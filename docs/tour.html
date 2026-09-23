@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tour — Operon</title>
+<meta name="description" content="A twelve-stop tour of the Operon language: variables, control flow, genes, closures, splice variants, fate machines, and the regulation layer.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="logo" href="index.html"><span class="logo-mark"></span>operon<b>.lang</b></a>
+    <nav>
+      <a href="index.html">Overview</a>
+      <a href="tour.html" class="here">Tour</a>
+      <a href="regulation.html">Regulation</a>
+      <a href="grammar.html">Grammar</a>
+      <a href="../web/playground/index.html" class="cta">Playground →</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+<h1 style="font-size:2.4rem; margin:56px 0 8px; letter-spacing:-0.02em;">Language tour</h1>
+<p class="lede" style="max-width:680px;">Twelve stops through Operon v2.0. Every example is canonical
+per the frozen SPEC — each one is paired with the molecular-biology mechanism it models, because in
+Operon the biology is not decoration: it <em>is</em> the semantics.</p>
+
+<div class="toc">
+  <div class="toc-title">Stops</div>
+  <ol>
+    <li><a href="#variables">Variables &amp; values</a></li>
+    <li><a href="#control">If, elif, match</a></li>
+    <li><a href="#loops">Loops &amp; collect</a></li>
+    <li><a href="#genes">Genes &amp; closures</a></li>
+    <li><a href="#strings">Strings &amp; interpolation</a></li>
+    <li><a href="#collections">Lists, maps, methods</a></li>
+    <li><a href="#stress">Stress &amp; rescue</a></li>
+    <li><a href="#tads">TADs &amp; anchors</a></li>
+    <li><a href="#splice">Splice variants</a></li>
+    <li><a href="#fate">Fate machines</a></li>
+    <li><a href="#regulation">Regulate, toggle, repressilator</a></li>
+    <li><a href="#frames">Frames &amp; proofs</a></li>
+  </ol>
+</div>
+
+<div class="callout teal">
+  <p><b>Try as you read.</b> The <a href="../web/playground/index.html">browser playground</a> runs the
+  expression core live (stops 1–6 plus lambdas). Stops 7–12 need the native Rust core from
+  <code>./scripts/build.sh</code>.</p>
+</div>
+
+<!-- 1 ---------------------------------------------------------------- -->
+<section class="tour-item" id="variables">
+  <div class="topic"><span class="idx">01</span><h2>Variables &amp; values</h2></div>
+  <figure class="code">
+    <figcaption><span>values.op</span><span class="tag">playground ✓</span></figcaption>
+    <pre><code><span class="k">let</span> name <span class="p">=</span> <span class="s">"lac-1"</span>          <span class="c"># str</span>
+<span class="k">let</span> copies <span class="p">=</span> <span class="n">4</span>              <span class="c"># int</span>
+<span class="k">let</span> rate <span class="p">=</span> <span class="n">0.25</span>             <span class="c"># float</span>
+<span class="k">let</span> active <span class="p">=</span> <span class="k">true</span>           <span class="c"># bool</span>
+<span class="k">let</span> ghost <span class="p">=</span> <span class="k">null</span>            <span class="c"># null — an unbound site</span>
+
+copies <span class="p">=</span> copies <span class="p">*</span> <span class="n">2</span>         <span class="c"># assignment (no `let`)</span>
+<span class="k">let</span> ratio <span class="p">=</span> copies <span class="p">/</span> <span class="n">4</span>      <span class="c"># `/` is true division → float 2.0</span>
+<span class="k">let</span> whole <span class="p">=</span> copies <span class="p">//</span> <span class="n">3</span>    <span class="c"># `//` floors → int 2</span>
+
+<span class="f">promote</span>(<span class="s">"{name}: copies={copies} ratio={ratio} whole={whole}"</span>)
+<span class="f">promote</span>(type(rate), type(ghost), active <span class="k">and</span> <span class="k">not</span> active)</code></pre>
+  </figure>
+  <div class="bio"><span class="bio-tag">Mechanism · cytoplasmic pool</span>
+  A cell's cytoplasm is not a registry of constants but a pool in flux: transcripts and proteins have
+  current abundances, and every binding site is either occupied or <em>unbound</em>. Operon mirrors
+  this — <code>let</code> establishes a binding, plain assignment updates it, and there is no
+  "undefined variable" crash: reading an unbound name yields <code>null</code> with a note, the way a
+  probe over an empty site reads zero, not catastrophe. Numbers keep the int/float distinction the
+  runtime needs for exact transcript counts versus continuous rates.</p></div>
+</section>
+
+<!-- 2 ---------------------------------------------------------------- -->
+<section class="tour-item" id="control">
+  <div class="topic"><span class="idx">02</span><h2>If, elif, match</h2></div>
+  <figure class="code">
+    <figcaption><span>checkpoints.op</span><span class="tag">playground ✓ (if/elif)</span></figcaption>
+    <pre><code><span class="k">gene</span> <span class="f">classify</span>(level) {
+    <span class="k">if</span> level <span class="p">&gt;=</span> <span class="n">80</span> {
+        <span class="k">return</span> <span class="s">"active chromatin"</span>
+    } <span class="k">elif</span> level <span class="p">&gt;=</span> <span class="n">40</span> {
+        <span class="k">return</span> <span class="s">"poised"</span>
+    } <span class="k">else</span> {
+        <span class="k">return</span> <span class="s">"repressed"</span>
+    }
+}
+
+<span class="f">promote</span>(classify(<span class="n">92</span>), classify(<span class="n">55</span>), classify(<span class="n">10</span>))
+
+<span class="c"># match — first matching case wins, patterns are literals or a binder</span>
+<span class="k">match</span> classify(<span class="n">92</span>) {
+    <span class="k">case</span> <span class="s">"repressed"</span> { <span class="f">promote</span>(<span class="s">"heterochromatin domain"</span>) }
+    <span class="k">case</span> <span class="s">"active chromatin"</span> { <span class="f">promote</span>(<span class="s">"acetylated, eager"</span>) }
+    <span class="k">case</span> other { <span class="f">promote</span>(<span class="s">"poised at {other}"</span>) }
+}</code></pre>
+  </figure>
+  <div class="bio"><span class="bio-tag">Mechanism · checkpoint control</span>
+  The cell makes commitment decisions at checkpoints: crossing a signaling threshold flips a switch
+  from one chromatin state to another, and the states are discrete — poised, active, repressed — not
+  a continuum. <code>if/elif/else</code> is the threshold cascade. <code>match</code> is the panel of
+  probes: each <code>case</code> is a literal test against the value, an identifier binds the value
+  for the block, and <code>_</code> is the wildcard. Like a probe array, the first positive reading
+  wins and the rest are not consulted.</p></div>
+</section>
+
+<!-- 3 ---------------------------------------------------------------- -->
+<section class="tour-item" id="loops">
+  <div class="topic"><span class="idx">03</span><h2>Loops &amp; collect</h2></div>
+  <figure class="code">
+    <figcaption><span>cycles.op</span><span class="tag">playground ✓</span></figcaption>
+    <pre><code><span class="k">let</span> counts <span class="p">=</span> []
+
+<span class="k">let</span> round <span class="p">=</span> <span class="n">0</span>
+<span class="k">while</span> round <span class="p">&lt;</span> <span class="n">3</span> {
+    round <span class="p">+=</span> <span class="n">1</span>
+    <span class="f">push</span>(counts, round <span class="p">*</span> round)
+}
+
+<span class="k">loop</span> {                       <span class="c"># infinite — exit via break</span>
+    <span class="k">if</span> len(counts) <span class="p">&gt;=</span> <span class="n">5</span> { <span class="k">break</span> }
+    <span class="f">push</span>(counts, <span class="n">0</span>)
+}
+
+<span class="k">for</span> c <span class="k">in</span> counts { <span class="f">promote</span>(<span class="s">"cycle yield: {c}"</span>) }
+<span class="k">for</span> ch <span class="k">in</span> <span class="s">"ATG"</span> { <span class="f">promote</span>(ch) }        <span class="c"># a string iterates as 1-char strings</span>
+
+<span class="c"># collect — a comprehension as one expression</span>
+<span class="k">let</span> doubled <span class="p">=</span> <span class="k">for</span> x <span class="k">in</span> counts <span class="k">collect</span> x <span class="p">*</span> <span class="n">2</span>
+<span class="k">let</span> live    <span class="p">=</span> <span class="k">for</span> x <span class="k">in</span> counts <span class="k">if</span> x <span class="p">&gt;</span> <span class="n">0</span> <span class="k">collect</span> x
+<span class="f">promote</span>(doubled.join(<span class="s">", "</span>), live.len())</code></pre>
+  </figure>
+  <div class="bio"><span class="bio-tag">Mechanism · polymerization cycles</span>
+  Biosynthesis is iterative machinery: the ribosome translocates one codon at a time in a loop that
+  only terminates at a stop signal, and polymerases repeat a cycle until dissociation.
+  <code>loop</code> is the ribosome — open-ended, exited only by an explicit terminator;
+  <code>while</code> is a polymerase with a defined template length; <code>for</code> walks an
+  existing sequence base by base (lists yield items, strings yield one-character strings, maps yield
+  keys). <code>collect</code> is the condensation reaction itself: one pass over a template, one
+  product list, with an optional <code>if</code> acting as fidelity filtering.</p></div>
+</section>
+
+<!-- 4 ---------------------------------------------------------------- -->
+<section class="tour-item" id="genes">
+  <div class="topic"><span class="idx">04</span><h2>Genes &amp; closures</h2></div>
+  <figure class="code">
+    <figcaption><span>genes.op</span><span class="tag">playground ✓</span></figcaption>
+    <pre><code><span class="k">gene</span> <span class="f">dilution</span>(conc, factor <span class="p">=</span> <span class="n">2</span>) {   <span class="c"># defaults, positional only</span>
+    <span class="k">return</span> conc <span class="p">/</span> factor
+}
+
+<span class="k">gene</span> <span class="f">make_counter</span>(start) {
+    <span class="k">let</span> n <span class="p">=</span> start
+    <span class="k">return</span> <span class="k">gene</span> () {      <span class="c"># block lambda closes over n</span>
+        n <span class="p">+=</span> <span class="n">1</span>
+        <span class="k">return</span> n
+    }
+}
+
+<span class="k">let</span> tick <span class="p">=</span> make_counter(<span class="n">10</span>)
+<span class="f">promote</span>(tick(), tick(), dilution(<span class="n">100</span>))          <span class="c"># 11, 12, 50.0</span>
+<span class="k">let</span> twice <span class="p">=</span> <span class="k">gene</span> (a) <span class="p">=&gt;</span> a <span class="p">*</span> <span class="n">2</span>       <span class="c"># expression lambda</span>
+<span class="f">promote</span>(twice(<span class="n">21</span>))</code></pre>
+  </figure>
+  <div class="bio"><span class="bio-tag">Mechanism · the operon &amp; chromatin context</span>
+  An operon is a cluster of genes transcribed as one unit under shared regulation — which is exactly
+  what a closure is: the function carries its defining regulatory environment with it. A gene defined
+  inside <code>make_counter</code> keeps access to the local <code>n</code> the way a gene in a
+  chromatin loop keeps contact with its enhancers, regardless of where execution later travels.
+  Defaults are constitutive expression levels (used when nothing else is specified), missing
+  arguments degrade to <code>null</code> with a note, and the full language adds
+  <code>guard (cond) else { }</code> — an upstream-ORF clause that can quietly refuse translation
+  before the body ever runs.</p></div>
+</section>
+
+<!-- 5 ---------------------------------------------------------------- -->
+<section class="tour-item" id="strings">
+  <div class="topic"><span class="idx">05</span><h2>Strings &amp; interpolation</h2></div>
+  <figure class="code">
+    <figcaption><span>message.op</span><span class="tag">playground ✓</span></figcaption>
+    <pre><code><span class="k">let</span> gene_name <span class="p">=</span> <span class="s">"repressilator"</span>
+<span class="k">let</span> level <span class="p">=</span> <span class="n">0.8</span>
+
+<span class="k">let</span> msg <span class="p">=</span> <span class="s">"{gene_name} @ strength {level} — {len(gene_name)} nt"</span>
+<span class="f">promote</span>(msg)
+
+<span class="f">promote</span>(gene_name.upper())               <span class="c"># REPRESSILATOR</span>
+<span class="f">promote</span>(<span class="s">"a-b-c"</span>.split(<span class="s">"-"</span>).join(<span class="s">" + "</span>))  <span class="c"># a + b + c</span>
+<span class="f">promote</span>(<span class="s">"   trim me  "</span>.trim(), <span class="s">"ab"</span>.repeat(<span class="n">3</span>))
+<span class="f">promote</span>(<span class="s">"ATG{...}"</span>.contains(<span class="s">"{...}"</span>))   <span class="c"># \{ escapes a literal brace</span></code></pre>
+  </figure>
+  <div class="bio"><span class="bio-tag">Mechanism · the mature transcript</span>
+  A messenger RNA is a composed message: coding segments, untranslated arms, chemical amendments.
+  Interpolation is translation in miniature — any expression inside <code>{ }</code> is evaluated at
+  runtime and coerced with <code>str()</code>, the way a ribosome renders a codon region into residue
+  in place. Escapes (<code>\n \t \\ \" \{</code>) are the post-transcriptional modifications: they
+  change what the message <em>says</em>, not what was encoded. Methods like <code>.split</code>,
+  <code>.join</code>, and <code>.replace</code> are the editing enzymes that cut and ligate the
+  message after it exists.</p></div>
+</section>
+
+<!-- 6 ---------------------------------------------------------------- -->
+<section class="tour-item" id="collections">
+  <div class="topic"><span class="idx">06</span><h2>Lists, maps, methods</h2></div>
+  <figure class="code">
+    <figcaption><span>pools.op</span><span class="tag">playground ✓</span></figcaption>
+    <pre><code><span class="k">let</span> reads <span class="p">=</span> [<span class="n">12</span>, <span class="n">7</span>, <span class="n">30</span>, <span class="n">7</span>]
+<span class="f">promote</span>(reads.map(<span class="k">gene</span> (r) <span class="p">=&gt;</span> r <span class="p">*</span> <span class="n">10</span>).join(<span class="s">" "</span>))
+<span class="f">promote</span>(reads.filter(<span class="k">gene</span> (r) <span class="p">=&gt;</span> r <span class="p">&gt;</span> <span class="n">10</span>).len())
+<span class="f">promote</span>(reads.reduce(<span class="k">gene</span> (a, b) <span class="p">=&gt;</span> a <span class="p">+</span> b, <span class="n">0</span>))
+<span class="f">promote</span>(reads.contains(<span class="n">7</span>), reads.index_of(<span class="n">30</span>), reads.slice(<span class="n">1</span>, <span class="n">3</span>).len())
+
+<span class="c"># maps are insertion-ordered — a field notebook, not a hash scatter</span>
+<span class="k">let</span> pool <span class="p">=</span> {mRNA<span class="p">:</span> <span class="n">42</span>, <span class="s">"ribosome"</span><span class="p">:</span> <span class="n">7</span>}
+pool[<span class="s">"velocity"</span>] <span class="p">=</span> <span class="n">0.25</span>
+pool.mRNA <span class="p">=</span> <span class="n">44</span>                  <span class="c"># member assignment writes the key</span>
+<span class="k">for</span> k <span class="k">in</span> pool.keys() { <span class="f">promote</span>(<span class="s">"{k} = {pool[k]}"</span>) }
+<span class="f">promote</span>(pool.has(<span class="s">"velocity"</span>), <span class="s">"mRNA"</span> <span class="k">in</span> pool, pool.items().len())</code></pre>
+  </figure>
+  <div class="bio"><span class="bio-tag">Mechanism · metabolite pools &amp; pathway flux</span>
+  A metabolic pathway is a pipeline: each enzyme takes the pool it is given, transforms it, and hands
+  it downstream — <code>.map</code> is that flux, <code>.filter</code> is a membrane that passes only
+  some species, and <code>.reduce</code> condenses a pool into a single summary metabolite. Maps are
+  the cell's ledger: an insertion-ordered record of which factor binds where, with
+  <code>.keys()</code> reading the row headings in the order they were written. Membership
+  (<code>in</code>) is a binding assay — deep equality for lists, substring for strings, key presence
+  for maps. Missing keys read as <code>null</code> with a note: an empty assay well, not an alarm.</p></div>
+</section>
+
+<!-- 7 ---------------------------------------------------------------- -->
+<section class="tour-item" id="stress">
+  <div class="topic"><span class="idx">07</span><h2>Stress &amp; rescue</h2></div>
+  <figure class="code">
+    <figcaption><span>containment.op</span><span class="tag">native core</span></figcaption>
+    <pre><code><span class="k">stress</span> <span class="p">{</span>
+    <span class="k">let</span> bad <span class="p">=</span> [<span class="n">1</span>, <span class="n">2</span>, <span class="n">3</span>][<span class="n">99</span>]          <span class="c"># Stress `missing`</span>
+<span class="p">}</span> <span class="k">rescue</span> (e) {
+    <span class="f">promote</span>(<span class="s">"contained: {e.kind} — {e.message}"</span>)
+}
+
+<span class="k">stress</span> missing {                     <span class="c"># kind filter: only `missing` is caught</span>
+    <span class="f">assert</span>(<span class="n">1</span> <span class="p">==</span> <span class="n">2</span>, <span class="s">"impossible result"</span>)   <span class="c"># raises `burned`, propagates</span>
+<span class="p">}</span> <span class="k">rescue</span> {
+    <span class="f">promote</span>(<span class="s">"never reached"</span>)
+}</code></pre>
+  </figure>
+  <div class="bio"><span class="bio-tag">Mechanism · unfolded protein response</span>
+  When misfolded proteins accumulate, the cell does not halt — it runs a containment program:
+  translation narrows, chaperone production rises, and the compartment rides out the insult. Operon's
+  <code>stress { } rescue { }</code> is that program. A runtime failure raises a <em>Stress</em> value
+  — a map of <code>kind</code> and <code>message</code> — with kinds named for the damage:
+  <code>unfolded</code> (type errors), <code>missing</code> (bad index/key), <code>overflow</code>,
+  <code>burned</code> (failed assertions). An unqualified <code>rescue</code> catches everything; a
+  kind filter catches only that lesion class and lets others propagate outward, exactly as a response
+  pathway is specific to one misfold class. With no rescue clause at all, the stress is contained to
+  <code>null</code> plus a note — the run continues.</p></div>
+</section>
+
+<!-- 8 ---------------------------------------------------------------- -->
+<section class="tour-item" id="tads">
+  <div class="topic"><span class="idx">08</span><h2>TADs &amp; anchors — modules</h2></div>
+  <figure class="code">
+    <figcaption><span>domain.op</span><span class="tag">native core</span></figcaption>
+    <pre><code><span class="k">tad</span> Signaling {
+    <span class="k">let</span> secret <span class="p">=</span> <span class="s">"loop-local"</span>
+
+    <span class="k">gene</span> <span class="f">relay</span>(x) { <span class="k">return</span> x <span class="p">*</span> <span class="n">2</span> }
+
+    <span class="k">anchor</span> <span class="k">export</span> relay        <span class="c"># the only name that escapes</span>
+}
+
+<span class="k">use</span> ./domain <span class="k">as</span> dom
+<span class="f">promote</span>(dom.relay(<span class="n">21</span>))          <span class="c"># 42</span>
+<span class="c"># dom.secret → null + note: insulated, never leaked</span>
+
+<span class="k">anchor</span> <span class="k">import</span> scaffold          <span class="c"># declarative: this domain expects `scaffold`</span></code></pre>
+  </figure>
+  <div class="bio"><span class="bio-tag">Mechanism · topologically associating domains</span>
+  The genome is folded into self-contacting loops bounded by architectural anchors. Inside a loop,
+  enhancers and promoters talk freely; across the boundary, they are electrically silent — insulation
+  prevents an enhancer in one domain from mis-driving a promoter in the next. <code>tad</code> is that
+  loop: names inside are invisible outside and escape only through an <code>anchor export</code>
+  placed within the same domain, the way only loop-boundary elements are exposed to the neighboring
+  loop. <code>anchor import</code> is the declarative statement that a domain expects an external
+  factor to exist — the checker verifies it, and reports a note if the factor never arrives.
+  Importing a file binds a single module map; a cycle hands back the partial map with a note instead
+  of deadlocking, because a cell cannot wait forever for its own loop.</p></div>
+</section>
+
+<!-- 9 ---------------------------------------------------------------- -->
+<section class="tour-item" id="splice">
+  <div class="topic"><span class="idx">09</span><h2>Splice variants</h2></div>
+  <figure class="code">
+    <figcaption><span>isoforms.op</span><span class="tag">native core</span></figcaption>
+    <pre><code><span class="k">splice</span> <span class="f">render</span> {
+    <span class="k">variant</span> compact  { <span class="k">return</span> <span class="s">"[{x}]"</span> }
+    <span class="k">variant</span> detailed { <span class="k">return</span> <span class="s">"value = {x} (checked)"</span> }
+    <span class="k">@m6a</span>
+    <span class="k">variant</span> verbose  { <span class="k">return</span> <span class="s">"value = {x}, fully annotated"</span> }
+}
+
+<span class="f">render</span>(<span class="n">7</span>)     <span class="c"># dispatches to the active variant</span>
+<span class="c"># operon run isoforms.op --variant compact   → bakes one isoform</span></code></pre>
+  </figure>
+  <div class="bio"><span class="bio-tag">Mechanism · alternative splicing</span>
+  Most multi-cellular genes yield several mature mRNAs from one locus: the splicing machinery selects
+  which exons survive, so one gene serves several tissues or stages without duplicating the locus.
+  Operon's <code>splice</code> block declares the variants; the call site stays identical and
+  dispatch selects the active isoform. Selection order is deterministic, mirroring how a cell commits:
+  the <code>.cell</code> methylation config wins, then the command line (<code>--variant</code>), then
+  the variant carrying the <code>@m6a</code> dispatch-priority mark, then the first declared — the
+  default isoform. <code>operon build --variant</code> bakes a single isoform into a standalone file,
+  the way a terminally differentiated cell locks in its splicing program.</p></div>
+</section>
+
+<!-- 10 --------------------------------------------------------------- -->
+<section class="tour-item" id="fate">
+  <div class="topic"><span class="idx">10</span><h2>Fate machines</h2></div>
+  <figure class="code">
+    <figcaption><span>lineage.op</span><span class="tag">native core</span></figcaption>
+    <pre><code><span class="k">fate</span> Progenitor {
+    <span class="k">state</span> stem    <span class="p">-&gt;</span> committed, quiescent
+    <span class="k">state</span> committed <span class="p">-&gt;</span> stem, mature
+    <span class="k">state</span> mature
+    <span class="k">state</span> quiescent <span class="p">-&gt;</span> stem
+    <span class="k">enter</span> stem
+}
+
+<span class="k">let</span> cell <span class="p">=</span> Progenitor()
+<span class="f">promote</span>(cell.state(), cell.can(<span class="s">"mature"</span>))   <span class="c"># stem, false — two valleys away</span>
+cell.shift(<span class="s">"committed"</span>)
+<span class="f">promote</span>(cell.shift(<span class="s">"mature"</span>), cell.state()) <span class="c"># true, mature</span>
+<span class="f">promote</span>(cell.shift(<span class="s">"stem"</span>), cell.state())   <span class="c"># true, dedifferentiation</span></code></pre>
+  </figure>
+  <div class="bio"><span class="bio-tag">Mechanism · epigenetic landscape</span>
+  Cell identity behaves like a ball on a sculpted landscape: basins of attraction — fates — are
+  separated by ridges, and transitions follow the valleys between neighboring basins. A cell does not
+  teleport from stem to mature; it passes through committed intermediates, and some moves are simply
+  uphill and impossible. <code>fate</code> encodes the landscape as declared transitions.
+  <code>.shift(s)</code> returns <code>true</code> when the move follows a drawn valley; an illegal
+  request returns <code>false</code> with a note and the state <em>stays where it is</em> — the valley
+  semantics: rejection is not failure, it is geography. <code>.can(s)</code> reads the map without
+  moving.</p></div>
+</section>
+
+<!-- 11 --------------------------------------------------------------- -->
+<section class="tour-item" id="regulation">
+  <div class="topic"><span class="idx">11</span><h2>Regulate, toggle, repressilator</h2></div>
+  <figure class="code">
+    <figcaption><span>networks.op</span><span class="tag">native core</span></figcaption>
+    <pre><code><span class="k">regulate</span> {
+    <span class="f">signal</span> <span class="k">activates</span> <span class="f">enzyme</span> <span class="k">strength</span> <span class="n">0.8</span>
+    <span class="f">repressor</span> <span class="k">inhibits</span> <span class="f">enzyme</span>
+}
+
+<span class="k">toggle</span> <span class="f">lac_on</span>, <span class="f">lac_off</span>        <span class="c"># bistable: exactly one may be on</span>
+<span class="f">toggle_on</span>(<span class="s">"lac_on"</span>)
+<span class="f">promote</span>(toggle_state())        <span class="c"># {lac_on: 1.0, lac_off: 0.0}</span>
+
+<span class="k">repressilator</span> <span class="f">a</span> <span class="p">-&gt;</span> <span class="f">b</span> <span class="p">-&gt;</span> <span class="f">c</span> <span class="k">period</span> <span class="n">3</span>
+<span class="f">repressi_next</span>()
+<span class="f">promote</span>(repressi_state())      <span class="c"># {a: 0.0, b: 0.0, c: 1.0}</span></code></pre>
+  </figure>
+  <div class="bio"><span class="bio-tag">Mechanism · regulatory networks &amp; synthetic circuits</span>
+  Promoters talk to promoters. A transcription factor activates its target with a measurable strength,
+  and repressors subtract from it — a signed, weighted graph that cells propagate as signaling waves.
+  <code>regulate</code> declares that graph; <code>grn_fire("a")</code> sets a source to full level and
+  propagates wave by wave, with each hop damping the influence by its strength exponent — signal
+  attenuation along a cascade. The <em>toggle</em> is the classic bistable mutual-repression pair: two
+  repressors that cannot both win, so the system rests in exactly one of two stable states and
+  <code>toggle_on</code> flips it. The <em>repressilator</em> is a ring of three repressors whose
+  delayed mutual repression produces a self-sustaining oscillation; <code>repressi_next()</code>
+  advances the ring deterministically (each step represses the previous gene, releasing the next),
+  and with <code>period</code> the runtime runs it on a real clock as a living oscillator.</p></div>
+</section>
+
+<!-- 12 --------------------------------------------------------------- -->
+<section class="tour-item" id="frames">
+  <div class="topic"><span class="idx">12</span><h2>Frames &amp; proofs</h2></div>
+  <figure class="code">
+    <figcaption><span>genome.op — one file, two reading frames</span><span class="tag">native core</span></figcaption>
+    <pre><code><span class="k">gene</span> <span class="f">fib</span>(n) {
+    <span class="k">if</span> n <span class="p">&lt;</span> <span class="n">2</span> { <span class="k">return</span> n }
+    <span class="k">return</span> fib(n <span class="p">-</span> <span class="n">1</span>) <span class="p">+</span> fib(n <span class="p">-</span> <span class="n">2</span>)
+}
+
+<span class="f">promote</span>(fib(<span class="n">10</span>))          <span class="c"># the expression frame: what runs</span>
+
+<span class="k">frame</span> <span class="k">proof</span> {             <span class="c"># the proof frame: what `operon test` runs</span>
+    <span class="f">assert</span>(fib(<span class="n">0</span>) <span class="p">==</span> <span class="n">0</span>, <span class="s">"base case"</span>)
+    <span class="f">assert</span>(fib(<span class="n">10</span>) <span class="p">==</span> <span class="n">55</span>, <span class="s">"known term"</span>)
+}</code></pre>
+  </figure>
+  <div class="bio"><span class="bio-tag">Mechanism · overlapping reading frames</span>
+  Compact genomes exploit every base: the same sequence read in a shifted frame yields a second,
+  entirely functional protein, with the two products constrained never to corrupt each other. An
+  Operon file is one sequence with two sanctioned readings. The <em>expression frame</em> is what
+  <code>operon run</code> translates; <code>frame proof { }</code> overlays the test reading — the
+  same file carries the program <em>and</em> its verification, physically adjacent so they evolve
+  together. A proof that fails raises Stress <code>burned</code> and is recorded, but the suite keeps
+  going — Total Grammar applies to testing too. <code>operon test</code> walks a tree of files, runs
+  each file's proof frame, and reports files, proofs, passes, failures, and wobble-note counts in one
+  sweep.</p></div>
+</section>
+
+<hr class="divider">
+
+<section>
+  <h2>Where to next</h2>
+  <p>The <a href="regulation.html">regulation deep-dive</a> covers every mechanism in the
+  gene-expression layer — TADs, silencing, m6A priority, NMD sweeps, telemetry — and how each maps to
+  a concrete feature. The <a href="grammar.html">grammar reference</a> holds the lexical rules,
+  precedence table, the four-rung ladder, and the full CLI. Or open the
+  <a href="../web/playground/index.html">playground</a> and start wobbling.</p>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap foot-inner">
+    <div>
+      <a class="logo" href="index.html"><span class="logo-mark"></span>operon<b>.lang</b></a>
+      <p class="mono">Operon 2.0.0 · rust-core · c-runtime · cpp-kernel<br>
+      SPEC frozen for v2.0 · Total Grammar: nothing is rejected.</p>
+    </div>
+    <div class="foot-links">
+      <a href="index.html">Overview</a>
+      <a href="regulation.html">Regulation layer</a>
+      <a href="grammar.html">Grammar reference</a>
+      <a href="../web/playground/index.html">Playground</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

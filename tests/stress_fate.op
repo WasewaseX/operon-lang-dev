@@ -1,0 +1,76 @@
+stress unfoldeds { }
+rescue { }
+fate Signal {
+    state off -> on
+    state on -> off
+    enter off
+}
+frame proof {
+    # stress containment with kind filter
+    let caught = ""
+    stress {
+        let boom = 1 + "x"
+    } rescue (e) {
+        caught = e.kind
+    }
+    assert(caught == "unfolded", "stress caught unfolded")
+
+    # kind-filtered: wrong kind passes through to outer containment
+    let inner = 0
+    stress unfolded {
+        stress missing {
+            let nope = [1][99]
+        } rescue {
+            inner = 1
+        }
+    } rescue {
+        inner = 2
+    }
+    assert(inner == 1, "kind filter catches missing")
+
+    # uncaught stress contained (Total Grammar runtime law)
+    let survived = true
+    stress {
+        let x = {a: 1}.missing_key.deep
+    } rescue {
+        survived = true
+    }
+    assert(survived, "survive member miss")
+
+    # raise + rescue
+    let msg = ""
+    stress {
+        raise burned, "proof failed"
+    } rescue (e) {
+        msg = e.message
+    }
+    assert(msg == "proof failed", "raise burned")
+
+    # overflow is catchable
+    let ov = false
+    stress overflow {
+        let huge = 9223372036854775807 + 1
+    } rescue {
+        ov = true
+    }
+    assert(ov, "overflow catchable")
+
+    # division by zero
+    let dz = false
+    stress {
+        let y = 1 / 0
+    } rescue (e) {
+        dz = e.kind == "unfolded"
+    }
+    assert(dz, "div by zero catchable")
+
+    # fate landscape: transitions + valley semantics
+    let s = Signal()
+    assert(s.state() == "off", "fate enter state")
+    assert(s.can("on"), "fate can")
+    assert(s.shift("on"), "fate valid shift")
+    assert(s.state() == "on", "fate state after shift")
+    assert(not s.shift("explode"), "valley crossing refused")
+    assert(s.state() == "on", "valley stay keeps state")
+    assert(s.shift("off"), "on -> off")
+}

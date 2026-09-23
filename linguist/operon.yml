@@ -1,0 +1,12 @@
+# Ready-to-upstream github/linguist contribution for the Operon language.
+# Until merged upstream, GitHub renders Operon (.op) in the default gray;
+# this file is the prepared PR payload requesting the pink identity.
+---
+name: Operon
+type: programming
+color: "#E4409A"
+extensions:
+  - ".op"
+tm_scope: source.operon
+ace_mode: text
+language_id: 1000000001

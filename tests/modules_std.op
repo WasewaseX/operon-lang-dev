@@ -1,0 +1,25 @@
+use std/collections
+use std/strings
+use std/bio
+
+frame proof {
+    # std functions are Operon source executed by the Rust core
+    assert(collections.chunk([1, 2, 3, 4, 5], 2) == [[1, 2], [3, 4], [5]], "chunk")
+    assert(collections.zip([1, 2], ["a", "b"]) == [[1, "a"], [2, "b"]], "zip")
+    assert(collections.flatten([[1, 2], [3]]) == [1, 2, 3], "flatten")
+    assert(collections.take([9, 8, 7], 2) == [9, 8], "take")
+    assert(collections.count([1, 2, 3, 4], gene (v) => v % 2 == 0) == 2, "count pred")
+    let grouped = collections.group_by(["ax", "ay", "bx"], gene (s) => s.slice(0, 1))
+    assert(grouped["a"] == ["ax", "ay"], "group_by")
+
+    assert(strings.words("  a b  c ").len() == 3, "words")
+    assert(strings.capital("gene") == "Gene", "capital")
+    assert(strings.pad_left("7", 3, "0") == "007", "pad_left")
+    assert(strings.pad_right("7", 3, ".") == "7..", "pad_right")
+
+    let usage = bio.codon_usage("ATGATGAAA")
+    assert(usage["ATG"] == 2 and usage["AAA"] == 1, "codon_usage")
+    assert(bio.is_palindromic_site("GAATTC"), "palindromic site")
+    assert(bio.melting_point("ATGC") == 12.0, "melting point")
+    assert(bio.gc_skew("GGCC") == 0.0 and bio.gc_skew("GG") == 1.0, "gc skew")
+}

@@ -1,0 +1,2462 @@
+#!/usr/bin/env python3
+"""oracle.py — Operon reference implementation (bootstrap layer).
+
+Role in the stack: the semantic oracle used by the differential test harness
+to cross-check the Rust core, plus the packaging path. It implements the same
+frozen SPEC.md semantics as the Rust core: Total Grammar 4-rung ladder,
+gene-expression regulation layer, and the same display rules.
+
+Deliberately sequential: spawn() runs tasks inline (deterministic), which is
+equivalent for the differential corpus.
+"""
+import sys, os, json as _json
+
+# ----------------------------------------------------------------------------
+# notes / values
+
+class Note:
+    __slots__ = ("rung", "message")
+    def __init__(self, rung, message):
+        self.rung, self.message = rung, message
+
+class Stress(Exception):
+    def __init__(self, kind, message):
+        self.kind, self.message = kind, message
+    def as_map(self):
+        return {"kind": self.kind, "message": self.message}
+
+class Gene:
+    __slots__ = ("name", "params", "guard", "body", "acetylate", "methylate", "m6a", "closure")
+    def __init__(self, name, params, guard, body, ac=False, me=False, m6=False):
+        self.name, self.params, self.guard, self.body = name, params, guard, body
+        self.acetylate, self.methylate, self.m6a = ac, me, m6
+        self.closure = None
+
+class Return(Exception):
+    def __init__(self, value):
+        self.value = value
+
+class BreakLoop(Exception):
+    pass
+
+class ContinueLoop(Exception):
+    pass
+
+# display rules (must match Rust value.rs)
+def fmt_float(f):
+    if f != f:
+        return "nan"
+    if f == float("inf"):
+        return "inf"
+    if f == float("-inf"):
+        return "-inf"
+    if f == int(f) and abs(f) < 1e15:
+        return f"{f:.1f}"
+    return repr(f)
+
+def escape_str(s):
+    return s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\t", "\\t")
+
+def is_identlike(s):
+    return bool(s) and (s[0].isalpha() or s[0] == "_") and all(c.isalnum() or c == "_" for c in s)
+
+def v_repr(v):
+    if v is None: return "null"
+    if v is True: return "true"
+    if v is False: return "false"
+    if isinstance(v, int): return str(v)
+    if isinstance(v, float): return fmt_float(v)
+    if isinstance(v, str): return f'"{escape_str(v)}"'
+    if isinstance(v, list): return "[" + ", ".join(v_repr(x) for x in v) + "]"
+    if isinstance(v, dict):
+        return "{" + ", ".join(
+            (k if isinstance(k, str) and is_identlike(k) else v_repr(k)) + ": " + v_repr(val)
+            for k, val in v.items()) + "}"
+    if isinstance(v, Gene):
+        return f"<gene {v.name}>" if v.name else "<gene lambda>"
+    return "<?>" 
+
+def v_display(v):
+    if isinstance(v, str):
+        return v
+    return v_repr(v)
+
+def truthy(v):
+    if v is None or v is False: return False
+    if v is True: return True
+    if isinstance(v, (int, float)): return v != 0
+    if isinstance(v, str): return len(v) > 0
+    if isinstance(v, list): return len(v) > 0
+    if isinstance(v, dict): return len(v) > 0
+    return True
+
+def type_name(v):
+    if v is None: return "null"
+    if isinstance(v, bool): return "bool"
+    if isinstance(v, int): return "int"
+    if isinstance(v, float): return "float"
+    if isinstance(v, str): return "str"
+    if isinstance(v, list): return "list"
+    if isinstance(v, dict): return "map"
+    if isinstance(v, Gene): return "gene"
+    return "native"
+
+def deep_eq(a, b):
+    if isinstance(a, bool) or isinstance(b, bool):
+        return a is b
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        return a == b
+    if type(a) is not type(b) and not (a is None and b is None):
+        if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+            return a == b
+        return False
+    if isinstance(a, list):
+        return len(a) == len(b) and all(deep_eq(x, y) for x, y in zip(a, b))
+    if isinstance(a, dict):
+        if len(a) != len(b): return False
+        return all(any(deep_eq(k, k2) and deep_eq(v, v2) for k2, v2 in b.items()) for k, v in a.items())
+    return a == b
+
+# ----------------------------------------------------------------------------
+# lexer
+
+SYMBOLS = ["+=", "-=", "*=", "/=", "%=", "==", "!=", "<=", ">=", "&&", "||",
+           "//", "->", "=>", "{", "}", "(", ")", "[", "]", ",", ":", "+", "-",
+           "*", "/", "%", "=", "<", ">", "!", ".", ";"]
+
+def lex(src):
+    toks, notes = [], []
+    i, line, n = 0, 1, len(src)
+    while i < n:
+        c = src[i]
+        if c in " \t\r":
+            i += 1; continue
+        if c == "\n":
+            if not toks or toks[-1][0] != "NL":
+                toks.append(("NL", None, line))
+            line += 1; i += 1; continue
+        if c == "#":
+            while i < n and src[i] != "\n":
+                i += 1
+            continue
+        if c == '"':
+            raw, i2, closed, interp = "", i + 1, False, False
+            depth = 0
+            while i2 < n:
+                ch = src[i2]
+                if ch == "\\" and depth == 0 and i2 + 1 < n:
+                    e = src[i2 + 1]
+                    raw += {"n": "\n", "t": "\t", "\\": "\\", '"': '"', "{": "{", "}": "}"}.get(e, "\\" + e)
+                    i2 += 2; continue
+                if depth == 0 and ch == '"':
+                    closed = True; i2 += 1; break
+                if ch == "\n":
+                    line += 1
+                if ch == "{":
+                    depth += 1; interp = True
+                if ch == "}" and depth > 0:
+                    depth -= 1
+                raw += ch; i2 += 1
+            if not closed:
+                notes.append(Note(4, "unclosed string consumed to end of line"))
+            toks.append(("INTERP" if interp else "STR", raw, line))
+            i = i2; continue
+        if c == "'":
+            notes.append(Note(4, "single-quoted string repaired to double quotes"))
+            raw, i2, closed = "", i + 1, False
+            while i2 < n:
+                ch = src[i2]
+                if ch == "\\" and i2 + 1 < n:
+                    e = src[i2 + 1]
+                    raw += {"n": "\n", "t": "\t", '"': '"'}.get(e, e)
+                    i2 += 2; continue
+                if ch == "'":
+                    closed = True; i2 += 1; break
+                if ch == "\n":
+                    line += 1
+                raw += ch; i2 += 1
+            if not closed:
+                notes.append(Note(4, "unclosed string consumed to end of line"))
+            toks.append(("STR", raw, line))
+            i = i2; continue
+        if c == "@":
+            j = i + 1
+            while j < n and (src[j].isalnum() or src[j] == "_"):
+                j += 1
+            if j > i + 1:
+                toks.append(("MARK", src[i + 1:j], line))
+            else:
+                notes.append(Note(4, "stray '@' skipped"))
+            i = j; continue
+        if c.isdigit():
+            j = i
+            isf = False
+            while j < n and (src[j].isdigit() or src[j] == "."):
+                if src[j] == ".":
+                    if j + 1 >= n or not src[j + 1].isdigit():
+                        break
+                    isf = True
+                j += 1
+            if j < n and src[j] in "eE":
+                k = j + 1
+                if k < n and src[k] in "+-":
+                    k += 1
+                if k < n and src[k].isdigit():
+                    isf = True
+                    j = k
+                    while j < n and src[j].isdigit():
+                        j += 1
+            text = src[i:j]
+            try:
+                toks.append(("FLOAT", float(text), line) if isf else (("INT", int(text), line)))
+            except ValueError:
+                notes.append(Note(4, f"malformed number '{text}' treated as 0"))
+                toks.append(("INT", 0, line))
+            i = j; continue
+        if c.isalpha() or c == "_":
+            j = i
+            while j < n and (src[j].isalnum() or src[j] == "_"):
+                j += 1
+            toks.append(("IDENT", src[i:j], line))
+            i = j; continue
+        matched = False
+        for sym in SYMBOLS:
+            if src.startswith(sym, i):
+                toks.append(("SYM", sym, line))
+                i += len(sym)
+                matched = True
+                break
+        if not matched:
+            notes.append(Note(4, f"unexpected character '{c}' skipped"))
+            i += 1
+    toks.append(("EOF", None, line))
+    return toks, notes
+
+# ----------------------------------------------------------------------------
+# parser — Total Grammar ladder
+
+KEYWORDS = set("""gene let if elif else while loop for in return break continue match case use
+tad anchor export import enhance silence stress rescue raise fate state regulate activates
+inhibits strength toggle repressilator period frame proof guard splice variant edit replace
+ires as collect enter""".split())
+
+ARMS = set("""gene let if elif else while loop for return break continue match use tad anchor
+enhance silence stress raise fate regulate toggle repressilator frame splice edit ires""".split())
+
+SYNONYMS = {
+    "fn": "gene", "func": "gene", "fun": "gene", "def": "gene", "sub": "gene",
+    "lambda": "gene", "proc": "gene", "var": "let", "val": "let", "const": "let",
+    "foreach": "for", "each": "for", "import": "use", "include": "use",
+    "require": "use", "ret": "return", "stop": "break", "next": "continue",
+    "skip": "continue", "elseif": "elif",
+}
+VALUE_SYNONYMS = {"yes": True, "on": True, "no": False, "off": False,
+                  "nil": None, "none": None, "nothing": None}
+MARKS = {"acetylate", "methylate", "m6a"}
+
+def edit_distance(a, b):
+    if a == b:
+        return 0
+    la, lb = len(a), len(b)
+    if la == 0: return lb
+    if lb == 0: return la
+    prev = list(range(lb + 1))
+    for i in range(1, la + 1):
+        cur = [i] + [0] * lb
+        for j in range(1, lb + 1):
+            cost = 0 if a[i - 1] == b[j - 1] else 1
+            cur[j] = min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost)
+        prev = cur
+    return prev[lb]
+
+def wobble_keyword(word):
+    limit = 1 if len(word) <= 4 else 2
+    best, bd = None, 99
+    for k in KEYWORDS:
+        d = edit_distance(word, k)
+        if d <= limit and d < bd:
+            best, bd = k, d
+    return best
+
+class P:
+    def __init__(self, toks, notes):
+        self.toks, self.pos, self.notes = toks, 0, notes
+
+    def peek(self):
+        return self.toks[self.pos]
+
+    def next(self):
+        t = self.toks[self.pos]
+        if self.pos < len(self.toks) - 1:
+            self.pos += 1
+        return t
+
+    def note(self, line, rung, msg):
+        self.notes.append(Note(rung, msg))
+
+    def eat_nl(self):
+        while self.peek()[0] in ("NL", "SYM") and (self.peek()[0] == "NL" or self.peek()[1] == ";"):
+            self.next()
+
+    def expect_kw(self, word):
+        t = self.peek()
+        if t[0] == "IDENT" and t[1] == word:
+            self.next(); return True
+        if t[0] == "IDENT":
+            syn = SYNONYMS.get(t[1])
+            if syn == word:
+                self.note(t[2], 2, f"synonym '{t[1]}' repaired to '{word}'")
+                self.next(); return True
+            wk = wobble_keyword(t[1])
+            if wk == word:
+                self.note(t[2], 3, f"wobble: '{t[1]}' repaired to keyword '{word}'")
+                self.next(); return True
+        return False
+
+    def at_ident(self, w):
+        t = self.peek()
+        return t[0] == "IDENT" and t[1] == w
+
+    # program
+    def program(self):
+        out = []
+        while True:
+            self.eat_nl()
+            if self.peek()[0] == "EOF":
+                break
+            if self.peek() == ("SYM", "}", self.peek()[2]):
+                self.note(self.peek()[2], 4, "unmatched '}' skipped")
+                self.next(); continue
+            before = self.pos
+            s = self.stmt()
+            if s is not None:
+                out.append(s)
+            if self.pos == before:
+                self.note(self.peek()[2], 4, f"token skipped")
+                self.next()
+        return out
+
+    # statements
+    def stmt(self):
+        t = self.peek()
+        if t[0] == "MARK":
+            marks = []
+            while self.peek()[0] == "MARK":
+                m = self.next()[1]
+                if m in MARKS:
+                    marks.append(m)
+                else:
+                    wk = None
+                    for k in MARKS:
+                        if edit_distance(m, k) <= (1 if len(m) <= 4 else 2):
+                            self.note(t[2], 3, f"wobble: '@{m}' repaired to '@{k}'")
+                            wk = k
+                            break
+                    if wk:
+                        marks.append(wk)
+                    else:
+                        self.note(t[2], 4, f"unknown mark '@{m}' skipped")
+            if not self.expect_kw("gene"):
+                self.note(t[2], 4, "mark must precede 'gene'; skipped line")
+                self.skip_line()
+                return None
+            return self.gene_def(marks)
+        if t[0] == "SYM" and t[1] == "{":
+            self.note(t[2], 4, "bare block treated as scoped statements")
+            return ("block", self.block())
+        if t[0] == "IDENT":
+            return self.word_stmt(t[1])
+        self.note(t[2], 4, f"unexpected token at statement position")
+        self.next()
+        return None
+
+    def skip_line(self):
+        while self.peek()[0] not in ("NL", "EOF") and not (self.peek()[0] == "SYM" and self.peek()[1] == "}"):
+            self.next()
+
+    def end_stmt(self):
+        if self.peek()[0] == "NL" or (self.peek()[0] == "SYM" and self.peek()[1] == ";"):
+            self.next()
+
+    def word_stmt(self, w):
+        t1 = self.toks[self.pos + 1] if self.pos + 1 < len(self.toks) else ("EOF", None, 0)
+        expr_head = (t1[0] == "SYM" and t1[1] in ("=", "(", "[", ".", "+=", "-=", "*=", "/=", "%="))
+        word = w
+        if w not in KEYWORDS and not expr_head:
+            syn = SYNONYMS.get(w)
+            if syn and syn in ARMS:
+                self.note(self.peek()[2], 2, f"synonym '{w}' repaired to '{syn}'")
+                word = syn
+            else:
+                wk = wobble_keyword(w)
+                if wk and wk in ARMS:
+                    self.note(self.peek()[2], 3, f"wobble: '{w}' repaired to keyword '{wk}'")
+                    word = wk
+        if word == "gene":
+            self.next()
+            return self.gene_def([])
+        if word == "let":
+            self.next()
+            name = self.ident()
+            if self.peek() == ("SYM", "=", self.peek()[2]):
+                self.next()
+                e = self.expr()
+                self.end_stmt()
+                return ("let", name, e)
+            self.note(self.peek()[2], 4, f"'let {name}' without value binds null")
+            self.end_stmt()
+            return ("let", name, ("null",))
+        if word in ("if",):
+            self.next()
+            branches = [(self.expr(), self.block())]
+            els = None
+            while True:
+                self.eat_nl()
+                if self.at_ident("elif"):
+                    self.next()
+                    branches.append((self.expr(), self.block()))
+                elif self.expect_kw("else"):
+                    els = self.block()
+                    break
+                else:
+                    break
+            return ("if", branches, els)
+        if word == "while":
+            self.next()
+            cond = self.expr()
+            return ("while", cond, self.block())
+        if word == "loop":
+            self.next()
+            return ("loop", self.block())
+        if word == "for":
+            self.next()
+            name = self.ident()
+            if not self.expect_kw("in"):
+                self.note(self.peek()[2], 4, f"'for {name}' missing 'in'; iterating null")
+            it = self.expr()
+            return ("for", name, it, self.block())
+        if word == "return":
+            self.next()
+            k = self.peek()[0]
+            if k in ("NL", "EOF") or (k == "SYM" and self.peek()[1] in (";", "}")):
+                self.end_stmt()
+                return ("return", ("null",))
+            e = self.expr()
+            self.end_stmt()
+            return ("return", e)
+        if word == "break":
+            self.next(); self.end_stmt(); return ("break",)
+        if word == "continue":
+            self.next(); self.end_stmt(); return ("continue",)
+        if word == "match":
+            self.next()
+            subj = self.expr()
+            cases = []
+            if self.peek() == ("SYM", "{", self.peek()[2]):
+                self.next()
+                while True:
+                    self.eat_nl()
+                    t = self.peek()
+                    if t[0] == "SYM" and t[1] == "}":
+                        self.next(); break
+                    if t[0] == "EOF":
+                        self.note(t[2], 4, "match block auto-closed at end of file")
+                        break
+                    if not self.expect_kw("case"):
+                        self.note(t[2], 4, "expected 'case' in match; skipped token")
+                        self.next(); continue
+                    pat = self.pattern()
+                    if self.peek() == ("SYM", "=>", t[2]):
+                        self.next()
+                        e = self.expr()
+                        self.end_stmt()
+                        body = [("expr", e)]
+                    else:
+                        body = self.block()
+                    cases.append((pat, body))
+            return ("match", subj, cases)
+        if word == "use":
+            self.next()
+            path = self.use_path()
+            alias = None
+            if self.expect_kw("as"):
+                alias = self.ident()
+            self.end_stmt()
+            return ("use", path, alias)
+        if word == "tad":
+            self.next()
+            name = self.ident()
+            return ("tad", name, self.block())
+        if word == "anchor":
+            self.next()
+            is_export = self.expect_kw("export")
+            if not is_export:
+                self.expect_kw("import")
+            names = [self.ident()]
+            while self.peek() == ("SYM", ",", self.peek()[2]):
+                self.next()
+                names.append(self.ident())
+            self.end_stmt()
+            return ("anchor_export" if is_export else "anchor_import", [n for n in names if n])
+        if word == "enhance":
+            self.next()
+            names = [self.ident()]
+            while self.peek() == ("SYM", ",", self.peek()[2]):
+                self.next()
+                names.append(self.ident())
+            self.end_stmt()
+            return ("enhance", [n for n in names if n])
+        if word == "silence":
+            self.next()
+            frm = self.ident()
+            to = None
+            if self.peek() == ("SYM", "->", self.peek()[2]):
+                self.next()
+                to = self.ident()
+            self.end_stmt()
+            return ("silence", frm, to)
+        if word == "stress":
+            self.next()
+            kind = None
+            t = self.peek()
+            nt = self.toks[self.pos + 1] if self.pos + 1 < len(self.toks) else ("EOF", None, 0)
+            if t[0] == "IDENT" and nt == ("SYM", "{", t[2]):
+                kind = t[1]
+                self.next()
+            body = self.block()
+            rescue = None
+            self.eat_nl()
+            if self.expect_kw("rescue"):
+                bind = None
+                if self.peek() == ("SYM", "(", self.peek()[2]):
+                    self.next()
+                    if self.peek()[0] == "IDENT":
+                        bind = self.next()[1]
+                    if self.peek() == ("SYM", ")", self.peek()[2]):
+                        self.next()
+                rescue = (bind, self.block())
+            return ("stress", kind, body, rescue)
+        if word == "raise":
+            self.next()
+            save = self.pos
+            t = self.peek()
+            if t[0] == "IDENT" and t[1] in ("unfolded", "missing", "overflow", "burned"):
+                self.next()
+                if self.peek() == ("SYM", ",", t[2]):
+                    self.next()
+                    e = self.expr()
+                    self.end_stmt()
+                    return ("raise", t[1], e)
+                self.pos = save
+            e = self.expr()
+            self.end_stmt()
+            return ("raise", None, e)
+        if word == "fate":
+            self.next()
+            name = self.ident()
+            states, enter = [], None
+            if self.peek() == ("SYM", "{", self.peek()[2]):
+                self.next()
+                while True:
+                    self.eat_nl()
+                    t = self.peek()
+                    if t[0] == "SYM" and t[1] == "}":
+                        self.next(); break
+                    if t[0] == "EOF":
+                        break
+                    if t[0] == "IDENT" and (t[1] == "state" or edit_distance(t[1], "state") <= 1):
+                        if t[1] != "state":
+                            self.note(t[2], 3, f"wobble: '{t[1]}' repaired to 'state'")
+                        self.next()
+                        frm = self.ident()
+                        targets = []
+                        if self.peek() == ("SYM", "->", t[2]):
+                            self.next()
+                            targets.append(self.ident())
+                            while self.peek() == ("SYM", ",", t[2]):
+                                self.next()
+                                targets.append(self.ident())
+                        states.append((frm, [x for x in targets if x]))
+                        self.end_stmt()
+                    elif t[0] == "IDENT" and (t[1] == "enter" or edit_distance(t[1], "enter") <= 1):
+                        if t[1] != "enter":
+                            self.note(t[2], 3, f"wobble: '{t[1]}' repaired to 'enter'")
+                        self.next()
+                        enter = self.ident()
+                        self.end_stmt()
+                    else:
+                        self.note(t[2], 4, "unexpected token in fate block; skipped")
+                        self.next()
+            return ("fate", name, states, enter)
+        if word == "regulate":
+            self.next()
+            edges = []
+            if self.peek() == ("SYM", "{", self.peek()[2]):
+                self.next()
+                while True:
+                    self.eat_nl()
+                    t = self.peek()
+                    if t[0] == "SYM" and t[1] == "}":
+                        self.next(); break
+                    if t[0] == "EOF":
+                        break
+                    if t[0] != "IDENT":
+                        self.note(t[2], 4, "unexpected token in regulate block; skipped")
+                        self.next(); continue
+                    frm = self.next()[1]
+                    inhibit = None
+                    if self.expect_kw("activates"):
+                        inhibit = False
+                    elif self.expect_kw("inhibits"):
+                        inhibit = True
+                    if inhibit is None:
+                        self.note(t[2], 4, "regulate edge missing 'activates'/'inhibits'; edge dropped")
+                        self.skip_line(); continue
+                    to = self.ident()
+                    strength = 1.0
+                    if self.expect_kw("strength"):
+                        tt = self.peek()
+                        if tt[0] in ("INT", "FLOAT"):
+                            strength = float(tt[1]) if tt[0] == "FLOAT" else float(tt[1])
+                            self.next()
+                        else:
+                            self.note(tt[2], 4, "strength needs a number; using 1.0")
+                    edges.append((frm, to, strength, inhibit))
+                    self.end_stmt()
+            return ("regulate", edges)
+        if word == "toggle":
+            self.next()
+            a = self.ident()
+            b = a
+            if self.peek() == ("SYM", ",", self.peek()[2]):
+                self.next()
+                b = self.ident()
+            self.end_stmt()
+            return ("toggle", a, b)
+        if word == "repressilator":
+            self.next()
+            ring = [self.ident()]
+            while self.peek() == ("SYM", "->", self.peek()[2]):
+                self.next()
+                ring.append(self.ident())
+            period = None
+            if self.expect_kw("period"):
+                t = self.peek()
+                if t[0] in ("INT", "FLOAT"):
+                    period = float(t[1])
+                    self.next()
+            self.end_stmt()
+            return ("repressilator", [r for r in ring if r], period)
+        if word == "frame":
+            self.next()
+            is_proof = self.expect_kw("proof")
+            name = "proof" if is_proof else self.ident()
+            return ("frame", name, is_proof, self.block())
+        if word == "splice":
+            self.next()
+            root = self.ident()
+            variants = []
+            if self.peek() == ("SYM", "{", self.peek()[2]):
+                self.next()
+                while True:
+                    self.eat_nl()
+                    t = self.peek()
+                    if t[0] == "SYM" and t[1] == "}":
+                        self.next(); break
+                    if t[0] == "EOF":
+                        break
+                    if t[0] == "IDENT" and (t[1] == "variant" or edit_distance(t[1], "variant") <= 1):
+                        if t[1] != "variant":
+                            self.note(t[2], 3, f"wobble: '{t[1]}' repaired to 'variant'")
+                        self.next()
+                        vname = self.ident()
+                        variants.append((vname, self.block()))
+                    else:
+                        self.note(t[2], 4, "unexpected token in splice block; skipped")
+                        self.next()
+            return ("splice", root, variants)
+        if word == "edit":
+            self.next()
+            target = self.ident()
+            reps = []
+            if self.peek() == ("SYM", "{", self.peek()[2]):
+                self.next()
+                while True:
+                    self.eat_nl()
+                    t = self.peek()
+                    if t[0] == "SYM" and t[1] == "}":
+                        self.next(); break
+                    if t[0] == "EOF":
+                        break
+                    if self.expect_kw("replace"):
+                        frm = ""
+                        if self.peek()[0] in ("STR", "INTERP"):
+                            frm = self.next()[1]
+                        if self.peek() == ("SYM", "->", t[2]):
+                            self.next()
+                        to = ""
+                        if self.peek()[0] in ("STR", "INTERP"):
+                            to = self.next()[1]
+                        reps.append((frm, to))
+                        self.end_stmt()
+                    else:
+                        self.note(t[2], 4, "expected 'replace' in edit block; skipped")
+                        self.next()
+            return ("edit", target, reps)
+        if word == "ires":
+            self.next()
+            name = self.ident()
+            self.end_stmt()
+            return ("ires", name)
+        return self.assign_or_expr(w)
+
+    def ident(self):
+        t = self.peek()
+        if t[0] == "IDENT":
+            self.next()
+            return t[1]
+        self.note(t[2], 4, f"expected a name, found token; used '?'")
+        return "?"
+
+    def use_path(self):
+        parts = []
+        while True:
+            t = self.peek()
+            if t[0] == "IDENT":
+                parts.append(t[1]); self.next()
+            elif t[0] == "SYM" and t[1] in ("/", ".", "-"):
+                parts.append(t[1]); self.next()
+            elif t[0] == "STR":
+                parts.append(t[1]); self.next()
+            else:
+                break
+        return "".join(parts)
+
+    def assign_or_expr(self, w):
+        t1 = self.toks[self.pos + 1] if self.pos + 1 < len(self.toks) else ("EOF", None, 0)
+        if t1[0] == "SYM" and t1[1] == "=":
+            self.next()  # name
+            self.next()  # =
+            v = self.expr()
+            self.end_stmt()
+            return ("assign", w, None, v)
+        if t1[0] == "SYM" and t1[1] in ("+=", "-=", "*=", "/=", "%="):
+            opmap = {"+=": "+", "-=": "-", "*=": "*", "/=": "/", "%=": "%"}
+            self.next()  # name
+            self.next()  # op=
+            v = self.expr()
+            self.end_stmt()
+            return ("assign", w, opmap[t1[1]], v)
+        # expression statement (possibly index/member assignment)
+        e = self.expr()
+        t = self.peek()
+        if t[0] == "SYM" and t[1] == "=":
+            self.next()
+            v = self.expr()
+            self.end_stmt()
+            if e[0] == "index":
+                return ("idx_assign", e[1], e[2], None, v)
+            if e[0] == "member":
+                return ("mem_assign", e[1], e[2], None, v)
+            self.note(t[2], 4, "assignment target must be a name, index or member; value computed and dropped")
+            return ("expr", e)
+        if t[0] == "SYM" and t[1] in ("+=", "-=", "*=", "/=", "%="):
+            opmap = {"+=": "+", "-=": "-", "*=": "*", "/=": "/", "%=": "%"}
+            self.next()
+            v = self.expr()
+            self.end_stmt()
+            if e[0] == "index":
+                return ("idx_assign", e[1], e[2], opmap[t[1]], v)
+            if e[0] == "member":
+                return ("mem_assign", e[1], e[2], opmap[t[1]], v)
+            if e[0] == "ident":
+                return ("assign", e[1], opmap[t[1]], v)
+            self.note(t[2], 4, "compound assignment target invalid; dropped")
+            return ("expr", e)
+        # same-line garbage check BEFORE terminator
+        if not (t[0] in ("NL", "EOF") or (t[0] == "SYM" and t[1] in (";", "}"))):
+            self.note(t[2], 4, "expression statement not terminated; rest of line skipped")
+            self.skip_line()
+        self.end_stmt()
+        return ("expr", e)
+
+    def gene_def(self, marks):
+        ac = "acetylate" in marks
+        me = "methylate" in marks
+        m6 = "m6a" in marks
+        name = None
+        t = self.peek()
+        if t[0] == "IDENT" and t[1] != "guard":
+            name = t[1]
+            self.next()
+        params = []
+        if self.peek() == ("SYM", "(", self.peek()[2]):
+            self.next()
+            while True:
+                self.eat_nl()
+                t = self.peek()
+                if t[0] == "SYM" and t[1] == ")":
+                    self.next(); break
+                if t[0] == "EOF":
+                    self.note(t[2], 4, "parameter list auto-closed")
+                    break
+                pname = self.ident()
+                dflt = None
+                if self.peek() == ("SYM", "=", self.peek()[2]):
+                    self.next()
+                    dflt = self.expr()
+                params.append((pname, dflt))
+                if self.peek() == ("SYM", ",", self.peek()[2]):
+                    self.next()
+        guard = None
+        self.eat_nl()
+        if self.expect_kw("guard"):
+            if self.peek() == ("SYM", "(", self.peek()[2]):
+                self.next()
+                cond = self.expr()
+                if self.peek() == ("SYM", ")", self.peek()[2]):
+                    self.next()
+                else:
+                    self.note(self.peek()[2], 4, "guard condition auto-closed")
+                self.expect_kw("else")
+                gbody = self.block()
+                guard = (cond, gbody)
+            else:
+                self.note(self.peek()[2], 4, "guard without condition ignored")
+        self.eat_nl()
+        if self.peek() == ("SYM", "=>", self.peek()[2]):
+            self.next()
+            e = self.expr()
+            self.end_stmt()
+            return ("gene", Gene(name, params, guard, [("return", e)], ac, me, m6))
+        body = self.block()
+        return ("gene", Gene(name, params, guard, body, ac, me, m6))
+
+    def block(self):
+        if not (self.peek() == ("SYM", "{", self.peek()[2])):
+            self.note(self.peek()[2], 4, "block without braces; single statement accepted")
+            s = self.stmt()
+            return [s] if s else []
+        self.next()
+        out = []
+        while True:
+            self.eat_nl()
+            t = self.peek()
+            if t[0] == "SYM" and t[1] == "}":
+                self.next(); break
+            if t[0] == "EOF":
+                self.note(t[2], 4, "block auto-closed at end of file")
+                break
+            before = self.pos
+            s = self.stmt()
+            if s is not None:
+                out.append(s)
+            if self.pos == before:
+                self.note(t[2], 4, "token skipped")
+                self.next()
+        return out
+
+    # expressions
+    def expr(self):
+        return self.or_expr()
+
+    def or_expr(self):
+        left = self.and_expr()
+        while True:
+            t = self.peek()
+            if (t[0] == "IDENT" and t[1] == "or") or (t[0] == "SYM" and t[1] == "||"):
+                self.next()
+                left = ("bin", "or", left, self.and_expr())
+            else:
+                return left
+
+    def and_expr(self):
+        left = self.not_expr()
+        while True:
+            t = self.peek()
+            if (t[0] == "IDENT" and t[1] == "and") or (t[0] == "SYM" and t[1] == "&&"):
+                self.next()
+                left = ("bin", "and", left, self.not_expr())
+            else:
+                return left
+
+    def not_expr(self):
+        t = self.peek()
+        if (t[0] == "IDENT" and t[1] == "not") or (t[0] == "SYM" and t[1] == "!"):
+            self.next()
+            return ("un", "not", self.not_expr())
+        return self.cmp_expr()
+
+    def cmp_expr(self):
+        left = self.add_expr()
+        while True:
+            t = self.peek()
+            if t[0] == "SYM" and t[1] in ("==", "!=", "<", "<=", ">", ">="):
+                self.next()
+                left = ("bin", t[1], left, self.add_expr())
+            elif t[0] == "IDENT" and t[1] == "in":
+                self.next()
+                left = ("bin", "in", left, self.add_expr())
+            else:
+                return left
+
+    def add_expr(self):
+        left = self.mul_expr()
+        while True:
+            t = self.peek()
+            if t[0] == "SYM" and t[1] in ("+", "-"):
+                self.next()
+                left = ("bin", t[1], left, self.mul_expr())
+            else:
+                return left
+
+    def mul_expr(self):
+        left = self.unary()
+        while True:
+            t = self.peek()
+            if t[0] == "SYM" and t[1] in ("*", "/", "//", "%"):
+                self.next()
+                left = ("bin", t[1], left, self.unary())
+            else:
+                return left
+
+    def unary(self):
+        if self.peek() == ("SYM", "-", self.peek()[2]):
+            self.next()
+            return ("un", "neg", self.unary())
+        return self.postfix()
+
+    def postfix(self):
+        e = self.primary()
+        while True:
+            t = self.peek()
+            if t == ("SYM", "(", t[2]):
+                self.next()
+                args = []
+                while True:
+                    self.eat_nl()
+                    t2 = self.peek()
+                    if t2 == ("SYM", ")", t2[2]):
+                        self.next(); break
+                    if t2[0] == "EOF":
+                        self.note(t2[2], 4, "call arguments auto-closed")
+                        break
+                    args.append(self.expr())
+                    if self.peek() == ("SYM", ",", t2[2]):
+                        self.next()
+                e = ("call", e, args)
+            elif t == ("SYM", "[", t[2]):
+                self.next()
+                idx = self.expr()
+                if self.peek() == ("SYM", "]", self.peek()[2]):
+                    self.next()
+                else:
+                    self.note(self.peek()[2], 4, "index bracket auto-closed")
+                e = ("index", e, idx)
+            elif t == ("SYM", ".", t[2]):
+                self.next()
+                t2 = self.peek()
+                if t2[0] == "IDENT":
+                    self.next()
+                    if self.peek() == ("SYM", "(", t2[2]):
+                        self.next()
+                        args = []
+                        while True:
+                            self.eat_nl()
+                            t3 = self.peek()
+                            if t3 == ("SYM", ")", t3[2]):
+                                self.next(); break
+                            if t3[0] == "EOF":
+                                break
+                            args.append(self.expr())
+                            if self.peek() == ("SYM", ",", t3[2]):
+                                self.next()
+                        e = ("method", e, t2[1], args)
+                    else:
+                        e = ("member", e, t2[1])
+                else:
+                    self.note(t2[2], 4, "'.' followed by non-name; member skipped")
+                    break
+            else:
+                return e
+
+    def primary(self):
+        t = self.next()
+        kind, val, line = t
+        if kind == "INT":
+            return ("lit", val)
+        if kind == "FLOAT":
+            return ("lit", val)
+        if kind == "STR":
+            return ("lit", val)
+        if kind == "INTERP":
+            return self.build_interp(val, line)
+        if t == ("SYM", "(", line):
+            e = self.expr()
+            if self.peek() == ("SYM", ")", self.peek()[2]):
+                self.next()
+            else:
+                self.note(self.peek()[2], 4, "parenthesis auto-closed")
+            return e
+        if t == ("SYM", "[", line):
+            items = []
+            while True:
+                self.eat_nl()
+                t2 = self.peek()
+                if t2 == ("SYM", "]", t2[2]):
+                    self.next(); break
+                if t2[0] == "EOF":
+                    self.note(t2[2], 4, "list auto-closed at end of file")
+                    break
+                items.append(self.expr())
+                if self.peek() == ("SYM", ",", t2[2]):
+                    self.next()
+                elif not (self.peek() == ("SYM", "]", self.peek()[2])):
+                    self.note(self.peek()[2], 4, "list items separated automatically")
+            return ("list", items)
+        if t == ("SYM", "{", line):
+            pairs = []
+            while True:
+                self.eat_nl()
+                t2 = self.peek()
+                if t2 == ("SYM", "}", t2[2]):
+                    self.next(); break
+                if t2[0] == "EOF":
+                    self.note(t2[2], 4, "map literal auto-closed at end of file")
+                    break
+                if t2[0] == "IDENT":
+                    self.next()
+                    key = ("lit", t2[1])
+                elif t2[0] == "STR":
+                    self.next()
+                    key = ("lit", t2[1])
+                elif t2[0] == "INT":
+                    self.next()
+                    key = ("lit", t2[1])
+                else:
+                    self.note(t2[2], 4, "map key must be a name or string; key null")
+                    self.next()
+                    key = ("null",)
+                if self.peek() == ("SYM", ":", self.peek()[2]):
+                    self.next()
+                else:
+                    self.note(self.peek()[2], 4, "map entry missing ':'; value null")
+                val = self.expr()
+                pairs.append((key, val))
+                if self.peek() == ("SYM", ",", self.peek()[2]):
+                    self.next()
+            return ("map", pairs)
+        if kind == "IDENT":
+            if val in ("true", "false"):
+                if val not in ("true", "false"):
+                    self.note(line, 2, f"synonym '{val}' repaired")
+                return ("lit", val == "true")
+            if val in VALUE_SYNONYMS:
+                self.note(line, 2, f"synonym '{val}' repaired to '{'null' if VALUE_SYNONYMS[val] is None else str(VALUE_SYNONYMS[val]).lower()}'")
+                v = VALUE_SYNONYMS[val]
+                return ("lit", v)
+            if val == "null":
+                return ("null",)
+            if val in ("gene", "fn", "func", "def", "lambda"):
+                if val != "gene":
+                    self.note(line, 2, f"synonym '{val}' repaired to 'gene'")
+                s = self.gene_def([])
+                return ("lambda", s[1])
+            if val == "for":
+                var = self.ident()
+                self.expect_kw("in")
+                it = self.expr()
+                filt = None
+                if self.at_ident("if"):
+                    self.next()
+                    filt = self.expr()
+                self.expect_kw("collect")
+                body = self.expr()
+                return ("collect", var, it, filt, body)
+            return ("ident", val)
+        self.note(line, 4, f"unexpected token in expression; null substituted")
+        return ("null",)
+
+    def build_interp(self, raw, line):
+        parts = []
+        lit = []
+        i, n = 0, len(raw)
+        while i < n:
+            if raw[i] == "{":
+                if lit:
+                    parts.append(("lit", "".join(lit)))
+                    lit = []
+                depth, j = 1, i + 1
+                expr_txt = []
+                while j < n and depth > 0:
+                    if raw[j] == "{":
+                        depth += 1
+                    elif raw[j] == "}":
+                        depth -= 1
+                        if depth == 0:
+                            break
+                    expr_txt.append(raw[j])
+                    j += 1
+                i = j + 1
+                sub_toks, sub_notes = lex("".join(expr_txt))
+                sub = P(sub_toks, [])
+                e = sub.expr()
+                for nt in sub.notes:
+                    self.note(line, nt.rung, nt.message)
+                for nt in sub_notes:
+                    self.note(line, nt.rung, nt.message)
+                parts.append(("expr", e))
+            else:
+                lit.append(raw[i])
+                i += 1
+        if lit:
+            parts.append(("lit", "".join(lit)))
+        return ("interp", parts)
+
+    def pattern(self):
+        t = self.peek()
+        if t[0] == "INT" or t[0] == "FLOAT" or t[0] == "STR":
+            self.next()
+            lits = [("lit", t[1])]
+            while self.peek() == ("SYM", ",", self.peek()[2]):
+                self.next()
+                t2 = self.peek()
+                if t2[0] in ("INT", "FLOAT", "STR"):
+                    self.next()
+                    lits.append(("lit", t2[1]))
+                else:
+                    break
+            return lits[0] if len(lits) == 1 else ("multi", lits)
+        if t[0] == "IDENT":
+            if t[1] == "_":
+                self.next()
+                return ("wild",)
+            if t[1] in ("true", "false"):
+                self.next()
+                return ("lit", t[1] == "true")
+            if t[1] == "null":
+                self.next()
+                return ("null",)
+            self.next()
+            return ("bind", t[1])
+        self.note(t[2], 4, "pattern treated as wildcard")
+        self.next()
+        return ("wild",)
+
+def parse(src):
+    toks, notes = lex(src)
+    p = P(toks, notes)
+    stmts = p.program()
+    return stmts, p.notes
+
+# ----------------------------------------------------------------------------
+# evaluator
+
+BUILTINS = set("""promote len push pop insert remove keys values has del range str num type
+abs min max sum clock exit assert codon distance similar transcribe reverse_complement
+gc_content translate find_orf memory methyl fingerprint toggle_on toggle_state repressi_next
+repressi_state grn_fire grn_state spawn join""".split())
+
+BUILTIN_SYNONYMS = {"print": "promote", "echo": "promote", "say": "promote", "show": "promote"}
+
+class Interp:
+    def __init__(self, cell=None, cli_args=None):
+        self.notes = []
+        self.cell = cell or {}
+        self.silences = []
+        self.fates = {}
+        self.grn_edges = []
+        self.grn_levels = {}
+        self.toggles = []
+        self.repressi_ring = []
+        self.repressi_i = 0
+        self.ires = []
+        self.enhanced = []
+        self.defined_genes = []
+        self.call_counts = {}
+        self.modules = {}
+        self.loading = []
+        self.globals = {"__parent__": None}
+        self.cli_args = cli_args or []
+        self.steps = 0
+        self.proof_mode = False
+
+    def new_scope(self, parent):
+        return {"__parent__": parent}
+
+    def lookup(self, env, name):
+        node = env
+        while node is not None:
+            if name in node:
+                return node[name]
+            node = node["__parent__"]
+        return None
+
+    def find_env(self, env, name):
+        node = env
+        while node is not None:
+            if name in node:
+                return node
+            node = node["__parent__"]
+        return None
+
+    def assign(self, env, name, val):
+        target = self.find_env(env, name)
+        if target is None:
+            env[name] = val
+            return False
+        target[name] = val
+        return True
+
+    def note(self, rung, msg):
+        self.notes.append(Note(rung, msg))
+
+    def tick(self):
+        self.steps += 1
+        if self.steps > 20_000_000:
+            raise Stress("overflow", "step budget exhausted")
+
+    # ---- statements
+    def exec_block(self, env, stmts):
+        for s in stmts:
+            self.exec_stmt(env, s)
+
+    def exec_stmt(self, env, s):
+        self.tick()
+        k = s[0]
+        if k == "block":
+            self.exec_block(self.new_scope(env), s[1])
+        elif k == "let":
+            v = self.eval(env, s[2])
+            if s[1] in env:
+                self.note(4, f"rebinding '{s[1]}'")
+            env[s[1]] = v
+        elif k == "assign":
+            _, name, op, ve = s
+            v = self.eval(env, ve)
+            target = self.find_env(env, name)
+            if op is None:
+                if target is None:
+                    self.note(4, f"'{name}' was not declared; auto-declared")
+                self.assign(env, name, v)
+            else:
+                cur = self.lookup(env, name) if target is not None else None
+                nv = self.binop(op, cur, v)
+                if not self.assign(env, name, nv):
+                    self.note(4, f"'{name}' was not declared; auto-declared")
+        elif k == "idx_assign":
+            _, te, ie, op, ve = s
+            tv = self.eval(env, te)
+            iv = self.eval(env, ie)
+            v = self.eval(env, ve)
+            if isinstance(tv, list):
+                idx = self.as_index(iv, len(tv))
+                cur = tv[idx] if idx < len(tv) else None
+                nv = self.binop(op, cur, v) if op else v
+                if idx < len(tv):
+                    tv[idx] = nv
+                else:
+                    tv.append(nv)
+                    self.note(4, "index out of range; value appended")
+            elif isinstance(tv, dict):
+                cur = None
+                for kk, vv in tv.items():
+                    if deep_eq(kk, iv):
+                        cur = vv; break
+                nv = self.binop(op, cur, v) if op else v
+                key = iv if isinstance(iv, (str, int, float, bool)) else v_display(iv)
+                tv[key] = nv
+            else:
+                self.note(4, "index assignment on non-container ignored")
+        elif k == "mem_assign":
+            _, te, key, op, ve = s
+            tv = self.eval(env, te)
+            v = self.eval(env, ve)
+            if isinstance(tv, dict):
+                cur = tv.get(key)
+                tv[key] = self.binop(op, cur, v) if op else v
+            else:
+                self.note(4, "member assignment on non-map ignored")
+        elif k == "if":
+            _, branches, els = s
+            for cond, body in branches:
+                if truthy(self.eval(env, cond)):
+                    self.exec_block(self.new_scope(env), body)
+                    return
+            if els is not None:
+                self.exec_block(self.new_scope(env), els)
+        elif k == "while":
+            _, cond, body = s
+            while truthy(self.eval(env, cond)):
+                self.tick()
+                try:
+                    self.exec_block(self.new_scope(env), body)
+                except BreakLoop:
+                    break
+                except ContinueLoop:
+                    continue
+                except Return as r:
+                    raise r
+        elif k == "loop":
+            _, body = s
+            while True:
+                self.tick()
+                try:
+                    self.exec_block(self.new_scope(env), body)
+                except BreakLoop:
+                    break
+                except ContinueLoop:
+                    continue
+                except Return as r:
+                    raise r
+        elif k == "for":
+            _, name, it, body = s
+            itv = self.eval(env, it)
+            items = []
+            if isinstance(itv, list):
+                items = list(itv)
+            elif isinstance(itv, str):
+                items = list(itv)
+            elif isinstance(itv, dict):
+                items = list(itv.keys())
+            else:
+                self.note(4, f"cannot iterate {type_name(itv)}; loop skipped")
+            for item in items:
+                self.tick()
+                child = self.new_scope(env)
+                child[name] = item
+                try:
+                    self.exec_block(child, body)
+                except BreakLoop:
+                    break
+                except ContinueLoop:
+                    continue
+                except Return as r:
+                    raise r
+        elif k == "return":
+            raise Return(self.eval(env, s[1]))
+        elif k == "break":
+            raise BreakLoop()
+        elif k == "continue":
+            raise ContinueLoop()
+        elif k == "expr":
+            self.eval(env, s[1])  # propagates: stress frames or top-level contain
+        elif k == "match":
+            _, subj, cases = s
+            sv = self.eval(env, subj)
+            for pat, body in cases:
+                hit = False
+                if pat[0] == "wild":
+                    hit = True
+                elif pat[0] == "multi":
+                    hit = any(deep_eq(sv, self.eval(env, lt)) for lt in pat[1])
+                elif pat[0] in ("lit", "null"):
+                    lv = None if pat[0] == "null" else self.eval(env, pat)
+                    hit = deep_eq(sv, lv)
+                elif pat[0] == "bind":
+                    child = self.new_scope(env)
+                    child[pat[1]] = sv
+                    self.exec_block(child, body)
+                    return
+                if hit:
+                    self.exec_block(self.new_scope(env), body)
+                    return
+        elif k == "use":
+            modv = self.load_module(s[1])
+            name = s[2] or os.path.basename(s[1].replace("\\", "/")).split(".")[0].split("/")[-1]
+            env[name] = modv
+        elif k == "raise":
+            msg = self.eval(env, s[2])
+            raise Stress(s[1] or "unfolded", v_display(msg))
+        elif k == "stress":
+            _, kind, body, rescue = s
+            try:
+                self.exec_block(env, body)
+            except Stress as st:
+                if kind is not None and kind != st.kind and kind != "any":
+                    raise st
+                if rescue is not None:
+                    bind, rbody = rescue
+                    child = self.new_scope(env)
+                    if bind:
+                        child[bind] = st.as_map()
+                    self.exec_block(child, rbody)
+                else:
+                    self.note(4, f"stress contained: [{st.kind}] {st.message}")
+        elif k == "gene":
+            g = s[1]
+            if g.name and g.name not in self.defined_genes:
+                self.defined_genes.append(g.name)
+            g.closure = env
+            env[g.name or "<lambda>"] = g
+        elif k == "splice":
+            _, root, variants = s
+            chosen = self.choose_variant(root, variants)
+            if chosen:
+                vname, body = chosen
+                self.note(1, f"splice '{root}' → variant '{vname}' active")
+                g = Gene(root, [], None, body)
+                if root not in self.defined_genes:
+                    self.defined_genes.append(root)
+                env[root] = g
+        elif k == "silence":
+            if s[2]:
+                self.silences.append((s[1], s[2]))
+                self.note(1, f"RISC loaded: '{s[1]}' silenced → '{s[2]}'")
+        elif k == "enhance":
+            for n in s[1]:
+                if n not in self.enhanced:
+                    self.enhanced.append(n)
+        elif k == "ires":
+            if s[1] not in self.ires:
+                self.ires.append(s[1])
+        elif k == "fate":
+            self.fates[s[1]] = (s[2], s[3])
+        elif k == "regulate":
+            self.grn_edges.extend(s[1])
+        elif k == "toggle":
+            self.toggles.append((s[1], s[2], True))
+        elif k == "repressilator":
+            self.repressi_ring = s[1]
+            self.repressi_i = 0
+        elif k in ("frame", "edit", "anchor_export", "anchor_import"):
+            pass
+        elif k == "tad":
+            self.exec_block(env, s[2])
+
+    def choose_variant(self, root, variants):
+        if not variants:
+            return None
+        cv = self.cell.get(f"variant.{root}")
+        if cv:
+            for vn, body in variants:
+                if vn == cv:
+                    return (vn, body)
+        cv = self.cell.get("cli.variant")
+        if cv:
+            for vn, body in variants:
+                if vn == cv:
+                    return (vn, body)
+        return variants[0]
+
+    # ---- expressions
+    def eval(self, env, e):
+        self.tick()
+        k = e[0]
+        if k == "lit" or k == "null":
+            return None if k == "null" else e[1]
+        if k == "interp":
+            out = []
+            for pk, pv in e[1]:
+                if pk == "lit":
+                    out.append(pv)
+                else:
+                    out.append(v_display(self.eval(env, pv)))
+            return "".join(out)
+        if k == "list":
+            return [self.eval(env, x) for x in e[1]]
+        if k == "map":
+            m = {}
+            for ke, ve in e[1]:
+                kv = self.eval(env, ke)
+                key = kv if isinstance(kv, (str, int, float, bool)) else v_display(kv)
+                m[key] = self.eval(env, ve)
+            return m
+        if k == "ident":
+            v = self.lookup(env, e[1])
+            if v is not None or e[1] in env or self.find_env(env, e[1]) is not None:
+                return v
+            self.note(4, f"unbound '{e[1]}' read as null")
+            return None
+        if k == "un":
+            v = self.eval(env, e[2])
+            if e[1] == "neg":
+                if isinstance(v, (int, float)) and not isinstance(v, bool):
+                    return -v
+                raise Stress("unfolded", f"cannot negate {type_name(v)}")
+            return not truthy(v)
+        if k == "bin":
+            op = e[1]
+            if op == "and":
+                lv = self.eval(env, e[2])
+                return self.eval(env, e[3]) if truthy(lv) else lv
+            if op == "or":
+                lv = self.eval(env, e[2])
+                return lv if truthy(lv) else self.eval(env, e[3])
+            lv = self.eval(env, e[2])
+            rv = self.eval(env, e[3])
+            return self.binop(op, lv, rv)
+        if k == "call":
+            if e[1][0] == "ident":
+                args = [self.eval(env, a) for a in e[2]]
+                return self.call_named(env, e[1][1], args)
+            callee = self.eval(env, e[1])
+            args = [self.eval(env, a) for a in e[2]]
+            return self.call_value(env, callee, args)
+        if k == "index":
+            tv = self.eval(env, e[1])
+            iv = self.eval(env, e[2])
+            if isinstance(tv, list):
+                idx = self.as_index(iv, len(tv))
+                if idx < len(tv):
+                    return tv[idx]
+                raise Stress("missing", f"index {idx} out of range")
+            if isinstance(tv, dict):
+                for kk, vv in tv.items():
+                    if deep_eq(kk, iv):
+                        return vv
+                raise Stress("missing", "key not found")
+            if isinstance(tv, str):
+                idx = self.as_index(iv, len(tv))
+                if idx < len(tv):
+                    return tv[idx]
+                raise Stress("missing", "char index out of range")
+            raise Stress("unfolded", f"cannot index {type_name(tv)}")
+        if k == "member":
+            tv = self.eval(env, e[1])
+            if isinstance(tv, dict):
+                if e[2] in tv:
+                    return tv[e[2]]
+                self.note(4, f"member '{e[2]}' missing on map; null")
+                return None
+            self.note(4, f"member '{e[2]}' on {type_name(tv)} is null")
+            return None
+        if k == "method":
+            tv = self.eval(env, e[1])
+            args = [self.eval(env, a) for a in e[3]]
+            return self.call_method(env, tv, e[2], args)
+        if k == "lambda":
+            g = e[1]
+            g.name = g.name or "<lambda>"
+            g.closure = env
+            return g
+        if k == "collect":
+            _, var, it, filt, body = e
+            itv = self.eval(env, it)
+            items = itv if isinstance(itv, list) else (list(itv) if isinstance(itv, str) else (list(itv.keys()) if isinstance(itv, dict) else []))
+            out = []
+            for item in items:
+                self.tick()
+                child = self.new_scope(env)
+                child[var] = item
+                if filt is not None and not truthy(self.eval(child, filt)):
+                    continue
+                out.append(self.eval(child, body))
+            return out
+        raise Stress("unfolded", f"unknown expression {k}")
+
+    def as_index(self, v, ln):
+        if isinstance(v, int) and not isinstance(v, bool):
+            i = v
+            if i < 0:
+                i = ln + i
+            return max(i, 0)
+        raise Stress("missing", f"index must be int, found {type_name(v)}")
+
+    def binop(self, op, l, r):
+        if op == "+":
+            if isinstance(l, bool) or isinstance(r, bool):
+                raise Stress("unfolded", f"cannot add {type_name(l)} and {type_name(r)}")
+            if isinstance(l, (int, float)) and isinstance(r, (int, float)):
+                if isinstance(l, int) and isinstance(r, int) and not (-(2**63) <= l + r <= 2**63 - 1):
+                    raise Stress("overflow", "int overflow in '+'")
+                return l + r
+            if isinstance(l, str) and isinstance(r, str):
+                return l + r
+            if isinstance(l, list) and isinstance(r, list):
+                return l + r
+            raise Stress("unfolded", f"cannot add {type_name(l)} and {type_name(r)}")
+        if op in ("-", "*", "/", "//", "%"):
+            if isinstance(l, (int, float)) and isinstance(r, (int, float)) and not isinstance(l, bool) and not isinstance(r, bool):
+                I64MIN, I64MAX = -(2**63), 2**63 - 1
+                if op == "-":
+                    if isinstance(l, int) and isinstance(r, int) and not (I64MIN <= l - r <= I64MAX):
+                        raise Stress("overflow", "int overflow in '-'")
+                    return l - r
+                if op == "+":
+                    pass
+                if op == "*":
+                    if isinstance(l, int) and isinstance(r, int) and not (I64MIN <= l * r <= I64MAX):
+                        raise Stress("overflow", "int overflow in '*'")
+                    return l * r
+                if op == "/":
+                    if r == 0:
+                        raise Stress("unfolded", "division by zero")
+                    return l / r
+                if op == "//":
+                    if r == 0:
+                        raise Stress("unfolded", "division by zero in '//'")
+                    return float(l // r) if isinstance(l, float) or isinstance(r, float) else l // r
+                if r == 0:
+                    raise Stress("unfolded", "modulo by zero")
+                m = abs(l) % abs(r)
+                return m if l >= 0 else (m if m == 0 else abs(r) - m) * (1 if l >= 0 else -1)
+            raise Stress("unfolded", f"cannot apply '{op}' to {type_name(l)} and {type_name(r)}")
+        if op == "==":
+            return deep_eq(l, r)
+        if op == "!=":
+            return not deep_eq(l, r)
+        if op in ("<", "<=", ">", ">="):
+            if isinstance(l, str) and isinstance(r, str):
+                pass
+            elif isinstance(l, (int, float)) and isinstance(r, (int, float)):
+                pass
+            else:
+                raise Stress("unfolded", f"cannot order {type_name(l)} and {type_name(r)}")
+            if op == "<": return l < r
+            if op == "<=": return l <= r
+            if op == ">": return l > r
+            return l >= r
+        if op == "in":
+            if isinstance(r, list):
+                return any(deep_eq(l, x) for x in r)
+            if isinstance(r, str) and isinstance(l, str):
+                return l in r
+            if isinstance(r, dict):
+                return any(deep_eq(k, l) for k in r.keys())
+            raise Stress("unfolded", f"'in' not defined for {type_name(r)}")
+        raise Stress("unfolded", f"unknown op {op}")
+
+    # ---- calls
+    def call_value(self, env, callee, args):
+        if isinstance(callee, Gene):
+            return self.call_gene(callee, args)
+        self.note(4, f"called a {type_name(callee)} (not a gene); result null")
+        return None
+
+    def call_named(self, env, name, args):
+        if name in BUILTIN_SYNONYMS:
+            return self.builtin(env, BUILTIN_SYNONYMS[name], args)
+        # RISC silencing: redirect calls (acetylated genes are immune)
+        for frm, to in self.silences:
+            if frm == name:
+                target_gene = self.lookup(env, name)
+                immune = isinstance(target_gene, Gene) and target_gene.acetylate
+                if not immune:
+                    self.note(4, f"RISC: call to '{frm}' silenced → '{to}'")
+                    tgt = self.lookup(env, to)
+                    return self.call_value(env, tgt, args)
+        tgt = self.lookup(env, name)
+        if tgt is not None or self.find_env(env, name) is not None:
+            return self.call_value(env, tgt, args)
+        # fate constructor: Name() creates a fate-landscape instance
+        if name in self.fates:
+            states, enter = self.fates[name]
+            return {"#fate": name, "#state": enter or (states[0][0] if states else "")}
+        if name in BUILTINS:
+            return self.builtin(env, name, args)
+        limit2 = 1 if len(name) <= 4 else 2
+        best, bd = None, 99
+        for b in BUILTINS:
+            d = edit_distance(name, b)
+            if d <= limit2 and d < bd:
+                best, bd = b, d
+        if best:
+            self.note(3, f"wobble: unknown gene '{name}' repaired to builtin '{best}'")
+            return self.builtin(env, best, args)
+        best, bd = None, 99
+        for g in self.defined_genes:
+            d = edit_distance(name, g)
+            if d <= limit2 and d < bd:
+                best, bd = g, d
+        if best and bd > 0:
+            self.note(3, f"wobble: unknown gene '{name}' repaired to gene '{best}'")
+            gt = self.lookup(env, best)
+            return self.call_value(env, gt, args)
+        self.note(4, f"phantom call to '{name}'; result null")
+        return None
+
+    def call_gene(self, g, args):
+        name = g.name or "<lambda>"
+        self.call_counts[name] = self.call_counts.get(name, 0) + 1
+        fenv = self.new_scope(g.closure if g.closure is not None else self.globals)
+        for i, (pname, dflt) in enumerate(g.params):
+            if pname in ("?", ""):
+                continue
+            if i < len(args):
+                fenv[pname] = args[i]
+            elif dflt is not None:
+                fenv[pname] = self.eval(fenv, dflt)
+            else:
+                self.note(4, f"missing argument '{pname}' in call to {name}; bound null")
+                fenv[pname] = None
+        if len(args) > len(g.params) and g.params:
+            self.note(4, f"{len(args) - len(g.params)} extra argument(s) in call to {name} ignored")
+        if g.guard is not None:
+            cond, gbody = g.guard
+            ok = False
+            try:
+                ok = truthy(self.eval(fenv, cond))
+            except Stress:
+                ok = False
+            if not ok:
+                self.note(4, f"guard tripped calling {name}")
+                try:
+                    self.exec_block(fenv, gbody)
+                    self.note(4, f"guard of {name} returned null (uORF repression)")
+                    return None
+                except Return as r:
+                    return r.value
+        if g.methylate:
+            if self.cell.get("methylate.quiet") != "true":
+                self.note(4, f"methylated call to {name} (repressed chromatin)")
+        try:
+            self.exec_block(fenv, g.body)
+            return None
+        except Return as r:
+            return r.value
+        finally:
+            pass
+
+    # ---- methods
+    def call_method(self, env, recv, name, args):
+        if isinstance(recv, dict) and "#fate" in recv:
+            fate_name, cur = recv["#fate"], recv["#state"]
+            if name == "shift":
+                target = v_display(args[0]) if args else ""
+                states, _ = self.fates.get(fate_name, ([], None))
+                allowed = any(f == cur and target in tg for f, tg in states)
+                if allowed:
+                    recv["#state"] = target
+                    return True
+                self.note(4, f"fate {fate_name}: '{cur}' → '{target}' crosses a valley; state held")
+                return False
+            if name == "state":
+                return recv.get("#state")
+            if name == "can":
+                target = v_display(args[0]) if args else ""
+                states, _ = self.fates.get(fate_name, ([], None))
+                return any(f == cur and target in tg for f, tg in states)
+        if isinstance(recv, str):
+            if name == "upper": return recv.upper()
+            if name == "lower": return recv.lower()
+            if name == "trim": return recv.strip()
+            if name == "split":
+                sep = v_display(args[0]) if args else " "
+                return recv.split(sep)
+            if name == "join":
+                sep = recv
+                lst = args[0] if args else []
+                return sep.join(v_display(x) for x in lst)
+            if name == "replace":
+                return recv.replace(v_display(args[0]), v_display(args[1]))
+            if name == "contains": return v_display(args[0]) in recv
+            if name == "starts": return recv.startswith(v_display(args[0]))
+            if name == "ends": return recv.endswith(v_display(args[0]))
+            if name == "repeat": return recv * int(args[0])
+            if name == "slice":
+                a = int(args[0]) if len(args) > 0 else 0
+                b = int(args[1]) if len(args) > 1 else len(recv)
+                return recv[a:b]
+            if name == "len": return len(recv)
+        elif isinstance(recv, list):
+            if name == "map":
+                return [self.call_value(env, args[0], [x]) for x in recv]
+            if name == "filter":
+                return [x for x in recv if truthy(self.call_value(env, args[0], [x]))]
+            if name == "reduce":
+                acc = args[1] if len(args) > 1 else 0
+                for x in recv:
+                    acc = self.call_value(env, args[0], [acc, x])
+                return acc
+            if name == "each":
+                for x in recv:
+                    self.call_value(env, args[0], [x])
+                return None
+            if name == "sort":
+                if args and isinstance(args[0], Gene):
+                    import functools
+                    return sorted(recv, key=functools.cmp_to_key(
+                        lambda a, b: -1 if truthy(self.call_value(env, args[0], [a, b])) else 1))
+                return sorted(recv, key=lambda x: (isinstance(x, str), x))
+            if name == "reverse": return list(reversed(recv))
+            if name == "contains": return any(deep_eq(x, args[0]) for x in recv)
+            if name == "index_of":
+                for i, x in enumerate(recv):
+                    if deep_eq(x, args[0]):
+                        return i
+                return -1
+            if name == "slice":
+                a = int(args[0]) if len(args) > 0 else 0
+                b = int(args[1]) if len(args) > 1 else len(recv)
+                return recv[a:b]
+            if name == "join":
+                sep = v_display(args[0]) if args else ""
+                return sep.join(v_display(x) for x in recv)
+            if name == "len": return len(recv)
+            if name == "push": recv.append(args[0]); return recv
+            if name == "pop": return recv.pop() if recv else None
+        elif isinstance(recv, dict):
+            if name == "keys": return list(recv.keys())
+            if name == "values": return list(recv.values())
+            if name == "items": return [[k, v] for k, v in recv.items()]
+            if name == "has": return any(deep_eq(k, args[0]) for k in recv.keys())
+            if name == "del":
+                for k in list(recv.keys()):
+                    if deep_eq(k, args[0]):
+                        del recv[k]
+                return None
+            if name == "len": return len(recv)
+            if name in recv and isinstance(recv[name], (Gene,)):
+                return self.call_value(env, recv[name], args)
+        self.note(4, f"{type_name(recv)} has no method '{name}'; null")
+        return None
+
+    # ---- builtins
+    def builtin(self, env, name, args):
+        if name == "promote":
+            print(" ".join(v_display(a) for a in args))
+            return None
+        if name == "len":
+            v = args[0] if args else None
+            if isinstance(v, (str, list, dict)):
+                return len(v)
+            self.note(4, "len() of non-container is 0")
+            return 0
+        if name == "push":
+            args[0].append(args[1]); return args[0]
+        if name == "pop":
+            return args[0].pop() if args[0] else None
+        if name == "insert":
+            idx = self.as_index(args[1], len(args[0]))
+            args[0].insert(min(idx, len(args[0])), args[2]); return args[0]
+        if name == "remove":
+            idx = self.as_index(args[1], len(args[0]))
+            if idx < len(args[0]):
+                return args[0].pop(idx)
+            raise Stress("missing", "remove index out of range")
+        if name == "keys":
+            return list(args[0].keys()) if isinstance(args[0], dict) else []
+        if name == "values":
+            return list(args[0].values()) if isinstance(args[0], dict) else []
+        if name == "has":
+            return isinstance(args[0], dict) and any(deep_eq(k, args[1]) for k in args[0].keys())
+        if name == "del":
+            if isinstance(args[0], dict):
+                for k in list(args[0].keys()):
+                    if deep_eq(k, args[1]):
+                        del args[0][k]
+            return None
+        if name == "range":
+            if len(args) == 1:
+                a, b, st = 0, args[0], 1
+            elif len(args) == 2:
+                a, b, st = args[0], args[1], 1
+            else:
+                a, b, st = args[0], args[1], args[2]
+            if st == 0:
+                raise Stress("unfolded", "range step cannot be 0")
+            out = []
+            i = a
+            while (st > 0 and i < b) or (st < 0 and i > b):
+                out.append(i)
+                i += st
+                if len(out) > 10_000_000:
+                    raise Stress("overflow", "range too large")
+            return out
+        if name == "str":
+            return v_display(args[0]) if args else ""
+        if name == "num":
+            v = args[0] if args else None
+            if isinstance(v, (int, float)) and not isinstance(v, bool):
+                return v
+            try:
+                t = str(v).strip()
+                return int(t)
+            except ValueError:
+                try:
+                    return float(t)
+                except (ValueError, UnboundLocalError):
+                    self.note(4, f"num('{v}') failed; 0")
+                    return 0
+        if name == "type":
+            return type_name(args[0]) if args else "null"
+        if name == "abs":
+            return abs(args[0])
+        if name in ("min", "max"):
+            vals = []
+            for a in args:
+                if isinstance(a, list):
+                    vals.extend(a)
+                else:
+                    vals.append(a)
+            if not vals:
+                return None
+            return (min if name == "min" else max)(vals)
+        if name == "sum":
+            src = args[0] if len(args) == 1 and isinstance(args[0], list) else args
+            acc = 0
+            for v in src:
+                acc = self.binop("+", acc, v)
+            return acc
+        if name == "clock":
+            import time
+            return time.time()
+        if name == "exit":
+            sys.exit(int(args[0]) if args else 0)
+        if name == "assert":
+            ok = truthy(args[0]) if args else False
+            if not ok:
+                msg = v_display(args[1]) if len(args) > 1 else "assertion failed"
+                raise Stress("burned", msg)
+            return True
+        if name == "codon":
+            s = v_display(args[0]) if args else ""
+            # mirror of the C++ kernel: 3-letter groups scored by usage class
+            USAGE = [7,1,5,3,15,6,8,4,3,2,0,0,4,6,0,5,
+                     4,1,2,13,5,2,4,1,6,2,12,9,5,3,9,4,
+                     3,1,2,15,8,5,6,2,14,7,12,6,2,1,8,3,
+                     6,2,8,1,8,3,6,10,4,2,13,11,6,7,3,9]
+            def bidx(c):
+                return {"t": 0, "u": 0, "c": 1, "a": 2, "g": 3}.get(c.lower(), -1)
+            acc, groups = 0, 0
+            s2 = v_display(args[0]) if args else ""
+            i = 0
+            while i + 2 < len(s2):
+                b1, b2, b3 = bidx(s2[i]), bidx(s2[i+1]), bidx(s2[i+2])
+                if b1 < 0 or b2 < 0 or b3 < 0:
+                    acc += 90
+                else:
+                    w = USAGE[b1 * 16 + b2 * 4 + b3]
+                    acc += 30 + w * 5
+                groups += 1
+                i += 3
+            if groups == 0:
+                return 0
+            mean = acc // groups
+            return int(min(mean, 100))
+        if name == "distance":
+            a = v_display(args[0]) if args else ""
+            b = v_display(args[1]) if len(args) > 1 else ""
+            return edit_distance(a, b)
+        if name == "similar":
+            a = v_display(args[0]) if args else ""
+            b = v_display(args[1]) if len(args) > 1 else ""
+            maxd = int(args[2]) if len(args) > 2 else 2
+            return edit_distance(a, b) <= maxd
+        if name == "transcribe":
+            s = (v_display(args[0]) if args else "").upper()
+            return s.replace("T", "U")
+        if name == "reverse_complement":
+            s = (v_display(args[0]) if args else "").upper()
+            comp = {"A": "T", "T": "A", "G": "C", "C": "G"}
+            return "".join(comp.get(c, c) for c in reversed(s))
+        if name == "gc_content":
+            s = (v_display(args[0]) if args else "").upper()
+            n = sum(1 for c in s if c in "ATGC")
+            if n == 0:
+                return 0.0
+            gc = sum(1 for c in s if c in "GC")
+            return gc * 100.0 / n
+        if name == "translate":
+            s = (v_display(args[0]) if args else "").upper()
+            TABLE = {}
+            bases = "TCAG"
+            aas = "FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG"
+            i = 0
+            for b1 in bases:
+                for b2 in bases:
+                    for b3 in bases:
+                        TABLE[b1 + b2 + b3] = aas[i]
+                        i += 1
+            # NOTE: this enumeration order is TTT,TTC,TTA,TTG,TCT... (b3 fastest)
+            protein = []
+            s2 = s.replace("U", "T")
+            i = 0
+            while i + 3 <= len(s2):
+                codon = s2[i:i + 3]
+                if codon in ("TAA", "TAG", "TGA"):
+                    break
+                aa = None
+                for kk, vv in (("TTT","F"),("TTC","F"),("TTA","L"),("TTG","L"),
+                               ("TCT","S"),("TCC","S"),("TCA","S"),("TCG","S"),
+                               ("TAT","Y"),("TAC","Y"),("TAA","*"),("TAG","*"),
+                               ("TGT","C"),("TGC","C"),("TGA","*"),("TGG","W"),
+                               ("CTT","L"),("CTC","L"),("CTA","L"),("CTG","L"),
+                               ("CCT","P"),("CCC","P"),("CCA","P"),("CCG","P"),
+                               ("CAT","H"),("CAC","H"),("CAA","Q"),("CAG","Q"),
+                               ("CGT","R"),("CGC","R"),("CGA","R"),("CGG","R"),
+                               ("ATT","I"),("ATC","I"),("ATA","I"),("ATG","M"),
+                               ("ACT","T"),("ACC","T"),("ACA","T"),("ACG","T"),
+                               ("AAT","N"),("AAC","N"),("AAA","K"),("AAG","K"),
+                               ("AGT","S"),("AGC","S"),("AGA","R"),("AGG","R"),
+                               ("GTT","V"),("GTC","V"),("GTA","V"),("GTG","V"),
+                               ("GCT","A"),("GCC","A"),("GCA","A"),("GCG","A"),
+                               ("GAT","D"),("GAC","D"),("GAA","E"),("GAG","E"),
+                               ("GGT","G"),("GGC","G"),("GGA","G"),("GGG","G")):
+                    if kk == codon:
+                        aa = vv
+                        break
+                protein.append(aa or "X")
+                i += 3
+            return "".join(protein)
+        if name == "find_orf":
+            s = (v_display(args[0]) if args else "").upper()
+            out = []
+            i = 0
+            while i + 2 < len(s):
+                if s[i:i+3] == "ATG":
+                    j = i
+                    protein = []
+                    stopped = False
+                    while j + 2 < len(s):
+                        c2 = s[j:j+3]
+                        if c2 in ("TAA", "TAG", "TGA"):
+                            stopped = True
+                            break
+                        protein.append(self.builtin(env, "translate", [c2]) or "")
+                        j += 3
+                    if stopped and protein:
+                        out.append("".join(protein))
+                i += 1
+            return out
+        if name == "memory":
+            import resource
+            return {"arena_bytes": 0, "interns": 0, "allocs": 0}
+        if name == "methyl":
+            k = v_display(args[0]) if args else ""
+            d = args[1] if len(args) > 1 else None
+            v = self.cell.get(k)
+            if v is None:
+                return d
+            if v == "true": return True
+            if v == "false": return False
+            try:
+                return int(v)
+            except ValueError:
+                try:
+                    return float(v)
+                except ValueError:
+                    return v
+        if name == "fingerprint":
+            total_defined = len(self.defined_genes)
+            spliced = len([g for g in self.call_counts if g in self.defined_genes or True])
+            spliced = min(len(self.call_counts), total_defined)
+            unspliced = max(total_defined - spliced, 0)
+            n = len(self.call_counts)
+            mean = (sum(self.call_counts.values()) / n) if n else 0.0
+            var = (sum((c - mean) ** 2 for c in self.call_counts.values()) / n) if n else 0.0
+            fano = (var / mean) if mean > 0 else 0.0
+            velocity = (unspliced / total_defined) if total_defined else 0.0
+            return {"calls": dict(self.call_counts), "fano": fano,
+                    "spliced": spliced, "unspliced": unspliced, "velocity": velocity}
+        if name == "toggle_on":
+            nm = v_display(args[0]) if args else ""
+            for i, (a, b, _on) in enumerate(self.toggles):
+                if nm in (a, b):
+                    self.toggles[i] = (a, b, a == nm)
+                    return True
+            self.note(4, f"toggle pair containing '{nm}' not declared")
+            return False
+        if name == "toggle_state":
+            out = {}
+            for a, b, a_on in self.toggles:
+                out[a] = a_on
+                out[b] = not a_on
+            return out
+        if name == "repressi_next":
+            if not self.repressi_ring:
+                self.note(4, "no repressilator declared")
+                return None
+            self.repressi_i = (self.repressi_i + 1) % len(self.repressi_ring)
+            return self.repressi_i
+        if name == "repressi_state":
+            n = len(self.repressi_ring)
+            idx = self.repressi_i % n if n else 0
+            return {nm: (1.0 if i == idx else 0.0) for i, nm in enumerate(self.repressi_ring)}
+        if name == "grn_fire":
+            seed = v_display(args[0]) if args else ""
+            levels = {}
+            for frm, to, st, inh in self.grn_edges:
+                levels.setdefault(frm, 0.0)
+                levels.setdefault(to, 0.0)
+            levels[seed] = 1.0
+            for wave in range(10):
+                changed = False
+                snap = dict(levels)
+                for frm, to, st, inh in self.grn_edges:
+                    parent = snap.get(frm, 0.0)
+                    if parent <= 0:
+                        continue
+                    influence = parent * (st ** (wave + 1))
+                    cur = levels.get(to, 0.0)
+                    nxt = max(0.0, cur - influence) if inh else max(cur, influence)
+                    if abs(nxt - cur) > 1e-12:
+                        levels[to] = nxt
+                        changed = True
+                if not changed:
+                    break
+            self.grn_levels = levels
+            return dict(levels)
+        if name == "grn_state":
+            return dict(self.grn_levels)
+        if name == "spawn":
+            callee = args[0] if args else None
+            targs = args[1] if len(args) > 1 and isinstance(args[1], list) else []
+            if isinstance(callee, Gene):
+                try:
+                    result = self.call_gene(callee, targs)
+                except Stress as st:
+                    result = {"kind": st.kind, "message": st.message}
+                self.next_id = getattr(self, "next_id", 0) + 1
+                self.tasks = getattr(self, "tasks", {})
+                self.tasks[self.next_id] = result
+                return self.next_id
+            self.note(4, "spawn() needs a gene; null task")
+            return None
+        if name == "join":
+            tid = args[0] if args else None
+            tasks = getattr(self, "tasks", {})
+            if isinstance(tid, int) and tid in tasks:
+                return tasks.pop(tid)
+            self.note(4, f"task {tid} already joined or unknown")
+            return None
+        self.note(4, f"unknown builtin '{name}'; null")
+        return None
+
+    # ---- modules
+    def load_module(self, path):
+        if path in self.modules:
+            return self.modules[path]
+        if path in self.loading:
+            return {}
+        p = path if path.endswith(".op") else path + ".op"
+        cands = [p, os.path.join("std", p)]
+        std_dir = os.environ.get("OPERON_STD")
+        if std_dir:
+            cands.append(os.path.join(std_dir, p))
+        resolved = next((c for c in cands if os.path.exists(c)), None)
+        if resolved is None:
+            return {}
+        src = open(resolved).read()
+        self.loading.append(path)
+        stmts, notes = parse(src)
+        for nt in notes:
+            self.note(nt.rung, f"[{path}] {nt.message}")
+        menv = self.new_scope(self.globals)
+        for st in stmts:
+            try:
+                self.exec_stmt(menv, st)
+            except Stress as e:
+                self.note(4, f"stress contained: [{e.kind}] {e.message}")
+            except (Return, BreakLoop, ContinueLoop):
+                pass
+        self.loading.pop()
+        # export rule: anchor export wins, else top-level genes/lets
+        has_anchor = any(s[0] == "anchor_export" for s in stmts) or \
+            any(s[0] == "tad" and any(x[0] == "anchor_export" for x in s[2]) for s in stmts)
+        exports = {}
+        if has_anchor:
+            names = []
+            for s in stmts:
+                if s[0] == "anchor_export":
+                    names.extend(s[1])
+                if s[0] == "tad":
+                    for x in s[2]:
+                        if x[0] == "anchor_export":
+                            names.extend(x[1])
+            for nm in names:
+                v = self.lookup(menv, nm)
+                if v is not None or nm in menv:
+                    exports[nm] = v
+        else:
+            for kk, vv in menv.items():
+                if kk != "__parent__" and not kk.startswith("#"):
+                    exports[kk] = vv
+        self.modules[path] = exports
+        return exports
+
+def collect_structure(stmts):
+    proofs, frames, exports, tad_exports, tad_members, ires = [], [], [], [], [], []
+    def walk(body):
+        for s in body:
+            if s[0] == "frame":
+                if s[2]:
+                    proofs.append(s[3])
+                else:
+                    frames.append((s[1], s[3]))
+                walk(s[3])
+            elif s[0] == "tad":
+                members, exps = [], []
+                for x in s[2]:
+                    if x[0] == "anchor_export":
+                        exps.extend(x[1])
+                    if x[0] == "gene" and x[1].name:
+                        members.append(x[1].name)
+                    if x[0] == "let":
+                        members.append(x[1])
+                tad_exports.append((s[1], exps))
+                tad_members.append((s[1], members))
+                walk(s[2])
+            elif s[0] == "anchor_export":
+                exports.extend(s[1])
+            elif s[0] == "ires":
+                ires.append(s[1])
+            elif s[0] == "gene":
+                walk(s[1].body)
+                if s[1].guard:
+                    walk(s[1].guard[1])
+            elif s[0] == "splice":
+                for _, vb in s[2]:
+                    walk(vb)
+    walk(stmts)
+    return proofs, frames, exports, tad_exports, tad_members, ires
+
+# ----------------------------------------------------------------------------
+# nmd + orf helpers (mirror of genes.rs)
+
+def nmd_sweep(stmts, called, enhanced):
+    findings = []
+    def scan_body(body):
+        returned = False
+        for s in body:
+            if returned:
+                findings.append(("premature-stop", "statement after unconditional return (premature stop codon)"))
+            scan_inner(s)
+            if s[0] == "return":
+                returned = True
+    def scan_inner(s):
+        k = s[0]
+        if k == "gene":
+            scan_body(s[1].body)
+            if s[1].guard:
+                scan_body(s[1].guard[1])
+        elif k == "if":
+            for _, b in s[1]:
+                scan_body(b)
+            if s[2]:
+                scan_body(s[2])
+        elif k in ("while", "loop"):
+            scan_body(s[2] if k == "while" else s[1])
+        elif k == "for":
+            scan_body(s[3])
+        elif k == "block" or k == "tad":
+            scan_body(s[2] if k == "tad" else s[1])
+        elif k == "frame":
+            scan_body(s[3])
+        elif k == "stress":
+            scan_body(s[2])
+            if s[3]:
+                scan_body(s[3][1])
+    for s in stmts:
+        scan_inner(s)
+    for s in stmts:
+        if s[0] == "gene" and s[1].name:
+            name = s[1].name
+            if name in ("main",) or name in enhanced or name in called:
+                continue
+            if not s[1].methylate:
+                findings.append(("untranslated", f"gene '{name}' defined but never translated (dead transcript)"))
+    return findings
+
+def find_orfs_python(dna):
+    out = []
+    i = 0
+    while i + 2 < len(dna):
+        if dna[i:i+3] == "ATG":
+            j, protein, stopped = i, [], False
+            while j + 2 < len(dna):
+                c2 = dna[j:j+3]
+                if c2 in ("TAA", "TAG", "TGA"):
+                    stopped = True
+                    break
+                protein.append(translate_codon(c2))
+                j += 3
+            if stopped and protein:
+                out.append("".join(protein))
+        i += 1
+    return out
+
+def translate_codon(codon):
+    T = {}
+    pairs = [("TTT","F"),("TTC","F"),("TTA","L"),("TTG","L"),("TCT","S"),("TCC","S"),("TCA","S"),("TCG","S"),
+             ("TAT","Y"),("TAC","Y"),("TAA","*"),("TAG","*"),("TGT","C"),("TGC","C"),("TGA","*"),("TGG","W"),
+             ("CTT","L"),("CTC","L"),("CTA","L"),("CTG","L"),("CCT","P"),("CCC","P"),("CCA","P"),("CCG","P"),
+             ("CAT","H"),("CAC","H"),("CAA","Q"),("CAG","Q"),("CGT","R"),("CGC","R"),("CGA","R"),("CGG","R"),
+             ("ATT","I"),("ATC","I"),("ATA","I"),("ATG","M"),("ACT","T"),("ACC","T"),("ACA","T"),("ACG","T"),
+             ("AAT","N"),("AAC","N"),("AAA","K"),("AAG","K"),("AGT","S"),("AGC","S"),("AGA","R"),("AGG","R"),
+             ("GTT","V"),("GTC","V"),("GTA","V"),("GTG","V"),("GCT","A"),("GCC","A"),("GCA","A"),("GCG","A"),
+             ("GAT","D"),("GAC","D"),("GAA","E"),("GAG","E"),("GGT","G"),("GGC","G"),("GGA","G"),("GGG","G")]
+    for k, v in pairs:
+        T[k] = v
+    return T.get(codon, "X")
+
+# ----------------------------------------------------------------------------
+# load & run
+
+def parse_cell(src):
+    out = {}
+    section = ""
+    for line in src.splitlines():
+        t = line.strip()
+        if not t or t.startswith("#"):
+            continue
+        if t.startswith("[") and t.endswith("]"):
+            section = t[1:-1].strip()
+            continue
+        if "=" in t:
+            k, v = t.split("=", 1)
+            kk = f"{section}.{k.strip()}" if section else k.strip()
+            out[kk] = v.strip().strip('"')
+    return out
+
+def apply_rna(src, patch_src, stem):
+    applied = []
+    stmts, _ = parse(patch_src)
+    text = src
+    for s in stmts:
+        if s[0] == "edit":
+            target, reps = s[1], s[2]
+            if target not in (stem, "anywhere"):
+                start = text.find(f"gene {target}")
+                if start >= 0:
+                    end = text.find("\ngene ", start + 5)
+                    end = end + 1 if end >= 0 else len(text)
+                    seg = text[start:end]
+                    seg2 = seg
+                    for frm, to in reps:
+                        if frm in seg2:
+                            seg2 = seg2.replace(frm, to)
+                            applied.append(f"{target}: '{frm}' -> '{to}'")
+                    if seg2 != seg:
+                        text = text[:start] + seg2 + text[end:]
+            else:
+                for frm, to in reps:
+                    if frm in text:
+                        text = text.replace(frm, to)
+                        applied.append(f"{target}: '{frm}' -> '{to}'")
+    return text, applied
+
+def load_file(path, cell=None, variant=None, rna=None, args=None):
+    src = open(path).read()
+    stem = os.path.basename(path).rsplit(".", 1)[0]
+    it = Interp(cell=cell or {}, cli_args=args or [])
+    if variant:
+        it.cell["cli.variant"] = variant
+    if rna:
+        patch = open(rna).read()
+        src2, applied = apply_rna(src, patch, stem)
+        for a in applied:
+            it.note(1, f"rna edit applied: {a}")
+        src = src2
+    stmts, notes = parse(src)
+    for nt in notes:
+        it.note(nt.rung, nt.message)
+    it.ires = [s[1] for s in stmts if s[0] == "ires"]
+    for st in stmts:
+        try:
+            it.exec_stmt(it.globals, st)
+        except Stress as e:
+            it.note(4, f"stress contained: [{e.kind}] {e.message}")
+        except (Return, BreakLoop, ContinueLoop):
+            pass
+    proofs, frames, exports, tad_exports, tad_members, ires = collect_structure(stmts)
+    return it, stmts, proofs, frames
+
+def resolve_entry(it, stmts, entry=None, use_ires=False):
+    if entry:
+        return entry
+    if any(s[0] == "gene" and s[1].name == "main" for s in stmts):
+        return "main"
+    if it.ires:
+        return it.ires[0]
+    return None
+
+def run(path, cell=None, variant=None, rna=None, entry=None, frame=None, args=None):
+    it, stmts, proofs, frames = load_file(path, cell, variant, rna, args)
+    if frame:
+        for nm, body in frames:
+            if nm == frame:
+                it.exec_block(it.new_scope(it.globals), body)
+    else:
+        e = resolve_entry(it, stmts, entry)
+        if e:
+            argv = list(args or [])
+            g = it.globals.get(e)
+            if isinstance(g, Gene) and g.params:
+                it.call_gene(g, [argv])
+            elif isinstance(g, Gene):
+                it.call_gene(g, [])
+            else:
+                it.call_named(it.globals, e, [argv])
+    return it
+
+def main():
+    argv = sys.argv[1:]
+    if not argv or argv[0] in ("-h", "--help"):
+        print(__doc__)
+        sys.exit(2)
+    cmd = argv[0]
+    rest = argv[1:]
+    opts = {"cell": None, "variant": None, "rna": None, "entry": None, "frame": None, "args": []}
+    pos = []
+    i = 0
+    while i < len(rest):
+        a = rest[i]
+        if a == "--cell":
+            i += 1; opts["cell"] = rest[i]
+        elif a == "--variant":
+            i += 1; opts["variant"] = rest[i]
+        elif a == "--rna":
+            i += 1; opts["rna"] = rest[i]
+        elif a == "--entry":
+            i += 1; opts["entry"] = rest[i]
+        elif a == "--frame":
+            i += 1; opts["frame"] = rest[i]
+        elif a == "--json":
+            opts["json"] = True
+        else:
+            pos.append(a)
+        i += 1
+    if cmd == "version":
+        print("Operon 2.0.0 (python-oracle)")
+    elif cmd == "run":
+        it = run(pos[0], opts["cell"], opts["variant"], opts["rna"], opts["entry"], opts["frame"], pos[1:])
+        for nt in it.notes:
+            tag = {1: "info", 2: "synonym", 3: "wobble"}.get(nt.rung, "fallback")
+            print(f"[{tag}] {nt.message}", file=sys.stderr)
+    elif cmd == "test":
+        paths = pos or ["tests"]
+        files = []
+        for p in paths:
+            if os.path.isdir(p):
+                for root, _, fns in os.walk(p):
+                    for fn in sorted(fns):
+                        if fn.endswith(".op"):
+                            files.append(os.path.join(root, fn))
+            else:
+                files.append(p)
+        files.sort()
+        files_t, proofs, passed, failed, failures = 0, 0, 0, 0, []
+        for f in files:
+            it, stmts, proofs_l, frames = load_file(f, opts["cell"], opts["variant"], opts["rna"])
+            files_t += 1
+            proofs += len(proofs_l)
+            it.proof_mode = True
+            for pf in proofs_l:
+                try:
+                    it.exec_block(it.new_scope(it.globals), pf)
+                    passed += 1
+                except Stress as st:
+                    failed += 1
+                    failures.append(f"{f}: [{st.kind}] {st.message}")
+                except Exception as ex:
+                    failed += 1
+                    failures.append(f"{f}: [oracle-error] {type(ex).__name__}: {ex}")
+        print(f"operon test — {files_t} file(s), {proofs} proof(s): {passed} passed, {failed} failed")
+        for f in failures:
+            print(f"  FAIL {f}", file=sys.stderr)
+        if failed:
+            sys.exit(1)
+    elif cmd == "check":
+        src = open(pos[0]).read()
+        stmts, notes = parse(src)
+        score = 100 - sum(1 if n.rung == 2 else (2 if n.rung == 3 else (3 if n.rung == 4 else 0)) for n in notes)
+        letter = "A" if score >= 90 else "B" if score >= 80 else "C" if score >= 70 else "D" if score >= 60 else "F"
+        print(f"operon check: {pos[0]} — score {max(score, 50)}/100 (grade {letter})")
+    else:
+        print("oracle supports: run | test | check | version", file=sys.stderr)
+        sys.exit(2)
+
+if __name__ == "__main__":
+    main()

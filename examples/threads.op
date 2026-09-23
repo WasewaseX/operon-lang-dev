@@ -1,0 +1,14 @@
+# real OS threads
+gene partial(n) {
+    let acc = 0
+    for i in range(0, n) {
+        acc += i
+    }
+    return acc
+}
+gene main() {
+    let a = spawn(partial, [1000000])
+    let b = spawn(partial, [2000000])
+    promote("a = {join(a)}")
+    promote("b = {join(b)}")
+}

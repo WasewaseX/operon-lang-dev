@@ -1,0 +1,375 @@
+//! main.rs — Operon toolchain CLI (Rust core).
+//! run | check | test | fmt | build | profile | crispr | bench | version
+
+mod ast;
+mod ffi;
+mod genes;
+mod interp;
+mod lexer;
+mod parser;
+mod tools;
+mod value;
+
+use tools::Opts;
+use ast::{Expr, Stmt};
+use value::Value;
+
+fn main() {
+    let argv: Vec<String> = std::env::args().skip(1).collect();
+    if argv.is_empty() {
+        usage();
+        std::process::exit(2);
+    }
+    let cmd = argv[0].clone();
+    let rest = &argv[1..];
+
+    // extract flags
+    let mut opts = Opts {
+        cell: None,
+        variant: None,
+        rna: None,
+        entry: None,
+        use_ires: false,
+        frame: None,
+        args: Vec::new(),
+        quiet: false,
+    };
+    let mut json = false;
+    let mut strict = false;
+    let mut nmd = false;
+    let mut purge = false;
+    let mut write = false;
+    let mut knockout = String::new();
+    let mut iters = 20usize;
+    let mut outfile = String::new();
+    let mut positional: Vec<String> = Vec::new();
+
+    let mut i = 0;
+    while i < rest.len() {
+        let a = rest[i].clone();
+        match a.as_str() {
+            "--entry" => {
+                i += 1;
+                opts.entry = rest.get(i).cloned();
+            }
+            "--variant" => {
+                i += 1;
+                opts.variant = rest.get(i).cloned();
+            }
+            "--cell" => {
+                i += 1;
+                opts.cell = rest.get(i).cloned();
+            }
+            "--rna" => {
+                i += 1;
+                opts.rna = rest.get(i).cloned();
+            }
+            "--frame" => {
+                i += 1;
+                opts.frame = rest.get(i).cloned();
+            }
+            "--knockout" => {
+                i += 1;
+                knockout = rest.get(i).cloned().unwrap_or_default();
+            }
+            "--iters" => {
+                i += 1;
+                iters = rest.get(i).and_then(|s| s.parse().ok()).unwrap_or(20);
+            }
+            "-o" | "--out" => {
+                i += 1;
+                outfile = rest.get(i).cloned().unwrap_or_default();
+            }
+            "--ires" => opts.use_ires = true,
+            "--json" => json = true,
+            "--strict" => strict = true,
+            "--quiet" => opts.quiet = true,
+            "--nmd" => nmd = true,
+            "--nmd=purge" | "--purge" => {
+                nmd = true;
+                purge = true;
+            }
+            "--write" => write = true,
+            _ => positional.push(a),
+        }
+        i += 1;
+    }
+
+    match cmd.as_str() {
+        "version" => {
+            println!("Operon 2.0.0 (rust-core, c-runtime, cpp-kernel)");
+        }
+        "run" => {
+            let file = match positional.first() {
+                Some(f) => f.clone(),
+                None => die("run needs a file"),
+            };
+            opts.args = positional[1..].to_vec();
+            let mut l = match tools::load_file(&file, &opts) {
+                Ok(l) => l,
+                Err(e) => die(&e),
+            };
+            if opts.frame.is_none() {
+                let result = tools::run_entry(&mut l, &opts);
+                match result {
+                    Ok(_) => {}
+                    Err(s) => {
+                        eprintln!("[contained] [{}] {}", s.kind, s.message);
+                    }
+                }
+            }
+            tools::flush_notes(&l, opts.quiet);
+            if strict && l.interp.notes.iter().any(|n| n.rung >= 3) {
+                std::process::exit(3);
+            }
+        }
+        "check" => {
+            let file = match positional.first() {
+                Some(f) => f.clone(),
+                None => die("check needs a file"),
+            };
+            let rep = tools::check(&file, &opts, nmd, purge);
+            if json {
+                let nmd_json: Vec<String> = rep
+                    .nmd
+                    .iter()
+                    .map(|(k, m)| format!("{{\"kind\":\"{}\",\"message\":\"{}\"}}", k, tools::json_escape(m)))
+                    .collect();
+                println!(
+                    "{{\"file\":\"{}\",\"score\":{},\"letter\":\"{}\",\"notes\":{},\"wobbles\":{},\"fallbacks\":{},\"phantoms\":{},\"nmd\":{}}}",
+                    tools::json_escape(&file),
+                    rep.score,
+                    rep.letter,
+                    rep.notes,
+                    rep.wobbles,
+                    rep.fallbacks,
+                    rep.phantoms.len(),
+                    nmd_json.join(",")
+                );
+            } else {
+                println!("operon check: {} — score {}/100 (grade {})", file, rep.score, rep.letter);
+                if rep.wobbles > 0 || rep.fallbacks > 0 {
+                    println!("  repairs: {} wobble, {} fallback", rep.wobbles, rep.fallbacks);
+                }
+                if !rep.phantoms.is_empty() {
+                    println!("  phantom calls: {}", rep.phantoms.join(", "));
+                }
+                for (k, m) in &rep.nmd {
+                    println!("  nmd[{}]: {}", k, m);
+                }
+            }
+            if strict && (rep.wobbles > 0 || rep.fallbacks > 0) {
+                std::process::exit(3);
+            }
+        }
+        "test" => {
+            let paths: Vec<String> = if positional.is_empty() {
+                vec!["tests".to_string()]
+            } else {
+                positional.clone()
+            };
+            let rep = tools::run_tests(&paths, &opts, json);
+            if json {
+                let fails: Vec<String> = rep
+                    .failures
+                    .iter()
+                    .map(|f| format!("\"{}\"", tools::json_escape(f)))
+                    .collect();
+                println!(
+                    "{{\"files\":{},\"proofs\":{},\"passed\":{},\"failed\":{},\"failures\":{}}}",
+                    rep.files,
+                    rep.proofs,
+                    rep.passed,
+                    rep.failed,
+                    fails.join(",")
+                );
+            }
+            if rep.failed > 0 {
+                std::process::exit(1);
+            }
+        }
+        "fmt" => {
+            let file = match positional.first() {
+                Some(f) => f.clone(),
+                None => die("fmt needs a file"),
+            };
+            let src = std::fs::read_to_string(&file).unwrap_or_default();
+            let prog = parser::parse(&src);
+            let out = tools::format_program(&prog);
+            if write {
+                std::fs::write(&file, out).expect("write failed");
+                eprintln!("fmt: {} rewritten", file);
+            } else {
+                print!("{}", out);
+            }
+        }
+        "build" => {
+            let file = match positional.first() {
+                Some(f) => f.clone(),
+                None => die("build needs a file"),
+            };
+            let src = std::fs::read_to_string(&file).unwrap_or_default();
+            let stem = std::path::Path::new(&file)
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let mut src2 = src.clone();
+            if let Some(rna_path) = &opts.rna {
+                if let Ok(patch) = std::fs::read_to_string(rna_path) {
+                    let (s2, _) = genes::apply_rna(&src, &patch, &stem);
+                    src2 = s2;
+                }
+            }
+            let mut prog = parser::parse(&src2);
+            // bake selected splice variants (drop non-selected bodies)
+            if let Some(want) = &opts.variant {
+                for s in prog.stmts.iter_mut() {
+                    if let Stmt::Splice(sp) = s {
+                        let found = sp.variants.iter().find(|(n, _)| n == want).map(|(n, d)| (n.clone(), d.clone()));
+                        if let Some((vname, d)) = found {
+                            let sp_mut = std::sync::Arc::make_mut(sp);
+                            sp_mut.variants = vec![(vname, d)];
+                        }
+                    }
+                }
+            }
+            // strip proof frames from the baked artifact
+            prog.stmts.retain(|s| !matches!(s, Stmt::Frame { is_proof: true, .. }));
+            let out = tools::format_program(&prog);
+            let dest = if outfile.is_empty() {
+                format!("{}.built.op", stem)
+            } else {
+                outfile.clone()
+            };
+            std::fs::write(&dest, out).expect("write failed");
+            eprintln!("build: {} → {} (variant: {})", file, dest, opts.variant.as_deref().unwrap_or("default"));
+        }
+        "profile" => {
+            let file = match positional.first() {
+                Some(f) => f.clone(),
+                None => die("profile needs a file"),
+            };
+            let l = tools::profile(&file, &opts);
+            let mut rows: Vec<(String, u64, f64)> = l
+                .interp
+                .call_counts
+                .iter()
+                .map(|(k, c)| {
+                    let t = l.interp.call_time.get(k).cloned().unwrap_or(0.0);
+                    (k.clone(), *c, t)
+                })
+                .collect();
+            rows.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+            println!("operon profile: {} ({} gene(s) executed)", file, rows.len());
+            println!("{:<24} {:>8} {:>12}  flags", "gene", "calls", "self µs");
+            for (name, calls, time) in &rows {
+                let mut flags = String::new();
+                if l.interp.enhanced.contains(name) {
+                    flags.push_str("enhanced ");
+                }
+                if let Some(Value::Gene(d, _)) = l.interp.global.get(name) {
+                    if d.acetylate {
+                        flags.push_str("active ");
+                    }
+                    if d.methylate {
+                        flags.push_str("repressed ");
+                    }
+                }
+                println!("{:<24} {:>8} {:>12.1}  {}", name, calls, time, flags.trim_end());
+            }
+            let fp = {
+                // reuse fingerprint computation via builtin path
+                let mut li = l.interp.call_counts.clone();
+                let _ = &mut li;
+                let total_defined = l.interp.defined_genes.len();
+                let spliced = l.interp.call_counts.len().min(total_defined);
+                let unspliced = total_defined.saturating_sub(spliced);
+                let velocity = if total_defined > 0 { unspliced as f64 / total_defined as f64 } else { 0.0 };
+                (spliced, unspliced, velocity)
+            };
+            println!(
+                "telemetry: spliced {} · unspliced {} · velocity {:.2}",
+                fp.0, fp.1, fp.2
+            );
+            let mut suggestions: Vec<String> = Vec::new();
+            for g in &l.interp.defined_genes {
+                if !l.interp.call_counts.contains_key(g)
+                    && !l.interp.enhanced.contains(g)
+                    && g != "main"
+                {
+                    suggestions.push(g.clone());
+                }
+            }
+            if !suggestions.is_empty() {
+                println!("enhance candidates (hot but unannotated): {}", suggestions.join(", "));
+            }
+            tools::flush_notes(&l, opts.quiet);
+        }
+        "crispr" => {
+            let file = match positional.first() {
+                Some(f) => f.clone(),
+                None => die("crispr needs a file"),
+            };
+            if knockout.is_empty() {
+                die("crispr needs --knockout <gene>");
+            }
+            let rep = tools::crispr(&file, &opts, &knockout);
+            if json {
+                let fails: Vec<String> = rep
+                    .failures
+                    .iter()
+                    .map(|f| format!("\"{}\"", tools::json_escape(f)))
+                    .collect();
+                println!(
+                    "{{\"knockout\":\"{}\",\"proofs\":{},\"survivors\":{},\"failures\":{}}}",
+                    tools::json_escape(&rep.knockout),
+                    rep.proofs_total,
+                    rep.survivors,
+                    fails.join(",")
+                );
+            } else {
+                println!(
+                    "operon crispr: knocked out '{}' — {}/{} proof(s) survived",
+                    rep.knockout, rep.survivors, rep.proofs_total
+                );
+                for f in &rep.failures {
+                    eprintln!("  died: {}", f);
+                }
+            }
+        }
+        "bench" => {
+            let file = match positional.first() {
+                Some(f) => f.clone(),
+                None => die("bench needs a file"),
+            };
+            let rep = tools::bench(&file, &opts, iters);
+            println!(
+                "operon bench: {} × {} iters — min {:.3} ms · avg {:.3} ms",
+                file, rep.iters, rep.min_ms, rep.avg_ms
+            );
+        }
+        _ => usage(),
+    }
+}
+
+fn die(msg: &str) -> ! {
+    eprintln!("operon: {}", msg);
+    std::process::exit(2);
+}
+
+fn usage() {
+    eprintln!(
+        "Operon 2.0.0 — the gene-expression language (Total Grammar)
+usage:
+  operon run f.op [--entry g] [--variant v] [--cell c] [--rna r] [--frame name] [--ires] [--strict] [--quiet]
+  operon check f.op [--nmd | --nmd=purge] [--json]
+  operon test [paths...] [--json]
+  operon fmt f.op [--write]
+  operon build f.op [--variant v] [-o out.op]
+  operon profile f.op
+  operon crispr f.op --knockout gene [--json]
+  operon bench f.op [--iters n]
+  operon version"
+    );
+    std::process::exit(2);
+}

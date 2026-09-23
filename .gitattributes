@@ -1,0 +1,11 @@
+# GitHub Linguist mapping — Operon's stack bar
+*.op    linguist-language=Operon
+*.cell  linguist-language=Operon
+*.rna   linguist-language=Operon
+
+# generated artifacts, not source
+build/**    linguist-generated
+bin/**      linguist-generated
+dist/**     linguist-generated
+target/**   linguist-generated
+web/playground/app.js linguist-generated=false

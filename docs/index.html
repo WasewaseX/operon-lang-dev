@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Operon — the gene-expression language</title>
+<meta name="description" content="Operon: a Total Grammar language where nothing you write is ever rejected — it wobbles, repairs, and runs.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="logo" href="index.html"><span class="logo-mark"></span>operon<b>.lang</b></a>
+    <nav>
+      <a href="index.html" class="here">Overview</a>
+      <a href="tour.html">Tour</a>
+      <a href="regulation.html">Regulation</a>
+      <a href="grammar.html">Grammar</a>
+      <a href="../web/playground/index.html" class="cta">Playground →</a>
+    </nav>
+  </div>
+</header>
+
+<div class="hero">
+  <div class="wrap">
+    <span class="kicker">Operon v2.0 · frozen specification</span>
+    <h1>the <span class="pink">gene-expression</span> language</h1>
+    <p class="pitch">A <b>Total Grammar</b> language where nothing you write is ever rejected —
+    it <b>wobbles, repairs, and runs</b>. Parse problems degrade into logged <em>wobble notes</em>,
+    never errors. One file encodes program, tests, and regulation.</p>
+    <div class="hero-actions">
+      <a class="btn primary" href="tour.html">Take the language tour</a>
+      <a class="btn" href="../web/playground/index.html">Open the playground</a>
+      <a class="btn" href="grammar.html">Read the grammar</a>
+    </div>
+  </div>
+</div>
+
+<main class="wrap">
+
+<section>
+  <h2 id="install">Build from source</h2>
+  <p class="lede">Operon compiles its Rust core, links the C runtime and the C++ kernel, and bootstraps
+  its standard library from Operon itself. One script does all of it.</p>
+  <figure class="code">
+    <figcaption><span>shell</span><span class="tag">build &amp; first run</span></figcaption>
+    <pre><code><span class="c"># from the repository root — builds core, runtime, kernel, oracle</span>
+<span class="p">./</span>scripts/build.sh
+
+<span class="c"># then run your first transcript</span>
+<span class="p">./</span>build/operon run examples/hello.op</code></pre>
+  </figure>
+  <div class="callout teal">
+    <p><b>Total Grammar guarantee.</b> Every <code>.op</code> file parses and runs. A typo becomes a
+    wobble note on stderr; your program's stdout stays clean for piping.</p>
+  </div>
+</section>
+
+<hr class="divider">
+
+<section>
+  <h2 id="sample">A taste of the language</h2>
+  <figure class="code">
+    <figcaption><span>expression.op</span><span class="tag">runnable</span></figcaption>
+    <pre><code><span class="c"># a gene is a function; a closure inherits the chromatin it was defined in</span>
+<span class="k">gene</span> <span class="f">gc_content</span>(seq) {
+    <span class="k">let</span> gc <span class="p">=</span> <span class="n">0</span>
+    <span class="k">for</span> ch <span class="k">in</span> seq {
+        <span class="k">if</span> ch <span class="p">==</span> <span class="s">"G"</span> <span class="k">or</span> ch <span class="p">==</span> <span class="s">"C"</span> { gc <span class="p">+=</span> <span class="n">1</span> }
+    }
+    <span class="k">return</span> gc <span class="p">*</span> <span class="n">100</span> <span class="p">//</span> len(seq)
+}
+
+<span class="k">let</span> transcript <span class="p">=</span> <span class="s">"ATGGCCATTGTAATGGGCCGCTGAAAGGGTGCCCGATAG"</span>
+<span class="f">promote</span>(<span class="s">"gc content: {gc_content(transcript)}%"</span>)
+
+<span class="c"># lambdas, methods, interpolation — the everyday toolkit</span>
+<span class="k">let</span> words <span class="p">=</span> [<span class="s">"repressilator"</span>, <span class="s">"acetylate"</span>, <span class="s">"wobble"</span>]
+<span class="k">let</span> tagged <span class="p">=</span> words.map(<span class="k">gene</span> (w) <span class="p">=&gt;</span> <span class="s">"{w}:{codon(w)}"</span>)
+<span class="f">promote</span>(tagged.join(<span class="s">"  ·  "</span>))
+
+<span class="c"># containment: a stressed region is rescued, not fatal</span>
+<span class="k">stress</span> {
+    <span class="f">promote</span>(transcript[<span class="n">9999</span>])   <span class="c"># out of range → Stress `missing`</span>
+} <span class="k">rescue</span> (e) {
+    <span class="f">promote</span>(<span class="s">"contained: {e.kind} — {e.message}"</span>)
+}</code></pre>
+  </figure>
+  <p class="muted small">Everything above is canonical Operon. The browser playground implements the
+  expression core of this sample; the native Rust core adds the rest verbatim.</p>
+</section>
+
+<hr class="divider">
+
+<section>
+  <h2 id="features">Six mechanisms, one grammar</h2>
+  <p class="lede">Operon borrows its control layer from the gene-expression machinery of the cell —
+  mechanism names only, each mapped to a concrete language feature (SPEC.md §16).</p>
+
+  <div class="grid cols-3">
+    <div class="card">
+      <span class="glyph">⤨ wobble</span>
+      <h3>Wobble tolerance</h3>
+      <p>In translation, loose pairing at the third codon position lets one codon family be read by
+      fewer tRNAs. Operon's parser does the same: misspell a keyword within edit distance and it is
+      repaired, logged as a wobble note, and the program runs.</p>
+    </div>
+    <div class="card teal">
+      <span class="glyph">≡ frames</span>
+      <h3>Overlapping frames</h3>
+      <p>Viruses read one sequence in shifted frames to get two proteins from one genome. One
+      <code>.op</code> file is one sequence: <code>frame proof</code> is the test reading frame that
+      <code>operon test</code> translates, and <code>operon run</code> skips.</p>
+    </div>
+    <div class="card">
+      <span class="glyph">⌇ splice</span>
+      <h3>Splice variants</h3>
+      <p>One gene, several mature mRNAs. <code>splice</code> declares alternative bodies for one gene
+      name; <code>--variant</code>, the <code>.cell</code> config, or an <code>@m6a</code> mark picks
+      which variant is active at dispatch time.</p>
+    </div>
+    <div class="card teal">
+      <span class="glyph">✎ edit</span>
+      <h3>RNA editing</h3>
+      <p>Transcripts can be chemically amended after transcription. <code>.rna</code> patches rewrite
+      a target file's source text — hot-fixes applied before parsing, each replacement logged.</p>
+    </div>
+    <div class="card">
+      <span class="glyph">⛨ guard</span>
+      <h3>uORF guards</h3>
+      <p>Upstream open reading frames gate the main transcript: if conditions are poor, translation
+      stops early. A <code>guard (cond) else { }</code> clause sits between signature and body and
+      trips softly, returning null with a note — never a crash.</p>
+    </div>
+    <div class="card teal">
+      <span class="glyph">◉ methyl</span>
+      <h3>Methylation layer</h3>
+      <p>Cells silence regions epigenetically without touching the genome. A <code>.cell</code> config
+      file plus <code>@methylate</code> / <code>@acetylate</code> marks and <code>methyl()</code> reads
+      reprogram the same source without editing it.</p>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<section>
+  <h2 id="stack">The stack</h2>
+  <p class="lede">Three implementations agree on every behavior in the frozen specification; where they
+  disagree, the differential test suite fails.</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Layer</th><th>Language</th><th>Role</th></tr></thead>
+      <tbody>
+        <tr><td><code>src/</code> — core</td><td>Rust</td><td>Compiler, checker, formatter — the primary implementation</td></tr>
+        <tr><td><code>runtime/</code> — runtime</td><td>C</td><td>Arenas, interning, reference-counted values</td></tr>
+        <tr><td>kernel</td><td>C++</td><td>Hot paths: Myers edit-distance, telemetry counters</td></tr>
+        <tr><td><code>bootstrap/oracle.py</code></td><td>Python</td><td>Reference oracle for differential testing + packaging</td></tr>
+        <tr><td><code>std/</code></td><td>Operon</td><td>Self-hosted standard library, consumed via <code>use</code></td></tr>
+        <tr><td><code>docs/</code></td><td>HTML/CSS</td><td>This documentation site — no frameworks, no images</td></tr>
+        <tr><td><code>web/playground/</code></td><td>TypeScript / JS</td><td>Browser subset playground — the same spec, in your tab</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="faint small">Condensed from <code>SPEC.md</code> — implementation matrix and the biology ↔
+  feature map (§16).</p>
+</section>
+
+<section>
+  <div class="callout">
+    <p><b>Design law.</b> Naming uses mechanism names from molecular biology only — no scientist names
+    anywhere in code or docs. <code>operon version</code> →
+    <code>Operon 2.0.0 (rust-core, c-runtime, cpp-kernel)</code>.</p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap foot-inner">
+    <div>
+      <a class="logo" href="index.html"><span class="logo-mark"></span>operon<b>.lang</b></a>
+      <p class="mono">Operon 2.0.0 · rust-core · c-runtime · cpp-kernel<br>
+      SPEC frozen for v2.0 · Total Grammar: nothing is rejected.</p>
+    </div>
+    <div class="foot-links">
+      <a href="tour.html">Tour</a>
+      <a href="regulation.html">Regulation layer</a>
+      <a href="grammar.html">Grammar reference</a>
+      <a href="../web/playground/index.html">Playground</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

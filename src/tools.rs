@@ -1,0 +1,962 @@
+//! tools.rs — toolchain subcommands: run entry resolution, check/NMD grading,
+//! formatter, profile, crispr knockout screens, bench, test runner, build.
+
+use crate::ast::*;
+use crate::genes;
+use crate::interp::{Env, Flow, Interp};
+use crate::parser;
+use crate::value::{Stress, Value};
+use std::collections::HashSet;
+use std::io::Write as _;
+use std::path::Path;
+
+pub struct Opts {
+    pub cell: Option<String>,
+    pub variant: Option<String>,
+    pub rna: Option<String>,
+    pub entry: Option<String>,
+    pub use_ires: bool,
+    pub frame: Option<String>,
+    pub args: Vec<String>,
+    pub quiet: bool,
+}
+
+pub struct Loaded {
+    pub interp: Interp,
+    pub prog: Program,
+    pub file: String,
+}
+
+pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
+    let mut src = std::fs::read_to_string(file)
+        .map_err(|e| format!("cannot read '{}': {}", file, e))?;
+    let stem = Path::new(file).file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+
+    let mut interp = Interp::new();
+
+    // methylation layer: CLI --cell, else operon.cell auto-detect
+    let cell_path = opts.cell.clone().or_else(|| {
+        if Path::new("operon.cell").exists() {
+            Some("operon.cell".to_string())
+        } else {
+            None
+        }
+    });
+    if let Some(cp) = &cell_path {
+        match std::fs::read_to_string(cp) {
+            Ok(txt) => {
+                interp.cell = genes::parse_cell(&txt);
+            }
+            Err(e) => interp.note(0, 4, format!("cell config '{}' unreadable: {}", cp, e)),
+        }
+    }
+    if let Some(v) = &opts.variant {
+        interp.cell.insert("cli.variant".into(), v.clone());
+    }
+
+    // RNA edit patches (hot patches)
+    if let Some(rna_path) = &opts.rna {
+        match std::fs::read_to_string(rna_path) {
+            Ok(patch) => {
+                let (s2, applied) = genes::apply_rna(&src, &patch, &stem);
+                for a in &applied {
+                    interp.note(0, 1, format!("rna edit applied: {}", a));
+                }
+                if applied.is_empty() {
+                    interp.note(0, 4, format!("rna patch '{}' matched nothing", rna_path));
+                }
+                src = s2;
+            }
+            Err(e) => interp.note(0, 4, format!("rna patch '{}' unreadable: {}", rna_path, e)),
+        }
+    }
+
+    let prog = parser::parse(&src);
+    interp.ires = prog.ires.clone();
+    interp.cli_args = opts.args.clone();
+
+    // execute top-level (gene defs bind, silences load, regulate registers…)
+    // Top-Grammar containment: uncaught stress here is absorbed per statement.
+    let genv = interp.global.clone();
+    for stmt in &prog.stmts {
+        if let Err(s) = interp.exec_stmt(&genv, stmt) {
+            interp.note(0, 4, format!("stress contained: [{}] {}", s.kind, s.message));
+        }
+    }
+
+    // frame selection: --frame name runs that named frame instead of entry
+    if let Some(fname) = &opts.frame {
+        if let Some((_, body)) = prog.named_frames.iter().find(|(n, _)| n == fname) {
+            let _ = interp.exec_block(&genv, body);
+        } else {
+            interp.note(0, 4, format!("frame '{}' not declared", fname));
+        }
+    }
+
+    Ok(Loaded { interp, prog, file: file.to_string() })
+}
+
+pub fn resolve_entry(l: &mut Loaded, opts: &Opts) -> Option<String> {
+    if let Some(e) = &opts.entry {
+        return Some(e.clone());
+    }
+    if l.prog.stmts.iter().any(|s| matches!(s, Stmt::Gene(g) if g.name.as_deref() == Some("main"))) {
+        return Some("main".into());
+    }
+    if opts.use_ires || !l.interp.ires.is_empty() {
+        if let Some(first) = l.interp.ires.first().cloned() {
+            l.interp.note(0, 1, format!("cap-independent entry via ires '{}'", first));
+            return Some(first);
+        }
+    }
+    None
+}
+
+/// Run the entry gene (or nothing if no entry). Returns its value.
+pub fn run_entry(l: &mut Loaded, opts: &Opts) -> Result<Value, Stress> {
+    match resolve_entry(l, opts) {
+        Some(entry) => {
+            let argv = Value::List(std::rc::Rc::new(std::cell::RefCell::new(
+                opts.args.iter().map(|a| Value::Str(a.clone())).collect(),
+            )));
+            let genv = l.interp.global.clone();
+            let target = match genv.get(&entry) {
+                Some(v @ Value::Gene(_, _)) => v,
+                _ => {
+                    // not a gene or missing: named-call path handles wobble/phantom
+                    Value::Null
+                }
+            };
+            match target {
+                Value::Null => l.interp.call_named(&genv, &entry, vec![argv]),
+                v => {
+                    let has_params = match &v {
+                        Value::Gene(d, _) => !d.params.is_empty(),
+                        _ => false,
+                    };
+                    if has_params {
+                        l.interp.call_value(&genv, &v, vec![argv])
+                    } else {
+                        l.interp.call_value(&genv, &v, vec![])
+                    }
+                }
+            }
+        }
+        None => Ok(Value::Null),
+    }
+}
+
+// ------------------------------------------------------------ check
+pub struct CheckReport {
+    pub score: i64,
+    pub letter: char,
+    pub notes: usize,
+    pub wobbles: usize,
+    pub fallbacks: usize,
+    pub nmd: Vec<(String, String)>, // kind, message
+    pub phantoms: Vec<String>,
+    pub parsed: bool,
+}
+
+pub fn check(file: &str, opts: &Opts, nmd: bool, purge: bool) -> CheckReport {
+    let mut rep = CheckReport {
+        score: 100,
+        letter: 'A',
+        notes: 0,
+        wobbles: 0,
+        fallbacks: 0,
+        nmd: Vec::new(),
+        phantoms: Vec::new(),
+        parsed: true,
+    };
+    let src = match std::fs::read_to_string(file) {
+        Ok(s) => s,
+        Err(e) => {
+            rep.parsed = false;
+            rep.score = 50;
+            rep.letter = 'F';
+            rep.nmd.push(("error".into(), format!("cannot read '{}': {}", file, e)));
+            return rep;
+        }
+    };
+    let stem = Path::new(file).file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    let mut src2 = src.clone();
+    if let Some(rna_path) = &opts.rna {
+        if let Ok(patch) = std::fs::read_to_string(rna_path) {
+            let (s2, _) = genes::apply_rna(&src, &patch, &stem);
+            src2 = s2;
+        }
+    }
+    let mut prog = parser::parse(&src2);
+    let rung2 = prog.notes.iter().filter(|n| n.rung == 2).count();
+    rep.wobbles = prog.notes.iter().filter(|n| n.rung == 3).count();
+    rep.fallbacks = prog.notes.iter().filter(|n| n.rung == 4).count();
+    rep.notes = prog.notes.len();
+    rep.score -= (rung2 as i64) * 1 + (rep.wobbles as i64) * 2 + (rep.fallbacks as i64) * 3;
+
+    // phantom calls: called names never defined, never a builtin, never imported
+    let mut defined: HashSet<String> = HashSet::new();
+    let mut called: Vec<String> = Vec::new();
+    collect_calls(&prog, &mut defined, &mut called);
+    for c in &called {
+        if !defined.contains(c) && !crate::interp::BUILTIN_NAMES.contains(&c.as_str()) {
+            rep.phantoms.push(c.clone());
+        }
+    }
+    rep.score -= (rep.phantoms.len() as i64) * 2;
+
+    if nmd {
+        let calledv: Vec<String> = called.clone();
+        let findings = genes::nmd_sweep(&prog, &calledv, &[]);
+        for f in &findings {
+            rep.nmd.push((f.kind.to_string(), f.message.clone()));
+        }
+        rep.score -= findings.iter().map(|f| if f.kind == "premature-stop" { 4 } else { 1 }).sum::<i64>();
+    }
+    rep.score = rep.score.max(50);
+    rep.letter = grade_letter(rep.score);
+
+    if purge {
+        for s in prog.stmts.iter_mut() {
+            purge_stmt(s);
+        }
+        let out = crate::tools::format_program(&prog);
+        let _ = std::fs::write(file, out);
+    }
+    rep
+}
+
+fn purge_stmt(s: &mut Stmt) {
+    match s {
+        Stmt::Gene(g) => {
+            let g = std::sync::Arc::make_mut(g);
+            genes::purge_premature_stops(&mut g.body);
+        }
+        Stmt::If(branches, els) => {
+            for (_, b) in branches.iter_mut() {
+                genes::purge_premature_stops(b);
+            }
+            if let Some(e) = els {
+                genes::purge_premature_stops(e);
+            }
+        }
+        Stmt::While(_, b) | Stmt::Loop(b) | Stmt::For(_, _, b) | Stmt::Block(b) | Stmt::Tad(_, b) => {
+            genes::purge_premature_stops(b);
+        }
+        Stmt::Frame { body, .. } => genes::purge_premature_stops(body),
+        Stmt::Stress { body, rescue, .. } => {
+            genes::purge_premature_stops(body);
+            if let Some((_, rb)) = rescue {
+                genes::purge_premature_stops(rb);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn collect_calls(prog: &Program, defined: &mut HashSet<String>, called: &mut Vec<String>) {
+    fn walk_expr(e: &Expr, defined: &HashSet<String>, called: &mut Vec<String>) {
+        match e {
+            Expr::Call(f, args) => {
+                if let Expr::Ident(n) = &**f {
+                    if !defined.contains(n) {
+                        called.push(n.clone());
+                    }
+                }
+                walk_expr(f, defined, called);
+                for a in args {
+                    walk_expr(a, defined, called);
+                }
+            }
+            Expr::Method(r, _, args) => {
+                walk_expr(r, defined, called);
+                for a in args {
+                    walk_expr(a, defined, called);
+                }
+            }
+            Expr::Unary(_, a) | Expr::Member(a, _) => walk_expr(a, defined, called),
+            Expr::Binary(_, a, b) | Expr::Index(a, b) => {
+                walk_expr(a, defined, called);
+                walk_expr(b, defined, called);
+            }
+            Expr::List(xs) => xs.iter().for_each(|x| walk_expr(x, defined, called)),
+            Expr::Map(pairs) => pairs.iter().for_each(|(k, v)| {
+                walk_expr(k, defined, called);
+                walk_expr(v, defined, called);
+            }),
+            Expr::Interp(ps) => ps.iter().for_each(|p| {
+                if let InterpPart::Expr(x) = p {
+                    walk_expr(x, defined, called)
+                }
+            }),
+            Expr::Collect { iter, filter, body, .. } => {
+                walk_expr(iter, defined, called);
+                if let Some(f) = filter {
+                    walk_expr(f, defined, called);
+                }
+                walk_expr(body, defined, called);
+            }
+            _ => {}
+        }
+    }
+    fn walk_stmts(stmts: &[Stmt], defined: &mut HashSet<String>, called: &mut Vec<String>) {
+        for s in stmts {
+            walk_stmt(s, defined, called);
+        }
+    }
+    fn walk_stmt(s: &Stmt, defined: &mut HashSet<String>, called: &mut Vec<String>) {
+        let dref = defined.clone();
+        match s {
+            Stmt::Gene(g) => {
+                if let Some(n) = &g.name {
+                    defined.insert(n.clone());
+                }
+                walk_stmts(&g.body, defined, called);
+            }
+            Stmt::Splice(sp) => {
+                defined.insert(sp.root.clone());
+                for (_, d) in &sp.variants {
+                    walk_stmts(&d.body, defined, called);
+                }
+            }
+            Stmt::Let(_, e) | Stmt::Assign(_, _, e) | Stmt::ExprStmt(e) | Stmt::Return(Some(e)) | Stmt::Raise(_, e) => {
+                walk_expr(e, &dref, called)
+            }
+            Stmt::IndexAssign(t, i, _, e) => {
+                walk_expr(t, &dref, called);
+                walk_expr(i, &dref, called);
+                walk_expr(e, &dref, called);
+            }
+            Stmt::MemberAssign(t, _, _, e) => {
+                walk_expr(t, &dref, called);
+                walk_expr(e, &dref, called);
+            }
+            Stmt::If(bs, els) => {
+                for (c, b) in bs {
+                    walk_expr(c, &dref, called);
+                    walk_stmts(b, defined, called);
+                }
+                if let Some(eb) = els {
+                    walk_stmts(eb, defined, called);
+                }
+            }
+            Stmt::While(c, b) => {
+                walk_expr(c, &dref, called);
+                walk_stmts(b, defined, called);
+            }
+            Stmt::Loop(b) => walk_stmts(b, defined, called),
+            Stmt::For(_, it, b) => {
+                walk_expr(it, &dref, called);
+                walk_stmts(b, defined, called);
+            }
+            Stmt::Match(sub, cases) => {
+                walk_expr(sub, &dref, called);
+                for (p, b) in cases {
+                    match p {
+                        MatchPat::Lit(e) => walk_expr(e, &dref, called),
+                        MatchPat::Multi(ls) => ls.iter().for_each(|e| walk_expr(e, &dref, called)),
+                        _ => {}
+                    }
+                    walk_stmts(b, defined, called);
+                }
+            }
+            Stmt::Stress { body, rescue, .. } => {
+                walk_stmts(body, defined, called);
+                if let Some((_, rb)) = rescue {
+                    walk_stmts(rb, defined, called);
+                }
+            }
+            Stmt::Frame { body, .. } | Stmt::Block(body) | Stmt::Tad(_, body) => walk_stmts(body, defined, called),
+            _ => {}
+        }
+    }
+    let mut d0 = defined.clone();
+    // first pass: collect all gene names (forward refs allowed)
+    for s in &prog.stmts {
+        if let Stmt::Gene(g) = s {
+            if let Some(n) = &g.name {
+                d0.insert(n.clone());
+            }
+        }
+        if let Stmt::Splice(sp) = s {
+            d0.insert(sp.root.clone());
+        }
+    }
+    let mut called2 = Vec::new();
+    for s in &prog.stmts {
+        walk_stmt(s, &mut d0, &mut called2);
+    }
+    *called = called2;
+    *defined = d0;
+}
+
+pub fn grade_letter(score: i64) -> char {
+    if score >= 90 {
+        'A'
+    } else if score >= 80 {
+        'B'
+    } else if score >= 70 {
+        'C'
+    } else if score >= 60 {
+        'D'
+    } else {
+        'F'
+    }
+}
+
+// ------------------------------------------------------------ profile
+pub fn profile(file: &str, opts: &Opts) -> Loaded {
+    let mut l = load_file(file, opts).expect("load failed");
+    l.interp.profiling = true;
+    let _ = run_entry(&mut l, opts);
+    l
+}
+
+// ------------------------------------------------------------ crispr
+pub struct CrisprReport {
+    pub knockout: String,
+    pub proofs_total: usize,
+    pub survivors: usize,
+    pub failures: Vec<String>,
+}
+
+pub fn crispr(file: &str, opts: &Opts, knockout: &str) -> CrisprReport {
+    let mut l = load_file(file, opts).expect("load failed");
+    let genv = l.interp.global.clone();
+    // guide RNA: replace the gene body with return null
+    if let Some(Value::Gene(d, _)) = genv.get(knockout) {
+        let mut d2 = (*d).clone();
+        d2.body = vec![Stmt::Return(Some(Expr::Null))];
+        genv.define(knockout, Value::Gene(std::sync::Arc::new(d2), None));
+        l.interp.note(0, 1, format!("knockout: '{}' body replaced with return null", knockout));
+    } else {
+        l.interp.note(0, 4, format!("knockout target '{}' not found; screen skipped", knockout));
+    }
+    let mut rep = CrisprReport { knockout: knockout.to_string(), proofs_total: 0, survivors: 0, failures: Vec::new() };
+    l.interp.proof_mode = true;
+    for (i, proof) in l.prog.proofs.iter().enumerate() {
+        rep.proofs_total += 1;
+        let r = l.interp.exec_block(&genv, proof);
+        match r {
+            Ok(_) => rep.survivors += 1,
+            Err(s) => rep.failures.push(format!("proof #{} failed: [{}] {}", i + 1, s.kind, s.message)),
+        }
+    }
+    rep
+}
+
+// ------------------------------------------------------------ bench
+pub struct BenchReport {
+    pub iters: usize,
+    pub min_ms: f64,
+    pub avg_ms: f64,
+}
+
+pub fn bench(file: &str, opts: &Opts, iters: usize) -> BenchReport {
+    let mut times = Vec::new();
+    for _ in 0..iters {
+        let t0 = crate::ffi::now_ns();
+        let mut l = load_file(file, opts).expect("load failed");
+        let _ = run_entry(&mut l, opts);
+        times.push((crate::ffi::now_ns() - t0) / 1e6);
+    }
+    let min = times.iter().cloned().fold(f64::INFINITY, f64::min);
+    let avg = times.iter().sum::<f64>() / iters.max(1) as f64;
+    BenchReport { iters, min_ms: min, avg_ms: avg }
+}
+
+// ------------------------------------------------------------ test runner
+pub struct TestReport {
+    pub files: usize,
+    pub proofs: usize,
+    pub passed: usize,
+    pub failed: usize,
+    pub failures: Vec<String>,
+    pub notes: usize,
+}
+
+pub fn run_tests(paths: &[String], opts: &Opts, json: bool) -> TestReport {
+    let mut rep = TestReport { files: 0, proofs: 0, passed: 0, failed: 0, failures: Vec::new(), notes: 0 };
+    let mut files: Vec<String> = Vec::new();
+    for p in paths {
+        let path = Path::new(p);
+        if path.is_dir() {
+            collect_op_files(path, &mut files);
+        } else {
+            files.push(p.clone());
+        }
+    }
+    files.sort();
+    for f in &files {
+        let mut l = match load_file(f, opts) {
+            Ok(l) => l,
+            Err(e) => {
+                rep.failed += 1;
+                rep.failures.push(format!("{}: load error: {}", f, e));
+                continue;
+            }
+        };
+        rep.files += 1;
+        rep.notes += l.interp.notes.len();
+        let genv = l.interp.global.clone();
+        l.interp.proof_mode = true;
+        for (i, proof) in l.prog.proofs.iter().enumerate() {
+            rep.proofs += 1;
+            match l.interp.exec_block(&genv, proof) {
+                Ok(_) => rep.passed += 1,
+                Err(s) => {
+                    rep.failed += 1;
+                    rep.failures.push(format!("{} proof #{}: [{}] {}", f, i + 1, s.kind, s.message));
+                }
+            }
+        }
+    }
+    if !json {
+        println!("operon test — {} file(s), {} proof(s): {} passed, {} failed", rep.files, rep.proofs, rep.passed, rep.failed);
+        for f in &rep.failures {
+            eprintln!("  FAIL {}", f);
+        }
+        if rep.notes > 0 {
+            eprintln!("  ({} wobble note(s) absorbed during test runs)", rep.notes);
+        }
+    }
+    rep
+}
+
+fn collect_op_files(dir: &Path, out: &mut Vec<String>) {
+    if let Ok(rd) = std::fs::read_dir(dir) {
+        let mut entries: Vec<_> = rd.filter_map(|e| e.ok()).collect();
+        entries.sort_by_key(|e| e.path());
+        for e in entries {
+            let p = e.path();
+            if p.is_dir() {
+                collect_op_files(&p, out);
+            } else if p.extension().map(|x| x == "op").unwrap_or(false) {
+                out.push(p.to_string_lossy().to_string());
+            }
+        }
+    }
+}
+
+// ------------------------------------------------------------ formatter
+pub fn format_program(prog: &Program) -> String {
+    let mut out = String::new();
+    for s in &prog.stmts {
+        fmt_stmt(s, 0, &mut out);
+    }
+    out
+}
+
+fn indent(n: usize) -> String {
+    "  ".repeat(n)
+}
+
+fn fmt_block(stmts: &[Stmt], ind: usize, out: &mut String) {
+    out.push_str("{\n");
+    for s in stmts {
+        fmt_stmt(s, ind + 1, out);
+    }
+    out.push_str(&indent(ind));
+    out.push('}');
+}
+
+fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
+    out.push_str(&indent(ind));
+    match s {
+        Stmt::Let(n, e) => {
+            out.push_str(&format!("let {} = {}\n", n, fmt_expr(e)));
+        }
+        Stmt::Assign(n, None, e) => {
+            out.push_str(&format!("{} = {}\n", n, fmt_expr(e)));
+        }
+        Stmt::Assign(n, Some(op), e) => {
+            out.push_str(&format!("{} {}= {}\n", n, fmt_op(*op), fmt_expr(e)));
+        }
+        Stmt::IndexAssign(t, i, None, e) => {
+            out.push_str(&format!("{}[{}] = {}\n", fmt_expr(t), fmt_expr(i), fmt_expr(e)));
+        }
+        Stmt::IndexAssign(t, i, Some(op), e) => {
+            out.push_str(&format!("{}[{}] {}= {}\n", fmt_expr(t), fmt_expr(i), fmt_op(*op), fmt_expr(e)));
+        }
+        Stmt::MemberAssign(t, k, None, e) => {
+            out.push_str(&format!("{}.{} = {}\n", fmt_expr(t), k, fmt_expr(e)));
+        }
+        Stmt::MemberAssign(t, k, Some(op), e) => {
+            out.push_str(&format!("{}.{} {}= {}\n", fmt_expr(t), k, fmt_op(*op), fmt_expr(e)));
+        }
+        Stmt::If(branches, els) => {
+            for (i, (c, b)) in branches.iter().enumerate() {
+                if i > 0 {
+                    out.push_str(&indent(ind));
+                }
+                out.push_str(&format!("{} {} ", if i == 0 { "if" } else { "elif" }, fmt_expr(c)));
+                fmt_block(b, ind, out);
+                out.push('\n');
+            }
+            if let Some(eb) = els {
+                out.push_str(&indent(ind));
+                out.push_str("else ");
+                fmt_block(eb, ind, out);
+                out.push('\n');
+            }
+        }
+        Stmt::While(c, b) => {
+            out.push_str(&format!("while {} ", fmt_expr(c)));
+            fmt_block(b, ind, out);
+            out.push('\n');
+        }
+        Stmt::Loop(b) => {
+            out.push_str("loop ");
+            fmt_block(b, ind, out);
+            out.push('\n');
+        }
+        Stmt::For(n, it, b) => {
+            out.push_str(&format!("for {} in {} ", n, fmt_expr(it)));
+            fmt_block(b, ind, out);
+            out.push('\n');
+        }
+        Stmt::Return(Some(e)) => out.push_str(&format!("return {}\n", fmt_expr(e))),
+        Stmt::Return(None) => out.push_str("return\n"),
+        Stmt::Break => out.push_str("break\n"),
+        Stmt::Continue => out.push_str("continue\n"),
+        Stmt::ExprStmt(e) => out.push_str(&format!("{}\n", fmt_expr(e))),
+        Stmt::Match(sub, cases) => {
+            out.push_str(&format!("match {} ", fmt_expr(sub)));
+            out.push_str("{\n");
+            for (p, b) in cases {
+                out.push_str(&indent(ind + 1));
+                out.push_str(&format!("case {} ", fmt_pat(p)));
+                fmt_block(b, ind + 1, out);
+                out.push('\n');
+            }
+            out.push_str(&indent(ind));
+            out.push_str("}\n");
+        }
+        Stmt::Use(p, alias) => {
+            match alias {
+                Some(a) => out.push_str(&format!("use {} as {}\n", p, a)),
+                None => out.push_str(&format!("use {}\n", p)),
+            };
+        }
+        Stmt::Raise(k, e) => match k {
+            Some(k) => out.push_str(&format!("raise {}, {}\n", k, fmt_expr(e))),
+            None => out.push_str(&format!("raise {}\n", fmt_expr(e))),
+        },
+        Stmt::Stress { kind, body, rescue } => {
+            match kind {
+                Some(k) => out.push_str(&format!("stress {} ", k)),
+                None => out.push_str("stress "),
+            }
+            fmt_block(body, ind, out);
+            out.push('\n');
+            if let Some((bind, rb)) = rescue {
+                out.push_str(&indent(ind));
+                match bind {
+                    Some(b) => out.push_str(&format!("rescue ({}) ", b)),
+                    None => out.push_str("rescue "),
+                }
+                fmt_block(rb, ind, out);
+                out.push('\n');
+            }
+        }
+        Stmt::Gene(g) => {
+            if g.acetylate {
+                out.push_str("@acetylate ");
+            }
+            if g.methylate {
+                out.push_str("@methylate ");
+            }
+            if g.m6a {
+                out.push_str("@m6a ");
+            }
+            match &g.name {
+                Some(n) => out.push_str(&format!("gene {}({})", n, fmt_params(&g.params))),
+                None => out.push_str(&format!("gene({})", fmt_params(&g.params))),
+            }
+            if let Some((c, gb)) = &g.guard {
+                out.push_str(&format!(" guard ({}) ", fmt_expr(c)));
+                fmt_block(gb, ind, out);
+                out.push(' ');
+            }
+            fmt_block(&g.body, ind, out);
+            out.push_str("\n\n");
+        }
+        Stmt::Splice(sp) => {
+            out.push_str(&format!("splice {} ", sp.root));
+            out.push_str("{\n");
+            for (vn, d) in &sp.variants {
+                out.push_str(&indent(ind + 1));
+                out.push_str(&format!("variant {} ", vn));
+                fmt_block(&d.body, ind + 1, out);
+                out.push('\n');
+            }
+            out.push_str(&indent(ind));
+            out.push_str("}\n\n");
+        }
+        Stmt::Silence(f, t) => match t {
+            Some(t) => out.push_str(&format!("silence {} -> {}\n", f, t)),
+            None => out.push_str(&format!("silence {}\n", f)),
+        },
+        Stmt::Enhance(ns) => out.push_str(&format!("enhance {};\n", ns.join(", "))),
+        Stmt::Ires(n) => out.push_str(&format!("ires {};\n", n)),
+        Stmt::Fate(f) => {
+            out.push_str(&format!("fate {} ", f.name));
+            out.push_str("{\n");
+            for (st, tg) in &f.states {
+                out.push_str(&indent(ind + 1));
+                if tg.is_empty() {
+                    out.push_str(&format!("state {};\n", st));
+                } else {
+                    out.push_str(&format!("state {} -> {};\n", st, tg.join(", ")));
+                }
+            }
+            if let Some(e) = &f.enter {
+                out.push_str(&indent(ind + 1));
+                out.push_str(&format!("enter {};\n", e));
+            }
+            out.push_str(&indent(ind));
+            out.push_str("}\n\n");
+        }
+        Stmt::Regulate(edges) => {
+            out.push_str("regulate {\n");
+            for e in edges {
+                out.push_str(&indent(ind + 1));
+                out.push_str(&format!(
+                    "{} {} {}{};\n",
+                    e.from,
+                    if e.inhibit { "inhibits" } else { "activates" },
+                    e.to,
+                    if e.strength != 1.0 { format!(" strength {}", e.strength) } else { String::new() }
+                ));
+            }
+            out.push_str(&indent(ind));
+            out.push_str("}\n\n");
+        }
+        Stmt::Toggle(a, b) => out.push_str(&format!("toggle {}, {};\n", a, b)),
+        Stmt::Repressilator(ring, period) => {
+            out.push_str(&format!("repressilator {}", ring.join(" -> ")));
+            if let Some(p) = period {
+                out.push_str(&format!(" period {}", p));
+            }
+            out.push_str(";\n");
+        }
+        Stmt::Frame { name, is_proof, body } => {
+            if *is_proof {
+                out.push_str("frame proof ");
+            } else {
+                out.push_str(&format!("frame {} ", name));
+            }
+            fmt_block(body, ind, out);
+            out.push_str("\n\n");
+        }
+        Stmt::Edit(t, reps) => {
+            out.push_str(&format!("edit {} ", t));
+            out.push_str("{\n");
+            for (f, to) in reps {
+                out.push_str(&indent(ind + 1));
+                out.push_str(&format!("replace \"{}\" -> \"{}\";\n", f, to));
+            }
+            out.push_str(&indent(ind));
+            out.push_str("}\n\n");
+        }
+        Stmt::AnchorExport(ns) => out.push_str(&format!("anchor export {};\n", ns.join(", "))),
+        Stmt::AnchorImport(ns) => out.push_str(&format!("anchor import {};\n", ns.join(", "))),
+        Stmt::Tad(n, body) => {
+            out.push_str(&format!("tad {} ", n));
+            fmt_block(body, ind, out);
+            out.push_str("\n\n");
+        }
+        Stmt::Block(body) => {
+            fmt_block(body, ind, out);
+            out.push('\n');
+        }
+    }
+}
+
+fn fmt_pat(p: &MatchPat) -> String {
+    match p {
+        MatchPat::Lit(e) => fmt_expr(e),
+        MatchPat::Multi(ls) => ls.iter().map(fmt_expr).collect::<Vec<_>>().join(", "),
+        MatchPat::Bind(n) => n.clone(),
+        MatchPat::Wild => "_".into(),
+    }
+}
+
+fn fmt_params(ps: &[(String, Option<Expr>)]) -> String {
+    ps.iter()
+        .map(|(n, d)| match d {
+            Some(e) => format!("{} = {}", n, fmt_expr(e)),
+            None => n.clone(),
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+pub fn fmt_op(op: BinOp) -> &'static str {
+    match op {
+        BinOp::Add => "+",
+        BinOp::Sub => "-",
+        BinOp::Mul => "*",
+        BinOp::Div => "/",
+        BinOp::FloorDiv => "//",
+        BinOp::Mod => "%",
+        BinOp::Eq => "==",
+        BinOp::Neq => "!=",
+        BinOp::Lt => "<",
+        BinOp::Le => "<=",
+        BinOp::Gt => ">",
+        BinOp::Ge => ">=",
+        BinOp::And => "and",
+        BinOp::Or => "or",
+        BinOp::In => "in",
+    }
+}
+
+fn prec_of(op: BinOp) -> u8 {
+    match op {
+        BinOp::Or => 1,
+        BinOp::And => 2,
+        BinOp::Eq | BinOp::Neq | BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge | BinOp::In => 3,
+        BinOp::Add | BinOp::Sub => 4,
+        BinOp::Mul | BinOp::Div | BinOp::FloorDiv | BinOp::Mod => 5,
+    }
+}
+
+/// Precedence of an expression when nested (7 = atom/postfix, no parens ever).
+fn nest_prec(e: &Expr) -> u8 {
+    match e {
+        Expr::Binary(op, _, _) => prec_of(*op),
+        Expr::Unary(crate::ast::UnOp::Not, _) => 2,
+        Expr::Unary(crate::ast::UnOp::Neg, _) => 6,
+        _ => 7,
+    }
+}
+
+pub fn fmt_expr(e: &Expr) -> String {
+    fmt_prec(e, 0)
+}
+
+fn fmt_prec(e: &Expr, parent: u8) -> String {
+    let needs_paren = nest_prec(e) < parent;
+    let body = match e {
+        Expr::Null => "null".into(),
+        Expr::Bool(true) => "true".into(),
+        Expr::Bool(false) => "false".into(),
+        Expr::Int(i) => i.to_string(),
+        Expr::Float(f) => crate::value::format_float(*f),
+        Expr::Str(s) => format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n")),
+        Expr::Interp(parts) => {
+            let mut out = String::from("\"");
+            for p in parts {
+                match p {
+                    InterpPart::Lit(s) => out.push_str(s),
+                    InterpPart::Expr(x) => {
+                        out.push('{');
+                        out.push_str(&fmt_expr(x));
+                        out.push('}');
+                    }
+                }
+            }
+            out.push('"');
+            out
+        }
+        Expr::List(xs) => format!("[{}]", xs.iter().map(|x| fmt_prec(x, 0)).collect::<Vec<_>>().join(", ")),
+        Expr::Map(pairs) => format!(
+            "{{{}}}",
+            pairs
+                .iter()
+                .map(|(k, v)| format!("{}: {}", fmt_prec(k, 0), fmt_prec(v, 0)))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Expr::Ident(n) => n.clone(),
+        Expr::Unary(crate::ast::UnOp::Neg, a) => {
+            let inner = fmt_prec(a, 7);
+            if nest_prec(a) < 6 {
+                format!("-({})", inner)
+            } else {
+                format!("-{}", inner)
+            }
+        }
+        Expr::Unary(crate::ast::UnOp::Not, a) => {
+            let inner = fmt_prec(a, 3);
+            if nest_prec(a) <= 2 {
+                format!("not ({})", inner)
+            } else {
+                format!("not {}", inner)
+            }
+        }
+        Expr::Binary(op, a, b) => {
+            let p = prec_of(*op);
+            // left-assoc: left child may reuse p, right child must be tighter
+            let left = fmt_prec(a, p);
+            let right = fmt_prec(b, p + 1);
+            format!("{} {} {}", left, fmt_op(*op), right)
+        }
+        Expr::Call(f, args) => format!("{}({})", fmt_expr(f), args.iter().map(|x| fmt_prec(x, 0)).collect::<Vec<_>>().join(", ")),
+        Expr::Index(t, i) => format!("{}[{}]", fmt_expr(t), fmt_expr(i)),
+        Expr::Member(t, k) => format!("{}.{}", fmt_expr(t), k),
+        Expr::Method(t, m, args) => format!(
+            "{}.{}({})",
+            fmt_expr(t),
+            m,
+            args.iter().map(|x| fmt_prec(x, 0)).collect::<Vec<_>>().join(", ")
+        ),
+        Expr::Lambda(g) => format!("gene({}) => {}", fmt_params(&g.params), fmt_body_inline(&g.body)),
+        Expr::FateNew(n) => format!("{}()", n),
+        Expr::Collect { var, iter, filter, body } => {
+            let f = match filter {
+                Some(f) => format!(" if {}", fmt_expr(f)),
+                None => String::new(),
+            };
+            format!("for {} in {}{} collect {}", var, fmt_expr(iter), f, fmt_expr(body))
+        }
+    };
+    if needs_paren {
+        format!("({})", body)
+    } else {
+        body
+    }
+}
+
+fn fmt_body_inline(body: &[Stmt]) -> String {
+    if let Some(Stmt::Return(Some(e))) = body.first() {
+        fmt_expr(e)
+    } else {
+        "null".into()
+    }
+}
+
+// ------------------------------------------------------------ json
+pub fn json_escape(s: &str) -> String {
+    let mut out = String::new();
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\t' => out.push_str("\\t"),
+            '\r' => out.push_str("\\r"),
+            other if (other as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", other as u32)),
+            other => out.push(other),
+        }
+    }
+    out
+}
+
+pub fn flush_notes(l: &Loaded, quiet: bool) {
+    if quiet {
+        return;
+    }
+    let err = std::io::stderr();
+    let mut w = err.lock();
+    for n in &l.interp.notes {
+        let tag = match n.rung {
+            1 => "info",
+            2 => "synonym",
+            3 => "wobble",
+            _ => "fallback",
+        };
+        let _ = writeln!(w, "[{}] {}", tag, n.message);
+    }
+}

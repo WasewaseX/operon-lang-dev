@@ -1,0 +1,31 @@
+# the gene-expression regulation layer, live
+fate Cycle {
+    state gap1 -> synthesis
+    state synthesis -> mitosis
+    state mitosis -> gap1
+    enter gap1
+}
+regulate {
+    signal activates kinase strength 0.9
+    kinase activates factor
+    toxin inhibits kinase strength 0.8
+}
+splice fetch {
+    variant fast {
+        return "fast pathway"
+    }
+    variant safe {
+        return "safe pathway"
+    }
+}
+gene main() {
+    let cell = Cycle()
+    promote("cell in {cell.state()}")
+    cell.shift("synthesis")
+    promote("shifted to {cell.state()}")
+    cell.shift("apoptosis")
+    promote("valley refused: still {cell.state()}")
+    let lv = grn_fire("signal")
+    promote("kinase={lv.kinase} factor={lv.factor}")
+    promote("fetch: {fetch()}")
+}
