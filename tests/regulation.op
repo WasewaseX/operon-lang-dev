@@ -1,0 +1,31 @@
+regulate {
+    signal activates kinase strength 0.9
+    kinase activates factor
+    toxin inhibits kinase strength 0.8
+}
+toggle activator, repressor
+repressilator a -> b -> c
+frame proof {
+    # GRN: activation propagates, inhibition subtracts
+    let lv = grn_fire("signal")
+    assert(lv.signal == 1.0, "grn seed")
+    assert(lv.kinase > 0.0 and lv.kinase <= 0.9, "grn activation with decay")
+    assert(lv.factor > 0.0, "grn cascade")
+    let lv2 = grn_fire("toxin")
+    assert(lv2.kinase < 0.9, "grn inhibition reduces")
+
+    # toggle bistability: exactly one on
+    toggle_on("activator")
+    let st = toggle_state()
+    assert(st.activator == true, "toggle on")
+    assert(st.repressor == false, "mutual repression")
+
+    # repressilator manual ring
+    repressi_next()
+    repressi_next()
+    let rs = repressi_state()
+    assert(rs.c == 1.0, "ring advances to c")
+    assert(rs.a == 0.0, "a repressed")
+    repressi_next()
+    assert(repressi_state().a == 1.0, "wraps to a")
+}

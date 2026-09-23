@@ -1,0 +1,43 @@
+frame proof {
+    # rung 2: synonyms parse canonically (notes are emitted but harmless)
+    let x = 2
+    let y = 0
+    if x == 2 {
+        y = 40
+    }
+    assert(y == 40, "canonical path clean")
+
+    # rung 4: garbage is absorbed, never fatal
+    let survived = true
+    assert(survived, "file with junk still proves")
+
+    # unbound reads are null, not crashes
+    let z = ghost_variable
+    assert(z == null, "unbound read is null")
+
+    # phantom calls are null
+    assert(phantom_gene() == null, "phantom call null")
+
+    # runtime: calling a non-gene is null
+    let notgene = 5
+    assert(notgene() == null, "call non-gene null")
+
+    # strings wobble: single quotes accepted
+    let s = 'repaired'
+    assert(s == "repaired", "single-quote repair")
+
+    # codon scoring + edit distance (C++ kernel)
+    assert(distance("kitten", "sitting") == 3, "myers distance")
+    assert(distance("gene", "gen") == 1, "distance 1")
+    assert(similar("promote", "promot"), "similar within 2")
+    assert(not similar("abc", "xyz"), "dissimilar")
+    let cs = codon("atgatgaag")
+    assert(cs > 60 and cs <= 100, "codon score range")
+
+    # bio kernels
+    assert(transcribe("ATGC") == "AUGC", "transcribe")
+    assert(reverse_complement("ATGC") == "GCAT", "reverse complement")
+    assert(gc_content("GGCC") == 100.0, "gc content")
+    assert(translate("AUGAAAUAA") == "MK", "translate stops")
+    assert(find_orf("xxATGAAATAAxx").len() == 1, "orf finder")
+}

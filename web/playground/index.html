@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Operon Playground</title>
+<link rel="stylesheet" href="playground.css">
+</head>
+<body>
+<header>
+  <a class="brand" href="../docs/index.html">Operon</a>
+  <span class="tag">playground — subset v2.0</span>
+  <nav>
+    <a href="../docs/tour.html">tour</a>
+    <a href="../docs/regulation.html">regulation</a>
+    <a href="../docs/grammar.html">grammar</a>
+  </nav>
+</header>
+<main>
+  <section class="editor-pane">
+    <div class="pane-head">
+      <span>program.op</span>
+      <button id="run">Run <kbd>Ctrl</kbd>+<kbd>↵</kbd></button>
+    </div>
+    <textarea id="src" spellcheck="false" rows="18">gene fib(n) {
+    if n &lt; 2 {
+        return n
+    }
+    return fib(n - 1) + fib(n - 2)
+}
+
+promote("fib(10) = {fib(10)}")
+
+let xs = [5, 3, 8]
+promote("sorted: {xs.sort()}")
+
+les typo = "repaired, not rejected"
+promote("wobble: {typo}")</textarea>
+  </section>
+  <section class="out-pane">
+    <div class="pane-head"><span>output</span><span id="score" class="score">100 · A</span></div>
+    <pre id="console" aria-live="polite"></pre>
+    <div class="pane-head"><span>wobble notes</span></div>
+    <ul id="notes"></ul>
+  </section>
+</main>
+<footer>
+  <p>Playground subset v2.0 — the wobble ladder (4 rungs), genes, closures, lists, maps and
+     strings run here for real. The native Rust core adds splice variants, RNA-edit patches,
+     fate machines, regulate/toggle/repressilator, real OS threads and the full toolchain.</p>
+</footer>
+<script src="app.js"></script>
+<script src="ui.js"></script>
+</body>
+</html>

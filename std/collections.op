@@ -1,0 +1,59 @@
+# std/collections — self-hosted library written in Operon itself.
+# Runs on the Rust core; proves the language can carry its own weight.
+
+gene chunk(xs, size) {
+    let out = []
+    let cur = []
+    for v in xs {
+        push(cur, v)
+        if len(cur) == size {
+            push(out, cur)
+            cur = []
+        }
+    }
+    if len(cur) > 0 {
+        push(out, cur)
+    }
+    return out
+}
+
+gene zip(a, b) {
+    let n = min(len(a), len(b))
+    return for i in range(0, n) collect [a[i], b[i]]
+}
+
+gene group_by(xs, keyf) {
+    let out = {}
+    for v in xs {
+        let k = keyf(v)
+        if not has(out, k) {
+            out[k] = []
+        }
+        push(out[k], v)
+    }
+    return out
+}
+
+gene take(xs, n) {
+    return xs.slice(0, n)
+}
+
+gene flatten(xss) {
+    let out = []
+    for xs in xss {
+        for v in xs {
+            push(out, v)
+        }
+    }
+    return out
+}
+
+gene count(xs, pred) {
+    let n = 0
+    for v in xs {
+        if pred(v) {
+            n += 1
+        }
+    }
+    return n
+}

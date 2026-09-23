@@ -1,0 +1,38 @@
+gene old_api() {
+    return "old"
+}
+gene new_api() {
+    return "new"
+}
+silence old_api -> new_api;
+splice fetch {
+    variant fast {
+        return "fast-path"
+    }
+    variant safe {
+        return "safe-path"
+    }
+}
+splice pick {
+    @m6a
+    variant first {
+        return "m6a-wins"
+    }
+    variant second {
+        return "second"
+    }
+}
+@acetylate gene immune() {
+    return "immune"
+}
+silence immune -> old_api;
+frame proof {
+    # RISC silencing redirects calls
+    assert(old_api() == "new", "risc redirects")
+    # acetylated genes are immune to silencing
+    assert(immune() == "immune", "acetylated immune")
+    # splice: default = first variant
+    assert(fetch() == "fast-path", "splice default first")
+    # splice: m6a-marked variant wins when no explicit selection
+    assert(pick() == "m6a-wins", "m6a priority")
+}

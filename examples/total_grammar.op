@@ -1,0 +1,11 @@
+# Total Grammar: nothing you write is rejected.
+# This file contains deliberate junk — it still parses, repairs, and runs.
+gene main() {
+    les x = 21                       # rung 3 wobble: 'les' repairs to 'let'
+    promote("x = {x * 2}")
+    let ghost = undefined_thing      # rung 4: unbound reads are null
+    promote("ghost = {ghost}")
+    phantom_call(42)                 # rung 4: phantom calls are null
+    let s = 'single quotes'          # rung 4: repaired to double quotes
+    promote("s = {s}")
+}

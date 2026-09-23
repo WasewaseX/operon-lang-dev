@@ -1,0 +1,97 @@
+# GenomeLab — Operon demo application.
+# A small gene-analysis workbench: parses DNA records, reports ORFs, GC
+# content, codon usage, and runs a knockout screen on its own test frame.
+
+use std/bio
+use std/strings
+
+splice reporter {
+    variant rich {
+        gene report(rec) {
+            return "{rec.name}: gc={gc_content(rec.seq):.1} orfs={len(find_orf(rec.seq))}"
+        }
+    }
+    variant plain {
+        gene report(rec) {
+            return rec.name
+        }
+    }
+}
+
+@acetylate
+gene parse_record(text) {
+    let lines = text.trim().split("\n")
+    let name = ""
+    let seq = ""
+    for ln in lines {
+        if ln.starts(">") {
+            name = ln.slice(1).trim()
+        } else {
+            seq += ln.trim()
+        }
+    }
+    return {name: name, seq: seq.upper()}
+}
+
+gene gc_profile(rec) {
+    let counts = {G: 0, C: 0, A: 0, T: 0}
+    for ch in rec.seq {
+        if has(counts, ch) {
+            counts[ch] += 1
+        }
+    }
+    return counts
+}
+
+gene analyze(rec) {
+    let prof = gc_profile(rec)
+    let orfs = find_orf(rec.seq)
+    let usage = bio.codon_usage(rec.seq)
+    let top = ""
+    let topn = 0
+    for k in usage.keys() {
+        if usage[k] > topn {
+            topn = usage[k]
+            top = k
+        }
+    }
+    return {
+        name: rec.name,
+        gc: gc_content(rec.seq),
+        orf_count: len(orfs),
+        longest_orf: max(for o in orfs collect len(o)),
+        top_codon: top,
+        purine_skew: bio.gc_skew(rec.seq)
+    }
+}
+
+frame proof {
+    let rec = parse_record(">probe\nATGGCCTAA")
+    assert(rec.name == "probe", "record name")
+    assert(rec.seq == "ATGGCCTAA", "record seq")
+    let a = analyze(rec)
+    assert(a.orf_count == 1, "one ORF in ATGGCCTAA")
+    assert(a.longest_orf == 3, "ORF MK length")
+    assert(a.top_codon != "", "top codon found")
+    let r = parse_record(">x\nATG\nGGC\nTAA")
+    assert(r.seq == "ATGGGCTAA", "multiline join")
+    assert(gc_content("GGCC") == 100.0, "gc kernel")
+}
+
+gene main() {
+    let sample = ">brca_fragment\nATGGATCCTGATAAGCTAGAAATAG\n>mini\nATGAAATAA\n>.gc_rich\nGGCCGGCCAAGG"
+    let records = []
+    for block in sample.split(">") {
+        if block.trim() != "" {
+            push(records, parse_record(">" + block))
+        }
+    }
+    promote("GenomeLab — Operon demo")
+    promote("=======================")
+    for rec in records {
+        let a = analyze(rec)
+        promote("{strings.pad_right(rec.name, 16, " ")} gc={a.gc} orfs={a.orf_count} top={a.top_codon} skew={a.purine_skew}")
+    }
+    let fp = fingerprint()
+    promote("telemetry: spliced={fp.spliced} unspliced={fp.unspliced} velocity={fp.velocity} fano={fp.fano}")
+}

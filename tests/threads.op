@@ -1,0 +1,16 @@
+gene sum_to(n) {
+    let acc = 0
+    for i in range(0, n) {
+        acc += i
+    }
+    return acc
+}
+frame proof {
+    # real OS threads: spawn returns a task id, join returns the value
+    let t1 = spawn(sum_to, [100])
+    let t2 = spawn(sum_to, [1000])
+    assert(join(t1) == 4950, "task 1 result")
+    assert(join(t2) == 499500, "task 2 result")
+    # double join is contained (null + note)
+    assert(join(t1) == null, "double join contained")
+}

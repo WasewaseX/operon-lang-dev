@@ -1,0 +1,10 @@
+# recursion benchmark
+gene fib(n) {
+    if n < 2 {
+        return n
+    }
+    return fib(n - 1) + fib(n - 2)
+}
+gene main() {
+    promote("fib(25) = {fib(25)}")
+}

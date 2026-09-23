@@ -1,0 +1,5 @@
+# The classic first transcription
+gene main() {
+    promote("hello, operon!")
+    promote("wobble tolerant · gene regulated · rust fast")
+}

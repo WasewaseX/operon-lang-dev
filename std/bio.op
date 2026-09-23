@@ -1,0 +1,60 @@
+# std/bio — sequence utilities layered on the native kernels.
+
+gene codon_usage(seq) {
+    # count 3-letter windows
+    let out = {}
+    let chars = seq.upper()
+    let i = 0
+    while i + 3 <= len(chars) {
+        let c = chars.slice(i, i + 3)
+        if not has(out, c) {
+            out[c] = 0
+        }
+        out[c] += 1
+        i += 3
+    }
+    return out
+}
+
+gene is_palindromic_site(dna) {
+    return dna == reverse_complement(dna)
+}
+
+gene melting_point(dna) {
+    let s = dna.upper()
+    let a = 0
+    let t = 0
+    let g = 0
+    let c = 0
+    for ch in s {
+        if ch == "A" { a += 1 }
+        if ch == "T" { t += 1 }
+        if ch == "G" { g += 1 }
+        if ch == "C" { c += 1 }
+    }
+    let n = a + t + g + c
+    if n == 0 {
+        return 0.0
+    }
+    if n < 14 {
+        return 2.0 * (a + t) + 4.0 * (g + c)
+    }
+    return 64.9 + 41.0 * (g + c - 16.4) / n
+}
+
+gene gc_skew(dna) {
+    let g = 0
+    let c = 0
+    for ch in dna.upper() {
+        if ch == "G" {
+            g += 1
+        }
+        if ch == "C" {
+            c += 1
+        }
+    }
+    if g + c == 0 {
+        return 0.0
+    }
+    return (g - c) * 1.0 / (g + c)
+}

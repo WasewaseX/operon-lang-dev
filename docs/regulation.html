@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The regulation layer — Operon</title>
+<meta name="description" content="Operon's gene-expression regulation layer: TADs, anchors, enhancers, histone marks, NMD, RISC silencing, m6A priority, IRES, stress programs, fate landscapes, GRNs, and single-cell telemetry.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="logo" href="index.html"><span class="logo-mark"></span>operon<b>.lang</b></a>
+    <nav>
+      <a href="index.html">Overview</a>
+      <a href="tour.html">Tour</a>
+      <a href="regulation.html" class="here">Regulation</a>
+      <a href="grammar.html">Grammar</a>
+      <a href="../web/playground/index.html" class="cta">Playground →</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+<h1 style="font-size:2.4rem; margin:56px 0 8px; letter-spacing:-0.02em;">The regulation layer</h1>
+<p class="lede" style="max-width:700px;">A genome is not just a program — it is a program under
+<em>regulation</em>. The same DNA yields different cells because expression is layered: architectural
+folding, chromatin marks, transcript surveillance, controlled entry, containment programs, and
+telemetry. Operon implements that layer as executable language semantics. Every feature below is
+real, implemented, and tested — none are decorative.</p>
+
+<h2 id="map">Biology ↔ feature map</h2>
+<p>One row per mechanism, verbatim from SPEC.md §16. The rest of this page walks the table top to
+bottom.</p>
+
+<div class="tablewrap">
+  <table>
+    <thead><tr><th>Mechanism (real molecular biology)</th><th>Operon feature</th></tr></thead>
+    <tbody>
+      <tr><td>Wobble base pairing (redundant codon recognition)</td><td>4-rung Total Grammar + synonym table</td></tr>
+      <tr><td>Codon optimality</td><td><code>codon()</code> scoring in check grading</td></tr>
+      <tr><td>Overlapping reading frames</td><td><code>frame proof</code> — tests and code in one sequence</td></tr>
+      <tr><td>Alternative splicing</td><td><code>splice { variant }</code> + <code>--variant</code> / <code>.cell</code> selection</td></tr>
+      <tr><td>RNA editing</td><td><code>.rna</code> hot patches (<code>edit</code>/<code>replace</code>)</td></tr>
+      <tr><td>Upstream ORF repression</td><td><code>guard (cond) else { }</code> leading clauses</td></tr>
+      <tr><td>DNA methylation / epigenetics</td><td><code>.cell</code> config layer + <code>methyl()</code></td></tr>
+      <tr><td>TADs + CTCF anchors</td><td><code>tad</code> domains + <code>anchor export/import</code></td></tr>
+      <tr><td>Super-enhancers</td><td><code>enhance</code> clusters</td></tr>
+      <tr><td>Histone acetylation / methylation</td><td><code>@acetylate</code> / <code>@methylate</code> marks</td></tr>
+      <tr><td>Nonsense-mediated decay</td><td>NMD sweep (<code>--nmd</code>)</td></tr>
+      <tr><td>miRNA → RISC silencing</td><td><code>silence old -&gt; new;</code></td></tr>
+      <tr><td>m6A modification</td><td><code>@m6a</code> dispatch priority</td></tr>
+      <tr><td>IRES cap-independent entry</td><td><code>ires name;</code> + <code>--ires</code></td></tr>
+      <tr><td>UPR / ISR stress programs</td><td><code>stress { } rescue { }</code> containment</td></tr>
+      <tr><td>Fate landscapes (valley semantics)</td><td><code>fate</code> state machines</td></tr>
+      <tr><td>Gene regulatory networks</td><td><code>regulate</code> + <code>grn_fire/grn_state</code></td></tr>
+      <tr><td>Toggle switch bistability</td><td><code>toggle a, b;</code></td></tr>
+      <tr><td>Repressilator oscillation</td><td><code>repressilator a -&gt; b -&gt; c</code></td></tr>
+      <tr><td>Single-cell transcriptomics / Fano factor</td><td><code>fingerprint()</code> call/noise telemetry</td></tr>
+      <tr><td>RNA velocity</td><td>spliced/unspliced/velocity metrics</td></tr>
+      <tr><td>CRISPR knockout screens</td><td><code>operon crispr --knockout</code></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<hr class="divider">
+
+<h2 id="architecture">1 · Insulation: TADs and anchors</h2>
+<p>The interphase genome is partitioned into <strong>topologically associating domains (TADs)</strong> —
+regions whose loci contact each other far more frequently than they contact neighbors, bounded by
+architectural protein binding sites (classically CTCF anchor sites, often reinforced by cohesin
+extrusion). The functional consequence is <em>enhancer insulation</em>: a regulatory element inside
+the loop drives promoters inside the same loop and is blind to promoters across the boundary.
+Breaking a boundary — in development or disease — lets an enhancer hijack a foreign promoter, and the
+result is misexpression.</p>
+<p>Operon encodes this as <strong>visibility semantics</strong>. A <code>tad Name { }</code> block is
+an insulation domain: names declared inside are lexically captive. They escape only through an
+<code>anchor export</code> statement placed <em>inside the same tad</em> — the anchor site on the
+loop. A file with no <code>anchor export</code> anywhere is default-open (all top-level genes and
+lets exported), mirroring a loop-less, unstructured region. <code>anchor import x;</code> is the
+declarative counterpart: it asserts that this domain expects an external factor to exist, which
+<code>operon check</code> verifies (a missing factor is a note, not an error). Tads do not nest —
+attempted nesting degrades to a merged domain with a note, because real loops cannot meaningfully
+contain a second independent loop boundary at the same scale. <code>use</code> imports bind one
+module map per file, with a module cache so the same transcript is not re-executed, and cyclic
+imports return the partial map with a note rather than deadlocking.</p>
+
+<h2 id="marks">2 · Enhancers and chromatin marks</h2>
+<p><strong>Super-enhancers</strong> are dense clusters of enhancer elements bound by unusually high
+concentrations of transcriptional machinery; they preferentially drive the genes that define a
+cell's identity, and their perturbation disproportionately reshapes the expression profile. In
+Operon, <code>enhance a, b, c;</code> marks a cluster of genes as priority targets:
+<code>operon profile</code> shows the enhancement flag per gene, and <code>operon check</code>
+awards a codon-score bonus to enhanced hot genes — investing grading weight where expression
+investment actually lands.</p>
+<p><strong>Histone marks</strong> are the second layer. Acetylation of histone tails neutralizes
+their positive charge, loosens DNA wrapping, and generally means <em>eager, transcribable</em>
+chromatin; repressive methylation compacts nucleosomes and locks regions down. The marks are
+epigenetic: the DNA sequence is untouched, but the behavior of the region changes. Operon's
+<code>@acetylate</code> marks a gene as eager/priority — it is excluded from <code>silence</code>
+rewriting, because active chromatin stays active. <code>@methylate</code> represses a gene: calls to
+it still run (repression is not deletion), but each call emits a soft <code>"methylated call"</code>
+note — suppressed when the <code>.cell</code> config sets <code>methylate.quiet = true</code> — and
+marked genes are excluded from generated docs. Neither mark edits the function body: the layer sits
+<em>above</em> the source, exactly as epigenetics sits above the genome.</p>
+
+<h2 id="surveillance">3 · Transcript surveillance: NMD, RISC, editing</h2>
+<p>Cells audit their transcripts three ways, and Operon implements all three as distinct tools.</p>
+<p><strong>Nonsense-mediated decay (NMD)</strong> degrades mRNAs carrying a premature stop codon —
+typically one upstream of an exon-junction complex, the molecular signature of a splicing mistake.
+The cell would rather destroy a truncated product than let it accumulate. <code>operon check
+--nmd</code> is that sweep over source code: <em>premature stops</em> are statements unreachable
+after an unconditional <code>return</code> (dead transcript downstream of a stop signal, −4 each in
+grading), and <em>untranslated transcripts</em> are genes that are defined but never called, not
+exported, and not enhanced (−1, informational). <code>--nmd purge</code> rewrites the file without
+them — decay, executed.</p>
+<p><strong>miRNA/RISC silencing</strong> is post-transcriptional and <em>sequence-directed</em>: a
+small RNA guides the RISC complex by base-pairing to a complementary target, and the complex then
+redirects or degrades that specific transcript — regulation without touching the gene itself. The
+Operon statement <code>silence old -&gt; new;</code> does precisely this at the call level: after the
+statement executes, every call to gene <code>old</code> is transparently redirected to <code>new</code>
+with a <code>"RISC: call silenced"</code> note. <code>@acetylate</code> genes are immune, as active
+chromatin is. Crucially, same-name splice variants resolve <em>first</em>, and silencing applies to
+the resolved name — guide specificity is judged after isoform identity, which is how real
+targeting works.</p>
+<p><strong>RNA editing</strong> chemically amends individual transcript bases after transcription,
+changing what the message says without changing the gene. Operon's <code>.rna</code> files are
+patch lists: <code>edit target { replace "src" -&gt; "dst"; }</code> where target is a file or gene
+name; the patch is applied to the target's <em>source text before parsing</em>, each applied
+replacement logged as a note. This makes them hot-fixes with a full audit trail — invoked with
+<code>operon run app.op --rna hot.rna</code>, never silently.</p>
+
+<h2 id="entry">4 · Entry: m6A priority and IRES</h2>
+<p><strong>m6A</strong> (N6-methyladenosine) is the most abundant internal mRNA modification; among
+its many roles is steering which reading of a message wins — reader proteins bound at m6A sites
+influence processing, export, and translation efficiency. Operon distills this to a resolution rule:
+among same-name candidates — splice variants, shadowing definitions — the <code>@m6a</code>-marked
+one wins dispatch. One mark, one priority, deterministic.</p>
+<p><strong>IRES elements</strong> (internal ribosome entry sites) allow translation initiation in the
+<em>middle</em> of a message, cap-independently — the ribosome lands where the element says, not at
+the 5′ cap. Operon's <code>ires name;</code> declares a cap-independent entry gene, and <code>operon
+run --ires</code> (or running a file with no <code>main</code>) begins execution at the first
+declared IRES target instead of the canonical entry. A program therefore has a defined default
+reading and an alternative internal one, both first-class.</p>
+<p><strong>Codon optimality</strong> — the observation that synonymous codons are translated with
+different efficiencies — appears as <code>codon(s)</code>, a deterministic 0–100 style score of an
+identifier used by <code>operon check</code> grading: concise, digit-free, well-shaped names score
+higher, and the score feeds the same letter-grade report as wobble penalties.</p>
+
+<h2 id="proteostasis">5 · Proteostasis: UPR/ISR stress programs</h2>
+<p>The <strong>unfolded protein response</strong> and the broader <strong>integrated stress
+response</strong> are graded containment programs, not panics: sensors detect accumulated damage,
+translation narrows, specific rescue genes are induced, and if adaptation fails only then does the
+cell commit to apoptosis. The key property is <em>specificity with containment</em> — the response
+is proportionate to the lesion class.</p>
+<p>Operon's <code>stress { } rescue { }</code> implements exactly that contract. Runtime failures
+raise a <em>Stress</em> value — a map <code>{"kind": Str, "message": Str}</code> — with kinds named
+for lesion classes: <code>unfolded</code> (type errors, e.g. ordering incompatible values),
+<code>missing</code> (bad index/key/member/null dereference), <code>overflow</code> (integer
+overflow, recursion depth), <code>burned</code> (assertion failures, resource errors). An
+unqualified <code>rescue</code> catches any kind; <code>stress missing { … }</code> filters to that
+kind only and lets others propagate outward — lesion specificity. The rescue binding is optional
+(<code>rescue (e)</code>), and with no rescue clause the stress is contained to <code>null</code>
+plus a note. Nothing here is an exception in the crash sense: Total Grammar holds at runtime, and a
+stressed region degrades, logs, and lets the run continue.</p>
+
+<h2 id="identity">6 · Cell identity: fate landscapes and circuits</h2>
+<p><strong>Fate landscapes.</strong> Development is often pictured as a ball rolling over a
+landscape whose valleys are cell fates and whose ridges separate basins of attraction: transitions
+follow connected valleys, some moves are uphill-impossible, and a blocked move leaves the cell where
+it was. <code>fate Name { state a -&gt; b, c; … enter a; }</code> declares that map;
+<code>Name()</code> instantiates at the <code>enter</code> state. <code>.shift(s)</code> returns
+<code>true</code> when a declared transition exists — and <code>false</code> with a note and an
+<em>unchanged</em> state otherwise: the valley stay. <code>.can(s)</code> surveys without moving.
+Instances are ordinary maps with hidden <code>#fate</code>/<code>#state</code> keys, so fate is
+inspectable but not casually overwritable.</p>
+<p><strong>Gene regulatory networks.</strong> Promoters regulate promoters: activators raise target
+expression with measurable strength, repressors subtract from it. <code>regulate { a activates b
+strength 0.8; c inhibits d; }</code> declares the signed, weighted graph (default strength 1.0);
+<code>grn_fire("a")</code> sets <code>a</code> to level 1.0 and propagates in waves — activation sets
+<code>child = max(child, parent × strength^wave)</code>, inhibition computes
+<code>child = max(0, child − parent × strength^wave)</code> — attenuation increasing with each hop,
+as in a signaling cascade. <code>grn_state()</code> returns the level map of every gene in the
+graph.</p>
+<p><strong>The toggle switch.</strong> Two repressors arranged so that each shuts the other off form
+a bistable memory element: the system must rest in exactly one of two states, and it remembers which
+until actively flipped. <code>toggle a, b;</code> declares the pair; <code>toggle_on("a")</code>
+turns <code>a</code> on and <code>b</code> off; <code>toggle_state()</code> reports both. The
+invariant is absolute — exactly one may be on.</p>
+<p><strong>The repressilator.</strong> A ring of three repressors, each repressing the next, produces
+self-sustaining oscillation — the synthetic-biology demonstration that a regulatory <em>topology</em>
+alone can generate a clock. <code>repressilator a -&gt; b -&gt; c;</code> declares the ring.
+<code>repressi_next()</code> advances it deterministically (each step represses the previous gene,
+releasing the next; <code>repressi_state()</code> shows the on gene at 1.0, others 0.0) — the
+reproducible mode tests rely on. Adding <code>period 3</code> and calling <code>repressi_start()</code>
+spawns a real OS thread flipping the ring every 3 seconds — the demo mode, an actual oscillator
+against the wall clock.</p>
+
+<h2 id="telemetry">7 · Telemetry: the single-cell layer</h2>
+<p>Single-cell transcriptomics reads expression <em>per cell</em> rather than per bulk culture, and
+two quantities dominate the analysis. The <strong>Fano factor</strong> (variance over mean of
+molecule counts) separates transcript noise from steady expression — a bursty, occasionally-fired
+gene has a high Fano factor; a constitutively expressed one sits near baseline. <strong>RNA
+velocity</strong> compares unspliced (nascent) to spliced (mature) transcript counts to infer the
+<em>direction</em> a population is moving: high unspliced fraction means the gene is being ramped
+up right now.</p>
+<p><code>fingerprint()</code> returns exactly this for a run: <code>calls</code> (gene → count),
+<code>fano</code> (variance/mean of call-time buckets; 0 for ≤1 call), <code>spliced</code> (genes
+executed at least once), <code>unspliced</code> (defined but never executed), and <code>velocity</code>
+(unspliced / total). <code>operon profile f.op</code> runs instrumented and prints the per-gene
+table — calls, self-time in microseconds, flags (<code>enhanced active repressed</code>) — followed
+by the spliced/unspliced/velocity summary and <em>enhance suggestions</em>: the top
+unspliced-but-hot candidates that deserve an <code>enhance</code> cluster. Telemetry is not a bolt-on
+debugger; it is the same readout a profilometer gives a culture.</p>
+
+<h2 id="screens">8 · Perturbation: knockout screens</h2>
+<p>A <strong>CRISPR knockout screen</strong> disables one gene at a time across a population and
+records which knockouts change the phenotype — causal maps built by systematic ablation. Operon's
+<code>operon crispr f.op --knockout gene</code> is that protocol for code: the target gene's body is
+rewritten to <code>return null</code>, the file's proof frames are then run, and survivors (proofs
+that still pass) are reported — with <code>--json</code> for machine consumption. A gene whose
+knockout changes nothing is a lead: probably dead code, arguably an unspliced transcript. The
+epigenetic counterpart completes the layer: the <code>.cell</code> methylation config (key = value
+lines, section headers, <code>#</code> comments; auto-detected as <code>operon.cell</code>) carries
+keys the implementation consumes — <code>variant.&lt;splice&gt;</code>, <code>methylate.quiet</code>,
+<code>wobble.strict</code>, <code>entry</code> — and programs read their own configuration via
+<code>methyl("key", default?)</code>, the way a locus reads its own methylation state.</p>
+
+<div class="callout">
+  <p><b>One law above the layer.</b> Regulation never rejects: silencing redirects, methylation
+  notes, NMD purges, knockouts null out. Every mechanism here <em>modifies behavior with a record</em>
+  rather than failing the run — the Total Grammar law, extended from parsing to expression.</p>
+</div>
+
+<section>
+  <h2>Continue</h2>
+  <p>See the mechanisms in motion in the <a href="tour.html">language tour</a> (stops 7–12), or read
+  the precise syntax in the <a href="grammar.html">grammar reference</a>. The
+  <a href="../web/playground/index.html">playground</a> runs the expression core in your browser.</p>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap foot-inner">
+    <div>
+      <a class="logo" href="index.html"><span class="logo-mark"></span>operon<b>.lang</b></a>
+      <p class="mono">Operon 2.0.0 · rust-core · c-runtime · cpp-kernel<br>
+      SPEC frozen for v2.0 · Total Grammar: nothing is rejected.</p>
+    </div>
+    <div class="foot-links">
+      <a href="index.html">Overview</a>
+      <a href="tour.html">Tour</a>
+      <a href="grammar.html">Grammar reference</a>
+      <a href="../web/playground/index.html">Playground</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

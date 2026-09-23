@@ -1,0 +1,29 @@
+gene make_counter(start) {
+    let n = start
+    return gene (by) {
+        n += by
+        return n
+    }
+}
+gene apply_twice(f, v) {
+    return f(f(v))
+}
+gene fib(n) {
+    if n < 2 {
+        return n
+    }
+    return fib(n - 1) + fib(n - 2)
+}
+gene defaults(a, b = 10, c = 100) {
+    return a + b + c
+}
+frame proof {
+    let c = make_counter(100)
+    assert(c(1) == 101, "closure captures env")
+    assert(c(1) == 102, "closure state persists")
+    assert(apply_twice(gene (x) => x * 3, 7) == 63, "hof lambda")
+    assert(fib(15) == 610, "recursion fib")
+    assert(defaults(1) == 111, "defaults all")
+    assert(defaults(1, 2) == 103, "defaults partial")
+    assert(defaults(1, 2, 3) == 6, "defaults none")
+}

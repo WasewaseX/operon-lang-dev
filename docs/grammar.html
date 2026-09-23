@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grammar reference — Operon</title>
+<meta name="description" content="Operon grammar reference: lexical rules, statement forms, expression precedence, the 4-rung Total Grammar ladder, builtins, methods, CLI, and the grading model.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="logo" href="index.html"><span class="logo-mark"></span>operon<b>.lang</b></a>
+    <nav>
+      <a href="index.html">Overview</a>
+      <a href="tour.html">Tour</a>
+      <a href="regulation.html">Regulation</a>
+      <a href="grammar.html" class="here">Grammar</a>
+      <a href="../web/playground/index.html" class="cta">Playground →</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+<h1 style="font-size:2.4rem; margin:56px 0 8px; letter-spacing:-0.02em;">Grammar reference</h1>
+<p class="lede" style="max-width:680px;">The formal-ish contract, condensed from the frozen
+SPEC (v2.0). Where this page and SPEC.md differ, SPEC.md wins — it is the single source implemented
+identically by the Rust core, the Python oracle, and the JS playground.</p>
+
+<div class="toc">
+  <div class="toc-title">Contents</div>
+  <ol>
+    <li><a href="#lexical">Lexical rules</a></li>
+    <li><a href="#keywords">Keywords &amp; marks</a></li>
+    <li><a href="#statements">Statement forms</a></li>
+    <li><a href="#genes-grammar">Gene forms</a></li>
+    <li><a href="#precedence">Expression precedence</a></li>
+    <li><a href="#ladder">The Total Grammar ladder</a></li>
+    <li><a href="#builtins">Builtins</a></li>
+    <li><a href="#methods">Methods</a></li>
+    <li><a href="#cli">CLI reference</a></li>
+    <li><a href="#grading">Grading model</a></li>
+  </ol>
+</div>
+
+<!-- 1 lexical -------------------------------------------------------- -->
+<h2 id="lexical">1 · Lexical rules</h2>
+<ul class="plain">
+  <li><b>Comments</b> — <code>#</code> to end of line. A <code>#!</code> shebang is allowed on line 1. A <code>#</code> inside a string does <b>not</b> start a comment.</li>
+  <li><b>Strings</b> — <code>"double quoted"</code> only. Escapes: <code>\n \t \\ \" \{</code>. Interpolation <code>"{expr}"</code> takes any expression, evaluated at runtime and <code>str()</code>-coerced.</li>
+  <li><b>Single quotes</b> — no single-quoted strings in canonical form. A <code>'</code> in code is a wobble: treated as <code>"</code> with a note.</li>
+  <li><b>Identifiers</b> — <code>[A-Za-z_][A-Za-z0-9_]*</code>.</li>
+  <li><b>Numbers</b> — <code>42</code> (int), <code>3.14</code> (float), <code>1e3</code> (float). Negative values come from unary minus.</li>
+  <li><b>Newlines</b> terminate statements; <code>;</code> is allowed and ignored (also <code>;;</code>, stray). Blocks are <code>{ ... }</code>.</li>
+  <li><b>Marks</b> — <code>@acetylate</code> <code>@methylate</code> <code>@m6a</code>.</li>
+  <li><b>Extensions</b> — <code>.op</code> source · <code>.cell</code> methylation config · <code>.rna</code> edit patches.</li>
+</ul>
+
+<h2 id="keywords">2 · Keywords &amp; marks</h2>
+<p>Canonical keywords (46):</p>
+<figure class="code">
+  <figcaption><span>canonical keyword set</span><span class="tag">SPEC §3</span></figcaption>
+  <pre><code>gene let if elif else while loop for in return break continue
+match case use tad anchor export import enhance silence stress
+rescue raise fate state regulate activates inhibits strength
+toggle repressilator period frame proof guard splice variant
+edit replace apply true false null and or not collect ires
+
+marks: <span class="m">@acetylate</span> <span class="m">@methylate</span> <span class="m">@m6a</span></code></pre>
+</figure>
+<p>Every keyword has entry paths in the synonym table (rung 2) and the edit-distance repair table
+(rung 3) — see <a href="#ladder">the ladder</a>.</p>
+
+<!-- 3 statements ----------------------------------------------------- -->
+<h2 id="statements">3 · Statement forms</h2>
+<figure class="code">
+  <figcaption><span>statements</span><span class="tag">SPEC §5</span></figcaption>
+  <pre><code><span class="k">let</span> name = expr                     <span class="c"># definition (re-let with note "rebinding")</span>
+name = expr                         <span class="c"># assign (auto-let at top scope with note)</span>
+name += -= *= //= expr              <span class="c"># compound (also on a[i], a.k targets)</span>
+<span class="k">if</span> expr { } <span class="k">elif</span> expr { } <span class="k">else</span> { }  <span class="c"># elif/else optional, elif chainable</span>
+<span class="k">while</span> expr { }
+<span class="k">loop</span> { }                            <span class="c"># infinite; break/continue</span>
+<span class="k">for</span> name <span class="k">in</span> expr { }                <span class="c"># List→items, Str→1-char strs, Map→keys</span>
+<span class="k">return</span> expr?                        <span class="c"># bare return → null</span>
+<span class="k">break</span> / <span class="k">continue</span>
+<span class="k">match</span> expr { <span class="k">case</span> p { } ... }       <span class="c"># literals (==, comma-sep), ident (binds), _</span>
+<span class="k">use</span> path (<span class="k">as</span> name)?                 <span class="c"># file import → binds module Map</span>
+<span class="k">raise</span> expr                          <span class="c"># raise Stress{kind:"unfolded", ...}</span>
+<span class="k">raise</span> kind , expr                   <span class="c"># kind ∈ unfolded missing overflow burned</span>
+<span class="k">stress</span> (kind)? { B } <span class="k">rescue</span> (e)? { R }   <span class="c"># containment</span></code></pre>
+</figure>
+
+<!-- 4 genes ---------------------------------------------------------- -->
+<h2 id="genes-grammar">4 · Gene forms</h2>
+<figure class="code">
+  <figcaption><span>genes &amp; lambdas</span><span class="tag">SPEC §7</span></figcaption>
+  <pre><code>marks* <span class="k">gene</span> name(p1, p2 = default) <span class="k">guard</span> (cond) <span class="k">else</span> { B } { body }
+marks* <span class="k">gene</span> (p1) <span class="p">=&gt;</span> expr            <span class="c"># anonymous expression lambda</span>
+marks* <span class="k">gene</span> (p1) { body }           <span class="c"># anonymous block lambda</span>
+<span class="k">let</span> f = <span class="k">gene</span> (x) <span class="p">=&gt;</span> x * 2
+<span class="k">for</span> x <span class="k">in</span> xs <span class="k">if</span> x &gt; 0 <span class="k">collect</span> x      <span class="c"># collect expression with filter</span></code></pre>
+</figure>
+<p>Closures capture the defining environment by reference. Calls are positional with defaults;
+extra arguments are ignored with a note, missing arguments without a default arrive as
+<code>null</code> with a note — never a crash. The <code>guard</code> clause (uORF) sits between
+signature and body: if its condition is false, the else block runs; a non-null result from that
+block becomes the call result, otherwise the result is <code>null</code> plus a
+<code>"guard tripped"</code> note. Recursion is allowed; depth limit 10,000 → Stress
+<code>overflow</code>.</p>
+
+<!-- 5 precedence ------------------------------------------------------ -->
+<h2 id="precedence">5 · Expression precedence</h2>
+<p>Low → high. This table is copied from SPEC §6 and is normative.</p>
+<div class="tablewrap">
+  <table>
+    <thead><tr><th style="width:3.5em;">Level</th><th style="width:14em;">Operators</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><code>or</code> (<code>||</code>)</td><td>Short-circuits, returns operand value — <code>a or b</code> → <code>a</code> if truthy else <code>b</code></td></tr>
+      <tr><td>2</td><td><code>and</code> (<code>&amp;&amp;</code>)</td><td>Same short-circuit semantics</td></tr>
+      <tr><td>3</td><td>unary <code>not</code> (<code>!</code>)</td><td><code>not a == b</code> parses as <code>not (a == b)</code></td></tr>
+      <tr><td>4</td><td><code>== != &lt; &lt;= &gt; &gt;=</code>, <code>in</code></td><td>Left-assoc, no chaining. <code>x in xs</code>: List membership, Str substring, Map key membership</td></tr>
+      <tr><td>5</td><td><code>+ -</code></td><td><code>+</code> also concatenates two strings or two lists</td></tr>
+      <tr><td>6</td><td><code>* / // %</code></td><td><code>/</code> true division (always Float) · <code>//</code> floor division (Int) · <code>%</code> floored remainder, sign follows divisor</td></tr>
+      <tr><td>7</td><td>unary <code>-</code></td><td></td></tr>
+      <tr><td>8</td><td>postfix: <code>f(x)</code> <code>a[i]</code> <code>a.k</code> <code>a.k(args)</code></td><td>Member access on Map → key lookup (missing → Null + note); methods are native</td></tr>
+      <tr><td>9</td><td>primary</td><td>literal, ident, <code>(expr)</code>, list <code>[a, b]</code>, map <code>{k: v, "k2": v}</code>, lambda, <code>collect</code></td></tr>
+    </tbody>
+  </table>
+</div>
+<p class="muted small">Assignment extras: <code>a.k = v</code> assigns a map key; <code>a[i] = v</code>
+assigns a list index (out of range → Stress <code>missing</code>, catchable). Equality <code>==</code>
+is deep; Int/Float compare numerically.</p>
+
+<!-- 6 ladder ---------------------------------------------------------- -->
+<h2 id="ladder">6 · The Total Grammar ladder</h2>
+<p>Every parse passes down the ladder; each rung below 1 emits <strong>notes</strong> — structured
+records of <code>line, rung, message, repair</code>. Nothing is ever rejected.</p>
+
+<div class="ladder">
+  <div class="rung">
+    <span class="num">1</span>
+    <div>
+      <h4>Canonical <span class="lvl">no notes</span></h4>
+      <p>Exact keyword and grammar match. The file parses as written.</p>
+      <div class="ex"><span class="k">let</span> x = 2
+<span class="f">promote</span>(<span class="s">"answer {x * 7}"</span>)          <span class="c"># → answer 42</span></div>
+    </div>
+  </div>
+  <div class="rung">
+    <span class="num">2</span>
+    <div>
+      <h4>Synonym <span class="lvl">known alternate spelling</span></h4>
+      <p>A synonym table maps alternate spellings to canonical keywords: <code>fn func def fun sub
+      lambda proc → gene</code> · <code>print echo say show → promote</code> · <code>var val const →
+      let</code> · <code>elseif → elif</code> · <code>foreach each → for</code> · <code>import
+      include require → use</code> · <code>ret → return</code> · <code>stop → break</code> ·
+      <code>continue next skip → continue</code> · <code>yes on → true</code> · <code>no off →
+      false</code> · <code>null nil none nothing → null</code> · <code>&amp;&amp; → and</code> ·
+      <code>|| → or</code> · <code>! → not</code>.</p>
+      <div class="ex"><span class="note">var</span> x = 2            <span class="arrow">→</span> rung-2 note, parsed as <span class="k">let</span> x = 2
+<span class="note">print</span>(<span class="s">"hi"</span>)          <span class="arrow">→</span> rung-2 note, parsed as <span class="f">promote</span>(<span class="s">"hi"</span>)</div>
+    </div>
+  </div>
+  <div class="rung">
+    <span class="num">3</span>
+    <div>
+      <h4>Wobble <span class="lvl">edit-distance repair</span></h4>
+      <p>An identifier within edit distance ≤ 2 of exactly one keyword (≤ 1 if its length ≤ 4) is
+      repaired to that keyword, with a note. Applies to marks too. Ambiguity — two keywords
+      equidistant — falls to rung 4 for that token.</p>
+      <div class="ex"><span class="note">les</span> x = 2            <span class="arrow">→</span> note: repaired <span class="note">les</span> <span class="arrow">→</span> <span class="k">let</span> (distance 1) — runs normally
+<span class="m">@acetylat</span> <span class="k">gene</span> f() {}   <span class="arrow">→</span> note: mark repaired <span class="arrow">→</span> <span class="m">@acetylate</span></div>
+    </div>
+  </div>
+  <div class="rung">
+    <span class="num">4</span>
+    <div>
+      <h4>Semantic fallback <span class="lvl">degrade, never reject</span></h4>
+      <p>An unknown bare identifier in expression position becomes the string literal of its own
+      name, with a note ("unbound wobble"). Stray tokens are skipped with notes. Unclosed braces are
+      auto-closed at EOF with notes. Extra closers are skipped with notes. An unclosed string
+      consumes to EOF with a note.</p>
+      <div class="ex"><span class="f">promote</span>(<span class="note">greeting</span>)          <span class="arrow">→</span> note: unbound wobble — "greeting" used as string literal
+}                        <span class="arrow">→</span> note: skipped extra `}` — run continues</div>
+    </div>
+  </div>
+</div>
+
+<div class="callout">
+  <p><b>Runtime Total Grammar.</b> Reading an unbound variable → <code>null</code> + note; calling a
+  non-gene → <code>null</code> + note. A run never aborts on soft failures — only <code>exit()</code>
+  or an uncaught raise-style hard event ends it early (and even that prints a containment note
+  first). Undefined gene calls are reported by <code>operon check</code> as <em>phantom calls</em>.</p>
+</div>
+
+<!-- 7 builtins --------------------------------------------------------- -->
+<h2 id="builtins">7 · Builtins</h2>
+<div class="tablewrap">
+  <table>
+    <thead><tr><th>Builtin</th><th>Signature / behavior</th></tr></thead>
+    <tbody>
+      <tr><td><code>promote(*a)</code></td><td>Print args, space-joined, to stdout; returns null</td></tr>
+      <tr><td><code>len</code></td><td>Length of str / list / map</td></tr>
+      <tr><td><code>push(l, v)</code> · <code>pop(l)</code></td><td>List append / remove-and-return last</td></tr>
+      <tr><td><code>insert(l,i,v)</code> · <code>remove(l,i)</code></td><td>Positional list mutation</td></tr>
+      <tr><td><code>keys(m)</code> · <code>values(m)</code> · <code>has(m,k)</code> · <code>del(m,k)</code></td><td>Map views and mutation (insertion-ordered)</td></tr>
+      <tr><td><code>range(a, b?, step?)</code></td><td>Returns a List</td></tr>
+      <tr><td><code>str</code> · <code>num</code></td><td>Coercions; <code>num</code> fails → 0 + note</td></tr>
+      <tr><td><code>type</code></td><td><code>null bool int float str list map gene native</code></td></tr>
+      <tr><td><code>abs min max sum</code></td><td>Numeric helpers</td></tr>
+      <tr><td><code>clock()</code></td><td>Seconds, float</td></tr>
+      <tr><td><code>exit(n?)</code> · <code>assert(c, msg?)</code></td><td>Hard stop · raises Stress <code>burned</code> on failure</td></tr>
+      <tr><td><code>codon(s)</code></td><td>0–100 style score of an identifier (codon optimality)</td></tr>
+      <tr><td><code>distance(a,b)</code> · <code>similar(a,b,maxd?)</code></td><td>Edit distance (C++ Myers kernel) · boolean threshold</td></tr>
+      <tr><td><code>transcribe(dna)</code> · <code>translate(rna)</code></td><td>Sequence tools; translate stops at stop codon</td></tr>
+      <tr><td><code>reverse_complement(dna)</code> · <code>gc_content(dna)</code> · <code>find_orf(dna)</code></td><td>Sequence tools (gc 0–100; ORF protein list)</td></tr>
+      <tr><td><code>memory()</code></td><td>Map <code>arena_bytes, interns, allocs</code> from the C runtime</td></tr>
+      <tr><td><code>fingerprint()</code></td><td>Run telemetry — <code>calls fano spliced unspliced velocity</code></td></tr>
+      <tr><td><code>spawn(f, args?)</code> · <code>join(id)</code></td><td>OS thread tasks; result returned, second join → null + note</td></tr>
+      <tr><td><code>toggle_on(name)</code> · <code>toggle_state()</code></td><td>Toggle-switch bistability control</td></tr>
+      <tr><td><code>repressi_next()</code> · <code>repressi_state()</code></td><td>Repressilator ring advance / levels</td></tr>
+      <tr><td><code>grn_fire(name)</code> · <code>grn_state()</code></td><td>Regulatory-network ignition / level map</td></tr>
+      <tr><td><code>methyl(key, default?)</code></td><td>Read the <code>.cell</code> methylation config</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- 8 methods ---------------------------------------------------------- -->
+<h2 id="methods">8 · Methods</h2>
+<figure class="code">
+  <figcaption><span>method tables</span><span class="tag">SPEC §10</span></figcaption>
+  <pre><code><span class="c"># Str</span>
+.upper() .lower() .trim() .split(sep) .join(list) .replace(a,b)
+.contains(x) .starts(x) .ends(x) .repeat(n) .slice(a,b) .len()
+
+<span class="c"># List  (cmp returns true when a before b)</span>
+.map(f) .filter(f) .reduce(f, init) .each(f) .sort(cmp?)
+.reverse() .contains(x) .index_of(x) .slice(a,b) .join(sep) .len()
+
+<span class="c"># Map</span>
+.keys() .values() .items() .has(k) .del(k) .len()</code></pre>
+</figure>
+
+<!-- 9 CLI --------------------------------------------------------------- -->
+<h2 id="cli">9 · CLI reference</h2>
+<figure class="code">
+  <figcaption><span>operon — Rust toolchain binary</span><span class="tag">SPEC §15</span></figcaption>
+  <pre><code>operon run f.op    [--entry g] [--variant v] [--cell c] [--rna r] [--frame name] [--ires] [--strict] [--quiet] [--json]
+operon check f.op  [--nmd] [--nmd=purge] [--json]
+operon test [paths...]
+operon fmt f.op    [--write]        <span class="c"># canonical formatter; wobble-corrected output parses clean</span>
+operon build f.op  --variant v -o out.op
+operon profile f.op
+operon crispr f.op --knockout gene [--json]   <span class="c"># knockout: body → return null; then run proofs; report survivors</span>
+operon bench f.op  [--iters n]
+operon version</code></pre>
+</figure>
+<ul class="plain">
+  <li><code>operon test</code> defaults to <code>tests/</code> recursively; each file's proof frames run, failures are recorded, the suite continues; exit 1 on any failure. Report: files, proofs run, passed, failed, wobble notes.</li>
+  <li><code>--strict</code> → exit code 3 if any rung ≥ 3 note occurred.</li>
+  <li><b>Stdout discipline</b> — <code>promote</code> prints program output; notes/reports go to <em>stderr</em>, so <code>operon run f.op &gt; out.txt</code> is clean. <code>--json</code> on check/test/profile/crispr emits machine-readable JSON to stdout.</li>
+</ul>
+
+<!-- 10 grading ----------------------------------------------------------- -->
+<h2 id="grading">10 · Grading model</h2>
+<p><code>operon check</code> grades a file the way the cell grades a transcript — by accumulated
+damage, not by rejection:</p>
+<div class="tablewrap">
+  <table>
+    <thead><tr><th>Event</th><th>Penalty</th></tr></thead>
+    <tbody>
+      <tr><td>Start</td><td><b>100</b></td></tr>
+      <tr><td>Wobble note (rung 3)</td><td>−2</td></tr>
+      <tr><td>Fallback note (rung 4)</td><td>−3</td></tr>
+      <tr><td>NMD premature stop (unreachable after <code>return</code>)</td><td>−4</td></tr>
+      <tr><td>Untranslated transcript (defined, never called, unexported, unenhanced)</td><td>−1</td></tr>
+      <tr><td>Phantom call (calling an undefined gene — runs as null)</td><td>−2</td></tr>
+      <tr><td>Floor</td><td><b>50</b></td></tr>
+    </tbody>
+  </table>
+</div>
+<p>Letters: <span class="badge pink">A ≥ 90</span> <span class="badge">B ≥ 80</span>
+<span class="badge">C ≥ 70</span> <span class="badge">D ≥ 60</span> <span class="badge">F else</span>.
+The <a href="../web/playground/index.html">playground</a> applies the same arithmetic live — wobble
+−2, fallback −3, floor 50 — as its score chip.</p>
+
+</main>
+
+<footer>
+  <div class="wrap foot-inner">
+    <div>
+      <a class="logo" href="index.html"><span class="logo-mark"></span>operon<b>.lang</b></a>
+      <p class="mono">Operon 2.0.0 · rust-core · c-runtime · cpp-kernel<br>
+      SPEC frozen for v2.0 · Total Grammar: nothing is rejected.</p>
+    </div>
+    <div class="foot-links">
+      <a href="index.html">Overview</a>
+      <a href="tour.html">Tour</a>
+      <a href="regulation.html">Regulation layer</a>
+      <a href="../web/playground/index.html">Playground</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
