@@ -25,9 +25,12 @@ pass=0; fail=0; failed_files=()
 run_one() {
     local f="$1"; shift
     local grants=("$@")
-    timeout 15 ./bin/operon run "$f" "${grants[@]}" > "$TMP/out" 2> "$TMP/err"
+    # sz hotfix: -k 5 — a payload that ignores SIGTERM must die by SIGKILL;
+    # plain `timeout 15` wedged CI for ~131 s on rt_p4a (TERM ignored, timeout
+    # blocked until the process died on its own). rc 137 = SIGKILLed (hang).
+    timeout -k 5 15 ./bin/operon run "$f" "${grants[@]}" > "$TMP/out" 2> "$TMP/err"
     local rc=$?
-    if [ $rc -eq 124 ]; then
+    if [ $rc -eq 124 ] || [ $rc -eq 137 ]; then
         echo "HANG  $f"; return 1
     fi
     if [ $rc -ge 130 ] && [ $rc -ne 137 ]; then
