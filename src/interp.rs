@@ -1753,7 +1753,7 @@ impl Interp {
                 if let Some(t) = e.threshold {
                     if lvl >= t {
                         veto = Some(format!(
-                            "inhibitor '{}' level {:?} >= threshold {:?}",
+                            "inhibitor '{}' level {} >= threshold {}",
                             e.from, lvl, t
                         ));
                     }
@@ -1767,7 +1767,7 @@ impl Interp {
                 };
                 if lvl < t {
                     veto = Some(format!(
-                        "regulator '{}' level {:?} < threshold {:?}",
+                        "regulator '{}' level {} < threshold {}",
                         e.from, lvl, t
                     ));
                 }
@@ -1911,6 +1911,16 @@ impl Interp {
             Flow::Ret(v) => Ok(v),
             _ => Ok(Value::Null),
         }
+    }
+
+    /// dx-r1 (audit W5): clear all profiler accounting so a second execution
+    /// (profile re-run) starts from zero without inheriting load-time counts.
+    pub fn reset_profile(&mut self) {
+        self.call_counts.clear();
+        self.call_time.clear();
+        self.call_time_self.clear();
+        self.call_stack.clear();
+        self.call_clock = 0;
     }
 
     /// Close the timing frame for a gene call: accumulate exclusive (self)
@@ -2858,7 +2868,10 @@ impl Interp {
                     self.note(
                         0,
                         4,
-                        format!("floor of {:?}; 0", other.map(|v| v.type_name())),
+                        format!(
+                            "floor of a {} value; 0",
+                            other.map(|v| v.type_name()).unwrap_or("null")
+                        ),
                     );
                     0
                 }

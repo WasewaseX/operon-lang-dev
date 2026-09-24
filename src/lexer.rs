@@ -58,6 +58,66 @@ pub enum Tok {
     Eof,
 }
 
+impl Tok {
+    /// dx-r1: programmer-facing token name for diagnostics. Rust's Debug
+    /// output leaked internal enum shapes like `Str("boom")` into user
+    /// messages; describe() speaks in source terms instead.
+    pub fn describe(&self) -> String {
+        match self {
+            Tok::Ident(s) => format!("identifier '{}'", s),
+            Tok::Int(n) => format!("number {}", n),
+            Tok::Float(f) => format!("number {}", f),
+            Tok::Str(s) => format!("string \"{}\"", s),
+            Tok::Interp(s) => format!("interpolated string \"{}\"", s),
+            Tok::Mark(m) => format!("mark '@{}'", m),
+            Tok::Newline => "end of line".to_string(),
+            Tok::LBrace => "'{'".to_string(),
+            Tok::RBrace => "'}'".to_string(),
+            Tok::LParen => "'('".to_string(),
+            Tok::RParen => "')'".to_string(),
+            Tok::LBrack => "'['".to_string(),
+            Tok::RBrack => "']'".to_string(),
+            Tok::Comma => "','".to_string(),
+            Tok::Colon => "':'".to_string(),
+            Tok::Arrow => "'->'".to_string(),
+            Tok::FatArrow => "'=>'".to_string(),
+            Tok::Plus => "'+'".to_string(),
+            Tok::Minus => "'-'".to_string(),
+            Tok::Star => "'*'".to_string(),
+            Tok::Slash => "'/'".to_string(),
+            Tok::DSlash => "'//'".to_string(),
+            Tok::Percent => "'%'".to_string(),
+            Tok::PlusEq => "'+='".to_string(),
+            Tok::MinusEq => "'-='".to_string(),
+            Tok::StarEq => "'*='".to_string(),
+            Tok::SlashEq => "'/='".to_string(),
+            Tok::DSlashEq => "'//='".to_string(),
+            Tok::PercentEq => "'%='".to_string(),
+            Tok::StarStar => "'**'".to_string(),
+            Tok::Amp => "'&'".to_string(),
+            Tok::Pipe => "'|'".to_string(),
+            Tok::Caret => "'^'".to_string(),
+            Tok::Tilde => "'~'".to_string(),
+            Tok::Shl => "'<<'".to_string(),
+            Tok::Shr => "'>>'".to_string(),
+            Tok::Question => "'?'".to_string(),
+            Tok::Eq => "'='".to_string(),
+            Tok::EqEq => "'=='".to_string(),
+            Tok::Neq => "'!='".to_string(),
+            Tok::Lt => "'<'".to_string(),
+            Tok::Le => "'<='".to_string(),
+            Tok::Gt => "'>'".to_string(),
+            Tok::Ge => "'>='".to_string(),
+            Tok::AmpAmp => "'&&'".to_string(),
+            Tok::PipePipe => "'||'".to_string(),
+            Tok::Bang => "'!'".to_string(),
+            Tok::Dot => "'.'".to_string(),
+            Tok::Semi => "';'".to_string(),
+            Tok::Eof => "end of file".to_string(),
+        }
+    }
+}
+
 pub struct Lexed {
     pub toks: Vec<(Tok, usize)>, // token + line
     pub notes: Vec<Note>,
