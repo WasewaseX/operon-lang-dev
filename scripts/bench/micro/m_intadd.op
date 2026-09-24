@@ -1,0 +1,8 @@
+# bench micro: int add: 300k additions (checked overflow path) (builder-B, B1)
+# One construct in isolation; native CPython mirror in bench_compare.py MICRO.
+main {
+    let a = 0
+    let b = 1
+    for i in range(300000) { a = a + b }
+    promote("a = {a}")
+}

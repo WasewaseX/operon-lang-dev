@@ -1,0 +1,67 @@
+# tests/bench — correctness proofs for the B1 benchmark fixtures (builder-B).
+# Benchmarks that measure the wrong answer are worse than no benchmarks, so
+# every scripts/bench/*.op workload gets a small-scale twin here with
+# closed-form expected values. Fast by design: the proof suite sweeps this
+# file on every CI run (<1s of work).
+# Fixture -> proof mapping:
+#   fib25.op       -> fib(10), fib(15)
+#   loops.op       -> acc over range(20) of i % 7
+#   recursion.op   -> C(10,5), C(20,10)
+#   collections.op -> map increment / distinct / list-sum at n=200
+#   grn.op         -> gate holds pre-fire, passes post-fire, arithmetic intact
+
+gene fib(n) {
+    if n < 2 { return n }
+    return fib(n - 1) + fib(n - 2)
+}
+
+gene pasc(n, k) {
+    if k == 0 { return 1 }
+    if k == n { return 1 }
+    return pasc(n - 1, k - 1) + pasc(n - 1, k)
+}
+
+regulate {
+    driver activates worker_a threshold 0.3
+    driver activates worker_b threshold 0.5
+}
+enhance worker_a;
+gene driver() { return 1 }
+gene worker_a(n) { return n + 1 }
+gene worker_b(n) { return n * 2 }
+
+frame proof {
+    # fib25.op — naive recursion produces the sequence
+    assert(fib(10) == 55, "fib(10) == 55")
+    assert(fib(15) == 610, "fib(15) == 610")
+
+    # loops.op — sum of i % 7 for i in range(20): 21 + 21 + 15 = 57
+    let acc = 0
+    for i in range(20) { acc = acc + i % 7 }
+    assert(acc == 57, "loops fixture: sum(i%7, i<20) == 57")
+
+    # recursion.op — binomial coefficients (wide-shallow recursion)
+    assert(pasc(10, 5) == 252, "C(10,5) == 252")
+    assert(pasc(20, 10) == 184756, "C(20,10) == 184756 (fixture scale)")
+
+    # collections.op — insert-or-increment over 20 keys, 200 writes
+    let m = {}
+    let xs = []
+    for i in range(200) {
+        let k = "k" + str(i % 20)
+        if has(m, k) { m[k] = m[k] + 1 } else { m[k] = 1 }
+        push(xs, i % 97)
+    }
+    let total = 0
+    for v in xs { total = total + v }
+    assert(total == 9327, "collections fixture: sum(i%97, i<200) == 9327")
+    assert(len(m) == 20, "collections fixture: 20 distinct keys")
+    assert(m["k7"] == 10, "collections fixture: each key hit 10x")
+
+    # grn.op — the call gate is real: no level, no call; level, full call
+    assert(worker_a(1) == null, "grn fixture: unregulated level vetoes call")
+    assert(worker_b(3) == null, "grn fixture: second edge vetoes too")
+    grn_fire("driver")
+    assert(worker_a(1) == 2, "grn fixture: enhanced worker fires post-fire")
+    assert(worker_b(3) == 6, "grn fixture: worker_b fires post-fire")
+}

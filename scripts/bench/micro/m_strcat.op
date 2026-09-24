@@ -1,0 +1,7 @@
+# bench micro: string concat: 12k `s = s + "ab"` reallocations (builder-B, B1)
+# One construct in isolation; native CPython mirror in bench_compare.py MICRO.
+main {
+    let s = ""
+    for i in range(12000) { s = s + "ab" }
+    promote("len = {len(s)}")
+}

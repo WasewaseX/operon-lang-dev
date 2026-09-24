@@ -1,0 +1,3 @@
+# bench micro: startup calibration — no work (builder-B, B1)
+# One construct in isolation; native CPython mirror in bench_compare.py MICRO.
+main { promote("ok") }
