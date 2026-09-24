@@ -1,0 +1,8 @@
+gene main() {
+    stress {
+        exit(99)
+    } rescue (e) {
+        print("contained: {e.kind}")
+    }
+    print("survived")
+}

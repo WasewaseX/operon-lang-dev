@@ -1,0 +1,8 @@
+gene main() {
+    stress {
+        let r = run("sleep", ["10"])
+        print("returned code={r.code} ok={r.ok}")
+    } rescue (e) {
+        print("stress: {e.kind}")
+    }
+}

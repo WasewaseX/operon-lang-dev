@@ -1,0 +1,5 @@
+[allow]
+run = "sleep"
+
+[run]
+timeout_ms = 300
