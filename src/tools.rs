@@ -117,6 +117,13 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
     if interp.cell.get("methylate.quiet").map(|v| v == "true").unwrap_or(false) {
         interp.methyl_quiet = true;
     }
+    // .cell methylate.threshold (T2b graded silencing gate; default 3)
+    if let Some(t) = interp.cell.get("methylate.threshold") {
+        match t.trim().parse::<u32>() {
+            Ok(v) => interp.methyl_threshold = v,
+            Err(_) => interp.note(0, 4, format!("cell key 'methylate.threshold = {}' ignored: needs a non-negative integer", t)),
+        }
+    }
 
     // execute top-level (gene defs bind, silences load, regulate registers…)
     // Top-Grammar containment: uncaught stress here is absorbed per statement.
