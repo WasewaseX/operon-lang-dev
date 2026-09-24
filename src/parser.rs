@@ -12,7 +12,7 @@
 use crate::ast::*;
 use crate::lexer::{lex, Tok};
 
-const KEYWORDS: &[&str] = &[
+pub(crate) const KEYWORDS: &[&str] = &[
     "gene",
     "let",
     "if",
