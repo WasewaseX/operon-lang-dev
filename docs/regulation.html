@@ -184,7 +184,7 @@ inspectable but not casually overwritable.</p>
 expression with measurable strength, repressors subtract from it. <code>regulate { a activates b
 strength 0.8; c inhibits d; }</code> declares the signed, weighted graph (default strength 1.0). The
 network is <strong>stateful</strong>: levels persist across <code>grn_fire("a")</code> calls —
-homeostasis — and each fire seeds the source additively, capped at 1.0. Each fire runs in two
+levels that persist across fires by default (decay is opt-in dilution) — and each fire seeds the source additively, capped at 1.0. Each fire runs in two
 phases. <em>Phase 1, activation</em>: influence propagates in waves,
 <code>child = max(child, parent × strength^wave)</code> — each hop attenuates by another factor of
 strength, as in a signaling cascade. <em>Phase 2, inhibition</em>: each repressor applies its
@@ -196,7 +196,7 @@ influence = <code>strength × p² / (p² + t²)</code> where p is the parent lev
 threshold, saturating above it, the sigmoid dose–response of a real binding site.
 <code>grn_state()</code> returns the level map of every gene in the graph.</p>
 <p><strong>The toggle switch.</strong> Two repressors arranged so that each shuts the other off form
-a bistable memory element: the system must rest in exactly one of two states, and it remembers which
+a mutual-repression latch: the system rests in exactly one of two states, and it remembers which
 until actively flipped. <code>toggle a, b;</code> declares the pair; <code>toggle_on("a")</code>
 turns <code>a</code> on and <code>b</code> off; <code>toggle_state()</code> reports both. The
 invariant is absolute — exactly one may be on — and the pair <strong>gates calls</strong>: invoking
@@ -205,9 +205,11 @@ inactive allele ('y' is on)</code>). <code>@acetylate</code> genes are immune; o
 <p><strong>The repressilator.</strong> A ring of three repressors, each repressing the next, produces
 self-sustaining oscillation — the synthetic-biology demonstration that a regulatory <em>topology</em>
 alone can generate a clock. <code>repressilator a -&gt; b -&gt; c;</code> declares the ring.
-<code>repressi_next()</code> advances it deterministically (each step represses the previous gene,
-releasing the next; <code>repressi_state()</code> shows the on gene at 1.0, others 0.0) — the
-reproducible mode tests rely on. Declaring it with <code>period 3</code> immediately spawns a real
+<code>repressi_next()</code> advances it one tick (the ring integrates a reduced, protein-only
+variant of the Elowitz–Leibler model — α=10, γ=1, Hill h=4, 20 Euler substeps per tick — so the
+~6-tick oscillation and the one-tick repression lag are <em>emergent</em>, not scheduled;
+<code>repressi_state()</code> returns the continuous level of every node) — the reproducible mode
+tests rely on. Declaring it with <code>period 3</code> immediately spawns a real
 OS thread flipping the ring every 3 seconds, and <code>repressi_start(ms)</code> restarts the timed
 ring with an explicit millisecond period — the demo mode, an actual oscillator against the wall
 clock.</p>

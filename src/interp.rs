@@ -1637,10 +1637,43 @@ impl Interp {
     ) -> Result<Value, Stress> {
         match callee {
             Value::Gene(def, closure) if def.seq => {
+                // reg-r3 (re-audit): the sequence's own gates ALL apply at
+                // creation, in the same order as call_gene_inner — GRN veto,
+                // methylation, toggle. reg-r1 gated only the toggle; a
+                // level-3-methylated sequence still transcribed, breaking
+                // "silenced means silenced" for the sibling feature.
+                let seq_name = def.name.clone().unwrap_or_else(|| "<seq>".into());
+                let dl = def.line;
+                // GRN gate first (same funnel contract as gene calls)
+                if let Some(reason) = self.grn_veto(&seq_name) {
+                    self.note(
+                        dl,
+                        4,
+                        format!(
+                            "grn gate: sequence '{}' call suppressed ({})",
+                            seq_name, reason
+                        ),
+                    );
+                    return Ok(Value::Null);
+                }
+                // methylation gate (graded; @acetylate exempt)
+                if !def.acetylate {
+                    let lvl = *self.methyl_levels.get(&seq_name).unwrap_or(&0);
+                    if lvl >= self.methyl_threshold {
+                        self.note(
+                            dl,
+                            4,
+                            format!(
+                                "methylation silences: sequence '{}' (level {} >= threshold {}) — call returns null",
+                                seq_name, lvl, self.methyl_threshold
+                            ),
+                        );
+                        return Ok(Value::Null);
+                    }
+                }
                 // reg-r1: the sequence's own toggle gate applies at creation —
                 // the lazy body runs in a worker whose yield-loop cannot pass
                 // through call_named, so a repressed allele must not start
-                let seq_name = def.name.clone().unwrap_or_else(|| "<seq>".into());
                 if let Some(&(ref a, ref b, a_on)) = self
                     .toggles
                     .iter()
@@ -3043,8 +3076,8 @@ impl Interp {
             }
             "grn_fire" => {
                 let seed = args.first().map(|v| v.display()).unwrap_or_default();
-                // A10 (reg-r2): GRN decay — real gene regulation is
-                // homeostasis, not a latch. Before every pulse, existing
+                // A10 (reg-r2): GRN decay — opt-in dilution. Real regulation decays:
+                // levels bleed off unless refreshed. Before every pulse, existing
                 // levels decay by the configured fraction. Decay comes from
                 // the pulse itself — grn_fire(seed, f) — or falls back to
                 // .cell `[grn] decay = f`. Default (unset / 0) is
@@ -3069,7 +3102,7 @@ impl Interp {
                         }
                     }
                 }
-                // STATEFUL network: levels persist across fires (homeostasis)
+                // STATEFUL network: levels persist across fires (a latch by default — decay makes the dilution explicit)
                 for e in &self.grn_edges {
                     self.grn_levels.entry(e.from.clone()).or_insert(0.0);
                     self.grn_levels.entry(e.to.clone()).or_insert(0.0);
@@ -3099,7 +3132,19 @@ impl Interp {
                                 let t2 = t * t;
                                 e.strength * (p2 / (p2 + t2))
                             }
-                            _ => parent * e.strength.powi(_wave),
+                            // sec-r3/reg-r3: repeated multiplication, NOT
+                            // powi — powi's algorithm is platform-chosen,
+                            // while the oracle must mirror this op-for-op
+                            // (bit-identical IEEE-754 parity contract)
+                            _ => {
+                                let mut s = e.strength;
+                                let mut k = _wave;
+                                while k > 1 {
+                                    s *= e.strength;
+                                    k -= 1;
+                                }
+                                parent * s
+                            }
                         };
                         let cur = *activated.get(&e.to).unwrap_or(&0.0);
                         let next = cur.max(influence);
