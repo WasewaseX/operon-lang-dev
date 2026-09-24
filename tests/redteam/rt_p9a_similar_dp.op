@@ -1,0 +1,10 @@
+# sec-r1 regression (audit C-1): similar() DP freeze. Pre-fix: fuel-blind
+# kernel call — minutes to YEARS of uninterruptible CPU (1.6e13 cells at
+# the string ceiling). Contained now by the 10M-cell ceiling in ffi.
+let a = "a" * 40000
+let b = "b" * 40000
+stress {
+    let close = similar(a, b, 2)
+} rescue (e) {
+    promote("similar DP ceiling: contained (" + e.kind + ")")
+}

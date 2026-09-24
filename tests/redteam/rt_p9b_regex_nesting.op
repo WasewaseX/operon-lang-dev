@@ -1,0 +1,9 @@
+# sec-r1 regression (audit C-2): regex PARSER nesting bomb. Pre-fix: native
+# stack overflow abort (rc=134, uncatchable — kills the process). Contained
+# now by RE_DEPTH_CAP (1024) in the regex parser.
+let p = "(" * 2000000 + ")" * 2000000
+stress {
+    let hit = re_match(p, "x")
+} rescue (e) {
+    promote("regex nesting bomb: contained (" + e.kind + ")")
+}

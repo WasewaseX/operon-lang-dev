@@ -20,8 +20,24 @@ pub fn intern(s: &str) -> u32 {
     unsafe { rt_intern(s.as_ptr(), s.len()) }
 }
 
+/// DP cell budget for the C++ edit-distance kernel (sec-r1, audit C-1/C-8).
+/// An FFI call is fuel-blind — no step/fuel accounting can interrupt it — so
+/// the O(la*lb) budget must be enforced BEFORE the hop. One guard here
+/// protects `distance()`, `similar()`, the wobble-repair paths, and the
+/// parser's suggestion engine, which all funnel through this function.
+pub const DP_CELL_BUDGET: usize = 10_000_000;
+
+/// Returned instead of a distance when the input pair exceeds the budget.
+/// No real distance can be i32::MAX, and every comparison site treats a
+/// bigger distance as a worse match — so over-budget pairs simply never
+/// win a "nearest" contest.
+pub const DP_BUDGET_SENTINEL: i32 = i32::MAX;
+
 /// Edit distance between two Rust strings (C++ bit-parallel kernel).
 pub fn edit_distance(a: &str, b: &str) -> i32 {
+    if a.len().saturating_mul(b.len()) > DP_CELL_BUDGET {
+        return DP_BUDGET_SENTINEL;
+    }
     unsafe {
         rt_edit_distance(
             a.as_ptr() as *const c_char,

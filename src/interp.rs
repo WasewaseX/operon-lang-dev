@@ -2179,6 +2179,16 @@ impl Interp {
             })),
             "push" => {
                 if let (Some(Value::List(l)), Some(v)) = (args.first(), args.get(1)) {
+                    // sec-r1 (audit C-3): the builtin form MUST be memory-
+                    // charged exactly like the method form — an uncharged
+                    // growth path is an allocator-abort DoS (rc=134, outside
+                    // the catchable-stress contract)
+                    let bytes = match v {
+                        Value::Str(x) => x.len() as u64 + 24,
+                        Value::List(x) => 8 * x.borrow().len() as u64 + 48,
+                        _ => 16,
+                    };
+                    mem_charge(bytes)?;
                     l.borrow_mut().push(v.clone());
                     Ok(Value::List(l.clone()))
                 } else {
@@ -2420,6 +2430,22 @@ impl Interp {
                     Some(Value::Int(i)) => *i as i32,
                     _ => 2,
                 };
+                // sec-r1 (audit C-1): same DP ceiling as distance() — the
+                // kernel hop is fuel-blind, so the budget must be checked
+                // before the call, not by the caller
+                if a.len().saturating_mul(b.len()) > crate::ffi::DP_CELL_BUDGET {
+                    return Err(Stress::new(
+                        "overflow",
+                        "similar inputs exceed the 10M-cell DP ceiling",
+                    ));
+                }
+                // byte-length difference lower-bounds the distance: if the
+                // strings differ in length by more than maxd, the kernel
+                // cannot possibly return a value <= maxd
+                let diff = (a.len() as i64 - b.len() as i64).abs();
+                if diff > maxd as i64 {
+                    return Ok(Value::Bool(false));
+                }
                 Ok(Value::Bool(crate::ffi::edit_distance(&a, &b) <= maxd))
             }
             "transcribe" => {
@@ -3703,6 +3729,23 @@ impl Interp {
                 "join" => {
                     let sep = args.first().map(|v| v.display()).unwrap_or_default();
                     let parts: Vec<String> = l.borrow().iter().map(|v| v.display()).collect();
+                    // sec-r1 (audit C-10): join allocates the whole result in
+                    // one hop — apply the same per-op ceiling + aggregate
+                    // charge as concat/repeat, or a 64M-element list mints a
+                    // ~1 GB string invisible to every ceiling
+                    let total: u64 = parts.iter().map(|p| p.len() as u64).sum();
+                    let seps = if parts.is_empty() {
+                        0u64
+                    } else {
+                        sep.len() as u64 * (parts.len() as u64 - 1)
+                    };
+                    if total.saturating_add(seps) > 512 * 1024 * 1024 {
+                        return Err(Stress::new(
+                            "overflow",
+                            "join result exceeds the 512 MiB ceiling",
+                        ));
+                    }
+                    mem_charge(total.saturating_add(seps))?;
                     Ok(Value::Str(parts.join(&sep)))
                 }
                 "len" => Ok(Value::Int(l.borrow().len() as i64)),
@@ -3989,7 +4032,19 @@ pub fn send_response(conn: u64, status: &str, ctype: &str, body: &str) -> Result
 
 fn http_get(host: &str, port: u16, path: &str) -> Result<String, String> {
     use std::io::{Read, Write};
-    let mut stream = TcpStream::connect((host, port)).map_err(|e| e.to_string())?;
+    // sec-r1 (audit C-12): CR/LF in host/path injects headers into the
+    // request line (request smuggling); reject before any socket exists
+    if host.contains('\r') || host.contains('\n') || path.contains('\r') || path.contains('\n') {
+        return Err("http_get: host and path must not contain CR or LF".to_string());
+    }
+    // bounded connect: a black-holed address previously stalled one call for
+    // the OS TCP timeout (fuel-blind, minutes)
+    let addr = std::net::ToSocketAddrs::to_socket_addrs(&(host, port))
+        .map_err(|e| e.to_string())?
+        .next()
+        .ok_or_else(|| "http_get: host resolved to no address".to_string())?;
+    let mut stream = TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(10))
+        .map_err(|e| e.to_string())?;
     let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(30)));
     let req = format!(
         "GET {} HTTP/1.0\r\nHost: {}\r\nUser-Agent: operon\r\n\r\n",
@@ -4122,10 +4177,17 @@ enum ReAst {
 
 const RE_STEP_CAP: u64 = 2_000_000;
 
+/// sec-r1 (audit C-2): the regex PARSER recurses per group nesting — the
+/// matcher has a step cap, but a pattern like `"(" * 2_000_000` blew the
+/// native stack before a single match step ran (uncatchable abort, rc=134).
+/// Cap nesting at 1024 (10× anything a real pattern needs).
+const RE_DEPTH_CAP: usize = 1024;
+
 struct ReParser {
     chars: Vec<char>,
     pos: usize,
     ngroups: usize,
+    depth: usize,
 }
 
 impl ReParser {
@@ -4231,6 +4293,11 @@ impl ReParser {
         let c = self.chars[self.pos];
         match c {
             '(' => {
+                // sec-r1 (audit C-2): parser recursion depth = group nesting
+                self.depth += 1;
+                if self.depth > RE_DEPTH_CAP {
+                    return Err(format!("regex group nesting exceeds {}", RE_DEPTH_CAP));
+                }
                 self.pos += 1;
                 let capture = if self.chars[self.pos..].starts_with(&['?', ':']) {
                     self.pos += 2;
@@ -4240,6 +4307,7 @@ impl ReParser {
                     true
                 };
                 let inner = self.alternation()?;
+                self.depth -= 1;
                 if self.pos >= self.chars.len() || self.chars[self.pos] != ')' {
                     return Err("unclosed group".into());
                 }
@@ -4554,6 +4622,7 @@ impl ReEngine {
             chars: pattern.chars().collect(),
             pos: 0,
             ngroups: 0,
+            depth: 0,
         };
         let ast = rp.parse()?;
         Ok(ReEngine {
