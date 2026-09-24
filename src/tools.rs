@@ -252,8 +252,40 @@ pub fn check(file: &str, opts: &Opts, nmd: bool, purge: bool) -> CheckReport {
     let mut defined: HashSet<String> = HashSet::new();
     let mut called: Vec<String> = Vec::new();
     collect_calls(&prog, &mut defined, &mut called);
+    // genes exported by `use`d modules count as defined (they are callable)
+    let mut module_genes: HashSet<String> = HashSet::new();
+    for s in &prog.stmts {
+        if let Stmt::Use(path, _) = s {
+            for cand in [format!("{}.op", path), format!("std/{}.op", path)] {
+                if let Ok(msrc) = std::fs::read_to_string(&cand) {
+                    let mp = parser::parse(&msrc);
+                    for st in &mp.stmts {
+                        match st {
+                            Stmt::Gene(g) => {
+                                if let Some(n) = &g.name {
+                                    module_genes.insert(n.clone());
+                                }
+                            }
+                            Stmt::Seq(g) => {
+                                if let Some(n) = &g.name {
+                                    module_genes.insert(n.clone());
+                                }
+                            }
+                            Stmt::Splice(sp) => {
+                                module_genes.insert(sp.root.clone());
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+    }
     for c in &called {
-        if !defined.contains(c) && !crate::interp::BUILTIN_NAMES.contains(&c.as_str()) {
+        if !defined.contains(c)
+            && !module_genes.contains(c)
+            && !crate::interp::BUILTIN_NAMES.contains(&c.as_str())
+        {
             rep.phantoms.push(c.clone());
         }
     }

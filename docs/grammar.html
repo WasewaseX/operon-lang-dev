@@ -25,8 +25,8 @@
 <main class="wrap">
 
 <h1 style="font-size:2.4rem; margin:56px 0 8px; letter-spacing:-0.02em;">Grammar reference</h1>
-<p class="lede" style="max-width:680px;">The formal-ish contract, condensed from the frozen
-SPEC (v2.0). Where this page and SPEC.md differ, SPEC.md wins — it is the single source implemented
+<p class="lede" style="max-width:680px;">The formal-ish contract, condensed from the
+SPEC (v2.1). Where this page and SPEC.md differ, SPEC.md wins — it is the single source implemented
 identically by the Rust core, the Python oracle, and the JS playground.</p>
 
 <div class="toc">
@@ -36,6 +36,7 @@ identically by the Rust core, the Python oracle, and the JS playground.</p>
     <li><a href="#keywords">Keywords &amp; marks</a></li>
     <li><a href="#statements">Statement forms</a></li>
     <li><a href="#genes-grammar">Gene forms</a></li>
+    <li><a href="#phenotypes-grammar">Phenotypes &amp; sequences</a></li>
     <li><a href="#precedence">Expression precedence</a></li>
     <li><a href="#ladder">The Total Grammar ladder</a></li>
     <li><a href="#builtins">Builtins</a></li>
@@ -49,7 +50,7 @@ identically by the Rust core, the Python oracle, and the JS playground.</p>
 <h2 id="lexical">1 · Lexical rules</h2>
 <ul class="plain">
   <li><b>Comments</b> — <code>#</code> to end of line. A <code>#!</code> shebang is allowed on line 1. A <code>#</code> inside a string does <b>not</b> start a comment.</li>
-  <li><b>Strings</b> — <code>"double quoted"</code> only. Escapes: <code>\n \t \\ \" \{</code>. Interpolation <code>"{expr}"</code> takes any expression, evaluated at runtime and <code>str()</code>-coerced.</li>
+  <li><b>Strings</b> — <code>"double quoted"</code> only. Escapes: <code>\n \t \\ \" \{ \}</code>. Interpolation <code>"{expr}"</code> takes any expression, evaluated at runtime and <code>str()</code>-coerced.</li>
   <li><b>Single quotes</b> — no single-quoted strings in canonical form. A <code>'</code> in code is a wobble: treated as <code>"</code> with a note.</li>
   <li><b>Identifiers</b> — <code>[A-Za-z_][A-Za-z0-9_]*</code>.</li>
   <li><b>Numbers</b> — <code>42</code> (int), <code>3.14</code> (float), <code>1e3</code> (float). Negative values come from unary minus.</li>
@@ -59,19 +60,23 @@ identically by the Rust core, the Python oracle, and the JS playground.</p>
 </ul>
 
 <h2 id="keywords">2 · Keywords &amp; marks</h2>
-<p>Canonical keywords (46):</p>
+<p>Canonical keywords (51):</p>
 <figure class="code">
   <figcaption><span>canonical keyword set</span><span class="tag">SPEC §3</span></figcaption>
   <pre><code>gene let if elif else while loop for in return break continue
 match case use tad anchor export import enhance silence stress
 rescue raise fate state regulate activates inhibits strength
 toggle repressilator period frame proof guard splice variant
-edit replace apply true false null and or not collect ires
+edit replace ires as collect enter
+phenotype sequence yield new threshold from self
 
 marks: <span class="m">@acetylate</span> <span class="m">@methylate</span> <span class="m">@m6a</span></code></pre>
 </figure>
+<p>The literal words <code>true false null</code> and the logical words <code>and or not</code>
+are recognized in expression positions; they are not part of the reserved keyword table.</p>
 <p>Every keyword has entry paths in the synonym table (rung 2) and the edit-distance repair table
-(rung 3) — see <a href="#ladder">the ladder</a>.</p>
+(rung 3) — see <a href="#ladder">the ladder</a>. Synonyms include
+<code>class/struct/record → phenotype</code> and <code>generator/gen/stream → sequence</code>.</p>
 
 <!-- 3 statements ----------------------------------------------------- -->
 <h2 id="statements">3 · Statement forms</h2>
@@ -90,7 +95,10 @@ name += -= *= //= expr              <span class="c"># compound (also on a[i], a.
 <span class="k">use</span> path (<span class="k">as</span> name)?                 <span class="c"># file import → binds module Map</span>
 <span class="k">raise</span> expr                          <span class="c"># raise Stress{kind:"unfolded", ...}</span>
 <span class="k">raise</span> kind , expr                   <span class="c"># kind ∈ unfolded missing overflow burned</span>
-<span class="k">stress</span> (kind)? { B } <span class="k">rescue</span> (e)? { R }   <span class="c"># containment</span></code></pre>
+<span class="k">stress</span> (kind)? { B } <span class="k">rescue</span> (e)? { R }   <span class="c"># containment; kinds also include</span>
+                                    <span class="c"># `interference` — sandbox denials (SPEC §9b)</span>
+main { ... }                        <span class="c"># bare-name block = a param-less gene definition</span>
+                                    <span class="c"># (rung-4 note); `main { }` is the C-like entry</span></code></pre>
 </figure>
 
 <!-- 4 genes ---------------------------------------------------------- -->
@@ -111,6 +119,42 @@ block becomes the call result, otherwise the result is <code>null</code> plus a
 <code>"guard tripped"</code> note. Recursion is allowed; depth limit 10,000 → Stress
 <code>overflow</code>.</p>
 
+<!-- 4b phenotypes/sequences ----------------------------------------- -->
+<h2 id="phenotypes-grammar">4b · Phenotypes &amp; sequences</h2>
+<figure class="code">
+  <figcaption><span>phenotype / sequence</span><span class="tag">SPEC §7a–§7b</span></figcaption>
+  <pre><code><span class="k">phenotype</span> Counter {
+    <span class="k">let</span> count = <span class="n">0</span>                        <span class="c"># field with a default value</span>
+    <span class="k">gene</span> init(start = <span class="n">0</span>) { self.count = start }   <span class="c"># constructor (optional)</span>
+    <span class="k">gene</span> bump(by = <span class="n">1</span>) { self.count = self.count + by; <span class="k">return</span> self.count }
+}
+<span class="k">phenotype</span> Neuron <span class="k">from</span> Counter {          <span class="c"># inheritance</span>
+    <span class="k">gene</span> fire() { <span class="k">return</span> <span class="s">"spike:{self.count}"</span> }
+}
+<span class="k">let</span> n = <span class="k">new</span> Neuron(<span class="n">2</span>)
+promote(n.bump(<span class="n">3</span>))       <span class="c"># 5  — inherited method</span>
+promote(n.fire())        <span class="c"># spike:5 — `self` binds the instance</span></code></pre>
+</figure>
+<p><code>new Name(args)</code> applies field defaults lineage root-first, then the lineage is
+searched <b>root-first</b> for an <code>init</code> — the first (least-derived) one runs with the
+args. <code>type(o)</code> returns the phenotype name. Missing fields and methods read as
+<code>null</code> + note.</p>
+<figure class="code">
+  <figcaption><span>sequence.op</span><span class="tag">runnable</span></figcaption>
+  <pre><code><span class="k">sequence</span> countdown(n) {
+    <span class="k">while</span> n &gt; <span class="n">0</span> {
+        <span class="k">yield</span> n
+        n -= <span class="n">1</span>
+    }
+}
+<span class="k">let</span> s = countdown(<span class="n">3</span>)
+promote(s.next(), s.next())        <span class="c"># 3, 2 — lazy pull</span>
+promote(countdown(<span class="n">4</span>).collect())    <span class="c"># [4, 3, 2, 1]</span></code></pre>
+</figure>
+<p>A sequence body runs on its own <b>worker cell</b> (an OS thread); the consumer pulls values
+through a rendezvous channel, so a sequence that yields forever is legal. Values cross by
+serialization; named genes and lambdas travel as arguments, a running sequence object does not.</p>
+
 <!-- 5 precedence ------------------------------------------------------ -->
 <h2 id="precedence">5 · Expression precedence</h2>
 <p>Low → high. This table is copied from SPEC §6 and is normative.</p>
@@ -118,21 +162,36 @@ block becomes the call result, otherwise the result is <code>null</code> plus a
   <table>
     <thead><tr><th style="width:3.5em;">Level</th><th style="width:14em;">Operators</th><th>Notes</th></tr></thead>
     <tbody>
-      <tr><td>1</td><td><code>or</code> (<code>||</code>)</td><td>Short-circuits, returns operand value — <code>a or b</code> → <code>a</code> if truthy else <code>b</code></td></tr>
-      <tr><td>2</td><td><code>and</code> (<code>&amp;&amp;</code>)</td><td>Same short-circuit semantics</td></tr>
-      <tr><td>3</td><td>unary <code>not</code> (<code>!</code>)</td><td><code>not a == b</code> parses as <code>not (a == b)</code></td></tr>
-      <tr><td>4</td><td><code>== != &lt; &lt;= &gt; &gt;=</code>, <code>in</code></td><td>Left-assoc, no chaining. <code>x in xs</code>: List membership, Str substring, Map key membership</td></tr>
-      <tr><td>5</td><td><code>+ -</code></td><td><code>+</code> also concatenates two strings or two lists</td></tr>
-      <tr><td>6</td><td><code>* / // %</code></td><td><code>/</code> true division (always Float) · <code>//</code> floor division (Int) · <code>%</code> floored remainder, sign follows divisor</td></tr>
-      <tr><td>7</td><td>unary <code>-</code></td><td></td></tr>
-      <tr><td>8</td><td>postfix: <code>f(x)</code> <code>a[i]</code> <code>a.k</code> <code>a.k(args)</code></td><td>Member access on Map → key lookup (missing → Null + note); methods are native</td></tr>
-      <tr><td>9</td><td>primary</td><td>literal, ident, <code>(expr)</code>, list <code>[a, b]</code>, map <code>{k: v, "k2": v}</code>, lambda, <code>collect</code></td></tr>
+      <tr><td>1</td><td><code>cond ? a : b</code></td><td>Ternary, right-associative, lowest precedence</td></tr>
+      <tr><td>2</td><td><code>or</code> (<code>||</code>)</td><td>Short-circuits, returns operand value — <code>a or b</code> → <code>a</code> if truthy else <code>b</code></td></tr>
+      <tr><td>3</td><td><code>and</code> (<code>&amp;&amp;</code>)</td><td>Same short-circuit semantics</td></tr>
+      <tr><td>4</td><td>unary <code>not</code> (<code>!</code>)</td><td><code>not a == b</code> parses as <code>not (a == b)</code></td></tr>
+      <tr><td>5</td><td><code>== != &lt; &lt;= &gt; &gt;=</code>, <code>in</code></td><td>Left-assoc, no chaining. <code>x in xs</code>: List membership, Str substring, Map key membership</td></tr>
+      <tr><td>6</td><td><code>|</code></td><td>Bitwise OR (Int)</td></tr>
+      <tr><td>7</td><td><code>^</code></td><td>Bitwise XOR (Int)</td></tr>
+      <tr><td>8</td><td><code>&amp;</code></td><td>Bitwise AND (Int)</td></tr>
+      <tr><td>9</td><td><code>&lt;&lt; &gt;&gt;</code></td><td>Bit shifts (Int)</td></tr>
+      <tr><td>10</td><td><code>+ -</code></td><td><code>+</code> also concatenates two strings or two lists</td></tr>
+      <tr><td>11</td><td><code>* / // %</code></td><td><code>/</code> true division (always Float) · <code>//</code> floor division (Int) · <code>%</code> floored remainder, sign follows divisor; <code>int % int</code> → Int</td></tr>
+      <tr><td>12</td><td>unary <code>-</code> <code>~</code></td><td><code>~</code> is bitwise not (Int)</td></tr>
+      <tr><td>13</td><td><code>**</code></td><td>Power, right-associative (<code>2 ** 3 ** 2</code> → 512), binds tighter than unary minus on its left (<code>-2 ** 2</code> → −4)</td></tr>
+      <tr><td>14</td><td>postfix: <code>f(x)</code> <code>a[i]</code> <code>a.k</code> <code>a.k(args)</code></td><td>Member access on Map → key lookup (missing → Null + note); methods are native</td></tr>
+      <tr><td>15</td><td>primary</td><td>literal, ident, <code>(expr)</code>, list <code>[a, b]</code>, map <code>{k: v, "k2": v}</code>, lambda, <code>collect</code>, <code>new Name(args)</code></td></tr>
     </tbody>
   </table>
 </div>
 <p class="muted small">Assignment extras: <code>a.k = v</code> assigns a map key; <code>a[i] = v</code>
 assigns a list index (out of range → Stress <code>missing</code>, catchable). Equality <code>==</code>
 is deep; Int/Float compare numerically.</p>
+<figure class="code">
+  <figcaption><span>precedence at work — runnable</span><span class="tag">verified</span></figcaption>
+  <pre><code>promote(2 ** 3 ** 2)              <span class="c"># 512 — ** is right-associative</span>
+promote(-2 ** 2)                  <span class="c"># -4 — ** binds tighter than unary minus</span>
+promote(12 &amp; 10, 12 | 10, 12 ^ 10)  <span class="c"># 8 14 6 — bitwise and/or/xor</span>
+promote(1 &lt;&lt; 4, 256 &gt;&gt; 4, ~5)     <span class="c"># 16 16 -6 — shifts and bitwise not</span>
+promote(7 % 3, 7 % -3)            <span class="c"># 1 -1 — int % int stays int, sign follows divisor</span>
+promote(5 &gt; 3 ? "big" : "small")  <span class="c"># big — ternary, lowest precedence</span></code></pre>
+</figure>
 
 <!-- 6 ladder ---------------------------------------------------------- -->
 <h2 id="ladder">6 · The Total Grammar ladder</h2>
@@ -209,19 +268,33 @@ records of <code>line, rung, message, repair</code>. Nothing is ever rejected.</
       <tr><td><code>keys(m)</code> · <code>values(m)</code> · <code>has(m,k)</code> · <code>del(m,k)</code></td><td>Map views and mutation (insertion-ordered)</td></tr>
       <tr><td><code>range(a, b?, step?)</code></td><td>Returns a List</td></tr>
       <tr><td><code>str</code> · <code>num</code></td><td>Coercions; <code>num</code> fails → 0 + note</td></tr>
-      <tr><td><code>type</code></td><td><code>null bool int float str list map gene native</code></td></tr>
+      <tr><td><code>type</code></td><td><code>null bool int float str list map gene native sequence</code>, or the phenotype name for instances</td></tr>
       <tr><td><code>abs min max sum</code></td><td>Numeric helpers</td></tr>
-      <tr><td><code>clock()</code></td><td>Seconds, float</td></tr>
+      <tr><td><code>floor(x)</code> · <code>ceil(x)</code></td><td>Round down/up → Int</td></tr>
+      <tr><td><code>sqrt(x)</code> · <code>pow(b, e)</code></td><td>Root and power → Float</td></tr>
+      <tr><td><code>clock()</code> · <code>now()</code></td><td>Monotonic seconds, float</td></tr>
+      <tr><td><code>random()</code> · <code>random(n)</code> · <code>randomize(seed?)</code></td><td>Float in [0,1) · int in [0,n) · deterministic xorshift seed (identical in both implementations)</td></tr>
+      <tr><td><code>chr(i)</code> · <code>ord(c)</code></td><td>Code point ↔ 1-char string</td></tr>
+      <tr><td><code>argv()</code></td><td>List of the CLI arguments after the script path</td></tr>
+      <tr><td><code>sleep(ms)</code></td><td>Wall-clock pause; capped at 60,000 ms (sleep escapes the step budget)</td></tr>
+      <tr><td><code>call(name_or_gene, args_list)</code></td><td>Dynamic dispatch — builtins, named genes, or gene values</td></tr>
+      <tr><td><code>json_parse(s)</code> · <code>json_str(v)</code></td><td>JSON round-trip; nesting &gt; 512 raises Stress <code>unfolded</code></td></tr>
+      <tr><td><code>read_file(p)</code> · <code>write_file(p,s)</code> · <code>append_file(p,s)</code></td><td><b>Capability-gated</b> filesystem writes/reads (SPEC §9b)</td></tr>
+      <tr><td><code>exists(p)</code> · <code>read_dir(p)</code></td><td><b>Capability-gated</b> probe / directory listing (List of names)</td></tr>
+      <tr><td><code>run(prog, args?)</code></td><td><b>Capability-gated</b> subprocess → map <code>code stdout stderr ok</code></td></tr>
+      <tr><td><code>http_get(host, port?, path?)</code></td><td><b>Capability-gated</b> HTTP GET → response body</td></tr>
+      <tr><td><code>serve(port?)</code> · <code>recv_request()</code> · <code>send_response(conn, status?, ctype?, body?)</code></td><td><b>Capability-gated</b> HTTP server: listen, poll requests (<code>conn method path body</code> or null), reply</td></tr>
+      <tr><td><code>env(name)</code></td><td><b>Capability-gated</b> environment variable read</td></tr>
       <tr><td><code>exit(n?)</code> · <code>assert(c, msg?)</code></td><td>Hard stop · raises Stress <code>burned</code> on failure</td></tr>
       <tr><td><code>codon(s)</code></td><td>0–100 style score of an identifier (codon optimality)</td></tr>
       <tr><td><code>distance(a,b)</code> · <code>similar(a,b,maxd?)</code></td><td>Edit distance (C++ bit-parallel kernel) · boolean threshold</td></tr>
       <tr><td><code>transcribe(dna)</code> · <code>translate(rna)</code></td><td>Sequence tools; translate stops at stop codon</td></tr>
       <tr><td><code>reverse_complement(dna)</code> · <code>gc_content(dna)</code> · <code>find_orf(dna)</code></td><td>Sequence tools (gc 0–100; ORF protein list)</td></tr>
       <tr><td><code>memory()</code></td><td>Map <code>arena_bytes, interns, allocs</code> from the C runtime</td></tr>
-      <tr><td><code>fingerprint()</code></td><td>Run telemetry — <code>calls burst mature nascent maturation</code></td></tr>
+      <tr><td><code>fingerprint()</code></td><td>Run telemetry — <code>calls burst burst_by_gene mature nascent maturation</code> (§14 of SPEC; the old spliced/unspliced/velocity keys are retired)</td></tr>
       <tr><td><code>spawn(f, args?)</code> · <code>join(id)</code></td><td>OS thread tasks; result returned, second join → null + note</td></tr>
       <tr><td><code>toggle_on(name)</code> · <code>toggle_state()</code></td><td>Toggle-switch bistability control</td></tr>
-      <tr><td><code>repressi_next()</code> · <code>repressi_state()</code></td><td>Repressilator ring advance / levels</td></tr>
+      <tr><td><code>repressi_next()</code> · <code>repressi_state()</code> · <code>repressi_start(ms)</code></td><td>Repressilator ring advance / levels / timed OS-thread mode</td></tr>
       <tr><td><code>grn_fire(name)</code> · <code>grn_state()</code></td><td>Regulatory-network ignition / level map</td></tr>
       <tr><td><code>methyl(key, default?)</code></td><td>Read the <code>.cell</code> methylation config</td></tr>
     </tbody>
@@ -248,20 +321,24 @@ records of <code>line, rung, message, repair</code>. Nothing is ever rejected.</
 <h2 id="cli">9 · CLI reference</h2>
 <figure class="code">
   <figcaption><span>operon — Rust toolchain binary</span><span class="tag">SPEC §15</span></figcaption>
-  <pre><code>operon run f.op    [--entry g] [--variant v] [--cell c] [--rna r] [--frame name] [--ires] [--strict] [--quiet] [--json]
+  <pre><code>operon run f.op    [--entry g] [--variant v] [--cell c] [--rna r] [--frame name] [--ires] [--strict] [--quiet] [--fuel N]
+                   [--allow-read p] [--allow-write p] [--allow-run prog] [--allow-net host:port] [--allow-env var] [--allow-all]
 operon check f.op  [--nmd] [--nmd=purge] [--json]
 operon test [paths...]
 operon fmt f.op    [--write]        <span class="c"># canonical formatter; wobble-corrected output parses clean</span>
 operon build f.op  --variant v -o out.op
 operon profile f.op
-operon crispr f.op --knockout gene [--json]   <span class="c"># knockout: body → return null; then run proofs; report survivors</span>
+operon crispr f.op (--knockout gene | --matrix) [--json]   <span class="c"># knockout: body → return null; run proofs; survivors.</span>
+                                    <span class="c"># matrix: knock out every top-level gene; viability table</span>
 operon bench f.op  [--iters n]
 operon version</code></pre>
 </figure>
 <ul class="plain">
-  <li><code>operon test</code> defaults to <code>tests/</code> recursively; each file's proof frames run, failures are recorded, the suite continues; exit 1 on any failure. Report: files, proofs run, passed, failed, wobble notes.</li>
-  <li><code>--strict</code> → exit code 3 if any rung ≥ 3 note occurred.</li>
-  <li><b>Stdout discipline</b> — <code>promote</code> prints program output; notes/reports go to <em>stderr</em>, so <code>operon run f.op &gt; out.txt</code> is clean. <code>--json</code> on check/test/profile/crispr emits machine-readable JSON to stdout.</li>
+  <li><code>operon test</code> defaults to <code>tests/</code> recursively; each file's proof frames run, failures are recorded, the suite continues; exit 1 on any failure. Report: files, proofs run, passed, failed, assertions exercised, wobble notes. A proof that returns early or exercises zero assertions <b>fails</b> (integrity, not politeness). Current suite: 18 files / 18 proofs / 209 assertions.</li>
+  <li><code>--strict</code> → exit code 3 if any rung ≥ 3 note occurred (<code>wobble.strict = true</code> in <code>.cell</code> does the same per run).</li>
+  <li><code>--fuel N</code> caps the interpreter's step budget (default 200,000,000); exhaustion raises catchable Stress <code>overflow</code>.</li>
+  <li><b>Stdout discipline</b> — <code>promote</code> prints program output; notes/reports go to <em>stderr</em>, so <code>operon run f.op &gt; out.txt</code> is clean. <code>--json</code> on check/test/crispr emits machine-readable JSON to stdout (<code>check --json</code> includes <code>phantoms</code> and <code>nmd</code> arrays).</li>
+  <li><b>Capability grants</b> — <code>--allow-read/--allow-write</code> take paths, <code>--allow-run</code> a program, <code>--allow-net</code> a <code>host:port</code>, <code>--allow-env</code> a variable name, <code>--allow-all</code> opens everything. Denied operations raise catchable Stress <code>interference</code> — see the security section of <a href="../SPEC.md">SPEC §9b</a> for the full model (default-deny, symlink-resolved grants, <code>.cell</code> <code>allow.*</code> keys only with explicit <code>--cell</code>).</li>
 </ul>
 
 <!-- 10 grading ----------------------------------------------------------- -->
@@ -278,6 +355,8 @@ damage, not by rejection:</p>
       <tr><td>NMD premature stop (unreachable after <code>return</code>)</td><td>−4</td></tr>
       <tr><td>Untranslated transcript (defined, never called, unexported, unenhanced)</td><td>−1</td></tr>
       <tr><td>Phantom call (calling an undefined gene — runs as null)</td><td>−2</td></tr>
+      <tr><td>Unverified <code>anchor import</code> (not in file or used modules)</td><td>−2</td></tr>
+      <tr><td>Hot <code>enhance</code>d gene with a codon-optimal name</td><td>up to <b>+6</b> total</td></tr>
       <tr><td>Floor</td><td><b>50</b></td></tr>
     </tbody>
   </table>
@@ -293,8 +372,8 @@ The <a href="../web/playground/index.html">playground</a> applies the same arith
   <div class="wrap foot-inner">
     <div>
       <a class="logo" href="index.html"><span class="logo-mark"></span>operon<b>.lang</b></a>
-      <p class="mono">Operon 2.0.0 · rust-core · c-runtime · cpp-kernel<br>
-      SPEC frozen for v2.0 · Total Grammar: nothing is rejected.</p>
+      <p class="mono">Operon 2.1.0 · rust-core · c-runtime · cpp-kernel<br>
+      SPEC v2.1 · Total Grammar: nothing is rejected.</p>
     </div>
     <div class="foot-links">
       <a href="index.html">Overview</a>

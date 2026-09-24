@@ -864,12 +864,59 @@ class P:
                 e = self.expr()
             self.end_stmt()
             return ("yield", e)
-        # bare-name block: `main { ... }` is a gene definition (C-like idiom)
+        # bare-name definition: `main { ... }` / `route(req) { ... }` are
+        # gene definitions — lookahead: NAME '{' or NAME '(' ... ')' '{'
         t1 = self.toks[self.pos + 1] if self.pos + 1 < len(self.toks) else ("EOF", None, 0)
-        if word not in KEYWORDS and t1[0] == "SYM" and t1[1] == "{":
+        is_def = False
+        if word not in KEYWORDS:
+            if t1[0] == "SYM" and t1[1] == "{":
+                is_def = True
+            elif t1[0] == "SYM" and t1[1] == "(":
+                j = self.pos + 1
+                depth = 0
+                n = len(self.toks)
+                while j < n:
+                    tk = self.toks[j]
+                    if tk[0] == "SYM" and tk[1] == "(":
+                        depth += 1
+                    elif tk[0] == "SYM" and tk[1] == ")":
+                        depth -= 1
+                        if depth == 0:
+                            j += 1
+                            while j < n and self.toks[j][0] == "NL":
+                                j += 1
+                            is_def = j < n and self.toks[j][0] == "SYM" and self.toks[j][1] == "{"
+                            break
+                    elif tk[0] == "EOF":
+                        break
+                    j += 1
+        if is_def:
             self.note(self.peek()[2], 4, f"bare name block '{word}' treated as gene definition")
-            self.next()  # consume the name; block starts at '{'
-            g = Gene(word, [], None, self.block())
+            self.next()  # consume the name
+            params = []
+            if self.peek() == ("SYM", "(", self.peek()[2]):
+                self.next()
+                while True:
+                    self.eat_nl()
+                    t = self.peek()
+                    if t[0] == "SYM" and t[1] == ")":
+                        self.next(); break
+                    if t[0] == "EOF":
+                        self.note(t[2], 4, "parameter list auto-closed")
+                        break
+                    before = self.pos
+                    pname = self.ident()
+                    dflt = None
+                    if self.peek() == ("SYM", "=", self.peek()[2]):
+                        self.next()
+                        dflt = self.expr()
+                    params.append((pname, dflt))
+                    if self.peek() == ("SYM", ",", self.peek()[2]):
+                        self.next()
+                    if self.pos == before:
+                        self.note(t[2], 4, "unclosed parameter list; auto-closed")
+                        break
+            g = Gene(word, params, None, self.block())
             return ("gene", g)
         return self.assign_or_expr(w)
 
@@ -1434,8 +1481,8 @@ BUILTINS = set("""promote len push pop insert remove keys values has del range s
 abs min max sum clock exit assert codon distance similar transcribe reverse_complement
 gc_content translate find_orf memory methyl fingerprint toggle_on toggle_state repressi_next
 repressi_state repressi_start grn_fire grn_state spawn join floor ceil sqrt pow random
-randomize chr ord now sleep argv read_file write_file append_file exists read_dir run
-http_get serve recv_request send_response json_parse json_str env call""".split())
+randomize chr ord now sleep argv read_file write_file append_file exists file_size read_dir run
+http_get serve recv_request send_response json_parse json_str env call items""".split())
 
 BUILTIN_SYNONYMS = {"print": "promote", "echo": "promote", "say": "promote", "show": "promote"}
 
@@ -1735,12 +1782,10 @@ class Interp:
             modv = self.load_module(s[1])
             name = s[2] or os.path.basename(s[1].replace("\\", "/")).split(".")[0].split("/")[-1]
             env[name] = modv
-            # flat-bind exported genes beside the alias map (worker + call()
-            # resolution without a prefix)
+            # flat-bind ALL exports beside the alias map (genes AND data)
             if isinstance(modv, dict):
                 for kname, v in modv.items():
-                    if isinstance(v, Gene):
-                        env[kname] = v
+                    env[kname] = v
         elif k == "raise":
             msg = self.eval(env, s[2])
             raise Stress(s[1] or "unfolded", v_display(msg))
@@ -2676,6 +2721,11 @@ class Interp:
             return dict(self.grn_levels)
         if name == "grn_state":
             return dict(self.grn_levels)
+        if name == "items":
+            v = args[0] if args else {}
+            if isinstance(v, dict):
+                return [[k, val] for k, val in v.items()]
+            return []
         if name == "spawn":
             callee = args[0] if args else None
             targs = args[1] if len(args) > 1 and isinstance(args[1], list) else []
@@ -2781,6 +2831,13 @@ class Interp:
             path = v_display(args[0]) if args else ""
             self.cap_check("read", "read", path)
             return os.path.exists(path)
+        if name == "file_size":
+            path = v_display(args[0]) if args else ""
+            self.cap_check("read", "read", path)
+            try:
+                return os.path.getsize(path)
+            except OSError:
+                return -1
         if name == "read_dir":
             path = v_display(args[0]) if args else ""
             self.cap_check("read", "read", path)

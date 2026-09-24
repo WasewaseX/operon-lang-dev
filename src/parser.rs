@@ -1038,18 +1038,84 @@ impl Parser {
                 Some(Stmt::Yield(e))
             }
             _ => {
-                // bare-name block: `main { ... }` is a gene definition — the
-                // C-like entry idiom, canonical sugar for `gene main { ... }`
-                if !is_canonical(&word)
-                    && matches!(self.toks.get(self.pos + 1).map(|t| &t.0), Some(Tok::LBrace))
-                {
+                // bare-name definition: `main { ... }` and `route(req) { ... }`
+                // are gene definitions — the C-like entry/route idiom.
+                // Lookahead: NAME '{' or NAME '(' ... ')' '{' (a plain call
+                // like `promote(x)` is followed by other tokens, not '{').
+                let is_def = {
+                    let toks = &self.toks;
+                    let n = toks.len();
+                    let mut j = self.pos + 1;
+                    let mut looks = false;
+                    if j < n && matches!(toks[j].0, Tok::LBrace) {
+                        looks = true;
+                    } else if j < n && matches!(toks[j].0, Tok::LParen) {
+                        // scan to the matching close paren, then expect '{'
+                        let mut depth = 0i32;
+                        while j < n {
+                            match toks[j].0 {
+                                Tok::LParen => depth += 1,
+                                Tok::RParen => {
+                                    depth -= 1;
+                                    if depth == 0 {
+                                        j += 1;
+                                        // skip newlines/semis between ) and {
+                                        while j < n
+                                            && matches!(toks[j].0, Tok::Newline | Tok::Semi)
+                                        {
+                                            j += 1;
+                                        }
+                                        looks = j < n && matches!(toks[j].0, Tok::LBrace);
+                                        break;
+                                    }
+                                }
+                                Tok::Eof => break,
+                                _ => {}
+                            }
+                            j += 1;
+                        }
+                    }
+                    looks
+                };
+                if !is_canonical(&word) && is_def {
                     let line = self.line();
                     self.note(line, 4, format!("bare name block '{word}' treated as gene definition"));
-                    self.next(); // consume the name; block starts at '{'
+                    self.next(); // consume the name
+                    let mut params: Vec<(String, Option<Expr>)> = Vec::new();
+                    if matches!(self.peek(), Tok::LParen) {
+                        self.next(); // (
+                        loop {
+                            self.eat_newlines_inline();
+                            if matches!(self.peek(), Tok::RParen) {
+                                self.next();
+                                break;
+                            }
+                            if matches!(self.peek(), Tok::Eof) {
+                                self.note(self.line(), 4, "parameter list auto-closed");
+                                break;
+                            }
+                            let before = self.pos;
+                            let pname = self.expect_ident().unwrap_or_default();
+                            let default = if matches!(self.peek(), Tok::Eq) {
+                                self.next();
+                                Some(self.parse_expr())
+                            } else {
+                                None
+                            };
+                            params.push((pname, default));
+                            if matches!(self.peek(), Tok::Comma) {
+                                self.next();
+                            }
+                            if self.pos == before {
+                                self.note(self.line(), 4, "unclosed parameter list; auto-closed");
+                                break;
+                            }
+                        }
+                    }
                     let body = self.parse_block().unwrap_or_default();
                     return Some(Stmt::Gene(std::sync::Arc::new(GeneDef {
                         name: Some(word.clone()),
-                        params: vec![],
+                        params,
                         guard: None,
                         body,
                         acetylate: false,

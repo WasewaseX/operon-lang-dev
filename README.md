@@ -22,37 +22,37 @@ The mandate: *"Rust, then C, then Python, then Operon, then C++, then HTML, then
 - Python as bootstrap (not implementation) is the right reduction from v1's 100%-Python mistake.
 - One point withheld: **Operon below Python is a snapshot, not a destiny.** Mainstream languages converge on self-hosting (Rust in Rust, Go in Go, TypeScript in TypeScript). Operon's share must grow release over release — the stdlib is already pure `.op`.
 
-### Measured composition (v2.0.0, `bash scripts/stack_report.sh`)
+### Measured composition (v2.1.0, `bash scripts/stack_report.sh`)
 
 | rank | language | lines | share | role |
 |---|---|---|---|---|
-| 1 | **Rust** | 8,191 | ~47% | lexer, Total Grammar parser, evaluator, capability sandbox, HTTP/JSON, toolchain CLI (`src/`) |
-| 2 | **Python** | 3,317 | ~19% | bootstrap: reference oracle + differential harness + packaging (`bootstrap/`) |
+| 1 | **Rust** | 8,428 | ~51% | lexer, Total Grammar parser, evaluator, capability sandbox, HTTP/JSON, toolchain CLI (`src/`) |
+| 2 | **Python** | 3,346 | ~20% | bootstrap: reference oracle + differential harness + packaging (`bootstrap/`) |
 | 3 | **JavaScript** | 1,522 | ~9% | browser playground subset interpreter (`web/playground/app.js`) |
-| 4 | **HTML** | 1,214 | ~7% | documentation site (`docs/`) |
-| 5 | **Operon** | 1,188 | ~7% | **self-hosted stdlib (6 modules), tests, GenomeLab** (`std/ tests/ examples/ apps/`) |
+| 4 | **HTML** | 1,309 | ~8% | documentation site (`docs/`) |
+| 5 | **Operon** | 1,221 | ~7% | **self-hosted stdlib (6 modules), tests, GenomeLab** (`std/ tests/ examples/ apps/`) |
 | 6 | **CSS** | 311 | ~2% | docs + playground styling |
-| 7 | **C** | 180 | ~1% | runtime kernel: intern table, arena, FNV-1a, clock (`runtime/operon_rt.c`) |
+| 7 | **C** | 187 | ~1% | runtime kernel: intern table, arena, FNV-1a, clock (`runtime/operon_rt.c`) |
 | 8 | **C++** | 148 | ~1% | algorithm kernel: bit-parallel edit distance, codon-usage scoring (`runtime/codon_kernel.cpp`) |
 | 9 | **Shell** | 70 | <1% | build/test/bench/stack scripts (`scripts/`) |
 | 10 | **TypeScript** | 23 | <1% | playground type surface (`app.d.ts`) |
 
 **Honest deviations from the requested order, and why:**
 
-1. **Python (2) > C (7).** The oracle is not "too much Python" — it is the differential engine that proves the Rust core correct (16/16 program-level output matches). Deleting it would save lines and lose verification. The C kernel is small because interning, hashing and clocks are small; it is load-bearing, not decorative — every identifier of every parsed file flows through it, `distance()`/`codon()` are C++ kernels, and `memory()`/`clock()` read C state directly. v2.1 grows C honestly (arena-backed GC, C map kernel for environments).
+1. **Python (2) > C (7).** The oracle is not "too much Python" — it is the differential engine that proves the Rust core correct (24/24 program-level output matches). Deleting it would save lines and lose verification. The C kernel is small because interning, hashing and clocks are small; it is load-bearing, not decorative — every identifier of every parsed file flows through it, `distance()`/`codon()` are C++ kernels, and `memory()`/`clock()` read C state directly.
 2. **Operon (6) is small — on purpose, for now.** `std/` runs on the Rust core today; every release self-hosts more. That is exactly how Rust/Go/TS historically converged.
 
 ### Measured performance (Rust core vs Python oracle, same programs)
 
 | bench | rust | oracle | speedup |
 |---|---|---|---|
-| fib(25) — 242k recursive calls | 125 ms | 3,076 ms | **24.5×** |
-| 200k-iteration loop with arithmetic | 65 ms | 861 ms | **13.2×** |
-| 16k string interpolations | 26 ms | 114 ms | **4.3×** |
+| fib(25) — 242k recursive calls | 127 ms | 3,119 ms | **24.5×** |
+| 200k-iteration loop with arithmetic | 59 ms | 863 ms | **14.5×** |
+| 16k string interpolations | 24 ms | 112 ms | **4.6×** |
 
 (Reproduce: `bash scripts/bench.sh`.) Startup overhead included in both — the interpreter-only deltas are larger.
 
-**Honest CPython comparison:** on the call-heavy fib(25) micro-benchmark the Rust tree-walking interpreter runs ~5× slower than CPython's own bytecode VM (125 ms vs ~26 ms incl. startup; CPython's frame machinery is C). Tree-walkers lose to bytecode VMs; a bytecode compiler + VM in the Rust core is the v3 performance path and is why the differential harness exists — it will prove the VM against the tree-walker before it replaces it.
+**Honest CPython comparison:** on the call-heavy fib(25) micro-benchmark the Rust tree-walking interpreter runs **~12× slower than CPython 3.12** (≈125 ms vs ≈10.5 ms compute-only, startup excluded on both sides; CPython's frame machinery is C). Tree-walkers lose to bytecode VMs; a bytecode compiler + VM in the Rust core is the v3 performance path and is why the differential harness exists — it will prove the VM against the tree-walker before it replaces it.
 
 ---
 
@@ -98,24 +98,40 @@ Real mechanisms, real semantics — the professor-level feature set:
 | IRES cap-independent entry | `ires alt_main;` + `--ires` |
 | UPR / ISR stress programs | `stress { RISKY } rescue (e) { CONTAIN }` — kind-filtered, catchable overflow |
 | fate landscapes | `fate Cycle { state a -> b; enter a; }` — `.shift()/.state()/.can()`, valley semantics |
-| gene regulatory networks | `regulate { a activates b strength 0.9; c inhibits d; }` + `grn_fire/grn_state` |
-| toggle-switch bistability | `toggle a, b;` — exactly one on |
-| repressilator oscillation | `repressilator a -> b -> c period 3;` — manual ring or timed OS thread |
-| single-cell telemetry | `fingerprint()` — calls, burst index, spliced/unspliced/velocity |
-| CRISPR knockout screens | `operon crispr app.op --knockout fetch_data` — which proofs survive? |
+| phenotypic differentiation | `phenotype Cell { let f = 0; gene init(v) { self.f = v } }` — `new Cell(1)`, inheritance `from`, `self` |
+| polypeptide elongation | `sequence gen() { yield v }` — lazy `.next()` / `.collect()` on worker cells |
+| gene regulatory networks | `regulate { a activates b strength 0.9; c inhibits d; }` — stateful, two-phase fire, optional `threshold` dose–response |
+| toggle-switch bistability | `toggle a, b;` — exactly one on; calls to the repressed allele return null with a note |
+| repressilator oscillation | `repressilator a -> b -> c period 3;` — manual ring or timed OS thread (`repressi_start(ms)`) |
+| single-cell telemetry | `fingerprint()` — calls, burst index, mature / nascent / maturation |
+| RNA interference (antiviral silencing) | capability sandbox — default-deny file/net/env/run; violations raise catchable Stress `interference` |
+| CRISPR knockout screens | `operon crispr app.op --knockout fetch_data` — which proofs survive? (`--matrix` knocks out every gene) |
+
+## Security model — the culture flask
+
+An Operon program is an organism in a flask: the runtime is **default-deny** about the world outside. `read_file`, `write_file`, `append_file`, `exists`, `read_dir`, `run`, `http_get`, `serve`, and `env` raise a catchable Stress `interference` (the cell's RNA-interference machinery silencing an untrusted operation) unless the operator grants access:
+
+```console
+$ operon run app.op --allow-read /data --allow-write /tmp/out \
+      --allow-run gzip --allow-net 127.0.0.1:8080 --allow-env API_KEY
+$ operon run app.op --allow-all        # open flask
+```
+
+Path grants are symlink-resolved; a grant that normalizes to the empty string is rejected. A `.cell` config grants capabilities only when loaded explicitly with `--cell` — an auto-detected `operon.cell` cannot widen its own sandbox. Imports inside the project or the stdlib are always allowed; anything else needs a read grant. Resource ceilings are part of the same contract: recursion 10,000, step budget 200M (`--fuel N` lowers it), string repeat 512 MiB, edit-distance table 10M cells, JSON depth 512 — each a catchable Stress — and `sleep` is clamped to 60 s. Nothing crashes; see SPEC §9b.
 
 ## Toolchain
 
 ```
-operon run f.op      [--entry g] [--variant v] [--cell c] [--rna r] [--frame n] [--ires] [--strict]
-operon check f.op    [--nmd | --nmd=purge]        # 100-point grade + letter
-operon test [dirs]                                # proof-frame runner (10 files / 10 proofs green)
+operon run f.op      [--entry g] [--variant v] [--cell c] [--rna r] [--frame n] [--ires] [--strict] [--fuel N]
+                     [--allow-read p] [--allow-write p] [--allow-run prog] [--allow-net host:port] [--allow-env var] [--allow-all]
+operon check f.op    [--nmd | --nmd=purge] [--json]   # 100-point grade + letter; --json: phantoms/nmd arrays
+operon test [dirs]                                # proof-frame runner (18 files / 18 proofs / 209 assertions green)
 operon fmt f.op     [--write]                     # precedence-correct canonical formatter
 operon build f.op   [--variant v] [-o out.op]     # bake splices, strip proofs
-operon profile f.op                               # per-gene calls, µs, flags, velocity, enhance candidates
-operon crispr f.op --knockout gene [--json]
+operon profile f.op                               # per-gene calls, exclusive self-µs, flags, maturation, enhance candidates
+operon crispr f.op  (--knockout gene | --matrix) [--json]
 operon bench f.op   [--iters n]
-operon version                                    # Operon 2.0.0 (rust-core, c-runtime, cpp-kernel)
+operon version                                    # Operon 2.0.0 (rust-core, c-runtime, cpp-kernel) — banner trails SPEC 2.1.0
 ```
 
 ## Build from source
@@ -123,8 +139,8 @@ operon version                                    # Operon 2.0.0 (rust-core, c-r
 ```console
 $ ./scripts/build.sh          # gcc + g++ the kernels, rustc the core
 OK: bin/operon
-$ ./scripts/test.sh           # 10/10 proof files, C kernel smoke 14/14
-$ python3 bootstrap/harness.py  # differential: 16/16 programs MATCH across implementations
+$ ./scripts/test.sh           # 18/18 proof files (209 assertions), C kernel smoke 14/14
+$ python3 bootstrap/harness.py  # differential: 24/24 programs MATCH across implementations
 $ bash scripts/bench.sh
 ```
 
@@ -134,10 +150,11 @@ Requires: rustc (≥1.70), gcc, g++. No crates, no network, no external dependen
 
 - **Values**: null, bool, int(i64, overflow = catchable Stress), float, str (with `"interp {expr}"`), list, map (insertion-ordered), gene (closure), native.
 - **Control**: `if/elif/else`, `while`, `loop`, `for…in`, `match/case` (literals, binding, wildcard), `for x in xs if cond collect body` comprehensions, `break/continue`, `return`.
-- **Genes**: named, anonymous, lambdas, defaults, closures, recursion, `guard` clauses, marks.
-- **Errors**: everything is a catchable `Stress{kind, message}` — `unfolded | missing | overflow | burned` — plus Total-Grammar runtime notes. A program never crashes; worst case it narrates what it repaired.
-- **Concurrency**: `spawn(gene, args)` / `join(id)` — real OS threads with value serialization; timed repressilator threads.
-- **Modules**: `use std/bio;` — TAD-insulated, anchor-controlled exports, module cache, cycle-tolerant.
+- **Operators**: `**` (right-assoc pow), `& | ^ << >> ~` bitwise, `cond ? a : b` ternary, `int % int` → int.
+- **Genes**: named, anonymous, lambdas, defaults, closures, recursion, `guard` clauses, marks — plus **phenotype classes** (`phenotype P { let f = 0; gene init() {…} }`, `new P(...)`, `self`, `phenotype C from P`) and **sequence generators** (`sequence s() { yield v }` with `.next()`/`.collect()`, lazy worker-cell pull).
+- **Errors**: everything is a catchable `Stress{kind, message}` — `unfolded | missing | overflow | burned | interference` — plus Total-Grammar runtime notes. A program never crashes; worst case it narrates what it repaired.
+- **Concurrency**: `spawn(gene, args)` / `join(id)` — real OS threads with value serialization; sequences run on worker cells; timed repressilator threads.
+- **Modules**: `use std/bio;` — TAD-insulated, anchor-controlled exports, module cache, cycle-tolerant. Six stdlib modules today: `bio`, `collections`, `iter`, `math`, `seq`, `strings`.
 
 ## Repository layout
 
@@ -147,7 +164,6 @@ runtime/     C runtime kernel + C++ algorithm kernel
 bootstrap/   Python oracle + differential harness (the verification layer)
 std/         self-hosted Operon standard library (.op)
 tools/       (reserved for .op tooling as self-hosting grows)
-std/seq.op std/math.op std/iter.op  (v2.1: self-hosted sequence/math/iter modules)
 tests/       proof-frame test suite (.op) + C kernel smoke test
 apps/        GenomeLab demo (pure .op)
 examples/    tour programs (.op)

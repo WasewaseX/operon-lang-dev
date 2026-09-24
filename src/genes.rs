@@ -573,14 +573,17 @@ pub fn seq_start(
     def: Arc<GeneDef>,
     args: Vec<Value>,
     snap: Vec<(String, SnapVal)>,
+    caps: crate::interp::Caps,
 ) -> Rc<RefCell<crate::value::SeqState>> {
     let send_args: Vec<SnapArg> = args.iter().map(arg_to_snap).collect();
+    let host_caps = caps;
     let (tx, rx) = mpsc::sync_channel::<crate::value::SeqMsg>(0);
     std::thread::spawn(move || {
         let mut ti = Interp::new();
         let genv = Env::new(None);
         bind_snapshot(&genv, &snap);
         ti.global = genv;
+        ti.caps = host_caps; // worker cells inherit the host's grants
         let conv_args: Vec<Value> = send_args.iter().map(|a| arg_from_snap(a, &snap)).collect();
         // run the sequence body: params bound, Yield sends over the channel
         let result = run_seq_body(&mut ti, &def, conv_args, &tx);
@@ -653,11 +656,13 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
     let send_args: Vec<SnapArg> = args.iter().map(arg_to_snap).collect();
     let (tx, rx) = mpsc::channel::<(SendValue, Vec<Note>)>();
     let global_note = format!("[task {}]", name);
+    let host_caps = interp.caps.clone();
     std::thread::spawn(move || {
         let mut ti = Interp::new();
         let genv = Env::new(None);
         bind_snapshot(&genv, &snap);
         ti.global = genv;
+        ti.caps = host_caps; // worker cells inherit the host's grants
         let conv_args: Vec<Value> = send_args.iter().map(|a| arg_from_snap(a, &snap)).collect();
         let result = ti.call_gene(def, None, conv_args);
         let (rv, notes) = match result {

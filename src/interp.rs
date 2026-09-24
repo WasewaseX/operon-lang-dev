@@ -568,16 +568,22 @@ impl Interp {
                                 .unwrap_or_else(|| "mod".into())
                         });
                         env.define(&name, modv.clone());
-                        // flat-bind exported genes beside the alias map: the
-                        // whole gene repertoire stays addressable by name
-                        // (workers and call() resolve them without a prefix)
+                        // flat-bind ALL exports beside the alias map: the whole
+                        // module repertoire (genes AND data like config lets)
+                        // stays addressable by name — workers and call()
+                        // resolve them without a prefix, and worker snapshots
+                        // carry module data across the membrane
                         if let Value::Map(m) = &modv {
-                            for (k, v) in m.borrow().iter() {
-                                if let Value::Str(kname) = k {
-                                    if matches!(v, Value::Gene(_, _)) {
-                                        env.define(kname, v.clone());
-                                    }
-                                }
+                            let flat: Vec<(String, Value)> = m
+                                .borrow()
+                                .iter()
+                                .filter_map(|(k, v)| match k {
+                                    Value::Str(s) => Some((s.clone(), v.clone())),
+                                    _ => None,
+                                })
+                                .collect();
+                            for (kname, v) in flat {
+                                env.define(&kname, v);
                             }
                         }
                     }
@@ -596,6 +602,9 @@ impl Interp {
             Stmt::Stress { kind, body, rescue } => {
                 let result = self.exec_block(env, body);
                 match result {
+                    // return/break/continue inside the guarded body propagate
+                    // to the enclosing gene/loop — only STRESS is intercepted
+                    Ok(flow @ (Flow::Ret(_) | Flow::Brk | Flow::Cont)) => Ok(flow),
                     Ok(_) => Ok(Flow::Norm),
                     Err(stress) => {
                         let kind_ok = match kind {
@@ -615,8 +624,10 @@ impl Interp {
                                     let m = self.stress_map(&stress);
                                     child.define(b, m);
                                 }
-                                self.exec_block(&child, rbody)?;
-                                Ok(Flow::Norm)
+                                match self.exec_block(&child, rbody)? {
+                                    Flow::Norm => Ok(Flow::Norm),
+                                    other => Ok(other),
+                                }
                             }
                             None => {
                                 self.note(0, 4, format!("stress contained: [{}] {}", stress.kind, stress.message));
@@ -1246,7 +1257,7 @@ impl Interp {
                     self.note(0, 4, format!("{} extra argument(s) in call to sequence ignored", args.len() - def.params.len()));
                 }
                 let snap = crate::genes::snapshot_globals(self);
-                let st = crate::genes::seq_start(def.clone(), args, snap);
+                let st = crate::genes::seq_start(def.clone(), args, snap, self.caps.clone());
                 Ok(Value::Seq(def.clone(), st))
             }
             Value::Gene(def, closure) => self.call_gene(def.clone(), closure.clone(), args),
@@ -2127,6 +2138,15 @@ impl Interp {
                     .map(|(k, v)| (Value::Str(k.clone()), Value::Float(*v)))
                     .collect(),
             )))),
+            "items" => match args.first() {
+                Some(Value::Map(m)) => Ok(Value::List(Rc::new(RefCell::new(
+                    m.borrow()
+                        .iter()
+                        .map(|(k, v)| Value::List(Rc::new(RefCell::new(vec![k.clone(), v.clone()]))))
+                        .collect(),
+                )))),
+                _ => Ok(Value::List(Rc::new(RefCell::new(vec![])))),
+            },
             "spawn" => {
                 let callee = args.first().cloned().unwrap_or(Value::Null);
                 let task_args = match args.get(1) {
@@ -2265,6 +2285,14 @@ impl Interp {
                 let path = args.first().map(|v| v.display()).unwrap_or_default();
                 self.caps.check(&self.caps.read, "read", &path)?;
                 Ok(Value::Bool(std::path::Path::new(&path).exists()))
+            }
+            "file_size" => {
+                let path = args.first().map(|v| v.display()).unwrap_or_default();
+                self.caps.check(&self.caps.read, "read", &path)?;
+                match std::fs::metadata(&path) {
+                    Ok(m) => Ok(Value::Int(m.len() as i64)),
+                    Err(_) => Ok(Value::Int(-1)),
+                }
             }
             "read_dir" => {
                 let path = args.first().map(|v| v.display()).unwrap_or_default();
@@ -2813,7 +2841,7 @@ pub fn serve_start(port: u16) -> Result<(), String> {
                             break;
                         }
                         if buf.len() > 64 * 1024 {
-                            break;
+                            break; // oversized head: caller sees no head terminator
                         }
                     }
                     Err(_) => break,
@@ -2864,9 +2892,25 @@ pub fn send_response(conn: u64, status: &str, ctype: &str, body: &str) -> Result
     let st = guard.as_ref().ok_or("server not running")?;
     let stream = st.conns.lock().map_err(|_| "conn lock poisoned")?.remove(&conn);
     let mut stream = stream.ok_or("unknown connection id")?;
+    let reason = match status {
+        "200" => "OK",
+        "201" => "Created",
+        "204" => "No Content",
+        "301" => "Moved Permanently",
+        "302" => "Found",
+        "400" => "Bad Request",
+        "403" => "Forbidden",
+        "404" => "Not Found",
+        "405" => "Method Not Allowed",
+        "413" => "Payload Too Large",
+        "431" => "Request Header Fields Too Large",
+        "500" => "Internal Server Error",
+        "503" => "Service Unavailable",
+        _ => "OK",
+    };
     let head = format!(
-        "HTTP/1.1 {} OK-ish\r\nContent-Type: {}; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-        status, ctype, body.len()
+        "HTTP/1.1 {} {}\r\nContent-Type: {}; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        status, reason, ctype, body.len()
     );
     use std::io::Write;
     stream
@@ -3154,7 +3198,7 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "translate", "find_orf", "memory", "methyl", "fingerprint", "toggle_on", "toggle_state",
     "repressi_next", "repressi_state", "repressi_start", "grn_fire", "grn_state", "spawn", "join",
     "floor", "ceil", "sqrt", "pow", "random", "randomize", "chr", "ord", "now", "sleep",
-    "argv", "read_file", "write_file", "append_file", "exists", "read_dir", "run",
+    "argv", "read_file", "write_file", "append_file", "exists", "file_size", "read_dir", "items", "run",
     "http_get", "serve", "recv_request", "send_response", "json_parse", "json_str", "env",
     "call",
 ];
