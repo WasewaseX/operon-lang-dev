@@ -1,13 +1,13 @@
 # ============================================================
 # Vending machine FSM  — cookbook #05
-# you already know: a state machine as a dict of dicts
+# you already know: a machine as a dict of dicts
 # teaches: nested maps as transition tables, while-style loops,
-#          state reset on terminal transition
+#          pos reset on terminal transition
 # run: operon run examples/cookbook/fsm_vending.op
 # expected output: examples/cookbook/expected/fsm_vending.out
 # verified by scripts/cookbook.sh on the Rust core AND the Python oracle
 # ============================================================
-gene step(state, coin) {
+gene step(pos, coin) {
     # s0=0c s5=5c s10=10c s15=15c s20=20c; vend at >= 25c
     let machine = {
         "s0":  {"n": "s5",   "d": "s10",  "q": "vend"},
@@ -16,23 +16,23 @@ gene step(state, coin) {
         "s15": {"n": "s20",  "d": "vend", "q": "vend"},
         "s20": {"n": "vend", "d": "vend", "q": "vend"}
     }
-    return machine[state][coin]
+    return machine[pos][coin]
 }
 
 gene main() {
     let coins = ["n", "d", "n", "n", "d", "q", "n"]
-    let state = "s0"
+    let pos = "s0"
     let vends = 0
 
     for c in coins {
-        let next_state = step(state, c)
-        promote("{state} --{c}--> {next_state}")
+        let next_state = step(pos, c)
+        promote("{pos} --{c}--> {next_state}")
         if next_state == "vend" {
             vends += 1
-            state = "s0"          # machine resets after dispensing
+            pos = "s0"          # machine resets after dispensing
         } else {
-            state = next_state
+            pos = next_state
         }
     }
-    promote("vended {vends} items; final state {state}")
+    promote("vended {vends} items; final pos {pos}")
 }
