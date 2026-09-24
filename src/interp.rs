@@ -139,13 +139,15 @@ impl Caps {
     /// compare against the resolved grant. Falls back to lexical comparison
     /// when the target does not exist (e.g. a file about to be created).
     fn path_allowed(list: &[String], path: &str) -> bool {
-        let resolved_requested = std::fs::canonicalize(path).ok();
+        let resolved_requested = std::fs::canonicalize(path)
+            .ok()
+            .map(|p: std::path::PathBuf| p.to_string_lossy().replace('\\', "/"));
         for g in list {
             // grant must exist and resolve inside its directory
             if let Ok(rg) = std::fs::canonicalize(g) {
-                let rg_str = rg.to_string_lossy().to_string();
+                let rg_str = rg.to_string_lossy().replace('\\', "/");
                 if let Some(rp) = &resolved_requested {
-                    let rp_str = rp.to_string_lossy().to_string();
+                    let rp_str = rp.as_str().replace('\\', "/");
                     if rp_str == rg_str || rp_str.starts_with(&format!("{}/", rg_str)) {
                         return true;
                     }
@@ -155,7 +157,7 @@ impl Caps {
                 let mut probe = std::path::PathBuf::from(path);
                 while probe.pop() {
                     if let Ok(pp) = std::fs::canonicalize(&probe) {
-                        let pp_str = pp.to_string_lossy().to_string();
+                        let pp_str = pp.to_string_lossy().replace('\\', "/");
                         if pp_str == rg_str || pp_str.starts_with(&format!("{}/", rg_str)) {
                             return true;
                         }
