@@ -111,6 +111,20 @@ else
     pass=$((pass+1))
 fi
 
+# sec-r4 (audit F-6): run() child output is capped at 64 MiB per stream.
+# The payload's child emits ~80 MB; the interpreter must return a collected
+# prefix <= 67108864 chars with rc 0 -- not OOM, not the full 80000000.
+timeout 30 ./bin/operon run "$DIR/rt_p10e_run_output_cap.op" --allow-run sh > "$TMP/out" 2> "$TMP/err"
+cap_rc=$?
+cap_len=$(grep -oE "capped: [0-9]+" "$TMP/out" | grep -oE "[0-9]+" || echo 0)
+if [ $cap_rc -eq 124 ] || [ $cap_rc -eq 137 ] || [ "$cap_len" -gt 67125248 ] || [ "$cap_len" -eq 0 ]; then
+    echo "BREACH run-output-cap (rc=$cap_rc, len=$cap_len)"
+    fail=$((fail+1)); failed_files+=("run-output-cap")
+else
+    echo "ok    run-output-cap (len=$cap_len)"
+    pass=$((pass+1))
+fi
+
 if [ -n "$(ls -A /tmp/redteam-out-escape 2>/dev/null)" ]; then
     echo "ESCAPE: files were created inside /tmp/redteam-out-escape — sandbox breached"
     fail=$((fail+1))

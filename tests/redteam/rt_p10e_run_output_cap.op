@@ -1,0 +1,11 @@
+# rt_p10e (sec-r4 F-6): run() collected child output was uncapped - an 800 MB
+# emitter handed a fuel-blind 800 MB String to the Value heap. Collected
+# output is now capped at 64 MiB per stream; the run stays bounded.
+gene main() {
+    stress {
+        let r = run("sh", ["-c", "head -c 80000000 /dev/zero | tr '\\0' 'x'"])
+        print("capped: {len(r.stdout)}")
+    } rescue (e) {
+        print("stress: {e.kind}")
+    }
+}

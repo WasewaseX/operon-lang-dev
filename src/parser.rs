@@ -219,6 +219,20 @@ impl Parser {
         t
     }
     fn note(&mut self, line: usize, rung: u8, msg: impl Into<String>) {
+        // sec-r4 (F-3): parse-time notes were uncapped — a 3 MB file of
+        // syntax errors grew 1.5 M notes (646 MB RSS, 258 MB stderr). Same
+        // 10k contract as Interp::note; past the cap, notes are suppressed.
+        const PARSE_NOTE_CAP: usize = 10_000;
+        if self.notes.len() >= PARSE_NOTE_CAP {
+            if self.notes.len() == PARSE_NOTE_CAP {
+                self.notes.push(Note {
+                    line,
+                    rung: 4,
+                    message: "parse note cap (10000) reached — further notes suppressed".into(),
+                });
+            }
+            return;
+        }
         self.notes.push(Note {
             line,
             rung,
@@ -2547,6 +2561,18 @@ impl Parser {
     }
 
     fn build_interp(&mut self, raw: String, line: usize) -> Expr {
+        // sec-r4 (F-1): interpolation nesting recurses parser-in-parser; each
+        // level used to start a fresh depth counter, so `"{ \"{ … }\" }"` was
+        // unbounded (60 KB source -> 2.14 GB RSS -> SIGKILL). Cap nesting and
+        // inherit the parent depth so the existing cap machinery applies.
+        if self.depth >= 64 {
+            self.note(
+                line,
+                4,
+                "string interpolation nested deeper than 64; treated as literal text",
+            );
+            return Expr::Interp(vec![InterpPart::Lit(raw)]);
+        }
         // split "a{x}b{y}" into lit/expr parts; sub-parse each expression
         let mut parts: Vec<InterpPart> = Vec::new();
         let mut lit = String::new();
@@ -2573,12 +2599,14 @@ impl Parser {
                     i += 1;
                 }
                 i += 1; // skip '}'
-                let mut sub = parse_snippet(&expr_txt);
+                self.depth += 1;
+                let mut sub = parse_snippet(&expr_txt, self.depth);
                 let e = sub.parse_expr();
-                self.notes.extend(sub.notes.drain(..).map(|mut n| {
+                self.depth -= 1;
+                for mut n in sub.notes.drain(..) {
                     n.line = line;
-                    n
-                }));
+                    self.note(n.line, n.rung, n.message);
+                }
                 parts.push(InterpPart::Expr(e));
             } else {
                 lit.push(chars[i]);
@@ -2668,12 +2696,12 @@ impl Parser {
     }
 }
 
-fn parse_snippet(src: &str) -> Parser {
+fn parse_snippet(src: &str, depth: u32) -> Parser {
     let lexed = lex(src);
     Parser {
         toks: lexed.toks,
         pos: 0,
         notes: lexed.notes,
-        depth: 0,
+        depth,
     }
 }
