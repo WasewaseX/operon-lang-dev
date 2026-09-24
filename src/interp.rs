@@ -1775,12 +1775,35 @@ impl Interp {
             return None;
         }
         let boosted = self.enhanced.iter().any(|g| g == name);
+        // A11 (reg-r2): a repressilator node doubles as a GRN regulator.
+        // If an edge's source is a ring node with no explicit grn_fire
+        // level, the gate reads the node's normalized oscillation level
+        // (raw/α, clamped 0..1) at the current tick — so the emergent
+        // oscillator genuinely drives downstream genes.
+        let ring_len = self.repressi_ring.len();
+        let tick: u64 = match &self.repressi_atomic {
+            Some(a) => a.load(std::sync::atomic::Ordering::SeqCst),
+            None => self.repressi_tick,
+        };
         let mut veto: Option<String> = None;
         for e in self.grn_edges.iter().filter(|e| e.to == name) {
             if veto.is_some() {
                 break;
             }
-            let lvl = *self.grn_levels.get(&e.from).unwrap_or(&0.0);
+            let lvl = match self.grn_levels.get(&e.from) {
+                Some(v) => *v,
+                None => {
+                    if ring_len > 0 {
+                        if let Some(idx) = self.repressi_ring.iter().position(|r| r == &e.from) {
+                            crate::interp::repressilator_gate_level(ring_len, tick, idx)
+                        } else {
+                            0.0
+                        }
+                    } else {
+                        0.0
+                    }
+                }
+            };
             if e.inhibit {
                 if let Some(t) = e.threshold {
                     if lvl >= t {
@@ -2616,6 +2639,66 @@ impl Interp {
                     None => d,
                 })
             }
+            "methylate" => {
+                // A12 (reg-r2): runtime methylation — the SAME graded
+                // semantics as the @methylate definition attribute (D-005):
+                // level += 1, gate applies at the NEXT call. Returns the
+                // gene's new level as an Int.
+                let k = args.first().map(|v| v.display()).unwrap_or_default();
+                let (lvl, silenced) = {
+                    let lvl = self.methyl_levels.entry(k.clone()).or_insert(0);
+                    *lvl += 1;
+                    (*lvl, *lvl >= self.methyl_threshold)
+                };
+                self.note(
+                    0,
+                    2,
+                    format!(
+                        "methylation deepened: '{}' (level {}) — silenced at the next call if {}",
+                        k, lvl, silenced
+                    ),
+                );
+                Ok(Value::Int(lvl as i64))
+            }
+            "demethylate" => {
+                // A12: the @acetylate direction — saturating relaxation.
+                let k = args.first().map(|v| v.display()).unwrap_or_default();
+                let (lvl, silenced) = {
+                    let lvl = self.methyl_levels.entry(k.clone()).or_insert(0);
+                    *lvl = lvl.saturating_sub(1);
+                    (*lvl, *lvl >= self.methyl_threshold)
+                };
+                self.note(
+                    0,
+                    2,
+                    format!(
+                        "methylation relaxed: '{}' (level {}) — silenced at the next call if {}",
+                        k, lvl, silenced
+                    ),
+                );
+                Ok(Value::Int(lvl as i64))
+            }
+            "grn_set" => {
+                // A12: write a GRN node's level directly (0..1, clamped).
+                // This is how host programs steer gate state at runtime
+                // without re-firing the whole network.
+                let k = args.first().map(|v| v.display()).unwrap_or_default();
+                let v = match args.get(1) {
+                    Some(Value::Int(i)) => *i as f64,
+                    Some(Value::Float(f)) => *f,
+                    _ => 0.0,
+                };
+                let v = v.clamp(0.0, 1.0);
+                self.grn_levels.insert(k.clone(), v);
+                self.note(0, 2, format!("grn level set: '{}' = {}", k, v));
+                Ok(Value::Float(v))
+            }
+            "grn_get" => {
+                // A12: read a GRN node's level (the write-side counterpart
+                // of grn_set; pairs with grn_state() for the whole map).
+                let k = args.first().map(|v| v.display()).unwrap_or_default();
+                Ok(Value::Float(*self.grn_levels.get(&k).unwrap_or(&0.0)))
+            }
             "fingerprint" => {
                 let counts: Vec<(Value, Value)> = self
                     .call_counts
@@ -2752,39 +2835,62 @@ impl Interp {
                 Ok(Value::Bool(true))
             }
             "repressi_state" => {
-                // T2d oscillation dynamics: each node's level is a driven
-                // exponential — 1.0 at its drive tick, decaying by half per
-                // tick afterwards, 0.0 before its first drive. Deterministic
-                // from (tick, ring index): no history state, and the timed
-                // (atomic) mode follows the same formula.
+                // A11 (reg-r2, honesty): emergent mutual repression. The old
+                // "0.5^tj" formula was a hardcoded drive schedule — no gene
+                // repressed anything. The ring now integrates the discrete
+                // Elowitz–Leibler repressilator (Elowitz & Leibler 2000):
+                //   dA/dt = α / (1 + R^h) − γA   (R = the repressor's level)
+                // Euler-integrated, 20 substeps of dt=0.05 per ring tick,
+                // α=10, γ=1, h=4, init [5, 0, 0]. Each node represses its
+                // clockwise neighbor; the oscillation is EMERGENT from that
+                // loop, not scheduled. State is a pure function of the tick
+                // count — both manual (repressi_next) and wall-clock
+                // (repressi_start) modes fold the identical arithmetic, so
+                // they can never diverge, and the Python oracle mirrors it
+                // op-for-op (bit-identical IEEE-754 results).
                 let n = self.repressi_ring.len();
                 if n == 0 {
                     return Ok(Value::Map(Rc::new(RefCell::new(Vec::new()))));
                 }
-                let (tick, active): (u64, usize) = match &self.repressi_atomic {
-                    Some(a) => {
-                        let c = a.load(std::sync::atomic::Ordering::SeqCst);
-                        (c, (c as usize) % n)
-                    }
-                    None => (self.repressi_tick, self.repressi_i),
+                let tick: u64 = match &self.repressi_atomic {
+                    Some(a) => a.load(std::sync::atomic::Ordering::SeqCst),
+                    None => self.repressi_tick,
                 };
-                let _ = active;
+                let levels = repressilator_levels(n, tick);
                 let mut out = Vec::new();
-                for (j, name) in self.repressi_ring.iter().enumerate() {
-                    // node j is driven at ticks t ≡ j (mod n), t >= 1
-                    let tj = (tick as i64 - j as i64).rem_euclid(n as i64);
-                    let last_drive = tick as i64 - tj;
-                    let level = if last_drive >= 1 {
-                        0.5f64.powi(tj as i32)
-                    } else {
-                        0.0
-                    };
-                    out.push((Value::Str(name.clone()), Value::Float(level)));
+                for (name, lvl) in self.repressi_ring.iter().zip(levels.iter()) {
+                    out.push((Value::Str(name.clone()), Value::Float(*lvl)));
                 }
                 Ok(Value::Map(Rc::new(RefCell::new(out))))
             }
             "grn_fire" => {
                 let seed = args.first().map(|v| v.display()).unwrap_or_default();
+                // A10 (reg-r2): GRN decay — real gene regulation is
+                // homeostasis, not a latch. Before every pulse, existing
+                // levels decay by the configured fraction. Decay comes from
+                // the pulse itself — grn_fire(seed, f) — or falls back to
+                // .cell `[grn] decay = f`. Default (unset / 0) is
+                // byte-identical to the pre-A10 behavior: the multiply loop
+                // is skipped entirely, not multiplied by 1.
+                let decay: f64 = match args.get(1) {
+                    Some(Value::Int(i)) => (*i as f64).clamp(0.0, 1.0),
+                    Some(Value::Float(f)) => f.clamp(0.0, 1.0),
+                    _ => self
+                        .cell
+                        .get("grn.decay")
+                        .and_then(|v| v.parse::<f64>().ok())
+                        .map(|d| d.clamp(0.0, 1.0))
+                        .unwrap_or(0.0),
+                };
+                if decay > 0.0 && !self.grn_levels.is_empty() {
+                    let retention = 1.0 - decay;
+                    for lvl in self.grn_levels.values_mut() {
+                        *lvl *= retention;
+                        if *lvl < f64::EPSILON {
+                            *lvl = 0.0;
+                        }
+                    }
+                }
                 // STATEFUL network: levels persist across fires (homeostasis)
                 for e in &self.grn_edges {
                     self.grn_levels.entry(e.from.clone()).or_insert(0.0);
@@ -5083,6 +5189,10 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "find_orf",
     "memory",
     "methyl",
+    "methylate",
+    "demethylate",
+    "grn_set",
+    "grn_get",
     "fingerprint",
     "toggle_on",
     "toggle_state",
@@ -5158,4 +5268,60 @@ pub fn unsafe_interns() -> u32 {
 }
 pub fn unsafe_allocs() -> u64 {
     crate::ffi::table_allocs()
+}
+
+// ---------------------------------------------------------------- repressilator
+
+/// A11 (reg-r2): the ring's state as a pure function of the tick count.
+///
+/// Discrete Elowitz–Leibler repressilator (Elowitz & Leibler, Nature 2000):
+/// every substep, each node integrates
+///     dA/dt = α / (1 + R^h) − γA        R = level of A's repressor
+/// with α=10, γ=1, h=4, dt=0.05, 20 substeps per ring tick, init [5,0,...].
+/// Node j's repressor is node (j+n−1) mod n (ring `a -> b -> c` means a
+/// represses b). Oscillation emerges from the loop itself — nothing is
+/// scheduled.
+///
+/// Determinism contract (differential oracle parity):
+///   * only +, −, ×, ÷ and an unrolled 4th power — no powi/pow/libm calls;
+///   * identical op order in the Python mirror (bootstrap/oracle.py);
+///   * stateless fold from init — manual and wall-clock modes cannot drift.
+pub fn repressilator_levels(n: usize, tick: u64) -> Vec<f64> {
+    const ALPHA: f64 = 10.0;
+    const GAMMA: f64 = 1.0;
+    const DT: f64 = 0.05;
+    const SUBSTEPS: usize = 20;
+    if n == 0 {
+        return Vec::new();
+    }
+    let mut lv = vec![0.0f64; n];
+    lv[0] = 5.0;
+    for _ in 0..tick {
+        for _ in 0..SUBSTEPS {
+            let snap = lv.clone();
+            for (j, item) in lv.iter_mut().enumerate() {
+                let rep = snap[(j + n - 1) % n];
+                // unrolled rep^4 — MUST stay op-identical to the oracle
+                let rep4 = rep * rep * rep * rep;
+                let d = ALPHA / (1.0 + rep4) - GAMMA * snap[j];
+                let v = snap[j] + DT * d;
+                *item = if v > 0.0 { v } else { 0.0 };
+            }
+        }
+    }
+    lv
+}
+
+/// Normalized (0..1) ring level a GRN gate reads for a ring node: the raw
+/// ODE level divided by the production scale α, clamped. (A11: gates can
+/// read ring levels.)
+pub fn repressilator_gate_level(n: usize, tick: u64, node_index: usize) -> f64 {
+    const ALPHA: f64 = 10.0;
+    let raw = repressilator_levels(n, tick)[node_index.min(n.saturating_sub(1))];
+    let norm = raw / ALPHA;
+    if norm > 1.0 {
+        1.0
+    } else {
+        norm
+    }
 }

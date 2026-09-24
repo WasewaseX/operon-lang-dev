@@ -20,12 +20,14 @@ frame proof {
     assert(st.activator == true, "toggle on")
     assert(st.repressor == false, "mutual repression")
 
-    # repressilator manual ring
+    # repressilator manual ring — A11: emergent mutual repression (the ring
+    # integrates the Elowitz–Leibler model; nothing is scheduled)
     repressi_next()
     repressi_next()
     let rs = repressi_state()
-    assert(rs.c == 1.0, "ring advances to c")
-    assert(rs.a == 0.0, "a repressed")
-    repressi_next()
-    assert(repressi_state().a == 1.0, "wraps to a")
+    assert(rs.a > 0.0 and rs.b > 0.0, "ring nodes alive")
+    assert(rs.a != rs.b, "nodes desynchronized: emergent phases")
+    # determinism: state is a pure function of the tick count
+    let rs2 = repressi_state()
+    assert(rs2.a == rs.a and rs2.b == rs.b, "stateless fold: same tick, same levels")
 }
