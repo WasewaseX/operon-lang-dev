@@ -1,0 +1,21 @@
+# Windows diagnostics: exercises the constructs behind the 3 failing proofs
+use std/collections as c
+use std/iter as it
+use std/seq as sq
+main {
+    promote("chunk: {c.chunk([1, 2, 3, 4, 5], 2)}")
+    promote("unique: {it.unique([1, 2, 1, 3])}")
+    let squares = sq.map_seq("range_seq", [0, 5, 1], gene (x) => x * x).collect()
+    promote("map_seq: {squares}")
+    let capped = sq.take_seq("fib_seq", [], 7).collect()
+    promote("take_seq: {capped}")
+    promote("mod: {type(7 % 3)} {7 % 3}")
+    let mixed = [3, "a", 1, "b"]
+    promote("sort: {mixed.sort()}")
+    stress {
+        read_file("/etc/passwd")
+        promote("deny: FAIL")
+    } rescue (e) {
+        promote("deny kind: {e.kind}")
+    }
+}
