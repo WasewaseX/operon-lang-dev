@@ -223,6 +223,8 @@ pub struct Interp {
     pub toggles: Vec<(String, String, bool)>, // (a, b, a_on) — mutual repression pair
     pub repressi_ring: Vec<String>,
     pub repressi_i: usize,
+    /// T2d: manual-mode tick counter — drives the level oscillation formula.
+    pub repressi_tick: u64,
     pub repressi_atomic: Option<Arc<AtomicU64>>,
     pub ires: Vec<String>,
     pub enhanced: Vec<String>,
@@ -275,6 +277,7 @@ impl Interp {
             toggles: Vec::new(),
             repressi_ring: Vec::new(),
             repressi_i: 0,
+            repressi_tick: 0,
             repressi_atomic: None,
             ires: Vec::new(),
             enhanced: Vec::new(),
@@ -774,6 +777,7 @@ impl Interp {
             Stmt::Repressilator(ring, period) => {
                 self.repressi_ring = ring.clone();
                 self.repressi_i = 0;
+                self.repressi_tick = 0;
                 if let Some(sec) = period {
                     if *sec > 0.0 {
                         let counter = Arc::new(AtomicU64::new(0));
@@ -2221,6 +2225,7 @@ impl Interp {
                     return Ok(Value::Null);
                 }
                 self.repressi_i = (self.repressi_i + 1) % self.repressi_ring.len();
+                self.repressi_tick += 1;
                 Ok(Value::Int(self.repressi_i as i64))
             }
             "repressi_start" => {
@@ -2256,14 +2261,30 @@ impl Interp {
                 Ok(Value::Bool(true))
             }
             "repressi_state" => {
+                // T2d oscillation dynamics: each node's level is a driven
+                // exponential — 1.0 at its drive tick, decaying by half per
+                // tick afterwards, 0.0 before its first drive. Deterministic
+                // from (tick, ring index): no history state, and the timed
+                // (atomic) mode follows the same formula.
                 let n = self.repressi_ring.len();
-                let idx = match &self.repressi_atomic {
-                    Some(a) => (a.load(std::sync::atomic::Ordering::SeqCst) as usize) % n.max(1),
-                    None => self.repressi_i,
+                if n == 0 {
+                    return Ok(Value::Map(Rc::new(RefCell::new(Vec::new()))));
+                }
+                let (tick, active): (u64, usize) = match &self.repressi_atomic {
+                    Some(a) => {
+                        let c = a.load(std::sync::atomic::Ordering::SeqCst);
+                        (c, (c as usize) % n)
+                    }
+                    None => (self.repressi_tick, self.repressi_i),
                 };
+                let _ = active;
                 let mut out = Vec::new();
-                for (i, name) in self.repressi_ring.iter().enumerate() {
-                    out.push((Value::Str(name.clone()), Value::Float(if i == idx { 1.0 } else { 0.0 })));
+                for (j, name) in self.repressi_ring.iter().enumerate() {
+                    // node j is driven at ticks t ≡ j (mod n), t >= 1
+                    let tj = (tick as i64 - j as i64).rem_euclid(n as i64);
+                    let last_drive = tick as i64 - tj;
+                    let level = if last_drive >= 1 { 0.5f64.powi(tj as i32) } else { 0.0 };
+                    out.push((Value::Str(name.clone()), Value::Float(level)));
                 }
                 Ok(Value::Map(Rc::new(RefCell::new(out))))
             }
