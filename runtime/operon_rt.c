@@ -161,7 +161,14 @@ void rt_reset(void) {
     pthread_mutex_lock(&g_lock);
     g_arena_used = 0;
     g_allocs     = 0;
-    /* intern table survives resets: identifiers stay valid for the process */
+    /* the intern table lives inside the arena: a reset invalidates every
+     * string it points to, so the table MUST be cleared with it — leaving
+     * stale entries would alias surviving ids into reused memory */
+    if (g_slots) {
+        memset(g_slots, 0, (size_t)g_cap * sizeof(Slot));
+    }
+    g_count   = 0;
+    g_next_id = 1;
     pthread_mutex_unlock(&g_lock);
 }
 
