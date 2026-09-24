@@ -4060,8 +4060,9 @@ pub const BUILTIN_NAMES: &[&str] = &[
 // ---------------------------------------------------------------- memory
 // Aggregate allocation counter (monotonic per run). Per-op ceilings cap
 // single operations; this caps the SUM so `push(loop)` cannot walk RSS into
-// the allocator's abort. Charged on growth events: push/insert/concat/
-// repeat/range/json-parse. Ceiling 2 GiB, overridable with --mem-mb.
+// the allocator's abort. Charged on growth events: push / string concat /
+// string repeat. Ceiling 2 GiB (a run that allocates-and-keeps 2 GiB is a
+// runaway by contract).
 static ALLOC_BYTES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 pub const ALLOC_CEILING: u64 = 2 * 1024 * 1024 * 1024;
 
