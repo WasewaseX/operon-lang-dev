@@ -328,7 +328,7 @@ for mechanical edits across many programs. Both are plain text; see SPEC §9 for
 ## 11. Where to go next
 
 - **Read the standard library**: `std/*.op` — six small modules, all Operon.
-- **Read the proof suite**: `tests/` — 25 files, every language behavior asserted.
+- **Read the proof suite**: `tests/` — 32 files, every language behavior asserted.
 - **Run the app**: `apps/genomelab/genomelab.op` — a small DNA-toolbox CLI built entirely in Operon.
 - **The spec**: `SPEC.md` — the full contract, organized by feature.
 - **The roadmap**: where the language goes next (a bytecode VM for speed, more self-hosting).

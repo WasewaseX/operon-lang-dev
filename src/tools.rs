@@ -10,6 +10,7 @@ use std::collections::HashSet;
 use std::io::Write as _;
 use std::path::Path;
 
+#[derive(Clone)]
 pub struct Opts {
     pub cell: Option<String>,
     pub variant: Option<String>,
@@ -20,6 +21,9 @@ pub struct Opts {
     pub args: Vec<String>,
     pub quiet: bool,
     pub caps: crate::interp::Caps,
+    /// dx-r1 (audit W5): time top-level statements during load — without
+    /// this, `operon profile` reported 0.0 µs for any script without main().
+    pub profile: bool,
 }
 
 pub struct Loaded {
@@ -36,6 +40,7 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
         .unwrap_or_default();
 
     let mut interp = Interp::new();
+    interp.profiling = opts.profile;
     // base dir for module resolution (relative to the importing file)
     interp.base_dir = std::path::Path::new(file)
         .parent()
@@ -631,12 +636,18 @@ pub fn grade_letter(score: i64) -> char {
 
 // ------------------------------------------------------------ profile
 pub fn profile(file: &str, opts: &Opts) -> Loaded {
-    let mut l = match load_file(file, opts) {
+    // dx-r1 (audit W5): profiling must be ON before load — top-level
+    // statements execute during load, and a script without a main() gene
+    // (the common shape) previously reported 0.0 µs for everything. No
+    // re-run: re-executing would double the program's side effects.
+    let mut opts = opts.clone();
+    opts.profile = true;
+    let mut l = match load_file(file, &opts) {
         Ok(l) => l,
         Err(e) => crate::die(&format!("{}: {}", file, e)),
     };
     l.interp.profiling = true;
-    let _ = run_entry(&mut l, opts);
+    let _ = run_entry(&mut l, &opts);
     l
 }
 
