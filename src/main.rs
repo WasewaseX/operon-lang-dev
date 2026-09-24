@@ -108,6 +108,10 @@ fn real_main() {
                     _ => die("--allow-run needs a program name argument"),
                 }
             }
+            "--allow-exit" => {
+                // sec-r2 (audit C-11): exit() is a capability, default-deny
+                opts.caps.exit_allowed = true;
+            }
             "--allow-net" => {
                 i += 1;
                 match rest.get(i) {
@@ -201,7 +205,7 @@ fn real_main() {
     match cmd.as_str() {
         "version" => {
             println!(
-                "Operon {} (rust-core, c-runtime, cpp-kernel)",
+                "Operon {} (rust-core, cpp-kernel)",
                 env!("CARGO_PKG_VERSION")
             );
         }
@@ -643,6 +647,9 @@ fn repl() {
                         println!(":proof [f]   run proof frames — this session's, or file f's");
                         println!(":genes       list genes defined so far");
                         println!(":vars        list top-level variables");
+                        println!(
+                            ":symbols     inspect the symbol table (every name the lexer has seen)"
+                        );
                         println!(":reset       discard session state and start fresh");
                         println!(":quit        leave the repl (definitions end with the session)");
                     }
@@ -691,6 +698,19 @@ fn repl() {
                         } else {
                             names.sort();
                             println!("  {}", names.join(", "));
+                        }
+                    }
+                    "symbols" => {
+                        // sec-r2: a real consumer of the intern table — the
+                        // canonical record of every identifier this session
+                        // has lexed, in first-seen order
+                        let syms = operon::ffi::symbols();
+                        println!("  {} symbol(s) interned this process", syms.len());
+                        for s in syms.iter().rev().take(24).collect::<Vec<_>>().iter().rev() {
+                            println!("    {}", s);
+                        }
+                        if syms.len() > 24 {
+                            println!("    … {} more", syms.len() - 24);
                         }
                     }
                     "vars" => {
@@ -931,7 +951,7 @@ fn usage() {
 usage:
   operon run f.op [--entry g] [--variant v] [--cell c] [--rna r] [--frame name] [--ires] [--strict] [--quiet]
                   [--fuel steps] [--allow-read path] [--allow-write path] [--allow-net host:port]
-                  [--allow-run cmd] [--allow-env var] [--allow-all]
+                  [--allow-run cmd] [--allow-exit] [--allow-env var] [--allow-all]
   operon check f.op [--nmd | --nmd=purge] [--json]
   operon test [paths...] [--json]
   operon fmt f.op [--write]

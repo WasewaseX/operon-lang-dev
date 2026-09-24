@@ -114,6 +114,11 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
                 "run" => interp.caps.add_grant("run", &v),
                 "net" => interp.caps.add_grant("net", &v),
                 "env" => interp.caps.add_grant("env", &v),
+                // sec-r2 (audit C-11): exit is a boolean capability
+                "exit" => {
+                    interp.caps.exit_allowed = v == "true";
+                    Ok(())
+                }
                 _ => Ok(()),
             };
             if let Err(s) = added {

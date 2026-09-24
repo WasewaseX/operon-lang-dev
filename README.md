@@ -18,7 +18,7 @@ The mandate: *"Rust, then C, then Python, then Operon, then C++, then HTML, then
 **Verdict on that stack order before building: 9/10.** Evidence:
 
 - A new language implemented in a systems language with a C runtime substrate is the mainstream pattern: CPython (C core), Lua (C), Ruby's YJIT (Rust), Rust v1 (hosted in OCaml before self-hosting). Rust-first gives parser/VM performance from day one.
-- C second is correct: intern tables, arenas, hashing, clocks — the runtime kernel — are classic C territory (CPython does exactly this).
+- C second was the plan — until the sec-r2 audit proved the runtime kernel was write-only AND carried the project's one memory-safety class. Evidence beats aesthetics: interning moved into Rust, the C kernel was deleted, and the C++ algorithm kernel (which IS hot and pointer-free) stayed.
 - Python as bootstrap (not implementation) is the right reduction from v1's 100%-Python mistake.
 - One point withheld: **Operon below Python is a snapshot, not a destiny.** Mainstream languages converge on self-hosting (Rust in Rust, Go in Go, TypeScript in TypeScript). Operon's share must grow release over release — the stdlib is already pure `.op`.
 
@@ -26,21 +26,21 @@ The mandate: *"Rust, then C, then Python, then Operon, then C++, then HTML, then
 
 | rank | language | lines | share | role |
 |---|---|---|---|---|
-| 1 | **Rust** | 12,452 | ~46% | lexer, Total Grammar parser, evaluator, capability sandbox, HTTP/JSON, toolchain CLI, REPL, `operon-ls` LSP seed (`src/`) |
-| 2 | **Operon** | 7,147 | ~27% | **self-hosted stdlib (6 modules), proof tests, red-team suite, differential corpus, GenomeLab** (`std/ tests/ examples/ apps/`) |
-| 3 | **Python** | 3,617 | ~13% | bootstrap: reference oracle + differential harness (`bootstrap/`) — test infrastructure only, nothing shipped depends on it |
-| 4 | **JavaScript** | 1,522 | ~6% | browser playground subset interpreter (`web/playground/app.js`) |
-| 5 | **HTML** | 1,318 | ~5% | documentation site (`docs/`) |
-| 6 | **CSS** | 311 | ~1% | docs + playground styling |
-| 7 | **Shell** | 202 | <1% | build/test/bench/stack/install scripts (`scripts/`) |
-| 8 | **C** | 187 | <1% | runtime kernel: intern table, arena, FNV-1a, clock (`runtime/operon_rt.c`) |
-| 9 | **C++** | 148 | <1% | algorithm kernel: bit-parallel edit distance, codon-usage scoring (`runtime/codon_kernel.cpp`) |
-| 10 | **TypeScript** | 23 | <1% | playground type surface (`app.d.ts`) |
+| 1 | **Rust** | 12,297 | ~47% | lexer, Total Grammar parser, evaluator, capability sandbox, symbol table, HTTP/JSON, toolchain CLI, REPL, `operon-ls` LSP seed (`src/`) |
+| 2 | **Operon** | 6,994 | ~27% | **self-hosted stdlib (6 modules), proof tests, red-team suite, differential corpus, GenomeLab** (`std/ tests/ examples/ apps/`) |
+| 3 | **Python** | 3,529 | ~13% | bootstrap: reference oracle + differential harness (`bootstrap/`) — test infrastructure only, nothing shipped depends on it |
+| 4 | **JavaScript** | 1,400 | ~5% | browser playground subset interpreter (`web/playground/app.js`) |
+| 5 | **HTML** | 1,263 | ~5% | documentation site (`docs/`) |
+| 6 | **CSS** | 284 | ~1% | docs + playground styling |
+| 7 | **Shell** | 187 | <1% | build/test/bench/stack/install scripts (`scripts/`) |
+| 8 | **C++** | 134 | <1% | algorithm kernel: bit-parallel edit distance, codon-usage scoring (`runtime/codon_kernel.cpp` + its smoke driver) |
+| 9 | **TypeScript** | 18 | <1% | playground type surface (`app.d.ts`) |
 
 **Honest deviations from the requested order, and why:**
 
-1. **Python (2) > C (7).** The oracle is not "too much Python" — it is the differential engine that proves the Rust core correct (28/28 program-level output matches). Deleting it would save lines and lose verification. The C kernel is small because interning, hashing and clocks are small; it is load-bearing, not decorative — every identifier of every parsed file flows through it, `distance()`/`codon()` are C++ kernels, and `memory()`/`clock()` read C state directly.
-2. **Operon (2) has overtaken everything except Rust.** Between v2.1.0 and v2.2.0 the `.op` share grew from ~7% to ~27% (proof suite, 59-payload red-team containment, 6-program differential corpus, stdlib). `std/` runs on the Rust core today; every release self-hosts more. That is exactly how Rust/Go/TS historically converged.
+1. **Python (2) > C++ (8).** The oracle is not "too much Python" — it is the differential engine that proves the Rust core correct (39/39 program-level output matches). Deleting it would save lines and lose verification.
+2. **The C kernel was deleted on purpose (sec-r2, audit A15).** The audit proved it was write-only (the lexer discarded every intern result) and that its raw-pointer arena was the project's one ASan-confirmed memory-safety class. Interning now lives in Rust (`src/ffi.rs`): same stable-id semantics, `memory()` still reports table stats, and the entire UAF class is structurally impossible. The C++ codon kernel STAYED because it earned its place: bit-parallel Myers is genuinely hot (`distance()`, `similar()`, wobble repair, parser suggestions), allocation-free, and budget-guarded.
+3. **Operon (2) has overtaken everything except Rust.** Between v2.1.0 and v2.2.0 the `.op` share grew from ~7% to ~27% (proof suite, red-team containment, differential corpus, stdlib). `std/` runs on the Rust core today; every release self-hosts more. That is exactly how Rust/Go/TS historically converged.
 
 ### Measured performance (Rust core vs Python oracle, same programs)
 
@@ -141,7 +141,7 @@ operon profile f.op                               # per-gene calls, exclusive se
 operon crispr f.op  (--knockout gene | --matrix) [--json]
 operon bench f.op   [--iters n]
 operon-ls                                         # stdio LSP seed: diagnostics + gene-signature hover (SPEC §15)
-operon version                                    # Operon 2.2.0 (rust-core, c-runtime, cpp-kernel) — banner matches SPEC 2.2.0
+operon version                                    # Operon 2.2.0 (rust-core, cpp-kernel) — banner matches SPEC 2.2.0
 ```
 
 ## Build from source
