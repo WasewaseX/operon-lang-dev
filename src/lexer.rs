@@ -9,9 +9,9 @@ pub enum Tok {
     Ident(String),
     Int(i64),
     Float(f64),
-    Str(String),      // no interpolation present
-    Interp(String),   // raw content, contains {..} parts
-    Mark(String),     // @word
+    Str(String),    // no interpolation present
+    Interp(String), // raw content, contains {..} parts
+    Mark(String),   // @word
     Newline,
     LBrace,
     RBrace,
@@ -21,13 +21,38 @@ pub enum Tok {
     RBrack,
     Comma,
     Colon,
-    Arrow,     // ->
-    FatArrow,  // =>
-    Plus, Minus, Star, Slash, DSlash, Percent,
-    PlusEq, MinusEq, StarEq, SlashEq, DSlashEq, PercentEq,
-    StarStar, Amp, Pipe, Caret, Tilde, Shl, Shr, Question,
-    Eq, EqEq, Neq, Lt, Le, Gt, Ge,
-    AmpAmp, PipePipe, Bang,
+    Arrow,    // ->
+    FatArrow, // =>
+    Plus,
+    Minus,
+    Star,
+    Slash,
+    DSlash,
+    Percent,
+    PlusEq,
+    MinusEq,
+    StarEq,
+    SlashEq,
+    DSlashEq,
+    PercentEq,
+    StarStar,
+    Amp,
+    Pipe,
+    Caret,
+    Tilde,
+    Shl,
+    Shr,
+    Question,
+    Eq,
+    EqEq,
+    Neq,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+    AmpAmp,
+    PipePipe,
+    Bang,
     Dot,
     Semi,
     Eof,
@@ -46,7 +71,11 @@ pub fn lex(src: &str) -> Lexed {
     let mut line = 1usize;
     let n = chars.len();
 
-    macro_rules! push { ($t:expr) => { toks.push(($t, line)) } }
+    macro_rules! push {
+        ($t:expr) => {
+            toks.push(($t, line))
+        };
+    }
 
     while i < n {
         let c = chars[i];
@@ -78,7 +107,11 @@ pub fn lex(src: &str) -> Lexed {
         if c == '"' {
             let (tok, note) = lex_string(&chars, &mut i, &mut line, '"');
             if let Some(msg) = note {
-                notes.push(Note { line, rung: 4, message: msg });
+                notes.push(Note {
+                    line,
+                    rung: 4,
+                    message: msg,
+                });
             }
             push!(tok);
             continue;
@@ -103,7 +136,11 @@ pub fn lex(src: &str) -> Lexed {
             }
             let word: String = chars[start..j].iter().collect();
             if word.is_empty() {
-                notes.push(Note { line, rung: 4, message: "stray '@' skipped".into() });
+                notes.push(Note {
+                    line,
+                    rung: 4,
+                    message: "stray '@' skipped".into(),
+                });
             } else {
                 push!(Tok::Mark(word));
             }
@@ -174,16 +211,46 @@ pub fn lex(src: &str) -> Lexed {
         }
         // operators
         match c {
-            '{' => { push!(Tok::LBrace); i += 1; }
-            '}' => { push!(Tok::RBrace); i += 1; }
-            '(' => { push!(Tok::LParen); i += 1; }
-            ')' => { push!(Tok::RParen); i += 1; }
-            '[' => { push!(Tok::LBrack); i += 1; }
-            ']' => { push!(Tok::RBrack); i += 1; }
-            ',' => { push!(Tok::Comma); i += 1; }
-            ':' => { push!(Tok::Colon); i += 1; }
-            '.' => { push!(Tok::Dot); i += 1; }
-            ';' => { push!(Tok::Semi); i += 1; }
+            '{' => {
+                push!(Tok::LBrace);
+                i += 1;
+            }
+            '}' => {
+                push!(Tok::RBrace);
+                i += 1;
+            }
+            '(' => {
+                push!(Tok::LParen);
+                i += 1;
+            }
+            ')' => {
+                push!(Tok::RParen);
+                i += 1;
+            }
+            '[' => {
+                push!(Tok::LBrack);
+                i += 1;
+            }
+            ']' => {
+                push!(Tok::RBrack);
+                i += 1;
+            }
+            ',' => {
+                push!(Tok::Comma);
+                i += 1;
+            }
+            ':' => {
+                push!(Tok::Colon);
+                i += 1;
+            }
+            '.' => {
+                push!(Tok::Dot);
+                i += 1;
+            }
+            ';' => {
+                push!(Tok::Semi);
+                i += 1;
+            }
             '+' => {
                 if i + 1 < n && chars[i + 1] == '=' {
                     push!(Tok::PlusEq);
@@ -335,7 +402,12 @@ pub fn lex(src: &str) -> Lexed {
 
 /// Lex a double-quoted (or repaired single-quoted) string starting at the
 /// opening quote. Handles escapes; returns Interp token if {..} parts exist.
-fn lex_string(chars: &[char], i: &mut usize, line: &mut usize, quote: char) -> (Tok, Option<String>) {
+fn lex_string(
+    chars: &[char],
+    i: &mut usize,
+    line: &mut usize,
+    quote: char,
+) -> (Tok, Option<String>) {
     let n = chars.len();
     *i += 1; // skip opening quote
     let mut raw = String::new();
@@ -387,6 +459,10 @@ fn lex_string(chars: &[char], i: &mut usize, line: &mut usize, quote: char) -> (
     } else {
         Some("unclosed string consumed to end of line".to_string())
     };
-    let tok = if has_interp { Tok::Interp(raw) } else { Tok::Str(raw) };
+    let tok = if has_interp {
+        Tok::Interp(raw)
+    } else {
+        Tok::Str(raw)
+    };
     (tok, note)
 }

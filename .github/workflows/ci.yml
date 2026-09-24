@@ -14,13 +14,15 @@ jobs:
       - name: Install Rust (stable + clippy)
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
+          components: clippy, rustfmt
       - name: Cargo build (release; C/C++ kernels via build.rs)
         run: cargo build --release
       - name: Cargo test (unit + .op proof suite + version gate)
         run: cargo test --release
       - name: Clippy (warnings allowed, errors not)
         run: cargo clippy --all-targets
+      - name: Formatting (cargo fmt --check)
+        run: cargo fmt --check
       - name: Toolchain build via scripts/build.sh (bin/operon compat path)
         run: bash scripts/build.sh
       - name: C/C++ kernel smoke (ASan + UBSan)
@@ -47,7 +49,7 @@ jobs:
       - name: Install Rust (stable + clippy)
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
+          components: clippy, rustfmt
       - name: Install MinGW (gcc/g++)
         run: |
           $mingw = "C:\mingw64\bin"
