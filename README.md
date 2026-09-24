@@ -125,12 +125,13 @@ Path grants are symlink-resolved; a grant that normalizes to the empty string is
 operon run f.op      [--entry g] [--variant v] [--cell c] [--rna r] [--frame n] [--ires] [--strict] [--fuel N]
                      [--allow-read p] [--allow-write p] [--allow-run prog] [--allow-net host:port] [--allow-env var] [--allow-all]
 operon check f.op    [--nmd | --nmd=purge] [--json]   # 100-point grade + letter; --json: phantoms/nmd arrays
-operon test [dirs]                                # proof-frame runner (22 files / 22 proofs / 262 assertions green)
+operon test [dirs]                                # proof-frame runner (26 files / 26 proofs / 281 assertions green)
 operon fmt f.op     [--write]                     # precedence-correct canonical formatter
 operon build f.op   [--variant v] [-o out.op]     # bake splices, strip proofs
 operon profile f.op                               # per-gene calls, exclusive self-µs, flags, maturation, enhance candidates
 operon crispr f.op  (--knockout gene | --matrix) [--json]
 operon bench f.op   [--iters n]
+operon-ls                                         # stdio LSP seed: diagnostics + gene-signature hover (SPEC §15)
 operon version                                    # Operon 2.1.1 (rust-core, c-runtime, cpp-kernel) — banner matches SPEC 2.1.1
 ```
 

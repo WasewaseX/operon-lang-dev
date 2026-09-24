@@ -1,7 +1,7 @@
-build/
-bin/
-target/
-dist/
+/build/
+/bin/
+/target/
+/dist/
 __pycache__/
 *.pyc
 *.built.op

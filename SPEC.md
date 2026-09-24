@@ -299,6 +299,8 @@ operon bench f.op  [--iters n]
 operon version
 ```
 
+**`operon-ls`** — language-server seed (stdio LSP): `initialize` / `shutdown` / `exit`, full-text document sync, `textDocument/publishDiagnostics` (Total Grammar parse notes by rung + `tools check` phantom calls), and `textDocument/hover` with gene/splice signatures. Programmer-first by D-008: hovering `boost` shows `gene boost(x)` plus its marks (`@acetylate`, `@methylate`, `@m6a`, `enhance`) and a one-line analogy — gene vocabulary is an intuition aid, never a prerequisite. Zero external dependencies: request JSON is parsed by the language's own `json_parse`.
+
 - Grading (`operon check`): start 100; wobble note −2; fallback note −3; NMD premature stop −4; untranslated transcript −1; phantom call −2; unverified `anchor import` −2; hot `enhance`d genes with codon-optimal names earn up to +6 back; floor 50. Letter: A ≥ 90, B ≥ 80, C ≥ 70, D ≥ 60, else F.
 - `check --json` emits valid JSON: score, letter, note counts, `phantoms` (undefined called genes), `nmd` findings array.
 - `--fuel N` caps the interpreter's step budget (default 200,000,000); exhaustion raises catchable Stress `overflow`.
