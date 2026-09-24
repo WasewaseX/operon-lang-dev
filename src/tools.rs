@@ -286,7 +286,33 @@ pub fn check(file: &str, opts: &Opts, nmd: bool, purge: bool) -> CheckReport {
             src2 = s2;
         }
     }
-    let mut prog = parser::parse(&src2);
+    let (rep, mut prog) = check_source(&src2, nmd);
+
+    if purge {
+        for s in prog.stmts.iter_mut() {
+            purge_stmt(s);
+        }
+        let out = crate::tools::format_program(&prog);
+        let _ = std::fs::write(file, out);
+    }
+    rep
+}
+
+/// In-memory core of `check` — the file-based `check()` delegates here, and
+/// non-CLI tools (operon-ls) call it directly on editor buffers. Returns the
+/// report AND the parsed program (the LSP hover table comes from it).
+pub fn check_source(src: &str, nmd: bool) -> (CheckReport, Program) {
+    let mut rep = CheckReport {
+        score: 100,
+        letter: 'A',
+        notes: 0,
+        wobbles: 0,
+        fallbacks: 0,
+        nmd: Vec::new(),
+        phantoms: Vec::new(),
+        parsed: true,
+    };
+    let prog = parser::parse(src);
     let rung2 = prog.notes.iter().filter(|n| n.rung == 2).count();
     rep.wobbles = prog.notes.iter().filter(|n| n.rung == 3).count();
     rep.fallbacks = prog.notes.iter().filter(|n| n.rung == 4).count();
@@ -413,15 +439,7 @@ pub fn check(file: &str, opts: &Opts, nmd: bool, purge: bool) -> CheckReport {
     }
     rep.score = rep.score.max(50);
     rep.letter = grade_letter(rep.score);
-
-    if purge {
-        for s in prog.stmts.iter_mut() {
-            purge_stmt(s);
-        }
-        let out = crate::tools::format_program(&prog);
-        let _ = std::fs::write(file, out);
-    }
-    rep
+    (rep, prog)
 }
 
 fn purge_stmt(s: &mut Stmt) {
