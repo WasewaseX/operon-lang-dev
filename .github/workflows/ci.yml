@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v4.2.2 (SHA-pinned, sec-r1)
       - name: Install Rust (stable + clippy)
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable (SHA-pinned, D-6/sec-r5)
         with:
           components: clippy, rustfmt
       - name: Cargo build (release; C/C++ kernels via build.rs)
@@ -51,7 +51,7 @@ jobs:
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v4.2.2 (SHA-pinned, sec-r1)
       - name: Install Rust (stable + clippy)
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable (SHA-pinned, D-6/sec-r5)
         with:
           components: clippy, rustfmt
       - name: Install MinGW (gcc/g++)
@@ -86,7 +86,7 @@ jobs:
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v4.2.2 (SHA-pinned, sec-r1)
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable (SHA-pinned, D-6/sec-r5)
       - name: Cargo build (release)
         run: cargo build --release
       - name: Expose bin/operon (bench.sh compat path)

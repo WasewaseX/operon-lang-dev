@@ -1,0 +1,13 @@
+# sec-r5: deep_eq depth cap lowered 100k -> 16k. 100k native recursion
+# frames sat within ~2 MB of the 8 MB main stack (one layout change from
+# SIGSEGV). Twin 300k-deep chains compare contained: false at the cap.
+gene main() {
+    let t = [1];
+    let u = [1];
+    for i in range(300000) {
+        t = [t];
+        u = [u];
+    }
+    print(t == u);
+    print("p11e-contained");
+}

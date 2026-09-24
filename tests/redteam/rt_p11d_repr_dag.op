@@ -1,0 +1,10 @@
+# sec-r5 F-10: the same DAG class through print/repr. Memoized visited-set
+# keeps structural display linear; shared subtrees render the cycle marker.
+gene main() {
+    let l = [1];
+    for i in range(30) {
+        l = [l, l];
+    }
+    print(l);
+    print("p11d-contained");
+}

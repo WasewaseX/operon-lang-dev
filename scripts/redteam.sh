@@ -10,7 +10,7 @@ set -u
 cd "$(dirname "$0")/.."
 DIR="tests/redteam"
 TMP=$(mktemp -d)
-trap 'rm -rf "$TMP"; rm -f "$DIR/rt_evil_link" "$DIR/rt_wlink"; rm -rf "$DIR/rt_evildir" /tmp/redteam-out-escape' EXIT
+trap 'rm -rf "$TMP"; rm -f "$DIR/rt_evil_link" "$DIR/rt_wlink" "$DIR/rt_toctou_link" "$DIR/rt_fifo_fixture" "$DIR/rt_toctou_in"; rm -rf "$DIR/rt_evildir" /tmp/redteam-out-escape' EXIT
 
 # recreate the adversarial symlinks (runtime fixtures, never committed):
 # rt_evil_link → /etc/passwd (read escape), rt_wlink → /tmp/redteam-out-escape
@@ -20,6 +20,17 @@ ln -sf /tmp/redteam-out-escape "$DIR/rt_wlink"
 mkdir -p "$DIR/rt_evildir" && ln -sf /etc/hostname "$DIR/rt_evildir/hostname"
 rm -rf /tmp/redteam-out-escape
 mkdir -p /tmp/redteam-out-escape  # S5: a LIVE escape target makes denials non-vacuous
+
+# sec-r5 (F-11): FIFO fixture — read_file must refuse non-regular files
+# instead of blocking open() forever.
+mkfifo "$DIR/rt_fifo_fixture" 2>/dev/null || true
+# sec-r5 (F-8): TOCTOU fixtures — an in-grant plain file and a symlink
+# that the flipper below keeps swapping between it and the outside canary.
+# Link targets are ABSOLUTE (like a real attacker's); a relative target
+# here would be a broken symlink and make the race vacuous.
+printf 'canary-pristine' > /tmp/redteam-out-escape/toctou_canary
+printf 'in-grant' > "$DIR/rt_toctou_in"
+ln -sfn "$(pwd)/$DIR/rt_toctou_in" "$DIR/rt_toctou_link"
 pass=0; fail=0; failed_files=()
 
 run_one() {
@@ -63,6 +74,17 @@ for f in "$DIR"/rt_p*.op; do
             run_one "$f" --allow-net "127.0.0.1:1" --allow-read "$DIR" ;;
         *cell*)
             run_one "$f" --cell "$DIR/rt_grant.cell" ;;
+        *p11n*)
+            # sec-r5 F-11: /dev/zero is a char device — the grant is real,
+            # the refusal must come from the regular-file check, not the
+            # sandbox (default-deny would make the test vacuous)
+            run_one "$f" --allow-read /dev --allow-read "$DIR" ;;
+        *p11h*|*toctou*)
+            # the payload writes through rt_toctou_link INSIDE the granted
+            # dir; the flipper escapes are caught by fd verification
+            run_one "$f" --allow-write "$DIR" --allow-read "$DIR" ;;
+        *p11f*|*fifo*)
+            run_one "$f" --allow-read "$DIR" ;;
         *)
             run_one "$f" --allow-read "$DIR" --allow-write "$DIR" --allow-run echo ;;
     esac
@@ -125,11 +147,33 @@ else
     pass=$((pass+1))
 fi
 
-if [ -n "$(ls -A /tmp/redteam-out-escape 2>/dev/null)" ]; then
+# sec-r5 (F-8): TOCTOU symlink-swap orchestrator. A flipper process races
+# the payload's 2000 writes through rt_toctou_link, swapping it between
+# the in-grant file and the outside canary. CONTAINMENT = the canary's
+# content is untouched after the race (post-open fd verification means
+# no byte ever lands outside the grant).
+( for i in $(seq 1 400); do
+    ln -sfn /tmp/redteam-out-escape/toctou_canary "$DIR/rt_toctou_link" 2>/dev/null
+    ln -sfn "$(pwd)/$DIR/rt_toctou_in" "$DIR/rt_toctou_link" 2>/dev/null
+  done ) &
+FLIPPER=$!
+timeout 30 ./bin/operon run "$DIR/rt_p11h_toctou.op" --allow-write "$DIR" --allow-read "$DIR" > "$TMP/out" 2> "$TMP/err"
+toctou_rc=$?
+wait $FLIPPER
+canary=$(cat /tmp/redteam-out-escape/toctou_canary 2>/dev/null || echo MISSING)
+if [ $toctou_rc -ge 130 ] || [ $toctou_rc -eq 124 ] || [ "$canary" != "canary-pristine" ] || ! grep -q "p11h-contained" "$TMP/out"; then
+    echo "BREACH toctou (rc=$toctou_rc, canary='$canary')"
+    fail=$((fail+1)); failed_files+=("toctou")
+else
+    echo "ok    toctou (canary pristine, $(grep -oE 'denied: [0-9]+' "$TMP/out" | head -1))"
+    pass=$((pass+1))
+fi
+
+if [ -n "$(ls -A /tmp/redteam-out-escape 2>/dev/null | grep -v toctou_canary)" ]; then
     echo "ESCAPE: files were created inside /tmp/redteam-out-escape — sandbox breached"
     fail=$((fail+1))
 fi
-rm -f "$DIR/rt_evil_link" "$DIR/rt_wlink"; rm -rf "$DIR/rt_evildir"
+rm -f "$DIR/rt_evil_link" "$DIR/rt_wlink" "$DIR/rt_toctou_link" "$DIR/rt_fifo_fixture" "$DIR/rt_toctou_in"; rm -rf "$DIR/rt_evildir"
 echo "redteam: $pass contained, $fail breached"
 if [ $fail -gt 0 ]; then
     printf '  %s\n' "${failed_files[@]}"
