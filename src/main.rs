@@ -1,18 +1,17 @@
 //! main.rs — Operon toolchain CLI (Rust core).
 //! run | check | test | fmt | build | profile | crispr | bench | version
 
-mod ast;
-mod ffi;
-mod genes;
-mod interp;
-mod lexer;
-mod parser;
-mod tools;
-mod value;
+// The language core lives in the `operon` library crate (src/lib.rs);
+// this binary is the CLI shell over it.
+use operon::genes;
+use operon::interp;
+use operon::parser;
+use operon::tools;
 
-use tools::Opts;
-use ast::Stmt;
-use value::Value;
+use operon::die;
+use operon::tools::Opts;
+use operon::ast::Stmt;
+use operon::value::Value;
 
 fn main() {
     // The evaluator recurses through exec_block → eval → call_gene; deep
@@ -53,7 +52,7 @@ fn real_main() {
         frame: None,
         args: Vec::new(),
         quiet: false,
-        caps: crate::interp::Caps::default(),
+        caps: interp::Caps::default(),
     };
     let mut json = false;
     let mut strict = false;
@@ -131,7 +130,7 @@ fn real_main() {
                 }
             }
             "--allow-all" => {
-                opts.caps = crate::interp::Caps::allow_all();
+                opts.caps = interp::Caps::allow_all();
             }
             "--fuel" => {
                 i += 1;
@@ -494,26 +493,20 @@ fn real_main() {
     }
 }
 
-pub fn die(msg: &str) -> ! {
-    eprintln!("operon: {}", msg);
-    std::process::exit(2);
-}
-
-
 // ------------------------------------------------------------ repl
 fn repl() {
     use std::io::{BufRead, Write};
     println!("Operon 2.2.0 repl — gene-expression shell (type :quit to leave)");
     let mut l = match tools::load_file("/dev/null", &Opts {
         cell: None, variant: None, rna: None, entry: None, use_ires: false,
-        frame: None, args: Vec::new(), quiet: true, caps: crate::interp::Caps::default(),
+        frame: None, args: Vec::new(), quiet: true, caps: interp::Caps::default(),
     }) {
         Ok(l) => l,
         Err(_) => {
             // /dev/null missing (Windows): build an empty Loaded by hand
             tools::Loaded {
-                interp: crate::interp::Interp::new(),
-                prog: crate::parser::parse(""),
+                interp: interp::Interp::new(),
+                prog: parser::parse(""),
             }
         }
     };
@@ -589,7 +582,7 @@ fn repl_brace_balance(s: &str) -> i32 {
 }
 
 fn repl_eval(l: &mut tools::Loaded, src: &str) {
-    let prog = crate::parser::parse(src);
+    let prog = parser::parse(src);
     let broken = prog.notes.iter().any(|n| n.rung >= 4) || prog.stmts.is_empty();
     if !broken {
         let env = l.interp.global.clone();
@@ -614,7 +607,7 @@ fn repl_eval(l: &mut tools::Loaded, src: &str) {
     // expression mode: a bare `1 + 2 * 3` is not a statement — evaluate it
     // by assignment-to-scratch and print the bound value
     let wrapped = format!("__repl_val = ({})", src.trim().trim_end_matches(';'));
-    let wprog = crate::parser::parse(&wrapped);
+    let wprog = parser::parse(&wrapped);
     if wprog.notes.iter().any(|n| n.rung >= 4) {
         for n in &prog.notes {
             println!("  [note] {}", n.message);
