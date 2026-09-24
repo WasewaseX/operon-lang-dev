@@ -1,0 +1,26 @@
+# bench: grn-heavy — the regulation call gate under load (builder-B, B1)
+# Measures the per-call cost of the v2.2 honesty machinery: every call to a
+# regulated gene walks the GRN edge list and compares the source level
+# against the edge threshold (grn_veto, T2a). One gene is `enhance`d, so
+# its threshold gets the ENHANCE_DELTA reduction too (T2e). All calls PASS
+# the gate (driver level 1.0) — we benchmark the gate's happy path, not
+# note-spam from suppressed calls.
+# Native CPython mirror: scripts/bench_compare.py (native_grn).
+regulate {
+    driver activates worker_a threshold 0.3
+    driver activates worker_b threshold 0.5
+    driver activates reporter threshold 0.7
+}
+enhance worker_a;
+gene driver() { return 1 }
+gene worker_a(n) { return n + 1 }
+gene worker_b(n) { return n * 2 }
+gene reporter(n) { return n - 1 }
+main {
+    grn_fire("driver")
+    let acc = 0
+    for i in range(20000) {
+        acc = acc + worker_a(i) + worker_b(i) + reporter(i)
+    }
+    promote("acc = {acc}")
+}

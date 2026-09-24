@@ -1,0 +1,8 @@
+# bench micro: variable read through the env chain: 200k reads of an outer-scope let (builder-B, B1)
+# One construct in isolation; native CPython mirror in bench_compare.py MICRO.
+main {
+    let x = 7
+    let a = 0
+    for i in range(200000) { a = a + x }
+    promote("a = {a}")
+}
