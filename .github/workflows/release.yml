@@ -1,0 +1,77 @@
+name: operon-release
+
+# T3: prebuilt binaries on every version tag.
+# Package layout: operon-{version}-{os}-{arch}.(tar.gz|zip) containing the
+# binary + README + LICENSE + std/ + examples/ — everything a learner needs.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,    target: x86_64-unknown-linux-gnu,  pkg: tar }
+          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, pkg: tar }
+          - { os: macos-13,         target: x86_64-apple-darwin,       pkg: tar }
+          - { os: macos-latest,     target: aarch64-apple-darwin,      pkg: tar }
+          - { os: windows-latest,   target: x86_64-pc-windows-msvc,    pkg: zip }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build (release, host target)
+        run: cargo build --release
+
+      - name: Proof suite gates the release
+        shell: bash
+        run: cargo test --release
+
+      - name: Package (unix)
+        if: matrix.pkg == 'tar'
+        shell: bash
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          ST="operon-${V}-${{ matrix.target }}"
+          mkdir -p "$ST"
+          cp target/release/operon "$ST/"
+          cp README.md LICENSE "$ST/"
+          cp -r std examples "$ST/"
+          tar czf "$ST.tar.gz" "$ST"
+          sha256sum "$ST.tar.gz" > "$ST.tar.gz.sha256"
+          echo "ASSET=$ST.tar.gz" >> "$GITHUB_ENV"
+
+      - name: Package (windows)
+        if: matrix.pkg == 'zip'
+        shell: pwsh
+        run: |
+          $V = "${env:GITHUB_REF_NAME}" -replace '^v',''
+          $ST = "operon-$V-${{ matrix.target }}"
+          New-Item -ItemType Directory -Force -Path $ST | Out-Null
+          Copy-Item target/release/operon.exe $ST/
+          Copy-Item README.md, LICENSE $ST/
+          Copy-Item -Recurse std, examples $ST/
+          Compress-Archive -Path $ST -DestinationPath "$ST.zip"
+          $h = (Get-FileHash "$ST.zip" -Algorithm SHA256).Hash.ToLower()
+          "$h  $ST.zip" | Out-File -Encoding ascii "$ST.zip.sha256"
+          "ASSET=$ST.zip" | Out-File -Encoding ascii -Append $env:GITHUB_ENV
+
+      - name: Attach to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ env.ASSET }}
+            ${{ env.ASSET }}.sha256
