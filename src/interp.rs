@@ -1452,12 +1452,12 @@ impl Interp {
                     if (*a < 0) != (*b < 0) && q * b != *a {
                         q -= 1; // floor rounds down
                     }
-                    let rb = q.checked_mul(*b).ok_or_else(|| {
-                        Stress::new("overflow", "int overflow in '%'")
-                    })?;
-                    let m = (*a).checked_sub(rb).ok_or_else(|| {
-                        Stress::new("overflow", "int overflow in '%'")
-                    })?;
+                    let rb = q
+                        .checked_mul(*b)
+                        .ok_or_else(|| Stress::new("overflow", "int overflow in '%'"))?;
+                    let m = (*a)
+                        .checked_sub(rb)
+                        .ok_or_else(|| Stress::new("overflow", "int overflow in '%'"))?;
                     return Ok(Value::Int(m));
                 }
                 let (a, b) = self.as_floats(l, r)?;

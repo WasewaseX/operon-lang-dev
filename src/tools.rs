@@ -741,7 +741,15 @@ pub struct TestReport {
 }
 
 pub fn run_tests(paths: &[String], opts: &Opts, json: bool) -> TestReport {
-    let mut rep = TestReport { files: 0, proofs: 0, passed: 0, failed: 0, failures: Vec::new(), notes: 0, asserts: 0 };
+    let mut rep = TestReport {
+        files: 0,
+        proofs: 0,
+        passed: 0,
+        failed: 0,
+        failures: Vec::new(),
+        notes: 0,
+        asserts: 0,
+    };
     let mut total_asserts = 0u64;
     let mut files: Vec<String> = Vec::new();
     for p in paths {
