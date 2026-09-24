@@ -1,0 +1,12 @@
+# sec-r5 F-11: read_file on a FIFO blocked open() forever (live hang with
+# fuel untouched). read_file now stats first and refuses non-regular
+# files: catchable interference stress.
+gene main() {
+    stress {
+        let txt = read_file("tests/redteam/rt_fifo_fixture");
+        print("read: " + txt);
+    } rescue (e) {
+        print("rescued: " + e.kind);
+    }
+    print("p11f-contained");
+}

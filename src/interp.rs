@@ -227,6 +227,97 @@ impl Caps {
             Err(Self::denied(kind, what))
         }
     }
+    /// sec-r5 (F-8): true when path grants are actively enforced.
+    pub fn gates_paths(&self, list: &[String]) -> bool {
+        self.enabled && !list.iter().any(|g| g == "*")
+    }
+    /// sec-r5 (F-8a): follow a symlink chain to its final form (40 hops max),
+    /// keeping the last path seen. canonicalize() fails on DANGLING links —
+    /// exactly the state a TOCTOU attacker stages — so this resolver still
+    /// resolves them and a dangling outside-pointing link is rejected BEFORE
+    /// open() can create-through it as an empty file.
+    fn resolve_link_chain(p: &std::path::Path) -> std::path::PathBuf {
+        // Anchor: resolve the deepest existing ancestor of the ORIGINAL path
+        // to an absolute base, so RELATIVE symlink targets join correctly
+        // (a relative target is interpreted against the link's directory).
+        let mut cur = p.to_path_buf();
+        if cur.is_relative() {
+            let file = cur
+                .file_name()
+                .map(std::path::PathBuf::from)
+                .unwrap_or_default();
+            let mut anc = cur.parent().map(|pp| pp.to_path_buf()).unwrap_or_default();
+            let mut abs = std::fs::canonicalize(&anc).ok();
+            while abs.is_none() && anc.pop() && !anc.as_os_str().is_empty() {
+                abs = std::fs::canonicalize(&anc).ok();
+            }
+            if let Some(a) = abs {
+                cur = a.join(file);
+            }
+        }
+        for _ in 0..40 {
+            match std::fs::symlink_metadata(&cur) {
+                Ok(m) if m.file_type().is_symlink() => {
+                    let target = match std::fs::read_link(&cur) {
+                        Ok(t) => t,
+                        Err(_) => break,
+                    };
+                    let next = if target.is_absolute() {
+                        target
+                    } else {
+                        let parent = cur
+                            .parent()
+                            .map(|pp| pp.to_path_buf())
+                            .unwrap_or_else(|| std::path::PathBuf::from("/"));
+                        parent.join(target)
+                    };
+                    cur = next;
+                }
+                _ => break,
+            }
+        }
+        cur
+    }
+    /// sec-r5 (F-8): post-open containment verification — anti-TOCTOU.
+    /// The pre-open check races against symlink swaps: what was resolved at
+    /// T1 may not be what the OS touches at T2 (proven live: a flipped link
+    /// landed attacker-controlled bytes outside the grant). Open FIRST,
+    /// verify the handle's true identity, then do I/O — through the handle,
+    /// so no later path re-resolution exists.
+    ///   - Unix: /proc/self/fd/<fd> reveals the fully-resolved path
+    ///   - elsewhere: symlink/reparse handles are refused outright
+    pub fn verify_opened(
+        f: &std::fs::File,
+        path: &str,
+        list: &[String],
+        kind: &str,
+    ) -> Result<(), Stress> {
+        #[cfg(unix)]
+        {
+            use std::os::unix::io::AsRawFd;
+            let fd_path = format!("/proc/self/fd/{}", f.as_raw_fd());
+            let resolved = std::fs::read_link(&fd_path)
+                .map(|p| p.to_string_lossy().replace('\\', "/"))
+                .unwrap_or_else(|_| path.to_string());
+            if !Self::path_allowed(list, &resolved) {
+                return Err(Self::denied(kind, &resolved));
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            if let Ok(m) = f.metadata() {
+                if m.file_type().is_symlink() {
+                    return Err(Self::denied(kind, path));
+                }
+            }
+            if let Ok(c) = std::fs::canonicalize(path) {
+                if !Self::path_allowed(list, c.to_string_lossy().as_ref()) {
+                    return Err(Self::denied(kind, path));
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 /// T2e: super-enhancer activation boost — an `enhance`d gene lowers its
@@ -1400,7 +1491,15 @@ impl Interp {
         }
     }
 
-    pub fn map_insert(&self, m: &crate::value::MapRef, key: Value, val: Value) {
+    pub fn map_insert(&mut self, m: &crate::value::MapRef, key: Value, val: Value) {
+        // sec-r5 (F-12): non-scalar keys miss the hash memo and linear-scan
+        // deep_eq against every existing key per upsert — quadratic CPU that
+        // burned zero fuel (25k list-keyed inserts was a live hang). Charge
+        // the scan to the step budget; the next tick raises overflow.
+        if !crate::value::key_is_scalar(&key) {
+            let n = m.borrow().len() as u64;
+            self.steps = self.steps.saturating_add(n);
+        }
         // dx-r3: memoized upsert (was a linear deep_eq scan)
         m.borrow_mut().insert(key, val);
     }
@@ -1474,7 +1573,13 @@ impl Interp {
                 Ok(Value::Map(m))
             }
             Expr::Ident(name) => match env.get(name) {
-                Some(v) => Ok(v),
+                Some(v) => {
+                    // sec-r5 (F-9): a variable read is a deep copy — a 500 MB
+                    // string read three times IS 1.5 GB of real allocation,
+                    // so large copies enter the aggregate ceiling too.
+                    charge_clone(&v)?;
+                    Ok(v)
+                }
                 None => {
                     self.note(0, 4, format!("unbound '{}' read as null", name));
                     Ok(Value::Null)
@@ -1801,6 +1906,16 @@ impl Interp {
                             "list concat exceeds the 64M-element ceiling",
                         ));
                     }
+                    // sec-r5 (F-9): the clone below deep-copies every element
+                    // (Value::Str elements are real memcpys) — charge the
+                    // string bytes + the Vec allocation itself.
+                    let mut bytes: u64 = 0;
+                    for e in a.borrow().iter().chain(b.borrow().iter()) {
+                        if let Value::Str(s) = e {
+                            bytes += s.len() as u64;
+                        }
+                    }
+                    mem_charge(bytes)?;
                     let mut v = a.borrow().clone();
                     v.extend(b.borrow().iter().cloned());
                     Ok(Value::List(Rc::new(RefCell::new(v))))
@@ -4434,15 +4549,38 @@ impl Interp {
                     .collect(),
             )))),
             // -------------------------------------------------- filesystem (capability-gated)
-            // open the CANONICALIZED path: what we checked is what we touch
-            // (closes the check/open race on symlink flips)
+            // sec-r5 (F-8/F-11): stat → open → verify-the-handle → read.
+            // Only regular files are readable (FIFOs block open() forever and
+            // /dev/zero is an infinite byte well — both were live hang/OOM);
+            // the bytes are charged BEFORE the read; and the opened handle is
+            // verified against the grants (anti-TOCTOU), never re-resolved.
             "read_file" => {
                 let path = args.first().map(|v| v.display()).unwrap_or_default();
                 self.caps.check(&self.caps.read, "read", &path)?;
-                let opened = std::fs::canonicalize(&path)
-                    .unwrap_or_else(|_| std::path::PathBuf::from(&path));
-                match std::fs::read_to_string(&opened) {
-                    Ok(s) => Ok(Value::Str(s)),
+                let meta = std::fs::metadata(&path)
+                    .map_err(|e| Stress::new("missing", format!("read_file '{}': {}", path, e)))?;
+                if !meta.is_file() {
+                    return Err(Stress::new(
+                        "interference",
+                        format!("read_file '{}': refused — not a regular file", path),
+                    ));
+                }
+                mem_charge(meta.len())?;
+                match std::fs::File::open(&path) {
+                    Ok(f) => {
+                        if self.caps.gates_paths(&self.caps.read) {
+                            Caps::verify_opened(&f, &path, &self.caps.read, "read")?;
+                        }
+                        use std::io::Read;
+                        let mut s = String::new();
+                        match f.take(meta.len()).read_to_string(&mut s) {
+                            Ok(_) => Ok(Value::Str(s)),
+                            Err(e) => Err(Stress::new(
+                                "missing",
+                                format!("read_file '{}': {}", path, e),
+                            )),
+                        }
+                    }
                     Err(e) => Err(Stress::new(
                         "missing",
                         format!("read_file '{}': {}", path, e),
@@ -4453,27 +4591,60 @@ impl Interp {
                 let path = args.first().map(|v| v.display()).unwrap_or_default();
                 let body = args.get(1).map(|v| v.display()).unwrap_or_default();
                 self.caps.check(&self.caps.write, "write", &path)?;
-                let opened = std::fs::canonicalize(&path)
-                    .unwrap_or_else(|_| std::path::PathBuf::from(&path));
-                // hardlink defense: refuse to overwrite shared inodes
-                #[cfg(unix)]
-                {
-                    use std::os::unix::fs::MetadataExt;
-                    if let Ok(m) = std::fs::metadata(&opened) {
-                        if m.nlink() > 1 {
-                            return Err(Stress::new(
-                                "interference",
-                                format!(
-                                    "write_file '{}': refused — path is a hardlink ({} links)",
-                                    path,
-                                    m.nlink()
-                                ),
-                            ));
-                        }
+                // sec-r5 (F-8a): resolve the symlink chain BEFORE opening — a
+                // dangling outside-pointing link must be rejected, not created-
+                // through. The post-open fd verification below closes the race.
+                if self.caps.gates_paths(&self.caps.write) {
+                    let final_path = Caps::resolve_link_chain(std::path::Path::new(&path));
+                    if !Caps::path_allowed(&self.caps.write, &final_path.to_string_lossy()) {
+                        return Err(Caps::denied("write", &path));
                     }
                 }
-                match std::fs::write(&opened, body) {
-                    Ok(()) => Ok(Value::Bool(true)),
+                // sec-r5 (F-8): open FIRST, verify the handle's true identity,
+                // then write through the handle. The old check→canonicalize→
+                // write sequence was TOCTOU-raceable with a symlink swap, and
+                // truncate-at-open could destroy a raced file — so truncate
+                // happens AFTER verification, via the verified handle.
+                match std::fs::OpenOptions::new()
+                    .write(true)
+                    .create(true)
+                    .truncate(false) // no truncate at open; set_len(0) post-verify
+                    .open(&path)
+                {
+                    Ok(mut f) => {
+                        if self.caps.gates_paths(&self.caps.write) {
+                            Caps::verify_opened(&f, &path, &self.caps.write, "write")?;
+                        }
+                        // hardlink defense: refuse to overwrite shared inodes
+                        #[cfg(unix)]
+                        {
+                            use std::os::unix::fs::MetadataExt;
+                            if let Ok(m) = f.metadata() {
+                                if m.nlink() > 1 {
+                                    return Err(Stress::new(
+                                        "interference",
+                                        format!(
+                                            "write_file '{}': refused — path is a hardlink ({} links)",
+                                            path,
+                                            m.nlink()
+                                        ),
+                                    ));
+                                }
+                            }
+                        }
+                        f.set_len(0).map_err(|e| {
+                            Stress::new("missing", format!("write_file '{}': {}", path, e))
+                        })?;
+                        mem_charge(body.len() as u64)?;
+                        use std::io::Write;
+                        match f.write_all(body.as_bytes()) {
+                            Ok(()) => Ok(Value::Bool(true)),
+                            Err(e) => Err(Stress::new(
+                                "missing",
+                                format!("write_file '{}': {}", path, e),
+                            )),
+                        }
+                    }
                     Err(e) => Err(Stress::new(
                         "missing",
                         format!("write_file '{}': {}", path, e),
@@ -4484,31 +4655,42 @@ impl Interp {
                 let path = args.first().map(|v| v.display()).unwrap_or_default();
                 let body = args.get(1).map(|v| v.display()).unwrap_or_default();
                 self.caps.check(&self.caps.write, "write", &path)?;
-                let opened = std::fs::canonicalize(&path)
-                    .unwrap_or_else(|_| std::path::PathBuf::from(&path));
-                // hardlink defense (parity with write_file — S4 NEW-3)
-                #[cfg(unix)]
-                {
-                    use std::os::unix::fs::MetadataExt;
-                    if let Ok(m) = std::fs::metadata(&opened) {
-                        if m.nlink() > 1 {
-                            return Err(Stress::new(
-                                "interference",
-                                format!(
-                                    "append_file '{}': refused — path is a hardlink ({} links)",
-                                    path,
-                                    m.nlink()
-                                ),
-                            ));
-                        }
+                // sec-r5 (F-8a): dangling-link pre-resolution (see write_file)
+                if self.caps.gates_paths(&self.caps.write) {
+                    let final_path = Caps::resolve_link_chain(std::path::Path::new(&path));
+                    if !Caps::path_allowed(&self.caps.write, &final_path.to_string_lossy()) {
+                        return Err(Caps::denied("write", &path));
                     }
                 }
+                // sec-r5 (F-8): open → verify-the-handle → write via handle
                 match std::fs::OpenOptions::new()
                     .create(true)
+                    .truncate(false) // append mode never truncates; explicit for clippy
                     .append(true)
-                    .open(&opened)
+                    .open(&path)
                 {
                     Ok(mut f) => {
+                        if self.caps.gates_paths(&self.caps.write) {
+                            Caps::verify_opened(&f, &path, &self.caps.write, "write")?;
+                        }
+                        // hardlink defense (parity with write_file — S4 NEW-3)
+                        #[cfg(unix)]
+                        {
+                            use std::os::unix::fs::MetadataExt;
+                            if let Ok(m) = f.metadata() {
+                                if m.nlink() > 1 {
+                                    return Err(Stress::new(
+                                        "interference",
+                                        format!(
+                                            "append_file '{}': refused — path is a hardlink ({} links)",
+                                            path,
+                                            m.nlink()
+                                        ),
+                                    ));
+                                }
+                            }
+                        }
+                        mem_charge(body.len() as u64)?;
                         use std::io::Write;
                         match f.write_all(body.as_bytes()) {
                             Ok(()) => Ok(Value::Bool(true)),
@@ -5025,24 +5207,43 @@ impl Interp {
                         }
                     }
                 }
-                "lower" => Ok(Value::Str(s.to_lowercase())),
-                "trim" => Ok(Value::Str(s.trim().to_string())),
+                "lower" => {
+                    let r = s.to_lowercase();
+                    mem_charge(r.len() as u64)?;
+                    Ok(Value::Str(r))
+                }
+                "trim" => {
+                    let r = s.trim().to_string();
+                    mem_charge(r.len() as u64)?;
+                    Ok(Value::Str(r))
+                }
                 "split" => {
                     let sep = args
                         .first()
                         .map(|v| v.display())
                         .unwrap_or_else(|| " ".into());
-                    Ok(Value::List(Rc::new(RefCell::new(
-                        s.split(sep.as_str())
-                            .map(|p| Value::Str(p.to_string()))
-                            .collect(),
-                    ))))
+                    let parts: Vec<Value> = s
+                        .split(sep.as_str())
+                        .map(|p| Value::Str(p.to_string()))
+                        .collect();
+                    // sec-r5 (F-9): the produced pieces are real allocations
+                    let bytes: u64 = parts
+                        .iter()
+                        .map(|v| match v {
+                            Value::Str(t) => t.len() as u64,
+                            _ => 0,
+                        })
+                        .sum();
+                    mem_charge(bytes)?;
+                    Ok(Value::List(Rc::new(RefCell::new(parts))))
                 }
                 "join" => {
                     let sep = s.clone();
                     if let Some(Value::List(l)) = args.first() {
                         let parts: Vec<String> = l.borrow().iter().map(|v| v.display()).collect();
-                        Ok(Value::Str(parts.join(&sep)))
+                        let r = parts.join(&sep);
+                        mem_charge(r.len() as u64)?;
+                        Ok(Value::Str(r))
                     } else {
                         Ok(Value::Str(s))
                     }
@@ -5050,7 +5251,9 @@ impl Interp {
                 "replace" => {
                     let a = args.first().map(|v| v.display()).unwrap_or_default();
                     let b = args.get(1).map(|v| v.display()).unwrap_or_default();
-                    Ok(Value::Str(s.replace(&a, &b)))
+                    let r = s.replace(&a, &b);
+                    mem_charge(r.len() as u64)?;
+                    Ok(Value::Str(r))
                 }
                 "contains" => {
                     let a = args.first().map(|v| v.display()).unwrap_or_default();
@@ -5077,6 +5280,9 @@ impl Interp {
                             "repeat exceeds the 512 MiB string ceiling",
                         ));
                     }
+                    // sec-r5 (F-9): the per-op cap alone ignores the aggregate —
+                    // many mid-size repeats must drain the 2 GiB ceiling too.
+                    mem_charge(n.saturating_mul(s.len()) as u64)?;
                     Ok(Value::Str(s.repeat(n)))
                 }
                 "slice" => {
@@ -5637,7 +5843,10 @@ fn http_get(host: &str, port: u16, path: &str) -> Result<String, String> {
 pub fn json_stringify(v: &Value) -> String {
     // cycle-safe: a container containing itself serializes the repeated
     // branch as null (JSON has no cycle marker; CPython's json.dumps errors,
-    // we contain instead of crash)
+    // we contain instead of crash). sec-r5 (F-10): the visited set is NOT
+    // unwound, so shared (aliased) subtrees also serialize once — see the
+    // F-10 note in json_stringify_g; this keeps serialization LINEAR for
+    // DAG-shaped values instead of exponential.
     let mut seen: Vec<usize> = Vec::new();
     json_stringify_g(v, &mut seen, 0)
 }
@@ -5651,7 +5860,15 @@ fn json_stringify_g(v: &Value, seen: &mut Vec<usize>, depth: u32) -> String {
         Value::Bool(true) => "true".into(),
         Value::Bool(false) => "false".into(),
         Value::Int(i) => i.to_string(),
-        Value::Float(f) => crate::value::format_float(*f),
+        Value::Float(f) => {
+            // sec-r5 (F-13): inf/NaN are invalid JSON (RFC 8259) — bare `inf`
+            // tokens broke the round-trip contract. Serialize as null.
+            if f.is_finite() {
+                crate::value::format_float(*f)
+            } else {
+                "null".into()
+            }
+        }
         Value::Str(s) => json_quote(s),
         Value::List(l) => {
             let id = std::rc::Rc::as_ptr(l) as *const u8 as usize;
@@ -5664,7 +5881,10 @@ fn json_stringify_g(v: &Value, seen: &mut Vec<usize>, depth: u32) -> String {
                 .iter()
                 .map(|x| json_stringify_g(x, seen, depth + 1))
                 .collect();
-            seen.pop();
+            // sec-r5 (F-10): the visited id is NOT popped. Unwinding made
+            // DAG-shaped values (l=[l,l] chains) re-walk exponentially —
+            // 2^45 node visits for one builtin call (live hang). Memoized:
+            // shared subtrees serialize once, later references as null.
             format!("[{}]", parts.join(","))
         }
         Value::Map(m) => {
@@ -5684,7 +5904,7 @@ fn json_stringify_g(v: &Value, seen: &mut Vec<usize>, depth: u32) -> String {
                     )
                 })
                 .collect();
-            seen.pop();
+            // sec-r5 (F-10): visited id stays (see the list arm above)
             format!("{{{}}}", parts.join(","))
         }
         other => json_quote(&other.display()),
@@ -6600,6 +6820,19 @@ pub fn mem_charge(bytes: u64) -> Result<(), Stress> {
             "overflow",
             "aggregate allocation ceiling (2 GiB) exhausted for this run",
         ));
+    }
+    Ok(())
+}
+
+/// sec-r5 (F-9): Value::Str clones are deep copies — every read/push of a
+/// large string is a fresh allocation of its full byte size. Copies above
+/// 64 KiB enter the aggregate ceiling; smaller ones stay uncharged so
+/// normal loops (a 50-byte word read a million times) are not taxed.
+fn charge_clone(v: &Value) -> Result<(), Stress> {
+    if let Value::Str(s) = v {
+        if s.len() > 64 * 1024 {
+            mem_charge(s.len() as u64)?;
+        }
     }
     Ok(())
 }
