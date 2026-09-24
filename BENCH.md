@@ -53,45 +53,49 @@ mislead anyone.
 
 | field | value |
 |---|---|
-| date | 2026-09-24 |
+| date | 2026-09-24 (re-measured post audit-wave 1) |
 | host | c-6ab50512-14810412 (containerized CI-class VM) |
 | cpu | Intel(R) Xeon(R) Processor |
 | os | Linux 5.10.134 x86_64, glibc 2.41 |
 | python | 3.12.14 |
-| operon | v2.2.0 release binary = main @ 95ffef7 |
+| operon | main @ `e757b4d` + B1 (`c7d4dd2`), release build, rustc 1.98.1 |
 
 Rerun on your machine before quoting ratios in an argument — absolute times
 move, the *relative shape* (maps ≫ calls ≫ loops) does not.
 
-## Results — named workloads (v2.2.0 baseline)
+## Results — named workloads (v2.2.0 baseline, re-measured on `e757b4d`)
+
+Audit-wave 1 (security/dx/reg merges d0ce9e5/b83c0a2/e757b4d) re-verified: every
+row moved ≤3% vs the `95ffef7` first measurement — the containment guards (push
+mem-charge, DP ceiling) cost nothing measurable on honest workloads.
 
 | workload | operon (ms) | oracle (ms) | native-py (ms) | op/py | op/oracle | calls/iters |
 |---|---:|---:|---:|---:|---:|---:|
-| fib25 | 128.0 | 2434.2 | 12.8 | **10.0x** | 19.0x | 242,785 calls |
-| loops | 62.9 | 865.8 | 11.5 | **5.5x** | 13.8x | 200,000 iters |
-| strings | 25.2 | 115.4 | 0.8 | **33.5x** | 4.6x | 4,000 replaces |
-| collections | 319.1 | 22537.4 | 5.3 | **60.0x** | 70.6x | 20k map ops + 20k pushes |
-| recursion | 230.9 | 4969.9 | 23.6 | **9.8x** | 21.5x | 369,511 calls |
-| grn | 32.7 | 515.4 | 8.5 | **3.8x** | 15.7x | 60,000 gated calls |
+| fib25 | 127.7 | 2405.4 | 12.8 | **10.0x** | 18.8x | 242,785 calls |
+| loops | 62.3 | 871.1 | 11.2 | **5.6x** | 14.0x | 200,000 iters |
+| strings | 26.0 | 116.9 | 0.7 | **35.3x** | 4.5x | 4,000 replaces |
+| collections | 329.5 | 22503.7 | 5.3 | **61.8x** | 68.3x | 20k map ops + 20k pushes |
+| recursion | 228.8 | 4923.8 | 23.7 | **9.6x** | 21.5x | 369,511 calls |
+| grn | 33.2 | 514.6 | 8.6 | **3.9x** | 15.5x | 60,000 gated calls |
 
 `op/py` = operon vs native CPython — **the v3.0 gap to close**.
 `op/oracle` = how much faster the Rust core already is than its Python mirror.
 
-## Results — micro (per construct, v2.2.0 baseline)
+## Results — micro (per construct, re-measured on `e757b4d`)
 
 | micro | operon (ms) | oracle (ms) | native-py (ms) | op/py | op ns/op | py ns/op |
 |---|---:|---:|---:|---:|---:|---:|
-| m_empty (startup) | 0.9 | 54.4 | — | — | — | — |
-| m_call | 64.2 | 766.9 | 8.4 | **7.6x** | 214 | 28 |
-| m_forrange | 52.7 | 624.6 | 9.0 | **5.9x** | 88 | 15 |
-| m_while | 60.9 | 1323.4 | 11.9 | **5.1x** | 102 | 20 |
-| m_varread | 59.1 | 653.5 | 9.0 | **6.5x** | 98 | 15 |
-| m_intadd | 85.4 | 950.1 | 13.6 | **6.3x** | 95 | 15 |
-| m_listpush | 16.5 | 230.0 | 2.3 | **7.3x** | 110 | 15 |
-| m_listidx | 37.5 | 581.2 | 7.6 | **4.9x** | 125 | 25 |
-| m_mapset | 429.6 | 30280.9 | 5.3 | **80.7x** | 5370 | 67 |
-| m_mapget | 571.6 | 40277.3 | 7.8 | **73.7x** | 3712 | 50 |
-| m_strcat | 9.9 | 91.9 | 0.7 | **14.7x** | 412 | 28 |
+| m_empty (startup) | 0.9 | 52.6 | — | — | — | — |
+| m_call | 63.3 | 761.7 | 8.4 | **7.5x** | 211 | 28 |
+| m_forrange | 50.9 | 614.1 | 8.9 | **5.7x** | 85 | 15 |
+| m_while | 59.9 | 1315.0 | 11.9 | **5.0x** | 100 | 20 |
+| m_varread | 56.7 | 657.1 | 9.1 | **6.3x** | 94 | 15 |
+| m_intadd | 86.0 | 945.6 | 13.6 | **6.3x** | 96 | 15 |
+| m_listpush | 16.3 | 226.9 | 2.3 | **7.1x** | 108 | 15 |
+| m_listidx | 38.0 | 579.7 | 7.7 | **5.0x** | 127 | 26 |
+| m_mapset | 445.0 | 31634.9 | 5.3 | **83.6x** | 5563 | 67 |
+| m_mapget | 583.2 | 40460.4 | 7.8 | **74.5x** | 3787 | 51 |
+| m_strcat | 10.0 | 96.2 | 0.7 | **14.7x** | 416 | 28 |
 
 ## Reading the numbers
 
@@ -122,7 +126,7 @@ move, the *relative shape* (maps ≫ calls ≫ loops) does not.
 ## Top-10 interpreter hot-path targets (input to the v3.0 Ribosome VM design)
 
 Ordered by expected payoff. Line references are read-only analysis anchors on
-main @ 95ffef7 (`src/interp.rs`); no src/* changes are proposed for v2.2.
+main @ `e757b4d` (`src/interp.rs`); no src/* changes are proposed for v2.2.
 
 1. **`Value::Map` as an association list** — `map_insert` (interp.rs:956) and
    every map read do a linear `deep_eq` scan. Replace with a real hash map over
@@ -133,26 +137,26 @@ main @ 95ffef7 (`src/interp.rs`); no src/* changes are proposed for v2.2.
    builds `Env::new(Rc + HashMap)` per item to bind one variable. Slot-based
    locals, or a reused single-slot iteration frame. Expected: loops ~2x.
 3. **Per-call `String` churn in the call path** — `call_gene_inner`
-   (interp.rs:1779+) clones the callee name 2–3x per call for `call_counts` /
+   (interp.rs:1805+) clones the callee name 2–3x per call for `call_counts` /
    `gene_buckets` keys. Intern gene names (symbol table → index), make
    telemetry arrays index-addressed. Expected: call-heavy code ~1.5–2x.
 4. **`for` over a list materializes a full clone** — `l.borrow().clone()`
-   (interp.rs:~597) copies the entire list before the first iteration. Iterate
+   (interp.rs:589) copies the entire list before the first iteration. Iterate
    the `Rc` with an index instead.
 5. **`tick()` per eval node and per iteration** — interp.rs:368, called first
-   thing in `eval` (969) and in every loop body: a modulo + branch per AST node
+   thing in `eval` (968) and in every loop body: a modulo + branch per AST node
    for fuel accounting. Charge fuel in batches (branch-free decrement, check on
    underflow) or only at loop back-edges and calls. Expected: ~5–10% across
    the board.
 6. **String concatenation reallocates per op** — `apply_binop` Add
-   (interp.rs:~1327): `format!` + per-op `mem_charge`. A rope / amortized
+   (interp.rs:~1317): `format!` + per-op `mem_charge`. A rope / amortized
    builder for the `s = s + x` accumulation shape. Expected: m_strcat ~5x.
 7. **String literals clone per evaluation** — `Expr::Str(s.clone())`
    (interp.rs:975). Pool literals per program (`Rc<str>`); the parser already
    walks them once.
-8. **GRN gate per-call costs** — `grn_veto` (interp.rs:~1762) walks all edges
+8. **GRN gate per-call costs** — `grn_veto` (interp.rs:1767) walks all edges
    filtered per callee and scans `enhanced` per call; `grn_fire`
-   (interp.rs:~2718/2751) clones the whole `grn_levels` map twice per fire.
+   (interp.rs:2766) clones the whole `grn_levels` map twice per fire (2780, 2834).
    Index edges by callee, precompute the enhanced set, mutate levels in place.
    Cheap today (3.8x overall) — keep it cheap as nets grow.
 9. **`silences` linear scan + clone per call site** — `Expr::Call`
@@ -160,7 +164,7 @@ main @ 95ffef7 (`src/interp.rs`); no src/* changes are proposed for v2.2.
    call. Resolve callees once per site (inline cache), invalidate on
    `silence`/`acetylate` mutations.
 10. **Builtin dispatch by string `match` per call** — `call_builtin`
-    (interp.rs:2159) matches `&str` each call. Intern builtin names at parse
+    (interp.rs:2195) matches `&str` each call. Intern builtin names at parse
     time (or perfect-hash) → enum dispatch.
 
 **The v3.0 design takeaway:** targets 2, 3, 5, 7, 9, 10 are exactly the costs a
@@ -176,6 +180,7 @@ after v3.0 — which the differential harness needs it to.
 | version | commit | date | fib25 op/py | loops op/py | collections op/py | grn op/py |
 |---|---|---|---:|---:|---:|---:|
 | v2.2.0 | 95ffef7 | 2026-09-24 | 10.0x | 5.5x | 60.0x | 3.8x |
+| v2.2.0+audit1 | e757b4d | 2026-09-24 | 10.0x | 5.6x | 61.8x | 3.9x |
 
 (Add a row per release; ratios from the default `--iters 5` run.)
 
