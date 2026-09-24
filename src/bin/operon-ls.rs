@@ -139,6 +139,11 @@ fn main() {
 // ---- framing ------------------------------------------------------------
 
 fn read_message(input: &mut impl Read) -> Result<String, ()> {
+    // sec-r1 (audit C-4): Content-Length is attacker-controlled from the
+    // editor side. `vec![0u8; len]` with an unbounded len panicked on
+    // capacity overflow (rc=101, killing the session) and reserved gigabytes
+    // for large-but-valid values before one body byte arrived. Cap the frame.
+    const MAX_FRAME: usize = 64 * 1024 * 1024;
     let mut header = Vec::new();
     let mut byte = [0u8; 1];
     // read until \r\n\r\n
@@ -167,6 +172,9 @@ fn read_message(input: &mut impl Read) -> Result<String, ()> {
                 .unwrap_or(None)
         })
         .ok_or(())?;
+    if len > MAX_FRAME {
+        return Err(());
+    }
     let mut body = vec![0u8; len];
     input.read_exact(&mut body).map_err(|_| ())?;
     String::from_utf8(body).map_err(|_| ())
