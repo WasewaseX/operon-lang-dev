@@ -1,0 +1,6 @@
+# sec-r1 regression (audit C-7): module-loader existence oracle. Pre-fix, a
+# default-deny program distinguished real vs ghost outside paths ("blocked:
+# read denied" vs "not found"). Both now yield ONE unified failure string
+# for the traversal name class.
+use "../outside_real_redteam_xyz"
+use "../outside_ghost_redteam_xyz"

@@ -248,21 +248,41 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
         || is_std_tree(&rc_resolved, &std_env);
     if !managed && interp.caps.enabled {
         if let Err(s) = interp.caps.check(&interp.caps.read, "read", &resolved) {
+            // sec-r1 (audit C-7): keep the policy message for direct grants
+            // debugging, but for the traversal class return the SAME string
+            // resolve_path uses — otherwise real-vs-ghost is distinguishable
+            let traversal = path.contains("..")
+                || path.starts_with('/')
+                || path.starts_with("\\\\")
+                || path.contains(":\\")
+                || path.contains(":/")
+                || path.starts_with('~');
+            if traversal {
+                return Err(format!(
+                    "module '{}' load failed (denied or nonexistent)",
+                    path
+                ));
+            }
             return Err(format!(
                 "module '{}' blocked: [{}] {}",
                 path, s.kind, s.message
             ));
         }
     }
-    let src = std::fs::read_to_string(&resolved)
-        .map_err(|e| format!("cannot read '{}': {}", resolved, e))?;
-    let stem = std::path::Path::new(&resolved)
+    // sec-r1 (audit C-7 TOCTOU): read the CANONICALIZED path, mirroring the
+    // read_file builtin's check/open race fix — a symlink swapped between
+    // the policy decision (canonicalize) and the read previously routed the
+    // read outside the sandbox
+    let rc_path = std::path::PathBuf::from(&rc_resolved);
+    let src = std::fs::read_to_string(&rc_path)
+        .map_err(|_| unified_load_fail(path, interp.caps.enabled))?;
+    let stem = std::path::Path::new(&rc_path)
         .file_stem()
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_default();
 
     // module-level .rna sidecar
-    let rna_sidecar = std::path::Path::new(&resolved).with_extension("rna");
+    let rna_sidecar = std::path::Path::new(&rc_path).with_extension("rna");
     let src = if rna_sidecar.exists() {
         let patch = std::fs::read_to_string(&rna_sidecar).unwrap_or_default();
         let (s2, applied) = apply_rna(&src, &patch, &stem);
@@ -357,6 +377,24 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
 
 fn resolve_path(interp: &Interp, path: &str) -> Result<String, String> {
     let p = path.trim_end_matches(".op").to_string() + ".op";
+    // sec-r1 (audit C-7): with the sandbox on, traversal/absolute module
+    // names must not leak which outside paths exist — "not found" (ghost)
+    // vs "blocked" (real file) was a filesystem existence oracle. That name
+    // class gets ONE unified failure message; plain relative names inside
+    // the project keep the precise "not found" for usable typos.
+    let traversal = path.contains("..")
+        || path.starts_with('/')
+        || path.starts_with("\\\\")
+        || path.contains(":\\")
+        || path.contains(":/")
+        || path.starts_with('~');
+    let unified_err = |traversal_denied: bool| {
+        if traversal_denied {
+            format!("module '{}' load failed (denied or nonexistent)", path)
+        } else {
+            format!("module '{}' not found", path)
+        }
+    };
     let mut candidates: Vec<Option<std::path::PathBuf>> = Vec::new();
     // relative to the importing file's directory first (SPEC §8)
     if let Some(base) = &interp.base_dir {
@@ -375,7 +413,17 @@ fn resolve_path(interp: &Interp, path: &str) -> Result<String, String> {
             return Ok(c.to_string_lossy().to_string());
         }
     }
-    Err(format!("module '{}' not found", path))
+    Err(unified_err(interp.caps.enabled && traversal))
+}
+
+/// sec-r1 (audit C-7): single failure string for the traversal name class so
+/// real-vs-ghost outside paths are indistinguishable in observable output.
+fn unified_load_fail(path: &str, caps_enabled: bool) -> String {
+    if caps_enabled {
+        format!("module '{}' load failed (denied or nonexistent)", path)
+    } else {
+        format!("module '{}' load failed", path)
+    }
 }
 
 // ------------------------------------------------------------ NMD sweep

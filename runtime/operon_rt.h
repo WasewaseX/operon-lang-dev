@@ -15,7 +15,9 @@
 /* Interns a byte string, returning a stable id. Equal bytes => equal id. */
 uint32_t rt_intern(const char *s, size_t n);
 
-/* Returns the bytes for an interned id (never NULL for valid ids). */
+/* Returns the bytes for an interned id (never NULL for valid ids).
+ * sec-r1: id 0 is reserved/invalid and always returns NULL; ids for strings
+ * that were interned but lost to arena exhaustion also return NULL. */
 const char *rt_intern_get(uint32_t id, size_t *n_out);
 
 /* Number of distinct interned strings this process has created. */
