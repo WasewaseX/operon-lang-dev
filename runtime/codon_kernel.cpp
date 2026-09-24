@@ -70,7 +70,7 @@ int32_t rt_edit_distance(const char *a, size_t la, const char *b, size_t lb) {
      * DP, O(la*lb). The bit-parallel block variant is scheduled for v2.1. */
     {
         uint32_t *row = (uint32_t *)malloc((lb + 1) * sizeof(uint32_t));
-        if (!row) return -1;
+        if (!row) return 2147483647; /* sec-r3: malloc failure must LOSE every nearest-match contest (i32::MAX), not win it with -1 */
         for (size_t j = 0; j <= lb; j++) row[j] = (uint32_t)j;
         for (size_t i = 1; i <= la; i++) {
             uint32_t prev = row[0];

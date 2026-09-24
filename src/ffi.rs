@@ -132,9 +132,18 @@ pub const DP_CELL_BUDGET: usize = 10_000_000;
 /// win a "nearest" contest.
 pub const DP_BUDGET_SENTINEL: i32 = i32::MAX;
 
+/// sec-r3 (re-audit #8): per-operand cap. The cell budget alone admits
+/// pathological shapes (10 MB × 1 byte = 10 M cells) whose bit-parallel
+/// wavefront costs tens of ms per hop, fuel-blind. Identifiers and
+/// suggestion candidates are tiny; 64 KiB per operand is generous headroom.
+pub const FFI_OPERAND_CAP: usize = 64 * 1024;
+
 /// Edit distance between two Rust strings (C++ bit-parallel kernel).
 pub fn edit_distance(a: &str, b: &str) -> i32 {
-    if a.len().saturating_mul(b.len()) > DP_CELL_BUDGET {
+    if a.len().saturating_mul(b.len()) > DP_CELL_BUDGET
+        || a.len() > FFI_OPERAND_CAP
+        || b.len() > FFI_OPERAND_CAP
+    {
         return DP_BUDGET_SENTINEL;
     }
     unsafe {
