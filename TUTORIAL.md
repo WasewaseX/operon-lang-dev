@@ -333,8 +333,8 @@ use std/strings as s
 use std/math as m
 
 gene main() {
-    promote(s::capital("operon"))            # "Operon"
-    promote("mean = {m::mean([1, 2, 3, 4])}")
+    promote(s.capital("operon"))             # "Operon"
+    promote("mean = {m.mean([1, 2, 3, 4])}")
 }
 ```
 

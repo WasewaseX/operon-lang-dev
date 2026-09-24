@@ -54,6 +54,7 @@ fn real_main() {
         quiet: false,
         caps: interp::Caps::default(),
         profile: false,
+        stdout_sink: None,
     };
     let mut json = false;
     let mut strict = false;
@@ -203,6 +204,12 @@ fn real_main() {
     }
 
     match cmd.as_str() {
+        "--version" | "-V" => {
+            println!(
+                "Operon {} (rust-core, cpp-kernel)",
+                env!("CARGO_PKG_VERSION")
+            );
+        }
         "version" => {
             println!(
                 "Operon {} (rust-core, cpp-kernel)",
@@ -237,7 +244,18 @@ fn real_main() {
                 match result {
                     Ok(_) => {}
                     Err(s) => {
-                        eprintln!("[contained] [{}] {}", s.kind, s.message);
+                        // dx-r3 (re-audit): the PRIMARY diagnostic gets a
+                        // location when the stress carries its origin line —
+                        // matching mainstream norms where the fatal error is
+                        // the located one
+                        if s.line > 0 {
+                            eprintln!(
+                                "[contained] [{}] {}:{}: {}",
+                                s.kind, l.interp.file, s.line, s.message
+                            );
+                        } else {
+                            eprintln!("[contained] [{}] {}", s.kind, s.message);
+                        }
                         // dx-r1 (parity audit W2): a failing program must not
                         // report success — CI/shell pipelines trusted rc=0
                         // from scripts that died. 1 = uncaught top-level stress.
@@ -573,7 +591,14 @@ fn real_main() {
                 file, rep.iters, rep.min_ms, rep.avg_ms
             );
         }
-        _ => usage(),
+        other => {
+            // dx-r3 (re-audit): an unknown subcommand says so — a silent
+            // usage dump reads like a broken flag
+            die(&format!(
+                "unknown command '{}' — run `operon` with no arguments for usage",
+                other
+            ));
+        }
     }
 }
 
@@ -597,6 +622,7 @@ fn repl() {
             quiet: true,
             caps: interp::Caps::default(),
             profile: false,
+            stdout_sink: None,
         },
     ) {
         Ok(l) => l,
@@ -689,6 +715,7 @@ fn repl() {
                                 quiet: true,
                                 caps: interp::Caps::default(),
                                 profile: false,
+                                stdout_sink: None,
                             };
                             let rep = tools::run_tests(&[arg.to_string()], &opts, false);
                             println!(
@@ -757,6 +784,7 @@ fn repl() {
                                 quiet: true,
                                 caps: interp::Caps::default(),
                                 profile: false,
+                                stdout_sink: None,
                             },
                         ) {
                             Ok(nl) => nl,

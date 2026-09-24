@@ -6,9 +6,11 @@ use crate::genes;
 use crate::interp::{Flow, Interp};
 use crate::parser;
 use crate::value::{Stress, Value};
+use std::cell::RefCell;
 use std::collections::HashSet;
 use std::io::Write as _;
 use std::path::Path;
+use std::rc::Rc;
 
 #[derive(Clone)]
 pub struct Opts {
@@ -24,6 +26,10 @@ pub struct Opts {
     /// dx-r1 (audit W5): time top-level statements during load — without
     /// this, `operon profile` reported 0.0 µs for any script without main().
     pub profile: bool,
+    /// dx-r3 (re-audit / A14): when set, program stdout (promote) is
+    /// captured here from the moment the interp exists — the test runner
+    /// uses it so top-level output can't leak into the report either.
+    pub stdout_sink: Option<std::rc::Rc<std::cell::RefCell<Vec<String>>>>,
 }
 
 pub struct Loaded {
@@ -41,6 +47,8 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
 
     let mut interp = Interp::new();
     interp.profiling = opts.profile;
+    // dx-r3: capture program stdout from load time (test runner)
+    interp.stdout_sink = opts.stdout_sink.clone();
     // A13 (dx-r2): diagnostics render file:line
     interp.file = file.to_string();
     // base dir for module resolution (relative to the importing file)
@@ -780,7 +788,14 @@ pub fn run_tests(paths: &[String], opts: &Opts, json: bool) -> TestReport {
     }
     files.sort();
     for f in &files {
-        let mut l = match load_file(f, opts) {
+        // dx-r3 (re-audit / A14 leftover): capture each file's program
+        // stdout (promote output) instead of streaming it into the report;
+        // captured lines are shown ONLY for the failing file
+        let sink = Rc::new(RefCell::new(Vec::new()));
+        let captured = sink.clone();
+        let mut file_opts = opts.clone();
+        file_opts.stdout_sink = Some(sink);
+        let mut l = match load_file(f, &file_opts) {
             Ok(l) => l,
             Err(e) => {
                 rep.failed += 1;
@@ -792,6 +807,8 @@ pub fn run_tests(paths: &[String], opts: &Opts, json: bool) -> TestReport {
         rep.notes += l.interp.notes.len();
         let genv = l.interp.global.clone();
         l.interp.proof_mode = true;
+        let mut file_failed = false;
+        let mut proof_failures: Vec<String> = Vec::new();
         for (i, proof) in l.prog.proofs.iter().enumerate() {
             rep.proofs += 1;
             let asserts_before = l.interp.asserts_run;
@@ -801,7 +818,8 @@ pub fn run_tests(paths: &[String], opts: &Opts, json: bool) -> TestReport {
                 Ok(Flow::Norm) => {
                     if l.interp.asserts_run == asserts_before {
                         rep.failed += 1;
-                        rep.failures.push(format!(
+                        file_failed = true;
+                        proof_failures.push(format!(
                             "{} proof #{}: no assertion exercised (vacuous proof)",
                             f,
                             i + 1
@@ -812,7 +830,8 @@ pub fn run_tests(paths: &[String], opts: &Opts, json: bool) -> TestReport {
                 }
                 Ok(_) => {
                     rep.failed += 1;
-                    rep.failures.push(format!(
+                    file_failed = true;
+                    proof_failures.push(format!(
                         "{} proof #{}: exited early (return/break inside proof)",
                         f,
                         i + 1
@@ -820,7 +839,8 @@ pub fn run_tests(paths: &[String], opts: &Opts, json: bool) -> TestReport {
                 }
                 Err(s) => {
                     rep.failed += 1;
-                    rep.failures.push(format!(
+                    file_failed = true;
+                    proof_failures.push(format!(
                         "{} proof #{}: [{}] {}",
                         f,
                         i + 1,
@@ -828,6 +848,14 @@ pub fn run_tests(paths: &[String], opts: &Opts, json: bool) -> TestReport {
                         s.message
                     ));
                 }
+            }
+        }
+        rep.failures.append(&mut proof_failures);
+        if file_failed {
+            let out = captured.borrow();
+            if !out.is_empty() {
+                rep.failures
+                    .push(format!("{} captured stdout:\n{}", f, out.join("\n")));
             }
         }
         total_asserts += l.interp.asserts_run;

@@ -55,6 +55,18 @@ mkdir -p "$DEST"
 tar xzf "$TMP/$ASSET" -C "$TMP"
 mv "$TMP/operon-${VER#v}-${TARGET}/operon" "$DEST/operon"
 chmod +x "$DEST/operon"
+# dx-r3 (re-audit): the release tarball ships the self-hosted stdlib and
+# the LSP server — the old installer discarded BOTH, so `use std/strings`
+# silently resolved to null on every clean install. std/ must sit next to
+# the binary (exe-relative resolution, genes.rs module loader).
+if [ -d "$TMP/operon-${VER#v}-${TARGET}/std" ]; then
+  rm -rf "$DEST/std"
+  cp -r "$TMP/operon-${VER#v}-${TARGET}/std" "$DEST/std"
+fi
+if [ -f "$TMP/operon-${VER#v}-${TARGET}/operon-ls" ]; then
+  mv "$TMP/operon-${VER#v}-${TARGET}/operon-ls" "$DEST/operon-ls"
+  chmod +x "$DEST/operon-ls"
+fi
 
 case ":$PATH:" in
   *":$DEST:"*) ;;
