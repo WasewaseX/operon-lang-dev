@@ -58,7 +58,7 @@ bottom.</p>
       <tr><td>Gene regulatory networks</td><td><code>regulate</code> + <code>grn_fire/grn_state</code></td></tr>
       <tr><td>Toggle switch bistability</td><td><code>toggle a, b;</code></td></tr>
       <tr><td>Repressilator oscillation</td><td><code>repressilator a -&gt; b -&gt; c</code></td></tr>
-      <tr><td>Single-cell transcriptomics / Fano factor</td><td><code>fingerprint()</code> call/noise telemetry</td></tr>
+      <tr><td>Single-cell transcriptomics / burst index</td><td><code>fingerprint()</code> call/noise telemetry</td></tr>
       <tr><td>RNA velocity</td><td>spliced/unspliced/velocity metrics</td></tr>
       <tr><td>CRISPR knockout screens</td><td><code>operon crispr --knockout</code></td></tr>
     </tbody>
@@ -200,9 +200,9 @@ against the wall clock.</p>
 
 <h2 id="telemetry">7 · Telemetry: the single-cell layer</h2>
 <p>Single-cell transcriptomics reads expression <em>per cell</em> rather than per bulk culture, and
-two quantities dominate the analysis. The <strong>Fano factor</strong> (variance over mean of
+two quantities dominate the analysis. The <strong>burst index</strong> (variance over mean of
 molecule counts) separates transcript noise from steady expression — a bursty, occasionally-fired
-gene has a high Fano factor; a constitutively expressed one sits near baseline. <strong>RNA
+gene has a high burst index; a constitutively expressed one sits near baseline. <strong>RNA
 velocity</strong> compares unspliced (nascent) to spliced (mature) transcript counts to infer the
 <em>direction</em> a population is moving: high unspliced fraction means the gene is being ramped
 up right now.</p>

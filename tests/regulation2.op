@@ -1,0 +1,31 @@
+# differential: stateful GRN with thresholds, toggle gate, m6a stability
+regulate {
+    signal activates kinase strength 1.0 threshold 0.3
+    kinase inhibits pump strength 0.9
+}
+toggle lac, tet
+gene lac() { return "lac-on" }
+gene tet() { return "tet-on" }
+@m6a gene stable() { return "m6a-v1" }
+gene stable() { return "m6a-v2" }
+frame proof {
+    let lv = grn_fire("signal")
+    assert(lv.signal == 1.0)
+    assert(lv.kinase > 0.8)
+    assert(lv.kinase < 1.0)
+    assert(lv.pump == 0.0)
+    assert(stable() == "m6a-v1")
+    toggle_on("tet")
+    assert(toggle_state().tet == true)
+    assert(toggle_state().lac == false)
+    assert(lac() == null)
+    assert(tet() == "tet-on")
+}
+main {
+    let lv = grn_fire("signal")
+    promote("kinase level: {lv.kinase}")
+    promote("stable: {stable()}")
+    toggle_on("tet")
+    promote("lac repressed: {lac() == null}")
+    promote("tet active: {tet()}")
+}

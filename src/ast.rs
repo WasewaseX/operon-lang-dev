@@ -41,12 +41,15 @@ pub enum Expr {
         body: Box<Expr>,
     },
     FateNew(String),
+    New(String, Vec<Expr>), // phenotype constructor
+    Ternary(Box<Expr>, Box<Expr>, Box<Expr>), // cond ? a : b
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum UnOp {
     Neg,
     Not,
+    BitNot,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -57,6 +60,12 @@ pub enum BinOp {
     Div,
     FloorDiv,
     Mod,
+    Pow,
+    BitAnd,
+    BitOr,
+    BitXor,
+    Shl,
+    Shr,
     Eq,
     Neq,
     Lt,
@@ -77,6 +86,15 @@ pub struct GeneDef {
     pub acetylate: bool,
     pub methylate: bool,
     pub m6a: bool,
+    pub seq: bool, // sequence (generator) definition
+}
+
+#[derive(Debug, Clone)]
+pub struct PhenoDef {
+    pub name: String,
+    pub parent: Option<String>,
+    pub fields: Vec<(String, Expr)>,   // field name -> default expr
+    pub methods: Vec<Arc<GeneDef>>,
 }
 
 #[derive(Debug, Clone)]
@@ -98,6 +116,7 @@ pub struct RegEdge {
     pub to: String,
     pub strength: f64,
     pub inhibit: bool,
+    pub threshold: Option<f64>, // Hill-style dose threshold
 }
 
 #[derive(Debug, Clone)]
@@ -149,6 +168,9 @@ pub enum Stmt {
     AnchorImport(Vec<String>),
     Tad(String, Vec<Stmt>),
     Block(Vec<Stmt>), // bare scoped block (Total Grammar repair product)
+    Seq(Arc<GeneDef>),             // sequence definition (generator)
+    Yield(Option<Expr>),           // yield inside a sequence body
+    Pheno(Arc<PhenoDef>),          // phenotype definition (user class)
 }
 
 #[derive(Debug, Clone, Default)]

@@ -2,7 +2,7 @@
 //! soft failures become notes; only catchable Stress propagates.
 
 use crate::ast::*;
-use crate::value::{format_float, key_scalar, Stress, Value};
+use crate::value::{key_scalar, SeqState, Stress, Value};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -66,11 +66,85 @@ pub struct TaskHandle {
     pub done: bool,
 }
 
+/// Capability grants (default-deny for I/O, processes, sockets, env).
+/// "Safer than Rust by default": an Operon program can touch nothing unless
+/// the host explicitly grants it. Violations raise catchable `interference`
+/// stress (RNA interference — the cell's antiviral silencing response).
+#[derive(Clone)]
+pub struct Caps {
+    pub enabled: bool,
+    pub read: Vec<String>,
+    pub write: Vec<String>,
+    pub run: Vec<String>,
+    pub net: Vec<String>,
+    pub env: Vec<String>,
+}
+
+impl Default for Caps {
+    fn default() -> Caps {
+        // secure by default: enabled (denying) with zero grants
+        Caps { enabled: true, read: Vec::new(), write: Vec::new(), run: Vec::new(), net: Vec::new(), env: Vec::new() }
+    }
+}
+
+impl Caps {
+    pub fn allow_all() -> Caps {
+        Caps { enabled: false, ..Default::default() }
+    }
+    pub fn denied(kind: &str, what: &str) -> Stress {
+        Stress::new(
+            "interference",
+            format!("{} denied — no capability grant covers '{}' (grant with --allow-{} or --allow-all)", kind, what, kind),
+        )
+    }
+    /// Lexical path normalization (no filesystem access — pure string math).
+    fn norm_path(p: &str) -> String {
+        let mut out: Vec<&str> = Vec::new();
+        for seg in p.split('/') {
+            match seg {
+                "" | "." => {}
+                ".." => {
+                    out.pop();
+                }
+                s => out.push(s),
+            }
+        }
+        out.join("/")
+    }
+    pub fn path_ok(list: &[String], path: &str) -> bool {
+        let np = Self::norm_path(path);
+        for g in list {
+            let ng = Self::norm_path(g);
+            if ng.is_empty() || np == ng || np.starts_with(&format!("{}/", ng)) {
+                return true;
+            }
+        }
+        false
+    }
+    pub fn check(&self, list: &[String], kind: &str, what: &str) -> Result<(), Stress> {
+        if !self.enabled || list.iter().any(|g| g == "*") {
+            return Ok(());
+        }
+        let ok = if kind == "read" || kind == "write" {
+            Self::path_ok(list, what)
+        } else {
+            list.iter().any(|g| g == what)
+        };
+        if ok {
+            Ok(())
+        } else {
+            Err(Self::denied(kind, what))
+        }
+    }
+}
+
 pub struct Interp {
     pub notes: Vec<Note>,
     pub cell: HashMap<String, String>,
+    pub cell_entry: Option<String>,
     pub silences: Vec<(String, String)>,
     pub fates: HashMap<String, Arc<FateDef>>,
+    pub phenos: HashMap<String, Arc<PhenoDef>>,
     pub grn_edges: Vec<RegEdge>,
     pub grn_levels: HashMap<String, f64>,
     pub toggles: Vec<(String, String, bool)>, // (a, b, a_on) — mutual repression pair
@@ -82,6 +156,10 @@ pub struct Interp {
     pub defined_genes: Vec<String>,
     pub call_counts: HashMap<String, u64>,
     pub call_time: HashMap<String, f64>, // µs inclusive (profiling)
+    pub call_time_self: HashMap<String, f64>, // µs exclusive (children subtracted)
+    pub call_stack: Vec<(String, f64, f64)>, // (name, start_ns, child_acc µs)
+    pub call_clock: u64,
+    pub gene_buckets: HashMap<String, HashMap<u64, u64>>, // burst-index bins (20 calls/bin)
     pub modules: HashMap<String, Value>, // path -> module map
     pub loading: Vec<String>,
     pub profiling: bool,
@@ -90,9 +168,17 @@ pub struct Interp {
     pub global: Rc<Env>,
     pub steps: u64,
     pub step_budget: u64,
+    pub depth: u32,
+    pub depth_limit: u32,
+    pub caps: Caps,
+    pub methyl_quiet: bool,
+    pub methyl_noted: std::collections::HashSet<String>,
+    pub asserts_run: u64,
+    pub rng: u64,
     pub cli_args: Vec<String>,
     pub tasks: HashMap<i64, TaskHandle>,
     pub next_task_id: i64,
+    pub seq_tx: Option<mpsc::SyncSender<crate::value::SeqMsg>>,
 }
 
 pub enum Builtin {
@@ -105,8 +191,10 @@ impl Interp {
         Interp {
             notes: Vec::new(),
             cell: HashMap::new(),
+            cell_entry: None,
             silences: Vec::new(),
             fates: HashMap::new(),
+            phenos: HashMap::new(),
             grn_edges: Vec::new(),
             grn_levels: HashMap::new(),
             toggles: Vec::new(),
@@ -118,6 +206,10 @@ impl Interp {
             defined_genes: Vec::new(),
             call_counts: HashMap::new(),
             call_time: HashMap::new(),
+            call_time_self: HashMap::new(),
+            call_stack: Vec::new(),
+            call_clock: 0,
+            gene_buckets: HashMap::new(),
             modules: HashMap::new(),
             loading: Vec::new(),
             profiling: false,
@@ -126,9 +218,17 @@ impl Interp {
             global: Env::new(None),
             steps: 0,
             step_budget: 200_000_000,
+            depth: 0,
+            depth_limit: 10_000,
+            caps: Caps::default(),
+            methyl_quiet: false,
+            methyl_noted: std::collections::HashSet::new(),
+            asserts_run: 0,
+            rng: 0x9E3779B97F4A7C15,
             cli_args: Vec::new(),
             tasks: HashMap::new(),
             next_task_id: 1,
+            seq_tx: None,
         }
     }
 
@@ -194,20 +294,45 @@ impl Interp {
                 let iv = self.eval(env, i)?;
                 let mut val = self.eval(env, e)?;
                 if let Some(binop) = op {
-                    let cur = match &tv {
-                        Value::List(l) => {
-                            let idx = self.as_index(&iv, l.borrow().len())?;
-                            l.borrow().get(idx).cloned().unwrap_or(Value::Null)
+                    let cur = match (&tv, &iv) {
+                        (Value::List(l), Value::Int(idx)) => {
+                            let n = l.borrow().len() as i64;
+                            let j = if *idx < 0 { n + *idx } else { *idx };
+                            if j >= 0 && j < n {
+                                l.borrow().get(j as usize).cloned().unwrap_or(Value::Null)
+                            } else {
+                                Value::Null
+                            }
                         }
-                        Value::Map(m) => m.borrow().iter().find(|(k, _)| k.deep_eq(&iv)).map(|(_, v)| v.clone()).unwrap_or(Value::Null),
+                        (Value::List(l), _) => {
+                            let idx = self.as_index(&iv, l.borrow().len()).unwrap_or(usize::MAX);
+                            if idx != usize::MAX && idx < l.borrow().len() {
+                                l.borrow().get(idx).cloned().unwrap_or(Value::Null)
+                            } else {
+                                Value::Null
+                            }
+                        }
+                        (Value::Map(m), _) => m.borrow().iter().find(|(k, _)| k.deep_eq(&iv)).map(|(_, v)| v.clone()).unwrap_or(Value::Null),
                         _ => Value::Null,
                     };
                     val = self.apply_binop(env, *binop, &cur, &val)?;
                 }
                 match (&tv, &iv) {
+                    (Value::List(l), Value::Int(idx)) => {
+                        let n = l.borrow().len() as i64;
+                        let j = if *idx < 0 { n + *idx } else { *idx };
+                        if j >= 0 && j < n {
+                            l.borrow_mut()[j as usize] = val;
+                        } else {
+                            // out-of-range writes append (Total Grammar: degrade,
+                            // never reject) — noted so the shape change is visible
+                            l.borrow_mut().push(val);
+                            self.note(0, 4, "index out of range; value appended");
+                        }
+                    }
                     (Value::List(l), _) => {
-                        let idx = self.as_index(&iv, l.borrow().len())?;
-                        if idx < l.borrow().len() {
+                        let idx = self.as_index(&iv, l.borrow().len()).unwrap_or(usize::MAX);
+                        if idx != usize::MAX && idx < l.borrow().len() {
                             l.borrow_mut()[idx] = val;
                         } else {
                             l.borrow_mut().push(val);
@@ -240,6 +365,9 @@ impl Interp {
                 }
                 match tv {
                     Value::Map(m) => {
+                        self.map_insert(&m, Value::Str(key.clone()), val);
+                    }
+                    Value::Obj(d, m) => {
                         self.map_insert(&m, Value::Str(key.clone()), val);
                     }
                     _ => self.note(0, 4, "member assignment on non-map ignored"),
@@ -290,6 +418,26 @@ impl Interp {
             }
             Stmt::For(name, iter, body) => {
                 let itv = self.eval(env, iter)?;
+                if let Value::Seq(_def, st) = itv {
+                    // lazy pull iteration over a sequence
+                    loop {
+                        self.tick()?;
+                        let v = self.seq_pull(&st)?;
+                        match v {
+                            Some(item) => {
+                                let child = Env::new(Some(env.clone()));
+                                child.define(name, item);
+                                match self.exec_block(&child, body)? {
+                                    Flow::Brk => break,
+                                    Flow::Ret(v) => return Ok(Flow::Ret(v)),
+                                    _ => {}
+                                }
+                            }
+                            None => break,
+                        }
+                    }
+                    return Ok(Flow::Norm);
+                }
                 let items: Vec<Value> = match itv {
                     Value::List(l) => l.borrow().clone(),
                     Value::Str(s) => s.chars().map(|c| Value::Str(c.to_string())).collect(),
@@ -332,11 +480,23 @@ impl Interp {
                     let hit = match pat {
                         MatchPat::Wild => true,
                         MatchPat::Lit(l) => {
-                            let lv = self.eval(env, l).unwrap_or(Value::Null);
+                            let lv = match self.eval(env, l) {
+                                Ok(v) => v,
+                                Err(s) => {
+                                    self.note(0, 4, format!("pattern evaluation contained: [{}] {}", s.kind, s.message));
+                                    Value::Null
+                                }
+                            };
                             sv.deep_eq(&lv)
                         }
                         MatchPat::Multi(ls) => ls.iter().any(|l| {
-                            let lv = self.eval(env, l).unwrap_or(Value::Null);
+                            let lv = match self.eval(env, l) {
+                                Ok(v) => v,
+                                Err(s) => {
+                                    self.note(0, 4, format!("pattern evaluation contained: [{}] {}", s.kind, s.message));
+                                    Value::Null
+                                }
+                            };
                             sv.deep_eq(&lv)
                         }),
                         MatchPat::Bind(n) => {
@@ -361,7 +521,19 @@ impl Interp {
                                 .map(|s| s.to_string_lossy().to_string())
                                 .unwrap_or_else(|| "mod".into())
                         });
-                        env.define(&name, modv);
+                        env.define(&name, modv.clone());
+                        // flat-bind exported genes beside the alias map: the
+                        // whole gene repertoire stays addressable by name
+                        // (workers and call() resolve them without a prefix)
+                        if let Value::Map(m) = &modv {
+                            for (k, v) in m.borrow().iter() {
+                                if let Value::Str(kname) = k {
+                                    if matches!(v, Value::Gene(_, _)) {
+                                        env.define(kname, v.clone());
+                                    }
+                                }
+                            }
+                        }
                     }
                     Err(msg) => {
                         self.note(0, 4, format!("use '{}' failed: {}", path, msg));
@@ -410,6 +582,17 @@ impl Interp {
             }
             Stmt::Gene(def) => {
                 let name = def.name.clone().unwrap_or_else(|| "<lambda>".into());
+                // @m6a-stabilized transcripts win dispatch among same-name
+                // candidates: a redefinition cannot overwrite an m6a-marked
+                // binding unless it carries the mark itself.
+                if !def.m6a {
+                    if let Some(Value::Gene(old, _)) = env.get(&name) {
+                        if old.m6a {
+                            self.note(0, 4, format!("'{}' is @m6a-stabilized; redefinition ignored (mark the new copy to replace it)", name));
+                            return Ok(Flow::Norm);
+                        }
+                    }
+                }
                 if !self.defined_genes.contains(&name) {
                     self.defined_genes.push(name.clone());
                 }
@@ -492,6 +675,32 @@ impl Interp {
                 // scope: members bind into the enclosing environment.
                 self.exec_block(env, body)
             }
+            Stmt::Pheno(def) => {
+                self.phenos.insert(def.name.clone(), def.clone());
+                Ok(Flow::Norm)
+            }
+            Stmt::Seq(def) => {
+                let name = def.name.clone().unwrap_or_else(|| "<lambda>".into());
+                if !self.defined_genes.contains(&name) {
+                    self.defined_genes.push(name.clone());
+                }
+                env.define(&name, Value::Gene(def.clone(), Some(env.clone())));
+                Ok(Flow::Norm)
+            }
+            Stmt::Yield(e) => {
+                let v = match e {
+                    Some(e) => self.eval(env, e)?,
+                    None => Value::Null,
+                };
+                if let Some(tx) = &self.seq_tx {
+                    // rendezvous: send blocks until the consumer pulls — laziness
+                    let _ = tx.send(crate::value::SeqMsg::Yield(crate::genes::to_send(&v)));
+                    Ok(Flow::Norm)
+                } else {
+                    self.note(0, 4, "yield outside a sequence; treated as return");
+                    Ok(Flow::Ret(v))
+                }
+            }
         }
     }
 
@@ -513,7 +722,14 @@ impl Interp {
         match v {
             Value::Int(i) => {
                 if *i < 0 {
-                    Ok((len as i64 + *i).max(0) as usize)
+                    // negative indexing counts from the end; past-the-front is
+                    // out of range (never clamped)
+                    let j = len as i64 + *i;
+                    if j < 0 {
+                        Err(Stress::new("missing", format!("index {} out of range", *i)))
+                    } else {
+                        Ok(j as usize)
+                    }
                 } else {
                     Ok(*i as usize)
                 }
@@ -550,10 +766,15 @@ impl Interp {
                 for p in parts {
                     match p {
                         InterpPart::Lit(s) => out.push_str(s),
-                        InterpPart::Expr(e) => {
-                            let v = self.eval(env, e)?;
-                            out.push_str(&v.display());
-                        }
+                        InterpPart::Expr(e) => match self.eval(env, e) {
+                            Ok(v) => out.push_str(&v.display()),
+                            Err(s) => {
+                                // a stressed interpolation degrades to "null" —
+                                // the surrounding statement still produces output
+                                self.note(0, 4, format!("interpolation stress contained: [{}] {}", s.kind, s.message));
+                                out.push_str("null");
+                            }
+                        },
                     }
                 }
                 Ok(Value::Str(out))
@@ -600,6 +821,14 @@ impl Interp {
                         )),
                     },
                     UnOp::Not => Ok(Value::Bool(!v.truthy())),
+                    UnOp::BitNot => match v {
+                        Value::Int(i) => Ok(Value::Int(!i)),
+                        Value::Bool(b) => Ok(Value::Int(!(b as i64))),
+                        other => Err(Stress::new(
+                            "unfolded",
+                            format!("cannot bit-invert {}", other.type_name()),
+                        )),
+                    },
                 }
             }
             Expr::Binary(op, l, r) => {
@@ -696,6 +925,13 @@ impl Interp {
                             Ok(Value::Null)
                         }
                     },
+                    Value::Obj(d, m) => match m.borrow().iter().find(|(k, _)| matches!(k, Value::Str(s) if s == key)) {
+                        Some((_, v)) => Ok(v.clone()),
+                        None => {
+                            self.note(0, 4, format!("field '{}' missing on phenotype {}; null", key, d.name));
+                            Ok(Value::Null)
+                        }
+                    },
                     _ => {
                         self.note(0, 4, format!("member '{}' on {} is null", key, tv.type_name()));
                         Ok(Value::Null)
@@ -711,6 +947,28 @@ impl Interp {
                 self.call_method(env, tv, name, argvs)
             }
             Expr::Lambda(def) => Ok(Value::Gene(def.clone(), Some(env.clone()))),
+            Expr::Ternary(c, a, b) => {
+                let cv = self.eval(env, c)?;
+                if cv.truthy() {
+                    self.eval(env, a)
+                } else {
+                    self.eval(env, b)
+                }
+            }
+            Expr::New(name, args) => {
+                let def = match self.phenos.get(name) {
+                    Some(d) => d.clone(),
+                    None => {
+                        self.note(0, 4, format!("phenotype '{}' not declared; instance is an empty map", name));
+                        return Ok(Value::Map(Rc::new(RefCell::new(Vec::new()))));
+                    }
+                };
+                let mut argvs = Vec::with_capacity(args.len());
+                for a in args {
+                    argvs.push(self.eval(env, a)?);
+                }
+                self.construct_obj(&def, argvs)
+            }
             Expr::FateNew(name) => {
                 let def = match self.fates.get(name) {
                     Some(d) => d.clone(),
@@ -730,15 +988,34 @@ impl Interp {
             }
             Expr::Collect { var, iter, filter, body } => {
                 let itv = self.eval(env, iter)?;
-                let items: Vec<Value> = match itv {
-                    Value::List(l) => l.borrow().clone(),
-                    Value::Str(s) => s.chars().map(|c| Value::Str(c.to_string())).collect(),
-                    Value::Map(m) => m.borrow().iter().map(|(k, _)| k.clone()).collect(),
-                    _ => Vec::new(),
-                };
+                let mut source: Vec<Value> = Vec::new();
+                let mut seq_state: Option<Rc<RefCell<SeqState>>> = None;
+                match itv {
+                    Value::List(l) => source = l.borrow().clone(),
+                    Value::Str(s) => source = s.chars().map(|c| Value::Str(c.to_string())).collect(),
+                    Value::Map(m) => source = m.borrow().iter().map(|(k, _)| k.clone()).collect(),
+                    Value::Seq(_d, st) => seq_state = Some(st),
+                    _ => {}
+                }
                 let mut out = Vec::new();
-                for item in items {
+                let mut idx = 0usize;
+                loop {
                     self.tick()?;
+                    let item = if let Some(st) = &seq_state {
+                        self.seq_pull(st)?
+                    } else {
+                        if idx >= source.len() {
+                            None
+                        } else {
+                            let v = source[idx].clone();
+                            idx += 1;
+                            Some(v)
+                        }
+                    };
+                    let item = match item {
+                        Some(v) => v,
+                        None => break,
+                    };
                     let child = Env::new(Some(env.clone()));
                     child.define(var, item);
                     if let Some(f) = filter {
@@ -775,6 +1052,37 @@ impl Interp {
             },
             Sub => self.arith(l, r, "+-", |a, b| a.checked_sub(*b).map(Value::Int), |a, b| a - b),
             Mul => self.arith(l, r, "*", |a, b| a.checked_mul(*b).map(Value::Int), |a, b| a * b),
+            Pow => {
+                // 2**10 → int (checked); anything else promotes to float
+                match (l, r) {
+                    (Value::Int(a), Value::Int(b)) if *b >= 0 && *b <= u32::MAX as i64 => {
+                        a.checked_pow(*b as u32).map(Value::Int).ok_or_else(|| Stress::new("overflow", "int overflow in '**'"))
+                    }
+                    _ => {
+                        let (a, b) = self.as_floats(l, r)?;
+                        Ok(Value::Float(a.powf(b)))
+                    }
+                }
+            }
+            BitAnd | BitOr | BitXor => {
+                let (a, b) = self.as_ints(l, r)?;
+                Ok(Value::Int(match op {
+                    BinOp::BitAnd => a & b,
+                    BinOp::BitOr => a | b,
+                    _ => a ^ b,
+                }))
+            }
+            Shl | Shr => {
+                let (a, b) = self.as_ints(l, r)?;
+                if b < 0 || b > 63 {
+                    return Err(Stress::new("overflow", format!("shift amount {} out of range", b)));
+                }
+                Ok(Value::Int(if op == BinOp::Shl {
+                    a.checked_shl(b as u32).unwrap_or(0)
+                } else {
+                    a >> b // arithmetic (sign-extending), like Python
+                }))
+            }
             Div => {
                 let (a, b) = self.as_floats(l, r)?;
                 if b == 0.0 {
@@ -843,6 +1151,20 @@ impl Interp {
         }
     }
 
+    fn as_ints(&self, l: &Value, r: &Value) -> Result<(i64, i64), Stress> {
+        let conv = |v: &Value| -> Result<i64, Stress> {
+            match v {
+                Value::Int(i) => Ok(*i),
+                Value::Bool(b) => Ok(*b as i64),
+                other => Err(Stress::new(
+                    "unfolded",
+                    format!("bitwise op needs ints, found {}", other.type_name()),
+                )),
+            }
+        };
+        Ok((conv(l)?, conv(r)?))
+    }
+
     fn as_floats(&self, l: &Value, r: &Value) -> Result<(f64, f64), Stress> {
         match (l, r) {
             (Value::Int(a), Value::Int(b)) => Ok((*a as f64, *b as f64)),
@@ -870,6 +1192,15 @@ impl Interp {
     // ------------------------------------------------------- calls
     pub fn call_value(&mut self, env: &Rc<Env>, callee: &Value, args: Vec<Value>) -> Result<Value, Stress> {
         match callee {
+            Value::Gene(def, closure) if def.seq => {
+                // calling a sequence starts a worker; pulls are lazy
+                if args.len() > def.params.len() && !def.params.is_empty() {
+                    self.note(0, 4, format!("{} extra argument(s) in call to sequence ignored", args.len() - def.params.len()));
+                }
+                let snap = crate::genes::snapshot_globals(self);
+                let st = crate::genes::seq_start(def.clone(), args, snap);
+                Ok(Value::Seq(def.clone(), st))
+            }
             Value::Gene(def, closure) => self.call_gene(def.clone(), closure.clone(), args),
             Value::Native(name) => {
                 let n = *name;
@@ -883,6 +1214,18 @@ impl Interp {
     }
 
     pub fn call_named(&mut self, env: &Rc<Env>, name: &str, args: Vec<Value>) -> Result<Value, Stress> {
+        // toggle bistability gate: the repressed allele of a toggle pair refuses
+        // calls (acetylated genes override repression — open chromatin wins)
+        if let Some(&(ref a, ref b, a_on)) = self.toggles.iter().find(|(a, b, _)| a == name || b == name) {
+            let this_is_a = a == name;
+            let active = (a_on && this_is_a) || (!a_on && !this_is_a);
+            let immune = matches!(env.get(name), Some(Value::Gene(d, _)) if d.acetylate);
+            if !active && !immune {
+                let winner = if a_on { a } else { b };
+                self.note(0, 4, format!("toggle repressed: '{}' is the inactive allele ('{}' is on)", name, winner));
+                return Ok(Value::Null);
+            }
+        }
         // canonical builtin synonyms (print/echo/say/show → promote)
         if let Some((_, canon)) = BUILTIN_SYNONYMS.iter().find(|(s, _)| *s == name) {
             return self.call_builtin(env, canon, args);
@@ -930,11 +1273,31 @@ impl Interp {
     }
 
     pub fn call_gene(&mut self, def: Arc<GeneDef>, closure: Option<Rc<Env>>, args: Vec<Value>) -> Result<Value, Stress> {
+        // recursion depth limit (SPEC §7): runaway self-transcription is
+        // contained as catchable overflow stress instead of a hard crash
+        self.depth += 1;
+        if self.depth > self.depth_limit {
+            self.depth -= 1;
+            return Err(Stress::new("overflow", format!("recursion depth limit ({}) exceeded", self.depth_limit)));
+        }
+        let result = self.call_gene_inner(def, closure, args);
+        self.depth -= 1;
+        result
+    }
+
+    fn call_gene_inner(&mut self, def: Arc<GeneDef>, closure: Option<Rc<Env>>, args: Vec<Value>) -> Result<Value, Stress> {
         let name = def.name.clone().unwrap_or_else(|| "<lambda>".into());
         *self.call_counts.entry(name.clone()).or_insert(0) += 1;
-        let base = self.call_counts.get(&name).cloned().unwrap_or(0);
-        if self.profiling {
-            *self.call_time.entry(name.clone()).or_insert(0.0) += 0.0; // replaced by timed wrapper in profile mode
+        // burst-index binning: 20 calls per bin, per gene (gene-expression
+        // burstiness is measured on per-gene time bins, not across genes)
+        self.call_clock += 1;
+        let bucket = self.call_clock / 20;
+        *self.gene_buckets.entry(name.clone()).or_default().entry(bucket).or_insert(0) += 1;
+        // @methylate: transcriptionally repressed genes announce their first
+        // call (suppressed by .cell `methylate.quiet = true`)
+        if def.methylate && !self.methyl_quiet && !self.methyl_noted.contains(&name) {
+            self.methyl_noted.insert(name.clone());
+            self.note(0, 4, format!("methylated call: '{}' (chromatin repressed)", name));
         }
         let fenv = match &closure {
             Some(e) => Env::new(Some(e.clone())),
@@ -958,8 +1321,10 @@ impl Interp {
         if args.len() > def.params.len() && !def.params.is_empty() {
             self.note(0, 4, format!("{} extra argument(s) in call to {} ignored", args.len() - def.params.len(), name));
         }
-        // entry bookkeeping for telemetry
+        // inclusive/exclusive timing: exclusive time subtracts children so a
+        // caller never inflates itself with its callees' cost
         let start = if self.profiling { Some(crate::ffi::now_ns()) } else { None };
+        self.call_stack.push((name.clone(), start.unwrap_or(0.0), 0.0));
         // uORF guard
         if let Some((cond, gbody)) = &def.guard {
             let ok = self.eval(&fenv, cond).map(|v| v.truthy()).unwrap_or(false);
@@ -975,6 +1340,7 @@ impl Interp {
                         }
                     }
                 }
+                self.close_timing(&name);
                 return Ok(match flowed {
                     Flow::Ret(v) => v,
                     _ => {
@@ -985,16 +1351,200 @@ impl Interp {
             }
         }
         let result = self.exec_block(&fenv, &def.body);
-        if let Some(t0) = start {
-            let dt = (crate::ffi::now_ns() - t0) / 1000.0;
-            *self.call_time.entry(name.clone()).or_insert(0.0) += dt;
-        }
-        let _ = base;
+        self.close_timing(&name);
         match result? {
             Flow::Ret(v) => Ok(v),
             _ => Ok(Value::Null),
         }
     }
+
+    /// Close the timing frame for a gene call: accumulate exclusive (self)
+    /// time and hand the inclusive time to the parent's child budget.
+    fn close_timing(&mut self, name: &str) {
+        if let Some((n, t0, child_acc)) = self.call_stack.pop() {
+            if self.profiling {
+                let incl = (crate::ffi::now_ns() - t0) / 1000.0;
+                let self_us = (incl - child_acc).max(0.0);
+                *self.call_time.entry(n.clone()).or_insert(0.0) += incl;
+                *self.call_time_self.entry(n.clone()).or_insert(0.0) += self_us;
+                if let Some(parent) = self.call_stack.last_mut() {
+                    parent.2 += incl; // my inclusive time is my parent's child time
+                }
+            }
+            let _ = (n, child_acc);
+        }
+        let _ = name;
+    }
+
+    /// Pull the next value from a sequence; Ok(None) means exhaustion.
+    pub fn seq_pull(&mut self, st: &Rc<RefCell<SeqState>>) -> Result<Option<Value>, Stress> {
+        loop {
+            let msg = {
+                let mut b = st.borrow_mut();
+                if b.done {
+                    return Ok(None);
+                }
+                if let Some(s) = b.stress.take() {
+                    b.done = true;
+                    return Err(Stress::new(&s.0, s.1));
+                }
+                b.rx.take()
+            };
+            let rx = match msg {
+                Some(rx) => rx,
+                None => {
+                    // another pull already consumed the receiver; done
+                    let mut b = st.borrow_mut();
+                    b.done = true;
+                    return Ok(None);
+                }
+            };
+            let m = rx.recv();
+            let mut b = st.borrow_mut();
+            match m {
+                Ok(crate::value::SeqMsg::Yield(sv)) => {
+                    b.rx = Some(rx); // put the receiver back for the next pull
+                    drop(b);
+                    return Ok(Some(crate::genes::from_send(sv)));
+                }
+                Ok(crate::value::SeqMsg::Done(notes, stress)) => {
+                    b.done = true;
+                    for n in notes {
+                        let mut n2 = n;
+                        n2.message = format!("[seq] {}", n2.message);
+                        self.notes.push(n2);
+                    }
+                    if let Some((k, m)) = stress {
+                        b.stress = Some((k, m));
+                        drop(b);
+                        return Err(self.seq_stress(st));
+                    }
+                    return Ok(None);
+                }
+                Err(_) => {
+                    b.done = true;
+                    return Ok(None);
+                }
+            }
+        }
+    }
+
+    fn seq_stress(&mut self, st: &Rc<RefCell<SeqState>>) -> Stress {
+        let s = st.borrow().stress.clone();
+        match s {
+            Some((k, m)) => Stress::new(&k, m),
+            None => Stress::new("unfolded", "sequence stress"),
+        }
+    }
+
+    /// Build a phenotype instance: parent fields first (differentiation
+    /// lineage), then own overrides, then the init method if declared.
+    pub fn construct_obj(&mut self, def: &Arc<PhenoDef>, args: Vec<Value>) -> Result<Value, Stress> {
+        let m: crate::value::MapRef = Rc::new(RefCell::new(Vec::new()));
+        // gather the lineage root-first
+        let chain = self.pheno_chain(def);
+        for d in chain.iter().rev() {
+            for (fname, fexpr) in &d.fields {
+                let v = self.eval(&self.global.clone(), fexpr).unwrap_or(Value::Null);
+                self.map_insert(&m, Value::Str(fname.clone()), v);
+            }
+        }
+        let obj = Value::Obj(def.clone(), m.clone());
+        // constructor: own init, else nearest ancestor's
+        for d in chain.iter().rev() {
+            if let Some(init) = d.methods.iter().find(|g| g.name.as_deref() == Some("init")) {
+                self.call_method_gene(init.clone(), obj.clone(), args)?;
+                break;
+            }
+        }
+        Ok(Value::Obj(def.clone(), m))
+    }
+
+    /// Inheritance lineage (child → root), capped for cycle safety.
+    fn pheno_chain(&self, def: &Arc<PhenoDef>) -> Vec<Arc<PhenoDef>> {
+        let mut chain: Vec<Arc<PhenoDef>> = Vec::new();
+        let mut cur = Some(def.clone());
+        let mut hops = 0;
+        while let Some(d) = cur {
+            chain.push(d.clone());
+            hops += 1;
+            if hops > 32 {
+                break;
+            }
+            cur = d.parent.as_ref().and_then(|p| self.phenos.get(p).cloned());
+        }
+        chain
+    }
+
+    /// Call a phenotype method: binds `self` plus params, supports guard, and
+    /// records telemetry under `Name.method`.
+    pub fn call_method_gene(&mut self, def: Arc<GeneDef>, self_val: Value, args: Vec<Value>) -> Result<Value, Stress> {
+        self.depth += 1;
+        if self.depth > self.depth_limit {
+            self.depth -= 1;
+            return Err(Stress::new("overflow", format!("recursion depth limit ({}) exceeded", self.depth_limit)));
+        }
+        let r = self.call_method_gene_inner(def, self_val, args);
+        self.depth -= 1;
+        r
+    }
+
+    fn call_method_gene_inner(&mut self, def: Arc<GeneDef>, self_val: Value, args: Vec<Value>) -> Result<Value, Stress> {
+        let name = def.name.clone().unwrap_or_else(|| "<method>".into());
+        *self.call_counts.entry(name.clone()).or_insert(0) += 1;
+        self.call_clock += 1;
+        let bucket = self.call_clock / 20;
+        *self.gene_buckets.entry(name.clone()).or_default().entry(bucket).or_insert(0) += 1;
+        if def.methylate && !self.methyl_quiet && !self.methyl_noted.contains(&name) {
+            self.methyl_noted.insert(name.clone());
+            self.note(0, 4, format!("methylated call: '{}' (chromatin repressed)", name));
+        }
+        let fenv = Env::new(Some(self.global.clone()));
+        fenv.define("self", self_val);
+        for (i, (pname, default)) in def.params.iter().enumerate() {
+            if pname.is_empty() || pname == "?" || pname == "self" {
+                continue;
+            }
+            if let Some(a) = args.get(i) {
+                fenv.define(pname, a.clone());
+            } else if let Some(d) = default {
+                let dv = self.eval(&fenv, d).unwrap_or(Value::Null);
+                fenv.define(pname, dv);
+            } else {
+                self.note(0, 4, format!("missing argument '{}' in call to {}; bound null", pname, name));
+                fenv.define(pname, Value::Null);
+            }
+        }
+        let start = if self.profiling { Some(crate::ffi::now_ns()) } else { None };
+        self.call_stack.push((name.clone(), start.unwrap_or(0.0), 0.0));
+        if let Some((cond, gbody)) = &def.guard {
+            let ok = self.eval(&fenv, cond).map(|v| v.truthy()).unwrap_or(false);
+            if !ok {
+                self.note(0, 4, format!("guard tripped calling {}", name));
+                let mut flowed = Flow::Norm;
+                for s in gbody {
+                    match self.exec_stmt(&fenv, s)? {
+                        Flow::Norm => {}
+                        other => {
+                            flowed = other;
+                            break;
+                        }
+                    }
+                }
+                self.close_timing(&name);
+                return Ok(match flowed {
+                    Flow::Ret(v) => v,
+                    _ => Value::Null,
+                });
+            }
+        }
+        let result = self.exec_block(&fenv, &def.body);
+        self.close_timing(&name);
+        match result? {
+            Flow::Ret(v) => Ok(v),
+            _ => Ok(Value::Null),
+        }
+ }
 
     // ------------------------------------------------------- builtins
     fn call_builtin(&mut self, env: &Rc<Env>, name: &str, args: Vec<Value>) -> Result<Value, Stress> {
@@ -1112,9 +1662,11 @@ impl Interp {
                 Some(Value::Float(f)) => Ok(Value::Float(*f)),
                 _ => Ok(Value::Int(0)),
             },
-            "type" => Ok(Value::Str(
-                args.first().map(|v| v.type_name().to_string()).unwrap_or_default(),
-            )),
+            "type" => Ok(Value::Str(match args.first() {
+                Some(Value::Obj(d, _)) => d.name.clone(), // like Python: instance's class name
+                Some(v) => v.type_name().to_string(),
+                None => "null".to_string(),
+            })),
             "abs" => match args.first() {
                 Some(Value::Int(i)) => Ok(Value::Int(i.abs())),
                 Some(Value::Float(f)) => Ok(Value::Float(f.abs())),
@@ -1205,6 +1757,7 @@ impl Interp {
             }
             "assert" => {
                 let ok = args.first().map(|v| v.truthy()).unwrap_or(false);
+                self.asserts_run += 1;
                 if !ok {
                     let msg = args.get(1).map(|v| v.display()).unwrap_or_else(|| "assertion failed".into());
                     return Err(Stress::new("burned", msg));
@@ -1325,33 +1878,50 @@ impl Interp {
                     .iter()
                     .map(|(k, v)| (Value::Str(k.clone()), Value::Int(*v as i64)))
                     .collect();
-                // Fano factor over per-gene call counts
-                let n = self.call_counts.len();
-                let mean = if n > 0 {
-                    self.call_counts.values().sum::<u64>() as f64 / n as f64
-                } else {
-                    0.0
-                };
-                let var = if n > 0 {
-                    self.call_counts.values().map(|c| (*c as f64 - mean).powi(2)).sum::<f64>() / n as f64
-                } else {
-                    0.0
-                };
-                let fano = if mean > 0.0 { var / mean } else { 0.0 };
+                // burst index (variance/mean of per-gene call counts over time
+                // bins of 20 calls): constitutive genes ≈ 0, bursty genes > 1
+                let total_bins = (self.call_clock / 20) + 1;
+                let mut burst_total = 0.0;
+                let mut burst_n = 0usize;
+                let mut burst_by_gene: Vec<(Value, Value)> = Vec::new();
+                for (g, bins) in &self.gene_buckets {
+                    let n = total_bins as f64;
+                    let total: u64 = bins.values().sum();
+                    let mean = total as f64 / n;
+                    let var = (0..total_bins)
+                        .map(|b| {
+                            let c = *bins.get(&b).unwrap_or(&0) as f64;
+                            (c - mean).powi(2)
+                        })
+                        .sum::<f64>()
+                        / n;
+                    let burst = if mean > 0.0 { var / mean } else { 0.0 };
+                    burst_by_gene.push((Value::Str(g.clone()), Value::Float(burst)));
+                    burst_total += burst;
+                    burst_n += 1;
+                }
+                burst_by_gene.sort_by(|a, b| match (&a.0, &b.0) {
+                    (Value::Str(x), Value::Str(y)) => x.cmp(y),
+                    _ => std::cmp::Ordering::Equal,
+                });
+                let burst_avg = if burst_n > 0 { burst_total / burst_n as f64 } else { 0.0 };
+                // transcript maturation: mature = genes translated at least
+                // once; nascent = defined but never called
                 let total_defined = self.defined_genes.len();
-                let spliced = self.call_counts.len().min(total_defined);
-                let unspliced = total_defined.saturating_sub(spliced);
-                let velocity = if total_defined > 0 {
-                    unspliced as f64 / total_defined as f64
+                let mature = self.call_counts.len().min(total_defined);
+                let nascent = total_defined.saturating_sub(mature);
+                let maturation = if total_defined > 0 {
+                    mature as f64 / total_defined as f64
                 } else {
                     0.0
                 };
                 let m = Rc::new(RefCell::new(vec![
                     (Value::Str("calls".into()), Value::Map(Rc::new(RefCell::new(counts)))),
-                    (Value::Str("fano".into()), Value::Float(fano)),
-                    (Value::Str("spliced".into()), Value::Int(spliced as i64)),
-                    (Value::Str("unspliced".into()), Value::Int(unspliced as i64)),
-                    (Value::Str("velocity".into()), Value::Float(velocity)),
+                    (Value::Str("burst".into()), Value::Float(burst_avg)),
+                    (Value::Str("burst_by_gene".into()), Value::Map(Rc::new(RefCell::new(burst_by_gene)))),
+                    (Value::Str("mature".into()), Value::Int(mature as i64)),
+                    (Value::Str("nascent".into()), Value::Int(nascent as i64)),
+                    (Value::Str("maturation".into()), Value::Float(maturation)),
                 ]));
                 Ok(Value::Map(m))
             }
@@ -1382,6 +1952,32 @@ impl Interp {
                 self.repressi_i = (self.repressi_i + 1) % self.repressi_ring.len();
                 Ok(Value::Int(self.repressi_i as i64))
             }
+            "repressi_start" => {
+                // start the wall-clock oscillator: one thread tick advances the
+                // ring each period (deterministic manual rings need no thread)
+                let ms = match args.first() {
+                    Some(Value::Int(i)) => *i as u64,
+                    Some(Value::Float(f)) => (*f).max(0.0) as u64,
+                    _ => 1000,
+                };
+                if self.repressi_ring.is_empty() {
+                    self.note(0, 4, "repressi_start: no repressilator ring declared");
+                    return Ok(Value::Bool(false));
+                }
+                if ms == 0 {
+                    self.note(0, 4, "repressi_start period must be > 0 ms");
+                    return Ok(Value::Bool(false));
+                }
+                let counter = Arc::new(AtomicU64::new(0));
+                let c2 = counter.clone();
+                std::thread::spawn(move || loop {
+                    std::thread::sleep(std::time::Duration::from_millis(ms));
+                    c2.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                });
+                self.repressi_atomic = Some(counter);
+                self.note(0, 1, format!("repressilator oscillating every {} ms", ms));
+                Ok(Value::Bool(true))
+            }
             "repressi_state" => {
                 let n = self.repressi_ring.len();
                 let idx = match &self.repressi_atomic {
@@ -1396,14 +1992,18 @@ impl Interp {
             }
             "grn_fire" => {
                 let seed = args.first().map(|v| v.display()).unwrap_or_default();
-                self.grn_levels.clear();
+                // the network is STATEFUL: levels persist across fires, so
+                // inhibition can counter earlier activation (homeostasis)
                 for e in &self.grn_edges {
                     self.grn_levels.entry(e.from.clone()).or_insert(0.0);
                     self.grn_levels.entry(e.to.clone()).or_insert(0.0);
                 }
-                *self.grn_levels.entry(seed.clone()).or_insert(0.0) = 1.0;
-                // propagate waves (activates: max-propagate × strength^wave; inhibits: subtract)
-                for _wave in 0..10 {
+                let cur = *self.grn_levels.get(&seed).unwrap_or(&0.0);
+                self.grn_levels.insert(seed.clone(), (cur + 1.0).min(1.0));
+                // propagate waves: child = max(child, parent × strength^wave)
+                // (docs formula); edges with a threshold use a Hill-style
+                // dose–response n=2 curve instead of the linear decay
+                for _wave in 1..=10 {
                     let mut changed = false;
                     let snapshot = self.grn_levels.clone();
                     for e in &self.grn_edges {
@@ -1411,7 +2011,14 @@ impl Interp {
                         if parent <= 0.0 {
                             continue;
                         }
-                        let influence = parent * e.strength.powi(_wave as i32 + 1);
+                        let influence = match e.threshold {
+                            Some(t) if t > 0.0 => {
+                                let p2 = parent * parent;
+                                let t2 = t * t;
+                                e.strength * (p2 / (p2 + t2))
+                            }
+                            _ => parent * e.strength.powi(_wave),
+                        };
                         let cur = *self.grn_levels.get(&e.to).unwrap_or(&0.0);
                         let next = if e.inhibit {
                             (cur - influence).max(0.0)
@@ -1454,6 +2061,266 @@ impl Interp {
                     _ => -1,
                 };
                 crate::genes::join_task(self, id)
+            }
+            // -------------------------------------------------- math
+            "floor" => Ok(Value::Int(match args.first() {
+                Some(Value::Int(i)) => *i,
+                Some(Value::Float(f)) => f.floor() as i64,
+                other => {
+                    self.note(0, 4, format!("floor of {:?}; 0", other.map(|v| v.type_name())));
+                    0
+                }
+            })),
+            "ceil" => Ok(Value::Int(match args.first() {
+                Some(Value::Int(i)) => *i,
+                Some(Value::Float(f)) => f.ceil() as i64,
+                _ => 0,
+            })),
+            "sqrt" => {
+                let (a, _) = match args.first() {
+                    Some(v) => self.as_floats(v, &Value::Int(1))?,
+                    None => (0.0, 1.0),
+                };
+                if a < 0.0 {
+                    return Err(Stress::new("unfolded", "sqrt of negative number"));
+                }
+                Ok(Value::Float(a.sqrt()))
+            }
+            "pow" => {
+                let (a, b) = match (args.first(), args.get(1)) {
+                    (Some(x), Some(y)) => self.as_floats(x, y)?,
+                    _ => {
+                        self.note(0, 4, "pow(x, y) needs two numbers; 0");
+                        (0.0, 0.0)
+                    }
+                };
+                Ok(Value::Float(a.powf(b)))
+            }
+            "random" => {
+                // xorshift64* — identical state machine in both implementations
+                let mut x = self.rng;
+                x ^= x >> 12;
+                x ^= x << 25;
+                x ^= x >> 27;
+                self.rng = x;
+                match args.first() {
+                    Some(Value::Int(n)) if *n > 0 => {
+                        let r = (x.wrapping_mul(0x2545F4914F6CDD1D)) as u64;
+                        Ok(Value::Int((r % (*n as u64)) as i64))
+                    }
+                    _ => {
+                        let f = ((x >> 11) as f64) / 9_007_199_254_740_992.0; // 2^53
+                        Ok(Value::Float(f))
+                    }
+                }
+            }
+            "randomize" => {
+                let s = match args.first() {
+                    Some(Value::Int(i)) => *i as u64,
+                    Some(Value::Float(f)) => (*f as i64) as u64,
+                    _ => 0x9E3779B97F4A7C15,
+                };
+                self.rng = if s == 0 { 0x9E3779B97F4A7C15 } else { s };
+                Ok(Value::Null)
+            }
+            "chr" => Ok(Value::Str(match args.first() {
+                Some(Value::Int(i)) if *i >= 0 && *i <= 0x10FFFF => {
+                    char::from_u32(*i as u32).map(|c| c.to_string()).unwrap_or_default()
+                }
+                _ => String::new(),
+            })),
+            "ord" => Ok(Value::Int(match args.first() {
+                Some(Value::Str(s)) => s.chars().next().map(|c| c as i64).unwrap_or(0),
+                _ => 0,
+            })),
+            "now" => Ok(Value::Float(crate::ffi::now_ns() / 1e9)),
+            "sleep" => {
+                let ms = match args.first() {
+                    Some(Value::Int(i)) => (*i).max(0) as u64,
+                    Some(Value::Float(f)) => (*f).max(0.0) as u64,
+                    _ => 0,
+                };
+                std::thread::sleep(std::time::Duration::from_millis(ms));
+                Ok(Value::Null)
+            }
+            "argv" => Ok(Value::List(Rc::new(RefCell::new(
+                self.cli_args.iter().map(|a| Value::Str(a.clone())).collect(),
+            )))),
+            // -------------------------------------------------- filesystem (capability-gated)
+            "read_file" => {
+                let path = args.first().map(|v| v.display()).unwrap_or_default();
+                self.caps.check(&self.caps.read, "read", &path)?;
+                match std::fs::read_to_string(&path) {
+                    Ok(s) => Ok(Value::Str(s)),
+                    Err(e) => Err(Stress::new("missing", format!("read_file '{}': {}", path, e))),
+                }
+            }
+            "write_file" => {
+                let path = args.first().map(|v| v.display()).unwrap_or_default();
+                let body = args.get(1).map(|v| v.display()).unwrap_or_default();
+                self.caps.check(&self.caps.write, "write", &path)?;
+                match std::fs::write(&path, body) {
+                    Ok(()) => Ok(Value::Bool(true)),
+                    Err(e) => Err(Stress::new("missing", format!("write_file '{}': {}", path, e))),
+                }
+            }
+            "append_file" => {
+                let path = args.first().map(|v| v.display()).unwrap_or_default();
+                let body = args.get(1).map(|v| v.display()).unwrap_or_default();
+                self.caps.check(&self.caps.write, "write", &path)?;
+                match std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+                    Ok(mut f) => {
+                        use std::io::Write;
+                        match f.write_all(body.as_bytes()) {
+                            Ok(()) => Ok(Value::Bool(true)),
+                            Err(e) => Err(Stress::new("missing", format!("append_file '{}': {}", path, e))),
+                        }
+                    }
+                    Err(e) => Err(Stress::new("missing", format!("append_file '{}': {}", path, e))),
+                }
+            }
+            "exists" => {
+                let path = args.first().map(|v| v.display()).unwrap_or_default();
+                self.caps.check(&self.caps.read, "read", &path)?;
+                Ok(Value::Bool(std::path::Path::new(&path).exists()))
+            }
+            "read_dir" => {
+                let path = args.first().map(|v| v.display()).unwrap_or_default();
+                self.caps.check(&self.caps.read, "read", &path)?;
+                match std::fs::read_dir(&path) {
+                    Ok(rd) => {
+                        let mut names: Vec<Value> = Vec::new();
+                        for e in rd.filter_map(|e| e.ok()) {
+                            names.push(Value::Str(e.file_name().to_string_lossy().to_string()));
+                        }
+                        names.sort_by(|a, b| match (a, b) {
+                            (Value::Str(x), Value::Str(y)) => x.cmp(y),
+                            _ => std::cmp::Ordering::Equal,
+                        });
+                        Ok(Value::List(Rc::new(RefCell::new(names))))
+                    }
+                    Err(e) => Err(Stress::new("missing", format!("read_dir '{}': {}", path, e))),
+                }
+            }
+            // -------------------------------------------------- process / net (capability-gated)
+            "run" => {
+                let prog = args.first().map(|v| v.display()).unwrap_or_default();
+                let prog_args: Vec<String> = match args.get(1) {
+                    Some(Value::List(l)) => l.borrow().iter().map(|v| v.display()).collect(),
+                    _ => Vec::new(),
+                };
+                self.caps.check(&self.caps.run, "run", &prog)?;
+                let out = std::process::Command::new(&prog).args(&prog_args).output();
+                match out {
+                    Ok(o) => {
+                        let stdout = String::from_utf8_lossy(&o.stdout).to_string();
+                        let stderr = String::from_utf8_lossy(&o.stderr).to_string();
+                        let m = Rc::new(RefCell::new(vec![
+                            (Value::Str("code".into()), Value::Int(o.status.code().unwrap_or(-1) as i64)),
+                            (Value::Str("stdout".into()), Value::Str(stdout)),
+                            (Value::Str("stderr".into()), Value::Str(stderr)),
+                            (Value::Str("ok".into()), Value::Bool(o.status.success())),
+                        ]));
+                        Ok(Value::Map(m))
+                    }
+                    Err(e) => Err(Stress::new("missing", format!("run '{}': {}", prog, e))),
+                }
+            }
+            "http_get" => {
+                let host = args.first().map(|v| v.display()).unwrap_or_default();
+                let port = match args.get(1) {
+                    Some(Value::Int(p)) => *p as u16,
+                    _ => 80,
+                };
+                let path = args.get(2).map(|v| v.display()).unwrap_or_else(|| "/".into());
+                let target = format!("{}:{}", host, port);
+                self.caps.check(&self.caps.net, "net", &target)?;
+                match http_get(&host, port, &path) {
+                    Ok(body) => Ok(Value::Str(body)),
+                    Err(e) => Err(Stress::new("missing", format!("http_get '{}': {}", target, e))),
+                }
+            }
+            "serve" => {
+                let port = match args.first() {
+                    Some(Value::Int(p)) => *p as u16,
+                    _ => 8080,
+                };
+                let target = format!("127.0.0.1:{}", port);
+                self.caps.check(&self.caps.net, "net", &target)?;
+                match crate::interp::serve_start(port) {
+                    Ok(()) => Ok(Value::Bool(true)),
+                    Err(e) => Err(Stress::new("missing", format!("serve port {}: {}", port, e))),
+                }
+            }
+            "recv_request" => {
+                // poll the shared request queue: {conn, method, path, body} or null
+                match crate::interp::recv_request() {
+                    Some((conn, method, path, body)) => {
+                        let m = Rc::new(RefCell::new(vec![
+                            (Value::Str("conn".into()), Value::Int(conn as i64)),
+                            (Value::Str("method".into()), Value::Str(method)),
+                            (Value::Str("path".into()), Value::Str(path)),
+                            (Value::Str("body".into()), Value::Str(body)),
+                        ]));
+                        Ok(Value::Map(m))
+                    }
+                    None => Ok(Value::Null),
+                }
+            }
+            "send_response" => {
+                let conn = match args.first() {
+                    Some(Value::Int(i)) => *i as u64,
+                    _ => 0,
+                };
+                let status = args.get(1).map(|v| v.display()).unwrap_or_else(|| "200".into());
+                let ctype = args.get(2).map(|v| v.display()).unwrap_or_else(|| "text/html".into());
+                let body = args.get(3).map(|v| v.display()).unwrap_or_default();
+                match crate::interp::send_response(conn, &status, &ctype, &body) {
+                    Ok(()) => Ok(Value::Bool(true)),
+                    Err(e) => Err(Stress::new("missing", format!("send_response: {}", e))),
+                }
+            }
+            // -------------------------------------------------- json
+            "json_parse" => {
+                let s = args.first().map(|v| v.display()).unwrap_or_default();
+                match json_parse(&s) {
+                    Ok(v) => Ok(v),
+                    Err(e) => Err(Stress::new("unfolded", format!("json_parse: {}", e))),
+                }
+            }
+            "json_str" => {
+                let v = args.first().cloned().unwrap_or(Value::Null);
+                Ok(Value::Str(json_stringify(&v)))
+            }
+            // -------------------------------------------------- env (capability-gated)
+            "env" => {
+                let name = args.first().map(|v| v.display()).unwrap_or_default();
+                self.caps.check(&self.caps.env, "env", &name)?;
+                Ok(match std::env::var(&name) {
+                    Ok(v) => Value::Str(v),
+                    Err(_) => Value::Null,
+                })
+            }
+            "call" => {
+                // dynamic dispatch: call(name_or_gene, args_list) — the
+                // ribosome translating a named transcript on demand
+                let target = args.first().cloned().unwrap_or(Value::Null);
+                let call_args: Vec<Value> = match args.get(1) {
+                    Some(Value::List(l)) => l.borrow().clone(),
+                    _ => Vec::new(),
+                };
+                match &target {
+                    Value::Str(name) => {
+                        if BUILTIN_SYNONYMS.iter().any(|(s, _)| s == name)
+                            || BUILTIN_NAMES.contains(&name.as_str())
+                        {
+                            return self.call_builtin(env, name, call_args);
+                        }
+                        let v = env.get(name).unwrap_or(Value::Null);
+                        self.call_value(env, &v, call_args)
+                    }
+                    other => self.call_value(env, other, call_args),
+                }
             }
             _ => {
                 self.note(0, 4, format!("unknown builtin '{}'; null", name));
@@ -1640,14 +2507,15 @@ impl Interp {
                     let cmp = args.first().cloned().unwrap_or(Value::Null);
                     let mut v = l.borrow().clone();
                     if let Value::Gene(_, _) | Value::Native(_) = &cmp {
-                        // insertion sort with user comparator (a before b)
+                        // insertion sort with user comparator: cmp(a, b) true
+                        // when a belongs BEFORE b (SPEC §sorted-order)
                         for i in 1..v.len() {
                             let mut j = i;
                             while j > 0 {
                                 let a = v[j - 1].clone();
                                 let b = v[j].clone();
                                 let before = self.call_value(env, &cmp, vec![a, b])?.truthy();
-                                if before {
+                                if !before {
                                     v.swap(j - 1, j);
                                     j -= 1;
                                 } else {
@@ -1753,12 +2621,376 @@ impl Interp {
                     }
                 },
             },
+            Value::Seq(_d, st) => match name {
+                "next" => {
+                    match self.seq_pull(&st)? {
+                        Some(v) => Ok(v),
+                        None => Ok(Value::Null),
+                    }
+                }
+                "collect" => {
+                    let mut out = Vec::new();
+                    loop {
+                        match self.seq_pull(&st)? {
+                            Some(v) => out.push(v),
+                            None => break,
+                        }
+                    }
+                    Ok(Value::List(Rc::new(RefCell::new(out))))
+                }
+                _ => {
+                    self.note(0, 4, format!("unknown sequence method '{}'; null", name));
+                    Ok(Value::Null)
+                }
+            },
+            Value::Obj(def, fields) => {
+                // phenotype method dispatch: own methods first, then the
+                // differentiation lineage (parent chain)
+                let chain = self.pheno_chain(&def);
+                for d in chain.iter() {
+                    if let Some(g) = d.methods.iter().find(|g| g.name.as_deref() == Some(name)) {
+                        let obj = Value::Obj(def.clone(), fields.clone());
+                        return self.call_method_gene(g.clone(), obj, args);
+                    }
+                }
+                // fall back to field access as a zero-arg call
+                match fields.borrow().iter().find(|(k, _)| matches!(k, Value::Str(s) if s == name)) {
+                    Some((_, v)) => self.call_value(env, v, args),
+                    None => {
+                        self.note(0, 4, format!("phenotype {} has no method '{}'; null", def.name, name));
+                        Ok(Value::Null)
+                    }
+                }
+            }
             other => {
                 self.note(0, 4, format!("{} has no method '{}'; null", other.type_name(), name));
                 Ok(Value::Null)
             }
         }
     }
+}
+
+// ------------------------------------------------------------------ server
+// A tiny built-in HTTP server (capability-gated): one listener thread feeds a
+// shared request queue; the Operon program polls recv_request / answers with
+// send_response. Global state because the toolchain binary hosts one process.
+use std::collections::HashMap as StdHashMap;
+use std::io::Read;
+use std::net::{TcpListener, TcpStream};
+use std::sync::Mutex;
+
+struct ServerState {
+    rx: mpsc::Receiver<(u64, String, String, String)>,
+    conns: Arc<Mutex<StdHashMap<u64, TcpStream>>>,
+    next_conn: Arc<AtomicU64>,
+}
+
+static SERVER: Mutex<Option<ServerState>> = Mutex::new(None);
+
+pub fn serve_start(port: u16) -> Result<(), String> {
+    let mut guard = SERVER.lock().map_err(|_| "server lock poisoned")?;
+    if guard.is_some() {
+        return Ok(()); // already running
+    }
+    let listener = TcpListener::bind(("127.0.0.1", port)).map_err(|e| e.to_string())?;
+    let (tx, rx) = mpsc::channel::<(u64, String, String, String)>();
+    let conns: Arc<Mutex<StdHashMap<u64, TcpStream>>> = Arc::new(Mutex::new(StdHashMap::new()));
+    let next_conn = Arc::new(AtomicU64::new(1));
+    let conns2 = conns.clone();
+    let next2 = next_conn.clone();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let mut stream = match stream {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            let conn = next2.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            // read the request head (and body if declared)
+            let mut buf = Vec::new();
+            let mut byte = [0u8; 1];
+            let mut head_end = None;
+            loop {
+                match stream.read(&mut byte) {
+                    Ok(0) => break,
+                    Ok(_) => {
+                        buf.push(byte[0]);
+                        if buf.len() >= 4 && &buf[buf.len() - 4..] == b"\r\n\r\n" {
+                            head_end = Some(buf.len());
+                            break;
+                        }
+                        if buf.len() > 64 * 1024 {
+                            break;
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+            let head = String::from_utf8_lossy(&buf).to_string();
+            let mut body = String::new();
+            let mut method = "GET".into();
+            let mut path = "/".into();
+            if let Some(l0) = head.lines().next() {
+                let mut it = l0.split_whitespace();
+                method = it.next().unwrap_or("GET").to_string();
+                path = it.next().unwrap_or("/").to_string();
+            }
+            let clen = head
+                .to_ascii_lowercase()
+                .lines()
+                .find_map(|l| l.strip_prefix("content-length:").map(|v| v.trim().to_string()))
+                .and_then(|v| v.parse::<usize>().ok())
+                .unwrap_or(0);
+            if clen > 0 && clen <= 8 * 1024 * 1024 {
+                let mut rest = vec![0u8; clen];
+                if stream.read_exact(&mut rest).is_ok() {
+                    body = String::from_utf8_lossy(&rest).to_string();
+                }
+            }
+            let _ = head_end;
+            conns2.lock().ok().map(|mut c| c.insert(conn, stream));
+            let _ = tx.send((conn, method, path, body));
+        }
+    });
+    *guard = Some(ServerState { rx, conns, next_conn });
+    Ok(())
+}
+
+pub fn recv_request() -> Option<(u64, String, String, String)> {
+    let guard = SERVER.lock().ok()?;
+    let st = guard.as_ref()?;
+    match st.rx.recv_timeout(std::time::Duration::from_millis(10)) {
+        Ok(r) => Some(r),
+        Err(mpsc::RecvTimeoutError::Timeout) => None,
+        Err(mpsc::RecvTimeoutError::Disconnected) => None,
+    }
+}
+
+pub fn send_response(conn: u64, status: &str, ctype: &str, body: &str) -> Result<(), String> {
+    let guard = SERVER.lock().map_err(|_| "server lock poisoned")?;
+    let st = guard.as_ref().ok_or("server not running")?;
+    let stream = st.conns.lock().map_err(|_| "conn lock poisoned")?.remove(&conn);
+    let mut stream = stream.ok_or("unknown connection id")?;
+    let head = format!(
+        "HTTP/1.1 {} OK-ish\r\nContent-Type: {}; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        status, ctype, body.len()
+    );
+    use std::io::Write;
+    stream
+        .write_all(head.as_bytes())
+        .and_then(|_| stream.write_all(body.as_bytes()))
+        .and_then(|_| stream.flush())
+        .map_err(|e| e.to_string())
+}
+
+fn http_get(host: &str, port: u16, path: &str) -> Result<String, String> {
+    use std::io::{Read, Write};
+    let mut stream = TcpStream::connect((host, port)).map_err(|e| e.to_string())?;
+    let req = format!("GET {} HTTP/1.0\r\nHost: {}\r\nUser-Agent: operon\r\n\r\n", path, host);
+    stream.write_all(req.as_bytes()).map_err(|e| e.to_string())?;
+    let mut buf = Vec::new();
+    stream.read_to_end(&mut buf).map_err(|e| e.to_string())?;
+    // split headers from body
+    if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+        Ok(String::from_utf8_lossy(&buf[pos + 4..]).to_string())
+    } else {
+        Ok(String::from_utf8_lossy(&buf).to_string())
+    }
+}
+
+// ------------------------------------------------------------------ json
+pub fn json_stringify(v: &Value) -> String {
+    match v {
+        Value::Null => "null".into(),
+        Value::Bool(true) => "true".into(),
+        Value::Bool(false) => "false".into(),
+        Value::Int(i) => i.to_string(),
+        Value::Float(f) => crate::value::format_float(*f),
+        Value::Str(s) => json_quote(s),
+        Value::List(l) => {
+            let parts: Vec<String> = l.borrow().iter().map(json_stringify).collect();
+            format!("[{}]", parts.join(","))
+        }
+        Value::Map(m) => {
+            let parts: Vec<String> = m
+                .borrow()
+                .iter()
+                .map(|(k, v)| format!("{}:{}", json_quote(&k.display()), json_stringify(v)))
+                .collect();
+            format!("{{{}}}", parts.join(","))
+        }
+        other => json_quote(&other.display()),
+    }
+}
+
+fn json_quote(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\t' => out.push_str("\\t"),
+            '\r' => out.push_str("\\r"),
+            other if (other as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", other as u32)),
+            other => out.push(other),
+        }
+    }
+    out.push('"');
+    out
+}
+
+pub fn json_parse(src: &str) -> Result<Value, String> {
+    struct P<'a> {
+        b: &'a [u8],
+        i: usize,
+    }
+    impl<'a> P<'a> {
+        fn ws(&mut self) {
+            while self.i < self.b.len() && (self.b[self.i] as char).is_ascii_whitespace() {
+                self.i += 1;
+            }
+        }
+        fn peek(&mut self) -> Option<u8> {
+            self.ws();
+            self.b.get(self.i).copied()
+        }
+        fn value(&mut self) -> Result<Value, String> {
+            match self.peek().ok_or("unexpected end of json")? {
+                b'{' => {
+                    self.i += 1;
+                    let mut out: Vec<(Value, Value)> = Vec::new();
+                    if self.peek() == Some(b'}') {
+                        self.i += 1;
+                        return Ok(Value::Map(Rc::new(RefCell::new(out))));
+                    }
+                    loop {
+                        let k = self.value()?;
+                        if self.peek() != Some(b':') {
+                            return Err("expected ':'".into());
+                        }
+                        self.i += 1;
+                        let v = self.value()?;
+                        out.push((Value::Str(k.display()), v));
+                        match self.peek() {
+                            Some(b',') => {
+                                self.i += 1;
+                            }
+                            Some(b'}') => {
+                                self.i += 1;
+                                break;
+                            }
+                            _ => return Err("expected ',' or '}'".into()),
+                        }
+                    }
+                    Ok(Value::Map(Rc::new(RefCell::new(out))))
+                }
+                b'[' => {
+                    self.i += 1;
+                    let mut out: Vec<Value> = Vec::new();
+                    if self.peek() == Some(b']') {
+                        self.i += 1;
+                        return Ok(Value::List(Rc::new(RefCell::new(out))));
+                    }
+                    loop {
+                        out.push(self.value()?);
+                        match self.peek() {
+                            Some(b',') => {
+                                self.i += 1;
+                            }
+                            Some(b']') => {
+                                self.i += 1;
+                                break;
+                            }
+                            _ => return Err("expected ',' or ']'".into()),
+                        }
+                    }
+                    Ok(Value::List(Rc::new(RefCell::new(out))))
+                }
+                b'"' => {
+                    self.i += 1;
+                    let mut s = String::new();
+                    loop {
+                        match self.b.get(self.i) {
+                            None => return Err("unterminated string".into()),
+                            Some(b'"') => {
+                                self.i += 1;
+                                break;
+                            }
+                            Some(b'\\') => {
+                                self.i += 1;
+                                match self.b.get(self.i) {
+                                    Some(b'n') => s.push('\n'),
+                                    Some(b't') => s.push('\t'),
+                                    Some(b'r') => s.push('\r'),
+                                    Some(b'"') => s.push('"'),
+                                    Some(b'\\') => s.push('\\'),
+                                    Some(b'/') => s.push('/'),
+                                    Some(b'u') => {
+                                        if self.i + 4 < self.b.len() {
+                                            if let Ok(cp) = u32::from_str_radix(
+                                                std::str::from_utf8(&self.b[self.i + 1..self.i + 5]).map_err(|_| "bad unicode")?,
+                                                16,
+                                            ) {
+                                                s.push(char::from_u32(cp).unwrap_or('\u{FFFD}'));
+                                                self.i += 4;
+                                            }
+                                        }
+                                    }
+                                    _ => return Err("bad escape".into()),
+                                }
+                                self.i += 1;
+                            }
+                            Some(&c) => {
+                                s.push(c as char);
+                                self.i += 1;
+                            }
+                        }
+                    }
+                    Ok(Value::Str(s))
+                }
+                b't' => {
+                    self.expect_word("true")?;
+                    Ok(Value::Bool(true))
+                }
+                b'f' => {
+                    self.expect_word("false")?;
+                    Ok(Value::Bool(false))
+                }
+                b'n' => {
+                    self.expect_word("null")?;
+                    Ok(Value::Null)
+                }
+                _ => {
+                    let start = self.i;
+                    while self.i < self.b.len()
+                        && matches!(self.b[self.i], b'-' | b'+' | b'.' | b'e' | b'E' | b'0'..=b'9')
+                    {
+                        self.i += 1;
+                    }
+                    let txt = std::str::from_utf8(&self.b[start..self.i]).map_err(|_| "bad number")?;
+                    if txt.is_empty() {
+                        return Err(format!("unexpected character at {}", start));
+                    }
+                    if let Ok(i) = txt.parse::<i64>() {
+                        Ok(Value::Int(i))
+                    } else {
+                        txt.parse::<f64>().map(Value::Float).map_err(|e| e.to_string())
+                    }
+                }
+            }
+        }
+        fn expect_word(&mut self, w: &str) -> Result<(), String> {
+            if self.b.len() >= self.i + w.len() && &self.b[self.i..self.i + w.len()] == w.as_bytes() {
+                self.i += w.len();
+                Ok(())
+            } else {
+                Err(format!("expected '{}'", w))
+            }
+        }
+    }
+    let mut p = P { b: src.as_bytes(), i: 0 };
+    p.value()
 }
 
 pub fn codon_table_char(codon: &str) -> char {
@@ -1787,7 +3019,11 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "range", "str", "num", "type", "abs", "min", "max", "sum", "clock", "exit", "assert",
     "codon", "distance", "similar", "transcribe", "reverse_complement", "gc_content",
     "translate", "find_orf", "memory", "methyl", "fingerprint", "toggle_on", "toggle_state",
-    "repressi_next", "repressi_state", "grn_fire", "grn_state", "spawn", "join",
+    "repressi_next", "repressi_state", "repressi_start", "grn_fire", "grn_state", "spawn", "join",
+    "floor", "ceil", "sqrt", "pow", "random", "randomize", "chr", "ord", "now", "sleep",
+    "argv", "read_file", "write_file", "append_file", "exists", "read_dir", "run",
+    "http_get", "serve", "recv_request", "send_response", "json_parse", "json_str", "env",
+    "call",
 ];
 
 // direct C kernel accessors for the memory() builtin

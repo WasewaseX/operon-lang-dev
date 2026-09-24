@@ -381,7 +381,48 @@ pub enum SendValue {
     Stress(String, String),
 }
 
-fn to_send(v: &Value) -> SendValue {
+/// Sendable environment snapshot entry: gene definitions cross by Arc,
+/// data values cross by serialization.
+pub enum SnapVal {
+    Gene(Arc<GeneDef>),
+    Data(SendValue),
+}
+
+/// Sendable argument: data serializes; named genes cross as references to
+/// the snapshot (the worker re-binds them from its inherited repertoire).
+/// Anonymous lambdas cannot cross — they arrive as null with a note.
+pub enum SnapArg {
+    Data(SendValue),
+    GeneRef(String),
+    Lambda(Arc<GeneDef>),
+}
+
+pub fn arg_to_snap(v: &Value) -> SnapArg {
+    match v {
+        Value::Gene(d, _) if d.name.is_some() => SnapArg::GeneRef(d.name.clone().unwrap()),
+        Value::Gene(d, _) => SnapArg::Lambda(d.clone()),
+        other => SnapArg::Data(to_send(other)),
+    }
+}
+
+pub fn arg_from_snap(a: &SnapArg, snap: &[(String, SnapVal)]) -> Value {
+    match a {
+        SnapArg::Data(sv) => from_send(clone_send(sv)),
+        SnapArg::GeneRef(n) => {
+            for (name, sv) in snap {
+                if name == n {
+                    if let SnapVal::Gene(d) = sv {
+                        return Value::Gene(d.clone(), None);
+                    }
+                }
+            }
+            Value::Null
+        }
+        SnapArg::Lambda(d) => Value::Gene(d.clone(), None),
+    }
+}
+
+pub fn to_send(v: &Value) -> SendValue {
     match v {
         Value::Null => SendValue::Null,
         Value::Bool(b) => SendValue::Bool(*b),
@@ -396,11 +437,21 @@ fn to_send(v: &Value) -> SendValue {
                 .collect(),
         ),
         Value::Gene(_, _) => SendValue::Null,
+        Value::Seq(_, _) => SendValue::Null,
+        Value::Obj(d, m) => {
+            // objects cross the boundary as their field map (+ identity key)
+            let mut out: Vec<(String, SendValue)> = Vec::new();
+            out.push(("#phenotype".into(), SendValue::Str(d.name.clone())));
+            for (k, v) in m.borrow().iter() {
+                out.push((k.display(), to_send(v)));
+            }
+            SendValue::Map(out)
+        }
         Value::Native(_) => SendValue::Null,
     }
 }
 
-fn from_send(v: SendValue) -> Value {
+pub fn from_send(v: SendValue) -> Value {
     match v {
         SendValue::Null => Value::Null,
         SendValue::Bool(b) => Value::Bool(b),
@@ -420,14 +471,114 @@ fn from_send(v: SendValue) -> Value {
 
 struct TaskHandleAlias;
 
+/// Snapshot the parent global environment for a worker thread: gene
+/// definitions cross by Arc (they are immutable ASTs), data values cross by
+/// SendValue serialization. This gives tasks and sequences visibility of the
+/// whole module surface — cells share metabolites through signals, and worker
+/// cells inherit the module's gene repertoire.
+pub fn snapshot_globals(interp: &Interp) -> Vec<(String, SnapVal)> {
+    let mut out: Vec<(String, SnapVal)> = Vec::new();
+    for (name, v) in interp.global.vars.borrow().iter() {
+        match v {
+            Value::Gene(d, _) => out.push((name.clone(), SnapVal::Gene(d.clone()))),
+            other => {
+                let sv = to_send(other);
+                out.push((name.clone(), SnapVal::Data(sv)));
+            }
+        }
+    }
+    out
+}
+
+pub fn bind_snapshot(env: &Rc<Env>, snap: &[(String, SnapVal)]) {
+    for (name, sv) in snap {
+        let v = match sv {
+            SnapVal::Gene(d) => Value::Gene(d.clone(), None),
+            SnapVal::Data(sv) => from_send(clone_send(sv)),
+        };
+        env.define(name, v);
+    }
+}
+
+/// Deep-clone a SendValue (cloning via serialization round-trip).
+fn clone_send(sv: &SendValue) -> SendValue {
+    match sv {
+        SendValue::Null => SendValue::Null,
+        SendValue::Bool(b) => SendValue::Bool(*b),
+        SendValue::Int(i) => SendValue::Int(*i),
+        SendValue::Float(f) => SendValue::Float(*f),
+        SendValue::Str(s) => SendValue::Str(s.clone()),
+        SendValue::List(l) => SendValue::List(l.iter().map(clone_send).collect()),
+        SendValue::Map(m) => SendValue::Map(m.iter().map(|(k, v)| (k.clone(), clone_send(v))).collect()),
+        SendValue::Stress(k, m) => SendValue::Stress(k.clone(), m.clone()),
+    }
+}
+
+// ------------------------------------------------------------ sequences
+/// Start a sequence worker: rendezvous channel makes pulls lazy — the worker
+/// blocks on each yield until the consumer pulls the next value.
+pub fn seq_start(
+    def: Arc<GeneDef>,
+    args: Vec<Value>,
+    snap: Vec<(String, SnapVal)>,
+) -> Rc<RefCell<crate::value::SeqState>> {
+    let send_args: Vec<SnapArg> = args.iter().map(arg_to_snap).collect();
+    let (tx, rx) = mpsc::sync_channel::<crate::value::SeqMsg>(0);
+    std::thread::spawn(move || {
+        let mut ti = Interp::new();
+        let genv = Env::new(None);
+        bind_snapshot(&genv, &snap);
+        ti.global = genv;
+        let conv_args: Vec<Value> = send_args.iter().map(|a| arg_from_snap(a, &snap)).collect();
+        // run the sequence body: params bound, Yield sends over the channel
+        let result = run_seq_body(&mut ti, &def, conv_args, &tx);
+        let (notes, stress) = match result {
+            Ok(()) => (ti.notes, None),
+            Err(s) => (ti.notes, Some((s.kind, s.message))),
+        };
+        let _ = tx.send(crate::value::SeqMsg::Done(notes, stress));
+    });
+    Rc::new(RefCell::new(crate::value::SeqState {
+        rx: Some(rx),
+        done: false,
+        stress: None,
+    }))
+}
+
+fn run_seq_body(
+    ti: &mut Interp,
+    def: &Arc<GeneDef>,
+    args: Vec<Value>,
+    tx: &mpsc::SyncSender<crate::value::SeqMsg>,
+) -> Result<(), Stress> {
+    ti.seq_tx = Some(tx.clone());
+    let fenv = Env::new(Some(ti.global.clone()));
+    for (i, (pname, default)) in def.params.iter().enumerate() {
+        if pname.is_empty() || pname == "?" {
+            continue;
+        }
+        if let Some(a) = args.get(i) {
+            fenv.define(pname, a.clone());
+        } else if let Some(d) = default {
+            let dv = ti.eval(&fenv, d).unwrap_or(Value::Null);
+            fenv.define(pname, dv);
+        } else {
+            fenv.define(pname, Value::Null);
+        }
+    }
+    // Yield is the only interesting flow: everything else terminates the
+    // sequence (return value is dropped — sequences are streams, not answers).
+    let _ = ti.exec_block(&fenv, &def.body)?;
+    Ok(())
+}
+
 pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Result<Value, Stress> {
-    // Only top-level named genes without closures can cross the thread boundary.
+    // Only top-level named genes can cross the thread boundary; the worker
+    // inherits the whole module gene repertoire via snapshot (definitions by
+    // Arc, data by SendValue serialization).
     let def: Arc<GeneDef> = match &callee {
         Value::Gene(d, None) => d.clone(),
-        Value::Gene(d, Some(_)) => {
-            // allow: main-thread gene with closure env — flatten by cloning def only
-            d.clone()
-        }
+        Value::Gene(d, Some(_)) => d.clone(),
         _ => {
             interp.note(0, 4, "spawn() needs a gene; null task");
             return Ok(Value::Int(-1));
@@ -443,16 +594,16 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
         let _ = interp.call_gene(def, None, args)?;
         return Ok(Value::Int(0));
     }
-    let send_args: Vec<SendValue> = args.iter().map(to_send).collect();
+    let snap = snapshot_globals(interp);
+    let send_args: Vec<SnapArg> = args.iter().map(arg_to_snap).collect();
     let (tx, rx) = mpsc::channel::<(SendValue, Vec<Note>)>();
     let global_note = format!("[task {}]", name);
     std::thread::spawn(move || {
         let mut ti = Interp::new();
-        // give the task a global env with ONLY this gene bound under its name
         let genv = Env::new(None);
-        genv.define(&name, Value::Gene(def.clone(), None));
+        bind_snapshot(&genv, &snap);
         ti.global = genv;
-        let conv_args: Vec<Value> = send_args.into_iter().map(from_send).collect();
+        let conv_args: Vec<Value> = send_args.iter().map(|a| arg_from_snap(a, &snap)).collect();
         let result = ti.call_gene(def, None, conv_args);
         let (rv, notes) = match result {
             Ok(v) => (to_send(&v), ti.notes),

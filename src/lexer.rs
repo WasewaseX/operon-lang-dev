@@ -25,6 +25,7 @@ pub enum Tok {
     FatArrow,  // =>
     Plus, Minus, Star, Slash, DSlash, Percent,
     PlusEq, MinusEq, StarEq, SlashEq, DSlashEq, PercentEq,
+    StarStar, Amp, Pipe, Caret, Tilde, Shl, Shr, Question,
     Eq, EqEq, Neq, Lt, Le, Gt, Ge,
     AmpAmp, PipePipe, Bang,
     Dot,
@@ -193,7 +194,10 @@ pub fn lex(src: &str) -> Lexed {
                 }
             }
             '*' => {
-                if i + 1 < n && chars[i + 1] == '=' {
+                if i + 1 < n && chars[i + 1] == '*' {
+                    push!(Tok::StarStar);
+                    i += 2;
+                } else if i + 1 < n && chars[i + 1] == '=' {
                     push!(Tok::StarEq);
                     i += 2;
                 } else {
@@ -261,7 +265,10 @@ pub fn lex(src: &str) -> Lexed {
                 }
             }
             '<' => {
-                if i + 1 < n && chars[i + 1] == '=' {
+                if i + 1 < n && chars[i + 1] == '<' {
+                    push!(Tok::Shl);
+                    i += 2;
+                } else if i + 1 < n && chars[i + 1] == '=' {
                     push!(Tok::Le);
                     i += 2;
                 } else {
@@ -270,7 +277,10 @@ pub fn lex(src: &str) -> Lexed {
                 }
             }
             '>' => {
-                if i + 1 < n && chars[i + 1] == '=' {
+                if i + 1 < n && chars[i + 1] == '>' {
+                    push!(Tok::Shr);
+                    i += 2;
+                } else if i + 1 < n && chars[i + 1] == '=' {
                     push!(Tok::Ge);
                     i += 2;
                 } else {
@@ -283,7 +293,7 @@ pub fn lex(src: &str) -> Lexed {
                     push!(Tok::AmpAmp);
                     i += 2;
                 } else {
-                    notes.push(Note { line, rung: 4, message: "stray '&' skipped (did you mean 'and'?)".into() });
+                    push!(Tok::Amp);
                     i += 1;
                 }
             }
@@ -292,9 +302,21 @@ pub fn lex(src: &str) -> Lexed {
                     push!(Tok::PipePipe);
                     i += 2;
                 } else {
-                    notes.push(Note { line, rung: 4, message: "stray '|' skipped (did you mean 'or'?)".into() });
+                    push!(Tok::Pipe);
                     i += 1;
                 }
+            }
+            '^' => {
+                push!(Tok::Caret);
+                i += 1;
+            }
+            '~' => {
+                push!(Tok::Tilde);
+                i += 1;
+            }
+            '?' => {
+                push!(Tok::Question);
+                i += 1;
             }
             other => {
                 notes.push(Note {
@@ -328,7 +350,7 @@ fn lex_string(chars: &[char], i: &mut usize, line: &mut usize, quote: char) -> (
             *i += 1;
             continue;
         }
-        if depth == 0 && c == '\\' && *i + 1 < n {
+        if c == '\\' && *i + 1 < n {
             let e = chars[*i + 1];
             match e {
                 'n' => raw.push('\n'),

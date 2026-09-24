@@ -1,0 +1,30 @@
+# differential: phenotype classes, init, inheritance, self, type()
+phenotype Counter {
+    let count = 0
+    let label = "base"
+    gene init(start = 0) { self.count = start; return self }
+    gene bump(by = 1) { self.count = self.count + by; return self.count }
+}
+phenotype Neuron from Counter {
+    let label = "neuron"
+    gene fire() { return "spike:{self.count}" }
+}
+frame proof {
+    let c = new Counter(5)
+    assert(c.bump() == 6)
+    assert(c.bump(5) == 11)
+    assert(c.count == 11)
+    assert(type(c) == "Counter")
+    let n = new Neuron(2)
+    assert(n.bump(3) == 5)
+    assert(n.fire() == "spike:5")
+    assert(n.label == "neuron")
+    assert(type(n) == "Neuron")
+}
+main {
+    let c = new Counter(1)
+    promote("count after 4 bumps: {c.bump(4)}")
+    let n = new Neuron(0)
+    n.bump(2)
+    promote("fired: {n.fire()}")
+}

@@ -1,0 +1,97 @@
+# std/iter — self-hosted iteration and higher-order utilities.
+# Written in Operon, for Operon: the library layer grows the language itself.
+
+gene take(seq, n) {
+    # pull up to n values from a sequence (or slice a list)
+    if type(seq) == "list" {
+        return seq.slice(0, n)
+    }
+    let out = []
+    let i = 0
+    while i < n {
+        let v = seq.next()
+        if v == null {
+            return out
+        }
+        push(out, v)
+        i = i + 1
+    }
+    return out
+}
+
+gene drain(seq) {
+    # collect everything a sequence still has
+    if type(seq) == "list" {
+        return seq
+    }
+    return seq.collect()
+}
+
+gene enumerate_pairs(xs) {
+    # list of [index, item] pairs
+    let out = []
+    let i = 0
+    for x in xs {
+        push(out, [i, x])
+        i = i + 1
+    }
+    return out
+}
+
+gene zip(a, b) {
+    let out = []
+    let n = min(len(a), len(b))
+    let i = 0
+    while i < n {
+        push(out, [a[i], b[i]])
+        i = i + 1
+    }
+    return out
+}
+
+gene flatten(xs) {
+    # one level deep
+    let out = []
+    for x in xs {
+        if type(x) == "list" {
+            for y in x { push(out, y) }
+        } else {
+            push(out, x)
+        }
+    }
+    return out
+}
+
+gene unique(xs) {
+    let seen = {}
+    let out = []
+    for x in xs {
+        if !has(seen, str(x)) {
+            seen[str(x)] = true
+            push(out, x)
+        }
+    }
+    return out
+}
+
+gene chunk(xs, n) {
+    if n <= 0 { return [] }
+    let out = []
+    let cur = []
+    let i = 0
+    for x in xs {
+        push(cur, x)
+        i = i + 1
+        if i == n {
+            push(out, cur)
+            cur = []
+            i = 0
+        }
+    }
+    if len(cur) > 0 { push(out, cur) }
+    return out
+}
+
+gene range_step(a, b, step) {
+    return range(a, b, step)
+}

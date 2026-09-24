@@ -1,0 +1,5 @@
+main {
+    let acc = 0
+    for i in range(200000) { acc = acc + i % 7 }
+    promote("acc = {acc}")
+}

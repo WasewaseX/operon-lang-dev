@@ -26,11 +26,62 @@ class Stress(Exception):
         return {"kind": self.kind, "message": self.message}
 
 class Gene:
-    __slots__ = ("name", "params", "guard", "body", "acetylate", "methylate", "m6a", "closure")
-    def __init__(self, name, params, guard, body, ac=False, me=False, m6=False):
+    __slots__ = ("name", "params", "guard", "body", "acetylate", "methylate", "m6a", "seq", "closure")
+    def __init__(self, name, params, guard, body, ac=False, me=False, m6=False, seq=False):
         self.name, self.params, self.guard, self.body = name, params, guard, body
-        self.acetylate, self.methylate, self.m6a = ac, me, m6
+        self.acetylate, self.methylate, self.m6a, self.seq = ac, me, m6, seq
         self.closure = None
+
+class Pheno:
+    __slots__ = ("name", "parent", "fields", "methods")
+    def __init__(self, name, parent, fields, methods):
+        self.name, self.parent, self.fields, self.methods = name, parent, fields, methods
+
+class ObjInst:
+    __slots__ = ("defn", "fields")
+    def __init__(self, defn, fields):
+        self.defn, self.fields = defn, fields
+
+class SeqObj:
+    """Sequential-oracle sequence: values are produced by running the body to
+    completion on first pull (buffered), then served one at a time. The Rust
+    core pulls lazily via a rendezvous worker; corpus-visible output is
+    identical because the differential programs do not print inside bodies."""
+    __slots__ = ("interp", "gene", "args", "buf", "idx", "done")
+    def __init__(self, interp, gene, args):
+        self.interp, self.gene, self.args = interp, gene, args
+        self.buf = None
+        self.idx = 0
+        self.done = False
+
+    def pull(self):
+        if self.buf is None:
+            self.buf = []
+            saved = self.interp.seq_buffer
+            self.interp.seq_buffer = self.buf
+            try:
+                g = self.gene
+                fenv = self.interp.new_scope(g.closure if g.closure is not None else self.interp.globals)
+                for i, (pname, dflt) in enumerate(g.params):
+                    if pname in ("?", ""):
+                        continue
+                    if i < len(self.args):
+                        fenv[pname] = self.args[i]
+                    elif dflt is not None:
+                        fenv[pname] = self.interp.eval(fenv, dflt)
+                    else:
+                        fenv[pname] = None
+                try:
+                    self.interp.exec_block(fenv, g.body)
+                except Return:
+                    pass
+            finally:
+                self.interp.seq_buffer = saved
+        if self.idx < len(self.buf):
+            v = self.buf[self.idx]
+            self.idx += 1
+            return v
+        return None
 
 class Return(Exception):
     def __init__(self, value):
@@ -50,8 +101,8 @@ def fmt_float(f):
         return "inf"
     if f == float("-inf"):
         return "-inf"
-    if f == int(f) and abs(f) < 1e15:
-        return f"{f:.1f}"
+    # Python repr IS the canonical float format (shortest round-trip,
+    # scientific when exp < -4 or >= 16, ".0" on integral positional values)
     return repr(f)
 
 def escape_str(s):
@@ -74,6 +125,10 @@ def v_repr(v):
             for k, val in v.items()) + "}"
     if isinstance(v, Gene):
         return f"<gene {v.name}>" if v.name else "<gene lambda>"
+    if isinstance(v, SeqObj):
+        return f"<sequence {v.gene.name}>" if v.gene.name else "<sequence lambda>"
+    if isinstance(v, ObjInst):
+        return f"<phenotype {v.defn.name}>"
     return "<?>" 
 
 def v_display(v):
@@ -99,6 +154,8 @@ def type_name(v):
     if isinstance(v, list): return "list"
     if isinstance(v, dict): return "map"
     if isinstance(v, Gene): return "gene"
+    if isinstance(v, SeqObj): return "sequence"
+    if isinstance(v, ObjInst): return "phenotype"
     return "native"
 
 def deep_eq(a, b):
@@ -120,8 +177,8 @@ def deep_eq(a, b):
 # ----------------------------------------------------------------------------
 # lexer
 
-SYMBOLS = ["+=", "-=", "*=", "/=", "%=", "==", "!=", "<=", ">=", "&&", "||",
-           "//", "->", "=>", "{", "}", "(", ")", "[", "]", ",", ":", "+", "-",
+SYMBOLS = ["**=", "<<=", ">>=", "+=", "-=", "*=", "/=", "%=", "==", "!=", "<=", ">=", "&&", "||",
+           "//", "->", "=>", "**", "<<", ">>", "&", "|", "^", "~", "?", "{", "}", "(", ")", "[", "]", ",", ":", "+", "-",
            "*", "/", "%", "=", "<", ">", "!", ".", ";"]
 
 def lex(src):
@@ -144,7 +201,7 @@ def lex(src):
             depth = 0
             while i2 < n:
                 ch = src[i2]
-                if ch == "\\" and depth == 0 and i2 + 1 < n:
+                if ch == "\\" and i2 + 1 < n:
                     e = src[i2 + 1]
                     raw += {"n": "\n", "t": "\t", "\\": "\\", '"': '"', "{": "{", "}": "}"}.get(e, "\\" + e)
                     i2 += 2; continue
@@ -238,10 +295,11 @@ def lex(src):
 KEYWORDS = set("""gene let if elif else while loop for in return break continue match case use
 tad anchor export import enhance silence stress rescue raise fate state regulate activates
 inhibits strength toggle repressilator period frame proof guard splice variant edit replace
-ires as collect enter""".split())
+ires as collect enter phenotype sequence yield new threshold from self""".split())
 
 ARMS = set("""gene let if elif else while loop for return break continue match use tad anchor
-enhance silence stress raise fate regulate toggle repressilator frame splice edit ires""".split())
+enhance silence stress raise fate regulate toggle repressilator frame splice edit ires
+phenotype sequence yield""".split())
 
 SYNONYMS = {
     "fn": "gene", "func": "gene", "fun": "gene", "def": "gene", "sub": "gene",
@@ -249,6 +307,8 @@ SYNONYMS = {
     "foreach": "for", "each": "for", "import": "use", "include": "use",
     "require": "use", "ret": "return", "stop": "break", "next": "continue",
     "skip": "continue", "elseif": "elif",
+    "class": "phenotype", "struct": "phenotype", "record": "phenotype", "prototype": "phenotype",
+    "type": "phenotype", "generator": "sequence", "gen": "sequence", "stream": "sequence", "iter": "sequence",
 }
 VALUE_SYNONYMS = {"yes": True, "on": True, "no": False, "off": False,
                   "nil": None, "none": None, "nothing": None}
@@ -540,7 +600,7 @@ class P:
             self.next()
             save = self.pos
             t = self.peek()
-            if t[0] == "IDENT" and t[1] in ("unfolded", "missing", "overflow", "burned"):
+            if t[0] == "IDENT" and t[1] in ("unfolded", "missing", "overflow", "burned", "interference"):
                 self.next()
                 if self.peek() == ("SYM", ",", t[2]):
                     self.next()
@@ -621,7 +681,15 @@ class P:
                             self.next()
                         else:
                             self.note(tt[2], 4, "strength needs a number; using 1.0")
-                    edges.append((frm, to, strength, inhibit))
+                    threshold = None
+                    if self.expect_kw("threshold"):
+                        tt = self.peek()
+                        if tt[0] in ("INT", "FLOAT"):
+                            threshold = float(tt[1])
+                            self.next()
+                        else:
+                            self.note(tt[2], 4, "threshold needs a number; ignored")
+                    edges.append((frm, to, strength, inhibit, threshold))
                     self.end_stmt()
             return ("regulate", edges)
         if word == "toggle":
@@ -670,7 +738,29 @@ class P:
                             self.note(t[2], 3, f"wobble: '{t[1]}' repaired to 'variant'")
                         self.next()
                         vname = self.ident()
-                        variants.append((vname, self.block()))
+                        vparams = []
+                        if self.peek() == ("SYM", "(", self.peek()[2]):
+                            self.next()
+                            while True:
+                                self.eat_nl()
+                                t2 = self.peek()
+                                if t2[0] == "SYM" and t2[1] == ")":
+                                    self.next(); break
+                                if t2[0] == "EOF":
+                                    break
+                                before = self.pos
+                                pname = self.ident()
+                                dflt = None
+                                if self.peek() == ("SYM", "=", self.peek()[2]):
+                                    self.next()
+                                    dflt = self.expr()
+                                vparams.append((pname, dflt))
+                                if self.peek() == ("SYM", ",", self.peek()[2]):
+                                    self.next()
+                                if self.pos == before:
+                                    self.note(t2[2], 4, "unclosed variant parameter list; auto-closed")
+                                    break
+                        variants.append((vname, vparams, self.block()))
                     else:
                         self.note(t[2], 4, "unexpected token in splice block; skipped")
                         self.next()
@@ -708,6 +798,79 @@ class P:
             name = self.ident()
             self.end_stmt()
             return ("ires", name)
+        if word == "phenotype":
+            self.next()
+            name = self.ident()
+            parent = None
+            if self.at_ident("from"):
+                self.next()
+                parent = self.ident()
+            fields, methods = [], []
+            if self.peek() == ("SYM", "{", self.peek()[2]):
+                self.next()
+                while True:
+                    self.eat_nl()
+                    t = self.peek()
+                    if t[0] == "SYM" and t[1] == "}":
+                        self.next(); break
+                    if t[0] == "EOF":
+                        self.note(t[2], 4, "phenotype body auto-closed")
+                        break
+                    if t[0] == "MARK":
+                        self.next()
+                        marks = [t[1]] if t[1] in MARKS else []
+                        if self.expect_kw("gene"):
+                            methods.append(self.gene_def(marks)[1])
+                        else:
+                            self.note(t[2], 4, "mark inside phenotype must precede 'gene'; skipped")
+                            self.skip_line()
+                        continue
+                    if t[0] == "IDENT" and (t[1] == "gene" or SYNONYMS.get(t[1]) == "gene"):
+                        if t[1] != "gene":
+                            self.note(t[2], 2, f"synonym '{t[1]}' repaired to 'gene'")
+                        self.next()
+                        methods.append(self.gene_def([])[1])
+                        continue
+                    if t[0] == "IDENT" and (t[1] == "let" or SYNONYMS.get(t[1]) == "let"):
+                        if t[1] != "let":
+                            self.note(t[2], 2, f"synonym '{t[1]}' repaired to 'let'")
+                        self.next()
+                        fname = self.ident()
+                        dflt = ("null",)
+                        if self.peek() == ("SYM", "=", self.peek()[2]):
+                            self.next()
+                            dflt = self.expr()
+                        self.end_stmt()
+                        if fname != "?":
+                            fields.append((fname, dflt))
+                        continue
+                    self.note(t[2], 4, "unexpected token in phenotype body; skipped")
+                    before = self.pos
+                    self.next()
+                    if self.pos == before:
+                        break
+            return ("pheno", Pheno(name, parent, fields, methods))
+        if word == "sequence":
+            self.next()
+            g = self.gene_def([])
+            if g[0] == "gene":
+                g[1].seq = True
+            return ("expr", ("null",)) if g[0] != "gene" else ("gene", g[1])
+        if word == "yield":
+            self.next()
+            t = self.peek()
+            e = None
+            if not (t[0] in ("NL", "EOF") or (t[0] == "SYM" and t[1] in (";", "}"))):
+                e = self.expr()
+            self.end_stmt()
+            return ("yield", e)
+        # bare-name block: `main { ... }` is a gene definition (C-like idiom)
+        t1 = self.toks[self.pos + 1] if self.pos + 1 < len(self.toks) else ("EOF", None, 0)
+        if word not in KEYWORDS and t1[0] == "SYM" and t1[1] == "{":
+            self.note(self.peek()[2], 4, f"bare name block '{word}' treated as gene definition")
+            self.next()  # consume the name; block starts at '{'
+            g = Gene(word, [], None, self.block())
+            return ("gene", g)
         return self.assign_or_expr(w)
 
     def ident(self):
@@ -719,15 +882,24 @@ class P:
         return "?"
 
     def use_path(self):
+        # segments joined by separators; boundary words ('as') never glue in
         parts = []
         while True:
             t = self.peek()
             if t[0] == "IDENT":
+                if t[1] in ("as", "from"):
+                    break
                 parts.append(t[1]); self.next()
+                nt = self.peek()
+                if not (nt[0] == "SYM" and nt[1] in ("/", ".", "-")):
+                    break
             elif t[0] == "SYM" and t[1] in ("/", ".", "-"):
                 parts.append(t[1]); self.next()
             elif t[0] == "STR":
                 parts.append(t[1]); self.next()
+                nt = self.peek()
+                if not (nt[0] == "SYM" and nt[1] in ("/", ".", "-")):
+                    break
             else:
                 break
         return "".join(parts)
@@ -800,6 +972,7 @@ class P:
                 if t[0] == "EOF":
                     self.note(t[2], 4, "parameter list auto-closed")
                     break
+                before = self.pos
                 pname = self.ident()
                 dflt = None
                 if self.peek() == ("SYM", "=", self.peek()[2]):
@@ -808,6 +981,9 @@ class P:
                 params.append((pname, dflt))
                 if self.peek() == ("SYM", ",", self.peek()[2]):
                     self.next()
+                if self.pos == before:
+                    self.note(t[2], 4, "unclosed parameter list; auto-closed")
+                    break
         guard = None
         self.eat_nl()
         if self.expect_kw("guard"):
@@ -858,7 +1034,19 @@ class P:
 
     # expressions
     def expr(self):
-        return self.or_expr()
+        cond = self.or_expr()
+        t = self.peek()
+        if t[0] == "SYM" and t[1] == "?":
+            self.next()
+            a = self.expr()
+            t2 = self.peek()
+            if t2[0] == "SYM" and t2[1] == ":":
+                self.next()
+            else:
+                self.note(t[2], 4, "ternary missing ':'; else-branch is null")
+            b = self.expr()
+            return ("tern", cond, a, b)
+        return cond
 
     def or_expr(self):
         left = self.and_expr()
@@ -888,15 +1076,55 @@ class P:
         return self.cmp_expr()
 
     def cmp_expr(self):
-        left = self.add_expr()
+        left = self.bitor_expr()
         while True:
             t = self.peek()
             if t[0] == "SYM" and t[1] in ("==", "!=", "<", "<=", ">", ">="):
                 self.next()
-                left = ("bin", t[1], left, self.add_expr())
+                left = ("bin", t[1], left, self.bitor_expr())
             elif t[0] == "IDENT" and t[1] == "in":
                 self.next()
-                left = ("bin", "in", left, self.add_expr())
+                left = ("bin", "in", left, self.bitor_expr())
+            else:
+                return left
+
+    def bitor_expr(self):
+        left = self.bitxor_expr()
+        while True:
+            t = self.peek()
+            if t[0] == "SYM" and t[1] == "|":
+                self.next()
+                left = ("bin", "|", left, self.bitxor_expr())
+            else:
+                return left
+
+    def bitxor_expr(self):
+        left = self.bitand_expr()
+        while True:
+            t = self.peek()
+            if t[0] == "SYM" and t[1] == "^":
+                self.next()
+                left = ("bin", "^", left, self.bitand_expr())
+            else:
+                return left
+
+    def bitand_expr(self):
+        left = self.shift_expr()
+        while True:
+            t = self.peek()
+            if t[0] == "SYM" and t[1] == "&":
+                self.next()
+                left = ("bin", "&", left, self.shift_expr())
+            else:
+                return left
+
+    def shift_expr(self):
+        left = self.add_expr()
+        while True:
+            t = self.peek()
+            if t[0] == "SYM" and t[1] in ("<<", ">>"):
+                self.next()
+                left = ("bin", t[1], left, self.add_expr())
             else:
                 return left
 
@@ -924,7 +1152,19 @@ class P:
         if self.peek() == ("SYM", "-", self.peek()[2]):
             self.next()
             return ("un", "neg", self.unary())
-        return self.postfix()
+        if self.peek() == ("SYM", "~", self.peek()[2]):
+            self.next()
+            return ("un", "bitnot", self.unary())
+        return self.pow_expr()
+
+    def pow_expr(self):
+        left = self.postfix()
+        t = self.peek()
+        if t[0] == "SYM" and t[1] == "**":
+            self.next()
+            # right-assoc; right operand re-enters unary so 2**-3 parses
+            return ("bin", "**", left, self.unary())
+        return left
 
     def postfix(self):
         e = self.primary()
@@ -1062,6 +1302,26 @@ class P:
                     self.note(line, 2, f"synonym '{val}' repaired to 'gene'")
                 s = self.gene_def([])
                 return ("lambda", s[1])
+            if val == "new":
+                cname = self.ident()
+                cargs = []
+                if self.peek() == ("SYM", "(", self.peek()[2]):
+                    self.next()
+                    while True:
+                        self.eat_nl()
+                        t2 = self.peek()
+                        if t2[0] == "SYM" and t2[1] == ")":
+                            self.next(); break
+                        if t2[0] == "EOF":
+                            break
+                        before = self.pos
+                        cargs.append(self.expr())
+                        if self.peek() == ("SYM", ",", self.peek()[2]):
+                            self.next()
+                        if self.pos == before:
+                            self.note(t2[2], 4, "unclosed constructor argument list; auto-closed")
+                            break
+                return ("new", cname, cargs)
             if val == "for":
                 var = self.ident()
                 self.expect_kw("in")
@@ -1115,18 +1375,36 @@ class P:
 
     def pattern(self):
         t = self.peek()
-        if t[0] == "INT" or t[0] == "FLOAT" or t[0] == "STR":
+        neg = t[0] == "SYM" and t[1] == "-"
+        if neg:
             self.next()
-            lits = [("lit", t[1])]
+            t = self.peek()
+        if t[0] in ("INT", "FLOAT"):
+            self.next()
+            lits = [("lit", -t[1] if neg else t[1])]
             while self.peek() == ("SYM", ",", self.peek()[2]):
                 self.next()
                 t2 = self.peek()
-                if t2[0] in ("INT", "FLOAT", "STR"):
+                neg2 = t2[0] == "SYM" and t2[1] == "-"
+                if neg2:
+                    self.next()
+                    t2 = self.peek()
+                if t2[0] in ("INT", "FLOAT"):
+                    self.next()
+                    lits.append(("lit", -t2[1] if neg2 else t2[1]))
+                elif t2[0] == "STR" and not neg2:
                     self.next()
                     lits.append(("lit", t2[1]))
                 else:
                     break
             return lits[0] if len(lits) == 1 else ("multi", lits)
+        if t[0] == "STR" and not neg:
+            self.next()
+            return ("lit", t[1])
+        if neg:
+            self.note(t[2], 4, "dangling '-' in pattern treated as wildcard")
+            self.next()
+            return ("wild",)
         if t[0] == "IDENT":
             if t[1] == "_":
                 self.next()
@@ -1155,7 +1433,9 @@ def parse(src):
 BUILTINS = set("""promote len push pop insert remove keys values has del range str num type
 abs min max sum clock exit assert codon distance similar transcribe reverse_complement
 gc_content translate find_orf memory methyl fingerprint toggle_on toggle_state repressi_next
-repressi_state grn_fire grn_state spawn join""".split())
+repressi_state repressi_start grn_fire grn_state spawn join floor ceil sqrt pow random
+randomize chr ord now sleep argv read_file write_file append_file exists read_dir run
+http_get serve recv_request send_response json_parse json_str env call""".split())
 
 BUILTIN_SYNONYMS = {"print": "promote", "echo": "promote", "say": "promote", "show": "promote"}
 
@@ -1165,6 +1445,7 @@ class Interp:
         self.cell = cell or {}
         self.silences = []
         self.fates = {}
+        self.phenos = {}
         self.grn_edges = []
         self.grn_levels = {}
         self.toggles = []
@@ -1174,12 +1455,54 @@ class Interp:
         self.enhanced = []
         self.defined_genes = []
         self.call_counts = {}
+        self.call_clock = 0
+        self.gene_buckets = {}
         self.modules = {}
         self.loading = []
         self.globals = {"__parent__": None}
         self.cli_args = cli_args or []
         self.steps = 0
+        self.depth = 0
+        self.depth_limit = 10_000
+        self.methyl_quiet = False
+        self.methyl_noted = set()
+        self.asserts_run = 0
+        self.rng = 0x9E3779B97F4A7C15
+        self.seq_buffer = None
+        self.caps = {"enabled": True, "read": [], "write": [], "run": [], "net": [], "env": []}
+        self.cell_entry = None
         self.proof_mode = False
+
+    # ---- capabilities (mirror of Rust Caps)
+    @staticmethod
+    def _norm_path(p):
+        out = []
+        for seg in p.split("/"):
+            if seg in ("", "."):
+                continue
+            if seg == "..":
+                if out:
+                    out.pop()
+            else:
+                out.append(seg)
+        return "/".join(out)
+
+    def cap_check(self, cap, kind, what):
+        c = self.caps
+        if not c["enabled"] or "*" in c[cap]:
+            return
+        ok = False
+        if kind in ("read", "write"):
+            np = self._norm_path(what)
+            for g in c[cap]:
+                ng = self._norm_path(g)
+                if ng == "" or np == ng or np.startswith(ng + "/"):
+                    ok = True
+                    break
+        else:
+            ok = what in c[cap]
+        if not ok:
+            raise Stress("interference", f"{kind} denied — no capability grant covers '{what}' (grant with --allow-{kind} or --allow-all)")
 
     def new_scope(self, parent):
         return {"__parent__": parent}
@@ -1250,10 +1573,13 @@ class Interp:
             iv = self.eval(env, ie)
             v = self.eval(env, ve)
             if isinstance(tv, list):
-                idx = self.as_index(iv, len(tv))
-                cur = tv[idx] if idx < len(tv) else None
+                try:
+                    idx = self.as_index(iv, len(tv))
+                except Stress:
+                    idx = None
+                cur = tv[idx] if (idx is not None and idx < len(tv)) else None
                 nv = self.binop(op, cur, v) if op else v
-                if idx < len(tv):
+                if idx is not None and idx < len(tv):
                     tv[idx] = nv
                 else:
                     tv.append(nv)
@@ -1272,7 +1598,10 @@ class Interp:
             _, te, key, op, ve = s
             tv = self.eval(env, te)
             v = self.eval(env, ve)
-            if isinstance(tv, dict):
+            if isinstance(tv, ObjInst):
+                cur = tv.fields.get(key)
+                tv.fields[key] = self.binop(op, cur, v) if op else v
+            elif isinstance(tv, dict):
                 cur = tv.get(key)
                 tv[key] = self.binop(op, cur, v) if op else v
             else:
@@ -1313,6 +1642,23 @@ class Interp:
             _, name, it, body = s
             itv = self.eval(env, it)
             items = []
+            if isinstance(itv, SeqObj):
+                while True:
+                    self.tick()
+                    item = itv.pull()
+                    if item is None:
+                        break
+                    child = self.new_scope(env)
+                    child[name] = item
+                    try:
+                        self.exec_block(child, body)
+                    except BreakLoop:
+                        break
+                    except ContinueLoop:
+                        continue
+                    except Return as r:
+                        raise r
+                return
             if isinstance(itv, list):
                 items = list(itv)
             elif isinstance(itv, str):
@@ -1365,6 +1711,12 @@ class Interp:
             modv = self.load_module(s[1])
             name = s[2] or os.path.basename(s[1].replace("\\", "/")).split(".")[0].split("/")[-1]
             env[name] = modv
+            # flat-bind exported genes beside the alias map (worker + call()
+            # resolution without a prefix)
+            if isinstance(modv, dict):
+                for kname, v in modv.items():
+                    if isinstance(v, Gene):
+                        env[kname] = v
         elif k == "raise":
             msg = self.eval(env, s[2])
             raise Stress(s[1] or "unfolded", v_display(msg))
@@ -1385,17 +1737,34 @@ class Interp:
                     self.note(4, f"stress contained: [{st.kind}] {st.message}")
         elif k == "gene":
             g = s[1]
+            name = g.name or "<lambda>"
+            # @m6a-stabilized transcripts win dispatch among same-name candidates
+            if not g.m6a:
+                old = self.lookup(env, name)
+                if isinstance(old, Gene) and old.m6a:
+                    self.note(4, f"'{name}' is @m6a-stabilized; redefinition ignored (mark the new copy to replace it)")
+                    return
             if g.name and g.name not in self.defined_genes:
                 self.defined_genes.append(g.name)
             g.closure = env
             env[g.name or "<lambda>"] = g
+        elif k == "pheno":
+            p = s[1]
+            self.phenos[p.name] = p
+        elif k == "yield":
+            v = self.eval(env, s[1]) if s[1] is not None else None
+            if self.seq_buffer is not None:
+                self.seq_buffer.append(v)
+            else:
+                self.note(4, "yield outside a sequence; treated as return")
+                raise Return(v)
         elif k == "splice":
             _, root, variants = s
             chosen = self.choose_variant(root, variants)
             if chosen:
-                vname, body = chosen
+                vname, vparams, body = chosen
                 self.note(1, f"splice '{root}' → variant '{vname}' active")
-                g = Gene(root, [], None, body)
+                g = Gene(root, vparams, None, body)
                 if root not in self.defined_genes:
                     self.defined_genes.append(root)
                 env[root] = g
@@ -1474,7 +1843,24 @@ class Interp:
                 if isinstance(v, (int, float)) and not isinstance(v, bool):
                     return -v
                 raise Stress("unfolded", f"cannot negate {type_name(v)}")
+            if e[1] == "bitnot":
+                if isinstance(v, bool):
+                    return ~int(v)
+                if isinstance(v, int):
+                    return ~v
+                raise Stress("unfolded", f"cannot bit-invert {type_name(v)}")
             return not truthy(v)
+        if k == "tern":
+            _, cond, a, b = e
+            return self.eval(env, a) if truthy(self.eval(env, cond)) else self.eval(env, b)
+        if k == "new":
+            _, name, args_e = e
+            p = self.phenos.get(name)
+            if p is None:
+                self.note(4, f"phenotype '{name}' not declared; instance is an empty map")
+                return {}
+            args = [self.eval(env, a) for a in args_e]
+            return self.construct_obj(p, args)
         if k == "bin":
             op = e[1]
             if op == "and":
@@ -1514,6 +1900,11 @@ class Interp:
             raise Stress("unfolded", f"cannot index {type_name(tv)}")
         if k == "member":
             tv = self.eval(env, e[1])
+            if isinstance(tv, ObjInst):
+                if e[2] in tv.fields:
+                    return tv.fields[e[2]]
+                self.note(4, f"field '{e[2]}' missing on phenotype {tv.defn.name}; null")
+                return None
             if isinstance(tv, dict):
                 if e[2] in tv:
                     return tv[e[2]]
@@ -1533,7 +1924,15 @@ class Interp:
         if k == "collect":
             _, var, it, filt, body = e
             itv = self.eval(env, it)
-            items = itv if isinstance(itv, list) else (list(itv) if isinstance(itv, str) else (list(itv.keys()) if isinstance(itv, dict) else []))
+            if isinstance(itv, SeqObj):
+                items = []
+                while True:
+                    v = itv.pull()
+                    if v is None:
+                        break
+                    items.append(v)
+            else:
+                items = itv if isinstance(itv, list) else (list(itv) if isinstance(itv, str) else (list(itv.keys()) if isinstance(itv, dict) else []))
             out = []
             for item in items:
                 self.tick()
@@ -1550,7 +1949,9 @@ class Interp:
             i = v
             if i < 0:
                 i = ln + i
-            return max(i, 0)
+                if i < 0:
+                    raise Stress("missing", f"index {v} out of range")
+            return i
         raise Stress("missing", f"index must be int, found {type_name(v)}")
 
     def binop(self, op, l, r):
@@ -1592,6 +1993,36 @@ class Interp:
                 m = abs(l) % abs(r)
                 return m if l >= 0 else (m if m == 0 else abs(r) - m) * (1 if l >= 0 else -1)
             raise Stress("unfolded", f"cannot apply '{op}' to {type_name(l)} and {type_name(r)}")
+        if op == "**":
+            if isinstance(l, int) and isinstance(r, int) and not isinstance(l, bool) and not isinstance(r, bool) and r >= 0:
+                if r > 10_000_000:
+                    raise Stress("overflow", "int overflow in '**'")
+                val = l ** r
+                if not (-(2**63) <= val <= 2**63 - 1):
+                    raise Stress("overflow", "int overflow in '**'")
+                return val
+            if isinstance(l, (int, float)) and isinstance(r, (int, float)) and not isinstance(l, bool) and not isinstance(r, bool):
+                return float(l) ** float(r)
+            raise Stress("unfolded", f"cannot apply '**' to {type_name(l)} and {type_name(r)}")
+        if op in ("&", "|", "^", "<<", ">>"):
+            def as_i(x):
+                if isinstance(x, bool):
+                    return int(x)
+                if isinstance(x, int):
+                    return x
+                raise Stress("unfolded", f"bitwise op needs ints, found {type_name(x)}")
+            a, b = as_i(l), as_i(r)
+            if op == "&": return a & b
+            if op == "|": return a | b
+            if op == "^": return a ^ b
+            if b < 0 or b > 63:
+                raise Stress("overflow", f"shift amount {b} out of range")
+            if op == "<<":
+                val = a << b
+                if not (-(2**63) <= val <= 2**63 - 1):
+                    return 0
+                return val
+            return a >> b
         if op == "==":
             return deep_eq(l, r)
         if op == "!=":
@@ -1620,6 +2051,8 @@ class Interp:
     # ---- calls
     def call_value(self, env, callee, args):
         if isinstance(callee, Gene):
+            if callee.seq:
+                return SeqObj(self, callee, args)
             return self.call_gene(callee, args)
         self.note(4, f"called a {type_name(callee)} (not a gene); result null")
         return None
@@ -1627,6 +2060,18 @@ class Interp:
     def call_named(self, env, name, args):
         if name in BUILTIN_SYNONYMS:
             return self.builtin(env, BUILTIN_SYNONYMS[name], args)
+        # toggle bistability gate: the repressed allele refuses calls
+        for a, b, a_on in self.toggles:
+            if a == name or b == name:
+                this_is_a = a == name
+                active = (a_on and this_is_a) or ((not a_on) and (not this_is_a))
+                target_gene = self.lookup(env, name)
+                immune = isinstance(target_gene, Gene) and target_gene.acetylate
+                if not active and not immune:
+                    winner = a if a_on else b
+                    self.note(4, f"toggle repressed: '{name}' is the inactive allele ('{winner}' is on)")
+                    return None
+                break
         # RISC silencing: redirect calls (acetylated genes are immune)
         for frm, to in self.silences:
             if frm == name:
@@ -1668,7 +2113,26 @@ class Interp:
 
     def call_gene(self, g, args):
         name = g.name or "<lambda>"
+        # recursion depth limit (mirror of Rust core)
+        self.depth += 1
+        if self.depth > self.depth_limit:
+            self.depth -= 1
+            raise Stress("overflow", f"recursion depth limit ({self.depth_limit}) exceeded")
+        try:
+            return self.call_gene_inner(g, args)
+        finally:
+            self.depth -= 1
+
+    def call_gene_inner(self, g, args):
+        name = g.name or "<lambda>"
         self.call_counts[name] = self.call_counts.get(name, 0) + 1
+        self.call_clock += 1
+        bucket = self.call_clock // 20
+        self.gene_buckets.setdefault(name, {}).setdefault(bucket, 0)
+        self.gene_buckets[name][bucket] += 1
+        if g.methylate and not self.methyl_quiet and name not in self.methyl_noted:
+            self.methyl_noted.add(name)
+            self.note(4, f"methylated call: '{name}' (chromatin repressed)")
         fenv = self.new_scope(g.closure if g.closure is not None else self.globals)
         for i, (pname, dflt) in enumerate(g.params):
             if pname in ("?", ""):
@@ -1697,19 +2161,90 @@ class Interp:
                     return None
                 except Return as r:
                     return r.value
-        if g.methylate:
-            if self.cell.get("methylate.quiet") != "true":
-                self.note(4, f"methylated call to {name} (repressed chromatin)")
         try:
             self.exec_block(fenv, g.body)
             return None
         except Return as r:
             return r.value
-        finally:
-            pass
 
     # ---- methods
+    def call_method_gene(self, g, self_val, args):
+        self.depth += 1
+        if self.depth > self.depth_limit:
+            self.depth -= 1
+            raise Stress("overflow", f"recursion depth limit ({self.depth_limit}) exceeded")
+        try:
+            name = g.name or "<method>"
+            self.call_counts[name] = self.call_counts.get(name, 0) + 1
+            self.call_clock += 1
+            bucket = self.call_clock // 20
+            self.gene_buckets.setdefault(name, {}).setdefault(bucket, 0)
+            self.gene_buckets[name][bucket] += 1
+            if g.methylate and not self.methyl_quiet and name not in self.methyl_noted:
+                self.methyl_noted.add(name)
+                self.note(4, f"methylated call: '{name}' (chromatin repressed)")
+            fenv = self.new_scope(self.globals)
+            fenv["self"] = self_val
+            for i, (pname, dflt) in enumerate(g.params):
+                if pname in ("?", "", "self"):
+                    continue
+                if i < len(args):
+                    fenv[pname] = args[i]
+                elif dflt is not None:
+                    fenv[pname] = self.eval(fenv, dflt)
+                else:
+                    fenv[pname] = None
+            if g.guard is not None:
+                cond, gbody = g.guard
+                try:
+                    ok = truthy(self.eval(fenv, cond))
+                except Stress:
+                    ok = False
+                if not ok:
+                    self.note(4, f"guard tripped calling {name}")
+                    try:
+                        self.exec_block(fenv, gbody)
+                        return None
+                    except Return as r:
+                        return r.value
+            try:
+                self.exec_block(fenv, g.body)
+                return None
+            except Return as r:
+                return r.value
+        finally:
+            self.depth -= 1
+
     def call_method(self, env, recv, name, args):
+        if isinstance(recv, SeqObj):
+            if name == "next":
+                return recv.pull()
+            if name == "collect":
+                out = []
+                while True:
+                    v = recv.pull()
+                    if v is None:
+                        break
+                    out.append(v)
+                return out
+            self.note(4, f"unknown sequence method '{name}'; null")
+            return None
+        if isinstance(recv, ObjInst):
+            chain = []
+            d = recv.defn
+            hops = 0
+            while d is not None and hops <= 32:
+                chain.append(d)
+                d = self.phenos.get(d.parent) if d.parent else None
+                hops += 1
+            for dd in chain:
+                for g in dd.methods:
+                    if g.name == name:
+                        return self.call_method_gene(g, recv, args)
+            if name in recv.fields:
+                return self.call_value(env, recv.fields[name], args)
+            self.note(4, f"phenotype {recv.defn.name} has no method '{name}'; null")
+            return None
         if isinstance(recv, dict) and "#fate" in recv:
             fate_name, cur = recv["#fate"], recv["#state"]
             if name == "shift":
@@ -1870,6 +2405,8 @@ class Interp:
                     self.note(4, f"num('{v}') failed; 0")
                     return 0
         if name == "type":
+            if args and isinstance(args[0], ObjInst):
+                return args[0].defn.name
             return type_name(args[0]) if args else "null"
         if name == "abs":
             return abs(args[0])
@@ -2029,17 +2566,26 @@ class Interp:
                 except ValueError:
                     return v
         if name == "fingerprint":
+            total_bins = (self.call_clock // 20) + 1
+            burst_by = {}
+            burst_total, burst_n = 0.0, 0
+            for gname, bins in self.gene_buckets.items():
+                n = float(total_bins)
+                total = sum(bins.values())
+                mean = total / n
+                var = sum((float(bins.get(b, 0)) - mean) ** 2 for b in range(total_bins)) / n
+                burst = (var / mean) if mean > 0 else 0.0
+                burst_by[gname] = burst
+                burst_total += burst
+                burst_n += 1
+            burst_avg = (burst_total / burst_n) if burst_n else 0.0
             total_defined = len(self.defined_genes)
-            spliced = len([g for g in self.call_counts if g in self.defined_genes or True])
-            spliced = min(len(self.call_counts), total_defined)
-            unspliced = max(total_defined - spliced, 0)
-            n = len(self.call_counts)
-            mean = (sum(self.call_counts.values()) / n) if n else 0.0
-            var = (sum((c - mean) ** 2 for c in self.call_counts.values()) / n) if n else 0.0
-            fano = (var / mean) if mean > 0 else 0.0
-            velocity = (unspliced / total_defined) if total_defined else 0.0
-            return {"calls": dict(self.call_counts), "fano": fano,
-                    "spliced": spliced, "unspliced": unspliced, "velocity": velocity}
+            mature = min(len(self.call_counts), total_defined)
+            nascent = max(total_defined - mature, 0)
+            maturation = (mature / total_defined) if total_defined else 0.0
+            return {"calls": dict(self.call_counts), "burst": burst_avg,
+                    "burst_by_gene": dict(sorted(burst_by.items())),
+                    "mature": mature, "nascent": nascent, "maturation": maturation}
         if name == "toggle_on":
             nm = v_display(args[0]) if args else ""
             for i, (a, b, _on) in enumerate(self.toggles):
@@ -2060,34 +2606,50 @@ class Interp:
                 return None
             self.repressi_i = (self.repressi_i + 1) % len(self.repressi_ring)
             return self.repressi_i
+        if name == "repressi_start":
+            if not self.repressi_ring:
+                self.note(4, "repressi_start: no repressilator ring declared")
+                return False
+            ms = 1000
+            if args and isinstance(args[0], (int, float)):
+                ms = int(max(args[0], 0))
+            if ms == 0:
+                self.note(4, "repressi_start period must be > 0 ms")
+                return False
+            self.note(1, f"repressilator oscillating every {ms} ms (sequential oracle: manual ring only)")
+            return True
         if name == "repressi_state":
             n = len(self.repressi_ring)
             idx = self.repressi_i % n if n else 0
             return {nm: (1.0 if i == idx else 0.0) for i, nm in enumerate(self.repressi_ring)}
         if name == "grn_fire":
             seed = v_display(args[0]) if args else ""
-            levels = {}
-            for frm, to, st, inh in self.grn_edges:
-                levels.setdefault(frm, 0.0)
-                levels.setdefault(to, 0.0)
-            levels[seed] = 1.0
-            for wave in range(10):
+            # STATEFUL network: levels persist across fires (homeostasis)
+            for frm, to, st, inh, thr in self.grn_edges:
+                self.grn_levels.setdefault(frm, 0.0)
+                self.grn_levels.setdefault(to, 0.0)
+            self.grn_levels[seed] = min(self.grn_levels.get(seed, 0.0) + 1.0, 1.0)
+            for wave in range(1, 11):
                 changed = False
-                snap = dict(levels)
-                for frm, to, st, inh in self.grn_edges:
+                snap = dict(self.grn_levels)
+                for frm, to, st, inh, thr in self.grn_edges:
                     parent = snap.get(frm, 0.0)
                     if parent <= 0:
                         continue
-                    influence = parent * (st ** (wave + 1))
-                    cur = levels.get(to, 0.0)
+                    if thr is not None and thr > 0.0:
+                        p2 = parent * parent
+                        t2 = thr * thr
+                        influence = st * (p2 / (p2 + t2))
+                    else:
+                        influence = parent * (st ** wave)
+                    cur = self.grn_levels.get(to, 0.0)
                     nxt = max(0.0, cur - influence) if inh else max(cur, influence)
                     if abs(nxt - cur) > 1e-12:
-                        levels[to] = nxt
+                        self.grn_levels[to] = nxt
                         changed = True
                 if not changed:
                     break
-            self.grn_levels = levels
-            return dict(levels)
+            return dict(self.grn_levels)
         if name == "grn_state":
             return dict(self.grn_levels)
         if name == "spawn":
@@ -2111,8 +2673,199 @@ class Interp:
                 return tasks.pop(tid)
             self.note(4, f"task {tid} already joined or unknown")
             return None
+        # ---- math
+        if name == "floor":
+            v = args[0] if args else 0
+            return int(v // 1) if isinstance(v, float) else (v if isinstance(v, int) else 0)
+        if name == "ceil":
+            v = args[0] if args else 0
+            return -int(-v // 1) if isinstance(v, float) else (v if isinstance(v, int) else 0)
+        if name == "sqrt":
+            v = float(args[0]) if args else 0.0
+            if v < 0:
+                raise Stress("unfolded", "sqrt of negative number")
+            return v ** 0.5
+        if name == "pow":
+            a = float(args[0]) if len(args) > 0 else 0.0
+            b = float(args[1]) if len(args) > 1 else 0.0
+            return a ** b
+        if name == "random":
+            x = self.rng
+            x ^= (x >> 12) & 0xFFFFFFFFFFFFFFFF
+            x ^= (x << 25) & 0xFFFFFFFFFFFFFFFF
+            x ^= (x >> 27) & 0xFFFFFFFFFFFFFFFF
+            self.rng = x & 0xFFFFFFFFFFFFFFFF
+            x = self.rng
+            if args and isinstance(args[0], int) and not isinstance(args[0], bool) and args[0] > 0:
+                r = (x * 0x2545F4914F6CDD1D) & 0xFFFFFFFFFFFFFFFF
+                return r % args[0]
+            return ((x >> 11) & ((1 << 53) - 1)) / 9007199254740992.0
+        if name == "randomize":
+            s = 0x9E3779B97F4A7C15
+            if args and isinstance(args[0], (int, float)) and not isinstance(args[0], bool):
+                s = int(args[0]) & 0xFFFFFFFFFFFFFFFF
+            self.rng = s if s != 0 else 0x9E3779B97F4A7C15
+            return None
+        if name == "chr":
+            i = args[0] if args and isinstance(args[0], int) else 0
+            return chr(i) if 0 <= i <= 0x10FFFF else ""
+        if name == "ord":
+            s = args[0] if args and isinstance(args[0], str) else ""
+            return ord(s[0]) if s else 0
+        if name == "now":
+            import time as _t
+            return float(_t.time())
+        if name == "sleep":
+            import time as _t
+            ms = 0
+            if args and isinstance(args[0], (int, float)):
+                ms = max(args[0], 0)
+            _t.sleep(ms / 1000.0)
+            return None
+        if name == "argv":
+            return list(self.cli_args)
+        # ---- filesystem (capability-gated)
+        if name == "read_file":
+            path = v_display(args[0]) if args else ""
+            self.cap_check("read", "read", path)
+            try:
+                with open(path, "r", encoding="utf-8", errors="strict") as f:
+                    return f.read()
+            except OSError as e:
+                raise Stress("missing", f"read_file '{path}': {e}")
+        if name == "write_file":
+            path = v_display(args[0]) if args else ""
+            body = v_display(args[1]) if len(args) > 1 else ""
+            self.cap_check("write", "write", path)
+            try:
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(body)
+                return True
+            except OSError as e:
+                raise Stress("missing", f"write_file '{path}': {e}")
+        if name == "append_file":
+            path = v_display(args[0]) if args else ""
+            body = v_display(args[1]) if len(args) > 1 else ""
+            self.cap_check("write", "write", path)
+            try:
+                with open(path, "a", encoding="utf-8") as f:
+                    f.write(body)
+                return True
+            except OSError as e:
+                raise Stress("missing", f"append_file '{path}': {e}")
+        if name == "exists":
+            path = v_display(args[0]) if args else ""
+            self.cap_check("read", "read", path)
+            return os.path.exists(path)
+        if name == "read_dir":
+            path = v_display(args[0]) if args else ""
+            self.cap_check("read", "read", path)
+            try:
+                return sorted(os.listdir(path))
+            except OSError as e:
+                raise Stress("missing", f"read_dir '{path}': {e}")
+        # ---- process / net (capability-gated)
+        if name == "run":
+            prog = v_display(args[0]) if args else ""
+            pargs = [v_display(x) for x in args[1]] if len(args) > 1 and isinstance(args[1], list) else []
+            self.cap_check("run", "run", prog)
+            import subprocess as _sp
+            try:
+                cp = _sp.run([prog] + pargs, capture_output=True, text=True)
+                return {"code": cp.returncode, "stdout": cp.stdout, "stderr": cp.stderr, "ok": cp.returncode == 0}
+            except OSError as e:
+                raise Stress("missing", f"run '{prog}': {e}")
+        if name == "http_get":
+            host = v_display(args[0]) if args else ""
+            port = int(args[1]) if len(args) > 1 and isinstance(args[1], int) else 80
+            path = v_display(args[2]) if len(args) > 2 else "/"
+            self.cap_check("net", "net", f"{host}:{port}")
+            import socket as _s
+            try:
+                s = _s.create_connection((host, port), timeout=10)
+                s.sendall(f"GET {path} HTTP/1.0\r\nHost: {host}\r\nUser-Agent: operon\r\n\r\n".encode())
+                buf = b""
+                while True:
+                    chunk = s.recv(65536)
+                    if not chunk:
+                        break
+                    buf += chunk
+                s.close()
+                pos = buf.find(b"\r\n\r\n")
+                return buf[pos + 4:].decode("utf-8", "replace") if pos >= 0 else buf.decode("utf-8", "replace")
+            except OSError as e:
+                raise Stress("missing", f"http_get '{host}:{port}': {e}")
+        if name in ("serve", "recv_request", "send_response"):
+            # the sequential oracle does not host a server; these are only
+            # reachable in the Rust core (differential corpus avoids them)
+            if name == "serve":
+                port = int(args[0]) if args and isinstance(args[0], int) else 8080
+                self.cap_check("net", "net", f"127.0.0.1:{port}")
+            self.note(4, f"{name} is not available in the sequential oracle; null")
+            return None
+        # ---- json
+        if name == "json_parse":
+            s = v_display(args[0]) if args else "null"
+            try:
+                return _json.loads(s, object_pairs_hook=lambda pairs: dict(pairs))
+            except ValueError as e:
+                raise Stress("unfolded", f"json_parse: {e}")
+        if name == "json_str":
+            v = args[0] if args else None
+            return self._json_str(v)
+        # ---- env (capability-gated)
+        if name == "env":
+            nm = v_display(args[0]) if args else ""
+            self.cap_check("env", "env", nm)
+            return os.environ.get(nm)
+        if name == "call":
+            # dynamic dispatch: call(name_or_gene, args_list)
+            target = args[0] if args else None
+            call_args = args[1] if len(args) > 1 and isinstance(args[1], list) else []
+            if isinstance(target, str):
+                if target in BUILTINS or target in BUILTIN_SYNONYMS:
+                    return self.builtin(env, BUILTIN_SYNONYMS.get(target, target), call_args)
+                tv = self.lookup(env, target)
+                return self.call_value(env, tv, call_args)
+            return self.call_value(env, target, call_args)
         self.note(4, f"unknown builtin '{name}'; null")
         return None
+
+    @staticmethod
+    def _json_str(v):
+        if v is None: return "null"
+        if v is True: return "true"
+        if v is False: return "false"
+        if isinstance(v, int): return str(v)
+        if isinstance(v, float): return fmt_float(v)
+        if isinstance(v, str): return _json.dumps(v)
+        if isinstance(v, list): return "[" + ",".join(Interp._json_str(x) for x in v) + "]"
+        if isinstance(v, dict):
+            return "{" + ",".join(_json.dumps(str(k) if not isinstance(k, str) else k) + ":" + Interp._json_str(val) for k, val in v.items()) + "}"
+        return _json.dumps(v_display(v))
+
+    def construct_obj(self, p, args):
+        chain = []
+        d = p
+        hops = 0
+        while d is not None and hops <= 32:
+            chain.append(d)
+            d = self.phenos.get(d.parent) if d.parent else None
+            hops += 1
+        fields = {}
+        for dd in reversed(chain):
+            for fname, fexpr in dd.fields:
+                fields[fname] = self.eval(self.globals, fexpr)
+        obj = ObjInst(p, fields)
+        for dd in reversed(chain):
+            for g in dd.methods:
+                if g.name == "init":
+                    self.call_method_gene(g, obj, args)
+                    break
+            else:
+                continue
+            break
+        return obj
 
     # ---- modules
     def load_module(self, path):
@@ -2197,7 +2950,7 @@ def collect_structure(stmts):
                 if s[1].guard:
                     walk(s[1].guard[1])
             elif s[0] == "splice":
-                for _, vb in s[2]:
+                for _, _vp, vb in s[2]:
                     walk(vb)
     walk(stmts)
     return proofs, frames, exports, tad_exports, tad_members, ires
@@ -2327,10 +3080,12 @@ def apply_rna(src, patch_src, stem):
                         applied.append(f"{target}: '{frm}' -> '{to}'")
     return text, applied
 
-def load_file(path, cell=None, variant=None, rna=None, args=None):
+def load_file(path, cell=None, variant=None, rna=None, args=None, caps=None):
     src = open(path).read()
     stem = os.path.basename(path).rsplit(".", 1)[0]
     it = Interp(cell=cell or {}, cli_args=args or [])
+    if caps is not None:
+        it.caps = caps
     if variant:
         it.cell["cli.variant"] = variant
     if rna:
@@ -2343,6 +3098,16 @@ def load_file(path, cell=None, variant=None, rna=None, args=None):
     for nt in notes:
         it.note(nt.rung, nt.message)
     it.ires = [s[1] for s in stmts if s[0] == "ires"]
+    # capability grants from .cell allow.* keys (mirror of Rust)
+    for k, v in it.cell.items():
+        if k.startswith("allow."):
+            rest = k[len("allow."):]
+            if rest in ("read", "write", "run", "net", "env"):
+                it.caps[rest].append(v)
+    if it.cell.get("entry"):
+        it.cell_entry = it.cell["entry"]
+    if it.cell.get("methylate.quiet") == "true":
+        it.methyl_quiet = True
     for st in stmts:
         try:
             it.exec_stmt(it.globals, st)
@@ -2356,14 +3121,18 @@ def load_file(path, cell=None, variant=None, rna=None, args=None):
 def resolve_entry(it, stmts, entry=None, use_ires=False):
     if entry:
         return entry
+    if it.cell_entry:
+        return it.cell_entry
+    if use_ires and it.ires:
+        return it.ires[0]
     if any(s[0] == "gene" and s[1].name == "main" for s in stmts):
         return "main"
     if it.ires:
         return it.ires[0]
     return None
 
-def run(path, cell=None, variant=None, rna=None, entry=None, frame=None, args=None):
-    it, stmts, proofs, frames = load_file(path, cell, variant, rna, args)
+def run(path, cell=None, variant=None, rna=None, entry=None, frame=None, args=None, caps=None):
+    it, stmts, proofs, frames = load_file(path, cell, variant, rna, args, caps)
     if frame:
         for nm, body in frames:
             if nm == frame:
@@ -2405,13 +3174,20 @@ def main():
             i += 1; opts["frame"] = rest[i]
         elif a == "--json":
             opts["json"] = True
+        elif a in ("--allow-read", "--allow-write", "--allow-run", "--allow-net", "--allow-env"):
+            i += 1
+            cap = a.replace("--allow-", "")
+            it_caps = opts.setdefault("caps", {"enabled": True, "read": [], "write": [], "run": [], "net": [], "env": []})
+            it_caps[cap].append(rest[i])
+        elif a == "--allow-all":
+            opts["caps"] = {"enabled": False, "read": [], "write": [], "run": [], "net": [], "env": []}
         else:
             pos.append(a)
         i += 1
     if cmd == "version":
         print("Operon 2.0.0 (python-oracle)")
     elif cmd == "run":
-        it = run(pos[0], opts["cell"], opts["variant"], opts["rna"], opts["entry"], opts["frame"], pos[1:])
+        it = run(pos[0], opts["cell"], opts["variant"], opts["rna"], opts["entry"], opts["frame"], pos[1:], caps=opts.get("caps"))
         for nt in it.notes:
             tag = {1: "info", 2: "synonym", 3: "wobble"}.get(nt.rung, "fallback")
             print(f"[{tag}] {nt.message}", file=sys.stderr)
@@ -2459,4 +3235,13 @@ def main():
         sys.exit(2)
 
 if __name__ == "__main__":
-    main()
+    # deep recursion support: run on a worker thread with a large stack and a
+    # raised recursion limit, mirroring the Rust core's 512 MiB worker + 10k
+    # Operon-frame depth limit. Runaway recursion surfaces as RecursionError,
+    # never a native crash.
+    sys.setrecursionlimit(150_000)
+    import threading as _th
+    _t = _th.Thread(target=main, name="oracle-worker")
+    _th.stack_size(1 << 29)
+    _t.start()
+    _t.join()

@@ -18,9 +18,15 @@ const KEYWORDS: &[&str] = &[
     "silence", "stress", "rescue", "raise", "fate", "state", "regulate", "activates",
     "inhibits", "strength", "toggle", "repressilator", "period", "frame", "proof", "guard",
     "splice", "variant", "edit", "replace", "ires", "as", "collect", "enter",
+    "phenotype", "sequence", "yield", "new", "threshold", "from", "self",
 ];
 
 const MARKS: &[&str] = &["acetylate", "methylate", "m6a"];
+
+/// Words that end a `use` path — the alias introducer and statement enders.
+fn use_path_boundary(w: &str) -> bool {
+    w == "as" || w == "from"
+}
 
 pub fn is_canonical(w: &str) -> bool {
     KEYWORDS.contains(&w)
@@ -40,6 +46,8 @@ fn synonym(w: &str) -> Option<&'static str> {
         "no" | "off" => "false",
         "nil" | "none" | "nothing" => "null",
         "unless" => "ifnot",
+        "class" | "struct" | "record" | "prototype" | "type" => "phenotype",
+        "generator" | "gen" | "stream" | "iter" => "sequence",
         _ => return None,
     })
 }
@@ -305,7 +313,7 @@ impl Parser {
             "gene", "let", "if", "ifnot", "elif", "else", "while", "loop", "for", "return",
             "break", "continue", "match", "use", "tad", "anchor", "enhance", "silence",
             "stress", "rescue", "raise", "fate", "regulate", "toggle", "repressilator",
-            "frame", "splice", "edit", "ires",
+            "frame", "splice", "edit", "ires", "phenotype", "sequence", "yield",
         ];
         let mut word = w.to_string();
         // Expression-head detection: `i += 1`, `x = 2`, `f(...)`, `a[0]`,
@@ -699,7 +707,24 @@ impl Parser {
                                         }
                                     }
                                 }
-                                edges.push(RegEdge { from, to, strength, inhibit });
+                                let mut threshold = None;
+                                if self.expect_kw("threshold") {
+                                    match self.peek().clone() {
+                                        Tok::Float(f) => {
+                                            self.next();
+                                            threshold = Some(f);
+                                        }
+                                        Tok::Int(i) => {
+                                            self.next();
+                                            threshold = Some(i as f64);
+                                        }
+                                        _ => {
+                                            let line = self.line();
+                                            self.note(line, 4, "threshold needs a number; ignored");
+                                        }
+                                    }
+                                }
+                                edges.push(RegEdge { from, to, strength, inhibit, threshold });
                                 self.end_stmt();
                             }
                             _ => {
@@ -789,17 +814,49 @@ impl Parser {
                                 }
                                 self.next();
                                 let vname = self.expect_ident().unwrap_or_else(|| "v".into());
+                                // optional parameter list on variants
+                                let mut params: Vec<(String, Option<Expr>)> = Vec::new();
+                                if matches!(self.peek(), Tok::LParen) {
+                                    self.next();
+                                    loop {
+                                        self.eat_newlines_inline();
+                                        if matches!(self.peek(), Tok::RParen) {
+                                            self.next();
+                                            break;
+                                        }
+                                        if matches!(self.peek(), Tok::Eof) {
+                                            break;
+                                        }
+                                        let before = self.pos;
+                                        let pname = self.expect_ident().unwrap_or_default();
+                                        let default = if matches!(self.peek(), Tok::Eq) {
+                                            self.next();
+                                            Some(self.parse_expr())
+                                        } else {
+                                            None
+                                        };
+                                        params.push((pname, default));
+                                        if matches!(self.peek(), Tok::Comma) {
+                                            self.next();
+                                        }
+                                        if self.pos == before {
+                                            self.note(self.line(), 4, "unclosed variant parameter list; auto-closed");
+                                            break;
+                                        }
+                                    }
+                                }
                                 let body = self.parse_block().unwrap_or_default();
                                 variants.push((
                                     vname,
                                     std::sync::Arc::new(GeneDef {
                                         name: Some(root.clone()),
-                                        params: vec![],
+                                        params,
                                         guard: None,
                                         body,
                                         acetylate: false,
                                         methylate: false,
                                         m6a: false,
+                                        seq: false,
                                     }),
                                 ));
                             }
@@ -876,18 +933,153 @@ impl Parser {
                 self.end_stmt();
                 Some(Stmt::Ires(name))
             }
-            _ => self.parse_assign_or_expr(w),
+            "phenotype" => {
+                self.next();
+                let name = self.expect_ident()?;
+                let mut parent = None;
+                if self.at_kw("from") {
+                    self.next();
+                    parent = Some(self.expect_ident().unwrap_or_default());
+                }
+                let mut fields = Vec::new();
+                let mut methods = Vec::new();
+                if matches!(self.peek(), Tok::LBrace) {
+                    self.next();
+                    loop {
+                        self.eat_newlines();
+                        match self.peek().clone() {
+                            Tok::RBrace => {
+                                self.next();
+                                break;
+                            }
+                            Tok::Eof => {
+                                let line = self.line();
+                                self.note(line, 4, "phenotype body auto-closed");
+                                break;
+                            }
+                            Tok::Mark(m) => {
+                                // marks on methods: reuse mark parsing
+                                let line = self.line();
+                                self.next();
+                                if let Some(mark) = self.repair_mark(m, line) {
+                                    let marks = vec![mark];
+                                    if self.expect_kw("gene") {
+                                        if let Some(Stmt::Gene(g)) = Some(self.parse_gene_def(marks)) {
+                                            methods.push(g);
+                                        }
+                                    } else {
+                                        self.note(line, 4, "mark inside phenotype must precede 'gene'; skipped");
+                                        self.skip_line();
+                                    }
+                                }
+                            }
+                            Tok::Ident(w) if w == "gene" || synonym(&w) == Some("gene") => {
+                                if w != "gene" {
+                                    let line = self.line();
+                                    self.note(line, 2, format!("synonym '{}' repaired to 'gene'", w));
+                                }
+                                self.next();
+                                if let Some(Stmt::Gene(g)) = Some(self.parse_gene_def(vec![])) {
+                                    methods.push(g);
+                                }
+                            }
+                            Tok::Ident(w) if w == "let" || synonym(&w) == Some("let") => {
+                                if w != "let" {
+                                    let line = self.line();
+                                    self.note(line, 2, format!("synonym '{}' repaired to 'let'", w));
+                                }
+                                self.next();
+                                let fname = self.expect_ident().unwrap_or_default();
+                                let default = if matches!(self.peek(), Tok::Eq) {
+                                    self.next();
+                                    self.parse_expr()
+                                } else {
+                                    Expr::Null
+                                };
+                                self.end_stmt();
+                                if !fname.is_empty() && fname != "?" {
+                                    fields.push((fname, default));
+                                }
+                            }
+                            _ => {
+                                let line = self.line();
+                                self.note(line, 4, "unexpected token in phenotype body; skipped");
+                                let before = self.pos;
+                                self.next();
+                                if self.pos == before {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                let pname = name.clone();
+                Some(Stmt::Pheno(std::sync::Arc::new(PhenoDef { name: pname, parent, fields, methods })))
+            }
+            "sequence" => {
+                self.next();
+                let def = self.parse_gene_def(vec![]);
+                match def {
+                    Stmt::Gene(g) => {
+                        let mut g2 = (*g).clone();
+                        g2.seq = true;
+                        Some(Stmt::Seq(std::sync::Arc::new(g2)))
+                    }
+                    other => Some(other),
+                }
+            }
+            "yield" => {
+                self.next();
+                let e = match self.peek() {
+                    Tok::Newline | Tok::Semi | Tok::RBrace | Tok::Eof => None,
+                    _ => Some(self.parse_expr()),
+                };
+                self.end_stmt();
+                Some(Stmt::Yield(e))
+            }
+            _ => {
+                // bare-name block: `main { ... }` is a gene definition — the
+                // C-like entry idiom, canonical sugar for `gene main { ... }`
+                if !is_canonical(&word)
+                    && matches!(self.toks.get(self.pos + 1).map(|t| &t.0), Some(Tok::LBrace))
+                {
+                    let line = self.line();
+                    self.note(line, 4, format!("bare name block '{word}' treated as gene definition"));
+                    self.next(); // consume the name; block starts at '{'
+                    let body = self.parse_block().unwrap_or_default();
+                    return Some(Stmt::Gene(std::sync::Arc::new(GeneDef {
+                        name: Some(word.clone()),
+                        params: vec![],
+                        guard: None,
+                        body,
+                        acetylate: false,
+                        methylate: false,
+                        m6a: false,
+                        seq: false,
+                    })));
+                }
+                self.parse_assign_or_expr(w)
+            }
         }
     }
 
     fn parse_use_path(&mut self) -> String {
-        let mut parts: Vec<String> = Vec::new();
+        // path := segment (('/' | '.' | '-') segment)* ; segments are plain
+        // identifiers. A boundary word ('as', statement keyword, etc.) ends
+        // the path — it is never glued into it.
         let mut cur = String::new();
         loop {
             match self.peek().clone() {
                 Tok::Ident(w) => {
+                    if use_path_boundary(&w) {
+                        break;
+                    }
                     cur.push_str(&w);
                     self.next();
+                    // after a segment, only a separator may continue the path
+                    if !matches!(self.peek(), Tok::Slash | Tok::Dot | Tok::Minus) {
+                        break;
+                    }
                 }
                 Tok::Slash => {
                     cur.push('/');
@@ -904,17 +1096,14 @@ impl Parser {
                 Tok::Str(s) => {
                     cur.push_str(&s);
                     self.next();
+                    if !matches!(self.peek(), Tok::Slash | Tok::Dot | Tok::Minus) {
+                        break;
+                    }
                 }
                 _ => break,
             }
-            if !matches!(self.peek(), Tok::Slash | Tok::Dot | Tok::Ident(_) | Tok::Minus | Tok::Str(_)) {
-                break;
-            }
         }
-        if !cur.is_empty() {
-            parts.push(cur);
-        }
-        parts.join("")
+        cur
     }
 
     fn expect_ident(&mut self) -> Option<String> {
@@ -1061,6 +1250,7 @@ impl Parser {
                     self.note(line, 4, "parameter list auto-closed");
                     break;
                 }
+                let before = self.pos;
                 let pname = self.expect_ident().unwrap_or_default();
                 let default = if matches!(self.peek(), Tok::Eq) {
                     self.next();
@@ -1071,6 +1261,13 @@ impl Parser {
                 params.push((pname, default));
                 if matches!(self.peek(), Tok::Comma) {
                     self.next();
+                }
+                if self.pos == before {
+                    // no progress: non-parameter token inside the signature —
+                    // auto-close instead of spinning (Total Grammar recovery)
+                    let line = self.line();
+                    self.note(line, 4, "unclosed parameter list; auto-closed");
+                    break;
                 }
             }
         }
@@ -1109,11 +1306,12 @@ impl Parser {
                 acetylate,
                 methylate,
                 m6a,
+                seq: false,
             };
             return Stmt::Gene(std::sync::Arc::new(def));
         }
         let body = self.parse_block().unwrap_or_default();
-        let def = GeneDef { name, params, guard, body, acetylate, methylate, m6a };
+        let def = GeneDef { name, params, guard, body, acetylate, methylate, m6a, seq: false };
         Stmt::Gene(std::sync::Arc::new(def))
     }
 
@@ -1165,7 +1363,21 @@ impl Parser {
 
     // ---- expressions ----------------------------------------------------
     pub fn parse_expr(&mut self) -> Expr {
-        self.parse_or()
+        // ternary: cond ? a : b (right-assoc, lowest precedence)
+        let cond = self.parse_or();
+        if matches!(self.peek(), Tok::Question) {
+            let line = self.line();
+            self.next();
+            let a = self.parse_expr();
+            if matches!(self.peek(), Tok::Colon) {
+                self.next();
+            } else {
+                self.note(line, 4, "ternary missing ':'; else-branch is null");
+            }
+            let b = self.parse_expr();
+            return Expr::Ternary(Box::new(cond), Box::new(a), Box::new(b));
+        }
+        cond
     }
 
     fn parse_or(&mut self) -> Expr {
@@ -1213,7 +1425,7 @@ impl Parser {
     }
 
     fn parse_cmp(&mut self) -> Expr {
-        let mut left = self.parse_add();
+        let mut left = self.parse_bitor();
         loop {
             let op = match self.peek() {
                 Tok::EqEq => Some(BinOp::Eq),
@@ -1223,6 +1435,55 @@ impl Parser {
                 Tok::Gt => Some(BinOp::Gt),
                 Tok::Ge => Some(BinOp::Ge),
                 Tok::Ident(w) if w == "in" => Some(BinOp::In),
+                _ => None,
+            };
+            if let Some(op) = op {
+                self.next();
+                let right = self.parse_bitor();
+                left = Expr::Binary(op, Box::new(left), Box::new(right));
+            } else {
+                break;
+            }
+        }
+        left
+    }
+
+    fn parse_bitor(&mut self) -> Expr {
+        let mut left = self.parse_bitxor();
+        while matches!(self.peek(), Tok::Pipe) {
+            self.next();
+            let right = self.parse_bitxor();
+            left = Expr::Binary(BinOp::BitOr, Box::new(left), Box::new(right));
+        }
+        left
+    }
+
+    fn parse_bitxor(&mut self) -> Expr {
+        let mut left = self.parse_bitand();
+        while matches!(self.peek(), Tok::Caret) {
+            self.next();
+            let right = self.parse_bitand();
+            left = Expr::Binary(BinOp::BitXor, Box::new(left), Box::new(right));
+        }
+        left
+    }
+
+    fn parse_bitand(&mut self) -> Expr {
+        let mut left = self.parse_shift();
+        while matches!(self.peek(), Tok::Amp) {
+            self.next();
+            let right = self.parse_shift();
+            left = Expr::Binary(BinOp::BitAnd, Box::new(left), Box::new(right));
+        }
+        left
+    }
+
+    fn parse_shift(&mut self) -> Expr {
+        let mut left = self.parse_add();
+        loop {
+            let op = match self.peek() {
+                Tok::Shl => Some(BinOp::Shl),
+                Tok::Shr => Some(BinOp::Shr),
                 _ => None,
             };
             if let Some(op) = op {
@@ -1282,7 +1543,25 @@ impl Parser {
             let e = self.parse_unary();
             return Expr::Unary(UnOp::Neg, Box::new(e));
         }
-        self.parse_postfix()
+        if matches!(self.peek(), Tok::Tilde) {
+            self.next();
+            let e = self.parse_unary();
+            return Expr::Unary(UnOp::BitNot, Box::new(e));
+        }
+        self.parse_pow()
+    }
+
+    fn parse_pow(&mut self) -> Expr {
+        // '**' binds tighter than unary minus on the left (-2**2 = -4) and is
+        // right-associative (2**3**2 = 2**9). The right operand re-enters
+        // parse_unary so 2**-3 parses.
+        let left = self.parse_postfix();
+        if matches!(self.peek(), Tok::StarStar) {
+            self.next();
+            let right = self.parse_unary();
+            return Expr::Binary(BinOp::Pow, Box::new(left), Box::new(right));
+        }
+        left
     }
 
     fn parse_postfix(&mut self) -> Expr {
@@ -1454,6 +1733,34 @@ impl Parser {
                             _ => Expr::Null,
                         }
                     }
+                    "new" => {
+                        self.next();
+                        let name = self.expect_ident().unwrap_or_default();
+                        let mut args = Vec::new();
+                        if matches!(self.peek(), Tok::LParen) {
+                            self.next();
+                            loop {
+                                self.eat_newlines_inline();
+                                if matches!(self.peek(), Tok::RParen) {
+                                    self.next();
+                                    break;
+                                }
+                                if matches!(self.peek(), Tok::Eof) {
+                                    break;
+                                }
+                                let before = self.pos;
+                                args.push(self.parse_expr());
+                                if matches!(self.peek(), Tok::Comma) {
+                                    self.next();
+                                }
+                                if self.pos == before {
+                                    self.note(self.line(), 4, "unclosed constructor argument list; auto-closed");
+                                    break;
+                                }
+                            }
+                        }
+                        Expr::New(name, args)
+                    }
                     "for" => {
                         // collect expression: for x in iter (if cond)? collect body
                         self.next();
@@ -1589,40 +1896,56 @@ impl Parser {
     fn parse_pattern(&mut self) -> MatchPat {
         let mut lits: Vec<Expr> = Vec::new();
         loop {
+            // negative literals are legal patterns (case 1, -1 =>)
+            let neg = matches!(self.peek(), Tok::Minus);
+            if neg {
+                self.next();
+            }
             match self.peek().clone() {
                 Tok::Int(i) => {
                     self.next();
-                    lits.push(Expr::Int(i));
+                    let e = Expr::Int(if neg { -i } else { i });
+                    lits.push(e);
                 }
                 Tok::Float(f) => {
                     self.next();
-                    lits.push(Expr::Float(f));
+                    let e = Expr::Float(if neg { -f } else { f });
+                    lits.push(e);
                 }
                 Tok::Str(s) => {
+                    if neg {
+                        let line = self.line();
+                        self.note(line, 4, "'-' before a string pattern ignored");
+                    }
                     self.next();
                     lits.push(Expr::Str(s));
                 }
-                Tok::Ident(w) if w == "true" => {
+                Tok::Ident(w) if !neg && w == "true" => {
                     self.next();
                     lits.push(Expr::Bool(true));
                 }
-                Tok::Ident(w) if w == "false" => {
+                Tok::Ident(w) if !neg && w == "false" => {
                     self.next();
                     lits.push(Expr::Bool(false));
                 }
-                Tok::Ident(w) if w == "null" => {
+                Tok::Ident(w) if !neg && w == "null" => {
                     self.next();
                     lits.push(Expr::Null);
                 }
-                Tok::Ident(w) if w == "_" => {
+                Tok::Ident(w) if !neg && w == "_" => {
                     self.next();
                     return MatchPat::Wild;
                 }
-                Tok::Ident(w) => {
+                Tok::Ident(w) if !neg => {
                     self.next();
                     return MatchPat::Bind(w);
                 }
                 other => {
+                    if neg {
+                        // '-' consumed but no literal followed
+                        let line = self.line();
+                        self.note(line, 4, "dangling '-' in pattern treated as wildcard");
+                    }
                     let line = self.line();
                     self.note(line, 4, format!("pattern '{:?}' treated as wildcard", other));
                     self.next();

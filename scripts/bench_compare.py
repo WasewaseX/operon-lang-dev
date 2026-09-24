@@ -11,7 +11,7 @@ def bench(cmd, iters=5):
     return min(ts), statistics.mean(ts)
 print(f"{'bench':<10} {'rust min':>10} {'oracle min':>11} {'speedup':>8}")
 for b in ("fib25", "loops", "strings"):
-    p = f"/tmp/bench/{b}.op"
+    p = os.path.join(ROOT, "scripts", "bench", f"{b}.op")
     if not os.path.exists(p):
         continue
     rmin, _ = bench([os.path.join(ROOT, "bin", "operon"), "run", p])

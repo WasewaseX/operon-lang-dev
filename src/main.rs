@@ -15,6 +15,19 @@ use ast::{Expr, Stmt};
 use value::Value;
 
 fn main() {
+    // The evaluator recurses through exec_block → eval → call_gene; deep
+    // Operon recursion needs a real stack. The toolchain therefore runs on a
+    // dedicated worker with a 512 MiB stack, and the interpreter's own depth
+    // limit (10_000) contains runaway recursion as catchable overflow stress
+    // long before the native stack is at risk.
+    let child = std::thread::Builder::new()
+        .stack_size(1 << 29)
+        .spawn(real_main)
+        .expect("cannot spawn toolchain worker");
+    let _ = child.join();
+}
+
+fn real_main() {
     let argv: Vec<String> = std::env::args().skip(1).collect();
     if argv.is_empty() {
         usage();
@@ -33,12 +46,15 @@ fn main() {
         frame: None,
         args: Vec::new(),
         quiet: false,
+        caps: crate::interp::Caps::default(),
     };
     let mut json = false;
     let mut strict = false;
     let mut nmd = false;
     let mut purge = false;
     let mut write = false;
+    let mut matrix = false;
+    let mut fuel: Option<u64> = None;
     let mut knockout = String::new();
     let mut iters = 20usize;
     let mut outfile = String::new();
@@ -52,6 +68,46 @@ fn main() {
                 i += 1;
                 opts.entry = rest.get(i).cloned();
             }
+            "--allow-read" => {
+                i += 1;
+                if let Some(p) = rest.get(i) {
+                    opts.caps.read.push(p.clone());
+                }
+            }
+            "--allow-write" => {
+                i += 1;
+                if let Some(p) = rest.get(i) {
+                    opts.caps.write.push(p.clone());
+                }
+            }
+            "--allow-run" => {
+                i += 1;
+                if let Some(p) = rest.get(i) {
+                    opts.caps.run.push(p.clone());
+                }
+            }
+            "--allow-net" => {
+                i += 1;
+                if let Some(p) = rest.get(i) {
+                    opts.caps.net.push(p.clone());
+                }
+            }
+            "--allow-env" => {
+                i += 1;
+                if let Some(p) = rest.get(i) {
+                    opts.caps.env.push(p.clone());
+                }
+            }
+            "--allow-all" => {
+                opts.caps = crate::interp::Caps::allow_all();
+            }
+            "--fuel" => {
+                i += 1;
+                if let Some(p) = rest.get(i).and_then(|s| s.parse::<u64>().ok()) {
+                    fuel = Some(p);
+                }
+            }
+            "--matrix" => matrix = true,
             "--variant" => {
                 i += 1;
                 opts.variant = rest.get(i).cloned();
@@ -109,6 +165,9 @@ fn main() {
                 Ok(l) => l,
                 Err(e) => die(&e),
             };
+            if let Some(f) = fuel {
+                l.interp.step_budget = f;
+            }
             if opts.frame.is_none() {
                 let result = tools::run_entry(&mut l, &opts);
                 match result {
@@ -119,7 +178,8 @@ fn main() {
                 }
             }
             tools::flush_notes(&l, opts.quiet);
-            if strict && l.interp.notes.iter().any(|n| n.rung >= 3) {
+            let strict_cell = l.interp.cell.get("wobble.strict").map(|v| v == "true").unwrap_or(false);
+            if (strict || strict_cell) && l.interp.notes.iter().any(|n| n.rung >= 3) {
                 std::process::exit(3);
             }
         }
@@ -133,17 +193,22 @@ fn main() {
                 let nmd_json: Vec<String> = rep
                     .nmd
                     .iter()
-                    .map(|(k, m)| format!("{{\"kind\":\"{}\",\"message\":\"{}\"}}", k, tools::json_escape(m)))
+                    .map(|(k, m)| format!("{{\"kind\":\"{}\",\"message\":\"{}\"}}", tools::json_escape(k), tools::json_escape(m)))
+                    .collect();
+                let ph_json: Vec<String> = rep
+                    .phantoms
+                    .iter()
+                    .map(|p| format!("\"{}\"", tools::json_escape(p)))
                     .collect();
                 println!(
-                    "{{\"file\":\"{}\",\"score\":{},\"letter\":\"{}\",\"notes\":{},\"wobbles\":{},\"fallbacks\":{},\"phantoms\":{},\"nmd\":{}}}",
+                    "{{\"file\":\"{}\",\"score\":{},\"letter\":\"{}\",\"notes\":{},\"wobbles\":{},\"fallbacks\":{},\"phantoms\":[{}],\"nmd\":[{}]}}",
                     tools::json_escape(&file),
                     rep.score,
                     rep.letter,
                     rep.notes,
                     rep.wobbles,
                     rep.fallbacks,
-                    rep.phantoms.len(),
+                    ph_json.join(","),
                     nmd_json.join(",")
                 );
             } else {
@@ -176,7 +241,7 @@ fn main() {
                     .map(|f| format!("\"{}\"", tools::json_escape(f)))
                     .collect();
                 println!(
-                    "{{\"files\":{},\"proofs\":{},\"passed\":{},\"failed\":{},\"failures\":{}}}",
+                    "{{\"files\":{},\"proofs\":{},\"passed\":{},\"failed\":{},\"failures\":[{}]}}",
                     rep.files,
                     rep.proofs,
                     rep.passed,
@@ -255,7 +320,7 @@ fn main() {
                 .call_counts
                 .iter()
                 .map(|(k, c)| {
-                    let t = l.interp.call_time.get(k).cloned().unwrap_or(0.0);
+                    let t = l.interp.call_time_self.get(k).cloned().unwrap_or(0.0);
                     (k.clone(), *c, t)
                 })
                 .collect();
@@ -288,12 +353,15 @@ fn main() {
                 (spliced, unspliced, velocity)
             };
             println!(
-                "telemetry: spliced {} · unspliced {} · velocity {:.2}",
+                "telemetry: mature {} · nascent {} · maturation {:.2}",
                 fp.0, fp.1, fp.2
             );
             let mut suggestions: Vec<String> = Vec::new();
+            let max_calls = l.interp.call_counts.values().copied().max().unwrap_or(0);
             for g in &l.interp.defined_genes {
-                if !l.interp.call_counts.contains_key(g)
+                let calls = l.interp.call_counts.get(g).copied().unwrap_or(0);
+                // only genuinely hot genes (≥10% of the hottest) are candidates
+                if calls >= 1 && calls * 10 >= max_calls
                     && !l.interp.enhanced.contains(g)
                     && g != "main"
                 {
@@ -310,30 +378,65 @@ fn main() {
                 Some(f) => f.clone(),
                 None => die("crispr needs a file"),
             };
-            if knockout.is_empty() {
-                die("crispr needs --knockout <gene>");
-            }
-            let rep = tools::crispr(&file, &opts, &knockout);
-            if json {
-                let fails: Vec<String> = rep
-                    .failures
-                    .iter()
-                    .map(|f| format!("\"{}\"", tools::json_escape(f)))
-                    .collect();
-                println!(
-                    "{{\"knockout\":\"{}\",\"proofs\":{},\"survivors\":{},\"failures\":{}}}",
-                    tools::json_escape(&rep.knockout),
-                    rep.proofs_total,
-                    rep.survivors,
-                    fails.join(",")
-                );
+            if matrix {
+                // perturbation matrix: knock out EVERY top-level gene in a
+                // fresh interpreter, run all proofs, tabulate viability
+                let src = std::fs::read_to_string(&file).unwrap_or_default();
+                let prog = parser::parse(&src);
+                let mut targets: Vec<String> = Vec::new();
+                for s in &prog.stmts {
+                    if let Stmt::Gene(g) = s {
+                        if let Some(n) = &g.name {
+                            targets.push(n.clone());
+                        }
+                    }
+                }
+                println!("operon crispr matrix: {} target(s) × proofs", targets.len());
+                let mut rows: Vec<(String, usize, usize)> = Vec::new();
+                for t in &targets {
+                    let rep = tools::crispr(&file, &opts, t);
+                    rows.push((t.clone(), rep.survivors, rep.proofs_total));
+                }
+                let essential: Vec<&String> = rows.iter().filter(|(_, s, t)| *s < *t).map(|(n, _, _)| n).collect();
+                for (name, survivors, total) in &rows {
+                    let tag = if total > survivors { "ESSENTIAL" } else { "dispensable" };
+                    println!("  {:<24} {}/{} survived  {}", name, survivors, total, tag);
+                }
+                if json {
+                    let cells: Vec<String> = rows
+                        .iter()
+                        .map(|(n, s, t)| format!("{{\"gene\":\"{}\",\"survivors\":{},\"proofs\":{}}}", tools::json_escape(n), s, t))
+                        .collect();
+                    println!("{{\"matrix\":[{}]}}", cells.join(","));
+                } else if essential.is_empty() {
+                    println!("  no essential genes found (all knockouts viable)");
+                }
             } else {
-                println!(
-                    "operon crispr: knocked out '{}' — {}/{} proof(s) survived",
-                    rep.knockout, rep.survivors, rep.proofs_total
-                );
-                for f in &rep.failures {
-                    eprintln!("  died: {}", f);
+                if knockout.is_empty() {
+                    die("crispr needs --knockout <gene> (or --matrix)");
+                }
+                let rep = tools::crispr(&file, &opts, &knockout);
+                if json {
+                    let fails: Vec<String> = rep
+                        .failures
+                        .iter()
+                        .map(|f| format!("\"{}\"", tools::json_escape(f)))
+                        .collect();
+                    println!(
+                        "{{\"knockout\":\"{}\",\"proofs\":{},\"survivors\":{},\"failures\":[{}]}}",
+                        tools::json_escape(&rep.knockout),
+                        rep.proofs_total,
+                        rep.survivors,
+                        fails.join(",")
+                    );
+                } else {
+                    println!(
+                        "operon crispr: knocked out '{}' — {}/{} proof(s) survived",
+                        rep.knockout, rep.survivors, rep.proofs_total
+                    );
+                    for f in &rep.failures {
+                        eprintln!("  died: {}", f);
+                    }
                 }
             }
         }

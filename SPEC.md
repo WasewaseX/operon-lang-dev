@@ -140,7 +140,7 @@ stress missing { ... } rescue { ... }    # kind filter: only catches `missing`
 
 ## 10. Builtins and methods
 
-**Builtins:** `promote(*a)` (print, space-joined, returns null) · `len` · `push(l,v)` · `pop(l)` · `insert(l,i,v)` · `remove(l,i)` · `keys(m)` · `values(m)` · `has(m,k)` · `del(m,k)` · `range(a, b?, step?)` (returns List) · `str` · `num` (fails → 0 + note) · `type` (`null bool int float str list map gene native`) · `abs min max sum` · `clock()` (seconds, float) · `exit(n?)` · `assert(c, msg?)` · `codon(s)` (0–100 style score of an identifier) · `distance(a,b)` (edit distance, C++ Myers kernel) · `similar(a,b,maxd?)` (bool) · `transcribe(dna)` · `translate(rna)` (stops at stop codon) · `reverse_complement(dna)` · `gc_content(dna)` (0–100) · `find_orf(dna)` (list of ORF proteins) · `memory()` (map `arena_bytes, interns, allocs` from the C runtime) · `fingerprint()` (run telemetry, §12) · `spawn(f, args?)` → id · `join(id)` → value · `toggle_on(name)` · `toggle_state()` · `repressi_next()` · `repressi_state()` · `grn_fire(name)` · `grn_state()` · `methyl(key, default?)`.
+**Builtins:** `promote(*a)` (print, space-joined, returns null) · `len` · `push(l,v)` · `pop(l)` · `insert(l,i,v)` · `remove(l,i)` · `keys(m)` · `values(m)` · `has(m,k)` · `del(m,k)` · `range(a, b?, step?)` (returns List) · `str` · `num` (fails → 0 + note) · `type` (`null bool int float str list map gene native`) · `abs min max sum` · `clock()` (seconds, float) · `exit(n?)` · `assert(c, msg?)` · `codon(s)` (0–100 style score of an identifier) · `distance(a,b)` (edit distance, C++ bit-parallel kernel) · `similar(a,b,maxd?)` (bool) · `transcribe(dna)` · `translate(rna)` (stops at stop codon) · `reverse_complement(dna)` · `gc_content(dna)` (0–100) · `find_orf(dna)` (list of ORF proteins) · `memory()` (map `arena_bytes, interns, allocs` from the C runtime) · `fingerprint()` (run telemetry, §12) · `spawn(f, args?)` → id · `join(id)` → value · `toggle_on(name)` · `toggle_state()` · `repressi_next()` · `repressi_state()` · `grn_fire(name)` · `grn_state()` · `methyl(key, default?)`.
 
 **Str methods:** `.upper() .lower() .trim() .split(sep) .join(list) .replace(a,b) .contains(x) .starts(x) .ends(x) .repeat(n) .slice(a,b) .len()`
 **List methods:** `.map(f) .filter(f) .reduce(f, init) .each(f) .sort(cmp?) .reverse() .contains(x) .index_of(x) .slice(a,b) .join(sep) .len()` (cmp returns true when a before b)
@@ -224,7 +224,7 @@ operon version
 | Gene regulatory networks | `regulate` + `grn_fire/grn_state` |
 | Toggle switch bistability | `toggle a, b;` |
 | Repressilator oscillation | `repressilator a -> b -> c` |
-| Single-cell transcriptomics / Fano factor | `fingerprint()` call/noise telemetry |
+| Single-cell transcriptomics / burst index | `fingerprint()` call/noise telemetry |
 | RNA velocity | spliced/unspliced/velocity metrics |
 | CRISPR knockout screens | `operon crispr --knockout` |
 

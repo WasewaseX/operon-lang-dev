@@ -1,0 +1,55 @@
+name: operon-ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Build toolchain (C + C++ + Rust)
+        run: bash scripts/build.sh
+      - name: C/C++ kernel smoke (ASan + UBSan)
+        run: |
+          gcc -O1 -std=c17 -fsanitize=address,undefined -Wall -Wextra -Werror -c runtime/operon_rt.c -o build/operon_rt.o
+          g++ -O1 -std=c++17 -fsanitize=address,undefined -Wall -Wextra -Werror -c runtime/codon_kernel.cpp -o build/codon_kernel.o
+          ar rcs build/liboperon_rt.a build/operon_rt.o build/codon_kernel.o
+          gcc -O1 -std=c17 -fsanitize=address,undefined tests/smoke_runtime.c build/liboperon_rt.a -lstdc++ -lm -o /tmp/operon_smoke
+          /tmp/operon_smoke
+      - name: Proof suite (Rust core)
+        run: ./bin/operon test tests/
+      - name: Differential harness (Rust core vs Python oracle)
+        run: python3 bootstrap/harness.py
+      - name: Playground smoke
+        run: node web/playground/smoke.js
+      - name: Stack report
+        run: bash scripts/stack_report.sh
+
+  windows:
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install MinGW (gcc/g++)
+        run: |
+          $mingw = "C:\mingw64\bin"
+          if (Test-Path $mingw) { Add-Content $env:GITHUB_PATH $mingw }
+          else { choco install mingw -y }
+        shell: pwsh
+      - name: Build toolchain
+        shell: bash
+        run: bash scripts/build.sh
+      - name: Proof suite
+        shell: bash
+        run: ./bin/operon test tests/
+      - name: Differential harness
+        shell: bash
+        run: python3 bootstrap/harness.py

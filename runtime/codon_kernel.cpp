@@ -2,7 +2,7 @@
 //
 // Two genuinely hot kernels exported to the toolchain through the C ABI:
 //
-//  1. rt_edit_distance — bit-parallel Levenshtein (Myers' algorithm) for the
+//  1. rt_edit_distance — bit-parallel edit-distance wavefront (block algorithm) for the
 //     wobble engine. The parser asks it for every near-keyword candidate, the
 //     stdlib exposes it as distance()/similar(). Single-word path covers
 //     pattern lengths <= 64 at O(n); the block path extends bit-vectors to
@@ -34,7 +34,7 @@ int32_t rt_edit_distance(const char *a, size_t la, const char *b, size_t lb) {
     if (lb > la) { const char *t = a; a = b; b = t; size_t tn = la; la = lb; lb = tn; }
 
     if (lb <= 64) {
-        /* Myers single-word: exact Levenshtein in O(la). `score` is the
+        /* single-word bit-parallel path: exact edit distance in O(la). `score` is the
          * number of trailing fixed bits maintained by the standard invariant
          * (distance = lb - popcount-of-matched-prefix, tracked via Ph/Mh at
          * the top bit). */
@@ -128,7 +128,13 @@ int32_t rt_codon_score(const char *s, size_t n) {
         int b1 = base_idx((unsigned char)s[i]);
         int b2 = base_idx((unsigned char)s[i + 1]);
         int b3 = base_idx((unsigned char)s[i + 2]);
-        if (b1 < 0 || b2 < 0 || b3 < 0) { acc += 90; groups++; continue; }
+        if (b1 < 0 || b2 < 0 || b3 < 0) {
+            /* unmapped group (non-DNA letters): NEUTRAL 50 — never reward
+             * biological nonsense, never punish ordinary identifiers */
+            acc += 50;
+            groups++;
+            continue;
+        }
         unsigned char w = USAGE[b1 * 16 + b2 * 4 + b3];
         acc += 30 + (uint64_t)w * 5;   /* map 0..15 -> 30..105, clamp below */
         groups++;

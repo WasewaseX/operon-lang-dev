@@ -93,5 +93,5 @@ gene main() {
         promote("{strings.pad_right(rec.name, 16, " ")} gc={a.gc} orfs={a.orf_count} top={a.top_codon} skew={a.purine_skew}")
     }
     let fp = fingerprint()
-    promote("telemetry: spliced={fp.spliced} unspliced={fp.unspliced} velocity={fp.velocity} fano={fp.fano}")
+    promote("telemetry: mature={fp.mature} nascent={fp.nascent} maturation={fp.maturation} burst={fp.burst}")
 }
