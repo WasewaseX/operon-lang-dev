@@ -1,0 +1,15 @@
+# differential: wave-3 semantics pinning — strings, slices, immutability
+promote("ab" * 3)
+promote(3 * "xy")
+let s = "hello world"
+promote(s.slice(-5, -1))
+promote(s.slice(0, 5))
+let original = [3, 1, 2]
+let sorted = original.sort()
+promote(sorted)
+promote(original)
+promote("a-b-c".split("-"))
+promote("  pad  ".trim())
+promote("abc".upper())
+promote("ABC".lower())
+promote(len("four"))
