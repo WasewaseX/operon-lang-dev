@@ -1581,6 +1581,31 @@ impl Interp {
     ) -> Result<Value, Stress> {
         match callee {
             Value::Gene(def, closure) if def.seq => {
+                // reg-r1: the sequence's own toggle gate applies at creation —
+                // the lazy body runs in a worker whose yield-loop cannot pass
+                // through call_named, so a repressed allele must not start
+                let seq_name = def.name.clone().unwrap_or_else(|| "<seq>".into());
+                if let Some(&(ref a, ref b, a_on)) = self
+                    .toggles
+                    .iter()
+                    .find(|(a, b, _)| a == &seq_name || b == &seq_name)
+                {
+                    let this_is_a = a == &seq_name;
+                    let active = (a_on && this_is_a) || (!a_on && !this_is_a);
+                    let immune = def.acetylate;
+                    if !active && !immune {
+                        let winner = if a_on { a } else { b };
+                        self.note(
+                            0,
+                            4,
+                            format!(
+                                "toggle repressed: sequence '{}' is the inactive allele ('{}' is on)",
+                                seq_name, winner
+                            ),
+                        );
+                        return Ok(Value::Null);
+                    }
+                }
                 // calling a sequence starts a worker; pulls are lazy
                 if args.len() > def.params.len() && !def.params.is_empty() {
                     self.note(
@@ -1597,6 +1622,7 @@ impl Interp {
                     def.clone(),
                     args,
                     snap,
+                    crate::genes::snapshot_regulation(self),
                     self.caps.clone(),
                     self.fuel_pool.clone(),
                 )?;
