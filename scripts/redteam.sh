@@ -19,6 +19,7 @@ ln -sf /etc/passwd "$DIR/rt_evil_link"
 ln -sf /tmp/redteam-out-escape "$DIR/rt_wlink"
 mkdir -p "$DIR/rt_evildir" && ln -sf /etc/hostname "$DIR/rt_evildir/hostname"
 rm -rf /tmp/redteam-out-escape
+mkdir -p /tmp/redteam-out-escape  # S5: a LIVE escape target makes denials non-vacuous
 pass=0; fail=0; failed_files=()
 
 run_one() {
