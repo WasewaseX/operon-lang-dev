@@ -1854,10 +1854,7 @@ impl Interp {
                 None => {
                     if ring_len > 0 {
                         if let Some(idx) = self.repressi_ring.iter().position(|r| r == &e.from) {
-                            match self.ring_gate_level(ring_len, tick, idx) {
-                                Ok(v) => v,
-                                Err(_) => 0.0,
-                            }
+                            self.ring_gate_level(ring_len, tick, idx).unwrap_or(0.0)
                         } else {
                             0.0
                         }
