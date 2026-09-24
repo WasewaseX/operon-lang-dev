@@ -265,6 +265,7 @@ All features are real, implemented, tested — none are decorative.
 - `spawn(f, args?)` — starts a real OS thread running gene `f`; returns task id (Int). `join(id)` waits and returns the result (second join → Null + note). Arguments and results cross by serialization (named genes, lambdas, and phenotype instances cross; a running sequence object does not).
 - Thread panics are impossible by construction: any stress inside the thread is returned as a Stress Map value.
 - Memory model note (honesty): values are reference-counted; tasks communicate by args/results, not shared mutable state. Data races on shared globals are prevented by design (closures capture is by value at spawn time for non-local references).
+- **Worker cells inherit regulation state (reg-r1).** A spawned task or sequence cell starts with a copy of the parent's GRN edges + levels, methylation counters + threshold, toggle pairs, and enhance marks, frozen at spawn time. Worker calls dispatch through the same funnel as the host, so a toggle-repressed allele, a silenced (level ≥ threshold) gene, or a GRN-vetoed call returns null inside the cell exactly as it does outside — regulation is part of the cell, not a host-side illusion. Later parent-side regulation changes do NOT propagate to already-running cells (snapshot semantics).
 - Sequences (§7b) run on the same worker-cell substrate: each sequence body is a worker thread pulling through a rendezvous channel.
 
 ## 14. Telemetry — the single-cell layer
