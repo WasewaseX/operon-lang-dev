@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# test.sh — full verification: C kernel smoke, proof suite, differential harness.
+# test.sh — full verification: native kernel smoke (ASan-capable), proof
+# suite, differential harness.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-echo "[1/3] C/C++ kernel smoke test"
-gcc -O2 -std=c17 tests/smoke_runtime.c build/operon_rt.o build/codon_kernel.o -lstdc++ -lm -o /tmp/operon_smoke
+echo "[1/3] C++ codon kernel smoke test"
+g++ -O2 -std=c++17 tests/smoke_codon.cpp build/codon_kernel.o -o /tmp/operon_smoke
 /tmp/operon_smoke
 echo "[2/3] Operon proof suite (Rust core)"
 ./bin/operon test tests/

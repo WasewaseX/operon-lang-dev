@@ -80,6 +80,34 @@ else
     pass=$((pass+1))
 fi
 
+# sec-r2 (audit C-11): exit() is a capability, default-deny. The payload
+# calls exit(99) inside stress/rescue; if the process dies with 99 the
+# sandbox is breached — a contained run rescues, prints "survived", exits 0.
+timeout 5 ./bin/operon run "$DIR/rt_x_exit_denied.op" --allow-read "$DIR" --allow-write "$DIR" > "$TMP/out" 2> "$TMP/err"
+exit_rc=$?
+if [ $exit_rc -eq 99 ] || [ $exit_rc -eq 124 ] || ! grep -q "survived" "$TMP/out"; then
+    echo "BREACH exit-capability (rc=$exit_rc)"
+    fail=$((fail+1)); failed_files+=("exit-capability")
+else
+    echo "ok    exit-capability (rc=$exit_rc)"
+    pass=$((pass+1))
+fi
+
+# sec-r2 (audit A14): run() children die at the wall-clock timeout. The
+# payload spawns `sleep 10` under run.timeout_ms=300; the interpreter must
+# return in well under 8s with ok=false — not hang (rc=124) and not wait.
+start=$SECONDS
+timeout 15 ./bin/operon run "$DIR/rt_x_run_timeout.op" --allow-run sleep --cell "$DIR/rt_x_timeout.cell" > "$TMP/out" 2> "$TMP/err"
+to_rc=$?
+elapsed=$((SECONDS - start))
+if [ $to_rc -eq 124 ] || [ $elapsed -ge 8 ] || ! grep -q "ok=false" "$TMP/out"; then
+    echo "BREACH run-timeout (rc=$to_rc, ${elapsed}s)"
+    fail=$((fail+1)); failed_files+=("run-timeout")
+else
+    echo "ok    run-timeout (rc=$to_rc, ${elapsed}s)"
+    pass=$((pass+1))
+fi
+
 if [ -n "$(ls -A /tmp/redteam-out-escape 2>/dev/null)" ]; then
     echo "ESCAPE: files were created inside /tmp/redteam-out-escape — sandbox breached"
     fail=$((fail+1))
