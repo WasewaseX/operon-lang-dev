@@ -11,9 +11,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Rust
+      - name: Install Rust (stable + clippy)
         uses: dtolnay/rust-toolchain@stable
-      - name: Build toolchain (C + C++ + Rust)
+        with:
+          components: clippy
+      - name: Cargo build (release; C/C++ kernels via build.rs)
+        run: cargo build --release
+      - name: Cargo test (unit + .op proof suite + version gate)
+        run: cargo test --release
+      - name: Clippy (warnings allowed, errors not)
+        run: cargo clippy --all-targets
+      - name: Toolchain build via scripts/build.sh (bin/operon compat path)
         run: bash scripts/build.sh
       - name: C/C++ kernel smoke (ASan + UBSan)
         run: |
@@ -22,7 +30,7 @@ jobs:
           ar rcs build/liboperon_rt.a build/operon_rt.o build/codon_kernel.o
           gcc -O1 -std=c17 -fsanitize=address,undefined tests/smoke_runtime.c build/liboperon_rt.a -lstdc++ -lm -o /tmp/operon_smoke
           /tmp/operon_smoke
-      - name: Proof suite (Rust core)
+      - name: Proof suite (compat path: ./bin/operon test tests/)
         run: ./bin/operon test tests/
       - name: Differential harness (Rust core vs Python oracle)
         run: python3 bootstrap/harness.py
@@ -36,20 +44,25 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-      - name: Install Rust
+      - name: Install Rust (stable + clippy)
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
       - name: Install MinGW (gcc/g++)
         run: |
           $mingw = "C:\mingw64\bin"
           if (Test-Path $mingw) { Add-Content $env:GITHUB_PATH $mingw }
           else { choco install mingw -y }
         shell: pwsh
-      - name: Build toolchain
+      - name: Cargo build (release)
         shell: bash
-        run: bash scripts/build.sh
+        run: cargo build --release
+      - name: Cargo test
+        shell: bash
+        run: cargo test --release
       - name: Proof suite
         shell: bash
-        run: ./bin/operon test tests/
+        run: ./target/release/operon test tests/
       - name: Differential harness
         shell: bash
         run: python3 bootstrap/harness.py

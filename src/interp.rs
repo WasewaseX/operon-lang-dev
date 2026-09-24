@@ -1556,54 +1556,53 @@ impl Interp {
     }
 
     /// Pull the next value from a sequence; Ok(None) means exhaustion.
+    /// (Straight-line: every branch below terminates the pull — there is no retry.)
     pub fn seq_pull(&mut self, st: &Rc<RefCell<SeqState>>) -> Result<Option<Value>, Stress> {
-        loop {
-            let msg = {
-                let mut b = st.borrow_mut();
-                if b.done {
-                    return Ok(None);
-                }
-                if let Some(s) = b.stress.take() {
-                    b.done = true;
-                    return Err(Stress::new(&s.0, s.1));
-                }
-                b.rx.take()
-            };
-            let rx = match msg {
-                Some(rx) => rx,
-                None => {
-                    // another pull already consumed the receiver; done
-                    let mut b = st.borrow_mut();
-                    b.done = true;
-                    return Ok(None);
-                }
-            };
-            let m = rx.recv();
+        let msg = {
             let mut b = st.borrow_mut();
-            match m {
-                Ok(crate::value::SeqMsg::Yield(sv)) => {
-                    b.rx = Some(rx); // put the receiver back for the next pull
+            if b.done {
+                return Ok(None);
+            }
+            if let Some(s) = b.stress.take() {
+                b.done = true;
+                return Err(Stress::new(&s.0, s.1));
+            }
+            b.rx.take()
+        };
+        let rx = match msg {
+            Some(rx) => rx,
+            None => {
+                // another pull already consumed the receiver; done
+                let mut b = st.borrow_mut();
+                b.done = true;
+                return Ok(None);
+            }
+        };
+        let m = rx.recv();
+        let mut b = st.borrow_mut();
+        match m {
+            Ok(crate::value::SeqMsg::Yield(sv)) => {
+                b.rx = Some(rx); // put the receiver back for the next pull
+                drop(b);
+                Ok(Some(crate::genes::from_send(sv)))
+            }
+            Ok(crate::value::SeqMsg::Done(notes, stress)) => {
+                b.done = true;
+                for n in notes {
+                    let mut n2 = n;
+                    n2.message = format!("[seq] {}", n2.message);
+                    self.notes.push(n2);
+                }
+                if let Some((k, m)) = stress {
+                    b.stress = Some((k, m));
                     drop(b);
-                    return Ok(Some(crate::genes::from_send(sv)));
+                    return Err(self.seq_stress(st));
                 }
-                Ok(crate::value::SeqMsg::Done(notes, stress)) => {
-                    b.done = true;
-                    for n in notes {
-                        let mut n2 = n;
-                        n2.message = format!("[seq] {}", n2.message);
-                        self.notes.push(n2);
-                    }
-                    if let Some((k, m)) = stress {
-                        b.stress = Some((k, m));
-                        drop(b);
-                        return Err(self.seq_stress(st));
-                    }
-                    return Ok(None);
-                }
-                Err(_) => {
-                    b.done = true;
-                    return Ok(None);
-                }
+                Ok(None)
+            }
+            Err(_) => {
+                b.done = true;
+                Ok(None)
             }
         }
     }
