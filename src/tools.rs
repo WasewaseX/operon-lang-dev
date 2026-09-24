@@ -28,13 +28,18 @@ pub struct Loaded {
 }
 
 pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
-    let mut src = std::fs::read_to_string(file)
-        .map_err(|e| format!("cannot read '{}': {}", file, e))?;
-    let stem = Path::new(file).file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    let mut src =
+        std::fs::read_to_string(file).map_err(|e| format!("cannot read '{}': {}", file, e))?;
+    let stem = Path::new(file)
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
 
     let mut interp = Interp::new();
     // base dir for module resolution (relative to the importing file)
-    interp.base_dir = std::path::Path::new(file).parent().map(|p| p.to_string_lossy().to_string());
+    interp.base_dir = std::path::Path::new(file)
+        .parent()
+        .map(|p| p.to_string_lossy().to_string());
 
     // methylation layer: CLI --cell, else operon.cell auto-detect.
     // SECURITY POLICY: an auto-detected cell config may configure entry/
@@ -87,7 +92,11 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
     interp.cli_args = opts.args.clone();
     // capability grants: CLI flags + .cell allow.* keys (CLI wins)
     interp.caps = opts.caps.clone();
-    let cell_pairs: Vec<(String, String)> = interp.cell.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+    let cell_pairs: Vec<(String, String)> = interp
+        .cell
+        .iter()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
     for (k, v) in cell_pairs {
         if let Some(rest) = k.strip_prefix("allow.") {
             if !cell_is_explicit {
@@ -114,14 +123,26 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
         }
     }
     // .cell methylate.quiet
-    if interp.cell.get("methylate.quiet").map(|v| v == "true").unwrap_or(false) {
+    if interp
+        .cell
+        .get("methylate.quiet")
+        .map(|v| v == "true")
+        .unwrap_or(false)
+    {
         interp.methyl_quiet = true;
     }
     // .cell methylate.threshold (T2b graded silencing gate; default 3)
     if let Some(t) = interp.cell.get("methylate.threshold") {
         match t.trim().parse::<u32>() {
             Ok(v) => interp.methyl_threshold = v,
-            Err(_) => interp.note(0, 4, format!("cell key 'methylate.threshold = {}' ignored: needs a non-negative integer", t)),
+            Err(_) => interp.note(
+                0,
+                4,
+                format!(
+                    "cell key 'methylate.threshold = {}' ignored: needs a non-negative integer",
+                    t
+                ),
+            ),
         }
     }
 
@@ -130,7 +151,11 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
     let genv = interp.global.clone();
     for stmt in &prog.stmts {
         if let Err(s) = interp.exec_stmt(&genv, stmt) {
-            interp.note(0, 4, format!("stress contained: [{}] {}", s.kind, s.message));
+            interp.note(
+                0,
+                4,
+                format!("stress contained: [{}] {}", s.kind, s.message),
+            );
         }
     }
 
@@ -157,16 +182,25 @@ pub fn resolve_entry(l: &mut Loaded, opts: &Opts) -> Option<String> {
     // initiation is chosen deliberately by the caller)
     if opts.use_ires {
         if let Some(first) = l.interp.ires.first().cloned() {
-            l.interp.note(0, 1, format!("cap-independent entry via --ires '{}'", first));
+            l.interp.note(
+                0,
+                1,
+                format!("cap-independent entry via --ires '{}'", first),
+            );
             return Some(first);
         }
     }
-    if l.prog.stmts.iter().any(|s| matches!(s, Stmt::Gene(g) if g.name.as_deref() == Some("main"))) {
+    if l.prog
+        .stmts
+        .iter()
+        .any(|s| matches!(s, Stmt::Gene(g) if g.name.as_deref() == Some("main")))
+    {
         return Some("main".into());
     }
     if !l.interp.ires.is_empty() {
         if let Some(first) = l.interp.ires.first().cloned() {
-            l.interp.note(0, 1, format!("cap-independent entry via ires '{}'", first));
+            l.interp
+                .note(0, 1, format!("cap-independent entry via ires '{}'", first));
             return Some(first);
         }
     }
@@ -236,11 +270,15 @@ pub fn check(file: &str, opts: &Opts, nmd: bool, purge: bool) -> CheckReport {
             rep.parsed = false;
             rep.score = 50;
             rep.letter = 'F';
-            rep.nmd.push(("error".into(), format!("cannot read '{}': {}", file, e)));
+            rep.nmd
+                .push(("error".into(), format!("cannot read '{}': {}", file, e)));
             return rep;
         }
     };
-    let stem = Path::new(file).file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    let stem = Path::new(file)
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
     let mut src2 = src.clone();
     if let Some(rna_path) = &opts.rna {
         if let Ok(patch) = std::fs::read_to_string(rna_path) {
@@ -253,7 +291,7 @@ pub fn check(file: &str, opts: &Opts, nmd: bool, purge: bool) -> CheckReport {
     rep.wobbles = prog.notes.iter().filter(|n| n.rung == 3).count();
     rep.fallbacks = prog.notes.iter().filter(|n| n.rung == 4).count();
     rep.notes = prog.notes.len();
-    rep.score -= (rung2 as i64) * 1 + (rep.wobbles as i64) * 2 + (rep.fallbacks as i64) * 3;
+    rep.score -= (rung2 as i64) + (rep.wobbles as i64) * 2 + (rep.fallbacks as i64) * 3;
 
     // all called names (for phantoms AND the NMD untranslated detector)
     let mut defined: HashSet<String> = HashSet::new();
@@ -336,7 +374,10 @@ pub fn check(file: &str, opts: &Opts, nmd: bool, purge: bool) -> CheckReport {
         }
         for n in &imported {
             if !defined.contains(n) && !module_exports.contains(n) {
-                rep.nmd.push(("anchor".into(), format!("anchor import '{}' not found in file or used modules", n)));
+                rep.nmd.push((
+                    "anchor".into(),
+                    format!("anchor import '{}' not found in file or used modules", n),
+                ));
                 rep.score -= 2;
             }
         }
@@ -365,7 +406,10 @@ pub fn check(file: &str, opts: &Opts, nmd: bool, purge: bool) -> CheckReport {
         for f in &findings {
             rep.nmd.push((f.kind.to_string(), f.message.clone()));
         }
-        rep.score -= findings.iter().map(|f| if f.kind == "premature-stop" { 4 } else { 1 }).sum::<i64>();
+        rep.score -= findings
+            .iter()
+            .map(|f| if f.kind == "premature-stop" { 4 } else { 1 })
+            .sum::<i64>();
     }
     rep.score = rep.score.max(50);
     rep.letter = grade_letter(rep.score);
@@ -394,7 +438,11 @@ fn purge_stmt(s: &mut Stmt) {
                 genes::purge_premature_stops(e);
             }
         }
-        Stmt::While(_, b) | Stmt::Loop(b) | Stmt::For(_, _, b) | Stmt::Block(b) | Stmt::Tad(_, b) => {
+        Stmt::While(_, b)
+        | Stmt::Loop(b)
+        | Stmt::For(_, _, b)
+        | Stmt::Block(b)
+        | Stmt::Tad(_, b) => {
             genes::purge_premature_stops(b);
         }
         Stmt::Frame { body, .. } => genes::purge_premature_stops(body),
@@ -409,7 +457,7 @@ fn purge_stmt(s: &mut Stmt) {
 }
 
 fn collect_calls(prog: &Program, defined: &mut HashSet<String>, called: &mut Vec<String>) {
-    fn walk_expr(e: &Expr, defined: &HashSet<String>, called: &mut Vec<String>) {
+    fn walk_expr(e: &Expr, called: &mut Vec<String>) {
         match e {
             Expr::Call(f, args) => {
                 if let Expr::Ident(n) = &**f {
@@ -417,38 +465,40 @@ fn collect_calls(prog: &Program, defined: &mut HashSet<String>, called: &mut Vec
                     // needs the full transcription record, not just phantoms
                     called.push(n.clone());
                 }
-                walk_expr(f, defined, called);
+                walk_expr(f, called);
                 for a in args {
-                    walk_expr(a, defined, called);
+                    walk_expr(a, called);
                 }
             }
             Expr::Method(r, _, args) => {
-                walk_expr(r, defined, called);
+                walk_expr(r, called);
                 for a in args {
-                    walk_expr(a, defined, called);
+                    walk_expr(a, called);
                 }
             }
-            Expr::Unary(_, a) | Expr::Member(a, _) => walk_expr(a, defined, called),
+            Expr::Unary(_, a) | Expr::Member(a, _) => walk_expr(a, called),
             Expr::Binary(_, a, b) | Expr::Index(a, b) => {
-                walk_expr(a, defined, called);
-                walk_expr(b, defined, called);
+                walk_expr(a, called);
+                walk_expr(b, called);
             }
-            Expr::List(xs) => xs.iter().for_each(|x| walk_expr(x, defined, called)),
+            Expr::List(xs) => xs.iter().for_each(|x| walk_expr(x, called)),
             Expr::Map(pairs) => pairs.iter().for_each(|(k, v)| {
-                walk_expr(k, defined, called);
-                walk_expr(v, defined, called);
+                walk_expr(k, called);
+                walk_expr(v, called);
             }),
             Expr::Interp(ps) => ps.iter().for_each(|p| {
                 if let InterpPart::Expr(x) = p {
-                    walk_expr(x, defined, called)
+                    walk_expr(x, called)
                 }
             }),
-            Expr::Collect { iter, filter, body, .. } => {
-                walk_expr(iter, defined, called);
+            Expr::Collect {
+                iter, filter, body, ..
+            } => {
+                walk_expr(iter, called);
                 if let Some(f) = filter {
-                    walk_expr(f, defined, called);
+                    walk_expr(f, called);
                 }
-                walk_expr(body, defined, called);
+                walk_expr(body, called);
             }
             _ => {}
         }
@@ -459,7 +509,6 @@ fn collect_calls(prog: &Program, defined: &mut HashSet<String>, called: &mut Vec
         }
     }
     fn walk_stmt(s: &Stmt, defined: &mut HashSet<String>, called: &mut Vec<String>) {
-        let dref = defined.clone();
         match s {
             Stmt::Gene(g) => {
                 if let Some(n) = &g.name {
@@ -473,21 +522,23 @@ fn collect_calls(prog: &Program, defined: &mut HashSet<String>, called: &mut Vec
                     walk_stmts(&d.body, defined, called);
                 }
             }
-            Stmt::Let(_, e) | Stmt::Assign(_, _, e) | Stmt::ExprStmt(e) | Stmt::Return(Some(e)) | Stmt::Raise(_, e) => {
-                walk_expr(e, &dref, called)
-            }
+            Stmt::Let(_, e)
+            | Stmt::Assign(_, _, e)
+            | Stmt::ExprStmt(e)
+            | Stmt::Return(Some(e))
+            | Stmt::Raise(_, e) => walk_expr(e, called),
             Stmt::IndexAssign(t, i, _, e) => {
-                walk_expr(t, &dref, called);
-                walk_expr(i, &dref, called);
-                walk_expr(e, &dref, called);
+                walk_expr(t, called);
+                walk_expr(i, called);
+                walk_expr(e, called);
             }
             Stmt::MemberAssign(t, _, _, e) => {
-                walk_expr(t, &dref, called);
-                walk_expr(e, &dref, called);
+                walk_expr(t, called);
+                walk_expr(e, called);
             }
             Stmt::If(bs, els) => {
                 for (c, b) in bs {
-                    walk_expr(c, &dref, called);
+                    walk_expr(c, called);
                     walk_stmts(b, defined, called);
                 }
                 if let Some(eb) = els {
@@ -495,20 +546,20 @@ fn collect_calls(prog: &Program, defined: &mut HashSet<String>, called: &mut Vec
                 }
             }
             Stmt::While(c, b) => {
-                walk_expr(c, &dref, called);
+                walk_expr(c, called);
                 walk_stmts(b, defined, called);
             }
             Stmt::Loop(b) => walk_stmts(b, defined, called),
             Stmt::For(_, it, b) => {
-                walk_expr(it, &dref, called);
+                walk_expr(it, called);
                 walk_stmts(b, defined, called);
             }
             Stmt::Match(sub, cases) => {
-                walk_expr(sub, &dref, called);
+                walk_expr(sub, called);
                 for (p, b) in cases {
                     match p {
-                        MatchPat::Lit(e) => walk_expr(e, &dref, called),
-                        MatchPat::Multi(ls) => ls.iter().for_each(|e| walk_expr(e, &dref, called)),
+                        MatchPat::Lit(e) => walk_expr(e, called),
+                        MatchPat::Multi(ls) => ls.iter().for_each(|e| walk_expr(e, called)),
                         _ => {}
                     }
                     walk_stmts(b, defined, called);
@@ -520,7 +571,9 @@ fn collect_calls(prog: &Program, defined: &mut HashSet<String>, called: &mut Vec
                     walk_stmts(rb, defined, called);
                 }
             }
-            Stmt::Frame { body, .. } | Stmt::Block(body) | Stmt::Tad(_, body) => walk_stmts(body, defined, called),
+            Stmt::Frame { body, .. } | Stmt::Block(body) | Stmt::Tad(_, body) => {
+                walk_stmts(body, defined, called)
+            }
             _ => {}
         }
     }
@@ -560,7 +613,10 @@ pub fn grade_letter(score: i64) -> char {
 
 // ------------------------------------------------------------ profile
 pub fn profile(file: &str, opts: &Opts) -> Loaded {
-    let mut l = match load_file(file, opts) { Ok(l) => l, Err(e) => crate::die(&format!("{}: {}", file, e)) };
+    let mut l = match load_file(file, opts) {
+        Ok(l) => l,
+        Err(e) => crate::die(&format!("{}: {}", file, e)),
+    };
     l.interp.profiling = true;
     let _ = run_entry(&mut l, opts);
     l
@@ -575,18 +631,34 @@ pub struct CrisprReport {
 }
 
 pub fn crispr(file: &str, opts: &Opts, knockout: &str) -> CrisprReport {
-    let mut l = match load_file(file, opts) { Ok(l) => l, Err(e) => crate::die(&format!("{}: {}", file, e)) };
+    let mut l = match load_file(file, opts) {
+        Ok(l) => l,
+        Err(e) => crate::die(&format!("{}: {}", file, e)),
+    };
     let genv = l.interp.global.clone();
     // guide RNA: replace the gene body with return null
     if let Some(Value::Gene(d, _)) = genv.get(knockout) {
         let mut d2 = (*d).clone();
         d2.body = vec![Stmt::Return(Some(Expr::Null))];
         genv.define(knockout, Value::Gene(std::sync::Arc::new(d2), None));
-        l.interp.note(0, 1, format!("knockout: '{}' body replaced with return null", knockout));
+        l.interp.note(
+            0,
+            1,
+            format!("knockout: '{}' body replaced with return null", knockout),
+        );
     } else {
-        l.interp.note(0, 4, format!("knockout target '{}' not found; screen skipped", knockout));
+        l.interp.note(
+            0,
+            4,
+            format!("knockout target '{}' not found; screen skipped", knockout),
+        );
     }
-    let mut rep = CrisprReport { knockout: knockout.to_string(), proofs_total: 0, survivors: 0, failures: Vec::new() };
+    let mut rep = CrisprReport {
+        knockout: knockout.to_string(),
+        proofs_total: 0,
+        survivors: 0,
+        failures: Vec::new(),
+    };
     l.interp.proof_mode = true;
     for (i, proof) in l.prog.proofs.iter().enumerate() {
         rep.proofs_total += 1;
@@ -594,13 +666,19 @@ pub fn crispr(file: &str, opts: &Opts, knockout: &str) -> CrisprReport {
         match r {
             Ok(Flow::Norm) => {
                 if l.interp.asserts_run == 0 {
-                    rep.failures.push(format!("proof #{}: no assertion exercised", i + 1));
+                    rep.failures
+                        .push(format!("proof #{}: no assertion exercised", i + 1));
                 } else {
                     rep.survivors += 1;
                 }
             }
             Ok(_) => rep.failures.push(format!("proof #{}: exited early", i + 1)),
-            Err(s) => rep.failures.push(format!("proof #{} failed: [{}] {}", i + 1, s.kind, s.message)),
+            Err(s) => rep.failures.push(format!(
+                "proof #{} failed: [{}] {}",
+                i + 1,
+                s.kind,
+                s.message
+            )),
         }
     }
     rep
@@ -617,13 +695,20 @@ pub fn bench(file: &str, opts: &Opts, iters: usize) -> BenchReport {
     let mut times = Vec::new();
     for _ in 0..iters {
         let t0 = crate::ffi::now_ns();
-        let mut l = match load_file(file, opts) { Ok(l) => l, Err(e) => crate::die(&format!("{}: {}", file, e)) };
+        let mut l = match load_file(file, opts) {
+            Ok(l) => l,
+            Err(e) => crate::die(&format!("{}: {}", file, e)),
+        };
         let _ = run_entry(&mut l, opts);
         times.push((crate::ffi::now_ns() - t0) / 1e6);
     }
     let min = times.iter().cloned().fold(f64::INFINITY, f64::min);
     let avg = times.iter().sum::<f64>() / iters.max(1) as f64;
-    BenchReport { iters, min_ms: min, avg_ms: avg }
+    BenchReport {
+        iters,
+        min_ms: min,
+        avg_ms: avg,
+    }
 }
 
 // ------------------------------------------------------------ test runner
@@ -637,7 +722,14 @@ pub struct TestReport {
 }
 
 pub fn run_tests(paths: &[String], opts: &Opts, json: bool) -> TestReport {
-    let mut rep = TestReport { files: 0, proofs: 0, passed: 0, failed: 0, failures: Vec::new(), notes: 0 };
+    let mut rep = TestReport {
+        files: 0,
+        proofs: 0,
+        passed: 0,
+        failed: 0,
+        failures: Vec::new(),
+        notes: 0,
+    };
     let mut total_asserts = 0u64;
     let mut files: Vec<String> = Vec::new();
     for p in paths {
@@ -671,18 +763,32 @@ pub fn run_tests(paths: &[String], opts: &Opts, json: bool) -> TestReport {
                 Ok(Flow::Norm) => {
                     if l.interp.asserts_run == asserts_before {
                         rep.failed += 1;
-                        rep.failures.push(format!("{} proof #{}: no assertion exercised (vacuous proof)", f, i + 1));
+                        rep.failures.push(format!(
+                            "{} proof #{}: no assertion exercised (vacuous proof)",
+                            f,
+                            i + 1
+                        ));
                     } else {
                         rep.passed += 1;
                     }
                 }
                 Ok(_) => {
                     rep.failed += 1;
-                    rep.failures.push(format!("{} proof #{}: exited early (return/break inside proof)", f, i + 1));
+                    rep.failures.push(format!(
+                        "{} proof #{}: exited early (return/break inside proof)",
+                        f,
+                        i + 1
+                    ));
                 }
                 Err(s) => {
                     rep.failed += 1;
-                    rep.failures.push(format!("{} proof #{}: [{}] {}", f, i + 1, s.kind, s.message));
+                    rep.failures.push(format!(
+                        "{} proof #{}: [{}] {}",
+                        f,
+                        i + 1,
+                        s.kind,
+                        s.message
+                    ));
                 }
             }
         }
@@ -750,7 +856,11 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
     out.push_str(&indent(ind));
     match s {
         Stmt::Seq(g) => {
-            out.push_str(&format!("sequence {}({}) ", g.name.clone().unwrap_or_default(), fmt_params(&g.params)));
+            out.push_str(&format!(
+                "sequence {}({}) ",
+                g.name.clone().unwrap_or_default(),
+                fmt_params(&g.params)
+            ));
             fmt_block(&g.body, ind, out);
             out.push_str("\n\n");
         }
@@ -780,7 +890,11 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
                     out.push_str("@m6a ");
                 }
                 out.push_str(&indent(ind + 1));
-                out.push_str(&format!("gene {}({}) ", g.name.clone().unwrap_or_default(), fmt_params(&g.params)));
+                out.push_str(&format!(
+                    "gene {}({}) ",
+                    g.name.clone().unwrap_or_default(),
+                    fmt_params(&g.params)
+                ));
                 fmt_block(&g.body, ind + 1, out);
                 out.push('\n');
             }
@@ -797,23 +911,44 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
             out.push_str(&format!("{} {}= {}\n", n, fmt_op(*op), fmt_expr(e)));
         }
         Stmt::IndexAssign(t, i, None, e) => {
-            out.push_str(&format!("{}[{}] = {}\n", fmt_expr(t), fmt_expr(i), fmt_expr(e)));
+            out.push_str(&format!(
+                "{}[{}] = {}\n",
+                fmt_expr(t),
+                fmt_expr(i),
+                fmt_expr(e)
+            ));
         }
         Stmt::IndexAssign(t, i, Some(op), e) => {
-            out.push_str(&format!("{}[{}] {}= {}\n", fmt_expr(t), fmt_expr(i), fmt_op(*op), fmt_expr(e)));
+            out.push_str(&format!(
+                "{}[{}] {}= {}\n",
+                fmt_expr(t),
+                fmt_expr(i),
+                fmt_op(*op),
+                fmt_expr(e)
+            ));
         }
         Stmt::MemberAssign(t, k, None, e) => {
             out.push_str(&format!("{}.{} = {}\n", fmt_expr(t), k, fmt_expr(e)));
         }
         Stmt::MemberAssign(t, k, Some(op), e) => {
-            out.push_str(&format!("{}.{} {}= {}\n", fmt_expr(t), k, fmt_op(*op), fmt_expr(e)));
+            out.push_str(&format!(
+                "{}.{} {}= {}\n",
+                fmt_expr(t),
+                k,
+                fmt_op(*op),
+                fmt_expr(e)
+            ));
         }
         Stmt::If(branches, els) => {
             for (i, (c, b)) in branches.iter().enumerate() {
                 if i > 0 {
                     out.push_str(&indent(ind));
                 }
-                out.push_str(&format!("{} {} ", if i == 0 { "if" } else { "elif" }, fmt_expr(c)));
+                out.push_str(&format!(
+                    "{} {} ",
+                    if i == 0 { "if" } else { "elif" },
+                    fmt_expr(c)
+                ));
                 fmt_block(b, ind, out);
                 out.push('\n');
             }
@@ -973,7 +1108,11 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
                     e.from,
                     if e.inhibit { "inhibits" } else { "activates" },
                     e.to,
-                    if e.strength != 1.0 { format!(" strength {}", e.strength) } else { String::new() }
+                    if e.strength != 1.0 {
+                        format!(" strength {}", e.strength)
+                    } else {
+                        String::new()
+                    }
                 ));
             }
             out.push_str(&indent(ind));
@@ -987,7 +1126,11 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
             }
             out.push_str(";\n");
         }
-        Stmt::Frame { name, is_proof, body } => {
+        Stmt::Frame {
+            name,
+            is_proof,
+            body,
+        } => {
             if *is_proof {
                 out.push_str("frame proof ");
             } else {
@@ -1005,8 +1148,8 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
                 // corrupt the formatted file
                 out.push_str(&format!(
                     "replace \"{}\" -> \"{}\";\n",
-                    json_escape(&f),
-                    json_escape(&to)
+                    json_escape(f),
+                    json_escape(to)
                 ));
             }
             out.push_str(&indent(ind));
@@ -1145,7 +1288,13 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
             out.push('"');
             out
         }
-        Expr::List(xs) => format!("[{}]", xs.iter().map(|x| fmt_prec(x, 0)).collect::<Vec<_>>().join(", ")),
+        Expr::List(xs) => format!(
+            "[{}]",
+            xs.iter()
+                .map(|x| fmt_prec(x, 0))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
         Expr::Map(pairs) => format!(
             "{{{}}}",
             pairs
@@ -1186,23 +1335,48 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
             let right = fmt_prec(b, p + 1);
             format!("{} {} {}", left, fmt_op(*op), right)
         }
-        Expr::Call(f, args) => format!("{}({})", fmt_expr(f), args.iter().map(|x| fmt_prec(x, 0)).collect::<Vec<_>>().join(", ")),
+        Expr::Call(f, args) => format!(
+            "{}({})",
+            fmt_expr(f),
+            args.iter()
+                .map(|x| fmt_prec(x, 0))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
         Expr::Index(t, i) => format!("{}[{}]", fmt_expr(t), fmt_expr(i)),
         Expr::Member(t, k) => format!("{}.{}", fmt_expr(t), k),
         Expr::Method(t, m, args) => format!(
             "{}.{}({})",
             fmt_expr(t),
             m,
-            args.iter().map(|x| fmt_prec(x, 0)).collect::<Vec<_>>().join(", ")
+            args.iter()
+                .map(|x| fmt_prec(x, 0))
+                .collect::<Vec<_>>()
+                .join(", ")
         ),
-        Expr::Lambda(g) => format!("gene({}) => {}", fmt_params(&g.params), fmt_body_inline(&g.body)),
+        Expr::Lambda(g) => format!(
+            "gene({}) => {}",
+            fmt_params(&g.params),
+            fmt_body_inline(&g.body)
+        ),
         Expr::FateNew(n) => format!("{}()", n),
-        Expr::Collect { var, iter, filter, body } => {
+        Expr::Collect {
+            var,
+            iter,
+            filter,
+            body,
+        } => {
             let f = match filter {
                 Some(f) => format!(" if {}", fmt_expr(f)),
                 None => String::new(),
             };
-            format!("for {} in {}{} collect {}", var, fmt_expr(iter), f, fmt_expr(body))
+            format!(
+                "for {} in {}{} collect {}",
+                var,
+                fmt_expr(iter),
+                f,
+                fmt_expr(body)
+            )
         }
         Expr::Ternary(c, a, b) => {
             // cond slot: a nested ternary MUST be parenthesized — `a ? 0 : 2
@@ -1213,7 +1387,10 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
         Expr::New(n, args) => format!(
             "new {}({})",
             n,
-            args.iter().map(|x| fmt_prec(x, 0)).collect::<Vec<_>>().join(", ")
+            args.iter()
+                .map(|x| fmt_prec(x, 0))
+                .collect::<Vec<_>>()
+                .join(", ")
         ),
     };
     if needs_paren {

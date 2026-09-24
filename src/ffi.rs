@@ -22,7 +22,14 @@ pub fn intern(s: &str) -> u32 {
 
 /// Edit distance between two Rust strings (C++ bit-parallel kernel).
 pub fn edit_distance(a: &str, b: &str) -> i32 {
-    unsafe { rt_edit_distance(a.as_ptr() as *const c_char, a.len(), b.as_ptr() as *const c_char, b.len()) }
+    unsafe {
+        rt_edit_distance(
+            a.as_ptr() as *const c_char,
+            a.len(),
+            b.as_ptr() as *const c_char,
+            b.len(),
+        )
+    }
 }
 
 /// Codon-usage style score 0..100 (C++ kernel).

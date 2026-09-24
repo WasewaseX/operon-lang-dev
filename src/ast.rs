@@ -41,7 +41,7 @@ pub enum Expr {
         body: Box<Expr>,
     },
     FateNew(String),
-    New(String, Vec<Expr>), // phenotype constructor
+    New(String, Vec<Expr>),                   // phenotype constructor
     Ternary(Box<Expr>, Box<Expr>, Box<Expr>), // cond ? a : b
 }
 
@@ -93,7 +93,7 @@ pub struct GeneDef {
 pub struct PhenoDef {
     pub name: String,
     pub parent: Option<String>,
-    pub fields: Vec<(String, Expr)>,   // field name -> default expr
+    pub fields: Vec<(String, Expr)>, // field name -> default expr
     pub methods: Vec<Arc<GeneDef>>,
 }
 
@@ -121,10 +121,10 @@ pub struct RegEdge {
 
 #[derive(Debug, Clone)]
 pub enum MatchPat {
-    Lit(Expr),          // literal-only pattern
-    Multi(Vec<Expr>),   // comma-separated literals
-    Bind(String),       // identifier binds value
-    Wild,               // _
+    Lit(Expr),        // literal-only pattern
+    Multi(Vec<Expr>), // comma-separated literals
+    Bind(String),     // identifier binds value
+    Wild,             // _
 }
 
 #[derive(Debug, Clone)]
@@ -167,10 +167,10 @@ pub enum Stmt {
     AnchorExport(Vec<String>),
     AnchorImport(Vec<String>),
     Tad(String, Vec<Stmt>),
-    Block(Vec<Stmt>), // bare scoped block (Total Grammar repair product)
-    Seq(Arc<GeneDef>),             // sequence definition (generator)
-    Yield(Option<Expr>),           // yield inside a sequence body
-    Pheno(Arc<PhenoDef>),          // phenotype definition (user class)
+    Block(Vec<Stmt>),     // bare scoped block (Total Grammar repair product)
+    Seq(Arc<GeneDef>),    // sequence definition (generator)
+    Yield(Option<Expr>),  // yield inside a sequence body
+    Pheno(Arc<PhenoDef>), // phenotype definition (user class)
 }
 
 #[derive(Debug, Clone, Default)]
