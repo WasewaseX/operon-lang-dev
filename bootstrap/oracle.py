@@ -2665,7 +2665,10 @@ class Interp:
             return acc
         if name == "clock":
             import time
-            return time.time()
+            return time.monotonic()
+        if name == "now":
+            import time
+            return time.monotonic()
         if name == "exit":
             sys.exit(int(args[0]) if args else 0)
         if name == "assert":
@@ -3068,9 +3071,6 @@ class Interp:
         if name == "ord":
             s = args[0] if args and isinstance(args[0], str) else ""
             return ord(s[0]) if s else 0
-        if name == "now":
-            import time as _t
-            return float(_t.time())
         if name == "sleep":
             import time as _t
             ms = 0
