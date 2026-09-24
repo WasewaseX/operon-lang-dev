@@ -293,10 +293,11 @@ records of <code>line, rung, message, repair</code>. Nothing is ever rejected.</
       <tr><td><code>memory()</code></td><td>Map <code>arena_bytes, interns, allocs</code> from the C runtime</td></tr>
       <tr><td><code>fingerprint()</code></td><td>Run telemetry — <code>calls burst burst_by_gene mature nascent maturation</code> (§14 of SPEC; the old spliced/unspliced/velocity keys are retired)</td></tr>
       <tr><td><code>spawn(f, args?)</code> · <code>join(id)</code></td><td>OS thread tasks; result returned, second join → null + note</td></tr>
-      <tr><td><code>toggle_on(name)</code> · <code>toggle_state()</code></td><td>Toggle-switch bistability control</td></tr>
+      <tr><td><code>toggle_on(name)</code> · <code>toggle_state()</code></td><td>Mutual-repression latch control</td></tr>
       <tr><td><code>repressi_next()</code> · <code>repressi_state()</code> · <code>repressi_start(ms)</code></td><td>Repressilator ring advance / levels / timed OS-thread mode</td></tr>
-      <tr><td><code>grn_fire(name)</code> · <code>grn_state()</code></td><td>Regulatory-network ignition / level map</td></tr>
+      <tr><td><code>grn_fire(name, decay?)</code> · <code>grn_state()</code> · <code>grn_set(n, v)</code> · <code>grn_get(n)</code></td><td>Regulatory-network ignition (optional per-pulse decay) / level map / single-node write (clamped 0..1) / read</td></tr>
       <tr><td><code>methyl(key, default?)</code></td><td>Read the <code>.cell</code> methylation config</td></tr>
+      <tr><td><code>methylate(name)</code> · <code>demethylate(name)</code></td><td>Runtime methylation — graded +1 / saturating −1, gate at the next call (returns the level)</td></tr>
     </tbody>
   </table>
 </div>

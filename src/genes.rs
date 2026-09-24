@@ -793,9 +793,29 @@ pub struct RegulationSnap {
     pub methyl_levels: Vec<(String, u32)>,
     pub methyl_threshold: u32,
     pub enhanced: Vec<String>,
+    /// reg-r3 (re-audit): the repressilator ring rides the snapshot too —
+    /// node names + the RAW ODE levels frozen at spawn, so a ring-sourced
+    /// GRN gate vetoes identically inside the cell ("exactly as it does
+    /// outside"). Workers are bounded cells: the ring is frozen at spawn
+    /// like every other regulation state, not live-ticking.
+    pub repressi_ring: Vec<String>,
+    pub repressi_tick: u64,
+    pub repressi_levels: Vec<f64>,
 }
 
 pub fn snapshot_regulation(interp: &Interp) -> RegulationSnap {
+    // reg-r3: freeze the ring at the spawn tick (levels via the same pure
+    // fold the host uses — bit-identical arithmetic)
+    let (ring_tick, ring_levels) = {
+        let tick = match &interp.repressi_atomic {
+            Some(a) => a.load(std::sync::atomic::Ordering::SeqCst),
+            None => interp.repressi_tick,
+        };
+        (
+            tick,
+            crate::interp::repressilator_levels(interp.repressi_ring.len(), tick),
+        )
+    };
     RegulationSnap {
         grn_edges: interp.grn_edges.clone(),
         grn_levels: interp
@@ -811,6 +831,9 @@ pub fn snapshot_regulation(interp: &Interp) -> RegulationSnap {
             .collect(),
         methyl_threshold: interp.methyl_threshold,
         enhanced: interp.enhanced.clone(),
+        repressi_ring: interp.repressi_ring.clone(),
+        repressi_tick: ring_tick,
+        repressi_levels: ring_levels,
     }
 }
 
@@ -821,6 +844,12 @@ pub fn bind_regulation(ti: &mut Interp, s: &RegulationSnap) {
     ti.methyl_levels = s.methyl_levels.iter().cloned().collect();
     ti.methyl_threshold = s.methyl_threshold;
     ti.enhanced = s.enhanced.clone();
+    // reg-r3: ring nodes resolve to the frozen spawn levels — pin the
+    // worker's cache to (spawn_tick, levels) so ring_gate_level returns
+    // exactly what the host saw (no live ticking inside the cell)
+    ti.repressi_ring = s.repressi_ring.clone();
+    ti.repressi_tick = s.repressi_tick;
+    *ti.repressi_cache.borrow_mut() = (s.repressi_tick, s.repressi_levels.clone());
 }
 
 pub fn bind_snapshot(env: &Rc<Env>, snap: &[(String, SnapVal)]) {

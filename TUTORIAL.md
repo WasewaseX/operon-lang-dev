@@ -242,9 +242,9 @@ worker()                               # runs again
 ```
 
 The same idea applies to the regulatory network: `grn_set(node, v)` / `grn_get(node)` read and
-write gate levels directly, and `grn_fire(node, decay)` takes an optional decay fraction —
-regulation is homeostasis, not a latch, so levels bleed off between pulses unless you keep
-re-firing them.
+write gate levels directly, and `grn_fire(node, decay)` takes an optional decay fraction.
+Decay is **opt-in** dilution — levels persist forever when unset — so pass a decay per pulse
+or set `[grn] decay` in your `.cell` if you want levels that bleed off between pulses.
 
 ## 7. Proof frames = tests built into the language
 
@@ -350,7 +350,7 @@ for mechanical edits across many programs. Both are plain text; see SPEC §9 for
 ## 11. Where to go next
 
 - **Read the standard library**: `std/*.op` — six small modules, all Operon.
-- **Read the proof suite**: `tests/` — 32 files, every language behavior asserted.
+- **Read the proof suite**: `tests/` — 50 files, every language behavior asserted.
 - **Run the app**: `apps/genomelab/genomelab.op` — a small DNA-toolbox CLI built entirely in Operon.
 - **The spec**: `SPEC.md` — the full contract, organized by feature.
 - **The roadmap**: where the language goes next (a bytecode VM for speed, more self-hosting).

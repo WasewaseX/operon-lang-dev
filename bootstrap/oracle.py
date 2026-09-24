@@ -2218,6 +2218,20 @@ class Interp:
     def call_value(self, env, callee, args):
         if isinstance(callee, Gene):
             if callee.seq:
+                # reg-r3 (re-audit): sequences honor ALL creation gates —
+                # GRN veto, methylation, toggle — in call_gene_inner order
+                # (mirror of the Rust branch; reg-r1 gated only the toggle)
+                seq_name = callee.name or "<seq>"
+                dl = getattr(callee, "line", 0)
+                veto = self.grn_veto(seq_name)
+                if veto is not None:
+                    self.note(4, f"grn gate: sequence '{seq_name}' call suppressed ({veto})")
+                    return None
+                if not callee.acetylate:
+                    lvl = self.methyl_levels.get(seq_name, 0)
+                    if lvl >= self.methyl_threshold:
+                        self.note(4, f"methylation silences: sequence '{seq_name}' (level {lvl} >= threshold {self.methyl_threshold}) — call returns null")
+                        return None
                 return SeqObj(self, callee, args)
             return self.call_gene(callee, args)
         self.note(4, f"called a {type_name(callee)} (not a gene); result null")
@@ -2915,15 +2929,24 @@ class Interp:
                     self.grn_levels[k2] *= retention
                     if self.grn_levels[k2] < 2.220446049250313e-16:  # f64::EPSILON
                         self.grn_levels[k2] = 0.0
-            # STATEFUL network: levels persist across fires (homeostasis)
+            # STATEFUL network: levels persist across fires (a latch by default — decay makes the dilution explicit)
             for frm, to, st, inh, thr in self.grn_edges:
                 self.grn_levels.setdefault(frm, 0.0)
                 self.grn_levels.setdefault(to, 0.0)
             self.grn_levels[seed] = min(self.grn_levels.get(seed, 0.0) + 1.0, 1.0)
+            # reg-r3 (re-audit): TWO-PHASE fire, mirroring the Rust core and
+            # the SPEC exactly — phase 1 propagates ACTIVATION in waves with
+            # inhibitors excluded; phase 2 applies each inhibitor ONCE,
+            # post-activation. (The old mirror subtracted inside the wave
+            # loop — up to 10 times — diverging from the SPEC's "applied
+            # exactly once per fire"; a pre-charged inhibited target shows
+            # it: Rust yields 0.1, the old mirror yielded 0.0.)
             for wave in range(1, 11):
                 changed = False
                 snap = dict(self.grn_levels)
                 for frm, to, st, inh, thr in self.grn_edges:
+                    if inh:
+                        continue  # inhibitors propagate in phase 2
                     parent = snap.get(frm, 0.0)
                     if parent <= 0:
                         continue
@@ -2932,14 +2955,38 @@ class Interp:
                         t2 = thr * thr
                         influence = st * (p2 / (p2 + t2))
                     else:
-                        influence = parent * (st ** wave)
+                        # op-identical to the Rust repeated multiplication
+                        # (never ** — pow vs mul rounding must not diverge)
+                        s = st
+                        for _ in range(wave - 1):
+                            s *= st
+                        influence = parent * s
                     cur = self.grn_levels.get(to, 0.0)
-                    nxt = max(0.0, cur - influence) if inh else max(cur, influence)
+                    nxt = max(cur, influence)
                     if abs(nxt - cur) > 1e-12:
                         self.grn_levels[to] = nxt
                         changed = True
                 if not changed:
                     break
+            # phase 2: inhibition subtracts once, from the source's
+            # post-activation level (sources read the PRE-phase-2 snapshot —
+            # parity with the Rust `activated` map, so a node that is both a
+            # target and a later source keeps its post-activation level)
+            post = dict(self.grn_levels)
+            for frm, to, st, inh, thr in self.grn_edges:
+                if not inh:
+                    continue
+                parent = post.get(frm, 0.0)
+                if parent <= 0.0:
+                    continue
+                if thr is not None and thr > 0.0:
+                    p2 = parent * parent
+                    t2 = thr * thr
+                    influence = st * (p2 / (p2 + t2))
+                else:
+                    influence = parent * st
+                cur = self.grn_levels.get(to, 0.0)
+                self.grn_levels[to] = max(0.0, cur - influence)
             return dict(self.grn_levels)
         if name == "grn_state":
             return dict(self.grn_levels)
