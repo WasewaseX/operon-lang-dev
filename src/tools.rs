@@ -522,7 +522,7 @@ fn collect_calls(prog: &Program, defined: &mut HashSet<String>, called: &mut Vec
                 }
             }
             Expr::Unary(_, a) | Expr::Member(a, _) | Expr::MemberSafe(a, _) => walk_expr(a, called),
-            Expr::Binary(_, a, b) | Expr::Index(a, b) => {
+            Expr::Binary(_, a, b, _) | Expr::Index(a, b, _) => {
                 walk_expr(a, called);
                 walk_expr(b, called);
             }
@@ -1348,7 +1348,7 @@ fn prec_of(op: BinOp) -> u8 {
 /// Precedence of an expression when nested (11 = atom/postfix, no parens ever).
 fn nest_prec(e: &Expr) -> u8 {
     match e {
-        Expr::Binary(op, _, _) => prec_of(*op),
+        Expr::Binary(op, _, _, _) => prec_of(*op),
         Expr::Ternary(_, _, _) => 1,
         Expr::Unary(crate::ast::UnOp::Not, _) => 2,
         Expr::Unary(crate::ast::UnOp::BitNot, _) => 11,
@@ -1444,7 +1444,7 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
                 format!("not {}", inner)
             }
         }
-        Expr::Binary(op, a, b) => {
+        Expr::Binary(op, a, b, _) => {
             let p = prec_of(*op);
             // left-assoc: left child may reuse p, right child must be tighter
             let left = fmt_prec(a, p);
@@ -1459,7 +1459,7 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
-        Expr::Index(t, i) => format!("{}[{}]", fmt_expr(t), fmt_expr(i)),
+        Expr::Index(t, i, _) => format!("{}[{}]", fmt_expr(t), fmt_expr(i)),
         Expr::Member(t, k) => format!("{}.{}", fmt_expr(t), k),
         Expr::MemberSafe(t, k) => format!("{}?.{}", fmt_expr(t), k),
         Expr::MethodSafe(t, m, args) => format!(
