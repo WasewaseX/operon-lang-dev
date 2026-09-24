@@ -1,0 +1,167 @@
+# std/json — helpers over the json_parse / json_str builtins.
+#
+# json_parse gives you the value; these helpers give you the everyday
+# navigation and reshaping layer. A "path" is a dot-separated walk:
+# "user.tags.0" steps into object key "user", then key "tags", then array
+# index 0. Missing steps return the fallback (null unless you pass one).
+
+gene json_type(v) {
+    # JSON-schema vocabulary for type() values
+    let t = type(v)
+    if t == "map" {
+        return "object"
+    }
+    if t == "list" {
+        return "array"
+    }
+    if t == "null" {
+        return "null"
+    }
+    if t == "bool" {
+        return "boolean"
+    }
+    if t == "int" or t == "float" {
+        return "number"
+    }
+    return t
+}
+
+gene json_is_object(v) {
+    return type(v) == "map"
+}
+
+gene json_is_array(v) {
+    return type(v) == "list"
+}
+
+gene json_get_or(v, path, fallback) {
+    # walk a dotted path through objects (key) and arrays (index)
+    let cur = v
+    for p in path.split(".") {
+        if cur == null {
+            return fallback
+        }
+        let t = type(cur)
+        if t == "map" {
+            if has(cur, p) {
+                cur = cur[p]
+            } else {
+                return fallback
+            }
+        } else {
+            if t == "list" {
+                # index steps must be canonical digit strings
+                let ix = num(p)
+                if str(ix) == p and ix >= 0 and ix < len(cur) {
+                    cur = cur[ix]
+                } else {
+                    return fallback
+                }
+            } else {
+                return fallback
+            }
+        }
+    }
+    return cur
+}
+
+gene json_get(v, path) {
+    return json_get_or(v, path, null)
+}
+
+gene json_merge(a, b) {
+    # shallow merge: b's keys win
+    let out = {}
+    for k in keys(a) {
+        out[k] = a[k]
+    }
+    for k in keys(b) {
+        out[k] = b[k]
+    }
+    return out
+}
+
+gene json_pick(v, keep) {
+    # top-level projection: only the listed keys
+    let out = {}
+    if type(v) != "map" {
+        return out
+    }
+    for k in keep {
+        if has(v, k) {
+            out[k] = v[k]
+        }
+    }
+    return out
+}
+
+gene json_omit(v, drop) {
+    # inverse of pick: every key except the listed ones
+    if type(v) != "map" {
+        return v
+    }
+    let out = {}
+    for k in keys(v) {
+        let keep = true
+        for d in drop {
+            if d == k {
+                keep = false
+            }
+        }
+        if keep {
+            out[k] = v[k]
+        }
+    }
+    return out
+}
+
+gene json_flatten(v) {
+    # {"a": {"b": 1}, "c": [2, 3]} -> {"a.b": 1, "c.0": 2, "c.1": 3}
+    let out = {}
+    json_flatten_into(v, "", out)
+    return out
+}
+
+gene json_flatten_into(v, prefix, out) {
+    if type(v) == "map" {
+        let ks = keys(v)
+        if len(ks) == 0 {
+            if len(prefix) > 0 {
+                out[prefix] = {}
+            }
+            return
+        }
+        for k in ks {
+            let p = k
+            if len(prefix) > 0 {
+                p = prefix + "." + k
+            }
+            json_flatten_into(v[k], p, out)
+        }
+        return
+    }
+    if type(v) == "list" {
+        if len(v) == 0 {
+            if len(prefix) > 0 {
+                out[prefix] = []
+            }
+            return
+        }
+        let i = 0
+        for x in v {
+            let p = str(i)
+            if len(prefix) > 0 {
+                p = prefix + "." + str(i)
+            }
+            json_flatten_into(x, p, out)
+            i = i + 1
+        }
+        return
+    }
+    out[prefix] = v
+}
+
+gene json_compact(v) {
+    # canonical round-trip: parse then re-serialize (drops formatting)
+    return json_str(json_parse(v))
+}

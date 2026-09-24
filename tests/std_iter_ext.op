@@ -1,0 +1,65 @@
+# differential: std/iter extensions — everyday adapters (map/filter/fold/...)
+use std/iter as it
+
+frame proof {
+    # map / filter
+    assert(it.map([1, 2, 3], gene (x) => x * 2) == [2, 4, 6])
+    assert(it.map([], gene (x) => x) == [])
+    assert(it.filter(range(0, 10), gene (x) => x % 3 == 0) == [0, 3, 6, 9])
+    assert(it.filter([1, 2], gene (x) => false) == [])
+
+    # fold / scan
+    assert(it.fold([1, 2, 3, 4], 0, gene (a, x) => a + x) == 10)
+    assert(it.fold([], 7, gene (a, x) => a + x) == 7)
+    assert(it.fold(["a", "b"], "", gene (a, x) => a + x) == "ab")
+    assert(it.scan([1, 2, 3], 10, gene (a, x) => a + x) == [11, 13, 16])
+    assert(it.scan([], 5, gene (a, x) => a + x) == [])
+
+    # any / all
+    assert(it.any([1, 2, 3], gene (x) => x > 2))
+    assert(!it.any([1, 2, 3], gene (x) => x > 9))
+    assert(!it.any([], gene (x) => true))
+    assert(it.all([2, 4], gene (x) => x % 2 == 0))
+    assert(!it.all([2, 5], gene (x) => x % 2 == 0))
+    assert(it.all([], gene (x) => false))
+
+    # take_while / drop_while (prefix semantics)
+    assert(it.take_while([1, 2, 3, 0, 4], gene (x) => x > 0) == [1, 2, 3])
+    assert(it.take_while([0, 1], gene (x) => x > 0) == [])
+    assert(it.take_while([], gene (x) => true) == [])
+    assert(it.drop_while([1, 2, 3, 0, 4], gene (x) => x < 3) == [3, 0, 4])
+    assert(it.drop_while([9, 1], gene (x) => x > 100) == [9, 1])
+
+    # find_first / index_of
+    assert(it.find_first([5, 6, 7], gene (x) => x > 5) == 6)
+    assert(it.find_first([5], gene (x) => x > 9) == null)
+    assert(it.index_of(["a", "b", "c"], "b") == 1)
+    assert(it.index_of(["a"], "z") == 0 - 1)
+    assert(it.index_of([], "a") == 0 - 1)
+
+    # intersperse / sliding
+    assert(it.intersperse([1, 2, 3], 0) == [1, 0, 2, 0, 3])
+    assert(it.intersperse([1], 0) == [1])
+    assert(it.intersperse([], 0) == [])
+    assert(it.sliding([1, 2, 3, 4], 2) == [[1, 2], [2, 3], [3, 4]])
+    assert(it.sliding([1, 2], 5) == [])
+    assert(it.sliding([1], 0) == [])
+
+    # enumerate_pairs / range_step
+    assert(it.enumerate_pairs(["a", "b"]) == [[0, "a"], [1, "b"]])
+    assert(it.enumerate_pairs([]) == [])
+    assert(it.range_step(0, 10, 3) == [0, 3, 6, 9])
+    assert(it.range_step(0, 1, 5) == [0])
+
+    # sort_by_key / reversed / concat_all
+    assert(it.sort_by_key(["bbb", "a", "cc"], gene (s) => len(s)) == ["a", "cc", "bbb"])
+    assert(it.sort_by_key([3, 1, 2], gene (x) => 0 - x) == [3, 2, 1])
+    assert(it.reversed([1, 2, 3]) == [3, 2, 1])
+    assert(it.reversed([]) == [])
+    assert(it.concat_all([[1], [2, 3], []]) == [1, 2, 3])
+    assert(it.concat_all([]) == [])
+}
+
+main {
+    promote("std/iter ext: ok")
+}

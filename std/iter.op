@@ -95,3 +95,164 @@ gene chunk(xs, n) {
 gene range_step(a, b, step) {
     return range(a, b, step)
 }
+
+# --- everyday adapters (B2) -------------------------------------------------
+
+gene map(xs, f) {
+    # transform each item (list-in, list-out; sequences use seq.map_seq)
+    let out = []
+    for x in xs {
+        push(out, f(x))
+    }
+    return out
+}
+
+gene filter(xs, pred) {
+    # keep items where pred(item) is true
+    let out = []
+    for x in xs {
+        if pred(x) {
+            push(out, x)
+        }
+    }
+    return out
+}
+
+gene fold(xs, acc, f) {
+    # left fold: fold([1,2,3], 0, gene (a, x) => a + x) == 6
+    for x in xs {
+        acc = f(acc, x)
+    }
+    return acc
+}
+
+gene scan(xs, acc, f) {
+    # fold that remembers: list of every intermediate accumulator
+    let out = []
+    for x in xs {
+        acc = f(acc, x)
+        push(out, acc)
+    }
+    return out
+}
+
+gene any(xs, pred) {
+    for x in xs {
+        if pred(x) {
+            return true
+        }
+    }
+    return false
+}
+
+gene all(xs, pred) {
+    for x in xs {
+        if !pred(x) {
+            return false
+        }
+    }
+    return true
+}
+
+gene take_while(xs, pred) {
+    let out = []
+    for x in xs {
+        if !pred(x) {
+            return out
+        }
+        push(out, x)
+    }
+    return out
+}
+
+gene drop_while(xs, pred) {
+    # skip the matching prefix, keep everything from the first miss on
+    let out = []
+    let dropping = true
+    for x in xs {
+        if dropping and pred(x) {
+            continue
+        }
+        dropping = false
+        push(out, x)
+    }
+    return out
+}
+
+gene find_first(xs, pred) {
+    # first match or null
+    for x in xs {
+        if pred(x) {
+            return x
+        }
+    }
+    return null
+}
+
+gene index_of(xs, v) {
+    # position of the first == match, or -1
+    let i = 0
+    for x in xs {
+        if x == v {
+            return i
+        }
+        i = i + 1
+    }
+    return -1
+}
+
+gene intersperse(xs, sep) {
+    # [1,2,3] -> [1, 0, 2, 0, 3] with sep = 0
+    let out = []
+    let i = 0
+    for x in xs {
+        if i > 0 {
+            push(out, sep)
+        }
+        push(out, x)
+        i = i + 1
+    }
+    return out
+}
+
+gene sliding(xs, n) {
+    # overlapping windows: sliding([1,2,3,4], 2) == [[1,2],[2,3],[3,4]]
+    if n <= 0 {
+        return []
+    }
+    let out = []
+    let m = len(xs)
+    let i = 0
+    while i + n <= m {
+        push(out, xs.slice(i, i + n))
+        i = i + 1
+    }
+    return out
+}
+
+gene sort_by_key(xs, keyf) {
+    # stable sort on a computed key: sort_by_key(words, len)
+    return xs.sort(gene (a, b) => keyf(a) < keyf(b))
+}
+
+gene reversed(xs) {
+    # functional reverse (list method .reverse() mutates; this returns a new list)
+    let out = []
+    let i = len(xs) - 1
+    while i >= 0 {
+        push(out, xs[i])
+        i = i - 1
+    }
+    return out
+}
+
+gene concat_all(xss) {
+    # flatten exactly one level, left to right
+    let out = []
+    for xs2 in xss {
+        for x in xs2 {
+            push(out, x)
+        }
+    }
+    return out
+}

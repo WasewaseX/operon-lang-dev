@@ -1,0 +1,78 @@
+# differential: std/strings extensions — case/strip/lines/quote helpers
+use std/strings as st
+
+frame proof {
+    # strip_prefix / strip_suffix (no-op when the piece is absent)
+    assert(st.strip_prefix("--flag", "--") == "flag")
+    assert(st.strip_prefix("abc", "z") == "abc")
+    assert(st.strip_prefix("abc", "") == "abc")
+    assert(st.strip_suffix("f.op", ".op") == "f")
+    assert(st.strip_suffix("f.op", ".cpp") == "f.op")
+    assert(st.strip_suffix("abc", "") == "abc")
+    assert(st.strip_prefix("aaa", "aa") == "a")
+
+    # is_blank
+    assert(st.is_blank(""))
+    assert(st.is_blank("   "))
+    assert(st.is_blank("\t \n"))
+    assert(!st.is_blank(" x"))
+
+    # chars
+    assert(st.chars("ab!") == ["a", "b", "!"])
+    assert(st.chars("") == [])
+
+    # lines: trailing newline dropped, interior empties kept
+    assert(st.lines("a\nb\n") == ["a", "b"])
+    assert(st.lines("a\nb") == ["a", "b"])
+    assert(st.lines("\n") == [""])
+    assert(st.lines("a\n\nb\n") == ["a", "", "b"])
+
+    # title_case: whitespace-normalized
+    assert(st.title_case("hello big world") == "Hello Big World")
+    assert(st.title_case("  hello   world ") == "Hello World")
+    assert(st.title_case("") == "")
+    assert(st.title_case("one") == "One")
+
+    # to_snake: humps, separators, acronym runs
+    assert(st.to_snake("myVarName") == "my_var_name")
+    assert(st.to_snake("MyVarName") == "my_var_name")
+    assert(st.to_snake("HTTPServer") == "http_server")
+    assert(st.to_snake("my-var place") == "my_var_place")
+    assert(st.to_snake("already_snake") == "already_snake")
+    assert(st.to_snake("A") == "a")
+    assert(st.to_snake("") == "")
+
+    # to_camel / to_kebab
+    assert(st.to_camel("hello big world") == "helloBigWorld")
+    assert(st.to_camel("my-var_name") == "myVarName")
+    assert(st.to_camel("Single") == "single")
+    assert(st.to_camel("a  b") == "aB")
+    assert(st.to_kebab("myVarName") == "my-var-name")
+    assert(st.to_kebab("plain") == "plain")
+
+    # pad (center) / starts_any
+    assert(st.pad("a", 3, "-") == "-a-")
+    assert(st.pad("abcd", 3, "-") == "abcd")
+    assert(st.pad("", 1, "-") == "-")
+    assert(st.starts_any("--verbose", ["-", "--"]))
+    assert(!st.starts_any("plain", ["-", "--"]))
+    assert(!st.starts_any("plain", []))
+
+    # ellipsis: never wider than width
+    assert(st.ellipsis("abcdefgh", 6) == "abc...")
+    assert(st.ellipsis("abc", 6) == "abc")
+    assert(st.ellipsis("abcdef", 3) == "...")
+    assert(st.ellipsis("abcd", 2) == "ab")
+    assert(st.ellipsis("", 5) == "")
+
+    # unquote: one matching pair
+    assert(st.unquote("\"x\"") == "x")
+    assert(st.unquote("'y'") == "y")
+    assert(st.unquote("x") == "x")
+    assert(st.unquote("\"mixed'") == "\"mixed'")
+    assert(st.unquote("\"a\" \"b\"") == "a\" \"b")
+}
+
+main {
+    promote("std/strings ext: ok")
+}
