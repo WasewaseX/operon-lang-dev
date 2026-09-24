@@ -1,6 +1,6 @@
 # Operon v2.1 — Language Specification
 
-**Status:** v2.2.0. This document is the single contract implemented identically by:
+**Status:** v2.1.1. This document is the single contract implemented identically by:
 
 | Implementation | Language | Role |
 |---|---|---|
@@ -337,7 +337,7 @@ operon version
 
 ## 17. Version
 
-### §19 — Wave-3 hardening and surface expansion (2.2.0)
+### §19 — Wave-3 hardening and surface expansion (2.1.1)
 
 **Security model upgrades (§9b amendments):**
 
@@ -397,7 +397,7 @@ operon version
 13. **REPL.** `operon repl` — persistent-expression shell; expressions print
     their value, definitions persist; `:quit` exits.
 
-**Semantics pinning (2.2.0):** `%` follows the divisor's sign; `//` is floor
+**Semantics pinning (2.1.1):** `%` follows the divisor's sign; `//` is floor
 division and always yields `int`; comparisons involving NaN are false;
 `floor`/`ceil` of out-of-i64 floats raise `overflow`; negative slice indexes
 count from the end; `sort()` returns a new list (immutable-method contract
@@ -406,7 +406,7 @@ module's placeholder map which fills when loading completes (with a rung-4
 note); map/filter/reduce/each run callbacks over a snapshot of the source
 list (callbacks may freely mutate the original).
 
-This specification is **Operon 2.2.0**. (`operon version` prints the implementation banner `Operon 2.2.0 (rust-core, c-runtime, cpp-kernel)` matches this document.)
+This specification is **Operon 2.1.1**. (`operon version` prints the implementation banner `Operon 2.1.1 (rust-core, c-runtime, cpp-kernel)` matches this document.)
 
 ## 18. Verification status (what the shipped suite proves)
 
