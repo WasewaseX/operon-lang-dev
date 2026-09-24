@@ -339,6 +339,14 @@ impl Parser {
                         marks.push(r);
                     }
                 }
+                // dx-r6 (loop-5-a audit MED): an own-line mark —
+                //   @acetylate\ngene foo() —
+                // never reached `gene`: the newline between mark and keyword
+                // wasn't eaten, the mark was dropped with a rung-4 note, and
+                // the same code silently changed regulation semantics vs its
+                // same-line spelling. Marks and `gene` may now be separated
+                // by newlines/semicolons like any other statement pair.
+                self.eat_newlines();
                 if !self.expect_kw("gene") {
                     let line = self.line();
                     self.note(line, 4, "mark must precede 'gene'; skipped line");

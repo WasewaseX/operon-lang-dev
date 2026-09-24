@@ -71,7 +71,7 @@ frame proof {
     assert(rec.seq == "ATGGCCTAA", "record seq")
     let a = analyze(rec)
     assert(a.orf_count == 1, "one ORF in ATGGCCTAA")
-    assert(a.longest_orf == 3, "ORF MK length")
+    assert(a.longest_orf == 2, "ORF MA length")
     assert(a.top_codon != "", "top codon found")
     let r = parse_record(">x\nATG\nGGC\nTAA")
     assert(r.seq == "ATGGGCTAA", "multiline join")

@@ -4397,6 +4397,68 @@ impl Interp {
                     }
                 }
             }
+            // dx-r6 (loop-5-a audit): regex substitution — the one regex op a
+            // scripting baseline expects that was missing. Literal
+            // replacement (no $1 refs — groups come from re_groups).
+            "re_replace" => {
+                let pat = args.first().map(|v| v.display()).unwrap_or_default();
+                let s = args.get(1).map(|v| v.display()).unwrap_or_default();
+                let repl = args.get(2).map(|v| v.display()).unwrap_or_default();
+                let engine = re_compile(&pat)?;
+                let chars: Vec<char> = s.chars().collect();
+                let mut out = String::new();
+                let mut pos = 0usize;
+                // termination is inherent: every iteration consumes at least
+                // one char (empty matches advance one), and the end-of-string
+                // position is searched exactly once (Python re.sub parity:
+                // re.sub("", "ab", "-") == "-a-b-")
+                while pos <= chars.len() {
+                    let searching = pos;
+                    // each scan is bounded by the engine's 2M-step cap; the
+                    // step charge keeps the total under the fuel budget
+                    self.steps = self.steps.saturating_add(chars.len() as u64);
+                    match engine.search(&chars, searching) {
+                        None => break,
+                        Some((a, b, _, ovf)) => {
+                            if ovf {
+                                return Err(Stress::new(
+                                    "overflow",
+                                    "regex backtracking exceeded 2M steps",
+                                ));
+                            }
+                            if a > pos {
+                                out.extend(&chars[pos..a]);
+                            }
+                            out.push_str(&repl);
+                            if b > a {
+                                pos = b;
+                            } else {
+                                // empty match: emit the current char (it is
+                                // not part of the match) and step over it —
+                                // Python re.sub parity for empty patterns
+                                if a < chars.len() {
+                                    out.push(chars[a]);
+                                }
+                                pos = a + 1;
+                            }
+                            if out.len() > 64 * 1024 * 1024 {
+                                return Err(Stress::new(
+                                    "overflow",
+                                    "re_replace result exceeds the 64 MiB ceiling",
+                                ));
+                            }
+                            if searching == chars.len() {
+                                break;
+                            }
+                        }
+                    }
+                }
+                if pos < chars.len() {
+                    out.extend(&chars[pos..]);
+                }
+                mem_charge(out.len() as u64)?;
+                Ok(Value::Str(out))
+            }
             // ------------------------------------------------ date / time (UTC civil calendar)
             "unix_time" => {
                 let now = std::time::SystemTime::now()
@@ -4717,6 +4779,83 @@ impl Interp {
                 match std::fs::metadata(&path) {
                     Ok(m) => Ok(Value::Int(m.len() as i64)),
                     Err(_) => Ok(Value::Int(-1)),
+                }
+            }
+            // dx-r6 (loop-5-a audit): the fs mutate ops a scripting baseline
+            // expects — delete/rename/mkdir — under the SAME discipline as
+            // write_file: write-capability, dangling-link pre-resolution,
+            // and post-open verification where a handle exists.
+            "fs_delete" => {
+                let path = args.first().map(|v| v.display()).unwrap_or_default();
+                self.caps.check(&self.caps.write, "write", &path)?;
+                if self.caps.gates_paths(&self.caps.write) {
+                    let final_path = Caps::resolve_link_chain(std::path::Path::new(&path));
+                    if !Caps::path_allowed(&self.caps.write, &final_path.to_string_lossy()) {
+                        return Err(Caps::denied("write", &path));
+                    }
+                }
+                let p = std::path::Path::new(&path);
+                // refuse symlinked paths outright: deleting the LINK is the
+                // guest's business, deleting through it is not (the strict
+                // pre-check already rejects outside-pointing links)
+                if std::fs::symlink_metadata(p)
+                    .map(|m| m.file_type().is_symlink())
+                    .unwrap_or(false)
+                {
+                    return Err(Stress::new(
+                        "interference",
+                        format!("fs_delete '{}': refused — path is a symlink", path),
+                    ));
+                }
+                let r = if p.is_dir() {
+                    std::fs::remove_dir(p) // empty dirs only: no recursive bombs
+                } else {
+                    std::fs::remove_file(p)
+                };
+                match r {
+                    Ok(()) => Ok(Value::Bool(true)),
+                    Err(e) => Err(Stress::new(
+                        "missing",
+                        format!("fs_delete '{}': {}", path, e),
+                    )),
+                }
+            }
+            "fs_rename" => {
+                let from = args.first().map(|v| v.display()).unwrap_or_default();
+                let to = args.get(1).map(|v| v.display()).unwrap_or_default();
+                self.caps.check(&self.caps.write, "write", &from)?;
+                self.caps.check(&self.caps.write, "write", &to)?;
+                if self.caps.gates_paths(&self.caps.write) {
+                    for what in [&from, &to] {
+                        let final_path = Caps::resolve_link_chain(std::path::Path::new(what));
+                        if !Caps::path_allowed(&self.caps.write, &final_path.to_string_lossy()) {
+                            return Err(Caps::denied("write", what));
+                        }
+                    }
+                }
+                match std::fs::rename(&from, &to) {
+                    Ok(()) => Ok(Value::Bool(true)),
+                    Err(e) => Err(Stress::new(
+                        "missing",
+                        format!("fs_rename '{}' -> '{}': {}", from, to, e),
+                    )),
+                }
+            }
+            "fs_mkdir" => {
+                let path = args.first().map(|v| v.display()).unwrap_or_default();
+                self.caps.check(&self.caps.write, "write", &path)?;
+                if self.caps.gates_paths(&self.caps.write) {
+                    let final_path = Caps::resolve_link_chain(std::path::Path::new(&path));
+                    if !Caps::path_allowed(&self.caps.write, &final_path.to_string_lossy()) {
+                        return Err(Caps::denied("write", &path));
+                    }
+                }
+                match std::fs::create_dir_all(&path) {
+                    Ok(()) => Ok(Value::Bool(true)),
+                    Err(e) => Err(Stress::new(
+                        "missing",
+                        format!("fs_mkdir '{}': {}", path, e),
+                    )),
                 }
             }
             "read_dir" => {
@@ -6769,6 +6908,10 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "exists",
     "file_size",
     "read_dir",
+    "fs_delete",
+    "fs_rename",
+    "fs_mkdir",
+    "re_replace",
     "items",
     "run",
     "http_get",
