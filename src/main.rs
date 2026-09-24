@@ -496,7 +496,7 @@ fn real_main() {
 // ------------------------------------------------------------ repl
 fn repl() {
     use std::io::{BufRead, Write};
-    println!("Operon 2.1.1 repl — gene-expression shell (type :quit to leave)");
+    println!("Operon 2.1.1 repl — gene-expression shell (:help for commands, :quit to leave)");
     let mut l = match tools::load_file("/dev/null", &Opts {
         cell: None, variant: None, rna: None, entry: None, use_ires: false,
         frame: None, args: Vec::new(), quiet: true, caps: interp::Caps::default(),
@@ -511,6 +511,9 @@ fn repl() {
         }
     };
     l.interp.proof_mode = false;
+    // every executed chunk is kept so `:proof` can replay the session's
+    // proof frames against the live interpreter state
+    let mut session = String::new();
     let stdin = std::io::stdin();
     let mut buffer = String::new();
     loop {
@@ -533,12 +536,114 @@ fn repl() {
         if t == ":quit" || t == ":q" || t == "exit" {
             break;
         }
+        if let Some(cmd) = t.strip_prefix(':') {
+            // commands never join the code buffer
+            if buffer.is_empty() {
+                let first = cmd.split_whitespace().next().unwrap_or("");
+                let arg = cmd[first.len()..].trim();
+                match first {
+                    "help" | "h" => {
+                        println!(":load f.op   read a file into this session (genes become callable)");
+                        println!(":proof [f]   run proof frames — this session's, or file f's");
+                        println!(":genes       list genes defined so far");
+                        println!(":vars        list top-level variables");
+                        println!(":reset       discard session state and start fresh");
+                        println!(":quit        leave the repl (definitions end with the session)");
+                    }
+                    "load" => {
+                        if arg.is_empty() {
+                            println!("  usage: :load path/to/file.op");
+                        } else {
+                            match std::fs::read_to_string(arg) {
+                                Ok(src) => {
+                                    println!("  loaded {} ({} bytes)", arg, src.len());
+                                    session.push_str(&src);
+                                    session.push('\n');
+                                    repl_eval(&mut l, &src);
+                                }
+                                Err(e) => println!("  [io] cannot read '{}': {}", arg, e),
+                            }
+                        }
+                    }
+                    "proof" => {
+                        if arg.is_empty() {
+                            repl_proof_session(&mut l, &session);
+                        } else {
+                            let opts = Opts {
+                                cell: None, variant: None, rna: None, entry: None,
+                                use_ires: false, frame: None, args: Vec::new(),
+                                quiet: true, caps: interp::Caps::default(),
+                            };
+                            let rep = tools::run_tests(&[arg.to_string()], &opts, false);
+                            println!(
+                                "  {}: {}/{} proof(s) passed ({} assertion(s))",
+                                arg, rep.passed, rep.proofs, rep.asserts
+                            );
+                        }
+                    }
+                    "genes" => {
+                        let mut names = l.interp.defined_genes.clone();
+                        if names.is_empty() {
+                            println!("  (no genes defined yet — try: gene hi() {{ return 1 }})");
+                        } else {
+                            names.sort();
+                            println!("  {}", names.join(", "));
+                        }
+                    }
+                    "vars" => {
+                        let env = l.interp.global.clone();
+                        let mut keys: Vec<String> = env
+                            .vars
+                            .borrow()
+                            .keys()
+                            .filter(|k| !k.starts_with("__"))
+                            .cloned()
+                            .collect();
+                        if keys.is_empty() {
+                            println!("  (no top-level variables yet)");
+                        } else {
+                            keys.sort();
+                            for k in keys {
+                                let v = env.get(&k).map(|v| v.repr()).unwrap_or_default();
+                                let short = if v.chars().count() > 60 {
+                                    format!("{}…", v.chars().take(60).collect::<String>())
+                                } else {
+                                    v
+                                };
+                                println!("  {} = {}", k, short);
+                            }
+                        }
+                    }
+                    "reset" => {
+                        l = match tools::load_file("/dev/null", &Opts {
+                            cell: None, variant: None, rna: None, entry: None,
+                            use_ires: false, frame: None, args: Vec::new(), quiet: true,
+                            caps: interp::Caps::default(),
+                        }) {
+                            Ok(nl) => nl,
+                            Err(_) => tools::Loaded {
+                                interp: interp::Interp::new(),
+                                prog: parser::parse(""),
+                            },
+                        };
+                        l.interp.proof_mode = false;
+                        session.clear();
+                        println!("  session reset");
+                    }
+                    other => println!("  unknown command ':{}' — try :help", other),
+                }
+                continue;
+            }
+            // a ':' line while a block is open is treated as code text
+        }
         if t.is_empty() && buffer.is_empty() {
             continue;
         }
         if t.is_empty() {
             // execute accumulated block
             let src = std::mem::take(&mut buffer);
+            session.push_str(&src);
+            session.push('\n');
             repl_eval(&mut l, &src);
             continue;
         }
@@ -547,6 +652,8 @@ fn repl() {
         // open blocks keep accumulating until the braces close
         if repl_brace_balance(&buffer) <= 0 {
             let src = std::mem::take(&mut buffer);
+            session.push_str(&src);
+            session.push('\n');
             repl_eval(&mut l, &src);
         }
     }
@@ -554,6 +661,53 @@ fn repl() {
     if !buffer.is_empty() {
         repl_eval(&mut l, &buffer);
     }
+}
+
+// :proof (no file) — run every proof frame the session has defined so far,
+// against the live interpreter state, mirroring `operon test` semantics:
+// a proof must run to completion AND exercise at least one assertion.
+fn repl_proof_session(l: &mut tools::Loaded, session: &str) {
+    if session.trim().is_empty() {
+        println!("  (empty session — define some code first)");
+        return;
+    }
+    let prog = parser::parse(session);
+    if prog.proofs.is_empty() {
+        println!("  no proof frames in this session — add one: frame proof {{ assert(1 == 1, \"ok\") }}");
+        return;
+    }
+    let total = prog.proofs.len();
+    let mut passed = 0usize;
+    let mut failed = 0usize;
+    let genv = l.interp.global.clone();
+    let proof_was = l.interp.proof_mode;
+    l.interp.proof_mode = true;
+    for (i, proof) in prog.proofs.iter().enumerate() {
+        let before = l.interp.asserts_run;
+        match l.interp.exec_block(&genv, proof) {
+            Ok(interp::Flow::Norm) => {
+                if l.interp.asserts_run == before {
+                    println!("  session proof #{}: FAILED (vacuous — no assertion exercised)", i + 1);
+                    failed += 1;
+                } else {
+                    passed += 1;
+                }
+            }
+            Ok(_) => {
+                println!("  session proof #{}: FAILED (exited early — return/break inside proof)", i + 1);
+                failed += 1;
+            }
+            Err(s) => {
+                println!("  session proof #{}: FAILED ({})", i + 1, s.message);
+                failed += 1;
+            }
+        }
+    }
+    l.interp.proof_mode = proof_was;
+    println!(
+        "  session proof: {}/{} passed ({} failed)",
+        passed, total, failed
+    );
 }
 
 fn repl_brace_balance(s: &str) -> i32 {
