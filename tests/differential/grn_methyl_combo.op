@@ -1,0 +1,18 @@
+# differential: regulation gate + graded methylation (T2a + T2b)
+regulate {
+    src activates target threshold 2
+}
+gene src() { return 1 }
+gene target() { return "ran" }
+gene muted() { return "spoke" }
+@methylate muted
+@methylate muted
+gene main() {
+    promote(target())                    # below threshold -> null
+    grn_fire("src")
+    grn_fire("src")
+    promote(target())                    # level 1.0 >= 0.5 -> ran
+    promote(muted())                     # methyl level 2 < 3 -> spoke
+    @methylate muted
+    promote(muted())                     # methyl level 3 >= 3 -> null
+}
