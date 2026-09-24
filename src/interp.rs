@@ -568,6 +568,105 @@ impl Interp {
                 }
                 Ok(Flow::Norm)
             }
+            Stmt::LetPat(pat, e) => {
+                // L1a: destructuring definition. Soft-miss: a pattern never
+                // hard-fails — wrong shape or missing piece binds Null + note.
+                let v = self.eval(env, e)?;
+                self.bind_pattern(env, pat, v);
+                Ok(Flow::Norm)
+            }
+            Stmt::ForPat(pat, iter, body) => {
+                // L1a: destructuring loop — each item binds the pattern in a
+                // fresh child scope, exactly like `for name`.
+                let itv = self.eval(env, iter)?;
+                if let Value::Seq(_def, st) = itv {
+                    loop {
+                        self.tick()?;
+                        let v = self.seq_pull(&st)?;
+                        match v {
+                            Some(item) => {
+                                let child = Env::new(Some(env.clone()));
+                                self.bind_pattern(&child, pat, item);
+                                match self.exec_block(&child, body)? {
+                                    Flow::Brk => break,
+                                    Flow::Ret(v) => return Ok(Flow::Ret(v)),
+                                    _ => {}
+                                }
+                            }
+                            None => break,
+                        }
+                    }
+                    return Ok(Flow::Norm);
+                }
+                let items: Vec<Value> = match itv {
+                    Value::List(l) => l.borrow().clone(),
+                    Value::Str(s) => s.chars().map(|c| Value::Str(c.to_string())).collect(),
+                    Value::Map(m) => m.borrow().iter().map(|(k, _)| k.clone()).collect(),
+                    other => {
+                        self.note(
+                            0,
+                            4,
+                            format!("cannot iterate {}; loop skipped", other.type_name()),
+                        );
+                        Vec::new()
+                    }
+                };
+                for item in items {
+                    self.tick()?;
+                    let child = Env::new(Some(env.clone()));
+                    self.bind_pattern(&child, pat, item);
+                    match self.exec_block(&child, body)? {
+                        Flow::Brk => break,
+                        Flow::Ret(v) => return Ok(Flow::Ret(v)),
+                        _ => {}
+                    }
+                }
+                Ok(Flow::Norm)
+            }
+            Stmt::MultiAssign(targets, values, define) => {
+                // L1a: swap / multiple assignment. All right-hand values are
+                // evaluated (left to right) BEFORE any target is written —
+                // `a, b = b, a` swaps, never smears.
+                let mut vals = Vec::with_capacity(values.len());
+                for v in values {
+                    vals.push(self.eval(env, v)?);
+                }
+                if vals.len() < targets.len() {
+                    self.note(
+                        0,
+                        4,
+                        "multi-assign: fewer values than targets; the rest bind null",
+                    );
+                } else if vals.len() > targets.len() {
+                    self.note(0, 4, "multi-assign: extra values dropped");
+                }
+                if *define && vals.len() != targets.len() {
+                    self.note(
+                        0,
+                        4,
+                        "multi 'let': fewer values than names; the rest bind null",
+                    );
+                }
+                for (i, t) in targets.iter().enumerate() {
+                    let val = vals.get(i).cloned().unwrap_or(Value::Null);
+                    if *define {
+                        match t {
+                            Expr::Ident(name) => {
+                                if env.get(name).is_some() {
+                                    self.note(0, 4, format!("rebinding '{}'", name));
+                                }
+                                env.define(name, val);
+                            }
+                            _ => {
+                                self.note(0, 4, "multi 'let' target must be a name; dropped");
+                            }
+                        }
+                    } else {
+                        self.assign_to_target(env, t, val)?;
+                    }
+                }
+                Ok(Flow::Norm)
+            }
             Stmt::If(branches, els) => {
                 for (cond, body) in branches {
                     let c = self.eval(env, cond)?;
@@ -985,6 +1084,282 @@ impl Interp {
         }
     }
 
+    /// L1a: shared member-read logic for `Expr::Member` and `Expr::MemberSafe`
+    /// (the safe form null-checks the receiver before calling this).
+    fn member_value(&mut self, tv: Value, key: &str) -> Result<Value, Stress> {
+        match &tv {
+            Value::Map(m) => match m
+                .borrow()
+                .iter()
+                .find(|(k, _)| matches!(k, Value::Str(s) if s == key))
+            {
+                Some((_, v)) => Ok(v.clone()),
+                None => {
+                    self.note(0, 4, format!("member '{}' missing on map; null", key));
+                    Ok(Value::Null)
+                }
+            },
+            Value::Obj(d, m) => match m
+                .borrow()
+                .iter()
+                .find(|(k, _)| matches!(k, Value::Str(s) if s == key))
+            {
+                Some((_, v)) => Ok(v.clone()),
+                None => {
+                    self.note(
+                        0,
+                        4,
+                        format!("field '{}' missing on phenotype {}; null", key, d.name),
+                    );
+                    Ok(Value::Null)
+                }
+            },
+            _ => {
+                self.note(
+                    0,
+                    4,
+                    format!("member '{}' on {} is null", key, tv.type_name()),
+                );
+                Ok(Value::Null)
+            }
+        }
+    }
+
+    /// L1a: bind a destructuring pattern. Total Grammar soft-miss: a wrong
+    /// container shape binds all Nulls with one note; a missing element/key
+    /// binds Null for that piece only. Every binding is a fresh `let`
+    /// (rebinding notes if the name already exists in this scope).
+    fn bind_pattern(&mut self, env: &Rc<Env>, pat: &Pat, v: Value) {
+        match pat {
+            Pat::Bind(name) => {
+                if env.get(name).is_some() {
+                    self.note(0, 4, format!("rebinding '{}'", name));
+                }
+                env.define(name, v);
+            }
+            Pat::List { elems, rest } => match &v {
+                Value::List(l) => {
+                    let n = l.borrow().len();
+                    for (i, ep) in elems.iter().enumerate() {
+                        let item = if i < n {
+                            l.borrow()[i].clone()
+                        } else {
+                            self.note(0, 4, format!("destructure: index {} missing; null", i));
+                            Value::Null
+                        };
+                        self.bind_pattern(env, ep, item);
+                    }
+                    match rest {
+                        Some(rname) => {
+                            let tail: Vec<Value> = if elems.len() < n {
+                                l.borrow()[elems.len()..].to_vec()
+                            } else {
+                                Vec::new()
+                            };
+                            if env.get(rname).is_some() {
+                                self.note(0, 4, format!("rebinding '{}'", rname));
+                            }
+                            env.define(rname, Value::List(Rc::new(RefCell::new(tail))));
+                        }
+                        None => {
+                            if n > elems.len() {
+                                self.note(
+                                    0,
+                                    4,
+                                    format!(
+                                        "destructure: {} extra element(s) dropped",
+                                        n - elems.len()
+                                    ),
+                                );
+                            }
+                        }
+                    }
+                }
+                Value::Null => {
+                    self.note(0, 4, "destructure of null binds nulls");
+                    for ep in elems {
+                        self.bind_pattern(env, ep, Value::Null);
+                    }
+                    if let Some(rname) = rest {
+                        if env.get(rname).is_some() {
+                            self.note(0, 4, format!("rebinding '{}'", rname));
+                        }
+                        env.define(rname, Value::List(Rc::new(RefCell::new(Vec::new()))));
+                    }
+                }
+                Value::Str(sv) => {
+                    // list patterns destructure strings by char (like for-in)
+                    let chars: Vec<Value> = sv.chars().map(|c| Value::Str(c.to_string())).collect();
+                    let n = chars.len();
+                    for (i, ep) in elems.iter().enumerate() {
+                        let item = if i < n {
+                            chars[i].clone()
+                        } else {
+                            self.note(0, 4, format!("destructure: index {} missing; null", i));
+                            Value::Null
+                        };
+                        self.bind_pattern(env, ep, item);
+                    }
+                    match rest {
+                        Some(rname) => {
+                            let tail: Vec<Value> = if elems.len() < n {
+                                chars[elems.len()..].to_vec()
+                            } else {
+                                Vec::new()
+                            };
+                            if env.get(rname).is_some() {
+                                self.note(0, 4, format!("rebinding '{}'", rname));
+                            }
+                            env.define(rname, Value::List(Rc::new(RefCell::new(tail))));
+                        }
+                        None => {
+                            if n > elems.len() {
+                                self.note(
+                                    0,
+                                    4,
+                                    format!(
+                                        "destructure: {} extra element(s) dropped",
+                                        n - elems.len()
+                                    ),
+                                );
+                            }
+                        }
+                    }
+                }
+                other => {
+                    self.note(
+                        0,
+                        4,
+                        format!(
+                            "cannot destructure {}; pattern binds nulls",
+                            other.type_name()
+                        ),
+                    );
+                    for ep in elems {
+                        self.bind_pattern(env, ep, Value::Null);
+                    }
+                    if let Some(rname) = rest {
+                        if env.get(rname).is_some() {
+                            self.note(0, 4, format!("rebinding '{}'", rname));
+                        }
+                        env.define(rname, Value::List(Rc::new(RefCell::new(Vec::new()))));
+                    }
+                }
+            },
+            Pat::Map { keys } => match &v {
+                Value::Map(m) => {
+                    for k in keys {
+                        let item = m
+                            .borrow()
+                            .iter()
+                            .find(|(mk, _)| matches!(mk, Value::Str(s) if s == k))
+                            .map(|(_, mv)| mv.clone());
+                        match item {
+                            Some(mv) => {
+                                if env.get(k).is_some() {
+                                    self.note(0, 4, format!("rebinding '{}'", k));
+                                }
+                                env.define(k, mv);
+                            }
+                            None => {
+                                self.note(0, 4, format!("destructure: key '{}' missing; null", k));
+                                if env.get(k).is_some() {
+                                    self.note(0, 4, format!("rebinding '{}'", k));
+                                }
+                                env.define(k, Value::Null);
+                            }
+                        }
+                    }
+                }
+                other => {
+                    self.note(
+                        0,
+                        4,
+                        format!(
+                            "cannot destructure {}; pattern binds nulls",
+                            other.type_name()
+                        ),
+                    );
+                    for k in keys {
+                        if env.get(k).is_some() {
+                            self.note(0, 4, format!("rebinding '{}'", k));
+                        }
+                        env.define(k, Value::Null);
+                    }
+                }
+            },
+        }
+    }
+
+    /// L1a: single-target writer for multi-assignment (names, index targets,
+    /// member targets). Mirrors IndexAssign/MemberAssign write semantics.
+    fn assign_to_target(&mut self, env: &Rc<Env>, t: &Expr, val: Value) -> Result<(), Stress> {
+        match t {
+            Expr::Ident(name) => {
+                if !env.set(name, val) {
+                    self.note(0, 4, format!("'{}' was not declared; auto-declared", name));
+                }
+                Ok(())
+            }
+            Expr::Index(ct, it) => {
+                let tv = self.eval(env, ct)?;
+                let iv = self.eval(env, it)?;
+                match (&tv, &iv) {
+                    (Value::List(l), Value::Int(idx)) => {
+                        let n = l.borrow().len() as i64;
+                        let j = if *idx < 0 { n + *idx } else { *idx };
+                        if j >= 0 && j < n {
+                            l.borrow_mut()[j as usize] = val;
+                        } else {
+                            l.borrow_mut().push(val);
+                            self.note(0, 4, "index out of range; value appended");
+                        }
+                        Ok(())
+                    }
+                    (Value::List(l), _) => {
+                        let idx = self.as_index(&iv, l.borrow().len()).unwrap_or(usize::MAX);
+                        if idx != usize::MAX && idx < l.borrow().len() {
+                            l.borrow_mut()[idx] = val;
+                        } else {
+                            l.borrow_mut().push(val);
+                            self.note(0, 4, "index out of range; value appended");
+                        }
+                        Ok(())
+                    }
+                    (Value::Map(m), _) => {
+                        self.map_insert(m, iv, val);
+                        Ok(())
+                    }
+                    _ => {
+                        self.note(0, 4, "index assignment on non-container ignored");
+                        Ok(())
+                    }
+                }
+            }
+            Expr::Member(ct, key) => {
+                let tv = self.eval(env, ct)?;
+                match tv {
+                    Value::Map(m) => {
+                        self.map_insert(&m, Value::Str(key.clone()), val);
+                        Ok(())
+                    }
+                    Value::Obj(_d, m) => {
+                        self.map_insert(&m, Value::Str(key.clone()), val);
+                        Ok(())
+                    }
+                    _ => {
+                        self.note(0, 4, "member assignment on non-map ignored");
+                        Ok(())
+                    }
+                }
+            }
+            _ => {
+                self.note(0, 4, "multi-assign target invalid; value dropped");
+                Ok(())
+            }
+        }
+    }
+
     pub fn stress_map(&self, s: &Stress) -> Value {
         Value::Map(Rc::new(RefCell::new(crate::value::MapStore::from_vec(
             vec![
@@ -1132,6 +1507,15 @@ impl Interp {
                         }
                         return self.eval(env, r);
                     }
+                    BinOp::Nullish => {
+                        // L1a: coalesce Null only — falsy-but-non-null values
+                        // (0, "", []) pass through unchanged.
+                        let lv = self.eval(env, l)?;
+                        if matches!(lv, Value::Null) {
+                            return self.eval(env, r);
+                        }
+                        return Ok(lv);
+                    }
                     _ => {}
                 }
                 let lv = self.eval(env, l)?;
@@ -1215,45 +1599,31 @@ impl Interp {
             }
             Expr::Member(t, key) => {
                 let tv = self.eval(env, t)?;
-                match &tv {
-                    Value::Map(m) => match m
-                        .borrow()
-                        .iter()
-                        .find(|(k, _)| matches!(k, Value::Str(s) if s == key))
-                    {
-                        Some((_, v)) => Ok(v.clone()),
-                        None => {
-                            self.note(0, 4, format!("member '{}' missing on map; null", key));
-                            Ok(Value::Null)
-                        }
-                    },
-                    Value::Obj(d, m) => match m
-                        .borrow()
-                        .iter()
-                        .find(|(k, _)| matches!(k, Value::Str(s) if s == key))
-                    {
-                        Some((_, v)) => Ok(v.clone()),
-                        None => {
-                            self.note(
-                                0,
-                                4,
-                                format!("field '{}' missing on phenotype {}; null", key, d.name),
-                            );
-                            Ok(Value::Null)
-                        }
-                    },
-                    _ => {
-                        self.note(
-                            0,
-                            4,
-                            format!("member '{}' on {} is null", key, tv.type_name()),
-                        );
-                        Ok(Value::Null)
-                    }
+                self.member_value(tv, key)
+            }
+            Expr::MemberSafe(t, key) => {
+                // L1a: `a?.k` — a Null receiver is Null, silently; anything
+                // else behaves exactly like `.` (missing keys still note).
+                let tv = self.eval(env, t)?;
+                if matches!(tv, Value::Null) {
+                    return Ok(Value::Null);
                 }
+                self.member_value(tv, key)
             }
             Expr::Method(t, name, args) => {
                 let tv = self.eval(env, t)?;
+                let mut argvs = Vec::with_capacity(args.len());
+                for a in args {
+                    argvs.push(self.eval(env, a)?);
+                }
+                self.call_method(env, tv, name, argvs)
+            }
+            Expr::MethodSafe(t, name, args) => {
+                // L1a: `a?.k(args)` — same contract as `?.` members.
+                let tv = self.eval(env, t)?;
+                if matches!(tv, Value::Null) {
+                    return Ok(Value::Null);
+                }
                 let mut argvs = Vec::with_capacity(args.len());
                 for a in args {
                     argvs.push(self.eval(env, a)?);
@@ -1380,6 +1750,13 @@ impl Interp {
     ) -> Result<Value, Stress> {
         use BinOp::*;
         match op {
+            // L1a: `??` short-circuits in eval() before apply_binop; this arm
+            // exists for totality (value-level coalescing, both sides ready).
+            Nullish => Ok(if matches!(l, Value::Null) {
+                r.clone()
+            } else {
+                l.clone()
+            }),
             Add => match (l, r) {
                 (Value::Int(a), Value::Int(b)) => a
                     .checked_add(*b)
@@ -2628,6 +3005,454 @@ impl Interp {
                     }
                 }
                 Ok(best.unwrap_or(Value::Null))
+            }
+            // ---- L1a: iteration + numeric builtins (oracle mirrors each) ----
+            "enumerate" => match args.first() {
+                Some(Value::List(l)) => {
+                    let out: Vec<Value> = l
+                        .borrow()
+                        .iter()
+                        .enumerate()
+                        .map(|(i, v)| {
+                            Value::List(Rc::new(RefCell::new(vec![
+                                Value::Int(i as i64),
+                                v.clone(),
+                            ])))
+                        })
+                        .collect();
+                    mem_charge(8 * out.len() as u64 + 48)?;
+                    Ok(Value::List(Rc::new(RefCell::new(out))))
+                }
+                Some(Value::Str(s)) => {
+                    let out: Vec<Value> = s
+                        .chars()
+                        .enumerate()
+                        .map(|(i, c)| {
+                            Value::List(Rc::new(RefCell::new(vec![
+                                Value::Int(i as i64),
+                                Value::Str(c.to_string()),
+                            ])))
+                        })
+                        .collect();
+                    mem_charge(8 * out.len() as u64 + 48)?;
+                    Ok(Value::List(Rc::new(RefCell::new(out))))
+                }
+                other => {
+                    self.note(
+                        self.cur_line,
+                        4,
+                        format!(
+                            "enumerate of a {}; null",
+                            other.map(|v| v.type_name()).unwrap_or("null")
+                        ),
+                    );
+                    Ok(Value::Null)
+                }
+            },
+            "zip" => {
+                let a = match args.first() {
+                    Some(Value::List(l)) => l.borrow().clone(),
+                    _ => {
+                        self.note(self.cur_line, 4, "zip needs two lists; null");
+                        return Ok(Value::Null);
+                    }
+                };
+                let b = match args.get(1) {
+                    Some(Value::List(l)) => l.borrow().clone(),
+                    _ => {
+                        self.note(self.cur_line, 4, "zip needs two lists; null");
+                        return Ok(Value::Null);
+                    }
+                };
+                let n = a.len().min(b.len());
+                let out: Vec<Value> = (0..n)
+                    .map(|i| Value::List(Rc::new(RefCell::new(vec![a[i].clone(), b[i].clone()]))))
+                    .collect();
+                mem_charge(8 * out.len() as u64 + 48)?;
+                Ok(Value::List(Rc::new(RefCell::new(out))))
+            }
+            "sorted" => match args.first() {
+                Some(Value::List(l)) => {
+                    let mut v = l.borrow().clone();
+                    match args.get(1) {
+                        Some(Value::Gene(_, _)) => {
+                            let cmp = args.get(1).unwrap().clone();
+                            // insertion sort with user comparator — the exact
+                            // `.sort()` contract, non-mutating output
+                            for i in 1..v.len() {
+                                let mut j = i;
+                                while j > 0 {
+                                    let a = v[j - 1].clone();
+                                    let b = v[j].clone();
+                                    let before = self.call_value(env, &cmp, vec![a, b])?.truthy();
+                                    if !before {
+                                        v.swap(j - 1, j);
+                                        j -= 1;
+                                    } else {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        _ => {
+                            let key = |v: &Value| -> (u8, f64, String) {
+                                match v {
+                                    Value::Bool(b) => (0, *b as i64 as f64, String::new()),
+                                    Value::Int(i) => (0, *i as f64, String::new()),
+                                    Value::Float(f) => (0, *f, String::new()),
+                                    Value::Str(s) => (1, 0.0, s.clone()),
+                                    other => (2, 0.0, other.repr()),
+                                }
+                            };
+                            v.sort_by(|a, b| {
+                                let (ka, kb) = (key(a), key(b));
+                                ka.0.cmp(&kb.0)
+                                    .then(
+                                        ka.1.partial_cmp(&kb.1)
+                                            .unwrap_or(std::cmp::Ordering::Equal),
+                                    )
+                                    .then_with(|| ka.2.cmp(&kb.2))
+                            });
+                        }
+                    }
+                    mem_charge(8 * v.len() as u64 + 48)?;
+                    Ok(Value::List(Rc::new(RefCell::new(v))))
+                }
+                other => {
+                    self.note(
+                        self.cur_line,
+                        4,
+                        format!(
+                            "sorted of a {}; null",
+                            other.map(|v| v.type_name()).unwrap_or("null")
+                        ),
+                    );
+                    Ok(Value::Null)
+                }
+            },
+            "reversed" => match args.first() {
+                Some(Value::List(l)) => {
+                    let mut v = l.borrow().clone();
+                    v.reverse();
+                    Ok(Value::List(Rc::new(RefCell::new(v))))
+                }
+                other => {
+                    self.note(
+                        self.cur_line,
+                        4,
+                        format!(
+                            "reversed of a {}; null",
+                            other.map(|v| v.type_name()).unwrap_or("null")
+                        ),
+                    );
+                    Ok(Value::Null)
+                }
+            },
+            "any" => match args.first() {
+                Some(Value::List(l)) => Ok(Value::Bool(l.borrow().iter().any(|v| v.truthy()))),
+                other => {
+                    self.note(
+                        self.cur_line,
+                        4,
+                        format!(
+                            "any of a {}; false",
+                            other.map(|v| v.type_name()).unwrap_or("null")
+                        ),
+                    );
+                    Ok(Value::Bool(false))
+                }
+            },
+            "all" => match args.first() {
+                Some(Value::List(l)) => Ok(Value::Bool(l.borrow().iter().all(|v| v.truthy()))),
+                other => {
+                    self.note(
+                        self.cur_line,
+                        4,
+                        format!(
+                            "all of a {}; false",
+                            other.map(|v| v.type_name()).unwrap_or("null")
+                        ),
+                    );
+                    Ok(Value::Bool(false))
+                }
+            },
+            "first" => match args.first() {
+                Some(Value::List(l)) => {
+                    if l.borrow().is_empty() {
+                        self.note(self.cur_line, 4, "first of an empty list; null");
+                        Ok(Value::Null)
+                    } else {
+                        Ok(l.borrow()[0].clone())
+                    }
+                }
+                Some(Value::Str(s)) => match s.chars().next() {
+                    Some(c) => Ok(Value::Str(c.to_string())),
+                    None => {
+                        self.note(self.cur_line, 4, "first of an empty string; null");
+                        Ok(Value::Null)
+                    }
+                },
+                other => {
+                    self.note(
+                        self.cur_line,
+                        4,
+                        format!(
+                            "first of a {}; null",
+                            other.map(|v| v.type_name()).unwrap_or("null")
+                        ),
+                    );
+                    Ok(Value::Null)
+                }
+            },
+            "last" => match args.first() {
+                Some(Value::List(l)) => {
+                    if l.borrow().is_empty() {
+                        self.note(self.cur_line, 4, "last of an empty list; null");
+                        Ok(Value::Null)
+                    } else {
+                        Ok(l.borrow()[l.borrow().len() - 1].clone())
+                    }
+                }
+                Some(Value::Str(s)) => match s.chars().last() {
+                    Some(c) => Ok(Value::Str(c.to_string())),
+                    None => {
+                        self.note(self.cur_line, 4, "last of an empty string; null");
+                        Ok(Value::Null)
+                    }
+                },
+                other => {
+                    self.note(
+                        self.cur_line,
+                        4,
+                        format!(
+                            "last of a {}; null",
+                            other.map(|v| v.type_name()).unwrap_or("null")
+                        ),
+                    );
+                    Ok(Value::Null)
+                }
+            },
+            "take" => {
+                let n = match args.get(1) {
+                    Some(Value::Int(i)) if *i >= 0 => *i as usize,
+                    Some(Value::Int(_)) => 0,
+                    _ => {
+                        self.note(self.cur_line, 4, "take needs a count; null");
+                        return Ok(Value::Null);
+                    }
+                };
+                match args.first() {
+                    Some(Value::List(l)) => Ok(Value::List(Rc::new(RefCell::new(
+                        l.borrow().iter().take(n).cloned().collect(),
+                    )))),
+                    Some(Value::Str(s)) => Ok(Value::Str(s.chars().take(n).collect())),
+                    other => {
+                        self.note(
+                            self.cur_line,
+                            4,
+                            format!(
+                                "take of a {}; null",
+                                other.map(|v| v.type_name()).unwrap_or("null")
+                            ),
+                        );
+                        Ok(Value::Null)
+                    }
+                }
+            }
+            "drop" => {
+                let n = match args.get(1) {
+                    Some(Value::Int(i)) if *i >= 0 => *i as usize,
+                    Some(Value::Int(_)) => 0,
+                    _ => {
+                        self.note(self.cur_line, 4, "drop needs a count; null");
+                        return Ok(Value::Null);
+                    }
+                };
+                match args.first() {
+                    Some(Value::List(l)) => Ok(Value::List(Rc::new(RefCell::new(
+                        l.borrow().iter().skip(n).cloned().collect(),
+                    )))),
+                    Some(Value::Str(s)) => Ok(Value::Str(s.chars().skip(n).collect())),
+                    other => {
+                        self.note(
+                            self.cur_line,
+                            4,
+                            format!(
+                                "drop of a {}; null",
+                                other.map(|v| v.type_name()).unwrap_or("null")
+                            ),
+                        );
+                        Ok(Value::Null)
+                    }
+                }
+            }
+            "unique" => match args.first() {
+                Some(Value::List(l)) => {
+                    let mut out: Vec<Value> = Vec::new();
+                    for v in l.borrow().iter() {
+                        if !out.iter().any(|u| u.deep_eq(v)) {
+                            out.push(v.clone());
+                        }
+                    }
+                    mem_charge(8 * out.len() as u64 + 48)?;
+                    Ok(Value::List(Rc::new(RefCell::new(out))))
+                }
+                other => {
+                    self.note(
+                        self.cur_line,
+                        4,
+                        format!(
+                            "unique of a {}; null",
+                            other.map(|v| v.type_name()).unwrap_or("null")
+                        ),
+                    );
+                    Ok(Value::Null)
+                }
+            },
+            "flatten" => match args.first() {
+                Some(Value::List(l)) => {
+                    let mut out: Vec<Value> = Vec::new();
+                    for v in l.borrow().iter() {
+                        if let Value::List(inner) = v {
+                            out.extend(inner.borrow().iter().cloned());
+                        } else {
+                            out.push(v.clone());
+                        }
+                    }
+                    mem_charge(8 * out.len() as u64 + 48)?;
+                    Ok(Value::List(Rc::new(RefCell::new(out))))
+                }
+                other => {
+                    self.note(
+                        self.cur_line,
+                        4,
+                        format!(
+                            "flatten of a {}; null",
+                            other.map(|v| v.type_name()).unwrap_or("null")
+                        ),
+                    );
+                    Ok(Value::Null)
+                }
+            },
+            "chunk" => {
+                let n = match args.get(1) {
+                    Some(Value::Int(i)) if *i > 0 => *i as usize,
+                    Some(Value::Int(_)) => {
+                        self.note(self.cur_line, 4, "chunk size must be positive; empty");
+                        return Ok(Value::List(Rc::new(RefCell::new(Vec::new()))));
+                    }
+                    _ => {
+                        self.note(self.cur_line, 4, "chunk needs a size; null");
+                        return Ok(Value::Null);
+                    }
+                };
+                match args.first() {
+                    Some(Value::List(l)) => {
+                        let out: Vec<Value> = l
+                            .borrow()
+                            .chunks(n)
+                            .map(|c| Value::List(Rc::new(RefCell::new(c.to_vec()))))
+                            .collect();
+                        mem_charge(8 * out.len() as u64 + 48)?;
+                        Ok(Value::List(Rc::new(RefCell::new(out))))
+                    }
+                    other => {
+                        self.note(
+                            self.cur_line,
+                            4,
+                            format!(
+                                "chunk of a {}; null",
+                                other.map(|v| v.type_name()).unwrap_or("null")
+                            ),
+                        );
+                        Ok(Value::Null)
+                    }
+                }
+            }
+            "round" => {
+                let d = match args.get(1) {
+                    None => 0u32,
+                    Some(Value::Int(n)) if *n >= 0 => *n as u32,
+                    Some(Value::Int(_)) => {
+                        self.note(self.cur_line, 4, "negative digit count; treated as 0");
+                        0u32
+                    }
+                    Some(_) => {
+                        self.note(self.cur_line, 4, "digit count must be an int; treated as 0");
+                        0u32
+                    }
+                };
+                match args.first() {
+                    Some(Value::Int(i)) => Ok(Value::Int(*i)),
+                    Some(Value::Float(f)) => {
+                        // half-away-from-zero at the d-th decimal, computed
+                        // identically in the oracle (same f64 formula —
+                        // bit-identical, like the repressilator mirror)
+                        if !f.is_finite() {
+                            return Ok(Value::Float(*f));
+                        }
+                        let scale = 10f64.powi(d as i32);
+                        let r = ((f.abs() * scale) + 0.5).floor() / scale * f.signum();
+                        if d == 0 {
+                            if !r.is_finite()
+                                || r >= 9.223372036854776e18
+                                || r <= -9.223372036854776e18
+                            {
+                                return Err(Stress::new(
+                                    "overflow",
+                                    "float too large for round to int",
+                                ));
+                            }
+                            Ok(Value::Int(r as i64))
+                        } else {
+                            Ok(Value::Float(r))
+                        }
+                    }
+                    other => {
+                        self.note(
+                            self.cur_line,
+                            4,
+                            format!(
+                                "round of a {}; 0",
+                                other.map(|v| v.type_name()).unwrap_or("null")
+                            ),
+                        );
+                        Ok(Value::Int(0))
+                    }
+                }
+            }
+            "clamp" => {
+                let num =
+                    |v: Option<&Value>| matches!(v, Some(Value::Int(_)) | Some(Value::Float(_)));
+                let a = args.first();
+                let lo = args.get(1);
+                let hi = args.get(2);
+                if !(num(a) && num(lo) && num(hi)) {
+                    self.note(self.cur_line, 4, "clamp needs three numbers; null");
+                    return Ok(Value::Null);
+                }
+                let v = a.unwrap().clone();
+                let lo = lo.unwrap().clone();
+                let hi = hi.unwrap().clone();
+                if self.compare(&v, &lo).unwrap_or(std::cmp::Ordering::Equal)
+                    == std::cmp::Ordering::Less
+                {
+                    Ok(lo)
+                } else if self.compare(&v, &hi).unwrap_or(std::cmp::Ordering::Equal)
+                    == std::cmp::Ordering::Greater
+                {
+                    Ok(hi)
+                } else {
+                    Ok(v)
+                }
+            }
+            "divmod" => {
+                // parity by construction: reuses the `//` and `%` operators
+                let a = args.first().cloned().unwrap_or(Value::Null);
+                let b = args.get(1).cloned().unwrap_or(Value::Null);
+                let q = self.apply_binop(env, BinOp::FloorDiv, &a, &b)?;
+                let r = self.apply_binop(env, BinOp::Mod, &a, &b)?;
+                Ok(Value::List(Rc::new(RefCell::new(vec![q, r]))))
             }
             "sum" => {
                 let mut acc = Value::Int(0);
@@ -4070,6 +4895,34 @@ impl Interp {
         match recv {
             Value::Str(s) => match name {
                 "upper" => Ok(Value::Str(s.to_uppercase())),
+                "at" => {
+                    // L1a: safe char access with an optional default.
+                    let chars: Vec<char> = s.chars().collect();
+                    match args.first() {
+                        Some(Value::Int(i)) => {
+                            let j = if *i < 0 { chars.len() as i64 + *i } else { *i };
+                            if j >= 0 && (j as usize) < chars.len() {
+                                Ok(Value::Str(chars[j as usize].to_string()))
+                            } else {
+                                match args.get(1) {
+                                    Some(d) => Ok(d.clone()),
+                                    None => {
+                                        self.note(
+                                            self.cur_line,
+                                            4,
+                                            "char index out of range; null",
+                                        );
+                                        Ok(Value::Null)
+                                    }
+                                }
+                            }
+                        }
+                        _ => {
+                            self.note(self.cur_line, 4, "at needs an int index; null");
+                            Ok(Value::Null)
+                        }
+                    }
+                }
                 "lower" => Ok(Value::Str(s.to_lowercase())),
                 "trim" => Ok(Value::Str(s.trim().to_string())),
                 "split" => {
@@ -4318,6 +5171,30 @@ impl Interp {
                     Ok(Value::List(l.clone()))
                 }
                 "pop" => Ok(l.borrow_mut().pop().unwrap_or(Value::Null)),
+                "get" => {
+                    // L1a: safe index read with an optional default.
+                    let n = l.borrow().len();
+                    match args.first() {
+                        Some(Value::Int(i)) => {
+                            let j = if *i < 0 { n as i64 + *i } else { *i };
+                            if j >= 0 && (j as usize) < n {
+                                Ok(l.borrow()[j as usize].clone())
+                            } else {
+                                match args.get(1) {
+                                    Some(d) => Ok(d.clone()),
+                                    None => {
+                                        self.note(self.cur_line, 4, "index out of range; null");
+                                        Ok(Value::Null)
+                                    }
+                                }
+                            }
+                        }
+                        _ => {
+                            self.note(self.cur_line, 4, "list get needs an int index; null");
+                            Ok(Value::Null)
+                        }
+                    }
+                }
                 _ => {
                     self.note(0, 4, format!("unknown list method '{}'; null", name));
                     Ok(Value::Null)
@@ -4341,6 +5218,31 @@ impl Interp {
                 "has" => {
                     let t = args.first().cloned().unwrap_or(Value::Null);
                     Ok(Value::Bool(m.borrow().position(&t).is_some()))
+                }
+                "get" => {
+                    // L1a: safe key access with an optional default. Bare
+                    // missing key keeps the member-access note; with a
+                    // default it is returned silently (mainstream idiom).
+                    let t = args.first().cloned().unwrap_or(Value::Null);
+                    match m.borrow().position(&t) {
+                        Some(i) => Ok(m
+                            .borrow()
+                            .iter()
+                            .nth(i)
+                            .map(|(_, v)| v.clone())
+                            .unwrap_or(Value::Null)),
+                        None => match args.get(1) {
+                            Some(d) => Ok(d.clone()),
+                            None => {
+                                self.note(
+                                    self.cur_line,
+                                    4,
+                                    format!("key '{}' missing; null", t.display()),
+                                );
+                                Ok(Value::Null)
+                            }
+                        },
+                    }
                 }
                 "del" => {
                     let t = args.first().cloned().unwrap_or(Value::Null);
@@ -5561,6 +6463,23 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "date_parts",
     "date_fmt",
     "call",
+    // L1a: iteration + numeric builtins
+    "enumerate",
+    "zip",
+    "sorted",
+    "reversed",
+    "any",
+    "all",
+    "first",
+    "last",
+    "take",
+    "drop",
+    "unique",
+    "flatten",
+    "chunk",
+    "round",
+    "clamp",
+    "divmod",
 ];
 
 // ---------------------------------------------------------------- memory
