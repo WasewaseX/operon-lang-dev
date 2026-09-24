@@ -184,7 +184,7 @@ fn real_main() {
 
     match cmd.as_str() {
         "version" => {
-            println!("Operon 2.2.0 (rust-core, c-runtime, cpp-kernel)");
+            println!("Operon 2.1.1 (rust-core, c-runtime, cpp-kernel)");
         }
         "repl" => {
             repl();
@@ -496,7 +496,7 @@ fn real_main() {
 // ------------------------------------------------------------ repl
 fn repl() {
     use std::io::{BufRead, Write};
-    println!("Operon 2.2.0 repl — gene-expression shell (type :quit to leave)");
+    println!("Operon 2.1.1 repl — gene-expression shell (type :quit to leave)");
     let mut l = match tools::load_file("/dev/null", &Opts {
         cell: None, variant: None, rna: None, entry: None, use_ires: false,
         frame: None, args: Vec::new(), quiet: true, caps: interp::Caps::default(),
@@ -629,7 +629,7 @@ fn repl_eval(l: &mut tools::Loaded, src: &str) {
 
 fn usage() {
     eprintln!(
-        "Operon 2.2.0 — the gene-expression language (Total Grammar)
+        "Operon 2.1.1 — the gene-expression language (Total Grammar)
 usage:
   operon run f.op [--entry g] [--variant v] [--cell c] [--rna r] [--frame name] [--ires] [--strict] [--quiet]
   operon check f.op [--nmd | --nmd=purge] [--json]
