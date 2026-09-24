@@ -1,0 +1,152 @@
+# std/csv — CSV-ish parsing and serialization, a pure string layer.
+#
+# RFC-4180 flavored: fields may be quoted; inside quotes the separator and
+# newlines are literal; "" inside a quoted field is one literal quote.
+# The separator is a parameter — "csv" also handles TSV ("|", ";", "\t"...).
+#
+# csv_parse is a character-level state machine, so quoted multi-line fields
+# survive; every function here is pure (no fs access, no caps involved).
+
+gene csv_escape(field, sep) {
+    # quote a field when needed; double any inner quotes
+    let f = str(field)
+    if f.contains(sep) or f.contains("\"") or f.contains("\n") {
+        return "\"" + f.replace("\"", "\"\"") + "\""
+    }
+    return f
+}
+
+gene csv_row(fields, sep) {
+    # serialize one row: ["a", "b,c"] -> a,"b,c"
+    let out = ""
+    let i = 0
+    for f in fields {
+        if i > 0 {
+            out = out + sep
+        }
+        out = out + csv_escape(f, sep)
+        i = i + 1
+    }
+    return out
+}
+
+gene csv_parse(text, sep) {
+    # parse a whole document into rows (list of list of string fields)
+    let cr = chr(13)
+    let rows = []
+    let row = []
+    let field = ""
+    let inq = false
+    let i = 0
+    let n = len(text)
+    while i < n {
+        let c = text.slice(i, i + 1)
+        if inq {
+            if c == "\"" {
+                if i + 1 < n and text.slice(i + 1, i + 2) == "\"" {
+                    field = field + "\""
+                    i = i + 1
+                } else {
+                    inq = false
+                }
+            } else {
+                field = field + c
+            }
+        } else {
+            if c == "\"" and field == "" {
+                inq = true
+            } else {
+                if c == sep {
+                    push(row, field)
+                    field = ""
+                } else {
+                    if c == "\n" {
+                        push(row, field)
+                        push(rows, row)
+                        row = []
+                        field = ""
+                    } else {
+                        if c == cr {
+                            # swallow real carriage returns (CRLF endings)
+                        } else {
+                            field = field + c
+                        }
+                    }
+                }
+            }
+        }
+        i = i + 1
+    }
+    if len(field) > 0 or len(row) > 0 {
+        push(row, field)
+        push(rows, row)
+    }
+    return rows
+}
+
+gene csv_parse_line(line, sep) {
+    # single-line convenience: first parsed row, or [] for empty input
+    let rows = csv_parse(line, sep)
+    if len(rows) == 0 {
+        return []
+    }
+    return rows[0]
+}
+
+gene csv_records(text, sep) {
+    # header row + data rows -> list of maps keyed by the header names
+    let rows = csv_parse(text, sep)
+    if len(rows) < 2 {
+        return []
+    }
+    let head = rows[0]
+    let out = []
+    let i = 1
+    while i < len(rows) {
+        let m = {}
+        let c = 0
+        for h in head {
+            if c < len(rows[i]) {
+                m[h] = rows[i][c]
+            }
+            c = c + 1
+        }
+        push(out, m)
+        i = i + 1
+    }
+    return out
+}
+
+gene csv_column(text, sep, name) {
+    # all values of the named column (data rows only)
+    let rows = csv_parse(text, sep)
+    if len(rows) < 2 {
+        return []
+    }
+    let head = rows[0]
+    let ix = 0 - 1
+    let c = 0
+    for h in head {
+        if h == name {
+            ix = c
+        }
+        c = c + 1
+    }
+    if ix < 0 {
+        return []
+    }
+    let out = []
+    let i = 1
+    while i < len(rows) {
+        if ix < len(rows[i]) {
+            push(out, rows[i][ix])
+        }
+        i = i + 1
+    }
+    return out
+}
+
+gene csv_count_fields(line, sep) {
+    # how many fields a single line would produce (quote-aware)
+    return len(csv_parse_line(line, sep))
+}
