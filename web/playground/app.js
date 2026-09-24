@@ -48,7 +48,10 @@ const STMT_KEYWORDS = KEYWORDS.filter(
 const EXPR_KEYWORDS = ["true", "false", "null", "and", "or", "not", "in", "gene", "collect", "if", "for"];
 
 const BUILTINS = ["promote", "len", "str", "num", "type", "range", "push", "pop",
-  "keys", "values", "abs", "min", "max", "sum", "clock", "distance", "codon", "exit"];
+  "keys", "values", "has", "del", "remove", "insert", "chr", "floor", "ceil",
+  "sqrt", "pow", "json_parse", "json_str", "abs", "min", "max", "sum", "clock",
+  "distance", "codon", "exit"];
+const BUILTIN_SET = new Set(BUILTINS);
 
 const SUPPORTED_STMT = new Set([
   "let", "if", "while", "loop", "for", "return", "break", "continue", "gene",
@@ -208,8 +211,15 @@ function readString(src, i, ctx, line, quote) {
         const s = src[k];
         if (s === "\\") { sub += s + (src[k + 1] || ""); k += 2; continue; }
         if (s === '"' || s === "'") {
-          const q2 = s; k++;
-          while (k < N && src[k] !== q2) { if (src[k] === "\\") k++; k++; }
+          // keep the quoted literal INTACT inside the hole (the native cores
+          // allow {m["k"]}, {len("x")}, {"a".upper()} — parity fix, B4)
+          const q2 = s;
+          sub += s; k++;
+          while (k < N && src[k] !== q2) {
+            if (src[k] === "\\") { sub += src[k] + (src[k + 1] || ""); k += 2; continue; }
+            sub += src[k]; k++;
+          }
+          if (k < N) sub += src[k]; // closing quote
           k++; continue;
         }
         if (s === "{") { depth++; sub += s; k++; continue; }
@@ -762,7 +772,13 @@ class Parser {
       if (p.expr === undefined) { out.push({ txt: p.txt || "" }); continue; }
       if (!p.expr) { out.push({ txt: "{" }); continue; }
       try {
-        const sub = new Parser(lex(p.expr, this.ctx, line), this.ctx, this.names);
+        const subToks = lex(p.expr, this.ctx, line);
+        // interpolation holes are full expressions: their own binders (lambda
+        // params, lets) must be known to the sub-parser, else rung-3 repair
+        // mangles them (parity fix, B4)
+        const subNames = new Set(this.names);
+        for (const w of knownNames(subToks)) subNames.add(w);
+        const sub = new Parser(subToks, this.ctx, subNames);
         const ast = sub.parseExpr();
         if (sub.peek().t !== "eof") sub.note(4, "trailing tokens in interpolation — ignored");
         out.push({ ast, line });
@@ -856,10 +872,22 @@ function str(v) {
   if (v instanceof Flt) return formatFloat(v.n);
   if (typeof v === "number") return String(v);
   if (typeof v === "string") return v;
-  if (Array.isArray(v)) return "[" + v.map(str).join(", ") + "]";
-  if (v instanceof Map) return "{" + Array.from(v.entries()).map((kv) => kv[0] + ": " + str(kv[1])).join(", ") + "}";
+  if (Array.isArray(v)) return "[" + v.map((x) => displayStr(x, true)).join(", ") + "]";
+  if (v instanceof Map) return "{" + Array.from(v.entries()).map((kv) => kv[0] + ": " + displayStr(kv[1], true)).join(", ") + "}";
   if (v && v.__gene) return "<gene " + (v.name || "<anonymous>") + ">";
   return "<native " + (v.name || "fn") + ">";
+}
+
+// Display rules per SPEC §19 (parity fix, B4): a string renders raw at the
+// top level, but QUOTED when nested inside a list or a map value; map keys
+// stay unquoted. Matches the native core and the oracle byte-for-byte.
+function displayStr(v, nested) {
+  if (typeof v === "string") {
+    return nested ? '"' + v.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"' : v;
+  }
+  if (Array.isArray(v)) return "[" + v.map((x) => displayStr(x, true)).join(", ") + "]";
+  if (v instanceof Map) return "{" + Array.from(v.entries()).map((kv) => kv[0] + ": " + displayStr(kv[1], true)).join(", ") + "}";
+  return str(v);
 }
 
 function numCoerce(ctx, v, line) {
@@ -948,7 +976,23 @@ function evalExpr(nd, env, ctx) {
     }
     case "var": {
       const hit = env.lookup(nd.name);
-      if (!hit) { note(ctx, 0, "unbound variable '" + nd.name + "' — null returned", nd.line); return null; }
+      if (!hit) {
+        // parity with the native cores (B4): a bare BUILTIN name read as a
+        // VALUE is null — builtins are not first-class (wrap in a gene)
+        if (BUILTIN_SET.has(nd.name)) {
+          note(ctx, 0, "builtin '" + nd.name + "' read as a value — null returned (wrap it in a gene)", nd.line);
+          return null;
+        }
+        note(ctx, 0, "unbound variable '" + nd.name + "' — null returned", nd.line);
+        return null;
+      }
+      if (hit.val && hit.val.__native) {
+        // value position: the native cores keep builtins OUT of the variable
+        // namespace — reading one as a value yields null, not the callable.
+        // (Call position bypasses this — see the "call" case below.)
+        note(ctx, 0, "builtin '" + nd.name + "' read as a value — null returned (wrap it in a gene)", nd.line);
+        return null;
+      }
       return hit.val;
     }
     case "list": return nd.items.map((it) => evalExpr(it, env, ctx));
@@ -1023,7 +1067,15 @@ function evalExpr(nd, env, ctx) {
       return callMethod(ctx, obj, nd.name, args, nd.line);
     }
     case "call": {
-      const fnv = evalExpr(nd.fn, env, ctx);
+      // call position: a builtin name resolves to its native fn directly,
+      // bypassing the value-position null rule for builtins (parity, B4)
+      let fnv;
+      if (nd.fn && nd.fn.k === "var" && BUILTIN_SET.has(nd.fn.name)) {
+        const hit = env.lookup(nd.fn.name);
+        fnv = hit ? hit.val : null;
+      } else {
+        fnv = evalExpr(nd.fn, env, ctx);
+      }
       const args = nd.args.map((a) => evalExpr(a, env, ctx));
       return callValue(ctx, fnv, args, nd.line);
     }
@@ -1357,6 +1409,103 @@ function makeGlobalEnv(ctx) {
     if (!(m instanceof Map)) { note(c, 0, "unfolded: keys needs a map — null returned", ln); return null; }
     return Array.from(m.keys());
   });
+  def("has", (args, c, ln) => {
+    const m = args[0], k = args[1];
+    if (m instanceof Map) return m.has(typeof k === "string" ? k : str(k));
+    if (Array.isArray(m)) return m.some((x) => deepEq(x, k)); // SPEC: list membership via has(xs, v)
+    note(c, 0, "unfolded: has needs a map or list — false returned", ln);
+    return false;
+  });
+  def("del", (args, c, ln) => {
+    const m = args[0], k = args[1];
+    if (m instanceof Map) { m.delete(typeof k === "string" ? k : str(k)); return null; }
+    note(c, 0, "unfolded: del needs a map — null returned", ln);
+    return null;
+  });
+  def("remove", (args, c, ln) => {
+    const xs = args[0], idx = args[1];
+    if (!Array.isArray(xs) || typeof idx !== "number") { note(c, 0, "unfolded: remove(list, i) — null returned", ln); return null; }
+    const i = idx < 0 ? xs.length + idx : idx;
+    if (i < 0 || i >= xs.length) { note(c, 0, "missing: remove index out of range — null returned", ln); return null; }
+    return xs.splice(i, 1)[0];
+  });
+  def("insert", (args, c, ln) => {
+    const xs = args[0], idx = args[1], v = args[2];
+    if (!Array.isArray(xs) || typeof idx !== "number") { note(c, 0, "unfolded: insert(list, i, v) — null returned", ln); return null; }
+    const i = Math.max(0, Math.min(xs.length, idx < 0 ? xs.length + idx : idx));
+    xs.splice(i, 0, v);
+    return null;
+  });
+  def("chr", (args, c, ln) => {
+    const v = one(args);
+    if (typeof v !== "number" || v < 0 || v > 0x10ffff || v !== Math.floor(v)) {
+      note(c, 0, "unfolded: chr needs an int code point — null returned", ln);
+      return null;
+    }
+    try { return String.fromCodePoint(v); } catch (e) { note(c, 0, "unfolded: chr code point invalid — null returned", ln); return null; }
+  });
+  def("json_parse", (args, c, ln) => {
+    const s = one(args);
+    if (typeof s !== "string") { note(c, 0, "unfolded: json_parse needs text — null returned", ln); return null; }
+    try {
+      const conv = (x) => {
+        if (x === null || typeof x === "boolean" || typeof x === "number") return x;
+        if (typeof x === "string") return x;
+        if (Array.isArray(x)) return x.map(conv);
+        const m = new Map();
+        for (const k of Object.keys(x)) m.set(k, conv(x[k]));
+        return m;
+      };
+      return conv(JSON.parse(s));
+    } catch (e) {
+      note(c, 0, "unfolded: invalid JSON — null returned", ln);
+      return null;
+    }
+  });
+  def("json_str", (args, c, ln) => {
+    const conv = (v) => {
+      if (v === null || v === undefined) return null;
+      if (v === true || v === false || typeof v === "number") return v;
+      if (v instanceof Flt) return v.n;
+      if (typeof v === "string") return v;
+      if (Array.isArray(v)) return v.map(conv);
+      if (v instanceof Map) {
+        const o = {};
+        for (const [k, val] of v.entries()) o[k] = conv(val);
+        return o;
+      }
+      note(c, ln, "unfolded: json_str on " + typeOf(v) + " — null returned", ln);
+      return undefined;
+    };
+    const plain = conv(one(args));
+    if (plain === undefined) return null;
+    return JSON.stringify(plain);
+  });
+  def("floor", (args, c, ln) => {
+    const v = one(args);
+    if (typeof v !== "number" && !(v instanceof Flt)) { note(c, 0, "unfolded: floor on " + typeOf(v) + " — null returned", ln); return null; }
+    return Math.floor(numVal(v));
+  });
+  def("ceil", (args, c, ln) => {
+    const v = one(args);
+    if (typeof v !== "number" && !(v instanceof Flt)) { note(c, 0, "unfolded: ceil on " + typeOf(v) + " — null returned", ln); return null; }
+    return Math.ceil(numVal(v));
+  });
+  def("sqrt", (args, c, ln) => {
+    const v = one(args);
+    if (typeof v !== "number" && !(v instanceof Flt)) { note(c, 0, "unfolded: sqrt on " + typeOf(v) + " — null returned", ln); return null; }
+    const n = numVal(v);
+    if (n < 0) { note(c, 0, "unfolded: sqrt of negative number — null returned", ln); return null; }
+    return flt(Math.sqrt(n));
+  });
+  def("pow", (args, c, ln) => {
+    const a = args[0], b = args[1];
+    if ((typeof a !== "number" && !(a instanceof Flt)) || (typeof b !== "number" && !(b instanceof Flt))) {
+      note(c, 0, "unfolded: pow needs numbers — null returned", ln);
+      return null;
+    }
+    return flt(Math.pow(numVal(a), numVal(b)));
+  });
   def("values", (args, c, ln) => {
     const m = one(args);
     if (!(m instanceof Map)) { note(c, 0, "unfolded: values needs a map — null returned", ln); return null; }
@@ -1424,6 +1573,12 @@ function runProgram(src) {
     const genv = makeGlobalEnv(ctx);
     try {
       execBlock(program, genv, ctx);
+      // entry contract (SPEC §2): `gene main()` is the program entry point,
+      // same as the native core — call it after top-level definitions land.
+      const mainGene = genv.vars.get("main");
+      if (mainGene && mainGene.__gene) {
+        callValue(ctx, mainGene, [], 0);
+      }
     } catch (e) {
       if (e instanceof Sg) {
         if (e.kind === "abort") note(ctx, 0, "step budget exhausted — run stopped", 0);
