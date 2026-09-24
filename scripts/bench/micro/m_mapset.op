@@ -1,0 +1,7 @@
+# bench micro: map insert-or-update: 40k writes over 4k keys (assoc-list cost) (builder-B, B1)
+# One construct in isolation; native CPython mirror in bench_compare.py MICRO.
+main {
+    let m = {}
+    for i in range(40000) { m[str(i % 4000)] = i }
+    promote("len = {len(m)}")
+}

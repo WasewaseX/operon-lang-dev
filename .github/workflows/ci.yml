@@ -70,3 +70,18 @@ jobs:
       - name: Differential harness
         shell: bash
         run: python3 bootstrap/harness.py
+
+  bench:
+    name: bench (non-blocking trend point)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v4.2.2 (SHA-pinned, sec-r1)
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cargo build (release)
+        run: cargo build --release
+      - name: Expose bin/operon (bench.sh compat path)
+        run: mkdir -p bin && cp target/release/operon bin/operon
+      - name: Benchmark suite (quick pass; methodology in BENCH.md)
+        run: bash scripts/bench.sh --quick

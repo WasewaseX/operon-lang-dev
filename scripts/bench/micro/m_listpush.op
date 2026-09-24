@@ -1,0 +1,7 @@
+# bench micro: list push builtin: 50k appends (builder-B, B1)
+# One construct in isolation; native CPython mirror in bench_compare.py MICRO.
+main {
+    let xs = []
+    for i in range(50000) { push(xs, i) }
+    promote("len = {len(xs)}")
+}

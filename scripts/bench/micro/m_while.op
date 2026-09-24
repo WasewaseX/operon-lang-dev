@@ -1,0 +1,9 @@
+# bench micro: while loop: 200k iterations, counter decrement (builder-B, B1)
+# One construct in isolation; native CPython mirror in bench_compare.py MICRO.
+main {
+    let i = 200000
+    let a = 0
+    while i > 0 { a = a + 1
+        i = i - 1 }
+    promote("a = {a}")
+}

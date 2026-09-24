@@ -1,0 +1,8 @@
+# bench micro: gene call overhead: 100k calls, arg pass + int return (builder-B, B1)
+# One construct in isolation; native CPython mirror in bench_compare.py MICRO.
+gene nop(n) { return n }
+main {
+    let a = 0
+    for i in range(100000) { a = a + nop(i) }
+    promote("a = {a}")
+}
