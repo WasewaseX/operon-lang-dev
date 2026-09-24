@@ -1,6 +1,6 @@
 # Operon v2.1 — Language Specification
 
-**Status:** v2.1.0. This document is the single contract implemented identically by:
+**Status:** v2.2.0. This document is the single contract implemented identically by:
 
 | Implementation | Language | Role |
 |---|---|---|
@@ -241,7 +241,7 @@ All features are real, implemented, tested — none are decorative.
 - **`tad` / `anchor`** — §8. Module insulation with export anchors.
 - **`enhance a, b, c;`** — super-enhancer cluster: marks genes; `operon profile` shows the enhancement flag; `operon check` gives the file a codon-score bonus for enhanced hot genes.
 - **`@acetylate`** — histone acetylation mark: gene is eager/priority; excluded from silence rewriting (active chromatin stays active); shown as `active` in profile.
-- **`@methylate`** — histone methylation mark: gene is repressed; the **first call** to it emits a soft note "methylated call" (later calls are silent — the cell does not narrate every repression; suppressed entirely when `.cell` sets `methylate.quiet = true`); marked genes are excluded from generated docs.
+- **`@methylate`** — histone methylation mark: gene is repressed; the **first call** to it emits a soft note "methylated call" (later calls are silent — the cell does not narrate every repression; suppressed entirely when `.cell` sets `methylate.quiet = true`); marked genes are exempt from the NMD untranslated sweep.
 - **`@m6a`** — m6A mark = dispatch priority + transcript stability: among same-name candidates (splice variants, shadowing), the m6a-marked one wins resolution, and an m6a-marked binding **resists redefinition** — an unmarked re-`gene` of the same name is ignored with a note ("@m6a-stabilized; redefinition ignored"); mark the new copy too, to replace it.
 - **`silence old -> new;`** — RISC-style silencing: after this statement, every call to gene `old` is redirected to `new` with a note "RISC: call silenced". `@acetylate` genes are immune. Same-name splice variants resolve first, then silencing applies to the resolved name.
 - **NMD sweep** (`operon check --nmd`): "premature stops" = unreachable statements after an unconditional `return` (reported −4 each); "untranslated transcripts" = defined, never-called, non-exported, non-enhanced genes (info, −1). `--nmd purge` rewrites the file without them.
@@ -337,7 +337,76 @@ operon version
 
 ## 17. Version
 
-This specification is **Operon 2.1.0**. (`operon version` prints the implementation banner `Operon 2.0.0 (rust-core, c-runtime, cpp-kernel)` — the banner lags this document until the next build bump.)
+### §19 — Wave-3 hardening and surface expansion (2.2.0)
+
+**Security model upgrades (§9b amendments):**
+
+1. **Strict symlink resolution.** If a path EXISTS, its fully-resolved form
+   (all symlinks followed) must lie inside a grant. The parent-chain probe is
+   used only for not-yet-existing targets. A symlink planted in a granted
+   directory pointing outside the sandbox resolves to its target and is
+   rejected. File effects open the canonicalized path (what was checked is
+   what is touched), and on Unix a write is refused when the target inode has
+   more than one link (hardlink defense).
+2. **Safe-base child environment.** `run()` spawns children with an EMPTY
+   environment plus OS essentials (PATH, TEMP/SystemRoot family) and the
+   explicitly `--allow-env`-granted variables. Parent secrets (CI tokens,
+   credentials) cannot leak into effectors.
+3. **Thread budget.** At most 256 live worker cells per run; exceeding the
+   cap raises catchable `overflow`. Workers get 256 MiB stacks (matching the
+   toolchain's depth headroom) and inherit the host's capabilities AND fuel.
+   A worker panic fails the run with a non-zero exit — never a silent success.
+4. **Run-wide fuel.** `spawn`/sequences no longer mint fresh budgets: host and
+   every worker drain ONE pool (default 500M steps per run). `sleep` charges
+   wall-time-proportional fuel (1 step per µs), and entering a `rescue` block
+   charges 64 steps — neither a sleep loop nor a rescue retry-spin can outrun
+   the budget.
+5. **Memory ceilings.** String concat and `repeat`/`str * int` share the
+   512 MiB ceiling; list concat is capped at 64M elements; live tasks at 4096
+   (`join()` them). All raise catchable `overflow`.
+6. **Server hardening.** `serve()` applies a 10 s read timeout per connection
+   and caps the live connection table at 256; `http_get` bounds responses at
+   64 MiB.
+7. **Parser containment.** Expression nesting is capped at 4096 (deeper input
+   truncates with a rung-4 note); token peeking is bounds-clamped. Adversarial
+   inputs (million-paren bombs, quote storms) produce diagnostics, never
+   native stack exhaustion.
+8. **Cycle safety.** Self-referential lists/maps render with `[...]`/`{...}`
+   markers (repr), serialize the repeated branch as `null` (JSON), and compare
+   with identity short-circuit (a structure equals itself). Spawn arguments
+   deeper than 100k fail the spawn with catchable `overflow`.
+
+**New surface (§10 additions):**
+
+9. **Regex (zero-dependency).** `re_match(pattern, s)` — anchored prefix test.
+   `re_find(pattern, s, start?)` — leftmost match as
+   `{text, start, end, groups}` or null. `re_groups(pattern, s)` — capture
+   list or null. Syntax: literals, `.`, classes `[a-z0-9^]`, `\d \w \s \D \W
+   \S`, `* + ? {m,n}`, alternation `|`, groups `( )` and `(?: )`, anchors
+   `^ $`. The backtracking matcher has a hard 2M-step cap: catastrophic
+   patterns raise catchable `overflow` (ReDoS-proof by construction). In
+   double-quoted strings quantifier braces must be escaped (`\{2,3\}`) because
+   `{..}` is interpolation.
+10. **Time (UTC civil calendar).** `unix_time()` — seconds since the epoch.
+    `date_parts(ts)` — `{year, month, day, hour, min, sec, wday}` (Sunday=0).
+    `date_fmt(ts, fmt)` — `%Y %m %d %H %M %S` expansion.
+11. **String repetition.** `"ab" * 3` and `3 * "ab"` — Python parity, capped
+    by the 512 MiB ceiling.
+12. **Join deadline.** `join(id, timeout_ms?)` returns null and notes when the
+    worker exceeds the deadline (the task stays joinable).
+13. **REPL.** `operon repl` — persistent-expression shell; expressions print
+    their value, definitions persist; `:quit` exits.
+
+**Semantics pinning (2.2.0):** `%` follows the divisor's sign; `//` is floor
+division and always yields `int`; comparisons involving NaN are false;
+`floor`/`ceil` of out-of-i64 floats raise `overflow`; negative slice indexes
+count from the end; `sort()` returns a new list (immutable-method contract
+shared with `reverse`/`slice`/`map`); cyclic imports return the still-loading
+module's placeholder map which fills when loading completes (with a rung-4
+note); map/filter/reduce/each run callbacks over a snapshot of the source
+list (callbacks may freely mutate the original).
+
+This specification is **Operon 2.2.0**. (`operon version` prints the implementation banner `Operon 2.2.0 (rust-core, c-runtime, cpp-kernel)` matches this document.)
 
 ## 18. Verification status (what the shipped suite proves)
 
