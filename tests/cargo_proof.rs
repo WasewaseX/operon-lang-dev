@@ -43,8 +43,27 @@ fn proof_suite_is_green() {
         stderr
     );
     // The suite must not be vacuous: it has to actually run files and proofs.
+    // Parse the summary counts instead of substring-matching: with 30 proofs,
+    // the line "30 proof(s)" CONTAINS the substring "0 proof(s)", which burned
+    // this gate as a false positive (hotfix after dx-r2 landed the 30th proof).
+    let summary = stdout
+        .lines()
+        .find(|l| l.contains("file(s)") && l.contains("proof(s)"))
+        .unwrap_or("");
+    let count_before = |token: &str| -> u64 {
+        match summary.find(token) {
+            Some(idx) => summary[..idx]
+                .rsplit(|c: char| !c.is_ascii_digit())
+                .find(|d| !d.is_empty())
+                .and_then(|d| d.parse().ok())
+                .unwrap_or(0),
+            None => 0,
+        }
+    };
+    let files = count_before("file(s)");
+    let proofs = count_before("proof(s)");
     assert!(
-        !stdout.contains("0 proof(s)"),
-        "proof suite ran zero proofs — the gate is vacuous:\n{stdout}"
+        files > 0 && proofs > 0,
+        "proof suite ran {files} file(s) / {proofs} proof(s) — the gate is vacuous:\n{stdout}"
     );
 }
