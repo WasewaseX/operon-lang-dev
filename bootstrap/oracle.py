@@ -1513,6 +1513,10 @@ class Interp:
         self.depth_limit = 10_000
         self.methyl_quiet = False
         self.methyl_noted = set()
+        # T2b graded methylation: per-gene silencing level (@methylate defs +1,
+        # @acetylate defs -1). Calls are blocked at methyl_threshold (default 3).
+        self.methyl_levels = {}
+        self.methyl_threshold = 3
         self.asserts_run = 0
         self.rng = 0x9E3779B97F4A7C15
         self.seq_buffer = None
@@ -1807,6 +1811,11 @@ class Interp:
         elif k == "gene":
             g = s[1]
             name = g.name or "<lambda>"
+            # T2b graded methylation (D-005): mirror of the Rust core
+            if g.methylate:
+                self.methyl_levels[name] = self.methyl_levels.get(name, 0) + 1
+            elif g.acetylate:
+                self.methyl_levels[name] = max(0, self.methyl_levels.get(name, 0) - 1)
             # @m6a-stabilized transcripts win dispatch among same-name candidates
             if not g.m6a:
                 old = self.lookup(env, name)
@@ -2252,6 +2261,13 @@ class Interp:
         if veto is not None:
             self.note(4, f"grn gate: '{name}' call suppressed ({veto})")
             return None
+        # T2b methylation gate: level >= threshold blocks transcription;
+        # @acetylate genes are exempt (open chromatin wins — D-005).
+        if not g.acetylate:
+            lvl = self.methyl_levels.get(name, 0)
+            if lvl >= self.methyl_threshold:
+                self.note(4, f"methylation silences: '{name}' (level {lvl} >= threshold {self.methyl_threshold}) — call returns null")
+                return None
         self.call_counts[name] = self.call_counts.get(name, 0) + 1
         self.call_clock += 1
         bucket = self.call_clock // 20
@@ -2302,6 +2318,12 @@ class Interp:
             raise Stress("overflow", f"recursion depth limit ({self.depth_limit}) exceeded")
         try:
             name = g.name or "<method>"
+            # T2b methylation gate for phenotype methods (same contract).
+            if not g.acetylate:
+                lvl = self.methyl_levels.get(name, 0)
+                if lvl >= self.methyl_threshold:
+                    self.note(4, f"methylation silences: '{name}' (level {lvl} >= threshold {self.methyl_threshold}) — call returns null")
+                    return None
             self.call_counts[name] = self.call_counts.get(name, 0) + 1
             self.call_clock += 1
             bucket = self.call_clock // 20
@@ -3323,6 +3345,13 @@ def load_file(path, cell=None, variant=None, rna=None, args=None, caps=None):
         it.cell_entry = it.cell["entry"]
     if it.cell.get("methylate.quiet") == "true":
         it.methyl_quiet = True
+    # .cell methylate.threshold (T2b graded silencing gate; default 3)
+    _mthr = it.cell.get("methylate.threshold")
+    if _mthr is not None:
+        try:
+            it.methyl_threshold = int(str(_mthr).strip())
+        except ValueError:
+            it.note(4, f"cell key 'methylate.threshold = {_mthr}' ignored: needs a non-negative integer")
     for st in stmts:
         try:
             it.exec_stmt(it.globals, st)
