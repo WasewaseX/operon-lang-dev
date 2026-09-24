@@ -334,7 +334,7 @@ operon bench f.op  [--iters n]
 operon version</code></pre>
 </figure>
 <ul class="plain">
-  <li><code>operon test</code> defaults to <code>tests/</code> recursively; each file's proof frames run, failures are recorded, the suite continues; exit 1 on any failure. Report: files, proofs run, passed, failed, assertions exercised, wobble notes. A proof that returns early or exercises zero assertions <b>fails</b> (integrity, not politeness). Current suite: 18 files / 18 proofs / 209 assertions.</li>
+  <li><code>operon test</code> defaults to <code>tests/</code> recursively; each file's proof frames run, failures are recorded, the suite continues; exit 1 on any failure. Report: files, proofs run, passed, failed, assertions exercised, wobble notes. A proof that returns early or exercises zero assertions <b>fails</b> (integrity, not politeness). Current suite: 22 files / 22 proofs / 262 assertions.</li>
   <li><code>--strict</code> → exit code 3 if any rung ≥ 3 note occurred (<code>wobble.strict = true</code> in <code>.cell</code> does the same per run).</li>
   <li><code>--fuel N</code> caps the interpreter's step budget (default 200,000,000); exhaustion raises catchable Stress <code>overflow</code>.</li>
   <li><b>Stdout discipline</b> — <code>promote</code> prints program output; notes/reports go to <em>stderr</em>, so <code>operon run f.op &gt; out.txt</code> is clean. <code>--json</code> on check/test/crispr emits machine-readable JSON to stdout (<code>check --json</code> includes <code>phantoms</code> and <code>nmd</code> arrays).</li>
