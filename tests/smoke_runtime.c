@@ -23,7 +23,7 @@ int main(void) {
     uint64_t h = rt_hash64("a", 1);
     CHECK(h == 0xaf63dc4c8601ec8cULL, "fnv1a-64 known vector");
 
-    /* edit distance: known Levenshtein values (powers the wobble engine) */
+    /* edit distance: known edit-distance values (powers the wobble engine) */
     CHECK(rt_edit_distance("kitten", 6, "sitting", 7) == 3, "lev kitten/sitting=3");
     CHECK(rt_edit_distance("gene", 4, "gen", 3) == 1, "lev gene/gen=1");
     CHECK(rt_edit_distance("else", 4, "elf", 3) == 2, "lev else/elf=2");

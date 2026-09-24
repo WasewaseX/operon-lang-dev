@@ -214,11 +214,11 @@ records of <code>line, rung, message, repair</code>. Nothing is ever rejected.</
       <tr><td><code>clock()</code></td><td>Seconds, float</td></tr>
       <tr><td><code>exit(n?)</code> · <code>assert(c, msg?)</code></td><td>Hard stop · raises Stress <code>burned</code> on failure</td></tr>
       <tr><td><code>codon(s)</code></td><td>0–100 style score of an identifier (codon optimality)</td></tr>
-      <tr><td><code>distance(a,b)</code> · <code>similar(a,b,maxd?)</code></td><td>Edit distance (C++ Myers kernel) · boolean threshold</td></tr>
+      <tr><td><code>distance(a,b)</code> · <code>similar(a,b,maxd?)</code></td><td>Edit distance (C++ bit-parallel kernel) · boolean threshold</td></tr>
       <tr><td><code>transcribe(dna)</code> · <code>translate(rna)</code></td><td>Sequence tools; translate stops at stop codon</td></tr>
       <tr><td><code>reverse_complement(dna)</code> · <code>gc_content(dna)</code> · <code>find_orf(dna)</code></td><td>Sequence tools (gc 0–100; ORF protein list)</td></tr>
       <tr><td><code>memory()</code></td><td>Map <code>arena_bytes, interns, allocs</code> from the C runtime</td></tr>
-      <tr><td><code>fingerprint()</code></td><td>Run telemetry — <code>calls fano spliced unspliced velocity</code></td></tr>
+      <tr><td><code>fingerprint()</code></td><td>Run telemetry — <code>calls burst mature nascent maturation</code></td></tr>
       <tr><td><code>spawn(f, args?)</code> · <code>join(id)</code></td><td>OS thread tasks; result returned, second join → null + note</td></tr>
       <tr><td><code>toggle_on(name)</code> · <code>toggle_state()</code></td><td>Toggle-switch bistability control</td></tr>
       <tr><td><code>repressi_next()</code> · <code>repressi_state()</code></td><td>Repressilator ring advance / levels</td></tr>

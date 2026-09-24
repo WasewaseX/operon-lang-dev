@@ -1,0 +1,35 @@
+# differential: capability sandbox — default-deny, catchable interference
+frame proof {
+    stress {
+        let t = read_file("/etc/passwd")
+        assert(false)
+    } rescue (e) {
+        assert(e.kind == "interference")
+    }
+    stress {
+        run("whoami", [])
+        assert(false)
+    } rescue (e) {
+        assert(e.kind == "interference")
+    }
+    stress {
+        write_file("/tmp/operon-deny-test", "x")
+        assert(false)
+    } rescue (e) {
+        assert(e.kind == "interference")
+    }
+    stress {
+        env("HOME")
+        assert(false)
+    } rescue (e) {
+        assert(e.kind == "interference")
+    }
+}
+main {
+    stress {
+        read_file("/etc/hostname")
+        promote("sandbox: FAIL")
+    } rescue (e) {
+        promote("sandbox: denied as expected")
+    }
+}

@@ -1,13 +1,28 @@
 #!/usr/bin/env bash
-# stack_report.sh — measured language composition (what GitHub Linguist would see).
+# stack_report.sh — measured language composition (what GitHub Linguist sees).
+# Uses find so it needs no globstar; counts every tracked source tree.
 cd "$(dirname "$0")/.."
+count() { # language, find-expr
+  local lang="$1"; shift
+  local files lines
+  files=$(find "$@" -type f 2>/dev/null | grep -v '^\./\.git' | wc -l)
+  lines=$(find "$@" -type f 2>/dev/null | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
+  [ "${lines:-0}" -gt 0 ] && printf "%-12s %8s %8s\n" "$lang" "$lines" "$files"
+}
 printf "%-12s %8s %8s\n" "language" "lines" "files"
-for pair in "Rust:src/**/*.rs" "C:runtime/*.c" "C++:runtime/*.cpp" "Python:bootstrap/*.py" "Operon:std/*.op" "Operon2:tools/*.op" "Operon3:tests/*.op" "Operon4:examples/*.op" "Operon5:apps/**/*.op" "Shell:scripts/*.sh" "HTML:docs/*.html" "CSS:docs/*.css" "JavaScript:web/playground/*.js" "TypeScript:web/playground/*.ts"; do
-  lang="${pair%%:*}"; pat="${pair#*:}"
-  total=0
-  for f in $(ls $pat 2>/dev/null); do n=$(wc -l < "$f"); total=$((total + n)); done
-  [ "$total" -gt 0 ] && printf "%-12s %8d %8s\n" "$lang" "$total" "$(ls $pat 2>/dev/null | wc -l)"
-done
+count Rust    src -name '*.rs'
+count C       runtime -name '*.c'
+count C++     runtime -name '*.cpp'
+count Python  bootstrap -name '*.py'
+count Shell   scripts -name '*.sh'
+count HTML    docs -name '*.html'
+count CSS     docs -name '*.css'
+count JS      web -name '*.js'
+count TS      web -name '*.ts'
+count Operon  std -name '*.op'
+count Operon2 tests -name '*.op'
+count Operon3 examples -name '*.op'
+count Operon4 apps -name '*.op'
+count Operon5 tools -name '*.op'
 echo "---"
-echo "total .op (Operon) lines:"
-cat std/*.op tools/*.op tests/*.op examples/*.op apps/genomelab/*.op 2>/dev/null | wc -l
+echo "total Operon (.op) lines: $(find std tests examples apps tools -name '*.op' 2>/dev/null | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')"

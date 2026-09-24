@@ -26,15 +26,16 @@ The mandate: *"Rust, then C, then Python, then Operon, then C++, then HTML, then
 
 | rank | language | lines | share | role |
 |---|---|---|---|---|
-| 1 | **Rust** | 6,098 | ~49% | lexer, Total Grammar parser, evaluator, toolchain CLI (`src/`) |
-| 2 | **Python** | 2,532 | ~20% | bootstrap: reference oracle + differential harness + packaging (`bootstrap/`) |
-| 3 | **JavaScript** | 1,451 | ~12% | browser playground subset interpreter (`web/playground/app.js`) |
-| 4 | **HTML** | 1,214 | ~10% | documentation site (`docs/`) |
-| 5 | **CSS** | 311 | ~2% | docs + playground styling |
-| 6 | **Operon** | 752+ | ~6% | self-hosted stdlib, tools, tests, apps (`std/ tools/ tests/ examples/ apps/`) |
+| 1 | **Rust** | 8,191 | ~47% | lexer, Total Grammar parser, evaluator, capability sandbox, HTTP/JSON, toolchain CLI (`src/`) |
+| 2 | **Python** | 3,317 | ~19% | bootstrap: reference oracle + differential harness + packaging (`bootstrap/`) |
+| 3 | **JavaScript** | 1,522 | ~9% | browser playground subset interpreter (`web/playground/app.js`) |
+| 4 | **HTML** | 1,214 | ~7% | documentation site (`docs/`) |
+| 5 | **Operon** | 1,188 | ~7% | **self-hosted stdlib (6 modules), tests, GenomeLab** (`std/ tests/ examples/ apps/`) |
+| 6 | **CSS** | 311 | ~2% | docs + playground styling |
 | 7 | **C** | 180 | ~1% | runtime kernel: intern table, arena, FNV-1a, clock (`runtime/operon_rt.c`) |
-| 8 | **C++** | 142 | ~1% | algorithm kernel: Myers bit-parallel edit distance, codon-usage scoring (`runtime/codon_kernel.cpp`) |
-| 9 | **Shell** | ~30 | <1% | build/test/bench scripts (`scripts/`) |
+| 8 | **C++** | 148 | ~1% | algorithm kernel: bit-parallel edit distance, codon-usage scoring (`runtime/codon_kernel.cpp`) |
+| 9 | **Shell** | 70 | <1% | build/test/bench/stack scripts (`scripts/`) |
+| 10 | **TypeScript** | 23 | <1% | playground type surface (`app.d.ts`) |
 
 **Honest deviations from the requested order, and why:**
 
@@ -45,11 +46,13 @@ The mandate: *"Rust, then C, then Python, then Operon, then C++, then HTML, then
 
 | bench | rust | oracle | speedup |
 |---|---|---|---|
-| fib(25) — 242k recursive calls | 105 ms | 1,781 ms | **17.0×** |
-| 200k-iteration loop with arithmetic | 63 ms | 652 ms | **10.3×** |
-| 20k string concatenations | 12 ms | 82 ms | **6.7×** |
+| fib(25) — 242k recursive calls | 125 ms | 3,076 ms | **24.5×** |
+| 200k-iteration loop with arithmetic | 65 ms | 861 ms | **13.2×** |
+| 16k string interpolations | 26 ms | 114 ms | **4.3×** |
 
 (Reproduce: `bash scripts/bench.sh`.) Startup overhead included in both — the interpreter-only deltas are larger.
+
+**Honest CPython comparison:** on the call-heavy fib(25) micro-benchmark the Rust tree-walking interpreter runs ~5× slower than CPython's own bytecode VM (125 ms vs ~26 ms incl. startup; CPython's frame machinery is C). Tree-walkers lose to bytecode VMs; a bytecode compiler + VM in the Rust core is the v3 performance path and is why the differential harness exists — it will prove the VM against the tree-walker before it replaces it.
 
 ---
 
@@ -59,7 +62,7 @@ No `.op` file is ever rejected. Parse problems become **notes**:
 
 1. **Canonical** — exact match.
 2. **Synonym** — `fn/func/def → gene`, `print/echo → promote`, `var/val → let`, `yes/on → true`, `&& → and`, …
-3. **Wobble** — a word at a keyword-required position within edit distance ≤ 2 of exactly one keyword is repaired (`les x = 2` runs as `let`). Powered by the C++ Myers bit-parallel kernel.
+3. **Wobble** — a word at a keyword-required position within edit distance ≤ 2 of exactly one keyword is repaired (`les x = 2` runs as `let`). Powered by the C++ bit-parallel edit-distance kernel.
 4. **Semantic fallback** — unknown identifiers read as `null`, phantom calls return `null`, unclosed braces auto-close, single quotes repair to double — all noted, all noted on stderr.
 
 ```operon
@@ -98,7 +101,7 @@ Real mechanisms, real semantics — the professor-level feature set:
 | gene regulatory networks | `regulate { a activates b strength 0.9; c inhibits d; }` + `grn_fire/grn_state` |
 | toggle-switch bistability | `toggle a, b;` — exactly one on |
 | repressilator oscillation | `repressilator a -> b -> c period 3;` — manual ring or timed OS thread |
-| single-cell telemetry | `fingerprint()` — calls, Fano factor, spliced/unspliced/velocity |
+| single-cell telemetry | `fingerprint()` — calls, burst index, spliced/unspliced/velocity |
 | CRISPR knockout screens | `operon crispr app.op --knockout fetch_data` — which proofs survive? |
 
 ## Toolchain
@@ -144,6 +147,7 @@ runtime/     C runtime kernel + C++ algorithm kernel
 bootstrap/   Python oracle + differential harness (the verification layer)
 std/         self-hosted Operon standard library (.op)
 tools/       (reserved for .op tooling as self-hosting grows)
+std/seq.op std/math.op std/iter.op  (v2.1: self-hosted sequence/math/iter modules)
 tests/       proof-frame test suite (.op) + C kernel smoke test
 apps/        GenomeLab demo (pure .op)
 examples/    tour programs (.op)

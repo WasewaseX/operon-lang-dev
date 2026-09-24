@@ -1,0 +1,31 @@
+# differential: json round trip + seeded random
+# note: string interpolation treats { } as expression delimiters, so JSON
+# literals in source escape their braces (\{ \}) — the lexer unescapes them.
+frame proof {
+    let v = json_parse("\{\"a\": 1, \"b\": [1, 2, 3], \"c\": \"hi\"\}")
+    assert(v.a == 1)
+    assert(v.b == [1, 2, 3])
+    assert(v.c == "hi")
+    let s = json_str({a: 1, b: [1, 2, 3]})
+    assert(s == "\{\"a\":1,\"b\":[1,2,3]\}")
+    randomize(42)
+    let a = random(1000)
+    randomize(42)
+    let b = random(1000)
+    assert(a == b)
+    let f = random()
+    assert(f >= 0.0 and f < 1.0)
+    assert(floor(3.7) == 3)
+    assert(ceil(3.2) == 4)
+    assert(sqrt(16) == 4.0)
+    assert(chr(65) == "A")
+    assert(ord("A") == 65)
+}
+main {
+    randomize(7)
+    let r1 = random(100)
+    randomize(7)
+    let r2 = random(100)
+    promote("deterministic pair: {r1} {r2}")
+    promote("json: {json_str({ok: true, xs: [1.5]})}")
+}

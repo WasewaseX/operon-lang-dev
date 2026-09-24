@@ -22,7 +22,7 @@ pub fn intern(s: &str) -> u32 {
     unsafe { rt_intern(s.as_ptr(), s.len()) }
 }
 
-/// Edit distance between two Rust strings (C++ Myers kernel).
+/// Edit distance between two Rust strings (C++ bit-parallel kernel).
 pub fn edit_distance(a: &str, b: &str) -> i32 {
     unsafe { rt_edit_distance(a.as_ptr() as *const c_char, a.len(), b.as_ptr() as *const c_char, b.len()) }
 }

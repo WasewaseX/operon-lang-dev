@@ -1,0 +1,62 @@
+# std/math — self-hosted numeric utilities on top of the core math builtins.
+
+gene clamp(x, lo, hi) {
+    if x < lo { return lo }
+    if x > hi { return hi }
+    return x
+}
+
+gene lerp(a, b, t) {
+    return a + (b - a) * t
+}
+
+gene mean(xs) {
+    if len(xs) == 0 { return 0.0 }
+    return sum(xs) / len(xs)
+}
+
+gene variance(xs) {
+    if len(xs) == 0 { return 0.0 }
+    let m = mean(xs)
+    let acc = 0.0
+    for x in xs {
+        acc = acc + (x - m) * (x - m)
+    }
+    return acc / len(xs)
+}
+
+gene stddev(xs) {
+    return sqrt(variance(xs))
+}
+
+gene median(xs) {
+    let n = len(xs)
+    if n == 0 { return 0.0 }
+    let sorted = xs.sort(gene (a, b) => a < b)
+    if n % 2 == 1 {
+        return sorted[n // 2]
+    }
+    return (sorted[n // 2 - 1] + sorted[n // 2]) / 2.0
+}
+
+gene hill(x, k, n) {
+    # Hill function: saturation dose-response (n = cooperativity)
+    let xn = x ** n
+    let kn = k ** n
+    return xn / (xn + kn)
+}
+
+gene sigmoid(x) {
+    return 1.0 / (1.0 + 2.718281828459045 ** (0.0 - x))
+}
+
+gene digits(n) {
+    let out = []
+    let v = abs(n)
+    if v == 0 { return [0] }
+    while v > 0 {
+        insert(out, 0, v % 10)
+        v = v // 10
+    }
+    return out
+}

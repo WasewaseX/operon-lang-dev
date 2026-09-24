@@ -19,6 +19,7 @@ pub struct Opts {
     pub frame: Option<String>,
     pub args: Vec<String>,
     pub quiet: bool,
+    pub caps: crate::interp::Caps,
 }
 
 pub struct Loaded {
@@ -72,8 +73,36 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
     }
 
     let prog = parser::parse(&src);
+    // surface parse-time notes at runtime too (Total Grammar transparency)
+    for n in &prog.notes {
+        interp.notes.push(n.clone());
+    }
     interp.ires = prog.ires.clone();
     interp.cli_args = opts.args.clone();
+    // capability grants: CLI flags + .cell allow.* keys (CLI wins)
+    interp.caps = opts.caps.clone();
+    for (k, v) in &interp.cell {
+        if let Some(rest) = k.strip_prefix("allow.") {
+            match rest {
+                "read" => interp.caps.read.push(v.clone()),
+                "write" => interp.caps.write.push(v.clone()),
+                "run" => interp.caps.run.push(v.clone()),
+                "net" => interp.caps.net.push(v.clone()),
+                "env" => interp.caps.env.push(v.clone()),
+                _ => {}
+            }
+        }
+    }
+    // .cell entry (morphogen gradient: CLI --entry > cell entry > main > ires)
+    if opts.entry.is_none() {
+        if let Some(e) = interp.cell.get("entry") {
+            interp.cell_entry = Some(e.clone());
+        }
+    }
+    // .cell methylate.quiet
+    if interp.cell.get("methylate.quiet").map(|v| v == "true").unwrap_or(false) {
+        interp.methyl_quiet = true;
+    }
 
     // execute top-level (gene defs bind, silences load, regulate registers…)
     // Top-Grammar containment: uncaught stress here is absorbed per statement.
@@ -100,10 +129,21 @@ pub fn resolve_entry(l: &mut Loaded, opts: &Opts) -> Option<String> {
     if let Some(e) = &opts.entry {
         return Some(e.clone());
     }
+    if let Some(e) = &l.interp.cell_entry {
+        return Some(e.clone());
+    }
+    // explicit --ires overrides the canonical main entry (cap-independent
+    // initiation is chosen deliberately by the caller)
+    if opts.use_ires {
+        if let Some(first) = l.interp.ires.first().cloned() {
+            l.interp.note(0, 1, format!("cap-independent entry via --ires '{}'", first));
+            return Some(first);
+        }
+    }
     if l.prog.stmts.iter().any(|s| matches!(s, Stmt::Gene(g) if g.name.as_deref() == Some("main"))) {
         return Some("main".into());
     }
-    if opts.use_ires || !l.interp.ires.is_empty() {
+    if !l.interp.ires.is_empty() {
         if let Some(first) = l.interp.ires.first().cloned() {
             l.interp.note(0, 1, format!("cap-independent entry via ires '{}'", first));
             return Some(first);
@@ -194,7 +234,7 @@ pub fn check(file: &str, opts: &Opts, nmd: bool, purge: bool) -> CheckReport {
     rep.notes = prog.notes.len();
     rep.score -= (rung2 as i64) * 1 + (rep.wobbles as i64) * 2 + (rep.fallbacks as i64) * 3;
 
-    // phantom calls: called names never defined, never a builtin, never imported
+    // all called names (for phantoms AND the NMD untranslated detector)
     let mut defined: HashSet<String> = HashSet::new();
     let mut called: Vec<String> = Vec::new();
     collect_calls(&prog, &mut defined, &mut called);
@@ -205,9 +245,70 @@ pub fn check(file: &str, opts: &Opts, nmd: bool, purge: bool) -> CheckReport {
     }
     rep.score -= (rep.phantoms.len() as i64) * 2;
 
+    // CTCF anchor import verification: every imported anchor must exist in
+    // this file or be exported by a used module
+    let mut imported: Vec<String> = Vec::new();
+    for s in &prog.stmts {
+        if let Stmt::AnchorImport(names) = s {
+            imported.extend(names.clone());
+        }
+    }
+    if !imported.is_empty() {
+        let mut module_exports: HashSet<String> = HashSet::new();
+        for s in &prog.stmts {
+            if let Stmt::Use(path, _) = s {
+                for cand in [format!("{}.op", path), format!("std/{}.op", path)] {
+                    if let Ok(msrc) = std::fs::read_to_string(&cand) {
+                        let mp = parser::parse(&msrc);
+                        module_exports.extend(mp.anchor_exports.clone());
+                        for (_, exps) in &mp.tad_exports {
+                            module_exports.extend(exps.clone());
+                        }
+                        for st in &mp.stmts {
+                            match st {
+                                Stmt::Gene(g) => {
+                                    if let Some(n) = &g.name {
+                                        module_exports.insert(n.clone());
+                                    }
+                                }
+                                Stmt::Splice(sp) => {
+                                    module_exports.insert(sp.root.clone());
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        for n in &imported {
+            if !defined.contains(n) && !module_exports.contains(n) {
+                rep.nmd.push(("anchor".into(), format!("anchor import '{}' not found in file or used modules", n)));
+                rep.score -= 2;
+            }
+        }
+    }
+
+    // super-enhancer bonus: `enhance`d genes that are actually hot (called)
+    // and codon-optimal in their naming earn back up to +6
+    let mut enhanced: Vec<String> = Vec::new();
+    for s in &prog.stmts {
+        if let Stmt::Enhance(names) = s {
+            enhanced.extend(names.clone());
+        }
+    }
+    let mut bonus = 0i64;
+    for name in &enhanced {
+        if defined.contains(name) && called.contains(name) {
+            let cs = crate::ffi::codon_score(name) as i64;
+            bonus += (cs - 50) / 20; // 50-100 → 0..2 per hot gene
+        }
+    }
+    rep.score += bonus.min(6);
+
     if nmd {
         let calledv: Vec<String> = called.clone();
-        let findings = genes::nmd_sweep(&prog, &calledv, &[]);
+        let findings = genes::nmd_sweep(&prog, &calledv, &enhanced);
         for f in &findings {
             rep.nmd.push((f.kind.to_string(), f.message.clone()));
         }
@@ -259,9 +360,9 @@ fn collect_calls(prog: &Program, defined: &mut HashSet<String>, called: &mut Vec
         match e {
             Expr::Call(f, args) => {
                 if let Expr::Ident(n) = &**f {
-                    if !defined.contains(n) {
-                        called.push(n.clone());
-                    }
+                    // record EVERY named call — the NMD untranslated detector
+                    // needs the full transcription record, not just phantoms
+                    called.push(n.clone());
                 }
                 walk_expr(f, defined, called);
                 for a in args {
@@ -438,7 +539,14 @@ pub fn crispr(file: &str, opts: &Opts, knockout: &str) -> CrisprReport {
         rep.proofs_total += 1;
         let r = l.interp.exec_block(&genv, proof);
         match r {
-            Ok(_) => rep.survivors += 1,
+            Ok(Flow::Norm) => {
+                if l.interp.asserts_run == 0 {
+                    rep.failures.push(format!("proof #{}: no assertion exercised", i + 1));
+                } else {
+                    rep.survivors += 1;
+                }
+            }
+            Ok(_) => rep.failures.push(format!("proof #{}: exited early", i + 1)),
             Err(s) => rep.failures.push(format!("proof #{} failed: [{}] {}", i + 1, s.kind, s.message)),
         }
     }
@@ -477,6 +585,7 @@ pub struct TestReport {
 
 pub fn run_tests(paths: &[String], opts: &Opts, json: bool) -> TestReport {
     let mut rep = TestReport { files: 0, proofs: 0, passed: 0, failed: 0, failures: Vec::new(), notes: 0 };
+    let mut total_asserts = 0u64;
     let mut files: Vec<String> = Vec::new();
     for p in paths {
         let path = Path::new(p);
@@ -502,17 +611,35 @@ pub fn run_tests(paths: &[String], opts: &Opts, json: bool) -> TestReport {
         l.interp.proof_mode = true;
         for (i, proof) in l.prog.proofs.iter().enumerate() {
             rep.proofs += 1;
+            let asserts_before = l.interp.asserts_run;
             match l.interp.exec_block(&genv, proof) {
-                Ok(_) => rep.passed += 1,
+                // a proof frame must run to completion — early return/break is
+                // an integrity failure, not a pass (proofs are guard slides)
+                Ok(Flow::Norm) => {
+                    if l.interp.asserts_run == asserts_before {
+                        rep.failed += 1;
+                        rep.failures.push(format!("{} proof #{}: no assertion exercised (vacuous proof)", f, i + 1));
+                    } else {
+                        rep.passed += 1;
+                    }
+                }
+                Ok(_) => {
+                    rep.failed += 1;
+                    rep.failures.push(format!("{} proof #{}: exited early (return/break inside proof)", f, i + 1));
+                }
                 Err(s) => {
                     rep.failed += 1;
                     rep.failures.push(format!("{} proof #{}: [{}] {}", f, i + 1, s.kind, s.message));
                 }
             }
         }
+        total_asserts += l.interp.asserts_run;
     }
     if !json {
-        println!("operon test — {} file(s), {} proof(s): {} passed, {} failed", rep.files, rep.proofs, rep.passed, rep.failed);
+        println!(
+            "operon test — {} file(s), {} proof(s): {} passed, {} failed ({} assertion(s) exercised)",
+            rep.files, rep.proofs, rep.passed, rep.failed, total_asserts
+        );
         for f in &rep.failures {
             eprintln!("  FAIL {}", f);
         }
@@ -563,6 +690,44 @@ fn fmt_block(stmts: &[Stmt], ind: usize, out: &mut String) {
 fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
     out.push_str(&indent(ind));
     match s {
+        Stmt::Seq(g) => {
+            out.push_str(&format!("sequence {}({}) ", g.name.clone().unwrap_or_default(), fmt_params(&g.params)));
+            fmt_block(&g.body, ind, out);
+            out.push_str("\n\n");
+        }
+        Stmt::Yield(Some(e)) => out.push_str(&format!("yield {}\n", fmt_expr(e))),
+        Stmt::Yield(None) => out.push_str("yield\n"),
+        Stmt::Pheno(p) => {
+            match &p.parent {
+                Some(par) => out.push_str(&format!("phenotype {} from {} ", p.name, par)),
+                None => out.push_str(&format!("phenotype {} ", p.name)),
+            }
+            out.push_str("{\n");
+            for (fname, fexpr) in &p.fields {
+                out.push_str(&indent(ind + 1));
+                out.push_str(&format!("let {} = {}\n", fname, fmt_expr(fexpr)));
+            }
+            for g in &p.methods {
+                if g.acetylate {
+                    out.push_str(&indent(ind + 1));
+                    out.push_str("@acetylate ");
+                }
+                if g.methylate {
+                    out.push_str(&indent(ind + 1));
+                    out.push_str("@methylate ");
+                }
+                if g.m6a {
+                    out.push_str(&indent(ind + 1));
+                    out.push_str("@m6a ");
+                }
+                out.push_str(&indent(ind + 1));
+                out.push_str(&format!("gene {}({}) ", g.name.clone().unwrap_or_default(), fmt_params(&g.params)));
+                fmt_block(&g.body, ind + 1, out);
+                out.push('\n');
+            }
+            out.push_str(&indent(ind));
+            out.push_str("}\n\n");
+        }
         Stmt::Let(n, e) => {
             out.push_str(&format!("let {} = {}\n", n, fmt_expr(e)));
         }
@@ -800,6 +965,12 @@ pub fn fmt_op(op: BinOp) -> &'static str {
         BinOp::Div => "/",
         BinOp::FloorDiv => "//",
         BinOp::Mod => "%",
+        BinOp::Pow => "**",
+        BinOp::BitAnd => "&",
+        BinOp::BitOr => "|",
+        BinOp::BitXor => "^",
+        BinOp::Shl => "<<",
+        BinOp::Shr => ">>",
         BinOp::Eq => "==",
         BinOp::Neq => "!=",
         BinOp::Lt => "<",
@@ -817,18 +988,25 @@ fn prec_of(op: BinOp) -> u8 {
         BinOp::Or => 1,
         BinOp::And => 2,
         BinOp::Eq | BinOp::Neq | BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge | BinOp::In => 3,
-        BinOp::Add | BinOp::Sub => 4,
-        BinOp::Mul | BinOp::Div | BinOp::FloorDiv | BinOp::Mod => 5,
+        BinOp::BitOr => 4,
+        BinOp::BitXor => 5,
+        BinOp::BitAnd => 6,
+        BinOp::Shl | BinOp::Shr => 7,
+        BinOp::Add | BinOp::Sub => 8,
+        BinOp::Mul | BinOp::Div | BinOp::FloorDiv | BinOp::Mod => 9,
+        BinOp::Pow => 10,
     }
 }
 
-/// Precedence of an expression when nested (7 = atom/postfix, no parens ever).
+/// Precedence of an expression when nested (11 = atom/postfix, no parens ever).
 fn nest_prec(e: &Expr) -> u8 {
     match e {
         Expr::Binary(op, _, _) => prec_of(*op),
+        Expr::Ternary(_, _, _) => 1,
         Expr::Unary(crate::ast::UnOp::Not, _) => 2,
-        Expr::Unary(crate::ast::UnOp::Neg, _) => 6,
-        _ => 7,
+        Expr::Unary(crate::ast::UnOp::BitNot, _) => 11,
+        Expr::Unary(crate::ast::UnOp::Neg, _) => 10,
+        _ => 11,
     }
 }
 
@@ -871,11 +1049,19 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
         ),
         Expr::Ident(n) => n.clone(),
         Expr::Unary(crate::ast::UnOp::Neg, a) => {
-            let inner = fmt_prec(a, 7);
-            if nest_prec(a) < 6 {
+            let inner = fmt_prec(a, 11);
+            if nest_prec(a) < 10 {
                 format!("-({})", inner)
             } else {
                 format!("-{}", inner)
+            }
+        }
+        Expr::Unary(crate::ast::UnOp::BitNot, a) => {
+            let inner = fmt_prec(a, 11);
+            if nest_prec(a) < 11 {
+                format!("~({})", inner)
+            } else {
+                format!("~{}", inner)
             }
         }
         Expr::Unary(crate::ast::UnOp::Not, a) => {
@@ -911,6 +1097,14 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
             };
             format!("for {} in {}{} collect {}", var, fmt_expr(iter), f, fmt_expr(body))
         }
+        Expr::Ternary(c, a, b) => {
+            format!("{} ? {} : {}", fmt_prec(c, 1), fmt_expr(a), fmt_expr(b))
+        }
+        Expr::New(n, args) => format!(
+            "new {}({})",
+            n,
+            args.iter().map(|x| fmt_prec(x, 0)).collect::<Vec<_>>().join(", ")
+        ),
     };
     if needs_paren {
         format!("({})", body)

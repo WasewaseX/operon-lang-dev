@@ -1,0 +1,5 @@
+main {
+    let s = ""
+    for i in range(4000) { s = s + "x{t}y".replace("{t}", str(i % 10)) }
+    promote("len = {len(s)}")
+}

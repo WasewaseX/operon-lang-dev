@@ -1,0 +1,34 @@
+# differential: self-hosted stdlib (written in Operon) on both implementations
+use std/math as m
+use std/iter as it
+use std/seq as sq
+use std/strings as st
+frame proof {
+    assert(m.clamp(5, 0, 3) == 3)
+    assert(m.clamp(-1, 0, 3) == 0)
+    assert(m.mean([1, 2, 3]) == 2.0)
+    assert(m.median([3, 1, 2]) == 2.0)
+    assert(m.hill(1.0, 1.0, 2) == 0.5)
+    assert(m.sigmoid(0.0) == 0.5)
+    assert(m.digits(402) == [4, 0, 2])
+    assert(it.unique([1, 2, 1, 3, 2]) == [1, 2, 3])
+    assert(it.chunk([1, 2, 3, 4, 5], 2) == [[1, 2], [3, 4], [5]])
+    assert(it.zip([1, 2], ["a", "b"])[0] == [1, "a"])
+    assert(it.flatten([[1], [2, 3]]) == [1, 2, 3])
+    let squares = sq.map_seq("range_seq", [0, 5, 1], gene (x) => x * x).collect()
+    assert(squares == [0, 1, 4, 9, 16])
+    let evens = sq.filter_seq("range_seq", [0, 10, 1], gene (x) => x % 2 == 0).collect()
+    assert(evens == [0, 2, 4, 6, 8])
+    let capped = sq.take_seq("fib_seq", [], 7).collect()
+    assert(capped == [0, 1, 1, 2, 3, 5, 8])
+    assert(st.capital("operon") == "Operon")
+    assert(st.pad_left("7", 3, "0") == "007")
+}
+main {
+    let f = sq.take_seq("fib_seq", [], 10).collect()
+    promote("fib stream: {f}")
+    let evens = sq.filter_seq("range_seq", [0, 12, 1], gene (x) => x % 2 == 0).collect()
+    promote("evens: {evens}")
+    promote("median: {m.median([5, 1, 9, 3])}")
+    promote("word count: {len(st.words('the quick   brown fox'))}")
+}

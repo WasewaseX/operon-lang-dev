@@ -1,0 +1,27 @@
+# differential: sequence generators — for, .next(), .collect()
+sequence countdown(n) {
+    while n > 0 {
+        yield n
+        n = n - 1
+    }
+}
+sequence naturals(limit) {
+    for i in range(limit) { yield i * i }
+}
+frame proof {
+    let got = []
+    for x in countdown(4) { push(got, x) }
+    assert(got == [4, 3, 2, 1])
+    let s = countdown(3)
+    assert(s.next() == 3)
+    assert(s.next() == 2)
+    assert(s.next() == 1)
+    assert(s.next() == null)
+    let squares = naturals(5).collect()
+    assert(squares == [0, 1, 4, 9, 16])
+}
+main {
+    let total = 0
+    for x in naturals(6) { total = total + x }
+    promote("sum of first squares: {total}")
+}

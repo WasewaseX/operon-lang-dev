@@ -29,7 +29,7 @@ size_t   rt_arena_used(void);                  /* bytes allocated from the arena
 uint64_t rt_alloc_count(void);                 /* arena allocation ops */
 
 /* ---- C++ kernel exports (codon_kernel.cpp) -------------------------- */
-/* Myers bit-parallel Levenshtein distance; DP fallback for long strings. */
+/* bit-parallel edit-distance wavefront; DP fallback for long strings. */
 int32_t rt_edit_distance(const char *a, size_t la, const char *b, size_t lb);
 
 /* Codon-usage-style style score of an identifier, 0..100. */

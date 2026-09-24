@@ -1,0 +1,59 @@
+# std/seq — self-hosted sequence (generator) combinators.
+#
+# Sequences are worker cells: a sequence body runs on its own worker thread
+# and values cross to the consumer through a rendezvous channel. Transcripts
+# do not cross membranes — a running sequence object stays in the cell that
+# created it. So these combinators take the SOURCE as the NAME of a sequence
+# gene (resolved inside the combinator's own worker via call()), while
+# transformation genes travel freely (named genes and lambdas cross by
+# definition).
+
+sequence map_seq(src, sargs, f) {
+    let s = call(src, sargs)
+    for x in s {
+        yield f(x)
+    }
+}
+
+sequence filter_seq(src, sargs, pred) {
+    let s = call(src, sargs)
+    for x in s {
+        if pred(x) { yield x }
+    }
+}
+
+sequence take_seq(src, sargs, n) {
+    let s = call(src, sargs)
+    let i = 0
+    for x in s {
+        if i >= n { return }
+        yield x
+        i = i + 1
+    }
+}
+
+sequence concat_seq(src_a, args_a, src_b, args_b) {
+    for x in call(src_a, args_a) { yield x }
+    for y in call(src_b, args_b) { yield y }
+}
+
+sequence fib_seq(limit = 1e15) {
+    # bounded: yields every Fibonacci value <= limit (workers must terminate)
+    let a = 0
+    let b = 1
+    while a <= limit {
+        yield a
+        let t = a + b
+        a = b
+        b = t
+    }
+}
+
+sequence range_seq(a, b, step) {
+    let i = a
+    if step > 0 {
+        while i < b { yield i; i = i + step }
+    } else {
+        if step < 0 { while i > b { yield i; i = i + step } }
+    }
+}

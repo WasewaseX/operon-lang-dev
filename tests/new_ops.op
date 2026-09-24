@@ -1,0 +1,30 @@
+# differential: pow / bitwise / shifts / ternary / float printing / index semantics
+frame proof {
+    assert(2 ** 10 == 1024)
+    assert(2 ** 0 == 1)
+    assert(-2 ** 2 == -4)
+    assert(5 & 3 == 1)
+    assert(1 | 8 == 9)
+    assert(15 ^ 3 == 12)
+    assert(1 << 10 == 1024)
+    assert(-16 >> 2 == -4)
+    assert(~5 == -6)
+    assert((true ? 1 : 2) == 1)
+    assert((false ? 1 : 2) == 2)
+    assert(7 % 3 == 1)
+    assert(-7 // 2 == -4)
+    let xs = [10, 20, 30]
+    assert(xs[-1] == 30)
+    assert(xs[-3] == 10)
+    assert(xs[1] == 20)
+    stress { xs[-10] assert(false) } rescue (e) { assert(e.kind == "missing") }
+    let s = "héllo"
+    assert(len(s) == 5)
+}
+main {
+    promote("floats: {1e16} {1e-7} {0.1 + 0.2} {2.0} {1e15}")
+    let ys = [3, 1, 2]
+    let zs = ys.sort(gene (a, b) => a < b)
+    promote("sorted: {zs}")
+    promote("tern: {true ? \"yes\" : \"no\"}")
+}
