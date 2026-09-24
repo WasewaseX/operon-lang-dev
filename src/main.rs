@@ -69,6 +69,8 @@ fn real_main() {
     let mut purge = false;
     let mut write = false;
     let mut matrix = false;
+    // dx-r6: true after the `--` separator — remaining args are program argv
+    let mut passthrough = false;
     let mut fuel: Option<u64> = None;
     let mut knockout = String::new();
     let mut iters = 20usize;
@@ -194,11 +196,20 @@ fn real_main() {
                 purge = true;
             }
             "--write" => write = true,
+            "--" => {
+                // dx-r6 (loop-5-a audit MED): POSIX `--` separator — everything
+                // after it belongs to the PROGRAM, not the host CLI. Without
+                // it, `operon run app.op --key value` died with "unknown flag
+                // '--key'" and half of std/args.op's documented conventions
+                // were unreachable from a real command line. Unknown --flags
+                // BEFORE the separator still fail loudly (dx-r1 typo guard).
+                passthrough = true;
+            }
             _ => {
                 // dx-r1 (parity audit W6): unknown flags silently became
                 // program argv — `operon run f.op --strick` ran with a typo'd
                 // flag and no warning. Fail loudly instead.
-                if a.starts_with("--") {
+                if a.starts_with("--") && !passthrough {
                     die(&format!(
                         "unknown flag '{}' — run `operon` with no arguments for usage",
                         a
