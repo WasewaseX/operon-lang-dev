@@ -1,0 +1,7 @@
+get a -> 1
+evict: b
+get b -> null
+get c -> 3
+hits 2, misses 1
+cached keys: ["a", "c"]
+recency order (old->new): ["a", "c"]

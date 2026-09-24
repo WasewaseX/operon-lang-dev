@@ -1,0 +1,53 @@
+# ============================================================
+# LRU cache  — cookbook #10
+# you already know: functools.lru_cache / an OrderedDict LRU
+# teaches: combining a map (lookup) with a list (recency order),
+#          explicit eviction, hit/miss accounting
+# run: operon run examples/cookbook/lru_cache.op
+# expected output: examples/cookbook/expected/lru_cache.out
+# verified by scripts/cookbook.sh on the Rust core AND the Python oracle
+# ============================================================
+gene make_cache(capacity) {
+    return {"cap": capacity, "store": {}, "order": [], "hits": 0, "misses": 0}
+}
+
+gene cache_get(cache, key) {
+    if has(cache["store"], key) {
+        cache["hits"] += 1
+        # touch: move key to the most-recent end of the order list
+        let idx = cache["order"].index_of(key)
+        remove(cache["order"], idx)
+        push(cache["order"], key)
+        return cache["store"][key]
+    }
+    cache["misses"] += 1
+    return null
+}
+
+gene cache_put(cache, key, value) {
+    if has(cache["store"], key) {
+        remove(cache["order"], cache["order"].index_of(key))
+    }
+    cache["store"][key] = value
+    push(cache["order"], key)
+    while len(cache["order"]) > cache["cap"] {
+        # evict the least-recently-used: front of the order list
+        let victim = cache["order"][0]
+        remove(cache["order"], 0)
+        del(cache["store"], victim)
+        promote("evict: {victim}")
+    }
+}
+
+gene main() {
+    let cache = make_cache(2)
+    cache_put(cache, "a", 1)
+    cache_put(cache, "b", 2)
+    promote("get a -> {cache_get(cache, "a")}")     # a is now most recent
+    cache_put(cache, "c", 3)                        # evicts b (front)
+    promote("get b -> {cache_get(cache, "b")}")
+    promote("get c -> {cache_get(cache, "c")}")
+    promote("hits {cache["hits"]}, misses {cache["misses"]}")
+    promote("cached keys: {keys(cache["store"])}")
+    promote("recency order (old->new): {cache["order"]}")
+}

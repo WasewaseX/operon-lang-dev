@@ -1,0 +1,10 @@
+7 / 2  = 3.5
+6 / 2  = 3.0
+7 // 2 = 3
+(0 - 7) // 3 = -3   (floored: -2.33 becomes -3)
+7 % 3  = 1
+(0 - 7) % 3 = 2   (still positive)
+7 % (0 - 3) = -2   (negative)
+100 days after wednesday: fri
+10 days before wednesday: sun
+price: 123.45
