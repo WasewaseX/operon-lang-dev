@@ -1,0 +1,8 @@
+gene main() {
+    stress {
+        write_file("/tmp/redteam-out/../../REDTEAM_PWN.txt", "breach?")
+        promote("wrote traversal")
+    } rescue (e) {
+        promote("denied: {e.kind}")
+    }
+}

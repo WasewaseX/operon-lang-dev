@@ -1,0 +1,31 @@
+# regex engine + civil-calendar builtins — differential + containment proofs
+# NOTE: braces in regex quantifiers must be escaped (\{ \}) because {..} in
+# double-quoted strings is interpolation; escaped braces pass through raw.
+frame proof {
+    # character classes and quantifiers
+    assert(re_match("\d+", "12345") == true, "digits match")
+    assert(re_match("\d+", "x123") == false, "anchor at 0")
+    assert(re_find("[a-z]+", "  Hello world 42 ").text == "ello", "class scan")
+    assert(re_find("\d+", "a17b9").start == 1, "leftmost")
+    assert(re_groups("(\d+)-(\d+)", "range 10-99 end")[0] == "10", "group 1")
+    assert(re_groups("(\d+)-(\d+)", "range 10-99 end")[1] == "99", "group 2")
+    assert(re_find("a*b", "aaab").text == "aaab", "greedy star")
+    assert(re_find("a?b", "b").text == "b", "optional")
+    assert(re_match("^(a|b)+$", "abab") == true, "alternation plus")
+    assert(re_match("(x\{2,3\})y", "xxxy") == true, "bounded repeat")
+    assert(re_find("\w+@\w+\.[a-z]+", "mail bob@corp.io now").text == "bob@corp.io", "practical email find")
+    assert(re_find("\d\{3\}", "ab12") == null, "no match is null")
+    assert(re_groups("(a)(b)?(c)", "ac")[1] == null, "uncaptured optional group is null")
+    assert(re_match("\s\S", " x") == true, "shorthand classes")
+    # civil calendar
+    let p0 = date_parts(0)
+    assert(p0.year == 1970 and p0.month == 1 and p0.day == 1, "epoch date")
+    assert(p0.wday == 4, "epoch was a Thursday")
+    assert(date_fmt(1000000000, "%Y-%m-%d %H:%M:%S") == "2001-09-09 01:46:40", "1e9 fmt")
+    assert(date_fmt(951782400, "%Y/%m/%d") == "2000/02/29", "leap year handling")
+    let p1 = date_parts(951782400)
+    assert(p1.year == 2000 and p1.month == 2 and p1.day == 29, "leap date parts")
+}
+main {
+    promote("regex+time suite complete")
+}

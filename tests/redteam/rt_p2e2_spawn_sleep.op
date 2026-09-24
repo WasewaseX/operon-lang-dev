@@ -1,0 +1,14 @@
+# a forever-sleeping worker must not hang a bounded join (wave-3 fix:
+# join(id, timeout_ms) returns null at the deadline; sleep drains fuel)
+gene sleeper_loop() {
+    while true {
+        sleep(60000)
+    }
+    return 0
+}
+gene main() {
+    let t = spawn(sleeper_loop, [])
+    promote("spawned")
+    let r = join(t, 2000)
+    promote("joined-with-timeout")
+}

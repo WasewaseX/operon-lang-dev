@@ -1,0 +1,2 @@
+let s = "[".repeat(100000) + "1" + "]".repeat(100000)
+stress { let v = json_parse(s) promote("parsed") } rescue (e) { promote("caught: {e.kind} {e.message}") }

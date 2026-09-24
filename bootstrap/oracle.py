@@ -1910,6 +1910,8 @@ class Interp:
             v = self.eval(env, e[2])
             if e[1] == "neg":
                 if isinstance(v, (int, float)) and not isinstance(v, bool):
+                    if isinstance(v, int) and v == -(2**63):
+                        raise Stress("overflow", "int overflow in negation (i64::MIN)")
                     return -v
                 raise Stress("unfolded", f"cannot negate {type_name(v)}")
             if e[1] == "bitnot":
@@ -2046,6 +2048,20 @@ class Interp:
                 if op == "+":
                     pass
                 if op == "*":
+                    if isinstance(l, str):
+                        n = int(r)
+                        if n < 0:
+                            raise Stress("unfolded", "repeat count must be non-negative")
+                        if n * len(l) > 512 * 1024 * 1024:
+                            raise Stress("overflow", "repeat exceeds the 512 MiB string ceiling")
+                        return l * n
+                    if isinstance(r, str):
+                        n = int(l)
+                        if n < 0:
+                            raise Stress("unfolded", "repeat count must be non-negative")
+                        if n * len(r) > 512 * 1024 * 1024:
+                            raise Stress("overflow", "repeat exceeds the 512 MiB string ceiling")
+                        return r * n
                     if isinstance(l, int) and isinstance(r, int) and not (I64MIN <= l * r <= I64MAX):
                         raise Stress("overflow", "int overflow in '*'")
                     return l * r
@@ -2056,11 +2072,17 @@ class Interp:
                 if op == "//":
                     if r == 0:
                         raise Stress("unfolded", "division by zero in '//'")
-                    return float(l // r) if isinstance(l, float) or isinstance(r, float) else l // r
+                    # SPEC/parity: floor division, ALWAYS int (i64)
+                    q = l // r
+                    if isinstance(q, float):
+                        q = int(q)
+                    if not (-(2**63) <= q <= 2**63 - 1):
+                        raise Stress("overflow", "int overflow in '//'")
+                    return q
                 if r == 0:
                     raise Stress("unfolded", "modulo by zero")
-                m = abs(l) % abs(r)
-                return m if l >= 0 else (m if m == 0 else abs(r) - m) * (1 if l >= 0 else -1)
+                # SPEC: sign follows divisor (= Python % semantics)
+                return l % r
             raise Stress("unfolded", f"cannot apply '{op}' to {type_name(l)} and {type_name(r)}")
         if op == "**":
             if isinstance(l, int) and isinstance(r, int) and not isinstance(l, bool) and not isinstance(r, bool) and r >= 0:
@@ -2071,7 +2093,10 @@ class Interp:
                     raise Stress("overflow", "int overflow in '**'")
                 return val
             if isinstance(l, (int, float)) and isinstance(r, (int, float)) and not isinstance(l, bool) and not isinstance(r, bool):
-                return float(l) ** float(r)
+                try:
+                    return float(l) ** float(r)
+                except OverflowError:
+                    raise Stress("overflow", "float '**' overflowed to infinity")
             raise Stress("unfolded", f"cannot apply '**' to {type_name(l)} and {type_name(r)}")
         if op in ("&", "|", "^", "<<", ">>"):
             def as_i(x):
@@ -2088,8 +2113,10 @@ class Interp:
                 raise Stress("overflow", f"shift amount {b} out of range")
             if op == "<<":
                 val = a << b
-                if not (-(2**63) <= val <= 2**63 - 1):
-                    return 0
+                # mirror the release-build i64 wrap (two's complement)
+                val &= (1 << 64) - 1
+                if val >= 2**63:
+                    val -= 2**64
                 return val
             return a >> b
         if op == "==":
@@ -2372,7 +2399,12 @@ class Interp:
                     import functools
                     return sorted(recv, key=functools.cmp_to_key(
                         lambda a, b: -1 if truthy(self.call_value(env, args[0], [a, b])) else 1))
-                return sorted(recv, key=lambda x: (isinstance(x, str), x))
+                return sorted(recv, key=lambda x: (
+                    (0, float(x), "") if isinstance(x, (int, float)) and not isinstance(x, bool)
+                    else ((0, float(int(x)), "") if isinstance(x, bool)
+                          else ((1, 0.0, x) if isinstance(x, str)
+                                else (2, 0.0, repr_of(x))))
+                ))
             if name == "reverse": return list(reversed(recv))
             if name == "contains": return any(deep_eq(x, args[0]) for x in recv)
             if name == "index_of":
@@ -2478,7 +2510,10 @@ class Interp:
                 return args[0].defn.name
             return type_name(args[0]) if args else "null"
         if name == "abs":
-            return abs(args[0])
+            a0 = args[0] if args else 0
+            if isinstance(a0, int) and not isinstance(a0, bool) and a0 == -(2**63):
+                raise Stress("overflow", "int overflow in abs(i64::MIN)")
+            return abs(a0)
         if name in ("min", "max"):
             vals = []
             for a in args:
@@ -2750,10 +2785,20 @@ class Interp:
         # ---- math
         if name == "floor":
             v = args[0] if args else 0
-            return int(v // 1) if isinstance(v, float) else (v if isinstance(v, int) else 0)
+            if isinstance(v, float):
+                import math as _m
+                if not _m.isfinite(v) or v >= 9.223372036854776e18 or v <= -9.223372036854776e18:
+                    raise Stress("overflow", "float too large for floor/ceil to int")
+                return int(_m.floor(v))
+            return v if isinstance(v, int) else 0
         if name == "ceil":
             v = args[0] if args else 0
-            return -int(-v // 1) if isinstance(v, float) else (v if isinstance(v, int) else 0)
+            if isinstance(v, float):
+                import math as _m
+                if not _m.isfinite(v) or v >= 9.223372036854776e18 or v <= -9.223372036854776e18:
+                    raise Stress("overflow", "float too large for floor/ceil to int")
+                return int(_m.ceil(v))
+            return v if isinstance(v, int) else 0
         if name == "sqrt":
             v = float(args[0]) if args else 0.0
             if v < 0:
@@ -2763,6 +2808,59 @@ class Interp:
             a = float(args[0]) if len(args) > 0 else 0.0
             b = float(args[1]) if len(args) > 1 else 0.0
             return a ** b
+        if name in ("re_match", "re_find", "re_groups"):
+            import re as _re
+            pat = args[0] if args else ""
+            subj = args[1] if len(args) > 1 else ""
+            try:
+                rx = _re.compile(pat)
+            except _re.error as e:
+                raise Stress("unfolded", f"regex: {e}")
+            try:
+                if name == "re_match":
+                    # prefix match (anchored at 0), mirroring the Rust core
+                    return rx.match(subj) is not None
+                start = int(args[2]) if len(args) > 2 else 0
+                m = rx.search(subj, start)
+                if m is None:
+                    return None
+                if name == "re_groups":
+                    return [g if g is not None else None for g in m.groups()]
+                return {"text": m.group(0), "start": m.start(), "end": m.end(),
+                        "groups": [g if g is not None else None for g in m.groups()]}
+            except _re.error as e:
+                raise Stress("unfolded", f"regex: {e}")
+            except RecursionError:
+                raise Stress("overflow", "regex backtracking exceeded 2M steps")
+        if name == "unix_time":
+            import time as _t
+            return int(_t.time())
+        if name == "date_parts":
+            import time as _t
+            ts = int(args[0]) if args else 0
+            st = _t.gmtime(ts)
+            return {"year": st.tm_year, "month": st.tm_mon, "day": st.tm_mday,
+                    "hour": st.tm_hour, "min": st.tm_min, "sec": st.tm_sec,
+                    "wday": (st.tm_wday + 1) % 7}
+        if name == "date_fmt":
+            import time as _t
+            ts = int(args[0]) if args else 0
+            fmt = args[1] if len(args) > 1 else "%Y-%m-%d %H:%M:%S"
+            st = _t.gmtime(ts)
+            out = []
+            i = 0
+            while i < len(fmt):
+                if fmt[i] == "%" and i + 1 < len(fmt):
+                    c = fmt[i + 1]
+                    out.append({"Y": f"{st.tm_year:04d}", "m": f"{st.tm_mon:02d}",
+                                "d": f"{st.tm_mday:02d}", "H": f"{st.tm_hour:02d}",
+                                "M": f"{st.tm_min:02d}", "S": f"{st.tm_sec:02d}",
+                                "%": "%"}.get(c, "%" + c))
+                    i += 2
+                else:
+                    out.append(fmt[i])
+                    i += 1
+            return "".join(out)
         if name == "random":
             x = self.rng
             x ^= (x >> 12) & 0xFFFFFFFFFFFFFFFF

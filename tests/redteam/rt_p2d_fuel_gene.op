@@ -1,0 +1,7 @@
+gene spin() {
+    while true { }
+    return 0
+}
+gene main() {
+    promote(spin())
+}

@@ -1,0 +1,2 @@
+# explicit grant cell (positive control)
+allow.read = /etc

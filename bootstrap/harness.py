@@ -16,6 +16,11 @@ def run(cmd, timeout=120):
 def collect_op(root):
     out = []
     for dirpath, _, files in os.walk(root):
+        # red-team payloads are adversarial by design (hangs, bombs,
+        # escapes): they are exercised by scripts/redteam.sh, never by the
+        # differential harness (both implementations would just time out)
+        if "redteam" in dirpath:
+            continue
         for f in sorted(files):
             if f.endswith(".op"):
                 out.append(os.path.join(dirpath, f))

@@ -1,0 +1,14 @@
+gene main() {
+    stress {
+        let s = read_file("/etc/hostname")
+        promote("granted read: {s}")
+    } rescue (e) {
+        promote("denied: {e.kind}")
+    }
+    stress {
+        write_file("/etc/REDTEAM_PWN.txt", "no")
+        promote("WROTE /etc — BREACH")
+    } rescue (e) {
+        promote("write denied: {e.kind}")
+    }
+}

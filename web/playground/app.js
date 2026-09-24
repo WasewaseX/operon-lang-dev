@@ -63,7 +63,7 @@ const DEPTH_MAX = 10000;
 /* ------------------------------ helpers ----------------------------------- */
 
 // Pure-JS edit distance (used by wobble repair AND the `distance` builtin).
-function levenshtein(a, b) {
+function editDistance(a, b) {
   if (a === b) return 0;
   const m = a.length, n = b.length;
   if (m === 0) return n;
@@ -289,7 +289,7 @@ class Parser {
     const thr = w.length <= 4 ? 1 : 2;
     let best = null, bestD = thr + 1, ties = 0;
     for (const k of candidates) {
-      const d = levenshtein(w, k);
+      const d = editDistance(w, k);
       if (d <= thr) {
         if (d < bestD) { bestD = d; best = k; ties = 1; }
         else if (d === bestD) ties++;
@@ -1394,7 +1394,7 @@ function makeGlobalEnv(ctx) {
     const t = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
     return flt(t / 1000);
   });
-  def("distance", (args) => levenshtein(str(one(args)), str(args.length >= 2 ? args[1] : "")));
+  def("distance", (args) => editDistance(str(one(args)), str(args.length >= 2 ? args[1] : "")));
   def("codon", (args, c, ln) => {
     const s = str(one(args));
     let score = 100;

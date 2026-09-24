@@ -1,6 +1,7 @@
 //! value.rs — runtime values, display, truthiness, comparison, deep equality.
 
 use crate::ast::GeneDef;
+use std::collections::HashSet;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::sync::Arc;
@@ -85,7 +86,16 @@ impl Value {
     }
 
     /// Structural display (inside containers): strings quoted.
+    /// Cycle-safe: a container that (transitively) contains itself renders
+    /// with a `[...]` / `{...}` marker (CPython behavior), never recurses
+    /// forever. Depth is capped too, so very deep (non-cyclic) nesting
+    /// degrades gracefully instead of exhausting the native stack.
     pub fn repr(&self) -> String {
+        let mut seen: HashSet<usize> = HashSet::new();
+        self.repr_g(&mut seen, 0)
+    }
+
+    fn repr_g(&self, seen: &mut HashSet<usize>, depth: u32) -> String {
         match self {
             Value::Null => "null".into(),
             Value::Bool(true) => "true".into(),
@@ -94,15 +104,26 @@ impl Value {
             Value::Float(f) => format_float(*f),
             Value::Str(s) => format!("\"{}\"", escape_str(s)),
             Value::List(l) => {
-                let items: Vec<String> = l.borrow().iter().map(|v| v.repr()).collect();
+                let id = Rc::as_ptr(l) as *const u8 as usize;
+                if depth > 256 || !seen.insert(id) {
+                    return "[...]".into();
+                }
+                let items: Vec<String> =
+                    l.borrow().iter().map(|v| v.repr_g(seen, depth + 1)).collect();
+                seen.remove(&id);
                 format!("[{}]", items.join(", "))
             }
             Value::Map(m) => {
+                let id = Rc::as_ptr(m) as *const u8 as usize;
+                if depth > 256 || !seen.insert(id) {
+                    return "{...}".into();
+                }
                 let items: Vec<String> = m
                     .borrow()
                     .iter()
-                    .map(|(k, v)| format!("{}: {}", key_repr(k), v.repr()))
+                    .map(|(k, v)| format!("{}: {}", key_repr_g(k, seen, depth), v.repr_g(seen, depth + 1)))
                     .collect();
+                seen.remove(&id);
                 format!("{{{}}}", items.join(", "))
             }
             Value::Gene(d, _) => match &d.name {
@@ -117,8 +138,18 @@ impl Value {
         }
     }
 
-    /// Deep equality (maps order-insensitive).
+    /// Deep equality (maps order-insensitive). Cycle-safe: identity is
+    /// checked first (a structure equals itself), and a pair of containers
+    /// already being compared short-circuits to true; depth-capped.
     pub fn deep_eq(&self, other: &Value) -> bool {
+        let mut seen: HashSet<(usize, usize)> = HashSet::new();
+        self.deep_eq_g(other, &mut seen, 0)
+    }
+
+    fn deep_eq_g(&self, other: &Value, seen: &mut HashSet<(usize, usize)>, depth: u32) -> bool {
+        if depth > 100_000 {
+            return false;
+        }
         match (self, other) {
             (Value::Null, Value::Null) => true,
             (Value::Bool(a), Value::Bool(b)) => a == b,
@@ -127,19 +158,38 @@ impl Value {
             (Value::Int(a), Value::Float(b)) | (Value::Float(b), Value::Int(a)) => (*a as f64) == *b,
             (Value::Str(a), Value::Str(b)) => a == b,
             (Value::List(a), Value::List(b)) => {
+                if Rc::ptr_eq(a, b) {
+                    return true; // a structure equals itself
+                }
+                let pair = (Rc::as_ptr(a) as *const u8 as usize,
+                            Rc::as_ptr(b) as *const u8 as usize);
+                if !seen.insert(pair) {
+                    return true; // already comparing this pair (cycle)
+                }
                 let la = a.borrow();
                 let lb = b.borrow();
-                la.len() == lb.len() && la.iter().zip(lb.iter()).all(|(x, y)| x.deep_eq(y))
+                let ok = la.len() == lb.len()
+                    && la.iter().zip(lb.iter()).all(|(x, y)| x.deep_eq_g(y, seen, depth + 1));
+                seen.remove(&pair);
+                ok
             }
             (Value::Map(a), Value::Map(b)) => {
+                if Rc::ptr_eq(a, b) {
+                    return true;
+                }
+                let pair = (Rc::as_ptr(a) as *const u8 as usize,
+                            Rc::as_ptr(b) as *const u8 as usize);
+                if !seen.insert(pair) {
+                    return true;
+                }
                 let ma = a.borrow();
                 let mb = b.borrow();
-                if ma.len() != mb.len() {
-                    return false;
-                }
-                ma.iter().all(|(k, v)| {
-                    mb.iter().any(|(k2, v2)| k.deep_eq(k2) && v.deep_eq(v2))
-                })
+                let ok = ma.len() == mb.len()
+                    && ma.iter().all(|(k, v)| {
+                        mb.iter().any(|(k2, v2)| k.deep_eq_g(k2, seen, depth + 1) && v.deep_eq_g(v2, seen, depth + 1))
+                    });
+                seen.remove(&pair);
+                ok
             }
             (Value::Gene(d1, _), Value::Gene(d2, _)) => Arc::ptr_eq(d1, d2),
             (Value::Seq(d1, _), Value::Seq(d2, _)) => Arc::ptr_eq(d1, d2),
@@ -193,10 +243,10 @@ fn escape_str(s: &str) -> String {
     out
 }
 
-fn key_repr(k: &Value) -> String {
+fn key_repr_g(k: &Value, seen: &mut HashSet<usize>, depth: u32) -> String {
     match k {
         Value::Str(s) if is_identlike(s) => s.clone(),
-        other => other.repr(),
+        other => other.repr_g(seen, depth + 1),
     }
 }
 

@@ -1,0 +1,16 @@
+gene echo_arg(x) {
+    return 1
+}
+gene main() {
+    let l = [0]
+    for i in range(0, 1000000) {
+        l = [l]
+    }
+    stress {
+        let t = spawn(echo_arg, [l])
+        promote("task {t}")
+        join(t)
+    } rescue (e) {
+        promote("caught: {e.kind}")
+    }
+}

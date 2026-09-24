@@ -1,0 +1,7 @@
+gene main() {
+    let s = "x"
+    for i in range(0, 60) {
+        s = s + s
+    }
+    promote(len(s))
+}

@@ -1,0 +1,2 @@
+use "/proc/self/environ"
+promote("used")

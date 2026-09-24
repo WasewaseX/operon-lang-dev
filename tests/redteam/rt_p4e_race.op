@@ -1,0 +1,16 @@
+gene writer(n) {
+    for i in range(0, 100) {
+        write_file("/tmp/redteam-out/race.txt", "w{n}i{i}\n")
+    }
+    return 0
+}
+gene main() {
+    let ids = []
+    for n in range(0, 8) {
+        push(ids, spawn(writer, [n]))
+    }
+    for t in ids {
+        join(t)
+    }
+    promote("race done")
+}

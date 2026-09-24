@@ -1,0 +1,14 @@
+gene f() {
+    stress {
+        return f()
+    } rescue (e) {
+        return f()
+    }
+}
+gene main() {
+    stress {
+        promote(f())
+    } rescue (e) {
+        promote("outer caught: {e.kind}")
+    }
+}

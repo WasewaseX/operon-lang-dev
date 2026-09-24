@@ -1,0 +1,8 @@
+gene main() {
+    stress {
+        let s = read_file("/etc/passwd")
+        promote("LEAK: {len(s)} chars")
+    } rescue (e) {
+        promote("denied: {e.kind}")
+    }
+}

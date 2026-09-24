@@ -1,0 +1,31 @@
+gene probe(p) {
+    stress {
+        let s = read_file(p)
+        return "READ {p} ({len(s)})"
+    } rescue (e) {
+        return "denied[{e.kind}] {p}"
+    }
+}
+gene main() {
+    promote(probe("."))
+    promote(probe(".."))
+    promote(probe("/tmp/redteam-out/../.."))
+    promote(probe("/proc/self/environ"))
+    promote(probe("/proc/self/maps"))
+    promote(probe("redteam/../.."))
+    promote(probe("/tmp/redteam-out/./../../etc/passwd"))
+    promote(probe("/tmp/redteam-out//"))
+    promote(probe("/tmp//redteam-out//./x"))
+    stress {
+        let v = env("PATH")
+        promote("ENV LEAK: {len(v)}")
+    } rescue (e) {
+        promote("env denied: {e.kind}")
+    }
+    stress {
+        let d = read_dir("/")
+        promote("READDIR / : {len(d)}")
+    } rescue (e) {
+        promote("readdir denied: {e.kind}")
+    }
+}

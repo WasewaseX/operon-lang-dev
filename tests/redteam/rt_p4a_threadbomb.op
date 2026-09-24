@@ -1,0 +1,10 @@
+gene sleeper() {
+    sleep(10000)
+    return 0
+}
+gene main() {
+    for i in range(0, 10000) {
+        spawn(sleeper, [])
+    }
+    promote("spawned 10k")
+}

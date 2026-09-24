@@ -1,0 +1,13 @@
+gene echo_arg(x) {
+    return len(x)
+}
+gene main() {
+    let l = [1, 2]
+    push(l, l)
+    stress {
+        let t = spawn(echo_arg, [l])
+        promote("task {t} -> {join(t)}")
+    } rescue (e) {
+        promote("caught: {e.kind}")
+    }
+}

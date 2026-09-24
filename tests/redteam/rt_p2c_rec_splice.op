@@ -1,0 +1,8 @@
+splice s {
+    variant a {
+        return s()
+    }
+}
+gene main() {
+    promote(s())
+}

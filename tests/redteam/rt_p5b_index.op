@@ -1,0 +1,20 @@
+gene t(label, f) {
+    stress {
+        return "{label} = {f()}"
+    } rescue (e) {
+        return "{label} -> [{e.kind}] {e.message}"
+    }
+}
+gene main() {
+    let xs = [1, 2, 3]
+    promote(t("[-1]", gene () { return xs[-1] }))
+    promote(t("[1e18]", gene () { return xs[1000000000000000000] }))
+    promote(t("[9223372036854775807]", gene () { return xs[9223372036854775807] }))
+    promote(t("str[99]", gene () { return "ab"[99] }))
+    let m = {"k": 1}
+    promote(t("map[null]", gene () { return m[null] }))
+    promote(t("map[m]", gene () { return m[m] }))
+    promote(t("null[0]", gene () { let n = null return n[0] }))
+    promote(t("null.f", gene () { let n = null return n.f }))
+    promote(t("1[0]", gene () { return 1[0] }))
+}

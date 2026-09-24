@@ -1,0 +1,8 @@
+gene main() {
+    stress {
+        write_file("/home/z/my-project/download/operon/tests/redteam/rt_wlink/pwn.txt", "WROTE-OUTSIDE-GRANT")
+        promote("write via symlink: OK")
+    } rescue (e) {
+        promote("denied: {e.kind}")
+    }
+}

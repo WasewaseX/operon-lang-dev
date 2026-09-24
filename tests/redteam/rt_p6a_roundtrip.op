@@ -1,0 +1,4 @@
+let s = "braces {a} {\"quoted\"} back\{slash} term\" end"
+let t = "multi\nline\ttab {x} \"q\" \\n literal"
+promote(s)
+promote(t)

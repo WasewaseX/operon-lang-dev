@@ -1,0 +1,14 @@
+gene main() {
+    stress {
+        let s = read_file("/home/z/my-project/download/operon/tests/redteam/rt_evil_link")
+        promote("LEAK: {len(s)} chars")
+    } rescue (e) {
+        promote("denied: {e.kind}")
+    }
+    stress {
+        let s = read_file("/home/z/my-project/download/operon/tests/redteam/rt_evildir/hostname")
+        promote("LEAK2: {len(s)} chars")
+    } rescue (e) {
+        promote("denied2: {e.kind}")
+    }
+}

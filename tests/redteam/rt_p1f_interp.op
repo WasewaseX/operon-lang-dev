@@ -1,0 +1,9 @@
+let x = 1
+let s = "{ "{ "{ x }" }" }"
+let t = "{}{}{}"
+let u = "{ }{ }{ }"
+promote(s)
+promote(t)
+promote(u)
+let v = "{ "{ "{
+promote(v)

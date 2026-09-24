@@ -1,0 +1,3 @@
+gene main() {
+    promote("cell-run ok")
+}

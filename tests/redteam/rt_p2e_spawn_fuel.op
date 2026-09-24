@@ -1,0 +1,10 @@
+gene spin() {
+    while true { }
+    return 0
+}
+gene main() {
+    let t = spawn(spin, [])
+    promote("spawned")
+    join(t)
+    promote("joined")
+}

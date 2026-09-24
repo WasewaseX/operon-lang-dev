@@ -1,0 +1,9 @@
+gene g() guard (false) else {
+    while true { }
+    return 0
+} {
+    return 1
+}
+gene main() {
+    promote(g())
+}

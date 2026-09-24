@@ -1,0 +1,6 @@
+let a = "ends with brace}"
+let b = "contains \" inside"
+let c = "has { and } both"
+promote(a)
+promote(b)
+promote(c)

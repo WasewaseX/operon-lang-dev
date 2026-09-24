@@ -1,0 +1,6 @@
+let s = 'a' + 'b'
+promote(s)
+let t = 'it's'
+promote(t)
+let u = 'don'"'"'t stop'
+promote(u)

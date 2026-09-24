@@ -1,0 +1,14 @@
+gene main() {
+    stress {
+        write_file("/tmp/redteam-out/../REDTEAM_PWN2.txt", "breach?")
+        promote("wrote dotdot")
+    } rescue (e) {
+        promote("denied: {e.kind}")
+    }
+    stress {
+        append_file("/tmp/redteam-out/sub/../../../REDTEAM_PWN3.txt", "breach?")
+        promote("wrote subdotdot")
+    } rescue (e) {
+        promote("denied2: {e.kind}")
+    }
+}

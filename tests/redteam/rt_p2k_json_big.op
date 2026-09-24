@@ -1,0 +1,9 @@
+gene main() {
+    let s = "[1," .repeat(1000000) + "1]"
+    stress {
+        let v = json_parse(s)
+        promote("big json parsed: {len(v)}")
+    } rescue (e) {
+        promote("caught: {e.kind} {e.message}")
+    }
+}

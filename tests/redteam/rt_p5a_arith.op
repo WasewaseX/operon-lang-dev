@@ -1,0 +1,21 @@
+gene t(label, f) {
+    stress {
+        return "{label} = {f()}"
+    } rescue (e) {
+        return "{label} -> [{e.kind}] {e.message}"
+    }
+}
+gene main() {
+    promote(t("1e400", gene () { return 1e400 }))
+    promote(t("-0.0", gene () { return -0.0 }))
+    promote(t("0/0", gene () { return 0 / 0 }))
+    promote(t("0.0/0.0", gene () { return 0.0 / 0.0 }))
+    promote(t("1%0", gene () { return 1 % 0 }))
+    promote(t("pow2^10000", gene () { return pow(2, 10000) }))
+    promote(t("maxint*2", gene () { return 9223372036854775807 * 2 }))
+    promote(t("maxint+1", gene () { return 9223372036854775807 + 1 }))
+    promote(t("repeat-5", gene () { return "a" .repeat(-5) }))
+    promote(t("repeat 1e9", gene () { return "a" .repeat(1000000000) }))
+    promote(t("1e400 str", gene () { return str(1e400) }))
+    promote(t("pow(2.0,20000)", gene () { return pow(2.0, 20000.0) }))
+}

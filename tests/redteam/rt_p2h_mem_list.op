@@ -1,0 +1,6 @@
+gene main() {
+    let l = []
+    while true {
+        push(l, [1, 2, 3])
+    }
+}

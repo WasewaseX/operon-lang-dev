@@ -1,0 +1,23 @@
+gene main() {
+    stress {
+        let inf = 1e400
+        let s = json_str({"a": inf, "b": -0.0})
+        promote("json_str: {s}")
+        let v = json_parse(s)
+        promote("roundtrip a={v.a} c={v.c}")
+    } rescue (e) {
+        promote("caught: {e.kind} {e.message}")
+    }
+    stress {
+        let v = json_parse("[NaN, Infinity, -Infinity]")
+        promote("parsed nonstd: {v}")
+    } rescue (e) {
+        promote("nonstd caught: {e.kind}")
+    }
+    stress {
+        let v = json_parse("\"\\ud83d\\ude00\"")
+        promote("json pair: {v} len {len(v)}")
+    } rescue (e) {
+        promote("pair caught: {e.kind}")
+    }
+}
