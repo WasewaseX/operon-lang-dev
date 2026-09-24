@@ -1919,7 +1919,12 @@ impl Parser {
             let nullish_line = self.line();
             self.next();
             let right = self.parse_and();
-            left = Expr::Binary(BinOp::Nullish, Box::new(left), Box::new(right), nullish_line);
+            left = Expr::Binary(
+                BinOp::Nullish,
+                Box::new(left),
+                Box::new(right),
+                nullish_line,
+            );
         }
         left
     }

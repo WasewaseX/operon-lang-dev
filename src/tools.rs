@@ -992,7 +992,7 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
                 fmt_expr(it)
             ));
             fmt_block(b, ind, out);
-            out.push_str("\n");
+            out.push('\n');
         }
         Stmt::MultiAssign(ts, vs, true) => {
             let tj: Vec<String> = ts.iter().map(fmt_expr).collect();
