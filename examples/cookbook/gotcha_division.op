@@ -2,14 +2,12 @@
 # GOTCHA: division, integer division, floored modulo  — cookbook #18
 # you already know: Python's / vs // vs % (Operon matches Python)
 # teaches: `/` is always float division; `//` is integer division;
-#          `%` is FLOORED — the sign follows the divisor, which is
+#          `%` is FLOORED - the sign follows the divisor, which is
 #          exactly what you want for cyclic work
 # run: operon run examples/cookbook/gotcha_division.op
 # expected output: examples/cookbook/expected/gotcha_division.out
 # verified by scripts/cookbook.sh on the Rust core AND the Python oracle
 # ============================================================
-use std/fmt as fm
-
 gene main() {
     # / is float division even for whole results
     promote("7 / 2  = {7 / 2}")
@@ -31,6 +29,7 @@ gene main() {
     promote("10 days before wednesday: {days[((wednesday - 10) % 7 + 7) % 7]}")
 
     # money math: keep integers for cents, format at the edge
+    # (for real formatting, see std/fmt fmt_fixed in STDLIB.md)
     let cents = 12345
-    promote("price: {fm.fmt_fixed(cents / 100.0, 2)}")
+    promote("price: {cents / 100.0}")
 }

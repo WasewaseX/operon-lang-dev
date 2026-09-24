@@ -7,7 +7,6 @@
 # expected output: examples/cookbook/expected/gotcha_builtins_not_values.out
 # verified by scripts/cookbook.sh on the Rust core AND the Python oracle
 # ============================================================
-use std/iter as it
 
 gene main() {
     # the trap: a bare builtin name reads as an unbound variable -> null
@@ -17,19 +16,20 @@ gene main() {
     # calling through the null is contained too (null + note, not a crash):
     promote("f([1, 2, 3]): {f([1, 2, 3])}")
 
-    # the fix: wrap it — genes ARE first-class values
+    # the fix: wrap it - genes ARE first-class values; the std/iter
+    # adapters (and list .map methods) take the wrapper and just work
     gene count(xs) {
         return len(xs)
     }
     let words = ["kiwi", "fig", "watermelon"]
-    promote("lengths: {it.map(words, count)}")
+    promote("lengths: {words.map(count)}")
 
-    # same pattern for anything higher-order: sort_by_key, filter, fold...
+    # same pattern for anything higher-order: sort, filter, reduce...
     gene first_char(s) {
         return s.slice(0, 1)
     }
-    promote("first letters: {it.map(words, first_char)}")
+    promote("first letters: {words.map(first_char)}")
 
     # and a lambda-style gene expression works inline when it's short
-    promote("upper lengths: {it.map(it.map(words, count), gene (n) { return n * 10 })}")
+    promote("upper lengths: {words.map(count).map(gene (n) { return n * 10 })}")
 }
