@@ -220,7 +220,7 @@ Resource ceilings (all raise catchable Stress):
 
 ## 10. Builtins and methods
 
-**Builtins — core:** `promote(*a)` (print, space-joined, returns null) · `len` · `push(l,v)` · `pop(l)` · `insert(l,i,v)` · `remove(l,i)` · `keys(m)` · `values(m)` · `has(m,k)` · `del(m,k)` · `range(a, b?, step?)` (returns List) · `str` · `num` (fails → 0 + note) · `type` (`null bool int float str list map gene native sequence`, or the phenotype name for instances) · `abs min max sum` · `floor(x)` `ceil(x)` (→ Int) · `sqrt(x)` `pow(b, e)` (→ Float) · `clock()` (monotonic seconds, float) · `now()` (monotonic seconds, float — the same high-resolution timer under a briefer name) · `exit(n?)` · `assert(c, msg?)` · `codon(s)` (0–100 style score of an identifier) · `distance(a,b)` (edit distance, C++ bit-parallel kernel; 10M-cell ceiling) · `similar(a,b,maxd?)` (bool) · `transcribe(dna)` · `translate(rna)` (stops at stop codon) · `reverse_complement(dna)` · `gc_content(dna)` (0–100) · `find_orf(dna)` (list of ORF proteins) · `memory()` (map `arena_bytes, interns, allocs` from the C runtime) · `methyl(key, default?)`.
+**Builtins — core:** `promote(*a)` (print, space-joined, returns null) · `len` · `push(l,v)` · `pop(l)` · `insert(l,i,v)` · `remove(l,i)` · `keys(m)` · `values(m)` · `has(m,k)` · `del(m,k)` · `range(a, b?, step?)` (returns List) · `str` · `num` (fails → 0 + note) · `type` (`null bool int float str list map gene native sequence`, or the phenotype name for instances) · `abs min max sum` · `floor(x)` `ceil(x)` (→ Int) · `sqrt(x)` `pow(b, e)` (→ Float) · `clock()` (monotonic seconds, float) · `now()` (monotonic seconds, float — the same high-resolution timer under a briefer name) · `exit(n?)` (capability-gated, sec-r2: kills the host process, so it is default-deny — grant with `--allow-exit` or `.cell allow.exit = true`) · `assert(c, msg?)` · `codon(s)` (0–100 style score of an identifier) · `distance(a,b)` (edit distance, C++ bit-parallel kernel; 10M-cell ceiling) · `similar(a,b,maxd?)` (bool) · `transcribe(dna)` · `translate(rna)` (stops at stop codon) · `reverse_complement(dna)` · `gc_content(dna)` (0–100) · `find_orf(dna)` (list of ORF proteins) · `memory()` (map `arena_bytes, interns, allocs` from the in-process symbol table) · `methyl(key, default?)`.
 
 **Builtins — randomness and dynamic dispatch:** `random()` (float in [0,1)) · `random(n)` (int in [0,n)) · `randomize(seed?)` (deterministic xorshift state, identical in both implementations) · `chr(i)` · `ord(c)` · `argv()` (List of the arguments after the script path) · `sleep(ms)` (≤ 60,000 ms) · `call(name_or_gene, args_list)` (dynamic dispatch — resolves builtins, named genes, or gene values).
 
@@ -414,7 +414,7 @@ module's placeholder map which fills when loading completes (with a rung-4
 note); map/filter/reduce/each run callbacks over a snapshot of the source
 list (callbacks may freely mutate the original).
 
-This specification is **Operon 2.2.0**. `operon version` prints the implementation banner `Operon 2.2.0 (rust-core, c-runtime, cpp-kernel)`, which matches this document.
+This specification is **Operon 2.2.0**. `operon version` prints the implementation banner `Operon 2.2.0 (rust-core, cpp-kernel)`, which matches this document. (sec-r2: the C runtime kernel was deleted — audit A15 proved its intern table was write-only and its raw pointers were the project's one ASan-confirmed memory-safety class; interning now lives in Rust, and the banner no longer claims a c-runtime.)
 
 ## 18. Verification status (what the shipped suite proves)
 

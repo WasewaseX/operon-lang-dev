@@ -257,8 +257,10 @@ pub fn lex(src: &str) -> Lexed {
             }
             continue;
         }
-        // identifiers / keywords — every name is interned into the C table,
-        // which becomes the canonical record of all symbols in all files
+        // identifiers / keywords — every name is interned into the in-process
+        // symbol table (src/ffi.rs, Rust-owned since sec-r2/A15), the canonical
+        // record of all symbols in all files: memory() stats, REPL :symbols,
+        // and the future LSP goto-definition all read from it
         if c.is_ascii_alphabetic() || c == '_' {
             let start = i;
             while i < n && (chars[i].is_ascii_alphanumeric() || chars[i] == '_') {

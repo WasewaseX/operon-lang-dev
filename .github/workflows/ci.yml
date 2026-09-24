@@ -25,16 +25,14 @@ jobs:
         run: cargo fmt --check
       - name: Toolchain build via scripts/build.sh (bin/operon compat path)
         run: bash scripts/build.sh
-      - name: C/C++ kernel smoke (ASan + UBSan)
+      - name: C++ kernel smoke (ASan + UBSan)
         run: |
-          gcc -O1 -std=c17 -fsanitize=address,undefined -Wall -Wextra -Werror -c runtime/operon_rt.c -o build/operon_rt.o
           g++ -O1 -std=c++17 -fsanitize=address,undefined -Wall -Wextra -Werror -c runtime/codon_kernel.cpp -o build/codon_kernel.o
-          ar rcs build/liboperon_rt.a build/operon_rt.o build/codon_kernel.o
-          gcc -O1 -std=c17 -fsanitize=address,undefined tests/smoke_runtime.c build/liboperon_rt.a -lstdc++ -lm -o /tmp/operon_smoke
+          g++ -O1 -std=c++17 -fsanitize=address,undefined tests/smoke_codon.cpp build/codon_kernel.o -o /tmp/operon_smoke
           /tmp/operon_smoke
       - name: Proof suite (compat path bin/operon)
         run: ./bin/operon test tests/
-      - name: Red-team containment suite (59 payloads, R1-F5)
+      - name: Red-team containment suite (67 payloads, R1-F5 + sec-r2)
         run: bash scripts/redteam.sh
       - name: Differential harness (Rust core vs Python oracle)
         run: python3 bootstrap/harness.py

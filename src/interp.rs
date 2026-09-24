@@ -80,6 +80,10 @@ pub struct Caps {
     pub run: Vec<String>,
     pub net: Vec<String>,
     pub env: Vec<String>,
+    /// sec-r2 (audit C-11): exit() kills the whole host process — in test
+    /// runners, the REPL, the LSP, or any embedded host that is fatal. So
+    /// it is a capability like any other, default-deny.
+    pub exit_allowed: bool,
 }
 
 impl Default for Caps {
@@ -92,6 +96,7 @@ impl Default for Caps {
             run: Vec::new(),
             net: Vec::new(),
             env: Vec::new(),
+            exit_allowed: false,
         }
     }
 }
@@ -100,6 +105,7 @@ impl Caps {
     pub fn allow_all() -> Caps {
         Caps {
             enabled: false,
+            exit_allowed: true,
             ..Default::default()
         }
     }
@@ -2424,6 +2430,20 @@ impl Interp {
             }
             "clock" => Ok(Value::Float(crate::ffi::now_ns() / 1e9)),
             "exit" => {
+                // sec-r2 (audit C-11): process exit is a capability, not a
+                // builtin right. An ungranted exit kills the test runner,
+                // the REPL, the LSP — the host — so default-deny applies.
+                if self.caps.enabled && !self.caps.exit_allowed {
+                    self.note(
+                        0,
+                        4,
+                        "exit denied: capability 'exit' not granted (grant with --allow-exit or .cell allow.exit = true)",
+                    );
+                    return Err(Stress::new(
+                        "interference",
+                        "exit denied — capability 'exit' not granted (grant with --allow-exit or .cell allow.exit = true)",
+                    ));
+                }
                 let code = match args.first() {
                     Some(Value::Int(i)) => *i as i32,
                     _ => 0,
@@ -3328,19 +3348,85 @@ impl Interp {
                         cmd.env(k, v);
                     }
                 }
-                let out = cmd.output();
-                match out {
-                    Ok(o) => {
-                        let stdout = String::from_utf8_lossy(&o.stdout).to_string();
-                        let stderr = String::from_utf8_lossy(&o.stderr).to_string();
+                // sec-r2 (audit A14): a child that never exits used to freeze
+                // the interpreter forever (run("sleep", ["10000"]) was a
+                // whole-program DoS). Children now run under a wall-clock
+                // timeout: .cell `run.timeout_ms`, clamped 1..300_000,
+                // default 10_000. A timed-out child is killed and reported.
+                let timeout_ms = self
+                    .cell
+                    .get("run.timeout_ms")
+                    .and_then(|v| v.parse::<u64>().ok())
+                    .unwrap_or(10_000)
+                    .clamp(1, 300_000);
+                let run_result = cmd
+                    .stdout(std::process::Stdio::piped())
+                    .stderr(std::process::Stdio::piped())
+                    .spawn()
+                    .and_then(|mut child| {
+                        let start = std::time::Instant::now();
+                        loop {
+                            match child.try_wait() {
+                                Ok(Some(status)) => {
+                                    // drain pipes after a clean exit
+                                    let mut so = Vec::new();
+                                    let mut se = Vec::new();
+                                    if let Some(mut p) = child.stdout.take() {
+                                        use std::io::Read;
+                                        let _ = p.read_to_end(&mut so);
+                                    }
+                                    if let Some(mut p) = child.stderr.take() {
+                                        use std::io::Read;
+                                        let _ = p.read_to_end(&mut se);
+                                    }
+                                    return Ok((status, so, se, false));
+                                }
+                                Ok(None) => {
+                                    if start.elapsed().as_millis() as u64 >= timeout_ms {
+                                        let _ = child.kill();
+                                        let _ = child.wait();
+                                        return Ok((
+                                            std::process::ExitStatus::default(),
+                                            Vec::new(),
+                                            Vec::new(),
+                                            true,
+                                        ));
+                                    }
+                                    std::thread::sleep(std::time::Duration::from_millis(5));
+                                }
+                                Err(e) => return Err(e),
+                            }
+                        }
+                    });
+                match run_result {
+                    Ok((status, so_raw, se_raw, timed_out)) => {
+                        if timed_out {
+                            self.note(
+                                0,
+                                4,
+                                format!(
+                                    "run '{}': killed after {} ms (timeout; set .cell run.timeout_ms)",
+                                    prog, timeout_ms
+                                ),
+                            );
+                        }
+                        let stdout = String::from_utf8_lossy(&so_raw).to_string();
+                        let stderr = String::from_utf8_lossy(&se_raw).to_string();
                         let m = Rc::new(RefCell::new(vec![
                             (
                                 Value::Str("code".into()),
-                                Value::Int(o.status.code().unwrap_or(-1) as i64),
+                                Value::Int(if timed_out {
+                                    -1
+                                } else {
+                                    status.code().unwrap_or(-1) as i64
+                                }),
                             ),
                             (Value::Str("stdout".into()), Value::Str(stdout)),
                             (Value::Str("stderr".into()), Value::Str(stderr)),
-                            (Value::Str("ok".into()), Value::Bool(o.status.success())),
+                            (
+                                Value::Str("ok".into()),
+                                Value::Bool(!timed_out && status.success()),
+                            ),
                         ]));
                         Ok(Value::Map(m))
                     }
@@ -5062,13 +5148,14 @@ pub fn mem_charge(bytes: u64) -> Result<(), Stress> {
     Ok(())
 }
 
-// direct C kernel accessors for the memory() builtin
+// symbol-table accessors for the memory() builtin (sec-r2: Rust-owned
+// table — the C kernel these used to reach into is deleted, audit A15)
 pub fn unsafe_arena() -> usize {
-    unsafe { crate::ffi::rt_arena_used() }
+    crate::ffi::table_bytes()
 }
 pub fn unsafe_interns() -> u32 {
-    unsafe { crate::ffi::rt_intern_count() }
+    crate::ffi::intern_count()
 }
 pub fn unsafe_allocs() -> u64 {
-    unsafe { crate::ffi::rt_alloc_count() }
+    crate::ffi::table_allocs()
 }
