@@ -1,0 +1,75 @@
+# differential: std/json — navigation and reshaping helpers
+#
+# note: raw JSON text with object braces is built via chr(123)/chr(125) here,
+# because a bare { inside a string literal starts interpolation (SPEC).
+use std/json as js
+
+frame proof {
+    let OB = chr(123)
+    let CB = chr(125)
+    let LB = chr(91)
+    let RB = chr(93)
+    let raw = OB + "\"user\": " + OB + "\"name\": \"Ada\", \"tags\": [\"x\", \"y\"], \"score\": 9.5" + CB + ", \"on\": true, \"n\": null, \"i\": 7" + CB
+    let v = json_parse(raw)
+    assert(len(v) == 4)
+
+    # json_type: JSON-schema vocabulary over type()
+    assert(js.json_type(v) == "object")
+    assert(js.json_type(v["user"]) == "object")
+    assert(js.json_type(v["user"]["tags"]) == "array")
+    assert(js.json_type(v["on"]) == "boolean")
+    assert(js.json_type(v["n"]) == "null")
+    assert(js.json_type(v["user"]["score"]) == "number")
+    assert(js.json_type(v["i"]) == "number")
+    assert(js.json_type("s") == "str")
+    assert(js.json_is_object(v) and !js.json_is_array(v))
+    assert(js.json_is_array(v["user"]["tags"]))
+
+    # path walking: object keys, array indices, misses
+    assert(js.json_get(v, "user") == v["user"])
+    assert(js.json_get(v, "user.name") == "Ada")
+    assert(js.json_get(v, "user.tags.0") == "x")
+    assert(js.json_get(v, "user.tags.1") == "y")
+    assert(js.json_get(v, "user.score") == 9.5)
+    assert(js.json_get(v, "user.nope") == null)
+    assert(js.json_get(v, "user.tags.9") == null)
+    assert(js.json_get(v, "user.name.x") == null)
+    assert(js.json_get(v, "n.x") == null)
+    assert(js.json_get_or(v, "deep.down", "FB") == "FB")
+    assert(js.json_get_or(v, "user.name", "FB") == "Ada")
+
+    # merge: shallow, right wins
+    let a = {"a": 1, "b": 1}
+    let b = {"b": 2, "c": 3}
+    let merged = js.json_merge(a, b)
+    assert(merged["a"] == 1 and merged["b"] == 2 and merged["c"] == 3)
+    assert(len(keys(merged)) == 3)
+
+    # pick / omit: top-level projection
+    let picked = js.json_pick(v, ["on", "zz"])
+    assert(picked["on"] == true and len(keys(picked)) == 1)
+    assert(len(keys(js.json_pick(v, []))) == 0)
+    let slim = js.json_omit(v, ["on", "user"])
+    assert(has(slim, "n") and has(slim, "i") and !has(slim, "on") and !has(slim, "user"))
+    assert(js.json_omit("scalar", ["x"]) == "scalar")
+
+    # flatten: dot paths down to every scalar
+    let flat = js.json_flatten(v)
+    assert(flat["user.name"] == "Ada")
+    assert(flat["user.tags.0"] == "x")
+    assert(flat["user.tags.1"] == "y")
+    assert(flat["user.score"] == 9.5)
+    assert(flat["on"] == true)
+    assert(flat["n"] == null)
+    assert(flat["i"] == 7)
+    let empty_child = js.json_flatten(json_parse(OB + "\"e\": " + OB + CB + ", \"l\": " + LB + RB + CB))
+    assert(json_str(empty_child["e"]) == OB + CB and json_str(empty_child["l"]) == LB + RB)
+
+    # compact: parse + re-serialize drops formatting
+    assert(js.json_compact(OB + "\"a\" : 1" + CB) == OB + "\"a\":1" + CB)
+    assert(js.json_compact("[1, 2]") == "[1,2]")
+}
+
+main {
+    promote("std/json: ok")
+}

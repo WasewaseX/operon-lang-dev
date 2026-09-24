@@ -1,0 +1,127 @@
+# std/args — command-line argument parsing helpers.
+#
+# These operate on a LIST of argv strings so they stay unit-testable. The
+# real command line is available as the `argv()` builtin — pass it straight
+# in: `args_value(argv(), "out", "a.out")`.
+#
+# Convention (the usual CLI shapes):
+#   --flag              boolean flag (args_flag -> true)
+#   --key value         value is the NEXT item (args_value)
+#   --key=value         value attached with '=' (args_value)
+#   -k                  single-dash flags are BOOLEAN only (args_flag)
+#   -k=value            single-dash with a value in '=' form (args_value)
+#   everything else     positional (args_positional)
+#
+# One documented ambiguity: a bare `--key` (no '=' form) consumes the next
+# item as its value even if that next item is itself a flag. Single-dash
+# flags never consume a following item — put their values in '=' form.
+# This keeps the parser dependency-free — no spec table required.
+
+gene args_norm(name) {
+    # accept "verbose", "-v", "--verbose" — dash-prefixed stays, bare gets --
+    if name.starts("-") {
+        return name
+    }
+    return "--" + name
+}
+
+gene args_positional(argv) {
+    # items that are neither flags nor flag values
+    let out = []
+    let n = len(argv)
+    let i = 0
+    while i < n {
+        let a = argv[i]
+        if a.starts("--") {
+            if a.contains("=") {
+                i = i + 1
+            } else {
+                i = i + 2
+            }
+        } else {
+            if a.starts("-") {
+                i = i + 1
+            } else {
+                push(out, a)
+                i = i + 1
+            }
+        }
+    }
+    return out
+}
+
+gene args_flag(argv, name) {
+    # true if the flag is present (--flag) or truthy (--flag=true|1|yes|on)
+    let f = args_norm(name)
+    let eq = f + "="
+    for a in argv {
+        if a == f {
+            return true
+        }
+        if a.starts(eq) {
+            let v = a.slice(len(eq), len(a))
+            return v == "true" or v == "1" or v == "yes" or v == "on"
+        }
+    }
+    return false
+}
+
+gene args_has(argv, name) {
+    # key present in either form (--key or --key=...), regardless of value
+    let f = args_norm(name)
+    let eq = f + "="
+    for a in argv {
+        if a == f {
+            return true
+        }
+        if a.starts(eq) {
+            return true
+        }
+    }
+    return false
+}
+
+gene args_value(argv, name, default) {
+    # the value of --key / --key=value, or default when absent
+    let f = args_norm(name)
+    let eq = f + "="
+    let n = len(argv)
+    let i = 0
+    while i < n {
+        let a = argv[i]
+        if a == f {
+            if i + 1 < n {
+                return argv[i + 1]
+            }
+            return default
+        }
+        if a.starts(eq) {
+            return a.slice(len(eq), len(a))
+        }
+        i = i + 1
+    }
+    return default
+}
+
+gene args_get(argv, name) {
+    # args_value with null fallback — handy inside conditionals
+    return args_value(argv, name, null)
+}
+
+gene args_number(argv, name, default) {
+    # numeric option: --jobs 4 -> 4 (int when clean, float otherwise)
+    let raw = args_get(argv, name)
+    if raw == null {
+        return default
+    }
+    return num(raw)
+}
+
+gene args_subcommand(argv) {
+    # first positional item (e.g. "build" in `tool --verbose build`), or null
+    let p = args_positional(argv)
+    if len(p) == 0 {
+        return null
+    }
+    return p[0]
+}

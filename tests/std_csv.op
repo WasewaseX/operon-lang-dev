@@ -1,0 +1,52 @@
+# differential: std/csv — quote-aware CSV parsing and serialization
+use std/csv as csv
+
+frame proof {
+    # escaping: only when needed; inner quotes doubled
+    assert(csv.csv_escape("plain", ",") == "plain")
+    assert(csv.csv_escape("a,b", ",") == "\"a,b\"")
+    assert(csv.csv_escape("say \"hi\"", ",") == "\"say \"\"hi\"\"\"")
+    assert(csv.csv_escape("line\nbreak", ",") == "\"line\nbreak\"")
+    assert(csv.csv_escape("a|b", "|") == "\"a|b\"")
+
+    # row serialization round shape
+    assert(csv.csv_row(["a", "b,c", "d"], ",") == "a,\"b,c\",d")
+    assert(csv.csv_row([], ",") == "")
+    assert(csv.csv_row([1, 2], ",") == "1,2")
+
+    # single line: plain, quoted, doubled quotes, trailing empty field
+    assert(csv.csv_parse_line("1,2,3", ",") == ["1", "2", "3"])
+    assert(csv.csv_parse_line("1,\"x,y\",3", ",") == ["1", "x,y", "3"])
+    assert(csv.csv_parse_line("1,\"x\"\"y\",3", ",") == ["1", "x\"y", "3"])
+    assert(csv.csv_parse_line("a,b,", ",") == ["a", "b", ""])
+    assert(csv.csv_parse_line("", ",") == [])
+
+    # document: quoted separators, CRLF endings (chr(13): \r is not an escape), quoted newline field
+    let crlf = chr(13) + "\n"
+    let doc = "name,age" + crlf + "\"Smith, John\",42" + crlf + "Li,31" + crlf
+    assert(csv.csv_parse(doc, ",") == [["name", "age"], ["Smith, John", "42"], ["Li", "31"]])
+    let ml = "a,\"x\ny\",b\nc,d,e\n"
+    assert(csv.csv_parse(ml, ",") == [["a", "x\ny", "b"], ["c", "d", "e"]])
+    assert(csv.csv_parse("", ",") == [])
+
+    # records: header-keyed maps
+    let recs = csv.csv_records("name,age\nAda,36\nLin,28\n", ",")
+    assert(len(recs) == 2)
+    assert(recs[0]["name"] == "Ada" and recs[0]["age"] == "36")
+    assert(recs[1]["name"] == "Lin")
+    assert(csv.csv_records("onlyheader\n", ",") == [])
+
+    # column extraction, incl. missing column
+    assert(csv.csv_column("name,age\nAda,36\nLin,28\n", ",", "age") == ["36", "28"])
+    assert(csv.csv_column("name,age\nAda,36\n", ",", "nope") == [])
+    assert(csv.csv_column("h\n", ",", "h") == [])
+
+    # custom separator + field counting
+    assert(csv.csv_parse_line("a;b;c", ";") == ["a", "b", "c"])
+    assert(csv.csv_count_fields("1,2,3", ",") == 3)
+    assert(csv.csv_count_fields("1,\"a,b\"", ",") == 2)
+}
+
+main {
+    promote("std/csv: ok")
+}
