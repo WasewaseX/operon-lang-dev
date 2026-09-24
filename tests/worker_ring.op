@@ -1,0 +1,38 @@
+# reg-r3 (re-audit) — the repressilator ring rides the spawn snapshot
+# A ring-sourced GRN gate must veto a call inside a worker cell EXACTLY as
+# it does outside (reg-r1's contract, formerly false for ring nodes: the
+# ring did not ride RegulationSnap and every ring node read 0.0 in the
+# cell). Warm the ring to a tick where node `a` is HIGH (norm ≈ 0.64 at
+# tick 5), then call a threshold-gated gene from host and worker.
+regulate {
+    a activates target strength 1.0 threshold 0.3
+}
+repressilator a -> b -> c
+
+gene target() {
+    return "RING-DRIVEN"
+}
+gene worker_call() {
+    return target()
+}
+frame proof {
+    repressi_next()
+    repressi_next()
+    repressi_next()
+    repressi_next()
+    repressi_next()
+    # tick 5: a's raw level 6.36 → norm 0.64 ≥ threshold 0.3
+    assert(target() == "RING-DRIVEN", "host call passes the ring gate")
+    let id = spawn(worker_call, [])
+    let r = join(id)
+    assert(r == "RING-DRIVEN", "worker call passes the SAME ring gate (frozen snapshot)")
+}
+main {
+    repressi_next()
+    repressi_next()
+    repressi_next()
+    repressi_next()
+    repressi_next()
+    let id = spawn(worker_call, [])
+    promote("worker sees ring-gated gene: {join(id)}")
+}

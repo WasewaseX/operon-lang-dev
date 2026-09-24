@@ -25,5 +25,5 @@ opt-level = 3
 lto = false
 codegen-units = 16
 panic = "unwind"
-# dx-r1 (audit W13): stripped release binaries — 1.9 MB → ~0.8 MB
+# dx-r1 (audit W13): stripped release binaries (measured 1.6 MB on linux x64)
 strip = true

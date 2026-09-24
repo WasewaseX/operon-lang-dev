@@ -38,7 +38,7 @@ The mandate: *"Rust, then C, then Python, then Operon, then C++, then HTML, then
 
 **Honest deviations from the requested order, and why:**
 
-1. **Python (2) > C++ (8).** The oracle is not "too much Python" — it is the differential engine that proves the Rust core correct (39/39 program-level output matches). Deleting it would save lines and lose verification.
+1. **Python (2) > C++ (8).** The oracle is not "too much Python" — it is the differential engine that proves the Rust core correct (56/56 program-level output matches). Deleting it would save lines and lose verification.
 2. **The C kernel was deleted on purpose (sec-r2, audit A15).** The audit proved it was write-only (the lexer discarded every intern result) and that its raw-pointer arena was the project's one ASan-confirmed memory-safety class. Interning now lives in Rust (`src/ffi.rs`): same stable-id semantics, `memory()` still reports table stats, and the entire UAF class is structurally impossible. The C++ codon kernel STAYED because it earned its place: bit-parallel Myers is genuinely hot (`distance()`, `similar()`, wobble repair, parser suggestions), allocation-free, and budget-guarded.
 3. **Operon (2) has overtaken everything except Rust.** Between v2.1.0 and v2.2.0 the `.op` share grew from ~7% to ~27% (proof suite, red-team containment, differential corpus, stdlib). `std/` runs on the Rust core today; every release self-hosts more. That is exactly how Rust/Go/TS historically converged.
 
@@ -134,7 +134,7 @@ Path grants are symlink-resolved; a grant that normalizes to the empty string is
 operon run f.op      [--entry g] [--variant v] [--cell c] [--rna r] [--frame n] [--ires] [--strict] [--fuel N]
                      [--allow-read p] [--allow-write p] [--allow-run prog] [--allow-net host:port] [--allow-env var] [--allow-all]
 operon check f.op    [--nmd | --nmd=purge] [--json]   # 100-point grade + letter; --json: phantoms/nmd arrays
-operon test [dirs]                                # proof-frame runner (26 files / 26 proofs / 281 assertions green)
+operon test [dirs]                                # proof-frame runner (50 files / 44 proofs / 654 assertions green)
 operon fmt f.op     [--write]                     # precedence-correct canonical formatter
 operon build f.op   [--variant v] [-o out.op]     # bake splices, strip proofs
 operon profile f.op                               # per-gene calls, exclusive self-µs, flags, maturation, enhance candidates
@@ -149,8 +149,8 @@ operon version                                    # Operon 2.2.0 (rust-core, cpp
 ```console
 $ ./scripts/build.sh          # gcc + g++ the kernels, rustc the core
 OK: bin/operon
-$ ./scripts/test.sh           # 32 proof files (281 assertions), C kernel smoke 14/14
-$ python3 bootstrap/harness.py  # differential: 28/28 programs MATCH across implementations
+$ ./scripts/test.sh           # 50 proof files (654 assertions), C++ kernel smoke
+$ python3 bootstrap/harness.py  # differential: 56/56 programs MATCH across implementations
 $ bash scripts/redteam.sh       # adversarial containment: 59 attacks contained, 0 breached
 $ bash scripts/bench.sh
 ```
