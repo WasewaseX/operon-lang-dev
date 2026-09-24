@@ -1,0 +1,37 @@
+# differential: S3 builtin coverage — state introspection builtins
+# grn_state(), items() and methyl() are pure readers over interpreter state,
+# so their goldens are fully deterministic:
+#   grn_state — level map after one grn_fire (levels asserted, never printed
+#               as floats; key count is exact)
+#   items     — map -> list of pairs in INSERTION order (both implementations
+#               preserve it); the map comes from json_parse, itself a
+#               golden-covered builtin
+#   methyl    — .cell reader; no .cell file is present, so the explicit
+#               default-value path is what gets pinned
+regulate {
+    signal activates kinase strength 0.9
+}
+toggle a, b
+frame proof {
+    grn_fire("signal")
+    let st = grn_state()
+    assert(type(st) == "map", "grn_state is a map")
+    assert(len(st) == 2, "exactly the two declared nodes")
+    assert(st.signal > 0.0, "seeded node carries level")
+    assert(st.kinase > 0.0, "activated node carries level")
+
+    # items over an insertion-ordered map (built via json_parse)
+    let cfg = json_parse("\{\"x\": 1, \"y\": 2\}")
+    let pairs = items(cfg)
+    assert(type(pairs) == "list", "items returns a list")
+    assert(len(pairs) == 2, "items length matches")
+    assert(pairs[0][0] == "x" and pairs[1][0] == "y", "insertion order kept")
+    assert(pairs[0][1] == 1 and pairs[1][1] == 2, "values carried")
+
+    # methyl default path (no .cell file in scope)
+    assert(methyl("no.such.key", 7) == 7, "methyl returns explicit default")
+    assert(type(methyl("no.such.key", "d")) == "str", "default type preserved")
+}
+main {
+    promote("state-introspection: ok")
+}

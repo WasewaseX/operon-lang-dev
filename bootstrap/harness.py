@@ -9,6 +9,16 @@ Usage: python3 bootstrap/harness.py [--bin ../bin/operon]
 """
 import subprocess, sys, os, argparse
 
+# S3 exclusion policy (sz, 2026-09-24) — builtins with NO exact-output golden,
+# by nature, each accounted for:
+#   exit               — control-flow terminator; its exit-code contract is the
+#                        harness itself (rust_code == py_code on every program)
+#   serve/recv_request/send_response — network server trio; timing-dependent,
+#                        containment covered by redteam suite instead
+#   repressi_start     — wall-clock thread ticker; manual rings (deterministic)
+#                        are covered via repressi_next/repressi_state
+# Every other builtin in src/interp.rs call_builtin has >= 1 differential
+# golden or a shape contract under tests/differential/.
 def run(cmd, timeout=120):
     p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     return p.stdout, p.returncode
