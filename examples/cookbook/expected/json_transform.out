@@ -1,0 +1,9 @@
+service = api
+limits.cpu = 4
+tags.0 = edge
+missing = null
+merged version = 3, region = eu
+public has secret? false
+flat keys = 7
+flat.limits.mem = 8
+compact = {"service":"api","version":3,"limits":{"cpu":4,"mem":8},"tags":["edge","core"],"region":"eu"}

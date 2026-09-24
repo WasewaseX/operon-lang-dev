@@ -1,0 +1,5 @@
+operon 2 renders the value: 2
+raw json: {"a": 1, "b": [true, null]}
+round trip: {"a":1,"b":[true,null]}
+helper: {key: value}
+lengths: newline 3, real CR 3, fake CR 4

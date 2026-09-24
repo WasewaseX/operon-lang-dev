@@ -1,0 +1,8 @@
+type(5):      int
+type("s"):   str
+type([]):     list
+type empty map: map
+is_off: true
+kinds[1]: missing
+next_step: encode
+rule of thumb: snake_case names never collide

@@ -1,0 +1,63 @@
+# ============================================================
+# Matrix operations  — cookbook #11
+# you already know: nested lists + a triple loop matmul
+# teaches: 2D data as lists of lists, accumulator loops, row printing
+#          with join
+# run: operon run examples/cookbook/matrix_ops.op
+# expected output: examples/cookbook/expected/matrix_ops.out
+# verified by scripts/cookbook.sh on the Rust core AND the Python oracle
+# ============================================================
+gene transpose(a) {
+    # a is rows x cols; out is cols x rows
+    let out = []
+    for j in range(0, len(a[0])) {
+        let col = []
+        for row in a {
+            push(col, row[j])
+        }
+        push(out, col)
+    }
+    return out
+}
+
+gene matmul(a, b) {
+    # a is r x k, b must be k x c; dot product of rows x transposed-cols
+    let bt = transpose(b)
+    let out = []
+    for row in a {
+        let new_row = []
+        for col in bt {
+            let acc = 0
+            for i in range(0, len(col)) {
+                acc += row[i] * col[i]
+            }
+            push(new_row, acc)
+        }
+        push(out, new_row)
+    }
+    return out
+}
+
+gene det2(a) {
+    return a[0][0] * a[1][1] - a[0][1] * a[1][0]
+}
+
+gene show_matrix(label, mat) {
+    promote("{label}:")
+    for row in mat {
+        promote("  [{row.join(" ")}]")
+    }
+}
+
+gene main() {
+    let a = [[1, 2, 3], [4, 5, 6]]       # 2 x 3
+    let b = [[7, 8], [9, 10], [11, 12]]  # 3 x 2
+
+    show_matrix("a", a)
+    show_matrix("a transposed", transpose(a))
+    show_matrix("a x b", matmul(a, b))
+
+    let sq = [[3, 8], [4, 6]]
+    show_matrix("sq", sq)
+    promote("det(sq) = {det2(sq)}")
+}

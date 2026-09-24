@@ -1,0 +1,66 @@
+# ============================================================
+# Caesar cipher  — cookbook #14
+# you already know: ROT13 via str.translate / a substitution map
+# teaches: building translation tables from parallel strings, has()-first
+#          map access, case handling without char codes, char walk via slice
+# run: operon run examples/cookbook/caesar.op
+# expected output: examples/cookbook/expected/caesar.out
+# verified by scripts/cookbook.sh on the Rust core AND the Python oracle
+# ============================================================
+gene shift_table(alphabet, places) {
+    # build alphabet -> shifted-alphabet as a map, no char codes needed
+    let cut = places % len(alphabet)
+    let rotated = alphabet.slice(cut, len(alphabet)) + alphabet.slice(0, cut)
+    let table = {}
+    for i in range(0, len(alphabet)) {
+        table[alphabet.slice(i, i + 1)] = rotated.slice(i, i + 1)
+    }
+    return table
+}
+
+gene substitute(text, table) {
+    let out = ""
+    for i in range(0, len(text)) {
+        let ch = text.slice(i, i + 1)
+        if has(table, ch) {
+            out = out + table[ch]
+        } else {
+            out = out + ch          # spaces and punctuation pass through
+        }
+    }
+    return out
+}
+
+gene main() {
+    let lower = "abcdefghijklmnopqrstuvwxyz"
+    let upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+    # encode uses the shifted tables (lower and upper need separate maps);
+    # decode is the same machine shifted back 26 - 3 = 23 places
+    let message = "Attack At Dawn"
+    let both = {}
+    let enc_lower = shift_table(lower, 3)
+    let enc_upper = shift_table(upper, 3)
+    for k in keys(enc_lower) { both[k] = enc_lower[k] }
+    for k in keys(enc_upper) { both[k] = enc_upper[k] }
+
+    let cipher = substitute(message, both)
+    promote("plain:  {message}")
+    promote("cipher: {cipher}")
+
+    # decode: shift back by 3 (26 - 3 = 23)
+    let back = {}
+    let dec_lower = shift_table(lower, 23)
+    let dec_upper = shift_table(upper, 23)
+    for k in keys(dec_lower) { back[k] = dec_lower[k] }
+    for k in keys(dec_upper) { back[k] = dec_upper[k] }
+    promote("round trip: {substitute(cipher, back)}")
+
+    # rot13 is just caesar with a half turn
+    let rot13 = {}
+    let l13 = shift_table(lower, 13)
+    let u13 = shift_table(upper, 13)
+    for k in keys(l13) { rot13[k] = l13[k] }
+    for k in keys(u13) { rot13[k] = u13[k] }
+    promote("rot13 of \"{message}\": {substitute(message, rot13)}")
+}

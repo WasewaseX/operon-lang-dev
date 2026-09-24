@@ -479,6 +479,7 @@ fn purge_stmt(s: &mut Stmt) {
         Stmt::While(_, b)
         | Stmt::Loop(b)
         | Stmt::For(_, _, b)
+        | Stmt::ForPat(_, _, b)
         | Stmt::Block(b)
         | Stmt::Tad(_, b) => {
             genes::purge_premature_stops(b);
@@ -514,7 +515,13 @@ fn collect_calls(prog: &Program, defined: &mut HashSet<String>, called: &mut Vec
                     walk_expr(a, called);
                 }
             }
-            Expr::Unary(_, a) | Expr::Member(a, _) => walk_expr(a, called),
+            Expr::MethodSafe(r, _, args) => {
+                walk_expr(r, called);
+                for a in args {
+                    walk_expr(a, called);
+                }
+            }
+            Expr::Unary(_, a) | Expr::Member(a, _) | Expr::MemberSafe(a, _) => walk_expr(a, called),
             Expr::Binary(_, a, b) | Expr::Index(a, b) => {
                 walk_expr(a, called);
                 walk_expr(b, called);
@@ -971,6 +978,32 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
         Stmt::Let(n, e) => {
             out.push_str(&format!("let {} = {}\n", n, fmt_expr(e)));
         }
+        Stmt::LetPat(p, e) => {
+            out.push_str(&format!(
+                "let {} = {}\n",
+                fmt_destructure_pat(p),
+                fmt_expr(e)
+            ));
+        }
+        Stmt::ForPat(p, it, b) => {
+            out.push_str(&format!(
+                "for {} in {} ",
+                fmt_destructure_pat(p),
+                fmt_expr(it)
+            ));
+            fmt_block(b, ind, out);
+            out.push_str("\n");
+        }
+        Stmt::MultiAssign(ts, vs, true) => {
+            let tj: Vec<String> = ts.iter().map(fmt_expr).collect();
+            let vj: Vec<String> = vs.iter().map(fmt_expr).collect();
+            out.push_str(&format!("let {} = {}\n", tj.join(", "), vj.join(", ")));
+        }
+        Stmt::MultiAssign(ts, vs, false) => {
+            let tj: Vec<String> = ts.iter().map(fmt_expr).collect();
+            let vj: Vec<String> = vs.iter().map(fmt_expr).collect();
+            out.push_str(&format!("{} = {}\n", tj.join(", "), vj.join(", ")));
+        }
         Stmt::Assign(n, None, e) => {
             out.push_str(&format!("{} = {}\n", n, fmt_expr(e)));
         }
@@ -1255,6 +1288,21 @@ fn fmt_params(ps: &[(String, Option<Expr>)]) -> String {
         .join(", ")
 }
 
+/// L1a: canonical form of a destructuring pattern.
+fn fmt_destructure_pat(p: &Pat) -> String {
+    match p {
+        Pat::Bind(n) => n.clone(),
+        Pat::List { elems, rest } => {
+            let mut parts: Vec<String> = elems.iter().map(fmt_destructure_pat).collect();
+            if let Some(r) = rest {
+                parts.push(format!("*{}", r));
+            }
+            format!("[{}]", parts.join(", "))
+        }
+        Pat::Map { keys } => format!("{{{}}}", keys.join(", ")),
+    }
+}
+
 pub fn fmt_op(op: BinOp) -> &'static str {
     match op {
         BinOp::Add => "+",
@@ -1278,13 +1326,14 @@ pub fn fmt_op(op: BinOp) -> &'static str {
         BinOp::And => "and",
         BinOp::Or => "or",
         BinOp::In => "in",
+        BinOp::Nullish => "??",
     }
 }
 
 fn prec_of(op: BinOp) -> u8 {
     match op {
         BinOp::Or => 1,
-        BinOp::And => 2,
+        BinOp::Nullish | BinOp::And => 2,
         BinOp::Eq | BinOp::Neq | BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge | BinOp::In => 3,
         BinOp::BitOr => 4,
         BinOp::BitXor => 5,
@@ -1412,6 +1461,16 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
         ),
         Expr::Index(t, i) => format!("{}[{}]", fmt_expr(t), fmt_expr(i)),
         Expr::Member(t, k) => format!("{}.{}", fmt_expr(t), k),
+        Expr::MemberSafe(t, k) => format!("{}?.{}", fmt_expr(t), k),
+        Expr::MethodSafe(t, m, args) => format!(
+            "{}?.{}({})",
+            fmt_expr(t),
+            m,
+            args.iter()
+                .map(|x| fmt_prec(x, 0))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
         Expr::Method(t, m, args) => format!(
             "{}.{}({})",
             fmt_expr(t),

@@ -467,7 +467,48 @@ impl Parser {
             }
             "let" => {
                 self.next();
+                // L1a: destructuring definitions — `let [a, b] = e`,
+                // `let {x, y} = e` (patterns nest; `*rest` captures the tail).
+                if matches!(self.peek(), Tok::LBrack | Tok::LBrace) {
+                    let pat = self.parse_destructure_pat();
+                    if matches!(self.peek(), Tok::Eq) {
+                        self.next();
+                        let e = self.parse_expr();
+                        self.end_stmt();
+                        return Some(Stmt::LetPat(pat, e));
+                    }
+                    let line = self.line();
+                    self.note(line, 4, "destructured 'let' without value binds nulls");
+                    self.end_stmt();
+                    return Some(Stmt::LetPat(pat, Expr::Null));
+                }
                 let name = self.expect_ident()?;
+                // L1a: `let a, b = 1, 2` — multi-define (all values evaluated
+                // before any name binds).
+                if matches!(self.peek(), Tok::Comma) {
+                    let mut names = vec![name];
+                    while matches!(self.peek(), Tok::Comma) {
+                        self.next();
+                        names.push(self.expect_ident()?);
+                    }
+                    if matches!(self.peek(), Tok::Eq) {
+                        self.next();
+                        let mut values = vec![self.parse_expr()];
+                        while matches!(self.peek(), Tok::Comma) {
+                            self.next();
+                            values.push(self.parse_expr());
+                        }
+                        self.end_stmt();
+                        let targets: Vec<Expr> = names.into_iter().map(Expr::Ident).collect();
+                        return Some(Stmt::MultiAssign(targets, values, true));
+                    }
+                    let line = self.line();
+                    self.note(line, 4, "multi 'let' without value binds nulls");
+                    self.end_stmt();
+                    let targets: Vec<Expr> = names.into_iter().map(Expr::Ident).collect();
+                    let values: Vec<Expr> = targets.iter().map(|_| Expr::Null).collect();
+                    return Some(Stmt::MultiAssign(targets, values, true));
+                }
                 let line = self.line();
                 if matches!(self.peek(), Tok::Eq) {
                     self.next();
@@ -523,6 +564,17 @@ impl Parser {
             }
             "for" => {
                 self.next();
+                // L1a: destructuring loop target — `for [k, v] in pairs { }`.
+                if matches!(self.peek(), Tok::LBrack | Tok::LBrace) {
+                    let pat = self.parse_destructure_pat();
+                    if !self.expect_kw("in") {
+                        let line = self.line();
+                        self.note(line, 4, "'for <pattern>' missing 'in'; iterating null");
+                    }
+                    let iter = self.parse_expr();
+                    let body = self.parse_block().unwrap_or_default();
+                    return Some(Stmt::ForPat(pat, iter, body));
+                }
                 let name = self.expect_ident()?;
                 if !self.expect_kw("in") {
                     let line = self.line();
@@ -1483,6 +1535,44 @@ impl Parser {
                             }
                         }
                     }
+                    Tok::Comma if Self::is_assign_target(&e) => {
+                        // L1a: multiple assignment / swap — `a, b = b, a`,
+                        // `m.k, l[0] = x, y`. Parse the rest of the target
+                        // list, require '=', then the RHS list (RHS is fully
+                        // evaluated before any target is assigned). If no '='
+                        // follows, rewind and fall back to the old behavior.
+                        let save = self.pos;
+                        let mut targets = vec![e.clone()];
+                        let mut valid = true;
+                        while matches!(self.peek(), Tok::Comma) {
+                            self.next();
+                            let t = self.parse_expr();
+                            if !Self::is_assign_target(&t) {
+                                valid = false;
+                            }
+                            targets.push(t);
+                        }
+                        if valid && matches!(self.peek(), Tok::Eq) {
+                            self.next();
+                            let mut values = vec![self.parse_expr()];
+                            while matches!(self.peek(), Tok::Comma) {
+                                self.next();
+                                values.push(self.parse_expr());
+                            }
+                            self.end_stmt();
+                            return Some(Stmt::MultiAssign(targets, values, false));
+                        }
+                        self.pos = save;
+                        let line = self.line();
+                        self.note(
+                            line,
+                            4,
+                            "expression statement not terminated; rest of line skipped",
+                        );
+                        self.skip_line();
+                        self.end_stmt();
+                        Some(Stmt::ExprStmt(e))
+                    }
                     Tok::PlusEq
                     | Tok::MinusEq
                     | Tok::StarEq
@@ -1528,6 +1618,108 @@ impl Parser {
                         Some(Stmt::ExprStmt(e))
                     }
                 }
+            }
+        }
+    }
+
+    /// L1a: can this expression stand on the left of `=` in a multi-assign?
+    /// Names, index expressions and member expressions only.
+    fn is_assign_target(e: &Expr) -> bool {
+        matches!(e, Expr::Ident(_) | Expr::Index(..) | Expr::Member(..))
+    }
+
+    /// L1a: destructuring pattern — `[a, b]`, `[head, *rest]`, `{x, y}`,
+    /// nested list patterns. Soft Total Grammar: unclosed brackets are
+    /// auto-closed with a note; garbage elements bind wildcards.
+    fn parse_destructure_pat(&mut self) -> Pat {
+        match self.peek().clone() {
+            Tok::LBrack => {
+                self.next();
+                let mut elems = Vec::new();
+                let mut rest = None;
+                loop {
+                    self.eat_newlines_inline();
+                    match self.peek().clone() {
+                        Tok::RBrack => {
+                            self.next();
+                            break;
+                        }
+                        Tok::Eof => {
+                            let line = self.line();
+                            self.note(line, 4, "pattern bracket auto-closed");
+                            break;
+                        }
+                        Tok::Star => {
+                            self.next();
+                            if let Tok::Ident(w) = self.peek().clone() {
+                                self.next();
+                                rest = Some(w);
+                            } else {
+                                let line = self.line();
+                                self.note(line, 4, "'*' in pattern needs a name; tail skipped");
+                            }
+                        }
+                        Tok::Comma => {
+                            self.next();
+                        }
+                        _ => {
+                            elems.push(self.parse_destructure_pat());
+                        }
+                    }
+                }
+                Pat::List { elems, rest }
+            }
+            Tok::LBrace => {
+                self.next();
+                let mut keys = Vec::new();
+                loop {
+                    self.eat_newlines_inline();
+                    match self.peek().clone() {
+                        Tok::RBrace => {
+                            self.next();
+                            break;
+                        }
+                        Tok::Eof => {
+                            let line = self.line();
+                            self.note(line, 4, "pattern brace auto-closed");
+                            break;
+                        }
+                        Tok::Comma => {
+                            self.next();
+                        }
+                        Tok::Ident(w) => {
+                            self.next();
+                            keys.push(w);
+                        }
+                        other => {
+                            let line = self.line();
+                            self.note(
+                                line,
+                                4,
+                                format!("'{}' is not a map-pattern key; skipped", other.describe()),
+                            );
+                            self.next();
+                        }
+                    }
+                }
+                Pat::Map { keys }
+            }
+            Tok::Ident(w) => {
+                self.next();
+                Pat::Bind(w)
+            }
+            other => {
+                let line = self.line();
+                self.note(
+                    line,
+                    4,
+                    format!(
+                        "'{}' cannot start a pattern; binding null",
+                        other.describe()
+                    ),
+                );
+                self.next();
+                Pat::Bind("_".to_string())
             }
         }
     }
@@ -1705,16 +1897,28 @@ impl Parser {
     }
 
     fn parse_or(&mut self) -> Expr {
-        let mut left = self.parse_and();
+        let mut left = self.parse_nullish();
         loop {
             let is_or = self.at_kw("or") || matches!(self.peek(), Tok::PipePipe);
             if is_or {
                 self.next();
-                let right = self.parse_and();
+                let right = self.parse_nullish();
                 left = Expr::Binary(BinOp::Or, Box::new(left), Box::new(right));
             } else {
                 break;
             }
+        }
+        left
+    }
+
+    /// L1a: `a ?? b` — sits between `or` and `and` so `a or b ?? c` reads as
+    /// `a or (b ?? c)`. Associative, so a left-assoc loop is fine.
+    fn parse_nullish(&mut self) -> Expr {
+        let mut left = self.parse_and();
+        while matches!(self.peek(), Tok::QuestionQuestion) {
+            self.next();
+            let right = self.parse_and();
+            left = Expr::Binary(BinOp::Nullish, Box::new(left), Box::new(right));
         }
         left
     }
@@ -1990,6 +2194,49 @@ impl Parser {
                                 4,
                                 format!("'.' followed by '{}'; member skipped", other.describe()),
                             );
+                            break;
+                        }
+                    }
+                }
+                Tok::QuestionDot => {
+                    // L1a: `a?.k` / `a?.k(args)` — null-safe member access.
+                    self.next();
+                    match self.peek().clone() {
+                        Tok::Ident(m) => {
+                            self.next();
+                            if matches!(self.peek(), Tok::LParen) {
+                                self.next();
+                                let mut args = Vec::new();
+                                loop {
+                                    self.eat_newlines_inline();
+                                    if matches!(self.peek(), Tok::RParen) {
+                                        self.next();
+                                        break;
+                                    }
+                                    if matches!(self.peek(), Tok::Eof) {
+                                        break;
+                                    }
+                                    args.push(self.parse_expr());
+                                    if matches!(self.peek(), Tok::Comma) {
+                                        self.next();
+                                    }
+                                }
+                                e = Expr::MethodSafe(Box::new(e), m, args);
+                            } else {
+                                e = Expr::MemberSafe(Box::new(e), m);
+                            }
+                        }
+                        other => {
+                            let line = self.line();
+                            self.note(
+                                line,
+                                4,
+                                format!(
+                                    "'?.' followed by '{}'; chain resolves to null",
+                                    other.describe()
+                                ),
+                            );
+                            e = Expr::MemberSafe(Box::new(e), String::new());
                             break;
                         }
                     }

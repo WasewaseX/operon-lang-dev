@@ -1,6 +1,6 @@
-# Operon v2.1 — Language Specification
+# Operon v2.3 — Language Specification
 
-**Status:** v2.2.0. This document is the single contract implemented identically by:
+**Status:** v2.3.0-dev (L1a: null-safety, destructuring, iteration/numeric builtins). This document is the single contract implemented identically by:
 
 | Implementation | Language | Role |
 |---|---|---|
@@ -67,13 +67,28 @@ Unbound/undefined `gene` calls are reported by `operon check` as **phantom calls
 
 ```
 let name = expr                     # definition (re-let with note "rebinding")
+let [a, b] = expr                   # destructuring definition (v2.3) — list
+                                    # pattern; *rest captures the tail; strings
+                                    # destructure by char; patterns nest; soft
+                                    # miss → null + note (never a hard failure)
+let {x, y} = expr                   # map pattern (v2.3): each name reads that
+                                    # key (bare names only; missing → null+note)
+let a, b = e1, e2                   # multi-define (v2.3): every RHS is
+                                    # evaluated before any name binds
 name = expr                         # assign (auto-let at top scope with note)
+a, b = b, a                         # multi-assign / swap (v2.3): all RHS
+                                    # evaluated (left→right) first, then targets
+                                    # written in order; targets may be names,
+                                    # a[i] or a.k; shorter RHS → null + note
 name += -= *= //= expr              # compound (also on a[i], a.k targets)
 if expr { } elif expr { } else { }  # elif/else optional, elif chainable
 while expr { }
 loop { }                            # infinite; break/continue
 for name in expr { }                # List→items, Str→1-char strs, Map→keys,
                                     # sequence → pulled values (§7b)
+for [k, v] in expr { }              # destructuring loop (v2.3) — any pattern
+                                    # accepted; each item binds the pattern in a
+                                    # fresh child scope
 return expr?                        # bare return → null
 break / continue
 match expr { case p { } ... }       # patterns: literals (==, comma-sep allowed),
@@ -89,11 +104,19 @@ Name { B }                          # bare-name block: a gene definition with no
                                     # C-like entry idiom
 ```
 
+**Pattern soft-miss law (v2.3):** a destructuring pattern never hard-fails a
+run. Destructuring a non-container (or null) binds all its names to null with
+one note; a missing element/key binds null for that piece only; extra elements
+are dropped with a note. `*rest` on an exhausted list binds `[]`.
+
 ## 6. Expressions (precedence low → high)
 
 1. `cond ? a : b` — ternary, right-associative, lowest precedence
 2. `or` (`||`) — short-circuits, returns operand value (`a or b` → a if truthy else b)
 3. `and` (`&&`) — same semantics
+3.5 `a ?? b` (v2.3) — null coalescing: sits between `or` and `and`
+   (`a or b ?? c` reads `a or (b ?? c)`); short-circuits; coalesces **Null
+   only** — falsy-but-non-null values (`0`, `""`, `[]`, `false`) pass through.
 4. unary `not` (`!`) — `not a == b` parses as `not (a == b)`
 5. comparisons `== != < <= > >=` and `in` (left-assoc, no chaining); `x in xs`: List membership, Str substring, Map key membership
 6. bitwise OR `|`
@@ -104,7 +127,10 @@ Name { B }                          # bare-name block: a gene definition with no
 11. `* / // %`
 12. unary `-` and `~` (bitwise not)
 13. `**` power — right-associative, binds tighter than unary minus on its left
-14. postfix: call `f(x)`, index `a[i]`, member `a.k`, method call `a.k(args)`
+14. postfix: call `f(x)`, index `a[i]`, member `a.k`, method call `a.k(args)`,
+    and the null-safe forms `a?.k`, `a?.k(args)` (v2.3): a Null receiver yields
+    Null **silently** — no note; a non-Null receiver behaves exactly like `.`
+    (missing keys still note). Chains compose: `a?.b?.c`.
 15. primary: literal, ident, `(expr)`, list `[a, b]`, map `{k: v, "k2": v}`, lambda, `collect` (§7), `new Name(args)` (§7a)
 
 Member access on Map → key lookup (missing → Null + note). Methods (see §10) are native.
@@ -223,6 +249,10 @@ Resource ceilings (all raise catchable Stress):
 **Builtins — core:** `promote(*a)` (print, space-joined, returns null) · `len` · `push(l,v)` · `pop(l)` · `insert(l,i,v)` · `remove(l,i)` · `keys(m)` · `values(m)` · `has(m,k)` · `del(m,k)` · `range(a, b?, step?)` (returns List) · `str` · `num` (fails → 0 + note) · `type` (`null bool int float str list map gene native sequence`, or the phenotype name for instances) · `abs min max sum` · `floor(x)` `ceil(x)` (→ Int) · `sqrt(x)` `pow(b, e)` (→ Float) · `clock()` (monotonic seconds, float) · `now()` (monotonic seconds, float — the same high-resolution timer under a briefer name) · `exit(n?)` (capability-gated, sec-r2: kills the host process, so it is default-deny — grant with `--allow-exit` or `.cell allow.exit = true`) · `assert(c, msg?)` · `codon(s)` (0–100 style score of an identifier) · `distance(a,b)` (edit distance, C++ bit-parallel kernel; 10M-cell ceiling and a 64 KiB per-operand cap — over-budget pairs never win a nearest-match contest) · `similar(a,b,maxd?)` (bool) · `transcribe(dna)` · `translate(rna)` (stops at stop codon) · `reverse_complement(dna)` · `gc_content(dna)` (0–100) · `find_orf(dna)` (list of ORF proteins) · `memory()` (map `arena_bytes, interns, allocs` from the in-process symbol table) · `methyl(key, default?)`.
 
 **Builtins — randomness and dynamic dispatch:** `random()` (float in [0,1)) · `random(n)` (int in [0,n)) · `randomize(seed?)` (deterministic xorshift state, identical in both implementations) · `chr(i)` · `ord(c)` · `argv()` (List of the arguments after the script path) · `sleep(ms)` (≤ 60,000 ms) · `call(name_or_gene, args_list)` (dynamic dispatch — resolves builtins, named genes, or gene values).
+
+**Builtins — iteration and numeric (v2.3):** `enumerate(x)` (List of `[i, v]` pairs; List or Str) · `zip(a, b)` (List of `[va, vb]` pairs, min length) · `sorted(l, cmp?)` (new list; same comparator contract as `.sort` — cmp true when a belongs before b — or the default mixed-type order) · `reversed(l)` (new list) · `any(l)` / `all(l)` (truthiness; empty → `false` / `true`) · `first(l)` / `last(l)` (element or char; empty → Null + note) · `take(l, n)` / `drop(l, n)` (clamped slices; List or Str) · `unique(l)` (deep-equality dedup, first occurrence kept) · `flatten(l)` (one level) · `chunk(l, n)` (size-n groups, last partial; n ≤ 0 → note) · `round(x, d?)` (d omitted/0 → Int, else Float; **half away from zero** at the d-th decimal, computed in the same f64 formula in both implementations — `round(1.005, 2) == 1.0` because 1.005 is stored as 1.00499…) · `clamp(v, lo, hi)` (numbers; non-number → Null + note) · `divmod(a, b)` (`[q, r]` with the exact `//` and `%` semantics — floored, sign follows divisor). Wrong-type inputs return Null (or `false` for `any`/`all`) with a note, never a crash.
+
+**Safe accessors (v2.3):** `m.get(k, d?)` (Map; deep-equality key lookup; missing → default when given, else Null + note) · `l.get(i, d?)` (List; negative index from the end; out of range → default or Null + note) · `s.at(i, d?)` (Str char; same contract). The bare forms (`m.k`, `l[i]`) keep their existing behavior — `.get`/`.at` add an explicit default, they do not change any existing read.
 
 **Builtins — JSON:** `json_parse(s)` (→ value; nesting > 512 → Stress) · `json_str(v)`.
 
@@ -419,6 +449,6 @@ This specification is **Operon 2.2.0**. `operon version` prints the implementati
 
 ## 18. Verification status (what the shipped suite proves)
 
-- Proof frames: **50 files / 44 proofs / 654 assertions**, green on the Rust core and the Python oracle.
-- Differential harness (Rust core vs Python oracle, program-level stdout): **56 programs, all MATCH**, plus the oracle runs the same 44-proof suite (both implementations green, enforced in CI).
+- Proof frames: **54 files / 48 proofs / 745 assertions**, green on the Rust core and the Python oracle.
+- Differential harness (Rust core vs Python oracle, program-level stdout): **78 programs, all MATCH**, plus the oracle runs the same 48-proof suite (both implementations green, enforced in CI).
 - Playground smoke: expression-core subset in the browser, spec-aligned (unbound reads → null + note).
