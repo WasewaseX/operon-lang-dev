@@ -63,8 +63,8 @@ for f in "$DIR"/rt_p*.op; do
 done
 
 echo
-if [ -e /tmp/redteam-out-escape ]; then
-    echo "ESCAPE: /tmp/redteam-out-escape was created — sandbox breached"
+if [ -n "$(ls -A /tmp/redteam-out-escape 2>/dev/null)" ]; then
+    echo "ESCAPE: files were created inside /tmp/redteam-out-escape — sandbox breached"
     fail=$((fail+1))
 fi
 rm -f "$DIR/rt_evil_link" "$DIR/rt_wlink"; rm -rf "$DIR/rt_evildir"
