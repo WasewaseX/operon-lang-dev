@@ -154,9 +154,8 @@ pub fn choose_variant(interp: &Interp, sp: &SpliceDef) -> Option<(String, Arc<Ge
 
 // ------------------------------------------------------------ modules
 pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
-    if let Some(v) = interp.modules.get(path) {
-        return Ok(v.clone());
-    }
+    // cyclic re-entry FIRST (the placeholder below is also in the cache, so
+    // this check must precede the cache hit or the §19 note would be dead)
     if interp.loading.iter().any(|p| p == path) {
         // cyclic import: return the PLACEHOLDER map registered at load start.
         // When the loading module finishes, this same Rc<RefCell> is filled,
@@ -170,6 +169,9 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
             return Ok(v.clone());
         }
         return Ok(Value::Map(Rc::new(RefCell::new(Vec::new()))));
+    }
+    if let Some(v) = interp.modules.get(path) {
+        return Ok(v.clone());
     }
     let resolved = resolve_path(interp, path)?;
     // Module loading is a read, but of a runtime-managed tree: the

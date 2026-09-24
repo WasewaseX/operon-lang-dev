@@ -164,24 +164,31 @@ impl Caps {
         // non-existent target (create/write case): its parent chain
         // must resolve inside the grant
         for g in list {
-            if let Ok(rg) = std::fs::canonicalize(g) {
-                let rg_str = rg.to_string_lossy().replace('\\', "/");
-                let mut probe = std::path::PathBuf::from(path);
-                while probe.pop() {
-                    if let Ok(pp) = std::fs::canonicalize(&probe) {
-                        let pp_str = pp.to_string_lossy().replace('\\', "/");
-                        if pp_str == rg_str || pp_str.starts_with(&format!("{}/", rg_str)) {
-                            return true;
+            match std::fs::canonicalize(g) {
+                Ok(rg) => {
+                    let rg_str = rg.to_string_lossy().replace('\\', "/");
+                    let mut probe = std::path::PathBuf::from(path);
+                    while probe.pop() {
+                        if let Ok(pp) = std::fs::canonicalize(&probe) {
+                            let pp_str = pp.to_string_lossy().replace('\\', "/");
+                            if pp_str == rg_str || pp_str.starts_with(&format!("{}/", rg_str)) {
+                                return true;
+                            }
+                            break; // nearest existing ancestor checked
                         }
-                        break; // nearest existing ancestor checked
                     }
                 }
-            }
-            // lexical fallback for grants that do not exist on disk
-            let np = Self::norm_path(path);
-            let ng = Self::norm_path(g);
-            if !ng.is_empty() && (np == ng || np.starts_with(&format!("{}/", ng))) {
-                return true;
+                Err(_) => {
+                    // lexical fallback ONLY for grants that do not exist on
+                    // disk. A grant that exists but failed to cover an
+                    // existing canonicalized target must never be re-admitted
+                    // lexically — that is the symlink-escape hole (S4 NEW-1).
+                    let np = Self::norm_path(path);
+                    let ng = Self::norm_path(g);
+                    if !ng.is_empty() && (np == ng || np.starts_with(&format!("{}/", ng))) {
+                        return true;
+                    }
+                }
             }
         }
         false
@@ -310,6 +317,7 @@ impl Interp {
         if n.saturating_mul(s.len() as u64) > 512 * 1024 * 1024 {
             return Err(Stress::new("overflow", "repeat exceeds the 512 MiB string ceiling"));
         }
+        mem_charge(n.saturating_mul(s.len() as u64))?;
         Ok(Value::Str(s.repeat(n as usize)))
     }
 
@@ -755,13 +763,22 @@ impl Interp {
                     if *sec > 0.0 {
                         let counter = Arc::new(AtomicU64::new(0));
                         let c2 = counter.clone();
-                        let ms = (*sec * 1000.0) as u64;
-                        std::thread::spawn(move || loop {
+                        let ms = (*sec * 1000.0).clamp(1.0, 60_000.0) as u64;
+                        // timer goes through the thread budget (S4 NEW-5):
+                        // capped, guarded, and failure is a note — never a
+                        // bare uncapped spawn
+                        match crate::genes::spawn_worker(move || loop {
                             std::thread::sleep(std::time::Duration::from_millis(ms));
                             c2.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                        });
-                        self.repressi_atomic = Some(counter);
-                        self.note(0, 1, format!("repressilator oscillating every {} ms", ms));
+                        }) {
+                            Ok(()) => {
+                                self.repressi_atomic = Some(counter);
+                                self.note(0, 1, format!("repressilator oscillating every {} ms", ms));
+                            }
+                            Err(_) => {
+                                self.note(0, 4, "repressilator timer skipped: thread budget exhausted");
+                            }
+                        }
                     }
                 }
                 Ok(Flow::Norm)
@@ -1141,11 +1158,11 @@ impl Interp {
                 (Value::Int(a), Value::Float(b)) => Ok(Value::Float(*a as f64 + b)),
                 (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a + *b as f64)),
                 (Value::Str(a), Value::Str(b)) => {
-                    // allocation ceiling: unbounded concat doubling OOM-kills
-                    // the process outside the stress model — cap as overflow
+                    // per-op ceiling + aggregate allocation ceiling
                     if a.len().saturating_add(b.len()) > 512 * 1024 * 1024 {
                         return Err(Stress::new("overflow", "string concat exceeds the 512 MiB ceiling"));
                     }
+                    mem_charge(a.len() as u64 + b.len() as u64)?;
                     Ok(Value::Str(format!("{}{}", a, b)))
                 }
                 (Value::List(a), Value::List(b)) => {
@@ -2145,10 +2162,16 @@ impl Interp {
                 }
                 let counter = Arc::new(AtomicU64::new(0));
                 let c2 = counter.clone();
-                std::thread::spawn(move || loop {
+                match crate::genes::spawn_worker(move || loop {
                     std::thread::sleep(std::time::Duration::from_millis(ms));
                     c2.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                });
+                }) {
+                    Ok(()) => {}
+                    Err(_) => {
+                        self.note(0, 4, "repressilator timer skipped: thread budget exhausted");
+                        return Ok(Value::Bool(false));
+                    }
+                }
                 self.repressi_atomic = Some(counter);
                 self.note(0, 1, format!("repressilator oscillating every {} ms", ms));
                 Ok(Value::Bool(true))
@@ -2562,6 +2585,17 @@ impl Interp {
                 let body = args.get(1).map(|v| v.display()).unwrap_or_default();
                 self.caps.check(&self.caps.write, "write", &path)?;
                 let opened = std::fs::canonicalize(&path).unwrap_or_else(|_| std::path::PathBuf::from(&path));
+                // hardlink defense (parity with write_file — S4 NEW-3)
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::MetadataExt;
+                    if let Ok(m) = std::fs::metadata(&opened) {
+                        if m.nlink() > 1 {
+                            return Err(Stress::new("interference", format!(
+                                "append_file '{}': refused — path is a hardlink ({} links)", path, m.nlink())));
+                        }
+                    }
+                }
                 match std::fs::OpenOptions::new().create(true).append(true).open(&opened) {
                     Ok(mut f) => {
                         use std::io::Write;
@@ -3032,6 +3066,13 @@ impl Interp {
                 "len" => Ok(Value::Int(l.borrow().len() as i64)),
                 "push" => {
                     if let Some(v) = args.first() {
+                        // aggregate allocation ceiling (S4 NEW-2)
+                        let bytes = match v {
+                            Value::Str(x) => x.len() as u64 + 24,
+                            Value::List(x) => 8 * x.borrow().len() as u64 + 48,
+                            _ => 16,
+                        };
+                        mem_charge(bytes)?;
                         l.borrow_mut().push(v.clone());
                     }
                     Ok(Value::List(l.clone()))
@@ -3155,6 +3196,7 @@ pub fn serve_start(port: u16) -> Result<(), String> {
     let conns2 = conns.clone();
     let next2 = Arc::new(AtomicU64::new(1));
     const MAX_CONNECTIONS: usize = 256;
+    let tx2 = tx.clone();
     std::thread::spawn(move || {
         for stream in listener.incoming() {
             let mut stream = match stream {
@@ -3168,55 +3210,72 @@ pub fn serve_start(port: u16) -> Result<(), String> {
                 continue;
             }
             let conn = next2.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            // read the request head (and body if declared)
-            let mut buf = Vec::new();
-            let mut byte = [0u8; 1];
-            let mut head_end = None;
-            loop {
-                match stream.read(&mut byte) {
-                    Ok(0) => break,
-                    Ok(_) => {
-                        buf.push(byte[0]);
-                        if buf.len() >= 4 && &buf[buf.len() - 4..] == b"\r\n\r\n" {
-                            head_end = Some(buf.len());
-                            break;
-                        }
-                        if buf.len() > 64 * 1024 {
-                            break; // oversized head: caller sees no head terminator
-                        }
-                    }
-                    Err(_) => break,
+            // per-connection reader: a trickling client holds only its own
+            // thread (with its 10s timeout), never the accept loop (S4 fix 8)
+            let conns3 = conns2.clone();
+            let tx3 = tx2.clone();
+            let read_res = crate::genes::spawn_worker(move || {
+                let (head, body) = read_request_head(&mut stream);
+                let mut method = "GET".to_string();
+                let mut path = "/".to_string();
+                if let Some(l0) = head.lines().next() {
+                    let mut it = l0.split_whitespace();
+                    method = it.next().unwrap_or("GET").to_string();
+                    path = it.next().unwrap_or("/").to_string();
                 }
+                conns3.lock().ok().map(|mut c| c.insert(conn, stream));
+                let _ = tx3.send((conn, method, path, body));
+            });
+            if read_res.is_err() {
+                continue; // thread budget exhausted: drop the connection
             }
-            let head = String::from_utf8_lossy(&buf).to_string();
-            let mut body = String::new();
-            let mut method = "GET".into();
-            let mut path = "/".into();
-            if let Some(l0) = head.lines().next() {
-                let mut it = l0.split_whitespace();
-                method = it.next().unwrap_or("GET").to_string();
-                path = it.next().unwrap_or("/").to_string();
-            }
-            let clen = head
-                .to_ascii_lowercase()
-                .lines()
-                .find_map(|l| l.strip_prefix("content-length:").map(|v| v.trim().to_string()))
-                .and_then(|v| v.parse::<usize>().ok())
-                .unwrap_or(0);
-            if clen > 0 && clen <= 8 * 1024 * 1024 {
-                let mut rest = vec![0u8; clen];
-                if stream.read_exact(&mut rest).is_ok() {
-                    body = String::from_utf8_lossy(&rest).to_string();
-                }
-            }
-            let _ = head_end;
-            conns2.lock().ok().map(|mut c| c.insert(conn, stream));
-            let _ = tx.send((conn, method, path, body));
         }
     });
     *guard = Some(ServerState { rx, conns });
     Ok(())
 }
+
+/// Read one request head (+ declared body) from a stream.
+/// Returns (head, method-path-body-triple as raw strings pre-parsed here).
+fn read_request_head(
+    stream: &mut std::net::TcpStream,
+) -> (String, String) {
+    let mut buf = Vec::new();
+    let mut byte = [0u8; 1];
+    loop {
+        match stream.read(&mut byte) {
+            Ok(0) => break,
+            Ok(_) => {
+                buf.push(byte[0]);
+                if buf.len() >= 4 && &buf[buf.len() - 4..] == b"\r\n\r\n" {
+                    break;
+                }
+                if buf.len() > 64 * 1024 {
+                    break; // oversized head: caller sees no head terminator
+                }
+            }
+            Err(_) => break,
+        }
+    }
+    let head = String::from_utf8_lossy(&buf).to_string();
+    let clen = head
+        .to_ascii_lowercase()
+        .lines()
+        .find_map(|l| l.strip_prefix("content-length:").map(|v| v.trim().to_string()))
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(0);
+    let mut body = String::new();
+    if clen > 0 && clen <= 8 * 1024 * 1024 {
+        let mut rest = vec![0u8; clen];
+        if stream.read_exact(&mut rest).is_ok() {
+            body = String::from_utf8_lossy(&rest).to_string();
+        }
+    }
+    (head, body)
+}
+
+#[allow(dead_code)]
+
 
 pub fn recv_request() -> Option<(u64, String, String, String)> {
     let guard = SERVER.lock().ok()?;
@@ -3997,6 +4056,25 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "re_match", "re_find", "re_groups", "unix_time", "date_parts", "date_fmt",
     "call",
 ];
+
+// ---------------------------------------------------------------- memory
+// Aggregate allocation counter (monotonic per run). Per-op ceilings cap
+// single operations; this caps the SUM so `push(loop)` cannot walk RSS into
+// the allocator's abort. Charged on growth events: push/insert/concat/
+// repeat/range/json-parse. Ceiling 2 GiB, overridable with --mem-mb.
+static ALLOC_BYTES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+pub const ALLOC_CEILING: u64 = 2 * 1024 * 1024 * 1024;
+
+pub fn mem_charge(bytes: u64) -> Result<(), Stress> {
+    let prev = ALLOC_BYTES.fetch_add(bytes, std::sync::atomic::Ordering::Relaxed);
+    if prev.saturating_add(bytes) > ALLOC_CEILING {
+        return Err(Stress::new(
+            "overflow",
+            "aggregate allocation ceiling (2 GiB) exhausted for this run",
+        ));
+    }
+    Ok(())
+}
 
 // direct C kernel accessors for the memory() builtin
 pub fn unsafe_arena() -> usize {
