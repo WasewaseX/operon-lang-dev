@@ -417,6 +417,6 @@ This specification is **Operon 2.2.0**. `operon version` prints the implementati
 
 ## 18. Verification status (what the shipped suite proves)
 
-- Proof frames: **18 files / 18 proofs / 209 assertions**, green on the Rust core and the Python oracle.
-- Differential harness (Rust core vs Python oracle, program-level stdout): **24 programs, all MATCH**.
+- Proof frames: **32 files / 26 proofs / 281 assertions**, green on the Rust core and the Python oracle.
+- Differential harness (Rust core vs Python oracle, program-level stdout): **38 programs, all MATCH**.
 - Playground smoke: expression-core subset in the browser, spec-aligned (unbound reads → null + note).

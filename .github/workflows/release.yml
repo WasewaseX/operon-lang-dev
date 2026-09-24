@@ -34,7 +34,7 @@ jobs:
           - { os: windows-latest,   target: x86_64-pc-windows-msvc,    pkg: zip }
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v4.2.2 (SHA-pinned, sec-r1)
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -55,6 +55,7 @@ jobs:
           ST="operon-${V}-${{ matrix.target }}"
           mkdir -p "$ST"
           cp "target/${{ matrix.target }}/release/operon" "$ST/"
+          cp "target/${{ matrix.target }}/release/operon-ls" "$ST/" 2>/dev/null || cp target/release/operon-ls "$ST/"
           cp README.md LICENSE TUTORIAL.md "$ST/"
           cp -r std examples "$ST/"
           tar czf "$ST.tar.gz" "$ST"
