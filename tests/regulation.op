@@ -14,7 +14,7 @@ frame proof {
     let lv2 = grn_fire("toxin")
     assert(lv2.kinase < 0.9, "grn inhibition reduces")
 
-    # toggle bistability: exactly one on
+    # toggle latch: exactly one on
     toggle_on("activator")
     let st = toggle_state()
     assert(st.activator == true, "toggle on")
