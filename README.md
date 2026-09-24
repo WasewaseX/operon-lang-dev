@@ -173,9 +173,51 @@ operon build f.op   [--variant v] [-o out.op]     # bake splices, strip proofs
 operon profile f.op                               # per-gene calls, exclusive self-µs, flags, maturation, enhance candidates
 operon crispr f.op  (--knockout gene | --matrix) [--json]
 operon bench f.op   [--iters n]
-operon-ls                                         # stdio LSP seed: diagnostics + gene-signature hover (SPEC §15)
+operon-ls                                         # stdio LSP: diagnostics, hover, definition, symbols, completion, formatting (SPEC §15)
 operon version                                    # Operon 2.2.0 (rust-core, cpp-kernel) — banner matches SPEC 2.2.0
 ```
+
+## Connect your editor (operon-ls)
+
+`operon-ls` is a zero-dependency stdio language server shipped in every release archive (and in the Windows zip since lsp-r1). It wires the real Total Grammar parser and the `check` engine into your editor — the same diagnostics you get from `operon check`, no second implementation:
+
+- **Diagnostics on open/change** — parse notes per Total Grammar rung (canonical → hint, synonym → info, wobble → warning, fallback → error) plus phantom-call detection that resolves `use`d modules **independently of the launch directory** (document-relative → CWD → `std/` → exe-relative `std/`).
+- **Hover** — gene/seq signatures with regulation marks (`@acetylate`, `@methylate`, `@m6a`, `enhance`), splice variant tables, builtin signatures.
+- **Go-to-definition** for genes, sequences, and splice roots.
+- **Document symbols** — the file's callable inventory in the outline view.
+- **Completion** — in-file genes with signatures, builtins, keywords, top-level bindings.
+- **Formatting** — the same canonical formatter as `operon fmt`.
+
+Neovim (nvim-lspconfig, any version ≥ 0.8):
+
+```lua
+vim.lsp.start({
+  name = 'operon-ls',
+  cmd = { 'operon-ls' },
+  filetypes = { 'operon' },
+})
+```
+
+VS Code (minimal client via any LSP client extension, e.g. "LSP Support"):
+
+```json
+{ "operon-ls": { "command": "operon-ls", "args": [], "languages": ["operon"] } }
+```
+
+Helix (`~/.config/helix/languages.toml`):
+
+```toml
+[[language]]
+name = "operon"
+scope = "source.operon"
+file-types = ["op"]
+language-servers = ["operon-ls"]
+
+[language-server.operon-ls]
+command = "operon-ls"
+```
+
+Ranged (incremental) edits are ignored by design while `textDocumentSync = 1` (full-text) is advertised — well-behaved editors always send full text on change.
 
 ## Build from source
 

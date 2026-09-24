@@ -13,6 +13,8 @@
 use crate::ast::{Note, Stmt};
 use crate::tools::check_source;
 use crate::value::Value;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Diagnostic {
@@ -175,6 +177,13 @@ fn pick_span(line: &str, target: Option<&str>) -> (usize, usize) {
 /// Analyze an editor buffer: parse notes + check-engine phantoms as
 /// diagnostics; collect the gene/splice tables for hover.
 pub fn analyze(src: &str) -> LsDoc {
+    analyze_doc(src, None)
+}
+
+/// lsp-r1 (P0): analyze with the document's own directory as the first
+/// `use`-module search base — editors launch servers from arbitrary CWDs,
+/// and module resolution must not depend on the process CWD.
+pub fn analyze_doc(src: &str, base_dir: Option<&str>) -> LsDoc {
     let mut doc = LsDoc::default();
     let prog = crate::parser::parse(src);
     doc.diagnostics = prog
@@ -219,7 +228,7 @@ pub fn analyze(src: &str) -> LsDoc {
     }
 
     // phantoms from the same engine `operon check` uses (defined-vs-called)
-    let (rep, _) = check_source(src, false);
+    let (rep, _) = check_source(src, false, base_dir);
     for p in &rep.phantoms {
         // underline the first bare occurrence of the name
         let mut diag = Diagnostic {
@@ -312,6 +321,166 @@ active variant (selection: .cell > CLI > @m6a > first declared).{}",
     }
 
     None
+}
+
+/// lsp-r1: textDocument/definition — the location of the definition of the
+/// word under the cursor. Returns (line, col, len), 0-based line, of the
+/// `gene NAME` / `seq NAME` / `splice NAME` site. Builtins and unknown
+/// words resolve to None (the editor keeps the cursor).
+pub fn definition(
+    src: &str,
+    doc: &LsDoc,
+    line0: usize,
+    col0: usize,
+) -> Option<(usize, usize, usize)> {
+    let line = src.lines().nth(line0)?;
+    let (_, word) = word_at(line, col0)?;
+    let kind = if doc
+        .genes
+        .iter()
+        .find(|g| g.name == word)
+        .map(|g| g.seq)
+        .unwrap_or(false)
+    {
+        "seq"
+    } else if doc.genes.iter().any(|g| g.name == word) {
+        "gene"
+    } else if doc.splices.iter().any(|s| s.root == word) {
+        "splice"
+    } else {
+        return None;
+    };
+    let dl = def_line(src, kind, &word)?;
+    let text = src.lines().nth(dl)?;
+    let col = text
+        .find(&word)
+        .map(|p| text[..p].chars().count())
+        .unwrap_or(0);
+    Some((dl, col, word.chars().count()))
+}
+
+/// lsp-r1: textDocument/documentSymbol — the file's callable inventory
+/// (genes, sequences, splices) as LSP DocumentSymbol values. Data the
+/// analyze() pass already collects; no second parse.
+pub fn document_symbols(src: &str, doc: &LsDoc) -> Value {
+    let sym = |name: String, detail: &str, line: usize| {
+        let line_text = src.lines().nth(line).unwrap_or("");
+        let col = line_text
+            .find(&name)
+            .map(|p| line_text[..p].chars().count())
+            .unwrap_or(0);
+        let len = name.chars().count();
+        mapv(vec![
+            ("name", Value::Str(name)),
+            ("kind", Value::Int(12)), // LSP SymbolKind.Function
+            ("range", range_value(line, 0, line_text.chars().count())),
+            ("selectionRange", range_value(line, col, len)),
+            ("detail", Value::Str(detail.into())),
+        ])
+    };
+    let mut items: Vec<Value> = Vec::new();
+    for g in &doc.genes {
+        let kind = if g.seq { "seq" } else { "gene" };
+        let line = def_line(src, kind, &g.name).unwrap_or(0);
+        items.push(sym(
+            format!("{}({})", g.name, g.params.join(", ")),
+            kind,
+            line,
+        ));
+    }
+    for sp in &doc.splices {
+        let line = def_line(src, "splice", &sp.root).unwrap_or(0);
+        items.push(sym(
+            format!("splice {} {{ {} }}", sp.root, sp.variants.join(", ")),
+            "splice",
+            line,
+        ));
+    }
+    Value::List(Rc::new(RefCell::new(items)))
+}
+
+/// lsp-r1: textDocument/completion — a flat, editor-filtered inventory:
+/// in-file genes/splices (with signatures), builtins, keywords, and
+/// top-level bindings. Kind codes: 3 = Function, 14 = Keyword, 6 = Variable.
+pub fn completions(src: &str, doc: &LsDoc) -> Vec<Value> {
+    let mut items: Vec<Value> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let push = |label: String,
+                kind: i64,
+                detail: String,
+                seen: &mut std::collections::HashSet<String>,
+                items: &mut Vec<Value>| {
+        if seen.insert(label.clone()) {
+            items.push(mapv(vec![
+                ("label", Value::Str(label)),
+                ("kind", Value::Int(kind)),
+                ("detail", Value::Str(detail)),
+            ]));
+        }
+    };
+    for g in &doc.genes {
+        let kind = if g.seq { "seq" } else { "gene" };
+        let mut marks = String::new();
+        if g.acetylate {
+            marks.push_str(" @acetylate");
+        }
+        if g.methylate {
+            marks.push_str(" @methylate");
+        }
+        if g.m6a {
+            marks.push_str(" @m6a");
+        }
+        push(
+            g.name.clone(),
+            3,
+            format!("{} {}({}){}", kind, g.name, g.params.join(", "), marks),
+            &mut seen,
+            &mut items,
+        );
+    }
+    for sp in &doc.splices {
+        push(
+            sp.root.clone(),
+            3,
+            format!("splice {} {{ {} }}", sp.root, sp.variants.join(", ")),
+            &mut seen,
+            &mut items,
+        );
+    }
+    // top-level bindings (v1: file-level lets — gene bodies come with the
+    // AST-indexed completion pass; the editor filters client-side anyway)
+    let prog = crate::parser::parse(src);
+    for st in &prog.stmts {
+        if let Stmt::Let(name, _) = st {
+            push(name.clone(), 6, "let binding".into(), &mut seen, &mut items);
+        }
+    }
+    for b in crate::interp::BUILTIN_NAMES {
+        push(
+            (*b).to_string(),
+            3,
+            "built-in gene (SPEC §10)".into(),
+            &mut seen,
+            &mut items,
+        );
+    }
+    for k in crate::parser::KEYWORDS {
+        push(
+            (*k).to_string(),
+            14,
+            "keyword".into(),
+            &mut seen,
+            &mut items,
+        );
+    }
+    items
+}
+
+/// lsp-r1: textDocument/formatting — the same canonical formatter `operon fmt`
+/// uses, applied to the buffer. Returns the full-document replacement text.
+pub fn format_text(src: &str) -> Option<String> {
+    let prog = crate::parser::parse(src);
+    Some(crate::tools::format_program(&prog))
 }
 
 /// Serialize diagnostics as an LSP publishDiagnostics params Value.
