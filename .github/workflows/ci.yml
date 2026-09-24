@@ -36,6 +36,8 @@ jobs:
         run: ./bin/operon test tests/
       - name: Differential harness (Rust core vs Python oracle)
         run: python3 bootstrap/harness.py
+      - name: LSP seed smoke (operon-ls stdio session)
+        run: python3 tests/lsp_smoke.py
       - name: Playground smoke
         run: node web/playground/smoke.js
       - name: Stack report
