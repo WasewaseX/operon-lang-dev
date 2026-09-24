@@ -30,7 +30,7 @@ jobs:
           ar rcs build/liboperon_rt.a build/operon_rt.o build/codon_kernel.o
           gcc -O1 -std=c17 -fsanitize=address,undefined tests/smoke_runtime.c build/liboperon_rt.a -lstdc++ -lm -o /tmp/operon_smoke
           /tmp/operon_smoke
-      - name: Proof suite (compat path: ./bin/operon test tests/)
+      - name: Proof suite (compat path bin/operon)
         run: ./bin/operon test tests/
       - name: Differential harness (Rust core vs Python oracle)
         run: python3 bootstrap/harness.py
