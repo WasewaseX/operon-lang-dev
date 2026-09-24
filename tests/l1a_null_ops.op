@@ -1,0 +1,46 @@
+# L1a: ?? (null coalescing) + ?. (optional chaining) + safe accessors
+# contract: ?? coalesces Null ONLY (falsy values pass through); ?. returns
+# Null silently for a Null receiver; missing keys on non-null receivers keep
+# the standard note. `.get`/`.at` add explicit defaults.
+frame proof {
+    let m = {a: 1, b: 2}
+    let n = null
+    assert((n ?? "fb") == "fb")
+    assert((m.a ?? "fb") == 1)
+    assert((0 ?? 5) == 0)
+    assert(("" ?? 5) == "")
+    assert((([] ?? 5) == []))
+    assert((false ?? true) == false)
+    assert(n?.x?.y == null)
+    assert(m?.a == 1)
+    assert(m?.missing == null)
+    assert(m?.a == 1)
+    assert(m.get("a") == 1)
+    assert(m.get("zz", 99) == 99)
+    assert(m.get("zz") == null)
+    let l = [10, 20, 30]
+    assert(l.get(0) == 10)
+    assert(l.get(-1) == 30)
+    assert(l.get(99, -1) == -1)
+    assert(l.get(99) == null)
+    assert("hello".at(1) == "e")
+    assert("hello".at(-1) == "o")
+    assert("hello".at(99, "x") == "x")
+    # ?? chains read left to right, right-assoc: a ?? (b ?? c)
+    let a = null
+    let b = null
+    assert((a ?? b ?? 3) == 3)
+    assert((a ?? 2 ?? 3) == 2)
+}
+main {
+    let m = {a: 1}
+    let n = null
+    promote(m?.a)
+    promote(m?.missing)
+    promote(n?.x?.y)
+    promote(n ?? "fallback")
+    promote(0 ?? 5)
+    promote(m.get("zz", 99))
+    promote([10, 20].get(9, -1))
+    promote("hi".at(0))
+}

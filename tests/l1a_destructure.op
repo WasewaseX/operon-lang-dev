@@ -1,0 +1,68 @@
+# L1a: destructuring (let / for), rest patterns, multi-assignment, swap
+# contract: patterns NEVER hard-fail (Total Grammar) — wrong container type
+# binds nulls with a note; a missing element/key binds null for that piece;
+# *rest captures the tail. Multi-assign evaluates all RHS before writing.
+frame proof {
+    let l = [10, 20, 30]
+    let [a, b, c] = l
+    assert(a == 10 and b == 20 and c == 30)
+    let [h, *rest] = l
+    assert(h == 10)
+    assert(rest == [20, 30])
+    let [p, q] = [1]
+    assert(p == 1 and q == null)
+    let m = {x: 1, y: 2}
+    let {x, y} = m
+    assert(x == 1 and y == 2)
+    let {zz} = m
+    assert(zz == null)
+    let [[i1, i2], s2] = [[1, 2], "s"]
+    assert(i1 == 1 and i2 == 2 and s2 == "s")
+    let [w1] = "text"
+    assert(w1 == "t")
+    let [bad1, bad2] = 42
+    assert(bad1 == null and bad2 == null)
+    let {mbad} = 42
+    assert(mbad == null)
+    let pairs = [[1, "one"], [2, "two"]]
+    let total = 0
+    for [num, name] in pairs {
+        total += num
+        assert(name == "one" or name == "two")
+    }
+    assert(total == 3)
+    for [k, v] in m.items() {
+        assert(m[k] == v)
+    }
+    let x, y = 1, 2
+    assert(x == 1 and y == 2)
+    x, y = y, x
+    assert(x == 2 and y == 1)
+    let acc = {n: 0}
+    let slot = [0]
+    acc.n, slot[0] = 7, 9
+    assert(acc.n == 7 and slot[0] == 9)
+    let d1, d2 = 5
+    assert(d1 == 5 and d2 == null)
+}
+main {
+    let l = [10, 20, 30]
+    let [a, *rest] = l
+    promote(a)
+    promote(rest)
+    let m = {x: 1, y: 2}
+    let {x, y} = m
+    promote("{x} {y}")
+    let [q1] = [1]
+    promote(q1)
+    let [b1] = 42
+    promote(b1)
+    for [k, v] in m.items() {
+        promote("{k}={v}")
+    }
+    let u, w = 1, 2
+    u, w = w, u
+    promote("{u} {w}")
+    let c1, c2 = 5
+    promote("{c1} {c2}")
+}
