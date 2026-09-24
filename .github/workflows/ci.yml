@@ -34,6 +34,8 @@ jobs:
           /tmp/operon_smoke
       - name: Proof suite (compat path bin/operon)
         run: ./bin/operon test tests/
+      - name: Red-team containment suite (59 payloads, R1-F5)
+        run: bash scripts/redteam.sh
       - name: Differential harness (Rust core vs Python oracle)
         run: python3 bootstrap/harness.py
       - name: LSP seed smoke (operon-ls stdio session)
