@@ -184,7 +184,7 @@ fn real_main() {
 
     match cmd.as_str() {
         "version" => {
-            println!("Operon 2.1.1 (rust-core, c-runtime, cpp-kernel)");
+            println!("Operon 2.2.0 (rust-core, c-runtime, cpp-kernel)");
         }
         "repl" => {
             repl();
@@ -552,11 +552,21 @@ fn real_main() {
 // ------------------------------------------------------------ repl
 fn repl() {
     use std::io::{BufRead, Write};
-    println!("Operon 2.1.1 repl — gene-expression shell (:help for commands, :quit to leave)");
-    let mut l = match tools::load_file("/dev/null", &Opts {
-        cell: None, variant: None, rna: None, entry: None, use_ires: false,
-        frame: None, args: Vec::new(), quiet: true, caps: interp::Caps::default(),
-    }) {
+    println!("Operon 2.2.0 repl — gene-expression shell (:help for commands, :quit to leave)");
+    let mut l = match tools::load_file(
+        "/dev/null",
+        &Opts {
+            cell: None,
+            variant: None,
+            rna: None,
+            entry: None,
+            use_ires: false,
+            frame: None,
+            args: Vec::new(),
+            quiet: true,
+            caps: interp::Caps::default(),
+        },
+    ) {
         Ok(l) => l,
         Err(_) => {
             // /dev/null missing (Windows): build an empty Loaded by hand
@@ -599,7 +609,9 @@ fn repl() {
                 let arg = cmd[first.len()..].trim();
                 match first {
                     "help" | "h" => {
-                        println!(":load f.op   read a file into this session (genes become callable)");
+                        println!(
+                            ":load f.op   read a file into this session (genes become callable)"
+                        );
                         println!(":proof [f]   run proof frames — this session's, or file f's");
                         println!(":genes       list genes defined so far");
                         println!(":vars        list top-level variables");
@@ -626,9 +638,15 @@ fn repl() {
                             repl_proof_session(&mut l, &session);
                         } else {
                             let opts = Opts {
-                                cell: None, variant: None, rna: None, entry: None,
-                                use_ires: false, frame: None, args: Vec::new(),
-                                quiet: true, caps: interp::Caps::default(),
+                                cell: None,
+                                variant: None,
+                                rna: None,
+                                entry: None,
+                                use_ires: false,
+                                frame: None,
+                                args: Vec::new(),
+                                quiet: true,
+                                caps: interp::Caps::default(),
                             };
                             let rep = tools::run_tests(&[arg.to_string()], &opts, false);
                             println!(
@@ -671,11 +689,20 @@ fn repl() {
                         }
                     }
                     "reset" => {
-                        l = match tools::load_file("/dev/null", &Opts {
-                            cell: None, variant: None, rna: None, entry: None,
-                            use_ires: false, frame: None, args: Vec::new(), quiet: true,
-                            caps: interp::Caps::default(),
-                        }) {
+                        l = match tools::load_file(
+                            "/dev/null",
+                            &Opts {
+                                cell: None,
+                                variant: None,
+                                rna: None,
+                                entry: None,
+                                use_ires: false,
+                                frame: None,
+                                args: Vec::new(),
+                                quiet: true,
+                                caps: interp::Caps::default(),
+                            },
+                        ) {
                             Ok(nl) => nl,
                             Err(_) => tools::Loaded {
                                 interp: interp::Interp::new(),
@@ -729,7 +756,9 @@ fn repl_proof_session(l: &mut tools::Loaded, session: &str) {
     }
     let prog = parser::parse(session);
     if prog.proofs.is_empty() {
-        println!("  no proof frames in this session — add one: frame proof {{ assert(1 == 1, \"ok\") }}");
+        println!(
+            "  no proof frames in this session — add one: frame proof {{ assert(1 == 1, \"ok\") }}"
+        );
         return;
     }
     let total = prog.proofs.len();
@@ -743,14 +772,20 @@ fn repl_proof_session(l: &mut tools::Loaded, session: &str) {
         match l.interp.exec_block(&genv, proof) {
             Ok(interp::Flow::Norm) => {
                 if l.interp.asserts_run == before {
-                    println!("  session proof #{}: FAILED (vacuous — no assertion exercised)", i + 1);
+                    println!(
+                        "  session proof #{}: FAILED (vacuous — no assertion exercised)",
+                        i + 1
+                    );
                     failed += 1;
                 } else {
                     passed += 1;
                 }
             }
             Ok(_) => {
-                println!("  session proof #{}: FAILED (exited early — return/break inside proof)", i + 1);
+                println!(
+                    "  session proof #{}: FAILED (exited early — return/break inside proof)",
+                    i + 1
+                );
                 failed += 1;
             }
             Err(s) => {
@@ -839,7 +874,7 @@ fn repl_eval(l: &mut tools::Loaded, src: &str) {
 
 fn usage() {
     eprintln!(
-        "Operon 2.1.1 — the gene-expression language (Total Grammar)
+        "Operon 2.2.0 — the gene-expression language (Total Grammar)
 usage:
   operon run f.op [--entry g] [--variant v] [--cell c] [--rna r] [--frame name] [--ires] [--strict] [--quiet]
   operon check f.op [--nmd | --nmd=purge] [--json]

@@ -141,7 +141,7 @@ operon profile f.op                               # per-gene calls, exclusive se
 operon crispr f.op  (--knockout gene | --matrix) [--json]
 operon bench f.op   [--iters n]
 operon-ls                                         # stdio LSP seed: diagnostics + gene-signature hover (SPEC §15)
-operon version                                    # Operon 2.1.1 (rust-core, c-runtime, cpp-kernel) — banner matches SPEC 2.1.1
+operon version                                    # Operon 2.2.0 (rust-core, c-runtime, cpp-kernel) — banner matches SPEC 2.2.0
 ```
 
 ## Build from source
