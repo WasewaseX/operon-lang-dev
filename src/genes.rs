@@ -126,11 +126,13 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
     // ALWAYS importable (otherwise no `use` works under default-deny).
     // Imports that reach OUTSIDE those trees (arbitrary disk paths) require
     // an explicit read capability — a program cannot execute random files.
+    // canonicalized Windows paths carry backslashes: normalize both sides to
+    // forward slashes so prefix comparison is platform-neutral
     fn under(resolved: &str, root: &Option<String>) -> bool {
         match root {
             Some(r) => match std::fs::canonicalize(r) {
                 Ok(rc) => {
-                    let rs = rc.to_string_lossy().to_string();
+                    let rs = rc.to_string_lossy().replace('\\', "/");
                     resolved == rs || resolved.starts_with(&format!("{}/", rs))
                 }
                 Err(_) => false,
@@ -139,9 +141,11 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
         }
     }
     let rc_resolved = std::fs::canonicalize(&resolved)
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|_| resolved.clone());
-    let cwd = std::env::current_dir().ok().map(|p| p.to_string_lossy().to_string());
+        .map(|p| p.to_string_lossy().replace('\\', "/"))
+        .unwrap_or_else(|_| resolved.replace('\\', "/"));
+    let cwd = std::env::current_dir()
+        .ok()
+        .map(|p| p.to_string_lossy().replace('\\', "/"));
     let std_env = std::env::var("OPERON_STD").ok();
     let managed = under(&rc_resolved, &interp.base_dir)
         || under(&rc_resolved, &cwd)
