@@ -1,0 +1,17 @@
+# differential: splice variants, defaults, and @m6a selection (T2c)
+splice sized {
+    variant v(a, b = 10) {
+        return a + b
+    }
+}
+promote(sized(5))
+promote(sized(5, 20))
+splice pick {
+    variant first {
+        return 1
+    }
+    variant @m6a second {
+        return 2
+    }
+}
+promote(pick())
