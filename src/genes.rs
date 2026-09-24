@@ -1132,8 +1132,22 @@ pub fn join_task(interp: &mut Interp, id: i64, timeout_ms: Option<u64>) -> Resul
                     return Ok(Value::Null);
                 }
             },
-            None => match handle.rx.recv() {
+            None => match handle.rx.recv_timeout(std::time::Duration::from_secs(300)) {
+                // sec-r3 (re-audit #3): the unbounded join was a free host
+                // freeze — a worker looping `run("sleep", …)` kept the
+                // channel open for as long as its fuel lasted. The default
+                // join is now ceiling-bounded like the whole run (300 s):
+                // timed-out tasks stay joinable and join returns null.
                 Ok(pair) => Ok(pair),
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    interp.note(
+                        0,
+                        4,
+                        format!("join timeout (300000 ms ceiling) on task {}", id),
+                    );
+                    interp.tasks.insert(id, handle); // keep the task joinable later
+                    return Ok(Value::Null);
+                }
                 Err(_) => {
                     interp.note(0, 4, format!("task {} channel closed", id));
                     return Ok(Value::Null);
