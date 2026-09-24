@@ -778,6 +778,51 @@ pub fn snapshot_globals(interp: &Interp) -> Vec<(String, SnapVal)> {
     out
 }
 
+/// reg-r1 (regulation audit W1, severity HIGH): worker cells inherit the
+/// parent's REGULATION state — GRN edges + levels, methylation counters +
+/// threshold, toggle pairs, enhance marks. The old snapshot carried only
+/// env values, so `spawn()` silently ungated the entire regulation layer:
+/// a `@methylate`-silenced gene printed "chromatin repressed" WHILE it
+/// executed inside a worker, and toggle/GRN gates were inert in every
+/// cell. Least astonishment (D-008): a silenced gene stays silenced.
+#[derive(Clone)]
+pub struct RegulationSnap {
+    pub grn_edges: Vec<RegEdge>,
+    pub grn_levels: Vec<(String, f64)>,
+    pub toggles: Vec<(String, String, bool)>,
+    pub methyl_levels: Vec<(String, u32)>,
+    pub methyl_threshold: u32,
+    pub enhanced: Vec<String>,
+}
+
+pub fn snapshot_regulation(interp: &Interp) -> RegulationSnap {
+    RegulationSnap {
+        grn_edges: interp.grn_edges.clone(),
+        grn_levels: interp
+            .grn_levels
+            .iter()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect(),
+        toggles: interp.toggles.clone(),
+        methyl_levels: interp
+            .methyl_levels
+            .iter()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect(),
+        methyl_threshold: interp.methyl_threshold,
+        enhanced: interp.enhanced.clone(),
+    }
+}
+
+pub fn bind_regulation(ti: &mut Interp, s: &RegulationSnap) {
+    ti.grn_edges = s.grn_edges.clone();
+    ti.grn_levels = s.grn_levels.iter().cloned().collect();
+    ti.toggles = s.toggles.clone();
+    ti.methyl_levels = s.methyl_levels.iter().cloned().collect();
+    ti.methyl_threshold = s.methyl_threshold;
+    ti.enhanced = s.enhanced.clone();
+}
+
 pub fn bind_snapshot(env: &Rc<Env>, snap: &[(String, SnapVal)]) {
     for (name, sv) in snap {
         let v = match sv {
@@ -843,6 +888,7 @@ pub fn seq_start(
     def: Arc<GeneDef>,
     args: Vec<Value>,
     snap: Vec<(String, SnapVal)>,
+    reg: RegulationSnap,
     caps: crate::interp::Caps,
     fuel_pool: Option<Arc<AtomicI64>>,
 ) -> Result<Rc<RefCell<crate::value::SeqState>>, Stress> {
@@ -854,6 +900,7 @@ pub fn seq_start(
         ti.fuel_pool = fuel_pool;
         let genv = Env::new(None);
         bind_snapshot(&genv, &snap);
+        bind_regulation(&mut ti, &reg);
         ti.global = genv;
         ti.caps = host_caps; // worker cells inherit the host's grants
         let conv_args: Vec<Value> = send_args.iter().map(|a| arg_from_snap(a, &snap)).collect();
@@ -941,9 +988,11 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
         Value::Gene(_, Some(cl)) => snapshot_with_closure(interp, Some(cl)),
         _ => snapshot_globals(interp),
     };
+    let rsnap = snapshot_regulation(interp);
     let send_args: Vec<SnapArg> = args.iter().map(arg_to_snap).collect();
     let (tx, rx) = mpsc::channel::<(SendValue, Vec<Note>)>();
     let global_note = format!("[task {}]", name);
+    let task_name = name.clone();
     let host_caps = interp.caps.clone();
     let host_fuel = interp.fuel_pool.clone();
     spawn_worker(move || {
@@ -951,10 +1000,14 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
         ti.fuel_pool = host_fuel;
         let genv = Env::new(None);
         bind_snapshot(&genv, &snap);
-        ti.global = genv;
+        bind_regulation(&mut ti, &rsnap);
+        ti.global = genv.clone();
         ti.caps = host_caps; // worker cells inherit the host's grants
         let conv_args: Vec<Value> = send_args.iter().map(|a| arg_from_snap(a, &snap)).collect();
-        let result = ti.call_gene(def, None, conv_args);
+        // reg-r1: worker cells call through the SAME name-dispatch funnel as
+        // the host — call_named evaluates the toggle/methyl/GRN gates that a
+        // direct call_gene would bypass, so a repressed gene stays repressed
+        let result = ti.call_named(&genv, &task_name, conv_args);
         let (rv, notes) = match result {
             Ok(v) => (to_send(&v), ti.notes),
             Err(s) => (SendValue::Stress(s.kind, s.message), ti.notes),

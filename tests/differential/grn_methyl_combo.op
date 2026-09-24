@@ -1,18 +1,20 @@
-# differential: regulation gate + graded methylation (T2a + T2b)
+# differential: regulation gate + graded methylation (T2a + T2b), reg-r1 rewrite.
+# The audit (regulation W2) found the original a no-op: standalone @methylate
+# lines are rejected by the parser (marks must precede a gene definition) and
+# the threshold comment contradicted the edge (2, not 0.5). This version uses
+# only the canonical forms and asserts match the mechanics exactly.
 regulate {
-    src activates target threshold 2
+    src activates target threshold 1
 }
 gene src() { return 1 }
 gene target() { return "ran" }
-gene muted() { return "spoke" }
-@methylate muted
-@methylate muted
+@methylate gene muted() { return "v1" }
+@methylate gene muted() { return "v2" }
 gene main() {
-    promote(target())                    # below threshold -> null
+    promote(target())                    # src level 0.0 < 1 -> null
     grn_fire("src")
-    grn_fire("src")
-    promote(target())                    # level 1.0 >= 0.5 -> ran
-    promote(muted())                     # methyl level 2 < 3 -> spoke
-    @methylate muted
+    promote(target())                    # src level 1.0 >= 1 -> ran
+    promote(muted())                     # methyl level 2 < 3 -> spoke (v2)
+    @methylate gene muted() { return "v3" }
     promote(muted())                     # methyl level 3 >= 3 -> null
 }
