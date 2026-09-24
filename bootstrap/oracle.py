@@ -1729,6 +1729,7 @@ abs min max sum clock exit assert codon distance similar transcribe reverse_comp
 gc_content translate find_orf memory methyl methylate demethylate grn_set grn_get fingerprint toggle_on toggle_state repressi_next
 repressi_state repressi_start grn_fire grn_state spawn join floor ceil sqrt pow random
 randomize chr ord now sleep argv read_file write_file append_file exists file_size read_dir run
+fs_delete fs_rename fs_mkdir re_replace
 http_get serve recv_request send_response json_parse json_str env call items
 re_match re_find re_groups unix_time date_parts date_fmt
 enumerate zip sorted reversed any all first last take drop unique flatten chunk round clamp divmod""".split())
@@ -3558,6 +3559,20 @@ class Interp:
                 raise Stress("unfolded", f"regex: {e}")
             except RecursionError:
                 raise Stress("overflow", "regex backtracking exceeded 2M steps")
+        if name == "re_replace":
+            # dx-r6 mirror of the Rust implementation: global literal
+            # substitution (empty patterns behave like Python re.sub)
+            import re as _re
+            pat = args[0] if args else ""
+            subj = args[1] if len(args) > 1 else ""
+            repl = args[2] if len(args) > 2 else ""
+            try:
+                rx = _re.compile(pat)
+            except _re.error as e:
+                raise Stress("unfolded", f"regex: {e}")
+            # literal replacement: a callable repl treats the text as data
+            # (no \1 backref interpretation — mirrors the Rust implementation)
+            return rx.sub(lambda _m: repl, subj)
         if name == "unix_time":
             import time as _t
             return int(_t.time())
@@ -3666,6 +3681,38 @@ class Interp:
                 return sorted(os.listdir(path))
             except OSError as e:
                 raise Stress("missing", f"read_dir '{path}': {e}")
+        # ---- dx-r6: fs mutate ops (mirror of the Rust capability discipline)
+        if name == "fs_delete":
+            path = v_display(args[0]) if args else ""
+            self.cap_check("write", "write", path)
+            if os.path.islink(path):
+                raise Stress("interference", f"fs_delete '{path}': refused — path is a symlink")
+            try:
+                if os.path.isdir(path):
+                    os.rmdir(path)  # empty dirs only: no recursive bombs
+                else:
+                    os.remove(path)
+                return True
+            except OSError as e:
+                raise Stress("missing", f"fs_delete '{path}': {e}")
+        if name == "fs_rename":
+            src = v_display(args[0]) if args else ""
+            dst = v_display(args[1]) if len(args) > 1 else ""
+            self.cap_check("write", "write", src)
+            self.cap_check("write", "write", dst)
+            try:
+                os.rename(src, dst)
+                return True
+            except OSError as e:
+                raise Stress("missing", f"fs_rename '{src}' -> '{dst}': {e}")
+        if name == "fs_mkdir":
+            path = v_display(args[0]) if args else ""
+            self.cap_check("write", "write", path)
+            try:
+                os.makedirs(path, exist_ok=True)
+                return True
+            except OSError as e:
+                raise Stress("missing", f"fs_mkdir '{path}': {e}")
         # ---- process / net (capability-gated)
         if name == "run":
             prog = v_display(args[0]) if args else ""

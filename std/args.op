@@ -4,6 +4,13 @@
 # real command line is available as the `argv()` builtin — pass it straight
 # in: `args_value(argv(), "out", "a.out")`.
 #
+# Reaching the program's own flags (dx-r6): the host CLI fails loudly on
+# unknown --flags BEFORE the script path (typo guard), so pass program
+# flags after the POSIX `--` separator:
+#   operon run app.op -- --key value --mode=fast
+# Everything after `--` lands in argv() verbatim; single-dash flags and
+# positionals pass through with or without it.
+#
 # Convention (the usual CLI shapes):
 #   --flag              boolean flag (args_flag -> true)
 #   --key value         value is the NEXT item (args_value)

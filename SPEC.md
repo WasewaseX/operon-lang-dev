@@ -217,7 +217,7 @@ stress missing { ... } rescue { ... }    # kind filter: only catches `missing`
 
 ## 9b. Security — the capability sandbox
 
-The runtime is **default-deny**: a program is an organism in a culture flask, and nothing outside the flask exists until the operator grants it. The builtins `read_file`, `write_file`, `append_file`, `exists`, `read_dir`, `file_size`, `run`, `http_get`, `serve`, `env`, and `exit` raise catchable Stress `interference` when no grant covers the access — RNA-interference: the cell's antiviral machinery silences the operation instead of crashing. `recv_request`/`send_response` poll a queue that only `serve` fills, so they are inert without a granted server.
+The runtime is **default-deny**: a program is an organism in a culture flask, and nothing outside the flask exists until the operator grants it. The builtins `read_file`, `write_file`, `append_file`, `exists`, `read_dir`, `file_size`, `fs_delete`, `fs_rename`, `fs_mkdir`, `run`, `http_get`, `serve`, `env`, and `exit` raise catchable Stress `interference` when no grant covers the access — RNA-interference: the cell's antiviral machinery silences the operation instead of crashing. `recv_request`/`send_response` poll a queue that only `serve` fills, so they are inert without a granted server.
 
 Grants (operator-side, CLI):
 
@@ -269,7 +269,7 @@ sec-r5 containment semantics worth stating plainly:
 
 **Builtins — JSON:** `json_parse(s)` (→ value; nesting > 512 → Stress) · `json_str(v)`.
 
-**Builtins — capability-gated (§9b; denied → Stress `interference`):** `read_file(p)` · `write_file(p, s)` · `append_file(p, s)` · `exists(p)` · `read_dir(p)` (List of names) · `run(prog, args?)` (map `code stdout stderr ok`; the child runs under a wall-clock timeout — `.cell run.timeout_ms`, default 10 s, clamped 1..300 000 — and the child's wall time is charged as fuel exactly like `sleep`; output may be truncated when a grandchild holds the pipe past the 250 ms drain grace) · `http_get(host, port?, path?)` (response body) · `serve(port?)` · `recv_request()` (map `conn method path body`, or null) · `send_response(conn, status?, ctype?, body?)` (status/ctype containing control characters are refused — no header injection) · `env(name)`.
+**Builtins — capability-gated (§9b; denied → Stress `interference`):** `read_file(p)` (regular files only — FIFOs/devices are refused `interference`, sec-r5) · `write_file(p, s)` · `append_file(p, s)` · `exists(p)` · `read_dir(p)` (List of names) · `fs_delete(p)` (files and EMPTY dirs; symlinks are refused outright — dx-r6) · `fs_rename(from, to)` (both paths need a write grant) · `fs_mkdir(p)` (create_dir_all semantics) · `run(prog, args?)` (map `code stdout stderr ok`; the child runs under a wall-clock timeout — `.cell run.timeout_ms`, default 10 s, clamped 1..300 000 — and the child's wall time is charged as fuel exactly like `sleep`; output may be truncated when a grandchild holds the pipe past the 250 ms drain grace) · `http_get(host, port?, path?)` (response body) · `serve(port?)` · `recv_request()` (map `conn method path body`, or null) · `send_response(conn, status?, ctype?, body?)` (status/ctype containing control characters are refused — no header injection) · `env(name)`.
 
 **Builtins — concurrency, telemetry, regulation:** `fingerprint()` (run telemetry, §14) · `spawn(f, args?)` → id · `join(id)` → value (default wait ceiling 300 s — timed-out tasks stay joinable, join returns null; explicit `join(id, ms)` unchanged) · `toggle_on(name)` · `toggle_state()` · `repressi_next()` · `repressi_state()` (fuel-charged: integrating new ring ticks costs 20 steps/tick) · `repressi_start(ms)` (one shared cancellable timer per run — restarting retires the old thread) · `grn_fire(name, decay?)` · `grn_state()` · `grn_set(name, v)` (write a node's level, clamped 0..1) · `grn_get(name)` (read a node's level) · `methylate(name)` / `demethylate(name)` (runtime methylation — same graded semantics as the `@methylate`/`@acetylate` marks: level +1 / saturating −1, gate applies at the next call; returns the gene's new level; keys are allocation-charged like any growth).
 
@@ -332,6 +332,7 @@ operon run f.op    [--entry g] [--variant v] [--cell c] [--rna r] [--frame name]
                    [--strict] [--quiet] [--fuel N]
                    [--allow-read p] [--allow-write p] [--allow-run prog]
                    [--allow-net host:port] [--allow-env var] [--allow-all]   # §9b
+                   [-- --args...]   # dx-r6: everything after `--` is program argv
 operon check f.op  [--nmd] [--nmd=purge] [--json]
 operon test [paths...]
 operon fmt f.op    [--write]        # canonical formatter; wobble-corrected output parses clean
@@ -428,7 +429,10 @@ operon version
 9. **Regex (zero-dependency).** `re_match(pattern, s)` — anchored prefix test.
    `re_find(pattern, s, start?)` — leftmost match as
    `{text, start, end, groups}` or null. `re_groups(pattern, s)` — capture
-   list or null. Syntax: literals, `.`, classes `[a-z0-9^]`, `\d \w \s \D \W
+   list or null. `re_replace(pattern, s, repl)` — global literal substitution
+   (no `$1` refs — captures come from `re_groups`; empty patterns are
+   rejected like `re_match`; the result is capped at 64 MiB and every scan
+   is step-charged — dx-r6). Syntax: literals, `.`, classes `[a-z0-9^]`, `\d \w \s \D \W
    \S`, `* + ? {m,n}`, alternation `|`, groups `( )` and `(?: )`, anchors
    `^ $`. The backtracking matcher has a hard 2M-step cap: catastrophic
    patterns raise catchable `overflow` (ReDoS-proof by construction). In
