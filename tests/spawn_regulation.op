@@ -1,0 +1,19 @@
+# reg-r1 regression (regulation audit W1): regulation state must survive
+# spawn()/sequences — a repressed off-side gene returns null on the host
+# AND inside every worker cell. Pre-fix (fail-pre verified): workers
+# inherited NO regulation state, so both asserts burn on old cores.
+gene a() {
+    return "A-ON-SIDE"
+}
+gene b() {
+    return "B-OFF-SIDE"
+}
+toggle a, b
+toggle_on("a")
+frame proof {
+    let host = b()
+    assert(host == null, "off-side gene is null on host")
+    let id = spawn(b, [])
+    let in_cell = join(id)
+    assert(in_cell == null, "off-side gene stays repressed in worker cells")
+}

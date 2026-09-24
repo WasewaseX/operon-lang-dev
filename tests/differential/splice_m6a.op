@@ -1,4 +1,7 @@
-# differential: splice variants, defaults, and @m6a selection (T2c)
+# differential: splice variants, defaults, and @m6a selection (T2c), reg-r1 fix.
+# The audit (regulation W6) found `variant @m6a second` exercises the wobble
+# path — the mark must PRECEDE the variant keyword (SPEC §11 wording). The
+# file now uses only the canonical form.
 splice sized {
     variant v(a, b = 10) {
         return a + b
@@ -10,7 +13,8 @@ splice pick {
     variant first {
         return 1
     }
-    variant @m6a second {
+    @m6a
+    variant second {
         return 2
     }
 }
