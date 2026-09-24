@@ -13,12 +13,57 @@ use crate::ast::*;
 use crate::lexer::{lex, Tok};
 
 const KEYWORDS: &[&str] = &[
-    "gene", "let", "if", "elif", "else", "while", "loop", "for", "in", "return", "break",
-    "continue", "match", "case", "use", "tad", "anchor", "export", "import", "enhance",
-    "silence", "stress", "rescue", "raise", "fate", "state", "regulate", "activates",
-    "inhibits", "strength", "toggle", "repressilator", "period", "frame", "proof", "guard",
-    "splice", "variant", "edit", "replace", "ires", "as", "collect", "enter",
-    "phenotype", "sequence", "yield", "new", "threshold", "from", "self",
+    "gene",
+    "let",
+    "if",
+    "elif",
+    "else",
+    "while",
+    "loop",
+    "for",
+    "in",
+    "return",
+    "break",
+    "continue",
+    "match",
+    "case",
+    "use",
+    "tad",
+    "anchor",
+    "export",
+    "import",
+    "enhance",
+    "silence",
+    "stress",
+    "rescue",
+    "raise",
+    "fate",
+    "state",
+    "regulate",
+    "activates",
+    "inhibits",
+    "strength",
+    "toggle",
+    "repressilator",
+    "period",
+    "frame",
+    "proof",
+    "guard",
+    "splice",
+    "variant",
+    "edit",
+    "replace",
+    "ires",
+    "as",
+    "collect",
+    "enter",
+    "phenotype",
+    "sequence",
+    "yield",
+    "new",
+    "threshold",
+    "from",
+    "self",
 ];
 
 const MARKS: &[&str] = &["acetylate", "methylate", "m6a"];
@@ -77,7 +122,12 @@ pub struct Parser {
 pub fn parse(src: &str) -> Program {
     let lexed = lex(src);
     let mut notes = lexed.notes;
-    let mut p = Parser { toks: lexed.toks, pos: 0, notes: Vec::new(), depth: 0 };
+    let mut p = Parser {
+        toks: lexed.toks,
+        pos: 0,
+        notes: Vec::new(),
+        depth: 0,
+    };
     let stmts = p.parse_program();
     notes.append(&mut p.notes);
     let mut prog = Program {
@@ -99,7 +149,11 @@ fn collect_structure(prog: &mut Program) {
     fn walk(stmts: &[Stmt], prog: &mut Program, current_tad: Option<&str>) {
         for s in stmts {
             match s {
-                Stmt::Frame { name, is_proof, body } => {
+                Stmt::Frame {
+                    name,
+                    is_proof,
+                    body,
+                } => {
                     if *is_proof {
                         prog.proofs.push(body.clone());
                     } else {
@@ -165,7 +219,11 @@ impl Parser {
         t
     }
     fn note(&mut self, line: usize, rung: u8, msg: impl Into<String>) {
-        self.notes.push(Note { line, rung, message: msg.into() });
+        self.notes.push(Note {
+            line,
+            rung,
+            message: msg.into(),
+        });
     }
     fn eat_newlines(&mut self) {
         while matches!(self.peek(), Tok::Newline | Tok::Semi) {
@@ -174,7 +232,10 @@ impl Parser {
     }
     /// Skip tokens to end of line (rung-4 recovery).
     fn skip_line(&mut self) {
-        while !matches!(self.peek(), Tok::Newline | Tok::Semi | Tok::RBrace | Tok::Eof) {
+        while !matches!(
+            self.peek(),
+            Tok::Newline | Tok::Semi | Tok::RBrace | Tok::Eof
+        ) {
             self.next();
         }
     }
@@ -231,9 +292,8 @@ impl Parser {
                 continue;
             }
             let before = self.pos;
-            match self.parse_stmt() {
-                Some(s) => out.push(s),
-                None => {}
+            if let Some(s) = self.parse_stmt() {
+                out.push(s);
             }
             if self.pos == before {
                 // no progress: hard fallback
@@ -267,7 +327,7 @@ impl Parser {
                     self.skip_line();
                     return None;
                 }
-                return Some(self.parse_gene_def(marks));
+                Some(self.parse_gene_def(marks))
             }
             Tok::Ident(w) => self.parse_word_stmt(&w),
             Tok::LBrace => {
@@ -279,7 +339,11 @@ impl Parser {
             }
             other => {
                 let line = self.line();
-                self.note(line, 4, format!("unexpected token '{:?}' at statement position", other));
+                self.note(
+                    line,
+                    4,
+                    format!("unexpected token '{:?}' at statement position", other),
+                );
                 self.next();
                 None
             }
@@ -314,10 +378,38 @@ impl Parser {
         // identifier that repairs to a NON-statement word (e.g. `n` → `in`)
         // keeps its original spelling — binding positions are never repaired.
         const ARMS: &[&str] = &[
-            "gene", "let", "if", "ifnot", "elif", "else", "while", "loop", "for", "return",
-            "break", "continue", "match", "use", "tad", "anchor", "enhance", "silence",
-            "stress", "rescue", "raise", "fate", "regulate", "toggle", "repressilator",
-            "frame", "splice", "edit", "ires", "phenotype", "sequence", "yield",
+            "gene",
+            "let",
+            "if",
+            "ifnot",
+            "elif",
+            "else",
+            "while",
+            "loop",
+            "for",
+            "return",
+            "break",
+            "continue",
+            "match",
+            "use",
+            "tad",
+            "anchor",
+            "enhance",
+            "silence",
+            "stress",
+            "rescue",
+            "raise",
+            "fate",
+            "regulate",
+            "toggle",
+            "repressilator",
+            "frame",
+            "splice",
+            "edit",
+            "ires",
+            "phenotype",
+            "sequence",
+            "yield",
         ];
         let mut word = w.to_string();
         // Expression-head detection: `i += 1`, `x = 2`, `f(...)`, `a[0]`,
@@ -342,7 +434,11 @@ impl Parser {
             if let Some(canon) = synonym(&word) {
                 if ARMS.contains(&canon) {
                     let line = self.line();
-                    self.note(line, 2, format!("synonym '{}' repaired to '{}'", word, canon));
+                    self.note(
+                        line,
+                        2,
+                        format!("synonym '{}' repaired to '{}'", word, canon),
+                    );
                     word = canon.to_string();
                 }
             } else if let Some(canon) = wobble_keyword(&word) {
@@ -423,7 +519,11 @@ impl Parser {
                 let name = self.expect_ident()?;
                 if !self.expect_kw("in") {
                     let line = self.line();
-                    self.note(line, 4, format!("'for {}' missing 'in'; iterating null", name));
+                    self.note(
+                        line,
+                        4,
+                        format!("'for {}' missing 'in'; iterating null", name),
+                    );
                 }
                 let iter = self.parse_expr();
                 let body = self.parse_block().unwrap_or_default();
@@ -550,7 +650,13 @@ impl Parser {
             "stress" => {
                 self.next();
                 let kind = if let Tok::Ident(w) = self.peek().clone() {
-                    if !is_canonical(&w) || w == "missing" || w == "unfolded" || w == "overflow" || w == "burned" || w == "any" {
+                    if !is_canonical(&w)
+                        || w == "missing"
+                        || w == "unfolded"
+                        || w == "overflow"
+                        || w == "burned"
+                        || w == "any"
+                    {
                         // only treat as kind if followed by a block
                         if matches!(&self.toks[self.pos + 1].0, Tok::LBrace) {
                             self.next();
@@ -628,10 +734,18 @@ impl Parser {
                                 self.note(line, 4, "fate block auto-closed");
                                 break;
                             }
-                            Tok::Ident(w) if w == "state" || synonym(&w) == Some("state") || crate::ffi::edit_distance(&w, "state") <= 1 => {
+                            Tok::Ident(w)
+                                if w == "state"
+                                    || synonym(&w) == Some("state")
+                                    || crate::ffi::edit_distance(&w, "state") <= 1 =>
+                            {
                                 if w != "state" {
                                     let line = self.line();
-                                    self.note(line, 3, format!("wobble: '{}' repaired to 'state'", w));
+                                    self.note(
+                                        line,
+                                        3,
+                                        format!("wobble: '{}' repaired to 'state'", w),
+                                    );
                                 }
                                 self.next();
                                 let from = self.expect_ident().unwrap_or_default();
@@ -648,10 +762,16 @@ impl Parser {
                                 states.push((from, targets));
                                 self.end_stmt();
                             }
-                            Tok::Ident(w) if w == "enter" || crate::ffi::edit_distance(&w, "enter") <= 1 => {
+                            Tok::Ident(w)
+                                if w == "enter" || crate::ffi::edit_distance(&w, "enter") <= 1 =>
+                            {
                                 if w != "enter" {
                                     let line = self.line();
-                                    self.note(line, 3, format!("wobble: '{}' repaired to 'enter'", w));
+                                    self.note(
+                                        line,
+                                        3,
+                                        format!("wobble: '{}' repaired to 'enter'", w),
+                                    );
                                 }
                                 self.next();
                                 enter = Some(self.expect_ident().unwrap_or_default());
@@ -666,7 +786,11 @@ impl Parser {
                     }
                 }
                 let fname = name.clone();
-                Some(Stmt::Fate(std::sync::Arc::new(FateDef { name: fname, states, enter })))
+                Some(Stmt::Fate(std::sync::Arc::new(FateDef {
+                    name: fname,
+                    states,
+                    enter,
+                })))
             }
             "regulate" => {
                 self.next();
@@ -707,7 +831,11 @@ impl Parser {
                                         }
                                         _ => {
                                             let line = self.line();
-                                            self.note(line, 4, "strength needs a number; using 1.0");
+                                            self.note(
+                                                line,
+                                                4,
+                                                "strength needs a number; using 1.0",
+                                            );
                                         }
                                     }
                                 }
@@ -728,7 +856,13 @@ impl Parser {
                                         }
                                     }
                                 }
-                                edges.push(RegEdge { from, to, strength, inhibit, threshold });
+                                edges.push(RegEdge {
+                                    from,
+                                    to,
+                                    strength,
+                                    inhibit,
+                                    threshold,
+                                });
                                 self.end_stmt();
                             }
                             _ => {
@@ -789,7 +923,11 @@ impl Parser {
                     self.expect_ident().unwrap_or_else(|| "frame".into())
                 };
                 let body = self.parse_block().unwrap_or_default();
-                Some(Stmt::Frame { name, is_proof, body })
+                Some(Stmt::Frame {
+                    name,
+                    is_proof,
+                    body,
+                })
             }
             "splice" => {
                 self.next();
@@ -806,7 +944,11 @@ impl Parser {
                             Tok::RBrace => {
                                 self.next();
                                 if !pending_marks.is_empty() {
-                                    self.note(self.line(), 4, "mark must precede 'variant' in splice block; skipped");
+                                    self.note(
+                                        self.line(),
+                                        4,
+                                        "mark must precede 'variant' in splice block; skipped",
+                                    );
                                 }
                                 break;
                             }
@@ -823,11 +965,17 @@ impl Parser {
                                 }
                             }
                             Tok::Ident(w)
-                                if w == "variant" || synonym(&w) == Some("variant") || crate::ffi::edit_distance(&w, "variant") <= 1 =>
+                                if w == "variant"
+                                    || synonym(&w) == Some("variant")
+                                    || crate::ffi::edit_distance(&w, "variant") <= 1 =>
                             {
                                 if w != "variant" {
                                     let line = self.line();
-                                    self.note(line, 3, format!("wobble: '{}' repaired to 'variant'", w));
+                                    self.note(
+                                        line,
+                                        3,
+                                        format!("wobble: '{}' repaired to 'variant'", w),
+                                    );
                                 }
                                 self.next();
                                 let vname = self.expect_ident().unwrap_or_else(|| "v".into());
@@ -865,7 +1013,11 @@ impl Parser {
                                             self.next();
                                         }
                                         if self.pos == before {
-                                            self.note(self.line(), 4, "unclosed variant parameter list; auto-closed");
+                                            self.note(
+                                                self.line(),
+                                                4,
+                                                "unclosed variant parameter list; auto-closed",
+                                            );
                                             break;
                                         }
                                     }
@@ -895,9 +1047,16 @@ impl Parser {
                 }
                 if variants.is_empty() {
                     let line = self.line();
-                    self.note(line, 4, format!("splice '{}' has no variants; binds null", root));
+                    self.note(
+                        line,
+                        4,
+                        format!("splice '{}' has no variants; binds null", root),
+                    );
                 }
-                Some(Stmt::Splice(std::sync::Arc::new(SpliceDef { root, variants })))
+                Some(Stmt::Splice(std::sync::Arc::new(SpliceDef {
+                    root,
+                    variants,
+                })))
             }
             "edit" => {
                 self.next();
@@ -989,11 +1148,17 @@ impl Parser {
                                 if let Some(mark) = self.repair_mark(m, line) {
                                     let marks = vec![mark];
                                     if self.expect_kw("gene") {
-                                        if let Some(Stmt::Gene(g)) = Some(self.parse_gene_def(marks)) {
+                                        if let Some(Stmt::Gene(g)) =
+                                            Some(self.parse_gene_def(marks))
+                                        {
                                             methods.push(g);
                                         }
                                     } else {
-                                        self.note(line, 4, "mark inside phenotype must precede 'gene'; skipped");
+                                        self.note(
+                                            line,
+                                            4,
+                                            "mark inside phenotype must precede 'gene'; skipped",
+                                        );
                                         self.skip_line();
                                     }
                                 }
@@ -1001,7 +1166,11 @@ impl Parser {
                             Tok::Ident(w) if w == "gene" || synonym(&w) == Some("gene") => {
                                 if w != "gene" {
                                     let line = self.line();
-                                    self.note(line, 2, format!("synonym '{}' repaired to 'gene'", w));
+                                    self.note(
+                                        line,
+                                        2,
+                                        format!("synonym '{}' repaired to 'gene'", w),
+                                    );
                                 }
                                 self.next();
                                 if let Some(Stmt::Gene(g)) = Some(self.parse_gene_def(vec![])) {
@@ -1011,7 +1180,11 @@ impl Parser {
                             Tok::Ident(w) if w == "let" || synonym(&w) == Some("let") => {
                                 if w != "let" {
                                     let line = self.line();
-                                    self.note(line, 2, format!("synonym '{}' repaired to 'let'", w));
+                                    self.note(
+                                        line,
+                                        2,
+                                        format!("synonym '{}' repaired to 'let'", w),
+                                    );
                                 }
                                 self.next();
                                 let fname = self.expect_ident().unwrap_or_default();
@@ -1039,7 +1212,12 @@ impl Parser {
                     }
                 }
                 let pname = name.clone();
-                Some(Stmt::Pheno(std::sync::Arc::new(PhenoDef { name: pname, parent, fields, methods })))
+                Some(Stmt::Pheno(std::sync::Arc::new(PhenoDef {
+                    name: pname,
+                    parent,
+                    fields,
+                    methods,
+                })))
             }
             "sequence" => {
                 self.next();
@@ -1085,8 +1263,7 @@ impl Parser {
                                     if depth == 0 {
                                         j += 1;
                                         // skip newlines/semis between ) and {
-                                        while j < n
-                                            && matches!(toks[j].0, Tok::Newline | Tok::Semi)
+                                        while j < n && matches!(toks[j].0, Tok::Newline | Tok::Semi)
                                         {
                                             j += 1;
                                         }
@@ -1104,7 +1281,11 @@ impl Parser {
                 };
                 if !is_canonical(&word) && is_def {
                     let line = self.line();
-                    self.note(line, 4, format!("bare name block '{word}' treated as gene definition"));
+                    self.note(
+                        line,
+                        4,
+                        format!("bare name block '{word}' treated as gene definition"),
+                    );
                     self.next(); // consume the name
                     let mut params: Vec<(String, Option<Expr>)> = Vec::new();
                     if matches!(self.peek(), Tok::LParen) {
@@ -1205,7 +1386,11 @@ impl Parser {
             }
             other => {
                 let line = self.line();
-                self.note(line, 4, format!("expected a name, found '{:?}'; used '?'", other));
+                self.note(
+                    line,
+                    4,
+                    format!("expected a name, found '{:?}'; used '?'", other),
+                );
                 Some("?".to_string())
             }
         }
@@ -1260,9 +1445,7 @@ impl Parser {
                         let val = self.parse_expr();
                         self.end_stmt();
                         match e {
-                            Expr::Index(t, i) => {
-                                Some(Stmt::IndexAssign(*t, *i, None, val))
-                            }
+                            Expr::Index(t, i) => Some(Stmt::IndexAssign(*t, *i, None, val)),
                             Expr::Member(t, k) => Some(Stmt::MemberAssign(*t, k, None, val)),
                             other => {
                                 let line = self.line();
@@ -1275,7 +1458,11 @@ impl Parser {
                             }
                         }
                     }
-                    Tok::PlusEq | Tok::MinusEq | Tok::StarEq | Tok::SlashEq | Tok::DSlashEq
+                    Tok::PlusEq
+                    | Tok::MinusEq
+                    | Tok::StarEq
+                    | Tok::SlashEq
+                    | Tok::DSlashEq
                     | Tok::PercentEq => {
                         let op = match self.peek().clone() {
                             Tok::PlusEq => BinOp::Add,
@@ -1305,7 +1492,11 @@ impl Parser {
                             Tok::Newline | Tok::Semi | Tok::RBrace | Tok::Eof
                         ) {
                             let line = self.line();
-                            self.note(line, 4, "expression statement not terminated; rest of line skipped");
+                            self.note(
+                                line,
+                                4,
+                                "expression statement not terminated; rest of line skipped",
+                            );
                             self.skip_line();
                         }
                         self.end_stmt();
@@ -1402,7 +1593,16 @@ impl Parser {
             return Stmt::Gene(std::sync::Arc::new(def));
         }
         let body = self.parse_block().unwrap_or_default();
-        let def = GeneDef { name, params, guard, body, acetylate, methylate, m6a, seq: false };
+        let def = GeneDef {
+            name,
+            params,
+            guard,
+            body,
+            acetylate,
+            methylate,
+            m6a,
+            seq: false,
+        };
         Stmt::Gene(std::sync::Arc::new(def))
     }
 
@@ -1437,9 +1637,8 @@ impl Parser {
                 }
                 _ => {
                     let before = self.pos;
-                    match self.parse_stmt() {
-                        Some(s) => out.push(s),
-                        None => {}
+                    if let Some(s) = self.parse_stmt() {
+                        out.push(s);
                     }
                     if self.pos == before {
                         let line = self.line();
@@ -1474,14 +1673,9 @@ impl Parser {
     fn parse_or(&mut self) -> Expr {
         let mut left = self.parse_and();
         loop {
-            let is_or = self.at_kw("or")
-                || matches!(self.peek(), Tok::PipePipe);
+            let is_or = self.at_kw("or") || matches!(self.peek(), Tok::PipePipe);
             if is_or {
-                if self.at_kw("or") {
-                    self.next();
-                } else {
-                    self.next();
-                }
+                self.next();
                 let right = self.parse_and();
                 left = Expr::Binary(BinOp::Or, Box::new(left), Box::new(right));
             } else {
@@ -1756,7 +1950,11 @@ impl Parser {
                         }
                         other => {
                             let line = self.line();
-                            self.note(line, 4, format!("'.' followed by '{:?}'; member skipped", other));
+                            self.note(
+                                line,
+                                4,
+                                format!("'.' followed by '{:?}'; member skipped", other),
+                            );
                             break;
                         }
                     }
@@ -1927,7 +2125,11 @@ impl Parser {
                                     self.next();
                                 }
                                 if self.pos == before {
-                                    self.note(self.line(), 4, "unclosed constructor argument list; auto-closed");
+                                    self.note(
+                                        self.line(),
+                                        4,
+                                        "unclosed constructor argument list; auto-closed",
+                                    );
                                     break;
                                 }
                             }
@@ -1947,7 +2149,12 @@ impl Parser {
                         }
                         self.expect_kw("collect");
                         let body = self.parse_expr();
-                        Expr::Collect { var, iter: Box::new(iter), filter, body: Box::new(body) }
+                        Expr::Collect {
+                            var,
+                            iter: Box::new(iter),
+                            filter,
+                            body: Box::new(body),
+                        }
                     }
                     _ => {
                         self.next();
@@ -1960,7 +2167,10 @@ impl Parser {
                 self.note(
                     line,
                     4,
-                    format!("unexpected token '{:?}' in expression; null substituted", other),
+                    format!(
+                        "unexpected token '{:?}' in expression; null substituted",
+                        other
+                    ),
                 );
                 self.next();
                 Expr::Null
@@ -1979,7 +2189,9 @@ impl Parser {
                     Tok::RBrace => {
                         bal -= 1;
                         self.pos += 1;
-                        if bal == 0 { break; }
+                        if bal == 0 {
+                            break;
+                        }
                     }
                     _ => {}
                 }
@@ -2139,7 +2351,11 @@ impl Parser {
                         self.note(line, 4, "dangling '-' in pattern treated as wildcard");
                     }
                     let line = self.line();
-                    self.note(line, 4, format!("pattern '{:?}' treated as wildcard", other));
+                    self.note(
+                        line,
+                        4,
+                        format!("pattern '{:?}' treated as wildcard", other),
+                    );
                     self.next();
                     return MatchPat::Wild;
                 }
@@ -2160,5 +2376,10 @@ impl Parser {
 
 fn parse_snippet(src: &str) -> Parser {
     let lexed = lex(src);
-    Parser { toks: lexed.toks, pos: 0, notes: lexed.notes, depth: 0 }
+    Parser {
+        toks: lexed.toks,
+        pos: 0,
+        notes: lexed.notes,
+        depth: 0,
+    }
 }

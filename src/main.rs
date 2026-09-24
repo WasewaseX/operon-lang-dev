@@ -8,9 +8,9 @@ use operon::interp;
 use operon::parser;
 use operon::tools;
 
+use operon::ast::Stmt;
 use operon::die;
 use operon::tools::Opts;
-use operon::ast::Stmt;
 use operon::value::Value;
 
 fn main() {
@@ -219,7 +219,12 @@ fn real_main() {
                 }
             }
             tools::flush_notes(&l, opts.quiet);
-            let strict_cell = l.interp.cell.get("wobble.strict").map(|v| v == "true").unwrap_or(false);
+            let strict_cell = l
+                .interp
+                .cell
+                .get("wobble.strict")
+                .map(|v| v == "true")
+                .unwrap_or(false);
             if (strict || strict_cell) && l.interp.notes.iter().any(|n| n.rung >= 3) {
                 std::process::exit(3);
             }
@@ -234,7 +239,13 @@ fn real_main() {
                 let nmd_json: Vec<String> = rep
                     .nmd
                     .iter()
-                    .map(|(k, m)| format!("{{\"kind\":\"{}\",\"message\":\"{}\"}}", tools::json_escape(k), tools::json_escape(m)))
+                    .map(|(k, m)| {
+                        format!(
+                            "{{\"kind\":\"{}\",\"message\":\"{}\"}}",
+                            tools::json_escape(k),
+                            tools::json_escape(m)
+                        )
+                    })
                     .collect();
                 let ph_json: Vec<String> = rep
                     .phantoms
@@ -253,9 +264,15 @@ fn real_main() {
                     nmd_json.join(",")
                 );
             } else {
-                println!("operon check: {} — score {}/100 (grade {})", file, rep.score, rep.letter);
+                println!(
+                    "operon check: {} — score {}/100 (grade {})",
+                    file, rep.score, rep.letter
+                );
                 if rep.wobbles > 0 || rep.fallbacks > 0 {
-                    println!("  repairs: {} wobble, {} fallback", rep.wobbles, rep.fallbacks);
+                    println!(
+                        "  repairs: {} wobble, {} fallback",
+                        rep.wobbles, rep.fallbacks
+                    );
                 }
                 if !rep.phantoms.is_empty() {
                     println!("  phantom calls: {}", rep.phantoms.join(", "));
@@ -331,7 +348,11 @@ fn real_main() {
             if let Some(want) = &opts.variant {
                 for s in prog.stmts.iter_mut() {
                     if let Stmt::Splice(sp) = s {
-                        let found = sp.variants.iter().find(|(n, _)| n == want).map(|(n, d)| (n.clone(), d.clone()));
+                        let found = sp
+                            .variants
+                            .iter()
+                            .find(|(n, _)| n == want)
+                            .map(|(n, d)| (n.clone(), d.clone()));
                         if let Some((vname, d)) = found {
                             let sp_mut = std::sync::Arc::make_mut(sp);
                             sp_mut.variants = vec![(vname, d)];
@@ -340,7 +361,8 @@ fn real_main() {
                 }
             }
             // strip proof frames from the baked artifact
-            prog.stmts.retain(|s| !matches!(s, Stmt::Frame { is_proof: true, .. }));
+            prog.stmts
+                .retain(|s| !matches!(s, Stmt::Frame { is_proof: true, .. }));
             let out = tools::format_program(&prog);
             let dest = if outfile.is_empty() {
                 format!("{}.built.op", stem)
@@ -348,7 +370,12 @@ fn real_main() {
                 outfile.clone()
             };
             std::fs::write(&dest, out).expect("write failed");
-            eprintln!("build: {} → {} (variant: {})", file, dest, opts.variant.as_deref().unwrap_or("default"));
+            eprintln!(
+                "build: {} → {} (variant: {})",
+                file,
+                dest,
+                opts.variant.as_deref().unwrap_or("default")
+            );
         }
         "profile" => {
             let file = match positional.first() {
@@ -381,13 +408,23 @@ fn real_main() {
                         flags.push_str("repressed ");
                     }
                 }
-                println!("{:<24} {:>8} {:>12.1}  {}", name, calls, time, flags.trim_end());
+                println!(
+                    "{:<24} {:>8} {:>12.1}  {}",
+                    name,
+                    calls,
+                    time,
+                    flags.trim_end()
+                );
             }
             let fp = {
                 let total_defined = l.interp.defined_genes.len();
                 let mature = l.interp.call_counts.len().min(total_defined);
                 let nascent = total_defined.saturating_sub(mature);
-                let maturation = if total_defined > 0 { mature as f64 / total_defined as f64 } else { 0.0 };
+                let maturation = if total_defined > 0 {
+                    mature as f64 / total_defined as f64
+                } else {
+                    0.0
+                };
                 (mature, nascent, maturation)
             };
             println!(
@@ -399,7 +436,8 @@ fn real_main() {
             for g in &l.interp.defined_genes {
                 let calls = l.interp.call_counts.get(g).copied().unwrap_or(0);
                 // only genuinely hot genes (≥10% of the hottest) are candidates
-                if calls >= 1 && calls * 10 >= max_calls
+                if calls >= 1
+                    && calls * 10 >= max_calls
                     && !l.interp.enhanced.contains(g)
                     && g != "main"
                 {
@@ -407,7 +445,10 @@ fn real_main() {
                 }
             }
             if !suggestions.is_empty() {
-                println!("enhance candidates (hot but unannotated): {}", suggestions.join(", "));
+                println!(
+                    "enhance candidates (hot but unannotated): {}",
+                    suggestions.join(", ")
+                );
             }
             tools::flush_notes(&l, opts.quiet);
         }
@@ -435,15 +476,30 @@ fn real_main() {
                     let rep = tools::crispr(&file, &opts, t);
                     rows.push((t.clone(), rep.survivors, rep.proofs_total));
                 }
-                let essential: Vec<&String> = rows.iter().filter(|(_, s, t)| *s < *t).map(|(n, _, _)| n).collect();
+                let essential: Vec<&String> = rows
+                    .iter()
+                    .filter(|(_, s, t)| *s < *t)
+                    .map(|(n, _, _)| n)
+                    .collect();
                 for (name, survivors, total) in &rows {
-                    let tag = if total > survivors { "ESSENTIAL" } else { "dispensable" };
+                    let tag = if total > survivors {
+                        "ESSENTIAL"
+                    } else {
+                        "dispensable"
+                    };
                     println!("  {:<24} {}/{} survived  {}", name, survivors, total, tag);
                 }
                 if json {
                     let cells: Vec<String> = rows
                         .iter()
-                        .map(|(n, s, t)| format!("{{\"gene\":\"{}\",\"survivors\":{},\"proofs\":{}}}", tools::json_escape(n), s, t))
+                        .map(|(n, s, t)| {
+                            format!(
+                                "{{\"gene\":\"{}\",\"survivors\":{},\"proofs\":{}}}",
+                                tools::json_escape(n),
+                                s,
+                                t
+                            )
+                        })
                         .collect();
                     println!("{{\"matrix\":[{}]}}", cells.join(","));
                 } else if essential.is_empty() {
@@ -497,10 +553,20 @@ fn real_main() {
 fn repl() {
     use std::io::{BufRead, Write};
     println!("Operon 2.1.1 repl — gene-expression shell (type :quit to leave)");
-    let mut l = match tools::load_file("/dev/null", &Opts {
-        cell: None, variant: None, rna: None, entry: None, use_ires: false,
-        frame: None, args: Vec::new(), quiet: true, caps: interp::Caps::default(),
-    }) {
+    let mut l = match tools::load_file(
+        "/dev/null",
+        &Opts {
+            cell: None,
+            variant: None,
+            rna: None,
+            entry: None,
+            use_ires: false,
+            frame: None,
+            args: Vec::new(),
+            quiet: true,
+            caps: interp::Caps::default(),
+        },
+    ) {
         Ok(l) => l,
         Err(_) => {
             // /dev/null missing (Windows): build an empty Loaded by hand

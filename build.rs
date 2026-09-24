@@ -20,7 +20,8 @@ fn main() {
     // --- C++ codon kernel -------------------------------------------------
     // -fno-exceptions matches scripts/build.sh: the kernel never unwinds.
     let mut codon = cc::Build::new();
-    codon.file("runtime/codon_kernel.cpp")
+    codon
+        .file("runtime/codon_kernel.cpp")
         .cpp(true)
         .flag("-std=c++17")
         .flag("-fno-exceptions")

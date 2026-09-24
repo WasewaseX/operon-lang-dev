@@ -1,9 +1,9 @@
 //! value.rs — runtime values, display, truthiness, comparison, deep equality.
 
 use crate::ast::GeneDef;
+use std::cell::RefCell;
 use std::collections::HashSet;
 use std::rc::Rc;
-use std::cell::RefCell;
 use std::sync::Arc;
 
 pub type ListRef = Rc<RefCell<Vec<Value>>>;
@@ -38,13 +38,16 @@ pub enum Value {
 }
 
 pub struct Stress {
-    pub kind: String,   // unfolded | missing | overflow | burned | interference
+    pub kind: String, // unfolded | missing | overflow | burned | interference
     pub message: String,
 }
 
 impl Stress {
     pub fn new(kind: &str, message: impl Into<String>) -> Self {
-        Stress { kind: kind.to_string(), message: message.into() }
+        Stress {
+            kind: kind.to_string(),
+            message: message.into(),
+        }
     }
 }
 
@@ -108,8 +111,11 @@ impl Value {
                 if depth > 256 || !seen.insert(id) {
                     return "[...]".into();
                 }
-                let items: Vec<String> =
-                    l.borrow().iter().map(|v| v.repr_g(seen, depth + 1)).collect();
+                let items: Vec<String> = l
+                    .borrow()
+                    .iter()
+                    .map(|v| v.repr_g(seen, depth + 1))
+                    .collect();
                 seen.remove(&id);
                 format!("[{}]", items.join(", "))
             }
@@ -121,7 +127,13 @@ impl Value {
                 let items: Vec<String> = m
                     .borrow()
                     .iter()
-                    .map(|(k, v)| format!("{}: {}", key_repr_g(k, seen, depth), v.repr_g(seen, depth + 1)))
+                    .map(|(k, v)| {
+                        format!(
+                            "{}: {}",
+                            key_repr_g(k, seen, depth),
+                            v.repr_g(seen, depth + 1)
+                        )
+                    })
                     .collect();
                 seen.remove(&id);
                 format!("{{{}}}", items.join(", "))
@@ -155,21 +167,28 @@ impl Value {
             (Value::Bool(a), Value::Bool(b)) => a == b,
             (Value::Int(a), Value::Int(b)) => a == b,
             (Value::Float(a), Value::Float(b)) => a == b,
-            (Value::Int(a), Value::Float(b)) | (Value::Float(b), Value::Int(a)) => (*a as f64) == *b,
+            (Value::Int(a), Value::Float(b)) | (Value::Float(b), Value::Int(a)) => {
+                (*a as f64) == *b
+            }
             (Value::Str(a), Value::Str(b)) => a == b,
             (Value::List(a), Value::List(b)) => {
                 if Rc::ptr_eq(a, b) {
                     return true; // a structure equals itself
                 }
-                let pair = (Rc::as_ptr(a) as *const u8 as usize,
-                            Rc::as_ptr(b) as *const u8 as usize);
+                let pair = (
+                    Rc::as_ptr(a) as *const u8 as usize,
+                    Rc::as_ptr(b) as *const u8 as usize,
+                );
                 if !seen.insert(pair) {
                     return true; // already comparing this pair (cycle)
                 }
                 let la = a.borrow();
                 let lb = b.borrow();
                 let ok = la.len() == lb.len()
-                    && la.iter().zip(lb.iter()).all(|(x, y)| x.deep_eq_g(y, seen, depth + 1));
+                    && la
+                        .iter()
+                        .zip(lb.iter())
+                        .all(|(x, y)| x.deep_eq_g(y, seen, depth + 1));
                 seen.remove(&pair);
                 ok
             }
@@ -177,8 +196,10 @@ impl Value {
                 if Rc::ptr_eq(a, b) {
                     return true;
                 }
-                let pair = (Rc::as_ptr(a) as *const u8 as usize,
-                            Rc::as_ptr(b) as *const u8 as usize);
+                let pair = (
+                    Rc::as_ptr(a) as *const u8 as usize,
+                    Rc::as_ptr(b) as *const u8 as usize,
+                );
                 if !seen.insert(pair) {
                     return true;
                 }
@@ -186,7 +207,9 @@ impl Value {
                 let mb = b.borrow();
                 let ok = ma.len() == mb.len()
                     && ma.iter().all(|(k, v)| {
-                        mb.iter().any(|(k2, v2)| k.deep_eq_g(k2, seen, depth + 1) && v.deep_eq_g(v2, seen, depth + 1))
+                        mb.iter().any(|(k2, v2)| {
+                            k.deep_eq_g(k2, seen, depth + 1) && v.deep_eq_g(v2, seen, depth + 1)
+                        })
                     });
                 seen.remove(&pair);
                 ok
@@ -216,7 +239,7 @@ pub fn format_float(f: f64) -> String {
         None => return s,
     };
     let exp: i32 = exp_txt.parse().unwrap_or(0);
-    if exp < -4 || exp >= 16 {
+    if !(-4..16).contains(&exp) {
         let sign = if exp < 0 { '-' } else { '+' };
         format!("{}e{}{:02}", mant, sign, exp.abs())
     } else {

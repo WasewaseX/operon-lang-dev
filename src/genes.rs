@@ -31,7 +31,10 @@ pub fn spawn_worker(f: impl FnOnce() + Send + 'static) -> Result<(), Stress> {
         LIVE_THREADS.fetch_sub(1, Ordering::Relaxed);
         return Err(Stress::new(
             "overflow",
-            format!("thread cap ({}) reached — too many live workers", MAX_THREADS),
+            format!(
+                "thread cap ({}) reached — too many live workers",
+                MAX_THREADS
+            ),
         ));
     }
     let res = std::thread::Builder::new()
@@ -45,7 +48,10 @@ pub fn spawn_worker(f: impl FnOnce() + Send + 'static) -> Result<(), Stress> {
         Ok(_) => Ok(()),
         Err(e) => {
             LIVE_THREADS.fetch_sub(1, Ordering::Relaxed);
-            Err(Stress::new("overflow", format!("cannot spawn worker thread: {}", e)))
+            Err(Stress::new(
+                "overflow",
+                format!("cannot spawn worker thread: {}", e),
+            ))
         }
     }
 }
@@ -161,10 +167,14 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
         // When the loading module finishes, this same Rc<RefCell> is filled,
         // so the first importer sees the completed data too (wave-3 Critic-L:
         // the old empty-map return poisoned the top-level importer).
-        interp.note(0, 4, format!(
+        interp.note(
+            0,
+            4,
+            format!(
             "cyclic import of '{}' — module still loading; its map fills when loading completes",
             path
-        ));
+        ),
+        );
         if let Some(v) = interp.modules.get(path) {
             return Ok(v.clone());
         }
@@ -229,16 +239,19 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
                 }
             }
         }
-        roots.iter().any(|r| {
-            resolved == r.as_str() || resolved.starts_with(&format!("{}/", r))
-        })
+        roots
+            .iter()
+            .any(|r| resolved == r.as_str() || resolved.starts_with(&format!("{}/", r)))
     }
     let managed = under(&rc_resolved, &interp.base_dir)
         || under(&rc_resolved, &cwd)
         || is_std_tree(&rc_resolved, &std_env);
     if !managed && interp.caps.enabled {
         if let Err(s) = interp.caps.check(&interp.caps.read, "read", &resolved) {
-            return Err(format!("module '{}' blocked: [{}] {}", path, s.kind, s.message));
+            return Err(format!(
+                "module '{}' blocked: [{}] {}",
+                path, s.kind, s.message
+            ));
         }
     }
     let src = std::fs::read_to_string(&resolved)
@@ -270,20 +283,29 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
     interp.loading.push(path.to_string());
     let prog = crate::parser::parse(&src);
     for n in prog.notes {
-        interp.notes.push(Note { line: n.line, rung: n.rung, message: format!("[{}] {}", path, n.message) });
+        interp.notes.push(Note {
+            line: n.line,
+            rung: n.rung,
+            message: format!("[{}] {}", path, n.message),
+        });
     }
 
     // Execute module in a fresh child env of global (containment per stmt).
     let menv = Env::new(Some(interp.global.clone()));
     for stmt in &prog.stmts {
         if let Err(st) = interp.exec_stmt(&menv, stmt) {
-            interp.note(0, 4, format!("stress contained: [{}] {}", st.kind, st.message));
+            interp.note(
+                0,
+                4,
+                format!("stress contained: [{}] {}", st.kind, st.message),
+            );
         }
     }
     interp.loading.pop();
 
     // Exports: anchor export wins; else all top-level names; TAD insulation.
-    let has_any_anchor = !prog.anchor_exports.is_empty() || prog.tad_exports.iter().any(|(_, e)| !e.is_empty());
+    let has_any_anchor =
+        !prog.anchor_exports.is_empty() || prog.tad_exports.iter().any(|(_, e)| !e.is_empty());
     let mut exports: Vec<(Value, Value)> = Vec::new();
     let mut export_set: Vec<String> = prog.anchor_exports.clone();
     for (_, exps) in &prog.tad_exports {
@@ -315,7 +337,11 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
                 target.clear();
                 target.extend(exports);
             }
-            interp.modules.get(path).cloned().unwrap_or_else(|| Value::Map(Rc::new(RefCell::new(Vec::new()))))
+            interp
+                .modules
+                .get(path)
+                .cloned()
+                .unwrap_or_else(|| Value::Map(Rc::new(RefCell::new(Vec::new()))))
         } else {
             let mv = Value::Map(Rc::new(RefCell::new(exports)));
             interp.modules.insert(path.to_string(), mv.clone());
@@ -339,7 +365,11 @@ fn resolve_path(interp: &Interp, path: &str) -> Result<String, String> {
     candidates.push(Some(std::path::PathBuf::from(&p)));
     candidates.push(Some(std::path::PathBuf::from("std").join(&p)));
     // explicit standard-library override (not double-joined with std/)
-    candidates.push(std::env::var("OPERON_STD").ok().map(|d| std::path::PathBuf::from(d).join(&p)));
+    candidates.push(
+        std::env::var("OPERON_STD")
+            .ok()
+            .map(|d| std::path::PathBuf::from(d).join(&p)),
+    );
     for c in candidates.into_iter().flatten() {
         if c.exists() {
             return Ok(c.to_string_lossy().to_string());
@@ -428,8 +458,11 @@ pub fn nmd_sweep(prog: &Program, called: &[String], enhanced: &[String]) -> Vec<
                     || prog.tad_exports.iter().any(|(_, e)| e.contains(name));
                 if !exported && !g.methylate {
                     out.push(NmdFinding {
-                            kind: "untranslated",
-                        message: format!("gene '{}' defined but never translated (dead transcript)", name),
+                        kind: "untranslated",
+                        message: format!(
+                            "gene '{}' defined but never translated (dead transcript)",
+                            name
+                        ),
                     });
                 }
             }
@@ -461,7 +494,11 @@ pub fn purge_premature_stops(stmts: &mut Vec<Stmt>) {
                     purge_premature_stops(e);
                 }
             }
-            Stmt::While(_, b) | Stmt::Loop(b) | Stmt::For(_, _, b) | Stmt::Block(b) | Stmt::Tad(_, b) => {
+            Stmt::While(_, b)
+            | Stmt::Loop(b)
+            | Stmt::For(_, _, b)
+            | Stmt::Block(b)
+            | Stmt::Tad(_, b) => {
                 purge_premature_stops(b);
             }
             Stmt::Frame { body, .. } => purge_premature_stops(body),
@@ -616,10 +653,7 @@ const SEND_DEPTH_CAP: u32 = 100_000;
 
 fn to_send_d(v: &Value, d: u32) -> SendValue {
     if d > SEND_DEPTH_CAP {
-        return SendValue::Stress(
-            "overflow".into(),
-            "spawn argument nesting too deep".into(),
-        );
+        return SendValue::Stress("overflow".into(), "spawn argument nesting too deep".into());
     }
     match v {
         Value::Null => SendValue::Null,
@@ -627,9 +661,7 @@ fn to_send_d(v: &Value, d: u32) -> SendValue {
         Value::Int(i) => SendValue::Int(*i),
         Value::Float(f) => SendValue::Float(*f),
         Value::Str(s) => SendValue::Str(s.clone()),
-        Value::List(l) => {
-            SendValue::List(l.borrow().iter().map(|x| to_send_d(x, d + 1)).collect())
-        }
+        Value::List(l) => SendValue::List(l.borrow().iter().map(|x| to_send_d(x, d + 1)).collect()),
         Value::Map(m) => SendValue::Map(
             m.borrow()
                 .iter()
@@ -664,11 +696,13 @@ fn from_send_d(v: SendValue, d: u32) -> Value {
         SendValue::Int(i) => Value::Int(i),
         SendValue::Float(f) => Value::Float(f),
         SendValue::Str(s) => Value::Str(s),
-        SendValue::List(l) => {
-            Value::List(Rc::new(RefCell::new(l.into_iter().map(|x| from_send_d(x, d + 1)).collect())))
-        }
+        SendValue::List(l) => Value::List(Rc::new(RefCell::new(
+            l.into_iter().map(|x| from_send_d(x, d + 1)).collect(),
+        ))),
         SendValue::Map(m) => Value::Map(Rc::new(RefCell::new(
-            m.into_iter().map(|(k, v)| (Value::Str(k), from_send_d(v, d + 1))).collect(),
+            m.into_iter()
+                .map(|(k, v)| (Value::Str(k), from_send_d(v, d + 1)))
+                .collect(),
         ))),
         SendValue::Stress(k, m) => Value::Map(Rc::new(RefCell::new(vec![
             (Value::Str("kind".into()), Value::Str(k)),
@@ -744,11 +778,11 @@ fn clone_send_d(sv: &SendValue, d: u32) -> SendValue {
         SendValue::Int(i) => SendValue::Int(*i),
         SendValue::Float(f) => SendValue::Float(*f),
         SendValue::Str(s) => SendValue::Str(s.clone()),
-        SendValue::List(l) => {
-            SendValue::List(l.iter().map(|x| clone_send_d(x, d + 1)).collect())
-        }
+        SendValue::List(l) => SendValue::List(l.iter().map(|x| clone_send_d(x, d + 1)).collect()),
         SendValue::Map(m) => SendValue::Map(
-            m.iter().map(|(k, v)| (k.clone(), clone_send_d(v, d + 1))).collect(),
+            m.iter()
+                .map(|(k, v)| (k.clone(), clone_send_d(v, d + 1)))
+                .collect(),
         ),
         SendValue::Stress(k, m) => SendValue::Stress(k.clone(), m.clone()),
     }
@@ -834,7 +868,10 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
         interp.note(
             0,
             4,
-            format!("spawn: gene '{}' contains closures; running inline (id 0)", name),
+            format!(
+                "spawn: gene '{}' contains closures; running inline (id 0)",
+                name
+            ),
         );
         let _ = interp.call_gene(def, None, args)?;
         return Ok(Value::Int(0));
@@ -849,10 +886,7 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
     // fail the SPAWN (catchable stress), not smuggle a stress value across
     for a in &args {
         if value_depth(a, 0) > 100_000 {
-            return Err(Stress::new(
-                "overflow",
-                "spawn argument nesting too deep",
-            ));
+            return Err(Stress::new("overflow", "spawn argument nesting too deep"));
         }
     }
     let snap = match &callee {
@@ -864,7 +898,7 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
     let global_note = format!("[task {}]", name);
     let host_caps = interp.caps.clone();
     let host_fuel = interp.fuel_pool.clone();
-    if let Err(s) = spawn_worker(move || {
+    spawn_worker(move || {
         let mut ti = Interp::new();
         ti.fuel_pool = host_fuel;
         let genv = Env::new(None);
@@ -885,9 +919,7 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
             })
             .collect();
         let _ = tx.send((rv, notes));
-    }) {
-        return Err(s);
-    }
+    })?;
     let id = interp.next_task_id;
     interp.next_task_id += 1;
     interp.tasks.insert(id, crate::interp::TaskHandle { rx });
@@ -900,14 +932,20 @@ fn def_has_lambda(def: &GeneDef) -> bool {
             Expr::Lambda(_) => true,
             Expr::Unary(_, a) | Expr::Member(a, _) => expr_has(a),
             Expr::Binary(_, a, b) | Expr::Index(a, b) => expr_has(a) || expr_has(b),
-            Expr::Call(a, args) | Expr::Method(a, _, args) => expr_has(a) || args.iter().any(expr_has),
+            Expr::Call(a, args) | Expr::Method(a, _, args) => {
+                expr_has(a) || args.iter().any(expr_has)
+            }
             Expr::List(xs) => xs.iter().any(expr_has),
             Expr::Map(pairs) => pairs.iter().any(|(k, v)| expr_has(k) || expr_has(v)),
             Expr::Interp(ps) => ps
                 .iter()
                 .any(|p| matches!(p, InterpPart::Expr(e) if expr_has(e))),
-            Expr::Collect { iter, filter, body, .. } => {
-                expr_has(iter) || filter.as_ref().map(|f| expr_has(f)).unwrap_or(false) || expr_has(body)
+            Expr::Collect {
+                iter, filter, body, ..
+            } => {
+                expr_has(iter)
+                    || filter.as_ref().map(|f| expr_has(f)).unwrap_or(false)
+                    || expr_has(body)
             }
             _ => false,
         }
@@ -917,7 +955,9 @@ fn def_has_lambda(def: &GeneDef) -> bool {
     }
     fn stmt_has(s: &Stmt) -> bool {
         match s {
-            Stmt::Let(_, e) | Stmt::Assign(_, _, e) | Stmt::ExprStmt(e) | Stmt::Return(Some(e)) => expr_has(e),
+            Stmt::Let(_, e) | Stmt::Assign(_, _, e) | Stmt::ExprStmt(e) | Stmt::Return(Some(e)) => {
+                expr_has(e)
+            }
             Stmt::IndexAssign(t, i, _, e) => expr_has(t) || expr_has(i) || expr_has(e),
             Stmt::MemberAssign(t, _, _, e) => expr_has(t) || expr_has(e),
             Stmt::If(bs, els) => {
@@ -939,13 +979,22 @@ fn def_has_lambda(def: &GeneDef) -> bool {
                     })
             }
             Stmt::Stress { body, rescue, .. } => {
-                stmts_have(body) || rescue.as_ref().map(|(_, rb)| stmts_have(rb)).unwrap_or(false)
+                stmts_have(body)
+                    || rescue
+                        .as_ref()
+                        .map(|(_, rb)| stmts_have(rb))
+                        .unwrap_or(false)
             }
             Stmt::Gene(g) => stmts_have(&g.body),
             _ => false,
         }
     }
-    stmts_have(&def.body) || def.guard.as_ref().map(|(_, b)| stmts_have(b)).unwrap_or(false)
+    stmts_have(&def.body)
+        || def
+            .guard
+            .as_ref()
+            .map(|(_, b)| stmts_have(b))
+            .unwrap_or(false)
 }
 
 pub fn join_task(interp: &mut Interp, id: i64, timeout_ms: Option<u64>) -> Result<Value, Stress> {
@@ -965,30 +1014,31 @@ pub fn join_task(interp: &mut Interp, id: i64, timeout_ms: Option<u64>) -> Resul
         }
     };
     // optional deadline: join(id, ms) returns null when the worker exceeds it
-    let received: Result<(crate::genes::SendValue, Vec<Note>), std::sync::mpsc::RecvTimeoutError> = match timeout_ms {
-        Some(ms) => match handle
-            .rx
-            .recv_timeout(std::time::Duration::from_millis(ms.min(600_000)))
-        {
-            Ok(pair) => Ok(pair),
-            Err(mpsc::RecvTimeoutError::Timeout) => {
-                interp.note(0, 4, format!("join timeout ({} ms) on task {}", ms, id));
-                interp.tasks.insert(id, handle); // keep the task joinable later
-                return Ok(Value::Null);
-            }
-            Err(_) => {
-                interp.note(0, 4, format!("task {} channel closed", id));
-                return Ok(Value::Null);
-            }
-        },
-        None => match handle.rx.recv() {
-            Ok(pair) => Ok(pair),
-            Err(_) => {
-                interp.note(0, 4, format!("task {} channel closed", id));
-                return Ok(Value::Null);
-            }
-        },
-    };
+    let received: Result<(crate::genes::SendValue, Vec<Note>), std::sync::mpsc::RecvTimeoutError> =
+        match timeout_ms {
+            Some(ms) => match handle
+                .rx
+                .recv_timeout(std::time::Duration::from_millis(ms.min(600_000)))
+            {
+                Ok(pair) => Ok(pair),
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    interp.note(0, 4, format!("join timeout ({} ms) on task {}", ms, id));
+                    interp.tasks.insert(id, handle); // keep the task joinable later
+                    return Ok(Value::Null);
+                }
+                Err(_) => {
+                    interp.note(0, 4, format!("task {} channel closed", id));
+                    return Ok(Value::Null);
+                }
+            },
+            None => match handle.rx.recv() {
+                Ok(pair) => Ok(pair),
+                Err(_) => {
+                    interp.note(0, 4, format!("task {} channel closed", id));
+                    return Ok(Value::Null);
+                }
+            },
+        };
     match received {
         Ok((v, notes)) => {
             for n in notes {
