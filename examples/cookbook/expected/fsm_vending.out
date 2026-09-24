@@ -5,4 +5,4 @@ s20 --n--> vend
 s0 --d--> s10
 s10 --q--> vend
 s0 --n--> s5
-vended 2 items; final state s5
+vended 2 items; final pos s5
