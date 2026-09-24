@@ -51,7 +51,12 @@ jobs:
           cp README.md LICENSE TUTORIAL.md "$ST/"
           cp -r std examples "$ST/"
           tar czf "$ST.tar.gz" "$ST"
-          sha256sum "$ST.tar.gz" > "$ST.tar.gz.sha256"
+          # macOS has no GNU coreutils sha256sum — fall back to shasum
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "$ST.tar.gz" > "$ST.tar.gz.sha256"
+          else
+            shasum -a 256 "$ST.tar.gz" > "$ST.tar.gz.sha256"
+          fi
           echo "ASSET=$ST.tar.gz" >> "$GITHUB_ENV"
 
       - name: Package (windows)
