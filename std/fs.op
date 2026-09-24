@@ -1,0 +1,130 @@
+# std/fs — SAFE wrappers over the capability-gated file builtins.
+#
+# Capability model stays default-deny and untouched: these wrappers carry no
+# grants of their own. What they add is graceful degradation — on a missing
+# file OR a denied capability they return your fallback (or null / false)
+# instead of throwing. If you need to TELL those two cases apart, call the
+# raw builtins (read_file / write_file) under `stress / rescue` yourself.
+#
+# Every wrapper: zero throw, honest return. "Safe" means "never crashes the
+# program", not "silently grants access" — denial still denies.
+
+gene fs_read_or(path, fallback) {
+    # whole file as text, or fallback on missing/denied/empty-null
+    stress {
+        let v = read_file(path)
+        if v == null {
+            return fallback
+        }
+        return v
+    } rescue (e) {
+        return fallback
+    }
+}
+
+gene fs_read(path) {
+    # whole file as text, or null
+    return fs_read_or(path, null)
+}
+
+gene fs_lines_or(path, fallback) {
+    # file split into lines (\n), trailing empty line dropped
+    let t = fs_read_or(path, null)
+    if t == null {
+        return fallback
+    }
+    return strings_lines(t)
+}
+
+gene fs_lines(path) {
+    return fs_lines_or(path, null)
+}
+
+gene strings_lines(text) {
+    # pure helper (no fs): split on \n, drop one trailing empty piece
+    let parts = text.split("\n")
+    let n = len(parts)
+    if n > 0 and parts[n - 1] == "" {
+        return parts.slice(0, n - 1)
+    }
+    return parts
+}
+
+gene fs_write_text(path, text) {
+    # write text; true on success, false on denied/failed
+    stress {
+        write_file(path, text)
+        return true
+    } rescue (e) {
+        return false
+    }
+}
+
+gene fs_write_lines(path, lines) {
+    # write a list as lines (each terminated by \n); true/false
+    stress {
+        let out = ""
+        for l in lines {
+            out = out + l + "\n"
+        }
+        write_file(path, out)
+        return true
+    } rescue (e) {
+        return false
+    }
+}
+
+gene fs_append_line(path, line) {
+    # append one line; true/false
+    stress {
+        append_file(path, line + "\n")
+        return true
+    } rescue (e) {
+        return false
+    }
+}
+
+gene fs_read_json_or(path, fallback) {
+    # read + json_parse with fallback on missing, invalid JSON, or denial
+    stress {
+        let t = read_file(path)
+        if t == null {
+            return fallback
+        }
+        let v = json_parse(t)
+        if v == null {
+            return fallback
+        }
+        return v
+    } rescue (e) {
+        return fallback
+    }
+}
+
+gene fs_write_json(path, v) {
+    # serialize with json_str and write; true/false
+    stress {
+        write_file(path, json_str(v))
+        return true
+    } rescue (e) {
+        return false
+    }
+}
+
+gene fs_list_dir_or(path, fallback) {
+    # directory listing (names), or fallback on denied/failed
+    stress {
+        return read_dir(path)
+    } rescue (e) {
+        return fallback
+    }
+}
+
+gene fs_size_or(path, fallback) {
+    # file size in bytes, or fallback
+    stress {
+        return file_size(path)
+    } rescue (e) {
+        return fallback
+    }
+}
