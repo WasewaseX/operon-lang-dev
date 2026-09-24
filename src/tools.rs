@@ -41,6 +41,8 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
 
     let mut interp = Interp::new();
     interp.profiling = opts.profile;
+    // A13 (dx-r2): diagnostics render file:line
+    interp.file = file.to_string();
     // base dir for module resolution (relative to the importing file)
     interp.base_dir = std::path::Path::new(file)
         .parent()
@@ -487,7 +489,7 @@ fn purge_stmt(s: &mut Stmt) {
 fn collect_calls(prog: &Program, defined: &mut HashSet<String>, called: &mut Vec<String>) {
     fn walk_expr(e: &Expr, called: &mut Vec<String>) {
         match e {
-            Expr::Call(f, args) => {
+            Expr::Call(f, args, _) => {
                 if let Expr::Ident(n) = &**f {
                     // record EVERY named call — the NMD untranslated detector
                     // needs the full transcription record, not just phantoms
@@ -1372,7 +1374,7 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
             let right = fmt_prec(b, p + 1);
             format!("{} {} {}", left, fmt_op(*op), right)
         }
-        Expr::Call(f, args) => format!(
+        Expr::Call(f, args, _) => format!(
             "{}({})",
             fmt_expr(f),
             args.iter()
@@ -1475,6 +1477,11 @@ pub fn flush_notes(l: &Loaded, quiet: bool) {
             3 => "wobble",
             _ => "fallback",
         };
-        let _ = writeln!(w, "[{}] {}", tag, n.message);
+        // A13 (dx-r2): real locations when the note carries a line
+        if n.line > 0 {
+            let _ = writeln!(w, "[{}] {}:{}: {}", tag, l.interp.file, n.line, n.message);
+        } else {
+            let _ = writeln!(w, "[{}] {}", tag, n.message);
+        }
     }
 }
