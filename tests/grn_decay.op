@@ -1,0 +1,42 @@
+# A10 (reg-r2) — GRN decay: homeostasis, not a latch (SPEC §11)
+# Without configuration the network is byte-identical to pre-A10 (levels
+# persist forever). With decay — .cell `[grn] decay = f` or the optional
+# grn_fire(seed, f) pulse argument — every level decays by the fraction
+# BEFORE each pulse: regulation is homeostasis. Pre-A10 cores have no
+# pulse-argument form, so the assertions below fail there (verified).
+regulate {
+    signal activates factor strength 0.4
+}
+frame proof {
+    # an untouched node holds its explicit level through a fire...
+    grn_set("y", 1.0)
+    let before = grn_get("y")
+    assert(before == 1.0, "grn_set stores the level")
+    grn_fire("signal", 0.0)
+    assert(grn_get("y") == 1.0, "zero decay: level persists (latch mode)")
+    # ...but under a decayed pulse it bleeds off
+    grn_fire("signal", 0.5)
+    let after = grn_get("y")
+    assert(after == 0.5, "decay 0.5 halves the bystander level")
+    # the decayed level propagates into the network state (observable)
+    grn_fire("signal", 0.5)
+    assert(grn_get("y") == 0.25, "decay compounds: homeostasis, not a latch")
+    # the seed itself is re-pulsed: decay first, then the +1 bump
+    grn_fire("signal", 0.5)
+    let s = grn_fire("signal", 0.5)
+    assert(s.signal == 1.0, "seed decays then re-pulses to full")
+    # clamp: decay never produces negative levels
+    grn_fire("signal", 1.0)
+    assert(grn_get("y") == 0.0, "full decay empties the bystander")
+    # grn_set clamps writes into the legal 0..1 band
+    grn_set("y", 7.0)
+    assert(grn_get("y") == 1.0, "grn_set clamps above 1.0")
+    grn_set("y", -2.0)
+    assert(grn_get("y") == 0.0, "grn_set clamps below 0.0")
+}
+main {
+    grn_set("y", 1.0)
+    grn_fire("signal", 0.5)
+    grn_fire("signal", 0.5)
+    promote("bystander level after two decayed fires: {grn_get('y')}")
+}

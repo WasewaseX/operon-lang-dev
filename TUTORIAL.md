@@ -224,6 +224,28 @@ The companion marks, without mystique:
 - **`enhance`** — marks a gene as a hot path for the profiler; under regulation it also
   strengthens activation, so it behaves like a priority hint, not decoration.
 
+You can also steer the mute button **at runtime**, without redefining anything —
+`methylate()`/`demethylate()` use the exact same graded counter as the marks:
+
+```operon
+gene worker() {
+    return "doing work"
+}
+
+methylate("worker")                    # level 1 — still under the threshold
+worker()                               # runs
+methylate("worker")
+methylate("worker")                    # level 3 — gate closes
+worker()                               # null, with a silencing note
+demethylate("worker")                  # level 2 — gate reopens
+worker()                               # runs again
+```
+
+The same idea applies to the regulatory network: `grn_set(node, v)` / `grn_get(node)` read and
+write gate levels directly, and `grn_fire(node, decay)` takes an optional decay fraction —
+regulation is homeostasis, not a latch, so levels bleed off between pulses unless you keep
+re-firing them.
+
 ## 7. Proof frames = tests built into the language
 
 A `frame proof` is a block of assertions the toolchain runs:

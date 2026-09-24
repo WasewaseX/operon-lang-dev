@@ -1,0 +1,41 @@
+# A12 (reg-r2) — runtime methylation API (SPEC §11)
+# methylate(name) / demethylate(name) steer the T2b methylation gate at
+# runtime with the same graded semantics as the @methylate / @acetylate
+# definition attributes: level += 1 / saturating −1. Calls are blocked at
+# methylate.threshold (default 3). Pre-A12 cores have no such builtins, so
+# every assertion here fails there (verified).
+gene reporter() {
+    return "expressed"
+}
+frame proof {
+    # baseline: an unmethylated gene expresses
+    assert(reporter() == "expressed", "unmethylated gene expresses")
+    # graded silencing: levels 1 and 2 still express (gate not closed)
+    let l1 = methylate("reporter")
+    assert(l1 == 1, "first methylation returns level 1")
+    assert(reporter() == "expressed", "level 1 < threshold 3: still expresses")
+    let l2 = methylate("reporter")
+    assert(l2 == 2, "second methylation deepens to level 2")
+    assert(reporter() == "expressed", "level 2 < threshold 3: still expresses")
+    # third mark closes the gate: the call is silenced (returns null)
+    let l3 = methylate("reporter")
+    assert(l3 == 3, "third methylation reaches the threshold")
+    assert(reporter() == null, "level 3 >= threshold 3: silenced at the next call")
+    # relaxation: one demethylate reopens expression (saturating at 0)
+    let d1 = demethylate("reporter")
+    assert(d1 == 2, "demethylate relaxes to level 2")
+    assert(reporter() == "expressed", "level 2 < threshold 3: expresses again")
+    # demethylate never underflows: level floors at 0
+    demethylate("reporter")
+    demethylate("reporter")
+    let d3 = demethylate("reporter")
+    assert(d3 == 0, "demethylate saturates at 0 (no underflow)")
+    assert(reporter() == "expressed", "fully relaxed gene expresses")
+    # the config-getter methyl() is untouched (back-compat, D-002):
+    # unset keys fall to the default argument, exactly as before
+    assert(methyl("methylate.threshold", 3) == 3, "methyl() config-getter default works")
+}
+main {
+    let l = methylate("reporter")
+    promote("runtime methylation level: {l}")
+}
