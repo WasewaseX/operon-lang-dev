@@ -1,0 +1,43 @@
+# T2d — repressilator dynamics (SPEC §11, v2.2 honesty pass)
+# repressi_state() now returns a driven oscillation, not a square wave:
+# a node peaks at 1.0 on its drive tick, then decays exponentially (half
+# per tick), and is 0.0 before its first drive. Phase lag between nodes is
+# exactly one ring step. Pre-T2d cores return hard 1.0/0.0 squares, so the
+# decay assertions FAIL there (verified).
+repressilator p -> q -> r
+frame proof {
+    # one full drive cycle: p wrapped to the active allele
+    repressi_next()
+    repressi_next()
+    repressi_next()
+    let s = repressi_state()
+    assert(s.p == 1.0, "drive tick peaks at 1.0")
+    # dynamics, not a square: the two trailing nodes hold degraded levels
+    assert(s.q > 0.0 and s.q < 1.0, "trailing node decays (dynamic, not square)")
+    assert(s.r > 0.0 and s.r < 1.0, "second trailing node decays too")
+    # phase lag: q was driven one tick earlier than r → strictly lower level
+    assert(s.q < s.r, "older peak decayed further (phase lag)")
+    # sustained oscillation: p peaks at least twice over 9 more ticks
+    let hist = []
+    let i = 0
+    while i < 9 {
+        repressi_next()
+        push(hist, repressi_state().p)
+        i += 1
+    }
+    let peaks = 0
+    let k = 1
+    while k < 8 {
+        if hist[k] > hist[k - 1] and hist[k] > hist[k + 1] {
+            peaks += 1
+        }
+        k += 1
+    }
+    assert(peaks >= 2, "oscillation sustains: at least two peaks in the history")
+}
+main {
+    repressi_next()
+    repressi_next()
+    let s = repressi_state()
+    promote("levels: {s.p} / {s.q} / {s.r}")
+}
