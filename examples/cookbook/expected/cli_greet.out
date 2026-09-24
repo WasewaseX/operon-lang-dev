@@ -1,0 +1,4 @@
+argv now: []
+parsed: HELLO, ADA! (subcommand: greet)
+parsed: hello, Grace (subcommand: greet)
+has --name? true  has --dry-run? false
