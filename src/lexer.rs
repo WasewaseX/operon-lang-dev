@@ -127,6 +127,23 @@ pub struct Lexed {
     pub notes: Vec<Note>,
 }
 
+// sec-r4 (F-3): parse-time note cap — mirrors the Parser/Interp 10k contract.
+// A 3 MB file of repairable errors used to grow 1.5 M notes (646 MB RSS).
+fn lex_note(buf: &mut Vec<Note>, n: Note) {
+    const LEX_NOTE_CAP: usize = 10_000;
+    if buf.len() >= LEX_NOTE_CAP {
+        if buf.len() == LEX_NOTE_CAP {
+            buf.push(Note {
+                line: n.line,
+                rung: 4,
+                message: "lex note cap (10000) reached - further notes suppressed".into(),
+            });
+        }
+        return;
+    }
+    buf.push(n);
+}
+
 pub fn lex(src: &str) -> Lexed {
     let mut toks: Vec<(Tok, usize)> = Vec::new();
     let mut notes: Vec<Note> = Vec::new();
@@ -171,22 +188,28 @@ pub fn lex(src: &str) -> Lexed {
         if c == '"' {
             let (tok, note) = lex_string(&chars, &mut i, &mut line, '"');
             if let Some(msg) = note {
-                notes.push(Note {
-                    line,
-                    rung: 4,
-                    message: msg,
-                });
+                lex_note(
+                    &mut notes,
+                    Note {
+                        line,
+                        rung: 4,
+                        message: msg,
+                    },
+                );
             }
             push!(tok);
             continue;
         }
         // single-quote string → wobble: treat as double-quoted (rung 4)
         if c == '\'' {
-            notes.push(Note {
-                line,
-                rung: 4,
-                message: "single-quoted string repaired to double quotes".into(),
-            });
+            lex_note(
+                &mut notes,
+                Note {
+                    line,
+                    rung: 4,
+                    message: "single-quoted string repaired to double quotes".into(),
+                },
+            );
             let (tok, _note) = lex_string(&chars, &mut i, &mut line, '\'');
             push!(tok);
             continue;
@@ -200,11 +223,14 @@ pub fn lex(src: &str) -> Lexed {
             }
             let word: String = chars[start..j].iter().collect();
             if word.is_empty() {
-                notes.push(Note {
-                    line,
-                    rung: 4,
-                    message: "stray '@' skipped".into(),
-                });
+                lex_note(
+                    &mut notes,
+                    Note {
+                        line,
+                        rung: 4,
+                        message: "stray '@' skipped".into(),
+                    },
+                );
             } else {
                 push!(Tok::Mark(word));
             }
@@ -243,20 +269,26 @@ pub fn lex(src: &str) -> Lexed {
             if is_float {
                 match text.parse::<f64>() {
                     Ok(f) => push!(Tok::Float(f)),
-                    Err(_) => notes.push(Note {
-                        line,
-                        rung: 4,
-                        message: format!("malformed number '{}' treated as 0", text),
-                    }),
+                    Err(_) => lex_note(
+                        &mut notes,
+                        Note {
+                            line,
+                            rung: 4,
+                            message: format!("malformed number '{}' treated as 0", text),
+                        },
+                    ),
                 }
             } else {
                 match text.parse::<i64>() {
                     Ok(v) => push!(Tok::Int(v)),
-                    Err(_) => notes.push(Note {
-                        line,
-                        rung: 4,
-                        message: format!("integer '{}' out of range treated as 0", text),
-                    }),
+                    Err(_) => lex_note(
+                        &mut notes,
+                        Note {
+                            line,
+                            rung: 4,
+                            message: format!("integer '{}' out of range treated as 0", text),
+                        },
+                    ),
                 }
             }
             continue;
@@ -469,11 +501,14 @@ pub fn lex(src: &str) -> Lexed {
                 }
             }
             other => {
-                notes.push(Note {
-                    line,
-                    rung: 4,
-                    message: format!("unexpected character '{}' skipped", other),
-                });
+                lex_note(
+                    &mut notes,
+                    Note {
+                        line,
+                        rung: 4,
+                        message: format!("unexpected character '{}' skipped", other),
+                    },
+                );
                 i += 1;
             }
         }

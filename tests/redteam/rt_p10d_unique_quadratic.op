@@ -1,0 +1,14 @@
+# rt_p10d (sec-r4 F-4): unique() dedup scan is O(n^2) inside ONE builtin
+# call, invisible to the step counter (20k single-element lists = 20.4 s
+# wall for ~60k fuel). The scan is now fuel-charged (10 steps/compare);
+# past the 200M default budget it is contained as overflow.
+gene main() {
+    let items = []
+    let i = 0
+    while i < 8000 {
+        push(items, [i])
+        i = i + 1
+    }
+    let u = unique(items)
+    print("no: {len(u)}")
+}

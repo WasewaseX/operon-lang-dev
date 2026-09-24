@@ -1,0 +1,12 @@
+# rt_p10b (sec-r4 F-2): interpolation assembly was never memory-charged -
+# `s = "{s}{s}"` doubling blew past both ceilings into SIGKILL (rc=137).
+# The assembled string is now charged like concat; contained as overflow.
+gene main() {
+    let s = "x"
+    let i = 0
+    while i < 64 {
+        s = "{s}{s}"
+        i = i + 1
+    }
+    print("no: {len(s)}")
+}

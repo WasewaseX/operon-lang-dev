@@ -309,7 +309,7 @@ pub struct Interp {
 
 /// `Interp` is never `Default::default()`d with semantics on purpose:
 /// `new()` carries the deterministic RNG seed (0x9E3779B97F4A7C15) and the
-/// 5M step ceiling — both are contract (differential parity, §9 fuel).
+/// 200M step ceiling — both are contract (differential parity, §9 fuel).
 impl Default for Interp {
     fn default() -> Self {
         Self::new()
@@ -1415,9 +1415,19 @@ impl Interp {
                 let mut out = String::new();
                 for p in parts {
                     match p {
-                        InterpPart::Lit(s) => out.push_str(s),
+                        InterpPart::Lit(s) => {
+                            // sec-r4 (F-2): the assembled interpolation string
+                            // was never memory-charged, so `s = "{s}{s}"`
+                            // doubling walked past both ceilings into SIGKILL.
+                            mem_charge(s.len() as u64)?;
+                            out.push_str(s);
+                        }
                         InterpPart::Expr(e) => match self.eval(env, e) {
-                            Ok(v) => out.push_str(&v.display()),
+                            Ok(v) => {
+                                let piece = v.display();
+                                mem_charge(piece.len() as u64)?;
+                                out.push_str(&piece);
+                            }
                             Err(s) => {
                                 // a stressed interpolation degrades to "null" —
                                 // the surrounding statement still produces output
@@ -3323,6 +3333,18 @@ impl Interp {
                 Some(Value::List(l)) => {
                     let mut out: Vec<Value> = Vec::new();
                     for v in l.borrow().iter() {
+                        // sec-r4 (F-4): the dedup scan is O(n^2) in the element
+                        // count but happens inside ONE builtin call, invisible
+                        // to the step counter (20k single-element lists burned
+                        // 20.4 s wall for ~60k fuel). Charge the scan like the
+                        // repressi tick precedent (10 steps per comparison).
+                        self.steps = self.steps.saturating_add(10 * out.len() as u64);
+                        if self.steps > self.step_budget {
+                            return Err(Stress::new(
+                                "overflow",
+                                "step budget exhausted (unique scan)",
+                            ));
+                        }
                         if !out.iter().any(|u| u.deep_eq(v)) {
                             out.push(v.clone());
                         }
@@ -4606,11 +4628,29 @@ impl Interp {
                         use std::sync::mpsc;
                         let (tx_so, rx_so) = mpsc::channel::<Vec<u8>>();
                         let (tx_se, rx_se) = mpsc::channel::<Vec<u8>>();
+                        // sec-r4 (F-6): collected child output is capped at 64
+                        // MiB per stream — an 800 MB emitter used to hand a
+                        // fuel-blind 800 MB String to the Value heap. The
+                        // reader stops at the cap; the child keeps running
+                        // (it gets killed by the timeout) and the collected
+                        // prefix is what the caller sees.
+                        const MAX_CHILD_OUT: usize = 64 * 1024 * 1024;
                         if let Some(mut p) = child.stdout.take() {
                             std::thread::spawn(move || {
                                 let mut v = Vec::new();
                                 use std::io::Read;
-                                let _ = p.read_to_end(&mut v);
+                                let mut chunk = [0u8; 16384];
+                                loop {
+                                    match p.read(&mut chunk) {
+                                        Ok(0) | Err(_) => break,
+                                        Ok(n) => {
+                                            v.extend_from_slice(&chunk[..n]);
+                                            if v.len() > MAX_CHILD_OUT {
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
                                 let _ = tx_so.send(v);
                             });
                         }
@@ -4618,7 +4658,18 @@ impl Interp {
                             std::thread::spawn(move || {
                                 let mut v = Vec::new();
                                 use std::io::Read;
-                                let _ = p.read_to_end(&mut v);
+                                let mut chunk = [0u8; 16384];
+                                loop {
+                                    match p.read(&mut chunk) {
+                                        Ok(0) | Err(_) => break,
+                                        Ok(n) => {
+                                            v.extend_from_slice(&chunk[..n]);
+                                            if v.len() > MAX_CHILD_OUT {
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
                                 let _ = tx_se.send(v);
                             });
                         }
@@ -4719,8 +4770,23 @@ impl Interp {
                     .unwrap_or_else(|| "/".into());
                 let target = format!("{}:{}", host, port);
                 self.caps.check(&self.caps.net, "net", &target)?;
+                // sec-r4 (F-5): http wall time is fuel, exactly like sleep and
+                // run() children (1000 steps/ms) — a trickling peer used to
+                // buy unbounded wall time at ~40 fuel steps per call.
+                let started = std::time::Instant::now();
                 match http_get(&host, port, &path) {
-                    Ok(body) => Ok(Value::Str(body)),
+                    Ok(body) => {
+                        let wall_ms = started.elapsed().as_millis() as u64;
+                        let charge = wall_ms.saturating_mul(1000);
+                        self.steps = self.steps.saturating_add(charge);
+                        if self.steps > self.step_budget {
+                            return Err(Stress::new(
+                                "overflow",
+                                "step budget exhausted (http wall time)",
+                            ));
+                        }
+                        Ok(Value::Str(body))
+                    }
                     Err(e) => Err(Stress::new(
                         "missing",
                         format!("http_get '{}': {}", target, e),

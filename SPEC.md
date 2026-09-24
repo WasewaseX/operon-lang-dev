@@ -217,7 +217,7 @@ stress missing { ... } rescue { ... }    # kind filter: only catches `missing`
 
 ## 9b. Security — the capability sandbox
 
-The runtime is **default-deny**: a program is an organism in a culture flask, and nothing outside the flask exists until the operator grants it. The builtins `read_file`, `write_file`, `append_file`, `exists`, `read_dir`, `run`, `http_get`, `serve`, and `env` raise catchable Stress `interference` when no grant covers the access — RNA-interference: the cell's antiviral machinery silences the operation instead of crashing. `recv_request`/`send_response` poll a queue that only `serve` fills, so they are inert without a granted server.
+The runtime is **default-deny**: a program is an organism in a culture flask, and nothing outside the flask exists until the operator grants it. The builtins `read_file`, `write_file`, `append_file`, `exists`, `read_dir`, `file_size`, `run`, `http_get`, `serve`, `env`, and `exit` raise catchable Stress `interference` when no grant covers the access — RNA-interference: the cell's antiviral machinery silences the operation instead of crashing. `recv_request`/`send_response` poll a queue that only `serve` fills, so they are inert without a granted server.
 
 Grants (operator-side, CLI):
 
@@ -239,6 +239,9 @@ Resource ceilings (all raise catchable Stress):
 | Recursion depth | 10,000 (`overflow`) |
 | Step budget | 200,000,000 steps per run (`overflow` "step budget exhausted"); `--fuel N` lowers it |
 | String `.repeat()` allocation | 512 MiB |
+| Aggregate run allocation | 2 GiB (push/concat/repeat/interp assembly all charged) |
+| Collected `run()` child output | 64 MiB per stream (collected prefix is returned; the child is still timeout-killed) |
+| Parse/lex notes | 10,000 per parse (further notes suppressed) |
 | `distance()` dynamic-programming table | 10,000,000 cells |
 | `sleep()` | 60,000 ms (sleep escapes the step budget, so it is capped) |
 | `json_parse` nesting | 512 levels |
