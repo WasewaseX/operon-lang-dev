@@ -724,6 +724,7 @@ impl Parser {
             }
             "fate" => {
                 self.next();
+                let fate_line = self.line();
                 let name = self.expect_ident()?;
                 let mut states: Vec<(String, Vec<String>)> = Vec::new();
                 let mut enter = None;
@@ -795,6 +796,7 @@ impl Parser {
                 let fname = name.clone();
                 Some(Stmt::Fate(std::sync::Arc::new(FateDef {
                     name: fname,
+                    line: fate_line,
                     states,
                     enter,
                 })))
@@ -938,6 +940,7 @@ impl Parser {
             }
             "splice" => {
                 self.next();
+                let splice_line = self.line();
                 let root = self.expect_ident()?;
                 let mut variants = Vec::new();
                 // T2c: marks collected before a 'variant' keyword apply to
@@ -1034,6 +1037,7 @@ impl Parser {
                                     vname,
                                     std::sync::Arc::new(GeneDef {
                                         name: Some(root.clone()),
+                                        line: self.line(),
                                         params,
                                         guard: None,
                                         body,
@@ -1062,6 +1066,7 @@ impl Parser {
                 }
                 Some(Stmt::Splice(std::sync::Arc::new(SpliceDef {
                     root,
+                    line: splice_line,
                     variants,
                 })))
             }
@@ -1124,6 +1129,7 @@ impl Parser {
             }
             "phenotype" => {
                 self.next();
+                let pheno_line = self.line();
                 let name = self.expect_ident()?;
                 let mut parent = None;
                 if self.at_kw("from") {
@@ -1219,6 +1225,7 @@ impl Parser {
                 let pname = name.clone();
                 Some(Stmt::Pheno(std::sync::Arc::new(PhenoDef {
                     name: pname,
+                    line: pheno_line,
                     parent,
                     fields,
                     methods,
@@ -1285,6 +1292,7 @@ impl Parser {
                     looks
                 };
                 if !is_canonical(&word) && is_def {
+                    let gene_line = self.line();
                     let line = self.line();
                     self.note(
                         line,
@@ -1326,6 +1334,7 @@ impl Parser {
                     let body = self.parse_block().unwrap_or_default();
                     return Some(Stmt::Gene(std::sync::Arc::new(GeneDef {
                         name: Some(word.clone()),
+                        line: gene_line,
                         params,
                         guard: None,
                         body,
@@ -1513,6 +1522,9 @@ impl Parser {
     }
 
     fn parse_gene_def(&mut self, marks: Vec<String>) -> Stmt {
+        // A13 (dx-r2): the def keyword's line — every definition-borne
+        // runtime note (gates, silencing) points here.
+        let def_line = self.line();
         let acetylate = marks.iter().any(|m| m == "acetylate");
         let methylate = marks.iter().any(|m| m == "methylate");
         let m6a = marks.iter().any(|m| m == "m6a");
@@ -1587,6 +1599,7 @@ impl Parser {
             self.end_stmt();
             let def = GeneDef {
                 name,
+                line: def_line,
                 params,
                 guard,
                 body: vec![Stmt::Return(Some(e))],
@@ -1600,6 +1613,7 @@ impl Parser {
         let body = self.parse_block().unwrap_or_default();
         let def = GeneDef {
             name,
+            line: def_line,
             params,
             guard,
             body,
@@ -1899,6 +1913,7 @@ impl Parser {
         loop {
             match self.peek().clone() {
                 Tok::LParen => {
+                    let call_line = self.line();
                     self.next();
                     let mut args = Vec::new();
                     loop {
@@ -1917,7 +1932,7 @@ impl Parser {
                             self.next();
                         }
                     }
-                    e = Expr::Call(Box::new(e), args);
+                    e = Expr::Call(Box::new(e), args, call_line);
                 }
                 Tok::LBrack => {
                     self.next();

@@ -887,7 +887,12 @@ fn repl_flush_new_notes(l: &tools::Loaded, start: usize) {
             3 => "wobble",
             _ => "fallback",
         };
-        println!("  [{}] {}", tag, n.message);
+        // A13 (dx-r2): real locations when the note carries a line
+        if n.line > 0 {
+            println!("  [{}] {}:{}: {}", tag, l.interp.file, n.line, n.message);
+        } else {
+            println!("  [{}] {}", tag, n.message);
+        }
     }
 }
 
