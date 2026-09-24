@@ -17,3 +17,7 @@ frame proof {
     let in_cell = join(id)
     assert(in_cell == null, "off-side gene stays repressed in worker cells")
 }
+main {
+    let id = spawn(b, [])
+    promote("worker saw repressed allele as: {join(id)}")
+}

@@ -1738,7 +1738,35 @@ impl Interp {
                 )?;
                 Ok(Value::Seq(def.clone(), st))
             }
-            Value::Gene(def, closure) => self.call_gene(def.clone(), closure.clone(), args),
+            Value::Gene(def, closure) => {
+                // reg-r4 (re-audit B-5): value-bound (higher-order) gene
+                // calls pass the toggle gate too — "the pair gates calls"
+                // is unqualified (SPEC §11); the seq branch already gated,
+                // plain genes did not.
+                if let Some(gname) = &def.name {
+                    if let Some(&(ref a, ref b, a_on)) = self
+                        .toggles
+                        .iter()
+                        .find(|(a, b, _)| a == gname || b == gname)
+                    {
+                        let this_is_a = a == gname;
+                        let active = (a_on && this_is_a) || (!a_on && !this_is_a);
+                        if !active && !def.acetylate {
+                            let winner = if a_on { a } else { b };
+                            self.note(
+                                def.line,
+                                4,
+                                format!(
+                                    "toggle repressed: '{}' is the inactive allele ('{}' is on)",
+                                    gname, winner
+                                ),
+                            );
+                            return Ok(Value::Null);
+                        }
+                    }
+                }
+                self.call_gene(def.clone(), closure.clone(), args)
+            }
             other => {
                 self.note(
                     0,

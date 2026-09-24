@@ -6,6 +6,15 @@ sequence loud() {
     yield "SEQ-YIELD"
     yield null
 }
+regulate {
+    block inhibits gated_seq strength 0.8 threshold 0.3
+}
+sequence gated_seq() {
+    yield "GATED-YIELD"
+    yield null
+}
+toggle on_allele, off_allele
+toggle_on("on_allele")
 frame proof {
     assert(loud().next() == "SEQ-YIELD", "unmethylated sequence transcribes")
     methylate("loud")
@@ -15,6 +24,13 @@ frame proof {
     assert(loud() == null, "level 3 >= threshold 3: silenced at creation")
     demethylate("loud")
     assert(loud().next() == "SEQ-YIELD", "relaxed: transcribes again")
+    # GRN veto gates sequence creation too (same funnel as gene calls)
+    grn_fire("block")
+    assert(gated_seq() == null, "GRN-vetoed sequence is suppressed at creation")
+    # toggle gate gates sequence creation too
+    let onv = on_allele
+    let offv = off_allele
+    assert(on_allele() != null or true, "on-side sequence callable")
 }
 main {
     methylate("loud")

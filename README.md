@@ -110,7 +110,7 @@ Real mechanisms, real semantics — the professor-level feature set:
 | phenotypic differentiation | `phenotype Cell { let f = 0; gene init(v) { self.f = v } }` — `new Cell(1)`, inheritance `from`, `self` |
 | polypeptide elongation | `sequence gen() { yield v }` — lazy `.next()` / `.collect()` on worker cells |
 | gene regulatory networks | `regulate { a activates b strength 0.9; c inhibits d; }` — stateful, two-phase fire, optional `threshold` dose–response |
-| toggle-switch bistability | `toggle a, b;` — exactly one on; calls to the repressed allele return null with a note |
+| mutual-repression latch (toggle switch) | `toggle a, b;` — exactly one on; calls to the repressed allele return null with a note |
 | repressilator oscillation | `repressilator a -> b -> c period 3;` — manual ring or timed OS thread (`repressi_start(ms)`) |
 | single-cell telemetry | `fingerprint()` — calls, burst index, mature / nascent / maturation |
 | RNA interference (antiviral silencing) | capability sandbox — default-deny file/net/env/run; violations raise catchable Stress `interference` |
