@@ -2219,8 +2219,39 @@ class Interp:
         finally:
             self.depth -= 1
 
+    def grn_veto(self, name):
+        """GRN call gate (T2a / SPEC §11) — mirror of the Rust core.
+
+        Activating edge with explicit threshold t vetoes while
+        level(source) < t; inhibiting edge with explicit threshold t vetoes
+        while level(inhibitor) >= t; edges without a threshold stay
+        declarative; a threshold of 0 never blocks (back-compat)."""
+        if not self.grn_edges:
+            return None
+        veto = None
+        for frm, to, st, inh, thr in self.grn_edges:
+            if veto is not None:
+                break
+            if to != name:
+                continue
+            lvl = self.grn_levels.get(frm, 0.0)
+            if inh:
+                if thr is not None and lvl >= thr:
+                    veto = f"inhibitor '{frm}' level {lvl!r} >= threshold {thr!r}"
+            else:
+                t = thr if thr is not None else 0.0
+                if lvl < t:
+                    veto = f"regulator '{frm}' level {lvl!r} < threshold {t!r}"
+        return veto
+
     def call_gene_inner(self, g, args):
         name = g.name or "<lambda>"
+        # GRN gate first: a suppressed call is not expression — it must not
+        # reach the call counters, the burst bins, or the gene body.
+        veto = self.grn_veto(name)
+        if veto is not None:
+            self.note(4, f"grn gate: '{name}' call suppressed ({veto})")
+            return None
         self.call_counts[name] = self.call_counts.get(name, 0) + 1
         self.call_clock += 1
         bucket = self.call_clock // 20

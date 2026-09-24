@@ -1464,8 +1464,50 @@ impl Interp {
         result
     }
 
+    /// GRN call gate (T2a / SPEC §11): does the regulatory network veto a
+    /// call to `name`? Returns the veto reason when the call must be
+    /// suppressed. Contract:
+    ///   - activating edge with explicit `threshold t`: vetoes while
+    ///     `level(source) < t` (all incoming activating edges must pass);
+    ///   - inhibiting edge with explicit `threshold t`: vetoes while
+    ///     `level(inhibitor) >= t`;
+    ///   - edges without a threshold stay declarative (level dynamics only),
+    ///   - and a threshold of 0 never blocks — so declaring a network with
+    ///     no explicit thresholds changes zero call behavior (back-compat).
+    fn grn_veto(&self, name: &str) -> Option<String> {
+        if self.grn_edges.is_empty() {
+            return None;
+        }
+        let mut veto: Option<String> = None;
+        for e in self.grn_edges.iter().filter(|e| e.to == name) {
+            if veto.is_some() {
+                break;
+            }
+            let lvl = *self.grn_levels.get(&e.from).unwrap_or(&0.0);
+            if e.inhibit {
+                if let Some(t) = e.threshold {
+                    if lvl >= t {
+                        veto = Some(format!("inhibitor '{}' level {:?} >= threshold {:?}", e.from, lvl, t));
+                    }
+                }
+            } else {
+                let t = e.threshold.unwrap_or(0.0);
+                if lvl < t {
+                    veto = Some(format!("regulator '{}' level {:?} < threshold {:?}", e.from, lvl, t));
+                }
+            }
+        }
+        veto
+    }
+
     fn call_gene_inner(&mut self, def: Arc<GeneDef>, closure: Option<Rc<Env>>, args: Vec<Value>) -> Result<Value, Stress> {
         let name = def.name.clone().unwrap_or_else(|| "<lambda>".into());
+        // GRN gate first: a suppressed call is not expression — it must not
+        // reach the call counters, the burst bins, or the gene body.
+        if let Some(reason) = self.grn_veto(&name) {
+            self.note(0, 4, format!("grn gate: '{}' call suppressed ({})", name, reason));
+            return Ok(Value::Null);
+        }
         *self.call_counts.entry(name.clone()).or_insert(0) += 1;
         // burst-index binning: 20 calls per bin, per gene (gene-expression
         // burstiness is measured on per-gene time bins, not across genes)
