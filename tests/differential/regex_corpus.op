@@ -1,0 +1,13 @@
+# differential: zero-dependency regex surface
+promote(re_match("he", "hello"))
+promote(re_match("lo", "hello"))
+promote(re_match("^hello$", "hello"))
+let m = re_find("l+", "hello")
+promote(m["text"])
+promote(m["start"])
+promote(m["end"])
+let g = re_groups("(\\d+)-(\\d+)", "12-34")
+promote(g[0])
+promote(g[1])
+promote(re_find("z", "hello"))
+promote(re_groups("a(b)c", "abc")[1])

@@ -1508,7 +1508,8 @@ abs min max sum clock exit assert codon distance similar transcribe reverse_comp
 gc_content translate find_orf memory methyl fingerprint toggle_on toggle_state repressi_next
 repressi_state repressi_start grn_fire grn_state spawn join floor ceil sqrt pow random
 randomize chr ord now sleep argv read_file write_file append_file exists file_size read_dir run
-http_get serve recv_request send_response json_parse json_str env call items""".split())
+http_get serve recv_request send_response json_parse json_str env call items
+re_match re_find re_groups unix_time date_parts date_fmt""".split())
 
 BUILTIN_SYNONYMS = {"print": "promote", "echo": "promote", "say": "promote", "show": "promote"}
 
@@ -2082,29 +2083,28 @@ class Interp:
                 return l + r
             raise Stress("unfolded", f"cannot add {type_name(l)} and {type_name(r)}")
         if op in ("-", "*", "/", "//", "%"):
+            # string repetition (Python parity): "ab" * 3 / 3 * "ab"
+            if op == "*" and isinstance(l, str) and not isinstance(r, str):
+                n = int(r)
+                if n < 0:
+                    raise Stress("unfolded", "repeat count must be non-negative")
+                if n * len(l) > 512 * 1024 * 1024:
+                    raise Stress("overflow", "repeat exceeds the 512 MiB string ceiling")
+                return l * n
+            if op == "*" and isinstance(r, str) and not isinstance(l, str):
+                n = int(l)
+                if n < 0:
+                    raise Stress("unfolded", "repeat count must be non-negative")
+                if n * len(r) > 512 * 1024 * 1024:
+                    raise Stress("overflow", "repeat exceeds the 512 MiB string ceiling")
+                return r * n
             if isinstance(l, (int, float)) and isinstance(r, (int, float)) and not isinstance(l, bool) and not isinstance(r, bool):
                 I64MIN, I64MAX = -(2**63), 2**63 - 1
                 if op == "-":
                     if isinstance(l, int) and isinstance(r, int) and not (I64MIN <= l - r <= I64MAX):
                         raise Stress("overflow", "int overflow in '-'")
                     return l - r
-                if op == "+":
-                    pass
                 if op == "*":
-                    if isinstance(l, str):
-                        n = int(r)
-                        if n < 0:
-                            raise Stress("unfolded", "repeat count must be non-negative")
-                        if n * len(l) > 512 * 1024 * 1024:
-                            raise Stress("overflow", "repeat exceeds the 512 MiB string ceiling")
-                        return l * n
-                    if isinstance(r, str):
-                        n = int(l)
-                        if n < 0:
-                            raise Stress("unfolded", "repeat count must be non-negative")
-                        if n * len(r) > 512 * 1024 * 1024:
-                            raise Stress("overflow", "repeat exceeds the 512 MiB string ceiling")
-                        return r * n
                     if isinstance(l, int) and isinstance(r, int) and not (I64MIN <= l * r <= I64MAX):
                         raise Stress("overflow", "int overflow in '*'")
                     return l * r

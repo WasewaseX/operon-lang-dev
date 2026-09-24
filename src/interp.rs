@@ -1276,16 +1276,26 @@ impl Interp {
                 Ok(Value::Int(q as i64))
             }
             Mod => {
-                // int % int stays int (Python semantics); sign follows divisor
+                // int % int stays int (Python floored semantics); sign follows
+                // divisor: r = a - b * floor(a / b) — 7 % -3 == -2, -7 % -3 == -1
                 if let (Value::Int(a), Value::Int(b)) = (l, r) {
                     if *b == 0 {
                         return Err(Stress::new("unfolded", "modulo by zero"));
                     }
-                    let bb = b.checked_abs().ok_or_else(|| {
-                        Stress::new("overflow", "int overflow in '%' (i64::MIN divisor)")
+                    if *a == i64::MIN && *b == -1 {
+                        return Err(Stress::new("overflow", "int overflow in '%'"));
+                    }
+                    let mut q = a / b; // Rust / truncates toward zero
+                    if (*a < 0) != (*b < 0) && q * b != *a {
+                        q -= 1; // floor rounds down
+                    }
+                    let rb = q.checked_mul(*b).ok_or_else(|| {
+                        Stress::new("overflow", "int overflow in '%'")
                     })?;
-                    let m = a.rem_euclid(bb);
-                    return Ok(Value::Int(if *b < 0 { -m } else { m }));
+                    let m = (*a).checked_sub(rb).ok_or_else(|| {
+                        Stress::new("overflow", "int overflow in '%'")
+                    })?;
+                    return Ok(Value::Int(m));
                 }
                 let (a, b) = self.as_floats(l, r)?;
                 if b == 0.0 {
