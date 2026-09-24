@@ -1,6 +1,6 @@
 # Operon v2.1 — Language Specification
 
-**Status:** v2.1.1. This document is the single contract implemented identically by:
+**Status:** v2.2.0. This document is the single contract implemented identically by:
 
 | Implementation | Language | Role |
 |---|---|---|
@@ -413,7 +413,7 @@ module's placeholder map which fills when loading completes (with a rung-4
 note); map/filter/reduce/each run callbacks over a snapshot of the source
 list (callbacks may freely mutate the original).
 
-This specification is **Operon 2.1.1**. (`operon version` prints the implementation banner `Operon 2.1.1 (rust-core, c-runtime, cpp-kernel)` matches this document.)
+This specification is **Operon 2.2.0**. `operon version` prints the implementation banner `Operon 2.2.0 (rust-core, c-runtime, cpp-kernel)`, which matches this document.
 
 ## 18. Verification status (what the shipped suite proves)
 
