@@ -1,0 +1,48 @@
+# mechanism coverage — wave-3 Critic-D gaps: guard uORF, variant params,
+# codon non-DNA rejection, anchor-import verification, deep-spawn cap
+frame proof {
+    # uORF leading guard: false condition trips the guard arm
+    gene gated(n) guard (n > 0) else {
+        return "guarded"
+    } {
+        return "body:{n}"
+    }
+    assert(gated(1) == "body:1", "guard passes through")
+    assert(gated(-1) == "guarded", "guard trips to else-arm")
+
+    # splice variant params: defaults + explicit args round-trip
+    splice sized {
+        variant v(a, b = 10) {
+            return a + b
+        }
+    }
+    assert(sized(5) == 15, "variant default param")
+    assert(sized(5, 20) == 25, "variant explicit param")
+
+    # codon usage scoring: non-DNA letters score NEUTRAL (50), not 90
+    assert(codon("xyzxyz") == 50, "codon non-DNA neutral")
+    assert(codon("ATGCGT") > 50, "codon real DNA scores above neutral")
+
+    # deep spawn payloads: the SendValue depth cap is a catchable stress
+    let deep = [1]
+    let cur = deep
+    let i = 0
+    while i < 300000 {
+        let nxt = [cur]
+        cur = nxt
+        i = i + 1
+    }
+    stress {
+        let t = spawn(join_probe, [cur])
+        join(t)
+        assert(false, "deep spawn must raise")
+    } rescue (e) {
+        assert(e.kind == "overflow", "deep spawn contained")
+    }
+}
+gene join_probe(x) {
+    return 1
+}
+main {
+    promote("mechanism coverage verified")
+}

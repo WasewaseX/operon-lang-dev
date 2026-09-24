@@ -71,12 +71,13 @@ pub struct Parser {
     toks: Vec<(Tok, usize)>,
     pos: usize,
     notes: Vec<Note>,
+    depth: u32,
 }
 
 pub fn parse(src: &str) -> Program {
     let lexed = lex(src);
     let mut notes = lexed.notes;
-    let mut p = Parser { toks: lexed.toks, pos: 0, notes: Vec::new() };
+    let mut p = Parser { toks: lexed.toks, pos: 0, notes: Vec::new(), depth: 0 };
     let stmts = p.parse_program();
     notes.append(&mut p.notes);
     let mut prog = Program {
@@ -148,10 +149,13 @@ fn collect_structure(prog: &mut Program) {
 
 impl Parser {
     fn peek(&self) -> &Tok {
-        &self.toks[self.pos].0
+        // clamp: token walk must never index past the trailing Eof
+        let i = self.pos.min(self.toks.len() - 1);
+        &self.toks[i].0
     }
     fn line(&self) -> usize {
-        self.toks[self.pos].1
+        let i = self.pos.min(self.toks.len() - 1);
+        self.toks[i].1
     }
     fn next(&mut self) -> Tok {
         let t = self.toks[self.pos].0.clone();
@@ -1726,8 +1730,32 @@ impl Parser {
                 self.build_interp(raw, line)
             }
             Tok::LParen => {
+                // nesting cap: a million-deep `((((…` must not exhaust the
+                // native stack (Critic-X rt_p1c3) — truncate as a rung-4 note
+                if self.depth >= 4096 {
+                    let line = self.line();
+                    self.note(line, 4, "expression nested deeper than 4096; truncated");
+                    let mut bal = 0usize;
+                    while self.pos < self.toks.len() {
+                        match self.toks[self.pos].0 {
+                            Tok::LParen => bal += 1,
+                            Tok::RParen => {
+                                bal -= 1;
+                                self.pos += 1;
+                                if bal == 0 {
+                                    break;
+                                }
+                            }
+                            _ => {}
+                        }
+                        self.pos += 1;
+                    }
+                    return Expr::Null;
+                }
                 self.next();
+                self.depth += 1;
                 let e = self.parse_expr();
+                self.depth -= 1;
                 if matches!(self.peek(), Tok::RParen) {
                     self.next();
                 } else {
@@ -1737,6 +1765,27 @@ impl Parser {
                 e
             }
             Tok::LBrack => {
+                if self.depth >= 4096 {
+                    let line = self.line();
+                    self.note(line, 4, "expression nested deeper than 4096; truncated");
+                    let mut bal = 0usize;
+                    while self.pos < self.toks.len() {
+                        match self.toks[self.pos].0 {
+                            Tok::LBrack => bal += 1,
+                            Tok::RBrack => {
+                                bal -= 1;
+                                self.pos += 1;
+                                if bal == 0 {
+                                    break;
+                                }
+                            }
+                            _ => {}
+                        }
+                        self.pos += 1;
+                    }
+                    return Expr::Null;
+                }
+                self.depth += 1;
                 self.next();
                 let mut items = Vec::new();
                 loop {
@@ -1758,6 +1807,7 @@ impl Parser {
                         self.note(line, 4, "list items separated automatically");
                     }
                 }
+                self.depth -= 1;
                 Expr::List(items)
             }
             Tok::LBrace => self.parse_map_literal(),
@@ -2034,5 +2084,5 @@ impl Parser {
 
 fn parse_snippet(src: &str) -> Parser {
     let lexed = lex(src);
-    Parser { toks: lexed.toks, pos: 0, notes: lexed.notes }
+    Parser { toks: lexed.toks, pos: 0, notes: lexed.notes, depth: 0 }
 }

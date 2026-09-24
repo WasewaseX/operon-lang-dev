@@ -1,0 +1,6 @@
+gene f(n) {
+    return f(n + 1)
+}
+gene main() {
+    promote(f(0))
+}

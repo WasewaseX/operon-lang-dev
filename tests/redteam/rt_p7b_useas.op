@@ -1,0 +1,3 @@
+use std/math as M
+use std/bio as B
+promote(str(M.sqrt(4.0)))

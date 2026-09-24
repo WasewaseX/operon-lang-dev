@@ -1,0 +1,8 @@
+gene main() {
+    stress {
+        let s = read_file("/etc/hostname")
+        promote("LEAK: {s}")
+    } rescue (e) {
+        promote("denied: {e.kind}")
+    }
+}

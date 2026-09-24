@@ -27,7 +27,7 @@ frame proof {
     assert(s == "repaired", "single-quote repair")
 
     # codon scoring + edit distance (C++ kernel)
-    assert(distance("kitten", "sitting") == 3, "myers distance")
+    assert(distance("kitten", "sitting") == 3, "edit distance")
     assert(distance("gene", "gen") == 1, "distance 1")
     assert(similar("promote", "promot"), "similar within 2")
     assert(not similar("abc", "xyz"), "dissimilar")

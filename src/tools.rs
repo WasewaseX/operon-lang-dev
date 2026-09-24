@@ -553,7 +553,7 @@ pub fn grade_letter(score: i64) -> char {
 
 // ------------------------------------------------------------ profile
 pub fn profile(file: &str, opts: &Opts) -> Loaded {
-    let mut l = load_file(file, opts).expect("load failed");
+    let mut l = match load_file(file, opts) { Ok(l) => l, Err(e) => crate::die(&format!("{}: {}", file, e)) };
     l.interp.profiling = true;
     let _ = run_entry(&mut l, opts);
     l
@@ -568,7 +568,7 @@ pub struct CrisprReport {
 }
 
 pub fn crispr(file: &str, opts: &Opts, knockout: &str) -> CrisprReport {
-    let mut l = load_file(file, opts).expect("load failed");
+    let mut l = match load_file(file, opts) { Ok(l) => l, Err(e) => crate::die(&format!("{}: {}", file, e)) };
     let genv = l.interp.global.clone();
     // guide RNA: replace the gene body with return null
     if let Some(Value::Gene(d, _)) = genv.get(knockout) {
@@ -610,7 +610,7 @@ pub fn bench(file: &str, opts: &Opts, iters: usize) -> BenchReport {
     let mut times = Vec::new();
     for _ in 0..iters {
         let t0 = crate::ffi::now_ns();
-        let mut l = load_file(file, opts).expect("load failed");
+        let mut l = match load_file(file, opts) { Ok(l) => l, Err(e) => crate::die(&format!("{}: {}", file, e)) };
         let _ = run_entry(&mut l, opts);
         times.push((crate::ffi::now_ns() - t0) / 1e6);
     }
@@ -703,6 +703,12 @@ fn collect_op_files(dir: &Path, out: &mut Vec<String>) {
         for e in entries {
             let p = e.path();
             if p.is_dir() {
+                // the red-team suite is adversarial by design (hangs, bombs,
+                // escapes) — it is exercised by scripts/redteam.sh with
+                // containment expectations, never by the proof runner
+                if p.file_name().map(|n| n == "redteam").unwrap_or(false) {
+                    continue;
+                }
                 collect_op_files(&p, out);
             } else if p.extension().map(|x| x == "op").unwrap_or(false) {
                 out.push(p.to_string_lossy().to_string());
@@ -897,7 +903,20 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
             out.push_str("{\n");
             for (vn, d) in &sp.variants {
                 out.push_str(&indent(ind + 1));
-                out.push_str(&format!("variant {} ", vn));
+                // round-trip variant params (retired the SPEC §11 build caveat)
+                if d.params.is_empty() {
+                    out.push_str(&format!("variant {} ", vn));
+                } else {
+                    let ps: Vec<String> = d
+                        .params
+                        .iter()
+                        .map(|(n, defv)| match defv {
+                            Some(e) => format!("{} = {}", n, fmt_expr(e)),
+                            None => n.clone(),
+                        })
+                        .collect();
+                    out.push_str(&format!("variant {}({}) ", vn, ps.join(", ")));
+                }
                 fmt_block(&d.body, ind + 1, out);
                 out.push('\n');
             }
@@ -965,7 +984,13 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
             out.push_str("{\n");
             for (f, to) in reps {
                 out.push_str(&indent(ind + 1));
-                out.push_str(&format!("replace \"{}\" -> \"{}\";\n", f, to));
+                // escape pattern text: a raw quote inside a pattern would
+                // corrupt the formatted file
+                out.push_str(&format!(
+                    "replace \"{}\" -> \"{}\";\n",
+                    json_escape(&f),
+                    json_escape(&to)
+                ));
             }
             out.push_str(&indent(ind));
             out.push_str("}\n\n");
@@ -1163,7 +1188,10 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
             format!("for {} in {}{} collect {}", var, fmt_expr(iter), f, fmt_expr(body))
         }
         Expr::Ternary(c, a, b) => {
-            format!("{} ? {} : {}", fmt_prec(c, 1), fmt_expr(a), fmt_expr(b))
+            // cond slot: a nested ternary MUST be parenthesized — `a ? 0 : 2
+            // ? 3 : 4` re-parses as `a ? 0 : (2 ? 3 : 4)` and silently changes
+            // meaning (wave-3 Critic-Q semantics bug)
+            format!("{} ? {} : {}", fmt_prec(c, 2), fmt_expr(a), fmt_expr(b))
         }
         Expr::New(n, args) => format!(
             "new {}({})",

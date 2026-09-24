@@ -1,0 +1,13 @@
+gene noop() {
+    return 1
+}
+gene main() {
+    let ids = []
+    for i in range(0, 10000) {
+        push(ids, spawn(noop, []))
+    }
+    for t in ids {
+        join(t)
+    }
+    promote("done")
+}

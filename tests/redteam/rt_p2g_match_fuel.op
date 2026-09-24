@@ -1,0 +1,6 @@
+gene main() {
+    match 1 {
+        case 1 { while true { } }
+        case _ { promote("no") }
+    }
+}

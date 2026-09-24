@@ -138,22 +138,34 @@ impl Caps {
     /// Resolve what the path ACTUALLY is on disk (symlinks included) and
     /// compare against the resolved grant. Falls back to lexical comparison
     /// when the target does not exist (e.g. a file about to be created).
+    ///
+    /// STRICT-RULE (sandbox): if the path EXISTS, its fully-resolved form
+    /// must be inside a grant — no parent-chain probing. A symlink placed
+    /// inside a granted directory that points outside the sandbox resolves
+    /// to its target and is rejected even though the link's parent is
+    /// granted (Critic-X B1).
     fn path_allowed(list: &[String], path: &str) -> bool {
         let resolved_requested = std::fs::canonicalize(path)
             .ok()
             .map(|p: std::path::PathBuf| p.to_string_lossy().replace('\\', "/"));
-        for g in list {
-            // grant must exist and resolve inside its directory
-            if let Ok(rg) = std::fs::canonicalize(g) {
-                let rg_str = rg.to_string_lossy().replace('\\', "/");
-                if let Some(rp) = &resolved_requested {
-                    let rp_str = rp.as_str().replace('\\', "/");
+        if let Some(rp) = &resolved_requested {
+            // existing target: strict resolved-prefix match only
+            let rp_str = rp.as_str().replace('\\', "/");
+            for g in list {
+                if let Ok(rg) = std::fs::canonicalize(g) {
+                    let rg_str = rg.to_string_lossy().replace('\\', "/");
                     if rp_str == rg_str || rp_str.starts_with(&format!("{}/", rg_str)) {
                         return true;
                     }
                 }
-                // non-existent target (create/write case): its parent chain
-                // must resolve inside the grant
+            }
+            return false;
+        }
+        // non-existent target (create/write case): its parent chain
+        // must resolve inside the grant
+        for g in list {
+            if let Ok(rg) = std::fs::canonicalize(g) {
+                let rg_str = rg.to_string_lossy().replace('\\', "/");
                 let mut probe = std::path::PathBuf::from(path);
                 while probe.pop() {
                     if let Ok(pp) = std::fs::canonicalize(&probe) {
@@ -232,6 +244,9 @@ pub struct Interp {
     pub tasks: HashMap<i64, TaskHandle>,
     pub next_task_id: i64,
     pub seq_tx: Option<mpsc::SyncSender<crate::value::SeqMsg>>,
+    /// Process-wide step ceiling shared with every spawned worker: when
+    /// present, the run's TOTAL fuel (host + all threads) drains this pool.
+    pub fuel_pool: Option<Arc<std::sync::atomic::AtomicI64>>,
 }
 
 impl Interp {
@@ -277,6 +292,7 @@ impl Interp {
             tasks: HashMap::new(),
             next_task_id: 1,
             seq_tx: None,
+            fuel_pool: None,
         }
     }
 
@@ -284,8 +300,31 @@ impl Interp {
         self.notes.push(Note { line, rung, message: msg.into() });
     }
 
+    fn str_repeat(&self, s: &str, n: i64) -> Result<Value, Stress> {
+        if n < 0 {
+            return Err(Stress::new("unfolded", "repeat count must be non-negative"));
+        }
+        let n = n as u64;
+        // allocation ceiling: giant repeats abort the process outside the
+        // stress model — cap as catchable overflow
+        if n.saturating_mul(s.len() as u64) > 512 * 1024 * 1024 {
+            return Err(Stress::new("overflow", "repeat exceeds the 512 MiB string ceiling"));
+        }
+        Ok(Value::Str(s.repeat(n as usize)))
+    }
+
     fn tick(&mut self) -> Result<(), Stress> {
         self.steps += 1;
+        // shared pool: every 65_536 steps, drain a chunk from the run-wide
+        // pool so host + workers share one "steps per run" ceiling
+        if self.steps % 65_536 == 0 {
+            if let Some(pool) = &self.fuel_pool {
+                let left = pool.fetch_sub(65_536, std::sync::atomic::Ordering::Relaxed);
+                if left <= 65_536 {
+                    return Err(Stress::new("overflow", "run-wide step budget exhausted (shared pool)"));
+                }
+            }
+        }
         if self.steps > self.step_budget {
             Err(Stress::new("overflow", "step budget exhausted"))
         } else {
@@ -621,6 +660,13 @@ impl Interp {
                         }
                         match rescue {
                             Some((binding, rbody)) => {
+                                // rescue entry is real work: charge it. A
+                                // `rescue { return f() }` retry-spin otherwise
+                                // dodges the fuel counter entirely (wave-3
+                                // Critic-X hang #1).
+                                for _ in 0..64 {
+                                    self.tick()?;
+                                }
                                 let child = Env::new(Some(env.clone()));
                                 if let Some(b) = binding {
                                     let m = self.stress_map(&stress);
@@ -866,7 +912,9 @@ impl Interp {
                 let v = self.eval(env, e)?;
                 match op {
                     UnOp::Neg => match v {
-                        Value::Int(i) => Ok(Value::Int(-i)),
+                        Value::Int(i) => i.checked_neg().map(Value::Int).ok_or_else(|| {
+                            Stress::new("overflow", "int overflow in negation (i64::MIN)")
+                        }),
                         Value::Float(f) => Ok(Value::Float(-f)),
                         other => Err(Stress::new(
                             "unfolded",
@@ -1092,8 +1140,18 @@ impl Interp {
                 (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a + b)),
                 (Value::Int(a), Value::Float(b)) => Ok(Value::Float(*a as f64 + b)),
                 (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a + *b as f64)),
-                (Value::Str(a), Value::Str(b)) => Ok(Value::Str(format!("{}{}", a, b))),
+                (Value::Str(a), Value::Str(b)) => {
+                    // allocation ceiling: unbounded concat doubling OOM-kills
+                    // the process outside the stress model — cap as overflow
+                    if a.len().saturating_add(b.len()) > 512 * 1024 * 1024 {
+                        return Err(Stress::new("overflow", "string concat exceeds the 512 MiB ceiling"));
+                    }
+                    Ok(Value::Str(format!("{}{}", a, b)))
+                }
                 (Value::List(a), Value::List(b)) => {
+                    if a.borrow().len().saturating_add(b.borrow().len()) > 64 * 1024 * 1024 {
+                        return Err(Stress::new("overflow", "list concat exceeds the 64M-element ceiling"));
+                    }
                     let mut v = a.borrow().clone();
                     v.extend(b.borrow().iter().cloned());
                     Ok(Value::List(Rc::new(RefCell::new(v))))
@@ -1104,7 +1162,16 @@ impl Interp {
                 )),
             },
             Sub => self.arith(l, r, "+-", |a, b| a.checked_sub(*b).map(Value::Int), |a, b| a - b),
-            Mul => self.arith(l, r, "*", |a, b| a.checked_mul(*b).map(Value::Int), |a, b| a * b),
+            Mul => {
+                // string repetition (Python parity): "ab" * 3 / 3 * "ab"
+                if let (Value::Str(s), Value::Int(n)) = (l, r) {
+                    return self.str_repeat(s, *n);
+                }
+                if let (Value::Int(n), Value::Str(s)) = (l, r) {
+                    return self.str_repeat(s, *n);
+                }
+                self.arith(l, r, "*", |a, b| a.checked_mul(*b).map(Value::Int), |a, b| a * b)
+            }
             Pow => {
                 // 2**10 → int (checked); anything else promotes to float
                 match (l, r) {
@@ -1113,7 +1180,11 @@ impl Interp {
                     }
                     _ => {
                         let (a, b) = self.as_floats(l, r)?;
-                        Ok(Value::Float(a.powf(b)))
+                        let out = a.powf(b);
+                        if out.is_infinite() && a.is_finite() && b.is_finite() && b > 0.0 {
+                            return Err(Stress::new("overflow", "float '**' overflowed to infinity"));
+                        }
+                        Ok(Value::Float(out))
                     }
                 }
             }
@@ -1144,11 +1215,29 @@ impl Interp {
                 Ok(Value::Float(a / b))
             }
             FloorDiv => {
+                // floor division (Python-parity), ALWAYS int, overflow-contained
+                if let (Value::Int(a), Value::Int(b)) = (l, r) {
+                    if *b == 0 {
+                        return Err(Stress::new("unfolded", "division by zero in '//'"));
+                    }
+                    if *a == i64::MIN && *b == -1 {
+                        return Err(Stress::new("overflow", "int overflow in '//'"));
+                    }
+                    let mut q = a / b;
+                    if (*a < 0) != (*b < 0) && q * b != *a {
+                        q -= 1; // Rust / truncates toward zero; floor rounds down
+                    }
+                    return Ok(Value::Int(q));
+                }
                 let (a, b) = self.as_floats(l, r)?;
                 if b == 0.0 {
                     return Err(Stress::new("unfolded", "division by zero in '//'"));
                 }
-                Ok(Value::Int(a.div_euclid(b) as i64))
+                let q = (a / b).floor();
+                if !q.is_finite() || q >= 9.223372036854776e18 || q <= -9.223372036854776e18 {
+                    return Err(Stress::new("overflow", "int overflow in '//'"));
+                }
+                Ok(Value::Int(q as i64))
             }
             Mod => {
                 // int % int stays int (Python semantics); sign follows divisor
@@ -1156,7 +1245,10 @@ impl Interp {
                     if *b == 0 {
                         return Err(Stress::new("unfolded", "modulo by zero"));
                     }
-                    let m = a.rem_euclid(b.abs());
+                    let bb = b.checked_abs().ok_or_else(|| {
+                        Stress::new("overflow", "int overflow in '%' (i64::MIN divisor)")
+                    })?;
+                    let m = a.rem_euclid(bb);
                     return Ok(Value::Int(if *b < 0 { -m } else { m }));
                 }
                 let (a, b) = self.as_floats(l, r)?;
@@ -1168,6 +1260,13 @@ impl Interp {
             Eq => Ok(Value::Bool(l.deep_eq(r))),
             Neq => Ok(Value::Bool(!l.deep_eq(r))),
             Lt | Le | Gt | Ge => {
+                // IEEE/Python parity: any comparison with NaN is false
+                // (Eq/Neq already behave correctly via deep_eq)
+                let nan_involved = matches!(l, Value::Float(f) if f.is_nan())
+                    || matches!(r, Value::Float(f) if f.is_nan());
+                if nan_involved {
+                    return Ok(Value::Bool(false));
+                }
                 let ord = self.compare(l, r)?;
                 Ok(Value::Bool(match op {
                     Lt => ord == std::cmp::Ordering::Less,
@@ -1259,7 +1358,13 @@ impl Interp {
                     self.note(0, 4, format!("{} extra argument(s) in call to sequence ignored", args.len() - def.params.len()));
                 }
                 let snap = crate::genes::snapshot_globals(self);
-                let st = crate::genes::seq_start(def.clone(), args, snap, self.caps.clone());
+                let st = crate::genes::seq_start(
+                    def.clone(),
+                    args,
+                    snap,
+                    self.caps.clone(),
+                    self.fuel_pool.clone(),
+                )?;
                 Ok(Value::Seq(def.clone(), st))
             }
             Value::Gene(def, closure) => self.call_gene(def.clone(), closure.clone(), args),
@@ -1725,7 +1830,9 @@ impl Interp {
                 None => "null".to_string(),
             })),
             "abs" => match args.first() {
-                Some(Value::Int(i)) => Ok(Value::Int(i.abs())),
+                Some(Value::Int(i)) => i.checked_abs().map(Value::Int).ok_or_else(|| {
+                    Stress::new("overflow", "int overflow in abs(i64::MIN)")
+                }),
                 Some(Value::Float(f)) => Ok(Value::Float(f.abs())),
                 _ => Ok(Value::Int(0)),
             },
@@ -2162,12 +2269,24 @@ impl Interp {
                     Some(Value::Int(i)) => *i,
                     _ => -1,
                 };
-                crate::genes::join_task(self, id)
+                let timeout = match args.get(1) {
+                    Some(Value::Int(i)) if *i > 0 => Some(*i as u64),
+                    Some(Value::Float(f)) if *f > 0.0 => Some(*f as u64),
+                    _ => None,
+                };
+                crate::genes::join_task(self, id, timeout)
             }
             // -------------------------------------------------- math
             "floor" => Ok(Value::Int(match args.first() {
                 Some(Value::Int(i)) => *i,
-                Some(Value::Float(f)) => f.floor() as i64,
+                Some(Value::Float(f)) => {
+                    // a float outside i64 range has no faithful int form —
+                    // catchable overflow (the oracle agrees, i64 is the contract)
+                    if !f.is_finite() || *f >= 9.223372036854776e18 || *f <= -9.223372036854776e18 {
+                        return Err(Stress::new("overflow", "float too large for floor/ceil to int"));
+                    }
+                    f.floor() as i64
+                }
                 other => {
                     self.note(0, 4, format!("floor of {:?}; 0", other.map(|v| v.type_name())));
                     0
@@ -2175,7 +2294,12 @@ impl Interp {
             })),
             "ceil" => Ok(Value::Int(match args.first() {
                 Some(Value::Int(i)) => *i,
-                Some(Value::Float(f)) => f.ceil() as i64,
+                Some(Value::Float(f)) => {
+                    if !f.is_finite() || *f >= 9.223372036854776e18 || *f <= -9.223372036854776e18 {
+                        return Err(Stress::new("overflow", "float too large for floor/ceil to int"));
+                    }
+                    f.ceil() as i64
+                }
                 _ => 0,
             })),
             "sqrt" => {
@@ -2197,6 +2321,143 @@ impl Interp {
                     }
                 };
                 Ok(Value::Float(a.powf(b)))
+            }
+            // ------------------------------------------------ regex (ReDoS-safe: 2M step cap)
+            "re_match" => {
+                // re_match(pattern, s) — full match test
+                let pat = args.first().map(|v| v.display()).unwrap_or_default();
+                let s = args.get(1).map(|v| v.display()).unwrap_or_default();
+                let engine = re_compile(&pat)?;
+                let chars: Vec<char> = s.chars().collect();
+                let (ok, ovf, _, _) = engine.run_at(&chars, 0);
+                if ovf {
+                    return Err(Stress::new("overflow", "regex backtracking exceeded 2M steps"));
+                }
+                Ok(Value::Bool(ok))
+            }
+            "re_find" => {
+                // re_find(pattern, s, start?) — leftmost match as a map
+                let pat = args.first().map(|v| v.display()).unwrap_or_default();
+                let s = args.get(1).map(|v| v.display()).unwrap_or_default();
+                let start = match args.get(2) {
+                    Some(Value::Int(i)) => (*i).max(0) as usize,
+                    _ => 0,
+                };
+                let engine = re_compile(&pat)?;
+                let chars: Vec<char> = s.chars().collect();
+                match engine.search(&chars, start.min(chars.len())) {
+                    None => Ok(Value::Null),
+                    Some((st, en, caps, ovf)) => {
+                        if ovf {
+                            return Err(Stress::new("overflow", "regex backtracking exceeded 2M steps"));
+                        }
+                        let text: String = chars[st..en].iter().collect();
+                        let groups: Vec<Value> = caps
+                            .iter()
+                            .map(|g| match g {
+                                Some((a, b)) => Value::Str(chars[*a..*b].iter().collect()),
+                                None => Value::Null,
+                            })
+                            .collect();
+                        Ok(Value::Map(Rc::new(RefCell::new(vec![
+                            (Value::Str("text".into()), Value::Str(text)),
+                            (Value::Str("start".into()), Value::Int(st as i64)),
+                            (Value::Str("end".into()), Value::Int(en as i64)),
+                            (Value::Str("groups".into()), Value::List(Rc::new(RefCell::new(groups)))),
+                        ]))))
+                    }
+                }
+            }
+            "re_groups" => {
+                let pat = args.first().map(|v| v.display()).unwrap_or_default();
+                let s = args.get(1).map(|v| v.display()).unwrap_or_default();
+                let engine = re_compile(&pat)?;
+                let chars: Vec<char> = s.chars().collect();
+                match engine.search(&chars, 0) {
+                    None => Ok(Value::Null),
+                    Some((_, _, caps, ovf)) => {
+                        if ovf {
+                            return Err(Stress::new("overflow", "regex backtracking exceeded 2M steps"));
+                        }
+                        let groups: Vec<Value> = caps
+                            .iter()
+                            .map(|g| match g {
+                                Some((a, b)) => Value::Str(chars[*a..*b].iter().collect()),
+                                None => Value::Null,
+                            })
+                            .collect();
+                        Ok(Value::List(Rc::new(RefCell::new(groups))))
+                    }
+                }
+            }
+            // ------------------------------------------------ date / time (UTC civil calendar)
+            "unix_time" => {
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs() as i64)
+                    .unwrap_or(0);
+                Ok(Value::Int(now))
+            }
+            "date_parts" => {
+                let ts = match args.first() {
+                    Some(Value::Int(i)) => *i,
+                    Some(Value::Float(f)) => *f as i64,
+                    _ => {
+                        return Err(Stress::new("unfolded", "date_parts(ts) needs a unix timestamp"));
+                    }
+                };
+                let days = ts.div_euclid(86_400);
+                let secs = ts.rem_euclid(86_400);
+                let (y, m, d) = civil_from_days(days);
+                let wday = (days + 4).rem_euclid(7); // 1970-01-01 = Thursday(4), Sunday=0
+                Ok(Value::Map(Rc::new(RefCell::new(vec![
+                    (Value::Str("year".into()), Value::Int(y)),
+                    (Value::Str("month".into()), Value::Int(m as i64)),
+                    (Value::Str("day".into()), Value::Int(d as i64)),
+                    (Value::Str("hour".into()), Value::Int(secs / 3600)),
+                    (Value::Str("min".into()), Value::Int((secs % 3600) / 60)),
+                    (Value::Str("sec".into()), Value::Int(secs % 60)),
+                    (Value::Str("wday".into()), Value::Int(wday)),
+                ]))))
+            }
+            "date_fmt" => {
+                let ts = match args.first() {
+                    Some(Value::Int(i)) => *i,
+                    Some(Value::Float(f)) => *f as i64,
+                    _ => {
+                        return Err(Stress::new("unfolded", "date_fmt(ts, fmt) needs a unix timestamp"));
+                    }
+                };
+                let fmt = args.get(1).map(|v| v.display()).unwrap_or_else(|| "%Y-%m-%d %H:%M:%S".into());
+                let days = ts.div_euclid(86_400);
+                let secs = ts.rem_euclid(86_400);
+                let (y, m, d) = civil_from_days(days);
+                let hh = secs / 3600;
+                let mi = (secs % 3600) / 60;
+                let ss = secs % 60;
+                let mut out = String::new();
+                let mut it = fmt.chars().peekable();
+                while let Some(c) = it.next() {
+                    if c == '%' {
+                        match it.next() {
+                            Some('Y') => out.push_str(&format!("{:04}", y)),
+                            Some('m') => out.push_str(&format!("{:02}", m)),
+                            Some('d') => out.push_str(&format!("{:02}", d)),
+                            Some('H') => out.push_str(&format!("{:02}", hh)),
+                            Some('M') => out.push_str(&format!("{:02}", mi)),
+                            Some('S') => out.push_str(&format!("{:02}", ss)),
+                            Some('%') => out.push('%'),
+                            Some(other) => {
+                                out.push('%');
+                                out.push(other);
+                            }
+                            None => out.push('%'),
+                        }
+                    } else {
+                        out.push(c);
+                    }
+                }
+                Ok(Value::Str(out))
             }
             "random" => {
                 // xorshift64* — identical state machine in both implementations
@@ -2244,6 +2505,19 @@ impl Interp {
                 };
                 // wall-clock ceiling: sleep escapes the step budget, so cap it
                 let ms = ms.min(60_000);
+                // fuel charge: a sleeping worker drains the shared pool in
+                // proportion to its wall time — sleep-loops cannot run forever
+                let charge = ms.saturating_mul(1000);
+                self.steps = self.steps.saturating_add(charge);
+                if let Some(pool) = &self.fuel_pool {
+                    let left = pool.fetch_sub(charge as i64, std::sync::atomic::Ordering::Relaxed);
+                    if left <= charge as i64 {
+                        return Err(Stress::new("overflow", "run-wide step budget exhausted (sleep)"));
+                    }
+                }
+                if self.steps > self.step_budget {
+                    return Err(Stress::new("overflow", "step budget exhausted (sleep)"));
+                }
                 std::thread::sleep(std::time::Duration::from_millis(ms));
                 Ok(Value::Null)
             }
@@ -2251,10 +2525,13 @@ impl Interp {
                 self.cli_args.iter().map(|a| Value::Str(a.clone())).collect(),
             )))),
             // -------------------------------------------------- filesystem (capability-gated)
+            // open the CANONICALIZED path: what we checked is what we touch
+            // (closes the check/open race on symlink flips)
             "read_file" => {
                 let path = args.first().map(|v| v.display()).unwrap_or_default();
                 self.caps.check(&self.caps.read, "read", &path)?;
-                match std::fs::read_to_string(&path) {
+                let opened = std::fs::canonicalize(&path).unwrap_or_else(|_| std::path::PathBuf::from(&path));
+                match std::fs::read_to_string(&opened) {
                     Ok(s) => Ok(Value::Str(s)),
                     Err(e) => Err(Stress::new("missing", format!("read_file '{}': {}", path, e))),
                 }
@@ -2263,7 +2540,19 @@ impl Interp {
                 let path = args.first().map(|v| v.display()).unwrap_or_default();
                 let body = args.get(1).map(|v| v.display()).unwrap_or_default();
                 self.caps.check(&self.caps.write, "write", &path)?;
-                match std::fs::write(&path, body) {
+                let opened = std::fs::canonicalize(&path).unwrap_or_else(|_| std::path::PathBuf::from(&path));
+                // hardlink defense: refuse to overwrite shared inodes
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::MetadataExt;
+                    if let Ok(m) = std::fs::metadata(&opened) {
+                        if m.nlink() > 1 {
+                            return Err(Stress::new("interference", format!(
+                                "write_file '{}': refused — path is a hardlink ({} links)", path, m.nlink())));
+                        }
+                    }
+                }
+                match std::fs::write(&opened, body) {
                     Ok(()) => Ok(Value::Bool(true)),
                     Err(e) => Err(Stress::new("missing", format!("write_file '{}': {}", path, e))),
                 }
@@ -2272,7 +2561,8 @@ impl Interp {
                 let path = args.first().map(|v| v.display()).unwrap_or_default();
                 let body = args.get(1).map(|v| v.display()).unwrap_or_default();
                 self.caps.check(&self.caps.write, "write", &path)?;
-                match std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+                let opened = std::fs::canonicalize(&path).unwrap_or_else(|_| std::path::PathBuf::from(&path));
+                match std::fs::OpenOptions::new().create(true).append(true).open(&opened) {
                     Ok(mut f) => {
                         use std::io::Write;
                         match f.write_all(body.as_bytes()) {
@@ -2322,7 +2612,25 @@ impl Interp {
                     _ => Vec::new(),
                 };
                 self.caps.check(&self.caps.run, "run", &prog)?;
-                let out = std::process::Command::new(&prog).args(&prog_args).output();
+                // safe-base environment: children get the OS essentials plus
+                // explicitly env-granted variables — never the whole parent
+                // environment (secrets like CI tokens cannot leak to effects)
+                let mut cmd = std::process::Command::new(&prog);
+                cmd.args(&prog_args).env_clear();
+                for (k, v) in std::env::vars_os() {
+                    let key = k.to_string_lossy().to_string();
+                    let essential = matches!(
+                        key.as_str(),
+                        "PATH" | "HOME" | "LANG" | "TMPDIR" | "USER"
+                            | "SystemRoot" | "SystemDrive" | "COMSPEC" | "PATHEXT"
+                            | "WINDIR" | "TEMP" | "TMP" | "APPDATA" | "LOCALAPPDATA"
+                            | "PROGRAMFILES" | "PROGRAMDATA" | "USERPROFILE"
+                    );
+                    if essential || self.caps.env.iter().any(|e| e == &key) {
+                        cmd.env(k, v);
+                    }
+                }
+                let out = cmd.output();
                 match out {
                     Ok(o) => {
                         let stdout = String::from_utf8_lossy(&o.stdout).to_string();
@@ -2575,8 +2883,16 @@ impl Interp {
                         _ => s.len() as i64,
                     };
                     let len = s.chars().count() as i64;
-                    let a = a.clamp(0, len) as usize;
-                    let b = b.clamp(0, len) as usize;
+                    // Python-style: negative indexes count from the end
+                    let norm = |x: i64| -> i64 {
+                        if x < 0 {
+                            (len + x).max(0)
+                        } else {
+                            x.min(len)
+                        }
+                    };
+                    let a = norm(a) as usize;
+                    let b = norm(b) as usize;
                     Ok(Value::Str(s.chars().skip(a).take(b.saturating_sub(a)).collect()))
                 }
                 "len" => Ok(Value::Int(s.chars().count() as i64)),
@@ -2589,7 +2905,10 @@ impl Interp {
                 "map" => {
                     let f = args.first().cloned().unwrap_or(Value::Null);
                     let mut out = Vec::new();
-                    for v in l.borrow().iter() {
+                    // clone-first: user callbacks may mutate the source list
+                    // (a borrow() held across the callback would abort)
+                    let src: Vec<Value> = l.borrow().clone();
+                    for v in src.iter() {
                         out.push(self.call_value(env, &f, vec![v.clone()])?);
                     }
                     Ok(Value::List(Rc::new(RefCell::new(out))))
@@ -2597,7 +2916,8 @@ impl Interp {
                 "filter" => {
                     let f = args.first().cloned().unwrap_or(Value::Null);
                     let mut out = Vec::new();
-                    for v in l.borrow().iter() {
+                    let src: Vec<Value> = l.borrow().clone();
+                    for v in src.iter() {
                         if self.call_value(env, &f, vec![v.clone()])?.truthy() {
                             out.push(v.clone());
                         }
@@ -2608,14 +2928,16 @@ impl Interp {
                     let f = args.first().cloned().unwrap_or(Value::Null);
                     let init = args.get(1).cloned().unwrap_or(Value::Int(0));
                     let mut acc = init;
-                    for v in l.borrow().iter() {
+                    let src: Vec<Value> = l.borrow().clone();
+                    for v in src.iter() {
                         acc = self.call_value(env, &f, vec![acc, v.clone()])?;
                     }
                     Ok(acc)
                 }
                 "each" => {
                     let f = args.first().cloned().unwrap_or(Value::Null);
-                    for v in l.borrow().iter() {
+                    let src: Vec<Value> = l.borrow().clone();
+                    for v in src.iter() {
                         self.call_value(env, &f, vec![v.clone()])?;
                     }
                     Ok(Value::Null)
@@ -2660,6 +2982,8 @@ impl Interp {
                                 .then_with(|| ka.2.cmp(&kb.2))
                         });
                     }
+                    // immutable-method contract: returns a NEW sorted list
+                    // (mirrors reverse/slice/map — the suite is the contract)
                     Ok(Value::List(Rc::new(RefCell::new(v))))
                 }
                 "reverse" => {
@@ -2687,8 +3011,16 @@ impl Interp {
                         _ => l.borrow().len() as i64,
                     };
                     let len = l.borrow().len() as i64;
-                    let a = a.clamp(0, len) as usize;
-                    let b = b.clamp(0, len) as usize;
+                    // Python-style: negative indexes count from the end
+                    let norm = |x: i64| -> i64 {
+                        if x < 0 {
+                            (len + x).max(0)
+                        } else {
+                            x.min(len)
+                        }
+                    };
+                    let a = norm(a) as usize;
+                    let b = norm(b) as usize;
                     let out: Vec<Value> = l.borrow()[a..b.max(a)].to_vec();
                     Ok(Value::List(Rc::new(RefCell::new(out))))
                 }
@@ -2822,12 +3154,19 @@ pub fn serve_start(port: u16) -> Result<(), String> {
     let conns: Arc<Mutex<StdHashMap<u64, TcpStream>>> = Arc::new(Mutex::new(StdHashMap::new()));
     let conns2 = conns.clone();
     let next2 = Arc::new(AtomicU64::new(1));
+    const MAX_CONNECTIONS: usize = 256;
     std::thread::spawn(move || {
         for stream in listener.incoming() {
             let mut stream = match stream {
                 Ok(s) => s,
                 Err(_) => continue,
             };
+            // a half-open client must not stall the accept loop forever
+            let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(10)));
+            // connection-table cap: floods are dropped, not queued forever
+            if conns2.lock().map(|c| c.len() >= MAX_CONNECTIONS).unwrap_or(true) {
+                continue;
+            }
             let conn = next2.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             // read the request head (and body if declared)
             let mut buf = Vec::new();
@@ -2925,10 +3264,25 @@ pub fn send_response(conn: u64, status: &str, ctype: &str, body: &str) -> Result
 fn http_get(host: &str, port: u16, path: &str) -> Result<String, String> {
     use std::io::{Read, Write};
     let mut stream = TcpStream::connect((host, port)).map_err(|e| e.to_string())?;
+    let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(30)));
     let req = format!("GET {} HTTP/1.0\r\nHost: {}\r\nUser-Agent: operon\r\n\r\n", path, host);
     stream.write_all(req.as_bytes()).map_err(|e| e.to_string())?;
+    // bounded read: an endless peer cannot balloon memory without limit
     let mut buf = Vec::new();
-    stream.read_to_end(&mut buf).map_err(|e| e.to_string())?;
+    let mut chunk = [0u8; 16384];
+    const MAX_RESPONSE: usize = 64 * 1024 * 1024;
+    loop {
+        match stream.read(&mut chunk) {
+            Ok(0) => break,
+            Ok(n) => {
+                buf.extend_from_slice(&chunk[..n]);
+                if buf.len() > MAX_RESPONSE {
+                    return Err("http_get response exceeds the 64 MiB ceiling".into());
+                }
+            }
+            Err(e) => return Err(e.to_string()),
+        }
+    }
     // split headers from body
     if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
         Ok(String::from_utf8_lossy(&buf[pos + 4..]).to_string())
@@ -2939,6 +3293,17 @@ fn http_get(host: &str, port: u16, path: &str) -> Result<String, String> {
 
 // ------------------------------------------------------------------ json
 pub fn json_stringify(v: &Value) -> String {
+    // cycle-safe: a container containing itself serializes the repeated
+    // branch as null (JSON has no cycle marker; CPython's json.dumps errors,
+    // we contain instead of crash)
+    let mut seen: Vec<usize> = Vec::new();
+    json_stringify_g(v, &mut seen, 0)
+}
+
+fn json_stringify_g(v: &Value, seen: &mut Vec<usize>, depth: u32) -> String {
+    if depth > 512 {
+        return "null".into();
+    }
     match v {
         Value::Null => "null".into(),
         Value::Bool(true) => "true".into(),
@@ -2947,15 +3312,28 @@ pub fn json_stringify(v: &Value) -> String {
         Value::Float(f) => crate::value::format_float(*f),
         Value::Str(s) => json_quote(s),
         Value::List(l) => {
-            let parts: Vec<String> = l.borrow().iter().map(json_stringify).collect();
+            let id = std::rc::Rc::as_ptr(l) as *const u8 as usize;
+            if seen.contains(&id) {
+                return "null".into();
+            }
+            seen.push(id);
+            let parts: Vec<String> =
+                l.borrow().iter().map(|x| json_stringify_g(x, seen, depth + 1)).collect();
+            seen.pop();
             format!("[{}]", parts.join(","))
         }
         Value::Map(m) => {
+            let id = std::rc::Rc::as_ptr(m) as *const u8 as usize;
+            if seen.contains(&id) {
+                return "null".into();
+            }
+            seen.push(id);
             let parts: Vec<String> = m
                 .borrow()
                 .iter()
-                .map(|(k, v)| format!("{}:{}", json_quote(&k.display()), json_stringify(v)))
+                .map(|(k, x)| format!("{}:{}", json_quote(&k.display()), json_stringify_g(x, seen, depth + 1)))
                 .collect();
+            seen.pop();
             format!("{{{}}}", parts.join(","))
         }
         other => json_quote(&other.display()),
@@ -2978,6 +3356,416 @@ fn json_quote(s: &str) -> String {
     }
     out.push('"');
     out
+}
+
+
+// =================================================================== regex
+// Zero-dependency regex engine (wave-3 Critic-L gap #2). Explicit-stack
+// backtracking matcher with a HARD STEP CAP: catastrophic backtracking
+// raises a catchable `overflow` stress instead of hanging (ReDoS-proof).
+//
+// Supported syntax (Python-compatible subset):
+//   literals  .  [a-z0-9^]  \d \w \s \D \W \S  escapes
+//   * + ? {m} {m,} {m,n}   |   () groups (and (?:...))   ^ $
+
+#[derive(Debug, Clone)]
+enum ReAst {
+    Lit(char),
+    Dot,
+    Cls(Vec<(char, char)>, bool),
+    Seq(Vec<ReAst>),
+    Alt(Vec<ReAst>),
+    Rep(Box<ReAst>, usize, usize),
+    Group(usize, Box<ReAst>),
+    Bol,
+    Eol,
+}
+
+const RE_STEP_CAP: u64 = 2_000_000;
+
+struct ReParser {
+    chars: Vec<char>,
+    pos: usize,
+    ngroups: usize,
+}
+
+impl ReParser {
+    fn parse(&mut self) -> Result<ReAst, String> {
+        let a = self.alternation()?;
+        if self.pos < self.chars.len() {
+            return Err(format!("unexpected '{}' at {}", self.chars[self.pos], self.pos));
+        }
+        Ok(a)
+    }
+    fn alternation(&mut self) -> Result<ReAst, String> {
+        let mut branches = vec![self.concat()?];
+        while self.pos < self.chars.len() && self.chars[self.pos] == '|' {
+            self.pos += 1;
+            branches.push(self.concat()?);
+        }
+        if branches.len() == 1 { Ok(branches.pop().unwrap()) } else { Ok(ReAst::Alt(branches)) }
+    }
+    fn concat(&mut self) -> Result<ReAst, String> {
+        let mut items = Vec::new();
+        while self.pos < self.chars.len() && self.chars[self.pos] != '|' && self.chars[self.pos] != ')' {
+            items.push(self.repeat()?);
+        }
+        Ok(match items.len() {
+            0 => ReAst::Seq(Vec::new()),
+            1 => items.pop().unwrap(),
+            _ => ReAst::Seq(items),
+        })
+    }
+    fn repeat(&mut self) -> Result<ReAst, String> {
+        let atom = self.atom()?;
+        if self.pos >= self.chars.len() { return Ok(atom); }
+        let (min, max) = match self.chars[self.pos] {
+            '*' => { self.pos += 1; (0, usize::MAX) }
+            '+' => { self.pos += 1; (1, usize::MAX) }
+            '?' => { self.pos += 1; (0, 1) }
+            '{' => {
+                let save = self.pos;
+                self.pos += 1;
+                let mut m = String::new();
+                while self.pos < self.chars.len() && self.chars[self.pos].is_ascii_digit() {
+                    m.push(self.chars[self.pos]); self.pos += 1;
+                }
+                if m.is_empty() { self.pos = save; return Ok(atom); }
+                let min: usize = m.parse().map_err(|_| "bad repetition".to_string())?;
+                let mut max = min;
+                if self.pos < self.chars.len() && self.chars[self.pos] == ',' {
+                    self.pos += 1;
+                    let mut n = String::new();
+                    while self.pos < self.chars.len() && self.chars[self.pos].is_ascii_digit() {
+                        n.push(self.chars[self.pos]); self.pos += 1;
+                    }
+                    max = if n.is_empty() { usize::MAX } else { n.parse().map_err(|_| "bad repetition".to_string())? };
+                }
+                if self.pos >= self.chars.len() || self.chars[self.pos] != '}' {
+                    self.pos = save; return Ok(atom);
+                }
+                self.pos += 1;
+                if min > max || max > 100_000 { return Err("bad repetition range".into()); }
+                (min, max)
+            }
+            _ => return Ok(atom),
+        };
+        Ok(ReAst::Rep(Box::new(atom), min, max))
+    }
+    fn atom(&mut self) -> Result<ReAst, String> {
+        if self.pos >= self.chars.len() { return Err("unexpected end of pattern".into()); }
+        let c = self.chars[self.pos];
+        match c {
+            '(' => {
+                self.pos += 1;
+                let capture = if self.chars[self.pos..].starts_with(&['?', ':']) {
+                    self.pos += 2;
+                    false
+                } else {
+                    self.ngroups += 1;
+                    true
+                };
+                let inner = self.alternation()?;
+                if self.pos >= self.chars.len() || self.chars[self.pos] != ')' {
+                    return Err("unclosed group".into());
+                }
+                self.pos += 1;
+                Ok(if capture { ReAst::Group(self.ngroups, Box::new(inner)) } else { inner })
+            }
+            '[' => {
+                self.pos += 1;
+                let mut neg = false;
+                if self.pos < self.chars.len() && self.chars[self.pos] == '^' {
+                    neg = true; self.pos += 1;
+                }
+                let mut items: Vec<(char, char)> = Vec::new();
+                let mut first = true;
+                while self.pos < self.chars.len() && (self.chars[self.pos] != ']' || first) {
+                    first = false;
+                    let mut lo = self.chars[self.pos];
+                    if lo == '\\' && self.pos + 1 < self.chars.len() {
+                        self.pos += 1;
+                        let e = self.chars[self.pos];
+                        match e {
+                            'n' => { lo = '\n'; self.pos += 1; }
+                            't' => { lo = '\t'; self.pos += 1; }
+                            'r' => { lo = '\r'; self.pos += 1; }
+                            'd' | 'w' | 's' | 'D' | 'W' | 'S' => {
+                                let (ranges, _) = re_class_shorthand(e);
+                                items.extend(ranges);
+                                self.pos += 1;
+                                continue;
+                            }
+                            other => { lo = other; self.pos += 1; }
+                        }
+                    } else {
+                        self.pos += 1;
+                    }
+                    if self.pos + 1 < self.chars.len()
+                        && self.chars[self.pos] == '-'
+                        && self.chars[self.pos + 1] != ']'
+                    {
+                        self.pos += 1;
+                        let hi = self.chars[self.pos];
+                        self.pos += 1;
+                        items.push((lo, hi));
+                    } else {
+                        items.push((lo, lo));
+                    }
+                }
+                if self.pos >= self.chars.len() { return Err("unclosed class".into()); }
+                self.pos += 1;
+                Ok(ReAst::Cls(items, neg))
+            }
+            '.' => { self.pos += 1; Ok(ReAst::Dot) }
+            '^' => { self.pos += 1; Ok(ReAst::Bol) }
+            '$' => { self.pos += 1; Ok(ReAst::Eol) }
+            '\\' => {
+                self.pos += 1;
+                if self.pos >= self.chars.len() { return Err("trailing backslash".into()); }
+                let e = self.chars[self.pos];
+                self.pos += 1;
+                if matches!(e, 'd' | 'w' | 's' | 'D' | 'W' | 'S') {
+                    let (ranges, _) = re_class_shorthand(e);
+                    let neg = matches!(e, 'D' | 'W' | 'S');
+                    Ok(ReAst::Cls(ranges, neg))
+                } else {
+                    Ok(ReAst::Lit(match e {
+                        'n' => '\n', 't' => '\t', 'r' => '\r', '0' => '\0',
+                        other => other,
+                    }))
+                }
+            }
+            '*' | '+' | '?' => Err(format!("nothing to repeat at {}", self.pos)),
+            other => { self.pos += 1; Ok(ReAst::Lit(other)) }
+        }
+    }
+}
+
+fn re_class_shorthand(e: char) -> (Vec<(char, char)>, usize) {
+    match e {
+        'd' | 'D' => (vec![('0', '9')], 1),
+        'w' | 'W' => (vec![('a', 'z'), ('A', 'Z'), ('0', '9'), ('_', '_')], 1),
+        's' | 'S' => (vec![(' ', ' '), ('\t', '\t'), ('\n', '\n'), ('\r', '\r')], 1),
+        _ => (Vec::new(), 0),
+    }
+}
+
+/// Pending-work item: either an AST node or a group-close bookkeeping marker.
+#[derive(Clone, Copy)]
+enum ReItem<'a> {
+    Node(&'a ReAst),
+    CapOpen(usize, usize), // (group number, start position)
+}
+
+struct ReMatcher<'a> {
+    subject: &'a [char],
+    steps: u64,
+    last_end: usize,
+    overflow: bool,
+}
+
+impl<'a> ReMatcher<'a> {
+    fn m_all(&mut self, stack: &mut Vec<ReItem<'a>>, pos: usize, caps: &mut Vec<Option<(usize, usize)>>) -> bool {
+        match stack.pop() {
+            None => {
+                // full parse accepted: greedy ordering makes this the
+                // longest/rightmost end for this start position
+                self.last_end = pos;
+                true
+            }
+            Some(ReItem::CapOpen(n, start)) => {
+                caps[n - 1] = Some((start, pos));
+                self.m_all(stack, pos, caps)
+            }
+            Some(ReItem::Node(node)) => self.m(node, stack, pos, caps),
+        }
+    }
+
+    fn m(&mut self, node: &'a ReAst, stack: &mut Vec<ReItem<'a>>, pos: usize, caps: &mut Vec<Option<(usize, usize)>>) -> bool {
+        self.steps += 1;
+        if self.steps > RE_STEP_CAP {
+            self.overflow = true;
+            return false;
+        }
+        match node {
+            ReAst::Lit(c) => {
+                if pos < self.subject.len() && self.subject[pos] == *c {
+                    self.m_all(stack, pos + 1, caps)
+                } else {
+                    false
+                }
+            }
+            ReAst::Dot => {
+                if pos < self.subject.len() && self.subject[pos] != '\n' {
+                    self.m_all(stack, pos + 1, caps)
+                } else {
+                    false
+                }
+            }
+            ReAst::Cls(items, neg) => {
+                if pos >= self.subject.len() {
+                    return false;
+                }
+                let c = self.subject[pos];
+                let inside = items.iter().any(|(lo, hi)| c >= *lo && c <= *hi);
+                if inside != *neg {
+                    self.m_all(stack, pos + 1, caps)
+                } else {
+                    false
+                }
+            }
+            ReAst::Bol => {
+                if pos == 0 { self.m_all(stack, pos, caps) } else { false }
+            }
+            ReAst::Eol => {
+                if pos == self.subject.len() { self.m_all(stack, pos, caps) } else { false }
+            }
+            ReAst::Seq(v) => {
+                let saved: Vec<ReItem> = stack.clone();
+                for x in v.iter().rev() {
+                    stack.push(ReItem::Node(x));
+                }
+                if self.m_all(stack, pos, caps) {
+                    true
+                } else {
+                    *stack = saved.clone();
+                    false
+                }
+            }
+            ReAst::Alt(v) => {
+                let saved: Vec<ReItem> = stack.clone();
+                for b in v {
+                    let snap = caps.clone();
+                    stack.push(ReItem::Node(b));
+                    if self.m_all(stack, pos, caps) {
+                        return true;
+                    }
+                    *stack = saved.clone();
+                    *caps = snap;
+                }
+                false
+            }
+            ReAst::Group(n, inner) => {
+                let saved: Vec<ReItem> = stack.clone();
+                stack.push(ReItem::CapOpen(*n, pos));
+                stack.push(ReItem::Node(inner));
+                if self.m_all(stack, pos, caps) {
+                    true
+                } else {
+                    *stack = saved.clone();
+                    false
+                }
+            }
+            ReAst::Rep(inner, min, max) => {
+                // Greedy repetition. Each iteration runs as an isolated
+                // sub-match (groups inside repeats take the last-iteration
+                // capture, Python-style); ends are recorded and the
+                // continuation is tried from the longest end backwards.
+                let mut ends: Vec<(usize, Vec<Option<(usize, usize)>>)> = vec![(pos, caps.clone())];
+                let mut cur = pos;
+                loop {
+                    if ends.len() > *max {
+                        break;
+                    }
+                    let mut iter_caps = caps.clone();
+                    match self.sub_match(inner, cur, &mut iter_caps) {
+                        Some(e) => {
+                            let zero = e == cur;
+                            ends.push((e, iter_caps));
+                            cur = e;
+                            if zero {
+                                break; // zero-width iteration: stop expanding
+                            }
+                        }
+                        None => break,
+                    }
+                }
+                // need at least `min` completed iterations (ends[k] = k iters)
+                while ends.len() - 1 >= *min && !ends.is_empty() {
+                    let (e, snap) = ends.last().unwrap().clone();
+                    let save = caps.clone();
+                    *caps = snap;
+                    let saved: Vec<ReItem> = stack.clone();
+                    if self.m_all(stack, e, caps) {
+                        return true;
+                    }
+                    *stack = saved.clone();
+                    *caps = save;
+                    ends.pop();
+                }
+                false
+            }
+        }
+    }
+
+    /// Isolated sub-match of one repetition iteration: returns the end
+    /// position of the (greedy-first) match of `node` starting at `pos`.
+    fn sub_match(&mut self, node: &'a ReAst, pos: usize, caps: &mut Vec<Option<(usize, usize)>>) -> Option<usize> {
+        let saved_end = self.last_end;
+        let mut stack: Vec<ReItem> = vec![ReItem::Node(node)];
+        if self.m_all(&mut stack, pos, caps) {
+            Some(self.last_end)
+        } else {
+            self.last_end = saved_end;
+            None
+        }
+    }
+}
+
+pub struct ReEngine {
+    ast: ReAst,
+    pub ngroups: usize,
+}
+
+impl ReEngine {
+    pub fn new(pattern: &str) -> Result<ReEngine, String> {
+        let mut rp = ReParser { chars: pattern.chars().collect(), pos: 0, ngroups: 0 };
+        let ast = rp.parse()?;
+        Ok(ReEngine { ast, ngroups: rp.ngroups })
+    }
+
+    /// Full-match test at `start`; returns (matched, overflow, end, caps).
+    fn run_at(&self, s: &[char], start: usize) -> (bool, bool, usize, Vec<Option<(usize, usize)>>) {
+        let mut mch = ReMatcher { subject: s, steps: 0, last_end: start, overflow: false };
+        let mut caps: Vec<Option<(usize, usize)>> = vec![None; self.ngroups];
+        let mut stack: Vec<ReItem> = vec![ReItem::Node(&self.ast)];
+        let ok = mch.m_all(&mut stack, start, &mut caps);
+        (ok, mch.overflow, mch.last_end, caps)
+    }
+
+    /// Leftmost match from `from`: (start, end, caps, overflow).
+    pub fn search(&self, s: &[char], from: usize) -> Option<(usize, usize, Vec<Option<(usize, usize)>>, bool)> {
+        for start in from..=s.len() {
+            let (ok, ovf, end, caps) = self.run_at(s, start);
+            if ovf {
+                return Some((start, end, caps, true));
+            }
+            if ok {
+                return Some((start, end, caps, false));
+            }
+        }
+        None
+    }
+}
+
+pub fn re_compile(pattern: &str) -> Result<ReEngine, Stress> {
+    ReEngine::new(pattern).map_err(|e| Stress::new("unfolded", format!("regex: {}", e)))
+}
+
+
+/// Howard-style civil-from-days (UTC): days since 1970-01-01 → (y, m, d).
+fn civil_from_days(z: i64) -> (i64, u32, u32) {
+    let z = z + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = (z - era * 146_097) as u64;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe as i64 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
+    (y + if m <= 2 { 1 } else { 0 }, m, d)
 }
 
 pub fn json_parse(src: &str) -> Result<Value, String> {
@@ -3145,6 +3933,10 @@ pub fn json_parse(src: &str) -> Result<Value, String> {
                     if txt.is_empty() {
                         return Err(format!("unexpected character at {}", start));
                     }
+                    if txt.starts_with('+') {
+                        // JSON forbids a leading plus on numbers
+                        return Err(format!("json numbers cannot start with '+' at {}", start));
+                    }
                     if let Ok(i) = txt.parse::<i64>() {
                         Ok(Value::Int(i))
                     } else {
@@ -3202,6 +3994,7 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "floor", "ceil", "sqrt", "pow", "random", "randomize", "chr", "ord", "now", "sleep",
     "argv", "read_file", "write_file", "append_file", "exists", "file_size", "read_dir", "items", "run",
     "http_get", "serve", "recv_request", "send_response", "json_parse", "json_str", "env",
+    "re_match", "re_find", "re_groups", "unix_time", "date_parts", "date_fmt",
     "call",
 ];
 

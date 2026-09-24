@@ -1,0 +1,5 @@
+let a = "unterminated
+let b = "unterminated
+let c = "unterminated
+let d = 'single
+let e = """""""

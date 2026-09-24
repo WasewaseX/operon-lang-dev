@@ -1,0 +1,4 @@
+﻿# BOM + CRLF file
+gene main() {
+    promote("bom ok")
+}

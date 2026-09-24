@@ -1,0 +1,17 @@
+gene main() {
+    let nul = "a\u0000b"
+    promote("nul string len: {len(nul)}")
+    let m = {}
+    m["\u0000"] = 1
+    promote("nul key: {has(m, chr(0))}")
+    let sur = "\ud800"
+    promote("surrogate len: {len(sur)}")
+    let pair = "\ud83d\ude00"
+    promote("pair: {pair} len {len(pair)}")
+    stress {
+        let j = json_parse("\"\\ud800\"")
+        promote("json lone surrogate: {j}")
+    } rescue (e) {
+        promote("json surrogate caught: {e.kind} {e.message}")
+    }
+}

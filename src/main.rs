@@ -24,7 +24,14 @@ fn main() {
         .stack_size(1 << 29)
         .spawn(real_main)
         .expect("cannot spawn toolchain worker");
-    let _ = child.join();
+    // a worker panic must never masquerade as success (Critic-X B2)
+    match child.join() {
+        Ok(()) => {}
+        Err(_) => {
+            eprintln!("[fatal] internal toolchain panic — this input crashed the runtime");
+            std::process::exit(101);
+        }
+    }
 }
 
 fn real_main() {
@@ -178,7 +185,10 @@ fn real_main() {
 
     match cmd.as_str() {
         "version" => {
-            println!("Operon 2.0.0 (rust-core, c-runtime, cpp-kernel)");
+            println!("Operon 2.2.0 (rust-core, c-runtime, cpp-kernel)");
+        }
+        "repl" => {
+            repl();
         }
         "run" => {
             let file = match positional.first() {
@@ -193,6 +203,13 @@ fn real_main() {
             if let Some(f) = fuel {
                 l.interp.step_budget = f;
             }
+            // run-wide shared fuel pool: host + every spawned worker cell
+            // drain ONE pool, so `loop { spawn(...) }` cannot multiply the
+            // budget (SPEC §9b: 200M steps per run, not per interpreter)
+            let total = fuel.unwrap_or(500_000_000);
+            l.interp.fuel_pool = Some(std::sync::Arc::new(std::sync::atomic::AtomicI64::new(
+                total as i64,
+            )));
             if opts.frame.is_none() {
                 let result = tools::run_entry(&mut l, &opts);
                 match result {
@@ -477,19 +494,155 @@ fn real_main() {
     }
 }
 
-fn die(msg: &str) -> ! {
+pub fn die(msg: &str) -> ! {
     eprintln!("operon: {}", msg);
     std::process::exit(2);
 }
 
+
+// ------------------------------------------------------------ repl
+fn repl() {
+    use std::io::{BufRead, Write};
+    println!("Operon 2.2.0 repl — gene-expression shell (type :quit to leave)");
+    let mut l = match tools::load_file("/dev/null", &Opts {
+        cell: None, variant: None, rna: None, entry: None, use_ires: false,
+        frame: None, args: Vec::new(), quiet: true, caps: crate::interp::Caps::default(),
+    }) {
+        Ok(l) => l,
+        Err(_) => {
+            // /dev/null missing (Windows): build an empty Loaded by hand
+            tools::Loaded {
+                interp: crate::interp::Interp::new(),
+                prog: crate::parser::parse(""),
+            }
+        }
+    };
+    l.interp.proof_mode = false;
+    let stdin = std::io::stdin();
+    let mut buffer = String::new();
+    loop {
+        {
+            let mut out = std::io::stdout();
+            if buffer.is_empty() {
+                let _ = write!(out, "op> ");
+            } else {
+                let _ = write!(out, " .. ");
+            }
+            let _ = out.flush();
+        }
+        let mut line = String::new();
+        match stdin.lock().read_line(&mut line) {
+            Ok(0) => break, // EOF
+            Ok(_) => {}
+            Err(_) => break,
+        }
+        let t = line.trim().to_string();
+        if t == ":quit" || t == ":q" || t == "exit" {
+            break;
+        }
+        if t.is_empty() && buffer.is_empty() {
+            continue;
+        }
+        if t.is_empty() {
+            // execute accumulated block
+            let src = std::mem::take(&mut buffer);
+            repl_eval(&mut l, &src);
+            continue;
+        }
+        buffer.push_str(&line);
+        // execute as soon as brace balance closes (single-line defs, exprs);
+        // open blocks keep accumulating until the braces close
+        if repl_brace_balance(&buffer) <= 0 {
+            let src = std::mem::take(&mut buffer);
+            repl_eval(&mut l, &src);
+        }
+    }
+    // flush any remainder
+    if !buffer.is_empty() {
+        repl_eval(&mut l, &buffer);
+    }
+}
+
+fn repl_brace_balance(s: &str) -> i32 {
+    let mut bal = 0i32;
+    let mut in_str = false;
+    let mut esc = false;
+    for c in s.chars() {
+        if in_str {
+            if esc {
+                esc = false;
+            } else if c == '\\' {
+                esc = true;
+            } else if c == '"' {
+                in_str = false;
+            }
+            continue;
+        }
+        match c {
+            '"' => in_str = true,
+            '{' => bal += 1,
+            '}' => bal -= 1,
+            _ => {}
+        }
+    }
+    bal
+}
+
+fn repl_eval(l: &mut tools::Loaded, src: &str) {
+    let prog = crate::parser::parse(src);
+    let broken = prog.notes.iter().any(|n| n.rung >= 4) || prog.stmts.is_empty();
+    if !broken {
+        let env = l.interp.global.clone();
+        for stmt in &prog.stmts {
+            if let Stmt::ExprStmt(e) = stmt {
+                match l.interp.eval(&env, e) {
+                    Ok(v) => {
+                        if !matches!(v, Value::Null) {
+                            println!("{}", v.repr());
+                        }
+                    }
+                    Err(st) => println!("  [{}] {}", st.kind, st.message),
+                }
+            } else {
+                if let Err(st) = l.interp.exec_stmt(&env, stmt) {
+                    println!("  [{}] {}", st.kind, st.message);
+                }
+            }
+        }
+        return;
+    }
+    // expression mode: a bare `1 + 2 * 3` is not a statement — evaluate it
+    // by assignment-to-scratch and print the bound value
+    let wrapped = format!("__repl_val = ({})", src.trim().trim_end_matches(';'));
+    let wprog = crate::parser::parse(&wrapped);
+    if wprog.notes.iter().any(|n| n.rung >= 4) {
+        for n in &prog.notes {
+            println!("  [note] {}", n.message);
+        }
+        return;
+    }
+    let env = l.interp.global.clone();
+    for stmt in &wprog.stmts {
+        if let Err(st) = l.interp.exec_stmt(&env, stmt) {
+            println!("  [{}] {}", st.kind, st.message);
+        }
+    }
+    if let Some(v) = env.get("__repl_val") {
+        if !matches!(v, Value::Null) {
+            println!("{}", v.repr());
+        }
+    }
+}
+
 fn usage() {
     eprintln!(
-        "Operon 2.0.0 — the gene-expression language (Total Grammar)
+        "Operon 2.2.0 — the gene-expression language (Total Grammar)
 usage:
   operon run f.op [--entry g] [--variant v] [--cell c] [--rna r] [--frame name] [--ires] [--strict] [--quiet]
   operon check f.op [--nmd | --nmd=purge] [--json]
   operon test [paths...] [--json]
   operon fmt f.op [--write]
+  operon repl
   operon build f.op [--variant v] [-o out.op]
   operon profile f.op
   operon crispr f.op --knockout gene [--json]

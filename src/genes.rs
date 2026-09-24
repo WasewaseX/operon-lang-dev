@@ -8,7 +8,47 @@ use crate::value::{Stress, Value};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
 use std::sync::{mpsc, Arc};
+
+// ------------------------------------------------------------ thread budget
+// A run may hold at most MAX_THREADS live worker cells. Exceeding the cap is
+// a catchable `overflow` stress, never a panic — thread bombs are contained.
+const MAX_THREADS: usize = 256;
+const WORKER_STACK: usize = 256 * 1024 * 1024; // match-class native stack
+static LIVE_THREADS: AtomicUsize = AtomicUsize::new(0);
+
+struct ThreadGuard;
+impl Drop for ThreadGuard {
+    fn drop(&mut self) {
+        LIVE_THREADS.fetch_sub(1, Ordering::Relaxed);
+    }
+}
+
+pub fn spawn_worker(f: impl FnOnce() + Send + 'static) -> Result<(), Stress> {
+    let live = LIVE_THREADS.fetch_add(1, Ordering::Relaxed);
+    if live >= MAX_THREADS {
+        LIVE_THREADS.fetch_sub(1, Ordering::Relaxed);
+        return Err(Stress::new(
+            "overflow",
+            format!("thread cap ({}) reached — too many live workers", MAX_THREADS),
+        ));
+    }
+    let res = std::thread::Builder::new()
+        .name("operon-worker".into())
+        .stack_size(WORKER_STACK)
+        .spawn(move || {
+            let _g = ThreadGuard;
+            f();
+        });
+    match res {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            LIVE_THREADS.fetch_sub(1, Ordering::Relaxed);
+            Err(Stress::new("overflow", format!("cannot spawn worker thread: {}", e)))
+        }
+    }
+}
 
 // ------------------------------------------------------------ .cell config
 pub fn parse_cell(src: &str) -> HashMap<String, String> {
@@ -118,7 +158,18 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
         return Ok(v.clone());
     }
     if interp.loading.iter().any(|p| p == path) {
-        return Ok(Value::Map(Rc::new(RefCell::new(Vec::new())))); // cycle: partial module
+        // cyclic import: return the PLACEHOLDER map registered at load start.
+        // When the loading module finishes, this same Rc<RefCell> is filled,
+        // so the first importer sees the completed data too (wave-3 Critic-L:
+        // the old empty-map return poisoned the top-level importer).
+        interp.note(0, 4, format!(
+            "cyclic import of '{}' — module still loading; its map fills when loading completes",
+            path
+        ));
+        if let Some(v) = interp.modules.get(path) {
+            return Ok(v.clone());
+        }
+        return Ok(Value::Map(Rc::new(RefCell::new(Vec::new()))));
     }
     let resolved = resolve_path(interp, path)?;
     // Module loading is a read, but of a runtime-managed tree: the
@@ -147,10 +198,42 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
         .ok()
         .map(|p| p.to_string_lossy().replace('\\', "/"));
     let std_env = std::env::var("OPERON_STD").ok();
+    // the managed std library is the REAL std directory (exe-relative,
+    // OPERON_STD override, or the interpreter's own tree) — never any path
+    // that merely *contains* a `/std/` component
+    fn is_std_tree(resolved: &str, std_env: &Option<String>) -> bool {
+        let mut roots: Vec<String> = Vec::new();
+        if let Some(e) = std_env {
+            if let Ok(rc) = std::fs::canonicalize(e) {
+                roots.push(rc.to_string_lossy().replace('\\', "/"));
+            }
+        }
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(bin) = exe.parent() {
+                if let Some(root) = bin.parent() {
+                    let c = root.join("std");
+                    if c.is_dir() {
+                        if let Ok(rc) = std::fs::canonicalize(&c) {
+                            roots.push(rc.to_string_lossy().replace('\\', "/"));
+                        }
+                    }
+                }
+                // also the interpreter's own directory (bundled layouts)
+                let c2 = bin.join("std");
+                if c2.is_dir() {
+                    if let Ok(rc) = std::fs::canonicalize(&c2) {
+                        roots.push(rc.to_string_lossy().replace('\\', "/"));
+                    }
+                }
+            }
+        }
+        roots.iter().any(|r| {
+            resolved == r.as_str() || resolved.starts_with(&format!("{}/", r))
+        })
+    }
     let managed = under(&rc_resolved, &interp.base_dir)
         || under(&rc_resolved, &cwd)
-        || rc_resolved.contains("/std/")
-        || under(&rc_resolved, &std_env);
+        || is_std_tree(&rc_resolved, &std_env);
     if !managed && interp.caps.enabled {
         if let Err(s) = interp.caps.check(&interp.caps.read, "read", &resolved) {
             return Err(format!("module '{}' blocked: [{}] {}", path, s.kind, s.message));
@@ -176,6 +259,12 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
         src
     };
 
+    // register the placeholder map BEFORE the body runs: cyclic re-entry
+    // receives this exact Rc and sees it filled when loading completes
+    interp.modules.insert(
+        path.to_string(),
+        Value::Map(Rc::new(RefCell::new(Vec::<(Value, Value)>::new()))),
+    );
     interp.loading.push(path.to_string());
     let prog = crate::parser::parse(&src);
     for n in prog.notes {
@@ -215,10 +304,28 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
             _ => std::cmp::Ordering::Equal,
         });
     }
-    let modv = Value::Map(Rc::new(RefCell::new(exports)));
-    interp.modules.insert(path.to_string(), modv.clone());
+    let modv = {
+        // fill the placeholder registered before the body ran — same Rc,
+        // so cyclic importers holding it observe the completed data
+        if let Some(Value::Map(m)) = interp.modules.get(path) {
+            {
+                let mut target = m.borrow_mut();
+                target.clear();
+                target.extend(exports);
+            }
+            interp.modules.get(path).cloned().unwrap_or_else(|| Value::Map(Rc::new(RefCell::new(Vec::new()))))
+        } else {
+            let mv = Value::Map(Rc::new(RefCell::new(exports)));
+            interp.modules.insert(path.to_string(), mv.clone());
+            mv
+        }
+    };
     Ok(modv)
 }
+
+// NOTE: placeholder protocol — a module registers an EMPTY map in
+// interp.modules before its body runs; completion fills THAT
+// SAME map so cyclic importers holding the placeholder observe the data.
 
 fn resolve_path(interp: &Interp, path: &str) -> Result<String, String> {
     let p = path.trim_end_matches(".op").to_string() + ".op";
@@ -434,10 +541,14 @@ pub enum SnapArg {
 }
 
 pub fn arg_to_snap(v: &Value) -> SnapArg {
+    arg_to_snap_d(v, 0)
+}
+
+fn arg_to_snap_d(v: &Value, d: u32) -> SnapArg {
     match v {
-        Value::Gene(d, _) if d.name.is_some() => SnapArg::GeneRef(d.name.clone().unwrap()),
-        Value::Gene(d, _) => SnapArg::Lambda(d.clone()),
-        other => SnapArg::Data(to_send(other)),
+        Value::Gene(d2, _) if d2.name.is_some() => SnapArg::GeneRef(d2.name.clone().unwrap()),
+        Value::Gene(d2, _) => SnapArg::Lambda(d2.clone()),
+        other => SnapArg::Data(to_send_d(other, d)),
     }
 }
 
@@ -458,28 +569,79 @@ pub fn arg_from_snap(a: &SnapArg, snap: &[(String, SnapVal)]) -> Value {
     }
 }
 
+/// Maximum nesting depth of a value (cycle-safe: visited pointers never
+/// re-expand). Walk stops at the SendValue cap.
+fn value_depth(v: &Value, d: u32) -> u32 {
+    if d > 100_000 {
+        return d;
+    }
+    match v {
+        Value::List(l) => {
+            let mut maxd = d;
+            for x in l.borrow().iter() {
+                let dd = value_depth(x, d + 1);
+                if dd > maxd {
+                    maxd = dd;
+                }
+                if maxd > 100_000 {
+                    return maxd;
+                }
+            }
+            maxd
+        }
+        Value::Map(m) => {
+            let mut maxd = d;
+            for (_, x) in m.borrow().iter() {
+                let dd = value_depth(x, d + 1);
+                if dd > maxd {
+                    maxd = dd;
+                }
+                if maxd > 100_000 {
+                    return maxd;
+                }
+            }
+            maxd
+        }
+        _ => d,
+    }
+}
+
 pub fn to_send(v: &Value) -> SendValue {
+    to_send_d(v, 0)
+}
+
+const SEND_DEPTH_CAP: u32 = 100_000;
+
+fn to_send_d(v: &Value, d: u32) -> SendValue {
+    if d > SEND_DEPTH_CAP {
+        return SendValue::Stress(
+            "overflow".into(),
+            "spawn argument nesting too deep".into(),
+        );
+    }
     match v {
         Value::Null => SendValue::Null,
         Value::Bool(b) => SendValue::Bool(*b),
         Value::Int(i) => SendValue::Int(*i),
         Value::Float(f) => SendValue::Float(*f),
         Value::Str(s) => SendValue::Str(s.clone()),
-        Value::List(l) => SendValue::List(l.borrow().iter().map(to_send).collect()),
+        Value::List(l) => {
+            SendValue::List(l.borrow().iter().map(|x| to_send_d(x, d + 1)).collect())
+        }
         Value::Map(m) => SendValue::Map(
             m.borrow()
                 .iter()
-                .map(|(k, v)| (k.display(), to_send(v)))
+                .map(|(k, v)| (k.display(), to_send_d(v, d + 1)))
                 .collect(),
         ),
         Value::Gene(_, _) => SendValue::Null,
         Value::Seq(_, _) => SendValue::Null,
-        Value::Obj(d, m) => {
+        Value::Obj(pd, m) => {
             // objects cross the boundary as their field map (+ identity key)
             let mut out: Vec<(String, SendValue)> = Vec::new();
-            out.push(("#phenotype".into(), SendValue::Str(d.name.clone())));
+            out.push(("#phenotype".into(), SendValue::Str(pd.name.clone())));
             for (k, v) in m.borrow().iter() {
-                out.push((k.display(), to_send(v)));
+                out.push((k.display(), to_send_d(v, d + 1)));
             }
             SendValue::Map(out)
         }
@@ -487,15 +649,24 @@ pub fn to_send(v: &Value) -> SendValue {
 }
 
 pub fn from_send(v: SendValue) -> Value {
+    from_send_d(v, 0)
+}
+
+fn from_send_d(v: SendValue, d: u32) -> Value {
+    if d > SEND_DEPTH_CAP {
+        return Value::Null; // capped payload arrives as null (worker-side cap)
+    }
     match v {
         SendValue::Null => Value::Null,
         SendValue::Bool(b) => Value::Bool(b),
         SendValue::Int(i) => Value::Int(i),
         SendValue::Float(f) => Value::Float(f),
         SendValue::Str(s) => Value::Str(s),
-        SendValue::List(l) => Value::List(Rc::new(RefCell::new(l.into_iter().map(from_send).collect()))),
+        SendValue::List(l) => {
+            Value::List(Rc::new(RefCell::new(l.into_iter().map(|x| from_send_d(x, d + 1)).collect())))
+        }
         SendValue::Map(m) => Value::Map(Rc::new(RefCell::new(
-            m.into_iter().map(|(k, v)| (Value::Str(k), from_send(v))).collect(),
+            m.into_iter().map(|(k, v)| (Value::Str(k), from_send_d(v, d + 1))).collect(),
         ))),
         SendValue::Stress(k, m) => Value::Map(Rc::new(RefCell::new(vec![
             (Value::Str("kind".into()), Value::Str(k)),
@@ -558,14 +729,25 @@ pub fn snapshot_with_closure(interp: &Interp, closure: Option<&Rc<Env>>) -> Vec<
 
 /// Deep-clone a SendValue (cloning via serialization round-trip).
 fn clone_send(sv: &SendValue) -> SendValue {
+    clone_send_d(sv, 0)
+}
+
+fn clone_send_d(sv: &SendValue, d: u32) -> SendValue {
+    if d > 2 * SEND_DEPTH_CAP {
+        return SendValue::Stress("overflow".into(), "worker payload too deep".into());
+    }
     match sv {
         SendValue::Null => SendValue::Null,
         SendValue::Bool(b) => SendValue::Bool(*b),
         SendValue::Int(i) => SendValue::Int(*i),
         SendValue::Float(f) => SendValue::Float(*f),
         SendValue::Str(s) => SendValue::Str(s.clone()),
-        SendValue::List(l) => SendValue::List(l.iter().map(clone_send).collect()),
-        SendValue::Map(m) => SendValue::Map(m.iter().map(|(k, v)| (k.clone(), clone_send(v))).collect()),
+        SendValue::List(l) => {
+            SendValue::List(l.iter().map(|x| clone_send_d(x, d + 1)).collect())
+        }
+        SendValue::Map(m) => SendValue::Map(
+            m.iter().map(|(k, v)| (k.clone(), clone_send_d(v, d + 1))).collect(),
+        ),
         SendValue::Stress(k, m) => SendValue::Stress(k.clone(), m.clone()),
     }
 }
@@ -578,12 +760,14 @@ pub fn seq_start(
     args: Vec<Value>,
     snap: Vec<(String, SnapVal)>,
     caps: crate::interp::Caps,
-) -> Rc<RefCell<crate::value::SeqState>> {
+    fuel_pool: Option<Arc<AtomicI64>>,
+) -> Result<Rc<RefCell<crate::value::SeqState>>, Stress> {
     let send_args: Vec<SnapArg> = args.iter().map(arg_to_snap).collect();
     let host_caps = caps;
     let (tx, rx) = mpsc::sync_channel::<crate::value::SeqMsg>(0);
-    std::thread::spawn(move || {
+    spawn_worker(move || {
         let mut ti = Interp::new();
+        ti.fuel_pool = fuel_pool;
         let genv = Env::new(None);
         bind_snapshot(&genv, &snap);
         ti.global = genv;
@@ -596,12 +780,12 @@ pub fn seq_start(
             Err(s) => (ti.notes, Some((s.kind, s.message))),
         };
         let _ = tx.send(crate::value::SeqMsg::Done(notes, stress));
-    });
-    Rc::new(RefCell::new(crate::value::SeqState {
+    })?;
+    Ok(Rc::new(RefCell::new(crate::value::SeqState {
         rx: Some(rx),
         done: false,
         stress: None,
-    }))
+    })))
 }
 
 fn run_seq_body(
@@ -653,6 +837,22 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
         let _ = interp.call_gene(def, None, args)?;
         return Ok(Value::Int(0));
     }
+    if interp.tasks.len() >= 4096 {
+        return Err(Stress::new(
+            "overflow",
+            "too many live tasks (4096) — join() your spawns",
+        ));
+    }
+    // pre-flight depth check: a payload deeper than the SendValue cap must
+    // fail the SPAWN (catchable stress), not smuggle a stress value across
+    for a in &args {
+        if value_depth(a, 0) > 100_000 {
+            return Err(Stress::new(
+                "overflow",
+                "spawn argument nesting too deep",
+            ));
+        }
+    }
     let snap = match &callee {
         Value::Gene(_, Some(cl)) => snapshot_with_closure(interp, Some(cl)),
         _ => snapshot_globals(interp),
@@ -661,8 +861,10 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
     let (tx, rx) = mpsc::channel::<(SendValue, Vec<Note>)>();
     let global_note = format!("[task {}]", name);
     let host_caps = interp.caps.clone();
-    std::thread::spawn(move || {
+    let host_fuel = interp.fuel_pool.clone();
+    if let Err(s) = spawn_worker(move || {
         let mut ti = Interp::new();
+        ti.fuel_pool = host_fuel;
         let genv = Env::new(None);
         bind_snapshot(&genv, &snap);
         ti.global = genv;
@@ -681,7 +883,9 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
             })
             .collect();
         let _ = tx.send((rv, notes));
-    });
+    }) {
+        return Err(s);
+    }
     let id = interp.next_task_id;
     interp.next_task_id += 1;
     interp.tasks.insert(id, crate::interp::TaskHandle { rx });
@@ -742,7 +946,7 @@ fn def_has_lambda(def: &GeneDef) -> bool {
     stmts_have(&def.body) || def.guard.as_ref().map(|(_, b)| stmts_have(b)).unwrap_or(false)
 }
 
-pub fn join_task(interp: &mut Interp, id: i64) -> Result<Value, Stress> {
+pub fn join_task(interp: &mut Interp, id: i64, timeout_ms: Option<u64>) -> Result<Value, Stress> {
     // join by id; id 0 means "inline run already returned" (see spawn)
     if id == 0 {
         return Ok(Value::Null);
@@ -758,7 +962,32 @@ pub fn join_task(interp: &mut Interp, id: i64) -> Result<Value, Stress> {
             return Ok(Value::Null);
         }
     };
-    match handle.rx.recv() {
+    // optional deadline: join(id, ms) returns null when the worker exceeds it
+    let received: Result<(crate::genes::SendValue, Vec<Note>), std::sync::mpsc::RecvTimeoutError> = match timeout_ms {
+        Some(ms) => match handle
+            .rx
+            .recv_timeout(std::time::Duration::from_millis(ms.min(600_000)))
+        {
+            Ok(pair) => Ok(pair),
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                interp.note(0, 4, format!("join timeout ({} ms) on task {}", ms, id));
+                interp.tasks.insert(id, handle); // keep the task joinable later
+                return Ok(Value::Null);
+            }
+            Err(_) => {
+                interp.note(0, 4, format!("task {} channel closed", id));
+                return Ok(Value::Null);
+            }
+        },
+        None => match handle.rx.recv() {
+            Ok(pair) => Ok(pair),
+            Err(_) => {
+                interp.note(0, 4, format!("task {} channel closed", id));
+                return Ok(Value::Null);
+            }
+        },
+    };
+    match received {
         Ok((v, notes)) => {
             for n in notes {
                 interp.notes.push(n);

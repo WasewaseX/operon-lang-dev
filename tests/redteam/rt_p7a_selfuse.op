@@ -1,0 +1,4 @@
+use "rt_p7a_selfuse.op"
+gene main() {
+    promote("self-use ok")
+}

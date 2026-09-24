@@ -1,0 +1,14 @@
+gene main() {
+    stress {
+        let r = run("echo", ["redteam-proof"])
+        promote("RAN: {r.stdout}")
+    } rescue (e) {
+        promote("denied: {e.kind}")
+    }
+    stress {
+        let r = run("/bin/sh", ["-c", "echo redteam-proof"])
+        promote("RAN sh: {r.stdout}")
+    } rescue (e) {
+        promote("denied-sh: {e.kind}")
+    }
+}

@@ -1,0 +1,24 @@
+gene main() {
+    let l = [1, 2]
+    push(l, l)
+    stress {
+        let s = str(l)
+        promote("str ok: {len(s)} chars")
+    } rescue (e) {
+        promote("str caught: {e.kind}")
+    }
+    stress {
+        let j = json_str(l)
+        promote("json ok: {len(j)}")
+    } rescue (e) {
+        promote("json caught: {e.kind}")
+    }
+    stress {
+        let m = {}
+        m["l"] = m
+        let s2 = str(m)
+        promote("map cycle str ok")
+    } rescue (e) {
+        promote("map cycle caught: {e.kind}")
+    }
+}

@@ -1,0 +1,14 @@
+gen f() { return 1 }
+genn g() { return 2 }
+GENE h() { return 3 }
+genne i() { return 4 }
+fn j() { return 5 }
+func k() { return 6 }
+let var x = var 7
+forever l in range(0,1) { promote(l) }
+iff x == 7 { promote("y") } elz { promote("n") }
+matchh x { cas 7 { } }
+stresss { } rescu (e) { }
+spwn(j)
+us std/math
+ret
