@@ -53,6 +53,7 @@ fn real_main() {
         args: Vec::new(),
         quiet: false,
         caps: interp::Caps::default(),
+        profile: false,
     };
     let mut json = false;
     let mut strict = false;
@@ -134,8 +135,9 @@ fn real_main() {
             }
             "--fuel" => {
                 i += 1;
-                if let Some(p) = rest.get(i).and_then(|s| s.parse::<u64>().ok()) {
-                    fuel = Some(p);
+                match rest.get(i).map(|s| s.parse::<u64>()) {
+                    Some(Ok(p)) => fuel = Some(p),
+                    _ => die("--fuel needs a number argument (e.g. --fuel 500000000)"),
                 }
             }
             "--matrix" => matrix = true,
@@ -161,7 +163,10 @@ fn real_main() {
             }
             "--iters" => {
                 i += 1;
-                iters = rest.get(i).and_then(|s| s.parse().ok()).unwrap_or(20);
+                match rest.get(i).map(|s| s.parse::<usize>()) {
+                    Some(Ok(n)) => iters = n,
+                    _ => die("--iters needs a number argument (e.g. --iters 50)"),
+                }
             }
             "-o" | "--out" => {
                 i += 1;
@@ -177,14 +182,28 @@ fn real_main() {
                 purge = true;
             }
             "--write" => write = true,
-            _ => positional.push(a),
+            _ => {
+                // dx-r1 (parity audit W6): unknown flags silently became
+                // program argv — `operon run f.op --strick` ran with a typo'd
+                // flag and no warning. Fail loudly instead.
+                if a.starts_with("--") {
+                    die(&format!(
+                        "unknown flag '{}' — run `operon` with no arguments for usage",
+                        a
+                    ));
+                }
+                positional.push(a);
+            }
         }
         i += 1;
     }
 
     match cmd.as_str() {
         "version" => {
-            println!("Operon 2.2.0 (rust-core, c-runtime, cpp-kernel)");
+            println!(
+                "Operon {} (rust-core, c-runtime, cpp-kernel)",
+                env!("CARGO_PKG_VERSION")
+            );
         }
         "repl" => {
             repl();
@@ -215,6 +234,11 @@ fn real_main() {
                     Ok(_) => {}
                     Err(s) => {
                         eprintln!("[contained] [{}] {}", s.kind, s.message);
+                        // dx-r1 (parity audit W2): a failing program must not
+                        // report success — CI/shell pipelines trusted rc=0
+                        // from scripts that died. 1 = uncaught top-level stress.
+                        tools::flush_notes(&l, opts.quiet);
+                        std::process::exit(1);
                     }
                 }
             }
@@ -552,7 +576,10 @@ fn real_main() {
 // ------------------------------------------------------------ repl
 fn repl() {
     use std::io::{BufRead, Write};
-    println!("Operon 2.2.0 repl — gene-expression shell (:help for commands, :quit to leave)");
+    println!(
+        "Operon {} repl — gene-expression shell (:help for commands, :quit to leave)",
+        env!("CARGO_PKG_VERSION")
+    );
     let mut l = match tools::load_file(
         "/dev/null",
         &Opts {
@@ -565,6 +592,7 @@ fn repl() {
             args: Vec::new(),
             quiet: true,
             caps: interp::Caps::default(),
+            profile: false,
         },
     ) {
         Ok(l) => l,
@@ -647,6 +675,7 @@ fn repl() {
                                 args: Vec::new(),
                                 quiet: true,
                                 caps: interp::Caps::default(),
+                                profile: false,
                             };
                             let rep = tools::run_tests(&[arg.to_string()], &opts, false);
                             println!(
@@ -701,6 +730,7 @@ fn repl() {
                                 args: Vec::new(),
                                 quiet: true,
                                 caps: interp::Caps::default(),
+                                profile: false,
                             },
                         ) {
                             Ok(nl) => nl,
@@ -826,7 +856,23 @@ fn repl_brace_balance(s: &str) -> i32 {
     bal
 }
 
+/// dx-r1 (audit W4): print only the notes this REPL input produced —
+/// previously notes were recorded but never shown, so the wobble/phantom
+/// diagnostics that are the language's brand were invisible interactively.
+fn repl_flush_new_notes(l: &tools::Loaded, start: usize) {
+    for n in &l.interp.notes[start..] {
+        let tag = match n.rung {
+            1 => "info",
+            2 => "synonym",
+            3 => "wobble",
+            _ => "fallback",
+        };
+        println!("  [{}] {}", tag, n.message);
+    }
+}
+
 fn repl_eval(l: &mut tools::Loaded, src: &str) {
+    let note_start = l.interp.notes.len();
     let prog = parser::parse(src);
     let broken = prog.notes.iter().any(|n| n.rung >= 4) || prog.stmts.is_empty();
     if !broken {
@@ -847,6 +893,7 @@ fn repl_eval(l: &mut tools::Loaded, src: &str) {
                 }
             }
         }
+        repl_flush_new_notes(l, note_start);
         return;
     }
     // expression mode: a bare `1 + 2 * 3` is not a statement — evaluate it
@@ -860,11 +907,17 @@ fn repl_eval(l: &mut tools::Loaded, src: &str) {
         return;
     }
     let env = l.interp.global.clone();
+    let note_start = l.interp.notes.len();
     for stmt in &wprog.stmts {
         if let Err(st) = l.interp.exec_stmt(&env, stmt) {
             println!("  [{}] {}", st.kind, st.message);
         }
     }
+    // dx-r1 (parity audit W4): notes were recorded but never shown — the
+    // REPL swallowed the wobble/phantom notes that are the language's brand
+    // ("never leaves you guessing"). Print only the notes this input
+    // produced (tools::flush_notes would replay the whole session).
+    repl_flush_new_notes(l, note_start);
     if let Some(v) = env.get("__repl_val") {
         if !matches!(v, Value::Null) {
             println!("{}", v.repr());
@@ -874,9 +927,11 @@ fn repl_eval(l: &mut tools::Loaded, src: &str) {
 
 fn usage() {
     eprintln!(
-        "Operon 2.2.0 — the gene-expression language (Total Grammar)
+        "Operon {} — the gene-expression language (Total Grammar)
 usage:
   operon run f.op [--entry g] [--variant v] [--cell c] [--rna r] [--frame name] [--ires] [--strict] [--quiet]
+                  [--fuel steps] [--allow-read path] [--allow-write path] [--allow-net host:port]
+                  [--allow-run cmd] [--allow-env var] [--allow-all]
   operon check f.op [--nmd | --nmd=purge] [--json]
   operon test [paths...] [--json]
   operon fmt f.op [--write]
@@ -885,7 +940,8 @@ usage:
   operon profile f.op
   operon crispr f.op --knockout gene [--json]
   operon bench f.op [--iters n]
-  operon version"
+  operon version",
+        env!("CARGO_PKG_VERSION")
     );
     std::process::exit(2);
 }

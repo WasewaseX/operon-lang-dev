@@ -35,10 +35,21 @@ trap 'rm -rf "$TMP"' EXIT
 echo "==> downloading $ASSET"
 curl -fsSL "$URL" -o "$TMP/$ASSET" || { echo "error: download failed ($URL)" >&2; exit 1; }
 
-if command -v sha256sum >/dev/null 2>&1 && curl -fsSL "$URL.sha256" -o "$TMP/$ASSET.sha256" 2>/dev/null; then
-  (cd "$TMP" && sha256sum -c "$ASSET.sha256" >/dev/null) && echo "==> checksum ok" \
-    || { echo "error: checksum mismatch" >&2; exit 1; }
+# sec-r1 (audit SC-1): verification must FAIL CLOSED — the old version
+# silently skipped verification on macOS (no sha256sum) or when the .sha256
+# asset 404'd, which is exactly the downgrade/substitution hole curl|sh
+# must never have.
+if [ "$(uname -s)" = "Darwin" ]; then SHASUM="shasum -a 256"; else SHASUM="sha256sum"; fi
+if ! command -v ${SHASUM%% *} >/dev/null 2>&1; then
+  echo "error: no checksum tool found; refusing to install unverified" >&2
+  exit 1
 fi
+if ! curl -fsSL "$URL.sha256" -o "$TMP/$ASSET.sha256"; then
+  echo "error: checksum file unavailable ($URL.sha256); refusing to install unverified" >&2
+  exit 1
+fi
+(cd "$TMP" && $SHASUM -c "$ASSET.sha256" >/dev/null) && echo "==> checksum ok" \
+  || { echo "error: checksum mismatch; refusing to install" >&2; exit 1; }
 
 mkdir -p "$DEST"
 tar xzf "$TMP/$ASSET" -C "$TMP"

@@ -298,7 +298,11 @@ impl Parser {
             if self.pos == before {
                 // no progress: hard fallback
                 let line = self.line();
-                self.note(line, 4, format!("token '{:?}' skipped", self.peek()));
+                self.note(
+                    line,
+                    4,
+                    format!("token '{}' skipped", self.peek().describe()),
+                );
                 self.next();
             }
         }
@@ -342,7 +346,10 @@ impl Parser {
                 self.note(
                     line,
                     4,
-                    format!("unexpected token '{:?}' at statement position", other),
+                    format!(
+                        "unexpected token '{}' at statement position",
+                        other.describe()
+                    ),
                 );
                 self.next();
                 None
@@ -1083,7 +1090,7 @@ impl Parser {
                                             let line = self.line();
                                             self.note(line, 4, "edit needs string patterns");
                                             self.next();
-                                            format!("{:?}", other)
+                                            other.describe()
                                         }
                                     };
                                     if matches!(self.peek(), Tok::Arrow) {
@@ -1094,9 +1101,7 @@ impl Parser {
                                             self.next();
                                             s
                                         }
-                                        other => {
-                                            format!("{:?}", other)
-                                        }
+                                        other => other.describe(),
                                     };
                                     reps.push((from, to));
                                     self.end_stmt();
@@ -1389,7 +1394,7 @@ impl Parser {
                 self.note(
                     line,
                     4,
-                    format!("expected a name, found '{:?}'; used '?'", other),
+                    format!("expected a name, found '{}'; used '?'", other.describe()),
                 );
                 Some("?".to_string())
             }
@@ -1642,7 +1647,11 @@ impl Parser {
                     }
                     if self.pos == before {
                         let line = self.line();
-                        self.note(line, 4, format!("token '{:?}' skipped", self.peek()));
+                        self.note(
+                            line,
+                            4,
+                            format!("token '{}' skipped", self.peek().describe()),
+                        );
                         self.next();
                     }
                 }
@@ -1953,7 +1962,7 @@ impl Parser {
                             self.note(
                                 line,
                                 4,
-                                format!("'.' followed by '{:?}'; member skipped", other),
+                                format!("'.' followed by '{}'; member skipped", other.describe()),
                             );
                             break;
                         }
@@ -2168,8 +2177,8 @@ impl Parser {
                     line,
                     4,
                     format!(
-                        "unexpected token '{:?}' in expression; null substituted",
-                        other
+                        "unexpected token '{}' in expression; null substituted",
+                        other.describe()
                     ),
                 );
                 self.next();
@@ -2354,7 +2363,7 @@ impl Parser {
                     self.note(
                         line,
                         4,
-                        format!("pattern '{:?}' treated as wildcard", other),
+                        format!("pattern '{}' treated as wildcard", other.describe()),
                     );
                     self.next();
                     return MatchPat::Wild;
