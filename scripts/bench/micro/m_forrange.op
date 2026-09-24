@@ -1,0 +1,7 @@
+# bench micro: for-in over range: 200k iterations, empty-ish body (builder-B, B1)
+# One construct in isolation; native CPython mirror in bench_compare.py MICRO.
+main {
+    let a = 0
+    for i in range(200000) { a = a + 1 }
+    promote("a = {a}")
+}

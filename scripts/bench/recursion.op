@@ -1,0 +1,11 @@
+# bench: recursion — bounded-depth tree recursion (builder-B, B1)
+# Naive binomial recursion C(20,10): ~184k calls with depth <= 20.
+# A different shape from fib (deep linear chain): here the tree is wide
+# and shallow, so per-call overhead dominates rather than call-stack depth.
+# Native CPython mirror: scripts/bench_compare.py (native_recursion).
+gene pasc(n, k) {
+    if k == 0 { return 1 }
+    if k == n { return 1 }
+    return pasc(n - 1, k - 1) + pasc(n - 1, k)
+}
+main { promote("C(20,10) = {pasc(20, 10)}") }

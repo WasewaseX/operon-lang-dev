@@ -1,0 +1,8 @@
+# bench micro: list index read: 2000-element list, 100k reads (builder-B, B1)
+# One construct in isolation; native CPython mirror in bench_compare.py MICRO.
+main {
+    let xs = for i in range(2000) collect i
+    let a = 0
+    for i in range(100000) { a = a + xs[i % 2000] }
+    promote("a = {a}")
+}
