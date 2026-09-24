@@ -1,0 +1,12 @@
+# sec-r5 F-10: DAG-shaped values (l=[l,l] chains) made json_str re-walk
+# exponentially (2^45 node visits for one builtin call = live hang).
+# The memoized visited-set keeps serialization linear.
+gene main() {
+    let l = [1];
+    for i in range(45) {
+        l = [l, l];
+    }
+    let j = json_str(l);
+    print(len(j) > 0);
+    print("p11c-contained");
+}

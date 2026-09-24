@@ -1,0 +1,11 @@
+# sec-r5 F-11: read_file("/dev/zero") was an infinite byte well — OOM
+# SIGKILL (rc 137). Non-regular files are now refused before open.
+gene main() {
+    stress {
+        let txt = read_file("/dev/zero");
+        print("read " + str(len(txt)) + " bytes");
+    } rescue (e) {
+        print("rescued: " + e.kind);
+    }
+    print("p11n-contained");
+}

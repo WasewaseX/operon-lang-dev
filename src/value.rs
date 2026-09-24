@@ -21,6 +21,13 @@ pub struct MapStore {
     memo: std::collections::HashMap<(u8, String), usize>,
 }
 
+/// sec-r5 (F-12): non-scalar keys (lists/maps) miss the hash memo and fall
+/// back to a linear deep_eq scan. Unbounded, that was quadratic CPU that
+/// burned zero fuel — 25k list-keyed inserts was a live hang. The scan is
+/// now capped: beyond this many entries a non-scalar key is treated as
+/// absent (SPEC §9b). Scalar keys keep exact semantics via the memo.
+const NON_SCALAR_SCAN_CAP: usize = 512;
+
 fn key_tag(v: &Value) -> (u8, String) {
     match v {
         Value::Null => (0, String::new()),
@@ -66,8 +73,14 @@ impl MapStore {
                     }
                 }
             }
+            // scalar keys keep exact semantics: full scan on memo miss
+            return self.items.iter().position(|(k, _)| k.deep_eq(key));
         }
-        self.items.iter().position(|(k, _)| k.deep_eq(key))
+        // sec-r5 (F-12): non-scalar keys — bounded scan (see NON_SCALAR_SCAN_CAP)
+        self.items
+            .iter()
+            .take(NON_SCALAR_SCAN_CAP)
+            .position(|(k, _)| k.deep_eq(key))
     }
     /// Upsert preserving insertion order (existing key keeps its position).
     pub fn insert(&mut self, key: Value, val: Value) {
@@ -231,6 +244,10 @@ impl Value {
     /// with a `[...]` / `{...}` marker (CPython behavior), never recurses
     /// forever. Depth is capped too, so very deep (non-cyclic) nesting
     /// degrades gracefully instead of exhausting the native stack.
+    /// sec-r5 (F-10): the visited set is NOT unwound on exit — unwinding
+    /// made DAG-shaped values (l=[l,l] chains) re-walk exponentially (a
+    /// 45-deep chain is 2^45 node visits: a live hang). Memoized: a shared
+    /// subtree renders once; later references render the cycle marker.
     pub fn repr(&self) -> String {
         let mut seen: HashSet<usize> = HashSet::new();
         self.repr_g(&mut seen, 0)
@@ -254,7 +271,7 @@ impl Value {
                     .iter()
                     .map(|v| v.repr_g(seen, depth + 1))
                     .collect();
-                seen.remove(&id);
+                // sec-r5 (F-10): visited id stays — memoized DAG containment
                 format!("[{}]", items.join(", "))
             }
             Value::Map(m) => {
@@ -273,7 +290,7 @@ impl Value {
                         )
                     })
                     .collect();
-                seen.remove(&id);
+                // sec-r5 (F-10): visited id stays — memoized DAG containment
                 format!("{{{}}}", items.join(", "))
             }
             Value::Gene(d, _) => match &d.name {
@@ -291,13 +308,20 @@ impl Value {
     /// Deep equality (maps order-insensitive). Cycle-safe: identity is
     /// checked first (a structure equals itself), and a pair of containers
     /// already being compared short-circuits to true; depth-capped.
+    /// sec-r5 (F-10): the compared-pair set is NOT unwound on exit — for
+    /// trees this is invisible (pairs are unique anyway); for DAG-shaped
+    /// values it memoizes "this pair already verified equal", keeping the
+    /// comparison linear instead of exponential (a 40-deep l=[l,l] twin
+    /// chain was a live hang).
     pub fn deep_eq(&self, other: &Value) -> bool {
         let mut seen: HashSet<(usize, usize)> = HashSet::new();
         self.deep_eq_g(other, &mut seen, 0)
     }
 
     fn deep_eq_g(&self, other: &Value, seen: &mut HashSet<(usize, usize)>, depth: u32) -> bool {
-        if depth > 100_000 {
+        // sec-r5: 100k native frames sat within ~2 MB of the 8 MB main stack
+        // (one layout change from SIGSEGV); 16k keeps comfortable headroom.
+        if depth > 16_000 {
             return false;
         }
         match (self, other) {
@@ -327,7 +351,7 @@ impl Value {
                         .iter()
                         .zip(lb.iter())
                         .all(|(x, y)| x.deep_eq_g(y, seen, depth + 1));
-                seen.remove(&pair);
+                // sec-r5 (F-10): pair stays in `seen` — DAG memoization
                 ok
             }
             (Value::Map(a), Value::Map(b)) => {
@@ -349,7 +373,7 @@ impl Value {
                             k.deep_eq_g(k2, seen, depth + 1) && v.deep_eq_g(v2, seen, depth + 1)
                         })
                     });
-                seen.remove(&pair);
+                // sec-r5 (F-10): pair stays in `seen` — DAG memoization
                 ok
             }
             (Value::Gene(d1, _), Value::Gene(d2, _)) => Arc::ptr_eq(d1, d2),
@@ -425,4 +449,14 @@ pub fn key_scalar(v: &Value) -> Option<Value> {
         }
         _ => None,
     }
+}
+
+/// sec-r5 (F-12): true when a map key hits the hash memo (O(1) upsert).
+/// Non-scalar keys fall back to a linear deep_eq scan per operation —
+/// callers charge that scan to the fuel budget.
+pub fn key_is_scalar(v: &Value) -> bool {
+    matches!(
+        v,
+        Value::Null | Value::Bool(_) | Value::Int(_) | Value::Float(_) | Value::Str(_)
+    )
 }

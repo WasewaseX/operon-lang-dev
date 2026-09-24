@@ -228,6 +228,8 @@ operon run app.op --allow-all           # open flask (for scripts that mean it)
 ```
 
 - Path grants (`read`/`write`) resolve symlinks: the requested path is canonicalized before comparison against the canonicalized grant. A grant that normalizes to the empty string (`/`, or `.` from `/`) would match everything and is **rejected** at startup.
+- **sec-r5 (anti-TOCTOU): file I/O verifies the opened handle, not the path.** The old check → canonicalize → write sequence was raceable with a symlink swap (proven live: a flipped link landed attacker-controlled bytes outside the grant). Now `read_file`/`write_file`/`append_file` open the file FIRST, verify the handle's true identity (Unix: the fully-resolved `/proc/self/fd/<n>` target; elsewhere: symlink/reparse handles are refused), and do all I/O **through the handle** — there is no later path re-resolution to race. A dangling outside-pointing symlink is resolved (chains up to 40 hops) and rejected **before** open, so it cannot be created-through as an empty file. Residual (documented): a race that flips a link to a dangling outside target inside the check-to-open window can create an empty file outside the grant — no content ever crosses.
+- **sec-r5: `read_file` reads regular files only.** FIFOs (which would block `open()` forever) and device files like `/dev/zero` (an infinite byte well that OOM-killed the host) are refused with Stress `interference` before open; the stat'd size is charged against the aggregate allocation ceiling before the read.
 - `--allow-net` takes `host:port`; `--allow-env` takes a variable name; `--allow-run` takes a program name.
 - `.cell` grant keys (`allow.read = /data`, …) are honored **only** when the config is loaded explicitly via `--cell file.cell`. An auto-detected `operon.cell` cannot grant capabilities — its `allow.*` keys are ignored with an `[info]` note (a file that happens to sit in the project must not silently widen the sandbox).
 - `use` imports: files inside the program's own project directory, the CWD, or the standard library are always importable (otherwise nothing imports under default-deny). A `use` that resolves outside those managed trees requires a read grant; the denial is Stress `interference`.
@@ -239,13 +241,21 @@ Resource ceilings (all raise catchable Stress):
 | Recursion depth | 10,000 (`overflow`) |
 | Step budget | 200,000,000 steps per run (`overflow` "step budget exhausted"); `--fuel N` lowers it |
 | String `.repeat()` allocation | 512 MiB |
-| Aggregate run allocation | 2 GiB (push/concat/repeat/interp assembly all charged) |
+| Aggregate run allocation | 2 GiB (push/concat/repeat/interp assembly all charged; sec-r5: large-string variable reads and writes/reads of file bytes are charged too — a 500 MB string read three times IS 1.5 GB of real allocation) |
 | Collected `run()` child output | 64 MiB per stream (collected prefix is returned; the child is still timeout-killed) |
 | Parse/lex notes | 10,000 per parse (further notes suppressed) |
 | `distance()` dynamic-programming table | 10,000,000 cells |
 | `sleep()` | 60,000 ms (sleep escapes the step budget, so it is capped) |
 | `json_parse` nesting | 512 levels |
 | Integer arithmetic | i64, overflow → `overflow` (no wrap) |
+| Map non-scalar-key scan (sec-r5) | 512 entries per lookup/upsert — beyond that a non-scalar (list/map) key is treated as absent; scalar keys keep exact semantics via the hash memo |
+
+sec-r5 containment semantics worth stating plainly:
+
+- **DAG-shaped values serialize and compare in linear time.** `json_str`, structural display (`print`), and `deep_eq` (`==`) keep their visited/comparison sets for the whole walk instead of unwinding them. A shared (aliased) subtree is rendered once; later references render as `null` (JSON) or the `[...]`/`{...}` marker (display) — the same containment CPython applies to cycles, extended to aliased DAGs, which previously re-walked exponentially (`l = [l, l]` chains: 2^45 node visits for one builtin call).
+- **`json_str` emits valid JSON only (RFC 8259).** Non-finite floats serialize as `null` instead of bare `inf`/`nan` tokens that no JSON parser accepts.
+- **The aggregate allocation ceiling and the step budget are monotonic.** Once crossed, the counter stays over the limit — every later charge fails, including charges inside a `rescue` handler, so a run that breached a resource ceiling ends with the top-level containment note rather than resuming. Resource-exhaustion overflow is the one stress a rescue cannot recover from; the contract is a bounded note, never an OOM kill or allocator abort.
+- **CI/supply chain:** every GitHub Action in both workflows is pinned to a commit SHA (checkout, toolchain, gh-release — D-6 closed); `Cargo.lock` has zero runtime dependencies (build-time only: cc, shlex, find-msvc-tools).
 
 ## 10. Builtins and methods
 
