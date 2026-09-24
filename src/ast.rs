@@ -34,7 +34,12 @@ pub enum Expr {
     Call(Box<Expr>, Vec<Expr>, usize),
     Index(Box<Expr>, Box<Expr>),
     Member(Box<Expr>, String),
+    /// L1a: `a?.k` — Null receiver yields Null (silent); otherwise identical
+    /// to Member.
+    MemberSafe(Box<Expr>, String),
     Method(Box<Expr>, String, Vec<Expr>),
+    /// L1a: `a?.k(args)` — Null-safe method call (same contract).
+    MethodSafe(Box<Expr>, String, Vec<Expr>),
     Lambda(Arc<GeneDef>),
     Collect {
         var: String,
@@ -77,6 +82,9 @@ pub enum BinOp {
     And,
     Or,
     In,
+    /// L1a: `a ?? b` — coalesces Null only (not falsy); right-assoc,
+    /// short-circuit (b unevaluated when a is non-null).
+    Nullish,
 }
 
 #[derive(Debug, Clone)]
@@ -138,12 +146,38 @@ pub enum MatchPat {
     Wild,             // _
 }
 
+/// L1a: destructuring patterns (let / for). `Bind` binds the whole item;
+/// `List` destructures a List (elements are patterns; `*rest` captures the
+/// tail); `Map` destructures a Map (each name reads that key). Soft-miss
+/// semantics: wrong container type or missing element/key binds Null with a
+/// note — Total Grammar: a pattern never hard-fails a run.
+#[derive(Debug, Clone)]
+pub enum Pat {
+    Bind(String),
+    List {
+        elems: Vec<Pat>,
+        rest: Option<String>, // *rest — tail after the fixed elements
+    },
+    Map {
+        keys: Vec<String>,
+    },
+}
+
 #[derive(Debug, Clone)]
 pub enum Stmt {
     Let(String, Expr),
     Assign(String, Option<BinOp>, Expr), // name (op=)? expr
     IndexAssign(Expr, Expr, Option<BinOp>, Expr), // target[i] (op=)? expr
     MemberAssign(Expr, String, Option<BinOp>, Expr), // target.k (op=)? expr
+    /// L1a: destructuring definition — `let [a, b] = e`, `let {x, y} = e`,
+    /// `let [a, *rest] = e` (patterns nest).
+    LetPat(Pat, Expr),
+    /// L1a: destructuring for-loop — `for [k, v] in pairs { ... }`.
+    ForPat(Pat, Expr, Vec<Stmt>),
+    /// L1a: multiple assignment / swap — `a, b = b, a`; RHS evaluated fully
+    /// (left to right) before any target is assigned. `let a, b = 1, 2` sets
+    /// `define` (fresh bindings); the bare form assigns existing names.
+    MultiAssign(Vec<Expr>, Vec<Expr>, bool),
     If(Vec<(Expr, Vec<Stmt>)>, Option<Vec<Stmt>>),
     While(Expr, Vec<Stmt>),
     Loop(Vec<Stmt>),

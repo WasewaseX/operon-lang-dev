@@ -183,7 +183,7 @@ operon version                                    # Operon 2.2.0 (rust-core, cpp
 $ ./scripts/build.sh          # gcc + g++ the kernels, rustc the core
 OK: bin/operon
 $ ./scripts/test.sh           # 50 proof files (654 assertions), C++ kernel smoke
-$ python3 bootstrap/harness.py  # differential: 56/56 programs MATCH across implementations
+$ python3 bootstrap/harness.py  # differential: 78/78 programs MATCH across implementations
 $ bash scripts/redteam.sh       # adversarial containment: 59 attacks contained, 0 breached
 $ bash scripts/bench.sh
 ```

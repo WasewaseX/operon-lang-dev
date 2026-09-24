@@ -1,0 +1,46 @@
+# L1a: numeric builtins — round / clamp / divmod
+# contract: round(x) -> Int, round(x, d) -> Float, half-away-from-zero at the
+# d-th decimal (same f64 formula in both implementations — bit-identical);
+# clamp keeps the clamped bound's value; divmod reuses // and % exactly
+# (floored, sign follows divisor).
+frame proof {
+    assert(round(2) == 2)
+    assert(round(2.5) == 3)
+    assert(round(2.4) == 2)
+    assert(round(-2.5) == -3)
+    assert(round(-2.4) == -2)
+    assert(round(0.5) == 1)
+    assert(round(-0.5) == -1)
+    assert(round(2.456, 2) == 2.46)
+    assert(round(2.456, 1) == 2.5)
+    assert(round(1.005, 2) == 1.0)
+    assert(round(123.456, 0) == 123)
+    assert(clamp(15, 0, 10) == 10)
+    assert(clamp(-5, 0, 10) == 0)
+    assert(clamp(5, 0, 10) == 5)
+    assert(clamp(2.5, 0, 10) == 2.5)
+    assert(divmod(7, 2) == [3, 1])
+    assert(divmod(-7, 2) == [-4, 1])
+    assert(divmod(7, -2) == [-4, -1])
+    assert(divmod(-7, -2) == [3, -1])
+    assert(divmod(9, 3) == [3, 0])
+}
+main {
+    promote(round(2.5))
+    promote(round(2.4))
+    promote(round(-2.5))
+    promote(round(2.456, 2))
+    promote(round(2.456, 1))
+    promote(round(1.005, 2))
+    promote(round(7))
+    promote(clamp(15, 0, 10))
+    promote(clamp(-5, 0, 10))
+    promote(clamp(5, 0, 10))
+    promote(divmod(7, 2))
+    promote(divmod(-7, 2))
+    promote(divmod(7, -2))
+    promote(divmod(-7, -2))
+    promote(divmod(7.5, 2))
+    promote(clamp("x", 0, 10))
+    promote(round("x"))
+}

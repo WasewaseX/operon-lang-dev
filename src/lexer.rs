@@ -43,6 +43,8 @@ pub enum Tok {
     Shl,
     Shr,
     Question,
+    QuestionDot,      // ?. — optional chaining (L1a)
+    QuestionQuestion, // ?? — null coalescing (L1a)
     Eq,
     EqEq,
     Neq,
@@ -101,6 +103,8 @@ impl Tok {
             Tok::Shl => "'<<'".to_string(),
             Tok::Shr => "'>>'".to_string(),
             Tok::Question => "'?'".to_string(),
+            Tok::QuestionDot => "'?.'".to_string(),
+            Tok::QuestionQuestion => "'??'".to_string(),
             Tok::Eq => "'='".to_string(),
             Tok::EqEq => "'=='".to_string(),
             Tok::Neq => "'!='".to_string(),
@@ -444,8 +448,25 @@ pub fn lex(src: &str) -> Lexed {
                 i += 1;
             }
             '?' => {
-                push!(Tok::Question);
-                i += 1;
+                // L1a: '??' = null coalescing; '?.' = optional chaining
+                // (only when not followed by a digit — a float literal can
+                // never start with '.', but a ternary 'a ?. 5' space-form
+                // must not eat the dot; digit guard keeps '?' + '.' separate
+                // for any future numeric forms).
+                if i + 1 < n && chars[i + 1] == '?' {
+                    push!(Tok::QuestionQuestion);
+                    i += 2;
+                } else if i + 1 < n
+                    && chars[i + 1] == '.'
+                    && i + 2 < n
+                    && !chars[i + 2].is_ascii_digit()
+                {
+                    push!(Tok::QuestionDot);
+                    i += 2;
+                } else {
+                    push!(Tok::Question);
+                    i += 1;
+                }
             }
             other => {
                 notes.push(Note {
