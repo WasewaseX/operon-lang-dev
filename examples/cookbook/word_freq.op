@@ -1,0 +1,47 @@
+# ============================================================
+# Word frequency  — cookbook #01
+# you already know: collections.Counter(text.split()).most_common(3)
+# teaches: maps as counters, keys() iteration, sort_by_key with a
+#          gene (lambda) key, pad_left for aligned columns
+# run: operon run examples/cookbook/word_freq.op
+# expected output: examples/cookbook/expected/word_freq.out
+# verified by scripts/cookbook.sh on the Rust core AND the Python oracle
+# ============================================================
+use std/iter as it
+use std/strings as st
+
+gene count_words(text) {
+    # a map is insertion-ordered, so first-seen order is stable
+    let counts = {}
+    for w in st.words(text) {
+        if not has(counts, w) {
+            counts[w] = 0
+        }
+        counts[w] = counts[w] + 1
+    }
+    return counts
+}
+
+gene main() {
+    let text = "the quick fox outruns the lazy dog the fox naps and the dog dreams the dog end"
+    let counts = count_words(text)
+
+    # rank words by count, descending: sort ascending on (0 - count)
+    let ranked = it.sort_by_key(keys(counts), gene (w) {
+        return 0 - counts[w]
+    })
+    let top3 = it.take(ranked, 3)
+
+    let distinct = len(keys(counts))
+    promote("top words (of {distinct} distinct):")
+    let rank = 1
+    for w in top3 {
+        let pos = st.pad_left(str(rank), 2, " ")
+        let name = st.pad_right(w, 8, ".")
+        promote("{pos}. {name} {counts[w]}")
+        rank += 1
+    }
+
+    # counts map is reusable: how often does one word appear?
+    promote("fox appears {counts["fox"]} times, dog appears {counts["dog"]} times")
+}

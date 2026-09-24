@@ -1,0 +1,36 @@
+# ============================================================
+# GOTCHA: division, integer division, floored modulo  — cookbook #18
+# you already know: Python's / vs // vs % (Operon matches Python)
+# teaches: `/` is always float division; `//` is integer division;
+#          `%` is FLOORED — the sign follows the divisor, which is
+#          exactly what you want for cyclic work
+# run: operon run examples/cookbook/gotcha_division.op
+# expected output: examples/cookbook/expected/gotcha_division.out
+# verified by scripts/cookbook.sh on the Rust core AND the Python oracle
+# ============================================================
+use std/fmt as fm
+
+gene main() {
+    # / is float division even for whole results
+    promote("7 / 2  = {7 / 2}")
+    promote("6 / 2  = {6 / 2}")
+
+    # // truncates toward negative infinity (floor), like Python's //
+    promote("7 // 2 = {7 // 2}")
+    promote("(0 - 7) // 3 = {(0 - 7) // 3}   (floored: -2.33 becomes -3)")
+
+    # % is floored: result has the sign of the DIVISOR
+    promote("7 % 3  = {7 % 3}")
+    promote("(0 - 7) % 3 = {(0 - 7) % 3}   (still positive)")
+    promote("7 % (0 - 3) = {7 % (0 - 3)}   (negative)")
+
+    # why floored modulo is the right default: cyclic indexing just works
+    let days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+    let wednesday = 2
+    promote("100 days after wednesday: {days[(wednesday + 100) % 7]}")
+    promote("10 days before wednesday: {days[((wednesday - 10) % 7 + 7) % 7]}")
+
+    # money math: keep integers for cents, format at the edge
+    let cents = 12345
+    promote("price: {fm.fmt_fixed(cents / 100.0, 2)}")
+}

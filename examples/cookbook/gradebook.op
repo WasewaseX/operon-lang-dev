@@ -1,0 +1,51 @@
+# ============================================================
+# Gradebook  — cookbook #09
+# you already know: pandas groupby + describe, minus the install
+# teaches: records as list-of-maps, std/math aggregates, min/max
+#          builtins, group_by from std/collections, fmt_table
+# run: operon run examples/cookbook/gradebook.op
+# expected output: examples/cookbook/expected/gradebook.out
+# verified by scripts/cookbook.sh on the Rust core AND the Python oracle
+# ============================================================
+use std/math as m
+use std/collections as cl
+use std/fmt as fm
+
+gene main() {
+    let students = [
+        {"name": "Ada", "subject": "math", "score": 92},
+        {"name": "Ada", "subject": "art", "score": 88},
+        {"name": "Grace", "subject": "math", "score": 97},
+        {"name": "Grace", "subject": "art", "score": 91},
+        {"name": "Alan", "subject": "math", "score": 85},
+        {"name": "Alan", "subject": "art", "score": 79}
+    ]
+
+    # group whole records by a computed key
+    let by_subject = cl.group_by(students, gene (s) { return s["subject"] })
+
+    for subject in keys(by_subject) {
+        let rows = by_subject[subject]
+        let scores = for s in rows collect s["score"]
+        let mean_v = fm.fmt_fixed(m.mean(scores), 1)
+        let med_v = m.median(scores)
+        let sd_v = fm.fmt_fixed(m.stddev(scores), 2)
+        promote("{subject}: mean {mean_v}, median {med_v}, stddev {sd_v}")
+    }
+
+    # per-student averages as an ASCII table
+    let by_name = cl.group_by(students, gene (s) { return s["name"] })
+    let report = []
+    for name in keys(by_name) {
+        let scores = for s in by_name[name] collect s["score"]
+        let avg_v = fm.fmt_fixed(m.mean(scores), 1)
+        push(report, {"student": name, "avg": avg_v, "best": max(scores)})
+    }
+    promote(fm.fmt_table(report, ["student", "avg", "best"]))
+
+    # top score overall, and who set it
+    let all_scores = for s in students collect s["score"]
+    let top = max(all_scores)
+    let best = cl.group_by(students, gene (s) { return s["score"] })[top]
+    promote("top score: {top} by {best[0]["name"]}")
+}

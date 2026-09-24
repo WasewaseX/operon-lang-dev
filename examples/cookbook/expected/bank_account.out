@@ -1,0 +1,7 @@
+open: Ada, balance 0
+deposit 120 -> 120
+deposit -5  -> rejected: deposit must be positive
+withdraw 30 -> 90
+contained [unfolded]: insufficient funds: have 90, need 500
+final balance 90
+history: ["+120", "-30"]

@@ -1,0 +1,51 @@
+# ============================================================
+# Bank account  — cookbook #07
+# you already know: a class with methods + exceptions
+# teaches: records as maps, guard clauses, raise + stress/rescue
+#          containment (Operon's try/catch, honestly named)
+# run: operon run examples/cookbook/bank_account.op
+# expected output: examples/cookbook/expected/bank_account.out
+# verified by scripts/cookbook.sh on the Rust core AND the Python oracle
+# ============================================================
+gene new_account(owner) {
+    return {"owner": owner, "balance": 0, "history": []}
+}
+
+gene deposit(acct, amount) guard (amount > 0) else {
+    return "rejected: deposit must be positive"
+} {
+    acct["balance"] = acct["balance"] + amount
+    push(acct["history"], "+{amount}")
+    return acct["balance"]
+}
+
+gene withdraw(acct, amount) guard (amount > 0) else {
+    return "rejected: withdraw must be positive"
+} {
+    if amount > acct["balance"] {
+        # one-arg raise: kind becomes "unfolded", message is the string
+        raise "insufficient funds: have {acct["balance"]}, need {amount}"
+    }
+    acct["balance"] = acct["balance"] - amount
+    push(acct["history"], "-{amount}")
+    return acct["balance"]
+}
+
+gene main() {
+    let acct = new_account("Ada")
+    promote("open: {acct["owner"]}, balance {acct["balance"]}")
+    promote("deposit 120 -> {deposit(acct, 120)}")
+    promote("deposit -5  -> {deposit(acct, 0 - 5)}")
+    promote("withdraw 30 -> {withdraw(acct, 30)}")
+
+    # the overdraft raise is contained right here — call first, then print
+    stress {
+        let result = withdraw(acct, 500)
+        promote("withdraw 500 -> {result}")
+    } rescue (e) {
+        promote("contained [{e.kind}]: {e.message}")
+    }
+
+    promote("final balance {acct["balance"]}")
+    promote("history: {acct["history"]}")
+}

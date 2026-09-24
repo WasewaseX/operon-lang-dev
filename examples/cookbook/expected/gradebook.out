@@ -1,0 +1,10 @@
+math: mean 91.3, median 92, stddev 4.92
+art: mean 86.0, median 88, stddev 5.10
++---------+------+------+
+| student | avg  | best |
++---------+------+------+
+| Ada     | 90.0 | 92   |
+| Grace   | 94.0 | 97   |
+| Alan    | 82.0 | 85   |
++---------+------+------+
+top score: 97 by Grace
