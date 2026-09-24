@@ -11,7 +11,7 @@ mod tools;
 mod value;
 
 use tools::Opts;
-use ast::{Expr, Stmt};
+use ast::Stmt;
 use value::Value;
 
 fn main() {
@@ -70,32 +70,57 @@ fn real_main() {
             }
             "--allow-read" => {
                 i += 1;
-                if let Some(p) = rest.get(i) {
-                    opts.caps.read.push(p.clone());
+                match rest.get(i) {
+                    Some(p) if !p.starts_with("--") => {
+                        if let Err(s) = opts.caps.add_grant("read", p) {
+                            die(&format!("invalid --allow-read: {}", s.message));
+                        }
+                    }
+                    _ => die("--allow-read needs a path argument"),
                 }
             }
             "--allow-write" => {
                 i += 1;
-                if let Some(p) = rest.get(i) {
-                    opts.caps.write.push(p.clone());
+                match rest.get(i) {
+                    Some(p) if !p.starts_with("--") => {
+                        if let Err(s) = opts.caps.add_grant("write", p) {
+                            die(&format!("invalid --allow-write: {}", s.message));
+                        }
+                    }
+                    _ => die("--allow-write needs a path argument"),
                 }
             }
             "--allow-run" => {
                 i += 1;
-                if let Some(p) = rest.get(i) {
-                    opts.caps.run.push(p.clone());
+                match rest.get(i) {
+                    Some(p) if !p.starts_with("--") => {
+                        if let Err(s) = opts.caps.add_grant("run", p) {
+                            die(&format!("invalid --allow-run: {}", s.message));
+                        }
+                    }
+                    _ => die("--allow-run needs a program name argument"),
                 }
             }
             "--allow-net" => {
                 i += 1;
-                if let Some(p) = rest.get(i) {
-                    opts.caps.net.push(p.clone());
+                match rest.get(i) {
+                    Some(p) if !p.starts_with("--") => {
+                        if let Err(s) = opts.caps.add_grant("net", p) {
+                            die(&format!("invalid --allow-net: {}", s.message));
+                        }
+                    }
+                    _ => die("--allow-net needs a host:port argument"),
                 }
             }
             "--allow-env" => {
                 i += 1;
-                if let Some(p) = rest.get(i) {
-                    opts.caps.env.push(p.clone());
+                match rest.get(i) {
+                    Some(p) if !p.starts_with("--") => {
+                        if let Err(s) = opts.caps.add_grant("env", p) {
+                            die(&format!("invalid --allow-env: {}", s.message));
+                        }
+                    }
+                    _ => die("--allow-env needs a variable name argument"),
                 }
             }
             "--allow-all" => {
@@ -343,14 +368,11 @@ fn real_main() {
                 println!("{:<24} {:>8} {:>12.1}  {}", name, calls, time, flags.trim_end());
             }
             let fp = {
-                // reuse fingerprint computation via builtin path
-                let mut li = l.interp.call_counts.clone();
-                let _ = &mut li;
                 let total_defined = l.interp.defined_genes.len();
-                let spliced = l.interp.call_counts.len().min(total_defined);
-                let unspliced = total_defined.saturating_sub(spliced);
-                let velocity = if total_defined > 0 { unspliced as f64 / total_defined as f64 } else { 0.0 };
-                (spliced, unspliced, velocity)
+                let mature = l.interp.call_counts.len().min(total_defined);
+                let nascent = total_defined.saturating_sub(mature);
+                let maturation = if total_defined > 0 { mature as f64 / total_defined as f64 } else { 0.0 };
+                (mature, nascent, maturation)
             };
             println!(
                 "telemetry: mature {} · nascent {} · maturation {:.2}",

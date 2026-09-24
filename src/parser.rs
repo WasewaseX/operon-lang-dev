@@ -77,7 +77,7 @@ pub fn parse(src: &str) -> Program {
     let lexed = lex(src);
     let mut notes = lexed.notes;
     let mut p = Parser { toks: lexed.toks, pos: 0, notes: Vec::new() };
-    let mut stmts = p.parse_program();
+    let stmts = p.parse_program();
     notes.append(&mut p.notes);
     let mut prog = Program {
         proofs: Vec::new(),
@@ -1852,7 +1852,7 @@ impl Parser {
         // split "a{x}b{y}" into lit/expr parts; sub-parse each expression
         let mut parts: Vec<InterpPart> = Vec::new();
         let mut lit = String::new();
-        let mut chars: Vec<char> = raw.chars().collect();
+        let chars: Vec<char> = raw.chars().collect();
         let mut i = 0usize;
         while i < chars.len() {
             if chars[i] == '{' {

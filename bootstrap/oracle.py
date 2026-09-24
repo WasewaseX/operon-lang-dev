@@ -1487,18 +1487,42 @@ class Interp:
                 out.append(seg)
         return "/".join(out)
 
+    @staticmethod
+    def _resolved(p):
+        try:
+            return os.path.realpath(p)
+        except OSError:
+            return p
+
+    def _path_allowed(self, cap, what):
+        # resolved-prefix comparison (symlink-aware, like the Rust core)
+        rw = self._resolved(what)
+        for g in self.caps[cap]:
+            rg = self._resolved(g)
+            if rw == rg or rw.startswith(rg + os.sep):
+                return True
+            # non-existent target: nearest existing ancestor must resolve inside
+            probe = what
+            parent = os.path.dirname(probe)
+            if parent and parent != probe:
+                rp = self._resolved(parent)
+                if rp == rg or rp.startswith(rg + os.sep):
+                    return True
+        # lexical fallback for grants that do not exist on disk
+        np = self._norm_path(what)
+        for g in self.caps[cap]:
+            ng = self._norm_path(g)
+            if ng != "" and (np == ng or np.startswith(ng + "/")):
+                return True
+        return False
+
     def cap_check(self, cap, kind, what):
         c = self.caps
         if not c["enabled"] or "*" in c[cap]:
             return
         ok = False
         if kind in ("read", "write"):
-            np = self._norm_path(what)
-            for g in c[cap]:
-                ng = self._norm_path(g)
-                if ng == "" or np == ng or np.startswith(ng + "/"):
-                    ok = True
-                    break
+            ok = self._path_allowed(cap, what)
         else:
             ok = what in c[cap]
         if not ok:
@@ -3098,11 +3122,16 @@ def load_file(path, cell=None, variant=None, rna=None, args=None, caps=None):
     for nt in notes:
         it.note(nt.rung, nt.message)
     it.ires = [s[1] for s in stmts if s[0] == "ires"]
-    # capability grants from .cell allow.* keys (mirror of Rust)
-    for k, v in it.cell.items():
+    # capability grants from .cell allow.* keys — only an EXPLICITLY passed
+    # --cell may grant; auto-detected operon.cell keys are ignored with a note
+    cell_explicit = cell is not None and isinstance(cell, dict)
+    for k, v in list(it.cell.items()):
         if k.startswith("allow."):
             rest = k[len("allow."):]
             if rest in ("read", "write", "run", "net", "env"):
+                if not cell_explicit:
+                    it.note(1, f"cell key '{k}={v}' ignored: auto-detected operon.cell cannot grant capabilities (pass --cell explicitly)")
+                    continue
                 it.caps[rest].append(v)
     if it.cell.get("entry"):
         it.cell_entry = it.cell["entry"]

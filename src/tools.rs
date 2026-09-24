@@ -3,7 +3,7 @@
 
 use crate::ast::*;
 use crate::genes;
-use crate::interp::{Env, Flow, Interp};
+use crate::interp::{Flow, Interp};
 use crate::parser;
 use crate::value::{Stress, Value};
 use std::collections::HashSet;
@@ -25,7 +25,6 @@ pub struct Opts {
 pub struct Loaded {
     pub interp: Interp,
     pub prog: Program,
-    pub file: String,
 }
 
 pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
@@ -34,8 +33,14 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
     let stem = Path::new(file).file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
 
     let mut interp = Interp::new();
+    // base dir for module resolution (relative to the importing file)
+    interp.base_dir = std::path::Path::new(file).parent().map(|p| p.to_string_lossy().to_string());
 
-    // methylation layer: CLI --cell, else operon.cell auto-detect
+    // methylation layer: CLI --cell, else operon.cell auto-detect.
+    // SECURITY POLICY: an auto-detected cell config may configure entry/
+    // variant/quiet keys, but its allow.* keys are IGNORED — capability
+    // grants must come from the operator (CLI --allow-* / explicit --cell),
+    // never silently from a file that happens to sit in the project.
     let cell_path = opts.cell.clone().or_else(|| {
         if Path::new("operon.cell").exists() {
             Some("operon.cell".to_string())
@@ -43,6 +48,7 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
             None
         }
     });
+    let cell_is_explicit = opts.cell.is_some();
     if let Some(cp) = &cell_path {
         match std::fs::read_to_string(cp) {
             Ok(txt) => {
@@ -81,15 +87,23 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
     interp.cli_args = opts.args.clone();
     // capability grants: CLI flags + .cell allow.* keys (CLI wins)
     interp.caps = opts.caps.clone();
-    for (k, v) in &interp.cell {
+    let cell_pairs: Vec<(String, String)> = interp.cell.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+    for (k, v) in cell_pairs {
         if let Some(rest) = k.strip_prefix("allow.") {
-            match rest {
-                "read" => interp.caps.read.push(v.clone()),
-                "write" => interp.caps.write.push(v.clone()),
-                "run" => interp.caps.run.push(v.clone()),
-                "net" => interp.caps.net.push(v.clone()),
-                "env" => interp.caps.env.push(v.clone()),
-                _ => {}
+            if !cell_is_explicit {
+                interp.note(0, 1, format!("cell key '{}={}' ignored: auto-detected operon.cell cannot grant capabilities (pass --cell explicitly)", k, v));
+                continue;
+            }
+            let added = match rest {
+                "read" => interp.caps.add_grant("read", &v),
+                "write" => interp.caps.add_grant("write", &v),
+                "run" => interp.caps.add_grant("run", &v),
+                "net" => interp.caps.add_grant("net", &v),
+                "env" => interp.caps.add_grant("env", &v),
+                _ => Ok(()),
+            };
+            if let Err(s) = added {
+                interp.note(0, 4, format!("invalid cell grant: {}", s.message));
             }
         }
     }
@@ -122,7 +136,7 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
         }
     }
 
-    Ok(Loaded { interp, prog, file: file.to_string() })
+    Ok(Loaded { interp, prog })
 }
 
 pub fn resolve_entry(l: &mut Loaded, opts: &Opts) -> Option<String> {
@@ -1022,12 +1036,31 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
         Expr::Bool(false) => "false".into(),
         Expr::Int(i) => i.to_string(),
         Expr::Float(f) => crate::value::format_float(*f),
-        Expr::Str(s) => format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n")),
+        Expr::Str(s) => format!(
+            "\"{}\"",
+            s.replace('\\', "\\\\")
+                .replace('"', "\\\"")
+                .replace('\n', "\\n")
+                .replace('\t', "\\t")
+                .replace('{', "\\{")
+                .replace('}', "\\}")
+        ),
         Expr::Interp(parts) => {
             let mut out = String::from("\"");
             for p in parts {
                 match p {
-                    InterpPart::Lit(s) => out.push_str(s),
+                    InterpPart::Lit(s) => {
+                        // literal segments may contain braces that came from
+                        // \\{ \\} escapes — re-escape them or fmt corrupts the file
+                        out.push_str(
+                            &s.replace('\\', "\\\\")
+                                .replace('"', "\\\"")
+                                .replace('\n', "\\n")
+                                .replace('\t', "\\t")
+                                .replace('{', "\\{")
+                                .replace('}', "\\}"),
+                        );
+                    }
                     InterpPart::Expr(x) => {
                         out.push('{');
                         out.push_str(&fmt_expr(x));

@@ -121,6 +121,37 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
         return Ok(Value::Map(Rc::new(RefCell::new(Vec::new())))); // cycle: partial module
     }
     let resolved = resolve_path(interp, path)?;
+    // Module loading is a read, but of a runtime-managed tree: the
+    // importing file's own project directory and the standard library are
+    // ALWAYS importable (otherwise no `use` works under default-deny).
+    // Imports that reach OUTSIDE those trees (arbitrary disk paths) require
+    // an explicit read capability — a program cannot execute random files.
+    fn under(resolved: &str, root: &Option<String>) -> bool {
+        match root {
+            Some(r) => match std::fs::canonicalize(r) {
+                Ok(rc) => {
+                    let rs = rc.to_string_lossy().to_string();
+                    resolved == rs || resolved.starts_with(&format!("{}/", rs))
+                }
+                Err(_) => false,
+            },
+            None => false,
+        }
+    }
+    let rc_resolved = std::fs::canonicalize(&resolved)
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|_| resolved.clone());
+    let cwd = std::env::current_dir().ok().map(|p| p.to_string_lossy().to_string());
+    let std_env = std::env::var("OPERON_STD").ok();
+    let managed = under(&rc_resolved, &interp.base_dir)
+        || under(&rc_resolved, &cwd)
+        || rc_resolved.contains("/std/")
+        || under(&rc_resolved, &std_env);
+    if !managed && interp.caps.enabled {
+        if let Err(s) = interp.caps.check(&interp.caps.read, "read", &resolved) {
+            return Err(format!("module '{}' blocked: [{}] {}", path, s.kind, s.message));
+        }
+    }
     let src = std::fs::read_to_string(&resolved)
         .map_err(|e| format!("cannot read '{}': {}", resolved, e))?;
     let stem = std::path::Path::new(&resolved)
@@ -185,12 +216,16 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
     Ok(modv)
 }
 
-fn resolve_path(_interp: &Interp, path: &str) -> Result<String, String> {
+fn resolve_path(interp: &Interp, path: &str) -> Result<String, String> {
     let p = path.trim_end_matches(".op").to_string() + ".op";
-    let mut candidates: Vec<Option<std::path::PathBuf>> = vec![
-        Some(std::path::PathBuf::from(&p)),
-        Some(std::path::PathBuf::from("std").join(&p)),
-    ];
+    let mut candidates: Vec<Option<std::path::PathBuf>> = Vec::new();
+    // relative to the importing file's directory first (SPEC §8)
+    if let Some(base) = &interp.base_dir {
+        candidates.push(Some(std::path::PathBuf::from(base).join(&p)));
+    }
+    candidates.push(Some(std::path::PathBuf::from(&p)));
+    candidates.push(Some(std::path::PathBuf::from("std").join(&p)));
+    // explicit standard-library override (not double-joined with std/)
     candidates.push(std::env::var("OPERON_STD").ok().map(|d| std::path::PathBuf::from(d).join(&p)));
     for c in candidates.into_iter().flatten() {
         if c.exists() {
@@ -202,7 +237,6 @@ fn resolve_path(_interp: &Interp, path: &str) -> Result<String, String> {
 
 // ------------------------------------------------------------ NMD sweep
 pub struct NmdFinding {
-    pub line_hint: String,
     pub kind: &'static str, // "premature-stop" | "untranslated"
     pub message: String,
 }
@@ -217,7 +251,6 @@ pub fn nmd_sweep(prog: &Program, called: &[String], enhanced: &[String]) -> Vec<
         for s in body {
             if returned {
                 out.push(NmdFinding {
-                    line_hint: String::new(),
                     kind: "premature-stop",
                     message: "statement after unconditional return (premature stop codon)".into(),
                 });
@@ -282,8 +315,7 @@ pub fn nmd_sweep(prog: &Program, called: &[String], enhanced: &[String]) -> Vec<
                     || prog.tad_exports.iter().any(|(_, e)| e.contains(name));
                 if !exported && !g.methylate {
                     out.push(NmdFinding {
-                        line_hint: String::new(),
-                        kind: "untranslated",
+                            kind: "untranslated",
                         message: format!("gene '{}' defined but never translated (dead transcript)", name),
                     });
                 }
@@ -447,7 +479,6 @@ pub fn to_send(v: &Value) -> SendValue {
             }
             SendValue::Map(out)
         }
-        Value::Native(_) => SendValue::Null,
     }
 }
 
@@ -468,8 +499,6 @@ pub fn from_send(v: SendValue) -> Value {
         ]))),
     }
 }
-
-struct TaskHandleAlias;
 
 /// Snapshot the parent global environment for a worker thread: gene
 /// definitions cross by Arc (they are immutable ASTs), data values cross by
@@ -498,6 +527,29 @@ pub fn bind_snapshot(env: &Rc<Env>, snap: &[(String, SnapVal)]) {
         };
         env.define(name, v);
     }
+}
+
+/// Snapshot the global environment PLUS a closure's captured scope chain, so
+/// spawned tasks see their lexical captures (SPEC §13: capture is by value
+/// at spawn time). Genes cross by Arc; data crosses by serialization.
+pub fn snapshot_with_closure(interp: &Interp, closure: Option<&Rc<Env>>) -> Vec<(String, SnapVal)> {
+    let mut out = snapshot_globals(interp);
+    let mut node = closure.cloned();
+    let mut hops = 0usize;
+    while let Some(env) = node {
+        hops += 1;
+        if hops > 64 || Rc::ptr_eq(&env, &interp.global) {
+            break;
+        }
+        for (name, v) in env.vars.borrow().iter() {
+            match v {
+                Value::Gene(d, _) => out.push((name.clone(), SnapVal::Gene(d.clone()))),
+                other => out.push((name.clone(), SnapVal::Data(to_send(other)))),
+            }
+        }
+        node = env.parent.clone();
+    }
+    out
 }
 
 /// Deep-clone a SendValue (cloning via serialization round-trip).
@@ -594,7 +646,10 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
         let _ = interp.call_gene(def, None, args)?;
         return Ok(Value::Int(0));
     }
-    let snap = snapshot_globals(interp);
+    let snap = match &callee {
+        Value::Gene(_, Some(cl)) => snapshot_with_closure(interp, Some(cl)),
+        _ => snapshot_globals(interp),
+    };
     let send_args: Vec<SnapArg> = args.iter().map(arg_to_snap).collect();
     let (tx, rx) = mpsc::channel::<(SendValue, Vec<Note>)>();
     let global_note = format!("[task {}]", name);
@@ -620,7 +675,7 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
     });
     let id = interp.next_task_id;
     interp.next_task_id += 1;
-    interp.tasks.insert(id, crate::interp::TaskHandle { rx, done: false });
+    interp.tasks.insert(id, crate::interp::TaskHandle { rx });
     Ok(Value::Int(id))
 }
 
@@ -687,7 +742,7 @@ pub fn join_task(interp: &mut Interp, id: i64) -> Result<Value, Stress> {
         interp.note(0, 4, "join() needs a task id");
         return Ok(Value::Null);
     }
-    let mut handle = match interp.tasks.remove(&id) {
+    let handle = match interp.tasks.remove(&id) {
         Some(h) => h,
         None => {
             interp.note(0, 4, format!("task {} already joined or unknown", id));

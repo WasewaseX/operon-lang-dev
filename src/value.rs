@@ -34,7 +34,6 @@ pub enum Value {
     Gene(Arc<GeneDef>, Option<EnvRef>),
     Seq(Arc<GeneDef>, Rc<RefCell<SeqState>>),
     Obj(Arc<crate::ast::PhenoDef>, MapRef),
-    Native(&'static str),
 }
 
 pub struct Stress {
@@ -61,7 +60,6 @@ impl Value {
             Value::Gene(_, _) => "gene",
             Value::Seq(_, _) => "sequence",
             Value::Obj(_, _) => "phenotype",
-            Value::Native(_) => "native",
         }
     }
 
@@ -74,7 +72,7 @@ impl Value {
             Value::Str(s) => !s.is_empty(),
             Value::List(l) => !l.borrow().is_empty(),
             Value::Map(m) => !m.borrow().is_empty(),
-            Value::Gene(_, _) | Value::Seq(_, _) | Value::Obj(_, _) | Value::Native(_) => true,
+            Value::Gene(_, _) | Value::Seq(_, _) | Value::Obj(_, _) => true,
         }
     }
 
@@ -116,7 +114,6 @@ impl Value {
                 None => "<sequence lambda>".into(),
             },
             Value::Obj(d, _) => format!("<phenotype {}>", d.name),
-            Value::Native(n) => format!("<native {}>", n),
         }
     }
 
@@ -147,7 +144,6 @@ impl Value {
             (Value::Gene(d1, _), Value::Gene(d2, _)) => Arc::ptr_eq(d1, d2),
             (Value::Seq(d1, _), Value::Seq(d2, _)) => Arc::ptr_eq(d1, d2),
             (Value::Obj(d1, _), Value::Obj(d2, _)) => Arc::ptr_eq(d1, d2),
-            (Value::Native(a), Value::Native(b)) => a == b,
             _ => false,
         }
     }

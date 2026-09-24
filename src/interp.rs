@@ -63,7 +63,6 @@ pub enum Flow {
 
 pub struct TaskHandle {
     pub rx: mpsc::Receiver<(crate::genes::SendValue, Vec<Note>)>,
-    pub done: bool,
 }
 
 /// Capability grants (default-deny for I/O, processes, sockets, env).
@@ -111,11 +110,63 @@ impl Caps {
         }
         out.join("/")
     }
-    pub fn path_ok(list: &[String], path: &str) -> bool {
-        let np = Self::norm_path(path);
+    /// A grant that normalizes to the empty string would match everything —
+    /// reject it instead (granting "." from /, or "/", must not mean the
+    /// whole filesystem).
+    pub fn validate_grant(kind: &str, g: &str) -> Result<(), Stress> {
+        let ng = Self::norm_path(g);
+        if ng.is_empty() {
+            return Err(Stress::new(
+                "interference",
+                format!("capability grant '{}' for {} is empty after normalization; grant a concrete directory or file", g, kind),
+            ));
+        }
+        Ok(())
+    }
+    pub fn add_grant(&mut self, kind: &str, g: &str) -> Result<(), Stress> {
+        Self::validate_grant(kind, g)?;
+        let list = match kind {
+            "read" => &mut self.read,
+            "write" => &mut self.write,
+            "run" => &mut self.run,
+            "net" => &mut self.net,
+            _ => &mut self.env,
+        };
+        list.push(g.to_string());
+        Ok(())
+    }
+    /// Resolve what the path ACTUALLY is on disk (symlinks included) and
+    /// compare against the resolved grant. Falls back to lexical comparison
+    /// when the target does not exist (e.g. a file about to be created).
+    fn path_allowed(list: &[String], path: &str) -> bool {
+        let resolved_requested = std::fs::canonicalize(path).ok();
         for g in list {
+            // grant must exist and resolve inside its directory
+            if let Ok(rg) = std::fs::canonicalize(g) {
+                let rg_str = rg.to_string_lossy().to_string();
+                if let Some(rp) = &resolved_requested {
+                    let rp_str = rp.to_string_lossy().to_string();
+                    if rp_str == rg_str || rp_str.starts_with(&format!("{}/", rg_str)) {
+                        return true;
+                    }
+                }
+                // non-existent target (create/write case): its parent chain
+                // must resolve inside the grant
+                let mut probe = std::path::PathBuf::from(path);
+                while probe.pop() {
+                    if let Ok(pp) = std::fs::canonicalize(&probe) {
+                        let pp_str = pp.to_string_lossy().to_string();
+                        if pp_str == rg_str || pp_str.starts_with(&format!("{}/", rg_str)) {
+                            return true;
+                        }
+                        break; // nearest existing ancestor checked
+                    }
+                }
+            }
+            // lexical fallback for grants that do not exist on disk
+            let np = Self::norm_path(path);
             let ng = Self::norm_path(g);
-            if ng.is_empty() || np == ng || np.starts_with(&format!("{}/", ng)) {
+            if !ng.is_empty() && (np == ng || np.starts_with(&format!("{}/", ng))) {
                 return true;
             }
         }
@@ -126,7 +177,7 @@ impl Caps {
             return Ok(());
         }
         let ok = if kind == "read" || kind == "write" {
-            Self::path_ok(list, what)
+            Self::path_allowed(list, what)
         } else {
             list.iter().any(|g| g == what)
         };
@@ -142,6 +193,7 @@ pub struct Interp {
     pub notes: Vec<Note>,
     pub cell: HashMap<String, String>,
     pub cell_entry: Option<String>,
+    pub base_dir: Option<String>,
     pub silences: Vec<(String, String)>,
     pub fates: HashMap<String, Arc<FateDef>>,
     pub phenos: HashMap<String, Arc<PhenoDef>>,
@@ -164,7 +216,6 @@ pub struct Interp {
     pub loading: Vec<String>,
     pub profiling: bool,
     pub proof_mode: bool,
-    pub spliced_unspliced: (usize, usize),
     pub global: Rc<Env>,
     pub steps: u64,
     pub step_budget: u64,
@@ -181,17 +232,13 @@ pub struct Interp {
     pub seq_tx: Option<mpsc::SyncSender<crate::value::SeqMsg>>,
 }
 
-pub enum Builtin {
-    Done(Result<Value, Stress>),
-    NotBuiltin,
-}
-
 impl Interp {
     pub fn new() -> Interp {
         Interp {
             notes: Vec::new(),
             cell: HashMap::new(),
             cell_entry: None,
+            base_dir: None,
             silences: Vec::new(),
             fates: HashMap::new(),
             phenos: HashMap::new(),
@@ -214,7 +261,6 @@ impl Interp {
             loading: Vec::new(),
             profiling: false,
             proof_mode: false,
-            spliced_unspliced: (0, 0),
             global: Env::new(None),
             steps: 0,
             step_budget: 200_000_000,
@@ -367,7 +413,7 @@ impl Interp {
                     Value::Map(m) => {
                         self.map_insert(&m, Value::Str(key.clone()), val);
                     }
-                    Value::Obj(d, m) => {
+                    Value::Obj(_d, m) => {
                         self.map_insert(&m, Value::Str(key.clone()), val);
                     }
                     _ => self.note(0, 4, "member assignment on non-map ignored"),
@@ -710,12 +756,6 @@ impl Interp {
             (Value::Str("message".into()), Value::Str(s.message.clone())),
         ]));
         Value::Map(m)
-    }
-
-    /// Contain a stress: uncaught at statement level → note + continue.
-    fn contain(&mut self, _env: &Rc<Env>, s: Stress) -> Result<Value, Stress> {
-        self.note(0, 4, format!("stress contained: [{}] {}", s.kind, s.message));
-        Ok(Value::Null)
     }
 
     pub fn as_index(&self, v: &Value, len: usize) -> Result<usize, Stress> {
@@ -1098,6 +1138,14 @@ impl Interp {
                 Ok(Value::Int(a.div_euclid(b) as i64))
             }
             Mod => {
+                // int % int stays int (Python semantics); sign follows divisor
+                if let (Value::Int(a), Value::Int(b)) = (l, r) {
+                    if *b == 0 {
+                        return Err(Stress::new("unfolded", "modulo by zero"));
+                    }
+                    let m = a.rem_euclid(b.abs());
+                    return Ok(Value::Int(if *b < 0 { -m } else { m }));
+                }
                 let (a, b) = self.as_floats(l, r)?;
                 if b == 0.0 {
                     return Err(Stress::new("unfolded", "modulo by zero"));
@@ -1190,7 +1238,7 @@ impl Interp {
     }
 
     // ------------------------------------------------------- calls
-    pub fn call_value(&mut self, env: &Rc<Env>, callee: &Value, args: Vec<Value>) -> Result<Value, Stress> {
+    pub fn call_value(&mut self, _env: &Rc<Env>, callee: &Value, args: Vec<Value>) -> Result<Value, Stress> {
         match callee {
             Value::Gene(def, closure) if def.seq => {
                 // calling a sequence starts a worker; pulls are lazy
@@ -1202,10 +1250,6 @@ impl Interp {
                 Ok(Value::Seq(def.clone(), st))
             }
             Value::Gene(def, closure) => self.call_gene(def.clone(), closure.clone(), args),
-            Value::Native(name) => {
-                let n = *name;
-                self.call_builtin(env, n, args)
-            }
             other => {
                 self.note(0, 4, format!("called a {} (not a gene); result null", other.type_name()));
                 Ok(Value::Null)
@@ -1771,6 +1815,11 @@ impl Interp {
             "distance" => {
                 let a = args.first().map(|v| v.display()).unwrap_or_default();
                 let b = args.get(1).map(|v| v.display()).unwrap_or_default();
+                // the DP fallback kernel is O(la*lb): refuse pathological
+                // inputs instead of freezing outside the step budget
+                if a.len().saturating_mul(b.len()) > 10_000_000 {
+                    return Err(Stress::new("overflow", "distance inputs exceed the 10M-cell DP ceiling"));
+                }
                 Ok(Value::Int(crate::ffi::edit_distance(&a, &b) as i64))
             }
             "similar" => {
@@ -1878,17 +1927,23 @@ impl Interp {
                     .iter()
                     .map(|(k, v)| (Value::Str(k.clone()), Value::Int(*v as i64)))
                     .collect();
-                // burst index (variance/mean of per-gene call counts over time
-                // bins of 20 calls): constitutive genes ≈ 0, bursty genes > 1
-                let total_bins = (self.call_clock / 20) + 1;
+                // burst index (variance/mean of per-gene call counts over
+                // COMPLETE 20-call bins): constitutive genes → 0; the trailing
+                // partial bin is excluded so a perfectly periodic pattern
+                // scores 0, as the biology demands
+                let complete_bins = (self.call_clock / 20) as u64;
                 let mut burst_total = 0.0;
                 let mut burst_n = 0usize;
                 let mut burst_by_gene: Vec<(Value, Value)> = Vec::new();
                 for (g, bins) in &self.gene_buckets {
-                    let n = total_bins as f64;
-                    let total: u64 = bins.values().sum();
+                    if complete_bins == 0 {
+                        burst_by_gene.push((Value::Str(g.clone()), Value::Float(0.0)));
+                        continue;
+                    }
+                    let n = complete_bins as f64;
+                    let total: u64 = (0..complete_bins).map(|b| *bins.get(&b).unwrap_or(&0)).sum();
                     let mean = total as f64 / n;
-                    let var = (0..total_bins)
+                    let var = (0..complete_bins)
                         .map(|b| {
                             let c = *bins.get(&b).unwrap_or(&0) as f64;
                             (c - mean).powi(2)
@@ -1992,21 +2047,26 @@ impl Interp {
             }
             "grn_fire" => {
                 let seed = args.first().map(|v| v.display()).unwrap_or_default();
-                // the network is STATEFUL: levels persist across fires, so
-                // inhibition can counter earlier activation (homeostasis)
+                // STATEFUL network: levels persist across fires (homeostasis)
                 for e in &self.grn_edges {
                     self.grn_levels.entry(e.from.clone()).or_insert(0.0);
                     self.grn_levels.entry(e.to.clone()).or_insert(0.0);
                 }
                 let cur = *self.grn_levels.get(&seed).unwrap_or(&0.0);
                 self.grn_levels.insert(seed.clone(), (cur + 1.0).min(1.0));
-                // propagate waves: child = max(child, parent × strength^wave)
-                // (docs formula); edges with a threshold use a Hill-style
-                // dose–response n=2 curve instead of the linear decay
+                // Phase 1 — activation: child = max(child, parent × strength^wave)
+                // where wave counts propagation hops (multi-hop attenuation).
+                // Phase 2 — inhibition: each repressor applies its influence
+                // ONCE per fire (a repressor's concentration sets the output
+                // level; it does not compound over propagation waves).
+                let mut activated: HashMap<String, f64> = self.grn_levels.clone();
                 for _wave in 1..=10 {
                     let mut changed = false;
-                    let snapshot = self.grn_levels.clone();
+                    let snapshot = activated.clone();
                     for e in &self.grn_edges {
+                        if e.inhibit {
+                            continue; // inhibitors propagate in phase 2
+                        }
                         let parent = *snapshot.get(&e.from).unwrap_or(&0.0);
                         if parent <= 0.0 {
                             continue;
@@ -2019,14 +2079,10 @@ impl Interp {
                             }
                             _ => parent * e.strength.powi(_wave),
                         };
-                        let cur = *self.grn_levels.get(&e.to).unwrap_or(&0.0);
-                        let next = if e.inhibit {
-                            (cur - influence).max(0.0)
-                        } else {
-                            cur.max(influence)
-                        };
+                        let cur = *activated.get(&e.to).unwrap_or(&0.0);
+                        let next = cur.max(influence);
                         if (next - cur).abs() > 1e-12 {
-                            self.grn_levels.insert(e.to.clone(), next);
+                            activated.insert(e.to.clone(), next);
                             changed = true;
                         }
                     }
@@ -2034,6 +2090,30 @@ impl Interp {
                         break;
                     }
                 }
+                // phase 2: inhibition subtracts once, based on the source's
+                // post-activation level
+                let mut inhibited: HashMap<String, f64> = activated.clone();
+                for e in &self.grn_edges {
+                    if !e.inhibit {
+                        continue;
+                    }
+                    let parent = *activated.get(&e.from).unwrap_or(&0.0);
+                    if parent <= 0.0 {
+                        continue;
+                    }
+                    let influence = match e.threshold {
+                        Some(t) if t > 0.0 => {
+                            let p2 = parent * parent;
+                            let t2 = t * t;
+                            e.strength * (p2 / (p2 + t2))
+                        }
+                        _ => parent * e.strength,
+                    };
+                    let cur = *inhibited.get(&e.to).unwrap_or(&0.0);
+                    let next = (cur - influence).max(0.0);
+                    inhibited.insert(e.to.clone(), next);
+                }
+                self.grn_levels = inhibited;
                 Ok(Value::Map(Rc::new(RefCell::new(
                     self.grn_levels
                         .iter()
@@ -2140,6 +2220,8 @@ impl Interp {
                     Some(Value::Float(f)) => (*f).max(0.0) as u64,
                     _ => 0,
                 };
+                // wall-clock ceiling: sleep escapes the step budget, so cap it
+                let ms = ms.min(60_000);
                 std::thread::sleep(std::time::Duration::from_millis(ms));
                 Ok(Value::Null)
             }
@@ -2446,6 +2528,11 @@ impl Interp {
                         Some(Value::Int(i)) => (*i).max(0) as usize,
                         _ => 0,
                     };
+                    // allocation ceiling: giant repeats abort the process
+                    // outside the stress model — cap as catchable overflow
+                    if n.saturating_mul(s.len()) > 512 * 1024 * 1024 {
+                        return Err(Stress::new("overflow", "repeat exceeds the 512 MiB string ceiling"));
+                    }
                     Ok(Value::Str(s.repeat(n)))
                 }
                 "slice" => {
@@ -2506,7 +2593,7 @@ impl Interp {
                 "sort" => {
                     let cmp = args.first().cloned().unwrap_or(Value::Null);
                     let mut v = l.borrow().clone();
-                    if let Value::Gene(_, _) | Value::Native(_) = &cmp {
+                    if let Value::Gene(_, _) = &cmp {
                         // insertion sort with user comparator: cmp(a, b) true
                         // when a belongs BEFORE b (SPEC §sorted-order)
                         for i in 1..v.len() {
@@ -2524,14 +2611,23 @@ impl Interp {
                             }
                         }
                     } else {
-                        // default: numbers and strings ascending
-                        v.sort_by(|a, b| match (a, b) {
-                            (Value::Int(x), Value::Int(y)) => x.cmp(y),
-                            (Value::Str(x), Value::Str(y)) => x.cmp(y),
-                            _ => {
-                                let (x, y) = self.as_floats(a, b).unwrap_or((0.0, 0.0));
-                                x.partial_cmp(&y).unwrap_or(std::cmp::Ordering::Equal)
+                        // default: numbers and strings ascending — mixed-type
+                        // ordering matches the oracle (numbers first, strings
+                        // after), stability preserved
+                        let key = |v: &Value| -> (u8, f64, String) {
+                            match v {
+                                Value::Bool(b) => (0, *b as i64 as f64, String::new()),
+                                Value::Int(i) => (0, *i as f64, String::new()),
+                                Value::Float(f) => (0, *f, String::new()),
+                                Value::Str(s) => (1, 0.0, s.clone()),
+                                other => (2, 0.0, other.repr()),
                             }
+                        };
+                        v.sort_by(|a, b| {
+                            let (ka, kb) = (key(a), key(b));
+                            ka.0.cmp(&kb.0)
+                                .then(ka.1.partial_cmp(&kb.1).unwrap_or(std::cmp::Ordering::Equal))
+                                .then_with(|| ka.2.cmp(&kb.2))
                         });
                     }
                     Ok(Value::List(Rc::new(RefCell::new(v))))
@@ -2611,7 +2707,7 @@ impl Interp {
                 }
                 "len" => Ok(Value::Int(m.borrow().len() as i64)),
                 _ => match m.borrow().iter().find(|(k, _)| matches!(k, Value::Str(s) if s == name)) {
-                    Some((_, Value::Gene(_, _)) | (_, Value::Native(_))) => {
+                    Some((_, Value::Gene(_, _))) => {
                         let f = m.borrow().iter().find(|(k, _)| matches!(k, Value::Str(s) if s == name)).map(|(_, v)| v.clone()).unwrap();
                         self.call_value(env, &f, args)
                     }
@@ -2682,7 +2778,6 @@ use std::sync::Mutex;
 struct ServerState {
     rx: mpsc::Receiver<(u64, String, String, String)>,
     conns: Arc<Mutex<StdHashMap<u64, TcpStream>>>,
-    next_conn: Arc<AtomicU64>,
 }
 
 static SERVER: Mutex<Option<ServerState>> = Mutex::new(None);
@@ -2695,9 +2790,8 @@ pub fn serve_start(port: u16) -> Result<(), String> {
     let listener = TcpListener::bind(("127.0.0.1", port)).map_err(|e| e.to_string())?;
     let (tx, rx) = mpsc::channel::<(u64, String, String, String)>();
     let conns: Arc<Mutex<StdHashMap<u64, TcpStream>>> = Arc::new(Mutex::new(StdHashMap::new()));
-    let next_conn = Arc::new(AtomicU64::new(1));
     let conns2 = conns.clone();
-    let next2 = next_conn.clone();
+    let next2 = Arc::new(AtomicU64::new(1));
     std::thread::spawn(move || {
         for stream in listener.incoming() {
             let mut stream = match stream {
@@ -2751,7 +2845,7 @@ pub fn serve_start(port: u16) -> Result<(), String> {
             let _ = tx.send((conn, method, path, body));
         }
     });
-    *guard = Some(ServerState { rx, conns, next_conn });
+    *guard = Some(ServerState { rx, conns });
     Ok(())
 }
 
@@ -2841,42 +2935,53 @@ fn json_quote(s: &str) -> String {
 }
 
 pub fn json_parse(src: &str) -> Result<Value, String> {
-    struct P<'a> {
-        b: &'a [u8],
+    struct P {
+        b: Vec<char>,
         i: usize,
+        depth: usize,
     }
-    impl<'a> P<'a> {
+    const MAX_DEPTH: usize = 512;
+    impl P {
         fn ws(&mut self) {
-            while self.i < self.b.len() && (self.b[self.i] as char).is_ascii_whitespace() {
+            while self.i < self.b.len() && self.b[self.i].is_ascii_whitespace() {
                 self.i += 1;
             }
         }
-        fn peek(&mut self) -> Option<u8> {
+        fn peek(&mut self) -> Option<char> {
             self.ws();
             self.b.get(self.i).copied()
         }
         fn value(&mut self) -> Result<Value, String> {
+            self.depth += 1;
+            if self.depth > MAX_DEPTH {
+                return Err(format!("json nested deeper than {} levels", MAX_DEPTH));
+            }
+            let r = self.value_inner();
+            self.depth -= 1;
+            r
+        }
+        fn value_inner(&mut self) -> Result<Value, String> {
             match self.peek().ok_or("unexpected end of json")? {
-                b'{' => {
+                '{' => {
                     self.i += 1;
                     let mut out: Vec<(Value, Value)> = Vec::new();
-                    if self.peek() == Some(b'}') {
+                    if self.peek() == Some('}') {
                         self.i += 1;
                         return Ok(Value::Map(Rc::new(RefCell::new(out))));
                     }
                     loop {
                         let k = self.value()?;
-                        if self.peek() != Some(b':') {
+                        if self.peek() != Some(':') {
                             return Err("expected ':'".into());
                         }
                         self.i += 1;
                         let v = self.value()?;
                         out.push((Value::Str(k.display()), v));
                         match self.peek() {
-                            Some(b',') => {
+                            Some(',') => {
                                 self.i += 1;
                             }
-                            Some(b'}') => {
+                            Some('}') => {
                                 self.i += 1;
                                 break;
                             }
@@ -2885,20 +2990,20 @@ pub fn json_parse(src: &str) -> Result<Value, String> {
                     }
                     Ok(Value::Map(Rc::new(RefCell::new(out))))
                 }
-                b'[' => {
+                '[' => {
                     self.i += 1;
                     let mut out: Vec<Value> = Vec::new();
-                    if self.peek() == Some(b']') {
+                    if self.peek() == Some(']') {
                         self.i += 1;
                         return Ok(Value::List(Rc::new(RefCell::new(out))));
                     }
                     loop {
                         out.push(self.value()?);
                         match self.peek() {
-                            Some(b',') => {
+                            Some(',') => {
                                 self.i += 1;
                             }
-                            Some(b']') => {
+                            Some(']') => {
                                 self.i += 1;
                                 break;
                             }
@@ -2907,34 +3012,56 @@ pub fn json_parse(src: &str) -> Result<Value, String> {
                     }
                     Ok(Value::List(Rc::new(RefCell::new(out))))
                 }
-                b'"' => {
+                '"' => {
                     self.i += 1;
                     let mut s = String::new();
                     loop {
                         match self.b.get(self.i) {
                             None => return Err("unterminated string".into()),
-                            Some(b'"') => {
+                            Some('"') => {
                                 self.i += 1;
                                 break;
                             }
-                            Some(b'\\') => {
+                            Some('\\') => {
                                 self.i += 1;
                                 match self.b.get(self.i) {
-                                    Some(b'n') => s.push('\n'),
-                                    Some(b't') => s.push('\t'),
-                                    Some(b'r') => s.push('\r'),
-                                    Some(b'"') => s.push('"'),
-                                    Some(b'\\') => s.push('\\'),
-                                    Some(b'/') => s.push('/'),
-                                    Some(b'u') => {
-                                        if self.i + 4 < self.b.len() {
-                                            if let Ok(cp) = u32::from_str_radix(
-                                                std::str::from_utf8(&self.b[self.i + 1..self.i + 5]).map_err(|_| "bad unicode")?,
-                                                16,
-                                            ) {
-                                                s.push(char::from_u32(cp).unwrap_or('\u{FFFD}'));
-                                                self.i += 4;
+                                    Some('n') => s.push('\n'),
+                                    Some('t') => s.push('\t'),
+                                    Some('r') => s.push('\r'),
+                                    Some('"') => s.push('"'),
+                                    Some('\\') => s.push('\\'),
+                                    Some('/') => s.push('/'),
+                                    Some('u') => {
+                                        // \uXXXX with surrogate-pair decoding
+                                        let hex = |p: &P, off: usize| -> Result<u32, String> {
+                                            let mut v = 0u32;
+                                            for k in 0..4 {
+                                                let c = *p.b.get(p.i + 1 + off + k).ok_or("bad unicode escape")?;
+                                                let d = c.to_digit(16).ok_or("bad unicode escape")?;
+                                                v = v * 16 + d;
                                             }
+                                            Ok(v)
+                                        };
+                                        let cp = hex(self, 0)?;
+                                        self.i += 4;
+                                        if (0xD800..0xDC00).contains(&cp) {
+                                            // high surrogate: expect a low surrogate next
+                                            if self.b.get(self.i + 1) == Some(&'\\') && self.b.get(self.i + 2) == Some(&'u') {
+                                                let lo = hex(self, 2)?;
+                                                if (0xDC00..0xE000).contains(&lo) {
+                                                    self.i += 6;
+                                                    let combined = 0x10000 + ((cp - 0xD800) << 10) + (lo - 0xDC00);
+                                                    s.push(char::from_u32(combined).unwrap_or('\u{FFFD}'));
+                                                } else {
+                                                    s.push('\u{FFFD}');
+                                                }
+                                            } else {
+                                                s.push('\u{FFFD}');
+                                            }
+                                        } else if (0xDC00..0xE000).contains(&cp) {
+                                            s.push('\u{FFFD}'); // orphan low surrogate
+                                        } else {
+                                            s.push(char::from_u32(cp).unwrap_or('\u{FFFD}'));
                                         }
                                     }
                                     _ => return Err("bad escape".into()),
@@ -2942,33 +3069,33 @@ pub fn json_parse(src: &str) -> Result<Value, String> {
                                 self.i += 1;
                             }
                             Some(&c) => {
-                                s.push(c as char);
+                                s.push(c); // char-wise: real UTF-8, not bytes-as-Latin-1
                                 self.i += 1;
                             }
                         }
                     }
                     Ok(Value::Str(s))
                 }
-                b't' => {
+                't' => {
                     self.expect_word("true")?;
                     Ok(Value::Bool(true))
                 }
-                b'f' => {
+                'f' => {
                     self.expect_word("false")?;
                     Ok(Value::Bool(false))
                 }
-                b'n' => {
+                'n' => {
                     self.expect_word("null")?;
                     Ok(Value::Null)
                 }
                 _ => {
                     let start = self.i;
                     while self.i < self.b.len()
-                        && matches!(self.b[self.i], b'-' | b'+' | b'.' | b'e' | b'E' | b'0'..=b'9')
+                        && matches!(self.b[self.i], '-' | '+' | '.' | 'e' | 'E' | '0'..='9')
                     {
                         self.i += 1;
                     }
-                    let txt = std::str::from_utf8(&self.b[start..self.i]).map_err(|_| "bad number")?;
+                    let txt: String = self.b[start..self.i].iter().collect();
                     if txt.is_empty() {
                         return Err(format!("unexpected character at {}", start));
                     }
@@ -2981,16 +3108,22 @@ pub fn json_parse(src: &str) -> Result<Value, String> {
             }
         }
         fn expect_word(&mut self, w: &str) -> Result<(), String> {
-            if self.b.len() >= self.i + w.len() && &self.b[self.i..self.i + w.len()] == w.as_bytes() {
-                self.i += w.len();
+            let chars: Vec<char> = w.chars().collect();
+            if self.b.len() >= self.i + chars.len() && self.b[self.i..self.i + chars.len()] == chars[..] {
+                self.i += chars.len();
                 Ok(())
             } else {
                 Err(format!("expected '{}'", w))
             }
         }
     }
-    let mut p = P { b: src.as_bytes(), i: 0 };
-    p.value()
+    let mut p = P { b: src.chars().collect(), i: 0, depth: 0 };
+    let v = p.value()?;
+    p.ws();
+    if p.i < p.b.len() {
+        return Err(format!("trailing garbage at position {}", p.i));
+    }
+    Ok(v)
 }
 
 pub fn codon_table_char(codon: &str) -> char {
