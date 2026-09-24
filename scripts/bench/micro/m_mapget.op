@@ -1,0 +1,9 @@
+# bench micro: map lookup: 4k-key map, 50k reads with key stringify (builder-B, B1)
+# One construct in isolation; native CPython mirror in bench_compare.py MICRO.
+main {
+    let m = {}
+    for i in range(4000) { m[str(i)] = i }
+    let a = 0
+    for i in range(50000) { a = a + m[str(i % 4000)] }
+    promote("a = {a}")
+}
