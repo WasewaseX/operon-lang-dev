@@ -1,0 +1,46 @@
+# differential: std/args — CLI argument parsing helpers
+use std/args as ar
+
+frame proof {
+    # normalization: bare, single-dash, double-dash all accepted
+    assert(ar.args_norm("out") == "--out")
+    assert(ar.args_norm("-o") == "-o")
+    assert(ar.args_norm("--out") == "--out")
+
+    # positionals: long --flags consume values; single-dash flags do not
+    assert(ar.args_positional(["tool", "--verbose", "x"]) == ["tool"])
+    assert(ar.args_positional(["tool", "--out=x.txt", "in.op"]) == ["tool", "in.op"])
+    assert(ar.args_positional(["tool", "-k", "a.op"]) == ["tool", "a.op"])
+    assert(ar.args_positional(["tool", "-k=fast", "in.op"]) == ["tool", "in.op"])
+    assert(ar.args_positional([]) == [])
+
+    # flags: presence and truthy/= forms
+    assert(ar.args_flag(["--verbose"], "verbose"))
+    assert(ar.args_flag(["run", "--dry-run=true"], "dry-run"))
+    assert(ar.args_flag(["--on=1"], "on"))
+    assert(!ar.args_flag(["--dry=false"], "dry"))
+    assert(!ar.args_flag(["a", "b"], "dry"))
+
+    # has: either form, any value
+    assert(ar.args_has(["--level=0"], "level"))
+    assert(ar.args_has(["--level", "0"], "level"))
+    assert(!ar.args_has(["--other"], "level"))
+
+    # values: next-item form, attached form, default, numeric
+    assert(ar.args_value(["--out", "x.txt"], "out", "d") == "x.txt")
+    assert(ar.args_value(["--out=y.csv"], "out", "d") == "y.csv")
+    assert(ar.args_value(["run"], "out", "d") == "d")
+    assert(ar.args_get(["--tag", "v2"], "tag") == "v2")
+    assert(ar.args_get(["run"], "tag") == null)
+    assert(ar.args_number(["--jobs", "4"], "jobs", 1) == 4)
+    assert(ar.args_number(["--rate", "1.5"], "rate", 0) == 1.5)
+    assert(ar.args_number(["run"], "jobs", 1) == 1)
+
+    # subcommand: first positional or null
+    assert(ar.args_subcommand(["tool", "--verbose", "build", "x"]) == "tool")
+    assert(ar.args_subcommand(["--flag"]) == null)
+}
+
+main {
+    promote("std/args: ok")
+}

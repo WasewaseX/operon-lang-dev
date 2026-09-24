@@ -1,0 +1,38 @@
+# differential: std/fs — safe capability-gated wrappers
+#
+# The proof suite runs under DEFAULT-DENY (no --allow-read/--allow-write), so
+# every wrapper here takes its fallback path on both implementations — that is
+# exactly the containment contract being tested: no throw, honest fallback,
+# zero capability leakage. The success path needs grants and is exercised by
+# `bash scripts/b2_fs_demo.sh --allow-all` (manual, never in CI) and by the
+# redteam suite's denial checks.
+use std/fs as fsys
+
+frame proof {
+    # reads under denial: fallback / null / empty list — never a crash
+    assert(fsys.fs_read_or("/tmp/operon_no_such_file_zz", "FB") == "FB")
+    assert(fsys.fs_read("/tmp/operon_no_such_file_zz") == null)
+    assert(fsys.fs_lines("/tmp/operon_no_such_file_zz") == null)
+    assert(fsys.fs_lines_or("/tmp/operon_no_such_file_zz", ["d"]) == ["d"])
+    assert(fsys.fs_read_json_or("/tmp/operon_no_such_file_zz", [1, 2]) == [1, 2])
+    assert(fsys.fs_list_dir_or("/tmp/operon_no_such_dir_zz", []) == [])
+    assert(fsys.fs_size_or("/tmp/operon_no_such_file_zz", 0 - 1) == 0 - 1)
+
+    # writes under denial: false, and nothing appears (double-check with exists)
+    assert(fsys.fs_write_text("/tmp/operon_denied_write_zz", "x") == false)
+    assert(fsys.fs_write_lines("/tmp/operon_denied_write_zz", ["x"]) == false)
+    assert(fsys.fs_append_line("/tmp/operon_denied_write_zz", "x") == false)
+    assert(fsys.fs_write_json("/tmp/operon_denied_write_zz", {"a": 1}) == false)
+
+    # pure helper: line splitting (no fs, no caps)
+    assert(fsys.strings_lines("a\nb\n") == ["a", "b"])
+    assert(fsys.strings_lines("a\nb") == ["a", "b"])
+    assert(fsys.strings_lines("\n") == [""])
+    assert(fsys.strings_lines("") == [])
+    assert(fsys.strings_lines("one") == ["one"])
+    assert(fsys.strings_lines("a\n\nb\n") == ["a", "", "b"])
+}
+
+main {
+    promote("std/fs: ok (deny-path verified; grant-path is manual/redteam)")
+}
