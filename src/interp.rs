@@ -240,6 +240,11 @@ pub struct Interp {
     pub cell: HashMap<String, String>,
     pub cell_entry: Option<String>,
     pub base_dir: Option<String>,
+    /// A13 (dx-r2): line of the call expression currently executing —
+    /// builtin diagnostics stamp this instead of 0.
+    pub cur_line: usize,
+    /// A13 (dx-r2): source file name for diagnostic rendering.
+    pub file: String,
     pub silences: Vec<(String, String)>,
     pub fates: HashMap<String, Arc<FateDef>>,
     pub phenos: HashMap<String, Arc<PhenoDef>>,
@@ -303,6 +308,8 @@ impl Interp {
             cell: HashMap::new(),
             cell_entry: None,
             base_dir: None,
+            cur_line: 0,
+            file: "<repl>".to_string(),
             silences: Vec::new(),
             fates: HashMap::new(),
             phenos: HashMap::new(),
@@ -1081,7 +1088,9 @@ impl Interp {
                 let rv = self.eval(env, r)?;
                 self.apply_binop(env, *op, &lv, &rv)
             }
-            Expr::Call(callee, args) => {
+            Expr::Call(callee, args, call_line) => {
+                // A13 (dx-r2): builtin diagnostics carry the call site
+                self.cur_line = *call_line;
                 // check silences at call sites (RISC)
                 if let Expr::Ident(name) = &**callee {
                     if let Some((from, to)) = self.silences.iter().find(|(f, _)| f == name).cloned()
@@ -1838,11 +1847,13 @@ impl Interp {
         args: Vec<Value>,
     ) -> Result<Value, Stress> {
         let name = def.name.clone().unwrap_or_else(|| "<lambda>".into());
+        // A13 (dx-r2): gate notes point at the gene's definition line
+        let dl = def.line;
         // GRN gate first: a suppressed call is not expression — it must not
         // reach the call counters, the burst bins, or the gene body.
         if let Some(reason) = self.grn_veto(&name) {
             self.note(
-                0,
+                dl,
                 4,
                 format!("grn gate: '{}' call suppressed ({})", name, reason),
             );
@@ -1854,7 +1865,7 @@ impl Interp {
             let lvl = *self.methyl_levels.get(&name).unwrap_or(&0);
             if lvl >= self.methyl_threshold {
                 self.note(
-                    0,
+                    dl,
                     4,
                     format!(
                         "methylation silences: '{}' (level {} >= threshold {}) — call returns null",
@@ -1880,7 +1891,7 @@ impl Interp {
         if def.methylate && !self.methyl_quiet && !self.methyl_noted.contains(&name) {
             self.methyl_noted.insert(name.clone());
             self.note(
-                0,
+                dl,
                 4,
                 format!("methylated call: '{}' (chromatin repressed)", name),
             );
@@ -1901,7 +1912,7 @@ impl Interp {
                 fenv.define(pname, dv);
             } else {
                 self.note(
-                    0,
+                    dl,
                     4,
                     format!(
                         "missing argument '{}' in call to {}; bound null",
@@ -1913,7 +1924,7 @@ impl Interp {
         }
         if args.len() > def.params.len() && !def.params.is_empty() {
             self.note(
-                0,
+                dl,
                 4,
                 format!(
                     "{} extra argument(s) in call to {} ignored",
@@ -1935,7 +1946,7 @@ impl Interp {
         if let Some((cond, gbody)) = &def.guard {
             let ok = self.eval(&fenv, cond).map(|v| v.truthy()).unwrap_or(false);
             if !ok {
-                self.note(0, 4, format!("guard tripped calling {}", name));
+                self.note(dl, 4, format!("guard tripped calling {}", name));
                 let mut flowed = Flow::Norm;
                 for s in gbody {
                     match self.exec_stmt(&fenv, s)? {
@@ -1951,7 +1962,7 @@ impl Interp {
                     Flow::Ret(v) => v,
                     _ => {
                         self.note(
-                            0,
+                            dl,
                             4,
                             format!("guard of {} returned null (uORF repression)", name),
                         );
@@ -2129,12 +2140,14 @@ impl Interp {
         args: Vec<Value>,
     ) -> Result<Value, Stress> {
         let name = def.name.clone().unwrap_or_else(|| "<method>".into());
+        // A13 (dx-r2): gate notes point at the method's definition line
+        let dl = def.line;
         // T2b methylation gate for phenotype methods (same contract).
         if !def.acetylate {
             let lvl = *self.methyl_levels.get(&name).unwrap_or(&0);
             if lvl >= self.methyl_threshold {
                 self.note(
-                    0,
+                    dl,
                     4,
                     format!(
                         "methylation silences: '{}' (level {} >= threshold {}) — call returns null",
@@ -2156,7 +2169,7 @@ impl Interp {
         if def.methylate && !self.methyl_quiet && !self.methyl_noted.contains(&name) {
             self.methyl_noted.insert(name.clone());
             self.note(
-                0,
+                dl,
                 4,
                 format!("methylated call: '{}' (chromatin repressed)", name),
             );
@@ -2174,7 +2187,7 @@ impl Interp {
                 fenv.define(pname, dv);
             } else {
                 self.note(
-                    0,
+                    dl,
                     4,
                     format!(
                         "missing argument '{}' in call to {}; bound null",
@@ -2194,7 +2207,7 @@ impl Interp {
         if let Some((cond, gbody)) = &def.guard {
             let ok = self.eval(&fenv, cond).map(|v| v.truthy()).unwrap_or(false);
             if !ok {
-                self.note(0, 4, format!("guard tripped calling {}", name));
+                self.note(dl, 4, format!("guard tripped calling {}", name));
                 let mut flowed = Flow::Norm;
                 for s in gbody {
                     match self.exec_stmt(&fenv, s)? {
@@ -2238,7 +2251,7 @@ impl Interp {
                 Some(Value::List(l)) => l.borrow().len() as i64,
                 Some(Value::Map(m)) => m.borrow().len() as i64,
                 _ => {
-                    self.note(0, 4, "len() of non-container is 0");
+                    self.note(self.cur_line, 4, "len() of non-container is 0");
                     0
                 }
             })),
@@ -2318,7 +2331,7 @@ impl Interp {
                     (Some(Value::Int(x)), Some(Value::Int(y)), None) => (*x, *y, 1),
                     (Some(Value::Int(x)), Some(Value::Int(y)), Some(Value::Int(z))) => (*x, *y, *z),
                     _ => {
-                        self.note(0, 4, "range() needs ints; returned []");
+                        self.note(self.cur_line, 4, "range() needs ints; returned []");
                         (0, 0, 1)
                     }
                 };
@@ -2347,7 +2360,7 @@ impl Interp {
                     } else if let Ok(f) = t.parse::<f64>() {
                         Ok(Value::Float(f))
                     } else {
-                        self.note(0, 4, format!("num('{}') failed; 0", t));
+                        self.note(self.cur_line, 4, format!("num('{}') failed; 0", t));
                         Ok(Value::Int(0))
                     }
                 }
@@ -2457,8 +2470,7 @@ impl Interp {
                 // builtin right. An ungranted exit kills the test runner,
                 // the REPL, the LSP — the host — so default-deny applies.
                 if self.caps.enabled && !self.caps.exit_allowed {
-                    self.note(
-                        0,
+                    self.note(self.cur_line,
                         4,
                         "exit denied: capability 'exit' not granted (grant with --allow-exit or .cell allow.exit = true)",
                     );
@@ -2651,7 +2663,7 @@ impl Interp {
                     (*lvl, *lvl >= self.methyl_threshold)
                 };
                 self.note(
-                    0,
+                    self.cur_line,
                     2,
                     format!(
                         "methylation deepened: '{}' (level {}) — silenced at the next call if {}",
@@ -2669,7 +2681,7 @@ impl Interp {
                     (*lvl, *lvl >= self.methyl_threshold)
                 };
                 self.note(
-                    0,
+                    self.cur_line,
                     2,
                     format!(
                         "methylation relaxed: '{}' (level {}) — silenced at the next call if {}",
@@ -2690,7 +2702,7 @@ impl Interp {
                 };
                 let v = v.clamp(0.0, 1.0);
                 self.grn_levels.insert(k.clone(), v);
-                self.note(0, 2, format!("grn level set: '{}' = {}", k, v));
+                self.note(self.cur_line, 2, format!("grn level set: '{}' = {}", k, v));
                 Ok(Value::Float(v))
             }
             "grn_get" => {
@@ -2779,7 +2791,7 @@ impl Interp {
                     }
                 }
                 self.note(
-                    0,
+                    self.cur_line,
                     4,
                     format!("toggle pair containing '{}' not declared", name),
                 );
@@ -2795,7 +2807,7 @@ impl Interp {
             }
             "repressi_next" => {
                 if self.repressi_ring.is_empty() {
-                    self.note(0, 4, "no repressilator declared");
+                    self.note(self.cur_line, 4, "no repressilator declared");
                     return Ok(Value::Null);
                 }
                 self.repressi_i = (self.repressi_i + 1) % self.repressi_ring.len();
@@ -2811,11 +2823,15 @@ impl Interp {
                     _ => 1000,
                 };
                 if self.repressi_ring.is_empty() {
-                    self.note(0, 4, "repressi_start: no repressilator ring declared");
+                    self.note(
+                        self.cur_line,
+                        4,
+                        "repressi_start: no repressilator ring declared",
+                    );
                     return Ok(Value::Bool(false));
                 }
                 if ms == 0 {
-                    self.note(0, 4, "repressi_start period must be > 0 ms");
+                    self.note(self.cur_line, 4, "repressi_start period must be > 0 ms");
                     return Ok(Value::Bool(false));
                 }
                 let counter = Arc::new(AtomicU64::new(0));
@@ -2826,12 +2842,20 @@ impl Interp {
                 }) {
                     Ok(()) => {}
                     Err(_) => {
-                        self.note(0, 4, "repressilator timer skipped: thread budget exhausted");
+                        self.note(
+                            self.cur_line,
+                            4,
+                            "repressilator timer skipped: thread budget exhausted",
+                        );
                         return Ok(Value::Bool(false));
                     }
                 }
                 self.repressi_atomic = Some(counter);
-                self.note(0, 1, format!("repressilator oscillating every {} ms", ms));
+                self.note(
+                    self.cur_line,
+                    1,
+                    format!("repressilator oscillating every {} ms", ms),
+                );
                 Ok(Value::Bool(true))
             }
             "repressi_state" => {
@@ -3018,7 +3042,7 @@ impl Interp {
                 }
                 other => {
                     self.note(
-                        0,
+                        self.cur_line,
                         4,
                         format!(
                             "floor of a {} value; 0",
@@ -3055,7 +3079,7 @@ impl Interp {
                 let (a, b) = match (args.first(), args.get(1)) {
                     (Some(x), Some(y)) => self.as_floats(x, y)?,
                     _ => {
-                        self.note(0, 4, "pow(x, y) needs two numbers; 0");
+                        self.note(self.cur_line, 4, "pow(x, y) needs two numbers; 0");
                         (0.0, 0.0)
                     }
                 };
@@ -3507,8 +3531,7 @@ impl Interp {
                 match run_result {
                     Ok((status, so_raw, se_raw, timed_out)) => {
                         if timed_out {
-                            self.note(
-                                0,
+                            self.note(self.cur_line,
                                 4,
                                 format!(
                                     "run '{}': killed after {} ms (timeout; set .cell run.timeout_ms)",
@@ -3651,7 +3674,11 @@ impl Interp {
                 }
             }
             _ => {
-                self.note(0, 4, format!("unknown builtin '{}'; null", name));
+                self.note(
+                    self.cur_line,
+                    4,
+                    format!("unknown builtin '{}'; null", name),
+                );
                 Ok(Value::Null)
             }
         }

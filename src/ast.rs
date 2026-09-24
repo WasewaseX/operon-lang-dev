@@ -29,7 +29,9 @@ pub enum Expr {
     Ident(String),
     Unary(UnOp, Box<Expr>),
     Binary(BinOp, Box<Expr>, Box<Expr>),
-    Call(Box<Expr>, Vec<Expr>),
+    /// A13 (dx-r2): source line of the call site — runtime builtin notes
+    /// (denials, timeouts, gate changes) carry the caller's location.
+    Call(Box<Expr>, Vec<Expr>, usize),
     Index(Box<Expr>, Box<Expr>),
     Member(Box<Expr>, String),
     Method(Box<Expr>, String, Vec<Expr>),
@@ -80,6 +82,9 @@ pub enum BinOp {
 #[derive(Debug, Clone)]
 pub struct GeneDef {
     pub name: Option<String>,
+    /// A13 (dx-r2): source line of the definition — runtime gate notes
+    /// (grn veto, methylation silencing, etc.) render real locations.
+    pub line: usize,
     pub params: Vec<(String, Option<Expr>)>,
     pub guard: Option<(Expr, Vec<Stmt>)>,
     pub body: Vec<Stmt>,
@@ -92,6 +97,8 @@ pub struct GeneDef {
 #[derive(Debug, Clone)]
 pub struct PhenoDef {
     pub name: String,
+    /// A13: source line of the definition (dx-r2 spans).
+    pub line: usize,
     pub parent: Option<String>,
     pub fields: Vec<(String, Expr)>, // field name -> default expr
     pub methods: Vec<Arc<GeneDef>>,
@@ -100,12 +107,16 @@ pub struct PhenoDef {
 #[derive(Debug, Clone)]
 pub struct SpliceDef {
     pub root: String,
+    /// A13: source line of the definition (dx-r2 spans).
+    pub line: usize,
     pub variants: Vec<(String, Arc<GeneDef>)>, // (variant name, gene)
 }
 
 #[derive(Debug, Clone)]
 pub struct FateDef {
     pub name: String,
+    /// A13: source line of the definition (dx-r2 spans).
+    pub line: usize,
     pub states: Vec<(String, Vec<String>)>, // state -> allowed targets
     pub enter: Option<String>,
 }

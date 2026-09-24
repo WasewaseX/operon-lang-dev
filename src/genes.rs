@@ -1033,7 +1033,7 @@ fn def_has_lambda(def: &GeneDef) -> bool {
             Expr::Lambda(_) => true,
             Expr::Unary(_, a) | Expr::Member(a, _) => expr_has(a),
             Expr::Binary(_, a, b) | Expr::Index(a, b) => expr_has(a) || expr_has(b),
-            Expr::Call(a, args) | Expr::Method(a, _, args) => {
+            Expr::Call(a, args, _) | Expr::Method(a, _, args) => {
                 expr_has(a) || args.iter().any(expr_has)
             }
             Expr::List(xs) => xs.iter().any(expr_has),
