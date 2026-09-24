@@ -1524,6 +1524,7 @@ class Interp:
         self.toggles = []
         self.repressi_ring = []
         self.repressi_i = 0
+        self.repressi_tick = 0
         self.ires = []
         self.enhanced = []
         self.defined_genes = []
@@ -1893,6 +1894,7 @@ class Interp:
         elif k == "repressilator":
             self.repressi_ring = s[1]
             self.repressi_i = 0
+            self.repressi_tick = 0
         elif k in ("frame", "edit", "anchor_export", "anchor_import"):
             pass
         elif k == "tad":
@@ -2794,6 +2796,7 @@ class Interp:
                 self.note(4, "no repressilator declared")
                 return None
             self.repressi_i = (self.repressi_i + 1) % len(self.repressi_ring)
+            self.repressi_tick += 1
             return self.repressi_i
         if name == "repressi_start":
             if not self.repressi_ring:
@@ -2808,9 +2811,18 @@ class Interp:
             self.note(1, f"repressilator oscillating every {ms} ms (sequential oracle: manual ring only)")
             return True
         if name == "repressi_state":
+            # T2d oscillation dynamics — mirror of the Rust core: 1.0 at the
+            # drive tick, exponential decay (half per tick) afterwards, 0.0
+            # before the first drive. Deterministic from (tick, ring size).
             n = len(self.repressi_ring)
-            idx = self.repressi_i % n if n else 0
-            return {nm: (1.0 if i == idx else 0.0) for i, nm in enumerate(self.repressi_ring)}
+            if not n:
+                return {}
+            out = {}
+            for j, nm in enumerate(self.repressi_ring):
+                tj = (self.repressi_tick - j) % n
+                last_drive = self.repressi_tick - tj
+                out[nm] = 0.5 ** tj if last_drive >= 1 else 0.0
+            return out
         if name == "grn_fire":
             seed = v_display(args[0]) if args else ""
             # STATEFUL network: levels persist across fires (homeostasis)
