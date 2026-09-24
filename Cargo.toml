@@ -1,0 +1,27 @@
+[package]
+name = "operon"
+version = "2.2.0"
+edition = "2021"
+license = "MIT"
+description = "Operon — the gene-expression language. Total Grammar toolchain (Rust core, C/C++ load-bearing kernels)."
+repository = "https://github.com/WasewaseX/operon-lang-dev"
+readme = "README.md"
+keywords = ["language", "interpreter", "compiler"]
+categories = ["compilers"]
+
+[lib]
+name = "operon"
+path = "src/lib.rs"
+
+[[bin]]
+name = "operon"
+path = "src/main.rs"
+
+[build-dependencies]
+cc = "1"
+
+[profile.release]
+opt-level = 3
+lto = false
+codegen-units = 16
+panic = "unwind"
