@@ -1,0 +1,154 @@
+# std/fmt — presentation-layer formatting helpers.
+#
+# Everything here returns strings and is pure. Rounding is half away from
+# zero (the convention most people expect from school math); documented per
+# function. No locale, no side channels — what you see is the algorithm.
+
+gene fmt_fixed(x, n) {
+    # fixed decimals: fmt_fixed(3.14159, 2) == "3.14", fmt_fixed(2.5, 2) == "2.50"
+    # rounding is half away from zero: fmt_fixed(2.5, 0) == "3"
+    let neg = x < 0
+    if neg {
+        x = 0.0 - x
+    }
+    let sc = 10 ** n
+    let r = floor(x * sc + 0.5)
+    let whole = r // sc
+    let frac = r % sc
+    let out = str(whole)
+    if neg and r != 0 {
+        out = "-" + out
+    }
+    if n > 0 {
+        let fs = str(frac)
+        while len(fs) < n {
+            fs = "0" + fs
+        }
+        out = out + "." + fs
+    }
+    return out
+}
+
+gene fmt_thousands(n) {
+    # digit grouping: 1234567 -> "1,234,567" (integers only)
+    let neg = n < 0
+    if neg {
+        n = 0 - n
+    }
+    let s = str(n)
+    let out = ""
+    let count = 0
+    let i = len(s) - 1
+    while i >= 0 {
+        out = s.slice(i, i + 1) + out
+        count = count + 1
+        if count % 3 == 0 and i > 0 {
+            out = "," + out
+        }
+        i = i - 1
+    }
+    if neg {
+        out = "-" + out
+    }
+    return out
+}
+
+gene fmt_pct(x, n) {
+    # fraction -> percent string: fmt_pct(0.125, 1) == "12.5%"
+    return fmt_fixed(x * 100, n) + "%"
+}
+
+gene fmt_bytes(n) {
+    # human sizes: 1536 -> "1.5 KB", 1048576 -> "1.0 MB" (binary units)
+    let units = ["B", "KB", "MB", "GB", "TB"]
+    let v = n * 1.0
+    let ui = 0
+    while v >= 1024 and ui < 4 {
+        v = v / 1024
+        ui = ui + 1
+    }
+    if ui == 0 {
+        return str(n) + " B"
+    }
+    return fmt_fixed(v, 1) + " " + units[ui]
+}
+
+gene fmt_cell(row, headers, i) {
+    # one table cell from either a map (keyed by header) or a list (by index)
+    if type(row) == "map" {
+        if has(row, headers[i]) {
+            return str(row[headers[i]])
+        }
+        return ""
+    }
+    if i < len(row) {
+        return str(row[i])
+    }
+    return ""
+}
+
+gene fmt_pad_cell(s, w) {
+    # left-justified cell padding (local so this module stays self-contained)
+    while len(s) < w {
+        s = s + " "
+    }
+    return s
+}
+
+gene fmt_table(rows, headers) {
+    # ASCII table with a header row:
+    #   +------+----+
+    #   | name | id |
+    #   +------+----+
+    # rows: list of maps (headers pick the columns) or lists (positional)
+    let cols = len(headers)
+    let widths = []
+    for h in headers {
+        push(widths, len(h))
+    }
+    for r in rows {
+        let i = 0
+        while i < cols {
+            let cell = fmt_cell(r, headers, i)
+            if len(cell) > widths[i] {
+                widths[i] = len(cell)
+            }
+            i = i + 1
+        }
+    }
+    let border = "+"
+    for w in widths {
+        let k = 0
+        while k < w + 2 {
+            border = border + "-"
+            k = k + 1
+        }
+        border = border + "+"
+    }
+    let head = "|"
+    let i = 0
+    while i < cols {
+        head = head + " " + fmt_pad_cell(headers[i], widths[i]) + " |"
+        i = i + 1
+    }
+    let out = border + "\n" + head + "\n" + border
+    for r in rows {
+        let line = "|"
+        let c = 0
+        while c < cols {
+            line = line + " " + fmt_pad_cell(fmt_cell(r, headers, c), widths[c]) + " |"
+            c = c + 1
+        }
+        out = out + "\n" + line
+    }
+    out = out + "\n" + border
+    return out
+}
+
+gene fmt_bool(b) {
+    # stable text form for booleans inside tables/reports
+    if b {
+        return "true"
+    }
+    return "false"
+}

@@ -1,0 +1,81 @@
+# differential: std/math extensions — round/gcd/lcm/factorial/isqrt/divmod/wrap
+use std/math as m
+
+frame proof {
+    # round: half away from zero (ceil(-x - 0.5) for negatives)
+    assert(m.round(2.4) == 2)
+    assert(m.round(2.5) == 3)
+    assert(m.round(2.6) == 3)
+    assert(m.round(0 - 2.5) == 0 - 3)
+    assert(m.round(0 - 2.4) == 0 - 2)
+    assert(m.round(0.0) == 0)
+
+    # round_to: numeric rounding to n decimals (float in, number out)
+    assert(m.round_to(3.14159, 3) == 3.142)
+    assert(m.round_to(2.5, 0) == 3.0)
+    assert(m.round_to(1.25, 1) == 1.3)
+    assert(m.round_to(0 - 1.25, 1) == 0 - 1.3)
+
+    # sign
+    assert(m.sign(9) == 1)
+    assert(m.sign(0 - 5) == 0 - 1)
+    assert(m.sign(0) == 0)
+    assert(m.sign(0.0) == 0)
+
+    # gcd / lcm (abs-valued inputs)
+    assert(m.gcd(12, 18) == 6)
+    assert(m.gcd(18, 12) == 6)
+    assert(m.gcd(0 - 12, 18) == 6)
+    assert(m.gcd(7, 13) == 1)
+    assert(m.gcd(0, 5) == 5)
+    assert(m.gcd(5, 0) == 5)
+    assert(m.lcm(4, 6) == 12)
+    assert(m.lcm(0 - 4, 6) == 12)
+    assert(m.lcm(0, 5) == 0)
+    assert(m.lcm(3, 3) == 3)
+
+    # factorial
+    assert(m.factorial(0) == 1)
+    assert(m.factorial(1) == 1)
+    assert(m.factorial(5) == 120)
+    assert(m.factorial(10) == 3628800)
+
+    # isqrt: binary search, no float error
+    assert(m.isqrt(0) == 0)
+    assert(m.isqrt(1) == 1)
+    assert(m.isqrt(2) == 1)
+    assert(m.isqrt(3) == 1)
+    assert(m.isqrt(4) == 2)
+    assert(m.isqrt(15) == 3)
+    assert(m.isqrt(16) == 4)
+    assert(m.isqrt(17) == 4)
+    assert(m.isqrt(1000000) == 1000)
+    assert(m.isqrt(999999) == 999)
+
+    # lerp / variance / stddev (population)
+    assert(m.lerp(0, 10, 0.5) == 5.0)
+    assert(m.lerp(2, 4, 0) == 2.0)
+    assert(m.lerp(2, 4, 1) == 4.0)
+    assert(m.variance([2, 4, 4, 4, 5, 5, 7, 9]) == 4.0)
+    assert(m.variance([]) == 0.0)
+    assert(m.stddev([2, 2]) == 0.0)
+    assert(m.stddev([1, 3]) == 1.0)
+
+    # divmod: floored division pair (SPEC % semantics)
+    assert(m.divmod(17, 5) == [3, 2])
+    assert(m.divmod(15, 5) == [3, 0])
+    assert(m.divmod(0 - 7, 3) == [0 - 3, 2])
+    assert(m.divmod(7, 0 - 3) == [0 - 3, 0 - 2])
+
+    # wrap: cyclic shift into [lo, hi)
+    assert(m.wrap(370, 0, 360) == 10)
+    assert(m.wrap(0 - 10, 0, 360) == 350)
+    assert(m.wrap(5, 0, 360) == 5)
+    assert(m.wrap(360, 0, 360) == 0)
+    assert(m.wrap(7, 1, 8) == 7)
+    assert(m.wrap(8, 1, 8) == 1)
+}
+
+main {
+    promote("std/math ext: ok")
+}

@@ -51,3 +51,142 @@ gene pad(s, width, fill) {
     let lpad = pad_left(s, width - (width - len(s)) / 2, fill)
     return pad_right(lpad, width, fill)
 }
+
+# --- everyday string helpers (B2) --------------------------------------------
+
+gene strip_prefix(s, p) {
+    if len(p) > 0 and s.starts(p) {
+        return s.slice(len(p), len(s))
+    }
+    return s
+}
+
+gene strip_suffix(s, x) {
+    if len(x) > 0 and s.ends(x) {
+        return s.slice(0, len(s) - len(x))
+    }
+    return s
+}
+
+gene is_blank(s) {
+    return len(s.trim()) == 0
+}
+
+gene chars(s) {
+    # list of single-character strings
+    let out = []
+    let i = 0
+    while i < len(s) {
+        push(out, s.slice(i, i + 1))
+        i = i + 1
+    }
+    return out
+}
+
+gene lines(s) {
+    # split on \n, dropping one trailing empty piece ("a\nb\n" -> ["a","b"])
+    let parts = s.split("\n")
+    let n = len(parts)
+    if n > 0 and parts[n - 1] == "" {
+        return parts.slice(0, n - 1)
+    }
+    return parts
+}
+
+gene title_case(s) {
+    # "hello big world" -> "Hello Big World" (whitespace-normalized)
+    let out = []
+    for w in words(s) {
+        push(out, capital(w))
+    }
+    return " ".join(out)
+}
+
+gene to_snake(s) {
+    # "myVarName" / "MyVarName" / "my var" / "my-var" -> "my_var_name"
+    # acronym runs stay one word: "HTTPServer" -> "http_server"
+    let src = s.trim()
+    let out = ""
+    let n = len(src)
+    let i = 0
+    while i < n {
+        let c = src.slice(i, i + 1)
+        if c == " " or c == "-" or c == "_" {
+            if len(out) > 0 and out.slice(len(out) - 1, len(out)) != "_" {
+                out = out + "_"
+            }
+            i = i + 1
+            continue
+        }
+        let is_up = c != c.lower() and c == c.upper()
+        if is_up and i > 0 {
+            let prev = src.slice(i - 1, i)
+            let prev_low = prev == prev.lower() and prev != prev.upper()
+            let nextc = ""
+            if i + 1 < n {
+                nextc = src.slice(i + 1, i + 2)
+            }
+            let next_low = nextc == nextc.lower() and nextc != nextc.upper()
+            let prev_up = prev == prev.upper() and prev != prev.lower()
+            if prev_low or (prev_up and nextc != "" and next_low) {
+                if out.slice(len(out) - 1, len(out)) != "_" {
+                    out = out + "_"
+                }
+            }
+        }
+        out = out + c.lower()
+        i = i + 1
+    }
+    return strip_suffix(out, "_")
+}
+
+gene to_camel(s) {
+    # "hello big world" -> "helloBigWorld"; "my-var_name" -> "myVarName"
+    let src = s.trim()
+    let out = ""
+    let up_next = false
+    let i = 0
+    while i < len(src) {
+        let c = src.slice(i, i + 1)
+        if c == " " or c == "-" or c == "_" {
+            up_next = true
+        } else {
+            if up_next and len(out) > 0 {
+                out = out + c.upper()
+            } else {
+                out = out + c.lower()
+            }
+            up_next = false
+        }
+        i = i + 1
+    }
+    return out
+}
+
+gene to_kebab(s) {
+    # "myVarName" -> "my-var-name"
+    return to_snake(s).replace("_", "-")
+}
+
+gene ellipsis(s, width) {
+    # truncate with a tail, never wider than `width` ("..." counts as 3)
+    if len(s) <= width {
+        return s
+    }
+    if width < 3 {
+        return s.slice(0, width)
+    }
+    return s.slice(0, width - 3) + "..."
+}
+
+gene unquote(s) {
+    # remove ONE pair of matching surrounding quotes ("a" or 'a' -> a)
+    if len(s) >= 2 {
+        let a = s.slice(0, 1)
+        let b = s.slice(len(s) - 1, len(s))
+        if (a == "\"" and b == "\"") or (a == "'" and b == "'") {
+            return s.slice(1, len(s) - 1)
+        }
+    }
+    return s
+}

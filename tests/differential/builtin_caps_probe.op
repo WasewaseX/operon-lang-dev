@@ -1,0 +1,40 @@
+# differential: S3 builtin coverage — capability gate on fs introspection
+# exists() and file_size() sit behind the same read-capability gate as
+# read_file(). Deny-by-default is the security invariant (D-005), so the
+# deterministic golden is the RESCUE contract: both implementations must
+# raise interference with the same kind, for absolute and relative paths
+# alike. The granted path for fs builtins is exercised by the redteam
+# grant suite (scripts/redteam.sh, tests/redteam/rt_grant.cell).
+frame proof {
+    stress {
+        exists("/etc/passwd")
+        assert(false, "exists must be denied by default")
+    } rescue (e) {
+        assert(e.kind == "interference", "exists deny kind")
+    }
+
+    stress {
+        file_size("/etc/passwd")
+        assert(false, "file_size must be denied by default")
+    } rescue (e) {
+        assert(e.kind == "interference", "file_size deny kind")
+    }
+
+    # relative paths get no free pass either
+    stress {
+        exists("probe_relative.tmp")
+        assert(false, "relative exists must be denied")
+    } rescue (e) {
+        assert(e.kind == "interference", "relative exists deny kind")
+    }
+
+    stress {
+        file_size("probe_relative.tmp")
+        assert(false, "relative file_size must be denied")
+    } rescue (e) {
+        assert(e.kind == "interference", "relative file_size deny kind")
+    }
+}
+main {
+    promote("caps-probe: ok")
+}

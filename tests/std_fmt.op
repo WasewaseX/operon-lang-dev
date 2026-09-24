@@ -1,0 +1,64 @@
+# differential: std/fmt — presentation formatting
+use std/fmt as fm
+
+frame proof {
+    # fmt_fixed: half away from zero, zero padding, sign rules
+    assert(fm.fmt_fixed(3.14159, 2) == "3.14")
+    assert(fm.fmt_fixed(2.5, 2) == "2.50")
+    assert(fm.fmt_fixed(2.5, 0) == "3")
+    assert(fm.fmt_fixed(0 - 2.5, 0) == "-3")
+    assert(fm.fmt_fixed(0 - 0.4, 0) == "0")
+    assert(fm.fmt_fixed(0.001, 2) == "0.00")
+    assert(fm.fmt_fixed(0.125, 2) == "0.13")
+    assert(fm.fmt_fixed(9.999, 2) == "10.00")
+    assert(fm.fmt_fixed(0 - 9.999, 2) == "-10.00")
+    assert(fm.fmt_fixed(7.0, 0) == "7")
+    assert(fm.fmt_fixed(42.0, 1) == "42.0")
+
+    # fmt_thousands: grouping and sign
+    assert(fm.fmt_thousands(0) == "0")
+    assert(fm.fmt_thousands(42) == "42")
+    assert(fm.fmt_thousands(999) == "999")
+    assert(fm.fmt_thousands(1000) == "1,000")
+    assert(fm.fmt_thousands(1234567) == "1,234,567")
+    assert(fm.fmt_thousands(0 - 9876) == "-9,876")
+    assert(fm.fmt_thousands(1000000) == "1,000,000")
+
+    # fmt_pct
+    assert(fm.fmt_pct(0.125, 1) == "12.5%")
+    assert(fm.fmt_pct(1.0, 0) == "100%")
+    assert(fm.fmt_pct(0.0, 2) == "0.00%")
+    assert(fm.fmt_pct(0 - 0.25, 1) == "-25.0%")
+
+    # fmt_bytes: binary units
+    assert(fm.fmt_bytes(0) == "0 B")
+    assert(fm.fmt_bytes(999) == "999 B")
+    assert(fm.fmt_bytes(1024) == "1.0 KB")
+    assert(fm.fmt_bytes(1536) == "1.5 KB")
+    assert(fm.fmt_bytes(1048576) == "1.0 MB")
+    assert(fm.fmt_bytes(1610612736) == "1.5 GB")
+
+    # fmt_bool
+    assert(fm.fmt_bool(true) == "true")
+    assert(fm.fmt_bool(false) == "false")
+
+    # fmt_table: maps keyed by header and positional rows, width computation
+    let rows = [{"name": "ab", "id": 1}, {"name": "c", "id": 23}]
+    let t = fm.fmt_table(rows, ["name", "id"])
+    let lines = t.split("\n")
+    assert(len(lines) == 6)
+    assert(lines[0] == "+------+----+")
+    assert(lines[1] == "| name | id |")
+    assert(lines[2] == "+------+----+")
+    assert(lines[3] == "| ab   | 1  |")
+    assert(lines[4] == "| c    | 23 |")
+    assert(lines[5] == "+------+----+")
+    let pos_rows = [["x", 5], ["yy", 6]]
+    let t2 = fm.fmt_table(pos_rows, ["a", "b"])
+    assert(len(t2.split("\n")) == 6)
+    assert(fm.fmt_table([], ["h"]) == "+---+\n| h |\n+---+\n+---+")
+}
+
+main {
+    promote("std/fmt: ok")
+}

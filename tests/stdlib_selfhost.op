@@ -3,6 +3,11 @@ use std/math as m
 use std/iter as it
 use std/seq as sq
 use std/strings as st
+use std/args as ar
+use std/csv as cv
+use std/json as js
+use std/fmt as fm
+use std/fs as fsys
 frame proof {
     assert(m.clamp(5, 0, 3) == 3)
     assert(m.clamp(-1, 0, 3) == 0)
@@ -21,8 +26,30 @@ frame proof {
     assert(evens == [0, 2, 4, 6, 8])
     let capped = sq.take_seq("fib_seq", [], 7).collect()
     assert(capped == [0, 1, 1, 2, 3, 5, 8])
+    let both = sq.concat_seq("range_seq", [0, 2, 1], "range_seq", [5, 7, 1]).collect()
+    assert(both == [0, 1, 5, 6])
+    let dr = it.drain(sq.range_seq(0, 3, 1))
+    assert(dr == [0, 1, 2])
     assert(st.capital("operon") == "Operon")
     assert(st.pad_left("7", 3, "0") == "007")
+
+    # --- B2 cross-module integration ---------------------------------------
+    # csv -> fmt: render parsed records as a table
+    let recs = cv.csv_records("name,age\nAda,36\nLin,28\n", ",")
+    let tbl = fm.fmt_table(recs, ["name", "age"])
+    assert(len(tbl.split("\n")) == 6)
+    assert(tbl.contains("| Ada") and tbl.contains("| 36 "))
+    # json round trip + fold composition: sum all top-level values
+    let OB = chr(123)
+    let CB = chr(125)
+    let v = json_parse(OB + "\"a\": 1, \"b\": 2" + CB)
+    let total = it.fold(keys(v), 0, gene (acc, k) => acc + v[k])
+    assert(total == 3)
+    # args + strings: normalize the flag name, then snake_case it
+    assert(st.to_snake(ar.args_norm("dry-run")) == "dry_run")
+    assert(ar.args_value(["--dry-run=true"], "dry-run", "x") == "true")
+    # fs safe wrapper under default-deny: fallback, no throw
+    assert(fsys.fs_read_or("/tmp/operon_selfhost_deny_zz", "FB") == "FB")
 }
 main {
     let f = sq.take_seq("fib_seq", [], 10).collect()
