@@ -1,0 +1,34 @@
+# T2b — @methylate graded silencing (SPEC §11, v2.2 honesty pass, D-005)
+# Each executed @methylate-marked definition deepens the gene's silencing
+# level; a call is blocked at level >= threshold (default 3, tunable via
+# .cell `methylate.threshold`). @acetylate defs relax the level, and
+# @acetylate genes are exempt from the gate (open chromatin wins).
+# This file FAILS on pre-T2b cores: silenced calls return real values there.
+@methylate gene silenced() { return "v1" }
+@methylate gene silenced() { return "v2" }
+@methylate gene silenced() { return "v3" }
+@methylate gene partial() { return "p1" }
+@methylate gene partial() { return "p2" }
+@methylate gene open() { return "open-ran" }
+@methylate gene opened() { return "v1" }
+@methylate gene opened() { return "v2" }
+@methylate gene opened() { return "v3" }
+@methylate gene opened() { return "v4" }
+@acetylate gene opened() { return "opened-ran" }
+frame proof {
+    # level 3 (three marked defs) → blocked, returns null
+    assert(silenced() == null, "level 3 >= threshold 3 silences calls")
+    # level 2 < 3 → still transcribes (last marked def wins dispatch)
+    assert(partial() == "p2", "level 2 below threshold executes")
+    # unmarked gene: unaffected
+    assert(open() == "open-ran", "unmarked gene unaffected")
+    # exemption proof: 4 marks (level 4) − 1 acetylate (level 3) would gate,
+    # but the binding itself is @acetylate → exempt (open chromatin wins)
+    assert(opened() == "opened-ran", "acetylated gene exempt from methylation gate")
+}
+main {
+    promote("silenced: {silenced()}")
+    promote("partial: {partial()}")
+    promote("open: {open()}")
+    promote("opened: {opened()}")
+}

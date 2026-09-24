@@ -245,6 +245,10 @@ pub struct Interp {
     pub caps: Caps,
     pub methyl_quiet: bool,
     pub methyl_noted: std::collections::HashSet<String>,
+    /// T2b graded methylation: per-gene silencing level (@methylate defs +1,
+    /// @acetylate defs −1). Calls are blocked at `methyl_threshold` (default 3).
+    pub methyl_levels: HashMap<String, u32>,
+    pub methyl_threshold: u32,
     pub asserts_run: u64,
     pub rng: u64,
     pub cli_args: Vec<String>,
@@ -293,6 +297,8 @@ impl Interp {
             caps: Caps::default(),
             methyl_quiet: false,
             methyl_noted: std::collections::HashSet::new(),
+            methyl_levels: HashMap::new(),
+            methyl_threshold: 3,
             asserts_run: 0,
             rng: 0x9E3779B97F4A7C15,
             cli_args: Vec::new(),
@@ -695,6 +701,15 @@ impl Interp {
             }
             Stmt::Gene(def) => {
                 let name = def.name.clone().unwrap_or_else(|| "<lambda>".into());
+                // T2b graded methylation (D-005): every @methylate-marked
+                // definition deepens the silencing level; an @acetylate
+                // definition relaxes it (histone marks compete on chromatin).
+                if def.methylate {
+                    *self.methyl_levels.entry(name.clone()).or_insert(0) += 1;
+                } else if def.acetylate {
+                    let lvl = self.methyl_levels.entry(name.clone()).or_insert(0);
+                    *lvl = lvl.saturating_sub(1);
+                }
                 // @m6a-stabilized transcripts win dispatch among same-name
                 // candidates: a redefinition cannot overwrite an m6a-marked
                 // binding unless it carries the mark itself.
@@ -1508,6 +1523,18 @@ impl Interp {
             self.note(0, 4, format!("grn gate: '{}' call suppressed ({})", name, reason));
             return Ok(Value::Null);
         }
+        // T2b methylation gate: level >= threshold blocks transcription;
+        // @acetylate genes are exempt (open chromatin wins — D-005).
+        if !def.acetylate {
+            let lvl = *self.methyl_levels.get(&name).unwrap_or(&0);
+            if lvl >= self.methyl_threshold {
+                self.note(0, 4, format!(
+                    "methylation silences: '{}' (level {} >= threshold {}) — call returns null",
+                    name, lvl, self.methyl_threshold
+                ));
+                return Ok(Value::Null);
+            }
+        }
         *self.call_counts.entry(name.clone()).or_insert(0) += 1;
         // burst-index binning: 20 calls per bin, per gene (gene-expression
         // burstiness is measured on per-gene time bins, not across genes)
@@ -1711,6 +1738,17 @@ impl Interp {
 
     fn call_method_gene_inner(&mut self, def: Arc<GeneDef>, self_val: Value, args: Vec<Value>) -> Result<Value, Stress> {
         let name = def.name.clone().unwrap_or_else(|| "<method>".into());
+        // T2b methylation gate for phenotype methods (same contract).
+        if !def.acetylate {
+            let lvl = *self.methyl_levels.get(&name).unwrap_or(&0);
+            if lvl >= self.methyl_threshold {
+                self.note(0, 4, format!(
+                    "methylation silences: '{}' (level {} >= threshold {}) — call returns null",
+                    name, lvl, self.methyl_threshold
+                ));
+                return Ok(Value::Null);
+            }
+        }
         *self.call_counts.entry(name.clone()).or_insert(0) += 1;
         self.call_clock += 1;
         let bucket = self.call_clock / 20;
