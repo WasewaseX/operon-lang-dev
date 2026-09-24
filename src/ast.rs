@@ -28,11 +28,13 @@ pub enum Expr {
     Map(Vec<(Expr, Expr)>),
     Ident(String),
     Unary(UnOp, Box<Expr>),
-    Binary(BinOp, Box<Expr>, Box<Expr>),
+    /// dx-r4: source line of the operator — hard type errors locate themselves.
+    Binary(BinOp, Box<Expr>, Box<Expr>, usize),
     /// A13 (dx-r2): source line of the call site — runtime builtin notes
     /// (denials, timeouts, gate changes) carry the caller's location.
     Call(Box<Expr>, Vec<Expr>, usize),
-    Index(Box<Expr>, Box<Expr>),
+    /// dx-r4: source line of the bracket — index errors locate themselves.
+    Index(Box<Expr>, Box<Expr>, usize),
     Member(Box<Expr>, String),
     Method(Box<Expr>, String, Vec<Expr>),
     Lambda(Arc<GeneDef>),
