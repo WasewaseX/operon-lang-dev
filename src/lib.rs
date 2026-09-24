@@ -9,6 +9,7 @@ pub mod ffi;
 pub mod genes;
 pub mod interp;
 pub mod lexer;
+pub mod ls;
 pub mod parser;
 pub mod tools;
 pub mod value;
