@@ -14,12 +14,12 @@ splice fetch {
     }
 }
 splice pick {
-    @m6a
-    variant first {
-        return "m6a-wins"
-    }
     variant second {
         return "second"
+    }
+    @m6a
+    variant marked {
+        return "m6a-wins"
     }
 }
 @acetylate gene immune() {
@@ -33,6 +33,8 @@ frame proof {
     assert(immune() == "immune", "acetylated immune")
     # splice: default = first variant
     assert(fetch() == "fast-path", "splice default first")
-    # splice: m6a-marked variant wins when no explicit selection
-    assert(pick() == "m6a-wins", "m6a priority")
+    # splice: m6a-marked variant wins even when NOT first-declared —
+    # selection happens only because of the mark (T2c: pre-fix, the mark
+    # token was skipped and 'second' won by first-declared default)
+    assert(pick() == "m6a-wins", "m6a variant selection beats first-declared")
 }
