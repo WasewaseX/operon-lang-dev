@@ -67,6 +67,12 @@ jobs:
       - name: Proof suite
         shell: bash
         run: ./target/release/operon test tests/
+      # sz hotfix: harness.py defaults to bin/operon (dx-r3 compat path);
+      # the linux job builds it via scripts/build.sh, windows must expose it
+      # too (operon.exe → bin/operon) or the harness FileNotFoundError's.
+      - name: Expose bin/operon (harness compat path)
+        shell: bash
+        run: mkdir -p bin && cp target/release/operon.exe bin/operon.exe && cp target/release/operon.exe bin/operon
       - name: Differential harness
         shell: bash
         run: python3 bootstrap/harness.py
