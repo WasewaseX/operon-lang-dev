@@ -51,4 +51,4 @@ case ":$PATH:" in
 esac
 
 "$DEST/operon" version
-echo "==> installed. try: operon repl   (or read the tutorial: operon-lang/TUTORIAL.md)"
+echo "==> installed. try: operon repl   (or read the tutorial: https://github.com/WasewaseX/operon-lang-dev/blob/main/TUTORIAL.md)"
