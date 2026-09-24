@@ -131,7 +131,7 @@ operon build f.op   [--variant v] [-o out.op]     # bake splices, strip proofs
 operon profile f.op                               # per-gene calls, exclusive self-µs, flags, maturation, enhance candidates
 operon crispr f.op  (--knockout gene | --matrix) [--json]
 operon bench f.op   [--iters n]
-operon version                                    # Operon 2.2.0 (rust-core, c-runtime, cpp-kernel) — banner matches SPEC 2.2.0
+operon version                                    # Operon 2.1.1 (rust-core, c-runtime, cpp-kernel) — banner matches SPEC 2.1.1
 ```
 
 ## Build from source
