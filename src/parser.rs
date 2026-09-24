@@ -1294,11 +1294,22 @@ impl Parser {
                 if !is_canonical(&word) && is_def {
                     let gene_line = self.line();
                     let line = self.line();
-                    self.note(
-                        line,
-                        4,
-                        format!("bare name block '{word}' treated as gene definition"),
-                    );
+                    // dx-r3 (re-audit): bare `main { }` is the community's
+                    // most common top-level form and the formatter's own
+                    // output style — it is canonical sugar (rung 1), not a
+                    // repair. Other bare-name blocks stay rung 4.
+                    let (rung, msg) = if word == "main" {
+                        (
+                            1,
+                            "bare 'main' block accepted as the entry gene (canonical form: gene main())".to_string(),
+                        )
+                    } else {
+                        (
+                            4,
+                            format!("bare name block '{word}' treated as gene definition"),
+                        )
+                    };
+                    self.note(line, rung, msg);
                     self.next(); // consume the name
                     let mut params: Vec<(String, Option<Expr>)> = Vec::new();
                     if matches!(self.peek(), Tok::LParen) {

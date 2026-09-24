@@ -178,7 +178,9 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
         if let Some(v) = interp.modules.get(path) {
             return Ok(v.clone());
         }
-        return Ok(Value::Map(Rc::new(RefCell::new(Vec::new()))));
+        return Ok(Value::Map(Rc::new(RefCell::new(
+            crate::value::MapStore::default(),
+        ))));
     }
     if let Some(v) = interp.modules.get(path) {
         return Ok(v.clone());
@@ -298,7 +300,7 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
     // receives this exact Rc and sees it filled when loading completes
     interp.modules.insert(
         path.to_string(),
-        Value::Map(Rc::new(RefCell::new(Vec::<(Value, Value)>::new()))),
+        Value::Map(Rc::new(RefCell::new(crate::value::MapStore::default()))),
     );
     interp.loading.push(path.to_string());
     let prog = crate::parser::parse(&src);
@@ -357,13 +359,13 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
                 target.clear();
                 target.extend(exports);
             }
-            interp
-                .modules
-                .get(path)
-                .cloned()
-                .unwrap_or_else(|| Value::Map(Rc::new(RefCell::new(Vec::new()))))
+            interp.modules.get(path).cloned().unwrap_or_else(|| {
+                Value::Map(Rc::new(RefCell::new(crate::value::MapStore::default())))
+            })
         } else {
-            let mv = Value::Map(Rc::new(RefCell::new(exports)));
+            let mv = Value::Map(Rc::new(RefCell::new(crate::value::MapStore::from_vec(
+                exports,
+            ))));
             interp.modules.insert(path.to_string(), mv.clone());
             mv
         }
@@ -752,10 +754,12 @@ fn from_send_d(v: SendValue, d: u32) -> Value {
                 .map(|(k, v)| (Value::Str(k), from_send_d(v, d + 1)))
                 .collect(),
         ))),
-        SendValue::Stress(k, m) => Value::Map(Rc::new(RefCell::new(vec![
-            (Value::Str("kind".into()), Value::Str(k)),
-            (Value::Str("message".into()), Value::Str(m)),
-        ]))),
+        SendValue::Stress(k, m) => Value::Map(Rc::new(RefCell::new(
+            crate::value::MapStore::from_vec(vec![
+                (Value::Str("kind".into()), Value::Str(k)),
+                (Value::Str("message".into()), Value::Str(m)),
+            ]),
+        ))),
     }
 }
 

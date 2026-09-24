@@ -247,6 +247,10 @@ pub struct Interp {
     pub cur_line: usize,
     /// A13 (dx-r2): source file name for diagnostic rendering.
     pub file: String,
+    /// dx-r3 (re-audit / A14 leftover): when set, promote() writes here
+    /// instead of process stdout — the test runner captures per-file
+    /// program output and shows it only on failure (clean reports).
+    pub stdout_sink: Option<Rc<RefCell<Vec<String>>>>,
     pub silences: Vec<(String, String)>,
     pub fates: HashMap<String, Arc<FateDef>>,
     pub phenos: HashMap<String, Arc<PhenoDef>>,
@@ -322,6 +326,7 @@ impl Interp {
             base_dir: None,
             cur_line: 0,
             file: "<repl>".to_string(),
+            stdout_sink: None,
             silences: Vec::new(),
             fates: HashMap::new(),
             phenos: HashMap::new(),
@@ -758,7 +763,11 @@ impl Interp {
                 let mv = self.eval(env, msg)?;
                 let message = mv.display();
                 let k = kind.clone().unwrap_or_else(|| "unfolded".into());
-                Err(Stress { kind: k, message })
+                Err(Stress {
+                    kind: k,
+                    message,
+                    line: 0,
+                })
             }
             Stmt::Stress { kind, body, rescue } => {
                 let result = self.exec_block(env, body);
@@ -977,11 +986,12 @@ impl Interp {
     }
 
     pub fn stress_map(&self, s: &Stress) -> Value {
-        let m = Rc::new(RefCell::new(vec![
-            (Value::Str("kind".into()), Value::Str(s.kind.clone())),
-            (Value::Str("message".into()), Value::Str(s.message.clone())),
-        ]));
-        Value::Map(m)
+        Value::Map(Rc::new(RefCell::new(crate::value::MapStore::from_vec(
+            vec![
+                (Value::Str("kind".into()), Value::Str(s.kind.clone())),
+                (Value::Str("message".into()), Value::Str(s.message.clone())),
+            ],
+        ))))
     }
 
     pub fn as_index(&self, v: &Value, len: usize) -> Result<usize, Stress> {
@@ -992,7 +1002,11 @@ impl Interp {
                     // out of range (never clamped)
                     let j = len as i64 + *i;
                     if j < 0 {
-                        Err(Stress::new("missing", format!("index {} out of range", *i)))
+                        Err(Stress::at(
+                            self.cur_line,
+                            "missing",
+                            format!("index {} out of range", *i),
+                        ))
                     } else {
                         Ok(j as usize)
                     }
@@ -1008,14 +1022,8 @@ impl Interp {
     }
 
     pub fn map_insert(&self, m: &crate::value::MapRef, key: Value, val: Value) {
-        let mut b = m.borrow_mut();
-        for (k, v) in b.iter_mut() {
-            if k.deep_eq(&key) {
-                *v = val;
-                return;
-            }
-        }
-        b.push((key, val));
+        // dx-r3: memoized upsert (was a linear deep_eq scan)
+        m.borrow_mut().insert(key, val);
     }
 
     // ------------------------------------------------------- expressions
@@ -1060,7 +1068,8 @@ impl Interp {
                 Ok(Value::List(Rc::new(RefCell::new(vs))))
             }
             Expr::Map(pairs) => {
-                let m: crate::value::MapRef = Rc::new(RefCell::new(Vec::new()));
+                let m: crate::value::MapRef =
+                    Rc::new(RefCell::new(crate::value::MapStore::default()));
                 for (k, v) in pairs {
                     let kv = self.eval(env, k)?;
                     let vv = self.eval(env, v)?;
@@ -1177,16 +1186,20 @@ impl Interp {
                         let idx = self.as_index(&iv, l.borrow().len())?;
                         match l.borrow().get(idx) {
                             Some(v) => Ok(v.clone()),
-                            None => Err(Stress::new(
+                            None => Err(Stress::at(
+                                self.cur_line,
                                 "missing",
                                 format!("index {} out of range", idx),
                             )),
                         }
                     }
-                    (Value::Map(m), _) => match m.borrow().iter().find(|(k, _)| k.deep_eq(&iv)) {
-                        Some((_, v)) => Ok(v.clone()),
-                        None => Err(Stress::new("missing", "key not found")),
-                    },
+                    (Value::Map(m), _) => {
+                        let pos = m.borrow().position(&iv);
+                        match pos {
+                            Some(i) => Ok(m.borrow().get(i).unwrap().1.clone()),
+                            None => Err(Stress::new("missing", "key not found")),
+                        }
+                    }
                     (Value::Str(s), _) => {
                         let idx = self.as_index(&iv, s.chars().count())?;
                         match s.chars().nth(idx) {
@@ -1268,7 +1281,9 @@ impl Interp {
                                 name
                             ),
                         );
-                        return Ok(Value::Map(Rc::new(RefCell::new(Vec::new()))));
+                        return Ok(Value::Map(Rc::new(RefCell::new(
+                            crate::value::MapStore::default(),
+                        ))));
                     }
                 };
                 let mut argvs = Vec::with_capacity(args.len());
@@ -1286,7 +1301,9 @@ impl Interp {
                             4,
                             format!("fate '{}' not declared; instance inert", name),
                         );
-                        return Ok(Value::Map(Rc::new(RefCell::new(Vec::new()))));
+                        return Ok(Value::Map(Rc::new(RefCell::new(
+                            crate::value::MapStore::default(),
+                        ))));
                     }
                 };
                 let enter = def.enter.clone().unwrap_or_else(|| {
@@ -1295,11 +1312,12 @@ impl Interp {
                         .map(|(s, _)| s.clone())
                         .unwrap_or_default()
                 });
-                let m: crate::value::MapRef = Rc::new(RefCell::new(vec![
-                    (Value::Str("#fate".into()), Value::Str(def.name.clone())),
-                    (Value::Str("#state".into()), Value::Str(enter)),
-                ]));
-                Ok(Value::Map(m))
+                Ok(Value::Map(Rc::new(RefCell::new(
+                    crate::value::MapStore::from_vec(vec![
+                        (Value::Str("#fate".into()), Value::Str(def.name.clone())),
+                        (Value::Str("#state".into()), Value::Str(enter)),
+                    ]),
+                ))))
             }
             Expr::Collect {
                 var,
@@ -1392,7 +1410,8 @@ impl Interp {
                     v.extend(b.borrow().iter().cloned());
                     Ok(Value::List(Rc::new(RefCell::new(v))))
                 }
-                _ => Err(Stress::new(
+                _ => Err(Stress::at(
+                    self.cur_line,
                     "unfolded",
                     format!("cannot add {} and {}", l.type_name(), r.type_name()),
                 )),
@@ -1574,7 +1593,8 @@ impl Interp {
             (Value::Float(a), Value::Float(b)) => Ok(Value::Float(ff(*a, *b))),
             (Value::Int(a), Value::Float(b)) => Ok(Value::Float(ff(*a as f64, *b))),
             (Value::Float(a), Value::Int(b)) => Ok(Value::Float(ff(*a, *b as f64))),
-            _ => Err(Stress::new(
+            _ => Err(Stress::at(
+                self.cur_line,
                 "unfolded",
                 format!(
                     "cannot apply '{}' to {} and {}",
@@ -1606,7 +1626,8 @@ impl Interp {
             (Value::Float(a), Value::Float(b)) => Ok((*a, *b)),
             (Value::Int(a), Value::Float(b)) => Ok((*a as f64, *b)),
             (Value::Float(a), Value::Int(b)) => Ok((*a, *b as f64)),
-            _ => Err(Stress::new(
+            _ => Err(Stress::at(
+                self.cur_line,
                 "unfolded",
                 format!(
                     "numeric op needs numbers, found {} and {}",
@@ -2229,7 +2250,7 @@ impl Interp {
         def: &Arc<PhenoDef>,
         args: Vec<Value>,
     ) -> Result<Value, Stress> {
-        let m: crate::value::MapRef = Rc::new(RefCell::new(Vec::new()));
+        let m: crate::value::MapRef = Rc::new(RefCell::new(crate::value::MapStore::default()));
         // gather the lineage root-first
         let chain = self.pheno_chain(def);
         for d in chain.iter().rev() {
@@ -2398,7 +2419,14 @@ impl Interp {
         match name {
             "promote" => {
                 let parts: Vec<String> = args.iter().map(|v| v.display()).collect();
-                println!("{}", parts.join(" "));
+                let line = parts.join(" ");
+                if let Some(sink) = self.stdout_sink.clone() {
+                    // dx-r3: captured by the host (test runner) — nothing
+                    // reaches the report until the host prints it
+                    sink.borrow_mut().push(line);
+                } else {
+                    println!("{}", line);
+                }
                 Ok(Value::Null)
             }
             "len" => Ok(Value::Int(match args.first() {
@@ -2465,17 +2493,12 @@ impl Interp {
                 _ => Ok(Value::List(Rc::new(RefCell::new(vec![])))),
             },
             "has" => match (args.first(), args.get(1)) {
-                (Some(Value::Map(m)), Some(k)) => {
-                    Ok(Value::Bool(m.borrow().iter().any(|(kk, _)| kk.deep_eq(k))))
-                }
+                (Some(Value::Map(m)), Some(k)) => Ok(Value::Bool(m.borrow().position(k).is_some())),
                 _ => Ok(Value::Bool(false)),
             },
             "del" => match (args.first(), args.get(1)) {
                 (Some(Value::Map(m)), Some(k)) => {
-                    let mut b = m.borrow_mut();
-                    if let Some(pos) = b.iter().position(|(kk, _)| kk.deep_eq(k)) {
-                        b.remove(pos);
-                    }
+                    m.borrow_mut().del(k);
                     Ok(Value::Null)
                 }
                 _ => Ok(Value::Null),
@@ -2772,8 +2795,8 @@ impl Interp {
                     orfs.into_iter().map(Value::Str).collect(),
                 ))))
             }
-            "memory" => {
-                let m = Rc::new(RefCell::new(vec![
+            "memory" => Ok(Value::Map(Rc::new(RefCell::new(
+                crate::value::MapStore::from_vec(vec![
                     (
                         Value::Str("arena_bytes".into()),
                         Value::Int(unsafe_arena() as i64),
@@ -2786,9 +2809,8 @@ impl Interp {
                         Value::Str("allocs".into()),
                         Value::Int(unsafe_allocs() as i64),
                     ),
-                ]));
-                Ok(Value::Map(m))
-            }
+                ]),
+            )))),
             "methyl" => {
                 let k = args.first().map(|v| v.display()).unwrap_or_default();
                 let d = args.get(1).cloned().unwrap_or(Value::Null);
@@ -2941,21 +2963,26 @@ impl Interp {
                 } else {
                     0.0
                 };
-                let m = Rc::new(RefCell::new(vec![
-                    (
-                        Value::Str("calls".into()),
-                        Value::Map(Rc::new(RefCell::new(counts))),
-                    ),
-                    (Value::Str("burst".into()), Value::Float(burst_avg)),
-                    (
-                        Value::Str("burst_by_gene".into()),
-                        Value::Map(Rc::new(RefCell::new(burst_by_gene))),
-                    ),
-                    (Value::Str("mature".into()), Value::Int(mature as i64)),
-                    (Value::Str("nascent".into()), Value::Int(nascent as i64)),
-                    (Value::Str("maturation".into()), Value::Float(maturation)),
-                ]));
-                Ok(Value::Map(m))
+                Ok(Value::Map(Rc::new(RefCell::new(
+                    crate::value::MapStore::from_vec(vec![
+                        (
+                            Value::Str("calls".into()),
+                            Value::Map(Rc::new(RefCell::new(crate::value::MapStore::from_vec(
+                                counts,
+                            )))),
+                        ),
+                        (Value::Str("burst".into()), Value::Float(burst_avg)),
+                        (
+                            Value::Str("burst_by_gene".into()),
+                            Value::Map(Rc::new(RefCell::new(crate::value::MapStore::from_vec(
+                                burst_by_gene,
+                            )))),
+                        ),
+                        (Value::Str("mature".into()), Value::Int(mature as i64)),
+                        (Value::Str("nascent".into()), Value::Int(nascent as i64)),
+                        (Value::Str("maturation".into()), Value::Float(maturation)),
+                    ]),
+                ))))
             }
             "toggle_on" => {
                 let name = args.first().map(|v| v.display()).unwrap_or_default();
@@ -2978,7 +3005,9 @@ impl Interp {
                     out.push((Value::Str(a.clone()), Value::Bool(*a_on)));
                     out.push((Value::Str(b.clone()), Value::Bool(!*a_on)));
                 }
-                Ok(Value::Map(Rc::new(RefCell::new(out))))
+                Ok(Value::Map(Rc::new(RefCell::new(
+                    crate::value::MapStore::from_vec(out),
+                ))))
             }
             "repressi_next" => {
                 if self.repressi_ring.is_empty() {
@@ -3060,7 +3089,9 @@ impl Interp {
                 // op-for-op (bit-identical IEEE-754 results).
                 let n = self.repressi_ring.len();
                 if n == 0 {
-                    return Ok(Value::Map(Rc::new(RefCell::new(Vec::new()))));
+                    return Ok(Value::Map(Rc::new(RefCell::new(
+                        crate::value::MapStore::default(),
+                    ))));
                 }
                 let tick: u64 = match &self.repressi_atomic {
                     Some(a) => a.load(std::sync::atomic::Ordering::SeqCst),
@@ -3072,7 +3103,9 @@ impl Interp {
                 for (name, lvl) in self.repressi_ring.iter().zip(levels.iter()) {
                     out.push((Value::Str(name.clone()), Value::Float(*lvl)));
                 }
-                Ok(Value::Map(Rc::new(RefCell::new(out))))
+                Ok(Value::Map(Rc::new(RefCell::new(
+                    crate::value::MapStore::from_vec(out),
+                ))))
             }
             "grn_fire" => {
                 let seed = args.first().map(|v| v.display()).unwrap_or_default();
@@ -3327,15 +3360,17 @@ impl Interp {
                                 None => Value::Null,
                             })
                             .collect();
-                        Ok(Value::Map(Rc::new(RefCell::new(vec![
-                            (Value::Str("text".into()), Value::Str(text)),
-                            (Value::Str("start".into()), Value::Int(st as i64)),
-                            (Value::Str("end".into()), Value::Int(en as i64)),
-                            (
-                                Value::Str("groups".into()),
-                                Value::List(Rc::new(RefCell::new(groups))),
-                            ),
-                        ]))))
+                        Ok(Value::Map(Rc::new(RefCell::new(
+                            crate::value::MapStore::from_vec(vec![
+                                (Value::Str("text".into()), Value::Str(text)),
+                                (Value::Str("start".into()), Value::Int(st as i64)),
+                                (Value::Str("end".into()), Value::Int(en as i64)),
+                                (
+                                    Value::Str("groups".into()),
+                                    Value::List(Rc::new(RefCell::new(groups))),
+                                ),
+                            ]),
+                        ))))
                     }
                 }
             }
@@ -3387,15 +3422,17 @@ impl Interp {
                 let secs = ts.rem_euclid(86_400);
                 let (y, m, d) = civil_from_days(days);
                 let wday = (days + 4).rem_euclid(7); // 1970-01-01 = Thursday(4), Sunday=0
-                Ok(Value::Map(Rc::new(RefCell::new(vec![
-                    (Value::Str("year".into()), Value::Int(y)),
-                    (Value::Str("month".into()), Value::Int(m as i64)),
-                    (Value::Str("day".into()), Value::Int(d as i64)),
-                    (Value::Str("hour".into()), Value::Int(secs / 3600)),
-                    (Value::Str("min".into()), Value::Int((secs % 3600) / 60)),
-                    (Value::Str("sec".into()), Value::Int(secs % 60)),
-                    (Value::Str("wday".into()), Value::Int(wday)),
-                ]))))
+                Ok(Value::Map(Rc::new(RefCell::new(
+                    crate::value::MapStore::from_vec(vec![
+                        (Value::Str("year".into()), Value::Int(y)),
+                        (Value::Str("month".into()), Value::Int(m as i64)),
+                        (Value::Str("day".into()), Value::Int(d as i64)),
+                        (Value::Str("hour".into()), Value::Int(secs / 3600)),
+                        (Value::Str("min".into()), Value::Int((secs % 3600) / 60)),
+                        (Value::Str("sec".into()), Value::Int(secs % 60)),
+                        (Value::Str("wday".into()), Value::Int(wday)),
+                    ]),
+                ))))
             }
             "date_fmt" => {
                 let ts = match args.first() {
@@ -3790,23 +3827,24 @@ impl Interp {
                         }
                         let stdout = String::from_utf8_lossy(&so_raw).to_string();
                         let stderr = String::from_utf8_lossy(&se_raw).to_string();
-                        let m = Rc::new(RefCell::new(vec![
-                            (
-                                Value::Str("code".into()),
-                                Value::Int(if timed_out {
-                                    -1
-                                } else {
-                                    status.code().unwrap_or(-1) as i64
-                                }),
-                            ),
-                            (Value::Str("stdout".into()), Value::Str(stdout)),
-                            (Value::Str("stderr".into()), Value::Str(stderr)),
-                            (
-                                Value::Str("ok".into()),
-                                Value::Bool(!timed_out && status.success()),
-                            ),
-                        ]));
-                        Ok(Value::Map(m))
+                        Ok(Value::Map(Rc::new(RefCell::new(
+                            crate::value::MapStore::from_vec(vec![
+                                (
+                                    Value::Str("code".into()),
+                                    Value::Int(if timed_out {
+                                        -1
+                                    } else {
+                                        status.code().unwrap_or(-1) as i64
+                                    }),
+                                ),
+                                (Value::Str("stdout".into()), Value::Str(stdout)),
+                                (Value::Str("stderr".into()), Value::Str(stderr)),
+                                (
+                                    Value::Str("ok".into()),
+                                    Value::Bool(!timed_out && status.success()),
+                                ),
+                            ]),
+                        ))))
                     }
                     Err(e) => Err(Stress::new("missing", format!("run '{}': {}", prog, e))),
                 }
@@ -3849,15 +3887,14 @@ impl Interp {
             "recv_request" => {
                 // poll the shared request queue: {conn, method, path, body} or null
                 match crate::interp::recv_request() {
-                    Some((conn, method, path, body)) => {
-                        let m = Rc::new(RefCell::new(vec![
+                    Some((conn, method, path, body)) => Ok(Value::Map(Rc::new(RefCell::new(
+                        crate::value::MapStore::from_vec(vec![
                             (Value::Str("conn".into()), Value::Int(conn as i64)),
                             (Value::Str("method".into()), Value::Str(method)),
                             (Value::Str("path".into()), Value::Str(path)),
                             (Value::Str("body".into()), Value::Str(body)),
-                        ]));
-                        Ok(Value::Map(m))
-                    }
+                        ]),
+                    )))),
                     None => Ok(Value::Null),
                 }
             }
@@ -4303,14 +4340,11 @@ impl Interp {
                 )))),
                 "has" => {
                     let t = args.first().cloned().unwrap_or(Value::Null);
-                    Ok(Value::Bool(m.borrow().iter().any(|(k, _)| k.deep_eq(&t))))
+                    Ok(Value::Bool(m.borrow().position(&t).is_some()))
                 }
                 "del" => {
                     let t = args.first().cloned().unwrap_or(Value::Null);
-                    let mut b = m.borrow_mut();
-                    if let Some(pos) = b.iter().position(|(k, _)| k.deep_eq(&t)) {
-                        b.remove(pos);
-                    }
+                    m.borrow_mut().del(&t);
                     Ok(Value::Null)
                 }
                 "len" => Ok(Value::Int(m.borrow().len() as i64)),
@@ -5229,7 +5263,9 @@ pub fn json_parse(src: &str) -> Result<Value, String> {
                     let mut out: Vec<(Value, Value)> = Vec::new();
                     if self.peek() == Some('}') {
                         self.i += 1;
-                        return Ok(Value::Map(Rc::new(RefCell::new(out))));
+                        return Ok(Value::Map(Rc::new(RefCell::new(
+                            crate::value::MapStore::from_vec(out),
+                        ))));
                     }
                     loop {
                         let k = self.value()?;
@@ -5250,7 +5286,9 @@ pub fn json_parse(src: &str) -> Result<Value, String> {
                             _ => return Err("expected ',' or '}'".into()),
                         }
                     }
-                    Ok(Value::Map(Rc::new(RefCell::new(out))))
+                    Ok(Value::Map(Rc::new(RefCell::new(
+                        crate::value::MapStore::from_vec(out),
+                    ))))
                 }
                 '[' => {
                     self.i += 1;
