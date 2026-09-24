@@ -1,0 +1,31 @@
+# differential: S3 builtin coverage — time/process introspection (shape contracts)
+# Builtins whose VALUES are wall-clock dependent (unix_time, now, clock, memory,
+# argv) are pinned by type/range assertions only: no clock value is ever printed,
+# so both implementations produce byte-identical output. The epoch-scale bounds
+# double as sanity gates (a stuck clock or a mis-scaled float fails the proof).
+frame proof {
+    # unix_time: int seconds since epoch; now: float epoch seconds; clock: float
+    # monotonic seconds since process start.
+    assert(type(unix_time()) == "int", "unix_time is int")
+    assert(unix_time() > 1600000000, "unix_time is epoch-scale")
+    # now()/clock() are the SAME monotonic process timer (SPEC §22): only
+    # monotonicity-scale bounds are assertable; wall epoch is unix_time()'s job.
+    assert(type(now()) == "float", "now is float")
+    assert(now() >= 0.0, "now is non-negative")
+    assert(type(clock()) == "float", "clock is float")
+    assert(clock() >= 0.0, "clock is non-negative")
+    let drift = clock() - now()
+    assert(drift < 5.0 and drift > -5.0, "now is clock under a briefer name")
+
+    # memory: introspection map with documented keys, non-negative magnitudes
+    let m = memory()
+    assert(type(m) == "map", "memory is a map")
+    assert(m.arena_bytes >= 0, "arena bytes non-negative")
+
+    # argv: the proof runner and the harness pass no extra CLI arguments
+    assert(type(argv()) == "list", "argv is a list")
+    assert(len(argv()) == 0, "no CLI args under test runners")
+}
+main {
+    promote("time-shape: ok")
+}
