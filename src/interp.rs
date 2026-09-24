@@ -1115,7 +1115,9 @@ impl Interp {
                     },
                 }
             }
-            Expr::Binary(op, l, r) => {
+            Expr::Binary(op, l, r, bin_line) => {
+                // dx-r4: hard type errors from this expression locate here
+                self.cur_line = *bin_line;
                 // short-circuit
                 match op {
                     BinOp::And => {
@@ -1178,7 +1180,9 @@ impl Interp {
                 }
                 self.call_value(env, &cv, argvs)
             }
-            Expr::Index(t, i) => {
+            Expr::Index(t, i, idx_line) => {
+                // dx-r4: index errors locate at the bracket
+                self.cur_line = *idx_line;
                 let tv = self.eval(env, t)?;
                 let iv = self.eval(env, i)?;
                 match (&tv, &iv) {

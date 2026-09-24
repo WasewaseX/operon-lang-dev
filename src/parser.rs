@@ -1470,7 +1470,7 @@ impl Parser {
                         let val = self.parse_expr();
                         self.end_stmt();
                         match e {
-                            Expr::Index(t, i) => Some(Stmt::IndexAssign(*t, *i, None, val)),
+                            Expr::Index(t, i, _) => Some(Stmt::IndexAssign(*t, *i, None, val)),
                             Expr::Member(t, k) => Some(Stmt::MemberAssign(*t, k, None, val)),
                             other => {
                                 let line = self.line();
@@ -1501,7 +1501,7 @@ impl Parser {
                         let val = self.parse_expr();
                         self.end_stmt();
                         match e {
-                            Expr::Index(t, i) => Some(Stmt::IndexAssign(*t, *i, Some(op), val)),
+                            Expr::Index(t, i, _) => Some(Stmt::IndexAssign(*t, *i, Some(op), val)),
                             Expr::Member(t, k) => Some(Stmt::MemberAssign(*t, k, Some(op), val)),
                             other => {
                                 let line = self.line();
@@ -1711,7 +1711,7 @@ impl Parser {
             if is_or {
                 self.next();
                 let right = self.parse_and();
-                left = Expr::Binary(BinOp::Or, Box::new(left), Box::new(right));
+                left = Expr::Binary(BinOp::Or, Box::new(left), Box::new(right), self.line());
             } else {
                 break;
             }
@@ -1726,7 +1726,7 @@ impl Parser {
             if is_and {
                 self.next();
                 let right = self.parse_not();
-                left = Expr::Binary(BinOp::And, Box::new(left), Box::new(right));
+                left = Expr::Binary(BinOp::And, Box::new(left), Box::new(right), self.line());
             } else {
                 break;
             }
@@ -1757,9 +1757,10 @@ impl Parser {
                 _ => None,
             };
             if let Some(op) = op {
+                let bin_line = self.line();
                 self.next();
                 let right = self.parse_bitor();
-                left = Expr::Binary(op, Box::new(left), Box::new(right));
+                left = Expr::Binary(op, Box::new(left), Box::new(right), bin_line);
             } else {
                 break;
             }
@@ -1772,7 +1773,7 @@ impl Parser {
         while matches!(self.peek(), Tok::Pipe) {
             self.next();
             let right = self.parse_bitxor();
-            left = Expr::Binary(BinOp::BitOr, Box::new(left), Box::new(right));
+            left = Expr::Binary(BinOp::BitOr, Box::new(left), Box::new(right), self.line());
         }
         left
     }
@@ -1782,7 +1783,7 @@ impl Parser {
         while matches!(self.peek(), Tok::Caret) {
             self.next();
             let right = self.parse_bitand();
-            left = Expr::Binary(BinOp::BitXor, Box::new(left), Box::new(right));
+            left = Expr::Binary(BinOp::BitXor, Box::new(left), Box::new(right), self.line());
         }
         left
     }
@@ -1792,7 +1793,7 @@ impl Parser {
         while matches!(self.peek(), Tok::Amp) {
             self.next();
             let right = self.parse_shift();
-            left = Expr::Binary(BinOp::BitAnd, Box::new(left), Box::new(right));
+            left = Expr::Binary(BinOp::BitAnd, Box::new(left), Box::new(right), self.line());
         }
         left
     }
@@ -1806,9 +1807,10 @@ impl Parser {
                 _ => None,
             };
             if let Some(op) = op {
+                let bin_line = self.line();
                 self.next();
                 let right = self.parse_add();
-                left = Expr::Binary(op, Box::new(left), Box::new(right));
+                left = Expr::Binary(op, Box::new(left), Box::new(right), bin_line);
             } else {
                 break;
             }
@@ -1825,9 +1827,10 @@ impl Parser {
                 _ => None,
             };
             if let Some(op) = op {
+                let bin_line = self.line();
                 self.next();
                 let right = self.parse_mul();
-                left = Expr::Binary(op, Box::new(left), Box::new(right));
+                left = Expr::Binary(op, Box::new(left), Box::new(right), bin_line);
             } else {
                 break;
             }
@@ -1846,9 +1849,10 @@ impl Parser {
                 _ => None,
             };
             if let Some(op) = op {
+                let bin_line = self.line();
                 self.next();
                 let right = self.parse_unary();
-                left = Expr::Binary(op, Box::new(left), Box::new(right));
+                left = Expr::Binary(op, Box::new(left), Box::new(right), bin_line);
             } else {
                 break;
             }
@@ -1912,9 +1916,10 @@ impl Parser {
         // parse_unary so 2**-3 parses.
         let left = self.parse_postfix();
         if matches!(self.peek(), Tok::StarStar) {
+            let pow_line = self.line();
             self.next();
             let right = self.parse_unary();
-            return Expr::Binary(BinOp::Pow, Box::new(left), Box::new(right));
+            return Expr::Binary(BinOp::Pow, Box::new(left), Box::new(right), pow_line);
         }
         left
     }
@@ -1946,6 +1951,7 @@ impl Parser {
                     e = Expr::Call(Box::new(e), args, call_line);
                 }
                 Tok::LBrack => {
+                    let index_line = self.line();
                     self.next();
                     let idx = self.parse_expr();
                     if matches!(self.peek(), Tok::RBrack) {
@@ -1954,7 +1960,7 @@ impl Parser {
                         let line = self.line();
                         self.note(line, 4, "index bracket auto-closed");
                     }
-                    e = Expr::Index(Box::new(e), Box::new(idx));
+                    e = Expr::Index(Box::new(e), Box::new(idx), index_line);
                 }
                 Tok::Dot => {
                     self.next();
