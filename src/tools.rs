@@ -737,17 +737,11 @@ pub struct TestReport {
     pub failed: usize,
     pub failures: Vec<String>,
     pub notes: usize,
+    pub asserts: u64,
 }
 
 pub fn run_tests(paths: &[String], opts: &Opts, json: bool) -> TestReport {
-    let mut rep = TestReport {
-        files: 0,
-        proofs: 0,
-        passed: 0,
-        failed: 0,
-        failures: Vec::new(),
-        notes: 0,
-    };
+    let mut rep = TestReport { files: 0, proofs: 0, passed: 0, failed: 0, failures: Vec::new(), notes: 0, asserts: 0 };
     let mut total_asserts = 0u64;
     let mut files: Vec<String> = Vec::new();
     for p in paths {
@@ -811,6 +805,7 @@ pub fn run_tests(paths: &[String], opts: &Opts, json: bool) -> TestReport {
             }
         }
         total_asserts += l.interp.asserts_run;
+        rep.asserts = total_asserts;
     }
     if !json {
         println!(

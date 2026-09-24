@@ -397,7 +397,12 @@ operon version
 12. **Join deadline.** `join(id, timeout_ms?)` returns null and notes when the
     worker exceeds the deadline (the task stays joinable).
 13. **REPL.** `operon repl` — persistent-expression shell; expressions print
-    their value, definitions persist; `:quit` exits.
+    their value, definitions persist; `:quit` exits. Commands: `:help`,
+    `:load f.op` (execute a file into the session), `:proof` (run every
+    `frame proof` defined in the session against live state — a proof must
+    complete and exercise ≥1 assertion), `:proof f.op` (run a file's proofs),
+    `:genes`, `:vars`, `:reset`. Commands are recognized only at an empty
+    code buffer; inside an open block, `:` text is code.
 
 **Semantics pinning (2.1.1):** `%` follows the divisor's sign; `//` is floor
 division and always yields `int`; comparisons involving NaN are false;
