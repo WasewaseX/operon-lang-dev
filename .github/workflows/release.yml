@@ -48,7 +48,7 @@ jobs:
           ST="operon-${V}-${{ matrix.target }}"
           mkdir -p "$ST"
           cp target/release/operon "$ST/"
-          cp README.md LICENSE "$ST/"
+          cp README.md LICENSE TUTORIAL.md "$ST/"
           cp -r std examples "$ST/"
           tar czf "$ST.tar.gz" "$ST"
           sha256sum "$ST.tar.gz" > "$ST.tar.gz.sha256"
@@ -62,7 +62,7 @@ jobs:
           $ST = "operon-$V-${{ matrix.target }}"
           New-Item -ItemType Directory -Force -Path $ST | Out-Null
           Copy-Item target/release/operon.exe $ST/
-          Copy-Item README.md, LICENSE $ST/
+          Copy-Item README.md, LICENSE, TUTORIAL.md $ST/
           Copy-Item -Recurse std, examples $ST/
           Compress-Archive -Path $ST -DestinationPath "$ST.zip"
           $h = (Get-FileHash "$ST.zip" -Algorithm SHA256).Hash.ToLower()
