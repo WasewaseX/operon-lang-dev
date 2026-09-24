@@ -8,6 +8,8 @@ g++ -O2 -std=c++17 tests/smoke_codon.cpp build/codon_kernel.o -o /tmp/operon_smo
 /tmp/operon_smoke
 echo "[2/3] Operon proof suite (Rust core)"
 ./bin/operon test tests/
-echo "[3/3] Differential harness (Rust core vs Python oracle)"
+echo "[3/4] Differential harness (Rust core vs Python oracle)"
 python3 bootstrap/harness.py
+echo "[4/4] Oracle proof suite (the same frames on the second implementation)"
+python3 bootstrap/oracle.py test tests/
 echo "ALL GREEN"

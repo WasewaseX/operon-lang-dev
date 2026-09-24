@@ -138,18 +138,39 @@ def escape_str(s):
 def is_identlike(s):
     return bool(s) and (s[0].isalpha() or s[0] == "_") and all(c.isalnum() or c == "_" for c in s)
 
-def v_repr(v):
+def v_repr(v, _seen=None, _depth=0):
+    # reg-r4 (re-audit B-3): cycle-safe — a container containing itself
+    # renders the [...] / {...} marker at depth > 256 or on a re-entry
+    # (mirror of the Rust core; the old version recursed forever)
+    if _seen is None:
+        _seen = set()
+    if _depth > 256:
+        return "[...]"
     if v is None: return "null"
     if v is True: return "true"
     if v is False: return "false"
     if isinstance(v, int): return str(v)
     if isinstance(v, float): return fmt_float(v)
     if isinstance(v, str): return f'"{escape_str(v)}"'
-    if isinstance(v, list): return "[" + ", ".join(v_repr(x) for x in v) + "]"
+    if isinstance(v, list):
+        marker = id(v)
+        if marker in _seen:
+            return "[...]"
+        _seen.add(marker)
+        out = "[" + ", ".join(v_repr(x, _seen, _depth + 1) for x in v) + "]"
+        _seen.discard(marker)
+        return out
     if isinstance(v, dict):
-        return "{" + ", ".join(
-            (k if isinstance(k, str) and is_identlike(k) else v_repr(k)) + ": " + v_repr(val)
+        marker = id(v)
+        if marker in _seen:
+            return "{...}"
+        _seen.add(marker)
+        out = "{" + ", ".join(
+            (k if isinstance(k, str) and is_identlike(k) else v_repr(k, _seen, _depth + 1))
+            + ": " + v_repr(val, _seen, _depth + 1)
             for k, val in v.items()) + "}"
+        _seen.discard(marker)
+        return out
     if isinstance(v, Gene):
         return f"<gene {v.name}>" if v.name else "<gene lambda>"
     if isinstance(v, SeqObj):
@@ -185,7 +206,10 @@ def type_name(v):
     if isinstance(v, ObjInst): return "phenotype"
     return "native"
 
-def deep_eq(a, b):
+def deep_eq(a, b, _pairs=None):
+    # reg-r4: cycle-safe — a pair of containers already being compared is
+    # treated as equal (mirror of the Rust deep_eq's seen-pair set); the
+    # old version recursed forever on `cyc == cyc`
     if isinstance(a, bool) or isinstance(b, bool):
         return a is b
     if isinstance(a, (int, float)) and isinstance(b, (int, float)):
@@ -194,11 +218,23 @@ def deep_eq(a, b):
         if isinstance(a, (int, float)) and isinstance(b, (int, float)):
             return a == b
         return False
-    if isinstance(a, list):
-        return len(a) == len(b) and all(deep_eq(x, y) for x, y in zip(a, b))
-    if isinstance(a, dict):
-        if len(a) != len(b): return False
-        return all(any(deep_eq(k, k2) and deep_eq(v, v2) for k2, v2 in b.items()) for k, v in a.items())
+    if isinstance(a, (list, dict)):
+        if _pairs is None:
+            _pairs = set()
+        key = (id(a), id(b))
+        if key in _pairs:
+            return True  # already comparing this pair (cycle)
+        _pairs.add(key)
+        try:
+            if isinstance(a, list):
+                return len(a) == len(b) and all(
+                    deep_eq(x, y, _pairs) for x, y in zip(a, b))
+            if len(a) != len(b):
+                return False
+            return all(any(deep_eq(k, k2, _pairs) and deep_eq(v, v2, _pairs)
+                           for k2, v2 in b.items()) for k, v in a.items())
+        finally:
+            _pairs.discard(key)
     return a == b
 
 # ----------------------------------------------------------------------------
@@ -2105,8 +2141,14 @@ class Interp:
                     raise Stress("overflow", "int overflow in '+'")
                 return l + r
             if isinstance(l, str) and isinstance(r, str):
+                # reg-r4: concat ceiling parity with the Rust core — "exactly
+                # at the 512 MiB line" + concat must raise, not allocate 1 GiB
+                if len(l) + len(r) > 512 * 1024 * 1024:
+                    raise Stress("overflow", "string concat exceeds the 512 MiB ceiling")
                 return l + r
             if isinstance(l, list) and isinstance(r, list):
+                if len(l) + len(r) > 64 * 1024 * 1024:
+                    raise Stress("overflow", "list concat exceeds the 64M-element ceiling")
                 return l + r
             raise Stress("unfolded", f"cannot add {type_name(l)} and {type_name(r)}")
         if op in ("-", "*", "/", "//", "%"):
@@ -2217,6 +2259,20 @@ class Interp:
     # ---- calls
     def call_value(self, env, callee, args):
         if isinstance(callee, Gene):
+            if not callee.seq:
+                # reg-r4 (re-audit B-5): value-bound (higher-order) gene calls
+                # pass the toggle gate too — "the pair gates calls" is
+                # unqualified; the seq branch already gated, genes did not
+                gname = callee.name or "<lambda>"
+                for a, b, a_on in self.toggles:
+                    if a == gname or b == gname:
+                        this_is_a = a == gname
+                        active = (a_on and this_is_a) or ((not a_on) and (not this_is_a))
+                        if not active and not callee.acetylate:
+                            winner = a if a_on else b
+                            self.note(4, f"toggle repressed: '{gname}' is the inactive allele ('{winner}' is on)")
+                            return None
+                        break
             if callee.seq:
                 # reg-r3 (re-audit): sequences honor ALL creation gates —
                 # GRN veto, methylation, toggle — in call_gene_inner order
@@ -2232,6 +2288,18 @@ class Interp:
                     if lvl >= self.methyl_threshold:
                         self.note(4, f"methylation silences: sequence '{seq_name}' (level {lvl} >= threshold {self.methyl_threshold}) — call returns null")
                         return None
+                # reg-r4 (re-audit B-1): the toggle gate was missing here —
+                # a toggle-repressed sequence created via a value binding
+                # transcribed in the oracle while the Rust core refused it
+                for a, b, a_on in self.toggles:
+                    if a == seq_name or b == seq_name:
+                        this_is_a = a == seq_name
+                        active = (a_on and this_is_a) or ((not a_on) and (not this_is_a))
+                        if not active and not callee.acetylate:
+                            winner = a if a_on else b
+                            self.note(4, f"toggle repressed: sequence '{seq_name}' is the inactive allele ('{winner}' is on)")
+                            return None
+                        break
                 return SeqObj(self, callee, args)
             return self.call_gene(callee, args)
         self.note(4, f"called a {type_name(callee)} (not a gene); result null")
@@ -2240,7 +2308,19 @@ class Interp:
     def call_named(self, env, name, args):
         if name in BUILTIN_SYNONYMS:
             return self.builtin(env, BUILTIN_SYNONYMS[name], args)
-        # toggle bistability gate: the repressed allele refuses calls
+        # reg-r4 (re-audit B-4): gate ORDER is pinned SPEC-wide — RISC at the
+        # call site first, then the toggle gate (mirror of the Rust core:
+        # silencing wins over repression because it rewrites the callee).
+        # RISC silencing: redirect calls (acetylated genes are immune)
+        for frm, to in self.silences:
+            if frm == name:
+                target_gene = self.lookup(env, name)
+                immune = isinstance(target_gene, Gene) and target_gene.acetylate
+                if not immune:
+                    self.note(4, f"RISC: call to '{frm}' silenced → '{to}'")
+                    tgt = self.lookup(env, to)
+                    return self.call_value(env, tgt, args)
+        # toggle gate: the repressed allele refuses calls
         for a, b, a_on in self.toggles:
             if a == name or b == name:
                 this_is_a = a == name
@@ -2252,15 +2332,6 @@ class Interp:
                     self.note(4, f"toggle repressed: '{name}' is the inactive allele ('{winner}' is on)")
                     return None
                 break
-        # RISC silencing: redirect calls (acetylated genes are immune)
-        for frm, to in self.silences:
-            if frm == name:
-                target_gene = self.lookup(env, name)
-                immune = isinstance(target_gene, Gene) and target_gene.acetylate
-                if not immune:
-                    self.note(4, f"RISC: call to '{frm}' silenced → '{to}'")
-                    tgt = self.lookup(env, to)
-                    return self.call_value(env, tgt, args)
         tgt = self.lookup(env, name)
         if tgt is not None or self.find_env(env, name) is not None:
             return self.call_value(env, tgt, args)
@@ -2706,7 +2777,9 @@ class Interp:
             while i + 2 < len(s2):
                 b1, b2, b3 = bidx(s2[i]), bidx(s2[i+1]), bidx(s2[i+2])
                 if b1 < 0 or b2 < 0 or b3 < 0:
-                    acc += 90
+                    # reg-r4 (re-audit B-2): NEUTRAL 50, mirroring the kernel
+                    # (never reward biological nonsense, never punish ids)
+                    acc += 50
                 else:
                     w = USAGE[b1 * 16 + b2 * 4 + b3]
                     acc += 30 + w * 5
@@ -2999,8 +3072,29 @@ class Interp:
             callee = args[0] if args else None
             targs = args[1] if len(args) > 1 and isinstance(args[1], list) else []
             if isinstance(callee, Gene):
+                # reg-r4: SendValue depth ceiling mirror (Rust SEND_DEPTH_CAP
+                # = 100_000) — deep spawn payloads raise a catchable
+                # `overflow` stress exactly like the Rust serialization path
+                for _a in targs:
+                    _stack = [(_a, 1)]
+                    while _stack:
+                        _item, _d = _stack.pop()
+                        if _d > 100_000:
+                            raise Stress("overflow", "spawn payload exceeds the depth ceiling")
+                        if isinstance(_item, list):
+                            _stack.extend((x, _d + 1) for x in _item)
+                        elif isinstance(_item, dict):
+                            _stack.extend((x, _d + 1) for x in _item.values())
+                # reg-r4 (re-audit B-2): route through call_named like the
+                # Rust worker does — a direct call_gene bypasses the
+                # toggle/RISC/GRN/methyl gates ("a repressed allele stays
+                # repressed in worker cells", reg-r1's own contract)
                 try:
-                    result = self.call_gene(callee, targs)
+                    spawn_name = callee.name
+                    if spawn_name:
+                        result = self.call_named(env, spawn_name, targs)
+                    else:
+                        result = self.call_value(env, callee, targs)
                 except Stress as st:
                     result = {"kind": st.kind, "message": st.message}
                 self.next_id = getattr(self, "next_id", 0) + 1
@@ -3242,16 +3336,33 @@ class Interp:
         return None
 
     @staticmethod
-    def _json_str(v):
+    def _json_str(v, _seen=None, _depth=0):
+        # reg-r4: cycle-safe — repeated branch serializes as null, depth
+        # cap 512 (mirror of the Rust json_stringify_g)
+        if _seen is None:
+            _seen = set()
+        if _depth > 512:
+            return "null"
         if v is None: return "null"
         if v is True: return "true"
         if v is False: return "false"
         if isinstance(v, int): return str(v)
         if isinstance(v, float): return fmt_float(v)
         if isinstance(v, str): return _json.dumps(v)
-        if isinstance(v, list): return "[" + ",".join(Interp._json_str(x) for x in v) + "]"
-        if isinstance(v, dict):
-            return "{" + ",".join(_json.dumps(str(k) if not isinstance(k, str) else k) + ":" + Interp._json_str(val) for k, val in v.items()) + "}"
+        if isinstance(v, (list, dict)):
+            marker = id(v)
+            if marker in _seen:
+                return "null"
+            _seen.add(marker)
+            if isinstance(v, list):
+                out = "[" + ",".join(Interp._json_str(x, _seen, _depth + 1) for x in v) + "]"
+            else:
+                out = "{" + ",".join(
+                    _json.dumps(str(k) if not isinstance(k, str) else k) + ":"
+                    + Interp._json_str(val, _seen, _depth + 1)
+                    for k, val in v.items()) + "}"
+            _seen.discard(marker)
+            return out
         return _json.dumps(v_display(v))
 
     def construct_obj(self, p, args):
@@ -3619,6 +3730,12 @@ def main():
         for p in paths:
             if os.path.isdir(p):
                 for root, _, fns in os.walk(p):
+                    # reg-r4: adversarial red-team payloads are containment
+                    # expectations, not proof frames — the Rust runner skips
+                    # this directory too (parity; the walk used to crash on
+                    # one of the payloads)
+                    if "redteam" in root.replace(os.sep, "/"):
+                        continue
                     for fn in sorted(fns):
                         if fn.endswith(".op"):
                             files.append(os.path.join(root, fn))
@@ -3627,7 +3744,18 @@ def main():
         files.sort()
         files_t, proofs, passed, failed, failures = 0, 0, 0, 0, []
         for f in files:
-            it, stmts, proofs_l, frames = load_file(f, opts["cell"], opts["variant"], opts["rna"])
+            # reg-r4: a file that fails to LOAD is a suite failure, not a
+            # crash of the runner (the Rust runner records it and continues)
+            try:
+                it, stmts, proofs_l, frames = load_file(f, opts["cell"], opts["variant"], opts["rna"])
+            except RecursionError:
+                failed += 1
+                failures.append(f"{f}: load error: recursion limit (parser depth)")
+                continue
+            except Exception as ex:
+                failed += 1
+                failures.append(f"{f}: load error: {type(ex).__name__}: {ex}")
+                continue
             files_t += 1
             proofs += len(proofs_l)
             it.proof_mode = True
