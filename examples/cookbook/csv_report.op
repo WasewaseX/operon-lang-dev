@@ -1,0 +1,41 @@
+# ============================================================
+# CSV report  — cookbook #02
+# you already know: the csv module + a group-by aggregate + tabulate
+# teaches: std/csv quote-aware parsing, num() for numeric fields,
+#          maps for grouping, std/fmt for an ASCII table
+# run: operon run examples/cookbook/csv_report.op
+# expected output: examples/cookbook/expected/csv_report.out
+# verified by scripts/cookbook.sh on the Rust core AND the Python oracle
+# ============================================================
+use std/csv as cv
+use std/fmt as fm
+
+gene main() {
+    # one quoted field contains a comma and a doubled quote - RFC-4180 rules
+    let doc = "product,category,qty\n\"widget, small\",tools,3\nsprocket,tools,5\ngear,parts,2\nflange,parts,7"
+
+    let rows = cv.csv_parse(doc, ",")
+    promote("parsed {len(rows)} rows; row 1 product = {rows[1][0]}")
+
+    # CSV fields are STRINGS - convert the qty column with num()
+    # group qty by category (a map per category would work the same way)
+    let totals = {}
+    for i in range(1, len(rows)) {
+        let category = rows[i][1]
+        if not has(totals, category) {
+            totals[category] = 0
+        }
+        totals[category] = totals[category] + num(rows[i][2])
+    }
+
+    # fmt_table accepts map rows keyed by the headers
+    let report = []
+    for category in keys(totals) {
+        push(report, {"category": category, "total qty": totals[category]})
+    }
+    promote(fm.fmt_table(report, ["category", "total qty"]))
+
+    # csv round-trip: escape a field the way csv_escape would
+    let tricky = "widget, small"
+    promote("escaped: {cv.csv_escape(tricky, ",")}")
+}

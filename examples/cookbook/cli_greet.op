@@ -1,0 +1,44 @@
+# ============================================================
+# CLI arguments  — cookbook #04
+# you already know: argparse / clap — flags, values, subcommands
+# teaches: std/args parsing over a list of argv strings; argv() is
+#          the real command line, a demo list keeps the output fixed
+# run: operon run examples/cookbook/cli_greet.op
+# expected output: examples/cookbook/expected/cli_greet.out
+# verified by scripts/cookbook.sh on the Rust core AND the Python oracle
+# ============================================================
+use std/args as ar
+
+gene greet(argv_list) {
+    # convention: --flag boolean · --key value · --key=value attached ·
+    # single-dash -k is boolean only · bare words are positional
+    let loud = ar.args_flag(argv_list, "loud")
+    let name = ar.args_value(argv_list, "name", "world")
+    let target = ar.args_subcommand(argv_list)
+
+    let greeting = "hello, {name}"
+    if loud {
+        greeting = greeting.upper() + "!"
+    }
+    if target != null {
+        greeting = greeting + " (subcommand: {target})"
+    }
+    return greeting
+}
+
+gene main() {
+    # argv() is what the shell gave us — empty when run without arguments
+    promote("argv now: {argv()}")
+
+    # a fixed demo line keeps this example deterministic; to parse the real
+    # command line, pass argv() instead of demo:
+    let demo = ["greet", "--loud", "--name", "Ada", "deploy"]
+    promote("parsed: {greet(demo)}")
+
+    # same args, quiet form, attached value: --name=Grace
+    let quiet = ["greet", "--name=Grace"]
+    promote("parsed: {greet(quiet)}")
+
+    # unknown options are simply not there — check before you trust
+    promote("has --name? {ar.args_has(demo, "name")}  has --dry-run? {ar.args_has(demo, "dry-run")}")
+}

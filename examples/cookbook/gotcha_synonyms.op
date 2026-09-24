@@ -1,0 +1,40 @@
+# ============================================================
+# GOTCHA: synonym words are not variable names  — cookbook #16
+# you already know: some languages reserve weird identifiers too
+# teaches: words like off/on/yes/no/next/iter/each/type are aliases
+#          or keywords. The Total Grammar "repairs" `let off = 1`
+#          into `let false = 1` (with a note) instead of failing —
+#          so pick names that cannot collide: is_off, kinds, idx.
+# run: operon run examples/cookbook/gotcha_synonyms.op
+# expected output: examples/cookbook/expected/gotcha_synonyms.out
+# verified by scripts/cookbook.sh on the Rust core AND the Python oracle
+# ============================================================
+gene main() {
+    # `type` IS usable - as a call, not a name:
+    promote("type(5):      {type(5)}")
+    promote("type(\"s\"):   {type("s")}")
+    promote("type([]):     {type([])}")
+    let empty_map = {}
+    promote("type empty map: {type(empty_map)}")
+
+    # safe names for the concepts you actually mean:
+    let is_off = true
+    let kinds = ["unfolded", "missing", "overflow", "burned"]
+    let idx = 1
+    let next_step = "encode"
+
+    promote("is_off: {is_off}")
+    promote("kinds[{idx}]: {kinds[idx]}")
+    promote("next_step: {next_step}")
+
+    # what NOT to write (each repairs to a keyword/alias, with a note):
+    #   let off = 1      -> repaired to `let false = 1`
+    #   let on  = 2      -> repaired to `let true  = 2`
+    #   let next = 3     -> `next` is a keyword
+    #   let type = 4     -> collides with the type() builtin
+    #   gene show(...)   -> `show` is an alias of promote (prints!)
+    # the program still RUNS (Total Grammar never aborts) - but your
+    # variable silently became something else. --strict turns the note
+    # into a failure so CI catches it.
+    promote("rule of thumb: snake_case names never collide")
+}

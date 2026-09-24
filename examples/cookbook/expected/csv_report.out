@@ -1,0 +1,8 @@
+parsed 5 rows; row 1 product = widget, small
++----------+-----------+
+| category | total qty |
++----------+-----------+
+| tools    | 8         |
+| parts    | 9         |
++----------+-----------+
+escaped: "widget, small"

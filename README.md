@@ -65,6 +65,39 @@ against the toolchain. Then try `operon repl` — `:help` is your friend.
 
 ---
 
+## Cookbook — small real programs to steal from
+
+`examples/cookbook/` holds 18 runnable programs (14 everyday recipes + 4 gotcha tours),
+each ≤80 lines with a header that says what it teaches. Every output is deterministic
+and **verified by `bash scripts/cookbook.sh` on the Rust core AND the Python oracle** —
+an example that rots or diverges fails CI instead of lying to you.
+
+| program | you already know it as | teaches |
+|---|---|---|
+| [word_freq](examples/cookbook/word_freq.op) | `Counter(text.split()).most_common(3)` | maps as counters, `sort_by_key`, pad_left |
+| [csv_report](examples/cookbook/csv_report.op) | csv module + groupby + tabulate | quote-aware parsing, `num()` for fields, fmt_table |
+| [json_transform](examples/cookbook/json_transform.op) | `json.loads` + dict surgery | dot-path get, merge/pick/omit, flatten, brace-free JSON |
+| [cli_greet](examples/cookbook/cli_greet.op) | argparse / clap | flags, `--key=value`, subcommands via std/args |
+| [fsm_vending](examples/cookbook/fsm_vending.op) | a state machine as dict-of-dicts | transition tables, terminal-state reset |
+| [monte_carlo_pi](examples/cookbook/monte_carlo_pi.op) | random sampling on the unit square | deterministic LCG, float math, fmt_fixed |
+| [bank_account](examples/cookbook/bank_account.op) | a class + try/catch | guard clauses, `raise`, `stress/rescue` containment |
+| [text_stats](examples/cookbook/text_stats.op) | `wc -lwc` + longest word | words/chars/lines, running max, vowels via chars() |
+| [gradebook](examples/cookbook/gradebook.op) | pandas describe, minus the install | mean/median/stddev, group_by, top-score lookup |
+| [lru_cache](examples/cookbook/lru_cache.op) | `functools.lru_cache` | map + recency list, eviction, hit/miss counters |
+| [matrix_ops](examples/cookbook/matrix_ops.op) | nested-list matmul | transpose, dot products, row printing |
+| [primes](examples/cookbook/primes.op) | a sieve + Goldbach pairs | boolean-array sieves, list `contains` scans |
+| [roman](examples/cookbook/roman.op) | an encoder/decoder pair | parallel-table greedy encode, subtractive decode |
+| [caesar](examples/cookbook/caesar.op) | `str.translate` ROT13 | substitution tables from parallel strings, round-trips |
+| [gotcha_braces](examples/cookbook/gotcha_braces.op) | f-string escaping | every `{` interpolates; raw braces via `chr(123)`; no `\r` escape |
+| [gotcha_synonyms](examples/cookbook/gotcha_synonyms.op) | reserved words | `off/next/type/show…` repair to keywords/aliases — safe naming |
+| [gotcha_builtins_not_values](examples/cookbook/gotcha_builtins_not_values.op) | `print` is a value in Python | builtins read as null; wrap them in a gene |
+| [gotcha_division](examples/cookbook/gotcha_division.op) | Python `/` vs `//` vs `%` | floored modulo, cyclic indexing, money math |
+
+Run any of them: `operon run examples/cookbook/word_freq.op`. Re-verify all:
+`bash scripts/cookbook.sh`.
+
+---
+
 ## Total Grammar — the 4-rung ladder
 
 No `.op` file is ever rejected. Parse problems become **notes**:

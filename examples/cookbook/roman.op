@@ -1,0 +1,56 @@
+# ============================================================
+# Roman numerals  — cookbook #13
+# you already know: an encoder/decoder pair with lookup tables
+# teaches: ordered tables as parallel lists, greedy encoding,
+#          subtractive decoding with a lookahead
+# run: operon run examples/cookbook/roman.op
+# expected output: examples/cookbook/expected/roman.out
+# verified by scripts/cookbook.sh on the Rust core AND the Python oracle
+# ============================================================
+gene to_roman(n) {
+    let values = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1]
+    let glyphs = ["M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I"]
+    let out = ""
+    let rest = n
+    for i in range(0, len(values)) {
+        while rest >= values[i] {
+            out = out + glyphs[i]
+            rest = rest - values[i]
+        }
+    }
+    return out
+}
+
+gene glyph_value(c) {
+    if c == "M" { return 1000 }
+    if c == "D" { return 500 }
+    if c == "C" { return 100 }
+    if c == "L" { return 50 }
+    if c == "X" { return 10 }
+    if c == "V" { return 5 }
+    if c == "I" { return 1 }
+    return 0
+}
+
+gene from_roman(s) {
+    # walking right to left: a glyph smaller than the one on its right subtracts
+    let total = 0
+    let i = len(s) - 1
+    while i >= 0 {
+        let v = glyph_value(s.slice(i, i + 1))
+        if i + 1 < len(s) and v < glyph_value(s.slice(i + 1, i + 2)) {
+            total = total - v
+        } else {
+            total = total + v
+        }
+        i -= 1
+    }
+    return total
+}
+
+gene main() {
+    for n in [4, 9, 14, 40, 90, 2026] {
+        let r = to_roman(n)
+        promote("{n} -> {r} -> {from_roman(r)}")
+    }
+}
