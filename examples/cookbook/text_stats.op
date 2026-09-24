@@ -1,0 +1,52 @@
+# ============================================================
+# Text statistics  — cookbook #08
+# you already know: wc -lwc + a longest-word scan
+# teaches: splitting/iterating text, string methods, chars(),
+#          running max/sum accumulators
+# run: operon run examples/cookbook/text_stats.op
+# expected output: examples/cookbook/expected/text_stats.out
+# verified by scripts/cookbook.sh on the Rust core AND the Python oracle
+# ============================================================
+use std/strings as st
+
+gene main() {
+    let lines = [
+        "operon keeps programs honest",
+        "every value tells you its type",
+        "errors explain themselves"
+    ]
+
+    let total_words = 0
+    let total_chars = 0
+    let longest = ""
+    for line in lines {
+        let ws = st.words(line)
+        total_words += len(ws)
+        total_chars += len(line)
+        for w in ws {
+            if len(w) > len(longest) {
+                longest = w
+            }
+        }
+    }
+
+    promote("lines: {len(lines)}  words: {total_words}  chars: {total_chars}")
+    promote("longest word: {longest} ({len(longest)} chars)")
+    promote("title line: {st.title_case(lines[0])}")
+
+    # characters() level work: count vowels across everything
+    let vowels = 0
+    for line in lines {
+        for ch in st.chars(line) {
+            if "aeiou".contains(ch) {
+                vowels += 1
+            }
+        }
+    }
+    promote("vowels: {vowels}")
+
+    # pad a mini report column for alignment
+    for line in lines {
+        promote("{st.pad_right(st.words(line)[0], 8, ".")}| {len(line)} chars")
+    }
+}

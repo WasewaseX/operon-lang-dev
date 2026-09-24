@@ -9,7 +9,7 @@
 <body>
 <header>
   <a class="brand" href="../docs/index.html">Operon</a>
-  <span class="tag">playground — subset v2.0</span>
+  <span class="tag" id="subset-banner">playground subset</span>
   <nav>
     <a href="../docs/tour.html">tour</a>
     <a href="../docs/regulation.html">regulation</a>
@@ -20,22 +20,13 @@
   <section class="editor-pane">
     <div class="pane-head">
       <span>program.op</span>
-      <button id="run">Run <kbd>Ctrl</kbd>+<kbd>↵</kbd></button>
+      <span class="controls">
+        <select id="example" aria-label="example programs"></select>
+        <button id="share" title="copy a link that encodes this program">share</button>
+        <button id="run">Run <kbd>Ctrl</kbd>+<kbd>↵</kbd></button>
+      </span>
     </div>
-    <textarea id="src" spellcheck="false" rows="18">gene fib(n) {
-    if n &lt; 2 {
-        return n
-    }
-    return fib(n - 1) + fib(n - 2)
-}
-
-promote("fib(10) = {fib(10)}")
-
-let xs = [5, 3, 8]
-promote("sorted: {xs.sort()}")
-
-les typo = "repaired, not rejected"
-promote("wobble: {typo}")</textarea>
+    <textarea id="src" spellcheck="false" rows="18"></textarea>
   </section>
   <section class="out-pane">
     <div class="pane-head"><span>output</span><span id="score" class="score">100 · A</span></div>
@@ -45,10 +36,13 @@ promote("wobble: {typo}")</textarea>
   </section>
 </main>
 <footer>
-  <p>Playground subset v2.0 — the wobble ladder (4 rungs), genes, closures, lists, maps and
-     strings run here for real. The native Rust core adds splice variants, RNA-edit patches,
-     fate machines, regulate/toggle/repressilator, real OS threads and the full toolchain.</p>
+  <p>The playground subset runs the wobble ladder (4 rungs), genes, closures, lists, maps,
+     strings, and the JSON/CSV-free everyday builtins for real. Entries marked
+     <em>native core</em> use std modules or guard/raise semantics this page doesn't carry —
+     run them with <code>operon run</code> instead (see the
+     <a href="../README.md">README</a> and <a href="../STDLIB.md">STDLIB.md</a>).</p>
 </footer>
+<script src="examples.data.js"></script>
 <script src="app.js"></script>
 <script src="ui.js"></script>
 </body>

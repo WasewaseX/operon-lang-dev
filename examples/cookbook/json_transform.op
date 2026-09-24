@@ -1,0 +1,46 @@
+# ============================================================
+# JSON transform  — cookbook #03
+# you already know: json.loads + dict navigation + dict | overrides
+# teaches: std/json dot-path navigation, merge/pick/omit, flatten,
+#          and the chr(123)/chr(125) idiom for literal braces
+#          (a bare { in a string starts interpolation — gotcha!)
+# run: operon run examples/cookbook/json_transform.op
+# expected output: examples/cookbook/expected/json_transform.out
+# verified by scripts/cookbook.sh on the Rust core AND the Python oracle
+# ============================================================
+use std/json as js
+
+gene main() {
+    # build JSON text without literal braces: [LB]/[RB] become { } below
+    let pieces = [
+        "[LB]\"service\":\"api\",\"version\":2,",
+        "\"limits\":[LB]\"cpu\":4,\"mem\":8[RB],",
+        "\"tags\":[\"edge\",\"core\"],\"secret\":\"hunter2\"[RB]"
+    ]
+    let src = pieces.join("")
+    let cfg = json_parse(src.replace("[LB]", chr(123)).replace("[RB]", chr(125)))
+
+    # dot-path navigation: object steps by key, array steps by index
+    promote("service = {js.json_get(cfg, "service")}")
+    promote("limits.cpu = {js.json_get(cfg, "limits.cpu")}")
+    promote("tags.0 = {js.json_get(cfg, "tags.0")}")
+    promote("missing = {js.json_get(cfg, "limits.gpu")}")
+
+    # shallow merge, right side wins (same brace-free construction)
+    let ovr_text = "[LB]\"version\":3,\"region\":\"eu\"[RB]".replace("[LB]", chr(123)).replace("[RB]", chr(125))
+    let overrides = json_parse(ovr_text)
+    let merged = js.json_merge(cfg, overrides)
+    promote("merged version = {merged["version"]}, region = {merged["region"]}")
+
+    # reshape: keep only what the API may see
+    let public = js.json_omit(merged, ["secret"])
+    promote("public has secret? {has(public, "secret")}")
+
+    # flatten to dot-path scalars and count them
+    let flat = js.json_flatten(public)
+    promote("flat keys = {len(keys(flat))}")
+    promote("flat.limits.mem = {flat["limits.mem"]}")
+
+    # parse + re-serialize drops formatting whitespace
+    promote("compact = {js.json_compact(json_str(public))}")
+}

@@ -1,0 +1,36 @@
+# ============================================================
+# Monte Carlo pi  — cookbook #06
+# you already know: random.random() sampling on the unit square
+# teaches: a deterministic LCG (no wall clock — same output every
+#          run, on every core), float math, std/fmt formatting
+# run: operon run examples/cookbook/monte_carlo_pi.op
+# expected output: examples/cookbook/expected/monte_carlo_pi.out
+# verified by scripts/cookbook.sh on the Rust core AND the Python oracle
+# ============================================================
+use std/fmt as fm
+
+gene lcg(seed) {
+    # classic glibc-flavoured LCG; fits i64 with no overflow
+    return (seed * 1103515245 + 12345) % 2147483648
+}
+
+gene main() {
+    let n = 10000
+    let state = 42
+    let hits = 0
+
+    for i in range(0, n) {
+        # map the raw integer into [-1, 1) for x and y
+        state = lcg(state)
+        let x = state / 1073741824.0 - 1.0
+        state = lcg(state)
+        let y = state / 1073741824.0 - 1.0
+        if x * x + y * y <= 1.0 {
+            hits += 1
+        }
+    }
+
+    let pi = 4.0 * hits / n
+    promote("points: {n}  inside circle: {hits}")
+    promote("estimate: pi ~= {fm.fmt_fixed(pi, 4)}")
+}
