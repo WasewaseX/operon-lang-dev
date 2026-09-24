@@ -1,0 +1,17 @@
+# differential: guard arms — expectation TRUE runs body, FALSE runs fallback
+gene pick(n) guard (n > 0) else {
+    return "fallback"
+} {
+    return "body:{n}"
+}
+promote(pick(3))
+promote(pick(-3))
+promote(pick(0))
+# guard with float comparison and string condition
+gene classify(x) guard (x > 10.5) else {
+    return "small"
+} {
+    return "large"
+}
+promote(classify(10.0))
+promote(classify(11.0))

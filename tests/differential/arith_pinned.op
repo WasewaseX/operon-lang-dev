@@ -1,0 +1,15 @@
+# differential: semantics pinning — modulo sign, floor division, NaN, negatives
+promote(7 % 3)
+promote(-7 % 3)
+promote(7 % -3)
+promote(-7 % -3)
+promote(7 // 2)
+promote(-7 // 2)
+promote(7 // -2)
+let x = 0.0 / 1.0
+promote(x > 1)
+let neg = [1, 2, 3, 4, 5]
+promote(neg[-1])
+promote(neg[-3])
+promote(2 ** 10)
+promote(10 == 10.0)
