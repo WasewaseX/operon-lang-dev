@@ -177,6 +177,58 @@ operon-ls                                         # stdio LSP seed: diagnostics 
 operon version                                    # Operon 2.2.0 (rust-core, cpp-kernel) — banner matches SPEC 2.2.0
 ```
 
+## Install everywhere
+
+The one-liner installs the prebuilt binary for your platform (linux x64/arm64, macos
+x64/arm64, windows x64 msvc) plus `std/`, `operon-ls`, and the bundled examples:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/WasewaseX/operon-lang-dev/main/scripts/install.sh | sh
+```
+
+**With cargo-binstall** (no compiler needed — installs the release binary through cargo's own
+tooling). `[package.metadata.binstall]` ships in `Cargo.toml`; the URL and archive templates
+were verified against the real `v2.2.0` release assets and archive layout:
+
+```sh
+cargo binstall --git https://github.com/WasewaseX/operon-lang-dev operon
+# or, once the crate is published to crates.io:
+cargo binstall operon
+```
+
+**Homebrew** (community draft — the tap is the owner's to publish):
+
+```ruby
+# Formula/operon.rb in a tap repo (e.g. WasewaseX/homebrew-tap)
+class Operon < Formula
+  desc "The gene-expression language: Total Grammar toolchain, Rust core"
+  homepage "https://github.com/WasewaseX/operon-lang-dev"
+  version "2.2.0"
+  if OS.mac? && Hardware::CPU.arm?
+    url "https://github.com/WasewaseX/operon-lang-dev/releases/download/v#{version}/operon-#{version}-aarch64-apple-darwin.tar.gz"
+  elsif OS.mac?
+    url "https://github.com/WasewaseX/operon-lang-dev/releases/download/v#{version}/operon-#{version}-x86_64-apple-darwin.tar.gz"
+  elsif Hardware::CPU.intel?
+    url "https://github.com/WasewaseX/operon-lang-dev/releases/download/v#{version}/operon-#{version}-x86_64-unknown-linux-gnu.tar.gz"
+  else
+    url "https://github.com/WasewaseX/operon-lang-dev/releases/download/v#{version}/operon-#{version}-aarch64-unknown-linux-gnu.tar.gz"
+  end
+  def install
+    bin.install "operon"
+    (prefix/"std").install Dir["std/*"]
+  end
+end
+```
+
+**Windows**: the msvc archive installs with `tar -xf` (built into Windows 10+) or any unzip
+tool; winget/scoop manifests are welcome as community contributions — the release assets and
+SHA-256 checksums are already per-target, which is what both packagers need.
+
+Every recipe above reuses the same per-target release assets published by the tag pipeline
+(proof-gated), so "install everywhere" stays true on all five targets. Cargo from source is
+always available: `cargo install --git https://github.com/WasewaseX/operon-lang-dev operon`
+— wait for it to compile the same tree CI tests.
+
 ## Build from source
 
 ```console

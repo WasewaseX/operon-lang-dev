@@ -17,6 +17,20 @@ path = "src/lib.rs"
 name = "operon"
 path = "src/main.rs"
 
+# B5 (builder-B): cargo-binstall support. Inert metadata — cargo build ignores
+# [package.metadata]. Lets any user with cargo-binstall install the prebuilt
+# release binary without a compiler:
+#   cargo binstall --git https://github.com/WasewaseX/operon-lang-dev operon
+# Templates resolve against the GitHub release tagged v{version}; the Windows
+# archive is a zip, everything else is a tar.gz. Validated with --dry-run
+# against the real v2.2.0 assets (see README "Install everywhere").
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ version }-{ target }{ archive-suffix }"
+bin-dir = "{ name }-{ version }-{ target }/{ bin }{ binary-ext }"
+
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-fmt = "zip"
+
 [build-dependencies]
 cc = "1"
 
