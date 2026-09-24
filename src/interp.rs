@@ -1301,7 +1301,8 @@ impl Interp {
                 }
                 Ok(())
             }
-            Expr::Index(ct, it) => {
+            Expr::Index(ct, it, idx_line) => {
+                self.cur_line = *idx_line;
                 let tv = self.eval(env, ct)?;
                 let iv = self.eval(env, it)?;
                 match (&tv, &iv) {
