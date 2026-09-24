@@ -37,7 +37,7 @@ jobs:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v4.2.2 (SHA-pinned, sec-r1)
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable (SHA-pinned, D-6/sec-r5)
         with:
           targets: ${{ matrix.target }}
 
@@ -83,7 +83,7 @@ jobs:
           "ASSET=$ST.zip" | Out-File -Encoding ascii -Append $env:GITHUB_ENV
 
       - name: Attach to GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2 (SHA-pinned, D-6/sec-r5)
         with:
           files: |
             ${{ env.ASSET }}

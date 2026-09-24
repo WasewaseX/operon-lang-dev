@@ -1,0 +1,19 @@
+# sec-r5 F-8: TOCTOU symlink-swap write escape. The flipper (driven by
+# redteam.sh) races this payload's writes: the link inside the granted
+# dir flips between an in-grant file and an outside canary. Post-open fd
+# verification means the canary is NEVER written (its content stays
+# pristine); raced writes raise caught interference stress instead.
+gene main() {
+    let ok = 0;
+    let denied = 0;
+    for i in range(2000) {
+        stress {
+            write_file("tests/redteam/rt_toctou_link", "data-" + str(i));
+            ok = ok + 1;
+        } rescue (e) {
+            denied = denied + 1;
+        }
+    }
+    print("writes-ok: " + str(ok) + " denied: " + str(denied));
+    print("p11h-contained");
+}
