@@ -1,14 +1,12 @@
 # ============================================================
 # Caesar cipher  — cookbook #14
 # you already know: ROT13 via str.translate / a substitution map
-# teaches: building translation tables from parallel strings,
-#          has()-first map access, case handling without char codes
+# teaches: building translation tables from parallel strings, has()-first
+#          map access, case handling without char codes, char walk via slice
 # run: operon run examples/cookbook/caesar.op
 # expected output: examples/cookbook/expected/caesar.out
 # verified by scripts/cookbook.sh on the Rust core AND the Python oracle
 # ============================================================
-use std/strings as st
-
 gene shift_table(alphabet, places) {
     # build alphabet -> shifted-alphabet as a map, no char codes needed
     let cut = places % len(alphabet)
@@ -22,7 +20,8 @@ gene shift_table(alphabet, places) {
 
 gene substitute(text, table) {
     let out = ""
-    for ch in st.chars(text) {
+    for i in range(0, len(text)) {
+        let ch = text.slice(i, i + 1)
         if has(table, ch) {
             out = out + table[ch]
         } else {

@@ -32,6 +32,7 @@ gene main() {
     #   let on  = 2      -> repaired to `let true  = 2`
     #   let next = 3     -> `next` is a keyword
     #   let type = 4     -> collides with the type() builtin
+    #   let state = 5    -> `state` is a keyword (fate machines)
     #   gene show(...)   -> `show` is an alias of promote (prints!)
     # the program still RUNS (Total Grammar never aborts) - but your
     # variable silently became something else. --strict turns the note
