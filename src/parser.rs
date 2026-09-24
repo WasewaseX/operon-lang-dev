@@ -795,6 +795,9 @@ impl Parser {
                 self.next();
                 let root = self.expect_ident()?;
                 let mut variants = Vec::new();
+                // T2c: marks collected before a 'variant' keyword apply to
+                // that variant (same grammar as gene definitions).
+                let mut pending_marks: Vec<String> = Vec::new();
                 if matches!(self.peek(), Tok::LBrace) {
                     self.next();
                     loop {
@@ -802,12 +805,22 @@ impl Parser {
                         match self.peek().clone() {
                             Tok::RBrace => {
                                 self.next();
+                                if !pending_marks.is_empty() {
+                                    self.note(self.line(), 4, "mark must precede 'variant' in splice block; skipped");
+                                }
                                 break;
                             }
                             Tok::Eof => {
                                 let line = self.line();
                                 self.note(line, 4, "splice block auto-closed");
                                 break;
+                            }
+                            Tok::Mark(m) => {
+                                let line = self.line();
+                                self.next();
+                                if let Some(r) = self.repair_mark(m, line) {
+                                    pending_marks.push(r);
+                                }
                             }
                             Tok::Ident(w)
                                 if w == "variant" || synonym(&w) == Some("variant") || crate::ffi::edit_distance(&w, "variant") <= 1 =>
@@ -818,6 +831,14 @@ impl Parser {
                                 }
                                 self.next();
                                 let vname = self.expect_ident().unwrap_or_else(|| "v".into());
+                                // T2c: drain pending marks into the variant's
+                                // GeneDef — @m6a gives the variant selection
+                                // priority (choose_variant step 3); @acetylate
+                                // and @methylate ride on the resolved binding.
+                                let vmarks = std::mem::take(&mut pending_marks);
+                                let v_ac = vmarks.iter().any(|m| m == "acetylate");
+                                let v_me = vmarks.iter().any(|m| m == "methylate");
+                                let v_m6 = vmarks.iter().any(|m| m == "m6a");
                                 // optional parameter list on variants
                                 let mut params: Vec<(String, Option<Expr>)> = Vec::new();
                                 if matches!(self.peek(), Tok::LParen) {
@@ -857,9 +878,9 @@ impl Parser {
                                         params,
                                         guard: None,
                                         body,
-                                        acetylate: false,
-                                        methylate: false,
-                                        m6a: false,
+                                        acetylate: v_ac,
+                                        methylate: v_me,
+                                        m6a: v_m6,
                                         seq: false,
                                     }),
                                 ));

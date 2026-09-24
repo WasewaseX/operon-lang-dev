@@ -724,20 +724,43 @@ class P:
             self.next()
             root = self.ident()
             variants = []
+            pending_marks = []  # T2c: marks before 'variant' apply to that variant
             if self.peek() == ("SYM", "{", self.peek()[2]):
                 self.next()
                 while True:
                     self.eat_nl()
                     t = self.peek()
                     if t[0] == "SYM" and t[1] == "}":
-                        self.next(); break
+                        self.next()
+                        if pending_marks:
+                            self.note(t[2], 4, "mark must precede 'variant' in splice block; skipped")
+                            pending_marks = []
+                        break
                     if t[0] == "EOF":
                         break
+                    if t[0] == "MARK":
+                        m = self.next()[1]
+                        if m in MARKS:
+                            pending_marks.append(m)
+                        else:
+                            wk = None
+                            for k in MARKS:
+                                if edit_distance(m, k) <= (1 if len(m) <= 4 else 2):
+                                    self.note(t[2], 3, f"wobble: '@{m}' repaired to '@{k}'")
+                                    wk = k
+                                    break
+                            if wk:
+                                pending_marks.append(wk)
+                            else:
+                                self.note(t[2], 4, f"unknown mark '@{m}' skipped")
+                        continue
                     if t[0] == "IDENT" and (t[1] == "variant" or edit_distance(t[1], "variant") <= 1):
                         if t[1] != "variant":
                             self.note(t[2], 3, f"wobble: '{t[1]}' repaired to 'variant'")
                         self.next()
                         vname = self.ident()
+                        vmarks = pending_marks
+                        pending_marks = []
                         vparams = []
                         if self.peek() == ("SYM", "(", self.peek()[2]):
                             self.next()
@@ -760,8 +783,11 @@ class P:
                                 if self.pos == before:
                                     self.note(t2[2], 4, "unclosed variant parameter list; auto-closed")
                                     break
-                        variants.append((vname, vparams, self.block()))
+                        variants.append((vname, vparams, self.block(), vmarks))
                     else:
+                        if pending_marks:
+                            self.note(t[2], 4, "mark must precede 'variant' in splice block; skipped")
+                            pending_marks = []
                         self.note(t[2], 4, "unexpected token in splice block; skipped")
                         self.next()
             return ("splice", root, variants)
@@ -1840,9 +1866,10 @@ class Interp:
             _, root, variants = s
             chosen = self.choose_variant(root, variants)
             if chosen:
-                vname, vparams, body = chosen
+                vname, vparams, body, vmarks = chosen
                 self.note(1, f"splice '{root}' → variant '{vname}' active")
-                g = Gene(root, vparams, None, body)
+                g = Gene(root, vparams, None, body,
+                         ac="acetylate" in vmarks, me="methylate" in vmarks, m6="m6a" in vmarks)
                 if root not in self.defined_genes:
                     self.defined_genes.append(root)
                 env[root] = g
@@ -1876,14 +1903,19 @@ class Interp:
             return None
         cv = self.cell.get(f"variant.{root}")
         if cv:
-            for vn, body in variants:
+            for vn, vp, b, mk in variants:
                 if vn == cv:
-                    return (vn, body)
+                    return (vn, vp, b, mk)
         cv = self.cell.get("cli.variant")
         if cv:
-            for vn, body in variants:
+            for vn, vp, b, mk in variants:
                 if vn == cv:
-                    return (vn, body)
+                    return (vn, vp, b, mk)
+        # 3. m6a-marked variant (T2c: mirrors the Rust core)
+        for vn, vp, b, mk in variants:
+            if "m6a" in mk:
+                return (vn, vp, b, mk)
+        # 4. first declared
         return variants[0]
 
     # ---- expressions
@@ -3182,7 +3214,7 @@ def collect_structure(stmts):
                 if s[1].guard:
                     walk(s[1].guard[1])
             elif s[0] == "splice":
-                for _, _vp, vb in s[2]:
+                for _, _vp, vb, _mk in s[2]:
                     walk(vb)
     walk(stmts)
     return proofs, frames, exports, tad_exports, tad_members, ires

@@ -910,6 +910,16 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
             out.push_str("{\n");
             for (vn, d) in &sp.variants {
                 out.push_str(&indent(ind + 1));
+                // T2c round-trip: variant marks must survive fmt
+                if d.m6a {
+                    out.push_str("@m6a ");
+                }
+                if d.methylate {
+                    out.push_str("@methylate ");
+                }
+                if d.acetylate {
+                    out.push_str("@acetylate ");
+                }
                 // round-trip variant params (retired the SPEC §11 build caveat)
                 if d.params.is_empty() {
                     out.push_str(&format!("variant {} ", vn));
