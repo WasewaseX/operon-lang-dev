@@ -1608,17 +1608,53 @@ impl Parser {
     }
 
     fn parse_unary(&mut self) -> Expr {
+        // unary chains (`------x` ×1M) recurse natively — same depth cap as
+        // paren/list nesting (S4 NEW-4)
+        if self.depth >= 4096 {
+            let line = self.line();
+            self.note(line, 4, "expression nested deeper than 4096; truncated");
+            self.skip_to_stmt_end();
+            return Expr::Null;
+        }
         if matches!(self.peek(), Tok::Minus) {
             self.next();
+            self.depth += 1;
             let e = self.parse_unary();
+            self.depth -= 1;
             return Expr::Unary(UnOp::Neg, Box::new(e));
         }
         if matches!(self.peek(), Tok::Tilde) {
             self.next();
+            self.depth += 1;
             let e = self.parse_unary();
+            self.depth -= 1;
             return Expr::Unary(UnOp::BitNot, Box::new(e));
         }
         self.parse_pow()
+    }
+
+    /// Consume tokens up to (and including) the next statement terminator,
+    /// used when a depth cap truncates a pathological expression.
+    fn skip_to_stmt_end(&mut self) {
+        let mut depth = 0usize;
+        while self.pos < self.toks.len() {
+            match self.toks[self.pos].0 {
+                Tok::LParen | Tok::LBrack | Tok::LBrace => depth += 1,
+                Tok::RParen | Tok::RBrack | Tok::RBrace => {
+                    if depth == 0 {
+                        return; // let the caller see the closing delimiter
+                    }
+                    depth -= 1;
+                }
+                Tok::Newline | Tok::Semi if depth == 0 => {
+                    self.pos += 1;
+                    return;
+                }
+                Tok::Eof => return,
+                _ => {}
+            }
+            self.pos += 1;
+        }
     }
 
     fn parse_pow(&mut self) -> Expr {
@@ -1912,6 +1948,25 @@ impl Parser {
     }
 
     fn parse_map_literal(&mut self) -> Expr {
+        if self.depth >= 4096 {
+            let line = self.line();
+            self.note(line, 4, "expression nested deeper than 4096; truncated");
+            let mut bal = 0usize;
+            while self.pos < self.toks.len() {
+                match self.toks[self.pos].0 {
+                    Tok::LBrace => bal += 1,
+                    Tok::RBrace => {
+                        bal -= 1;
+                        self.pos += 1;
+                        if bal == 0 { break; }
+                    }
+                    _ => {}
+                }
+                self.pos += 1;
+            }
+            return Expr::Map(Vec::new());
+        }
+        self.depth += 1;
         self.next(); // {
         let mut pairs: Vec<(Expr, Expr)> = Vec::new();
         loop {

@@ -10,7 +10,15 @@ set -u
 cd "$(dirname "$0")/.."
 DIR="tests/redteam"
 TMP=$(mktemp -d)
-trap 'rm -rf "$TMP"' EXIT
+trap 'rm -rf "$TMP"; rm -f "$DIR/rt_evil_link" "$DIR/rt_wlink"; rm -rf "$DIR/rt_evildir" /tmp/redteam-out-escape' EXIT
+
+# recreate the adversarial symlinks (runtime fixtures, never committed):
+# rt_evil_link → /etc/passwd (read escape), rt_wlink → /tmp/redteam-out-escape
+# (write escape). If a run CREATES the escape target, the suite fails below.
+ln -sf /etc/passwd "$DIR/rt_evil_link"
+ln -sf /tmp/redteam-out-escape "$DIR/rt_wlink"
+mkdir -p "$DIR/rt_evildir" && ln -sf /etc/hostname "$DIR/rt_evildir/hostname"
+rm -rf /tmp/redteam-out-escape
 pass=0; fail=0; failed_files=()
 
 run_one() {
@@ -54,6 +62,11 @@ for f in "$DIR"/rt_p*.op; do
 done
 
 echo
+if [ -e /tmp/redteam-out-escape ]; then
+    echo "ESCAPE: /tmp/redteam-out-escape was created — sandbox breached"
+    fail=$((fail+1))
+fi
+rm -f "$DIR/rt_evil_link" "$DIR/rt_wlink"; rm -rf "$DIR/rt_evildir"
 echo "redteam: $pass contained, $fail breached"
 if [ $fail -gt 0 ]; then
     printf '  %s\n' "${failed_files[@]}"
