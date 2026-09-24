@@ -609,6 +609,12 @@ fn repl() {
         }
     };
     l.interp.proof_mode = false;
+    // sec-r3 (re-audit #9): the REPL shares the run-wide fuel pool too —
+    // without it each spawned worker got its own full 200M budget, the
+    // spawn-budget multiplication rt_p2e closed for `run` (SPEC §9b)
+    l.interp.fuel_pool = Some(std::sync::Arc::new(std::sync::atomic::AtomicI64::new(
+        500_000_000,
+    )));
     // every executed chunk is kept so `:proof` can replay the session's
     // proof frames against the live interpreter state
     let mut session = String::new();

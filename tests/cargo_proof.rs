@@ -43,8 +43,18 @@ fn proof_suite_is_green() {
         stderr
     );
     // The suite must not be vacuous: it has to actually run files and proofs.
+    // (sec-r3: digit-guarded anchors — a bare "0 proof(s)" substring also
+    // matches "30 proof(s)" and false-failed the gate since the suite grew
+    // past 9 proofs. The summary format is
+    //   "{n} file(s), {p} proof(s): {x} passed, {y} failed ({z} assertion(s) exercised)"
+    // so ", 0 proof(s):" can only match when p == 0, and "(0 assertion"
+    // only when z == 0 — "(30 assertion" does not contain "(0 assertion".)
     assert!(
-        !stdout.contains("0 proof(s)"),
+        !stdout.contains(", 0 proof(s):"),
         "proof suite ran zero proofs — the gate is vacuous:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("(0 assertion"),
+        "proof suite exercised zero assertions — the gate is vacuous:\n{stdout}"
     );
 }

@@ -6,7 +6,7 @@ use crate::value::{key_scalar, SeqState, Stress, Value};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::{mpsc, Arc};
 
 pub struct Env {
@@ -237,6 +237,8 @@ pub const ENHANCE_DELTA: f64 = 0.25;
 
 pub struct Interp {
     pub notes: Vec<Note>,
+    /// sec-r3: notes suppressed past the cap (surfaced once).
+    pub notes_dropped: u64,
     pub cell: HashMap<String, String>,
     pub cell_entry: Option<String>,
     pub base_dir: Option<String>,
@@ -256,6 +258,15 @@ pub struct Interp {
     /// T2d: manual-mode tick counter — drives the level oscillation formula.
     pub repressi_tick: u64,
     pub repressi_atomic: Option<Arc<AtomicU64>>,
+    /// sec-r3: cancellable timer flag — repressi_start/repressilator share
+    /// ONE timer thread; the previous one is flagged off before a new spawn
+    /// (no permanent thread-budget drain).
+    pub repressi_timer_stop: Option<Arc<AtomicBool>>,
+    /// sec-r3: memoized ring state — (tick, levels). repressi_state()
+    /// integrates incrementally from here instead of re-folding O(tick)
+    /// from init on every read (the re-audit's CPU-burn finding), with the
+    /// per-tick work charged as fuel.
+    pub repressi_cache: std::cell::RefCell<(u64, Vec<f64>)>,
     pub ires: Vec<String>,
     pub enhanced: Vec<String>,
     pub defined_genes: Vec<String>,
@@ -305,6 +316,7 @@ impl Interp {
     pub fn new() -> Interp {
         Interp {
             notes: Vec::new(),
+            notes_dropped: 0,
             cell: HashMap::new(),
             cell_entry: None,
             base_dir: None,
@@ -320,6 +332,8 @@ impl Interp {
             repressi_i: 0,
             repressi_tick: 0,
             repressi_atomic: None,
+            repressi_timer_stop: None,
+            repressi_cache: std::cell::RefCell::new((0, Vec::new())),
             ires: Vec::new(),
             enhanced: Vec::new(),
             defined_genes: Vec::new(),
@@ -354,6 +368,21 @@ impl Interp {
     }
 
     pub fn note(&mut self, line: usize, rung: u8, msg: impl Into<String>) {
+        // sec-r3 (re-audit #4): unbounded note growth bypassed the 2 GiB
+        // allocation contract (1.8 GB of stderr observed from a methylate
+        // loop). Past the cap, further notes are counted, not stored.
+        const NOTE_CAP: usize = 10_000;
+        if self.notes.len() >= NOTE_CAP {
+            self.notes_dropped += 1;
+            if self.notes_dropped == 1 {
+                self.notes.push(Note {
+                    line,
+                    rung: 4,
+                    message: "note cap (10000) reached — further notes suppressed".into(),
+                });
+            }
+            return;
+        }
         self.notes.push(Note {
             line,
             rung,
@@ -865,15 +894,27 @@ impl Interp {
                         let counter = Arc::new(AtomicU64::new(0));
                         let c2 = counter.clone();
                         let ms = (*sec * 1000.0).clamp(1.0, 60_000.0) as u64;
+                        // sec-r3: one SHARED cancellable timer per interp — the
+                        // previous timer is flagged off before a new spawn, so
+                        // repeated repressilator declarations cannot drain the
+                        // thread budget with orphaned sleeper threads.
+                        if let Some(flag) = self.repressi_timer_stop.take() {
+                            flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                        }
+                        let stop = Arc::new(AtomicBool::new(false));
+                        let stop2 = stop.clone();
                         // timer goes through the thread budget (S4 NEW-5):
                         // capped, guarded, and failure is a note — never a
                         // bare uncapped spawn
-                        match crate::genes::spawn_worker(move || loop {
-                            std::thread::sleep(std::time::Duration::from_millis(ms));
-                            c2.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                        match crate::genes::spawn_worker(move || {
+                            while !stop2.load(std::sync::atomic::Ordering::SeqCst) {
+                                std::thread::sleep(std::time::Duration::from_millis(ms));
+                                c2.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                            }
                         }) {
                             Ok(()) => {
                                 self.repressi_atomic = Some(counter);
+                                self.repressi_timer_stop = Some(stop);
                                 self.note(
                                     0,
                                     1,
@@ -1779,7 +1820,7 @@ impl Interp {
     /// T2e: an `enhance`d gene lowers its activating thresholds by
     /// ENHANCE_DELTA — a super-enhancer fires where an unenhanced gene
     /// stays gated.
-    fn grn_veto(&self, name: &str) -> Option<String> {
+    fn grn_veto(&mut self, name: &str) -> Option<String> {
         if self.grn_edges.is_empty() {
             return None;
         }
@@ -1795,7 +1836,16 @@ impl Interp {
             None => self.repressi_tick,
         };
         let mut veto: Option<String> = None;
-        for e in self.grn_edges.iter().filter(|e| e.to == name) {
+        // sec-r3: clone the matching edges — the ring-overlay path mutates
+        // self (fuel-charged cache), which cannot borrow grn_edges at the
+        // same time. Edge counts are tiny; a clone per veto check is noise.
+        let edges: Vec<RegEdge> = self
+            .grn_edges
+            .iter()
+            .filter(|e| e.to == name)
+            .cloned()
+            .collect();
+        for e in &edges {
             if veto.is_some() {
                 break;
             }
@@ -1804,7 +1854,7 @@ impl Interp {
                 None => {
                     if ring_len > 0 {
                         if let Some(idx) = self.repressi_ring.iter().position(|r| r == &e.from) {
-                            crate::interp::repressilator_gate_level(ring_len, tick, idx)
+                            self.ring_gate_level(ring_len, tick, idx).unwrap_or(0.0)
                         } else {
                             0.0
                         }
@@ -1838,6 +1888,78 @@ impl Interp {
             }
         }
         veto
+    }
+
+    /// sec-r3: cached, fuel-charged ring levels. Integrates incrementally
+    /// from the memoized state — bit-identical values to folding from init
+    /// (identical per-tick operation sequence via `repressilator_step`),
+    /// but O(new ticks) per read instead of O(total ticks), with the
+    /// integrated work charged as fuel (re-audit finding #2: 1000 reads at
+    /// tick 200k cost 80 s of uncharged CPU; now it drains the step budget
+    /// like any other work).
+    fn ring_advance(&mut self, n: usize, tick: u64) -> Result<Vec<f64>, Stress> {
+        const FUEL_PER_TICK: u64 = 20; // one step per Euler substep
+        let (cached_tick, cached_levels) = {
+            let c = self.repressi_cache.borrow();
+            let (t, v) = &*c;
+            if v.len() == n && *t <= tick {
+                (*t, v.clone())
+            } else {
+                // ring resized or clock went backwards: rebuild from init
+                (u64::MAX, Vec::new())
+            }
+        };
+        let levels = if cached_tick == u64::MAX {
+            self.steps = self
+                .steps
+                .saturating_add(tick.saturating_mul(FUEL_PER_TICK));
+            if self.steps > self.step_budget {
+                return Err(Stress::new(
+                    "overflow",
+                    "step budget exhausted (repressilator fold)",
+                ));
+            }
+            repressilator_levels(n, tick)
+        } else if cached_tick == tick {
+            cached_levels
+        } else {
+            let new_ticks = tick - cached_tick;
+            self.steps = self
+                .steps
+                .saturating_add(new_ticks.saturating_mul(FUEL_PER_TICK));
+            if self.steps > self.step_budget {
+                return Err(Stress::new(
+                    "overflow",
+                    "step budget exhausted (repressilator fold)",
+                ));
+            }
+            let mut lv = cached_levels;
+            for _ in 0..new_ticks {
+                lv = repressilator_step(lv);
+            }
+            lv
+        };
+        if let Some(pool) = &self.fuel_pool {
+            // ring reads pool with the run-wide budget like sleep does
+            let left = pool.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+            if left <= 1 {
+                return Err(Stress::new(
+                    "overflow",
+                    "run-wide step budget exhausted (repressilator)",
+                ));
+            }
+        }
+        *self.repressi_cache.borrow_mut() = (tick, levels.clone());
+        Ok(levels)
+    }
+
+    /// Normalized ring level for a GRN gate (cached, fuel-charged path).
+    fn ring_gate_level(&mut self, n: usize, tick: u64, node_index: usize) -> Result<f64, Stress> {
+        const ALPHA: f64 = 10.0;
+        let levels = self.ring_advance(n, tick)?;
+        let raw = levels[node_index.min(n.saturating_sub(1))];
+        let norm = raw / ALPHA;
+        Ok(if norm > 1.0 { 1.0 } else { norm })
     }
 
     fn call_gene_inner(
@@ -2469,7 +2591,10 @@ impl Interp {
                 // sec-r2 (audit C-11): process exit is a capability, not a
                 // builtin right. An ungranted exit kills the test runner,
                 // the REPL, the LSP — the host — so default-deny applies.
-                if self.caps.enabled && !self.caps.exit_allowed {
+                // sec-r3: decoupled from `enabled` — an embedder that turns
+                // the sandbox off wholesale must still grant exit explicitly
+                // (only Caps::allow_all() implies it).
+                if !self.caps.exit_allowed {
                     self.note(self.cur_line,
                         4,
                         "exit denied: capability 'exit' not granted (grant with --allow-exit or .cell allow.exit = true)",
@@ -2634,6 +2759,11 @@ impl Interp {
             "methyl" => {
                 let k = args.first().map(|v| v.display()).unwrap_or_default();
                 let d = args.get(1).cloned().unwrap_or(Value::Null);
+                // sec-r3 (re-audit #15): capability grants are the host's
+                // business, not the sandboxed program's — redact them
+                if k.starts_with("allow.") {
+                    return Ok(d);
+                }
                 Ok(match self.cell.get(&k) {
                     Some(v) => {
                         if v == "true" {
@@ -2657,37 +2787,46 @@ impl Interp {
                 // level += 1, gate applies at the NEXT call. Returns the
                 // gene's new level as an Int.
                 let k = args.first().map(|v| v.display()).unwrap_or_default();
+                // sec-r3 (re-audit #4): the map + its note are allocations —
+                // charge them against the 2 GiB ceiling like every other
+                // growth; ungranted note spam honors methylate.quiet
+                mem_charge((k.len() + 64) as u64)?;
                 let (lvl, silenced) = {
                     let lvl = self.methyl_levels.entry(k.clone()).or_insert(0);
                     *lvl += 1;
                     (*lvl, *lvl >= self.methyl_threshold)
                 };
-                self.note(
-                    self.cur_line,
-                    2,
-                    format!(
-                        "methylation deepened: '{}' (level {}) — silenced at the next call if {}",
-                        k, lvl, silenced
-                    ),
-                );
+                if !self.methyl_quiet {
+                    self.note(
+                        self.cur_line,
+                        2,
+                        format!(
+                            "methylation deepened: '{}' (level {}) — silenced at the next call if {}",
+                            k, lvl, silenced
+                        ),
+                    );
+                }
                 Ok(Value::Int(lvl as i64))
             }
             "demethylate" => {
                 // A12: the @acetylate direction — saturating relaxation.
                 let k = args.first().map(|v| v.display()).unwrap_or_default();
+                mem_charge((k.len() + 64) as u64)?;
                 let (lvl, silenced) = {
                     let lvl = self.methyl_levels.entry(k.clone()).or_insert(0);
                     *lvl = lvl.saturating_sub(1);
                     (*lvl, *lvl >= self.methyl_threshold)
                 };
-                self.note(
-                    self.cur_line,
-                    2,
-                    format!(
-                        "methylation relaxed: '{}' (level {}) — silenced at the next call if {}",
-                        k, lvl, silenced
-                    ),
-                );
+                if !self.methyl_quiet {
+                    self.note(
+                        self.cur_line,
+                        2,
+                        format!(
+                            "methylation relaxed: '{}' (level {}) — silenced at the next call if {}",
+                            k, lvl, silenced
+                        ),
+                    );
+                }
                 Ok(Value::Int(lvl as i64))
             }
             "grn_set" => {
@@ -2701,8 +2840,11 @@ impl Interp {
                     _ => 0.0,
                 };
                 let v = v.clamp(0.0, 1.0);
+                mem_charge((k.len() + 64) as u64)?;
                 self.grn_levels.insert(k.clone(), v);
-                self.note(self.cur_line, 2, format!("grn level set: '{}' = {}", k, v));
+                if !self.methyl_quiet {
+                    self.note(self.cur_line, 2, format!("grn level set: '{}' = {}", k, v));
+                }
                 Ok(Value::Float(v))
             }
             "grn_get" => {
@@ -2818,7 +2960,8 @@ impl Interp {
                 // start the wall-clock oscillator: one thread tick advances the
                 // ring each period (deterministic manual rings need no thread)
                 let ms = match args.first() {
-                    Some(Value::Int(i)) => *i as u64,
+                    // sec-r3: negative Int must not wrap to a near-infinite sleep
+                    Some(Value::Int(i)) => (*i).max(0) as u64,
                     Some(Value::Float(f)) => (*f).max(0.0) as u64,
                     _ => 1000,
                 };
@@ -2836,11 +2979,21 @@ impl Interp {
                 }
                 let counter = Arc::new(AtomicU64::new(0));
                 let c2 = counter.clone();
-                match crate::genes::spawn_worker(move || loop {
-                    std::thread::sleep(std::time::Duration::from_millis(ms));
-                    c2.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                // sec-r3: shared cancellable timer (see Stmt::Repressilator)
+                if let Some(flag) = self.repressi_timer_stop.take() {
+                    flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                }
+                let stop = Arc::new(AtomicBool::new(false));
+                let stop2 = stop.clone();
+                match crate::genes::spawn_worker(move || {
+                    while !stop2.load(std::sync::atomic::Ordering::SeqCst) {
+                        std::thread::sleep(std::time::Duration::from_millis(ms));
+                        c2.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    }
                 }) {
-                    Ok(()) => {}
+                    Ok(()) => {
+                        self.repressi_timer_stop = Some(stop);
+                    }
                     Err(_) => {
                         self.note(
                             self.cur_line,
@@ -2880,7 +3033,8 @@ impl Interp {
                     Some(a) => a.load(std::sync::atomic::Ordering::SeqCst),
                     None => self.repressi_tick,
                 };
-                let levels = repressilator_levels(n, tick);
+                // sec-r3: cached + fuel-charged (was O(tick) per read, uncharged)
+                let levels = self.ring_advance(n, tick)?;
                 let mut out = Vec::new();
                 for (name, lvl) in self.repressi_ring.iter().zip(levels.iter()) {
                     out.push((Value::Str(name.clone()), Value::Float(*lvl)));
@@ -3483,53 +3637,103 @@ impl Interp {
                 // whole-program DoS). Children now run under a wall-clock
                 // timeout: .cell `run.timeout_ms`, clamped 1..300_000,
                 // default 10_000. A timed-out child is killed and reported.
+                // sec-r3 (re-audit #1/#5): two more containment holes closed —
+                //   (a) the post-exit pipe drain moved OFF the wait path:
+                //       reader threads drain stdout/stderr concurrently, so a
+                //       grandchild inheriting the pipe write-end cannot extend
+                //       the freeze past the timeout (bounded by DRAIN_WAIT);
+                //   (b) the child's WALL TIME is charged as fuel exactly like
+                //       sleep (1000 steps/ms) — `while true { run("sleep",…) }`
+                //       used to buy unbounded wall time at ~40 fuel steps per
+                //       8 s; now it drains the shared pool like sleep does.
                 let timeout_ms = self
                     .cell
                     .get("run.timeout_ms")
                     .and_then(|v| v.parse::<u64>().ok())
                     .unwrap_or(10_000)
                     .clamp(1, 300_000);
+                let started = std::time::Instant::now();
                 let run_result = cmd
                     .stdout(std::process::Stdio::piped())
                     .stderr(std::process::Stdio::piped())
                     .spawn()
-                    .and_then(|mut child| {
+                    .map(|mut child| {
+                        // sec-r3: concurrent drainers on channels — the run
+                        // collects with a BOUNDED receive, so a grandchild
+                        // inheriting the pipe write-end cannot extend the
+                        // freeze past the timeout (the reader thread itself
+                        // dies whenever the pipe finally closes, harmless).
+                        use std::sync::mpsc;
+                        let (tx_so, rx_so) = mpsc::channel::<Vec<u8>>();
+                        let (tx_se, rx_se) = mpsc::channel::<Vec<u8>>();
+                        if let Some(mut p) = child.stdout.take() {
+                            std::thread::spawn(move || {
+                                let mut v = Vec::new();
+                                use std::io::Read;
+                                let _ = p.read_to_end(&mut v);
+                                let _ = tx_so.send(v);
+                            });
+                        }
+                        if let Some(mut p) = child.stderr.take() {
+                            std::thread::spawn(move || {
+                                let mut v = Vec::new();
+                                use std::io::Read;
+                                let _ = p.read_to_end(&mut v);
+                                let _ = tx_se.send(v);
+                            });
+                        }
+                        (child, rx_so, rx_se)
+                    })
+                    .and_then(|(mut child, rx_so, rx_se)| {
                         let start = std::time::Instant::now();
-                        loop {
+                        let mut timed_out = false;
+                        let status = loop {
                             match child.try_wait() {
-                                Ok(Some(status)) => {
-                                    // drain pipes after a clean exit
-                                    let mut so = Vec::new();
-                                    let mut se = Vec::new();
-                                    if let Some(mut p) = child.stdout.take() {
-                                        use std::io::Read;
-                                        let _ = p.read_to_end(&mut so);
-                                    }
-                                    if let Some(mut p) = child.stderr.take() {
-                                        use std::io::Read;
-                                        let _ = p.read_to_end(&mut se);
-                                    }
-                                    return Ok((status, so, se, false));
-                                }
+                                Ok(Some(st)) => break st,
                                 Ok(None) => {
                                     if start.elapsed().as_millis() as u64 >= timeout_ms {
                                         let _ = child.kill();
                                         let _ = child.wait();
-                                        return Ok((
-                                            std::process::ExitStatus::default(),
-                                            Vec::new(),
-                                            Vec::new(),
-                                            true,
-                                        ));
+                                        timed_out = true;
+                                        break std::process::ExitStatus::default();
                                     }
                                     std::thread::sleep(std::time::Duration::from_millis(5));
                                 }
                                 Err(e) => return Err(e),
                             }
-                        }
+                        };
+                        // bounded drain collection: whatever arrived within
+                        // the grace window is the output; the rest is dropped
+                        const DRAIN_WAIT: std::time::Duration =
+                            std::time::Duration::from_millis(250);
+                        let so_raw = rx_so.recv_timeout(DRAIN_WAIT).unwrap_or_default();
+                        let se_raw = rx_se.recv_timeout(DRAIN_WAIT).unwrap_or_default();
+                        Ok((status, so_raw, se_raw, timed_out))
                     });
                 match run_result {
                     Ok((status, so_raw, se_raw, timed_out)) => {
+                        // sec-r3 (re-audit #5): the child's wall time is fuel,
+                        // exactly like sleep (1000 steps/ms) — shelling a
+                        // sleep out to a child no longer bypasses the charge.
+                        let wall_ms = started.elapsed().as_millis() as u64;
+                        let charge = wall_ms.saturating_mul(1000);
+                        self.steps = self.steps.saturating_add(charge);
+                        if let Some(pool) = &self.fuel_pool {
+                            let left =
+                                pool.fetch_sub(charge as i64, std::sync::atomic::Ordering::Relaxed);
+                            if left <= charge as i64 {
+                                return Err(Stress::new(
+                                    "overflow",
+                                    "run-wide step budget exhausted (run child wall time)",
+                                ));
+                            }
+                        }
+                        if self.steps > self.step_budget {
+                            return Err(Stress::new(
+                                "overflow",
+                                "step budget exhausted (run child wall time)",
+                            ));
+                        }
                         if timed_out {
                             self.note(self.cur_line,
                                 4,
@@ -3626,6 +3830,17 @@ impl Interp {
                     .map(|v| v.display())
                     .unwrap_or_else(|| "text/html".into());
                 let body = args.get(3).map(|v| v.display()).unwrap_or_default();
+                // sec-r3 (re-audit #6): response splitting — the server-side
+                // twin of the http_get CRLF guard. status/ctype are formatted
+                // raw into the response head, so CR/LF/control bytes in them
+                // inject headers (proxy/cache poisoning when fronted).
+                let header_safe = |s: &str| !s.chars().any(|c| (c as u32) < 0x20 || c == '\x7f');
+                if !header_safe(&status) || !header_safe(&ctype) {
+                    return Err(Stress::new(
+                        "interference",
+                        "send_response: status/content-type contain control characters (header injection refused)",
+                    ));
+                }
                 match crate::interp::send_response(conn, &status, &ctype, &body) {
                     Ok(()) => Ok(Value::Bool(true)),
                     Err(e) => Err(Stress::new("missing", format!("send_response: {}", e))),
@@ -5339,9 +5554,36 @@ pub fn repressilator_levels(n: usize, tick: u64) -> Vec<f64> {
     lv
 }
 
+/// One ring tick of the ODE (20 Euler substeps) — shared by the pure
+/// from-init fold and the interpreter's incremental cache (sec-r3), so both
+/// paths execute the identical operation sequence (bit-identical parity).
+pub fn repressilator_step(mut lv: Vec<f64>) -> Vec<f64> {
+    const ALPHA: f64 = 10.0;
+    const GAMMA: f64 = 1.0;
+    const DT: f64 = 0.05;
+    const SUBSTEPS: usize = 20;
+    let n = lv.len();
+    if n == 0 {
+        return lv;
+    }
+    for _ in 0..SUBSTEPS {
+        let snap = lv.clone();
+        for (j, item) in lv.iter_mut().enumerate() {
+            let rep = snap[(j + n - 1) % n];
+            // unrolled rep^4 — MUST stay op-identical to the oracle
+            let rep4 = rep * rep * rep * rep;
+            let d = ALPHA / (1.0 + rep4) - GAMMA * snap[j];
+            let v = snap[j] + DT * d;
+            *item = if v > 0.0 { v } else { 0.0 };
+        }
+    }
+    lv
+}
+
 /// Normalized (0..1) ring level a GRN gate reads for a ring node: the raw
 /// ODE level divided by the production scale α, clamped. (A11: gates can
-/// read ring levels.)
+/// read ring levels.) Pure form — used by tests; the interpreter routes
+/// through the fuel-charged cache (`Interp::ring_gate_level`).
 pub fn repressilator_gate_level(n: usize, tick: u64, node_index: usize) -> f64 {
     const ALPHA: f64 = 10.0;
     let raw = repressilator_levels(n, tick)[node_index.min(n.saturating_sub(1))];
