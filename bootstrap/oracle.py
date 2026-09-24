@@ -32,6 +32,8 @@ class Gene:
         self.acetylate, self.methylate, self.m6a, self.seq = ac, me, m6, seq
         self.closure = None
 
+ENHANCE_DELTA = 0.25  # T2e: super-enhancer activation boost (GRN threshold reduction)
+
 class Pheno:
     __slots__ = ("name", "parent", "fields", "methods")
     def __init__(self, name, parent, fields, methods):
@@ -2268,9 +2270,12 @@ class Interp:
         Activating edge with explicit threshold t vetoes while
         level(source) < t; inhibiting edge with explicit threshold t vetoes
         while level(inhibitor) >= t; edges without a threshold stay
-        declarative; a threshold of 0 never blocks (back-compat)."""
+        declarative; a threshold of 0 never blocks (back-compat).
+        T2e: an enhance'd gene lowers its activating thresholds by
+        ENHANCE_DELTA (0.25)."""
         if not self.grn_edges:
             return None
+        boosted = name in self.enhanced
         veto = None
         for frm, to, st, inh, thr in self.grn_edges:
             if veto is not None:
@@ -2283,6 +2288,8 @@ class Interp:
                     veto = f"inhibitor '{frm}' level {lvl!r} >= threshold {thr!r}"
             else:
                 t = thr if thr is not None else 0.0
+                if boosted:
+                    t = max(0.0, t - ENHANCE_DELTA)
                 if lvl < t:
                     veto = f"regulator '{frm}' level {lvl!r} < threshold {t!r}"
         return veto
