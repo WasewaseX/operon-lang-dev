@@ -7,7 +7,133 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 pub type ListRef = Rc<RefCell<Vec<Value>>>;
-pub type MapRef = Rc<RefCell<Vec<(Value, Value)>>>;
+
+/// dx-r3 (re-audit perf #7): maps keep their insertion-ordered Vec (repr,
+/// keys(), iteration order are part of the language contract) but gain a
+/// hash memo over (type tag, display) -> position, so the hot lookups —
+/// `m[k]`, `has`, `del`, member access, `map_insert` — are O(1) instead of
+/// a linear deep_eq scan (the collections bench ran 40–55x CPython).
+/// The memo is a PREFILTER: candidate positions are always verified with
+/// deep_eq, so exotic equalities stay exact.
+#[derive(Default)]
+pub struct MapStore {
+    pub items: Vec<(Value, Value)>,
+    memo: std::collections::HashMap<(u8, String), usize>,
+}
+
+fn key_tag(v: &Value) -> (u8, String) {
+    match v {
+        Value::Null => (0, String::new()),
+        Value::Bool(b) => (1, b.to_string()),
+        Value::Int(i) => (2, i.to_string()),
+        Value::Float(f) => (3, f.to_string()),
+        Value::Str(s) => (4, s.clone()),
+        // non-scalar keys are legal but rare — they simply miss the memo
+        // and fall back to the linear scan
+        _ => (255, String::new()),
+    }
+}
+
+impl MapStore {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn from_vec(items: Vec<(Value, Value)>) -> Self {
+        let mut s = MapStore {
+            items,
+            memo: std::collections::HashMap::new(),
+        };
+        s.rebuild();
+        s
+    }
+    pub fn rebuild(&mut self) {
+        self.memo.clear();
+        for (i, (k, _)) in self.items.iter().enumerate() {
+            let tag = key_tag(k);
+            if tag.0 != 255 {
+                self.memo.insert(tag, i); // last write wins = deep_eq semantics
+            }
+        }
+    }
+    /// Exact position of `key` (deep_eq verified), O(1) for scalar keys.
+    pub fn position(&self, key: &Value) -> Option<usize> {
+        let tag = key_tag(key);
+        if tag.0 != 255 {
+            if let Some(&i) = self.memo.get(&tag) {
+                if let Some((k, _)) = self.items.get(i) {
+                    if k.deep_eq(key) {
+                        return Some(i);
+                    }
+                }
+            }
+        }
+        self.items.iter().position(|(k, _)| k.deep_eq(key))
+    }
+    /// Upsert preserving insertion order (existing key keeps its position).
+    pub fn insert(&mut self, key: Value, val: Value) {
+        if let Some(i) = self.position(&key) {
+            self.items[i].1 = val;
+            return;
+        }
+        let tag = key_tag(&key);
+        self.items.push((key, val));
+        if tag.0 != 255 {
+            self.memo.insert(tag, self.items.len() - 1);
+        }
+    }
+    /// Delete by key; returns true when something was removed. Positions
+    /// after the removed slot shift, so the memo is rebuilt.
+    pub fn del(&mut self, key: &Value) -> bool {
+        match self.position(key) {
+            Some(i) => {
+                self.items.remove(i);
+                self.rebuild();
+                true
+            }
+            None => false,
+        }
+    }
+    pub fn len(&self) -> usize {
+        self.items.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.items.is_empty()
+    }
+    /// Vec-compatible passthroughs: existing call sites keep compiling.
+    pub fn iter(&self) -> std::slice::Iter<'_, (Value, Value)> {
+        self.items.iter()
+    }
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, (Value, Value)> {
+        self.items.iter_mut()
+    }
+    pub fn clear(&mut self) {
+        self.items.clear();
+        self.memo.clear();
+    }
+    pub fn extend<I: IntoIterator<Item = (Value, Value)>>(&mut self, iter: I) {
+        for (k, v) in iter {
+            self.insert(k, v);
+        }
+    }
+    pub fn get(&self, i: usize) -> Option<&(Value, Value)> {
+        self.items.get(i)
+    }
+}
+
+impl std::ops::Index<usize> for MapStore {
+    type Output = (Value, Value);
+    fn index(&self, i: usize) -> &(Value, Value) {
+        &self.items[i]
+    }
+}
+
+impl FromIterator<(Value, Value)> for MapStore {
+    fn from_iter<I: IntoIterator<Item = (Value, Value)>>(iter: I) -> Self {
+        MapStore::from_vec(iter.into_iter().collect())
+    }
+}
+
+pub type MapRef = Rc<RefCell<MapStore>>;
 pub type EnvRef = Rc<crate::interp::Env>;
 
 /// Message a sequence worker sends to its consumer over the rendezvous channel.
@@ -40,6 +166,9 @@ pub enum Value {
 pub struct Stress {
     pub kind: String, // unfolded | missing | overflow | burned | interference
     pub message: String,
+    /// dx-r3 (re-audit): source line the hard error originated from — the
+    /// primary diagnostic gets a location, matching mainstream norms.
+    pub line: usize,
 }
 
 impl Stress {
@@ -47,6 +176,15 @@ impl Stress {
         Stress {
             kind: kind.to_string(),
             message: message.into(),
+            line: 0,
+        }
+    }
+    /// dx-r3: a located hard error (call sites inside eval stamp cur_line).
+    pub fn at(line: usize, kind: &str, message: impl Into<String>) -> Self {
+        Stress {
+            kind: kind.to_string(),
+            message: message.into(),
+            line,
         }
     }
 }

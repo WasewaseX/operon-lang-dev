@@ -27,7 +27,7 @@ The mandate: *"Rust, then C, then Python, then Operon, then C++, then HTML, then
 | rank | language | lines | share | role |
 |---|---|---|---|---|
 | 1 | **Rust** | 12,297 | ~47% | lexer, Total Grammar parser, evaluator, capability sandbox, symbol table, HTTP/JSON, toolchain CLI, REPL, `operon-ls` LSP seed (`src/`) |
-| 2 | **Operon** | 6,994 | ~27% | **self-hosted stdlib (6 modules), proof tests, red-team suite, differential corpus, GenomeLab** (`std/ tests/ examples/ apps/`) |
+| 2 | **Operon** | 6,994 | ~27% | **self-hosted stdlib (11 modules), proof tests, red-team suite, differential corpus, GenomeLab** (`std/ tests/ examples/ apps/`) |
 | 3 | **Python** | 3,529 | ~13% | bootstrap: reference oracle + differential harness (`bootstrap/`) — test infrastructure only, nothing shipped depends on it |
 | 4 | **JavaScript** | 1,400 | ~5% | browser playground subset interpreter (`web/playground/app.js`) |
 | 5 | **HTML** | 1,263 | ~5% | documentation site (`docs/`) |
