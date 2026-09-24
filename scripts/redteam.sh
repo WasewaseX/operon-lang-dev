@@ -54,6 +54,10 @@ for f in "$DIR"/rt_p*.op; do
             run_one "$f" --allow-read "$DIR" --allow-write "$DIR" --allow-run echo --allow-env PATH ;;
         *spawn*|*thread*|*sleep*)
             run_one "$f" --allow-read "$DIR" --allow-write /tmp ;;
+        *http*)
+            # sec-r1: CRLF-injection payload needs a net grant to reach the
+            # guard (default-deny blocks net anyway — both are containment)
+            run_one "$f" --allow-net "127.0.0.1:1" --allow-read "$DIR" ;;
         *cell*)
             run_one "$f" --cell "$DIR/rt_grant.cell" ;;
         *)
@@ -63,6 +67,19 @@ for f in "$DIR"/rt_p*.op; do
 done
 
 echo
+
+# sec-r1 (audit C-4): LSP framing fuzz — attacker-controlled Content-Length
+# from the editor side must close the session gracefully, never panic.
+printf 'Content-Length: 18446744073709551615\r\n\r\n{' | timeout 5 ./bin/operon-ls > /dev/null 2> "$TMP/lsperr"
+lsp_rc=$?
+if [ $lsp_rc -ge 130 ] || [ $lsp_rc -eq 124 ] || grep -qE "panicked at|capacity overflow|stack overflow" "$TMP/lsperr"; then
+    echo "PANIC  lsp-framing (rc=$lsp_rc)"
+    fail=$((fail+1)); failed_files+=("lsp-framing")
+else
+    echo "ok    lsp-framing (rc=$lsp_rc)"
+    pass=$((pass+1))
+fi
+
 if [ -n "$(ls -A /tmp/redteam-out-escape 2>/dev/null)" ]; then
     echo "ESCAPE: files were created inside /tmp/redteam-out-escape — sandbox breached"
     fail=$((fail+1))

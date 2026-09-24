@@ -1,0 +1,8 @@
+# sec-r1 regression (audit C-12): CR/LF in http_get host/path injects
+# headers into the request line (request smuggling). The CRLF guard rejects
+# before any socket exists; default-deny blocks net regardless.
+stress {
+    let page = http_get("127.0.0.1\r\nX-Injected: 1", 1, "/x")
+} rescue (e) {
+    promote("http CRLF: contained (" + e.kind + ")")
+}

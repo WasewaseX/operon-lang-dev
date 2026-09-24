@@ -73,9 +73,38 @@ static size_t  g_cap       = 0;   /* power of two */
 static size_t  g_count     = 0;   /* occupied slots */
 static uint32_t g_next_id  = 1;   /* id 0 reserved */
 
-/* dense index: g_dense[id] -> slot with that id (ids are dense 1..n) */
-static Slot  **g_dense     = NULL;
+/* dense index: g_dense[id] = slot INDEX + 1 (0 = absent). sec-r1 (audit
+ * C-5/C-6): the old design stored &Slot pointers — table_init's growth
+ * free()d the slot array without refreshing the index, so rt_intern_get
+ * dereferenced freed memory (ASan-proven heap-use-after-free), and realloc
+ * left unassigned entries pointing at garbage (SEGV on id 0). Indices
+ * survive slot-array moves only if rebuilt on growth; calloc guarantees
+ * every unassigned entry is the defined 0 = "absent". */
+static size_t *g_dense     = NULL;
 static size_t  g_dense_cap = 0;
+
+/* rebuild the dense index from scratch — called only on table growth and
+ * after rt_reset's table clear (amortized O(n) per doubling) */
+static void dense_rebuild(void) {
+    if (g_slots == NULL) return;
+    size_t need = (size_t)g_next_id + 1;
+    if (need > g_dense_cap) {
+        size_t  ncap = need * 2;
+        size_t *nd   = (size_t *)calloc(ncap, sizeof(size_t));
+        if (nd == NULL) return; /* degraded: reads fail closed, writes fine */
+        free(g_dense);
+        g_dense     = nd;
+        g_dense_cap = ncap;
+    } else {
+        memset(g_dense, 0, g_dense_cap * sizeof(size_t));
+    }
+    for (size_t i = 0; i < g_cap; i++) {
+        if (g_slots[i].bytes == NULL) continue;
+        if ((size_t)g_slots[i].id < g_dense_cap) {
+            g_dense[g_slots[i].id] = i + 1;
+        }
+    }
+}
 
 static rt_mutex_t g_lock = RT_MUTEX_INIT;
 
@@ -98,6 +127,8 @@ static void table_init(size_t need) {
         free(g_slots);
         g_slots = nslot;
         g_cap   = ncap;
+        /* slots moved (rehash): stale slot indices must be rebuilt */
+        dense_rebuild();
     }
     (void)need;
 }
@@ -135,14 +166,23 @@ uint32_t rt_intern(const char *s, size_t n) {
     g_slots[i].bytes = copy;
     g_count++;
 
-    /* maintain dense index */
+    /* maintain dense index: grow preserving entries (slots did not move
+     * here — only the index array reallocates, and calloc zero-fills the
+     * new region so unassigned ids stay 0 = absent) */
     if ((size_t)g_slots[i].id >= g_dense_cap) {
         size_t ncap = ((size_t)g_slots[i].id + 1) * 2;
-        Slot **nd = (Slot **)realloc(g_dense, ncap * sizeof(Slot *));
-        if (nd) { g_dense = nd; g_dense_cap = ncap; }
+        size_t *nd = (size_t *)calloc(ncap, sizeof(size_t));
+        if (nd) {
+            if (g_dense) {
+                memcpy(nd, g_dense, g_dense_cap * sizeof(size_t));
+                free(g_dense);
+            }
+            g_dense     = nd;
+            g_dense_cap = ncap;
+        }
     }
     if (g_dense && (size_t)g_slots[i].id < g_dense_cap)
-        g_dense[g_slots[i].id] = &g_slots[i];
+        g_dense[g_slots[i].id] = i + 1;
 
     rt_mutex_unlock(&g_lock);
     return g_slots[i].id;
@@ -152,9 +192,12 @@ const char *rt_intern_get(uint32_t id, size_t *n_out) {
     rt_mutex_lock(&g_lock);
     const char *out = NULL;
     size_t len = 0;
-    if (id < g_dense_cap && g_dense && g_dense[id]) {
-        out = g_dense[id]->bytes;
-        len = g_dense[id]->len;
+    if (id > 0 && id < g_dense_cap && g_dense && g_dense[id] != 0) {
+        const Slot *s = &g_slots[g_dense[id] - 1];
+        if (s->bytes != NULL) {
+            out = s->bytes;
+            len = s->len;
+        }
     }
     rt_mutex_unlock(&g_lock);
     if (n_out) *n_out = len;
@@ -194,6 +237,14 @@ void rt_reset(void) {
     }
     g_count   = 0;
     g_next_id = 1;
+    /* the dense index refers to the table we just cleared: free it so the
+     * next intern starts from a provably zero state (stale indices would
+     * resurrect dangling slot positions) */
+    if (g_dense) {
+        free(g_dense);
+        g_dense     = NULL;
+        g_dense_cap = 0;
+    }
     rt_mutex_unlock(&g_lock);
 }
 

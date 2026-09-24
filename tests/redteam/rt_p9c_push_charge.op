@@ -1,0 +1,12 @@
+# sec-r1 regression (audit C-3): uncharged push() builtin. Pre-fix: walked
+# past every ceiling until the allocator aborted (rc=134, outside the
+# stress contract). Post-fix the aggregate 2 GiB ceiling trips CATCHABLY.
+# RSS stays bounded: the list is dropped each iteration while the charge
+# accumulates in the run-wide allocator pool.
+let s = "A" * 16000000
+let i = 0
+while i < 500 {
+    let l = []
+    push(l, s)
+    i = i + 1
+}
