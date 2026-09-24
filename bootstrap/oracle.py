@@ -205,7 +205,7 @@ def deep_eq(a, b):
 # lexer
 
 SYMBOLS = ["**=", "<<=", ">>=", "+=", "-=", "*=", "/=", "%=", "==", "!=", "<=", ">=", "&&", "||",
-           "//", "->", "=>", "**", "<<", ">>", "&", "|", "^", "~", "?", "{", "}", "(", ")", "[", "]", ",", ":", "+", "-",
+           "//", "->", "=>", "**", "<<", ">>", "??", "?.", "&", "|", "^", "~", "?", "{", "}", "(", ")", "[", "]", ",", ":", "+", "-",
            "*", "/", "%", "=", "<", ">", "!", ".", ";"]
 
 def lex(src):
@@ -303,6 +303,11 @@ def lex(src):
                 j += 1
             toks.append(("IDENT", src[i:j], line))
             i = j; continue
+        if c == "?" and i + 2 < n and src[i+1] == "." and src[i+2].isdigit():
+            # L1a parity guard: '?.' followed by a digit lexes as '?' + number-dot
+            toks.append(("SYM", "?", line))
+            i += 1
+            continue
         matched = False
         for sym in SYMBOLS:
             if src.startswith(sym, i):
@@ -484,7 +489,36 @@ class P:
             return self.gene_def([])
         if word == "let":
             self.next()
+            t = self.peek()
+            # L1a: destructuring definitions
+            if t[0] == "SYM" and t[1] in ("[", "{"):
+                pat = self.destructure_pat()
+                if self.peek() == ("SYM", "=", self.peek()[2]):
+                    self.next()
+                    e = self.expr()
+                    self.end_stmt()
+                    return ("letpat", pat, e)
+                self.note(self.peek()[2], 4, "destructured 'let' without value binds nulls")
+                self.end_stmt()
+                return ("letpat", pat, ("null",))
             name = self.ident()
+            # L1a: `let a, b = 1, 2` multi-define
+            if self.peek() == ("SYM", ",", self.peek()[2]):
+                names = [name]
+                while self.peek() == ("SYM", ",", self.peek()[2]):
+                    self.next()
+                    names.append(self.ident())
+                if self.peek() == ("SYM", "=", self.peek()[2]):
+                    self.next()
+                    values = [self.expr()]
+                    while self.peek() == ("SYM", ",", self.peek()[2]):
+                        self.next()
+                        values.append(self.expr())
+                    self.end_stmt()
+                    return ("multi", [("ident", n) for n in names], values, True)
+                self.note(self.peek()[2], 4, "multi 'let' without value binds nulls")
+                self.end_stmt()
+                return ("multi", [("ident", n) for n in names], [("null",)] * len(names), True)
             if self.peek() == ("SYM", "=", self.peek()[2]):
                 self.next()
                 e = self.expr()
@@ -517,6 +551,14 @@ class P:
             return ("loop", self.block())
         if word == "for":
             self.next()
+            t = self.peek()
+            # L1a: destructuring loop target
+            if t[0] == "SYM" and t[1] in ("[", "{"):
+                pat = self.destructure_pat()
+                if not self.expect_kw("in"):
+                    self.note(self.peek()[2], 4, "'for <pattern>' missing 'in'; iterating null")
+                it = self.expr()
+                return ("forpat", pat, it, self.block())
             name = self.ident()
             if not self.expect_kw("in"):
                 self.note(self.peek()[2], 4, f"'for {name}' missing 'in'; iterating null")
@@ -1022,6 +1064,30 @@ class P:
         # expression statement (possibly index/member assignment)
         e = self.expr()
         t = self.peek()
+        # L1a: multiple assignment / swap — a, b = b, a
+        if t[0] == "SYM" and t[1] == "," and e[0] in ("ident", "index", "member"):
+            save = self.pos
+            targets = [e]
+            valid = True
+            while self.peek() == ("SYM", ",", self.peek()[2]):
+                self.next()
+                te = self.expr()
+                if te[0] not in ("ident", "index", "member"):
+                    valid = False
+                targets.append(te)
+            if valid and self.peek() == ("SYM", "=", self.peek()[2]):
+                self.next()
+                values = [self.expr()]
+                while self.peek() == ("SYM", ",", self.peek()[2]):
+                    self.next()
+                    values.append(self.expr())
+                self.end_stmt()
+                return ("multi", targets, values, False)
+            self.pos = save
+            self.note(self.peek()[2], 4, "expression statement not terminated; rest of line skipped")
+            self.skip_line()
+            self.end_stmt()
+            return ("expr", e)
         if t[0] == "SYM" and t[1] == "=":
             self.next()
             v = self.expr()
@@ -1132,6 +1198,61 @@ class P:
                 self.next()
         return out
 
+    # L1a: destructuring pattern parser (mirrors src/parser.rs parse_destructure_pat)
+    def destructure_pat(self):
+        t = self.peek()
+        if t[0] == "SYM" and t[1] == "[":
+            self.next()
+            elems, rest = [], None
+            while True:
+                self.eat_nl()
+                t2 = self.peek()
+                if t2 == ("SYM", "]", t2[2]):
+                    self.next(); break
+                if t2[0] == "EOF":
+                    self.note(t2[2], 4, "pattern bracket auto-closed")
+                    break
+                if t2 == ("SYM", "*", t2[2]):
+                    self.next()
+                    t3 = self.peek()
+                    if t3[0] == "IDENT":
+                        self.next()
+                        rest = t3[1]
+                    else:
+                        self.note(t3[2], 4, "'*' in pattern needs a name; tail skipped")
+                elif t2 == ("SYM", ",", t2[2]):
+                    self.next()
+                else:
+                    elems.append(self.destructure_pat())
+            return ("plist", elems, rest)
+        if t[0] == "SYM" and t[1] == "{":
+            self.next()
+            keys = []
+            while True:
+                self.eat_nl()
+                t2 = self.peek()
+                if t2 == ("SYM", "}", t2[2]):
+                    self.next(); break
+                if t2[0] == "EOF":
+                    self.note(t2[2], 4, "pattern brace auto-closed")
+                    break
+                if t2 == ("SYM", ",", t2[2]):
+                    self.next()
+                elif t2[0] == "IDENT":
+                    self.next()
+                    keys.append(t2[1])
+                else:
+                    self.note(t2[2], 4, f"'{t2[1]}' is not a map-pattern key; skipped")
+                    self.next()
+            return ("pmap", keys)
+        t2 = self.peek()
+        if t2[0] == "IDENT":
+            self.next()
+            return ("pbind", t2[1])
+        self.note(t2[2], 4, f"'{t2[1]}' cannot start a pattern; binding null")
+        self.next()
+        return ("pbind", "_")
+
     # expressions
     def expr(self):
         cond = self.or_expr()
@@ -1149,12 +1270,23 @@ class P:
         return cond
 
     def or_expr(self):
-        left = self.and_expr()
+        left = self.nullish_expr()
         while True:
             t = self.peek()
             if (t[0] == "IDENT" and t[1] == "or") or (t[0] == "SYM" and t[1] == "||"):
                 self.next()
-                left = ("bin", "or", left, self.and_expr())
+                left = ("bin", "or", left, self.nullish_expr())
+            else:
+                return left
+
+    def nullish_expr(self):
+        # L1a: a ?? b — sits between or and and (mirrors src/parser.rs)
+        left = self.and_expr()
+        while True:
+            t = self.peek()
+            if t[0] == "SYM" and t[1] == "??":
+                self.next()
+                left = ("bin", "nullish", left, self.and_expr())
             else:
                 return left
 
@@ -1316,6 +1448,32 @@ class P:
                         e = ("member", e, t2[1])
                 else:
                     self.note(t2[2], 4, "'.' followed by non-name; member skipped")
+                    break
+            elif t == ("SYM", "?.", t[2]):
+                # L1a: optional chaining (mirrors src/parser.rs QuestionDot)
+                self.next()
+                t2 = self.peek()
+                if t2[0] == "IDENT":
+                    self.next()
+                    if self.peek() == ("SYM", "(", t2[2]):
+                        self.next()
+                        args = []
+                        while True:
+                            self.eat_nl()
+                            t3 = self.peek()
+                            if t3 == ("SYM", ")", t3[2]):
+                                self.next(); break
+                            if t3[0] == "EOF":
+                                break
+                            args.append(self.expr())
+                            if self.peek() == ("SYM", ",", t3[2]):
+                                self.next()
+                        e = ("method?", e, t2[1], args)
+                    else:
+                        e = ("member?", e, t2[1])
+                else:
+                    self.note(t2[2], 4, "'?.' followed by non-name; chain resolves to null")
+                    e = ("member?", e, "")
                     break
             else:
                 return e
@@ -1536,7 +1694,8 @@ gc_content translate find_orf memory methyl methylate demethylate grn_set grn_ge
 repressi_state repressi_start grn_fire grn_state spawn join floor ceil sqrt pow random
 randomize chr ord now sleep argv read_file write_file append_file exists file_size read_dir run
 http_get serve recv_request send_response json_parse json_str env call items
-re_match re_find re_groups unix_time date_parts date_fmt""".split())
+re_match re_find re_groups unix_time date_parts date_fmt
+enumerate zip sorted reversed any all first last take drop unique flatten chunk round clamp divmod""".split())
 
 BUILTIN_SYNONYMS = {"print": "promote", "echo": "promote", "say": "promote", "show": "promote"}
 
@@ -1670,6 +1829,84 @@ class Interp:
             raise Stress("overflow", "step budget exhausted")
 
     # ---- statements
+    def bind_pattern(self, env, pat, v):
+        # L1a: destructuring binder — soft-miss semantics (Total Grammar)
+        k = pat[0]
+        if k == "pbind":
+            name = pat[1]
+            if name in env:
+                self.note(4, f"rebinding '{name}'")
+            env[name] = v
+        elif k == "plist":
+            elems, rest = pat[1], pat[2]
+            if isinstance(v, list):
+                n = len(v)
+                for i, ep in enumerate(elems):
+                    if i < n:
+                        self.bind_pattern(env, ep, v[i])
+                    else:
+                        self.note(4, f"destructure: index {i} missing; null")
+                        self.bind_pattern(env, ep, None)
+                if rest is not None:
+                    tail = list(v[len(elems):]) if len(elems) < n else []
+                    if rest in env:
+                        self.note(4, f"rebinding '{rest}'")
+                    env[rest] = tail
+                elif n > len(elems):
+                    self.note(4, f"destructure: {n - len(elems)} extra element(s) dropped")
+            elif isinstance(v, str):
+                # list patterns destructure strings by char (like for-in)
+                chars = list(v)
+                n = len(chars)
+                for i, ep in enumerate(elems):
+                    if i < n:
+                        self.bind_pattern(env, ep, chars[i])
+                    else:
+                        self.note(4, f"destructure: index {i} missing; null")
+                        self.bind_pattern(env, ep, None)
+                if rest is not None:
+                    tail = chars[len(elems):] if len(elems) < n else []
+                    if rest in env:
+                        self.note(4, f"rebinding '{rest}'")
+                    env[rest] = tail
+                elif n > len(elems):
+                    self.note(4, f"destructure: {n - len(elems)} extra element(s) dropped")
+            elif v is None:
+                self.note(4, "destructure of null binds nulls")
+                for ep in elems:
+                    self.bind_pattern(env, ep, None)
+                if rest is not None:
+                    if rest in env:
+                        self.note(4, f"rebinding '{rest}'")
+                    env[rest] = []
+            else:
+                self.note(4, f"cannot destructure {type_name(v)}; pattern binds nulls")
+                for ep in elems:
+                    self.bind_pattern(env, ep, None)
+                if rest is not None:
+                    if rest in env:
+                        self.note(4, f"rebinding '{rest}'")
+                    env[rest] = []
+        elif k == "pmap":
+            keys = pat[1]
+            if isinstance(v, dict):
+                for key in keys:
+                    if key in v:
+                        if key in env:
+                            self.note(4, f"rebinding '{key}'")
+                        env[key] = v[key]
+                    else:
+                        self.note(4, f"destructure: key '{key}' missing; null")
+                        if key in env:
+                            self.note(4, f"rebinding '{key}'")
+                        env[key] = None
+            else:
+                self.note(4, f"cannot destructure {type_name(v)}; pattern binds nulls")
+                for key in keys:
+                    if key in env:
+                        self.note(4, f"rebinding '{key}'")
+                    env[key] = None
+
     def exec_block(self, env, stmts):
         for s in stmts:
             self.exec_stmt(env, s)
@@ -1684,6 +1921,105 @@ class Interp:
             if s[1] in env:
                 self.note(4, f"rebinding '{s[1]}'")
             env[s[1]] = v
+        elif k == "letpat":
+            # L1a: destructuring definition
+            v = self.eval(env, s[2])
+            self.bind_pattern(env, s[1], v)
+        elif k == "forpat":
+            # L1a: destructuring loop
+            _, pat, it, body = s
+            itv = self.eval(env, it)
+            if isinstance(itv, SeqObj):
+                while True:
+                    self.tick()
+                    item = itv.pull()
+                    if item is None:
+                        break
+                    child = self.new_scope(env)
+                    self.bind_pattern(child, pat, item)
+                    try:
+                        self.exec_block(child, body)
+                    except BreakLoop:
+                        break
+                    except ContinueLoop:
+                        continue
+                    except Return as r:
+                        raise r
+                return
+            if isinstance(itv, list):
+                items = list(itv)
+            elif isinstance(itv, str):
+                items = list(itv)
+            elif isinstance(itv, dict):
+                items = list(itv.keys())
+            else:
+                self.note(4, f"cannot iterate {type_name(itv)}; loop skipped")
+                items = []
+            for item in items:
+                self.tick()
+                child = self.new_scope(env)
+                self.bind_pattern(child, pat, item)
+                try:
+                    self.exec_block(child, body)
+                except BreakLoop:
+                    break
+                except ContinueLoop:
+                    continue
+                except Return as r:
+                    raise r
+        elif k == "multi":
+            # L1a: multiple assignment / swap — all values evaluated first
+            _, targets, values, define = s
+            vals = [self.eval(env, v) for v in values]
+            if len(vals) < len(targets):
+                self.note(4, "multi-assign: fewer values than targets; the rest bind null")
+            elif len(vals) > len(targets):
+                self.note(4, "multi-assign: extra values dropped")
+            for i, t in enumerate(targets):
+                val = vals[i] if i < len(vals) else None
+                if define:
+                    if t[0] == "ident":
+                        name = t[1]
+                        if name in env:
+                            self.note(4, f"rebinding '{name}'")
+                        env[name] = val
+                    else:
+                        self.note(4, "multi 'let' target must be a name; dropped")
+                else:
+                    if t[0] == "ident":
+                        name = t[1]
+                        target = self.find_env(env, name)
+                        if target is None:
+                            self.note(4, f"'{name}' was not declared; auto-declared")
+                        self.assign(env, name, val)
+                    elif t[0] == "index":
+                        tv = self.eval(env, t[1])
+                        iv = self.eval(env, t[2])
+                        if isinstance(tv, list):
+                            try:
+                                idx = self.as_index(iv, len(tv))
+                            except Stress:
+                                idx = None
+                            if idx is not None and idx < len(tv):
+                                tv[idx] = val
+                            else:
+                                tv.append(val)
+                                self.note(4, "index out of range; value appended")
+                        elif isinstance(tv, dict):
+                            key = iv if isinstance(iv, (str, int, float, bool)) else v_display(iv)
+                            tv[key] = val
+                        else:
+                            self.note(4, "index assignment on non-container ignored")
+                    elif t[0] == "member":
+                        tv = self.eval(env, t[1])
+                        if isinstance(tv, ObjInst):
+                            tv.fields[t[2]] = val
+                        elif isinstance(tv, dict):
+                            tv[t[2]] = val
+                        else:
+                            self.note(4, "member assignment on non-map ignored")
+                    else:
+                        self.note(4, "multi-assign target invalid; value dropped")
         elif k == "assign":
             _, name, op, ve = s
             v = self.eval(env, ve)
@@ -1949,6 +2285,21 @@ class Interp:
         return variants[0]
 
     # ---- expressions
+    def member_value(self, tv, key):
+        # L1a: shared member read for `.` and `?.` (safe form pre-checks Null)
+        if isinstance(tv, ObjInst):
+            if key in tv.fields:
+                return tv.fields[key]
+            self.note(4, f"field '{key}' missing on phenotype {tv.defn.name}; null")
+            return None
+        if isinstance(tv, dict):
+            if key in tv:
+                return tv[key]
+            self.note(4, f"member '{key}' missing on map; null")
+            return None
+        self.note(4, f"member '{key}' on {type_name(tv)} is null")
+        return None
+
     def eval(self, env, e):
         self.tick()
         k = e[0]
@@ -2011,6 +2362,10 @@ class Interp:
             if op == "or":
                 lv = self.eval(env, e[2])
                 return lv if truthy(lv) else self.eval(env, e[3])
+            if op == "nullish":
+                # L1a: coalesce Null only — falsy non-null passes through
+                lv = self.eval(env, e[2])
+                return self.eval(env, e[3]) if lv is None else lv
             lv = self.eval(env, e[2])
             rv = self.eval(env, e[3])
             return self.binop(op, lv, rv)
@@ -2042,18 +2397,19 @@ class Interp:
             raise Stress("unfolded", f"cannot index {type_name(tv)}")
         if k == "member":
             tv = self.eval(env, e[1])
-            if isinstance(tv, ObjInst):
-                if e[2] in tv.fields:
-                    return tv.fields[e[2]]
-                self.note(4, f"field '{e[2]}' missing on phenotype {tv.defn.name}; null")
+            return self.member_value(tv, e[2])
+        if k == "member?":
+            # L1a: optional chaining — Null receiver is Null, silently
+            tv = self.eval(env, e[1])
+            if tv is None:
                 return None
-            if isinstance(tv, dict):
-                if e[2] in tv:
-                    return tv[e[2]]
-                self.note(4, f"member '{e[2]}' missing on map; null")
+            return self.member_value(tv, e[2])
+        if k == "method?":
+            tv = self.eval(env, e[1])
+            if tv is None:
                 return None
-            self.note(4, f"member '{e[2]}' on {type_name(tv)} is null")
-            return None
+            args = [self.eval(env, a) for a in e[3]]
+            return self.call_method(env, tv, e[2], args)
         if k == "method":
             tv = self.eval(env, e[1])
             args = [self.eval(env, a) for a in e[3]]
@@ -2506,6 +2862,19 @@ class Interp:
                 states, _ = self.fates.get(fate_name, ([], None))
                 return any(f == cur and target in tg for f, tg in states)
         if isinstance(recv, str):
+            if name == "at":
+                # L1a: safe char access with an optional default
+                i = args[0] if args else None
+                if isinstance(i, bool) or not isinstance(i, int):
+                    self.note(4, "at needs an int index; null")
+                    return None
+                j = len(recv) + i if i < 0 else i
+                if 0 <= j < len(recv):
+                    return recv[j]
+                if len(args) > 1:
+                    return args[1]
+                self.note(4, "char index out of range; null")
+                return None
             if name == "upper": return recv.upper()
             if name == "lower": return recv.lower()
             if name == "trim": return recv.strip()
@@ -2569,10 +2938,39 @@ class Interp:
             if name == "len": return len(recv)
             if name == "push": recv.append(args[0]); return recv
             if name == "pop": return recv.pop() if recv else None
+            if name == "get":
+                # L1a: safe index read with an optional default
+                i = args[0] if args else None
+                if isinstance(i, bool) or not isinstance(i, int):
+                    self.note(4, "list get needs an int index; null")
+                    return None
+                j = len(recv) + i if i < 0 else i
+                if 0 <= j < len(recv):
+                    return recv[j]
+                if len(args) > 1:
+                    return args[1]
+                self.note(4, "index out of range; null")
+                return None
         elif isinstance(recv, dict):
             if name == "keys": return list(recv.keys())
             if name == "values": return list(recv.values())
             if name == "items": return [[k, v] for k, v in recv.items()]
+            if name == "get":
+                # L1a: safe key access with an optional default
+                t = args[0] if args else None
+                hit = None
+                found = False
+                for k in recv.keys():
+                    if deep_eq(k, t):
+                        hit = recv[k]
+                        found = True
+                        break
+                if found:
+                    return hit
+                if len(args) > 1:
+                    return args[1]
+                self.note(4, f"key '{v_display(t)}' missing; null")
+                return None
             if name == "has": return any(deep_eq(k, args[0]) for k in recv.keys())
             if name == "del":
                 for k in list(recv.keys()):
@@ -3238,6 +3636,206 @@ class Interp:
                 tv = self.lookup(env, target)
                 return self.call_value(env, tv, call_args)
             return self.call_value(env, target, call_args)
+        # ---- L1a: iteration + numeric builtins (mirror src/interp.rs) ----
+        if name == "enumerate":
+            v = args[0] if args else None
+            if isinstance(v, list):
+                return [[i, x] for i, x in enumerate(v)]
+            if isinstance(v, str):
+                return [[i, c] for i, c in enumerate(v)]
+            self.note(4, f"enumerate of a {type_name(v)}; null")
+            return None
+        if name == "zip":
+            a = args[0] if args else None
+            b = args[1] if len(args) > 1 else None
+            if not isinstance(a, list) or not isinstance(b, list):
+                self.note(4, "zip needs two lists; null")
+                return None
+            return [[a[i], b[i]] for i in range(min(len(a), len(b)))]
+        if name == "sorted":
+            v = args[0] if args else None
+            if not isinstance(v, list):
+                self.note(4, f"sorted of a {type_name(v)}; null")
+                return None
+            out = list(v)
+            if len(args) > 1 and isinstance(args[1], Gene):
+                cmp = args[1]
+                for i in range(1, len(out)):
+                    j = i
+                    while j > 0:
+                        before = truthy(self.call_value(env, cmp, [out[j - 1], out[j]]))
+                        if not before:
+                            out[j - 1], out[j] = out[j], out[j - 1]
+                            j -= 1
+                        else:
+                            break
+            else:
+                # identical key to the .sort() method — one ordering contract
+                out.sort(key=lambda x: (
+                    (0, float(x), "") if isinstance(x, (int, float)) and not isinstance(x, bool)
+                    else ((0, float(int(x)), "") if isinstance(x, bool)
+                          else ((1, 0.0, x) if isinstance(x, str)
+                                else (2, 0.0, repr_of(x))))
+                ))
+            return out
+        if name == "reversed":
+            v = args[0] if args else None
+            if isinstance(v, list):
+                return list(reversed(v))
+            self.note(4, f"reversed of a {type_name(v)}; null")
+            return None
+        if name == "any":
+            v = args[0] if args else None
+            if isinstance(v, list):
+                return any(truthy(x) for x in v)
+            self.note(4, f"any of a {type_name(v)}; false")
+            return False
+        if name == "all":
+            v = args[0] if args else None
+            if isinstance(v, list):
+                return all(truthy(x) for x in v)
+            self.note(4, f"all of a {type_name(v)}; false")
+            return False
+        if name == "first":
+            v = args[0] if args else None
+            if isinstance(v, list):
+                if not v:
+                    self.note(4, "first of an empty list; null")
+                    return None
+                return v[0]
+            if isinstance(v, str):
+                if not v:
+                    self.note(4, "first of an empty string; null")
+                    return None
+                return v[0]
+            self.note(4, f"first of a {type_name(v)}; null")
+            return None
+        if name == "last":
+            v = args[0] if args else None
+            if isinstance(v, list):
+                if not v:
+                    self.note(4, "last of an empty list; null")
+                    return None
+                return v[-1]
+            if isinstance(v, str):
+                if not v:
+                    self.note(4, "last of an empty string; null")
+                    return None
+                return v[-1]
+            self.note(4, f"last of a {type_name(v)}; null")
+            return None
+        if name == "take":
+            v = args[0] if args else None
+            n = args[1] if len(args) > 1 else None
+            if not isinstance(n, int) or isinstance(n, bool):
+                self.note(4, "take needs a count; null")
+                return None
+            if n < 0:
+                n = 0
+            if isinstance(v, list):
+                return v[:n]
+            if isinstance(v, str):
+                return v[:n]
+            self.note(4, f"take of a {type_name(v)}; null")
+            return None
+        if name == "drop":
+            v = args[0] if args else None
+            n = args[1] if len(args) > 1 else None
+            if not isinstance(n, int) or isinstance(n, bool):
+                self.note(4, "drop needs a count; null")
+                return None
+            if n < 0:
+                n = 0
+            if isinstance(v, list):
+                return v[n:]
+            if isinstance(v, str):
+                return v[n:]
+            self.note(4, f"drop of a {type_name(v)}; null")
+            return None
+        if name == "unique":
+            v = args[0] if args else None
+            if isinstance(v, list):
+                out = []
+                for x in v:
+                    if not any(deep_eq(u, x) for u in out):
+                        out.append(x)
+                return out
+            self.note(4, f"unique of a {type_name(v)}; null")
+            return None
+        if name == "flatten":
+            v = args[0] if args else None
+            if isinstance(v, list):
+                out = []
+                for x in v:
+                    if isinstance(x, list):
+                        out.extend(x)
+                    else:
+                        out.append(x)
+                return out
+            self.note(4, f"flatten of a {type_name(v)}; null")
+            return None
+        if name == "chunk":
+            v = args[0] if args else None
+            n = args[1] if len(args) > 1 else None
+            if not isinstance(n, int) or isinstance(n, bool):
+                self.note(4, "chunk needs a size; null")
+                return None
+            if n <= 0:
+                self.note(4, "chunk size must be positive; empty")
+                return []
+            if isinstance(v, list):
+                return [v[i:i + n] for i in range(0, len(v), n)]
+            self.note(4, f"chunk of a {type_name(v)}; null")
+            return None
+        if name == "round":
+            v = args[0] if args else None
+            d = args[1] if len(args) > 1 else 0
+            if not isinstance(d, int) or isinstance(d, bool):
+                self.note(4, "digit count must be an int; treated as 0")
+                d = 0
+            if d < 0:
+                self.note(4, "negative digit count; treated as 0")
+                d = 0
+            if isinstance(v, bool):
+                self.note(4, f"round of a {type_name(v)}; 0")
+                return 0
+            if isinstance(v, int):
+                return v
+            if isinstance(v, float):
+                if v != v or v in (float("inf"), float("-inf")):
+                    return v
+                scale = 10.0 ** d
+                r = (abs(v) * scale + 0.5) // 1 / scale
+                r = r if v >= 0 else -r
+                if d == 0:
+                    if not (-(2**63) <= r <= 2**63 - 1):
+                        raise Stress("overflow", "float too large for round to int")
+                    return int(r)
+                return r
+            self.note(4, f"round of a {type_name(v)}; 0")
+            return 0
+        if name == "clamp":
+            v = args[0] if args else None
+            lo = args[1] if len(args) > 1 else None
+            hi = args[2] if len(args) > 2 else None
+            nums = (int, float)
+            if not (isinstance(v, nums) and not isinstance(v, bool)
+                    and isinstance(lo, nums) and not isinstance(lo, bool)
+                    and isinstance(hi, nums) and not isinstance(hi, bool)):
+                self.note(4, "clamp needs three numbers; null")
+                return None
+            if v < lo:
+                return lo
+            if v > hi:
+                return hi
+            return v
+        if name == "divmod":
+            # parity by construction: reuses the // and % operators
+            a = args[0] if args else None
+            b = args[1] if len(args) > 1 else None
+            q = self.binop("//", a, b)
+            r = self.binop("%", a, b)
+            return [q, r]
         self.note(4, f"unknown builtin '{name}'; null")
         return None
 
