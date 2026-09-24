@@ -43,6 +43,8 @@ bottom.</p>
       <tr><td>Codon optimality</td><td><code>codon()</code> scoring in check grading</td></tr>
       <tr><td>Overlapping reading frames</td><td><code>frame proof</code> — tests and code in one sequence</td></tr>
       <tr><td>Alternative splicing</td><td><code>splice { variant }</code> + <code>--variant</code> / <code>.cell</code> selection</td></tr>
+      <tr><td>Phenotypic state and differentiation</td><td><code>phenotype</code> classes: <code>new</code>, <code>init</code>, <code>self</code>, inheritance <code>from</code></td></tr>
+      <tr><td>Polypeptide elongation (values produced one at a time)</td><td><code>sequence</code> generators + <code>yield</code> / <code>.next()</code> / <code>.collect()</code> on worker cells</td></tr>
       <tr><td>RNA editing</td><td><code>.rna</code> hot patches (<code>edit</code>/<code>replace</code>)</td></tr>
       <tr><td>Upstream ORF repression</td><td><code>guard (cond) else { }</code> leading clauses</td></tr>
       <tr><td>DNA methylation / epigenetics</td><td><code>.cell</code> config layer + <code>methyl()</code></td></tr>
@@ -58,9 +60,10 @@ bottom.</p>
       <tr><td>Gene regulatory networks</td><td><code>regulate</code> + <code>grn_fire/grn_state</code></td></tr>
       <tr><td>Toggle switch bistability</td><td><code>toggle a, b;</code></td></tr>
       <tr><td>Repressilator oscillation</td><td><code>repressilator a -&gt; b -&gt; c</code></td></tr>
-      <tr><td>Single-cell transcriptomics / burst index</td><td><code>fingerprint()</code> call/noise telemetry</td></tr>
-      <tr><td>RNA velocity</td><td>spliced/unspliced/velocity metrics</td></tr>
-      <tr><td>CRISPR knockout screens</td><td><code>operon crispr --knockout</code></td></tr>
+      <tr><td>Single-cell transcriptomics / burst index</td><td><code>fingerprint()</code> calls / burst / mature / nascent / maturation telemetry</td></tr>
+      <tr><td>Transcript maturation share (honest replacement for velocity)</td><td><code>maturation</code> = mature / total genes</td></tr>
+      <tr><td>RNA interference (antiviral silencing)</td><td>capability sandbox: default-deny, Stress <code>interference</code> (SPEC §9b)</td></tr>
+      <tr><td>CRISPR knockout screens</td><td><code>operon crispr --knockout</code> / <code>--matrix</code></td></tr>
     </tbody>
   </table>
 </div>
@@ -100,11 +103,12 @@ their positive charge, loosens DNA wrapping, and generally means <em>eager, tran
 chromatin; repressive methylation compacts nucleosomes and locks regions down. The marks are
 epigenetic: the DNA sequence is untouched, but the behavior of the region changes. Operon's
 <code>@acetylate</code> marks a gene as eager/priority — it is excluded from <code>silence</code>
-rewriting, because active chromatin stays active. <code>@methylate</code> represses a gene: calls to
-it still run (repression is not deletion), but each call emits a soft <code>"methylated call"</code>
-note — suppressed when the <code>.cell</code> config sets <code>methylate.quiet = true</code> — and
-marked genes are excluded from generated docs. Neither mark edits the function body: the layer sits
-<em>above</em> the source, exactly as epigenetics sits above the genome.</p>
+rewriting (and from toggle-gated call refusal), because active chromatin stays active.
+<code>@methylate</code> represses a gene: calls to it still run (repression is not deletion), but the
+<strong>first call</strong> emits a soft <code>"methylated call"</code> note — the cell does not
+narrate every repression, so later calls are silent — and the note disappears entirely when the
+<code>.cell</code> config sets <code>methylate.quiet = true</code>. Neither mark edits the function
+body: the layer sits <em>above</em> the source, exactly as epigenetics sits above the genome.</p>
 
 <h2 id="surveillance">3 · Transcript surveillance: NMD, RISC, editing</h2>
 <p>Cells audit their transcripts three ways, and Operon implements all three as distinct tools.</p>
@@ -178,55 +182,75 @@ Instances are ordinary maps with hidden <code>#fate</code>/<code>#state</code> k
 inspectable but not casually overwritable.</p>
 <p><strong>Gene regulatory networks.</strong> Promoters regulate promoters: activators raise target
 expression with measurable strength, repressors subtract from it. <code>regulate { a activates b
-strength 0.8; c inhibits d; }</code> declares the signed, weighted graph (default strength 1.0);
-<code>grn_fire("a")</code> sets <code>a</code> to level 1.0 and propagates in waves — activation sets
-<code>child = max(child, parent × strength^wave)</code>, inhibition computes
-<code>child = max(0, child − parent × strength^wave)</code> — attenuation increasing with each hop,
-as in a signaling cascade. <code>grn_state()</code> returns the level map of every gene in the
-graph.</p>
+strength 0.8; c inhibits d; }</code> declares the signed, weighted graph (default strength 1.0). The
+network is <strong>stateful</strong>: levels persist across <code>grn_fire("a")</code> calls —
+homeostasis — and each fire seeds the source additively, capped at 1.0. Each fire runs in two
+phases. <em>Phase 1, activation</em>: influence propagates in waves,
+<code>child = max(child, parent × strength^wave)</code> — each hop attenuates by another factor of
+strength, as in a signaling cascade. <em>Phase 2, inhibition</em>: each repressor applies its
+influence <strong>exactly once per fire</strong>,
+<code>child = max(0, child − parent × strength)</code>, based on the source's post-activation
+level — a repressor's concentration sets the output level; it does not compound across waves. An
+edge may carry an optional <code>threshold t</code> (dose–response, n = 2):
+influence = <code>strength × p² / (p² + t²)</code> where p is the parent level — weak below the
+threshold, saturating above it, the sigmoid dose–response of a real binding site.
+<code>grn_state()</code> returns the level map of every gene in the graph.</p>
 <p><strong>The toggle switch.</strong> Two repressors arranged so that each shuts the other off form
 a bistable memory element: the system must rest in exactly one of two states, and it remembers which
 until actively flipped. <code>toggle a, b;</code> declares the pair; <code>toggle_on("a")</code>
 turns <code>a</code> on and <code>b</code> off; <code>toggle_state()</code> reports both. The
-invariant is absolute — exactly one may be on.</p>
+invariant is absolute — exactly one may be on — and the pair <strong>gates calls</strong>: invoking
+the repressed allele returns <code>null</code> with a note (<code>toggle repressed: 'x' is the
+inactive allele ('y' is on)</code>). <code>@acetylate</code> genes are immune; open chromatin wins.</p>
 <p><strong>The repressilator.</strong> A ring of three repressors, each repressing the next, produces
 self-sustaining oscillation — the synthetic-biology demonstration that a regulatory <em>topology</em>
 alone can generate a clock. <code>repressilator a -&gt; b -&gt; c;</code> declares the ring.
 <code>repressi_next()</code> advances it deterministically (each step represses the previous gene,
 releasing the next; <code>repressi_state()</code> shows the on gene at 1.0, others 0.0) — the
-reproducible mode tests rely on. Adding <code>period 3</code> and calling <code>repressi_start()</code>
-spawns a real OS thread flipping the ring every 3 seconds — the demo mode, an actual oscillator
-against the wall clock.</p>
+reproducible mode tests rely on. Declaring it with <code>period 3</code> immediately spawns a real
+OS thread flipping the ring every 3 seconds, and <code>repressi_start(ms)</code> restarts the timed
+ring with an explicit millisecond period — the demo mode, an actual oscillator against the wall
+clock.</p>
 
 <h2 id="telemetry">7 · Telemetry: the single-cell layer</h2>
 <p>Single-cell transcriptomics reads expression <em>per cell</em> rather than per bulk culture, and
-two quantities dominate the analysis. The <strong>burst index</strong> (variance over mean of
-molecule counts) separates transcript noise from steady expression — a bursty, occasionally-fired
-gene has a high burst index; a constitutively expressed one sits near baseline. <strong>RNA
-velocity</strong> compares unspliced (nascent) to spliced (mature) transcript counts to infer the
-<em>direction</em> a population is moving: high unspliced fraction means the gene is being ramped
-up right now.</p>
-<p><code>fingerprint()</code> returns exactly this for a run: <code>calls</code> (gene → count),
-<code>fano</code> (variance/mean of call-time buckets; 0 for ≤1 call), <code>spliced</code> (genes
-executed at least once), <code>unspliced</code> (defined but never executed), and <code>velocity</code>
-(unspliced / total). <code>operon profile f.op</code> runs instrumented and prints the per-gene
-table — calls, self-time in microseconds, flags (<code>enhanced active repressed</code>) — followed
-by the spliced/unspliced/velocity summary and <em>enhance suggestions</em>: the top
-unspliced-but-hot candidates that deserve an <code>enhance</code> cluster. Telemetry is not a bolt-on
-debugger; it is the same readout a profilometer gives a culture.</p>
+the quantity that separates a bursty gene from a steady one is transcriptional <strong>burst
+kinetics</strong>: counts sampled over fixed windows give a variance-over-mean ratio — the burst
+index — that is high for genes fired in occasional bursts and near zero for constitutively expressed
+ones. And the fraction of a gene population that has actually been read out — genes called at least
+once, over all genes defined — is the <strong>transcript maturation share</strong>: the honest,
+measurable counterpart of the velocity idea, without pretending to infer direction from a single
+cell.</p>
+<p><code>fingerprint()</code> returns exactly this for a run. The run's global call clock is sliced
+into <strong>complete bins of 20 gene calls</strong> (a trailing partial bin is dropped); each
+gene's count per bin is one sample, and its burst index is the variance of those samples over their
+mean — 0 for a gene with one or fewer calls or a single bin. The returned map carries
+<code>calls</code> (gene → count), <code>mature</code> (genes called at least once),
+<code>nascent</code> (defined but never called), <code>maturation</code> (mature / total — the
+transcript maturation share), <code>burst</code> (the mean per-gene burst index), and
+<code>burst_by_gene</code>. <code>operon profile f.op</code> runs instrumented and prints the
+per-gene table — calls, <strong>exclusive self-time in microseconds</strong> (children subtracted,
+so a wrapper gene shows only its own overhead), flags (<code>enhanced active repressed</code>) —
+followed by the <code>mature · nascent · maturation</code> summary and <em>enhance candidates</em>:
+the hot genes (called at least 10% as often as the most-called gene) that carry no
+<code>enhance</code> annotation yet. Telemetry is not a bolt-on debugger; it is the same readout a
+profilometer gives a culture.</p>
 
 <h2 id="screens">8 · Perturbation: knockout screens</h2>
 <p>A <strong>CRISPR knockout screen</strong> disables one gene at a time across a population and
 records which knockouts change the phenotype — causal maps built by systematic ablation. Operon's
 <code>operon crispr f.op --knockout gene</code> is that protocol for code: the target gene's body is
 rewritten to <code>return null</code>, the file's proof frames are then run, and survivors (proofs
-that still pass) are reported — with <code>--json</code> for machine consumption. A gene whose
-knockout changes nothing is a lead: probably dead code, arguably an unspliced transcript. The
-epigenetic counterpart completes the layer: the <code>.cell</code> methylation config (key = value
-lines, section headers, <code>#</code> comments; auto-detected as <code>operon.cell</code>) carries
-keys the implementation consumes — <code>variant.&lt;splice&gt;</code>, <code>methylate.quiet</code>,
-<code>wobble.strict</code>, <code>entry</code> — and programs read their own configuration via
-<code>methyl("key", default?)</code>, the way a locus reads its own methylation state.</p>
+that still pass) are reported — with <code>--json</code> for machine consumption.
+<code>operon crispr f.op --matrix</code> runs the whole screen: <strong>every top-level gene</strong>
+is knocked out in turn and the viability table printed (a gene whose knockout breaks a proof is
+marked <code>ESSENTIAL</code>; one whose knockout changes nothing is dispensable — probably dead
+code, arguably a nascent transcript). The epigenetic counterpart completes the layer: the
+<code>.cell</code> methylation config (key = value lines, section headers, <code>#</code> comments;
+auto-detected as <code>operon.cell</code>) carries keys the implementation consumes —
+<code>variant.&lt;splice&gt;</code>, <code>methylate.quiet</code>, <code>wobble.strict</code>,
+<code>entry</code> — and programs read their own configuration via <code>methyl("key", default?)</code>,
+the way a locus reads its own methylation state.</p>
 
 <div class="callout">
   <p><b>One law above the layer.</b> Regulation never rejects: silencing redirects, methylation
@@ -247,8 +271,8 @@ keys the implementation consumes — <code>variant.&lt;splice&gt;</code>, <code>
   <div class="wrap foot-inner">
     <div>
       <a class="logo" href="index.html"><span class="logo-mark"></span>operon<b>.lang</b></a>
-      <p class="mono">Operon 2.0.0 · rust-core · c-runtime · cpp-kernel<br>
-      SPEC frozen for v2.0 · Total Grammar: nothing is rejected.</p>
+      <p class="mono">Operon 2.1.0 · rust-core · c-runtime · cpp-kernel<br>
+      SPEC v2.1 · Total Grammar: nothing is rejected.</p>
     </div>
     <div class="foot-links">
       <a href="index.html">Overview</a>

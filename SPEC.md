@@ -1,6 +1,6 @@
-# Operon v2.0 — Frozen Language Specification
+# Operon v2.1 — Language Specification
 
-**Status:** FROZEN for v2.0. This document is the single contract implemented identically by:
+**Status:** v2.1.0. This document is the single contract implemented identically by:
 
 | Implementation | Language | Role |
 |---|---|---|
@@ -31,19 +31,21 @@ Ordering `< <= > >=` on numbers and strings; between incompatible types → rais
 
 Arithmetic:
 - `+ - *` numeric (int×float → float); `+` on two strings concatenates; `+` on two lists concatenates.
-- `/` true division, always Float. `//` floor division (Int). `%` floored remainder, sign follows divisor.
+- `/` true division, always Float. `//` floor division (Int). `%` floored remainder, sign follows divisor; `int % int` returns Int.
+- `**` power, right-associative (`2 ** 3 ** 2` → 512), binds tighter than unary minus on its left (`-2 ** 2` → −4); int base with a non-negative int exponent → Int, otherwise Float.
+- Bitwise: `& | ^` (and, or, xor), `<< >>` shifts, `~` bitwise not — Int operands, Int results.
 - Integer overflow wraps? NO — overflow raises Stress `overflow` (catchable).
-- `~` none. Bitwise ops: not in v2.0.
 
 ## 3. Lexical
 
 - Comments: `#` to end of line. `#!` shebang allowed on line 1.
-- Strings: `"double"`; escapes `\n \t \\ \" \{`; interpolation `"{expr}"` — any expression, evaluated at runtime, `str()`-coerced. No single-quoted strings in canonical form (a `'` in code is a wobble: treated as `"` with a note).
+- Strings: `"double"`; escapes `\n \t \\ \" \{ \}`; interpolation `"{expr}"` — any expression, evaluated at runtime, `str()`-coerced. No single-quoted strings in canonical form (a `'` in code is a wobble: treated as `"` with a note).
 - Identifiers `[A-Za-z_][A-Za-z0-9_]*`.
 - Numbers: `42`, `3.14`, `1e3` (float). Negative via unary minus.
 - Newlines terminate statements; `;` allowed and ignored (also `;;`, stray). Blocks are `{ ... }`.
-- Keywords (canonical):
-  `gene let if elif else while loop for in return break continue match case use tad anchor export import enhance silence stress rescue raise fate state regulate activates inhibits strength toggle repressilator period frame proof guard splice variant edit replace apply true false null and or not collect ires`
+- Keywords (canonical, 51 — the parser's reserved set):
+  `gene let if elif else while loop for in return break continue match case use tad anchor export import enhance silence stress rescue raise fate state regulate activates inhibits strength toggle repressilator period frame proof guard splice variant edit replace ires as collect enter phenotype sequence yield new threshold from self`
+- Literal words `true false null` and the logical words `and or not` are recognized in expression positions (not part of the reserved keyword table).
 - Marks: `@acetylate` `@methylate` `@m6a`.
 - `#` inside a string does NOT start a comment.
 
@@ -70,7 +72,8 @@ name += -= *= //= expr              # compound (also on a[i], a.k targets)
 if expr { } elif expr { } else { }  # elif/else optional, elif chainable
 while expr { }
 loop { }                            # infinite; break/continue
-for name in expr { }                # List→items, Str→1-char strs, Map→keys
+for name in expr { }                # List→items, Str→1-char strs, Map→keys,
+                                    # sequence → pulled values (§7b)
 return expr?                        # bare return → null
 break / continue
 match expr { case p { } ... }       # patterns: literals (==, comma-sep allowed),
@@ -78,20 +81,31 @@ match expr { case p { } ... }       # patterns: literals (==, comma-sep allowed)
 use path (as name)?                 # file import → binds module Map (see §8)
 raise expr                          # raise Stress{kind:"unfolded", message: str(e)}
 raise kind , expr                   # kind ∈ unfolded missing overflow burned
-stress (kind)? { B } rescue (e)? { R }   # containment, see §9
+stress (kind)? { B } rescue (e)? { R }   # containment, see §9 (kinds incl.
+                                    # `interference`, §9b — sandbox denials)
+
+Name { B }                          # bare-name block: a gene definition with no
+                                    # params (rung-4 note) — `main { }` is the
+                                    # C-like entry idiom
 ```
 
 ## 6. Expressions (precedence low → high)
 
-1. `or` (`||`) — short-circuits, returns operand value (`a or b` → a if truthy else b)
-2. `and` (`&&`) — same semantics
-3. unary `not` (`!`) — `not a == b` parses as `not (a == b)`
-4. comparisons `== != < <= > >=` and `in` (left-assoc, no chaining); `x in xs`: List membership, Str substring, Map key membership
-5. `+ -`
-6. `* / // %`
-7. unary `-`
-8. postfix: call `f(x)`, index `a[i]`, member `a.k`, method call `a.k(args)`
-9. primary: literal, ident, `(expr)`, list `[a, b]`, map `{k: v, "k2": v}`, lambda, `collect` (§7)
+1. `cond ? a : b` — ternary, right-associative, lowest precedence
+2. `or` (`||`) — short-circuits, returns operand value (`a or b` → a if truthy else b)
+3. `and` (`&&`) — same semantics
+4. unary `not` (`!`) — `not a == b` parses as `not (a == b)`
+5. comparisons `== != < <= > >=` and `in` (left-assoc, no chaining); `x in xs`: List membership, Str substring, Map key membership
+6. bitwise OR `|`
+7. bitwise XOR `^`
+8. bitwise AND `&`
+9. shifts `<< >>`
+10. `+ -`
+11. `* / // %`
+12. unary `-` and `~` (bitwise not)
+13. `**` power — right-associative, binds tighter than unary minus on its left
+14. postfix: call `f(x)`, index `a[i]`, member `a.k`, method call `a.k(args)`
+15. primary: literal, ident, `(expr)`, list `[a, b]`, map `{k: v, "k2": v}`, lambda, `collect` (§7), `new Name(args)` (§7a)
 
 Member access on Map → key lookup (missing → Null + note). Methods (see §10) are native.
 `a.k = v` assigns map key. `a[i] = v` assigns list index (out of range → Stress `missing`, catchable).
@@ -113,20 +127,57 @@ let f = gene (x) => x * 2
 
 **collect expression** (comprehension): `for x in xs collect x * 2` is an expression evaluating to a List. Optional filter: `for x in xs if x > 0 collect x`.
 
+## 7a. Phenotypes (classes)
+
+```
+phenotype Name {
+    let field = value                # field with a default value (any expr)
+    gene init(p1, ...) { self.f = p1 }   # constructor (optional)
+    gene method(a) { return self.f + a } # methods read/write fields via self
+}
+phenotype Child from Parent { ... }  # inheritance: methods + fields
+let o = new Name(args)               # construct (calls init if declared)
+```
+
+- `new Name(args)` builds an instance: field defaults apply lineage root-first (parent fields, then own overrides), then exactly one `init` runs with the args — the lineage is searched **root-first** and the first (least-derived) `init` found wins; a child's `init` only runs if no ancestor declares one. Without any `init`, fields keep their defaults. (`super` is not a binding: an unbound `super.init(...)` inside `init` reads null with a note.)
+- `self.f` reads and writes fields inside methods. Field access from outside: `o.f`. Missing fields → `null` + note.
+- Method dispatch: own methods first, then the parent chain. Missing method → `null` + note.
+- `type(o)` returns the phenotype name (`"Counter"`); `o.f = v` assigns a field. Phenotype instances cross `spawn` boundaries by serialization (they travel as maps carrying a hidden `#phenotype` key).
+- Marks may precede `gene` inside a phenotype (`@acetylate gene m() { ... }`).
+
+## 7b. Sequences (generators)
+
+```
+sequence name(p1, p2 = default) {
+    ...
+    yield v                          # produce a value; body suspends until pulled
+}
+let s = name(3)
+s.next()                             # next value, or null when exhausted
+s.collect()                          # drain remaining values into a List
+for v in name(3) { ... }             # sequences are directly iterable
+```
+
+- A sequence body runs on its own **worker cell** (a real OS thread); the consumer pulls values through a rendezvous channel. Pull is lazy — a sequence that yields forever is legal and only produces values on demand.
+- Values cross the membrane by serialization. Named genes and lambdas may travel as arguments (they cross by definition); a running sequence object itself does not cross.
+- Honesty note: the Rust core pulls lazily; the Python oracle models a sequence by running the body to completion on first pull (buffered). Output is identical for programs that do not print inside a sequence body, and the differential corpus avoids infinite sequences.
+- `yield` outside a sequence is treated as `return` with a note.
+
 ## 8. Modules, TADs, anchors
 
-- `use path;` — path like `std/bio`, `./util`, `util` (`.op` appended if absent). Resolution order: (1) relative to importing file's dir; (2) `./std/` under CWD; (3) `$OPERON_STD`. Binds one name: basename, or `as name`. `use std/bio as b;` → `b.some_fn(...)`. Importing the same file twice executes it once (module cache).
+- `use path;` — path like `std/bio`, `./util`, `util` (`.op` appended if absent). Resolution order: (1) relative to the importing file's dir; (2) the path as written, under CWD; (3) `std/` under CWD; (4) `$OPERON_STD` joined with the path as written (not double-joined with `std/`). Binds one name: basename, or `as name`. `use std/bio as b;` → `b.some_fn(...)`. Importing the same file twice executes it once (module cache).
+- Import gating (§9b): imports that resolve inside the program's own managed trees — the importing file's project directory, the CWD, or the standard library — are always allowed; a `use` that reaches outside those trees requires a read capability.
 - A module evaluates to a Map of its **exported** names. Export rule:
   - If the file contains any `anchor export a, b;` (at top level or inside a tad), ONLY those names are exported.
   - With zero `anchor export` anywhere, all top-level genes and lets are exported (default-open).
 - `tad Name { ... }` — topologically-associating domain: an insulation boundary. Names inside a tad escape ONLY via `anchor export` **inside that tad**. Tads may not nest (nesting degrades to a merged tad + note). A file may have several tads.
-- `anchor import x;` — declares an external name the domain expects; purely declarative + `operon check` verifies it exists (note if not).
+- `anchor import x;` — declares an external name the domain expects; `operon check` verifies it exists in the file or in used modules (−2 and a finding if not).
 - Cyclic `use` → second import returns the partial module Map + note (no hang).
 
 ## 9. Stress containment (errors)
 
 Runtime failures raise a **Stress** value: Map `{"kind": Str, "message": Str}`. Kinds:
-`unfolded` (type errors), `missing` (bad index/key/member/null-deref), `overflow` (int overflow, depth limit), `burned` (assertion failures, resource errors), `any` (catch-all position only).
+`unfolded` (type errors), `missing` (bad index/key/member/null-deref), `overflow` (int overflow, depth limit, resource ceilings), `burned` (assertion failures, resource errors), `interference` (capability-sandbox denials, §9b), `any` (catch-all position only).
 
 ```
 stress { RISKY } rescue (e) { promote("contained: {e.message}") }
@@ -138,9 +189,46 @@ stress missing { ... } rescue { ... }    # kind filter: only catches `missing`
 - Uncaught at top level → printed as containment note, run continues (or ends that entry call with Null).
 - `assert(cond, msg?)` raises Stress `burned` on failure (this is what proof frames catch).
 
+## 9b. Security — the capability sandbox
+
+The runtime is **default-deny**: a program is an organism in a culture flask, and nothing outside the flask exists until the operator grants it. The builtins `read_file`, `write_file`, `append_file`, `exists`, `read_dir`, `run`, `http_get`, `serve`, and `env` raise catchable Stress `interference` when no grant covers the access — RNA-interference: the cell's antiviral machinery silences the operation instead of crashing. `recv_request`/`send_response` poll a queue that only `serve` fills, so they are inert without a granted server.
+
+Grants (operator-side, CLI):
+
+```
+operon run app.op --allow-read /data --allow-write /tmp/out \
+              --allow-run gzip --allow-net 127.0.0.1:8080 --allow-env API_KEY
+operon run app.op --allow-all           # open flask (for scripts that mean it)
+```
+
+- Path grants (`read`/`write`) resolve symlinks: the requested path is canonicalized before comparison against the canonicalized grant. A grant that normalizes to the empty string (`/`, or `.` from `/`) would match everything and is **rejected** at startup.
+- `--allow-net` takes `host:port`; `--allow-env` takes a variable name; `--allow-run` takes a program name.
+- `.cell` grant keys (`allow.read = /data`, …) are honored **only** when the config is loaded explicitly via `--cell file.cell`. An auto-detected `operon.cell` cannot grant capabilities — its `allow.*` keys are ignored with an `[info]` note (a file that happens to sit in the project must not silently widen the sandbox).
+- `use` imports: files inside the program's own project directory, the CWD, or the standard library are always importable (otherwise nothing imports under default-deny). A `use` that resolves outside those managed trees requires a read grant; the denial is Stress `interference`.
+
+Resource ceilings (all raise catchable Stress):
+
+| Resource | Ceiling |
+|---|---|
+| Recursion depth | 10,000 (`overflow`) |
+| Step budget | 200,000,000 steps per run (`overflow` "step budget exhausted"); `--fuel N` lowers it |
+| String `.repeat()` allocation | 512 MiB |
+| `distance()` dynamic-programming table | 10,000,000 cells |
+| `sleep()` | 60,000 ms (sleep escapes the step budget, so it is capped) |
+| `json_parse` nesting | 512 levels |
+| Integer arithmetic | i64, overflow → `overflow` (no wrap) |
+
 ## 10. Builtins and methods
 
-**Builtins:** `promote(*a)` (print, space-joined, returns null) · `len` · `push(l,v)` · `pop(l)` · `insert(l,i,v)` · `remove(l,i)` · `keys(m)` · `values(m)` · `has(m,k)` · `del(m,k)` · `range(a, b?, step?)` (returns List) · `str` · `num` (fails → 0 + note) · `type` (`null bool int float str list map gene native`) · `abs min max sum` · `clock()` (seconds, float) · `exit(n?)` · `assert(c, msg?)` · `codon(s)` (0–100 style score of an identifier) · `distance(a,b)` (edit distance, C++ bit-parallel kernel) · `similar(a,b,maxd?)` (bool) · `transcribe(dna)` · `translate(rna)` (stops at stop codon) · `reverse_complement(dna)` · `gc_content(dna)` (0–100) · `find_orf(dna)` (list of ORF proteins) · `memory()` (map `arena_bytes, interns, allocs` from the C runtime) · `fingerprint()` (run telemetry, §12) · `spawn(f, args?)` → id · `join(id)` → value · `toggle_on(name)` · `toggle_state()` · `repressi_next()` · `repressi_state()` · `grn_fire(name)` · `grn_state()` · `methyl(key, default?)`.
+**Builtins — core:** `promote(*a)` (print, space-joined, returns null) · `len` · `push(l,v)` · `pop(l)` · `insert(l,i,v)` · `remove(l,i)` · `keys(m)` · `values(m)` · `has(m,k)` · `del(m,k)` · `range(a, b?, step?)` (returns List) · `str` · `num` (fails → 0 + note) · `type` (`null bool int float str list map gene native sequence`, or the phenotype name for instances) · `abs min max sum` · `floor(x)` `ceil(x)` (→ Int) · `sqrt(x)` `pow(b, e)` (→ Float) · `clock()` (monotonic seconds, float) · `now()` (monotonic seconds, float — the same high-resolution timer under a briefer name) · `exit(n?)` · `assert(c, msg?)` · `codon(s)` (0–100 style score of an identifier) · `distance(a,b)` (edit distance, C++ bit-parallel kernel; 10M-cell ceiling) · `similar(a,b,maxd?)` (bool) · `transcribe(dna)` · `translate(rna)` (stops at stop codon) · `reverse_complement(dna)` · `gc_content(dna)` (0–100) · `find_orf(dna)` (list of ORF proteins) · `memory()` (map `arena_bytes, interns, allocs` from the C runtime) · `methyl(key, default?)`.
+
+**Builtins — randomness and dynamic dispatch:** `random()` (float in [0,1)) · `random(n)` (int in [0,n)) · `randomize(seed?)` (deterministic xorshift state, identical in both implementations) · `chr(i)` · `ord(c)` · `argv()` (List of the arguments after the script path) · `sleep(ms)` (≤ 60,000 ms) · `call(name_or_gene, args_list)` (dynamic dispatch — resolves builtins, named genes, or gene values).
+
+**Builtins — JSON:** `json_parse(s)` (→ value; nesting > 512 → Stress) · `json_str(v)`.
+
+**Builtins — capability-gated (§9b; denied → Stress `interference`):** `read_file(p)` · `write_file(p, s)` · `append_file(p, s)` · `exists(p)` · `read_dir(p)` (List of names) · `run(prog, args?)` (map `code stdout stderr ok`) · `http_get(host, port?, path?)` (response body) · `serve(port?)` · `recv_request()` (map `conn method path body`, or null) · `send_response(conn, status?, ctype?, body?)` · `env(name)`.
+
+**Builtins — concurrency, telemetry, regulation:** `fingerprint()` (run telemetry, §14) · `spawn(f, args?)` → id · `join(id)` → value · `toggle_on(name)` · `toggle_state()` · `repressi_next()` · `repressi_state()` · `repressi_start(ms)` · `grn_fire(name)` · `grn_state()`.
 
 **Str methods:** `.upper() .lower() .trim() .split(sep) .join(list) .replace(a,b) .contains(x) .starts(x) .ends(x) .repeat(n) .slice(a,b) .len()`
 **List methods:** `.map(f) .filter(f) .reduce(f, init) .each(f) .sort(cmp?) .reverse() .contains(x) .index_of(x) .slice(a,b) .join(sep) .len()` (cmp returns true when a before b)
@@ -153,53 +241,69 @@ All features are real, implemented, tested — none are decorative.
 - **`tad` / `anchor`** — §8. Module insulation with export anchors.
 - **`enhance a, b, c;`** — super-enhancer cluster: marks genes; `operon profile` shows the enhancement flag; `operon check` gives the file a codon-score bonus for enhanced hot genes.
 - **`@acetylate`** — histone acetylation mark: gene is eager/priority; excluded from silence rewriting (active chromatin stays active); shown as `active` in profile.
-- **`@methylate`** — histone methylation mark: gene is repressed; calls to it emit a soft note "methylated call" (suppressed when `.cell` sets `methylate.quiet = true`); excluded from docs.
-- **`@m6a`** — m6A mark = dispatch priority: among same-name candidates (splice variants, shadowing), the m6a-marked one wins resolution.
+- **`@methylate`** — histone methylation mark: gene is repressed; the **first call** to it emits a soft note "methylated call" (later calls are silent — the cell does not narrate every repression; suppressed entirely when `.cell` sets `methylate.quiet = true`); marked genes are excluded from generated docs.
+- **`@m6a`** — m6A mark = dispatch priority + transcript stability: among same-name candidates (splice variants, shadowing), the m6a-marked one wins resolution, and an m6a-marked binding **resists redefinition** — an unmarked re-`gene` of the same name is ignored with a note ("@m6a-stabilized; redefinition ignored"); mark the new copy too, to replace it.
 - **`silence old -> new;`** — RISC-style silencing: after this statement, every call to gene `old` is redirected to `new` with a note "RISC: call silenced". `@acetylate` genes are immune. Same-name splice variants resolve first, then silencing applies to the resolved name.
 - **NMD sweep** (`operon check --nmd`): "premature stops" = unreachable statements after an unconditional `return` (reported −4 each); "untranslated transcripts" = defined, never-called, non-exported, non-enhanced genes (info, −1). `--nmd purge` rewrites the file without them.
-- **`splice name { variant a { } variant b { } }`** — alternative splicing: `name(...)` dispatches to the active variant. Selection order: `.cell` `variant.name=v` > CLI `--variant v` > `@m6a`-marked variant > first declared. `operon build --variant a` bakes one variant into a standalone file.
+- **`splice name { variant a { } variant b { } }`** — alternative splicing: `name(...)` dispatches to the active variant. Selection order: `.cell` `variant.name=v` > CLI `--variant v` > first declared (the resolver also consults an `@m6a` mark between the CLI and first-declared steps, but variant declarations cannot currently carry marks — the mark syntax applies to `gene` definitions only). Variants take parameters. `operon build --variant a` bakes one variant into a standalone file (build caveat: a variant's parameter list is not yet carried into the baked file — bake param-less variants, or keep the splice in the source).
 - **`.rna` edit patches** — `edit target { replace "src" -> "dst"; }` where target is a file name or gene name; applied to that target's source text before parsing. CLI: `operon run app.op --rna hot.rna`. Each applied replacement emits a note.
-- **`.cell` methylation config** — `key = value` lines, `[section]` headers, `#` comments. CLI `--cell f.cell`; else `operon.cell` auto-detected. Read via `methyl("k", d?)`. Impl-consumed keys: `variant.<splice>`, `methylate.quiet`, `wobble.strict` (wobble ≥ rung 3 printed as warnings), `entry`.
-- **`ires name;`** — internal ribosome entry site: declares a cap-independent entry gene. `operon run --ires` (or no `main`) runs the first declared `ires` target.
+- **`.cell` methylation config** — `key = value` lines, `[section]` headers, `#` comments. CLI `--cell f.cell`; else `operon.cell` auto-detected. Read via `methyl("k", d?)`. Impl-consumed keys: `variant.<splice>` (active variant), `methylate.quiet` (suppress the methylated-call note), `wobble.strict = true` (a run with any rung ≥ 3 note exits 3, same as `--strict`), `entry` (cap-independent default entry, below CLI `--entry` and above `main`), and `allow.*` capability grants — honored only with explicit `--cell` (§9b).
+- **`ires name;`** — internal ribosome entry site: declares a cap-independent entry gene. `operon run --ires` overrides the canonical `main` entry and runs the first declared `ires` target; a file with no `main` uses it automatically. Entry precedence: CLI `--entry` > `.cell` `entry` > `main` > first `ires`.
 - **`fate Name { state a -> b, c; state b -> a; enter a; }`** — fate landscape state machine. `let m = Name()` enters the `enter` state (default: first declared). Methods on instances: `.shift(s)` (true if transition allowed; invalid → note + false, state unchanged — the valley stay), `.state()` (current), `.can(s)` (bool). Instances are Maps with hidden `#fate`/`#state` keys.
-- **`regulate { a activates b strength 0.8; c inhibits d; }`** — gene regulatory network (default strength 1.0). `grn_fire("a")` sets `a = 1.0` and propagates in waves: activates → `child = max(child, parent × strength^wave)`, inhibits → `child = max(0, child − parent × strength^wave)`. `grn_state()` returns the level Map (all genes in the graph).
-- **`toggle a, b;`** — bistable mutual-repression pair (genetic toggle switch). `toggle_on("a")` turns `a` on and `b` off; `toggle_state()` → Map of both. Exactly one may be on.
-- **`repressilator a -> b -> c;`** — repressive oscillation ring. Manual mode (deterministic, for tests): `repressi_next()` advances the ring (each `next` represses the previous, activating the next), `repressi_state()` → Map of levels (on gene = 1.0, others 0.0). `repressilator a -> b -> c period 3;` + `repressi_start()` spawns a real OS thread flipping every 3 s (demo mode).
+- **`regulate { a activates b strength 0.8; c inhibits d; }`** — gene regulatory network (default strength 1.0). The network is **stateful**: levels persist across `grn_fire` calls (homeostasis), and each fire seeds additively, capped at 1.0. Each fire runs in two phases: (1) **activation** propagates in waves, `child = max(child, parent × strength^wave)` — hop attenuation over up to 10 waves; (2) **inhibition** is applied exactly once per fire, `child = max(0, child − parent × strength)`, based on the source's post-activation level — a repressor's concentration sets the output level, it does not compound across waves. An edge may carry an optional `threshold t` (dose-response, n = 2): influence = `strength × p² / (p² + t²)` where p is the parent level — weak below the threshold, saturating above it. `grn_state()` returns the level Map (all genes in the graph).
+- **`toggle a, b;`** — bistable mutual-repression pair (genetic toggle switch). `toggle_on("a")` turns `a` on and `b` off; `toggle_state()` → Map of both. Exactly one may be on — and the pair gates **calls**: calling the repressed allele returns `null` with a note ("toggle repressed: … is the inactive allele"); `@acetylate` genes are immune (open chromatin wins).
+- **`repressilator a -> b -> c;`** — repressive oscillation ring. Manual mode (deterministic, for tests): `repressi_next()` advances the ring (each `next` represses the previous, activating the next), `repressi_state()` → Map of levels (on gene = 1.0, others 0.0). Declaring `repressilator a -> b -> c period 3;` immediately spawns a real OS thread flipping the ring every 3 seconds (demo mode, wall clock); `repressi_start(ms)` (re)starts the timed ring with an explicit millisecond period. In timed mode `repressi_state()` follows the thread's ring index — a manual `repressi_next()` does not move it.
 
 ## 12. Frames, proofs, overlapping reading frames
 
 - `frame proof { assert(...); ... }` — the **test reading frame** of the file. Skipped by `operon run`; executed by `operon test`. The same file encodes program + tests (two reading frames over one sequence).
 - `frame name { ... }` — named frames (metadata/optional scenes); runnable via `operon run --frame name`.
-- `operon test [paths...]` — default paths: `tests/` recursively. For each file: run its proof frames; a proof failure (Stress burned) is recorded; the suite continues (Total Grammar). Exit code 1 if any failure. Report: files, proofs run, passed, failed, wobble notes count.
+- `operon test [paths...]` — default paths: `tests/` recursively. For each file: run its proof frames; a proof failure (Stress burned) is recorded; the suite continues (Total Grammar). A proof must **run to completion** — an early `return`/`break` inside a proof fails it ("exited early"), and a proof that exercises **zero assertions** fails it ("vacuous proof"). Exit code 1 if any failure. Report: files, proofs run, passed, failed, assertions exercised, wobble notes count. Current suite: 18 files / 18 proofs / 209 assertions, all green on both implementations.
 
 ## 13. Concurrency
 
-- `spawn(f, args?)` — starts a real OS thread running gene `f`; returns task id (Int). `join(id)` waits and returns the result (second join → Null + note).
+- `spawn(f, args?)` — starts a real OS thread running gene `f`; returns task id (Int). `join(id)` waits and returns the result (second join → Null + note). Arguments and results cross by serialization (named genes, lambdas, and phenotype instances cross; a running sequence object does not).
 - Thread panics are impossible by construction: any stress inside the thread is returned as a Stress Map value.
 - Memory model note (honesty): values are reference-counted; tasks communicate by args/results, not shared mutable state. Data races on shared globals are prevented by design (closures capture is by value at spawn time for non-local references).
+- Sequences (§7b) run on the same worker-cell substrate: each sequence body is a worker thread pulling through a rendezvous channel.
 
 ## 14. Telemetry — the single-cell layer
 
-- `fingerprint()` returns Map: `calls` (Map gene→count), `fano` (Map gene→variance/mean over call-time buckets; 0 for ≤1 call), `spliced` (count of genes executed ≥1), `unspliced` (defined but never executed), `velocity` (unspliced / total, 0 if none).
-- `operon profile f.op` — runs instrumented, prints table: gene, calls, self-time µs, flags (`enhanced active repressed`), then spliced/unspliced/velocity summary and **enhance suggestions** (top unspliced-but-hot candidates).
+- `fingerprint()` returns Map:
+  - `calls` — Map gene → call count (phenotype methods count as `Name.method`).
+  - `mature` — genes called at least once.
+  - `nascent` — genes defined but never called.
+  - `maturation` — mature / total defined genes (the transcript-maturation share).
+  - `burst` — the aggregate **burst index**: mean over genes of (variance / mean) of per-gene call counts across complete 20-call bins of the run's call clock.
+  - `burst_by_gene` — the per-gene burst indices (0 for a gene with ≤ 1 call or one bin).
+- Method: the run's global call clock is sliced into windows of 20 gene calls; each gene's count per window is a sample. A gene fired in bursts has a high variance/mean ratio; a constitutively expressed one sits near 0. Only complete bins count (a trailing partial bin is dropped).
+- `operon profile f.op` — runs instrumented, prints table: gene, calls, **exclusive self-time µs** (children subtracted), flags (`enhanced active repressed`), then a `mature · nascent · maturation` summary and **enhance candidates** — hot genes (called ≥ 10% as often as the most-called gene) that carry no `enhance` annotation.
+- The v2.0 telemetry keys `spliced` / `unspliced` / `velocity` (and the per-gene variance/mean noise key) are retired; `mature`/`nascent`/`maturation` carry the same biology honestly (maturation share, not velocity).
 
 ## 15. Toolchain (Rust binary `operon`)
 
 ```
-operon run f.op    [--entry g] [--variant v] [--cell c] [--rna r] [--frame name] [--ires] [--strict] [--quiet] [--json]
+operon run f.op    [--entry g] [--variant v] [--cell c] [--rna r] [--frame name] [--ires]
+                   [--strict] [--quiet] [--fuel N]
+                   [--allow-read p] [--allow-write p] [--allow-run prog]
+                   [--allow-net host:port] [--allow-env var] [--allow-all]   # §9b
 operon check f.op  [--nmd] [--nmd=purge] [--json]
 operon test [paths...]
 operon fmt f.op    [--write]        # canonical formatter; wobble-corrected output parses clean
 operon build f.op  --variant v -o out.op
 operon profile f.op
-operon crispr f.op --knockout gene [--json]   # knockout: body → return null; then run proofs; report survivors
+operon crispr f.op (--knockout gene | --matrix) [--json]
+                   # knockout: body → return null; then run proofs; report survivors.
+                   # matrix: knock out EVERY top-level gene; viability table (ESSENTIAL if a proof fails)
 operon bench f.op  [--iters n]
 operon version
 ```
 
-- Grading (`operon check`): start 100; wobble note −2; fallback note −3; NMD premature stop −4; untranslated transcript −1; phantom call −2; floor 50. Letter: A ≥ 90, B ≥ 80, C ≥ 70, D ≥ 60, else F.
-- `--strict` → exit code 3 if any rung ≥ 3 note occurred.
-- Stdout discipline: `promote` prints program output; notes/reports go to **stderr** (so `operon run f.op > out.txt` is clean). `--json` on check/test/profile/crispr emits machine-readable JSON to stdout.
+- Grading (`operon check`): start 100; wobble note −2; fallback note −3; NMD premature stop −4; untranslated transcript −1; phantom call −2; unverified `anchor import` −2; hot `enhance`d genes with codon-optimal names earn up to +6 back; floor 50. Letter: A ≥ 90, B ≥ 80, C ≥ 70, D ≥ 60, else F.
+- `check --json` emits valid JSON: score, letter, note counts, `phantoms` (undefined called genes), `nmd` findings array.
+- `--fuel N` caps the interpreter's step budget (default 200,000,000); exhaustion raises catchable Stress `overflow`.
+- `--strict` → exit code 3 if any rung ≥ 3 note occurred (`wobble.strict = true` in `.cell` does the same per run).
+- Stdout discipline: `promote` prints program output; notes/reports go to **stderr** (so `operon run f.op > out.txt` is clean). `--json` on check/test/crispr emits machine-readable JSON to stdout.
 
 ## 16. Biology ↔ feature map (for docs; no scientist names)
 
@@ -209,6 +313,8 @@ operon version
 | Codon optimality | `codon()` scoring in check grading |
 | Overlapping reading frames | `frame proof` — tests and code in one sequence |
 | Alternative splicing | `splice { variant }` + `--variant` / `.cell` selection |
+| Phenotypic state and differentiation | `phenotype` classes: `new`, `init`, `self`, inheritance `from` |
+| Polypeptide elongation (values produced one at a time) | `sequence` generators + `yield` / `.next()` / `.collect()` on worker cells |
 | RNA editing | `.rna` hot patches (`edit/replace`) |
 | Upstream ORF repression | `guard (cond) else { }` leading clauses |
 | DNA methylation / epigenetics | `.cell` config layer + `methyl()` |
@@ -224,10 +330,17 @@ operon version
 | Gene regulatory networks | `regulate` + `grn_fire/grn_state` |
 | Toggle switch bistability | `toggle a, b;` |
 | Repressilator oscillation | `repressilator a -> b -> c` |
-| Single-cell transcriptomics / burst index | `fingerprint()` call/noise telemetry |
-| RNA velocity | spliced/unspliced/velocity metrics |
-| CRISPR knockout screens | `operon crispr --knockout` |
+| Single-cell transcriptomics / burst index | `fingerprint()` calls / burst / mature / nascent / maturation telemetry |
+| Transcript maturation share (honest replacement for velocity) | `maturation` = mature / total genes |
+| RNA interference (antiviral silencing) | capability sandbox: default-deny, Stress `interference` (§9b) |
+| CRISPR knockout screens | `operon crispr --knockout` / `--matrix` |
 
 ## 17. Version
 
-`operon version` → `Operon 2.0.0 (rust-core, c-runtime, cpp-kernel)`.
+This specification is **Operon 2.1.0**. (`operon version` prints the implementation banner `Operon 2.0.0 (rust-core, c-runtime, cpp-kernel)` — the banner lags this document until the next build bump.)
+
+## 18. Verification status (what the shipped suite proves)
+
+- Proof frames: **18 files / 18 proofs / 209 assertions**, green on the Rust core and the Python oracle.
+- Differential harness (Rust core vs Python oracle, program-level stdout): **24 programs, all MATCH**.
+- Playground smoke: expression-core subset in the browser, spec-aligned (unbound reads → null + note).

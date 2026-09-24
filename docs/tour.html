@@ -25,8 +25,8 @@
 <main class="wrap">
 
 <h1 style="font-size:2.4rem; margin:56px 0 8px; letter-spacing:-0.02em;">Language tour</h1>
-<p class="lede" style="max-width:680px;">Twelve stops through Operon v2.0. Every example is canonical
-per the frozen SPEC — each one is paired with the molecular-biology mechanism it models, because in
+<p class="lede" style="max-width:680px;">Twelve stops through Operon v2.1. Every example is canonical
+per the SPEC — each one is paired with the molecular-biology mechanism it models, because in
 Operon the biology is not decoration: it <em>is</em> the semantics.</p>
 
 <div class="toc">
@@ -196,7 +196,7 @@ copies <span class="p">=</span> copies <span class="p">*</span> <span class="n">
 <span class="f">promote</span>(gene_name.upper())               <span class="c"># REPRESSILATOR</span>
 <span class="f">promote</span>(<span class="s">"a-b-c"</span>.split(<span class="s">"-"</span>).join(<span class="s">" + "</span>))  <span class="c"># a + b + c</span>
 <span class="f">promote</span>(<span class="s">"   trim me  "</span>.trim(), <span class="s">"ab"</span>.repeat(<span class="n">3</span>))
-<span class="f">promote</span>(<span class="s">"ATG{...}"</span>.contains(<span class="s">"{...}"</span>))   <span class="c"># \{ escapes a literal brace</span></code></pre>
+<span class="f">promote</span>(<span class="s">"ATG\{...\}"</span>.contains(<span class="s">"\{...\}"</span>))   <span class="c"># true — \{ escapes a literal brace</span></code></pre>
   </figure>
   <div class="bio"><span class="bio-tag">Mechanism · the mature transcript</span>
   A messenger RNA is a composed message: coding segments, untranslated arms, chemical amendments.
@@ -221,10 +221,10 @@ copies <span class="p">=</span> copies <span class="p">*</span> <span class="n">
 
 <span class="c"># maps are insertion-ordered — a field notebook, not a hash scatter</span>
 <span class="k">let</span> pool <span class="p">=</span> {mRNA<span class="p">:</span> <span class="n">42</span>, <span class="s">"ribosome"</span><span class="p">:</span> <span class="n">7</span>}
-pool[<span class="s">"velocity"</span>] <span class="p">=</span> <span class="n">0.25</span>
+pool[<span class="s">"flux"</span>] <span class="p">=</span> <span class="n">0.25</span>
 pool.mRNA <span class="p">=</span> <span class="n">44</span>                  <span class="c"># member assignment writes the key</span>
 <span class="k">for</span> k <span class="k">in</span> pool.keys() { <span class="f">promote</span>(<span class="s">"{k} = {pool[k]}"</span>) }
-<span class="f">promote</span>(pool.has(<span class="s">"velocity"</span>), <span class="s">"mRNA"</span> <span class="k">in</span> pool, pool.items().len())</code></pre>
+<span class="f">promote</span>(pool.has(<span class="s">"flux"</span>), <span class="s">"mRNA"</span> <span class="k">in</span> pool, pool.items().len())</code></pre>
   </figure>
   <div class="bio"><span class="bio-tag">Mechanism · metabolite pools &amp; pathway flux</span>
   A metabolic pathway is a pipeline: each enzyme takes the pool it is given, transforms it, and hands
@@ -300,26 +300,25 @@ pool.mRNA <span class="p">=</span> <span class="n">44</span>                  <s
 <section class="tour-item" id="splice">
   <div class="topic"><span class="idx">09</span><h2>Splice variants</h2></div>
   <figure class="code">
-    <figcaption><span>isoforms.op</span><span class="tag">native core</span></figcaption>
+    <figcaption><span>isoforms.op</span><span class="tag">native core · verified</span></figcaption>
     <pre><code><span class="k">splice</span> <span class="f">render</span> {
-    <span class="k">variant</span> compact  { <span class="k">return</span> <span class="s">"[{x}]"</span> }
-    <span class="k">variant</span> detailed { <span class="k">return</span> <span class="s">"value = {x} (checked)"</span> }
-    <span class="k">@m6a</span>
-    <span class="k">variant</span> verbose  { <span class="k">return</span> <span class="s">"value = {x}, fully annotated"</span> }
+    <span class="k">variant</span> compact(x)  { <span class="k">return</span> <span class="s">"[{x}]"</span> }
+    <span class="k">variant</span> detailed(x) { <span class="k">return</span> <span class="s">"value = {x} (checked)"</span> }
 }
 
-<span class="f">render</span>(<span class="n">7</span>)     <span class="c"># dispatches to the active variant</span>
-<span class="c"># operon run isoforms.op --variant compact   → bakes one isoform</span></code></pre>
+<span class="f">promote</span>(render(<span class="n">7</span>))              <span class="c"># [7] — first declared is the default isoform</span>
+<span class="c"># operon run isoforms.op --variant detailed → value = 7 (checked)</span>
+<span class="c"># operon build isoforms.op --variant compact -o built.op → bakes one isoform</span></code></pre>
   </figure>
   <div class="bio"><span class="bio-tag">Mechanism · alternative splicing</span>
   Most multi-cellular genes yield several mature mRNAs from one locus: the splicing machinery selects
   which exons survive, so one gene serves several tissues or stages without duplicating the locus.
-  Operon's <code>splice</code> block declares the variants; the call site stays identical and
-  dispatch selects the active isoform. Selection order is deterministic, mirroring how a cell commits:
-  the <code>.cell</code> methylation config wins, then the command line (<code>--variant</code>), then
-  the variant carrying the <code>@m6a</code> dispatch-priority mark, then the first declared — the
-  default isoform. <code>operon build --variant</code> bakes a single isoform into a standalone file,
-  the way a terminally differentiated cell locks in its splicing program.</p></div>
+  Operon's <code>splice</code> block declares the variants (each with its own parameter list); the
+  call site stays identical and dispatch selects the active isoform. Selection order is deterministic,
+  mirroring how a cell commits: the <code>.cell</code> methylation config wins, then the command line
+  (<code>--variant</code>), then the first declared — the default isoform. <code>operon build
+  --variant</code> bakes a single isoform into a standalone file, the way a terminally differentiated
+  cell locks in its splicing program.</p></div>
 </section>
 
 <!-- 10 --------------------------------------------------------------- -->
@@ -364,20 +363,22 @@ cell.shift(<span class="s">"committed"</span>)
 
 <span class="k">toggle</span> <span class="f">lac_on</span>, <span class="f">lac_off</span>        <span class="c"># bistable: exactly one may be on</span>
 <span class="f">toggle_on</span>(<span class="s">"lac_on"</span>)
-<span class="f">promote</span>(toggle_state())        <span class="c"># {lac_on: 1.0, lac_off: 0.0}</span>
+<span class="f">promote</span>(toggle_state())        <span class="c"># {lac_on: true, lac_off: false}</span>
 
 <span class="k">repressilator</span> <span class="f">a</span> <span class="p">-&gt;</span> <span class="f">b</span> <span class="p">-&gt;</span> <span class="f">c</span> <span class="k">period</span> <span class="n">3</span>
 <span class="f">repressi_next</span>()
-<span class="f">promote</span>(repressi_state())      <span class="c"># {a: 0.0, b: 0.0, c: 1.0}</span></code></pre>
+<span class="f">promote</span>(repressi_state())      <span class="c"># {a: 1.0, b: 0.0, c: 0.0}</span></code></pre>
   </figure>
   <div class="bio"><span class="bio-tag">Mechanism · regulatory networks &amp; synthetic circuits</span>
   Promoters talk to promoters. A transcription factor activates its target with a measurable strength,
   and repressors subtract from it — a signed, weighted graph that cells propagate as signaling waves.
-  <code>regulate</code> declares that graph; <code>grn_fire("a")</code> sets a source to full level and
+  <code>regulate</code> declares that graph; <code>grn_fire("a")</code> seeds a source and
   propagates wave by wave, with each hop damping the influence by its strength exponent — signal
-  attenuation along a cascade. The <em>toggle</em> is the classic bistable mutual-repression pair: two
+  attenuation along a cascade, inhibition landing once per fire. The <em>toggle</em> is the classic
+  bistable mutual-repression pair: two
   repressors that cannot both win, so the system rests in exactly one of two stable states and
-  <code>toggle_on</code> flips it. The <em>repressilator</em> is a ring of three repressors whose
+  <code>toggle_on</code> flips it — and a call to the repressed allele is refused softly, as null
+  with a note. The <em>repressilator</em> is a ring of three repressors whose
   delayed mutual repression produces a self-sustaining oscillation; <code>repressi_next()</code>
   advances the ring deterministically (each step represses the previous gene, releasing the next),
   and with <code>period</code> the runtime runs it on a real clock as a living oscillator.</p></div>
@@ -429,8 +430,8 @@ cell.shift(<span class="s">"committed"</span>)
   <div class="wrap foot-inner">
     <div>
       <a class="logo" href="index.html"><span class="logo-mark"></span>operon<b>.lang</b></a>
-      <p class="mono">Operon 2.0.0 · rust-core · c-runtime · cpp-kernel<br>
-      SPEC frozen for v2.0 · Total Grammar: nothing is rejected.</p>
+      <p class="mono">Operon 2.1.0 · rust-core · c-runtime · cpp-kernel<br>
+      SPEC v2.1 · Total Grammar: nothing is rejected.</p>
     </div>
     <div class="foot-links">
       <a href="index.html">Overview</a>

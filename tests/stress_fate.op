@@ -74,3 +74,25 @@ frame proof {
     assert(s.state() == "on", "valley stay keeps state")
     assert(s.shift("off"), "on -> off")
 }
+
+frame proof {
+    # return inside a stress body propagates to the enclosing gene
+    gene grab() {
+        stress {
+            return "from-guard"
+        } rescue (e) {
+            return "from-rescue"
+        }
+        return "unreached"
+    }
+    assert(grab() == "from-guard")
+    gene grab2() {
+        stress {
+            raise burned, "boom"
+            return "nope"
+        } rescue (e) {
+            return "rescued:{e.kind}"
+        }
+    }
+    assert(grab2() == "rescued:burned")
+}
