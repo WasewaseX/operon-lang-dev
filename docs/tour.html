@@ -361,13 +361,13 @@ cell.shift(<span class="s">"committed"</span>)
     <span class="f">repressor</span> <span class="k">inhibits</span> <span class="f">enzyme</span>
 }
 
-<span class="k">toggle</span> <span class="f">lac_on</span>, <span class="f">lac_off</span>        <span class="c"># bistable: exactly one may be on</span>
+<span class="k">toggle</span> <span class="f">lac_on</span>, <span class="f">lac_off</span>        <span class="c"># mutual-repression latch: exactly one may be on</span>
 <span class="f">toggle_on</span>(<span class="s">"lac_on"</span>)
 <span class="f">promote</span>(toggle_state())        <span class="c"># {lac_on: true, lac_off: false}</span>
 
 <span class="k">repressilator</span> <span class="f">a</span> <span class="p">-&gt;</span> <span class="f">b</span> <span class="p">-&gt;</span> <span class="f">c</span> <span class="k">period</span> <span class="n">3</span>
 <span class="f">repressi_next</span>()
-<span class="f">promote</span>(repressi_state())      <span class="c"># {a: 1.0, b: 0.0, c: 0.0}</span></code></pre>
+<span class="f">promote</span>(repressi_state())      <span class="c"># continuous ODE levels, e.g. {a: 2.366, b: 0.057, c: 6.415}</span></code></pre>
   </figure>
   <div class="bio"><span class="bio-tag">Mechanism · regulatory networks &amp; synthetic circuits</span>
   Promoters talk to promoters. A transcription factor activates its target with a measurable strength,
@@ -375,7 +375,7 @@ cell.shift(<span class="s">"committed"</span>)
   <code>regulate</code> declares that graph; <code>grn_fire("a")</code> seeds a source and
   propagates wave by wave, with each hop damping the influence by its strength exponent — signal
   attenuation along a cascade, inhibition landing once per fire. The <em>toggle</em> is the classic
-  bistable mutual-repression pair: two
+  mutual-repression latch: two
   repressors that cannot both win, so the system rests in exactly one of two stable states and
   <code>toggle_on</code> flips it — and a call to the repressed allele is refused softly, as null
   with a note. The <em>repressilator</em> is a ring of three repressors whose

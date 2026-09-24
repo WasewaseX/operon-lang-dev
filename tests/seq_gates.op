@@ -1,0 +1,24 @@
+# reg-r3 (re-audit) — sequences honor ALL creation gates
+# A sequence is a transcript too: GRN veto, methylation, and the toggle
+# gate all apply at creation (reg-r1 gated only the toggle — a silenced
+# sequence still transcribed). Threshold default 3.
+sequence loud() {
+    yield "SEQ-YIELD"
+    yield null
+}
+frame proof {
+    assert(loud().next() == "SEQ-YIELD", "unmethylated sequence transcribes")
+    methylate("loud")
+    methylate("loud")
+    assert(loud().next() == "SEQ-YIELD", "level 2 < threshold 3: still transcribes")
+    methylate("loud")
+    assert(loud() == null, "level 3 >= threshold 3: silenced at creation")
+    demethylate("loud")
+    assert(loud().next() == "SEQ-YIELD", "relaxed: transcribes again")
+}
+main {
+    methylate("loud")
+    methylate("loud")
+    methylate("loud")
+    promote("silenced sequence yields: {loud()}")
+}
