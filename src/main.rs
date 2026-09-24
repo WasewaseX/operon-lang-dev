@@ -42,6 +42,13 @@ fn real_main() {
     let cmd = argv[0].clone();
     let rest = &argv[1..];
 
+    // dx-r5 (audit D-4): rustc/go/tsc answer --help; operon used to say
+    // "unknown command". Same usage as the no-args case, exit 0.
+    if cmd == "--help" || cmd == "-h" || cmd == "help" {
+        usage();
+        std::process::exit(0);
+    }
+
     // extract flags
     let mut opts = Opts {
         cell: None,

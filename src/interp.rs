@@ -865,7 +865,10 @@ impl Interp {
                 Err(Stress {
                     kind: k,
                     message,
-                    line: 0,
+                    // dx-r5 (audit D-3): raises carried line 0 — containment
+                    // notes rendered unlocated. cur_line is the last located
+                    // expression the interpreter executed (dx-r4 stamps).
+                    line: self.cur_line,
                 })
             }
             Stmt::Stress { kind, body, rescue } => {
@@ -904,7 +907,7 @@ impl Interp {
                             }
                             None => {
                                 self.note(
-                                    0,
+                                    stress.line,
                                     4,
                                     format!(
                                         "stress contained: [{}] {}",
