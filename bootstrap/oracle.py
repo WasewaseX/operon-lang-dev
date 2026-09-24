@@ -34,6 +34,31 @@ class Gene:
 
 ENHANCE_DELTA = 0.25  # T2e: super-enhancer activation boost (GRN threshold reduction)
 
+
+def repressilator_levels(n, tick):
+    """A11 (reg-r2): mirror of the Rust `repressilator_levels` (src/interp.rs).
+
+    Discrete Elowitz–Leibler ring: dA/dt = α/(1 + R^4) − γA, Euler-integrated,
+    20 substeps of dt=0.05 per ring tick, α=10, γ=1, init [5, 0, ...]. Node j's
+    repressor is node (j+n−1) mod n. Op order matches Rust exactly — the two
+    implementations must stay bit-identical (differential oracle parity).
+    """
+    if n == 0:
+        return []
+    ALPHA, GAMMA, DT, SUB = 10.0, 1.0, 0.05, 20
+    lv = [0.0] * n
+    lv[0] = 5.0
+    for _ in range(tick):
+        for _ in range(SUB):
+            snap = lv[:]
+            for j in range(n):
+                rep = snap[(j + n - 1) % n]
+                rep4 = rep * rep * rep * rep
+                d = ALPHA / (1.0 + rep4) - GAMMA * snap[j]
+                v = snap[j] + DT * d
+                lv[j] = v if v > 0.0 else 0.0
+    return lv
+
 class Pheno:
     __slots__ = ("name", "parent", "fields", "methods")
     def __init__(self, name, parent, fields, methods):
@@ -1507,7 +1532,7 @@ def parse(src):
 
 BUILTINS = set("""promote len push pop insert remove keys values has del range str num type
 abs min max sum clock exit assert codon distance similar transcribe reverse_complement
-gc_content translate find_orf memory methyl fingerprint toggle_on toggle_state repressi_next
+gc_content translate find_orf memory methyl methylate demethylate grn_set grn_get fingerprint toggle_on toggle_state repressi_next
 repressi_state repressi_start grn_fire grn_state spawn join floor ceil sqrt pow random
 randomize chr ord now sleep argv read_file write_file append_file exists file_size read_dir run
 http_get serve recv_request send_response json_parse json_str env call items
@@ -2282,7 +2307,7 @@ class Interp:
                 break
             if to != name:
                 continue
-            lvl = self.grn_levels.get(frm, 0.0)
+            lvl = self._grn_level(frm)
             if inh:
                 if thr is not None and lvl >= thr:
                     veto = f"inhibitor '{frm}' level {lvl!r} >= threshold {thr!r}"
@@ -2293,6 +2318,20 @@ class Interp:
                 if lvl < t:
                     veto = f"regulator '{frm}' level {lvl!r} < threshold {t!r}"
         return veto
+
+    def _grn_level(self, frm):
+        """A11 (reg-r2): mirror of the Rust grn_veto level resolution —
+        explicit grn levels first, then the repressilator ring overlay
+        (normalized raw/α, clamped 0..1) so the emergent oscillator
+        genuinely drives downstream genes."""
+        if frm in self.grn_levels:
+            return self.grn_levels[frm]
+        if self.repressi_ring and frm in self.repressi_ring:
+            idx = self.repressi_ring.index(frm)
+            lvls = repressilator_levels(len(self.repressi_ring), self.repressi_tick)
+            norm = lvls[idx] / 10.0
+            return min(norm, 1.0)
+        return 0.0
 
     def call_gene_inner(self, g, args):
         name = g.name or "<lambda>"
@@ -2763,6 +2802,30 @@ class Interp:
                     return float(v)
                 except ValueError:
                     return v
+        if name == "methylate":
+            # A12 (reg-r2): mirror of the Rust runtime API — same graded
+            # semantics as the @methylate attribute (D-005): level += 1.
+            k = v_display(args[0]) if args else ""
+            self.methyl_levels[k] = self.methyl_levels.get(k, 0) + 1
+            return self.methyl_levels[k]
+        if name == "demethylate":
+            # A12: the @acetylate direction — saturating relaxation.
+            k = v_display(args[0]) if args else ""
+            self.methyl_levels[k] = max(0, self.methyl_levels.get(k, 0) - 1)
+            return self.methyl_levels[k]
+        if name == "grn_set":
+            # A12: write a GRN node's level directly (0..1, clamped).
+            k = v_display(args[0]) if args else ""
+            v = args[1] if len(args) > 1 else 0.0
+            if not isinstance(v, float):
+                v = float(v)
+            v = min(max(v, 0.0), 1.0)
+            self.grn_levels[k] = v
+            return v
+        if name == "grn_get":
+            # A12: read a GRN node's level.
+            k = v_display(args[0]) if args else ""
+            return self.grn_levels.get(k, 0.0)
         if name == "fingerprint":
             total_bins = (self.call_clock // 20) + 1
             burst_by = {}
@@ -2818,20 +2881,37 @@ class Interp:
             self.note(1, f"repressilator oscillating every {ms} ms (sequential oracle: manual ring only)")
             return True
         if name == "repressi_state":
-            # T2d oscillation dynamics — mirror of the Rust core: 1.0 at the
-            # drive tick, exponential decay (half per tick) afterwards, 0.0
-            # before the first drive. Deterministic from (tick, ring size).
+            # A11 (reg-r2) — mirror of the Rust core: the ring integrates
+            # the discrete Elowitz–Leibler repressilator. State is a pure
+            # function of the tick count; arithmetic order matches Rust
+            # op-for-op (bit-identical IEEE-754).
             n = len(self.repressi_ring)
             if not n:
                 return {}
-            out = {}
-            for j, nm in enumerate(self.repressi_ring):
-                tj = (self.repressi_tick - j) % n
-                last_drive = self.repressi_tick - tj
-                out[nm] = 0.5 ** tj if last_drive >= 1 else 0.0
-            return out
+            lvls = repressilator_levels(n, self.repressi_tick)
+            return {nm: lvls[j] for j, nm in enumerate(self.repressi_ring)}
         if name == "grn_fire":
             seed = v_display(args[0]) if args else ""
+            # A10 (reg-r2): decay mirror — decay comes from the pulse itself
+            # (grn_fire(seed, f)) or falls back to .cell `[grn] decay`;
+            # unset/0 skips the loop (byte-identical to pre-A10).
+            raw_decay = args[1] if len(args) > 1 else None
+            if raw_decay is not None:
+                if not isinstance(raw_decay, float):
+                    raw_decay = float(raw_decay)
+                decay = min(max(raw_decay, 0.0), 1.0)
+            else:
+                decay = self.cell.get("grn.decay")
+                try:
+                    decay = min(max(float(decay), 0.0), 1.0) if decay is not None else 0.0
+                except ValueError:
+                    decay = 0.0
+            if decay > 0.0 and self.grn_levels:
+                retention = 1.0 - decay
+                for k2 in self.grn_levels:
+                    self.grn_levels[k2] *= retention
+                    if self.grn_levels[k2] < 2.220446049250313e-16:  # f64::EPSILON
+                        self.grn_levels[k2] = 0.0
             # STATEFUL network: levels persist across fires (homeostasis)
             for frm, to, st, inh, thr in self.grn_edges:
                 self.grn_levels.setdefault(frm, 0.0)
