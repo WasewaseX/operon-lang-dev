@@ -18,67 +18,77 @@ gene csv_escape(field, sep) {
 
 gene csv_row(fields, sep) {
     # serialize one row: ["a", "b,c"] -> a,"b,c"
-    let out = ""
+    # dx-r5 (audit P0-2): parts accumulate in a list, joined once — the
+    # concat loop was O(n^2) (each + re-allocated the whole row so far).
+    let parts = []
     let i = 0
     for f in fields {
         if i > 0 {
-            out = out + sep
+            push(parts, sep)
         }
-        out = out + csv_escape(f, sep)
+        push(parts, csv_escape(f, sep))
         i = i + 1
     }
-    return out
+    return parts.join("")
 }
 
 gene csv_parse(text, sep) {
     # parse a whole document into rows (list of list of string fields)
+    # dx-r5 (audit P0-2): the field buffer accumulates in a list joined once
+    # per field, and the document is iterated with `for c in text` — the old
+    # form re-allocated the field per character AND sliced per character
+    # (measured 3.7 s on a 196 KB document; this form is linear).
+    # pending = saw a double-quote inside a quoted field: it either opens an
+    # escaped quote (next char is another quote) or closed the field.
     let cr = chr(13)
     let rows = []
     let row = []
-    let field = ""
+    let chars = []
     let inq = false
-    let i = 0
-    let n = len(text)
-    while i < n {
-        let c = text.slice(i, i + 1)
-        if inq {
-            if c == "\"" {
-                if i + 1 < n and text.slice(i + 1, i + 2) == "\"" {
-                    field = field + "\""
-                    i = i + 1
-                } else {
-                    inq = false
-                }
-            } else {
-                field = field + c
-            }
+    let pending = false
+    for c in text {
+        if pending and c == "\"" {
+            push(chars, "\"")
+            pending = false
+            continue
+        }
+        if pending {
+            pending = false
+            inq = false
         } else {
-            if c == "\"" and field == "" {
-                inq = true
-            } else {
-                if c == sep {
-                    push(row, field)
-                    field = ""
+            if inq {
+                if c == "\"" {
+                    pending = true
                 } else {
-                    if c == "\n" {
-                        push(row, field)
-                        push(rows, row)
-                        row = []
-                        field = ""
+                    push(chars, c)
+                }
+                continue
+            }
+        }
+        if c == "\"" and len(chars) == 0 {
+            inq = true
+        } else {
+            if c == sep {
+                push(row, chars.join(""))
+                chars = []
+            } else {
+                if c == "\n" {
+                    push(row, chars.join(""))
+                    chars = []
+                    push(rows, row)
+                    row = []
+                } else {
+                    if c == cr {
+                        # swallow real carriage returns (CRLF endings)
                     } else {
-                        if c == cr {
-                            # swallow real carriage returns (CRLF endings)
-                        } else {
-                            field = field + c
-                        }
+                        push(chars, c)
                     }
                 }
             }
         }
-        i = i + 1
     }
-    if len(field) > 0 or len(row) > 0 {
-        push(row, field)
+    if len(chars) > 0 or len(row) > 0 {
+        push(row, chars.join(""))
         push(rows, row)
     }
     return rows

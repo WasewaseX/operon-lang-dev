@@ -172,7 +172,7 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
     for stmt in &prog.stmts {
         if let Err(s) = interp.exec_stmt(&genv, stmt) {
             interp.note(
-                0,
+                s.line,
                 4,
                 format!("stress contained: [{}] {}", s.kind, s.message),
             );

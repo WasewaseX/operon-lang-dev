@@ -317,7 +317,7 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
     for stmt in &prog.stmts {
         if let Err(st) = interp.exec_stmt(&menv, stmt) {
             interp.note(
-                0,
+                st.line,
                 4,
                 format!("stress contained: [{}] {}", st.kind, st.message),
             );
@@ -404,6 +404,32 @@ fn resolve_path(interp: &Interp, path: &str) -> Result<String, String> {
     }
     candidates.push(Some(std::path::PathBuf::from(&p)));
     candidates.push(Some(std::path::PathBuf::from("std").join(&p)));
+    // dx-r5 (audit P0-1): a clean `curl | sh` install ships std/ beside the
+    // binary, but resolve_path had no exe-relative candidate — `use std/…`
+    // failed silently from any other CWD (silent-null-with-exit-0). Mirror
+    // the caps layer's exe-relative std tree (genes.rs is_std_tree): the
+    // install layout (…/bin/operon + …/std) and a dev layout (…/target/
+    // release/operon + repo std/) both resolve.
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            // `use std/x`: p already carries the std/ component, so join the
+            // bundled layout (…/bin/operon + …/bin/std) and the install/dev
+            // layout (…/bin/operon + …/std) directly.
+            candidates.push(Some(dir.join(&p)));
+            if let Some(root) = dir.parent() {
+                candidates.push(Some(root.join(&p)));
+            }
+            // bare `use x`: try the exe-relative std trees by file name
+            if !p.starts_with("std/") {
+                if let Some(fname) = std::path::Path::new(&p).file_name() {
+                    candidates.push(Some(dir.join("std").join(fname)));
+                    if let Some(root) = dir.parent() {
+                        candidates.push(Some(root.join("std").join(fname)));
+                    }
+                }
+            }
+        }
+    }
     // explicit standard-library override (not double-joined with std/)
     candidates.push(
         std::env::var("OPERON_STD")
