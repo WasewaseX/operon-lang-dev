@@ -56,6 +56,15 @@ The mandate: *"Rust, then C, then Python, then Operon, then C++, then HTML, then
 
 ---
 
+## New here? Learn it in an hour
+
+Operon is built for programmers, not biologists — the gene vocabulary is flavor, not a
+prerequisite. **[TUTORIAL.md](TUTORIAL.md)** takes you from `hello.op` to proof frames,
+splice variants, regulation-as-feature-flags and the REPL, with every example verified
+against the toolchain. Then try `operon repl` — `:help` is your friend.
+
+---
+
 ## Total Grammar — the 4-rung ladder
 
 No `.op` file is ever rejected. Parse problems become **notes**:
