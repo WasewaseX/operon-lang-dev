@@ -306,7 +306,7 @@ pub fn check(file: &str, opts: &Opts, nmd: bool, purge: bool) -> CheckReport {
             src2 = s2;
         }
     }
-    let (rep, mut prog) = check_source(&src2, nmd);
+    let (rep, mut prog) = check_source(&src2, nmd, None);
 
     if purge {
         for s in prog.stmts.iter_mut() {
@@ -318,10 +318,44 @@ pub fn check(file: &str, opts: &Opts, nmd: bool, purge: bool) -> CheckReport {
     rep
 }
 
+/// lsp-r1 (P0): where a `use`d module's source might live — the same
+/// candidate list the runtime's gene loader resolves (document-relative,
+/// CWD-relative, std/, exe-relative std/). The LSP launches from arbitrary
+/// working directories (editors pick the CWD), so without the exe-relative
+/// candidate `use math` + `mean(...)` produced FALSE "phantom call"
+/// diagnostics — the demo-works/real-code-breaks failure mode, reproduced
+/// live by the loop-5-b audit.
+pub fn module_candidates(path: &str, base_dir: Option<&str>) -> Vec<std::path::PathBuf> {
+    let p = format!("{}.op", path.trim_end_matches(".op"));
+    let mut out = Vec::new();
+    if let Some(base) = base_dir {
+        out.push(std::path::PathBuf::from(base).join(&p));
+    }
+    out.push(std::path::PathBuf::from(&p));
+    out.push(std::path::PathBuf::from("std").join(&p));
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            out.push(dir.join("std").join(&p));
+        }
+    }
+    // dev-checkout candidate: the cargo manifest dir (compiled in). A source
+    // checkout runs operon-ls from target/release/, where exe-relative std/
+    // does not exist — the stdlib sits at the manifest root. Installed
+    // binaries are covered by the exe-relative candidate above.
+    out.push(
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("std")
+            .join(&p),
+    );
+    out
+}
+
 /// In-memory core of `check` — the file-based `check()` delegates here, and
 /// non-CLI tools (operon-ls) call it directly on editor buffers. Returns the
 /// report AND the parsed program (the LSP hover table comes from it).
-pub fn check_source(src: &str, nmd: bool) -> (CheckReport, Program) {
+/// `base_dir` (when known, e.g. the LSP document's directory) is searched
+/// first for `use`d modules.
+pub fn check_source(src: &str, nmd: bool, base_dir: Option<&str>) -> (CheckReport, Program) {
     let mut rep = CheckReport {
         score: 100,
         letter: 'A',
@@ -347,7 +381,7 @@ pub fn check_source(src: &str, nmd: bool) -> (CheckReport, Program) {
     let mut module_genes: HashSet<String> = HashSet::new();
     for s in &prog.stmts {
         if let Stmt::Use(path, _) = s {
-            for cand in [format!("{}.op", path), format!("std/{}.op", path)] {
+            for cand in module_candidates(path, base_dir) {
                 if let Ok(msrc) = std::fs::read_to_string(&cand) {
                     let mp = parser::parse(&msrc);
                     for st in &mp.stmts {
@@ -394,7 +428,7 @@ pub fn check_source(src: &str, nmd: bool) -> (CheckReport, Program) {
         let mut module_exports: HashSet<String> = HashSet::new();
         for s in &prog.stmts {
             if let Stmt::Use(path, _) = s {
-                for cand in [format!("{}.op", path), format!("std/{}.op", path)] {
+                for cand in module_candidates(path, base_dir) {
                     if let Ok(msrc) = std::fs::read_to_string(&cand) {
                         let mp = parser::parse(&msrc);
                         module_exports.extend(mp.anchor_exports.clone());

@@ -55,7 +55,10 @@ jobs:
           ST="operon-${V}-${{ matrix.target }}"
           mkdir -p "$ST"
           cp "target/${{ matrix.target }}/release/operon" "$ST/"
-          cp "target/${{ matrix.target }}/release/operon-ls" "$ST/" 2>/dev/null || cp target/release/operon-ls "$ST/"
+          # lsp-r1: hard-require the target's own operon-ls — the old
+          # `|| cp target/release/operon-ls` fallback could ship a host-arch
+          # binary that does not run on the target
+          cp "target/${{ matrix.target }}/release/operon-ls" "$ST/"
           cp README.md LICENSE TUTORIAL.md "$ST/"
           cp -r std examples "$ST/"
           tar czf "$ST.tar.gz" "$ST"
@@ -75,6 +78,9 @@ jobs:
           $ST = "operon-$V-${{ matrix.target }}"
           New-Item -ItemType Directory -Force -Path $ST | Out-Null
           Copy-Item "target/${{ matrix.target }}/release/operon.exe" $ST/
+          # lsp-r1: Windows users get the language server too (it was missing
+          # from the zip entirely — the editor story did not exist on Windows)
+          Copy-Item "target/${{ matrix.target }}/release/operon-ls.exe" $ST/
           Copy-Item README.md, LICENSE, TUTORIAL.md $ST/
           Copy-Item -Recurse std, examples $ST/
           Compress-Archive -Path $ST -DestinationPath "$ST.zip"
