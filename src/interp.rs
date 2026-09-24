@@ -210,6 +210,12 @@ impl Caps {
     }
 }
 
+/// T2e: super-enhancer activation boost — an `enhance`d gene lowers its
+/// GRN activating thresholds by this much (0.25), so under the T2a call
+/// gate an enhanced gene demonstrably fires where an unenhanced one would
+/// stay gated. Only meaningful on edges that carry an explicit threshold.
+pub const ENHANCE_DELTA: f64 = 0.25;
+
 pub struct Interp {
     pub notes: Vec<Note>,
     pub cell: HashMap<String, String>,
@@ -1493,10 +1499,14 @@ impl Interp {
     ///   - edges without a threshold stay declarative (level dynamics only),
     ///   - and a threshold of 0 never blocks — so declaring a network with
     ///     no explicit thresholds changes zero call behavior (back-compat).
+    /// T2e: an `enhance`d gene lowers its activating thresholds by
+    /// ENHANCE_DELTA — a super-enhancer fires where an unenhanced gene
+    /// stays gated.
     fn grn_veto(&self, name: &str) -> Option<String> {
         if self.grn_edges.is_empty() {
             return None;
         }
+        let boosted = self.enhanced.iter().any(|g| g == name);
         let mut veto: Option<String> = None;
         for e in self.grn_edges.iter().filter(|e| e.to == name) {
             if veto.is_some() {
@@ -1511,6 +1521,7 @@ impl Interp {
                 }
             } else {
                 let t = e.threshold.unwrap_or(0.0);
+                let t = if boosted { (t - ENHANCE_DELTA).max(0.0) } else { t };
                 if lvl < t {
                     veto = Some(format!("regulator '{}' level {:?} < threshold {:?}", e.from, lvl, t));
                 }
