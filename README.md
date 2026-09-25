@@ -42,6 +42,16 @@ The mandate: *"Rust, then C, then Python, then Operon, then C++, then HTML, then
 2. **The C kernel was deleted on purpose (sec-r2, audit A15).** The audit proved it was write-only (the lexer discarded every intern result) and that its raw-pointer arena was the project's one ASan-confirmed memory-safety class. Interning now lives in Rust (`src/ffi.rs`): same stable-id semantics, `memory()` still reports table stats, and the entire UAF class is structurally impossible. The C++ codon kernel STAYED because it earned its place: bit-parallel Myers is genuinely hot (`distance()`, `similar()`, wobble repair, parser suggestions), allocation-free, and budget-guarded.
 3. **Operon (2) has overtaken everything except Rust.** Between v2.1.0 and v2.2.0 the `.op` share grew from ~7% to ~27% (proof suite, red-team containment, differential corpus, stdlib). `std/` runs on the Rust core today; every release self-hosts more. That is exactly how Rust/Go/TS historically converged.
 
+### The substrate statement (D-010, substrate-r1)
+
+Operon is not built from zero, and never was. The language stands ON three ecosystems, each earning its layer with evidence:
+
+- **Rust — the toolchain substrate.** Lexer, Total Grammar parser, evaluator, capability sandbox, REPL, LSP, release binaries. This is the CPython/Lua pattern (systems-language core) with memory safety included.
+- **C++ — the algorithm kernel substrate.** The codon kernel survived two audits because it is genuinely hot, allocation-free, and budget-guarded (bit-parallel Myers edit distance). The C kernel that did NOT earn its place was deleted.
+- **Python — the ecosystem substrate (new in substrate-r1).** `py(module, "func", [args])` is a capability-gated bridge to the scientific Python stack: one granted call to NumPy, SciPy, Biopython, pandas. Grant per module (`--allow-py numpy`), isolated-mode child, same containment contract as `run()` (timeout kill, fuel-charged wall time, 64 MiB output cap, scrubbed env). This is the architectural answer to "your libraries are too small": a stdlib does not need 500,000 modules of its own — it needs a hard, sandboxed door to the ecosystem that already has them. Operon joins computational biology's Python majority instead of fighting it.
+
+And one deliberate NON-dependency: **Racket is not in the stack — by evidence and by choice.** An external review claimed Operon depended on Racket; the measured stack (`scripts/stack_report.sh`) contains zero `.rkt` lines. We keep it that way: depending on a small-ecosystem language as infrastructure would import exactly the risk that review warned about. What we take from Racket is its idea — language-oriented programming, a tower of notations — which Total Grammar already embodies natively (four parse rungs, wobble repair, proof frames). Ideas travel; fragile dependencies don't.
+
 ### Measured performance (Rust core vs Python oracle, same programs)
 
 | bench | rust | oracle | speedup |

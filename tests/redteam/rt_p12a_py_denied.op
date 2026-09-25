@@ -1,0 +1,12 @@
+# substrate-r1: the py bridge is default-deny like every other effect.
+# Zero py grants here: the very first py() must raise catchable
+# interference. If it ever EXECUTES, the sandbox is breached.
+gene main() {
+    stress {
+        let r = py("math", "sqrt", [4])
+        print("p12a-BREACH py executed without a grant: " + r.value)
+    } rescue (e) {
+        assert(e.kind == "interference")
+        print("p12a contained: py denied by default")
+    }
+}

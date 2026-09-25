@@ -72,6 +72,17 @@ for f in "$DIR"/rt_p*.op; do
             # sec-r1: CRLF-injection payload needs a net grant to reach the
             # guard (default-deny blocks net anyway — both are containment)
             run_one "$f" --allow-net "127.0.0.1:1" --allow-read "$DIR" ;;
+        *p12a*)
+            # substrate-r1: py bridge default-deny — NO py grant, the call
+            # must be denied (granting nothing is the containment)
+            run_one "$f" --allow-read "$DIR" --allow-write "$DIR" --allow-run echo ;;
+        *p12b*)
+            # substrate-r1: module fence — math granted, os must stay denied
+            run_one "$f" --allow-py math --allow-read "$DIR" ;;
+        *p12c*)
+            # substrate-r1: timeout kill — time granted, 300 ms budget via
+            # an explicit operator cell
+            run_one "$f" --cell "$DIR/py_grant.cell" --allow-read "$DIR" ;;
         *cell*)
             run_one "$f" --cell "$DIR/rt_grant.cell" ;;
         *p11n*)

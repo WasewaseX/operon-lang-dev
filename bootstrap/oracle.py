@@ -1730,7 +1730,7 @@ gc_content translate find_orf memory methyl methylate demethylate grn_set grn_ge
 repressi_state repressi_start grn_fire grn_state spawn join floor ceil sqrt pow random
 randomize chr ord now sleep argv read_file write_file append_file exists file_size read_dir run
 fs_delete fs_rename fs_mkdir re_replace
-http_get serve recv_request send_response json_parse json_str env call items
+http_get serve recv_request send_response json_parse json_str env call items py
 re_match re_find re_groups unix_time date_parts date_fmt
 enumerate zip sorted reversed any all first last take drop unique flatten chunk round clamp divmod""".split())
 
@@ -1771,7 +1771,7 @@ class Interp:
         self.asserts_run = 0
         self.rng = 0x9E3779B97F4A7C15
         self.seq_buffer = None
-        self.caps = {"enabled": True, "read": [], "write": [], "run": [], "net": [], "env": []}
+        self.caps = {"enabled": True, "read": [], "write": [], "run": [], "net": [], "env": [], "py": []}
         self.cell_entry = None
         self.proof_mode = False
 
@@ -3767,6 +3767,31 @@ class Interp:
             nm = v_display(args[0]) if args else ""
             self.cap_check("env", "env", nm)
             return os.environ.get(nm)
+        # ---- py (substrate-r1): the Python ecosystem bridge. The oracle
+        # runs in-process (it IS python); the ok/value/error/code contract
+        # matches the Rust bridge. Timeout/env-scrub containment is not
+        # mirrored here — the granted suite that exercises those paths is
+        # Rust-runner-only, and the differential corpus avoids py effects.
+        if name == "py":
+            module = v_display(args[0]) if args else ""
+            func = v_display(args[1]) if len(args) > 1 else ""
+            call_args = args[2] if len(args) > 2 and isinstance(args[2], list) else []
+            if not module:
+                raise Stress("missing", "py: module name required")
+            self.cap_check("py", "py", module)
+            import importlib as _il
+            try:
+                mod = _il.import_module(module)
+                obj = mod
+                for part in str(func or "").split("."):
+                    if part:
+                        obj = getattr(obj, part)
+                val = obj(*call_args)
+                return {"ok": True, "value": val, "error": None, "code": 0}
+            except BaseException as e:
+                import traceback as _tb
+                msg = "".join(_tb.format_exception_only(type(e), e)).strip()
+                return {"ok": False, "value": None, "error": msg, "code": 1}
         if name == "call":
             # dynamic dispatch: call(name_or_gene, args_list)
             target = args[0] if args else None
@@ -4270,11 +4295,16 @@ def load_file(path, cell=None, variant=None, rna=None, args=None, caps=None):
     for k, v in list(it.cell.items()):
         if k.startswith("allow."):
             rest = k[len("allow."):]
-            if rest in ("read", "write", "run", "net", "env"):
+            if rest in ("read", "write", "run", "net", "env", "py"):
                 if not cell_explicit:
                     it.note(1, f"cell key '{k}={v}' ignored: auto-detected operon.cell cannot grant capabilities (pass --cell explicitly)")
                     continue
-                it.caps[rest].append(v)
+                # cell values may carry a comma-separated grant list (parity
+                # with the Rust runner's cell parsing)
+                for g in v.split(","):
+                    g = g.strip()
+                    if g:
+                        it.caps[rest].append(g)
     if it.cell.get("entry"):
         it.cell_entry = it.cell["entry"]
     if it.cell.get("methylate.quiet") == "true":
@@ -4352,13 +4382,13 @@ def main():
             i += 1; opts["frame"] = rest[i]
         elif a == "--json":
             opts["json"] = True
-        elif a in ("--allow-read", "--allow-write", "--allow-run", "--allow-net", "--allow-env"):
+        elif a in ("--allow-read", "--allow-write", "--allow-run", "--allow-net", "--allow-env", "--allow-py"):
             i += 1
             cap = a.replace("--allow-", "")
-            it_caps = opts.setdefault("caps", {"enabled": True, "read": [], "write": [], "run": [], "net": [], "env": []})
+            it_caps = opts.setdefault("caps", {"enabled": True, "read": [], "write": [], "run": [], "net": [], "env": [], "py": []})
             it_caps[cap].append(rest[i])
         elif a == "--allow-all":
-            opts["caps"] = {"enabled": False, "read": [], "write": [], "run": [], "net": [], "env": []}
+            opts["caps"] = {"enabled": False, "read": [], "write": [], "run": [], "net": [], "env": [], "py": []}
         else:
             pos.append(a)
         i += 1
@@ -4380,6 +4410,10 @@ def main():
                     # this directory too (parity; the walk used to crash on
                     # one of the payloads)
                     if "redteam" in root.replace(os.sep, "/"):
+                        continue
+                    # substrate-r1: capability-granted proofs run only under
+                    # an explicit operator cell (Rust runner skips them too)
+                    if "granted" in root.replace(os.sep, "/"):
                         continue
                     for fn in sorted(fns):
                         if fn.endswith(".op"):

@@ -24,6 +24,19 @@ frame proof {
     } rescue (e) {
         assert(e.kind == "interference")
     }
+    # substrate-r1: the py bridge joins default-deny — module granularity
+    stress {
+        py("math", "sqrt", [2])
+        assert(false)
+    } rescue (e) {
+        assert(e.kind == "interference")
+    }
+    stress {
+        py("numpy", "arange", [0, 1])
+        assert(false)
+    } rescue (e) {
+        assert(e.kind == "interference")
+    }
 }
 main {
     stress {

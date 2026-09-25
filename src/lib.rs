@@ -13,6 +13,7 @@ pub mod interp;
 pub mod lexer;
 pub mod ls;
 pub mod parser;
+pub mod pybridge;
 pub mod tools;
 pub mod value;
 
