@@ -491,6 +491,19 @@ pub struct Interp {
     /// = level 1.0 (saturated medium).
     pub signals: Vec<String>,
     pub medium: Option<Arc<Mutex<HashMap<String, u64>>>>,
+    /// loop-9 (F-6): worker-side resolved m6A reader knobs (yd2, yatt,
+    /// min_level) — None on the host (which resolves .cell lazily per
+    /// integration); Some after bind_regulation (workers fold the parent's
+    /// reader math exactly, since they do not inherit raw .cell).
+    pub m6a_reader_pins: Option<(f64, f64, u32)>,
+    /// loop-9 (F-4): runtime splicing-factor shifts (root -> variant name).
+    /// A runtime factor event that overrides the static @m6a bias but NOT
+    /// the operator pins (.cell variant.<root> / cli.variant). Rides
+    /// RegulationSnap (workers freeze the shift at spawn).
+    pub splice_shift: HashMap<String, String>,
+    /// loop-9 (F-4): root -> SpliceDef registry so splice_shift can
+    /// re-resolve the variant list at runtime.
+    pub splice_registry: HashMap<String, crate::ast::SpliceDef>,
     pub grn_binds: Vec<crate::ast::BindDef>,
     pub toggles: Vec<(String, String, bool)>, // (a, b, a_on) — mutual repression pair
     pub repressi_ring: Vec<String>,
@@ -597,6 +610,9 @@ impl Interp {
             ligands: Vec::new(),
             signals: Vec::new(),
             medium: None,
+            m6a_reader_pins: None,
+            splice_shift: HashMap::new(),
+            splice_registry: HashMap::new(),
             ligand_pools: HashMap::new(),
             grn_binds: Vec::new(),
             toggles: Vec::new(),
@@ -1241,6 +1257,8 @@ impl Interp {
                 Ok(Flow::Norm)
             }
             Stmt::Splice(sp) => {
+                // loop-9 (F-4): registry for runtime splice_shift re-resolution
+                self.splice_registry.insert(sp.root.clone(), (**sp).clone());
                 let chosen = crate::genes::choose_variant(self, sp);
                 if let Some((vname, def)) = chosen {
                     self.note(
@@ -2998,7 +3016,35 @@ impl Interp {
             self.trans_last.insert(key, now);
             let delta = now.saturating_sub(last);
             let dec = t.decay.unwrap_or(0.0);
-            if delta == 0 && dec == 0.0 {
+            // loop-9 (F-6): m6A READER fate (YTHDF2 decay routing + YTHDF1/3
+            // translation attenuation) engages only at mark density >=
+            // min_level (default 2) — the legacy {0,1} bool sub-lattice is
+            // bit-identical to the pre-reader core. Knobs come from .cell
+            // (host, resolved lazily per integration) or the pinned snapshot
+            // tuple (workers, who do not inherit raw .cell).
+            let (yd2, yatt, min_level) = match self.m6a_reader_pins {
+                Some(t) => t,
+                None => (
+                    self.cell
+                        .get("m6a.reader.decay")
+                        .and_then(|v| v.parse::<f64>().ok())
+                        .map(|v| v.clamp(0.0, 1.0))
+                        .unwrap_or(0.25),
+                    self.cell
+                        .get("m6a.reader.translation")
+                        .and_then(|v| v.parse::<f64>().ok())
+                        .map(|v| v.clamp(0.0, 1.0))
+                        .unwrap_or(0.10),
+                    self.cell
+                        .get("m6a.reader.min_level")
+                        .and_then(|v| v.parse::<u32>().ok())
+                        .map(|v| v.clamp(0, 3))
+                        .unwrap_or(2),
+                ),
+            };
+            let reader = *self.m6a_levels.get(&t.from).unwrap_or(&0) >= min_level;
+            let dec_eff = if reader { dec + yatt } else { dec };
+            if delta == 0 && dec_eff == 0.0 {
                 continue; // nothing produced, nothing to decay
             }
             let rate = t.rate.unwrap_or(1.0);
@@ -3075,8 +3121,16 @@ impl Interp {
                 }
                 rf *= f;
             }
+            // loop-9 (F-6): YTHDF2-style decay routing — the LAST
+            // production multiply (normative order: rate × rbs ×
+            // polarity × (1 − yd2)); fewer marked transcripts reach the
+            // translating pool. Applies to EVERY translates edge sourced
+            // at a sufficiently-marked gene (operon or not).
+            if reader {
+                rf *= 1.0 - yd2;
+            }
             let cur = *self.grn_levels.get(&t.to).unwrap_or(&0.0);
-            let p = (cur + rf * delta as f64 - dec * cur).clamp(0.0, 1.0);
+            let p = (cur + rf * delta as f64 - dec_eff * cur).clamp(0.0, 1.0);
             self.grn_levels.insert(t.to.clone(), p);
         }
     }
@@ -4875,6 +4929,85 @@ impl Interp {
                     );
                 }
                 Ok(Value::Int(lvl as i64))
+            }
+            "splice_shift" => {
+                // loop-9 (F-4): runtime splicing-factor regulation — rebinds
+                // the splice root to the named variant exactly as
+                // Stmt::Splice does. Future calls shift immediately;
+                // in-flight calls hold their resolved Arc<GeneDef> and
+                // finish on the old variant (no mid-call body swap, ever).
+                let root = args.first().map(|v| v.display()).unwrap_or_default();
+                let variant = args.get(1).map(|v| v.display()).unwrap_or_default();
+                mem_charge((root.len() + 64) as u64)?;
+                // locate the splice registry entry via the CURRENT binding
+                match env.get(&root) {
+                    Some(Value::Gene(d, closure)) => {
+                        // walk to the owning splice: variants are registered
+                        // on the SpliceDef; recover it from the root's def
+                        // via the splice registry stored at parse time
+                        match self.splice_registry.get(&root) {
+                            Some(sp) => {
+                                if !sp.variants.iter().any(|(n, _)| n == &variant) {
+                                    let active = crate::genes::choose_variant(self, sp)
+                                        .map(|(n, _)| n)
+                                        .unwrap_or_default();
+                                    self.note(
+                                        self.cur_line,
+                                        4,
+                                        format!(
+                                            "splice_shift: variant '{}' not declared in splice '{}'; selection unchanged",
+                                            variant, root
+                                        ),
+                                    );
+                                    Ok(Value::Str(active))
+                                } else {
+                                    self.splice_shift.insert(root.clone(), variant.clone());
+                                    let (active, def) = match crate::genes::choose_variant(self, sp)
+                                    {
+                                        Some((n, d)) => (n, d),
+                                        None => (String::new(), d.clone()),
+                                    };
+                                    // loop-9 (F-4): a splicing factor acts
+                                    // TRANS — replace the existing binding
+                                    // wherever it lives (up the chain), so
+                                    // every future transcript of the root
+                                    // uses the shifted variant.
+                                    if !env.set(&root, Value::Gene(def.clone(), closure.clone())) {
+                                        env.define(&root, Value::Gene(def, closure.clone()));
+                                    }
+                                    self.note(
+                                        self.cur_line,
+                                        1,
+                                        format!(
+                                            "splice shift: '{}' -> variant '{}' (was '{}')",
+                                            root, variant, active
+                                        ),
+                                    );
+                                    Ok(Value::Str(active))
+                                }
+                            }
+                            None => {
+                                self.note(
+                                    self.cur_line,
+                                    4,
+                                    format!(
+                                        "splice_shift: no splice registry for '{}'; selection unchanged",
+                                        root
+                                    ),
+                                );
+                                Ok(Value::Null)
+                            }
+                        }
+                    }
+                    _ => {
+                        self.note(
+                            self.cur_line,
+                            4,
+                            format!("splice_shift: no splice '{}'; selection unchanged", root),
+                        );
+                        Ok(Value::Null)
+                    }
+                }
             }
             "m6a_write" | "m6a_erase" => {
                 // reg-bio-3 (B3): quantitative m6A site density 0..=3 —
@@ -8435,6 +8568,7 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "quorum",
     "quench",
     "quorum_state",
+    "splice_shift",
     "len",
     "push",
     "pop",

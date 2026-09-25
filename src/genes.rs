@@ -149,10 +149,18 @@ pub fn choose_variant(interp: &Interp, sp: &SpliceDef) -> Option<(String, Arc<Ge
             return Some((found.0.clone(), found.1.clone()));
         }
     }
-    // 3. m6a-marked variant
+    // 3. loop-9 (F-4): runtime splice_shift (a bound splicing factor
+    // overrides the static mark; the operator pins above override it)
+    if let Some(v) = interp.splice_shift.get(&sp.root) {
+        if let Some(found) = sp.variants.iter().find(|(n, _)| n == v) {
+            return Some((found.0.clone(), found.1.clone()));
+        }
+    }
+    // 4. m6a-marked variant
     if let Some(found) = sp.variants.iter().find(|(_, d)| d.m6a) {
         return Some((found.0.clone(), found.1.clone()));
     }
+    // 5. first declared
     // 4. first declared
     let first = sp.variants.first().unwrap();
     Some((first.0.clone(), first.1.clone()))
@@ -867,6 +875,12 @@ pub struct RegulationSnap {
     /// shared pool is handed to the worker explicitly (environment, not
     /// cytoplasm: live, not frozen).
     pub signals: Vec<String>,
+    /// loop-9 (F-6): resolved m6A reader knobs ride the snapshot so a
+    /// worker folds the parent's reader math exactly.
+    pub m6a_reader: (f64, f64, u32),
+    /// loop-9 (F-4): runtime splice shifts freeze at spawn (snapshot
+    /// contract — later parent-side shifts do not propagate).
+    pub splice_shift: Vec<(String, String)>,
     pub risc_escaped: Vec<String>,
     /// reg-bio-3 (A1/A7): polycistronic units (membership, order, rbs,
     /// transcript counters) ride the snapshot.
@@ -945,6 +959,31 @@ pub fn snapshot_regulation(interp: &Interp) -> RegulationSnap {
         grn_binds: interp.grn_binds.clone(),
         silences: interp.silences.clone(),
         signals: interp.signals.clone(),
+        splice_shift: interp
+            .splice_shift
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect(),
+        m6a_reader: (
+            interp
+                .cell
+                .get("m6a.reader.decay")
+                .and_then(|v| v.parse::<f64>().ok())
+                .map(|v| v.clamp(0.0, 1.0))
+                .unwrap_or(0.25),
+            interp
+                .cell
+                .get("m6a.reader.translation")
+                .and_then(|v| v.parse::<f64>().ok())
+                .map(|v| v.clamp(0.0, 1.0))
+                .unwrap_or(0.10),
+            interp
+                .cell
+                .get("m6a.reader.min_level")
+                .and_then(|v| v.parse::<u32>().ok())
+                .map(|v| v.clamp(0, 3))
+                .unwrap_or(2),
+        ),
         risc_escaped: interp.risc_escaped.iter().cloned().collect(),
         operons: interp.operons.clone(),
         m6a_levels: interp
@@ -996,6 +1035,9 @@ pub fn bind_regulation(ti: &mut Interp, s: &RegulationSnap) {
     // loop-9 (C8): signal species ride the snapshot; the MEDIUM arc is
     // assigned by the spawner (shared, live — see spawn_task/seq_start).
     ti.signals = s.signals.clone();
+    // loop-9 (F-6): resolved reader knobs pin the worker's math
+    ti.m6a_reader_pins = Some(s.m6a_reader);
+    ti.splice_shift = s.splice_shift.iter().cloned().collect();
     ti.operons = s.operons.clone();
     ti.m6a_levels = s.m6a_levels.iter().cloned().collect();
     ti.generation = s.generation;

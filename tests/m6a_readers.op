@@ -1,0 +1,58 @@
+# loop-9 (F-6): m6A READER effects on the two-tier translates model.
+# Real biology: the m6A mark is executed by READERS — YTHDF2 routes marked
+# mRNAs to P-body decay (fewer marked transcripts reach the translating
+# pool), YTHDF1/3 attenuate translation (the marked transcript's product is
+# less efficiently produced). Fate is downstream of the reader and
+# proportional to mark density.
+# In Operon: mark density >= 2 (the .cell-overridable min_level) engages
+#   production × (1 − m6a.reader.decay)      [YTHDF2, default 0.25]
+#   protein decay + m6a.reader.translation   [YTHDF1/3, default 0.10]
+# Multiplication order is normative (rate × rbs × polarity × (1−yd2)); the
+# {0,1} legacy lattice is bit-identical to the pre-reader core. Expected
+# values are captured BEFORE each integration and computed IN-LANGUAGE with
+# the same op tree as the engine, so the assertions are bit-exact on both
+# cores.
+# Fails-pre: density 2 produced full-rate proteins on the pre-reader core.
+regulate {
+    m0 translates mp0 rate 1.0 decay 0.0
+    m1 translates mp1 rate 1.0 decay 0.0
+    m3 translates mp3 rate 0.3 decay 0.2
+}
+gene m0() { return "m0" }
+gene m1() { return "m1" }
+gene m3() { return "m3" }
+frame proof {
+    # level 0: byte-identical legacy behavior
+    m0()
+    grn_fire("m0")
+    assert(abs(grn_get("mp0") - 1.0) < 1e-12, "density 0: no reader effect (legacy)")
+    # level 1 (the legacy resistance lattice): still no reader effect
+    m6a_write("m1", 1)
+    m1()
+    grn_fire("m1")
+    assert(abs(grn_get("mp1") - 1.0) < 1e-12, "density 1: the legacy sub-lattice stays byte-identical")
+    # density 2: YTHDF2 routing (production x(1-0.25)) + YTHDF1/3
+    # attenuation (+0.10 protein decay), engaging from the FIRST integration
+    let prod = 0.3 * (1.0 - 0.25)
+    m6a_write("m3", 2)
+    m3()
+    grn_fire("m3")
+    assert(abs(grn_get("mp3") - prod) < 1e-12, "density 2: production x(1-0.25) (decay term is zero on an empty pool)")
+    # second integration: the reader protein decay (0.2 + 0.10) folds in
+    let v = grn_get("mp3")
+    m3()
+    grn_fire("m3")
+    assert(abs(grn_get("mp3") - (v + prod - (0.2 + 0.1) * v)) < 1e-12, "second integration: reader decay (0.2+0.10) folds in - plain decay 0.2 would land higher")
+    # erasing below min_level snaps the effect off (deterministic lattice)
+    m6a_erase("m3", 3)
+    let v2 = grn_get("mp3")
+    m3()
+    grn_fire("m3")
+    assert(abs(grn_get("mp3") - (v2 + 0.3 - 0.2 * v2)) < 1e-12, "erased to 0: reader effect snaps off (plain decay, full rate)")
+    # mid-run re-writes change SUBSEQUENT integrations only (deterministic)
+    m6a_write("m3", 3)
+    let v3 = grn_get("mp3")
+    m3()
+    grn_fire("m3")
+    assert(abs(grn_get("mp3") - (v3 + prod - (0.2 + 0.1) * v3)) < 1e-12, "re-marked at 3: the reader factors re-engage on the next integration")
+}
