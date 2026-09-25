@@ -31,6 +31,18 @@ mkfifo "$DIR/rt_fifo_fixture" 2>/dev/null || true
 printf 'canary-pristine' > /tmp/redteam-out-escape/toctou_canary
 printf 'in-grant' > "$DIR/rt_toctou_in"
 ln -sfn "$(pwd)/$DIR/rt_toctou_in" "$DIR/rt_toctou_link"
+# reg-bio-2 (jury 12-score-invariants): fail fast if ./bin/operon is a stale
+# copy — every gate that runs ./bin/operon must exercise the same binary the
+# other gates built in target/release/.
+if [ -f target/release/operon ]; then
+    bin_md5=$(md5sum bin/operon 2>/dev/null | cut -d" " -f1)
+    tgt_md5=$(md5sum target/release/operon 2>/dev/null | cut -d" " -f1)
+    if [ "$bin_md5" != "$tgt_md5" ]; then
+        echo "STALE bin/operon (md5 mismatch vs target/release) — run scripts/build.sh first" >&2
+        exit 3
+    fi
+fi
+
 pass=0; fail=0; failed_files=()
 
 run_one() {
