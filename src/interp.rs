@@ -3524,6 +3524,40 @@ impl Interp {
     /// when the call is suppressed (promoter off). OFF entirely unless
     /// `.cell expression.stochastic = true` — the deterministic contract is
     /// untouched for every existing program.
+    /// loop-9 (F-5): CIS riboswitch gate — the aptamer lives on THIS
+    /// transcript. The metabolite pool is cell-wide (`ligand_level`); the
+    /// sensor is per-gene. `off` class: bound (level >= t) folds the
+    /// terminator hairpin -> OFF. `on` class: unbound (level < t) sequesters
+    /// the RBS -> OFF. Evaluated after methylation (chromatin) and before
+    /// the promoter: DNA-level gates first, then the RNA-level element,
+    /// then promoter firing. A terminated transcript is not expression.
+    fn riboswitch_veto(&mut self, def: &GeneDef) -> bool {
+        let Some((lig, on, t)) = &def.riboswitch else {
+            return false;
+        };
+        let lvl = self.ligand_level(lig);
+        let bound = lvl >= *t;
+        let veto = if *on { !bound } else { bound };
+        if veto {
+            let why = if *on {
+                "unbound: RBS sequestered"
+            } else {
+                "bound: terminator hairpin folded"
+            };
+            self.note(
+                self.cur_line,
+                4,
+                format!(
+                    "riboswitch '{}' {}: '{}' call suppressed",
+                    lig,
+                    why,
+                    def.name.clone().unwrap_or_default()
+                ),
+            );
+        }
+        veto
+    }
+
     fn promoter_veto(&mut self, name: &str) -> bool {
         if !self.expr_stochastic {
             return false;
@@ -3583,8 +3617,14 @@ impl Interp {
                 return Ok(Value::Null);
             }
         }
+        // loop-9 (F-5): CIS riboswitch — after chromatin, before the
+        // promoter. The pinned order extends to
+        // RISC → toggle → GRN → methylation → riboswitch → promoter.
+        if self.riboswitch_veto(&def) {
+            return Ok(Value::Null);
+        }
         // reg-bio (F-1): telegraph promoter layer — the pinned gate order
-        // ends here: RISC → toggle → GRN → methylation → promoter.
+        // ends here: RISC → toggle → GRN → methylation → riboswitch → promoter.
         if self.promoter_veto(&name) {
             self.note(
                 dl,
@@ -3893,6 +3933,11 @@ impl Interp {
                 );
                 return Ok(Value::Null);
             }
+        }
+        // loop-9 (F-5): cis riboswitch on phenotype methods too (same
+        // funnel position: after chromatin, before the promoter).
+        if self.riboswitch_veto(&def) {
+            return Ok(Value::Null);
         }
         // reg-bio (F-1): promoter gate for phenotype methods (funnel order
         // preserved — last gate before the call counters).

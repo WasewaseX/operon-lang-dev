@@ -1,0 +1,39 @@
+# loop-9 (F-5): the CIS riboswitch — an aptamer on the transcript's own
+# 5'UTR. Real biology: riboswitches are cis-acting; the metabolite pool is
+# cell-wide but the SENSOR belongs to one transcript. `off` class
+# (TPP/purine/SAM): ligand bound -> terminator hairpin -> transcription OFF.
+# `on` class (adenine/glycine activators): ligand bound -> RBS exposed -> ON.
+# The trans ligand EDGE remains the metabolite-sensor analog; the mark is
+# the per-transcript element. Gate order: methylation -> riboswitch ->
+# promoter (DNA-level chromatin first, then the RNA-level element).
+# Fails-pre: @riboswitch was an unknown mark dropped with a rung-4 note —
+# the gate never existed, so every assert burns.
+ligand tpp
+ligand ade
+@riboswitch tpp off threshold 0.5 gene tppOperon() { return "TPP-OFF" }
+@riboswitch ade on gene addA() { return "ADE-ON" }
+gene plainGene() { return "PLAIN" }
+@acetylate
+@riboswitch tpp off threshold 0.5 gene bothMarks() { return "BOTH" }
+frame proof {
+    # off class: bound pool folds the terminator hairpin
+    ligand_set("tpp", 0.9)
+    assert(tppOperon() == null, "off-class riboswitch: ligand bound -> terminator hairpin -> call suppressed")
+    ligand_set("tpp", 0.1)
+    assert(tppOperon() == "TPP-OFF", "off-class: ligand released -> the transcript expresses")
+    # on class: the RBS is sequestered until the ligand binds
+    ligand_set("ade", 0.1)
+    assert(addA() == null, "on-class riboswitch: ligand unbound -> RBS sequestered -> call suppressed")
+    ligand_set("ade", 0.9)
+    assert(addA() == "ADE-ON", "on-class: ligand bound -> RBS exposed -> expresses")
+    # CIS property: the sensor is per-gene — an unmarked gene under the SAME
+    # pool is unaffected either way
+    ligand_set("tpp", 0.9)
+    assert(plainGene() == "PLAIN", "cis property: the unmarked gene ignores the pool")
+    assert(tppOperon() == null, "the marked gene still responds to the same pool")
+    # gate order: acetylation (chromatin permission) does NOT immunize
+    # against an RNA hairpin — immunity stops at the methylation gate
+    assert(bothMarks() == null, "acetylate does not immunize: the RNA hairpin is downstream of chromatin")
+    ligand_set("tpp", 0.1)
+    assert(bothMarks() == "BOTH", "hairpin released: the acetylated gene expresses normally")
+}
