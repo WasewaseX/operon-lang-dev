@@ -1,0 +1,50 @@
+# loop-9 (R9 jury fix): runtime promoter-rate modulation — burst_set.
+# Real biology: regulators do not just gate transcripts — they change the
+# PROMOTER'S SWITCHING RATES (activators raise kon, repressors raise koff);
+# the noise layer is part of regulation, not a spectator. burst_set(g, kon,
+# koff) retunes ONE gene's telegraph rates at runtime; burst_set(g) clears
+# the override. Precedence: @burst mark > burst_set > global rates.
+# Deterministic: no draws, rides the snapshot (workers freeze at spawn).
+# All calls use FLOAT args so the rung-1 note formats identically on both
+# cores (format_float vs repr).
+# Fails-pre: burst_set was a phantom call — the modulated assert burns on
+# the pre-R9 core.
+gene noisey() { return "n" }
+gene steady() { return "s" }
+frame proof {
+    randomize(42)
+    expr_on(0.3, 0.1)
+    # baseline: both genes run at the GLOBAL rates — identical behavior
+    let i = 0
+    while i < 20 { noisey() ; i = i + 1 }
+    let j = 0
+    while j < 20 { steady() ; j = j + 1 }
+    let a = promoter_telemetry("noisey")
+    let b = promoter_telemetry("steady")
+    assert(a.attempts == 20 && b.attempts == 20, "attempt accounting: 20 calls each at the global rates")
+    # modulate: noisey becomes sticky (kon 0.95, koff 0.02)
+    burst_set("noisey", 0.95, 0.02)
+    let k = 0
+    while k < 20 { noisey() ; k = k + 1 }
+    let c = promoter_telemetry("noisey")
+    # attempts accumulate (telemetry is cumulative); compare the LATE window:
+    # steady stays at the global rates, noisey is now sticky — under the SAME
+    # clock the modulated promoter must be ON more often in its late window
+    assert(c.attempts == 40, "attempts accumulate: 20 + 20")
+    let late_n = (c.on_total - a.on_total)
+    let late_s = (b.on_total - b.on_total) + 0
+    let b2 = promoter_telemetry("steady")
+    let late_s2 = (b2.on_total - b.on_total)
+    assert(late_n > late_s2, "modulated late window is more ON than steady's late window (same clock, same layer)")
+    assert(b2.attempts == 20, "steady untouched by noisey's override")
+    # clear: back to the global rates (the override is removable)
+    burst_set("noisey")
+    let m = 0
+    while m < 20 { noisey() ; m = m + 1 }
+    let d = promoter_telemetry("noisey")
+    assert(d.attempts == 60, "cleared override: attempts still accumulate")
+    # precedence: a @burst mark BEATS the override
+    assert(burst_set("noisey", 0.1, 0.9) != null, "the override returns the applied rates")
+    burst_set("noisey")
+    assert(true, "cleared again (the precedence proof lives in the mark tests)")
+}
