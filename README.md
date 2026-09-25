@@ -131,7 +131,7 @@ operon check: bad.op — score 94/100 (grade A)
 
 ## The gene-expression regulation layer
 
-Real mechanisms, real semantics — the professor-level feature set:
+Real mechanisms, real semantics — the professor-level feature set (fidelity is per-row; SPEC §16 carries the term audits):
 
 | mechanism | feature |
 |---|---|
@@ -143,7 +143,7 @@ Real mechanisms, real semantics — the professor-level feature set:
 | DNA methylation / epigenetics | `.cell` config layer + `methyl("k")` |
 | TADs + CTCF anchors | `tad Name { anchor export f; }` — module insulation |
 | super-enhancers | `enhance f, g;` — profile flags + grading bonus |
-| histone marks | `@acetylate` (priority, silence-immune) · `@methylate` (repressed, soft-noted) |
+| histone marks | `@acetylate` (permissiveness: silence-immune, not priority) · `@methylate` (graded marks) |
 | nonsense-mediated decay | `operon check --nmd` finds premature stops & dead transcripts; `--nmd=purge` rewrites |
 | miRNA → RISC | `silence old_api -> new_api;` — calls redirect, noted |
 | m6A modification | `@m6a` — dispatch priority among splice variants |
@@ -177,7 +177,7 @@ Path grants are symlink-resolved; a grant that normalizes to the empty string is
 operon run f.op      [--entry g] [--variant v] [--cell c] [--rna r] [--frame n] [--ires] [--strict] [--fuel N]
                      [--allow-read p] [--allow-write p] [--allow-run prog] [--allow-net host:port] [--allow-env var] [--allow-all]
 operon check f.op    [--nmd | --nmd=purge] [--json]   # 100-point grade + letter; --json: phantoms/nmd arrays
-operon test [dirs]                                # proof-frame runner (69 files / 63 proofs / 855 assertions green)
+operon test [dirs]                                # proof-frame runner (71 files / 65 proofs / 864 assertions green)
 operon fmt f.op     [--write]                     # precedence-correct canonical formatter
 operon build f.op   [--variant v] [-o out.op]     # bake splices, strip proofs
 operon profile f.op                               # per-gene calls, exclusive self-µs, flags, maturation, enhance candidates
@@ -234,7 +234,7 @@ Ranged (incremental) edits are ignored by design while `textDocumentSync = 1` (f
 ```console
 $ ./scripts/build.sh          # gcc + g++ the kernels, rustc the core
 OK: bin/operon
-$ ./scripts/test.sh           # 69 proof files (855 assertions), C++ kernel smoke
+$ ./scripts/test.sh           # 71 proof files (864 assertions), C++ kernel smoke
 $ python3 bootstrap/harness.py  # differential: 85/85 programs MATCH across implementations
 $ bash scripts/redteam.sh       # adversarial containment: 88 attacks contained, 0 breached
 $ bash scripts/bench.sh

@@ -873,6 +873,14 @@ class P:
                             self.next()
                         else:
                             self.note(tt[2], 4, "strength needs a number; using 1.0")
+                        # reg-bio-2 (D2c): strength clamps to the physical
+                        # range (mirror of the Rust parser clamp + note).
+                        if strength > 1.0:
+                            self.note(tt[2], 4, "strength > 1.0 clamped to 1.0 (levels are concentration fractions)")
+                            strength = 1.0
+                        elif strength < 0.0:
+                            self.note(tt[2], 4, "negative strength clamped to 0.0 (a negative repressor is not a booster)")
+                            strength = 0.0
                     threshold = None
                     if self.expect_kw("threshold"):
                         tt = self.peek()

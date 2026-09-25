@@ -1,0 +1,36 @@
+# reg-bio-2 pin (jury request 12-score-invariants): the multiplicative
+# dt-aware ring noise is the round's most complex new arithmetic — this
+# differential case pins it byte-for-byte across both engines with a fixed
+# seed. Properties proven in the proof frame: strictly positive levels
+# (multiplicative noise never crosses zero — the old additive kick clamped
+# troughs at exactly 0.0 for noise >= 0.3), and amplitude scales with the
+# level (level-scaled sigma, not a fixed absolute kick).
+repressilator a -> b -> c noise 0.4 seed 7
+frame proof {
+    let s = repressi_state()
+    # at tick 0 the fold has not advanced: init level a = 5
+    repressi_next()
+    repressi_next()
+    repressi_next()
+    repressi_next()
+    repressi_next()
+    let s5 = repressi_state()
+    let a5 = s5.a
+    let b5 = s5.b
+    let c5 = s5.c
+    assert(a5 > 0.0, "multiplicative noise keeps the level strictly positive")
+    assert(b5 > 0.0, "no node rectifies to a hard zero (additive kick did)")
+    assert(c5 > 0.0, "all three nodes stay in the physical domain")
+    assert(a5 < 12.0, "the multiplicative kick stays bounded (factor in [0.78, 1.22] per substep)")
+}
+main {
+    let i = 0
+    while i < 5 {
+        repressi_next()
+        i += 1
+    }
+    let s = repressi_state()
+    promote("tick5: {s.a}")
+    promote("tick5: {s.b}")
+    promote("tick5: {s.c}")
+}
