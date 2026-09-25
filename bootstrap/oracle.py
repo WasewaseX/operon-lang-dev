@@ -26,10 +26,10 @@ class Stress(Exception):
         return {"kind": self.kind, "message": self.message}
 
 class Gene:
-    __slots__ = ("name", "params", "guard", "body", "acetylate", "methylate", "m6a", "seq", "closure")
-    def __init__(self, name, params, guard, body, ac=False, me=False, m6=False, seq=False):
+    __slots__ = ("name", "params", "guard", "body", "acetylate", "methylate", "m6a", "copies", "seq", "closure")
+    def __init__(self, name, params, guard, body, ac=False, me=False, m6=False, copies=1, seq=False):
         self.name, self.params, self.guard, self.body = name, params, guard, body
-        self.acetylate, self.methylate, self.m6a, self.seq = ac, me, m6, seq
+        self.acetylate, self.methylate, self.m6a, self.copies, self.seq = ac, me, m6, copies, seq
         self.closure = None
 
 ENHANCE_DELTA = 0.25  # T2e: super-enhancer activation boost (GRN threshold reduction)
@@ -394,11 +394,11 @@ def lex(src):
 KEYWORDS = set("""gene let if elif else while loop for in return break continue match case use
 tad anchor export import enhance silence stress rescue raise fate state regulate activates
 inhibits strength toggle repressilator period frame proof guard splice variant edit replace
-ires as collect enter phenotype sequence yield new threshold from self""".split())
+ires as collect enter phenotype sequence yield new threshold from self operon""".split())
 
 ARMS = set("""gene let if elif else while loop for return break continue match use tad anchor
 enhance silence stress raise fate regulate toggle repressilator frame splice edit ires
-phenotype sequence yield""".split())
+phenotype sequence yield operon""".split())
 
 SYNONYMS = {
     "fn": "gene", "func": "gene", "fun": "gene", "def": "gene", "sub": "gene",
@@ -411,7 +411,7 @@ SYNONYMS = {
 }
 VALUE_SYNONYMS = {"yes": True, "on": True, "no": False, "off": False,
                   "nil": None, "none": None, "nothing": None}
-MARKS = {"acetylate", "methylate", "m6a"}
+MARKS = {"acetylate", "methylate", "m6a", "copies"}
 
 def edit_distance(a, b):
     if a == b:
@@ -515,11 +515,22 @@ class P:
                         marks.append(wk)
                     else:
                         self.note(t[2], 4, f"unknown mark '@{m}' skipped")
+            # reg-bio-3 (C10): `@copies n` carries its dosage argument
+            copies = 1
+            if "copies" in marks:
+                tt = self.peek()
+                if tt[0] == "INT":
+                    self.next()
+                    if tt[1] < 1 or tt[1] > 64:
+                        self.note(tt[2], 4, "gene dosage clamped to 1..=64 copies (a level is a concentration, not an amplifier)")
+                    copies = min(max(tt[1], 1), 64)
+                else:
+                    self.note(tt[2], 4, "@copies needs an integer 1..=64; default 1")
             if not self.expect_kw("gene"):
                 self.note(t[2], 4, "mark must precede 'gene'; skipped line")
                 self.skip_line()
                 return None
-            return self.gene_def(marks)
+            return self.gene_def(marks, copies)
         if t[0] == "SYM" and t[1] == "{":
             self.note(t[2], 4, "bare block treated as scoped statements")
             return ("block", self.block())
@@ -703,14 +714,36 @@ class P:
             self.end_stmt()
             return ("enhance", [n for n in names if n])
         if word == "silence":
+            # reg-bio-3 (C9): stoichiometric RISC — strength/sites
             self.next()
             frm = self.ident()
             to = None
             if self.peek() == ("SYM", "->", self.peek()[2]):
                 self.next()
                 to = self.ident()
+            strength, sites = 1.0, 1
+            t2 = self.peek()
+            if t2[0] == "IDENT" and t2[1] == "strength":
+                self.next()
+                tt = self.peek()
+                if tt[0] in ("INT", "FLOAT"):
+                    strength = min(max(float(tt[1]), 0.0), 1.0)
+                    self.next()
+                else:
+                    self.note(tt[2], 4, "strength needs a number 0..=1; ignored")
+            t2 = self.peek()
+            if t2[0] == "IDENT" and t2[1] == "sites":
+                self.next()
+                tt = self.peek()
+                if tt[0] == "INT":
+                    if tt[1] < 1 or tt[1] > 64:
+                        self.note(tt[2], 4, "sites clamped to 1..=64")
+                    sites = min(max(tt[1], 1), 64)
+                    self.next()
+                else:
+                    self.note(tt[2], 4, "sites needs an integer 1..=64; ignored")
             self.end_stmt()
-            return ("silence", frm, to)
+            return ("silence", frm, to, strength, sites)
         if word == "stress":
             self.next()
             kind = None
@@ -959,6 +992,43 @@ class P:
                 self.note(self.peek()[2], 4, "decoy needs 'for <tf> capacity <num>'; skipped")
             self.end_stmt()
             return ("decoy", d, tf, cap)
+        if word == "operon":
+            # reg-bio-3 (A1/A7): polycistronic transcription unit —
+            # `operon lac { lacZ rbs 1.0; lacY rbs 0.6; lacA; }` (mirror)
+            self.next()
+            name = self.ident()
+            members = []
+            if self.peek() == ("SYM", "{", self.peek()[2]):
+                self.next()
+                while True:
+                    self.eat_nl()
+                    t2 = self.peek()
+                    if t2 == ("SYM", "}", t2[2]):
+                        self.next()
+                        break
+                    if t2[0] == "EOF":
+                        self.note(t2[2], 4, "operon block auto-closed")
+                        break
+                    if t2[0] == "IDENT":
+                        self.next()
+                        rbs = 1.0
+                        t3 = self.peek()
+                        if t3[0] == "IDENT" and t3[1] == "rbs":
+                            self.next()
+                            tt = self.peek()
+                            if tt[0] in ("INT", "FLOAT"):
+                                rbs = min(max(float(tt[1]), 0.0), 1.0)
+                                self.next()
+                            else:
+                                self.note(tt[2], 4, "rbs needs a number 0..=1; using 1.0")
+                        members.append((t2[1], rbs))
+                        self.end_stmt()
+                    else:
+                        self.note(t2[2], 4, "unexpected token in operon block; skipped")
+                        self.next()
+            else:
+                self.note(self.peek()[2], 4, "operon needs a block '{ cistron rbs r; ... }'; skipped")
+            return ("operon", name, members)
         if word == "toggle":
             self.next()
             a = self.ident()
@@ -1386,10 +1456,12 @@ class P:
         self.end_stmt()
         return ("expr", e)
 
-    def gene_def(self, marks):
+    def gene_def(self, marks, copies=1):
         ac = "acetylate" in marks
         me = "methylate" in marks
         m6 = "m6a" in marks
+        # reg-bio-3 (C10): @copies dosage arrives via the mark-argument
+        # parse (the clamps/notes mirror the Rust core op-for-op)
         name = None
         t = self.peek()
         if t[0] == "IDENT" and t[1] != "guard":
@@ -1438,9 +1510,9 @@ class P:
             self.next()
             e = self.expr()
             self.end_stmt()
-            return ("gene", Gene(name, params, guard, [("return", e)], ac, me, m6))
+            return ("gene", Gene(name, params, guard, [("return", e)], ac, me, m6, copies))
         body = self.block()
-        return ("gene", Gene(name, params, guard, body, ac, me, m6))
+        return ("gene", Gene(name, params, guard, body, ac, me, m6, copies))
 
     def block(self):
         if not (self.peek() == ("SYM", "{", self.peek()[2])):
@@ -1958,7 +2030,7 @@ def parse(src):
 
 BUILTINS = set("""promote expr_on expr_off decay_clock ligand_set ligand len push pop insert remove keys values has del range str num type
 abs min max sum clock exit assert codon distance similar transcribe reverse_complement
-gc_content translate find_orf memory methyl methylate demethylate grn_set grn_get fingerprint toggle_on toggle_state repressi_next
+gc_content translate find_orf memory methyl methylate demethylate m6a_write m6a_erase passage grn_set grn_get fingerprint toggle_on toggle_state repressi_next
 repressi_state repressi_start grn_fire grn_state spawn join floor ceil sqrt pow random
 randomize chr ord now sleep argv read_file write_file append_file exists file_size read_dir run
 fs_delete fs_rename fs_mkdir re_replace
@@ -1973,6 +2045,13 @@ class Interp:
         self.notes = []
         self.cell = cell or {}
         self.silences = []
+        # reg-bio-3: operons / stoichiometric-RISC bookkeeping / m6A levels /
+        # generation counter / gene dosage registry (mirror of the Rust core)
+        self.operons = []
+        self.risc_escaped = set()
+        self.m6a_levels = {}
+        self.generation = 0
+        self.copies = {}
         self.fates = {}
         self.phenos = {}
         self.grn_edges = []
@@ -2497,12 +2576,19 @@ class Interp:
                 self.methyl_levels[name] = self.methyl_levels.get(name, 0) + 1
             elif g.acetylate:
                 self.methyl_levels[name] = max(0, self.methyl_levels.get(name, 0) - 1)
+            # reg-bio-3 (B3): executed @m6a defs deepen the site-density level
+            if g.m6a:
+                self.m6a_levels[name] = min(self.m6a_levels.get(name, 0) + 1, 3)
+            # reg-bio-3 (C10): gene dosage registry
+            if g.copies > 1:
+                self.copies[name] = g.copies
+            else:
+                self.copies.pop(name, None)
             # @m6a-stabilized transcripts win dispatch among same-name candidates
-            if not g.m6a:
-                old = self.lookup(env, name)
-                if isinstance(old, Gene) and old.m6a:
-                    self.note(4, f"'{name}' is @m6a-stabilized; redefinition ignored (mark the new copy to replace it)")
-                    return
+            # (reg-bio-3 (B3): resistance reads the quantitative level >= 1)
+            if not g.m6a and self.m6a_levels.get(name, 0) >= 1:
+                self.note(4, f"'{name}' is @m6a-stabilized; redefinition ignored (mark the new copy to replace it)")
+                return
             if g.name and g.name not in self.defined_genes:
                 self.defined_genes.append(g.name)
             g.closure = env
@@ -2529,12 +2615,36 @@ class Interp:
                     self.defined_genes.append(root)
                 env[root] = g
         elif k == "silence":
-            self.silences.append((s[1], s[2]))
-            if s[2]:
-                self.note(1, f"RISC loaded: '{s[1]}' silenced → '{s[2]}'")
+            _, sfrm, sto, sstr, ssites = s
+            self.silences.append((sfrm, sto, sstr, ssites))
+            if sstr < 1.0 or ssites > 1:
+                suffix = f" (strength {sstr!r}, sites {ssites})"
+            else:
+                suffix = ""
+            if sto:
+                self.note(1, f"RISC loaded: '{sfrm}' silenced → '{sto}'{suffix}")
             else:
                 # reg-bio (F-4): pure RISC degradation (was a silent no-op)
-                self.note(1, f"RISC loaded: '{s[1]}' degraded (no replacement)")
+                self.note(1, f"RISC loaded: '{sfrm}' degraded (no replacement){suffix}")
+        elif k == "operon":
+            # reg-bio-3 (A1/A7): register the unit (membership by name,
+            # last-wins redefinition, cross-unit ownership ignored) (mirror)
+            _, oname, omembers = s
+            if not omembers:
+                self.note(4, f"operon '{oname}': no cistrons declared; skipped")
+            else:
+                self.operons = [u for u in self.operons if u["name"] != oname]
+                unit = {"name": oname, "members": [], "transcripts": 0}
+                for og, orbs in omembers:
+                    if any(om == og for u2 in self.operons for om, _o in u2["members"]):
+                        self.note(4, f"cistron '{og}' already belongs to another operon; ignored")
+                        continue
+                    unit["members"].append((og, orbs))
+                if not unit["members"]:
+                    self.note(4, f"operon '{oname}': every cistron belonged to another unit; skipped")
+                else:
+                    self.operons.append(unit)
+                    self.note(1, f"operon '{oname}': {len(unit['members'])} cistron(s) on one transcript")
         elif k == "enhance":
             for n in s[1]:
                 if n not in self.enhanced:
@@ -2941,18 +3051,41 @@ class Interp:
         # reg-r4 (re-audit B-4): gate ORDER is pinned SPEC-wide — RISC at the
         # call site first, then the toggle gate (mirror of the Rust core:
         # silencing wins over repression because it rewrites the callee).
-        # RISC silencing: redirect calls (acetylated genes are immune)
-        for frm, to in self.silences:
-            if frm == name:
-                target_gene = self.lookup(env, name)
-                immune = isinstance(target_gene, Gene) and target_gene.acetylate
-                if not immune:
+        # RISC silencing: redirect calls (acetylated genes are immune).
+        # reg-bio-3 (C9): stoichiometric capture — every entry for the
+        # target is one binding site; per-call capture p = 1 - Π(1-s)^sites.
+        # strength 1.0 / one site = legacy binary redirect (no draw).
+        entries = [e for e in self.silences if e[0] == name]
+        if entries:
+            target_gene = self.lookup(env, name)
+            immune = isinstance(target_gene, Gene) and target_gene.acetylate
+            if not immune:
+                surv = 1.0
+                for _f, _t, s_i, sites_i in entries:
+                    base = 1.0 - s_i
+                    for _k in range(sites_i):
+                        surv *= base
+                p = 1.0 - surv
+                captured = True
+                if p < 1.0:
+                    x = self.rng
+                    x ^= (x >> 12) & M64
+                    x ^= (x << 25) & M64
+                    x ^= (x >> 27) & M64
+                    self.rng = x & M64
+                    u = ((self.rng >> 11) & ((1 << 53) - 1)) / 9007199254740992.0
+                    captured = u < p
+                    if not captured and name not in self.risc_escaped:
+                        self.risc_escaped.add(name)
+                        self.note(4, f"RISC escape: '{name}' escaped silencing (strength {entries[0][2]!r}, sites {entries[0][3]})")
+                if captured:
+                    to = entries[0][1]
                     if to is not None:
-                        self.note(4, f"RISC: call to '{frm}' silenced → '{to}'")
+                        self.note(4, f"RISC: call to '{name}' silenced → '{to}'")
                         tgt = self.lookup(env, to)
                         return self.call_value(env, tgt, args)
                     # reg-bio (F-4): pure degradation — no replacement executes
-                    self.note(4, f"RISC: call to '{frm}' degraded (no replacement)")
+                    self.note(4, f"RISC: call to '{name}' degraded (no replacement)")
                     return None
         # toggle gate: the repressed allele refuses calls
         for a, b, a_on in self.toggles:
@@ -3009,7 +3142,32 @@ class Interp:
             self.depth -= 1
 
     def grn_veto(self, name):
-        """GRN call gate (T2a / SPEC §11) — mirror of the Rust core.
+        """reg-bio-3 (A1/A7): the call gate. A call to a cistron of a
+        polycistronic unit is a transcription attempt of the WHOLE unit:
+        edges targeting the unit veto every member first (induction acts
+        on the unit's promoter), then the cistron's own edges apply.
+        The unit pass short-circuits — its message wins. (mirror)"""
+        if not self.grn_edges:
+            return None
+        ui = self._operon_of(name)
+        if ui is not None:
+            uname = self.operons[ui]["name"]
+            if any(e[1] == uname for e in self.grn_edges):
+                reason = self._gate_veto_for(uname)
+                if reason is not None:
+                    return f"operon '{uname}': {reason}"
+        return self._gate_veto_for(name)
+
+    def _operon_of(self, gene):
+        """reg-bio-3 (A1/A7): index of the unit owning `gene`, if any."""
+        for i, u in enumerate(self.operons):
+            if any(m == gene for m, _r in u["members"]):
+                return i
+        return None
+
+    def _gate_veto_for(self, name):
+        """GRN cis-gate for ONE target (T2a / SPEC §11) — mirror of the
+        Rust core (the pinned body, target as a parameter).
 
         Activating edge with explicit threshold t vetoes while
         level(source) < t; inhibiting edge with explicit threshold t vetoes
@@ -3147,6 +3305,11 @@ class Interp:
                 occ = (lig / (k + lig)) if k > 0.0 else 1.0
                 factor *= (1.0 - occ) if inducer else occ
         out = l * factor
+        # reg-bio-3 (C10): gene dosage — @copies amplifies the CONCENTRATION
+        # the gene feeds its edges, saturating on the 0..1 lattice (mirror)
+        c = self.copies.get(frm)
+        if c is not None and c > 1:
+            out *= c
         return out if out <= 1.0 else 1.0
 
     def _trans_integrate(self):
@@ -3168,6 +3331,31 @@ class Interp:
             if delta == 0 and dec == 0.0:
                 continue
             r = rate if rate is not None else 1.0
+            # reg-bio-3 (A1/A7): per-cistron rbs efficiency + transcriptional
+            # polarity (upstream blocking reduces downstream yield) (mirror)
+            ui = self._operon_of(frm)
+            if ui is not None:
+                u = self.operons[ui]
+                pos = next(i for i, (m, _r) in enumerate(u["members"]) if m == frm)
+                r *= u["members"][pos][1]
+                blocked = 0
+                for g2, _r2 in u["members"][:pos]:
+                    silenced = any(f2 == g2 and t2 is None for f2, t2, _s2, _n2 in self.silences)
+                    methylated = self.methyl_levels.get(g2, 0) >= self.methyl_threshold
+                    if silenced or methylated:
+                        blocked += 1
+                if blocked > 0:
+                    pol = self.cell.get("operon.polarity")
+                    pv = 0.5
+                    if pol is not None:
+                        try:
+                            pv = min(max(float(pol), 0.0), 1.0)
+                        except ValueError:
+                            pv = 0.5
+                    f2 = 1.0
+                    for _k in range(blocked):
+                        f2 *= pv
+                    r *= f2
             cur = self.grn_levels.get(to, 0.0)
             p = cur + r * delta - dec * cur
             if p < 0.0:
@@ -3211,6 +3399,20 @@ class Interp:
                 self.grn_levels[k2] *= retention
                 if self.grn_levels[k2] < 2.220446049250313e-16:
                     self.grn_levels[k2] = 0.0
+        # reg-bio-3 (B3): m6A decay — `.cell m6a.decay f` erases site
+        # density as time passes (half-down rounding on the 0..=3 lattice;
+        # a diluted mark never reads as MORE marked). Unset = byte-identical.
+        mdecay = self.cell.get("m6a.decay")
+        if mdecay is not None and self.m6a_levels:
+            try:
+                mf = min(max(float(mdecay), 0.0), 1.0)
+            except ValueError:
+                mf = 0.0
+            if mf > 0.0:
+                import math as _math
+                for k2 in list(self.m6a_levels):
+                    x = self.m6a_levels[k2] * (1.0 - mf) - 0.5
+                    self.m6a_levels[k2] = max(0, int(_math.ceil(x)))
         self._trans_integrate()
 
     def _promoter_veto(self, name):
@@ -3258,6 +3460,11 @@ class Interp:
         if self._promoter_veto(name):
             self.note(4, f"promoter inactive: '{name}' burst-off — call returns null")
             return None
+        # reg-bio-3 (A1/A7): the call passed every gate — one transcript of
+        # the unit is made (a suppressed call is NOT expression) (mirror)
+        ui = self._operon_of(name)
+        if ui is not None:
+            self.operons[ui]["transcripts"] += 1
         self.call_counts[name] = self.call_counts.get(name, 0) + 1
         self.call_clock += 1
         # reg-bio-2 (C2): the decay clock (mirror of the Rust hook)
@@ -3767,6 +3974,46 @@ class Interp:
                     return float(v)
                 except ValueError:
                     return v
+        if name in ("m6a_write", "m6a_erase"):
+            # reg-bio-3 (B3): quantitative m6A site density 0..=3 (mirror)
+            k = v_display(args[0]) if args else ""
+            n = args[1] if len(args) > 1 and isinstance(args[1], int) and not isinstance(args[1], bool) else 1
+            n = max(n, 0)
+            if name == "m6a_write":
+                lvl = min(self.m6a_levels.get(k, 0) + n, 3)
+                verb = "written"
+            else:
+                lvl = max(0, self.m6a_levels.get(k, 0) - n)
+                verb = "erased"
+            self.m6a_levels[k] = lvl
+            marked = lvl >= 1
+            if not self.methyl_quiet:
+                self.note(2, f"m6A {verb}: '{k}' (level {lvl}) — redefinition {'resisted' if marked else 'no longer resisted'}")
+            return lvl
+        if name == "passage":
+            # reg-bio-3 (B2/B6): cell divisions — marks dilute unless
+            # maintained (mirror of the Rust passage builtin)
+            n = args[0] if args and isinstance(args[0], int) and not isinstance(args[0], bool) else 1
+            n = max(n, 0)
+            if n > 1_000_000:
+                self.note(4, "passage: n clamped to 1000000 divisions (a culture that old is not a useful model)")
+                n = 1_000_000
+            f = self.cell.get("methyl.maintenance")
+            fv = 0.5
+            if f is not None:
+                try:
+                    fv = min(max(float(f), 0.0), 1.0)
+                except ValueError:
+                    fv = 0.5
+            import math as _math
+            for _i in range(n):
+                for k2 in list(self.methyl_levels):
+                    x = self.methyl_levels[k2] * fv - 0.5
+                    self.methyl_levels[k2] = max(0, int(_math.ceil(x)))
+            self.generation += n
+            if not self.methyl_quiet:
+                self.note(1, f"passage: {n} divisions (maintenance {fv!r}) — generation {self.generation}")
+            return self.generation
         if name == "methylate":
             # A12 (reg-r2): mirror of the Rust runtime API — same graded
             # semantics as the @methylate attribute (D-005): level += 1.
@@ -3820,10 +4067,15 @@ class Interp:
             nascent = max(total_defined - mature, 0)
             maturation = (mature / total_defined) if total_defined else 0.0
             # reg-bio-2 (D9): "calls" emits in sorted key order (Rust parity).
+            # reg-bio-3 (A1/A7/B2): polycistronic transcript counts + division
+            # counter (sorted-key determinism, D9) (mirror)
+            transcripts = {u["name"]: u["transcripts"] for u in self.operons}
             return {"calls": dict(sorted(self.call_counts.items())), "burst": burst_avg,
                     "burst_by_gene": dict(sorted(burst_by.items())),
                     "bursts": dict(sorted(self.burst_off.items())),
-                    "mature": mature, "nascent": nascent, "maturation": maturation}
+                    "mature": mature, "nascent": nascent, "maturation": maturation,
+                    "transcripts": dict(sorted(transcripts.items())),
+                    "generation": self.generation}
         if name == "toggle_on":
             nm = v_display(args[0]) if args else ""
             for i, (a, b, _on) in enumerate(self.toggles):

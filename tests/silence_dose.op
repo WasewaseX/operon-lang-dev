@@ -1,0 +1,45 @@
+# reg-bio-3 (C9): stoichiometric RISC — real RNAi is dose-dependent. The
+# strength is the per-site capture probability; sites compose multiplicatively
+# (survival = (1-s)^n). A capture draw rides the SHARED mirrored xorshift64*
+# stream (telegraph-promoter discipline). Contracts pinned here:
+#   (1) p = 1 - (1-s)^sites is deterministic under randomize(seed);
+#   (2) strength-1.0 silence captures WITHOUT consuming entropy;
+#   (3) @acetylate immunity is checked BEFORE any draw — immune calls
+#       leave the random() stream untouched.
+gene loud() { return "L" }
+gene quiet() { return "Q" }
+gene gone() { return "G" }
+@acetylate gene sacred() { return "S" }
+silence loud -> quiet strength 0.5
+silence loud -> quiet strength 0.5
+silence gone;
+silence sacred;
+frame proof {
+    # (1) two sites at 0.5: per-call capture p = 1 - 0.25 = 0.75
+    randomize(42)
+    let captured = 0
+    for i in range(20) {
+        if loud() == "Q" {
+            captured = captured + 1
+        }
+    }
+    assert(captured == 16, "20 calls at p=0.75: deterministic capture count (parity pin)")
+    # (2) binary silence: captured with NO entropy consumed
+    randomize(7)
+    let r1 = random()
+    randomize(7)
+    assert(gone() == null, "strength-1.0 silence captures deterministically")
+    let r2 = random()
+    assert(abs(r1 - r2) < 1e-12, "binary capture consumed no draw (legacy stream untouched)")
+    # (3) @acetylate immunity precedes the draw: the stream is untouched
+    randomize(7)
+    let r3 = random()
+    randomize(7)
+    assert(sacred() == "S", "acetylated transcript escapes RISC entirely")
+    let r4 = random()
+    assert(abs(r3 - r4) < 1e-12, "immune check precedes any draw (no entropy spent)")
+}
+main {
+    randomize(42)
+    promote("loud(1): {loud()} loud(2): {loud()} gone: {gone()} sacred: {sacred()}")
+}

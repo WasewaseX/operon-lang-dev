@@ -1,0 +1,31 @@
+# reg-bio-3 (A1/A7): the leader attenuator — an `attenuates` edge targeting
+# the UNIT is the trpL story: when the leader terminates, NO cistron of the
+# unit is transcribed (the whole polycistronic mRNA is lost). The outcome is
+# RNA-level: the message reports leader termination, wrapped in the unit gate.
+regulate {
+    hightrp attenuates trp strength 0.9 threshold 0.4
+    trpE translates pe rate 1.0
+    trpD translates pd rate 1.0
+}
+gene trpE() { return "E" }
+gene trpD() { return "D" }
+operon trp { trpE rbs 1.0; trpD rbs 0.7; }
+frame proof {
+    grn_set("hightrp", 0.9)
+    assert(trpE() == null, "leader terminated: E is not transcribed")
+    assert(trpD() == null, "leader terminated: D is not transcribed either")
+    assert(fingerprint().transcripts.trp == 0, "no transcript survives leader termination")
+    grn_set("hightrp", 0.1)
+    assert(trpE() == "E", "attenuator off: the unit transcribes")
+    assert(trpD() == "D", "attenuator off: the second cistron transcribes")
+    assert(fingerprint().transcripts.trp == 2, "two successful calls, two unit transcripts")
+    grn_fire("hightrp")
+    assert(abs(grn_get("pe") - 1.0) < 1e-12, "E protein at rbs 1.0")
+    assert(abs(grn_get("pd") - 0.7) < 1e-12, "D protein at rbs 0.7 (downstream gradient)")
+}
+main {
+    grn_set("hightrp", 0.9)
+    promote("high tryptophan: {trpE()}")
+    grn_set("hightrp", 0.1)
+    promote("low tryptophan: {trpE()} {trpD()}")
+}

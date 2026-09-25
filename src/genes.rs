@@ -858,6 +858,18 @@ pub struct RegulationSnap {
     pub ligands: Vec<String>,
     pub ligand_pools: Vec<(String, f64)>,
     pub grn_binds: Vec<crate::ast::BindDef>,
+    /// reg-bio-3 (C9): RISC entries ride the snapshot — a spawned cell is a
+    /// whole regulatory cell: silencing redirects inside it too (13b fix:
+    /// §13's inventory previously missed silences).
+    pub silences: Vec<(String, Option<String>, f64, u32)>,
+    pub risc_escaped: Vec<String>,
+    /// reg-bio-3 (A1/A7): polycistronic units (membership, order, rbs,
+    /// transcript counters) ride the snapshot.
+    pub operons: Vec<crate::interp::OperonUnit>,
+    /// reg-bio-3 (B3/B2/C10): m6A levels, generation counter, gene dosage.
+    pub m6a_levels: Vec<(String, u32)>,
+    pub generation: u64,
+    pub copies: Vec<(String, u32)>,
 }
 
 pub fn snapshot_regulation(interp: &Interp) -> RegulationSnap {
@@ -926,6 +938,16 @@ pub fn snapshot_regulation(interp: &Interp) -> RegulationSnap {
             .map(|(k, v)| (k.clone(), *v))
             .collect(),
         grn_binds: interp.grn_binds.clone(),
+        silences: interp.silences.clone(),
+        risc_escaped: interp.risc_escaped.iter().cloned().collect(),
+        operons: interp.operons.clone(),
+        m6a_levels: interp
+            .m6a_levels
+            .iter()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect(),
+        generation: interp.generation,
+        copies: interp.copies.iter().map(|(k, v)| (k.clone(), *v)).collect(),
     }
 }
 
@@ -961,6 +983,14 @@ pub fn bind_regulation(ti: &mut Interp, s: &RegulationSnap) {
     ti.ligands = s.ligands.clone();
     ti.ligand_pools = s.ligand_pools.iter().cloned().collect();
     ti.grn_binds = s.grn_binds.clone();
+    // reg-bio-3: RISC entries, polycistronic units, m6A levels, generation
+    // and dosage restore (worker cells are whole regulatory cells)
+    ti.silences = s.silences.clone();
+    ti.risc_escaped = s.risc_escaped.iter().cloned().collect();
+    ti.operons = s.operons.clone();
+    ti.m6a_levels = s.m6a_levels.iter().cloned().collect();
+    ti.generation = s.generation;
+    ti.copies = s.copies.iter().cloned().collect();
 }
 
 pub fn bind_snapshot(env: &Rc<Env>, snap: &[(String, SnapVal)]) {

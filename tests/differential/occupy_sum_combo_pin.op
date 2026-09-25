@@ -1,0 +1,49 @@
+# reg-bio-3 (sz adversarial ask): the combined parity seam — occupy +
+# sum-pooling + a ligand edge source on ONE target. This is the exact
+# junction session-12 flagged as fragile: sum edges are pooled members
+# (never individual AND members), the fire-group pass must run before the
+# wave convergence check, and ligand sources read their metabolite pool.
+ligand ilig
+regulate {
+    rep inhibits tgt strength 0.6 threshold 0.2 occupy
+    a1 activates tgt strength 0.3 threshold 0.5 hill 2 sum
+    a2 activates tgt strength 0.3 threshold 0.5 hill 2 sum
+    ilig activates tgt strength 1.0 threshold 0.3
+    s1 activates mid strength 0.6 threshold 0.5 hill 2 sum
+    s2 activates mid strength 0.6 threshold 0.5 hill 2 sum
+    mid activates out strength 1.0 threshold 0.3
+}
+gene tgt() { return "T" }
+gene out() { return "O" }
+frame proof {
+    grn_set("rep", 0.1)
+    grn_set("a1", 0.4)
+    grn_set("a2", 0.4)
+    # pooled inputs: 0.3*0.4 + 0.3*0.4 = 0.24 < 0.5 — the pool fails alone
+    ligand_set("ilig", 0.9)
+    assert(tgt() == null, "pooled inputs below threshold: the group fails even with the ligand source on")
+    # synergy: two sub-threshold inputs POOL past the gate...
+    grn_set("a1", 0.85)
+    grn_set("a2", 0.85)
+    # ...but the AND member (ligand source below threshold) still vetoes
+    ligand_set("ilig", 0.2)
+    assert(tgt() == null, "pool passes (0.51 >= 0.5) but the ligand AND-member vetoes")
+    # all conjuncts pass: pool + ligand, with the occupier below its threshold
+    ligand_set("ilig", 0.9)
+    assert(tgt() == "T", "pooled synergy + ligand source: the combined gate opens")
+    # sum-only chain: the fire-group pass must run pre-convergence
+    grn_set("s1", 0.5)
+    grn_set("s2", 0.5)
+    grn_fire("s1")
+    # firing s1 seeds it to 1.0; the pooled group P = 0.6*1.0 + 0.6*0.5 = 0.9
+    # opens mid through its Hill gate, and mid's plain edge must reach out
+    # in the SAME fire (the session-12 pre-convergence regression)
+    assert(grn_get("mid") >= 0.5, "pooled group opened mid through the fire pass")
+    assert(grn_get("out") >= 0.3, "sum-gated chain propagated to out in the same fire (group pass pre-convergence)")
+}
+main {
+    grn_set("a1", 0.85)
+    grn_set("a2", 0.85)
+    ligand_set("ilig", 0.9)
+    promote("combined gate: {tgt()}")
+}

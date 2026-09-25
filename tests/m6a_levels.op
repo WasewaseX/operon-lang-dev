@@ -1,0 +1,31 @@
+# reg-bio-3 (B3): quantitative m6A site density (prokaryotic Dam-style DNA
+# methylation analogy, per the SPEC term audit). Every executed @m6a-marked
+# definition deepens the level (+1, capped 3); resistance to redefinition
+# requires level >= 1. m6a_write/m6a_erase are the writer/eraser builtins —
+# with levels, an erased mark stops resisting even though the legacy bool
+# would still say "marked".
+@m6a gene stable() { return "S" }
+frame proof {
+    assert(stable() == "S", "the marked original is bound")
+    gene stable() { return "X" }
+    assert(stable() == "S", "level 1: redefinition resisted")
+    # erase the site density — the mark quantitatively disappears
+    assert(m6a_erase("stable") == 0, "erase drops the level to 0")
+    gene stable() { return "X" }
+    assert(stable() == "X", "level 0: the redefinition now wins")
+    # write site density back on: resistance returns
+    assert(m6a_write("stable", 2) == 2, "writer complex sets density 2")
+    gene stable() { return "Y" }
+    assert(stable() == "X", "level 2: redefinition resisted again")
+    assert(m6a_erase("stable", 1) == 1, "partial erase leaves density 1")
+    gene stable() { return "Y" }
+    assert(stable() == "X", "level 1 still resists")
+    assert(m6a_erase("stable") == 0, "full erase")
+    gene stable() { return "Y" }
+    assert(stable() == "Y", "density gone: redefinition proceeds")
+}
+main {
+    promote("stable: {stable()}")
+    m6a_erase("stable")
+    promote("after erase: {stable()}")
+}

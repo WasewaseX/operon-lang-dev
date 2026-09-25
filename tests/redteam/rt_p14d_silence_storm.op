@@ -1,0 +1,15 @@
+# reg-bio-3: silence-registry storm — thousands of silence statements plus
+# repeated calls through the stoichiometric capture path. Registry entries,
+# notes, and per-call draws must all stay inside the fuel/note-cap contracts
+# (a bounded run, never a hang or an unbounded stderr).
+gene target() { return "T" }
+gene filler() { return "F" }
+silence target strength 0.5 sites 64;
+gene main() {
+    let i = 0;
+    while i < 500000 {
+        silence target -> filler strength 0.5;
+        i = i + 1;
+    }
+    print("p14d-unreachable");
+}

@@ -1,0 +1,12 @@
+# reg-bio-3: m6a_write/m6a_erase abuse — flooding the level registry with
+# fresh keys in a loop. Every entry is an allocation charged against the
+# memory ceiling (methylate precedent), so the flood ends in a clean
+# containment note instead of unbounded growth.
+gene main() {
+    let i = 0;
+    while i < 5000000 {
+        m6a_write("key-{i}", 1);
+        i = i + 1;
+    }
+    print("p14c-unreachable");
+}
