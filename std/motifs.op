@@ -1,0 +1,117 @@
+# std/motifs — canonical gene-regulatory network motifs, runnable circuits.
+#
+# The wiring patterns every real regulatory network is built from (the
+# network-motif vocabulary), implemented over the `regulate` layer as
+# executable circuits with their signature read/driver genes. Pure .op —
+# the library ships no native code of its own.
+#
+#   motif_install()      wire all four circuits (call once per cell)
+#   motif_hill(p, t, n)  the dose-response transfer function the engine
+#                        itself uses: p^n/(p^n + t^n) — for analysis/plotting
+#   motif_autoreg()      negative autoregulation — self-repression lowers
+#                        the circuit's own steady level (below full)
+#   fc() / motif_ffl()   coherent feed-forward loop — the output needs BOTH
+#                        the direct arm and the indirect arm above threshold:
+#                        a persistence filter (sign-sensitive delay)
+#   ic() / motif_pulse() incoherent feed-forward loop — the repressor arm
+#                        compresses the output pulse below plain activation
+#   tx() / ty()          the mutual-repression toggle (rate-based switch),
+#                        flipped with motif_flip(which)
+#   motif_states()       every circuit node's current level
+#
+# Node/circuit names are module-scoped by their prefix; import with an alias
+# (`use std/motifs as m`) and drive the outputs through the alias.
+
+gene motif_install() {
+    # 1 — negative autoregulation: ar represses itself
+    regulate { ar inhibits ar strength 0.6 threshold 0.3 }
+    # 2 — coherent feed-forward loop: fa -> fb -> fc AND fa -> fc
+    regulate {
+        fa activates fb strength 1.0
+        fa activates fc strength 1.0 threshold 0.3
+        fb activates fc strength 1.0 threshold 0.3
+    }
+    # 3 — incoherent feed-forward loop: ia -> ic AND ia -> ib ⊣ ic
+    regulate {
+        ia activates ic strength 1.0 threshold 0.2
+        ia activates ib strength 1.0
+        ib inhibits ic strength 0.5 threshold 0.2
+    }
+    # 4 — mutual-repression toggle switch (rate-based bistability)
+    regulate {
+        tx inhibits ty strength 1.0 threshold 0.4 hill 2
+        ty inhibits tx strength 1.0 threshold 0.4 hill 2
+    }
+    toggle tx, ty;
+    return true
+}
+
+gene motif_hill(p, t, n) {
+    # the engine's own dose-response: repeated multiplication, never pow —
+    # the same op order the interpreter and the oracle use
+    let ph = 1.0
+    let th = 1.0
+    let k = 0
+    while k < n {
+        ph = ph * p
+        th = th * t
+        k = k + 1
+    }
+    return ph / (ph + th)
+}
+
+gene ar() {
+    # calling the autorepressed gene IS gated by its own product: once the
+    # level sits at or above the threshold the call vetoes itself
+    return "ar-expressed"
+}
+
+gene fc() {
+    # the coherent-FFL output gene: gated conjunctively by both arms
+    return "fc-expressed"
+}
+
+gene ic() {
+    # the incoherent-FFL output gene
+    return "ic-expressed"
+}
+
+gene tx() {
+    # toggle allele A
+    return "tx-expressed"
+}
+
+gene ty() {
+    # toggle allele B
+    return "ty-expressed"
+}
+
+gene motif_autoreg() {
+    # pulse the circuit and read the self-repressed steady level
+    grn_fire("ar")
+    return grn_get("ar")
+}
+
+gene motif_ffl() {
+    # read the FFL output under the current arm levels (grn_set fa/fb first)
+    let v = fc()
+    if v == null {
+        return "blocked"
+    }
+    return "expressed"
+}
+
+gene motif_pulse() {
+    # pulse the incoherent circuit and read the compressed output amplitude
+    grn_fire("ia")
+    return grn_get("ic")
+}
+
+gene motif_flip(which) {
+    # flip the mutual-repression switch (toggle_on drives the latch)
+    return toggle_on(which)
+}
+
+gene motif_states() {
+    return grn_state()
+}

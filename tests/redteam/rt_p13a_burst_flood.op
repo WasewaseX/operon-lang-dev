@@ -1,0 +1,16 @@
+# reg-bio p13a: telegraph promoter note flood — a hot loop with the layer
+# on and kon=koff=0.5 (half the calls burst-off). Containment: the 10k note
+# cap bounds note memory, the step budget bounds the loop, the run finishes
+# contained with a bounded report — never a 2 GiB allocation or a hang.
+gene pulse() {
+    return 1
+}
+gene main() {
+    expr_on(0.5, 0.5)
+    let i = 0
+    while i < 200000 {
+        pulse()
+        i = i + 1
+    }
+    print("p13a-contained")
+}

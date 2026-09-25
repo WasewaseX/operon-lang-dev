@@ -1,0 +1,40 @@
+# std/motifs — proof coverage for the network-motif library (SPEC §17)
+use std/motifs
+
+frame proof {
+    assert(motifs.motif_install() == true, "install wires the circuits")
+    # the dose-response helper mirrors the engine's own transfer function
+    let e2 = motifs.motif_hill(0.6, 0.5, 2)
+    assert(e2 - (0.36 / (0.36 + 0.25)) < 1e-12 && (0.36 / (0.36 + 0.25)) - e2 < 1e-12, "hill n=2 matches the engine shape")
+    assert(motifs.motif_hill(0.6, 0.5, 4) > motifs.motif_hill(0.6, 0.5, 1), "ultrasensitivity ordering holds")
+    # negative autoregulation: the self-repressed steady level sits below full
+    let ar_lvl = motifs.motif_autoreg()
+    assert(ar_lvl > 0.44 && ar_lvl < 0.46, "autorepressed steady state ≈ 0.45")
+    assert(ar_lvl < 1.0, "self-repression is load-bearing")
+    # and the autorepressed gene's own call vetoes at its own level
+    assert(motifs.ar() == null, "the autorepressed gene gates itself")
+    # coherent FFL: the output needs BOTH arms above threshold
+    grn_set("fa", 0.2)
+    grn_set("fb", 0.8)
+    assert(motifs.motif_ffl() == "blocked", "one arm short: the persistence filter blocks")
+    grn_set("fa", 0.5)
+    assert(motifs.motif_ffl() == "expressed", "both arms above threshold: output expresses")
+    assert(motifs.fc() == "fc-expressed", "the FFL output gene answers")
+    # incoherent FFL: the repressor arm compresses the pulse
+    let amp = motifs.motif_pulse()
+    assert(amp > 0.4 && amp < 0.5, "the pulse lands compressed (≈ 0.48)")
+    assert(amp < motifs.motif_hill(1.0, 0.2, 2), "incoherent output sits below plain activation")
+    # the mutual-repression toggle flips both ways
+    assert(motifs.motif_flip("tx") == true, "flip wires tx on")
+    assert(motifs.tx() == "tx-expressed", "tx expresses while dominant")
+    assert(motifs.ty() == null, "ty is the inactive allele")
+    assert(motifs.motif_flip("ty") == true, "flip wires ty on")
+    assert(motifs.ty() == "ty-expressed", "ty expresses after the flip")
+    assert(motifs.tx() == null, "tx went inactive")
+    # the whole circuit board is readable
+    let st = motifs.motif_states()
+    assert(st.fa == 0.5 && st.fb == 0.8, "motif_states returns the level map")
+}
+main {
+    promote("motifs module proofs done")
+}

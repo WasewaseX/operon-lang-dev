@@ -33,29 +33,56 @@ class Gene:
         self.closure = None
 
 ENHANCE_DELTA = 0.25  # T2e: super-enhancer activation boost (GRN threshold reduction)
+M64 = 0xFFFFFFFFFFFFFFFF
+
+# reg-bio (F-5): default ring kinetics — the historical constants.
+DEFAULT_REPRESSI = {"alpha": 10.0, "gamma": 1.0, "hill": 4, "basal": 0.0, "noise": 0.0,
+                    "seed": 0x9E3779B97F4A7C15}
 
 
-def repressilator_levels(n, tick):
-    """A11 (reg-r2): mirror of the Rust `repressilator_levels` (src/interp.rs).
+def repressilator_levels(n, tick, params=None):
+    """A11 (reg-r2) / reg-bio (F-5): mirror of the Rust `repressilator_levels_p`.
 
-    Discrete Elowitz–Leibler ring: dA/dt = α/(1 + R^4) − γA, Euler-integrated,
-    20 substeps of dt=0.05 per ring tick, α=10, γ=1, init [5, 0, ...]. Node j's
-    repressor is node (j+n−1) mod n. Op order matches Rust exactly — the two
-    implementations must stay bit-identical (differential oracle parity).
+    Discrete Elowitz–Leibler ring: dA/dt = α/(1 + R^h) + basal − γA,
+    Euler-integrated, 20 substeps of dt=0.05 per ring tick, init [5, 0, ...].
+    Node j's repressor is node (j+n−1) mod n. With default params (noise off)
+    this is bit-identical to the historical form. The optional noise kick is
+    drawn per (tick, substep, node) from a stream derived from the ABSOLUTE
+    position — the same derivation as the Rust core, so fold-from-init and
+    incremental-cache paths agree bit-for-bit in BOTH implementations.
     """
     if n == 0:
         return []
-    ALPHA, GAMMA, DT, SUB = 10.0, 1.0, 0.05, 20
+    p = params if params is not None else DEFAULT_REPRESSI
+    ALPHA, GAMMA, DT, SUB = p["alpha"], p["gamma"], 0.05, 20
+    HILL, BASAL, NOISE, SEED = p["hill"], p["basal"], p["noise"], p["seed"]
     lv = [0.0] * n
     lv[0] = 5.0
-    for _ in range(tick):
-        for _ in range(SUB):
+    for t in range(tick):
+        for ss in range(SUB):
+            nx = 0
+            if NOISE > 0.0:
+                nx = (SEED ^ ((t * 0x9E3779B97F4A7C15) & M64)
+                      ^ ((ss * 0xBF58476D1CE4E5B9) & M64)) & M64
+                if nx == 0:
+                    nx = 0x9E3779B97F4A7C15
             snap = lv[:]
             for j in range(n):
                 rep = snap[(j + n - 1) % n]
-                rep4 = rep * rep * rep * rep
-                d = ALPHA / (1.0 + rep4) - GAMMA * snap[j]
+                # rep^hill via repeated multiplication — op-identical to Rust
+                # (default h=4 == the historical rep*rep*rep*rep exactly)
+                rh = 1.0
+                for _k in range(HILL):
+                    rh *= rep
+                d = ALPHA / (1.0 + rh) + BASAL - GAMMA * snap[j]
                 v = snap[j] + DT * d
+                if NOISE > 0.0:
+                    nx ^= (nx >> 12) & M64
+                    nx ^= (nx << 25) & M64
+                    nx ^= (nx >> 27) & M64
+                    nx &= M64
+                    u = ((nx >> 11) & ((1 << 53) - 1)) / 9007199254740992.0
+                    v += NOISE * (u - 0.5)
                 lv[j] = v if v > 0.0 else 0.0
     return lv
 
@@ -794,7 +821,31 @@ class P:
                             self.next()
                         else:
                             self.note(tt[2], 4, "threshold needs a number; ignored")
-                    edges.append((frm, to, strength, inhibit, threshold))
+                    # reg-bio (F-2): optional per-edge Hill exponent (1..=8)
+                    hill = None
+                    if self.expect_kw("hill"):
+                        tt = self.peek()
+                        if tt[0] == "INT":
+                            iv = int(tt[1])
+                            self.next()
+                            if 1 <= iv <= 8:
+                                hill = iv
+                            else:
+                                self.note(tt[2], 4, "hill needs an integer 1..=8; edge keeps the default n=2 shape")
+                        else:
+                            self.note(tt[2], 4, "hill needs an integer 1..=8; edge keeps the default n=2 shape")
+                    # reg-bio (F-3): optional cis-regulatory OR membership
+                    is_any = False
+                    if self.expect_kw("any"):
+                        is_any = True
+                    if (hill is not None or is_any) and threshold is None:
+                        self.note(tt[2], 4, "hill/any apply to thresholded edges; ignored (edge stays declarative)")
+                        hill = None
+                        is_any = False
+                    if is_any and inhibit:
+                        self.note(tt[2], 4, "any on an inhibiting edge is ignored (inhibitors already veto independently)")
+                        is_any = False
+                    edges.append((frm, to, strength, inhibit, threshold, hill, is_any))
                     self.end_stmt()
             return ("regulate", edges)
         if word == "toggle":
@@ -818,8 +869,78 @@ class P:
                 if t[0] in ("INT", "FLOAT"):
                     period = float(t[1])
                     self.next()
+            # reg-bio (F-5): inline kinetics — mirror of the Rust parser.
+            # Canonical order: alpha, gamma, hill, basal, noise, seed.
+            ov = {"alpha": None, "gamma": None, "hill": None, "basal": None,
+                  "noise": None, "seed": None}
+            while True:
+                if self.expect_kw("alpha"):
+                    t = self.peek()
+                    if t[0] in ("INT", "FLOAT"):
+                        self.next()
+                        f = float(t[1])
+                        if f > 0.0:
+                            ov["alpha"] = f
+                        else:
+                            self.note(t[2], 4, "alpha needs a number > 0; ignored")
+                    else:
+                        self.note(t[2], 4, "alpha needs a number > 0; ignored")
+                elif self.expect_kw("gamma"):
+                    t = self.peek()
+                    if t[0] in ("INT", "FLOAT"):
+                        self.next()
+                        f = float(t[1])
+                        if f >= 0.0:
+                            ov["gamma"] = f
+                        else:
+                            self.note(t[2], 4, "gamma needs a number >= 0; ignored")
+                    else:
+                        self.note(t[2], 4, "gamma needs a number >= 0; ignored")
+                elif self.expect_kw("hill"):
+                    t = self.peek()
+                    if t[0] == "INT":
+                        self.next()
+                        iv = int(t[1])
+                        if 1 <= iv <= 8:
+                            ov["hill"] = iv
+                        else:
+                            self.note(t[2], 4, "hill needs an integer 1..=8; ignored")
+                    else:
+                        self.note(t[2], 4, "hill needs an integer 1..=8; ignored")
+                elif self.expect_kw("basal"):
+                    t = self.peek()
+                    if t[0] in ("INT", "FLOAT"):
+                        self.next()
+                        f = float(t[1])
+                        if f >= 0.0:
+                            ov["basal"] = f
+                        else:
+                            self.note(t[2], 4, "basal needs a number >= 0; ignored")
+                    else:
+                        self.note(t[2], 4, "basal needs a number >= 0; ignored")
+                elif self.expect_kw("noise"):
+                    t = self.peek()
+                    if t[0] in ("INT", "FLOAT"):
+                        self.next()
+                        f = float(t[1])
+                        if 0.0 <= f <= 1.0:
+                            ov["noise"] = f
+                        else:
+                            self.note(t[2], 4, "noise needs a number in 0..=1; ignored")
+                    else:
+                        self.note(t[2], 4, "noise needs a number in 0..=1; ignored")
+                elif self.expect_kw("seed"):
+                    t = self.peek()
+                    if t[0] == "INT":
+                        self.next()
+                        iv = int(t[1])
+                        ov["seed"] = 0x9E3779B97F4A7C15 if iv == 0 else (iv & M64)
+                    else:
+                        self.note(t[2], 4, "seed needs an integer; ignored")
+                else:
+                    break
             self.end_stmt()
-            return ("repressilator", [r for r in ring if r], period)
+            return ("repressilator", [r for r in ring if r], period, ov)
         if word == "frame":
             self.next()
             is_proof = self.expect_kw("proof")
@@ -1724,7 +1845,7 @@ def parse(src):
 # ----------------------------------------------------------------------------
 # evaluator
 
-BUILTINS = set("""promote len push pop insert remove keys values has del range str num type
+BUILTINS = set("""promote expr_on expr_off len push pop insert remove keys values has del range str num type
 abs min max sum clock exit assert codon distance similar transcribe reverse_complement
 gc_content translate find_orf memory methyl methylate demethylate grn_set grn_get fingerprint toggle_on toggle_state repressi_next
 repressi_state repressi_start grn_fire grn_state spawn join floor ceil sqrt pow random
@@ -1770,6 +1891,16 @@ class Interp:
         self.methyl_threshold = 3
         self.asserts_run = 0
         self.rng = 0x9E3779B97F4A7C15
+        # reg-bio (F-6): enhancer dose (default 0.25)
+        self.enhance_delta = 0.25
+        # reg-bio (F-1): telegraph promoter layer (opt-in via .cell)
+        self.expr_stochastic = False
+        self.expr_kon = 0.3
+        self.expr_koff = 0.1
+        self.promoter_states = {}
+        self.burst_off = {}
+        # reg-bio (F-5): repressilator kinetics (defaults = historical constants)
+        self.repressi_params = dict(DEFAULT_REPRESSI)
         self.seq_buffer = None
         self.caps = {"enabled": True, "read": [], "write": [], "run": [], "net": [], "env": [], "py": []}
         self.cell_entry = None
@@ -2276,9 +2407,12 @@ class Interp:
                     self.defined_genes.append(root)
                 env[root] = g
         elif k == "silence":
+            self.silences.append((s[1], s[2]))
             if s[2]:
-                self.silences.append((s[1], s[2]))
                 self.note(1, f"RISC loaded: '{s[1]}' silenced → '{s[2]}'")
+            else:
+                # reg-bio (F-4): pure RISC degradation (was a silent no-op)
+                self.note(1, f"RISC loaded: '{s[1]}' degraded (no replacement)")
         elif k == "enhance":
             for n in s[1]:
                 if n not in self.enhanced:
@@ -2296,6 +2430,10 @@ class Interp:
             self.repressi_ring = s[1]
             self.repressi_i = 0
             self.repressi_tick = 0
+            # reg-bio (F-5): inline kinetics layer onto the current params
+            for _fk in ("alpha", "gamma", "hill", "basal", "noise", "seed"):
+                if s[3][_fk] is not None:
+                    self.repressi_params[_fk] = s[3][_fk]
         elif k in ("frame", "edit", "anchor_export", "anchor_import"):
             pass
         elif k == "tad":
@@ -2657,6 +2795,12 @@ class Interp:
                             self.note(4, f"toggle repressed: sequence '{seq_name}' is the inactive allele ('{winner}' is on)")
                             return None
                         break
+                # reg-bio (F-1): promoter gate last — the pinned funnel order
+                # ends here (bursting is the promoter's own stochastic
+                # dynamics; no @acetylate exemption — open chromatin bursts too)
+                if self._promoter_veto(seq_name):
+                    self.note(4, f"promoter inactive: sequence '{seq_name}' burst-off — call returns null")
+                    return None
                 return SeqObj(self, callee, args)
             return self.call_gene(callee, args)
         self.note(4, f"called a {type_name(callee)} (not a gene); result null")
@@ -2674,9 +2818,13 @@ class Interp:
                 target_gene = self.lookup(env, name)
                 immune = isinstance(target_gene, Gene) and target_gene.acetylate
                 if not immune:
-                    self.note(4, f"RISC: call to '{frm}' silenced → '{to}'")
-                    tgt = self.lookup(env, to)
-                    return self.call_value(env, tgt, args)
+                    if to is not None:
+                        self.note(4, f"RISC: call to '{frm}' silenced → '{to}'")
+                        tgt = self.lookup(env, to)
+                        return self.call_value(env, tgt, args)
+                    # reg-bio (F-4): pure degradation — no replacement executes
+                    self.note(4, f"RISC: call to '{frm}' degraded (no replacement)")
+                    return None
         # toggle gate: the repressed allele refuses calls
         for a, b, a_on in self.toggles:
             if a == name or b == name:
@@ -2744,21 +2892,40 @@ class Interp:
             return None
         boosted = name in self.enhanced
         veto = None
-        for frm, to, st, inh, thr in self.grn_edges:
+        # reg-bio (F-3): AND/OR cis-regulatory logic — first-wins message
+        # order preserved exactly (mirror of the Rust grn_veto). The gate
+        # opens iff (every AND member passes) OR (any OR member passes) —
+        # an `any` edge is an ALTERNATIVE activator that alone suffices.
+        and_fail = None
+        and_present = False
+        or_present = False
+        or_pass = False
+        for frm, to, st, inh, thr, hill, is_any in self.grn_edges:
             if veto is not None:
                 break
             if to != name:
                 continue
             lvl = self._grn_level(frm)
             if inh:
-                if thr is not None and lvl >= thr:
+                if thr is not None and lvl >= thr and and_fail is None:
                     veto = f"inhibitor '{frm}' level {lvl!r} >= threshold {thr!r}"
-            else:
-                t = thr if thr is not None else 0.0
+            elif thr is not None:
+                t = thr
                 if boosted:
-                    t = max(0.0, t - ENHANCE_DELTA)
-                if lvl < t:
-                    veto = f"regulator '{frm}' level {lvl!r} < threshold {t!r}"
+                    t = max(0.0, t - self.enhance_delta)
+                if is_any:
+                    or_present = True
+                    if lvl >= t:
+                        or_pass = True
+                else:
+                    and_present = True
+                    if lvl < t and and_fail is None:
+                        and_fail = f"regulator '{frm}' level {lvl!r} < threshold {t!r}"
+        if veto is None and not or_pass:
+            if and_fail is not None:
+                veto = and_fail
+            elif or_present and not and_present:
+                veto = "no OR activator above threshold"
         return veto
 
     def _grn_level(self, frm):
@@ -2770,10 +2937,35 @@ class Interp:
             return self.grn_levels[frm]
         if self.repressi_ring and frm in self.repressi_ring:
             idx = self.repressi_ring.index(frm)
-            lvls = repressilator_levels(len(self.repressi_ring), self.repressi_tick)
-            norm = lvls[idx] / 10.0
+            lvls = repressilator_levels(len(self.repressi_ring), self.repressi_tick, self.repressi_params)
+            norm = lvls[idx] / self.repressi_params["alpha"]
             return min(norm, 1.0)
         return 0.0
+
+    def _promoter_veto(self, name):
+        """reg-bio (F-1): telegraph promoter draw — mirror of the Rust
+        promoter_veto. One draw per call attempt on the SHARED xorshift64*
+        stream (the `random()` state machine): active → off with p=koff,
+        inactive → on with p=kon. State persists across calls (the burst)."""
+        if not self.expr_stochastic:
+            return False
+        was_active = self.promoter_states.get(name, True)
+        x = self.rng
+        x ^= (x >> 12) & M64
+        x ^= (x << 25) & M64
+        x ^= (x >> 27) & M64
+        self.rng = x & M64
+        x = self.rng
+        u = ((x >> 11) & ((1 << 53) - 1)) / 9007199254740992.0
+        if was_active:
+            now_active = u >= self.expr_koff
+        else:
+            now_active = u < self.expr_kon
+        self.promoter_states[name] = now_active
+        if not now_active:
+            self.burst_off[name] = self.burst_off.get(name, 0) + 1
+            return True
+        return False
 
     def call_gene_inner(self, g, args):
         name = g.name or "<lambda>"
@@ -2790,6 +2982,11 @@ class Interp:
             if lvl >= self.methyl_threshold:
                 self.note(4, f"methylation silences: '{name}' (level {lvl} >= threshold {self.methyl_threshold}) — call returns null")
                 return None
+        # reg-bio (F-1): telegraph promoter layer — the pinned gate order
+        # ends here: RISC → toggle → GRN → methylation → promoter.
+        if self._promoter_veto(name):
+            self.note(4, f"promoter inactive: '{name}' burst-off — call returns null")
+            return None
         self.call_counts[name] = self.call_counts.get(name, 0) + 1
         self.call_clock += 1
         bucket = self.call_clock // 20
@@ -2846,6 +3043,10 @@ class Interp:
                 if lvl >= self.methyl_threshold:
                     self.note(4, f"methylation silences: '{name}' (level {lvl} >= threshold {self.methyl_threshold}) — call returns null")
                     return None
+            # reg-bio (F-1): promoter gate (funnel order preserved)
+            if self._promoter_veto(name):
+                self.note(4, f"promoter inactive: '{name}' burst-off — call returns null")
+                return None
             self.call_counts[name] = self.call_counts.get(name, 0) + 1
             self.call_clock += 1
             bucket = self.call_clock // 20
@@ -3335,6 +3536,7 @@ class Interp:
             maturation = (mature / total_defined) if total_defined else 0.0
             return {"calls": dict(self.call_counts), "burst": burst_avg,
                     "burst_by_gene": dict(sorted(burst_by.items())),
+                    "bursts": dict(sorted(self.burst_off.items())),
                     "mature": mature, "nascent": nascent, "maturation": maturation}
         if name == "toggle_on":
             nm = v_display(args[0]) if args else ""
@@ -3377,7 +3579,7 @@ class Interp:
             n = len(self.repressi_ring)
             if not n:
                 return {}
-            lvls = repressilator_levels(n, self.repressi_tick)
+            lvls = repressilator_levels(n, self.repressi_tick, self.repressi_params)
             return {nm: lvls[j] for j, nm in enumerate(self.repressi_ring)}
         if name == "grn_fire":
             seed = v_display(args[0]) if args else ""
@@ -3402,7 +3604,7 @@ class Interp:
                     if self.grn_levels[k2] < 2.220446049250313e-16:  # f64::EPSILON
                         self.grn_levels[k2] = 0.0
             # STATEFUL network: levels persist across fires (a latch by default — decay makes the dilution explicit)
-            for frm, to, st, inh, thr in self.grn_edges:
+            for frm, to, st, inh, thr, hill, is_any in self.grn_edges:
                 self.grn_levels.setdefault(frm, 0.0)
                 self.grn_levels.setdefault(to, 0.0)
             self.grn_levels[seed] = min(self.grn_levels.get(seed, 0.0) + 1.0, 1.0)
@@ -3416,16 +3618,22 @@ class Interp:
             for wave in range(1, 11):
                 changed = False
                 snap = dict(self.grn_levels)
-                for frm, to, st, inh, thr in self.grn_edges:
+                for frm, to, st, inh, thr, hill, is_any in self.grn_edges:
                     if inh:
                         continue  # inhibitors propagate in phase 2
                     parent = snap.get(frm, 0.0)
                     if parent <= 0:
                         continue
                     if thr is not None and thr > 0.0:
-                        p2 = parent * parent
-                        t2 = thr * thr
-                        influence = st * (p2 / (p2 + t2))
+                        # reg-bio (F-2): per-edge Hill exponent (mirror of
+                        # the Rust repeated multiplication — never **)
+                        n_h = hill if hill is not None else 2
+                        ph = 1.0
+                        th2 = 1.0
+                        for _k in range(n_h):
+                            ph *= parent
+                            th2 *= thr
+                        influence = st * (ph / (ph + th2))
                     else:
                         # op-identical to the Rust repeated multiplication
                         # (never ** — pow vs mul rounding must not diverge)
@@ -3445,16 +3653,21 @@ class Interp:
             # parity with the Rust `activated` map, so a node that is both a
             # target and a later source keeps its post-activation level)
             post = dict(self.grn_levels)
-            for frm, to, st, inh, thr in self.grn_edges:
+            for frm, to, st, inh, thr, hill, is_any in self.grn_edges:
                 if not inh:
                     continue
                 parent = post.get(frm, 0.0)
                 if parent <= 0.0:
                     continue
                 if thr is not None and thr > 0.0:
-                    p2 = parent * parent
-                    t2 = thr * thr
-                    influence = st * (p2 / (p2 + t2))
+                    # reg-bio (F-2): cooperative repressor influence
+                    n_h = hill if hill is not None else 2
+                    ph = 1.0
+                    th2 = 1.0
+                    for _k in range(n_h):
+                        ph *= parent
+                        th2 *= thr
+                    influence = st * (ph / (ph + th2))
                 else:
                     influence = parent * st
                 cur = self.grn_levels.get(to, 0.0)
@@ -3619,6 +3832,23 @@ class Interp:
                 s = int(args[0]) & 0xFFFFFFFFFFFFFFFF
             self.rng = s if s != 0 else 0x9E3779B97F4A7C15
             return None
+        if name == "expr_on":
+            # reg-bio (F-1): mirror of the Rust builtin — in-source switch for
+            # the telegraph promoter layer (kon/koff clamped 0..1)
+            kon = 0.3
+            koff = 0.1
+            if args and isinstance(args[0], (int, float)) and not isinstance(args[0], bool):
+                kon = min(max(float(args[0]), 0.0), 1.0)
+            if len(args) > 1 and isinstance(args[1], (int, float)) and not isinstance(args[1], bool):
+                koff = min(max(float(args[1]), 0.0), 1.0)
+            self.expr_stochastic = True
+            self.expr_kon = kon
+            self.expr_koff = koff
+            self.note(1, f"telegraph promoter on (kon={kon}, koff={koff})")
+            return True
+        if name == "expr_off":
+            self.expr_stochastic = False
+            return False
         if name == "chr":
             i = args[0] if args and isinstance(args[0], int) else 0
             return chr(i) if 0 <= i <= 0x10FFFF else ""
@@ -4316,6 +4546,81 @@ def load_file(path, cell=None, variant=None, rna=None, args=None, caps=None):
             it.methyl_threshold = int(str(_mthr).strip())
         except ValueError:
             it.note(4, f"cell key 'methylate.threshold = {_mthr}' ignored: needs a non-negative integer")
+    # reg-bio (F-6): enhancer dose (default 0.25)
+    _ed = it.cell.get("enhance.delta")
+    if _ed is not None:
+        try:
+            _f = float(str(_ed).strip())
+            if 0.0 <= _f <= 1.0:
+                it.enhance_delta = _f
+            else:
+                it.note(4, f"cell key 'enhance.delta = {_ed}' ignored: needs a number in 0..=1")
+        except ValueError:
+            it.note(4, f"cell key 'enhance.delta = {_ed}' ignored: needs a number in 0..=1")
+    # reg-bio (F-1): telegraph promoter layer (opt-in)
+    if it.cell.get("expression.stochastic", "").strip() == "true":
+        it.expr_stochastic = True
+    for _ck, _attr in (("expression.kon", "expr_kon"), ("expression.koff", "expr_koff")):
+        _cv = it.cell.get(_ck)
+        if _cv is not None:
+            try:
+                _f = float(str(_cv).strip())
+                if 0.0 <= _f <= 1.0:
+                    setattr(it, _attr, _f)
+                else:
+                    it.note(4, f"cell key '{_ck} = {_cv}' ignored: needs a number in 0..=1")
+            except ValueError:
+                it.note(4, f"cell key '{_ck} = {_cv}' ignored: needs a number in 0..=1")
+    _esd = it.cell.get("expression.seed")
+    if _esd is not None:
+        try:
+            _s = int(str(_esd).strip())
+            it.rng = 0x9E3779B97F4A7C15 if _s == 0 else (_s & M64)
+        except ValueError:
+            it.note(4, f"cell key 'expression.seed = {_esd}' ignored: needs an integer")
+    # reg-bio (F-5): repressilator kinetics — plasmid engineering surface
+    for _ck, _lo, _hi in (("repressi.alpha", None, None), ("repressi.gamma", None, None),
+                          ("repressi.basal", None, None), ("repressi.noise", None, None)):
+        _cv = it.cell.get(_ck)
+        if _cv is None:
+            continue
+        try:
+            _f = float(str(_cv).strip())
+        except ValueError:
+            it.note(4, f"cell key '{_ck} = {_cv}' ignored: needs a number")
+            continue
+        _key = _ck.split(".")[1]
+        if _key == "alpha" and _f > 0.0:
+            it.repressi_params["alpha"] = _f
+        elif _key == "gamma" and _f >= 0.0:
+            it.repressi_params["gamma"] = _f
+        elif _key == "basal" and _f >= 0.0:
+            it.repressi_params["basal"] = _f
+        elif _key == "noise" and 0.0 <= _f <= 1.0:
+            it.repressi_params["noise"] = _f
+        elif _key == "alpha":
+            it.note(4, f"cell key '{_ck} = {_cv}' ignored: needs a number > 0")
+        elif _key == "gamma" or _key == "basal":
+            it.note(4, f"cell key '{_ck} = {_cv}' ignored: needs a number >= 0")
+        elif _key == "noise":
+            it.note(4, f"cell key '{_ck} = {_cv}' ignored: needs a number in 0..=1")
+    _rh = it.cell.get("repressi.hill")
+    if _rh is not None:
+        try:
+            _n = int(str(_rh).strip())
+            if 1 <= _n <= 8:
+                it.repressi_params["hill"] = _n
+            else:
+                it.note(4, f"cell key 'repressi.hill = {_rh}' ignored: needs an integer 1..=8")
+        except ValueError:
+            it.note(4, f"cell key 'repressi.hill = {_rh}' ignored: needs an integer 1..=8")
+    _rsd = it.cell.get("repressi.seed")
+    if _rsd is not None:
+        try:
+            _s = int(str(_rsd).strip())
+            it.repressi_params["seed"] = 0x9E3779B97F4A7C15 if _s == 0 else (_s & M64)
+        except ValueError:
+            it.note(4, f"cell key 'repressi.seed = {_rsd}' ignored: needs an integer")
     for st in stmts:
         try:
             it.exec_stmt(it.globals, st)

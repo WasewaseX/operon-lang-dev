@@ -122,6 +122,20 @@ pub struct SpliceDef {
     pub variants: Vec<(String, Arc<GeneDef>)>, // (variant name, gene)
 }
 
+/// reg-bio (F-5): inline ring kinetics — `repressilator a -> b -> c alpha 20;`.
+/// Each field layers onto the interpreter's current `RepressiParams` (last
+/// declaration wins per-field); None leaves the value untouched, so `.cell`
+/// configuration and inline overrides compose.
+#[derive(Debug, Clone, Default)]
+pub struct RepressiOverrides {
+    pub alpha: Option<f64>,
+    pub gamma: Option<f64>,
+    pub hill: Option<u32>,
+    pub basal: Option<f64>,
+    pub noise: Option<f64>,
+    pub seed: Option<u64>,
+}
+
 #[derive(Debug, Clone)]
 pub struct FateDef {
     pub name: String,
@@ -138,6 +152,16 @@ pub struct RegEdge {
     pub strength: f64,
     pub inhibit: bool,
     pub threshold: Option<f64>, // Hill-style dose threshold
+    /// reg-bio (F-2): per-edge Hill exponent (1..=8). None = the historical
+    /// n=2 dose-response (bit-identical legacy path). Only meaningful on
+    /// edges carrying a threshold (dose-response shape).
+    pub hill: Option<u32>,
+    /// reg-bio (F-3): cis-regulatory OR membership. An `any` edge passes the
+    /// call gate when its own threshold passes — the gene fires if ALL
+    /// non-any thresholded edges pass AND at least one `any` edge passes.
+    /// Inhibiting edges ignore `any` (inhibitors already veto with OR
+    /// semantics: any inhibitor above its threshold vetoes).
+    pub any: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -204,7 +228,7 @@ pub enum Stmt {
     Fate(Arc<FateDef>),
     Regulate(Vec<RegEdge>),
     Toggle(String, String),
-    Repressilator(Vec<String>, Option<f64>),
+    Repressilator(Vec<String>, Option<f64>, RepressiOverrides),
     Frame {
         name: String,
         is_proof: bool,
