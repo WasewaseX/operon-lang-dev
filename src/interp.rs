@@ -407,6 +407,22 @@ impl Default for RepressiParams {
     }
 }
 
+/// reg-bio-3 (A1/A7): a polycistronic transcription unit — the namesake
+/// construct. ONE promoter drives N cistrons on ONE polycistronic mRNA.
+/// Member order is load-bearing: position determines the RBS gradient
+/// (translation efficiency) and polarity exposure (upstream blocking
+/// reduces downstream yield).
+#[derive(Clone)]
+pub struct OperonUnit {
+    pub name: String,
+    /// (cistron gene, rbs translation-efficiency multiplier 0..=1) in
+    /// transcriptional order.
+    pub members: Vec<(String, f64)>,
+    /// successful expression events of this unit (one per cistron call
+    /// that passes every gate; suppressed calls make no transcript).
+    pub transcripts: u64,
+}
+
 pub struct Interp {
     pub notes: Vec<Note>,
     /// sec-r3: notes suppressed past the cap (surfaced once).
@@ -423,7 +439,30 @@ pub struct Interp {
     /// instead of process stdout — the test runner captures per-file
     /// program output and shows it only on failure (clean reports).
     pub stdout_sink: Option<Rc<RefCell<Vec<String>>>>,
-    pub silences: Vec<(String, Option<String>)>,
+    /// reg-bio-3 (C9): stoichiometric RISC — (from, to, strength, sites).
+    /// Each entry is one binding site; capture probability per call is
+    /// 1 - (1-s)^sites over all entries for the target. strength 1.0 with
+    /// one site = the legacy binary redirect, bit-identical.
+    pub silences: Vec<(String, Option<String>, f64, u32)>,
+    /// reg-bio-3 (A1/A7): polycistronic transcription units — the namesake
+    /// construct. One promoter drives N cistrons on ONE transcript; member
+    /// order is load-bearing (RBS gradient + polarity exposure).
+    pub operons: Vec<OperonUnit>,
+    /// reg-bio-3 (C9): stoichiometric RISC bookkeeping — genes that escaped
+    /// a sub-1.0 capture (first escape notes once).
+    pub risc_escaped: std::collections::HashSet<String>,
+    /// reg-bio-3 (B3): m6A site-density levels 0..=3 (prokaryotic Dam-style
+    /// DNA-methylation analogy, per the SPEC term audit). Resistance to
+    /// redefinition requires level >= 1; the legacy bool is the {0,1}
+    /// sub-lattice.
+    pub m6a_levels: HashMap<String, u32>,
+    /// reg-bio-3 (B2/B6): divisions counter — `passage(n)` advances it;
+    /// spawn is a thread, not a division, and does not touch it.
+    pub generation: u64,
+    /// reg-bio-3 (C10): gene dosage registry — name -> copies (>1 only).
+    /// Interp-level (not Env) because regulation reads resolve source
+    /// names without env access.
+    pub copies: HashMap<String, u32>,
     pub fates: HashMap<String, Arc<FateDef>>,
     pub phenos: HashMap<String, Arc<PhenoDef>>,
     pub grn_edges: Vec<RegEdge>,
@@ -532,6 +571,11 @@ impl Interp {
             file: "<repl>".to_string(),
             stdout_sink: None,
             silences: Vec::new(),
+            operons: Vec::new(),
+            risc_escaped: std::collections::HashSet::new(),
+            m6a_levels: HashMap::new(),
+            generation: 0,
+            copies: HashMap::new(),
             fates: HashMap::new(),
             phenos: HashMap::new(),
             grn_edges: Vec::new(),
@@ -1150,16 +1194,32 @@ impl Interp {
                     let lvl = self.methyl_levels.entry(name.clone()).or_insert(0);
                     *lvl = lvl.saturating_sub(1);
                 }
+                // reg-bio-3 (B3): every executed @m6a-marked definition
+                // deepens the m6A site-density level (quantitative Dam-style
+                // mark); resistance to redefinition requires level >= 1.
+                if def.m6a {
+                    let lvl = self.m6a_levels.entry(name.clone()).or_insert(0);
+                    *lvl = (*lvl + 1).min(3);
+                }
+                // reg-bio-3 (C10): gene dosage registry (transcript dose
+                // into GRN reads; the return value is untouched).
+                if def.copies > 1 {
+                    self.copies.insert(name.clone(), def.copies);
+                } else {
+                    self.copies.remove(&name);
+                }
                 // @m6a-stabilized transcripts win dispatch among same-name
                 // candidates: a redefinition cannot overwrite an m6a-marked
                 // binding unless it carries the mark itself.
-                if !def.m6a {
-                    if let Some(Value::Gene(old, _)) = env.get(&name) {
-                        if old.m6a {
-                            self.note(0, 4, format!("'{}' is @m6a-stabilized; redefinition ignored (mark the new copy to replace it)", name));
-                            return Ok(Flow::Norm);
-                        }
-                    }
+                // reg-bio-3 (B3): resistance reads the QUANTITATIVE m6A
+                // level (>= 1) — the legacy bool is exactly the {0,1}
+                // sub-lattice (every executed @m6a def bumps the level), so
+                // legacy programs are bit-identical, while m6a_write on an
+                // unmarked gene now protects it and m6a_erase on a marked
+                // one truly releases it.
+                if !def.m6a && *self.m6a_levels.get(&name).unwrap_or(&0) >= 1 {
+                    self.note(0, 4, format!("'{}' is @m6a-stabilized; redefinition ignored (mark the new copy to replace it)", name));
+                    return Ok(Flow::Norm);
                 }
                 if !self.defined_genes.contains(&name) {
                     self.defined_genes.push(name.clone());
@@ -1182,25 +1242,109 @@ impl Interp {
                 }
                 Ok(Flow::Norm)
             }
-            Stmt::Silence(from, to) => {
+            Stmt::Silence(from, to, strength, sites) => {
+                let strength = *strength;
+                let sites = *sites;
                 match to {
                     Some(t) => {
-                        self.silences.push((from.clone(), Some(t.clone())));
-                        self.note(0, 1, format!("RISC loaded: '{}' silenced → '{}'", from, t));
+                        self.silences
+                            .push((from.clone(), Some(t.clone()), strength, sites));
+                        if strength < 1.0 || sites > 1 {
+                            self.note(
+                                0,
+                                1,
+                                format!(
+                                    "RISC loaded: '{}' silenced → '{}' (strength {}, sites {})",
+                                    from,
+                                    t,
+                                    crate::value::format_float(strength),
+                                    sites
+                                ),
+                            );
+                        } else {
+                            self.note(0, 1, format!("RISC loaded: '{}' silenced → '{}'", from, t));
+                        }
                     }
                     // reg-bio (F-4): pure RISC degradation — miRNA/RISC destroys
                     // the transcript; there is no replacement gene. The old
                     // behavior was a SILENT no-op, which violated the honesty
                     // principle (a statement that pretends nothing happened).
                     None => {
-                        self.silences.push((from.clone(), None));
-                        self.note(
-                            0,
-                            1,
-                            format!("RISC loaded: '{}' degraded (no replacement)", from),
-                        );
+                        self.silences.push((from.clone(), None, strength, sites));
+                        if strength < 1.0 || sites > 1 {
+                            self.note(
+                                0,
+                                1,
+                                format!(
+                                    "RISC loaded: '{}' degraded (no replacement) (strength {}, sites {})",
+                                    from,
+                                    crate::value::format_float(strength),
+                                    sites
+                                ),
+                            );
+                        } else {
+                            self.note(
+                                0,
+                                1,
+                                format!("RISC loaded: '{}' degraded (no replacement)", from),
+                            );
+                        }
                     }
                 }
+                Ok(Flow::Norm)
+            }
+            // reg-bio-3 (A1/A7): register a polycistronic transcription unit.
+            // Membership by name (cistrons may be defined later); redefinition
+            // replaces (last wins, Total Grammar); a cistron already owned by
+            // another unit is ignored with a note.
+            Stmt::Operon(name, members) => {
+                if members.is_empty() {
+                    self.note(
+                        0,
+                        4,
+                        format!("operon '{}': no cistrons declared; skipped", name),
+                    );
+                    return Ok(Flow::Norm);
+                }
+                self.operons.retain(|u| u.name != *name);
+                let mut unit = OperonUnit {
+                    name: name.clone(),
+                    members: Vec::new(),
+                    transcripts: 0,
+                };
+                for (g, rbs) in members {
+                    if self
+                        .operons
+                        .iter()
+                        .any(|u| u.members.iter().any(|(m, _)| m == g))
+                    {
+                        self.note(
+                            0,
+                            4,
+                            format!("cistron '{}' already belongs to another operon; ignored", g),
+                        );
+                        continue;
+                    }
+                    unit.members.push((g.clone(), *rbs));
+                }
+                if unit.members.is_empty() {
+                    self.note(
+                        0,
+                        4,
+                        format!(
+                            "operon '{}': every cistron belonged to another unit; skipped",
+                            name
+                        ),
+                    );
+                    return Ok(Flow::Norm);
+                }
+                let n = unit.members.len();
+                self.operons.push(unit);
+                self.note(
+                    0,
+                    1,
+                    format!("operon '{}': {} cistron(s) on one transcript", name, n),
+                );
                 Ok(Flow::Norm)
             }
             Stmt::Enhance(names) => {
@@ -1829,42 +1973,98 @@ impl Interp {
                 self.cur_line = *call_line;
                 // check silences at call sites (RISC)
                 if let Expr::Ident(name) = &**callee {
-                    if let Some((from, to)) = self.silences.iter().find(|(f, _)| f == name).cloned()
-                    {
-                        // acetylated genes are immune
+                    // reg-bio-3 (C9): stoichiometric RISC — every entry for
+                    // the target is one binding site; the per-call capture
+                    // probability is 1 − Π(1−s_i)^sites_i. strength 1.0 /
+                    // one site = legacy binary redirect (no draw — the RNG
+                    // stream is untouched for legacy programs).
+                    let entries: Vec<(String, Option<String>, f64, u32)> = self
+                        .silences
+                        .iter()
+                        .filter(|(f, _, _, _)| f == name)
+                        .cloned()
+                        .collect();
+                    if let Some((_, first_to, first_s, first_sites)) = entries.first().cloned() {
+                        // acetylated genes are immune (checked BEFORE any
+                        // draw — immunity consumes no randomness)
                         let immune = match env.get(name) {
                             Some(Value::Gene(d, _)) => d.acetylate,
                             _ => false,
                         };
                         if !immune {
-                            match to {
-                                Some(to) => {
-                                    self.note(
-                                        0,
-                                        4,
-                                        format!("RISC: call to '{}' silenced → '{}'", from, to),
-                                    );
-                                    let target = env.get(&to).unwrap_or(Value::Null);
-                                    let mut argvs = Vec::new();
-                                    for a in args {
-                                        argvs.push(self.eval(env, a)?);
-                                    }
-                                    return self.call_value(env, &target, argvs);
+                            let mut surv = 1.0f64;
+                            for (_, _, s, sites) in &entries {
+                                let base = 1.0 - *s;
+                                let mut k = 0;
+                                while k < *sites {
+                                    surv *= base;
+                                    k += 1;
                                 }
-                                // reg-bio (F-4): pure degradation — the transcript
-                                // is destroyed, no replacement executes. A degraded
-                                // call is not expression: it returns null BEFORE the
-                                // call counters, exactly like the other silencing gates.
-                                None => {
-                                    self.note(
-                                        0,
-                                        4,
-                                        format!(
-                                            "RISC: call to '{}' degraded (no replacement)",
-                                            from
-                                        ),
-                                    );
-                                    return Ok(Value::Null);
+                            }
+                            let p = 1.0 - surv;
+                            // capture decision: deterministic draw on the
+                            // shared mirrored xorshift64* stream (same
+                            // discipline as the telegraph promoter); only
+                            // when the capture is genuinely probabilistic
+                            let captured = if p >= 1.0 {
+                                true
+                            } else {
+                                let mut x = self.rng;
+                                x ^= x >> 12;
+                                x ^= x << 25;
+                                x ^= x >> 27;
+                                self.rng = x;
+                                let u = ((x >> 11) as f64) / 9_007_199_254_740_992.0;
+                                if u < p {
+                                    true
+                                } else {
+                                    // escape: the call proceeds through the
+                                    // pinned funnel; note once per gene
+                                    if self.risc_escaped.insert(name.clone()) {
+                                        self.note(
+                                            0,
+                                            4,
+                                            format!(
+                                                "RISC escape: '{}' escaped silencing (strength {}, sites {})",
+                                                name,
+                                                crate::value::format_float(first_s),
+                                                first_sites
+                                            ),
+                                        );
+                                    }
+                                    false
+                                }
+                            };
+                            if captured {
+                                match first_to {
+                                    Some(to) => {
+                                        self.note(
+                                            0,
+                                            4,
+                                            format!("RISC: call to '{}' silenced → '{}'", name, to),
+                                        );
+                                        let target = env.get(&to).unwrap_or(Value::Null);
+                                        let mut argvs = Vec::new();
+                                        for a in args {
+                                            argvs.push(self.eval(env, a)?);
+                                        }
+                                        return self.call_value(env, &target, argvs);
+                                    }
+                                    // reg-bio (F-4): pure degradation — the transcript
+                                    // is destroyed, no replacement executes. A degraded
+                                    // call is not expression: it returns null BEFORE the
+                                    // call counters, exactly like the other silencing gates.
+                                    None => {
+                                        self.note(
+                                            0,
+                                            4,
+                                            format!(
+                                                "RISC: call to '{}' degraded (no replacement)",
+                                                name
+                                            ),
+                                        );
+                                        return Ok(Value::Null);
+                                    }
                                 }
                             }
                         }
@@ -2676,6 +2876,13 @@ impl Interp {
             }
         }
         let out = l * factor;
+        // reg-bio-3 (C10): gene dosage — @copies amplifies the CONCENTRATION
+        // the gene feeds its edges (transcript amount under titration),
+        // saturating on the 0..1 lattice. Copies = 1 is bit-identical.
+        let out = match self.copies.get(source) {
+            Some(c) if *c > 1 => out * (*c as f64),
+            _ => out,
+        };
         if out > 1.0 {
             1.0
         } else {
@@ -2705,8 +2912,56 @@ impl Interp {
                 continue; // nothing produced, nothing to decay
             }
             let rate = t.rate.unwrap_or(1.0);
+            // reg-bio-3 (A1/A7): per-cistron translation efficiency — the
+            // source's `rbs` multiplier (Shine-Dalgarno strength) scales the
+            // protein production rate; the stoichiometric gradient IS the
+            // rbs-scaled protein nodes. And transcriptional polarity:
+            // upstream blocking (target-less RISC silencing or
+            // methylation-past-threshold) reduces downstream yield —
+            // polarity^#blocked, `operon.polarity` (default 0.5). Silent at
+            // the note layer; observable through levels (deterministic).
+            let mut rf = rate;
+            if let Some(ui) = self
+                .operons
+                .iter()
+                .position(|u| u.members.iter().any(|(m, _)| m == &t.from))
+            {
+                let (pos, rbs) = {
+                    let u = &self.operons[ui];
+                    let pos = u.members.iter().position(|(m, _)| *m == t.from).unwrap();
+                    (pos, u.members[pos].1)
+                };
+                rf *= rbs;
+                let mut blocked = 0usize;
+                for (g, _) in self.operons[ui].members.iter().take(pos) {
+                    let silenced = self
+                        .silences
+                        .iter()
+                        .any(|(f, to, _, _)| f == g && to.is_none());
+                    let methylated =
+                        *self.methyl_levels.get(g).unwrap_or(&0) >= self.methyl_threshold;
+                    if silenced || methylated {
+                        blocked += 1;
+                    }
+                }
+                if blocked > 0 {
+                    let pol = self
+                        .cell
+                        .get("operon.polarity")
+                        .and_then(|v| v.parse::<f64>().ok())
+                        .map(|v| v.clamp(0.0, 1.0))
+                        .unwrap_or(0.5);
+                    let mut f = 1.0f64;
+                    let mut k = 0;
+                    while k < blocked {
+                        f *= pol;
+                        k += 1;
+                    }
+                    rf *= f;
+                }
+            }
             let cur = *self.grn_levels.get(&t.to).unwrap_or(&0.0);
-            let p = (cur + rate * delta as f64 - dec * cur).clamp(0.0, 1.0);
+            let p = (cur + rf * delta as f64 - dec * cur).clamp(0.0, 1.0);
             self.grn_levels.insert(t.to.clone(), p);
         }
     }
@@ -2755,6 +3010,23 @@ impl Interp {
                 }
             }
         }
+        // reg-bio-3 (B3): m6A decay — `.cell m6a.decay f` erases site
+        // density as time passes (half-down rounding on the 0..=3 lattice:
+        // a diluted mark never reads as MORE marked). Unset = byte-identical.
+        if let Some(f) = self
+            .cell
+            .get("m6a.decay")
+            .and_then(|v| v.parse::<f64>().ok())
+            .map(|v| v.clamp(0.0, 1.0))
+        {
+            if f > 0.0 && !self.m6a_levels.is_empty() {
+                for lvl in self.m6a_levels.values_mut() {
+                    let x = (*lvl as f64) * (1.0 - f) - 0.5;
+                    let next = x.ceil();
+                    *lvl = if next < 0.0 { 0 } else { next as u32 };
+                }
+            }
+        }
         self.trans_integrate();
     }
 
@@ -2781,11 +3053,41 @@ impl Interp {
     /// semantics (any above-threshold inhibitor vetoes). Message order is
     /// first-wins in declaration order — unchanged from the pre-`any`
     /// behavior for every network without OR members.
+    /// reg-bio-3 (A1/A7): the call gate. A call to a cistron of a
+    /// polycistronic unit is a transcription attempt of the WHOLE unit:
+    /// edges targeting the unit veto every member first (induction acts on
+    /// the unit's promoter), then the cistron's own edges apply as usual.
+    /// The unit pass short-circuits — its message wins over per-cistron
+    /// messages. Units without targeting edges are inert (declarative).
     fn grn_veto(&mut self, name: &str) -> Option<String> {
         if self.grn_edges.is_empty() {
             return None;
         }
-        let boosted = self.enhanced.iter().any(|g| g == name);
+        if let Some(ui) = self
+            .operons
+            .iter()
+            .position(|u| u.members.iter().any(|(m, _)| m == name))
+        {
+            let unit_name = self.operons[ui].name.clone();
+            let targeted = self.grn_edges.iter().any(|e| e.to == unit_name);
+            if targeted {
+                if let Some(reason) = self.gate_veto_for(&unit_name) {
+                    return Some(format!("operon '{}': {}", unit_name, reason));
+                }
+            }
+        }
+        self.gate_veto_for(name)
+    }
+
+    /// The per-target cis-gate evaluation (AND/OR/inhibit/attenuates/sum
+    /// pools + enhance boost). Used for the unit pass and the per-cistron
+    /// pass alike (reg-bio-3 refactor of the pinned grn_veto body — logic
+    /// unchanged, target is a parameter).
+    fn gate_veto_for(&mut self, target: &str) -> Option<String> {
+        if self.grn_edges.is_empty() {
+            return None;
+        }
+        let boosted = self.enhanced.iter().any(|g| g == target);
         let delta = self.enhance_delta;
         // A11 (reg-r2): a repressilator node doubles as a GRN regulator.
         // If an edge's source is a ring node with no explicit grn_fire
@@ -2808,7 +3110,7 @@ impl Interp {
         let edges: Vec<RegEdge> = self
             .grn_edges
             .iter()
-            .filter(|e| e.to == name)
+            .filter(|e| e.to == target)
             .cloned()
             .collect();
         for e in &edges {
@@ -2900,7 +3202,7 @@ impl Interp {
             let sum_edges: Vec<RegEdge> = self
                 .grn_edges
                 .iter()
-                .filter(|e| !e.inhibit && e.sum && e.to == name)
+                .filter(|e| !e.inhibit && e.sum && e.to == target)
                 .cloned()
                 .collect();
             for e in &sum_edges {
@@ -3122,6 +3424,16 @@ impl Interp {
                 ),
             );
             return Ok(Value::Null);
+        }
+        // reg-bio-3 (A1/A7): the call passed every gate — one transcript of
+        // the unit is made (a suppressed call is NOT expression and counts
+        // nothing; a successful cistron call is one polycistronic transcript).
+        if let Some(ui) = self
+            .operons
+            .iter()
+            .position(|u| u.members.iter().any(|(m, _)| *m == name))
+        {
+            self.operons[ui].transcripts += 1;
         }
         *self.call_counts.entry(name.clone()).or_insert(0) += 1;
         // burst-index binning: 20 calls per bin, per gene (gene-expression
@@ -4442,6 +4754,100 @@ impl Interp {
                 }
                 Ok(Value::Int(lvl as i64))
             }
+            "m6a_write" | "m6a_erase" => {
+                // reg-bio-3 (B3): quantitative m6A site density 0..=3 —
+                // write adds (writer-complex dose), erase removes (eraser
+                // dose). Dispatch resistance requires level >= 1; levels
+                // above 1 take longer to decay (`.cell m6a.decay`).
+                let k = args.first().map(|v| v.display()).unwrap_or_default();
+                let n = match args.get(1) {
+                    Some(Value::Int(i)) => (*i).max(0) as u32,
+                    _ => 1,
+                };
+                mem_charge((k.len() + 64) as u64)?;
+                let (lvl, marked) = {
+                    let lvl = self.m6a_levels.entry(k.clone()).or_insert(0);
+                    if name == "m6a_write" {
+                        *lvl = (*lvl).saturating_add(n).min(3);
+                    } else {
+                        *lvl = lvl.saturating_sub(n);
+                    }
+                    (*lvl, *lvl >= 1)
+                };
+                if !self.methyl_quiet {
+                    self.note(
+                        self.cur_line,
+                        2,
+                        format!(
+                            "m6A {}: '{}' (level {}) — redefinition {}",
+                            if name == "m6a_write" {
+                                "written"
+                            } else {
+                                "erased"
+                            },
+                            k,
+                            lvl,
+                            if marked {
+                                "resisted"
+                            } else {
+                                "no longer resisted"
+                            }
+                        ),
+                    );
+                }
+                Ok(Value::Int(lvl as i64))
+            }
+            "passage" => {
+                // reg-bio-3 (B2/B6): cell divisions. Epigenetic marks DILUTE
+                // unless maintained: each division multiplies every
+                // methylation level by `methyl.maintenance` (default 0.5 =
+                // pure-dilution null; 1.0 = perfect DNMT1-style maintenance;
+                // 0.0 = instant loss) with half-down rounding on the u32
+                // lattice — a diluted mark never reads as MORE repressed.
+                // `generation` counts divisions; spawn is a thread, not a
+                // division, and does not touch it.
+                let mut n = match args.first() {
+                    Some(Value::Int(i)) => (*i).max(0) as u64,
+                    Some(Value::Float(f)) => (*f).max(0.0) as u64,
+                    _ => 1,
+                };
+                if n > 1_000_000 {
+                    self.note(
+                        self.cur_line,
+                        4,
+                        "passage: n clamped to 1000000 divisions (a culture that old is not a useful model)",
+                    );
+                    n = 1_000_000;
+                }
+                let f = self
+                    .cell
+                    .get("methyl.maintenance")
+                    .and_then(|v| v.parse::<f64>().ok())
+                    .map(|v| v.clamp(0.0, 1.0))
+                    .unwrap_or(0.5);
+                mem_charge(64 + 8 * self.methyl_levels.len() as u64)?;
+                for _ in 0..n {
+                    for lvl in self.methyl_levels.values_mut() {
+                        let x = (*lvl as f64) * f - 0.5;
+                        let next = x.ceil();
+                        *lvl = if next < 0.0 { 0 } else { next as u32 };
+                    }
+                }
+                self.generation = self.generation.saturating_add(n);
+                if !self.methyl_quiet {
+                    self.note(
+                        self.cur_line,
+                        1,
+                        format!(
+                            "passage: {} divisions (maintenance {}) — generation {}",
+                            n,
+                            crate::value::format_float(f),
+                            self.generation
+                        ),
+                    );
+                }
+                Ok(Value::Int(self.generation as i64))
+            }
             "grn_set" => {
                 // A12: write a GRN node's level directly (0..1, clamped).
                 // This is how host programs steer gate state at runtime
@@ -4556,6 +4962,18 @@ impl Interp {
                 } else {
                     0.0
                 };
+                // reg-bio-3 (A1/A7/B2): polycistronic transcript counts and
+                // the division counter (sorted-key determinism, D9).
+                let mut transcript_pairs: Vec<(String, u64)> = self
+                    .operons
+                    .iter()
+                    .map(|u| (u.name.clone(), u.transcripts))
+                    .collect();
+                transcript_pairs.sort_by(|a, b| a.0.cmp(&b.0));
+                let transcripts: Vec<(Value, Value)> = transcript_pairs
+                    .into_iter()
+                    .map(|(k, v)| (Value::Str(k), Value::Int(v as i64)))
+                    .collect();
                 Ok(Value::Map(Rc::new(RefCell::new(
                     crate::value::MapStore::from_vec(vec![
                         (
@@ -4580,6 +4998,16 @@ impl Interp {
                         (Value::Str("mature".into()), Value::Int(mature as i64)),
                         (Value::Str("nascent".into()), Value::Int(nascent as i64)),
                         (Value::Str("maturation".into()), Value::Float(maturation)),
+                        (
+                            Value::Str("transcripts".into()),
+                            Value::Map(Rc::new(RefCell::new(crate::value::MapStore::from_vec(
+                                transcripts,
+                            )))),
+                        ),
+                        (
+                            Value::Str("generation".into()),
+                            Value::Int(self.generation as i64),
+                        ),
                     ]),
                 ))))
             }
@@ -7712,6 +8140,9 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "methyl",
     "methylate",
     "demethylate",
+    "m6a_write",
+    "m6a_erase",
+    "passage",
     "grn_set",
     "grn_get",
     "fingerprint",

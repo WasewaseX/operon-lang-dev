@@ -101,6 +101,10 @@ pub struct GeneDef {
     pub acetylate: bool,
     pub methylate: bool,
     pub m6a: bool,
+    /// reg-bio-3 (C10): gene dosage — `@copies n`. Copies amplify the
+    /// concentration the gene feeds its GRN edges (transcript amount),
+    /// NOT the call's return value. Clamped 1..=64 at parse.
+    pub copies: u32,
     pub seq: bool, // sequence (generator) definition
 }
 
@@ -276,7 +280,20 @@ pub enum Stmt {
     },
     Gene(Arc<GeneDef>),
     Splice(Arc<SpliceDef>),
-    Silence(String, Option<String>),
+    /// reg-bio-3 (C9): stoichiometric RISC — `silence old -> new strength s
+    /// sites n;`. The strength is the per-site capture probability (clamped
+    /// 0..=1, default 1.0); each statement is one binding site (sites n
+    /// composes multiplicatively: survival = (1-s)^n). Omitted strength and
+    /// sites reproduce the legacy binary redirect bit-identically.
+    Silence(String, Option<String>, f64, u32),
+    /// reg-bio-3 (A1/A7): the polycistronic transcription unit — the
+    /// namesake construct. `operon lac { lacZ rbs 1.0; lacY rbs 0.6; }`:
+    /// ONE promoter drives N cistrons on ONE transcript; a call to any
+    /// cistron is a transcription attempt of the WHOLE unit, so edges
+    /// targeting the unit gate every member. Member order is load-bearing
+    /// (RBS gradient + polarity exposure); each member's `rbs` multiplies
+    /// its translation rate (Shine-Dalgarno strength, clamped 0..=1).
+    Operon(String, Vec<(String, f64)>),
     Enhance(Vec<String>),
     Ires(String),
     Fate(Arc<FateDef>),

@@ -1,0 +1,29 @@
+# reg-bio-3: worker RNG derivation contract (sz adversarial ask). A worker's
+# stream is derived from its task id (decorrelation), but randomize(seed)
+# inside a worker pins that worker's stream to the SAME sequence the host
+# would produce for the same seed — determinism across cells, not per-cell
+# chaos. Two workers with equal seeds agree; each also agrees with the host.
+gene seeder() {
+    randomize(99)
+    return random()
+}
+gene seeder2() {
+    randomize(99)
+    return random()
+}
+frame proof {
+    let a = spawn(seeder)
+    let ra = join(a)
+    let b = spawn(seeder2)
+    let rb = join(b)
+    assert(ra == rb, "two workers, same seed: identical streams (derivation is decorrelation, not randomness)")
+    randomize(99)
+    let host = random()
+    assert(abs(ra - host) < 1e-12, "worker randomize(seed) matches the host stream for the same seed")
+}
+main {
+    let id = spawn(seeder)
+    promote("worker draw: {join(id)}")
+    randomize(99)
+    promote("host draw:   {random()}")
+}

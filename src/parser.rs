@@ -69,9 +69,10 @@ pub(crate) const KEYWORDS: &[&str] = &[
     "bind",
     "inducer",
     "cofactor",
+    "operon",
 ];
 
-const MARKS: &[&str] = &["acetylate", "methylate", "m6a"];
+const MARKS: &[&str] = &["acetylate", "methylate", "m6a", "copies"];
 
 /// Words that end a `use` path — the alias introducer and statement enders.
 fn use_path_boundary(w: &str) -> bool {
@@ -344,6 +345,28 @@ impl Parser {
                         marks.push(r);
                     }
                 }
+                // reg-bio-3 (C10): `@copies n` carries its dosage argument.
+                let mut copies: u32 = 1;
+                if marks.iter().any(|m| m == "copies") {
+                    match self.peek().clone() {
+                        Tok::Int(i) => {
+                            self.next();
+                            if !(1..=64).contains(&i) {
+                                let line = self.line();
+                                self.note(
+                                    line,
+                                    4,
+                                    "gene dosage clamped to 1..=64 copies (a level is a concentration, not an amplifier)",
+                                );
+                            }
+                            copies = i.clamp(1, 64) as u32;
+                        }
+                        _ => {
+                            let line = self.line();
+                            self.note(line, 4, "@copies needs an integer 1..=64; default 1");
+                        }
+                    }
+                }
                 // dx-r6 (loop-5-a audit MED): an own-line mark —
                 //   @acetylate\ngene foo() —
                 // never reached `gene`: the newline between mark and keyword
@@ -358,7 +381,7 @@ impl Parser {
                     self.skip_line();
                     return None;
                 }
-                Some(self.parse_gene_def(marks))
+                Some(self.parse_gene_def(marks, copies))
             }
             Tok::Ident(w) => self.parse_word_stmt(&w),
             Tok::LBrace => {
@@ -446,6 +469,7 @@ impl Parser {
             "yield",
             "decoy",
             "ligand",
+            "operon",
         ];
         let mut word = w.to_string();
         // Expression-head detection: `i += 1`, `x = 2`, `f(...)`, `a[0]`,
@@ -492,7 +516,7 @@ impl Parser {
         match word.as_str() {
             "gene" => {
                 self.next();
-                Some(self.parse_gene_def(vec![]))
+                Some(self.parse_gene_def(vec![], 1))
             }
             "let" => {
                 self.next();
@@ -732,8 +756,47 @@ impl Parser {
                     self.next();
                     to = Some(self.expect_ident()?);
                 }
+                // reg-bio-3 (C9): stoichiometric RISC — `strength s` is the
+                // per-site capture probability; `sites n` composes
+                // multiplicatively. Omitted = legacy binary silence.
+                let mut strength = 1.0;
+                if matches!(self.peek().clone(), Tok::Ident(w) if w == "strength") {
+                    self.next();
+                    match self.peek().clone() {
+                        Tok::Float(f) => {
+                            self.next();
+                            strength = f.clamp(0.0, 1.0);
+                        }
+                        Tok::Int(i) => {
+                            self.next();
+                            strength = (i as f64).clamp(0.0, 1.0);
+                        }
+                        _ => {
+                            let line = self.line();
+                            self.note(line, 4, "strength needs a number 0..=1; ignored");
+                        }
+                    }
+                }
+                let mut sites: u32 = 1;
+                if matches!(self.peek().clone(), Tok::Ident(w) if w == "sites") {
+                    self.next();
+                    match self.peek().clone() {
+                        Tok::Int(i) => {
+                            self.next();
+                            if !(1..=64).contains(&i) {
+                                let line = self.line();
+                                self.note(line, 4, "sites clamped to 1..=64");
+                            }
+                            sites = i.clamp(1, 64) as u32;
+                        }
+                        _ => {
+                            let line = self.line();
+                            self.note(line, 4, "sites needs an integer 1..=64; ignored");
+                        }
+                    }
+                }
                 self.end_stmt();
-                Some(Stmt::Silence(from, to))
+                Some(Stmt::Silence(from, to, strength, sites))
             }
             "stress" => {
                 self.next();
@@ -1249,6 +1312,75 @@ impl Parser {
                 self.end_stmt();
                 Some(Stmt::Decoy(d, tf, cap))
             }
+            // reg-bio-3 (A1/A7): the polycistronic transcription unit —
+            // `operon lac { lacZ rbs 1.0; lacY rbs 0.6; lacA; }`. ONE
+            // promoter drives N cistrons on ONE transcript; member ORDER is
+            // load-bearing (RBS gradient + polarity exposure). `rbs` is the
+            // per-cistron translation efficiency (Shine-Dalgarno strength,
+            // clamped 0..=1, default 1.0) — distinct from edge `strength`,
+            // which is a binding weight.
+            "operon" => {
+                self.next();
+                let name = self.expect_ident().unwrap_or_default();
+                let mut members: Vec<(String, f64)> = Vec::new();
+                if matches!(self.peek(), Tok::LBrace) {
+                    self.next();
+                    loop {
+                        self.eat_newlines();
+                        match self.peek().clone() {
+                            Tok::RBrace => {
+                                self.next();
+                                break;
+                            }
+                            Tok::Eof => {
+                                let line = self.line();
+                                self.note(line, 4, "operon block auto-closed");
+                                break;
+                            }
+                            Tok::Ident(g) => {
+                                self.next();
+                                let mut rbs = 1.0;
+                                if matches!(self.peek().clone(), Tok::Ident(w) if w == "rbs") {
+                                    self.next();
+                                    match self.peek().clone() {
+                                        Tok::Float(f) => {
+                                            self.next();
+                                            rbs = f.clamp(0.0, 1.0);
+                                        }
+                                        Tok::Int(i) => {
+                                            self.next();
+                                            rbs = (i as f64).clamp(0.0, 1.0);
+                                        }
+                                        _ => {
+                                            let line = self.line();
+                                            self.note(
+                                                line,
+                                                4,
+                                                "rbs needs a number 0..=1; using 1.0",
+                                            );
+                                        }
+                                    }
+                                }
+                                members.push((g, rbs));
+                                self.end_stmt();
+                            }
+                            _ => {
+                                let line = self.line();
+                                self.note(line, 4, "unexpected token in operon block; skipped");
+                                self.next();
+                            }
+                        }
+                    }
+                } else {
+                    let line = self.line();
+                    self.note(
+                        line,
+                        4,
+                        "operon needs a block '{ cistron rbs r; ... }'; skipped",
+                    );
+                }
+                Some(Stmt::Operon(name, members))
+            }
             "toggle" => {
                 self.next();
                 let a = self.expect_ident()?;
@@ -1531,6 +1663,7 @@ impl Parser {
                                         acetylate: v_ac,
                                         methylate: v_me,
                                         m6a: v_m6,
+                                        copies: 1,
                                         seq: false,
                                     }),
                                 ));
@@ -1647,7 +1780,7 @@ impl Parser {
                                     let marks = vec![mark];
                                     if self.expect_kw("gene") {
                                         if let Some(Stmt::Gene(g)) =
-                                            Some(self.parse_gene_def(marks))
+                                            Some(self.parse_gene_def(marks, 1))
                                         {
                                             methods.push(g);
                                         }
@@ -1671,7 +1804,7 @@ impl Parser {
                                     );
                                 }
                                 self.next();
-                                if let Some(Stmt::Gene(g)) = Some(self.parse_gene_def(vec![])) {
+                                if let Some(Stmt::Gene(g)) = Some(self.parse_gene_def(vec![], 1)) {
                                     methods.push(g);
                                 }
                             }
@@ -1720,7 +1853,7 @@ impl Parser {
             }
             "sequence" => {
                 self.next();
-                let def = self.parse_gene_def(vec![]);
+                let def = self.parse_gene_def(vec![], 1);
                 match def {
                     Stmt::Gene(g) => {
                         let mut g2 = (*g).clone();
@@ -1839,6 +1972,7 @@ impl Parser {
                         acetylate: false,
                         methylate: false,
                         m6a: false,
+                        copies: 1,
                         seq: false,
                     })));
                 }
@@ -2159,7 +2293,7 @@ impl Parser {
         }
     }
 
-    fn parse_gene_def(&mut self, marks: Vec<String>) -> Stmt {
+    fn parse_gene_def(&mut self, marks: Vec<String>, copies: u32) -> Stmt {
         // A13 (dx-r2): the def keyword's line — every definition-borne
         // runtime note (gates, silencing) points here.
         let def_line = self.line();
@@ -2244,6 +2378,7 @@ impl Parser {
                 acetylate,
                 methylate,
                 m6a,
+                copies,
                 seq: false,
             };
             return Stmt::Gene(std::sync::Arc::new(def));
@@ -2258,6 +2393,7 @@ impl Parser {
             acetylate,
             methylate,
             m6a,
+            copies,
             seq: false,
         };
         Stmt::Gene(std::sync::Arc::new(def))
@@ -2828,7 +2964,7 @@ impl Parser {
                         }
                         self.next();
                         // anonymous lambda in expression position
-                        match self.parse_gene_def(vec![]) {
+                        match self.parse_gene_def(vec![], 1) {
                             Stmt::Gene(def) => Expr::Lambda(def),
                             _ => Expr::Null,
                         }

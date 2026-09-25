@@ -1,0 +1,36 @@
+# reg-bio-3 (B2/B6): epigenetic inheritance — cell divisions. Marks DILUTE
+# unless maintained: each passage multiplies every methylation level by
+# `methyl.maintenance` (default 0.5 = the pure-dilution null model; 1.0 would
+# be perfect DNMT1-style maintenance) with half-down rounding — a diluted
+# mark never reads as MORE repressed. `generation` counts divisions; spawn is
+# a thread, not a division, and never touches it.
+@methylate gene marked() { return "M" }
+@methylate gene marked() { return "M" }
+@methylate gene marked() { return "M" }
+frame proof {
+    assert(marked() == null, "three marks: level 3 >= threshold 3, silenced")
+    let g0 = fingerprint().generation
+    let g = passage(2)
+    assert(g == g0 + 2, "passage returns the generation counter")
+    assert(fingerprint().generation == g0 + 2, "generation rides telemetry")
+    assert(marked() == "M", "two divisions at dilution 0.5: level 3 -> 1 -> 0, expression returns")
+    # half-down contract: 3 dilutes to 1 (1.5 rounds DOWN to 1) — the mark
+    # survives one division but no longer silences at threshold 3
+    methylate("marked")
+    methylate("marked")
+    assert(methylate("marked") == 3, "runtime methylation back to level 3")
+    assert(marked() == null, "level 3 silences again")
+    passage(1)
+    assert(marked() == "M", "level 3 dilutes to 1 (1.5 -> 1): below threshold, expression returns")
+    passage(1)
+    assert(marked() == "M", "level 1 dilutes to 0: the mark is fully lost without maintenance")
+    # dilution is monotone: re-marking starts from the diluted level
+    assert(methylate("marked") == 1, "one fresh mark on the diluted chromatin")
+    passage(1)
+    assert(marked() == "M", "level 1 dilutes to 0 in a single division (0.5 rounds half-down to 0)")
+}
+main {
+    promote("marked: {marked()}")
+    passage(2)
+    promote("after two divisions: {marked()} generation {fingerprint().generation}")
+}

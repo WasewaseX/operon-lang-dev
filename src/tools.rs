@@ -1371,10 +1371,21 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
             out.push_str(&indent(ind));
             out.push_str("}\n\n");
         }
-        Stmt::Silence(f, t) => match t {
-            Some(t) => out.push_str(&format!("silence {} -> {}\n", f, t)),
-            None => out.push_str(&format!("silence {}\n", f)),
-        },
+        Stmt::Silence(f, t, s, sites) => {
+            let suffix = if *s < 1.0 || *sites > 1 {
+                format!(
+                    " strength {} sites {}",
+                    crate::value::format_float(*s),
+                    *sites
+                )
+            } else {
+                String::new()
+            };
+            match t {
+                Some(t) => out.push_str(&format!("silence {} -> {}{}\n", f, t, suffix)),
+                None => out.push_str(&format!("silence {}{}\n", f, suffix)),
+            }
+        }
         Stmt::Enhance(ns) => out.push_str(&format!("enhance {};\n", ns.join(", "))),
         Stmt::Ires(n) => out.push_str(&format!("ires {};\n", n)),
         Stmt::Fate(f) => {
@@ -1471,6 +1482,22 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
             out.push_str("}\n\n");
         }
         Stmt::Toggle(a, b) => out.push_str(&format!("toggle {}, {};\n", a, b)),
+        // reg-bio-3 (A1/A7): round-trip the polycistronic unit
+        Stmt::Operon(name, members) => {
+            out.push_str(&format!("operon {} {{\n", name));
+            for (g, rbs) in members {
+                if *rbs != 1.0 {
+                    out.push_str(&format!(
+                        "    {} rbs {};\n",
+                        g,
+                        crate::value::format_float(*rbs)
+                    ));
+                } else {
+                    out.push_str(&format!("    {};\n", g));
+                }
+            }
+            out.push_str("}\n\n");
+        }
         // reg-bio-2 (C11): decoy round-trip (canonical form)
         Stmt::Decoy(d, tf, cap) => {
             out.push_str(&format!("decoy {} for {} capacity {};\n", d, tf, cap))

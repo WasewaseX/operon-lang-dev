@@ -1,0 +1,23 @@
+# reg-bio-3 (A1/A7 + §13): worker cells are whole regulatory cells — the
+# polycistronic unit registry rides the spawn snapshot: a worker calling a
+# cistron is gated by the SAME unit-level edges (induction frozen at spawn).
+regulate {
+    act activates lacw strength 0.9 threshold 0.5
+}
+gene w1() { return "w1" }
+gene w2() { return "w2" }
+operon lacw { w1 rbs 1.0; w2 rbs 0.5; }
+gene probe() { return w1() }
+frame proof {
+    let t = spawn(probe)
+    assert(join(t) == null, "worker inherits the closed unit gate")
+    grn_set("act", 0.9)
+    let t2 = spawn(probe)
+    assert(join(t2) == "w1", "worker inherits the induced unit gate")
+    assert(fingerprint().transcripts.lacw == 0, "worker expression is local to the cell (snapshot semantics): host transcript counter unchanged")
+}
+main {
+    grn_set("act", 0.9)
+    let id = spawn(probe)
+    promote("worker saw: {join(id)}")
+}
