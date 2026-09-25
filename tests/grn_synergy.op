@@ -1,0 +1,51 @@
+# reg-bio-2 (B7): synergistic pooling — `sum` edges pool their weighted
+# inputs (P = min(1, sum of strength*level)) and ONE Hill function of P
+# drives both the call gate and the fire influence. Two sub-threshold
+# inputs fire together (enhanceosome synergy); legacy AND members must
+# each pass alone. Networks without `sum` are bit-identical.
+regulate {
+    a activates duo threshold 0.5 sum
+    b activates duo threshold 0.5 sum
+    c activates solo threshold 0.5
+    d activates solo threshold 0.5
+    x activates syg threshold 0.5 sum hill 2
+    y activates syg threshold 0.5 sum hill 2
+    seedz activates dummy threshold 0.1
+}
+gene duo() { return "duo-ran" }
+gene solo() { return "solo-ran" }
+gene dummy() { return "dummy-ran" }
+frame proof {
+    # all three regulators at 0.3 — sub-threshold individually (0.3 < 0.5)
+    grn_set("a", 0.3)
+    grn_set("c", 0.3)
+    grn_set("d", 0.3)
+    assert(duo() == null, "one pooled input alone: P = 0.3 < 0.5")
+    assert(solo() == null, "legacy AND members fail individually at 0.3 < 0.5")
+    grn_set("b", 0.3)
+    assert(duo() == "duo-ran", "two sub-threshold inputs fire together (P = 0.6 >= 0.5)")
+    assert(solo() == null, "legacy semantics unchanged: each member must pass alone")
+    # super-additivity of the pooled influence (hill 2):
+    #   pooled:  P = 0.6, influence = 0.36 / (0.36 + 0.25) = 0.590163...
+    #   singles: each 0.09 / (0.09 + 0.25) = 0.264705...; sum = 0.529411...
+    grn_set("x", 0.3)
+    grn_set("y", 0.3)
+    grn_set("syg", 0.0)
+    grn_fire("seedz")
+    let s = grn_state()
+    assert(s.syg > 0.59 and s.syg < 0.5902, "pooled influence lands at P^2/(P^2 + t^2) for P = 0.6")
+    let single = (0.3 * 0.3) / ((0.3 * 0.3) + (0.5 * 0.5))
+    assert(s.syg > 2.0 * single, "super-additive: pooled influence beats the sum of individual influences")
+}
+main {
+    grn_set("a", 0.3)
+    grn_set("b", 0.3)
+    grn_set("x", 0.3)
+    grn_set("y", 0.3)
+    grn_set("syg", 0.0)
+    grn_fire("seedz")
+    let s = grn_state()
+    promote("syg: {s.syg}")
+    promote("duo: {duo()}")
+    promote("solo: {solo()}")
+}

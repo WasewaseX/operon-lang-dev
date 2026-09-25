@@ -841,10 +841,23 @@ pub struct RegulationSnap {
     pub expr_stochastic: bool,
     pub expr_kon: f64,
     pub expr_koff: f64,
+    /// reg-bio-2 (C2): decay-clock override rides the snapshot
+    pub decay_clock_n: Option<u64>,
+    pub decay_clock_f: Option<f64>,
     /// reg-bio (F-5): the ring's kinetic parameters ride the snapshot so a
     /// worker folding frozen ring levels uses the parent's α/γ/n/basal.
     pub repressi_params: crate::interp::RepressiParams,
     pub enhance_delta: f64,
+    /// reg-bio-2 (C1/C11): the translation layer and decoy sites ride the
+    /// snapshot — worker cells are whole regulatory cells (same contract
+    /// as every other regulation field).
+    pub trans_edges: Vec<crate::ast::TransEdge>,
+    pub trans_last: Vec<(String, u64)>,
+    pub decoys: Vec<(String, String, f64)>,
+    /// reg-bio-2 (A4): ligand pools + allosteric bindings ride the snapshot
+    pub ligands: Vec<String>,
+    pub ligand_pools: Vec<(String, f64)>,
+    pub grn_binds: Vec<crate::ast::BindDef>,
 }
 
 pub fn snapshot_regulation(interp: &Interp) -> RegulationSnap {
@@ -895,8 +908,24 @@ pub fn snapshot_regulation(interp: &Interp) -> RegulationSnap {
         expr_stochastic: interp.expr_stochastic,
         expr_kon: interp.expr_kon,
         expr_koff: interp.expr_koff,
+        decay_clock_n: interp.decay_clock_n,
+        decay_clock_f: interp.decay_clock_f,
         repressi_params: interp.repressi_params,
         enhance_delta: interp.enhance_delta,
+        trans_edges: interp.trans_edges.clone(),
+        trans_last: interp
+            .trans_last
+            .iter()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect(),
+        decoys: interp.decoys.clone(),
+        ligands: interp.ligands.clone(),
+        ligand_pools: interp
+            .ligand_pools
+            .iter()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect(),
+        grn_binds: interp.grn_binds.clone(),
     }
 }
 
@@ -920,8 +949,18 @@ pub fn bind_regulation(ti: &mut Interp, s: &RegulationSnap) {
     ti.expr_stochastic = s.expr_stochastic;
     ti.expr_kon = s.expr_kon;
     ti.expr_koff = s.expr_koff;
+    ti.decay_clock_n = s.decay_clock_n;
+    ti.decay_clock_f = s.decay_clock_f;
     ti.repressi_params = s.repressi_params;
     ti.enhance_delta = s.enhance_delta;
+    // reg-bio-2 (C1/C11): translation + decoy state restore
+    ti.trans_edges = s.trans_edges.clone();
+    ti.trans_last = s.trans_last.iter().cloned().collect();
+    ti.decoys = s.decoys.clone();
+    // reg-bio-2 (A4): ligand pools + allosteric bindings restore
+    ti.ligands = s.ligands.clone();
+    ti.ligand_pools = s.ligand_pools.iter().cloned().collect();
+    ti.grn_binds = s.grn_binds.clone();
 }
 
 pub fn bind_snapshot(env: &Rc<Env>, snap: &[(String, SnapVal)]) {
@@ -1096,9 +1135,23 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
     let task_name = name.clone();
     let host_caps = interp.caps.clone();
     let host_fuel = interp.fuel_pool.clone();
+    // reg-bio-2 (C3): the task id must be claimed BEFORE the worker body
+    // runs — the worker's RNG stream is derived from it (decorrelated
+    // promoter bursting across cells).
+    let id = interp.next_task_id;
+    interp.next_task_id += 1;
+    let task_seed = 0x9E3779B97F4A7C15u64 ^ (id as u64).wrapping_mul(0x9E3779B97F4A7C15);
     spawn_worker(move || {
         let mut ti = Interp::new();
         ti.fuel_pool = host_fuel;
+        // reg-bio-2 (C3): worker cells do NOT all start from the same default
+        // seed — each derives its stream from its task id, so two cells
+        // bursting under expr_on draw DIFFERENT promoter sequences. The old
+        // behavior was synchronized bursting across cells (perfect
+        // correlation) — the exact opposite of extrinsic noise. Still fully
+        // deterministic: same program → same ids → same streams. The Python
+        // oracle mirrors the derivation (save / derive / restore) inline.
+        ti.rng = task_seed;
         let genv = Env::new(None);
         bind_snapshot(&genv, &snap);
         bind_regulation(&mut ti, &rsnap);
@@ -1122,8 +1175,7 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
             .collect();
         let _ = tx.send((rv, notes));
     })?;
-    let id = interp.next_task_id;
-    interp.next_task_id += 1;
+    let _ = id; // claimed before spawn (C3); registered below
     interp.tasks.insert(id, crate::interp::TaskHandle { rx });
     Ok(Value::Int(id))
 }

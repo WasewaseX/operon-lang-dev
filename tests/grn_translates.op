@@ -1,0 +1,39 @@
+# reg-bio-2 (C1): the translation layer — two-tier expression. mRNA is the
+# gene's call stream; protein is a `translates` node integrating
+# p += rate*deltaCalls - decay*p at every engine update point (grn_fire,
+# decay-clock tick). Protein lags transcription, accumulates smoothly, and
+# gates genes on its own tier — the signature delay a one-tier engine
+# cannot express.
+regulate {
+    mrna translates prot rate 0.3 decay 0.1
+    prot activates responsive threshold 0.5
+}
+gene mrna() { return "tx" }
+gene responsive() { return "prot-ran" }
+frame proof {
+    assert(grn_get("prot") == 0.0, "no protein before the first integration")
+    assert(responsive() == null, "two-tier gate closed: no protein yet")
+    mrna()
+    grn_fire("mrna")
+    let p1 = grn_get("prot")
+    assert(abs(p1 - 0.3) < 1e-12, "protein = rate x transcripts after one integration (p = 0.3 x 1)")
+    assert(responsive() == null, "mRNA present but protein 0.3 < 0.5 — the delay is observable")
+    mrna()
+    grn_fire("mrna")
+    let p2 = grn_get("prot")
+    assert(abs(p2 - 0.57) < 1e-12, "protein accumulates with transcripts (0.3 + 0.3 - 0.1 x 0.3 = 0.57)")
+    assert(responsive() == "prot-ran", "protein crossed the threshold — the gate opened LATER than one-tier")
+    # decay between pulses: integration with zero new transcripts
+    grn_fire("mrna")
+    let p3 = grn_get("prot")
+    assert(abs(p3 - 0.513) < 1e-12, "protein decays on its own tier (0.57 - 0.1 x 0.57 = 0.513)")
+}
+main {
+    mrna()
+    grn_fire("mrna")
+    promote("p1: {grn_get(\"prot\")}")
+    mrna()
+    grn_fire("mrna")
+    promote("p2: {grn_get(\"prot\")}")
+    promote("responsive: {responsive()}")
+}

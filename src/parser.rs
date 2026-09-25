@@ -64,6 +64,11 @@ pub(crate) const KEYWORDS: &[&str] = &[
     "threshold",
     "from",
     "self",
+    "decoy",
+    "ligand",
+    "bind",
+    "inducer",
+    "cofactor",
 ];
 
 const MARKS: &[&str] = &["acetylate", "methylate", "m6a"];
@@ -439,6 +444,8 @@ impl Parser {
             "phenotype",
             "sequence",
             "yield",
+            "decoy",
+            "ligand",
         ];
         let mut word = w.to_string();
         // Expression-head detection: `i += 1`, `x = 2`, `f(...)`, `a[0]`,
@@ -878,6 +885,8 @@ impl Parser {
             "regulate" => {
                 self.next();
                 let mut edges = Vec::new();
+                let mut trans = Vec::new();
+                let mut binds = Vec::new();
                 if matches!(self.peek(), Tok::LBrace) {
                     self.next();
                     loop {
@@ -890,13 +899,128 @@ impl Parser {
                             Tok::Eof => break,
                             Tok::Ident(from) => {
                                 self.next();
+                                // reg-bio-2 (C1): `a translates b rate r decay d;`
+                                // — the translation layer. Not a cis-gate: a
+                                // production relation (mRNA -> protein).
+                                if self.expect_kw("translates") {
+                                    let to = self.expect_ident().unwrap_or_default();
+                                    let mut rate = None;
+                                    if self.expect_kw("rate") {
+                                        match self.peek().clone() {
+                                            Tok::Float(f) => {
+                                                self.next();
+                                                rate = Some(f);
+                                            }
+                                            Tok::Int(i) => {
+                                                self.next();
+                                                rate = Some(i as f64);
+                                            }
+                                            _ => {
+                                                let line = self.line();
+                                                self.note(
+                                                    line,
+                                                    4,
+                                                    "rate needs a number; using 1.0",
+                                                );
+                                            }
+                                        }
+                                    }
+                                    let mut pdecay = None;
+                                    if self.expect_kw("decay") {
+                                        match self.peek().clone() {
+                                            Tok::Float(f) => {
+                                                self.next();
+                                                pdecay = Some(f.clamp(0.0, 1.0));
+                                            }
+                                            Tok::Int(i) => {
+                                                self.next();
+                                                pdecay = Some((i as f64).clamp(0.0, 1.0));
+                                            }
+                                            _ => {
+                                                let line = self.line();
+                                                self.note(line, 4, "decay needs a number; ignored");
+                                            }
+                                        }
+                                    }
+                                    trans.push(crate::ast::TransEdge {
+                                        from,
+                                        to,
+                                        rate,
+                                        decay: pdecay,
+                                    });
+                                    self.end_stmt();
+                                    continue;
+                                }
+                                // reg-bio-2 (A4): `bind tf inducer lg k v;` /
+                                // `bind tf cofactor lg k v;` — allostery. The
+                                // binding modulates the TF's DNA-available
+                                // fraction at every regulation read. `bind` is
+                                // a HEAD keyword here (no edge source): the
+                                // head ident was consumed as `from` above.
+                                if from == "bind" {
+                                    let tf = self.expect_ident().unwrap_or_default();
+                                    let inducer = if self.expect_kw("inducer") {
+                                        true
+                                    } else if self.expect_kw("cofactor") {
+                                        false
+                                    } else {
+                                        let line = self.line();
+                                        self.note(
+                                            line,
+                                            4,
+                                            "bind needs 'inducer' or 'cofactor'; binding dropped",
+                                        );
+                                        self.skip_line();
+                                        continue;
+                                    };
+                                    let lg = self.expect_ident().unwrap_or_default();
+                                    let mut k = 0.1;
+                                    if self.expect_kw("k") {
+                                        match self.peek().clone() {
+                                            Tok::Float(f) => {
+                                                self.next();
+                                                k = f;
+                                            }
+                                            Tok::Int(i) => {
+                                                self.next();
+                                                k = i as f64;
+                                            }
+                                            _ => {
+                                                let line = self.line();
+                                                self.note(line, 4, "k needs a number; using 0.1");
+                                            }
+                                        }
+                                        if k <= 0.0 {
+                                            let line = self.line();
+                                            self.note(line, 4, "k must be > 0; using 0.1");
+                                            k = 0.1;
+                                        }
+                                    }
+                                    binds.push(crate::ast::BindDef {
+                                        tf,
+                                        ligand: lg,
+                                        inducer,
+                                        k,
+                                    });
+                                    self.end_stmt();
+                                    continue;
+                                }
+                                // reg-bio-2 (A5): per-edge attenuator flag —
+                                // taken by the next edge build (std::mem::take).
+                                let mut attenuating = false;
                                 let inhibit = if self.expect_kw("activates") {
                                     false
                                 } else if self.expect_kw("inhibits") {
                                     true
+                                } else if self.expect_kw("attenuates") {
+                                    // reg-bio-2 (A5/C7): RNA-level attenuation —
+                                    // veto mechanics of an inhibitor, RNA-level
+                                    // report, fire-phase inhibition.
+                                    attenuating = true;
+                                    true
                                 } else {
                                     let line = self.line();
-                                    self.note(line, 4, "regulate edge missing 'activates'/'inhibits'; edge dropped");
+                                    self.note(line, 4, "regulate edge missing 'activates'/'inhibits'/'translates'; edge dropped");
                                     self.skip_line();
                                     continue;
                                 };
@@ -920,6 +1044,29 @@ impl Parser {
                                                 "strength needs a number; using 1.0",
                                             );
                                         }
+                                    }
+                                    // reg-bio-2 (D2c): a strength is a binding
+                                    // weight, not an amplifier — clamped to the
+                                    // physical range and the propagation write
+                                    // clamps influence at 1.0. Legacy programs
+                                    // (0..=1) are untouched; out-of-range gets
+                                    // a note, not an error (Total Grammar).
+                                    if strength > 1.0 {
+                                        let line = self.line();
+                                        self.note(
+                                            line,
+                                            4,
+                                            "strength > 1.0 clamped to 1.0 (levels are concentration fractions)",
+                                        );
+                                        strength = 1.0;
+                                    } else if strength < 0.0 {
+                                        let line = self.line();
+                                        self.note(
+                                            line,
+                                            4,
+                                            "negative strength clamped to 0.0 (a negative repressor is not a booster)",
+                                        );
+                                        strength = 0.0;
                                     }
                                 }
                                 let mut threshold = None;
@@ -972,6 +1119,19 @@ impl Parser {
                                 if self.expect_kw("any") {
                                     any_edge = true;
                                 }
+                                // reg-bio-2 (D2b): optional occupancy repression —
+                                // the multiplicative Kⁿ/(Kⁿ+Rⁿ) survival form.
+                                // Canonical edge order:
+                                //   strength -> threshold -> hill -> any -> occupy -> sum
+                                let mut occupy_edge = false;
+                                if self.expect_kw("occupy") {
+                                    occupy_edge = true;
+                                }
+                                // reg-bio-2 (B7): optional synergistic pooling.
+                                let mut sum_edge = false;
+                                if self.expect_kw("sum") {
+                                    sum_edge = true;
+                                }
                                 // hill/any shape the dose-response gate; without a
                                 // threshold the edge is declarative, so both are noise.
                                 if (hill.is_some() || any_edge) && threshold.is_none() {
@@ -995,6 +1155,28 @@ impl Parser {
                                     );
                                     any_edge = false;
                                 }
+                                // `occupy` reshapes INHIBITION (multiplicative
+                                // survival); on an activator it is noise.
+                                if occupy_edge && !inhibit {
+                                    let line = self.line();
+                                    self.note(
+                                        line,
+                                        4,
+                                        "occupy applies to inhibiting edges; ignored (activators cannot occupy a promoter they activate)",
+                                    );
+                                    occupy_edge = false;
+                                }
+                                // `sum` pools ACTIVATING inputs; an inhibitor already
+                                // composes multiplicatively with `occupy`.
+                                if sum_edge && (inhibit || threshold.is_none()) {
+                                    let line = self.line();
+                                    self.note(
+                                        line,
+                                        4,
+                                        "sum applies to thresholded activating edges; ignored",
+                                    );
+                                    sum_edge = false;
+                                }
                                 edges.push(RegEdge {
                                     from,
                                     to,
@@ -1003,6 +1185,9 @@ impl Parser {
                                     threshold,
                                     hill,
                                     any: any_edge,
+                                    occupy: occupy_edge,
+                                    sum: sum_edge,
+                                    attenuates: std::mem::take(&mut attenuating),
                                 });
                                 self.end_stmt();
                             }
@@ -1014,7 +1199,55 @@ impl Parser {
                         }
                     }
                 }
-                Some(Stmt::Regulate(edges))
+                Some(Stmt::Regulate(edges, trans, binds))
+            }
+            // reg-bio-2 (A4): `ligand iptg;` — a small-molecule pool. The
+            // pool's level is set with ligand_set(name, v) or the `.cell
+            // [ligand.<name>]` bath config, and a ligand named as an edge
+            // source gates calls directly (riboswitch-style, protein-free).
+            "ligand" => {
+                self.next();
+                let name = self.expect_ident().unwrap_or_default();
+                self.end_stmt();
+                Some(Stmt::Ligand(name))
+            }
+            // reg-bio-2 (C11): `decoy d for tf capacity 0.5;` — a decoy
+            // binding site that titrates its regulator (competitive
+            // sequestration: free TF = total − capacity × decoy level).
+            "decoy" => {
+                self.next();
+                let d = self.expect_ident().unwrap_or_default();
+                let mut tf = String::new();
+                let mut cap = 0.0;
+                if self.expect_kw("for") {
+                    tf = self.expect_ident().unwrap_or_default();
+                    if matches!(self.peek().clone(), Tok::Ident(w) if w == "capacity") {
+                        self.next();
+                        match self.peek().clone() {
+                            Tok::Float(f) => {
+                                self.next();
+                                cap = f.clamp(0.0, 1.0);
+                            }
+                            Tok::Int(i) => {
+                                self.next();
+                                cap = (i as f64).clamp(0.0, 1.0);
+                            }
+                            _ => {
+                                let line = self.line();
+                                self.note(line, 4, "capacity needs a number 0..=1; ignored");
+                                cap = 0.0;
+                            }
+                        }
+                    } else {
+                        let line = self.line();
+                        self.note(line, 4, "decoy needs 'capacity <num>'; declared inert");
+                    }
+                } else {
+                    let line = self.line();
+                    self.note(line, 4, "decoy needs 'for <tf> capacity <num>'; skipped");
+                }
+                self.end_stmt();
+                Some(Stmt::Decoy(d, tf, cap))
             }
             "toggle" => {
                 self.next();

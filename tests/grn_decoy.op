@@ -1,0 +1,32 @@
+# reg-bio-2 (C11): decoy binding sites — competitive titration. A decoy
+# node bound to a regulator sequesters capacity x level(decoy) of it at
+# EVERY regulation read (free TF = total - sequestered, clamped at 0).
+# Overexpressing the sponge closes a gate that was open; emptying it
+# restores the free fraction. No decoys = bit-identical legacy reads.
+regulate {
+    tf activates target strength 1.0 threshold 0.5
+}
+gene target() { return "t" }
+frame proof {
+    grn_set("tf", 0.8)
+    assert(target() == "t", "no decoy: regulator at 0.8 passes the 0.5 threshold")
+    decoy sponge for tf capacity 0.5
+    grn_set("sponge", 1.0)
+    assert(target() == null, "decoy sequesters: free = 0.8 - 0.5 x 1.0 = 0.3 < 0.5")
+    grn_set("sponge", 0.4)
+    assert(target() == "t", "partial sponge: free = 0.8 - 0.5 x 0.4 = 0.6 >= 0.5")
+    grn_set("sponge", 2.0)
+    assert(target() == null, "sponge overexpression saturates the titration (free clamps at 0)")
+    let s = grn_state()
+    assert(s.sponge == 1.0, "the decoy carries level like any node (grn_set clamps 0..1)")
+    grn_set("sponge", 0.0)
+    assert(target() == "t", "decoy emptied: the free fraction is restored")
+}
+main {
+    grn_set("tf", 0.8)
+    decoy sponge for tf capacity 0.5
+    grn_set("sponge", 1.0)
+    promote("sponged: {target()}")
+    grn_set("sponge", 0.0)
+    promote("released: {target()}")
+}

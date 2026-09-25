@@ -1,0 +1,59 @@
+# reg-bio-2 (D2b): occupancy repression — the thermodynamic
+# K^n/(K^n + R^n) multiplicative survival form. One fire recomputes the
+# whole network; each repressor applies its influence ONCE per pulse.
+# Two partial repressors (level 1.0, strength 0.5, threshold 0.5 →
+# influence 0.4 each) on a target at 1.0:
+#   subtractive (legacy): 1 - 0.4 - 0.4 = 0.2
+#   occupancy (survival): 1 x 0.6 x 0.6 = 0.36
+# Occupancy composes multiplicatively — repression can never overshoot,
+# and near-full occupancy approaches (never crosses) zero, while the
+# subtractive form overshoots to a hard zero.
+regulate {
+    sig activates target strength 1.0 threshold 0.2
+    r1 inhibits sub_target strength 0.5 threshold 0.5
+    r2 inhibits sub_target strength 0.5 threshold 0.5
+    r1 inhibits occ_target strength 0.5 threshold 0.5 occupy
+    r2 inhibits occ_target strength 0.5 threshold 0.5 occupy
+    r3 inhibits sub_full strength 1.0 threshold 0.1
+    r4 inhibits sub_full strength 1.0 threshold 0.1
+    r3 inhibits occ_full strength 1.0 threshold 0.1 occupy
+    r4 inhibits occ_full strength 1.0 threshold 0.1 occupy
+}
+gene target() { return "t" }
+gene sub_target() { return "sub" }
+gene occ_target() { return "occ" }
+gene sub_full() { return "subf" }
+gene occ_full() { return "occf" }
+frame proof {
+    grn_set("r1", 1.0)
+    grn_set("r2", 1.0)
+    grn_set("sub_target", 1.0)
+    grn_set("occ_target", 1.0)
+    grn_fire("sig")
+    let s = grn_state()
+    assert(abs(s.sub_target - 0.2) < 1e-12, "subtractive repression: 1 - 0.4 - 0.4 = 0.2")
+    assert(abs(s.occ_target - 0.36) < 1e-12, "occupancy survival: 1 x 0.6 x 0.6 = 0.36")
+    assert(s.occ_target > s.sub_target, "partial repressors survive more under occupancy (multiplicative, not overshooting)")
+    # near-silence: influence 1/(1+0.01) = 0.9901 each
+    grn_set("r1", 0.0)
+    grn_set("r2", 0.0)
+    grn_set("r3", 1.0)
+    grn_set("r4", 1.0)
+    grn_set("sub_full", 1.0)
+    grn_set("occ_full", 1.0)
+    grn_fire("sig")
+    let s3 = grn_state()
+    assert(s3.sub_full == 0.0, "two near-full repressors: the subtractive form overshoots to hard zero")
+    assert(s3.occ_full > 0.0 and s3.occ_full < 1e-4, "occupancy: multiplicative survival approaches but never crosses zero")
+    assert(target() == "t", "the unrelated activator gate still passes")
+}
+main {
+    grn_set("r1", 1.0)
+    grn_set("r2", 1.0)
+    grn_set("sub_target", 1.0)
+    grn_set("occ_target", 1.0)
+    grn_fire("sig")
+    let s = grn_state()
+    promote("sub: {s.sub_target}")
+    promote("occ: {s.occ_target}")
+}
