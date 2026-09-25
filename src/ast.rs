@@ -106,6 +106,12 @@ pub struct GeneDef {
     /// NOT the call's return value. Clamped 1..=64 at parse.
     pub copies: u32,
     pub seq: bool, // sequence (generator) definition
+    /// loop-9 (F-5): a CIS riboswitch aptamer in this transcript's own 5'UTR
+    /// — `(ligand, bound_means_on, threshold)`. The metabolite pool is
+    /// cell-wide; the SENSOR is per-gene. `off` class (TPP/purine/SAM):
+    /// bound -> terminator hairpin -> OFF. `on` class (adenine/glycine
+    /// activators): bound -> RBS exposed -> ON.
+    pub riboswitch: Option<(String, bool, f64)>,
 }
 
 #[derive(Debug, Clone)]

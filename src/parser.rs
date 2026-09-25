@@ -73,7 +73,7 @@ pub(crate) const KEYWORDS: &[&str] = &[
     "operon",
 ];
 
-const MARKS: &[&str] = &["acetylate", "methylate", "m6a", "copies"];
+const MARKS: &[&str] = &["acetylate", "methylate", "m6a", "copies", "riboswitch"];
 
 /// Words that end a `use` path — the alias introducer and statement enders.
 fn use_path_boundary(w: &str) -> bool {
@@ -338,12 +338,19 @@ impl Parser {
                 self.next();
                 let mark = self.repair_mark(m, line)?;
                 let mut marks = vec![mark];
-                // allow stacked marks
-                while let Tok::Mark(m2) = self.peek().clone() {
-                    let l2 = self.line();
-                    self.next();
-                    if let Some(r) = self.repair_mark(m2, l2) {
-                        marks.push(r);
+                // allow stacked marks — with newlines/semis between them
+                // (loop-9: the dx-r6 newline bridge now applies BETWEEN
+                // marks too, so `@acetylate\n@riboswitch … gene` stacks)
+                loop {
+                    self.eat_newlines();
+                    if let Tok::Mark(m2) = self.peek().clone() {
+                        let l2 = self.line();
+                        self.next();
+                        if let Some(r) = self.repair_mark(m2, l2) {
+                            marks.push(r);
+                        }
+                    } else {
+                        break;
                     }
                 }
                 // reg-bio-3 (C10): `@copies n` carries its dosage argument.
@@ -368,6 +375,66 @@ impl Parser {
                         }
                     }
                 }
+                // loop-9 (F-5): `@riboswitch ligand off|on threshold t` — a
+                // cis aptamer on this gene's own transcript. `off` class:
+                // bound => terminator hairpin => OFF. `on` class: bound =>
+                // RBS exposed => ON. threshold optional (default 0.5).
+                let mut riboswitch: Option<(String, bool, f64)> = None;
+                if marks.iter().any(|m| m == "riboswitch") {
+                    let lig = match self.peek().clone() {
+                        Tok::Ident(w) => {
+                            self.next();
+                            w
+                        }
+                        _ => String::new(),
+                    };
+                    let mut on = false;
+                    let mut ok = !lig.is_empty();
+                    if !ok {
+                        let line = self.line();
+                        self.note(line, 4, "@riboswitch needs a ligand name; mark ignored");
+                    } else {
+                        match self.peek().clone() {
+                            Tok::Ident(w) if w == "on" => {
+                                self.next();
+                                on = true;
+                            }
+                            Tok::Ident(w) if w == "off" => {
+                                self.next();
+                            }
+                            _ => {
+                                let line = self.line();
+                                self.note(line, 4, "@riboswitch needs 'on' or 'off'; mark ignored");
+                                ok = false;
+                            }
+                        }
+                    }
+                    let mut threshold = 0.5;
+                    if ok {
+                        if matches!(self.peek().clone(), Tok::Ident(w) if w == "threshold") {
+                            self.next();
+                            match self.peek().clone() {
+                                Tok::Float(f) => {
+                                    self.next();
+                                    threshold = f.clamp(0.0, 1.0);
+                                }
+                                Tok::Int(i) => {
+                                    self.next();
+                                    threshold = (i as f64).clamp(0.0, 1.0);
+                                }
+                                _ => {
+                                    let line = self.line();
+                                    self.note(
+                                        line,
+                                        4,
+                                        "riboswitch threshold needs a number 0..=1; default 0.5",
+                                    );
+                                }
+                            }
+                        }
+                        riboswitch = Some((lig, on, threshold));
+                    }
+                }
                 // dx-r6 (loop-5-a audit MED): an own-line mark —
                 //   @acetylate\ngene foo() —
                 // never reached `gene`: the newline between mark and keyword
@@ -382,7 +449,7 @@ impl Parser {
                     self.skip_line();
                     return None;
                 }
-                Some(self.parse_gene_def(marks, copies))
+                Some(self.parse_gene_def(marks, copies, riboswitch))
             }
             Tok::Ident(w) => self.parse_word_stmt(&w),
             Tok::LBrace => {
@@ -518,7 +585,7 @@ impl Parser {
         match word.as_str() {
             "gene" => {
                 self.next();
-                Some(self.parse_gene_def(vec![], 1))
+                Some(self.parse_gene_def(vec![], 1, None))
             }
             "let" => {
                 self.next();
@@ -1676,6 +1743,7 @@ impl Parser {
                                         m6a: v_m6,
                                         copies: 1,
                                         seq: false,
+                                        riboswitch: None,
                                     }),
                                 ));
                             }
@@ -1791,7 +1859,7 @@ impl Parser {
                                     let marks = vec![mark];
                                     if self.expect_kw("gene") {
                                         if let Some(Stmt::Gene(g)) =
-                                            Some(self.parse_gene_def(marks, 1))
+                                            Some(self.parse_gene_def(marks, 1, None))
                                         {
                                             methods.push(g);
                                         }
@@ -1815,7 +1883,9 @@ impl Parser {
                                     );
                                 }
                                 self.next();
-                                if let Some(Stmt::Gene(g)) = Some(self.parse_gene_def(vec![], 1)) {
+                                if let Some(Stmt::Gene(g)) =
+                                    Some(self.parse_gene_def(vec![], 1, None))
+                                {
                                     methods.push(g);
                                 }
                             }
@@ -1864,7 +1934,7 @@ impl Parser {
             }
             "sequence" => {
                 self.next();
-                let def = self.parse_gene_def(vec![], 1);
+                let def = self.parse_gene_def(vec![], 1, None);
                 match def {
                     Stmt::Gene(g) => {
                         let mut g2 = (*g).clone();
@@ -1985,6 +2055,7 @@ impl Parser {
                         m6a: false,
                         copies: 1,
                         seq: false,
+                        riboswitch: None,
                     })));
                 }
                 self.parse_assign_or_expr(w)
@@ -2304,7 +2375,12 @@ impl Parser {
         }
     }
 
-    fn parse_gene_def(&mut self, marks: Vec<String>, copies: u32) -> Stmt {
+    fn parse_gene_def(
+        &mut self,
+        marks: Vec<String>,
+        copies: u32,
+        riboswitch: Option<(String, bool, f64)>,
+    ) -> Stmt {
         // A13 (dx-r2): the def keyword's line — every definition-borne
         // runtime note (gates, silencing) points here.
         let def_line = self.line();
@@ -2391,6 +2467,7 @@ impl Parser {
                 m6a,
                 copies,
                 seq: false,
+                riboswitch,
             };
             return Stmt::Gene(std::sync::Arc::new(def));
         }
@@ -2406,6 +2483,7 @@ impl Parser {
             m6a,
             copies,
             seq: false,
+            riboswitch,
         };
         Stmt::Gene(std::sync::Arc::new(def))
     }
@@ -2975,7 +3053,7 @@ impl Parser {
                         }
                         self.next();
                         // anonymous lambda in expression position
-                        match self.parse_gene_def(vec![], 1) {
+                        match self.parse_gene_def(vec![], 1, None) {
                             Stmt::Gene(def) => Expr::Lambda(def),
                             _ => Expr::Null,
                         }

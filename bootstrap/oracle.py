@@ -26,10 +26,12 @@ class Stress(Exception):
         return {"kind": self.kind, "message": self.message}
 
 class Gene:
-    __slots__ = ("name", "params", "guard", "body", "acetylate", "methylate", "m6a", "copies", "seq", "closure")
-    def __init__(self, name, params, guard, body, ac=False, me=False, m6=False, copies=1, seq=False):
+    __slots__ = ("name", "params", "guard", "body", "acetylate", "methylate", "m6a", "copies", "seq", "riboswitch", "closure")
+    def __init__(self, name, params, guard, body, ac=False, me=False, m6=False, copies=1, seq=False, riboswitch=None):
         self.name, self.params, self.guard, self.body = name, params, guard, body
         self.acetylate, self.methylate, self.m6a, self.copies, self.seq = ac, me, m6, copies, seq
+        # loop-9 (F-5): cis riboswitch (ligand, bound_means_on, threshold)
+        self.riboswitch = riboswitch
         self.closure = None
 
 ENHANCE_DELTA = 0.25  # T2e: super-enhancer activation boost (GRN threshold reduction)
@@ -419,7 +421,7 @@ SYNONYMS = {
 }
 VALUE_SYNONYMS = {"yes": True, "on": True, "no": False, "off": False,
                   "nil": None, "none": None, "nothing": None}
-MARKS = {"acetylate", "methylate", "m6a", "copies"}
+MARKS = {"acetylate", "methylate", "m6a", "copies", "riboswitch"}
 
 def edit_distance(a, b):
     if a == b:
@@ -508,7 +510,12 @@ class P:
         t = self.peek()
         if t[0] == "MARK":
             marks = []
-            while self.peek()[0] == "MARK":
+            # loop-9: stacked marks with newlines/semis between them (the
+            # dx-r6 newline bridge now applies BETWEEN marks too)
+            while True:
+                self.eat_nl()
+                if self.peek()[0] != "MARK":
+                    break
                 m = self.next()[1]
                 if m in MARKS:
                     marks.append(m)
@@ -534,11 +541,40 @@ class P:
                     copies = min(max(tt[1], 1), 64)
                 else:
                     self.note(tt[2], 4, "@copies needs an integer 1..=64; default 1")
+            # loop-9 (F-5): @riboswitch ligand off|on threshold t — a cis
+            # aptamer on this gene's own transcript (mirror of the Rust drain)
+            riboswitch = None
+            if "riboswitch" in marks:
+                tt = self.peek()
+                lig = tt[1] if tt[0] == "IDENT" else ""
+                if lig:
+                    self.next()
+                else:
+                    self.note(tt[2], 4, "@riboswitch needs a ligand name; mark ignored")
+                cls = self.peek()
+                on = None
+                if lig and cls[0] == "IDENT" and cls[1] in ("on", "off"):
+                    self.next()
+                    on = cls[1] == "on"
+                elif lig:
+                    self.note(cls[2], 4, "@riboswitch needs 'on' or 'off'; mark ignored")
+                threshold = 0.5
+                if on is not None:
+                    nt = self.peek()
+                    if nt[0] == "IDENT" and nt[1] == "threshold":
+                        self.next()
+                        vt = self.peek()
+                        if vt[0] in ("FLOAT", "INT"):
+                            self.next()
+                            threshold = min(max(float(vt[1]), 0.0), 1.0)
+                        else:
+                            self.note(vt[2], 4, "riboswitch threshold needs a number 0..=1; default 0.5")
+                    riboswitch = (lig, on, threshold)
             if not self.expect_kw("gene"):
                 self.note(t[2], 4, "mark must precede 'gene'; skipped line")
                 self.skip_line()
                 return None
-            return self.gene_def(marks, copies)
+            return self.gene_def(marks, copies, riboswitch)
         if t[0] == "SYM" and t[1] == "{":
             self.note(t[2], 4, "bare block treated as scoped statements")
             return ("block", self.block())
@@ -1464,7 +1500,7 @@ class P:
         self.end_stmt()
         return ("expr", e)
 
-    def gene_def(self, marks, copies=1):
+    def gene_def(self, marks, copies=1, riboswitch=None):
         ac = "acetylate" in marks
         me = "methylate" in marks
         m6 = "m6a" in marks
@@ -1518,9 +1554,9 @@ class P:
             self.next()
             e = self.expr()
             self.end_stmt()
-            return ("gene", Gene(name, params, guard, [("return", e)], ac, me, m6, copies))
+            return ("gene", Gene(name, params, guard, [("return", e)], ac, me, m6, copies, riboswitch=riboswitch))
         body = self.block()
-        return ("gene", Gene(name, params, guard, body, ac, me, m6, copies))
+        return ("gene", Gene(name, params, guard, body, ac, me, m6, copies, riboswitch=riboswitch))
 
     def block(self):
         if not (self.peek() == ("SYM", "{", self.peek()[2])):
@@ -3550,8 +3586,20 @@ class Interp:
             if lvl >= self.methyl_threshold:
                 self.note(4, f"methylation silences: '{name}' (level {lvl} >= threshold {self.methyl_threshold}) — call returns null")
                 return None
+        # loop-9 (F-5): CIS riboswitch — after chromatin, before the
+        # promoter. The pinned order extends to
+        # RISC → toggle → GRN → methylation → riboswitch → promoter.
+        if g.riboswitch is not None:
+            lig, on, rt = g.riboswitch
+            lvl = self._ligand_level(lig)
+            bound = lvl >= rt
+            veto = (not bound) if on else bound
+            if veto:
+                why = "unbound: RBS sequestered" if on else "bound: terminator hairpin folded"
+                self.note(4, f"riboswitch '{lig}' {why}: '{name}' call suppressed")
+                return None
         # reg-bio (F-1): telegraph promoter layer — the pinned gate order
-        # ends here: RISC → toggle → GRN → methylation → promoter.
+        # ends here: RISC → toggle → GRN → methylation → riboswitch → promoter.
         if self._promoter_veto(name):
             self.note(4, f"promoter inactive: '{name}' burst-off — call returns null")
             return None
