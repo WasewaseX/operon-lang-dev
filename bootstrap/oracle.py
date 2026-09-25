@@ -9,7 +9,7 @@ gene-expression regulation layer, and the same display rules.
 Deliberately sequential: spawn() runs tasks inline (deterministic), which is
 equivalent for the differential corpus.
 """
-import sys, os, json as _json
+import sys, os, math, json as _json
 
 # ----------------------------------------------------------------------------
 # notes / values
@@ -2036,7 +2036,7 @@ def parse(src):
 # ----------------------------------------------------------------------------
 # evaluator
 
-BUILTINS = set("""promote expr_on expr_off decay_clock ligand_set ligand len push pop insert remove keys values has del range str num type
+BUILTINS = set("""promote expr_on expr_off decay_clock ligand_set ligand secrete quorum quench quorum_state len push pop insert remove keys values has del range str num type
 abs min max sum clock exit assert codon distance similar transcribe reverse_complement
 gc_content translate find_orf memory methyl methylate demethylate m6a_write m6a_erase passage grn_set grn_get fingerprint toggle_on toggle_state repressi_next
 repressi_state repressi_start grn_fire grn_state spawn join floor ceil sqrt pow random
@@ -2109,6 +2109,11 @@ class Interp:
         # reg-bio-2 (A4): ligand pools + allosteric bindings
         self.ligands = []
         self.ligand_pools = {}
+        # loop-9 (C8): quorum-sensing signal species + the shared medium
+        # (species -> integer molecule count). The oracle is sequential, so
+        # one dict IS the shared medium; inline spawn shares it naturally.
+        self.signals = []
+        self.medium = {}
         self.grn_binds = []
         self.seq_buffer = None
         self.caps = {"enabled": True, "read": [], "write": [], "run": [], "net": [], "env": [], "py": []}
@@ -2198,6 +2203,13 @@ class Interp:
         return True
 
     def note(self, rung, msg):
+        # loop-9 (C8): worker-note prefix parity — the Rust join path tags
+        # every spawned worker note with "[task <name>] " (genes.rs); the
+        # sequential oracle applies the same prefix while the spawn body
+        # runs inline, so cross-cell notes are byte-identical.
+        prefix = getattr(self, "task_note_prefix", None)
+        if prefix:
+            msg = f"{prefix} {msg}"
         self.notes.append(Note(rung, msg))
 
     def tick(self):
@@ -2669,6 +2681,9 @@ class Interp:
         elif k == "ligand":
             if s[1] not in self.ligands:
                 self.ligands.append(s[1])
+        elif k == "autoinducer":
+            # loop-9 (C8): register a quorum-sensing signal species (mirror)
+            self._signal_register(s[1])
         elif k == "decoy":
             self.decoys.append((s[1], s[2], s[3]))
         elif k == "toggle":
@@ -3278,9 +3293,28 @@ class Interp:
             # reg-bio-2 (A4/C7): a ligand edge source reads its metabolite
             # pool — a riboswitch-style, protein-free gate (mirror).
             lvl = self._ligand_level(frm)
+        elif frm in self.signals:
+            # loop-9 (C8): a signal species reads the shared medium (the
+            # LuxR-AHL population gate — mirror of Rust signal_level).
+            lvl = self._signal_level(frm)
         else:
             lvl = 0.0
         return lvl
+
+    def _signal_register(self, name):
+        """loop-9 (C8): mirror of Rust signal_register — idempotent, cap 64."""
+        if name in self.signals:
+            return True
+        if len(self.signals) >= 64:
+            self.note(4, f"signal species cap (64) reached: '{name}' not registered")
+            return False
+        self.signals.append(name)
+        return True
+
+    def _signal_level(self, name):
+        """loop-9 (C8): mirror of Rust signal_level — molecules / 1e9, ONE
+        division (counts capped at 1e9 < 2**53, so the double is identical)."""
+        return self.medium.get(name, 0) / 1e9
 
     def _ligand_level(self, name):
         """reg-bio-2 (A4): mirror of the Rust ligand_level — the runtime pool
@@ -4034,6 +4068,19 @@ class Interp:
                 for k2 in list(self.methyl_levels):
                     x = self.methyl_levels[k2] * fv - 0.5
                     self.methyl_levels[k2] = max(0, int(_math.ceil(x)))
+            # loop-9 (C8): the signal medium dilutes with the culture —
+            # floor(m * d) per division, d = .cell quorum.dilution (default
+            # 0.5, binary-exact halving). Empty medium = no-op (mirror).
+            qd = self.cell.get("quorum.dilution")
+            qdv = 0.5
+            if qd is not None:
+                try:
+                    qdv = min(max(float(qd), 0.0), 1.0)
+                except ValueError:
+                    qdv = 0.5
+            for _i in range(n):
+                for k2 in list(self.medium):
+                    self.medium[k2] = int(_math.floor(self.medium[k2] * qdv))
             self.generation += n
             if not self.methyl_quiet:
                 self.note(1, f"passage: {n} divisions (maintenance {fv!r}) — generation {self.generation}")
@@ -4178,10 +4225,20 @@ class Interp:
             # engine update point (mirror of the Rust grn_fire).
             self._trans_integrate()
             # STATEFUL network: levels persist across fires (a latch by default — decay makes the dilution explicit)
+            # loop-9 (P0-2): ligand/signal-backed endpoints stay OUT of
+            # grn_levels (they resolve through their own pools — seeding
+            # them at 0.0 would shadow those reads forever) (mirror).
             for frm, to, st, inh, thr, hill, is_any, occupy, is_sum, attenuating in self.grn_edges:
-                self.grn_levels.setdefault(frm, 0.0)
-                self.grn_levels.setdefault(to, 0.0)
-            self.grn_levels[seed] = min(self.grn_levels.get(seed, 0.0) + 1.0, 1.0)
+                if frm not in self.ligands and frm not in self.signals:
+                    self.grn_levels.setdefault(frm, 0.0)
+                if to not in self.ligands and to not in self.signals:
+                    self.grn_levels.setdefault(to, 0.0)
+            # loop-9 (C8): firing a signal species directly would shadow the
+            # medium read — the Rust core refuses with a note (mirror).
+            if seed in self.signals:
+                self.note(4, f"'{seed}' is a signal species: its level lives in the shared medium — use secrete()")
+            else:
+                self.grn_levels[seed] = min(self.grn_levels.get(seed, 0.0) + 1.0, 1.0)
             # reg-r3 (re-audit): TWO-PHASE fire, mirroring the Rust core and
             # the SPEC exactly — phase 1 propagates ACTIVATION in waves with
             # inhibitors excluded; phase 2 applies each inhibitor ONCE,
@@ -4328,8 +4385,58 @@ class Interp:
                 _task_id = getattr(self, "next_id", 0) + 1
                 _derived = (0x9E3779B97F4A7C15 ^ ((_task_id * 0x9E3779B97F4A7C15) & M64)) & M64
                 self.rng = _derived
+                spawn_name = callee.name
+                # loop-9 (C8): the Rust worker tags its notes "[task <name>]"
+                # — mirror the prefix while the body runs inline
+                _saved_prefix = getattr(self, "task_note_prefix", None)
+                self.task_note_prefix = f"[task {spawn_name or '<lambda>'}]"
+                # loop-9: worker-cell isolation (mirror of the snapshot
+                # semantics) — the Rust worker gets a COPY of regulation
+                # state and FRESH expression counters; mutations inside the
+                # cell never propagate to the host. The sequential oracle
+                # must save/restore everything the snapshot carries.
+                _saved_state = {
+                    "grn_edges": list(self.grn_edges),
+                    "grn_levels": dict(self.grn_levels),
+                    "toggles": list(self.toggles),
+                    "methyl_levels": dict(self.methyl_levels),
+                    "methyl_threshold": self.methyl_threshold,
+                    "enhanced": list(self.enhanced),
+                    "repressi_ring": list(self.repressi_ring),
+                    "repressi_tick": self.repressi_tick,
+                    "repressi_params": dict(self.repressi_params),
+                    "promoter_states": dict(self.promoter_states),
+                    "burst_off": dict(self.burst_off),
+                    "expr_stochastic": self.expr_stochastic,
+                    "expr_kon": self.expr_kon,
+                    "expr_koff": self.expr_koff,
+                    "decay_clock_n": self.decay_clock_n,
+                    "decay_clock_f": self.decay_clock_f,
+                    "trans_edges": list(self.trans_edges),
+                    "trans_last": dict(self.trans_last),
+                    "decoys": list(self.decoys),
+                    "ligands": list(self.ligands),
+                    "ligand_pools": dict(self.ligand_pools),
+                    "grn_binds": list(self.grn_binds),
+                    "silences": list(self.silences),
+                    "risc_escaped": set(self.risc_escaped),
+                    "operons": [dict(u) for u in self.operons],
+                    "m6a_levels": dict(self.m6a_levels),
+                    "generation": self.generation,
+                    "copies": dict(self.copies),
+                    "signals": list(self.signals),
+                    "call_counts": dict(self.call_counts),
+                    "call_clock": self.call_clock,
+                    "gene_buckets": {k: dict(v) for k, v in self.gene_buckets.items()},
+                    "defined_genes": list(self.defined_genes),
+                    "methyl_noted": set(self.methyl_noted),
+                }
+                # the worker starts with FRESH expression counters (its own
+                # call clock starts at zero)
+                self.call_counts = {}
+                self.call_clock = 0
+                self.gene_buckets = {}
                 try:
-                    spawn_name = callee.name
                     if spawn_name:
                         result = self.call_named(env, spawn_name, targs)
                     else:
@@ -4337,7 +4444,10 @@ class Interp:
                 except Stress as st:
                     result = {"kind": st.kind, "message": st.message}
                 finally:
+                    for k2, v2 in _saved_state.items():
+                        setattr(self, k2, v2)
                     self.rng = _saved_rng
+                    self.task_note_prefix = _saved_prefix
                 self.next_id = _task_id
                 self.tasks = getattr(self, "tasks", {})
                 self.tasks[self.next_id] = result
@@ -4508,6 +4618,73 @@ class Interp:
         if name == "ligand":
             nm = v_display(args[0]) if args else ""
             return self._ligand_level(nm)
+        if name == "secrete":
+            # loop-9 (C8): mirror of the Rust secrete — Int exact, Float
+            # floors (never rounds), negative clamps to 0 with a note,
+            # non-finite clamps to 0, saturating add capped at 1e9.
+            nm = v_display(args[0]) if args else ""
+            amt = 1
+            if len(args) > 1:
+                a = args[1]
+                if isinstance(a, bool):
+                    amt = 1
+                elif isinstance(a, int):
+                    if a < 0:
+                        self.note(4, f"secrete: negative amount clamps to 0 molecules ('{nm}')")
+                    amt = max(0, min(a, 1_000_000_000))
+                elif isinstance(a, float):
+                    if a != a or a in (float("inf"), float("-inf")):
+                        self.note(4, f"secrete: non-finite amount clamps to 0 molecules ('{nm}')")
+                        amt = 0
+                    else:
+                        if a < 0.0:
+                            self.note(4, f"secrete: negative amount floors to 0 molecules ('{nm}')")
+                        amt = int(min(max(math.floor(a), 0.0), 1e9))
+                else:
+                    amt = 1
+            committed = 0
+            if self._signal_register(nm):
+                cur = self.medium.get(nm, 0)
+                nxt = min(cur + amt, 1_000_000_000)
+                self.medium[nm] = nxt
+                committed = nxt - cur
+            self.note(1, f"secrete '{nm}': +{committed} molecules (level {fmt_float(committed / 1e9)})")
+            return committed
+        if name == "quorum":
+            # loop-9 (C8): mirror — one arg -> level; two args -> level >= t.
+            nm = v_display(args[0]) if args else ""
+            lvl = self._signal_level(nm)
+            if len(args) > 1:
+                t = args[1]
+                if isinstance(t, bool):
+                    t = 0.0
+                elif isinstance(t, (int, float)):
+                    t = float(t)
+                else:
+                    t = 0.0
+                return lvl >= t
+            return lvl
+        if name == "quench":
+            # loop-9 (C8): mirror — m <- floor(m * (1-f)); no arg destroys all.
+            nm = v_display(args[0]) if args else ""
+            f = 1.0
+            if len(args) > 1:
+                a = args[1]
+                if isinstance(a, bool):
+                    f = 1.0
+                elif isinstance(a, (int, float)):
+                    f = min(max(float(a), 0.0), 1.0)
+                else:
+                    f = 1.0
+            cur = self.medium.get(nm, 0)
+            nxt = int(math.floor(cur * (1.0 - f)))
+            self.medium[nm] = nxt
+            removed = cur - nxt
+            self.note(1, f"quench '{nm}': -{removed} molecules")
+            return removed
+        if name == "quorum_state":
+            # loop-9 (C8): mirror — sorted-key species -> molecule counts.
+            return {k: self.medium[k] for k in sorted(self.medium)}
         if name == "chr":
             i = args[0] if args and isinstance(args[0], int) else 0
             return chr(i) if 0 <= i <= 0x10FFFF else ""

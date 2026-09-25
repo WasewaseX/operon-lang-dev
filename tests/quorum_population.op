@@ -1,0 +1,33 @@
+# loop-9 (C8): quorum sensing — part 3: the population layer.
+# Real biology: the signal is EXTRACELLULAR and shared — my secretion
+# raises YOUR activation. In Operon the medium is process-global: spawned
+# cells hold the SAME live pool (environment, not cytoplasm — deliberately
+# NOT part of the frozen RegulationSnap), and integer molecule counts make
+# concurrent secretions COMMUTE (order-free accumulation).
+# Contract: cross-cell reads are deterministic once every spawned cell is
+# joined (join-before-read). Dilution rides passage() — each division
+# halves the medium (default quorum.dilution 0.5, binary-exact).
+# Fails-pre: cross-cell reads were phantom nulls.
+autoinducer ahl
+gene secrete_a() {
+    secrete("ahl", 200000000)
+    return "a"
+}
+frame proof {
+    let i1 = spawn(secrete_a, [])
+    let i2 = spawn(secrete_a, [])
+    assert(join(i1) == "a", "worker A expresses")
+    assert(join(i2) == "a", "worker B expresses")
+    assert(quorum("ahl") == 0.4, "joined workers' secretions committed to the shared medium: 2e8 + 2e8 = 0.4")
+    # a worker spawned AFTER a host secretion sees the host's charge —
+    # the medium is live, not a frozen snapshot
+    secrete("ahl", 100000000)
+    let i3 = spawn(secrete_a, [])
+    assert(join(i3) == "a", "worker C expresses")
+    assert(quorum("ahl") == 0.7, "worker C saw the host's 1e8 and added its own 2e8: 0.4 + 0.1 + 0.2")
+    # dilution: passage halves the culture's medium per division
+    passage(1)
+    assert(quorum("ahl") == 0.35, "one division at default dilution 0.5: 7e8 -> 3.5e8 = 0.35")
+    passage(1)
+    assert(quorum("ahl") == 0.175, "second division: 3.5e8 -> 1.75e8 = 0.175")
+}

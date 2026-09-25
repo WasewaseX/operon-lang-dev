@@ -304,6 +304,12 @@ pub enum Stmt {
     /// and they drive gates directly (a ligand named as an edge source is
     /// a riboswitch-style, protein-free gate).
     Ligand(String),
+    /// loop-9 (C8): a quorum-sensing signal species — `autoinducer ahl;`.
+    /// The species registers into the process-global SHARED medium (the
+    /// environment, not the cytoplasm): `secrete` charges it, `quorum`
+    /// reads it, and a species named as an edge source is a LuxR·AHL-style
+    /// population gate — my secretion raises YOUR activation.
+    Autoinducer(String),
     Toggle(String, String),
     /// reg-bio-2 (C11): a decoy binding site — `decoy d for tf capacity c;`.
     /// The decoy node absorbs its regulator without producing output:

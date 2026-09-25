@@ -1504,6 +1504,7 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
         }
         // reg-bio-2 (A4): ligand declaration round-trip
         Stmt::Ligand(name) => out.push_str(&format!("ligand {};\n", name)),
+        Stmt::Autoinducer(name) => out.push_str(&format!("autoinducer {};\n", name)),
         Stmt::Repressilator(ring, period, ov) => {
             out.push_str(&format!("repressilator {}", ring.join(" -> ")));
             if let Some(p) = period {

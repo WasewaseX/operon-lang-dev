@@ -66,6 +66,7 @@ pub(crate) const KEYWORDS: &[&str] = &[
     "self",
     "decoy",
     "ligand",
+    "autoinducer",
     "bind",
     "inducer",
     "cofactor",
@@ -469,6 +470,7 @@ impl Parser {
             "yield",
             "decoy",
             "ligand",
+            "autoinducer",
             "operon",
         ];
         let mut word = w.to_string();
@@ -1273,6 +1275,15 @@ impl Parser {
                 let name = self.expect_ident().unwrap_or_default();
                 self.end_stmt();
                 Some(Stmt::Ligand(name))
+            }
+            // loop-9 (C8): `autoinducer ahl;` — register a quorum-sensing
+            // signal species into the process-global shared medium.
+            // Idempotent; secrete() auto-registers too (ligand_set precedent).
+            "autoinducer" => {
+                self.next();
+                let name = self.expect_ident().unwrap_or_default();
+                self.end_stmt();
+                Some(Stmt::Autoinducer(name))
             }
             // reg-bio-2 (C11): `decoy d for tf capacity 0.5;` — a decoy
             // binding site that titrates its regulator (competitive

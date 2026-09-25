@@ -9,7 +9,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
-use std::sync::{mpsc, Arc};
+use std::sync::{mpsc, Arc, Mutex};
 
 // ------------------------------------------------------------ thread budget
 // A run may hold at most MAX_THREADS live worker cells. Exceeding the cap is
@@ -862,6 +862,11 @@ pub struct RegulationSnap {
     /// whole regulatory cell: silencing redirects inside it too (13b fix:
     /// §13's inventory previously missed silences).
     pub silences: Vec<(String, Option<String>, f64, u32)>,
+    /// loop-9 (C8): signal species names ride the snapshot (a worker needs
+    /// them for edge-source resolution). The MEDIUM itself does NOT — the
+    /// shared pool is handed to the worker explicitly (environment, not
+    /// cytoplasm: live, not frozen).
+    pub signals: Vec<String>,
     pub risc_escaped: Vec<String>,
     /// reg-bio-3 (A1/A7): polycistronic units (membership, order, rbs,
     /// transcript counters) ride the snapshot.
@@ -939,6 +944,7 @@ pub fn snapshot_regulation(interp: &Interp) -> RegulationSnap {
             .collect(),
         grn_binds: interp.grn_binds.clone(),
         silences: interp.silences.clone(),
+        signals: interp.signals.clone(),
         risc_escaped: interp.risc_escaped.iter().cloned().collect(),
         operons: interp.operons.clone(),
         m6a_levels: interp
@@ -987,6 +993,9 @@ pub fn bind_regulation(ti: &mut Interp, s: &RegulationSnap) {
     // and dosage restore (worker cells are whole regulatory cells)
     ti.silences = s.silences.clone();
     ti.risc_escaped = s.risc_escaped.iter().cloned().collect();
+    // loop-9 (C8): signal species ride the snapshot; the MEDIUM arc is
+    // assigned by the spawner (shared, live — see spawn_task/seq_start).
+    ti.signals = s.signals.clone();
     ti.operons = s.operons.clone();
     ti.m6a_levels = s.m6a_levels.iter().cloned().collect();
     ti.generation = s.generation;
@@ -1061,6 +1070,7 @@ pub fn seq_start(
     reg: RegulationSnap,
     caps: crate::interp::Caps,
     fuel_pool: Option<Arc<AtomicI64>>,
+    medium: Option<Arc<Mutex<HashMap<String, u64>>>>,
 ) -> Result<Rc<RefCell<crate::value::SeqState>>, Stress> {
     let send_args: Vec<SnapArg> = args.iter().map(arg_to_snap).collect();
     let host_caps = caps;
@@ -1068,6 +1078,8 @@ pub fn seq_start(
     spawn_worker(move || {
         let mut ti = Interp::new();
         ti.fuel_pool = fuel_pool;
+        // loop-9 (C8): the worker holds the SAME live medium (environment)
+        ti.medium = medium;
         let genv = Env::new(None);
         bind_snapshot(&genv, &snap);
         bind_regulation(&mut ti, &reg);
@@ -1165,6 +1177,12 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
     let task_name = name.clone();
     let host_caps = interp.caps.clone();
     let host_fuel = interp.fuel_pool.clone();
+    // loop-9 (C8): the worker holds the SAME live medium (environment —
+    // my secretion raises your activation across cells). Spawning adds a
+    // cell to the culture, so the medium materializes here even when the
+    // host has not secreted yet — an empty shared pool reads exactly like
+    // None (0.0 everywhere), so legacy behavior is unchanged.
+    let host_medium = Some(interp.medium_arc());
     // reg-bio-2 (C3): the task id must be claimed BEFORE the worker body
     // runs — the worker's RNG stream is derived from it (decorrelated
     // promoter bursting across cells).
@@ -1174,6 +1192,8 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
     spawn_worker(move || {
         let mut ti = Interp::new();
         ti.fuel_pool = host_fuel;
+        // loop-9 (C8): live shared medium
+        ti.medium = host_medium;
         // reg-bio-2 (C3): worker cells do NOT all start from the same default
         // seed — each derives its stream from its task id, so two cells
         // bursting under expr_on draw DIFFERENT promoter sequences. The old
