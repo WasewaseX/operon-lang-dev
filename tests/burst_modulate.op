@@ -11,6 +11,8 @@
 # the pre-R9 core.
 gene noisey() { return "n" }
 gene steady() { return "s" }
+@burst 0.9 0.05
+gene marked() { return "m" }
 frame proof {
     randomize(42)
     expr_on(0.3, 0.1)
@@ -43,8 +45,18 @@ frame proof {
     while m < 20 { noisey() ; m = m + 1 }
     let d = promoter_telemetry("noisey")
     assert(d.attempts == 60, "cleared override: attempts still accumulate")
-    # precedence: a @burst mark BEATS the override
-    assert(burst_set("noisey", 0.1, 0.9) != null, "the override returns the applied rates")
-    burst_set("noisey")
-    assert(true, "cleared again (the precedence proof lives in the mark tests)")
+    # precedence: a @burst mark BEATS the override — a marked gene given a
+    # contrary override still runs its MARK's rates (asserted behaviorally:
+    # the marked gene stays strongly ON even though the override says
+    # mostly-OFF; the override would flip it to ~0.1 if it won)
+    burst_set("marked", 0.05, 0.95)
+    let q = 0
+    while q < 20 { marked() ; q = q + 1 }
+    let mt = promoter_telemetry("marked")
+    assert(mt.attempts == 20, "marked gene: 20 attempts under the contrary override")
+    assert(mt.on_frac > 0.5, "precedence: the @burst mark wins over burst_set (a lost override would be ~0.1 ON)")
+    burst_set("marked")
+    # the override returns the applied rates
+    assert(burst_set("steady", 0.1, 0.9) != null, "the override returns the applied rates")
+    burst_set("steady")
 }

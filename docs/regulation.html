@@ -287,3 +287,28 @@ the way a locus reads its own methylation state.</p>
 
 </body>
 </html>
+<!-- loop-9 additions (reg-bio-4/R9): population, RNA layer, noise identity -->
+<h2>loop-9 surfaces</h2>
+<dl>
+<dt><code>autoinducer ahl;</code> + <code>secrete</code>/<code>quorum</code>/<code>quench</code>/<code>quorum_state</code></dt>
+<dd>Quorum sensing — a process-global SHARED medium of integer molecule counts
+(cap 1e9 = level 1.0). A species named as an edge source is the LuxR·AHL gate;
+dilution rides <code>passage(n)</code> (<code>.cell quorum.dilution</code>, default 0.5).</dd>
+<dt><code>@riboswitch ligand off|on threshold t</code></dt>
+<dd>Cis aptamer on the transcript's own 5'UTR: <code>off</code> class — bound →
+terminator hairpin → OFF; <code>on</code> class — bound → RBS exposed → ON.
+Gate order: methylation → riboswitch → promoter.</dd>
+<dt><code>splice_shift(root, variant)</code></dt>
+<dd>Runtime splicing-factor regulation — a trans-acting shift between the
+operator pins and the @m6a bias.</dd>
+<dt>m6A reader fate (density ≥ 2)</dt>
+<dd>YTHDF2-like production ×(1−0.25) + YTHDF1/3-like protein decay +0.10 on
+<code>translates</code> edges (<code>.cell m6a.reader.*</code>).</dd>
+<dt><code>@burst kon koff</code> + <code>promoter_telemetry(g)</code> + <code>burst_set(g, kon, koff)</code></dt>
+<dd>Per-gene promoter identity, attempt telemetry (on_frac / burst_size), and
+runtime rate modulation. Precedence: <code>@burst</code> &gt;
+<code>burst_set</code> &gt; global rates.</dd>
+<dt><code>m6a.decay</code> standalone cadence + <code>m6a.decay_calls</code></dt>
+<dd>The m6A lattice decays on its own cadence when no GRN decay clock is
+configured (was a silent no-op before loop-9).</dd>
+</dl>

@@ -1,0 +1,29 @@
+# loop-9 (C8): the quorum differential golden — the C8 surface was invisible
+# to the harness (frames never execute in run mode). This program drives the
+# pool through its main gene and PROMOTES the exact values, so the byte-exact
+# differential comparison covers secrete/quorum/quench/quorum_state.
+autoinducer ahl
+autoinducer ai2
+gene main() {
+    secrete("ahl", 500000000)
+    promote(quorum("ahl"))
+    secrete("ahl", 500000000)
+    promote(quorum("ahl"))
+    secrete("ahl", 500000000)
+    promote(quorum("ahl"))
+    secrete("b", 0.7)
+    promote(quorum("b"))
+    promote(quench("ahl", 0.5))
+    promote(quorum("ahl"))
+    let st = quorum_state()
+    promote(st.ahl)
+    promote(st.b)
+    promote(len(st))
+    # the refusal path is note-level (both cores); the level stays 0.0
+    grn_fire("ahl")
+    promote(quorum("ahl"))
+    # dilution rides passage
+    passage(1)
+    promote(quorum("ahl"))
+    promote(quorum("never_declared"))
+}
