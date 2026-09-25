@@ -7,7 +7,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicU64};
-use std::sync::{mpsc, Arc};
+use std::sync::{mpsc, Arc, Mutex};
 
 pub struct Env {
     pub vars: RefCell<HashMap<String, Value>>,
@@ -480,6 +480,17 @@ pub struct Interp {
     /// read straight from its pool (riboswitch-style, protein-free gate).
     pub ligands: Vec<String>,
     pub ligand_pools: HashMap<String, f64>,
+    /// loop-9 (C8): quorum-sensing signal species and the process-global
+    /// SHARED medium (species → molecule count, integer u64). The medium is
+    /// the environment, not the cytoplasm: it is deliberately NOT part of
+    /// RegulationSnap (workers inherit frozen pools but a LIVE medium) and
+    /// it is handed to workers explicitly like fuel_pool. Integer counts
+    /// make concurrent secretions COMMUTE — order-free accumulation, so
+    /// thread interleaving cannot change the pool (the cross-thread answer
+    /// to the burst_total float-sum lesson). Saturating cap 1e9 molecules
+    /// = level 1.0 (saturated medium).
+    pub signals: Vec<String>,
+    pub medium: Option<Arc<Mutex<HashMap<String, u64>>>>,
     pub grn_binds: Vec<crate::ast::BindDef>,
     pub toggles: Vec<(String, String, bool)>, // (a, b, a_on) — mutual repression pair
     pub repressi_ring: Vec<String>,
@@ -584,6 +595,8 @@ impl Interp {
             trans_last: HashMap::new(),
             decoys: Vec::new(),
             ligands: Vec::new(),
+            signals: Vec::new(),
+            medium: None,
             ligand_pools: HashMap::new(),
             grn_binds: Vec::new(),
             toggles: Vec::new(),
@@ -1377,6 +1390,13 @@ impl Interp {
                 if !self.ligands.contains(name) {
                     self.ligands.push(name.clone());
                 }
+                Ok(Flow::Norm)
+            }
+            // loop-9 (C8): register a quorum-sensing signal species
+            // (idempotent). The species becomes a shared-medium edge source
+            // (LuxR·AHL population gate) chargeable via secrete().
+            Stmt::Autoinducer(name) => {
+                self.signal_register(name);
                 Ok(Flow::Norm)
             }
             // reg-bio-2 (C11): a decoy site is inert until it carries level
@@ -2660,6 +2680,7 @@ impl Interp {
                     crate::genes::snapshot_regulation(self),
                     self.caps.clone(),
                     self.fuel_pool.clone(),
+                    Some(self.medium_arc()),
                 )?;
                 Ok(Value::Seq(def.clone(), st))
             }
@@ -2846,6 +2867,75 @@ impl Interp {
             .and_then(|v| v.parse::<f64>().ok())
             .map(|v| v.clamp(0.0, 1.0))
             .unwrap_or(0.0)
+    }
+
+    /// loop-9 (C8): register a signal species (idempotent, cap 64 — the
+    /// anti map-growth answer to the rt_p11g class). Returns false when
+    /// the cap refuses the registration.
+    pub fn signal_register(&mut self, name: &str) -> bool {
+        if self.signals.iter().any(|s| s == name) {
+            return true;
+        }
+        if self.signals.len() >= 64 {
+            self.note(
+                self.cur_line,
+                4,
+                format!("signal species cap (64) reached: '{}' not registered", name),
+            );
+            return false;
+        }
+        self.signals.push(name.to_string());
+        true
+    }
+
+    /// loop-9 (C8): lazy shared-medium accessor (created on first use) —
+    /// an Arc so spawn/seq workers can hold the SAME pool (the culture's
+    /// medium, shared across every cell of the run).
+    pub fn medium_arc(&mut self) -> Arc<Mutex<HashMap<String, u64>>> {
+        if self.medium.is_none() {
+            self.medium = Some(Arc::new(Mutex::new(HashMap::new())));
+        }
+        self.medium.as_ref().unwrap().clone()
+    }
+
+    /// loop-9 (C8): the population level of a signal species —
+    /// molecules / 1e9 with the write-side cap at 1e9 (so the level is
+    /// already ≤ 1.0 — no second clamp op). ONE division; counts < 2^53
+    /// make the double bit-identical to the oracle's int/float division.
+    pub fn signal_level(&self, name: &str) -> f64 {
+        if let Some(m) = &self.medium {
+            if let Ok(g) = m.lock() {
+                if let Some(c) = g.get(name) {
+                    return (*c as f64) / 1e9;
+                }
+            }
+        }
+        0.0
+    }
+
+    /// loop-9 (C8/T6): THE edge-source level chain — explicit grn level →
+    /// repressilator ring overlay → ligand pool → signal medium → 0.0.
+    /// One resolver for the main gate pass AND the sum-group pass (the
+    /// oracle has a single _grn_level; the previously duplicated Rust
+    /// chain was exactly the parity-site mismatch the fleet flagged).
+    /// Signal species resolve after ligands; both live outside grn_levels
+    /// (the grn_fire seeding loop skips them — loop-9 P0-2 family).
+    fn edge_source_level(&mut self, source: &str, ring_len: usize, tick: u64) -> f64 {
+        if let Some(v) = self.grn_levels.get(source) {
+            return *v;
+        }
+        if ring_len > 0 {
+            if let Some(idx) = self.repressi_ring.iter().position(|r| r == source) {
+                return self.ring_gate_level(ring_len, tick, idx).unwrap_or(0.0);
+            }
+        }
+        if self.ligands.iter().any(|l| l == source) {
+            return self.ligand_level(source);
+        }
+        if self.signals.iter().any(|s| s == source) {
+            return self.signal_level(source);
+        }
+        0.0
     }
 
     /// reg-bio-2 (C11 + A4): the DNA-available fraction of a regulator's
@@ -3190,29 +3280,7 @@ impl Interp {
             if e.sum {
                 continue;
             }
-            let lvl = match self.grn_levels.get(&e.from) {
-                Some(v) => *v,
-                None => {
-                    if ring_len > 0 {
-                        if let Some(idx) = self.repressi_ring.iter().position(|r| r == &e.from) {
-                            self.ring_gate_level(ring_len, tick, idx).unwrap_or(0.0)
-                        } else {
-                            // reg-bio-2 (A4/C7): a ligand named as an edge
-                            // source is read straight from its metabolite
-                            // pool — a riboswitch-style, protein-free gate.
-                            match self.ligands.iter().position(|l| l == &e.from) {
-                                Some(_) => self.ligand_level(&e.from),
-                                None => 0.0,
-                            }
-                        }
-                    } else {
-                        match self.ligands.iter().position(|l| l == &e.from) {
-                            Some(_) => self.ligand_level(&e.from),
-                            None => 0.0,
-                        }
-                    }
-                }
-            };
+            let lvl = self.edge_source_level(&e.from, ring_len, tick);
             // reg-bio-2 (C11 + A4): regulation reads the DNA-available
             // fraction — decoy titration, then allosteric modulation.
             let lvl = self.regulated_level(lvl, &e.from);
@@ -3280,25 +3348,7 @@ impl Interp {
                 // same source resolution as the main loop above: explicit
                 // level → ring overlay → ligand pool → 0.0, then the free
                 // fraction
-                let raw = match self.grn_levels.get(&e.from) {
-                    Some(v) => *v,
-                    None => {
-                        if ring_len > 0 {
-                            if let Some(idx) = self.repressi_ring.iter().position(|r| r == &e.from)
-                            {
-                                self.ring_gate_level(ring_len, tick, idx).unwrap_or(0.0)
-                            } else if self.ligands.iter().any(|l| l == &e.from) {
-                                self.ligand_level(&e.from)
-                            } else {
-                                0.0
-                            }
-                        } else if self.ligands.iter().any(|l| l == &e.from) {
-                            self.ligand_level(&e.from)
-                        } else {
-                            0.0
-                        }
-                    }
-                };
+                let raw = self.edge_source_level(&e.from, ring_len, tick);
                 let lvl = self.regulated_level(raw, &e.from);
                 let n = e.hill.unwrap_or(2);
                 if let Some(g) = groups
@@ -4905,6 +4955,27 @@ impl Interp {
                         *lvl = if next < 0.0 { 0 } else { next as u32 };
                     }
                 }
+                // loop-9 (C8): the signal medium dilutes with the culture —
+                // floor(m × d) per division, d = `.cell quorum.dilution`
+                // (default 0.5 = binary-exact halving; 1.0 = chemostat, no
+                // exchange; 0.0 = full medium exchange every division).
+                // Absent/empty medium = no-op — byte-identical for every
+                // legacy passage program.
+                let qd = self
+                    .cell
+                    .get("quorum.dilution")
+                    .and_then(|v| v.parse::<f64>().ok())
+                    .map(|v| v.clamp(0.0, 1.0))
+                    .unwrap_or(0.5);
+                if let Some(m) = self.medium.as_ref() {
+                    if let Ok(mut g) = m.lock() {
+                        for _ in 0..n {
+                            for v in g.values_mut() {
+                                *v = ((*v as f64) * qd).floor() as u64;
+                            }
+                        }
+                    }
+                }
                 self.generation = self.generation.saturating_add(n);
                 if !self.methyl_quiet {
                     self.note(
@@ -5249,15 +5320,34 @@ impl Interp {
                 // and resolves through the ligand fallback exactly as before
                 // the first fire.
                 for e in &self.grn_edges {
-                    if !self.ligands.iter().any(|l| l == &e.from) {
+                    if !self.ligands.iter().any(|l| l == &e.from)
+                        && !self.signals.iter().any(|s| s == &e.from)
+                    {
                         self.grn_levels.entry(e.from.clone()).or_insert(0.0);
                     }
-                    if !self.ligands.iter().any(|l| l == &e.to) {
+                    if !self.ligands.iter().any(|l| l == &e.to)
+                        && !self.signals.iter().any(|s| s == &e.to)
+                    {
                         self.grn_levels.entry(e.to.clone()).or_insert(0.0);
                     }
                 }
-                let cur = *self.grn_levels.get(&seed).unwrap_or(&0.0);
-                self.grn_levels.insert(seed.clone(), (cur + 1.0).min(1.0));
+                // loop-9 (C8): a signal species lives in the medium, not in
+                // grn_levels — firing it directly would shadow the medium
+                // read forever (the P0-2 shadow, seed-path edition). Refuse
+                // honestly instead of silently poisoning the gate.
+                if self.signals.iter().any(|s| s == &seed) {
+                    self.note(
+                        self.cur_line,
+                        4,
+                        format!(
+                            "'{}' is a signal species: its level lives in the shared medium — use secrete()",
+                            seed
+                        ),
+                    );
+                } else {
+                    let cur = *self.grn_levels.get(&seed).unwrap_or(&0.0);
+                    self.grn_levels.insert(seed.clone(), (cur + 1.0).min(1.0));
+                }
                 // Phase 1 — activation: child = max(child, parent × strength^wave)
                 // where wave counts propagation hops (multi-hop attenuation).
                 // Phase 2 — inhibition: each repressor applies its influence
@@ -5847,6 +5937,156 @@ impl Interp {
                 // reg-bio-2 (A4): read a metabolite pool (cell-bath fallback).
                 let name = args.first().map(|v| v.display()).unwrap_or_default();
                 Ok(Value::Float(self.ligand_level(&name)))
+            }
+            "secrete" => {
+                // loop-9 (C8): emit molecules into the shared medium.
+                // Int = exact molecules; Float floors (never rounds — T4
+                // parity: Python round is banker's, Rust is half-away);
+                // negative clamps to 0 with a note; non-finite clamps to 0;
+                // saturating add capped at 1e9 (saturated medium = level 1.0).
+                // secrete("x") with no amount emits ONE unit.
+                let name = args.first().map(|v| v.display()).unwrap_or_default();
+                mem_charge(64)?;
+                let amt: u64 = match args.get(1) {
+                    None => 1,
+                    Some(Value::Int(i)) => {
+                        if *i < 0 {
+                            self.note(
+                                self.cur_line,
+                                4,
+                                format!(
+                                    "secrete: negative amount clamps to 0 molecules ('{}')",
+                                    name
+                                ),
+                            );
+                        }
+                        (*i).clamp(0, 1_000_000_000) as u64
+                    }
+                    Some(Value::Float(f)) if !f.is_finite() => {
+                        self.note(
+                            self.cur_line,
+                            4,
+                            format!(
+                                "secrete: non-finite amount clamps to 0 molecules ('{}')",
+                                name
+                            ),
+                        );
+                        0
+                    }
+                    Some(Value::Float(f)) => {
+                        if *f < 0.0 {
+                            self.note(
+                                self.cur_line,
+                                4,
+                                format!(
+                                    "secrete: negative amount floors to 0 molecules ('{}')",
+                                    name
+                                ),
+                            );
+                        }
+                        f.floor().clamp(0.0, 1e9) as u64
+                    }
+                    Some(_) => 1,
+                };
+                let committed = if self.signal_register(&name) {
+                    let m = self.medium_arc();
+                    let res = {
+                        match m.lock() {
+                            Ok(mut g) => {
+                                let cur = *g.get(&name).unwrap_or(&0u64);
+                                let next = cur.saturating_add(amt).min(1_000_000_000);
+                                g.insert(name.clone(), next);
+                                next - cur
+                            }
+                            Err(_) => 0,
+                        }
+                    };
+                    res
+                } else {
+                    0
+                };
+                self.note(
+                    self.cur_line,
+                    1,
+                    format!(
+                        "secrete '{}': +{} molecules (level {})",
+                        name,
+                        committed,
+                        crate::value::format_float(committed as f64 / 1e9)
+                    ),
+                );
+                Ok(Value::Int(committed as i64))
+            }
+            "quorum" => {
+                // loop-9 (C8): read the population level of a signal species.
+                // One arg → level (Float); two args → level >= threshold
+                // (Bool — the same >= the GRN gate uses). Unknown/empty
+                // species → 0.0 / false: "empty pool → quorum false" is the
+                // default, not a special case.
+                let name = args.first().map(|v| v.display()).unwrap_or_default();
+                let lvl = self.signal_level(&name);
+                match args.get(1) {
+                    Some(t) => {
+                        let t = match t {
+                            Value::Int(i) => *i as f64,
+                            Value::Float(f) => *f,
+                            _ => 0.0,
+                        };
+                        Ok(Value::Bool(lvl >= t))
+                    }
+                    None => Ok(Value::Float(lvl)),
+                }
+            }
+            "quench" => {
+                // loop-9 (C8): degrade signal molecules (AiiA lactonase —
+                // quorum quenching). One arg → destroy ALL; two args →
+                // fraction f destroyed: m ← floor(m × (1−f)) — floor, never
+                // round (T4 parity).
+                let name = args.first().map(|v| v.display()).unwrap_or_default();
+                mem_charge(64)?;
+                let f = match args.get(1) {
+                    None => 1.0,
+                    Some(Value::Int(i)) => (*i as f64).clamp(0.0, 1.0),
+                    Some(Value::Float(f)) => f.clamp(0.0, 1.0),
+                    Some(_) => 1.0,
+                };
+                let removed = match self.medium.as_ref() {
+                    Some(m) => match m.lock() {
+                        Ok(mut g) => {
+                            let cur = *g.get(&name).unwrap_or(&0u64);
+                            let next = ((cur as f64) * (1.0 - f)).floor() as u64;
+                            g.insert(name.clone(), next);
+                            cur - next
+                        }
+                        Err(_) => 0,
+                    },
+                    None => 0,
+                };
+                self.note(
+                    self.cur_line,
+                    1,
+                    format!("quench '{}': -{} molecules", name, removed),
+                );
+                Ok(Value::Int(removed as i64))
+            }
+            "quorum_state" => {
+                // loop-9 (C8): population telemetry — species → molecule
+                // count, SORTED keys (D9: byte-order sort both cores).
+                let mut pairs: Vec<(String, u64)> = match self.medium.as_ref() {
+                    Some(m) => match m.lock() {
+                        Ok(g) => g.iter().map(|(k, v)| (k.clone(), *v)).collect(),
+                        Err(_) => Vec::new(),
+                    },
+                    None => Vec::new(),
+                };
+                pairs.sort_by(|a, b| a.0.cmp(&b.0));
+                let map: Vec<(Value, Value)> = pairs
+                    .into_iter()
+                    .map(|(k, v)| (Value::Str(k), Value::Int(v as i64)))
+                    .collect();
+                Ok(Value::Map(Rc::new(RefCell::new(
+                    crate::value::MapStore::from_vec(map),
+                ))))
             }
             "chr" => Ok(Value::Str(match args.first() {
                 Some(Value::Int(i)) if *i >= 0 && *i <= 0x10FFFF => char::from_u32(*i as u32)
@@ -7120,7 +7360,6 @@ impl Interp {
 use std::collections::HashMap as StdHashMap;
 use std::io::Read;
 use std::net::{TcpListener, TcpStream};
-use std::sync::Mutex;
 
 struct ServerState {
     rx: mpsc::Receiver<(u64, String, String, String)>,
@@ -8192,6 +8431,10 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "decay_clock",
     "ligand_set",
     "ligand",
+    "secrete",
+    "quorum",
+    "quench",
+    "quorum_state",
     "len",
     "push",
     "pop",

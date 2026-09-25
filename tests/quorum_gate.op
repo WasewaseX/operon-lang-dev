@@ -1,0 +1,42 @@
+# loop-9 (C8): quorum sensing — part 4: edge-source composition.
+# A signal species is a FIRST-CLASS edge source: AND membership, OR/any
+# membership, and sum POOLS all resolve the medium. This pin also locks
+# the two historically fragile seams: (a) the sum-group pass resolves
+# signal sources (the Rust chain was duplicated there once — the T6 trap),
+# and (b) resolution ORDER: an explicit grn_set level wins over the medium.
+# Fails-pre: phantom edge sources read 0.0 — every assert burns.
+autoinducer ahl
+autoinducer ai2
+regulate {
+    ahl activates g strength 1.0 threshold 0.4
+    s1 activates g strength 1.0 threshold 0.6
+    reg activates g strength 1.0 threshold 0.5
+    ahl activates h strength 0.5 threshold 0.5 sum
+    ai2 activates h strength 0.5 threshold 0.5 sum
+}
+gene g() { return "G" }
+gene h() { return "H" }
+frame proof {
+    grn_set("s1", 0.9)
+    assert(g() == null, "ahl 0.0 and reg 0.0: the AND members fail")
+    secrete("ahl", 500000000)
+    assert(g() == null, "ahl 0.5 passes its member but reg 0.0 still vetoes (AND)")
+    grn_set("reg", 0.6)
+    assert(g() == "G", "medium-sourced member (ahl 0.5) + grn members: the gate opens")
+    # dose response on the shared signal: drop the medium, gate closes
+    quench("ahl")
+    assert(g() == null, "quenched medium: the ahl member fails again")
+    # sum pool of TWO signals — pooled inputs open the gate together
+    # (pins the sum-pass signal resolution site). Each signal is
+    # sub-threshold ALONE: 0.5*0.6 = 0.3 and 0.5*0.4 = 0.2, but the pool
+    # P = 0.5*0.6 + 0.5*0.4 = 0.5 passes.
+    secrete("ai2", 400000000)
+    assert(h() == null, "pool: 0.5*0 + 0.5*0.4 = 0.2 < 0.5 — one signal alone fails")
+    secrete("ahl", 600000000)
+    assert(h() == "H", "pool: 0.5*0.6 + 0.5*0.4 = 0.5 — two sub-threshold-alone signals pool past the gate")
+    # resolution order: an explicit grn_set level wins over the medium
+    quench("ahl")
+    grn_set("ahl", 0.9)
+    assert(g() == "G", "explicit grn_set('ahl') wins over the (empty) medium")
+    assert(h() == "H", "the sum pass resolves the explicit level too (same chain)")
+}

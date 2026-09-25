@@ -1,0 +1,38 @@
+# loop-9 (C8): quorum sensing — part 2: the LuxI/LuxR all-or-none circuit.
+# Real biology: luxI (the SYNTHASE) sits inside the luminescence operon it
+# activates — below threshold nothing secretes, above threshold every
+# success charges the medium further: positive feedback, all-or-none ON,
+# and quenching collapses it (the OFF branch).
+# The phenomenology needs ZERO new machinery: the signal species is an
+# edge source, the polycistronic unit gate does the rest.
+# Fails-pre: the gate veto reason "no such level" burns every assert.
+autoinducer ahl
+regulate {
+    ahl activates lux strength 1.0 threshold 0.4
+}
+operon lux { luxI rbs 1.0; luxB rbs 0.8; }
+gene luxI() { secrete("ahl", 300000000); return "synthase" }
+gene luxB() { return "luciferase" }
+frame proof {
+    # below threshold: the unit gate vetoes luxI — no expression, no secretion
+    assert(luxI() == null, "below threshold: the lux unit is vetoed (luxI never runs)")
+    assert(quorum("ahl") == 0.0, "suppressed calls are not expression: no molecules secreted")
+    # external pulses (neighboring cells) push the medium over threshold
+    secrete("ahl", 150000000)
+    secrete("ahl", 150000000)
+    secrete("ahl", 150000000)
+    assert(quorum("ahl") == 0.45, "three external pulses: 4.5e8 molecules = level 0.45")
+    # the gate opens: expression succeeds. luxB's body does NOT secrete —
+    # a call runs the CALLED cistron's body only (the unit gate gates the
+    # whole transcript; bodies are per-cistron).
+    assert(luxB() == "luciferase", "above threshold: the lux unit expresses")
+    assert(quorum("ahl") == 0.45, "luxB secreted nothing: only luxI carries the synthase")
+    assert(luxI() == "synthase", "positive feedback: the synthase itself now expresses")
+    assert(quorum("ahl") == 0.75, "luxI's call secreted 3e8 molecules (0.45 + 0.30)")
+    assert(luxI() == "synthase", "the feedback keeps firing")
+    assert(quorum("ahl") == 1.0, "all-or-none: repeated induction saturates the medium (1.05e9 clamps)")
+    # quench collapses it — the OFF branch (hysteresis reset)
+    quench("ahl")
+    assert(luxB() == null, "quenched below threshold: the unit re-silences")
+    assert(quorum("ahl") == 0.0, "quench emptied the medium")
+}

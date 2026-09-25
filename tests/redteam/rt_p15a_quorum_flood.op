@@ -1,0 +1,24 @@
+# loop-9 (C8): quorum pool abuse — species flood + molecule saturation +
+# a secrete hot loop must all terminate contained (species-cap note, note
+# cap, fuel/step budget), never OOM or hang (cf. rt_p14a, rt_p13a, rt_p11g).
+gene main() {
+    # 70 species: the 64-species cap refuses the rest with a note
+    let i = 0
+    while i < 70 {
+        secrete("s{i}", 1000000);
+        i = i + 1
+    }
+    # saturation: amounts beyond the cap clamp at 1e9 molecules (level 1.0)
+    secrete("sat", 18446744073709551616);
+    secrete("sat", 1e30);
+    print("sat level: {quorum(\"sat\")}");
+    # hot loop: bounded by the step budget, notes capped
+    let j = 0
+    while j < 200000 {
+        secrete("hot", 5);
+        j = j + 1
+    }
+    print("hot level: {quorum(\"hot\")}");
+    print("species seen: {len(quorum_state())}");
+    print("p15a-contained");
+}
