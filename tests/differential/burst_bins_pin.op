@@ -1,0 +1,54 @@
+# loop-9 (P0-3): the burst-index parity pin — COMPLETE 20-call bins only.
+# The Rust core measures complete bins (call_clock / 20) and excludes the
+# trailing partial bin ("a perfectly periodic pattern scores 0, as the
+# biology demands"); the oracle mirror used to include the trailing partial
+# bin (+1), so the same histories scored differently on the two cores.
+# This pin locks the complete-bin rule on BOTH cores.
+#
+# Call-clock ledger in the proof context (the frame's own execution ticks
+# the shared clock once before the body runs — clock 1, bucket 0):
+#   frame tick     -> clock 1            (no gene bucket)
+#   g x41          -> clock 2..42        g bins: b0=19, b1=20, b2=2
+#   m x10          -> clock 43..52       m bins: b2=10
+#   s x30          -> clock 53..82       s bins: b2=8, b3=20, b4=2 (partial)
+# At fingerprint time clock=82 -> complete_bins=4 (buckets 0..3).
+#   g: {19,20,2,0}   mean 10.25  var 86.1875 -> 8.408536585365853
+#   m: {0,0,10,0}    mean 2.5    var 18.75   -> 7.5
+#   s: {0,0,8,20}    mean 7      var 67      -> 67/7 = 9.571428...
+gene g() { return "g" }
+gene m() { return "m" }
+gene s() { return "s" }
+frame proof {
+    let i = 0
+    while i < 41 { g() ; i = i + 1 }
+    let j = 0
+    while j < 10 { m() ; j = j + 1 }
+    let k = 0
+    while k < 30 { s() ; k = k + 1 }
+    let f = fingerprint()
+    assert(f.calls.g == 41, "g called 41 times")
+    assert(f.calls.m == 10, "m called 10 times")
+    assert(f.calls.s == 30, "s called 30 times")
+    assert(abs(f.burst_by_gene.g - 8.408536585365853) < 1e-12, "g complete bins {19,20,2,0}: var 86.1875 / mean 10.25 -> 8.4085... (partial bin excluded)")
+    assert(abs(f.burst_by_gene.m - 7.5) < 1e-12, "m complete bins {0,0,10,0}: var 18.75 / mean 2.5 -> 7.5")
+    assert(abs(f.burst_by_gene.s - 67.0/7.0) < 1e-12, "s complete bins {0,0,8,20}: var 67 / mean 7 -> 67/7")
+    assert(abs(f.burst - ((8.408536585365853 + 7.5 + 67.0/7.0)/3)) < 1e-12, "aggregate accumulates in sorted gene order (g, m, s)")
+    assert(len(f.bursts) == 0, "telegraph layer off: no promoter off-counts")
+}
+# differential surface: the harness compares plain-RUN stdout, where frames
+# never execute — so main() reproduces the same schedule (its own call is
+# the one clock-1 tick, exactly like the frame tick in proof mode) and
+# promotes the exact values for byte-for-byte parity on both cores.
+gene main() {
+    let i = 0
+    while i < 41 { g() ; i = i + 1 }
+    let j = 0
+    while j < 10 { m() ; j = j + 1 }
+    let k = 0
+    while k < 30 { s() ; k = k + 1 }
+    let f = fingerprint()
+    promote(f.burst_by_gene.g)
+    promote(f.burst_by_gene.m)
+    promote(f.burst_by_gene.s)
+    promote(f.burst)
+}

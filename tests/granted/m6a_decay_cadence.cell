@@ -1,0 +1,4 @@
+# loop-9 (P0-4): explicit operator cell for the standalone m6A decay
+# cadence proof. Non-capability keys ride the same explicit --cell mechanism.
+[m6a]
+decay = 0.5

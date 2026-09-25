@@ -1,0 +1,28 @@
+# loop-9 (P0-4): the standalone m6A decay cadence — an explicit-cell proof.
+# The B3 decay block ran ONLY inside the GRN decay tick, so with no
+# `grn.decay_calls` and no decay-clock builtin configured,
+# `.cell m6a.decay` was a silent no-op (and shipped without any proof
+# covering the standalone case). The own-cadence path erases site density
+# every `m6a.decay_calls` calls (default 1), half-down rounding on the
+# 0..=3 lattice — a diluted mark never reads as MORE marked.
+# Exercised ONLY via an explicit operator cell (the default proof runner
+# is zero-grant and skips tests/granted/):
+#   ./bin/operon test tests/granted/m6a_decay_cadence.op --cell tests/granted/m6a_decay_cadence.cell
+# Fails-pre: on a core without the own-cadence path the density never
+# decays, so both asserts burn.
+gene stable() { return "S" }
+frame proof {
+    # sanity: the cell key must actually be present, otherwise this file
+    # is being run zero-grant and the contract is not exercisable
+    assert(methyl("m6a.decay", 0.0) == 0.5, "operator cell carries m6a.decay 0.5")
+    m6a_write("stable", 2)
+    assert(m6a_erase("stable", 0) == 2, "density 2 written (erase-by-0 reads the level)")
+    stable()
+    assert(m6a_erase("stable", 0) == 1, "call 1 decays density: 2*0.5 - 0.5 -> ceil 1 (half-down lattice)")
+    stable()
+    assert(m6a_erase("stable", 0) == 0, "call 2 decays density: 1*0.5 - 0.5 -> ceil 0")
+    # re-write and confirm the lattice keeps half-down discipline
+    m6a_write("stable", 3)
+    stable()
+    assert(m6a_erase("stable", 0) == 1, "density 3: 3*0.5 - 0.5 = 1.0 -> ceil 1 (never rounds UP)")
+}

@@ -1,0 +1,30 @@
+# loop-9 (P0-2): ligand-pool edge sources must survive a grn_fire.
+# The fire's endpoint-seeding loop used to insert ligand names into
+# grn_levels at 0.0 — and gate resolution reads grn_levels BEFORE the
+# ligand-pool fallback — so ONE unrelated fire permanently killed every
+# ligand gate for the rest of the run. Ligand-backed endpoints are now
+# skipped: their level lives in the metabolite pool and resolves through
+# the fallback exactly as before the first fire.
+# Fails-pre: the last assertion burns on the old core (tgt() returns null
+# after the fire).
+ligand ara
+regulate {
+    ara activates tgt strength 1.0 threshold 0.3
+    s1 activates mid strength 1.0 threshold 0.3
+}
+gene tgt() { return "T" }
+gene mid() { return "M" }
+frame proof {
+    ligand_set("ara", 0.9)
+    assert(tgt() == "T", "ligand gate opens from the metabolite pool")
+    grn_set("s1", 0.5)
+    grn_fire("s1")
+    assert(mid() == "M", "the unrelated fire does its own job")
+    assert(tgt() == "T", "ligand gate SURVIVES an unrelated grn_fire (no 0.0 shadow)")
+    # the ligand stays live and re-readable after further fires
+    ligand_set("ara", 0.1)
+    assert(tgt() == null, "dropping the ligand below threshold closes the gate (still pool-driven)")
+    ligand_set("ara", 0.9)
+    grn_fire("s1")
+    assert(tgt() == "T", "gate re-opens from the pool after a second fire")
+}
