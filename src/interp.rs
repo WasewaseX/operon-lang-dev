@@ -428,6 +428,20 @@ pub struct Interp {
     pub phenos: HashMap<String, Arc<PhenoDef>>,
     pub grn_edges: Vec<RegEdge>,
     pub grn_levels: HashMap<String, f64>,
+    /// reg-bio-2 (C1): the translation layer — production relations
+    /// (mRNA -> protein) and their call-count checkpoints. Protein nodes
+    /// live in `grn_levels` so gates read them like any regulator.
+    pub trans_edges: Vec<crate::ast::TransEdge>,
+    pub trans_last: HashMap<String, u64>, // "from\u{0}to" -> call count at last integration
+    /// reg-bio-2 (C11): decoy binding sites (decoy, tf, capacity) —
+    /// competitive titration on every regulation read of `tf`.
+    pub decoys: Vec<(String, String, f64)>,
+    /// reg-bio-2 (A4): small-molecule ligand pools (metabolites, not genes)
+    /// and allosteric binding records. A ligand named as an edge source is
+    /// read straight from its pool (riboswitch-style, protein-free gate).
+    pub ligands: Vec<String>,
+    pub ligand_pools: HashMap<String, f64>,
+    pub grn_binds: Vec<crate::ast::BindDef>,
     pub toggles: Vec<(String, String, bool)>, // (a, b, a_on) — mutual repression pair
     pub repressi_ring: Vec<String>,
     pub repressi_i: usize,
@@ -480,6 +494,10 @@ pub struct Interp {
     pub expr_stochastic: bool,
     pub expr_kon: f64,
     pub expr_koff: f64,
+    /// reg-bio-2 (C2): decay-clock runtime override (decay_clock builtin).
+    /// None = fall back to the `.cell` keys (`grn.decay_calls`/`grn.decay`).
+    pub decay_clock_n: Option<u64>,
+    pub decay_clock_f: Option<f64>,
     pub promoter_states: HashMap<String, bool>,
     pub burst_off: HashMap<String, u64>,
     /// reg-bio (F-5): repressilator kinetic parameters (defaults = legacy).
@@ -518,6 +536,12 @@ impl Interp {
             phenos: HashMap::new(),
             grn_edges: Vec::new(),
             grn_levels: HashMap::new(),
+            trans_edges: Vec::new(),
+            trans_last: HashMap::new(),
+            decoys: Vec::new(),
+            ligands: Vec::new(),
+            ligand_pools: HashMap::new(),
+            grn_binds: Vec::new(),
             toggles: Vec::new(),
             repressi_ring: Vec::new(),
             repressi_i: 0,
@@ -554,6 +578,8 @@ impl Interp {
             expr_stochastic: false,
             expr_kon: 0.3,
             expr_koff: 0.1,
+            decay_clock_n: None,
+            decay_clock_f: None,
             promoter_states: HashMap::new(),
             burst_off: HashMap::new(),
             repressi_params: RepressiParams::default(),
@@ -1195,8 +1221,25 @@ impl Interp {
                 self.fates.insert(def.name.clone(), def.clone());
                 Ok(Flow::Norm)
             }
-            Stmt::Regulate(edges) => {
+            Stmt::Regulate(edges, trans, binds) => {
                 self.grn_edges.extend(edges.clone());
+                self.trans_edges.extend(trans.clone());
+                self.grn_binds.extend(binds.clone());
+                Ok(Flow::Norm)
+            }
+            // reg-bio-2 (A4): ligand pools default to 0.0 (or the `.cell
+            // [ligand.<name>]` bath value read lazily at use sites).
+            Stmt::Ligand(name) => {
+                if !self.ligands.contains(name) {
+                    self.ligands.push(name.clone());
+                }
+                Ok(Flow::Norm)
+            }
+            // reg-bio-2 (C11): a decoy site is inert until it carries level
+            // (grn_set/grn_fire on the decoy node) — the titration itself
+            // happens at every regulation read via `regulated_level`.
+            Stmt::Decoy(d, tf, cap) => {
+                self.decoys.push((d.clone(), tf.clone(), *cap));
                 Ok(Flow::Norm)
             }
             Stmt::Toggle(a, b) => {
@@ -2570,6 +2613,151 @@ impl Interp {
         result
     }
 
+    /// reg-bio-2 (D9): GRN maps emit in SORTED key order. HashMap iteration
+    /// order varies per process (RandomState hashing), so grn_state() and
+    /// grn_fire() returned maps whose ITEM ORDER was nondeterministic across
+    /// runs — a proof-frame hazard (a program iterating items() sees a
+    /// different order every run) and an oracle parity hazard (Python dicts
+    /// keep insertion order). Gene names are ASCII identifiers, so Rust
+    /// byte-order sort matches the oracle's sorted() exactly.
+    fn grn_map_sorted(&self) -> Value {
+        let mut pairs: Vec<(String, f64)> = self
+            .grn_levels
+            .iter()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect();
+        pairs.sort_by(|a, b| a.0.cmp(&b.0));
+        Value::Map(Rc::new(RefCell::new(crate::value::MapStore::from_vec(
+            pairs
+                .into_iter()
+                .map(|(k, v)| (Value::Str(k), Value::Float(v)))
+                .collect(),
+        ))))
+    }
+
+    /// reg-bio-2 (A4): the effective ligand pool level — the runtime pool
+    /// (`ligand_set`) wins; the `.cell [ligand.<name>]` bath is the default.
+    fn ligand_level(&self, name: &str) -> f64 {
+        if let Some(v) = self.ligand_pools.get(name) {
+            return *v;
+        }
+        self.cell
+            .get(&format!("ligand.{}", name))
+            .and_then(|v| v.parse::<f64>().ok())
+            .map(|v| v.clamp(0.0, 1.0))
+            .unwrap_or(0.0)
+    }
+
+    /// reg-bio-2 (C11 + A4): the DNA-available fraction of a regulator's
+    /// level. Two layers compose in physical order:
+    ///   1. decoy titration — every decoy site binding `source` sequesters
+    ///      capacity × level(decoy) (competitive binding);
+    ///   2. allostery — every `bind` record modulates the free fraction by
+    ///      its ligand occupancy: inducers reduce affinity (Π(1 − occ)),
+    ///      cofactors increase it (Π occ), occ = L/(k+L).
+    ///
+    /// No decoys/binds = bit-identical pass-through.
+    fn regulated_level(&self, raw: f64, source: &str) -> f64 {
+        let mut l = raw;
+        for (d, tf, cap) in &self.decoys {
+            if tf == source {
+                if let Some(dl) = self.grn_levels.get(d) {
+                    l -= cap * dl;
+                }
+            }
+        }
+        let l = if l < 0.0 { 0.0 } else { l };
+        let mut factor = 1.0f64;
+        for b in &self.grn_binds {
+            if b.tf == source {
+                let lig = self.ligand_level(&b.ligand);
+                let occ = if b.k > 0.0 { lig / (b.k + lig) } else { 1.0 };
+                factor *= if b.inducer { 1.0 - occ } else { occ };
+            }
+        }
+        let out = l * factor;
+        if out > 1.0 {
+            1.0
+        } else {
+            out
+        }
+    }
+
+    /// reg-bio-2 (C1): integrate the translation layer — one Euler step per
+    /// `translates` edge: p += rate·Δcalls − decay·p (clamped 0..1), where
+    /// Δcalls is the source's call-count delta since the last integration
+    /// (checkpoints start at 0, so all prior calls count on the first
+    /// integration). Called at every engine update point: grn_fire pulses
+    /// and decay-clock ticks.
+    fn trans_integrate(&mut self) {
+        if self.trans_edges.is_empty() {
+            return;
+        }
+        let edges = self.trans_edges.clone();
+        for t in &edges {
+            let key = format!("{}\u{0}{}", t.from, t.to);
+            let now = *self.call_counts.get(&t.from).unwrap_or(&0);
+            let last = *self.trans_last.get(&key).unwrap_or(&0);
+            self.trans_last.insert(key, now);
+            let delta = now.saturating_sub(last);
+            let dec = t.decay.unwrap_or(0.0);
+            if delta == 0 && dec == 0.0 {
+                continue; // nothing produced, nothing to decay
+            }
+            let rate = t.rate.unwrap_or(1.0);
+            let cur = *self.grn_levels.get(&t.to).unwrap_or(&0.0);
+            let p = (cur + rate * delta as f64 - dec * cur).clamp(0.0, 1.0);
+            self.grn_levels.insert(t.to.clone(), p);
+        }
+    }
+
+    /// reg-bio-2 (C2): time-driven decay on the call clock. `.cell
+    /// [grn] decay_calls = N` fires one decay step every N calls — decay
+    /// runs as time passes (expression events), not only when someone
+    /// calls grn_fire. The fraction is `[grn] decay` (shared with the
+    /// per-fire dilution). After the decay step the translation layer
+    /// integrates, so protein accumulates/decays as calls accrue.
+    /// Unset key = byte-identical to the event-driven contract.
+    fn grn_decay_tick(&mut self) {
+        // reg-bio-2 (C2): the decay_clock builtin overrides the .cell keys.
+        let (n, cell_frac) = match (self.decay_clock_n, self.decay_clock_f) {
+            (Some(n), f) => (n, f),
+            (None, f) => {
+                let cn = match self.cell.get("grn.decay_calls") {
+                    Some(v) => match v.parse::<u64>() {
+                        Ok(n) if n > 0 => n,
+                        _ => return,
+                    },
+                    None => return,
+                };
+                (cn, f)
+            }
+        };
+        if !self.call_clock.is_multiple_of(n) {
+            return;
+        }
+        let decay: f64 = match self.decay_clock_f {
+            Some(f) => f,
+            None => cell_frac.unwrap_or_else(|| {
+                self.cell
+                    .get("grn.decay")
+                    .and_then(|v| v.parse::<f64>().ok())
+                    .map(|d| d.clamp(0.0, 1.0))
+                    .unwrap_or(0.0)
+            }),
+        };
+        if decay > 0.0 && !self.grn_levels.is_empty() {
+            let retention = 1.0 - decay;
+            for lvl in self.grn_levels.values_mut() {
+                *lvl *= retention;
+                if *lvl < f64::EPSILON {
+                    *lvl = 0.0;
+                }
+            }
+        }
+        self.trans_integrate();
+    }
+
     /// GRN call gate (T2a / SPEC §11): does the regulatory network veto a
     /// call to `name`? Returns the veto reason when the call must be
     /// suppressed. Contract:
@@ -2627,6 +2815,12 @@ impl Interp {
             if veto.is_some() {
                 break;
             }
+            // reg-bio-2 (B7): sum edges are pooled members, evaluated by the
+            // group pass below — never as individual AND members (a pooled
+            // input below its own threshold is exactly the synergy case).
+            if e.sum {
+                continue;
+            }
             let lvl = match self.grn_levels.get(&e.from) {
                 Some(v) => *v,
                 None => {
@@ -2634,22 +2828,40 @@ impl Interp {
                         if let Some(idx) = self.repressi_ring.iter().position(|r| r == &e.from) {
                             self.ring_gate_level(ring_len, tick, idx).unwrap_or(0.0)
                         } else {
-                            0.0
+                            // reg-bio-2 (A4/C7): a ligand named as an edge
+                            // source is read straight from its metabolite
+                            // pool — a riboswitch-style, protein-free gate.
+                            match self.ligands.iter().position(|l| l == &e.from) {
+                                Some(_) => self.ligand_level(&e.from),
+                                None => 0.0,
+                            }
                         }
                     } else {
-                        0.0
+                        match self.ligands.iter().position(|l| l == &e.from) {
+                            Some(_) => self.ligand_level(&e.from),
+                            None => 0.0,
+                        }
                     }
                 }
             };
+            // reg-bio-2 (C11 + A4): regulation reads the DNA-available
+            // fraction — decoy titration, then allosteric modulation.
+            let lvl = self.regulated_level(lvl, &e.from);
             if e.inhibit {
                 if let Some(t) = e.threshold {
                     if lvl >= t && and_fail.is_none() {
                         // first-wins: an earlier failing AND activator keeps
-                        // its message (exact legacy ordering)
-                        veto = Some(format!(
-                            "inhibitor '{}' level {} >= threshold {}",
-                            e.from, lvl, t
-                        ));
+                        // its message (exact legacy ordering). reg-bio-2 (A5):
+                        // an `attenuates` edge reports the RNA-level mechanism
+                        // (leader peptide / terminator hairpin outcome).
+                        veto = Some(if e.attenuates {
+                            format!(
+                                "attenuator '{}' level {} >= threshold {} (leader terminated)",
+                                e.from, lvl, t
+                            )
+                        } else {
+                            format!("inhibitor '{}' level {} >= threshold {}", e.from, lvl, t)
+                        });
                     }
                 }
             } else if e.threshold.is_some() {
@@ -2672,6 +2884,73 @@ impl Interp {
                 }
             }
             // activating edges without a threshold stay declarative
+        }
+        // reg-bio-2 (B7): pooled (`sum`) edges — groups keyed by (target,
+        // threshold, hill) pool their weighted inputs P = min(1, Σ s·lvl)
+        // and each group acts as ONE conjunctive member that passes iff
+        // P >= t (with the enhance boost). Two sub-threshold inputs can
+        // open a gate together — enhanceosome synergy. Message order:
+        // individual members first (declaration order, above), then pooled
+        // groups in declaration order of their first member.
+        if veto.is_none() {
+            let mut groups: Vec<(String, f64, u32, f64)> = Vec::new(); // (to, t, n, P)
+                                                                       // sec-r3 pattern: clone the matching edges — the ring-overlay
+                                                                       // path mutates self (fuel-charged cache), which cannot borrow
+                                                                       // grn_edges at the same time.
+            let sum_edges: Vec<RegEdge> = self
+                .grn_edges
+                .iter()
+                .filter(|e| !e.inhibit && e.sum && e.to == name)
+                .cloned()
+                .collect();
+            for e in &sum_edges {
+                let t = match e.threshold {
+                    Some(t) if t > 0.0 => t,
+                    _ => continue,
+                };
+                // same source resolution as the main loop above: explicit
+                // level → ring overlay → ligand pool → 0.0, then the free
+                // fraction
+                let raw = match self.grn_levels.get(&e.from) {
+                    Some(v) => *v,
+                    None => {
+                        if ring_len > 0 {
+                            if let Some(idx) = self.repressi_ring.iter().position(|r| r == &e.from)
+                            {
+                                self.ring_gate_level(ring_len, tick, idx).unwrap_or(0.0)
+                            } else if self.ligands.iter().any(|l| l == &e.from) {
+                                self.ligand_level(&e.from)
+                            } else {
+                                0.0
+                            }
+                        } else if self.ligands.iter().any(|l| l == &e.from) {
+                            self.ligand_level(&e.from)
+                        } else {
+                            0.0
+                        }
+                    }
+                };
+                let lvl = self.regulated_level(raw, &e.from);
+                let n = e.hill.unwrap_or(2);
+                if let Some(g) = groups
+                    .iter_mut()
+                    .find(|(gt, gt2, gn, _)| *gt == e.to && *gt2 == t && *gn == n)
+                {
+                    g.3 += e.strength * lvl;
+                } else {
+                    groups.push((e.to.clone(), t, n, e.strength * lvl));
+                }
+            }
+            for (to, t, _n, pooled) in groups {
+                let p = pooled.min(1.0);
+                let t = if boosted { (t - delta).max(0.0) } else { t };
+                if p < t && and_fail.is_none() {
+                    and_fail = Some(format!(
+                        "pooled regulators of '{}' level {} < threshold {}",
+                        to, p, t
+                    ));
+                }
+            }
         }
         // reg-bio (F-3): the gate opens iff (every AND member passes) OR
         // (any OR member passes) — an `any` edge is an alternative
@@ -2848,6 +3127,9 @@ impl Interp {
         // burst-index binning: 20 calls per bin, per gene (gene-expression
         // burstiness is measured on per-gene time bins, not across genes)
         self.call_clock += 1;
+        // reg-bio-2 (C2): the decay clock — time-driven decay + translation
+        // integration tick here (unset key = no-op).
+        self.grn_decay_tick();
         let bucket = self.call_clock / 20;
         *self
             .gene_buckets
@@ -3141,6 +3423,9 @@ impl Interp {
         }
         *self.call_counts.entry(name.clone()).or_insert(0) += 1;
         self.call_clock += 1;
+        // reg-bio-2 (C2): the decay clock ticks on the phenotype-method path
+        // too (both expression surfaces share one timebase).
+        self.grn_decay_tick();
         let bucket = self.call_clock / 20;
         *self
             .gene_buckets
@@ -3249,11 +3534,18 @@ impl Interp {
                     // sec-r1 (audit C-3): the builtin form MUST be memory-
                     // charged exactly like the method form — an uncharged
                     // growth path is an allocator-abort DoS (rc=134, outside
-                    // the catchable-stress contract)
+                    // the catchable-stress contract).
+                    // reg-bio-2 hardening: the charge must dominate the REAL
+                    // allocation (clone buffer + Rc/RefCell headers + outer
+                    // slot amortization ≈ 100+ B for a 3-element list). The
+                    // old 8·len+48 undercounted ~1.5×, letting a push loop
+                    // reach OOM-killer territory on a 4 GiB host before the
+                    // 2 GiB ceiling tripped (rt_p2h flaked rc=137). 16·len+96
+                    // trips the ceiling at ~1.5 GiB real — always inside.
                     let bytes = match v {
-                        Value::Str(x) => x.len() as u64 + 24,
-                        Value::List(x) => 8 * x.borrow().len() as u64 + 48,
-                        _ => 16,
+                        Value::Str(x) => x.len() as u64 + 48,
+                        Value::List(x) => 16 * x.borrow().len() as u64 + 96,
+                        _ => 32,
                     };
                     mem_charge(bytes)?;
                     l.borrow_mut().push(v.clone());
@@ -4175,10 +4467,19 @@ impl Interp {
                 Ok(Value::Float(*self.grn_levels.get(&k).unwrap_or(&0.0)))
             }
             "fingerprint" => {
-                let counts: Vec<(Value, Value)> = self
+                // reg-bio-2 (D9): call counts emit in SORTED key order —
+                // HashMap iteration order varies per process, and these maps
+                // cross the differential parity boundary. Gene names are
+                // ASCII, so byte-order sort matches the oracle's sorted().
+                let mut call_pairs: Vec<(String, u64)> = self
                     .call_counts
                     .iter()
-                    .map(|(k, v)| (Value::Str(k.clone()), Value::Int(*v as i64)))
+                    .map(|(k, v)| (k.clone(), *v))
+                    .collect();
+                call_pairs.sort_by(|a, b| a.0.cmp(&b.0));
+                let counts: Vec<(Value, Value)> = call_pairs
+                    .into_iter()
+                    .map(|(k, v)| (Value::Str(k), Value::Int(v as i64)))
                     .collect();
                 // burst index (variance/mean of per-gene call counts over
                 // COMPLETE 20-call bins): constitutive genes → 0; the trailing
@@ -4188,7 +4489,15 @@ impl Interp {
                 let mut burst_total = 0.0;
                 let mut burst_n = 0usize;
                 let mut burst_by_gene: Vec<(Value, Value)> = Vec::new();
-                for (g, bins) in &self.gene_buckets {
+                // reg-bio-2 (D9): iterate buckets in sorted key order —
+                // burst_total is a float SUM, and float addition is not
+                // associative, so HashMap order made the aggregate differ in
+                // the last ulp across processes. The per-gene list is sorted
+                // below anyway; the accumulator must match that order.
+                let mut bucket_keys: Vec<&String> = self.gene_buckets.keys().collect();
+                bucket_keys.sort();
+                for g in bucket_keys {
+                    let bins = &self.gene_buckets[g];
                     if complete_bins == 0 {
                         burst_by_gene.push((Value::Str(g.clone()), Value::Float(0.0)));
                         continue;
@@ -4198,10 +4507,14 @@ impl Interp {
                         .map(|b| *bins.get(&b).unwrap_or(&0))
                         .sum();
                     let mean = total as f64 / n;
+                    // reg-bio-2 (D9): never powi — explicit multiply (the
+                    // powi algorithm is platform-chosen; the oracle mirrors
+                    // this op-for-op as d*d).
                     let var = (0..complete_bins)
                         .map(|b| {
                             let c = *bins.get(&b).unwrap_or(&0) as f64;
-                            (c - mean).powi(2)
+                            let d = c - mean;
+                            d * d
                         })
                         .sum::<f64>()
                         / n;
@@ -4421,6 +4734,11 @@ impl Interp {
                         }
                     }
                 }
+                // reg-bio-2 (C1): the translation layer integrates at every
+                // engine update point — each fire is one Euler step of
+                // p += rate·Δcalls − decay·p. Protein nodes live in
+                // grn_levels and gate genes like any regulator (two-tier).
+                self.trans_integrate();
                 // STATEFUL network: levels persist across fires (a latch by default — decay makes the dilution explicit)
                 for e in &self.grn_edges {
                     self.grn_levels.entry(e.from.clone()).or_insert(0.0);
@@ -4441,10 +4759,15 @@ impl Interp {
                         if e.inhibit {
                             continue; // inhibitors propagate in phase 2
                         }
+                        if e.sum {
+                            continue; // pooled edges propagate as groups, below
+                        }
                         let parent = *snapshot.get(&e.from).unwrap_or(&0.0);
                         if parent <= 0.0 {
                             continue;
                         }
+                        // reg-bio-2 (C11): propagation reads the FREE fraction
+                        let parent = self.regulated_level(parent, &e.from);
                         let influence = match e.threshold {
                             Some(t) if t > 0.0 => {
                                 // reg-bio (F-2): per-edge Hill exponent —
@@ -4479,9 +4802,59 @@ impl Interp {
                             }
                         };
                         let cur = *activated.get(&e.to).unwrap_or(&0.0);
-                        let next = cur.max(influence);
+                        // reg-bio-2 (D2c): influence clamps at 1.0 — a level is
+                        // a concentration fraction, `grn_set` clamps 0..1, and
+                        // strength > 1 must not push a node past saturation.
+                        // Legacy programs (strength <= 1) are bit-identical.
+                        let next = cur.max(influence.min(1.0));
                         if (next - cur).abs() > 1e-12 {
                             activated.insert(e.to.clone(), next);
+                            changed = true;
+                        }
+                    }
+                    // reg-bio-2 (B7): pooled (`sum`) edges — one pass per
+                    // wave. Groups keyed by (target, threshold, hill) pool
+                    // weighted inputs P = min(1, Σ s·parent) and apply ONE
+                    // Hill of P: child = max(child, Pⁿ/(Pⁿ+tⁿ)). Strength is
+                    // folded into P (it scales the input, not the response).
+                    // Runs BEFORE the wave's convergence check: a network of
+                    // only sum edges must still propagate on wave 1.
+                    let mut groups: Vec<(String, f64, u32, f64)> = Vec::new();
+                    for e in self.grn_edges.iter() {
+                        if e.inhibit || !e.sum {
+                            continue;
+                        }
+                        let t = match e.threshold {
+                            Some(t) if t > 0.0 => t,
+                            _ => continue,
+                        };
+                        let raw = *snapshot.get(&e.from).unwrap_or(&0.0);
+                        let parent = self.regulated_level(raw, &e.from);
+                        let n = e.hill.unwrap_or(2);
+                        if let Some(g) = groups
+                            .iter_mut()
+                            .find(|(gt, gt2, gn, _)| *gt == e.to && *gt2 == t && *gn == n)
+                        {
+                            g.3 += e.strength * parent;
+                        } else {
+                            groups.push((e.to.clone(), t, n, e.strength * parent));
+                        }
+                    }
+                    for (to, t, n, pooled) in groups {
+                        let p = pooled.min(1.0);
+                        let mut ph = 1.0f64;
+                        let mut th = 1.0f64;
+                        let mut k = 0;
+                        while k < n {
+                            ph *= p;
+                            th *= t;
+                            k += 1;
+                        }
+                        let influence = ph / (ph + th);
+                        let cur = *activated.get(&to).unwrap_or(&0.0);
+                        let next = cur.max(influence.min(1.0));
+                        if (next - cur).abs() > 1e-12 {
+                            activated.insert(to.clone(), next);
                             changed = true;
                         }
                     }
@@ -4500,6 +4873,8 @@ impl Interp {
                     if parent <= 0.0 {
                         continue;
                     }
+                    // reg-bio-2 (C11): inhibition also reads the FREE fraction
+                    let parent = self.regulated_level(parent, &e.from);
                     let influence = match e.threshold {
                         Some(t) if t > 0.0 => {
                             // reg-bio (F-2): Hill exponent here too — a
@@ -4519,23 +4894,22 @@ impl Interp {
                         _ => parent * e.strength,
                     };
                     let cur = *inhibited.get(&e.to).unwrap_or(&0.0);
-                    let next = (cur - influence).max(0.0);
+                    // reg-bio-2 (D2b): occupancy repression — multiplicative
+                    // survival child *= 1 − influence (the thermodynamic
+                    // Kⁿ/(Kⁿ+Rⁿ) form; repression can never overshoot and
+                    // full occupancy silences completely). Legacy edges keep
+                    // the subtractive-once form (bit-identical default).
+                    let next = if e.occupy {
+                        cur * (1.0 - influence.min(1.0))
+                    } else {
+                        (cur - influence).max(0.0)
+                    };
                     inhibited.insert(e.to.clone(), next);
                 }
                 self.grn_levels = inhibited;
-                Ok(Value::Map(Rc::new(RefCell::new(
-                    self.grn_levels
-                        .iter()
-                        .map(|(k, v)| (Value::Str(k.clone()), Value::Float(*v)))
-                        .collect(),
-                ))))
+                Ok(self.grn_map_sorted())
             }
-            "grn_state" => Ok(Value::Map(Rc::new(RefCell::new(
-                self.grn_levels
-                    .iter()
-                    .map(|(k, v)| (Value::Str(k.clone()), Value::Float(*v)))
-                    .collect(),
-            )))),
+            "grn_state" => Ok(self.grn_map_sorted()),
             "items" => match args.first() {
                 Some(Value::Map(m)) => Ok(Value::List(Rc::new(RefCell::new(
                     m.borrow()
@@ -4905,6 +5279,62 @@ impl Interp {
             "expr_off" => {
                 self.expr_stochastic = false;
                 Ok(Value::Bool(false))
+            }
+            "decay_clock" => {
+                // reg-bio-2 (C2): in-source switch for the decay clock —
+                // `decay_clock(n, f)` fires one GRN decay step (fraction f,
+                // default from `.cell [grn] decay`) every n calls, and the
+                // translation layer integrates on the same ticks. n = 0
+                // restores the event-driven contract. Mirrors `expr_on`'s
+                // design: the .cell keys are initial config, the builtin is
+                // the runtime switch.
+                let n = match args.first() {
+                    Some(Value::Int(i)) if *i > 0 => Some(*i as u64),
+                    Some(Value::Float(f)) if *f > 0.0 => Some(*f as u64),
+                    _ => None,
+                };
+                let frac = match args.get(1) {
+                    Some(Value::Int(i)) => Some((*i as f64).clamp(0.0, 1.0)),
+                    Some(Value::Float(f)) => Some(f.clamp(0.0, 1.0)),
+                    _ => None,
+                };
+                self.decay_clock_n = n;
+                self.decay_clock_f = frac;
+                match n {
+                    Some(n) => {
+                        self.note(
+                            self.cur_line,
+                            1,
+                            format!("decay clock on (one decay step every {n} calls)"),
+                        );
+                        Ok(Value::Bool(true))
+                    }
+                    None => {
+                        self.note(self.cur_line, 1, "decay clock off (event-driven)");
+                        Ok(Value::Bool(false))
+                    }
+                }
+            }
+            "ligand_set" => {
+                // reg-bio-2 (A4): set a metabolite pool — ligand_set("iptg", 0.9).
+                // The pool wins over the `.cell [ligand.<name>]` bath default.
+                let name = args.first().map(|v| v.display()).unwrap_or_default();
+                let v = match args.get(1) {
+                    Some(Value::Int(i)) => (*i as f64).clamp(0.0, 1.0),
+                    Some(Value::Float(f)) => f.clamp(0.0, 1.0),
+                    _ => 0.0,
+                };
+                if !self.ligands.contains(&name) {
+                    self.ligands.push(name.clone());
+                }
+                self.ligand_pools.insert(name.clone(), v);
+                self.note(self.cur_line, 1, format!("ligand pool '{}': {}", name, v));
+                Ok(Value::Float(v))
+            }
+            "ligand" => {
+                // reg-bio-2 (A4): read a metabolite pool (cell-bath fallback).
+                let name = args.first().map(|v| v.display()).unwrap_or_default();
+                Ok(Value::Float(self.ligand_level(&name)))
             }
             "chr" => Ok(Value::Str(match args.first() {
                 Some(Value::Int(i)) if *i >= 0 && *i <= 0x10FFFF => char::from_u32(*i as u32)
@@ -6002,11 +6432,13 @@ impl Interp {
                 "len" => Ok(Value::Int(l.borrow().len() as i64)),
                 "push" => {
                     if let Some(v) = args.first() {
-                        // aggregate allocation ceiling (S4 NEW-2)
+                        // aggregate allocation ceiling (S4 NEW-2) — reg-bio-2
+                        // hardening: mirrors the builtin form's real-usage
+                        // charge (16·len + 96), see the push builtin note.
                         let bytes = match v {
-                            Value::Str(x) => x.len() as u64 + 24,
-                            Value::List(x) => 8 * x.borrow().len() as u64 + 48,
-                            _ => 16,
+                            Value::Str(x) => x.len() as u64 + 48,
+                            Value::List(x) => 16 * x.borrow().len() as u64 + 96,
+                            _ => 32,
                         };
                         mem_charge(bytes)?;
                         l.borrow_mut().push(v.clone());
@@ -7245,6 +7677,9 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "promote",
     "expr_on",
     "expr_off",
+    "decay_clock",
+    "ligand_set",
+    "ligand",
     "len",
     "push",
     "pop",
@@ -7480,7 +7915,19 @@ pub fn repressilator_step_p(mut lv: Vec<f64>, p: RepressiParams, tick: u64) -> V
                 nx ^= nx << 25;
                 nx ^= nx >> 27;
                 let u = ((nx >> 11) as f64) / 9_007_199_254_740_992.0;
-                v += p.noise * (u - 0.5);
+                // reg-bio-2 (D6): multiplicative, dt-aware noise. Real gene-
+                // expression noise is multiplicative and strictly positive.
+                // The old additive kick (a) rectified upward through the zero
+                // clamp — E[max(0, x+δ)] > x for small x, a 6.8× bias at
+                // x=0.01, noise=0.5 — and (b) ignored the Euler timescale.
+                // The kick is now a FRACTION of the current level; with the
+                // 1/√SUBSTEPS spread, per-tick variance ≈ noise²·v² and the
+                // factor stays in [1−0.224, 1+0.224] for noise ≤ 1, so v
+                // never crosses zero. Op order mirrored op-for-op in
+                // bootstrap/oracle.py; noise=0 skips the draw entirely
+                // (byte-identical legacy path). The constant is the literal
+                // double nearest 1/√20 on BOTH sides — no libm sqrt call.
+                v *= 1.0 + p.noise * 0.22360679774997896 * (2.0 * u - 1.0);
             }
             *item = if v > 0.0 { v } else { 0.0 };
         }

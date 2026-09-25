@@ -82,7 +82,11 @@ def repressilator_levels(n, tick, params=None):
                     nx ^= (nx >> 27) & M64
                     nx &= M64
                     u = ((nx >> 11) & ((1 << 53) - 1)) / 9007199254740992.0
-                    v += NOISE * (u - 0.5)
+                    # reg-bio-2 (D6): multiplicative, dt-aware noise — op-for-op
+                    # mirror of the Rust core. The constant is the literal double
+                    # nearest 1/√20 on BOTH sides (no math.sqrt call — the value
+                    # is fixed text, so IEEE parity is trivial).
+                    v = v * (1.0 + NOISE * 0.22360679774997896 * (2.0 * u - 1.0))
                 lv[j] = v if v > 0.0 else 0.0
     return lv
 
@@ -783,6 +787,8 @@ class P:
         if word == "regulate":
             self.next()
             edges = []
+            trans = []
+            binds = []
             if self.peek() == ("SYM", "{", self.peek()[2]):
                 self.next()
                 while True:
@@ -796,13 +802,67 @@ class P:
                         self.note(t[2], 4, "unexpected token in regulate block; skipped")
                         self.next(); continue
                     frm = self.next()[1]
+                    # reg-bio-2 (C1): `a translates b rate r decay d;`
+                    if self.expect_kw("translates"):
+                        to = self.ident()
+                        rate = None
+                        if self.expect_kw("rate"):
+                            tt = self.peek()
+                            if tt[0] in ("INT", "FLOAT"):
+                                rate = float(tt[1])
+                                self.next()
+                            else:
+                                self.note(tt[2], 4, "rate needs a number; using 1.0")
+                        pdecay = None
+                        if self.expect_kw("decay"):
+                            tt = self.peek()
+                            if tt[0] in ("INT", "FLOAT"):
+                                pdecay = min(max(float(tt[1]), 0.0), 1.0)
+                                self.next()
+                            else:
+                                self.note(tt[2], 4, "decay needs a number; ignored")
+                        trans.append((frm, to, rate, pdecay))
+                        self.end_stmt()
+                        continue
+                    # reg-bio-2 (A4): `bind tf inducer lg k v;` — `bind` is a
+                    # HEAD keyword here (no edge source); head already consumed.
+                    if frm == "bind":
+                        tf = self.ident()
+                        inducer = None
+                        if self.expect_kw("inducer"):
+                            inducer = True
+                        elif self.expect_kw("cofactor"):
+                            inducer = False
+                        if inducer is None:
+                            self.note(t[2], 4, "bind needs 'inducer' or 'cofactor'; binding dropped")
+                            self.skip_line(); continue
+                        lg = self.ident()
+                        k = 0.1
+                        if self.expect_kw("k"):
+                            tt = self.peek()
+                            if tt[0] in ("INT", "FLOAT"):
+                                k = float(tt[1])
+                                self.next()
+                            else:
+                                self.note(tt[2], 4, "k needs a number; using 0.1")
+                            if k <= 0.0:
+                                self.note(tt[2], 4, "k must be > 0; using 0.1")
+                                k = 0.1
+                        binds.append((tf, lg, inducer, k))
+                        self.end_stmt()
+                        continue
+                    # reg-bio-2 (A5): per-edge attenuator flag
+                    attenuating = False
                     inhibit = None
                     if self.expect_kw("activates"):
                         inhibit = False
                     elif self.expect_kw("inhibits"):
                         inhibit = True
+                    elif self.expect_kw("attenuates"):
+                        attenuating = True
+                        inhibit = True
                     if inhibit is None:
-                        self.note(t[2], 4, "regulate edge missing 'activates'/'inhibits'; edge dropped")
+                        self.note(t[2], 4, "regulate edge missing 'activates'/'inhibits'/'translates'; edge dropped")
                         self.skip_line(); continue
                     to = self.ident()
                     strength = 1.0
@@ -838,6 +898,14 @@ class P:
                     is_any = False
                     if self.expect_kw("any"):
                         is_any = True
+                    # reg-bio-2 (D2b/B7): occupancy + pooling keywords
+                    # (canonical order: strength -> threshold -> hill -> any -> occupy -> sum)
+                    occupy = False
+                    if self.expect_kw("occupy"):
+                        occupy = True
+                    is_sum = False
+                    if self.expect_kw("sum"):
+                        is_sum = True
                     if (hill is not None or is_any) and threshold is None:
                         self.note(tt[2], 4, "hill/any apply to thresholded edges; ignored (edge stays declarative)")
                         hill = None
@@ -845,9 +913,44 @@ class P:
                     if is_any and inhibit:
                         self.note(tt[2], 4, "any on an inhibiting edge is ignored (inhibitors already veto independently)")
                         is_any = False
-                    edges.append((frm, to, strength, inhibit, threshold, hill, is_any))
+                    if occupy and not inhibit:
+                        self.note(tt[2], 4, "occupy applies to inhibiting edges; ignored (activators cannot occupy a promoter they activate)")
+                        occupy = False
+                    if is_sum and (inhibit or threshold is None):
+                        self.note(tt[2], 4, "sum applies to thresholded activating edges; ignored")
+                        is_sum = False
+                    edges.append((frm, to, strength, inhibit, threshold, hill, is_any, occupy, is_sum, attenuating))
                     self.end_stmt()
-            return ("regulate", edges)
+            return ("regulate", edges, trans, binds)
+        if word == "ligand":
+            # reg-bio-2 (A4): `ligand iptg;` — a small-molecule pool
+            self.next()
+            name = self.ident()
+            self.end_stmt()
+            return ("ligand", name)
+        if word == "decoy":
+            # reg-bio-2 (C11): `decoy d for tf capacity 0.5;`
+            self.next()
+            d = self.ident()
+            tf, cap = "", 0.0
+            if self.expect_kw("for"):
+                tf = self.ident()
+                t2 = self.peek()
+                if t2[0] == "IDENT" and t2[1] == "capacity":
+                    self.next()
+                    tt = self.peek()
+                    if tt[0] in ("INT", "FLOAT"):
+                        cap = min(max(float(tt[1]), 0.0), 1.0)
+                        self.next()
+                    else:
+                        self.note(tt[2], 4, "capacity needs a number 0..=1; ignored")
+                        cap = 0.0
+                else:
+                    self.note(t2[2], 4, "decoy needs 'capacity <num>'; declared inert")
+            else:
+                self.note(self.peek()[2], 4, "decoy needs 'for <tf> capacity <num>'; skipped")
+            self.end_stmt()
+            return ("decoy", d, tf, cap)
         if word == "toggle":
             self.next()
             a = self.ident()
@@ -1845,7 +1948,7 @@ def parse(src):
 # ----------------------------------------------------------------------------
 # evaluator
 
-BUILTINS = set("""promote expr_on expr_off len push pop insert remove keys values has del range str num type
+BUILTINS = set("""promote expr_on expr_off decay_clock ligand_set ligand len push pop insert remove keys values has del range str num type
 abs min max sum clock exit assert codon distance similar transcribe reverse_complement
 gc_content translate find_orf memory methyl methylate demethylate grn_set grn_get fingerprint toggle_on toggle_state repressi_next
 repressi_state repressi_start grn_fire grn_state spawn join floor ceil sqrt pow random
@@ -1897,10 +2000,21 @@ class Interp:
         self.expr_stochastic = False
         self.expr_kon = 0.3
         self.expr_koff = 0.1
+        # reg-bio-2 (C2): decay-clock runtime override (decay_clock builtin)
+        self.decay_clock_n = None
+        self.decay_clock_f = None
         self.promoter_states = {}
         self.burst_off = {}
         # reg-bio (F-5): repressilator kinetics (defaults = historical constants)
         self.repressi_params = dict(DEFAULT_REPRESSI)
+        # reg-bio-2 (C1/C11): translation layer + decoy sites
+        self.trans_edges = []
+        self.trans_last = {}
+        self.decoys = []
+        # reg-bio-2 (A4): ligand pools + allosteric bindings
+        self.ligands = []
+        self.ligand_pools = {}
+        self.grn_binds = []
         self.seq_buffer = None
         self.caps = {"enabled": True, "read": [], "write": [], "run": [], "net": [], "env": [], "py": []}
         self.cell_entry = None
@@ -2424,6 +2538,13 @@ class Interp:
             self.fates[s[1]] = (s[2], s[3])
         elif k == "regulate":
             self.grn_edges.extend(s[1])
+            self.trans_edges.extend(s[2])
+            self.grn_binds.extend(s[3])
+        elif k == "ligand":
+            if s[1] not in self.ligands:
+                self.ligands.append(s[1])
+        elif k == "decoy":
+            self.decoys.append((s[1], s[2], s[3]))
         elif k == "toggle":
             self.toggles.append((s[1], s[2], True))
         elif k == "repressilator":
@@ -2900,15 +3021,26 @@ class Interp:
         and_present = False
         or_present = False
         or_pass = False
-        for frm, to, st, inh, thr, hill, is_any in self.grn_edges:
+        for frm, to, st, inh, thr, hill, is_any, occupy, is_sum, attenuating in self.grn_edges:
             if veto is not None:
                 break
             if to != name:
                 continue
-            lvl = self._grn_level(frm)
+            # reg-bio-2 (B7): sum edges are pooled members, evaluated by the
+            # group pass below — never as individual AND members (mirror).
+            if is_sum:
+                continue
+            # reg-bio-2 (C11 + A4): regulation reads the DNA-available
+            # fraction (mirror of the Rust veto).
+            lvl = self._regulated_level(self._grn_level(frm), frm)
             if inh:
                 if thr is not None and lvl >= thr and and_fail is None:
-                    veto = f"inhibitor '{frm}' level {lvl!r} >= threshold {thr!r}"
+                    # reg-bio-2 (A5): an `attenuates` edge reports the
+                    # RNA-level mechanism (leader-termination outcome).
+                    if attenuating:
+                        veto = f"attenuator '{frm}' level {lvl!r} >= threshold {thr!r} (leader terminated)"
+                    else:
+                        veto = f"inhibitor '{frm}' level {lvl!r} >= threshold {thr!r}"
             elif thr is not None:
                 t = thr
                 if boosted:
@@ -2921,6 +3053,32 @@ class Interp:
                     and_present = True
                     if lvl < t and and_fail is None:
                         and_fail = f"regulator '{frm}' level {lvl!r} < threshold {t!r}"
+        # reg-bio-2 (B7): pooled (`sum`) edges — group pass (mirror of the
+        # Rust grn_veto). Groups keyed by (target, threshold, hill) pool
+        # weighted inputs P = min(1, Σ s·lvl); each group acts as ONE
+        # conjunctive member passing iff P >= t (with the enhance boost).
+        if veto is None:
+            groups = []
+            for frm, to, st, inh, thr, hill, is_any, occupy, is_sum, attenuating in self.grn_edges:
+                if inh or not is_sum or to != name:
+                    continue
+                if thr is None or thr <= 0.0:
+                    continue
+                lvl = self._regulated_level(self._grn_level(frm), frm)
+                n_h = hill if hill is not None else 2
+                for g in groups:
+                    if g[0] == to and g[1] == thr and g[2] == n_h:
+                        g[3] += st * lvl
+                        break
+                else:
+                    groups.append([to, thr, n_h, st * lvl])
+            for to, thr, _n, pooled in groups:
+                p = min(pooled, 1.0)
+                t = thr
+                if boosted:
+                    t = max(0.0, t - self.enhance_delta)
+                if p < t and and_fail is None:
+                    and_fail = f"pooled regulators of '{to}' level {p!r} < threshold {t!r}"
         if veto is None and not or_pass:
             if and_fail is not None:
                 veto = and_fail
@@ -2932,15 +3090,120 @@ class Interp:
         """A11 (reg-r2): mirror of the Rust grn_veto level resolution —
         explicit grn levels first, then the repressilator ring overlay
         (normalized raw/α, clamped 0..1) so the emergent oscillator
-        genuinely drives downstream genes."""
+        genuinely drives downstream genes.
+        reg-bio-2 (C11): the read returns the FREE fraction — decoy sites
+        sequester their regulator (competitive titration, mirror of the
+        Rust regulated_level)."""
         if frm in self.grn_levels:
-            return self.grn_levels[frm]
-        if self.repressi_ring and frm in self.repressi_ring:
+            lvl = self.grn_levels[frm]
+        elif self.repressi_ring and frm in self.repressi_ring:
             idx = self.repressi_ring.index(frm)
             lvls = repressilator_levels(len(self.repressi_ring), self.repressi_tick, self.repressi_params)
-            norm = lvls[idx] / self.repressi_params["alpha"]
-            return min(norm, 1.0)
-        return 0.0
+            lvl = min(lvls[idx] / self.repressi_params["alpha"], 1.0)
+        elif frm in self.ligands:
+            # reg-bio-2 (A4/C7): a ligand edge source reads its metabolite
+            # pool — a riboswitch-style, protein-free gate (mirror).
+            lvl = self._ligand_level(frm)
+        else:
+            lvl = 0.0
+        return lvl
+
+    def _ligand_level(self, name):
+        """reg-bio-2 (A4): mirror of the Rust ligand_level — the runtime pool
+        (`ligand_set`) wins; the `.cell [ligand.<name>]` bath is the default."""
+        if name in self.ligand_pools:
+            return self.ligand_pools[name]
+        raw = self.cell.get("ligand." + name)
+        if raw is None:
+            return 0.0
+        try:
+            return min(max(float(raw), 0.0), 1.0)
+        except ValueError:
+            return 0.0
+
+    def _regulated_level(self, raw, frm):
+        """reg-bio-2 (C11 + A4): mirror of the Rust regulated_level — the
+        DNA-available fraction: (1) decoy titration (subtractive), then
+        (2) allosteric modulation (inducers: Π(1 − occ), cofactors: Π occ,
+        occ = L/(k+L))."""
+        l = raw
+        for d, tf, cap in self.decoys:
+            if tf == frm:
+                l -= cap * self.grn_levels.get(d, 0.0)
+        if l < 0.0:
+            l = 0.0
+        factor = 1.0
+        for tf, lg, inducer, k in self.grn_binds:
+            if tf == frm:
+                lig = self._ligand_level(lg)
+                occ = (lig / (k + lig)) if k > 0.0 else 1.0
+                factor *= (1.0 - occ) if inducer else occ
+        out = l * factor
+        return out if out <= 1.0 else 1.0
+
+    def _trans_integrate(self):
+        """reg-bio-2 (C1): mirror of the Rust trans_integrate — one Euler
+        step per translates edge: p += rate·Δcalls − decay·p (clamped 0..1)
+        where Δcalls is the source's call-count delta since the last
+        integration (checkpoints start at 0)."""
+        if not self.trans_edges:
+            return
+        for frm, to, rate, pdecay in self.trans_edges:
+            key = frm + "\u0000" + to
+            now = self.call_counts.get(frm, 0)
+            last = self.trans_last.get(key, 0)
+            self.trans_last[key] = now
+            delta = now - last
+            if delta < 0:
+                delta = 0
+            dec = pdecay if pdecay is not None else 0.0
+            if delta == 0 and dec == 0.0:
+                continue
+            r = rate if rate is not None else 1.0
+            cur = self.grn_levels.get(to, 0.0)
+            p = cur + r * delta - dec * cur
+            if p < 0.0:
+                p = 0.0
+            if p > 1.0:
+                p = 1.0
+            self.grn_levels[to] = p
+
+    def _grn_decay_tick(self):
+        """reg-bio-2 (C2): mirror of the Rust grn_decay_tick — the
+        decay_clock builtin overrides the .cell keys (`grn.decay_calls`/
+        `grn.decay`); one decay step every N calls, then translation
+        integrates. Unset = no-op (byte-identical event-driven contract)."""
+        if self.decay_clock_n is not None:
+            n = self.decay_clock_n
+        else:
+            raw = self.cell.get("grn.decay_calls")
+            if raw is None:
+                return
+            try:
+                n = int(raw)
+            except (TypeError, ValueError):
+                return
+            if n <= 0:
+                return
+        if self.call_clock % n != 0:
+            return
+        if self.decay_clock_f is not None:
+            decay = self.decay_clock_f
+        else:
+            d = self.cell.get("grn.decay")
+            decay = 0.0
+            if d is not None:
+                try:
+                    decay = min(max(float(d), 0.0), 1.0)
+                except ValueError:
+                    decay = 0.0
+        if decay > 0.0 and self.grn_levels:
+            retention = 1.0 - decay
+            for k2 in list(self.grn_levels):
+                self.grn_levels[k2] *= retention
+                if self.grn_levels[k2] < 2.220446049250313e-16:
+                    self.grn_levels[k2] = 0.0
+        self._trans_integrate()
 
     def _promoter_veto(self, name):
         """reg-bio (F-1): telegraph promoter draw — mirror of the Rust
@@ -2989,6 +3252,8 @@ class Interp:
             return None
         self.call_counts[name] = self.call_counts.get(name, 0) + 1
         self.call_clock += 1
+        # reg-bio-2 (C2): the decay clock (mirror of the Rust hook)
+        self._grn_decay_tick()
         bucket = self.call_clock // 20
         self.gene_buckets.setdefault(name, {}).setdefault(bucket, 0)
         self.gene_buckets[name][bucket] += 1
@@ -3049,6 +3314,8 @@ class Interp:
                 return None
             self.call_counts[name] = self.call_counts.get(name, 0) + 1
             self.call_clock += 1
+            # reg-bio-2 (C2): the decay clock (mirror of the Rust hook)
+            self._grn_decay_tick()
             bucket = self.call_clock // 20
             self.gene_buckets.setdefault(name, {}).setdefault(bucket, 0)
             self.gene_buckets[name][bucket] += 1
@@ -3520,11 +3787,21 @@ class Interp:
             total_bins = (self.call_clock // 20) + 1
             burst_by = {}
             burst_total, burst_n = 0.0, 0
-            for gname, bins in self.gene_buckets.items():
+            # reg-bio-2 (D9): iterate buckets in SORTED key order — the Rust
+            # core accumulates burst_total in sorted order (float addition is
+            # not associative; order must match for the last-ulp parity).
+            for gname in sorted(self.gene_buckets):
+                bins = self.gene_buckets[gname]
                 n = float(total_bins)
                 total = sum(bins.values())
                 mean = total / n
-                var = sum((float(bins.get(b, 0)) - mean) ** 2 for b in range(total_bins)) / n
+                # reg-bio-2 (D9): d*d (explicit multiply), never ** — op-for-op
+                # with the Rust core's un-multiplied square.
+                var = 0.0
+                for b in range(total_bins):
+                    d = float(bins.get(b, 0)) - mean
+                    var += d * d
+                var /= n
                 burst = (var / mean) if mean > 0 else 0.0
                 burst_by[gname] = burst
                 burst_total += burst
@@ -3534,7 +3811,8 @@ class Interp:
             mature = min(len(self.call_counts), total_defined)
             nascent = max(total_defined - mature, 0)
             maturation = (mature / total_defined) if total_defined else 0.0
-            return {"calls": dict(self.call_counts), "burst": burst_avg,
+            # reg-bio-2 (D9): "calls" emits in sorted key order (Rust parity).
+            return {"calls": dict(sorted(self.call_counts.items())), "burst": burst_avg,
                     "burst_by_gene": dict(sorted(burst_by.items())),
                     "bursts": dict(sorted(self.burst_off.items())),
                     "mature": mature, "nascent": nascent, "maturation": maturation}
@@ -3603,8 +3881,11 @@ class Interp:
                     self.grn_levels[k2] *= retention
                     if self.grn_levels[k2] < 2.220446049250313e-16:  # f64::EPSILON
                         self.grn_levels[k2] = 0.0
+            # reg-bio-2 (C1): the translation layer integrates at every
+            # engine update point (mirror of the Rust grn_fire).
+            self._trans_integrate()
             # STATEFUL network: levels persist across fires (a latch by default — decay makes the dilution explicit)
-            for frm, to, st, inh, thr, hill, is_any in self.grn_edges:
+            for frm, to, st, inh, thr, hill, is_any, occupy, is_sum, attenuating in self.grn_edges:
                 self.grn_levels.setdefault(frm, 0.0)
                 self.grn_levels.setdefault(to, 0.0)
             self.grn_levels[seed] = min(self.grn_levels.get(seed, 0.0) + 1.0, 1.0)
@@ -3618,12 +3899,16 @@ class Interp:
             for wave in range(1, 11):
                 changed = False
                 snap = dict(self.grn_levels)
-                for frm, to, st, inh, thr, hill, is_any in self.grn_edges:
+                for frm, to, st, inh, thr, hill, is_any, occupy, is_sum, attenuating in self.grn_edges:
                     if inh:
                         continue  # inhibitors propagate in phase 2
+                    if is_sum:
+                        continue  # pooled edges propagate as groups, below
                     parent = snap.get(frm, 0.0)
                     if parent <= 0:
                         continue
+                    # reg-bio-2 (C11): propagation reads the FREE fraction
+                    parent = self._regulated_level(parent, frm)
                     if thr is not None and thr > 0.0:
                         # reg-bio (F-2): per-edge Hill exponent (mirror of
                         # the Rust repeated multiplication — never **)
@@ -3642,7 +3927,38 @@ class Interp:
                             s *= st
                         influence = parent * s
                     cur = self.grn_levels.get(to, 0.0)
-                    nxt = max(cur, influence)
+                    # reg-bio-2 (D2c): influence clamps at 1.0 (mirror)
+                    nxt = max(cur, min(influence, 1.0))
+                    if abs(nxt - cur) > 1e-12:
+                        self.grn_levels[to] = nxt
+                        changed = True
+                # reg-bio-2 (B7): pooled (`sum`) edges — group pass per wave,
+                # BEFORE the convergence check (mirror of the Rust core).
+                groups = []
+                for frm, to, st, inh, thr, hill, is_any, occupy, is_sum, attenuating in self.grn_edges:
+                    if inh or not is_sum:
+                        continue
+                    if thr is None or thr <= 0.0:
+                        continue
+                    parent = snap.get(frm, 0.0)
+                    parent = self._regulated_level(parent, frm)
+                    n_h = hill if hill is not None else 2
+                    for g in groups:
+                        if g[0] == to and g[1] == thr and g[2] == n_h:
+                            g[3] += st * parent
+                            break
+                    else:
+                        groups.append([to, thr, n_h, st * parent])
+                for to, thr, n_h, pooled in groups:
+                    p = min(pooled, 1.0)
+                    ph = 1.0
+                    th2 = 1.0
+                    for _k in range(n_h):
+                        ph *= p
+                        th2 *= thr
+                    influence = ph / (ph + th2)
+                    cur = self.grn_levels.get(to, 0.0)
+                    nxt = max(cur, min(influence, 1.0))
                     if abs(nxt - cur) > 1e-12:
                         self.grn_levels[to] = nxt
                         changed = True
@@ -3653,12 +3969,14 @@ class Interp:
             # parity with the Rust `activated` map, so a node that is both a
             # target and a later source keeps its post-activation level)
             post = dict(self.grn_levels)
-            for frm, to, st, inh, thr, hill, is_any in self.grn_edges:
+            for frm, to, st, inh, thr, hill, is_any, occupy, is_sum, attenuating in self.grn_edges:
                 if not inh:
                     continue
                 parent = post.get(frm, 0.0)
                 if parent <= 0.0:
                     continue
+                # reg-bio-2 (C11): inhibition also reads the FREE fraction
+                parent = self._regulated_level(parent, frm)
                 if thr is not None and thr > 0.0:
                     # reg-bio (F-2): cooperative repressor influence
                     n_h = hill if hill is not None else 2
@@ -3671,10 +3989,17 @@ class Interp:
                 else:
                     influence = parent * st
                 cur = self.grn_levels.get(to, 0.0)
-                self.grn_levels[to] = max(0.0, cur - influence)
-            return dict(self.grn_levels)
+                # reg-bio-2 (D2b): occupancy repression — multiplicative
+                # survival (mirror of the Rust core); legacy subtracts once.
+                if occupy:
+                    self.grn_levels[to] = cur * (1.0 - min(influence, 1.0))
+                else:
+                    self.grn_levels[to] = max(0.0, cur - influence)
+            return dict(sorted(self.grn_levels.items()))
         if name == "grn_state":
-            return dict(self.grn_levels)
+            # reg-bio-2 (D9): sorted key order — Rust HashMap order varies per
+            # process; both implementations now emit byte-order sorted maps.
+            return dict(sorted(self.grn_levels.items()))
         if name == "items":
             v = args[0] if args else {}
             if isinstance(v, dict):
@@ -3701,6 +4026,15 @@ class Interp:
                 # Rust worker does — a direct call_gene bypasses the
                 # toggle/RISC/GRN/methyl gates ("a repressed allele stays
                 # repressed in worker cells", reg-r1's own contract)
+                # reg-bio-2 (C3): worker RNG decorrelation mirror — the Rust
+                # worker derives its stream from the task id; the sequential
+                # oracle runs the body inline but saves / derives / restores
+                # the host stream, so stochastic worker bodies draw from the
+                # identical derived sequence bit-for-bit.
+                _saved_rng = self.rng
+                _task_id = getattr(self, "next_id", 0) + 1
+                _derived = (0x9E3779B97F4A7C15 ^ ((_task_id * 0x9E3779B97F4A7C15) & M64)) & M64
+                self.rng = _derived
                 try:
                     spawn_name = callee.name
                     if spawn_name:
@@ -3709,7 +4043,9 @@ class Interp:
                         result = self.call_value(env, callee, targs)
                 except Stress as st:
                     result = {"kind": st.kind, "message": st.message}
-                self.next_id = getattr(self, "next_id", 0) + 1
+                finally:
+                    self.rng = _saved_rng
+                self.next_id = _task_id
                 self.tasks = getattr(self, "tasks", {})
                 self.tasks[self.next_id] = result
                 return self.next_id
@@ -3849,6 +4185,36 @@ class Interp:
         if name == "expr_off":
             self.expr_stochastic = False
             return False
+        if name == "decay_clock":
+            # reg-bio-2 (C2): mirror of the Rust builtin — in-source switch
+            # for the decay clock (interval n, optional fraction f)
+            n = None
+            if args and isinstance(args[0], (int, float)) and not isinstance(args[0], bool) and args[0] > 0:
+                n = int(args[0])
+            frac = None
+            if len(args) > 1 and isinstance(args[1], (int, float)) and not isinstance(args[1], bool):
+                frac = min(max(float(args[1]), 0.0), 1.0)
+            self.decay_clock_n = n
+            self.decay_clock_f = frac
+            if n is not None:
+                self.note(1, f"decay clock on (one decay step every {n} calls)")
+                return True
+            self.note(1, "decay clock off (event-driven)")
+            return False
+        # ---- ligands (reg-bio-2 A4)
+        if name == "ligand_set":
+            nm = v_display(args[0]) if args else ""
+            v = 0.0
+            if len(args) > 1 and isinstance(args[1], (int, float)) and not isinstance(args[1], bool):
+                v = min(max(float(args[1]), 0.0), 1.0)
+            if nm not in self.ligands:
+                self.ligands.append(nm)
+            self.ligand_pools[nm] = v
+            self.note(1, f"ligand pool '{nm}': {v}")
+            return v
+        if name == "ligand":
+            nm = v_display(args[0]) if args else ""
+            return self._ligand_level(nm)
         if name == "chr":
             i = args[0] if args and isinstance(args[0], int) else 0
             return chr(i) if 0 <= i <= 0x10FFFF else ""

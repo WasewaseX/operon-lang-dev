@@ -162,6 +162,60 @@ pub struct RegEdge {
     /// Inhibiting edges ignore `any` (inhibitors already veto with OR
     /// semantics: any inhibitor above its threshold vetoes).
     pub any: bool,
+    /// reg-bio-2 (D2b): occupancy repression. An inhibiting edge marked
+    /// `occupy` composes multiplicatively — child *= 1 − influence — the
+    /// thermodynamic Kⁿ/(Kⁿ+Rⁿ) survival form where repression can never
+    /// overshoot and full occupancy means full silencing. Legacy edges
+    /// subtract once (bit-identical default).
+    pub occupy: bool,
+    /// reg-bio-2 (B7): synergistic pooling. `sum` activating (thresholded)
+    /// edges targeting the same gene pool their weighted inputs —
+    /// P = min(1, Σ strength·level) — and ONE Hill function of P drives
+    /// both the gate and the fire influence, so two sub-threshold inputs
+    /// can fire together (enhanceosome synergy). Edge groups are keyed by
+    /// (target, threshold, hill); edges without `sum` are untouched.
+    pub sum: bool,
+    /// reg-bio-2 (A5/C7): an `attenuates` edge vetoes like an inhibitor but
+    /// reports the RNA-level mechanism — transcription attenuation (leader
+    /// peptide / terminator hairpin outcome), not TF occlusion.
+    pub attenuates: bool,
+}
+
+/// reg-bio-2 (A4): an allosteric binding record — `bind tf inducer lig k v;`
+/// or `bind tf cofactor lig k v;`. Ligand binding modulates the regulator's
+/// DNA-available fraction: an INDUCER reduces affinity (allolactose on LacI
+/// — binding relieves repression), a COFACTOR increases it (tryptophan on
+/// TrpR — binding enables repression). At every regulation read of `tf`:
+///   occ = L / (k + L)
+///   free = level × Π(1 − occ) over inducers × Π occ over cofactors
+#[derive(Debug, Clone)]
+pub struct BindDef {
+    pub tf: String,
+    pub ligand: String,
+    /// "inducer" reduces DNA affinity; "cofactor" increases it
+    pub inducer: bool,
+    /// dissociation-style constant (occ = L/(k+L)); default 0.1
+    pub k: f64,
+}
+
+/// reg-bio-2 (C1): the translation layer. A `translates` edge models
+/// mRNA→protein production: at every engine update point (a `grn_fire`
+/// pulse, a decay-clock tick) the target protein node integrates one Euler
+/// step of the classic two-tier ODE
+///     p ← p + rate·Δcalls − decay·p      (clamped 0..1)
+/// where Δcalls is the source gene's call-count delta since the last
+/// integration — transcripts accumulate in the call counters, protein
+/// accumulates here, lagging and smoothing the transcriptional bursts.
+/// Protein nodes live in `grn_levels`, so any GRN gate can read a protein
+/// as its regulator (two-tier regulation).
+#[derive(Debug, Clone)]
+pub struct TransEdge {
+    pub from: String,
+    pub to: String,
+    /// translation rate per transcript call (default 1.0)
+    pub rate: Option<f64>,
+    /// protein decay fraction per integration (default 0.0 — stable product)
+    pub decay: Option<f64>,
 }
 
 #[derive(Debug, Clone)]
@@ -226,8 +280,19 @@ pub enum Stmt {
     Enhance(Vec<String>),
     Ires(String),
     Fate(Arc<FateDef>),
-    Regulate(Vec<RegEdge>),
+    Regulate(Vec<RegEdge>, Vec<TransEdge>, Vec<BindDef>),
+    /// reg-bio-2 (A4): a small-molecule ligand pool — `ligand iptg;`.
+    /// Ligands are metabolites, not genes: their levels are set via
+    /// `ligand_set(name, v)` or the `.cell [ligand.<name>]` bath config,
+    /// and they drive gates directly (a ligand named as an edge source is
+    /// a riboswitch-style, protein-free gate).
+    Ligand(String),
     Toggle(String, String),
+    /// reg-bio-2 (C11): a decoy binding site — `decoy d for tf capacity c;`.
+    /// The decoy node absorbs its regulator without producing output:
+    /// every regulation read of `tf` sees the free fraction
+    /// max(0, level(tf) − c·level(d)) — competitive titration.
+    Decoy(String, String, f64),
     Repressilator(Vec<String>, Option<f64>, RepressiOverrides),
     Frame {
         name: String,

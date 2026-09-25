@@ -1395,26 +1395,88 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
             out.push_str(&indent(ind));
             out.push_str("}\n\n");
         }
-        Stmt::Regulate(edges) => {
+        Stmt::Regulate(edges, trans, binds) => {
             out.push_str("regulate {\n");
             for e in edges {
                 out.push_str(&indent(ind + 1));
-                out.push_str(&format!(
-                    "{} {} {}{};\n",
+                // reg-bio-2: canonical round-trip of the edge keywords
+                // (order: strength -> threshold -> hill -> any -> occupy -> sum)
+                let mut line = format!(
+                    "{} {} {}{}",
                     e.from,
-                    if e.inhibit { "inhibits" } else { "activates" },
+                    // reg-bio-2 (A5): attenuator edges round-trip their verb
+                    if e.attenuates {
+                        "attenuates"
+                    } else if e.inhibit {
+                        "inhibits"
+                    } else {
+                        "activates"
+                    },
                     e.to,
                     if e.strength != 1.0 {
                         format!(" strength {}", e.strength)
                     } else {
                         String::new()
                     }
+                );
+                if let Some(t) = e.threshold {
+                    line.push_str(&format!(" threshold {}", t));
+                }
+                if let Some(h) = e.hill {
+                    line.push_str(&format!(" hill {}", h));
+                }
+                if e.any {
+                    line.push_str(" any");
+                }
+                if e.occupy {
+                    line.push_str(" occupy");
+                }
+                if e.sum {
+                    line.push_str(" sum");
+                }
+                line.push_str(";\n");
+                out.push_str(&line);
+            }
+            // reg-bio-2 (C1): translation edges round-trip canonically
+            for t in trans {
+                out.push_str(&indent(ind + 1));
+                out.push_str(&format!(
+                    "{} translates {}{}{};\n",
+                    t.from,
+                    t.to,
+                    if let Some(r) = t.rate {
+                        format!(" rate {}", r)
+                    } else {
+                        String::new()
+                    },
+                    if let Some(d) = t.decay {
+                        format!(" decay {}", d)
+                    } else {
+                        String::new()
+                    }
+                ));
+            }
+            // reg-bio-2 (A4): allosteric bindings round-trip canonically
+            for b in binds {
+                out.push_str(&indent(ind + 1));
+                out.push_str(&format!(
+                    "bind {} {} {} k {};\n",
+                    b.tf,
+                    if b.inducer { "inducer" } else { "cofactor" },
+                    b.ligand,
+                    b.k
                 ));
             }
             out.push_str(&indent(ind));
             out.push_str("}\n\n");
         }
         Stmt::Toggle(a, b) => out.push_str(&format!("toggle {}, {};\n", a, b)),
+        // reg-bio-2 (C11): decoy round-trip (canonical form)
+        Stmt::Decoy(d, tf, cap) => {
+            out.push_str(&format!("decoy {} for {} capacity {};\n", d, tf, cap))
+        }
+        // reg-bio-2 (A4): ligand declaration round-trip
+        Stmt::Ligand(name) => out.push_str(&format!("ligand {};\n", name)),
         Stmt::Repressilator(ring, period, ov) => {
             out.push_str(&format!("repressilator {}", ring.join(" -> ")));
             if let Some(p) = period {
