@@ -878,6 +878,10 @@ pub struct RegulationSnap {
     /// loop-9 (F-6): resolved m6A reader knobs ride the snapshot so a
     /// worker folds the parent's reader math exactly.
     pub m6a_reader: (f64, f64, u32),
+    /// loop-9 (F-3): per-gene promoter attempt telemetry rides the snapshot
+    /// (name, attempts, on_total, episodes) — worker cells are whole
+    /// regulatory cells; telemetry must not desync from the host mid-burst.
+    pub promoter_tel: Vec<(String, u64, u64, u64)>,
     /// loop-9 (F-4): runtime splice shifts freeze at spawn (snapshot
     /// contract — later parent-side shifts do not propagate).
     pub splice_shift: Vec<(String, String)>,
@@ -964,6 +968,11 @@ pub fn snapshot_regulation(interp: &Interp) -> RegulationSnap {
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect(),
+        promoter_tel: interp
+            .promoter_tel
+            .iter()
+            .map(|(k, (a, o, e))| (k.clone(), *a, *o, *e))
+            .collect(),
         m6a_reader: (
             interp
                 .cell
@@ -1038,6 +1047,11 @@ pub fn bind_regulation(ti: &mut Interp, s: &RegulationSnap) {
     // loop-9 (F-6): resolved reader knobs pin the worker's math
     ti.m6a_reader_pins = Some(s.m6a_reader);
     ti.splice_shift = s.splice_shift.iter().cloned().collect();
+    ti.promoter_tel = s
+        .promoter_tel
+        .iter()
+        .map(|(k, a, o, e)| (k.clone(), (*a, *o, *e)))
+        .collect();
     ti.operons = s.operons.clone();
     ti.m6a_levels = s.m6a_levels.iter().cloned().collect();
     ti.generation = s.generation;

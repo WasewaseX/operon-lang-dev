@@ -1,0 +1,58 @@
+# loop-9 (F-2/F-3): per-gene PROMOTER IDENTITY — @burst(kon, koff).
+# Real biology: different promoters have different switching rates — that is
+# their identity. A sticky promoter (kon 0.9, koff 0.05) fires in long
+# bursts; a flickery one (kon 0.05, koff 0.9) rarely fires at all. Under ONE
+# shared telegraph layer the two genes now behave differently, and
+# promoter_telemetry() quantifies it: attempts, on_total, episodes,
+# on_frac, and burst_size = on_total/episodes (mean ON-run length; ~1 under
+# Poisson-like firing, >>1 under bursting — the bursting signature).
+# All draws ride the shared mirrored xorshift (randomize(42) pins the
+# stream), so every number is exact on BOTH cores.
+# Fails-pre: @burst was an unknown mark (dropped) — both marked genes ran at
+# the GLOBAL rates, the identity asserts burn; promoter_telemetry was a
+# phantom call.
+@burst 0.9 0.05
+gene sticky() { return "on" }
+@burst 0.05 0.9
+gene flicker() { return "on" }
+gene plain() { return "on" }
+frame proof {
+    randomize(42)
+    expr_on(0.3, 0.1)
+    let sticky_on = 0
+    let sticky_off = 0
+    let i_sticky = 0
+    while i_sticky < 30 {
+        if sticky() == null { sticky_off = sticky_off + 1 } else { sticky_on = sticky_on + 1 }
+        i_sticky = i_sticky + 1
+    }
+    let flicker_on = 0
+    let flicker_off = 0
+    let i_flicker = 0
+    while i_flicker < 30 {
+        if flicker() == null { flicker_off = flicker_off + 1 } else { flicker_on = flicker_on + 1 }
+        i_flicker = i_flicker + 1
+    }
+    let plain_on = 0
+    let plain_off = 0
+    let i_plain = 0
+    while i_plain < 30 {
+        if plain() == null { plain_off = plain_off + 1 } else { plain_on = plain_on + 1 }
+        i_plain = i_plain + 1
+    }
+    let t = promoter_telemetry("sticky")
+    assert(t.attempts == 30, "sticky: 30 attempts reached the promoter gate")
+    assert(t.on_frac >= 0.6, "sticky promoter (kon 0.9, koff 0.05): strongly ON")
+    let f = promoter_telemetry("flicker")
+    assert(f.attempts == 30, "flicker: 30 attempts")
+    assert(f.on_frac < 0.2, "flicker promoter (kon 0.05, koff 0.9): overwhelmingly OFF")
+    assert(f.on_frac < t.on_frac, "promoter identity: same layer, different genes, different behavior")
+    assert(t.burst_size > 3, "sticky ON-runs average ~4 calls (bursting signature, Poisson would be ~1)")
+    assert(t.burst_size > f.burst_size, "burst size separates the promoters (sticky ON-runs are longer)")
+    # per-gene identity does not leak: the unmarked gene uses the GLOBAL rates
+    let p = promoter_telemetry("plain")
+    assert(p.attempts == 30, "plain: 30 attempts")
+    assert(p.on_frac < t.on_frac, "unmarked gene at the global rates is less ON than the sticky promoter")
+    # telemetry is attempt-level: attempts = on + off exactly
+    assert(t.attempts == t.on_total + (30 - t.on_total), "attempt accounting is exact")
+}

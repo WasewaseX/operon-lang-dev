@@ -26,12 +26,14 @@ class Stress(Exception):
         return {"kind": self.kind, "message": self.message}
 
 class Gene:
-    __slots__ = ("name", "params", "guard", "body", "acetylate", "methylate", "m6a", "copies", "seq", "riboswitch", "closure")
-    def __init__(self, name, params, guard, body, ac=False, me=False, m6=False, copies=1, seq=False, riboswitch=None):
+    __slots__ = ("name", "params", "guard", "body", "acetylate", "methylate", "m6a", "copies", "seq", "riboswitch", "burst", "closure")
+    def __init__(self, name, params, guard, body, ac=False, me=False, m6=False, copies=1, seq=False, riboswitch=None, burst=None):
         self.name, self.params, self.guard, self.body = name, params, guard, body
         self.acetylate, self.methylate, self.m6a, self.copies, self.seq = ac, me, m6, copies, seq
         # loop-9 (F-5): cis riboswitch (ligand, bound_means_on, threshold)
         self.riboswitch = riboswitch
+        # loop-9 (F-2): per-gene promoter identity (kon, koff)
+        self.burst = burst
         self.closure = None
 
 ENHANCE_DELTA = 0.25  # T2e: super-enhancer activation boost (GRN threshold reduction)
@@ -421,7 +423,7 @@ SYNONYMS = {
 }
 VALUE_SYNONYMS = {"yes": True, "on": True, "no": False, "off": False,
                   "nil": None, "none": None, "nothing": None}
-MARKS = {"acetylate", "methylate", "m6a", "copies", "riboswitch"}
+MARKS = {"acetylate", "methylate", "m6a", "copies", "riboswitch", "burst"}
 
 def edit_distance(a, b):
     if a == b:
@@ -570,11 +572,28 @@ class P:
                         else:
                             self.note(vt[2], 4, "riboswitch threshold needs a number 0..=1; default 0.5")
                     riboswitch = (lig, on, threshold)
+            # loop-9 (F-2): @burst kon koff — per-gene promoter identity
+            burst = None
+            if "burst" in marks:
+                vals = [0.3, 0.1]
+                got = 0
+                while got < 2:
+                    vt = self.peek()
+                    if vt[0] in ("FLOAT", "INT") and not isinstance(vt[1], bool):
+                        self.next()
+                        vals[got] = min(max(float(vt[1]), 0.0), 1.0)
+                        got += 1
+                    else:
+                        break
+                if got < 2:
+                    self.note(t[2], 4, "@burst needs kon and koff (0..=1); defaults 0.3/0.1")
+                burst = (vals[0], vals[1])
+            self.eat_nl()
             if not self.expect_kw("gene"):
                 self.note(t[2], 4, "mark must precede 'gene'; skipped line")
                 self.skip_line()
                 return None
-            return self.gene_def(marks, copies, riboswitch)
+            return self.gene_def(marks, copies, riboswitch, burst)
         if t[0] == "SYM" and t[1] == "{":
             self.note(t[2], 4, "bare block treated as scoped statements")
             return ("block", self.block())
@@ -1500,7 +1519,7 @@ class P:
         self.end_stmt()
         return ("expr", e)
 
-    def gene_def(self, marks, copies=1, riboswitch=None):
+    def gene_def(self, marks, copies=1, riboswitch=None, burst=None):
         ac = "acetylate" in marks
         me = "methylate" in marks
         m6 = "m6a" in marks
@@ -1554,9 +1573,9 @@ class P:
             self.next()
             e = self.expr()
             self.end_stmt()
-            return ("gene", Gene(name, params, guard, [("return", e)], ac, me, m6, copies, riboswitch=riboswitch))
+            return ("gene", Gene(name, params, guard, [("return", e)], ac, me, m6, copies, riboswitch=riboswitch, burst=burst))
         body = self.block()
-        return ("gene", Gene(name, params, guard, body, ac, me, m6, copies, riboswitch=riboswitch))
+        return ("gene", Gene(name, params, guard, body, ac, me, m6, copies, riboswitch=riboswitch, burst=burst))
 
     def block(self):
         if not (self.peek() == ("SYM", "{", self.peek()[2])):
@@ -2072,7 +2091,7 @@ def parse(src):
 # ----------------------------------------------------------------------------
 # evaluator
 
-BUILTINS = set("""promote expr_on expr_off decay_clock ligand_set ligand secrete quorum quench quorum_state splice_shift len push pop insert remove keys values has del range str num type
+BUILTINS = set("""promote expr_on expr_off decay_clock ligand_set ligand secrete quorum quench quorum_state splice_shift promoter_telemetry len push pop insert remove keys values has del range str num type
 abs min max sum clock exit assert codon distance similar transcribe reverse_complement
 gc_content translate find_orf memory methyl methylate demethylate m6a_write m6a_erase passage grn_set grn_get fingerprint toggle_on toggle_state repressi_next
 repressi_state repressi_start grn_fire grn_state spawn join floor ceil sqrt pow random
@@ -2153,6 +2172,8 @@ class Interp:
         # loop-9 (F-4): runtime splice shifts (root -> variant name)
         self.splice_shift = {}
         self.splice_registry = {}
+        # loop-9 (F-3): per-gene promoter attempt telemetry (mirror)
+        self.promoter_tel = {}
         self.grn_binds = []
         self.seq_buffer = None
         self.caps = {"enabled": True, "read": [], "write": [], "run": [], "net": [], "env": [], "py": []}
@@ -3108,7 +3129,7 @@ class Interp:
                 # reg-bio (F-1): promoter gate last — the pinned funnel order
                 # ends here (bursting is the promoter's own stochastic
                 # dynamics; no @acetylate exemption — open chromatin bursts too)
-                if self._promoter_veto(seq_name):
+                if self._promoter_veto(seq_name, callee.burst):
                     self.note(4, f"promoter inactive: sequence '{seq_name}' burst-off — call returns null")
                     return None
                 return SeqObj(self, callee, args)
@@ -3546,13 +3567,16 @@ class Interp:
                     self.m6a_levels[k2] = max(0, int(_math.ceil(x)))
         self._trans_integrate()
 
-    def _promoter_veto(self, name):
+    def _promoter_veto(self, name, burst=None):
         """reg-bio (F-1): telegraph promoter draw — mirror of the Rust
         promoter_veto. One draw per call attempt on the SHARED xorshift64*
         stream (the `random()` state machine): active → off with p=koff,
-        inactive → on with p=kon. State persists across calls (the burst)."""
+        inactive → on with p=kon. State persists across calls (the burst).
+        loop-9 (F-2): a per-gene @burst mark overrides (kon, koff) for THIS
+        gene only — promoter identity. loop-9 (F-3): attempt telemetry."""
         if not self.expr_stochastic:
             return False
+        kon, koff = burst if burst is not None else (self.expr_kon, self.expr_koff)
         was_active = self.promoter_states.get(name, True)
         x = self.rng
         x ^= (x >> 12) & M64
@@ -3562,10 +3586,12 @@ class Interp:
         x = self.rng
         u = ((x >> 11) & ((1 << 53) - 1)) / 9007199254740992.0
         if was_active:
-            now_active = u >= self.expr_koff
+            now_active = u >= koff
         else:
-            now_active = u < self.expr_kon
+            now_active = u < kon
         self.promoter_states[name] = now_active
+        e = self.promoter_tel.get(name, (0, 0, 0))
+        self.promoter_tel[name] = (e[0] + 1, e[1] + (1 if now_active else 0), e[2] + (1 if (not now_active) and was_active else 0))
         if not now_active:
             self.burst_off[name] = self.burst_off.get(name, 0) + 1
             return True
@@ -3600,7 +3626,7 @@ class Interp:
                 return None
         # reg-bio (F-1): telegraph promoter layer — the pinned gate order
         # ends here: RISC → toggle → GRN → methylation → riboswitch → promoter.
-        if self._promoter_veto(name):
+        if self._promoter_veto(name, g.burst):
             self.note(4, f"promoter inactive: '{name}' burst-off — call returns null")
             return None
         # reg-bio-3 (A1/A7): the call passed every gate — one transcript of
@@ -4536,6 +4562,7 @@ class Interp:
                     "copies": dict(self.copies),
                     "signals": list(self.signals),
                     "splice_shift": dict(self.splice_shift),
+                    "promoter_tel": dict(self.promoter_tel),
                     "call_counts": dict(self.call_counts),
                     "call_clock": self.call_clock,
                     "gene_buckets": {k: dict(v) for k, v in self.gene_buckets.items()},
@@ -4682,6 +4709,14 @@ class Interp:
                 s = int(args[0]) & 0xFFFFFFFFFFFFFFFF
             self.rng = s if s != 0 else 0x9E3779B97F4A7C15
             return None
+        if name == "promoter_telemetry":
+            # loop-9 (F-3): per-gene promoter attempt telemetry (mirror)
+            nm = v_display(args[0]) if args else ""
+            attempts, on_total, episodes = self.promoter_tel.get(nm, (0, 0, 0))
+            on_frac = (on_total / attempts) if attempts > 0 else 0.0
+            burst_size = (on_total / episodes) if episodes > 0 else 0.0
+            return {"attempts": attempts, "on_total": on_total, "episodes": episodes,
+                    "on_frac": on_frac, "burst_size": burst_size}
         if name == "expr_on":
             # reg-bio (F-1): mirror of the Rust builtin — in-source switch for
             # the telegraph promoter layer (kon/koff clamped 0..1)
