@@ -112,6 +112,12 @@ pub struct GeneDef {
     /// bound -> terminator hairpin -> OFF. `on` class (adenine/glycine
     /// activators): bound -> RBS exposed -> ON.
     pub riboswitch: Option<(String, bool, f64)>,
+    /// loop-9 (F-2): per-gene PROMOTER IDENTITY — `@burst kon koff`. The
+    /// telegraph layer's rates for THIS gene (overrides the global
+    /// expr_on/.cell rates). Burst size ~ k_tx/k_off, burst frequency ~
+    /// k_on: different promoters have different (kon, koff) — that is
+    /// their identity. Rides the gene Arc, so workers inherit for free.
+    pub burst: Option<(f64, f64)>,
 }
 
 #[derive(Debug, Clone)]

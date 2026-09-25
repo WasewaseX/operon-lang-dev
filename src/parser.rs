@@ -73,7 +73,14 @@ pub(crate) const KEYWORDS: &[&str] = &[
     "operon",
 ];
 
-const MARKS: &[&str] = &["acetylate", "methylate", "m6a", "copies", "riboswitch"];
+const MARKS: &[&str] = &[
+    "acetylate",
+    "methylate",
+    "m6a",
+    "copies",
+    "riboswitch",
+    "burst",
+];
 
 /// Words that end a `use` path — the alias introducer and statement enders.
 fn use_path_boundary(w: &str) -> bool {
@@ -435,6 +442,37 @@ impl Parser {
                         riboswitch = Some((lig, on, threshold));
                     }
                 }
+                // loop-9 (F-2): `@burst kon koff` — per-gene promoter
+                // identity (two numbers, clamped 0..=1).
+                let mut burst: Option<(f64, f64)> = None;
+                if marks.iter().any(|m| m == "burst") {
+                    let mut vals: [f64; 2] = [0.3, 0.1];
+                    let mut got = 0;
+                    while got < 2 {
+                        match self.peek().clone() {
+                            Tok::Float(f) => {
+                                self.next();
+                                vals[got] = f.clamp(0.0, 1.0);
+                                got += 1;
+                            }
+                            Tok::Int(i) => {
+                                self.next();
+                                vals[got] = (i as f64).clamp(0.0, 1.0);
+                                got += 1;
+                            }
+                            _ => break,
+                        }
+                    }
+                    if got < 2 {
+                        let line = self.line();
+                        self.note(
+                            line,
+                            4,
+                            "@burst needs kon and koff (0..=1); defaults 0.3/0.1",
+                        );
+                    }
+                    burst = Some((vals[0], vals[1]));
+                }
                 // dx-r6 (loop-5-a audit MED): an own-line mark —
                 //   @acetylate\ngene foo() —
                 // never reached `gene`: the newline between mark and keyword
@@ -449,7 +487,7 @@ impl Parser {
                     self.skip_line();
                     return None;
                 }
-                Some(self.parse_gene_def(marks, copies, riboswitch))
+                Some(self.parse_gene_def(marks, copies, riboswitch, burst))
             }
             Tok::Ident(w) => self.parse_word_stmt(&w),
             Tok::LBrace => {
@@ -585,7 +623,7 @@ impl Parser {
         match word.as_str() {
             "gene" => {
                 self.next();
-                Some(self.parse_gene_def(vec![], 1, None))
+                Some(self.parse_gene_def(vec![], 1, None, None))
             }
             "let" => {
                 self.next();
@@ -1744,6 +1782,7 @@ impl Parser {
                                         copies: 1,
                                         seq: false,
                                         riboswitch: None,
+                                        burst: None,
                                     }),
                                 ));
                             }
@@ -1859,7 +1898,7 @@ impl Parser {
                                     let marks = vec![mark];
                                     if self.expect_kw("gene") {
                                         if let Some(Stmt::Gene(g)) =
-                                            Some(self.parse_gene_def(marks, 1, None))
+                                            Some(self.parse_gene_def(marks, 1, None, None))
                                         {
                                             methods.push(g);
                                         }
@@ -1884,7 +1923,7 @@ impl Parser {
                                 }
                                 self.next();
                                 if let Some(Stmt::Gene(g)) =
-                                    Some(self.parse_gene_def(vec![], 1, None))
+                                    Some(self.parse_gene_def(vec![], 1, None, None))
                                 {
                                     methods.push(g);
                                 }
@@ -1934,7 +1973,7 @@ impl Parser {
             }
             "sequence" => {
                 self.next();
-                let def = self.parse_gene_def(vec![], 1, None);
+                let def = self.parse_gene_def(vec![], 1, None, None);
                 match def {
                     Stmt::Gene(g) => {
                         let mut g2 = (*g).clone();
@@ -2056,6 +2095,7 @@ impl Parser {
                         copies: 1,
                         seq: false,
                         riboswitch: None,
+                        burst: None,
                     })));
                 }
                 self.parse_assign_or_expr(w)
@@ -2380,6 +2420,7 @@ impl Parser {
         marks: Vec<String>,
         copies: u32,
         riboswitch: Option<(String, bool, f64)>,
+        burst: Option<(f64, f64)>,
     ) -> Stmt {
         // A13 (dx-r2): the def keyword's line — every definition-borne
         // runtime note (gates, silencing) points here.
@@ -2468,6 +2509,7 @@ impl Parser {
                 copies,
                 seq: false,
                 riboswitch,
+                burst,
             };
             return Stmt::Gene(std::sync::Arc::new(def));
         }
@@ -2484,6 +2526,7 @@ impl Parser {
             copies,
             seq: false,
             riboswitch,
+            burst,
         };
         Stmt::Gene(std::sync::Arc::new(def))
     }
@@ -3053,7 +3096,7 @@ impl Parser {
                         }
                         self.next();
                         // anonymous lambda in expression position
-                        match self.parse_gene_def(vec![], 1, None) {
+                        match self.parse_gene_def(vec![], 1, None, None) {
                             Stmt::Gene(def) => Expr::Lambda(def),
                             _ => Expr::Null,
                         }

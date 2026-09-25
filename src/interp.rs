@@ -496,6 +496,9 @@ pub struct Interp {
     /// integration); Some after bind_regulation (workers fold the parent's
     /// reader math exactly, since they do not inherit raw .cell).
     pub m6a_reader_pins: Option<(f64, f64, u32)>,
+    /// loop-9 (F-3): per-gene promoter attempt telemetry —
+    /// (attempts, on_total, episodes) per gene name. Rides RegulationSnap.
+    pub promoter_tel: HashMap<String, (u64, u64, u64)>,
     /// loop-9 (F-4): runtime splicing-factor shifts (root -> variant name).
     /// A runtime factor event that overrides the static @m6a bias but NOT
     /// the operator pins (.cell variant.<root> / cli.variant). Rides
@@ -611,6 +614,7 @@ impl Interp {
             signals: Vec::new(),
             medium: None,
             m6a_reader_pins: None,
+            promoter_tel: HashMap::new(),
             splice_shift: HashMap::new(),
             splice_registry: HashMap::new(),
             ligand_pools: HashMap::new(),
@@ -2668,7 +2672,7 @@ impl Interp {
                 // promoter's own stochastic dynamics, downstream of every
                 // trans/epigenetic gate. Bursting is universal (open
                 // chromatin bursts too): no @acetylate exemption here.
-                if self.promoter_veto(&seq_name) {
+                if self.promoter_veto(def) {
                     self.note(
                         dl,
                         4,
@@ -3558,25 +3562,35 @@ impl Interp {
         veto
     }
 
-    fn promoter_veto(&mut self, name: &str) -> bool {
+    fn promoter_veto(&mut self, def: &GeneDef) -> bool {
+        let name = def.name.clone().unwrap_or_default();
         if !self.expr_stochastic {
             return false;
         }
-        let was_active = *self.promoter_states.get(name).unwrap_or(&true);
+        // loop-9 (F-2): per-gene PROMOTER IDENTITY — the mark's own rates
+        // override the global telegraph parameters for this gene only.
+        let (kon, koff) = def.burst.unwrap_or((self.expr_kon, self.expr_koff));
+        let was_active = *self.promoter_states.get(&name).unwrap_or(&true);
         let mut x = self.rng;
         x ^= x >> 12;
         x ^= x << 25;
         x ^= x >> 27;
         self.rng = x;
         let u = ((x >> 11) as f64) / 9_007_199_254_740_992.0;
-        let now_active = if was_active {
-            u >= self.expr_koff
-        } else {
-            u < self.expr_kon
-        };
-        self.promoter_states.insert(name.to_string(), now_active);
+        let now_active = if was_active { u >= koff } else { u < kon };
+        self.promoter_states.insert(name.clone(), now_active);
+        // loop-9 (F-3): attempt telemetry — every call that reaches the
+        // promoter gate is one attempt; episodes are maximal ON-runs
+        // (an ON->OFF transition completes one burst).
+        let e = self.promoter_tel.entry(name.clone()).or_insert((0, 0, 0));
+        e.0 += 1;
+        if now_active {
+            e.1 += 1;
+        } else if was_active {
+            e.2 += 1;
+        }
         if !now_active {
-            *self.burst_off.entry(name.to_string()).or_insert(0) += 1;
+            *self.burst_off.entry(name).or_insert(0) += 1;
             return true;
         }
         false
@@ -3625,7 +3639,7 @@ impl Interp {
         }
         // reg-bio (F-1): telegraph promoter layer — the pinned gate order
         // ends here: RISC → toggle → GRN → methylation → riboswitch → promoter.
-        if self.promoter_veto(&name) {
+        if self.promoter_veto(&def) {
             self.note(
                 dl,
                 4,
@@ -3941,7 +3955,7 @@ impl Interp {
         }
         // reg-bio (F-1): promoter gate for phenotype methods (funnel order
         // preserved — last gate before the call counters).
-        if self.promoter_veto(&name) {
+        if self.promoter_veto(&def) {
             self.note(
                 dl,
                 4,
@@ -6030,6 +6044,35 @@ impl Interp {
                 };
                 self.rng = if s == 0 { 0x9E3779B97F4A7C15 } else { s };
                 Ok(Value::Null)
+            }
+            "promoter_telemetry" => {
+                // loop-9 (F-3): per-gene promoter attempt telemetry —
+                // {attempts, on_total, episodes, on_frac, burst_size}.
+                // burst_size = on_total/episodes is the mean ON-run length:
+                // ~1 under Poisson-like firing, >>1 under bursting — the
+                // bursting signature. Zero attempts = all-zero telemetry.
+                let name = args.first().map(|v| v.display()).unwrap_or_default();
+                let (attempts, on_total, episodes) =
+                    *self.promoter_tel.get(&name).unwrap_or(&(0, 0, 0));
+                let on_frac = if attempts > 0 {
+                    on_total as f64 / attempts as f64
+                } else {
+                    0.0
+                };
+                let burst_size = if episodes > 0 {
+                    on_total as f64 / episodes as f64
+                } else {
+                    0.0
+                };
+                Ok(Value::Map(Rc::new(RefCell::new(
+                    crate::value::MapStore::from_vec(vec![
+                        (Value::Str("attempts".into()), Value::Int(attempts as i64)),
+                        (Value::Str("on_total".into()), Value::Int(on_total as i64)),
+                        (Value::Str("episodes".into()), Value::Int(episodes as i64)),
+                        (Value::Str("on_frac".into()), Value::Float(on_frac)),
+                        (Value::Str("burst_size".into()), Value::Float(burst_size)),
+                    ]),
+                ))))
             }
             "expr_on" => {
                 // reg-bio (F-1): in-source switch for the telegraph promoter
@@ -8614,6 +8657,7 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "quench",
     "quorum_state",
     "splice_shift",
+    "promoter_telemetry",
     "len",
     "push",
     "pop",
