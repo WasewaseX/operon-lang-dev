@@ -118,6 +118,18 @@ fn real_main() {
                     _ => die("--allow-run needs a program name argument"),
                 }
             }
+            "--allow-py" => {
+                // substrate-r1: Python bridge grant — exact-match per module
+                i += 1;
+                match rest.get(i) {
+                    Some(p) if !p.starts_with("--") => {
+                        if let Err(s) = opts.caps.add_grant("py", p) {
+                            die(&format!("invalid --allow-py: {}", s.message));
+                        }
+                    }
+                    _ => die("--allow-py needs a module name argument"),
+                }
+            }
             "--allow-exit" => {
                 // sec-r2 (audit C-11): exit() is a capability, default-deny
                 opts.caps.exit_allowed = true;
@@ -1008,7 +1020,7 @@ fn usage() {
 usage:
   operon run f.op [--entry g] [--variant v] [--cell c] [--rna r] [--frame name] [--ires] [--strict] [--quiet]
                   [--fuel steps] [--allow-read path] [--allow-write path] [--allow-net host:port]
-                  [--allow-run cmd] [--allow-exit] [--allow-env var] [--allow-all]
+                  [--allow-run cmd] [--allow-py module] [--allow-exit] [--allow-env var] [--allow-all]
   operon check f.op [--nmd | --nmd=purge] [--json]
   operon test [paths...] [--json]
   operon fmt f.op [--write]

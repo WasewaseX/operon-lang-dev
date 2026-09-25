@@ -68,6 +68,40 @@ pub struct TaskHandle {
     pub rx: mpsc::Receiver<(crate::genes::SendValue, Vec<Note>)>,
 }
 
+/// Children get the OS essentials plus explicitly env-granted variables —
+/// never the whole parent environment (secrets like CI tokens cannot leak
+/// to effects). Shared by run() and the py bridge (substrate-r1) so the two
+/// subprocess paths can never drift apart.
+pub(crate) fn safe_base_env(cmd: &mut std::process::Command, env_grants: &[String]) {
+    cmd.env_clear();
+    for (k, v) in std::env::vars_os() {
+        let key = k.to_string_lossy().to_string();
+        let essential = matches!(
+            key.as_str(),
+            "PATH"
+                | "HOME"
+                | "LANG"
+                | "TMPDIR"
+                | "USER"
+                | "SystemRoot"
+                | "SystemDrive"
+                | "COMSPEC"
+                | "PATHEXT"
+                | "WINDIR"
+                | "TEMP"
+                | "TMP"
+                | "APPDATA"
+                | "LOCALAPPDATA"
+                | "PROGRAMFILES"
+                | "PROGRAMDATA"
+                | "USERPROFILE"
+        );
+        if essential || env_grants.iter().any(|e| e == &key) {
+            cmd.env(k, v);
+        }
+    }
+}
+
 /// Capability grants (default-deny for I/O, processes, sockets, env).
 /// "Safer than Rust by default": an Operon program can touch nothing unless
 /// the host explicitly grants it. Violations raise catchable `interference`
@@ -80,6 +114,11 @@ pub struct Caps {
     pub run: Vec<String>,
     pub net: Vec<String>,
     pub env: Vec<String>,
+    /// substrate-r1: the Python bridge. Grants are exact-match per MODULE
+    /// name (--allow-py math). A grant is a trust act — the module runs with
+    /// the interpreter's OS privileges — so the grant surface stays
+    /// per-module instead of all-or-nothing like run().
+    pub py: Vec<String>,
     /// sec-r2 (audit C-11): exit() kills the whole host process — in test
     /// runners, the REPL, the LSP, or any embedded host that is fatal. So
     /// it is a capability like any other, default-deny.
@@ -96,6 +135,7 @@ impl Default for Caps {
             run: Vec::new(),
             net: Vec::new(),
             env: Vec::new(),
+            py: Vec::new(),
             exit_allowed: false,
         }
     }
@@ -149,6 +189,7 @@ impl Caps {
             "write" => &mut self.write,
             "run" => &mut self.run,
             "net" => &mut self.net,
+            "py" => &mut self.py,
             _ => &mut self.env,
         };
         list.push(g.to_string());
@@ -4891,33 +4932,10 @@ impl Interp {
                 // explicitly env-granted variables — never the whole parent
                 // environment (secrets like CI tokens cannot leak to effects)
                 let mut cmd = std::process::Command::new(&prog);
-                cmd.args(&prog_args).env_clear();
-                for (k, v) in std::env::vars_os() {
-                    let key = k.to_string_lossy().to_string();
-                    let essential = matches!(
-                        key.as_str(),
-                        "PATH"
-                            | "HOME"
-                            | "LANG"
-                            | "TMPDIR"
-                            | "USER"
-                            | "SystemRoot"
-                            | "SystemDrive"
-                            | "COMSPEC"
-                            | "PATHEXT"
-                            | "WINDIR"
-                            | "TEMP"
-                            | "TMP"
-                            | "APPDATA"
-                            | "LOCALAPPDATA"
-                            | "PROGRAMFILES"
-                            | "PROGRAMDATA"
-                            | "USERPROFILE"
-                    );
-                    if essential || self.caps.env.iter().any(|e| e == &key) {
-                        cmd.env(k, v);
-                    }
-                }
+                cmd.args(&prog_args);
+                // substrate-r1: environment policy extracted to safe_base_env
+                // so run() and the py bridge share one scrub implementation
+                safe_base_env(&mut cmd, &self.caps.env);
                 // sec-r2 (audit A14): a child that never exits used to freeze
                 // the interpreter forever (run("sleep", ["10000"]) was a
                 // whole-program DoS). Children now run under a wall-clock
@@ -4957,8 +4975,9 @@ impl Interp {
                         // fuel-blind 800 MB String to the Value heap. The
                         // reader stops at the cap; the child keeps running
                         // (it gets killed by the timeout) and the collected
-                        // prefix is what the caller sees.
-                        const MAX_CHILD_OUT: usize = 64 * 1024 * 1024;
+                        // prefix is what the caller sees. substrate-r1: the
+                        // cap is now shared with the py bridge (one source).
+                        use crate::pybridge::MAX_CHILD_OUT;
                         if let Some(mut p) = child.stdout.take() {
                             std::thread::spawn(move || {
                                 let mut v = Vec::new();
@@ -5080,6 +5099,84 @@ impl Interp {
                         ))))
                     }
                     Err(e) => Err(Stress::new("missing", format!("run '{}': {}", prog, e))),
+                }
+            }
+            // -------------------------------------------------- py (substrate-r1)
+            // Python ecosystem bridge: py(module, "dotted.func", [args]) ->
+            // {ok, value, error, code}. Capability `py` is default-deny,
+            // exact-match per MODULE. Containment (isolated-mode child,
+            // env scrub, timeout kill, capped drains, one-line JSON
+            // protocol) lives in pybridge.rs; the interpreter adds the
+            // run()-precedent fuel charge: wall time is fuel (1000 steps/ms).
+            "py" => {
+                let module = args.first().map(|v| v.display()).unwrap_or_default();
+                let func = args.get(1).map(|v| v.display()).unwrap_or_default();
+                let call_args: Vec<Value> = match args.get(2) {
+                    Some(Value::List(l)) => l.borrow().clone(),
+                    _ => Vec::new(),
+                };
+                if module.is_empty() {
+                    return Err(Stress::new("missing", "py: module name required"));
+                }
+                self.caps.check(&self.caps.py, "py", &module)?;
+                // marshal through the language's own JSON serializer so
+                // Seq/Float semantics stay Operon's; the request payload we
+                // materialize is memory-charged like any big string
+                let args_json = json_stringify(&Value::List(Rc::new(RefCell::new(call_args))));
+                if !args_json.is_empty() && args_json.len() > 65_536 {
+                    mem_charge(args_json.len() as u64)?;
+                }
+                let timeout_ms = self
+                    .cell
+                    .get("py.timeout_ms")
+                    .and_then(|v| v.parse::<u64>().ok())
+                    .unwrap_or(10_000)
+                    .clamp(1, 300_000);
+                let started = std::time::Instant::now();
+                match crate::pybridge::py_call(&module, &func, &args_json, timeout_ms) {
+                    Ok(r) => {
+                        let wall_ms = started.elapsed().as_millis() as u64;
+                        let charge = wall_ms.saturating_mul(1000);
+                        self.steps = self.steps.saturating_add(charge);
+                        if let Some(pool) = &self.fuel_pool {
+                            let left =
+                                pool.fetch_sub(charge as i64, std::sync::atomic::Ordering::Relaxed);
+                            if left <= charge as i64 {
+                                return Err(Stress::new(
+                                    "overflow",
+                                    "run-wide step budget exhausted (py child wall time)",
+                                ));
+                            }
+                        }
+                        if self.steps > self.step_budget {
+                            return Err(Stress::new(
+                                "overflow",
+                                "step budget exhausted (py child wall time)",
+                            ));
+                        }
+                        if r.timed_out {
+                            self.note(
+                                self.cur_line,
+                                4,
+                                r.error.clone().unwrap_or_else(|| "py timeout".into()),
+                            );
+                        }
+                        Ok(Value::Map(Rc::new(RefCell::new(
+                            crate::value::MapStore::from_vec(vec![
+                                (Value::Str("ok".into()), Value::Bool(r.ok)),
+                                (Value::Str("value".into()), r.value),
+                                (
+                                    Value::Str("error".into()),
+                                    match r.error {
+                                        Some(e) => Value::Str(e),
+                                        None => Value::Null,
+                                    },
+                                ),
+                                (Value::Str("code".into()), Value::Int(r.code)),
+                            ]),
+                        ))))
+                    }
+                    Err(e) => Err(Stress::new("missing", format!("py '{}': {}", module, e))),
                 }
             }
             "http_get" => {
@@ -6050,7 +6147,7 @@ fn json_stringify_g(v: &Value, seen: &mut Vec<usize>, depth: u32) -> String {
     }
 }
 
-fn json_quote(s: &str) -> String {
+pub(crate) fn json_quote(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 2);
     out.push('"');
     for c in s.chars() {
@@ -6914,6 +7011,7 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "re_replace",
     "items",
     "run",
+    "py",
     "http_get",
     "serve",
     "recv_request",

@@ -1,0 +1,55 @@
+# substrate-r1: the Python ecosystem bridge — granted proof suite.
+# Exercised ONLY via an explicit operator cell:
+#   ./bin/operon test tests/granted/ --cell tests/granted/pybridge.cell
+# The default proof runner (zero grants) skips this directory by design —
+# these frames are meaningless without the operator's grants. Denials and
+# the module fence live in tests/security_caps.op and tests/redteam/.
+frame proof {
+    # 1. float marshalling both directions, process contract intact
+    let r = py("math", "sqrt", [2])
+    assert(r.ok)
+    assert(abs(r.value - 1.4142135623730951) < 1e-12)
+    assert(r.code == 0)
+
+    # 2. json round trip through the language's own serializer
+    let payload = {"gene": "lacZ", "kd": 42, "on": true, "tags": ["a", "b"]}
+    let back = py("json", "loads", [json_str(payload)])
+    assert(back.ok)
+    assert(back.value.kd == 42)
+    assert(back.value.gene == "lacZ")
+    assert(back.value.on == true)
+    assert(back.value.tags[1] == "b")
+
+    # 3. Python exceptions arrive as DATA (ok:false), never a crash
+    let bad = py("math", "sqrt", [-1])
+    assert(bad.ok == false)
+    assert(bad.code == 1)
+    assert(bad.error != null)
+
+    # 4. module fence: os is NOT in the operator's grant list
+    stress {
+        let sneaky = py("os", "getcwd", [])
+        assert(false)
+    } rescue (e) {
+        assert(e.kind == "interference")
+    }
+
+    # 5. positive control of the fence: a granted module does run
+    let ok_call = py("math", "pow", [2, 10])
+    assert(ok_call.ok)
+    assert(abs(ok_call.value - 1024.0) < 1e-9)
+
+    # 6. numpy — the point of the whole bridge (skip when absent)
+    let np = py("numpy", "arange", [0, 5])
+    if np.ok {
+        assert(np.value == [0, 1, 2, 3, 4])
+        let norm = py("numpy", "linalg.norm", [[3, 4]])
+        assert(norm.ok)
+        assert(abs(norm.value - 5.0) < 1e-9)
+    } else {
+        print("numpy absent on this interpreter — ndarray asserts skipped")
+    }
+}
+gene main() {
+    print("pybridge granted suite: OK")
+}

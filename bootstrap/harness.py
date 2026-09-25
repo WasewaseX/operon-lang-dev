@@ -31,6 +31,10 @@ def collect_op(root):
         # differential harness (both implementations would just time out)
         if "redteam" in dirpath:
             continue
+        # substrate-r1: capability-granted proofs need an operator cell —
+        # the differential harness runs zero-grant by design
+        if "granted" in dirpath:
+            continue
         for f in sorted(files):
             if f.endswith(".op"):
                 out.append(os.path.join(dirpath, f))

@@ -11,6 +11,9 @@ echo "[2/3] Operon proof suite (Rust core)"
 # dx-r6 (loop-5-a audit): apps/ joins the CI gate — the flagship app's
 # proof frame was failing silently (stale ORF assert) because nothing ran it
 ./bin/operon test apps/
+# substrate-r1: the Python bridge granted suite — explicit operator cell
+# (grants cannot come from auto-detected cells, so this is a separate step)
+./bin/operon test tests/granted/ --cell tests/granted/pybridge.cell
 echo "[3/4] Differential harness (Rust core vs Python oracle)"
 python3 bootstrap/harness.py
 echo "[4/4] Oracle proof suite (the same frames on the second implementation)"

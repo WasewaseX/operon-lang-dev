@@ -1,0 +1,7 @@
+# substrate-r1: operator cell for the py-bridge redteam payloads.
+# Explicit --cell only (auto-detected cells cannot grant).
+[allow]
+py = time
+
+[py]
+timeout_ms = 300

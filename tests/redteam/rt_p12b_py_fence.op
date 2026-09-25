@@ -1,0 +1,15 @@
+# substrate-r1: the module fence. --allow-py math is granted; os is NOT.
+# Grant granularity is per-module: reaching os through a math grant would
+# be a containment break. Positive control proves the granted module runs.
+gene main() {
+    stress {
+        let r = py("os", "getcwd", [])
+        print("p12b-BREACH os reached through a math grant")
+    } rescue (e) {
+        assert(e.kind == "interference")
+        print("p12b contained: module fence held")
+    }
+    let r = py("math", "sqrt", [4])
+    assert(r.ok)
+    assert(abs(r.value - 2.0) < 1e-9)
+}

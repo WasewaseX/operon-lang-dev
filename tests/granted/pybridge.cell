@@ -1,0 +1,9 @@
+# substrate-r1: operator cell for the GRANTED proof suite (tests/granted/).
+# Explicit --cell only — auto-detected operon.cell files cannot grant
+# capabilities by design (TOCTOU guard, tools.rs). Cell values carry a
+# comma-separated grant list; CLI flags stay one-per-flag.
+[allow]
+py = math, json, time, numpy
+
+[py]
+timeout_ms = 5000

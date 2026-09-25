@@ -119,11 +119,22 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
                 continue;
             }
             let added = match rest {
-                "read" => interp.caps.add_grant("read", &v),
-                "write" => interp.caps.add_grant("write", &v),
-                "run" => interp.caps.add_grant("run", &v),
-                "net" => interp.caps.add_grant("net", &v),
-                "env" => interp.caps.add_grant("env", &v),
+                // cell values may carry a comma-separated grant list
+                // ("py = math, json") — CLI flags stay one-per-flag
+                "read" | "write" | "run" | "net" | "env" | "py" => {
+                    let mut res = Ok(());
+                    for g in v.split(',') {
+                        let g = g.trim();
+                        if g.is_empty() {
+                            continue;
+                        }
+                        res = interp.caps.add_grant(rest, g);
+                        if res.is_err() {
+                            break;
+                        }
+                    }
+                    res
+                }
                 // sec-r2 (audit C-11): exit is a boolean capability
                 "exit" => {
                     interp.caps.exit_allowed = v == "true";
@@ -928,6 +939,13 @@ fn collect_op_files(dir: &Path, out: &mut Vec<String>) {
                 // escapes) — it is exercised by scripts/redteam.sh with
                 // containment expectations, never by the proof runner
                 if p.file_name().map(|n| n == "redteam").unwrap_or(false) {
+                    continue;
+                }
+                // substrate-r1: tests/granted/ holds capability-granted
+                // proofs — meaningless (would all deny) under the default
+                // runner's zero-grant sandbox. Exercised explicitly by
+                // scripts/test.sh with an operator cell file.
+                if p.file_name().map(|n| n == "granted").unwrap_or(false) {
                     continue;
                 }
                 collect_op_files(&p, out);

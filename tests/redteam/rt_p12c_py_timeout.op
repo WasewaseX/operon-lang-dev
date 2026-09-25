@@ -1,0 +1,13 @@
+# substrate-r1: timeout kill is bounded. time is granted via the operator
+# cell (py_grant.cell, py.timeout_ms = 300); the child sleeps for an hour
+# and MUST be killed at ~300 ms — never 3600 s (the redteam judge treats
+# rc 124/137 as HANG, and so would a user).
+gene main() {
+    let t0 = unix_time()
+    let r = py("time", "sleep", [3600])
+    assert(r.ok == false)
+    assert(r.code == -1)
+    let dt = unix_time() - t0
+    assert(dt < 30)
+    print("p12c contained: hour-long sleep killed inside the wall budget")
+}
