@@ -3341,29 +3341,45 @@ class Interp:
             r = rate if rate is not None else 1.0
             # reg-bio-3 (A1/A7): per-cistron rbs efficiency + transcriptional
             # polarity (upstream blocking reduces downstream yield) (mirror)
+            # loop-9 (P0-1): per-call-WEIGHTED polarity (mirror) — each
+            # upstream member contributes its expected factor: methylation
+            # past threshold => pol; a target-less RISC silence with capture
+            # p = 1 − Π(1−s_i)^sites_i => surv + (1−surv)·pol with
+            # surv = Π(1−s_i)^sites_i; nothing => 1.0. Legacy inputs
+            # degenerate to exactly 1.0 or pol in the same member order,
+            # bit-identical to the old binary rule; no randomness consumed.
             ui = self._operon_of(frm)
             if ui is not None:
                 u = self.operons[ui]
                 pos = next(i for i, (m, _r) in enumerate(u["members"]) if m == frm)
                 r *= u["members"][pos][1]
-                blocked = 0
+                pol = self.cell.get("operon.polarity")
+                pv = 0.5
+                if pol is not None:
+                    try:
+                        pv = min(max(float(pol), 0.0), 1.0)
+                    except ValueError:
+                        pv = 0.5
+                f2 = 1.0
                 for g2, _r2 in u["members"][:pos]:
-                    silenced = any(f2 == g2 and t2 is None for f2, t2, _s2, _n2 in self.silences)
                     methylated = self.methyl_levels.get(g2, 0) >= self.methyl_threshold
-                    if silenced or methylated:
-                        blocked += 1
-                if blocked > 0:
-                    pol = self.cell.get("operon.polarity")
-                    pv = 0.5
-                    if pol is not None:
-                        try:
-                            pv = min(max(float(pol), 0.0), 1.0)
-                        except ValueError:
-                            pv = 0.5
-                    f2 = 1.0
-                    for _k in range(blocked):
-                        f2 *= pv
-                    r *= f2
+                    if methylated:
+                        factor = pv
+                    else:
+                        surv = 1.0
+                        silenced = False
+                        for f3, t3, s3, n3 in self.silences:
+                            if f3 == g2 and t3 is None:
+                                silenced = True
+                                base = 1.0 - s3
+                                for _k in range(n3):
+                                    surv *= base
+                        if silenced:
+                            factor = surv + (1.0 - surv) * pv
+                        else:
+                            factor = 1.0
+                    f2 *= factor
+                r *= f2
             cur = self.grn_levels.get(to, 0.0)
             p = cur + r * delta - dec * cur
             if p < 0.0:
@@ -4047,7 +4063,13 @@ class Interp:
             k = v_display(args[0]) if args else ""
             return self.grn_levels.get(k, 0.0)
         if name == "fingerprint":
-            total_bins = (self.call_clock // 20) + 1
+            # loop-9 (P0-3): parity fix — the Rust core measures COMPLETE
+            # 20-call bins only (`call_clock / 20`); this mirror's former
+            # `+ 1` included the trailing partial bin, so the same 41-call
+            # history scored 2.439 on Rust and 0.053 here. Mirror the
+            # complete-bin rule op-for-op (complete_bins == 0 lists the gene
+            # at 0.0 but excludes it from the average, exactly like Rust).
+            complete_bins = self.call_clock // 20
             burst_by = {}
             burst_total, burst_n = 0.0, 0
             # reg-bio-2 (D9): iterate buckets in SORTED key order — the Rust
@@ -4055,13 +4077,16 @@ class Interp:
             # not associative; order must match for the last-ulp parity).
             for gname in sorted(self.gene_buckets):
                 bins = self.gene_buckets[gname]
-                n = float(total_bins)
-                total = sum(bins.values())
+                if complete_bins == 0:
+                    burst_by[gname] = 0.0
+                    continue
+                n = float(complete_bins)
+                total = sum(bins.get(b, 0) for b in range(complete_bins))
                 mean = total / n
                 # reg-bio-2 (D9): d*d (explicit multiply), never ** — op-for-op
                 # with the Rust core's un-multiplied square.
                 var = 0.0
-                for b in range(total_bins):
+                for b in range(complete_bins):
                     d = float(bins.get(b, 0)) - mean
                     var += d * d
                 var /= n

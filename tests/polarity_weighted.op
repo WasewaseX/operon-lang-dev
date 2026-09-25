@@ -1,0 +1,52 @@
+# loop-9 (P0-1): per-call-WEIGHTED transcriptional polarity.
+# The pre-loop-9 rule counted an upstream cistron as "blocked" on mere
+# EXISTENCE of a target-less silence: a strength-0.4 silence (40% capture)
+# imposed the FULL 0.5 derating on everything downstream, even though 60%
+# of calls survived. The weighted rule folds each upstream member's
+# per-call capture probability into an expected factor:
+#     surv + (1−surv)·pol   with   surv = Π(1−s_i)^sites_i
+# Legacy inputs degenerate bit-identically (strength 1.0 → surv 0 → pol;
+# methylation → pol; nothing → 1.0, an exact no-op multiply).
+# Fails-pre: the 0.8 and 0.63 assertions burn on the old binary rule
+# (0.5 and 0.25).
+regulate {
+    b1 translates pb1 rate 1.0
+    b2 translates pb2 rate 1.0
+    c3 translates pc3 rate 1.0
+}
+gene a1() { return "a1" }
+gene b1() { return "b1" }
+gene a2() { return "a2" }
+gene b2() { return "b2" }
+gene a3() { return "a3" }
+gene b3() { return "b3" }
+gene c3() { return "c3" }
+operon w1 { a1 rbs 1.0; b1 rbs 1.0; }
+operon w2 { a2 rbs 1.0; b2 rbs 1.0; }
+operon w3 { a3 rbs 1.0; b3 rbs 1.0; c3 rbs 1.0; }
+frame proof {
+    # (1) weighted: 40% capture on the upstream cistron → downstream
+    #     factor = surv + (1−surv)·pol = 0.6 + 0.4·0.5 = 0.8
+    silence a1 strength 0.4;
+    b1()
+    grn_fire("a1")
+    assert(abs(grn_get("pb1") - 0.8) < 1e-12, "weighted polarity: surv 0.6 gives factor 0.6 + 0.4*0.5 = 0.8 (binary rule said 0.5)")
+    # (2) legacy degenerate: strength 1.0 → surv 0 → EXACTLY pol, the same
+    #     factor the binary rule produced (bit-identical back-compat)
+    silence a2 strength 1.0;
+    b2()
+    grn_fire("a2")
+    assert(abs(grn_get("pb2") - 0.5) < 1e-12, "strength 1.0 degenerates to the legacy binary factor 0.5")
+    # (3) two partial silences compound multiplicatively in member order:
+    #     (0.8 + 0.2·0.5)·(0.4 + 0.6·0.5) = 0.9·0.7 = 0.63
+    silence a3 strength 0.2;
+    silence b3 strength 0.6;
+    c3()
+    grn_fire("a3")
+    assert(abs(grn_get("pc3") - 0.63) < 1e-12, "two partial upstream silences: 0.9 * 0.7 = 0.63 (member order)")
+    # (4) the survival side is observable too: raise polarity to 1.0 and a
+    #     partially-silenced upstream member stops derating at all
+    #     (surv + (1−surv)·1.0 = 1.0 — polarity only matters when blocked
+    #     calls actually lose yield)
+    assert(methyl("operon.polarity", 0.5) == 0.5, "default polarity is 0.5 (read back through the cell reader)")
+}

@@ -2932,37 +2932,101 @@ impl Interp {
                     (pos, u.members[pos].1)
                 };
                 rf *= rbs;
-                let mut blocked = 0usize;
+                // loop-9 (P0-1): per-call-WEIGHTED polarity. The old binary
+                // existence check imposed the full polarity^1 derating on
+                // downstream cistrons even for a strength-0.01 silence that
+                // captures just 1% of calls. Each upstream member now
+                // contributes its expected factor: methylation-past-threshold
+                // blocks transcription outright (factor = pol, exactly as
+                // before); a target-less RISC silence with per-call capture
+                // p = 1 − Π(1−s_i)^sites_i leaves the call alive with
+                // probability surv = 1 − p, so the downstream yield scales by
+                // surv + (1−surv)·pol. Legacy inputs degenerate exactly: no
+                // silence → 1.0 (an exact no-op multiply); strength 1.0 →
+                // surv = 0 → pol; methylation → pol — the same factors in the
+                // same member order, so legacy programs are bit-identical.
+                // No randomness is consumed here: this is the expected value,
+                // not a draw (the draw happens only in the call path).
+                let pol = self
+                    .cell
+                    .get("operon.polarity")
+                    .and_then(|v| v.parse::<f64>().ok())
+                    .map(|v| v.clamp(0.0, 1.0))
+                    .unwrap_or(0.5);
+                let mut f = 1.0f64;
                 for (g, _) in self.operons[ui].members.iter().take(pos) {
-                    let silenced = self
-                        .silences
-                        .iter()
-                        .any(|(f, to, _, _)| f == g && to.is_none());
                     let methylated =
                         *self.methyl_levels.get(g).unwrap_or(&0) >= self.methyl_threshold;
-                    if silenced || methylated {
-                        blocked += 1;
-                    }
+                    let factor = if methylated {
+                        // methylation dominates: transcription is blocked
+                        // regardless of any RISC capture probability
+                        pol
+                    } else {
+                        let mut surv = 1.0f64;
+                        let mut silenced = false;
+                        for (sf, st, s, sites) in self.silences.iter() {
+                            if sf == g && st.is_none() {
+                                silenced = true;
+                                let base = 1.0 - *s;
+                                let mut k = 0;
+                                while k < *sites {
+                                    surv *= base;
+                                    k += 1;
+                                }
+                            }
+                        }
+                        if silenced {
+                            surv + (1.0 - surv) * pol
+                        } else {
+                            1.0
+                        }
+                    };
+                    f *= factor;
                 }
-                if blocked > 0 {
-                    let pol = self
-                        .cell
-                        .get("operon.polarity")
-                        .and_then(|v| v.parse::<f64>().ok())
-                        .map(|v| v.clamp(0.0, 1.0))
-                        .unwrap_or(0.5);
-                    let mut f = 1.0f64;
-                    let mut k = 0;
-                    while k < blocked {
-                        f *= pol;
-                        k += 1;
-                    }
-                    rf *= f;
-                }
+                rf *= f;
             }
             let cur = *self.grn_levels.get(&t.to).unwrap_or(&0.0);
             let p = (cur + rf * delta as f64 - dec * cur).clamp(0.0, 1.0);
             self.grn_levels.insert(t.to.clone(), p);
+        }
+    }
+
+    /// loop-9 (P0-4): standalone m6A decay cadence. The B3 decay block ran
+    /// ONLY inside the GRN decay tick — with no `grn.decay_calls` and no
+    /// decay-clock builtin configured, the early returns made
+    /// `.cell m6a.decay` a silent no-op (and it shipped without any proof
+    /// covering the standalone case). When no GRN clock exists, the
+    /// `m6a.decay` fraction erases site density every `m6a.decay_calls`
+    /// calls (default 1), half-down rounding on the 0..=3 lattice — a
+    /// diluted mark never reads as MORE marked. When a GRN clock IS
+    /// configured this returns immediately: the decay then rides the GRN
+    /// tick exactly as before (no double decay).
+    fn m6a_decay_own(&mut self) {
+        if self.decay_clock_n.is_some() || self.cell.contains_key("grn.decay_calls") {
+            return;
+        }
+        let f = match self
+            .cell
+            .get("m6a.decay")
+            .and_then(|v| v.parse::<f64>().ok())
+            .map(|v| v.clamp(0.0, 1.0))
+        {
+            Some(f) if f > 0.0 => f,
+            _ => return,
+        };
+        let n = self
+            .cell
+            .get("m6a.decay_calls")
+            .and_then(|v| v.parse::<u64>().ok())
+            .filter(|n| *n > 0)
+            .unwrap_or(1);
+        if !self.call_clock.is_multiple_of(n) || self.m6a_levels.is_empty() {
+            return;
+        }
+        for lvl in self.m6a_levels.values_mut() {
+            let x = (*lvl as f64) * (1.0 - f) - 0.5;
+            let next = x.ceil();
+            *lvl = if next < 0.0 { 0 } else { next as u32 };
         }
     }
 
@@ -2981,6 +3045,9 @@ impl Interp {
                 let cn = match self.cell.get("grn.decay_calls") {
                     Some(v) => match v.parse::<u64>() {
                         Ok(n) if n > 0 => n,
+                        // loop-9 (P0-4): no GRN clock — the standalone m6A
+                        // cadence already ran at the call site (m6a_decay_own
+                        // is invoked before this tick), so return cleanly.
                         _ => return,
                     },
                     None => return,
@@ -3441,6 +3508,9 @@ impl Interp {
         self.call_clock += 1;
         // reg-bio-2 (C2): the decay clock — time-driven decay + translation
         // integration tick here (unset key = no-op).
+        // loop-9 (P0-4): the m6A lattice decays on its own cadence when no
+        // GRN clock is configured (inert without `m6a.decay` — byte-identical).
+        self.m6a_decay_own();
         self.grn_decay_tick();
         let bucket = self.call_clock / 20;
         *self
@@ -3737,6 +3807,8 @@ impl Interp {
         self.call_clock += 1;
         // reg-bio-2 (C2): the decay clock ticks on the phenotype-method path
         // too (both expression surfaces share one timebase).
+        // loop-9 (P0-4): standalone m6A cadence (same contract, both paths).
+        self.m6a_decay_own();
         self.grn_decay_tick();
         let bucket = self.call_clock / 20;
         *self
@@ -5168,9 +5240,21 @@ impl Interp {
                 // grn_levels and gate genes like any regulator (two-tier).
                 self.trans_integrate();
                 // STATEFUL network: levels persist across fires (a latch by default — decay makes the dilution explicit)
+                // loop-9 (P0-2): ligand-pool edge sources do NOT live in
+                // grn_levels. Seeding them here at 0.0 permanently shadowed
+                // the metabolite-pool read in gate resolution (grn_levels.get
+                // wins over the ligand fallback), so ONE grn_fire killed every
+                // ligand gate for the rest of the run. Sources/targets backed
+                // by a metabolite are skipped — their level lives in the pool
+                // and resolves through the ligand fallback exactly as before
+                // the first fire.
                 for e in &self.grn_edges {
-                    self.grn_levels.entry(e.from.clone()).or_insert(0.0);
-                    self.grn_levels.entry(e.to.clone()).or_insert(0.0);
+                    if !self.ligands.iter().any(|l| l == &e.from) {
+                        self.grn_levels.entry(e.from.clone()).or_insert(0.0);
+                    }
+                    if !self.ligands.iter().any(|l| l == &e.to) {
+                        self.grn_levels.entry(e.to.clone()).or_insert(0.0);
+                    }
                 }
                 let cur = *self.grn_levels.get(&seed).unwrap_or(&0.0);
                 self.grn_levels.insert(seed.clone(), (cur + 1.0).min(1.0));

@@ -14,6 +14,9 @@ echo "[2/3] Operon proof suite (Rust core)"
 # substrate-r1: the Python bridge granted suite — explicit operator cell
 # (grants cannot come from auto-detected cells, so this is a separate step)
 ./bin/operon test tests/granted/ --cell tests/granted/pybridge.cell
+# loop-9 (P0-4): the standalone m6A decay cadence — its own explicit cell
+# (m6a.decay 0.5); a silent no-op before this round, now pinned here.
+./bin/operon test tests/granted/m6a_decay_cadence.op --cell tests/granted/m6a_decay_cadence.cell
 echo "[3/4] Differential harness (Rust core vs Python oracle)"
 python3 bootstrap/harness.py
 echo "[4/4] Oracle proof suite (the same frames on the second implementation)"
