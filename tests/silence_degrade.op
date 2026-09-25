@@ -1,0 +1,29 @@
+# reg-bio (F-4) — pure RISC degradation: `silence old;`
+#
+# miRNA/RISC DESTROYS a transcript — there is no replacement gene. The
+# redirect form (`silence old -> new;`) is allele replacement and stays;
+# the target-less form is degradation: calls return null with a note, and
+# a degraded call is not expression (it never reaches the call counters).
+# @acetylate genes are immune (open chromatin wins — D-005).
+gene ghost() { return "boo" }
+gene keeper() { return "kept" }
+@acetylate gene tough() { return "tough" }
+frame proof {
+    assert(ghost() == "boo", "before silencing the gene answers")
+    assert(keeper() == "kept", "unrelated gene unaffected")
+    assert(tough() == "tough", "acetylated gene answers")
+    # load pure degradation
+    silence ghost;
+    assert(ghost() == null, "RISC degradation: no replacement executes")
+    assert(ghost() == null, "degradation is stable across calls")
+    assert(keeper() == "kept", "silencing is per-gene")
+    # redirect form unchanged (allele replacement)
+    silence keeper -> tough;
+    assert(keeper() == "tough", "redirect form still replaces the allele")
+    # acetylate immunity covers degradation too
+    silence tough;
+    assert(tough() == "tough", "@acetylate is immune to RISC degradation")
+}
+main {
+    promote("RISC degradation proofs done")
+}

@@ -1,0 +1,17 @@
+# reg-bio p13b: noisy ring — noise=1.0 draws per substep must stay
+# fuel-charged, deterministic, and bounded. The fold charges 20 steps per
+# tick like the noiseless ring; the seeded position-derived stream keeps
+# both implementations bit-identical. Containment: the loop completes with
+# a bounded accumulator (no hang, no divergence, no breach).
+repressilator a -> b -> c noise 1.0 seed 42
+gene main() {
+    let i = 0
+    let acc = 0.0
+    while i < 5000 {
+        repressi_next()
+        let s = repressi_state()
+        acc = acc + s.a
+        i = i + 1
+    }
+    print("p13b contained: acc=" + str(acc))
+}

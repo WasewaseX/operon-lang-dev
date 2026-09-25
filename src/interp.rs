@@ -365,7 +365,47 @@ impl Caps {
 /// GRN activating thresholds by this much (0.25), so under the T2a call
 /// gate an enhanced gene demonstrably fires where an unenhanced one would
 /// stay gated. Only meaningful on edges that carry an explicit threshold.
+/// reg-bio (F-6): the dose is overridable via `.cell enhance.delta` — real
+/// enhancer strength varies by orders of magnitude with binding-site
+/// number/affinity; 0.25 stays the default for every existing program.
 pub const ENHANCE_DELTA: f64 = 0.25;
+
+/// reg-bio (F-5): the repressilator's kinetic parameters. The published
+/// Elowitz–Leibler system is parameterized (α, γ, Hill n, plasmid copy
+/// number); a language that hardcodes them cannot do in-silico plasmid
+/// engineering. Defaults are EXACTLY the historical constants, so unset
+/// cells are bit-identical to every previous run (parity contract).
+#[derive(Debug, Clone, Copy)]
+pub struct RepressiParams {
+    pub alpha: f64,
+    pub gamma: f64,
+    pub hill: u32,
+    /// basal promoter leak — real repressed promoters never reach zero
+    /// transcription; dA/dt gains a constant +basal term.
+    pub basal: f64,
+    /// noise amplitude (0 = off). When > 0, each Euler substep draws a
+    /// deterministic kick from a stream derived from the absolute
+    /// (tick, substep) position — so the fold-from-init path and the
+    /// incremental cache path produce bit-identical levels, and the
+    /// Python oracle mirrors it op-for-op (phase diffusion, E-L §noise).
+    pub noise: f64,
+    /// seed for the noise stream (independent of the program's `random()`
+    /// stream — noise never perturbs user-visible randomness).
+    pub seed: u64,
+}
+
+impl Default for RepressiParams {
+    fn default() -> Self {
+        RepressiParams {
+            alpha: 10.0,
+            gamma: 1.0,
+            hill: 4,
+            basal: 0.0,
+            noise: 0.0,
+            seed: 0x9E3779B97F4A7C15,
+        }
+    }
+}
 
 pub struct Interp {
     pub notes: Vec<Note>,
@@ -383,7 +423,7 @@ pub struct Interp {
     /// instead of process stdout — the test runner captures per-file
     /// program output and shows it only on failure (clean reports).
     pub stdout_sink: Option<Rc<RefCell<Vec<String>>>>,
-    pub silences: Vec<(String, String)>,
+    pub silences: Vec<(String, Option<String>)>,
     pub fates: HashMap<String, Arc<FateDef>>,
     pub phenos: HashMap<String, Arc<PhenoDef>>,
     pub grn_edges: Vec<RegEdge>,
@@ -430,6 +470,20 @@ pub struct Interp {
     pub methyl_threshold: u32,
     pub asserts_run: u64,
     pub rng: u64,
+    /// reg-bio (F-6): configurable enhancer dose (default ENHANCE_DELTA).
+    pub enhance_delta: f64,
+    /// reg-bio (F-1): the telegraph promoter layer. Real promoters switch
+    /// between active/inactive states (transcriptional bursting); when
+    /// `expr_stochastic` is on, each gene carries a promoter state and one
+    /// seeded draw per call attempt decides on/off. OFF by default — the
+    /// deterministic contract is untouched.
+    pub expr_stochastic: bool,
+    pub expr_kon: f64,
+    pub expr_koff: f64,
+    pub promoter_states: HashMap<String, bool>,
+    pub burst_off: HashMap<String, u64>,
+    /// reg-bio (F-5): repressilator kinetic parameters (defaults = legacy).
+    pub repressi_params: RepressiParams,
     pub cli_args: Vec<String>,
     pub tasks: HashMap<i64, TaskHandle>,
     pub next_task_id: i64,
@@ -496,6 +550,13 @@ impl Interp {
             methyl_threshold: 3,
             asserts_run: 0,
             rng: 0x9E3779B97F4A7C15,
+            enhance_delta: ENHANCE_DELTA,
+            expr_stochastic: false,
+            expr_kon: 0.3,
+            expr_koff: 0.1,
+            promoter_states: HashMap::new(),
+            burst_off: HashMap::new(),
+            repressi_params: RepressiParams::default(),
             cli_args: Vec::new(),
             tasks: HashMap::new(),
             next_task_id: 1,
@@ -1096,9 +1157,23 @@ impl Interp {
                 Ok(Flow::Norm)
             }
             Stmt::Silence(from, to) => {
-                if let Some(t) = to {
-                    self.silences.push((from.clone(), t.clone()));
-                    self.note(0, 1, format!("RISC loaded: '{}' silenced → '{}'", from, t));
+                match to {
+                    Some(t) => {
+                        self.silences.push((from.clone(), Some(t.clone())));
+                        self.note(0, 1, format!("RISC loaded: '{}' silenced → '{}'", from, t));
+                    }
+                    // reg-bio (F-4): pure RISC degradation — miRNA/RISC destroys
+                    // the transcript; there is no replacement gene. The old
+                    // behavior was a SILENT no-op, which violated the honesty
+                    // principle (a statement that pretends nothing happened).
+                    None => {
+                        self.silences.push((from.clone(), None));
+                        self.note(
+                            0,
+                            1,
+                            format!("RISC loaded: '{}' degraded (no replacement)", from),
+                        );
+                    }
                 }
                 Ok(Flow::Norm)
             }
@@ -1128,10 +1203,32 @@ impl Interp {
                 self.toggles.push((a.clone(), b.clone(), true));
                 Ok(Flow::Norm)
             }
-            Stmt::Repressilator(ring, period) => {
+            Stmt::Repressilator(ring, period, ov) => {
                 self.repressi_ring = ring.clone();
                 self.repressi_i = 0;
                 self.repressi_tick = 0;
+                // reg-bio (F-5): inline kinetics layer onto the current params
+                // (.cell keys apply first, declarations override per-field)
+                if let Some(a) = ov.alpha {
+                    self.repressi_params.alpha = a;
+                }
+                if let Some(g) = ov.gamma {
+                    self.repressi_params.gamma = g;
+                }
+                if let Some(h) = ov.hill {
+                    self.repressi_params.hill = h;
+                }
+                if let Some(b) = ov.basal {
+                    self.repressi_params.basal = b;
+                }
+                if let Some(n) = ov.noise {
+                    self.repressi_params.noise = n;
+                }
+                if let Some(s) = ov.seed {
+                    self.repressi_params.seed = s;
+                }
+                // the ring cache is stale the moment new kinetics land
+                *self.repressi_cache.borrow_mut() = (0, Vec::new());
                 if let Some(sec) = period {
                     if *sec > 0.0 {
                         let counter = Arc::new(AtomicU64::new(0));
@@ -1697,17 +1794,36 @@ impl Interp {
                             _ => false,
                         };
                         if !immune {
-                            self.note(
-                                0,
-                                4,
-                                format!("RISC: call to '{}' silenced → '{}'", from, to),
-                            );
-                            let target = env.get(&to).unwrap_or(Value::Null);
-                            let mut argvs = Vec::new();
-                            for a in args {
-                                argvs.push(self.eval(env, a)?);
+                            match to {
+                                Some(to) => {
+                                    self.note(
+                                        0,
+                                        4,
+                                        format!("RISC: call to '{}' silenced → '{}'", from, to),
+                                    );
+                                    let target = env.get(&to).unwrap_or(Value::Null);
+                                    let mut argvs = Vec::new();
+                                    for a in args {
+                                        argvs.push(self.eval(env, a)?);
+                                    }
+                                    return self.call_value(env, &target, argvs);
+                                }
+                                // reg-bio (F-4): pure degradation — the transcript
+                                // is destroyed, no replacement executes. A degraded
+                                // call is not expression: it returns null BEFORE the
+                                // call counters, exactly like the other silencing gates.
+                                None => {
+                                    self.note(
+                                        0,
+                                        4,
+                                        format!(
+                                            "RISC: call to '{}' degraded (no replacement)",
+                                            from
+                                        ),
+                                    );
+                                    return Ok(Value::Null);
+                                }
                             }
-                            return self.call_value(env, &target, argvs);
                         }
                     }
                     // named call: user genes, builtins, wobble repair, phantoms
@@ -2267,6 +2383,21 @@ impl Interp {
                         return Ok(Value::Null);
                     }
                 }
+                // reg-bio (F-1): promoter gate last — bursting is the
+                // promoter's own stochastic dynamics, downstream of every
+                // trans/epigenetic gate. Bursting is universal (open
+                // chromatin bursts too): no @acetylate exemption here.
+                if self.promoter_veto(&seq_name) {
+                    self.note(
+                        dl,
+                        4,
+                        format!(
+                            "promoter inactive: sequence '{}' burst-off — call returns null",
+                            seq_name
+                        ),
+                    );
+                    return Ok(Value::Null);
+                }
                 // calling a sequence starts a worker; pulls are lazy
                 if args.len() > def.params.len() && !def.params.is_empty() {
                     self.note(
@@ -2451,13 +2582,23 @@ impl Interp {
     ///     no explicit thresholds changes zero call behavior (back-compat).
     ///
     /// T2e: an `enhance`d gene lowers its activating thresholds by
-    /// ENHANCE_DELTA — a super-enhancer fires where an unenhanced gene
-    /// stays gated.
+    /// `enhance_delta` (default ENHANCE_DELTA, `.cell enhance.delta`) — a
+    /// super-enhancer fires where an unenhanced gene stays gated.
+    ///
+    /// reg-bio (F-3): cis-regulatory input functions. Activating thresholded
+    /// edges are AND members (all must pass — the legacy contract); edges
+    /// declared `any` are OR members — ALTERNATIVE activators, each of which
+    /// alone suffices. Precisely: the gate opens iff (every AND member
+    /// passes) OR (any OR member passes). Inhibitors keep their own OR
+    /// semantics (any above-threshold inhibitor vetoes). Message order is
+    /// first-wins in declaration order — unchanged from the pre-`any`
+    /// behavior for every network without OR members.
     fn grn_veto(&mut self, name: &str) -> Option<String> {
         if self.grn_edges.is_empty() {
             return None;
         }
         let boosted = self.enhanced.iter().any(|g| g == name);
+        let delta = self.enhance_delta;
         // A11 (reg-r2): a repressilator node doubles as a GRN regulator.
         // If an edge's source is a ring node with no explicit grn_fire
         // level, the gate reads the node's normalized oscillation level
@@ -2469,6 +2610,10 @@ impl Interp {
             None => self.repressi_tick,
         };
         let mut veto: Option<String> = None;
+        let mut and_fail: Option<String> = None;
+        let mut and_present = false;
+        let mut or_present = false;
+        let mut or_pass = false;
         // sec-r3: clone the matching edges — the ring-overlay path mutates
         // self (fuel-charged cache), which cannot borrow grn_edges at the
         // same time. Edge counts are tiny; a clone per veto check is noise.
@@ -2498,26 +2643,45 @@ impl Interp {
             };
             if e.inhibit {
                 if let Some(t) = e.threshold {
-                    if lvl >= t {
+                    if lvl >= t && and_fail.is_none() {
+                        // first-wins: an earlier failing AND activator keeps
+                        // its message (exact legacy ordering)
                         veto = Some(format!(
                             "inhibitor '{}' level {} >= threshold {}",
                             e.from, lvl, t
                         ));
                     }
                 }
-            } else {
+            } else if e.threshold.is_some() {
                 let t = e.threshold.unwrap_or(0.0);
-                let t = if boosted {
-                    (t - ENHANCE_DELTA).max(0.0)
+                let t = if boosted { (t - delta).max(0.0) } else { t };
+                let pass = lvl >= t;
+                if e.any {
+                    or_present = true;
+                    if pass {
+                        or_pass = true;
+                    }
                 } else {
-                    t
-                };
-                if lvl < t {
-                    veto = Some(format!(
-                        "regulator '{}' level {} < threshold {}",
-                        e.from, lvl, t
-                    ));
+                    and_present = true;
+                    if !pass && and_fail.is_none() {
+                        and_fail = Some(format!(
+                            "regulator '{}' level {} < threshold {}",
+                            e.from, lvl, t
+                        ));
+                    }
                 }
+            }
+            // activating edges without a threshold stay declarative
+        }
+        // reg-bio (F-3): the gate opens iff (every AND member passes) OR
+        // (any OR member passes) — an `any` edge is an alternative
+        // activator that alone suffices. Networks without `any` keep the
+        // exact legacy conjunctive behavior.
+        if veto.is_none() && !or_pass {
+            if let Some(f) = and_fail {
+                veto = Some(f);
+            } else if or_present && !and_present {
+                veto = Some("no OR activator above threshold".to_string());
             }
         }
         veto
@@ -2542,6 +2706,7 @@ impl Interp {
                 (u64::MAX, Vec::new())
             }
         };
+        let p = self.repressi_params;
         let levels = if cached_tick == u64::MAX {
             self.steps = self
                 .steps
@@ -2552,7 +2717,7 @@ impl Interp {
                     "step budget exhausted (repressilator fold)",
                 ));
             }
-            repressilator_levels(n, tick)
+            repressilator_levels_p(n, tick, p)
         } else if cached_tick == tick {
             cached_levels
         } else {
@@ -2567,8 +2732,10 @@ impl Interp {
                 ));
             }
             let mut lv = cached_levels;
-            for _ in 0..new_ticks {
-                lv = repressilator_step(lv);
+            // absolute tick indices drive the position-derived noise stream
+            // (reg-bio F-5) — identical ops to the from-init fold
+            for t in cached_tick..tick {
+                lv = repressilator_step_p(lv, p, t);
             }
             lv
         };
@@ -2588,11 +2755,45 @@ impl Interp {
 
     /// Normalized ring level for a GRN gate (cached, fuel-charged path).
     fn ring_gate_level(&mut self, n: usize, tick: u64, node_index: usize) -> Result<f64, Stress> {
-        const ALPHA: f64 = 10.0;
+        let alpha = self.repressi_params.alpha;
         let levels = self.ring_advance(n, tick)?;
         let raw = levels[node_index.min(n.saturating_sub(1))];
-        let norm = raw / ALPHA;
+        let norm = raw / alpha;
         Ok(if norm > 1.0 { 1.0 } else { norm })
+    }
+
+    /// reg-bio (F-1): the telegraph promoter draw. Real promoters switch
+    /// between active/inactive states — transcription happens in bursts.
+    /// One draw per call attempt on the SHARED mirrored xorshift64* stream
+    /// (the same state machine `random()` uses, so the Python oracle mirrors
+    /// it op-for-op): an active promoter switches off with probability
+    /// `koff`; an inactive one switches on with probability `kon`. The state
+    /// persists across calls (that persistence IS the burst). Returns true
+    /// when the call is suppressed (promoter off). OFF entirely unless
+    /// `.cell expression.stochastic = true` — the deterministic contract is
+    /// untouched for every existing program.
+    fn promoter_veto(&mut self, name: &str) -> bool {
+        if !self.expr_stochastic {
+            return false;
+        }
+        let was_active = *self.promoter_states.get(name).unwrap_or(&true);
+        let mut x = self.rng;
+        x ^= x >> 12;
+        x ^= x << 25;
+        x ^= x >> 27;
+        self.rng = x;
+        let u = ((x >> 11) as f64) / 9_007_199_254_740_992.0;
+        let now_active = if was_active {
+            u >= self.expr_koff
+        } else {
+            u < self.expr_kon
+        };
+        self.promoter_states.insert(name.to_string(), now_active);
+        if !now_active {
+            *self.burst_off.entry(name.to_string()).or_insert(0) += 1;
+            return true;
+        }
+        false
     }
 
     fn call_gene_inner(
@@ -2629,6 +2830,19 @@ impl Interp {
                 );
                 return Ok(Value::Null);
             }
+        }
+        // reg-bio (F-1): telegraph promoter layer — the pinned gate order
+        // ends here: RISC → toggle → GRN → methylation → promoter.
+        if self.promoter_veto(&name) {
+            self.note(
+                dl,
+                4,
+                format!(
+                    "promoter inactive: '{}' burst-off — call returns null",
+                    name
+                ),
+            );
+            return Ok(Value::Null);
         }
         *self.call_counts.entry(name.clone()).or_insert(0) += 1;
         // burst-index binning: 20 calls per bin, per gene (gene-expression
@@ -2911,6 +3125,19 @@ impl Interp {
                 );
                 return Ok(Value::Null);
             }
+        }
+        // reg-bio (F-1): promoter gate for phenotype methods (funnel order
+        // preserved — last gate before the call counters).
+        if self.promoter_veto(&name) {
+            self.note(
+                dl,
+                4,
+                format!(
+                    "promoter inactive: '{}' burst-off — call returns null",
+                    name
+                ),
+            );
+            return Ok(Value::Null);
         }
         *self.call_counts.entry(name.clone()).or_insert(0) += 1;
         self.call_clock += 1;
@@ -3983,6 +4210,20 @@ impl Interp {
                     burst_total += burst;
                     burst_n += 1;
                 }
+                // reg-bio (F-1): promoter burst-off counts. With the
+                // telegraph layer OFF this is empty (deterministic runs have
+                // no promoter noise); with it ON, `burst` now measures
+                // something with real physical meaning: promoter-state
+                // driven variance in expression, not just call patterns.
+                let mut bursts: Vec<(Value, Value)> = self
+                    .burst_off
+                    .iter()
+                    .map(|(g, c)| (Value::Str(g.clone()), Value::Int(*c as i64)))
+                    .collect();
+                bursts.sort_by(|a, b| match (&a.0, &b.0) {
+                    (Value::Str(x), Value::Str(y)) => x.cmp(y),
+                    _ => std::cmp::Ordering::Equal,
+                });
                 burst_by_gene.sort_by(|a, b| match (&a.0, &b.0) {
                     (Value::Str(x), Value::Str(y)) => x.cmp(y),
                     _ => std::cmp::Ordering::Equal,
@@ -4015,6 +4256,12 @@ impl Interp {
                             Value::Str("burst_by_gene".into()),
                             Value::Map(Rc::new(RefCell::new(crate::value::MapStore::from_vec(
                                 burst_by_gene,
+                            )))),
+                        ),
+                        (
+                            Value::Str("bursts".into()),
+                            Value::Map(Rc::new(RefCell::new(crate::value::MapStore::from_vec(
+                                bursts,
                             )))),
                         ),
                         (Value::Str("mature".into()), Value::Int(mature as i64)),
@@ -4200,9 +4447,22 @@ impl Interp {
                         }
                         let influence = match e.threshold {
                             Some(t) if t > 0.0 => {
-                                let p2 = parent * parent;
-                                let t2 = t * t;
-                                e.strength * (p2 / (p2 + t2))
+                                // reg-bio (F-2): per-edge Hill exponent —
+                                // cooperative binding. Repeated multiplication,
+                                // NOT powi (platform-chosen); the oracle mirrors
+                                // this op-for-op (bit-identical IEEE-754 parity).
+                                // The default n=2 reproduces the historical
+                                // parent*parent / t*t form exactly.
+                                let n = e.hill.unwrap_or(2);
+                                let mut ph = 1.0f64;
+                                let mut th = 1.0f64;
+                                let mut k = 0;
+                                while k < n {
+                                    ph *= parent;
+                                    th *= t;
+                                    k += 1;
+                                }
+                                e.strength * (ph / (ph + th))
                             }
                             // sec-r3/reg-r3: repeated multiplication, NOT
                             // powi — powi's algorithm is platform-chosen,
@@ -4242,9 +4502,19 @@ impl Interp {
                     }
                     let influence = match e.threshold {
                         Some(t) if t > 0.0 => {
-                            let p2 = parent * parent;
-                            let t2 = t * t;
-                            e.strength * (p2 / (p2 + t2))
+                            // reg-bio (F-2): Hill exponent here too — a
+                            // cooperative repressor's influence saturates the
+                            // same way its activation dose does.
+                            let n = e.hill.unwrap_or(2);
+                            let mut ph = 1.0f64;
+                            let mut th = 1.0f64;
+                            let mut k = 0;
+                            while k < n {
+                                ph *= parent;
+                                th *= t;
+                                k += 1;
+                            }
+                            e.strength * (ph / (ph + th))
                         }
                         _ => parent * e.strength,
                     };
@@ -4606,6 +4876,35 @@ impl Interp {
                 };
                 self.rng = if s == 0 { 0x9E3779B97F4A7C15 } else { s };
                 Ok(Value::Null)
+            }
+            "expr_on" => {
+                // reg-bio (F-1): in-source switch for the telegraph promoter
+                // layer — kon/koff per call attempt (clamped 0..1). Call
+                // randomize(seed) first for reproducible bursting. The layer
+                // stays off unless explicitly turned on here or via .cell.
+                let kon = match args.first() {
+                    Some(Value::Int(i)) => (*i as f64).clamp(0.0, 1.0),
+                    Some(Value::Float(f)) => f.clamp(0.0, 1.0),
+                    _ => 0.3,
+                };
+                let koff = match args.get(1) {
+                    Some(Value::Int(i)) => (*i as f64).clamp(0.0, 1.0),
+                    Some(Value::Float(f)) => f.clamp(0.0, 1.0),
+                    _ => 0.1,
+                };
+                self.expr_stochastic = true;
+                self.expr_kon = kon;
+                self.expr_koff = koff;
+                self.note(
+                    self.cur_line,
+                    1,
+                    format!("telegraph promoter on (kon={kon}, koff={koff})"),
+                );
+                Ok(Value::Bool(true))
+            }
+            "expr_off" => {
+                self.expr_stochastic = false;
+                Ok(Value::Bool(false))
             }
             "chr" => Ok(Value::Str(match args.first() {
                 Some(Value::Int(i)) if *i >= 0 && *i <= 0x10FFFF => char::from_u32(*i as u32)
@@ -6944,6 +7243,8 @@ pub const BUILTIN_SYNONYMS: &[(&str, &str)] = &[
 
 pub const BUILTIN_NAMES: &[&str] = &[
     "promote",
+    "expr_on",
+    "expr_off",
     "len",
     "push",
     "pop",
@@ -7107,27 +7408,20 @@ pub fn unsafe_allocs() -> u64 {
 ///   * identical op order in the Python mirror (bootstrap/oracle.py);
 ///   * stateless fold from init — manual and wall-clock modes cannot drift.
 pub fn repressilator_levels(n: usize, tick: u64) -> Vec<f64> {
-    const ALPHA: f64 = 10.0;
-    const GAMMA: f64 = 1.0;
-    const DT: f64 = 0.05;
-    const SUBSTEPS: usize = 20;
+    repressilator_levels_p(n, tick, RepressiParams::default())
+}
+
+/// reg-bio (F-5): parameterized fold — kinetic constants come from
+/// `RepressiParams` (`.cell repressi.*`). Default params are bit-identical
+/// to the historical constants.
+pub fn repressilator_levels_p(n: usize, tick: u64, p: RepressiParams) -> Vec<f64> {
     if n == 0 {
         return Vec::new();
     }
     let mut lv = vec![0.0f64; n];
     lv[0] = 5.0;
-    for _ in 0..tick {
-        for _ in 0..SUBSTEPS {
-            let snap = lv.clone();
-            for (j, item) in lv.iter_mut().enumerate() {
-                let rep = snap[(j + n - 1) % n];
-                // unrolled rep^4 — MUST stay op-identical to the oracle
-                let rep4 = rep * rep * rep * rep;
-                let d = ALPHA / (1.0 + rep4) - GAMMA * snap[j];
-                let v = snap[j] + DT * d;
-                *item = if v > 0.0 { v } else { 0.0 };
-            }
-        }
+    for t in 0..tick {
+        lv = repressilator_step_p(lv, p, t);
     }
     lv
 }
@@ -7135,23 +7429,59 @@ pub fn repressilator_levels(n: usize, tick: u64) -> Vec<f64> {
 /// One ring tick of the ODE (20 Euler substeps) — shared by the pure
 /// from-init fold and the interpreter's incremental cache (sec-r3), so both
 /// paths execute the identical operation sequence (bit-identical parity).
-pub fn repressilator_step(mut lv: Vec<f64>) -> Vec<f64> {
-    const ALPHA: f64 = 10.0;
-    const GAMMA: f64 = 1.0;
+///
+/// reg-bio (F-5): parameterized (α, γ, Hill n, basal leak) + optional noise.
+/// The noise stream is derived from the ABSOLUTE (tick, substep) position —
+/// `seed ^ tick·G ^ substep·G'` re-seeded per substep — so the incremental
+/// cache path (which starts mid-stream at the cached tick) and the
+/// from-init fold produce bit-identical levels. With `noise = 0` the draw
+/// is skipped entirely: byte-identical to the pre-noise arithmetic.
+pub fn repressilator_step(lv: Vec<f64>) -> Vec<f64> {
+    repressilator_step_p(lv, RepressiParams::default(), 0)
+}
+
+pub fn repressilator_step_p(mut lv: Vec<f64>, p: RepressiParams, tick: u64) -> Vec<f64> {
     const DT: f64 = 0.05;
     const SUBSTEPS: usize = 20;
     let n = lv.len();
     if n == 0 {
         return lv;
     }
-    for _ in 0..SUBSTEPS {
+    for ss in 0..SUBSTEPS {
+        // position-derived noise seed (independent of the program's
+        // `random()` stream — ring noise never perturbs user randomness)
+        let mut nx = if p.noise > 0.0 {
+            let mut s = p.seed
+                ^ tick.wrapping_mul(0x9E3779B97F4A7C15)
+                ^ (ss as u64).wrapping_mul(0xBF58476D1CE4E5B9);
+            if s == 0 {
+                s = 0x9E3779B97F4A7C15;
+            }
+            s
+        } else {
+            0
+        };
         let snap = lv.clone();
         for (j, item) in lv.iter_mut().enumerate() {
             let rep = snap[(j + n - 1) % n];
-            // unrolled rep^4 — MUST stay op-identical to the oracle
-            let rep4 = rep * rep * rep * rep;
-            let d = ALPHA / (1.0 + rep4) - GAMMA * snap[j];
-            let v = snap[j] + DT * d;
+            // rep^hill via repeated multiplication — MUST stay op-identical
+            // to the oracle. Default hill=4 is the historical unrolled
+            // rep*rep*rep*rep exactly (1.0*rep is exact in IEEE-754).
+            let mut rh = 1.0f64;
+            let mut k = 0;
+            while k < p.hill {
+                rh *= rep;
+                k += 1;
+            }
+            let d = p.alpha / (1.0 + rh) + p.basal - p.gamma * snap[j];
+            let mut v = snap[j] + DT * d;
+            if p.noise > 0.0 {
+                nx ^= nx >> 12;
+                nx ^= nx << 25;
+                nx ^= nx >> 27;
+                let u = ((nx >> 11) as f64) / 9_007_199_254_740_992.0;
+                v += p.noise * (u - 0.5);
+            }
             *item = if v > 0.0 { v } else { 0.0 };
         }
     }

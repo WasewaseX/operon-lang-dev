@@ -176,6 +176,150 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
             ),
         }
     }
+    // reg-bio (F-6): enhancer dose (default ENHANCE_DELTA = 0.25)
+    if let Some(v) = interp.cell.get("enhance.delta") {
+        match v.trim().parse::<f64>() {
+            Ok(f) if (0.0..=1.0).contains(&f) => interp.enhance_delta = f,
+            _ => interp.note(
+                0,
+                4,
+                format!(
+                    "cell key 'enhance.delta = {}' ignored: needs a number in 0..=1",
+                    v
+                ),
+            ),
+        }
+    }
+    // reg-bio (F-1): the telegraph promoter layer — opt-in stochastic
+    // expression. kon/koff are switch probabilities per call attempt.
+    if interp
+        .cell
+        .get("expression.stochastic")
+        .map(|v| v.trim() == "true")
+        .unwrap_or(false)
+    {
+        interp.expr_stochastic = true;
+    }
+    if let Some(v) = interp.cell.get("expression.kon") {
+        match v.trim().parse::<f64>() {
+            Ok(f) if (0.0..=1.0).contains(&f) => interp.expr_kon = f,
+            _ => interp.note(
+                0,
+                4,
+                format!(
+                    "cell key 'expression.kon = {}' ignored: needs a number in 0..=1",
+                    v
+                ),
+            ),
+        }
+    }
+    if let Some(v) = interp.cell.get("expression.koff") {
+        match v.trim().parse::<f64>() {
+            Ok(f) if (0.0..=1.0).contains(&f) => interp.expr_koff = f,
+            _ => interp.note(
+                0,
+                4,
+                format!(
+                    "cell key 'expression.koff = {}' ignored: needs a number in 0..=1",
+                    v
+                ),
+            ),
+        }
+    }
+    // expression.seed reseeds the SHARED mirrored xorshift64* stream the
+    // promoter draws ride — reproducible bursting across runs/implementations
+    if let Some(v) = interp.cell.get("expression.seed") {
+        match v.trim().parse::<i64>() {
+            Ok(s) => interp.rng = if s == 0 { 0x9E3779B97F4A7C15 } else { s as u64 },
+            Err(_) => interp.note(
+                0,
+                4,
+                format!(
+                    "cell key 'expression.seed = {}' ignored: needs an integer",
+                    v
+                ),
+            ),
+        }
+    }
+    // reg-bio (F-5): repressilator kinetics — plasmid engineering surface.
+    // Defaults are the historical constants; unset keys change nothing.
+    if let Some(v) = interp.cell.get("repressi.alpha") {
+        match v.trim().parse::<f64>() {
+            Ok(f) if f > 0.0 => interp.repressi_params.alpha = f,
+            _ => interp.note(
+                0,
+                4,
+                format!(
+                    "cell key 'repressi.alpha = {}' ignored: needs a number > 0",
+                    v
+                ),
+            ),
+        }
+    }
+    if let Some(v) = interp.cell.get("repressi.gamma") {
+        match v.trim().parse::<f64>() {
+            Ok(f) if f >= 0.0 => interp.repressi_params.gamma = f,
+            _ => interp.note(
+                0,
+                4,
+                format!(
+                    "cell key 'repressi.gamma = {}' ignored: needs a number >= 0",
+                    v
+                ),
+            ),
+        }
+    }
+    if let Some(v) = interp.cell.get("repressi.hill") {
+        match v.trim().parse::<u32>() {
+            Ok(n) if (1..=8).contains(&n) => interp.repressi_params.hill = n,
+            _ => interp.note(
+                0,
+                4,
+                format!(
+                    "cell key 'repressi.hill = {}' ignored: needs an integer 1..=8",
+                    v
+                ),
+            ),
+        }
+    }
+    if let Some(v) = interp.cell.get("repressi.basal") {
+        match v.trim().parse::<f64>() {
+            Ok(f) if f >= 0.0 => interp.repressi_params.basal = f,
+            _ => interp.note(
+                0,
+                4,
+                format!(
+                    "cell key 'repressi.basal = {}' ignored: needs a number >= 0",
+                    v
+                ),
+            ),
+        }
+    }
+    if let Some(v) = interp.cell.get("repressi.noise") {
+        match v.trim().parse::<f64>() {
+            Ok(f) if (0.0..=1.0).contains(&f) => interp.repressi_params.noise = f,
+            _ => interp.note(
+                0,
+                4,
+                format!(
+                    "cell key 'repressi.noise = {}' ignored: needs a number in 0..=1",
+                    v
+                ),
+            ),
+        }
+    }
+    if let Some(v) = interp.cell.get("repressi.seed") {
+        match v.trim().parse::<i64>() {
+            Ok(s) => {
+                interp.repressi_params.seed = if s == 0 { 0x9E3779B97F4A7C15 } else { s as u64 }
+            }
+            Err(_) => interp.note(
+                0,
+                4,
+                format!("cell key 'repressi.seed = {}' ignored: needs an integer", v),
+            ),
+        }
+    }
 
     // execute top-level (gene defs bind, silences load, regulate registers…)
     // Top-Grammar containment: uncaught stress here is absorbed per statement.
@@ -1271,10 +1415,29 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
             out.push_str("}\n\n");
         }
         Stmt::Toggle(a, b) => out.push_str(&format!("toggle {}, {};\n", a, b)),
-        Stmt::Repressilator(ring, period) => {
+        Stmt::Repressilator(ring, period, ov) => {
             out.push_str(&format!("repressilator {}", ring.join(" -> ")));
             if let Some(p) = period {
                 out.push_str(&format!(" period {}", p));
+            }
+            // reg-bio (F-5): round-trip the inline kinetics (canonical order)
+            if let Some(a) = ov.alpha {
+                out.push_str(&format!(" alpha {}", a));
+            }
+            if let Some(g) = ov.gamma {
+                out.push_str(&format!(" gamma {}", g));
+            }
+            if let Some(h) = ov.hill {
+                out.push_str(&format!(" hill {}", h));
+            }
+            if let Some(b) = ov.basal {
+                out.push_str(&format!(" basal {}", b));
+            }
+            if let Some(n) = ov.noise {
+                out.push_str(&format!(" noise {}", n));
+            }
+            if let Some(s) = ov.seed {
+                out.push_str(&format!(" seed {}", s));
             }
             out.push_str(";\n");
         }

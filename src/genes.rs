@@ -831,6 +831,20 @@ pub struct RegulationSnap {
     pub repressi_ring: Vec<String>,
     pub repressi_tick: u64,
     pub repressi_levels: Vec<f64>,
+    /// reg-bio (F-1): the telegraph promoter layer rides the snapshot —
+    /// promoter states are part of a cell's regulatory state, so a spawned
+    /// cell (mitosis) inherits the parent's on/off promoters and burst
+    /// counters, and later parent-side switches do not propagate
+    /// (snapshot semantics, same contract as every other regulation field).
+    pub promoter_states: Vec<(String, bool)>,
+    pub burst_off: Vec<(String, u64)>,
+    pub expr_stochastic: bool,
+    pub expr_kon: f64,
+    pub expr_koff: f64,
+    /// reg-bio (F-5): the ring's kinetic parameters ride the snapshot so a
+    /// worker folding frozen ring levels uses the parent's α/γ/n/basal.
+    pub repressi_params: crate::interp::RepressiParams,
+    pub enhance_delta: f64,
 }
 
 pub fn snapshot_regulation(interp: &Interp) -> RegulationSnap {
@@ -843,7 +857,11 @@ pub fn snapshot_regulation(interp: &Interp) -> RegulationSnap {
         };
         (
             tick,
-            crate::interp::repressilator_levels(interp.repressi_ring.len(), tick),
+            crate::interp::repressilator_levels_p(
+                interp.repressi_ring.len(),
+                tick,
+                interp.repressi_params,
+            ),
         )
     };
     RegulationSnap {
@@ -864,6 +882,21 @@ pub fn snapshot_regulation(interp: &Interp) -> RegulationSnap {
         repressi_ring: interp.repressi_ring.clone(),
         repressi_tick: ring_tick,
         repressi_levels: ring_levels,
+        promoter_states: interp
+            .promoter_states
+            .iter()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect(),
+        burst_off: interp
+            .burst_off
+            .iter()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect(),
+        expr_stochastic: interp.expr_stochastic,
+        expr_kon: interp.expr_kon,
+        expr_koff: interp.expr_koff,
+        repressi_params: interp.repressi_params,
+        enhance_delta: interp.enhance_delta,
     }
 }
 
@@ -880,6 +913,15 @@ pub fn bind_regulation(ti: &mut Interp, s: &RegulationSnap) {
     ti.repressi_ring = s.repressi_ring.clone();
     ti.repressi_tick = s.repressi_tick;
     *ti.repressi_cache.borrow_mut() = (s.repressi_tick, s.repressi_levels.clone());
+    // reg-bio: promoter layer + ring kinetics + enhancer dose ride the
+    // snapshot (worker cells are whole regulatory cells, not gate ghosts)
+    ti.promoter_states = s.promoter_states.iter().cloned().collect();
+    ti.burst_off = s.burst_off.iter().cloned().collect();
+    ti.expr_stochastic = s.expr_stochastic;
+    ti.expr_kon = s.expr_kon;
+    ti.expr_koff = s.expr_koff;
+    ti.repressi_params = s.repressi_params;
+    ti.enhance_delta = s.enhance_delta;
 }
 
 pub fn bind_snapshot(env: &Rc<Env>, snap: &[(String, SnapVal)]) {

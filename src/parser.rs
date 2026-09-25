@@ -939,12 +939,70 @@ impl Parser {
                                         }
                                     }
                                 }
+                                // reg-bio (F-2): optional per-edge Hill exponent.
+                                // Canonical edge order: strength -> threshold -> hill -> any.
+                                let mut hill = None;
+                                if self.expect_kw("hill") {
+                                    match self.peek().clone() {
+                                        Tok::Int(i) => {
+                                            self.next();
+                                            if (1..=8).contains(&i) {
+                                                hill = Some(i as u32);
+                                            } else {
+                                                let line = self.line();
+                                                self.note(
+                                                    line,
+                                                    4,
+                                                    "hill needs an integer 1..=8; edge keeps the default n=2 shape",
+                                                );
+                                            }
+                                        }
+                                        _ => {
+                                            let line = self.line();
+                                            self.note(
+                                                line,
+                                                4,
+                                                "hill needs an integer 1..=8; edge keeps the default n=2 shape",
+                                            );
+                                        }
+                                    }
+                                }
+                                // reg-bio (F-3): optional cis-regulatory OR membership.
+                                let mut any_edge = false;
+                                if self.expect_kw("any") {
+                                    any_edge = true;
+                                }
+                                // hill/any shape the dose-response gate; without a
+                                // threshold the edge is declarative, so both are noise.
+                                if (hill.is_some() || any_edge) && threshold.is_none() {
+                                    let line = self.line();
+                                    self.note(
+                                        line,
+                                        4,
+                                        "hill/any apply to thresholded edges; ignored (edge stays declarative)",
+                                    );
+                                    hill = None;
+                                    any_edge = false;
+                                }
+                                // `any` on an inhibitor is noise: inhibitors already
+                                // veto with OR semantics (any above-threshold veto fires).
+                                if any_edge && inhibit {
+                                    let line = self.line();
+                                    self.note(
+                                        line,
+                                        4,
+                                        "any on an inhibiting edge is ignored (inhibitors already veto independently)",
+                                    );
+                                    any_edge = false;
+                                }
                                 edges.push(RegEdge {
                                     from,
                                     to,
                                     strength,
                                     inhibit,
                                     threshold,
+                                    hill,
+                                    any: any_edge,
                                 });
                                 self.end_stmt();
                             }
@@ -994,8 +1052,130 @@ impl Parser {
                         _ => {}
                     }
                 }
+                // reg-bio (F-5): inline kinetics — plasmid engineering in
+                // source. Canonical order: alpha, gamma, hill, basal, noise,
+                // seed; each keyword optional, each layers onto the current
+                // params (last declaration wins per-field).
+                let mut ov = crate::ast::RepressiOverrides::default();
+                loop {
+                    if self.expect_kw("alpha") {
+                        match self.peek().clone() {
+                            Tok::Float(f) => {
+                                self.next();
+                                if f > 0.0 {
+                                    ov.alpha = Some(f);
+                                } else {
+                                    let line = self.line();
+                                    self.note(line, 4, "alpha needs a number > 0; ignored");
+                                }
+                            }
+                            Tok::Int(i) => {
+                                self.next();
+                                if i > 0 {
+                                    ov.alpha = Some(i as f64);
+                                } else {
+                                    let line = self.line();
+                                    self.note(line, 4, "alpha needs a number > 0; ignored");
+                                }
+                            }
+                            _ => {
+                                let line = self.line();
+                                self.note(line, 4, "alpha needs a number > 0; ignored");
+                            }
+                        }
+                    } else if self.expect_kw("gamma") {
+                        match self.peek().clone() {
+                            Tok::Float(f) => {
+                                self.next();
+                                if f >= 0.0 {
+                                    ov.gamma = Some(f);
+                                } else {
+                                    let line = self.line();
+                                    self.note(line, 4, "gamma needs a number >= 0; ignored");
+                                }
+                            }
+                            Tok::Int(i) => {
+                                self.next();
+                                ov.gamma = Some(i as f64);
+                            }
+                            _ => {
+                                let line = self.line();
+                                self.note(line, 4, "gamma needs a number >= 0; ignored");
+                            }
+                        }
+                    } else if self.expect_kw("hill") {
+                        if let Tok::Int(i) = self.peek().clone() {
+                            self.next();
+                            if (1..=8).contains(&i) {
+                                ov.hill = Some(i as u32);
+                            } else {
+                                let line = self.line();
+                                self.note(line, 4, "hill needs an integer 1..=8; ignored");
+                            }
+                        } else {
+                            let line = self.line();
+                            self.note(line, 4, "hill needs an integer 1..=8; ignored");
+                        }
+                    } else if self.expect_kw("basal") {
+                        match self.peek().clone() {
+                            Tok::Float(f) => {
+                                self.next();
+                                if f >= 0.0 {
+                                    ov.basal = Some(f);
+                                } else {
+                                    let line = self.line();
+                                    self.note(line, 4, "basal needs a number >= 0; ignored");
+                                }
+                            }
+                            Tok::Int(i) => {
+                                self.next();
+                                ov.basal = Some(i as f64);
+                            }
+                            _ => {
+                                let line = self.line();
+                                self.note(line, 4, "basal needs a number >= 0; ignored");
+                            }
+                        }
+                    } else if self.expect_kw("noise") {
+                        match self.peek().clone() {
+                            Tok::Float(f) => {
+                                self.next();
+                                if (0.0..=1.0).contains(&f) {
+                                    ov.noise = Some(f);
+                                } else {
+                                    let line = self.line();
+                                    self.note(line, 4, "noise needs a number in 0..=1; ignored");
+                                }
+                            }
+                            Tok::Int(i) => {
+                                self.next();
+                                let f = i as f64;
+                                if f <= 1.0 {
+                                    ov.noise = Some(f);
+                                } else {
+                                    let line = self.line();
+                                    self.note(line, 4, "noise needs a number in 0..=1; ignored");
+                                }
+                            }
+                            _ => {
+                                let line = self.line();
+                                self.note(line, 4, "noise needs a number in 0..=1; ignored");
+                            }
+                        }
+                    } else if self.expect_kw("seed") {
+                        if let Tok::Int(i) = self.peek().clone() {
+                            self.next();
+                            ov.seed = Some(if i == 0 { 0x9E3779B97F4A7C15 } else { i as u64 });
+                        } else {
+                            let line = self.line();
+                            self.note(line, 4, "seed needs an integer; ignored");
+                        }
+                    } else {
+                        break;
+                    }
+                }
                 self.end_stmt();
-                Some(Stmt::Repressilator(ring, period))
+                Some(Stmt::Repressilator(ring, period, ov))
             }
             "frame" => {
                 self.next();

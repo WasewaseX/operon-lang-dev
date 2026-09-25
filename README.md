@@ -26,13 +26,13 @@ The mandate: *"Rust, then C, then Python, then Operon, then C++, then HTML, then
 
 | rank | language | lines | share | role |
 |---|---|---|---|---|
-| 1 | **Rust** | 12,297 | ~47% | lexer, Total Grammar parser, evaluator, capability sandbox, symbol table, HTTP/JSON, toolchain CLI, REPL, `operon-ls` LSP seed (`src/`) |
-| 2 | **Operon** | 6,994 | ~27% | **self-hosted stdlib (11 modules), proof tests, red-team suite, differential corpus, GenomeLab** (`std/ tests/ examples/ apps/`) |
-| 3 | **Python** | 3,529 | ~13% | bootstrap: reference oracle + differential harness (`bootstrap/`) — test infrastructure only, nothing shipped depends on it |
-| 4 | **JavaScript** | 1,400 | ~5% | browser playground subset interpreter (`web/playground/app.js`) |
-| 5 | **HTML** | 1,263 | ~5% | documentation site (`docs/`) |
-| 6 | **CSS** | 284 | ~1% | docs + playground styling |
-| 7 | **Shell** | 187 | <1% | build/test/bench/stack/install scripts (`scripts/`) |
+| 1 | **Rust** | 15,937 | ~46% | lexer, Total Grammar parser, evaluator, capability sandbox, symbol table, HTTP/JSON, toolchain CLI, REPL, `operon-ls` LSP seed (`src/`) |
+| 2 | **Operon** | 9,906 | ~28% | **self-hosted stdlib (12 modules incl. `std/motifs`), proof tests, red-team suite, differential corpus, GenomeLab** (`std/ tests/ examples/ apps/`) |
+| 3 | **Python** | 5,129 | ~15% | bootstrap: reference oracle + differential harness (`bootstrap/`) — test infrastructure only, nothing shipped depends on it |
+| 4 | **JavaScript** | 1,834 | ~5% | browser playground subset interpreter (`web/playground/app.js`) |
+| 5 | **HTML** | 1,263 | ~4% | documentation site (`docs/`) |
+| 6 | **CSS** | 293 | ~1% | docs + playground styling |
+| 7 | **Shell** | 311 | ~1% | build/test/bench/stack/install scripts (`scripts/`) |
 | 8 | **C++** | 134 | <1% | algorithm kernel: bit-parallel edit distance, codon-usage scoring (`runtime/codon_kernel.cpp` + its smoke driver) |
 | 9 | **TypeScript** | 18 | <1% | playground type surface (`app.d.ts`) |
 
@@ -177,7 +177,7 @@ Path grants are symlink-resolved; a grant that normalizes to the empty string is
 operon run f.op      [--entry g] [--variant v] [--cell c] [--rna r] [--frame n] [--ires] [--strict] [--fuel N]
                      [--allow-read p] [--allow-write p] [--allow-run prog] [--allow-net host:port] [--allow-env var] [--allow-all]
 operon check f.op    [--nmd | --nmd=purge] [--json]   # 100-point grade + letter; --json: phantoms/nmd arrays
-operon test [dirs]                                # proof-frame runner (50 files / 44 proofs / 654 assertions green)
+operon test [dirs]                                # proof-frame runner (62 files / 56 proofs / 813 assertions green)
 operon fmt f.op     [--write]                     # precedence-correct canonical formatter
 operon build f.op   [--variant v] [-o out.op]     # bake splices, strip proofs
 operon profile f.op                               # per-gene calls, exclusive self-µs, flags, maturation, enhance candidates
@@ -234,9 +234,9 @@ Ranged (incremental) edits are ignored by design while `textDocumentSync = 1` (f
 ```console
 $ ./scripts/build.sh          # gcc + g++ the kernels, rustc the core
 OK: bin/operon
-$ ./scripts/test.sh           # 50 proof files (654 assertions), C++ kernel smoke
-$ python3 bootstrap/harness.py  # differential: 78/78 programs MATCH across implementations
-$ bash scripts/redteam.sh       # adversarial containment: 59 attacks contained, 0 breached
+$ ./scripts/test.sh           # 62 proof files (813 assertions), C++ kernel smoke
+$ python3 bootstrap/harness.py  # differential: 85/85 programs MATCH across implementations
+$ bash scripts/redteam.sh       # adversarial containment: 88 attacks contained, 0 breached
 $ bash scripts/bench.sh
 ```
 

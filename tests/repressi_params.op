@@ -1,0 +1,27 @@
+# reg-bio (F-5) — repressilator kinetics: the plasmid-engineering surface
+#
+# The published Elowitz–Leibler system is PARAMETERIZED (α, γ, Hill n, basal
+# leak). Operon's ring now carries those kinetics inline — defaults are the
+# historical constants (α=10, γ=1, h=4, basal=0, noise=0) and stay
+# bit-identical. This file proves the BASAL LEAK: repressed promoters never
+# reach zero, so every ring minimum lifts off the zero floor.
+# (One ring per process: a second `repressilator` declaration replaces the
+# ring — see repressi_alpha.op for the α surface.)
+repressilator p -> q -> r basal 0.5
+frame proof {
+    # tick 0 is the [5, 0, 0] init regardless of kinetics
+    let s0 = repressi_state()
+    assert(s0.p == 5.0 && s0.q == 0.0 && s0.r == 0.0, "ring starts at the E-L init")
+    # fold past the first trough: the default (basal 0) ring visits exact 0
+    # at its minima — the basal ring's floor stays strictly above zero
+    let i = 0
+    while i < 12 {
+        repressi_next()
+        i = i + 1
+    }
+    let st = repressi_state()
+    assert(st.p > 0.2 && st.q > 0.2 && st.r > 0.2, "basal 0.5 lifts EVERY minimum off the zero floor")
+}
+main {
+    promote("basal-leak proofs done")
+}
