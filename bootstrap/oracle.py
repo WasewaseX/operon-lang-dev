@@ -363,6 +363,14 @@ def lex(src):
             except ValueError:
                 notes.append(Note(4, f"malformed number '{text}' treated as 0"))
                 toks.append(("INT", 0, line))
+            else:
+                # parity with the Rust lexer: an integer literal beyond i64
+                # is out of range and treated as 0 with the same note (the
+                # Rust core parses i64; a Python bignum would otherwise see
+                # a value the compiled engine never did)
+                if not isf and not (-2**63 <= int(text) <= 2**63 - 1):
+                    notes.append(Note(4, f"integer '{text}' out of range treated as 0"))
+                    toks[-1] = ("INT", 0, line)
             i = j; continue
         if c.isalpha() or c == "_":
             j = i
