@@ -882,6 +882,8 @@ pub struct RegulationSnap {
     /// (name, attempts, on_total, episodes) — worker cells are whole
     /// regulatory cells; telemetry must not desync from the host mid-burst.
     pub promoter_tel: Vec<(String, u64, u64, u64)>,
+    /// loop-9 (R9): runtime burst overrides freeze at spawn (snapshot).
+    pub burst_overrides: Vec<(String, f64, f64)>,
     /// loop-9 (F-4): runtime splice shifts freeze at spawn (snapshot
     /// contract — later parent-side shifts do not propagate).
     pub splice_shift: Vec<(String, String)>,
@@ -973,6 +975,11 @@ pub fn snapshot_regulation(interp: &Interp) -> RegulationSnap {
             .iter()
             .map(|(k, (a, o, e))| (k.clone(), *a, *o, *e))
             .collect(),
+        burst_overrides: interp
+            .burst_overrides
+            .iter()
+            .map(|(k, (a, b))| (k.clone(), *a, *b))
+            .collect(),
         m6a_reader: (
             interp
                 .cell
@@ -1051,6 +1058,11 @@ pub fn bind_regulation(ti: &mut Interp, s: &RegulationSnap) {
         .promoter_tel
         .iter()
         .map(|(k, a, o, e)| (k.clone(), (*a, *o, *e)))
+        .collect();
+    ti.burst_overrides = s
+        .burst_overrides
+        .iter()
+        .map(|(k, a, b)| (k.clone(), (*a, *b)))
         .collect();
     ti.operons = s.operons.clone();
     ti.m6a_levels = s.m6a_levels.iter().cloned().collect();

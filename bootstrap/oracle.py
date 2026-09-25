@@ -1032,6 +1032,13 @@ class P:
             name = self.ident()
             self.end_stmt()
             return ("ligand", name)
+        if word == "autoinducer":
+            # loop-9 (C8): `autoinducer ahl;` — register a quorum-sensing
+            # signal species into the shared medium (parse mirror)
+            self.next()
+            name = self.ident()
+            self.end_stmt()
+            return ("autoinducer", name)
         if word == "decoy":
             # reg-bio-2 (C11): `decoy d for tf capacity 0.5;`
             self.next()
@@ -2091,7 +2098,7 @@ def parse(src):
 # ----------------------------------------------------------------------------
 # evaluator
 
-BUILTINS = set("""promote expr_on expr_off decay_clock ligand_set ligand secrete quorum quench quorum_state splice_shift promoter_telemetry len push pop insert remove keys values has del range str num type
+BUILTINS = set("""promote expr_on expr_off decay_clock ligand_set ligand secrete quorum quench quorum_state splice_shift promoter_telemetry burst_set len push pop insert remove keys values has del range str num type
 abs min max sum clock exit assert codon distance similar transcribe reverse_complement
 gc_content translate find_orf memory methyl methylate demethylate m6a_write m6a_erase passage grn_set grn_get fingerprint toggle_on toggle_state repressi_next
 repressi_state repressi_start grn_fire grn_state spawn join floor ceil sqrt pow random
@@ -2174,6 +2181,8 @@ class Interp:
         self.splice_registry = {}
         # loop-9 (F-3): per-gene promoter attempt telemetry (mirror)
         self.promoter_tel = {}
+        # loop-9 (R9): runtime promoter-rate modulation (mirror)
+        self.burst_overrides = {}
         self.grn_binds = []
         self.seq_buffer = None
         self.caps = {"enabled": True, "read": [], "write": [], "run": [], "net": [], "env": [], "py": []}
@@ -3576,6 +3585,8 @@ class Interp:
         gene only — promoter identity. loop-9 (F-3): attempt telemetry."""
         if not self.expr_stochastic:
             return False
+        if burst is None:
+            burst = self.burst_overrides.get(name)
         kon, koff = burst if burst is not None else (self.expr_kon, self.expr_koff)
         was_active = self.promoter_states.get(name, True)
         x = self.rng
@@ -4563,6 +4574,7 @@ class Interp:
                     "signals": list(self.signals),
                     "splice_shift": dict(self.splice_shift),
                     "promoter_tel": dict(self.promoter_tel),
+                    "burst_overrides": dict(self.burst_overrides),
                     "call_counts": dict(self.call_counts),
                     "call_clock": self.call_clock,
                     "gene_buckets": {k: dict(v) for k, v in self.gene_buckets.items()},
@@ -4717,6 +4729,20 @@ class Interp:
             burst_size = (on_total / episodes) if episodes > 0 else 0.0
             return {"attempts": attempts, "on_total": on_total, "episodes": episodes,
                     "on_frac": on_frac, "burst_size": burst_size}
+        if name == "burst_set":
+            # loop-9 (R9): runtime promoter-rate modulation (mirror)
+            nm = v_display(args[0]) if args else ""
+            if len(args) >= 3 and isinstance(args[1], (int, float)) and isinstance(args[2], (int, float)):
+                kon = min(max(float(args[1]), 0.0), 1.0)
+                koff = min(max(float(args[2]), 0.0), 1.0)
+                self.burst_overrides[nm] = (kon, koff)
+                if not self.methyl_quiet:
+                    self.note(1, f"burst override: '{nm}' (kon={kon!r}, koff={koff!r})")
+                return {"kon": kon, "koff": koff}
+            self.burst_overrides.pop(nm, None)
+            if not self.methyl_quiet:
+                self.note(1, f"burst override cleared: '{nm}'")
+            return None
         if name == "expr_on":
             # reg-bio (F-1): mirror of the Rust builtin — in-source switch for
             # the telegraph promoter layer (kon/koff clamped 0..1)

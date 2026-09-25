@@ -499,6 +499,10 @@ pub struct Interp {
     /// loop-9 (F-3): per-gene promoter attempt telemetry —
     /// (attempts, on_total, episodes) per gene name. Rides RegulationSnap.
     pub promoter_tel: HashMap<String, (u64, u64, u64)>,
+    /// loop-9 (R9): runtime promoter-rate modulation (burst_set) —
+    /// gene -> (kon, koff). Sits BELOW the @burst mark in precedence.
+    /// Rides RegulationSnap (worker cells freeze modulation at spawn).
+    pub burst_overrides: HashMap<String, (f64, f64)>,
     /// loop-9 (F-4): runtime splicing-factor shifts (root -> variant name).
     /// A runtime factor event that overrides the static @m6a bias but NOT
     /// the operator pins (.cell variant.<root> / cli.variant). Rides
@@ -615,6 +619,7 @@ impl Interp {
             medium: None,
             m6a_reader_pins: None,
             promoter_tel: HashMap::new(),
+            burst_overrides: HashMap::new(),
             splice_shift: HashMap::new(),
             splice_registry: HashMap::new(),
             ligand_pools: HashMap::new(),
@@ -3569,7 +3574,14 @@ impl Interp {
         }
         // loop-9 (F-2): per-gene PROMOTER IDENTITY — the mark's own rates
         // override the global telegraph parameters for this gene only.
-        let (kon, koff) = def.burst.unwrap_or((self.expr_kon, self.expr_koff));
+        // loop-9 (R9 jury): runtime modulation — a regulator CAN retune a
+        // specific promoter's switching rates at runtime (burst_set), so the
+        // noise layer does not float free of the regulation system.
+        // Precedence: @burst mark > burst_set override > global rates.
+        let (kon, koff) = def
+            .burst
+            .or_else(|| self.burst_overrides.get(&name).copied())
+            .unwrap_or((self.expr_kon, self.expr_koff));
         let was_active = *self.promoter_states.get(&name).unwrap_or(&true);
         let mut x = self.rng;
         x ^= x >> 12;
@@ -6073,6 +6085,68 @@ impl Interp {
                         (Value::Str("burst_size".into()), Value::Float(burst_size)),
                     ]),
                 ))))
+            }
+            "burst_set" => {
+                // loop-9 (R9): runtime promoter-rate modulation — retune ONE
+                // gene's telegraph rates (the noise layer meets regulation).
+                // burst_set(g) clears the override; burst_set(g, kon, koff)
+                // sets it (clamped 0..=1). Precedence: @burst mark > this.
+                let name = args.first().map(|v| v.display()).unwrap_or_default();
+                mem_charge((name.len() + 64) as u64)?;
+                match (args.get(1), args.get(2)) {
+                    (Some(Value::Int(i)), Some(Value::Int(j))) => {
+                        let kon = (*i as f64).clamp(0.0, 1.0);
+                        let koff = (*j as f64).clamp(0.0, 1.0);
+                        self.burst_overrides.insert(name.clone(), (kon, koff));
+                        if !self.methyl_quiet {
+                            self.note(
+                                self.cur_line,
+                                1,
+                                format!("burst override: '{}' (kon={}, koff={})", name, kon, koff),
+                            );
+                        }
+                        Ok(Value::Map(Rc::new(RefCell::new(
+                            crate::value::MapStore::from_vec(vec![
+                                (Value::Str("kon".into()), Value::Float(kon)),
+                                (Value::Str("koff".into()), Value::Float(koff)),
+                            ]),
+                        ))))
+                    }
+                    (Some(Value::Float(i)), Some(Value::Float(j))) => {
+                        let kon = i.clamp(0.0, 1.0);
+                        let koff = j.clamp(0.0, 1.0);
+                        self.burst_overrides.insert(name.clone(), (kon, koff));
+                        if !self.methyl_quiet {
+                            self.note(
+                                self.cur_line,
+                                1,
+                                format!(
+                                    "burst override: '{}' (kon={}, koff={})",
+                                    name,
+                                    crate::value::format_float(kon),
+                                    crate::value::format_float(koff)
+                                ),
+                            );
+                        }
+                        Ok(Value::Map(Rc::new(RefCell::new(
+                            crate::value::MapStore::from_vec(vec![
+                                (Value::Str("kon".into()), Value::Float(kon)),
+                                (Value::Str("koff".into()), Value::Float(koff)),
+                            ]),
+                        ))))
+                    }
+                    _ => {
+                        self.burst_overrides.remove(&name);
+                        if !self.methyl_quiet {
+                            self.note(
+                                self.cur_line,
+                                1,
+                                format!("burst override cleared: '{}'", name),
+                            );
+                        }
+                        Ok(Value::Null)
+                    }
+                }
             }
             "expr_on" => {
                 // reg-bio (F-1): in-source switch for the telegraph promoter
@@ -8658,6 +8732,7 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "quorum_state",
     "splice_shift",
     "promoter_telemetry",
+    "burst_set",
     "len",
     "push",
     "pop",

@@ -13,7 +13,7 @@ echo "[2/3] Operon proof suite (Rust core)"
 ./bin/operon test apps/
 # substrate-r1: the Python bridge granted suite — explicit operator cell
 # (grants cannot come from auto-detected cells, so this is a separate step)
-./bin/operon test tests/granted/ --cell tests/granted/pybridge.cell
+./bin/operon test tests/granted/pybridge.op --cell tests/granted/pybridge.cell
 # loop-9 (P0-4): the standalone m6A decay cadence — its own explicit cell
 # (m6a.decay 0.5); a silent no-op before this round, now pinned here.
 ./bin/operon test tests/granted/m6a_decay_cadence.op --cell tests/granted/m6a_decay_cadence.cell
