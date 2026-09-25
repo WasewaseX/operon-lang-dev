@@ -1,0 +1,30 @@
+# loop-9 (F-4): runtime splicing-factor regulation — splice_shift.
+# Real biology: splicing factors (SR proteins, hnRNPs) bind cis elements
+# and CHANGE which splice site wins at runtime — a regulated shift, not a
+# static priority. In Operon the shift slots between the operator pins
+# (.cell variant.<root> / cli.variant) and the @m6a mark: a bound factor
+# beats a basal inclusion bias, but the operator still has the final word.
+# Future calls shift immediately; in-flight calls hold their resolved
+# definition and finish on the old variant (no mid-call body swap, ever).
+# Fails-pre: splice_shift was a phantom call returning null — the first
+# assert burns on the pre-loop-9 core.
+splice rna {
+    variant long { return "L-long" }
+    variant short { return "S-short" }
+}
+gene caller() { return rna() }
+frame proof {
+    assert(rna() == "L-long", "no shift: first-declared variant wins (static default)")
+    assert(splice_shift("rna", "short") == "short", "the shift returns the now-active variant")
+    assert(rna() == "S-short", "future calls use the shifted variant")
+    assert(caller() == "S-short", "calls through other genes resolve per call (shift applies)")
+    # shift back
+    assert(splice_shift("rna", "long") == "long", "shifting back is legal")
+    assert(rna() == "L-long", "restored")
+    # unknown variant: soft-fail, returns the CURRENT active variant
+    assert(splice_shift("rna", "missing") == "long", "unknown variant: selection unchanged, current name returned")
+    assert(rna() == "L-long", "unknown variant changed nothing")
+    # unknown root: soft-fail null
+    assert(splice_shift("nosuch", "long") == null, "unknown root: soft null (Total Grammar, never a crash)")
+    assert(rna() == "L-long", "failed shift left the selection alone")
+}

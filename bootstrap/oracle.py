@@ -2036,7 +2036,7 @@ def parse(src):
 # ----------------------------------------------------------------------------
 # evaluator
 
-BUILTINS = set("""promote expr_on expr_off decay_clock ligand_set ligand secrete quorum quench quorum_state len push pop insert remove keys values has del range str num type
+BUILTINS = set("""promote expr_on expr_off decay_clock ligand_set ligand secrete quorum quench quorum_state splice_shift len push pop insert remove keys values has del range str num type
 abs min max sum clock exit assert codon distance similar transcribe reverse_complement
 gc_content translate find_orf memory methyl methylate demethylate m6a_write m6a_erase passage grn_set grn_get fingerprint toggle_on toggle_state repressi_next
 repressi_state repressi_start grn_fire grn_state spawn join floor ceil sqrt pow random
@@ -2114,6 +2114,9 @@ class Interp:
         # one dict IS the shared medium; inline spawn shares it naturally.
         self.signals = []
         self.medium = {}
+        # loop-9 (F-4): runtime splice shifts (root -> variant name)
+        self.splice_shift = {}
+        self.splice_registry = {}
         self.grn_binds = []
         self.seq_buffer = None
         self.caps = {"enabled": True, "read": [], "write": [], "run": [], "net": [], "env": [], "py": []}
@@ -2625,6 +2628,8 @@ class Interp:
                 raise Return(v)
         elif k == "splice":
             _, root, variants = s
+            # loop-9 (F-4): registry for runtime splice_shift re-resolution
+            self.splice_registry[root] = s
             chosen = self.choose_variant(root, variants)
             if chosen:
                 vname, vparams, body, vmarks = chosen
@@ -2714,11 +2719,18 @@ class Interp:
             for vn, vp, b, mk in variants:
                 if vn == cv:
                     return (vn, vp, b, mk)
-        # 3. m6a-marked variant (T2c: mirrors the Rust core)
+        # 3. loop-9 (F-4): runtime splice_shift (a bound splicing factor
+        # overrides the static mark; the operator pins above override it)
+        sv = self.splice_shift.get(root)
+        if sv:
+            for vn, vp, b, mk in variants:
+                if vn == sv:
+                    return (vn, vp, b, mk)
+        # 4. m6a-marked variant (T2c: mirrors the Rust core)
         for vn, vp, b, mk in variants:
             if "m6a" in mk:
                 return (vn, vp, b, mk)
-        # 4. first declared
+        # 5. first declared
         return variants[0]
 
     # ---- expressions
@@ -3370,7 +3382,28 @@ class Interp:
             if delta < 0:
                 delta = 0
             dec = pdecay if pdecay is not None else 0.0
-            if delta == 0 and dec == 0.0:
+            # loop-9 (F-6): m6A reader fate (mirror) — engage only at mark
+            # density >= min_level (default 2); the {0,1} legacy lattice is
+            # bit-identical. Knobs: .cell m6a.reader.decay (0.25) /
+            # m6a.reader.translation (0.10) / m6a.reader.min_level (2).
+            yd2 = self.cell.get("m6a.reader.decay")
+            try:
+                yd2 = min(max(float(yd2), 0.0), 1.0) if yd2 is not None else 0.25
+            except ValueError:
+                yd2 = 0.25
+            yatt = self.cell.get("m6a.reader.translation")
+            try:
+                yatt = min(max(float(yatt), 0.0), 1.0) if yatt is not None else 0.10
+            except ValueError:
+                yatt = 0.10
+            minl = self.cell.get("m6a.reader.min_level")
+            try:
+                minl = min(max(int(minl), 0), 3) if minl is not None else 2
+            except ValueError:
+                minl = 2
+            reader = self.m6a_levels.get(frm, 0) >= minl
+            dec_eff = dec + yatt if reader else dec
+            if delta == 0 and dec_eff == 0.0:
                 continue
             r = rate if rate is not None else 1.0
             # reg-bio-3 (A1/A7): per-cistron rbs efficiency + transcriptional
@@ -3414,8 +3447,12 @@ class Interp:
                             factor = 1.0
                     f2 *= factor
                 r *= f2
+            # loop-9 (F-6): YTHDF2 decay routing — the LAST production
+            # multiply (normative order: rate x rbs x polarity x (1-yd2))
+            if reader:
+                r *= 1.0 - yd2
             cur = self.grn_levels.get(to, 0.0)
-            p = cur + r * delta - dec * cur
+            p = cur + r * delta - dec_eff * cur
             if p < 0.0:
                 p = 0.0
             if p > 1.0:
@@ -4032,6 +4069,31 @@ class Interp:
                     return float(v)
                 except ValueError:
                     return v
+        if name == "splice_shift":
+            # loop-9 (F-4): mirror of the Rust builtin — rebinds the splice
+            # root to the named variant exactly like the splice statement.
+            root = v_display(args[0]) if args else ""
+            variant = v_display(args[1]) if len(args) > 1 else ""
+            sp = self.splice_registry.get(root)
+            if sp is None:
+                self.note(4, f"splice_shift: no splice '{root}'; selection unchanged")
+                return None
+            variants = sp[2]
+            if not any(v[0] == variant for v in variants):
+                cur = self.choose_variant(root, variants)
+                cur = cur[0] if cur else ""
+                self.note(4, f"splice_shift: variant '{variant}' not declared in splice '{root}'; selection unchanged")
+                return cur
+            self.splice_shift[root] = variant
+            vname, vparams, body, vmarks = self.choose_variant(root, variants)
+            g = Gene(root, vparams, None, body,
+                     ac="acetylate" in vmarks, me="methylate" in vmarks, m6="m6a" in vmarks)
+            if root not in self.defined_genes:
+                self.defined_genes.append(root)
+            # trans-acting factor: replace the binding up the env chain
+            self.assign(env, root, g)
+            self.note(1, f"splice shift: '{root}' -> variant '{variant}' (was '{vname}')")
+            return vname
         if name in ("m6a_write", "m6a_erase"):
             # reg-bio-3 (B3): quantitative m6A site density 0..=3 (mirror)
             k = v_display(args[0]) if args else ""
@@ -4425,6 +4487,7 @@ class Interp:
                     "generation": self.generation,
                     "copies": dict(self.copies),
                     "signals": list(self.signals),
+                    "splice_shift": dict(self.splice_shift),
                     "call_counts": dict(self.call_counts),
                     "call_clock": self.call_clock,
                     "gene_buckets": {k: dict(v) for k, v in self.gene_buckets.items()},

@@ -384,6 +384,8 @@ operon version
 | Codon optimality | `codon()` scoring in check grading |
 | Overlapping reading frames | `frame proof` — tests and code in one sequence |
 | Alternative splicing | `splice { variant }` + `--variant` / `.cell` selection |
+| Runtime splice regulation (splicing factors) | `splice_shift(root, variant)` — trans-acting shift between the operator pins and the @m6a bias |
+| m6A reader fate (YTHDF2 decay / YTHDF1-3 attenuation) | density >= 2 engages reader factors on `translates` (`.cell m6a.reader.*`) |
 | Phenotypic state and differentiation | `phenotype` classes: `new`, `init`, `self`, inheritance `from` |
 | Polypeptide elongation (values produced one at a time) | `sequence` generators + `yield` / `.next()` / `.collect()` on worker cells |
 | RNA editing | `.rna` hot patches (`edit/replace`) |
