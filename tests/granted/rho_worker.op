@@ -1,0 +1,28 @@
+# loop-10 (F-7): worker parity — the Rho knobs ride RegulationSnap, so a
+# spawned cell folds the parent's termination math exactly (whole regulatory
+# cell contract; the trap-8 lesson from reg-bio-4: a knob that misses the
+# snapshot diverges only under the flag — the worst kind). catch 1.0 +
+# strength-1.0 silence = zero draws, fully deterministic. FAILS-PRE: pre-
+# loop-10 cores had no rho layer — the worker returned "c" on both sides.
+regulate {
+    a translates pa rate 0.4
+}
+gene a() { return "a" }
+gene b() { return "b" }
+gene c() { return "c" }
+operon abc { a rbs 1.0; b rbs 1.0; c rbs 1.0; }
+silence b;
+gene probe() {
+    return c()
+}
+frame proof {
+    let t = spawn(probe)
+    assert(join(t) == null, "worker inherits the rho layer: terminated in the cell too")
+    assert(c() == null, "host folds the same deterministic termination")
+    let t2 = spawn(probe)
+    assert(join(t2) == null, "second cell folds identically (snapshot is stable)")
+}
+main {
+    let t = spawn(probe)
+    promote("worker c: {join(t)}")
+}

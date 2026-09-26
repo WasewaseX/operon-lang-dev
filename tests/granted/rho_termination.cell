@@ -1,0 +1,7 @@
+# loop-10 (F-7): explicit operator cell — Rho termination armed at catch 1.0
+# (deterministic catch-up). Non-capability keys, granted-lane pattern
+# (m6a_decay_cadence precedent): proofs with per-proof knobs run via
+# explicit --cell only, so the zero-grant sweep stays bit-identical.
+[rho]
+termination = true
+catch = 1.0

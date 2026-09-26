@@ -1,0 +1,48 @@
+# loop-10 (F-7): Rho-dependent termination — the defining prokaryotic
+# polarity mechanism. Translation failure upstream (here: bare `silence b`,
+# strength 1.0) leaves the upstream RNA naked; Rho loads and chases; the
+# rest of the transcript for THIS call is lost. Opt-in via .cell
+# rho.termination (explicit operator cell — see rho_termination.cell).
+# FAILS-PRE: on pre-loop-10 cores no rho layer existed — c() returned "c"
+# and counted a transcript.
+# Determinism: p_g = 1 (strength-1.0 silence) and rho.catch = 1.0 both hit
+# the no-draw fast paths — termination is CERTAIN and consumes ZERO entropy
+# (the C9 p∈{0,1} discipline extended to the Rho scan).
+regulate {
+    a translates pa rate 0.4
+    b translates pb rate 0.4
+    c translates pc rate 0.4
+}
+gene a() { return "a" }
+gene b() { return "b" }
+gene c() { return "c" }
+operon abc { a rbs 1.0; b rbs 1.0; c rbs 1.0; }
+silence b;
+frame proof {
+    # certain termination: the scan finds b naked at distance 1, q = 1.0 —
+    # the catch-up is deterministic, c() returns null
+    randomize(7)
+    let r1 = random()
+    randomize(7)
+    assert(c() == null, "rho catch 1.0: naked upstream b terminates this transcript")
+    let r2 = random()
+    assert(abs(r1 - r2) < 1e-12, "deterministic termination consumed no draw (p=1 and q=1 fast paths)")
+    # a terminated call is NOT expression: no transcript, no counters
+    assert(fingerprint().transcripts.abc == 0, "terminated call counts no unit transcript")
+    # seed-independence at q = 0 (fresh cell): the scan consumes no draws
+    # (p=1 and q=1 fast paths), so the outcome cannot drift across seeds
+    randomize(99)
+    assert(c() == null, "termination is seed-independent at catch 1.0 (fresh cell)")
+    assert(fingerprint().transcripts.abc == 0, "terminated calls still count nothing")
+    # NOW a() succeeds — one unit transcript loads EVERY cistron's ribosomes:
+    # q_b = 1.0 >= floor 0.5 → the F-8 coupling shield protects b even at
+    # catch 1.0. The layers compose exactly as the kinetics design demands.
+    assert(a() == "a", "upstream member calls are unaffected by the rho scan")
+    randomize(99)
+    assert(c() == "c", "after a() the queue shields b: coupling beats catch 1.0")
+    assert(fingerprint().transcripts.abc == 2, "the shielded call counts its transcript")
+}
+main {
+    randomize(7)
+    promote("c under rho: {c()}")
+}

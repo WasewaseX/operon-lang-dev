@@ -17,6 +17,14 @@ echo "[2/3] Operon proof suite (Rust core)"
 # loop-9 (P0-4): the standalone m6A decay cadence — its own explicit cell
 # (m6a.decay 0.5); a silent no-op before this round, now pinned here.
 ./bin/operon test tests/granted/m6a_decay_cadence.op --cell tests/granted/m6a_decay_cadence.cell
+# loop-10 (F-7/F-8): Rho termination + ribosome-queue shield — explicit
+# operator cells (granted-lane pattern); the ENTROPY-STREAM parity of the
+# opt-in draws is differentially pinned in harness.py (granted targets).
+./bin/operon test tests/granted/rho_termination.op --cell tests/granted/rho_termination.cell
+./bin/operon test tests/granted/rho_readthrough.op --cell tests/granted/rho_readthrough.cell
+./bin/operon test tests/granted/rho_prob.op --cell tests/granted/rho_prob.cell
+./bin/operon test tests/granted/rho_queue_shield.op --cell tests/granted/rho_queue_shield.cell
+./bin/operon test tests/granted/rho_worker.op --cell tests/granted/rho_worker.cell
 echo "[3/4] Differential harness (Rust core vs Python oracle)"
 python3 bootstrap/harness.py
 echo "[4/4] Oracle proof suite (the same frames on the second implementation)"

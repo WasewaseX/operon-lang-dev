@@ -496,6 +496,16 @@ pub struct Interp {
     /// integration); Some after bind_regulation (workers fold the parent's
     /// reader math exactly, since they do not inherit raw .cell).
     pub m6a_reader_pins: Option<(f64, f64, u32)>,
+    /// loop-10 (F-7/F-8): worker-side resolved Rho/queue knobs — (armed,
+    /// catch, queue_floor, queue_cap, drain). None on the host (which
+    /// resolves .cell lazily per use); Some after bind_regulation (workers
+    /// fold the parent's termination math exactly — they do not inherit
+    /// raw .cell).
+    pub rho_pins: Option<(bool, f64, f64, f64, f64)>,
+    /// loop-10 (F-8): per-cistron ribosome queue-depth register. Populated
+    /// ONLY when rho.termination is on (inert bookkeeping otherwise — no
+    /// back-compat surface at all). Rides RegulationSnap.
+    pub ribo_queue: HashMap<String, f64>,
     /// loop-9 (F-3): per-gene promoter attempt telemetry —
     /// (attempts, on_total, episodes) per gene name. Rides RegulationSnap.
     pub promoter_tel: HashMap<String, (u64, u64, u64)>,
@@ -618,6 +628,8 @@ impl Interp {
             signals: Vec::new(),
             medium: None,
             m6a_reader_pins: None,
+            rho_pins: None,
+            ribo_queue: HashMap::new(),
             promoter_tel: HashMap::new(),
             burst_overrides: HashMap::new(),
             splice_shift: HashMap::new(),
@@ -3007,6 +3019,40 @@ impl Interp {
         }
     }
 
+    /// loop-10 (F-7/F-8): the resolved Rho/queue knobs — (armed, catch,
+    /// queue_floor, queue_cap, drain). Host: .cell parsed per use (garbage
+    /// falls back exactly like the oracle mirror: catch clamps 0..1, the
+    /// rest parse-or-default); worker: the pinned snapshot tuple.
+    /// Default-off: absent rho.termination = false — legacy runs draw
+    /// nothing and stay bit-identical (telegraph-promoter precedent).
+    fn rho_knobs(&self) -> (bool, f64, f64, f64, f64) {
+        if let Some(k) = self.rho_pins {
+            return k;
+        }
+        let catch = self
+            .cell
+            .get("rho.catch")
+            .and_then(|v| v.parse::<f64>().ok())
+            .map(|v| v.clamp(0.0, 1.0))
+            .unwrap_or(0.5);
+        let fk = |key: &str, dflt: f64| -> f64 {
+            self.cell
+                .get(key)
+                .and_then(|v| v.parse::<f64>().ok())
+                .unwrap_or(dflt)
+        };
+        (
+            self.cell
+                .get("rho.termination")
+                .map(|v| v == "true")
+                .unwrap_or(false),
+            catch,
+            fk("rho.queue_floor", 0.5),
+            fk("ribosome.queue_cap", 1.0),
+            fk("ribosome.drain", 0.5),
+        )
+    }
+
     /// reg-bio-2 (C1): integrate the translation layer — one Euler step per
     /// `translates` edge: p += rate·Δcalls − decay·p (clamped 0..1), where
     /// Δcalls is the source's call-count delta since the last integration
@@ -3016,6 +3062,16 @@ impl Interp {
     fn trans_integrate(&mut self) {
         if self.trans_edges.is_empty() {
             return;
+        }
+        // loop-10 (F-8): ribosome queue drain — BEFORE the edge loop (pinned
+        // order; both entry points: grn_fire pulses and decay-clock ticks
+        // reach this function). Exists only under rho.termination; the
+        // max(0.0) op is mirror-safe.
+        let (rho_on, _catch, _floor, _cap, rho_drain) = self.rho_knobs();
+        if rho_on {
+            for q in self.ribo_queue.values_mut() {
+                *q = (*q - rho_drain).max(0.0);
+            }
         }
         let edges = self.trans_edges.clone();
         for t in &edges {
@@ -3662,6 +3718,123 @@ impl Interp {
             );
             return Ok(Value::Null);
         }
+        // loop-10 (F-7): Rho-dependent termination — opt-in (.cell
+        // `rho.termination = true`). The pinned gate order extends to
+        // RISC → toggle → GRN → methylation → riboswitch → promoter → RHO.
+        // The scan models Rho catching up on the NAKED upstream RNA of THIS
+        // transcript: an upstream cistron whose translation fails
+        // (methylation-past-threshold, or a RISC capture that fires on this
+        // attempt) exposes rut sites; Rho loads and chases; the rest of the
+        // transcript for THIS call is lost with probability decaying as
+        // catch^distance (integer cistron distance — repeated multiply, no
+        // powf). Ribosome occupancy shields (F-8): a queue depth at or
+        // above rho.queue_floor occludes the rut sites. Insert point: after
+        // the promoter gate, BEFORE transcript/counter bookkeeping — a
+        // terminated call is not expression (no counters, no transcript,
+        // no queue). Entropy: flag OFF = zero draws, bit-identical; flag ON
+        // draws only where 0 < p_g < 1 (member order) and where 0 < q < 1
+        // (one catch-up draw) — the C9 p∈{0,1} no-draw discipline.
+        let (rho_on, rho_catch, rho_floor, rho_cap, _rho_drain) = self.rho_knobs();
+        if rho_on {
+            if let Some(rui) = self
+                .operons
+                .iter()
+                .position(|u| u.members.iter().any(|(m, _)| *m == name))
+            {
+                let pos = self.operons[rui]
+                    .members
+                    .iter()
+                    .position(|(m, _)| *m == name)
+                    .unwrap();
+                let mut terminated: Option<String> = None;
+                for i in 0..pos {
+                    let (g, _) = self.operons[rui].members[i].clone();
+                    let p_g = if *self.methyl_levels.get(&g).unwrap_or(&0) >= self.methyl_threshold
+                    {
+                        1.0f64
+                    } else {
+                        let mut surv = 1.0f64;
+                        let mut has_silence = false;
+                        for (sf, st, s, sites) in self.silences.iter() {
+                            if *sf == g && st.is_none() {
+                                has_silence = true;
+                                let base = 1.0 - *s;
+                                let mut k = 0;
+                                while k < *sites {
+                                    surv *= base;
+                                    k += 1;
+                                }
+                            }
+                        }
+                        if has_silence {
+                            1.0 - surv
+                        } else {
+                            0.0
+                        }
+                    };
+                    if p_g == 0.0 {
+                        continue; // p=0 fast path: no draw
+                    }
+                    let mut x = self.rng;
+                    if 0.0 < p_g && p_g < 1.0 {
+                        x ^= x >> 12;
+                        x ^= x << 25;
+                        x ^= x >> 27;
+                        self.rng = x;
+                    }
+                    let naked_g = if p_g == 1.0 {
+                        true
+                    } else {
+                        let u = ((x >> 11) as f64) / 9_007_199_254_740_992.0;
+                        u < p_g
+                    };
+                    let shielded = *self.ribo_queue.get(&g).unwrap_or(&0.0) >= rho_floor;
+                    if naked_g && !shielded {
+                        // q = catch^d — the fold starts at 1.0 and multiplies
+                        // EXACTLY d times (integer cistron distance d =
+                        // pos - i; the off-by-one of starting at catch would
+                        // compute catch^(d+1) and halve the pressure)
+                        let mut q = 1.0f64;
+                        let mut k = 0;
+                        while k < pos - i {
+                            q *= rho_catch;
+                            k += 1;
+                        }
+                        if q == 0.0 {
+                            break; // Rho never catches up
+                        }
+                        let mut x2 = self.rng;
+                        if 0.0 < q && q < 1.0 {
+                            x2 ^= x2 >> 12;
+                            x2 ^= x2 << 25;
+                            x2 ^= x2 >> 27;
+                            self.rng = x2;
+                        }
+                        let caught = if q == 1.0 {
+                            true
+                        } else {
+                            let u2 = ((x2 >> 11) as f64) / 9_007_199_254_740_992.0;
+                            u2 < q
+                        };
+                        if caught {
+                            terminated = Some(g);
+                        }
+                        break; // the first naked member decides: no further scan
+                    }
+                }
+                if let Some(g) = terminated {
+                    self.note(
+                        dl,
+                        4,
+                        format!(
+                            "rho terminated: transcript lost at '{}' — call returns null",
+                            g
+                        ),
+                    );
+                    return Ok(Value::Null);
+                }
+            }
+        }
         // reg-bio-3 (A1/A7): the call passed every gate — one transcript of
         // the unit is made (a suppressed call is NOT expression and counts
         // nothing; a successful cistron call is one polycistronic transcript).
@@ -3671,6 +3844,19 @@ impl Interp {
             .position(|u| u.members.iter().any(|(m, _)| *m == name))
         {
             self.operons[ui].transcripts += 1;
+            // loop-10 (F-8): ribosome queue register — on every successful
+            // cistron call, EVERY member's queue grows by its rbs (the
+            // Shine–Dalgarno initiation propensity), capped at
+            // ribosome.queue_cap. Exists ONLY under rho.termination —
+            // inert bookkeeping otherwise (no legacy surface at all).
+            if rho_on {
+                for mi in 0..self.operons[ui].members.len() {
+                    let (m, rbs_m) = self.operons[ui].members[mi].clone();
+                    let q = self.ribo_queue.entry(m).or_insert(0.0);
+                    let nv = *q + rbs_m;
+                    *q = if nv > rho_cap { rho_cap } else { nv };
+                }
+            }
         }
         *self.call_counts.entry(name.clone()).or_insert(0) += 1;
         // burst-index binning: 20 calls per bin, per gene (gene-expression

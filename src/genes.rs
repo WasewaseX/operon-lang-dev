@@ -895,6 +895,13 @@ pub struct RegulationSnap {
     pub m6a_levels: Vec<(String, u32)>,
     pub generation: u64,
     pub copies: Vec<(String, u32)>,
+    /// loop-10 (F-7/F-8): resolved Rho/queue knobs ride the snapshot —
+    /// (armed, catch, queue_floor, queue_cap, drain). Worker cells fold the
+    /// parent's termination math exactly (they do not inherit raw .cell).
+    pub rho_knobs: (bool, f64, f64, f64, f64),
+    /// loop-10 (F-8): the queue register freezes at spawn (snapshot
+    /// contract — later parent-side queue growth does not propagate).
+    pub ribo_queue: Vec<(String, f64)>,
 }
 
 pub fn snapshot_regulation(interp: &Interp) -> RegulationSnap {
@@ -1009,6 +1016,39 @@ pub fn snapshot_regulation(interp: &Interp) -> RegulationSnap {
             .collect(),
         generation: interp.generation,
         copies: interp.copies.iter().map(|(k, v)| (k.clone(), *v)).collect(),
+        rho_knobs: (
+            interp
+                .cell
+                .get("rho.termination")
+                .map(|v| v == "true")
+                .unwrap_or(false),
+            interp
+                .cell
+                .get("rho.catch")
+                .and_then(|v| v.parse::<f64>().ok())
+                .map(|v| v.clamp(0.0, 1.0))
+                .unwrap_or(0.5),
+            interp
+                .cell
+                .get("rho.queue_floor")
+                .and_then(|v| v.parse::<f64>().ok())
+                .unwrap_or(0.5),
+            interp
+                .cell
+                .get("ribosome.queue_cap")
+                .and_then(|v| v.parse::<f64>().ok())
+                .unwrap_or(1.0),
+            interp
+                .cell
+                .get("ribosome.drain")
+                .and_then(|v| v.parse::<f64>().ok())
+                .unwrap_or(0.5),
+        ),
+        ribo_queue: interp
+            .ribo_queue
+            .iter()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect(),
     }
 }
 
@@ -1068,6 +1108,10 @@ pub fn bind_regulation(ti: &mut Interp, s: &RegulationSnap) {
     ti.m6a_levels = s.m6a_levels.iter().cloned().collect();
     ti.generation = s.generation;
     ti.copies = s.copies.iter().cloned().collect();
+    // loop-10 (F-7/F-8): Rho knobs pin the worker's termination math; the
+    // queue register freezes at spawn (whole regulatory cell contract)
+    ti.rho_pins = Some(s.rho_knobs);
+    ti.ribo_queue = s.ribo_queue.iter().cloned().collect();
 }
 
 pub fn bind_snapshot(env: &Rc<Env>, snap: &[(String, SnapVal)]) {
