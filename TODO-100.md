@@ -63,10 +63,10 @@ Rules:
 
 Effort: S ≤ half session · M = 1–2 sessions · L = multi-session · XL = release-scale.
 
-## CURRENT GATE NUMBERS (2026-09-26, main @ dd76caa)
+## CURRENT GATE NUMBERS (2026-09-26, main @ 563a331 — dev1 wave-1 merged)
 
-differential **128/128 MATCH** · proofs **99 files / 92 proofs / 1171 assertions** ·
-redteam **95 payloads / 0 breaches** · cargo test green (incl. 5 REPL contracts) ·
+differential **136/136 MATCH** · proofs **106 files / 95 proofs green (0 failed)** ·
+redteam **98 payloads / 0 breaches** · cargo test green (incl. 5 REPL contracts) ·
 clippy 0 · fmt clean · cookbook **18/18** · LSP smoke OK · CI success.
 
 > These numbers are re-measured every loop; when they change, update this header in the
@@ -166,7 +166,7 @@ clippy 0 · fmt clean · cookbook **18/18** · LSP smoke OK · CI success.
   `bootstrap/oracle.py`, `SPEC.md`, `tests/`.
 - Depends: W002 (pattern payloads) strongly recommended; may start in parallel.
 
-### W007 — Real error tracebacks [P0] [dev-1] [M] [open]
+### W007 — Real error tracebacks [P0] [dev-1] [M] [done: main 563a331 — call-chain capture + oracle line-parity + rt_p15a-c + SPEC §9a]
 - Goal: `Stress overflow / at calculate() line 12 col 3 / at process() line 40 / at main()`
   — full call chain with file:line:col, gene name, and stress kind, for every uncaught
   Stress and hard error.
@@ -221,7 +221,7 @@ clippy 0 · fmt clean · cookbook **18/18** · LSP smoke OK · CI success.
 - Deliverable until un-deferred: one design paragraph in SPEC §VM (Cranelift vs hand-rolled
   option table) + the measurement plan that would justify it. Owner sign-off required to start.
 
-### W013 — Memory-cycle strategy [P0] [dev-1] [L] [partial: walk-guards landed, reclamation open]
+### W013 — Memory-cycle strategy [P0] [dev-1] [L] [partial: D-013 decision recorded (document model + opt-in escape hatch, tracing GC rejected); SPEC §19 + memory_model.op on main 563a331; memory() cycle-count + weak refs remain]
 - Already done (evidence): sec-r5 DAG-memoized `stringify`/`repr`/`deep_eq` kills quadratic
   walks; cycle-safe JSON; equality/repr safety proven.
 - Remaining: pick reclamation strategy — (a) weak references API, (b) cycle collector at
@@ -232,7 +232,7 @@ clippy 0 · fmt clean · cookbook **18/18** · LSP smoke OK · CI success.
 - Files: `src/value.rs`, `src/interp.rs`, `src/ffi.rs` (memory() tables), `SPEC.md`,
   `tests/redteam/`.
 
-### W014 — Standardized memory model spec [P0] [dev-1] [M] [partial]
+### W014 — Standardized memory model spec [P0] [dev-1] [M] [done: main 563a331 — SPEC §19 + differential memory_model.op]
 - Goal: one SPEC section answering, for every value type: copy vs reference semantics of
   `let b = a`, container sharing, closure capture, thread transfer, cycle behavior,
   ownership/lifetime rules.
@@ -358,14 +358,14 @@ clippy 0 · fmt clean · cookbook **18/18** · LSP smoke OK · CI success.
   oracle mirror.
 - Files: `src/value.rs`, `src/interp.rs`, `src/lexer.rs`, `bootstrap/oracle.py`, `SPEC.md`.
 
-### W030 — Raw / multiline / byte strings [P2] [dev-1] [S] [verify]
+### W030 — Raw / multiline / byte strings [P2] [dev-1] [S] [done: main 563a331 — r"..." + """...""" oracle-mirrored; b"..." → W029]
 - Verify first: multiline strings + escape behavior are partially proven (rt_p6c/brescape);
   confirm what exists, then land `r"..."` raw + `b"..."` (with W029) + heredoc `'''...'''`
   if missing.
 - Done when: lexer tests + SPEC §6 literals table + oracle mirror.
 - Files: `src/lexer.rs`, `src/parser.rs`, `SPEC.md`, `tests/`.
 
-### W031 — Numeric literal forms [P1] [dev-1] [S] [open]
+### W031 — Numeric literal forms [P1] [dev-1] [S] [done: main 563a331 — 0x/0b/0o + _ separators, oracle-mirrored, SPEC §3]
 - Goal: `0xFF`, `0b101010`, `0o755`, `1_000_000` (underscores in decimal+hex).
 - Done when: lexer accepts forms; overflow behavior matches the existing saturate-to-0
   contract (f0fe2ec) with notes; oracle mirror; differential program.
