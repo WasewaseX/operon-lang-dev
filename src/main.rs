@@ -4,6 +4,7 @@
 // The language core lives in the `operon` library crate (src/lib.rs);
 // this binary is the CLI shell over it.
 use operon::genes;
+use operon::graph;
 use operon::interp;
 use operon::parser;
 use operon::tools;
@@ -552,6 +553,56 @@ fn real_main() {
                 })
                 .collect();
             rows.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+            // W096: machine-readable profile. Self-describing (units, version,
+            // per-gene flags). NOTE: Chrome-trace format is deliberately NOT
+            // emitted yet — the profiler records aggregate self-time only;
+            // a trace needs per-call spans (interp instrumentation, dev-1
+            // lane). Emitting synthetic intervals would misrepresent timing.
+            if json {
+                let genes_json: Vec<String> = rows
+                    .iter()
+                    .map(|(name, calls, time)| {
+                        let mut flags: Vec<String> = Vec::new();
+                        if l.interp.enhanced.contains(name) {
+                            flags.push("\"enhanced\"".to_string());
+                        }
+                        if let Some(Value::Gene(d, _)) = l.interp.global.get(name) {
+                            if d.acetylate {
+                                flags.push("\"active\"".to_string());
+                            }
+                            if d.methylate {
+                                flags.push("\"repressed\"".to_string());
+                            }
+                        }
+                        format!(
+                            "{{\"name\":\"{}\",\"calls\":{},\"self_us\":{:.1},\"flags\":[{}]}}",
+                            tools::json_escape(name),
+                            calls,
+                            time,
+                            flags.join(",")
+                        )
+                    })
+                    .collect();
+                let total_us: f64 = rows.iter().map(|(_, _, t)| t).sum();
+                let total_defined = l.interp.defined_genes.len();
+                let mature = l.interp.call_counts.len().min(total_defined);
+                println!(
+                    "{{\"format\":\"operon-profile\",\"version\":\"{}\",\"file\":\"{}\",\"unit_self_time\":\"microseconds\",\"genes\":[{}],\"total_self_us\":{:.1},\"mature\":{},\"nascent\":{},\"maturation\":{:.2}}}",
+                    env!("CARGO_PKG_VERSION"),
+                    tools::json_escape(&file),
+                    genes_json.join(","),
+                    total_us,
+                    mature,
+                    total_defined.saturating_sub(mature),
+                    if total_defined > 0 {
+                        mature as f64 / total_defined as f64
+                    } else {
+                        0.0
+                    }
+                );
+                tools::flush_notes(&l, opts.quiet);
+                return;
+            }
             println!("operon profile: {} ({} gene(s) executed)", file, rows.len());
             println!("{:<24} {:>8} {:>12}  flags", "gene", "calls", "self µs");
             for (name, calls, time) in &rows {
@@ -610,6 +661,22 @@ fn real_main() {
                 );
             }
             tools::flush_notes(&l, opts.quiet);
+        }
+        "graph" => {
+            // W094: static regulate-network export — parse-only (like
+            // check/fmt), no run, no capabilities beyond reading the file.
+            let file = match positional.first() {
+                Some(f) => f.clone(),
+                None => die("graph needs a file"),
+            };
+            let src = std::fs::read_to_string(&file).unwrap_or_default();
+            let prog = parser::parse(&src);
+            let g = graph::collect(&prog.stmts);
+            if json {
+                println!("{}", graph::to_json(&g));
+            } else {
+                print!("{}", graph::to_dot(&g));
+            }
         }
         "crispr" => {
             let file = match positional.first() {
@@ -1110,6 +1177,7 @@ usage:
   operon repl
   operon build f.op [--variant v] [-o out.op]
   operon rna f.op patch.rna [--write] [--json]
+  operon graph f.op [--json]
   operon profile f.op
   operon crispr f.op --knockout gene [--json]
   operon bench f.op [--iters n]
