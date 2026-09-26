@@ -7627,14 +7627,10 @@ impl Interp {
                                 self.py_version_warned = true;
                                 let below = {
                                     let mut parts = ver.split('.');
-                                    let major: u32 = parts
-                                        .next()
-                                        .and_then(|p| p.parse().ok())
-                                        .unwrap_or(0);
-                                    let minor: u32 = parts
-                                        .next()
-                                        .and_then(|p| p.parse().ok())
-                                        .unwrap_or(0);
+                                    let major: u32 =
+                                        parts.next().and_then(|p| p.parse().ok()).unwrap_or(0);
+                                    let minor: u32 =
+                                        parts.next().and_then(|p| p.parse().ok()).unwrap_or(0);
                                     (major, minor) < (3, 10)
                                 };
                                 if below {
