@@ -1,0 +1,5 @@
+regulate {
+  lac activates lacy strength 0.9
+  rep inhibits lac threshold 0.4
+}
+gene main() { grn_fire("net") }
