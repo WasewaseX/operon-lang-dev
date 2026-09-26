@@ -84,44 +84,146 @@ pub fn parse_cell(src: &str) -> HashMap<String, String> {
 }
 
 // ------------------------------------------------------------ .rna edits
-/// Apply an RNA edit patch to source text. Target matches either the file
-/// stem or a gene name; gene-scoped edits apply to that gene's source span
-/// (best effort: from `gene <name>` to the next top-level `gene ` at col 0).
-pub fn apply_rna(src: &str, patch_src: &str, file_stem: &str) -> (String, Vec<String>) {
-    let mut applied = Vec::new();
+/// One replacement rule's fate under `apply_rna_checked`.
+/// `hits` counts non-overlapping occurrences in the scanned region at the
+/// time the rule runs (rules apply sequentially, mirroring apply_rna).
+#[derive(Debug, Clone)]
+pub struct RnaEdit {
+    pub target: String,
+    /// true when the rule is scoped to a gene (not stem/anywhere)
+    pub gene_scoped: bool,
+    /// gene mode: the gene span was found; stem/anywhere mode: always true
+    pub target_found: bool,
+    pub from: String,
+    pub to: String,
+    pub hits: usize,
+    /// hits > 0 (the replacement actually changed text)
+    pub applied: bool,
+}
+
+/// Detailed result of a dry-run/checked RNA application (W068 safety mode).
+#[derive(Debug, Clone)]
+pub struct RnaReport {
+    pub edits: Vec<RnaEdit>,
+    pub new_text: String,
+}
+
+impl RnaReport {
+    pub fn applied(&self) -> usize {
+        self.edits.iter().filter(|e| e.applied).count()
+    }
+    pub fn missed(&self) -> usize {
+        self.edits.iter().filter(|e| !e.applied).count()
+    }
+    pub fn would_change(&self) -> bool {
+        // the caller owns the original text; report carries only the result,
+        // so "changed" is judged by whether any edit applied
+        self.applied() > 0
+    }
+}
+
+/// Apply an RNA edit patch to source text with a full per-rule report.
+/// Semantics are IDENTICAL to `apply_rna` (same scan order, same all-
+/// occurrences replacement, same gene-span scoping) — this is the checked
+/// engine; `apply_rna` is its lossy view (W068: no more silent misses).
+pub fn apply_rna_checked(src: &str, patch_src: &str, file_stem: &str) -> RnaReport {
+    let mut edits = Vec::new();
     let mut text = src.to_string();
     let patch = crate::parser::parse(patch_src);
     for s in &patch.stmts {
         if let Stmt::Edit(target, reps) = s {
             let gene_target = target != file_stem && target != "anywhere";
-            let mut edited = Vec::new();
             if gene_target {
                 if let Some((start, end)) = gene_span(&text, target) {
                     let seg = text[start..end].to_string();
                     let mut seg2 = seg.clone();
                     for (from, to) in reps {
-                        if seg2.contains(from.as_str()) {
+                        let hits = count_occurrences(&seg2, from);
+                        if hits > 0 {
                             seg2 = seg2.replace(from.as_str(), to);
-                            applied.push(format!("{}: '{}' -> '{}'", target, from, to));
                         }
+                        edits.push(RnaEdit {
+                            target: target.clone(),
+                            gene_scoped: true,
+                            target_found: true,
+                            from: from.clone(),
+                            to: to.clone(),
+                            hits,
+                            applied: hits > 0,
+                        });
                     }
                     if seg2 != seg {
                         text.replace_range(start..end, &seg2);
-                        edited.push(true);
                     }
-                    let _ = edited;
+                } else {
+                    // gene not found: every rule of the statement is a miss
+                    for (from, to) in reps {
+                        edits.push(RnaEdit {
+                            target: target.clone(),
+                            gene_scoped: true,
+                            target_found: false,
+                            from: from.clone(),
+                            to: to.clone(),
+                            hits: 0,
+                            applied: false,
+                        });
+                    }
                 }
             } else {
                 for (from, to) in reps {
-                    if text.contains(from.as_str()) {
+                    let hits = count_occurrences(&text, from);
+                    if hits > 0 {
                         text = text.replace(from.as_str(), to);
-                        applied.push(format!("{}: '{}' -> '{}'", target, from, to));
                     }
+                    edits.push(RnaEdit {
+                        target: target.clone(),
+                        gene_scoped: false,
+                        target_found: true,
+                        from: from.clone(),
+                        to: to.clone(),
+                        hits,
+                        applied: hits > 0,
+                    });
                 }
             }
         }
     }
-    (text, applied)
+    RnaReport {
+        edits,
+        new_text: text,
+    }
+}
+
+/// Count non-overlapping occurrences of `needle` in `hay` (the same matches
+/// `str::replace` would replace).
+fn count_occurrences(hay: &str, needle: &str) -> usize {
+    if needle.is_empty() {
+        return 0; // empty pattern: String::replace would insert everywhere —
+                  // never a useful edit; treat as no-match rather than corrupt
+    }
+    let mut n = 0;
+    let mut rest = hay;
+    while let Some(p) = rest.find(needle) {
+        n += 1;
+        rest = &rest[p + needle.len()..];
+    }
+    n
+}
+
+/// Apply an RNA edit patch to source text. Target matches either the file
+/// stem or a gene name; gene-scoped edits apply to that gene's source span
+/// (best effort: from `gene <name>` to the next top-level `gene ` at col 0).
+/// Lossy view over `apply_rna_checked` — kept for existing call sites
+/// (`run --rna`, `build --rna`); new tooling should use the checked engine.
+pub fn apply_rna(src: &str, patch_src: &str, file_stem: &str) -> (String, Vec<String>) {
+    let report = apply_rna_checked(src, patch_src, file_stem);
+    let applied = report
+        .edits
+        .iter()
+        .filter(|e| e.applied)
+        .map(|e| format!("{}: '{}' -> '{}'", e.target, e.from, e.to))
+        .collect();
+    (report.new_text, applied)
 }
 
 fn gene_span(src: &str, gene: &str) -> Option<(usize, usize)> {
