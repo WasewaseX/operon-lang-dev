@@ -3690,7 +3690,8 @@ class Interp:
         # Naked upstream RNA scan in member order: p_g = 1 (methylated) or
         # 1 − surv(g) (target-less RISC silence) or 0; draws only where
         # 0 < p_g < 1 (member order) then one catch-up draw where 0 < q < 1;
-        # catch^distance by repeated multiply (no pow); F-8 shield: queue
+        # catch probability compounding over the naked runway (no pow; the
+        # R10 W1 fix — pressure GROWS with distance); F-8 shield: queue
         # >= rho.queue_floor occludes the rut sites. A terminated call is
         # not expression: returns null before counters/transcript/queue.
         rho_on, rho_catch, rho_floor, rho_cap, _drain = self._rho_knobs()

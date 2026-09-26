@@ -246,6 +246,7 @@ Requires: rustc (≥1.70), gcc, g++. No crates, no network, no external dependen
 
 - **Values**: null, bool, int(i64, overflow = catchable Stress), float, str (with `"interp {expr}"`), list, map (insertion-ordered), gene (closure), native.
 - **Control**: `if/elif/else`, `while`, `loop`, `for…in`, `match/case` (literals, binding, wildcard), `for x in xs if cond collect body` comprehensions, `break/continue`, `return`.
+- **Regulation as execution**: `regulate` networks gate calls; `operon` units give polycistronic transcription with polarity, and opt-in Rho-dependent termination with a ribosome-queue coupling shield (`rho.termination` in a `.cell`).
 - **Operators**: `**` (right-assoc pow), `& | ^ << >> ~` bitwise, `cond ? a : b` ternary, `int % int` → int.
 - **Genes**: named, anonymous, lambdas, defaults, closures, recursion, `guard` clauses, marks — plus **phenotype classes** (`phenotype P { let f = 0; gene init() {…} }`, `new P(...)`, `self`, `phenotype C from P`) and **sequence generators** (`sequence s() { yield v }` with `.next()`/`.collect()`, lazy worker-cell pull).
 - **Errors**: everything is a catchable `Stress{kind, message}` — `unfolded | missing | overflow | burned | interference` — plus Total-Grammar runtime notes. A program never crashes; worst case it narrates what it repaired.

@@ -246,6 +246,24 @@ write gate levels directly, and `grn_fire(node, decay)` takes an optional decay 
 Decay is **opt-in** dilution — levels persist forever when unset — so pass a decay per pulse
 or set `[grn] decay` in your `.cell` if you want levels that bleed off between pulses.
 
+### Inside an operon: polarity and Rho termination (opt-in)
+
+When several genes share one `operon` unit, a failure upstream is felt downstream — that is
+transcriptional polarity. Two layers model it, and both are OFF unless you ask:
+
+- **Polarity (always on inside units, deterministic):** a silenced or methylated upstream
+  cistron derates the downstream protein yield by an expected factor (default `0.5` per
+  blocked member — tune with `[operon] polarity` in your `.cell`).
+- **Rho termination (opt-in):** set `[rho] termination = true` in a `.cell` file and a failed
+  upstream cistron becomes *naked RNA*: Rho loads, chases, and with probability
+  `1 − (1−catch)^d` — `d` = how many cistrons downstream the reader is — the rest of the
+  transcript is lost for that call (the call returns null and counts nothing). Further
+  downstream readers give Rho more time, so the probability grows with distance. Healthy
+  cistrons push back: every successful unit call fills a per-cistron ribosome queue
+  (`[ribosome] queue_cap`, drained by `[ribosome] drain` per integration tick), and a queue
+  at or above `[rho] queue_floor` shields the cistron — ribosome occupancy hides the sites
+  Rho needs. Full semantics: SPEC §11; runnable proofs: `tests/granted/rho_*.op`.
+
 ## 7. Proof frames = tests built into the language
 
 A `frame proof` is a block of assertions the toolchain runs:
