@@ -6040,8 +6040,10 @@ class Interp:
         # W06 (D-014) mirror: variants serialize as single-key objects —
         # {"some": v} / {"ok": v} / {"err": v}; None serializes as null.
         # Matches the Rust json_stringify_g Variant arms byte-for-byte.
+        # W06 parity fix: a null payload is a real payload — ok(null)
+        # serializes {"ok":null} on the Rust core; only tag None is bare null.
         if isinstance(v, Variant):
-            if v.tag == "None" or v.payload is None:
+            if v.tag == "None":
                 return "null"
             key = {"Some": "some", "Ok": "ok", "Err": "err"}.get(v.tag, "none")
             return "{" + _json.dumps(key) + ":" + Interp._json_str(v.payload, _seen, _depth + 1) + "}"
