@@ -186,7 +186,7 @@ Member access on Map → key lookup (missing → Null + note). Methods (see §10
 ## 7. Genes (functions) and lambdas
 
 ```
-marks* gene name(p1, p2 = default) guard (cond) else { B } { body }
+marks* gene name(p1: T, p2: T = default) -> T guard (cond) else { B } { body }
 marks* gene (p1) => expr            # anonymous lambda
 marks* gene (p1) { body }           # anonymous block lambda
 let f = gene (x) => x * 2
@@ -235,6 +235,45 @@ for v in name(3) { ... }             # sequences are directly iterable
 - Values cross the membrane by serialization. Named genes and lambdas may travel as arguments (they cross by definition); a running sequence object itself does not cross.
 - Honesty note: the Rust core pulls lazily; the Python oracle models a sequence by running the body to completion on first pull (buffered). Output is identical for programs that do not print inside a sequence body, and the differential corpus avoids infinite sequences.
 - `yield` outside a sequence is treated as `return` with a note.
+
+### 7c. Soft type annotations (W01 — L2c)
+
+Annotations document and enforce contracts at the boundaries, in the spirit of
+mypy/TypeScript-gradual-typing rather than a static checker:
+
+```
+gene clip(x: int, lo: int, hi: int) -> int { ... }   # param + return annotations
+let ratio: float = 0.5                               # annotated definition
+let name: str? = null                                # optional (accepts null)
+gene handle(v: int | str) -> any { ... }             # union
+```
+
+- **Grammar**: a type is a name, a name with `?` (optional), or a `|`
+  union of those. Known names match by value type: `int float str bool
+  list map gene sequence phenotype option result`. An unknown name parses
+  fine and matches nothing today (user-defined phenotype annotations are a
+  later stage) — never a parse rejection (Total Grammar, §4).
+- **Widening rule**: `float` accepts int (safe numeric widening); `int`
+  REFUSES float — no silent narrowing. `any` accepts everything.
+  `option`/`result` match the variant FAMILIES (Some/None vs Ok/Err — the
+  tag is the contract, §9); families are distinct.
+- **Enforcement is a SOFT contract**: violations raise catchable Stress
+  kind `unfolded` (§9), never a hard failure and never a parse rejection.
+  - **Params** are checked at the call funnel: `argument 'x' for gene
+    'g' expects int, got str`. Default-value expressions are checked the
+    same way. Phenotype methods run the same checks (`...for method
+    'm'...`).
+  - **Returns** are checked when the gene produces its value — including a
+    `?!`-propagated variant and a guard-branch return: `return of gene
+    'g' expects int, got str`. Falling off the end without a return is an
+    implicit null and violates a non-optional annotation: `...got null (no
+    return statement ran)`; declare `-> T?` when null is legitimate.
+  - **`let x: T = e`** checks at binding: `type annotation violated: 'x'
+    expects int, got str`. On a mismatch the binding does NOT happen.
+- **Staged model** (this stage = stage 1): annotations are runtime
+  contracts on gene calls and definitions. `operon check`-time inference
+  and reporting, typed collections (`List<T>` sugar), and type aliases are
+  later stages of W01; sequencing is tracked in ROADMAP-100.
 
 ## 8. Modules, TADs, anchors
 
