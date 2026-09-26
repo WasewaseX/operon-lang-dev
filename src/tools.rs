@@ -2151,3 +2151,154 @@ pub fn flush_notes(l: &Loaded, quiet: bool) {
         }
     }
 }
+
+// ---------------------------------------------------------------- fix (W65)
+
+/// W65 (ROADMAP-100): what one `operon fix` pass changed.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FixReport {
+    /// synonym/wobble canonicalizations the parser+fmt pass surfaced
+    /// (rung-2 and rung-3 repair notes on the migrated source).
+    pub canonicalized: usize,
+    /// `const` → `let` keyword migrations applied at the source level.
+    pub const_to_let: usize,
+    /// `expr::field` → `expr.field` migrations applied at the source level
+    /// (dx-r3: old tutorials taught the unsupported `::` spelling).
+    pub s_dot: usize,
+}
+
+/// W65: the `operon fix` core — parse → migrate → canonicalize.
+///
+/// Pipeline: (1) source-level legacy-token migrations, string/comment-aware;
+/// (2) parse with Total Grammar repairs; (3) emit the canonical formatter
+/// output. The result re-parses without rung-2+ notes on canonically valid
+/// input, and the canonical MEANING of the program never changes: fix is a
+/// surface-syntax migrator, not a rewriter.
+pub fn fix_source(src: &str) -> (String, FixReport) {
+    let (migrated, const_n, sdot_n) = migrate_source(src);
+    let prog = parser::parse(&migrated);
+    let canonicalized = prog.notes.iter().filter(|n| n.rung >= 2).count();
+    let out = format_program(&prog);
+    (
+        out,
+        FixReport {
+            canonicalized,
+            const_to_let: const_n,
+            s_dot: sdot_n,
+        },
+    )
+}
+
+/// W65: the source-level migration pass. Walks the whole source char-wise
+/// (not line-wise) so triple-quoted, raw, and escaped strings stay intact;
+/// edits only CODE regions: comments and every string form are copied
+/// verbatim. Returns (new_source, const_count, s_dot_count).
+fn migrate_source(src: &str) -> (String, usize, usize) {
+    let chars: Vec<char> = src.chars().collect();
+    let n = chars.len();
+    let mut out = String::with_capacity(src.len() + 16);
+    let mut i = 0usize;
+    let mut const_n = 0usize;
+    let mut sdot_n = 0usize;
+
+    while i < n {
+        let c = chars[i];
+        // comments: verbatim to end of line (the newline itself re-enters code)
+        if c == '#' {
+            while i < n && chars[i] != '\n' {
+                out.push(chars[i]);
+                i += 1;
+            }
+            continue;
+        }
+        // raw strings r"...": the r must be a standalone token (start or
+        // preceded by a non-id char) and followed directly by a quote
+        if c == 'r'
+            && i + 1 < n
+            && chars[i + 1] == '"'
+            && (i == 0 || !(chars[i - 1].is_ascii_alphanumeric() || chars[i - 1] == '_'))
+        {
+            out.push(c);
+            out.push('"');
+            i += 2;
+            while i < n && chars[i] != '"' {
+                if chars[i] == '\n' {
+                    out.push('\n');
+                } else {
+                    out.push(chars[i]);
+                }
+                i += 1;
+            }
+            if i < n {
+                out.push('"');
+                i += 1;
+            }
+            continue;
+        }
+        // triple-quoted strings """...""": verbatim, may span lines
+        if c == '"' && i + 2 < n && chars[i + 1] == '"' && chars[i + 2] == '"' {
+            out.push_str("\"\"\"");
+            i += 3;
+            while i < n {
+                if chars[i] == '"' && i + 2 < n && chars[i + 1] == '"' && chars[i + 2] == '"' {
+                    out.push_str("\"\"\"");
+                    i += 3;
+                    break;
+                }
+                out.push(chars[i]);
+                i += 1;
+            }
+            continue;
+        }
+        // plain strings: verbatim, backslash escapes respected
+        if c == '"' {
+            out.push(c);
+            i += 1;
+            while i < n {
+                if chars[i] == '\\' && i + 1 < n {
+                    out.push(chars[i]);
+                    out.push(chars[i + 1]);
+                    i += 2;
+                    continue;
+                }
+                if chars[i] == '"' {
+                    out.push('"');
+                    i += 1;
+                    break;
+                }
+                out.push(chars[i]);
+                i += 1;
+            }
+            continue;
+        }
+        // identifiers: the only code region fix rewrites
+        if c.is_ascii_alphabetic() || c == '_' {
+            let start = i;
+            while i < n && (chars[i].is_ascii_alphanumeric() || chars[i] == '_') {
+                i += 1;
+            }
+            let word: String = chars[start..i].iter().collect();
+            // migration 1: const → let (W64's first deprecation consumer)
+            if word == "const" {
+                out.push_str("let");
+                const_n += 1;
+            } else {
+                out.push_str(&word);
+            }
+            // migration 2: expr::field → expr.field (dx-r3 legacy spelling)
+            if i + 1 < n && chars[i] == ':' && chars[i + 1] == ':' {
+                let followed_by_id =
+                    i + 2 < n && (chars[i + 2].is_ascii_alphanumeric() || chars[i + 2] == '_');
+                if followed_by_id {
+                    out.push('.');
+                    i += 2;
+                    sdot_n += 1;
+                }
+            }
+            continue;
+        }
+        out.push(c);
+        i += 1;
+    }
+    (out, const_n, sdot_n)
+}

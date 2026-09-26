@@ -756,6 +756,67 @@ fn real_main() {
                 print!("{}", out);
             }
         }
+        // W65 (ROADMAP-100): the automated migrator. fix = legacy-surface
+        // migrations (const→let, s:: → dot access) + Total Grammar
+        // canonicalization, through the same formatter `operon fmt` uses.
+        // Dry-run by default (prints a per-line diff); --write applies.
+        // The canonical MEANING of the program never changes — pinned by
+        // tests/fix_corpus.rs (corpus-wide: canonical(fix(x)) == canonical(x)).
+        "fix" => {
+            let file = match positional.first() {
+                Some(f) => f.clone(),
+                None => die("fix needs a file"),
+            };
+            let src = std::fs::read_to_string(&file)
+                .unwrap_or_else(|e| die(&format!("cannot read {}: {}", file, e)));
+            let (out, rep) = tools::fix_source(&src);
+            let changed = out != src;
+            if json {
+                println!(
+                    "{{\"file\":\"{}\",\"changed\":{},\"migrations\":{{\"canonicalize\":{},\"const_to_let\":{},\"s_dot\":{}}}}}",
+                    tools::json_escape(&file),
+                    changed,
+                    rep.canonicalized,
+                    rep.const_to_let,
+                    rep.s_dot
+                );
+            } else if !changed {
+                println!("fix: {} — already canonical", file);
+            } else if write {
+                std::fs::write(&file, &out)
+                    .unwrap_or_else(|e| die(&format!("write failed: {}", e)));
+                eprintln!(
+                    "fix: {} rewritten ({} canonicalized, {} const→let, {} s::→dot)",
+                    file, rep.canonicalized, rep.const_to_let, rep.s_dot
+                );
+            } else {
+                // dry-run: show the diff, change nothing. Per changed line:
+                // the old line, then the new line, with 1-based line numbers.
+                println!("fix: {} — dry run (pass --write to apply)", file);
+                let old_lines: Vec<&str> = src.lines().collect();
+                let new_lines: Vec<&str> = out.lines().collect();
+                let mut shown = 0usize;
+                for k in 0..old_lines.len().max(new_lines.len()) {
+                    let o = old_lines.get(k).copied().unwrap_or("");
+                    let nw = new_lines.get(k).copied().unwrap_or("");
+                    if o != nw {
+                        if o.is_empty() {
+                            println!("{:>5}: + {}", k + 1, nw);
+                        } else if nw.is_empty() {
+                            println!("{:>5}: - {}", k + 1, o);
+                        } else {
+                            println!("{:>5}: - {}", k + 1, o);
+                            println!("{:>5}: + {}", k + 1, nw);
+                        }
+                        shown += 1;
+                    }
+                    if shown >= 200 {
+                        println!("  … more lines not shown (use --write to apply all)");
+                        break;
+                    }
+                }
+            }
+        }
         "rna" => {
             // W068 safety mode: default = checked dry-run (writes nothing);
             // --write applies the same engine; exit 1 on any miss so scripts notice.
@@ -1692,6 +1753,7 @@ usage:
   operon check f.op [--format diag|score] [--nmd | --nmd=purge] [--json]
   operon test [paths...] [--json] [--filter substr] [--list] [--repeat n]
   operon fmt f.op [--write] [--indent N] [--quotes single|double] [--fmt-config f]
+  operon fix f.op [--write] [--json]   # migrate legacy surface (const→let, s::→dot), dry-run default
   operon ast f.op [--json]
   operon explain f.op [--json] [--strict]
   operon lint f.op [--cell c] [--json]
