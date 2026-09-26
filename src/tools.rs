@@ -1220,7 +1220,10 @@ pub struct FmtConfig {
 
 impl Default for FmtConfig {
     fn default() -> Self {
-        FmtConfig { indent: 2, quotes: QuoteMode::Double }
+        FmtConfig {
+            indent: 2,
+            quotes: QuoteMode::Double,
+        }
     }
 }
 
@@ -1277,9 +1280,13 @@ fn str_lit(s: &str) -> String {
                 .replace('{', "\\{")
                 .replace('}', "\\}")
         ),
-        QuoteMode::Single if !s.contains('\'') && !s.contains('\\')
-            && !s.contains('{') && !s.contains('}')
-            && !s.contains('\n') && !s.contains('\t') =>
+        QuoteMode::Single
+            if !s.contains('\'')
+                && !s.contains('\\')
+                && !s.contains('{')
+                && !s.contains('}')
+                && !s.contains('\n')
+                && !s.contains('\t') =>
         {
             format!("'{}'", s)
         }
@@ -1314,7 +1321,7 @@ pub fn parse_fmt_config(src: &str) -> (FmtConfig, Vec<String>) {
         };
         match k {
             "indent" => match v.parse::<usize>() {
-                Ok(n) if n >= 1 && n <= 16 => cfg.indent = n,
+                Ok(n) if (1..=16).contains(&n) => cfg.indent = n,
                 _ => unknown.push(format!("indent = {v} (want 1..=16)")),
             },
             "quotes" => match v {
@@ -1322,7 +1329,7 @@ pub fn parse_fmt_config(src: &str) -> (FmtConfig, Vec<String>) {
                 "single" => cfg.quotes = QuoteMode::Single,
                 other => unknown.push(format!("quotes = {other} (want double|single)")),
             },
-            other => unknown.push(format!("{other}")),
+            other => unknown.push(other.to_string()),
         }
     }
     (cfg, unknown)

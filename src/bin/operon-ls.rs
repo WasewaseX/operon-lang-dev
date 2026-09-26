@@ -54,7 +54,7 @@ fn main() {
     // W62: versioned contract — `operon-ls --version` prints the
     // machine-readable pair editors can pin against. Anything else is
     // refused loudly (the server itself reads LSP frames on stdio).
-    for a in std::env::args().skip(1) {
+    if let Some(a) = std::env::args().nth(1) {
         match a.as_str() {
             "--version" | "-V" => {
                 println!("operon {} / lsp {}", env!("CARGO_PKG_VERSION"), LSP_VERSION);
