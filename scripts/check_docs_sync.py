@@ -99,6 +99,29 @@ def main():
     if re.search(r"\b(six|Six)\s+std", readme):
         fails.append("W57: README still says 'six std' modules")
 
+    # 8. packaging channel ledger ↔ README install matrix ↔ packaging/ dir
+    #    (W61): the matrix must name every channel file that exists, and
+    #    every packaging/ file it names must exist — in both directions.
+    pkg_dir = os.path.join(ROOT, "packaging")
+    channel_files = []
+    if os.path.isdir(pkg_dir):
+        for base, _dirs, fnames in os.walk(pkg_dir):
+            for f in fnames:
+                rel = os.path.relpath(os.path.join(base, f), ROOT).replace(os.sep, "/")
+                if rel != "packaging/genomelab.spec" and rel != "packaging/build_exe.bat":
+                    channel_files.append(rel)
+    for rel in channel_files:
+        if rel not in readme:
+            fails.append(f"W61: packaging channel '{rel}' missing from README install matrix")
+    for rel in ["packaging/scoop/operon.json", "packaging/aur/PKGBUILD",
+                "packaging/aur/PKGBUILD.git", "packaging/nix/default.nix"]:
+        if rel in readme and not os.path.exists(os.path.join(ROOT, rel)):
+            fails.append(f"W61: README install matrix names '{rel}' but the file is missing")
+    if "docs/PACKAGING.md" in readme and not os.path.exists(os.path.join(ROOT, "docs", "PACKAGING.md")):
+        fails.append("W61: README links docs/PACKAGING.md but the ledger is missing")
+    if not os.path.exists(os.path.join(ROOT, "docs", "PACKAGING.md")):
+        fails.append("W61: docs/PACKAGING.md channel ledger missing")
+
     if fails:
         print("DOCS OUT OF SYNC — fix the source, never hand-patch generated files:")
         for f in fails:
