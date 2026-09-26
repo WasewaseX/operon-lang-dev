@@ -63,11 +63,12 @@ Rules:
 
 Effort: S ≤ half session · M = 1–2 sessions · L = multi-session · XL = release-scale.
 
-## CURRENT GATE NUMBERS (2026-09-26, sz/m100-docs head — dev-3 wave-2 W074/W073)
+## CURRENT GATE NUMBERS (2026-09-27, sz/w076-embed head — dev-3 wrap-up W076/W077/W080/W085, main = #16+#20 merged)
 
-differential **149/149 MATCH** · proofs **118 files / 100 proofs green (1304 asserts, 0 failed)** ·
-redteam **100 payloads / 0 breaches** · cargo test green (incl. 6 docgen + 5 REPL contracts) ·
-clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK · sec_regression ALL GREEN.
+differential **152/152 MATCH** · proofs **120 files / 102 proofs green (1314 asserts, 0 failed)** ·
+redteam **100 payloads / 0 breaches** · cargo test green (81 tests / 12 suites, incl. embed-era suites) ·
+clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK · sec_regression ALL GREEN ·
+doc_api_check green · **embed gate green (W076: examples/embed path-dep crate builds + runs, promote() captured)**.
 
 > These numbers are re-measured every loop; when they change, update this header in the
 > same commit that lands work. If this header is stale, the per-level evidence links win.
