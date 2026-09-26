@@ -11,11 +11,13 @@
 //! optional Hill-style dose `threshold`. Levels themselves are runtime
 //! state — this export is structure only.
 
-use crate::ast::{RegEdge, Stmt};
+use crate::ast::{RegEdge, Stmt, TransEdge};
 
 #[derive(Debug, Default, Clone)]
 pub struct GraphDump {
     pub edges: Vec<RegEdge>,
+    /// two-tier translation edges (reg-bio-2): mRNA -> protein with rate/decay
+    pub trans: Vec<TransEdge>,
     pub nodes: Vec<String>,
 }
 
@@ -37,11 +39,18 @@ pub fn collect(stmts: &[Stmt]) -> GraphDump {
 fn walk(stmts: &[Stmt], g: &mut GraphDump) {
     for s in stmts {
         match s {
-            Stmt::Regulate(es) => {
+            Stmt::Regulate(es, trans, _binds) => {
+                // v1 renders regulation + translation edges; BindDef records
+                // (allostery) are node annotations — v2 scope (TODO-100 W094).
                 for e in es {
                     g.push_node(&e.from);
                     g.push_node(&e.to);
                     g.edges.push(e.clone());
+                }
+                for t in trans {
+                    g.push_node(&t.from);
+                    g.push_node(&t.to);
+                    g.trans.push(t.clone());
                 }
             }
             // mechanisms may nest: descend into the containers
@@ -60,6 +69,13 @@ pub fn to_dot(g: &GraphDump) -> String {
     let mut out = String::from("digraph operon {\n  rankdir=LR;\n");
     for n in &g.nodes {
         out.push_str(&format!("  \"{}\";\n", n));
+    }
+    for t in &g.trans {
+        let rate = t.rate.map(fmt_num).unwrap_or_else(|| "1".to_string());
+        out.push_str(&format!(
+            "  \"{}\" -> \"{}\" [label=\"translates x{}\", style=dotted];\n",
+            t.from, t.to, rate
+        ));
     }
     for e in &g.edges {
         let kind = if e.inhibit { "inhibits" } else { "activates" };
@@ -105,11 +121,33 @@ pub fn to_json(g: &GraphDump) -> String {
             )
         })
         .collect();
+    let trans: Vec<String> = g
+        .trans
+        .iter()
+        .map(|t| {
+            let rate = match t.rate {
+                Some(r) => format!("{:.1}", r),
+                None => "null".to_string(),
+            };
+            let decay = match t.decay {
+                Some(d) => format!("{:.1}", d),
+                None => "null".to_string(),
+            };
+            format!(
+                "{{\"from\":\"{}\",\"to\":\"{}\",\"rate\":{},\"decay\":{}}}",
+                crate::tools::json_escape(&t.from),
+                crate::tools::json_escape(&t.to),
+                rate,
+                decay
+            )
+        })
+        .collect();
     format!(
-        "{{\"format\":\"operon-graph\",\"version\":\"{}\",\"nodes\":[{}],\"edges\":[{}]}}",
+        "{{\"format\":\"operon-graph\",\"version\":\"{}\",\"nodes\":[{}],\"edges\":[{}],\"trans_edges\":[{}]}}",
         env!("CARGO_PKG_VERSION"),
         nodes.join(","),
-        edges.join(",")
+        edges.join(","),
+        trans.join(",")
     )
 }
 
@@ -143,6 +181,17 @@ mod tests {
         assert!(js.contains("\"format\":\"operon-graph\""));
         assert!(js.contains("\"threshold\":0.3"));
         assert!(js.contains("\"inhibit\":true"));
+    }
+
+    #[test]
+    fn translation_edges_render() {
+        let src = "regulate { mrna translates prot rate 0.5 }\n";
+        let prog = crate::parser::parse(src);
+        let g = collect(&prog.stmts);
+        assert_eq!(g.trans.len(), 1, "trans edge collected");
+        assert_eq!(g.edges.len(), 0, "reg edges untouched");
+        assert!(to_dot(&g).contains("translates x0.5"));
+        assert!(to_json(&g).contains("\"trans_edges\":[{\"from\":\"mrna\""));
     }
 
     #[test]
