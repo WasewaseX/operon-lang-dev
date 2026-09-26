@@ -328,7 +328,7 @@ def report_suites(results, iters):
            ("op/py", 8), ("op/oracle", 10), ("calls", 10)]
     print(fmt_row(hdr))
     print("  ".join("-" * w for _, w in hdr))
-    for name, _path, _nat, calls in SUITES:
+    for name, _path, _nat, calls, _extra in SUITES:
         r = results[name]
         op, orc, nat = r["operon"]["min"] * 1000, r["oracle"]["min"] * 1000, r["native"]["min"] * 1000
         cells = [(name, 12), (f"{op:.1f}", 10), (f"{orc:.1f}", 11), (f"{nat:.1f}", 11),
