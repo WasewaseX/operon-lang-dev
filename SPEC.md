@@ -1,6 +1,6 @@
-# Operon v2.3 — Language Specification
+# Operon — Language Specification
 
-**Status:** v2.3.0-dev (L1a: null-safety, destructuring, iteration/numeric builtins). This document is the single contract implemented identically by:
+**Status:** v2.2.0 + post-2.2 language amendments (L1a null-safety/destructuring/iteration builtins, L1c regex builtins, L1d wall-clock time builtins). Implementation version stays 2.2.0 until the next milestone tag (D-009: version moves only at milestones). This document is the single contract implemented identically by:
 
 | Implementation | Language | Role |
 |---|---|---|
@@ -43,10 +43,10 @@ Arithmetic:
 - Identifiers `[A-Za-z_][A-Za-z0-9_]*`.
 - Numbers: `42`, `3.14`, `1e3` (float). Negative via unary minus.
 - Newlines terminate statements; `;` allowed and ignored (also `;;`, stray). Blocks are `{ ... }`.
-- Keywords (canonical, 51 — the parser's reserved set):
-  `gene let if elif else while loop for in return break continue match case use tad anchor export import enhance silence stress rescue raise fate state regulate activates inhibits strength toggle repressilator period frame proof guard splice variant edit replace ires as collect enter phenotype sequence yield new threshold from self operon`
+- Keywords (canonical, 58 — the parser's reserved set; the 6 quorum words joined in reg-bio-3 C8):
+  `gene let if elif else while loop for in return break continue match case use tad anchor export import enhance silence stress rescue raise fate state regulate activates inhibits strength toggle repressilator period frame proof guard splice variant edit replace ires as collect enter phenotype sequence yield new threshold from self decoy ligand autoinducer bind inducer cofactor operon`
 - Literal words `true false null` and the logical words `and or not` are recognized in expression positions (not part of the reserved keyword table).
-- Marks: `@acetylate` `@methylate` `@m6a`.
+- Marks: `@acetylate` `@methylate` `@m6a` `@copies` `@riboswitch` `@burst`.
 - `#` inside a string does NOT start a comment.
 
 ## 4. Total Grammar — the 4-rung ladder
@@ -516,7 +516,7 @@ This specification is **Operon 2.2.0**. `operon version` prints the implementati
 
 ## 18. Verification status (what the shipped suite proves)
 
-- Proof frames: **80 files / 74 proofs / 930 assertions**, green on the Rust core and the Python oracle.
-- Differential harness (Rust core vs Python oracle, program-level stdout): **85 programs, all MATCH**, plus the oracle runs the same proof suite (both implementations green, enforced in CI).
-- Red-team suite: **92 payloads, 0 breaches** (note-cap, fuel-charge, and output-cap containment verified live on the stochastic-expression and reg-bio-3 surfaces).
+- Proof frames: **99 files / 92 proofs / 1,171 assertions**, green on the Rust core and the Python oracle.
+- Differential harness (Rust core vs Python oracle, program-level stdout): **128 programs, all MATCH**, plus the oracle runs the same proof suite (both implementations green, enforced in CI).
+- Red-team suite: **95 payloads, 0 breaches** (note-cap, fuel-charge, and output-cap containment verified live on the stochastic-expression, reg-bio-3, and Rho-termination surfaces).
 - Playground smoke: expression-core subset in the browser, spec-aligned (unbound reads → null + note).

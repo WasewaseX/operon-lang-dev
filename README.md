@@ -38,7 +38,7 @@ The mandate: *"Rust, then C, then Python, then Operon, then C++, then HTML, then
 
 **Honest deviations from the requested order, and why:**
 
-1. **Python (2) > C++ (8).** The oracle is not "too much Python" — it is the differential engine that proves the Rust core correct (56/56 program-level output matches). Deleting it would save lines and lose verification.
+1. **Python (2) > C++ (8).** The oracle is not "too much Python" — it is the differential engine that proves the Rust core correct (128/128 program-level output matches). Deleting it would save lines and lose verification.
 2. **The C kernel was deleted on purpose (sec-r2, audit A15).** The audit proved it was write-only (the lexer discarded every intern result) and that its raw-pointer arena was the project's one ASan-confirmed memory-safety class. Interning now lives in Rust (`src/ffi.rs`): same stable-id semantics, `memory()` still reports table stats, and the entire UAF class is structurally impossible. The C++ codon kernel STAYED because it earned its place: bit-parallel Myers is genuinely hot (`distance()`, `similar()`, wobble repair, parser suggestions), allocation-free, and budget-guarded.
 3. **Operon (2) has overtaken everything except Rust.** Between v2.1.0 and v2.2.0 the `.op` share grew from ~7% to ~27% (proof suite, red-team containment, differential corpus, stdlib). `std/` runs on the Rust core today; every release self-hosts more. That is exactly how Rust/Go/TS historically converged.
 
@@ -234,13 +234,13 @@ Ranged (incremental) edits are ignored by design while `textDocumentSync = 1` (f
 ```console
 $ ./scripts/build.sh          # gcc + g++ the kernels, rustc the core
 OK: bin/operon
-$ ./scripts/test.sh           # 80 proof files (930 assertions), C++ kernel smoke
-$ python3 bootstrap/harness.py  # differential: 85/85 programs MATCH across implementations
-$ bash scripts/redteam.sh       # adversarial containment: 88 attacks contained, 0 breached
+$ ./scripts/test.sh           # 99 proof files (1,171 assertions), C++ kernel smoke
+$ python3 bootstrap/harness.py  # differential: 128/128 programs MATCH across implementations
+$ bash scripts/redteam.sh       # adversarial containment: 95 attacks contained, 0 breached
 $ bash scripts/bench.sh
 ```
 
-Requires: rustc (≥1.70), gcc, g++. No crates, no network, no external dependencies.
+Requires: rustc (≥1.70), gcc, g++. One build-dependency: the `cc` crate compiles the bundled C++ codon kernel. No runtime crates, no network fetches, no dynamic library dependencies.
 
 ## Language
 
