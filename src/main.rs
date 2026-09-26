@@ -287,6 +287,25 @@ fn real_main() {
                         } else {
                             eprintln!("[contained] [{}] {}", s.kind, s.message);
                         }
+                        // W007: call-chain traceback — innermost frame first,
+                        // each frame the gene and the call site that invoked
+                        // it. Render capped at 64 (the capture cap); the
+                        // chain leaks nothing beyond the script path already
+                        // printed above (no env, no cwd, no host paths).
+                        if !s.chain.is_empty() {
+                            for (i, (name, line)) in s.chain.iter().enumerate() {
+                                if i >= 64 {
+                                    eprintln!("  … {} more frame(s)", s.chain.len() - 64);
+                                    break;
+                                }
+                                if *line > 0 {
+                                    eprintln!("  at {} ({}:{})", name, l.interp.file, line);
+                                } else {
+                                    eprintln!("  at {}", name);
+                                }
+                            }
+                            eprintln!("  at main");
+                        }
                         // dx-r1 (parity audit W2): a failing program must not
                         // report success — CI/shell pipelines trusted rc=0
                         // from scripts that died. 1 = uncaught top-level stress.

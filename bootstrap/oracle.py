@@ -22,8 +22,15 @@ class Note:
 class Stress(Exception):
     def __init__(self, kind, message):
         self.kind, self.message = kind, message
+        # W007 mirror: gene call chain captured during unwinding — innermost
+        # frame first, (gene, call-site line); capture cap 64 matches Rust.
+        self.chain = []
     def as_map(self):
-        return {"kind": self.kind, "message": self.message}
+        # W07 mirror: rescue binding carries the chain, same field order as
+        # the Rust stress_map (kind, message, chain). Stress.line stays a
+        # Rust-side stderr-rendering field (dx-r3) — not mirrored here.
+        return {"kind": self.kind, "message": self.message,
+                "chain": [{"gene": n, "line": l} for (n, l) in self.chain]}
 
 class Gene:
     __slots__ = ("name", "params", "guard", "body", "acetylate", "methylate", "m6a", "copies", "seq", "riboswitch", "burst", "closure")
@@ -1685,7 +1692,7 @@ class P:
             t = self.peek()
             if (t[0] == "IDENT" and t[1] == "or") or (t[0] == "SYM" and t[1] == "||"):
                 self.next()
-                left = ("bin", "or", left, self.nullish_expr())
+                left = ("bin", "or", left, self.nullish_expr(), self.peek()[2])  # W07: line = right-operand start (Rust stamps after next())
             else:
                 return left
 
@@ -1696,7 +1703,7 @@ class P:
             t = self.peek()
             if t[0] == "SYM" and t[1] == "??":
                 self.next()
-                left = ("bin", "nullish", left, self.and_expr())
+                left = ("bin", "nullish", left, self.and_expr(), t[2])  # W07: op line
             else:
                 return left
 
@@ -1706,7 +1713,7 @@ class P:
             t = self.peek()
             if (t[0] == "IDENT" and t[1] == "and") or (t[0] == "SYM" and t[1] == "&&"):
                 self.next()
-                left = ("bin", "and", left, self.not_expr())
+                left = ("bin", "and", left, self.not_expr(), self.peek()[2])  # W07: line = right-operand start
             else:
                 return left
 
@@ -1723,10 +1730,10 @@ class P:
             t = self.peek()
             if t[0] == "SYM" and t[1] in ("==", "!=", "<", "<=", ">", ">="):
                 self.next()
-                left = ("bin", t[1], left, self.bitor_expr())
+                left = ("bin", t[1], left, self.bitor_expr(), t[2])
             elif t[0] == "IDENT" and t[1] == "in":
                 self.next()
-                left = ("bin", "in", left, self.bitor_expr())
+                left = ("bin", "in", left, self.bitor_expr(), t[2])
             else:
                 return left
 
@@ -1736,7 +1743,7 @@ class P:
             t = self.peek()
             if t[0] == "SYM" and t[1] == "|":
                 self.next()
-                left = ("bin", "|", left, self.bitxor_expr())
+                left = ("bin", "|", left, self.bitxor_expr(), t[2])
             else:
                 return left
 
@@ -1746,7 +1753,7 @@ class P:
             t = self.peek()
             if t[0] == "SYM" and t[1] == "^":
                 self.next()
-                left = ("bin", "^", left, self.bitand_expr())
+                left = ("bin", "^", left, self.bitand_expr(), t[2])
             else:
                 return left
 
@@ -1756,7 +1763,7 @@ class P:
             t = self.peek()
             if t[0] == "SYM" and t[1] == "&":
                 self.next()
-                left = ("bin", "&", left, self.shift_expr())
+                left = ("bin", "&", left, self.shift_expr(), t[2])
             else:
                 return left
 
@@ -1766,7 +1773,7 @@ class P:
             t = self.peek()
             if t[0] == "SYM" and t[1] in ("<<", ">>"):
                 self.next()
-                left = ("bin", t[1], left, self.add_expr())
+                left = ("bin", t[1], left, self.add_expr(), t[2])
             else:
                 return left
 
@@ -1776,7 +1783,7 @@ class P:
             t = self.peek()
             if t[0] == "SYM" and t[1] in ("+", "-"):
                 self.next()
-                left = ("bin", t[1], left, self.mul_expr())
+                left = ("bin", t[1], left, self.mul_expr(), t[2])
             else:
                 return left
 
@@ -1786,7 +1793,7 @@ class P:
             t = self.peek()
             if t[0] == "SYM" and t[1] in ("*", "/", "//", "%"):
                 self.next()
-                left = ("bin", t[1], left, self.unary())
+                left = ("bin", t[1], left, self.unary(), t[2])
             else:
                 return left
 
@@ -1805,7 +1812,7 @@ class P:
         if t[0] == "SYM" and t[1] == "**":
             self.next()
             # right-assoc; right operand re-enters unary so 2**-3 parses
-            return ("bin", "**", left, self.unary())
+            return ("bin", "**", left, self.unary(), t[2])
         return left
 
     def postfix(self):
@@ -1826,7 +1833,7 @@ class P:
                     args.append(self.expr())
                     if self.peek() == ("SYM", ",", t2[2]):
                         self.next()
-                e = ("call", e, args)
+                e = ("call", e, args, t[2])  # W07: LParen line (Rust stamps before next())
             elif t == ("SYM", "[", t[2]):
                 self.next()
                 idx = self.expr()
@@ -1834,7 +1841,7 @@ class P:
                     self.next()
                 else:
                     self.note(self.peek()[2], 4, "index bracket auto-closed")
-                e = ("index", e, idx)
+                e = ("index", e, idx, t[2])  # W07: LBrack line
             elif t == ("SYM", ".", t[2]):
                 self.next()
                 t2 = self.peek()
@@ -2149,6 +2156,9 @@ class Interp:
         self.steps = 0
         self.depth = 0
         self.depth_limit = 10_000
+        # W07 mirror: line of the call/binop/index expression currently
+        # executing (A13/dx-r4 parity) — feeds traceback chain frames.
+        self.cur_line = 0
         self.methyl_quiet = False
         self.methyl_noted = set()
         # T2b graded methylation: per-gene silencing level (@methylate defs +1,
@@ -2457,6 +2467,7 @@ class Interp:
                             self.note(4, f"'{name}' was not declared; auto-declared")
                         self.assign(env, name, val)
                     elif t[0] == "index":
+                        self.cur_line = t[3] if len(t) > 3 else 0  # W07 mirror: assign-target stamp
                         tv = self.eval(env, t[1])
                         iv = self.eval(env, t[2])
                         if isinstance(tv, list):
@@ -2499,6 +2510,7 @@ class Interp:
                     self.note(4, f"'{name}' was not declared; auto-declared")
         elif k == "idx_assign":
             _, te, ie, op, ve = s
+            self.cur_line = te[3] if isinstance(te, tuple) and len(te) > 3 else 0  # W07 mirror
             tv = self.eval(env, te)
             iv = self.eval(env, ie)
             v = self.eval(env, ve)
@@ -2876,6 +2888,7 @@ class Interp:
             args = [self.eval(env, a) for a in args_e]
             return self.construct_obj(p, args)
         if k == "bin":
+            self.cur_line = e[4] if len(e) > 4 else 0  # W07 mirror: dx-r4 stamp
             op = e[1]
             if op == "and":
                 lv = self.eval(env, e[2])
@@ -2891,6 +2904,7 @@ class Interp:
             rv = self.eval(env, e[3])
             return self.binop(op, lv, rv)
         if k == "call":
+            self.cur_line = e[3] if len(e) > 3 else 0  # W07 mirror: A13 stamp
             if e[1][0] == "ident":
                 args = [self.eval(env, a) for a in e[2]]
                 return self.call_named(env, e[1][1], args)
@@ -2898,6 +2912,7 @@ class Interp:
             args = [self.eval(env, a) for a in e[2]]
             return self.call_value(env, callee, args)
         if k == "index":
+            self.cur_line = e[3] if len(e) > 3 else 0  # W07 mirror: dx-r4 stamp
             tv = self.eval(env, e[1])
             iv = self.eval(env, e[2])
             if isinstance(tv, list):
@@ -3243,8 +3258,16 @@ class Interp:
         if self.depth > self.depth_limit:
             self.depth -= 1
             raise Stress("overflow", f"recursion depth limit ({self.depth_limit}) exceeded")
+        # W007 mirror: the traceback frame for THIS gene — captured at entry
+        # (cur_line is the call site); appended only on the error path.
+        frame = (name, self.cur_line)
         try:
-            return self.call_gene_inner(g, args)
+            result = self.call_gene_inner(g, args)
+            return result
+        except Stress as st:
+            if len(st.chain) < 64:
+                st.chain.append(frame)
+            raise
         finally:
             self.depth -= 1
 

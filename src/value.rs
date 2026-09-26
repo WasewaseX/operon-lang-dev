@@ -182,6 +182,12 @@ pub struct Stress {
     /// dx-r3 (re-audit): source line the hard error originated from — the
     /// primary diagnostic gets a location, matching mainstream norms.
     pub line: usize,
+    /// W007: gene call chain, captured as the stress unwinds through the
+    /// call funnel — INNERMOST frame first, (gene name, call-site line).
+    /// Rendered on uncaught stress (main.rs) and exposed on rescue bindings
+    /// via stress_map ("chain" key). Capped at 64 frames (note-cap
+    /// discipline): a bounded chain is a contained chain.
+    pub chain: Vec<(String, usize)>,
 }
 
 impl Stress {
@@ -190,6 +196,7 @@ impl Stress {
             kind: kind.to_string(),
             message: message.into(),
             line: 0,
+            chain: Vec::new(),
         }
     }
     /// dx-r3: a located hard error (call sites inside eval stamp cur_line).
@@ -198,6 +205,7 @@ impl Stress {
             kind: kind.to_string(),
             message: message.into(),
             line,
+            chain: Vec::new(),
         }
     }
 }

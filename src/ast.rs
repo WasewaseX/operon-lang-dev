@@ -283,8 +283,8 @@ pub enum Stmt {
     Continue,
     ExprStmt(Expr),
     Match(Expr, Vec<(MatchPat, Vec<Stmt>)>),
-    Use(String, Option<String>), // path, alias
-    Raise(Option<String>, Expr), // kind, message
+    Use(String, Option<String>),        // path, alias
+    Raise(Option<String>, Expr, usize), // kind, message, statement line (W007)
     Stress {
         kind: Option<String>,
         body: Vec<Stmt>,
