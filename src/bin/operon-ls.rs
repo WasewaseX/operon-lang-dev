@@ -6,7 +6,9 @@
 //! lsp-r1, repair provenance as relatedInformation since W46),
 //! textDocument/hover with gene signatures + repair provenance,
 //! textDocument/definition, textDocument/references (W45),
-//! textDocument/semanticTokens (W45), textDocument/documentSymbol,
+//! textDocument/semanticTokens (W45), textDocument/prepareRename +
+//! textDocument/rename (W45-v2 — grep-class, W67 all-or-nothing discipline),
+//! textDocument/documentSymbol,
 //! textDocument/completion, textDocument/formatting (the canonical
 //! `operon fmt` engine), and `--explain FILE` wrapping the W38 rung report.
 //!
@@ -20,7 +22,8 @@
 use operon::interp::{json_parse, json_stringify};
 use operon::ls::{
     analyze_doc, completions, definition, document_symbols, format_text, hover, mapv,
-    publish_params, range_value, references, semantic_tokens, LsDoc, SEMANTIC_TOKEN_TYPES,
+    prepare_rename, publish_params, range_value, references, rename, semantic_tokens, LsDoc,
+    SEMANTIC_TOKEN_TYPES,
 };
 use operon::value::Value;
 use std::collections::HashMap;
@@ -43,12 +46,13 @@ const LSP_VERSION: u32 = 1;
 /// W62: the feature list echoed in the initialize handshake. Must stay in
 /// lockstep with the capabilities map below and with lsp_smoke's assertions
 /// (the smoke fails the build if they drift).
-const LSP_FEATURES: [&str; 9] = [
+const LSP_FEATURES: [&str; 10] = [
     "diagnostics",
     "hover",
     "definition",
     "references",     // W45
     "semanticTokens", // W45
+    "rename",         // W45-v2: prepareRename + rename, W67 discipline
     "documentSymbol",
     "completion",
     "formatting",
@@ -164,6 +168,13 @@ fn main() {
                             ("hoverProvider", Value::Bool(true)),
                             ("definitionProvider", Value::Bool(true)),
                             ("referencesProvider", Value::Bool(true)), // W45
+                            (
+                                // W45-v2: editors call prepareRename first; the
+                                // server refuses the whole rename (error) when
+                                // the new name is illegal or already taken
+                                "renameProvider",
+                                mapv(vec![("prepareProvider", Value::Bool(true))]),
+                            ),
                             (
                                 // W45: fixed 6-type legend, full sync only
                                 "semanticTokensProvider",
@@ -319,6 +330,72 @@ fn main() {
                     })
                 });
                 send(&mut stdout, id.unwrap_or(Value::Null), response, &None);
+            }
+            // W45-v2: prepareRename — the renamable span under the cursor
+            "textDocument/prepareRename" => {
+                let response = with_doc_position(&docs, &params, |src, doc, line, ch| {
+                    prepare_rename(src, doc, line, ch).map(|(l, c, len, placeholder)| {
+                        mapv(vec![
+                            ("range", range_value(l, c, len)),
+                            ("placeholder", Value::Str(placeholder)),
+                        ])
+                    })
+                });
+                send(&mut stdout, id.unwrap_or(Value::Null), response, &None);
+            }
+            // W45-v2: rename — WorkspaceEdit over every code occurrence.
+            // Refusals (invalid/reserved/builtin-taken/already-taken names)
+            // come back as JSON-RPC errors so the editor can surface the
+            // reason — a silent null would hide the all-or-nothing verdict.
+            "textDocument/rename" => {
+                let uri = doc_uri(&params);
+                let p = params.as_ref();
+                let new_name = p
+                    .and_then(|p| get_str(p, "newName"))
+                    .unwrap_or_default()
+                    .to_string();
+                let pos = p.and_then(|p| get(p, "position"));
+                let line = pos
+                    .as_ref()
+                    .and_then(|v| get(v, "line"))
+                    .and_then(|v| as_int(&v))
+                    .unwrap_or(0) as usize;
+                let ch = pos
+                    .as_ref()
+                    .and_then(|v| get(v, "character"))
+                    .and_then(|v| as_int(&v))
+                    .unwrap_or(0) as usize;
+                match docs.get(&uri) {
+                    Some(e) => match rename(&e.src, &e.analyzed, line, ch, &new_name) {
+                        Ok(edits) => {
+                            let items: Vec<Value> = edits
+                                .into_iter()
+                                .map(|(l, c, len)| {
+                                    mapv(vec![
+                                        ("range", range_value(l, c, len)),
+                                        ("newText", Value::Str(new_name.clone())),
+                                    ])
+                                })
+                                .collect();
+                            let result = mapv(vec![(
+                                "changes",
+                                mapv(vec![(
+                                    uri.as_str(),
+                                    Value::List(std::rc::Rc::new(std::cell::RefCell::new(items))),
+                                )]),
+                            )]);
+                            send(&mut stdout, id.unwrap_or(Value::Null), Some(result), &None);
+                        }
+                        Err(msg) => {
+                            let err = mapv(vec![
+                                ("code", Value::Int(-32001)),
+                                ("message", Value::Str(format!("rename refused: {}", msg))),
+                            ]);
+                            send(&mut stdout, id.unwrap_or(Value::Null), None, &Some(err));
+                        }
+                    },
+                    None => send(&mut stdout, id.unwrap_or(Value::Null), None, &None),
+                }
             }
             // W45: semantic tokens (full) — delta-encoded classification
             "textDocument/semanticTokens/full" | "textDocument/semanticTokens" => {

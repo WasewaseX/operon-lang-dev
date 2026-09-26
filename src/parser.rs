@@ -94,6 +94,25 @@ pub fn keyword_list() -> &'static [&'static str] {
     KEYWORDS
 }
 
+/// W45-v2 (LSP rename): true when `w` cannot be used as a plain identifier.
+/// Composition of the reserved-word surfaces, all read-only:
+///   - canonical keywords (`KEYWORDS` above),
+///   - mark names (`MARKS` — the `@directive` class),
+///   - the literal words the grammar reserves (`true`/`false`/`null` and the
+///     canonicalized `ifnot`),
+///   - the synonym table (`fn`, `var`, `on`, … — a name that repairs into a
+///     keyword is not a stable identifier).
+///
+/// Read-only accessor in the W55 precedent; the tables above stay the single
+/// source of truth. Mirrored in the oracle? No — rename is an editor-side
+/// tool, no differential surface.
+pub fn is_reserved_for_identifier(w: &str) -> bool {
+    if KEYWORDS.contains(&w) || MARKS.contains(&w) {
+        return true;
+    }
+    matches!(w, "true" | "false" | "null" | "ifnot") || synonym(w).is_some()
+}
+
 pub fn is_canonical(w: &str) -> bool {
     KEYWORDS.contains(&w)
 }

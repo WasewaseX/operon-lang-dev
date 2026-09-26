@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""LSP smoke test (G5 seed → lsp-r1 v2): drives ./target/release/operon-ls.
+"""LSP smoke test (G5 seed → lsp-r1 v2 → W45/W46/W45-v2): drives ./target/release/operon-ls.
 
 Covers: initialize handshake + advertised capabilities, publishDiagnostics
-(phantom call), hover with a gene signature, definition, documentSymbol,
+(phantom call), hover with a gene signature, definition, references,
+semanticTokens, prepareRename + rename (all-or-nothing refusals), documentSymbol,
 completion, formatting, didClose state clearing, the CWD-independence fix
 (server launched from a foreign directory must not phantom stdlib calls),
 unknown-method error, shutdown/exit. Run from repo root:
@@ -50,10 +51,13 @@ _feats = r["result"]["operonLsp"]["features"]
 assert "signatureHelp" in _feats and "hover" in _feats and "formatting" in _feats, _feats
 # W45: the new breadth features are advertised
 assert "references" in _feats and "semanticTokens" in _feats, _feats
+# W45-v2: rename joins additively (lsp 1 unchanged per LSP-VERSIONING rule 1)
+assert "rename" in _feats, _feats
 caps = r["result"]["capabilities"]
 assert caps["hoverProvider"] is True and caps["textDocumentSync"] == 1, caps
 assert caps["definitionProvider"] is True, caps
 assert caps["referencesProvider"] is True, caps
+assert caps["renameProvider"] == {"prepareProvider": True}, caps
 assert caps["documentSymbolProvider"] is True, caps
 assert caps["documentFormattingProvider"] is True, caps
 assert caps["completionProvider"]["resolveProvider"] is False, caps
@@ -185,6 +189,103 @@ assert r["id"] == 23, r
 assert r["result"] is not None, r
 assert "repair" in r["result"]["contents"]["value"], r["result"]
 assert "return" in r["result"]["contents"]["value"], r["result"]
+
+# 4b-W45v2. rename — prepareRename + the all-or-nothing rename (W67 discipline)
+send({
+    "jsonrpc": "2.0",
+    "method": "textDocument/didOpen",
+    "params": {
+        "textDocument": {"uri": "file:///rename.op", "languageId": "operon", "version": 1},
+        "text": (
+            "gene boost(x) { return x * 2 }\n"
+            "# boost in a comment\n"
+            "main {\n"
+            "    let s = \"boost stays\"\n"
+            "    let y = boost(1)\n"
+            "}\n"
+        ),
+    },
+})
+d = recv()
+assert d["method"] == "textDocument/publishDiagnostics", d
+
+# prepareRename on the call site answers the full span + placeholder
+send({
+    "jsonrpc": "2.0",
+    "id": 30,
+    "method": "textDocument/prepareRename",
+    "params": {
+        "textDocument": {"uri": "file:///rename.op"},
+        "position": {"line": 4, "character": 15},
+    },
+})
+r = recv()
+assert r["id"] == 30, r
+assert r["result"]["placeholder"] == "boost", r
+assert r["result"]["range"]["start"] == {"line": 4, "character": 12}, r
+
+# a keyword position refuses (prepareRename → null)
+send({
+    "jsonrpc": "2.0",
+    "id": 31,
+    "method": "textDocument/prepareRename",
+    "params": {
+        "textDocument": {"uri": "file:///rename.op"},
+        "position": {"line": 0, "character": 21},
+    },
+})
+r = recv()
+assert r["id"] == 31 and r["result"] is None, r
+
+# rename boost → enlarge: decl + call site; string and comment untouched
+send({
+    "jsonrpc": "2.0",
+    "id": 32,
+    "method": "textDocument/rename",
+    "params": {
+        "textDocument": {"uri": "file:///rename.op"},
+        "position": {"line": 4, "character": 15},
+        "newName": "enlarge",
+    },
+})
+r = recv()
+assert r["id"] == 32, r
+_edits = r["result"]["changes"]["file:///rename.op"]
+assert len(_edits) == 2, _edits
+assert all(e["newText"] == "enlarge" for e in _edits), _edits
+assert sorted(
+    (e["range"]["start"]["line"], e["range"]["start"]["character"]) for e in _edits
+) == [(0, 5), (4, 12)], _edits
+
+# a reserved new name refuses the WHOLE rename (JSON-RPC error, not a null)
+send({
+    "jsonrpc": "2.0",
+    "id": 33,
+    "method": "textDocument/rename",
+    "params": {
+        "textDocument": {"uri": "file:///rename.op"},
+        "position": {"line": 4, "character": 15},
+        "newName": "return",
+    },
+})
+r = recv()
+assert r["id"] == 33 and r.get("error", {}).get("code") == -32001, r
+assert "reserved" in r["error"]["message"], r
+
+# an in-file collision refuses with the all-or-nothing reason
+send({
+    "jsonrpc": "2.0",
+    "id": 34,
+    "method": "textDocument/rename",
+    "params": {
+        "textDocument": {"uri": "file:///rename.op"},
+        "position": {"line": 4, "character": 15},
+        "newName": "main",
+    },
+})
+r = recv()
+assert r["id"] == 34 and "error" in r, r
+assert "merge unrelated bindings" in r["error"]["message"], r
 
 # 4c. documentSymbol → boost + main listed
 send({
