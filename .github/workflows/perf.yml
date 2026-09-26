@@ -39,7 +39,10 @@ jobs:
           components: clippy, rustfmt
 
       - name: Build head
-        run: cargo build --release
+        run: |
+          cargo build --release
+          mkdir -p bin
+          cp target/release/operon bin/operon
 
       - name: Bench head
         run: python3 scripts/bench_compare.py --quick --json /tmp/head.json
@@ -55,6 +58,7 @@ jobs:
           git fetch origin "$BASE_SHA" --depth=1
           git checkout "$BASE_SHA" -- src build.rs Cargo.toml Cargo.lock runtime std
           cargo build --release
+          cp target/release/operon bin/operon
           python3 scripts/bench_compare.py --quick --json /tmp/base.json
           git checkout HEAD -- src build.rs Cargo.toml Cargo.lock runtime std
 
