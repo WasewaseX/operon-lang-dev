@@ -541,17 +541,54 @@ fn resolve_path(interp: &Interp, path: &str) -> Result<String, String> {
         }
     }
     // explicit standard-library override (not double-joined with std/)
+    let std_env = std::env::var("OPERON_STD").ok();
     candidates.push(
-        std::env::var("OPERON_STD")
-            .ok()
+        std_env
+            .clone()
             .map(|d| std::path::PathBuf::from(d).join(&p)),
     );
-    for c in candidates.into_iter().flatten() {
-        if c.exists() {
-            return Ok(c.to_string_lossy().to_string());
-        }
+    // W070: per-root attempt detail for the PLAIN name class only. The
+    // traversal class keeps its unified C-7 message — attempted-root detail
+    // for outside paths would resurrect the existence oracle C-7 removed.
+    // `is_file` (not `exists`) so a directory named `foo.op` reports as
+    // "not a regular file" instead of "resolving" and dying in the parser.
+    let mut attempts: Vec<String> = Vec::new();
+    if interp.base_dir.is_none() {
+        attempts.push("(no importing-file directory)".to_string());
     }
-    Err(unified_err(interp.caps.enabled && traversal))
+    let mut resolved: Option<String> = None;
+    for c in candidates.into_iter().flatten() {
+        let shown = c.to_string_lossy().to_string();
+        if c.is_file() {
+            resolved = Some(shown);
+            break;
+        }
+        attempts.push(format!(
+            "{} ({})",
+            shown,
+            if c.exists() {
+                "not a regular file"
+            } else {
+                "missing"
+            }
+        ));
+    }
+    if let Some(r) = resolved {
+        return Ok(r);
+    }
+    if let Some(d) = &std_env {
+        attempts.push(format!("OPERON_STD={}", d));
+    } else {
+        attempts.push("OPERON_STD (unset)".to_string());
+    }
+    if traversal {
+        return Err(unified_err(interp.caps.enabled && traversal));
+    }
+    Err(format!(
+        "module '{}' not found — tried: {}",
+        path,
+        attempts.join("; ")
+    ))
 }
 
 /// sec-r1 (audit C-7): single failure string for the traversal name class so
