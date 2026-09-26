@@ -1,0 +1,167 @@
+{
+ "cli_subcommands": [
+  "bench",
+  "build",
+  "check",
+  "crispr",
+  "fmt",
+  "profile",
+  "repl",
+  "run",
+  "test",
+  "version"
+ ],
+ "keyword_analogy_pending": [],
+ "keyword_count": 58,
+ "keywords": [
+  "activates",
+  "anchor",
+  "as",
+  "autoinducer",
+  "bind",
+  "break",
+  "case",
+  "cofactor",
+  "collect",
+  "continue",
+  "decoy",
+  "edit",
+  "elif",
+  "else",
+  "enhance",
+  "enter",
+  "export",
+  "fate",
+  "for",
+  "frame",
+  "from",
+  "gene",
+  "guard",
+  "if",
+  "import",
+  "in",
+  "inducer",
+  "inhibits",
+  "ires",
+  "let",
+  "ligand",
+  "loop",
+  "match",
+  "new",
+  "operon",
+  "period",
+  "phenotype",
+  "proof",
+  "raise",
+  "regulate",
+  "replace",
+  "repressilator",
+  "rescue",
+  "return",
+  "self",
+  "sequence",
+  "silence",
+  "splice",
+  "state",
+  "strength",
+  "stress",
+  "tad",
+  "threshold",
+  "toggle",
+  "use",
+  "variant",
+  "while",
+  "yield"
+ ],
+ "lsp_methods": [
+  "initialize",
+  "shutdown",
+  "textDocument/completion",
+  "textDocument/definition",
+  "textDocument/didChange",
+  "textDocument/didClose",
+  "textDocument/didOpen",
+  "textDocument/documentSymbol",
+  "textDocument/formatting",
+  "textDocument/hover",
+  "textDocument/publishDiagnostics"
+ ],
+ "proof_files": 83,
+ "proof_totals": {
+  "asserts": 99,
+  "files": 106,
+  "proofs": 99,
+  "source": "bin/operon"
+ },
+ "redteam_files": 92,
+ "spec": {
+  "h1": "# Operon \u2014 Language Specification",
+  "status": "v2.3.0-dev"
+ },
+ "std_function_count": 149,
+ "std_module_count": 15,
+ "std_modules": [
+  {
+   "functions": 8,
+   "module": "args"
+  },
+  {
+   "functions": 4,
+   "module": "bio"
+  },
+  {
+   "functions": 6,
+   "module": "collections"
+  },
+  {
+   "functions": 7,
+   "module": "csv"
+  },
+  {
+   "functions": 8,
+   "module": "fmt"
+  },
+  {
+   "functions": 12,
+   "module": "fs"
+  },
+  {
+   "functions": 23,
+   "module": "iter"
+  },
+  {
+   "functions": 11,
+   "module": "json"
+  },
+  {
+   "functions": 18,
+   "module": "math"
+  },
+  {
+   "functions": 12,
+   "module": "motifs"
+  },
+  {
+   "functions": 6,
+   "module": "random"
+  },
+  {
+   "functions": 0,
+   "module": "seq"
+  },
+  {
+   "functions": 11,
+   "module": "set"
+  },
+  {
+   "functions": 17,
+   "module": "strings"
+  },
+  {
+   "functions": 6,
+   "module": "testing"
+  }
+ ],
+ "test_op_files": 84,
+ "version": "2.2.0"
+}
