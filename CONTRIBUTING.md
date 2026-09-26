@@ -184,6 +184,37 @@ minimal, credit in the commit body.
   activating threshold by 0.25; `repressilator` is a driven-oscillator ring with phase lag.
 - Every std addition (builder-B) needs: unit proofs, a STDLIB.md row, zero Rust changes.
 
+### 8a. The docs-gate contract (W075) — examples are tests are docs
+
+Operon documentation is enforced at three points; "I updated the docs" is not
+one of them. The chain: **doc example → executable example → test → rendered
+doc.**
+
+1. **Cookbook gate (`scripts/cookbook.sh`)** — every `examples/cookbook/*.op`
+   runs against its frozen `examples/cookbook/expected/*.out`, byte-exact, on
+   every CI pass. A doc that shows cookbook output that no longer matches the
+   program cannot merge: fix the program or the frozen output IN THE SAME PR
+   (never hand-edit the .out to silence a failure — re-derive it and diff it).
+2. **Apps gate (`operon test apps/`)** — the flagship app's proof frame runs
+   in CI like any proof. Docs describing app behavior must survive the app's
+   own proofs.
+3. **API docs gate (`operon doc` + `scripts/doc_api_check.sh`, W073)** —
+   `docs/api/*.md` is GENERATED from the AST (signatures, marks, `##` doc
+   comments). The check re-renders and diffs; drift fails. `##` doc comments
+   live WITH the code they describe — a signature change without updating its
+   doc comment fails the regen-check by construction. Playground-side
+   consumers use `operon doc --json`.
+
+Rules of the chain:
+- A doc example in README/TUTORIAL/STDLIB must reference a verified program
+  (cookbook entry, app, or proof) — no copy-paste originals that rot.
+- W074 doc comments are the ONLY doc source rendered from the AST; keep prose
+  docs (SPEC/BENCH/design notes) OUT of `##` comments (they are API reference,
+  not narrative).
+- The differential harness doubles as the truth-pass for behavioral claims in
+  SPEC: a SPEC sentence describing deterministic output should be able to name
+  the differential/proof program that pins it.
+
 ---
 
 ## 9. Security and capability model
