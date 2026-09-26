@@ -27,6 +27,20 @@ pub struct Diagnostic {
     /// LSP severity: 1 error, 2 warning, 3 information, 4 hint.
     pub severity: u8,
     pub message: String,
+    /// W46: repair provenance — what the interpreter decided the token meant
+    /// (canonical form + rung). Empty when nothing was repaired (phantoms,
+    /// canonical teaching notes). Serialized as LSP relatedInformation.
+    pub related: Vec<Related>,
+}
+
+/// W46: one repair-provenance entry — the span it applies to (same range as
+/// the diagnostic in practice) and the canonical interpretation.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Related {
+    pub line: usize,
+    pub col: usize,
+    pub len: usize,
+    pub message: String,
 }
 
 #[derive(Debug, Clone)]
@@ -120,6 +134,34 @@ fn line_char_is_id(l: &str, idx: usize) -> bool {
         .unwrap_or(false)
 }
 
+/// W46: extract the canonical token a repair note names. Covers the three
+/// repair phrasings the parser emits today:
+///   rung 2 — `synonym 'x' repaired to 'y'`
+///   rung 3 — `wobble: 'x' repaired to keyword 'y'` / `wobble: '@x' repaired to '@y'`
+/// Rung-4 fallbacks name no canonical form ("unmatched '}' skipped") → None.
+fn canonical_from(msg: &str) -> Option<String> {
+    for (pat, strip_at) in [
+        ("repaired to keyword '", false),
+        ("repaired to '@", true),
+        ("repaired to '", false),
+    ] {
+        if let Some(a) = msg.find(pat) {
+            let rest = &msg[a + pat.len()..];
+            if let Some(b) = rest.find('\'') {
+                let t = if strip_at {
+                    rest[..b].trim_start_matches('@')
+                } else {
+                    &rest[..b]
+                };
+                if !t.is_empty() {
+                    return Some(t.to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
 fn note_to_diagnostic(src: &str, n: &Note) -> Diagnostic {
     let line0 = n.line.saturating_sub(1); // parser lines are 1-based
     let line_text = src.lines().nth(line0).unwrap_or("");
@@ -138,12 +180,36 @@ fn note_to_diagnostic(src: &str, n: &Note) -> Diagnostic {
         }
     }
     let (col, len) = pick_span(line_text, target.as_deref());
+    // W46: repair rungs (2 synonym, 3 wobble, 4+ fallback) carry provenance;
+    // rung-1 notes are canonical teaching notes — nothing was repaired.
+    let related = if n.rung >= 2 {
+        match canonical_from(&n.message) {
+            Some(canon) => vec![Related {
+                line: line0,
+                col,
+                len,
+                message: format!("interpreted as '{}' ({} rung)", canon, rung_label(n.rung)),
+            }],
+            None => vec![Related {
+                line: line0,
+                col,
+                len,
+                message: format!(
+                    "parsed under fault tolerance ({} rung) — no canonical form",
+                    rung_label(n.rung)
+                ),
+            }],
+        }
+    } else {
+        Vec::new()
+    };
     Diagnostic {
         line: line0,
         col,
         len,
         severity: note_severity(n.rung),
         message: format!("{} ({} rung)", n.message, rung_label(n.rung)),
+        related,
     }
 }
 
@@ -240,6 +306,7 @@ pub fn analyze_doc(src: &str, base_dir: Option<&str>) -> LsDoc {
                 "phantom call: '{}' is called but not defined in this file (check)",
                 p
             ),
+            related: Vec::new(), // a phantom is not a repair — no provenance
         };
         for (i, l) in src.lines().enumerate() {
             if let Some(pos) = l.find(p.as_str()) {
@@ -260,11 +327,28 @@ pub fn analyze_doc(src: &str, base_dir: Option<&str>) -> LsDoc {
     doc
 }
 
+/// W46: the repair provenance covering (line0, col0), if any — a diagnostic
+/// whose span contains the position AND carries related entries.
+fn repair_at(doc: &LsDoc, line0: usize, col0: usize) -> Option<&Related> {
+    doc.diagnostics
+        .iter()
+        .find(|d| {
+            d.line == line0 && !d.related.is_empty() && col0 >= d.col && col0 < d.col + d.len.max(1)
+        })
+        .and_then(|d| d.related.first())
+}
+
 /// Hover text (markdown) for the word under the cursor, per D-008:
 /// programmer-first, gene vocabulary as intuition aid, never a prerequisite.
+/// W46: hovering a repaired token shows what the interpreter decided it
+/// meant — provenance first, so the editor and the parser never disagree
+/// silently.
 pub fn hover(src: &str, doc: &LsDoc, line0: usize, col0: usize) -> Option<String> {
     let line = src.lines().nth(line0)?;
     let (_, word) = word_at(line, col0)?;
+    let provenance = repair_at(doc, line0, col0)
+        .map(|r| format!("\n\n---\n*Total Grammar repair: {}*", r.message))
+        .unwrap_or_default();
 
     if let Some(g) = doc.genes.iter().find(|g| g.name == word) {
         let kind = if g.seq { "seq" } else { "gene" };
@@ -291,8 +375,8 @@ pub fn hover(src: &str, doc: &LsDoc, line0: usize, col0: usize) -> Option<String
             .unwrap_or_default();
         return Some(format!(
             "```operon\n{}\n```\n\ngene — Operon's named function (a callable unit of expression). \
-Calls may be gated by GRN thresholds, methylation, or toggle state (SPEC §11).{}",
-            sig, def
+Calls may be gated by GRN thresholds, methylation, or toggle state (SPEC §11).{}{}",
+            sig, def, provenance
         ));
     }
 
@@ -315,8 +399,19 @@ active variant (selection: .cell > CLI > @m6a > first declared).{}",
 
     if crate::interp::BUILTIN_NAMES.contains(&word.as_str()) {
         return Some(format!(
-            "```operon\n{}()\n```\n\nbuilt-in gene (SPEC §10).",
-            word
+            "```operon\n{}()\n```\n\nbuilt-in gene (SPEC §10).{}",
+            word, provenance
+        ));
+    }
+
+    // W46: not a gene/splice/builtin — but if the parser repaired this token
+    // (e.g. `retrn` → `return`, a synonym like `var`), hover answers with the
+    // provenance instead of an empty null. The editor and the interpreter
+    // then agree in one view.
+    if let Some(r) = repair_at(doc, line0, col0) {
+        return Some(format!(
+            "```operon\n{}\n```\n\n*Total Grammar repair: {}*",
+            word, r.message
         ));
     }
 
@@ -357,6 +452,168 @@ pub fn definition(
         .map(|p| text[..p].chars().count())
         .unwrap_or(0);
     Some((dl, col, word.chars().count()))
+}
+
+/// W45: textDocument/references — every word-boundary occurrence of the
+/// identifier under the cursor, declaration included (includeDeclaration:
+/// true by LSP default). Grep-class by design (the ROADMAP-100 spec): span-
+/// accurate, single-file, no second parse. Mentions inside comments and
+/// quoted strings are excluded. Returns (line, col, len).
+pub fn references(
+    src: &str,
+    doc: &LsDoc,
+    line0: usize,
+    col0: usize,
+) -> Option<Vec<(usize, usize, usize)>> {
+    // doc is unused today (definition kinds come from the same scan) but
+    // stays in the signature so callers keep passing the cached analysis.
+    let _ = doc;
+    let line = src.lines().nth(line0)?;
+    let (_, word) = word_at(line, col0)?;
+    let is_id = |c: char| c.is_ascii_alphanumeric() || c == '_';
+    let mut out: Vec<(usize, usize, usize)> = Vec::new();
+    for (i, l) in src.lines().enumerate() {
+        let chars: Vec<char> = l.chars().collect();
+        let mut j = 0usize;
+        let mut in_str = false;
+        while j < chars.len() {
+            let c = chars[j];
+            if in_str {
+                if c == '"' {
+                    in_str = false;
+                }
+                j += 1;
+                continue;
+            }
+            if c == '"' {
+                in_str = true;
+                j += 1;
+                continue;
+            }
+            if c == '#' {
+                break; // comment: nothing after this counts as a reference
+            }
+            if is_id(c) {
+                let start = j;
+                while j < chars.len() && is_id(chars[j]) {
+                    j += 1;
+                }
+                let w: String = chars[start..j].iter().collect();
+                if w == word {
+                    out.push((i, start, j - start));
+                }
+            } else {
+                j += 1;
+            }
+        }
+    }
+    Some(out)
+}
+
+/// W45: the fixed semantic-token legend. Index into this array is the
+/// tokenType integer on the wire. Must stay in lockstep with the legend
+/// advertised in the initialize capabilities (asserted by lsp_smoke).
+pub const SEMANTIC_TOKEN_TYPES: [&str; 6] = [
+    "keyword",  // 0 — parse-level words + @marks
+    "function", // 1 — genes, seqs, splice roots, builtins
+    "variable", // 2 — every other identifier
+    "string",   // 3 — quoted spans (opening to closing quote)
+    "number",   // 4 — numeric literals
+    "comment",  // 5 — `#` to end of line (incl. `##` doc comments)
+];
+
+/// One classified span from the line scanner: (col, len, tokenType).
+type ScanTok = (usize, usize, usize);
+
+/// W45: classify one source line into semantic-token spans. String-aware
+/// (a `#` inside quotes does not start a comment) and comment-terminating.
+fn scan_line_tokens(line: &str, doc: &LsDoc) -> Vec<ScanTok> {
+    let is_id = |c: char| c.is_ascii_alphanumeric() || c == '_';
+    let chars: Vec<char> = line.chars().collect();
+    let mut out: Vec<ScanTok> = Vec::new();
+    let mut j = 0usize;
+    while j < chars.len() {
+        let c = chars[j];
+        if c == '#' {
+            // comment to end of line (## doc comments included)
+            out.push((j, chars.len() - j, 5));
+            break;
+        }
+        if c == '"' {
+            // quoted span: opening quote through the closing quote (or EOL
+            // for an unterminated string — the editor still gets the span)
+            let start = j;
+            j += 1;
+            while j < chars.len() && chars[j] != '"' {
+                j += 1;
+            }
+            if j < chars.len() {
+                j += 1; // include the closing quote
+            }
+            out.push((start, j - start, 3));
+            continue;
+        }
+        if c == '@' && j + 1 < chars.len() && is_id(chars[j + 1]) {
+            // marks: @methylate & friends are parse-level directives
+            let start = j;
+            j += 1;
+            while j < chars.len() && is_id(chars[j]) {
+                j += 1;
+            }
+            out.push((start, j - start, 0));
+            continue;
+        }
+        if is_id(c) {
+            let start = j;
+            while j < chars.len() && is_id(chars[j]) {
+                j += 1;
+            }
+            let w: String = chars[start..j].iter().collect();
+            let ty = if w
+                .chars()
+                .next()
+                .map(|c| c.is_ascii_digit())
+                .unwrap_or(false)
+            {
+                4 // number
+            } else if crate::parser::KEYWORDS.contains(&w.as_str()) {
+                0 // keyword
+            } else if doc.genes.iter().any(|g| g.name == w)
+                || doc.splices.iter().any(|s| s.root == w)
+                || crate::interp::BUILTIN_NAMES.contains(&w.as_str())
+            {
+                1 // function-class: gene / seq / splice root / builtin
+            } else {
+                2 // variable
+            };
+            out.push((start, j - start, ty));
+            continue;
+        }
+        j += 1; // operators and punctuation: no semantic token (editor themes cover them)
+    }
+    out
+}
+
+/// W45: textDocument/semanticTokens (full) — the whole document delta-encoded
+/// per the LSP wire format: a flat `data` array of
+/// [deltaLine, deltaStartCol, length, tokenType, tokenModifiers=0] quints,
+/// tokens ordered by position. Editors that skip the capability degrade to
+/// TextMate coloring with no behavioral change.
+pub fn semantic_tokens(src: &str, doc: &LsDoc) -> Value {
+    let mut data: Vec<Value> = Vec::new();
+    let mut prev_line: i64 = 0;
+    for (i, l) in src.lines().enumerate() {
+        for (col, len, ty) in scan_line_tokens(l, doc) {
+            let dl = i as i64 - prev_line;
+            prev_line = i as i64;
+            data.push(Value::Int(dl));
+            data.push(Value::Int(col as i64)); // deltaStart resets per line
+            data.push(Value::Int(len as i64));
+            data.push(Value::Int(ty as i64));
+            data.push(Value::Int(0)); // tokenModifiers
+        }
+    }
+    Value::List(Rc::new(RefCell::new(data)))
 }
 
 /// lsp-r1: textDocument/documentSymbol — the file's callable inventory
@@ -484,16 +741,41 @@ pub fn format_text(src: &str) -> Option<String> {
 }
 
 /// Serialize diagnostics as an LSP publishDiagnostics params Value.
+/// W46: diagnostics carrying repair provenance embed relatedInformation
+/// pointing at the same range with the canonical interpretation.
 pub fn publish_params(uri: &str, diags: &[Diagnostic]) -> Value {
     let items: Vec<Value> = diags
         .iter()
         .map(|d| {
-            mapv(vec![
+            let mut pairs = vec![
                 ("range", range_value(d.line, d.col, d.len)),
                 ("severity", Value::Int(d.severity as i64)),
                 ("source", Value::Str("operon-check".into())),
                 ("message", Value::Str(d.message.clone())),
-            ])
+            ];
+            if !d.related.is_empty() {
+                let related: Vec<Value> = d
+                    .related
+                    .iter()
+                    .map(|r| {
+                        mapv(vec![
+                            (
+                                "location",
+                                mapv(vec![
+                                    ("uri", Value::Str(uri.to_string())),
+                                    ("range", range_value(r.line, r.col, r.len)),
+                                ]),
+                            ),
+                            ("message", Value::Str(r.message.clone())),
+                        ])
+                    })
+                    .collect();
+                pairs.push((
+                    "relatedInformation",
+                    Value::List(Rc::new(RefCell::new(related))),
+                ));
+            }
+            mapv(pairs)
         })
         .collect();
     mapv(vec![
@@ -612,5 +894,141 @@ main { let wobbles = caller() }
             src.lines().next().unwrap()[d.col..d.col + d.len].to_string(),
             "retrn"
         );
+    }
+
+    // ---- W45: references ---------------------------------------------------
+
+    #[test]
+    fn references_find_all_word_boundaries() {
+        let src = "\
+gene boost(x) { return x }
+main { let y = boost(1) + boost(2) }
+# boost mentioned in a comment
+main { let z = \"boost in a string\" }
+";
+        let doc = analyze(src);
+        // cursor on the declaration (line 0, col 6)
+        let refs = references(src, &doc, 0, 6).expect("references for boost");
+        // 2 on line 1 + 1 declaration on line 0; comment + string mentions excluded
+        assert_eq!(refs.len(), 3, "{:?}", refs);
+        assert!(refs.contains(&(0, 5, 5))); // declaration (`gene boost`)
+        assert!(refs.contains(&(1, 15, 5))); // first call
+        assert!(refs.contains(&(1, 26, 5))); // second call
+                                             // unknown word → empty list, not None (None = cursor not on a word)
+        let none = references(src, &doc, 0, 0).expect("cursor on `gene` keyword");
+        assert!(none.iter().all(|&(l, _, _)| l == 0)); // only the keyword itself
+    }
+
+    #[test]
+    fn references_none_off_word() {
+        let doc = analyze(DEMO);
+        assert_eq!(references(DEMO, &doc, 0, 300), None); // past EOL
+    }
+
+    // ---- W45: semantic tokens ----------------------------------------------
+
+    #[test]
+    fn semantic_tokens_classify_and_delta_encode() {
+        let src = "gene boost(x) {\n  let y = \"hi\" + 42\n}\n";
+        let doc = analyze(src);
+        let v = semantic_tokens(src, &doc);
+        let items: Vec<i64> = match &v {
+            Value::List(l) => l
+                .borrow()
+                .iter()
+                .map(|x| match x {
+                    Value::Int(i) => *i,
+                    _ => panic!("non-int in data"),
+                })
+                .collect(),
+            _ => panic!("not a list"),
+        };
+        // quints: [dl, dc, len, ty, 0] — line 0 starts with keyword `gene`
+        assert_eq!(&items[0..5], &[0, 0, 4, 0, 0]); // `gene` keyword, len 4
+        assert_eq!(&items[5..10], &[0, 5, 5, 1, 0]); // `boost` function
+                                                     // line 1: `let y = "hi" + 42` → dl=1 keyword, variable, string, number
+        let line1 = &items[15..]; // after 3 tokens on line 0 (gene/boost/x)
+        assert_eq!(&line1[0..5], &[1, 2, 3, 0, 0]); // `let`
+        assert!(line1.chunks(5).any(|q| q[3] == 3), "string token expected");
+        assert!(line1.chunks(5).any(|q| q[3] == 4), "number token expected");
+    }
+
+    #[test]
+    fn semantic_tokens_comment_and_mark() {
+        let src = "## doc comment\n@methylate gene g() {}\n";
+        let doc = analyze(src);
+        let v = semantic_tokens(src, &doc);
+        let items: Vec<i64> = match &v {
+            Value::List(l) => l
+                .borrow()
+                .iter()
+                .map(|x| match x {
+                    Value::Int(i) => *i,
+                    _ => panic!("non-int"),
+                })
+                .collect(),
+            _ => panic!("not a list"),
+        };
+        // first token: the whole doc comment, type 5
+        assert_eq!(&items[0..5], &[0, 0, 14, 5, 0]);
+        // `@methylate` is a keyword-class mark on line 1
+        assert_eq!(&items[5..10], &[1, 0, 10, 0, 0]);
+    }
+
+    // ---- W46: repair provenance ---------------------------------------------
+
+    #[test]
+    fn wobble_diagnostic_carries_provenance() {
+        let src = "gene g() { retrn 1 }\n";
+        let doc = analyze(src);
+        let d = doc
+            .diagnostics
+            .iter()
+            .find(|d| !d.related.is_empty())
+            .expect("wobble carries related");
+        assert_eq!(
+            d.related[0].message,
+            "interpreted as 'return' (wobble rung)"
+        );
+        assert_eq!(d.related[0].line, 0);
+    }
+
+    #[test]
+    fn hover_on_repaired_token_shows_provenance() {
+        let src = "gene g() { retrn 1 }\n";
+        let doc = analyze(src);
+        // hover the `retrn` token (cols 11..16)
+        let h = hover(src, &doc, 0, 13).expect("hover on repaired token");
+        assert!(h.contains("retrn"), "{}", h);
+        assert!(h.contains("repair"), "{}", h);
+        assert!(h.contains("return"), "{}", h);
+    }
+
+    #[test]
+    fn phantom_has_no_provenance() {
+        let doc = analyze(DEMO);
+        let ph = doc
+            .diagnostics
+            .iter()
+            .find(|d| d.message.contains("phantom"))
+            .expect("phantom present");
+        assert!(ph.related.is_empty());
+    }
+
+    #[test]
+    fn canonical_from_covers_all_repair_phrasings() {
+        assert_eq!(
+            canonical_from("synonym 'var' repaired to 'let'").as_deref(),
+            Some("let")
+        );
+        assert_eq!(
+            canonical_from("wobble: 'retrn' repaired to keyword 'return'").as_deref(),
+            Some("return")
+        );
+        assert_eq!(
+            canonical_from("wobble: '@methlated' repaired to '@methylate'").as_deref(),
+            Some("methylate")
+        );
+        assert_eq!(canonical_from("unmatched '}' skipped"), None);
     }
 }
