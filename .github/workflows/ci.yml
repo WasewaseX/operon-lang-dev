@@ -23,6 +23,8 @@ jobs:
         run: cargo clippy --all-targets
       - name: Formatting (cargo fmt --check)
         run: cargo fmt --check
+      - name: Embedding example gate (W076 — external path-dep crate)
+        run: bash scripts/embed_example_check.sh
       - name: Toolchain build via scripts/build.sh (bin/operon compat path)
         run: bash scripts/build.sh
       - name: C++ kernel smoke (ASan + UBSan)

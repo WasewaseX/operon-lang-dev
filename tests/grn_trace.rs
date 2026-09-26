@@ -14,12 +14,17 @@
 use std::process::Command;
 
 fn run_trace(src: &str) -> (i32, String, String, String) {
-    let dir = std::env::temp_dir().join(format!("operon_trace_{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    // Per-CALL unique dir (nanos+pid): parallel tests in one binary shared a
+    // per-pid dir before, and a finishing test's remove_dir could delete
+    // another test's just-created EMPTY dir mid-flight (Windows CI failure,
+    // 2026-09-27; also a rare sandbox flake). Unique dirs make the race
+    // structurally impossible.
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .subsec_nanos();
+    let dir = std::env::temp_dir().join(format!("operon_trace_{}_{}", std::process::id(), nanos));
+    std::fs::create_dir_all(&dir).unwrap();
     let f = dir.join(format!("t{}_{}.op", nanos, std::process::id()));
     let tf = dir.join(format!("tr{}_{}.jsonl", nanos, std::process::id()));
     std::fs::write(&f, src).unwrap();
@@ -127,7 +132,11 @@ fn level_map_is_sorted_and_valid_jsonl_shape() {
 fn tracing_off_is_a_no_op_and_run_output_unchanged() {
     // without the flag the same program runs identically (no trace side
     // effects) — the OFF path must stay byte-identical
-    let dir = std::env::temp_dir().join(format!("operon_notrace_{}", std::process::id()));
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .subsec_nanos();
+    let dir = std::env::temp_dir().join(format!("operon_notrace_{}_{}", std::process::id(), nanos));
     std::fs::create_dir_all(&dir).unwrap();
     let f = dir.join("plain.op");
     std::fs::write(&f, GRN_SRC).unwrap();
