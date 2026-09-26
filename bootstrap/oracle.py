@@ -3467,15 +3467,17 @@ class Interp:
         step per translates edge: p += rate·Δcalls − decay·p (clamped 0..1)
         where Δcalls is the source's call-count delta since the last
         integration (checkpoints start at 0)."""
-        if not self.trans_edges:
-            return
-        # loop-10 (F-8): ribosome queue drain (mirror) — BEFORE the edge
-        # loop (pinned order; both entry points reach _trans_integrate).
-        # Exists only under rho.termination; max(0.0) is mirror-safe.
+        # loop-10 (F-8 + R10 kinetics jury L1): ribosome queue drain (mirror)
+        # — at ENTRY (before the empty-check: "every integration point") and
+        # before the edge loop (pinned order; both entry points reach
+        # _trans_integrate). Exists only under rho.termination; max(0.0) is
+        # mirror-safe.
         rho_on, _c, _fl, _cap, rho_drain = self._rho_knobs()
         if rho_on:
             for k2 in list(self.ribo_queue):
                 self.ribo_queue[k2] = max(0.0, self.ribo_queue[k2] - rho_drain)
+        if not self.trans_edges:
+            return
         for frm, to, rate, pdecay in self.trans_edges:
             key = frm + "\u0000" + to
             now = self.call_counts.get(frm, 0)
@@ -3523,33 +3525,39 @@ class Interp:
                 u = self.operons[ui]
                 pos = next(i for i, (m, _r) in enumerate(u["members"]) if m == frm)
                 r *= u["members"][pos][1]
-                pol = self.cell.get("operon.polarity")
-                pv = 0.5
-                if pol is not None:
-                    try:
-                        pv = min(max(float(pol), 0.0), 1.0)
-                    except ValueError:
-                        pv = 0.5
-                f2 = 1.0
-                for g2, _r2 in u["members"][:pos]:
-                    methylated = self.methyl_levels.get(g2, 0) >= self.methyl_threshold
-                    if methylated:
-                        factor = pv
-                    else:
-                        surv = 1.0
-                        silenced = False
-                        for f3, t3, s3, n3 in self.silences:
-                            if f3 == g2 and t3 is None:
-                                silenced = True
-                                base = 1.0 - s3
-                                for _k in range(n3):
-                                    surv *= base
-                        if silenced:
-                            factor = surv + (1.0 - surv) * pv
+                # loop-10 (W2, R10 biology jury): under Rho ON the polarity
+                # factor is IDENTITY — D2 resolves the upstream failure per
+                # call, so a surviving transcript translates at full rate
+                # (D1's expected-value derate would double-count the same
+                # loss). Rho OFF keeps the exact legacy fold (bit-identical).
+                if not rho_on:
+                    pol = self.cell.get("operon.polarity")
+                    pv = 0.5
+                    if pol is not None:
+                        try:
+                            pv = min(max(float(pol), 0.0), 1.0)
+                        except ValueError:
+                            pv = 0.5
+                    f2 = 1.0
+                    for g2, _r2 in u["members"][:pos]:
+                        methylated = self.methyl_levels.get(g2, 0) >= self.methyl_threshold
+                        if methylated:
+                            factor = pv
                         else:
-                            factor = 1.0
-                    f2 *= factor
-                r *= f2
+                            surv = 1.0
+                            silenced = False
+                            for f3, t3, s3, n3 in self.silences:
+                                if f3 == g2 and t3 is None:
+                                    silenced = True
+                                    base = 1.0 - s3
+                                    for _k in range(n3):
+                                        surv *= base
+                            if silenced:
+                                factor = surv + (1.0 - surv) * pv
+                            else:
+                                factor = 1.0
+                        f2 *= factor
+                    r *= f2
             # loop-9 (F-6): YTHDF2 decay routing — the LAST production
             # multiply (normative order: rate x rbs x polarity x (1-yd2))
             if reader:
@@ -3721,12 +3729,16 @@ class Interp:
                         naked_g = u < p_g
                     shielded = self.ribo_queue.get(g2, 0.0) >= rho_floor
                     if naked_g and not shielded:
-                        # q = catch^d — fold from 1.0, exactly d multiplies
-                        # (mirror of the Rust fix: starting at catch computed
-                        # catch^(d+1) and halved the termination pressure)
-                        q = 1.0
+                        # q = 1 - (1-catch)^d — per-cistron catch compounding
+                        # over the naked runway (mirror of the Rust W1 fix:
+                        # catch^d had the distance profile inverted — the
+                        # FURTHER downstream the reader, the MORE time Rho
+                        # has had to catch up)
+                        per = 1.0 - rho_catch
+                        surv = 1.0
                         for _k in range(pos - i):
-                            q *= rho_catch
+                            surv *= per
+                        q = 1.0 - surv
                         if q == 0.0:
                             break
                         x2 = self.rng
@@ -5624,28 +5636,6 @@ def apply_rna(src, patch_src, stem):
                         text = text.replace(frm, to)
                         applied.append(f"{target}: '{frm}' -> '{to}'")
     return text, applied
-
-def parse_cell(src):
-    """loop-10: mirror of genes::parse_cell — INI-style sections build dotted
-    keys; '#' comment lines are skipped; values are trimmed and quote-stripped.
-    The oracle's --cell flag previously passed the raw PATH where a dict was
-    expected (latent since substrate-r1 — never exercised until the loop-10
-    granted targets ran the oracle under --cell)."""
-    out = {}
-    section = ""
-    for line in src.splitlines():
-        t = line.strip()
-        if not t or t.startswith("#"):
-            continue
-        if t.startswith("[") and t.endswith("]"):
-            section = t[1:-1].strip()
-            continue
-        eq = t.find("=")
-        if eq >= 0:
-            k = t[:eq].strip()
-            v = t[eq + 1:].strip().strip('"')
-            out[f"{section}.{k}" if section else k] = v
-    return out
 
 def load_file(path, cell=None, variant=None, rna=None, args=None, caps=None):
     src = open(path).read()

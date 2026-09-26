@@ -2,7 +2,9 @@
 
 The standard library is pure `.op` — it runs on the Rust core like any
 program and is exercised by the proof suite (`tests/modules_std.op`,
-`tests/stdlib_selfhost.op`). Import with `use std/<module> as <alias>` and
+`tests/stdlib_selfhost.op`, and the per-module files `tests/std_*.op`:
+args, bio, collections, csv, fmt, fs, iter, json, math, random, set,
+strings, testing). Import with `use std/<module> as <alias>` and
 call with dot access: `s.capital("operon")`. The loader resolves `std/`
 exe-relative (installed trees) or from the interpreter's own tree; a
 `std/` next to your program wins.
@@ -18,8 +20,8 @@ exe-relative (installed trees) or from the interpreter's own tree; a
 | `std/iter.op` | iterator adapters over lists: `take`, `drain`, `enumerate_pairs`, `zip`, `flatten`, `unique`, `chunk`, `range_step`, `map`, `filter`, `fold`, `scan`, `any`, `all`, `take_while`, `drop_while`, `find_first`, `index_of`, `intersperse`, `sliding`, `sort_by_key`, `reversed`, `concat_all` |
 | `std/json.op` | JSON navigation: `json_type`, `json_is_object`, `json_is_array`, `json_get_or`, `json_get`, `json_merge`, `json_pick`, `json_omit`, `json_flatten`, `json_flatten_into`, `json_compact` |
 | `std/math.op` | numeric helpers: `clamp`, `lerp`, `mean`, `variance`, `stddev`, `median`, `hill`, `sigmoid`, `digits`, `round`, `round_to`, `sign`, `gcd`, `lcm`, `factorial`, `isqrt`, `divmod`, `wrap` |
-| `std/motifs.op` | canonical regulatory-network circuits over the `regulate` layer: `motif_install` wires them, `motif_hill` is the engine's own dose-response transfer function, `motif_autoreg` (negative autoregulation), `fc`/`motif_ffl` (coherent feed-forward persistence filter), `ic`/`motif_pulse` (incoherent feed-forward pulse compression), `tx`/`ty`/`motif_flip` (mutual-repression toggle), `motif_states` (the whole board's levels) |
-| `std/random.op` | deterministic randomness over the core `random()`/`randomize(seed)` stream (mirrored xorshift64*, byte-identical under a fixed seed): `rand_below`, `rand_int` (inclusive both ends), `rand_pick`, `rand_shuffle` (Fisher-Yates, new list), `rand_weighted` (cumulative weights over the sum), `rand_chance` |
+| `std/motifs.op` | canonical regulatory-network circuits over the `regulate` layer: `motif_install` wires them, `motif_hill` is the engine's own dose-response transfer function, `motif_autoreg` / `ar` (negative autoregulation; `ar` is the short alias), `fc`/`motif_ffl` (coherent feed-forward persistence filter), `ic`/`motif_pulse` (incoherent feed-forward pulse compression), `tx`/`ty`/`motif_flip` (mutual-repression toggle), `motif_states` (the whole board's levels) |
+| `std/random.op` | deterministic randomness over the core `random()`/`randomize(seed)` stream (mirrored xorshift64*, byte-identical under a fixed seed): `rand_below`, `rand_int` (inclusive both ends), `rand_pick`, `rand_shuffle` (Fisher-Yates, new list), `rand_weighted` (cumulative weights over the sum — weights MUST be non-negative; negative weights are undefined), `rand_chance` |
 | `std/seq.op` | sequence (worker-cell generator) combinators: `map_seq`, `filter_seq`, `take_seq`, `concat_seq`, `fib_seq`, `range_seq` — combinators take the SOURCE as a sequence-gene NAME (transcripts do not cross membranes); transformation genes travel freely |
 | `std/set.op` | set algebra over plain lists (a set is a list with unique members; equality is order-independent; every function is pure and returns a NEW list): `set_from`, `set_has`, `set_add`, `set_del`, `set_union`, `set_intersect`, `set_diff`, `set_symdiff`, `set_subset`, `set_eq`, `set_count` |
 | `std/strings.op` | everyday string shaping: `words`, `capital`, `pad_left`, `pad_right`, `starts_any`, `pad`, `strip_prefix`, `strip_suffix`, `is_blank`, `chars`, `lines`, `title_case`, `to_snake`, `to_camel`, `to_kebab`, `ellipsis`, `unquote` |
