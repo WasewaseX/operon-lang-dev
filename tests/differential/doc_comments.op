@@ -1,0 +1,23 @@
+## docs must be pure metadata — this program's output must be byte-identical
+## to its undocmented twin. The oracle treats ## lines as ordinary comments;
+## the Rust core captures them. Parity here pins that neither side lets docs
+## change evaluation, ordering, or error behavior.
+
+## doubles the input
+## (two doc lines on purpose)
+gene twice(x) {
+    return x * 2
+}
+
+## greets loudly
+@methylate
+gene shout(t) {
+    ## docs inside bodies stay inside bodies
+    return "!!" + t
+}
+
+gene main() {
+    print(twice(21))
+    print(shout("hi"))
+    print(twice(twice(3)))
+}

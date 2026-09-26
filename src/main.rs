@@ -685,6 +685,69 @@ fn real_main() {
             }
             tools::flush_notes(&l, opts.quiet);
         }
+        "doc" => {
+            // W073: markdown/JSON API reference from the AST — parse-only
+            // (like check/fmt/graph), no run, no capabilities beyond reading
+            // the input files. Directories expand to their top-level *.op
+            // files (sorted, deterministic output order).
+            let mut md_out: Vec<(String, String)> = Vec::new();
+            let mut json_out: Vec<String> = Vec::new();
+            let mut targets: Vec<String> = Vec::new();
+            for p in &positional {
+                let meta = std::fs::metadata(p);
+                match meta {
+                    Ok(m) if m.is_dir() => {
+                        let mut entries: Vec<String> = std::fs::read_dir(p)
+                            .map(|rd| {
+                                rd.filter_map(|e| e.ok())
+                                    .map(|e| e.path())
+                                    .filter(|pt| pt.extension().map(|x| x == "op").unwrap_or(false))
+                                    .map(|pt| pt.to_string_lossy().to_string())
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        entries.sort();
+                        targets.extend(entries);
+                    }
+                    _ => targets.push(p.clone()),
+                }
+            }
+            if targets.is_empty() {
+                die("doc needs a file or directory");
+            }
+            for t in &targets {
+                let src = std::fs::read_to_string(t).unwrap_or_default();
+                let prog = parser::parse(&src);
+                if json {
+                    json_out.push(tools::doc_json(t, &prog));
+                } else {
+                    md_out.push((t.clone(), tools::doc_markdown(t, &prog)));
+                }
+            }
+            if json {
+                println!("[{}]", json_out.join(","));
+            } else if !outfile.is_empty() {
+                // -o DIR: write one markdown file per input module
+                if let Err(e) = std::fs::create_dir_all(&outfile) {
+                    die(&format!("doc -o: cannot create '{}': {}", outfile, e));
+                }
+                for (t, md) in &md_out {
+                    let stem = std::path::Path::new(t)
+                        .file_stem()
+                        .map(|s| s.to_string_lossy().to_string())
+                        .unwrap_or_else(|| t.clone());
+                    let dest = format!("{}/{}.md", outfile, stem);
+                    if let Err(e) = std::fs::write(&dest, md) {
+                        die(&format!("doc -o: cannot write '{}': {}", dest, e));
+                    }
+                    println!("  wrote {}", dest);
+                }
+            } else {
+                for (_, md) in &md_out {
+                    print!("{}", md);
+                }
+            }
+        }
         "watch" => {
             // W072: re-run on change. v1: mtime polling (200 ms, no external
             // deps) over the entry file + its local (non-std) import tree;
@@ -961,6 +1024,7 @@ fn repl() {
                         );
                         println!(":proof [f]   run proof frames — this session's, or file f's");
                         println!(":genes       list genes defined so far");
+                        println!(":doc name    show the ## doc comment of a declaration (W074)");
                         println!(":vars        list top-level variables");
                         println!(
                             ":symbols     inspect the symbol table (every name the lexer has seen)"
@@ -1005,6 +1069,61 @@ fn repl() {
                                 "  {}: {}/{} proof(s) passed ({} assertion(s))",
                                 arg, rep.passed, rep.proofs, rep.asserts
                             );
+                        }
+                    }
+                    "doc" => {
+                        // W074: print the `##` doc comment attached to a
+                        // declaration in this session (metadata only — this
+                        // never executes anything).
+                        if arg.is_empty() {
+                            println!("  usage: :doc <gene|phenotype|splice|fate name>");
+                        } else {
+                            let prog = parser::parse(&session);
+                            let mut found = false;
+                            let print_doc = |doc: &[String], label: &str| {
+                                if doc.is_empty() {
+                                    println!("  {} — no ## doc comment", label);
+                                } else {
+                                    for dl in doc {
+                                        println!("  {}", dl);
+                                    }
+                                }
+                            };
+                            for st in &prog.stmts {
+                                match st {
+                                    Stmt::Gene(g) | Stmt::Seq(g)
+                                        if g.name.as_deref() == Some(arg) =>
+                                    {
+                                        print_doc(&g.doc, arg);
+                                        found = true;
+                                    }
+                                    Stmt::Pheno(p) if p.name == arg => {
+                                        print_doc(&p.doc, arg);
+                                        found = true;
+                                    }
+                                    Stmt::Splice(sp) if sp.root == arg => {
+                                        print_doc(&sp.doc, arg);
+                                        found = true;
+                                    }
+                                    Stmt::Fate(f) if f.name == arg => {
+                                        print_doc(&f.doc, arg);
+                                        found = true;
+                                    }
+                                    Stmt::Pheno(p) => {
+                                        // phenotype methods are not top-level
+                                        for m in &p.methods {
+                                            if m.name.as_deref() == Some(arg) {
+                                                print_doc(&m.doc, arg);
+                                                found = true;
+                                            }
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            if !found {
+                                println!("  no declaration named '{}' in this session", arg);
+                            }
                         }
                     }
                     "genes" => {
@@ -1306,6 +1425,7 @@ usage:
   operon build f.op [--variant v] [-o out.op]
   operon rna f.op patch.rna [--write] [--json]
   operon graph f.op [--json]
+  operon doc f.op|dir [...] [-o outdir] [--json]
   operon watch f.op [args...]
   operon profile f.op
   operon crispr f.op --knockout gene [--json]

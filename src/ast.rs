@@ -99,6 +99,9 @@ pub struct GeneDef {
     /// A13 (dx-r2): source line of the definition — runtime gate notes
     /// (grn veto, methylation silencing, etc.) render real locations.
     pub line: usize,
+    /// W074: `##` doc-comment lines attached to this declaration (metadata
+    /// only — never evaluated, mirrored by fmt/hover/`operon doc`).
+    pub doc: Vec<String>,
     pub params: Vec<(String, Option<Expr>)>,
     pub guard: Option<(Expr, Vec<Stmt>)>,
     pub body: Vec<Stmt>,
@@ -165,6 +168,8 @@ pub struct PhenoDef {
     pub name: String,
     /// A13: source line of the definition (dx-r2 spans).
     pub line: usize,
+    /// W074: doc-comment lines (metadata only).
+    pub doc: Vec<String>,
     pub parent: Option<String>,
     pub fields: Vec<(String, Expr)>, // field name -> default expr
     pub methods: Vec<Arc<GeneDef>>,
@@ -175,6 +180,8 @@ pub struct SpliceDef {
     pub root: String,
     /// A13: source line of the definition (dx-r2 spans).
     pub line: usize,
+    /// W074: doc-comment lines (metadata only).
+    pub doc: Vec<String>,
     pub variants: Vec<(String, Arc<GeneDef>)>, // (variant name, gene)
 }
 
@@ -197,6 +204,8 @@ pub struct FateDef {
     pub name: String,
     /// A13: source line of the definition (dx-r2 spans).
     pub line: usize,
+    /// W074: doc-comment lines (metadata only).
+    pub doc: Vec<String>,
     pub states: Vec<(String, Vec<String>)>, // state -> allowed targets
     pub enter: Option<String>,
 }
@@ -416,6 +425,9 @@ pub enum Stmt {
 pub struct Program {
     pub stmts: Vec<Stmt>,
     pub notes: Vec<Note>,
+    /// W074: a `##` block at the very top of the file that does NOT hug a
+    /// declaration (blank-line separated) becomes the module doc.
+    pub module_doc: Vec<String>,
     /// proof frames gathered (file path -> is implicit)
     pub proofs: Vec<Vec<Stmt>>,
     pub named_frames: Vec<(String, Vec<Stmt>)>,
