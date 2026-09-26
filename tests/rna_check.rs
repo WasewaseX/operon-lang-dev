@@ -11,7 +11,8 @@ const SRC: &str = "gene alpha() {\n    return 1\n}\n\ngene beta() {\n    return 
 
 #[test]
 fn hit_and_miss_accounting() {
-    let patch = "edit anywhere {\n    replace \"1\" -> \"7\"\n    replace \"not-present\" -> \"x\"\n}";
+    let patch =
+        "edit anywhere {\n    replace \"1\" -> \"7\"\n    replace \"not-present\" -> \"x\"\n}";
     let rep = apply_rna_checked(SRC, patch, "f");
     assert_eq!(rep.applied(), 1, "one rule hits");
     assert_eq!(rep.missed(), 1, "one rule misses");
@@ -72,7 +73,11 @@ fn wrapper_parity_with_legacy_shape() {
         .map(|e| format!("{}: '{}' -> '{}'", e.target, e.from, e.to))
         .collect();
     assert_eq!(applied, expect, "applied-string parity");
-    assert_eq!(applied.len(), 2, "22->33 and gene->gen applied; absent missed");
+    assert_eq!(
+        applied.len(),
+        2,
+        "22->33 and gene->gen applied; absent missed"
+    );
 }
 
 #[test]

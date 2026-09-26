@@ -457,7 +457,11 @@ fn real_main() {
                     patch_path,
                     report.applied(),
                     report.missed(),
-                    if report.would_change() { "" } else { " (no change)" }
+                    if report.would_change() {
+                        ""
+                    } else {
+                        " (no change)"
+                    }
                 );
                 for e in &report.edits {
                     let scope = if e.gene_scoped { "gene" } else { "anywhere" };
@@ -692,25 +696,29 @@ fn real_main() {
                     }
                 }
             }
-            let snapshot =
-                |files: &Vec<String>| -> Vec<(String, Option<std::time::SystemTime>)> {
-                    files
-                        .iter()
-                        .map(|f| {
-                            let m = std::fs::metadata(f).and_then(|m| m.modified()).ok();
-                            (f.clone(), m)
-                        })
-                        .collect()
-                };
-            let exe = std::env::current_exe()
-                .unwrap_or_else(|_| std::path::PathBuf::from("operon"));
+            let snapshot = |files: &Vec<String>| -> Vec<(String, Option<std::time::SystemTime>)> {
+                files
+                    .iter()
+                    .map(|f| {
+                        let m = std::fs::metadata(f).and_then(|m| m.modified()).ok();
+                        (f.clone(), m)
+                    })
+                    .collect()
+            };
+            let exe =
+                std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("operon"));
             let mut iter: usize = 0;
             loop {
                 let mut deps: Vec<String> = Vec::new();
                 collect_deps(&file, &mut deps);
                 let before = snapshot(&deps);
                 iter += 1;
-                println!("\n[watch #{}] {} ({} file(s) watched)", iter, file, deps.len());
+                println!(
+                    "\n[watch #{}] {} ({} file(s) watched)",
+                    iter,
+                    file,
+                    deps.len()
+                );
                 let t0 = std::time::Instant::now();
                 let status = std::process::Command::new(&exe)
                     .arg("run")
