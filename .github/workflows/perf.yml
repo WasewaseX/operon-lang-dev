@@ -1,0 +1,71 @@
+# perf.yml — W082: performance regression gate (dev-3, M100).
+#
+# Strategy: compare PR head vs PR base ON THE SAME RUNNER (median timings,
+# same noise), then fail on any tracked workload regressing > 20%.
+# Push events to main record a rolling reference artifact.
+#
+# This file intentionally does NOT touch ci.yml (builder-B's W59 lane owns
+# that file). bench_compare.py is untouched too (B1 lane); the gate is a
+# separate script (scripts/perf_gate.py) consuming its --json output.
+#
+# Actions are SHA-pinned (D-6). NOTE for W099 follow-up: ci.yml currently
+# uses dtolnay/rust-toolchain@stable — a FLOATING branch ref, which contradicts
+# D-6's "all actions SHA-pinned"; this file pins it by SHA and the finding is
+# flagged to builder-A for the ci.yml lanes.
+name: operon-perf
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  perf-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout head
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v4.2.2 (SHA-pinned, sec-r1)
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust (SHA-pinned action ref)
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master 2026-09-12
+        with:
+          components: clippy, rustfmt
+
+      - name: Build head
+        run: cargo build --release
+
+      - name: Bench head
+        run: python3 scripts/bench_compare.py --quick --json /tmp/head.json
+
+      # PR-only: base comparison on the same runner. Push events skip to
+      # the rolling-artifact step (a push gate needs a stored base; PRs
+      # carry their base with them — that is where the gate is airtight).
+      - name: Bench base (PR only)
+        if: github.event_name == 'pull_request'
+        run: |
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          git stash list || true
+          git fetch origin "$BASE_SHA" --depth=1
+          git checkout "$BASE_SHA" -- src build.rs Cargo.toml Cargo.lock runtime std
+          cargo build --release
+          python3 scripts/bench_compare.py --quick --json /tmp/base.json
+          git checkout HEAD -- src build.rs Cargo.toml Cargo.lock runtime std
+
+      - name: Gate (PR only)
+        if: github.event_name == 'pull_request'
+        run: python3 scripts/perf_gate.py /tmp/base.json /tmp/head.json --threshold 20
+
+      - name: Record rolling reference (push)
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: perf-reference-${{ github.sha }}
+          path: /tmp/head.json
+          retention-days: 90
