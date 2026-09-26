@@ -46,8 +46,13 @@ jobs:
         run: bash scripts/stack_report.sh
 
   windows:
+    name: windows (required — W59)
     runs-on: windows-latest
-    continue-on-error: true
+    # W59 (ROADMAP-100): the audit called out "Windows CI should not be
+    # non-blocking forever" — platform regressions accumulated silently under
+    # continue-on-error. As of this commit a Windows failure BLOCKS the PR.
+    # (Bench stays intentionally non-blocking; that is a trend point, not a
+    # gate.) If the windows runner flakes, fix forward — no silent passes.
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v4.2.2 (SHA-pinned, sec-r1)
       - name: Install Rust (stable + clippy)
