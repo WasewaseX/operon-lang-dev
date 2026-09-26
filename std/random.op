@@ -1,0 +1,78 @@
+# std/random — deterministic randomness over the core xorshift64* stream.
+#
+# The engine's random() is a mirrored deterministic stream: the Rust core
+# and the Python oracle draw IDENTICAL sequences, and randomize(seed) pins
+# the state — same seed, same sequence, reproducible byte-for-byte. These
+# wrappers stay thin and pure so the pinning survives: rand_shuffle returns
+# a NEW list (the input is never mutated), rand_pick never touches its
+# argument. rand_below carries a tiny float bias (floor(random()*n) is not
+# perfectly uniform over n) — kept simple by contract, and deterministic
+# everywhere.
+
+gene rand_below(n) {
+    # int in 0..n-1 via floor(random()*n); n <= 0 returns 0 (empty domain)
+    if n <= 0 {
+        return 0
+    }
+    return floor(random() * n)
+}
+
+gene rand_int(lo, hi) {
+    # int in lo..hi, inclusive on both ends: rand_int(1, 6) models a die
+    if hi <= lo {
+        return lo
+    }
+    return lo + rand_below(hi - lo + 1)
+}
+
+gene rand_pick(xs) {
+    # one uniform element, or null on an empty list
+    let n = len(xs)
+    if n == 0 {
+        return null
+    }
+    return xs[rand_below(n)]
+}
+
+gene rand_shuffle(xs) {
+    # Fisher-Yates over a copy: NEW list, input never mutated
+    let out = []
+    for x in xs {
+        push(out, x)
+    }
+    let i = len(out) - 1
+    while i > 0 {
+        let j = rand_below(i + 1)
+        let t = out[i]
+        out[i] = out[j]
+        out[j] = t
+        i = i - 1
+    }
+    return out
+}
+
+gene rand_weighted(pairs) {
+    # pairs: [[value, weight], ...] — one draw, picked by cumulative weight
+    # over the sum; null when the weights sum to zero (or no pairs given)
+    let total = 0
+    for p in pairs {
+        total = total + p[1]
+    }
+    if total <= 0 {
+        return null
+    }
+    let r = random() * total
+    let acc = 0
+    for p in pairs {
+        acc = acc + p[1]
+        if r < acc {
+            return p[0]
+        }
+    }
+    return pairs[len(pairs) - 1][0]
+}
+
+gene rand_chance(p) {
+    # true with probability p: random() < p (p <= 0 never, p >= 1 always)
+    return random() < p
+}

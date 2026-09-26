@@ -1,0 +1,71 @@
+# std/testing — a minimal deterministic test harness for .op programs.
+#
+# The expect genes accumulate into the module's own tally: a module-scope
+# map that gene bodies close over, so the counters survive across calls —
+# no globals, no I/O, nothing printed, nothing raised. A failed expect is
+# DATA: it records one miss and returns false, so a failing check never
+# vetoes the rest of a proof. Fold the tally with test_summary(), or read
+# it directly through the alias (t.t_state.passed / t.t_state.failed).
+#
+# Every expect returns the check's verdict, so proofs can assert on the
+# harness itself: assert(t.expect_eq(1 + 1, 2, "arith")). The `label`
+# argument is documentation — it names the check at the call site.
+
+let t_state = {passed: 0, failed: 0}
+
+gene expect_eq(actual, expected, label) {
+    # pass when actual == expected (deep equality: scalars, lists, maps)
+    if actual == expected {
+        t_state.passed = t_state.passed + 1
+        return true
+    }
+    t_state.failed = t_state.failed + 1
+    return false
+}
+
+gene expect_true(v, label) {
+    # pass when v is truthy
+    if v {
+        t_state.passed = t_state.passed + 1
+        return true
+    }
+    t_state.failed = t_state.failed + 1
+    return false
+}
+
+gene expect_false(v, label) {
+    # pass when v is falsy
+    if v {
+        t_state.failed = t_state.failed + 1
+        return false
+    }
+    t_state.passed = t_state.passed + 1
+    return true
+}
+
+gene expect_near(a, b, eps, label) {
+    # pass when |a - b| <= eps (inclusive tolerance, meant for floats)
+    if abs(a - b) <= eps {
+        t_state.passed = t_state.passed + 1
+        return true
+    }
+    t_state.failed = t_state.failed + 1
+    return false
+}
+
+gene expect_throws(f, label) {
+    # pass when calling f() raises any stress (zero-arg gene or lambda)
+    stress {
+        f()
+        t_state.failed = t_state.failed + 1
+        return false
+    } rescue (e) {
+        t_state.passed = t_state.passed + 1
+        return true
+    }
+}
+
+gene test_summary() {
+    # the folded tally, one line: "tests: N passed, M failed"
+    return "tests: " + str(t_state.passed) + " passed, " + str(t_state.failed) + " failed"
+}
