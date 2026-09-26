@@ -8,10 +8,10 @@ README/SPEC/BENCH are forbidden — link here instead.
 - **Keywords (parser reserved set)**: 58 — table in [KEYWORDS.md](KEYWORDS.md)
 - **Std modules**: 15 (args, bio, collections, csv, fmt, fs, iter, json, math, motifs, random, seq, set, strings, testing)
 - **Std functions (.op-level `gene` defs)**: 149
-- **Red-team payload files**: 92
-- **Proof files**: 83 (of 84 test .op files)
-- **Proof run** (bin/operon): 99 files, 92 proofs, 92 asserts
-- **CLI subcommands**: ast, bench, build, check, crispr, explain, fmt, ir, keywords, lint, profile, repl, run, test, version
+- **Red-team payload files**: 97
+- **Proof files**: 89 (of 90 test .op files)
+- **Proof run** (bin/operon): 112 files, 98 proofs, 98 asserts
+- **CLI subcommands**: ast, bench, build, check, crispr, explain, fmt, graph, ir, keywords, lint, profile, repl, rna, run, test, version, watch
 - **LSP methods**: initialize, shutdown, textDocument/completion, textDocument/definition, textDocument/didChange, textDocument/didClose, textDocument/didOpen, textDocument/documentSymbol, textDocument/formatting, textDocument/hover, textDocument/publishDiagnostics, textDocument/signatureHelp
 
 ## Std module inventory
