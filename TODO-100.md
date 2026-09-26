@@ -815,7 +815,7 @@ clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK · sec_regression AL
   baked-output shape (feeds W088 determinism).
 - Files: `SPEC.md`, `src/main.rs`, `tests/`.
 
-### W087 — Single-file bundle [P3] [dev-3] [M] [deferred: design note]
+### W087 — Single-file bundle [P3] [dev-3] [M] [done: design note docs/design/BUNDLE.md on sz/m100-docs — .opb text envelope (meta/cell/modules sections, source_hash per module, byte-identical-under-W088 by construction), v1 source payload + std-resolved-at-run + first-party-only closure, loader contract (dev-2 lane: load_file extension + explicit-cell-with-allow-refusal), CLI surface incl. bundle --check; payload:bytecode plugs in at W009, external-dep closure at W023 — the envelope is the fixed target both waves build against]
 - Deliverable: `docs/design/BUNDLE.md` — `operon bundle app.op` artifact layout (source +
   bytecode + stdlib deps + metadata), why it waits for W023/W009.
 
