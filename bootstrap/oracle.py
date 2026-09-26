@@ -2479,6 +2479,9 @@ class Interp:
     def __init__(self, cell=None, cli_args=None):
         self.notes = []
         self.cell = cell or {}
+        # W069: importing-entry directory — candidate root #1 for `use`
+        # (SPEC §8 resolution table). None until load_file sets it.
+        self.base_dir = None
         self.silences = []
         # reg-bio-3: operons / stoichiometric-RISC bookkeeping / m6A levels /
         # generation counter / gene dosage registry (mirror of the Rust core)
@@ -6057,7 +6060,13 @@ class Interp:
         if path in self.loading:
             return {}
         p = path if path.endswith(".op") else path + ".op"
+        # W069: resolution chain mirrors genes.rs resolve_path — the
+        # importing file's directory first, then CWD, then std/, then
+        # $OPERON_STD. (Exe-relative roots are runtime-only: the oracle
+        # never ships beside a std/ tree; see SPEC §8 table.)
         cands = [p, os.path.join("std", p)]
+        if self.base_dir:
+            cands.insert(0, os.path.join(self.base_dir, p))
         std_dir = os.environ.get("OPERON_STD")
         if std_dir:
             cands.append(os.path.join(std_dir, p))
@@ -6272,6 +6281,11 @@ def load_file(path, cell=None, variant=None, rna=None, args=None, caps=None):
     src = open(path).read()
     stem = os.path.basename(path).rsplit(".", 1)[0]
     it = Interp(cell=cell or {}, cli_args=args or [])
+    # W069: entry file's directory = resolution root #1 (matches Rust
+    # tools.rs interp.base_dir = entry-file dir).
+    d = os.path.dirname(os.path.abspath(path))
+    if d and d != os.path.abspath("."):
+        it.base_dir = d
     if caps is not None:
         it.caps = caps
     if variant:

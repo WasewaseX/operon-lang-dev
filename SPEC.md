@@ -278,7 +278,19 @@ gene handle(v: int | str) -> any { ... }             # union
 
 ## 8. Modules, TADs, anchors
 
-- `use path;` — path like `std/bio`, `./util`, `util` (`.op` appended if absent). Resolution order: (1) relative to the importing file's dir; (2) the path as written, under CWD; (3) `std/` under CWD; (4) `$OPERON_STD` joined with the path as written (not double-joined with `std/`). Binds one name: basename, or `as name`. `use std/bio as b;` → `b.some_fn(...)`. Importing the same file twice executes it once (module cache).
+- `use path;` — path like `std/bio`, `./util`, `util` (`.op` appended if absent). Binds one name: basename, or `as name`. `use std/bio as b;` → `b.some_fn(...)`. Importing the same file twice executes it once (module cache).
+- **Resolution algorithm (W069, pinned).** The path is tried against candidate roots **in order; first regular file wins**:
+  | # | candidate root | class | notes |
+  |---|---|---|---|
+  | 1 | the **importing file's directory** (`interp.base_dir` = entry-file dir, tools.rs) | doc-relative | the CWD never participates here — editors/CI may run from anywhere |
+  | 2 | the path **as written**, under the CWD | CWD | plain names resolve here when no doc-relative shadow exists |
+  | 3 | `std/` under the CWD | std | dev-tree layout |
+  | 4 | exe-dir joined with the path (and with exe-parent) | exe-relative | bundled layout `…/bin/operon + …/bin/std` and install/dev layout `…/bin/operon + …/std` (dx-r5) |
+  | 5 | exe-relative `std/` trees by **bare file name** (non-`std/` paths only) | exe-relative std | lets `use x` find the shipped `std/x.op` |
+  | 6 | `$OPERON_STD` joined with the path as written (not double-joined with `std/`) | override | operator override of the managed std tree |
+  - Failure classes (W070): a miss reports every attempted root **for the plain-name class only**; the traversal class (absolute/`..`/`~`/drive paths) keeps ONE unified "denied or nonexistent" message — attempted-root detail there would resurrect the C-7 filesystem existence oracle (sec-r1).
+  - **Parity note (honest scope)**: the Python oracle implements roots 1–3 + 6; roots 4–5 are runtime-only (the oracle never ships beside a `std/` tree). Differential coverage pins roots 1–2 (`tests/differential/mod_res.op`); root 3 is exercised corpus-wide by every `use std/…` program; roots 4–6 are pinned by the redteam/granted suites where the layouts exist (`scripts/install.sh`, release artifacts).
+  - **LSP divergence (allowed, justified)**: `operon-ls` resolves with the document's directory as root #1 and is deliberately **CWD-independent** (lsp-r1) — editors launch language servers from arbitrary CWDs; CWD-rooted candidates would make diagnostics machine-dependent. Runtime keeps CWD roots because `operon run`'s CWD is part of the operator contract.
 - Import gating (§9b): imports that resolve inside the program's own managed trees — the importing file's project directory, the CWD, or the standard library — are always allowed; a `use` that reaches outside those trees requires a read capability.
 - A module evaluates to a Map of its **exported** names. Export rule:
   - If the file contains any `anchor export a, b;` (at top level or inside a tad), ONLY those names are exported.
