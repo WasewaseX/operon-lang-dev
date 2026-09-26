@@ -41,7 +41,7 @@ let opts = Opts {
     frame: None,
     args: vec![],
     quiet: false,
-    caps: operon::interp::Caps::default_for_run(), // default-deny sandbox; see THREAT-MODEL.md
+    caps: operon::interp::Caps::default(), // default-deny sandbox (CLI equivalent: no --allow flags)
     profile: false,       // true = time top-level statements during load
     stdout_sink: None,    // Some(Rc<RefCell<Vec<String>>>) to capture promote() output
 };
