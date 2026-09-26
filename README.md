@@ -1,6 +1,6 @@
 # Operon
 
-**The gene-expression language.** A Total Grammar language where nothing you write is ever rejected — it wobbles, repairs, and runs — implemented on a native Rust core with a C++ algorithm kernel (bit-parallel Myers codon distance) as the only native companion.
+**The gene-expression language.** A Total Grammar language where nothing you write is ever rejected — it wobbles, repairs, and runs — implemented on a native Rust core with a small C++ codon kernel (bit-parallel Myers distance) for the hottest algorithms, and verified by a Python oracle + differential harness that never ships in the binary.
 
 ```operon
 gene greet(name) {
@@ -17,7 +17,7 @@ The mandate: *"Rust, then C, then Python, then Operon, then C++, then HTML, then
 
 **Verdict on that stack order before building: 9/10.** Evidence:
 
-- A new language implemented in a systems language with a C runtime substrate is the mainstream pattern: CPython (C core), Lua (C), Ruby's YJIT (Rust), Rust v1 (hosted in OCaml before self-hosting). Rust-first gives parser/VM performance from day one.
+- A new language implemented in a systems language is the mainstream pattern: CPython (C core), Lua (C), Ruby's YJIT (Rust), Rust v1 (hosted in OCaml before self-hosting). Operon is Rust-first for parser/VM performance from day one.
 - C second was the plan — until the sec-r2 audit proved the runtime kernel was write-only AND carried the project's one memory-safety class. Evidence beats aesthetics: interning moved into Rust, the C kernel was deleted, and the C++ algorithm kernel (which IS hot and pointer-free) stayed.
 - Python as bootstrap (not implementation) is the right reduction from v1's 100%-Python mistake.
 - One point withheld: **Operon below Python is a snapshot, not a destiny.** Mainstream languages converge on self-hosting (Rust in Rust, Go in Go, TypeScript in TypeScript). Operon's share must grow release over release — the stdlib is already pure `.op`.
@@ -234,13 +234,13 @@ Ranged (incremental) edits are ignored by design while `textDocumentSync = 1` (f
 ```console
 $ ./scripts/build.sh          # gcc + g++ the kernels, rustc the core
 OK: bin/operon
-$ ./scripts/test.sh           # 99 proof files (1,171 assertions), C++ kernel smoke
-$ python3 bootstrap/harness.py  # differential: 128/128 programs MATCH across implementations
-$ bash scripts/redteam.sh       # adversarial containment: 95 attacks contained, 0 breached
+$ ./scripts/test.sh           # proof suite (generated counts: docs/STATS.md), C++ kernel smoke
+$ python3 bootstrap/harness.py  # differential corpus (counts: docs/STATS.md) — must MATCH across implementations
+$ bash scripts/redteam.sh       # adversarial containment (payload count: docs/STATS.md) — 0 breached is the gate
 $ bash scripts/bench.sh
 ```
 
-Requires: rustc (≥1.70), gcc, g++. One build-dependency: the `cc` crate compiles the bundled C++ codon kernel. No runtime crates, no network fetches, no dynamic library dependencies.
+Requires: rustc (≥1.70), gcc, g++ (builds the C++ codon kernel). Zero runtime crates — the only build dependency is `cc` for the kernel build step; nothing touches the network unless you grant it (`py()` bridge, `run()`).
 
 ## Language
 
@@ -257,11 +257,11 @@ Requires: rustc (≥1.70), gcc, g++. One build-dependency: the `cc` crate compil
 
 ```
 src/         Rust core (lexer, parser, interp, genes, tools, cli)
-runtime/     C++ algorithm kernel (codon_kernel.cpp; the C runtime kernel was deleted in sec-r2 — audit A15)
+runtime/     C++ codon kernel (codon_kernel.cpp, built by cc; the legacy C kernel was deleted in sec-r2 — audit A15 — Rust FFI bridge lives in src/ffi.rs)
 bootstrap/   Python oracle + differential harness (the verification layer)
 std/         self-hosted Operon standard library (.op)
 tools/       (reserved for .op tooling as self-hosting grows)
-tests/       proof-frame test suite (.op) + C kernel smoke test
+tests/       proof-frame test suite (.op) + codon kernel smoke test
 apps/        GenomeLab demo (pure .op)
 examples/    tour programs (.op)
 docs/        documentation site (HTML/CSS)

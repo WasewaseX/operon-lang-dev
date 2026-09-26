@@ -290,7 +290,7 @@ records of <code>line, rung, message, repair</code>. Nothing is ever rejected.</
       <tr><td><code>distance(a,b)</code> · <code>similar(a,b,maxd?)</code></td><td>Edit distance (C++ bit-parallel kernel) · boolean threshold</td></tr>
       <tr><td><code>transcribe(dna)</code> · <code>translate(rna)</code></td><td>Sequence tools; translate stops at stop codon</td></tr>
       <tr><td><code>reverse_complement(dna)</code> · <code>gc_content(dna)</code> · <code>find_orf(dna)</code></td><td>Sequence tools (gc 0–100; ORF protein list)</td></tr>
-      <tr><td><code>memory()</code></td><td>Map <code>arena_bytes, interns, allocs</code> from the C runtime</td></tr>
+      <tr><td><code>memory()</code></td><td>Map <code>arena_bytes, interns, allocs</code> from the runtime core</td></tr>
       <tr><td><code>fingerprint()</code></td><td>Run telemetry — <code>calls burst burst_by_gene mature nascent maturation</code> (§14 of SPEC; the old spliced/unspliced/velocity keys are retired)</td></tr>
       <tr><td><code>spawn(f, args?)</code> · <code>join(id)</code></td><td>OS thread tasks; result returned, second join → null + note</td></tr>
       <tr><td><code>toggle_on(name)</code> · <code>toggle_state()</code></td><td>Mutual-repression latch control</td></tr>

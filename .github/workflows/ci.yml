@@ -46,10 +46,48 @@ jobs:
         run: bash scripts/stack_report.sh
 
   windows:
+    name: windows (required — W59)
     runs-on: windows-latest
-    continue-on-error: true
+    # W59 (ROADMAP-100): the audit called out "Windows CI should not be
+    # non-blocking forever" — platform regressions accumulated silently under
+    # continue-on-error. As of this commit a Windows failure BLOCKS the PR.
+    # (Bench stays intentionally non-blocking; that is a trend point, not a
+    # gate.) If the windows runner flakes, fix forward — no silent passes.
+    #
+    # W59 windows-truthing context: flipping this job to blocking surfaced
+    # TWO pre-existing Windows failures that continue-on-error had masked:
+    #   (a) tests/string_literals.op proof burned on CRLF — git's default
+    #       autocrlf converted LF to CRLF at checkout, corrupting the
+    #       verbatim content of a triple-quoted string. Fixed by the
+    #       repo-level .gitattributes (LF everywhere, every platform).
+    #   (b) the Python oracle exited 1 with no stdout for EVERY program on
+    #       the runner — every differential case read as `oracle: <missing>`
+    #       and the wall of DIVERGEs hid the real crash. The harness now
+    #       decodes subprocess output as UTF-8 and prints the oracle's
+    #       first stderr lines when its side fails, and oracle.py reads
+    #       every source file as UTF-8 with honest worker-thread exit-code
+    #       propagation. PYTHONUTF8=1 makes the runner's Python default to
+    #       UTF-8 mode as belt-and-braces for anything the explicit fixes
+    #       don't cover.
+    env:
+      PYTHONUTF8: "1"
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v4.2.2 (SHA-pinned, sec-r1)
+      # W59 one-shot oracle probe: if the differential harness ever reports
+      # all-diverge again, this prints the oracle's actual startup behavior
+      # (rc/stdout/stderr) directly in the job log — no more guessing from
+      # an anonymous DIVERGE wall. Kept non-blocking; it is a stethoscope,
+      # not a gate.
+      - name: Oracle startup probe (diagnostic, non-blocking)
+        continue-on-error: true
+        shell: bash
+        run: |
+          python3 bootstrap/oracle.py version
+          echo "probe: version rc=$?"
+          python3 bootstrap/oracle.py run tests/differential/arith_pinned.op > /tmp/probe.out 2> /tmp/probe.err
+          echo "probe: run rc=$?"
+          echo "probe stdout (first 5 lines):"; head -5 /tmp/probe.out
+          echo "probe stderr (first 10 lines):"; head -10 /tmp/probe.err
       - name: Install Rust (stable + clippy)
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable (SHA-pinned, D-6/sec-r5)
         with:
