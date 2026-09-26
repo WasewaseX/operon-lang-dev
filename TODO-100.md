@@ -63,11 +63,11 @@ Rules:
 
 Effort: S ≤ half session · M = 1–2 sessions · L = multi-session · XL = release-scale.
 
-## CURRENT GATE NUMBERS (2026-09-26, main @ 563a331 — dev1 wave-1 merged)
+## CURRENT GATE NUMBERS (2026-09-26, main @ c6ad132 — dev1 wave-2 W06 merged)
 
-differential **136/136 MATCH** · proofs **106 files / 95 proofs green (0 failed)** ·
-redteam **98 payloads / 0 breaches** · cargo test green (incl. 5 REPL contracts) ·
-clippy 0 · fmt clean · cookbook **18/18** · LSP smoke OK · CI success.
+differential **139/139 MATCH** · proofs **108 files / 96 proofs green (0 failed)** ·
+redteam **99 payloads / 0 breaches** · cargo test green (incl. 5 REPL contracts) ·
+clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK · CI success.
 
 > These numbers are re-measured every loop; when they change, update this header in the
 > same commit that lands work. If this header is stale, the per-level evidence links win.
@@ -154,7 +154,7 @@ clippy 0 · fmt clean · cookbook **18/18** · LSP smoke OK · CI success.
   `bootstrap/oracle.py`, `SPEC.md`, `README.md`.
 - Depends: none. Coordinate with W064 (deprecation machinery, dev-2).
 
-### W006 — First-class Option / Result [P0] [dev-1] [L] [open]
+### W006 — First-class Option / Result [P0] [dev-1] [L] [partial: D-014 stage 1 on main c6ad132 — Variant values (some/none/ok/err), ?! propagation (unforgeable Stress.prop marker; crosses rescue, no chain frames), 10 builtins, unwrap kind, none-synonym retirement, SPEC §9 four-tier hierarchy, oracle byte-identical, differential + proofs + rt_p16a; REMAIN: match-integration rides W002, std null→Result migration = stage 2 (compat note in SPEC §9)]
 - Goal: `Option<T>` / `Result<T, E>` as built-in variant values with `unwrap/unwrap_or/
   is_ok/is_err/?`-style propagation operator; Stress becomes purely the runtime containment
   mechanism (its current dual role as everyday error value ends).
