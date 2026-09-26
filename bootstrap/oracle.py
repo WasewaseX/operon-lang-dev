@@ -249,8 +249,9 @@ def v_repr(v, _seen=None, _depth=0):
     if isinstance(v, Variant):
         if v.tag == "None":
             return "None"
-        if v.payload is None:
-            return v.tag
+        # W06 parity fix: a null payload is a REAL payload — ok(null) renders
+        # Ok(null) like the Rust core (Some(Null)); the old payload-is-None
+        # guard rendered the bare tag and hid the value
         return f"{v.tag}({v_repr(v.payload, _seen, _depth + 1)})"
     if isinstance(v, SeqObj):
         return f"<sequence {v.gene.name}>" if v.gene.name else "<sequence lambda>"
@@ -3351,7 +3352,11 @@ class Interp:
             _, sub, line = e
             v = self.eval(env, sub)
             if isinstance(v, Variant):
-                if v.tag in ("Some", "Ok") and v.payload is not None:
+                if v.tag in ("Some", "Ok"):
+                    # null payload is a REAL payload: ok(null) stores Some(Null)
+                    # on the Rust side, so `?!` unwraps to null (W06 parity fix,
+                    # found by the std_serialize proof — the old `payload is
+                    # not None` guard wrongly unwound on Ok(null)/Some(null))
                     return v.payload
                 sig = Stress("propagate", "")
                 sig.prop = v
@@ -5438,7 +5443,9 @@ class Interp:
             if len(args) != 2:
                 raise Stress("unfolded", "unwrap_or(v, default) needs exactly 2 arguments")
             v = args[0]
-            if isinstance(v, Variant) and v.tag in ("Some", "Ok") and v.payload is not None:
+            # W06 parity fix: a null payload is a real payload — unwrap_or on
+            # Ok(null)/Some(null) returns null, not the default (Rust parity)
+            if isinstance(v, Variant) and v.tag in ("Some", "Ok"):
                 return v.payload
             return args[1]
         if name == "unwrap":
@@ -5446,7 +5453,10 @@ class Interp:
                 raise Stress("unfolded", "unwrap(v) needs exactly 1 argument")
             v = args[0]
             if isinstance(v, Variant):
-                if v.tag in ("Some", "Ok") and v.payload is not None:
+                if v.tag in ("Some", "Ok"):
+                    # W06 parity fix: unwrap(Ok(null)) returns null — the Rust
+                    # core stores ok(null) as Some(Null) and unwraps to it;
+                    # the old payload-is-None guard raised here instead
                     return v.payload
                 raise Stress("unwrap", f"unwrap on {v.tag}")
             raise Stress("unwrap", f"unwrap on a plain {type_name(v)} value")
@@ -6001,7 +6011,14 @@ class Interp:
         if v is True: return "true"
         if v is False: return "false"
         if isinstance(v, int): return str(v)
-        if isinstance(v, float): return fmt_float(v)
+        if isinstance(v, float):
+            # RFC 8259 honesty (SPEC §10): JSON has no NaN/Inf — non-finite
+            # floats serialize as null, exactly like the Rust json_stringify_g
+            # (display/print keep the nan/inf spelling via fmt_float; the WIRE
+            # never carries them. Found by the std_serialize proof.)
+            if v != v or v == float("inf") or v == float("-inf"):
+                return "null"
+            return fmt_float(v)
         if isinstance(v, str): return _json.dumps(v)
         if isinstance(v, (list, dict)):
             marker = id(v)
@@ -6020,8 +6037,10 @@ class Interp:
         # W06 (D-014) mirror: variants serialize as single-key objects —
         # {"some": v} / {"ok": v} / {"err": v}; None serializes as null.
         # Matches the Rust json_stringify_g Variant arms byte-for-byte.
+        # W06 parity fix: a null payload is a real payload — ok(null)
+        # serializes {"ok":null} on the Rust core; only tag None is bare null.
         if isinstance(v, Variant):
-            if v.tag == "None" or v.payload is None:
+            if v.tag == "None":
                 return "null"
             key = {"Some": "some", "Ok": "ok", "Err": "err"}.get(v.tag, "none")
             return "{" + _json.dumps(key) + ":" + Interp._json_str(v.payload, _seen, _depth + 1) + "}"
