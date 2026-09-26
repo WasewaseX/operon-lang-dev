@@ -11,7 +11,7 @@ area; conflicts resolve toward SPEC.md, then these files, then code comments.
 | [CELL-SCHEMA.md](CELL-SCHEMA.md) | W66 | landed (schema + validator: `operon lint --cell`) |
 | [FMT-CONFIG.md](FMT-CONFIG.md) | W47 | landed (indent/quotes + config file; byte-stability law corpus-wide; `--width` honestly deferred) |
 | SERIALIZATION.md | W34 | pending (contract drafted in ROADMAP-100; waits on W04 traits for full form) |
-| MACROS design | W35 | pending (docs/design/MACROS.md, ratified before any parser keyword) |
+| [MACROS design](../design/MACROS.md) | W35 | draft complete — models priced, Model A (declarative, rules-as-data) recommended, staged migration of the 7 hardcoded bio arms, open questions filed for sz ratification |
 | [LSP-VERSIONING.md](LSP-VERSIONING.md) | W62 | landed (operon-ls --version pin line, operonLsp handshake block, editor pinning table; smoke-enforced) |
 | MODULE-RESOLUTION.md | W69 | sz lane |
 | THREAT-MODEL.md | W100 | sz lane |
