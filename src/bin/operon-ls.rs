@@ -31,7 +31,44 @@ struct DocEntry {
     analyzed: LsDoc,
 }
 
+/// W62 (ROADMAP-100): the LSP contract version this server speaks. Bump on
+/// ANY breaking change to the handshake shape, advertised capabilities, or
+/// method semantics — additive bug-fixes do not bump it. Editors and
+/// extension authors pin against this number (docs/specs/LSP-VERSIONING.md).
+const LSP_VERSION: u32 = 1;
+
+/// W62: the feature list echoed in the initialize handshake. Must stay in
+/// lockstep with the capabilities map below and with lsp_smoke's assertions
+/// (the smoke fails the build if they drift).
+const LSP_FEATURES: [&str; 7] = [
+    "diagnostics",
+    "hover",
+    "definition",
+    "documentSymbol",
+    "completion",
+    "formatting",
+    "signatureHelp",
+];
+
 fn main() {
+    // W62: versioned contract — `operon-ls --version` prints the
+    // machine-readable pair editors can pin against. Anything else is
+    // refused loudly (the server itself reads LSP frames on stdio).
+    for a in std::env::args().skip(1) {
+        match a.as_str() {
+            "--version" | "-V" => {
+                println!("operon {} / lsp {}", env!("CARGO_PKG_VERSION"), LSP_VERSION);
+                return;
+            }
+            other => {
+                eprintln!(
+                    "operon-ls: unknown argument '{other}' (supported: --version); the server reads LSP frames on stdio"
+                );
+                std::process::exit(2);
+            }
+        }
+    }
+
     let stdin = std::io::stdin();
     let mut input = stdin.lock();
     let mut stdout = std::io::stdout();
@@ -47,7 +84,23 @@ fn main() {
         let params = get(&msg, "params");
         match method.as_str() {
             "initialize" => {
+                // W62: the handshake carries the LSP contract version and the
+                // feature list, so an editor can pin and the server can be
+                // held to its advertisement (asserted by lsp_smoke).
+                let features = Value::List(std::rc::Rc::new(std::cell::RefCell::new(
+                    LSP_FEATURES
+                        .iter()
+                        .map(|f| Value::Str((*f).into()))
+                        .collect(),
+                )));
                 let result = mapv(vec![
+                    (
+                        "operonLsp",
+                        mapv(vec![
+                            ("version", Value::Int(LSP_VERSION as i64)),
+                            ("features", features),
+                        ]),
+                    ),
                     (
                         "capabilities",
                         mapv(vec![
