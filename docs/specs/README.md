@@ -12,7 +12,7 @@ area; conflicts resolve toward SPEC.md, then these files, then code comments.
 | [FMT-CONFIG.md](FMT-CONFIG.md) | W47 | landed (indent/quotes + config file; byte-stability law corpus-wide; `--width` honestly deferred) |
 | SERIALIZATION.md | W34 | pending (contract drafted in ROADMAP-100; waits on W04 traits for full form) |
 | MACROS design | W35 | pending (docs/design/MACROS.md, ratified before any parser keyword) |
-| LSP-VERSIONING.md | W62 | pending (handshake carries version once W45/W46 land) |
+| [LSP-VERSIONING.md](LSP-VERSIONING.md) | W62 | landed (operon-ls --version pin line, operonLsp handshake block, editor pinning table; smoke-enforced) |
 | MODULE-RESOLUTION.md | W69 | sz lane |
 | THREAT-MODEL.md | W100 | sz lane |
 | EMBEDDING.md | W76 | sz lane |
