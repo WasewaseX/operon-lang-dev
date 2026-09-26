@@ -1,0 +1,23 @@
+# memory_model — W014 differential pin: the copy-vs-share contract.
+let a = [1, 2]
+let b = a
+push(b, 3)
+print("list alias: {len(a)}")
+let m = {k: 1}
+let m2 = m
+m2.k = 99
+print("map alias: {m.k}")
+let x = 5
+let y = x
+let z = y + 1
+print("int copy: {x} {z}")
+let s = "hi"
+let s2 = s
+print("str copy: {s} {s2}")
+gene mutate(lst) {
+    push(lst, 99)
+    return 0
+}
+let outer = [1]
+let r = mutate(outer)
+print("arg alias: {len(outer)}")

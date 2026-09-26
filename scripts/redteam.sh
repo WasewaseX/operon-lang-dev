@@ -100,6 +100,14 @@ for f in "$DIR"/rt_p*.op; do
             # opt-in layer armed via an explicit operator cell (catch 0.5,
             # queue_cap 0.0 = unshielded); containment = bounded runtime
             run_one "$f" --cell "$DIR/rt_p14e.cell" --allow-read "$DIR" ;;
+        *p15a*)
+            # M100 W007: uncaught deep chain via the exit-1 entry path —
+            # rc must be 1 (dx-r1 honesty), render capped, no panic
+            run_one "$f" --entry go ;;
+        *p15b*|*p15c*)
+            # M100 W007: chain on rescue bindings — contained (rc=0),
+            # frames leak nothing beyond gene names + in-file lines
+            run_one "$f" ;;
         *cell*)
             run_one "$f" --cell "$DIR/rt_grant.cell" ;;
         *p11n*)

@@ -1,0 +1,56 @@
+# traceback_shape.op — W007: the stress call chain is captured, ordered
+# innermost-first, and carries exact call-site lines (both engines).
+gene inner() {
+    raise overflow, "detonating"
+}
+gene outer() {
+    let r = inner()
+    return r
+}
+frame proof {
+    let kind_seen = ""
+    let f0_gene = ""
+    let f0_line = 0
+    let f1_gene = ""
+    let f1_line = 0
+    stress {
+        let v = outer()
+    } rescue (e) {
+        kind_seen = e.kind
+        let f0 = e.chain[0]
+        f0_gene = f0.gene
+        f0_line = f0.line
+        let f1 = e.chain[1]
+        f1_gene = f1.gene
+        f1_line = f1.line
+    }
+    assert(kind_seen == "overflow", "chain stress carries kind")
+    assert(f0_gene == "inner", "innermost frame is inner")
+    assert(f0_line == 7, "inner frame points at its call site in outer")
+    assert(f1_gene == "outer", "outer frame is second")
+    assert(f1_line == 17, "outer frame points at its call site in main")
+
+    # depth: every unwound gene appends exactly one frame
+    gene rec(n) {
+        if n <= 0 {
+            raise overflow, "bottom"
+        }
+        return rec(n - 1)
+    }
+    let depth_seen = 0
+    stress {
+        let v = rec(20)
+    } rescue (e2) {
+        depth_seen = len(e2.chain)
+    }
+    assert(depth_seen == 21, "21 nested rec frames + the entry-level call")
+
+    # cap: chains deeper than 64 keep exactly the 64 innermost frames
+    let capped = 0
+    stress {
+        let v = rec(5000)
+    } rescue (e3) {
+        capped = len(e3.chain)
+    }
+    assert(capped == 64, "chain capped at 64 innermost frames")
+}

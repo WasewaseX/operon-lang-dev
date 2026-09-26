@@ -22,8 +22,15 @@ class Note:
 class Stress(Exception):
     def __init__(self, kind, message):
         self.kind, self.message = kind, message
+        # W007 mirror: gene call chain captured during unwinding — innermost
+        # frame first, (gene, call-site line); capture cap 64 matches Rust.
+        self.chain = []
     def as_map(self):
-        return {"kind": self.kind, "message": self.message}
+        # W07 mirror: rescue binding carries the chain, same field order as
+        # the Rust stress_map (kind, message, chain). Stress.line stays a
+        # Rust-side stderr-rendering field (dx-r3) — not mirrored here.
+        return {"kind": self.kind, "message": self.message,
+                "chain": [{"gene": n, "line": l} for (n, l) in self.chain]}
 
 class Gene:
     __slots__ = ("name", "params", "guard", "body", "acetylate", "methylate", "m6a", "copies", "seq", "riboswitch", "burst", "closure")
@@ -294,6 +301,43 @@ def lex(src):
             while i < n and src[i] != "\n":
                 i += 1
             continue
+        # W030 mirror: raw strings r"..." — no escapes, no interpolation
+        if c == "r" and i + 1 < n and src[i+1] == '"':
+            i += 2
+            raw, closed = "", False
+            while i < n:
+                if src[i] == '"':
+                    i += 1; closed = True; break
+                if src[i] == "\n":
+                    line += 1
+                raw += src[i]; i += 1
+            if not closed:
+                notes.append(Note(4, "unclosed raw string consumed to end of input"))
+            toks.append(("STR", raw, line))
+            continue
+        # W030 mirror: multiline triple-quoted strings """...""" — escapes and
+        # interpolation processed, content verbatim
+        if c == '"' and i + 2 < n and src[i+1] == '"' and src[i+2] == '"':
+            i += 3
+            raw, closed, interp, depth = "", False, False, 0
+            while i < n:
+                if src[i] == '"' and i + 2 < n and src[i+1] == '"' and src[i+2] == '"':
+                    i += 3; closed = True; break
+                if src[i] == "\\" and i + 1 < n:
+                    e = src[i + 1]
+                    raw += {"n": "\n", "t": "\t", "\\": "\\", '"': '"', "{": "{", "}": "}"}.get(e, "\\" + e)
+                    i += 2; continue
+                if src[i] == "\n":
+                    line += 1
+                if src[i] == "{":
+                    depth += 1; interp = True
+                if src[i] == "}" and depth > 0:
+                    depth -= 1
+                raw += src[i]; i += 1
+            if not closed:
+                notes.append(Note(4, "unclosed multiline string consumed to end of input"))
+            toks.append(("INTERP" if interp else "STR", raw, line))
+            continue
         if c == '"':
             raw, i2, closed, interp = "", i + 1, False, False
             depth = 0
@@ -344,9 +388,27 @@ def lex(src):
                 notes.append(Note(4, "stray '@' skipped"))
             i = j; continue
         if c.isdigit():
+            # W031 mirror: radix prefixes 0x/0b/0o (case-insensitive) with `_`
+            # separators; prefix with no valid digit falls through to decimal
+            if c == "0" and i + 1 < n and src[i+1] in "xXbBoO":
+                radix = {"x": 16, "X": 16, "b": 2, "B": 2, "o": 8, "O": 8}[src[i+1]]
+                vset = "0123456789abcdefABCDEF" if radix == 16 else ("01" if radix == 2 else "01234567")
+                if i + 2 < n and (src[i+2] in vset or src[i+2] == "_"):
+                    j = i + 2
+                    while j < n and (src[j] in vset or src[j] == "_"):
+                        j += 1
+                    raw = src[i:j]
+                    digits = raw[2:].replace("_", "")
+                    val = int(digits, radix)
+                    toks.append(("INT", val, line))
+                    # i64 parity: out-of-range treated as 0 with the same note
+                    if not (-2**63 <= val <= 2**63 - 1):
+                        notes.append(Note(4, f"integer '{raw}' out of range treated as 0"))
+                        toks[-1] = ("INT", 0, line)
+                    i = j; continue
             j = i
             isf = False
-            while j < n and (src[j].isdigit() or src[j] == "."):
+            while j < n and (src[j].isdigit() or src[j] == "." or src[j] == "_"):
                 if src[j] == ".":
                     if j + 1 >= n or not src[j + 1].isdigit():
                         break
@@ -362,8 +424,10 @@ def lex(src):
                     while j < n and src[j].isdigit():
                         j += 1
             text = src[i:j]
+            # W031 mirror: `_` separators stripped before parsing
+            cleaned = text.replace("_", "")
             try:
-                toks.append(("FLOAT", float(text), line) if isf else (("INT", int(text), line)))
+                toks.append(("FLOAT", float(cleaned), line) if isf else (("INT", int(cleaned), line)))
             except ValueError:
                 notes.append(Note(4, f"malformed number '{text}' treated as 0"))
                 toks.append(("INT", 0, line))
@@ -372,7 +436,7 @@ def lex(src):
                 # is out of range and treated as 0 with the same note (the
                 # Rust core parses i64; a Python bignum would otherwise see
                 # a value the compiled engine never did)
-                if not isf and not (-2**63 <= int(text) <= 2**63 - 1):
+                if not isf and not (-2**63 <= int(cleaned) <= 2**63 - 1):
                     notes.append(Note(4, f"integer '{text}' out of range treated as 0"))
                     toks[-1] = ("INT", 0, line)
             i = j; continue
@@ -1685,7 +1749,7 @@ class P:
             t = self.peek()
             if (t[0] == "IDENT" and t[1] == "or") or (t[0] == "SYM" and t[1] == "||"):
                 self.next()
-                left = ("bin", "or", left, self.nullish_expr())
+                left = ("bin", "or", left, self.nullish_expr(), self.peek()[2])  # W07: line = right-operand start (Rust stamps after next())
             else:
                 return left
 
@@ -1696,7 +1760,7 @@ class P:
             t = self.peek()
             if t[0] == "SYM" and t[1] == "??":
                 self.next()
-                left = ("bin", "nullish", left, self.and_expr())
+                left = ("bin", "nullish", left, self.and_expr(), t[2])  # W07: op line
             else:
                 return left
 
@@ -1706,7 +1770,7 @@ class P:
             t = self.peek()
             if (t[0] == "IDENT" and t[1] == "and") or (t[0] == "SYM" and t[1] == "&&"):
                 self.next()
-                left = ("bin", "and", left, self.not_expr())
+                left = ("bin", "and", left, self.not_expr(), self.peek()[2])  # W07: line = right-operand start
             else:
                 return left
 
@@ -1723,10 +1787,10 @@ class P:
             t = self.peek()
             if t[0] == "SYM" and t[1] in ("==", "!=", "<", "<=", ">", ">="):
                 self.next()
-                left = ("bin", t[1], left, self.bitor_expr())
+                left = ("bin", t[1], left, self.bitor_expr(), t[2])
             elif t[0] == "IDENT" and t[1] == "in":
                 self.next()
-                left = ("bin", "in", left, self.bitor_expr())
+                left = ("bin", "in", left, self.bitor_expr(), t[2])
             else:
                 return left
 
@@ -1736,7 +1800,7 @@ class P:
             t = self.peek()
             if t[0] == "SYM" and t[1] == "|":
                 self.next()
-                left = ("bin", "|", left, self.bitxor_expr())
+                left = ("bin", "|", left, self.bitxor_expr(), t[2])
             else:
                 return left
 
@@ -1746,7 +1810,7 @@ class P:
             t = self.peek()
             if t[0] == "SYM" and t[1] == "^":
                 self.next()
-                left = ("bin", "^", left, self.bitand_expr())
+                left = ("bin", "^", left, self.bitand_expr(), t[2])
             else:
                 return left
 
@@ -1756,7 +1820,7 @@ class P:
             t = self.peek()
             if t[0] == "SYM" and t[1] == "&":
                 self.next()
-                left = ("bin", "&", left, self.shift_expr())
+                left = ("bin", "&", left, self.shift_expr(), t[2])
             else:
                 return left
 
@@ -1766,7 +1830,7 @@ class P:
             t = self.peek()
             if t[0] == "SYM" and t[1] in ("<<", ">>"):
                 self.next()
-                left = ("bin", t[1], left, self.add_expr())
+                left = ("bin", t[1], left, self.add_expr(), t[2])
             else:
                 return left
 
@@ -1776,7 +1840,7 @@ class P:
             t = self.peek()
             if t[0] == "SYM" and t[1] in ("+", "-"):
                 self.next()
-                left = ("bin", t[1], left, self.mul_expr())
+                left = ("bin", t[1], left, self.mul_expr(), t[2])
             else:
                 return left
 
@@ -1786,7 +1850,7 @@ class P:
             t = self.peek()
             if t[0] == "SYM" and t[1] in ("*", "/", "//", "%"):
                 self.next()
-                left = ("bin", t[1], left, self.unary())
+                left = ("bin", t[1], left, self.unary(), t[2])
             else:
                 return left
 
@@ -1805,7 +1869,7 @@ class P:
         if t[0] == "SYM" and t[1] == "**":
             self.next()
             # right-assoc; right operand re-enters unary so 2**-3 parses
-            return ("bin", "**", left, self.unary())
+            return ("bin", "**", left, self.unary(), t[2])
         return left
 
     def postfix(self):
@@ -1826,7 +1890,7 @@ class P:
                     args.append(self.expr())
                     if self.peek() == ("SYM", ",", t2[2]):
                         self.next()
-                e = ("call", e, args)
+                e = ("call", e, args, t[2])  # W07: LParen line (Rust stamps before next())
             elif t == ("SYM", "[", t[2]):
                 self.next()
                 idx = self.expr()
@@ -1834,7 +1898,7 @@ class P:
                     self.next()
                 else:
                     self.note(self.peek()[2], 4, "index bracket auto-closed")
-                e = ("index", e, idx)
+                e = ("index", e, idx, t[2])  # W07: LBrack line
             elif t == ("SYM", ".", t[2]):
                 self.next()
                 t2 = self.peek()
@@ -2149,6 +2213,9 @@ class Interp:
         self.steps = 0
         self.depth = 0
         self.depth_limit = 10_000
+        # W07 mirror: line of the call/binop/index expression currently
+        # executing (A13/dx-r4 parity) — feeds traceback chain frames.
+        self.cur_line = 0
         self.methyl_quiet = False
         self.methyl_noted = set()
         # T2b graded methylation: per-gene silencing level (@methylate defs +1,
@@ -2457,6 +2524,7 @@ class Interp:
                             self.note(4, f"'{name}' was not declared; auto-declared")
                         self.assign(env, name, val)
                     elif t[0] == "index":
+                        self.cur_line = t[3] if len(t) > 3 else 0  # W07 mirror: assign-target stamp
                         tv = self.eval(env, t[1])
                         iv = self.eval(env, t[2])
                         if isinstance(tv, list):
@@ -2499,6 +2567,7 @@ class Interp:
                     self.note(4, f"'{name}' was not declared; auto-declared")
         elif k == "idx_assign":
             _, te, ie, op, ve = s
+            self.cur_line = te[3] if isinstance(te, tuple) and len(te) > 3 else 0  # W07 mirror
             tv = self.eval(env, te)
             iv = self.eval(env, ie)
             v = self.eval(env, ve)
@@ -2876,6 +2945,7 @@ class Interp:
             args = [self.eval(env, a) for a in args_e]
             return self.construct_obj(p, args)
         if k == "bin":
+            self.cur_line = e[4] if len(e) > 4 else 0  # W07 mirror: dx-r4 stamp
             op = e[1]
             if op == "and":
                 lv = self.eval(env, e[2])
@@ -2891,6 +2961,7 @@ class Interp:
             rv = self.eval(env, e[3])
             return self.binop(op, lv, rv)
         if k == "call":
+            self.cur_line = e[3] if len(e) > 3 else 0  # W07 mirror: A13 stamp
             if e[1][0] == "ident":
                 args = [self.eval(env, a) for a in e[2]]
                 return self.call_named(env, e[1][1], args)
@@ -2898,6 +2969,7 @@ class Interp:
             args = [self.eval(env, a) for a in e[2]]
             return self.call_value(env, callee, args)
         if k == "index":
+            self.cur_line = e[3] if len(e) > 3 else 0  # W07 mirror: dx-r4 stamp
             tv = self.eval(env, e[1])
             iv = self.eval(env, e[2])
             if isinstance(tv, list):
@@ -3243,8 +3315,16 @@ class Interp:
         if self.depth > self.depth_limit:
             self.depth -= 1
             raise Stress("overflow", f"recursion depth limit ({self.depth_limit}) exceeded")
+        # W007 mirror: the traceback frame for THIS gene — captured at entry
+        # (cur_line is the call site); appended only on the error path.
+        frame = (name, self.cur_line)
         try:
-            return self.call_gene_inner(g, args)
+            result = self.call_gene_inner(g, args)
+            return result
+        except Stress as st:
+            if len(st.chain) < 64:
+                st.chain.append(frame)
+            raise
         finally:
             self.depth -= 1
 

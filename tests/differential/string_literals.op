@@ -1,0 +1,11 @@
+# string_literals — W030 differential pin: raw and multiline strings are
+# byte-identical on both engines.
+let p = r"C:\Users\test"
+print(p)
+print(r"a\nb")
+print(len(r"a\nb"))
+let doc = """
+first "line"
+second {1+1}
+"""
+print(doc)

@@ -397,7 +397,7 @@ pub fn run_entry(l: &mut Loaded, opts: &Opts) -> Result<Value, Stress> {
                     Value::Null
                 }
             };
-            match target {
+            let invoked = match target {
                 Value::Null => l.interp.call_named(&genv, &entry, vec![argv]),
                 v => {
                     let has_params = match &v {
@@ -409,6 +409,27 @@ pub fn run_entry(l: &mut Loaded, opts: &Opts) -> Result<Value, Stress> {
                     } else {
                         l.interp.call_value(&genv, &v, vec![])
                     }
+                }
+            };
+            match invoked {
+                Ok(v) => Ok(v),
+                Err(mut s) => {
+                    // W007: the entry gene is invoked by the RUNTIME (no call
+                    // expression), so its call_gene frame carries a stale
+                    // top-level line. The entry invocation is the OUTERMOST
+                    // gene frame — rewrite its line to 0 (renders as a bare
+                    // `at entry`) instead of appending a duplicate. Deep
+                    // chains capped at 64 keep their innermost frames only.
+                    if s.chain.is_empty() {
+                        s.chain.push((entry.clone(), 0));
+                    } else if let Some(last) = s.chain.last_mut() {
+                        if last.0 == entry {
+                            last.1 = 0;
+                        } else if s.chain.len() < 64 {
+                            s.chain.push((entry.clone(), 0));
+                        }
+                    }
+                    Err(s)
                 }
             }
         }
@@ -760,7 +781,7 @@ fn collect_calls(prog: &Program, defined: &mut HashSet<String>, called: &mut Vec
             | Stmt::Assign(_, _, e)
             | Stmt::ExprStmt(e)
             | Stmt::Return(Some(e))
-            | Stmt::Raise(_, e) => walk_expr(e, called),
+            | Stmt::Raise(_, e, _) => walk_expr(e, called),
             Stmt::IndexAssign(t, i, _, e) => {
                 walk_expr(t, called);
                 walk_expr(i, called);
@@ -1293,7 +1314,7 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
                 None => out.push_str(&format!("use {}\n", p)),
             };
         }
-        Stmt::Raise(k, e) => match k {
+        Stmt::Raise(k, e, _) => match k {
             Some(k) => out.push_str(&format!("raise {}, {}\n", k, fmt_expr(e))),
             None => out.push_str(&format!("raise {}\n", fmt_expr(e))),
         },

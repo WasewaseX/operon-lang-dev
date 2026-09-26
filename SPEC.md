@@ -39,9 +39,9 @@ Arithmetic:
 ## 3. Lexical
 
 - Comments: `#` to end of line. `#!` shebang allowed on line 1.
-- Strings: `"double"`; escapes `\n \t \\ \" \{ \}`; interpolation `"{expr}"` — any expression, evaluated at runtime, `str()`-coerced. No single-quoted strings in canonical form (a `'` in code is a wobble: treated as `"` with a note).
+- Strings: `"double"`; escapes `\n \t \\ \" \{ \}`; interpolation `"{expr}"` — any expression, evaluated at runtime, `str()`-coerced. No single-quoted strings in canonical form (a `'` in code is a wobble: treated as `"` with a note). **Raw strings** `r"..."` — content verbatim, NO escape processing, NO interpolation (newlines allowed). **Multiline strings** `"""..."""` — escapes and interpolation processed, quotes (`"` / `""`) allowed inside, content verbatim (no implicit indent stripping; `operon fmt` may normalize later). Byte strings `b"..."` arrive with the bytes type (W029).
 - Identifiers `[A-Za-z_][A-Za-z0-9_]*`.
-- Numbers: `42`, `3.14`, `1e3` (float). Negative via unary minus.
+- Numbers: `42`, `3.14`, `1e3` (float). Negative via unary minus. Radix forms `0xFF`, `0b101010`, `0o755` (case-insensitive prefix; canonical value is the same Int). `_` digit separators allowed inside any numeric literal (`1_000_000`, `0xFF_FF`, `1_000.5`) and are stripped before parsing — the printed value is unaffected (canonical form stays decimal). A radix prefix with no valid digit after it lexes as decimal `0` followed by identifiers (`0x` → `0`, `x`). Out-of-range literals keep the existing saturate-to-0 note contract (f0fe2ec).
 - Newlines terminate statements; `;` allowed and ignored (also `;;`, stray). Blocks are `{ ... }`.
 - Keywords (canonical, 58 — the parser's reserved set; the 6 quorum words joined in reg-bio-3 C8):
   `gene let if elif else while loop for in return break continue match case use tad anchor export import enhance silence stress rescue raise fate state regulate activates inhibits strength toggle repressilator period frame proof guard splice variant edit replace ires as collect enter phenotype sequence yield new threshold from self decoy ligand autoinducer bind inducer cofactor operon`
@@ -214,6 +214,38 @@ stress missing { ... } rescue { ... }    # kind filter: only catches `missing`
 - `rescue` binding optional: `rescue (e)`. No rescue clause → stress is contained to Null + note (Top-Grammar runtime law).
 - Uncaught at top level → printed as containment note, run continues (or ends that entry call with Null).
 - `assert(cond, msg?)` raises Stress `burned` on failure (this is what proof frames catch).
+
+### 9a. Stress tracebacks (W007)
+
+Every Stress carries a **call chain**: the gene frames it unwound through, innermost
+first. The chain is captured during unwinding at the call funnel (`call_gene`), each frame
+being `(gene name, call-site line)` — the line of the call expression that invoked that
+frame. The frame capture costs nothing on the happy path (append-on-error only) and is
+capped at **64 frames** (note-cap discipline: a bounded chain is a contained chain; deeper
+chains keep the 64 innermost frames).
+
+- **Rescue binding surface**: `e.chain` is a List of Maps `{"gene": Str, "line": Int}`,
+  innermost frame first, in that field order. `e.kind` / `e.message` unchanged. (The
+  Stress's own origin line is a Rust-side stderr-rendering field and is deliberately not
+  part of the rescue-map contract.)
+- **Uncaught rendering** (exit-1 path, e.g. `--entry`): the primary diagnostic renders
+  `file:line` of the raise (raise statements carry their own line), followed by the chain,
+  one frame per line, then `at main`:
+
+  ```
+  [contained] [overflow] app.op:2: detonating at depth
+    at boom (app.op:5)
+    at go
+    at main
+  ```
+
+  A frame with line 0 (the runtime-invoked entry gene) renders as a bare `at <gene>`.
+  The renderer is also capped at 64 frames (`… N more frame(s)`).
+- **Containment**: the chain leaks nothing beyond the script path already printed in the
+  primary diagnostic — no environment, no cwd, no host paths (redteam rt_p15a–c).
+- The Python oracle mirrors the capture op-for-op: identical `e.chain` values (gene names
+  AND call-site lines) — differential-pinned in `tests/differential/traceback_chain.op`
+  and shape-pinned in `tests/traceback_shape.op`.
 
 ## 9b. Security — the capability sandbox
 
@@ -520,3 +552,55 @@ This specification is **Operon 2.2.0**. `operon version` prints the implementati
 - Differential harness (Rust core vs Python oracle, program-level stdout): **128 programs, all MATCH**, plus the oracle runs the same proof suite (both implementations green, enforced in CI).
 - Red-team suite: **95 payloads, 0 breaches** (note-cap, fuel-charge, and output-cap containment verified live on the stochastic-expression, reg-bio-3, and Rho-termination surfaces).
 - Playground smoke: expression-core subset in the browser, spec-aligned (unbound reads → null + note).
+
+## 19. Memory model — binding, sharing, cycles (W014)
+
+The contract below states the CURRENT truth, verified behaviorally and mirrored by the
+differential corpus (`tests/differential/memory_model.op`). One rule of thumb: **scalar
+values copy; containers share.**
+
+### 19a. Binding semantics (`let b = a`)
+
+| Value kind | `let b = a` | Mutation through `b` |
+|---|---|---|
+| int, float, bool, null | value copy (independent) | n/a (immutable values) |
+| str | value copy (immutable; the read allocates a fresh string and is mem-charged, sec-r5 F-9) | n/a |
+| list | **shared handle** (Rc alias) | visible through `a` (`push(b, 3)` grows `a`) |
+| map | **shared handle** (Rc alias, insertion-ordered) | visible through `a` |
+| gene / phenotype / sequence | shared handle | method/state effects visible through both names |
+
+There is no implicit copy-on-write and no implicit deep clone. Programs that need an
+independent container copy it explicitly (element-wise or via stdlib helpers).
+
+### 19b. Argument passing
+
+Gene arguments follow the same rule: scalars copy, containers alias. A callee that
+`push`es a caller's list mutates the caller's list. Callers who need isolation copy before
+calling.
+
+### 19c. Closure capture
+
+Lambdas and inner genes capture the DEFINING environment by reference (the env chain is
+shared). Mutations of captured variables inside a closure are visible outside it. There is
+no by-value capture mode.
+
+### 19d. Thread transfer (spawn) — the snapshot membrane
+
+`spawn` hands the worker cell a SNAPSHOT: container mutations inside the worker are never
+visible in the parent and vice versa (verified: a worker pushing to a parent list leaves
+the parent's length unchanged after `join`). This membrane is what makes `Rc` safe across
+worker cells — nothing aliased crosses the boundary.
+
+### 19e. Cycles (W013 decision)
+
+Reference cycles (`let a = []; push(a, a)`) are legal values: equality, repr, and JSON
+serialization are cycle-safe (sec-r5 DAG-memoized walks). **Lifetime truth: an `Rc` cycle
+lives until interpreter teardown** — scripts and short-lived workers never notice; a
+long-lived server building unbounded cycles would leak. Chosen strategy (DECISIONS.md
+D-013):
+
+1. document the model (this section) — no silent reclamation, no determinism surprises;
+2. `memory()` reports interpreter stats today; a live-cycle count is the W013 follow-up;
+3. an explicit `break_cycle()`-style escape hatch and/or weak-map family (opt-in, .cell
+   gated) may land later; a tracing GC is REJECTED for v3 — it would break the fuel/mem
+   charge determinism contract (§9b).
