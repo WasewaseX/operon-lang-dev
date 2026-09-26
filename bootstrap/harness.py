@@ -20,8 +20,14 @@ import subprocess, sys, os, argparse
 # Every other builtin in src/interp.rs call_builtin has >= 1 differential
 # golden or a shape contract under tests/differential/.
 def run(cmd, timeout=120):
-    p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-    return p.stdout, p.returncode
+    # W59: decode both cores as UTF-8 explicitly. With bare text=True the
+    # decoding uses the platform locale (cp1252 on Windows runners), which
+    # both hides real output behind decode failures and can crash the
+    # harness itself on any non-ASCII byte. errors="replace" keeps a broken
+    # byte comparable instead of fatal.
+    p = subprocess.run(cmd, capture_output=True, text=True,
+                       encoding="utf-8", errors="replace", timeout=timeout)
+    return p.stdout, p.returncode, p.stderr
 
 def collect_op(root):
     out = []
@@ -69,9 +75,9 @@ def main():
     print(f"differential harness — {len(targets)} program(s) × 2 implementations\n")
     for t in targets:
         rel = os.path.relpath(t, root)
-        rust_out, rust_code = run([binpath, "run", t])
+        rust_out, rust_code, _ = run([binpath, "run", t])
         try:
-            py_out, py_code = run([sys.executable, oracle, "run", t])
+            py_out, py_code, py_err = run([sys.executable, oracle, "run", t])
         except subprocess.TimeoutExpired:
             print(f"  TIMEOUT  {rel} (oracle)")
             failed += 1
@@ -91,6 +97,14 @@ def main():
                     print(f"    oracle: {p_}")
             if rust_code != py_code:
                 print(f"    exit codes: rust={rust_code} oracle={py_code}")
+            # W59 diagnostics: an oracle that dies before producing output
+            # used to surface as a wall of anonymous DIVERGEs (the oracle's
+            # stderr was discarded). If the oracle side failed or went
+            # quiet, show the first lines of its stderr — the crash is
+            # there, not in the semantics.
+            if py_code != 0 and not py_out.strip() and py_err.strip():
+                for line in py_err.strip().splitlines()[:6]:
+                    print(f"    oracle stderr: {line}")
             failed += 1
     # loop-10 (F-7/F-8): granted-with-cell targets — both implementations
     # under the SAME explicit --cell; stdout must match byte-for-byte like
@@ -104,9 +118,9 @@ def main():
             print(f"  FAIL     {rel_op} (missing op or cell — granted targets are checked in, a missing one is a broken tree)")
             failed += 1
             continue
-        rust_out, rust_code = run([binpath, "run", gop, "--cell", gcell])
+        rust_out, rust_code, _ = run([binpath, "run", gop, "--cell", gcell])
         try:
-            py_out, py_code = run([sys.executable, oracle, "run", gop, "--cell", gcell])
+            py_out, py_code, py_err = run([sys.executable, oracle, "run", gop, "--cell", gcell])
         except subprocess.TimeoutExpired:
             print(f"  TIMEOUT  {rel_op} (oracle)")
             failed += 1
@@ -116,6 +130,9 @@ def main():
             passed += 1
         else:
             print(f"  DIVERGE  {rel_op} (granted)")
+            if py_code != 0 and not py_out.strip() and py_err.strip():
+                for line in py_err.strip().splitlines()[:6]:
+                    print(f"    oracle stderr: {line}")
             failed += 1
     print(f"\nresult: {passed} match, {failed} diverge, {skipped} skipped")
     sys.exit(1 if failed else 0)

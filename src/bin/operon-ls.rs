@@ -31,7 +31,44 @@ struct DocEntry {
     analyzed: LsDoc,
 }
 
+/// W62 (ROADMAP-100): the LSP contract version this server speaks. Bump on
+/// ANY breaking change to the handshake shape, advertised capabilities, or
+/// method semantics — additive bug-fixes do not bump it. Editors and
+/// extension authors pin against this number (docs/specs/LSP-VERSIONING.md).
+const LSP_VERSION: u32 = 1;
+
+/// W62: the feature list echoed in the initialize handshake. Must stay in
+/// lockstep with the capabilities map below and with lsp_smoke's assertions
+/// (the smoke fails the build if they drift).
+const LSP_FEATURES: [&str; 7] = [
+    "diagnostics",
+    "hover",
+    "definition",
+    "documentSymbol",
+    "completion",
+    "formatting",
+    "signatureHelp",
+];
+
 fn main() {
+    // W62: versioned contract — `operon-ls --version` prints the
+    // machine-readable pair editors can pin against. Anything else is
+    // refused loudly (the server itself reads LSP frames on stdio).
+    if let Some(a) = std::env::args().nth(1) {
+        match a.as_str() {
+            "--version" | "-V" => {
+                println!("operon {} / lsp {}", env!("CARGO_PKG_VERSION"), LSP_VERSION);
+                return;
+            }
+            other => {
+                eprintln!(
+                    "operon-ls: unknown argument '{other}' (supported: --version); the server reads LSP frames on stdio"
+                );
+                std::process::exit(2);
+            }
+        }
+    }
+
     let stdin = std::io::stdin();
     let mut input = stdin.lock();
     let mut stdout = std::io::stdout();
@@ -47,7 +84,23 @@ fn main() {
         let params = get(&msg, "params");
         match method.as_str() {
             "initialize" => {
+                // W62: the handshake carries the LSP contract version and the
+                // feature list, so an editor can pin and the server can be
+                // held to its advertisement (asserted by lsp_smoke).
+                let features = Value::List(std::rc::Rc::new(std::cell::RefCell::new(
+                    LSP_FEATURES
+                        .iter()
+                        .map(|f| Value::Str((*f).into()))
+                        .collect(),
+                )));
                 let result = mapv(vec![
+                    (
+                        "operonLsp",
+                        mapv(vec![
+                            ("version", Value::Int(LSP_VERSION as i64)),
+                            ("features", features),
+                        ]),
+                    ),
                     (
                         "capabilities",
                         mapv(vec![
@@ -159,6 +212,14 @@ fn main() {
                             ("range", range_value(l, c, len)),
                         ])
                     })
+                });
+                send(&mut stdout, id.unwrap_or(Value::Null), response, &None);
+            }
+            // W44 (ROADMAP-100): signature help — the innermost unclosed call
+            // left of the cursor, resolved against the doc's gene definitions.
+            "textDocument/signatureHelp" => {
+                let response = with_doc_position(&docs, &params, |src, _doc, line, ch| {
+                    signature_help(src, line, ch)
                 });
                 send(&mut stdout, id.unwrap_or(Value::Null), response, &None);
             }
@@ -391,4 +452,91 @@ fn as_int(v: &Value) -> Option<i64> {
         Value::Float(f) => Some(*f as i64),
         _ => None,
     }
+}
+
+// ------------------------------------------------------------ W44 signature help
+
+/// W44 (ROADMAP-100): textDocument/signatureHelp. Self-contained line scan:
+/// find the innermost unclosed `(` left of the cursor, name the callee, count
+/// top-level commas for activeParameter, resolve the gene's params from the
+/// doc source. Builtins/phenotype methods are v2 (arity table = W43's).
+fn signature_help(src: &str, line: usize, ch: usize) -> Option<Value> {
+    let mut offset = 0usize;
+    for (i, l) in src.lines().enumerate() {
+        if i == line {
+            break;
+        }
+        offset += l.len() + 1;
+    }
+    let rest = src.get(offset..)?;
+    let before: Vec<char> = rest.chars().take(ch).collect();
+    let mut depth = 0i32;
+    let mut open: Option<usize> = None;
+    let mut commas = 0i32;
+    let mut i = before.len();
+    while i > 0 {
+        i -= 1;
+        match before[i] {
+            ')' => depth += 1,
+            '(' => {
+                if depth == 0 {
+                    open = Some(i);
+                    break;
+                }
+                depth -= 1;
+            }
+            ',' if depth == 0 => commas += 1,
+            _ => {}
+        }
+    }
+    let open = open?;
+    let mut j = open;
+    while j > 0 && before[j - 1].is_whitespace() {
+        j -= 1;
+    }
+    let mut name = String::new();
+    while j > 0 && (before[j - 1].is_alphanumeric() || before[j - 1] == '_') {
+        j -= 1;
+        name.insert(0, before[j]);
+    }
+    if name.is_empty() {
+        return None;
+    }
+    let params = gene_params(src, &name)?;
+    let label = format!("{}({})", name, params.join(", "));
+    let sig = mapv(vec![
+        ("label", Value::Str(label)),
+        (
+            "parameters",
+            Value::List(std::rc::Rc::new(std::cell::RefCell::new(
+                params.iter().map(|p| Value::Str(p.clone())).collect(),
+            ))),
+        ),
+    ]);
+    Some(mapv(vec![
+        (
+            "signatures",
+            Value::List(std::rc::Rc::new(std::cell::RefCell::new(vec![sig]))),
+        ),
+        ("activeSignature", Value::Int(0)),
+        ("activeParameter", Value::Int(commas.max(0) as i64)),
+    ]))
+}
+
+/// Extract `gene <name>(a, b = 1)` parameter names from the document source.
+fn gene_params(src: &str, name: &str) -> Option<Vec<String>> {
+    let pat = format!("gene {}(", name);
+    let idx = src.find(&pat)? + pat.len();
+    let rest = src.get(idx..)?;
+    let end = rest.find(')')?;
+    let inner = &rest[..end];
+    let params: Vec<String> = inner
+        .split(',')
+        .map(|p| {
+            // `a` or `b = default` — the name is the first word
+            p.split_whitespace().next().unwrap_or("").to_string()
+        })
+        .filter(|p| !p.is_empty())
+        .collect();
+    Some(params)
 }

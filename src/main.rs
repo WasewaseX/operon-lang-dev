@@ -80,6 +80,16 @@ fn real_main() {
     let mut iters = 20usize;
     let mut outfile = String::new();
     let mut positional: Vec<String> = Vec::new();
+    // W49 (ROADMAP-100): test-runner filtering/determinism knobs
+    let mut test_filter: Option<String> = None;
+    let mut list_only = false;
+    let mut repeat = 1usize;
+    // W41: check output format — "score" (default this cycle) | "diag"
+    let mut check_format = String::from("score");
+    // W47 (ROADMAP-100): formatter configuration — file first, flags override
+    let mut fmt_indent: Option<usize> = None;
+    let mut fmt_quotes: Option<tools::QuoteMode> = None;
+    let mut fmt_config_path: Option<String> = None;
 
     let mut i = 0;
     while i < rest.len() {
@@ -226,6 +236,53 @@ fn real_main() {
                 }
                 trace_grn_path = p;
             }
+            "--filter" => {
+                i += 1;
+                test_filter = Some(
+                    rest.get(i)
+                        .cloned()
+                        .unwrap_or_else(|| die("--filter needs a substring argument")),
+                );
+            }
+            "--list" => list_only = true,
+            "--repeat" => {
+                i += 1;
+                match rest.get(i).map(|s| s.parse::<usize>()) {
+                    Some(Ok(n)) if n >= 1 => repeat = n,
+                    _ => die("--repeat needs a number >= 1"),
+                }
+            }
+            "--format" => {
+                i += 1;
+                match rest.get(i).cloned() {
+                    Some(f) if f == "diag" || f == "score" => check_format = f,
+                    _ => die("--format needs 'diag' or 'score'"),
+                }
+            }
+            // W47: formatter knobs (fmt arm). Precedence: flags > config file > defaults.
+            "--indent" => {
+                i += 1;
+                match rest.get(i).map(|s| s.parse::<usize>()) {
+                    Some(Ok(n)) if (1..=16).contains(&n) => fmt_indent = Some(n),
+                    _ => die("--indent needs a number 1..=16 (e.g. --indent 4)"),
+                }
+            }
+            "--quotes" => {
+                i += 1;
+                match rest.get(i).cloned().as_deref() {
+                    Some("single") => fmt_quotes = Some(tools::QuoteMode::Single),
+                    Some("double") => fmt_quotes = Some(tools::QuoteMode::Double),
+                    _ => die("--quotes needs 'single' or 'double'"),
+                }
+            }
+            "--fmt-config" => {
+                i += 1;
+                fmt_config_path = Some(
+                    rest.get(i)
+                        .cloned()
+                        .unwrap_or_else(|| die("--fmt-config needs a file path")),
+                );
+            }
             "--" => {
                 // dx-r6 (loop-5-a audit MED): POSIX `--` separator — everything
                 // after it belongs to the PROGRAM, not the host CLI. Without
@@ -266,6 +323,204 @@ fn real_main() {
         }
         "repl" => {
             repl();
+        }
+        // W39 (ROADMAP-100): AST dump — the Total Grammar debugging window.
+        "ast" => {
+            let file = match positional.first() {
+                Some(f) => f.clone(),
+                None => die("ast needs a file"),
+            };
+            let src = std::fs::read_to_string(&file)
+                .unwrap_or_else(|e| die(&format!("cannot read {}: {}", file, e)));
+            let prog = parser::parse(&src);
+            // W39 + fuzz finding (2026-09-26): `{:#?}` pretty-Debug grows
+            // quadratically with AST nesting depth (indent × depth), so a
+            // pathological-but-parseable input (thousands of `(`) turns `ast`
+            // into a hang. check() parses the same file in milliseconds — the
+            // parser is fine, the PRINTER is the problem. Guard: measure
+            // source nesting depth; beyond 400 levels print compact Debug.
+            let depth = src
+                .bytes()
+                .fold((0usize, 0usize), |(d, m), b| match b {
+                    b'(' | b'{' | b'[' => {
+                        let d = d + 1;
+                        (d, m.max(d))
+                    }
+                    b')' | b'}' | b']' => (d.saturating_sub(1), m),
+                    _ => (d, m),
+                })
+                .1;
+            let pretty = depth <= 400;
+            if json {
+                // v1: escaped Debug payload + structured counts; a stable-schema
+                // JSON printer is tracked as W39.2 in ROADMAP-100.
+                let dbg = if pretty {
+                    format!("{:#?}", prog.stmts)
+                } else {
+                    format!("{:?}", prog.stmts)
+                };
+                println!(
+                    "{{\"file\":\"{}\",\"format\":\"debug-v1\",\"stmts\":{},\"notes\":{},\"ast\":\"{}\"}}",
+                    tools::json_escape(&file),
+                    prog.stmts.len(),
+                    prog.notes.len(),
+                    tools::json_escape(&dbg)
+                );
+            } else {
+                for n in &prog.notes {
+                    println!("[note] rung {}: line {}: {}", n.rung, n.line, n.message);
+                }
+                if pretty {
+                    println!("{:#?}", prog.stmts);
+                } else {
+                    eprintln!(
+                        "[ast] nesting depth {} exceeds 400 — compact dump (pretty Debug is quadratic on deep trees)",
+                        depth
+                    );
+                    println!("{:?}", prog.stmts);
+                }
+            }
+        }
+        // W38 (ROADMAP-100): explain — what did Total Grammar do to my file?
+        "explain" => {
+            let file = match positional.first() {
+                Some(f) => f.clone(),
+                None => die("explain needs a file"),
+            };
+            let src = std::fs::read_to_string(&file)
+                .unwrap_or_else(|e| die(&format!("cannot read {}: {}", file, e)));
+            let prog = parser::parse(&src);
+            let rung_name = |r: u8| {
+                if r == 1 {
+                    "canonical"
+                } else if r == 2 {
+                    "synonym"
+                } else if r == 3 {
+                    "wobble"
+                } else {
+                    "fallback"
+                }
+            };
+            if json {
+                let notes: Vec<String> = prog
+                    .notes
+                    .iter()
+                    .map(|n| {
+                        format!(
+                            "{{\"line\":{},\"rung\":{},\"rung_name\":\"{}\",\"message\":\"{}\"}}",
+                            n.line,
+                            n.rung,
+                            rung_name(n.rung),
+                            tools::json_escape(&n.message)
+                        )
+                    })
+                    .collect();
+                println!(
+                    "{{\"file\":\"{}\",\"notes\":[{}],\"canonical\":{},\"synonym\":{},\"wobble\":{},\"fallback\":{}}}",
+                    tools::json_escape(&file),
+                    notes.join(","),
+                    prog.notes.iter().filter(|n| n.rung == 1).count(),
+                    prog.notes.iter().filter(|n| n.rung == 2).count(),
+                    prog.notes.iter().filter(|n| n.rung == 3).count(),
+                    prog.notes.iter().filter(|n| n.rung >= 4).count()
+                );
+            } else {
+                println!("Total Grammar report for {}:", file);
+                if prog.notes.is_empty() {
+                    println!("  canonical — no repairs, no recoveries");
+                }
+                for n in &prog.notes {
+                    println!("  [{}] line {}: {}", rung_name(n.rung), n.line, n.message);
+                }
+                let w = prog.notes.iter().filter(|n| n.rung == 3).count();
+                let fb = prog.notes.iter().filter(|n| n.rung >= 4).count();
+                if strict && (w > 0 || fb > 0) {
+                    println!(
+                        "  --strict verdict: FAIL ({} wobble(s), {} fallback(s))",
+                        w, fb
+                    );
+                } else {
+                    println!("  --strict verdict: PASS");
+                }
+            }
+        }
+        // W48/W42/W43 (ROADMAP-100): the linter front door — `check --format
+        // diag` shares this engine, so there is one rule set and two views.
+        "lint" => {
+            let file = match positional.first() {
+                Some(f) => f.clone(),
+                None => die("lint needs a file"),
+            };
+            let src = std::fs::read_to_string(&file)
+                .unwrap_or_else(|e| die(&format!("cannot read {}: {}", file, e)));
+            let prog = parser::parse(&src);
+            let mut findings = operon::lint::lint(&prog);
+            // W66: validate a .cell payload against the schema on request
+            if let Some(cell) = opts.cell.clone() {
+                match std::fs::read_to_string(&cell) {
+                    Ok(cs) => findings.extend(operon::lint::lint_cell(&cs)),
+                    Err(e) => die(&format!("cannot read {}: {}", cell, e)),
+                }
+            }
+            if json {
+                let items: Vec<String> = findings
+                    .iter()
+                    .map(|f| {
+                        format!(
+                            "{{\"line\":{},\"rule\":\"{}\",\"severity\":\"{}\",\"message\":\"{}\"}}",
+                            f.line,
+                            f.rule,
+                            f.sev.name(),
+                            tools::json_escape(&f.message)
+                        )
+                    })
+                    .collect();
+                println!(
+                    "{{\"file\":\"{}\",\"findings\":[{}]}}",
+                    tools::json_escape(&file),
+                    items.join(",")
+                );
+            } else if findings.is_empty() {
+                println!("lint: {} — clean", file);
+            } else {
+                for f in &findings {
+                    println!(
+                        "  {}:{}: {} [{}] ({})",
+                        file,
+                        f.line,
+                        f.sev.name(),
+                        f.rule,
+                        f.message
+                    );
+                }
+                println!("lint: {} finding(s)", findings.len());
+            }
+            if findings.iter().any(|f| f.sev == operon::lint::Sev::Error) {
+                std::process::exit(1);
+            }
+        }
+        // W55: machine-readable keyword inventory (docs/KEYWORDS.md is the
+        // generated human table from the same source of truth).
+        "keywords" => {
+            let kws = parser::keyword_list();
+            if json {
+                let items: Vec<String> = kws.iter().map(|k| format!("\"{}\"", k)).collect();
+                println!(
+                    "{{\"count\":{},\"keywords\":[{}]}}",
+                    kws.len(),
+                    items.join(",")
+                );
+            } else {
+                for k in kws {
+                    println!("{}", k);
+                }
+            }
+        }
+        // W40: honest stub until the A-track VM lands (bytecode = W09/W10).
+        "ir" => {
+            eprintln!("no IR yet — the bytecode pipeline is the W09/W10 track (docs/vm-design.md)");
+            eprintln!("today: `operon ast f.op` dumps the parsed AST");
+            std::process::exit(2);
         }
         "run" => {
             let file = match positional.first() {
@@ -355,6 +610,21 @@ fn real_main() {
                 None => die("check needs a file"),
             };
             let rep = tools::check(&file, &opts, nmd, purge);
+            // W41 (ROADMAP-100): --format diag renders sectioned diagnostics
+            // (error/warning/repair/style) instead of the school-grade banner.
+            // Default stays `score` this cycle so CI runners keep parsing the
+            // old shape; the default flip lands after one green CI cycle.
+            if check_format == "diag" && !json {
+                let src = std::fs::read_to_string(&file).unwrap_or_default();
+                let prog = parser::parse(&src);
+                let findings = operon::lint::lint(&prog);
+                print_diag(&file, &rep, &findings);
+                let hard = findings.iter().any(|f| f.sev == operon::lint::Sev::Error);
+                if hard || (strict && (rep.wobbles > 0 || rep.fallbacks > 0)) {
+                    std::process::exit(3);
+                }
+                std::process::exit(0);
+            }
             if json {
                 let nmd_json: Vec<String> = rep
                     .nmd
@@ -411,7 +681,50 @@ fn real_main() {
             } else {
                 positional.clone()
             };
-            let rep = tools::run_tests(&paths, &opts, json);
+            // W49 (ROADMAP-100): --list enumerates discovered files + proof
+            // frame counts without executing; --filter substr narrows the
+            // selection; --repeat N re-runs and pins byte-identical results.
+            let mut files = tools::collect_test_files(&paths);
+            if let Some(f) = test_filter.as_ref() {
+                files.retain(|p| p.contains(f.as_str()));
+            }
+            if list_only {
+                let mut total = 0usize;
+                for f in &files {
+                    let n = tools::count_proof_frames(f);
+                    total += n;
+                    println!("{}  {} proof frame(s)", f, n);
+                }
+                println!("{} file(s), {} proof frame(s) total", files.len(), total);
+                std::process::exit(0);
+            }
+            let rep = tools::run_tests(&files, &opts, json);
+            if repeat > 1 {
+                for run in 2..=repeat {
+                    let again = tools::run_tests(&files, &opts, false);
+                    if again.proofs != rep.proofs
+                        || again.passed != rep.passed
+                        || again.failed != rep.failed
+                        || again.asserts != rep.asserts
+                    {
+                        eprintln!(
+                            "determinism: run {} diverged (proofs {}/{} passed {}/{} failed {}/{})",
+                            run,
+                            again.proofs,
+                            rep.proofs,
+                            again.passed,
+                            rep.passed,
+                            again.failed,
+                            rep.failed
+                        );
+                        std::process::exit(1);
+                    }
+                }
+                eprintln!(
+                    "determinism: {} runs identical ({} proofs, {} asserts)",
+                    repeat, rep.proofs, rep.asserts
+                );
+            }
             if json {
                 let fails: Vec<String> = rep
                     .failures
@@ -436,9 +749,30 @@ fn real_main() {
                 Some(f) => f.clone(),
                 None => die("fmt needs a file"),
             };
+            // W47: config file (.operon-fmt.toml in CWD, or --fmt-config PATH)
+            // loads first; explicit flags override file keys; defaults last.
+            let cfg_path = fmt_config_path
+                .clone()
+                .unwrap_or_else(|| ".operon-fmt.toml".to_string());
+            let mut cfg = tools::FmtConfig::default();
+            if let Ok(text) = std::fs::read_to_string(&cfg_path) {
+                let (file_cfg, unknown) = tools::parse_fmt_config(&text);
+                cfg = file_cfg;
+                for u in &unknown {
+                    eprintln!("fmt: ignoring unknown config key in {cfg_path}: {u}");
+                }
+            } else if fmt_config_path.is_some() {
+                die(&format!("fmt: config file not found: {cfg_path}"));
+            }
+            if let Some(n) = fmt_indent {
+                cfg.indent = n;
+            }
+            if let Some(q) = fmt_quotes {
+                cfg.quotes = q;
+            }
             let src = std::fs::read_to_string(&file).unwrap_or_default();
             let prog = parser::parse(&src);
-            let out = tools::format_program(&prog);
+            let out = tools::format_program_with(&prog, &cfg);
             if write {
                 std::fs::write(&file, out).expect("write failed");
                 eprintln!("fmt: {} rewritten", file);
@@ -1543,6 +1877,62 @@ fn repl_eval(l: &mut tools::Loaded, src: &str) {
     }
 }
 
+/// W41 (ROADMAP-100): sectioned diagnostics renderer — the check output that
+/// treats programmers as adults (what's wrong + the fix), with the school
+/// grade preserved under `--format score` for CI compatibility.
+fn print_diag(file: &str, rep: &tools::CheckReport, findings: &[operon::lint::Finding]) {
+    use operon::lint::Sev;
+    let mut errors: Vec<&operon::lint::Finding> = Vec::new();
+    let mut warnings: Vec<&operon::lint::Finding> = Vec::new();
+    let mut style: Vec<&operon::lint::Finding> = Vec::new();
+    for f in findings {
+        match f.sev {
+            Sev::Error => errors.push(f),
+            Sev::Warning => warnings.push(f),
+            Sev::Style => style.push(f),
+        }
+    }
+    let section = |name: &str, items: &[&operon::lint::Finding]| {
+        if items.is_empty() {
+            return;
+        }
+        println!("{}:", name);
+        for f in items {
+            println!("  {}:{}: {} ({})", file, f.line, f.message, f.rule);
+        }
+    };
+    let mut n_errors = errors.len();
+    if !rep.parsed {
+        println!("error:");
+        println!("  {}: file could not be read", file);
+        n_errors += 1;
+    }
+    section("error", &errors);
+    let n_warnings = warnings.len() + rep.phantoms.len();
+    if !rep.phantoms.is_empty() {
+        println!("warning:");
+        for p in &rep.phantoms {
+            println!("  {}: phantom call: {}", file, p);
+        }
+    }
+    section("warning", &warnings);
+    if rep.notes > 0 {
+        println!("repair:");
+        println!(
+            "  {}: {} note(s) — {} wobble(s), {} fallback(s); run `operon explain {}` for the play-by-play",
+            file, rep.notes, rep.wobbles, rep.fallbacks, file
+        );
+    }
+    section("style", &style);
+    println!(
+        "summary: {} error(s), {} warning(s), {} style, {} repair note(s)",
+        n_errors,
+        n_warnings,
+        style.len(),
+        rep.notes
+    );
+}
+
 fn usage() {
     eprintln!(
         "Operon {} — the gene-expression language (Total Grammar)
@@ -1550,9 +1940,13 @@ usage:
   operon run f.op [--entry g] [--variant v] [--cell c] [--rna r] [--frame name] [--ires] [--strict] [--quiet]
                   [--fuel steps] [--allow-read path] [--allow-write path] [--allow-net host:port]
                   [--allow-run cmd] [--allow-py module] [--allow-exit] [--allow-env var] [--allow-all]
-  operon check f.op [--nmd | --nmd=purge] [--json]
-  operon test [paths...] [--json]
-  operon fmt f.op [--write]
+  operon check f.op [--format diag|score] [--nmd | --nmd=purge] [--json]
+  operon test [paths...] [--json] [--filter substr] [--list] [--repeat n]
+  operon fmt f.op [--write] [--indent N] [--quotes single|double] [--fmt-config f]
+  operon ast f.op [--json]
+  operon explain f.op [--json] [--strict]
+  operon lint f.op [--cell c] [--json]
+  operon keywords [--json]
   operon repl
   operon build f.op [--variant v] [-o out.op]
   operon rna f.op patch.rna [--write] [--json] [--allow-comment-drop]

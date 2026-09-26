@@ -44,6 +44,10 @@ def recv():
 send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
 r = recv()
 assert r["id"] == 1 and r["result"]["serverInfo"]["name"] == "operon-ls", r
+# W62: the handshake carries the versioned LSP contract (docs/specs/LSP-VERSIONING.md)
+assert r["result"]["operonLsp"]["version"] == 1, r["result"].get("operonLsp")
+_feats = r["result"]["operonLsp"]["features"]
+assert "signatureHelp" in _feats and "hover" in _feats and "formatting" in _feats, _feats
 caps = r["result"]["capabilities"]
 assert caps["hoverProvider"] is True and caps["textDocumentSync"] == 1, caps
 assert caps["definitionProvider"] is True, caps
@@ -239,6 +243,14 @@ env_proc.wait(timeout=5)
 assert env_proc.returncode == 0, env_proc.returncode
 
 print(
-    "LSP smoke: OK (initialize+caps, diagnostics, hover, definition, "
+    "LSP smoke: OK (initialize+caps+operonLsp, diagnostics, hover, definition, "
     "symbols, completion, formatting, didClose, CWD-independence, -32601, shutdown/exit)"
 )
+
+# W62: `--version` prints the machine-readable pin pair and never touches stdio
+_v = subprocess.run([BIN, "--version"], capture_output=True, text=True, timeout=10)
+assert _v.returncode == 0 and "/ lsp 1" in _v.stdout and _v.stdout.startswith("operon "), _v
+# unknown args are refused loudly (exit 2), protecting editors from typo args
+_bad = subprocess.run([BIN, "--bogus"], capture_output=True, text=True, timeout=10)
+assert _bad.returncode == 2 and "--version" in _bad.stderr, _bad
+print("LSP smoke: version contract OK (--version pin line, unknown-arg refusal)")
