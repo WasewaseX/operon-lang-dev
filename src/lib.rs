@@ -12,6 +12,7 @@ pub mod genes;
 pub mod graph;
 pub mod interp;
 pub mod lexer;
+pub mod lint;
 pub mod ls;
 pub mod parser;
 pub mod pybridge;

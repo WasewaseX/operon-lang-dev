@@ -1125,6 +1125,33 @@ pub fn run_tests(paths: &[String], opts: &Opts, json: bool) -> TestReport {
     rep
 }
 
+/// W49 (ROADMAP-100): expand test paths into a sorted explicit file list —
+/// lets the CLI implement `--list` and `--filter` without re-running the
+/// discovery logic differently from the real runner.
+pub fn collect_test_files(paths: &[String]) -> Vec<String> {
+    let mut files: Vec<String> = Vec::new();
+    for p in paths {
+        let path = Path::new(p);
+        if path.is_dir() {
+            collect_op_files(path, &mut files);
+        } else {
+            files.push(p.clone());
+        }
+    }
+    files.sort();
+    files.dedup();
+    files
+}
+
+/// W49: how many proof frames does this file declare? (cheap text scan used
+/// by `operon test --list`; the runner remains the authority for pass/fail).
+pub fn count_proof_frames(path: &str) -> usize {
+    match std::fs::read_to_string(path) {
+        Ok(s) => s.matches("frame proof").count(),
+        Err(_) => 0,
+    }
+}
+
 fn collect_op_files(dir: &Path, out: &mut Vec<String>) {
     if let Ok(rd) = std::fs::read_dir(dir) {
         let mut entries: Vec<_> = rd.filter_map(|e| e.ok()).collect();
