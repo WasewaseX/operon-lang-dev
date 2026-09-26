@@ -6,6 +6,7 @@
   "check",
   "crispr",
   "explain",
+  "fix",
   "fmt",
   "graph",
   "ir",
@@ -93,13 +94,15 @@
   "textDocument/formatting",
   "textDocument/hover",
   "textDocument/publishDiagnostics",
+  "textDocument/references",
+  "textDocument/semanticTokens",
   "textDocument/signatureHelp"
  ],
- "proof_files": 89,
+ "proof_files": 90,
  "proof_totals": {
-  "asserts": 98,
-  "files": 112,
-  "proofs": 98,
+  "asserts": 99,
+  "files": 113,
+  "proofs": 99,
   "source": "bin/operon"
  },
  "redteam_files": 97,
@@ -107,8 +110,8 @@
   "h1": "# Operon \u2014 Language Specification",
   "status": "v2.3.0-dev"
  },
- "std_function_count": 149,
- "std_module_count": 15,
+ "std_function_count": 157,
+ "std_module_count": 16,
  "std_modules": [
   {
    "functions": 8,
@@ -159,6 +162,10 @@
    "module": "seq"
   },
   {
+   "functions": 8,
+   "module": "serialize"
+  },
+  {
    "functions": 11,
    "module": "set"
   },
@@ -171,6 +178,6 @@
    "module": "testing"
   }
  ],
- "test_op_files": 90,
+ "test_op_files": 91,
  "version": "2.2.0"
 }

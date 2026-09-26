@@ -1,11 +1,14 @@
-//! operon-ls — Operon language server (G5 seed → lsp-r1 v2): stdio LSP.
+//! operon-ls — Operon language server (G5 seed → lsp-r1 v2 → W45/W46): stdio LSP.
 //!
 //! Features: initialize / shutdown / exit, full-text document sync (ranged
 //! edits are ignored, not mis-applied), publishDiagnostics (Total Grammar
 //! parse notes + `tools check` phantoms — resolved CWD-independently since
-//! lsp-r1), textDocument/hover with gene signatures, textDocument/definition,
-//! textDocument/documentSymbol, textDocument/completion, and
-//! textDocument/formatting (the canonical `operon fmt` engine).
+//! lsp-r1, repair provenance as relatedInformation since W46),
+//! textDocument/hover with gene signatures + repair provenance,
+//! textDocument/definition, textDocument/references (W45),
+//! textDocument/semanticTokens (W45), textDocument/documentSymbol,
+//! textDocument/completion, textDocument/formatting (the canonical
+//! `operon fmt` engine), and `--explain FILE` wrapping the W38 rung report.
 //!
 //! Protocol framing: Content-Length headers over stdio (LSP standard).
 //! The dependency surface stays at zero — request JSON is parsed with the
@@ -17,7 +20,7 @@
 use operon::interp::{json_parse, json_stringify};
 use operon::ls::{
     analyze_doc, completions, definition, document_symbols, format_text, hover, mapv,
-    publish_params, range_value, LsDoc,
+    publish_params, range_value, references, semantic_tokens, LsDoc, SEMANTIC_TOKEN_TYPES,
 };
 use operon::value::Value;
 use std::collections::HashMap;
@@ -40,29 +43,82 @@ const LSP_VERSION: u32 = 1;
 /// W62: the feature list echoed in the initialize handshake. Must stay in
 /// lockstep with the capabilities map below and with lsp_smoke's assertions
 /// (the smoke fails the build if they drift).
-const LSP_FEATURES: [&str; 7] = [
+const LSP_FEATURES: [&str; 9] = [
     "diagnostics",
     "hover",
     "definition",
+    "references",     // W45
+    "semanticTokens", // W45
     "documentSymbol",
     "completion",
     "formatting",
     "signatureHelp",
 ];
 
+/// W46: the Total Grammar report for one file (the `operon explain` shape).
+/// A second door over the same parse — no second engine, no drift risk.
+fn explain_file(file: &str) {
+    let src = match std::fs::read_to_string(file) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("operon-ls: cannot read {}: {}", file, e);
+            std::process::exit(2);
+        }
+    };
+    let prog = operon::parser::parse(&src);
+    let rung_name = |r: u8| match r {
+        1 => "canonical",
+        2 => "synonym",
+        3 => "wobble",
+        _ => "fallback",
+    };
+    println!("Total Grammar report for {}:", file);
+    if prog.notes.is_empty() {
+        println!("  canonical — no repairs, no recoveries");
+    }
+    for n in &prog.notes {
+        println!("  [{}] line {}: {}", rung_name(n.rung), n.line, n.message);
+    }
+    let w = prog.notes.iter().filter(|n| n.rung == 3).count();
+    let fb = prog.notes.iter().filter(|n| n.rung >= 4).count();
+    if w > 0 || fb > 0 {
+        println!(
+            "  verdict: {} wobble(s), {} fallback(s) — the program still runs",
+            w, fb
+        );
+    } else {
+        println!("  verdict: canonical");
+    }
+}
+
 fn main() {
     // W62: versioned contract — `operon-ls --version` prints the
-    // machine-readable pair editors can pin against. Anything else is
-    // refused loudly (the server itself reads LSP frames on stdio).
-    if let Some(a) = std::env::args().nth(1) {
+    // machine-readable pair editors can pin against. `--explain` wraps the
+    // W38 Total Grammar report for one workspace file (the same rung
+    // breakdown `operon explain` prints — a second door, not a second
+    // engine: parse + notes + canonical form, nothing more). Anything else
+    // is refused loudly (the server itself reads LSP frames on stdio).
+    let args: Vec<String> = std::env::args().collect();
+    if let Some(a) = args.get(1) {
         match a.as_str() {
             "--version" | "-V" => {
                 println!("operon {} / lsp {}", env!("CARGO_PKG_VERSION"), LSP_VERSION);
                 return;
             }
+            "--explain" => {
+                let file = match args.get(2) {
+                    Some(f) => f.clone(),
+                    None => {
+                        eprintln!("operon-ls: --explain needs a file argument");
+                        std::process::exit(2);
+                    }
+                };
+                explain_file(&file);
+                return;
+            }
             other => {
                 eprintln!(
-                    "operon-ls: unknown argument '{other}' (supported: --version); the server reads LSP frames on stdio"
+                    "operon-ls: unknown argument '{other}' (supported: --version, --explain FILE); the server reads LSP frames on stdio"
                 );
                 std::process::exit(2);
             }
@@ -107,6 +163,36 @@ fn main() {
                             ("textDocumentSync", Value::Int(1)), // full sync
                             ("hoverProvider", Value::Bool(true)),
                             ("definitionProvider", Value::Bool(true)),
+                            ("referencesProvider", Value::Bool(true)), // W45
+                            (
+                                // W45: fixed 6-type legend, full sync only
+                                "semanticTokensProvider",
+                                mapv(vec![
+                                    (
+                                        "legend",
+                                        mapv(vec![
+                                            (
+                                                "tokenTypes",
+                                                Value::List(std::rc::Rc::new(
+                                                    std::cell::RefCell::new(
+                                                        SEMANTIC_TOKEN_TYPES
+                                                            .iter()
+                                                            .map(|t| Value::Str((*t).into()))
+                                                            .collect(),
+                                                    ),
+                                                )),
+                                            ),
+                                            (
+                                                "tokenModifiers",
+                                                Value::List(std::rc::Rc::new(
+                                                    std::cell::RefCell::new(Vec::new()),
+                                                )),
+                                            ),
+                                        ]),
+                                    ),
+                                    ("full", Value::Bool(true)),
+                                ]),
+                            ),
                             ("documentSymbolProvider", Value::Bool(true)),
                             ("documentFormattingProvider", Value::Bool(true)),
                             (
@@ -213,6 +299,32 @@ fn main() {
                         ])
                     })
                 });
+                send(&mut stdout, id.unwrap_or(Value::Null), response, &None);
+            }
+            // W45: references — declaration + call sites, same-file
+            "textDocument/references" => {
+                let uri = doc_uri(&params);
+                let response = with_doc_position(&docs, &params, |src, doc, line, ch| {
+                    references(src, doc, line, ch).map(|refs| {
+                        let items: Vec<Value> = refs
+                            .into_iter()
+                            .map(|(l, c, len)| {
+                                mapv(vec![
+                                    ("uri", Value::Str(uri.clone())),
+                                    ("range", range_value(l, c, len)),
+                                ])
+                            })
+                            .collect();
+                        Value::List(std::rc::Rc::new(std::cell::RefCell::new(items)))
+                    })
+                });
+                send(&mut stdout, id.unwrap_or(Value::Null), response, &None);
+            }
+            // W45: semantic tokens (full) — delta-encoded classification
+            "textDocument/semanticTokens/full" | "textDocument/semanticTokens" => {
+                let response = docs
+                    .get(&doc_uri(&params))
+                    .map(|e| mapv(vec![("data", semantic_tokens(&e.src, &e.analyzed))]));
                 send(&mut stdout, id.unwrap_or(Value::Null), response, &None);
             }
             // W44 (ROADMAP-100): signature help — the innermost unclosed call
