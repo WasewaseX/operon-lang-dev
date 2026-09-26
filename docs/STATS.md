@@ -10,9 +10,9 @@ README/SPEC/BENCH are forbidden — link here instead.
 - **Std functions (.op-level `gene` defs)**: 149
 - **Red-team payload files**: 92
 - **Proof files**: 83 (of 84 test .op files)
-- **Proof run** (bin/operon): 106 files, 99 proofs, 99 asserts
-- **CLI subcommands**: bench, build, check, crispr, fmt, profile, repl, run, test, version
-- **LSP methods**: initialize, shutdown, textDocument/completion, textDocument/definition, textDocument/didChange, textDocument/didClose, textDocument/didOpen, textDocument/documentSymbol, textDocument/formatting, textDocument/hover, textDocument/publishDiagnostics
+- **Proof run** (bin/operon): 99 files, 92 proofs, 92 asserts
+- **CLI subcommands**: ast, bench, build, check, crispr, explain, fmt, ir, keywords, lint, profile, repl, run, test, version
+- **LSP methods**: initialize, shutdown, textDocument/completion, textDocument/definition, textDocument/didChange, textDocument/didClose, textDocument/didOpen, textDocument/documentSymbol, textDocument/formatting, textDocument/hover, textDocument/publishDiagnostics, textDocument/signatureHelp
 
 ## Std module inventory
 
