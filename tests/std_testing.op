@@ -1,0 +1,47 @@
+# differential: std/testing — deterministic expect harness, tally, summary
+use std/testing as t
+
+gene boom() {
+    # a raising gene for expect_throws to catch
+    raise "proof bomb"
+}
+
+gene quiet() {
+    return 11
+}
+
+frame proof {
+    # tally baseline before the checks below (delta-checked, not absolute)
+    let p0 = t.t_state.passed
+    let f0 = t.t_state.failed
+
+    # verdicts return, so proofs can assert on the harness itself; the two
+    # misses below are deliberate — a failed expect is data, not a crash
+    assert(t.expect_eq(1 + 1, 2, "arith"))
+    assert(t.expect_eq([1, 2], [1, 2], "list deep equality"))
+    assert(!t.expect_eq(1, 2, "deliberate miss"))
+    assert(t.expect_true(2 > 1, "holds"))
+    assert(!t.expect_true(1 > 2, "deliberate miss"))
+    assert(t.expect_false(1 > 2, "holds"))
+    assert(!t.expect_false(2 > 1, "deliberate miss"))
+
+    # expect_near: |a - b| <= eps, inclusive at the exact tolerance edge
+    assert(t.expect_near(0.1 + 0.2, 0.3, 0.0000001, "float slop"))
+    assert(t.expect_near(1.0, 1.5, 0.5, "exact tolerance edge"))
+    assert(!t.expect_near(1.0, 1.6, 0.5, "outside tolerance"))
+
+    # expect_throws: any raise counts, a quiet gene does not
+    assert(t.expect_throws(boom, "raises"))
+    assert(!t.expect_throws(quiet, "quiet gene"))
+
+    # the tally: 7 passes, 5 misses above (against the baseline taken first)
+    assert(t.t_state.passed == p0 + 7 and t.t_state.failed == f0 + 5)
+    assert(t.test_summary() == "tests: " + str(p0 + 7) + " passed, " + str(f0 + 5) + " failed")
+}
+
+main {
+    # the harness under a plain run: two holds, then the folded summary
+    t.expect_eq(40 + 2, 42, "main arith")
+    t.expect_near(0.25 * 4.0, 1.0, 0.0, "main exact float")
+    promote(t.test_summary() + " -- std/testing: ok")
+}

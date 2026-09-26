@@ -1,0 +1,58 @@
+# differential: std/set — set algebra over plain lists (pure, new-list results)
+use std/set as st
+
+frame proof {
+    # set_from: dedup keeps first-appearance order; empty stays empty
+    assert(st.set_from([3, 1, 3, 2, 1, 3]) == [3, 1, 2])
+    assert(st.set_from([]) == [])
+
+    # purity: the input list survives untouched
+    let src = [7, 7, 8]
+    assert(st.set_from(src) == [7, 8] and src == [7, 7, 8])
+
+    # the type-tagged dedup key: string "1" and int 1 stay distinct members
+    assert(st.set_from(["1", 1]) == ["1", 1])
+
+    # set_has: membership by value equality (int/float compare numerically)
+    assert(st.set_has([1, 2, 3], 2))
+    assert(!st.set_has([1, 2, 3], 9))
+    assert(st.set_has([1], 1.0))
+
+    # set_add: NEW set, duplicate member is a no-op, input intact
+    let base = [1, 2]
+    assert(st.set_add(base, 3) == [1, 2, 3] and base == [1, 2])
+    assert(st.set_add([1, 2], 2) == [1, 2])
+
+    # set_del: present and absent members (absent deletion is a no-op)
+    assert(st.set_del([1, 2, 3], 2) == [1, 3] and st.set_del([1, 2], 9) == [1, 2])
+
+    # union: a's order first, then b's new members in b's order
+    let a = [1, 2, 3]
+    let b = [3, 4]
+    assert(st.set_union(a, b) == [1, 2, 3, 4])
+    assert(st.set_union([], b) == [3, 4])
+
+    # intersect: shared members, in a's order (or none)
+    assert(st.set_intersect(a, b) == [3] and st.set_intersect(a, [9]) == [])
+
+    # diff is directional: a - b vs b - a
+    assert(st.set_diff(a, b) == [1, 2])
+    assert(st.set_diff(b, a) == [4])
+
+    # symdiff: (a - b) then (b - a)
+    assert(st.set_symdiff(a, b) == [1, 2, 4])
+
+    # subset: empty set is a subset of everything; a stray member breaks it
+    assert(st.set_subset([1, 2], [1, 2, 3]) and st.set_subset([], [1]))
+    assert(!st.set_subset([1, 9], [1, 2, 3]))
+
+    # set_eq is order-independent, and never a subset-style one-way match
+    assert(st.set_eq([3, 1, 2], [1, 2, 3]) and !st.set_eq([1, 2, 3], [1, 2]))
+
+    # count
+    assert(st.set_count([5, 6, 7]) == 3 and st.set_count([]) == 0)
+}
+
+main {
+    promote("std/set: ok")
+}

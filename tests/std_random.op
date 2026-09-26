@@ -1,0 +1,85 @@
+# differential: std/random — seeded wrappers over the mirrored xorshift64* stream
+use std/random as r
+
+frame proof {
+    # the pinned stream: randomize(7) fixes every draw, so shuffle output is
+    # exactly this list (byte-identical in the Rust core and the oracle)
+    randomize(7)
+    assert(r.rand_shuffle([1, 2, 3, 4, 5, 6, 7, 8]) == [4, 3, 2, 6, 5, 7, 8, 1])
+
+    # degenerate decks: zero draws consumed, list shape preserved
+    assert(r.rand_shuffle([]) == [])
+    assert(r.rand_shuffle(["solo"]) == ["solo"])
+
+    # purity: shuffle returns a NEW list, the input keeps its order
+    let hand = ["p", "q", "r", "s", "t"]
+    randomize(42)
+    assert(r.rand_shuffle(hand) == ["q", "r", "s", "t", "p"] and hand == ["p", "q", "r", "s", "t"])
+
+    # same seed, same shuffle — determinism is the whole contract
+    randomize(7)
+    let first = r.rand_shuffle([9, 8, 7, 6])
+    randomize(7)
+    assert(first == r.rand_shuffle([9, 8, 7, 6]))
+
+    # rand_int: inclusive on both ends, pinned dice sequence under seed 7
+    randomize(7)
+    let dice = []
+    for i in range(0, 12) {
+        let d = r.rand_int(1, 6)
+        assert(d >= 1 and d <= 6)
+        push(dice, d)
+    }
+    assert(dice == [1, 1, 1, 6, 1, 3, 5, 2, 6, 3, 1, 1])
+    assert(r.rand_int(4, 4) == 4 and r.rand_int(9, 2) == 9)
+
+    # rand_below: 50 draws in 0..9 under seed 7 sum to exactly 200
+    randomize(7)
+    let acc = 0
+    for i in range(0, 50) {
+        let v = r.rand_below(10)
+        assert(v >= 0 and v <= 9)
+        acc = acc + v
+    }
+    assert(acc == 200)
+    assert(r.rand_below(0) == 0 and r.rand_below(-3) == 0)
+
+    # rand_pick: pinned draws under seed 7; empty list yields null
+    randomize(7)
+    let picks = []
+    for i in range(0, 5) {
+        push(picks, r.rand_pick(["a", "b", "c"]))
+    }
+    assert(picks == ["a", "a", "a", "c", "a"])
+    assert(r.rand_pick([]) == null)
+
+    # rand_weighted: cumulative walk over the weight sum (1:3 odds here)
+    randomize(7)
+    let w = []
+    for i in range(0, 6) {
+        push(w, r.rand_weighted([["lo", 1], ["hi", 3]]))
+    }
+    assert(w == ["lo", "lo", "lo", "hi", "lo", "hi"])
+
+    # zero total weight never pays out; no pairs either
+    assert(r.rand_weighted([["a", 0], ["b", 5]]) == "b")
+    assert(r.rand_weighted([]) == null)
+
+    # rand_chance: p <= 0 never fires, p >= 1 always does
+    randomize(7)
+    let never = false
+    let always = true
+    for i in range(0, 8) {
+        if r.rand_chance(0.0) {
+            never = true
+        }
+        if !r.rand_chance(1.0) {
+            always = false
+        }
+    }
+    assert(!never and always)
+}
+
+main {
+    promote("std/random: ok")
+}

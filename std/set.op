@@ -1,0 +1,123 @@
+# std/set — set algebra over plain lists.
+#
+# A set is a list with unique members. Everything here is pure: every
+# function returns a NEW list and never mutates its arguments. set_from is
+# the canonicalizer (dedup keeping first-appearance order); the algebra
+# functions assume canonical sets (ordinary lists work, duplicated members
+# are carried as-is). Member tests use value equality (==, deep); dedup
+# keys on the type-tagged string form of a member, so string "1" and int 1
+# stay distinct members (one documented hairline: float 1.0 and int 1
+# dedup apart even though == says equal).
+
+gene set_from(xs) {
+    # deduplicated copy of xs, first-appearance order preserved
+    let seen = {}
+    let out = []
+    for x in xs {
+        let k = type(x) + ":" + str(x)
+        if !has(seen, k) {
+            seen[k] = true
+            push(out, x)
+        }
+    }
+    return out
+}
+
+gene set_has(set, v) {
+    # true when v is a member (value equality, linear scan)
+    for x in set {
+        if x == v {
+            return true
+        }
+    }
+    return false
+}
+
+gene set_add(set, v) {
+    # NEW set: set + {v}; adding an existing member changes nothing
+    let out = []
+    for x in set {
+        push(out, x)
+    }
+    if !set_has(set, v) {
+        push(out, v)
+    }
+    return out
+}
+
+gene set_del(set, v) {
+    # NEW set: set - {v}; deleting an absent member changes nothing
+    let out = []
+    for x in set {
+        if x == v {
+            continue
+        }
+        push(out, x)
+    }
+    return out
+}
+
+gene set_union(a, b) {
+    # members of a (in order), then b's members a lacks (in b's order)
+    let out = []
+    for x in a {
+        push(out, x)
+    }
+    for y in b {
+        if !set_has(out, y) {
+            push(out, y)
+        }
+    }
+    return out
+}
+
+gene set_intersect(a, b) {
+    # members a and b share, in a's order
+    let out = []
+    for x in a {
+        if set_has(b, x) {
+            push(out, x)
+        }
+    }
+    return out
+}
+
+gene set_diff(a, b) {
+    # a minus b: members of a that b lacks, in a's order
+    let out = []
+    for x in a {
+        if !set_has(b, x) {
+            push(out, x)
+        }
+    }
+    return out
+}
+
+gene set_symdiff(a, b) {
+    # symmetric difference: (a - b) members first, then (b - a) members
+    let out = set_diff(a, b)
+    for y in set_diff(b, a) {
+        push(out, y)
+    }
+    return out
+}
+
+gene set_subset(a, b) {
+    # true when every member of a is in b (the empty set is a subset of all)
+    for x in a {
+        if !set_has(b, x) {
+            return false
+        }
+    }
+    return true
+}
+
+gene set_eq(a, b) {
+    # order-independent equality: same members, both ways (order ignored)
+    return set_subset(a, b) and set_subset(b, a)
+}
+
+gene set_count(set) {
+    # how many members the set has
+    return len(set)
+}
