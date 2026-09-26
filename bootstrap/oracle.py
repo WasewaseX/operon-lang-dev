@@ -301,6 +301,43 @@ def lex(src):
             while i < n and src[i] != "\n":
                 i += 1
             continue
+        # W030 mirror: raw strings r"..." — no escapes, no interpolation
+        if c == "r" and i + 1 < n and src[i+1] == '"':
+            i += 2
+            raw, closed = "", False
+            while i < n:
+                if src[i] == '"':
+                    i += 1; closed = True; break
+                if src[i] == "\n":
+                    line += 1
+                raw += src[i]; i += 1
+            if not closed:
+                notes.append(Note(4, "unclosed raw string consumed to end of input"))
+            toks.append(("STR", raw, line))
+            continue
+        # W030 mirror: multiline triple-quoted strings """...""" — escapes and
+        # interpolation processed, content verbatim
+        if c == '"' and i + 2 < n and src[i+1] == '"' and src[i+2] == '"':
+            i += 3
+            raw, closed, interp, depth = "", False, False, 0
+            while i < n:
+                if src[i] == '"' and i + 2 < n and src[i+1] == '"' and src[i+2] == '"':
+                    i += 3; closed = True; break
+                if src[i] == "\\" and i + 1 < n:
+                    e = src[i + 1]
+                    raw += {"n": "\n", "t": "\t", "\\": "\\", '"': '"', "{": "{", "}": "}"}.get(e, "\\" + e)
+                    i += 2; continue
+                if src[i] == "\n":
+                    line += 1
+                if src[i] == "{":
+                    depth += 1; interp = True
+                if src[i] == "}" and depth > 0:
+                    depth -= 1
+                raw += src[i]; i += 1
+            if not closed:
+                notes.append(Note(4, "unclosed multiline string consumed to end of input"))
+            toks.append(("INTERP" if interp else "STR", raw, line))
+            continue
         if c == '"':
             raw, i2, closed, interp = "", i + 1, False, False
             depth = 0

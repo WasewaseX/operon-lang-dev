@@ -39,7 +39,7 @@ Arithmetic:
 ## 3. Lexical
 
 - Comments: `#` to end of line. `#!` shebang allowed on line 1.
-- Strings: `"double"`; escapes `\n \t \\ \" \{ \}`; interpolation `"{expr}"` — any expression, evaluated at runtime, `str()`-coerced. No single-quoted strings in canonical form (a `'` in code is a wobble: treated as `"` with a note).
+- Strings: `"double"`; escapes `\n \t \\ \" \{ \}`; interpolation `"{expr}"` — any expression, evaluated at runtime, `str()`-coerced. No single-quoted strings in canonical form (a `'` in code is a wobble: treated as `"` with a note). **Raw strings** `r"..."` — content verbatim, NO escape processing, NO interpolation (newlines allowed). **Multiline strings** `"""..."""` — escapes and interpolation processed, quotes (`"` / `""`) allowed inside, content verbatim (no implicit indent stripping; `operon fmt` may normalize later). Byte strings `b"..."` arrive with the bytes type (W029).
 - Identifiers `[A-Za-z_][A-Za-z0-9_]*`.
 - Numbers: `42`, `3.14`, `1e3` (float). Negative via unary minus. Radix forms `0xFF`, `0b101010`, `0o755` (case-insensitive prefix; canonical value is the same Int). `_` digit separators allowed inside any numeric literal (`1_000_000`, `0xFF_FF`, `1_000.5`) and are stripped before parsing — the printed value is unaffected (canonical form stays decimal). A radix prefix with no valid digit after it lexes as decimal `0` followed by identifiers (`0x` → `0`, `x`). Out-of-range literals keep the existing saturate-to-0 note contract (f0fe2ec).
 - Newlines terminate statements; `;` allowed and ignored (also `;;`, stray). Blocks are `{ ... }`.

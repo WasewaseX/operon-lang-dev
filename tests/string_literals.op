@@ -1,0 +1,17 @@
+# string_literals.op — W030: raw and multiline string literals.
+frame proof {
+    let raw_path = r"C:\Users\test\file"
+    assert(raw_path == "C:\\Users\\test\\file", "raw keeps backslashes verbatim")
+    assert(r"a\nb" == "a\\nb", "raw does not process escapes")
+    let triple = """
+alpha "quoted" beta
+gamma
+"""
+    assert(triple == "\nalpha \"quoted\" beta\ngamma\n", "triple keeps quotes and newlines")
+    let n = 2
+    let doc = """
+value: {n}
+"""
+    assert(doc == "\nvalue: 2\n", "triple interpolates")
+    assert(len(r"a\nb") == 4, "raw backslash-n is two chars")
+}

@@ -185,6 +185,122 @@ pub fn lex(src: &str) -> Lexed {
             continue;
         }
         // strings
+        // W030: raw strings r"..." — no escapes, no interpolation; ends at
+        // the closing quote (newlines allowed; the raw content is verbatim).
+        // A bare `r` identifier that is NOT followed by a quote is untouched.
+        if c == 'r' && i + 1 < n && chars[i + 1] == '"' {
+            i += 2; // skip r"
+            let mut raw = String::new();
+            let mut closed = false;
+            while i < n {
+                if chars[i] == '"' {
+                    i += 1;
+                    closed = true;
+                    break;
+                }
+                if chars[i] == '\n' {
+                    line += 1;
+                }
+                raw.push(chars[i]);
+                i += 1;
+            }
+            let note = if closed {
+                None
+            } else {
+                Some("unclosed raw string consumed to end of input".to_string())
+            };
+            if let Some(msg) = note {
+                lex_note(
+                    &mut notes,
+                    Note {
+                        line,
+                        rung: 4,
+                        message: msg,
+                    },
+                );
+            }
+            push!(Tok::Str(raw));
+            continue;
+        }
+        // W030: multiline triple-quoted strings """...""" — escapes and
+        // interpolation still processed; content is verbatim (no implicit
+        // indent stripping); can contain single/double quotes freely.
+        if c == '"' && i + 2 < n && chars[i + 1] == '"' && chars[i + 2] == '"' {
+            i += 3; // skip """
+            let mut raw = String::new();
+            let mut closed = false;
+            while i < n {
+                if chars[i] == '"' && i + 2 < n && chars[i + 1] == '"' && chars[i + 2] == '"' {
+                    i += 3;
+                    closed = true;
+                    break;
+                }
+                if chars[i] == '\\' && i + 1 < n {
+                    // same escape set as lex_string
+                    let e = chars[i + 1];
+                    match e {
+                        'n' => raw.push('\n'),
+                        't' => raw.push('\t'),
+                        '\\' => raw.push('\\'),
+                        '"' => raw.push('"'),
+                        '{' => raw.push('{'),
+                        '}' => raw.push('}'),
+                        other => {
+                            raw.push('\\');
+                            raw.push(other);
+                        }
+                    }
+                    i += 2;
+                    continue;
+                }
+                if chars[i] == '\n' {
+                    line += 1;
+                }
+                raw.push(chars[i]);
+                i += 1;
+            }
+            let note = if closed {
+                None
+            } else {
+                Some("unclosed multiline string consumed to end of input".to_string())
+            };
+            if let Some(msg) = note {
+                lex_note(
+                    &mut notes,
+                    Note {
+                        line,
+                        rung: 4,
+                        message: msg,
+                    },
+                );
+            }
+            // interpolation: {..} parts present? mark as Interp for the parser
+            let has_interp = {
+                let mut depth = 0usize;
+                let mut any = false;
+                for ch in raw.chars() {
+                    match ch {
+                        '{' => {
+                            depth += 1;
+                            any = true;
+                        }
+                        '}' => {
+                            if depth > 0 {
+                                depth -= 1;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                any
+            };
+            push!(if has_interp {
+                Tok::Interp(raw)
+            } else {
+                Tok::Str(raw)
+            });
+            continue;
+        }
         if c == '"' {
             let (tok, note) = lex_string(&chars, &mut i, &mut line, '"');
             if let Some(msg) = note {
@@ -242,8 +358,7 @@ pub fn lex(src: &str) -> Lexed {
             // W031: radix prefixes — 0x hex, 0b binary, 0o octal (case-insensitive
             // prefix), with `_` digit separators. A prefix with no valid digit
             // after it falls through to decimal lexing (`0x` = 0 then ident `x`).
-            if c == '0' && i + 1 < n && matches!(chars[i + 1], 'x' | 'X' | 'b' | 'B' | 'o' | 'O')
-            {
+            if c == '0' && i + 1 < n && matches!(chars[i + 1], 'x' | 'X' | 'b' | 'B' | 'o' | 'O') {
                 let radix = match chars[i + 1] {
                     'x' | 'X' => 16,
                     'b' | 'B' => 2,
@@ -260,10 +375,7 @@ pub fn lex(src: &str) -> Lexed {
                         j += 1;
                     }
                     let raw: String = chars[i..j].iter().collect();
-                    let digits: String = chars[i + 2..j]
-                        .iter()
-                        .filter(|&&ch| ch != '_')
-                        .collect();
+                    let digits: String = chars[i + 2..j].iter().filter(|&&ch| ch != '_').collect();
                     i = j;
                     match i64::from_str_radix(&digits, radix) {
                         Ok(v) => push!(Tok::Int(v)),
@@ -272,10 +384,7 @@ pub fn lex(src: &str) -> Lexed {
                             Note {
                                 line,
                                 rung: 4,
-                                message: format!(
-                                    "integer '{}' out of range treated as 0",
-                                    raw
-                                ),
+                                message: format!("integer '{}' out of range treated as 0", raw),
                             },
                         ),
                     }
@@ -284,9 +393,7 @@ pub fn lex(src: &str) -> Lexed {
             }
             let start = i;
             let mut is_float = false;
-            while i < n
-                && (chars[i].is_ascii_digit() || chars[i] == '.' || chars[i] == '_')
-            {
+            while i < n && (chars[i].is_ascii_digit() || chars[i] == '.' || chars[i] == '_') {
                 if chars[i] == '.' {
                     // don't consume a dot that isn't part of a number (e.g. 1.map)
                     if i + 1 >= n || !chars[i + 1].is_ascii_digit() {
