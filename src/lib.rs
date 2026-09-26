@@ -9,6 +9,7 @@
 pub mod ast;
 pub mod ffi;
 pub mod genes;
+pub mod graph;
 pub mod interp;
 pub mod lexer;
 pub mod ls;
