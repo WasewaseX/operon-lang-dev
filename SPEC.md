@@ -215,6 +215,38 @@ stress missing { ... } rescue { ... }    # kind filter: only catches `missing`
 - Uncaught at top level → printed as containment note, run continues (or ends that entry call with Null).
 - `assert(cond, msg?)` raises Stress `burned` on failure (this is what proof frames catch).
 
+### 9a. Stress tracebacks (W007)
+
+Every Stress carries a **call chain**: the gene frames it unwound through, innermost
+first. The chain is captured during unwinding at the call funnel (`call_gene`), each frame
+being `(gene name, call-site line)` — the line of the call expression that invoked that
+frame. The frame capture costs nothing on the happy path (append-on-error only) and is
+capped at **64 frames** (note-cap discipline: a bounded chain is a contained chain; deeper
+chains keep the 64 innermost frames).
+
+- **Rescue binding surface**: `e.chain` is a List of Maps `{"gene": Str, "line": Int}`,
+  innermost frame first, in that field order. `e.kind` / `e.message` unchanged. (The
+  Stress's own origin line is a Rust-side stderr-rendering field and is deliberately not
+  part of the rescue-map contract.)
+- **Uncaught rendering** (exit-1 path, e.g. `--entry`): the primary diagnostic renders
+  `file:line` of the raise (raise statements carry their own line), followed by the chain,
+  one frame per line, then `at main`:
+
+  ```
+  [contained] [overflow] app.op:2: detonating at depth
+    at boom (app.op:5)
+    at go
+    at main
+  ```
+
+  A frame with line 0 (the runtime-invoked entry gene) renders as a bare `at <gene>`.
+  The renderer is also capped at 64 frames (`… N more frame(s)`).
+- **Containment**: the chain leaks nothing beyond the script path already printed in the
+  primary diagnostic — no environment, no cwd, no host paths (redteam rt_p15a–c).
+- The Python oracle mirrors the capture op-for-op: identical `e.chain` values (gene names
+  AND call-site lines) — differential-pinned in `tests/differential/traceback_chain.op`
+  and shape-pinned in `tests/traceback_shape.op`.
+
 ## 9b. Security — the capability sandbox
 
 The runtime is **default-deny**: a program is an organism in a culture flask, and nothing outside the flask exists until the operator grants it. The builtins `read_file`, `write_file`, `append_file`, `exists`, `read_dir`, `file_size`, `fs_delete`, `fs_rename`, `fs_mkdir`, `run`, `py`, `http_get`, `serve`, `env`, and `exit` raise catchable Stress `interference` when no grant covers the access — RNA-interference: the cell's antiviral machinery silences the operation instead of crashing. `recv_request`/`send_response` poll a queue that only `serve` fills, so they are inert without a granted server.

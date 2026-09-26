@@ -1,0 +1,19 @@
+# traceback_chain.op — W07 differential pin: e.chain (gene names AND
+# call-site lines) must be byte-identical on the Rust core and the oracle.
+gene inner() {
+    raise overflow, "detonating"
+}
+gene outer() {
+    let r = inner()
+    return r
+}
+stress {
+    let v = outer()
+} rescue (e) {
+    print("kind={e.kind}")
+    print("msg={e.message}")
+    print("frames={len(e.chain)}")
+    for f in e.chain {
+        print("at {f.gene} line {f.line}")
+    }
+}
