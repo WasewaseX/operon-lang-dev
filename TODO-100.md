@@ -865,14 +865,11 @@ clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK · sec_regression AL
   allostery/titration/decay-clock from reg-bio-2); GenomeLab help references it.
 - Files: `docs/spec/BIO-CONTRACT.md` (new), `apps/genomelab/genomelab.op`, `README.md`.
 
-### W093 — Scientific validation layer [P2] [dev-3] [M] [partial: repressi_alpha/params, trp_attenuator, riboswitch_cis, silence_dose tests live]
-- Goal: formalize: reference datasets, known-model tests with numerical tolerances,
-  published-model reproduction notes.
-- Done when: `docs/spec/VALIDATION.md` lists each validated model, its source, tolerance,
-  and the test that enforces it; tolerance framework (approx_eq with documented eps) in
-  std/testing.op; one new reproduction test (e.g., classic repressilator period vs
-  published parameterization note).
-- Files: `docs/spec/VALIDATION.md`, `std/testing.op`, `tests/`.
+### W093 — Scientific validation layer [P2] [dev-3] [M] [done: docs/spec/VALIDATION.md registry live — V1 EC50/Hill curve (tests/sci_ec50_hill.op, threshold-is-the-EC50 identity + canonical 10-90 points at 1e-12, op-order exact) and V2 repressilator period (tests/sci_repressi_period.op, peak-to-peak = 6 ticks vs the Elowitz-Leibler 2000 discrete parameterization, peak-count-in-window pinning) landed on sz/m100-docs; V3-V8 rows registry-link the existing repressi/trp/riboswitch/silence/occupy/copies tests; std approx_eq helper deliberately left to the dev-2 std lane to avoid the open tooling PR]
+- Delivered: the registry (each validated model → source, mapping, tolerance,
+  enforcing test), two new literature-anchored reproduction tests, and the
+  follow-up list (approx_eq helper, two-tier/quorum/Rho dose curves).
+- Files: `docs/spec/VALIDATION.md`, `tests/sci_ec50_hill.op`, `tests/sci_repressi_period.op`.
 
 ### W094 — Graph visualization export [P2] [dev-3] [M] [done: PR #18 — src/graph.rs, DOT+JSON, 2 tests]
 - Goal: `operon graph file.op --format dot|json|svg-stub` exporting the GRN/regulation
