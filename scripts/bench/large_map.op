@@ -1,0 +1,12 @@
+# bench: large-map — build a 6k-key map, then a full lookup pass (W083)
+main {
+    let m = {}
+    for i in range(6000) {
+        m["key-" + str(i)] = i * 3
+    }
+    let acc = 0
+    for i in range(6000) {
+        acc = acc + m["key-" + str(i)]
+    }
+    promote("map sum = {acc}")
+}
