@@ -28,8 +28,8 @@ The `initialize` result carries the contract next to the standard fields:
 ```json
 {
   "operonLsp": { "version": 1, "features": ["diagnostics", "hover",
-      "definition", "documentSymbol", "completion", "formatting",
-      "signatureHelp"] },
+      "definition", "references", "semanticTokens", "rename", "documentSymbol",
+      "completion", "formatting", "signatureHelp"] },
   "capabilities": { ... standard LSP capability map ... },
   "serverInfo": { "name": "operon-ls", "version": "..." }
 }
@@ -47,10 +47,30 @@ The `initialize` result carries the contract next to the standard fields:
 | VS Code (generic LSP client extension) | 1 | same surface via `operon-ls` command; no official extension published yet — this table updates with the extension |
 | any LSP 3.17-capable client | 1 | stdio framing (Content-Length), full-text document sync (ranged edits ignored by contract — the server advertises sync=1) |
 
-The honest scope line: lsp v1 advertises exactly the seven features above.
-Nothing else (rename, references, semantic tokens) is claimed — those are
-W45/W46 items and will land as additive features (still lsp 1) or with a
-contract bump if any existing shape changes.
+The honest scope line: lsp v1 advertises exactly the ten features above
+(W45 added `references` + `semanticTokens` and W45-v2 added `rename`, all
+additively — no bump, per rule 1). Repair provenance (W46) rides the
+EXISTING `diagnostics` and `hover` features: publishDiagnostics may carry
+`relatedInformation` and hover may append the repair note — both additive
+fields on advertised features, covered by the same rule. `--explain FILE`
+is a CLI door (not an LSP method), outside the contract. Inlay-hints remain
+unclaimed.
+
+### W45-v2 rename semantics (part of the lsp 1 contract)
+
+`textDocument/prepareRename` answers `{range, placeholder}` for a plain
+code identifier; it refuses (null) on keywords, literals, synonyms, mark
+names, builtins, and positions inside strings or comments. `textDocument/rename`
+returns a same-file WorkspaceEdit over every code occurrence of the
+identifier — declaration included; interpolated `{..}` expressions count
+(they are evaluated), string/comment/`@mark` mentions never do. The engine
+is the SAME scanner references uses (zero drift between the two features),
+grep-class and identifier-precise, NOT scope-aware — run `operon check`
+after a rename; that honesty mirrors W67's `operon rna` rename discipline.
+All-or-nothing: an invalid, reserved, builtin-target, same-name, or
+already-taken new name refuses the WHOLE rename as a JSON-RPC error
+(code -32001) so the editor can surface the reason — a silent null or a
+partial edit set are both contract violations.
 
 ## Change rules
 
