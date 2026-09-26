@@ -6073,7 +6073,7 @@ class Interp:
         resolved = next((c for c in cands if os.path.exists(c)), None)
         if resolved is None:
             return {}
-        src = open(resolved).read()
+        src = open(resolved, encoding="utf-8", errors="replace").read()  # W59: explicit UTF-8 (Windows locale default is cp1252)
         self.loading.append(path)
         stmts, notes = parse(src)
         for nt in notes:
@@ -6278,7 +6278,7 @@ def apply_rna(src, patch_src, stem):
     return text, applied
 
 def load_file(path, cell=None, variant=None, rna=None, args=None, caps=None):
-    src = open(path).read()
+    src = open(path, encoding="utf-8", errors="replace").read()  # W59: explicit UTF-8
     stem = os.path.basename(path).rsplit(".", 1)[0]
     it = Interp(cell=cell or {}, cli_args=args or [])
     # W069: entry file's directory = resolution root #1 (matches Rust
@@ -6291,7 +6291,7 @@ def load_file(path, cell=None, variant=None, rna=None, args=None, caps=None):
     if variant:
         it.cell["cli.variant"] = variant
     if rna:
-        patch = open(rna).read()
+        patch = open(rna, encoding="utf-8", errors="replace").read()  # W59: explicit UTF-8
         src2, applied = apply_rna(src, patch, stem)
         for a in applied:
             it.note(1, f"rna edit applied: {a}")
@@ -6487,7 +6487,7 @@ def main():
     # AttributeError on .items(); the Rust CLI parses the file, so did we)
     cell_dict = None
     if opts["cell"]:
-        with open(opts["cell"]) as _cf:
+        with open(opts["cell"], encoding="utf-8", errors="replace") as _cf:  # W59: explicit UTF-8
             cell_dict = parse_cell(_cf.read())
     if cmd == "version":
         print("Operon 2.0.0 (python-oracle)")
@@ -6556,7 +6556,7 @@ def main():
         if failed:
             sys.exit(1)
     elif cmd == "check":
-        src = open(pos[0]).read()
+        src = open(pos[0], encoding="utf-8", errors="replace").read()  # W59: explicit UTF-8
         stmts, notes = parse(src)
         score = 100 - sum(1 if n.rung == 2 else (2 if n.rung == 3 else (3 if n.rung == 4 else 0)) for n in notes)
         letter = "A" if score >= 90 else "B" if score >= 80 else "C" if score >= 70 else "D" if score >= 60 else "F"
@@ -6570,9 +6570,44 @@ if __name__ == "__main__":
     # raised recursion limit, mirroring the Rust core's 512 MiB worker + 10k
     # Operon-frame depth limit. Runaway recursion surfaces as RecursionError,
     # never a native crash.
+    #
+    # W59 (Windows truthing), two fixes to the runner itself:
+    #
+    # 1. Honest exit codes. The worker-thread form used to swallow every
+    #    failure: an exception inside main() printed a traceback and the
+    #    process still exited 0, and main()'s own sys.exit() only ended the
+    #    thread. A dead oracle therefore looked SUCCESSFUL to any caller
+    #    that checks exit codes — the differential harness compares them.
+    #    The worker now records the outcome and the main thread re-raises it
+    #    as the process exit code.
+    #
+    # 2. Portable stack size. 1 << 29 sits exactly at Windows' 512 MiB
+    #    threading.stack_size() ceiling; treat the request as best-effort
+    #    with a fallback ladder instead of a hard startup dependency.
     sys.setrecursionlimit(150_000)
     import threading as _th
-    _t = _th.Thread(target=main, name="oracle-worker")
-    _th.stack_size(1 << 29)
+
+    for _sz in (1 << 29, 1 << 28, 1 << 26):
+        try:
+            _th.stack_size(_sz)
+            break
+        except (ValueError, RuntimeError, OverflowError):
+            continue
+
+    _rc = {"code": 0}
+
+    def _worker():
+        try:
+            main()
+        except SystemExit as _e:
+            _rc["code"] = _e.code if isinstance(_e.code, int) else (0 if _e.code is None else 1)
+        except BaseException:
+            import traceback
+            traceback.print_exc()
+            _rc["code"] = 1
+
+    _t = _th.Thread(target=_worker, name="oracle-worker")
     _t.start()
     _t.join()
+    if _rc["code"]:
+        sys.exit(_rc["code"])
