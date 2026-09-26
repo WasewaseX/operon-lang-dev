@@ -1,0 +1,13 @@
+# W069: module-resolution pin — the SAME name resolves through BOTH roots
+# by being written differently. `use mod_res_lib1` must hit candidate #1
+# (the importing file's own directory, NOT the CWD — the CWD copy does not
+# exist, so a fallthrough would null out the import). `use
+# tests/differential/mod_res_lib2` skips #1 (no nested shadow) and lands on
+# candidate #2 (the CWD). Both engines must agree.
+use mod_res_lib1;
+use tests/differential/mod_res_lib2;
+
+gene main() {
+    print(mod_res_lib1.lib1_tag())
+    print(mod_res_lib2.lib2_tag())
+}

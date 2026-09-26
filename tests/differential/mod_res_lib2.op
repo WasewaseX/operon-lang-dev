@@ -1,0 +1,5 @@
+# W069 helper: resolved via the CWD root (candidate #2) when imported by
+# mod_res.op as `use tests/differential/mod_res_lib2`; standalone-safe.
+gene lib2_tag() {
+    return "lib2:cwd"
+}
