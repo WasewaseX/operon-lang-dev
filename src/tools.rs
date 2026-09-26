@@ -1216,6 +1216,11 @@ pub enum QuoteMode {
 pub struct FmtConfig {
     pub indent: usize,
     pub quotes: QuoteMode,
+    /// W47-v2: soft line-width limit (`None` = off — the historical behavior,
+    /// and what LSP formatting uses so editors keep their own wrap policy).
+    /// When set, a post-print pass breaks lines longer than `width` at
+    /// parser-proven-safe comma points only (see `wrap_width`).
+    pub width: Option<usize>,
 }
 
 impl Default for FmtConfig {
@@ -1223,6 +1228,7 @@ impl Default for FmtConfig {
         FmtConfig {
             indent: 2,
             quotes: QuoteMode::Double,
+            width: None,
         }
     }
 }
@@ -1259,7 +1265,14 @@ pub fn format_program_with(prog: &Program, cfg: &FmtConfig) -> String {
     for s in &prog.stmts {
         fmt_stmt(s, 0, &mut out);
     }
-    out
+    // W47-v2: the width pass runs AFTER the canonical render, so it is a pure
+    // function of (canonical text, width, indent). Idempotence survives by
+    // construction: fmt re-parses the wrapped text to the SAME AST, re-renders
+    // the SAME canonical text, and re-wraps it identically.
+    match cfg.width {
+        Some(w) if w >= 1 => wrap_width(&out, w, cfg.indent),
+        _ => out,
+    }
 }
 
 fn active_indent() -> usize {
@@ -1338,10 +1351,200 @@ pub fn parse_fmt_config(src: &str) -> (FmtConfig, Vec<String>) {
                 "single" => cfg.quotes = QuoteMode::Single,
                 other => unknown.push(format!("quotes = {other} (want double|single)")),
             },
+            // W47-v2: `width = 0` means explicitly off; absent means off.
+            "width" => match v.parse::<usize>() {
+                Ok(0) => cfg.width = None,
+                Ok(n) if n <= 10_000 => cfg.width = Some(n),
+                _ => unknown.push(format!("width = {v} (want 0..=10000, 0 = off)")),
+            },
             other => unknown.push(other.to_string()),
         }
     }
     (cfg, unknown)
+}
+
+// ---------------------------------------------------------------------------
+// W47-v2: the `--width` post-print line wrapper.
+//
+// DESIGN CONTRACT (why this is safe without touching the parser):
+//
+// The parser already tolerates newlines inside bracketed GROUPS wherever a
+// group's element loop calls `eat_newlines_inline()` at its top — call args
+// (bare calls, method calls, ?. calls), gene/sequence parameter lists (with
+// annotations and defaults), and list literals. A newline after a comma in
+// those positions is pure whitespace: the AST cannot change.
+//
+// The wrapper therefore breaks ONLY at commas whose enclosing bracket stack
+// consists entirely of `(` and `[`. Everything else is out of scope by law:
+//   - `{` groups are never broken (a text pass cannot tell a block brace
+//     from a map-literal brace; both are legal in fmt output);
+//   - string literals (including their interpolation regions) are opaque —
+//     a comma inside a string is never a break point;
+//   - openers never break (the first element stays on the opener line);
+//   - closers stay glued to the last element (no dedicated closer line).
+// When a line has no breakable comma it stays long — honestly, visibly.
+//
+// Determinism: wrap_width is a pure function of (text, width, indent_unit).
+// It runs AFTER the canonical render, so fmt∘fmt re-renders the same
+// canonical text and re-wraps it identically — the byte-stability law holds
+// by construction, and tests/fmt_width.rs proves it corpus-wide together
+// with the two stronger laws: AST identity and zero re-parse notes.
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy)]
+struct WidthBreak {
+    /// byte offset just AFTER the comma (where the line may split)
+    pos: usize,
+    /// number of enclosing brackets at the comma (>=1: never at depth 0)
+    depth: usize,
+}
+
+/// Scan one rendered line for parser-safe break points.
+/// `fmt` output is canonical: only double-quoted strings with `\` escapes,
+/// no comments, no tabs. Blocks/maps contribute `{`/`}` which poison the
+/// bracket stack.
+///
+/// Strings are modeled as a FRAME STACK, because interpolation carries REAL
+/// code — including nested strings — inside the quotes:
+/// `"{cv.csv_escape(tricky, ",")}"`. A naive in-string flag closes the
+/// string at the nested `"` and the comma inside `","` looks like code.
+/// Here a `"` in code PUSHES a Str frame; a `"` in a Str frame pops it; a
+/// `{` in a Str frame pushes a Code frame (the interpolation region); a `}`
+/// popping that frame returns to the enclosing string. A comma is a
+/// candidate only when NO Str frame is open (the frame stack is just the
+/// bottom Code frame) — a newline anywhere inside a string would change the
+/// string's VALUE, so string regions are opaque end to end.
+fn scan_width_breaks(line: &str) -> Vec<WidthBreak> {
+    // Code(Some(base)) = an interpolation region inside a string; `base` is
+    // the bracket-stack depth at its opening `{`, so a `}` closing a MAP
+    // LITERAL inside the interpolation is distinguishable from the `}` that
+    // closes the interpolation itself. Code(None) = real line-level code.
+    #[derive(Clone, Copy, PartialEq)]
+    enum Frame {
+        Code(Option<usize>),
+        Str,
+        Esc, // inside a `\x` escape pair within a Str frame
+    }
+    let mut out = Vec::new();
+    let mut frames: Vec<Frame> = vec![Frame::Code(None)];
+    // bracket stack: true = break-friendly (`(`/`[`), false = poisoned (`{`)
+    let mut stack: Vec<bool> = Vec::new();
+    for (i, ch) in line.char_indices() {
+        let top = *frames.last().expect("frame stack never empty");
+        match top {
+            Frame::Esc => {
+                frames.pop(); // the escaped char itself is opaque
+            }
+            Frame::Str => match ch {
+                '\\' => frames.push(Frame::Esc),
+                '"' => {
+                    frames.pop(); // string ends
+                }
+                '{' => frames.push(Frame::Code(Some(stack.len()))), // interp opens
+                _ => {}                                             // string content: opaque
+            },
+            Frame::Code(base) => match ch {
+                '"' => frames.push(Frame::Str),
+                '(' | '[' => stack.push(true),
+                '{' => stack.push(false),
+                '}' => match base {
+                    // interp region closes only when its own `{`-depth is
+                    // back; deeper `}`s belong to code braces (maps, blocks)
+                    Some(b) if stack.len() == b => {
+                        frames.pop();
+                    }
+                    _ => {
+                        stack.pop(); // saturate on unbalanced lines: never panic
+                    }
+                },
+                ')' | ']' => {
+                    stack.pop();
+                }
+                // breakable ONLY at real code depth: inside a (/[
+                // group, never at depth 0, never inside ANY string
+                // frame (including interpolation code, where a newline
+                // would land in the string's VALUE).
+                ',' if base.is_none() && !stack.is_empty() && stack.iter().all(|&f| f) => {
+                    out.push(WidthBreak {
+                        pos: i + ch.len_utf8(),
+                        depth: stack.len(),
+                    });
+                }
+                _ => {}
+            },
+        }
+    }
+    out
+}
+
+fn wrap_width(text: &str, width: usize, indent_unit: usize) -> String {
+    let mut out = String::with_capacity(text.len() + text.len() / 8);
+    // split_inclusive keeps every existing '\n' byte-exact (blank lines,
+    // the double blank between top-level definitions — nothing moves).
+    for line in text.split_inclusive('\n') {
+        let (content, nl) = match line.strip_suffix('\n') {
+            Some(c) => (c, "\n"),
+            None => (line, ""),
+        };
+        let segs = wrap_line(content, width, indent_unit);
+        for (k, seg) in segs.iter().enumerate() {
+            if k > 0 {
+                out.push('\n'); // between wrapped segments of one source line
+            }
+            out.push_str(seg);
+        }
+        out.push_str(nl); // the source line's newline rides its last segment
+    }
+    out
+}
+
+fn wrap_line(line: &str, width: usize, indent_unit: usize) -> Vec<String> {
+    if line.chars().count() <= width || indent_unit == 0 {
+        return vec![line.to_string()];
+    }
+    let breaks = scan_width_breaks(line);
+    if breaks.is_empty() {
+        return vec![line.to_string()];
+    }
+    let dmin = breaks.iter().map(|b| b.depth).min().unwrap_or(1);
+    let chosen: Vec<WidthBreak> = breaks.iter().filter(|b| b.depth == dmin).copied().collect();
+    let base = line.len() - line.trim_start_matches(' ').len();
+    let cont_indent = base + dmin * indent_unit;
+    let mut segments: Vec<String> = Vec::new();
+    let mut prev = 0usize;
+    for b in &chosen {
+        segments.push(line[prev..b.pos].to_string());
+        prev = b.pos;
+    }
+    segments.push(line[prev..].to_string()); // tail keeps the closer glued
+    let mut res: Vec<String> = Vec::with_capacity(segments.len());
+    for (k, seg) in segments.into_iter().enumerate() {
+        if k == 0 {
+            res.push(seg);
+        } else {
+            let body = seg.trim_start();
+            if body.is_empty() {
+                return vec![line.to_string()]; // degenerate: refuse to wrap
+            }
+            res.push(format!("{}{}", " ".repeat(cont_indent), body));
+        }
+    }
+    // recursion: continuation segments may still overflow via deeper groups.
+    // Each level strictly increases the break depth, so this terminates.
+    let mut final_res = Vec::with_capacity(res.len());
+    for seg in &res {
+        if seg.chars().count() > width {
+            let sub = wrap_line(seg, width, indent_unit);
+            if sub.len() == 1 {
+                final_res.push(seg.clone());
+            } else {
+                final_res.extend(sub);
+            }
+        } else {
+            final_res.push(seg.clone());
+        }
+    }
+    final_res
 }
 
 fn fmt_block(stmts: &[Stmt], ind: usize, out: &mut String) {
