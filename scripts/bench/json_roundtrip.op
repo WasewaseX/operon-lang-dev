@@ -1,0 +1,25 @@
+# bench: json — parse + serialize over a nested document (W083)
+# Builds a deterministic nested document, serializes it with json_str,
+# parses it back with json_parse, and walks a few paths. Exercises the
+# JSON serializer/parser, map/list allocation, and string churn.
+# Native CPython mirror: native_json (bench_compare.py).
+main {
+    let doc = {}
+    for i in range(120) {
+        doc["row" + str(i)] = {
+            id: i,
+            name: "item-" + str(i),
+            tags: ["a", "b", "c"],
+            score: i * 1.5,
+            active: i % 2 == 0
+        }
+    }
+    let acc = 0
+    for i in range(200) {
+        let s = json_str(doc)
+        let back = json_parse(s)
+        acc = acc + back["row" + str(i % 120)].id
+        acc = acc + len(back["row" + str((i + 7) % 120)].tags)
+    }
+    promote("json acc = {acc}")
+}

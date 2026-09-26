@@ -78,6 +78,17 @@ mem-charge, DP ceiling) cost nothing measurable on honest workloads.
 | recursion | 228.8 | 4923.8 | 23.7 | **9.6x** | 21.5x | 369,511 calls |
 | grn | 33.2 | 514.6 | 8.6 | **3.9x** | 15.5x | 60,000 gated calls |
 
+**W083 real-program workloads** (landing wave; numbers to be re-measured in the next full bench pass — sizing verified, ratios below are placeholders until then):
+
+| workload | what it exercises | native mirror | notes |
+|---|---|---|---|
+| json | json_str/json_parse round-trip over a 120-row nested doc ×200 | CPython json.dumps/loads (algorithm parity) | serializer + map/list allocation |
+| regex | 5 patterns × 10 strings × 600 passes (re_match + re_find) | CPython re (algorithm parity) | regex engine incl. 2M-step ceiling |
+| seq | 6k-base LCG genome: GC%, 3-mer scan, motif locate | CPython (algorithm parity) | seeded LCG — no random(), fully reproducible |
+| large_map | 6k-key map build + full lookup pass | CPython dict (algorithm parity) | sized for the oracle pass (~18 s/iter) |
+| file_io | 300 × write+read 2 KiB, content-verified | CPython open/write/read (shape parity) | the ONE bench needing grants — runner passes `--allow-write /tmp --allow-read /tmp` itself; oracle side runs granted too |
+| modules | six local modules imported + 20k cross-module calls | CPython cached import machinery (**shape-compare only — not algorithm parity**) | exercises the SPEC §8 resolution table + module cache |
+
 `op/py` = operon vs native CPython — **the v3.0 gap to close**.
 `op/oracle` = how much faster the Rust core already is than its Python mirror.
 

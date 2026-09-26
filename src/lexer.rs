@@ -127,6 +127,12 @@ impl Tok {
 pub struct Lexed {
     pub toks: Vec<(Tok, usize)>, // token + line
     pub notes: Vec<Note>,
+    /// W074: `##` doc-comment lines, in source order — (line, text after the
+    /// `##` marker with one leading space stripped). Pure metadata: docs are
+    /// NOT tokens, so the token stream (and every existing consumer of it —
+    /// wobble scoring, repair rungs, the differential oracle) is untouched.
+    /// Plain `#` comments stay invisible exactly as before.
+    pub docs: Vec<(usize, String)>,
 }
 
 // sec-r4 (F-3): parse-time note cap — mirrors the Parser/Interp 10k contract.
@@ -149,6 +155,7 @@ fn lex_note(buf: &mut Vec<Note>, n: Note) {
 pub fn lex(src: &str) -> Lexed {
     let mut toks: Vec<(Tok, usize)> = Vec::new();
     let mut notes: Vec<Note> = Vec::new();
+    let mut docs: Vec<(usize, String)> = Vec::new();
     let chars: Vec<char> = src.chars().collect();
     let mut i = 0usize;
     let mut line = 1usize;
@@ -181,6 +188,23 @@ pub fn lex(src: &str) -> Lexed {
         }
         // comments
         if c == '#' {
+            // W074: `##` opens a DOC comment — captured as metadata (Lexed
+            // docs), never emitted as a token. The marker must be exactly
+            // two `#` (a `###` line is a doc whose text starts with `#`,
+            // same convention as markdown headings inside doc text).
+            if i + 1 < n && chars[i + 1] == '#' {
+                i += 2;
+                let mut text = String::new();
+                if i < n && chars[i] == ' ' {
+                    i += 1; // one leading space after the marker is stripped
+                }
+                while i < n && chars[i] != '\n' {
+                    text.push(chars[i]);
+                    i += 1;
+                }
+                docs.push((line, text));
+                continue;
+            }
             while i < n && chars[i] != '\n' {
                 i += 1;
             }
@@ -677,7 +701,7 @@ pub fn lex(src: &str) -> Lexed {
     }
 
     push!(Tok::Eof);
-    Lexed { toks, notes }
+    Lexed { toks, notes, docs }
 }
 
 /// Lex a double-quoted (or repaired single-quoted) string starting at the

@@ -249,8 +249,9 @@ def v_repr(v, _seen=None, _depth=0):
     if isinstance(v, Variant):
         if v.tag == "None":
             return "None"
-        if v.payload is None:
-            return v.tag
+        # W06 parity fix: a null payload is a REAL payload — ok(null) renders
+        # Ok(null) like the Rust core (Some(Null)); the old payload-is-None
+        # guard rendered the bare tag and hid the value
         return f"{v.tag}({v_repr(v.payload, _seen, _depth + 1)})"
     if isinstance(v, SeqObj):
         return f"<sequence {v.gene.name}>" if v.gene.name else "<sequence lambda>"
@@ -2479,6 +2480,9 @@ class Interp:
     def __init__(self, cell=None, cli_args=None):
         self.notes = []
         self.cell = cell or {}
+        # W069: importing-entry directory — candidate root #1 for `use`
+        # (SPEC §8 resolution table). None until load_file sets it.
+        self.base_dir = None
         self.silences = []
         # reg-bio-3: operons / stoichiometric-RISC bookkeeping / m6A levels /
         # generation counter / gene dosage registry (mirror of the Rust core)
@@ -3351,7 +3355,11 @@ class Interp:
             _, sub, line = e
             v = self.eval(env, sub)
             if isinstance(v, Variant):
-                if v.tag in ("Some", "Ok") and v.payload is not None:
+                if v.tag in ("Some", "Ok"):
+                    # null payload is a REAL payload: ok(null) stores Some(Null)
+                    # on the Rust side, so `?!` unwraps to null (W06 parity fix,
+                    # found by the std_serialize proof — the old `payload is
+                    # not None` guard wrongly unwound on Ok(null)/Some(null))
                     return v.payload
                 sig = Stress("propagate", "")
                 sig.prop = v
@@ -5438,7 +5446,9 @@ class Interp:
             if len(args) != 2:
                 raise Stress("unfolded", "unwrap_or(v, default) needs exactly 2 arguments")
             v = args[0]
-            if isinstance(v, Variant) and v.tag in ("Some", "Ok") and v.payload is not None:
+            # W06 parity fix: a null payload is a real payload — unwrap_or on
+            # Ok(null)/Some(null) returns null, not the default (Rust parity)
+            if isinstance(v, Variant) and v.tag in ("Some", "Ok"):
                 return v.payload
             return args[1]
         if name == "unwrap":
@@ -5446,7 +5456,10 @@ class Interp:
                 raise Stress("unfolded", "unwrap(v) needs exactly 1 argument")
             v = args[0]
             if isinstance(v, Variant):
-                if v.tag in ("Some", "Ok") and v.payload is not None:
+                if v.tag in ("Some", "Ok"):
+                    # W06 parity fix: unwrap(Ok(null)) returns null — the Rust
+                    # core stores ok(null) as Some(Null) and unwraps to it;
+                    # the old payload-is-None guard raised here instead
                     return v.payload
                 raise Stress("unwrap", f"unwrap on {v.tag}")
             raise Stress("unwrap", f"unwrap on a plain {type_name(v)} value")
@@ -6001,7 +6014,14 @@ class Interp:
         if v is True: return "true"
         if v is False: return "false"
         if isinstance(v, int): return str(v)
-        if isinstance(v, float): return fmt_float(v)
+        if isinstance(v, float):
+            # RFC 8259 honesty (SPEC §10): JSON has no NaN/Inf — non-finite
+            # floats serialize as null, exactly like the Rust json_stringify_g
+            # (display/print keep the nan/inf spelling via fmt_float; the WIRE
+            # never carries them. Found by the std_serialize proof.)
+            if v != v or v == float("inf") or v == float("-inf"):
+                return "null"
+            return fmt_float(v)
         if isinstance(v, str): return _json.dumps(v)
         if isinstance(v, (list, dict)):
             marker = id(v)
@@ -6057,7 +6077,13 @@ class Interp:
         if path in self.loading:
             return {}
         p = path if path.endswith(".op") else path + ".op"
+        # W069: resolution chain mirrors genes.rs resolve_path — the
+        # importing file's directory first, then CWD, then std/, then
+        # $OPERON_STD. (Exe-relative roots are runtime-only: the oracle
+        # never ships beside a std/ tree; see SPEC §8 table.)
         cands = [p, os.path.join("std", p)]
+        if self.base_dir:
+            cands.insert(0, os.path.join(self.base_dir, p))
         std_dir = os.environ.get("OPERON_STD")
         if std_dir:
             cands.append(os.path.join(std_dir, p))
@@ -6272,6 +6298,11 @@ def load_file(path, cell=None, variant=None, rna=None, args=None, caps=None):
     src = open(path, encoding="utf-8", errors="replace").read()  # W59: explicit UTF-8
     stem = os.path.basename(path).rsplit(".", 1)[0]
     it = Interp(cell=cell or {}, cli_args=args or [])
+    # W069: entry file's directory = resolution root #1 (matches Rust
+    # tools.rs interp.base_dir = entry-file dir).
+    d = os.path.dirname(os.path.abspath(path))
+    if d and d != os.path.abspath("."):
+        it.base_dir = d
     if caps is not None:
         it.caps = caps
     if variant:
