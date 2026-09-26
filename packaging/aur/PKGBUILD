@@ -1,0 +1,30 @@
+# Maintainer: Operon maintainers <https://github.com/WasewaseX/operon-lang-dev>
+# W61 COMMUNITY DRAFT — not CI-validated. Before publishing to the AUR:
+#   1. replace the sha256sums placeholders with the release's companion
+#      .sha256 values (the release ships operon-<v>-<target>.tar.gz.sha256),
+#   2. bump pkgrel on re-release, 3. run makepkg -si locally to smoke it.
+pkgname=operon-lang
+pkgver=2.2.0
+pkgrel=1
+pkgdesc="The gene-expression language — Total Grammar toolchain (Rust core, C++ algorithm kernel)"
+arch=('x86_64' 'aarch64')
+url="https://github.com/WasewaseX/operon-lang-dev"
+license=('MIT')
+depends=('glibc' 'gcc-libs')
+provides=('operon')
+conflicts=('operon-lang-git')
+source_x86_64=("${pkgname}-${pkgver}-x86_64.tar.gz::https://github.com/WasewaseX/operon-lang-dev/releases/download/v${pkgver}/operon-${pkgver}-x86_64-unknown-linux-gnu.tar.gz")
+source_aarch64=("${pkgname}-${pkgver}-aarch64.tar.gz::https://github.com/WasewaseX/operon-lang-dev/releases/download/v${pkgver}/operon-${pkgver}-aarch64-unknown-linux-gnu.tar.gz")
+sha256sums_x86_64=('REPLACE_WITH_COMPANION_SHA256')
+sha256sums_aarch64=('REPLACE_WITH_COMPANION_SHA256')
+
+package() {
+    install -Dm755 "${srcdir}/operon-${pkgver}/operon"     "${pkgdir}/usr/bin/operon"
+    install -Dm755 "${srcdir}/operon-${pkgver}/operon-ls"  "${pkgdir}/usr/bin/operon-ls"
+    if [ -d "${srcdir}/operon-${pkgver}/std" ]; then
+        mkdir -p "${pkgdir}/usr/lib/operon"
+        cp -r "${srcdir}/operon-${pkgver}/std" "${pkgdir}/usr/lib/operon/std"
+    fi
+    install -Dm644 "${srcdir}/operon-${pkgver}/LICENSE" \
+        "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE" 2>/dev/null || true
+}
