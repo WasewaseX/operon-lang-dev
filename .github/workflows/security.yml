@@ -1,0 +1,50 @@
+# security.yml — W099: security audit automation (dev-3, M100).
+#
+# Adds the pieces the per-PR CI does NOT cover:
+#   1. advisory scanning (cargo-audit over the committed Cargo.lock) — weekly
+#      + on demand; a fresh advisory lands between PRs and this catches it
+#   2. a weekly fresh-toolchain sweep of the full containment surface
+#      (unit+sec tests, redteam, caps) — the same gates PRs run, re-proven
+#      on a clean runner every week
+#
+# THREAT-MODEL.md §4.6 rows update when this workflow changes.
+# Findings recorded while authoring (W099 output):
+#   * ci.yml uses dtolnay/rust-toolchain@stable — a floating branch ref;
+#     D-6 says ALL actions are SHA-pinned. This file pins by SHA. builder-A
+#     should pin the ci.yml refs (3 occurrences) in their lane.
+name: operon-security
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  advisories:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v4.2.2 (SHA-pinned, sec-r1)
+      - name: Install Rust (SHA-pinned action ref)
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master 2026-09-12
+        with:
+          toolchain: stable
+      - name: Install cargo-audit (locked)
+        run: cargo install cargo-audit --locked
+      - name: Advisory scan (deny on vulnerabilities)
+        run: cargo audit --deny warnings
+
+  sandbox-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v4.2.2 (SHA-pinned, sec-r1)
+      - name: Install Rust (SHA-pinned action ref)
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master 2026-09-12
+        with:
+          toolchain: stable
+      - name: Full containment sweep
+        run: bash scripts/sec_regression.sh

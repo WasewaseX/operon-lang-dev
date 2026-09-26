@@ -4,6 +4,7 @@
 // The language core lives in the `operon` library crate (src/lib.rs);
 // this binary is the CLI shell over it.
 use operon::genes;
+use operon::graph;
 use operon::interp;
 use operon::parser;
 use operon::tools;
@@ -402,6 +403,93 @@ fn real_main() {
                 print!("{}", out);
             }
         }
+        "rna" => {
+            // W068 safety mode: default = checked dry-run (writes nothing);
+            // --write applies the same engine; exit 1 on any miss so scripts notice.
+            if positional.len() < 2 {
+                die("rna needs: operon rna <file.op> <patch.rna> [--write] [--json]");
+            }
+            let file = positional[0].clone();
+            let patch_path = positional[1].clone();
+            let src = match std::fs::read_to_string(&file) {
+                Ok(s) => s,
+                Err(e) => die(&format!("rna: cannot read {}: {}", file, e)),
+            };
+            let patch_src = match std::fs::read_to_string(&patch_path) {
+                Ok(s) => s,
+                Err(e) => die(&format!("rna: cannot read {}: {}", patch_path, e)),
+            };
+            let stem = std::path::Path::new(&file)
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let report = genes::apply_rna_checked(&src, &patch_src, &stem);
+            if json {
+                let rows: Vec<String> = report
+                    .edits
+                    .iter()
+                    .map(|e| {
+                        format!(
+                            "{{\"target\":\"{}\",\"scope\":\"{}\",\"target_found\":{},\"from\":\"{}\",\"to\":\"{}\",\"hits\":{},\"applied\":{}}}",
+                            tools::json_escape(&e.target),
+                            if e.gene_scoped { "gene" } else { "anywhere" },
+                            e.target_found,
+                            tools::json_escape(&e.from),
+                            tools::json_escape(&e.to),
+                            e.hits,
+                            e.applied
+                        )
+                    })
+                    .collect();
+                println!(
+                    "{{\"file\":\"{}\",\"patch\":\"{}\",\"edits\":[{}],\"applied\":{},\"missed\":{},\"would_change\":{}}}",
+                    tools::json_escape(&file),
+                    tools::json_escape(&patch_path),
+                    rows.join(","),
+                    report.applied(),
+                    report.missed(),
+                    report.would_change()
+                );
+            } else {
+                println!(
+                    "rna: {} <- {} — {} applied, {} missed{}",
+                    file,
+                    patch_path,
+                    report.applied(),
+                    report.missed(),
+                    if report.would_change() {
+                        ""
+                    } else {
+                        " (no change)"
+                    }
+                );
+                for e in &report.edits {
+                    let scope = if e.gene_scoped { "gene" } else { "anywhere" };
+                    if !e.target_found {
+                        println!("  MISS [{}] target gene '{}' not found", scope, e.target);
+                    } else if e.applied {
+                        println!(
+                            "  ok   [{}] {} '{}' -> '{}' ({} hit{})",
+                            scope,
+                            e.target,
+                            e.from,
+                            e.to,
+                            e.hits,
+                            if e.hits == 1 { "" } else { "s" }
+                        );
+                    } else {
+                        println!("  MISS [{}] {} '{}' not present", scope, e.target, e.from);
+                    }
+                }
+            }
+            if write {
+                std::fs::write(&file, &report.new_text).expect("write failed");
+                eprintln!("rna: {} rewritten", file);
+            }
+            if report.missed() > 0 {
+                std::process::exit(1);
+            }
+        }
         "build" => {
             let file = match positional.first() {
                 Some(f) => f.clone(),
@@ -469,6 +557,56 @@ fn real_main() {
                 })
                 .collect();
             rows.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+            // W096: machine-readable profile. Self-describing (units, version,
+            // per-gene flags). NOTE: Chrome-trace format is deliberately NOT
+            // emitted yet — the profiler records aggregate self-time only;
+            // a trace needs per-call spans (interp instrumentation, dev-1
+            // lane). Emitting synthetic intervals would misrepresent timing.
+            if json {
+                let genes_json: Vec<String> = rows
+                    .iter()
+                    .map(|(name, calls, time)| {
+                        let mut flags: Vec<String> = Vec::new();
+                        if l.interp.enhanced.contains(name) {
+                            flags.push("\"enhanced\"".to_string());
+                        }
+                        if let Some(Value::Gene(d, _)) = l.interp.global.get(name) {
+                            if d.acetylate {
+                                flags.push("\"active\"".to_string());
+                            }
+                            if d.methylate {
+                                flags.push("\"repressed\"".to_string());
+                            }
+                        }
+                        format!(
+                            "{{\"name\":\"{}\",\"calls\":{},\"self_us\":{:.1},\"flags\":[{}]}}",
+                            tools::json_escape(name),
+                            calls,
+                            time,
+                            flags.join(",")
+                        )
+                    })
+                    .collect();
+                let total_us: f64 = rows.iter().map(|(_, _, t)| t).sum();
+                let total_defined = l.interp.defined_genes.len();
+                let mature = l.interp.call_counts.len().min(total_defined);
+                println!(
+                    "{{\"format\":\"operon-profile\",\"version\":\"{}\",\"file\":\"{}\",\"unit_self_time\":\"microseconds\",\"genes\":[{}],\"total_self_us\":{:.1},\"mature\":{},\"nascent\":{},\"maturation\":{:.2}}}",
+                    env!("CARGO_PKG_VERSION"),
+                    tools::json_escape(&file),
+                    genes_json.join(","),
+                    total_us,
+                    mature,
+                    total_defined.saturating_sub(mature),
+                    if total_defined > 0 {
+                        mature as f64 / total_defined as f64
+                    } else {
+                        0.0
+                    }
+                );
+                tools::flush_notes(&l, opts.quiet);
+                return;
+            }
             println!("operon profile: {} ({} gene(s) executed)", file, rows.len());
             println!("{:<24} {:>8} {:>12}  flags", "gene", "calls", "self µs");
             for (name, calls, time) in &rows {
@@ -527,6 +665,102 @@ fn real_main() {
                 );
             }
             tools::flush_notes(&l, opts.quiet);
+        }
+        "watch" => {
+            // W072: re-run on change. v1: mtime polling (200 ms, no external
+            // deps) over the entry file + its local (non-std) import tree;
+            // each iteration is a fresh `operon run` child, so fuel/caps/
+            // interpreter state reset per run — no cross-run contamination.
+            let file = match positional.first() {
+                Some(f) => f.clone(),
+                None => die("watch needs a file"),
+            };
+            let passthrough = positional[1..].to_vec();
+            fn collect_deps(path: &str, visited: &mut Vec<String>) {
+                if visited.len() >= 64 || visited.iter().any(|p| p == path) {
+                    return;
+                }
+                visited.push(path.to_string());
+                let src = std::fs::read_to_string(path).unwrap_or_default();
+                let prog = parser::parse(&src);
+                let base = std::path::Path::new(path).parent().map(|p| p.to_path_buf());
+                for s in &prog.stmts {
+                    if let Stmt::Use(u, _) = s {
+                        let f = u.trim_end_matches(".op").to_string() + ".op";
+                        if let Some(b) = &base {
+                            let cand = b.join(&f);
+                            if cand.is_file() {
+                                collect_deps(cand.to_string_lossy().as_ref(), visited);
+                            }
+                        }
+                    }
+                }
+            }
+            let snapshot = |files: &Vec<String>| -> Vec<(String, Option<std::time::SystemTime>)> {
+                files
+                    .iter()
+                    .map(|f| {
+                        let m = std::fs::metadata(f).and_then(|m| m.modified()).ok();
+                        (f.clone(), m)
+                    })
+                    .collect()
+            };
+            let exe =
+                std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("operon"));
+            let mut iter: usize = 0;
+            loop {
+                let mut deps: Vec<String> = Vec::new();
+                collect_deps(&file, &mut deps);
+                let before = snapshot(&deps);
+                iter += 1;
+                println!(
+                    "\n[watch #{}] {} ({} file(s) watched)",
+                    iter,
+                    file,
+                    deps.len()
+                );
+                let t0 = std::time::Instant::now();
+                let status = std::process::Command::new(&exe)
+                    .arg("run")
+                    .arg(&file)
+                    .args(&passthrough)
+                    .status();
+                let ms = t0.elapsed().as_millis();
+                match status {
+                    Ok(s) => println!(
+                        "[watch #{}] exit={} in {}ms",
+                        iter,
+                        s.code().unwrap_or(-1),
+                        ms
+                    ),
+                    Err(e) => println!("[watch #{}] spawn failed: {}", iter, e),
+                }
+                // poll for changes; the dep set itself is recomputed on the
+                // next iteration so newly added imports start being watched
+                loop {
+                    std::thread::sleep(std::time::Duration::from_millis(200));
+                    let after = snapshot(&deps);
+                    if after != before {
+                        break;
+                    }
+                }
+            }
+        }
+        "graph" => {
+            // W094: static regulate-network export — parse-only (like
+            // check/fmt), no run, no capabilities beyond reading the file.
+            let file = match positional.first() {
+                Some(f) => f.clone(),
+                None => die("graph needs a file"),
+            };
+            let src = std::fs::read_to_string(&file).unwrap_or_default();
+            let prog = parser::parse(&src);
+            let g = graph::collect(&prog.stmts);
+            if json {
+                println!("{}", graph::to_json(&g));
+            } else {
+                print!("{}", graph::to_dot(&g));
+            }
         }
         "crispr" => {
             let file = match positional.first() {
@@ -1026,6 +1260,9 @@ usage:
   operon fmt f.op [--write]
   operon repl
   operon build f.op [--variant v] [-o out.op]
+  operon rna f.op patch.rna [--write] [--json]
+  operon graph f.op [--json]
+  operon watch f.op [args...]
   operon profile f.op
   operon crispr f.op --knockout gene [--json]
   operon bench f.op [--iters n]
