@@ -50,7 +50,8 @@ fn assert_stable(src: &str, cfg: &FmtConfig, path: &std::path::Path) {
     let once = format_program_with(&parser::parse(src), cfg);
     let twice = format_program_with(&parser::parse(&once), cfg);
     assert_eq!(
-        once, twice,
+        once,
+        twice,
         "formatter is not idempotent under {cfg:?} for {}",
         path.display()
     );
@@ -66,8 +67,7 @@ fn assert_stable(src: &str, cfg: &FmtConfig, path: &std::path::Path) {
         .filter(|n| n.rung >= 3)
         .map(|n| n.message.clone())
         .filter(|m| {
-            cfg.quotes != QuoteMode::Single
-                || m != "single-quoted string repaired to double quotes"
+            cfg.quotes != QuoteMode::Single || m != "single-quoted string repaired to double quotes"
         })
         .collect();
     assert!(
@@ -81,7 +81,11 @@ fn assert_stable(src: &str, cfg: &FmtConfig, path: &std::path::Path) {
 fn fmt_idempotence_corpus_default_config() {
     let cfg = FmtConfig::default();
     let files = corpus();
-    assert!(files.len() > 100, "corpus unexpectedly small: {}", files.len());
+    assert!(
+        files.len() > 100,
+        "corpus unexpectedly small: {}",
+        files.len()
+    );
     for f in &files {
         let src = std::fs::read_to_string(f).unwrap_or_default();
         assert_stable(&src, &cfg, f);
@@ -90,7 +94,10 @@ fn fmt_idempotence_corpus_default_config() {
 
 #[test]
 fn fmt_idempotence_corpus_indent4_single_quotes() {
-    let cfg = FmtConfig { indent: 4, quotes: QuoteMode::Single };
+    let cfg = FmtConfig {
+        indent: 4,
+        quotes: QuoteMode::Single,
+    };
     for f in corpus() {
         let src = std::fs::read_to_string(&f).unwrap_or_default();
         assert_stable(&src, &cfg, &f);
@@ -100,15 +107,27 @@ fn fmt_idempotence_corpus_indent4_single_quotes() {
 #[test]
 fn fmt_quote_decision_is_lossless_and_idempotent() {
     // plain text -> single under Single mode
-    let cfg_s = FmtConfig { indent: 2, quotes: QuoteMode::Single };
+    let cfg_s = FmtConfig {
+        indent: 2,
+        quotes: QuoteMode::Single,
+    };
     let out = format_program_with(&parser::parse("show(\"plain text\")"), &cfg_s);
-    assert!(out.contains("'plain text'"), "expected single quotes: {out}");
+    assert!(
+        out.contains("'plain text'"),
+        "expected single quotes: {out}"
+    );
     // content with a single-quote char must fall back to double (lossless rule)
     let out2 = format_program_with(&parser::parse("show(\"it's here\")"), &cfg_s);
-    assert!(out2.contains("\"it's here\""), "expected double fallback: {out2}");
+    assert!(
+        out2.contains("\"it's here\""),
+        "expected double fallback: {out2}"
+    );
     // interpolation always stays double (canonical form for interpolated strings)
     let out3 = format_program_with(&parser::parse("show(\"hi {name}\")"), &cfg_s);
-    assert!(out3.contains("\"hi {name}\""), "expected interp to stay double: {out3}");
+    assert!(
+        out3.contains("\"hi {name}\""),
+        "expected interp to stay double: {out3}"
+    );
     // and the single-quoted output re-parses to the SAME value (round-trip)
     let prog = parser::parse(&out);
     assert!(
@@ -124,9 +143,15 @@ fn fmt_indent_option_changes_nesting_only() {
     let a = format_program(&parser::parse(src));
     let b = format_program_with(
         &parser::parse(src),
-        &FmtConfig { indent: 4, quotes: QuoteMode::Double },
+        &FmtConfig {
+            indent: 4,
+            quotes: QuoteMode::Double,
+        },
     );
-    assert!(a.contains("\n    show(1)"), "default 2-space nesting: {a:?}");
+    assert!(
+        a.contains("\n    show(1)"),
+        "default 2-space nesting: {a:?}"
+    );
     assert!(b.contains("\n        show(1)"), "indent 4 nesting: {b:?}");
 }
 
