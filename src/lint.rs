@@ -184,7 +184,7 @@ pub fn lint(prog: &Program) -> Vec<Finding> {
                 }
             }
             // W42: unreachable-code (return/raise/raise-like followed by siblings)
-            Stmt::Return(_) | Stmt::Raise(_, _) => {}
+            Stmt::Return(_) | Stmt::Raise(_, _, _) => {} // W007: raise carries its line
             _ => {}
         }
     });
@@ -235,7 +235,7 @@ fn unreachable_scan(stmts: &[Stmt], line_hint: usize, out: &mut Vec<Finding>) {
         }
         match st {
             Stmt::Return(_) => terminated_at = Some((i, "return")),
-            Stmt::Raise(_, _) => terminated_at = Some((i, "raise")),
+            Stmt::Raise(_, _, _) => terminated_at = Some((i, "raise")),
             _ => terminated_at = None,
         }
         // recurse into nested blocks
@@ -570,7 +570,7 @@ fn stmt_gene(st: &Stmt) -> Option<&std::sync::Arc<crate::ast::GeneDef>> {
 fn st_exprs(st: &Stmt) -> Vec<&Expr> {
     match st {
         Stmt::Let(_, e) | Stmt::Return(Some(e)) => vec![e],
-        Stmt::Assign(_, _, e) | Stmt::Raise(_, e) => vec![e],
+        Stmt::Assign(_, _, e) | Stmt::Raise(_, e, _) => vec![e],
         Stmt::ExprStmt(e) => vec![e],
         Stmt::While(c, _) => vec![c],
         Stmt::For(_, it, _) => vec![it],

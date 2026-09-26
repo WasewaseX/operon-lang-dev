@@ -7,14 +7,17 @@
   "crispr",
   "explain",
   "fmt",
+  "graph",
   "ir",
   "keywords",
   "lint",
   "profile",
   "repl",
+  "rna",
   "run",
   "test",
-  "version"
+  "version",
+  "watch"
  ],
  "keyword_analogy_pending": [],
  "keyword_count": 58,
@@ -92,14 +95,14 @@
   "textDocument/publishDiagnostics",
   "textDocument/signatureHelp"
  ],
- "proof_files": 83,
+ "proof_files": 89,
  "proof_totals": {
-  "asserts": 92,
-  "files": 99,
-  "proofs": 92,
+  "asserts": 98,
+  "files": 112,
+  "proofs": 98,
   "source": "bin/operon"
  },
- "redteam_files": 92,
+ "redteam_files": 97,
  "spec": {
   "h1": "# Operon \u2014 Language Specification",
   "status": "v2.3.0-dev"
@@ -168,6 +171,6 @@
    "module": "testing"
   }
  ],
- "test_op_files": 84,
+ "test_op_files": 90,
  "version": "2.2.0"
 }
