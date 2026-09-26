@@ -244,12 +244,12 @@ Requires: rustc (≥1.70), gcc, g++. One build-dependency: the `cc` crate compil
 
 ## Language
 
-- **Values**: null, bool, int(i64, overflow = catchable Stress), float, str (with `"interp {expr}"`), list, map (insertion-ordered), gene (closure), native.
+- **Values**: null, bool, int(i64, overflow = catchable Stress), float, str (with `"interp {expr}"`), list, map (insertion-ordered), gene (closure), native, **Option/Result variants** (`some/none/ok/err` — expected failures are values, D-014).
 - **Control**: `if/elif/else`, `while`, `loop`, `for…in`, `match/case` (literals, binding, wildcard), `for x in xs if cond collect body` comprehensions, `break/continue`, `return`.
 - **Regulation as execution**: `regulate` networks gate calls; `operon` units give polycistronic transcription with polarity, and opt-in Rho-dependent termination with a ribosome-queue coupling shield (`rho.termination` in a `.cell`).
-- **Operators**: `**` (right-assoc pow), `& | ^ << >> ~` bitwise, `cond ? a : b` ternary, `int % int` → int.
+- **Operators**: `**` (right-assoc pow), `& | ^ << >> ~` bitwise, `cond ? a : b` ternary, `e?!` Result/Option propagation (Rust-style: Some/Ok unwraps, None/Err returns from the gene — a return, never a failure), `int % int` → int.
 - **Genes**: named, anonymous, lambdas, defaults, closures, recursion, `guard` clauses, marks — plus **phenotype classes** (`phenotype P { let f = 0; gene init() {…} }`, `new P(...)`, `self`, `phenotype C from P`) and **sequence generators** (`sequence s() { yield v }` with `.next()`/`.collect()`, lazy worker-cell pull).
-- **Errors**: everything is a catchable `Stress{kind, message}` — `unfolded | missing | overflow | burned | interference` — plus Total-Grammar runtime notes. A program never crashes; worst case it narrates what it repaired.
+- **Errors**: a four-tier hierarchy (SPEC §9) — null+note (soft miss) → **Option/Result values** (`some/none/ok/err`, `?!` propagation, `unwrap_or` defaults) → catchable `Stress{kind, message}` — `unfolded | missing | overflow | burned | interference | unwrap` — plus Total-Grammar runtime notes. Expected failures stay values; Stress is for contract violations. A program never crashes; worst case it narrates what it repaired.
 - **Concurrency**: `spawn(gene, args)` / `join(id)` — real OS threads with value serialization; sequences run on worker cells; timed repressilator threads.
 - **Modules**: `use std/bio;` — TAD-insulated, anchor-controlled exports, module cache, cycle-tolerant. Fifteen stdlib modules today: `args`, `bio`, `collections`, `csv`, `fmt`, `fs`, `iter`, `json`, `math`, `motifs`, `random`, `seq`, `set`, `strings`, `testing` — plus the capability-gated `py()` bridge for the scientific-Python deep end.
 

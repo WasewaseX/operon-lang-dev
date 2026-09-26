@@ -52,6 +52,10 @@ pub enum Expr {
     FateNew(String),
     New(String, Vec<Expr>),                   // phenotype constructor
     Ternary(Box<Expr>, Box<Expr>, Box<Expr>), // cond ? a : b
+    /// W06 (D-014): `e?!` — Option/Result propagation. Some/Ok unwraps to the
+    /// payload; None/Err unwinds to the nearest enclosing gene boundary and
+    /// becomes that gene's return value. Line stamps the propagation signal.
+    Propagate(Box<Expr>, usize),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

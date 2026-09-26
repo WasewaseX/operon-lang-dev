@@ -1,0 +1,50 @@
+# ============================================================
+# Option pipeline  — cookbook #19
+# you already know: Result/Option error handling from Rust/Swift
+# teaches: expected failures as VALUES (not exceptions): constructors,
+#          ?! propagation up a call chain, unwrap_or defaults, and the
+#          boundary where unwrap's stress belongs (programmer bugs only)
+# run: operon run examples/cookbook/option_pipeline.op
+# expected output: examples/cookbook/expected/option_pipeline.out
+# verified by scripts/cookbook.sh on the Rust core AND the Python oracle
+# ============================================================
+# A tiny "config lookup" layer: find_user returns a Result, get_pref an Option.
+# Option = "the value may be absent" · Result = "it may fail with a reason".
+gene find_user(db, name) {
+    if (not has(db, name)) {
+        return err("no user '" + name + "'")
+    }
+    return ok(db[name])
+}
+gene get_pref(user, key) {
+    let prefs = user["prefs"]
+    if (not has(prefs, key)) {
+        return none()
+    }
+    return some(prefs[key])
+}
+# ?! propagates the failure up: find_user's Err IS theme_of's return value,
+# and get_pref's none() unwinds too — no if-chains anywhere.
+gene theme_of(db, name) {
+    let user = find_user(db, name)?!
+    let theme = get_pref(user, "theme")?!
+    return ok("theme=" + theme)
+}
+# The boundary decides: unwrap_or for a default; is_ok/unwrap where the
+# caller wants the reason. Propagation is a return, so rescue never sees it.
+gene render(db, name) {
+    let r = theme_of(db, name)
+    if (is_ok(r)) {
+        return unwrap(r)
+    }
+    let fallback = get_pref(find_user(db, "public")?!, "theme")
+    return "theme=" + unwrap_or(fallback, "light")
+}
+let db = {
+    "alice": {"prefs": {"theme": "dark"}},
+    "public": {"prefs": {"theme": "light"}}
+}
+print(render(db, "alice"))
+print(render(db, "ghost"))
+db["public"]["prefs"]["theme"] = "solarized"
+print(render(db, "ghost"))

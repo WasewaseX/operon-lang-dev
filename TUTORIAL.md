@@ -316,6 +316,42 @@ Hard failures still exist for real faults: `raise` throws a catchable stress
 (`raise "overflow", "value too big"`), and `stress ... rescue ...` handles it — Operon's
 try/catch, with more honest naming than most.
 
+### 8a. Expected failures are values: Option/Result
+
+Most "errors" aren't failures at all — the key might be absent, the record might not
+exist. Operon gives those the mainstream treatment (Rust's `Option`/`Result`, D-014):
+
+```operon
+gene main() {
+    let maybe = some(42)        # or none()
+    let r = ok("shipped")       # or err("why it failed")
+    promote(unwrap_or(maybe, 0))    # 42 — safe extraction, never stresses
+    promote(is_ok(r), is_err(r))    # true false
+    promote(r)                      # Ok("shipped") — the tag IS the contract
+}
+```
+
+The workhorse is **`?!`** — propagation. A missing value returns *from your gene*, so the
+happy path stays straight-line:
+
+```operon
+gene find(db, k) {
+    if (not has(db, k)) {
+        return err("missing: " + k)
+    }
+    return ok(db[k])
+}
+gene double_of(db, k) {
+    let v = find(db, k)?!      # Err returns from double_of; Ok unwraps to v
+    return ok(v * 2)
+}
+```
+
+`double_of(db, "ghost")` IS `err("missing: ghost")` — the caller decides what a missing
+key means, right at the boundary. Reserve `unwrap()` (stress kind `unwrap`) for genuine
+programmer bugs — and `stress/rescue` for the exceptional tier. Hierarchy: null+note →
+Option/Result → Stress → hard exit (SPEC §9).
+
 ## 9. The REPL
 
 ```sh

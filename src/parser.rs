@@ -103,7 +103,7 @@ fn synonym(w: &str) -> Option<&'static str> {
         "next" | "skip" => "continue",
         "yes" | "on" => "true",
         "no" | "off" => "false",
-        "nil" | "none" | "nothing" => "null",
+        "nil" | "nothing" => "null",
         "unless" => "ifnot",
         "class" | "struct" | "record" | "prototype" | "type" => "phenotype",
         "generator" | "gen" | "stream" | "iter" => "sequence",
@@ -2957,6 +2957,14 @@ impl Parser {
                         }
                     }
                 }
+                Tok::QuestionBang => {
+                    // W06 (D-014): `e?!` — Option/Result propagation, a
+                    // postfix operator (binds tighter than every binary op,
+                    // repeats: Some(Some(x))?!?! unwraps twice).
+                    let line = self.line();
+                    self.next();
+                    e = Expr::Propagate(Box::new(e), line);
+                }
                 _ => break,
             }
         }
@@ -3082,7 +3090,11 @@ impl Parser {
                         self.next();
                         Expr::Bool(false)
                     }
-                    "null" | "nil" | "none" | "nothing" => {
+                    "null" | "nil" | "nothing" => {
+                        // W06 (D-014): 'none' was RETIRED from the null-synonym
+                        // set — it is now the Option constructor (none()). Bare
+                        // 'none' degrades to an unbound ident (phantom note),
+                        // never a silent null.
                         if w != "null" {
                             let line = self.line();
                             self.note(line, 2, format!("synonym '{}' repaired to 'null'", w));
