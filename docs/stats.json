@@ -1,10 +1,15 @@
 {
  "cli_subcommands": [
+  "ast",
   "bench",
   "build",
   "check",
   "crispr",
+  "explain",
   "fmt",
+  "ir",
+  "keywords",
+  "lint",
   "profile",
   "repl",
   "run",
@@ -84,13 +89,14 @@
   "textDocument/documentSymbol",
   "textDocument/formatting",
   "textDocument/hover",
-  "textDocument/publishDiagnostics"
+  "textDocument/publishDiagnostics",
+  "textDocument/signatureHelp"
  ],
  "proof_files": 83,
  "proof_totals": {
-  "asserts": 99,
-  "files": 106,
-  "proofs": 99,
+  "asserts": 92,
+  "files": 99,
+  "proofs": 92,
   "source": "bin/operon"
  },
  "redteam_files": 92,
