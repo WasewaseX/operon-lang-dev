@@ -93,7 +93,7 @@ pub enum BinOp {
     Nullish,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct GeneDef {
     pub name: Option<String>,
     /// A13 (dx-r2): source line of the definition — runtime gate notes
@@ -122,6 +122,42 @@ pub struct GeneDef {
     /// k_on: different promoters have different (kon, koff) — that is
     /// their identity. Rides the gene Arc, so workers inherit for free.
     pub burst: Option<(f64, f64)>,
+    /// W01 (L2c): soft type annotations — parallel to `params` (same
+    /// length; None where unannotated). Enforced at the call funnel as
+    /// catchable `unfolded` Stress (SPEC §7a); never a parse rejection.
+    pub param_anns: Vec<Option<TypeAnn>>,
+    /// W01: return annotation — `gene f() -> int { }`. Checked when the
+    /// gene produces its return value (including a `?!`-propagated one).
+    pub ret_ann: Option<TypeAnn>,
+}
+
+/// W01 (L2c): the annotation grammar — `int`, `float`, `str`, `bool`,
+/// `list`, `map`, `gene`, `sequence`, `phenotype`, `any`, unions (`int |
+/// str`), optionals (`int?`). Matching is by `Value::type_name()` with
+/// documented numeric widening (`float` accepts int; `int` refuses float)
+/// and `any` accepting everything. This is a SOFT contract: violations are
+/// recoverable Stress, never parse rejections.
+#[derive(Debug, Clone)]
+pub enum TypeAnn {
+    Named(String),
+    Union(Vec<TypeAnn>),
+    Optional(Box<TypeAnn>),
+}
+
+impl TypeAnn {
+    /// Canonical rendering (messages, fmt roundtrip, hover). Must match the
+    /// oracle's ann_render op-for-op.
+    pub fn render(&self) -> String {
+        match self {
+            TypeAnn::Named(n) => n.clone(),
+            TypeAnn::Union(alts) => alts
+                .iter()
+                .map(|a| a.render())
+                .collect::<Vec<_>>()
+                .join(" | "),
+            TypeAnn::Optional(inner) => format!("{}?", inner.render()),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -290,6 +326,10 @@ pub enum Pat {
 #[derive(Debug, Clone)]
 pub enum Stmt {
     Let(String, Expr),
+    /// W01 (L2c): annotated definition — `let n: int = 3`. The annotation is
+    /// checked when the statement binds (mismatch = catchable `unfolded`
+    /// Stress, SPEC §7a); the binding itself is an ordinary `let`.
+    LetAnn(String, TypeAnn, Expr),
     Assign(String, Option<BinOp>, Expr), // name (op=)? expr
     IndexAssign(Expr, Expr, Option<BinOp>, Expr), // target[i] (op=)? expr
     MemberAssign(Expr, String, Option<BinOp>, Expr), // target.k (op=)? expr

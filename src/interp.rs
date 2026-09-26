@@ -961,6 +961,29 @@ impl Interp {
                 env.define(name, v);
                 Ok(Flow::Norm)
             }
+            Stmt::LetAnn(name, ann, e) => {
+                // W01 (L2c): the annotation is a soft contract — a mismatch
+                // is catchable `unfolded` Stress (SPEC §7a), never a hard
+                // failure. On a mismatch the binding does NOT happen (the
+                // name stays unbound; a rescued program re-plans).
+                let v = self.eval(env, e)?;
+                if !ann_matches(&v, ann) {
+                    return Err(Stress::new(
+                        "unfolded",
+                        format!(
+                            "type annotation violated: '{}' expects {}, got {}",
+                            name,
+                            ann.render(),
+                            v.type_name()
+                        ),
+                    ));
+                }
+                if env.get(name).is_some() {
+                    self.note(0, 4, format!("rebinding '{}'", name));
+                }
+                env.define(name, v);
+                Ok(Flow::Norm)
+            }
             Stmt::Assign(name, op, e) => {
                 let val = self.eval(env, e)?;
                 match op {
@@ -4128,9 +4151,40 @@ impl Interp {
                 continue;
             }
             if let Some(a) = args.get(i) {
+                // W01 (L2c): soft param annotation — checked at the funnel,
+                // mismatch = catchable unfolded Stress naming the param,
+                // the gene, the expected and the actual type.
+                if let Some(ann) = def.param_anns.get(i).and_then(|a| a.as_ref()) {
+                    if !ann_matches(a, ann) {
+                        return Err(Stress::new(
+                            "unfolded",
+                            format!(
+                                "argument '{}' for gene '{}' expects {}, got {}",
+                                pname,
+                                name,
+                                ann.render(),
+                                a.type_name()
+                            ),
+                        ));
+                    }
+                }
                 fenv.define(pname, a.clone());
             } else if let Some(d) = default {
                 let dv = self.eval(&fenv, d).unwrap_or(Value::Null);
+                if let Some(ann) = def.param_anns.get(i).and_then(|a| a.as_ref()) {
+                    if !ann_matches(&dv, ann) {
+                        return Err(Stress::new(
+                            "unfolded",
+                            format!(
+                                "default of '{}' for gene '{}' expects {}, got {}",
+                                pname,
+                                name,
+                                ann.render(),
+                                dv.type_name()
+                            ),
+                        ));
+                    }
+                }
                 fenv.define(pname, dv);
             } else {
                 self.note(
@@ -4187,7 +4241,7 @@ impl Interp {
                     }
                 }
                 self.close_timing(&name);
-                return Ok(match flowed {
+                let gv = match flowed {
                     Flow::Ret(v) => v,
                     _ => {
                         self.note(
@@ -4197,7 +4251,10 @@ impl Interp {
                         );
                         Value::Null
                     }
-                });
+                };
+                // W01 (L2c): a guard-branch return is the gene's return —
+                // the annotation applies here too.
+                return self.check_ret_ann("gene", &name, &def.ret_ann, &gv, true);
             }
         }
         let result = self.exec_block(&fenv, &def.body);
@@ -4210,9 +4267,59 @@ impl Interp {
             Err(e) => return Err(e),
         };
         match flowed {
-            Flow::Ret(v) => Ok(v),
-            _ => Ok(Value::Null),
+            Flow::Ret(v) => {
+                // W01 (L2c): soft return annotation — checked on the value
+                // the gene actually returns (including a `?!`-propagated
+                // variant). Mismatch = catchable unfolded Stress; the W007
+                // chain still applies on the error path.
+                self.check_ret_ann("gene", &name, &def.ret_ann, &v, true)
+            }
+            _ => {
+                // no explicit return → null; a non-optional return
+                // annotation is violated by an implicit null too
+                self.check_ret_ann("gene", &name, &def.ret_ann, &Value::Null, false)
+            }
         }
+    }
+
+    /// W01 (L2c): the shared soft return-annotation check. `explicit=false`
+    /// means the gene fell off the end (implicit null) — the message names
+    /// it. Mirrored by oracle `_check_ret`.
+    fn check_ret_ann(
+        &self,
+        what: &str,
+        name: &str,
+        ann: &Option<TypeAnn>,
+        v: &Value,
+        explicit: bool,
+    ) -> Result<Value, Stress> {
+        if let Some(ann) = ann {
+            if explicit {
+                if !ann_matches(v, ann) {
+                    return Err(Stress::new(
+                        "unfolded",
+                        format!(
+                            "return of {} '{}' expects {}, got {}",
+                            what,
+                            name,
+                            ann.render(),
+                            v.type_name()
+                        ),
+                    ));
+                }
+            } else if !ann_matches(&Value::Null, ann) {
+                return Err(Stress::new(
+                    "unfolded",
+                    format!(
+                        "return of {} '{}' expects {}, got null (no return statement ran)",
+                        what,
+                        name,
+                        ann.render()
+                    ),
+                ));
+            }
+        }
+        Ok(v.clone())
     }
 
     /// dx-r1 (audit W5): clear all profiler accounting so a second execution
@@ -4440,6 +4547,21 @@ impl Interp {
                 continue;
             }
             if let Some(a) = args.get(i) {
+                // W01 (L2c): method param annotations — same soft contract.
+                if let Some(ann) = def.param_anns.get(i).and_then(|a| a.as_ref()) {
+                    if !ann_matches(a, ann) {
+                        return Err(Stress::new(
+                            "unfolded",
+                            format!(
+                                "argument '{}' for method '{}' expects {}, got {}",
+                                pname,
+                                name,
+                                ann.render(),
+                                a.type_name()
+                            ),
+                        ));
+                    }
+                }
                 fenv.define(pname, a.clone());
             } else if let Some(d) = default {
                 let dv = self.eval(&fenv, d).unwrap_or(Value::Null);
@@ -4501,8 +4623,12 @@ impl Interp {
             Err(e) => return Err(e),
         };
         match flowed {
-            Flow::Ret(v) => Ok(v),
-            _ => Ok(Value::Null),
+            Flow::Ret(v) => {
+                // W01 (L2c): phenotype methods enforce return annotations
+                // under the same soft contract as genes (SPEC §7c).
+                self.check_ret_ann("method", &name, &def.ret_ann, &v, true)
+            }
+            _ => self.check_ret_ann("method", &name, &def.ret_ann, &Value::Null, false),
         }
     }
 
@@ -9593,5 +9719,27 @@ pub fn repressilator_gate_level(n: usize, tick: u64, node_index: usize) -> f64 {
         1.0
     } else {
         norm
+    }
+}
+
+/// W01 (L2c): soft annotation matching. A value matches a type annotation by
+/// `Value::type_name()`, with two documented relaxations: `any` accepts
+/// everything, and `float` accepts int (safe numeric widening — `int`
+/// refuses float: no silent narrowing). Unions match any alternative;
+/// optionals additionally accept null. Mirrored by oracle.ann_matches.
+pub fn ann_matches(v: &Value, ann: &TypeAnn) -> bool {
+    match ann {
+        TypeAnn::Named(name) => {
+            if name == "any" {
+                return true;
+            }
+            if v.type_name() == name.as_str() {
+                return true;
+            }
+            // numeric widening: int is acceptable where float is declared
+            name == "float" && matches!(v, Value::Int(_))
+        }
+        TypeAnn::Union(alts) => alts.iter().any(|a| ann_matches(v, a)),
+        TypeAnn::Optional(inner) => matches!(v, Value::Null) || ann_matches(v, inner),
     }
 }

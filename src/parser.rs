@@ -643,6 +643,25 @@ impl Parser {
                     return Some(Stmt::LetPat(pat, Expr::Null));
                 }
                 let name = self.expect_ident()?;
+                // W01 (L2c): soft type annotation — `let n: int = 3`
+                if matches!(self.peek(), Tok::Colon) {
+                    self.next();
+                    let ann = self.parse_type_ann();
+                    if matches!(self.peek(), Tok::Eq) {
+                        self.next();
+                        let e = self.parse_expr();
+                        self.end_stmt();
+                        return Some(Stmt::LetAnn(name, ann, e));
+                    }
+                    let line = self.line();
+                    self.note(
+                        line,
+                        4,
+                        format!("'let {name}: {}' without value binds null", ann.render()),
+                    );
+                    self.end_stmt();
+                    return Some(Stmt::LetAnn(name, ann, Expr::Null));
+                }
                 // L1a: `let a, b = 1, 2` — multi-define (all values evaluated
                 // before any name binds).
                 if matches!(self.peek(), Tok::Comma) {
@@ -1784,6 +1803,7 @@ impl Parser {
                                         seq: false,
                                         riboswitch: None,
                                         burst: None,
+                                        ..GeneDef::default()
                                     }),
                                 ));
                             }
@@ -2097,6 +2117,7 @@ impl Parser {
                         seq: false,
                         riboswitch: None,
                         burst: None,
+                        ..GeneDef::default()
                     })));
                 }
                 self.parse_assign_or_expr(w)
@@ -2320,6 +2341,50 @@ impl Parser {
         matches!(e, Expr::Ident(_) | Expr::Index(..) | Expr::Member(..))
     }
 
+    /// W01 (L2c): type-annotation grammar — `name` (a type name), `name?`
+    /// (optional), `a | b | ...` (union). Total Grammar: a malformed
+    /// annotation degrades to `any` with a note — never a rejection.
+    fn parse_type_ann(&mut self) -> TypeAnn {
+        let first = self.parse_type_ann_atom();
+        if matches!(self.peek(), Tok::Pipe) {
+            let mut alts = vec![first];
+            while matches!(self.peek(), Tok::Pipe) {
+                self.next();
+                alts.push(self.parse_type_ann_atom());
+            }
+            return TypeAnn::Union(alts);
+        }
+        first
+    }
+
+    fn parse_type_ann_atom(&mut self) -> TypeAnn {
+        match self.peek().clone() {
+            Tok::Ident(w) => {
+                self.next();
+                let base = TypeAnn::Named(w);
+                if matches!(self.peek(), Tok::Question) {
+                    self.next();
+                    TypeAnn::Optional(Box::new(base))
+                } else {
+                    base
+                }
+            }
+            other => {
+                let line = self.line();
+                self.note(
+                    line,
+                    4,
+                    format!(
+                        "'{}' is not a type name; annotation treated as any",
+                        other.describe()
+                    ),
+                );
+                self.next();
+                TypeAnn::Named("any".to_string())
+            }
+        }
+    }
+
     /// L1a: destructuring pattern — `[a, b]`, `[head, *rest]`, `{x, y}`,
     /// nested list patterns. Soft Total Grammar: unclosed brackets are
     /// auto-closed with a note; garbage elements bind wildcards.
@@ -2437,6 +2502,7 @@ impl Parser {
             _ => None,
         };
         let mut params = Vec::new();
+        let mut param_anns: Vec<Option<TypeAnn>> = Vec::new();
         if matches!(self.peek(), Tok::LParen) {
             self.next();
             loop {
@@ -2452,6 +2518,13 @@ impl Parser {
                 }
                 let before = self.pos;
                 let pname = self.expect_ident().unwrap_or_default();
+                // W01 (L2c): parameter annotation — `gene f(x: int) { }`
+                let ann = if matches!(self.peek(), Tok::Colon) {
+                    self.next();
+                    Some(self.parse_type_ann())
+                } else {
+                    None
+                };
                 let default = if matches!(self.peek(), Tok::Eq) {
                     self.next();
                     Some(self.parse_expr())
@@ -2459,6 +2532,7 @@ impl Parser {
                     None
                 };
                 params.push((pname, default));
+                param_anns.push(ann);
                 if matches!(self.peek(), Tok::Comma) {
                     self.next();
                 }
@@ -2471,6 +2545,14 @@ impl Parser {
                 }
             }
         }
+        // W01 (L2c): return annotation — `gene f(x) -> int { }` (Tok::Arrow,
+        // parsed before the uORF guard clause).
+        let ret_ann = if matches!(self.peek(), Tok::Arrow) {
+            self.next();
+            Some(self.parse_type_ann())
+        } else {
+            None
+        };
         // uORF leading guard
         let mut guard = None;
         self.eat_newlines_inline();
@@ -2502,6 +2584,8 @@ impl Parser {
                 name,
                 line: def_line,
                 params,
+                param_anns,
+                ret_ann,
                 guard,
                 body: vec![Stmt::Return(Some(e))],
                 acetylate,
@@ -2519,6 +2603,8 @@ impl Parser {
             name,
             line: def_line,
             params,
+            param_anns,
+            ret_ann,
             guard,
             body,
             acetylate,

@@ -50,14 +50,17 @@ class Variant:
         return v_repr(self)
 
 class Gene:
-    __slots__ = ("name", "params", "guard", "body", "acetylate", "methylate", "m6a", "copies", "seq", "riboswitch", "burst", "closure")
-    def __init__(self, name, params, guard, body, ac=False, me=False, m6=False, copies=1, seq=False, riboswitch=None, burst=None):
+    __slots__ = ("name", "params", "guard", "body", "acetylate", "methylate", "m6a", "copies", "seq", "riboswitch", "burst", "closure", "param_anns", "ret_ann")
+    def __init__(self, name, params, guard, body, ac=False, me=False, m6=False, copies=1, seq=False, riboswitch=None, burst=None, param_anns=None, ret_ann=None):
         self.name, self.params, self.guard, self.body = name, params, guard, body
         self.acetylate, self.methylate, self.m6a, self.copies, self.seq = ac, me, m6, copies, seq
         # loop-9 (F-5): cis riboswitch (ligand, bound_means_on, threshold)
         self.riboswitch = riboswitch
         # loop-9 (F-2): per-gene promoter identity (kon, koff)
         self.burst = burst
+        # W01 (L2c): soft type annotations (mirror of GeneDef.param_anns/ret_ann)
+        self.param_anns = param_anns if param_anns is not None else []
+        self.ret_ann = ret_ann
         self.closure = None
 
 ENHANCE_DELTA = 0.25  # T2e: super-enhancer activation boost (GRN threshold reduction)
@@ -270,6 +273,36 @@ def truthy(v):
     # W06 mirror: a carried success is truthy; a carried failure is falsy
     if isinstance(v, Variant): return v.tag in ("Some", "Ok")
     return True
+
+# W01 (L2c) — soft annotation matching (mirror of interp.rs ann_matches).
+# A value matches by type_name(); `any` accepts everything; `float` accepts
+# int (safe numeric widening — `int` refuses float: no silent narrowing);
+# unions match any alternative; optionals additionally accept null.
+def ann_matches(v, ann):
+    k = ann[0]
+    if k == "named":
+        name = ann[1]
+        if name == "any":
+            return True
+        if type_name(v) == name:
+            return True
+        return name == "float" and isinstance(v, int) and not isinstance(v, bool)
+    if k == "union":
+        return any(ann_matches(v, a) for a in ann[1])
+    if k == "opt":
+        return v is None or ann_matches(v, ann[1])
+    return False
+
+def ann_render(ann):
+    # Canonical rendering — must match TypeAnn::render op-for-op.
+    k = ann[0]
+    if k == "named":
+        return ann[1]
+    if k == "union":
+        return " | ".join(ann_render(a) for a in ann[1])
+    if k == "opt":
+        return ann_render(ann[1]) + "?"
+    return "any"
 
 def type_name(v):
     if v is None: return "null"
@@ -776,6 +809,19 @@ class P:
                 self.note(self.peek()[2], 4, "multi 'let' without value binds nulls")
                 self.end_stmt()
                 return ("multi", [("ident", n) for n in names], [("null",)] * len(names), True)
+            # W01 (L2c): soft type annotation — `let n: int = 3`
+            t2 = self.peek()
+            if t2[0] == "SYM" and t2[1] == ":":
+                self.next()
+                ann = self.type_ann()
+                if self.peek() == ("SYM", "=", self.peek()[2]):
+                    self.next()
+                    e = self.expr()
+                    self.end_stmt()
+                    return ("letann", name, ann, e)
+                self.note(self.peek()[2], 4, f"'let {name}: {ann_render(ann)}' without value binds null")
+                self.end_stmt()
+                return ("letann", name, ann, ("null",))
             if self.peek() == ("SYM", "=", self.peek()[2]):
                 self.next()
                 e = self.expr()
@@ -1654,6 +1700,7 @@ class P:
             name = t[1]
             self.next()
         params = []
+        param_anns = []
         if self.peek() == ("SYM", "(", self.peek()[2]):
             self.next()
             while True:
@@ -1666,16 +1713,27 @@ class P:
                     break
                 before = self.pos
                 pname = self.ident()
+                # W01 (L2c): parameter annotation — `gene f(x: int) { }`
+                ann = None
+                if self.peek() == ("SYM", ":", self.peek()[2]):
+                    self.next()
+                    ann = self.type_ann()
                 dflt = None
                 if self.peek() == ("SYM", "=", self.peek()[2]):
                     self.next()
                     dflt = self.expr()
                 params.append((pname, dflt))
+                param_anns.append(ann)
                 if self.peek() == ("SYM", ",", self.peek()[2]):
                     self.next()
                 if self.pos == before:
                     self.note(t[2], 4, "unclosed parameter list; auto-closed")
                     break
+        # W01 (L2c): return annotation — `gene f(x) -> int { }`
+        ret_ann = None
+        if self.peek() == ("SYM", "->", self.peek()[2]):
+            self.next()
+            ret_ann = self.type_ann()
         guard = None
         self.eat_nl()
         if self.expect_kw("guard"):
@@ -1696,9 +1754,9 @@ class P:
             self.next()
             e = self.expr()
             self.end_stmt()
-            return ("gene", Gene(name, params, guard, [("return", e)], ac, me, m6, copies, riboswitch=riboswitch, burst=burst))
+            return ("gene", Gene(name, params, guard, [("return", e)], ac, me, m6, copies, seq=False, riboswitch=riboswitch, burst=burst, param_anns=param_anns, ret_ann=ret_ann))
         body = self.block()
-        return ("gene", Gene(name, params, guard, body, ac, me, m6, copies, riboswitch=riboswitch, burst=burst))
+        return ("gene", Gene(name, params, guard, body, ac, me, m6, copies, seq=False, riboswitch=riboswitch, burst=burst, param_anns=param_anns, ret_ann=ret_ann))
 
     def block(self):
         if not (self.peek() == ("SYM", "{", self.peek()[2])):
@@ -2163,6 +2221,33 @@ class P:
         if lit:
             parts.append(("lit", "".join(lit)))
         return ("interp", parts)
+
+    # W01 (L2c): type-annotation grammar — `name`, `name?` (optional),
+    # `a | b` (union). Malformed annotation degrades to any (Total Grammar).
+    def type_ann(self):
+        first = self.type_ann_atom()
+        t = self.peek()
+        if t[0] == "SYM" and t[1] == "|":
+            alts = [first]
+            while t[0] == "SYM" and t[1] == "|":
+                self.next()
+                alts.append(self.type_ann_atom())
+                t = self.peek()
+            return ("union", alts)
+        return first
+
+    def type_ann_atom(self):
+        t = self.peek()
+        if t[0] == "IDENT":
+            self.next()
+            t2 = self.peek()
+            if t2[0] == "SYM" and t2[1] == "?":
+                self.next()
+                return ("opt", ("named", t[1]))
+            return ("named", t[1])
+        self.note(t[2], 4, f"'{t[1]}' is not a type name; annotation treated as any")
+        self.next()
+        return ("named", "any")
 
     def pattern(self):
         # W02 (match-v2) mirror of parser.rs parse_pattern: atom | or-chain |
@@ -2766,6 +2851,16 @@ class Interp:
             if s[1] in env:
                 self.note(4, f"rebinding '{s[1]}'")
             env[s[1]] = v
+        elif k == "letann":
+            # W01 (L2c): annotated definition — mismatch = catchable unfolded
+            # Stress; the binding does NOT happen (mirror of interp.rs).
+            _, name, ann, ex = s
+            v = self.eval(env, ex)
+            if not ann_matches(v, ann):
+                raise Stress("unfolded", f"type annotation violated: '{name}' expects {ann_render(ann)}, got {type_name(v)}")
+            if name in env:
+                self.note(4, f"rebinding '{name}'")
+            env[name] = v
         elif k == "letpat":
             # L1a: destructuring definition
             v = self.eval(env, s[2])
@@ -4198,9 +4293,17 @@ class Interp:
             if pname in ("?", ""):
                 continue
             if i < len(args):
+                # W01 (L2c): soft param annotation at the funnel (mirror).
+                anns = g.param_anns
+                if i < len(anns) and anns[i] is not None and not ann_matches(args[i], anns[i]):
+                    raise Stress("unfolded", f"argument '{pname}' for gene '{name}' expects {ann_render(anns[i])}, got {type_name(args[i])}")
                 fenv[pname] = args[i]
             elif dflt is not None:
-                fenv[pname] = self.eval(fenv, dflt)
+                dv = self.eval(fenv, dflt)
+                anns = g.param_anns
+                if i < len(anns) and anns[i] is not None and not ann_matches(dv, anns[i]):
+                    raise Stress("unfolded", f"default of '{pname}' for gene '{name}' expects {ann_render(anns[i])}, got {type_name(dv)}")
+                fenv[pname] = dv
             else:
                 self.note(4, f"missing argument '{pname}' in call to {name}; bound null")
                 fenv[pname] = None
@@ -4229,15 +4332,30 @@ class Interp:
                     raise
         try:
             self.exec_block(fenv, g.body)
-            return None
+            # no explicit return → null; a non-optional return annotation is
+            # violated by the implicit null too (mirror of interp.rs)
+            return self._check_ret(name, g, None, False)
         except Return as r:
-            return r.value
+            return self._check_ret(name, g, r.value, True)
         except Stress as st:
             # W06 (D-014) mirror: a propagated variant IS the gene's return
             # value — the signal unwinds here and becomes the result.
             if st.prop is not None:
-                return st.prop
+                return self._check_ret(name, g, st.prop, True)
             raise
+
+    def _check_ret(self, name, g, v, explicit):
+        """W01 (L2c): soft return annotation — checked on the value the gene
+        actually returns (including a `?!`-propagated variant)."""
+        if g.ret_ann is None:
+            return v
+        if explicit:
+            if not ann_matches(v, g.ret_ann):
+                raise Stress("unfolded", f"return of gene '{name}' expects {ann_render(g.ret_ann)}, got {type_name(v)}")
+        else:
+            if not ann_matches(None, g.ret_ann):
+                raise Stress("unfolded", f"return of gene '{name}' expects {ann_render(g.ret_ann)}, got null (no return statement ran)")
+        return v
 
     # ---- methods
     def call_method_gene(self, g, self_val, args):
@@ -4273,6 +4391,10 @@ class Interp:
                 if pname in ("?", "", "self"):
                     continue
                 if i < len(args):
+                    # W01 (L2c): method param annotations — same soft contract.
+                    anns = g.param_anns
+                    if i < len(anns) and anns[i] is not None and not ann_matches(args[i], anns[i]):
+                        raise Stress("unfolded", f"argument '{pname}' for method '{name}' expects {ann_render(anns[i])}, got {type_name(args[i])}")
                     fenv[pname] = args[i]
                 elif dflt is not None:
                     fenv[pname] = self.eval(fenv, dflt)
@@ -4288,28 +4410,40 @@ class Interp:
                     self.note(4, f"guard tripped calling {name}")
                     try:
                         self.exec_block(fenv, gbody)
-                        return None
+                        return self._check_ret_method(name, g, None, False)
                     except Return as r:
-                        return r.value
+                        return self._check_ret_method(name, g, r.value, True)
                     except Stress as st:
                         # W06 (D-014) mirror: guard-body propagation returns
                         # from the method (same contract as a guard `return`).
                         if st.prop is not None:
-                            return st.prop
+                            return self._check_ret_method(name, g, st.prop, True)
                         raise
             try:
                 self.exec_block(fenv, g.body)
-                return None
+                return self._check_ret_method(name, g, None, False)
             except Return as r:
-                return r.value
+                return self._check_ret_method(name, g, r.value, True)
             except Stress as st:
                 # W06 (D-014) mirror: a propagated variant IS the method's
                 # return value.
                 if st.prop is not None:
-                    return st.prop
+                    return self._check_ret_method(name, g, st.prop, True)
                 raise
         finally:
             self.depth -= 1
+
+    def _check_ret_method(self, name, g, v, explicit):
+        """W01 (L2c): method return annotation — same soft contract."""
+        if g.ret_ann is None:
+            return v
+        if explicit:
+            if not ann_matches(v, g.ret_ann):
+                raise Stress("unfolded", f"return of method '{name}' expects {ann_render(g.ret_ann)}, got {type_name(v)}")
+        else:
+            if not ann_matches(None, g.ret_ann):
+                raise Stress("unfolded", f"return of method '{name}' expects {ann_render(g.ret_ann)}, got null (no return statement ran)")
+        return v
 
     def call_method(self, env, recv, name, args):
         if isinstance(recv, SeqObj):

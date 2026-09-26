@@ -789,6 +789,7 @@ fn collect_calls(prog: &Program, defined: &mut HashSet<String>, called: &mut Vec
                 }
             }
             Stmt::Let(_, e)
+            | Stmt::LetAnn(_, _, e)
             | Stmt::Assign(_, _, e)
             | Stmt::ExprStmt(e)
             | Stmt::Return(Some(e))
@@ -1226,6 +1227,10 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
         Stmt::Let(n, e) => {
             out.push_str(&format!("let {} = {}\n", n, fmt_expr(e)));
         }
+        // W01 (L2c): annotated definition roundtrip
+        Stmt::LetAnn(n, ann, e) => {
+            out.push_str(&format!("let {}: {} = {}\n", n, ann.render(), fmt_expr(e)));
+        }
         Stmt::LetPat(p, e) => {
             out.push_str(&format!(
                 "let {} = {}\n",
@@ -1377,8 +1382,23 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
                 out.push_str("@m6a ");
             }
             match &g.name {
-                Some(n) => out.push_str(&format!("gene {}({})", n, fmt_params(&g.params))),
-                None => out.push_str(&format!("gene({})", fmt_params(&g.params))),
+                Some(n) => out.push_str(&format!(
+                    "gene {}({}){}",
+                    n,
+                    fmt_params_ann(&g.params, &g.param_anns),
+                    match &g.ret_ann {
+                        Some(a) => format!(" -> {}", a.render()),
+                        None => String::new(),
+                    }
+                )),
+                None => out.push_str(&format!(
+                    "gene({}){}",
+                    fmt_params_ann(&g.params, &g.param_anns),
+                    match &g.ret_ann {
+                        Some(a) => format!(" -> {}", a.render()),
+                        None => String::new(),
+                    }
+                )),
             }
             if let Some((c, gb)) = &g.guard {
                 out.push_str(&format!(" guard ({}) ", fmt_expr(c)));
@@ -1659,10 +1679,25 @@ fn fmt_pat(p: &MatchPat) -> String {
 }
 
 fn fmt_params(ps: &[(String, Option<Expr>)]) -> String {
+    fmt_params_ann(ps, &[])
+}
+
+/// W01 (L2c): params with annotations — roundtrip form `name: T = default`.
+/// `anns` may be shorter than `ps` (unannotated definitions).
+fn fmt_params_ann(ps: &[(String, Option<Expr>)], anns: &[Option<TypeAnn>]) -> String {
     ps.iter()
-        .map(|(n, d)| match d {
-            Some(e) => format!("{} = {}", n, fmt_expr(e)),
-            None => n.clone(),
+        .enumerate()
+        .map(|(i, (n, d))| {
+            let mut s = n.clone();
+            if let Some(Some(a)) = anns.get(i) {
+                s.push_str(": ");
+                s.push_str(&a.render());
+            }
+            if let Some(e) = d {
+                s.push_str(" = ");
+                s.push_str(&fmt_expr(e));
+            }
+            s
         })
         .collect::<Vec<_>>()
         .join(", ")

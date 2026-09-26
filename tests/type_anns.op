@@ -1,0 +1,161 @@
+# type_anns.op — W01 (L2c): soft type annotations.
+# `gene f(x: int) -> int`, `let n: float = ...` — annotations are a SOFT
+# contract enforced at the call funnel / binding time as catchable
+# `unfolded` Stress (SPEC §7a). Never a parse rejection; Total Grammar.
+frame proof {
+    # ---- param + return annotations on the happy path
+    gene double(x: int) -> int {
+        return x * 2
+    }
+    assert(double(21) == 42, "annotated gene runs on well-typed args")
+    gene pick(flag: bool, a: str, b: str) -> str {
+        if flag {
+            return a
+        }
+        return b
+    }
+    assert(pick(true, "x", "y") == "x", "multi-annotated params")
+    # ---- numeric widening: float accepts int; int refuses float
+    gene widen(n: float) -> float {
+        return n * 2.0
+    }
+    assert(widen(3) == 6.0, "int widens into a float annotation")
+    gene shrink(n: int) -> int {
+        return n
+    }
+    let ok = 0
+    stress {
+        shrink(1.5)
+    } rescue (e) {
+        ok = 1
+        assert(e.kind == "unfolded", "float does NOT narrow into int")
+    }
+    assert(ok == 1, "narrowing violation surfaces as catchable stress")
+    # ---- return annotation enforced (explicit + implicit + propagated)
+    gene bad_ret() -> int {
+        return "oops"
+    }
+    let hit = 0
+    stress {
+        bad_ret()
+    } rescue (e) {
+        hit = 1
+        assert(e.message == "return of gene 'bad_ret' expects int, got str",
+            "return mismatch names the gene, the ann, and the type")
+    }
+    assert(hit == 1, "return violation is catchable")
+    gene no_ret() -> int {
+        let x = 1
+    }
+    let hit2 = 0
+    stress {
+        no_ret()
+    } rescue (e) {
+        hit2 = 1
+        assert(e.message == "return of gene 'no_ret' expects int, got null (no return statement ran)",
+            "implicit null violates a non-optional return ann")
+    }
+    assert(hit2 == 1, "implicit-null return violation is catchable")
+    gene fallthrough_ret() -> int? {
+        let x = 1
+    }
+    assert(fallthrough_ret() == null, "optional return ann accepts the implicit null")
+    # ---- `?!` propagation IS the return value and is checked as one
+    gene maybe(n: int) -> option {
+        if n < 0 {
+            return none()
+        }
+        return some(n)
+    }
+    gene consume(n: int) -> int | option {
+        return maybe(n)?!
+    }
+    assert(consume(4) == 4, "Some?! unwraps to the payload (union ann accepts int)")
+    assert(consume(-4) == none(), "propagated None IS the return value (union ann accepts option)")
+    # ---- unions and any
+    gene flex(v: int | str) -> str {
+        return "got:" + str(v)
+    }
+    assert(flex(7) == "got:7", "union accepts the first alternative")
+    assert(flex("s") == "got:s", "union accepts the second alternative")
+    let hit3 = 0
+    stress {
+        flex([1])
+    } rescue (e) {
+        hit3 = 1
+        assert(e.message == "argument 'v' for gene 'flex' expects int | str, got list",
+            "union mismatch renders the union canonically")
+    }
+    assert(hit3 == 1, "union violation is catchable")
+    gene anything(v: any) -> any {
+        return v
+    }
+    assert(anything({k: 1}) == {k: 1}, "any accepts a map")
+    # ---- let annotations
+    let n: int = 5
+    assert(n == 5, "annotated let binds on a matching value")
+    let f: float = 2
+    assert(f == 2.0, "annotated let widening works")
+    let opt: int? = null
+    assert(opt == null, "optional let ann accepts null")
+    let opt2: int? = 3
+    assert(opt2 == 3, "optional let ann accepts the inner type")
+    let caught = 0
+    stress {
+        let s: int = "str"
+    } rescue (e) {
+        caught = 1
+        assert(e.kind == "unfolded", "let ann violation is catchable")
+        assert(e.message == "type annotation violated: 's' expects int, got str",
+            "let ann message names the binding, the ann, and the type")
+    }
+    assert(caught == 1, "let ann violation raised")
+    # ---- default values are checked too
+    gene dflt(x: int = 1) -> int {
+        return x
+    }
+    assert(dflt() == 1, "annotated default used")
+    assert(dflt(9) == 9, "annotated param overridden")
+    # ---- unknown annotation names parse fine but match nothing: a typo'd
+    # type name surfaces loudly at the boundary (catchable), never silently
+    gene weird(x: Future) -> any {
+        return "ran"
+    }
+    let hit5 = 0
+    stress {
+        weird(1)
+    } rescue (e) {
+        hit5 = 1
+        assert(e.message == "argument 'x' for gene 'weird' expects Future, got int",
+            "unknown ann name names itself in the message")
+    }
+    assert(hit5 == 1, "unknown ann name matches nothing (typo armor)")
+    # ---- options/results are their families
+    gene o(x: option) -> option {
+        return x
+    }
+    assert(o(some(1)) == some(1), "option family ann accepts Some")
+    assert(o(none()) == none(), "option family ann accepts None")
+    let hit4 = 0
+    stress {
+        o(ok(1))
+    } rescue (e) {
+        hit4 = 1
+    }
+    assert(hit4 == 1, "option ann refuses a Result (families are distinct)")
+    # ---- sequences/lists/maps as annotations
+    gene total(xs: list) -> int {
+        let t = 0
+        for x in xs {
+            t = t + x
+        }
+        return t
+    }
+    assert(total([1, 2, 3]) == 6, "list ann")
+    gene lookup(m: map) -> any {
+        return m["k"]
+    }
+    assert(lookup({k: "v"}) == "v", "map ann")
+}
+
+print("type_anns complete")

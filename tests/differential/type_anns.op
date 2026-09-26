@@ -1,0 +1,94 @@
+# type_anns — W01 (L2c) differential pin: soft type annotations, byte-identical
+# on both engines. Param/return enforcement, numeric widening (float accepts
+# int; int refuses float), unions, optional (null-accepting), implicit-null
+# return violations, let-annotation violations, defaults, any, families.
+gene double(x: int) -> int {
+    return x * 2
+}
+print(double(21))
+gene widen(n: float) -> str {
+    return "f:" + str(n)
+}
+print(widen(3), widen(2.5))
+gene shrink(n: int) -> int {
+    return n
+}
+stress {
+    shrink(1.5)
+} rescue (e) {
+    print("narrow:", e.kind, e.message)
+}
+gene bad_ret() -> int {
+    return "oops"
+}
+stress {
+    bad_ret()
+} rescue (e) {
+    print("ret:", e.kind, e.message)
+}
+gene no_ret() -> int {
+    let x = 1
+}
+stress {
+    no_ret()
+} rescue (e) {
+    print("implicit:", e.kind, e.message)
+}
+gene opt_ret() -> int? {
+    let x = 1
+}
+print("opt-ret:", opt_ret())
+gene flex(v: int | str) -> str {
+    return "got:" + str(v)
+}
+print(flex(7), flex("s"))
+stress {
+    flex([1])
+} rescue (e) {
+    print("union:", e.kind, e.message)
+}
+stress {
+    let s: int = "str"
+} rescue (e) {
+    print("let:", e.kind, e.message)
+}
+let n: int = 5
+let f: float = 2
+let opt: int? = null
+print(n, f, opt)
+gene dflt(x: int = 1) -> int {
+    return x
+}
+print(dflt(), dflt(9))
+gene anything(v: any) -> any {
+    return v
+}
+print(anything([1, 2]), anything({k: 1}))
+gene maybe(n: int) -> option {
+    if n < 0 {
+        return none()
+    }
+    return some(n)
+}
+gene consume(n: int) -> int | option {
+    return maybe(n)?!
+}
+print(consume(4), consume(-4))
+gene o(x: option) -> option {
+    return x
+}
+stress {
+    o(ok(1))
+} rescue (e) {
+    print("family:", e.kind, e.message)
+}
+print(o(some(9)), o(none()))
+gene weird(x: Future) -> any {
+    return "ran"
+}
+stress {
+    weird(1)
+} rescue (e) {
+    print("unknown-ann:", e.kind, e.message)
+}
+print("type_anns differential complete")
