@@ -15,6 +15,7 @@ pub mod lexer;
 pub mod ls;
 pub mod parser;
 pub mod pybridge;
+pub mod rna2;
 pub mod tools;
 pub mod value;
 

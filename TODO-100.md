@@ -666,13 +666,13 @@ clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK · sec_regression AL
   `tests/redteam/`, `tests/differential/`.
 - Coordinate: W022 (`operon.toml`) reuses this validator.
 
-### W067 — `.rna` AST-based edit model [P2] [dev-3] [L] [partial: design note docs/design/RNA-V2.md — node addressing, reprint strategy, migration; implementation unblocked (W047/W47 fmt stable), candidate for next sz session]
+### W067 — `.rna` AST-based edit model [P2] [dev-3] [L] [done: stage 2 shipped on sz/m100-docs — node-addressed engine `src/rna2.rs` behind the same CLI, `syntax: v2` header dispatch (header-less = v1 byte-compatible), verbs rename/delete/body over paths gene[#ord]/splice/variant/phenotype/method/fate/regulate#N, all-or-nothing + ambiguity refusal + plain-comment preflight (—allow-comment-drop), reprint via format_program = fmt fixpoint, 14 pinned tests tests/rna_v2.rs, SPEC §rna + docs/design/RNA-V2.md as-built; stage 3 span deprecation remains future work per the migration path]
 - Goal: today's `.rna` edits target source spans/text — fragile under reformatting. Future:
   parse → identify AST node → apply AST edit → reprint.
-- Deliverable now: design note in SPEC §rna (or docs/design/RNA-V2.md) defining node
-  addressing (gene name + ordinal, not byte spans), reprint strategy (reuse fmt), and the
-  migration path. Implementation lands only after fmt canonical mode is stable (W047).
-- Files: `SPEC.md` or `docs/design/RNA-V2.md`, `src/tools.rs` (evidence comments).
+- Delivered: design note (RNA-V2.md) + the implementation: parse current source fresh,
+  address declarations by name+ordinal, mutate the AST, reprint via the canonical
+  formatter. Safety contract inherits W068 and tightens it (all-or-nothing, ordinal
+  disambiguation, comment preflight, parse-first body replacement).
 
 ### W068 — `.rna` safety mode [P1] [dev-3] [S] [done: PR #18 — checked engine + CLI, 6 tests]
 - Goal: `operon rna --check` (or the existing rna surface with `--check`): dry run that
@@ -883,9 +883,9 @@ clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK · sec_regression AL
   final levels); README recipe.
 - Files: `src/main.rs`, new `src/graph.rs`, `tests/`, `README.md`.
 
-### W095 — Live regulation visualizer [P3] [dev-3] [L] [deferred: depends W094]
-- Deliverable: design note extending W094 JSON with time-series frames; GenomeLab timeline
-  integration sketch. Implementation after W094 + GenomeLab next wave.
+### W095 — Live regulation visualizer [P3] [dev-3] [L] [done: tick-stream shipped on sz/m100-docs — `operon run f.op --trace-grn trace.jsonl` emits one JSONL frame per engine update point (grn_fire pulse / decay-clock tick, both funneled through trans_integrate) {"tick":N,"phase":"fire"|"decay","levels":{byte-sorted map, 6-dp}}; deterministic (W089 discipline), 200k-frame cap, interpreter performs no I/O (CLI drains after run, success or contained failure); 4 pinned tests tests/grn_trace.rs; SPEC CLI block documented; GenomeLab UI wiring remains open]
+- Delivered: the time-series half of W094's JSON — a runtime tick-stream (frames) a
+  visualizer replays or consumes live. GenomeLab timeline integration is a UI wave on top.
 
 ### W096 — Profiler output formats [P2] [dev-3] [S] [partial: --json landed (PR #18); Chrome-trace blocked on per-call spans (dev-1 lane)]
 - Goal: `operon profile --json` (self-describing: units, version, run metadata) +

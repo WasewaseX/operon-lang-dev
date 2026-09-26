@@ -452,6 +452,16 @@ pub struct Interp {
     /// instead of process stdout — the test runner captures per-file
     /// program output and shows it only on failure (clean reports).
     pub stdout_sink: Option<Rc<RefCell<Vec<String>>>>,
+    /// W095: GRN tick-stream collector — when Some, every engine update
+    /// point (grn_fire pulse / decay-clock tick, both funneled through
+    /// trans_integrate) appends one JSONL frame of the SORTED level map
+    /// (deterministic output, W089). The interpreter performs no I/O: the
+    /// CLI drains the buffer into a file after the run. Hard-capped at
+    /// 200k frames so a runaway loop cannot exhaust memory silently
+    /// (further frames are dropped, tick numbering continues).
+    pub trace_grn: Option<Vec<String>>,
+    /// W095: emitted-frame ordinal (monotonic across kinds).
+    pub trace_grn_tick: u64,
     /// reg-bio-3 (C9): stoichiometric RISC — (from, to, strength, sites).
     /// Each entry is one binding site; capture probability per call is
     /// 1 - (1-s)^sites over all entries for the target. strength 1.0 with
@@ -625,6 +635,8 @@ impl Interp {
             cur_line: 0,
             file: "<repl>".to_string(),
             stdout_sink: None,
+            trace_grn: None,
+            trace_grn_tick: 0,
             silences: Vec::new(),
             operons: Vec::new(),
             risc_escaped: std::collections::HashSet::new(),
@@ -3301,7 +3313,7 @@ impl Interp {
     /// (checkpoints start at 0, so all prior calls count on the first
     /// integration). Called at every engine update point: grn_fire pulses
     /// and decay-clock ticks.
-    fn trans_integrate(&mut self) {
+    fn trans_integrate(&mut self, phase: &str) {
         // loop-10 (F-8 + R10 kinetics jury L1): ribosome queue drain — at
         // ENTRY (before the empty-check: "every integration point" includes
         // units with no translates edges) and before the edge loop (pinned
@@ -3314,6 +3326,7 @@ impl Interp {
             }
         }
         if self.trans_edges.is_empty() {
+            self.grn_trace_frame(phase);
             return;
         }
         let edges = self.trans_edges.clone();
@@ -3449,6 +3462,36 @@ impl Interp {
             let p = (cur + rf * delta as f64 - dec_eff * cur).clamp(0.0, 1.0);
             self.grn_levels.insert(t.to.clone(), p);
         }
+        self.grn_trace_frame(phase);
+    }
+
+    /// W095: one JSONL frame of the current GRN level map (sorted keys —
+    /// deterministic output per W089), emitted at every engine update
+    /// point when tracing is on. No notes are raised (a tracing cap must
+    /// not perturb wobble.strict outcomes); the cap silently drops further
+    /// frames while tick numbering continues.
+    fn grn_trace_frame(&mut self, phase: &str) {
+        if let Some(buf) = &mut self.trace_grn {
+            if buf.len() >= 200_000 {
+                return;
+            }
+            let mut keys: Vec<&String> = self.grn_levels.keys().collect();
+            keys.sort();
+            let mut f = format!(
+                "{{\"tick\":{},\"phase\":\"{}\",\"levels\":{{",
+                self.trace_grn_tick, phase
+            );
+            for (i, k) in keys.iter().enumerate() {
+                if i > 0 {
+                    f.push(',');
+                }
+                let v = self.grn_levels.get(*k).copied().unwrap_or(0.0);
+                f.push_str(&format!("\"{}\":{:.6}", k, v));
+            }
+            f.push_str("}}");
+            buf.push(f);
+            self.trace_grn_tick += 1;
+        }
     }
 
     /// loop-9 (P0-4): standalone m6A decay cadence. The B3 decay block ran
@@ -3554,7 +3597,7 @@ impl Interp {
                 }
             }
         }
-        self.trans_integrate();
+        self.trans_integrate("decay");
     }
 
     /// GRN call gate (T2a / SPEC §11): does the regulatory network veto a
@@ -6089,7 +6132,7 @@ impl Interp {
                 // engine update point — each fire is one Euler step of
                 // p += rate·Δcalls − decay·p. Protein nodes live in
                 // grn_levels and gate genes like any regulator (two-tier).
-                self.trans_integrate();
+                self.trans_integrate("fire");
                 // STATEFUL network: levels persist across fires (a latch by default — decay makes the dilution explicit)
                 // loop-9 (P0-2): ligand-pool edge sources do NOT live in
                 // grn_levels. Seeding them here at 0.0 permanently shadowed
