@@ -1,6 +1,6 @@
 # Operon
 
-**The gene-expression language.** A Total Grammar language where nothing you write is ever rejected — it wobbles, repairs, and runs — implemented on a native Rust core with a C runtime kernel and a C++ algorithm kernel.
+**The gene-expression language.** A Total Grammar language where nothing you write is ever rejected — it wobbles, repairs, and runs — implemented on a native Rust core with a C++ algorithm kernel (bit-parallel Myers codon distance) as the only native companion.
 
 ```operon
 gene greet(name) {
@@ -257,7 +257,7 @@ Requires: rustc (≥1.70), gcc, g++. One build-dependency: the `cc` crate compil
 
 ```
 src/         Rust core (lexer, parser, interp, genes, tools, cli)
-runtime/     C runtime kernel + C++ algorithm kernel
+runtime/     C++ algorithm kernel (codon_kernel.cpp; the C runtime kernel was deleted in sec-r2 — audit A15)
 bootstrap/   Python oracle + differential harness (the verification layer)
 std/         self-hosted Operon standard library (.op)
 tools/       (reserved for .op tooling as self-hosting grows)
