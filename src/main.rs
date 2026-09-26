@@ -662,6 +662,82 @@ fn real_main() {
             }
             tools::flush_notes(&l, opts.quiet);
         }
+        "watch" => {
+            // W072: re-run on change. v1: mtime polling (200 ms, no external
+            // deps) over the entry file + its local (non-std) import tree;
+            // each iteration is a fresh `operon run` child, so fuel/caps/
+            // interpreter state reset per run — no cross-run contamination.
+            let file = match positional.first() {
+                Some(f) => f.clone(),
+                None => die("watch needs a file"),
+            };
+            let passthrough = positional[1..].to_vec();
+            fn collect_deps(path: &str, visited: &mut Vec<String>) {
+                if visited.len() >= 64 || visited.iter().any(|p| p == path) {
+                    return;
+                }
+                visited.push(path.to_string());
+                let src = std::fs::read_to_string(path).unwrap_or_default();
+                let prog = parser::parse(&src);
+                let base = std::path::Path::new(path).parent().map(|p| p.to_path_buf());
+                for s in &prog.stmts {
+                    if let Stmt::Use(u, _) = s {
+                        let f = u.trim_end_matches(".op").to_string() + ".op";
+                        if let Some(b) = &base {
+                            let cand = b.join(&f);
+                            if cand.is_file() {
+                                collect_deps(cand.to_string_lossy().as_ref(), visited);
+                            }
+                        }
+                    }
+                }
+            }
+            let snapshot =
+                |files: &Vec<String>| -> Vec<(String, Option<std::time::SystemTime>)> {
+                    files
+                        .iter()
+                        .map(|f| {
+                            let m = std::fs::metadata(f).and_then(|m| m.modified()).ok();
+                            (f.clone(), m)
+                        })
+                        .collect()
+                };
+            let exe = std::env::current_exe()
+                .unwrap_or_else(|_| std::path::PathBuf::from("operon"));
+            let mut iter: usize = 0;
+            loop {
+                let mut deps: Vec<String> = Vec::new();
+                collect_deps(&file, &mut deps);
+                let before = snapshot(&deps);
+                iter += 1;
+                println!("\n[watch #{}] {} ({} file(s) watched)", iter, file, deps.len());
+                let t0 = std::time::Instant::now();
+                let status = std::process::Command::new(&exe)
+                    .arg("run")
+                    .arg(&file)
+                    .args(&passthrough)
+                    .status();
+                let ms = t0.elapsed().as_millis();
+                match status {
+                    Ok(s) => println!(
+                        "[watch #{}] exit={} in {}ms",
+                        iter,
+                        s.code().unwrap_or(-1),
+                        ms
+                    ),
+                    Err(e) => println!("[watch #{}] spawn failed: {}", iter, e),
+                }
+                // poll for changes; the dep set itself is recomputed on the
+                // next iteration so newly added imports start being watched
+                loop {
+                    std::thread::sleep(std::time::Duration::from_millis(200));
+                    let after = snapshot(&deps);
+                    if after != before {
+                        break;
+                    }
+                }
+            }
+        }
         "graph" => {
             // W094: static regulate-network export — parse-only (like
             // check/fmt), no run, no capabilities beyond reading the file.
@@ -1178,6 +1254,7 @@ usage:
   operon build f.op [--variant v] [-o out.op]
   operon rna f.op patch.rna [--write] [--json]
   operon graph f.op [--json]
+  operon watch f.op [args...]
   operon profile f.op
   operon crispr f.op --knockout gene [--json]
   operon bench f.op [--iters n]
