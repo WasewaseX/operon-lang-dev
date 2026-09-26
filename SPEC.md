@@ -558,7 +558,10 @@ operon run f.op    [--entry g] [--variant v] [--cell c] [--rna r] [--frame name]
                    [-- --args...]   # dx-r6: everything after `--` is program argv
 operon check f.op  [--nmd] [--nmd=purge] [--json]
 operon test [paths...]
-operon fmt f.op    [--write]        # canonical formatter; wobble-corrected output parses clean
+operon fmt f.op    [--write] [--indent N] [--quotes single|double] [--width N] [--fmt-config f]
+                   # canonical formatter; wobble-corrected output parses clean.
+                   # --width: soft wrap at parser-safe comma points only (W47-v2;
+                   # docs/specs/FMT-CONFIG.md safe-break contract; AST never changes)
 operon fix f.op    [--write] [--json]  # legacy-surface migrator (W65): const→let, s::→dot, synonym canonicalization; dry-run default; meaning-preserving (canonical(fix(x)) == canonical(x), pinned corpus-wide)
 operon build f.op  --variant v -o out.op
 operon profile f.op
