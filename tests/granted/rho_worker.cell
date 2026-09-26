@@ -1,0 +1,5 @@
+# loop-10 (F-7): explicit operator cell for the worker-parity proof —
+# deterministic catch (1.0): zero draws anywhere, fully seed-independent.
+[rho]
+termination = true
+catch = 1.0

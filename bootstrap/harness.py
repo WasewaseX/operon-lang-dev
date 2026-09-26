@@ -40,6 +40,16 @@ def collect_op(root):
                 out.append(os.path.join(dirpath, f))
     return sorted(out)
 
+# loop-10 (F-7/F-8): granted-with-cell differential targets — the opt-in
+# Rho/queue proofs run under an explicit operator cell on BOTH cores.
+GRANTED_CELL_TARGETS = [
+    ("tests/granted/rho_termination.op", "tests/granted/rho_termination.cell"),
+    ("tests/granted/rho_readthrough.op", "tests/granted/rho_readthrough.cell"),
+    ("tests/granted/rho_prob.op", "tests/granted/rho_prob.cell"),
+    ("tests/granted/rho_queue_shield.op", "tests/granted/rho_queue_shield.cell"),
+    ("tests/granted/rho_worker.op", "tests/granted/rho_worker.cell"),
+]
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--bin", default=os.path.join(os.path.dirname(__file__), "..", "bin", "operon"))
@@ -81,6 +91,31 @@ def main():
                     print(f"    oracle: {p_}")
             if rust_code != py_code:
                 print(f"    exit codes: rust={rust_code} oracle={py_code}")
+            failed += 1
+    # loop-10 (F-7/F-8): granted-with-cell targets — both implementations
+    # under the SAME explicit --cell; stdout must match byte-for-byte like
+    # every other target. This pins the Rho layer's ENTROPY-STREAM parity
+    # (the opt-in draws are the riskiest divergence surface — trap #4 of
+    # the reg-bio-4 kinetics design).
+    for rel_op, rel_cell in GRANTED_CELL_TARGETS:
+        gop = os.path.join(root, rel_op)
+        gcell = os.path.join(root, rel_cell)
+        if not (os.path.isfile(gop) and os.path.isfile(gcell)):
+            print(f"  SKIP     {rel_op} (missing op or cell)")
+            skipped += 1
+            continue
+        rust_out, rust_code = run([binpath, "run", gop, "--cell", gcell])
+        try:
+            py_out, py_code = run([sys.executable, oracle, "run", gop, "--cell", gcell])
+        except subprocess.TimeoutExpired:
+            print(f"  TIMEOUT  {rel_op} (oracle)")
+            failed += 1
+            continue
+        if rust_out == py_out and rust_code == py_code:
+            print(f"  MATCH    {rel_op} (granted)")
+            passed += 1
+        else:
+            print(f"  DIVERGE  {rel_op} (granted)")
             failed += 1
     print(f"\nresult: {passed} match, {failed} diverge, {skipped} skipped")
     sys.exit(1 if failed else 0)

@@ -27,7 +27,7 @@ The mandate: *"Rust, then C, then Python, then Operon, then C++, then HTML, then
 | rank | language | lines | share | role |
 |---|---|---|---|---|
 | 1 | **Rust** | 15,937 | ~46% | lexer, Total Grammar parser, evaluator, capability sandbox, symbol table, HTTP/JSON, toolchain CLI, REPL, `operon-ls` LSP seed (`src/`) |
-| 2 | **Operon** | 9,906 | ~28% | **self-hosted stdlib (12 modules incl. `std/motifs`), proof tests, red-team suite, differential corpus, GenomeLab** (`std/ tests/ examples/ apps/`) |
+| 2 | **Operon** | 17,248 | ~35% | **self-hosted stdlib (15 modules incl. `std/motifs`, `std/set`, `std/testing`, `std/random`), proof tests, red-team suite, differential corpus, GenomeLab** (`std/ tests/ examples/ apps/`) |
 | 3 | **Python** | 5,129 | ~15% | bootstrap: reference oracle + differential harness (`bootstrap/`) — test infrastructure only, nothing shipped depends on it |
 | 4 | **JavaScript** | 1,834 | ~5% | browser playground subset interpreter (`web/playground/app.js`) |
 | 5 | **HTML** | 1,263 | ~4% | documentation site (`docs/`) |
@@ -250,7 +250,7 @@ Requires: rustc (≥1.70), gcc, g++. No crates, no network, no external dependen
 - **Genes**: named, anonymous, lambdas, defaults, closures, recursion, `guard` clauses, marks — plus **phenotype classes** (`phenotype P { let f = 0; gene init() {…} }`, `new P(...)`, `self`, `phenotype C from P`) and **sequence generators** (`sequence s() { yield v }` with `.next()`/`.collect()`, lazy worker-cell pull).
 - **Errors**: everything is a catchable `Stress{kind, message}` — `unfolded | missing | overflow | burned | interference` — plus Total-Grammar runtime notes. A program never crashes; worst case it narrates what it repaired.
 - **Concurrency**: `spawn(gene, args)` / `join(id)` — real OS threads with value serialization; sequences run on worker cells; timed repressilator threads.
-- **Modules**: `use std/bio;` — TAD-insulated, anchor-controlled exports, module cache, cycle-tolerant. Six stdlib modules today: `bio`, `collections`, `iter`, `math`, `seq`, `strings`.
+- **Modules**: `use std/bio;` — TAD-insulated, anchor-controlled exports, module cache, cycle-tolerant. Fifteen stdlib modules today: `args`, `bio`, `collections`, `csv`, `fmt`, `fs`, `iter`, `json`, `math`, `motifs`, `random`, `seq`, `set`, `strings`, `testing` — plus the capability-gated `py()` bridge for the scientific-Python deep end.
 
 ## Repository layout
 

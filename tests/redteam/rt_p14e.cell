@@ -1,0 +1,8 @@
+# loop-10 (F-9): explicit operator cell for the megacistron Rho payload —
+# catch 0.5 (probabilistic catch-up), queue_cap 0.0 (every cistron
+# unshielded: the termination path is exercised at full load).
+[rho]
+termination = true
+catch = 0.5
+[ribosome]
+queue_cap = 0.0

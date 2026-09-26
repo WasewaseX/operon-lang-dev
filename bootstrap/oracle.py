@@ -2118,6 +2118,12 @@ class Interp:
         # reg-bio-3: operons / stoichiometric-RISC bookkeeping / m6A levels /
         # generation counter / gene dosage registry (mirror of the Rust core)
         self.operons = []
+        # loop-10 (F-7/F-8): Rho/queue state — rho_pins is the worker-side
+        # resolved knob tuple (None on the host: .cell resolved per use,
+        # mirror of the Rust rho_knobs); ribo_queue is the per-cistron
+        # queue register (rho.termination-gated bookkeeping).
+        self.rho_pins = None
+        self.ribo_queue = {}
         self.risc_escaped = set()
         self.m6a_levels = {}
         self.generation = 0
@@ -3432,6 +3438,30 @@ class Interp:
             out *= c
         return out if out <= 1.0 else 1.0
 
+    def _rho_knobs(self):
+        """loop-10 (F-7/F-8): mirror of the Rust rho_knobs — (armed, catch,
+        queue_floor, queue_cap, drain). Host: .cell parsed per use (garbage
+        falls back identically: catch clamps 0..1, the rest parse-or-default);
+        worker: the pinned snapshot tuple. Default-off: absent
+        rho.termination = false — legacy runs draw nothing, bit-identical."""
+        if self.rho_pins is not None:
+            return self.rho_pins
+        armed = self.cell.get("rho.termination") == "true"
+        catch = self.cell.get("rho.catch")
+        try:
+            catch = min(max(float(catch), 0.0), 1.0) if catch is not None else 0.5
+        except ValueError:
+            catch = 0.5
+
+        def _g(key, dflt):
+            v = self.cell.get(key)
+            try:
+                return float(v) if v is not None else dflt
+            except (TypeError, ValueError):
+                return dflt
+
+        return (armed, catch, _g("rho.queue_floor", 0.5), _g("ribosome.queue_cap", 1.0), _g("ribosome.drain", 0.5))
+
     def _trans_integrate(self):
         """reg-bio-2 (C1): mirror of the Rust trans_integrate — one Euler
         step per translates edge: p += rate·Δcalls − decay·p (clamped 0..1)
@@ -3439,6 +3469,13 @@ class Interp:
         integration (checkpoints start at 0)."""
         if not self.trans_edges:
             return
+        # loop-10 (F-8): ribosome queue drain (mirror) — BEFORE the edge
+        # loop (pinned order; both entry points reach _trans_integrate).
+        # Exists only under rho.termination; max(0.0) is mirror-safe.
+        rho_on, _c, _fl, _cap, rho_drain = self._rho_knobs()
+        if rho_on:
+            for k2 in list(self.ribo_queue):
+                self.ribo_queue[k2] = max(0.0, self.ribo_queue[k2] - rho_drain)
         for frm, to, rate, pdecay in self.trans_edges:
             key = frm + "\u0000" + to
             now = self.call_counts.get(frm, 0)
@@ -3640,11 +3677,88 @@ class Interp:
         if self._promoter_veto(name, g.burst):
             self.note(4, f"promoter inactive: '{name}' burst-off — call returns null")
             return None
+        # loop-10 (F-7): Rho-dependent termination (mirror) — opt-in (.cell
+        # rho.termination = true). Pinned gate order ends: ... promoter → RHO.
+        # Naked upstream RNA scan in member order: p_g = 1 (methylated) or
+        # 1 − surv(g) (target-less RISC silence) or 0; draws only where
+        # 0 < p_g < 1 (member order) then one catch-up draw where 0 < q < 1;
+        # catch^distance by repeated multiply (no pow); F-8 shield: queue
+        # >= rho.queue_floor occludes the rut sites. A terminated call is
+        # not expression: returns null before counters/transcript/queue.
+        rho_on, rho_catch, rho_floor, rho_cap, _drain = self._rho_knobs()
+        if rho_on:
+            rui = self._operon_of(name)
+            if rui is not None:
+                pos = next(i for i, (m, _r) in enumerate(self.operons[rui]["members"]) if m == name)
+                terminated = None
+                for i in range(pos):
+                    g2 = self.operons[rui]["members"][i][0]
+                    if self.methyl_levels.get(g2, 0) >= self.methyl_threshold:
+                        p_g = 1.0
+                    else:
+                        surv = 1.0
+                        has_silence = False
+                        for f3, t3, s3, n3 in self.silences:
+                            if f3 == g2 and t3 is None:
+                                has_silence = True
+                                base = 1.0 - s3
+                                for _k in range(n3):
+                                    surv *= base
+                        p_g = (1.0 - surv) if has_silence else 0.0
+                    if p_g == 0.0:
+                        continue
+                    x = self.rng
+                    if 0.0 < p_g and p_g < 1.0:
+                        x ^= (x >> 12) & M64
+                        x ^= (x << 25) & M64
+                        x ^= (x >> 27) & M64
+                        self.rng = x & M64
+                    if p_g == 1.0:
+                        naked_g = True
+                    else:
+                        x = self.rng
+                        u = ((x >> 11) & ((1 << 53) - 1)) / 9007199254740992.0
+                        naked_g = u < p_g
+                    shielded = self.ribo_queue.get(g2, 0.0) >= rho_floor
+                    if naked_g and not shielded:
+                        # q = catch^d — fold from 1.0, exactly d multiplies
+                        # (mirror of the Rust fix: starting at catch computed
+                        # catch^(d+1) and halved the termination pressure)
+                        q = 1.0
+                        for _k in range(pos - i):
+                            q *= rho_catch
+                        if q == 0.0:
+                            break
+                        x2 = self.rng
+                        if 0.0 < q and q < 1.0:
+                            x2 ^= (x2 >> 12) & M64
+                            x2 ^= (x2 << 25) & M64
+                            x2 ^= (x2 >> 27) & M64
+                            self.rng = x2 & M64
+                        if q == 1.0:
+                            caught = True
+                        else:
+                            x2 = self.rng
+                            u2 = ((x2 >> 11) & ((1 << 53) - 1)) / 9007199254740992.0
+                            caught = u2 < q
+                        if caught:
+                            terminated = g2
+                        break
+                if terminated is not None:
+                    self.note(4, f"rho terminated: transcript lost at '{terminated}' — call returns null")
+                    return None
         # reg-bio-3 (A1/A7): the call passed every gate — one transcript of
         # the unit is made (a suppressed call is NOT expression) (mirror)
         ui = self._operon_of(name)
         if ui is not None:
             self.operons[ui]["transcripts"] += 1
+            # loop-10 (F-8): ribosome queue register (mirror) — every
+            # member's queue grows by its rbs, capped at ribosome.queue_cap;
+            # rho.termination-gated (inert bookkeeping otherwise).
+            if rho_on:
+                for m2, rbs2 in self.operons[ui]["members"]:
+                    nv = self.ribo_queue.get(m2, 0.0) + rbs2
+                    self.ribo_queue[m2] = rho_cap if nv > rho_cap else nv
         self.call_counts[name] = self.call_counts.get(name, 0) + 1
         self.call_clock += 1
         # reg-bio-2 (C2): the decay clock (mirror of the Rust hook)
@@ -4575,6 +4689,8 @@ class Interp:
                     "splice_shift": dict(self.splice_shift),
                     "promoter_tel": dict(self.promoter_tel),
                     "burst_overrides": dict(self.burst_overrides),
+                    "rho_pins": self.rho_pins,
+                    "ribo_queue": dict(self.ribo_queue),
                     "call_counts": dict(self.call_counts),
                     "call_clock": self.call_clock,
                     "gene_buckets": {k: dict(v) for k, v in self.gene_buckets.items()},
@@ -5509,6 +5625,28 @@ def apply_rna(src, patch_src, stem):
                         applied.append(f"{target}: '{frm}' -> '{to}'")
     return text, applied
 
+def parse_cell(src):
+    """loop-10: mirror of genes::parse_cell — INI-style sections build dotted
+    keys; '#' comment lines are skipped; values are trimmed and quote-stripped.
+    The oracle's --cell flag previously passed the raw PATH where a dict was
+    expected (latent since substrate-r1 — never exercised until the loop-10
+    granted targets ran the oracle under --cell)."""
+    out = {}
+    section = ""
+    for line in src.splitlines():
+        t = line.strip()
+        if not t or t.startswith("#"):
+            continue
+        if t.startswith("[") and t.endswith("]"):
+            section = t[1:-1].strip()
+            continue
+        eq = t.find("=")
+        if eq >= 0:
+            k = t[:eq].strip()
+            v = t[eq + 1:].strip().strip('"')
+            out[f"{section}.{k}" if section else k] = v
+    return out
+
 def load_file(path, cell=None, variant=None, rna=None, args=None, caps=None):
     src = open(path).read()
     stem = os.path.basename(path).rsplit(".", 1)[0]
@@ -5705,10 +5843,17 @@ def main():
         else:
             pos.append(a)
         i += 1
+    # loop-10: load the --cell FILE into the dict the interpreter expects
+    # (the flag previously leaked the path string into Interp(cell=...) —
+    # AttributeError on .items(); the Rust CLI parses the file, so did we)
+    cell_dict = None
+    if opts["cell"]:
+        with open(opts["cell"]) as _cf:
+            cell_dict = parse_cell(_cf.read())
     if cmd == "version":
         print("Operon 2.0.0 (python-oracle)")
     elif cmd == "run":
-        it = run(pos[0], opts["cell"], opts["variant"], opts["rna"], opts["entry"], opts["frame"], pos[1:], caps=opts.get("caps"))
+        it = run(pos[0], cell_dict, opts["variant"], opts["rna"], opts["entry"], opts["frame"], pos[1:], caps=opts.get("caps"))
         for nt in it.notes:
             tag = {1: "info", 2: "synonym", 3: "wobble"}.get(nt.rung, "fallback")
             print(f"[{tag}] {nt.message}", file=sys.stderr)
@@ -5739,7 +5884,7 @@ def main():
             # reg-r4: a file that fails to LOAD is a suite failure, not a
             # crash of the runner (the Rust runner records it and continues)
             try:
-                it, stmts, proofs_l, frames = load_file(f, opts["cell"], opts["variant"], opts["rna"])
+                it, stmts, proofs_l, frames = load_file(f, cell_dict, opts["variant"], opts["rna"])
             except RecursionError:
                 failed += 1
                 failures.append(f"{f}: load error: recursion limit (parser depth)")

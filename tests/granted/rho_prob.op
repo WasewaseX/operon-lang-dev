@@ -1,0 +1,47 @@
+# loop-10 (F-7): distance decay under the probabilistic arm — nakedness at
+# cistron distance d terminates with probability catch^d (0.5^d here). The
+# per-call draws ride the SHARED mirrored xorshift64* stream, so the
+# terminated-count over 40 seeded calls is an EXACT pin (not statistical):
+# any entropy-order drift between the cores diverges the count and the
+# harness fails. p=1 nakedness (bare silences) draws nothing; exactly ONE
+# catch-up draw happens per call (0 < q < 1).
+regulate {
+    a translates pa rate 0.4
+    x translates px rate 0.4
+}
+gene a() { return "a" }
+gene b() { return "b" }
+gene c() { return "c" }
+gene x() { return "x" }
+gene y() { return "y" }
+gene z() { return "z" }
+operon abc { a rbs 1.0; b rbs 1.0; c rbs 1.0; }
+operon xyz { x rbs 1.0; y rbs 1.0; z rbs 1.0; }
+silence b;
+silence x;
+frame proof {
+    # distance 1: b is the first naked member, q = 0.5 per call
+    randomize(11)
+    let lost1 = 0
+    for i in range(40) {
+        if c() == null { lost1 = lost1 + 1 }
+    }
+    assert(lost1 == 21, "d=1 (naked b): 40 seeded calls at catch 0.5 — exact terminated count (stream parity pin; expectation ~20)")
+    # distance 2: x is the first naked member, q = 0.25 per call — the decay
+    # must HALVE the termination pressure relative to d=1
+    randomize(11)
+    let lost2 = 0
+    for i in range(40) {
+        if z() == null { lost2 = lost2 + 1 }
+    }
+    assert(lost2 == 9, "d=2 (naked x): q = 0.25 per call — exact terminated count (distance decay pin; expectation ~10)")
+}
+main {
+    randomize(11)
+    let a1 = 0
+    for i in range(40) { if c() == null { a1 = a1 + 1 } }
+    randomize(11)
+    let a2 = 0
+    for i in range(40) { if z() == null { a2 = a2 + 1 } }
+    promote("d=1 lost: {a1}  d=2 lost: {a2}")
+}

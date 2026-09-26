@@ -1,0 +1,34 @@
+# loop-10 (F-7): the read-through arm — rho.catch = 0.0 means the q=0 fast
+# path breaks the scan with NO draw: the call reads through, counts a
+# transcript, and only the D1 expected-value polarity weighting derates
+# translation. FAILS-PRE: indistinguishable from OFF by outcome alone, but
+# the entropy pin plus the harness's byte-exact stream comparison separate
+# the layers (the granted targets are differential too — harness.py runs
+# both implementations under the SAME explicit cell).
+regulate {
+    a translates pa rate 0.4
+    b translates pb rate 0.4
+    c translates pc rate 0.4
+}
+gene a() { return "a" }
+gene b() { return "b" }
+gene c() { return "c" }
+operon abc { a rbs 1.0; b rbs 1.0; c rbs 1.0; }
+silence b;
+frame proof {
+    randomize(7)
+    let r1 = random()
+    randomize(7)
+    assert(c() == "c", "catch 0.0: Rho never catches up — the call reads through")
+    let r2 = random()
+    assert(abs(r1 - r2) < 1e-12, "q=0 break consumed no draw (p=1 nakedness fast path)")
+    assert(fingerprint().transcripts.abc == 1, "read-through counts the unit transcript")
+    # D1 polarity still applies to the surviving call: the b factor is
+    # surv + (1-surv)*pol = 0 + 1*0.5 = 0.5, so pc = 0.4 * 1.0 * 0.5 = 0.2
+    grn_fire("a")
+    assert(abs(grn_get("pc") - 0.2) < 1e-12, "D1 polarity derate composes under rho read-through (pc = 0.2)")
+}
+main {
+    randomize(7)
+    promote("c: {c()}")
+}

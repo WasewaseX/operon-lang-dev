@@ -1,0 +1,10 @@
+# loop-10 (F-8): explicit operator cell — deterministic catch (1.0) so the
+# SHIELD is the only thing standing between a naked upstream cistron and
+# termination. Floor 0.5, queue cap 1.0, drain 0.5 (the design defaults).
+[rho]
+termination = true
+catch = 1.0
+queue_floor = 0.5
+[ribosome]
+queue_cap = 1.0
+drain = 0.5

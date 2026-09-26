@@ -1,0 +1,5 @@
+# loop-10 (F-7): explicit operator cell — Rho termination armed at catch 0.0
+# (Rho loads but never catches up: q = catch^d = 0.0 for every distance).
+[rho]
+termination = true
+catch = 0.0

@@ -95,6 +95,11 @@ for f in "$DIR"/rt_p*.op; do
             # substrate-r1: timeout kill — time granted, 300 ms budget via
             # an explicit operator cell
             run_one "$f" --cell "$DIR/py_grant.cell" --allow-read "$DIR" ;;
+        *p14e*)
+            # loop-10 (F-9): Rho termination under megacistron load — the
+            # opt-in layer armed via an explicit operator cell (catch 0.5,
+            # queue_cap 0.0 = unshielded); containment = bounded runtime
+            run_one "$f" --cell "$DIR/rt_p14e.cell" --allow-read "$DIR" ;;
         *cell*)
             run_one "$f" --cell "$DIR/rt_grant.cell" ;;
         *p11n*)
