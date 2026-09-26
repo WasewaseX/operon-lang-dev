@@ -63,11 +63,11 @@ Rules:
 
 Effort: S ≤ half session · M = 1–2 sessions · L = multi-session · XL = release-scale.
 
-## CURRENT GATE NUMBERS (2026-09-26, main @ c6ad132 — dev1 wave-2 W06 merged)
+## CURRENT GATE NUMBERS (2026-09-26, sz/m100-docs head — dev-3 wave-2 W074/W073)
 
-differential **139/139 MATCH** · proofs **108 files / 96 proofs green (0 failed)** ·
-redteam **99 payloads / 0 breaches** · cargo test green (incl. 5 REPL contracts) ·
-clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK · CI success.
+differential **149/149 MATCH** · proofs **118 files / 100 proofs green (1304 asserts, 0 failed)** ·
+redteam **100 payloads / 0 breaches** · cargo test green (incl. 6 docgen + 5 REPL contracts) ·
+clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK · sec_regression ALL GREEN.
 
 > These numbers are re-measured every loop; when they change, update this header in the
 > same commit that lands work. If this header is stale, the per-level evidence links win.
@@ -666,7 +666,7 @@ clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK · CI success.
   `tests/redteam/`, `tests/differential/`.
 - Coordinate: W022 (`operon.toml`) reuses this validator.
 
-### W067 — `.rna` AST-based edit model [P2] [dev-3] [L] [partial: design]
+### W067 — `.rna` AST-based edit model [P2] [dev-3] [L] [partial: design note docs/design/RNA-V2.md — node addressing, reprint strategy, migration; implementation unblocked (W047/W47 fmt stable), candidate for next sz session]
 - Goal: today's `.rna` edits target source spans/text — fragile under reformatting. Future:
   parse → identify AST node → apply AST edit → reprint.
 - Deliverable now: design note in SPEC §rna (or docs/design/RNA-V2.md) defining node
@@ -682,7 +682,7 @@ clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK · CI success.
   hit/miss/multi-hit/missing-target; README recipe.
 - Files: `src/main.rs`, `src/tools.rs`, `tests/`, `README.md`.
 
-### W069 — Module resolution algorithm pinned [P2] [dev-3] [S] [partial]
+### W069 — Module resolution algorithm pinned [P2] [dev-3] [S] [done: PR #20 — SPEC §8 6-root table + honest parity scope + LSP divergence note; oracle base_dir parity; differential mod_res.op pins roots 1+2 (harness 148/148)]
 - Goal: the de-facto chain (doc-relative → CWD → std → OPERON_STD → exe-std →
   manifest-std) is SPEC-official with a decision table, and LSP + runtime + harness use
   the SAME order (lsp-r1 made LSP CWD-independent; runtime already exe-relative per dx-r5).
@@ -699,7 +699,7 @@ clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK · CI success.
   review).
 - Files: `src/interp.rs` (loader), `bootstrap/oracle.py`, `tests/`.
 
-### W071 — Hot reload [P3] [dev-3] [M] [deferred: design note]
+### W071 — Hot reload [P3] [dev-3] [M] [deferred: design note docs/design/HOT-RELOAD.md landed (state-family analysis: caps/seed re-derivation, module-cache invalidation, GRN full-reset default with replay opt-in, GenomeLab sketch); W072 precondition met; implementation consciously postponed — child-per-run is strictly safer at W084's ~2 ms startup]
 - Deliverable: design paragraph (watch-mode dependency, GRN state reset semantics, GenomeLab
   integration sketch) in `docs/design/HOT-RELOAD.md`. No implementation until W072 ships.
 
@@ -711,14 +711,14 @@ clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK · CI success.
   clean exit; test via scripted file touches; README.
 - Files: `src/main.rs`, `tests/`, `README.md`.
 
-### W073 — `operon doc` generator [P1] [dev-3] [M] [Track L3b] [open]
+### W073 — `operon doc` generator [P1] [dev-3] [M] [Track L3b] [done: PR #20 — operon doc f.op|dir [-o dir] [--json]; docs/api/ generated for all 15 std modules; scripts/doc_api_check.sh regen-check (CI-wirable); std/json.op exemplar doc set; md+json tests]
 - Goal: `operon doc file.op|dir` emits markdown: per gene — signature, doc comment (W074),
   marks/effects, capabilities required, examples found in doc comments; per module — index.
 - Done when: `operon doc std/` renders every std module; output committed under
   `docs/api/` as a generated artifact (CI regen-check like W053); tests.
 - Files: `src/main.rs`, `src/tools.rs` (parse reuse), `docs/api/` (generated), `CI`.
 
-### W074 — Doc comments [P1] [dev-3] [M] [open]
+### W074 — Doc comments [P1] [dev-3] [M] [done: PR #20 — `##` marker (wobble-safe: side table, zero token-stream drift), hug-rule attachment incl. @marks + module doc, survives repair rungs + fmt byte-exact, LSP hover + REPL :doc, SPEC §3 contract (pure metadata, oracle parity not required); tests/docgen.rs 6 + differential neutrality pin]
 - Goal: `///` line doc comments before `gene`/`phenotype`/module headers; parser captures
   them into AST metadata; hover shows them (LSP synergy with W044); `operon doc` consumes
   them (W073).
@@ -728,7 +728,7 @@ clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK · CI success.
 - Files: `src/lexer.rs`, `src/parser.rs`, `src/ast.rs`, `src/ls.rs`, `src/main.rs`,
   `SPEC.md`, `tests/`.
 
-### W075 — Example testing as first-class docs gate [P2] [dev-3] [S] [partial]
+### W075 — Example testing as first-class docs gate [P2] [dev-3] [S] [done: PR #20 — CONTRIBUTING §8a names the chain (doc example → executable example → test → rendered doc) with the three enforcement points: cookbook.sh byte-gate, apps proof gate, doc_api_check regen gate; no-copy-paste-rot rule + doc-comment scope rule]
 - Goal: formalize the existing chain: doc example → executable example → test → rendered
   doc. Cookbook (18/18) + apps/ gate already implement most of it; name it, document it,
   and make `operon doc` examples runnable-checked.
@@ -747,7 +747,7 @@ clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK · CI success.
 - Deliverable: `docs/design/C-ABI.md` — symbol surface (operon_run_source/operon_free/
   diagnostic access), ownership rules, why-not-yet (embedding API first, W076).
 
-### W078 — Python bridge explicitly optional [P2] [dev-3] [S] [verify]
+### W078 — Python bridge explicitly optional [P2] [dev-3] [S] [done: PR #20 — verified default-off (caps fence fires BEFORE interpreter probe, catchable Stress interference); interpreter-absent = clean Stress missing, never a crash; tests/pybridge_off.op pins bridge-off parity; SPEC §15 optionality contract ('fully functional with zero Python present', oracle = toolchain dep not runtime dep)]
 - Verify: substrate-r1 landed `py()` behind `--allow-py` + Caps.py grants (opt-in already).
   Confirm default-off behavior + graceful failure message when Python absent; document the
   optionality contract in SPEC §15 (bridge section).
@@ -755,7 +755,7 @@ clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK · CI success.
   "Operon is fully functional with zero Python present"; test asserting bridge-off parity.
 - Files: `src/interp.rs` (py bridge), `SPEC.md`, `tests/`.
 
-### W079 — Python bridge version contracts [P2] [dev-3] [S] [partial]
+### W079 — Python bridge version contracts [P2] [dev-3] [S] [done: PR #20 — bridge child reports version (py key, sys.version_info[:2]); interp warn-once per run below the 3.10 floor; SPEC §15b table (floor 3.10 / newer forward-as-is / no numpy-pandas guarantee beyond marshal rules / per-call spawn cost / Windows probe caveat)]
 - Goal: documented contract: supported Python (≥3.10), what happens on newer/older, no
   NumPy/pandas guarantee (forward as-is statement), startup-cost note, Windows caveat.
 - Done when: SPEC §15b contract table; runtime warns once when interpreter < documented
@@ -782,7 +782,7 @@ clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK · CI success.
   extend), CI job blocking on main, one documented escape hatch (re-baseline PR).
 - Files: `scripts/bench_compare.py`, `scripts/bench/baseline.json`, `.github/workflows/ci.yml`.
 
-### W083 — Real-program benchmarks [P2] [dev-3] [M] [partial: fib/loops/strings/collections/grn/recursion/micro live]
+### W083 — Real-program benchmarks [P2] [dev-3] [M] [done: PR #20 — +6 suites: json round-trip, regex corpus, seq motifs (seeded LCG — reproducible), large_map, file_io (the one grant-needing bench; runner passes grants itself), modules (resolution-table exercise; native = import-machinery shape-compare, noted); BENCH.md rows + honesty notes; oracle-tractable sizing]
 - Goal: add: JSON parse+serialize, regex corpus, sequence processing (motifs), module-heavy
   program, large-map workload, file-I/O micro (within caps), py()-bridge round-trip
   (non-blocking variant).
@@ -895,12 +895,12 @@ clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK · CI success.
   golden-file test.
 - Files: `src/tools.rs` (profiler), `src/main.rs`, `SPEC.md`, `tests/`.
 
-### W097 — Memory profiler [P3] [dev-3] [M] [partial: memory() builtin + intern tables live]
+### W097 — Memory profiler [P3] [dev-3] [M] [partial: memory() accounting PINNED in SPEC §10 (arena_bytes/interns/allocs = symbol-table gauge, honest limits stated); MEM-PROFILER.md design sketch (counting allocator, attribution windows, per-gene-by-extent); per-gene attribution deferred post-W009 by design]
 - Deliverable now: document `memory()`'s exact accounting (interns/bytes/allocs semantics
   from ffi.rs) in SPEC §10; hotspot/peak/per-gene allocation deferred with design sketch.
 - Files: `SPEC.md`, `docs/design/MEM-PROFILER.md` (sketch).
 
-### W098 — Thread profiler [P3] [dev-3] [M] [partial: attempt telemetry (F-3) landed]
+### W098 — Thread profiler [P3] [dev-3] [M] [partial: promoter_telemetry (F-3) + spawn/join semantics documented; WORKER-TELEMETRY.md design note (workers() sketch, differential shape-pin plan, timing values honestly unpinnable); workers() builtin deferred — full parity wave in dev-1's lane]
 - Deliverable now: expose worker telemetry (spawn/join/attempt counts, lifetimes) via a
   `workers()` introspection builtin or profile extension; document; blocked-time +
   task-fuel reporting deferred.
@@ -940,13 +940,13 @@ clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK · CI success.
 | W1 | truth sweep W053/W054/W055/W056/W057/W058 (one PR) | dev-2 | queued |
 | W1 | contract wave: W100 + W092 + DETERMINISM (W088/89/90) + W086 — 5/6 landed; W091 blocked on SPEC lane | dev-3 | **done (PR #17)** |
 | W1 | error model: W007 (tracebacks) | dev-1 | queued (loop-11 compatible) |
-| W2 | W068 + W070 + W069 | dev-3 | W068 + W070 done (PR #18); W069 queued |
+| W2 | W068 + W070 + W069 | dev-3 | **done (PRs #18, #20)** |
 | W2 | W039 + W043 + W049 | dev-2 | queued |
 | W2 | W006 (Option/Result) | dev-1 | queued |
-| W3 | W074 + W073 + W072 + W084 | dev-3 | W072 + W084 done (PR #18); W074/W073 deferred — lexer/parser lane conflict with dev-1 W007 |
+| W3 | W074 + W073 + W072 + W084 | dev-3 | **done (PRs #18, #20 — W074/W073 landed post-W007-merge)** |
 | W3 | W041 + W042 + W037 | dev-2 | queued |
 | W3 | W001/W002 (Track L2c/L2b) | dev-1 | queued |
-| W4 | W082 + W083 + W096 + W099 | dev-3 | W082 + W099 done (PR #18); W096 partial (--json landed); W083 queued |
+| W4 | W082 + W083 + W096 + W099 | dev-3 | W082 + W083 + W099 done (PRs #18, #20); W096 partial (--json landed; Chrome-trace awaits dev-1 per-call spans) |
 | W4 | W009 VM design → compiler | dev-1 | gated on W007/W006 |
 | W4b | W094 graph export | dev-3 | done (PR #18) |
 | W5+ | remaining P2/P3 per suggested orders | all | rolling |
