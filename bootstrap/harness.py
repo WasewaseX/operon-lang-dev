@@ -101,8 +101,8 @@ def main():
         gop = os.path.join(root, rel_op)
         gcell = os.path.join(root, rel_cell)
         if not (os.path.isfile(gop) and os.path.isfile(gcell)):
-            print(f"  SKIP     {rel_op} (missing op or cell)")
-            skipped += 1
+            print(f"  FAIL     {rel_op} (missing op or cell — granted targets are checked in, a missing one is a broken tree)")
+            failed += 1
             continue
         rust_out, rust_code = run([binpath, "run", gop, "--cell", gcell])
         try:

@@ -1,6 +1,8 @@
 # loop-10 (F-7): distance decay under the probabilistic arm — nakedness at
-# cistron distance d terminates with probability catch^d (0.5^d here). The
-# per-call draws ride the SHARED mirrored xorshift64* stream, so the
+# cistron distance d terminates with probability 1−(1−catch)^d (per-cistron
+# catch 0.5 compounding over the naked runway; the R10 W1 fix — pressure
+# GROWS with distance because Rho has more catch-up time). The per-call
+# draws ride the SHARED mirrored xorshift64* stream, so the
 # terminated-count over 40 seeded calls is an EXACT pin (not statistical):
 # any entropy-order drift between the cores diverges the count and the
 # harness fails. p=1 nakedness (bare silences) draws nothing; exactly ONE
@@ -27,14 +29,15 @@ frame proof {
         if c() == null { lost1 = lost1 + 1 }
     }
     assert(lost1 == 21, "d=1 (naked b): 40 seeded calls at catch 0.5 — exact terminated count (stream parity pin; expectation ~20)")
-    # distance 2: x is the first naked member, q = 0.25 per call — the decay
-    # must HALVE the termination pressure relative to d=1
+    # distance 2: x is the first naked member, q = 1−(1−0.5)² = 0.75 per
+    # call — the R10 W1 fix: the pressure must GROW with the naked runway
+    # (Rho has more catch-up time the further the reader is)
     randomize(11)
     let lost2 = 0
     for i in range(40) {
         if z() == null { lost2 = lost2 + 1 }
     }
-    assert(lost2 == 9, "d=2 (naked x): q = 0.25 per call — exact terminated count (distance decay pin; expectation ~10)")
+    assert(lost2 == 31, "d=2 (naked x): q = 0.75 per call — exact terminated count (distance-DIRECTION pin: pressure grows with d; expectation ~30)")
 }
 main {
     randomize(11)

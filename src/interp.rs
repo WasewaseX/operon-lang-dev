@@ -3060,18 +3060,19 @@ impl Interp {
     /// integration). Called at every engine update point: grn_fire pulses
     /// and decay-clock ticks.
     fn trans_integrate(&mut self) {
-        if self.trans_edges.is_empty() {
-            return;
-        }
-        // loop-10 (F-8): ribosome queue drain — BEFORE the edge loop (pinned
-        // order; both entry points: grn_fire pulses and decay-clock ticks
-        // reach this function). Exists only under rho.termination; the
-        // max(0.0) op is mirror-safe.
+        // loop-10 (F-8 + R10 kinetics jury L1): ribosome queue drain — at
+        // ENTRY (before the empty-check: "every integration point" includes
+        // units with no translates edges) and before the edge loop (pinned
+        // order; both entry points reach this function). Exists only under
+        // rho.termination; the max(0.0) op is mirror-safe.
         let (rho_on, _catch, _floor, _cap, rho_drain) = self.rho_knobs();
         if rho_on {
             for q in self.ribo_queue.values_mut() {
                 *q = (*q - rho_drain).max(0.0);
             }
+        }
+        if self.trans_edges.is_empty() {
+            return;
         }
         let edges = self.trans_edges.clone();
         for t in &edges {
@@ -3133,58 +3134,66 @@ impl Interp {
                     (pos, u.members[pos].1)
                 };
                 rf *= rbs;
-                // loop-9 (P0-1): per-call-WEIGHTED polarity. The old binary
-                // existence check imposed the full polarity^1 derating on
-                // downstream cistrons even for a strength-0.01 silence that
-                // captures just 1% of calls. Each upstream member now
-                // contributes its expected factor: methylation-past-threshold
-                // blocks transcription outright (factor = pol, exactly as
-                // before); a target-less RISC silence with per-call capture
-                // p = 1 − Π(1−s_i)^sites_i leaves the call alive with
-                // probability surv = 1 − p, so the downstream yield scales by
-                // surv + (1−surv)·pol. Legacy inputs degenerate exactly: no
-                // silence → 1.0 (an exact no-op multiply); strength 1.0 →
-                // surv = 0 → pol; methylation → pol — the same factors in the
-                // same member order, so legacy programs are bit-identical.
-                // No randomness is consumed here: this is the expected value,
-                // not a draw (the draw happens only in the call path).
-                let pol = self
-                    .cell
-                    .get("operon.polarity")
-                    .and_then(|v| v.parse::<f64>().ok())
-                    .map(|v| v.clamp(0.0, 1.0))
-                    .unwrap_or(0.5);
-                let mut f = 1.0f64;
-                for (g, _) in self.operons[ui].members.iter().take(pos) {
-                    let methylated =
-                        *self.methyl_levels.get(g).unwrap_or(&0) >= self.methyl_threshold;
-                    let factor = if methylated {
-                        // methylation dominates: transcription is blocked
-                        // regardless of any RISC capture probability
-                        pol
-                    } else {
-                        let mut surv = 1.0f64;
-                        let mut silenced = false;
-                        for (sf, st, s, sites) in self.silences.iter() {
-                            if sf == g && st.is_none() {
-                                silenced = true;
-                                let base = 1.0 - *s;
-                                let mut k = 0;
-                                while k < *sites {
-                                    surv *= base;
-                                    k += 1;
+                // loop-10 (W2, R10 biology jury): under Rho ON the polarity
+                // factor is IDENTITY — D2 resolves the upstream failure per
+                // call (terminate or read-through), so a SURVIVING transcript
+                // is whole and translates at full rate; the D1 expected-value
+                // derate would double-count the same loss. Rho OFF keeps the
+                // exact legacy fold (bit-identical).
+                if !rho_on {
+                    // loop-9 (P0-1): per-call-WEIGHTED polarity. The old binary
+                    // existence check imposed the full polarity^1 derating on
+                    // downstream cistrons even for a strength-0.01 silence that
+                    // captures just 1% of calls. Each upstream member now
+                    // contributes its expected factor: methylation-past-threshold
+                    // blocks transcription outright (factor = pol, exactly as
+                    // before); a target-less RISC silence with per-call capture
+                    // p = 1 − Π(1−s_i)^sites_i leaves the call alive with
+                    // probability surv = 1 − p, so the downstream yield scales by
+                    // surv + (1−surv)·pol. Legacy inputs degenerate exactly: no
+                    // silence → 1.0 (an exact no-op multiply); strength 1.0 →
+                    // surv = 0 → pol; methylation → pol — the same factors in the
+                    // same member order, so legacy programs are bit-identical.
+                    // No randomness is consumed here: this is the expected value,
+                    // not a draw (the draw happens only in the call path).
+                    let pol = self
+                        .cell
+                        .get("operon.polarity")
+                        .and_then(|v| v.parse::<f64>().ok())
+                        .map(|v| v.clamp(0.0, 1.0))
+                        .unwrap_or(0.5);
+                    let mut f = 1.0f64;
+                    for (g, _) in self.operons[ui].members.iter().take(pos) {
+                        let methylated =
+                            *self.methyl_levels.get(g).unwrap_or(&0) >= self.methyl_threshold;
+                        let factor = if methylated {
+                            // methylation dominates: transcription is blocked
+                            // regardless of any RISC capture probability
+                            pol
+                        } else {
+                            let mut surv = 1.0f64;
+                            let mut silenced = false;
+                            for (sf, st, s, sites) in self.silences.iter() {
+                                if sf == g && st.is_none() {
+                                    silenced = true;
+                                    let base = 1.0 - *s;
+                                    let mut k = 0;
+                                    while k < *sites {
+                                        surv *= base;
+                                        k += 1;
+                                    }
                                 }
                             }
-                        }
-                        if silenced {
-                            surv + (1.0 - surv) * pol
-                        } else {
-                            1.0
-                        }
-                    };
-                    f *= factor;
+                            if silenced {
+                                surv + (1.0 - surv) * pol
+                            } else {
+                                1.0
+                            }
+                        };
+                        f *= factor;
+                    }
+                    rf *= f;
                 }
-                rf *= f;
             }
             // loop-9 (F-6): YTHDF2-style decay routing — the LAST
             // production multiply (normative order: rate × rbs ×
@@ -3790,16 +3799,22 @@ impl Interp {
                     };
                     let shielded = *self.ribo_queue.get(&g).unwrap_or(&0.0) >= rho_floor;
                     if naked_g && !shielded {
-                        // q = catch^d — the fold starts at 1.0 and multiplies
-                        // EXACTLY d times (integer cistron distance d =
-                        // pos - i; the off-by-one of starting at catch would
-                        // compute catch^(d+1) and halve the pressure)
-                        let mut q = 1.0f64;
+                        // q = 1 − (1−catch)^d — per-cistron catch probability
+                        // compounding over the naked runway d = pos - i. The
+                        // R10 biology jury (W1) inverted the first cut
+                        // (catch^d): the FURTHER downstream the reader is
+                        // from the failure, the MORE time Rho has had to
+                        // catch up, so the termination probability must GROW
+                        // with distance. Identical to catch^d at d = 1 and at
+                        // catch ∈ {0,1} — the deterministic pins stand.
+                        let per = 1.0 - rho_catch;
+                        let mut surv = 1.0f64;
                         let mut k = 0;
                         while k < pos - i {
-                            q *= rho_catch;
+                            surv *= per;
                             k += 1;
                         }
+                        let q = 1.0 - surv;
                         if q == 0.0 {
                             break; // Rho never catches up
                         }

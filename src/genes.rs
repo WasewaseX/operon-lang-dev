@@ -1016,7 +1016,11 @@ pub fn snapshot_regulation(interp: &Interp) -> RegulationSnap {
             .collect(),
         generation: interp.generation,
         copies: interp.copies.iter().map(|(k, v)| (k.clone(), *v)).collect(),
-        rho_knobs: (
+        // loop-10 R10-b (parity jury F-1): prefer the pinned knobs when
+        // already bound (worker-in-worker snapshotting) — re-resolving from
+        // interp.cell (empty inside a worker) would silently disarm the
+        // layer at depth >= 2 while the oracle stays armed.
+        rho_knobs: interp.rho_pins.unwrap_or((
             interp
                 .cell
                 .get("rho.termination")
@@ -1043,7 +1047,7 @@ pub fn snapshot_regulation(interp: &Interp) -> RegulationSnap {
                 .get("ribosome.drain")
                 .and_then(|v| v.parse::<f64>().ok())
                 .unwrap_or(0.5),
-        ),
+        )),
         ribo_queue: interp
             .ribo_queue
             .iter()
