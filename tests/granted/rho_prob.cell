@@ -1,5 +1,6 @@
 # loop-10 (F-7): explicit operator cell — the probabilistic arm: catch 0.5
-# (distance decay q = 0.5^d). queue_cap 0.0 keeps every cistron unshielded
+# (distance decay q = 1−(1−catch)^d — pressure GROWS with the runway).
+# queue_cap 0.0 keeps every cistron unshielded
 # so the statistics measure the DISTANCE DECAY alone (with the default cap,
 # read-through calls grow the unit queue and the coupling shield kicks in —
 # that feedback is pinned separately in rho_queue_shield.op). Statistical

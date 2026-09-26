@@ -987,7 +987,11 @@ pub fn snapshot_regulation(interp: &Interp) -> RegulationSnap {
             .iter()
             .map(|(k, (a, b))| (k.clone(), *a, *b))
             .collect(),
-        m6a_reader: (
+        // loop-10 R10-c (parity jury F-1m): prefer the pinned reader knobs
+        // when already bound — the same worker-in-worker class as the rho
+        // fix below (re-resolving from an empty worker cell silently
+        // resets the reader to defaults at depth >= 2).
+        m6a_reader: interp.m6a_reader_pins.unwrap_or((
             interp
                 .cell
                 .get("m6a.reader.decay")
@@ -1006,7 +1010,7 @@ pub fn snapshot_regulation(interp: &Interp) -> RegulationSnap {
                 .and_then(|v| v.parse::<u32>().ok())
                 .map(|v| v.clamp(0, 3))
                 .unwrap_or(2),
-        ),
+        )),
         risc_escaped: interp.risc_escaped.iter().cloned().collect(),
         operons: interp.operons.clone(),
         m6a_levels: interp

@@ -3734,9 +3734,11 @@ impl Interp {
         // transcript: an upstream cistron whose translation fails
         // (methylation-past-threshold, or a RISC capture that fires on this
         // attempt) exposes rut sites; Rho loads and chases; the rest of the
-        // transcript for THIS call is lost with probability decaying as
-        // catch^distance (integer cistron distance — repeated multiply, no
-        // powf). Ribosome occupancy shields (F-8): a queue depth at or
+        // transcript for THIS call is lost with probability 1 − (1−catch)^d
+        // — per-cistron catch compounding over the naked runway d (GROWS
+        // with distance: the further the reader, the more catch-up time —
+        // the R10 W1 fix; repeated multiply, no powf). Ribosome occupancy
+        // shields (F-8): a queue depth at or
         // above rho.queue_floor occludes the rut sites. Insert point: after
         // the promoter gate, BEFORE transcript/counter bookkeeping — a
         // terminated call is not expression (no counters, no transcript,
