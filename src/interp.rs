@@ -441,6 +441,8 @@ pub struct Interp {
     pub cell: HashMap<String, String>,
     pub cell_entry: Option<String>,
     pub base_dir: Option<String>,
+    /// W079: warned once per run about a below-floor Python interpreter.
+    pub py_version_warned: bool,
     /// A13 (dx-r2): line of the call expression currently executing —
     /// builtin diagnostics stamp this instead of 0.
     pub cur_line: usize,
@@ -619,6 +621,7 @@ impl Interp {
             cell: HashMap::new(),
             cell_entry: None,
             base_dir: None,
+            py_version_warned: false,
             cur_line: 0,
             file: "<repl>".to_string(),
             stdout_sink: None,
@@ -7616,6 +7619,35 @@ impl Interp {
                                 "overflow",
                                 "step budget exhausted (py child wall time)",
                             ));
+                        }
+                        if let Some(ver) = &r.py_version {
+                            // W079: warn ONCE per run when the interpreter is
+                            // below the documented support floor (SPEC §15b).
+                            if !self.py_version_warned {
+                                self.py_version_warned = true;
+                                let below = {
+                                    let mut parts = ver.split('.');
+                                    let major: u32 = parts
+                                        .next()
+                                        .and_then(|p| p.parse().ok())
+                                        .unwrap_or(0);
+                                    let minor: u32 = parts
+                                        .next()
+                                        .and_then(|p| p.parse().ok())
+                                        .unwrap_or(0);
+                                    (major, minor) < (3, 10)
+                                };
+                                if below {
+                                    self.note(
+                                        self.cur_line,
+                                        4,
+                                        format!(
+                                            "py bridge: interpreter {} is below the documented support floor (3.10); behavior may drift (SPEC §15b)",
+                                            ver
+                                        ),
+                                    );
+                                }
+                            }
                         }
                         if r.timed_out {
                             self.note(
