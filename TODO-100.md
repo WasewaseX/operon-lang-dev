@@ -674,7 +674,7 @@ clippy 0 · fmt clean · cookbook **18/18** · LSP smoke OK · CI success.
   migration path. Implementation lands only after fmt canonical mode is stable (W047).
 - Files: `SPEC.md` or `docs/design/RNA-V2.md`, `src/tools.rs` (evidence comments).
 
-### W068 — `.rna` safety mode [P1] [dev-3] [S] [open]
+### W068 — `.rna` safety mode [P1] [dev-3] [S] [done: PR #18 — checked engine + CLI, 6 tests]
 - Goal: `operon rna --check` (or the existing rna surface with `--check`): dry run that
   reports target found/not, replacement count, old→new text diff, affected gene, and exits
   non-zero if a target is missing (script-friendly).
@@ -690,7 +690,7 @@ clippy 0 · fmt clean · cookbook **18/18** · LSP smoke OK · CI success.
   root; divergence between LSP/runtime documented as allowed only where justified.
 - Files: `SPEC.md`, `tests/differential/`, cross-check `src/ls.rs`.
 
-### W070 — Import diagnostics detail [P2] [dev-3] [S] [partial]
+### W070 — Import diagnostics detail [P2] [dev-3] [S] [done: PR #18 — attempted-roots detail, C-7 preserved]
 - Goal: failed `use` reports: requested path, every attempted root in order, why each
   failed (missing / not-a-file / capability-denied / parse-error-in-target), resolved
   std root version.
@@ -703,7 +703,7 @@ clippy 0 · fmt clean · cookbook **18/18** · LSP smoke OK · CI success.
 - Deliverable: design paragraph (watch-mode dependency, GRN state reset semantics, GenomeLab
   integration sketch) in `docs/design/HOT-RELOAD.md`. No implementation until W072 ships.
 
-### W072 — `operon watch` [P2] [dev-3] [S] [open]
+### W072 — `operon watch` [P2] [dev-3] [S] [done: PR #18 — mtime poll, fresh child per run]
 - Goal: `operon watch app.op [-- args]` re-runs on mtime change (poll ≥200ms, no new
   deps), clears screen or prints separator, shows run duration + exit status; `--quiet`
   for CI-ish loops.
@@ -773,7 +773,7 @@ clippy 0 · fmt clean · cookbook **18/18** · LSP smoke OK · CI success.
   without a benchmark proving ≥2x and a security re-audit** — add this line to
   CONTRIBUTING.md (done as part of W100's doc sweep).
 
-### W082 — Performance regression gating [P1] [dev-3] [S] [open]
+### W082 — Performance regression gating [P1] [dev-3] [S] [done: PR #18 — perf_gate.py + perf.yml]
 - Goal: bench CI job gains thresholds: any tracked benchmark regressing >20% vs the
   recorded baseline fails the job (noise-tolerant: median of 3 runs, ±5% band), turning
   the non-blocking job into a blocking gate on main.
@@ -790,7 +790,7 @@ clippy 0 · fmt clean · cookbook **18/18** · LSP smoke OK · CI success.
   no bench depends on network.
 - Files: `scripts/bench/*.op`, `scripts/bench.sh`, `BENCH.md`.
 
-### W084 — Startup time benchmark [P1] [dev-3] [S] [open]
+### W084 — Startup time benchmark [P1] [dev-3] [S] [done: PR #18 — exec 1.5ms / run-hello 1.7ms measured]
 - Goal: measure binary cold start → hello output, and startup composition (lexer/parser/
   stdlib import) via `--iters` timing harness; tracked per release.
 - Done when: `scripts/bench_startup.sh` (hyperfine if available, else manual loop) writes
@@ -807,7 +807,7 @@ clippy 0 · fmt clean · cookbook **18/18** · LSP smoke OK · CI success.
   README (audit's complaint).
 - Files: `SPEC.md`, `README.md`.
 
-### W086 — `operon build` contract [P1] [dev-3] [S] [open]
+### W086 — `operon build` contract [P1] [dev-3] [S] [done: PR #17 — BUILD-CONTRACT.md]
 - Goal: honest documented contract of what build does TODAY (source specialization/baking):
   inputs, outputs, what is NOT guaranteed (no VM bytecode, no native exe yet), stability
   of baked output.
@@ -819,7 +819,7 @@ clippy 0 · fmt clean · cookbook **18/18** · LSP smoke OK · CI success.
 - Deliverable: `docs/design/BUNDLE.md` — `operon bundle app.op` artifact layout (source +
   bytecode + stdlib deps + metadata), why it waits for W023/W009.
 
-### W088 — Reproducible build contract [P2] [dev-3] [S] [open]
+### W088 — Reproducible build contract [P2] [dev-3] [S] [done: PR #17 — DETERMINISM.md §6]
 - Goal: define reproducibility scope: same operon version + same source + same seed ⇒ same
   output bytes for `operon build` and `operon bundle` (future); document what is excluded
   (paths, timestamps) and how they are normalized.
@@ -827,7 +827,7 @@ clippy 0 · fmt clean · cookbook **18/18** · LSP smoke OK · CI success.
   (build twice, byte-compare) in CI or scripts.
 - Files: `docs/spec/DETERMINISM.md`, `scripts/`, `tests/`.
 
-### W089 — Randomness determinism model [P1] [dev-3] [S] [partial: seeded RNG + worker pinning exist]
+### W089 — Randomness determinism model [P1] [dev-3] [S] [done: PR #17 — DETERMINISM.md §4]
 - Goal: document what determinism means: same source + same seed + same operon version ⇒
   same random stream, single-thread AND multi-thread (worker pinning landed: worker_seed_pin
   test, F-1m pin preference); cross-platform stream identity promise or explicit
@@ -836,7 +836,7 @@ clippy 0 · fmt clean · cookbook **18/18** · LSP smoke OK · CI success.
   (tests/worker_seed_pin.op, std/random.op wrappers); SPEC §22 cross-link.
 - Files: `docs/spec/DETERMINISM.md`, `SPEC.md`.
 
-### W090 — Floating-point determinism [P2] [dev-3] [S] [open]
+### W090 — Floating-point determinism [P2] [dev-3] [S] [done: PR #17 — DETERMINISM.md §5]
 - Goal: define whether bit-identical f64 results across platforms are promised: compiler
   flags (no fast-math), operation order, transcendental policy (libm variance disclaimer),
   JSON float formatting policy.
@@ -844,7 +844,7 @@ clippy 0 · fmt clean · cookbook **18/18** · LSP smoke OK · CI success.
   already (release targets) — add explicit float-parity assertion program.
 - Files: `docs/spec/DETERMINISM.md`, `tests/differential/`.
 
-### W091 — Bio semantics separation [P1] [dev-3] [M] [open]
+### W091 — Bio semantics separation [P1] [dev-3] [M] [blocked: SPEC lane — after builder-B W54 lands]
 - Goal: SPEC currently interleaves language semantics with biological modeling semantics.
   Split: language sections state syntax/evaluation ONLY; bio modeling moves to a dedicated
   volume (docs/spec/BIO-MODEL.md) referenced from SPEC §11.
@@ -855,7 +855,7 @@ clippy 0 · fmt clean · cookbook **18/18** · LSP smoke OK · CI success.
 - Coordinate: W036 (syntax boundary, dev-2) + W092 (modeling contract, below) land as one
   coherent doc wave.
 
-### W092 — Biological modeling contract [P1] [dev-3] [M] [open]
+### W092 — Biological modeling contract [P1] [dev-3] [M] [done: PR #17 — BIO-CONTRACT.md]
 - Goal: every biological mechanism labeled honestly: **real mechanism / mathematical
   approximation / Operon-specific abstraction / fictional simplification**, with what the
   simulation output does and does NOT mean.
@@ -874,7 +874,7 @@ clippy 0 · fmt clean · cookbook **18/18** · LSP smoke OK · CI success.
   published parameterization note).
 - Files: `docs/spec/VALIDATION.md`, `std/testing.op`, `tests/`.
 
-### W094 — Graph visualization export [P2] [dev-3] [M] [open]
+### W094 — Graph visualization export [P2] [dev-3] [M] [done: PR #18 — src/graph.rs, DOT+JSON, 2 tests]
 - Goal: `operon graph file.op --format dot|json|svg-stub` exporting the GRN/regulation
   graph: nodes (genes, levels), edges (activation/inhibition, cooperativity), modifiers
   (methylation/m6A marks).
@@ -887,7 +887,7 @@ clippy 0 · fmt clean · cookbook **18/18** · LSP smoke OK · CI success.
 - Deliverable: design note extending W094 JSON with time-series frames; GenomeLab timeline
   integration sketch. Implementation after W094 + GenomeLab next wave.
 
-### W096 — Profiler output formats [P2] [dev-3] [S] [open]
+### W096 — Profiler output formats [P2] [dev-3] [S] [partial: --json landed (PR #18); Chrome-trace blocked on per-call spans (dev-1 lane)]
 - Goal: `operon profile --json` (self-describing: units, version, run metadata) +
   Chrome-trace format (`.json` events) so about://tracing / perfetto render it; flamegraph
   text format optional.
@@ -906,7 +906,7 @@ clippy 0 · fmt clean · cookbook **18/18** · LSP smoke OK · CI success.
   task-fuel reporting deferred.
 - Files: `src/interp.rs`, `SPEC.md`, `tests/`.
 
-### W099 — Security audit automation [P1] [dev-3] [M] [partial: SHA-pinned supply chain + redteam 95 in CI]
+### W099 — Security audit automation [P1] [dev-3] [M] [done: PR #18 — advisories + sweep landed; floating-ref finding filed]
 - Goal: add: `cargo-deny`/`cargo-audit` job (Rust advisories), dependency diff review
   note in CONTRIBUTING, periodic sandbox-regression runner (the live TOCTOU flipper
   pattern → scripted), resource-exhaustion smoke in CI, Windows/Unicode path probes on
@@ -917,7 +917,7 @@ clippy 0 · fmt clean · cookbook **18/18** · LSP smoke OK · CI success.
 - Files: `.github/workflows/security.yml` (new), `scripts/sec_regression.sh`,
   `CONTRIBUTING.md`.
 
-### W100 — Formal threat model [P0] [dev-3] [M] [open]
+### W100 — Formal threat model [P0] [dev-3] [M] [done: PR #17 — THREAT-MODEL.md]
 - Goal: ONE document answering: what Operon protects against, for each untrusted input —
   malicious source, `.cell`, `.rna`, module, dependency, Python package (py()), network
   peer (http), local filesystem, resource exhaustion, data exfiltration.
@@ -938,16 +938,17 @@ clippy 0 · fmt clean · cookbook **18/18** · LSP smoke OK · CI success.
 | wave | content | dev | status |
 |------|---------|-----|--------|
 | W1 | truth sweep W053/W054/W055/W056/W057/W058 (one PR) | dev-2 | queued |
-| W1 | contract wave: W100 + W091 + W092 + DETERMINISM + W086 | dev-3 | **wip (this session)** |
+| W1 | contract wave: W100 + W092 + DETERMINISM (W088/89/90) + W086 — 5/6 landed; W091 blocked on SPEC lane | dev-3 | **done (PR #17)** |
 | W1 | error model: W007 (tracebacks) | dev-1 | queued (loop-11 compatible) |
-| W2 | W068 + W070 + W069 | dev-3 | queued |
+| W2 | W068 + W070 + W069 | dev-3 | W068 + W070 done (PR #18); W069 queued |
 | W2 | W039 + W043 + W049 | dev-2 | queued |
 | W2 | W006 (Option/Result) | dev-1 | queued |
-| W3 | W074 + W073 + W072 + W084 | dev-3 | queued |
+| W3 | W074 + W073 + W072 + W084 | dev-3 | W072 + W084 done (PR #18); W074/W073 deferred — lexer/parser lane conflict with dev-1 W007 |
 | W3 | W041 + W042 + W037 | dev-2 | queued |
 | W3 | W001/W002 (Track L2c/L2b) | dev-1 | queued |
-| W4 | W082 + W083 + W096 + W099 | dev-3 | queued |
+| W4 | W082 + W083 + W096 + W099 | dev-3 | W082 + W099 done (PR #18); W096 partial (--json landed); W083 queued |
 | W4 | W009 VM design → compiler | dev-1 | gated on W007/W006 |
+| W4b | W094 graph export | dev-3 | done (PR #18) |
 | W5+ | remaining P2/P3 per suggested orders | all | rolling |
 
 ## Rules for evolving this document
