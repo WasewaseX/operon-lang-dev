@@ -63,11 +63,11 @@ Rules:
 
 Effort: S ≤ half session · M = 1–2 sessions · L = multi-session · XL = release-scale.
 
-## CURRENT GATE NUMBERS (2026-09-27, sz/w076-embed head — dev-3 wrap-up W076/W077/W080/W085, main = #16+#20 merged)
+## CURRENT GATE NUMBERS (2026-09-27, sz/w076-embed head over main 15aa6ac — dev-3 wrap-up + full b2 stack landed)
 
-differential **152/152 MATCH** · proofs **120 files / 102 proofs green (1314 asserts, 0 failed)** ·
-redteam **100 payloads / 0 breaches** · cargo test green (81 tests / 12 suites, incl. embed-era suites) ·
-clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK · sec_regression ALL GREEN ·
+differential **154/154 MATCH** · proofs **122 files / 103 proofs green (1346 asserts, 0 failed, Rust AND oracle)** ·
+redteam **100 payloads / 0 breaches** · cargo test green (101 tests) ·
+clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK (incl. rename asserts) · sec_regression ALL GREEN ·
 doc_api_check green · **embed gate green (W076: examples/embed path-dep crate builds + runs, promote() captured)**.
 
 > These numbers are re-measured every loop; when they change, update this header in the
