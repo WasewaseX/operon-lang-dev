@@ -55,7 +55,7 @@ Every parse passes down the ladder; each rung below 1 emits **notes** (structure
 
 1. **Canonical** — exact keyword/grammar match. No notes.
 2. **Synonym** — a known synonym table maps alternate spellings to canonical keywords:
-   `fn func def fun sub lambda proc → gene` · `print echo say show → promote` (promote is builtin, synonyms map in parser to a `promote` call) · `var val const → let` · `elseif → elif` · `foreach each → for` · `import include require → use` · `ret → return` · `stop → break` · `continue next skip → continue` · `yes on → true` · `no off → false` · `null nil none nothing → null` · `&& → and` · `|| → or` · `! → not`.
+   `fn func def fun sub lambda proc → gene` · `print echo say show → promote` (promote is builtin, synonyms map in parser to a `promote` call) · `var val const → let` · `elseif → elif` · `foreach each → for` · `import include require → use` · `ret → return` · `stop → break` · `continue next skip → continue` · `yes on → true` · `no off → false` · `null nil nothing → null` · `&& → and` · `|| → or` · `! → not`. (W06/D-014: `none` was RETIRED from the null synonyms — it is now the Option constructor `none()`; bare `none` degrades to an unbound-ident note, never a silent null.)
 3. **Wobble** — an identifier within edit distance ≤ 2 of exactly one keyword (≤ 1 if its length ≤ 4) is repaired to that keyword, with a note. Applies to marks too (`@acetylat` → `@acetylate`). Ambiguity (two keywords equidistant) → rung 4 for that token.
 4. **Semantic fallback** — unknown bare identifier in expression position becomes the string literal of its own name + note ("unbound wobble"); stray tokens are skipped with notes; unclosed braces are auto-closed at EOF with notes; extra closers are skipped with notes; an unclosed string consumes to EOF with a note.
 
@@ -128,7 +128,9 @@ are dropped with a note. `*rest` on an exhausted list binds `[]`.
 12. unary `-` and `~` (bitwise not)
 13. `**` power — right-associative, binds tighter than unary minus on its left
 14. postfix: call `f(x)`, index `a[i]`, member `a.k`, method call `a.k(args)`,
-    and the null-safe forms `a?.k`, `a?.k(args)` (v2.3): a Null receiver yields
+    the propagation form `e?!` (§9, D-014 — binds tighter than every binary/
+    ternary operator, repeats compose), and the null-safe forms `a?.k`,
+    `a?.k(args)` (v2.3): a Null receiver yields
     Null **silently** — no note; a non-Null receiver behaves exactly like `.`
     (missing keys still note). Chains compose: `a?.b?.c`.
 15. primary: literal, ident, `(expr)`, list `[a, b]`, map `{k: v, "k2": v}`, lambda, `collect` (§7), `new Name(args)` (§7a)
@@ -202,8 +204,63 @@ for v in name(3) { ... }             # sequences are directly iterable
 
 ## 9. Stress containment (errors)
 
+**The error hierarchy (W06, D-014).** Operon separates four tiers of "went wrong", each
+with its own mechanism — everyday failures never touch Stress:
+
+1. **Null + note** — a soft miss (`?.` on null, a member that isn't there, a burst-off
+   call). The value is `null`, a rung-4 note explains. Expected, routine, unwrappable
+   with `??`.
+2. **Option / Result** — an *expected* failure as a first-class value (below). The caller
+   decides: propagate with `?!`, default with `unwrap_or`, or inspect with `is_ok`/`is_err`.
+3. **Stress** — an *exceptional* failure: a contract violation, resource ceiling, or
+   capability denial. Contained by `stress/rescue`.
+4. **Hard exit** — uncaught stress at the entry boundary renders the traceback and exits 1
+   (§9a).
+
+**First-class Option/Result (D-014).** Four constructors build variant values: `some(v)`,
+`none()` (the Option family), `ok(v)`, `err(e)` (the Result family). The tag IS the
+contract — families are distinct (`some(1) != ok(1)`) and `type()` returns `option` or
+`result`. Payloads may be any value, including other variants (`some(some(9))`).
+
+- **Predicates**: `is_some/is_none/is_ok/is_err(v)`.
+- **Safe extraction**: `unwrap_or(v, default)` never stresses — payloads win, everything
+  else (None/Err/plain values) yields the default.
+- **Unsafe extraction**: `unwrap(v)` returns the payload of Some/Ok; on None/Err (or a
+  plain value) it raises Stress kind `unwrap` — a *programmer-contract* violation, i.e.
+  tier 3, deliberately rescue-catchable. Expected failures belong in the value layer
+  (check `is_ok` first, or propagate).
+- **Repr**: `Ok(3)`, `Err("x")`, `Some(3)`, `None`. **Truthiness**: Some/Ok are truthy,
+  None/Err falsy (`if (result)` reads naturally). **JSON**: `{"ok":1}`, `{"err":"x"}`,
+  `{"some":1}`; None serializes as `null` (in-memory lossless, JSON is a Map-shaped view).
+- **Equality**: same tag + equal payloads; `None == None`.
+
+**Propagation `?!` (D-014).** A postfix operator — `e?!`:
+
+- `e` is `Some(v)`/`Ok(v)` → the expression IS `v` (payload unwrapped).
+- `e` is `None`/`Err(x)` → the enclosing gene **returns** that variant value, unwinding
+  immediately (statement-level, like a `return`). This is a *return*, not a failure: it
+  crosses `stress/rescue` boundaries untouched, gains no traceback chain frames, and can
+  never be contained by rescue (not even `rescue any`).
+- `e` is a plain value → silent identity (the `?.`-on-non-null precedent).
+- Outside any gene (top level, proof frames, REPL): the signal is contained with a
+  rung-4 note `propagation reached top level: <value> passes through` — Total Grammar
+  never rejects, and the "propagate" kind never leaks as a failure anywhere (the marker
+  rides an interpreter-only payload field no user path can set; the `raise` grammar's
+  kind whitelist cannot name it either).
+- Inside a sequence body: the stream ends cleanly with the note `propagation ended the
+  sequence` (sequences are streams, not answers — the variant has no return path).
+- Repeats compose: `some(some(9))?!?!` is `9`. Binds tighter than every binary/ternary
+  operator; the formatter round-trips it.
+- Grammatically `?!` is one token, lexed before the ternary's bare `?` — the two never
+  collide.
+
+**Compatibility note (stage-2 roadmap)**: std functions that fail today return `null`
++tier-1 notes. They migrate to Result returns per-function, each documented in STDLIB.md
+at migration time; the null contract stays the default for 2.x so existing programs keep
+their byte-identical behavior.
+
 Runtime failures raise a **Stress** value: Map `{"kind": Str, "message": Str}`. Kinds:
-`unfolded` (type errors), `missing` (bad index/key/member/null-deref), `overflow` (int overflow, depth limit, resource ceilings), `burned` (assertion failures, resource errors), `interference` (capability-sandbox denials, §9b), `any` (catch-all position only).
+`unfolded` (type errors), `missing` (bad index/key/member/null-deref), `overflow` (int overflow, depth limit, resource ceilings), `burned` (assertion failures, resource errors), `interference` (capability-sandbox denials, §9b), `unwrap` (D-014: `unwrap` on None/Err or a plain value), `any` (catch-all position only).
 
 ```
 stress { RISKY } rescue (e) { promote("contained: {e.message}") }

@@ -45,6 +45,7 @@ pub enum Tok {
     Question,
     QuestionDot,      // ?. — optional chaining (L1a)
     QuestionQuestion, // ?? — null coalescing (L1a)
+    QuestionBang,     // ?! — Option/Result propagation (W06, D-014)
     Eq,
     EqEq,
     Neq,
@@ -105,6 +106,7 @@ impl Tok {
             Tok::Question => "'?'".to_string(),
             Tok::QuestionDot => "'?.'".to_string(),
             Tok::QuestionQuestion => "'??'".to_string(),
+            Tok::QuestionBang => "'?!'".to_string(),
             Tok::Eq => "'='".to_string(),
             Tok::EqEq => "'=='".to_string(),
             Tok::Neq => "'!='".to_string(),
@@ -647,6 +649,13 @@ pub fn lex(src: &str) -> Lexed {
                     && !chars[i + 2].is_ascii_digit()
                 {
                     push!(Tok::QuestionDot);
+                    i += 2;
+                } else if i + 1 < n && chars[i + 1] == '!' {
+                    // W06 (D-014): '?!' = Option/Result propagation. Binds as
+                    // a POSTFIX operator (parse_postfix), so it can never
+                    // collide with the ternary's bare '?' — '?!' is lexed as
+                    // one token before the '?' fallthrough.
+                    push!(Tok::QuestionBang);
                     i += 2;
                 } else {
                     push!(Tok::Question);

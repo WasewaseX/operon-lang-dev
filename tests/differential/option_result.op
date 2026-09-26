@@ -1,0 +1,56 @@
+# option_result — W06 (D-014) differential pin: first-class Option/Result
+# constructors, predicates, extraction, propagation, equality, repr, JSON.
+# Byte-identical on both engines.
+print(ok(42))
+print(some("hi"))
+print(none())
+print(err(7))
+print(is_ok(ok(1)), is_err(ok(1)))
+print(is_some(some(2)), is_none(some(2)))
+print(is_none(none()), is_ok(none()))
+print(unwrap(ok(10)), unwrap(some(3)))
+print(unwrap_or(none(), 0), unwrap_or(err("x"), 9), unwrap_or(ok(5), 9))
+print(ok(1) == ok(1), ok(1) == ok(2), some(1) == ok(1))
+print(none() == none(), err(1) == err(1), err(1) == err(2))
+let flag = ok("y")
+if (flag) {
+    print("t")
+} else {
+    print("f")
+}
+print([ok(1), none(), some([2, 3])])
+print(json_str(ok(1)), json_str(err("bad")), json_str(some(1)), json_str(none()))
+gene fetch(n) {
+    if (n > 10) {
+        return err("too big")
+    }
+    return ok(n * 2)
+}
+gene use(n) {
+    v = fetch(n)?!
+    return ok(v + 1)
+}
+print(use(4))
+print(use(11))
+gene plain(n) {
+    return n * 2
+}
+print(plain(21)?!)
+print("val=" + str(ok(3)?!))
+print(some(some(9))?!?!)
+print(type(some(1)), type(err("e")))
+
+let w = "world"
+print("interp: " + w)
+stress {
+    print(unwrap(none()))
+} rescue (e) {
+    print("caught: " + e.kind)
+}
+stress {
+    print(unwrap(err("boom")))
+} rescue (e) {
+    print("caught: " + e.kind + " " + e.message)
+}
+print(unwrap_or("plain", 1))
+print(5 ?!)
