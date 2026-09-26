@@ -229,6 +229,23 @@ command = "operon-ls"
 
 Ranged (incremental) edits are ignored by design while `textDocumentSync = 1` (full-text) is advertised — well-behaved editors always send full text on change.
 
+## Install
+
+Every channel below carries an honest validation mark (the full ledger lives in [docs/PACKAGING.md](docs/PACKAGING.md)):
+
+| channel | how | mark |
+|---|---|---|
+| GitHub release (linux x64+arm64, macos x64+arm64, windows) | download `operon-<v>-<target>.tar.gz` / `.zip` + verify the companion `.sha256` | **validated** — per-artifact release smoke in CI |
+| install script | `curl -fsSL https://raw.githubusercontent.com/WasewaseX/operon-lang-dev/main/scripts/install.sh \| sh` | community (runs on your machine) |
+| from source | `./scripts/build.sh` or `cargo install --path .` | **validated** — the CI cargo gate builds this exact path |
+| cargo-binstall / Homebrew / winget | metadata + drafts | staged — land with the B5 stack merge (docs/PACKAGING.md) |
+| Scoop (Windows) | `packaging/scoop/operon.json` | community draft |
+| AUR (release / git) | `packaging/aur/PKGBUILD` · `packaging/aur/PKGBUILD.git` | community drafts |
+| Nix | `packaging/nix/default.nix` | community draft |
+| deb / rpm | `[package.metadata.deb]` / `[package.metadata.generate-rpm]` in Cargo.toml | community drafts |
+
+Every archive ships `operon`, `operon-ls`, and the self-hosted `std/` library. `validated` means a CI job or smoke script in this repo exercises the channel today; `community` means a maintainer must pin the checksum and verify at publish time — "should work" is not a state we write down.
+
 ## Build from source
 
 ```console
@@ -267,7 +284,7 @@ examples/    tour programs (.op)
 docs/        documentation site (HTML/CSS)
 web/         browser playground (JS + TS declarations)
 scripts/     build.sh · test.sh · bench.sh · stack_report.sh
-packaging/   PyInstaller spec for the bootstrap path
+packaging/   distribution channels: Scoop manifest, AUR PKGBUILD (release+git), Nix derivation (ledger: docs/PACKAGING.md)
 ```
 
 ## License
