@@ -91,8 +91,10 @@ for [k, v] in expr { }              # destructuring loop (v2.3) — any pattern
                                     # fresh child scope
 return expr?                        # bare return → null
 break / continue
-match expr { case p { } ... }       # patterns: literals (==, comma-sep allowed),
-                                    # ident (binds), _ (wildcard). First match wins.
+match expr { case p { } ... }       # patterns (W02 match-v2, see §5a). First
+                                    # match wins; a shape that cannot match
+                                    # falls through — matching never rejects a
+                                    # run (Total Grammar, §4)
 use path (as name)?                 # file import → binds module Map (see §8)
 raise expr                          # raise Stress{kind:"unfolded", message: str(e)}
 raise kind , expr                   # kind ∈ unfolded missing overflow burned
@@ -108,6 +110,49 @@ Name { B }                          # bare-name block: a gene definition with no
 run. Destructuring a non-container (or null) binds all its names to null with
 one note; a missing element/key binds null for that piece only; extra elements
 are dropped with a note. `*rest` on an exhausted list binds `[]`.
+
+### 5a. Pattern matching — match-v2 (W02)
+
+`match` arms are patterns `p`, tried top to bottom; the first arm whose
+pattern hits executes its body in a fresh child scope holding the pattern's
+captures, and the statement ends. A pattern that cannot match (wrong tag,
+wrong length, missing key, non-container subject) simply misses — it never
+fails the run; with no hit and no catch-all the `match` falls through
+silently. New in W02 (all mirrored op-for-op by the Python oracle, and by
+`operon fmt` roundtrip):
+
+- **Variant patterns** — `Some(p)`, `None`, `Ok(p)`, `Err(p)` where `p` is
+  itself a pattern (nestable: `Some(Some(y))`). The tag IS the contract
+  (§9): a `Some` pattern never matches an `Ok` value. The bare tag form
+  (`Some`) matches the tag with any payload; `Some(p)` against the
+  payload-less `None` value misses. Tags are the four built-in variant
+  constructors only — any other capitalized name in pattern position is a
+  note + a whole-subject binding (a parenthesized payload is consumed and
+  ignored so the token stream stays aligned).
+- **List patterns** — `[p1, p2, *rest]`. Element patterns nest; the subject
+  must be a List of exactly that length, or (with `*rest`) at least that
+  length; `rest` binds the remaining tail as a fresh List. `[]` matches
+  only the empty list.
+- **Map patterns** — `{k1, k2: p}`. Each named key must be present on the
+  subject (a Map); the bare-key form binds the value, the `k: p` form runs
+  the sub-pattern against it. Non-string keys are only reachable via
+  indexing, not patterns.
+- **Or-patterns** — `p1 | p2 | ...`; alternatives are tried in order and
+  the FIRST hitting alternative provides the bindings (an alternative that
+  hits without binding yields unbound-name lookups downstream — soft nulls).
+  A failed alternative's partial captures never leak into the arm.
+  Newlines are allowed before any `|` (multi-line chains).
+- **Guards** — `p if cond`: the condition evaluates after `p`'s captures,
+  in the arm scope, so it sees the bindings (including after an or-chain —
+  the winning alternative's). Guard false ⇒ the arm misses and matching
+  continues. A stress inside the guard is contained to a note + miss;
+  the ONE escape is `?!` propagation (§9), which is a return, never a
+  failure — it leaves the match and unwinds to the gene boundary.
+- **Legacy forms, unchanged** — literal patterns (`1`, `"s"`, `true`,
+  `null`), identifier binds, `_`, and the literal comma-run (`case 1, 2`
+  = matches either). Pattern literal expressions cannot call or reference
+  names (they are literals by construction), so guards are the supported
+  way to test computed conditions.
 
 ## 6. Expressions (precedence low → high)
 

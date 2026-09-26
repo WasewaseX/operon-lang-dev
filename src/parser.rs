@@ -3321,79 +3321,300 @@ impl Parser {
         Expr::Interp(parts)
     }
 
+    /// W02 (match-v2) pattern grammar:
+    ///   pattern  := atom ( '|' atom )*            (or-pattern, first hit binds)
+    ///             | pattern 'if' expr             (guard — sees the bindings)
+    ///   atom     := literal | '_' | ident        (legacy forms, unchanged)
+    ///             | 'Some'/'None'/'Ok'/'Err' [ '(' pattern ')' ]
+    ///             | '[' pattern,... [ '*' ident ] ']'
+    ///             | '{' ident [':' pattern],... '}'
+    /// Legacy literal comma-runs (`case 1, 2 =>`) keep their Multi shape and
+    /// their legacy edge behavior byte-for-byte; everything new hangs off the
+    /// atom/`|`/`if` rules. Total Grammar: a malformed pattern degrades to a
+    /// wildcard/bind with a note — never a rejection.
     fn parse_pattern(&mut self) -> MatchPat {
-        let mut lits: Vec<Expr> = Vec::new();
-        loop {
-            // negative literals are legal patterns (case 1, -1 =>)
-            let neg = matches!(self.peek(), Tok::Minus);
-            if neg {
-                self.next();
-            }
-            match self.peek().clone() {
-                Tok::Int(i) => {
-                    self.next();
-                    let e = Expr::Int(if neg { -i } else { i });
-                    lits.push(e);
-                }
-                Tok::Float(f) => {
-                    self.next();
-                    let e = Expr::Float(if neg { -f } else { f });
-                    lits.push(e);
-                }
-                Tok::Str(s) => {
-                    if neg {
-                        let line = self.line();
-                        self.note(line, 4, "'-' before a string pattern ignored");
-                    }
-                    self.next();
-                    lits.push(Expr::Str(s));
-                }
-                Tok::Ident(w) if !neg && w == "true" => {
-                    self.next();
-                    lits.push(Expr::Bool(true));
-                }
-                Tok::Ident(w) if !neg && w == "false" => {
-                    self.next();
-                    lits.push(Expr::Bool(false));
-                }
-                Tok::Ident(w) if !neg && w == "null" => {
-                    self.next();
-                    lits.push(Expr::Null);
-                }
-                Tok::Ident(w) if !neg && w == "_" => {
-                    self.next();
-                    return MatchPat::Wild;
-                }
-                Tok::Ident(w) if !neg => {
-                    self.next();
-                    return MatchPat::Bind(w);
-                }
-                other => {
-                    if neg {
-                        // '-' consumed but no literal followed
-                        let line = self.line();
-                        self.note(line, 4, "dangling '-' in pattern treated as wildcard");
-                    }
-                    let line = self.line();
-                    self.note(
-                        line,
-                        4,
-                        format!("pattern '{}' treated as wildcard", other.describe()),
-                    );
-                    self.next();
-                    return MatchPat::Wild;
-                }
-            }
+        let first = self.parse_pat_atom();
+        // Legacy literal comma-run — only for a leading literal, preserving
+        // the pre-W02 shape (`case 1, 2 =>` → Multi) and edge behavior
+        // (a non-literal in the run discards the collected literals).
+        let leading_lit = match &first {
+            MatchPat::Lit(e) => Some(e.clone()),
+            _ => None,
+        };
+        if let Some(e0) = leading_lit {
             if matches!(self.peek(), Tok::Comma) {
-                self.next();
-            } else {
-                break;
+                let mut lits: Vec<Expr> = vec![e0];
+                loop {
+                    if !matches!(self.peek(), Tok::Comma) {
+                        break;
+                    }
+                    self.next();
+                    let neg = matches!(self.peek(), Tok::Minus);
+                    if neg {
+                        self.next();
+                    }
+                    match self.peek().clone() {
+                        Tok::Int(i) => {
+                            self.next();
+                            lits.push(Expr::Int(if neg { -i } else { i }));
+                        }
+                        Tok::Float(f) => {
+                            self.next();
+                            lits.push(Expr::Float(if neg { -f } else { f }));
+                        }
+                        Tok::Str(s) => {
+                            if neg {
+                                let line = self.line();
+                                self.note(line, 4, "'-' before a string pattern ignored");
+                            }
+                            self.next();
+                            lits.push(Expr::Str(s));
+                        }
+                        // Legacy edge: a non-literal in the comma-run returns
+                        // that pattern alone and discards prior literals
+                        // (pre-W02 behavior kept verbatim).
+                        _ => return self.parse_pat_atom(),
+                    }
+                }
+                return if lits.len() == 1 {
+                    MatchPat::Lit(lits.remove(0))
+                } else {
+                    MatchPat::Multi(lits)
+                };
             }
         }
-        if lits.len() == 1 {
-            MatchPat::Lit(lits.remove(0))
+        // Or-pattern chain: `p1 | p2 | ...` — newlines are allowed before
+        // any alternative (multi-line chains), before the guard check, and
+        // nowhere else. Eating them here is safe: an arm body always starts
+        // with `{` or `=>`, never with `|`/`if`.
+        self.eat_newlines_inline();
+        let pat = if matches!(self.peek(), Tok::Pipe) {
+            let mut alts = vec![first];
+            loop {
+                self.eat_newlines_inline();
+                if !matches!(self.peek(), Tok::Pipe) {
+                    break;
+                }
+                self.next();
+                alts.push(self.parse_pat_atom());
+                self.eat_newlines_inline();
+            }
+            MatchPat::Or(alts)
         } else {
-            MatchPat::Multi(lits)
+            first
+        };
+        // Guarded arm: `pat if cond` — applies to the WHOLE or-chain (the
+        // condition sees whichever alternative won).
+        if self.at_kw("if") {
+            self.next();
+            let cond = self.parse_expr();
+            return MatchPat::Guard(Box::new(pat), cond);
+        }
+        pat
+    }
+
+    /// One pattern atom (no `|`, no `if` at this level).
+    fn parse_pat_atom(&mut self) -> MatchPat {
+        let neg = matches!(self.peek(), Tok::Minus);
+        if neg {
+            self.next();
+        }
+        match self.peek().clone() {
+            Tok::Int(i) => {
+                self.next();
+                MatchPat::Lit(Expr::Int(if neg { -i } else { i }))
+            }
+            Tok::Float(f) => {
+                self.next();
+                MatchPat::Lit(Expr::Float(if neg { -f } else { f }))
+            }
+            Tok::Str(s) => {
+                if neg {
+                    let line = self.line();
+                    self.note(line, 4, "'-' before a string pattern ignored");
+                }
+                self.next();
+                MatchPat::Lit(Expr::Str(s))
+            }
+            Tok::Ident(w) if !neg && w == "true" => {
+                self.next();
+                MatchPat::Lit(Expr::Bool(true))
+            }
+            Tok::Ident(w) if !neg && w == "false" => {
+                self.next();
+                MatchPat::Lit(Expr::Bool(false))
+            }
+            Tok::Ident(w) if !neg && w == "null" => {
+                self.next();
+                MatchPat::Lit(Expr::Null)
+            }
+            Tok::Ident(w) if !neg && w == "_" => {
+                self.next();
+                MatchPat::Wild
+            }
+            Tok::Ident(w) if !neg && matches!(w.as_str(), "Some" | "None" | "Ok" | "Err") => {
+                self.next();
+                let payload = if matches!(self.peek(), Tok::LParen) {
+                    self.next();
+                    let line = self.line();
+                    if matches!(self.peek(), Tok::RParen) {
+                        self.next();
+                        self.note(
+                            line,
+                            4,
+                            "empty variant payload pattern — treated as tag-only",
+                        );
+                        None
+                    } else {
+                        let p = self.parse_pat_atom();
+                        if matches!(self.peek(), Tok::Comma) {
+                            self.note(
+                                line,
+                                4,
+                                "variant payload is a single value; extra pattern elements ignored",
+                            );
+                            while !matches!(self.peek(), Tok::RParen | Tok::Eof) {
+                                self.next();
+                            }
+                        }
+                        if matches!(self.peek(), Tok::RParen) {
+                            self.next();
+                        } else {
+                            let line = self.line();
+                            self.note(line, 4, "variant payload pattern auto-closed");
+                        }
+                        Some(Box::new(p))
+                    }
+                } else {
+                    None
+                };
+                MatchPat::Variant(w, payload)
+            }
+            Tok::Ident(w) if !neg && w.chars().next().is_some_and(|c| c.is_ascii_uppercase()) => {
+                // Unknown capitalized tag: soft fallback to a binding (the
+                // whole subject value binds under the name). A parenthesized
+                // payload is consumed and ignored so the token stream stays
+                // aligned (Total Grammar: degrade, never reject).
+                let line = self.line();
+                self.note(
+                    line,
+                    4,
+                    format!("unknown variant tag '{w}' — pattern treated as a binding"),
+                );
+                self.next();
+                if matches!(self.peek(), Tok::LParen) {
+                    self.note(line, 4, "unknown tag payload ignored (bound as a whole)");
+                    self.next();
+                    if !matches!(self.peek(), Tok::RParen) {
+                        let _ = self.parse_pat_atom();
+                        if matches!(self.peek(), Tok::Comma) {
+                            while !matches!(self.peek(), Tok::RParen | Tok::Eof) {
+                                self.next();
+                            }
+                        }
+                    }
+                    if matches!(self.peek(), Tok::RParen) {
+                        self.next();
+                    } else {
+                        let line = self.line();
+                        self.note(line, 4, "unknown tag payload auto-closed");
+                    }
+                }
+                MatchPat::Bind(w)
+            }
+            Tok::Ident(w) if !neg => {
+                self.next();
+                MatchPat::Bind(w)
+            }
+            Tok::LBrack if !neg => {
+                self.next();
+                let mut elems: Vec<MatchPat> = Vec::new();
+                let mut rest: Option<String> = None;
+                loop {
+                    self.eat_newlines_inline();
+                    match self.peek().clone() {
+                        Tok::RBrack => {
+                            self.next();
+                            break;
+                        }
+                        Tok::Eof => {
+                            let line = self.line();
+                            self.note(line, 4, "pattern bracket auto-closed");
+                            break;
+                        }
+                        Tok::Star => {
+                            self.next();
+                            if let Tok::Ident(w) = self.peek().clone() {
+                                self.next();
+                                rest = Some(w);
+                            } else {
+                                let line = self.line();
+                                self.note(line, 4, "'*' in pattern needs a name; tail skipped");
+                            }
+                        }
+                        Tok::Comma => {
+                            self.next();
+                        }
+                        _ => elems.push(self.parse_pat_atom()),
+                    }
+                }
+                MatchPat::ListPat { elems, rest }
+            }
+            Tok::LBrace if !neg => {
+                self.next();
+                let mut keys: Vec<(String, Option<Box<MatchPat>>)> = Vec::new();
+                loop {
+                    self.eat_newlines_inline();
+                    match self.peek().clone() {
+                        Tok::RBrace => {
+                            self.next();
+                            break;
+                        }
+                        Tok::Eof => {
+                            let line = self.line();
+                            self.note(line, 4, "pattern brace auto-closed");
+                            break;
+                        }
+                        Tok::Comma => {
+                            self.next();
+                        }
+                        Tok::Ident(w) => {
+                            self.next();
+                            let sub = if matches!(self.peek(), Tok::Colon) {
+                                self.next();
+                                Some(Box::new(self.parse_pat_atom()))
+                            } else {
+                                None
+                            };
+                            keys.push((w, sub));
+                        }
+                        other => {
+                            let line = self.line();
+                            self.note(
+                                line,
+                                4,
+                                format!("'{}' is not a map-pattern key; skipped", other.describe()),
+                            );
+                            self.next();
+                        }
+                    }
+                }
+                MatchPat::MapPat { keys }
+            }
+            other => {
+                if neg {
+                    let line = self.line();
+                    self.note(line, 4, "dangling '-' in pattern treated as wildcard");
+                }
+                let line = self.line();
+                self.note(
+                    line,
+                    4,
+                    format!("pattern '{}' treated as wildcard", other.describe()),
+                );
+                self.next();
+                MatchPat::Wild
+            }
         }
     }
 }

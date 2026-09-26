@@ -1,0 +1,423 @@
+# match_v2.op — W02: real pattern matching (match-v2 patterns).
+# Variants (Some/None/Ok/Err with payload patterns), list patterns
+# (exact length + *rest tails), map patterns (key presence + sub-patterns),
+# or-patterns (first alternative binds), guards (see the bindings; a
+# contained guard is a miss, never a failure). Total Grammar: a shape that
+# cannot match falls through — it never rejects a run.
+frame proof {
+    # ---- variant patterns: payload capture
+    let r = 0
+    match some(5) {
+        case Some(x) {
+            r = x
+        }
+    }
+    assert(r == 5, "Some(x) captures the payload")
+
+    # ---- tag-only form: None matches, Some arm never fires
+    r = 0
+    match none() {
+        case Some(x) {
+            r = x
+        }
+        case None {
+            r = "n"
+        }
+    }
+    assert(r == "n", "None hits the tag-only arm, not Some")
+
+    # ---- families are distinct: Some pattern never matches an Ok value
+    r = 0
+    match ok(1) {
+        case Some(x) {
+            r = "s"
+        }
+        case Ok(v) {
+            r = "o"
+        }
+    }
+    assert(r == "o", "Ok(1) is matched by Ok, not Some (family contract)")
+
+    # ---- nesting: Some(Some(y)) destructures two levels
+    r = 0
+    match some(some(3)) {
+        case Some(Some(y)) {
+            r = y
+        }
+        case Some(x) {
+            r = x
+        }
+    }
+    assert(r == 3, "nested variant pattern binds the innermost payload")
+
+    # ---- payload pattern against a payload-less value: arm simply misses
+    r = 7
+    match none() {
+        case Some(x) {
+            r = 1
+        }
+    }
+    assert(r == 7, "Some(x) vs None misses without failing")
+
+    # ---- Err carries its message
+    r = ""
+    match err("boom") {
+        case Ok(v) {
+            r = "ok-arm"
+        }
+        case Err(m) {
+            r = m
+        }
+    }
+    assert(r == "boom", "Err(m) captures the message")
+
+    # ---- bare capitalized tag matches ANY payload (tag-only form)
+    r = 0
+    match some(9) {
+        case Some {
+            r = 1
+        }
+    }
+    assert(r == 1, "bare Some matches any Some payload")
+
+    # ---- list patterns: exact length, mixed literal + bind
+    r = 0
+    match [1, 2, 3] {
+        case [1, a, 3] {
+            r = a
+        }
+    }
+    assert(r == 2, "list pattern mixes literals and binds")
+
+    # ---- list patterns: *rest captures the tail as a fresh list
+    r = 0
+    match [1, 2, 3, 4] {
+        case [1, *t] {
+            r = t
+        }
+    }
+    assert(r == [2, 3, 4], "*rest captures the tail list")
+
+    # ---- exact-length list: too short misses
+    r = 0
+    match [1] {
+        case [1, 2] {
+            r = 1
+        }
+        case [1] {
+            r = 2
+        }
+    }
+    assert(r == 2, "length mismatch falls through to the next arm")
+
+    # ---- rest pattern needs at least the fixed prefix
+    r = 0
+    match [1] {
+        case [1, 2, *t] {
+            r = 1
+        }
+        case [x] {
+            r = x
+        }
+    }
+    assert(r == 1, "*rest requires the fixed prefix to be present")
+
+    # ---- a non-list subject never matches a list pattern
+    r = 0
+    match 5 {
+        case [a] {
+            r = 1
+        }
+        case 5 {
+            r = 2
+        }
+    }
+    assert(r == 2, "list pattern vs scalar misses cleanly")
+
+    # ---- empty list pattern matches only the empty list
+    r = 0
+    match [] {
+        case [] {
+            r = "empty"
+        }
+        case [x] {
+            r = x
+        }
+    }
+    assert(r == "empty", "[] matches the empty list exactly")
+
+    # ---- map patterns: bare key binds the value
+    r = 0
+    let m = {name: "op", v: 7}
+    match m {
+        case {name} {
+            r = name
+        }
+    }
+    assert(r == "op", "map pattern binds the named key")
+
+    # ---- map patterns: sub-pattern on the value
+    r = 0
+    match m {
+        case {v: x} {
+            r = x
+        }
+    }
+    assert(r == 7, "map pattern with a value sub-pattern binds it")
+
+    # ---- map patterns: literal sub-pattern verifies the value
+    r = 0
+    match m {
+        case {v: 7} {
+            r = "seven"
+        }
+    }
+    assert(r == "seven", "literal sub-pattern verifies the mapped value")
+
+    # ---- map patterns: a missing key misses the arm
+    r = 0
+    match m {
+        case {absent} {
+            r = 1
+        }
+        case {name} {
+            r = 2
+        }
+    }
+    assert(r == 2, "missing key falls through to the next arm")
+
+    # ---- map patterns: partial match requires ALL named keys
+    r = 0
+    match m {
+        case {name, absent} {
+            r = 1
+        }
+        case {name, v} {
+            r = name + ":" + str(v)
+        }
+    }
+    assert(r == "op:7", "multi-key map pattern binds every key")
+
+    # ---- a non-map subject never matches a map pattern
+    r = 0
+    match "s" {
+        case {k} {
+            r = 1
+        }
+        case "s" {
+            r = 2
+        }
+    }
+    assert(r == 2, "map pattern vs scalar misses cleanly")
+
+    # ---- or-patterns: any alternative hits
+    r = 0
+    match 2 {
+        case 1 | 2 | 3 {
+            r = "low"
+        }
+        case _ {
+            r = "high"
+        }
+    }
+    assert(r == "low", "or-pattern hits on any alternative")
+
+    # ---- or-patterns: first HITTING alternative binds
+    r = 0
+    match ok(2) {
+        case Ok(n) | Ok(2) {
+            r = n
+        }
+    }
+    assert(r == 2, "first matching alternative provides the bindings")
+
+    # ---- first-hit-wins even when it binds nothing
+    r = "untouched"
+    match ok(2) {
+        case Ok(2) | Ok(n) {
+            r = n
+        }
+        case Ok(n) {
+            r = "second"
+        }
+    }
+    assert(r == null, "a hitting alternative with no binds yields unbound lookups (soft null)")
+
+    # ---- or-patterns over list/variant shapes
+    r = 0
+    match [5] {
+        case [1] | [x] {
+            r = x
+        }
+    }
+    assert(r == 5, "or-pattern over list alternatives binds the hit")
+
+    # ---- guards: the condition sees the pattern's bindings
+    r = 0
+    match some(5) {
+        case Some(x) if x > 3 {
+            r = "big"
+        }
+        case Some(x) {
+            r = "small"
+        }
+    }
+    assert(r == "big", "guard sees the bound payload")
+
+    # ---- guards: a false guard falls through to the next arm
+    r = 0
+    match some(2) {
+        case Some(x) if x > 3 {
+            r = "big"
+        }
+        case Some(x) {
+            r = "small"
+        }
+    }
+    assert(r == "small", "a false guard falls through, it never fails")
+
+    # ---- guards: a contained stress inside the guard is a miss
+    gene boom() {
+        raise "kaboom"
+    }
+    r = 0
+    match some(1) {
+        case Some(x) if boom() {
+            r = 1
+        }
+        case Some(x) {
+            r = 2
+        }
+    }
+    assert(r == 2, "a contained guard stress is a miss, never a crash")
+
+    # ---- guards + or-chains: the guard applies to the whole or-pattern
+    r = 0
+    match err("late") {
+        case Ok(n) | Err(m) if m == "late" {
+            r = m
+        }
+    }
+    assert(r == "late", "guard after an or-chain sees the winning alt's bindings")
+
+    # ---- arm order: first hit wins, wildcards are not magic
+    r = 0
+    match 5 {
+        case _ {
+            r = "w"
+        }
+        case 5 {
+            r = "five"
+        }
+    }
+    assert(r == "w", "arm order decides: a wildcard arm shadows later arms")
+
+    # ---- legacy comma-run literal arm is unchanged
+    r = 0
+    match 2 {
+        case 1, 2 {
+            r = "legacy"
+        }
+        case _ {
+            r = "other"
+        }
+    }
+    assert(r == "legacy", "legacy `case 1, 2` literal run still matches")
+
+    # ---- no arm hits: the statement falls through silently
+    r = 0
+    match 99 {
+        case 1 {
+            r = 1
+        }
+        case 2 {
+            r = 2
+        }
+    }
+    assert(r == 0, "no hit and no wildcard = clean fall-through")
+
+    # ---- bind arm still binds the whole subject
+    r = 0
+    match [1, 2] {
+        case whole {
+            r = whole
+        }
+    }
+    assert(r == [1, 2], "a plain identifier binds the whole subject")
+
+    # ---- subject is evaluated exactly once
+    gene side_count() {
+        tally = tally + 1
+        return some(4)
+    }
+    tally = 0
+    match side_count() {
+        case Some(v) {
+            r = v
+        }
+        case _ {
+            r = 0
+        }
+    }
+    assert(r == 4, "the arm captured the subject value")
+    assert(tally == 1, "the subject expression ran exactly once")
+
+    # ---- W06 interaction: `?!` inside a guard PROPAGATES (a return, not a
+    # failure) — it leaves the match and the gene returns the carried value.
+    gene guard_prop() {
+        match some(none()) {
+            case Some(v) if (v?!) {
+                return 1
+            }
+            case Some(v) {
+                return 2
+            }
+        }
+        return 3
+    }
+    assert(is_none(guard_prop()), "guard ?! propagates the inner None out of the gene")
+
+    # ---- fmt roundtrip sanity: patterns render back to source form
+    # (covered by the fmt gate; here we pin the observable behavior only)
+
+    # ---- classified: real dispatch on a Result-shaped value
+    gene classify(v) {
+        out = "?"
+        match v {
+            case Ok(n) if n > 100 {
+                out = "huge"
+            }
+            case Ok(n) {
+                out = "ok:" + str(n)
+            }
+            case Err(m) {
+                out = "err:" + m
+            }
+            case _ {
+                out = "other"
+            }
+        }
+        return out
+    }
+    assert(classify(ok(5)) == "ok:5", "classify dispatches Ok")
+    assert(classify(ok(500)) == "huge", "classify guards refine Ok")
+    assert(classify(err("no")) == "err:no", "classify dispatches Err")
+    assert(classify(3) == "other", "classify falls through on a non-variant")
+
+    # ---- deep nesting: runtime-deep value, one-level pattern binds the rest
+    gene bury(n, acc) {
+        if n <= 0 {
+            return acc
+        }
+        return bury(n - 1, some(acc))
+    }
+    r = 0
+    match bury(50, 1) {
+        case Some(v) {
+            r = 1
+        }
+    }
+    assert(r == 1, "a 50-deep variant value still matches a 1-level pattern")
+}
+
+print("match_v2 complete")

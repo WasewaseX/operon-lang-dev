@@ -54,6 +54,17 @@ impl Env {
     pub fn define(&self, name: &str, val: Value) {
         self.vars.borrow_mut().insert(name.to_string(), val);
     }
+    /// W02 (match-v2): this scope's own bindings (no parent walk) — used to
+    /// lift an or-pattern alternative's captures from its scratch scope into
+    /// the arm scope after the alternative hits. Pure copy; iteration order
+    /// of the backing map is irrelevant to semantics.
+    pub fn local_pairs(&self) -> Vec<(String, Value)> {
+        self.vars
+            .borrow()
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
+    }
 }
 
 #[derive(Clone)]
@@ -747,6 +758,183 @@ impl Interp {
         }
     }
 
+    /// W02 (match-v2): recursive pattern matcher. `env` is the scope pattern
+    /// literals/guards evaluate in (the arm's child); `bindings` is where
+    /// captures are defined (the same arm child, or an or-alternative's
+    /// scratch scope lifted on a hit). Returns true when the arm hits.
+    ///
+    /// Total Grammar contract: a pattern never hard-fails a run. A shape that
+    /// cannot match (wrong tag, wrong length, missing key) simply misses and
+    /// matching moves to the next arm; a contained error inside a literal or
+    /// guard becomes a note + a miss. The ONLY escape is `?!` propagation
+    /// (W06): payload-carrying Stress is a return, never a failure, and is
+    /// re-thrown untouched so it can never be caught or spoofed by matching.
+    fn match_pat(
+        &mut self,
+        env: &Rc<Env>,
+        bindings: &Rc<Env>,
+        sv: &Value,
+        pat: &MatchPat,
+    ) -> Result<bool, Stress> {
+        Ok(match pat {
+            MatchPat::Wild => true,
+            MatchPat::Bind(n) => {
+                bindings.define(n, sv.clone());
+                true
+            }
+            MatchPat::Lit(l) => {
+                let lv = match self.eval(env, l) {
+                    Ok(v) => v,
+                    // W06 (D-014): propagation is a return, not a failure —
+                    // it leaves the statement and heads for the gene
+                    // boundary (never contained).
+                    Err(s) if s.prop.is_some() => return Err(s),
+                    Err(s) => {
+                        self.note(
+                            0,
+                            4,
+                            format!("pattern evaluation contained: [{}] {}", s.kind, s.message),
+                        );
+                        Value::Null
+                    }
+                };
+                sv.deep_eq(&lv)
+            }
+            MatchPat::Multi(ls) => {
+                // Legacy literal comma-run (`case 1, 2 =>`) — any literal
+                // hits. W06: loop, not iter().any, so a `?!` inside a
+                // pattern literal can propagate out (closures cannot
+                // `return Err` through an iterator).
+                let mut hit = false;
+                for l in ls {
+                    let lv = match self.eval(env, l) {
+                        Ok(v) => v,
+                        Err(s) if s.prop.is_some() => return Err(s),
+                        Err(s) => {
+                            self.note(
+                                0,
+                                4,
+                                format!("pattern evaluation contained: [{}] {}", s.kind, s.message),
+                            );
+                            Value::Null
+                        }
+                    };
+                    if sv.deep_eq(&lv) {
+                        hit = true;
+                        break;
+                    }
+                }
+                hit
+            }
+            MatchPat::Or(alts) => {
+                // Alternatives tried in order; first hit binds. Each
+                // alternative captures into a scratch scope so a FAILED
+                // alternative's partial captures never leak into the arm;
+                // a hitting alternative's captures are lifted whole.
+                for a in alts {
+                    let scratch = Env::new(Some(env.clone()));
+                    if self.match_pat(env, &scratch, sv, a)? {
+                        for (k, v) in scratch.local_pairs() {
+                            bindings.define(&k, v);
+                        }
+                        return Ok(true);
+                    }
+                }
+                false
+            }
+            MatchPat::Variant(tag, payload) => {
+                if let Value::Variant(vt, vp) = sv {
+                    if vt.tag_name() == tag.as_str() {
+                        match (payload, vp) {
+                            // tag-only form: `None`, or `Some` = tag matches
+                            (None, _) => true,
+                            (Some(p), Some(pv)) => self.match_pat(env, bindings, pv, p)?,
+                            // payload pattern against a payload-less value
+                            (Some(_), None) => false,
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            }
+            MatchPat::ListPat { elems, rest } => {
+                if let Value::List(l) = sv {
+                    let items = l.borrow();
+                    let exact_ok = rest.is_none() && items.len() == elems.len();
+                    let rest_ok = rest.is_some() && items.len() >= elems.len();
+                    if !(exact_ok || rest_ok) {
+                        false
+                    } else {
+                        let mut hit = true;
+                        for (i, ep) in elems.iter().enumerate() {
+                            if !self.match_pat(env, bindings, &items[i], ep)? {
+                                hit = false;
+                                break;
+                            }
+                        }
+                        if hit {
+                            if let Some(r) = rest {
+                                let tail: Vec<Value> = items[elems.len()..].to_vec();
+                                bindings.define(r, Value::List(Rc::new(RefCell::new(tail))));
+                            }
+                        }
+                        hit
+                    }
+                } else {
+                    false
+                }
+            }
+            MatchPat::MapPat { keys } => {
+                if let Value::Map(m) = sv {
+                    let store = m.borrow();
+                    let mut hit = true;
+                    for (k, sub) in keys {
+                        let found = store
+                            .position(&Value::Str(k.clone()))
+                            .map(|i| store.items[i].1.clone());
+                        match (found, sub) {
+                            (None, _) => {
+                                hit = false;
+                                break;
+                            }
+                            (Some(v), None) => bindings.define(k, v),
+                            (Some(v), Some(p)) => {
+                                if !self.match_pat(env, bindings, &v, p)? {
+                                    hit = false;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    hit
+                } else {
+                    false
+                }
+            }
+            MatchPat::Guard(p, cond) => {
+                if self.match_pat(env, bindings, sv, p)? {
+                    match self.eval(bindings, cond) {
+                        Ok(v) => v.truthy(),
+                        // W06: propagation is a return, never a failure.
+                        Err(s) if s.prop.is_some() => return Err(s),
+                        Err(s) => {
+                            self.note(
+                                0,
+                                4,
+                                format!("pattern guard contained: [{}] {}", s.kind, s.message),
+                            );
+                            false
+                        }
+                    }
+                } else {
+                    false
+                }
+            }
+        })
+    }
+
     // ------------------------------------------------------- statements
     pub fn exec_block(&mut self, env: &Rc<Env>, stmts: &[Stmt]) -> Result<Flow, Stress> {
         for s in stmts {
@@ -1087,65 +1275,10 @@ impl Interp {
             Stmt::Match(subject, cases) => {
                 let sv = self.eval(env, subject)?;
                 for (pat, body) in cases {
-                    let hit = match pat {
-                        MatchPat::Wild => true,
-                        MatchPat::Lit(l) => {
-                            let lv = match self.eval(env, l) {
-                                Ok(v) => v,
-                                // W06 (D-014): propagation is a return, not a
-                                // failure — it leaves the statement and heads
-                                // for the gene boundary (never contained).
-                                Err(s) if s.prop.is_some() => return Err(s),
-                                Err(s) => {
-                                    self.note(
-                                        0,
-                                        4,
-                                        format!(
-                                            "pattern evaluation contained: [{}] {}",
-                                            s.kind, s.message
-                                        ),
-                                    );
-                                    Value::Null
-                                }
-                            };
-                            sv.deep_eq(&lv)
-                        }
-                        MatchPat::Multi(ls) => {
-                            // W06: restructured from iter().any so a `?!` inside
-                            // a pattern literal can propagate out (closure arms
-                            // cannot `return Err` through the iterator).
-                            let mut hit = false;
-                            for l in ls {
-                                let lv = match self.eval(env, l) {
-                                    Ok(v) => v,
-                                    Err(s) if s.prop.is_some() => return Err(s),
-                                    Err(s) => {
-                                        self.note(
-                                            0,
-                                            4,
-                                            format!(
-                                                "pattern evaluation contained: [{}] {}",
-                                                s.kind, s.message
-                                            ),
-                                        );
-                                        Value::Null
-                                    }
-                                };
-                                if sv.deep_eq(&lv) {
-                                    hit = true;
-                                    break;
-                                }
-                            }
-                            hit
-                        }
-                        MatchPat::Bind(n) => {
-                            let child = Env::new(Some(env.clone()));
-                            child.define(n, sv.clone());
-                            return self.exec_block(&child, body);
-                        }
-                    };
-                    if hit {
-                        let child = Env::new(Some(env.clone()));
+                    // One fresh child scope per arm — pattern captures live
+                    // only in the arm that hits and are gone afterwards.
+                    let child = Env::new(Some(env.clone()));
+                    if self.match_pat(&child, &child, &sv, pat)? {
                         return self.exec_block(&child, body);
                     }
                 }

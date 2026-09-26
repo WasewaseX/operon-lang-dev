@@ -1632,6 +1632,29 @@ fn fmt_pat(p: &MatchPat) -> String {
         MatchPat::Multi(ls) => ls.iter().map(fmt_expr).collect::<Vec<_>>().join(", "),
         MatchPat::Bind(n) => n.clone(),
         MatchPat::Wild => "_".into(),
+        // W02 (match-v2): roundtrip forms for the new patterns — fmt output
+        // re-parses to the same AST (checked by the fmt roundtrip gate).
+        MatchPat::Variant(tag, None) => tag.clone(),
+        MatchPat::Variant(tag, Some(p)) => format!("{}({})", tag, fmt_pat(p)),
+        MatchPat::ListPat { elems, rest } => {
+            let mut parts: Vec<String> = elems.iter().map(fmt_pat).collect();
+            if let Some(r) = rest {
+                parts.push(format!("*{}", r));
+            }
+            format!("[{}]", parts.join(", "))
+        }
+        MatchPat::MapPat { keys } => {
+            let parts: Vec<String> = keys
+                .iter()
+                .map(|(k, sub)| match sub {
+                    None => k.clone(),
+                    Some(p) => format!("{}: {}", k, fmt_pat(p)),
+                })
+                .collect();
+            format!("{{{}}}", parts.join(", "))
+        }
+        MatchPat::Or(alts) => alts.iter().map(fmt_pat).collect::<Vec<_>>().join(" | "),
+        MatchPat::Guard(p, c) => format!("{} if {}", fmt_pat(p), fmt_expr(c)),
     }
 }
 
