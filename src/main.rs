@@ -402,6 +402,89 @@ fn real_main() {
                 print!("{}", out);
             }
         }
+        "rna" => {
+            // W068 safety mode: default = checked dry-run (writes nothing);
+            // --write applies the same engine; exit 1 on any miss so scripts notice.
+            if positional.len() < 2 {
+                die("rna needs: operon rna <file.op> <patch.rna> [--write] [--json]");
+            }
+            let file = positional[0].clone();
+            let patch_path = positional[1].clone();
+            let src = match std::fs::read_to_string(&file) {
+                Ok(s) => s,
+                Err(e) => die(&format!("rna: cannot read {}: {}", file, e)),
+            };
+            let patch_src = match std::fs::read_to_string(&patch_path) {
+                Ok(s) => s,
+                Err(e) => die(&format!("rna: cannot read {}: {}", patch_path, e)),
+            };
+            let stem = std::path::Path::new(&file)
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let report = genes::apply_rna_checked(&src, &patch_src, &stem);
+            if json {
+                let rows: Vec<String> = report
+                    .edits
+                    .iter()
+                    .map(|e| {
+                        format!(
+                            "{{\"target\":\"{}\",\"scope\":\"{}\",\"target_found\":{},\"from\":\"{}\",\"to\":\"{}\",\"hits\":{},\"applied\":{}}}",
+                            tools::json_escape(&e.target),
+                            if e.gene_scoped { "gene" } else { "anywhere" },
+                            e.target_found,
+                            tools::json_escape(&e.from),
+                            tools::json_escape(&e.to),
+                            e.hits,
+                            e.applied
+                        )
+                    })
+                    .collect();
+                println!(
+                    "{{\"file\":\"{}\",\"patch\":\"{}\",\"edits\":[{}],\"applied\":{},\"missed\":{},\"would_change\":{}}}",
+                    tools::json_escape(&file),
+                    tools::json_escape(&patch_path),
+                    rows.join(","),
+                    report.applied(),
+                    report.missed(),
+                    report.would_change()
+                );
+            } else {
+                println!(
+                    "rna: {} <- {} — {} applied, {} missed{}",
+                    file,
+                    patch_path,
+                    report.applied(),
+                    report.missed(),
+                    if report.would_change() { "" } else { " (no change)" }
+                );
+                for e in &report.edits {
+                    let scope = if e.gene_scoped { "gene" } else { "anywhere" };
+                    if !e.target_found {
+                        println!("  MISS [{}] target gene '{}' not found", scope, e.target);
+                    } else if e.applied {
+                        println!(
+                            "  ok   [{}] {} '{}' -> '{}' ({} hit{})",
+                            scope,
+                            e.target,
+                            e.from,
+                            e.to,
+                            e.hits,
+                            if e.hits == 1 { "" } else { "s" }
+                        );
+                    } else {
+                        println!("  MISS [{}] {} '{}' not present", scope, e.target, e.from);
+                    }
+                }
+            }
+            if write {
+                std::fs::write(&file, &report.new_text).expect("write failed");
+                eprintln!("rna: {} rewritten", file);
+            }
+            if report.missed() > 0 {
+                std::process::exit(1);
+            }
+        }
         "build" => {
             let file = match positional.first() {
                 Some(f) => f.clone(),
@@ -1026,6 +1109,7 @@ usage:
   operon fmt f.op [--write]
   operon repl
   operon build f.op [--variant v] [-o out.op]
+  operon rna f.op patch.rna [--write] [--json]
   operon profile f.op
   operon crispr f.op --knockout gene [--json]
   operon bench f.op [--iters n]
