@@ -552,3 +552,55 @@ This specification is **Operon 2.2.0**. `operon version` prints the implementati
 - Differential harness (Rust core vs Python oracle, program-level stdout): **128 programs, all MATCH**, plus the oracle runs the same proof suite (both implementations green, enforced in CI).
 - Red-team suite: **95 payloads, 0 breaches** (note-cap, fuel-charge, and output-cap containment verified live on the stochastic-expression, reg-bio-3, and Rho-termination surfaces).
 - Playground smoke: expression-core subset in the browser, spec-aligned (unbound reads → null + note).
+
+## 19. Memory model — binding, sharing, cycles (W014)
+
+The contract below states the CURRENT truth, verified behaviorally and mirrored by the
+differential corpus (`tests/differential/memory_model.op`). One rule of thumb: **scalar
+values copy; containers share.**
+
+### 19a. Binding semantics (`let b = a`)
+
+| Value kind | `let b = a` | Mutation through `b` |
+|---|---|---|
+| int, float, bool, null | value copy (independent) | n/a (immutable values) |
+| str | value copy (immutable; the read allocates a fresh string and is mem-charged, sec-r5 F-9) | n/a |
+| list | **shared handle** (Rc alias) | visible through `a` (`push(b, 3)` grows `a`) |
+| map | **shared handle** (Rc alias, insertion-ordered) | visible through `a` |
+| gene / phenotype / sequence | shared handle | method/state effects visible through both names |
+
+There is no implicit copy-on-write and no implicit deep clone. Programs that need an
+independent container copy it explicitly (element-wise or via stdlib helpers).
+
+### 19b. Argument passing
+
+Gene arguments follow the same rule: scalars copy, containers alias. A callee that
+`push`es a caller's list mutates the caller's list. Callers who need isolation copy before
+calling.
+
+### 19c. Closure capture
+
+Lambdas and inner genes capture the DEFINING environment by reference (the env chain is
+shared). Mutations of captured variables inside a closure are visible outside it. There is
+no by-value capture mode.
+
+### 19d. Thread transfer (spawn) — the snapshot membrane
+
+`spawn` hands the worker cell a SNAPSHOT: container mutations inside the worker are never
+visible in the parent and vice versa (verified: a worker pushing to a parent list leaves
+the parent's length unchanged after `join`). This membrane is what makes `Rc` safe across
+worker cells — nothing aliased crosses the boundary.
+
+### 19e. Cycles (W013 decision)
+
+Reference cycles (`let a = []; push(a, a)`) are legal values: equality, repr, and JSON
+serialization are cycle-safe (sec-r5 DAG-memoized walks). **Lifetime truth: an `Rc` cycle
+lives until interpreter teardown** — scripts and short-lived workers never notice; a
+long-lived server building unbounded cycles would leak. Chosen strategy (DECISIONS.md
+D-013):
+
+1. document the model (this section) — no silent reclamation, no determinism surprises;
+2. `memory()` reports interpreter stats today; a live-cycle count is the W013 follow-up;
+3. an explicit `break_cycle()`-style escape hatch and/or weak-map family (opt-in, .cell
+   gated) may land later; a tracing GC is REJECTED for v3 — it would break the fuel/mem
+   charge determinism contract (§9b).
