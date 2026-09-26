@@ -1181,7 +1181,68 @@ fn collect_op_files(dir: &Path, out: &mut Vec<String>) {
 }
 
 // ------------------------------------------------------------ formatter
+
+/// W47 (ROADMAP-100): formatter configuration.
+///
+/// `indent` — spaces per nesting level. The default is 2 because that is the
+/// de-facto house style of every checked-in .op file (std/, tests/, examples/);
+/// a formatter whose default reformats the whole corpus is a broken default.
+///
+/// `quotes` — how plain string literals re-emit. `Double` is the canonical
+/// form (SPEC §3). `Single` re-emits `'…'` only when it is byte-lossless
+/// (content has no `'`, no backslash, no brace, no newline/tab — i.e. both
+/// spellings denote the same value with zero escaping); anything else falls
+/// back to double. Quote-style `preserve` is impossible BY DESIGN: the AST
+/// stores the string's VALUE, not which quote character the source used, so
+/// there is nothing to preserve.
+///
+/// Scope notes (honesty): keyword canonicalization is inherent to fmt — the
+/// parser repairs synonym spellings into the canonical AST, and fmt prints
+/// the AST, so `--canonical` would be a no-op flag and is deliberately not
+/// shipped. Soft `--width` wrapping is deferred (W47-v2): it changes token
+/// layout and must not ship before the byte-stability law is proven over it.
+///
+/// Threading: fmt is a single-threaded-per-call operation (CLI exits after;
+/// the LSP serves requests sequentially). The active config is a thread-local
+/// installed by `format_program_with` and restored by a Drop guard, which
+/// keeps every `fmt_*` signature unchanged (rustfmt makes the same trade).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum QuoteMode {
+    Double,
+    Single,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct FmtConfig {
+    pub indent: usize,
+    pub quotes: QuoteMode,
+}
+
+impl Default for FmtConfig {
+    fn default() -> Self {
+        FmtConfig { indent: 2, quotes: QuoteMode::Double }
+    }
+}
+
+thread_local! {
+    static FMT_CTX: std::cell::RefCell<FmtConfig> = std::cell::RefCell::new(FmtConfig::default());
+}
+
+/// Restores the default formatter config on scope exit, even on panic.
+struct FmtGuard;
+impl Drop for FmtGuard {
+    fn drop(&mut self) {
+        FMT_CTX.with(|c| *c.borrow_mut() = FmtConfig::default());
+    }
+}
+
 pub fn format_program(prog: &Program) -> String {
+    format_program_with(prog, &FmtConfig::default())
+}
+
+pub fn format_program_with(prog: &Program, cfg: &FmtConfig) -> String {
+    FMT_CTX.with(|c| *c.borrow_mut() = *cfg);
+    let _guard = FmtGuard;
     let mut out = String::new();
     for s in &prog.stmts {
         fmt_stmt(s, 0, &mut out);
@@ -1189,8 +1250,82 @@ pub fn format_program(prog: &Program) -> String {
     out
 }
 
+fn active_indent() -> usize {
+    FMT_CTX.with(|c| c.borrow().indent)
+}
+
+fn active_quotes() -> QuoteMode {
+    FMT_CTX.with(|c| c.borrow().quotes)
+}
+
 fn indent(n: usize) -> String {
-    "  ".repeat(n)
+    " ".repeat(n * active_indent())
+}
+
+/// W47: re-emit a plain string literal under the active quote mode.
+/// `Single` is taken only when BOTH spellings denote the identical value
+/// with no escaping at all; the lexer repairs `'` to `"` with a note, so
+/// the single-quoted output is legal (if slightly noisy) on re-parse.
+fn str_lit(s: &str) -> String {
+    match active_quotes() {
+        QuoteMode::Double => format!(
+            "\"{}\"",
+            s.replace('\\', "\\\\")
+                .replace('"', "\\\"")
+                .replace('\n', "\\n")
+                .replace('\t', "\\t")
+                .replace('{', "\\{")
+                .replace('}', "\\}")
+        ),
+        QuoteMode::Single if !s.contains('\'') && !s.contains('\\')
+            && !s.contains('{') && !s.contains('}')
+            && !s.contains('\n') && !s.contains('\t') =>
+        {
+            format!("'{}'", s)
+        }
+        QuoteMode::Single => format!(
+            "\"{}\"",
+            s.replace('\\', "\\\\")
+                .replace('"', "\\\"")
+                .replace('\n', "\\n")
+                .replace('\t', "\\t")
+                .replace('{', "\\{")
+                .replace('}', "\\}")
+        ),
+    }
+}
+
+/// W47: parse a minimal zero-dependency formatter config (`.operon-fmt.toml`).
+/// Only `indent` (positive integer) and `quotes` (`double`|`single`) are
+/// meaningful; section headers and comments are ignored; unknown keys are
+/// reported (not errors — Total Grammar spirit, forward-compatible) so the
+/// caller can surface them on stderr.
+pub fn parse_fmt_config(src: &str) -> (FmtConfig, Vec<String>) {
+    let mut cfg = FmtConfig::default();
+    let mut unknown: Vec<String> = Vec::new();
+    for raw in src.lines() {
+        let line = raw.split('#').next().unwrap_or("").trim();
+        if line.is_empty() || line.starts_with('[') {
+            continue;
+        }
+        let (k, v) = match line.split_once('=') {
+            Some((k, v)) => (k.trim(), v.trim().trim_matches('"').trim_matches('\'')),
+            None => continue,
+        };
+        match k {
+            "indent" => match v.parse::<usize>() {
+                Ok(n) if n >= 1 && n <= 16 => cfg.indent = n,
+                _ => unknown.push(format!("indent = {v} (want 1..=16)")),
+            },
+            "quotes" => match v {
+                "double" => cfg.quotes = QuoteMode::Double,
+                "single" => cfg.quotes = QuoteMode::Single,
+                other => unknown.push(format!("quotes = {other} (want double|single)")),
+            },
+            other => unknown.push(format!("{other}")),
+        }
+    }
+    (cfg, unknown)
 }
 
 fn fmt_block(stmts: &[Stmt], ind: usize, out: &mut String) {
@@ -1811,15 +1946,7 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
         Expr::Bool(false) => "false".into(),
         Expr::Int(i) => i.to_string(),
         Expr::Float(f) => crate::value::format_float(*f),
-        Expr::Str(s) => format!(
-            "\"{}\"",
-            s.replace('\\', "\\\\")
-                .replace('"', "\\\"")
-                .replace('\n', "\\n")
-                .replace('\t', "\\t")
-                .replace('{', "\\{")
-                .replace('}', "\\}")
-        ),
+        Expr::Str(s) => str_lit(s), // W47: quote mode aware (single only when byte-lossless)
         Expr::Interp(parts) => {
             let mut out = String::from("\"");
             for p in parts {

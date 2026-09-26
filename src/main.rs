@@ -83,6 +83,10 @@ fn real_main() {
     let mut repeat = 1usize;
     // W41: check output format — "score" (default this cycle) | "diag"
     let mut check_format = String::from("score");
+    // W47 (ROADMAP-100): formatter configuration — file first, flags override
+    let mut fmt_indent: Option<usize> = None;
+    let mut fmt_quotes: Option<tools::QuoteMode> = None;
+    let mut fmt_config_path: Option<String> = None;
 
     let mut i = 0;
     while i < rest.len() {
@@ -237,6 +241,30 @@ fn real_main() {
                     Some(f) if f == "diag" || f == "score" => check_format = f,
                     _ => die("--format needs 'diag' or 'score'"),
                 }
+            }
+            // W47: formatter knobs (fmt arm). Precedence: flags > config file > defaults.
+            "--indent" => {
+                i += 1;
+                match rest.get(i).map(|s| s.parse::<usize>()) {
+                    Some(Ok(n)) if (1..=16).contains(&n) => fmt_indent = Some(n),
+                    _ => die("--indent needs a number 1..=16 (e.g. --indent 4)"),
+                }
+            }
+            "--quotes" => {
+                i += 1;
+                match rest.get(i).cloned().as_deref() {
+                    Some("single") => fmt_quotes = Some(tools::QuoteMode::Single),
+                    Some("double") => fmt_quotes = Some(tools::QuoteMode::Double),
+                    _ => die("--quotes needs 'single' or 'double'"),
+                }
+            }
+            "--fmt-config" => {
+                i += 1;
+                fmt_config_path = Some(
+                    rest.get(i)
+                        .cloned()
+                        .unwrap_or_else(|| die("--fmt-config needs a file path")),
+                );
             }
             "--" => {
                 // dx-r6 (loop-5-a audit MED): POSIX `--` separator — everything
@@ -697,9 +725,30 @@ fn real_main() {
                 Some(f) => f.clone(),
                 None => die("fmt needs a file"),
             };
+            // W47: config file (.operon-fmt.toml in CWD, or --fmt-config PATH)
+            // loads first; explicit flags override file keys; defaults last.
+            let cfg_path = fmt_config_path
+                .clone()
+                .unwrap_or_else(|| ".operon-fmt.toml".to_string());
+            let mut cfg = tools::FmtConfig::default();
+            if let Ok(text) = std::fs::read_to_string(&cfg_path) {
+                let (file_cfg, unknown) = tools::parse_fmt_config(&text);
+                cfg = file_cfg;
+                for u in &unknown {
+                    eprintln!("fmt: ignoring unknown config key in {cfg_path}: {u}");
+                }
+            } else if fmt_config_path.is_some() {
+                die(&format!("fmt: config file not found: {cfg_path}"));
+            }
+            if let Some(n) = fmt_indent {
+                cfg.indent = n;
+            }
+            if let Some(q) = fmt_quotes {
+                cfg.quotes = q;
+            }
             let src = std::fs::read_to_string(&file).unwrap_or_default();
             let prog = parser::parse(&src);
-            let out = tools::format_program(&prog);
+            let out = tools::format_program_with(&prog, &cfg);
             if write {
                 std::fs::write(&file, out).expect("write failed");
                 eprintln!("fmt: {} rewritten", file);
@@ -1642,7 +1691,7 @@ usage:
                   [--allow-run cmd] [--allow-py module] [--allow-exit] [--allow-env var] [--allow-all]
   operon check f.op [--format diag|score] [--nmd | --nmd=purge] [--json]
   operon test [paths...] [--json] [--filter substr] [--list] [--repeat n]
-  operon fmt f.op [--write]
+  operon fmt f.op [--write] [--indent N] [--quotes single|double] [--fmt-config f]
   operon ast f.op [--json]
   operon explain f.op [--json] [--strict]
   operon lint f.op [--cell c] [--json]
