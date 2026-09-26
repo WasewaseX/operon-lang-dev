@@ -32,11 +32,19 @@ else
 fi
 
 echo "[3/3] default-deny sanity probes"
-denied=$(bin/operon run --quiet tests/security_caps.op 2>&1 && echo OK || echo FAIL)
-echo "security_caps.op: ${denied}"
+# W099 fix (builder-A finding, session-16): the probe programs PRINT text on
+# success ("sandbox: denied as expected"), so capturing combined output and
+# comparing it to the sentinel always failed on a green tree. rc-only now:
+# the run's exit code is the signal; output is shown, never compared.
+denied=OK
+bin/operon run --quiet tests/security_caps.op > /tmp/sec_probe1.out 2>&1 || denied=FAIL
+echo "security_caps.op: rc-signal ${denied}"
+tail -n 1 /tmp/sec_probe1.out
 [ "$denied" = "OK" ] || FAIL=1
-denied2=$(bin/operon run --quiet tests/caps_policy.op 2>&1 && echo OK || echo FAIL)
-echo "caps_policy.op: ${denied2}"
+denied2=OK
+bin/operon run --quiet tests/caps_policy.op > /tmp/sec_probe2.out 2>&1 || denied2=FAIL
+echo "caps_policy.op: rc-signal ${denied2}"
+tail -n 1 /tmp/sec_probe2.out
 [ "$denied2" = "OK" ] || FAIL=1
 
 if [ "$FAIL" -eq 0 ]; then

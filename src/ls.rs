@@ -52,6 +52,9 @@ pub struct GeneInfo {
     pub m6a: bool,
     pub enhanced: bool,
     pub seq: bool,
+    /// W074: `##` doc lines, shown in hover (gate: docs appear in hover +
+    /// doc output).
+    pub doc: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -280,6 +283,7 @@ pub fn analyze_doc(src: &str, base_dir: Option<&str>) -> LsDoc {
                         m6a: g.m6a,
                         enhanced: enhanced.iter().any(|e| e == n),
                         seq: matches!(st, Stmt::Seq(_)),
+                        doc: g.doc.clone(),
                     });
                 }
             }
@@ -373,10 +377,16 @@ pub fn hover(src: &str, doc: &LsDoc, line0: usize, col0: usize) -> Option<String
         let def = def_line(src, kind, &g.name)
             .map(|l| format!("\n\ndeclared at line {}", l + 1))
             .unwrap_or_default();
+        // W074: doc-comment lines surface in hover above the prose footer.
+        let doc_block = if g.doc.is_empty() {
+            String::new()
+        } else {
+            format!("\n\n----\n{}", g.doc.join("\n"))
+        };
         return Some(format!(
-            "```operon\n{}\n```\n\ngene — Operon's named function (a callable unit of expression). \
+            "```operon\n{}\n```{}\n\ngene — Operon's named function (a callable unit of expression). \
 Calls may be gated by GRN thresholds, methylation, or toggle state (SPEC §11).{}{}",
-            sig, def, provenance
+            sig, doc_block, def, provenance
         ));
     }
 

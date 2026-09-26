@@ -81,12 +81,14 @@ def main():
             if part:
                 obj = getattr(obj, part)
         val = obj(*req.get("args", []))
-        sys.stdout.write(json.dumps({"ok": True, "value": val},
+        sys.stdout.write(json.dumps({"ok": True, "value": val,
+                                     "py": ".".join(map(str, sys.version_info[:2]))},
                                     default=_default, allow_nan=False) + "\n")
         return 0
     except BaseException as e:
         msg = "".join(traceback.format_exception_only(type(e), e)).strip()
-        sys.stdout.write(json.dumps({"ok": False, "error": msg}) + "\n")
+        sys.stdout.write(json.dumps({"ok": False, "error": msg,
+                                     "py": ".".join(map(str, sys.version_info[:2]))}) + "\n")
         return 1
 
 if __name__ == "__main__":
@@ -103,6 +105,9 @@ pub struct PyResponse {
     pub error: Option<String>,
     pub code: i64,
     pub timed_out: bool,
+    /// W079: interpreter version as reported by the bridge child
+    /// (`sys.version.split()[0]`), when the child reported one.
+    pub py_version: Option<String>,
 }
 
 static PY_EXE: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
@@ -261,6 +266,7 @@ pub fn py_call(
             )),
             code: -1,
             timed_out: true,
+            py_version: None,
         });
     }
     let code = status.map(|s| s.code().unwrap_or(-1)).unwrap_or(-1) as i64;
@@ -279,6 +285,7 @@ pub fn py_call(
                 )),
                 code: -2,
                 timed_out: false,
+                py_version: None,
             });
         }
     };
@@ -312,6 +319,14 @@ pub fn py_call(
         error,
         code,
         timed_out: false,
+        py_version: match &resp {
+            Value::Map(m) => m
+                .borrow()
+                .iter()
+                .find(|(k, _)| matches!(k, Value::Str(s) if s == "py"))
+                .map(|(_, v)| v.display()),
+            _ => None,
+        },
     })
 }
 

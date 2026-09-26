@@ -1,0 +1,52 @@
+# W074: doc comments are metadata — this suite pins that they coexist with
+# every grammar surface (marks, guards, splices, phenotypes) without
+# changing behavior. Doc-text capture itself is pinned in tests/docgen.rs
+# (fmt roundtrip) and tests/differential/doc_comments.op (oracle parity).
+
+## doubles the input
+gene twice(x) {
+    return x * 2
+}
+
+## docs above a guarded gene
+## second line
+gene guarded(x) guard (x > 0) else {
+    return "fallback"
+} {
+    return x
+}
+
+## docs above splice
+splice shape {
+    variant square(v) {
+        return v * v
+    }
+    variant cube(v) {
+        return v * v * v
+    }
+}
+
+## docs above phenotype + methods
+## class-level line
+phenotype animal {
+    ## method-level line
+    gene speak() {
+        return "..."
+    }
+}
+
+gene main() {
+    print(twice(21))
+    print(guarded(5))
+    print(guarded(-1))
+    print(shape(3))
+    print(new animal().speak())
+}
+
+frame proof {
+    assert(twice(21) == 42)
+    assert(guarded(5) == 5)
+    assert(guarded(-1) == "fallback")
+    assert(shape(3) == 9)
+    assert(new animal().speak() == "...")
+}
