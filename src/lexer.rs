@@ -239,9 +239,54 @@ pub fn lex(src: &str) -> Lexed {
         }
         // numbers
         if c.is_ascii_digit() {
+            // W031: radix prefixes — 0x hex, 0b binary, 0o octal (case-insensitive
+            // prefix), with `_` digit separators. A prefix with no valid digit
+            // after it falls through to decimal lexing (`0x` = 0 then ident `x`).
+            if c == '0' && i + 1 < n && matches!(chars[i + 1], 'x' | 'X' | 'b' | 'B' | 'o' | 'O')
+            {
+                let radix = match chars[i + 1] {
+                    'x' | 'X' => 16,
+                    'b' | 'B' => 2,
+                    _ => 8,
+                };
+                let valid = |ch: char| match radix {
+                    16 => ch.is_ascii_hexdigit(),
+                    2 => ch == '0' || ch == '1',
+                    _ => ('0'..='7').contains(&ch),
+                };
+                if i + 2 < n && (valid(chars[i + 2]) || chars[i + 2] == '_') {
+                    let mut j = i + 2;
+                    while j < n && (valid(chars[j]) || chars[j] == '_') {
+                        j += 1;
+                    }
+                    let raw: String = chars[i..j].iter().collect();
+                    let digits: String = chars[i + 2..j]
+                        .iter()
+                        .filter(|&&ch| ch != '_')
+                        .collect();
+                    i = j;
+                    match i64::from_str_radix(&digits, radix) {
+                        Ok(v) => push!(Tok::Int(v)),
+                        Err(_) => lex_note(
+                            &mut notes,
+                            Note {
+                                line,
+                                rung: 4,
+                                message: format!(
+                                    "integer '{}' out of range treated as 0",
+                                    raw
+                                ),
+                            },
+                        ),
+                    }
+                    continue;
+                }
+            }
             let start = i;
             let mut is_float = false;
-            while i < n && (chars[i].is_ascii_digit() || chars[i] == '.') {
+            while i < n
+                && (chars[i].is_ascii_digit() || chars[i] == '.' || chars[i] == '_')
+            {
                 if chars[i] == '.' {
                     // don't consume a dot that isn't part of a number (e.g. 1.map)
                     if i + 1 >= n || !chars[i + 1].is_ascii_digit() {
@@ -266,8 +311,11 @@ pub fn lex(src: &str) -> Lexed {
                 }
             }
             let text: String = chars[start..i].iter().collect();
+            // W031: `_` separators are stripped before parsing (raw text is
+            // preserved in the out-of-range note for diagnosis)
+            let cleaned: String = text.chars().filter(|&ch| ch != '_').collect();
             if is_float {
-                match text.parse::<f64>() {
+                match cleaned.parse::<f64>() {
                     Ok(f) => push!(Tok::Float(f)),
                     Err(_) => lex_note(
                         &mut notes,
@@ -279,7 +327,7 @@ pub fn lex(src: &str) -> Lexed {
                     ),
                 }
             } else {
-                match text.parse::<i64>() {
+                match cleaned.parse::<i64>() {
                     Ok(v) => push!(Tok::Int(v)),
                     Err(_) => lex_note(
                         &mut notes,

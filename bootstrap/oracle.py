@@ -351,9 +351,27 @@ def lex(src):
                 notes.append(Note(4, "stray '@' skipped"))
             i = j; continue
         if c.isdigit():
+            # W031 mirror: radix prefixes 0x/0b/0o (case-insensitive) with `_`
+            # separators; prefix with no valid digit falls through to decimal
+            if c == "0" and i + 1 < n and src[i+1] in "xXbBoO":
+                radix = {"x": 16, "X": 16, "b": 2, "B": 2, "o": 8, "O": 8}[src[i+1]]
+                vset = "0123456789abcdefABCDEF" if radix == 16 else ("01" if radix == 2 else "01234567")
+                if i + 2 < n and (src[i+2] in vset or src[i+2] == "_"):
+                    j = i + 2
+                    while j < n and (src[j] in vset or src[j] == "_"):
+                        j += 1
+                    raw = src[i:j]
+                    digits = raw[2:].replace("_", "")
+                    val = int(digits, radix)
+                    toks.append(("INT", val, line))
+                    # i64 parity: out-of-range treated as 0 with the same note
+                    if not (-2**63 <= val <= 2**63 - 1):
+                        notes.append(Note(4, f"integer '{raw}' out of range treated as 0"))
+                        toks[-1] = ("INT", 0, line)
+                    i = j; continue
             j = i
             isf = False
-            while j < n and (src[j].isdigit() or src[j] == "."):
+            while j < n and (src[j].isdigit() or src[j] == "." or src[j] == "_"):
                 if src[j] == ".":
                     if j + 1 >= n or not src[j + 1].isdigit():
                         break
@@ -369,8 +387,10 @@ def lex(src):
                     while j < n and src[j].isdigit():
                         j += 1
             text = src[i:j]
+            # W031 mirror: `_` separators stripped before parsing
+            cleaned = text.replace("_", "")
             try:
-                toks.append(("FLOAT", float(text), line) if isf else (("INT", int(text), line)))
+                toks.append(("FLOAT", float(cleaned), line) if isf else (("INT", int(cleaned), line)))
             except ValueError:
                 notes.append(Note(4, f"malformed number '{text}' treated as 0"))
                 toks.append(("INT", 0, line))
@@ -379,7 +399,7 @@ def lex(src):
                 # is out of range and treated as 0 with the same note (the
                 # Rust core parses i64; a Python bignum would otherwise see
                 # a value the compiled engine never did)
-                if not isf and not (-2**63 <= int(text) <= 2**63 - 1):
+                if not isf and not (-2**63 <= int(cleaned) <= 2**63 - 1):
                     notes.append(Note(4, f"integer '{text}' out of range treated as 0"))
                     toks[-1] = ("INT", 0, line)
             i = j; continue
