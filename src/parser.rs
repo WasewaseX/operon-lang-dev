@@ -131,16 +131,37 @@ pub struct Parser {
     pos: usize,
     notes: Vec<Note>,
     depth: u32,
+    /// W074: `##` doc lines (line, text) in source order + consumption cursor.
+    docs: Vec<(usize, String)>,
+    doc_cursor: usize,
+    /// W074: line of the first non-newline token — a doc block entirely
+    /// above it and not hugging any decl is the module doc.
+    first_tok_line: usize,
+    module_doc_assigned: bool,
+    module_doc: Vec<String>,
 }
 
 pub fn parse(src: &str) -> Program {
     let lexed = lex(src);
     let mut notes = lexed.notes;
+    let first_tok_line = lexed
+        .toks
+        .iter()
+        .find(|(t, _)| !matches!(t, Tok::Newline | Tok::Semi))
+        .map(|(_, l)| *l)
+        .unwrap_or(1);
     let mut p = Parser {
         toks: lexed.toks,
         pos: 0,
         notes: Vec::new(),
         depth: 0,
+        // W074: doc lines ride alongside the token stream; the parser
+        // attaches them to declarations by source order (see take_doc).
+        docs: lexed.docs,
+        doc_cursor: 0,
+        first_tok_line,
+        module_doc_assigned: false,
+        module_doc: Vec::new(),
     };
     let stmts = p.parse_program();
     notes.append(&mut p.notes);
@@ -151,6 +172,7 @@ pub fn parse(src: &str) -> Program {
         tad_exports: Vec::new(),
         tad_members: Vec::new(),
         ires: Vec::new(),
+        module_doc: p.module_doc.clone(),
         notes,
         stmts,
     };
@@ -258,6 +280,56 @@ impl Parser {
             self.next();
         }
     }
+
+    // ---- W074: doc-comment attachment ---------------------------------
+    /// Consume every doc line above `decl_line`, group them into blocks
+    /// (a blank-line gap of 2+ source lines starts a new block), and attach
+    /// the LAST block — but only if it HUGS the declaration (doc line
+    /// immediately above the `gene`/`phenotype`/... keyword line). A top
+    /// block separated from everything by a blank line and positioned before
+    /// the first real token becomes the module doc. Docs are pure metadata:
+    /// dropping one can never change program behavior.
+    fn take_doc(&mut self, decl_line: usize) -> Vec<String> {
+        let mut consumed: Vec<(usize, String)> = Vec::new();
+        while self.doc_cursor < self.docs.len() && self.docs[self.doc_cursor].0 < decl_line {
+            consumed.push(self.docs[self.doc_cursor].clone());
+            self.doc_cursor += 1;
+        }
+        if consumed.is_empty() {
+            return Vec::new();
+        }
+        // group into blocks: gap > 1 line (i.e. 1+ blank line) splits.
+        let mut blocks: Vec<Vec<String>> = vec![Vec::new()];
+        let mut prev_line = consumed[0].0;
+        for (l, t) in &consumed {
+            if l.saturating_sub(prev_line) > 1 {
+                blocks.push(Vec::new());
+            }
+            blocks.last_mut().unwrap().push(t.clone());
+            prev_line = *l;
+        }
+        let last = blocks.pop().unwrap();
+        let last_line = prev_line; // line of the final consumed doc line
+        let hugs = decl_line.saturating_sub(last_line) == 1;
+        if !hugs {
+            // earlier blocks (and a non-hugging last block) that sit before
+            // the first real token line become the module doc (last wins).
+            if !self.module_doc_assigned {
+                let start_line = consumed[0].0;
+                if start_line < self.first_tok_line {
+                    self.module_doc = last;
+                    self.module_doc_assigned = true;
+                }
+            }
+            return Vec::new();
+        }
+        // non-attached earlier blocks before the first token: module doc.
+        if !self.module_doc_assigned && blocks.len() == 1 && !blocks[0].is_empty() {
+            self.module_doc = blocks.remove(0);
+            self.module_doc_assigned = true;
+        }
+        last
+    }
     /// Skip tokens to end of line (rung-4 recovery).
     fn skip_line(&mut self) {
         while !matches!(
@@ -342,6 +414,8 @@ impl Parser {
         match self.peek().clone() {
             Tok::Mark(m) => {
                 let line = self.line();
+                // W074: docs hug the whole declaration — above the marks.
+                let doc = self.take_doc(line);
                 self.next();
                 let mark = self.repair_mark(m, line)?;
                 let mut marks = vec![mark];
@@ -487,7 +561,7 @@ impl Parser {
                     self.skip_line();
                     return None;
                 }
-                Some(self.parse_gene_def(marks, copies, riboswitch, burst))
+                Some(self.parse_gene_def(marks, copies, riboswitch, burst, doc))
             }
             Tok::Ident(w) => self.parse_word_stmt(&w),
             Tok::LBrace => {
@@ -622,8 +696,10 @@ impl Parser {
         }
         match word.as_str() {
             "gene" => {
+                let l = self.line();
+                let doc = self.take_doc(l);
                 self.next();
-                Some(self.parse_gene_def(vec![], 1, None, None))
+                Some(self.parse_gene_def(vec![], 1, None, None, doc))
             }
             "let" => {
                 self.next();
@@ -996,6 +1072,7 @@ impl Parser {
             "fate" => {
                 self.next();
                 let fate_line = self.line();
+                let fate_doc = self.take_doc(fate_line);
                 let name = self.expect_ident()?;
                 let mut states: Vec<(String, Vec<String>)> = Vec::new();
                 let mut enter = None;
@@ -1068,6 +1145,7 @@ impl Parser {
                 Some(Stmt::Fate(std::sync::Arc::new(FateDef {
                     name: fname,
                     line: fate_line,
+                    doc: fate_doc,
                     states,
                     enter,
                 })))
@@ -1696,6 +1774,9 @@ impl Parser {
             "splice" => {
                 self.next();
                 let splice_line = self.line();
+                // W074: capture at arm start — variant genes' take_doc calls
+                // must not steal the splice's own doc block.
+                let splice_doc = self.take_doc(splice_line);
                 let root = self.expect_ident()?;
                 let mut variants = Vec::new();
                 // T2c: marks collected before a 'variant' keyword apply to
@@ -1826,6 +1907,7 @@ impl Parser {
                 Some(Stmt::Splice(std::sync::Arc::new(SpliceDef {
                     root,
                     line: splice_line,
+                    doc: splice_doc,
                     variants,
                 })))
             }
@@ -1889,6 +1971,9 @@ impl Parser {
             "phenotype" => {
                 self.next();
                 let pheno_line = self.line();
+                // W074: capture at arm start — inner method genes' take_doc
+                // calls must not steal the phenotype's own doc block.
+                let pheno_doc = self.take_doc(pheno_line);
                 let name = self.expect_ident()?;
                 let mut parent = None;
                 if self.at_kw("from") {
@@ -1914,12 +1999,13 @@ impl Parser {
                             Tok::Mark(m) => {
                                 // marks on methods: reuse mark parsing
                                 let line = self.line();
+                                let doc = self.take_doc(line);
                                 self.next();
                                 if let Some(mark) = self.repair_mark(m, line) {
                                     let marks = vec![mark];
                                     if self.expect_kw("gene") {
                                         if let Some(Stmt::Gene(g)) =
-                                            Some(self.parse_gene_def(marks, 1, None, None))
+                                            Some(self.parse_gene_def(marks, 1, None, None, doc))
                                         {
                                             methods.push(g);
                                         }
@@ -1934,17 +2020,18 @@ impl Parser {
                                 }
                             }
                             Tok::Ident(w) if w == "gene" || synonym(&w) == Some("gene") => {
+                                let mline = self.line();
+                                let doc = self.take_doc(mline);
                                 if w != "gene" {
-                                    let line = self.line();
                                     self.note(
-                                        line,
+                                        mline,
                                         2,
                                         format!("synonym '{}' repaired to 'gene'", w),
                                     );
                                 }
                                 self.next();
                                 if let Some(Stmt::Gene(g)) =
-                                    Some(self.parse_gene_def(vec![], 1, None, None))
+                                    Some(self.parse_gene_def(vec![], 1, None, None, doc))
                                 {
                                     methods.push(g);
                                 }
@@ -1987,14 +2074,17 @@ impl Parser {
                 Some(Stmt::Pheno(std::sync::Arc::new(PhenoDef {
                     name: pname,
                     line: pheno_line,
+                    doc: pheno_doc,
                     parent,
                     fields,
                     methods,
                 })))
             }
             "sequence" => {
+                let l = self.line();
+                let doc = self.take_doc(l);
                 self.next();
-                let def = self.parse_gene_def(vec![], 1, None, None);
+                let def = self.parse_gene_def(vec![], 1, None, None, doc);
                 match def {
                     Stmt::Gene(g) => {
                         let mut g2 = (*g).clone();
@@ -2071,6 +2161,9 @@ impl Parser {
                         )
                     };
                     self.note(line, rung, msg);
+                    // W074: bare-name blocks can carry docs too (docs hug
+                    // the name line).
+                    let doc = self.take_doc(line);
                     self.next(); // consume the name
                     let mut params: Vec<(String, Option<Expr>)> = Vec::new();
                     if matches!(self.peek(), Tok::LParen) {
@@ -2107,6 +2200,7 @@ impl Parser {
                     return Some(Stmt::Gene(std::sync::Arc::new(GeneDef {
                         name: Some(word.clone()),
                         line: gene_line,
+                        doc,
                         params,
                         guard: None,
                         body,
@@ -2487,6 +2581,7 @@ impl Parser {
         copies: u32,
         riboswitch: Option<(String, bool, f64)>,
         burst: Option<(f64, f64)>,
+        doc: Vec<String>,
     ) -> Stmt {
         // A13 (dx-r2): the def keyword's line — every definition-borne
         // runtime note (gates, silencing) points here.
@@ -2583,6 +2678,7 @@ impl Parser {
             let def = GeneDef {
                 name,
                 line: def_line,
+                doc,
                 params,
                 param_anns,
                 ret_ann,
@@ -2602,6 +2698,7 @@ impl Parser {
         let def = GeneDef {
             name,
             line: def_line,
+            doc,
             params,
             param_anns,
             ret_ann,
@@ -3195,7 +3292,7 @@ impl Parser {
                         }
                         self.next();
                         // anonymous lambda in expression position
-                        match self.parse_gene_def(vec![], 1, None, None) {
+                        match self.parse_gene_def(vec![], 1, None, None, Vec::new()) {
                             Stmt::Gene(def) => Expr::Lambda(def),
                             _ => Expr::Null,
                         }
@@ -3712,5 +3809,11 @@ fn parse_snippet(src: &str, depth: u32) -> Parser {
         pos: 0,
         notes: lexed.notes,
         depth,
+        // snippet parsing (REPL fragments) carries no docs
+        docs: Vec::new(),
+        doc_cursor: 0,
+        first_tok_line: 1,
+        module_doc_assigned: false,
+        module_doc: Vec::new(),
     }
 }
