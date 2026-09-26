@@ -87,6 +87,13 @@ fn use_path_boundary(w: &str) -> bool {
     w == "as" || w == "from"
 }
 
+/// W55 (ROADMAP-100): public read-only accessor for the reserved keyword set.
+/// Source of truth stays the `KEYWORDS` table above; generated docs
+/// (docs/KEYWORDS.md) mirror it — never the other way around.
+pub fn keyword_list() -> &'static [&'static str] {
+    KEYWORDS
+}
+
 pub fn is_canonical(w: &str) -> bool {
     KEYWORDS.contains(&w)
 }

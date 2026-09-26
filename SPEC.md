@@ -1,10 +1,10 @@
 # Operon — Language Specification
 
-**Status:** v2.2.0 + post-2.2 language amendments (L1a null-safety/destructuring/iteration builtins, L1c regex builtins, L1d wall-clock time builtins). Implementation version stays 2.2.0 until the next milestone tag (D-009: version moves only at milestones). This document is the single contract implemented identically by:
+**Status:** v2.3.0-dev — post-2.2 language amendments are landing incrementally (the generated inventory in [docs/STATS.md](docs/STATS.md) is the countable truth; D-009: version strings move only with the milestone). Last tagged release: 2.2.0. This document is the single contract implemented identically by:
 
 | Implementation | Language | Role |
 |---|---|---|
-| `src/` + `runtime/` | Rust + C + C++ | **Primary** compiler & runtime (the real thing) |
+| `src/` + `runtime/` | Rust + C++ | **Primary** compiler & runtime (the real thing) |
 | `bootstrap/oracle.py` | Python | Reference oracle for differential testing + packaging |
 | `web/playground/` | TypeScript/JS | Browser subset playground |
 
@@ -43,8 +43,7 @@ Arithmetic:
 - Identifiers `[A-Za-z_][A-Za-z0-9_]*`.
 - Numbers: `42`, `3.14`, `1e3` (float). Negative via unary minus. Radix forms `0xFF`, `0b101010`, `0o755` (case-insensitive prefix; canonical value is the same Int). `_` digit separators allowed inside any numeric literal (`1_000_000`, `0xFF_FF`, `1_000.5`) and are stripped before parsing — the printed value is unaffected (canonical form stays decimal). A radix prefix with no valid digit after it lexes as decimal `0` followed by identifiers (`0x` → `0`, `x`). Out-of-range literals keep the existing saturate-to-0 note contract (f0fe2ec).
 - Newlines terminate statements; `;` allowed and ignored (also `;;`, stray). Blocks are `{ ... }`.
-- Keywords (canonical, 58 — the parser's reserved set; the 6 quorum words joined in reg-bio-3 C8):
-  `gene let if elif else while loop for in return break continue match case use tad anchor export import enhance silence stress rescue raise fate state regulate activates inhibits strength toggle repressilator period frame proof guard splice variant edit replace ires as collect enter phenotype sequence yield new threshold from self decoy ligand autoinducer bind inducer cofactor operon`
+- Keywords (canonical — the parser's reserved set; the generated inventory with per-keyword programmer analogies lives in [docs/KEYWORDS.md](docs/KEYWORDS.md) and is never hand-typed here).
 - Literal words `true false null` and the logical words `and or not` are recognized in expression positions (not part of the reserved keyword table).
 - Marks: `@acetylate` `@methylate` `@m6a` `@copies` `@riboswitch` `@burst`.
 - `#` inside a string does NOT start a comment.
