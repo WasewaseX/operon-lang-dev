@@ -326,11 +326,22 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
     let genv = interp.global.clone();
     for stmt in &prog.stmts {
         if let Err(s) = interp.exec_stmt(&genv, stmt) {
-            interp.note(
-                s.line,
-                4,
-                format!("stress contained: [{}] {}", s.kind, s.message),
-            );
+            // W06 (D-014): propagation with no enclosing gene — the variant
+            // value passes through (Total Grammar: noted, never rejected).
+            // Never leaked as kind "propagate": the payload marker converts.
+            if let Some(v) = s.prop {
+                interp.note(
+                    s.line,
+                    4,
+                    format!("propagation reached top level: {} passes through", v.repr()),
+                );
+            } else {
+                interp.note(
+                    s.line,
+                    4,
+                    format!("stress contained: [{}] {}", s.kind, s.message),
+                );
+            }
         }
     }
 
@@ -934,6 +945,14 @@ pub fn crispr(file: &str, opts: &Opts, knockout: &str) -> CrisprReport {
                 }
             }
             Ok(_) => rep.failures.push(format!("proof #{}: exited early", i + 1)),
+            // W06 (D-014): propagation abandoning a proof frame is a failure
+            // (the frame did not complete) — rendered with the variant repr,
+            // never a leaked "propagate" kind.
+            Err(s) if s.prop.is_some() => rep.failures.push(format!(
+                "proof #{} failed: propagation left the proof frame ({})",
+                i + 1,
+                s.prop.unwrap().repr()
+            )),
             Err(s) => rep.failures.push(format!(
                 "proof #{} failed: [{}] {}",
                 i + 1,
@@ -1052,6 +1071,18 @@ pub fn run_tests(paths: &[String], opts: &Opts, json: bool) -> TestReport {
                         "{} proof #{}: exited early (return/break inside proof)",
                         f,
                         i + 1
+                    ));
+                }
+                // W06 (D-014): propagation abandoning a proof frame is a
+                // failure (the frame did not complete) — never a leaked kind.
+                Err(s) if s.prop.is_some() => {
+                    rep.failed += 1;
+                    file_failed = true;
+                    proof_failures.push(format!(
+                        "{} proof #{}: propagation left the proof frame ({})",
+                        f,
+                        i + 1,
+                        s.prop.unwrap().repr()
                     ));
                 }
                 Err(s) => {
@@ -1836,6 +1867,9 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
             // meaning (wave-3 Critic-Q semantics bug)
             format!("{} ? {} : {}", fmt_prec(c, 2), fmt_expr(a), fmt_expr(b))
         }
+        // W06 (D-014): postfix `?!` binds tighter than every binary/ternary —
+        // the operand renders at max precedence and needs no parentheses.
+        Expr::Propagate(e, _) => format!("{}?!", fmt_prec(e, 12)),
         Expr::New(n, args) => format!(
             "new {}({})",
             n,

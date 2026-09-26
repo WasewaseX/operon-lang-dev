@@ -1155,6 +1155,14 @@ fn repl_proof_session(l: &mut tools::Loaded, session: &str) {
                 );
                 failed += 1;
             }
+            Err(s) if s.prop.is_some() => {
+                println!(
+                    "  session proof #{}: FAILED (propagation left the proof frame: {})",
+                    i + 1,
+                    s.prop.unwrap().repr()
+                );
+                failed += 1;
+            }
             Err(s) => {
                 println!("  session proof #{}: FAILED ({})", i + 1, s.message);
                 failed += 1;
@@ -1227,11 +1235,22 @@ fn repl_eval(l: &mut tools::Loaded, src: &str) {
                             println!("{}", v.repr());
                         }
                     }
+                    // W06 (D-014): propagation with no enclosing gene in the
+                    // REPL — the variant value passes through, tagged honestly.
+                    Err(st) if st.prop.is_some() => {
+                        println!("  [propagate] {} passes through", st.prop.unwrap().repr())
+                    }
                     Err(st) => println!("  [{}] {}", st.kind, st.message),
                 }
             } else {
                 if let Err(st) = l.interp.exec_stmt(&env, stmt) {
-                    println!("  [{}] {}", st.kind, st.message);
+                    // W06 (D-014): REPL top-level propagation — value passes
+                    // through, never a leaked bare kind.
+                    if let Some(v) = st.prop {
+                        println!("  [propagate] {} passes through", v.repr());
+                    } else {
+                        println!("  [{}] {}", st.kind, st.message);
+                    }
                 }
             }
         }
@@ -1252,7 +1271,13 @@ fn repl_eval(l: &mut tools::Loaded, src: &str) {
     let note_start = l.interp.notes.len();
     for stmt in &wprog.stmts {
         if let Err(st) = l.interp.exec_stmt(&env, stmt) {
-            println!("  [{}] {}", st.kind, st.message);
+            // W06 (D-014): REPL expression-mode propagation — same
+            // passes-through contract as statement mode.
+            if let Some(v) = st.prop {
+                println!("  [propagate] {} passes through", v.repr());
+            } else {
+                println!("  [{}] {}", st.kind, st.message);
+            }
         }
     }
     // dx-r1 (parity audit W4): notes were recorded but never shown — the

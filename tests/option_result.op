@@ -1,0 +1,80 @@
+# option_result.op — W06 (D-014): first-class Option/Result values.
+# Hierarchy (SPEC §9): null+note (soft miss) → Option/Result (expected
+# failure, first-class value) → Stress (exceptional containment) → hard exit.
+frame proof {
+    # constructors + predicates
+    assert(is_ok(ok(1)), "ok() builds Result")
+    assert(is_err(err("e")), "err() builds Result")
+    assert(is_some(some(1)), "some() builds Option")
+    assert(is_none(none()), "none() builds Option")
+    assert(!is_ok(some(1)), "families are distinct: Some is not Ok")
+    assert(!is_some(ok(1)), "families are distinct: Ok is not Some")
+    # extraction
+    assert(unwrap(ok(7)) == 7, "unwrap(Ok) yields payload")
+    assert(unwrap(some("s")) == "s", "unwrap(Some) yields payload")
+    assert(unwrap_or(none(), 5) == 5, "unwrap_or(None) yields default")
+    assert(unwrap_or(err("x"), 5) == 5, "unwrap_or(Err) yields default")
+    assert(unwrap_or(ok(2), 5) == 2, "unwrap_or(Ok) yields payload")
+    # equality: tag IS the contract
+    assert(ok(1) == ok(1), "Ok(1) == Ok(1)")
+    assert(ok(1) != ok(2), "different payloads differ")
+    assert(some(1) != ok(1), "Some(x) != Ok(x)")
+    assert(none() == none(), "None == None")
+    assert(err(1) == err(1), "Err(1) == Err(1)")
+    # truthiness: carried success truthy, carried failure falsy
+    assert(ok(0), "Ok(0) is truthy (payload value irrelevant)")
+    assert(!none(), "None is falsy")
+    assert(!err("e"), "Err is falsy")
+    # repr contract
+    assert(str(ok(42)) == "Ok(42)", "Ok repr")
+    assert(str(none()) == "None", "None repr")
+    assert(str(some(1)) == "Some(1)", "Some repr")
+    # JSON contract: single-key objects; None serializes as null
+    assert(json_str(ok(1)) == "\{\"ok\":1}", "Ok JSON")
+    assert(json_str(none()) == "null", "None JSON")
+    # type names: family introspection
+    assert(type(some(1)) == "option", "option family name")
+    assert(type(err(1)) == "result", "result family name")
+    # propagation: Some/Ok unwrap to the payload
+    gene plus1(v) {
+        return ok(v)?! + 1
+    }
+    assert(plus1(41) == 42, "Ok?! unwraps to payload in expressions")
+    # propagation: None/Err becomes the gene's return value
+    gene guarded(n) {
+        if (n < 0) {
+            return err("negative")
+        }
+        return ok(n)
+    }
+    gene consume(n) {
+        let v = guarded(n)?!
+        return ok(v * 10)
+    }
+    assert(consume(3) == ok(30), "propagated Ok flows through use")
+    assert(consume(-1) == err("negative"), "propagated Err IS the return value")
+    # propagation crosses stress/rescue boundaries (it is a return, not a failure)
+    gene crossing(n) {
+        stress {
+            let v = guarded(n)?!
+            return ok(v)
+        } rescue (e) {
+            return err("rescue saw: " + e.kind)
+        }
+    }
+    assert(crossing(-5) == err("negative"), "propagation is never contained by rescue")
+    assert(crossing(4) == ok(4), "normal flow through the same rescue")
+    # unwrap is the exceptional tier: rescue-catchable stress kind "unwrap"
+    let caught_kind = ""
+    stress {
+        unwrap(none())
+    } rescue (e) {
+        caught_kind = e.kind
+    }
+    assert(caught_kind == "unwrap", "unwrap on None stresses with kind unwrap")
+    # plain-value propagation is identity (the ?. precedent)
+    assert(plain_probe() == 5, "plain value passes through ?! unchanged")
+}
+gene plain_probe() {
+    return 5 ?!
+}
