@@ -112,6 +112,16 @@ Notes:
 
 ## 6. CI-verified embedding example
 
-`examples/embed/` (an external-style crate depending on `operon` via path) is the M100
-follow-up for this level — it will be compiled in CI to keep this guide honest. Until it
-lands, the snippets above are exercised implicitly by `tests/repl.rs` and the tool layer.
+`examples/embed/` is an external-style crate: its own workspace + lockfile,
+consuming `operon` via `path = "../.."` exactly like a downstream embedder
+would consume a published one. It exercises BOTH levels above — core-level
+parse/eval with repair notes, and tool-level `load_file`/`run_entry` with
+default-deny caps and a captured `promote()` sink — and is built + run by
+`scripts/embed_example_check.sh` in CI (Linux job). If the public embedding
+surface drifts from this guide, that gate goes red. Run it locally:
+
+```bash
+bash scripts/embed_example_check.sh
+# or directly:
+cargo run --manifest-path examples/embed/Cargo.toml
+```

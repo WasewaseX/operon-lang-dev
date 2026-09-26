@@ -736,14 +736,14 @@ clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK · sec_regression AL
   apps gate + W073 examples check referenced as the three enforcement points.
 - Files: `CONTRIBUTING.md`, `scripts/cookbook.sh`.
 
-### W076 — Stable embedding API [P2] [dev-3] [M] [partial: lib.rs exists]
+### W076 — Stable embedding API [P2] [dev-3] [M] [done: docs/EMBEDDING.md (both integration levels, version note per W063, honest NOT-exposed list) + examples/embed/ — external-style crate, own workspace/lockfile, path dep on operon, exercises core-level parse/eval + tool-level load_file/run_entry with default-deny caps + captured promote() sink — built+run by scripts/embed_example_check.sh as a blocking CI step (Linux); curated pub module tree in src/lib.rs (ast ffi genes graph interp lexer ls parser pybridge rna2 tools value, all documented); prelude module deliberately sequenced post-W001-type-settle per the guide's own versioning rule]
 - Goal: documented public Rust API: parse/compile/run/sandbox-config/register-builtin/
   capture-output/inspect-diagnostics; semver'd releases; embedding example crate.
 - Done when: `docs/EMBEDDING.md` + lib.rs pub-use surface curated + `examples/embed/`
   (a tiny dependent crate using operon as a path dep, built in CI); version note per W063.
 - Files: `src/lib.rs`, `docs/EMBEDDING.md`, `examples/embed/`, `CI`.
 
-### W077 — C ABI [P3] [dev-3] [XL] [deferred: design note]
+### W077 — C ABI [P3] [dev-3] [XL] [deferred: design note docs/design/C-ABI.md landed — symbol surface sketch (operon_handle/run_source/notes/status/version), 4-line ownership contract, catch_unwind boundary, caps-struct 1:1 with NULL = default-deny, why-not-yet (Rust surface freeze + Native calling convention post-W004 + W009 crash boundary) + implementation order + FFI redteam plan]
 - Deliverable: `docs/design/C-ABI.md` — symbol surface (operon_run_source/operon_free/
   diagnostic access), ownership rules, why-not-yet (embedding API first, W076).
 
@@ -762,7 +762,7 @@ clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK · sec_regression AL
   floor; docs.
 - Files: `SPEC.md`, `src/interp.rs`, `README.md`.
 
-### W080 — Native C/C++ FFI [P3] [dev-3] [XL] [deferred: design note]
+### W080 — Native C/C++ FFI [P3] [dev-3] [XL] [deferred: design note docs/design/NATIVE-FFI.md landed — foreign "c" grammar sketch (Total-Grammar: declaration is grammar, execution is capability), Caps.ffi per-library exact-match grants (py()-shaped), v1 marshalling table (values only, no pointers/callbacks), threat sequencing (py() subprocess → W077 core C-ABI → this, gated on W009 boundary + wasm callee evaluation), implementation order with fence-first landing]
 - Deliverable: `docs/design/NATIVE-FFI.md` — `foreign` grammar sketch, capability gate
   (`--allow-ffi`), struct-layout story, why py() + C-ABI (W077) come first.
 
@@ -798,7 +798,7 @@ clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK · sec_regression AL
   non-regression gate.
 - Files: `scripts/bench_startup.sh`, `BENCH.md`, `.github/workflows/ci.yml`.
 
-### W085 — Standalone executable compilation [P2] [dev-3] [L] [partial: operon build = source bake]
+### W085 — Standalone executable compilation [P2] [dev-3] [L] [done-as-specced: the level's 'deliverable now' = roadmap + honesty — docs/spec/BUILD-CONTRACT.md §4 carries the 3-stage roadmap (bytecode bundle post-W009 → Rust-embed runtime → native codegen only if W011 demands), README/`build --help` make no standalone-executable promise ('bake splices, strip proofs'); true standalone binaries are stage 2/3, correctly gated on W009 by design]
 - Goal: `operon build app.op -o app` eventually produces a truly standalone binary.
   Roadmap: (1) bytecode bundle + tiny interpreter entry (post-W009), (2) Rust embed of
   bundle into a released `operon` runtime, (3) native codegen only if W011 profiling
