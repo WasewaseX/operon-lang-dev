@@ -1,0 +1,36 @@
+# Maintainer: Operon maintainers <https://github.com/WasewaseX/operon-lang-dev>
+# W61 COMMUNITY DRAFT — git-variant AUR package. Not CI-validated; builds
+# from the source tree, so requires rustc (>=1.70), gcc, g++.
+pkgname=operon-lang-git
+pkgver=2.2.0.r<commit-count-placeholder> # AUR convention: regenerate with git describe; the maintainer pins it at publish
+pkgrel=1
+pkgdesc="The gene-expression language — Total Grammar toolchain (Rust core, C++ algorithm kernel), built from source"
+arch=('x86_64' 'aarch64')
+url="https://github.com/WasewaseX/operon-lang-dev"
+license=('MIT')
+depends=('glibc' 'gcc-libs')
+makedepends=('git' 'rust>=1.70' 'gcc' 'gcc-libs')
+provides=('operon')
+conflicts=('operon-lang')
+source=("${pkgname}::git+https://github.com/WasewaseX/operon-lang-dev.git")
+sha256sums=('SKIP')
+
+pkgver() {
+    cd "${srcdir}/${pkgname}"
+    printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+    cd "${srcdir}/${pkgname}"
+    export PATH="$HOME/.cargo/bin:$PATH"
+    cargo build --release
+}
+
+package() {
+    install -Dm755 "${srcdir}/${pkgname}/target/release/operon"    "${pkgdir}/usr/bin/operon"
+    install -Dm755 "${srcdir}/${pkgname}/target/release/operon-ls" "${pkgdir}/usr/bin/operon-ls"
+    mkdir -p "${pkgdir}/usr/lib/operon"
+    cp -r "${srcdir}/${pkgname}/std" "${pkgdir}/usr/lib/operon/std"
+    install -Dm644 "${srcdir}/${pkgname}/LICENSE" \
+        "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}

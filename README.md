@@ -27,7 +27,7 @@ The mandate: *"Rust, then C, then Python, then Operon, then C++, then HTML, then
 | rank | language | lines | share | role |
 |---|---|---|---|---|
 | 1 | **Rust** | 15,937 | ~46% | lexer, Total Grammar parser, evaluator, capability sandbox, symbol table, HTTP/JSON, toolchain CLI, REPL, `operon-ls` LSP seed (`src/`) |
-| 2 | **Operon** | 17,248 | ~35% | **self-hosted stdlib (15 modules incl. `std/motifs`, `std/set`, `std/testing`, `std/random`), proof tests, red-team suite, differential corpus, GenomeLab** (`std/ tests/ examples/ apps/`) |
+| 2 | **Operon** | 17,248 | ~35% | **self-hosted stdlib (16 modules incl. `std/motifs`, `std/set`, `std/testing`, `std/random`, `std/serialize`), proof tests, red-team suite, differential corpus, GenomeLab** (`std/ tests/ examples/ apps/`) |
 | 3 | **Python** | 5,129 | ~15% | bootstrap: reference oracle + differential harness (`bootstrap/`) — test infrastructure only, nothing shipped depends on it |
 | 4 | **JavaScript** | 1,834 | ~5% | browser playground subset interpreter (`web/playground/app.js`) |
 | 5 | **HTML** | 1,263 | ~4% | documentation site (`docs/`) |
@@ -229,6 +229,23 @@ command = "operon-ls"
 
 Ranged (incremental) edits are ignored by design while `textDocumentSync = 1` (full-text) is advertised — well-behaved editors always send full text on change.
 
+## Install
+
+Every channel below carries an honest validation mark (the full ledger lives in [docs/PACKAGING.md](docs/PACKAGING.md)):
+
+| channel | how | mark |
+|---|---|---|
+| GitHub release (linux x64+arm64, macos x64+arm64, windows) | download `operon-<v>-<target>.tar.gz` / `.zip` + verify the companion `.sha256` | **validated** — per-artifact release smoke in CI |
+| install script | `curl -fsSL https://raw.githubusercontent.com/WasewaseX/operon-lang-dev/main/scripts/install.sh \| sh` | community (runs on your machine) |
+| from source | `./scripts/build.sh` or `cargo install --path .` | **validated** — the CI cargo gate builds this exact path |
+| cargo-binstall / Homebrew / winget | metadata + drafts | staged — land with the B5 stack merge (docs/PACKAGING.md) |
+| Scoop (Windows) | `packaging/scoop/operon.json` | community draft |
+| AUR (release / git) | `packaging/aur/PKGBUILD` · `packaging/aur/PKGBUILD.git` | community drafts |
+| Nix | `packaging/nix/default.nix` | community draft |
+| deb / rpm | `[package.metadata.deb]` / `[package.metadata.generate-rpm]` in Cargo.toml | community drafts |
+
+Every archive ships `operon`, `operon-ls`, and the self-hosted `std/` library. `validated` means a CI job or smoke script in this repo exercises the channel today; `community` means a maintainer must pin the checksum and verify at publish time — "should work" is not a state we write down.
+
 ## Build from source
 
 ```console
@@ -251,7 +268,7 @@ Requires: rustc (≥1.70), gcc, g++ (builds the C++ codon kernel). Zero runtime 
 - **Genes**: named, anonymous, lambdas, defaults, closures, recursion, `guard` clauses, marks — plus **soft type annotations** (`gene f(x: int) -> int`, `let n: float`, unions `int | str`, optionals `T?` — boundary-checked as catchable Stress, W01/SPEC §7c) and **phenotype classes** (`phenotype P { let f = 0; gene init() {…} }`, `new P(...)`, `self`, `phenotype C from P`) and **sequence generators** (`sequence s() { yield v }` with `.next()`/`.collect()`, lazy worker-cell pull).
 - **Errors**: a four-tier hierarchy (SPEC §9) — null+note (soft miss) → **Option/Result values** (`some/none/ok/err`, `?!` propagation, `unwrap_or` defaults) → catchable `Stress{kind, message}` — `unfolded | missing | overflow | burned | interference | unwrap` — plus Total-Grammar runtime notes. Expected failures stay values; Stress is for contract violations. A program never crashes; worst case it narrates what it repaired.
 - **Concurrency**: `spawn(gene, args)` / `join(id)` — real OS threads with value serialization; sequences run on worker cells; timed repressilator threads.
-- **Modules**: `use std/bio;` — TAD-insulated, anchor-controlled exports, module cache, cycle-tolerant. Fifteen stdlib modules today: `args`, `bio`, `collections`, `csv`, `fmt`, `fs`, `iter`, `json`, `math`, `motifs`, `random`, `seq`, `set`, `strings`, `testing` — plus the capability-gated `py()` bridge for the scientific-Python deep end.
+- **Modules**: `use std/bio;` — TAD-insulated, anchor-controlled exports, module cache, cycle-tolerant. Sixteen stdlib modules today: `args`, `bio`, `collections`, `csv`, `fmt`, `fs`, `iter`, `json`, `math`, `motifs`, `random`, `seq`, `serialize`, `set`, `strings`, `testing` — plus the capability-gated `py()` bridge for the scientific-Python deep end.
 
 ## Repository layout
 
@@ -267,7 +284,7 @@ examples/    tour programs (.op)
 docs/        documentation site (HTML/CSS)
 web/         browser playground (JS + TS declarations)
 scripts/     build.sh · test.sh · bench.sh · stack_report.sh
-packaging/   PyInstaller spec for the bootstrap path
+packaging/   distribution channels: Scoop manifest, AUR PKGBUILD (release+git), Nix derivation (ledger: docs/PACKAGING.md)
 ```
 
 ## License
