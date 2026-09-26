@@ -7,6 +7,7 @@ use operon::genes;
 use operon::graph;
 use operon::interp;
 use operon::parser;
+use operon::rna2;
 use operon::tools;
 
 use operon::ast::Stmt;
@@ -69,6 +70,8 @@ fn real_main() {
     let mut nmd = false;
     let mut purge = false;
     let mut write = false;
+    let mut allow_comment_drop = false;
+    let mut trace_grn_path: Option<String> = None;
     let mut matrix = false;
     // dx-r6: true after the `--` separator — remaining args are program argv
     let mut passthrough = false;
@@ -219,6 +222,20 @@ fn real_main() {
                 purge = true;
             }
             "--write" => write = true,
+            // W067 v2: the AST reprint drops plain `#` comments; the v2 rna
+            // engine refuses such files unless this flag is passed.
+            "--allow-comment-drop" => allow_comment_drop = true,
+            // W095: GRN tick-stream — every engine update point (fire pulse
+            // / decay tick) snapshots the sorted level map as one JSONL
+            // frame; the buffer lands in the file after the run.
+            "--trace-grn" => {
+                i += 1;
+                let p = rest.get(i).cloned();
+                if p.as_deref().map(str::is_empty).unwrap_or(true) {
+                    die("--trace-grn needs a file path");
+                }
+                trace_grn_path = p;
+            }
             "--filter" => {
                 i += 1;
                 test_filter = Some(
@@ -525,6 +542,9 @@ fn real_main() {
             l.interp.fuel_pool = Some(std::sync::Arc::new(std::sync::atomic::AtomicI64::new(
                 total as i64,
             )));
+            if trace_grn_path.is_some() {
+                l.interp.trace_grn = Some(Vec::new());
+            }
             if opts.frame.is_none() {
                 let result = tools::run_entry(&mut l, &opts);
                 match result {
@@ -564,11 +584,15 @@ fn real_main() {
                         // dx-r1 (parity audit W2): a failing program must not
                         // report success — CI/shell pipelines trusted rc=0
                         // from scripts that died. 1 = uncaught top-level stress.
+                        // W095: frames collected so far are still diagnostics —
+                        // drain before the exit.
+                        write_grn_trace(&l.interp, &trace_grn_path);
                         tools::flush_notes(&l, opts.quiet);
                         std::process::exit(1);
                     }
                 }
             }
+            write_grn_trace(&l.interp, &trace_grn_path);
             tools::flush_notes(&l, opts.quiet);
             let strict_cell = l
                 .interp
@@ -759,8 +783,11 @@ fn real_main() {
         "rna" => {
             // W068 safety mode: default = checked dry-run (writes nothing);
             // --write applies the same engine; exit 1 on any miss so scripts notice.
+            // W067 v2: a patch whose first content line is `syntax: v2` dispatches
+            // to the node-addressed engine (parse → edit AST → canonical reprint,
+            // all-or-nothing); absent header keeps v1 text semantics.
             if positional.len() < 2 {
-                die("rna needs: operon rna <file.op> <patch.rna> [--write] [--json]");
+                die("rna needs: operon rna <file.op> <patch.rna> [--write] [--json] [--allow-comment-drop]");
             }
             let file = positional[0].clone();
             let patch_path = positional[1].clone();
@@ -772,6 +799,93 @@ fn real_main() {
                 Ok(s) => s,
                 Err(e) => die(&format!("rna: cannot read {}: {}", patch_path, e)),
             };
+            if rna2::is_v2_patch(&patch_src) {
+                let report = match rna2::apply_rna_v2(&src, &patch_src, allow_comment_drop) {
+                    Ok(r) => r,
+                    Err(refusal) => die(&refusal),
+                };
+                if json {
+                    let rows: Vec<String> = report
+                        .rules
+                        .iter()
+                        .map(|r| {
+                            format!(
+                                "{{\"verb\":\"{}\",\"target\":\"{}\",\"target_found\":{},\"applied\":{},\"detail\":\"{}\"}}",
+                                r.verb,
+                                tools::json_escape(&r.target),
+                                r.target_found,
+                                r.applied,
+                                tools::json_escape(&r.detail)
+                            )
+                        })
+                        .collect();
+                    match &report.new_text {
+                        Some(new_text) => {
+                            println!(
+                                "{{\"engine\":\"v2\",\"file\":\"{}\",\"patch\":\"{}\",\"rules\":[{}],\"applied\":{},\"missed\":{},\"would_change\":{}}}",
+                                tools::json_escape(&file),
+                                tools::json_escape(&patch_path),
+                                rows.join(","),
+                                report.applied(),
+                                report.missed(),
+                                report.would_change()
+                            );
+                            if write {
+                                std::fs::write(&file, new_text).expect("write failed");
+                                eprintln!("rna v2: {} rewritten", file);
+                            }
+                        }
+                        None => {
+                            // all-or-nothing refusal — nothing written
+                            println!(
+                                "{{\"engine\":\"v2\",\"file\":\"{}\",\"patch\":\"{}\",\"rules\":[{}],\"applied\":0,\"missed\":{},\"would_change\":false,\"refused\":true}}",
+                                tools::json_escape(&file),
+                                tools::json_escape(&patch_path),
+                                rows.join(","),
+                                report.missed()
+                            );
+                        }
+                    }
+                } else {
+                    match &report.new_text {
+                        Some(_) => println!(
+                            "rna v2: {} <- {} — {} applied, {} missed{}",
+                            file,
+                            patch_path,
+                            report.applied(),
+                            report.missed(),
+                            if report.would_change() {
+                                ""
+                            } else {
+                                " (no change)"
+                            }
+                        ),
+                        None => println!(
+                            "rna v2: {} <- {} — REFUSED (all-or-nothing): {} missed",
+                            file,
+                            patch_path,
+                            report.missed()
+                        ),
+                    }
+                    for r in &report.rules {
+                        if !r.target_found {
+                            println!("  MISS [{}] {}", r.target, r.detail);
+                        } else {
+                            println!("  ok   [{}] {}", r.target, r.detail);
+                        }
+                    }
+                    if let Some(new_text) = &report.new_text {
+                        if write {
+                            std::fs::write(&file, new_text).expect("write failed");
+                            eprintln!("rna v2: {} rewritten", file);
+                        }
+                    }
+                }
+                if report.missed() > 0 {
+                    std::process::exit(1);
+                }
+                return;
+            }
             let stem = std::path::Path::new(&file)
                 .file_stem()
                 .map(|s| s.to_string_lossy().to_string())
@@ -1019,6 +1133,69 @@ fn real_main() {
             }
             tools::flush_notes(&l, opts.quiet);
         }
+        "doc" => {
+            // W073: markdown/JSON API reference from the AST — parse-only
+            // (like check/fmt/graph), no run, no capabilities beyond reading
+            // the input files. Directories expand to their top-level *.op
+            // files (sorted, deterministic output order).
+            let mut md_out: Vec<(String, String)> = Vec::new();
+            let mut json_out: Vec<String> = Vec::new();
+            let mut targets: Vec<String> = Vec::new();
+            for p in &positional {
+                let meta = std::fs::metadata(p);
+                match meta {
+                    Ok(m) if m.is_dir() => {
+                        let mut entries: Vec<String> = std::fs::read_dir(p)
+                            .map(|rd| {
+                                rd.filter_map(|e| e.ok())
+                                    .map(|e| e.path())
+                                    .filter(|pt| pt.extension().map(|x| x == "op").unwrap_or(false))
+                                    .map(|pt| pt.to_string_lossy().to_string())
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        entries.sort();
+                        targets.extend(entries);
+                    }
+                    _ => targets.push(p.clone()),
+                }
+            }
+            if targets.is_empty() {
+                die("doc needs a file or directory");
+            }
+            for t in &targets {
+                let src = std::fs::read_to_string(t).unwrap_or_default();
+                let prog = parser::parse(&src);
+                if json {
+                    json_out.push(tools::doc_json(t, &prog));
+                } else {
+                    md_out.push((t.clone(), tools::doc_markdown(t, &prog)));
+                }
+            }
+            if json {
+                println!("[{}]", json_out.join(","));
+            } else if !outfile.is_empty() {
+                // -o DIR: write one markdown file per input module
+                if let Err(e) = std::fs::create_dir_all(&outfile) {
+                    die(&format!("doc -o: cannot create '{}': {}", outfile, e));
+                }
+                for (t, md) in &md_out {
+                    let stem = std::path::Path::new(t)
+                        .file_stem()
+                        .map(|s| s.to_string_lossy().to_string())
+                        .unwrap_or_else(|| t.clone());
+                    let dest = format!("{}/{}.md", outfile, stem);
+                    if let Err(e) = std::fs::write(&dest, md) {
+                        die(&format!("doc -o: cannot write '{}': {}", dest, e));
+                    }
+                    println!("  wrote {}", dest);
+                }
+            } else {
+                for (_, md) in &md_out {
+                    print!("{}", md);
+                }
+            }
+        }
         "watch" => {
             // W072: re-run on change. v1: mtime polling (200 ms, no external
             // deps) over the entry file + its local (non-std) import tree;
@@ -1219,6 +1396,24 @@ fn real_main() {
     }
 }
 
+/// W095: drain the interpreter's GRN tick-stream buffer into the operator's
+/// file. The interpreter itself never touches the filesystem — this is the
+/// only I/O point. Frames are JSONL (one self-describing object per line).
+fn write_grn_trace(interp: &operon::interp::Interp, path: &Option<String>) {
+    if let (Some(p), Some(frames)) = (path, &interp.trace_grn) {
+        let mut out = String::new();
+        for f in frames {
+            out.push_str(f);
+            out.push('\n');
+        }
+        if let Err(e) = std::fs::write(p, out) {
+            eprintln!("grn trace: cannot write {}: {}", p, e);
+        } else {
+            eprintln!("grn trace: {} frame(s) -> {}", frames.len(), p);
+        }
+    }
+}
+
 // ------------------------------------------------------------ repl
 fn repl() {
     use std::io::{BufRead, Write};
@@ -1295,6 +1490,7 @@ fn repl() {
                         );
                         println!(":proof [f]   run proof frames — this session's, or file f's");
                         println!(":genes       list genes defined so far");
+                        println!(":doc name    show the ## doc comment of a declaration (W074)");
                         println!(":vars        list top-level variables");
                         println!(
                             ":symbols     inspect the symbol table (every name the lexer has seen)"
@@ -1339,6 +1535,61 @@ fn repl() {
                                 "  {}: {}/{} proof(s) passed ({} assertion(s))",
                                 arg, rep.passed, rep.proofs, rep.asserts
                             );
+                        }
+                    }
+                    "doc" => {
+                        // W074: print the `##` doc comment attached to a
+                        // declaration in this session (metadata only — this
+                        // never executes anything).
+                        if arg.is_empty() {
+                            println!("  usage: :doc <gene|phenotype|splice|fate name>");
+                        } else {
+                            let prog = parser::parse(&session);
+                            let mut found = false;
+                            let print_doc = |doc: &[String], label: &str| {
+                                if doc.is_empty() {
+                                    println!("  {} — no ## doc comment", label);
+                                } else {
+                                    for dl in doc {
+                                        println!("  {}", dl);
+                                    }
+                                }
+                            };
+                            for st in &prog.stmts {
+                                match st {
+                                    Stmt::Gene(g) | Stmt::Seq(g)
+                                        if g.name.as_deref() == Some(arg) =>
+                                    {
+                                        print_doc(&g.doc, arg);
+                                        found = true;
+                                    }
+                                    Stmt::Pheno(p) if p.name == arg => {
+                                        print_doc(&p.doc, arg);
+                                        found = true;
+                                    }
+                                    Stmt::Splice(sp) if sp.root == arg => {
+                                        print_doc(&sp.doc, arg);
+                                        found = true;
+                                    }
+                                    Stmt::Fate(f) if f.name == arg => {
+                                        print_doc(&f.doc, arg);
+                                        found = true;
+                                    }
+                                    Stmt::Pheno(p) => {
+                                        // phenotype methods are not top-level
+                                        for m in &p.methods {
+                                            if m.name.as_deref() == Some(arg) {
+                                                print_doc(&m.doc, arg);
+                                                found = true;
+                                            }
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            if !found {
+                                println!("  no declaration named '{}' in this session", arg);
+                            }
                         }
                     }
                     "genes" => {
@@ -1698,8 +1949,10 @@ usage:
   operon keywords [--json]
   operon repl
   operon build f.op [--variant v] [-o out.op]
-  operon rna f.op patch.rna [--write] [--json]
+  operon rna f.op patch.rna [--write] [--json] [--allow-comment-drop]
   operon graph f.op [--json]
+  operon run f.op --trace-grn trace.jsonl   # W095: JSONL GRN tick-stream
+  operon doc f.op|dir [...] [-o outdir] [--json]
   operon watch f.op [args...]
   operon profile f.op
   operon crispr f.op --knockout gene [--json]
