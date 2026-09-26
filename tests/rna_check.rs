@@ -50,11 +50,11 @@ fn gene_scoped_and_missing_gene() {
 fn stem_vs_anywhere_scoping() {
     // target == file stem → anywhere-mode (whole text)
     let rep = apply_rna_checked(SRC, "edit f { replace \"return\" -> \"yield\" }", "f");
-    assert_eq!(rep.edits[0].gene_scoped, false);
+    assert!(!rep.edits[0].gene_scoped);
     assert_eq!(rep.edits[0].hits, 2, "both genes' returns replaced");
     // target == "anywhere" → same
     let rep2 = apply_rna_checked(SRC, "edit anywhere { replace \"alpha\" -> \"gamma\" }", "f");
-    assert_eq!(rep2.edits[0].gene_scoped, false);
+    assert!(!rep2.edits[0].gene_scoped);
     assert!(rep2.new_text.contains("gene gamma()"));
 }
 
