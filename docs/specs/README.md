@@ -9,6 +9,7 @@ area; conflicts resolve toward SPEC.md, then these files, then code comments.
 | [BIO-LAYER-POLICY.md](BIO-LAYER-POLICY.md) | W36 + W81 | landed (syntax freeze + kernel boundary) |
 | [COMPATIBILITY.md](COMPATIBILITY.md) | W63 + W64 | landed (2.x contract + deprecation lifecycle; DECISIONS ratification pending) |
 | [CELL-SCHEMA.md](CELL-SCHEMA.md) | W66 | landed (schema + validator: `operon lint --cell`) |
+| [FMT-CONFIG.md](FMT-CONFIG.md) | W47 | landed (indent/quotes + config file; byte-stability law corpus-wide; `--width` honestly deferred) |
 | SERIALIZATION.md | W34 | pending (contract drafted in ROADMAP-100; waits on W04 traits for full form) |
 | MACROS design | W35 | pending (docs/design/MACROS.md, ratified before any parser keyword) |
 | LSP-VERSIONING.md | W62 | pending (handshake carries version once W45/W46 land) |
