@@ -955,7 +955,8 @@ impl Parser {
             }
             "raise" => {
                 self.next();
-                // raise kind, msg   |   raise msg
+                let raise_line = self.line(); // W007: the raise statement's own line
+                                              // raise kind, msg   |   raise msg
                 let save = self.pos;
                 if let Tok::Ident(k) = self.peek().clone() {
                     if matches!(k.as_str(), "unfolded" | "missing" | "overflow" | "burned") {
@@ -964,14 +965,14 @@ impl Parser {
                             self.next();
                             let msg = self.parse_expr();
                             self.end_stmt();
-                            return Some(Stmt::Raise(Some(k), msg));
+                            return Some(Stmt::Raise(Some(k), msg, raise_line));
                         }
                         self.pos = save;
                     }
                 }
                 let msg = self.parse_expr();
                 self.end_stmt();
-                Some(Stmt::Raise(None, msg))
+                Some(Stmt::Raise(None, msg, raise_line))
             }
             "fate" => {
                 self.next();

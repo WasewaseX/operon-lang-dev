@@ -1,0 +1,15 @@
+# rt_p15a — W007: deep uncaught chain renders bounded and leaks nothing.
+# Run with --entry go (runner case arm): rc=1, chain capped at 64, no panic,
+# no host paths beyond the script path in the primary diagnostic.
+gene boom() {
+    raise overflow, "detonating at depth"
+}
+gene dig(n) {
+    if n <= 0 {
+        return boom()
+    }
+    return dig(n - 1)
+}
+gene go() {
+    return dig(5000)
+}

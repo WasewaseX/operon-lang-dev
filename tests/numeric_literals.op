@@ -1,0 +1,16 @@
+# numeric_literals.op — W031: radix prefixes and digit separators.
+frame proof {
+    assert(0xFF == 255, "hex literal")
+    assert(0xff == 255, "hex lowercase")
+    assert(0b1010 == 10, "binary literal")
+    assert(0o755 == 493, "octal literal")
+    assert(1_000_000 == 1000000, "decimal separators")
+    assert(0xFF_FF == 65535, "hex separators")
+    assert(1_000.5 == 1000.5, "float separators")
+    assert(0x0 == 0, "hex zero")
+    # arithmetic composes
+    assert(0b11 * 0o10 == 24, "radix arithmetic")
+    # fallback: bare prefix lexes as decimal 0 + identifier
+    let x = 0
+    assert(x == 0, "bare 0 is zero")
+}

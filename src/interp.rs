@@ -1171,17 +1171,19 @@ impl Interp {
                 }
                 Ok(Flow::Norm)
             }
-            Stmt::Raise(kind, msg) => {
+            Stmt::Raise(kind, msg, raise_line) => {
                 let mv = self.eval(env, msg)?;
                 let message = mv.display();
                 let k = kind.clone().unwrap_or_else(|| "unfolded".into());
                 Err(Stress {
                     kind: k,
                     message,
-                    // dx-r5 (audit D-3): raises carried line 0 — containment
-                    // notes rendered unlocated. cur_line is the last located
-                    // expression the interpreter executed (dx-r4 stamps).
-                    line: self.cur_line,
+                    // W007 (upgrades dx-r5): the raise statement carries its
+                    // OWN line — the primary diagnostic points at the raise,
+                    // not at the last located expression before it.
+                    line: *raise_line,
+                    // W007: the chain fills during unwinding (call_gene).
+                    chain: Vec::new(),
                 })
             }
             Stmt::Stress { kind, body, rescue } => {
@@ -1840,10 +1842,29 @@ impl Interp {
     }
 
     pub fn stress_map(&self, s: &Stress) -> Value {
+        // W007: the rescue binding now carries the gene call chain — innermost
+        // frame first, each frame a map {gene, line}. Insertion order here is
+        // the contract the oracle mirrors field-for-field. (Stress.line stays
+        // a Rust-side stderr-rendering field, dx-r3 — it is deliberately NOT
+        // in this map because the oracle does not stamp it.)
+        let chain = Value::List(Rc::new(RefCell::new(
+            s.chain
+                .iter()
+                .map(|(name, line)| {
+                    Value::Map(Rc::new(RefCell::new(crate::value::MapStore::from_vec(
+                        vec![
+                            (Value::Str("gene".into()), Value::Str(name.clone())),
+                            (Value::Str("line".into()), Value::Int(*line as i64)),
+                        ],
+                    ))))
+                })
+                .collect(),
+        )));
         Value::Map(Rc::new(RefCell::new(crate::value::MapStore::from_vec(
             vec![
                 (Value::Str("kind".into()), Value::Str(s.kind.clone())),
                 (Value::Str("message".into()), Value::Str(s.message.clone())),
+                (Value::Str("chain".into()), chain),
             ],
         ))))
     }
@@ -2868,9 +2889,28 @@ impl Interp {
                 format!("recursion depth limit ({}) exceeded", self.depth_limit),
             ));
         }
+        // W007: the traceback frame for THIS gene — (name, call-site line as
+        // of entry; cur_line is the call expression that brought us here and
+        // only changes again when new expressions execute, which cannot
+        // happen during unwinding). Appended to a stress ONLY on the error
+        // path, so the happy path pays one comparison, not an allocation.
+        let frame = (
+            def.name.clone().unwrap_or_else(|| "<lambda>".into()),
+            self.cur_line,
+        );
         let result = self.call_gene_inner(def, closure, args);
         self.depth -= 1;
-        result
+        match result {
+            Ok(v) => Ok(v),
+            Err(mut s) => {
+                // innermost frame appends first; bounded at 64 (note-cap
+                // discipline — an unbounded chain is an uncontained one)
+                if s.chain.len() < 64 {
+                    s.chain.push(frame);
+                }
+                Err(s)
+            }
+        }
     }
 
     /// reg-bio-2 (D9): GRN maps emit in SORTED key order. HashMap iteration

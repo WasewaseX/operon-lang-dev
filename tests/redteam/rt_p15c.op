@@ -1,0 +1,14 @@
+# rt_p15c — W007: the capture cap is a hard contract — a 10000-deep unwind
+# keeps exactly 64 frames (unbounded chains would be an uncontained surface).
+gene rec(n) {
+    if n <= 0 {
+        raise overflow, "bottom of the well"
+    }
+    return rec(n - 1)
+}
+stress {
+    let v = rec(10000)
+} rescue (e) {
+    print("capped chain length: {len(e.chain)}")
+    print("innermost: {e.chain[0].gene}")
+}
