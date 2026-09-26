@@ -288,10 +288,32 @@ fn real_main() {
             let src = std::fs::read_to_string(&file)
                 .unwrap_or_else(|e| die(&format!("cannot read {}: {}", file, e)));
             let prog = parser::parse(&src);
+            // W39 + fuzz finding (2026-09-26): `{:#?}` pretty-Debug grows
+            // quadratically with AST nesting depth (indent × depth), so a
+            // pathological-but-parseable input (thousands of `(`) turns `ast`
+            // into a hang. check() parses the same file in milliseconds — the
+            // parser is fine, the PRINTER is the problem. Guard: measure
+            // source nesting depth; beyond 400 levels print compact Debug.
+            let depth = src
+                .bytes()
+                .fold((0usize, 0usize), |(d, m), b| match b {
+                    b'(' | b'{' | b'[' => {
+                        let d = d + 1;
+                        (d, m.max(d))
+                    }
+                    b')' | b'}' | b']' => (d.saturating_sub(1), m),
+                    _ => (d, m),
+                })
+                .1;
+            let pretty = depth <= 400;
             if json {
                 // v1: escaped Debug payload + structured counts; a stable-schema
                 // JSON printer is tracked as W39.2 in ROADMAP-100.
-                let dbg = format!("{:#?}", prog.stmts);
+                let dbg = if pretty {
+                    format!("{:#?}", prog.stmts)
+                } else {
+                    format!("{:?}", prog.stmts)
+                };
                 println!(
                     "{{\"file\":\"{}\",\"format\":\"debug-v1\",\"stmts\":{},\"notes\":{},\"ast\":\"{}\"}}",
                     tools::json_escape(&file),
@@ -303,7 +325,15 @@ fn real_main() {
                 for n in &prog.notes {
                     println!("[note] rung {}: line {}: {}", n.rung, n.line, n.message);
                 }
-                println!("{:#?}", prog.stmts);
+                if pretty {
+                    println!("{:#?}", prog.stmts);
+                } else {
+                    eprintln!(
+                        "[ast] nesting depth {} exceeds 400 — compact dump (pretty Debug is quadratic on deep trees)",
+                        depth
+                    );
+                    println!("{:?}", prog.stmts);
+                }
             }
         }
         // W38 (ROADMAP-100): explain — what did Total Grammar do to my file?
