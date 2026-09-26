@@ -245,7 +245,7 @@ Requires: rustc (≥1.70), gcc, g++. One build-dependency: the `cc` crate compil
 ## Language
 
 - **Values**: null, bool, int(i64, overflow = catchable Stress), float, str (with `"interp {expr}"`), list, map (insertion-ordered), gene (closure), native, **Option/Result variants** (`some/none/ok/err` — expected failures are values, D-014).
-- **Control**: `if/elif/else`, `while`, `loop`, `for…in`, `match/case` (literals, binding, wildcard), `for x in xs if cond collect body` comprehensions, `break/continue`, `return`.
+- **Control**: `if/elif/else`, `while`, `loop`, `for…in`, `match/case` (W02 match-v2: variant payload patterns `Some(x)`/`Ok(v)`, list patterns `[a, *rest]`, map patterns `{k, j: p}`, or-patterns `a | b`, guards `p if cond` — a shape that cannot match falls through, never fails), `for x in xs if cond collect body` comprehensions, `break/continue`, `return`.
 - **Regulation as execution**: `regulate` networks gate calls; `operon` units give polycistronic transcription with polarity, and opt-in Rho-dependent termination with a ribosome-queue coupling shield (`rho.termination` in a `.cell`).
 - **Operators**: `**` (right-assoc pow), `& | ^ << >> ~` bitwise, `cond ? a : b` ternary, `e?!` Result/Option propagation (Rust-style: Some/Ok unwraps, None/Err returns from the gene — a return, never a failure), `int % int` → int.
 - **Genes**: named, anonymous, lambdas, defaults, closures, recursion, `guard` clauses, marks — plus **phenotype classes** (`phenotype P { let f = 0; gene init() {…} }`, `new P(...)`, `self`, `phenotype C from P`) and **sequence generators** (`sequence s() { yield v }` with `.next()`/`.collect()`, lazy worker-cell pull).

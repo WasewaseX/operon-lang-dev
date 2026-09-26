@@ -244,6 +244,30 @@ pub enum MatchPat {
     Multi(Vec<Expr>), // comma-separated literals
     Bind(String),     // identifier binds value
     Wild,             // _
+    /// W02 (match-v2): variant constructor pattern — `Some(p)`, `None`,
+    /// `Ok(p)`, `Err(p)`. The payload is itself a pattern (nestable);
+    /// `None` payload = tag-only form (matches the tag with any payload).
+    /// Unknown capitalized tags fall back to Bind with a note (Total
+    /// Grammar: never a rejection).
+    Variant(String, Option<Box<MatchPat>>),
+    /// W02: list pattern — `[a, b, *rest]`. Element patterns nest; `*rest`
+    /// binds the remaining tail as a List. Without `*rest` the length must
+    /// match exactly.
+    ListPat {
+        elems: Vec<MatchPat>,
+        rest: Option<String>,
+    },
+    /// W02: map pattern — `{x, y: p}`. Each key must be present; an
+    /// optional sub-pattern is matched against the value.
+    MapPat {
+        keys: Vec<(String, Option<Box<MatchPat>>)>,
+    },
+    /// W02: or-pattern — `p1 | p2 | ...`; alternatives tried in order,
+    /// first match binds.
+    Or(Vec<MatchPat>),
+    /// W02: guarded arm — `pat if cond`; the condition sees the pattern's
+    /// bindings. Guard false (or contained) = arm misses, matching moves on.
+    Guard(Box<MatchPat>, Expr),
 }
 
 /// L1a: destructuring patterns (let / for). `Bind` binds the whole item;

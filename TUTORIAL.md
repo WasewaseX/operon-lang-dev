@@ -352,6 +352,36 @@ key means, right at the boundary. Reserve `unwrap()` (stress kind `unwrap`) for 
 programmer bugs — and `stress/rescue` for the exceptional tier. Hierarchy: null+note →
 Option/Result → Stress → hard exit (SPEC §9).
 
+### 8b. Pattern matching: shape-check and bind in one step (W02)
+
+`match` is the structured way to consume Options/Results and other shaped data — each
+`case` is a pattern that checks a shape AND binds its pieces in one step (SPEC §5a):
+
+```operon
+gene main() {
+    let r = find(db, "k2")
+    match r {
+        case Ok(v) if v > 100 { promote("huge:", v) }   # guard sees the binding
+        case Ok(v)            { promote("ok:", v) }
+        case Err(m)           { promote("failed:", m) }
+        case _                { promote("not even a Result") }
+    }
+    # list and map shapes work the same way
+    let point = [3, 7]
+    match point {
+        case [0, y]    { promote("on the y axis at", y) }
+        case [x, 0]    { promote("on the x axis at", x) }
+        case [x, *rest]{ promote("general:", x, rest) }
+    }
+}
+```
+
+The important contract: a pattern that cannot match (a `Some` pattern against `None`,
+the wrong list length, a missing map key) makes that arm miss — matching moves on and
+never fails the run. `|` alternatives (`case Ok(n) | Ok(2)`) try in order, first hit
+binds; a `case _` arm is the catch-all. Missing arms = silent fall-through, exactly
+like Total Grammar everywhere else.
+
 ## 9. The REPL
 
 ```sh

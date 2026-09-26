@@ -2165,6 +2165,64 @@ class P:
         return ("interp", parts)
 
     def pattern(self):
+        # W02 (match-v2) mirror of parser.rs parse_pattern: atom | or-chain |
+        # guard, with the legacy literal comma-run kept verbatim. Total
+        # Grammar: a malformed pattern degrades to wildcard/bind + note.
+        first = self.pattern_atom()
+        # Legacy literal comma-run — only for a leading literal; a
+        # non-literal in the run discards the collected literals (legacy
+        # edge behavior preserved op-for-op with the Rust core).
+        if first[0] == "lit":
+            t = self.peek()
+            if t[0] == "SYM" and t[1] == ",":
+                lits = [first]
+                while True:
+                    t = self.peek()
+                    if not (t[0] == "SYM" and t[1] == ","):
+                        break
+                    self.next()
+                    t2 = self.peek()
+                    neg2 = t2[0] == "SYM" and t2[1] == "-"
+                    if neg2:
+                        self.next()
+                        t2 = self.peek()
+                    if t2[0] in ("INT", "FLOAT"):
+                        self.next()
+                        lits.append(("lit", -t2[1] if neg2 else t2[1]))
+                    elif t2[0] == "STR" and not neg2:
+                        self.next()
+                        lits.append(("lit", t2[1]))
+                    else:
+                        return self.pattern_atom()
+                return lits[0] if len(lits) == 1 else ("multi", lits)
+        # Or-pattern chain: `p1 | p2 | ...` — newlines allowed before any
+        # alternative (multi-line chains), mirror of parser.rs.
+        while self.peek()[0] == "NL":
+            self.next()
+        t = self.peek()
+        if t[0] == "SYM" and t[1] == "|":
+            alts = [first]
+            while True:
+                while self.peek()[0] == "NL":
+                    self.next()
+                t = self.peek()
+                if not (t[0] == "SYM" and t[1] == "|"):
+                    break
+                self.next()
+                alts.append(self.pattern_atom())
+                while self.peek()[0] == "NL":
+                    self.next()
+            pat = ("or", alts)
+        else:
+            pat = first
+        # Guarded arm: `pat if cond` — applies to the WHOLE or-chain.
+        if self.at_ident("if"):
+            self.next()
+            cond = self.expr()
+            return ("guard", pat, cond)
+        return pat
+
+    def pattern_atom(self):
         t = self.peek()
         neg = t[0] == "SYM" and t[1] == "-"
         if neg:
@@ -2172,31 +2230,71 @@ class P:
             t = self.peek()
         if t[0] in ("INT", "FLOAT"):
             self.next()
-            lits = [("lit", -t[1] if neg else t[1])]
-            while self.peek() == ("SYM", ",", self.peek()[2]):
-                self.next()
-                t2 = self.peek()
-                neg2 = t2[0] == "SYM" and t2[1] == "-"
-                if neg2:
-                    self.next()
-                    t2 = self.peek()
-                if t2[0] in ("INT", "FLOAT"):
-                    self.next()
-                    lits.append(("lit", -t2[1] if neg2 else t2[1]))
-                elif t2[0] == "STR" and not neg2:
-                    self.next()
-                    lits.append(("lit", t2[1]))
-                else:
-                    break
-            return lits[0] if len(lits) == 1 else ("multi", lits)
-        if t[0] == "STR" and not neg:
+            return ("lit", -t[1] if neg else t[1])
+        if t[0] == "STR":
+            # W02 parity fix: '-' before a string pattern is ignored with a
+            # note (was: oracle said "dangling '-'" and went wildcard while
+            # the Rust core kept the literal — latent corner divergence,
+            # closed by mirroring the Rust behavior).
+            if neg:
+                self.note(t[2], 4, "'-' before a string pattern ignored")
             self.next()
             return ("lit", t[1])
-        if neg:
-            self.note(t[2], 4, "dangling '-' in pattern treated as wildcard")
+        if t[0] == "SYM" and t[1] == "[" and not neg:
             self.next()
-            return ("wild",)
-        if t[0] == "IDENT":
+            elems = []
+            rest = None
+            while True:
+                while self.peek()[0] == "NL":
+                    self.next()
+                t2 = self.peek()
+                if t2[0] == "SYM" and t2[1] == "]":
+                    self.next()
+                    break
+                if t2[0] == "EOF":
+                    self.note(t2[2], 4, "pattern bracket auto-closed")
+                    break
+                if t2[0] == "SYM" and t2[1] == "*":
+                    self.next()
+                    t3 = self.peek()
+                    if t3[0] == "IDENT":
+                        self.next()
+                        rest = t3[1]
+                    else:
+                        self.note(t3[2], 4, "'*' in pattern needs a name; tail skipped")
+                elif t2[0] == "SYM" and t2[1] == ",":
+                    self.next()
+                else:
+                    elems.append(self.pattern_atom())
+            return ("list", elems, rest)
+        if t[0] == "SYM" and t[1] == "{" and not neg:
+            self.next()
+            keys = []
+            while True:
+                while self.peek()[0] == "NL":
+                    self.next()
+                t2 = self.peek()
+                if t2[0] == "SYM" and t2[1] == "}":
+                    self.next()
+                    break
+                if t2[0] == "EOF":
+                    self.note(t2[2], 4, "pattern brace auto-closed")
+                    break
+                if t2[0] == "SYM" and t2[1] == ",":
+                    self.next()
+                elif t2[0] == "IDENT":
+                    self.next()
+                    sub = None
+                    t3 = self.peek()
+                    if t3[0] == "SYM" and t3[1] == ":":
+                        self.next()
+                        sub = self.pattern_atom()
+                    keys.append((t2[1], sub))
+                else:
+                    self.note(t2[2], 4, f"'{t2[1]}' is not a map-pattern key; skipped")
+                    self.next()
+            return ("map", keys)
+        if t[0] == "IDENT" and not neg:
             if t[1] == "_":
                 self.next()
                 return ("wild",)
@@ -2206,8 +2304,66 @@ class P:
             if t[1] == "null":
                 self.next()
                 return ("null",)
+            if t[1] in ("Some", "None", "Ok", "Err"):
+                self.next()
+                payload = None
+                t2 = self.peek()
+                if t2[0] == "SYM" and t2[1] == "(":
+                    self.next()
+                    line = t2[2]
+                    t3 = self.peek()
+                    if t3[0] == "SYM" and t3[1] == ")":
+                        self.next()
+                        self.note(line, 4, "empty variant payload pattern — treated as tag-only")
+                    else:
+                        payload = self.pattern_atom()
+                        t3 = self.peek()
+                        if t3[0] == "SYM" and t3[1] == ",":
+                            self.note(
+                                line, 4,
+                                "variant payload is a single value; extra pattern elements ignored",
+                            )
+                            while not (
+                                (self.peek()[0] == "SYM" and self.peek()[1] == ")")
+                                or self.peek()[0] == "EOF"
+                            ):
+                                self.next()
+                        t3 = self.peek()
+                        if t3[0] == "SYM" and t3[1] == ")":
+                            self.next()
+                        else:
+                            self.note(self.peek()[2], 4, "variant payload pattern auto-closed")
+                return ("variant", t[1], payload)
+            if t[1][:1].isupper():
+                # Unknown capitalized tag: soft fallback to a binding. A
+                # parenthesized payload is consumed and ignored so the token
+                # stream stays aligned (mirror of parser.rs).
+                self.note(t[2], 4, f"unknown variant tag '{t[1]}' — pattern treated as a binding")
+                self.next()
+                t2 = self.peek()
+                if t2[0] == "SYM" and t2[1] == "(":
+                    self.note(t[2], 4, "unknown tag payload ignored (bound as a whole)")
+                    self.next()
+                    if not (self.peek()[0] == "SYM" and self.peek()[1] == ")"):
+                        self.pattern_atom()
+                        t3 = self.peek()
+                        if t3[0] == "SYM" and t3[1] == ",":
+                            while not (
+                                (self.peek()[0] == "SYM" and self.peek()[1] == ")")
+                                or self.peek()[0] == "EOF"
+                            ):
+                                self.next()
+                    if self.peek()[0] == "SYM" and self.peek()[1] == ")":
+                        self.next()
+                    else:
+                        self.note(self.peek()[2], 4, "unknown tag payload auto-closed")
+                return ("bind", t[1])
             self.next()
             return ("bind", t[1])
+        if neg:
+            self.note(t[2], 4, "dangling '-' in pattern treated as wildcard")
+            self.next()
+            return ("wild",)
         self.note(t[2], 4, "pattern treated as wildcard")
         self.next()
         return ("wild",)
@@ -2498,6 +2654,104 @@ class Interp:
                         self.note(4, f"rebinding '{key}'")
                     env[key] = None
 
+    # ------------------------------------------------------------- W02 match-v2
+    def eval_pat_val(self, env, l):
+        """Mirror of the Rust pattern-literal eval: `?!` propagation is a
+        return (never contained); any other stress becomes a note + null."""
+        try:
+            return self.eval(env, l)
+        except Stress as st:
+            if st.prop is not None:
+                raise
+            self.note(4, f"pattern evaluation contained: [{st.kind}] {st.message}")
+            return None
+
+    def match_pat(self, env, bindings, sv, pat):
+        """W02 (match-v2) recursive pattern matcher — op-for-op mirror of
+        interp.rs match_pat. Total Grammar: a pattern never hard-fails; a
+        non-matching shape simply misses; only `?!` propagation escapes."""
+        k = pat[0]
+        if k == "wild":
+            return True
+        if k == "bind":
+            bindings[pat[1]] = sv
+            return True
+        if k == "lit":
+            # literal evals in the arm scope so same-arm bindings are visible
+            gev = self.new_scope(env)
+            gev.update(bindings)
+            return deep_eq(sv, self.eval_pat_val(gev, pat))
+        if k == "null":
+            return deep_eq(sv, None)
+        if k == "multi":
+            # legacy literal comma-run — any literal hits (first wins)
+            gev = self.new_scope(env)
+            gev.update(bindings)
+            for lt in pat[1]:
+                if deep_eq(sv, self.eval_pat_val(gev, lt)):
+                    return True
+            return False
+        if k == "or":
+            # alternatives in order, first hit binds; a failed alternative's
+            # partial captures never leak (scratch dict, lifted on hit)
+            for alt in pat[1]:
+                scratch = {}
+                if self.match_pat(env, scratch, sv, alt):
+                    bindings.update(scratch)
+                    return True
+            return False
+        if k == "variant":
+            _, tag, payload = pat
+            if isinstance(sv, Variant) and sv.tag == tag:
+                if payload is None:
+                    return True  # tag-only form
+                if sv.payload is None:
+                    return False  # payload pattern vs payload-less value
+                return self.match_pat(env, bindings, sv.payload, payload)
+            return False
+        if k == "list":
+            _, elems, rest = pat
+            if not isinstance(sv, list):
+                return False
+            if rest is None:
+                if len(sv) != len(elems):
+                    return False
+            elif len(sv) < len(elems):
+                return False
+            for i, ep in enumerate(elems):
+                if not self.match_pat(env, bindings, sv[i], ep):
+                    return False
+            if rest is not None:
+                bindings[rest] = sv[len(elems):]
+            return True
+        if k == "map":
+            _, keys = pat
+            if not isinstance(sv, dict):
+                return False
+            for key, sub in keys:
+                if key not in sv:
+                    return False
+                v = sv[key]
+                if sub is None:
+                    bindings[key] = v
+                elif not self.match_pat(env, bindings, v, sub):
+                    return False
+            return True
+        if k == "guard":
+            _, p, cond = pat
+            if not self.match_pat(env, bindings, sv, p):
+                return False
+            gev = self.new_scope(env)
+            gev.update(bindings)
+            try:
+                return truthy(self.eval(gev, cond))
+            except Stress as st:
+                if st.prop is not None:
+                    raise  # W06: propagation is a return, never a failure
+                self.note(4, f"pattern guard contained: [{st.kind}] {st.message}")
+                return False
+        return False
+
     def exec_block(self, env, stmts):
         for s in stmts:
             self.exec_stmt(env, s)
@@ -2750,21 +3004,13 @@ class Interp:
             _, subj, cases = s
             sv = self.eval(env, subj)
             for pat, body in cases:
-                hit = False
-                if pat[0] == "wild":
-                    hit = True
-                elif pat[0] == "multi":
-                    hit = any(deep_eq(sv, self.eval(env, lt)) for lt in pat[1])
-                elif pat[0] in ("lit", "null"):
-                    lv = None if pat[0] == "null" else self.eval(env, pat)
-                    hit = deep_eq(sv, lv)
-                elif pat[0] == "bind":
+                # W02 (match-v2): one binding dict per arm; captures live only
+                # in the arm that hits (mirror of interp.rs Stmt::Match).
+                bindings = {}
+                if self.match_pat(env, bindings, sv, pat):
                     child = self.new_scope(env)
-                    child[pat[1]] = sv
+                    child.update(bindings)
                     self.exec_block(child, body)
-                    return
-                if hit:
-                    self.exec_block(self.new_scope(env), body)
                     return
         elif k == "use":
             modv = self.load_module(s[1])

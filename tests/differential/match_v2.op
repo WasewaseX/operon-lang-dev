@@ -1,0 +1,246 @@
+# match_v2 — W02 differential pin: pattern matching on both engines,
+# byte-identical. Variant payload capture (incl. nesting), tag-only forms,
+# family distinction, list patterns with *rest tails, map patterns with
+# sub-patterns, or-pattern first-hit binding, guards (binding visibility,
+# false-guard fall-through, contained guard stress), legacy literal runs,
+# arm order, clean fall-through, and W06 `?!` propagation out of a guard.
+print("== variants ==")
+match some(5) {
+    case Some(x) {
+        print("some:", x)
+    }
+    case None {
+        print("none")
+    }
+}
+match none() {
+    case Some(x) {
+        print("some:", x)
+    }
+    case None {
+        print("none-tag")
+    }
+}
+match ok(1) {
+    case Some(x) {
+        print("fam-bug")
+    }
+    case Ok(v) {
+        print("ok:", v)
+    }
+}
+match some(some(3)) {
+    case Some(Some(y)) {
+        print("nested:", y)
+    }
+    case Some(x) {
+        print("outer:", x)
+    }
+}
+match err("boom") {
+    case Ok(v) {
+        print("ok-arm")
+    }
+    case Err(m) {
+        print("err:", m)
+    }
+}
+match some(9) {
+    case Some {
+        print("bare-tag")
+    }
+}
+out = "missed"
+match none() {
+    case Some(x) {
+        out = "hit"
+    }
+}
+print("payload-vs-none:", out)
+
+print("== lists ==")
+match [1, 2, 3] {
+    case [1, a, 3] {
+        print("mid:", a)
+    }
+}
+match [1, 2, 3, 4] {
+    case [1, *t] {
+        print("tail:", t)
+    }
+}
+match [1] {
+    case [1, 2] {
+        print("len-bug")
+    }
+    case [x] {
+        print("one:", x)
+    }
+}
+match 5 {
+    case [a] {
+        print("list-bug")
+    }
+    case 5 {
+        print("scalar-wins")
+    }
+}
+match [] {
+    case [] {
+        print("empty-list")
+    }
+    case [x] {
+        print("one-elem")
+    }
+}
+
+print("== maps ==")
+let m = {name: "op", v: 7}
+match m {
+    case {name} {
+        print("key:", name)
+    }
+}
+match m {
+    case {v: x} {
+        print("sub:", x)
+    }
+}
+match m {
+    case {v: 7} {
+        print("literal-sub")
+    }
+}
+match m {
+    case {absent} {
+        print("missing-key-bug")
+    }
+    case {name} {
+        print("fallback:", name)
+    }
+}
+match "s" {
+    case {k} {
+        print("map-vs-scalar-bug")
+    }
+    case "s" {
+        print("scalar-second")
+    }
+}
+
+print("== or ==")
+match 2 {
+    case 1 | 2 | 3 {
+        print("or-low")
+    }
+    case _ {
+        print("or-high")
+    }
+}
+match ok(2) {
+    case Ok(n) | Ok(2) {
+        print("or-first-binds:", n)
+    }
+}
+match [5] {
+    case [1] | [x] {
+        print("or-list:", x)
+    }
+}
+
+print("== guards ==")
+match some(5) {
+    case Some(x) if x > 3 {
+        print("guard-big:", x)
+    }
+    case Some(x) {
+        print("guard-small:", x)
+    }
+}
+match some(2) {
+    case Some(x) if x > 3 {
+        print("guard-big:", x)
+    }
+    case Some(x) {
+        print("guard-small:", x)
+    }
+}
+gene boom() {
+    raise "kaboom"
+}
+match some(1) {
+    case Some(x) if boom() {
+        print("guard-crash-bug")
+    }
+    case Some(x) {
+        print("guard-contained:", x)
+    }
+}
+match err("late") {
+    case Ok(n) | Err(m) if m == "late" {
+        print("guard-or:", m)
+    }
+}
+
+print("== order + legacy ==")
+match 5 {
+    case _ {
+        print("wild-first")
+    }
+    case 5 {
+        print("five-shadowed")
+    }
+}
+match 2 {
+    case 1, 2 {
+        print("legacy-run")
+    }
+    case _ {
+        print("legacy-miss")
+    }
+}
+match 99 {
+    case 1 {
+        print("nope")
+    }
+    case 2 {
+        print("nope")
+    }
+}
+print("fallthrough-done")
+
+print("== propagation ==")
+gene guard_prop() {
+    match some(none()) {
+        case Some(v) if (v?!) {
+            return "inner-arm"
+        }
+        case Some(v) {
+            return "outer-arm"
+        }
+    }
+    return "after"
+}
+print("prop:", guard_prop())
+
+print("== dispatch ==")
+gene classify(v) {
+    out = "?"
+    match v {
+        case Ok(n) if n > 100 {
+            out = "huge"
+        }
+        case Ok(n) {
+            out = "ok:" + str(n)
+        }
+        case Err(m) {
+            out = "err:" + m
+        }
+        case _ {
+            out = "other"
+        }
+    }
+    return out
+}
+print(classify(ok(5)), classify(ok(500)), classify(err("no")), classify(3))
+print("match_v2 differential complete")
