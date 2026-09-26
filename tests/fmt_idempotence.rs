@@ -97,6 +97,7 @@ fn fmt_idempotence_corpus_indent4_single_quotes() {
     let cfg = FmtConfig {
         indent: 4,
         quotes: QuoteMode::Single,
+        ..FmtConfig::default()
     };
     for f in corpus() {
         let src = std::fs::read_to_string(&f).unwrap_or_default();
@@ -110,6 +111,7 @@ fn fmt_quote_decision_is_lossless_and_idempotent() {
     let cfg_s = FmtConfig {
         indent: 2,
         quotes: QuoteMode::Single,
+        ..FmtConfig::default()
     };
     let out = format_program_with(&parser::parse("show(\"plain text\")"), &cfg_s);
     assert!(
@@ -146,6 +148,7 @@ fn fmt_indent_option_changes_nesting_only() {
         &FmtConfig {
             indent: 4,
             quotes: QuoteMode::Double,
+            ..FmtConfig::default()
         },
     );
     assert!(
@@ -163,10 +166,13 @@ fn fmt_config_parser_keys_bounds_and_unknowns() {
     assert_eq!(cfg.indent, 4);
     assert_eq!(cfg.quotes, QuoteMode::Single);
     assert!(unk.is_empty());
-    // out-of-bounds and unknown keys are reported, not fatal
+    // out-of-bounds and unknown keys are reported, not fatal.
+    // (W47-v2: `width` is now a KNOWN key — 80 parses; the unknown-report
+    // coverage moved to a genuinely unknown key `wrap`.)
     let (cfg2, unk2) =
-        operon::tools::parse_fmt_config("indent = 99\nquotes = triple\nwidth = 80\n");
+        operon::tools::parse_fmt_config("indent = 99\nquotes = triple\nwidth = 80\nwrap = yes\n");
     assert_eq!(cfg2.indent, 2); // default preserved
     assert_eq!(cfg2.quotes, QuoteMode::Double);
+    assert_eq!(cfg2.width, Some(80)); // W47-v2: width is a real key now
     assert_eq!(unk2.len(), 3, "all three problems reported: {unk2:?}");
 }

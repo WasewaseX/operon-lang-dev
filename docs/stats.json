@@ -5,6 +5,7 @@
   "build",
   "check",
   "crispr",
+  "doc",
   "explain",
   "fix",
   "fmt",
@@ -93,16 +94,18 @@
   "textDocument/documentSymbol",
   "textDocument/formatting",
   "textDocument/hover",
+  "textDocument/prepareRename",
   "textDocument/publishDiagnostics",
   "textDocument/references",
+  "textDocument/rename",
   "textDocument/semanticTokens",
   "textDocument/signatureHelp"
  ],
- "proof_files": 90,
+ "proof_files": 94,
  "proof_totals": {
-  "asserts": 99,
-  "files": 113,
-  "proofs": 99,
+  "asserts": 103,
+  "files": 122,
+  "proofs": 103,
   "source": "bin/operon"
  },
  "redteam_files": 97,
@@ -178,6 +181,6 @@
    "module": "testing"
   }
  ],
- "test_op_files": 91,
+ "test_op_files": 95,
  "version": "2.2.0"
 }

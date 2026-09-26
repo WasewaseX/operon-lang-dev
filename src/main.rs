@@ -89,6 +89,7 @@ fn real_main() {
     // W47 (ROADMAP-100): formatter configuration — file first, flags override
     let mut fmt_indent: Option<usize> = None;
     let mut fmt_quotes: Option<tools::QuoteMode> = None;
+    let mut fmt_width: Option<usize> = None; // W47-v2: 0 = explicitly off
     let mut fmt_config_path: Option<String> = None;
 
     let mut i = 0;
@@ -282,6 +283,15 @@ fn real_main() {
                         .cloned()
                         .unwrap_or_else(|| die("--fmt-config needs a file path")),
                 );
+            }
+            // W47-v2: soft line width. 0 = explicitly off (overrides the
+            // config file); absent = off. N in 1..=10000.
+            "--width" => {
+                i += 1;
+                match rest.get(i).map(|s| s.parse::<usize>()) {
+                    Some(Ok(n)) if n <= 10_000 => fmt_width = Some(n),
+                    _ => die("--width needs a number 0..=10000 (0 = off, e.g. --width 80)"),
+                }
             }
             "--" => {
                 // dx-r6 (loop-5-a audit MED): POSIX `--` separator — everything
@@ -769,6 +779,10 @@ fn real_main() {
             }
             if let Some(q) = fmt_quotes {
                 cfg.quotes = q;
+            }
+            // W47-v2: flag > file > default. 0 means explicitly off.
+            if let Some(n) = fmt_width {
+                cfg.width = if n == 0 { None } else { Some(n) };
             }
             let src = std::fs::read_to_string(&file).unwrap_or_default();
             let prog = parser::parse(&src);
@@ -2003,7 +2017,7 @@ usage:
                   [--allow-run cmd] [--allow-py module] [--allow-exit] [--allow-env var] [--allow-all]
   operon check f.op [--format diag|score] [--nmd | --nmd=purge] [--json]
   operon test [paths...] [--json] [--filter substr] [--list] [--repeat n]
-  operon fmt f.op [--write] [--indent N] [--quotes single|double] [--fmt-config f]
+  operon fmt f.op [--write] [--indent N] [--quotes single|double] [--width N] [--fmt-config f]
   operon fix f.op [--write] [--json]   # migrate legacy surface (const→let, s::→dot), dry-run default
   operon ast f.op [--json]
   operon explain f.op [--json] [--strict]

@@ -9,10 +9,10 @@ README/SPEC/BENCH are forbidden — link here instead.
 - **Std modules**: 16 (args, bio, collections, csv, fmt, fs, iter, json, math, motifs, random, seq, serialize, set, strings, testing)
 - **Std functions (.op-level `gene` defs)**: 157
 - **Red-team payload files**: 97
-- **Proof files**: 90 (of 91 test .op files)
-- **Proof run** (bin/operon): 113 files, 99 proofs, 99 asserts
-- **CLI subcommands**: ast, bench, build, check, crispr, explain, fix, fmt, graph, ir, keywords, lint, profile, repl, rna, run, test, version, watch
-- **LSP methods**: initialize, shutdown, textDocument/completion, textDocument/definition, textDocument/didChange, textDocument/didClose, textDocument/didOpen, textDocument/documentSymbol, textDocument/formatting, textDocument/hover, textDocument/publishDiagnostics, textDocument/references, textDocument/semanticTokens, textDocument/signatureHelp
+- **Proof files**: 94 (of 95 test .op files)
+- **Proof run** (bin/operon): 122 files, 103 proofs, 103 asserts
+- **CLI subcommands**: ast, bench, build, check, crispr, doc, explain, fix, fmt, graph, ir, keywords, lint, profile, repl, rna, run, test, version, watch
+- **LSP methods**: initialize, shutdown, textDocument/completion, textDocument/definition, textDocument/didChange, textDocument/didClose, textDocument/didOpen, textDocument/documentSymbol, textDocument/formatting, textDocument/hover, textDocument/prepareRename, textDocument/publishDiagnostics, textDocument/references, textDocument/rename, textDocument/semanticTokens, textDocument/signatureHelp
 
 ## Std module inventory
 
