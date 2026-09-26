@@ -12,7 +12,17 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 
 fn run_op(src: &str) -> (i32, String, String) {
-    let dir = std::env::temp_dir().join(format!("operon_sec_{}", std::process::id()));
+    // Per-CALL unique dir (see tests/grn_trace.rs run_trace note): a shared
+    // per-pid dir let a finishing test's remove_dir delete another test's
+    // just-created EMPTY dir mid-flight (Windows CI race, 2026-09-27).
+    let dir = std::env::temp_dir().join(format!(
+        "operon_sec_{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .subsec_nanos()
+    ));
     std::fs::create_dir_all(&dir).unwrap();
     let f = dir.join(format!(
         "t{}_{}.op",
@@ -149,7 +159,15 @@ stress {
 fn module_oracle_closed() {
     // C-7: real vs ghost outside paths must be indistinguishable — ONE
     // unified failure string for the traversal name class.
-    let dir = std::env::temp_dir().join(format!("operon_oracle_{}", std::process::id()));
+    // Per-CALL unique dir (race note in run_op above).
+    let dir = std::env::temp_dir().join(format!(
+        "operon_oracle_{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .subsec_nanos()
+    ));
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
         dir.join("prog.op"),
