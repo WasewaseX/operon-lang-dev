@@ -162,6 +162,35 @@ pub struct SeqState {
     pub stress: Option<(String, String)>,
 }
 
+/// W06 (D-014): the four Option/Result variant tags. Option = Some|None,
+/// Result = Ok|Err — families are distinct (Some(x) != Ok(x)) so a value
+/// always remembers which contract it carries.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum VTag {
+    SomeV,
+    NoneV,
+    OkV,
+    ErrV,
+}
+
+impl VTag {
+    /// Option family (Some/None) vs Result family (Ok/Err).
+    pub fn family(self) -> &'static str {
+        match self {
+            VTag::SomeV | VTag::NoneV => "option",
+            VTag::OkV | VTag::ErrV => "result",
+        }
+    }
+    pub fn tag_name(self) -> &'static str {
+        match self {
+            VTag::SomeV => "Some",
+            VTag::NoneV => "None",
+            VTag::OkV => "Ok",
+            VTag::ErrV => "Err",
+        }
+    }
+}
+
 #[derive(Clone)]
 pub enum Value {
     Null,
@@ -174,10 +203,13 @@ pub enum Value {
     Gene(Arc<GeneDef>, Option<EnvRef>),
     Seq(Arc<GeneDef>, Rc<RefCell<SeqState>>),
     Obj(Arc<crate::ast::PhenoDef>, MapRef),
+    /// W06 (D-014): first-class Option/Result variants. NoneV carries no
+    /// payload; the other three always do.
+    Variant(VTag, Option<Box<Value>>),
 }
 
 pub struct Stress {
-    pub kind: String, // unfolded | missing | overflow | burned | interference
+    pub kind: String, // unfolded | missing | overflow | burned | interference | unwrap
     pub message: String,
     /// dx-r3 (re-audit): source line the hard error originated from — the
     /// primary diagnostic gets a location, matching mainstream norms.
@@ -188,6 +220,14 @@ pub struct Stress {
     /// via stress_map ("chain" key). Capped at 64 frames (note-cap
     /// discipline): a bounded chain is a contained chain.
     pub chain: Vec<(String, usize)>,
+    /// W06 (D-014): propagation marker. Some(_) means this Stress is NOT a
+    /// failure — it is a `?!` propagation unwinding to the nearest enclosing
+    /// gene boundary, carrying the variant value to return. The payload is
+    /// the marker itself: no user path (raise/stress statements, builtins)
+    /// can construct a Stress with a payload, so rescue can never catch or
+    /// spoof propagation. Every catch site must convert payload-carrying
+    /// Stress into Flow::Ret BEFORE kind matching.
+    pub prop: Option<Value>,
 }
 
 impl Stress {
@@ -197,6 +237,7 @@ impl Stress {
             message: message.into(),
             line: 0,
             chain: Vec::new(),
+            prop: None,
         }
     }
     /// dx-r3: a located hard error (call sites inside eval stamp cur_line).
@@ -206,6 +247,19 @@ impl Stress {
             message: message.into(),
             line,
             chain: Vec::new(),
+            prop: None,
+        }
+    }
+    /// W06 (D-014): a propagation signal — a variant value unwinding to the
+    /// nearest enclosing gene boundary, where it becomes the gene's return
+    /// value. Never contained by rescue (catch sites pre-arm on `prop`).
+    pub fn prop(line: usize, value: Value) -> Self {
+        Stress {
+            kind: "propagate".to_string(),
+            message: String::new(),
+            line,
+            chain: Vec::new(),
+            prop: Some(value),
         }
     }
 }
@@ -223,6 +277,7 @@ impl Value {
             Value::Gene(_, _) => "gene",
             Value::Seq(_, _) => "sequence",
             Value::Obj(_, _) => "phenotype",
+            Value::Variant(t, _) => t.family(),
         }
     }
 
@@ -236,6 +291,10 @@ impl Value {
             Value::List(l) => !l.borrow().is_empty(),
             Value::Map(m) => !m.borrow().is_empty(),
             Value::Gene(_, _) | Value::Seq(_, _) | Value::Obj(_, _) => true,
+            // W06: a carried success is truthy; a carried failure is falsy —
+            // `if (result)` reads naturally without unwrapping.
+            Value::Variant(VTag::SomeV, _) | Value::Variant(VTag::OkV, _) => true,
+            Value::Variant(VTag::NoneV, _) | Value::Variant(VTag::ErrV, _) => false,
         }
     }
 
@@ -305,6 +364,15 @@ impl Value {
                 Some(n) => format!("<gene {}>", n),
                 None => "<gene lambda>".into(),
             },
+            // W06: variant repr mirrors mainstream constructor syntax; the
+            // payload renders through repr_g so depth/cycle caps apply.
+            Value::Variant(VTag::NoneV, _) => "None".into(),
+            Value::Variant(t, Some(p)) => {
+                format!("{}({})", t.tag_name(), p.repr_g(seen, depth + 1))
+            }
+            // a Some/Ok/Err with no payload cannot be constructed (builtins
+            // enforce arity); render defensively rather than panic.
+            Value::Variant(t, None) => t.tag_name().into(),
             Value::Seq(d, _) => match &d.name {
                 Some(n) => format!("<sequence {}>", n),
                 None => "<sequence lambda>".into(),
@@ -387,6 +455,17 @@ impl Value {
             (Value::Gene(d1, _), Value::Gene(d2, _)) => Arc::ptr_eq(d1, d2),
             (Value::Seq(d1, _), Value::Seq(d2, _)) => Arc::ptr_eq(d1, d2),
             (Value::Obj(d1, _), Value::Obj(d2, _)) => Arc::ptr_eq(d1, d2),
+            // W06: variants are equal iff same tag and payloads are equal;
+            // families are distinct (Some(x) != Ok(x)) because the tag IS the
+            // contract. None == None (no payload to compare).
+            (Value::Variant(t1, p1), Value::Variant(t2, p2)) => {
+                t1 == t2
+                    && match (p1, p2) {
+                        (None, None) => true,
+                        (Some(a), Some(b)) => a.deep_eq_g(b, seen, depth + 1),
+                        _ => false,
+                    }
+            }
             _ => false,
         }
     }

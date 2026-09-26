@@ -25,12 +25,29 @@ class Stress(Exception):
         # W007 mirror: gene call chain captured during unwinding — innermost
         # frame first, (gene, call-site line); capture cap 64 matches Rust.
         self.chain = []
+        # W06 (D-014) mirror: propagation marker — Some payload means this is
+        # NOT a failure but a `?!` signal unwinding to the gene boundary.
+        # No user path constructs a Stress with a payload (raise/stress go
+        # through the kind/message constructor), so rescue can never catch
+        # or spoof propagation. Every catch site pre-arms on `prop`.
+        self.prop = None
     def as_map(self):
         # W07 mirror: rescue binding carries the chain, same field order as
         # the Rust stress_map (kind, message, chain). Stress.line stays a
         # Rust-side stderr-rendering field (dx-r3) — not mirrored here.
         return {"kind": self.kind, "message": self.message,
                 "chain": [{"gene": n, "line": l} for (n, l) in self.chain]}
+
+class Variant:
+    """W06 (D-014) mirror: first-class Option/Result variant value.
+    tag is one of {Some, None, Ok, Err}; payload is None for None and a
+    value otherwise. Families are distinct: Some(x) != Ok(x) — the tag IS
+    the contract."""
+    __slots__ = ("tag", "payload")
+    def __init__(self, tag, payload):
+        self.tag, self.payload = tag, payload
+    def __repr__(self):
+        return v_repr(self)
 
 class Gene:
     __slots__ = ("name", "params", "guard", "body", "acetylate", "methylate", "m6a", "copies", "seq", "riboswitch", "burst", "closure")
@@ -144,6 +161,15 @@ class SeqObj:
                     self.interp.exec_block(fenv, g.body)
                 except Return:
                     pass
+                except Stress as st:
+                    # W06 (D-014) mirror: propagation inside a sequence ends
+                    # the stream — sequences are streams, not answers, so the
+                    # variant has no return path; the stream ends cleanly
+                    # (never leaked as a kind). Matches genes.rs run_seq_body.
+                    if st.prop is not None:
+                        self.interp.note(4, "propagation ended the sequence")
+                    else:
+                        raise
             finally:
                 self.interp.seq_buffer = saved
         if self.idx < len(self.buf):
@@ -215,6 +241,14 @@ def v_repr(v, _seen=None, _depth=0):
         return out
     if isinstance(v, Gene):
         return f"<gene {v.name}>" if v.name else "<gene lambda>"
+    # W06 mirror: variant repr mirrors mainstream constructor syntax; the
+    # payload renders through v_repr so depth/cycle caps apply.
+    if isinstance(v, Variant):
+        if v.tag == "None":
+            return "None"
+        if v.payload is None:
+            return v.tag
+        return f"{v.tag}({v_repr(v.payload, _seen, _depth + 1)})"
     if isinstance(v, SeqObj):
         return f"<sequence {v.gene.name}>" if v.gene.name else "<sequence lambda>"
     if isinstance(v, ObjInst):
@@ -233,6 +267,8 @@ def truthy(v):
     if isinstance(v, str): return len(v) > 0
     if isinstance(v, list): return len(v) > 0
     if isinstance(v, dict): return len(v) > 0
+    # W06 mirror: a carried success is truthy; a carried failure is falsy
+    if isinstance(v, Variant): return v.tag in ("Some", "Ok")
     return True
 
 def type_name(v):
@@ -246,6 +282,7 @@ def type_name(v):
     if isinstance(v, Gene): return "gene"
     if isinstance(v, SeqObj): return "sequence"
     if isinstance(v, ObjInst): return "phenotype"
+    if isinstance(v, Variant): return "option" if v.tag in ("Some", "None") else "result"
     return "native"
 
 def deep_eq(a, b, _pairs=None):
@@ -256,6 +293,18 @@ def deep_eq(a, b, _pairs=None):
         return a is b
     if isinstance(a, (int, float)) and isinstance(b, (int, float)):
         return a == b
+    # W06 (D-014) mirror: variants equal iff same tag + payload deep_eq;
+    # families distinct (Some(x) != Ok(x)); None == None.
+    if isinstance(a, Variant) or isinstance(b, Variant):
+        if not (isinstance(a, Variant) and isinstance(b, Variant)):
+            return False
+        if a.tag != b.tag:
+            return False
+        if a.payload is None and b.payload is None:
+            return True
+        if a.payload is None or b.payload is None:
+            return False
+        return deep_eq(a.payload, b.payload, _pairs)
     if type(a) is not type(b) and not (a is None and b is None):
         if isinstance(a, (int, float)) and isinstance(b, (int, float)):
             return a == b
@@ -283,7 +332,7 @@ def deep_eq(a, b, _pairs=None):
 # lexer
 
 SYMBOLS = ["**=", "<<=", ">>=", "+=", "-=", "*=", "/=", "%=", "==", "!=", "<=", ">=", "&&", "||",
-           "//", "->", "=>", "**", "<<", ">>", "??", "?.", "&", "|", "^", "~", "?", "{", "}", "(", ")", "[", "]", ",", ":", "+", "-",
+           "//", "->", "=>", "**", "<<", ">>", "??", "?.", "?!", "&", "|", "^", "~", "?", "{", "}", "(", ")", "[", "]", ",", ":", "+", "-",
            "*", "/", "%", "=", "<", ">", "!", ".", ";"]
 
 def lex(src):
@@ -486,7 +535,10 @@ SYNONYMS = {
     "type": "phenotype", "generator": "sequence", "gen": "sequence", "stream": "sequence", "iter": "sequence",
 }
 VALUE_SYNONYMS = {"yes": True, "on": True, "no": False, "off": False,
-                  "nil": None, "none": None, "nothing": None}
+                  "nil": None, "nothing": None}
+# W06 (D-014) mirror: 'none' RETIRED from VALUE_SYNONYMS — it is now the
+# Option constructor none(); bare 'none' degrades to an unbound ident
+# (phantom note), never a silent null. Matches src/parser.rs.
 MARKS = {"acetylate", "methylate", "m6a", "copies", "riboswitch", "burst"}
 
 def edit_distance(a, b):
@@ -1923,6 +1975,13 @@ class P:
                 else:
                     self.note(t2[2], 4, "'.' followed by non-name; member skipped")
                     break
+            elif t == ("SYM", "?!", t[2]):
+                # W06 (D-014): `e?!` — Option/Result propagation, a postfix
+                # operator (binds tighter than every binary op, repeats:
+                # Some(Some(3))?!?! unwraps twice). Mirrors src/parser.rs
+                # Tok::QuestionBang postfix arm.
+                self.next()
+                e = ("prop", e, t[2])
             elif t == ("SYM", "?.", t[2]):
                 # L1a: optional chaining (mirrors src/parser.rs QuestionDot)
                 self.next()
@@ -2170,6 +2229,7 @@ randomize chr ord now sleep argv read_file write_file append_file exists file_si
 fs_delete fs_rename fs_mkdir re_replace
 http_get serve recv_request send_response json_parse json_str env call items py
 re_match re_find re_groups unix_time date_parts date_fmt
+some none ok err is_some is_none is_ok is_err unwrap unwrap_or
 enumerate zip sorted reversed any all first last take drop unique flatten chunk round clamp divmod""".split())
 
 BUILTIN_SYNONYMS = {"print": "promote", "echo": "promote", "say": "promote", "show": "promote"}
@@ -2722,6 +2782,12 @@ class Interp:
             try:
                 self.exec_block(env, body)
             except Stress as st:
+                # W06 (D-014) mirror: propagation is a RETURN, not a failure —
+                # it crosses stress/rescue boundaries on its way to the gene
+                # boundary. Pre-arms BEFORE kind matching so rescue (including
+                # `rescue any`) can never contain or spoof it.
+                if st.prop is not None:
+                    raise Return(st.prop)
                 if kind is not None and kind != st.kind and kind != "any":
                     raise st
                 if rescue is not None:
@@ -2936,6 +3002,21 @@ class Interp:
         if k == "tern":
             _, cond, a, b = e
             return self.eval(env, a) if truthy(self.eval(env, cond)) else self.eval(env, b)
+        if k == "prop":
+            # W06 (D-014) mirror: `e?!` — Some/Ok unwrap to the payload;
+            # None/Err unwind to the nearest enclosing gene boundary (the
+            # gene RETURNS the variant). Plain values pass through untouched
+            # (silent identity, the same contract as `?.` on non-null).
+            _, sub, line = e
+            v = self.eval(env, sub)
+            if isinstance(v, Variant):
+                if v.tag in ("Some", "Ok") and v.payload is not None:
+                    return v.payload
+                sig = Stress("propagate", "")
+                sig.prop = v
+                sig.line = line
+                raise sig
+            return v
         if k == "new":
             _, name, args_e = e
             p = self.phenos.get(name)
@@ -3322,6 +3403,10 @@ class Interp:
             result = self.call_gene_inner(g, args)
             return result
         except Stress as st:
+            # W06 (D-014) mirror: propagation is a return, not a failure — no
+            # chain frame. A returned variant is not an error in flight.
+            if st.prop is not None:
+                raise
             if len(st.chain) < 64:
                 st.chain.append(frame)
             raise
@@ -3890,11 +3975,23 @@ class Interp:
                     return None
                 except Return as r:
                     return r.value
+                except Stress as st:
+                    # W06 (D-014) mirror: propagation from a guard body returns
+                    # from the gene (same contract as a guard `return`).
+                    if st.prop is not None:
+                        return st.prop
+                    raise
         try:
             self.exec_block(fenv, g.body)
             return None
         except Return as r:
             return r.value
+        except Stress as st:
+            # W06 (D-014) mirror: a propagated variant IS the gene's return
+            # value — the signal unwinds here and becomes the result.
+            if st.prop is not None:
+                return st.prop
+            raise
 
     # ---- methods
     def call_method_gene(self, g, self_val, args):
@@ -3948,11 +4045,23 @@ class Interp:
                         return None
                     except Return as r:
                         return r.value
+                    except Stress as st:
+                        # W06 (D-014) mirror: guard-body propagation returns
+                        # from the method (same contract as a guard `return`).
+                        if st.prop is not None:
+                            return st.prop
+                        raise
             try:
                 self.exec_block(fenv, g.body)
                 return None
             except Return as r:
                 return r.value
+            except Stress as st:
+                # W06 (D-014) mirror: a propagated variant IS the method's
+                # return value.
+                if st.prop is not None:
+                    return st.prop
+                raise
         finally:
             self.depth -= 1
 
@@ -4801,7 +4910,12 @@ class Interp:
                     else:
                         result = self.call_value(env, callee, targs)
                 except Stress as st:
-                    result = {"kind": st.kind, "message": st.message}
+                    # W06 (D-014) mirror: a propagated variant IS the worker
+                    # gene's return value — converted at the boundary.
+                    if st.prop is not None:
+                        result = st.prop
+                    else:
+                        result = {"kind": st.kind, "message": st.message}
                 finally:
                     for k2, v2 in _saved_state.items():
                         setattr(self, k2, v2)
@@ -4913,6 +5027,49 @@ class Interp:
                     out.append(fmt[i])
                     i += 1
             return "".join(out)
+        # ------------------------------------------------ Option / Result (W06, D-014)
+        # Constructors + predicates + extraction. Error messages byte-match
+        # the Rust core (Stress::at texts); families are distinct.
+        if name == "some":
+            if len(args) != 1:
+                raise Stress("unfolded", "some(v) needs exactly 1 argument")
+            return Variant("Some", args[0])
+        if name == "none":
+            if args:
+                raise Stress("unfolded", "none() takes no arguments")
+            return Variant("None", None)
+        if name == "ok":
+            if len(args) != 1:
+                raise Stress("unfolded", "ok(v) needs exactly 1 argument")
+            return Variant("Ok", args[0])
+        if name == "err":
+            if len(args) != 1:
+                raise Stress("unfolded", "err(e) needs exactly 1 argument")
+            return Variant("Err", args[0])
+        if name == "is_some":
+            return isinstance(args[0] if args else None, Variant) and args[0].tag == "Some"
+        if name == "is_none":
+            return isinstance(args[0] if args else None, Variant) and args[0].tag == "None"
+        if name == "is_ok":
+            return isinstance(args[0] if args else None, Variant) and args[0].tag == "Ok"
+        if name == "is_err":
+            return isinstance(args[0] if args else None, Variant) and args[0].tag == "Err"
+        if name == "unwrap_or":
+            if len(args) != 2:
+                raise Stress("unfolded", "unwrap_or(v, default) needs exactly 2 arguments")
+            v = args[0]
+            if isinstance(v, Variant) and v.tag in ("Some", "Ok") and v.payload is not None:
+                return v.payload
+            return args[1]
+        if name == "unwrap":
+            if len(args) != 1:
+                raise Stress("unfolded", "unwrap(v) needs exactly 1 argument")
+            v = args[0]
+            if isinstance(v, Variant):
+                if v.tag in ("Some", "Ok") and v.payload is not None:
+                    return v.payload
+                raise Stress("unwrap", f"unwrap on {v.tag}")
+            raise Stress("unwrap", f"unwrap on a plain {type_name(v)} value")
         if name == "random":
             x = self.rng
             x ^= (x >> 12) & 0xFFFFFFFFFFFFFFFF
@@ -5480,6 +5637,14 @@ class Interp:
                     for k, val in v.items()) + "}"
             _seen.discard(marker)
             return out
+        # W06 (D-014) mirror: variants serialize as single-key objects —
+        # {"some": v} / {"ok": v} / {"err": v}; None serializes as null.
+        # Matches the Rust json_stringify_g Variant arms byte-for-byte.
+        if isinstance(v, Variant):
+            if v.tag == "None" or v.payload is None:
+                return "null"
+            key = {"Some": "some", "Ok": "ok", "Err": "err"}.get(v.tag, "none")
+            return "{" + _json.dumps(key) + ":" + Interp._json_str(v.payload, _seen, _depth + 1) + "}"
         return _json.dumps(v_display(v))
 
     def construct_obj(self, p, args):
@@ -5529,7 +5694,12 @@ class Interp:
             try:
                 self.exec_stmt(menv, st)
             except Stress as e:
-                self.note(4, f"stress contained: [{e.kind}] {e.message}")
+                # W06 (D-014) mirror: propagation with no enclosing gene —
+                # the variant value passes through (noted, never rejected).
+                if e.prop is not None:
+                    self.note(4, f"propagation reached top level: {v_repr(e.prop)} passes through")
+                else:
+                    self.note(4, f"stress contained: [{e.kind}] {e.message}")
             except (Return, BreakLoop, ContinueLoop):
                 pass
         self.loading.pop()
@@ -5842,7 +6012,11 @@ def load_file(path, cell=None, variant=None, rna=None, args=None, caps=None):
         try:
             it.exec_stmt(it.globals, st)
         except Stress as e:
-            it.note(4, f"stress contained: [{e.kind}] {e.message}")
+            # W06 (D-014) mirror: top-level propagation passes through.
+            if e.prop is not None:
+                it.note(4, f"propagation reached top level: {v_repr(e.prop)} passes through")
+            else:
+                it.note(4, f"stress contained: [{e.kind}] {e.message}")
         except (Return, BreakLoop, ContinueLoop):
             pass
     proofs, frames, exports, tad_exports, tad_members, ires = collect_structure(stmts)
@@ -5973,7 +6147,12 @@ def main():
                     passed += 1
                 except Stress as st:
                     failed += 1
-                    failures.append(f"{f}: [{st.kind}] {st.message}")
+                    # W06 (D-014) mirror: propagation abandoning a proof frame
+                    # is a failure (the frame did not complete).
+                    if st.prop is not None:
+                        failures.append(f"{f}: propagation left the proof frame ({v_repr(st.prop)})")
+                    else:
+                        failures.append(f"{f}: [{st.kind}] {st.message}")
                 except Exception as ex:
                     failed += 1
                     failures.append(f"{f}: [oracle-error] {type(ex).__name__}: {ex}")

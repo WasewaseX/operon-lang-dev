@@ -33,6 +33,23 @@ Native kernels back the hot parts and are builtins, not imports:
 capability-gated `re_*` regex family. Every stdlib gene is pure `.op`
 over those builtins — the library ships no native code of its own.
 
+### Core builtins: first-class Option/Result (W06, D-014 — SPEC §9)
+
+Expected failures are values, not stress. The tag IS the contract — the
+Option family (`some`/`none`) and the Result family (`ok`/`err`) are
+distinct even with equal payloads:
+
+| builtin | contract |
+|---|---|
+| `some(v)` / `none()` | build an Option (type `option`) |
+| `ok(v)` / `err(e)` | build a Result (type `result`) |
+| `is_some(v)` / `is_none(v)` / `is_ok(v)` / `is_err(v)` | tag predicates |
+| `unwrap_or(v, default)` | safe extraction — never stresses; None/Err/plain all yield `default` |
+| `unwrap(v)` | unsafe extraction — Some/Ok payload; otherwise Stress kind `unwrap` (the exceptional tier; rescue-catchable) |
+| `e?!` (postfix) | propagation — Some/Ok unwrap to the payload; None/Err return FROM the enclosing gene with that variant; plain values pass through; never contained by rescue (SPEC §9) |
+
+JSON view: `{"ok":1}` / `{"err":"x"}` / `{"some":1}` / `null` for None.
+
 Discovery rules for agents and humans:
 - module genes are documented by their one-line headers in each file;
 - anything the module exports is importable — nothing is hidden;

@@ -784,6 +784,9 @@ pub enum SendValue {
     List(Vec<SendValue>),
     Map(Vec<(String, SendValue)>),
     Stress(String, String),
+    /// W06 (D-014): Option/Result variants cross spawn/sequence boundaries
+    /// losslessly (tag + payload); families are preserved.
+    Variant(String, Option<Box<SendValue>>),
 }
 
 /// Sendable environment snapshot entry: gene definitions cross by Arc,
@@ -893,6 +896,13 @@ fn to_send_d(v: &Value, d: u32) -> SendValue {
         ),
         Value::Gene(_, _) => SendValue::Null,
         Value::Seq(_, _) => SendValue::Null,
+        Value::Variant(crate::value::VTag::NoneV, _) => SendValue::Variant("None".into(), None),
+        Value::Variant(t, Some(p)) => {
+            SendValue::Variant(t.tag_name().into(), Some(Box::new(to_send_d(p, d + 1))))
+        }
+        // a Some/Ok/Err without payload cannot be constructed; degrade to
+        // the bare tag rather than panic at the boundary.
+        Value::Variant(t, None) => SendValue::Variant(t.tag_name().into(), None),
         Value::Obj(pd, m) => {
             // objects cross the boundary as their field map (+ identity key)
             let mut out: Vec<(String, SendValue)> = Vec::new();
@@ -933,6 +943,15 @@ fn from_send_d(v: SendValue, d: u32) -> Value {
                 (Value::Str("message".into()), Value::Str(m)),
             ]),
         ))),
+        SendValue::Variant(tag, payload) => {
+            let t = match tag.as_str() {
+                "Some" => crate::value::VTag::SomeV,
+                "None" => crate::value::VTag::NoneV,
+                "Ok" => crate::value::VTag::OkV,
+                _ => crate::value::VTag::ErrV,
+            };
+            Value::Variant(t, payload.map(|p| Box::new(from_send_d(*p, d + 1))))
+        }
     }
 }
 
@@ -1316,6 +1335,11 @@ fn clone_send_d(sv: &SendValue, d: u32) -> SendValue {
                 .collect(),
         ),
         SendValue::Stress(k, m) => SendValue::Stress(k.clone(), m.clone()),
+        // W06 (D-014): variants deep-clone tag + payload losslessly.
+        SendValue::Variant(tag, p) => SendValue::Variant(
+            tag.clone(),
+            p.as_ref().map(|x| Box::new(clone_send_d(x, d + 1))),
+        ),
     }
 }
 
@@ -1349,6 +1373,13 @@ pub fn seq_start(
         let result = run_seq_body(&mut ti, &def, conv_args, &tx);
         let (notes, stress) = match result {
             Ok(()) => (ti.notes, None),
+            // W06 (D-014): propagation inside a sequence ends the stream —
+            // sequences are streams, not answers, so the variant has no
+            // return path; the stream ends cleanly (never leaked as a kind).
+            Err(s) if s.prop.is_some() => {
+                ti.note(0, 4, "propagation ended the sequence");
+                (ti.notes, None)
+            }
             Err(s) => (ti.notes, Some((s.kind, s.message))),
         };
         let _ = tx.send(crate::value::SeqMsg::Done(notes, stress));
@@ -1473,6 +1504,9 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
         let result = ti.call_named(&genv, &task_name, conv_args);
         let (rv, notes) = match result {
             Ok(v) => (to_send(&v), ti.notes),
+            // W06 (D-014): a propagated variant IS the worker gene's return
+            // value — converted at the boundary, never leaked as a failure.
+            Err(s) if s.prop.is_some() => (to_send(&s.prop.unwrap()), ti.notes),
             Err(s) => (SendValue::Stress(s.kind, s.message), ti.notes),
         };
         let notes = notes

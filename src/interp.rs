@@ -1092,6 +1092,10 @@ impl Interp {
                         MatchPat::Lit(l) => {
                             let lv = match self.eval(env, l) {
                                 Ok(v) => v,
+                                // W06 (D-014): propagation is a return, not a
+                                // failure — it leaves the statement and heads
+                                // for the gene boundary (never contained).
+                                Err(s) if s.prop.is_some() => return Err(s),
                                 Err(s) => {
                                     self.note(
                                         0,
@@ -1106,23 +1110,34 @@ impl Interp {
                             };
                             sv.deep_eq(&lv)
                         }
-                        MatchPat::Multi(ls) => ls.iter().any(|l| {
-                            let lv = match self.eval(env, l) {
-                                Ok(v) => v,
-                                Err(s) => {
-                                    self.note(
-                                        0,
-                                        4,
-                                        format!(
-                                            "pattern evaluation contained: [{}] {}",
-                                            s.kind, s.message
-                                        ),
-                                    );
-                                    Value::Null
+                        MatchPat::Multi(ls) => {
+                            // W06: restructured from iter().any so a `?!` inside
+                            // a pattern literal can propagate out (closure arms
+                            // cannot `return Err` through the iterator).
+                            let mut hit = false;
+                            for l in ls {
+                                let lv = match self.eval(env, l) {
+                                    Ok(v) => v,
+                                    Err(s) if s.prop.is_some() => return Err(s),
+                                    Err(s) => {
+                                        self.note(
+                                            0,
+                                            4,
+                                            format!(
+                                                "pattern evaluation contained: [{}] {}",
+                                                s.kind, s.message
+                                            ),
+                                        );
+                                        Value::Null
+                                    }
+                                };
+                                if sv.deep_eq(&lv) {
+                                    hit = true;
+                                    break;
                                 }
-                            };
-                            sv.deep_eq(&lv)
-                        }),
+                            }
+                            hit
+                        }
                         MatchPat::Bind(n) => {
                             let child = Env::new(Some(env.clone()));
                             child.define(n, sv.clone());
@@ -1184,6 +1199,9 @@ impl Interp {
                     line: *raise_line,
                     // W007: the chain fills during unwinding (call_gene).
                     chain: Vec::new(),
+                    // D-014: `raise` can never forge propagation — the prop
+                    // marker has no user path. Forged kinds stay real stress.
+                    prop: None,
                 })
             }
             Stmt::Stress { kind, body, rescue } => {
@@ -1193,6 +1211,11 @@ impl Interp {
                     // to the enclosing gene/loop — only STRESS is intercepted
                     Ok(flow @ (Flow::Ret(_) | Flow::Brk | Flow::Cont)) => Ok(flow),
                     Ok(_) => Ok(Flow::Norm),
+                    // W06 (D-014): propagation is a RETURN, not a failure — it
+                    // crosses stress/rescue boundaries on its way to the gene
+                    // boundary. Must pre-arm BEFORE kind matching so rescue
+                    // (including `rescue any`) can never contain or spoof it.
+                    Err(s) if s.prop.is_some() => Ok(Flow::Ret(s.prop.unwrap())),
                     Err(stress) => {
                         let kind_ok = match kind {
                             None => true,
@@ -1935,6 +1958,9 @@ impl Interp {
                                 mem_charge(piece.len() as u64)?;
                                 out.push_str(&piece);
                             }
+                            // W06 (D-014): propagation is a return — it leaves
+                            // the interpolation and heads for the gene boundary.
+                            Err(s) if s.prop.is_some() => return Err(s),
                             Err(s) => {
                                 // a stressed interpolation degrades to "null" —
                                 // the surrounding statement still produces output
@@ -2234,6 +2260,20 @@ impl Interp {
                 self.call_method(env, tv, name, argvs)
             }
             Expr::Lambda(def) => Ok(Value::Gene(def.clone(), Some(env.clone()))),
+            Expr::Propagate(e, line) => {
+                // W06 (D-014): `e?!` — Some/Ok unwrap to the payload; None/Err
+                // unwind to the nearest enclosing gene boundary (the gene
+                // RETURNS the variant). Plain values pass through untouched
+                // (silent identity, the same contract as `?.` on non-null).
+                let v = self.eval(env, e)?;
+                match v {
+                    Value::Variant(crate::value::VTag::SomeV, Some(p)) => Ok(*p),
+                    Value::Variant(crate::value::VTag::OkV, Some(p)) => Ok(*p),
+                    Value::Variant(crate::value::VTag::NoneV, _)
+                    | Value::Variant(crate::value::VTag::ErrV, _) => Err(Stress::prop(*line, v)),
+                    _ => Ok(v),
+                }
+            }
             Expr::Ternary(c, a, b) => {
                 let cv = self.eval(env, c)?;
                 if cv.truthy() {
@@ -2902,6 +2942,9 @@ impl Interp {
         self.depth -= 1;
         match result {
             Ok(v) => Ok(v),
+            // W06 (D-014): propagation is a return, not a failure — no chain
+            // frame. A returned variant is not an error in flight.
+            Err(s) if s.prop.is_some() => Err(s),
             Err(mut s) => {
                 // innermost frame appends first; bounded at 64 (note-cap
                 // discipline — an unbounded chain is an uncontained one)
@@ -3995,12 +4038,19 @@ impl Interp {
                 self.note(dl, 4, format!("guard tripped calling {}", name));
                 let mut flowed = Flow::Norm;
                 for s in gbody {
-                    match self.exec_stmt(&fenv, s)? {
-                        Flow::Norm => {}
-                        other => {
+                    // W06 (D-014): propagation from a guard body returns from
+                    // the gene (same contract as a guard `return`).
+                    match self.exec_stmt(&fenv, s) {
+                        Ok(Flow::Norm) => {}
+                        Ok(other) => {
                             flowed = other;
                             break;
                         }
+                        Err(p) if p.prop.is_some() => {
+                            flowed = Flow::Ret(p.prop.unwrap());
+                            break;
+                        }
+                        Err(e) => return Err(e),
                     }
                 }
                 self.close_timing(&name);
@@ -4019,7 +4069,14 @@ impl Interp {
         }
         let result = self.exec_block(&fenv, &def.body);
         self.close_timing(&name);
-        match result? {
+        // W06 (D-014): a propagated variant IS the gene's return value — the
+        // signal unwinds here and becomes Flow::Ret (never a failure).
+        let flowed = match result {
+            Ok(f) => f,
+            Err(p) if p.prop.is_some() => Flow::Ret(p.prop.unwrap()),
+            Err(e) => return Err(e),
+        };
+        match flowed {
             Flow::Ret(v) => Ok(v),
             _ => Ok(Value::Null),
         }
@@ -4279,12 +4336,19 @@ impl Interp {
                 self.note(dl, 4, format!("guard tripped calling {}", name));
                 let mut flowed = Flow::Norm;
                 for s in gbody {
-                    match self.exec_stmt(&fenv, s)? {
-                        Flow::Norm => {}
-                        other => {
+                    // W06 (D-014): propagation from a guard body returns from
+                    // the gene (same contract as a guard `return`).
+                    match self.exec_stmt(&fenv, s) {
+                        Ok(Flow::Norm) => {}
+                        Ok(other) => {
                             flowed = other;
                             break;
                         }
+                        Err(p) if p.prop.is_some() => {
+                            flowed = Flow::Ret(p.prop.unwrap());
+                            break;
+                        }
+                        Err(e) => return Err(e),
                     }
                 }
                 self.close_timing(&name);
@@ -4296,7 +4360,14 @@ impl Interp {
         }
         let result = self.exec_block(&fenv, &def.body);
         self.close_timing(&name);
-        match result? {
+        // W06 (D-014): a propagated variant IS the gene's return value — the
+        // signal unwinds here and becomes Flow::Ret (never a failure).
+        let flowed = match result {
+            Ok(f) => f,
+            Err(p) if p.prop.is_some() => Flow::Ret(p.prop.unwrap()),
+            Err(e) => return Err(e),
+        };
+        match flowed {
             Flow::Ret(v) => Ok(v),
             _ => Ok(Value::Null),
         }
@@ -6192,6 +6263,120 @@ impl Interp {
                 }
                 mem_charge(out.len() as u64)?;
                 Ok(Value::Str(out))
+            }
+            // ------------------------------------------------ Option / Result (W06, D-014)
+            // Constructors: some(v)/none()/ok(v)/err(e) build first-class
+            // variant values. Families are distinct (Some(x) != Ok(x)).
+            "some" => {
+                if args.len() != 1 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "some(v) needs exactly 1 argument",
+                    ));
+                }
+                Ok(Value::Variant(
+                    crate::value::VTag::SomeV,
+                    Some(Box::new(args[0].clone())),
+                ))
+            }
+            "none" => {
+                if !args.is_empty() {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "none() takes no arguments",
+                    ));
+                }
+                Ok(Value::Variant(crate::value::VTag::NoneV, None))
+            }
+            "ok" => {
+                if args.len() != 1 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "ok(v) needs exactly 1 argument",
+                    ));
+                }
+                Ok(Value::Variant(
+                    crate::value::VTag::OkV,
+                    Some(Box::new(args[0].clone())),
+                ))
+            }
+            "err" => {
+                if args.len() != 1 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "err(e) needs exactly 1 argument",
+                    ));
+                }
+                Ok(Value::Variant(
+                    crate::value::VTag::ErrV,
+                    Some(Box::new(args[0].clone())),
+                ))
+            }
+            // Predicates: family-tag inspection without unwrapping.
+            "is_some" => Ok(Value::Bool(matches!(
+                args.first(),
+                Some(Value::Variant(crate::value::VTag::SomeV, _))
+            ))),
+            "is_none" => Ok(Value::Bool(matches!(
+                args.first(),
+                Some(Value::Variant(crate::value::VTag::NoneV, _))
+            ))),
+            "is_ok" => Ok(Value::Bool(matches!(
+                args.first(),
+                Some(Value::Variant(crate::value::VTag::OkV, _))
+            ))),
+            "is_err" => Ok(Value::Bool(matches!(
+                args.first(),
+                Some(Value::Variant(crate::value::VTag::ErrV, _))
+            ))),
+            // Safe extraction: never stresses — the default covers None/Err
+            // AND plain values (documented: extraction from a non-variant
+            // yields the value itself, so unwrap_or chains over mixed data).
+            "unwrap_or" => {
+                if args.len() != 2 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "unwrap_or(v, default) needs exactly 2 arguments",
+                    ));
+                }
+                Ok(match &args[0] {
+                    Value::Variant(crate::value::VTag::SomeV, Some(p))
+                    | Value::Variant(crate::value::VTag::OkV, Some(p)) => (**p).clone(),
+                    _ => args[1].clone(),
+                })
+            }
+            // Unsafe extraction: None/Err is a CONTRACT VIOLATION by the
+            // caller (the programmer asked for a payload that is not there)
+            // — the exceptional tier of the §9 hierarchy. Rescue-catchable
+            // via the "unwrap" kind; expected failures stay in the value
+            // layer (check is_some/is_ok first).
+            "unwrap" => {
+                if args.len() != 1 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "unwrap(v) needs exactly 1 argument",
+                    ));
+                }
+                match &args[0] {
+                    Value::Variant(crate::value::VTag::SomeV, Some(p))
+                    | Value::Variant(crate::value::VTag::OkV, Some(p)) => Ok((**p).clone()),
+                    Value::Variant(t, _) => Err(Stress::at(
+                        self.cur_line,
+                        "unwrap",
+                        format!("unwrap on {}", t.tag_name()),
+                    )),
+                    other => Err(Stress::at(
+                        self.cur_line,
+                        "unwrap",
+                        format!("unwrap on a plain {} value", other.type_name()),
+                    )),
+                }
             }
             // ------------------------------------------------ date / time (UTC civil calendar)
             "unix_time" => {
@@ -8126,6 +8311,24 @@ fn json_stringify_g(v: &Value, seen: &mut Vec<usize>, depth: u32) -> String {
             }
         }
         Value::Str(s) => json_quote(s),
+        // W06 (D-014): variants serialize losslessly as single-key objects —
+        // {"some": v} / {"ok": v} / {"err": v}; None serializes as null
+        // (JSON has no absent-value constructor). The payload rides the
+        // existing seen/depth guards, so a variant containing a cycle
+        // degrades exactly like the container alone would.
+        Value::Variant(crate::value::VTag::NoneV, _) => "null".into(),
+        Value::Variant(t, Some(p)) => format!(
+            "{{\"{}\":{}}}",
+            match t {
+                crate::value::VTag::SomeV => "some",
+                crate::value::VTag::OkV => "ok",
+                crate::value::VTag::ErrV => "err",
+                crate::value::VTag::NoneV => "none",
+            },
+            json_stringify_g(p, seen, depth + 1)
+        ),
+        // defensive: bare Some/Ok/Err without payload cannot be constructed
+        Value::Variant(_, None) => "null".into(),
         Value::List(l) => {
             let id = std::rc::Rc::as_ptr(l) as *const u8 as usize;
             if seen.contains(&id) {
@@ -9060,6 +9263,17 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "unix_time",
     "date_parts",
     "date_fmt",
+    // W06 (D-014): first-class Option/Result
+    "some",
+    "none",
+    "ok",
+    "err",
+    "is_some",
+    "is_none",
+    "is_ok",
+    "is_err",
+    "unwrap",
+    "unwrap_or",
     "call",
     // L1a: iteration + numeric builtins
     "enumerate",
