@@ -2,7 +2,7 @@
 
 The parser's reserved set (source of truth: `KEYWORDS` in `src/parser.rs`).
 
-Count: **58**. Regenerate: `python3 scripts/gen_doc_stats.py`.
+Count: **59**. Regenerate: `python3 scripts/gen_doc_stats.py`.
 
 Analogy voice per D-008 (zero biology assumed; one-line programmer meaning).
 
@@ -62,6 +62,7 @@ Analogy voice per D-008 (zero biology assumed; one-line programmer meaning).
 | `tad` | module boundary (TAD-insulated exports) |
 | `threshold` | gate cutoff |
 | `toggle` | boolean gate switch |
+| `trait` | *(analogy pending — file a docs finding)* |
 | `use` | import module |
 | `variant` | named alternative implementation |
 | `while` | condition loop |
@@ -69,3 +70,5 @@ Analogy voice per D-008 (zero biology assumed; one-line programmer meaning).
 
 Literal words `true false null` and logical `and or not` are recognized in
 expression positions but are not part of the reserved table (SPEC §3).
+
+NOTE: 1 keyword(s) lack a D-008 analogy: trait.

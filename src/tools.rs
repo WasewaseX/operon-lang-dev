@@ -1562,6 +1562,7 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
         Stmt::Gene(g) | Stmt::Seq(g) => &g.doc,
         Stmt::Splice(sp) => &sp.doc,
         Stmt::Pheno(p) => &p.doc,
+        Stmt::Trait(t) => &t.doc,
         Stmt::Fate(f) => &f.doc,
         _ => &[],
     };
@@ -1588,6 +1589,10 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
             match &p.parent {
                 Some(par) => out.push_str(&format!("phenotype {} from {} ", p.name, par)),
                 None => out.push_str(&format!("phenotype {} ", p.name)),
+            }
+            // W04: implements clause round-trips canonically
+            if !p.implements.is_empty() {
+                out.push_str(&format!("implements {} ", p.implements.join(", ")));
             }
             out.push_str("{\n");
             for (fname, fexpr) in &p.fields {
@@ -1621,6 +1626,30 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
                 ));
                 fmt_block(&g.body, ind + 1, out);
                 out.push('\n');
+            }
+            out.push_str(&indent(ind));
+            out.push_str("}\n\n");
+        }
+        // W04: trait declaration round-trip
+        Stmt::Trait(t) => {
+            out.push_str(&indent(ind));
+            out.push_str(&format!("trait {} {{\n", t.name));
+            for m in &t.methods {
+                out.push_str(&indent(ind + 1));
+                match &m.default {
+                    Some(g) => {
+                        out.push_str(&format!(
+                            "gene {}({}) ",
+                            g.name.clone().unwrap_or_default(),
+                            fmt_params(&g.params)
+                        ));
+                        fmt_block(&g.body, ind + 1, out);
+                        out.push('\n');
+                    }
+                    None => {
+                        out.push_str(&format!("gene {}();\n", m.name));
+                    }
+                }
             }
             out.push_str(&indent(ind));
             out.push_str("}\n\n");

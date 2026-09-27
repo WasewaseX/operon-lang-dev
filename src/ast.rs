@@ -171,8 +171,45 @@ pub struct PhenoDef {
     /// W074: doc-comment lines (metadata only).
     pub doc: Vec<String>,
     pub parent: Option<String>,
+    /// W04: implemented traits, in declaration order (`implements A, B`).
+    /// Method dispatch falls back to trait DEFAULT methods in this order
+    /// after the phenotype's own lineage misses.
+    pub implements: Vec<String>,
     pub fields: Vec<(String, Expr)>, // field name -> default expr
     pub methods: Vec<Arc<GeneDef>>,
+}
+
+/// W04 (SPEC §8b): a trait declaration — a named set of method contracts.
+/// A method without a body is REQUIRED (the implementing phenotype must
+/// provide it; construction notes a contract break, calls wobble); a
+/// method with a body is a DEFAULT (used when the phenotype lineage has
+/// no method of that name).
+#[derive(Debug, Clone)]
+pub struct TraitMethod {
+    pub name: String,
+    pub line: usize,
+    pub required: bool,
+    /// Full gene definition (params + body) parsed by the normal gene
+    /// parser — default methods are ordinary genes with a `self` binding.
+    pub default: Option<Arc<GeneDef>>,
+}
+#[derive(Clone)]
+pub struct TraitDef {
+    pub name: String,
+    pub line: usize,
+    pub doc: Vec<String>,
+    pub methods: Vec<TraitMethod>,
+}
+impl std::fmt::Debug for TraitDef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TraitDef")
+            .field("name", &self.name)
+            .field(
+                "methods",
+                &self.methods.iter().map(|m| &m.name).collect::<Vec<_>>(),
+            )
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -374,6 +411,8 @@ pub enum Stmt {
     },
     Gene(Arc<GeneDef>),
     Splice(Arc<SpliceDef>),
+    /// W04 (SPEC §8b): `trait Name { gene m(); gene n() { … } }`.
+    Trait(Arc<TraitDef>),
     /// reg-bio-3 (C9): stoichiometric RISC — `silence old -> new strength s
     /// sites n;`. The strength is the per-site capture probability (clamped
     /// 0..=1, default 1.0); each statement is one binding site (sites n

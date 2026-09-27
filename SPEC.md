@@ -349,6 +349,51 @@ L.push(4) / M.del("a")        # method forms stress identically
 - `anchor import x;` — declares an external name the domain expects; `operon check` verifies it exists in the file or in used modules (−2 and a finding if not).
 - Cyclic `use` → second import returns the partial module Map + note (no hang).
 
+### 8b. Traits — shared behavior for phenotypes (W04)
+
+A trait is a named set of method contracts. A phenotype can `implements` any number of
+traits (after the optional `from Parent` in the header); traits and inheritance compose:
+
+```
+trait Show {
+    gene describe() { return "shape:" + self.display() }   # DEFAULT method (has a body)
+}
+trait Big {
+    gene area()                                            # REQUIRED method (no body)
+}
+phenotype Rect implements Show, Big {
+    let w = 0
+    let h = 0
+    gene init(w, h) { self.w = w; self.h = h }
+    gene area() { return self.w * self.h }
+    gene display() { return "rect(" + str(self.w) + "x" + str(self.h) + ")" }
+}
+```
+
+- **Required vs default**: a trait method with no body is REQUIRED — the implementing
+  phenotype (or an ancestor) must provide it; a trait method with a body is a DEFAULT,
+  used when the phenotype's own lineage has no method of that name.
+- **Contract check at construction**: `new Rect(...)` verifies every REQUIRED method of
+  every implemented trait. A missing one is a rung-4 note —
+  `phenotype 'Rect' implements 'Big' but does not provide 'area()'` — the instance is
+  still built (Total Grammar); the eventual method call wobbles null per §9.
+  Implementing a trait that was never declared notes `trait 'X' not declared; contract
+  on 'Y' ignored`.
+- **Dispatch order**: phenotype's own lineage (child → root) first, then implemented
+  traits in declaration order (first default body with the name wins), then the
+  field-as-callable fallback. Dispatch is VIRTUAL: a default body calling
+  `self.display()` dispatches back through the phenotype's own methods first — that is
+  the point of the `Show.describe` example.
+- **Method semantics are ordinary gene semantics**: defaults take params, close over
+  nothing (they are plain genes with `self` bound), and ride the full call funnel
+  (regulation gates apply, §11).
+- **Redefinition**: re-declaring a trait replaces it (last wins, noted), mirroring
+  phenotype redefinition. Trait declarations inside tads contribute their names to the
+  module's member list (§8 export rules unchanged).
+- Evidence: tests/traits.op (10 assertions, both cores),
+  tests/differential/traits.op (byte-identical), fmt round-trips `trait` blocks and the
+  `implements` clause canonically.
+
 ## 9. Stress containment (errors)
 
 **The error hierarchy (W06, D-014).** Operon separates four tiers of "went wrong", each
