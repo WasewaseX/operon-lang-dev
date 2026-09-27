@@ -23,3 +23,9 @@ Reproduce:
 
 `rust-security-and-quality.sarif` is the clean re-run; `.before.sarif`
 preserves the one pre-fix finding for the audit trail.
+
+## Re-run after the M100 dev1 waves (2026-09-27, main 44c37fe)
+
+Fresh database over the current tree (vm.rs, pkg.rs registry, debugger,
+cancellation, scope, task groups included): rust-security-and-quality suite
+returns 0 findings. Evidence: rust-security-and-quality.sarif in this folder.
