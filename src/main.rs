@@ -961,6 +961,16 @@ fn real_main() {
                 }
                 return;
             }
+            // W067 stage 3, step 1 (W63 deprecation policy: Info first):
+            // a header-less patch runs the v1 span engine. Text semantics are
+            // byte-compatible and UNCHANGED — the deprecation surfaces only as
+            // tool metadata (this stderr note + `deprecated:true` in --json).
+            // Scoped to the `operon rna` file-editor path on purpose: the
+            // `run --rna` pre-parse path must stay note-free so Rust/oracle
+            // differential stderr parity is never at risk.
+            eprintln!(
+                "rna: note: header-less (v1 span) patches are deprecated (info, W63 step 1) — add 'syntax: v2' and node-addressed rules; see docs/design/RNA-V2.md"
+            );
             let stem = std::path::Path::new(&file)
                 .file_stem()
                 .map(|s| s.to_string_lossy().to_string())
@@ -984,7 +994,7 @@ fn real_main() {
                     })
                     .collect();
                 println!(
-                    "{{\"file\":\"{}\",\"patch\":\"{}\",\"edits\":[{}],\"applied\":{},\"missed\":{},\"would_change\":{}}}",
+                    "{{\"engine\":\"v1\",\"deprecated\":true,\"file\":\"{}\",\"patch\":\"{}\",\"edits\":[{}],\"applied\":{},\"missed\":{},\"would_change\":{}}}",
                     tools::json_escape(&file),
                     tools::json_escape(&patch_path),
                     rows.join(","),
