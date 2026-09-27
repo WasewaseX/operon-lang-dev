@@ -1315,9 +1315,11 @@ fn rewrite_stmt(s: &mut Stmt, cfg: &mut RewriteCfg) {
             rewrite_expr(cond, cfg);
             rewrite_stmts(body, cfg);
         }
-        Stmt::Loop(body) | Stmt::Frame { body, .. } | Stmt::Tad(_, body) | Stmt::Block(body) => {
-            rewrite_stmts(body, cfg)
-        }
+        Stmt::Loop(body)
+        | Stmt::Scope(body)
+        | Stmt::Frame { body, .. }
+        | Stmt::Tad(_, body)
+        | Stmt::Block(body) => rewrite_stmts(body, cfg),
         Stmt::For(_, it, body) => {
             rewrite_expr(it, cfg);
             rewrite_stmts(body, cfg);

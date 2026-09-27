@@ -399,6 +399,10 @@ pub enum Stmt {
     If(Vec<(Expr, Vec<Stmt>)>, Option<Vec<Stmt>>),
     While(Expr, Vec<Stmt>),
     Loop(Vec<Stmt>),
+    /// W17: structured-concurrency block. Tasks spawned inside register on
+    /// this scope and are joined at block exit, in spawn order, on every
+    /// flow path (normal, return/break/continue, or stress).
+    Scope(Vec<Stmt>),
     For(String, Expr, Vec<Stmt>),
     Return(Option<Expr>),
     Break,

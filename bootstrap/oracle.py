@@ -693,12 +693,12 @@ def lex(src):
 # ----------------------------------------------------------------------------
 # parser — Total Grammar ladder
 
-KEYWORDS = set("""gene let if elif else while loop for in return break continue match case use
+KEYWORDS = set("""gene let if elif else while loop scope for in return break continue match case use
 tad anchor export import enhance silence stress rescue raise fate state regulate activates
 inhibits strength toggle repressilator period frame proof guard splice variant edit replace
 ires as collect enter phenotype sequence yield new threshold from self operon""".split())
 
-ARMS = set("""gene let if elif else while loop for return break continue match use tad anchor
+ARMS = set("""gene let if elif else while loop scope for return break continue match use tad anchor
 enhance silence stress raise fate regulate toggle repressilator frame splice edit ires
 phenotype sequence yield operon""".split())
 
@@ -1142,6 +1142,10 @@ class P:
         if word == "loop":
             self.next()
             return ("loop", self.block())
+        if word == "scope":
+            # W17: structured-concurrency block
+            self.next()
+            return ("scope", self.block())
         if word == "for":
             self.next()
             t = self.peek()
@@ -3510,6 +3514,35 @@ class Interp:
                     continue
                 except Return as r:
                     raise r
+        elif k == "scope":
+            # W17: tasks spawned inside register on this scope and are
+            # reaped at block exit on every flow path. cancel-on-error
+            # (default on) asks the children to stop before reaping when
+            # the block unwinds by stress; the stress still propagates.
+            _, body = s
+            if not hasattr(self, "scope_stack"):
+                self.scope_stack = []
+            self.scope_stack.append([])
+            err = None
+            try:
+                self.exec_block(self.new_scope(env), body)
+            except BreakLoop as b:
+                err = b
+            except ContinueLoop as c:
+                err = c
+            except Return as r:
+                err = r
+            except Stress as st:
+                err = st
+            ids = self.scope_stack.pop()
+            cancel_on_err = self.cell.get("scope.cancel_on_error") != "off"
+            if isinstance(err, Stress) and cancel_on_err:
+                for i in ids:
+                    self.builtin(env, "cancel", [i])
+            for i in ids:
+                self.builtin(env, "join", [i])
+            if err is not None:
+                raise err
         elif k == "for":
             _, name, it, body = s
             itv = self.eval(env, it)
@@ -5914,6 +5947,11 @@ class Interp:
                 _tombs = getattr(self, "task_tombstones", {})
                 _tombs[self.next_id] = "done"
                 self.task_tombstones = _tombs
+                # W17: register on the innermost scope block, mirroring the
+                # Rust spawn's scope registration
+                _scopes = getattr(self, "scope_stack", None)
+                if _scopes:
+                    _scopes[-1].append(self.next_id)
                 return self.next_id
             self.note(4, "spawn() needs a gene; null task")
             return None

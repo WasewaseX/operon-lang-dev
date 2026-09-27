@@ -1,0 +1,76 @@
+# W17 structured concurrency: scope blocks (proof frames)
+# Ordering-free shapes only; the sequential oracle runs worker bodies
+# inline at spawn, so timing-dependent behavior lives in tests/timing/.
+gene quick(n) { return n * 2 }
+gene boom() {
+    raise burned, "child failure"
+}
+gene returner() {
+    scope {
+        let t = spawn(quick, [3])
+    }
+    return 99
+}
+
+frame proof {
+    # children spawned in a scope are reaped at exit, results discarded;
+    # joining a child manually inside the scope still works, and the
+    # reap's re-join of the same id is contained (null + note)
+    let got = 0
+    scope {
+        let t1 = spawn(quick, [10])
+        got = join(t1)
+    }
+    assert(got == 20, "join inside scope; reap re-join contained")
+
+    # after the scope, the reaped child is tombstoned done
+    let ids = []
+    scope {
+        let t3 = spawn(quick, [1])
+        push(ids, t3)
+    }
+    assert(task_state(ids[0]) == "done", "reaped child tombstoned done")
+
+    # nested scopes: the innermost registry owns its spawns; the outer
+    # registry keeps its own
+    let outer_ids = []
+    let inner_ids = []
+    scope {
+        let o = spawn(quick, [5])
+        push(outer_ids, o)
+        scope {
+            let i = spawn(quick, [6])
+            push(inner_ids, i)
+        }
+        assert(task_state(inner_ids[0]) == "done", "inner scope reaped at inner exit")
+    }
+    assert(task_state(outer_ids[0]) == "done", "outer scope reaped at outer exit")
+
+    # a failing child is CONTAINED: the stress map is discarded by the
+    # reap, the scope exits normally, and the tombstone still says done
+    let boom_id = 0
+    scope {
+        let b = spawn(boom, [])
+        boom_id = b
+    }
+    assert(task_state(boom_id) == "done", "failing child tombstoned done")
+
+    # stress in the scope BODY propagates after the reap: the caller's
+    # rescue sees the original kind and message
+    let propagated = ""
+    stress {
+        scope {
+            let t = spawn(quick, [7])
+            raise burned, "body failure"
+        }
+    } rescue (e) {
+        propagated = e.kind + ":" + e.message
+    }
+    assert(propagated == "burned:body failure", "scope stress propagates after reap")
+
+    # a return inside a gene still reaps the scope's children first
+    assert(returner() == 99, "gene return after scope reap")
+}
+main {
+    promote("scope: ok")
+}

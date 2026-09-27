@@ -1,0 +1,45 @@
+# differential: W17 scope blocks (structured concurrency)
+# Only ordering-free observable shapes; both engines print identical facts
+# about ids, tombstones, containment, and propagation.
+gene quick(n) { return n * 2 }
+gene boom() {
+    raise burned, "child failure"
+}
+
+main {
+    let ids = []
+    scope {
+        let t1 = spawn(quick, [10])
+        let t2 = spawn(quick, [20])
+        push(ids, t1)
+        push(ids, t2)
+    }
+    print("id0=" + str(ids[0]) + " id1=" + str(ids[1]))
+    print("state0=" + task_state(ids[0]))
+    print("state1=" + task_state(ids[1]))
+
+    # failing child contained, tombstoned done
+    let bid = 0
+    scope {
+        let b = spawn(boom, [])
+        bid = b
+    }
+    print("boom-state=" + task_state(bid))
+
+    # body stress propagates after the reap
+    let got = ""
+    stress {
+        scope {
+            let t = spawn(quick, [7])
+            raise burned, "body failure"
+        }
+    } rescue (e) {
+        got = e.kind + ":" + e.message
+    }
+    print("propagated=" + got)
+
+    # spawn outside a scope is untouched by scope machinery
+    let out = spawn(quick, [30])
+    print("outside=" + str(join(out)))
+    print("outside-state=" + task_state(out))
+}

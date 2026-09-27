@@ -21,6 +21,7 @@ pub(crate) const KEYWORDS: &[&str] = &[
     "else",
     "while",
     "loop",
+    "scope",
     "for",
     "in",
     "return",
@@ -688,6 +689,7 @@ impl Parser {
             "else",
             "while",
             "loop",
+            "scope",
             "for",
             "return",
             "break",
@@ -1066,6 +1068,12 @@ impl Parser {
                 self.next();
                 let body = self.parse_block().unwrap_or_default();
                 Some(Stmt::Loop(body))
+            }
+            // W17: structured-concurrency block (see SPEC §13)
+            "scope" => {
+                self.next();
+                let body = self.parse_block().unwrap_or_default();
+                Some(Stmt::Scope(body))
             }
             "for" => {
                 self.next();

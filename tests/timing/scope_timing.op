@@ -1,0 +1,36 @@
+# W17 timing lane (Rust-only): cancel-on-error and blocking reap need real
+# threads. The sequential oracle cannot observe mid-flight cancellation or
+# a join that blocks. Both shapes here are deterministic: the children
+# sleep far longer than host scheduling jitter.
+frame proof {
+    # cancel-on-error: a body stress cancels the sleeping children before
+    # reaping them; after the rescue their tombstones read cancelled
+    let ids = []
+    stress {
+        scope {
+            let t = spawn(slowpoke, [])
+            push(ids, t)
+            raise burned, "bail out"
+        }
+    } rescue (e) {
+        assert(e.kind == "burned", "original stress kind preserved")
+    }
+    assert(task_state(ids[0]) == "cancelled", "scope error cancelled the child")
+
+    # blocking reap: a scope whose body exits early still waits for its
+    # running children at the implicit join
+    let slow_id = 0
+    scope {
+        let t = spawn(slowpoke, [])
+        slow_id = t
+    }
+    assert(task_state(slow_id) == "done", "implicit join waited for the sleeper")
+}
+main {
+    promote("scope-timing: ok")
+}
+
+gene slowpoke() {
+    run("sleep", 200)
+    return 7
+}

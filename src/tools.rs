@@ -704,6 +704,7 @@ fn purge_stmt(s: &mut Stmt) {
         }
         Stmt::While(_, b)
         | Stmt::Loop(b)
+        | Stmt::Scope(b)
         | Stmt::For(_, _, b)
         | Stmt::ForPat(_, _, b)
         | Stmt::Block(b)
@@ -822,6 +823,7 @@ fn collect_calls(prog: &Program, defined: &mut HashSet<String>, called: &mut Vec
                 walk_stmts(b, defined, called);
             }
             Stmt::Loop(b) => walk_stmts(b, defined, called),
+            Stmt::Scope(b) => walk_stmts(b, defined, called),
             Stmt::For(_, it, b) => {
                 walk_expr(it, called);
                 walk_stmts(b, defined, called);
@@ -1765,6 +1767,11 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
         }
         Stmt::Loop(b) => {
             out.push_str("loop ");
+            fmt_block(b, ind, out);
+            out.push('\n');
+        }
+        Stmt::Scope(b) => {
+            out.push_str("scope ");
             fmt_block(b, ind, out);
             out.push('\n');
         }
