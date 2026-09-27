@@ -135,6 +135,22 @@ frame proof {
     assert(json_str(f.v) == "null", "nan field serializes as null at the wire")
     assert(ser.roundtrip(f, "json") == false, "non-finite field reports false, never a silent true")
 
+    # ---- W29 bytes: wire fidelity only (kind boundary is NOT rebuilt) ----
+    let bb = b"hi"
+    assert(ser.to_json(bb) == "[104,105]", "bytes rides the W29 int-list view, compact")
+    let bback = ser.from_json("[104,105]")
+    assert(is_ok(bback) and type(unwrap(bback)) == "list", "re-parse of the view is a plain int list")
+    assert(ser.roundtrip(bb, "json") == false, "roundtrip(bytes) honest false — the kind did not survive")
+    phenotype Blob {
+        let data = b"xy"
+    }
+    let blob = new Blob()
+    assert(ser.to_json(blob) == OB + "\"#phenotype\":\"Blob\",\"data\":[120,121]" + CB,
+        "instance bytes field rides the view inside the wire map")
+    let blob2 = unwrap(ser.from_json(ser.to_json(blob)))
+    assert(type(blob2) == "Blob", "bytes-field instance rebuilds")
+    assert(type(blob2.data) == "list" and blob2.data[0] == 120, "bytes field comes back as int-list DATA (wire fidelity, SPEC table)")
+
     # ---- value layer unchanged (stage-1 contract holds under stage 2) ----
     assert(ser.to_json(42) == "42", "int passthrough unchanged")
     assert(ser.roundtrip({"a": 1, "b": [1, 2]}, "json"), "value-layer map round-trips")

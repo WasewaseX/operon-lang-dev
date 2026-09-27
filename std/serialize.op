@@ -61,6 +61,10 @@
 #                            fidelity). Use the wrappers' json_str form
 #                            when the tag must survive, then rebuild at the
 #                            far end with is_ok/has_key.
+#   bytes (W29)              wire fidelity only: the W29 int-list view
+#                            (compact, e.g. [104,105]); re-parse is a plain
+#                            int list — the kind boundary is NOT rebuilt,
+#                            roundtrip() reports false (SPEC table row)
 
 # ---- W34 stage 2: phenotype wire layer (internal helpers) ----
 
