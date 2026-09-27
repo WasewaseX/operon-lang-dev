@@ -1,0 +1,26 @@
+# differential: W32 std/bigint — byte-identical output on both engines.
+# Prints exact values for the canonical escape demos (i64 overflow only
+# raises; bigint answers exactly), the sign matrices, parse rejection,
+# and the to_int boundary armor.
+use std/bigint;
+
+gene t(x) {
+    return bigint.big_to_str(x)
+}
+
+gene main() {
+    print("fact30:  ", t(bigint.big_fact(30)))
+    print("pow256:  ", t(bigint.big_pow(bigint.big_from_int(2), 256)))
+    print("famous:  ", t(bigint.big_mul(bigint.big_from_int(123456789), bigint.big_from_int(987654321))))
+    print("carry:   ", t(bigint.big_add(bigint.big_from_str("99999999999999999999"), bigint.big_from_int(1))))
+    print("add:     ", t(bigint.big_add(bigint.big_from_int(-5), bigint.big_from_int(3))), t(bigint.big_add(bigint.big_from_int(5), bigint.big_from_int(-3))))
+    print("sub:     ", t(bigint.big_sub(bigint.big_from_int(5), bigint.big_from_int(8))), t(bigint.big_sub(bigint.big_zero(), bigint.big_zero())))
+    print("neg:     ", t(bigint.big_neg(bigint.big_from_int(25))), t(bigint.big_neg(bigint.big_zero())))
+    print("cmp:     ", bigint.big_cmp(bigint.big_from_int(-3), bigint.big_from_int(-5)), bigint.big_cmp(bigint.big_from_int(-5), bigint.big_from_int(3)), bigint.big_cmp(bigint.big_zero(), bigint.big_zero()))
+    print("parse:   ", bigint.big_from_str(""), bigint.big_from_str("-"), bigint.big_from_str("12a4"), t(bigint.big_from_str("+007")))
+    print("roundtrip:", t(bigint.big_from_str("-123456789012345678901234567890")))
+    print("toint:   ", bigint.big_to_int(bigint.big_from_str("9223372036854775807")), bigint.big_to_int(bigint.big_from_str("9223372036854775808")), bigint.big_to_int(bigint.big_from_str("-9223372036854775808")))
+    print("tointneg:", bigint.big_to_int(bigint.big_from_str("-9223372036854775807")), bigint.big_to_int(bigint.big_from_int(0)))
+    print("fact21:  ", t(bigint.big_fact(21)))
+    print("pow0:    ", t(bigint.big_pow(bigint.big_from_str("-7"), 0)), t(bigint.big_pow(bigint.big_from_str("-7"), 3)), t(bigint.big_pow(bigint.big_from_str("-7"), 4)))
+}

@@ -2801,7 +2801,7 @@ impl Interp {
             Sub => self.arith(
                 l,
                 r,
-                "+-",
+                "-",
                 |a, b| a.checked_sub(*b).map(Value::Int),
                 |a, b| a - b,
             ),
@@ -3039,7 +3039,8 @@ impl Interp {
         args: Vec<Value>,
     ) -> Result<Value, Stress> {
         match callee {
-            Value::Gene(def, _closure) if def.seq => { // W099 CodeQL: closure env is consumed by the worker path, not here
+            Value::Gene(def, _closure) if def.seq => {
+                // W099 CodeQL: closure env is consumed by the worker path, not here
                 // reg-r3 (re-audit): the sequence's own gates ALL apply at
                 // creation, in the same order as call_gene_inner — GRN veto,
                 // methylation, toggle. reg-r1 gated only the toggle; a
