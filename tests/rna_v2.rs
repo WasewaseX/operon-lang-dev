@@ -9,6 +9,7 @@
 //! header keep v1 text semantics byte-compatible.
 
 use operon::rna2::{apply_rna_v2, is_v2_patch, parse_v2_patch, plain_comment_lines};
+use std::process::Command;
 
 const SRC: &str = r#"gene alpha(x) {
   return x + 1
@@ -318,4 +319,146 @@ fn v1_semantics_untouched_without_header() {
     let patch = "edit alpha { replace \"x + 1\" -> \"x + 7\" }";
     // (v1 dispatch happens in the CLI; here assert is_v2_patch routes NO)
     assert!(!is_v2_patch(patch));
+}
+
+// ------------------------------------------------------------ stage 3 step 1: v1 deprecation marker (W63 policy, info)
+
+fn run_rna_cli(
+    dir: &std::path::Path,
+    src_name: &str,
+    patch_name: &str,
+    extra: &[&str],
+) -> (i32, String, String) {
+    let out = Command::new(env!("CARGO_BIN_EXE_operon"))
+        .arg("rna")
+        .arg(dir.join(src_name))
+        .arg(dir.join(patch_name))
+        .args(extra)
+        .output()
+        .expect("run operon rna");
+    (
+        out.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
+}
+
+fn unique_dir(tag: &str) -> std::path::PathBuf {
+    // per-CALL unique dir (the 2026-09-27 Windows-parallel lesson): nanos+pid
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .subsec_nanos();
+    let dir = std::env::temp_dir().join(format!(
+        "operon_rna3_{}_{}_{}",
+        tag,
+        std::process::id(),
+        nanos
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+#[test]
+fn v1_cli_json_carries_deprecation_marker() {
+    let dir = unique_dir("json");
+    let src = dir.join("app.op");
+    let patch = dir.join("p.rna");
+    std::fs::write(&src, "gene alpha(x) {\n  return x + 1\n}\n").unwrap();
+    std::fs::write(&patch, "edit alpha { replace \"x + 1\" -> \"x + 7\" }").unwrap();
+    let (code, stdout, stderr) = run_rna_cli(&dir, "app.op", "p.rna", &["--json"]);
+    assert_eq!(code, 0, "v1 apply must succeed: stdout={}", stdout);
+    assert!(
+        stdout.contains("\"engine\":\"v1\""),
+        "v1 JSON must self-identify: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("\"deprecated\":true"),
+        "v1 JSON must carry the deprecation flag: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("\"applied\":1"),
+        "the edit itself still applies: {}",
+        stdout
+    );
+    assert!(
+        stderr.contains("syntax: v2"),
+        "stderr note must point at the v2 migration: {}",
+        stderr
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn v1_cli_human_note_goes_to_stderr_only() {
+    let dir = unique_dir("human");
+    let src = dir.join("app.op");
+    let patch = dir.join("p.rna");
+    std::fs::write(&src, "gene alpha(x) {\n  return x + 1\n}\n").unwrap();
+    std::fs::write(&patch, "edit alpha { replace \"x + 1\" -> \"x + 7\" }").unwrap();
+    let (code, stdout, stderr) = run_rna_cli(&dir, "app.op", "p.rna", &[]);
+    assert_eq!(code, 0);
+    // stdout stays the report; the deprecation note is stderr-only
+    assert!(
+        stdout.starts_with("rna: "),
+        "stdout report unchanged: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("1 applied"),
+        "report shows the apply: {}",
+        stdout
+    );
+    assert!(
+        stderr.contains("deprecated (info, W63 step 1)"),
+        "note present: {}",
+        stderr
+    );
+    assert!(
+        !stdout.contains("deprecated"),
+        "no deprecation text leaks into stdout: {}",
+        stdout
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn v2_cli_json_is_not_marked_deprecated() {
+    let dir = unique_dir("v2");
+    let src = dir.join("app.op");
+    let patch = dir.join("p.rna");
+    std::fs::write(&src, "gene alpha(x) {\n  return x + 1\n}\n").unwrap();
+    std::fs::write(&patch, "syntax: v2\nrename gene alpha -> alpha2").unwrap();
+    let (code, stdout, _stderr) = run_rna_cli(&dir, "app.op", "p.rna", &["--json"]);
+    assert_eq!(code, 0, "v2 rename must succeed: {}", stdout);
+    assert!(
+        stdout.contains("\"engine\":\"v2\""),
+        "v2 JSON self-identifies: {}",
+        stdout
+    );
+    assert!(
+        !stdout.contains("\"deprecated\":true"),
+        "v2 is NOT deprecated: {}",
+        stdout
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn v1_write_output_bytes_unchanged_by_deprecation() {
+    let dir = unique_dir("bytes");
+    let src = dir.join("app.op");
+    let patch = dir.join("p.rna");
+    let before = "gene alpha(x) {\n  return x + 1\n}\n";
+    std::fs::write(&src, before).unwrap();
+    std::fs::write(&patch, "edit alpha { replace \"x + 1\" -> \"x + 7\" }").unwrap();
+    let (code, _stdout, _stderr) = run_rna_cli(&dir, "app.op", "p.rna", &["--write"]);
+    assert_eq!(code, 0);
+    let after = std::fs::read_to_string(&src).unwrap();
+    // the deprecation is METADATA ONLY: the file contract is byte-identical to
+    // the pre-deprecation v1 engine (notes go to stderr, flags to --json)
+    assert_eq!(after, "gene alpha(x) {\n  return x + 7\n}\n");
+    let _ = std::fs::remove_dir_all(&dir);
 }
