@@ -1,4 +1,4 @@
-# sec-r5 F-11: read_file("/dev/zero") was an infinite byte well — OOM
+# sec-r5 F-11: read_file("/dev/zero") was an infinite byte well, OOM
 # SIGKILL (rc 137). Non-regular files are now refused before open.
 gene main() {
     stress {

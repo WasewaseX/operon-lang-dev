@@ -1,4 +1,4 @@
-# heap differential — deterministic min-heap ops, byte-identical both engines
+# heap differential, deterministic min-heap ops, byte-identical both engines
 use std/heap;
 let h = heap.heap_from([5, 1, 4, 2, 3])
 print("heap: {h}")

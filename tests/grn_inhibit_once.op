@@ -1,8 +1,8 @@
-# reg-r3 (re-audit) — inhibition applies ONCE per fire, post-activation
+# reg-r3 (re-audit), inhibition applies ONCE per fire, post-activation
 # (SPEC §11). This program catches the exact Rust↔oracle divergence the
 # loop-2 audit found: a pre-charged target under a non-threshold inhibitor
 # yielded 0.1 in the Rust core but 0.0 in the old per-wave oracle mirror.
-# With strength 0.9 and post-activation target 1.0: 1.0 − 0.9 = 0.1 once —
+# With strength 0.9 and post-activation target 1.0: 1.0 − 0.9 = 0.1 once,
 # per-wave subtraction would have driven it to 0.0.
 regulate {
     d activates d strength 1.0
@@ -16,7 +16,7 @@ frame proof {
     let lv2 = grn_fire("c")
     assert(lv2.c == 1.0, "inhibitor pulsed")
     # once-per-fire: exactly one subtraction of 0.9 from 1.0
-    assert(grn_get("d") > 0.0, "inhibition applied once — target survives")
+    assert(grn_get("d") > 0.0, "inhibition applied once, target survives")
     assert(grn_get("d") < 0.2, "inhibition is real (0.1, not 1.0)")
 }
 main {

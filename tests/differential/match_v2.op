@@ -1,4 +1,4 @@
-# match_v2 — W02 differential pin: pattern matching on both engines,
+# match_v2, W02 differential pin: pattern matching on both engines,
 # byte-identical. Variant payload capture (incl. nesting), tag-only forms,
 # family distinction, list patterns with *rest tails, map patterns with
 # sub-patterns, or-pattern first-hit binding, guards (binding visibility,

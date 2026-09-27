@@ -1,11 +1,11 @@
-# std/bigint — exact arbitrary-precision integers (W32 tutorial path).
+# std/bigint, exact arbitrary-precision integers (W32 tutorial path).
 #
 # WHY THIS EXISTS: native Operon integers are i64 with a hard no-wrap
-# contract — every arithmetic surface raises catchable `overflow` at the
+# contract, every arithmetic surface raises catchable `overflow` at the
 # i64 boundary (SPEC §9 limits table; pinned op-by-op in
 # tests/overflow_contract.op). When a computation legitimately needs to
-# cross that boundary — factorials, cryptography-style exponents, exact
-# combinatorics — this module gives you unbounded integers built from
+# cross that boundary, factorials, cryptography-style exponents, exact
+# combinatorics, this module gives you unbounded integers built from
 # plain lists, so the whole thing is readable, auditable, and runs
 # byte-identically on BOTH engines (it is ordinary .op).
 #
@@ -23,7 +23,7 @@
 # no clocks), and never panics. Parsing functions return null on bad
 # input instead of guessing; big_to_int returns null when the value no
 # longer fits i64 (never a silent clamp). Costs are what you expect:
-# add/sub are O(limbs), mul is schoolbook O(n*m) — fine for thousands
+# add/sub are O(limbs), mul is schoolbook O(n*m), fine for thousands
 # of digits, not a replacement for a real bignum kernel.
 #
 # Pins: tests/std_bigint.op (asserts, both engines) +
@@ -135,7 +135,7 @@ gene big_from_int(n) {
 }
 
 gene big_from_str(s) {
-    # optional leading sign, then digits ONLY — anything else is null
+    # optional leading sign, then digits ONLY, anything else is null
     let t = s
     let sign = 1
     if len(t) > 0 && t.slice(0, 1) == "-" {
@@ -218,7 +218,7 @@ gene big_abs(x) {
 }
 
 gene big_cmp(a, b) {
-    # -1 (a<b), 0 (a==b), 1 (a>b) — full signed ordering
+    # -1 (a<b), 0 (a==b), 1 (a>b), full signed ordering
     let sa = a[0]
     let sb = b[0]
     if sa != sb {
@@ -320,7 +320,7 @@ gene big_to_int(x) {
     # i64::MAX = 9223372036854775807 -> little-endian base-10^4 limbs
     # (grouped from the RIGHT: 922 | 3372 | 368 | 5477 | 5807; the third
     # group is "0368" -> 368. i64::MIN+1 == 2^63 differs ONLY in the low
-    # limb: 5808 — the boundary case this guard exists for.)
+    # limb: 5808, the boundary case this guard exists for.)
     let lim = [5807, 5477, 368, 3372, 922]
     let c = __cmp_mag(ls, lim)
     if c > 0 {

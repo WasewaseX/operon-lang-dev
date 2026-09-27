@@ -1,8 +1,8 @@
-# std/path — pure lexical path shaping. NO filesystem access: every
+# std/path, pure lexical path shaping. NO filesystem access: every
 # function is string arithmetic, needs no capability, and never touches
 # the disk (fs reads/writes stay in std/fs under the capability gates).
 #
-# Contract: POSIX-style separators (`/`) — the language's own file APIs
+# Contract: POSIX-style separators (`/`), the language's own file APIs
 # are POSIX-shaped on every platform, so one separator form is the truth.
 # `path_norm` is purely lexical: it collapses `.` and `..` and duplicate
 # slashes WITHOUT resolving symlinks (a `..` that climbs past the root of
@@ -73,7 +73,7 @@ gene path_is_abs(p) {
 }
 
 gene path_join(parts) {
-    # join a list of components with "/" — empty parts dropped
+    # join a list of components with "/", empty parts dropped
     let segs = []
     for part in parts {
         if part != "" {

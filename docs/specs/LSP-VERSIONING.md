@@ -16,8 +16,8 @@ is safe to call from installers and editor plugins. Unknown arguments exit 2
 with a message; the server proper takes no arguments and reads LSP frames on
 stdio.
 
-- **operon** — the crate version, moves with milestones (D-009). Informational.
-- **lsp** — the CONTRACT version editors pin against. Bumped on ANY breaking
+- **operon**, the crate version, moves with milestones (D-009). Informational.
+- **lsp**, the CONTRACT version editors pin against. Bumped on ANY breaking
   change to the handshake shape, the advertised capability set, or method
   semantics. Additive bug-fixes do not bump it. Current: **1**.
 
@@ -37,21 +37,21 @@ The `initialize` result carries the contract next to the standard fields:
 
 `operonLsp.features` and `capabilities` must stay in lockstep; the smoke test
 (`tests/lsp_smoke.py`) asserts the version field, the feature list, and the
-`--version` output shape — drift fails the build.
+`--version` output shape, drift fails the build.
 
 ## Editor-extension pinning table
 
 | client | lsp version | notes |
 |---|---|---|
 | Neovim ≥ 0.8 (`vim.lsp.start`) | 1 | zero config beyond `cmd` + `filetypes`; sees diagnostics, hover, definition, symbols, completion, formatting |
-| VS Code (generic LSP client extension) | 1 | same surface via `operon-ls` command; no official extension published yet — this table updates with the extension |
-| any LSP 3.17-capable client | 1 | stdio framing (Content-Length), full-text document sync (ranged edits ignored by contract — the server advertises sync=1) |
+| VS Code (generic LSP client extension) | 1 | same surface via `operon-ls` command; no official extension published yet, this table updates with the extension |
+| any LSP 3.17-capable client | 1 | stdio framing (Content-Length), full-text document sync (ranged edits ignored by contract, the server advertises sync=1) |
 
 The honest scope line: lsp v1 advertises exactly the ten features above
 (W45 added `references` + `semanticTokens` and W45-v2 added `rename`, all
-additively — no bump, per rule 1). Repair provenance (W46) rides the
+additively, no bump, per rule 1). Repair provenance (W46) rides the
 EXISTING `diagnostics` and `hover` features: publishDiagnostics may carry
-`relatedInformation` and hover may append the repair note — both additive
+`relatedInformation` and hover may append the repair note, both additive
 fields on advertised features, covered by the same rule. `--explain FILE`
 is a CLI door (not an LSP method), outside the contract. Inlay-hints remain
 unclaimed.
@@ -62,14 +62,14 @@ unclaimed.
 code identifier; it refuses (null) on keywords, literals, synonyms, mark
 names, builtins, and positions inside strings or comments. `textDocument/rename`
 returns a same-file WorkspaceEdit over every code occurrence of the
-identifier — declaration included; interpolated `{..}` expressions count
+identifier, declaration included; interpolated `{..}` expressions count
 (they are evaluated), string/comment/`@mark` mentions never do. The engine
 is the SAME scanner references uses (zero drift between the two features),
-grep-class and identifier-precise, NOT scope-aware — run `operon check`
+grep-class and identifier-precise, NOT scope-aware, run `operon check`
 after a rename; that honesty mirrors W67's `operon rna` rename discipline.
 All-or-nothing: an invalid, reserved, builtin-target, same-name, or
 already-taken new name refuses the WHOLE rename as a JSON-RPC error
-(code -32001) so the editor can surface the reason — a silent null or a
+(code -32001) so the editor can surface the reason, a silent null or a
 partial edit set are both contract violations.
 
 ## Change rules

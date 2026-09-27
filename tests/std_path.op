@@ -1,4 +1,4 @@
-# std/path — W27 proof: pure lexical path shaping (no fs, no capabilities).
+# std/path, W27 proof: pure lexical path shaping (no fs, no capabilities).
 # Covers base/dir/ext/is_abs/join/norm/split_ext including the edge cases:
 # trailing slashes, dotfiles, absolute-root climbing, relative ".." keeping.
 use std/path;

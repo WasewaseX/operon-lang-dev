@@ -16,7 +16,6 @@
   "profile",
   "repl",
   "rna",
-  "run",
   "test",
   "version",
   "watch"
@@ -120,7 +119,7 @@
  },
  "redteam_files": 101,
  "spec": {
-  "h1": "# Operon \u2014 Language Specification",
+  "h1": "# Operon, Language Specification",
   "status": "v2.3.0-dev"
  },
  "std_function_count": 226,

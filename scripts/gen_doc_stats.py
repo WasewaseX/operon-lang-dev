@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""gen_doc_stats.py — W53/W55: ONE generated source of truth for doc numbers.
+"""gen_doc_stats.py, W53/W55: ONE generated source of truth for doc numbers.
 
 Emits docs/stats.json + docs/STATS.md. Humans never hand-type these numbers:
   - version (Cargo.toml)          - SPEC version lines
@@ -84,7 +84,7 @@ def redteam_files():
     return len([f for f in os.listdir(d) if f.endswith(".op")])
 
 def _walk_op_files(rel_dir):
-    """Recursive .op listing — matches `operon test` (tests/ scanned recursively).
+    """Recursive .op listing, matches `operon test` (tests/ scanned recursively).
     Without this, the 'Proof files' line (top-level only) contradicts the
     binary's 'Proof run' line (recursive) inside the same generated STATS.md."""
     tdir = os.path.join(ROOT, rel_dir)
@@ -180,12 +180,12 @@ def compute():
 
 def render(s):
     L = []
-    L.append("# Operon repo statistics — GENERATED, do not hand-edit\n")
+    L.append("# Operon repo statistics, GENERATED, do not hand-edit\n")
     L.append("Source of truth: `scripts/gen_doc_stats.py` (run from repo root).\n"
              "Validated by `scripts/check_docs_sync.py`. Hand-typed numbers in\n"
-             "README/SPEC/BENCH are forbidden — link here instead.\n")
+             "README/SPEC/BENCH are forbidden, link here instead.\n")
     L.append(f"- **Version**: {s['version']}  · SPEC Status: {s['spec']['status']}")
-    L.append(f"- **Keywords (parser reserved set)**: {s['keyword_count']} — table in "
+    L.append(f"- **Keywords (parser reserved set)**: {s['keyword_count']}, table in "
              f"[KEYWORDS.md](KEYWORDS.md)")
     if s["keyword_analogy_pending"]:
         L.append(f"  - analogy pending: {', '.join(s['keyword_analogy_pending'])}")
@@ -199,7 +199,7 @@ def render(s):
         L.append(f"- **Proof run** ({pt['source']}): {pt['files']} files, "
                  f"{pt['proofs']} proofs, {pt['asserts']} asserts")
     else:
-        L.append("- **Proof run**: binary not built — run scripts/build.sh then regenerate")
+        L.append("- **Proof run**: binary not built, run scripts/build.sh then regenerate")
     h = s.get("harness")
     if h:
         L.append(f"- **Differential harness**: {h['match']} match / {h['diverge']} diverge "
@@ -221,15 +221,15 @@ def main():
         f.write("\n")
     with open(os.path.join(ROOT, "docs", "STATS.md"), "w", encoding="utf-8") as f:
         f.write(render(s))
-    # docs/KEYWORDS.md — W55: generated keyword inventory (D-008 analogies)
+    # docs/KEYWORDS.md, W55: generated keyword inventory (D-008 analogies)
     pending = s["keyword_analogy_pending"]
-    K = ["# Operon keywords — GENERATED from src/parser.rs, do not hand-edit\n",
+    K = ["# Operon keywords, GENERATED from src/parser.rs, do not hand-edit\n",
          "The parser's reserved set (source of truth: `KEYWORDS` in `src/parser.rs`).\n",
          f"Count: **{s['keyword_count']}**. Regenerate: `python3 scripts/gen_doc_stats.py`.\n",
          "Analogy voice per D-008 (zero biology assumed; one-line programmer meaning).\n",
          "| keyword | programmer analogy |", "|---|---|"]
     for k in s["keywords"]:
-        a = KEYWORD_ANALOGY.get(k, "*(analogy pending — file a docs finding)*")
+        a = KEYWORD_ANALOGY.get(k, "*(analogy pending, file a docs finding)*")
         K.append(f"| `{k}` | {a} |")
     K.append("\nLiteral words `true false null` and logical `and or not` are recognized in\n"
              "expression positions but are not part of the reserved table (SPEC §3).\n")

@@ -1,8 +1,8 @@
-# std/seq — self-hosted sequence (generator) combinators.
+# std/seq, self-hosted sequence (generator) combinators.
 #
 # Sequences are worker cells: a sequence body runs on its own worker thread
 # and values cross to the consumer through a rendezvous channel. Transcripts
-# do not cross membranes — a running sequence object stays in the cell that
+# do not cross membranes, a running sequence object stays in the cell that
 # created it. So these combinators take the SOURCE as the NAME of a sequence
 # gene (resolved inside the combinator's own worker via call()), while
 # transformation genes travel freely (named genes and lambdas cross by

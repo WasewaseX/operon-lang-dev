@@ -86,7 +86,7 @@ rep('''        if word == "gene":
             self.next()
             return self.gene_def([])''',
     '''        if word == "trait":
-            # W04 (SPEC 8b): `trait Name { gene m(); gene n() { ... } }` —
+            # W04 (SPEC 8b): `trait Name { gene m(); gene n() { ... } }`,
             # mirror of the Rust parser. A method with a body is a DEFAULT
             # (parsed by the normal gene parser); one without is REQUIRED.
             self.next()
@@ -104,7 +104,7 @@ rep('''        if word == "gene":
                         break
                     if t[0] == "IDENT" and (t[1] == "gene" or SYNONYMS.get(t[1]) == "gene"):
                         if self._trait_method_has_body():
-                            self.next()  # consume 'gene' — gene_def parses from the name
+                            self.next()  # consume 'gene', gene_def parses from the name
                             g = self.gene_def([])
                             if g[0] == "gene":
                                 methods.append(TraitM(g[1].name or "?", False, g[1]))
@@ -127,7 +127,7 @@ rep('''        if word == "gene":
             self.next()
             return self.gene_def([])''')
 
-# 6. helper methods (peek-ahead + params) — insert before `def stmt(self):`
+# 6. helper methods (peek-ahead + params), insert before `def stmt(self):`
 rep('''    def stmt(self):
         t = self.peek()''',
     '''    def _trait_method_has_body(self):
@@ -153,7 +153,7 @@ rep('''    def stmt(self):
         return False
 
     def _trait_params(self):
-        # W04: consume `(a, b, ...)` — plain names (a signature, not a body).
+        # W04: consume `(a, b, ...)`, plain names (a signature, not a body).
         if not (self.peek()[0] == "SYM" and self.peek()[1] == "("):
             return []
         self.next()
@@ -204,7 +204,7 @@ rep('''        obj = ObjInst(p, fields)
             break
         return obj''',
     '''        obj = ObjInst(p, fields)
-        # W04: trait contract check — required methods must be provided by
+        # W04: trait contract check, required methods must be provided by
         # the lineage; a break is a NOTE (Total Grammar), never fatal.
         for tname in p.implements:
             t = self.traits.get(tname)
@@ -238,7 +238,7 @@ rep('''            for dd in chain:
                 for g in dd.methods:
                     if g.name == name:
                         return self.call_method_gene(g, recv, args)
-            # W04: trait default methods — implemented traits in declaration
+            # W04: trait default methods, implemented traits in declaration
             # order; virtual (self.x() inside dispatches through the lineage
             # first) because the fallback resolution is the same walk.
             for tname in recv.defn.implements:

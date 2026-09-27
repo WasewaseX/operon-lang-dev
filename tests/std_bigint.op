@@ -1,4 +1,4 @@
-# W32: std/bigint — exact arbitrary-precision arithmetic over sign-magnitude
+# W32: std/bigint, exact arbitrary-precision arithmetic over sign-magnitude
 # base-10^4 digit lists (the sanctioned tutorial path past the i64 no-wrap
 # contract). Pins representation canonicalization, the full sign matrix,
 # known exact values, and the to_int boundary armor.

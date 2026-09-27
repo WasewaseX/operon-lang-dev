@@ -1,11 +1,11 @@
-# loop-9 (C8): quorum sensing — part 3: the population layer.
-# Real biology: the signal is EXTRACELLULAR and shared — my secretion
+# loop-9 (C8): quorum sensing, part 3: the population layer.
+# Real biology: the signal is EXTRACELLULAR and shared, my secretion
 # raises YOUR activation. In Operon the medium is process-global: spawned
-# cells hold the SAME live pool (environment, not cytoplasm — deliberately
+# cells hold the SAME live pool (environment, not cytoplasm, deliberately
 # NOT part of the frozen RegulationSnap), and integer molecule counts make
 # concurrent secretions COMMUTE (order-free accumulation).
 # Contract: cross-cell reads are deterministic once every spawned cell is
-# joined (join-before-read). Dilution rides passage() — each division
+# joined (join-before-read). Dilution rides passage(), each division
 # halves the medium (default quorum.dilution 0.5, binary-exact).
 # Fails-pre: cross-cell reads were phantom nulls.
 autoinducer ahl
@@ -19,7 +19,7 @@ frame proof {
     assert(join(i1) == "a", "worker A expresses")
     assert(join(i2) == "a", "worker B expresses")
     assert(quorum("ahl") == 0.4, "joined workers' secretions committed to the shared medium: 2e8 + 2e8 = 0.4")
-    # a worker spawned AFTER a host secretion sees the host's charge —
+    # a worker spawned AFTER a host secretion sees the host's charge,
     # the medium is live, not a frozen snapshot
     secrete("ahl", 100000000)
     let i3 = spawn(secrete_a, [])

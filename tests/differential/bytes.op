@@ -1,4 +1,4 @@
-# differential: W029 first-class bytes — byte-identical stdout on both
+# differential: W029 first-class bytes, byte-identical stdout on both
 # engines (Rust Vec<u8> vs Python bytes, same spelling everywhere).
 gene probe(f) {
     stress {

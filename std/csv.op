@@ -1,8 +1,8 @@
-# std/csv — CSV-ish parsing and serialization, a pure string layer.
+# std/csv, CSV-ish parsing and serialization, a pure string layer.
 #
 # RFC-4180 flavored: fields may be quoted; inside quotes the separator and
 # newlines are literal; "" inside a quoted field is one literal quote.
-# The separator is a parameter — "csv" also handles TSV ("|", ";", "\t"...).
+# The separator is a parameter, "csv" also handles TSV ("|", ";", "\t"...).
 #
 # csv_parse is a character-level state machine, so quoted multi-line fields
 # survive; every function here is pure (no fs access, no caps involved).
@@ -18,7 +18,7 @@ gene csv_escape(field, sep) {
 
 gene csv_row(fields, sep) {
     # serialize one row: ["a", "b,c"] -> a,"b,c"
-    # dx-r5 (audit P0-2): parts accumulate in a list, joined once — the
+    # dx-r5 (audit P0-2): parts accumulate in a list, joined once, the
     # concat loop was O(n^2) (each + re-allocated the whole row so far).
     let parts = []
     let i = 0
@@ -35,7 +35,7 @@ gene csv_row(fields, sep) {
 gene csv_parse(text, sep) {
     # parse a whole document into rows (list of list of string fields)
     # dx-r5 (audit P0-2): the field buffer accumulates in a list joined once
-    # per field, and the document is iterated with `for c in text` — the old
+    # per field, and the document is iterated with `for c in text`, the old
     # form re-allocated the field per character AND sliced per character
     # (measured 3.7 s on a 196 KB document; this form is linear).
     # pending = saw a double-quote inside a quoted field: it either opens an

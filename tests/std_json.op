@@ -1,4 +1,4 @@
-# differential: std/json — navigation and reshaping helpers
+# differential: std/json, navigation and reshaping helpers
 #
 # note: raw JSON text with object braces is built via chr(123)/chr(125) here,
 # because a bare { inside a string literal starts interpolation (SPEC).

@@ -1,4 +1,4 @@
-# std/time — W33 proof: pure duration/instant arithmetic over the L1d
+# std/time, W33 proof: pure duration/instant arithmetic over the L1d
 # clock builtins. UTC-only contract (no tz support, W89 determinism).
 # Wall-clock reads are never pinned; every assert uses fixed timestamps.
 use std/time;

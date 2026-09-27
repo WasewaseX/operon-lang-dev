@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""perf_gate.py — W082: performance regression gate (dev-3, M100).
+"""perf_gate.py, W082: performance regression gate (dev-3, M100).
 
 Compares two bench_compare.py --json outputs (base vs head, SAME runner)
 and fails on any tracked-workload regression beyond the threshold.
 
 Design constraints:
-  * consumes builder-B's bench_compare.py JSON (B1 artifact) — zero edits to
+  * consumes builder-B's bench_compare.py JSON (B1 artifact), zero edits to
     that script, this is a separate gate layer
   * compares the `operon` runner only (the oracle/native-py runners are
     reference bars, not regression targets)
@@ -25,11 +25,11 @@ import sys
 
 # Per-workload threshold overrides (2026-09-27 calibration, red-main r5
 # follow-up). file_io is I/O-bound: on GitHub shared runners its observed
-# spread across IDENTICAL code dwarfs the 20% default — base readings
+# spread across IDENTICAL code dwarfs the 20% default, base readings
 # 61.3 / 63.5 / 80.2 ms and one phantom +211% head spike inside a single
 # hour (runs 36300299980, 36301961772). A gate below the noise floor
 # produces false reds and erodes trust in the gate, so the I/O-bound
-# workload gets a 100% threshold — still catches a real catastrophic
+# workload gets a 100% threshold, still catches a real catastrophic
 # regression (2-3x, e.g. a lost write-batching or a per-line fsync) while
 # ignoring runner jitter. CPU-bound workloads keep the default.
 NOISY_THRESHOLDS = {"file_io": 100.0}
@@ -38,7 +38,7 @@ NOISY_THRESHOLDS = {"file_io": 100.0}
 def load_rows(path):
     """bench_compare.py --json shape:
     {"suites": {name: {"operon": {"min": s, "median": s, ...}, "oracle": ...}},
-     "micros": {...}} — times in SECONDS. Convert to ms, prefer median."""
+     "micros": {...}}, times in SECONDS. Convert to ms, prefer median."""
     with open(path) as f:
         data = json.load(f)
     rows = {}
@@ -103,7 +103,7 @@ def main():
         print(f"note: workloads missing from head (not failed): {', '.join(missing)}")
 
     if failed:
-        print(f"perf_gate: FAIL — regression > threshold: {', '.join(failed)}")
+        print(f"perf_gate: FAIL, regression > threshold: {', '.join(failed)}")
         return 1
     print("perf_gate: PASS")
     return 0

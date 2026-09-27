@@ -1,4 +1,4 @@
-# T2e — enhance has a runtime effect (SPEC §11, v2.2 honesty pass)
+# T2e, enhance has a runtime effect (SPEC §11, v2.2 honesty pass)
 # An `enhance`d gene lowers its GRN activating thresholds by ENHANCE_DELTA
 # (0.25), so under the T2a call gate an enhanced gene fires where an
 # unenhanced one stays gated. Pre-T2e cores gate both genes identically
@@ -12,10 +12,10 @@ enhance boosted;
 gene boosted() { return "boosted-ran" }
 gene plain() { return "plain-ran" }
 frame proof {
-    # before any fire: level(mid) = 0 — even the reduced threshold holds
+    # before any fire: level(mid) = 0, even the reduced threshold holds
     assert(boosted() == null, "no regulator activity: gate holds even enhanced")
     assert(plain() == null, "no regulator activity: plain gated")
-    # one fire: mid settles at 0.4 (hop attenuation) — below 0.5, at/above 0.25
+    # one fire: mid settles at 0.4 (hop attenuation), below 0.5, at/above 0.25
     let lv = grn_fire("signal")
     assert(lv.mid == 0.4, "hop attenuation sets mid level")
     assert(plain() == null, "0.4 < 0.5: unenhanced gene stays gated")

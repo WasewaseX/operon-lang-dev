@@ -1,4 +1,4 @@
-# reg-bio-3 (A1/A7 + §13): worker cells are whole regulatory cells — the
+# reg-bio-3 (A1/A7 + §13): worker cells are whole regulatory cells, the
 # polycistronic unit registry rides the spawn snapshot: a worker calling a
 # cistron is gated by the SAME unit-level edges (induction frozen at spawn).
 regulate {

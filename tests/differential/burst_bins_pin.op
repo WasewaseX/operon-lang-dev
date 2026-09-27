@@ -1,4 +1,4 @@
-# loop-9 (P0-3): the burst-index parity pin — COMPLETE 20-call bins only.
+# loop-9 (P0-3): the burst-index parity pin, COMPLETE 20-call bins only.
 # The Rust core measures complete bins (call_clock / 20) and excludes the
 # trailing partial bin ("a perfectly periodic pattern scores 0, as the
 # biology demands"); the oracle mirror used to include the trailing partial
@@ -6,7 +6,7 @@
 # This pin locks the complete-bin rule on BOTH cores.
 #
 # Call-clock ledger in the proof context (the frame's own execution ticks
-# the shared clock once before the body runs — clock 1, bucket 0):
+# the shared clock once before the body runs, clock 1, bucket 0):
 #   frame tick     -> clock 1            (no gene bucket)
 #   g x41          -> clock 2..42        g bins: b0=19, b1=20, b2=2
 #   m x10          -> clock 43..52       m bins: b2=10
@@ -36,7 +36,7 @@ frame proof {
     assert(len(f.bursts) == 0, "telegraph layer off: no promoter off-counts")
 }
 # differential surface: the harness compares plain-RUN stdout, where frames
-# never execute — so main() reproduces the same schedule (its own call is
+# never execute, so main() reproduces the same schedule (its own call is
 # the one clock-1 tick, exactly like the frame tick in proof mode) and
 # promotes the exact values for byte-for-byte parity on both cores.
 gene main() {

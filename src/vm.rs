@@ -1,4 +1,4 @@
-//! vm.rs — W09 stage A2: the OIR1 bytecode compiler and stack machine.
+//! vm.rs, W09 stage A2: the OIR1 bytecode compiler and stack machine.
 //!
 //! Architecture (per docs/vm-design.md §3-§8): the VM shares the tree-walk's
 //! `Interp`, `Value`, `Env`, notes, capability sandbox and fuel pool. Native
@@ -206,7 +206,7 @@ impl<'a> Compiler<'a> {
             Expr::Binary(op, l, r, op_line) => {
                 // And/Or/Nullish short-circuit (the rhs must not evaluate
                 // when the lhs decides); In routes through the bridge too.
-                // apply_binop's And/Or arm is unreachable!() by contract —
+                // apply_binop's And/Or arm is unreachable!() by contract,
                 // the tree-walk never calls it there, and neither may we.
                 match op {
                     BinOp::And | BinOp::Or | BinOp::Nullish | BinOp::In => return false,
@@ -802,7 +802,7 @@ pub fn optimize(code: &GeneCode) -> GeneCode {
 /// every target > `at` shifts down by `count`; a target inside the removed
 /// range cannot exist (we only remove folded operands, never jump targets,
 /// because jumps are only emitted at statement boundaries the folder does
-/// not touch — enforced by only folding Push/Push/Bin triples).
+/// not touch, enforced by only folding Push/Push/Bin triples).
 fn remap_after_removal(code: &mut GeneCode, at: usize, count: usize) {
     for instr in code.code.iter_mut() {
         match instr {

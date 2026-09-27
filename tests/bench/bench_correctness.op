@@ -1,4 +1,4 @@
-# tests/bench — correctness proofs for the B1 benchmark fixtures (builder-B).
+# tests/bench, correctness proofs for the B1 benchmark fixtures (builder-B).
 # Benchmarks that measure the wrong answer are worse than no benchmarks, so
 # every scripts/bench/*.op workload gets a small-scale twin here with
 # closed-form expected values. Fast by design: the proof suite sweeps this
@@ -31,20 +31,20 @@ gene worker_a(n) { return n + 1 }
 gene worker_b(n) { return n * 2 }
 
 frame proof {
-    # fib25.op — naive recursion produces the sequence
+    # fib25.op, naive recursion produces the sequence
     assert(fib(10) == 55, "fib(10) == 55")
     assert(fib(15) == 610, "fib(15) == 610")
 
-    # loops.op — sum of i % 7 for i in range(20): 21 + 21 + 15 = 57
+    # loops.op, sum of i % 7 for i in range(20): 21 + 21 + 15 = 57
     let acc = 0
     for i in range(20) { acc = acc + i % 7 }
     assert(acc == 57, "loops fixture: sum(i%7, i<20) == 57")
 
-    # recursion.op — binomial coefficients (wide-shallow recursion)
+    # recursion.op, binomial coefficients (wide-shallow recursion)
     assert(pasc(10, 5) == 252, "C(10,5) == 252")
     assert(pasc(20, 10) == 184756, "C(20,10) == 184756 (fixture scale)")
 
-    # collections.op — insert-or-increment over 20 keys, 200 writes
+    # collections.op, insert-or-increment over 20 keys, 200 writes
     let m = {}
     let xs = []
     for i in range(200) {
@@ -58,7 +58,7 @@ frame proof {
     assert(len(m) == 20, "collections fixture: 20 distinct keys")
     assert(m["k7"] == 10, "collections fixture: each key hit 10x")
 
-    # grn.op — the call gate is real: no level, no call; level, full call
+    # grn.op, the call gate is real: no level, no call; level, full call
     assert(worker_a(1) == null, "grn fixture: unregulated level vetoes call")
     assert(worker_b(3) == null, "grn fixture: second edge vetoes too")
     grn_fire("driver")

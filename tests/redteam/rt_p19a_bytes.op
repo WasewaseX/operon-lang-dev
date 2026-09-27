@@ -1,10 +1,10 @@
-# rt_p19a — W029 (first-class bytes): adversarial probes. Every probe must
+# rt_p19a, W029 (first-class bytes): adversarial probes. Every probe must
 # stay CONTAINED: catchable stress at the ceiling, no panic, no OOM abort,
 # no silent coercion across the str/bytes boundary, and the capability
 # gates on bytes file I/O identical to the text forms.
 #
 # ORDER MATTERS: the aggregate allocation ceiling is MONOTONIC (once tripped,
-# every later mem_charge fails — SPEC §9b), so the probe that trips it runs
+# every later mem_charge fails, SPEC §9b), so the probe that trips it runs
 # LAST; everything before it must stay under the aggregate budget.
 
 # 1. per-op allocation ceilings are catchable overflow, not aborts (Rust
@@ -90,7 +90,7 @@ stress {
     print("contained: capability gate")
 }
 
-# 7. aggregate run ceiling — LAST (monotonic: once tripped, every later
+# 7. aggregate run ceiling, LAST (monotonic: once tripped, every later
 #    charge fails, SPEC §9b). Repeated 100 MiB construction must hit the
 #    2 GiB aggregate ceiling and stay there.
 stress {

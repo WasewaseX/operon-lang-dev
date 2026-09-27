@@ -1,5 +1,5 @@
 # sec-r5 F-12: non-scalar map keys miss the hash memo and linear-scan
-# deep_eq per upsert — quadratic CPU that burned zero fuel (25k inserts
+# deep_eq per upsert, quadratic CPU that burned zero fuel (25k inserts
 # was a live hang). Bounded scan + step charge: caught overflow. Same
 # monotonic-ceiling semantics as p11a: top-level containment.
 gene main() {

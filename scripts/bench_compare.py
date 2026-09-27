@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""bench_compare.py — Operon benchmark suite (B1, builder-B).
+"""bench_compare.py, Operon benchmark suite (B1, builder-B).
 
 Three runners on identical algorithms:
-  operon    — the Rust core (bin/operon run <fixture>)
-  oracle    — bootstrap/oracle.py, the CPython tree-walking semantic mirror
-  native-py — the same algorithm hand-written in pure CPython (the v3.0
+  operon   , the Rust core (bin/operon run <fixture>)
+  oracle   , bootstrap/oracle.py, the CPython tree-walking semantic mirror
+  native-py, the same algorithm hand-written in pure CPython (the v3.0
               "CPython-level speed" target bar)
 
 Modes:
-  default     — the six named workloads in scripts/bench/*.op
-  --micro     — per-construct micro fixtures in scripts/bench/micro/*.op
-  --json PATH — additionally write machine-readable results
-  --iters N   — timing iterations (default 5; oracle uses max(3, N//2))
-  --quick     — fewer iterations, smaller fixture list
+  default    , the six named workloads in scripts/bench/*.op
+  --micro    , per-construct micro fixtures in scripts/bench/micro/*.op
+  --json PATH, additionally write machine-readable results
+  --iters N  , timing iterations (default 5; oracle uses max(3, N//2))
+  --quick    , fewer iterations, smaller fixture list
 
 Honesty notes:
   * timings are end-to-end process times (interpreter startup included);
@@ -37,7 +37,7 @@ OPERON = os.path.join(ROOT, "bin", "operon")
 ORACLE = os.path.join(ROOT, "bootstrap", "oracle.py")
 
 # --------------------------------------------------------------------------
-# native CPython mirrors — identical algorithms, one Python statement at a
+# native CPython mirrors, identical algorithms, one Python statement at a
 # time. Keep these in lockstep with scripts/bench/*.op and micro/*.op.
 # --------------------------------------------------------------------------
 
@@ -83,7 +83,7 @@ def native_recursion():
 
 def native_grn():
     # mirror of grn.op: per-call gate check (level >= threshold, one gene
-    # enhanced by 0.25), then arithmetic body. Happy path — all calls pass.
+    # enhanced by 0.25), then arithmetic body. Happy path, all calls pass.
     level = {"driver": 0.0}
 
     def worker_a(n):
@@ -335,7 +335,7 @@ def report_suites(results, iters):
                  (f"{op/nat:.1f}x", 8), (f"{orc/op:.1f}x", 10),
                  (str(calls) if calls else "-", 10)]
         print(fmt_row(cells))
-    print("(times in ms, end-to-end incl. startup; op/py = operon vs native CPython — the v3.0 gap)")
+    print("(times in ms, end-to-end incl. startup; op/py = operon vs native CPython, the v3.0 gap)")
 
 def report_micros(results, iters):
     hdr = [("micro", 12), ("operon", 10), ("oracle", 11), ("native-py", 11),

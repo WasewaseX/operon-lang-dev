@@ -1,4 +1,4 @@
-# pheno_equality — builder-B parity finding RESOLUTION differential pin:
+# pheno_equality, builder-B parity finding RESOLUTION differential pin:
 # instance == compares class name + deep field values on BOTH engines
 # (byte-identical output required). Covers: equal fields true, differing
 # fields false, field-count mismatch false, cross-class false, subclass-name

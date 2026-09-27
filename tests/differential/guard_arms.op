@@ -1,4 +1,4 @@
-# differential: guard arms — expectation TRUE runs body, FALSE runs fallback
+# differential: guard arms, expectation TRUE runs body, FALSE runs fallback
 gene pick(n) guard (n > 0) else {
     return "fallback"
 } {

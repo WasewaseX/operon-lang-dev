@@ -1,7 +1,7 @@
-# std/unicode — Unicode depth helpers over the language's documented
+# std/unicode, Unicode depth helpers over the language's documented
 # string semantics (SPEC §3): strings index by CHAR (Unicode scalar
 # value), len() counts chars, and grapheme clusters are the documented
-# subset behind grapheme_len(). Pure string arithmetic — no capabilities,
+# subset behind grapheme_len(). Pure string arithmetic, no capabilities,
 # no filesystem, no external tables beyond the fold table mirrored in
 # both engines (SPEC §3).
 #
@@ -54,7 +54,7 @@ gene is_alpha(c) {
 }
 
 gene char_codes(s) {
-    # the string as a list of codepoints (char-indexed — matches len())
+    # the string as a list of codepoints (char-indexed, matches len())
     let out = []
     for c in s {
         push(out, ord(c))
@@ -72,7 +72,7 @@ gene from_char_codes(codes) {
 
 gene byte_width(s) {
     # UTF-8 byte width of the char-indexed string (len() counts chars;
-    # this counts the bytes a UTF-8 encoder would emit) — subset rule:
+    # this counts the bytes a UTF-8 encoder would emit), subset rule:
     # 1 byte < 0x80, 2 bytes < 0x800, 3 bytes < 0x10000, else 4
     let total = 0
     for c in s {

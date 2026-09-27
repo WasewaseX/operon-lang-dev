@@ -1,4 +1,4 @@
-//! main.rs — Operon toolchain CLI (Rust core).
+//! main.rs, Operon toolchain CLI (Rust core).
 //! run | check | test | fmt | build | profile | crispr | bench | version
 
 // The language core lives in the `operon` library crate (src/lib.rs);
@@ -30,7 +30,7 @@ fn main() {
     match child.join() {
         Ok(()) => {}
         Err(_) => {
-            eprintln!("[fatal] internal toolchain panic — this input crashed the runtime");
+            eprintln!("[fatal] internal toolchain panic, this input crashed the runtime");
             std::process::exit(101);
         }
     }
@@ -53,7 +53,7 @@ fn real_main() {
     }
 
     // W19/W20: the package-manager command group owns its own flag
-    // vocabulary (add --as/--rev, etc.) — dispatch before generic parsing.
+    // vocabulary (add --as/--rev, etc.), dispatch before generic parsing.
     if cmd == "mod" {
         pkg::mod_command(rest);
     }
@@ -74,7 +74,7 @@ fn real_main() {
     };
     let mut json = false;
     let mut strict = false;
-    // W23: --locked — fail on operon.toml <-> operon.lock drift (CI pin)
+    // W23: --locked, fail on operon.toml <-> operon.lock drift (CI pin)
     let mut locked = false;
     let mut nmd = false;
     let mut purge = false;
@@ -91,7 +91,7 @@ fn real_main() {
     // W11: the optimization level (0 = off)
     let mut opt_level: u8 = 0;
     let mut matrix = false;
-    // dx-r6: true after the `--` separator — remaining args are program argv
+    // dx-r6: true after the `--` separator, remaining args are program argv
     let mut passthrough = false;
     let mut fuel: Option<u64> = None;
     let mut knockout = String::new();
@@ -102,9 +102,9 @@ fn real_main() {
     let mut test_filter: Option<String> = None;
     let mut list_only = false;
     let mut repeat = 1usize;
-    // W41: check output format — "score" (default this cycle) | "diag"
+    // W41: check output format, "score" (default this cycle) | "diag"
     let mut check_format = String::from("score");
-    // W47 (ROADMAP-100): formatter configuration — file first, flags override
+    // W47 (ROADMAP-100): formatter configuration, file first, flags override
     let mut fmt_indent: Option<usize> = None;
     let mut fmt_quotes: Option<tools::QuoteMode> = None;
     let mut fmt_width: Option<usize> = None; // W47-v2: 0 = explicitly off
@@ -152,7 +152,7 @@ fn real_main() {
                 }
             }
             "--allow-py" => {
-                // substrate-r1: Python bridge grant — exact-match per module
+                // substrate-r1: Python bridge grant, exact-match per module
                 i += 1;
                 match rest.get(i) {
                     Some(p) if !p.starts_with("--") => {
@@ -245,7 +245,7 @@ fn real_main() {
             // W067 v2: the AST reprint drops plain `#` comments; the v2 rna
             // engine refuses such files unless this flag is passed.
             "--allow-comment-drop" => allow_comment_drop = true,
-            // W095: GRN tick-stream — every engine update point (fire pulse
+            // W095: GRN tick-stream, every engine update point (fire pulse
             // / decay tick) snapshots the sorted level map as one JSONL
             // frame; the buffer lands in the file after the run.
             "--trace-grn" => {
@@ -340,7 +340,7 @@ fn real_main() {
                 }
             }
             "--" => {
-                // dx-r6 (loop-5-a audit MED): POSIX `--` separator — everything
+                // dx-r6 (loop-5-a audit MED): POSIX `--` separator, everything
                 // after it belongs to the PROGRAM, not the host CLI. Without
                 // it, `operon run app.op --key value` died with "unknown flag
                 // '--key'" and half of std/args.op's documented conventions
@@ -350,11 +350,11 @@ fn real_main() {
             }
             _ => {
                 // dx-r1 (parity audit W6): unknown flags silently became
-                // program argv — `operon run f.op --strick` ran with a typo'd
+                // program argv, `operon run f.op --strick` ran with a typo'd
                 // flag and no warning. Fail loudly instead.
                 if a.starts_with("--") && !passthrough {
                     die(&format!(
-                        "unknown flag '{}' — run `operon` with no arguments for usage",
+                        "unknown flag '{}', run `operon` with no arguments for usage",
                         a
                     ));
                 }
@@ -380,7 +380,7 @@ fn real_main() {
         "repl" => {
             repl();
         }
-        // W39 (ROADMAP-100): AST dump — the Total Grammar debugging window.
+        // W39 (ROADMAP-100): AST dump, the Total Grammar debugging window.
         "ast" => {
             let file = match positional.first() {
                 Some(f) => f.clone(),
@@ -392,7 +392,7 @@ fn real_main() {
             // W39 + fuzz finding (2026-09-26): `{:#?}` pretty-Debug grows
             // quadratically with AST nesting depth (indent × depth), so a
             // pathological-but-parseable input (thousands of `(`) turns `ast`
-            // into a hang. check() parses the same file in milliseconds — the
+            // into a hang. check() parses the same file in milliseconds, the
             // parser is fine, the PRINTER is the problem. Guard: measure
             // source nesting depth; beyond 400 levels print compact Debug.
             let depth = src
@@ -430,14 +430,14 @@ fn real_main() {
                     println!("{:#?}", prog.stmts);
                 } else {
                     eprintln!(
-                        "[ast] nesting depth {} exceeds 400 — compact dump (pretty Debug is quadratic on deep trees)",
+                        "[ast] nesting depth {} exceeds 400, compact dump (pretty Debug is quadratic on deep trees)",
                         depth
                     );
                     println!("{:?}", prog.stmts);
                 }
             }
         }
-        // W38 (ROADMAP-100): explain — what did Total Grammar do to my file?
+        // W38 (ROADMAP-100): explain, what did Total Grammar do to my file?
         "explain" => {
             let file = match positional.first() {
                 Some(f) => f.clone(),
@@ -483,7 +483,7 @@ fn real_main() {
             } else {
                 println!("Total Grammar report for {}:", file);
                 if prog.notes.is_empty() {
-                    println!("  canonical — no repairs, no recoveries");
+                    println!("  canonical, no repairs, no recoveries");
                 }
                 for n in &prog.notes {
                     println!("  [{}] line {}: {}", rung_name(n.rung), n.line, n.message);
@@ -500,7 +500,7 @@ fn real_main() {
                 }
             }
         }
-        // W48/W42/W43 (ROADMAP-100): the linter front door — `check --format
+        // W48/W42/W43 (ROADMAP-100): the linter front door, `check --format
         // diag` shares this engine, so there is one rule set and two views.
         "lint" => {
             let file = match positional.first() {
@@ -537,7 +537,7 @@ fn real_main() {
                     items.join(",")
                 );
             } else if findings.is_empty() {
-                println!("lint: {} — clean", file);
+                println!("lint: {}, clean", file);
             } else {
                 for f in &findings {
                     println!(
@@ -633,7 +633,7 @@ fn real_main() {
                     Ok(_) => {}
                     Err(s) => {
                         // dx-r3 (re-audit): the PRIMARY diagnostic gets a
-                        // location when the stress carries its origin line —
+                        // location when the stress carries its origin line,
                         // matching mainstream norms where the fatal error is
                         // the located one
                         if s.line > 0 {
@@ -644,7 +644,7 @@ fn real_main() {
                         } else {
                             eprintln!("[contained] [{}] {}", s.kind, s.message);
                         }
-                        // W007: call-chain traceback — innermost frame first,
+                        // W007: call-chain traceback, innermost frame first,
                         // each frame the gene and the call site that invoked
                         // it. Render capped at 64 (the capture cap); the
                         // chain leaks nothing beyond the script path already
@@ -664,9 +664,9 @@ fn real_main() {
                             eprintln!("  at main");
                         }
                         // dx-r1 (parity audit W2): a failing program must not
-                        // report success — CI/shell pipelines trusted rc=0
+                        // report success, CI/shell pipelines trusted rc=0
                         // from scripts that died. 1 = uncaught top-level stress.
-                        // W095: frames collected so far are still diagnostics —
+                        // W095: frames collected so far are still diagnostics,
                         // drain before the exit.
                         write_grn_trace(&l.interp, &trace_grn_path);
                         tools::flush_notes(&l, opts.quiet);
@@ -737,7 +737,7 @@ fn real_main() {
                 );
             } else {
                 println!(
-                    "operon check: {} — score {}/100 (grade {})",
+                    "operon check: {}, score {}/100 (grade {})",
                     file, rep.score, rep.letter
                 );
                 if rep.wobbles > 0 || rep.fallbacks > 0 {
@@ -871,7 +871,7 @@ fn real_main() {
         // migrations (const→let, s:: → dot access) + Total Grammar
         // canonicalization, through the same formatter `operon fmt` uses.
         // Dry-run by default (prints a per-line diff); --write applies.
-        // The canonical MEANING of the program never changes — pinned by
+        // The canonical MEANING of the program never changes, pinned by
         // tests/fix_corpus.rs (corpus-wide: canonical(fix(x)) == canonical(x)).
         "fix" => {
             let file = match positional.first() {
@@ -892,7 +892,7 @@ fn real_main() {
                     rep.s_dot
                 );
             } else if !changed {
-                println!("fix: {} — already canonical", file);
+                println!("fix: {}, already canonical", file);
             } else if write {
                 std::fs::write(&file, &out)
                     .unwrap_or_else(|e| die(&format!("write failed: {}", e)));
@@ -903,7 +903,7 @@ fn real_main() {
             } else {
                 // dry-run: show the diff, change nothing. Per changed line:
                 // the old line, then the new line, with 1-based line numbers.
-                println!("fix: {} — dry run (pass --write to apply)", file);
+                println!("fix: {}, dry run (pass --write to apply)", file);
                 let old_lines: Vec<&str> = src.lines().collect();
                 let new_lines: Vec<&str> = out.lines().collect();
                 let mut shown = 0usize;
@@ -984,7 +984,7 @@ fn real_main() {
                             }
                         }
                         None => {
-                            // all-or-nothing refusal — nothing written
+                            // all-or-nothing refusal, nothing written
                             println!(
                                 "{{\"engine\":\"v2\",\"file\":\"{}\",\"patch\":\"{}\",\"rules\":[{}],\"applied\":0,\"missed\":{},\"would_change\":false,\"refused\":true}}",
                                 tools::json_escape(&file),
@@ -997,7 +997,7 @@ fn real_main() {
                 } else {
                     match &report.new_text {
                         Some(_) => println!(
-                            "rna v2: {} <- {} — {} applied, {} missed{}",
+                            "rna v2: {} <- {}, {} applied, {} missed{}",
                             file,
                             patch_path,
                             report.applied(),
@@ -1009,7 +1009,7 @@ fn real_main() {
                             }
                         ),
                         None => println!(
-                            "rna v2: {} <- {} — REFUSED (all-or-nothing): {} missed",
+                            "rna v2: {} <- {}, REFUSED (all-or-nothing): {} missed",
                             file,
                             patch_path,
                             report.missed()
@@ -1036,13 +1036,13 @@ fn real_main() {
             }
             // W067 stage 3, step 1 (W63 deprecation policy: Info first):
             // a header-less patch runs the v1 span engine. Text semantics are
-            // byte-compatible and UNCHANGED — the deprecation surfaces only as
+            // byte-compatible and UNCHANGED, the deprecation surfaces only as
             // tool metadata (this stderr note + `deprecated:true` in --json).
             // Scoped to the `operon rna` file-editor path on purpose: the
             // `run --rna` pre-parse path must stay note-free so Rust/oracle
             // differential stderr parity is never at risk.
             eprintln!(
-                "rna: note: header-less (v1 span) patches are deprecated (info, W63 step 1) — add 'syntax: v2' and node-addressed rules; see docs/design/RNA-V2.md"
+                "rna: note: header-less (v1 span) patches are deprecated (info, W63 step 1), add 'syntax: v2' and node-addressed rules; see docs/design/RNA-V2.md"
             );
             let stem = std::path::Path::new(&file)
                 .file_stem()
@@ -1077,7 +1077,7 @@ fn real_main() {
                 );
             } else {
                 println!(
-                    "rna: {} <- {} — {} applied, {} missed{}",
+                    "rna: {} <- {}, {} applied, {} missed{}",
                     file,
                     patch_path,
                     report.applied(),
@@ -1184,7 +1184,7 @@ fn real_main() {
             rows.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
             // W096: machine-readable profile. Self-describing (units, version,
             // per-gene flags). NOTE: Chrome-trace format is deliberately NOT
-            // emitted yet — the profiler records aggregate self-time only;
+            // emitted yet, the profiler records aggregate self-time only;
             // a trace needs per-call spans (interp instrumentation, dev-1
             // lane). Emitting synthetic intervals would misrepresent timing.
             if json {
@@ -1292,7 +1292,7 @@ fn real_main() {
             tools::flush_notes(&l, opts.quiet);
         }
         "doc" => {
-            // W073: markdown/JSON API reference from the AST — parse-only
+            // W073: markdown/JSON API reference from the AST, parse-only
             // (like check/fmt/graph), no run, no capabilities beyond reading
             // the input files. Directories expand to their top-level *.op
             // files (sorted, deterministic output order).
@@ -1358,7 +1358,7 @@ fn real_main() {
             // W072: re-run on change. v1: mtime polling (200 ms, no external
             // deps) over the entry file + its local (non-std) import tree;
             // each iteration is a fresh `operon run` child, so fuel/caps/
-            // interpreter state reset per run — no cross-run contamination.
+            // interpreter state reset per run, no cross-run contamination.
             let file = match positional.first() {
                 Some(f) => f.clone(),
                 None => die("watch needs a file"),
@@ -1435,7 +1435,7 @@ fn real_main() {
             }
         }
         "graph" => {
-            // W094: static regulate-network export — parse-only (like
+            // W094: static regulate-network export, parse-only (like
             // check/fmt), no run, no capabilities beyond reading the file.
             let file = match positional.first() {
                 Some(f) => f.clone(),
@@ -1523,7 +1523,7 @@ fn real_main() {
                     );
                 } else {
                     println!(
-                        "operon crispr: knocked out '{}' — {}/{} proof(s) survived",
+                        "operon crispr: knocked out '{}', {}/{} proof(s) survived",
                         rep.knockout, rep.survivors, rep.proofs_total
                     );
                     for f in &rep.failures {
@@ -1539,15 +1539,15 @@ fn real_main() {
             };
             let rep = tools::bench(&file, &opts, iters);
             println!(
-                "operon bench: {} × {} iters — min {:.3} ms · avg {:.3} ms",
+                "operon bench: {} × {} iters, min {:.3} ms · avg {:.3} ms",
                 file, rep.iters, rep.min_ms, rep.avg_ms
             );
         }
         other => {
-            // dx-r3 (re-audit): an unknown subcommand says so — a silent
+            // dx-r3 (re-audit): an unknown subcommand says so, a silent
             // usage dump reads like a broken flag
             die(&format!(
-                "unknown command '{}' — run `operon` with no arguments for usage",
+                "unknown command '{}', run `operon` with no arguments for usage",
                 other
             ));
         }
@@ -1555,7 +1555,7 @@ fn real_main() {
 }
 
 /// W095: drain the interpreter's GRN tick-stream buffer into the operator's
-/// file. The interpreter itself never touches the filesystem — this is the
+/// file. The interpreter itself never touches the filesystem, this is the
 /// only I/O point. Frames are JSONL (one self-describing object per line).
 fn write_grn_trace(interp: &operon::interp::Interp, path: &Option<String>) {
     if let (Some(p), Some(frames)) = (path, &interp.trace_grn) {
@@ -1576,7 +1576,7 @@ fn write_grn_trace(interp: &operon::interp::Interp, path: &Option<String>) {
 fn repl() {
     use std::io::{BufRead, Write};
     println!(
-        "Operon {} repl — gene-expression shell (:help for commands, :quit to leave)",
+        "Operon {} repl, gene-expression shell (:help for commands, :quit to leave)",
         env!("CARGO_PKG_VERSION")
     );
     let mut l = match tools::load_file(
@@ -1605,7 +1605,7 @@ fn repl() {
         }
     };
     l.interp.proof_mode = false;
-    // sec-r3 (re-audit #9): the REPL shares the run-wide fuel pool too —
+    // sec-r3 (re-audit #9): the REPL shares the run-wide fuel pool too,
     // without it each spawned worker got its own full 200M budget, the
     // spawn-budget multiplication rt_p2e closed for `run` (SPEC §9b)
     l.interp.fuel_pool = Some(std::sync::Arc::new(std::sync::atomic::AtomicI64::new(
@@ -1646,7 +1646,7 @@ fn repl() {
                         println!(
                             ":load f.op   read a file into this session (genes become callable)"
                         );
-                        println!(":proof [f]   run proof frames — this session's, or file f's");
+                        println!(":proof [f]   run proof frames, this session's, or file f's");
                         println!(":genes       list genes defined so far");
                         println!(":doc name    show the ## doc comment of a declaration (W074)");
                         println!(":vars        list top-level variables");
@@ -1697,7 +1697,7 @@ fn repl() {
                     }
                     "doc" => {
                         // W074: print the `##` doc comment attached to a
-                        // declaration in this session (metadata only — this
+                        // declaration in this session (metadata only, this
                         // never executes anything).
                         if arg.is_empty() {
                             println!("  usage: :doc <gene|phenotype|splice|fate name>");
@@ -1706,7 +1706,7 @@ fn repl() {
                             let mut found = false;
                             let print_doc = |doc: &[String], label: &str| {
                                 if doc.is_empty() {
-                                    println!("  {} — no ## doc comment", label);
+                                    println!("  {}, no ## doc comment", label);
                                 } else {
                                     for dl in doc {
                                         println!("  {}", dl);
@@ -1753,14 +1753,14 @@ fn repl() {
                     "genes" => {
                         let mut names = l.interp.defined_genes.clone();
                         if names.is_empty() {
-                            println!("  (no genes defined yet — try: gene hi() {{ return 1 }})");
+                            println!("  (no genes defined yet, try: gene hi() {{ return 1 }})");
                         } else {
                             names.sort();
                             println!("  {}", names.join(", "));
                         }
                     }
                     "symbols" => {
-                        // sec-r2: a real consumer of the intern table — the
+                        // sec-r2: a real consumer of the intern table, the
                         // canonical record of every identifier this session
                         // has lexed, in first-seen order
                         let syms = operon::ffi::symbols();
@@ -1823,7 +1823,7 @@ fn repl() {
                         session.clear();
                         println!("  session reset");
                     }
-                    other => println!("  unknown command ':{}' — try :help", other),
+                    other => println!("  unknown command ':{}', try :help", other),
                 }
                 continue;
             }
@@ -1856,18 +1856,18 @@ fn repl() {
     }
 }
 
-// :proof (no file) — run every proof frame the session has defined so far,
+// :proof (no file), run every proof frame the session has defined so far,
 // against the live interpreter state, mirroring `operon test` semantics:
 // a proof must run to completion AND exercise at least one assertion.
 fn repl_proof_session(l: &mut tools::Loaded, session: &str) {
     if session.trim().is_empty() {
-        println!("  (empty session — define some code first)");
+        println!("  (empty session, define some code first)");
         return;
     }
     let prog = parser::parse(session);
     if prog.proofs.is_empty() {
         println!(
-            "  no proof frames in this session — add one: frame proof {{ assert(1 == 1, \"ok\") }}"
+            "  no proof frames in this session, add one: frame proof {{ assert(1 == 1, \"ok\") }}"
         );
         return;
     }
@@ -1883,7 +1883,7 @@ fn repl_proof_session(l: &mut tools::Loaded, session: &str) {
             Ok(interp::Flow::Norm) => {
                 if l.interp.asserts_run == before {
                     println!(
-                        "  session proof #{}: FAILED (vacuous — no assertion exercised)",
+                        "  session proof #{}: FAILED (vacuous, no assertion exercised)",
                         i + 1
                     );
                     failed += 1;
@@ -1893,7 +1893,7 @@ fn repl_proof_session(l: &mut tools::Loaded, session: &str) {
             }
             Ok(_) => {
                 println!(
-                    "  session proof #{}: FAILED (exited early — return/break inside proof)",
+                    "  session proof #{}: FAILED (exited early, return/break inside proof)",
                     i + 1
                 );
                 failed += 1;
@@ -1944,7 +1944,7 @@ fn repl_brace_balance(s: &str) -> i32 {
     bal
 }
 
-/// dx-r1 (audit W4): print only the notes this REPL input produced —
+/// dx-r1 (audit W4): print only the notes this REPL input produced,
 /// previously notes were recorded but never shown, so the wobble/phantom
 /// diagnostics that are the language's brand were invisible interactively.
 fn repl_flush_new_notes(l: &tools::Loaded, start: usize) {
@@ -1979,7 +1979,7 @@ fn repl_eval(l: &mut tools::Loaded, src: &str) {
                         }
                     }
                     // W06 (D-014): propagation with no enclosing gene in the
-                    // REPL — the variant value passes through, tagged honestly.
+                    // REPL, the variant value passes through, tagged honestly.
                     Err(st) if st.prop.is_some() => {
                         println!("  [propagate] {} passes through", st.prop.unwrap().repr())
                     }
@@ -1987,7 +1987,7 @@ fn repl_eval(l: &mut tools::Loaded, src: &str) {
                 }
             } else {
                 if let Err(st) = l.interp.exec_stmt(&env, stmt) {
-                    // W06 (D-014): REPL top-level propagation — value passes
+                    // W06 (D-014): REPL top-level propagation, value passes
                     // through, never a leaked bare kind.
                     if let Some(v) = st.prop {
                         println!("  [propagate] {} passes through", v.repr());
@@ -2000,7 +2000,7 @@ fn repl_eval(l: &mut tools::Loaded, src: &str) {
         repl_flush_new_notes(l, note_start);
         return;
     }
-    // expression mode: a bare `1 + 2 * 3` is not a statement — evaluate it
+    // expression mode: a bare `1 + 2 * 3` is not a statement, evaluate it
     // by assignment-to-scratch and print the bound value
     let wrapped = format!("__repl_val = ({})", src.trim().trim_end_matches(';'));
     let wprog = parser::parse(&wrapped);
@@ -2014,7 +2014,7 @@ fn repl_eval(l: &mut tools::Loaded, src: &str) {
     let note_start = l.interp.notes.len();
     for stmt in &wprog.stmts {
         if let Err(st) = l.interp.exec_stmt(&env, stmt) {
-            // W06 (D-014): REPL expression-mode propagation — same
+            // W06 (D-014): REPL expression-mode propagation, same
             // passes-through contract as statement mode.
             if let Some(v) = st.prop {
                 println!("  [propagate] {} passes through", v.repr());
@@ -2023,7 +2023,7 @@ fn repl_eval(l: &mut tools::Loaded, src: &str) {
             }
         }
     }
-    // dx-r1 (parity audit W4): notes were recorded but never shown — the
+    // dx-r1 (parity audit W4): notes were recorded but never shown, the
     // REPL swallowed the wobble/phantom notes that are the language's brand
     // ("never leaves you guessing"). Print only the notes this input
     // produced (tools::flush_notes would replay the whole session).
@@ -2035,7 +2035,7 @@ fn repl_eval(l: &mut tools::Loaded, src: &str) {
     }
 }
 
-/// W41 (ROADMAP-100): sectioned diagnostics renderer — the check output that
+/// W41 (ROADMAP-100): sectioned diagnostics renderer, the check output that
 /// treats programmers as adults (what's wrong + the fix), with the school
 /// grade preserved under `--format score` for CI compatibility.
 fn print_diag(file: &str, rep: &tools::CheckReport, findings: &[operon::lint::Finding]) {
@@ -2077,7 +2077,7 @@ fn print_diag(file: &str, rep: &tools::CheckReport, findings: &[operon::lint::Fi
     if rep.notes > 0 {
         println!("repair:");
         println!(
-            "  {}: {} note(s) — {} wobble(s), {} fallback(s); run `operon explain {}` for the play-by-play",
+            "  {}: {} note(s), {} wobble(s), {} fallback(s); run `operon explain {}` for the play-by-play",
             file, rep.notes, rep.wobbles, rep.fallbacks, file
         );
     }
@@ -2093,7 +2093,7 @@ fn print_diag(file: &str, rep: &tools::CheckReport, findings: &[operon::lint::Fi
 
 fn usage() {
     eprintln!(
-        "Operon {} — the gene-expression language (Total Grammar)
+        "Operon {}, the gene-expression language (Total Grammar)
 usage:
   operon run f.op [--entry g] [--variant v] [--cell c] [--rna r] [--frame name] [--ires] [--strict] [--quiet]
                   [--fuel steps] [--allow-read path] [--allow-write path] [--allow-net host:port]

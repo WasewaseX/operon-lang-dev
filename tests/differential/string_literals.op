@@ -1,4 +1,4 @@
-# string_literals — W030 differential pin: raw and multiline strings are
+# string_literals, W030 differential pin: raw and multiline strings are
 # byte-identical on both engines.
 let p = r"C:\Users\test"
 print(p)

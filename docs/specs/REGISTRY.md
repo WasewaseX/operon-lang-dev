@@ -1,4 +1,4 @@
-# REGISTRY.md — the W21 static git-index registry (cheap first version)
+# REGISTRY.md, the W21 static git-index registry (cheap first version)
 
 Status: **adopted** · Owner: dev-1 (builder-A) · Supersedes: nothing
 Audience: package authors and operators (D-008: zero biology assumed).

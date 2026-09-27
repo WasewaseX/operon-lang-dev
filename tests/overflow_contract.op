@@ -1,5 +1,5 @@
 # W32: the FULL integer-overflow contract, pinned with exact stress kinds
-# and messages — no silent wrap anywhere, on either engine. Every integer
+# and messages, no silent wrap anywhere, on either engine. Every integer
 # arithmetic surface gets its exact boundary stress; float behavior is
 # pinned too (inf is a value for * and /, but ** overflow RAISES).
 # Companion differential corpus: tests/differential/overflow_contract.op

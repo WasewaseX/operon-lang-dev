@@ -1,5 +1,5 @@
 # ============================================================
-# Bank account  — cookbook #07
+# Bank account , cookbook #07
 # you already know: a class with methods + exceptions
 # teaches: records as maps, guard clauses, raise + stress/rescue
 #          containment (Operon's try/catch, honestly named)
@@ -38,7 +38,7 @@ gene main() {
     promote("deposit -5  -> {deposit(acct, 0 - 5)}")
     promote("withdraw 30 -> {withdraw(acct, 30)}")
 
-    # the overdraft raise is contained right here — call first, then print
+    # the overdraft raise is contained right here, call first, then print
     stress {
         let result = withdraw(acct, 500)
         promote("withdraw 500 -> {result}")

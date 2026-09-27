@@ -1,4 +1,4 @@
-# A12 (reg-r2) — runtime methylation API (SPEC §11)
+# A12 (reg-r2), runtime methylation API (SPEC §11)
 # methylate(name) / demethylate(name) steer the T2b methylation gate at
 # runtime with the same graded semantics as the @methylate / @acetylate
 # definition attributes: level += 1 / saturating −1. Calls are blocked at

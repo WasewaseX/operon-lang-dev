@@ -1,4 +1,4 @@
-## json — helpers over the json_parse / json_str builtins.
+## json, helpers over the json_parse / json_str builtins.
 ## json_parse gives you the value; these helpers give you the everyday
 ## navigation and reshaping layer. A "path" is a dot-separated walk:
 ## "user.tags.0" steps into object key "user", then key "tags", then array

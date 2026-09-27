@@ -33,7 +33,7 @@ frame proof {
     assert(immune() == "immune", "acetylated immune")
     # splice: default = first variant
     assert(fetch() == "fast-path", "splice default first")
-    # splice: m6a-marked variant wins even when NOT first-declared —
+    # splice: m6a-marked variant wins even when NOT first-declared,
     # selection happens only because of the mark (T2c: pre-fix, the mark
     # token was skipped and 'second' won by first-declared default)
     assert(pick() == "m6a-wins", "m6a variant selection beats first-declared")
