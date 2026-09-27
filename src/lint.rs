@@ -156,6 +156,43 @@ pub fn lint(prog: &Program) -> Vec<Finding> {
         }
     }
 
+    // W05: const-reassign (static best-effort) — assignment to a name that
+    // was const-bound in this file and never re-bound by a plain let. The
+    // check is name-based and scope-insensitive BY DESIGN: any let/const
+    // re-binding of the name anywhere retires the finding, so the rule can
+    // only stay silent on shadowed bindings, never misfire on them.
+    let mut const_names: HashSet<String> = HashSet::new();
+    let mut let_rebound: HashSet<String> = HashSet::new();
+    walk_all(&prog.stmts, &mut |st, _| match st {
+        Stmt::LetConst(n, _) => {
+            const_names.insert(n.clone());
+        }
+        Stmt::Let(n, _) | Stmt::LetAnn(n, _, _) => {
+            let_rebound.insert(n.clone());
+        }
+        Stmt::LetPat(..) => {
+            // destructuring re-binds pieces by name — retire nothing specific;
+            // a pattern re-binding the const's name is rare and the runtime
+            // stress stays the backstop
+        }
+        _ => {}
+    });
+    walk_all(&prog.stmts, &mut |st, line| {
+        if let Stmt::Assign(n, _, _) = st {
+            if const_names.contains(n) && !let_rebound.contains(n) {
+                out.push(Finding::new(
+                    line,
+                    "const-reassign",
+                    Sev::Warning,
+                    format!(
+                        "assignment to const '{}' raises a catchable frozen stress at runtime",
+                        n
+                    ),
+                ));
+            }
+        }
+    });
+
     // per-statement rules over the whole tree
     walk_all(&prog.stmts, &mut |st, line| {
         match st {

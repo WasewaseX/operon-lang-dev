@@ -86,7 +86,7 @@ mem-charge, DP ceiling) cost nothing measurable on honest workloads.
 | regex | 5 patterns × 10 strings × 600 passes (re_match + re_find) | CPython re (algorithm parity) | regex engine incl. 2M-step ceiling |
 | seq | 6k-base LCG genome: GC%, 3-mer scan, motif locate | CPython (algorithm parity) | seeded LCG — no random(), fully reproducible |
 | large_map | 6k-key map build + full lookup pass | CPython dict (algorithm parity) | sized for the oracle pass (~18 s/iter) |
-| file_io | 300 × write+read 2 KiB, content-verified | CPython open/write/read (shape parity) | the ONE bench needing grants — runner passes `--allow-write /tmp --allow-read /tmp` itself; oracle side runs granted too |
+| file_io | 300 × write+read 2 KiB, content-verified | CPython open/write/read (shape parity) | the ONE bench needing grants — runner passes `--allow-write /tmp --allow-read /tmp` itself; oracle side runs granted too. NOISE (2026-09-27): I/O-bound — shared-runner spread across identical code measured 61–250 ms in one hour, so the perf gate pins this workload at a 100% threshold (`perf_gate.py` NOISY_THRESHOLDS) instead of the 20% default; still catches 2–3x catastrophic regressions, ignores runner jitter |
 | modules | six local modules imported + 20k cross-module calls | CPython cached import machinery (**shape-compare only — not algorithm parity**) | exercises the SPEC §8 resolution table + module cache |
 
 `op/py` = operon vs native CPython — **the v3.0 gap to close**.

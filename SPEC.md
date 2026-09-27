@@ -55,7 +55,7 @@ Every parse passes down the ladder; each rung below 1 emits **notes** (structure
 
 1. **Canonical** — exact keyword/grammar match. No notes.
 2. **Synonym** — a known synonym table maps alternate spellings to canonical keywords:
-   `fn func def fun sub lambda proc → gene` · `print echo say show → promote` (promote is builtin, synonyms map in parser to a `promote` call) · `var val const → let` · `elseif → elif` · `foreach each → for` · `import include require → use` · `ret → return` · `stop → break` · `continue next skip → continue` · `yes on → true` · `no off → false` · `null nil nothing → null` · `&& → and` · `|| → or` · `! → not`. (W06/D-014: `none` was RETIRED from the null synonyms — it is now the Option constructor `none()`; bare `none` degrades to an unbound-ident note, never a silent null.)
+   `fn func def fun sub lambda proc → gene` · `print echo say show → promote` (promote is builtin, synonyms map in parser to a `promote` call) · `var val → let` · `elseif → elif` · `foreach each → for` · `import include require → use` · `ret → return` · `stop → break` · `continue next skip → continue` · `yes on → true` · `no off → false` · `null nil nothing → null` · `&& → and` · `|| → or` · `! → not`. (W06/D-014: `none` was RETIRED from the null synonyms — it is now the Option constructor `none()`; bare `none` degrades to an unbound-ident note, never a silent null. W05: `const` was RETIRED from the let synonyms — it is its own immutable-binding form, §7d.)
 3. **Wobble** — an identifier within edit distance ≤ 2 of exactly one keyword (≤ 1 if its length ≤ 4) is repaired to that keyword, with a note. Applies to marks too (`@acetylat` → `@acetylate`). Ambiguity (two keywords equidistant) → rung 4 for that token.
 4. **Semantic fallback** — unknown bare identifier in expression position becomes the string literal of its own name + note ("unbound wobble"); stray tokens are skipped with notes; unclosed braces are auto-closed at EOF with notes; extra closers are skipped with notes; an unclosed string consumes to EOF with a note.
 
@@ -274,6 +274,56 @@ gene handle(v: int | str) -> any { ... }             # union
   contracts on gene calls and definitions. `operon check`-time inference
   and reporting, typed collections (`List<T>` sugar), and type aliases are
   later stages of W01; sequencing is tracked in ROADMAP-100.
+
+### 7d. Immutability — `const` bindings + deep freeze (W05)
+
+`const NAME = expr;` binds a name immutably. Two walls, one stress kind:
+
+```
+const K = 10                  # immutable binding
+const L = [1, 2, [3]]         # the value is DEEP-FROZEN
+const M = {"a": 1}            # maps freeze the same way
+K = 5                         # frozen stress: cannot reassign const 'K'
+push(L, 9)                    # frozen stress: cannot modify frozen list
+L[0] = 9                      # frozen stress: cannot modify frozen list
+M["b"] = 2                    # frozen stress: cannot modify frozen map
+del(M, "a")                   # frozen stress: cannot modify frozen map
+L.push(4) / M.del("a")        # method forms stress identically
+```
+
+- **Deep freeze**: freezing walks the value — every list and map reachable
+  from it (through nesting, aliases, variant payloads, and phenotype field
+  values) becomes immutable for the rest of the run. Cycle-safe (a
+  self-referencing container freezes once). The freeze itself draws
+  nothing: the entropy stream is untouched (byte-identical legacy).
+- **Catchable, never fatal**: every wall raises Stress kind `frozen`
+  (§9) — `rescue` handles it like any other stress. `--strict` runs and
+  `operon lint` surface statically-detectable reassignments first
+  (`const-reassign` finding; name-based, conservative — any `let`
+  re-binding of the name retires the finding).
+- **Scope of the walls**: the NAME wall covers `=`, `op=`, and multi-
+  assign rebinding; a re-DEFINITION (`const x = 1; const x = 2`) rebinds
+  like `let` does (with the usual rebinding note). The CONTAINER wall
+  covers index/member writes, `push/pop/insert/remove/del`, and their
+  method forms. Phenotype member stores stay mutable (methods keep
+  working); lists/maps held in fields are frozen. `sort`/`reverse`/
+  concatenation return NEW containers — they are reads, not writes.
+- **The spawn boundary**: frozen-ness does not cross `spawn` (§13) — a
+  worker receives serialized copies, and mutating a frozen argument inside
+  the worker body is engine-defined territory the corpus pins around (the
+  oracle parks the reachable frozen ids for the inline body to mirror the
+  worker's fresh-container semantics).
+- **Back-compat**: programs whose `const` bindings are never reassigned
+  and whose containers are never mutated run byte-identically to the old
+  `const → let` synonym (freeze draws nothing; corpus-verified). The
+  `operon fix` const→let migration is RETIRED (red-main r5 hotfix, W05):
+  `const` is live semantics — a fixer rewrite to `let` would unfreeze
+  bindings and change program meaning (fix_corpus law 1). The
+  `const_to_let` report field stays (always 0) for `--json` shape
+  stability.
+- **`let mut x`** parses: the `mut` annotation is documentation-only in
+  v2.x (contextually consumed when followed by the binding name — a
+  variable literally named `mut` keeps working).
 
 ## 8. Modules, TADs, anchors
 

@@ -120,7 +120,7 @@ pub fn is_canonical(w: &str) -> bool {
 fn synonym(w: &str) -> Option<&'static str> {
     Some(match w {
         "fn" | "func" | "fun" | "def" | "funct" | "sub" | "lambda" | "proc" => "gene",
-        "var" | "val" | "const" => "let",
+        "var" | "val" => "let",
         "elseif" => "elif",
         "foreach" | "each" => "for",
         "import" | "include" | "require" => "use",
@@ -727,8 +727,63 @@ impl Parser {
                 self.next();
                 Some(self.parse_gene_def(vec![], 1, None, None, doc))
             }
+            "const" => {
+                // W05: `const NAME = expr` — immutable binding with deep-freeze
+                // semantics (SPEC §7d). Destructuring degrades to a plain let
+                // (Total Grammar: degrade, never reject); a type annotation is
+                // parsed and dropped with a note (v1 scope).
+                self.next();
+                if matches!(self.peek(), Tok::LBrack | Tok::LBrace) {
+                    let line = self.line();
+                    let pat = self.parse_destructure_pat();
+                    self.note(
+                        line,
+                        4,
+                        "const destructuring not supported; bound as mutable let",
+                    );
+                    if matches!(self.peek(), Tok::Eq) {
+                        self.next();
+                        let e = self.parse_expr();
+                        self.end_stmt();
+                        return Some(Stmt::LetPat(pat, e));
+                    }
+                    self.note(line, 4, "destructured 'let' without value binds nulls");
+                    self.end_stmt();
+                    return Some(Stmt::LetPat(pat, Expr::Null));
+                }
+                let name = self.expect_ident()?;
+                if matches!(self.peek(), Tok::Colon) {
+                    let line = self.line();
+                    self.next();
+                    let _ = self.parse_type_ann();
+                    self.note(
+                        line,
+                        4,
+                        "const type annotation is not checked in v1; dropped",
+                    );
+                }
+                if matches!(self.peek(), Tok::Eq) {
+                    self.next();
+                    let e = self.parse_expr();
+                    self.end_stmt();
+                    return Some(Stmt::LetConst(name, e));
+                }
+                let line = self.line();
+                self.note(line, 4, "const without '=' binds null");
+                self.end_stmt();
+                Some(Stmt::LetConst(name, Expr::Null))
+            }
             "let" => {
                 self.next();
+                // W05: contextual `mut` annotation — `let mut x = ...` is
+                // documentation-only in v2.x; consumed silently when `mut` is
+                // followed by the real name (so a variable literally named
+                // `mut` keeps working: `let mut = 5`).
+                if matches!(self.peek(), Tok::Ident(w) if w == "mut") {
+                    if let Some(Tok::Ident(_)) = self.toks.get(self.pos + 1).map(|t| &t.0) {
+                        self.next();
+                    }
+                }
                 // L1a: destructuring definitions — `let [a, b] = e`,
                 // `let {x, y} = e` (patterns nest; `*rest` captures the tail).
                 if matches!(self.peek(), Tok::LBrack | Tok::LBrace) {
