@@ -7,6 +7,7 @@ use operon::genes;
 use operon::graph;
 use operon::interp;
 use operon::parser;
+use operon::pkg;
 use operon::rna2;
 use operon::tools;
 
@@ -51,6 +52,12 @@ fn real_main() {
         std::process::exit(0);
     }
 
+    // W19/W20: the package-manager command group owns its own flag
+    // vocabulary (add --as/--rev, etc.) — dispatch before generic parsing.
+    if cmd == "mod" {
+        pkg::mod_command(rest);
+    }
+
     // extract flags
     let mut opts = Opts {
         cell: None,
@@ -67,6 +74,8 @@ fn real_main() {
     };
     let mut json = false;
     let mut strict = false;
+    // W23: --locked — fail on operon.toml <-> operon.lock drift (CI pin)
+    let mut locked = false;
     let mut nmd = false;
     let mut purge = false;
     let mut write = false;
@@ -216,6 +225,7 @@ fn real_main() {
             "--ires" => opts.use_ires = true,
             "--json" => json = true,
             "--strict" => strict = true,
+            "--locked" => locked = true,
             "--quiet" => opts.quiet = true,
             "--nmd" => nmd = true,
             "--nmd=purge" | "--purge" => {
@@ -537,6 +547,9 @@ fn real_main() {
                 Some(f) => f.clone(),
                 None => die("run needs a file"),
             };
+            if locked && std::path::Path::new("operon.toml").exists() {
+                pkg::check_locked_manifest();
+            }
             opts.args = positional[1..].to_vec();
             let mut l = match tools::load_file(&file, &opts) {
                 Ok(l) => l,
@@ -2035,6 +2048,8 @@ usage:
   operon lint f.op [--cell c] [--json]
   operon keywords [--json]
   operon repl
+  operon mod init|add <url> [--rev r] [--as name]|remove <name>|update|install|tree|verify
+                  # package system (operon.toml manifest + operon.lock; W19/W20/W23)
   operon build f.op [--variant v] [-o out.op]
   operon rna f.op patch.rna [--write] [--json] [--allow-comment-drop]
   operon graph f.op [--json]

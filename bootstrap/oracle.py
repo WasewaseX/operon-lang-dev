@@ -2813,6 +2813,9 @@ class Interp:
         # W069: importing-entry directory — candidate root #1 for `use`
         # (SPEC §8 resolution table). None until load_file sets it.
         self.base_dir = None
+        # W19/W23 mirror: vendored dependency roots from operon.lock
+        # (package name -> cache dir), consulted as resolution root 7.
+        self.lock_dirs = []
         self.silences = []
         # reg-bio-3: operons / stoichiometric-RISC bookkeeping / m6A levels /
         # generation counter / gene dosage registry (mirror of the Rust core)
@@ -6756,6 +6759,14 @@ class Interp:
         std_dir = os.environ.get("OPERON_STD")
         if std_dir:
             cands.append(os.path.join(std_dir, p))
+        # W19/W23 mirror: root 7 — vendored deps from the lockfile (the
+        # leading path segment maps to the pinned checkout dir)
+        for dep_name, dep_dir in self.lock_dirs:
+            seg = dep_name + "/"
+            if p == dep_name + ".op":
+                cands.append(os.path.join(dep_dir, p))
+            elif p.startswith(seg):
+                cands.append(os.path.join(dep_dir, p[len(seg):]))
         resolved = next((c for c in cands if os.path.exists(c)), None)
         if resolved is None:
             return {}
@@ -6989,6 +7000,30 @@ def load_file(path, cell=None, variant=None, rna=None, args=None, caps=None):
     d = os.path.dirname(os.path.abspath(path))
     if d and d != os.path.abspath("."):
         it.base_dir = d
+    # W19/W23 mirror: vendored dependency roots from the nearest
+    # operon.lock (program dir, then CWD) — resolution root 7.
+    for lp in (os.path.join(d, "operon.lock"), "operon.lock"):
+        try:
+            with open(lp, encoding="utf-8") as f:
+                lock_text = f.read()
+            # tiny parse: name/rev pairs in [[dep]] blocks
+            name = rev = None
+            for raw in lock_text.splitlines():
+                line = raw.strip()
+                if line == "[[dep]]":
+                    name = rev = None
+                elif line.startswith("name") and "=" in line:
+                    name = line.split("=", 1)[1].strip().strip('"')
+                elif line.startswith("rev") and "=" in line:
+                    rev = line.split("=", 1)[1].strip().strip('"')
+                if name and rev:
+                    dd = os.environ.get("OPERON_DEPS") or os.path.join(
+                        os.path.expanduser("~"), ".operon", "deps")
+                    it.lock_dirs.append((name, os.path.join(dd, "%s-%s" % (name, rev[:12]))))
+                    name = rev = None
+            break
+        except OSError:
+            continue
     if caps is not None:
         it.caps = caps
     if variant:

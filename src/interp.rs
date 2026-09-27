@@ -481,6 +481,11 @@ pub struct Interp {
     pub cell: HashMap<String, String>,
     pub cell_entry: Option<String>,
     pub base_dir: Option<String>,
+    /// W19/W23: vendored dependency roots from operon.lock — (package name,
+    /// cache dir). Populated at CLI startup when a lockfile exists; the
+    /// module resolution chain consults it AFTER the standard roots so a
+    /// checked-out dep resolves offline (SPEC §8 resolution table, root 7).
+    pub lock_dirs: Vec<(String, String)>,
     /// W079: warned once per run about a below-floor Python interpreter.
     pub py_version_warned: bool,
     /// A13 (dx-r2): line of the call expression currently executing —
@@ -671,6 +676,7 @@ impl Interp {
             cell: HashMap::new(),
             cell_entry: None,
             base_dir: None,
+            lock_dirs: Vec::new(),
             py_version_warned: false,
             cur_line: 0,
             file: "<repl>".to_string(),
