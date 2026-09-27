@@ -84,6 +84,10 @@ fn real_main() {
     // W09 A2: run gene bodies through the OIR1 bytecode machine (src/vm.rs);
     // calls/gates stay on the shared path, so output is byte-identical
     let mut use_vm = false;
+    // W08 phase 1: `operon debug` break lines (--break N, repeatable)
+    #[allow(unused_assignments)]
+    let mut debug_mode = false;
+    let mut debug_breaks: Vec<usize> = Vec::new();
     let mut matrix = false;
     // dx-r6: true after the `--` separator — remaining args are program argv
     let mut passthrough = false;
@@ -253,6 +257,18 @@ fn real_main() {
             // W09 A2: the bytecode lane (same semantics, machine-executed)
             "--vm" => {
                 use_vm = true;
+            }
+            // W08 phase 1: a line breakpoint for `operon debug`
+            "--break" => {
+                i += 1;
+                let n = rest
+                    .get(i)
+                    .cloned()
+                    .unwrap_or_else(|| die("--break needs a line number"));
+                let n: usize = n
+                    .parse()
+                    .unwrap_or_else(|_| die("--break needs a line number"));
+                debug_breaks.push(n);
             }
             "--filter" => {
                 i += 1;
@@ -556,7 +572,8 @@ fn real_main() {
             let prog = parser::parse(&src);
             print!("{}", operon::vm::disassemble_program(&prog));
         }
-        "run" => {
+        "run" | "debug" => {
+            debug_mode = cmd == "debug";
             let file = match positional.first() {
                 Some(f) => f.clone(),
                 None => die("run needs a file"),
@@ -585,6 +602,16 @@ fn real_main() {
             if use_vm {
                 l.interp.vm = true;
                 l.interp.vm_program = Some(operon::vm::VmProgram::default());
+            }
+            if debug_mode {
+                l.interp.debug_file = file.clone();
+                for b in &debug_breaks {
+                    l.interp.debug_breaks.insert(*b);
+                }
+                eprintln!(
+                    "[debug] interactive session on {} (breaks at {:?}); c=continue s=step q=quit",
+                    file, debug_breaks
+                );
             }
             if opts.frame.is_none() {
                 let result = tools::run_entry(&mut l, &opts);
@@ -2066,6 +2093,7 @@ usage:
   operon lint f.op [--cell c] [--json]
   operon keywords [--json]
   operon repl
+  operon debug f.op --break N   # W08 phase 1: REPL on line breaks (c s q bt vars p EXPR)
   operon mod init|add <url|name> [--registry f] [--rev r] [--as name]|remove <name>|update|install|tree|verify|publish
                   # package system (operon.toml manifest + operon.lock; W19/W20/W23;
                   # W21 static registry: add-by-name + publish, docs/specs/REGISTRY.md)

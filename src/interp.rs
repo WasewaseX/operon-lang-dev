@@ -4,7 +4,7 @@
 use crate::ast::*;
 use crate::value::{key_scalar, SeqState, Stress, Value};
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::{mpsc, Arc, Mutex};
@@ -699,6 +699,12 @@ pub struct Interp {
     /// (bridged sub-ASTs and compiled bodies keyed by def pointer).
     pub vm: bool,
     pub vm_program: Option<crate::vm::VmProgram>,
+    /// W08 phase 1: interactive debug hooks (`operon debug`). Break lines
+    /// are matched against the current source line after each statement;
+    /// workers are separate Interps and never break.
+    pub debug_breaks: HashSet<usize>,
+    pub debug_step: bool,
+    pub debug_file: String,
     pub seq_tx: Option<mpsc::SyncSender<crate::value::SeqMsg>>,
     /// Process-wide step ceiling shared with every spawned worker: when
     /// present, the run's TOTAL fuel (host + all threads) drains this pool.
@@ -807,6 +813,9 @@ impl Interp {
             scope_stack: Vec::new(),
             vm: false,
             vm_program: None,
+            debug_breaks: HashSet::new(),
+            debug_step: false,
+            debug_file: String::new(),
             seq_tx: None,
             fuel_pool: None,
         }
@@ -1105,8 +1114,114 @@ impl Interp {
                 Flow::Norm => {}
                 other => return Ok(other),
             }
+            // W08 phase 1: the statement-level debug trap. cur_line now
+            // reflects the statement that just ran; a hit (or a step
+            // request from the previous trap) opens the REPL. Only the
+            // host interpreter has hooks set; workers never break.
+            if self.debug_step || self.debug_breaks.contains(&self.cur_line) {
+                self.debug_repl(env);
+            }
         }
         Ok(Flow::Norm)
+    }
+
+    /// W08 phase 1: the on-break REPL. Reads stdin; EOF resumes (piped
+    /// sessions terminate cleanly instead of wedging). Commands: c/continue
+    /// (resume), s/step (break after the next statement), p EXPR (evaluate
+    /// in the current frame), vars (dump the frame chain), bt (call chain),
+    /// q (leave the debugger with exit code 0).
+    fn debug_repl(&mut self, env: &Rc<Env>) {
+        use std::io::Write as _;
+        loop {
+            print!("(dbg) ");
+            let _ = std::io::stdout().flush();
+            let mut line = String::new();
+            if std::io::stdin().read_line(&mut line).unwrap_or(0) == 0 {
+                // EOF: resume to completion so piped sessions never wedge
+                self.debug_step = false;
+                self.debug_breaks.clear();
+                return;
+            }
+            let t = line.trim();
+            match t {
+                "c" | "continue" => {
+                    self.debug_step = false;
+                    return;
+                }
+                "s" | "step" => {
+                    self.debug_step = true;
+                    return;
+                }
+                "q" | "quit" => {
+                    eprintln!("[debug] quit");
+                    std::process::exit(0);
+                }
+                "bt" => {
+                    for (name, _, _) in self.call_stack.iter().rev() {
+                        println!("  at {}", name);
+                    }
+                }
+                "vars" => {
+                    let mut cur = Some(env.clone());
+                    let mut depth = 0usize;
+                    while let Some(e) = cur {
+                        let vars = e.vars.borrow();
+                        let mut names: Vec<String> = vars.keys().cloned().collect();
+                        names.sort();
+                        for n in names {
+                            let v = vars.get(&n).cloned().unwrap_or(Value::Null);
+                            let text = v.display();
+                            let text = if text.len() > 120 {
+                                format!(
+                                    "{}…",
+                                    &text[..text
+                                        .char_indices()
+                                        .nth(120)
+                                        .map(|(i, _)| i)
+                                        .unwrap_or(text.len())]
+                                )
+                            } else {
+                                text
+                            };
+                            println!("  {} = {}", n, text);
+                        }
+                        depth += 1;
+                        if depth >= 8 {
+                            break;
+                        }
+                        cur = e.parent.clone();
+                    }
+                }
+                other => {
+                    if let Some(expr_src) = other.strip_prefix("p ") {
+                        let src = expr_src.trim();
+                        if src.is_empty() {
+                            eprintln!("(dbg) p needs an expression");
+                            continue;
+                        }
+                        let parsed = crate::parser::parse(&format!("gene __dbg() {{ {} }}", src));
+                        let mut val: Option<Value> = None;
+                        if let Some(Stmt::Gene(g)) = parsed.stmts.first() {
+                            if let Some(Stmt::ExprStmt(e)) = g.body.first() {
+                                match self.eval(env, e) {
+                                    Ok(v) => val = Some(v),
+                                    Err(st) => {
+                                        println!("  [{}] {}", st.kind, st.message);
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
+                        match val {
+                            Some(v) => println!("  {}", v.display()),
+                            None => eprintln!("(dbg) cannot evaluate '{}'", src),
+                        }
+                    } else {
+                        eprintln!("(dbg) commands: c | s | q | bt | vars | p EXPR");
+                    }
+                }
+            }
+        }
     }
 
     pub fn exec_stmt(&mut self, env: &Rc<Env>, stmt: &Stmt) -> Result<Flow, Stress> {
