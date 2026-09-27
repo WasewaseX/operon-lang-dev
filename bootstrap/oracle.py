@@ -2790,7 +2790,7 @@ abs min max sum clock exit assert codon distance similar transcribe reverse_comp
 gc_content translate find_orf memory methyl methylate demethylate m6a_write m6a_erase passage grn_set grn_get fingerprint toggle_on toggle_state repressi_next
 repressi_state repressi_start grn_fire grn_state spawn join floor ceil sqrt pow random
 randomize chr ord now sleep argv read_file write_file append_file exists file_size read_dir run
-cancel task_state cancelled
+cancel task_state cancelled wait_all wait_any
 fs_delete fs_rename fs_mkdir re_replace
 bytes_from_str str_from_bytes bytes_from_list bytes_to_list read_file_bytes write_file_bytes
 http_get serve recv_request send_response json_parse json_str env call items py
@@ -5995,6 +5995,36 @@ class Interp:
             return None
         if name == "cancelled":
             return False
+        # W15: task-group surface. The sequential engine's children are all
+        # born finished, so wait_any answers the first LISTED id (completion
+        # ordering is Rust-lane evidence in tests/timing/) and wait_all pops
+        # every id in input order, position-aligned with the input.
+        if name == "wait_all":
+            ids = args[0] if args else []
+            if not isinstance(ids, list):
+                self.note(4, "wait_all() needs a list of task ids")
+                return []
+            tasks = getattr(self, "tasks", {})
+            out = []
+            for tid in ids:
+                if isinstance(tid, int) and tid in tasks:
+                    out.append(tasks.pop(tid))
+                else:
+                    self.note(4, f"task {tid} already joined or unknown")
+                    out.append(None)
+            return out
+        if name == "wait_any":
+            ids = args[0] if args else []
+            if not isinstance(ids, list) or not ids:
+                self.note(4, "wait_any() needs a list of task ids")
+                return None
+            tasks = getattr(self, "tasks", {})
+            tombs = getattr(self, "task_tombstones", {})
+            for tid in ids:
+                if (isinstance(tid, int) and tid in tasks) or tid in tombs:
+                    return tid
+            self.note(4, "wait_any timeout (30000 ms); no task finished")
+            return None
         # ---- math
         if name == "floor":
             v = args[0] if args else 0
