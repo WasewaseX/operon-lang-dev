@@ -48,7 +48,7 @@ KEYWORD_ANALOGY = {
 }
 
 def read(p):
-    with open(os.path.join(ROOT, p), encoding="utf-8") as f:
+    with open(os.path.join(ROOT, p), encoding="utf-8", errors="replace") as f:
         return f.read()
 
 def cargo_version():
@@ -82,17 +82,27 @@ def redteam_files():
         return 0
     return len([f for f in os.listdir(d) if f.endswith(".op")])
 
+def _walk_op_files(rel_dir):
+    """Recursive .op listing — matches `operon test` (tests/ scanned recursively).
+    Without this, the 'Proof files' line (top-level only) contradicts the
+    binary's 'Proof run' line (recursive) inside the same generated STATS.md."""
+    tdir = os.path.join(ROOT, rel_dir)
+    out = []
+    for dirpath, _dirnames, filenames in os.walk(tdir):
+        for f in sorted(filenames):
+            if f.endswith(".op"):
+                out.append(os.path.join(dirpath, f))
+    return sorted(out)
+
 def proof_files():
     n = 0
-    tdir = os.path.join(ROOT, "tests")
-    for f in sorted(os.listdir(tdir)):
-        if f.endswith(".op") and "frame proof" in read(os.path.join("tests", f)):
+    for p in _walk_op_files("tests"):
+        if "frame proof" in read(os.path.relpath(p, ROOT)):
             n += 1
     return n
 
 def test_op_files():
-    tdir = os.path.join(ROOT, "tests")
-    return len([f for f in os.listdir(tdir) if f.endswith(".op")])
+    return len(_walk_op_files("tests"))
 
 def cli_subcommands():
     src = read("src/main.rs")

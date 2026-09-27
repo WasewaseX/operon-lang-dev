@@ -9,7 +9,7 @@ README/SPEC/BENCH are forbidden — link here instead.
 - **Std modules**: 16 (args, bio, collections, csv, fmt, fs, iter, json, math, motifs, random, seq, serialize, set, strings, testing)
 - **Std functions (.op-level `gene` defs)**: 157
 - **Red-team payload files**: 97
-- **Proof files**: 95 (of 96 test .op files)
+- **Proof files**: 110 (of 228 test .op files)
 - **Proof run** (bin/operon): 124 files, 104 proofs, 1376 asserts
 - **Differential harness**: 156 match / 0 diverge (0 skipped) · granted lane: 7 cells
 - **CLI subcommands**: ast, bench, build, check, crispr, doc, explain, fix, fmt, graph, ir, keywords, lint, profile, repl, rna, run, test, version, watch
