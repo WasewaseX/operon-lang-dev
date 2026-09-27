@@ -2452,9 +2452,11 @@ impl Parser {
     }
 
     fn parse_use_path(&mut self) -> String {
-        // path := segment (('/' | '.' | '-') segment)* ; segments are plain
-        // identifiers. A boundary word ('as', statement keyword, etc.) ends
-        // the path — it is never glued into it.
+        // path := segment (('/' | '.' | '-' | '::') segment)* ; segments are
+        // plain identifiers. A boundary word ('as', statement keyword, etc.)
+        // ends the path — it is never glued into it. W25: `::` is the
+        // Rust-style separator, sugar for '/' (`use bio::sequence` =
+        // `use bio/sequence`) so namespaces read like mainstream module paths.
         let mut cur = String::new();
         loop {
             match self.peek().clone() {
@@ -2465,7 +2467,10 @@ impl Parser {
                     cur.push_str(&w);
                     self.next();
                     // after a segment, only a separator may continue the path
-                    if !matches!(self.peek(), Tok::Slash | Tok::Dot | Tok::Minus) {
+                    if !matches!(
+                        self.peek(),
+                        Tok::Slash | Tok::Dot | Tok::Minus | Tok::Colon
+                    ) {
                         break;
                     }
                 }
@@ -2481,10 +2486,23 @@ impl Parser {
                     cur.push('-');
                     self.next();
                 }
+                Tok::Colon => {
+                    // `::` only; a lone ':' ends the path (never consumed)
+                    let nxt = self.toks.get(self.pos + 1).map(|t| &t.0);
+                    if !matches!(nxt, Some(Tok::Colon)) {
+                        break;
+                    }
+                    cur.push('/');
+                    self.next();
+                    self.next();
+                }
                 Tok::Str(s) => {
                     cur.push_str(&s);
                     self.next();
-                    if !matches!(self.peek(), Tok::Slash | Tok::Dot | Tok::Minus) {
+                    if !matches!(
+                        self.peek(),
+                        Tok::Slash | Tok::Dot | Tok::Minus | Tok::Colon
+                    ) {
                         break;
                     }
                 }
