@@ -139,7 +139,12 @@ CallFrame {
   ip:     u32,          // resume point
   base:   u32,          // operand-stack base in the frame's value stack
   slots:  Vec<Value>,   // locals; escaped slots are Rc<RefCell<Value>> cells
-  ret:    Flow-slot     // normal return vs ?!-propagated return vs stress
+  ret:    Flow-slot,    // normal return vs ?!-propagated return vs stress
+  // --- W16/A2 reservation (docs/specs/ASYNC.md): carried from A2 onward,
+  // unused until async lands; cost = one enum tag + one u32 + one bool.
+  fiber:  Running | SuspendedOn(WakeReason),  // park at builtin calls only
+  wake_deadline: Option<u32>,                 // timer-wheel slot
+  cancel_flag: bool                           // W18 cooperative cancellation
 }
 ```
 
