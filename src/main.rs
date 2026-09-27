@@ -88,6 +88,8 @@ fn real_main() {
     #[allow(unused_assignments)]
     let mut debug_mode = false;
     let mut debug_breaks: Vec<usize> = Vec::new();
+    // W11: the optimization level (0 = off)
+    let mut opt_level: u8 = 0;
     let mut matrix = false;
     // dx-r6: true after the `--` separator — remaining args are program argv
     let mut passthrough = false;
@@ -257,6 +259,17 @@ fn real_main() {
             // W09 A2: the bytecode lane (same semantics, machine-executed)
             "--vm" => {
                 use_vm = true;
+            }
+            // W11: the optimization pipeline level
+            "--opt" => {
+                i += 1;
+                let n = rest
+                    .get(i)
+                    .cloned()
+                    .unwrap_or_else(|| die("--opt needs a level (0..=2)"));
+                opt_level = n
+                    .parse()
+                    .unwrap_or_else(|_| die("--opt needs a level (0..=2)"));
             }
             // W08 phase 1: a line breakpoint for `operon debug`
             "--break" => {
@@ -601,6 +614,7 @@ fn real_main() {
             }
             if use_vm {
                 l.interp.vm = true;
+                l.interp.vm_opt = opt_level;
                 l.interp.vm_program = Some(operon::vm::VmProgram::default());
             }
             if debug_mode {

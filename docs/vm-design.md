@@ -52,6 +52,21 @@ which puts function-call-heavy code at parity with CPython or better.
 6. **Version honesty (D-009)** — the VM ships behind `--vm` until A6 flips the default at a
    milestone; `operon version` gains a `-vm` banner suffix only when the default flips.
 
+## 2b. W11 stage 1 delivered: the optimization pipeline (2026-09-27, main)
+
+`--opt 1` runs two draw-free passes over each compiled body before execution
+(`optimize` in src/vm.rs): constant folding (Push/Push/Bin triples over pure
+Int/Float/Bool arithmetic, i64 CHECKED so anything that would stress at
+runtime stays runtime, and jump threading (Jmp chains resolved, a Jmp to the
+next instruction removed). The passes never touch Bridge/EvalExpr
+instructions: folding cannot reorder or remove a draw (invariant 2). Jump
+removal remaps every Jmp/JmpIfF/Brk/Cont target. Cache note: an optimized
+body caches under a shifted key so --opt 0 and --opt 1 do not share entries.
+Evidence: a unit test pins the folded shape of `return 6 * 7`; the corpus
+spot-check runs --vm --opt 1 byte-identical against the oracle on targets
+covering bigint, bytes, unicode and the cookbook. Later stages (dead-block
+elimination, inlining, specialization) stay open on the W11 board entry.
+
 ## 2a. A2 delivered: the bridge architecture (2026-09-27, main)
 
 Stage A2 is ON MAIN behind `--vm`, and it ships with an architecture decision

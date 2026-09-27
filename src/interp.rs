@@ -699,6 +699,8 @@ pub struct Interp {
     /// (bridged sub-ASTs and compiled bodies keyed by def pointer).
     pub vm: bool,
     pub vm_program: Option<crate::vm::VmProgram>,
+    /// W11: the optimization level behind --opt (0 = off).
+    pub vm_opt: u8,
     /// W08 phase 1: interactive debug hooks (`operon debug`). Break lines
     /// are matched against the current source line after each statement;
     /// workers are separate Interps and never break.
@@ -813,6 +815,7 @@ impl Interp {
             scope_stack: Vec::new(),
             vm: false,
             vm_program: None,
+            vm_opt: 0,
             debug_breaks: HashSet::new(),
             debug_step: false,
             debug_file: String::new(),

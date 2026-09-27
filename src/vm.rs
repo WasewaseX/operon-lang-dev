@@ -455,12 +455,24 @@ pub fn exec_gene_body(
     env: &Rc<Env>,
 ) -> Result<Flow, Stress> {
     let code = {
+        let opt = interp.vm_opt;
         let prog = interp.vm_program.as_mut().unwrap();
-        if let Some(cached) = prog.codes.get(&def_key) {
+        let key = if opt >= 1 {
+            // cache the optimized form under a shifted key
+            def_key.wrapping_add(1usize << 62)
+        } else {
+            def_key
+        };
+        if let Some(cached) = prog.codes.get(&key) {
             cached.clone()
         } else {
             let compiled = compile_body(name, body, prog);
-            prog.codes.insert(def_key, compiled.clone());
+            let compiled = if opt >= 1 {
+                optimize(&compiled)
+            } else {
+                compiled
+            };
+            prog.codes.insert(key, compiled.clone());
             compiled
         }
     };
@@ -696,10 +708,205 @@ fn render(i: &Instr, code: &GeneCode) -> String {
     }
 }
 
+/// W11 stage 1: the optimization pipeline. Two draw-free, provably
+/// behavior-preserving passes over the OIR1:
+///   1. constant folding: Push a, Push b, Bin -> Push (folded). Only pure
+///      Int/Float arithmetic folds, and only when the operation cannot
+///      stress (i64 checked ops); anything that would raise at runtime
+///      stays runtime (the stress kind+message are the contract).
+///   2. jump threading: a Jmp whose target is another Jmp follows the
+///      chain; an unconditional Jmp to the NEXT instruction disappears.
+///      Folding never touches a draw or a call: those are Bridge/EvalExpr
+///      instructions, and the folder must not reorder or remove draws
+///      (the entropy discipline, vm-design.md invariant 2).
+pub fn optimize(code: &GeneCode) -> GeneCode {
+    let mut consts = code.consts.clone();
+    let mut code = code.clone();
+
+    // pass 1: constant folding (fixpoint, bounded)
+    for _round in 0..8 {
+        let mut folded = false;
+        let mut i = 0;
+        while i + 2 < code.code.len() {
+            if let (Instr::Push(a), Instr::Push(b), Instr::Bin(op)) =
+                (&code.code[i], &code.code[i + 1], &code.code[i + 2])
+            {
+                if let Some(newc) = fold_consts(&mut consts, *a, *b, *op) {
+                    code.code[i] = Instr::Push(newc);
+                    code.code.remove(i + 2);
+                    code.code.remove(i + 1);
+                    code.lines.remove(i + 2);
+                    code.lines.remove(i + 1);
+                    remap_after_removal(&mut code, i + 1, 2);
+                    folded = true;
+                    continue; // try to fold the result into its neighbor
+                }
+            }
+            i += 1;
+        }
+        if !folded {
+            break;
+        }
+    }
+
+    // pass 2: jump threading + dead unconditional-jump removal
+    for _round in 0..8 {
+        let mut changed = false;
+        for i in 0..code.code.len() {
+            if let Instr::Jmp(t) = code.code[i] {
+                let mut target = t as usize;
+                let mut hops = 0;
+                while hops < 16 {
+                    match code.code.get(target) {
+                        Some(Instr::Jmp(t2)) => {
+                            target = *t2 as usize;
+                            hops += 1;
+                        }
+                        _ => break,
+                    }
+                }
+                if target != t as usize {
+                    code.code[i] = Instr::Jmp(target as u32);
+                    changed = true;
+                }
+            }
+        }
+        let mut i = 0;
+        while i < code.code.len() {
+            if let Instr::Jmp(t) = code.code[i] {
+                if t as usize == i + 1 {
+                    code.code.remove(i);
+                    code.lines.remove(i);
+                    remap_after_removal(&mut code, i, 1);
+                    changed = true;
+                    continue;
+                }
+            }
+            i += 1;
+        }
+        if !changed {
+            break;
+        }
+    }
+
+    GeneCode {
+        name: code.name,
+        consts,
+        names: code.names,
+        code: code.code,
+        lines: code.lines,
+    }
+}
+
+/// Remap jump targets after `count` instruction(s) at `at` were removed:
+/// every target > `at` shifts down by `count`; a target inside the removed
+/// range cannot exist (we only remove folded operands, never jump targets,
+/// because jumps are only emitted at statement boundaries the folder does
+/// not touch — enforced by only folding Push/Push/Bin triples).
+fn remap_after_removal(code: &mut GeneCode, at: usize, count: usize) {
+    for instr in code.code.iter_mut() {
+        match instr {
+            Instr::Jmp(t) | Instr::JmpIfF(t) | Instr::Brk(t) | Instr::Cont(t) => {
+                let tt = *t as usize;
+                if tt > at + count - 1 {
+                    *t = (tt - count) as u32;
+                }
+            }
+            _ => {}
+        }
+    }
+    let _ = at;
+}
+
+/// Fold one Push/Push/Bin triple into a constant (appended to the pool).
+fn fold_consts(consts: &mut Vec<Const>, a: u32, b: u32, op: BinOp) -> Option<u32> {
+    let va = consts.get(a as usize)?.clone();
+    let vb = consts.get(b as usize)?.clone();
+    use BinOp::*;
+    let folded: Const = match (va, vb) {
+        (Const::Int(x), Const::Int(y)) => match op {
+            Add => Const::Int(x.checked_add(y)?),
+            Sub => Const::Int(x.checked_sub(y)?),
+            Mul => Const::Int(x.checked_mul(y)?),
+            Div => {
+                if y == 0 {
+                    return None; // the runtime stress IS the contract
+                }
+                Const::Int(x.checked_div(y)?)
+            }
+            Mod => {
+                if y == 0 {
+                    return None;
+                }
+                Const::Int(x.checked_rem(y)?)
+            }
+            Eq => Const::Bool(x == y),
+            Neq => Const::Bool(x != y),
+            Lt => Const::Bool(x < y),
+            Le => Const::Bool(x <= y),
+            Gt => Const::Bool(x > y),
+            Ge => Const::Bool(x >= y),
+            _ => return None,
+        },
+        (Const::Float(x), Const::Float(y)) => match op {
+            Add => Const::Float(x + y),
+            Sub => Const::Float(x - y),
+            Mul => Const::Float(x * y),
+            Div => Const::Float(x / y),
+            Eq => Const::Bool(x == y),
+            Neq => Const::Bool(x != y),
+            Lt => Const::Bool(x < y),
+            Le => Const::Bool(x <= y),
+            Gt => Const::Bool(x > y),
+            Ge => Const::Bool(x >= y),
+            _ => return None,
+        },
+        (Const::Bool(x), Const::Bool(y)) => match op {
+            Eq => Const::Bool(x == y),
+            Neq => Const::Bool(x != y),
+            _ => return None,
+        },
+        _ => return None,
+    };
+    if let Some(i) = consts.iter().position(|c| *c == folded) {
+        return Some(i as u32);
+    }
+    consts.push(folded);
+    Some((consts.len() - 1) as u32)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::ast::Stmt;
+
+    /// W11 stage 1: the folding pass removes constant arithmetic without
+    /// changing the program's observable encoding of jumps.
+    #[test]
+    fn folds_constants_and_threads_jumps() {
+        let src = "gene f() {\n    return 6 * 7\n}\n";
+        let parsed = crate::parser::parse(src);
+        let mut body: Vec<Stmt> = Vec::new();
+        for s in &parsed.stmts {
+            if let Stmt::Gene(g) = s {
+                body = g.body.clone();
+            }
+        }
+        let mut prog = VmProgram::default();
+        let raw = compile_body("f", &body, &mut prog);
+        let opt = optimize(&raw);
+        // the folded body is exactly: Push 42, Ret
+        let names: Vec<String> = opt.code.iter().map(|i| mnemonic(i).to_string()).collect();
+        assert_eq!(names, vec!["Push", "Ret"], "folding changed the shape");
+        // and the constant really is 42
+        match &opt.code[0] {
+            Instr::Push(idx) => match &opt.consts[*idx as usize] {
+                Const::Int(42) => {}
+                other => panic!("folded to {:?}", other),
+            },
+            other => panic!("not a Push: {:?}", other),
+        }
+    }
 
     /// W10 done-when: one compiled function's encoding is pinned.
     #[test]
