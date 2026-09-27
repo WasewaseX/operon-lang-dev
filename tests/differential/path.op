@@ -1,0 +1,10 @@
+# path differential — pure lexical shaping, byte-identical both engines
+use std/path;
+print("base: {path.path_base("a/b/c.txt")} {path.path_base("a/b/")} {path.path_base("c.txt")}")
+print("dir: {path.path_dir("a/b/c.txt")} {path.path_dir("c.txt")} {path.path_dir("/x")}")
+print("ext: {path.path_ext("a/b.tar.gz")} {path.path_ext(".hidden")} {path.path_ext("readme")}")
+print("abs: {path.path_is_abs("/a")} {path.path_is_abs("a")}")
+print("join: {path.path_join(["a", "", "b", "c"])} | {path.path_join(["/r", "s", "f.txt"])}")
+print("norm: {path.path_norm("a/./b//c/../d")} | {path.path_norm("/a/../b/./c")}")
+print("keep: {path.path_norm("../keep/me")} | {path.path_norm("/../climb")}")
+print("split: {path.path_split_ext("a/b.tar.gz")} | {path.path_split_ext("noext")}")

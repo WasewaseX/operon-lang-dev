@@ -24,7 +24,7 @@
  "harness": {
   "diverge": 0,
   "granted_cells": 7,
-  "match": 164,
+  "match": 166,
   "skipped": 0
  },
  "keyword_analogy_pending": [],
@@ -107,11 +107,11 @@
   "textDocument/semanticTokens",
   "textDocument/signatureHelp"
  ],
- "proof_files": 114,
+ "proof_files": 115,
  "proof_totals": {
-  "asserts": 1451,
-  "files": 132,
-  "proofs": 108,
+  "asserts": 1479,
+  "files": 134,
+  "proofs": 109,
   "source": "bin/operon"
  },
  "redteam_files": 97,
@@ -119,8 +119,8 @@
   "h1": "# Operon \u2014 Language Specification",
   "status": "v2.3.0-dev"
  },
- "std_function_count": 189,
- "std_module_count": 19,
+ "std_function_count": 198,
+ "std_module_count": 20,
  "std_modules": [
   {
    "functions": 8,
@@ -171,6 +171,10 @@
    "module": "motifs"
   },
   {
+   "functions": 9,
+   "module": "path"
+  },
+  {
    "functions": 6,
    "module": "random"
   },
@@ -199,6 +203,6 @@
    "module": "time"
   }
  ],
- "test_op_files": 236,
+ "test_op_files": 238,
  "version": "2.2.0"
 }

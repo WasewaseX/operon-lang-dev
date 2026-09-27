@@ -1,0 +1,46 @@
+# std/path — W27 proof: pure lexical path shaping (no fs, no capabilities).
+# Covers base/dir/ext/is_abs/join/norm/split_ext including the edge cases:
+# trailing slashes, dotfiles, absolute-root climbing, relative ".." keeping.
+use std/path;
+frame proof {
+    # base
+    assert(path.path_base("a/b/c.txt") == "c.txt")
+    assert(path.path_base("a/b/") == "b")
+    assert(path.path_base("c.txt") == "c.txt")
+    assert(path.path_base("") == "")
+    assert(path.path_base("/") == "")
+    # dir
+    assert(path.path_dir("a/b/c.txt") == "a/b")
+    assert(path.path_dir("c.txt") == ".")
+    assert(path.path_dir("/x") == "/")
+    assert(path.path_dir("a/b/") == "a")
+    # ext
+    assert(path.path_ext("a/b.tar.gz") == "gz")
+    assert(path.path_ext("readme") == "")
+    assert(path.path_ext(".hidden") == "")
+    assert(path.path_ext("a/.hidden") == "")
+    # predicates
+    assert(path.path_is_abs("/a"))
+    assert(!path.path_is_abs("a"))
+    assert(!path.path_is_abs(""))
+    # join
+    assert(path.path_join(["a", "", "b", "c"]) == "a/b/c")
+    assert(path.path_join(["/root", "sub", "file.txt"]) == "/root/sub/file.txt")
+    assert(path.path_join([]) == "")
+    # lexical normalization
+    assert(path.path_norm("a/./b//c/../d") == "a/b/d")
+    assert(path.path_norm("/a/../b/./c") == "/b/c")
+    assert(path.path_norm("../keep/me") == "../keep/me")
+    assert(path.path_norm("/../climb") == "/climb")
+    assert(path.path_norm(".") == ".")
+    assert(path.path_norm("") == ".")
+    # split_ext
+    assert(path.path_split_ext("a/b.tar.gz") == ["b.tar", "gz"])
+    assert(path.path_split_ext("noext") == ["noext", ""])
+    assert(path.path_split_ext(".hidden") == [".hidden", ""])
+}
+main {
+    promote("base: {path.path_base('/etc/operon/config.cell')}")
+    promote("norm: {path.path_norm('std/../std/./time.op')}")
+    promote("join: {path.path_join(['docs', 'specs'])}")
+}
