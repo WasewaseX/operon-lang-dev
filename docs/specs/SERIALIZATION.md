@@ -46,6 +46,7 @@ failure, not a contract violation.
 | list | exact, recursively | |
 | map | exact, recursively | keys are strings; re-parse preserves document order so structural `==` holds |
 | option / result | **wire fidelity only** | `{"ok":…}` / `{"err":…}` / `null`; the tag is NOT rebuilt on parse — a single-key map is indistinguishable from a map BY DESIGN. Callers that need the tag rebuild it (`is_ok`/`has_key`) — see the pinned proof |
+| bytes | **wire fidelity only** | emits the W29 int-list view (`json_str(b"hi")` → `[104,105]`, compact — the W29 contract owns the rendering); re-parse yields a plain int **list** — the value-kind boundary is NOT rebuilt, by the same wire-fidelity rule as option/result. `roundtrip()` reports **false** (the checker never pretends a kind survived). Inside an instance field the same applies: the rebuild carries the int list as DATA |
 | phenotype instance | exact, recursively (stage 2) | emits the canonical wire map — field map + hidden `"#phenotype"` identity key, the SAME shape the `spawn` boundary uses (SPEC §7a); `from_json` rebuilds a REAL instance (class must be declared in the deserializing program; unknown name → `err(...)`). Reconstruction is DATA restore: `init` does NOT re-run and field defaults do NOT apply — the wire is the truth; absent fields read as null + note |
 
 `roundtrip(value, fmt)` implements this table as a runnable check; the

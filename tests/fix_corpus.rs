@@ -83,7 +83,10 @@ fn law2_fix_is_idempotent() {
 fn law3_fix_output_reparses_canonical() {
     // W05 hotfix: the const→let migration is RETIRED — const is live
     // semantics (immutable binding + deep freeze); rewriting it would be a
-    // meaning change (law 1). The s::→dot migration (dx-r3 legacy) remains.
+    // meaning change (law 1). The s::→dot migration (dx-r3 legacy) remains
+    // in EXPRESSION context only — W25 made `::` live exact sugar in USE
+    // paths, where separators are free spelling and law 4 keeps fix's hands
+    // off (see below).
     let legacy = "\
 const limit = 3
 gene scaled(x) { var base = config::limit return base + x }
@@ -106,6 +109,37 @@ gene scaled(x) { var base = config::limit return base + x }
     );
     assert!(!fixed.contains("::"), ":: must be gone");
     assert!(fixed.contains(".limit"), "{}", fixed);
+}
+
+#[test]
+fn law4_use_paths_keep_their_separator() {
+    // W25: `::` in use paths is live sugar. The migrator must leave use
+    // lines alone — law 1 fired on dev1's namespaces.op corpus file when
+    // the dx-r3 EXPRESSION repair rewrote `use std::set` -> `use std.set`,
+    // moving the canon form (parse canonicalizes the use-path render to
+    // `/`, so an un-migrated use line is canon-stable). Observable
+    // contract: a use-path `::` never increments s_dot; an
+    // expression-context `::` keeps the dx-r3 repair.
+    let src = "use std::bio\nuse std/set as set2\n";
+    let (fixed, rep) = fix_source(src);
+    assert_eq!(rep.s_dot, 0, "use-path :: is not an expression repair");
+    assert!(fixed.contains("use std/bio"), "use canon render: {}", fixed);
+    assert!(
+        fixed.contains("use std/set as set2"),
+        "/ alias survives: {}",
+        fixed
+    );
+    let canon_before = format_program(&parser::parse(src));
+    let canon_after = format_program(&parser::parse(&fixed));
+    assert_eq!(
+        canon_before, canon_after,
+        "use-only file: fix is canon-stable"
+    );
+    // expression context keeps the dx-r3 repair (law 3 pins the shape):
+    let expr_src = "gene g() { return config::limit }\n";
+    let (expr_fixed, expr_rep) = fix_source(expr_src);
+    assert_eq!(expr_rep.s_dot, 1, "expression :: still repaired");
+    assert!(expr_fixed.contains("config.limit"), "{}", expr_fixed);
 }
 
 #[test]

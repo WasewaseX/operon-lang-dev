@@ -2274,7 +2274,23 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
             "{{{}}}",
             pairs
                 .iter()
-                .map(|(k, v)| format!("{}: {}", fmt_prec(k, 0), fmt_prec(v, 0)))
+                .map(|(k, v)| {
+                    // law 1 (render∘parse idempotence): a Null-literal key
+                    // renders as a QUOTED string via str_lit (quote-mode
+                    // aware). The bare render `null:` re-parses as a
+                    // stringified key (the parser's map-key path refuses bare
+                    // null), so bare was not fixpoint-stable — fix_corpus law
+                    // 1 went red on dev1's W03 std_generics corpus file, whose
+                    // fallback-repaired map carries a Null key. The quoted
+                    // render re-parses as Str("null"), whose runtime key is
+                    // the same display text the Null key would normalize to.
+                    let key = if matches!(k, Expr::Null) {
+                        str_lit("null")
+                    } else {
+                        fmt_prec(k, 0)
+                    };
+                    format!("{}: {}", key, fmt_prec(v, 0))
+                })
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
@@ -2489,6 +2505,26 @@ fn migrate_source(src: &str) -> (String, usize, usize) {
 
     while i < n {
         let c = chars[i];
+        // W25 follow-up (2026-09-27): `::` is LIVE exact sugar in use paths
+        // (use std::bio — dev1's W25). A use line is copied VERBATIM: the
+        // separators are free spelling variants there (W25 contract), so the
+        // dx-r3 expr::field → expr.field repair below must never touch them
+        // (fix_corpus law 1: fix never changes canonical meaning — the
+        // formatter preserves the spelling the author chose). Expression
+        // context keeps the dx-r3 repair (law 3 pins it).
+        if c == 'u'
+            && (i == 0 || out.ends_with('\n'))
+            && i + 3 < n
+            && chars[i + 1] == 's'
+            && chars[i + 2] == 'e'
+            && (chars[i + 3] == ' ' || chars[i + 3] == '\t')
+        {
+            while i < n && chars[i] != '\n' {
+                out.push(chars[i]);
+                i += 1;
+            }
+            continue;
+        }
         // comments: verbatim to end of line (the newline itself re-enters code)
         if c == '#' {
             while i < n && chars[i] != '\n' {

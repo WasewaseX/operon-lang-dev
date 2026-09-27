@@ -8,11 +8,11 @@ README/SPEC/BENCH are forbidden — link here instead.
 - **Keywords (parser reserved set)**: 59 — table in [KEYWORDS.md](KEYWORDS.md)
   - analogy pending: trait
 - **Std modules**: 22 (args, bigint, bio, collections, csv, deque, fmt, fs, heap, iter, json, math, motifs, path, random, seq, serialize, set, strings, testing, time, unicode)
-- **Std functions (.op-level `gene` defs)**: 226
+- **Std functions (.op-level `gene` defs)**: 228
 - **Red-team payload files**: 99
-- **Proof files**: 121 (of 257 test .op files)
-- **Proof run** (bin/operon): 149 files, 115 proofs, 1659 asserts
-- **Differential harness**: 182 match / 0 diverge (0 skipped) · granted lane: 9 cells
+- **Proof files**: 122 (of 258 test .op files)
+- **Proof run** (bin/operon): 150 files, 116 proofs, 1704 asserts
+- **Differential harness**: 183 match / 0 diverge (0 skipped) · granted lane: 9 cells
 - **CLI subcommands**: ast, bench, build, check, crispr, doc, explain, fix, fmt, graph, ir, keywords, lint, profile, repl, rna, run, test, version, watch
 - **LSP methods**: initialize, shutdown, textDocument/completion, textDocument/definition, textDocument/didChange, textDocument/didClose, textDocument/didOpen, textDocument/documentSymbol, textDocument/formatting, textDocument/hover, textDocument/prepareRename, textDocument/publishDiagnostics, textDocument/references, textDocument/rename, textDocument/semanticTokens, textDocument/signatureHelp
 
@@ -36,7 +36,7 @@ README/SPEC/BENCH are forbidden — link here instead.
 | std/path | 9 |
 | std/random | 6 |
 | std/seq | 0 |
-| std/serialize | 8 |
+| std/serialize | 10 |
 | std/set | 11 |
 | std/strings | 17 |
 | std/testing | 6 |
