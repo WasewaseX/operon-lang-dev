@@ -3400,6 +3400,10 @@ impl Parser {
                 self.next();
                 Expr::Str(s)
             }
+            Tok::Bytes(b) => {
+                self.next();
+                Expr::Bytes(b)
+            }
             Tok::Interp(raw) => {
                 let line = self.line();
                 self.next();
@@ -3649,6 +3653,10 @@ impl Parser {
                             self.next();
                             Expr::Str(s)
                         }
+                        Tok::Bytes(b) => {
+                            self.next();
+                            Expr::Bytes(b)
+                        }
                         Tok::Int(i) => {
                             self.next();
                             Expr::Int(i)
@@ -3785,6 +3793,14 @@ impl Parser {
                             self.next();
                             lits.push(Expr::Str(s));
                         }
+                        Tok::Bytes(b) => {
+                            if neg {
+                                let line = self.line();
+                                self.note(line, 4, "'-' before a bytes pattern ignored");
+                            }
+                            self.next();
+                            lits.push(Expr::Bytes(b));
+                        }
                         // Legacy edge: a non-literal in the comma-run returns
                         // that pattern alone and discards prior literals
                         // (pre-W02 behavior kept verbatim).
@@ -3850,6 +3866,14 @@ impl Parser {
                 }
                 self.next();
                 MatchPat::Lit(Expr::Str(s))
+            }
+            Tok::Bytes(b) => {
+                if neg {
+                    let line = self.line();
+                    self.note(line, 4, "'-' before a bytes pattern ignored");
+                }
+                self.next();
+                MatchPat::Lit(Expr::Bytes(b))
             }
             Tok::Ident(w) if !neg && w == "true" => {
                 self.next();

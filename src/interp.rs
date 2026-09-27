@@ -794,6 +794,27 @@ impl Interp {
         Ok(Value::Str(s.repeat(n as usize)))
     }
 
+    /// W029: bytes repeat — same ceiling family as strings (a giant repeat
+    /// would abort the process outside the stress model), same fuel shape.
+    fn bytes_repeat(&self, b: &[u8], n: i64) -> Result<Value, Stress> {
+        if n < 0 {
+            return Err(Stress::new("unfolded", "repeat count must be non-negative"));
+        }
+        let n = n as u64;
+        if n.saturating_mul(b.len() as u64) > 512 * 1024 * 1024 {
+            return Err(Stress::new(
+                "overflow",
+                "repeat exceeds the 512 MiB bytes ceiling",
+            ));
+        }
+        mem_charge(n.saturating_mul(b.len() as u64))?;
+        let mut out = Vec::with_capacity((n as usize) * b.len());
+        for _ in 0..n {
+            out.extend_from_slice(b);
+        }
+        Ok(Value::Bytes(Rc::new(out)))
+    }
+
     fn tick(&mut self) -> Result<(), Stress> {
         self.steps += 1;
         // shared pool: every 65_536 steps, drain a chunk from the run-wide
@@ -1207,6 +1228,8 @@ impl Interp {
                 let items: Vec<Value> = match itv {
                     Value::List(l) => l.borrow().clone(),
                     Value::Str(s) => s.chars().map(|c| Value::Str(c.to_string())).collect(),
+                    // W029: iterating bytes yields ints 0..=255 (Python parity)
+                    Value::Bytes(b) => b.iter().map(|x| Value::Int(*x as i64)).collect(),
                     Value::Map(m) => m.borrow().iter().map(|(k, _)| k.clone()).collect(),
                     other => {
                         self.note(
@@ -1354,6 +1377,8 @@ impl Interp {
                 let items: Vec<Value> = match itv {
                     Value::List(l) => l.borrow().clone(),
                     Value::Str(s) => s.chars().map(|c| Value::Str(c.to_string())).collect(),
+                    // W029: iterating bytes yields ints 0..=255 (Python parity)
+                    Value::Bytes(b) => b.iter().map(|x| Value::Int(*x as i64)).collect(),
                     Value::Map(m) => m.borrow().iter().map(|(k, _)| k.clone()).collect(),
                     other => {
                         self.note(
@@ -2293,6 +2318,13 @@ impl Interp {
             Expr::Int(i) => Ok(Value::Int(*i)),
             Expr::Float(f) => Ok(Value::Float(*f)),
             Expr::Str(s) => Ok(Value::Str(s.clone())),
+            Expr::Bytes(b) => {
+                // W029: bytes are real allocations — charged like strings
+                // (a 512 MiB ceiling applies to repeat/concat, and the
+                // aggregate run ceiling applies here at construction)
+                mem_charge(b.len() as u64)?;
+                Ok(Value::Bytes(Rc::new(b.clone())))
+            }
             Expr::Interp(parts) => {
                 let mut out = String::new();
                 for p in parts {
@@ -2572,6 +2604,14 @@ impl Interp {
                             None => Err(Stress::new("missing", "char index out of range")),
                         }
                     }
+                    // W029: bytes[i] -> the byte value as an int (Python parity)
+                    (Value::Bytes(b), _) => {
+                        let idx = self.as_index(&iv, b.len())?;
+                        match b.get(idx) {
+                            Some(byte) => Ok(Value::Int(*byte as i64)),
+                            None => Err(Stress::new("missing", "byte index out of range")),
+                        }
+                    }
                     _ => Err(Stress::new(
                         "unfolded",
                         format!("cannot index {}", tv.type_name()),
@@ -2771,6 +2811,21 @@ impl Interp {
                     mem_charge(a.len() as u64 + b.len() as u64)?;
                     Ok(Value::Str(format!("{}{}", a, b)))
                 }
+                // W029: bytes + bytes -> bytes (same ceiling family as strings;
+                // bytes + str is a type error, never a silent coercion)
+                (Value::Bytes(a), Value::Bytes(b)) => {
+                    if a.len().saturating_add(b.len()) > 512 * 1024 * 1024 {
+                        return Err(Stress::new(
+                            "overflow",
+                            "bytes concat exceeds the 512 MiB ceiling",
+                        ));
+                    }
+                    mem_charge(a.len() as u64 + b.len() as u64)?;
+                    let mut out = Vec::with_capacity(a.len() + b.len());
+                    out.extend_from_slice(a);
+                    out.extend_from_slice(b);
+                    Ok(Value::Bytes(Rc::new(out)))
+                }
                 (Value::List(a), Value::List(b)) => {
                     if a.borrow().len().saturating_add(b.borrow().len()) > 64 * 1024 * 1024 {
                         return Err(Stress::new(
@@ -2812,6 +2867,13 @@ impl Interp {
                 }
                 if let (Value::Int(n), Value::Str(s)) = (l, r) {
                     return self.str_repeat(s, *n);
+                }
+                // W029: bytes repetition (Python parity): b"ab" * 3 / 3 * b"ab"
+                if let (Value::Bytes(b), Value::Int(n)) = (l, r) {
+                    return self.bytes_repeat(b, *n);
+                }
+                if let (Value::Int(n), Value::Bytes(b)) = (l, r) {
+                    return self.bytes_repeat(b, *n);
                 }
                 self.arith(
                     l,
@@ -4920,6 +4982,9 @@ impl Interp {
             }
             "len" => Ok(Value::Int(match args.first() {
                 Some(Value::Str(s)) => s.chars().count() as i64,
+                // W029: len(bytes) is the BYTE count (a bytes object has no
+                // chars — Python parity)
+                Some(Value::Bytes(b)) => b.len() as i64,
                 Some(Value::List(l)) => l.borrow().len() as i64,
                 Some(Value::Map(m)) => m.borrow().len() as i64,
                 _ => {
@@ -5043,6 +5108,117 @@ impl Interp {
             "str" => Ok(Value::Str(
                 args.first().map(|v| v.display()).unwrap_or_default(),
             )),
+            // -------------------------------------------------- W029: bytes
+            // The conversion surface is UTF-8-only and explicit-encoding-by-
+            // name: `bytes_from_str(s, enc?)` infallibly encodes (an Operon
+            // str IS valid UTF-8), `str_from_bytes` decodes and reports
+            // invalid input as the SOFT tier (null + note naming the byte
+            // position), and the list bridge enforces the 0..=255 domain as
+            // a catchable unfolded stress. Non-utf8/unknown encoding names
+            // are contract violations, never silent coercions.
+            "bytes_from_str" => {
+                let s = match args.first() {
+                    Some(Value::Str(s)) => s.clone(),
+                    Some(other) => {
+                        return Err(Stress::new(
+                            "unfolded",
+                            format!("bytes_from_str needs a str, got {}", other.type_name()),
+                        ))
+                    }
+                    None => String::new(),
+                };
+                if let Some(enc) = args.get(1) {
+                    let enc = enc.display();
+                    let low = enc.to_ascii_lowercase().replace('-', "");
+                    if low != "utf8" {
+                        return Err(Stress::new(
+                            "unfolded",
+                            format!("unsupported encoding '{}' (bytes are UTF-8 only)", enc),
+                        ));
+                    }
+                }
+                let out = s.into_bytes();
+                mem_charge(out.len() as u64)?;
+                Ok(Value::Bytes(Rc::new(out)))
+            }
+            "str_from_bytes" => match args.first() {
+                Some(Value::Bytes(b)) => {
+                    if let Some(enc) = args.get(1) {
+                        let enc = enc.display();
+                        let low = enc.to_ascii_lowercase().replace('-', "");
+                        if low != "utf8" {
+                            return Err(Stress::new(
+                                "unfolded",
+                                format!("unsupported encoding '{}' (bytes are UTF-8 only)", enc),
+                            ));
+                        }
+                    }
+                    match std::str::from_utf8(b) {
+                        Ok(s) => Ok(Value::Str(s.to_string())),
+                        Err(e) => {
+                            // soft tier: null + note naming the offending
+                            // position (Total Grammar — expected failure is
+                            // a value, not a stress)
+                            self.note(
+                                self.cur_line,
+                                4,
+                                format!(
+                                    "str_from_bytes: invalid UTF-8 at byte {}; null",
+                                    e.valid_up_to()
+                                ),
+                            );
+                            Ok(Value::Null)
+                        }
+                    }
+                }
+                Some(other) => Err(Stress::new(
+                    "unfolded",
+                    format!("str_from_bytes needs bytes, got {}", other.type_name()),
+                )),
+                None => Ok(Value::Str(String::new())),
+            },
+            "bytes_from_list" => match args.first() {
+                Some(Value::List(l)) => {
+                    let mut out = Vec::with_capacity(l.borrow().len());
+                    for v in l.borrow().iter() {
+                        match v {
+                            Value::Int(i) if (0..=255).contains(i) => out.push(*i as u8),
+                            Value::Int(i) => {
+                                return Err(Stress::new(
+                                    "unfolded",
+                                    format!("byte value {} out of range 0..255", i),
+                                ))
+                            }
+                            other => {
+                                return Err(Stress::new(
+                                    "unfolded",
+                                    format!(
+                                        "bytes_from_list needs ints, got {}",
+                                        other.type_name()
+                                    ),
+                                ))
+                            }
+                        }
+                    }
+                    mem_charge(out.len() as u64)?;
+                    Ok(Value::Bytes(Rc::new(out)))
+                }
+                Some(other) => Err(Stress::new(
+                    "unfolded",
+                    format!("bytes_from_list needs a list, got {}", other.type_name()),
+                )),
+                None => Ok(Value::Bytes(Rc::new(Vec::new()))),
+            },
+            "bytes_to_list" => match args.first() {
+                Some(Value::Bytes(b)) => Ok(Value::List(Rc::new(RefCell::new(
+                    b.iter().map(|x| Value::Int(*x as i64)).collect(),
+                )))),
+                Some(other) => Err(Stress::new(
+                    "unfolded",
+                    format!("bytes_to_list needs bytes, got {}", other.type_name()),
+                )),
+                None => Ok(Value::List(Rc::new(RefCell::new(vec![])))),
+            },
             "num" => match args.first() {
                 Some(Value::Str(s)) => {
                     let t = s.trim();
@@ -7568,6 +7744,111 @@ impl Interp {
                     )),
                 }
             }
+            // W029: bytes file I/O — the SAME armor as read_file/write_file
+            // (regular-files-only, charge-before-read, TOCTOU-verified handle,
+            // hardlink defense), with bytes payloads instead of text.
+            "read_file_bytes" => {
+                let path = args.first().map(|v| v.display()).unwrap_or_default();
+                self.caps.check(&self.caps.read, "read", &path)?;
+                let meta = std::fs::metadata(&path).map_err(|e| {
+                    Stress::new("missing", format!("read_file_bytes '{}': {}", path, e))
+                })?;
+                if !meta.is_file() {
+                    return Err(Stress::new(
+                        "interference",
+                        format!("read_file_bytes '{}': refused — not a regular file", path),
+                    ));
+                }
+                mem_charge(meta.len())?;
+                match std::fs::File::open(&path) {
+                    Ok(f) => {
+                        if self.caps.gates_paths(&self.caps.read) {
+                            Caps::verify_opened(&f, &path, &self.caps.read, "read")?;
+                        }
+                        use std::io::Read;
+                        let mut buf: Vec<u8> = Vec::with_capacity(meta.len() as usize);
+                        match f.take(meta.len()).read_to_end(&mut buf) {
+                            Ok(_) => Ok(Value::Bytes(Rc::new(buf))),
+                            Err(e) => Err(Stress::new(
+                                "missing",
+                                format!("read_file_bytes '{}': {}", path, e),
+                            )),
+                        }
+                    }
+                    Err(e) => Err(Stress::new(
+                        "missing",
+                        format!("read_file_bytes '{}': {}", path, e),
+                    )),
+                }
+            }
+            "write_file_bytes" => {
+                let path = args.first().map(|v| v.display()).unwrap_or_default();
+                let body = match args.get(1) {
+                    Some(Value::Bytes(b)) => b.clone(),
+                    Some(Value::Str(s)) => Rc::new(s.clone().into_bytes()),
+                    Some(other) => {
+                        return Err(Stress::new(
+                            "unfolded",
+                            format!(
+                                "write_file_bytes needs bytes (or str), got {}",
+                                other.type_name()
+                            ),
+                        ))
+                    }
+                    None => Rc::new(Vec::new()),
+                };
+                self.caps.check(&self.caps.write, "write", &path)?;
+                if self.caps.gates_paths(&self.caps.write) {
+                    let final_path = Caps::resolve_link_chain(std::path::Path::new(&path));
+                    if !Caps::path_allowed(&self.caps.write, &final_path.to_string_lossy()) {
+                        return Err(Caps::denied("write", &path));
+                    }
+                }
+                match std::fs::OpenOptions::new()
+                    .write(true)
+                    .create(true)
+                    .truncate(false)
+                    .open(&path)
+                {
+                    Ok(mut f) => {
+                        if self.caps.gates_paths(&self.caps.write) {
+                            Caps::verify_opened(&f, &path, &self.caps.write, "write")?;
+                        }
+                        #[cfg(unix)]
+                        {
+                            use std::os::unix::fs::MetadataExt;
+                            if let Ok(m) = f.metadata() {
+                                if m.nlink() > 1 {
+                                    return Err(Stress::new(
+                                        "interference",
+                                        format!(
+                                            "write_file_bytes '{}': refused — path is a hardlink ({} links)",
+                                            path,
+                                            m.nlink()
+                                        ),
+                                    ));
+                                }
+                            }
+                        }
+                        f.set_len(0).map_err(|e| {
+                            Stress::new("missing", format!("write_file_bytes '{}': {}", path, e))
+                        })?;
+                        mem_charge(body.len() as u64)?;
+                        use std::io::Write;
+                        match f.write_all(&body) {
+                            Ok(()) => Ok(Value::Bool(true)),
+                            Err(e) => Err(Stress::new(
+                                "missing",
+                                format!("write_file_bytes '{}': {}", path, e),
+                            )),
+                        }
+                    }
+                    Err(e) => Err(Stress::new(
+                        "missing",
+                        format!("write_file_bytes '{}': {}", path, e),
+                    )),
+                }
+            }
             "append_file" => {
                 let path = args.first().map(|v| v.display()).unwrap_or_default();
                 let body = args.get(1).map(|v| v.display()).unwrap_or_default();
@@ -8252,6 +8533,37 @@ impl Interp {
             }
         }
         match recv {
+            // W029: the bytes method surface — slice (Python-style negatives,
+            // clamped, returns NEW bytes) and len. Bytes are immutable, so
+            // there are deliberately no mutators.
+            Value::Bytes(b) => match name {
+                "slice" => {
+                    let a = match args.first() {
+                        Some(Value::Int(i)) => *i,
+                        _ => 0,
+                    };
+                    let blen = match args.get(1) {
+                        Some(Value::Int(i)) => *i,
+                        _ => b.len() as i64,
+                    };
+                    let len = b.len() as i64;
+                    let norm = |x: i64| -> i64 {
+                        if x < 0 {
+                            (len + x).max(0)
+                        } else {
+                            x.min(len)
+                        }
+                    };
+                    let a = norm(a) as usize;
+                    let e = norm(blen) as usize;
+                    Ok(Value::Bytes(Rc::new(b[a..e.max(a)].to_vec())))
+                }
+                "len" => Ok(Value::Int(b.len() as i64)),
+                _ => {
+                    self.note(0, 4, format!("unknown bytes method '{}'; null", name));
+                    Ok(Value::Null)
+                }
+            },
             Value::Str(s) => match name {
                 "upper" => Ok(Value::Str(s.to_uppercase())),
                 "at" => {
@@ -8972,6 +9284,12 @@ fn json_stringify_g(v: &Value, seen: &mut Vec<usize>, depth: u32) -> String {
             }
         }
         Value::Str(s) => json_quote(s),
+        // W029: JSON has no bytes type — the lossless view is the int list.
+        // (Python's json.dumps rejects bytes outright; we contain instead.)
+        Value::Bytes(b) => {
+            let items: Vec<String> = b.iter().map(|x| x.to_string()).collect();
+            format!("[{}]", items.join(","))
+        }
         // W06 (D-014): variants serialize losslessly as single-key objects —
         // {"some": v} / {"ok": v} / {"err": v}; None serializes as null
         // (JSON has no absent-value constructor). The payload rides the
@@ -9900,6 +10218,13 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "argv",
     "read_file",
     "write_file",
+    // W029: bytes — conversions + capability-gated bytes file I/O
+    "bytes_from_str",
+    "str_from_bytes",
+    "bytes_from_list",
+    "bytes_to_list",
+    "read_file_bytes",
+    "write_file_bytes",
     "append_file",
     "exists",
     "file_size",
