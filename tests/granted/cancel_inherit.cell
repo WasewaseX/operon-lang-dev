@@ -1,0 +1,5 @@
+# explicit operator cell for the W18 cancellation inheritance proof
+[allow]
+run = "sleep"
+read = "/tmp/op_w18_inherit.txt"
+write = "/tmp/op_w18_inherit.txt"

@@ -1177,6 +1177,13 @@ fn collect_op_files(dir: &Path, out: &mut Vec<String>) {
                 if p.file_name().map(|n| n == "granted").unwrap_or(false) {
                     continue;
                 }
+                // W18: cancellation timing proofs need real OS threads and
+                // mid-flight cancel ordering the sequential oracle cannot
+                // observe. Exercised explicitly (Rust side) by
+                // scripts/test.sh; the oracle walker skips it too.
+                if p.file_name().map(|n| n == "timing").unwrap_or(false) {
+                    continue;
+                }
                 collect_op_files(&p, out);
             } else if p.extension().map(|x| x == "op").unwrap_or(false) {
                 out.push(p.to_string_lossy().to_string());

@@ -8,7 +8,7 @@ use crate::value::{Stress, Value};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicUsize, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 
 // ------------------------------------------------------------ thread budget
@@ -1544,6 +1544,14 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
     let task_name = name.clone();
     let host_caps = interp.caps.clone();
     let host_fuel = interp.fuel_pool.clone();
+    // W18: each task gets its own cancel flag + an observable lifecycle
+    // phase. The worker's chain = every ancestor flag + its own, so
+    // cancelling a cell cancels its whole descent at tick boundaries.
+    let cancel_flag = Arc::new(AtomicBool::new(false));
+    let task_phase = Arc::new(Mutex::new(crate::interp::TaskState::Running));
+    let mut worker_chain = interp.cancel_chain.clone();
+    worker_chain.push(cancel_flag.clone());
+    let task_phase_in = task_phase.clone();
     // loop-9 (C8): the worker holds the SAME live medium (environment —
     // my secretion raises your activation across cells). Spawning adds a
     // cell to the culture, so the medium materializes here even when the
@@ -1558,6 +1566,7 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
     let task_seed = 0x9E3779B97F4A7C15u64 ^ (id as u64).wrapping_mul(0x9E3779B97F4A7C15);
     spawn_worker(move || {
         let mut ti = Interp::new();
+        ti.cancel_chain = worker_chain;
         ti.fuel_pool = host_fuel;
         // loop-9 (C8): live shared medium
         ti.medium = host_medium;
@@ -1593,10 +1602,27 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
                 n
             })
             .collect();
+        // W18: the worker itself records the terminal phase BEFORE the
+        // result leaves, so a concurrent task_state read never sees a
+        // half-finished task. A cancelled-run stress names the phase;
+        // everything else (including a late cancel that never landed on
+        // a tick) counts as done, because the gene did finish.
+        let phase = match &rv {
+            SendValue::Stress(k, _) if k == "cancelled" => crate::interp::TaskState::Cancelled,
+            _ => crate::interp::TaskState::Done,
+        };
+        *task_phase_in.lock().unwrap() = phase;
         let _ = tx.send((rv, notes));
     })?;
     let _ = id; // claimed before spawn (C3); registered below
-    interp.tasks.insert(id, crate::interp::TaskHandle { rx });
+    interp.tasks.insert(
+        id,
+        crate::interp::TaskHandle {
+            rx,
+            cancel: cancel_flag,
+            state: task_phase,
+        },
+    );
     Ok(Value::Int(id))
 }
 
@@ -1671,6 +1697,71 @@ fn def_has_lambda(def: &GeneDef) -> bool {
             .unwrap_or(false)
 }
 
+/// W18: ask a task to stop. The flag is observed by the worker at its next
+/// fuel tick boundary; nothing is preempted and no data is touched. The
+/// return value says whether the request landed on a task that can still
+/// act on it (true) or whether the task was already finished or unknown
+/// (false, with a rung-4 note saying which).
+pub fn cancel_task(interp: &mut Interp, args: Vec<Value>) -> Result<Value, Stress> {
+    let id = match args.first() {
+        Some(Value::Int(i)) => *i,
+        _ => -1,
+    };
+    if id <= 0 {
+        // id 0 is the inline-closure task (already returned)
+        interp.note(0, 4, "cancel() needs a task id");
+        return Ok(Value::Bool(false));
+    }
+    if let Some(handle) = interp.tasks.get(&id) {
+        let flag = handle.cancel.clone();
+        let phase_cell = handle.state.clone();
+        let mut phase = phase_cell.lock().unwrap();
+        if *phase == crate::interp::TaskState::Running {
+            flag.store(true, Ordering::Relaxed);
+            *phase = crate::interp::TaskState::Cancelled;
+            interp.note(0, 4, format!("cancel requested for task {}", id));
+            return Ok(Value::Bool(true));
+        }
+        interp.note(0, 4, format!("task {} already finished", id));
+        return Ok(Value::Bool(false));
+    }
+    if interp.task_tombstones.contains_key(&id) {
+        interp.note(0, 4, format!("task {} already finished", id));
+        return Ok(Value::Bool(false));
+    }
+    interp.note(0, 4, format!("task {} unknown or already joined", id));
+    Ok(Value::Bool(false))
+}
+
+/// W18: read a task's lifecycle phase without joining. Live tasks answer
+/// from the worker-owned phase; joined tasks answer from tombstones.
+/// Unknown ids (or already-forgotten ones) are contained at the soft tier.
+pub fn task_state_of(interp: &mut Interp, args: Vec<Value>) -> Result<Value, Stress> {
+    let id = match args.first() {
+        Some(Value::Int(i)) => *i,
+        _ => -1,
+    };
+    if id == 0 {
+        // inline-closure task: the body already ran to completion
+        return Ok(Value::Str("done".into()));
+    }
+    if id < 0 {
+        interp.note(0, 4, "task_state() needs a task id");
+        return Ok(Value::Null);
+    }
+    if let Some(handle) = interp.tasks.get(&id) {
+        let phase_cell = handle.state.clone();
+        let phase = *phase_cell.lock().unwrap();
+        return Ok(Value::Str(phase.as_str().into()));
+    }
+    if let Some(t) = interp.task_tombstones.get(&id) {
+        let s = t.as_str();
+        return Ok(Value::Str(s.into()));
+    }
+    interp.note(0, 4, format!("task {} unknown or already joined", id));
+    Ok(Value::Null)
+}
+
 pub fn join_task(interp: &mut Interp, id: i64, timeout_ms: Option<u64>) -> Result<Value, Stress> {
     // join by id; id 0 means "inline run already returned" (see spawn)
     if id == 0 {
@@ -1732,10 +1823,21 @@ pub fn join_task(interp: &mut Interp, id: i64, timeout_ms: Option<u64>) -> Resul
             for n in notes {
                 interp.notes.push(n);
             }
+            // W18: the handle left the registry; keep the terminal phase
+            // answerable for task_state(). A cancelled-run stress names
+            // the phase, everything else is a completed task.
+            let phase = match &v {
+                SendValue::Stress(k, _) if k == "cancelled" => crate::interp::TaskState::Cancelled,
+                _ => crate::interp::TaskState::Done,
+            };
+            interp.task_tombstones.insert(id, phase);
             Ok(from_send(v))
         }
         Err(_) => {
             interp.note(0, 4, format!("task {} channel closed", id));
+            interp
+                .task_tombstones
+                .insert(id, crate::interp::TaskState::Done);
             Ok(Value::Null)
         }
     }

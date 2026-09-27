@@ -1,0 +1,65 @@
+# W18 timing lane (Rust-only): cancellation shapes that need real OS
+# threads. The sequential oracle cannot observe ordering between threads,
+# so both test walkers skip tests/timing/ and scripts/test.sh runs this
+# lane explicitly with the Rust binary. Every shape here is deterministic:
+# cancel lands while the worker is inside a sleep that is far longer than
+# the host's scheduling jitter, so the flag is always set before the
+# worker's next tick.
+
+gene slowpoke() {
+    run("sleep", 150)
+    return 7
+}
+
+gene coop() {
+    # enter the cooperation window first, then poll. The engine raises the
+    # cancellation stress at the next statement boundary and the poll
+    # observes the same flag; both paths resolve to the same value, so the
+    # assertion is deterministic whichever one wins the race.
+    stress {
+        for i in range(200) {
+            if (cancelled()) {
+                return "stopped"
+            }
+            run("sleep", 5)
+        }
+        return "never-cancelled"
+    } rescue (e) {
+        if (e.kind == "cancelled") {
+            return "stopped"
+        }
+        return "other"
+    }
+}
+
+frame proof {
+    # cancel-at-boundary: the flag lands during the sleep; the worker's
+    # next tick raises the cancellation stress; join surfaces it as the
+    # standard stress map (kind + message).
+    let t = spawn(slowpoke, [])
+    assert(task_state(t) == "running", "fresh task is running")
+    assert(cancel(t) == true, "cancel lands on a running task")
+    assert(task_state(t) == "cancelled", "phase flips to cancelled")
+    let r = join(t)
+    assert(r["kind"] == "cancelled", "join surfaces the cancellation stress")
+    assert(r["message"] == "task cancelled", "cancellation message text")
+    assert(task_state(t) == "cancelled", "tombstone keeps the phase")
+    assert(cancel(t) == false, "second cancel is contained")
+
+    # cooperative: the worker is inside its rescue window (polling the
+    # flag) long before the cancel lands; the window's poll and the
+    # engine's boundary raise resolve to the same value
+    let c = spawn(coop, [])
+    run("sleep", 20)
+    let _ = cancel(c)
+    assert(join(c) == "stopped", "worker inside the window honours the flag")
+    assert(task_state(c) == "done", "cooperative exit counts as done")
+
+    # uncancelled baseline: the same gene runs to its loop bound
+    let f = spawn(coop, [])
+    assert(join(f) == "never-cancelled", "worker without cancel finishes the loop")
+    assert(task_state(f) == "done", "normal completion tombstone")
+}
+main {
+    promote("cancel-timing: ok")
+}
