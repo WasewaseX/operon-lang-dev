@@ -63,12 +63,13 @@ Rules:
 
 Effort: S ≤ half session · M = 1–2 sessions · L = multi-session · XL = release-scale.
 
-## CURRENT GATE NUMBERS (2026-09-27, sz/w076-embed head over main 15aa6ac — dev-3 wrap-up + full b2 stack landed)
+## CURRENT GATE NUMBERS (2026-09-27, main @ 9aa5fad — post red-main-r5 fix + #25/#26/#27 merge chain, re-measured by sz)
 
-differential **154/154 MATCH** · proofs **122 files / 103 proofs green (1346 asserts, 0 failed, Rust AND oracle)** ·
-redteam **100 payloads / 0 breaches** · cargo test green (101 tests) ·
+differential **156/156 MATCH** · proofs **124 files / 104 proofs green (1376 asserts, 0 failed)** ·
+redteam **100 payloads / 0 breaches** · cargo test green (130+ tests) ·
 clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK (incl. rename asserts) · sec_regression ALL GREEN ·
-doc_api_check green · **embed gate green (W076: examples/embed path-dep crate builds + runs, promote() captured)**.
+doc_api_check green · **embed gate green (W076: examples/embed path-dep crate builds + runs, promote() captured)** ·
+playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (file_io 100% noise threshold, PR #27).
 
 > These numbers are re-measured every loop; when they change, update this header in the
 > same commit that lands work. If this header is stale, the per-level evidence links win.
@@ -667,7 +668,7 @@ doc_api_check green · **embed gate green (W076: examples/embed path-dep crate b
   `tests/redteam/`, `tests/differential/`.
 - Coordinate: W022 (`operon.toml`) reuses this validator.
 
-### W067 — `.rna` AST-based edit model [P2] [dev-3] [L] [done: stage 2 shipped on sz/m100-docs — node-addressed engine `src/rna2.rs` behind the same CLI, `syntax: v2` header dispatch (header-less = v1 byte-compatible), verbs rename/delete/body over paths gene[#ord]/splice/variant/phenotype/method/fate/regulate#N, all-or-nothing + ambiguity refusal + plain-comment preflight (—allow-comment-drop), reprint via format_program = fmt fixpoint, 14 pinned tests tests/rna_v2.rs, SPEC §rna + docs/design/RNA-V2.md as-built; stage 3 span deprecation remains future work per the migration path]
+### W067 — `.rna` AST-based edit model [P2] [dev-3] [L] [done: stage 2 shipped on sz/m100-docs — node-addressed engine `src/rna2.rs` behind the same CLI, `syntax: v2` header dispatch (header-less = v1 byte-compatible), verbs rename/delete/body over paths gene[#ord]/splice/variant/phenotype/method/fate/regulate#N, all-or-nothing + ambiguity refusal + plain-comment preflight (—allow-comment-drop), reprint via format_program = fmt fixpoint, 14 pinned tests tests/rna_v2.rs, SPEC §rna + docs/design/RNA-V2.md as-built; STAGE 3 STARTED 2026-09-27 (PR #26, merged d86599a): step 1 of the W63 ladder — header-less v1 patches deprecated at Info (stderr note + engine:v1/deprecated:true in --json; file output byte-identical, pinned by test; run --rna deliberately note-free for differential stderr parity; 18 tests now); steps 2–3 (Warning → removal) are calendar-gated by W63]
 - Goal: today's `.rna` edits target source spans/text — fragile under reformatting. Future:
   parse → identify AST node → apply AST edit → reprint.
 - Delivered: design note (RNA-V2.md) + the implementation: parse current source fresh,
@@ -774,7 +775,7 @@ doc_api_check green · **embed gate green (W076: examples/embed path-dep crate b
   without a benchmark proving ≥2x and a security re-audit** — add this line to
   CONTRIBUTING.md (done as part of W100's doc sweep).
 
-### W082 — Performance regression gating [P1] [dev-3] [S] [done: PR #18 — perf_gate.py + perf.yml]
+### W082 — Performance regression gating [P1] [dev-3] [S] [done: PR #18 — perf_gate.py + perf.yml; CALIBRATED 2026-09-27 (PR #27): per-workload noise policy NOISY_THRESHOLDS = {file_io: 100%} — the I/O-bound bench's shared-runner spread (61–250 ms on identical code) exceeded the 20% gate and false- redd twice in one hour; CPU-bound workloads keep 20%; a real 2–3x catastrophic regression still fails; evidence recorded in BENCH.md. Lesson: a blocking gate must sit above the measured noise floor of what it pins.]
 - Goal: bench CI job gains thresholds: any tracked benchmark regressing >20% vs the
   recorded baseline fails the job (noise-tolerant: median of 3 runs, ±5% band), turning
   the non-blocking job into a blocking gate on main.
