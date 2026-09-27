@@ -52,6 +52,35 @@ which puts function-call-heavy code at parity with CPython or better.
 6. **Version honesty (D-009)** — the VM ships behind `--vm` until A6 flips the default at a
    milestone; `operon version` gains a `-vm` banner suffix only when the default flips.
 
+## 2a. A2 delivered: the bridge architecture (2026-09-27, main)
+
+Stage A2 is ON MAIN behind `--vm`, and it ships with an architecture decision
+this document adopts as the A3 baseline:
+
+- The compiler (`src/vm.rs`) compiles every gene body to OIR1. Compilation is
+  INFALLIBLE (Total Grammar): constructs outside the native set are bridged,
+  not rejected.
+- Native instructions: literals, name loads/stores (Env-based, identical
+  chain semantics, charge_clone + unbound notes preserved), the non-short-
+  circuit binops via the SHARED `apply_binop`, jumps, block scopes, return.
+- Bridged instructions re-enter the tree-walk for the sub-AST (calls,
+  methods, builtins, interpolation, patterns, and/or/nullish short-circuit,
+  every statement outside the native set). Bridged code IS the tree-walk, so
+  gates, entropy draws, note text and stress kinds are byte-identical by
+  construction. A bridged statement's flow is honored: Ret leaves the gene;
+  a Brk/Cont from a statement bridged inside a COMPILED loop is patched at
+  compile time to jump to that loop's end/top (BridgeStmtInLoop).
+- Param binding, the gate funnel and guards stay in `call_gene_inner` (§6's
+  "A2 does not bypass the funnel" posture); the hook swaps ONLY the body
+  execution. Fuel: every native opcode ticks once (never cheaper than the
+  tree-walk); bridged code costs what the tree-walk costs.
+- `operon ir` is the real OIR1 listing (W10 stage 1); the encoding of one
+  compiled function is pinned by a unit test.
+- Evidence: the differential harness grew a --vm lane; 184/184 targets are
+  byte-identical against the oracle on the same run that checks tree-walk.
+  Slot locals, escape analysis and the 3x perf pass remain A3/A5 work; the
+  call path enters the VM only through the shared funnel by design.
+
 ## 3. Value representation: unchanged (v1 decision)
 
 The VM reuses `src/value.rs` `Value` verbatim: `Null/Bool/Int(i64)/Float(f64)/Str/List(ListRef)/

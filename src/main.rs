@@ -81,6 +81,9 @@ fn real_main() {
     let mut write = false;
     let mut allow_comment_drop = false;
     let mut trace_grn_path: Option<String> = None;
+    // W09 A2: run gene bodies through the OIR1 bytecode machine (src/vm.rs);
+    // calls/gates stay on the shared path, so output is byte-identical
+    let mut use_vm = false;
     let mut matrix = false;
     // dx-r6: true after the `--` separator — remaining args are program argv
     let mut passthrough = false;
@@ -246,6 +249,10 @@ fn real_main() {
                     die("--trace-grn needs a file path");
                 }
                 trace_grn_path = p;
+            }
+            // W09 A2: the bytecode lane (same semantics, machine-executed)
+            "--vm" => {
+                use_vm = true;
             }
             "--filter" => {
                 i += 1;
@@ -536,11 +543,18 @@ fn real_main() {
                 }
             }
         }
-        // W40: honest stub until the A-track VM lands (bytecode = W09/W10).
+        // W09 A2 / W10 stage 1: the OIR1 listing is real. Every top-level
+        // gene compiles (unsupported constructs bridge at runtime, they do
+        // not block compilation).
         "ir" => {
-            eprintln!("no IR yet — the bytecode pipeline is the W09/W10 track (docs/vm-design.md)");
-            eprintln!("today: `operon ast f.op` dumps the parsed AST");
-            std::process::exit(2);
+            let file = match positional.first() {
+                Some(f) => f.clone(),
+                None => die("ir needs a file"),
+            };
+            let src = std::fs::read_to_string(&file)
+                .unwrap_or_else(|e| die(&format!("cannot read '{}': {}", file, e)));
+            let prog = parser::parse(&src);
+            print!("{}", operon::vm::disassemble_program(&prog));
         }
         "run" => {
             let file = match positional.first() {
@@ -567,6 +581,10 @@ fn real_main() {
             )));
             if trace_grn_path.is_some() {
                 l.interp.trace_grn = Some(Vec::new());
+            }
+            if use_vm {
+                l.interp.vm = true;
+                l.interp.vm_program = Some(operon::vm::VmProgram::default());
             }
             if opts.frame.is_none() {
                 let result = tools::run_entry(&mut l, &opts);

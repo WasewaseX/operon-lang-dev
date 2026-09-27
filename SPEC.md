@@ -665,6 +665,9 @@ All features are real, implemented, tested — none are decorative.
 
 ## 15. Toolchain (Rust binary `operon`)
 
+- **`--vm` (W09 A2)**: run with gene bodies executed by the OIR1 bytecode machine (src/vm.rs; docs/vm-design.md §2a). Calls, the gate funnel, capabilities, notes and stress kinds are SHARED code, so output is byte-identical to the tree-walk by construction; the differential harness runs every corpus target on both engines against the oracle (the `--vm` lane must stay all-green). `operon ir f.op` prints the OIR1 listing (W10 stage 1; the disassembly of one compiled function is pinned by a unit test).
+
+
 ```
 operon run f.op    [--entry g] [--variant v] [--cell c] [--rna r] [--frame name] [--ires]
                    [--strict] [--quiet] [--fuel N]
