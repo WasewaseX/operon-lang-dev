@@ -1,4 +1,4 @@
-# option_result.op — W06 (D-014): first-class Option/Result values.
+# option_result.op, W06 (D-014): first-class Option/Result values.
 # Hierarchy (SPEC §9): null+note (soft miss) → Option/Result (expected
 # failure, first-class value) → Stress (exceptional containment) → hard exit.
 frame proof {

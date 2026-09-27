@@ -1,5 +1,5 @@
 # W069 helper: resolved via the DOC-RELATIVE root (candidate #1) when
-# imported by mod_res.op — but also runs standalone (prints nothing).
+# imported by mod_res.op, but also runs standalone (prints nothing).
 gene lib1_tag() {
     return "lib1:doc-relative"
 }

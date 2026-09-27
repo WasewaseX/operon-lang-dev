@@ -1,8 +1,8 @@
-# std/fmt — presentation-layer formatting helpers.
+# std/fmt, presentation-layer formatting helpers.
 #
 # Everything here returns strings and is pure. Rounding is half away from
 # zero (the convention most people expect from school math); documented per
-# function. No locale, no side channels — what you see is the algorithm.
+# function. No locale, no side channels, what you see is the algorithm.
 
 gene fmt_fixed(x, n) {
     # fixed decimals: fmt_fixed(3.14159, 2) == "3.14", fmt_fixed(2.5, 2) == "2.50"

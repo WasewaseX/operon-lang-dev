@@ -1,4 +1,4 @@
-# differential: W03 stage 1 — callable-generic std APIs, byte-identical
+# differential: W03 stage 1, callable-generic std APIs, byte-identical
 # on both engines (one map/filter/fold/sort/group_by for every type).
 use std/iter;
 use std/collections;

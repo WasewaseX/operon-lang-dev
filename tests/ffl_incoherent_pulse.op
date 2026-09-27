@@ -1,16 +1,16 @@
-# incoherent FFL: X -> Z, X -> Y -| Z — pulse generator + adaptation (C6).
+# incoherent FFL: X -> Z, X -> Y -| Z, pulse generator + adaptation (C6).
 # Real biology: an incoherent feed-forward loop produces a BOUNDED pulse of
-# Z in response to sustained X — the repressor arm (Y, translated) catches
+# Z in response to sustained X, the repressor arm (Y, translated) catches
 # up and cancels the direct arm while the input stays ON (adaptation, not a
 # latch); removing and re-applying the input re-pulses. DinJ-YafN / gal-style
 # incoherence.
 # Every intermediate value below is pinned from the shared deterministic
 # op order and verified identical on BOTH cores (Rust + oracle). Each
-# SUCCESSFUL z() probe is itself one clock tick that decays yp by 0.1 —
+# SUCCESSFUL z() probe is itself one clock tick that decays yp by 0.1,
 # the pulse window is probe-aware by construction (time is expression).
 # Fails-pre: a core whose inhibitors veto permanently (no recovery) or
 # that lacks the protein tier cannot show the bounded window + re-pulse.
-# NOTE: one gene call per line — multiple calls on one line wobble
+# NOTE: one gene call per line, multiple calls on one line wobble
 # ("expression statement not terminated; rest of line skipped").
 regulate {
     x activates z strength 1.0 threshold 0.5

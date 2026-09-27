@@ -1,6 +1,6 @@
 # W078: the Python bridge is OPTIONAL and default-OFF. With zero grants,
 # py() raises catchable Stress `interference` (the capability fence) BEFORE
-# any interpreter is probed — a Python-absent machine produces this exact
+# any interpreter is probed, a Python-absent machine produces this exact
 # behavior. The interpreter-absent-with-grant path is pinned in
 # pybridge.rs: clean Stress `missing` ("python interpreter not found"),
 # never a crash (SPEC §15 optionality contract).

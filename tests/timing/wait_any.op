@@ -1,0 +1,24 @@
+# W15 timing lane (Rust-only): wait_any completion ORDER. The first
+# spawned task sleeps longer than the second, so wait_any must answer the
+# SECOND id (wall-clock completion order). The sequential oracle cannot
+# observe this; the walkers skip tests/timing/.
+gene slow() {
+    run("sleep", ["0.25"])
+    return 1
+}
+gene fast() {
+    run("sleep", ["0.04"])
+    return 2
+}
+
+frame proof {
+    let a = spawn(slow, [])
+    let b = spawn(fast, [])
+    assert(wait_any([a, b]) == b, "wait_any answers the earlier finisher")
+    let ra = join(a)
+    let rb = join(b)
+    assert(ra == 1 && rb == 2, "both results still joinable after wait_any")
+}
+main {
+    promote("task-group-timing: ok")
+}

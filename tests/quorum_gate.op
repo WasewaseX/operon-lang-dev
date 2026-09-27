@@ -1,10 +1,10 @@
-# loop-9 (C8): quorum sensing — part 4: edge-source composition.
+# loop-9 (C8): quorum sensing, part 4: edge-source composition.
 # A signal species is a FIRST-CLASS edge source: AND membership, OR/any
 # membership, and sum POOLS all resolve the medium. This pin also locks
 # the two historically fragile seams: (a) the sum-group pass resolves
-# signal sources (the Rust chain was duplicated there once — the T6 trap),
+# signal sources (the Rust chain was duplicated there once, the T6 trap),
 # and (b) resolution ORDER: an explicit grn_set level wins over the medium.
-# Fails-pre: phantom edge sources read 0.0 — every assert burns.
+# Fails-pre: phantom edge sources read 0.0, every assert burns.
 autoinducer ahl
 autoinducer ai2
 regulate {
@@ -26,14 +26,14 @@ frame proof {
     # dose response on the shared signal: drop the medium, gate closes
     quench("ahl")
     assert(g() == null, "quenched medium: the ahl member fails again")
-    # sum pool of TWO signals — pooled inputs open the gate together
+    # sum pool of TWO signals, pooled inputs open the gate together
     # (pins the sum-pass signal resolution site). Each signal is
     # sub-threshold ALONE: 0.5*0.6 = 0.3 and 0.5*0.4 = 0.2, but the pool
     # P = 0.5*0.6 + 0.5*0.4 = 0.5 passes.
     secrete("ai2", 400000000)
-    assert(h() == null, "pool: 0.5*0 + 0.5*0.4 = 0.2 < 0.5 — one signal alone fails")
+    assert(h() == null, "pool: 0.5*0 + 0.5*0.4 = 0.2 < 0.5, one signal alone fails")
     secrete("ahl", 600000000)
-    assert(h() == "H", "pool: 0.5*0.6 + 0.5*0.4 = 0.5 — two sub-threshold-alone signals pool past the gate")
+    assert(h() == "H", "pool: 0.5*0.6 + 0.5*0.4 = 0.5, two sub-threshold-alone signals pool past the gate")
     # resolution order: an explicit grn_set level wins over the medium
     quench("ahl")
     grn_set("ahl", 0.9)

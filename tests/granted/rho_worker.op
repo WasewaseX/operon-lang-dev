@@ -1,9 +1,9 @@
-# loop-10 (F-7): worker parity — the Rho knobs ride RegulationSnap, so a
+# loop-10 (F-7): worker parity, the Rho knobs ride RegulationSnap, so a
 # spawned cell folds the parent's termination math exactly (whole regulatory
 # cell contract; the trap-8 lesson from reg-bio-4: a knob that misses the
-# snapshot diverges only under the flag — the worst kind). catch 1.0 +
+# snapshot diverges only under the flag, the worst kind). catch 1.0 +
 # strength-1.0 silence = zero draws, fully deterministic. FAILS-PRE: pre-
-# loop-10 cores had no rho layer — the worker returned "c" on both sides.
+# loop-10 cores had no rho layer, the worker returned "c" on both sides.
 regulate {
     a translates pa rate 0.4
 }

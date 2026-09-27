@@ -1,4 +1,4 @@
-# std/motifs — proof coverage for the network-motif library (SPEC §17)
+# std/motifs, proof coverage for the network-motif library (SPEC §17)
 use std/motifs
 
 frame proof {

@@ -1,5 +1,5 @@
 # ============================================================
-# Matrix operations  — cookbook #11
+# Matrix operations , cookbook #11
 # you already know: nested lists + a triple loop matmul
 # teaches: 2D data as lists of lists, accumulator loops, row printing
 #          with join

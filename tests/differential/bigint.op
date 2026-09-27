@@ -1,4 +1,4 @@
-# differential: W32 std/bigint — byte-identical output on both engines.
+# differential: W32 std/bigint, byte-identical output on both engines.
 # Prints exact values for the canonical escape demos (i64 overflow only
 # raises; bigint answers exactly), the sign matrices, parse rejection,
 # and the to_int boundary armor.

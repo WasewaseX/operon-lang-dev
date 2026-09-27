@@ -1,14 +1,14 @@
-# loop-9 (F-2/F-3): per-gene PROMOTER IDENTITY — @burst(kon, koff).
-# Real biology: different promoters have different switching rates — that is
+# loop-9 (F-2/F-3): per-gene PROMOTER IDENTITY, @burst(kon, koff).
+# Real biology: different promoters have different switching rates, that is
 # their identity. A sticky promoter (kon 0.9, koff 0.05) fires in long
 # bursts; a flickery one (kon 0.05, koff 0.9) rarely fires at all. Under ONE
 # shared telegraph layer the two genes now behave differently, and
 # promoter_telemetry() quantifies it: attempts, on_total, episodes,
 # on_frac, and burst_size = on_total/episodes (mean ON-run length; ~1 under
-# Poisson-like firing, >>1 under bursting — the bursting signature).
+# Poisson-like firing, >>1 under bursting, the bursting signature).
 # All draws ride the shared mirrored xorshift (randomize(42) pins the
 # stream), so every number is exact on BOTH cores.
-# Fails-pre: @burst was an unknown mark (dropped) — both marked genes ran at
+# Fails-pre: @burst was an unknown mark (dropped), both marked genes ran at
 # the GLOBAL rates, the identity asserts burn; promoter_telemetry was a
 # phantom call.
 @burst 0.9 0.05

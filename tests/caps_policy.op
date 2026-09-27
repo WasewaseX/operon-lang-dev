@@ -1,4 +1,4 @@
-# differential: capability policy — grants validated, project imports work,
+# differential: capability policy, grants validated, project imports work,
 # module use of stdlib works under default-deny
 use std/math as m
 frame proof {

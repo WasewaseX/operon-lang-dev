@@ -1,12 +1,12 @@
-# loop-9 (F-4): runtime splicing-factor regulation — splice_shift.
+# loop-9 (F-4): runtime splicing-factor regulation, splice_shift.
 # Real biology: splicing factors (SR proteins, hnRNPs) bind cis elements
-# and CHANGE which splice site wins at runtime — a regulated shift, not a
+# and CHANGE which splice site wins at runtime, a regulated shift, not a
 # static priority. In Operon the shift slots between the operator pins
 # (.cell variant.<root> / cli.variant) and the @m6a mark: a bound factor
 # beats a basal inclusion bias, but the operator still has the final word.
 # Future calls shift immediately; in-flight calls hold their resolved
 # definition and finish on the old variant (no mid-call body swap, ever).
-# Fails-pre: splice_shift was a phantom call returning null — the first
+# Fails-pre: splice_shift was a phantom call returning null, the first
 # assert burns on the pre-loop-9 core.
 splice rna {
     variant long { return "L-long" }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""check_docs_sync.py — W53/W54/W55/W56/W57/W58: docs can never lie again.
+"""check_docs_sync.py, W53/W54/W55/W56/W57/W58: docs can never lie again.
 
 Recomputes the generated statistics (same pure function as gen_doc_stats.py)
 and fails on:
@@ -26,13 +26,13 @@ FORBIDDEN = [
     # (pattern, why, files)
     (r"C runtime", "W56: the C runtime kernel was ported to Rust (A15); only the C++ codon kernel exists",
      ["README.md", "TUTORIAL.md", "CONTRIBUTING.md", "*.html"]),
-    (r"No crates, no network", "W58: overclaim — Cargo.toml build-depends on cc; network is reachable via py()/run()",
+    (r"No crates, no network", "W58: overclaim, Cargo.toml build-depends on cc; network is reachable via py()/run()",
      ["README.md"]),
     (r"canonical,\s*\d+", "W55: keyword count is generated (docs/KEYWORDS.md), never hand-typed",
      ["SPEC.md"]),
     (r"\d+ proof files", "W53: proof counts are generated (docs/STATS.md), never hand-typed",
      ["README.md", "BENCH.md"]),
-    (r"\d+/\d+\s*(programs|differential).*MATCH", "W53: differential counts move every session — link docs/STATS.md",
+    (r"\d+/\d+\s*(programs|differential).*MATCH", "W53: differential counts move every session, link docs/STATS.md",
      ["README.md", "BENCH.md"]),
     (r"\d+\s+attacks contained", "W53: red-team counts are generated (docs/STATS.md), never hand-typed",
      ["README.md", "BENCH.md"]),
@@ -44,7 +44,7 @@ FORBIDDEN = [
      ["SPEC.md"]),
     (r"\d+ byte-exact targets", "W53: differential counts are generated (docs/STATS.md), never hand-typed",
      ["SPEC.md"]),
-    (r"\d+ programs, all MATCH", "W53: differential counts move every session — link docs/STATS.md",
+    (r"\d+ programs, all MATCH", "W53: differential counts move every session, link docs/STATS.md",
      ["SPEC.md"]),
     (r"\d+ payloads, \d+ breaches", "W53: red-team counts are generated (docs/STATS.md), never hand-typed",
      ["SPEC.md"]),
@@ -70,32 +70,32 @@ def main():
     # 1. committed stats.json must match recomputed truth
     sp = os.path.join(ROOT, "docs", "stats.json")
     if not os.path.exists(sp):
-        fails.append("docs/stats.json missing — run scripts/gen_doc_stats.py")
+        fails.append("docs/stats.json missing, run scripts/gen_doc_stats.py")
     else:
         committed = json.load(open(sp, encoding="utf-8"))
         for k in ("version", "keyword_count", "std_module_count", "std_function_count",
                   "redteam_files", "proof_files", "test_op_files"):
             if committed.get(k) != truth[k]:
                 fails.append(f"stats.json drift on '{k}': committed={committed.get(k)} "
-                             f"actual={truth[k]} — regenerate (gen_doc_stats.py)")
+                             f"actual={truth[k]}, regenerate (gen_doc_stats.py)")
         if committed.get("keywords") != truth["keywords"]:
-            fails.append("stats.json drift on 'keywords' — regenerate")
+            fails.append("stats.json drift on 'keywords', regenerate")
 
-    # 2/3. SPEC version honesty (W54) — D-009 semantics:
+    # 2/3. SPEC version honesty (W54), D-009 semantics:
     #   tagged state:   SPEC Status == Cargo version (exact)
     #   mid-milestone:  SPEC Status = vX.Y.Z-dev while Cargo carries the last tag
     spec_txt = open(os.path.join(ROOT, "SPEC.md"), encoding="utf-8").read()
     st = truth["spec"]["status"]
     ok_dev = re.fullmatch(r"v\d+\.\d+\.\d+-dev", st)
     # normalize the optional v/V prefix so a tagged Status ("v2.2.0") matches
-    # Cargo's unprefixed "2.2.0" — the exact-match form could never pass,
+    # Cargo's unprefixed "2.2.0", the exact-match form could never pass,
     # leaving the tagged-state branch dead code (D-009 needs both forms live)
     ok_tag = (st.lstrip("vV") == truth["version"])
     if not (ok_dev or ok_tag):
         fails.append(f"W54: SPEC Status ('{st}') must be the Cargo version ('{truth['version']}') "
                      f"or a vX.Y.Z-dev milestone label (D-009)")
     if re.search(r"v\d+\.\d+", truth["spec"]["h1"]):
-        fails.append(f"W54: SPEC H1 carries a version ('{truth['spec']['h1']}') — "
+        fails.append(f"W54: SPEC H1 carries a version ('{truth['spec']['h1']}'), "
                      f"version lives ONLY in the Status line")
 
     # 4/5/6. forbidden hand-typed/stale patterns
@@ -104,7 +104,7 @@ def main():
             txt = open(p, encoding="utf-8", errors="replace").read()
             for m in re.finditer(pat, txt):
                 line = txt[:m.start()].count("\n") + 1
-                fails.append(f"{os.path.relpath(p, ROOT)}:{line}: /{pat}/ — {why}")
+                fails.append(f"{os.path.relpath(p, ROOT)}:{line}: /{pat}/, {why}")
 
     # 7. README stdlib inventory completeness (W57)
     readme = open(os.path.join(ROOT, "README.md"), encoding="utf-8").read()
@@ -116,7 +116,7 @@ def main():
 
     # 8. packaging channel ledger ↔ README install matrix ↔ packaging/ dir
     #    (W61): the matrix must name every channel file that exists, and
-    #    every packaging/ file it names must exist — in both directions.
+    #    every packaging/ file it names must exist, in both directions.
     pkg_dir = os.path.join(ROOT, "packaging")
     channel_files = []
     if os.path.isdir(pkg_dir):
@@ -138,7 +138,7 @@ def main():
         fails.append("W61: docs/PACKAGING.md channel ledger missing")
 
     if fails:
-        print("DOCS OUT OF SYNC — fix the source, never hand-patch generated files:")
+        print("DOCS OUT OF SYNC, fix the source, never hand-patch generated files:")
         for f in fails:
             print("  ✗", f)
         return 1

@@ -1,8 +1,8 @@
-# Operon keywords — GENERATED from src/parser.rs, do not hand-edit
+# Operon keywords, GENERATED from src/parser.rs, do not hand-edit
 
 The parser's reserved set (source of truth: `KEYWORDS` in `src/parser.rs`).
 
-Count: **59**. Regenerate: `python3 scripts/gen_doc_stats.py`.
+Count: **60**. Regenerate: `python3 scripts/gen_doc_stats.py`.
 
 Analogy voice per D-008 (zero biology assumed; one-line programmer meaning).
 
@@ -52,6 +52,7 @@ Analogy voice per D-008 (zero biology assumed; one-line programmer meaning).
 | `repressilator` | 3-node oscillator (negative-feedback ring) |
 | `rescue` | catch handler |
 | `return` | exit with value |
+| `scope` | structured-concurrency block (children joined at exit) |
 | `self` | method receiver |
 | `sequence` | generator function |
 | `silence` | disable a gene (soft-off) |
@@ -62,7 +63,7 @@ Analogy voice per D-008 (zero biology assumed; one-line programmer meaning).
 | `tad` | module boundary (TAD-insulated exports) |
 | `threshold` | gate cutoff |
 | `toggle` | boolean gate switch |
-| `trait` | *(analogy pending — file a docs finding)* |
+| `trait` | *(analogy pending, file a docs finding)* |
 | `use` | import module |
 | `variant` | named alternative implementation |
 | `while` | condition loop |

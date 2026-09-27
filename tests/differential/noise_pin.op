@@ -1,8 +1,8 @@
 # reg-bio-2 pin (jury request 12-score-invariants): the multiplicative
-# dt-aware ring noise is the round's most complex new arithmetic — this
+# dt-aware ring noise is the round's most complex new arithmetic, this
 # differential case pins it byte-for-byte across both engines with a fixed
 # seed. Properties proven in the proof frame: strictly positive levels
-# (multiplicative noise never crosses zero — the old additive kick clamped
+# (multiplicative noise never crosses zero, the old additive kick clamped
 # troughs at exactly 0.0 for noise >= 0.3), and amplitude scales with the
 # level (level-scaled sigma, not a fixed absolute kick).
 repressilator a -> b -> c noise 0.4 seed 7

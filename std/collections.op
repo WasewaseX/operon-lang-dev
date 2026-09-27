@@ -1,4 +1,4 @@
-# std/collections — self-hosted library written in Operon itself.
+# std/collections, self-hosted library written in Operon itself.
 # Runs on the Rust core; proves the language can carry its own weight.
 
 gene chunk(xs, size) {

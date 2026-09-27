@@ -1,4 +1,4 @@
-# W074: doc comments are metadata — this suite pins that they coexist with
+# W074: doc comments are metadata, this suite pins that they coexist with
 # every grammar surface (marks, guards, splices, phenotypes) without
 # changing behavior. Doc-text capture itself is pinned in tests/docgen.rs
 # (fmt roundtrip) and tests/differential/doc_comments.op (oracle parity).

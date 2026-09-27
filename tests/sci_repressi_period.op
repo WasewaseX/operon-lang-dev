@@ -1,16 +1,16 @@
-# W093 — repressilator period reproduction vs the published parameterization.
-# Source model: Elowitz & Leibler (2000), Nature 403:335 — a synthetic
+# W093, repressilator period reproduction vs the published parameterization.
+# Source model: Elowitz & Leibler (2000), Nature 403:335, a synthetic
 # three-repressor ring (the first engineered biological oscillator). The
 # Operon ring (T2d, SPEC §11) integrates the same dimensionless system
 #     dA/dt = alpha / (1 + R^n) - gamma*A   (n = 4, alpha = 10, gamma = 1)
-# with 20 Euler substeps of dt = 0.05 per ring tick — one tick = 1.0
+# with 20 Euler substeps of dt = 0.05 per ring tick, one tick = 1.0
 # dimensionless time unit. Node j is repressed by node (j+n-1)%n.
 # Pinned reproduction target (this file): the peak-to-peak PERIOD of node p
 # is 6 ring ticks (= 6.0 dimensionless time units) in this parameterization,
 # stable across consecutive cycles after a 3-tick warmup. Peak amplitudes
 # are still relaxing toward the limit cycle from the initial condition, so
 # amplitudes are pinned with a 1e-9 identity tolerance ONLY as
-# stateless-fold consistency (same tick, same state — the W089 determinism
+# stateless-fold consistency (same tick, same state, the W089 determinism
 # contract), not against a published number.
 # Fails-pre: any core whose ring period drifts (integration changed), whose
 # oscillation is a hardcoded drive schedule (pre-A11), or whose fold is
@@ -51,5 +51,5 @@ frame proof {
     assert(s1.p == s2.p and s1.q == s2.q and s1.r == s2.r, "stateless fold: same tick, same state")
     # the period is the pinned reproduction quantity: peaks.len() == 5 in a
     # 30-tick window pins peak-to-peak = 6 ticks exactly (a drifted period
-    # of 5 or 7 yields 6 or 4 peaks — both fail the assert above)
+    # of 5 or 7 yields 6 or 4 peaks, both fail the assert above)
 }

@@ -1,19 +1,19 @@
-# Operon repo statistics — GENERATED, do not hand-edit
+# Operon repo statistics, GENERATED, do not hand-edit
 
 Source of truth: `scripts/gen_doc_stats.py` (run from repo root).
 Validated by `scripts/check_docs_sync.py`. Hand-typed numbers in
-README/SPEC/BENCH are forbidden — link here instead.
+README/SPEC/BENCH are forbidden, link here instead.
 
 - **Version**: 2.2.0  · SPEC Status: v2.3.0-dev
-- **Keywords (parser reserved set)**: 59 — table in [KEYWORDS.md](KEYWORDS.md)
+- **Keywords (parser reserved set)**: 60, table in [KEYWORDS.md](KEYWORDS.md)
   - analogy pending: trait
 - **Std modules**: 22 (args, bigint, bio, collections, csv, deque, fmt, fs, heap, iter, json, math, motifs, path, random, seq, serialize, set, strings, testing, time, unicode)
 - **Std functions (.op-level `gene` defs)**: 228
-- **Red-team payload files**: 99
-- **Proof files**: 122 (of 258 test .op files)
-- **Proof run** (bin/operon): 150 files, 116 proofs, 1704 asserts
-- **Differential harness**: 183 match / 0 diverge (0 skipped) · granted lane: 9 cells
-- **CLI subcommands**: ast, bench, build, check, crispr, doc, explain, fix, fmt, graph, ir, keywords, lint, profile, repl, rna, run, test, version, watch
+- **Red-team payload files**: 101
+- **Proof files**: 128 (of 269 test .op files)
+- **Proof run** (bin/operon): 155 files, 118 proofs, 1720 asserts
+- **Differential harness**: 191 match / 0 diverge (0 skipped) · granted lane: 10 cells
+- **CLI subcommands**: ast, bench, build, check, crispr, doc, explain, fix, fmt, graph, ir, keywords, lint, profile, repl, rna, test, version, watch
 - **LSP methods**: initialize, shutdown, textDocument/completion, textDocument/definition, textDocument/didChange, textDocument/didClose, textDocument/didOpen, textDocument/documentSymbol, textDocument/formatting, textDocument/hover, textDocument/prepareRename, textDocument/publishDiagnostics, textDocument/references, textDocument/rename, textDocument/semanticTokens, textDocument/signatureHelp
 
 ## Std module inventory

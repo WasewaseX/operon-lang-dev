@@ -1,4 +1,4 @@
-# differential: W32 overflow contract — byte-identical stdout on both
+# differential: W32 overflow contract, byte-identical stdout on both
 # engines. Prints the exact stress kind + message for every integer
 # arithmetic surface, then the float contract (inf/nan are values for
 # * and /, ** overflow raises) and the boundary sanity values.

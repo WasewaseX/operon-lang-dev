@@ -1,4 +1,4 @@
-# reg-bio-3: passage() abuse — astronomical division counts must terminate
+# reg-bio-3: passage() abuse, astronomical division counts must terminate
 # via the clamp + fuel contract, never a hang. n is clamped to 1e6 with a
 # note (a culture that old is not a useful model); the dilution loop is
 # bounded by the clamp, so the run ends cleanly.

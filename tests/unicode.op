@@ -1,4 +1,4 @@
-# unicode — W28 proof: documented string semantics (SPEC §3) — char vs
+# unicode, W28 proof: documented string semantics (SPEC §3), char vs
 # byte vs grapheme indexing, fold subset, char-indexed helpers.
 frame proof {
     # len() counts CHARS (Unicode scalar values) on both cores

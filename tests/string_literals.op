@@ -1,4 +1,4 @@
-# string_literals.op — W030: raw and multiline string literals.
+# string_literals.op, W030: raw and multiline string literals.
 frame proof {
     let raw_path = r"C:\Users\test\file"
     assert(raw_path == "C:\\Users\\test\\file", "raw keeps backslashes verbatim")

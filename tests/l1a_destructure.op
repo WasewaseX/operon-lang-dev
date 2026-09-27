@@ -1,5 +1,5 @@
 # L1a: destructuring (let / for), rest patterns, multi-assignment, swap
-# contract: patterns NEVER hard-fail (Total Grammar) — wrong container type
+# contract: patterns NEVER hard-fail (Total Grammar), wrong container type
 # binds nulls with a note; a missing element/key binds null for that piece;
 # *rest captures the tail. Multi-assign evaluates all RHS before writing.
 frame proof {

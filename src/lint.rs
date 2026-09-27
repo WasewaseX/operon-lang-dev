@@ -1,4 +1,4 @@
-//! lint.rs — W42/W43/W48/W66 (ROADMAP-100): the shared static-analysis rule
+//! lint.rs, W42/W43/W48/W66 (ROADMAP-100): the shared static-analysis rule
 //! engine. `operon lint` is the standalone front door; `operon check` reuses
 //! the same findings for its diagnostics format. Check-only: the interpreter
 //! and the oracle are untouched, so runtime semantics and differential parity
@@ -50,7 +50,7 @@ impl Finding {
     }
 }
 
-/// (min_args, max_args) — max == usize::MAX means unbounded (defaults/variadic
+/// (min_args, max_args), max == usize::MAX means unbounded (defaults/variadic
 /// shapes). Collected from gene/splice/sequence/phenotype-method definitions.
 pub type Arity = (usize, usize);
 
@@ -122,7 +122,7 @@ pub fn lint(prog: &Program) -> Vec<Finding> {
     collect_calls_stmts(&prog.stmts, &mut called);
 
     // W42: unused-gene (only when defined AND never called anywhere in-file;
-    // exported genes (anchor/tad exports) are library surface — skip them)
+    // exported genes (anchor/tad exports) are library surface, skip them)
     let exported: HashSet<String> = prog.anchor_exports.iter().cloned().collect();
     for (name, line) in &defined {
         if name == "main" || exported.contains(name) {
@@ -156,7 +156,7 @@ pub fn lint(prog: &Program) -> Vec<Finding> {
         }
     }
 
-    // W05: const-reassign (static best-effort) — assignment to a name that
+    // W05: const-reassign (static best-effort), assignment to a name that
     // was const-bound in this file and never re-bound by a plain let. The
     // check is name-based and scope-insensitive BY DESIGN: any let/const
     // re-binding of the name anywhere retires the finding, so the rule can
@@ -171,7 +171,7 @@ pub fn lint(prog: &Program) -> Vec<Finding> {
             let_rebound.insert(n.clone());
         }
         Stmt::LetPat(..) => {
-            // destructuring re-binds pieces by name — retire nothing specific;
+            // destructuring re-binds pieces by name, retire nothing specific;
             // a pattern re-binding the const's name is rare and the runtime
             // stress stays the backstop
         }
@@ -213,7 +213,7 @@ pub fn lint(prog: &Program) -> Vec<Finding> {
                             line,
                             "infinite-loop-suspect",
                             Sev::Style,
-                            "`while` over an always-true literal — if this is intentional, \
+                            "`while` over an always-true literal, if this is intentional, \
                              document it; fuel bounds contain it at runtime"
                                 .to_string(),
                         ));
@@ -240,7 +240,7 @@ pub fn lint(prog: &Program) -> Vec<Finding> {
 fn constant_condition(e: &Expr) -> Option<String> {
     match e {
         Expr::Int(v) => Some(format!(
-            "condition is the constant {} — {}",
+            "condition is the constant {}, {}",
             v,
             if *v != 0 {
                 "always true"
@@ -249,7 +249,7 @@ fn constant_condition(e: &Expr) -> Option<String> {
             }
         )),
         Expr::Bool(b) => Some(format!(
-            "condition is the constant {} — {}",
+            "condition is the constant {}, {}",
             b,
             if *b { "always true" } else { "always false" }
         )),
@@ -368,7 +368,7 @@ fn scan_expr_arities(
                                     "wrong-arity",
                                     Sev::Warning,
                                     format!(
-                                        "'{}' expects {} argument(s), got {} — \
+                                        "'{}' expects {} argument(s), got {}, \
                                          missing args become Null at runtime (checkable via rescue)",
                                         name,
                                         plural(*min),
@@ -381,7 +381,7 @@ fn scan_expr_arities(
                                     "wrong-arity",
                                     Sev::Warning,
                                     format!(
-                                        "'{}' accepts at most {} argument(s), got {} — \
+                                        "'{}' accepts at most {} argument(s), got {}, \
                                          extras are ignored at runtime",
                                         name,
                                         plural(*max),
@@ -400,7 +400,7 @@ fn scan_expr_arities(
                 );
             }
             Expr::Method(recv, _, args) | Expr::MethodSafe(recv, _, args) => {
-                // method arity lives in phenotype defs — v1 covers free genes only
+                // method arity lives in phenotype defs, v1 covers free genes only
                 scan_expr_arities(
                     std::iter::once(&**recv).chain(args.iter()).collect(),
                     arities,
@@ -517,7 +517,7 @@ pub fn lint_cell(cell_src: &str) -> Vec<Finding> {
                 "cell-unknown-key",
                 Sev::Warning,
                 format!(
-                    ".cell key '{}' is not in the schema (docs/specs/CELL-SCHEMA.md) — \
+                    ".cell key '{}' is not in the schema (docs/specs/CELL-SCHEMA.md), \
                      typo? it will be silently ignored",
                     k
                 ),
@@ -540,7 +540,7 @@ pub fn lint_cell(cell_src: &str) -> Vec<Finding> {
 
 fn stmt_line(st: &Stmt) -> Option<usize> {
     // A13 spans: Expr::Call/ExprStmt carry line; statements mostly derive from
-    // their expressions — v1 uses the expression lines that exist.
+    // their expressions, v1 uses the expression lines that exist.
     match st {
         Stmt::ExprStmt(e) => expr_line(e),
         Stmt::Return(Some(e)) => expr_line(e),
@@ -559,7 +559,7 @@ fn expr_line(e: &Expr) -> Option<usize> {
 fn nested_stmts(st: &Stmt) -> Option<&[Stmt]> {
     match st {
         Stmt::If(arms, els) => {
-            // v1: scan the first arm + else — full multi-arm traversal below
+            // v1: scan the first arm + else, full multi-arm traversal below
             if let Some((_, b)) = arms.first() {
                 return Some(b);
             }
@@ -766,7 +766,7 @@ mod tests {
 
     #[test]
     fn shadowed_name_not_arity_checked() {
-        // local binding named `add` shadows the gene — must stay silent
+        // local binding named `add` shadows the gene, must stay silent
         let f = lint_src(
             "gene add(a, b) {\n    return a + b\n}\ngene g() {\n    let add = 3\n    return add(1)\n}\ng()\n",
         );

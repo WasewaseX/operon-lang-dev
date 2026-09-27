@@ -1,4 +1,4 @@
-# differential: S3 builtin coverage — capability gate on fs introspection
+# differential: S3 builtin coverage, capability gate on fs introspection
 # exists() and file_size() sit behind the same read-capability gate as
 # read_file(). Deny-by-default is the security invariant (D-005), so the
 # deterministic golden is the RESCUE contract: both implementations must

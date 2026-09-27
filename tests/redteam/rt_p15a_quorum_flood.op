@@ -1,4 +1,4 @@
-# loop-9 (C8): quorum pool abuse — species flood + molecule saturation +
+# loop-9 (C8): quorum pool abuse, species flood + molecule saturation +
 # a secrete hot loop must all terminate contained (species-cap note, note
 # cap, fuel/step budget), never OOM or hang (cf. rt_p14a, rt_p13a, rt_p11g).
 gene main() {

@@ -1,4 +1,4 @@
-# option_result_null — W06 (D-014) differential pin: NULL PAYLOADS are real
+# option_result_null, W06 (D-014) differential pin: NULL PAYLOADS are real
 # payloads. Found by the std_serialize proof (roundtrip(null) → from_json
 # "null" → ok(null) → unwrap raised on the oracle while Rust unwrapped).
 # Contract: ok(null)/some(null) carry the null VALUE; unwrap / unwrap_or /

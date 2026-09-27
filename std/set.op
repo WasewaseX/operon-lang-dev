@@ -1,4 +1,4 @@
-# std/set — set algebra over plain lists.
+# std/set, set algebra over plain lists.
 #
 # A set is a list with unique members. Everything here is pure: every
 # function returns a NEW list and never mutates its arguments. set_from is

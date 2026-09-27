@@ -1,6 +1,6 @@
-//! W094 — static graph export for `regulate` networks.
+//! W094, static graph export for `regulate` networks.
 //!
-//! `operon graph f.op [--json]` walks the parsed program (no execution —
+//! `operon graph f.op [--json]` walks the parsed program (no execution,
 //! the same static stance as `check`/`fmt`), collects every `regulate`
 //! edge from top-level statements plus gene bodies / frames / TAD blocks
 //! (mechanisms may be declared inside any of those), and renders either
@@ -9,7 +9,7 @@
 //! Node/edge semantics per SPEC §11: an edge is `activates` (inhibit=false)
 //! or `inhibits` (inhibit=true) with `strength` (default 1.0) and an
 //! optional Hill-style dose `threshold`. Levels themselves are runtime
-//! state — this export is structure only.
+//! state, this export is structure only.
 
 use crate::ast::{RegEdge, Stmt, TransEdge};
 
@@ -41,7 +41,7 @@ fn walk(stmts: &[Stmt], g: &mut GraphDump) {
         match s {
             Stmt::Regulate(es, trans, _binds) => {
                 // v1 renders regulation + translation edges; BindDef records
-                // (allostery) are node annotations — v2 scope (TODO-100 W094).
+                // (allostery) are node annotations, v2 scope (TODO-100 W094).
                 for e in es {
                     g.push_node(&e.from);
                     g.push_node(&e.to);
@@ -63,7 +63,7 @@ fn walk(stmts: &[Stmt], g: &mut GraphDump) {
 }
 
 /// Graphviz DOT rendering. Inhibition edges are dashed crimson; labels carry
-/// strength and (when declared) the dose threshold — the two knobs a reader
+/// strength and (when declared) the dose threshold, the two knobs a reader
 /// of SPEC §11 needs to reconstruct the dynamics.
 pub fn to_dot(g: &GraphDump) -> String {
     let mut out = String::from("digraph operon {\n  rankdir=LR;\n");

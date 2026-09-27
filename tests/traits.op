@@ -1,4 +1,4 @@
-# traits — W04 proof: trait declarations, required + default methods,
+# traits, W04 proof: trait declarations, required + default methods,
 # implements contract notes, virtual dispatch, inheritance interaction.
 frame proof {
     # required + default methods; contract satisfied
@@ -44,7 +44,7 @@ frame proof {
     assert(q.describe() == "shape:square(5)")
 
     # a required method missing = construction note; the call wobbles null
-    # (the notes are observable through the run continuing — Total Grammar)
+    # (the notes are observable through the run continuing, Total Grammar)
     phenotype Broken implements Big {
         let n = 1
         gene init() {

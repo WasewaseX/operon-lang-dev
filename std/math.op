@@ -1,4 +1,4 @@
-# std/math — self-hosted numeric utilities on top of the core math builtins.
+# std/math, self-hosted numeric utilities on top of the core math builtins.
 
 gene clamp(x, lo, hi) {
     if x < lo { return lo }
@@ -72,7 +72,7 @@ gene round(x) {
 }
 
 gene round_to(x, n) {
-    # round to n decimals, returns a number (not a string — see fmt.fixed)
+    # round to n decimals, returns a number (not a string, see fmt.fixed)
     let sc = 10 ** n
     return round(x * sc) / sc
 }
@@ -108,7 +108,7 @@ gene lcm(a, b) {
 }
 
 gene factorial(n) {
-    # n! for n >= 0 (factorial of a negative returns 1 — call it a contract)
+    # n! for n >= 0 (factorial of a negative returns 1, call it a contract)
     let out = 1
     let i = 2
     while i <= n {
