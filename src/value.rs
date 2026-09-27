@@ -35,6 +35,11 @@ fn key_tag(v: &Value) -> (u8, String) {
         Value::Int(i) => (2, i.to_string()),
         Value::Float(f) => (3, f.to_string()),
         Value::Str(s) => (4, s.clone()),
+        // W029: bytes keys hit the memo via a length-tagged prefilter — the
+        // memo is only a PREFILTER (candidates are deep_eq-verified and a
+        // miss falls back to the exact full scan), so same-length collisions
+        // stay exact, just O(n) instead of O(1).
+        Value::Bytes(b) => (5, format!("b{}", b.len())),
         // non-scalar keys are legal but rare — they simply miss the memo
         // and fall back to the linear scan
         _ => (255, String::new()),
@@ -198,6 +203,10 @@ pub enum Value {
     Int(i64),
     Float(f64),
     Str(String),
+    /// W029: first-class immutable bytes. Immutability keeps the memory
+    /// model simple (no frozen interplay) and matches Python bytes; sharing
+    /// is Rc (assignment shares, like lists — SPEC §19a table row).
+    Bytes(Rc<Vec<u8>>),
     List(ListRef),
     Map(MapRef),
     Gene(Arc<GeneDef>, Option<EnvRef>),
@@ -272,6 +281,7 @@ impl Value {
             Value::Int(_) => "int",
             Value::Float(_) => "float",
             Value::Str(_) => "str",
+            Value::Bytes(_) => "bytes",
             Value::List(_) => "list",
             Value::Map(_) => "map",
             Value::Gene(_, _) => "gene",
@@ -288,6 +298,7 @@ impl Value {
             Value::Int(i) => *i != 0,
             Value::Float(f) => *f != 0.0,
             Value::Str(s) => !s.is_empty(),
+            Value::Bytes(b) => !b.is_empty(),
             Value::List(l) => !l.borrow().is_empty(),
             Value::Map(m) => !m.borrow().is_empty(),
             Value::Gene(_, _) | Value::Seq(_, _) | Value::Obj(_, _) => true,
@@ -328,6 +339,9 @@ impl Value {
             Value::Int(i) => i.to_string(),
             Value::Float(f) => format_float(*f),
             Value::Str(s) => format!("\"{}\"", escape_str(s)),
+            // W029: bytes repr mirrors mainstream b"..." spelling — printable
+            // ASCII raw, the C escape set short-form, everything else \xNN.
+            Value::Bytes(b) => format!("b\"{}\"", escape_bytes(b)),
             Value::List(l) => {
                 let id = Rc::as_ptr(l) as *const u8 as usize;
                 if depth > 256 || !seen.insert(id) {
@@ -409,6 +423,7 @@ impl Value {
                 (*a as f64) == *b
             }
             (Value::Str(a), Value::Str(b)) => a == b,
+            (Value::Bytes(a), Value::Bytes(b)) => a == b,
             (Value::List(a), Value::List(b)) => {
                 if Rc::ptr_eq(a, b) {
                     return true; // a structure equals itself
@@ -547,6 +562,25 @@ fn escape_str(s: &str) -> String {
     out
 }
 
+/// W029: the bytes side of the repr contract (see Value::repr_g Bytes arm).
+/// Printable ASCII renders raw; \n \t \r " \\ render short-form; every other
+/// byte renders \xNN. The oracle implements this function op-for-op.
+fn escape_bytes(b: &[u8]) -> String {
+    let mut out = String::with_capacity(b.len());
+    for &byte in b {
+        match byte {
+            b'\n' => out.push_str("\\n"),
+            b'\t' => out.push_str("\\t"),
+            b'\r' => out.push_str("\\r"),
+            b'"' => out.push_str("\\\""),
+            b'\\' => out.push_str("\\\\"),
+            0x20..=0x7e => out.push(byte as char),
+            other => out.push_str(&format!("\\x{:02x}", other)),
+        }
+    }
+    out
+}
+
 fn key_repr_g(k: &Value, seen: &mut HashSet<usize>, depth: u32) -> String {
     match k {
         Value::Str(s) if is_identlike(s) => s.clone(),
@@ -563,9 +597,12 @@ fn is_identlike(s: &str) -> bool {
 /// Convert a value to a map key scalar (used by map literals / index).
 pub fn key_scalar(v: &Value) -> Option<Value> {
     match v {
-        Value::Null | Value::Bool(_) | Value::Int(_) | Value::Float(_) | Value::Str(_) => {
-            Some(v.clone())
-        }
+        Value::Null
+        | Value::Bool(_)
+        | Value::Int(_)
+        | Value::Float(_)
+        | Value::Str(_)
+        | Value::Bytes(_) => Some(v.clone()),
         _ => None,
     }
 }
@@ -576,6 +613,11 @@ pub fn key_scalar(v: &Value) -> Option<Value> {
 pub fn key_is_scalar(v: &Value) -> bool {
     matches!(
         v,
-        Value::Null | Value::Bool(_) | Value::Int(_) | Value::Float(_) | Value::Str(_)
+        Value::Null
+            | Value::Bool(_)
+            | Value::Int(_)
+            | Value::Float(_)
+            | Value::Str(_)
+            | Value::Bytes(_)
     )
 }

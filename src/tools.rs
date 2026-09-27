@@ -2219,6 +2219,24 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
         Expr::Int(i) => i.to_string(),
         Expr::Float(f) => crate::value::format_float(*f),
         Expr::Str(s) => str_lit(s), // W47: quote mode aware (single only when byte-lossless)
+        // W029: bytes literals round-trip byte-exactly — the same escape set
+        // the lexer parses (short forms + \xNN), re-emitted deterministically.
+        Expr::Bytes(b) => {
+            let mut out = String::from("b\"");
+            for &byte in b {
+                match byte {
+                    b'\n' => out.push_str("\\n"),
+                    b'\t' => out.push_str("\\t"),
+                    b'\r' => out.push_str("\\r"),
+                    b'"' => out.push_str("\\\""),
+                    b'\\' => out.push_str("\\\\"),
+                    0x20..=0x7e => out.push(byte as char),
+                    other => out.push_str(&format!("\\x{:02x}", other)),
+                }
+            }
+            out.push('"');
+            out
+        }
         Expr::Interp(parts) => {
             let mut out = String::from("\"");
             for p in parts {

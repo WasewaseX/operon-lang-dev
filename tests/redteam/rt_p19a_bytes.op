@@ -1,0 +1,108 @@
+# rt_p19a — W029 (first-class bytes): adversarial probes. Every probe must
+# stay CONTAINED: catchable stress at the ceiling, no panic, no OOM abort,
+# no silent coercion across the str/bytes boundary, and the capability
+# gates on bytes file I/O identical to the text forms.
+#
+# ORDER MATTERS: the aggregate allocation ceiling is MONOTONIC (once tripped,
+# every later mem_charge fails — SPEC §9b), so the probe that trips it runs
+# LAST; everything before it must stay under the aggregate budget.
+
+# 1. per-op allocation ceilings are catchable overflow, not aborts (Rust
+#    panics or SIGKILL would escape the stress model). Rejected BEFORE any
+#    allocation happens, so the aggregate budget stays untouched.
+stress {
+    let boom = b"a" * 600000000
+    print("BREACH: repeat survived")
+} rescue (e) {
+    assert(e.kind == "overflow", "repeat ceiling kind")
+    print("contained: repeat ceiling")
+}
+stress {
+    let a = b"a" * 280000000
+    let b2 = b"b" * 280000000
+    let boom = a + b2
+    print("BREACH: concat survived")
+} rescue (e) {
+    assert(e.kind == "overflow", "concat ceiling kind")
+    print("contained: concat ceiling")
+}
+
+# 2. no silent coercion in either direction
+stress {
+    let boom = b"x" + "y"
+    print("BREACH: bytes+str coerced")
+} rescue (e) {
+    assert(e.kind == "unfolded", "bytes+str coercion kind")
+    print("contained: bytes+str coercion")
+}
+stress {
+    let boom = "y" + b"x"
+    print("BREACH: str+bytes coerced")
+} rescue (e) {
+    assert(e.kind == "unfolded", "str+bytes coercion kind")
+    print("contained: str+bytes coercion")
+}
+
+# 3. the 0..=255 byte domain is enforced against adversarial lists
+stress {
+    let boom = bytes_from_list([-1])
+    print("BREACH: negative byte")
+} rescue (e) {
+    assert(e.kind == "unfolded", "negative byte kind")
+    print("contained: negative byte")
+}
+stress {
+    let boom = bytes_from_list([256])
+    print("BREACH: byte over 255")
+} rescue (e) {
+    assert(e.kind == "unfolded", "byte 256 kind")
+    print("contained: byte 256")
+}
+
+# 4. index attacks: out-of-range is catchable missing, never a panic
+let b = b"abc"
+stress {
+    let x = b[100]
+    print("BREACH: index")
+} rescue (e) {
+    assert(e.kind == "missing", "index kind")
+    print("contained: index")
+}
+stress {
+    let x = b[-100]
+    print("BREACH: negative index")
+} rescue (e) {
+    assert(e.kind == "missing", "negative index kind")
+    print("contained: negative index")
+}
+
+# 5. decoding garbage is the soft tier (null + note), not a crash
+assert(str_from_bytes(b"\xff\xfe\xff\xfe") == null, "garbage decodes to null")
+assert(str_from_bytes(b"") == "", "empty decodes to empty")
+print("contained: garbage decode")
+
+# 6. bytes file I/O rides the capability gates (write denied by default)
+stress {
+    write_file_bytes("/tmp/operon_rt_bytes_attack.bin", b"x")
+    print("BREACH: write without grant")
+} rescue (e) {
+    assert(e.kind == "interference", "capability gate kind")
+    print("contained: capability gate")
+}
+
+# 7. aggregate run ceiling — LAST (monotonic: once tripped, every later
+#    charge fails, SPEC §9b). Repeated 100 MiB construction must hit the
+#    2 GiB aggregate ceiling and stay there.
+stress {
+    let i = 0
+    while i < 100 {
+        let blob = b"x" * 100000000
+        i += 1
+    }
+    print("BREACH: aggregate ceiling never tripped")
+} rescue (e) {
+    assert(e.kind == "overflow", "aggregate ceiling kind")
+    print("contained: aggregate ceiling")
+}
+
+print("rt_p19a: all probes contained")

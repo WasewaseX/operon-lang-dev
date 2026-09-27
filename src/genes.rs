@@ -781,6 +781,9 @@ pub enum SendValue {
     Int(i64),
     Float(f64),
     Str(String),
+    /// W029: bytes cross spawn/sequence boundaries losslessly (the spawn
+    /// wire snapshot-membrane rule: data values cross by serialization).
+    Bytes(Vec<u8>),
     List(Vec<SendValue>),
     Map(Vec<(String, SendValue)>),
     Stress(String, String),
@@ -887,6 +890,7 @@ fn to_send_d(v: &Value, d: u32) -> SendValue {
         Value::Int(i) => SendValue::Int(*i),
         Value::Float(f) => SendValue::Float(*f),
         Value::Str(s) => SendValue::Str(s.clone()),
+        Value::Bytes(b) => SendValue::Bytes(b.as_ref().clone()),
         Value::List(l) => SendValue::List(l.borrow().iter().map(|x| to_send_d(x, d + 1)).collect()),
         Value::Map(m) => SendValue::Map(
             m.borrow()
@@ -929,6 +933,7 @@ fn from_send_d(v: SendValue, d: u32) -> Value {
         SendValue::Int(i) => Value::Int(i),
         SendValue::Float(f) => Value::Float(f),
         SendValue::Str(s) => Value::Str(s),
+        SendValue::Bytes(b) => Value::Bytes(Rc::new(b)),
         SendValue::List(l) => Value::List(Rc::new(RefCell::new(
             l.into_iter().map(|x| from_send_d(x, d + 1)).collect(),
         ))),
@@ -1328,6 +1333,7 @@ fn clone_send_d(sv: &SendValue, d: u32) -> SendValue {
         SendValue::Int(i) => SendValue::Int(*i),
         SendValue::Float(f) => SendValue::Float(*f),
         SendValue::Str(s) => SendValue::Str(s.clone()),
+        SendValue::Bytes(b) => SendValue::Bytes(b.clone()),
         SendValue::List(l) => SendValue::List(l.iter().map(|x| clone_send_d(x, d + 1)).collect()),
         SendValue::Map(m) => SendValue::Map(
             m.iter()

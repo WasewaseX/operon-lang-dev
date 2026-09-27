@@ -11,6 +11,7 @@ pub enum Tok {
     Float(f64),
     Str(String),    // no interpolation present
     Interp(String), // raw content, contains {..} parts
+    Bytes(Vec<u8>), // W029: b"..." byte-string literal (no interpolation)
     Mark(String),   // @word
     Newline,
     LBrace,
@@ -72,6 +73,7 @@ impl Tok {
             Tok::Float(f) => format!("number {}", f),
             Tok::Str(s) => format!("string \"{}\"", s),
             Tok::Interp(s) => format!("interpolated string \"{}\"", s),
+            Tok::Bytes(_) => "bytes literal b\"...\"".to_string(),
             Tok::Mark(m) => format!("mark '@{}'", m),
             Tok::Newline => "end of line".to_string(),
             Tok::LBrace => "'{'".to_string(),
@@ -246,6 +248,115 @@ pub fn lex(src: &str) -> Lexed {
                 );
             }
             push!(Tok::Str(raw));
+            continue;
+        }
+        // W029: byte strings b"..." / b'...' — bytes literals. Escape set:
+        // \n \t \r \\ \" \' \0 \xNN (exactly two hex digits); unknown escapes
+        // keep the backslash + char verbatim (Python bytes convention); no
+        // interpolation ever ({ and } are plain bytes). A non-ASCII source
+        // char is UTF-8 encoded with a note (Total Grammar: repair, never
+        // reject). Unclosed literals consume to end of input with a note.
+        if (c == 'b' || c == 'B') && i + 1 < n && (chars[i + 1] == '"' || chars[i + 1] == '\'') {
+            let quote = chars[i + 1];
+            if quote == '\'' {
+                lex_note(
+                    &mut notes,
+                    Note {
+                        line,
+                        rung: 4,
+                        message: "single-quoted bytes literal repaired to double quotes".into(),
+                    },
+                );
+            }
+            i += 2; // skip b + quote
+            let mut out: Vec<u8> = Vec::new();
+            let mut closed = false;
+            while i < n {
+                if chars[i] == quote {
+                    i += 1;
+                    closed = true;
+                    break;
+                }
+                if chars[i] == '\\' && i + 1 < n {
+                    let e = chars[i + 1];
+                    match e {
+                        'n' => out.push(b'\n'),
+                        't' => out.push(b'\t'),
+                        'r' => out.push(b'\r'),
+                        '0' => out.push(0),
+                        '\\' => out.push(b'\\'),
+                        '"' => out.push(b'"'),
+                        '\'' => out.push(b'\''),
+                        'x' => {
+                            // \xNN — exactly two hex digits; malformed keeps
+                            // the text verbatim (with a note) instead of
+                            // rejecting the program
+                            let hex = |ch: char| ch.is_ascii_hexdigit();
+                            if i + 3 < n && hex(chars[i + 2]) && hex(chars[i + 3]) {
+                                let hi = chars[i + 2].to_digit(16).unwrap_or(0) as u8;
+                                let lo = chars[i + 3].to_digit(16).unwrap_or(0) as u8;
+                                out.push(hi * 16 + lo);
+                                i += 4;
+                                continue;
+                            }
+                            lex_note(
+                                &mut notes,
+                                Note {
+                                    line,
+                                    rung: 4,
+                                    message: "malformed \\x escape in bytes literal kept verbatim"
+                                        .into(),
+                                },
+                            );
+                            out.push(b'\\');
+                            out.push(b'x');
+                        }
+                        _ => {
+                            out.push(b'\\');
+                            // UTF-8-encode the escaped char (parity with the
+                            // oracle mirror; ASCII chars are 1 byte anyway)
+                            let mut buf = [0u8; 4];
+                            for byte in e.encode_utf8(&mut buf).as_bytes() {
+                                out.push(*byte);
+                            }
+                        }
+                    }
+                    i += 2;
+                    continue;
+                }
+                if chars[i] == '\n' {
+                    line += 1;
+                }
+                if chars[i] as u32 > 127 {
+                    // non-ASCII: UTF-8 encode the char (repair-with-note)
+                    let mut buf = [0u8; 4];
+                    for byte in chars[i].encode_utf8(&mut buf).as_bytes() {
+                        out.push(*byte);
+                    }
+                    lex_note(
+                        &mut notes,
+                        Note {
+                            line,
+                            rung: 4,
+                            message: "non-ASCII char in bytes literal encoded as UTF-8".into(),
+                        },
+                    );
+                } else {
+                    out.push(chars[i] as u8);
+                }
+                i += 1;
+            }
+            if !closed {
+                lex_note(
+                    &mut notes,
+                    Note {
+                        line,
+                        rung: 4,
+                        message: "unclosed bytes literal consumed to end of input".into(),
+                    },
+                );
+            }
+            push!(Tok::Bytes(out));
             continue;
         }
         // W030: multiline triple-quoted strings """...""" — escapes and

@@ -1175,6 +1175,8 @@ fn rewrite_expr(e: &mut Expr, cfg: &mut RewriteCfg) {
                 }
             }
         }
+        // W029: bytes literals are leaves — nothing to rewrite inside
+        Expr::Bytes(_) => {}
         Expr::Interp(parts) => {
             for p in parts {
                 if let InterpPart::Expr(sub) = p {

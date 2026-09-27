@@ -261,6 +261,20 @@ def fmt_float(f):
 def escape_str(s):
     return s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\t", "\\t")
 
+def escape_bytes(b):
+    # W029 mirror of the Rust escape_bytes — printable ASCII raw, the C
+    # escape set short-form, everything else \xNN two-hex-digit lowercase.
+    out = ""
+    for byte in b:
+        if byte == 0x0a: out += "\\n"
+        elif byte == 0x09: out += "\\t"
+        elif byte == 0x0d: out += "\\r"
+        elif byte == 0x22: out += '\\"'
+        elif byte == 0x5c: out += "\\\\"
+        elif 0x20 <= byte <= 0x7e: out += chr(byte)
+        else: out += "\\x%02x" % byte
+    return out
+
 def is_identlike(s):
     return bool(s) and (s[0].isalpha() or s[0] == "_") and all(c.isalnum() or c == "_" for c in s)
 
@@ -278,6 +292,7 @@ def v_repr(v, _seen=None, _depth=0):
     if isinstance(v, int): return str(v)
     if isinstance(v, float): return fmt_float(v)
     if isinstance(v, str): return f'"{escape_str(v)}"'
+    if isinstance(v, bytes): return f'b"{escape_bytes(v)}"'
     if isinstance(v, list):
         marker = id(v)
         if marker in _seen:
@@ -324,6 +339,7 @@ def truthy(v):
     if v is True: return True
     if isinstance(v, (int, float)): return v != 0
     if isinstance(v, str): return len(v) > 0
+    if isinstance(v, bytes): return len(v) > 0
     if isinstance(v, list): return len(v) > 0
     if isinstance(v, dict): return len(v) > 0
     # W06 mirror: a carried success is truthy; a carried failure is falsy
@@ -366,6 +382,7 @@ def type_name(v):
     if isinstance(v, int): return "int"
     if isinstance(v, float): return "float"
     if isinstance(v, str): return "str"
+    if isinstance(v, bytes): return "bytes"
     if isinstance(v, list): return "list"
     if isinstance(v, dict): return "map"
     if isinstance(v, Gene): return "gene"
@@ -382,6 +399,9 @@ def deep_eq(a, b, _pairs=None):
         return a is b
     if isinstance(a, (int, float)) and isinstance(b, (int, float)):
         return a == b
+    # W029 mirror: bytes equal iff same byte content
+    if isinstance(a, bytes) or isinstance(b, bytes):
+        return isinstance(a, bytes) and isinstance(b, bytes) and a == b
     # W06 (D-014) mirror: variants equal iff same tag + payload deep_eq;
     # families distinct (Some(x) != Ok(x)); None == None.
     if isinstance(a, Variant) or isinstance(b, Variant):
@@ -477,6 +497,49 @@ def lex(src):
             if not closed:
                 notes.append(Note(4, "unclosed raw string consumed to end of input"))
             toks.append(("STR", raw, line))
+            continue
+        # W029 mirror: bytes literals b"..." / b'...' — same escape set as the
+        # Rust lexer (\n \t \r \\ \" \' \0 \xNN; unknown escapes verbatim; no
+        # interpolation); non-ASCII encodes as UTF-8 with a note.
+        if (c == "b" or c == "B") and i + 1 < n and src[i+1] in ('"', "'"):
+            quote = src[i+1]
+            if quote == "'":
+                notes.append(Note(4, "single-quoted bytes literal repaired to double quotes"))
+            i += 2
+            out = bytearray()
+            closed = False
+            while i < n:
+                if src[i] == quote:
+                    i += 1; closed = True; break
+                if src[i] == "\\" and i + 1 < n:
+                    e = src[i + 1]
+                    if e == "n": out.append(10)
+                    elif e == "t": out.append(9)
+                    elif e == "r": out.append(13)
+                    elif e == "0": out.append(0)
+                    elif e == "\\": out.append(92)
+                    elif e == '"': out.append(34)
+                    elif e == "'": out.append(39)
+                    elif e == "x":
+                        if i + 3 < n and all(ch in "0123456789abcdefABCDEF" for ch in src[i+2:i+4]):
+                            out.append(int(src[i+2:i+4], 16))
+                            i += 4; continue
+                        notes.append(Note(4, "malformed \\x escape in bytes literal kept verbatim"))
+                        out.append(92); out.append(120)
+                    else:
+                        out.append(92); out.extend(e.encode("utf-8"))
+                    i += 2; continue
+                if src[i] == "\n":
+                    line += 1
+                if ord(src[i]) > 127:
+                    notes.append(Note(4, "non-ASCII char in bytes literal encoded as UTF-8"))
+                    out.extend(src[i].encode("utf-8"))
+                else:
+                    out.append(ord(src[i]))
+                i += 1
+            if not closed:
+                notes.append(Note(4, "unclosed bytes literal consumed to end of input"))
+            toks.append(("BYTES", bytes(out), line))
             continue
         # W030 mirror: multiline triple-quoted strings """...""" — escapes and
         # interpolation processed, content verbatim
@@ -2294,6 +2357,10 @@ class P:
             return ("lit", val)
         if kind == "STR":
             return ("lit", val)
+        if kind == "BYTES":
+            # W029 mirror: bytes literals are ordinary literal nodes carrying
+            # a Python bytes value (native, so == / hashing / dict keys work)
+            return ("lit", val)
         if kind == "INTERP":
             return self.build_interp(val, line)
         if t == ("SYM", "(", line):
@@ -2333,6 +2400,10 @@ class P:
                     self.next()
                     key = ("lit", t2[1])
                 elif t2[0] == "STR":
+                    self.next()
+                    key = ("lit", t2[1])
+                elif t2[0] == "BYTES":
+                    # W029 mirror: bytes are legal map keys (scalar class)
                     self.next()
                     key = ("lit", t2[1])
                 elif t2[0] == "INT":
@@ -2684,6 +2755,7 @@ gc_content translate find_orf memory methyl methylate demethylate m6a_write m6a_
 repressi_state repressi_start grn_fire grn_state spawn join floor ceil sqrt pow random
 randomize chr ord now sleep argv read_file write_file append_file exists file_size read_dir run
 fs_delete fs_rename fs_mkdir re_replace
+bytes_from_str str_from_bytes bytes_from_list bytes_to_list read_file_bytes write_file_bytes
 http_get serve recv_request send_response json_parse json_str env call items py
 re_match re_find re_groups unix_time date_parts date_fmt
 grapheme_len fold_case char_at char_slice
@@ -3214,6 +3286,9 @@ class Interp:
                 items = list(itv)
             elif isinstance(itv, str):
                 items = list(itv)
+            elif isinstance(itv, bytes):
+                # W029 mirror: iterating bytes yields ints 0..=255
+                items = list(itv)
             elif isinstance(itv, dict):
                 items = list(itv.keys())
             else:
@@ -3347,7 +3422,8 @@ class Interp:
                 # Container keys (list/map) still fall back to display text —
                 # pre-existing divergence, no corpus exposure, filed for a
                 # future session.
-                key = iv if isinstance(iv, (str, int, float, bool)) else (
+                # W029 mirror: bytes are scalar keys (native hashable, exact).
+                key = iv if isinstance(iv, (str, int, float, bool, bytes)) else (
                     iv if isinstance(iv, ObjInst) else v_display(iv))
                 tv[key] = nv
             else:
@@ -3422,6 +3498,9 @@ class Interp:
             if isinstance(itv, list):
                 items = list(itv)
             elif isinstance(itv, str):
+                items = list(itv)
+            elif isinstance(itv, bytes):
+                # W029 mirror: iterating bytes yields ints 0..=255
                 items = list(itv)
             elif isinstance(itv, dict):
                 items = list(itv.keys())
@@ -3674,7 +3753,9 @@ class Interp:
             m = {}
             for ke, ve in e[1]:
                 kv = self.eval(env, ke)
-                key = kv if isinstance(kv, (str, int, float, bool)) else v_display(kv)
+                # W029 mirror: bytes are scalar keys (Rust key_scalar includes
+                # Bytes) — never stringified
+                key = kv if isinstance(kv, (str, int, float, bool, bytes)) else v_display(kv)
                 m[key] = self.eval(env, ve)
             return m
         if k == "ident":
@@ -3771,6 +3852,12 @@ class Interp:
                 if idx < len(tv):
                     return tv[idx]
                 raise Stress("missing", "char index out of range")
+            # W029 mirror: bytes[i] -> int (Python parity)
+            if isinstance(tv, bytes):
+                idx = self.as_index(iv, len(tv))
+                if idx < len(tv):
+                    return tv[idx]
+                raise Stress("missing", "byte index out of range")
             raise Stress("unfolded", f"cannot index {type_name(tv)}")
         if k == "member":
             tv = self.eval(env, e[1])
@@ -3843,6 +3930,11 @@ class Interp:
                 if len(l) + len(r) > 512 * 1024 * 1024:
                     raise Stress("overflow", "string concat exceeds the 512 MiB ceiling")
                 return l + r
+            if isinstance(l, bytes) and isinstance(r, bytes):
+                # W029 mirror: bytes concat — same ceiling family as strings
+                if len(l) + len(r) > 512 * 1024 * 1024:
+                    raise Stress("overflow", "bytes concat exceeds the 512 MiB ceiling")
+                return l + r
             if isinstance(l, list) and isinstance(r, list):
                 if len(l) + len(r) > 64 * 1024 * 1024:
                     raise Stress("overflow", "list concat exceeds the 64M-element ceiling")
@@ -3857,12 +3949,27 @@ class Interp:
                 if n * len(l) > 512 * 1024 * 1024:
                     raise Stress("overflow", "repeat exceeds the 512 MiB string ceiling")
                 return l * n
+            # W029 mirror: bytes repetition (Python parity), same ceiling
+            if op == "*" and isinstance(l, bytes) and not isinstance(r, bytes):
+                n = int(r)
+                if n < 0:
+                    raise Stress("unfolded", "repeat count must be non-negative")
+                if n * len(l) > 512 * 1024 * 1024:
+                    raise Stress("overflow", "repeat exceeds the 512 MiB bytes ceiling")
+                return l * n
             if op == "*" and isinstance(r, str) and not isinstance(l, str):
                 n = int(l)
                 if n < 0:
                     raise Stress("unfolded", "repeat count must be non-negative")
                 if n * len(r) > 512 * 1024 * 1024:
                     raise Stress("overflow", "repeat exceeds the 512 MiB string ceiling")
+                return r * n
+            if op == "*" and isinstance(r, bytes) and not isinstance(l, bytes):
+                n = int(l)
+                if n < 0:
+                    raise Stress("unfolded", "repeat count must be non-negative")
+                if n * len(r) > 512 * 1024 * 1024:
+                    raise Stress("overflow", "repeat exceeds the 512 MiB bytes ceiling")
                 return r * n
             if isinstance(l, (int, float)) and isinstance(r, (int, float)) and not isinstance(l, bool) and not isinstance(r, bool):
                 I64MIN, I64MAX = -(2**63), 2**63 - 1
@@ -4869,6 +4976,16 @@ class Interp:
                 target = v_display(args[0]) if args else ""
                 states, _ = self.fates.get(fate_name, ([], None))
                 return any(f == cur and target in tg for f, tg in states)
+        # W029 mirror: the bytes method surface — slice (Python-style,
+        # clamped) and len. Bytes are immutable: no mutators by design.
+        if isinstance(recv, bytes):
+            if name == "slice":
+                a = int(args[0]) if len(args) > 0 else 0
+                b = int(args[1]) if len(args) > 1 else len(recv)
+                return recv[a:b]
+            if name == "len": return len(recv)
+            self.note(4, f"unknown bytes method '{name}'; null")
+            return None
         if isinstance(recv, str):
             if name == "at":
                 # L1a: safe char access with an optional default
@@ -5006,10 +5123,57 @@ class Interp:
             return None
         if name == "len":
             v = args[0] if args else None
-            if isinstance(v, (str, list, dict)):
+            if isinstance(v, (str, bytes, list, dict)):
                 return len(v)
             self.note(4, "len() of non-container is 0")
             return 0
+        # ---- W029: bytes conversions (UTF-8-only, explicit encoding)
+        if name == "bytes_from_str":
+            s = args[0] if args and isinstance(args[0], str) else None
+            if s is None:
+                raise Stress("unfolded", f"bytes_from_str needs a str, got {type_name(args[0] if args else None)}")
+            if len(args) > 1:
+                enc = v_display(args[1]).lower().replace("-", "")
+                if enc != "utf8":
+                    raise Stress("unfolded", f"unsupported encoding '{v_display(args[1])}' (bytes are UTF-8 only)")
+            return s.encode("utf-8")
+        if name == "str_from_bytes":
+            b = args[0] if args and isinstance(args[0], bytes) else None
+            if b is None and args and not isinstance(args[0], bytes):
+                raise Stress("unfolded", f"str_from_bytes needs bytes, got {type_name(args[0])}")
+            if len(args) > 1:
+                enc = v_display(args[1]).lower().replace("-", "")
+                if enc != "utf8":
+                    raise Stress("unfolded", f"unsupported encoding '{v_display(args[1])}' (bytes are UTF-8 only)")
+            if b is None:
+                return ""
+            try:
+                return b.decode("utf-8")
+            except UnicodeDecodeError as e:
+                # soft tier: null + note naming the offending byte position
+                self.note(4, f"str_from_bytes: invalid UTF-8 at byte {e.start}; null")
+                return None
+        if name == "bytes_from_list":
+            if not args or args[0] is None:
+                return b""
+            l = args[0]
+            if not isinstance(l, list):
+                raise Stress("unfolded", f"bytes_from_list needs a list, got {type_name(l)}")
+            out = bytearray()
+            for v in l:
+                if isinstance(v, bool) or not isinstance(v, int):
+                    raise Stress("unfolded", f"bytes_from_list needs ints, got {type_name(v)}")
+                if not (0 <= v <= 255):
+                    raise Stress("unfolded", f"byte value {v} out of range 0..255")
+                out.append(v)
+            return bytes(out)
+        if name == "bytes_to_list":
+            b = args[0] if args else None
+            if b is None:
+                return []
+            if not isinstance(b, bytes):
+                raise Stress("unfolded", f"bytes_to_list needs bytes, got {type_name(b)}")
+            return list(b)
         if name == "push":
             if self.is_frozen(args[0]):
                 raise self._frozen_stress("list")
@@ -6091,6 +6255,29 @@ class Interp:
                 return True
             except OSError as e:
                 raise Stress("missing", f"append_file '{path}': {e}")
+        # ---- W029: bytes file I/O (same capability gates as the text forms)
+        if name == "read_file_bytes":
+            path = v_display(args[0]) if args else ""
+            self.cap_check("read", "read", path)
+            try:
+                with open(path, "rb") as f:
+                    return f.read()
+            except OSError as e:
+                raise Stress("missing", f"read_file_bytes '{path}': {e}")
+        if name == "write_file_bytes":
+            path = v_display(args[0]) if args else ""
+            body = args[1] if len(args) > 1 else b""
+            if isinstance(body, str):
+                body = body.encode("utf-8")
+            elif not isinstance(body, bytes):
+                raise Stress("unfolded", f"write_file_bytes needs bytes (or str), got {type_name(body)}")
+            self.cap_check("write", "write", path)
+            try:
+                with open(path, "wb") as f:
+                    f.write(body)
+                return True
+            except OSError as e:
+                raise Stress("missing", f"write_file_bytes '{path}': {e}")
         if name == "exists":
             path = v_display(args[0]) if args else ""
             self.cap_check("read", "read", path)
@@ -6454,6 +6641,10 @@ class Interp:
                 return "null"
             return fmt_float(v)
         if isinstance(v, str): return _json.dumps(v)
+        # W029 mirror: JSON has no bytes type — the lossless view is the int
+        # list (the Rust json_stringify_g Bytes arm).
+        if isinstance(v, bytes):
+            return "[" + ",".join(str(x) for x in v) + "]"
         if isinstance(v, (list, dict)):
             marker = id(v)
             if marker in _seen:

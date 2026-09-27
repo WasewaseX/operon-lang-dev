@@ -23,6 +23,9 @@ pub enum Expr {
     Int(i64),
     Float(f64),
     Str(String),
+    /// W029: bytes literal b"..." — the raw bytes after escape processing;
+    /// no interpolation ever.
+    Bytes(Vec<u8>),
     Interp(Vec<InterpPart>),
     List(Vec<Expr>),
     Map(Vec<(Expr, Expr)>),
