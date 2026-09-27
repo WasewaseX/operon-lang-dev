@@ -12,6 +12,10 @@ use std::sync::{mpsc, Arc, Mutex};
 pub struct Env {
     pub vars: RefCell<HashMap<String, Value>>,
     pub parent: Option<Rc<Env>>,
+    /// W05: names bound with `const` in THIS scope. Assignment to a const
+    /// name (through the env chain) is a catchable `frozen` Stress;
+    /// re-DEFINITION (let/const) shadows or rebinds as before.
+    pub consts: RefCell<std::collections::HashSet<String>>,
 }
 
 impl Env {
@@ -19,7 +23,27 @@ impl Env {
         Rc::new(Env {
             vars: RefCell::new(HashMap::new()),
             parent,
+            consts: RefCell::new(std::collections::HashSet::new()),
         })
+    }
+    /// W05: a const binding — records the name so later assignment stresses.
+    pub fn define_const(&self, name: &str, val: Value) {
+        self.vars.borrow_mut().insert(name.to_string(), val);
+        self.consts.borrow_mut().insert(name.to_string());
+    }
+    /// W05: is `name` const-bound anywhere on the env chain?
+    pub fn is_const(&self, name: &str) -> bool {
+        if self.consts.borrow().contains(name) {
+            return true;
+        }
+        let mut node = self.parent.clone();
+        while let Some(env) = node {
+            if env.consts.borrow().contains(name) {
+                return true;
+            }
+            node = env.parent.clone();
+        }
+        false
     }
     pub fn get(&self, name: &str) -> Option<Value> {
         if let Some(v) = self.vars.borrow().get(name) {
@@ -438,6 +462,12 @@ pub struct Interp {
     pub notes: Vec<Note>,
     /// sec-r3: notes suppressed past the cap (surfaced once).
     pub notes_dropped: u64,
+    /// W05: pointer addresses (Rc::as_ptr) of deep-frozen List/Map containers.
+    /// Frozen-ness is per-interpreter by design: spawn arguments cross the
+    /// thread boundary by serialization, so a worker's copies are fresh
+    /// containers — the oracle mirrors this by parking the reachable frozen
+    /// ids for the duration of an inline spawn body (SPEC §7d boundary).
+    pub frozen: std::collections::HashSet<usize>,
     pub cell: HashMap<String, String>,
     pub cell_entry: Option<String>,
     pub base_dir: Option<String>,
@@ -690,6 +720,7 @@ impl Interp {
             caps: Caps::default(),
             methyl_quiet: false,
             methyl_noted: std::collections::HashSet::new(),
+            frozen: std::collections::HashSet::new(),
             methyl_levels: HashMap::new(),
             methyl_threshold: 3,
             asserts_run: 0,
@@ -976,6 +1007,18 @@ impl Interp {
                 env.define(name, v);
                 Ok(Flow::Norm)
             }
+            Stmt::LetConst(name, e) => {
+                // W05: immutable binding — the value is deep-frozen (every
+                // reachable list/map), the name recorded as const. Freezing
+                // draws nothing: the entropy stream is untouched.
+                let v = self.eval(env, e)?;
+                if env.get(name).is_some() {
+                    self.note(0, 4, format!("rebinding '{}'", name));
+                }
+                self.deep_freeze(&v);
+                env.define_const(name, v);
+                Ok(Flow::Norm)
+            }
             Stmt::LetAnn(name, ann, e) => {
                 // W01 (L2c): the annotation is a soft contract — a mismatch
                 // is catchable `unfolded` Stress (SPEC §7a), never a hard
@@ -1001,6 +1044,12 @@ impl Interp {
             }
             Stmt::Assign(name, op, e) => {
                 let val = self.eval(env, e)?;
+                if env.is_const(name) {
+                    return Err(Stress::new(
+                        "frozen",
+                        format!("cannot reassign const '{}'", name),
+                    ));
+                }
                 match op {
                     None => {
                         if !env.set(name, val) {
@@ -1052,6 +1101,9 @@ impl Interp {
                 }
                 match (&tv, &iv) {
                     (Value::List(l), Value::Int(idx)) => {
+                        if self.is_frozen_list(l) {
+                            return Err(Self::frozen_stress("list"));
+                        }
                         let n = l.borrow().len() as i64;
                         let j = if *idx < 0 { n + *idx } else { *idx };
                         if j >= 0 && j < n {
@@ -1064,6 +1116,9 @@ impl Interp {
                         }
                     }
                     (Value::List(l), _) => {
+                        if self.is_frozen_list(l) {
+                            return Err(Self::frozen_stress("list"));
+                        }
                         let idx = self.as_index(&iv, l.borrow().len()).unwrap_or(usize::MAX);
                         if idx != usize::MAX && idx < l.borrow().len() {
                             l.borrow_mut()[idx] = val;
@@ -1073,7 +1128,7 @@ impl Interp {
                         }
                     }
                     (Value::Map(m), _) => {
-                        self.map_insert(m, iv, val);
+                        self.map_insert(m, iv, val)?;
                     }
                     _ => {
                         self.note(0, 4, "index assignment on non-container ignored");
@@ -1098,10 +1153,10 @@ impl Interp {
                 }
                 match tv {
                     Value::Map(m) => {
-                        self.map_insert(&m, Value::Str(key.clone()), val);
+                        self.map_insert(&m, Value::Str(key.clone()), val)?;
                     }
                     Value::Obj(_d, m) => {
-                        self.map_insert(&m, Value::Str(key.clone()), val);
+                        self.map_insert(&m, Value::Str(key.clone()), val)?;
                     }
                     _ => self.note(0, 4, "member assignment on non-map ignored"),
                 }
@@ -1166,6 +1221,20 @@ impl Interp {
                 // L1a: swap / multiple assignment. All right-hand values are
                 // evaluated (left to right) BEFORE any target is written —
                 // `a, b = b, a` swaps, never smears.
+                // W05: non-define rebinding of a const name stresses before
+                // any target is written.
+                if !define {
+                    for t in targets {
+                        if let Expr::Ident(name) = t {
+                            if env.is_const(name) {
+                                return Err(Stress::new(
+                                    "frozen",
+                                    format!("cannot reassign const '{}'", name),
+                                ));
+                            }
+                        }
+                    }
+                }
                 let mut vals = Vec::with_capacity(values.len());
                 for v in values {
                     vals.push(self.eval(env, v)?);
@@ -1981,6 +2050,9 @@ impl Interp {
                 let iv = self.eval(env, it)?;
                 match (&tv, &iv) {
                     (Value::List(l), Value::Int(idx)) => {
+                        if self.is_frozen_list(l) {
+                            return Err(Self::frozen_stress("list"));
+                        }
                         let n = l.borrow().len() as i64;
                         let j = if *idx < 0 { n + *idx } else { *idx };
                         if j >= 0 && j < n {
@@ -1992,6 +2064,9 @@ impl Interp {
                         Ok(())
                     }
                     (Value::List(l), _) => {
+                        if self.is_frozen_list(l) {
+                            return Err(Self::frozen_stress("list"));
+                        }
                         let idx = self.as_index(&iv, l.borrow().len()).unwrap_or(usize::MAX);
                         if idx != usize::MAX && idx < l.borrow().len() {
                             l.borrow_mut()[idx] = val;
@@ -2002,7 +2077,7 @@ impl Interp {
                         Ok(())
                     }
                     (Value::Map(m), _) => {
-                        self.map_insert(m, iv, val);
+                        self.map_insert(m, iv, val)?;
                         Ok(())
                     }
                     _ => {
@@ -2015,11 +2090,11 @@ impl Interp {
                 let tv = self.eval(env, ct)?;
                 match tv {
                     Value::Map(m) => {
-                        self.map_insert(&m, Value::Str(key.clone()), val);
+                        self.map_insert(&m, Value::Str(key.clone()), val)?;
                         Ok(())
                     }
                     Value::Obj(_d, m) => {
-                        self.map_insert(&m, Value::Str(key.clone()), val);
+                        self.map_insert(&m, Value::Str(key.clone()), val)?;
                         Ok(())
                     }
                     _ => {
@@ -2090,7 +2165,80 @@ impl Interp {
         }
     }
 
-    pub fn map_insert(&mut self, m: &crate::value::MapRef, key: Value, val: Value) {
+    // ---- W05: const bindings + the deep-freeze registry ----
+
+    fn list_ptr(l: &crate::value::ListRef) -> usize {
+        Rc::as_ptr(l) as *const u8 as usize
+    }
+    fn map_ptr(m: &crate::value::MapRef) -> usize {
+        Rc::as_ptr(m) as *const u8 as usize
+    }
+
+    /// W05: deep-freeze a value — every List/Map reachable from it becomes
+    /// immutable (mutation raises the catchable `frozen` Stress). Cycle-safe
+    /// (pointer-visited; self-referencing containers are a tested shape).
+    /// Draws nothing: const bindings keep the entropy stream byte-identical.
+    pub fn deep_freeze(&mut self, v: &Value) {
+        let mut seen: std::collections::HashSet<usize> = std::collections::HashSet::new();
+        self.freeze_walk(v, &mut seen);
+    }
+
+    fn freeze_walk(&mut self, v: &Value, seen: &mut std::collections::HashSet<usize>) {
+        match v {
+            Value::List(l) => {
+                let p = Self::list_ptr(l);
+                if !seen.insert(p) {
+                    return;
+                }
+                self.frozen.insert(p);
+                for item in l.borrow().iter() {
+                    self.freeze_walk(item, seen);
+                }
+            }
+            Value::Map(m) => {
+                let p = Self::map_ptr(m);
+                if !seen.insert(p) {
+                    return;
+                }
+                self.frozen.insert(p);
+                for (k, val) in m.borrow().iter() {
+                    self.freeze_walk(k, seen);
+                    self.freeze_walk(val, seen);
+                }
+            }
+            Value::Variant(_, Some(inner)) => self.freeze_walk(inner, seen),
+            // Obj field STORES stay mutable (v1 scope, SPEC §7d): methods and
+            // member assignment on the phenotype keep working; nested lists /
+            // maps inside the fields ARE frozen.
+            Value::Obj(_, fields) => {
+                for (_, val) in fields.borrow().iter() {
+                    self.freeze_walk(val, seen);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    pub fn is_frozen_list(&self, l: &crate::value::ListRef) -> bool {
+        self.frozen.contains(&Self::list_ptr(l))
+    }
+    pub fn is_frozen_map(&self, m: &crate::value::MapRef) -> bool {
+        self.frozen.contains(&Self::map_ptr(m))
+    }
+    fn frozen_stress(what: &str) -> Stress {
+        Stress::new("frozen", format!("cannot modify frozen {}", what))
+    }
+
+    pub fn map_insert(
+        &mut self,
+        m: &crate::value::MapRef,
+        key: Value,
+        val: Value,
+    ) -> Result<(), Stress> {
+        // W05: frozen maps reject writes (catchable `frozen` Stress).
+        if self.is_frozen_map(m) {
+            return Err(Self::frozen_stress("map"));
+        }
         // sec-r5 (F-12): non-scalar keys miss the hash memo and linear-scan
         // deep_eq against every existing key per upsert — quadratic CPU that
         // burned zero fuel (25k list-keyed inserts was a live hang). Charge
@@ -2101,6 +2249,7 @@ impl Interp {
         }
         // dx-r3: memoized upsert (was a linear deep_eq scan)
         m.borrow_mut().insert(key, val);
+        Ok(())
     }
 
     // ------------------------------------------------------- expressions
@@ -2170,7 +2319,7 @@ impl Interp {
                             Value::Str(kv.display())
                         }
                     };
-                    self.map_insert(&m, key, vv);
+                    self.map_insert(&m, key, vv)?;
                 }
                 Ok(Value::Map(m))
             }
@@ -4471,7 +4620,8 @@ impl Interp {
                 let v = self
                     .eval(&self.global.clone(), fexpr)
                     .unwrap_or(Value::Null);
-                self.map_insert(&m, Value::Str(fname.clone()), v);
+                // m is a fresh field store — never frozen; the write cannot fail
+                let _ = self.map_insert(&m, Value::Str(fname.clone()), v);
             }
         }
         let obj = Value::Obj(def.clone(), m.clone());
@@ -4709,6 +4859,9 @@ impl Interp {
             })),
             "push" => {
                 if let (Some(Value::List(l)), Some(v)) = (args.first(), args.get(1)) {
+                    if self.is_frozen_list(l) {
+                        return Err(Self::frozen_stress("list"));
+                    }
                     // sec-r1 (audit C-3): the builtin form MUST be memory-
                     // charged exactly like the method form — an uncharged
                     // growth path is an allocator-abort DoS (rc=134, outside
@@ -4733,11 +4886,19 @@ impl Interp {
                 }
             }
             "pop" => match args.first() {
-                Some(Value::List(l)) => Ok(l.borrow_mut().pop().unwrap_or(Value::Null)),
+                Some(Value::List(l)) => {
+                    if self.is_frozen_list(l) {
+                        return Err(Self::frozen_stress("list"));
+                    }
+                    Ok(l.borrow_mut().pop().unwrap_or(Value::Null))
+                }
                 _ => Err(Stress::new("unfolded", "pop(list) needs a list")),
             },
             "insert" => match (args.first(), args.get(1), args.get(2)) {
                 (Some(Value::List(l)), Some(i), Some(v)) => {
+                    if self.is_frozen_list(l) {
+                        return Err(Self::frozen_stress("list"));
+                    }
                     let idx = self.as_index(i, l.borrow().len())?;
                     let idx = idx.min(l.borrow().len());
                     l.borrow_mut().insert(idx, v.clone());
@@ -4747,6 +4908,9 @@ impl Interp {
             },
             "remove" => match (args.first(), args.get(1)) {
                 (Some(Value::List(l)), Some(i)) => {
+                    if self.is_frozen_list(l) {
+                        return Err(Self::frozen_stress("list"));
+                    }
                     let idx = self.as_index(i, l.borrow().len())?;
                     if idx < l.borrow().len() {
                         Ok(l.borrow_mut().remove(idx))
@@ -4774,6 +4938,9 @@ impl Interp {
             },
             "del" => match (args.first(), args.get(1)) {
                 (Some(Value::Map(m)), Some(k)) => {
+                    if self.is_frozen_map(m) {
+                        return Err(Self::frozen_stress("map"));
+                    }
                     m.borrow_mut().del(k);
                     Ok(Value::Null)
                 }
@@ -7897,7 +8064,7 @@ impl Interp {
                             .map(|(_, tg)| tg.iter().any(|t| t == &target))
                             .unwrap_or(false);
                         if allowed {
-                            self.map_insert(m, Value::Str("#state".into()), Value::Str(target));
+                            self.map_insert(m, Value::Str("#state".into()), Value::Str(target))?;
                             Some(Ok(Value::Bool(true)))
                         } else {
                             self.note(
@@ -8236,6 +8403,9 @@ impl Interp {
                 }
                 "len" => Ok(Value::Int(l.borrow().len() as i64)),
                 "push" => {
+                    if self.is_frozen_list(&l) {
+                        return Err(Self::frozen_stress("list"));
+                    }
                     if let Some(v) = args.first() {
                         // aggregate allocation ceiling (S4 NEW-2) — reg-bio-2
                         // hardening: mirrors the builtin form's real-usage
@@ -8250,7 +8420,12 @@ impl Interp {
                     }
                     Ok(Value::List(l.clone()))
                 }
-                "pop" => Ok(l.borrow_mut().pop().unwrap_or(Value::Null)),
+                "pop" => {
+                    if self.is_frozen_list(&l) {
+                        return Err(Self::frozen_stress("list"));
+                    }
+                    Ok(l.borrow_mut().pop().unwrap_or(Value::Null))
+                }
                 "get" => {
                     // L1a: safe index read with an optional default.
                     let n = l.borrow().len();
@@ -8325,6 +8500,9 @@ impl Interp {
                     }
                 }
                 "del" => {
+                    if self.is_frozen_map(&m) {
+                        return Err(Self::frozen_stress("map"));
+                    }
                     let t = args.first().cloned().unwrap_or(Value::Null);
                     m.borrow_mut().del(&t);
                     Ok(Value::Null)

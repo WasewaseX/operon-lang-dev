@@ -1628,6 +1628,10 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
         Stmt::Let(n, e) => {
             out.push_str(&format!("let {} = {}\n", n, fmt_expr(e)));
         }
+        // W05: const roundtrip (immutable binding, deep-freeze semantics)
+        Stmt::LetConst(n, e) => {
+            out.push_str(&format!("const {} = {}\n", n, fmt_expr(e)));
+        }
         // W01 (L2c): annotated definition roundtrip
         Stmt::LetAnn(n, ann, e) => {
             out.push_str(&format!("let {}: {} = {}\n", n, ann.render(), fmt_expr(e)));
@@ -2393,6 +2397,9 @@ pub struct FixReport {
     /// (rung-2 and rung-3 repair notes on the migrated source).
     pub canonicalized: usize,
     /// `const` → `let` keyword migrations applied at the source level.
+    /// RETIRED (W05 hotfix): `const` is a live immutable binding, so the
+    /// rewrite would change program meaning. Field kept for --json shape
+    /// stability; always 0.
     pub const_to_let: usize,
     /// `expr::field` → `expr.field` migrations applied at the source level
     /// (dx-r3: old tutorials taught the unsupported `::` spelling).
@@ -2430,7 +2437,7 @@ fn migrate_source(src: &str) -> (String, usize, usize) {
     let n = chars.len();
     let mut out = String::with_capacity(src.len() + 16);
     let mut i = 0usize;
-    let mut const_n = 0usize;
+    let const_n = 0usize; // retired migration (W05 hotfix) — kept for report shape, always 0
     let mut sdot_n = 0usize;
 
     while i < n {
@@ -2510,13 +2517,13 @@ fn migrate_source(src: &str) -> (String, usize, usize) {
                 i += 1;
             }
             let word: String = chars[start..i].iter().collect();
-            // migration 1: const → let (W64's first deprecation consumer)
-            if word == "const" {
-                out.push_str("let");
-                const_n += 1;
-            } else {
-                out.push_str(&word);
-            }
+            // W05 hotfix (2026-09-27, red-main r5): `const` is a LIVE keyword
+            // again — immutable binding + deep freeze (SPEC §7 back-compat
+            // note). The W64 const→let migration is RETIRED: rewriting it
+            // unfreezes the binding, which is a MEANING change, and fix is
+            // forbidden from those (fix_corpus law 1). The counter stays in
+            // the report (always 0) so the --json shape never drifts.
+            out.push_str(&word);
             // migration 2: expr::field → expr.field (dx-r3 legacy spelling)
             if i + 1 < n && chars[i] == ':' && chars[i + 1] == ':' {
                 let followed_by_id =

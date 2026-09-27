@@ -561,7 +561,7 @@ phenotype sequence yield operon""".split())
 
 SYNONYMS = {
     "fn": "gene", "func": "gene", "fun": "gene", "def": "gene", "sub": "gene",
-    "lambda": "gene", "proc": "gene", "var": "let", "val": "let", "const": "let",
+    "lambda": "gene", "proc": "gene", "var": "let", "val": "let",
     "foreach": "for", "each": "for", "import": "use", "include": "use",
     "require": "use", "ret": "return", "stop": "break", "next": "continue",
     "skip": "continue", "elseif": "elif",
@@ -778,8 +778,47 @@ class P:
         if word == "gene":
             self.next()
             return self.gene_def([])
+        if word == "const":
+            # W05: `const NAME = expr` — immutable binding with deep-freeze
+            # semantics (mirror of the Rust parser; SPEC §7d).
+            self.next()
+            t = self.peek()
+            if t[0] == "SYM" and t[1] in ("[", "{"):
+                line = self.peek()[2]
+                pat = self.destructure_pat()
+                self.note(line, 4, "const destructuring not supported; bound as mutable let")
+                if self.peek() == ("SYM", "=", self.peek()[2]):
+                    self.next()
+                    e = self.expr()
+                    self.end_stmt()
+                    return ("letpat", pat, e)
+                self.note(self.peek()[2], 4, "destructured 'let' without value binds nulls")
+                self.end_stmt()
+                return ("letpat", pat, ("null",))
+            name = self.ident()
+            t2 = self.peek()
+            if t2[0] == "SYM" and t2[1] == ":":
+                line = t2[2]
+                self.next()
+                self.type_ann()
+                self.note(line, 4, "const type annotation is not checked in v1; dropped")
+            if self.peek() == ("SYM", "=", self.peek()[2]):
+                self.next()
+                e = self.expr()
+                self.end_stmt()
+                return ("const", name, e)
+            self.note(self.peek()[2], 4, "const without '=' binds null")
+            self.end_stmt()
+            return ("const", name, ("null",))
         if word == "let":
             self.next()
+            # W05: contextual `mut` annotation — documentation-only in v2.x;
+            # consumed silently when followed by the real name.
+            t = self.peek()
+            if t[0] == "IDENT" and t[1] == "mut":
+                nxt = self.toks[self.pos + 1] if self.pos + 1 < len(self.toks) else None
+                if nxt is not None and nxt[0] == "IDENT":
+                    self.next()
             t = self.peek()
             # L1a: destructuring definitions
             if t[0] == "SYM" and t[1] in ("[", "{"):
@@ -2480,6 +2519,11 @@ class Interp:
     def __init__(self, cell=None, cli_args=None):
         self.notes = []
         self.cell = cell or {}
+        # W05: frozen-container registry (id() of lists/dicts bound via const).
+        # Frozen-ness does NOT cross the spawn boundary: the reachable ids are
+        # parked for the duration of an inline spawn body (mirror of the Rust
+        # per-worker fresh containers, SPEC §7d).
+        self.frozen_ids = set()
         # W069: importing-entry directory — candidate root #1 for `use`
         # (SPEC §8 resolution table). None until load_file sets it.
         self.base_dir = None
@@ -2648,6 +2692,82 @@ class Interp:
             return False
         target[name] = val
         return True
+
+    # ---- W05: const bindings + deep-freeze registry (mirror of interp.rs) ----
+
+    def is_const(self, env, name):
+        node = env
+        while node is not None:
+            if ("__const__", name) in node:
+                return True
+            node = node.get("__parent__")
+        return False
+
+    def deep_freeze(self, v):
+        seen = set()
+        self._freeze_walk(v, seen)
+
+    def _freeze_walk(self, v, seen):
+        if isinstance(v, list):
+            p = id(v)
+            if p in seen:
+                return
+            seen.add(p)
+            self.frozen_ids.add(p)
+            for item in v:
+                self._freeze_walk(item, seen)
+        elif isinstance(v, dict):
+            p = id(v)
+            if p in seen:
+                return
+            seen.add(p)
+            self.frozen_ids.add(p)
+            for k, val in v.items():
+                self._freeze_walk(k, seen)
+                self._freeze_walk(val, seen)
+
+    def is_frozen(self, v):
+        return isinstance(v, (list, dict)) and id(v) in self.frozen_ids
+
+    @staticmethod
+    def _frozen_stress(what):
+        return Stress("frozen", f"cannot modify frozen {what}")
+
+    def _park_frozen_reachable(self, roots):
+        """Spawn boundary: the Rust worker receives serialized COPIES of the
+        arguments, so no container reachable from an argument is frozen inside
+        the worker. The sequential oracle runs the body inline against the
+        SAME objects — park the reachable ids for the body, restore after."""
+        parked = set()
+        seen = set()
+
+        def walk(v):
+            if isinstance(v, list):
+                if id(v) in seen:
+                    return
+                seen.add(id(v))
+                if id(v) in self.frozen_ids:
+                    parked.add(id(v))
+                    self.frozen_ids.discard(id(v))
+                for item in v:
+                    walk(item)
+            elif isinstance(v, dict):
+                if id(v) in seen:
+                    return
+                seen.add(id(v))
+                if id(v) in self.frozen_ids:
+                    parked.add(id(v))
+                    self.frozen_ids.discard(id(v))
+                for k, val in v.items():
+                    walk(k)
+                    walk(val)
+
+        for r in roots:
+            walk(r)
+        return parked
+
+    def _restore_frozen(self, parked):
+        self.frozen_ids |= parked
 
     def note(self, rung, msg):
         # loop-9 (C8): worker-note prefix parity — the Rust join path tags
@@ -2850,6 +2970,15 @@ class Interp:
         k = s[0]
         if k == "block":
             self.exec_block(self.new_scope(env), s[1])
+        elif k == "const":
+            # W05: immutable binding — deep-freeze + const name marker.
+            _, name, ex = s
+            v = self.eval(env, ex)
+            if name in env:
+                self.note(4, f"rebinding '{name}'")
+            self.deep_freeze(v)
+            env[name] = v
+            env[("__const__", name)] = True
         elif k == "let":
             v = self.eval(env, s[2])
             if s[1] in env:
@@ -2914,6 +3043,11 @@ class Interp:
         elif k == "multi":
             # L1a: multiple assignment / swap — all values evaluated first
             _, targets, values, define = s
+            if not define:
+                # W05: rebinding a const name stresses before any write
+                for t in targets:
+                    if t[0] == "ident" and self.is_const(env, t[1]):
+                        raise Stress("frozen", f"cannot reassign const '{t[1]}'")
             vals = [self.eval(env, v) for v in values]
             if len(vals) < len(targets):
                 self.note(4, "multi-assign: fewer values than targets; the rest bind null")
@@ -2941,6 +3075,8 @@ class Interp:
                         tv = self.eval(env, t[1])
                         iv = self.eval(env, t[2])
                         if isinstance(tv, list):
+                            if self.is_frozen(tv):
+                                raise self._frozen_stress("list")
                             try:
                                 idx = self.as_index(iv, len(tv))
                             except Stress:
@@ -2951,6 +3087,8 @@ class Interp:
                                 tv.append(val)
                                 self.note(4, "index out of range; value appended")
                         elif isinstance(tv, dict):
+                            if self.is_frozen(tv):
+                                raise self._frozen_stress("map")
                             key = iv if isinstance(iv, (str, int, float, bool)) else v_display(iv)
                             tv[key] = val
                         else:
@@ -2960,6 +3098,8 @@ class Interp:
                         if isinstance(tv, ObjInst):
                             tv.fields[t[2]] = val
                         elif isinstance(tv, dict):
+                            if self.is_frozen(tv):
+                                raise self._frozen_stress("map")
                             tv[t[2]] = val
                         else:
                             self.note(4, "member assignment on non-map ignored")
@@ -2968,6 +3108,8 @@ class Interp:
         elif k == "assign":
             _, name, op, ve = s
             v = self.eval(env, ve)
+            if self.is_const(env, name):
+                raise Stress("frozen", f"cannot reassign const '{name}'")
             target = self.find_env(env, name)
             if op is None:
                 if target is None:
@@ -2985,6 +3127,8 @@ class Interp:
             iv = self.eval(env, ie)
             v = self.eval(env, ve)
             if isinstance(tv, list):
+                if self.is_frozen(tv):
+                    raise self._frozen_stress("list")
                 try:
                     idx = self.as_index(iv, len(tv))
                 except Stress:
@@ -2997,6 +3141,8 @@ class Interp:
                     tv.append(nv)
                     self.note(4, "index out of range; value appended")
             elif isinstance(tv, dict):
+                if self.is_frozen(tv):
+                    raise self._frozen_stress("map")
                 cur = None
                 for kk, vv in tv.items():
                     if deep_eq(kk, iv):
@@ -3014,6 +3160,8 @@ class Interp:
                 cur = tv.fields.get(key)
                 tv.fields[key] = self.binop(op, cur, v) if op else v
             elif isinstance(tv, dict):
+                if self.is_frozen(tv):
+                    raise self._frozen_stress("map")
                 cur = tv.get(key)
                 tv[key] = self.binop(op, cur, v) if op else v
             else:
@@ -4575,8 +4723,14 @@ class Interp:
                 sep = v_display(args[0]) if args else ""
                 return sep.join(v_display(x) for x in recv)
             if name == "len": return len(recv)
-            if name == "push": recv.append(args[0]); return recv
-            if name == "pop": return recv.pop() if recv else None
+            if name == "push":
+                if self.is_frozen(recv):
+                    raise self._frozen_stress("list")
+                recv.append(args[0]); return recv
+            if name == "pop":
+                if self.is_frozen(recv):
+                    raise self._frozen_stress("list")
+                return recv.pop() if recv else None
             if name == "get":
                 # L1a: safe index read with an optional default
                 i = args[0] if args else None
@@ -4612,6 +4766,8 @@ class Interp:
                 return None
             if name == "has": return any(deep_eq(k, args[0]) for k in recv.keys())
             if name == "del":
+                if self.is_frozen(recv):
+                    raise self._frozen_stress("map")
                 for k in list(recv.keys()):
                     if deep_eq(k, args[0]):
                         del recv[k]
@@ -4634,13 +4790,21 @@ class Interp:
             self.note(4, "len() of non-container is 0")
             return 0
         if name == "push":
+            if self.is_frozen(args[0]):
+                raise self._frozen_stress("list")
             args[0].append(args[1]); return args[0]
         if name == "pop":
+            if self.is_frozen(args[0]):
+                raise self._frozen_stress("list")
             return args[0].pop() if args[0] else None
         if name == "insert":
+            if self.is_frozen(args[0]):
+                raise self._frozen_stress("list")
             idx = self.as_index(args[1], len(args[0]))
             args[0].insert(min(idx, len(args[0])), args[2]); return args[0]
         if name == "remove":
+            if self.is_frozen(args[0]):
+                raise self._frozen_stress("list")
             idx = self.as_index(args[1], len(args[0]))
             if idx < len(args[0]):
                 return args[0].pop(idx)
@@ -4653,6 +4817,8 @@ class Interp:
             return isinstance(args[0], dict) and any(deep_eq(k, args[1]) for k in args[0].keys())
         if name == "del":
             if isinstance(args[0], dict):
+                if self.is_frozen(args[0]):
+                    raise self._frozen_stress("map")
                 for k in list(args[0].keys()):
                     if deep_eq(k, args[1]):
                         del args[0][k]
@@ -5292,11 +5458,20 @@ class Interp:
                 self.call_counts = {}
                 self.call_clock = 0
                 self.gene_buckets = {}
+                # W05 spawn boundary: the Rust worker receives serialized
+                # COPIES of the arguments (nothing reachable from them is
+                # frozen inside the worker). Park the reachable frozen ids
+                # for the inline body, restore after — byte-parity with the
+                # per-interpreter registry semantics.
+                _parked_frozen = self._park_frozen_reachable(targs)
                 try:
-                    if spawn_name:
-                        result = self.call_named(env, spawn_name, targs)
-                    else:
-                        result = self.call_value(env, callee, targs)
+                    try:
+                        if spawn_name:
+                            result = self.call_named(env, spawn_name, targs)
+                        else:
+                            result = self.call_value(env, callee, targs)
+                    finally:
+                        self._restore_frozen(_parked_frozen)
                 except Stress as st:
                     # W06 (D-014) mirror: a propagated variant IS the worker
                     # gene's return value — converted at the boundary.
