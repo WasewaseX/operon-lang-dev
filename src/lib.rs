@@ -20,6 +20,7 @@ pub mod pybridge;
 pub mod rna2;
 pub mod tools;
 pub mod value;
+pub mod vm;
 
 /// Fatal CLI error: print to stderr and exit with status 2.
 /// Lives here (not in the binary) because tool-layer entry points rely on it.

@@ -695,6 +695,10 @@ pub struct Interp {
     /// W17: one task-id registry per active `scope` block (innermost
     /// last). spawn() registers into the top; scope exit reaps the ids.
     pub scope_stack: Vec<Vec<i64>>,
+    /// W09 A2: the bytecode lane flag (set by --vm) + the shared arenas
+    /// (bridged sub-ASTs and compiled bodies keyed by def pointer).
+    pub vm: bool,
+    pub vm_program: Option<crate::vm::VmProgram>,
     pub seq_tx: Option<mpsc::SyncSender<crate::value::SeqMsg>>,
     /// Process-wide step ceiling shared with every spawned worker: when
     /// present, the run's TOTAL fuel (host + all threads) drains this pool.
@@ -801,6 +805,8 @@ impl Interp {
             task_tombstones: HashMap::new(),
             cancel_suppressed: false,
             scope_stack: Vec::new(),
+            vm: false,
+            vm_program: None,
             seq_tx: None,
             fuel_pool: None,
         }
@@ -867,7 +873,7 @@ impl Interp {
         Ok(Value::Bytes(Rc::new(out)))
     }
 
-    fn tick(&mut self) -> Result<(), Stress> {
+    pub(crate) fn tick(&mut self) -> Result<(), Stress> {
         self.tick_inner(true)?;
         Ok(())
     }
@@ -4677,7 +4683,16 @@ impl Interp {
                 return self.check_ret_ann("gene", &name, &def.ret_ann, &gv, true);
             }
         }
-        let result = self.exec_block(&fenv, &def.body);
+        let result = if self.vm {
+            // W09 A2: the compiled-body path. Param binding, the gate funnel
+            // and guards ran above in the SHARED code; only the body
+            // execution swaps to the stack machine.
+            let key = std::sync::Arc::as_ptr(&def) as *const u8 as usize;
+            let name_for_vm = def.name.clone().unwrap_or_else(|| "<lambda>".into());
+            crate::vm::exec_gene_body(self, key, &name_for_vm, &def.body, &fenv)
+        } else {
+            self.exec_block(&fenv, &def.body)
+        };
         self.close_timing(&name);
         // W06 (D-014): a propagated variant IS the gene's return value — the
         // signal unwinds here and becomes Flow::Ret (never a failure).
@@ -5071,7 +5086,14 @@ impl Interp {
                 });
             }
         }
-        let result = self.exec_block(&fenv, &def.body);
+        let result = if self.vm {
+            // W09 A2: the compiled-body path (see the call_gene_inner site)
+            let key = std::sync::Arc::as_ptr(&def) as *const u8 as usize;
+            let name_for_vm = def.name.clone().unwrap_or_else(|| "<lambda>".into());
+            crate::vm::exec_gene_body(self, key, &name_for_vm, &def.body, &fenv)
+        } else {
+            self.exec_block(&fenv, &def.body)
+        };
         self.close_timing(&name);
         // W06 (D-014): a propagated variant IS the gene's return value — the
         // signal unwinds here and becomes Flow::Ret (never a failure).
@@ -10462,7 +10484,7 @@ pub fn mem_charge(bytes: u64) -> Result<(), Stress> {
 /// large string is a fresh allocation of its full byte size. Copies above
 /// 64 KiB enter the aggregate ceiling; smaller ones stay uncharged so
 /// normal loops (a 50-byte word read a million times) are not taxed.
-fn charge_clone(v: &Value) -> Result<(), Stress> {
+pub(crate) fn charge_clone(v: &Value) -> Result<(), Stress> {
     if let Value::Str(s) = v {
         if s.len() > 64 * 1024 {
             mem_charge(s.len() as u64)?;
