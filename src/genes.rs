@@ -436,8 +436,17 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
     interp.loading.pop();
 
     // Exports: anchor export wins; else all top-level names; TAD insulation.
+    // W24: under `.cell modules.visibility = strict`, a module with pub
+    // marks exports ONLY those names (anchors still win when present);
+    // a strict module with zero pub marks keeps default-open (the
+    // migration path) and notes it once. Default mode: `pub` is inert.
     let has_any_anchor =
         !prog.anchor_exports.is_empty() || prog.tad_exports.iter().any(|(_, e)| !e.is_empty());
+    let strict = interp
+        .cell
+        .get("modules.visibility")
+        .map(|s| s.eq_ignore_ascii_case("strict"))
+        .unwrap_or(false);
     let mut exports: Vec<(Value, Value)> = Vec::new();
     let mut export_set: Vec<String> = prog.anchor_exports.clone();
     for (_, exps) in &prog.tad_exports {
@@ -449,7 +458,40 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
                 exports.push((Value::Str(name.clone()), v));
             }
         }
+    } else if strict && !prog.pub_exports.is_empty() {
+        for name in &prog.pub_exports {
+            if let Some(v) = menv.get(name) {
+                exports.push((Value::Str(name.clone()), v));
+            }
+        }
+        let total = menv
+            .vars
+            .borrow()
+            .iter()
+            .filter(|(k, _)| !k.starts_with('#'))
+            .count();
+        let hidden = total.saturating_sub(exports.len());
+        if hidden > 0 {
+            interp.note(
+                0,
+                4,
+                format!(
+                    "strict visibility: {} private name(s) hidden in '{}' (mark with pub or anchor export)",
+                    hidden, path
+                ),
+            );
+        }
     } else {
+        if strict {
+            interp.note(
+                0,
+                4,
+                format!(
+                    "strict visibility: '{}' has no pub marks — default-open retained (add pub or anchor export)",
+                    path
+                ),
+            );
+        }
         for (k, v) in menv.vars.borrow().iter() {
             if !k.starts_with('#') {
                 exports.push((Value::Str(k.clone()), v.clone()));

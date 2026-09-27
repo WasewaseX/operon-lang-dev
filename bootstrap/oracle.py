@@ -745,6 +745,8 @@ def wobble_keyword(word):
 class P:
     def __init__(self, toks, notes):
         self.toks, self.pos, self.notes = toks, 0, notes
+        # W24: contextual `pub` marker names (top level only)
+        self.pub_names = []
 
     def peek(self):
         return self.toks[self.pos]
@@ -792,6 +794,28 @@ class P:
                 self.note(self.peek()[2], 4, "unmatched '}' skipped")
                 self.next(); continue
             before = self.pos
+            # W24 mirror: contextual `pub` marker — `pub gene` / `pub let` /
+            # `pub const` / `pub phenotype` at TOP LEVEL records the name for
+            # strict-mode export filtering. `pub` is NOT a keyword: an
+            # ordinary identifier named `pub` is untouched (Total Grammar).
+            t = self.peek()
+            if t[0] == "IDENT" and t[1] == "pub":
+                nt = self.toks[self.pos + 1] if self.pos + 1 < len(self.toks) else ("EOF", None, 0)
+                if nt[0] == "IDENT" and nt[1] in ("gene", "let", "const", "phenotype"):
+                    self.next()
+                    s = self.stmt()
+                    if s is not None:
+                        name = None
+                        if s[0] == "gene" and s[1].name:
+                            name = s[1].name
+                        elif s[0] in ("let", "const"):
+                            name = s[1]
+                        elif s[0] == "pheno":
+                            name = s[1].name
+                        if name:
+                            self.pub_names.append(name)
+                        out.append(s)
+                    continue
             s = self.stmt()
             if s is not None:
                 out.append(s)
@@ -2751,7 +2775,8 @@ def parse(src):
     toks, notes = lex(src)
     p = P(toks, notes)
     stmts = p.program()
-    return stmts, p.notes
+    # W24: pub-marked top-level names ride out for strict-mode export filter
+    return stmts, p.notes, p.pub_names
 
 # ----------------------------------------------------------------------------
 # evaluator
@@ -6736,7 +6761,7 @@ class Interp:
             return {}
         src = open(resolved, encoding="utf-8", errors="replace").read()  # W59: explicit UTF-8 (Windows locale default is cp1252)
         self.loading.append(path)
-        stmts, notes = parse(src)
+        stmts, notes, pubs = parse(src)
         for nt in notes:
             self.note(nt.rung, f"[{path}] {nt.message}")
         menv = self.new_scope(self.globals)
@@ -6753,9 +6778,13 @@ class Interp:
             except (Return, BreakLoop, ContinueLoop):
                 pass
         self.loading.pop()
-        # export rule: anchor export wins, else top-level genes/lets
+        # export rule: anchor export wins, else top-level genes/lets.
+        # W24 mirror: under .cell modules.visibility = strict, a module with
+        # pub marks exports ONLY those names (anchors win when present); a
+        # strict module with zero pub marks keeps default-open + a note.
         has_anchor = any(s[0] == "anchor_export" for s in stmts) or \
             any(s[0] == "tad" and any(x[0] == "anchor_export" for x in s[2]) for s in stmts)
+        strict = str(self.cell.get("modules.visibility", "")).lower() == "strict"
         exports = {}
         if has_anchor:
             names = []
@@ -6770,9 +6799,22 @@ class Interp:
                 v = self.lookup(menv, nm)
                 if v is not None or nm in menv:
                     exports[nm] = v
+        elif strict and pubs:
+            for nm in pubs:
+                v = self.lookup(menv, nm)
+                if v is not None or nm in menv:
+                    exports[nm] = v
+            hidden = sum(1 for kk in menv if isinstance(kk, str) and not kk.startswith("#")) - len(exports)
+            if hidden > 0:
+                self.note(4, f"strict visibility: {hidden} private name(s) hidden in '{path}' (mark with pub or anchor export)")
         else:
+            if strict:
+                self.note(4, f"strict visibility: '{path}' has no pub marks — default-open retained (add pub or anchor export)")
             for kk, vv in menv.items():
-                if kk != "__parent__" and not kk.startswith("#"):
+                # W24 fix (latent): tuple keys are internal const markers —
+                # they are never exports (a module with `const` used to crash
+                # this loop; found by the visibility differential fixture).
+                if isinstance(kk, str) and kk != "__parent__" and not kk.startswith("#"):
                     exports[kk] = vv
         self.modules[path] = exports
         return exports
@@ -6913,7 +6955,7 @@ def parse_cell(src):
 
 def apply_rna(src, patch_src, stem):
     applied = []
-    stmts, _ = parse(patch_src)
+    stmts, _, _ = parse(patch_src)
     text = src
     for s in stmts:
         if s[0] == "edit":
@@ -6957,7 +6999,7 @@ def load_file(path, cell=None, variant=None, rna=None, args=None, caps=None):
         for a in applied:
             it.note(1, f"rna edit applied: {a}")
         src = src2
-    stmts, notes = parse(src)
+    stmts, notes, _ = parse(src)
     for nt in notes:
         it.note(nt.rung, nt.message)
     it.ires = [s[1] for s in stmts if s[0] == "ires"]
@@ -7218,7 +7260,7 @@ def main():
             sys.exit(1)
     elif cmd == "check":
         src = open(pos[0], encoding="utf-8", errors="replace").read()  # W59: explicit UTF-8
-        stmts, notes = parse(src)
+        stmts, notes, _ = parse(src)
         score = 100 - sum(1 if n.rung == 2 else (2 if n.rung == 3 else (3 if n.rung == 4 else 0)) for n in notes)
         letter = "A" if score >= 90 else "B" if score >= 80 else "C" if score >= 70 else "D" if score >= 60 else "F"
         print(f"operon check: {pos[0]} — score {max(score, 50)}/100 (grade {letter})")

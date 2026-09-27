@@ -54,6 +54,10 @@ GRANTED_CELL_TARGETS = [
     ("tests/granted/rho_prob.op", "tests/granted/rho_prob.cell"),
     ("tests/granted/rho_queue_shield.op", "tests/granted/rho_queue_shield.cell"),
     ("tests/granted/rho_worker.op", "tests/granted/rho_worker.cell"),
+    # W24: strict visibility — the fixture module exports ONLY pub-marked
+    # names; both engines must agree on what is exported and how private
+    # reads contain (soft tier).
+    ("tests/granted/visibility_strict.op", "tests/granted/visibility_strict.cell"),
 ]
 
 def main():

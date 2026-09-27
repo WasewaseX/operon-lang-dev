@@ -1,0 +1,9 @@
+# W24 fixture module: two pub names, two private names.
+pub gene visible(x) {
+    return x * 2
+}
+pub let VERSION = "1.0"
+gene hidden_helper(x) {
+    return x + 1
+}
+const SECRET = 42

@@ -10,9 +10,9 @@ README/SPEC/BENCH are forbidden — link here instead.
 - **Std modules**: 22 (args, bigint, bio, collections, csv, deque, fmt, fs, heap, iter, json, math, motifs, path, random, seq, serialize, set, strings, testing, time, unicode)
 - **Std functions (.op-level `gene` defs)**: 226
 - **Red-team payload files**: 99
-- **Proof files**: 121 (of 253 test .op files)
-- **Proof run** (bin/operon): 147 files, 115 proofs, 1659 asserts
-- **Differential harness**: 179 match / 0 diverge (0 skipped) · granted lane: 7 cells
+- **Proof files**: 121 (of 257 test .op files)
+- **Proof run** (bin/operon): 149 files, 115 proofs, 1659 asserts
+- **Differential harness**: 182 match / 0 diverge (0 skipped) · granted lane: 9 cells
 - **CLI subcommands**: ast, bench, build, check, crispr, doc, explain, fix, fmt, graph, ir, keywords, lint, profile, repl, rna, run, test, version, watch
 - **LSP methods**: initialize, shutdown, textDocument/completion, textDocument/definition, textDocument/didChange, textDocument/didClose, textDocument/didOpen, textDocument/documentSymbol, textDocument/formatting, textDocument/hover, textDocument/prepareRename, textDocument/publishDiagnostics, textDocument/references, textDocument/rename, textDocument/semanticTokens, textDocument/signatureHelp
 
