@@ -40,6 +40,14 @@ Arithmetic:
 
 - Comments: `#` to end of line. `#!` shebang allowed on line 1.
 - Strings: `"double"`; escapes `\n \t \\ \" \{ \}`; interpolation `"{expr}"` — any expression, evaluated at runtime, `str()`-coerced. No single-quoted strings in canonical form (a `'` in code is a wobble: treated as `"` with a note). **Raw strings** `r"..."` — content verbatim, NO escape processing, NO interpolation (newlines allowed). **Multiline strings** `"""..."""` — escapes and interpolation processed, quotes (`"` / `""`) allowed inside, content verbatim (no implicit indent stripping; `operon fmt` may normalize later). Byte strings `b"..."` arrive with the bytes type (W029).
+- **Byte vs char vs grapheme indexing (W28, SPEC §3)** — one table, both engines:
+  | unit | what it is | where it applies |
+  |---|---|---|
+  | byte | one UTF-8 byte | `byte_width` (std/unicode) reports the UTF-8 size; raw byte access arrives with the bytes type (W029) |
+  | char | one Unicode scalar value (Rust `char` / Python str code point) | `len(str)`, `s[i]`, `s.slice(i,j)`, `char_at(s,i)`, `char_slice(s,i,j)`, `ord`, `for c in s` — ALL string indexing is char-indexed, on BOTH cores (pinned by tests/unicode.op, tests/differential/unicode.op) |
+  | grapheme | one user-perceived character | `grapheme_len(s)` over a DOCUMENTED subset (no external deps): base + combining marks (U+0300–036F, U+1AB0–1AFF, U+1DC0–1DFF, U+20D0–20FF, U+FE20–FE2F), ZWJ (U+200D) glues the previous and following char, regional-indicator pairs (flags) are one cluster; a lone RI is its own cluster |
+  Example: `"👨‍👩‍👧"` is 5 chars / 1 grapheme; `"🇺🇸"` is 2 chars / 1 grapheme; `"日本語"` is 3 chars / 6 UTF-8 bytes / 3 graphemes.
+  **Case folding**: `fold_case(s)` implements a documented SUBSET — ASCII A–Z, Latin-1 Supplement (À–Ö, Ø–Þ), Latin Extended-A (U+0100–U+0137 even→odd), Greek (U+0391–U+03A9, full-range monotone; no final-sigma context rule). Everything else is unchanged. The identical table logic runs in both engines (byte-identical output); full Unicode case folding / normalization is a later stage of W28 and is NOT claimed by `fold_case`.
 - Identifiers `[A-Za-z_][A-Za-z0-9_]*`.
 - Numbers: `42`, `3.14`, `1e3` (float). Negative via unary minus. Radix forms `0xFF`, `0b101010`, `0o755` (case-insensitive prefix; canonical value is the same Int). `_` digit separators allowed inside any numeric literal (`1_000_000`, `0xFF_FF`, `1_000.5`) and are stripped before parsing — the printed value is unaffected (canonical form stays decimal). A radix prefix with no valid digit after it lexes as decimal `0` followed by identifiers (`0x` → `0`, `x`). Out-of-range literals keep the existing saturate-to-0 note contract (f0fe2ec).
 - Newlines terminate statements; `;` allowed and ignored (also `;;`, stray). Blocks are `{ ... }`.
