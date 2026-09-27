@@ -116,6 +116,14 @@ window.PLAYGROUND_EXAMPLES = [
     "expected": "points: 10000  inside circle: 7797\nestimate: pi ~= 3.1188"
   },
   {
+    "name": "option_pipeline",
+    "title": "option_pipeline",
+    "teaches": "expected failures as VALUES (not exceptions): constructors,",
+    "code": "# ============================================================\n# Option pipeline  \u2014 cookbook #19\n# you already know: Result/Option error handling from Rust/Swift\n# teaches: expected failures as VALUES (not exceptions): constructors,\n#          ?! propagation up a call chain, unwrap_or defaults, and the\n#          boundary where unwrap's stress belongs (programmer bugs only)\n# run: operon run examples/cookbook/option_pipeline.op\n# expected output: examples/cookbook/expected/option_pipeline.out\n# verified by scripts/cookbook.sh on the Rust core AND the Python oracle\n# ============================================================\n# A tiny \"config lookup\" layer: find_user returns a Result, get_pref an Option.\n# Option = \"the value may be absent\" \u00b7 Result = \"it may fail with a reason\".\ngene find_user(db, name) {\n    if (not has(db, name)) {\n        return err(\"no user '\" + name + \"'\")\n    }\n    return ok(db[name])\n}\ngene get_pref(user, key) {\n    let prefs = user[\"prefs\"]\n    if (not has(prefs, key)) {\n        return none()\n    }\n    return some(prefs[key])\n}\n# ?! propagates the failure up: find_user's Err IS theme_of's return value,\n# and get_pref's none() unwinds too \u2014 no if-chains anywhere.\ngene theme_of(db, name) {\n    let user = find_user(db, name)?!\n    let theme = get_pref(user, \"theme\")?!\n    return ok(\"theme=\" + theme)\n}\n# The boundary decides: unwrap_or for a default; is_ok/unwrap where the\n# caller wants the reason. Propagation is a return, so rescue never sees it.\ngene render(db, name) {\n    let r = theme_of(db, name)\n    if (is_ok(r)) {\n        return unwrap(r)\n    }\n    let fallback = get_pref(find_user(db, \"public\")?!, \"theme\")\n    return \"theme=\" + unwrap_or(fallback, \"light\")\n}\nlet db = {\n    \"alice\": {\"prefs\": {\"theme\": \"dark\"}},\n    \"public\": {\"prefs\": {\"theme\": \"light\"}}\n}\nprint(render(db, \"alice\"))\nprint(render(db, \"ghost\"))\ndb[\"public\"][\"prefs\"][\"theme\"] = \"solarized\"\nprint(render(db, \"ghost\"))\n",
+    "verified": false,
+    "expected": "theme=dark\ntheme=light\ntheme=solarized"
+  },
+  {
     "name": "primes",
     "title": "primes",
     "teaches": "boolean-list sieves, break/continue-free control flow,",
