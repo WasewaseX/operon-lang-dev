@@ -476,6 +476,8 @@ pub struct Interp {
     /// alive (and the walk's membership stable) for the interpreter's life.
     pub frozen: std::collections::HashSet<usize>,
     pub frozen_keep: Vec<Value>,
+    /// W04: trait registry — declared traits by name (last wins).
+    pub traits: HashMap<String, Arc<crate::ast::TraitDef>>,
     pub cell: HashMap<String, String>,
     pub cell_entry: Option<String>,
     pub base_dir: Option<String>,
@@ -730,6 +732,7 @@ impl Interp {
             methyl_noted: std::collections::HashSet::new(),
             frozen: std::collections::HashSet::new(),
             frozen_keep: Vec::new(),
+            traits: HashMap::new(),
             methyl_levels: HashMap::new(),
             methyl_threshold: 3,
             asserts_run: 0,
@@ -1809,6 +1812,15 @@ impl Interp {
             }
             Stmt::Pheno(def) => {
                 self.phenos.insert(def.name.clone(), def.clone());
+                Ok(Flow::Norm)
+            }
+            Stmt::Trait(t) => {
+                // W04: trait registry — last declaration wins (mirrors
+                // phenotype redefinition); a note marks the replacement.
+                if self.traits.contains_key(&t.name) {
+                    self.note(0, 4, format!("redefining trait '{}'", t.name));
+                }
+                self.traits.insert(t.name.clone(), t.clone());
                 Ok(Flow::Norm)
             }
             Stmt::Seq(def) => {
@@ -4645,6 +4657,43 @@ impl Interp {
             }
         }
         let obj = Value::Obj(def.clone(), m.clone());
+        // W04: trait contract check — for each implemented trait, every
+        // REQUIRED method must be provided by the phenotype's lineage.
+        // Total Grammar: a contract break is a NOTE (the instance is still
+        // built; a missing method call wobbles per §9 rules).
+        for tname in &def.implements {
+            match self.traits.get(tname).cloned() {
+                None => {
+                    self.note(
+                        0,
+                        4,
+                        format!(
+                            "trait '{}' not declared; contract on '{}' ignored",
+                            tname, def.name
+                        ),
+                    );
+                }
+                Some(t) => {
+                    for req in t.methods.iter().filter(|mm| mm.required) {
+                        let provided = chain.iter().any(|d| {
+                            d.methods
+                                .iter()
+                                .any(|g| g.name.as_deref() == Some(&req.name))
+                        });
+                        if !provided {
+                            self.note(
+                                0,
+                                4,
+                                format!(
+                                    "phenotype '{}' implements '{}' but does not provide '{}()'",
+                                    def.name, tname, req.name
+                                ),
+                            );
+                        }
+                    }
+                }
+            }
+        }
         // constructor: own init, else nearest ancestor's
         for d in chain.iter().rev() {
             if let Some(init) = d.methods.iter().find(|g| g.name.as_deref() == Some("init")) {
@@ -8573,6 +8622,21 @@ impl Interp {
                     if let Some(g) = d.methods.iter().find(|g| g.name.as_deref() == Some(name)) {
                         let obj = Value::Obj(def.clone(), fields.clone());
                         return self.call_method_gene(g.clone(), obj, args);
+                    }
+                }
+                // W04: trait default methods — implemented traits in
+                // declaration order; the first default body with a matching
+                // name runs with `self` bound to this instance (virtual:
+                // a `self.x()` call inside it dispatches back through the
+                // phenotype's own methods first).
+                for tname in def.implements.iter() {
+                    if let Some(t) = self.traits.get(tname) {
+                        if let Some(m) = t.methods.iter().find(|mm| mm.name == name) {
+                            if let Some(g) = &m.default {
+                                let obj = Value::Obj(def.clone(), fields.clone());
+                                return self.call_method_gene(g.clone(), obj, args);
+                            }
+                        }
                     }
                 }
                 // fall back to field access as a zero-arg call

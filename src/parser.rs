@@ -15,6 +15,7 @@ use crate::lexer::{lex, Tok};
 pub(crate) const KEYWORDS: &[&str] = &[
     "gene",
     "let",
+    "trait",
     "if",
     "elif",
     "else",
@@ -230,6 +231,7 @@ fn collect_structure(prog: &mut Program) {
                         match t {
                             Stmt::AnchorExport(names) => exports.extend(names.clone()),
                             Stmt::Let(n, _) => members.push(n.clone()),
+                            Stmt::Trait(tr) => members.push(tr.name.clone()),
                             Stmt::Gene(g) => {
                                 if let Some(n) = &g.name {
                                     members.push(n.clone())
@@ -643,6 +645,7 @@ impl Parser {
         const ARMS: &[&str] = &[
             "gene",
             "let",
+            "trait",
             "if",
             "ifnot",
             "elif",
@@ -726,6 +729,136 @@ impl Parser {
                 let doc = self.take_doc(l);
                 self.next();
                 Some(self.parse_gene_def(vec![], 1, None, None, doc))
+            }
+            "trait" => {
+                // W04 (SPEC §8b): `trait Name { gene m(); gene n() { ... } }`.
+                // A method with a body is a DEFAULT (parsed by the normal
+                // gene parser); one without is REQUIRED (semicolon or
+                // newline terminates it).
+                let l = self.line();
+                let doc = self.take_doc(l);
+                self.next();
+                let name = self.expect_ident()?;
+                let mut methods: Vec<TraitMethod> = Vec::new();
+                if matches!(self.peek(), Tok::LBrace) {
+                    self.next();
+                    loop {
+                        self.eat_newlines();
+                        match self.peek().clone() {
+                            Tok::RBrace => {
+                                self.next();
+                                break;
+                            }
+                            Tok::Eof => {
+                                let ln = self.line();
+                                self.note(ln, 4, "trait body auto-closed at EOF");
+                                break;
+                            }
+                            Tok::Ident(w) if w == "gene" || synonym(&w) == Some("gene") => {
+                                let mline = self.line();
+                                self.next();
+                                let mname = self.expect_ident().unwrap_or_default();
+                                let mut params: Vec<String> = Vec::new();
+                                if matches!(self.peek(), Tok::LParen) {
+                                    self.next();
+                                    loop {
+                                        self.eat_newlines_inline();
+                                        match self.peek().clone() {
+                                            Tok::RParen => {
+                                                self.next();
+                                                break;
+                                            }
+                                            Tok::Ident(p) => {
+                                                self.next();
+                                                params.push(p);
+                                                // optional default value (doc-only
+                                                // in a signature; ignored with a
+                                                // note if present)
+                                                if matches!(self.peek(), Tok::Eq) {
+                                                    self.next();
+                                                    let _ = self.parse_expr();
+                                                }
+                                                if matches!(self.peek(), Tok::Comma) {
+                                                    self.next();
+                                                }
+                                            }
+                                            Tok::Comma => {
+                                                self.next();
+                                            }
+                                            other => {
+                                                let ln = self.line();
+                                                self.note(
+                                                    ln,
+                                                    4,
+                                                    format!(
+                                                        "unexpected {:?} in trait method params; skipped",
+                                                        other
+                                                    ),
+                                                );
+                                                self.next();
+                                            }
+                                        }
+                                    }
+                                }
+                                if matches!(self.peek(), Tok::LBrace) {
+                                    // default method: body parsed HERE — the
+                                    // head (name + params) was already
+                                    // consumed manually above, so parse_gene_def
+                                    // would mis-parse from the brace.
+                                    let body = self.parse_block().unwrap_or_default();
+                                    methods.push(TraitMethod {
+                                        name: mname.clone(),
+                                        line: mline,
+                                        required: false,
+                                        default: Some(std::sync::Arc::new(GeneDef {
+                                            name: Some(mname),
+                                            line: mline,
+                                            doc: vec![],
+                                            params: params
+                                                .iter()
+                                                .map(|p| (p.clone(), None))
+                                                .collect(),
+                                            guard: None,
+                                            body,
+                                            acetylate: false,
+                                            methylate: false,
+                                            m6a: false,
+                                            copies: 1,
+                                            seq: false,
+                                            riboswitch: None,
+                                            burst: None,
+                                            param_anns: vec![],
+                                            ret_ann: None,
+                                        })),
+                                    });
+                                } else {
+                                    // required method: `;` or newline
+                                    self.end_stmt();
+                                    methods.push(TraitMethod {
+                                        name: mname,
+                                        line: mline,
+                                        required: true,
+                                        default: None,
+                                    });
+                                }
+                            }
+                            _ => {
+                                let ln = self.line();
+                                self.note(ln, 4, "unexpected token in trait body; skipped");
+                                self.next();
+                            }
+                        }
+                    }
+                } else {
+                    let ln = self.line();
+                    self.note(ln, 4, "trait without body declares no methods");
+                }
+                Some(Stmt::Trait(std::sync::Arc::new(TraitDef {
+                    name,
+                    line: l,
+                    doc,
+                    methods,
+                })))
             }
             "const" => {
                 // W05: `const NAME = expr` — immutable binding with deep-freeze
@@ -2061,6 +2194,23 @@ impl Parser {
                     self.next();
                     parent = Some(self.expect_ident().unwrap_or_default());
                 }
+                // W04: optional `implements A, B, C` — the trait contract.
+                // Contextual word (not a keyword): an ident named implements
+                // elsewhere is untouched.
+                let mut implements = Vec::new();
+                if self.at_kw("implements") {
+                    self.next();
+                    loop {
+                        if let Some(t) = self.expect_ident() {
+                            implements.push(t);
+                        }
+                        if matches!(self.peek(), Tok::Comma) {
+                            self.next();
+                            continue;
+                        }
+                        break;
+                    }
+                }
                 let mut fields = Vec::new();
                 let mut methods = Vec::new();
                 if matches!(self.peek(), Tok::LBrace) {
@@ -2157,6 +2307,7 @@ impl Parser {
                     line: pheno_line,
                     doc: pheno_doc,
                     parent,
+                    implements,
                     fields,
                     methods,
                 })))

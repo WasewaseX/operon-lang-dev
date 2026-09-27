@@ -1368,6 +1368,17 @@ fn rewrite_stmt(s: &mut Stmt, cfg: &mut RewriteCfg) {
                 rewrite_stmts(&mut g.body, cfg);
             }
         }
+        // W04: trait default bodies are ordinary gene bodies — rewrite them;
+        // required methods have no body.
+        Stmt::Trait(t) => {
+            let td = Arc::make_mut(t);
+            for m in td.methods.iter_mut() {
+                if let Some(g) = &mut m.default {
+                    let gd = Arc::make_mut(g);
+                    rewrite_stmts(&mut gd.body, cfg);
+                }
+            }
+        }
         Stmt::Yield(Some(e)) => rewrite_expr(e, cfg),
         Stmt::Edit(..)
         | Stmt::Use(..)
