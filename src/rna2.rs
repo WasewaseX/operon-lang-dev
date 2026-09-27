@@ -1269,9 +1269,11 @@ fn rewrite_expr(e: &mut Expr, cfg: &mut RewriteCfg) {
 
 fn rewrite_stmt(s: &mut Stmt, cfg: &mut RewriteCfg) {
     match s {
-        Stmt::Let(_, e) | Stmt::Assign(_, _, e) | Stmt::Return(Some(e)) | Stmt::ExprStmt(e) => {
-            rewrite_expr(e, cfg)
-        }
+        Stmt::Let(_, e)
+        | Stmt::LetConst(_, e)
+        | Stmt::Assign(_, _, e)
+        | Stmt::Return(Some(e))
+        | Stmt::ExprStmt(e) => rewrite_expr(e, cfg),
         Stmt::LetAnn(_, ann, e) => {
             rewrite_ann(ann, cfg);
             rewrite_expr(e, cfg);

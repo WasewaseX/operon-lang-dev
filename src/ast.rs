@@ -335,6 +335,11 @@ pub enum Pat {
 #[derive(Debug, Clone)]
 pub enum Stmt {
     Let(String, Expr),
+    /// W05: `const NAME = expr` — an immutable binding. The bound value is
+    /// deep-frozen (lists/maps inside it can never be mutated — mutation
+    /// raises a catchable `frozen` Stress), and the NAME can never be
+    /// reassigned (rebinding defines anew; assignment is the `frozen` stress).
+    LetConst(String, Expr),
     /// W01 (L2c): annotated definition — `let n: int = 3`. The annotation is
     /// checked when the statement binds (mismatch = catchable `unfolded`
     /// Stress, SPEC §7a); the binding itself is an ordinary `let`.
