@@ -665,6 +665,9 @@ All features are real, implemented, tested — none are decorative.
 
 ## 15. Toolchain (Rust binary `operon`)
 
+- **`operon debug f.op --break N` (W08 phase 1)**: a statement-level trap in the tree-walk interpreter with a REPL on break: `c`/`continue` resumes, `s`/`step` breaks after the next statement, `p EXPR` evaluates in the current frame (same notes and stresses as a run), `vars` dumps the frame chain (values display-truncated), `bt` prints the call chain, `q` leaves with exit 0. EOF on stdin resumes to completion, so piped sessions are scriptable and never wedge. Workers are separate interpreters and never break. VM-offset breakpoints (DAP adapter, phase 2) are deferred to the A-track.
+
+
 - **`--vm` (W09 A2)**: run with gene bodies executed by the OIR1 bytecode machine (src/vm.rs; docs/vm-design.md §2a). Calls, the gate funnel, capabilities, notes and stress kinds are SHARED code, so output is byte-identical to the tree-walk by construction; the differential harness runs every corpus target on both engines against the oracle (the `--vm` lane must stay all-green). `operon ir f.op` prints the OIR1 listing (W10 stage 1; the disassembly of one compiled function is pinned by a unit test).
 
 
