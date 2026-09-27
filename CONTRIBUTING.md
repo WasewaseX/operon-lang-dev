@@ -215,6 +215,35 @@ Rules of the chain:
   SPEC: a SPEC sentence describing deterministic output should be able to name
   the differential/proof program that pins it.
 
+### 8b. The two-track SPEC rule (W091)
+
+SPEC.md and the biology documents are TWO tracks with ONE boundary, and the
+boundary is enforced at review:
+
+- **Language track** — SPEC.md (all sections). What the program DOES: syntax,
+  semantics, gates, clamps, knobs, entropy. A change here asserts behavior and
+  needs evidence (proof / differential / cargo test as applicable; oracle
+  parity where semantics are mirrored).
+- **Modeling track** — `docs/spec/MODELING-NOTES.md` and
+  `docs/spec/BIO-CONTRACT.md`. What a mechanism APPROXIMATES biologically:
+  rationale, term audits, not-modeled lists, honesty grades. A change here
+  must not alter behavior by construction; docs checks are the only gates.
+
+Enforcement:
+
+1. A PR touching `src/`, `bootstrap/oracle.py`, or `tests/` can never be
+   labeled "docs only" — the lane check rejects the label, not the reverse.
+2. A PR mixing the tracks must label which hunks are which. A bio-analogy
+   rewording riding silently inside a language PR (or a behavior change riding
+   silently inside a modeling PR) is a review FAIL.
+3. The `[MN-*]` markers in SPEC §11 and the §16 stub are load-bearing:
+   `scripts/check_docs_sync.py` fails when SPEC stops linking
+   `docs/spec/MODELING-NOTES.md`, and the old §16 table is a FORBIDDEN
+   pattern in SPEC (it lives in the modeling track now).
+4. Mechanism prose extracted to the modeling track keeps its provenance IDs
+   (reg-bio, C1…C11, A1…A7, F-1…F-8); the SPEC marker and the appendix
+   heading must share the key (`[MN-telegraph]` ↔ `### MN-telegraph`).
+
 ---
 
 ## 9. Security and capability model

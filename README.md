@@ -131,7 +131,7 @@ operon check: bad.op — score 94/100 (grade A)
 
 ## The gene-expression regulation layer
 
-Real mechanisms, real semantics — the professor-level feature set (fidelity is per-row; SPEC §16 carries the term audits):
+Real mechanisms, real semantics — the professor-level feature set (fidelity is per-row; docs/spec/BIO-CONTRACT.md grades every mechanism, docs/spec/MODELING-NOTES.md carries the term audits):
 
 | mechanism | feature |
 |---|---|
