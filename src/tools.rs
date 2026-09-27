@@ -55,6 +55,11 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
     interp.base_dir = std::path::Path::new(file)
         .parent()
         .map(|p| p.to_string_lossy().to_string());
+    // W19/W23: vendored dependency roots — when an operon.lock sits beside
+    // the program (or in the CWD), its resolved packages join the module
+    // resolution chain as root 7 (SPEC §8 table), so `use my-lib/…` runs
+    // offline from the vendored cache.
+    crate::pkg::apply_lock(&mut interp);
 
     // methylation layer: CLI --cell, else operon.cell auto-detect.
     // SECURITY POLICY: an auto-detected cell config may configure entry/

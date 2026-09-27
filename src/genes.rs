@@ -357,7 +357,16 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
     }
     let managed = under(&rc_resolved, &interp.base_dir)
         || under(&rc_resolved, &cwd)
-        || is_std_tree(&rc_resolved, &std_env);
+        || is_std_tree(&rc_resolved, &std_env)
+        // W19/W23: a vendored dependency from the lockfile is a runtime-
+        // managed tree too — the operator resolved + installed it (operon
+        // mod add/install), so it imports under default-deny exactly like
+        // std/; an arbitrary cache dir never appears here (the mapping is
+        // name → pinned rev dir from the checked-in lockfile).
+        || interp
+            .lock_dirs
+            .iter()
+            .any(|(_, d)| under(&rc_resolved, &Some(d.clone())));
     if !managed && interp.caps.enabled {
         if let Err(s) = interp.caps.check(&interp.caps.read, "read", &resolved) {
             // sec-r1 (audit C-7): keep the policy message for direct grants
@@ -589,6 +598,26 @@ fn resolve_path(interp: &Interp, path: &str) -> Result<String, String> {
             .clone()
             .map(|d| std::path::PathBuf::from(d).join(&p)),
     );
+    // W19/W23 (root 7): the vendored dependency cache from operon.lock.
+    // A lock entry `name -> dir` resolves the leading path segment: with
+    // lock entry (my-lib, ~/.operon/deps/my-lib-abc123), `use my-lib/util`
+    // tries <dir>/util.op (and bare `use my-lib` → <dir>/my-lib.op... the
+    // module's own root). Deterministic: the lock pins name→rev→dir, no
+    // globbing, and the standard roots above win first (a local checkout
+    // shadows the vendored copy — the developer's-tree-first rule).
+    for (dep_name, dep_dir) in &interp.lock_dirs {
+        let seg = format!("{}/", dep_name);
+        let tail: Option<String> = if p == format!("{}.op", dep_name) {
+            Some(format!("{}.op", dep_name))
+        } else if p.starts_with(&seg) {
+            Some(p[seg.len()..].to_string())
+        } else {
+            None
+        };
+        if let Some(t) = tail {
+            candidates.push(Some(std::path::PathBuf::from(dep_dir).join(t)));
+        }
+    }
     // W070: per-root attempt detail for the PLAIN name class only. The
     // traversal class keeps its unified C-7 message — attempted-root detail
     // for outside paths would resurrect the existence oracle C-7 removed.
