@@ -1,0 +1,26 @@
+# differential: W03 stage 1 — callable-generic std APIs, byte-identical
+# on both engines (one map/filter/fold/sort/group_by for every type).
+use std/iter;
+use std/collections;
+
+gene main() {
+    let nums = [3, 1, 2]
+    let strs = ["a", "bb", "ccc"]
+    let double = gene (x) => x + x
+    print(iter.map(nums, gene (x) => x * 2))
+    print(iter.map(strs, gene (s) => len(s)))
+    print(iter.map(nums, double))
+    print(iter.map(strs, double))
+    print(iter.filter(nums, gene (x) => x > 1))
+    print(iter.fold(nums, 0, gene (acc, x) => acc + x))
+    print(iter.fold(strs, "", gene (acc, s) => acc + s))
+    print(iter.sort_by_key(strs, gene (s) => len(s)))
+    print(collections.group_by(nums, gene (x) => x % 2))
+    print(iter.map([1, "x", [2]], gene (v) => type(v)))
+    print(iter.map([1, 2], gene (x) => x.missing()))
+    stress {
+        print(iter.map(nums, gene (x) => x + "s"))
+    } rescue (e) {
+        print("stress[", e.kind, "] contained")
+    }
+}
