@@ -24,13 +24,13 @@
  "harness": {
   "diverge": 0,
   "granted_cells": 10,
-  "match": 184,
+  "match": 187,
   "skipped": 0
  },
  "keyword_analogy_pending": [
   "trait"
  ],
- "keyword_count": 59,
+ "keyword_count": 60,
  "keywords": [
   "activates",
   "anchor",
@@ -76,6 +76,7 @@
   "repressilator",
   "rescue",
   "return",
+  "scope",
   "self",
   "sequence",
   "silence",
@@ -110,14 +111,14 @@
   "textDocument/semanticTokens",
   "textDocument/signatureHelp"
  ],
- "proof_files": 123,
+ "proof_files": 125,
  "proof_totals": {
-  "asserts": 1659,
-  "files": 150,
-  "proofs": 115,
+  "asserts": 1666,
+  "files": 152,
+  "proofs": 116,
   "source": "bin/operon"
  },
- "redteam_files": 100,
+ "redteam_files": 101,
  "spec": {
   "h1": "# Operon \u2014 Language Specification",
   "status": "v2.3.0-dev"
@@ -214,6 +215,6 @@
    "module": "unicode"
   }
  ],
- "test_op_files": 261,
+ "test_op_files": 265,
  "version": "2.2.0"
 }

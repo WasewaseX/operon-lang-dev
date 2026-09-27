@@ -20,6 +20,7 @@ KEYWORD_ANALOGY = {
     "gene": "named function (def)", "let": "variable binding",
     "if": "conditional", "elif": "else-if branch", "else": "fallback branch",
     "while": "condition loop", "loop": "infinite loop (break to exit)",
+    "scope": "structured-concurrency block (children joined at exit)",
     "for": "iteration", "in": "membership / loop binder", "return": "exit with value",
     "break": "leave loop", "continue": "next iteration",
     "match": "pattern switch", "case": "match arm", "use": "import module",

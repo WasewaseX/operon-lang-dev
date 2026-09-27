@@ -457,7 +457,45 @@ call them like any function.
 like `allow.read`). **`.rna` files** are scripted text patches applied before a run — handy
 for mechanical edits across many programs. Both are plain text; see SPEC §9 for their keys.
 
-## 11. Where to go next
+## 11. Concurrency: spawn, cancel, and scope
+
+Operon tasks are real OS threads. `spawn(gene, args)` starts one and returns a task id;
+`join(id)` waits for the result:
+
+```
+gene slow(n) {
+    run("sleep", 50)        # needs a run grant; see the capability sandbox
+    return n * n
+}
+let t = spawn(slow, [12])
+print(join(t))              # 144
+```
+
+Stress inside a worker never crashes anything: it comes back from `join` as a map
+`{kind, message}`. Tasks talk by arguments and results, never by shared mutable state,
+so there are no data races by construction.
+
+**Cancel a task** with `cancel(id)`. Cancellation is cooperative: the worker notices at
+its next fuel tick and dies with a catchable `cancelled` stress. A worker that wants to
+clean up runs its body inside `stress { } rescue (e) { }` and decides its own exit when
+the cancellation arrives. `task_state(id)` answers `"running"`, `"done"`, or
+`"cancelled"` without joining, and `cancelled()` lets a worker (or its descendants, which
+inherit the flag) poll the live request. Nothing is preempted, ever.
+
+**Structure your tasks with `scope`.** A `scope { }` block joins everything spawned
+inside it when the block exits, in spawn order, on every exit path. If the body raises,
+the children are asked to stop first (cancel-on-error), the reap still happens, and then
+the original stress propagates to your rescue. No orphaned threads, no bookkeeping:
+
+```
+scope {
+    let a = spawn(fetch, ["x"])
+    let b = spawn(fetch, ["y"])
+    # ... either both are reaped here, or a failure cancels and reaps both
+}
+```
+
+## 12. Where to go next
 
 - **Read the standard library**: `std/*.op` — six small modules, all Operon.
 - **Read the proof suite**: `tests/` — 50 files, every language behavior asserted.

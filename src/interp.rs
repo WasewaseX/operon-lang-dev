@@ -692,6 +692,9 @@ pub struct Interp {
     /// explicit `cancelled()` poll keeps reading the real chain. The step
     /// budget and fuel pool still apply, so a handler cannot spin forever.
     pub cancel_suppressed: bool,
+    /// W17: one task-id registry per active `scope` block (innermost
+    /// last). spawn() registers into the top; scope exit reaps the ids.
+    pub scope_stack: Vec<Vec<i64>>,
     pub seq_tx: Option<mpsc::SyncSender<crate::value::SeqMsg>>,
     /// Process-wide step ceiling shared with every spawned worker: when
     /// present, the run's TOTAL fuel (host + all threads) drains this pool.
@@ -797,6 +800,7 @@ impl Interp {
             cancel_chain: Vec::new(),
             task_tombstones: HashMap::new(),
             cancel_suppressed: false,
+            scope_stack: Vec::new(),
             seq_tx: None,
             fuel_pool: None,
         }
@@ -1432,6 +1436,38 @@ impl Interp {
                     }
                 }
                 Ok(Flow::Norm)
+            }
+            Stmt::Scope(body) => {
+                // W17: structured concurrency. Tasks spawned inside the
+                // block register on this scope and are reaped at block
+                // exit on every flow path. cancel-on-error (default on,
+                // .cell `scope.cancel_on_error = off` to disable) asks the
+                // children to stop before reaping when the block unwinds
+                // by stress; the stress itself still propagates after the
+                // reap, so the caller's rescue sees the original failure.
+                self.scope_stack.push(Vec::new());
+                let child = Env::new(Some(env.clone()));
+                let ran = self.exec_block(&child, body);
+                let ids = self.scope_stack.pop().unwrap_or_default();
+                if ran.is_err() {
+                    let cancel_on_err = self
+                        .cell
+                        .get("scope.cancel_on_error")
+                        .map(|v| v != "off")
+                        .unwrap_or(true);
+                    if cancel_on_err {
+                        for id in &ids {
+                            let _ = crate::genes::cancel_task(self, vec![Value::Int(*id)]);
+                        }
+                    }
+                }
+                for id in &ids {
+                    let _ = crate::genes::join_task(self, *id, None);
+                }
+                match ran? {
+                    Flow::Norm => Ok(Flow::Norm),
+                    other => Ok(other),
+                }
             }
             Stmt::For(name, iter, body) => {
                 let itv = self.eval(env, iter)?;

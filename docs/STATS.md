@@ -5,14 +5,14 @@ Validated by `scripts/check_docs_sync.py`. Hand-typed numbers in
 README/SPEC/BENCH are forbidden — link here instead.
 
 - **Version**: 2.2.0  · SPEC Status: v2.3.0-dev
-- **Keywords (parser reserved set)**: 59 — table in [KEYWORDS.md](KEYWORDS.md)
+- **Keywords (parser reserved set)**: 60 — table in [KEYWORDS.md](KEYWORDS.md)
   - analogy pending: trait
 - **Std modules**: 22 (args, bigint, bio, collections, csv, deque, fmt, fs, heap, iter, json, math, motifs, path, random, seq, serialize, set, strings, testing, time, unicode)
 - **Std functions (.op-level `gene` defs)**: 226
-- **Red-team payload files**: 100
-- **Proof files**: 123 (of 261 test .op files)
-- **Proof run** (bin/operon): 150 files, 115 proofs, 1659 asserts
-- **Differential harness**: 184 match / 0 diverge (0 skipped) · granted lane: 10 cells
+- **Red-team payload files**: 101
+- **Proof files**: 125 (of 265 test .op files)
+- **Proof run** (bin/operon): 152 files, 116 proofs, 1666 asserts
+- **Differential harness**: 187 match / 0 diverge (0 skipped) · granted lane: 10 cells
 - **CLI subcommands**: ast, bench, build, check, crispr, doc, explain, fix, fmt, graph, ir, keywords, lint, profile, repl, rna, run, test, version, watch
 - **LSP methods**: initialize, shutdown, textDocument/completion, textDocument/definition, textDocument/didChange, textDocument/didClose, textDocument/didOpen, textDocument/documentSymbol, textDocument/formatting, textDocument/hover, textDocument/prepareRename, textDocument/publishDiagnostics, textDocument/references, textDocument/rename, textDocument/semanticTokens, textDocument/signatureHelp
 

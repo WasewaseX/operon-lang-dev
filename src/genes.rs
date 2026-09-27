@@ -1623,6 +1623,11 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
             state: task_phase,
         },
     );
+    // W17: a spawn inside an active scope block registers on the innermost
+    // scope; the block reaps it at exit (structured concurrency).
+    if let Some(top) = interp.scope_stack.last_mut() {
+        top.push(id);
+    }
     Ok(Value::Int(id))
 }
 
