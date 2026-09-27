@@ -1,4 +1,4 @@
-# std/heap — W26 proof: deterministic binary min-heap over plain lists.
+# std/heap, W26 proof: deterministic binary min-heap over plain lists.
 # Covers: heap_from layout, push/pop/peek/sorted, comparator genes
 # (priority-queue idiom), purity (argument never mutated), empty protocol.
 use std/heap;
@@ -26,7 +26,7 @@ frame proof {
     assert(heap.heap_sorted(heap.heap_from([5, 3, 8, 1, 9, 2])) == [1, 2, 3, 5, 8, 9])
     # strings sort lexicographically with the default comparator
     assert(heap.heap_sorted(heap.heap_from(["pear", "apple", "fig"])) == ["apple", "fig", "pear"])
-    # comparator gene: priority-queue idiom — [priority, value] pairs
+    # comparator gene: priority-queue idiom, [priority, value] pairs
     let cmp = gene (x, y) => x[0] < y[0]
     let pq = heap.heap_from([[2, "b"], [1, "a"], [3, "c"]], cmp)
     assert(heap.heap_peek(pq) == [1, "a"])

@@ -1,4 +1,4 @@
-# std/deque — W26 proof: deque/queue API over plain lists, purity contract
+# std/deque, W26 proof: deque/queue API over plain lists, purity contract
 # (argument never mutated), [value, rest] pair protocol, empty-queue nulls.
 use std/deque;
 frame proof {

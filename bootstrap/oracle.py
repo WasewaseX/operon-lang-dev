@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""oracle.py — Operon reference implementation (bootstrap layer).
+"""oracle.py, Operon reference implementation (bootstrap layer).
 
 Role in the stack: the semantic oracle used by the differential test harness
 to cross-check the Rust core, plus the packaging path. It implements the same
@@ -22,10 +22,10 @@ class Note:
 class Stress(Exception):
     def __init__(self, kind, message):
         self.kind, self.message = kind, message
-        # W007 mirror: gene call chain captured during unwinding — innermost
+        # W007 mirror: gene call chain captured during unwinding, innermost
         # frame first, (gene, call-site line); capture cap 64 matches Rust.
         self.chain = []
-        # W06 (D-014) mirror: propagation marker — Some payload means this is
+        # W06 (D-014) mirror: propagation marker, Some payload means this is
         # NOT a failure but a `?!` signal unwinding to the gene boundary.
         # No user path constructs a Stress with a payload (raise/stress go
         # through the kind/message constructor), so rescue can never catch
@@ -34,14 +34,14 @@ class Stress(Exception):
     def as_map(self):
         # W07 mirror: rescue binding carries the chain, same field order as
         # the Rust stress_map (kind, message, chain). Stress.line stays a
-        # Rust-side stderr-rendering field (dx-r3) — not mirrored here.
+        # Rust-side stderr-rendering field (dx-r3), not mirrored here.
         return {"kind": self.kind, "message": self.message,
                 "chain": [{"gene": n, "line": l} for (n, l) in self.chain]}
 
 class Variant:
     """W06 (D-014) mirror: first-class Option/Result variant value.
     tag is one of {Some, None, Ok, Err}; payload is None for None and a
-    value otherwise. Families are distinct: Some(x) != Ok(x) — the tag IS
+    value otherwise. Families are distinct: Some(x) != Ok(x), the tag IS
     the contract."""
     __slots__ = ("tag", "payload")
     def __init__(self, tag, payload):
@@ -66,7 +66,7 @@ class Gene:
 ENHANCE_DELTA = 0.25  # T2e: super-enhancer activation boost (GRN threshold reduction)
 M64 = 0xFFFFFFFFFFFFFFFF
 
-# reg-bio (F-5): default ring kinetics — the historical constants.
+# reg-bio (F-5): default ring kinetics, the historical constants.
 DEFAULT_REPRESSI = {"alpha": 10.0, "gamma": 1.0, "hill": 4, "basal": 0.0, "noise": 0.0,
                     "seed": 0x9E3779B97F4A7C15}
 
@@ -79,7 +79,7 @@ def repressilator_levels(n, tick, params=None):
     Node j's repressor is node (j+n−1) mod n. With default params (noise off)
     this is bit-identical to the historical form. The optional noise kick is
     drawn per (tick, substep, node) from a stream derived from the ABSOLUTE
-    position — the same derivation as the Rust core, so fold-from-init and
+    position, the same derivation as the Rust core, so fold-from-init and
     incremental-cache paths agree bit-for-bit in BOTH implementations.
     """
     if n == 0:
@@ -100,7 +100,7 @@ def repressilator_levels(n, tick, params=None):
             snap = lv[:]
             for j in range(n):
                 rep = snap[(j + n - 1) % n]
-                # rep^hill via repeated multiplication — op-identical to Rust
+                # rep^hill via repeated multiplication, op-identical to Rust
                 # (default h=4 == the historical rep*rep*rep*rep exactly)
                 rh = 1.0
                 for _k in range(HILL):
@@ -113,9 +113,9 @@ def repressilator_levels(n, tick, params=None):
                     nx ^= (nx >> 27) & M64
                     nx &= M64
                     u = ((nx >> 11) & ((1 << 53) - 1)) / 9007199254740992.0
-                    # reg-bio-2 (D6): multiplicative, dt-aware noise — op-for-op
+                    # reg-bio-2 (D6): multiplicative, dt-aware noise, op-for-op
                     # mirror of the Rust core. The constant is the literal double
-                    # nearest 1/√20 on BOTH sides (no math.sqrt call — the value
+                    # nearest 1/√20 on BOTH sides (no math.sqrt call, the value
                     # is fixed text, so IEEE parity is trivial).
                     v = v * (1.0 + NOISE * 0.22360679774997896 * (2.0 * u - 1.0))
                 lv[j] = v if v > 0.0 else 0.0
@@ -221,7 +221,7 @@ class SeqObj:
                     pass
                 except Stress as st:
                     # W06 (D-014) mirror: propagation inside a sequence ends
-                    # the stream — sequences are streams, not answers, so the
+                    # the stream, sequences are streams, not answers, so the
                     # variant has no return path; the stream ends cleanly
                     # (never leaked as a kind). Matches genes.rs run_seq_body.
                     if st.prop is not None:
@@ -262,7 +262,7 @@ def escape_str(s):
     return s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\t", "\\t")
 
 def escape_bytes(b):
-    # W029 mirror of the Rust escape_bytes — printable ASCII raw, the C
+    # W029 mirror of the Rust escape_bytes, printable ASCII raw, the C
     # escape set short-form, everything else \xNN two-hex-digit lowercase.
     out = ""
     for byte in b:
@@ -279,7 +279,7 @@ def is_identlike(s):
     return bool(s) and (s[0].isalpha() or s[0] == "_") and all(c.isalnum() or c == "_" for c in s)
 
 def v_repr(v, _seen=None, _depth=0):
-    # reg-r4 (re-audit B-3): cycle-safe — a container containing itself
+    # reg-r4 (re-audit B-3): cycle-safe, a container containing itself
     # renders the [...] / {...} marker at depth > 256 or on a re-entry
     # (mirror of the Rust core; the old version recursed forever)
     if _seen is None:
@@ -319,7 +319,7 @@ def v_repr(v, _seen=None, _depth=0):
     if isinstance(v, Variant):
         if v.tag == "None":
             return "None"
-        # W06 parity fix: a null payload is a REAL payload — ok(null) renders
+        # W06 parity fix: a null payload is a REAL payload, ok(null) renders
         # Ok(null) like the Rust core (Some(Null)); the old payload-is-None
         # guard rendered the bare tag and hid the value
         return f"{v.tag}({v_repr(v.payload, _seen, _depth + 1)})"
@@ -346,9 +346,9 @@ def truthy(v):
     if isinstance(v, Variant): return v.tag in ("Some", "Ok")
     return True
 
-# W01 (L2c) — soft annotation matching (mirror of interp.rs ann_matches).
+# W01 (L2c), soft annotation matching (mirror of interp.rs ann_matches).
 # A value matches by type_name(); `any` accepts everything; `float` accepts
-# int (safe numeric widening — `int` refuses float: no silent narrowing);
+# int (safe numeric widening, `int` refuses float: no silent narrowing);
 # unions match any alternative; optionals additionally accept null.
 def ann_matches(v, ann):
     k = ann[0]
@@ -366,7 +366,7 @@ def ann_matches(v, ann):
     return False
 
 def ann_render(ann):
-    # Canonical rendering — must match TypeAnn::render op-for-op.
+    # Canonical rendering, must match TypeAnn::render op-for-op.
     k = ann[0]
     if k == "named":
         return ann[1]
@@ -392,7 +392,7 @@ def type_name(v):
     return "native"
 
 def deep_eq(a, b, _pairs=None):
-    # reg-r4: cycle-safe — a pair of containers already being compared is
+    # reg-r4: cycle-safe, a pair of containers already being compared is
     # treated as equal (mirror of the Rust deep_eq's seen-pair set); the
     # old version recursed forever on `cyc == cyc`
     if isinstance(a, bool) or isinstance(b, bool):
@@ -415,7 +415,7 @@ def deep_eq(a, b, _pairs=None):
             return False
         return deep_eq(a.payload, b.payload, _pairs)
     # builder-B parity finding (W34 stage 2, PR #28 pin): instances are DATA,
-    # not handles — equal iff same class name AND deep-equal field values.
+    # not handles, equal iff same class name AND deep-equal field values.
     # Mirror of the Rust Value::Obj arm (the old fall-through made every pair
     # of distinct instances False regardless of state).
     if isinstance(a, ObjInst) or isinstance(b, ObjInst):
@@ -484,7 +484,7 @@ def lex(src):
             while i < n and src[i] != "\n":
                 i += 1
             continue
-        # W030 mirror: raw strings r"..." — no escapes, no interpolation
+        # W030 mirror: raw strings r"...", no escapes, no interpolation
         if c == "r" and i + 1 < n and src[i+1] == '"':
             i += 2
             raw, closed = "", False
@@ -498,7 +498,7 @@ def lex(src):
                 notes.append(Note(4, "unclosed raw string consumed to end of input"))
             toks.append(("STR", raw, line))
             continue
-        # W029 mirror: bytes literals b"..." / b'...' — same escape set as the
+        # W029 mirror: bytes literals b"..." / b'...', same escape set as the
         # Rust lexer (\n \t \r \\ \" \' \0 \xNN; unknown escapes verbatim; no
         # interpolation); non-ASCII encodes as UTF-8 with a note.
         if (c == "b" or c == "B") and i + 1 < n and src[i+1] in ('"', "'"):
@@ -541,7 +541,7 @@ def lex(src):
                 notes.append(Note(4, "unclosed bytes literal consumed to end of input"))
             toks.append(("BYTES", bytes(out), line))
             continue
-        # W030 mirror: multiline triple-quoted strings """...""" — escapes and
+        # W030 mirror: multiline triple-quoted strings """...""", escapes and
         # interpolation processed, content verbatim
         if c == '"' and i + 2 < n and src[i+1] == '"' and src[i+2] == '"':
             i += 3
@@ -691,14 +691,14 @@ def lex(src):
     return toks, notes
 
 # ----------------------------------------------------------------------------
-# parser — Total Grammar ladder
+# parser, Total Grammar ladder
 
-KEYWORDS = set("""gene let if elif else while loop for in return break continue match case use
+KEYWORDS = set("""gene let if elif else while loop scope for in return break continue match case use
 tad anchor export import enhance silence stress rescue raise fate state regulate activates
 inhibits strength toggle repressilator period frame proof guard splice variant edit replace
 ires as collect enter phenotype sequence yield new threshold from self operon""".split())
 
-ARMS = set("""gene let if elif else while loop for return break continue match use tad anchor
+ARMS = set("""gene let if elif else while loop scope for return break continue match use tad anchor
 enhance silence stress raise fate regulate toggle repressilator frame splice edit ires
 phenotype sequence yield operon""".split())
 
@@ -713,7 +713,7 @@ SYNONYMS = {
 }
 VALUE_SYNONYMS = {"yes": True, "on": True, "no": False, "off": False,
                   "nil": None, "nothing": None}
-# W06 (D-014) mirror: 'none' RETIRED from VALUE_SYNONYMS — it is now the
+# W06 (D-014) mirror: 'none' RETIRED from VALUE_SYNONYMS, it is now the
 # Option constructor none(); bare 'none' degrades to an unbound ident
 # (phantom note), never a silent null. Matches src/parser.rs.
 MARKS = {"acetylate", "methylate", "m6a", "copies", "riboswitch", "burst"}
@@ -794,7 +794,7 @@ class P:
                 self.note(self.peek()[2], 4, "unmatched '}' skipped")
                 self.next(); continue
             before = self.pos
-            # W24 mirror: contextual `pub` marker — `pub gene` / `pub let` /
+            # W24 mirror: contextual `pub` marker, `pub gene` / `pub let` /
             # `pub const` / `pub phenotype` at TOP LEVEL records the name for
             # strict-mode export filtering. `pub` is NOT a keyword: an
             # ordinary identifier named `pub` is untouched (Total Grammar).
@@ -848,7 +848,7 @@ class P:
         return False
 
     def _trait_params(self):
-        # W04: consume `(a, b, ...)` — plain names (a signature, not a body).
+        # W04: consume `(a, b, ...)`, plain names (a signature, not a body).
         if not (self.peek()[0] == "SYM" and self.peek()[1] == "("):
             return []
         self.next()
@@ -905,7 +905,7 @@ class P:
                     copies = min(max(tt[1], 1), 64)
                 else:
                     self.note(tt[2], 4, "@copies needs an integer 1..=64; default 1")
-            # loop-9 (F-5): @riboswitch ligand off|on threshold t — a cis
+            # loop-9 (F-5): @riboswitch ligand off|on threshold t, a cis
             # aptamer on this gene's own transcript (mirror of the Rust drain)
             riboswitch = None
             if "riboswitch" in marks:
@@ -934,7 +934,7 @@ class P:
                         else:
                             self.note(vt[2], 4, "riboswitch threshold needs a number 0..=1; default 0.5")
                     riboswitch = (lig, on, threshold)
-            # loop-9 (F-2): @burst kon koff — per-gene promoter identity
+            # loop-9 (F-2): @burst kon koff, per-gene promoter identity
             burst = None
             if "burst" in marks:
                 vals = [0.3, 0.1]
@@ -988,7 +988,7 @@ class P:
                     self.note(self.peek()[2], 3, f"wobble: '{w}' repaired to keyword '{wk}'")
                     word = wk
         if word == "trait":
-            # W04 (SPEC 8b): `trait Name { gene m(); gene n() { ... } }` —
+            # W04 (SPEC 8b): `trait Name { gene m(); gene n() { ... } }`,
             # mirror of the Rust parser. A method with a body is a DEFAULT
             # (parsed by the normal gene parser); one without is REQUIRED.
             self.next()
@@ -1006,7 +1006,7 @@ class P:
                         break
                     if t[0] == "IDENT" and (t[1] == "gene" or SYNONYMS.get(t[1]) == "gene"):
                         if self._trait_method_has_body():
-                            self.next()  # consume 'gene' — gene_def parses from the name
+                            self.next()  # consume 'gene', gene_def parses from the name
                             g = self.gene_def([])
                             if g[0] == "gene":
                                 methods.append(TraitM(g[1].name or "?", False, g[1]))
@@ -1029,7 +1029,7 @@ class P:
             self.next()
             return self.gene_def([])
         if word == "const":
-            # W05: `const NAME = expr` — immutable binding with deep-freeze
+            # W05: `const NAME = expr`, immutable binding with deep-freeze
             # semantics (mirror of the Rust parser; SPEC §7d).
             self.next()
             t = self.peek()
@@ -1062,7 +1062,7 @@ class P:
             return ("const", name, ("null",))
         if word == "let":
             self.next()
-            # W05: contextual `mut` annotation — documentation-only in v2.x;
+            # W05: contextual `mut` annotation, documentation-only in v2.x;
             # consumed silently when followed by the real name.
             t = self.peek()
             if t[0] == "IDENT" and t[1] == "mut":
@@ -1099,7 +1099,7 @@ class P:
                 self.note(self.peek()[2], 4, "multi 'let' without value binds nulls")
                 self.end_stmt()
                 return ("multi", [("ident", n) for n in names], [("null",)] * len(names), True)
-            # W01 (L2c): soft type annotation — `let n: int = 3`
+            # W01 (L2c): soft type annotation, `let n: int = 3`
             t2 = self.peek()
             if t2[0] == "SYM" and t2[1] == ":":
                 self.next()
@@ -1142,6 +1142,10 @@ class P:
         if word == "loop":
             self.next()
             return ("loop", self.block())
+        if word == "scope":
+            # W17: structured-concurrency block
+            self.next()
+            return ("scope", self.block())
         if word == "for":
             self.next()
             t = self.peek()
@@ -1229,7 +1233,7 @@ class P:
             self.end_stmt()
             return ("enhance", [n for n in names if n])
         if word == "silence":
-            # reg-bio-3 (C9): stoichiometric RISC — strength/sites
+            # reg-bio-3 (C9): stoichiometric RISC, strength/sites
             self.next()
             frm = self.ident()
             to = None
@@ -1372,7 +1376,7 @@ class P:
                         trans.append((frm, to, rate, pdecay))
                         self.end_stmt()
                         continue
-                    # reg-bio-2 (A4): `bind tf inducer lg k v;` — `bind` is a
+                    # reg-bio-2 (A4): `bind tf inducer lg k v;`, `bind` is a
                     # HEAD keyword here (no edge source); head already consumed.
                     if frm == "bind":
                         tf = self.ident()
@@ -1479,13 +1483,13 @@ class P:
                     self.end_stmt()
             return ("regulate", edges, trans, binds)
         if word == "ligand":
-            # reg-bio-2 (A4): `ligand iptg;` — a small-molecule pool
+            # reg-bio-2 (A4): `ligand iptg;`, a small-molecule pool
             self.next()
             name = self.ident()
             self.end_stmt()
             return ("ligand", name)
         if word == "autoinducer":
-            # loop-9 (C8): `autoinducer ahl;` — register a quorum-sensing
+            # loop-9 (C8): `autoinducer ahl;`, register a quorum-sensing
             # signal species into the shared medium (parse mirror)
             self.next()
             name = self.ident()
@@ -1515,7 +1519,7 @@ class P:
             self.end_stmt()
             return ("decoy", d, tf, cap)
         if word == "operon":
-            # reg-bio-3 (A1/A7): polycistronic transcription unit —
+            # reg-bio-3 (A1/A7): polycistronic transcription unit,
             # `operon lac { lacZ rbs 1.0; lacY rbs 0.6; lacA; }` (mirror)
             self.next()
             name = self.ident()
@@ -1572,7 +1576,7 @@ class P:
                 if t[0] in ("INT", "FLOAT"):
                     period = float(t[1])
                     self.next()
-            # reg-bio (F-5): inline kinetics — mirror of the Rust parser.
+            # reg-bio (F-5): inline kinetics, mirror of the Rust parser.
             # Canonical order: alpha, gamma, hill, basal, noise, seed.
             ov = {"alpha": None, "gamma": None, "hill": None, "basal": None,
                   "noise": None, "seed": None}
@@ -1833,7 +1837,7 @@ class P:
             self.end_stmt()
             return ("yield", e)
         # bare-name definition: `main { ... }` / `route(req) { ... }` are
-        # gene definitions — lookahead: NAME '{' or NAME '(' ... ')' '{'
+        # gene definitions, lookahead: NAME '{' or NAME '(' ... ')' '{'
         t1 = self.toks[self.pos + 1] if self.pos + 1 < len(self.toks) else ("EOF", None, 0)
         is_def = False
         if word not in KEYWORDS:
@@ -1944,7 +1948,7 @@ class P:
         # expression statement (possibly index/member assignment)
         e = self.expr()
         t = self.peek()
-        # L1a: multiple assignment / swap — a, b = b, a
+        # L1a: multiple assignment / swap, a, b = b, a
         if t[0] == "SYM" and t[1] == "," and e[0] in ("ident", "index", "member"):
             save = self.pos
             targets = [e]
@@ -2023,7 +2027,7 @@ class P:
                     break
                 before = self.pos
                 pname = self.ident()
-                # W01 (L2c): parameter annotation — `gene f(x: int) { }`
+                # W01 (L2c): parameter annotation, `gene f(x: int) { }`
                 ann = None
                 if self.peek() == ("SYM", ":", self.peek()[2]):
                     self.next()
@@ -2039,7 +2043,7 @@ class P:
                 if self.pos == before:
                     self.note(t[2], 4, "unclosed parameter list; auto-closed")
                     break
-        # W01 (L2c): return annotation — `gene f(x) -> int { }`
+        # W01 (L2c): return annotation, `gene f(x) -> int { }`
         ret_ann = None
         if self.peek() == ("SYM", "->", self.peek()[2]):
             self.next()
@@ -2174,7 +2178,7 @@ class P:
                 return left
 
     def nullish_expr(self):
-        # L1a: a ?? b — sits between or and and (mirrors src/parser.rs)
+        # L1a: a ?? b, sits between or and and (mirrors src/parser.rs)
         left = self.and_expr()
         while True:
             t = self.peek()
@@ -2344,7 +2348,7 @@ class P:
                     self.note(t2[2], 4, "'.' followed by non-name; member skipped")
                     break
             elif t == ("SYM", "?!", t[2]):
-                # W06 (D-014): `e?!` — Option/Result propagation, a postfix
+                # W06 (D-014): `e?!`, Option/Result propagation, a postfix
                 # operator (binds tighter than every binary op, repeats:
                 # Some(Some(3))?!?! unwraps twice). Mirrors src/parser.rs
                 # Tok::QuestionBang postfix arm.
@@ -2540,7 +2544,7 @@ class P:
             parts.append(("lit", "".join(lit)))
         return ("interp", parts)
 
-    # W01 (L2c): type-annotation grammar — `name`, `name?` (optional),
+    # W01 (L2c): type-annotation grammar, `name`, `name?` (optional),
     # `a | b` (union). Malformed annotation degrades to any (Total Grammar).
     def type_ann(self):
         first = self.type_ann_atom()
@@ -2572,7 +2576,7 @@ class P:
         # guard, with the legacy literal comma-run kept verbatim. Total
         # Grammar: a malformed pattern degrades to wildcard/bind + note.
         first = self.pattern_atom()
-        # Legacy literal comma-run — only for a leading literal; a
+        # Legacy literal comma-run, only for a leading literal; a
         # non-literal in the run discards the collected literals (legacy
         # edge behavior preserved op-for-op with the Rust core).
         if first[0] == "lit":
@@ -2598,7 +2602,7 @@ class P:
                     else:
                         return self.pattern_atom()
                 return lits[0] if len(lits) == 1 else ("multi", lits)
-        # Or-pattern chain: `p1 | p2 | ...` — newlines allowed before any
+        # Or-pattern chain: `p1 | p2 | ...`, newlines allowed before any
         # alternative (multi-line chains), mirror of parser.rs.
         while self.peek()[0] == "NL":
             self.next()
@@ -2618,7 +2622,7 @@ class P:
             pat = ("or", alts)
         else:
             pat = first
-        # Guarded arm: `pat if cond` — applies to the WHOLE or-chain.
+        # Guarded arm: `pat if cond`, applies to the WHOLE or-chain.
         if self.at_ident("if"):
             self.next()
             cond = self.expr()
@@ -2637,7 +2641,7 @@ class P:
         if t[0] == "STR":
             # W02 parity fix: '-' before a string pattern is ignored with a
             # note (was: oracle said "dangling '-'" and went wildcard while
-            # the Rust core kept the literal — latent corner divergence,
+            # the Rust core kept the literal, latent corner divergence,
             # closed by mirroring the Rust behavior).
             if neg:
                 self.note(t[2], 4, "'-' before a string pattern ignored")
@@ -2717,7 +2721,7 @@ class P:
                     t3 = self.peek()
                     if t3[0] == "SYM" and t3[1] == ")":
                         self.next()
-                        self.note(line, 4, "empty variant payload pattern — treated as tag-only")
+                        self.note(line, 4, "empty variant payload pattern, treated as tag-only")
                     else:
                         payload = self.pattern_atom()
                         t3 = self.peek()
@@ -2741,7 +2745,7 @@ class P:
                 # Unknown capitalized tag: soft fallback to a binding. A
                 # parenthesized payload is consumed and ignored so the token
                 # stream stays aligned (mirror of parser.rs).
-                self.note(t[2], 4, f"unknown variant tag '{t[1]}' — pattern treated as a binding")
+                self.note(t[2], 4, f"unknown variant tag '{t[1]}', pattern treated as a binding")
                 self.next()
                 t2 = self.peek()
                 if t2[0] == "SYM" and t2[1] == "(":
@@ -2786,6 +2790,7 @@ abs min max sum clock exit assert codon distance similar transcribe reverse_comp
 gc_content translate find_orf memory methyl methylate demethylate m6a_write m6a_erase passage grn_set grn_get fingerprint toggle_on toggle_state repressi_next
 repressi_state repressi_start grn_fire grn_state spawn join floor ceil sqrt pow random
 randomize chr ord now sleep argv read_file write_file append_file exists file_size read_dir run
+cancel task_state cancelled wait_all wait_any
 fs_delete fs_rename fs_mkdir re_replace
 bytes_from_str str_from_bytes bytes_from_list bytes_to_list read_file_bytes write_file_bytes
 http_get serve recv_request send_response json_parse json_str env call items py
@@ -2811,14 +2816,17 @@ class Interp:
         # new list after a gene-local const is collected).
         self.frozen_ids = set()
         self.frozen_keep = []
-        # W069: importing-entry directory — candidate root #1 for `use`
+        # W069: importing-entry directory, candidate root #1 for `use`
         # (SPEC §8 resolution table). None until load_file sets it.
         self.base_dir = None
+        # W19/W23 mirror: vendored dependency roots from operon.lock
+        # (package name -> cache dir), consulted as resolution root 7.
+        self.lock_dirs = []
         self.silences = []
         # reg-bio-3: operons / stoichiometric-RISC bookkeeping / m6A levels /
         # generation counter / gene dosage registry (mirror of the Rust core)
         self.operons = []
-        # loop-10 (F-7/F-8): Rho/queue state — rho_pins is the worker-side
+        # loop-10 (F-7/F-8): Rho/queue state, rho_pins is the worker-side
         # resolved knob tuple (None on the host: .cell resolved per use,
         # mirror of the Rust rho_knobs); ribo_queue is the per-cistron
         # queue register (rho.termination-gated bookkeeping).
@@ -2852,7 +2860,7 @@ class Interp:
         self.depth = 0
         self.depth_limit = 10_000
         # W07 mirror: line of the call/binop/index expression currently
-        # executing (A13/dx-r4 parity) — feeds traceback chain frames.
+        # executing (A13/dx-r4 parity), feeds traceback chain frames.
         self.cur_line = 0
         self.methyl_quiet = False
         self.methyl_noted = set()
@@ -2953,7 +2961,7 @@ class Interp:
         else:
             ok = what in c[cap]
         if not ok:
-            raise Stress("interference", f"{kind} denied — no capability grant covers '{what}' (grant with --allow-{kind} or --allow-all)")
+            raise Stress("interference", f"{kind} denied, no capability grant covers '{what}' (grant with --allow-{kind} or --allow-all)")
 
     def new_scope(self, parent):
         return {"__parent__": parent}
@@ -3033,7 +3041,7 @@ class Interp:
         """Spawn boundary: the Rust worker receives serialized COPIES of the
         arguments, so no container reachable from an argument is frozen inside
         the worker. The sequential oracle runs the body inline against the
-        SAME objects — park the reachable ids for the body, restore after."""
+        SAME objects, park the reachable ids for the body, restore after."""
         parked = set()
         seen = set()
 
@@ -3066,7 +3074,7 @@ class Interp:
         self.frozen_ids |= parked
 
     def note(self, rung, msg):
-        # loop-9 (C8): worker-note prefix parity — the Rust join path tags
+        # loop-9 (C8): worker-note prefix parity, the Rust join path tags
         # every spawned worker note with "[task <name>] " (genes.rs); the
         # sequential oracle applies the same prefix while the spawn body
         # runs inline, so cross-cell notes are byte-identical.
@@ -3082,7 +3090,7 @@ class Interp:
 
     # ---- statements
     def bind_pattern(self, env, pat, v):
-        # L1a: destructuring binder — soft-miss semantics (Total Grammar)
+        # L1a: destructuring binder, soft-miss semantics (Total Grammar)
         k = pat[0]
         if k == "pbind":
             name = pat[1]
@@ -3172,7 +3180,7 @@ class Interp:
             return None
 
     def match_pat(self, env, bindings, sv, pat):
-        """W02 (match-v2) recursive pattern matcher — op-for-op mirror of
+        """W02 (match-v2) recursive pattern matcher, op-for-op mirror of
         interp.rs match_pat. Total Grammar: a pattern never hard-fails; a
         non-matching shape simply misses; only `?!` propagation escapes."""
         k = pat[0]
@@ -3189,7 +3197,7 @@ class Interp:
         if k == "null":
             return deep_eq(sv, None)
         if k == "multi":
-            # legacy literal comma-run — any literal hits (first wins)
+            # legacy literal comma-run, any literal hits (first wins)
             gev = self.new_scope(env)
             gev.update(bindings)
             for lt in pat[1]:
@@ -3267,7 +3275,7 @@ class Interp:
         if k == "block":
             self.exec_block(self.new_scope(env), s[1])
         elif k == "const":
-            # W05: immutable binding — deep-freeze + const name marker.
+            # W05: immutable binding, deep-freeze + const name marker.
             _, name, ex = s
             v = self.eval(env, ex)
             if name in env:
@@ -3281,7 +3289,7 @@ class Interp:
                 self.note(4, f"rebinding '{s[1]}'")
             env[s[1]] = v
         elif k == "letann":
-            # W01 (L2c): annotated definition — mismatch = catchable unfolded
+            # W01 (L2c): annotated definition, mismatch = catchable unfolded
             # Stress; the binding does NOT happen (mirror of interp.rs).
             _, name, ann, ex = s
             v = self.eval(env, ex)
@@ -3340,7 +3348,7 @@ class Interp:
                 except Return as r:
                     raise r
         elif k == "multi":
-            # L1a: multiple assignment / swap — all values evaluated first
+            # L1a: multiple assignment / swap, all values evaluated first
             _, targets, values, define = s
             if not define:
                 # W05: rebinding a const name stresses before any write
@@ -3449,10 +3457,10 @@ class Interp:
                 nv = self.binop(op, cur, v) if op else v
                 # pheno_equality pin: instance keys store AS INSTANCES (the
                 # Rust core keys maps by the actual value; v_display here
-                # stringified them into "<phenotype P>" — found by the
+                # stringified them into "<phenotype P>", found by the
                 # builder-B parity-finding resolution differential).
                 # ObjInst is hashable (id-based), so dict storage works.
-                # Container keys (list/map) still fall back to display text —
+                # Container keys (list/map) still fall back to display text,
                 # pre-existing divergence, no corpus exposure, filed for a
                 # future session.
                 # W029 mirror: bytes are scalar keys (native hashable, exact).
@@ -3507,6 +3515,35 @@ class Interp:
                     continue
                 except Return as r:
                     raise r
+        elif k == "scope":
+            # W17: tasks spawned inside register on this scope and are
+            # reaped at block exit on every flow path. cancel-on-error
+            # (default on) asks the children to stop before reaping when
+            # the block unwinds by stress; the stress still propagates.
+            _, body = s
+            if not hasattr(self, "scope_stack"):
+                self.scope_stack = []
+            self.scope_stack.append([])
+            err = None
+            try:
+                self.exec_block(self.new_scope(env), body)
+            except BreakLoop as b:
+                err = b
+            except ContinueLoop as c:
+                err = c
+            except Return as r:
+                err = r
+            except Stress as st:
+                err = st
+            ids = self.scope_stack.pop()
+            cancel_on_err = self.cell.get("scope.cancel_on_error") != "off"
+            if isinstance(err, Stress) and cancel_on_err:
+                for i in ids:
+                    self.builtin(env, "cancel", [i])
+            for i in ids:
+                self.builtin(env, "join", [i])
+            if err is not None:
+                raise err
         elif k == "for":
             _, name, it, body = s
             itv = self.eval(env, it)
@@ -3587,7 +3624,7 @@ class Interp:
             try:
                 self.exec_block(env, body)
             except Stress as st:
-                # W06 (D-014) mirror: propagation is a RETURN, not a failure —
+                # W06 (D-014) mirror: propagation is a RETURN, not a failure,
                 # it crosses stress/rescue boundaries on its way to the gene
                 # boundary. Pre-arms BEFORE kind matching so rescue (including
                 # `rescue any`) can never contain or spoof it.
@@ -3787,7 +3824,7 @@ class Interp:
             for ke, ve in e[1]:
                 kv = self.eval(env, ke)
                 # W029 mirror: bytes are scalar keys (Rust key_scalar includes
-                # Bytes) — never stringified
+                # Bytes), never stringified
                 key = kv if isinstance(kv, (str, int, float, bool, bytes)) else v_display(kv)
                 m[key] = self.eval(env, ve)
             return m
@@ -3816,7 +3853,7 @@ class Interp:
             _, cond, a, b = e
             return self.eval(env, a) if truthy(self.eval(env, cond)) else self.eval(env, b)
         if k == "prop":
-            # W06 (D-014) mirror: `e?!` — Some/Ok unwrap to the payload;
+            # W06 (D-014) mirror: `e?!`, Some/Ok unwrap to the payload;
             # None/Err unwind to the nearest enclosing gene boundary (the
             # gene RETURNS the variant). Plain values pass through untouched
             # (silent identity, the same contract as `?.` on non-null).
@@ -3826,7 +3863,7 @@ class Interp:
                 if v.tag in ("Some", "Ok"):
                     # null payload is a REAL payload: ok(null) stores Some(Null)
                     # on the Rust side, so `?!` unwraps to null (W06 parity fix,
-                    # found by the std_serialize proof — the old `payload is
+                    # found by the std_serialize proof, the old `payload is
                     # not None` guard wrongly unwound on Ok(null)/Some(null))
                     return v.payload
                 sig = Stress("propagate", "")
@@ -3852,7 +3889,7 @@ class Interp:
                 lv = self.eval(env, e[2])
                 return lv if truthy(lv) else self.eval(env, e[3])
             if op == "nullish":
-                # L1a: coalesce Null only — falsy non-null passes through
+                # L1a: coalesce Null only, falsy non-null passes through
                 lv = self.eval(env, e[2])
                 return self.eval(env, e[3]) if lv is None else lv
             lv = self.eval(env, e[2])
@@ -3896,7 +3933,7 @@ class Interp:
             tv = self.eval(env, e[1])
             return self.member_value(tv, e[2])
         if k == "member?":
-            # L1a: optional chaining — Null receiver is Null, silently
+            # L1a: optional chaining, Null receiver is Null, silently
             tv = self.eval(env, e[1])
             if tv is None:
                 return None
@@ -3958,13 +3995,13 @@ class Interp:
                     raise Stress("overflow", "int overflow in '+'")
                 return l + r
             if isinstance(l, str) and isinstance(r, str):
-                # reg-r4: concat ceiling parity with the Rust core — "exactly
+                # reg-r4: concat ceiling parity with the Rust core, "exactly
                 # at the 512 MiB line" + concat must raise, not allocate 1 GiB
                 if len(l) + len(r) > 512 * 1024 * 1024:
                     raise Stress("overflow", "string concat exceeds the 512 MiB ceiling")
                 return l + r
             if isinstance(l, bytes) and isinstance(r, bytes):
-                # W029 mirror: bytes concat — same ceiling family as strings
+                # W029 mirror: bytes concat, same ceiling family as strings
                 if len(l) + len(r) > 512 * 1024 * 1024:
                     raise Stress("overflow", "bytes concat exceeds the 512 MiB ceiling")
                 return l + r
@@ -4033,7 +4070,7 @@ class Interp:
                 if l == -(2**63) and r == -1:
                     # i64 corner: the quotient 2**63 does not fit, so the
                     # Rust core raises before ever materializing the
-                    # remainder — the oracle must mirror that (W32 corpus).
+                    # remainder, the oracle must mirror that (W32 corpus).
                     raise Stress("overflow", "int overflow in '%'")
                 # SPEC: sign follows divisor (= Python % semantics)
                 return l % r
@@ -4103,7 +4140,7 @@ class Interp:
         if isinstance(callee, Gene):
             if not callee.seq:
                 # reg-r4 (re-audit B-5): value-bound (higher-order) gene calls
-                # pass the toggle gate too — "the pair gates calls" is
+                # pass the toggle gate too, "the pair gates calls" is
                 # unqualified; the seq branch already gated, genes did not
                 gname = callee.name or "<lambda>"
                 for a, b, a_on in self.toggles:
@@ -4116,8 +4153,8 @@ class Interp:
                             return None
                         break
             if callee.seq:
-                # reg-r3 (re-audit): sequences honor ALL creation gates —
-                # GRN veto, methylation, toggle — in call_gene_inner order
+                # reg-r3 (re-audit): sequences honor ALL creation gates,
+                # GRN veto, methylation, toggle, in call_gene_inner order
                 # (mirror of the Rust branch; reg-r1 gated only the toggle)
                 seq_name = callee.name or "<seq>"
                 dl = getattr(callee, "line", 0)
@@ -4128,9 +4165,9 @@ class Interp:
                 if not callee.acetylate:
                     lvl = self.methyl_levels.get(seq_name, 0)
                     if lvl >= self.methyl_threshold:
-                        self.note(4, f"methylation silences: sequence '{seq_name}' (level {lvl} >= threshold {self.methyl_threshold}) — call returns null")
+                        self.note(4, f"methylation silences: sequence '{seq_name}' (level {lvl} >= threshold {self.methyl_threshold}), call returns null")
                         return None
-                # reg-r4 (re-audit B-1): the toggle gate was missing here —
+                # reg-r4 (re-audit B-1): the toggle gate was missing here,
                 # a toggle-repressed sequence created via a value binding
                 # transcribed in the oracle while the Rust core refused it
                 for a, b, a_on in self.toggles:
@@ -4142,11 +4179,11 @@ class Interp:
                             self.note(4, f"toggle repressed: sequence '{seq_name}' is the inactive allele ('{winner}' is on)")
                             return None
                         break
-                # reg-bio (F-1): promoter gate last — the pinned funnel order
+                # reg-bio (F-1): promoter gate last, the pinned funnel order
                 # ends here (bursting is the promoter's own stochastic
-                # dynamics; no @acetylate exemption — open chromatin bursts too)
+                # dynamics; no @acetylate exemption, open chromatin bursts too)
                 if self._promoter_veto(seq_name, callee.burst):
-                    self.note(4, f"promoter inactive: sequence '{seq_name}' burst-off — call returns null")
+                    self.note(4, f"promoter inactive: sequence '{seq_name}' burst-off, call returns null")
                     return None
                 return SeqObj(self, callee, args)
             return self.call_gene(callee, args)
@@ -4156,11 +4193,11 @@ class Interp:
     def call_named(self, env, name, args):
         if name in BUILTIN_SYNONYMS:
             return self.builtin(env, BUILTIN_SYNONYMS[name], args)
-        # reg-r4 (re-audit B-4): gate ORDER is pinned SPEC-wide — RISC at the
+        # reg-r4 (re-audit B-4): gate ORDER is pinned SPEC-wide, RISC at the
         # call site first, then the toggle gate (mirror of the Rust core:
         # silencing wins over repression because it rewrites the callee).
         # RISC silencing: redirect calls (acetylated genes are immune).
-        # reg-bio-3 (C9): stoichiometric capture — every entry for the
+        # reg-bio-3 (C9): stoichiometric capture, every entry for the
         # target is one binding site; per-call capture p = 1 - Π(1-s)^sites.
         # strength 1.0 / one site = legacy binary redirect (no draw).
         entries = [e for e in self.silences if e[0] == name]
@@ -4192,7 +4229,7 @@ class Interp:
                         self.note(4, f"RISC: call to '{name}' silenced → '{to}'")
                         tgt = self.lookup(env, to)
                         return self.call_value(env, tgt, args)
-                    # reg-bio (F-4): pure degradation — no replacement executes
+                    # reg-bio (F-4): pure degradation, no replacement executes
                     self.note(4, f"RISC: call to '{name}' degraded (no replacement)")
                     return None
         # toggle gate: the repressed allele refuses calls
@@ -4244,14 +4281,14 @@ class Interp:
         if self.depth > self.depth_limit:
             self.depth -= 1
             raise Stress("overflow", f"recursion depth limit ({self.depth_limit}) exceeded")
-        # W007 mirror: the traceback frame for THIS gene — captured at entry
+        # W007 mirror: the traceback frame for THIS gene, captured at entry
         # (cur_line is the call site); appended only on the error path.
         frame = (name, self.cur_line)
         try:
             result = self.call_gene_inner(g, args)
             return result
         except Stress as st:
-            # W06 (D-014) mirror: propagation is a return, not a failure — no
+            # W06 (D-014) mirror: propagation is a return, not a failure, no
             # chain frame. A returned variant is not an error in flight.
             if st.prop is not None:
                 raise
@@ -4266,7 +4303,7 @@ class Interp:
         polycistronic unit is a transcription attempt of the WHOLE unit:
         edges targeting the unit veto every member first (induction acts
         on the unit's promoter), then the cistron's own edges apply.
-        The unit pass short-circuits — its message wins. (mirror)"""
+        The unit pass short-circuits, its message wins. (mirror)"""
         if not self.grn_edges:
             return None
         ui = self._operon_of(name)
@@ -4286,7 +4323,7 @@ class Interp:
         return None
 
     def _gate_veto_for(self, name):
-        """GRN cis-gate for ONE target (T2a / SPEC §11) — mirror of the
+        """GRN cis-gate for ONE target (T2a / SPEC §11), mirror of the
         Rust core (the pinned body, target as a parameter).
 
         Activating edge with explicit threshold t vetoes while
@@ -4299,9 +4336,9 @@ class Interp:
             return None
         boosted = name in self.enhanced
         veto = None
-        # reg-bio (F-3): AND/OR cis-regulatory logic — first-wins message
+        # reg-bio (F-3): AND/OR cis-regulatory logic, first-wins message
         # order preserved exactly (mirror of the Rust grn_veto). The gate
-        # opens iff (every AND member passes) OR (any OR member passes) —
+        # opens iff (every AND member passes) OR (any OR member passes),
         # an `any` edge is an ALTERNATIVE activator that alone suffices.
         and_fail = None
         and_present = False
@@ -4313,7 +4350,7 @@ class Interp:
             if to != name:
                 continue
             # reg-bio-2 (B7): sum edges are pooled members, evaluated by the
-            # group pass below — never as individual AND members (mirror).
+            # group pass below, never as individual AND members (mirror).
             if is_sum:
                 continue
             # reg-bio-2 (C11 + A4): regulation reads the DNA-available
@@ -4339,7 +4376,7 @@ class Interp:
                     and_present = True
                     if lvl < t and and_fail is None:
                         and_fail = f"regulator '{frm}' level {lvl!r} < threshold {t!r}"
-        # reg-bio-2 (B7): pooled (`sum`) edges — group pass (mirror of the
+        # reg-bio-2 (B7): pooled (`sum`) edges, group pass (mirror of the
         # Rust grn_veto). Groups keyed by (target, threshold, hill) pool
         # weighted inputs P = min(1, Σ s·lvl); each group acts as ONE
         # conjunctive member passing iff P >= t (with the enhance boost).
@@ -4373,11 +4410,11 @@ class Interp:
         return veto
 
     def _grn_level(self, frm):
-        """A11 (reg-r2): mirror of the Rust grn_veto level resolution —
+        """A11 (reg-r2): mirror of the Rust grn_veto level resolution,
         explicit grn levels first, then the repressilator ring overlay
         (normalized raw/α, clamped 0..1) so the emergent oscillator
         genuinely drives downstream genes.
-        reg-bio-2 (C11): the read returns the FREE fraction — decoy sites
+        reg-bio-2 (C11): the read returns the FREE fraction, decoy sites
         sequester their regulator (competitive titration, mirror of the
         Rust regulated_level)."""
         if frm in self.grn_levels:
@@ -4388,18 +4425,18 @@ class Interp:
             lvl = min(lvls[idx] / self.repressi_params["alpha"], 1.0)
         elif frm in self.ligands:
             # reg-bio-2 (A4/C7): a ligand edge source reads its metabolite
-            # pool — a riboswitch-style, protein-free gate (mirror).
+            # pool, a riboswitch-style, protein-free gate (mirror).
             lvl = self._ligand_level(frm)
         elif frm in self.signals:
             # loop-9 (C8): a signal species reads the shared medium (the
-            # LuxR-AHL population gate — mirror of Rust signal_level).
+            # LuxR-AHL population gate, mirror of Rust signal_level).
             lvl = self._signal_level(frm)
         else:
             lvl = 0.0
         return lvl
 
     def _signal_register(self, name):
-        """loop-9 (C8): mirror of Rust signal_register — idempotent, cap 64."""
+        """loop-9 (C8): mirror of Rust signal_register, idempotent, cap 64."""
         if name in self.signals:
             return True
         if len(self.signals) >= 64:
@@ -4409,12 +4446,12 @@ class Interp:
         return True
 
     def _signal_level(self, name):
-        """loop-9 (C8): mirror of Rust signal_level — molecules / 1e9, ONE
+        """loop-9 (C8): mirror of Rust signal_level, molecules / 1e9, ONE
         division (counts capped at 1e9 < 2**53, so the double is identical)."""
         return self.medium.get(name, 0) / 1e9
 
     def _ligand_level(self, name):
-        """reg-bio-2 (A4): mirror of the Rust ligand_level — the runtime pool
+        """reg-bio-2 (A4): mirror of the Rust ligand_level, the runtime pool
         (`ligand_set`) wins; the `.cell [ligand.<name>]` bath is the default."""
         if name in self.ligand_pools:
             return self.ligand_pools[name]
@@ -4427,7 +4464,7 @@ class Interp:
             return 0.0
 
     def _regulated_level(self, raw, frm):
-        """reg-bio-2 (C11 + A4): mirror of the Rust regulated_level — the
+        """reg-bio-2 (C11 + A4): mirror of the Rust regulated_level, the
         DNA-available fraction: (1) decoy titration (subtractive), then
         (2) allosteric modulation (inducers: Π(1 − occ), cofactors: Π occ,
         occ = L/(k+L))."""
@@ -4444,7 +4481,7 @@ class Interp:
                 occ = (lig / (k + lig)) if k > 0.0 else 1.0
                 factor *= (1.0 - occ) if inducer else occ
         out = l * factor
-        # reg-bio-3 (C10): gene dosage — @copies amplifies the CONCENTRATION
+        # reg-bio-3 (C10): gene dosage, @copies amplifies the CONCENTRATION
         # the gene feeds its edges, saturating on the 0..1 lattice (mirror)
         c = self.copies.get(frm)
         if c is not None and c > 1:
@@ -4452,11 +4489,11 @@ class Interp:
         return out if out <= 1.0 else 1.0
 
     def _rho_knobs(self):
-        """loop-10 (F-7/F-8): mirror of the Rust rho_knobs — (armed, catch,
+        """loop-10 (F-7/F-8): mirror of the Rust rho_knobs, (armed, catch,
         queue_floor, queue_cap, drain). Host: .cell parsed per use (garbage
         falls back identically: catch clamps 0..1, the rest parse-or-default);
         worker: the pinned snapshot tuple. Default-off: absent
-        rho.termination = false — legacy runs draw nothing, bit-identical."""
+        rho.termination = false, legacy runs draw nothing, bit-identical."""
         if self.rho_pins is not None:
             return self.rho_pins
         armed = self.cell.get("rho.termination") == "true"
@@ -4476,12 +4513,12 @@ class Interp:
         return (armed, catch, _g("rho.queue_floor", 0.5), _g("ribosome.queue_cap", 1.0), _g("ribosome.drain", 0.5))
 
     def _trans_integrate(self):
-        """reg-bio-2 (C1): mirror of the Rust trans_integrate — one Euler
+        """reg-bio-2 (C1): mirror of the Rust trans_integrate, one Euler
         step per translates edge: p += rate·Δcalls − decay·p (clamped 0..1)
         where Δcalls is the source's call-count delta since the last
         integration (checkpoints start at 0)."""
         # loop-10 (F-8 + R10 kinetics jury L1): ribosome queue drain (mirror)
-        # — at ENTRY (before the empty-check: "every integration point") and
+        #, at ENTRY (before the empty-check: "every integration point") and
         # before the edge loop (pinned order; both entry points reach
         # _trans_integrate). Exists only under rho.termination; max(0.0) is
         # mirror-safe.
@@ -4500,7 +4537,7 @@ class Interp:
             if delta < 0:
                 delta = 0
             dec = pdecay if pdecay is not None else 0.0
-            # loop-9 (F-6): m6A reader fate (mirror) — engage only at mark
+            # loop-9 (F-6): m6A reader fate (mirror), engage only at mark
             # density >= min_level (default 2); the {0,1} legacy lattice is
             # bit-identical. Knobs: .cell m6a.reader.decay (0.25) /
             # m6a.reader.translation (0.10) / m6a.reader.min_level (2).
@@ -4526,7 +4563,7 @@ class Interp:
             r = rate if rate is not None else 1.0
             # reg-bio-3 (A1/A7): per-cistron rbs efficiency + transcriptional
             # polarity (upstream blocking reduces downstream yield) (mirror)
-            # loop-9 (P0-1): per-call-WEIGHTED polarity (mirror) — each
+            # loop-9 (P0-1): per-call-WEIGHTED polarity (mirror), each
             # upstream member contributes its expected factor: methylation
             # past threshold => pol; a target-less RISC silence with capture
             # p = 1 − Π(1−s_i)^sites_i => surv + (1−surv)·pol with
@@ -4539,7 +4576,7 @@ class Interp:
                 pos = next(i for i, (m, _r) in enumerate(u["members"]) if m == frm)
                 r *= u["members"][pos][1]
                 # loop-10 (W2, R10 biology jury): under Rho ON the polarity
-                # factor is IDENTITY — D2 resolves the upstream failure per
+                # factor is IDENTITY, D2 resolves the upstream failure per
                 # call, so a surviving transcript translates at full rate
                 # (D1's expected-value derate would double-count the same
                 # loss). Rho OFF keeps the exact legacy fold (bit-identical).
@@ -4571,7 +4608,7 @@ class Interp:
                                 factor = 1.0
                         f2 *= factor
                     r *= f2
-            # loop-9 (F-6): YTHDF2 decay routing — the LAST production
+            # loop-9 (F-6): YTHDF2 decay routing, the LAST production
             # multiply (normative order: rate x rbs x polarity x (1-yd2))
             if reader:
                 r *= 1.0 - yd2
@@ -4584,7 +4621,7 @@ class Interp:
             self.grn_levels[to] = p
 
     def _grn_decay_tick(self):
-        """reg-bio-2 (C2): mirror of the Rust grn_decay_tick — the
+        """reg-bio-2 (C2): mirror of the Rust grn_decay_tick, the
         decay_clock builtin overrides the .cell keys (`grn.decay_calls`/
         `grn.decay`); one decay step every N calls, then translation
         integrates. Unset = no-op (byte-identical event-driven contract)."""
@@ -4618,7 +4655,7 @@ class Interp:
                 self.grn_levels[k2] *= retention
                 if self.grn_levels[k2] < 2.220446049250313e-16:
                     self.grn_levels[k2] = 0.0
-        # reg-bio-3 (B3): m6A decay — `.cell m6a.decay f` erases site
+        # reg-bio-3 (B3): m6A decay, `.cell m6a.decay f` erases site
         # density as time passes (half-down rounding on the 0..=3 lattice;
         # a diluted mark never reads as MORE marked). Unset = byte-identical.
         mdecay = self.cell.get("m6a.decay")
@@ -4635,12 +4672,12 @@ class Interp:
         self._trans_integrate()
 
     def _promoter_veto(self, name, burst=None):
-        """reg-bio (F-1): telegraph promoter draw — mirror of the Rust
+        """reg-bio (F-1): telegraph promoter draw, mirror of the Rust
         promoter_veto. One draw per call attempt on the SHARED xorshift64*
         stream (the `random()` state machine): active → off with p=koff,
         inactive → on with p=kon. State persists across calls (the burst).
         loop-9 (F-2): a per-gene @burst mark overrides (kon, koff) for THIS
-        gene only — promoter identity. loop-9 (F-3): attempt telemetry."""
+        gene only, promoter identity. loop-9 (F-3): attempt telemetry."""
         if not self.expr_stochastic:
             return False
         if burst is None:
@@ -4668,20 +4705,20 @@ class Interp:
 
     def call_gene_inner(self, g, args):
         name = g.name or "<lambda>"
-        # GRN gate first: a suppressed call is not expression — it must not
+        # GRN gate first: a suppressed call is not expression, it must not
         # reach the call counters, the burst bins, or the gene body.
         veto = self.grn_veto(name)
         if veto is not None:
             self.note(4, f"grn gate: '{name}' call suppressed ({veto})")
             return None
         # T2b methylation gate: level >= threshold blocks transcription;
-        # @acetylate genes are exempt (open chromatin wins — D-005).
+        # @acetylate genes are exempt (open chromatin wins, D-005).
         if not g.acetylate:
             lvl = self.methyl_levels.get(name, 0)
             if lvl >= self.methyl_threshold:
-                self.note(4, f"methylation silences: '{name}' (level {lvl} >= threshold {self.methyl_threshold}) — call returns null")
+                self.note(4, f"methylation silences: '{name}' (level {lvl} >= threshold {self.methyl_threshold}), call returns null")
                 return None
-        # loop-9 (F-5): CIS riboswitch — after chromatin, before the
+        # loop-9 (F-5): CIS riboswitch, after chromatin, before the
         # promoter. The pinned order extends to
         # RISC → toggle → GRN → methylation → riboswitch → promoter.
         if g.riboswitch is not None:
@@ -4693,18 +4730,18 @@ class Interp:
                 why = "unbound: RBS sequestered" if on else "bound: terminator hairpin folded"
                 self.note(4, f"riboswitch '{lig}' {why}: '{name}' call suppressed")
                 return None
-        # reg-bio (F-1): telegraph promoter layer — the pinned gate order
+        # reg-bio (F-1): telegraph promoter layer, the pinned gate order
         # ends here: RISC → toggle → GRN → methylation → riboswitch → promoter.
         if self._promoter_veto(name, g.burst):
-            self.note(4, f"promoter inactive: '{name}' burst-off — call returns null")
+            self.note(4, f"promoter inactive: '{name}' burst-off, call returns null")
             return None
-        # loop-10 (F-7): Rho-dependent termination (mirror) — opt-in (.cell
+        # loop-10 (F-7): Rho-dependent termination (mirror), opt-in (.cell
         # rho.termination = true). Pinned gate order ends: ... promoter → RHO.
         # Naked upstream RNA scan in member order: p_g = 1 (methylated) or
         # 1 − surv(g) (target-less RISC silence) or 0; draws only where
         # 0 < p_g < 1 (member order) then one catch-up draw where 0 < q < 1;
         # catch probability compounding over the naked runway (no pow; the
-        # R10 W1 fix — pressure GROWS with distance); F-8 shield: queue
+        # R10 W1 fix, pressure GROWS with distance); F-8 shield: queue
         # >= rho.queue_floor occludes the rut sites. A terminated call is
         # not expression: returns null before counters/transcript/queue.
         rho_on, rho_catch, rho_floor, rho_cap, _drain = self._rho_knobs()
@@ -4743,9 +4780,9 @@ class Interp:
                         naked_g = u < p_g
                     shielded = self.ribo_queue.get(g2, 0.0) >= rho_floor
                     if naked_g and not shielded:
-                        # q = 1 - (1-catch)^d — per-cistron catch compounding
+                        # q = 1 - (1-catch)^d, per-cistron catch compounding
                         # over the naked runway (mirror of the Rust W1 fix:
-                        # catch^d had the distance profile inverted — the
+                        # catch^d had the distance profile inverted, the
                         # FURTHER downstream the reader, the MORE time Rho
                         # has had to catch up)
                         per = 1.0 - rho_catch
@@ -4771,14 +4808,14 @@ class Interp:
                             terminated = g2
                         break
                 if terminated is not None:
-                    self.note(4, f"rho terminated: transcript lost at '{terminated}' — call returns null")
+                    self.note(4, f"rho terminated: transcript lost at '{terminated}', call returns null")
                     return None
-        # reg-bio-3 (A1/A7): the call passed every gate — one transcript of
+        # reg-bio-3 (A1/A7): the call passed every gate, one transcript of
         # the unit is made (a suppressed call is NOT expression) (mirror)
         ui = self._operon_of(name)
         if ui is not None:
             self.operons[ui]["transcripts"] += 1
-            # loop-10 (F-8): ribosome queue register (mirror) — every
+            # loop-10 (F-8): ribosome queue register (mirror), every
             # member's queue grows by its rbs, capped at ribosome.queue_cap;
             # rho.termination-gated (inert bookkeeping otherwise).
             if rho_on:
@@ -4846,13 +4883,13 @@ class Interp:
             return self._check_ret(name, g, r.value, True)
         except Stress as st:
             # W06 (D-014) mirror: a propagated variant IS the gene's return
-            # value — the signal unwinds here and becomes the result.
+            # value, the signal unwinds here and becomes the result.
             if st.prop is not None:
                 return self._check_ret(name, g, st.prop, True)
             raise
 
     def _check_ret(self, name, g, v, explicit):
-        """W01 (L2c): soft return annotation — checked on the value the gene
+        """W01 (L2c): soft return annotation, checked on the value the gene
         actually returns (including a `?!`-propagated variant)."""
         if g.ret_ann is None:
             return v
@@ -4876,11 +4913,11 @@ class Interp:
             if not g.acetylate:
                 lvl = self.methyl_levels.get(name, 0)
                 if lvl >= self.methyl_threshold:
-                    self.note(4, f"methylation silences: '{name}' (level {lvl} >= threshold {self.methyl_threshold}) — call returns null")
+                    self.note(4, f"methylation silences: '{name}' (level {lvl} >= threshold {self.methyl_threshold}), call returns null")
                     return None
             # reg-bio (F-1): promoter gate (funnel order preserved)
             if self._promoter_veto(name):
-                self.note(4, f"promoter inactive: '{name}' burst-off — call returns null")
+                self.note(4, f"promoter inactive: '{name}' burst-off, call returns null")
                 return None
             self.call_counts[name] = self.call_counts.get(name, 0) + 1
             self.call_clock += 1
@@ -4898,7 +4935,7 @@ class Interp:
                 if pname in ("?", "", "self"):
                     continue
                 if i < len(args):
-                    # W01 (L2c): method param annotations — same soft contract.
+                    # W01 (L2c): method param annotations, same soft contract.
                     anns = g.param_anns
                     if i < len(anns) and anns[i] is not None and not ann_matches(args[i], anns[i]):
                         raise Stress("unfolded", f"argument '{pname}' for method '{name}' expects {ann_render(anns[i])}, got {type_name(args[i])}")
@@ -4941,7 +4978,7 @@ class Interp:
             self.depth -= 1
 
     def _check_ret_method(self, name, g, v, explicit):
-        """W01 (L2c): method return annotation — same soft contract."""
+        """W01 (L2c): method return annotation, same soft contract."""
         if g.ret_ann is None:
             return v
         if explicit:
@@ -4978,7 +5015,7 @@ class Interp:
                 for g in dd.methods:
                     if g.name == name:
                         return self.call_method_gene(g, recv, args)
-            # W04: trait default methods — implemented traits in declaration
+            # W04: trait default methods, implemented traits in declaration
             # order; virtual (self.x() inside dispatches through the lineage
             # first) because the fallback resolution is the same walk.
             for tname in recv.defn.implements:
@@ -5009,7 +5046,7 @@ class Interp:
                 target = v_display(args[0]) if args else ""
                 states, _ = self.fates.get(fate_name, ([], None))
                 return any(f == cur and target in tg for f, tg in states)
-        # W029 mirror: the bytes method surface — slice (Python-style,
+        # W029 mirror: the bytes method surface, slice (Python-style,
         # clamped) and len. Bytes are immutable: no mutators by design.
         if isinstance(recv, bytes):
             if name == "slice":
@@ -5443,7 +5480,7 @@ class Interp:
                 except ValueError:
                     return v
         if name == "splice_shift":
-            # loop-9 (F-4): mirror of the Rust builtin — rebinds the splice
+            # loop-9 (F-4): mirror of the Rust builtin, rebinds the splice
             # root to the named variant exactly like the splice statement.
             root = v_display(args[0]) if args else ""
             variant = v_display(args[1]) if len(args) > 1 else ""
@@ -5481,10 +5518,10 @@ class Interp:
             self.m6a_levels[k] = lvl
             marked = lvl >= 1
             if not self.methyl_quiet:
-                self.note(2, f"m6A {verb}: '{k}' (level {lvl}) — redefinition {'resisted' if marked else 'no longer resisted'}")
+                self.note(2, f"m6A {verb}: '{k}' (level {lvl}), redefinition {'resisted' if marked else 'no longer resisted'}")
             return lvl
         if name == "passage":
-            # reg-bio-3 (B2/B6): cell divisions — marks dilute unless
+            # reg-bio-3 (B2/B6): cell divisions, marks dilute unless
             # maintained (mirror of the Rust passage builtin)
             n = args[0] if args and isinstance(args[0], int) and not isinstance(args[0], bool) else 1
             n = max(n, 0)
@@ -5503,7 +5540,7 @@ class Interp:
                 for k2 in list(self.methyl_levels):
                     x = self.methyl_levels[k2] * fv - 0.5
                     self.methyl_levels[k2] = max(0, int(_math.ceil(x)))
-            # loop-9 (C8): the signal medium dilutes with the culture —
+            # loop-9 (C8): the signal medium dilutes with the culture,
             # floor(m * d) per division, d = .cell quorum.dilution (default
             # 0.5, binary-exact halving). Empty medium = no-op (mirror).
             qd = self.cell.get("quorum.dilution")
@@ -5518,16 +5555,16 @@ class Interp:
                     self.medium[k2] = int(_math.floor(self.medium[k2] * qdv))
             self.generation += n
             if not self.methyl_quiet:
-                self.note(1, f"passage: {n} divisions (maintenance {fv!r}) — generation {self.generation}")
+                self.note(1, f"passage: {n} divisions (maintenance {fv!r}), generation {self.generation}")
             return self.generation
         if name == "methylate":
-            # A12 (reg-r2): mirror of the Rust runtime API — same graded
+            # A12 (reg-r2): mirror of the Rust runtime API, same graded
             # semantics as the @methylate attribute (D-005): level += 1.
             k = v_display(args[0]) if args else ""
             self.methyl_levels[k] = self.methyl_levels.get(k, 0) + 1
             return self.methyl_levels[k]
         if name == "demethylate":
-            # A12: the @acetylate direction — saturating relaxation.
+            # A12: the @acetylate direction, saturating relaxation.
             k = v_display(args[0]) if args else ""
             self.methyl_levels[k] = max(0, self.methyl_levels.get(k, 0) - 1)
             return self.methyl_levels[k]
@@ -5545,7 +5582,7 @@ class Interp:
             k = v_display(args[0]) if args else ""
             return self.grn_levels.get(k, 0.0)
         if name == "fingerprint":
-            # loop-9 (P0-3): parity fix — the Rust core measures COMPLETE
+            # loop-9 (P0-3): parity fix, the Rust core measures COMPLETE
             # 20-call bins only (`call_clock / 20`); this mirror's former
             # `+ 1` included the trailing partial bin, so the same 41-call
             # history scored 2.439 on Rust and 0.053 here. Mirror the
@@ -5554,7 +5591,7 @@ class Interp:
             complete_bins = self.call_clock // 20
             burst_by = {}
             burst_total, burst_n = 0.0, 0
-            # reg-bio-2 (D9): iterate buckets in SORTED key order — the Rust
+            # reg-bio-2 (D9): iterate buckets in SORTED key order, the Rust
             # core accumulates burst_total in sorted order (float addition is
             # not associative; order must match for the last-ulp parity).
             for gname in sorted(self.gene_buckets):
@@ -5565,7 +5602,7 @@ class Interp:
                 n = float(complete_bins)
                 total = sum(bins.get(b, 0) for b in range(complete_bins))
                 mean = total / n
-                # reg-bio-2 (D9): d*d (explicit multiply), never ** — op-for-op
+                # reg-bio-2 (D9): d*d (explicit multiply), never **, op-for-op
                 # with the Rust core's un-multiplied square.
                 var = 0.0
                 for b in range(complete_bins):
@@ -5625,7 +5662,7 @@ class Interp:
             self.note(1, f"repressilator oscillating every {ms} ms (sequential oracle: manual ring only)")
             return True
         if name == "repressi_state":
-            # A11 (reg-r2) — mirror of the Rust core: the ring integrates
+            # A11 (reg-r2), mirror of the Rust core: the ring integrates
             # the discrete Elowitz–Leibler repressilator. State is a pure
             # function of the tick count; arithmetic order matches Rust
             # op-for-op (bit-identical IEEE-754).
@@ -5636,7 +5673,7 @@ class Interp:
             return {nm: lvls[j] for j, nm in enumerate(self.repressi_ring)}
         if name == "grn_fire":
             seed = v_display(args[0]) if args else ""
-            # A10 (reg-r2): decay mirror — decay comes from the pulse itself
+            # A10 (reg-r2): decay mirror, decay comes from the pulse itself
             # (grn_fire(seed, f)) or falls back to .cell `[grn] decay`;
             # unset/0 skips the loop (byte-identical to pre-A10).
             raw_decay = args[1] if len(args) > 1 else None
@@ -5659,9 +5696,9 @@ class Interp:
             # reg-bio-2 (C1): the translation layer integrates at every
             # engine update point (mirror of the Rust grn_fire).
             self._trans_integrate()
-            # STATEFUL network: levels persist across fires (a latch by default — decay makes the dilution explicit)
+            # STATEFUL network: levels persist across fires (a latch by default, decay makes the dilution explicit)
             # loop-9 (P0-2): ligand/signal-backed endpoints stay OUT of
-            # grn_levels (they resolve through their own pools — seeding
+            # grn_levels (they resolve through their own pools, seeding
             # them at 0.0 would shadow those reads forever) (mirror).
             for frm, to, st, inh, thr, hill, is_any, occupy, is_sum, attenuating in self.grn_edges:
                 if frm not in self.ligands and frm not in self.signals:
@@ -5669,16 +5706,16 @@ class Interp:
                 if to not in self.ligands and to not in self.signals:
                     self.grn_levels.setdefault(to, 0.0)
             # loop-9 (C8): firing a signal species directly would shadow the
-            # medium read — the Rust core refuses with a note (mirror).
+            # medium read, the Rust core refuses with a note (mirror).
             if seed in self.signals:
-                self.note(4, f"'{seed}' is a signal species: its level lives in the shared medium — use secrete()")
+                self.note(4, f"'{seed}' is a signal species: its level lives in the shared medium, use secrete()")
             else:
                 self.grn_levels[seed] = min(self.grn_levels.get(seed, 0.0) + 1.0, 1.0)
             # reg-r3 (re-audit): TWO-PHASE fire, mirroring the Rust core and
-            # the SPEC exactly — phase 1 propagates ACTIVATION in waves with
+            # the SPEC exactly, phase 1 propagates ACTIVATION in waves with
             # inhibitors excluded; phase 2 applies each inhibitor ONCE,
             # post-activation. (The old mirror subtracted inside the wave
-            # loop — up to 10 times — diverging from the SPEC's "applied
+            # loop, up to 10 times, diverging from the SPEC's "applied
             # exactly once per fire"; a pre-charged inhibited target shows
             # it: Rust yields 0.1, the old mirror yielded 0.0.)
             for wave in range(1, 11):
@@ -5696,7 +5733,7 @@ class Interp:
                     parent = self._regulated_level(parent, frm)
                     if thr is not None and thr > 0.0:
                         # reg-bio (F-2): per-edge Hill exponent (mirror of
-                        # the Rust repeated multiplication — never **)
+                        # the Rust repeated multiplication, never **)
                         n_h = hill if hill is not None else 2
                         ph = 1.0
                         th2 = 1.0
@@ -5706,7 +5743,7 @@ class Interp:
                         influence = st * (ph / (ph + th2))
                     else:
                         # op-identical to the Rust repeated multiplication
-                        # (never ** — pow vs mul rounding must not diverge)
+                        # (never **, pow vs mul rounding must not diverge)
                         s = st
                         for _ in range(wave - 1):
                             s *= st
@@ -5717,7 +5754,7 @@ class Interp:
                     if abs(nxt - cur) > 1e-12:
                         self.grn_levels[to] = nxt
                         changed = True
-                # reg-bio-2 (B7): pooled (`sum`) edges — group pass per wave,
+                # reg-bio-2 (B7): pooled (`sum`) edges, group pass per wave,
                 # BEFORE the convergence check (mirror of the Rust core).
                 groups = []
                 for frm, to, st, inh, thr, hill, is_any, occupy, is_sum, attenuating in self.grn_edges:
@@ -5750,7 +5787,7 @@ class Interp:
                 if not changed:
                     break
             # phase 2: inhibition subtracts once, from the source's
-            # post-activation level (sources read the PRE-phase-2 snapshot —
+            # post-activation level (sources read the PRE-phase-2 snapshot,
             # parity with the Rust `activated` map, so a node that is both a
             # target and a later source keeps its post-activation level)
             post = dict(self.grn_levels)
@@ -5774,7 +5811,7 @@ class Interp:
                 else:
                     influence = parent * st
                 cur = self.grn_levels.get(to, 0.0)
-                # reg-bio-2 (D2b): occupancy repression — multiplicative
+                # reg-bio-2 (D2b): occupancy repression, multiplicative
                 # survival (mirror of the Rust core); legacy subtracts once.
                 if occupy:
                     self.grn_levels[to] = cur * (1.0 - min(influence, 1.0))
@@ -5782,7 +5819,7 @@ class Interp:
                     self.grn_levels[to] = max(0.0, cur - influence)
             return dict(sorted(self.grn_levels.items()))
         if name == "grn_state":
-            # reg-bio-2 (D9): sorted key order — Rust HashMap order varies per
+            # reg-bio-2 (D9): sorted key order, Rust HashMap order varies per
             # process; both implementations now emit byte-order sorted maps.
             return dict(sorted(self.grn_levels.items()))
         if name == "items":
@@ -5795,7 +5832,7 @@ class Interp:
             targs = args[1] if len(args) > 1 and isinstance(args[1], list) else []
             if isinstance(callee, Gene):
                 # reg-r4: SendValue depth ceiling mirror (Rust SEND_DEPTH_CAP
-                # = 100_000) — deep spawn payloads raise a catchable
+                # = 100_000), deep spawn payloads raise a catchable
                 # `overflow` stress exactly like the Rust serialization path
                 for _a in targs:
                     _stack = [(_a, 1)]
@@ -5808,10 +5845,10 @@ class Interp:
                         elif isinstance(_item, dict):
                             _stack.extend((x, _d + 1) for x in _item.values())
                 # reg-r4 (re-audit B-2): route through call_named like the
-                # Rust worker does — a direct call_gene bypasses the
+                # Rust worker does, a direct call_gene bypasses the
                 # toggle/RISC/GRN/methyl gates ("a repressed allele stays
                 # repressed in worker cells", reg-r1's own contract)
-                # reg-bio-2 (C3): worker RNG decorrelation mirror — the Rust
+                # reg-bio-2 (C3): worker RNG decorrelation mirror, the Rust
                 # worker derives its stream from the task id; the sequential
                 # oracle runs the body inline but saves / derives / restores
                 # the host stream, so stochastic worker bodies draw from the
@@ -5822,11 +5859,11 @@ class Interp:
                 self.rng = _derived
                 spawn_name = callee.name
                 # loop-9 (C8): the Rust worker tags its notes "[task <name>]"
-                # — mirror the prefix while the body runs inline
+                #, mirror the prefix while the body runs inline
                 _saved_prefix = getattr(self, "task_note_prefix", None)
                 self.task_note_prefix = f"[task {spawn_name or '<lambda>'}]"
                 # loop-9: worker-cell isolation (mirror of the snapshot
-                # semantics) — the Rust worker gets a COPY of regulation
+                # semantics), the Rust worker gets a COPY of regulation
                 # state and FRESH expression counters; mutations inside the
                 # cell never propagate to the host. The sequential oracle
                 # must save/restore everything the snapshot carries.
@@ -5879,7 +5916,7 @@ class Interp:
                 # W05 spawn boundary: the Rust worker receives serialized
                 # COPIES of the arguments (nothing reachable from them is
                 # frozen inside the worker). Park the reachable frozen ids
-                # for the inline body, restore after — byte-parity with the
+                # for the inline body, restore after, byte-parity with the
                 # per-interpreter registry semantics.
                 _parked_frozen = self._park_frozen_reachable(targs)
                 try:
@@ -5892,7 +5929,7 @@ class Interp:
                         self._restore_frozen(_parked_frozen)
                 except Stress as st:
                     # W06 (D-014) mirror: a propagated variant IS the worker
-                    # gene's return value — converted at the boundary.
+                    # gene's return value, converted at the boundary.
                     if st.prop is not None:
                         result = st.prop
                     else:
@@ -5905,6 +5942,17 @@ class Interp:
                 self.next_id = _task_id
                 self.tasks = getattr(self, "tasks", {})
                 self.tasks[self.next_id] = result
+                # W18: the sequential engine ran the body inline, so the
+                # task is born finished; the phase tombstone mirrors the
+                # Rust registry's post-join answer
+                _tombs = getattr(self, "task_tombstones", {})
+                _tombs[self.next_id] = "done"
+                self.task_tombstones = _tombs
+                # W17: register on the innermost scope block, mirroring the
+                # Rust spawn's scope registration
+                _scopes = getattr(self, "scope_stack", None)
+                if _scopes:
+                    _scopes[-1].append(self.next_id)
                 return self.next_id
             self.note(4, "spawn() needs a gene; null task")
             return None
@@ -5914,6 +5962,69 @@ class Interp:
             if isinstance(tid, int) and tid in tasks:
                 return tasks.pop(tid)
             self.note(4, f"task {tid} already joined or unknown")
+            return None
+        # W18: cooperative task cancellation. The sequential engine runs
+        # worker bodies inline at spawn time, so by the time a cancel can
+        # name a task that task has already finished; the flag surface
+        # still exists and answers with the same notes as the concurrent
+        # engine's late-cancel path. Timing shapes are Rust-lane evidence
+        # (tests/timing/, excluded from both walkers).
+        if name == "cancel":
+            tid = args[0] if args else None
+            if not isinstance(tid, int) or tid <= 0:
+                self.note(4, "cancel() needs a task id")
+                return False
+            tasks = getattr(self, "tasks", {})
+            tombs = getattr(self, "task_tombstones", {})
+            if tid in tasks or tid in tombs:
+                self.note(4, f"task {tid} already finished")
+                return False
+            self.note(4, f"task {tid} unknown or already joined")
+            return False
+        if name == "task_state":
+            tid = args[0] if args else None
+            if tid == 0:
+                return "done"
+            if not isinstance(tid, int) or tid < 0:
+                self.note(4, "task_state() needs a task id")
+                return None
+            tasks = getattr(self, "tasks", {})
+            tombs = getattr(self, "task_tombstones", {})
+            if tid in tasks or tid in tombs:
+                return "done"
+            self.note(4, f"task {tid} unknown or already joined")
+            return None
+        if name == "cancelled":
+            return False
+        # W15: task-group surface. The sequential engine's children are all
+        # born finished, so wait_any answers the first LISTED id (completion
+        # ordering is Rust-lane evidence in tests/timing/) and wait_all pops
+        # every id in input order, position-aligned with the input.
+        if name == "wait_all":
+            ids = args[0] if args else []
+            if not isinstance(ids, list):
+                self.note(4, "wait_all() needs a list of task ids")
+                return []
+            tasks = getattr(self, "tasks", {})
+            out = []
+            for tid in ids:
+                if isinstance(tid, int) and tid in tasks:
+                    out.append(tasks.pop(tid))
+                else:
+                    self.note(4, f"task {tid} already joined or unknown")
+                    out.append(None)
+            return out
+        if name == "wait_any":
+            ids = args[0] if args else []
+            if not isinstance(ids, list) or not ids:
+                self.note(4, "wait_any() needs a list of task ids")
+                return None
+            tasks = getattr(self, "tasks", {})
+            tombs = getattr(self, "task_tombstones", {})
+            for tid in ids:
+                if (isinstance(tid, int) and tid in tasks) or tid in tombs:
+                    return tid
+            self.note(4, "wait_any timeout (30000 ms); no task finished")
             return None
         # ---- math
         if name == "floor":
@@ -5977,7 +6088,7 @@ class Interp:
             except _re.error as e:
                 raise Stress("unfolded", f"regex: {e}")
             # literal replacement: a callable repl treats the text as data
-            # (no \1 backref interpretation — mirrors the Rust implementation)
+            # (no \1 backref interpretation, mirrors the Rust implementation)
             return rx.sub(lambda _m: repl, subj)
         if name == "unix_time":
             import time as _t
@@ -6009,7 +6120,7 @@ class Interp:
                     i += 1
             return "".join(out)
         if name in ("grapheme_len", "fold_case", "char_at", "char_slice"):
-            # W28 (SPEC §3): Unicode depth — documented subsets, mirror of
+            # W28 (SPEC §3): Unicode depth, documented subsets, mirror of
             # the Rust core (identical rule set and fold table).
             s = v_display(args[0]) if args else ""
             if name == "grapheme_len":
@@ -6074,7 +6185,7 @@ class Interp:
             if len(args) != 2:
                 raise Stress("unfolded", "unwrap_or(v, default) needs exactly 2 arguments")
             v = args[0]
-            # W06 parity fix: a null payload is a real payload — unwrap_or on
+            # W06 parity fix: a null payload is a real payload, unwrap_or on
             # Ok(null)/Some(null) returns null, not the default (Rust parity)
             if isinstance(v, Variant) and v.tag in ("Some", "Ok"):
                 return v.payload
@@ -6085,7 +6196,7 @@ class Interp:
             v = args[0]
             if isinstance(v, Variant):
                 if v.tag in ("Some", "Ok"):
-                    # W06 parity fix: unwrap(Ok(null)) returns null — the Rust
+                    # W06 parity fix: unwrap(Ok(null)) returns null, the Rust
                     # core stores ok(null) as Some(Null) and unwraps to it;
                     # the old payload-is-None guard raised here instead
                     return v.payload
@@ -6131,7 +6242,7 @@ class Interp:
                 self.note(1, f"burst override cleared: '{nm}'")
             return None
         if name == "expr_on":
-            # reg-bio (F-1): mirror of the Rust builtin — in-source switch for
+            # reg-bio (F-1): mirror of the Rust builtin, in-source switch for
             # the telegraph promoter layer (kon/koff clamped 0..1)
             kon = 0.3
             koff = 0.1
@@ -6148,7 +6259,7 @@ class Interp:
             self.expr_stochastic = False
             return False
         if name == "decay_clock":
-            # reg-bio-2 (C2): mirror of the Rust builtin — in-source switch
+            # reg-bio-2 (C2): mirror of the Rust builtin, in-source switch
             # for the decay clock (interval n, optional fraction f)
             n = None
             if args and isinstance(args[0], (int, float)) and not isinstance(args[0], bool) and args[0] > 0:
@@ -6178,7 +6289,7 @@ class Interp:
             nm = v_display(args[0]) if args else ""
             return self._ligand_level(nm)
         if name == "secrete":
-            # loop-9 (C8): mirror of the Rust secrete — Int exact, Float
+            # loop-9 (C8): mirror of the Rust secrete, Int exact, Float
             # floors (never rounds), negative clamps to 0 with a note,
             # non-finite clamps to 0, saturating add capped at 1e9.
             nm = v_display(args[0]) if args else ""
@@ -6210,7 +6321,7 @@ class Interp:
             self.note(1, f"secrete '{nm}': +{committed} molecules (level {fmt_float(committed / 1e9)})")
             return committed
         if name == "quorum":
-            # loop-9 (C8): mirror — one arg -> level; two args -> level >= t.
+            # loop-9 (C8): mirror, one arg -> level; two args -> level >= t.
             nm = v_display(args[0]) if args else ""
             lvl = self._signal_level(nm)
             if len(args) > 1:
@@ -6224,7 +6335,7 @@ class Interp:
                 return lvl >= t
             return lvl
         if name == "quench":
-            # loop-9 (C8): mirror — m <- floor(m * (1-f)); no arg destroys all.
+            # loop-9 (C8): mirror, m <- floor(m * (1-f)); no arg destroys all.
             nm = v_display(args[0]) if args else ""
             f = 1.0
             if len(args) > 1:
@@ -6242,7 +6353,7 @@ class Interp:
             self.note(1, f"quench '{nm}': -{removed} molecules")
             return removed
         if name == "quorum_state":
-            # loop-9 (C8): mirror — sorted-key species -> molecule counts.
+            # loop-9 (C8): mirror, sorted-key species -> molecule counts.
             return {k: self.medium[k] for k in sorted(self.medium)}
         if name == "chr":
             i = args[0] if args and isinstance(args[0], int) else 0
@@ -6334,7 +6445,7 @@ class Interp:
             path = v_display(args[0]) if args else ""
             self.cap_check("write", "write", path)
             if os.path.islink(path):
-                raise Stress("interference", f"fs_delete '{path}': refused — path is a symlink")
+                raise Stress("interference", f"fs_delete '{path}': refused, path is a symlink")
             try:
                 if os.path.isdir(path):
                     os.rmdir(path)  # empty dirs only: no recursive bombs
@@ -6444,7 +6555,7 @@ class Interp:
         # ---- py (substrate-r1): the Python ecosystem bridge. The oracle
         # runs in-process (it IS python); the ok/value/error/code contract
         # matches the Rust bridge. Timeout/env-scrub containment is not
-        # mirrored here — the granted suite that exercises those paths is
+        # mirrored here, the granted suite that exercises those paths is
         # Rust-runner-only, and the differential corpus avoids py effects.
         if name == "py":
             module = v_display(args[0]) if args else ""
@@ -6510,7 +6621,7 @@ class Interp:
                         else:
                             break
             else:
-                # identical key to the .sort() method — one ordering contract
+                # identical key to the .sort() method, one ordering contract
                 out.sort(key=lambda x: (
                     (0, float(x), "") if isinstance(x, (int, float)) and not isinstance(x, bool)
                     else ((0, float(int(x)), "") if isinstance(x, bool)
@@ -6681,7 +6792,7 @@ class Interp:
 
     @staticmethod
     def _json_str(v, _seen=None, _depth=0):
-        # reg-r4: cycle-safe — repeated branch serializes as null, depth
+        # reg-r4: cycle-safe, repeated branch serializes as null, depth
         # cap 512 (mirror of the Rust json_stringify_g)
         if _seen is None:
             _seen = set()
@@ -6692,7 +6803,7 @@ class Interp:
         if v is False: return "false"
         if isinstance(v, int): return str(v)
         if isinstance(v, float):
-            # RFC 8259 honesty (SPEC §10): JSON has no NaN/Inf — non-finite
+            # RFC 8259 honesty (SPEC §10): JSON has no NaN/Inf, non-finite
             # floats serialize as null, exactly like the Rust json_stringify_g
             # (display/print keep the nan/inf spelling via fmt_float; the WIRE
             # never carries them. Found by the std_serialize proof.)
@@ -6700,7 +6811,7 @@ class Interp:
                 return "null"
             return fmt_float(v)
         if isinstance(v, str): return _json.dumps(v)
-        # W029 mirror: JSON has no bytes type — the lossless view is the int
+        # W029 mirror: JSON has no bytes type, the lossless view is the int
         # list (the Rust json_stringify_g Bytes arm).
         if isinstance(v, bytes):
             return "[" + ",".join(str(x) for x in v) + "]"
@@ -6718,10 +6829,10 @@ class Interp:
                     for k, val in v.items()) + "}"
             _seen.discard(marker)
             return out
-        # W06 (D-014) mirror: variants serialize as single-key objects —
+        # W06 (D-014) mirror: variants serialize as single-key objects,
         # {"some": v} / {"ok": v} / {"err": v}; None serializes as null.
         # Matches the Rust json_stringify_g Variant arms byte-for-byte.
-        # W06 parity fix: a null payload is a real payload — ok(null)
+        # W06 parity fix: a null payload is a real payload, ok(null)
         # serializes {"ok":null} on the Rust core; only tag None is bare null.
         if isinstance(v, Variant):
             if v.tag == "None":
@@ -6743,7 +6854,7 @@ class Interp:
             for fname, fexpr in dd.fields:
                 fields[fname] = self.eval(self.globals, fexpr)
         obj = ObjInst(p, fields)
-        # W04: trait contract check — required methods must be provided by
+        # W04: trait contract check, required methods must be provided by
         # the lineage; a break is a NOTE (Total Grammar), never fatal.
         for tname in p.implements:
             t = self.traits.get(tname)
@@ -6773,7 +6884,7 @@ class Interp:
         if path in self.loading:
             return {}
         p = path if path.endswith(".op") else path + ".op"
-        # W069: resolution chain mirrors genes.rs resolve_path — the
+        # W069: resolution chain mirrors genes.rs resolve_path, the
         # importing file's directory first, then CWD, then std/, then
         # $OPERON_STD. (Exe-relative roots are runtime-only: the oracle
         # never ships beside a std/ tree; see SPEC §8 table.)
@@ -6783,6 +6894,14 @@ class Interp:
         std_dir = os.environ.get("OPERON_STD")
         if std_dir:
             cands.append(os.path.join(std_dir, p))
+        # W19/W23 mirror: root 7, vendored deps from the lockfile (the
+        # leading path segment maps to the pinned checkout dir)
+        for dep_name, dep_dir in self.lock_dirs:
+            seg = dep_name + "/"
+            if p == dep_name + ".op":
+                cands.append(os.path.join(dep_dir, p))
+            elif p.startswith(seg):
+                cands.append(os.path.join(dep_dir, p[len(seg):]))
         resolved = next((c for c in cands if os.path.exists(c)), None)
         if resolved is None:
             return {}
@@ -6796,7 +6915,7 @@ class Interp:
             try:
                 self.exec_stmt(menv, st)
             except Stress as e:
-                # W06 (D-014) mirror: propagation with no enclosing gene —
+                # W06 (D-014) mirror: propagation with no enclosing gene,
                 # the variant value passes through (noted, never rejected).
                 if e.prop is not None:
                     self.note(4, f"propagation reached top level: {v_repr(e.prop)} passes through")
@@ -6836,9 +6955,9 @@ class Interp:
                 self.note(4, f"strict visibility: {hidden} private name(s) hidden in '{path}' (mark with pub or anchor export)")
         else:
             if strict:
-                self.note(4, f"strict visibility: '{path}' has no pub marks — default-open retained (add pub or anchor export)")
+                self.note(4, f"strict visibility: '{path}' has no pub marks, default-open retained (add pub or anchor export)")
             for kk, vv in menv.items():
-                # W24 fix (latent): tuple keys are internal const markers —
+                # W24 fix (latent): tuple keys are internal const markers,
                 # they are never exports (a module with `const` used to crash
                 # this loop; found by the visibility differential fixture).
                 if isinstance(kk, str) and kk != "__parent__" and not kk.startswith("#"):
@@ -7016,6 +7135,30 @@ def load_file(path, cell=None, variant=None, rna=None, args=None, caps=None):
     d = os.path.dirname(os.path.abspath(path))
     if d and d != os.path.abspath("."):
         it.base_dir = d
+    # W19/W23 mirror: vendored dependency roots from the nearest
+    # operon.lock (program dir, then CWD), resolution root 7.
+    for lp in (os.path.join(d, "operon.lock"), "operon.lock"):
+        try:
+            with open(lp, encoding="utf-8") as f:
+                lock_text = f.read()
+            # tiny parse: name/rev pairs in [[dep]] blocks
+            name = rev = None
+            for raw in lock_text.splitlines():
+                line = raw.strip()
+                if line == "[[dep]]":
+                    name = rev = None
+                elif line.startswith("name") and "=" in line:
+                    name = line.split("=", 1)[1].strip().strip('"')
+                elif line.startswith("rev") and "=" in line:
+                    rev = line.split("=", 1)[1].strip().strip('"')
+                if name and rev:
+                    dd = os.environ.get("OPERON_DEPS") or os.path.join(
+                        os.path.expanduser("~"), ".operon", "deps")
+                    it.lock_dirs.append((name, os.path.join(dd, "%s-%s" % (name, rev[:12]))))
+                    name = rev = None
+            break
+        except OSError:
+            continue
     if caps is not None:
         it.caps = caps
     if variant:
@@ -7030,7 +7173,7 @@ def load_file(path, cell=None, variant=None, rna=None, args=None, caps=None):
     for nt in notes:
         it.note(nt.rung, nt.message)
     it.ires = [s[1] for s in stmts if s[0] == "ires"]
-    # capability grants from .cell allow.* keys — only an EXPLICITLY passed
+    # capability grants from .cell allow.* keys, only an EXPLICITLY passed
     # --cell may grant; auto-detected operon.cell keys are ignored with a note
     cell_explicit = cell is not None and isinstance(cell, dict)
     for k, v in list(it.cell.items()):
@@ -7089,7 +7232,7 @@ def load_file(path, cell=None, variant=None, rna=None, args=None, caps=None):
             it.rng = 0x9E3779B97F4A7C15 if _s == 0 else (_s & M64)
         except ValueError:
             it.note(4, f"cell key 'expression.seed = {_esd}' ignored: needs an integer")
-    # reg-bio (F-5): repressilator kinetics — plasmid engineering surface
+    # reg-bio (F-5): repressilator kinetics, plasmid engineering surface
     for _ck, _lo, _hi in (("repressi.alpha", None, None), ("repressi.gamma", None, None),
                           ("repressi.basal", None, None), ("repressi.noise", None, None)):
         _cv = it.cell.get(_ck)
@@ -7213,7 +7356,7 @@ def main():
             pos.append(a)
         i += 1
     # loop-10: load the --cell FILE into the dict the interpreter expects
-    # (the flag previously leaked the path string into Interp(cell=...) —
+    # (the flag previously leaked the path string into Interp(cell=...),
     # AttributeError on .items(); the Rust CLI parses the file, so did we)
     cell_dict = None
     if opts["cell"]:
@@ -7233,7 +7376,7 @@ def main():
             if os.path.isdir(p):
                 for root, _, fns in os.walk(p):
                     # reg-r4: adversarial red-team payloads are containment
-                    # expectations, not proof frames — the Rust runner skips
+                    # expectations, not proof frames, the Rust runner skips
                     # this directory too (parity; the walk used to crash on
                     # one of the payloads)
                     if "redteam" in root.replace(os.sep, "/"):
@@ -7241,6 +7384,12 @@ def main():
                     # substrate-r1: capability-granted proofs run only under
                     # an explicit operator cell (Rust runner skips them too)
                     if "granted" in root.replace(os.sep, "/"):
+                        continue
+                    # W18: cancellation timing proofs need real OS threads;
+                    # the sequential engine cannot observe mid-flight
+                    # cancellation, so this lane is Rust-only (the Rust
+                    # walker skips it too)
+                    if "timing" in root.replace(os.sep, "/"):
                         continue
                     for fn in sorted(fns):
                         if fn.endswith(".op"):
@@ -7280,7 +7429,7 @@ def main():
                 except Exception as ex:
                     failed += 1
                     failures.append(f"{f}: [oracle-error] {type(ex).__name__}: {ex}")
-        print(f"operon test — {files_t} file(s), {proofs} proof(s): {passed} passed, {failed} failed")
+        print(f"operon test, {files_t} file(s), {proofs} proof(s): {passed} passed, {failed} failed")
         for f in failures:
             print(f"  FAIL {f}", file=sys.stderr)
         if failed:
@@ -7290,7 +7439,7 @@ def main():
         stmts, notes, _ = parse(src)
         score = 100 - sum(1 if n.rung == 2 else (2 if n.rung == 3 else (3 if n.rung == 4 else 0)) for n in notes)
         letter = "A" if score >= 90 else "B" if score >= 80 else "C" if score >= 70 else "D" if score >= 60 else "F"
-        print(f"operon check: {pos[0]} — score {max(score, 50)}/100 (grade {letter})")
+        print(f"operon check: {pos[0]}, score {max(score, 50)}/100 (grade {letter})")
     else:
         print("oracle supports: run | test | check | version", file=sys.stderr)
         sys.exit(2)
@@ -7307,7 +7456,7 @@ if __name__ == "__main__":
     #    failure: an exception inside main() printed a traceback and the
     #    process still exited 0, and main()'s own sys.exit() only ended the
     #    thread. A dead oracle therefore looked SUCCESSFUL to any caller
-    #    that checks exit codes — the differential harness compares them.
+    #    that checks exit codes, the differential harness compares them.
     #    The worker now records the outcome and the main thread re-raises it
     #    as the process exit code.
     #

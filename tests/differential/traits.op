@@ -1,4 +1,4 @@
-# traits — W04 differential pin: trait dispatch, defaults, virtual calls,
+# traits, W04 differential pin: trait dispatch, defaults, virtual calls,
 # contract notes. Byte-identical on both engines.
 trait Show {
     gene describe() {

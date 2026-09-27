@@ -1,10 +1,10 @@
-//! interp.rs — the tree-walking evaluator. Total Grammar at runtime:
+//! interp.rs, the tree-walking evaluator. Total Grammar at runtime:
 //! soft failures become notes; only catchable Stress propagates.
 
 use crate::ast::*;
 use crate::value::{key_scalar, SeqState, Stress, Value};
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::{mpsc, Arc, Mutex};
@@ -26,7 +26,7 @@ impl Env {
             consts: RefCell::new(std::collections::HashSet::new()),
         })
     }
-    /// W05: a const binding — records the name so later assignment stresses.
+    /// W05: a const binding, records the name so later assignment stresses.
     pub fn define_const(&self, name: &str, val: Value) {
         self.vars.borrow_mut().insert(name.to_string(), val);
         self.consts.borrow_mut().insert(name.to_string());
@@ -78,7 +78,7 @@ impl Env {
     pub fn define(&self, name: &str, val: Value) {
         self.vars.borrow_mut().insert(name.to_string(), val);
     }
-    /// W02 (match-v2): this scope's own bindings (no parent walk) — used to
+    /// W02 (match-v2): this scope's own bindings (no parent walk), used to
     /// lift an or-pattern alternative's captures from its scratch scope into
     /// the arm scope after the alternative hits. Pure copy; iteration order
     /// of the backing map is irrelevant to semantics.
@@ -99,11 +99,38 @@ pub enum Flow {
     Cont,
 }
 
-pub struct TaskHandle {
-    pub rx: mpsc::Receiver<(crate::genes::SendValue, Vec<Note>)>,
+/// W18: observable lifecycle phase of a task. The worker itself moves
+/// Running -> Done (or -> Cancelled when its last failure was the
+/// cancellation stress), so a state read never races the send. After join
+/// the phase lives on in `task_tombstones` so task_state keeps answering
+/// for ids that already left the registry.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum TaskState {
+    Running,
+    Done,
+    Cancelled,
 }
 
-/// Children get the OS essentials plus explicitly env-granted variables —
+impl TaskState {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            TaskState::Running => "running",
+            TaskState::Done => "done",
+            TaskState::Cancelled => "cancelled",
+        }
+    }
+}
+
+pub struct TaskHandle {
+    pub rx: mpsc::Receiver<(crate::genes::SendValue, Vec<Note>)>,
+    /// W18: cooperative cancellation flag. Setting it asks the worker to
+    /// stop at its next fuel tick boundary; nothing is preempted.
+    pub cancel: Arc<AtomicBool>,
+    /// W18: worker-owned lifecycle phase (see TaskState above).
+    pub state: Arc<std::sync::Mutex<TaskState>>,
+}
+
+/// Children get the OS essentials plus explicitly env-granted variables,
 /// never the whole parent environment (secrets like CI tokens cannot leak
 /// to effects). Shared by run() and the py bridge (substrate-r1) so the two
 /// subprocess paths can never drift apart.
@@ -140,7 +167,7 @@ pub(crate) fn safe_base_env(cmd: &mut std::process::Command, env_grants: &[Strin
 /// Capability grants (default-deny for I/O, processes, sockets, env).
 /// "Safer than Rust by default": an Operon program can touch nothing unless
 /// the host explicitly grants it. Violations raise catchable `interference`
-/// stress (RNA interference — the cell's antiviral silencing response).
+/// stress (RNA interference, the cell's antiviral silencing response).
 #[derive(Clone)]
 pub struct Caps {
     pub enabled: bool,
@@ -150,11 +177,11 @@ pub struct Caps {
     pub net: Vec<String>,
     pub env: Vec<String>,
     /// substrate-r1: the Python bridge. Grants are exact-match per MODULE
-    /// name (--allow-py math). A grant is a trust act — the module runs with
-    /// the interpreter's OS privileges — so the grant surface stays
+    /// name (--allow-py math). A grant is a trust act, the module runs with
+    /// the interpreter's OS privileges, so the grant surface stays
     /// per-module instead of all-or-nothing like run().
     pub py: Vec<String>,
-    /// sec-r2 (audit C-11): exit() kills the whole host process — in test
+    /// sec-r2 (audit C-11): exit() kills the whole host process, in test
     /// runners, the REPL, the LSP, or any embedded host that is fatal. So
     /// it is a capability like any other, default-deny.
     pub exit_allowed: bool,
@@ -187,10 +214,13 @@ impl Caps {
     pub fn denied(kind: &str, what: &str) -> Stress {
         Stress::new(
             "interference",
-            format!("{} denied — no capability grant covers '{}' (grant with --allow-{} or --allow-all)", kind, what, kind),
+            format!(
+                "{} denied, no capability grant covers '{}' (grant with --allow-{} or --allow-all)",
+                kind, what, kind
+            ),
         )
     }
-    /// Lexical path normalization (no filesystem access — pure string math).
+    /// Lexical path normalization (no filesystem access, pure string math).
     fn norm_path(p: &str) -> String {
         let mut out: Vec<&str> = Vec::new();
         for seg in p.split('/') {
@@ -204,7 +234,7 @@ impl Caps {
         }
         out.join("/")
     }
-    /// A grant that normalizes to the empty string would match everything —
+    /// A grant that normalizes to the empty string would match everything,
     /// reject it instead (granting "." from /, or "/", must not mean the
     /// whole filesystem).
     pub fn validate_grant(kind: &str, g: &str) -> Result<(), Stress> {
@@ -235,7 +265,7 @@ impl Caps {
     /// when the target does not exist (e.g. a file about to be created).
     ///
     /// STRICT-RULE (sandbox): if the path EXISTS, its fully-resolved form
-    /// must be inside a grant — no parent-chain probing. A symlink placed
+    /// must be inside a grant, no parent-chain probing. A symlink placed
     /// inside a granted directory that points outside the sandbox resolves
     /// to its target and is rejected even though the link's parent is
     /// granted (Critic-X B1).
@@ -277,7 +307,7 @@ impl Caps {
                     // lexical fallback ONLY for grants that do not exist on
                     // disk. A grant that exists but failed to cover an
                     // existing canonicalized target must never be re-admitted
-                    // lexically — that is the symlink-escape hole (S4 NEW-1).
+                    // lexically, that is the symlink-escape hole (S4 NEW-1).
                     let np = Self::norm_path(path);
                     let ng = Self::norm_path(g);
                     if !ng.is_empty() && (np == ng || np.starts_with(&format!("{}/", ng))) {
@@ -308,8 +338,8 @@ impl Caps {
         self.enabled && !list.iter().any(|g| g == "*")
     }
     /// sec-r5 (F-8a): follow a symlink chain to its final form (40 hops max),
-    /// keeping the last path seen. canonicalize() fails on DANGLING links —
-    /// exactly the state a TOCTOU attacker stages — so this resolver still
+    /// keeping the last path seen. canonicalize() fails on DANGLING links,
+    /// exactly the state a TOCTOU attacker stages, so this resolver still
     /// resolves them and a dangling outside-pointing link is rejected BEFORE
     /// open() can create-through it as an empty file.
     fn resolve_link_chain(p: &std::path::Path) -> std::path::PathBuf {
@@ -354,11 +384,11 @@ impl Caps {
         }
         cur
     }
-    /// sec-r5 (F-8): post-open containment verification — anti-TOCTOU.
+    /// sec-r5 (F-8): post-open containment verification, anti-TOCTOU.
     /// The pre-open check races against symlink swaps: what was resolved at
     /// T1 may not be what the OS touches at T2 (proven live: a flipped link
     /// landed attacker-controlled bytes outside the grant). Open FIRST,
-    /// verify the handle's true identity, then do I/O — through the handle,
+    /// verify the handle's true identity, then do I/O, through the handle,
     /// so no later path re-resolution exists.
     ///   - Unix: /proc/self/fd/<fd> reveals the fully-resolved path
     ///   - elsewhere: symlink/reparse handles are refused outright
@@ -396,11 +426,11 @@ impl Caps {
     }
 }
 
-/// T2e: super-enhancer activation boost — an `enhance`d gene lowers its
+/// T2e: super-enhancer activation boost, an `enhance`d gene lowers its
 /// GRN activating thresholds by this much (0.25), so under the T2a call
 /// gate an enhanced gene demonstrably fires where an unenhanced one would
 /// stay gated. Only meaningful on edges that carry an explicit threshold.
-/// reg-bio (F-6): the dose is overridable via `.cell enhance.delta` — real
+/// reg-bio (F-6): the dose is overridable via `.cell enhance.delta`, real
 /// enhancer strength varies by orders of magnitude with binding-site
 /// number/affinity; 0.25 stays the default for every existing program.
 pub const ENHANCE_DELTA: f64 = 0.25;
@@ -415,17 +445,17 @@ pub struct RepressiParams {
     pub alpha: f64,
     pub gamma: f64,
     pub hill: u32,
-    /// basal promoter leak — real repressed promoters never reach zero
+    /// basal promoter leak, real repressed promoters never reach zero
     /// transcription; dA/dt gains a constant +basal term.
     pub basal: f64,
     /// noise amplitude (0 = off). When > 0, each Euler substep draws a
     /// deterministic kick from a stream derived from the absolute
-    /// (tick, substep) position — so the fold-from-init path and the
+    /// (tick, substep) position, so the fold-from-init path and the
     /// incremental cache path produce bit-identical levels, and the
     /// Python oracle mirrors it op-for-op (phase diffusion, E-L §noise).
     pub noise: f64,
     /// seed for the noise stream (independent of the program's `random()`
-    /// stream — noise never perturbs user-visible randomness).
+    /// stream, noise never perturbs user-visible randomness).
     pub seed: u64,
 }
 
@@ -442,7 +472,7 @@ impl Default for RepressiParams {
     }
 }
 
-/// reg-bio-3 (A1/A7): a polycistronic transcription unit — the namesake
+/// reg-bio-3 (A1/A7): a polycistronic transcription unit, the namesake
 /// construct. ONE promoter drives N cistrons on ONE polycistronic mRNA.
 /// Member order is load-bearing: position determines the RBS gradient
 /// (translation efficiency) and polarity exposure (upstream blocking
@@ -465,34 +495,39 @@ pub struct Interp {
     /// W05: pointer addresses (Rc::as_ptr) of deep-frozen List/Map containers.
     /// Frozen-ness is per-interpreter by design: spawn arguments cross the
     /// thread boundary by serialization, so a worker's copies are fresh
-    /// containers — the oracle mirrors this by parking the reachable frozen
+    /// containers, the oracle mirrors this by parking the reachable frozen
     /// ids for the duration of an inline spawn body (SPEC §7d boundary).
     ///
     /// W05 hardening (rt_p18a probe 3): a raw address set observes ADDRESS
-    /// REUSE — a const binding that dies (gene-local const, dropped value)
+    /// REUSE, a const binding that dies (gene-local const, dropped value)
     /// can free its containers; the next allocation reuses the address and
     /// an innocent fresh list would be falsely frozen. `frozen_keep` holds a
     /// Value clone of every registered container, keeping the addresses
     /// alive (and the walk's membership stable) for the interpreter's life.
     pub frozen: std::collections::HashSet<usize>,
     pub frozen_keep: Vec<Value>,
-    /// W04: trait registry — declared traits by name (last wins).
+    /// W04: trait registry, declared traits by name (last wins).
     pub traits: HashMap<String, Arc<crate::ast::TraitDef>>,
     pub cell: HashMap<String, String>,
     pub cell_entry: Option<String>,
     pub base_dir: Option<String>,
+    /// W19/W23: vendored dependency roots from operon.lock, (package name,
+    /// cache dir). Populated at CLI startup when a lockfile exists; the
+    /// module resolution chain consults it AFTER the standard roots so a
+    /// checked-out dep resolves offline (SPEC §8 resolution table, root 7).
+    pub lock_dirs: Vec<(String, String)>,
     /// W079: warned once per run about a below-floor Python interpreter.
     pub py_version_warned: bool,
-    /// A13 (dx-r2): line of the call expression currently executing —
+    /// A13 (dx-r2): line of the call expression currently executing,
     /// builtin diagnostics stamp this instead of 0.
     pub cur_line: usize,
     /// A13 (dx-r2): source file name for diagnostic rendering.
     pub file: String,
     /// dx-r3 (re-audit / A14 leftover): when set, promote() writes here
-    /// instead of process stdout — the test runner captures per-file
+    /// instead of process stdout, the test runner captures per-file
     /// program output and shows it only on failure (clean reports).
     pub stdout_sink: Option<Rc<RefCell<Vec<String>>>>,
-    /// W095: GRN tick-stream collector — when Some, every engine update
+    /// W095: GRN tick-stream collector, when Some, every engine update
     /// point (grn_fire pulse / decay-clock tick, both funneled through
     /// trans_integrate) appends one JSONL frame of the SORTED level map
     /// (deterministic output, W089). The interpreter performs no I/O: the
@@ -502,16 +537,16 @@ pub struct Interp {
     pub trace_grn: Option<Vec<String>>,
     /// W095: emitted-frame ordinal (monotonic across kinds).
     pub trace_grn_tick: u64,
-    /// reg-bio-3 (C9): stoichiometric RISC — (from, to, strength, sites).
+    /// reg-bio-3 (C9): stoichiometric RISC, (from, to, strength, sites).
     /// Each entry is one binding site; capture probability per call is
     /// 1 - (1-s)^sites over all entries for the target. strength 1.0 with
     /// one site = the legacy binary redirect, bit-identical.
     pub silences: Vec<(String, Option<String>, f64, u32)>,
-    /// reg-bio-3 (A1/A7): polycistronic transcription units — the namesake
+    /// reg-bio-3 (A1/A7): polycistronic transcription units, the namesake
     /// construct. One promoter drives N cistrons on ONE transcript; member
     /// order is load-bearing (RBS gradient + polarity exposure).
     pub operons: Vec<OperonUnit>,
-    /// reg-bio-3 (C9): stoichiometric RISC bookkeeping — genes that escaped
+    /// reg-bio-3 (C9): stoichiometric RISC bookkeeping, genes that escaped
     /// a sub-1.0 capture (first escape notes once).
     pub risc_escaped: std::collections::HashSet<String>,
     /// reg-bio-3 (B3): m6A site-density levels 0..=3 (prokaryotic Dam-style
@@ -519,10 +554,10 @@ pub struct Interp {
     /// redefinition requires level >= 1; the legacy bool is the {0,1}
     /// sub-lattice.
     pub m6a_levels: HashMap<String, u32>,
-    /// reg-bio-3 (B2/B6): divisions counter — `passage(n)` advances it;
+    /// reg-bio-3 (B2/B6): divisions counter, `passage(n)` advances it;
     /// spawn is a thread, not a division, and does not touch it.
     pub generation: u64,
-    /// reg-bio-3 (C10): gene dosage registry — name -> copies (>1 only).
+    /// reg-bio-3 (C10): gene dosage registry, name -> copies (>1 only).
     /// Interp-level (not Env) because regulation reads resolve source
     /// names without env access.
     pub copies: HashMap<String, u32>,
@@ -530,12 +565,12 @@ pub struct Interp {
     pub phenos: HashMap<String, Arc<PhenoDef>>,
     pub grn_edges: Vec<RegEdge>,
     pub grn_levels: HashMap<String, f64>,
-    /// reg-bio-2 (C1): the translation layer — production relations
+    /// reg-bio-2 (C1): the translation layer, production relations
     /// (mRNA -> protein) and their call-count checkpoints. Protein nodes
     /// live in `grn_levels` so gates read them like any regulator.
     pub trans_edges: Vec<crate::ast::TransEdge>,
     pub trans_last: HashMap<String, u64>, // "from\u{0}to" -> call count at last integration
-    /// reg-bio-2 (C11): decoy binding sites (decoy, tf, capacity) —
+    /// reg-bio-2 (C11): decoy binding sites (decoy, tf, capacity),
     /// competitive titration on every regulation read of `tf`.
     pub decoys: Vec<(String, String, f64)>,
     /// reg-bio-2 (A4): small-molecule ligand pools (metabolites, not genes)
@@ -548,31 +583,31 @@ pub struct Interp {
     /// the environment, not the cytoplasm: it is deliberately NOT part of
     /// RegulationSnap (workers inherit frozen pools but a LIVE medium) and
     /// it is handed to workers explicitly like fuel_pool. Integer counts
-    /// make concurrent secretions COMMUTE — order-free accumulation, so
+    /// make concurrent secretions COMMUTE, order-free accumulation, so
     /// thread interleaving cannot change the pool (the cross-thread answer
     /// to the burst_total float-sum lesson). Saturating cap 1e9 molecules
     /// = level 1.0 (saturated medium).
     pub signals: Vec<String>,
     pub medium: Option<Arc<Mutex<HashMap<String, u64>>>>,
     /// loop-9 (F-6): worker-side resolved m6A reader knobs (yd2, yatt,
-    /// min_level) — None on the host (which resolves .cell lazily per
+    /// min_level), None on the host (which resolves .cell lazily per
     /// integration); Some after bind_regulation (workers fold the parent's
     /// reader math exactly, since they do not inherit raw .cell).
     pub m6a_reader_pins: Option<(f64, f64, u32)>,
-    /// loop-10 (F-7/F-8): worker-side resolved Rho/queue knobs — (armed,
+    /// loop-10 (F-7/F-8): worker-side resolved Rho/queue knobs, (armed,
     /// catch, queue_floor, queue_cap, drain). None on the host (which
     /// resolves .cell lazily per use); Some after bind_regulation (workers
-    /// fold the parent's termination math exactly — they do not inherit
+    /// fold the parent's termination math exactly, they do not inherit
     /// raw .cell).
     pub rho_pins: Option<(bool, f64, f64, f64, f64)>,
     /// loop-10 (F-8): per-cistron ribosome queue-depth register. Populated
-    /// ONLY when rho.termination is on (inert bookkeeping otherwise — no
+    /// ONLY when rho.termination is on (inert bookkeeping otherwise, no
     /// back-compat surface at all). Rides RegulationSnap.
     pub ribo_queue: HashMap<String, f64>,
-    /// loop-9 (F-3): per-gene promoter attempt telemetry —
+    /// loop-9 (F-3): per-gene promoter attempt telemetry,
     /// (attempts, on_total, episodes) per gene name. Rides RegulationSnap.
     pub promoter_tel: HashMap<String, (u64, u64, u64)>,
-    /// loop-9 (R9): runtime promoter-rate modulation (burst_set) —
+    /// loop-9 (R9): runtime promoter-rate modulation (burst_set),
     /// gene -> (kon, koff). Sits BELOW the @burst mark in precedence.
     /// Rides RegulationSnap (worker cells freeze modulation at spawn).
     pub burst_overrides: HashMap<String, (f64, f64)>,
@@ -585,17 +620,17 @@ pub struct Interp {
     /// re-resolve the variant list at runtime.
     pub splice_registry: HashMap<String, crate::ast::SpliceDef>,
     pub grn_binds: Vec<crate::ast::BindDef>,
-    pub toggles: Vec<(String, String, bool)>, // (a, b, a_on) — mutual repression pair
+    pub toggles: Vec<(String, String, bool)>, // (a, b, a_on), mutual repression pair
     pub repressi_ring: Vec<String>,
     pub repressi_i: usize,
-    /// T2d: manual-mode tick counter — drives the level oscillation formula.
+    /// T2d: manual-mode tick counter, drives the level oscillation formula.
     pub repressi_tick: u64,
     pub repressi_atomic: Option<Arc<AtomicU64>>,
-    /// sec-r3: cancellable timer flag — repressi_start/repressilator share
+    /// sec-r3: cancellable timer flag, repressi_start/repressilator share
     /// ONE timer thread; the previous one is flagged off before a new spawn
     /// (no permanent thread-budget drain).
     pub repressi_timer_stop: Option<Arc<AtomicBool>>,
-    /// sec-r3: memoized ring state — (tick, levels). repressi_state()
+    /// sec-r3: memoized ring state, (tick, levels). repressi_state()
     /// integrates incrementally from here instead of re-folding O(tick)
     /// from init on every read (the re-audit's CPU-burn finding), with the
     /// per-tick work charged as fuel.
@@ -632,7 +667,7 @@ pub struct Interp {
     /// reg-bio (F-1): the telegraph promoter layer. Real promoters switch
     /// between active/inactive states (transcriptional bursting); when
     /// `expr_stochastic` is on, each gene carries a promoter state and one
-    /// seeded draw per call attempt decides on/off. OFF by default — the
+    /// seeded draw per call attempt decides on/off. OFF by default, the
     /// deterministic contract is untouched.
     pub expr_stochastic: bool,
     pub expr_kon: f64,
@@ -648,6 +683,33 @@ pub struct Interp {
     pub cli_args: Vec<String>,
     pub tasks: HashMap<i64, TaskHandle>,
     pub next_task_id: i64,
+    /// W18: cancellation flags this interpreter must observe at tick
+    /// boundaries. The host chain is empty; a worker holds its own flag
+    /// plus every ancestor flag (cancelling a cell cancels its children).
+    pub cancel_chain: Vec<Arc<AtomicBool>>,
+    /// W18: terminal phases of already-joined tasks, so task_state()
+    /// keeps answering after the handle left the registry.
+    pub task_tombstones: HashMap<i64, TaskState>,
+    /// W18: inside a rescue handler the boundary raise is suppressed (the
+    /// handler must be able to act on a caught cancellation), while the
+    /// explicit `cancelled()` poll keeps reading the real chain. The step
+    /// budget and fuel pool still apply, so a handler cannot spin forever.
+    pub cancel_suppressed: bool,
+    /// W17: one task-id registry per active `scope` block (innermost
+    /// last). spawn() registers into the top; scope exit reaps the ids.
+    pub scope_stack: Vec<Vec<i64>>,
+    /// W09 A2: the bytecode lane flag (set by --vm) + the shared arenas
+    /// (bridged sub-ASTs and compiled bodies keyed by def pointer).
+    pub vm: bool,
+    pub vm_program: Option<crate::vm::VmProgram>,
+    /// W11: the optimization level behind --opt (0 = off).
+    pub vm_opt: u8,
+    /// W08 phase 1: interactive debug hooks (`operon debug`). Break lines
+    /// are matched against the current source line after each statement;
+    /// workers are separate Interps and never break.
+    pub debug_breaks: HashSet<usize>,
+    pub debug_step: bool,
+    pub debug_file: String,
     pub seq_tx: Option<mpsc::SyncSender<crate::value::SeqMsg>>,
     /// Process-wide step ceiling shared with every spawned worker: when
     /// present, the run's TOTAL fuel (host + all threads) drains this pool.
@@ -656,7 +718,7 @@ pub struct Interp {
 
 /// `Interp` is never `Default::default()`d with semantics on purpose:
 /// `new()` carries the deterministic RNG seed (0x9E3779B97F4A7C15) and the
-/// 200M step ceiling — both are contract (differential parity, §9 fuel).
+/// 200M step ceiling, both are contract (differential parity, §9 fuel).
 impl Default for Interp {
     fn default() -> Self {
         Self::new()
@@ -671,6 +733,7 @@ impl Interp {
             cell: HashMap::new(),
             cell_entry: None,
             base_dir: None,
+            lock_dirs: Vec::new(),
             py_version_warned: false,
             cur_line: 0,
             file: "<repl>".to_string(),
@@ -749,6 +812,16 @@ impl Interp {
             cli_args: Vec::new(),
             tasks: HashMap::new(),
             next_task_id: 1,
+            cancel_chain: Vec::new(),
+            task_tombstones: HashMap::new(),
+            cancel_suppressed: false,
+            scope_stack: Vec::new(),
+            vm: false,
+            vm_program: None,
+            vm_opt: 0,
+            debug_breaks: HashSet::new(),
+            debug_step: false,
+            debug_file: String::new(),
             seq_tx: None,
             fuel_pool: None,
         }
@@ -765,7 +838,7 @@ impl Interp {
                 self.notes.push(Note {
                     line,
                     rung: 4,
-                    message: "note cap (10000) reached — further notes suppressed".into(),
+                    message: "note cap (10000) reached, further notes suppressed".into(),
                 });
             }
             return;
@@ -783,7 +856,7 @@ impl Interp {
         }
         let n = n as u64;
         // allocation ceiling: giant repeats abort the process outside the
-        // stress model — cap as catchable overflow
+        // stress model, cap as catchable overflow
         if n.saturating_mul(s.len() as u64) > 512 * 1024 * 1024 {
             return Err(Stress::new(
                 "overflow",
@@ -794,7 +867,7 @@ impl Interp {
         Ok(Value::Str(s.repeat(n as usize)))
     }
 
-    /// W029: bytes repeat — same ceiling family as strings (a giant repeat
+    /// W029: bytes repeat, same ceiling family as strings (a giant repeat
     /// would abort the process outside the stress model), same fuel shape.
     fn bytes_repeat(&self, b: &[u8], n: i64) -> Result<Value, Stress> {
         if n < 0 {
@@ -815,7 +888,33 @@ impl Interp {
         Ok(Value::Bytes(Rc::new(out)))
     }
 
-    fn tick(&mut self) -> Result<(), Stress> {
+    pub(crate) fn tick(&mut self) -> Result<(), Stress> {
+        self.tick_inner(true)?;
+        Ok(())
+    }
+
+    /// W18: the entry tick of a stress construct still counts steps and
+    /// fuel but does NOT observe the cancel chain. If it did, a cancel
+    /// that landed before the worker was scheduled would raise before the
+    /// handler exists, and no cooperative worker could ever run its own
+    /// rescue. Skipping it here means the first tick INSIDE the arm is
+    /// the one that raises, so the rescue always gets its window.
+    fn tick_uncancelled(&mut self) -> Result<(), Stress> {
+        self.tick_inner(false)?;
+        Ok(())
+    }
+
+    fn tick_inner(&mut self, check_cancel: bool) -> Result<(), Stress> {
+        // W18: cooperative cancellation is checked at fuel tick boundaries.
+        // A worker observes its own flag plus every ancestor flag; the host
+        // chain is empty and pays one branch for the empty check.
+        if check_cancel && !self.cancel_suppressed && !self.cancel_chain.is_empty() {
+            for f in &self.cancel_chain {
+                if f.load(std::sync::atomic::Ordering::Relaxed) {
+                    return Err(Stress::new("cancelled", "task cancelled"));
+                }
+            }
+        }
         self.steps += 1;
         // shared pool: every 65_536 steps, drain a chunk from the run-wide
         // pool so host + workers share one "steps per run" ceiling
@@ -864,7 +963,7 @@ impl Interp {
             MatchPat::Lit(l) => {
                 let lv = match self.eval(env, l) {
                     Ok(v) => v,
-                    // W06 (D-014): propagation is a return, not a failure —
+                    // W06 (D-014): propagation is a return, not a failure,
                     // it leaves the statement and heads for the gene
                     // boundary (never contained).
                     Err(s) if s.prop.is_some() => return Err(s),
@@ -880,7 +979,7 @@ impl Interp {
                 sv.deep_eq(&lv)
             }
             MatchPat::Multi(ls) => {
-                // Legacy literal comma-run (`case 1, 2 =>`) — any literal
+                // Legacy literal comma-run (`case 1, 2 =>`), any literal
                 // hits. W06: loop, not iter().any, so a `?!` inside a
                 // pattern literal can propagate out (closures cannot
                 // `return Err` through an iterator).
@@ -1021,12 +1120,125 @@ impl Interp {
                 Flow::Norm => {}
                 other => return Ok(other),
             }
+            // W08 phase 1: the statement-level debug trap. cur_line now
+            // reflects the statement that just ran; a hit (or a step
+            // request from the previous trap) opens the REPL. Only the
+            // host interpreter has hooks set; workers never break.
+            if self.debug_step || self.debug_breaks.contains(&self.cur_line) {
+                self.debug_repl(env);
+            }
         }
         Ok(Flow::Norm)
     }
 
+    /// W08 phase 1: the on-break REPL. Reads stdin; EOF resumes (piped
+    /// sessions terminate cleanly instead of wedging). Commands: c/continue
+    /// (resume), s/step (break after the next statement), p EXPR (evaluate
+    /// in the current frame), vars (dump the frame chain), bt (call chain),
+    /// q (leave the debugger with exit code 0).
+    fn debug_repl(&mut self, env: &Rc<Env>) {
+        use std::io::Write as _;
+        loop {
+            print!("(dbg) ");
+            let _ = std::io::stdout().flush();
+            let mut line = String::new();
+            if std::io::stdin().read_line(&mut line).unwrap_or(0) == 0 {
+                // EOF: resume to completion so piped sessions never wedge
+                self.debug_step = false;
+                self.debug_breaks.clear();
+                return;
+            }
+            let t = line.trim();
+            match t {
+                "c" | "continue" => {
+                    self.debug_step = false;
+                    return;
+                }
+                "s" | "step" => {
+                    self.debug_step = true;
+                    return;
+                }
+                "q" | "quit" => {
+                    eprintln!("[debug] quit");
+                    std::process::exit(0);
+                }
+                "bt" => {
+                    for (name, _, _) in self.call_stack.iter().rev() {
+                        println!("  at {}", name);
+                    }
+                }
+                "vars" => {
+                    let mut cur = Some(env.clone());
+                    let mut depth = 0usize;
+                    while let Some(e) = cur {
+                        let vars = e.vars.borrow();
+                        let mut names: Vec<String> = vars.keys().cloned().collect();
+                        names.sort();
+                        for n in names {
+                            let v = vars.get(&n).cloned().unwrap_or(Value::Null);
+                            let text = v.display();
+                            let text = if text.len() > 120 {
+                                format!(
+                                    "{}…",
+                                    &text[..text
+                                        .char_indices()
+                                        .nth(120)
+                                        .map(|(i, _)| i)
+                                        .unwrap_or(text.len())]
+                                )
+                            } else {
+                                text
+                            };
+                            println!("  {} = {}", n, text);
+                        }
+                        depth += 1;
+                        if depth >= 8 {
+                            break;
+                        }
+                        cur = e.parent.clone();
+                    }
+                }
+                other => {
+                    if let Some(expr_src) = other.strip_prefix("p ") {
+                        let src = expr_src.trim();
+                        if src.is_empty() {
+                            eprintln!("(dbg) p needs an expression");
+                            continue;
+                        }
+                        let parsed = crate::parser::parse(&format!("gene __dbg() {{ {} }}", src));
+                        let mut val: Option<Value> = None;
+                        if let Some(Stmt::Gene(g)) = parsed.stmts.first() {
+                            if let Some(Stmt::ExprStmt(e)) = g.body.first() {
+                                match self.eval(env, e) {
+                                    Ok(v) => val = Some(v),
+                                    Err(st) => {
+                                        println!("  [{}] {}", st.kind, st.message);
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
+                        match val {
+                            Some(v) => println!("  {}", v.display()),
+                            None => eprintln!("(dbg) cannot evaluate '{}'", src),
+                        }
+                    } else {
+                        eprintln!("(dbg) commands: c | s | q | bt | vars | p EXPR");
+                    }
+                }
+            }
+        }
+    }
+
     pub fn exec_stmt(&mut self, env: &Rc<Env>, stmt: &Stmt) -> Result<Flow, Stress> {
-        self.tick()?;
+        // W18: a stress construct must be allowed to enter its own handler
+        // (see tick_uncancelled); every other statement observes cancel at
+        // the ordinary boundary.
+        if matches!(stmt, Stmt::Stress { .. }) {
+            self.tick_uncancelled()?;
+        } else {
+            self.tick()?;
+        }
         match stmt {
             Stmt::Block(body) => {
                 let child = Env::new(Some(env.clone()));
@@ -1041,7 +1253,7 @@ impl Interp {
                 Ok(Flow::Norm)
             }
             Stmt::LetConst(name, e) => {
-                // W05: immutable binding — the value is deep-frozen (every
+                // W05: immutable binding, the value is deep-frozen (every
                 // reachable list/map), the name recorded as const. Freezing
                 // draws nothing: the entropy stream is untouched.
                 let v = self.eval(env, e)?;
@@ -1053,7 +1265,7 @@ impl Interp {
                 Ok(Flow::Norm)
             }
             Stmt::LetAnn(name, ann, e) => {
-                // W01 (L2c): the annotation is a soft contract — a mismatch
+                // W01 (L2c): the annotation is a soft contract, a mismatch
                 // is catchable `unfolded` Stress (SPEC §7a), never a hard
                 // failure. On a mismatch the binding does NOT happen (the
                 // name stays unbound; a rescued program re-plans).
@@ -1143,7 +1355,7 @@ impl Interp {
                             l.borrow_mut()[j as usize] = val;
                         } else {
                             // out-of-range writes append (Total Grammar: degrade,
-                            // never reject) — noted so the shape change is visible
+                            // never reject), noted so the shape change is visible
                             l.borrow_mut().push(val);
                             self.note(0, 4, "index out of range; value appended");
                         }
@@ -1197,13 +1409,13 @@ impl Interp {
             }
             Stmt::LetPat(pat, e) => {
                 // L1a: destructuring definition. Soft-miss: a pattern never
-                // hard-fails — wrong shape or missing piece binds Null + note.
+                // hard-fails, wrong shape or missing piece binds Null + note.
                 let v = self.eval(env, e)?;
                 self.bind_pattern(env, pat, v);
                 Ok(Flow::Norm)
             }
             Stmt::ForPat(pat, iter, body) => {
-                // L1a: destructuring loop — each item binds the pattern in a
+                // L1a: destructuring loop, each item binds the pattern in a
                 // fresh child scope, exactly like `for name`.
                 let itv = self.eval(env, iter)?;
                 if let Value::Seq(_def, st) = itv {
@@ -1254,7 +1466,7 @@ impl Interp {
             }
             Stmt::MultiAssign(targets, values, define) => {
                 // L1a: swap / multiple assignment. All right-hand values are
-                // evaluated (left to right) BEFORE any target is written —
+                // evaluated (left to right) BEFORE any target is written,
                 // `a, b = b, a` swaps, never smears.
                 // W05: non-define rebinding of a const name stresses before
                 // any target is written.
@@ -1352,6 +1564,38 @@ impl Interp {
                 }
                 Ok(Flow::Norm)
             }
+            Stmt::Scope(body) => {
+                // W17: structured concurrency. Tasks spawned inside the
+                // block register on this scope and are reaped at block
+                // exit on every flow path. cancel-on-error (default on,
+                // .cell `scope.cancel_on_error = off` to disable) asks the
+                // children to stop before reaping when the block unwinds
+                // by stress; the stress itself still propagates after the
+                // reap, so the caller's rescue sees the original failure.
+                self.scope_stack.push(Vec::new());
+                let child = Env::new(Some(env.clone()));
+                let ran = self.exec_block(&child, body);
+                let ids = self.scope_stack.pop().unwrap_or_default();
+                if ran.is_err() {
+                    let cancel_on_err = self
+                        .cell
+                        .get("scope.cancel_on_error")
+                        .map(|v| v != "off")
+                        .unwrap_or(true);
+                    if cancel_on_err {
+                        for id in &ids {
+                            let _ = crate::genes::cancel_task(self, vec![Value::Int(*id)]);
+                        }
+                    }
+                }
+                for id in &ids {
+                    let _ = crate::genes::join_task(self, *id, None);
+                }
+                match ran? {
+                    Flow::Norm => Ok(Flow::Norm),
+                    other => Ok(other),
+                }
+            }
             Stmt::For(name, iter, body) => {
                 let itv = self.eval(env, iter)?;
                 if let Value::Seq(_def, st) = itv {
@@ -1419,7 +1663,7 @@ impl Interp {
             Stmt::Match(subject, cases) => {
                 let sv = self.eval(env, subject)?;
                 for (pat, body) in cases {
-                    // One fresh child scope per arm — pattern captures live
+                    // One fresh child scope per arm, pattern captures live
                     // only in the arm that hits and are gone afterwards.
                     let child = Env::new(Some(env.clone()));
                     if self.match_pat(&child, &child, &sv, pat)? {
@@ -1440,7 +1684,7 @@ impl Interp {
                         env.define(&name, modv.clone());
                         // flat-bind ALL exports beside the alias map: the whole
                         // module repertoire (genes AND data like config lets)
-                        // stays addressable by name — workers and call()
+                        // stays addressable by name, workers and call()
                         // resolve them without a prefix, and worker snapshots
                         // carry module data across the membrane
                         if let Value::Map(m) = &modv {
@@ -1471,12 +1715,12 @@ impl Interp {
                     kind: k,
                     message,
                     // W007 (upgrades dx-r5): the raise statement carries its
-                    // OWN line — the primary diagnostic points at the raise,
+                    // OWN line, the primary diagnostic points at the raise,
                     // not at the last located expression before it.
                     line: *raise_line,
                     // W007: the chain fills during unwinding (call_gene).
                     chain: Vec::new(),
-                    // D-014: `raise` can never forge propagation — the prop
+                    // D-014: `raise` can never forge propagation, the prop
                     // marker has no user path. Forged kinds stay real stress.
                     prop: None,
                 })
@@ -1485,10 +1729,10 @@ impl Interp {
                 let result = self.exec_block(env, body);
                 match result {
                     // return/break/continue inside the guarded body propagate
-                    // to the enclosing gene/loop — only STRESS is intercepted
+                    // to the enclosing gene/loop, only STRESS is intercepted
                     Ok(flow @ (Flow::Ret(_) | Flow::Brk | Flow::Cont)) => Ok(flow),
                     Ok(_) => Ok(Flow::Norm),
-                    // W06 (D-014): propagation is a RETURN, not a failure — it
+                    // W06 (D-014): propagation is a RETURN, not a failure, it
                     // crosses stress/rescue boundaries on its way to the gene
                     // boundary. Must pre-arm BEFORE kind matching so rescue
                     // (including `rescue any`) can never contain or spoof it.
@@ -1506,16 +1750,29 @@ impl Interp {
                                 // rescue entry is real work: charge it. A
                                 // `rescue { return f() }` retry-spin otherwise
                                 // dodges the fuel counter entirely (wave-3
-                                // Critic-X hang #1).
+                                // Critic-X hang #1). W18: the charge ticks are
+                                // cancel-lenient, or a caught cancellation
+                                // would re-raise here before the handler body
+                                // ever ran and no cooperative worker could
+                                // ever act on its own flag.
                                 for _ in 0..64 {
-                                    self.tick()?;
+                                    self.tick_uncancelled()?;
                                 }
                                 let child = Env::new(Some(env.clone()));
                                 if let Some(b) = binding {
                                     let m = self.stress_map(&stress);
                                     child.define(b, m);
                                 }
-                                match self.exec_block(&child, rbody)? {
+                                // W18: the handler runs with the boundary
+                                // raise suppressed so it can act on the
+                                // caught cancellation instead of dying at
+                                // its first statement. cancelled() still
+                                // polls the live chain inside here.
+                                let saved_suppress = self.cancel_suppressed;
+                                self.cancel_suppressed = true;
+                                let ran = self.exec_block(&child, rbody);
+                                self.cancel_suppressed = saved_suppress;
+                                match ran? {
                                     Flow::Norm => Ok(Flow::Norm),
                                     other => Ok(other),
                                 }
@@ -1564,7 +1821,7 @@ impl Interp {
                 // candidates: a redefinition cannot overwrite an m6a-marked
                 // binding unless it carries the mark itself.
                 // reg-bio-3 (B3): resistance reads the QUANTITATIVE m6A
-                // level (>= 1) — the legacy bool is exactly the {0,1}
+                // level (>= 1), the legacy bool is exactly the {0,1}
                 // sub-lattice (every executed @m6a def bumps the level), so
                 // legacy programs are bit-identical, while m6a_write on an
                 // unmarked gene now protects it and m6a_erase on a marked
@@ -1619,7 +1876,7 @@ impl Interp {
                             self.note(0, 1, format!("RISC loaded: '{}' silenced → '{}'", from, t));
                         }
                     }
-                    // reg-bio (F-4): pure RISC degradation — miRNA/RISC destroys
+                    // reg-bio (F-4): pure RISC degradation, miRNA/RISC destroys
                     // the transcript; there is no replacement gene. The old
                     // behavior was a SILENT no-op, which violated the honesty
                     // principle (a statement that pretends nothing happened).
@@ -1741,7 +1998,7 @@ impl Interp {
                 Ok(Flow::Norm)
             }
             // reg-bio-2 (C11): a decoy site is inert until it carries level
-            // (grn_set/grn_fire on the decoy node) — the titration itself
+            // (grn_set/grn_fire on the decoy node), the titration itself
             // happens at every regulation read via `regulated_level`.
             Stmt::Decoy(d, tf, cap) => {
                 self.decoys.push((d.clone(), tf.clone(), *cap));
@@ -1782,7 +2039,7 @@ impl Interp {
                         let counter = Arc::new(AtomicU64::new(0));
                         let c2 = counter.clone();
                         let ms = (*sec * 1000.0).clamp(1.0, 60_000.0) as u64;
-                        // sec-r3: one SHARED cancellable timer per interp — the
+                        // sec-r3: one SHARED cancellable timer per interp, the
                         // previous timer is flagged off before a new spawn, so
                         // repeated repressilator declarations cannot drain the
                         // thread budget with orphaned sleeper threads.
@@ -1792,7 +2049,7 @@ impl Interp {
                         let stop = Arc::new(AtomicBool::new(false));
                         let stop2 = stop.clone();
                         // timer goes through the thread budget (S4 NEW-5):
-                        // capped, guarded, and failure is a note — never a
+                        // capped, guarded, and failure is a note, never a
                         // bare uncapped spawn
                         match crate::genes::spawn_worker(move || {
                             while !stop2.load(std::sync::atomic::Ordering::SeqCst) {
@@ -1840,7 +2097,7 @@ impl Interp {
                 Ok(Flow::Norm)
             }
             Stmt::Trait(t) => {
-                // W04: trait registry — last declaration wins (mirrors
+                // W04: trait registry, last declaration wins (mirrors
                 // phenotype redefinition); a note marks the replacement.
                 if self.traits.contains_key(&t.name) {
                     self.note(0, 4, format!("redefining trait '{}'", t.name));
@@ -1862,7 +2119,7 @@ impl Interp {
                     None => Value::Null,
                 };
                 if let Some(tx) = &self.seq_tx {
-                    // rendezvous: send blocks until the consumer pulls — laziness
+                    // rendezvous: send blocks until the consumer pulls, laziness
                     let _ = tx.send(crate::value::SeqMsg::Yield(crate::genes::to_send(&v)));
                     Ok(Flow::Norm)
                 } else {
@@ -2157,10 +2414,10 @@ impl Interp {
     }
 
     pub fn stress_map(&self, s: &Stress) -> Value {
-        // W007: the rescue binding now carries the gene call chain — innermost
+        // W007: the rescue binding now carries the gene call chain, innermost
         // frame first, each frame a map {gene, line}. Insertion order here is
         // the contract the oracle mirrors field-for-field. (Stress.line stays
-        // a Rust-side stderr-rendering field, dx-r3 — it is deliberately NOT
+        // a Rust-side stderr-rendering field, dx-r3, it is deliberately NOT
         // in this map because the oracle does not stamp it.)
         let chain = Value::List(Rc::new(RefCell::new(
             s.chain
@@ -2220,7 +2477,7 @@ impl Interp {
         Rc::as_ptr(m) as *const u8 as usize
     }
 
-    /// W05: deep-freeze a value — every List/Map reachable from it becomes
+    /// W05: deep-freeze a value, every List/Map reachable from it becomes
     /// immutable (mutation raises the catchable `frozen` Stress). Cycle-safe
     /// (pointer-visited; self-referencing containers are a tested shape).
     /// Draws nothing: const bindings keep the entropy stream byte-identical.
@@ -2230,7 +2487,7 @@ impl Interp {
     }
 
     fn freeze_walk(&mut self, v: &Value, seen: &mut std::collections::HashSet<usize>) {
-        // W05 hardening (rt_p18a): ITERATIVE worklist, not recursion — a
+        // W05 hardening (rt_p18a): ITERATIVE worklist, not recursion, a
         // 2000+-deep nested const literal must freeze without touching the
         // interpreter stack (depth is attacker-controlled input).
         // Registration keeps the container ALIVE via frozen_keep (address-
@@ -2297,7 +2554,7 @@ impl Interp {
             return Err(Self::frozen_stress("map"));
         }
         // sec-r5 (F-12): non-scalar keys miss the hash memo and linear-scan
-        // deep_eq against every existing key per upsert — quadratic CPU that
+        // deep_eq against every existing key per upsert, quadratic CPU that
         // burned zero fuel (25k list-keyed inserts was a live hang). Charge
         // the scan to the step budget; the next tick raises overflow.
         if !crate::value::key_is_scalar(&key) {
@@ -2319,7 +2576,7 @@ impl Interp {
             Expr::Float(f) => Ok(Value::Float(*f)),
             Expr::Str(s) => Ok(Value::Str(s.clone())),
             Expr::Bytes(b) => {
-                // W029: bytes are real allocations — charged like strings
+                // W029: bytes are real allocations, charged like strings
                 // (a 512 MiB ceiling applies to repeat/concat, and the
                 // aggregate run ceiling applies here at construction)
                 mem_charge(b.len() as u64)?;
@@ -2342,11 +2599,11 @@ impl Interp {
                                 mem_charge(piece.len() as u64)?;
                                 out.push_str(&piece);
                             }
-                            // W06 (D-014): propagation is a return — it leaves
+                            // W06 (D-014): propagation is a return, it leaves
                             // the interpolation and heads for the gene boundary.
                             Err(s) if s.prop.is_some() => return Err(s),
                             Err(s) => {
-                                // a stressed interpolation degrades to "null" —
+                                // a stressed interpolation degrades to "null",
                                 // the surrounding statement still produces output
                                 self.note(
                                     0,
@@ -2389,7 +2646,7 @@ impl Interp {
             }
             Expr::Ident(name) => match env.get(name) {
                 Some(v) => {
-                    // sec-r5 (F-9): a variable read is a deep copy — a 500 MB
+                    // sec-r5 (F-9): a variable read is a deep copy, a 500 MB
                     // string read three times IS 1.5 GB of real allocation,
                     // so large copies enter the aggregate ceiling too.
                     charge_clone(&v)?;
@@ -2444,7 +2701,7 @@ impl Interp {
                         return self.eval(env, r);
                     }
                     BinOp::Nullish => {
-                        // L1a: coalesce Null only — falsy-but-non-null values
+                        // L1a: coalesce Null only, falsy-but-non-null values
                         // (0, "", []) pass through unchanged.
                         let lv = self.eval(env, l)?;
                         if matches!(lv, Value::Null) {
@@ -2463,10 +2720,10 @@ impl Interp {
                 self.cur_line = *call_line;
                 // check silences at call sites (RISC)
                 if let Expr::Ident(name) = &**callee {
-                    // reg-bio-3 (C9): stoichiometric RISC — every entry for
+                    // reg-bio-3 (C9): stoichiometric RISC, every entry for
                     // the target is one binding site; the per-call capture
                     // probability is 1 − Π(1−s_i)^sites_i. strength 1.0 /
-                    // one site = legacy binary redirect (no draw — the RNG
+                    // one site = legacy binary redirect (no draw, the RNG
                     // stream is untouched for legacy programs).
                     let entries: Vec<(String, Option<String>, f64, u32)> = self
                         .silences
@@ -2476,7 +2733,7 @@ impl Interp {
                         .collect();
                     if let Some((_, first_to, first_s, first_sites)) = entries.first().cloned() {
                         // acetylated genes are immune (checked BEFORE any
-                        // draw — immunity consumes no randomness)
+                        // draw, immunity consumes no randomness)
                         let immune = match env.get(name) {
                             Some(Value::Gene(d, _)) => d.acetylate,
                             _ => false,
@@ -2540,7 +2797,7 @@ impl Interp {
                                         }
                                         return self.call_value(env, &target, argvs);
                                     }
-                                    // reg-bio (F-4): pure degradation — the transcript
+                                    // reg-bio (F-4): pure degradation, the transcript
                                     // is destroyed, no replacement executes. A degraded
                                     // call is not expression: it returns null BEFORE the
                                     // call counters, exactly like the other silencing gates.
@@ -2623,7 +2880,7 @@ impl Interp {
                 self.member_value(tv, key)
             }
             Expr::MemberSafe(t, key) => {
-                // L1a: `a?.k` — a Null receiver is Null, silently; anything
+                // L1a: `a?.k`, a Null receiver is Null, silently; anything
                 // else behaves exactly like `.` (missing keys still note).
                 let tv = self.eval(env, t)?;
                 if matches!(tv, Value::Null) {
@@ -2640,7 +2897,7 @@ impl Interp {
                 self.call_method(env, tv, name, argvs)
             }
             Expr::MethodSafe(t, name, args) => {
-                // L1a: `a?.k(args)` — same contract as `?.` members.
+                // L1a: `a?.k(args)`, same contract as `?.` members.
                 let tv = self.eval(env, t)?;
                 if matches!(tv, Value::Null) {
                     return Ok(Value::Null);
@@ -2653,7 +2910,7 @@ impl Interp {
             }
             Expr::Lambda(def) => Ok(Value::Gene(def.clone(), Some(env.clone()))),
             Expr::Propagate(e, line) => {
-                // W06 (D-014): `e?!` — Some/Ok unwrap to the payload; None/Err
+                // W06 (D-014): `e?!`, Some/Ok unwrap to the payload; None/Err
                 // unwind to the nearest enclosing gene boundary (the gene
                 // RETURNS the variant). Plain values pass through untouched
                 // (silent identity, the same contract as `?.` on non-null).
@@ -2834,7 +3091,7 @@ impl Interp {
                         ));
                     }
                     // sec-r5 (F-9): the clone below deep-copies every element
-                    // (Value::Str elements are real memcpys) — charge the
+                    // (Value::Str elements are real memcpys), charge the
                     // string bytes + the Vec allocation itself.
                     let mut bytes: u64 = 0;
                     for e in a.borrow().iter().chain(b.borrow().iter()) {
@@ -2959,7 +3216,7 @@ impl Interp {
             }
             Mod => {
                 // int % int stays int (Python floored semantics); sign follows
-                // divisor: r = a - b * floor(a / b) — 7 % -3 == -2, -7 % -3 == -1
+                // divisor: r = a - b * floor(a / b), 7 % -3 == -2, -7 % -3 == -1
                 if let (Value::Int(a), Value::Int(b)) = (l, r) {
                     if *b == 0 {
                         return Err(Stress::new("unfolded", "modulo by zero"));
@@ -3104,7 +3361,7 @@ impl Interp {
             Value::Gene(def, _closure) if def.seq => {
                 // W099 CodeQL: closure env is consumed by the worker path, not here
                 // reg-r3 (re-audit): the sequence's own gates ALL apply at
-                // creation, in the same order as call_gene_inner — GRN veto,
+                // creation, in the same order as call_gene_inner, GRN veto,
                 // methylation, toggle. reg-r1 gated only the toggle; a
                 // level-3-methylated sequence still transcribed, breaking
                 // "silenced means silenced" for the sibling feature.
@@ -3130,14 +3387,14 @@ impl Interp {
                             dl,
                             4,
                             format!(
-                                "methylation silences: sequence '{}' (level {} >= threshold {}) — call returns null",
+                                "methylation silences: sequence '{}' (level {} >= threshold {}), call returns null",
                                 seq_name, lvl, self.methyl_threshold
                             ),
                         );
                         return Ok(Value::Null);
                     }
                 }
-                // reg-r1: the sequence's own toggle gate applies at creation —
+                // reg-r1: the sequence's own toggle gate applies at creation,
                 // the lazy body runs in a worker whose yield-loop cannot pass
                 // through call_named, so a repressed allele must not start
                 if let Some(&(ref a, ref b, a_on)) = self
@@ -3161,7 +3418,7 @@ impl Interp {
                         return Ok(Value::Null);
                     }
                 }
-                // reg-bio (F-1): promoter gate last — bursting is the
+                // reg-bio (F-1): promoter gate last, bursting is the
                 // promoter's own stochastic dynamics, downstream of every
                 // trans/epigenetic gate. Bursting is universal (open
                 // chromatin bursts too): no @acetylate exemption here.
@@ -3170,7 +3427,7 @@ impl Interp {
                         dl,
                         4,
                         format!(
-                            "promoter inactive: sequence '{}' burst-off — call returns null",
+                            "promoter inactive: sequence '{}' burst-off, call returns null",
                             seq_name
                         ),
                     );
@@ -3201,7 +3458,7 @@ impl Interp {
             }
             Value::Gene(def, closure) => {
                 // reg-r4 (re-audit B-5): value-bound (higher-order) gene
-                // calls pass the toggle gate too — "the pair gates calls"
+                // calls pass the toggle gate too, "the pair gates calls"
                 // is unqualified (SPEC §11); the seq branch already gated,
                 // plain genes did not.
                 if let Some(gname) = &def.name {
@@ -3246,7 +3503,7 @@ impl Interp {
         args: Vec<Value>,
     ) -> Result<Value, Stress> {
         // toggle bistability gate: the repressed allele of a toggle pair refuses
-        // calls (acetylated genes override repression — open chromatin wins)
+        // calls (acetylated genes override repression, open chromatin wins)
         if let Some(&(ref a, ref b, a_on)) =
             self.toggles.iter().find(|(a, b, _)| a == name || b == name)
         {
@@ -3344,7 +3601,7 @@ impl Interp {
                 format!("recursion depth limit ({}) exceeded", self.depth_limit),
             ));
         }
-        // W007: the traceback frame for THIS gene — (name, call-site line as
+        // W007: the traceback frame for THIS gene, (name, call-site line as
         // of entry; cur_line is the call expression that brought us here and
         // only changes again when new expressions execute, which cannot
         // happen during unwinding). Appended to a stress ONLY on the error
@@ -3357,12 +3614,12 @@ impl Interp {
         self.depth -= 1;
         match result {
             Ok(v) => Ok(v),
-            // W06 (D-014): propagation is a return, not a failure — no chain
+            // W06 (D-014): propagation is a return, not a failure, no chain
             // frame. A returned variant is not an error in flight.
             Err(s) if s.prop.is_some() => Err(s),
             Err(mut s) => {
                 // innermost frame appends first; bounded at 64 (note-cap
-                // discipline — an unbounded chain is an uncontained one)
+                // discipline, an unbounded chain is an uncontained one)
                 if s.chain.len() < 64 {
                     s.chain.push(frame);
                 }
@@ -3374,7 +3631,7 @@ impl Interp {
     /// reg-bio-2 (D9): GRN maps emit in SORTED key order. HashMap iteration
     /// order varies per process (RandomState hashing), so grn_state() and
     /// grn_fire() returned maps whose ITEM ORDER was nondeterministic across
-    /// runs — a proof-frame hazard (a program iterating items() sees a
+    /// runs, a proof-frame hazard (a program iterating items() sees a
     /// different order every run) and an oracle parity hazard (Python dicts
     /// keep insertion order). Gene names are ASCII identifiers, so Rust
     /// byte-order sort matches the oracle's sorted() exactly.
@@ -3393,7 +3650,7 @@ impl Interp {
         ))))
     }
 
-    /// reg-bio-2 (A4): the effective ligand pool level — the runtime pool
+    /// reg-bio-2 (A4): the effective ligand pool level, the runtime pool
     /// (`ligand_set`) wins; the `.cell [ligand.<name>]` bath is the default.
     fn ligand_level(&self, name: &str) -> f64 {
         if let Some(v) = self.ligand_pools.get(name) {
@@ -3406,7 +3663,7 @@ impl Interp {
             .unwrap_or(0.0)
     }
 
-    /// loop-9 (C8): register a signal species (idempotent, cap 64 — the
+    /// loop-9 (C8): register a signal species (idempotent, cap 64, the
     /// anti map-growth answer to the rt_p11g class). Returns false when
     /// the cap refuses the registration.
     pub fn signal_register(&mut self, name: &str) -> bool {
@@ -3425,7 +3682,7 @@ impl Interp {
         true
     }
 
-    /// loop-9 (C8): lazy shared-medium accessor (created on first use) —
+    /// loop-9 (C8): lazy shared-medium accessor (created on first use),
     /// an Arc so spawn/seq workers can hold the SAME pool (the culture's
     /// medium, shared across every cell of the run).
     pub fn medium_arc(&mut self) -> Arc<Mutex<HashMap<String, u64>>> {
@@ -3435,9 +3692,9 @@ impl Interp {
         self.medium.as_ref().unwrap().clone()
     }
 
-    /// loop-9 (C8): the population level of a signal species —
+    /// loop-9 (C8): the population level of a signal species,
     /// molecules / 1e9 with the write-side cap at 1e9 (so the level is
-    /// already ≤ 1.0 — no second clamp op). ONE division; counts < 2^53
+    /// already ≤ 1.0, no second clamp op). ONE division; counts < 2^53
     /// make the double bit-identical to the oracle's int/float division.
     pub fn signal_level(&self, name: &str) -> f64 {
         if let Some(m) = &self.medium {
@@ -3450,13 +3707,13 @@ impl Interp {
         0.0
     }
 
-    /// loop-9 (C8/T6): THE edge-source level chain — explicit grn level →
+    /// loop-9 (C8/T6): THE edge-source level chain, explicit grn level →
     /// repressilator ring overlay → ligand pool → signal medium → 0.0.
     /// One resolver for the main gate pass AND the sum-group pass (the
     /// oracle has a single _grn_level; the previously duplicated Rust
     /// chain was exactly the parity-site mismatch the fleet flagged).
     /// Signal species resolve after ligands; both live outside grn_levels
-    /// (the grn_fire seeding loop skips them — loop-9 P0-2 family).
+    /// (the grn_fire seeding loop skips them, loop-9 P0-2 family).
     fn edge_source_level(&mut self, source: &str, ring_len: usize, tick: u64) -> f64 {
         if let Some(v) = self.grn_levels.get(source) {
             return *v;
@@ -3477,9 +3734,9 @@ impl Interp {
 
     /// reg-bio-2 (C11 + A4): the DNA-available fraction of a regulator's
     /// level. Two layers compose in physical order:
-    ///   1. decoy titration — every decoy site binding `source` sequesters
+    ///   1. decoy titration, every decoy site binding `source` sequesters
     ///      capacity × level(decoy) (competitive binding);
-    ///   2. allostery — every `bind` record modulates the free fraction by
+    ///   2. allostery, every `bind` record modulates the free fraction by
     ///      its ligand occupancy: inducers reduce affinity (Π(1 − occ)),
     ///      cofactors increase it (Π occ), occ = L/(k+L).
     ///
@@ -3503,7 +3760,7 @@ impl Interp {
             }
         }
         let out = l * factor;
-        // reg-bio-3 (C10): gene dosage — @copies amplifies the CONCENTRATION
+        // reg-bio-3 (C10): gene dosage, @copies amplifies the CONCENTRATION
         // the gene feeds its edges (transcript amount under titration),
         // saturating on the 0..1 lattice. Copies = 1 is bit-identical.
         let out = match self.copies.get(source) {
@@ -3517,11 +3774,11 @@ impl Interp {
         }
     }
 
-    /// loop-10 (F-7/F-8): the resolved Rho/queue knobs — (armed, catch,
+    /// loop-10 (F-7/F-8): the resolved Rho/queue knobs, (armed, catch,
     /// queue_floor, queue_cap, drain). Host: .cell parsed per use (garbage
     /// falls back exactly like the oracle mirror: catch clamps 0..1, the
     /// rest parse-or-default); worker: the pinned snapshot tuple.
-    /// Default-off: absent rho.termination = false — legacy runs draw
+    /// Default-off: absent rho.termination = false, legacy runs draw
     /// nothing and stay bit-identical (telegraph-promoter precedent).
     fn rho_knobs(&self) -> (bool, f64, f64, f64, f64) {
         if let Some(k) = self.rho_pins {
@@ -3551,14 +3808,14 @@ impl Interp {
         )
     }
 
-    /// reg-bio-2 (C1): integrate the translation layer — one Euler step per
+    /// reg-bio-2 (C1): integrate the translation layer, one Euler step per
     /// `translates` edge: p += rate·Δcalls − decay·p (clamped 0..1), where
     /// Δcalls is the source's call-count delta since the last integration
     /// (checkpoints start at 0, so all prior calls count on the first
     /// integration). Called at every engine update point: grn_fire pulses
     /// and decay-clock ticks.
     fn trans_integrate(&mut self, phase: &str) {
-        // loop-10 (F-8 + R10 kinetics jury L1): ribosome queue drain — at
+        // loop-10 (F-8 + R10 kinetics jury L1): ribosome queue drain, at
         // ENTRY (before the empty-check: "every integration point" includes
         // units with no translates edges) and before the edge loop (pinned
         // order; both entry points reach this function). Exists only under
@@ -3583,7 +3840,7 @@ impl Interp {
             let dec = t.decay.unwrap_or(0.0);
             // loop-9 (F-6): m6A READER fate (YTHDF2 decay routing + YTHDF1/3
             // translation attenuation) engages only at mark density >=
-            // min_level (default 2) — the legacy {0,1} bool sub-lattice is
+            // min_level (default 2), the legacy {0,1} bool sub-lattice is
             // bit-identical to the pre-reader core. Knobs come from .cell
             // (host, resolved lazily per integration) or the pinned snapshot
             // tuple (workers, who do not inherit raw .cell).
@@ -3613,12 +3870,12 @@ impl Interp {
                 continue; // nothing produced, nothing to decay
             }
             let rate = t.rate.unwrap_or(1.0);
-            // reg-bio-3 (A1/A7): per-cistron translation efficiency — the
+            // reg-bio-3 (A1/A7): per-cistron translation efficiency, the
             // source's `rbs` multiplier (Shine-Dalgarno strength) scales the
             // protein production rate; the stoichiometric gradient IS the
             // rbs-scaled protein nodes. And transcriptional polarity:
             // upstream blocking (target-less RISC silencing or
-            // methylation-past-threshold) reduces downstream yield —
+            // methylation-past-threshold) reduces downstream yield,
             // polarity^#blocked, `operon.polarity` (default 0.5). Silent at
             // the note layer; observable through levels (deterministic).
             let mut rf = rate;
@@ -3634,7 +3891,7 @@ impl Interp {
                 };
                 rf *= rbs;
                 // loop-10 (W2, R10 biology jury): under Rho ON the polarity
-                // factor is IDENTITY — D2 resolves the upstream failure per
+                // factor is IDENTITY, D2 resolves the upstream failure per
                 // call (terminate or read-through), so a SURVIVING transcript
                 // is whole and translates at full rate; the D1 expected-value
                 // derate would double-count the same loss. Rho OFF keeps the
@@ -3651,7 +3908,7 @@ impl Interp {
                     // probability surv = 1 − p, so the downstream yield scales by
                     // surv + (1−surv)·pol. Legacy inputs degenerate exactly: no
                     // silence → 1.0 (an exact no-op multiply); strength 1.0 →
-                    // surv = 0 → pol; methylation → pol — the same factors in the
+                    // surv = 0 → pol; methylation → pol, the same factors in the
                     // same member order, so legacy programs are bit-identical.
                     // No randomness is consumed here: this is the expected value,
                     // not a draw (the draw happens only in the call path).
@@ -3694,7 +3951,7 @@ impl Interp {
                     rf *= f;
                 }
             }
-            // loop-9 (F-6): YTHDF2-style decay routing — the LAST
+            // loop-9 (F-6): YTHDF2-style decay routing, the LAST
             // production multiply (normative order: rate × rbs ×
             // polarity × (1 − yd2)); fewer marked transcripts reach the
             // translating pool. Applies to EVERY translates edge sourced
@@ -3709,7 +3966,7 @@ impl Interp {
         self.grn_trace_frame(phase);
     }
 
-    /// W095: one JSONL frame of the current GRN level map (sorted keys —
+    /// W095: one JSONL frame of the current GRN level map (sorted keys,
     /// deterministic output per W089), emitted at every engine update
     /// point when tracing is on. No notes are raised (a tracing cap must
     /// not perturb wobble.strict outcomes); the cap silently drops further
@@ -3739,12 +3996,12 @@ impl Interp {
     }
 
     /// loop-9 (P0-4): standalone m6A decay cadence. The B3 decay block ran
-    /// ONLY inside the GRN decay tick — with no `grn.decay_calls` and no
+    /// ONLY inside the GRN decay tick, with no `grn.decay_calls` and no
     /// decay-clock builtin configured, the early returns made
     /// `.cell m6a.decay` a silent no-op (and it shipped without any proof
     /// covering the standalone case). When no GRN clock exists, the
     /// `m6a.decay` fraction erases site density every `m6a.decay_calls`
-    /// calls (default 1), half-down rounding on the 0..=3 lattice — a
+    /// calls (default 1), half-down rounding on the 0..=3 lattice, a
     /// diluted mark never reads as MORE marked. When a GRN clock IS
     /// configured this returns immediately: the decay then rides the GRN
     /// tick exactly as before (no double decay).
@@ -3778,7 +4035,7 @@ impl Interp {
     }
 
     /// reg-bio-2 (C2): time-driven decay on the call clock. `.cell
-    /// [grn] decay_calls = N` fires one decay step every N calls — decay
+    /// [grn] decay_calls = N` fires one decay step every N calls, decay
     /// runs as time passes (expression events), not only when someone
     /// calls grn_fire. The fraction is `[grn] decay` (shared with the
     /// per-fire dilution). After the decay step the translation layer
@@ -3792,7 +4049,7 @@ impl Interp {
                 let cn = match self.cell.get("grn.decay_calls") {
                     Some(v) => match v.parse::<u64>() {
                         Ok(n) if n > 0 => n,
-                        // loop-9 (P0-4): no GRN clock — the standalone m6A
+                        // loop-9 (P0-4): no GRN clock, the standalone m6A
                         // cadence already ran at the call site (m6a_decay_own
                         // is invoked before this tick), so return cleanly.
                         _ => return,
@@ -3824,7 +4081,7 @@ impl Interp {
                 }
             }
         }
-        // reg-bio-3 (B3): m6A decay — `.cell m6a.decay f` erases site
+        // reg-bio-3 (B3): m6A decay, `.cell m6a.decay f` erases site
         // density as time passes (half-down rounding on the 0..=3 lattice:
         // a diluted mark never reads as MORE marked). Unset = byte-identical.
         if let Some(f) = self
@@ -3852,26 +4109,26 @@ impl Interp {
     ///   - inhibiting edge with explicit `threshold t`: vetoes while
     ///     `level(inhibitor) >= t`;
     ///   - edges without a threshold stay declarative (level dynamics only),
-    ///   - and a threshold of 0 never blocks — so declaring a network with
+    ///   - and a threshold of 0 never blocks, so declaring a network with
     ///     no explicit thresholds changes zero call behavior (back-compat).
     ///
     /// T2e: an `enhance`d gene lowers its activating thresholds by
-    /// `enhance_delta` (default ENHANCE_DELTA, `.cell enhance.delta`) — a
+    /// `enhance_delta` (default ENHANCE_DELTA, `.cell enhance.delta`), a
     /// super-enhancer fires where an unenhanced gene stays gated.
     ///
     /// reg-bio (F-3): cis-regulatory input functions. Activating thresholded
-    /// edges are AND members (all must pass — the legacy contract); edges
-    /// declared `any` are OR members — ALTERNATIVE activators, each of which
+    /// edges are AND members (all must pass, the legacy contract); edges
+    /// declared `any` are OR members, ALTERNATIVE activators, each of which
     /// alone suffices. Precisely: the gate opens iff (every AND member
     /// passes) OR (any OR member passes). Inhibitors keep their own OR
     /// semantics (any above-threshold inhibitor vetoes). Message order is
-    /// first-wins in declaration order — unchanged from the pre-`any`
+    /// first-wins in declaration order, unchanged from the pre-`any`
     /// behavior for every network without OR members.
     /// reg-bio-3 (A1/A7): the call gate. A call to a cistron of a
     /// polycistronic unit is a transcription attempt of the WHOLE unit:
     /// edges targeting the unit veto every member first (induction acts on
     /// the unit's promoter), then the cistron's own edges apply as usual.
-    /// The unit pass short-circuits — its message wins over per-cistron
+    /// The unit pass short-circuits, its message wins over per-cistron
     /// messages. Units without targeting edges are inert (declarative).
     fn grn_veto(&mut self, name: &str) -> Option<String> {
         if self.grn_edges.is_empty() {
@@ -3895,7 +4152,7 @@ impl Interp {
 
     /// The per-target cis-gate evaluation (AND/OR/inhibit/attenuates/sum
     /// pools + enhance boost). Used for the unit pass and the per-cistron
-    /// pass alike (reg-bio-3 refactor of the pinned grn_veto body — logic
+    /// pass alike (reg-bio-3 refactor of the pinned grn_veto body, logic
     /// unchanged, target is a parameter).
     fn gate_veto_for(&mut self, target: &str) -> Option<String> {
         if self.grn_edges.is_empty() {
@@ -3906,7 +4163,7 @@ impl Interp {
         // A11 (reg-r2): a repressilator node doubles as a GRN regulator.
         // If an edge's source is a ring node with no explicit grn_fire
         // level, the gate reads the node's normalized oscillation level
-        // (raw/α, clamped 0..1) at the current tick — so the emergent
+        // (raw/α, clamped 0..1) at the current tick, so the emergent
         // oscillator genuinely drives downstream genes.
         let ring_len = self.repressi_ring.len();
         let tick: u64 = match &self.repressi_atomic {
@@ -3918,7 +4175,7 @@ impl Interp {
         let mut and_present = false;
         let mut or_present = false;
         let mut or_pass = false;
-        // sec-r3: clone the matching edges — the ring-overlay path mutates
+        // sec-r3: clone the matching edges, the ring-overlay path mutates
         // self (fuel-charged cache), which cannot borrow grn_edges at the
         // same time. Edge counts are tiny; a clone per veto check is noise.
         let edges: Vec<RegEdge> = self
@@ -3932,14 +4189,14 @@ impl Interp {
                 break;
             }
             // reg-bio-2 (B7): sum edges are pooled members, evaluated by the
-            // group pass below — never as individual AND members (a pooled
+            // group pass below, never as individual AND members (a pooled
             // input below its own threshold is exactly the synergy case).
             if e.sum {
                 continue;
             }
             let lvl = self.edge_source_level(&e.from, ring_len, tick);
             // reg-bio-2 (C11 + A4): regulation reads the DNA-available
-            // fraction — decoy titration, then allosteric modulation.
+            // fraction, decoy titration, then allosteric modulation.
             let lvl = self.regulated_level(lvl, &e.from);
             if e.inhibit {
                 if let Some(t) = e.threshold {
@@ -3979,16 +4236,16 @@ impl Interp {
             }
             // activating edges without a threshold stay declarative
         }
-        // reg-bio-2 (B7): pooled (`sum`) edges — groups keyed by (target,
+        // reg-bio-2 (B7): pooled (`sum`) edges, groups keyed by (target,
         // threshold, hill) pool their weighted inputs P = min(1, Σ s·lvl)
         // and each group acts as ONE conjunctive member that passes iff
         // P >= t (with the enhance boost). Two sub-threshold inputs can
-        // open a gate together — enhanceosome synergy. Message order:
+        // open a gate together, enhanceosome synergy. Message order:
         // individual members first (declaration order, above), then pooled
         // groups in declaration order of their first member.
         if veto.is_none() {
             let mut groups: Vec<(String, f64, u32, f64)> = Vec::new(); // (to, t, n, P)
-                                                                       // sec-r3 pattern: clone the matching edges — the ring-overlay
+                                                                       // sec-r3 pattern: clone the matching edges, the ring-overlay
                                                                        // path mutates self (fuel-charged cache), which cannot borrow
                                                                        // grn_edges at the same time.
             let sum_edges: Vec<RegEdge> = self
@@ -4029,7 +4286,7 @@ impl Interp {
             }
         }
         // reg-bio (F-3): the gate opens iff (every AND member passes) OR
-        // (any OR member passes) — an `any` edge is an alternative
+        // (any OR member passes), an `any` edge is an alternative
         // activator that alone suffices. Networks without `any` keep the
         // exact legacy conjunctive behavior.
         if veto.is_none() && !or_pass {
@@ -4043,7 +4300,7 @@ impl Interp {
     }
 
     /// sec-r3: cached, fuel-charged ring levels. Integrates incrementally
-    /// from the memoized state — bit-identical values to folding from init
+    /// from the memoized state, bit-identical values to folding from init
     /// (identical per-tick operation sequence via `repressilator_step`),
     /// but O(new ticks) per read instead of O(total ticks), with the
     /// integrated work charged as fuel (re-audit finding #2: 1000 reads at
@@ -4088,7 +4345,7 @@ impl Interp {
             }
             let mut lv = cached_levels;
             // absolute tick indices drive the position-derived noise stream
-            // (reg-bio F-5) — identical ops to the from-init fold
+            // (reg-bio F-5), identical ops to the from-init fold
             for t in cached_tick..tick {
                 lv = repressilator_step_p(lv, p, t);
             }
@@ -4118,16 +4375,16 @@ impl Interp {
     }
 
     /// reg-bio (F-1): the telegraph promoter draw. Real promoters switch
-    /// between active/inactive states — transcription happens in bursts.
+    /// between active/inactive states, transcription happens in bursts.
     /// One draw per call attempt on the SHARED mirrored xorshift64* stream
     /// (the same state machine `random()` uses, so the Python oracle mirrors
     /// it op-for-op): an active promoter switches off with probability
     /// `koff`; an inactive one switches on with probability `kon`. The state
     /// persists across calls (that persistence IS the burst). Returns true
     /// when the call is suppressed (promoter off). OFF entirely unless
-    /// `.cell expression.stochastic = true` — the deterministic contract is
+    /// `.cell expression.stochastic = true`, the deterministic contract is
     /// untouched for every existing program.
-    /// loop-9 (F-5): CIS riboswitch gate — the aptamer lives on THIS
+    /// loop-9 (F-5): CIS riboswitch gate, the aptamer lives on THIS
     /// transcript. The metabolite pool is cell-wide (`ligand_level`); the
     /// sensor is per-gene. `off` class: bound (level >= t) folds the
     /// terminator hairpin -> OFF. `on` class: unbound (level < t) sequesters
@@ -4166,9 +4423,9 @@ impl Interp {
         if !self.expr_stochastic {
             return false;
         }
-        // loop-9 (F-2): per-gene PROMOTER IDENTITY — the mark's own rates
+        // loop-9 (F-2): per-gene PROMOTER IDENTITY, the mark's own rates
         // override the global telegraph parameters for this gene only.
-        // loop-9 (R9 jury): runtime modulation — a regulator CAN retune a
+        // loop-9 (R9 jury): runtime modulation, a regulator CAN retune a
         // specific promoter's switching rates at runtime (burst_set), so the
         // noise layer does not float free of the regulation system.
         // Precedence: @burst mark > burst_set override > global rates.
@@ -4185,7 +4442,7 @@ impl Interp {
         let u = ((x >> 11) as f64) / 9_007_199_254_740_992.0;
         let now_active = if was_active { u >= koff } else { u < kon };
         self.promoter_states.insert(name.clone(), now_active);
-        // loop-9 (F-3): attempt telemetry — every call that reaches the
+        // loop-9 (F-3): attempt telemetry, every call that reaches the
         // promoter gate is one attempt; episodes are maximal ON-runs
         // (an ON->OFF transition completes one burst).
         let e = self.promoter_tel.entry(name.clone()).or_insert((0, 0, 0));
@@ -4211,7 +4468,7 @@ impl Interp {
         let name = def.name.clone().unwrap_or_else(|| "<lambda>".into());
         // A13 (dx-r2): gate notes point at the gene's definition line
         let dl = def.line;
-        // GRN gate first: a suppressed call is not expression — it must not
+        // GRN gate first: a suppressed call is not expression, it must not
         // reach the call counters, the burst bins, or the gene body.
         if let Some(reason) = self.grn_veto(&name) {
             self.note(
@@ -4222,7 +4479,7 @@ impl Interp {
             return Ok(Value::Null);
         }
         // T2b methylation gate: level >= threshold blocks transcription;
-        // @acetylate genes are exempt (open chromatin wins — D-005).
+        // @acetylate genes are exempt (open chromatin wins, D-005).
         if !def.acetylate {
             let lvl = *self.methyl_levels.get(&name).unwrap_or(&0);
             if lvl >= self.methyl_threshold {
@@ -4230,33 +4487,30 @@ impl Interp {
                     dl,
                     4,
                     format!(
-                        "methylation silences: '{}' (level {} >= threshold {}) — call returns null",
+                        "methylation silences: '{}' (level {} >= threshold {}), call returns null",
                         name, lvl, self.methyl_threshold
                     ),
                 );
                 return Ok(Value::Null);
             }
         }
-        // loop-9 (F-5): CIS riboswitch — after chromatin, before the
+        // loop-9 (F-5): CIS riboswitch, after chromatin, before the
         // promoter. The pinned order extends to
         // RISC → toggle → GRN → methylation → riboswitch → promoter.
         if self.riboswitch_veto(&def) {
             return Ok(Value::Null);
         }
-        // reg-bio (F-1): telegraph promoter layer — the pinned gate order
+        // reg-bio (F-1): telegraph promoter layer, the pinned gate order
         // ends here: RISC → toggle → GRN → methylation → riboswitch → promoter.
         if self.promoter_veto(&def) {
             self.note(
                 dl,
                 4,
-                format!(
-                    "promoter inactive: '{}' burst-off — call returns null",
-                    name
-                ),
+                format!("promoter inactive: '{}' burst-off, call returns null", name),
             );
             return Ok(Value::Null);
         }
-        // loop-10 (F-7): Rho-dependent termination — opt-in (.cell
+        // loop-10 (F-7): Rho-dependent termination, opt-in (.cell
         // `rho.termination = true`). The pinned gate order extends to
         // RISC → toggle → GRN → methylation → riboswitch → promoter → RHO.
         // The scan models Rho catching up on the NAKED upstream RNA of THIS
@@ -4264,16 +4518,16 @@ impl Interp {
         // (methylation-past-threshold, or a RISC capture that fires on this
         // attempt) exposes rut sites; Rho loads and chases; the rest of the
         // transcript for THIS call is lost with probability 1 − (1−catch)^d
-        // — per-cistron catch compounding over the naked runway d (GROWS
-        // with distance: the further the reader, the more catch-up time —
+        //, per-cistron catch compounding over the naked runway d (GROWS
+        // with distance: the further the reader, the more catch-up time,
         // the R10 W1 fix; repeated multiply, no powf). Ribosome occupancy
         // shields (F-8): a queue depth at or
         // above rho.queue_floor occludes the rut sites. Insert point: after
-        // the promoter gate, BEFORE transcript/counter bookkeeping — a
+        // the promoter gate, BEFORE transcript/counter bookkeeping, a
         // terminated call is not expression (no counters, no transcript,
         // no queue). Entropy: flag OFF = zero draws, bit-identical; flag ON
         // draws only where 0 < p_g < 1 (member order) and where 0 < q < 1
-        // (one catch-up draw) — the C9 p∈{0,1} no-draw discipline.
+        // (one catch-up draw), the C9 p∈{0,1} no-draw discipline.
         let (rho_on, rho_catch, rho_floor, rho_cap, _rho_drain) = self.rho_knobs();
         if rho_on {
             if let Some(rui) = self
@@ -4330,14 +4584,14 @@ impl Interp {
                     };
                     let shielded = *self.ribo_queue.get(&g).unwrap_or(&0.0) >= rho_floor;
                     if naked_g && !shielded {
-                        // q = 1 − (1−catch)^d — per-cistron catch probability
+                        // q = 1 − (1−catch)^d, per-cistron catch probability
                         // compounding over the naked runway d = pos - i. The
                         // R10 biology jury (W1) inverted the first cut
                         // (catch^d): the FURTHER downstream the reader is
                         // from the failure, the MORE time Rho has had to
                         // catch up, so the termination probability must GROW
                         // with distance. Identical to catch^d at d = 1 and at
-                        // catch ∈ {0,1} — the deterministic pins stand.
+                        // catch ∈ {0,1}, the deterministic pins stand.
                         let per = 1.0 - rho_catch;
                         let mut surv = 1.0f64;
                         let mut k = 0;
@@ -4373,7 +4627,7 @@ impl Interp {
                         dl,
                         4,
                         format!(
-                            "rho terminated: transcript lost at '{}' — call returns null",
+                            "rho terminated: transcript lost at '{}', call returns null",
                             g
                         ),
                     );
@@ -4381,7 +4635,7 @@ impl Interp {
                 }
             }
         }
-        // reg-bio-3 (A1/A7): the call passed every gate — one transcript of
+        // reg-bio-3 (A1/A7): the call passed every gate, one transcript of
         // the unit is made (a suppressed call is NOT expression and counts
         // nothing; a successful cistron call is one polycistronic transcript).
         if let Some(ui) = self
@@ -4390,10 +4644,10 @@ impl Interp {
             .position(|u| u.members.iter().any(|(m, _)| *m == name))
         {
             self.operons[ui].transcripts += 1;
-            // loop-10 (F-8): ribosome queue register — on every successful
+            // loop-10 (F-8): ribosome queue register, on every successful
             // cistron call, EVERY member's queue grows by its rbs (the
             // Shine–Dalgarno initiation propensity), capped at
-            // ribosome.queue_cap. Exists ONLY under rho.termination —
+            // ribosome.queue_cap. Exists ONLY under rho.termination,
             // inert bookkeeping otherwise (no legacy surface at all).
             if rho_on {
                 for mi in 0..self.operons[ui].members.len() {
@@ -4408,10 +4662,10 @@ impl Interp {
         // burst-index binning: 20 calls per bin, per gene (gene-expression
         // burstiness is measured on per-gene time bins, not across genes)
         self.call_clock += 1;
-        // reg-bio-2 (C2): the decay clock — time-driven decay + translation
+        // reg-bio-2 (C2): the decay clock, time-driven decay + translation
         // integration tick here (unset key = no-op).
         // loop-9 (P0-4): the m6A lattice decays on its own cadence when no
-        // GRN clock is configured (inert without `m6a.decay` — byte-identical).
+        // GRN clock is configured (inert without `m6a.decay`, byte-identical).
         self.m6a_decay_own();
         self.grn_decay_tick();
         let bucket = self.call_clock / 20;
@@ -4441,7 +4695,7 @@ impl Interp {
                 continue;
             }
             if let Some(a) = args.get(i) {
-                // W01 (L2c): soft param annotation — checked at the funnel,
+                // W01 (L2c): soft param annotation, checked at the funnel,
                 // mismatch = catchable unfolded Stress naming the param,
                 // the gene, the expected and the actual type.
                 if let Some(ann) = def.param_anns.get(i).and_then(|a| a.as_ref()) {
@@ -4542,14 +4796,23 @@ impl Interp {
                         Value::Null
                     }
                 };
-                // W01 (L2c): a guard-branch return is the gene's return —
+                // W01 (L2c): a guard-branch return is the gene's return,
                 // the annotation applies here too.
                 return self.check_ret_ann("gene", &name, &def.ret_ann, &gv, true);
             }
         }
-        let result = self.exec_block(&fenv, &def.body);
+        let result = if self.vm {
+            // W09 A2: the compiled-body path. Param binding, the gate funnel
+            // and guards ran above in the SHARED code; only the body
+            // execution swaps to the stack machine.
+            let key = std::sync::Arc::as_ptr(&def) as *const u8 as usize;
+            let name_for_vm = def.name.clone().unwrap_or_else(|| "<lambda>".into());
+            crate::vm::exec_gene_body(self, key, &name_for_vm, &def.body, &fenv)
+        } else {
+            self.exec_block(&fenv, &def.body)
+        };
         self.close_timing(&name);
-        // W06 (D-014): a propagated variant IS the gene's return value — the
+        // W06 (D-014): a propagated variant IS the gene's return value, the
         // signal unwinds here and becomes Flow::Ret (never a failure).
         let flowed = match result {
             Ok(f) => f,
@@ -4558,7 +4821,7 @@ impl Interp {
         };
         match flowed {
             Flow::Ret(v) => {
-                // W01 (L2c): soft return annotation — checked on the value
+                // W01 (L2c): soft return annotation, checked on the value
                 // the gene actually returns (including a `?!`-propagated
                 // variant). Mismatch = catchable unfolded Stress; the W007
                 // chain still applies on the error path.
@@ -4573,7 +4836,7 @@ impl Interp {
     }
 
     /// W01 (L2c): the shared soft return-annotation check. `explicit=false`
-    /// means the gene fell off the end (implicit null) — the message names
+    /// means the gene fell off the end (implicit null), the message names
     /// it. Mirrored by oracle `_check_ret`.
     fn check_ret_ann(
         &self,
@@ -4641,7 +4904,7 @@ impl Interp {
     }
 
     /// Pull the next value from a sequence; Ok(None) means exhaustion.
-    /// (Straight-line: every branch below terminates the pull — there is no retry.)
+    /// (Straight-line: every branch below terminates the pull, there is no retry.)
     pub fn seq_pull(&mut self, st: &Rc<RefCell<SeqState>>) -> Result<Option<Value>, Stress> {
         let msg = {
             let mut b = st.borrow_mut();
@@ -4715,12 +4978,12 @@ impl Interp {
                 let v = self
                     .eval(&self.global.clone(), fexpr)
                     .unwrap_or(Value::Null);
-                // m is a fresh field store — never frozen; the write cannot fail
+                // m is a fresh field store, never frozen; the write cannot fail
                 let _ = self.map_insert(&m, Value::Str(fname.clone()), v);
             }
         }
         let obj = Value::Obj(def.clone(), m.clone());
-        // W04: trait contract check — for each implemented trait, every
+        // W04: trait contract check, for each implemented trait, every
         // REQUIRED method must be provided by the phenotype's lineage.
         // Total Grammar: a contract break is a NOTE (the instance is still
         // built; a missing method call wobbles per §9 rules).
@@ -4821,7 +5084,7 @@ impl Interp {
                     dl,
                     4,
                     format!(
-                        "methylation silences: '{}' (level {} >= threshold {}) — call returns null",
+                        "methylation silences: '{}' (level {} >= threshold {}), call returns null",
                         name, lvl, self.methyl_threshold
                     ),
                 );
@@ -4834,15 +5097,12 @@ impl Interp {
             return Ok(Value::Null);
         }
         // reg-bio (F-1): promoter gate for phenotype methods (funnel order
-        // preserved — last gate before the call counters).
+        // preserved, last gate before the call counters).
         if self.promoter_veto(&def) {
             self.note(
                 dl,
                 4,
-                format!(
-                    "promoter inactive: '{}' burst-off — call returns null",
-                    name
-                ),
+                format!("promoter inactive: '{}' burst-off, call returns null", name),
             );
             return Ok(Value::Null);
         }
@@ -4875,7 +5135,7 @@ impl Interp {
                 continue;
             }
             if let Some(a) = args.get(i) {
-                // W01 (L2c): method param annotations — same soft contract.
+                // W01 (L2c): method param annotations, same soft contract.
                 if let Some(ann) = def.param_anns.get(i).and_then(|a| a.as_ref()) {
                     if !ann_matches(a, ann) {
                         return Err(Stress::new(
@@ -4941,9 +5201,16 @@ impl Interp {
                 });
             }
         }
-        let result = self.exec_block(&fenv, &def.body);
+        let result = if self.vm {
+            // W09 A2: the compiled-body path (see the call_gene_inner site)
+            let key = std::sync::Arc::as_ptr(&def) as *const u8 as usize;
+            let name_for_vm = def.name.clone().unwrap_or_else(|| "<lambda>".into());
+            crate::vm::exec_gene_body(self, key, &name_for_vm, &def.body, &fenv)
+        } else {
+            self.exec_block(&fenv, &def.body)
+        };
         self.close_timing(&name);
-        // W06 (D-014): a propagated variant IS the gene's return value — the
+        // W06 (D-014): a propagated variant IS the gene's return value, the
         // signal unwinds here and becomes Flow::Ret (never a failure).
         let flowed = match result {
             Ok(f) => f,
@@ -4972,7 +5239,7 @@ impl Interp {
                 let parts: Vec<String> = args.iter().map(|v| v.display()).collect();
                 let line = parts.join(" ");
                 if let Some(sink) = self.stdout_sink.clone() {
-                    // dx-r3: captured by the host (test runner) — nothing
+                    // dx-r3: captured by the host (test runner), nothing
                     // reaches the report until the host prints it
                     sink.borrow_mut().push(line);
                 } else {
@@ -4983,7 +5250,7 @@ impl Interp {
             "len" => Ok(Value::Int(match args.first() {
                 Some(Value::Str(s)) => s.chars().count() as i64,
                 // W029: len(bytes) is the BYTE count (a bytes object has no
-                // chars — Python parity)
+                // chars, Python parity)
                 Some(Value::Bytes(b)) => b.len() as i64,
                 Some(Value::List(l)) => l.borrow().len() as i64,
                 Some(Value::Map(m)) => m.borrow().len() as i64,
@@ -4998,7 +5265,7 @@ impl Interp {
                         return Err(Self::frozen_stress("list"));
                     }
                     // sec-r1 (audit C-3): the builtin form MUST be memory-
-                    // charged exactly like the method form — an uncharged
+                    // charged exactly like the method form, an uncharged
                     // growth path is an allocator-abort DoS (rc=134, outside
                     // the catchable-stress contract).
                     // reg-bio-2 hardening: the charge must dominate the REAL
@@ -5007,7 +5274,7 @@ impl Interp {
                     // old 8·len+48 undercounted ~1.5×, letting a push loop
                     // reach OOM-killer territory on a 4 GiB host before the
                     // 2 GiB ceiling tripped (rt_p2h flaked rc=137). 16·len+96
-                    // trips the ceiling at ~1.5 GiB real — always inside.
+                    // trips the ceiling at ~1.5 GiB real, always inside.
                     let bytes = match v {
                         Value::Str(x) => x.len() as u64 + 48,
                         Value::List(x) => 16 * x.borrow().len() as u64 + 96,
@@ -5157,7 +5424,7 @@ impl Interp {
                         Ok(s) => Ok(Value::Str(s.to_string())),
                         Err(e) => {
                             // soft tier: null + note naming the offending
-                            // position (Total Grammar — expected failure is
+                            // position (Total Grammar, expected failure is
                             // a value, not a stress)
                             self.note(
                                 self.cur_line,
@@ -5389,7 +5656,7 @@ impl Interp {
                     match args.get(1) {
                         Some(Value::Gene(_, _)) => {
                             let cmp = args.get(1).unwrap().clone();
-                            // insertion sort with user comparator — the exact
+                            // insertion sort with user comparator, the exact
                             // `.sort()` contract, non-mutating output
                             for i in 1..v.len() {
                                 let mut j = i;
@@ -5710,7 +5977,7 @@ impl Interp {
                     Some(Value::Int(i)) => Ok(Value::Int(*i)),
                     Some(Value::Float(f)) => {
                         // half-away-from-zero at the d-th decimal, computed
-                        // identically in the oracle (same f64 formula —
+                        // identically in the oracle (same f64 formula,
                         // bit-identical, like the repressilator mirror)
                         if !f.is_finite() {
                             return Ok(Value::Float(*f));
@@ -5795,8 +6062,8 @@ impl Interp {
             "exit" => {
                 // sec-r2 (audit C-11): process exit is a capability, not a
                 // builtin right. An ungranted exit kills the test runner,
-                // the REPL, the LSP — the host — so default-deny applies.
-                // sec-r3: decoupled from `enabled` — an embedder that turns
+                // the REPL, the LSP, the host, so default-deny applies.
+                // sec-r3: decoupled from `enabled`, an embedder that turns
                 // the sandbox off wholesale must still grant exit explicitly
                 // (only Caps::allow_all() implies it).
                 if !self.caps.exit_allowed {
@@ -5806,7 +6073,7 @@ impl Interp {
                     );
                     return Err(Stress::new(
                         "interference",
-                        "exit denied — capability 'exit' not granted (grant with --allow-exit or .cell allow.exit = true)",
+                        "exit denied, capability 'exit' not granted (grant with --allow-exit or .cell allow.exit = true)",
                     ));
                 }
                 let code = match args.first() {
@@ -5851,7 +6118,7 @@ impl Interp {
                     Some(Value::Int(i)) => *i as i32,
                     _ => 2,
                 };
-                // sec-r1 (audit C-1): same DP ceiling as distance() — the
+                // sec-r1 (audit C-1): same DP ceiling as distance(), the
                 // kernel hop is fuel-blind, so the budget must be checked
                 // before the call, not by the caller
                 if a.len().saturating_mul(b.len()) > crate::ffi::DP_CELL_BUDGET {
@@ -5964,7 +6231,7 @@ impl Interp {
                 let k = args.first().map(|v| v.display()).unwrap_or_default();
                 let d = args.get(1).cloned().unwrap_or(Value::Null);
                 // sec-r3 (re-audit #15): capability grants are the host's
-                // business, not the sandboxed program's — redact them
+                // business, not the sandboxed program's, redact them
                 if k.starts_with("allow.") {
                     return Ok(d);
                 }
@@ -5986,12 +6253,12 @@ impl Interp {
                 })
             }
             "methylate" => {
-                // A12 (reg-r2): runtime methylation — the SAME graded
+                // A12 (reg-r2): runtime methylation, the SAME graded
                 // semantics as the @methylate definition attribute (D-005):
                 // level += 1, gate applies at the NEXT call. Returns the
                 // gene's new level as an Int.
                 let k = args.first().map(|v| v.display()).unwrap_or_default();
-                // sec-r3 (re-audit #4): the map + its note are allocations —
+                // sec-r3 (re-audit #4): the map + its note are allocations,
                 // charge them against the 2 GiB ceiling like every other
                 // growth; ungranted note spam honors methylate.quiet
                 mem_charge((k.len() + 64) as u64)?;
@@ -6005,7 +6272,7 @@ impl Interp {
                         self.cur_line,
                         2,
                         format!(
-                            "methylation deepened: '{}' (level {}) — silenced at the next call if {}",
+                            "methylation deepened: '{}' (level {}), silenced at the next call if {}",
                             k, lvl, silenced
                         ),
                     );
@@ -6013,7 +6280,7 @@ impl Interp {
                 Ok(Value::Int(lvl as i64))
             }
             "demethylate" => {
-                // A12: the @acetylate direction — saturating relaxation.
+                // A12: the @acetylate direction, saturating relaxation.
                 let k = args.first().map(|v| v.display()).unwrap_or_default();
                 mem_charge((k.len() + 64) as u64)?;
                 let (lvl, silenced) = {
@@ -6026,7 +6293,7 @@ impl Interp {
                         self.cur_line,
                         2,
                         format!(
-                            "methylation relaxed: '{}' (level {}) — silenced at the next call if {}",
+                            "methylation relaxed: '{}' (level {}), silenced at the next call if {}",
                             k, lvl, silenced
                         ),
                     );
@@ -6034,7 +6301,7 @@ impl Interp {
                 Ok(Value::Int(lvl as i64))
             }
             "splice_shift" => {
-                // loop-9 (F-4): runtime splicing-factor regulation — rebinds
+                // loop-9 (F-4): runtime splicing-factor regulation, rebinds
                 // the splice root to the named variant exactly as
                 // Stmt::Splice does. Future calls shift immediately;
                 // in-flight calls hold their resolved Arc<GeneDef> and
@@ -6071,7 +6338,7 @@ impl Interp {
                                         None => (String::new(), d.clone()),
                                     };
                                     // loop-9 (F-4): a splicing factor acts
-                                    // TRANS — replace the existing binding
+                                    // TRANS, replace the existing binding
                                     // wherever it lives (up the chain), so
                                     // every future transcript of the root
                                     // uses the shifted variant.
@@ -6113,7 +6380,7 @@ impl Interp {
                 }
             }
             "m6a_write" | "m6a_erase" => {
-                // reg-bio-3 (B3): quantitative m6A site density 0..=3 —
+                // reg-bio-3 (B3): quantitative m6A site density 0..=3,
                 // write adds (writer-complex dose), erase removes (eraser
                 // dose). Dispatch resistance requires level >= 1; levels
                 // above 1 take longer to decay (`.cell m6a.decay`).
@@ -6137,7 +6404,7 @@ impl Interp {
                         self.cur_line,
                         2,
                         format!(
-                            "m6A {}: '{}' (level {}) — redefinition {}",
+                            "m6A {}: '{}' (level {}), redefinition {}",
                             if name == "m6a_write" {
                                 "written"
                             } else {
@@ -6161,7 +6428,7 @@ impl Interp {
                 // methylation level by `methyl.maintenance` (default 0.5 =
                 // pure-dilution null; 1.0 = perfect DNMT1-style maintenance;
                 // 0.0 = instant loss) with half-down rounding on the u32
-                // lattice — a diluted mark never reads as MORE repressed.
+                // lattice, a diluted mark never reads as MORE repressed.
                 // `generation` counts divisions; spawn is a thread, not a
                 // division, and does not touch it.
                 let mut n = match args.first() {
@@ -6191,11 +6458,11 @@ impl Interp {
                         *lvl = if next < 0.0 { 0 } else { next as u32 };
                     }
                 }
-                // loop-9 (C8): the signal medium dilutes with the culture —
+                // loop-9 (C8): the signal medium dilutes with the culture,
                 // floor(m × d) per division, d = `.cell quorum.dilution`
                 // (default 0.5 = binary-exact halving; 1.0 = chemostat, no
                 // exchange; 0.0 = full medium exchange every division).
-                // Absent/empty medium = no-op — byte-identical for every
+                // Absent/empty medium = no-op, byte-identical for every
                 // legacy passage program.
                 let qd = self
                     .cell
@@ -6218,7 +6485,7 @@ impl Interp {
                         self.cur_line,
                         1,
                         format!(
-                            "passage: {} divisions (maintenance {}) — generation {}",
+                            "passage: {} divisions (maintenance {}), generation {}",
                             n,
                             crate::value::format_float(f),
                             self.generation
@@ -6252,7 +6519,7 @@ impl Interp {
                 Ok(Value::Float(*self.grn_levels.get(&k).unwrap_or(&0.0)))
             }
             "fingerprint" => {
-                // reg-bio-2 (D9): call counts emit in SORTED key order —
+                // reg-bio-2 (D9): call counts emit in SORTED key order,
                 // HashMap iteration order varies per process, and these maps
                 // cross the differential parity boundary. Gene names are
                 // ASCII, so byte-order sort matches the oracle's sorted().
@@ -6274,7 +6541,7 @@ impl Interp {
                 let mut burst_total = 0.0;
                 let mut burst_n = 0usize;
                 let mut burst_by_gene: Vec<(Value, Value)> = Vec::new();
-                // reg-bio-2 (D9): iterate buckets in sorted key order —
+                // reg-bio-2 (D9): iterate buckets in sorted key order,
                 // burst_total is a float SUM, and float addition is not
                 // associative, so HashMap order made the aggregate differ in
                 // the last ulp across processes. The per-gene list is sorted
@@ -6292,7 +6559,7 @@ impl Interp {
                         .map(|b| *bins.get(&b).unwrap_or(&0))
                         .sum();
                     let mean = total as f64 / n;
-                    // reg-bio-2 (D9): never powi — explicit multiply (the
+                    // reg-bio-2 (D9): never powi, explicit multiply (the
                     // powi algorithm is platform-chosen; the oracle mirrors
                     // this op-for-op as d*d).
                     let var = (0..complete_bins)
@@ -6481,7 +6748,7 @@ impl Interp {
             }
             "repressi_state" => {
                 // A11 (reg-r2, honesty): emergent mutual repression. The old
-                // "0.5^tj" formula was a hardcoded drive schedule — no gene
+                // "0.5^tj" formula was a hardcoded drive schedule, no gene
                 // repressed anything. The ring now integrates the discrete
                 // Elowitz–Leibler repressilator (Elowitz & Leibler 2000):
                 //   dA/dt = α / (1 + R^h) − γA   (R = the repressor's level)
@@ -6489,7 +6756,7 @@ impl Interp {
                 // α=10, γ=1, h=4, init [5, 0, 0]. Each node represses its
                 // clockwise neighbor; the oscillation is EMERGENT from that
                 // loop, not scheduled. State is a pure function of the tick
-                // count — both manual (repressi_next) and wall-clock
+                // count, both manual (repressi_next) and wall-clock
                 // (repressi_start) modes fold the identical arithmetic, so
                 // they can never diverge, and the Python oracle mirrors it
                 // op-for-op (bit-identical IEEE-754 results).
@@ -6515,10 +6782,10 @@ impl Interp {
             }
             "grn_fire" => {
                 let seed = args.first().map(|v| v.display()).unwrap_or_default();
-                // A10 (reg-r2): GRN decay — opt-in dilution. Real regulation decays:
+                // A10 (reg-r2): GRN decay, opt-in dilution. Real regulation decays:
                 // levels bleed off unless refreshed. Before every pulse, existing
                 // levels decay by the configured fraction. Decay comes from
-                // the pulse itself — grn_fire(seed, f) — or falls back to
+                // the pulse itself, grn_fire(seed, f), or falls back to
                 // .cell `[grn] decay = f`. Default (unset / 0) is
                 // byte-identical to the pre-A10 behavior: the multiply loop
                 // is skipped entirely, not multiplied by 1.
@@ -6542,17 +6809,17 @@ impl Interp {
                     }
                 }
                 // reg-bio-2 (C1): the translation layer integrates at every
-                // engine update point — each fire is one Euler step of
+                // engine update point, each fire is one Euler step of
                 // p += rate·Δcalls − decay·p. Protein nodes live in
                 // grn_levels and gate genes like any regulator (two-tier).
                 self.trans_integrate("fire");
-                // STATEFUL network: levels persist across fires (a latch by default — decay makes the dilution explicit)
+                // STATEFUL network: levels persist across fires (a latch by default, decay makes the dilution explicit)
                 // loop-9 (P0-2): ligand-pool edge sources do NOT live in
                 // grn_levels. Seeding them here at 0.0 permanently shadowed
                 // the metabolite-pool read in gate resolution (grn_levels.get
                 // wins over the ligand fallback), so ONE grn_fire killed every
                 // ligand gate for the rest of the run. Sources/targets backed
-                // by a metabolite are skipped — their level lives in the pool
+                // by a metabolite are skipped, their level lives in the pool
                 // and resolves through the ligand fallback exactly as before
                 // the first fire.
                 for e in &self.grn_edges {
@@ -6568,7 +6835,7 @@ impl Interp {
                     }
                 }
                 // loop-9 (C8): a signal species lives in the medium, not in
-                // grn_levels — firing it directly would shadow the medium
+                // grn_levels, firing it directly would shadow the medium
                 // read forever (the P0-2 shadow, seed-path edition). Refuse
                 // honestly instead of silently poisoning the gate.
                 if self.signals.iter().any(|s| s == &seed) {
@@ -6576,7 +6843,7 @@ impl Interp {
                         self.cur_line,
                         4,
                         format!(
-                            "'{}' is a signal species: its level lives in the shared medium — use secrete()",
+                            "'{}' is a signal species: its level lives in the shared medium, use secrete()",
                             seed
                         ),
                     );
@@ -6584,9 +6851,9 @@ impl Interp {
                     let cur = *self.grn_levels.get(&seed).unwrap_or(&0.0);
                     self.grn_levels.insert(seed.clone(), (cur + 1.0).min(1.0));
                 }
-                // Phase 1 — activation: child = max(child, parent × strength^wave)
+                // Phase 1, activation: child = max(child, parent × strength^wave)
                 // where wave counts propagation hops (multi-hop attenuation).
-                // Phase 2 — inhibition: each repressor applies its influence
+                // Phase 2, inhibition: each repressor applies its influence
                 // ONCE per fire (a repressor's concentration sets the output
                 // level; it does not compound over propagation waves).
                 let mut activated: HashMap<String, f64> = self.grn_levels.clone();
@@ -6608,7 +6875,7 @@ impl Interp {
                         let parent = self.regulated_level(parent, &e.from);
                         let influence = match e.threshold {
                             Some(t) if t > 0.0 => {
-                                // reg-bio (F-2): per-edge Hill exponent —
+                                // reg-bio (F-2): per-edge Hill exponent,
                                 // cooperative binding. Repeated multiplication,
                                 // NOT powi (platform-chosen); the oracle mirrors
                                 // this op-for-op (bit-identical IEEE-754 parity).
@@ -6626,7 +6893,7 @@ impl Interp {
                                 e.strength * (ph / (ph + th))
                             }
                             // sec-r3/reg-r3: repeated multiplication, NOT
-                            // powi — powi's algorithm is platform-chosen,
+                            // powi, powi's algorithm is platform-chosen,
                             // while the oracle must mirror this op-for-op
                             // (bit-identical IEEE-754 parity contract)
                             _ => {
@@ -6640,7 +6907,7 @@ impl Interp {
                             }
                         };
                         let cur = *activated.get(&e.to).unwrap_or(&0.0);
-                        // reg-bio-2 (D2c): influence clamps at 1.0 — a level is
+                        // reg-bio-2 (D2c): influence clamps at 1.0, a level is
                         // a concentration fraction, `grn_set` clamps 0..1, and
                         // strength > 1 must not push a node past saturation.
                         // Legacy programs (strength <= 1) are bit-identical.
@@ -6650,7 +6917,7 @@ impl Interp {
                             changed = true;
                         }
                     }
-                    // reg-bio-2 (B7): pooled (`sum`) edges — one pass per
+                    // reg-bio-2 (B7): pooled (`sum`) edges, one pass per
                     // wave. Groups keyed by (target, threshold, hill) pool
                     // weighted inputs P = min(1, Σ s·parent) and apply ONE
                     // Hill of P: child = max(child, Pⁿ/(Pⁿ+tⁿ)). Strength is
@@ -6715,7 +6982,7 @@ impl Interp {
                     let parent = self.regulated_level(parent, &e.from);
                     let influence = match e.threshold {
                         Some(t) if t > 0.0 => {
-                            // reg-bio (F-2): Hill exponent here too — a
+                            // reg-bio (F-2): Hill exponent here too, a
                             // cooperative repressor's influence saturates the
                             // same way its activation dose does.
                             let n = e.hill.unwrap_or(2);
@@ -6732,7 +6999,7 @@ impl Interp {
                         _ => parent * e.strength,
                     };
                     let cur = *inhibited.get(&e.to).unwrap_or(&0.0);
-                    // reg-bio-2 (D2b): occupancy repression — multiplicative
+                    // reg-bio-2 (D2b): occupancy repression, multiplicative
                     // survival child *= 1 − influence (the thermodynamic
                     // Kⁿ/(Kⁿ+Rⁿ) form; repression can never overshoot and
                     // full occupancy silences completely). Legacy edges keep
@@ -6779,11 +7046,27 @@ impl Interp {
                 };
                 crate::genes::join_task(self, id, timeout)
             }
+            // W18: cooperative cancellation surface (see genes.rs for the
+            // registry rules; the flag is only OBSERVED at tick boundaries)
+            "cancel" => crate::genes::cancel_task(self, args),
+            "task_state" => crate::genes::task_state_of(self, args),
+            "cancelled" => Ok(Value::Bool(
+                self.cancel_chain
+                    .iter()
+                    .any(|f| f.load(std::sync::atomic::Ordering::Relaxed)),
+            )),
+            // W15: task-group surface. wait_all joins every id in input
+            // order and returns the results as a list; wait_any returns
+            // the id of the first finished task in the list (polling the
+            // lifecycle phases, since the worker sets its phase before
+            // the result leaves).
+            "wait_all" => crate::genes::wait_all_tasks(self, args),
+            "wait_any" => crate::genes::wait_any_task(self, args),
             // -------------------------------------------------- math
             "floor" => Ok(Value::Int(match args.first() {
                 Some(Value::Int(i)) => *i,
                 Some(Value::Float(f)) => {
-                    // a float outside i64 range has no faithful int form —
+                    // a float outside i64 range has no faithful int form,
                     // catchable overflow (the oracle agrees, i64 is the contract)
                     if !f.is_finite() || *f >= 9.223372036854776e18 || *f <= -9.223372036854776e18 {
                         return Err(Stress::new(
@@ -6840,7 +7123,7 @@ impl Interp {
             }
             // ------------------------------------------------ regex (ReDoS-safe: 2M step cap)
             "re_match" => {
-                // re_match(pattern, s) — full match test
+                // re_match(pattern, s), full match test
                 let pat = args.first().map(|v| v.display()).unwrap_or_default();
                 let s = args.get(1).map(|v| v.display()).unwrap_or_default();
                 let engine = re_compile(&pat)?;
@@ -6855,7 +7138,7 @@ impl Interp {
                 Ok(Value::Bool(ok))
             }
             "re_find" => {
-                // re_find(pattern, s, start?) — leftmost match as a map
+                // re_find(pattern, s, start?), leftmost match as a map
                 let pat = args.first().map(|v| v.display()).unwrap_or_default();
                 let s = args.get(1).map(|v| v.display()).unwrap_or_default();
                 let start = match args.get(2) {
@@ -6920,9 +7203,9 @@ impl Interp {
                     }
                 }
             }
-            // dx-r6 (loop-5-a audit): regex substitution — the one regex op a
+            // dx-r6 (loop-5-a audit): regex substitution, the one regex op a
             // scripting baseline expects that was missing. Literal
-            // replacement (no $1 refs — groups come from re_groups).
+            // replacement (no $1 refs, groups come from re_groups).
             "re_replace" => {
                 let pat = args.first().map(|v| v.display()).unwrap_or_default();
                 let s = args.get(1).map(|v| v.display()).unwrap_or_default();
@@ -6957,7 +7240,7 @@ impl Interp {
                                 pos = b;
                             } else {
                                 // empty match: emit the current char (it is
-                                // not part of the match) and step over it —
+                                // not part of the match) and step over it,
                                 // Python re.sub parity for empty patterns
                                 if a < chars.len() {
                                     out.push(chars[a]);
@@ -7051,7 +7334,7 @@ impl Interp {
                 args.first(),
                 Some(Value::Variant(crate::value::VTag::ErrV, _))
             ))),
-            // Safe extraction: never stresses — the default covers None/Err
+            // Safe extraction: never stresses, the default covers None/Err
             // AND plain values (documented: extraction from a non-variant
             // yields the value itself, so unwrap_or chains over mixed data).
             "unwrap_or" => {
@@ -7070,7 +7353,7 @@ impl Interp {
             }
             // Unsafe extraction: None/Err is a CONTRACT VIOLATION by the
             // caller (the programmer asked for a payload that is not there)
-            // — the exceptional tier of the §9 hierarchy. Rescue-catchable
+            //, the exceptional tier of the §9 hierarchy. Rescue-catchable
             // via the "unwrap" kind; expected failures stay in the value
             // layer (check is_some/is_ok first).
             "unwrap" => {
@@ -7178,11 +7461,11 @@ impl Interp {
             }
             // ---------------- W28: Unicode depth (SPEC §3, documented subset)
             "grapheme_len" => {
-                // Grapheme-cluster count — DOCUMENTED SUBSET (no external
+                // Grapheme-cluster count, DOCUMENTED SUBSET (no external
                 // deps): base + combining marks (U+0300-036F, U+1AB0-1AFF,
                 // U+1DC0-1DFF, U+20D0-20FF, U+FE20-FE2F), ZWJ (U+200D)
                 // sequences, and regional-indicator pairs (flags). This is
-                // the same rule set the oracle implements — byte-identical.
+                // the same rule set the oracle implements, byte-identical.
                 let s = args.first().map(|v| v.display()).unwrap_or_default();
                 Ok(Value::Int(grapheme_count(&s) as i64))
             }
@@ -7209,7 +7492,7 @@ impl Interp {
                 Ok(Value::Str(out))
             }
             "char_at" => {
-                // char-indexed read (char = Unicode scalar value) — the
+                // char-indexed read (char = Unicode scalar value), the
                 // SAME unit len(str) already counts on both cores.
                 let s = args.first().map(|v| v.display()).unwrap_or_default();
                 let i = match args.get(1) {
@@ -7226,7 +7509,7 @@ impl Interp {
                 }
             }
             "char_slice" => {
-                // char-indexed slice [i, j), clamped — mirrors the oracle
+                // char-indexed slice [i, j), clamped, mirrors the oracle
                 let s = args.first().map(|v| v.display()).unwrap_or_default();
                 let (i, j) = match (args.get(1), args.get(2)) {
                     (Some(Value::Int(a)), Some(Value::Int(b))) => (*a, *b),
@@ -7245,7 +7528,7 @@ impl Interp {
                 Ok(Value::Str(chars[a..hi].iter().collect()))
             }
             "random" => {
-                // xorshift64* — identical state machine in both implementations
+                // xorshift64*, identical state machine in both implementations
                 let mut x = self.rng;
                 x ^= x >> 12;
                 x ^= x << 25;
@@ -7272,10 +7555,10 @@ impl Interp {
                 Ok(Value::Null)
             }
             "promoter_telemetry" => {
-                // loop-9 (F-3): per-gene promoter attempt telemetry —
+                // loop-9 (F-3): per-gene promoter attempt telemetry,
                 // {attempts, on_total, episodes, on_frac, burst_size}.
                 // burst_size = on_total/episodes is the mean ON-run length:
-                // ~1 under Poisson-like firing, >>1 under bursting — the
+                // ~1 under Poisson-like firing, >>1 under bursting, the
                 // bursting signature. Zero attempts = all-zero telemetry.
                 let name = args.first().map(|v| v.display()).unwrap_or_default();
                 let (attempts, on_total, episodes) =
@@ -7301,7 +7584,7 @@ impl Interp {
                 ))))
             }
             "burst_set" => {
-                // loop-9 (R9): runtime promoter-rate modulation — retune ONE
+                // loop-9 (R9): runtime promoter-rate modulation, retune ONE
                 // gene's telegraph rates (the noise layer meets regulation).
                 // burst_set(g) clears the override; burst_set(g, kon, koff)
                 // sets it (clamped 0..=1). Precedence: @burst mark > this.
@@ -7364,7 +7647,7 @@ impl Interp {
             }
             "expr_on" => {
                 // reg-bio (F-1): in-source switch for the telegraph promoter
-                // layer — kon/koff per call attempt (clamped 0..1). Call
+                // layer, kon/koff per call attempt (clamped 0..1). Call
                 // randomize(seed) first for reproducible bursting. The layer
                 // stays off unless explicitly turned on here or via .cell.
                 let kon = match args.first() {
@@ -7392,7 +7675,7 @@ impl Interp {
                 Ok(Value::Bool(false))
             }
             "decay_clock" => {
-                // reg-bio-2 (C2): in-source switch for the decay clock —
+                // reg-bio-2 (C2): in-source switch for the decay clock,
                 // `decay_clock(n, f)` fires one GRN decay step (fraction f,
                 // default from `.cell [grn] decay`) every n calls, and the
                 // translation layer integrates on the same ticks. n = 0
@@ -7427,7 +7710,7 @@ impl Interp {
                 }
             }
             "ligand_set" => {
-                // reg-bio-2 (A4): set a metabolite pool — ligand_set("iptg", 0.9).
+                // reg-bio-2 (A4): set a metabolite pool, ligand_set("iptg", 0.9).
                 // The pool wins over the `.cell [ligand.<name>]` bath default.
                 let name = args.first().map(|v| v.display()).unwrap_or_default();
                 let v = match args.get(1) {
@@ -7449,7 +7732,7 @@ impl Interp {
             }
             "secrete" => {
                 // loop-9 (C8): emit molecules into the shared medium.
-                // Int = exact molecules; Float floors (never rounds — T4
+                // Int = exact molecules; Float floors (never rounds, T4
                 // parity: Python round is banker's, Rust is half-away);
                 // negative clamps to 0 with a note; non-finite clamps to 0;
                 // saturating add capped at 1e9 (saturated medium = level 1.0).
@@ -7529,7 +7812,7 @@ impl Interp {
             "quorum" => {
                 // loop-9 (C8): read the population level of a signal species.
                 // One arg → level (Float); two args → level >= threshold
-                // (Bool — the same >= the GRN gate uses). Unknown/empty
+                // (Bool, the same >= the GRN gate uses). Unknown/empty
                 // species → 0.0 / false: "empty pool → quorum false" is the
                 // default, not a special case.
                 let name = args.first().map(|v| v.display()).unwrap_or_default();
@@ -7547,9 +7830,9 @@ impl Interp {
                 }
             }
             "quench" => {
-                // loop-9 (C8): degrade signal molecules (AiiA lactonase —
+                // loop-9 (C8): degrade signal molecules (AiiA lactonase,
                 // quorum quenching). One arg → destroy ALL; two args →
-                // fraction f destroyed: m ← floor(m × (1−f)) — floor, never
+                // fraction f destroyed: m ← floor(m × (1−f)), floor, never
                 // round (T4 parity).
                 let name = args.first().map(|v| v.display()).unwrap_or_default();
                 mem_charge(64)?;
@@ -7579,7 +7862,7 @@ impl Interp {
                 Ok(Value::Int(removed as i64))
             }
             "quorum_state" => {
-                // loop-9 (C8): population telemetry — species → molecule
+                // loop-9 (C8): population telemetry, species → molecule
                 // count, SORTED keys (D9: byte-order sort both cores).
                 let mut pairs: Vec<(String, u64)> = match self.medium.as_ref() {
                     Some(m) => match m.lock() {
@@ -7617,7 +7900,7 @@ impl Interp {
                 // wall-clock ceiling: sleep escapes the step budget, so cap it
                 let ms = ms.min(60_000);
                 // fuel charge: a sleeping worker drains the shared pool in
-                // proportion to its wall time — sleep-loops cannot run forever
+                // proportion to its wall time, sleep-loops cannot run forever
                 let charge = ms.saturating_mul(1000);
                 self.steps = self.steps.saturating_add(charge);
                 if let Some(pool) = &self.fuel_pool {
@@ -7644,7 +7927,7 @@ impl Interp {
             // -------------------------------------------------- filesystem (capability-gated)
             // sec-r5 (F-8/F-11): stat → open → verify-the-handle → read.
             // Only regular files are readable (FIFOs block open() forever and
-            // /dev/zero is an infinite byte well — both were live hang/OOM);
+            // /dev/zero is an infinite byte well, both were live hang/OOM);
             // the bytes are charged BEFORE the read; and the opened handle is
             // verified against the grants (anti-TOCTOU), never re-resolved.
             "read_file" => {
@@ -7655,7 +7938,7 @@ impl Interp {
                 if !meta.is_file() {
                     return Err(Stress::new(
                         "interference",
-                        format!("read_file '{}': refused — not a regular file", path),
+                        format!("read_file '{}': refused, not a regular file", path),
                     ));
                 }
                 mem_charge(meta.len())?;
@@ -7684,7 +7967,7 @@ impl Interp {
                 let path = args.first().map(|v| v.display()).unwrap_or_default();
                 let body = args.get(1).map(|v| v.display()).unwrap_or_default();
                 self.caps.check(&self.caps.write, "write", &path)?;
-                // sec-r5 (F-8a): resolve the symlink chain BEFORE opening — a
+                // sec-r5 (F-8a): resolve the symlink chain BEFORE opening, a
                 // dangling outside-pointing link must be rejected, not created-
                 // through. The post-open fd verification below closes the race.
                 if self.caps.gates_paths(&self.caps.write) {
@@ -7696,7 +7979,7 @@ impl Interp {
                 // sec-r5 (F-8): open FIRST, verify the handle's true identity,
                 // then write through the handle. The old check→canonicalize→
                 // write sequence was TOCTOU-raceable with a symlink swap, and
-                // truncate-at-open could destroy a raced file — so truncate
+                // truncate-at-open could destroy a raced file, so truncate
                 // happens AFTER verification, via the verified handle.
                 match std::fs::OpenOptions::new()
                     .write(true)
@@ -7717,7 +8000,7 @@ impl Interp {
                                     return Err(Stress::new(
                                         "interference",
                                         format!(
-                                            "write_file '{}': refused — path is a hardlink ({} links)",
+                                            "write_file '{}': refused, path is a hardlink ({} links)",
                                             path,
                                             m.nlink()
                                         ),
@@ -7744,7 +8027,7 @@ impl Interp {
                     )),
                 }
             }
-            // W029: bytes file I/O — the SAME armor as read_file/write_file
+            // W029: bytes file I/O, the SAME armor as read_file/write_file
             // (regular-files-only, charge-before-read, TOCTOU-verified handle,
             // hardlink defense), with bytes payloads instead of text.
             "read_file_bytes" => {
@@ -7756,7 +8039,7 @@ impl Interp {
                 if !meta.is_file() {
                     return Err(Stress::new(
                         "interference",
-                        format!("read_file_bytes '{}': refused — not a regular file", path),
+                        format!("read_file_bytes '{}': refused, not a regular file", path),
                     ));
                 }
                 mem_charge(meta.len())?;
@@ -7822,7 +8105,7 @@ impl Interp {
                                     return Err(Stress::new(
                                         "interference",
                                         format!(
-                                            "write_file_bytes '{}': refused — path is a hardlink ({} links)",
+                                            "write_file_bytes '{}': refused, path is a hardlink ({} links)",
                                             path,
                                             m.nlink()
                                         ),
@@ -7871,7 +8154,7 @@ impl Interp {
                         if self.caps.gates_paths(&self.caps.write) {
                             Caps::verify_opened(&f, &path, &self.caps.write, "write")?;
                         }
-                        // hardlink defense (parity with write_file — S4 NEW-3)
+                        // hardlink defense (parity with write_file, S4 NEW-3)
                         #[cfg(unix)]
                         {
                             use std::os::unix::fs::MetadataExt;
@@ -7880,7 +8163,7 @@ impl Interp {
                                     return Err(Stress::new(
                                         "interference",
                                         format!(
-                                            "append_file '{}': refused — path is a hardlink ({} links)",
+                                            "append_file '{}': refused, path is a hardlink ({} links)",
                                             path,
                                             m.nlink()
                                         ),
@@ -7918,7 +8201,7 @@ impl Interp {
                 }
             }
             // dx-r6 (loop-5-a audit): the fs mutate ops a scripting baseline
-            // expects — delete/rename/mkdir — under the SAME discipline as
+            // expects, delete/rename/mkdir, under the SAME discipline as
             // write_file: write-capability, dangling-link pre-resolution,
             // and post-open verification where a handle exists.
             "fs_delete" => {
@@ -7940,7 +8223,7 @@ impl Interp {
                 {
                     return Err(Stress::new(
                         "interference",
-                        format!("fs_delete '{}': refused — path is a symlink", path),
+                        format!("fs_delete '{}': refused, path is a symlink", path),
                     ));
                 }
                 let r = if p.is_dir() {
@@ -8024,7 +8307,7 @@ impl Interp {
                 };
                 self.caps.check(&self.caps.run, "run", &prog)?;
                 // safe-base environment: children get the OS essentials plus
-                // explicitly env-granted variables — never the whole parent
+                // explicitly env-granted variables, never the whole parent
                 // environment (secrets like CI tokens cannot leak to effects)
                 let mut cmd = std::process::Command::new(&prog);
                 cmd.args(&prog_args);
@@ -8036,13 +8319,13 @@ impl Interp {
                 // whole-program DoS). Children now run under a wall-clock
                 // timeout: .cell `run.timeout_ms`, clamped 1..300_000,
                 // default 10_000. A timed-out child is killed and reported.
-                // sec-r3 (re-audit #1/#5): two more containment holes closed —
+                // sec-r3 (re-audit #1/#5): two more containment holes closed,
                 //   (a) the post-exit pipe drain moved OFF the wait path:
                 //       reader threads drain stdout/stderr concurrently, so a
                 //       grandchild inheriting the pipe write-end cannot extend
                 //       the freeze past the timeout (bounded by DRAIN_WAIT);
                 //   (b) the child's WALL TIME is charged as fuel exactly like
-                //       sleep (1000 steps/ms) — `while true { run("sleep",…) }`
+                //       sleep (1000 steps/ms), `while true { run("sleep",…) }`
                 //       used to buy unbounded wall time at ~40 fuel steps per
                 //       8 s; now it drains the shared pool like sleep does.
                 let timeout_ms = self
@@ -8057,7 +8340,7 @@ impl Interp {
                     .stderr(std::process::Stdio::piped())
                     .spawn()
                     .map(|mut child| {
-                        // sec-r3: concurrent drainers on channels — the run
+                        // sec-r3: concurrent drainers on channels, the run
                         // collects with a BOUNDED receive, so a grandchild
                         // inheriting the pipe write-end cannot extend the
                         // freeze past the timeout (the reader thread itself
@@ -8066,7 +8349,7 @@ impl Interp {
                         let (tx_so, rx_so) = mpsc::channel::<Vec<u8>>();
                         let (tx_se, rx_se) = mpsc::channel::<Vec<u8>>();
                         // sec-r4 (F-6): collected child output is capped at 64
-                        // MiB per stream — an 800 MB emitter used to hand a
+                        // MiB per stream, an 800 MB emitter used to hand a
                         // fuel-blind 800 MB String to the Value heap. The
                         // reader stops at the cap; the child keeps running
                         // (it gets killed by the timeout) and the collected
@@ -8142,7 +8425,7 @@ impl Interp {
                 match run_result {
                     Ok((status, so_raw, se_raw, timed_out)) => {
                         // sec-r3 (re-audit #5): the child's wall time is fuel,
-                        // exactly like sleep (1000 steps/ms) — shelling a
+                        // exactly like sleep (1000 steps/ms), shelling a
                         // sleep out to a child no longer bypasses the charge.
                         let wall_ms = started.elapsed().as_millis() as u64;
                         let charge = wall_ms.saturating_mul(1000);
@@ -8312,7 +8595,7 @@ impl Interp {
                 let target = format!("{}:{}", host, port);
                 self.caps.check(&self.caps.net, "net", &target)?;
                 // sec-r4 (F-5): http wall time is fuel, exactly like sleep and
-                // run() children (1000 steps/ms) — a trickling peer used to
+                // run() children (1000 steps/ms), a trickling peer used to
                 // buy unbounded wall time at ~40 fuel steps per call.
                 let started = std::time::Instant::now();
                 match http_get(&host, port, &path) {
@@ -8377,7 +8660,7 @@ impl Interp {
                     .map(|v| v.display())
                     .unwrap_or_else(|| "text/html".into());
                 let body = args.get(3).map(|v| v.display()).unwrap_or_default();
-                // sec-r3 (re-audit #6): response splitting — the server-side
+                // sec-r3 (re-audit #6): response splitting, the server-side
                 // twin of the http_get CRLF guard. status/ctype are formatted
                 // raw into the response head, so CR/LF/control bytes in them
                 // inject headers (proxy/cache poisoning when fronted).
@@ -8508,7 +8791,7 @@ impl Interp {
                 })
             }
             "call" => {
-                // dynamic dispatch: call(name_or_gene, args_list) — the
+                // dynamic dispatch: call(name_or_gene, args_list), the
                 // ribosome translating a named transcript on demand
                 let target = args.first().cloned().unwrap_or(Value::Null);
                 let call_args: Vec<Value> = match args.get(1) {
@@ -8626,7 +8909,7 @@ impl Interp {
             }
         }
         match recv {
-            // W029: the bytes method surface — slice (Python-style negatives,
+            // W029: the bytes method surface, slice (Python-style negatives,
             // clamped, returns NEW bytes) and len. Bytes are immutable, so
             // there are deliberately no mutators.
             Value::Bytes(b) => match name {
@@ -8753,14 +9036,14 @@ impl Interp {
                         _ => 0,
                     };
                     // allocation ceiling: giant repeats abort the process
-                    // outside the stress model — cap as catchable overflow
+                    // outside the stress model, cap as catchable overflow
                     if n.saturating_mul(s.len()) > 512 * 1024 * 1024 {
                         return Err(Stress::new(
                             "overflow",
                             "repeat exceeds the 512 MiB string ceiling",
                         ));
                     }
-                    // sec-r5 (F-9): the per-op cap alone ignores the aggregate —
+                    // sec-r5 (F-9): the per-op cap alone ignores the aggregate,
                     // many mid-size repeats must drain the 2 GiB ceiling too.
                     mem_charge(n.saturating_mul(s.len()) as u64)?;
                     Ok(Value::Str(s.repeat(n)))
@@ -8857,7 +9140,7 @@ impl Interp {
                             }
                         }
                     } else {
-                        // default: numbers and strings ascending — mixed-type
+                        // default: numbers and strings ascending, mixed-type
                         // ordering matches the oracle (numbers first, strings
                         // after), stability preserved
                         let key = |v: &Value| -> (u8, f64, String) {
@@ -8877,7 +9160,7 @@ impl Interp {
                         });
                     }
                     // immutable-method contract: returns a NEW sorted list
-                    // (mirrors reverse/slice/map — the suite is the contract)
+                    // (mirrors reverse/slice/map, the suite is the contract)
                     Ok(Value::List(Rc::new(RefCell::new(v))))
                 }
                 "reverse" => {
@@ -8926,7 +9209,7 @@ impl Interp {
                     let sep = args.first().map(|v| v.display()).unwrap_or_default();
                     let parts: Vec<String> = l.borrow().iter().map(|v| v.display()).collect();
                     // sec-r1 (audit C-10): join allocates the whole result in
-                    // one hop — apply the same per-op ceiling + aggregate
+                    // one hop, apply the same per-op ceiling + aggregate
                     // charge as concat/repeat, or a 64M-element list mints a
                     // ~1 GB string invisible to every ceiling
                     let total: u64 = parts.iter().map(|p| p.len() as u64).sum();
@@ -8950,7 +9233,7 @@ impl Interp {
                         return Err(Self::frozen_stress("list"));
                     }
                     if let Some(v) = args.first() {
-                        // aggregate allocation ceiling (S4 NEW-2) — reg-bio-2
+                        // aggregate allocation ceiling (S4 NEW-2), reg-bio-2
                         // hardening: mirrors the builtin form's real-usage
                         // charge (16·len + 96), see the push builtin note.
                         let bytes = match v {
@@ -9098,7 +9381,7 @@ impl Interp {
                         return self.call_method_gene(g.clone(), obj, args);
                     }
                 }
-                // W04: trait default methods — implemented traits in
+                // W04: trait default methods, implemented traits in
                 // declaration order; the first default body with a matching
                 // name runs with `self` bound to this instance (virtual:
                 // a `self.x()` call inside it dispatches back through the
@@ -9351,7 +9634,7 @@ pub fn json_stringify(v: &Value) -> String {
     // cycle-safe: a container containing itself serializes the repeated
     // branch as null (JSON has no cycle marker; CPython's json.dumps errors,
     // we contain instead of crash). sec-r5 (F-10): the visited set is NOT
-    // unwound, so shared (aliased) subtrees also serialize once — see the
+    // unwound, so shared (aliased) subtrees also serialize once, see the
     // F-10 note in json_stringify_g; this keeps serialization LINEAR for
     // DAG-shaped values instead of exponential.
     let mut seen: Vec<usize> = Vec::new();
@@ -9368,7 +9651,7 @@ fn json_stringify_g(v: &Value, seen: &mut Vec<usize>, depth: u32) -> String {
         Value::Bool(false) => "false".into(),
         Value::Int(i) => i.to_string(),
         Value::Float(f) => {
-            // sec-r5 (F-13): inf/NaN are invalid JSON (RFC 8259) — bare `inf`
+            // sec-r5 (F-13): inf/NaN are invalid JSON (RFC 8259), bare `inf`
             // tokens broke the round-trip contract. Serialize as null.
             if f.is_finite() {
                 crate::value::format_float(*f)
@@ -9377,13 +9660,13 @@ fn json_stringify_g(v: &Value, seen: &mut Vec<usize>, depth: u32) -> String {
             }
         }
         Value::Str(s) => json_quote(s),
-        // W029: JSON has no bytes type — the lossless view is the int list.
+        // W029: JSON has no bytes type, the lossless view is the int list.
         // (Python's json.dumps rejects bytes outright; we contain instead.)
         Value::Bytes(b) => {
             let items: Vec<String> = b.iter().map(|x| x.to_string()).collect();
             format!("[{}]", items.join(","))
         }
-        // W06 (D-014): variants serialize losslessly as single-key objects —
+        // W06 (D-014): variants serialize losslessly as single-key objects,
         // {"some": v} / {"ok": v} / {"err": v}; None serializes as null
         // (JSON has no absent-value constructor). The payload rides the
         // existing seen/depth guards, so a variant containing a cycle
@@ -9413,7 +9696,7 @@ fn json_stringify_g(v: &Value, seen: &mut Vec<usize>, depth: u32) -> String {
                 .map(|x| json_stringify_g(x, seen, depth + 1))
                 .collect();
             // sec-r5 (F-10): the visited id is NOT popped. Unwinding made
-            // DAG-shaped values (l=[l,l] chains) re-walk exponentially —
+            // DAG-shaped values (l=[l,l] chains) re-walk exponentially,
             // 2^45 node visits for one builtin call (live hang). Memoized:
             // shared subtrees serialize once, later references as null.
             format!("[{}]", parts.join(","))
@@ -9484,7 +9767,7 @@ enum ReAst {
 
 const RE_STEP_CAP: u64 = 2_000_000;
 
-/// sec-r1 (audit C-2): the regex PARSER recurses per group nesting — the
+/// sec-r1 (audit C-2): the regex PARSER recurses per group nesting, the
 /// matcher has a step cap, but a pattern like `"(" * 2_000_000` blew the
 /// native stack before a single match step ran (uncatchable abort, rc=134).
 /// Cap nesting at 1024 (10× anything a real pattern needs).
@@ -10298,6 +10581,13 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "grn_state",
     "spawn",
     "join",
+    // W18: cooperative task cancellation
+    "cancel",
+    "task_state",
+    "cancelled",
+    // W15: task-group surface
+    "wait_all",
+    "wait_any",
     "floor",
     "ceil",
     "sqrt",
@@ -10311,7 +10601,7 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "argv",
     "read_file",
     "write_file",
-    // W029: bytes — conversions + capability-gated bytes file I/O
+    // W029: bytes, conversions + capability-gated bytes file I/O
     "bytes_from_str",
     "str_from_bytes",
     "bytes_from_list",
@@ -10342,7 +10632,7 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "unix_time",
     "date_parts",
     "date_fmt",
-    // W28 (SPEC §3): Unicode depth — documented subsets, oracle-mirrored
+    // W28 (SPEC §3): Unicode depth, documented subsets, oracle-mirrored
     "grapheme_len",
     "fold_case",
     "char_at",
@@ -10403,11 +10693,11 @@ pub fn mem_charge(bytes: u64) -> Result<(), Stress> {
     Ok(())
 }
 
-/// sec-r5 (F-9): Value::Str clones are deep copies — every read/push of a
+/// sec-r5 (F-9): Value::Str clones are deep copies, every read/push of a
 /// large string is a fresh allocation of its full byte size. Copies above
 /// 64 KiB enter the aggregate ceiling; smaller ones stay uncharged so
 /// normal loops (a 50-byte word read a million times) are not taxed.
-fn charge_clone(v: &Value) -> Result<(), Stress> {
+pub(crate) fn charge_clone(v: &Value) -> Result<(), Stress> {
     if let Value::Str(s) = v {
         if s.len() > 64 * 1024 {
             mem_charge(s.len() as u64)?;
@@ -10417,7 +10707,7 @@ fn charge_clone(v: &Value) -> Result<(), Stress> {
 }
 
 // symbol-table accessors for the memory() builtin (sec-r2: Rust-owned
-// table — the C kernel these used to reach into is deleted, audit A15)
+// table, the C kernel these used to reach into is deleted, audit A15)
 pub fn unsafe_arena() -> usize {
     crate::ffi::table_bytes()
 }
@@ -10437,18 +10727,18 @@ pub fn unsafe_allocs() -> u64 {
 ///     dA/dt = α / (1 + R^h) − γA        R = level of A's repressor
 /// with α=10, γ=1, h=4, dt=0.05, 20 substeps per ring tick, init [5,0,...].
 /// Node j's repressor is node (j+n−1) mod n (ring `a -> b -> c` means a
-/// represses b). Oscillation emerges from the loop itself — nothing is
+/// represses b). Oscillation emerges from the loop itself, nothing is
 /// scheduled.
 ///
 /// Determinism contract (differential oracle parity):
-///   * only +, −, ×, ÷ and an unrolled 4th power — no powi/pow/libm calls;
+///   * only +, −, ×, ÷ and an unrolled 4th power, no powi/pow/libm calls;
 ///   * identical op order in the Python mirror (bootstrap/oracle.py);
-///   * stateless fold from init — manual and wall-clock modes cannot drift.
+///   * stateless fold from init, manual and wall-clock modes cannot drift.
 pub fn repressilator_levels(n: usize, tick: u64) -> Vec<f64> {
     repressilator_levels_p(n, tick, RepressiParams::default())
 }
 
-/// reg-bio (F-5): parameterized fold — kinetic constants come from
+/// reg-bio (F-5): parameterized fold, kinetic constants come from
 /// `RepressiParams` (`.cell repressi.*`). Default params are bit-identical
 /// to the historical constants.
 pub fn repressilator_levels_p(n: usize, tick: u64, p: RepressiParams) -> Vec<f64> {
@@ -10463,13 +10753,13 @@ pub fn repressilator_levels_p(n: usize, tick: u64, p: RepressiParams) -> Vec<f64
     lv
 }
 
-/// One ring tick of the ODE (20 Euler substeps) — shared by the pure
+/// One ring tick of the ODE (20 Euler substeps), shared by the pure
 /// from-init fold and the interpreter's incremental cache (sec-r3), so both
 /// paths execute the identical operation sequence (bit-identical parity).
 ///
 /// reg-bio (F-5): parameterized (α, γ, Hill n, basal leak) + optional noise.
-/// The noise stream is derived from the ABSOLUTE (tick, substep) position —
-/// `seed ^ tick·G ^ substep·G'` re-seeded per substep — so the incremental
+/// The noise stream is derived from the ABSOLUTE (tick, substep) position,
+/// `seed ^ tick·G ^ substep·G'` re-seeded per substep, so the incremental
 /// cache path (which starts mid-stream at the cached tick) and the
 /// from-init fold produce bit-identical levels. With `noise = 0` the draw
 /// is skipped entirely: byte-identical to the pre-noise arithmetic.
@@ -10486,7 +10776,7 @@ pub fn repressilator_step_p(mut lv: Vec<f64>, p: RepressiParams, tick: u64) -> V
     }
     for ss in 0..SUBSTEPS {
         // position-derived noise seed (independent of the program's
-        // `random()` stream — ring noise never perturbs user randomness)
+        // `random()` stream, ring noise never perturbs user randomness)
         let mut nx = if p.noise > 0.0 {
             let mut s = p.seed
                 ^ tick.wrapping_mul(0x9E3779B97F4A7C15)
@@ -10501,7 +10791,7 @@ pub fn repressilator_step_p(mut lv: Vec<f64>, p: RepressiParams, tick: u64) -> V
         let snap = lv.clone();
         for (j, item) in lv.iter_mut().enumerate() {
             let rep = snap[(j + n - 1) % n];
-            // rep^hill via repeated multiplication — MUST stay op-identical
+            // rep^hill via repeated multiplication, MUST stay op-identical
             // to the oracle. Default hill=4 is the historical unrolled
             // rep*rep*rep*rep exactly (1.0*rep is exact in IEEE-754).
             let mut rh = 1.0f64;
@@ -10520,15 +10810,15 @@ pub fn repressilator_step_p(mut lv: Vec<f64>, p: RepressiParams, tick: u64) -> V
                 // reg-bio-2 (D6): multiplicative, dt-aware noise. Real gene-
                 // expression noise is multiplicative and strictly positive.
                 // The old additive kick (a) rectified upward through the zero
-                // clamp — E[max(0, x+δ)] > x for small x, a 6.8× bias at
-                // x=0.01, noise=0.5 — and (b) ignored the Euler timescale.
+                // clamp, E[max(0, x+δ)] > x for small x, a 6.8× bias at
+                // x=0.01, noise=0.5, and (b) ignored the Euler timescale.
                 // The kick is now a FRACTION of the current level; with the
                 // 1/√SUBSTEPS spread, per-tick variance ≈ noise²·v² and the
                 // factor stays in [1−0.224, 1+0.224] for noise ≤ 1, so v
                 // never crosses zero. Op order mirrored op-for-op in
                 // bootstrap/oracle.py; noise=0 skips the draw entirely
                 // (byte-identical legacy path). The constant is the literal
-                // double nearest 1/√20 on BOTH sides — no libm sqrt call.
+                // double nearest 1/√20 on BOTH sides, no libm sqrt call.
                 v *= 1.0 + p.noise * 0.22360679774997896 * (2.0 * u - 1.0);
             }
             *item = if v > 0.0 { v } else { 0.0 };
@@ -10539,7 +10829,7 @@ pub fn repressilator_step_p(mut lv: Vec<f64>, p: RepressiParams, tick: u64) -> V
 
 /// Normalized (0..1) ring level a GRN gate reads for a ring node: the raw
 /// ODE level divided by the production scale α, clamped. (A11: gates can
-/// read ring levels.) Pure form — used by tests; the interpreter routes
+/// read ring levels.) Pure form, used by tests; the interpreter routes
 /// through the fuel-charged cache (`Interp::ring_gate_level`).
 pub fn repressilator_gate_level(n: usize, tick: u64, node_index: usize) -> f64 {
     const ALPHA: f64 = 10.0;
@@ -10554,7 +10844,7 @@ pub fn repressilator_gate_level(n: usize, tick: u64, node_index: usize) -> f64 {
 
 /// W01 (L2c): soft annotation matching. A value matches a type annotation by
 /// `Value::type_name()`, with two documented relaxations: `any` accepts
-/// everything, and `float` accepts int (safe numeric widening — `int`
+/// everything, and `float` accepts int (safe numeric widening, `int`
 /// refuses float: no silent narrowing). Unions match any alternative;
 /// optionals additionally accept null. Mirrored by oracle.ann_matches.
 pub fn ann_matches(v: &Value, ann: &TypeAnn) -> bool {
@@ -10580,7 +10870,7 @@ pub fn ann_matches(v: &Value, ann: &TypeAnn) -> bool {
 /// combining marks (U+0300-036F, U+1AB0-1AFF, U+1DC0-1DFF, U+20D0-20FF,
 /// U+FE20-FE2F), ZWJ (U+200D) glues the previous and following char, and
 /// regional-indicator pairs (flags) are one cluster each. ASCII is a fast
-/// path. The Python oracle implements the identical rule set — the two
+/// path. The Python oracle implements the identical rule set, the two
 /// counts can never diverge on the same input.
 pub fn grapheme_count(s: &str) -> usize {
     let chars: Vec<char> = s.chars().collect();

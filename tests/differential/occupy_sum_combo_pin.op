@@ -1,4 +1,4 @@
-# reg-bio-3 (sz adversarial ask): the combined parity seam — occupy +
+# reg-bio-3 (sz adversarial ask): the combined parity seam, occupy +
 # sum-pooling + a ligand edge source on ONE target. This is the exact
 # junction session-12 flagged as fragile: sum edges are pooled members
 # (never individual AND members), the fire-group pass must run before the
@@ -19,7 +19,7 @@ frame proof {
     grn_set("rep", 0.1)
     grn_set("a1", 0.4)
     grn_set("a2", 0.4)
-    # pooled inputs: 0.3*0.4 + 0.3*0.4 = 0.24 < 0.5 — the pool fails alone
+    # pooled inputs: 0.3*0.4 + 0.3*0.4 = 0.24 < 0.5, the pool fails alone
     ligand_set("ilig", 0.9)
     assert(tgt() == null, "pooled inputs below threshold: the group fails even with the ligand source on")
     # synergy: two sub-threshold inputs POOL past the gate...

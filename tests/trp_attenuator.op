@@ -1,4 +1,4 @@
-# reg-bio-2 (A5): corepressor polarity + transcription attenuation — the
+# reg-bio-2 (A5): corepressor polarity + transcription attenuation, the
 # trp operon story. Tryptophan is a COREPRESSOR: binding INCREASES TrpR's
 # DNA affinity (the exact opposite polarity of lac's inducer). The
 # `attenuates` edge is an RNA-level mechanism: at high amino-acid pool the
@@ -13,15 +13,15 @@ gene trpE() { return "trpE-ran" }
 gene leader() { return "leader-ran" }
 frame proof {
     grn_set("trpR", 1.0)
-    # scarcity: the aporepressor cannot bind — the operon is ON
+    # scarcity: the aporepressor cannot bind, the operon is ON
     ligand_set("trp", 0.02)
-    assert(trpE() == "trpE-ran", "trp scarcity: occ = 0.02/0.12 < threshold — aporepressor state")
+    assert(trpE() == "trpE-ran", "trp scarcity: occ = 0.02/0.12 < threshold, aporepressor state")
     assert(leader() == "leader-ran", "low tryptophan: the leader reads through (no attenuation)")
     # abundance: tryptophan ENABLES repression (corepressor polarity)
     ligand_set("trp", 0.9)
     assert(trpE() == null, "high tryptophan: TrpR binds (cofactor polarity) and represses")
     assert(leader() == null, "high tryptophan: the attenuator terminates the leader transcript")
-    # polarity mirror: the regulator's LEVEL never moved — only the pool did
+    # polarity mirror: the regulator's LEVEL never moved, only the pool did
     assert(grn_get("trpR") == 1.0, "TrpR level unchanged throughout (allostery, not dilution)")
     assert(abs(ligand("trp") - 0.9) < 1e-12, "the metabolite pool is readable (ligand reader)")
 }

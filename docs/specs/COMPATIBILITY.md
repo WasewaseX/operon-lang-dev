@@ -9,7 +9,7 @@
    version ⇒ byte-identical outputs (draw-count invariance; loop-9 discipline). Engine
    refactors that change the RNG stream require a language-version bump.
 3. **Breaking changes require 3.0** and a DECISIONS entry listing every breakage with a
-   migration path (mechanized where possible — `operon fix`, W65).
+   migration path (mechanized where possible, `operon fix`, W65).
 4. **Version strings move only with milestones** (D-009): Cargo.toml carries the last tagged
    release; SPEC Status carries the in-development label (`vX.Y.0-dev`). Enforced mechanically
    by `scripts/check_docs_sync.py` (W53/W54).

@@ -1,4 +1,4 @@
-//! lexer.rs — tokenizer. Produces raw tokens; keyword recognition happens in
+//! lexer.rs, tokenizer. Produces raw tokens; keyword recognition happens in
 //! the parser so the wobble ladder (rungs 2/3) can repair at the positions
 //! where a keyword is actually required.
 
@@ -44,9 +44,9 @@ pub enum Tok {
     Shl,
     Shr,
     Question,
-    QuestionDot,      // ?. — optional chaining (L1a)
-    QuestionQuestion, // ?? — null coalescing (L1a)
-    QuestionBang,     // ?! — Option/Result propagation (W06, D-014)
+    QuestionDot,      // ?., optional chaining (L1a)
+    QuestionQuestion, // ??, null coalescing (L1a)
+    QuestionBang,     // ?!, Option/Result propagation (W06, D-014)
     Eq,
     EqEq,
     Neq,
@@ -129,15 +129,15 @@ impl Tok {
 pub struct Lexed {
     pub toks: Vec<(Tok, usize)>, // token + line
     pub notes: Vec<Note>,
-    /// W074: `##` doc-comment lines, in source order — (line, text after the
+    /// W074: `##` doc-comment lines, in source order, (line, text after the
     /// `##` marker with one leading space stripped). Pure metadata: docs are
-    /// NOT tokens, so the token stream (and every existing consumer of it —
+    /// NOT tokens, so the token stream (and every existing consumer of it,
     /// wobble scoring, repair rungs, the differential oracle) is untouched.
     /// Plain `#` comments stay invisible exactly as before.
     pub docs: Vec<(usize, String)>,
 }
 
-// sec-r4 (F-3): parse-time note cap — mirrors the Parser/Interp 10k contract.
+// sec-r4 (F-3): parse-time note cap, mirrors the Parser/Interp 10k contract.
 // A 3 MB file of repairable errors used to grow 1.5 M notes (646 MB RSS).
 fn lex_note(buf: &mut Vec<Note>, n: Note) {
     const LEX_NOTE_CAP: usize = 10_000;
@@ -190,7 +190,7 @@ pub fn lex(src: &str) -> Lexed {
         }
         // comments
         if c == '#' {
-            // W074: `##` opens a DOC comment — captured as metadata (Lexed
+            // W074: `##` opens a DOC comment, captured as metadata (Lexed
             // docs), never emitted as a token. The marker must be exactly
             // two `#` (a `###` line is a doc whose text starts with `#`,
             // same convention as markdown headings inside doc text).
@@ -213,7 +213,7 @@ pub fn lex(src: &str) -> Lexed {
             continue;
         }
         // strings
-        // W030: raw strings r"..." — no escapes, no interpolation; ends at
+        // W030: raw strings r"...", no escapes, no interpolation; ends at
         // the closing quote (newlines allowed; the raw content is verbatim).
         // A bare `r` identifier that is NOT followed by a quote is untouched.
         if c == 'r' && i + 1 < n && chars[i + 1] == '"' {
@@ -250,7 +250,7 @@ pub fn lex(src: &str) -> Lexed {
             push!(Tok::Str(raw));
             continue;
         }
-        // W029: byte strings b"..." / b'...' — bytes literals. Escape set:
+        // W029: byte strings b"..." / b'...', bytes literals. Escape set:
         // \n \t \r \\ \" \' \0 \xNN (exactly two hex digits); unknown escapes
         // keep the backslash + char verbatim (Python bytes convention); no
         // interpolation ever ({ and } are plain bytes). A non-ASCII source
@@ -288,7 +288,7 @@ pub fn lex(src: &str) -> Lexed {
                         '"' => out.push(b'"'),
                         '\'' => out.push(b'\''),
                         'x' => {
-                            // \xNN — exactly two hex digits; malformed keeps
+                            // \xNN, exactly two hex digits; malformed keeps
                             // the text verbatim (with a note) instead of
                             // rejecting the program
                             let hex = |ch: char| ch.is_ascii_hexdigit();
@@ -359,7 +359,7 @@ pub fn lex(src: &str) -> Lexed {
             push!(Tok::Bytes(out));
             continue;
         }
-        // W030: multiline triple-quoted strings """...""" — escapes and
+        // W030: multiline triple-quoted strings """...""", escapes and
         // interpolation still processed; content is verbatim (no implicit
         // indent stripping); can contain single/double quotes freely.
         if c == '"' && i + 2 < n && chars[i + 1] == '"' && chars[i + 2] == '"' {
@@ -490,7 +490,7 @@ pub fn lex(src: &str) -> Lexed {
         }
         // numbers
         if c.is_ascii_digit() {
-            // W031: radix prefixes — 0x hex, 0b binary, 0o octal (case-insensitive
+            // W031: radix prefixes, 0x hex, 0b binary, 0o octal (case-insensitive
             // prefix), with `_` digit separators. A prefix with no valid digit
             // after it falls through to decimal lexing (`0x` = 0 then ident `x`).
             if c == '0' && i + 1 < n && matches!(chars[i + 1], 'x' | 'X' | 'b' | 'B' | 'o' | 'O') {
@@ -583,7 +583,7 @@ pub fn lex(src: &str) -> Lexed {
             }
             continue;
         }
-        // identifiers / keywords — every name is interned into the in-process
+        // identifiers / keywords, every name is interned into the in-process
         // symbol table (src/ffi.rs, Rust-owned since sec-r2/A15), the canonical
         // record of all symbols in all files: memory() stats, REPL :symbols,
         // and the future LSP goto-definition all read from it
@@ -771,7 +771,7 @@ pub fn lex(src: &str) -> Lexed {
             }
             '?' => {
                 // L1a: '??' = null coalescing; '?.' = optional chaining
-                // (only when not followed by a digit — a float literal can
+                // (only when not followed by a digit, a float literal can
                 // never start with '.', but a ternary 'a ?. 5' space-form
                 // must not eat the dot; digit guard keeps '?' + '.' separate
                 // for any future numeric forms).
@@ -788,7 +788,7 @@ pub fn lex(src: &str) -> Lexed {
                 } else if i + 1 < n && chars[i + 1] == '!' {
                     // W06 (D-014): '?!' = Option/Result propagation. Binds as
                     // a POSTFIX operator (parse_postfix), so it can never
-                    // collide with the ternary's bare '?' — '?!' is lexed as
+                    // collide with the ternary's bare '?', '?!' is lexed as
                     // one token before the '?' fallthrough.
                     push!(Tok::QuestionBang);
                     i += 2;

@@ -1,4 +1,4 @@
-# C-ABI — design note (M100 W077)
+# C-ABI, design note (M100 W077)
 
 owner: sz (dev-3) · status: deferred-by-design (implement after W076 settles + W009 VM)
 see also: `docs/EMBEDDING.md` (Rust embedding, landed), `THREAT-MODEL.md`,
@@ -7,20 +7,20 @@ see also: `docs/EMBEDDING.md` (Rust embedding, landed), `THREAT-MODEL.md`,
 ## 1. Why a C ABI at all
 
 The Rust embedding API (W076) covers in-process hosts that speak Rust. A C ABI makes the
-same capability reachable from every FFI-capable ecosystem — Python (cffi/ctypes), Node
+same capability reachable from every FFI-capable ecosystem, Python (cffi/ctypes), Node
 (N-API/node-ffi), Go (cgo), Java (JNI), C/C++ directly, and every language that can bind
-a C symbol — without each one depending on `cxx`/`cbindgen` Rust-toolchain knowledge.
+a C symbol, without each one depending on `cxx`/`cbindgen` Rust-toolchain knowledge.
 It is the layer that turns "operon is a Rust crate" into "operon is a library, full stop".
 
 ## 2. Why NOT yet (sequencing, deliberately)
 
 1. **The Rust surface is not semver-hardened.** W076's own guide pins an exact version
    and defers the semver pledge until the type system (W001) and traits (W004) settle.
-   A C ABI is a harder commitment than the Rust API — C symbols, once shipped, are
+   A C ABI is a harder commitment than the Rust API, C symbols, once shipped, are
    effectively forever (every downstream binding bakes them in). Freezing C symbols on
    top of a moving Rust surface guarantees breakage or permanent shims.
-2. **Host builtins are not public yet.** The most valuable C-ABI use case — registering a
-   native function as an Operon builtin — needs the `Native` value calling convention to
+2. **Host builtins are not public yet.** The most valuable C-ABI use case, registering a
+   native function as an Operon builtin, needs the `Native` value calling convention to
    be public and stable (W076 follow-up, post-W004). Exposing `operon_register_builtin`
    before the convention is frozen would mint a compatibility debt no deprecation ladder
    can pay down.
@@ -34,10 +34,10 @@ It is the layer that turns "operon is a Rust crate" into "operon is a library, f
 ## 3. Proposed symbol surface (v1 sketch)
 
 ```c
-/* operon.h — sketch, not frozen. All functions are thread-local to the
+/* operon.h, sketch, not frozen. All functions are thread-local to the
    interpreter handle; no global mutable state. */
 
-/* Opaque handle: one interpreter + loaded program. NOT thread-safe —
+/* Opaque handle: one interpreter + loaded program. NOT thread-safe,
    one handle per thread (Interp is !Sync today; see §5). */
 typedef struct operon_handle operon_handle;
 
@@ -75,10 +75,10 @@ Non-goals for v1 (explicit): no `Value` introspection beyond the rendered string
 
 ## 4. Ownership rules (the whole contract in four lines)
 
-1. **Handles** are created by `operon_new` and destroyed by `operon_free` — exactly once,
+1. **Handles** are created by `operon_new` and destroyed by `operon_free`, exactly once,
    from any thread (interior `Arc` teardown is the only cross-thread step).
 2. **Strings returned to the caller** are owned by the handle until the next call on that
-   handle OR until `operon_string_free` — documented per-symbol; borrowed pointers are
+   handle OR until `operon_string_free`, documented per-symbol; borrowed pointers are
    never invalidated mid-call.
 3. **Strings passed in** are borrowed for the duration of the call only.
 4. **No panics across the boundary**: every exported fn wraps its body in
@@ -88,13 +88,13 @@ Non-goals for v1 (explicit): no `Value` introspection beyond the rendered string
 ## 5. Capability + threat-model deltas
 
 - `operon_caps` mirrors the Rust `Caps` struct 1:1 (read/write/run/net/env/py grants +
-  enabled flag). **NULL means default-deny** — the C ABI must make the safe choice the
+  enabled flag). **NULL means default-deny**, the C ABI must make the safe choice the
   lazy choice (THREAT-MODEL.md's "no embedder backdoor" rule applies verbatim).
 - New attack surface vs W076: a C caller is exactly as trusted as a Rust embedder (same
-  process, same privileges) — no new sandbox boundary is claimed. `operon_run_source`
+  process, same privileges), no new sandbox boundary is claimed. `operon_run_source`
   inherits every containment guarantee and every residual risk listed in THREAT-MODEL.md;
   the C note adds: untrusted callers must not be hosts (a host that links this library
-  and runs untrusted source with expanded caps owns the consequences — same as Rust).
+  and runs untrusted source with expanded caps owns the consequences, same as Rust).
 - rt-payload plan: extend `tests/redteam/` with an FFI-shaped smoke once the ABI exists
   (garbage source, missing NUL discipline via length-bounded copy-in, double-free of
   returned strings under ASan).

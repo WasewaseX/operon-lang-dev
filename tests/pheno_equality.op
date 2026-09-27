@@ -1,5 +1,5 @@
 # builder-B parity finding RESOLUTION (dev1 ruling, 2026-09-26): phenotype
-# instances are DATA — `==` compares class name + deep field values, in BOTH
+# instances are DATA, `==` compares class name + deep field values, in BOTH
 # engines. Before this ruling the Rust core compared the shared PhenoDef via
 # Arc::ptr_eq (any two same-class instances were == regardless of fields)
 # while the oracle fell through to identity (all distinct pairs !=). Neither

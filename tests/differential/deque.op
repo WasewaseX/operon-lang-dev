@@ -1,4 +1,4 @@
-# deque differential — pure deque/queue ops, byte-identical both engines
+# deque differential, pure deque/queue ops, byte-identical both engines
 use std/deque;
 let dq = deque.deque_push_front(deque.deque_push_back(deque.deque_from([1, 2]), 3), 0)
 print("deque: {dq}")

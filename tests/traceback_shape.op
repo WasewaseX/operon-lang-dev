@@ -1,4 +1,4 @@
-# traceback_shape.op — W007: the stress call chain is captured, ordered
+# traceback_shape.op, W007: the stress call chain is captured, ordered
 # innermost-first, and carries exact call-site lines (both engines).
 gene inner() {
     raise overflow, "detonating"

@@ -1,4 +1,4 @@
-# differential: std/serialize — the unified serialization front door (W34)
+# differential: std/serialize, the unified serialization front door (W34)
 #
 # Pins the stage-1 contract: Result-shaped errors (D-014), the round-trip
 # table per value type, the wire fidelity of Option/Result wrappers, and the
@@ -14,7 +14,7 @@ use std/csv as csv
 frame proof {
     # ---- error contract: junk text is an err() value, never a crash ----
     # (the junk payload starts with chr(123): a bare { inside a string
-    # literal would start interpolation — the same rule std_json pins)
+    # literal would start interpolation, the same rule std_json pins)
     let bad = ser.from_json(chr(123) + "not json")
     assert(is_err(bad), "invalid JSON -> err()")
     assert(type(bad) == "result", "from_json returns the result family")
@@ -43,7 +43,7 @@ frame proof {
     # reports false instead of pretending
     let nan = 1e308 * 10 * 0.0
     assert(json_str(nan) == "null", "nan serializes as null")
-    assert(!ser.roundtrip(nan, "json"), "nan does not round-trip — reported honestly")
+    assert(!ser.roundtrip(nan, "json"), "nan does not round-trip, reported honestly")
 
     # ---- Option/Result wire fidelity: single-key shape, tag NOT rebuilt ----
     assert(json_str(ok(1)) == OB + "\"ok\":1" + CB, "Ok wire shape (compact)")
@@ -51,7 +51,7 @@ frame proof {
     assert(json_str(none()) == "null", "None wire shape")
     let back = ser.from_json(json_str(ok(1)))
     assert(is_ok(back), "the wire text re-parses")
-    assert(unwrap(back) == {"ok": 1}, "wire is a map — tag fidelity is the caller's rebuild")
+    assert(unwrap(back) == {"ok": 1}, "wire is a map, tag fidelity is the caller's rebuild")
     assert(ser.roundtrip({"ok": 1}, "json"), "the wire shape itself round-trips")
 
     # ---- csv layer: rows of scalars, Result-shaped parse ----

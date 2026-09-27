@@ -1,4 +1,4 @@
-## docs must be pure metadata — this program's output must be byte-identical
+## docs must be pure metadata, this program's output must be byte-identical
 ## to its undocmented twin. The oracle treats ## lines as ordinary comments;
 ## the Rust core captures them. Parity here pins that neither side lets docs
 ## change evaluation, ordering, or error behavior.

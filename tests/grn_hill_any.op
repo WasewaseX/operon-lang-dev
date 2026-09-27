@@ -1,12 +1,12 @@
-# reg-bio (F-2/F-3) — per-edge Hill cooperativity + cis-regulatory OR logic
+# reg-bio (F-2/F-3), per-edge Hill cooperativity + cis-regulatory OR logic
 #
-# `hill n` shapes the dose-response: strength × p^n/(p^n + t^n) — cooperative
+# `hill n` shapes the dose-response: strength × p^n/(p^n + t^n), cooperative
 # binding (real TF oligomers give n = 1..4+). For p > t a higher exponent
 # saturates harder toward full influence (ultrasensitivity); for p < t it
 # collapses toward 0. The default (no hill keyword) keeps the historical n=2
 # shape bit-identically. Edge keyword order: strength -> threshold -> hill -> any.
 #
-# `any` marks an edge as an OR member — an ALTERNATIVE activator that alone
+# `any` marks an edge as an OR member, an ALTERNATIVE activator that alone
 # suffices: the gate opens iff (every AND member passes) OR (any OR member
 # passes). Networks without `any` keep the exact conjunctive behavior.
 regulate {
@@ -27,13 +27,13 @@ frame proof {
     let na = grn_get("a")
     let nb = grn_get("b")
     let nc = grn_get("c")
-    # n=2 (default): 0.36/(0.36+0.25) — the historical shape, unchanged
+    # n=2 (default): 0.36/(0.36+0.25), the historical shape, unchanged
     let ea = 0.36 / (0.36 + 0.25)
     assert(na - ea < 1e-12 && ea - na < 1e-12, "default edge keeps the n=2 dose-response")
-    # n=1: 0.6/(0.6+0.5) — the graded Michaelis shape (no cooperativity)
+    # n=1: 0.6/(0.6+0.5), the graded Michaelis shape (no cooperativity)
     let eb = 0.6 / (0.6 + 0.5)
     assert(nb - eb < 1e-12 && eb - nb < 1e-12, "hill 1 gives the Michaelis shape")
-    # n=4: 0.1296/(0.1296+0.0625) — ultrasensitive saturation
+    # n=4: 0.1296/(0.1296+0.0625), ultrasensitive saturation
     let ec = 0.1296 / (0.1296 + 0.0625)
     assert(nc - ec < 1e-12 && ec - nc < 1e-12, "hill 4 saturates near 1")
     # cooperativity sharpens the switch above threshold

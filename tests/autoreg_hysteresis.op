@@ -1,5 +1,5 @@
 
-# C5/D4 — positive autoregulation (two-tier loop a -> ap -> a) + hysteresis sweep
+# C5/D4, positive autoregulation (two-tier loop a -> ap -> a) + hysteresis sweep
 ligand ind
 decay_clock(1, 0.0)
 regulate {
@@ -18,13 +18,13 @@ frame proof {
     ligand_set("ind", 0.3)
     assert(a() == null, "up L=0.3: OFF")
     ligand_set("ind", 0.4)
-    assert(a() == null, "up L=0.4: OFF — the switch point is above 0.4")
+    assert(a() == null, "up L=0.4: OFF, the switch point is above 0.4")
     ligand_set("ind", 0.5)
     assert(a() == "a-tx", "up L=0.5: input arm opens; A transcribes")
     assert(grn_get("ap") - 0.6 < 1e-12, "A's own protein accumulated (0.6)")
     # ---- DOWN sweep: the SELF-arm holds the gate open below the input threshold
     ligand_set("ind", 0.4)
-    assert(a() == "a-tx", "DOWN L=0.4: ON (was OFF on the way up) — HYSTERESIS")
+    assert(a() == "a-tx", "DOWN L=0.4: ON (was OFF on the way up), HYSTERESIS")
     ligand_set("ind", 0.3)
     assert(a() == "a-tx", "DOWN L=0.3: ON (memory)")
     ligand_set("ind", 0.2)
@@ -38,7 +38,7 @@ frame proof {
     tick()
     tick()
     assert(grn_get("ap") < 0.5, "two idle ticks halve the protein twice (0.25)")
-    assert(a() == null, "drained: gate shuts at L=0 — bistable OFF")
+    assert(a() == null, "drained: gate shuts at L=0, bistable OFF")
     assert(a() == null, "OFF is absorbing: no re-arm without input")
 }
 main { promote("autoreg hysteresis done") }

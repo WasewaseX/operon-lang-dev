@@ -1,4 +1,4 @@
-//! tools.rs — toolchain subcommands: run entry resolution, check/NMD grading,
+//! tools.rs, toolchain subcommands: run entry resolution, check/NMD grading,
 //! formatter, profile, crispr knockout screens, bench, test runner, build.
 
 use crate::ast::*;
@@ -23,11 +23,11 @@ pub struct Opts {
     pub args: Vec<String>,
     pub quiet: bool,
     pub caps: crate::interp::Caps,
-    /// dx-r1 (audit W5): time top-level statements during load — without
+    /// dx-r1 (audit W5): time top-level statements during load, without
     /// this, `operon profile` reported 0.0 µs for any script without main().
     pub profile: bool,
     /// dx-r3 (re-audit / A14): when set, program stdout (promote) is
-    /// captured here from the moment the interp exists — the test runner
+    /// captured here from the moment the interp exists, the test runner
     /// uses it so top-level output can't leak into the report either.
     pub stdout_sink: Option<std::rc::Rc<std::cell::RefCell<Vec<String>>>>,
 }
@@ -55,10 +55,15 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
     interp.base_dir = std::path::Path::new(file)
         .parent()
         .map(|p| p.to_string_lossy().to_string());
+    // W19/W23: vendored dependency roots, when an operon.lock sits beside
+    // the program (or in the CWD), its resolved packages join the module
+    // resolution chain as root 7 (SPEC §8 table), so `use my-lib/…` runs
+    // offline from the vendored cache.
+    crate::pkg::apply_lock(&mut interp);
 
     // methylation layer: CLI --cell, else operon.cell auto-detect.
     // SECURITY POLICY: an auto-detected cell config may configure entry/
-    // variant/quiet keys, but its allow.* keys are IGNORED — capability
+    // variant/quiet keys, but its allow.* keys are IGNORED, capability
     // grants must come from the operator (CLI --allow-* / explicit --cell),
     // never silently from a file that happens to sit in the project.
     let cell_path = opts.cell.clone().or_else(|| {
@@ -120,7 +125,7 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
             }
             let added = match rest {
                 // cell values may carry a comma-separated grant list
-                // ("py = math, json") — CLI flags stay one-per-flag
+                // ("py = math, json"), CLI flags stay one-per-flag
                 "read" | "write" | "run" | "net" | "env" | "py" => {
                     let mut res = Ok(());
                     for g in v.split(',') {
@@ -190,7 +195,7 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
             ),
         }
     }
-    // reg-bio (F-1): the telegraph promoter layer — opt-in stochastic
+    // reg-bio (F-1): the telegraph promoter layer, opt-in stochastic
     // expression. kon/koff are switch probabilities per call attempt.
     if interp
         .cell
@@ -227,7 +232,7 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
         }
     }
     // expression.seed reseeds the SHARED mirrored xorshift64* stream the
-    // promoter draws ride — reproducible bursting across runs/implementations
+    // promoter draws ride, reproducible bursting across runs/implementations
     if let Some(v) = interp.cell.get("expression.seed") {
         match v.trim().parse::<i64>() {
             Ok(s) => interp.rng = if s == 0 { 0x9E3779B97F4A7C15 } else { s as u64 },
@@ -241,7 +246,7 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
             ),
         }
     }
-    // reg-bio (F-5): repressilator kinetics — plasmid engineering surface.
+    // reg-bio (F-5): repressilator kinetics, plasmid engineering surface.
     // Defaults are the historical constants; unset keys change nothing.
     if let Some(v) = interp.cell.get("repressi.alpha") {
         match v.trim().parse::<f64>() {
@@ -326,7 +331,7 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
     let genv = interp.global.clone();
     for stmt in &prog.stmts {
         if let Err(s) = interp.exec_stmt(&genv, stmt) {
-            // W06 (D-014): propagation with no enclosing gene — the variant
+            // W06 (D-014): propagation with no enclosing gene, the variant
             // value passes through (Total Grammar: noted, never rejected).
             // Never leaked as kind "propagate": the payload marker converts.
             if let Some(v) = s.prop {
@@ -428,7 +433,7 @@ pub fn run_entry(l: &mut Loaded, opts: &Opts) -> Result<Value, Stress> {
                     // W007: the entry gene is invoked by the RUNTIME (no call
                     // expression), so its call_gene frame carries a stale
                     // top-level line. The entry invocation is the OUTERMOST
-                    // gene frame — rewrite its line to 0 (renders as a bare
+                    // gene frame, rewrite its line to 0 (renders as a bare
                     // `at entry`) instead of appending a duplicate. Deep
                     // chains capped at 64 keep their innermost frames only.
                     if s.chain.is_empty() {
@@ -505,12 +510,12 @@ pub fn check(file: &str, opts: &Opts, nmd: bool, purge: bool) -> CheckReport {
     rep
 }
 
-/// lsp-r1 (P0): where a `use`d module's source might live — the same
+/// lsp-r1 (P0): where a `use`d module's source might live, the same
 /// candidate list the runtime's gene loader resolves (document-relative,
 /// CWD-relative, std/, exe-relative std/). The LSP launches from arbitrary
 /// working directories (editors pick the CWD), so without the exe-relative
 /// candidate `use math` + `mean(...)` produced FALSE "phantom call"
-/// diagnostics — the demo-works/real-code-breaks failure mode, reproduced
+/// diagnostics, the demo-works/real-code-breaks failure mode, reproduced
 /// live by the loop-5-b audit.
 pub fn module_candidates(path: &str, base_dir: Option<&str>) -> Vec<std::path::PathBuf> {
     let p = format!("{}.op", path.trim_end_matches(".op"));
@@ -527,7 +532,7 @@ pub fn module_candidates(path: &str, base_dir: Option<&str>) -> Vec<std::path::P
     }
     // dev-checkout candidate: the cargo manifest dir (compiled in). A source
     // checkout runs operon-ls from target/release/, where exe-relative std/
-    // does not exist — the stdlib sits at the manifest root. Installed
+    // does not exist, the stdlib sits at the manifest root. Installed
     // binaries are covered by the exe-relative candidate above.
     out.push(
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -537,7 +542,7 @@ pub fn module_candidates(path: &str, base_dir: Option<&str>) -> Vec<std::path::P
     out
 }
 
-/// In-memory core of `check` — the file-based `check()` delegates here, and
+/// In-memory core of `check`, the file-based `check()` delegates here, and
 /// non-CLI tools (operon-ls) call it directly on editor buffers. Returns the
 /// report AND the parsed program (the LSP hover table comes from it).
 /// `base_dir` (when known, e.g. the LSP document's directory) is searched
@@ -699,6 +704,7 @@ fn purge_stmt(s: &mut Stmt) {
         }
         Stmt::While(_, b)
         | Stmt::Loop(b)
+        | Stmt::Scope(b)
         | Stmt::For(_, _, b)
         | Stmt::ForPat(_, _, b)
         | Stmt::Block(b)
@@ -721,7 +727,7 @@ fn collect_calls(prog: &Program, defined: &mut HashSet<String>, called: &mut Vec
         match e {
             Expr::Call(f, args, _) => {
                 if let Expr::Ident(n) = &**f {
-                    // record EVERY named call — the NMD untranslated detector
+                    // record EVERY named call, the NMD untranslated detector
                     // needs the full transcription record, not just phantoms
                     called.push(n.clone());
                 }
@@ -817,6 +823,7 @@ fn collect_calls(prog: &Program, defined: &mut HashSet<String>, called: &mut Vec
                 walk_stmts(b, defined, called);
             }
             Stmt::Loop(b) => walk_stmts(b, defined, called),
+            Stmt::Scope(b) => walk_stmts(b, defined, called),
             Stmt::For(_, it, b) => {
                 walk_expr(it, called);
                 walk_stmts(b, defined, called);
@@ -880,7 +887,7 @@ pub fn grade_letter(score: i64) -> char {
 
 // ------------------------------------------------------------ profile
 pub fn profile(file: &str, opts: &Opts) -> Loaded {
-    // dx-r1 (audit W5): profiling must be ON before load — top-level
+    // dx-r1 (audit W5): profiling must be ON before load, top-level
     // statements execute during load, and a script without a main() gene
     // (the common shape) previously reported 0.0 µs for everything. No
     // re-run: re-executing would double the program's side effects.
@@ -947,7 +954,7 @@ pub fn crispr(file: &str, opts: &Opts, knockout: &str) -> CrisprReport {
             }
             Ok(_) => rep.failures.push(format!("proof #{}: exited early", i + 1)),
             // W06 (D-014): propagation abandoning a proof frame is a failure
-            // (the frame did not complete) — rendered with the variant repr,
+            // (the frame did not complete), rendered with the variant repr,
             // never a leaked "propagate" kind.
             Err(s) if s.prop.is_some() => rep.failures.push(format!(
                 "proof #{} failed: propagation left the proof frame ({})",
@@ -1050,7 +1057,7 @@ pub fn run_tests(paths: &[String], opts: &Opts, json: bool) -> TestReport {
             rep.proofs += 1;
             let asserts_before = l.interp.asserts_run;
             match l.interp.exec_block(&genv, proof) {
-                // a proof frame must run to completion — early return/break is
+                // a proof frame must run to completion, early return/break is
                 // an integrity failure, not a pass (proofs are guard slides)
                 Ok(Flow::Norm) => {
                     if l.interp.asserts_run == asserts_before {
@@ -1075,7 +1082,7 @@ pub fn run_tests(paths: &[String], opts: &Opts, json: bool) -> TestReport {
                     ));
                 }
                 // W06 (D-014): propagation abandoning a proof frame is a
-                // failure (the frame did not complete) — never a leaked kind.
+                // failure (the frame did not complete), never a leaked kind.
                 Err(s) if s.prop.is_some() => {
                     rep.failed += 1;
                     file_failed = true;
@@ -1112,7 +1119,7 @@ pub fn run_tests(paths: &[String], opts: &Opts, json: bool) -> TestReport {
     }
     if !json {
         println!(
-            "operon test — {} file(s), {} proof(s): {} passed, {} failed ({} assertion(s) exercised)",
+            "operon test, {} file(s), {} proof(s): {} passed, {} failed ({} assertion(s) exercised)",
             rep.files, rep.proofs, rep.passed, rep.failed, total_asserts
         );
         for f in &rep.failures {
@@ -1125,7 +1132,7 @@ pub fn run_tests(paths: &[String], opts: &Opts, json: bool) -> TestReport {
     rep
 }
 
-/// W49 (ROADMAP-100): expand test paths into a sorted explicit file list —
+/// W49 (ROADMAP-100): expand test paths into a sorted explicit file list,
 /// lets the CLI implement `--list` and `--filter` without re-running the
 /// discovery logic differently from the real runner.
 pub fn collect_test_files(paths: &[String]) -> Vec<String> {
@@ -1160,16 +1167,23 @@ fn collect_op_files(dir: &Path, out: &mut Vec<String>) {
             let p = e.path();
             if p.is_dir() {
                 // the red-team suite is adversarial by design (hangs, bombs,
-                // escapes) — it is exercised by scripts/redteam.sh with
+                // escapes), it is exercised by scripts/redteam.sh with
                 // containment expectations, never by the proof runner
                 if p.file_name().map(|n| n == "redteam").unwrap_or(false) {
                     continue;
                 }
                 // substrate-r1: tests/granted/ holds capability-granted
-                // proofs — meaningless (would all deny) under the default
+                // proofs, meaningless (would all deny) under the default
                 // runner's zero-grant sandbox. Exercised explicitly by
                 // scripts/test.sh with an operator cell file.
                 if p.file_name().map(|n| n == "granted").unwrap_or(false) {
+                    continue;
+                }
+                // W18: cancellation timing proofs need real OS threads and
+                // mid-flight cancel ordering the sequential oracle cannot
+                // observe. Exercised explicitly (Rust side) by
+                // scripts/test.sh; the oracle walker skips it too.
+                if p.file_name().map(|n| n == "timing").unwrap_or(false) {
                     continue;
                 }
                 collect_op_files(&p, out);
@@ -1184,19 +1198,19 @@ fn collect_op_files(dir: &Path, out: &mut Vec<String>) {
 
 /// W47 (ROADMAP-100): formatter configuration.
 ///
-/// `indent` — spaces per nesting level. The default is 2 because that is the
+/// `indent`, spaces per nesting level. The default is 2 because that is the
 /// de-facto house style of every checked-in .op file (std/, tests/, examples/);
 /// a formatter whose default reformats the whole corpus is a broken default.
 ///
-/// `quotes` — how plain string literals re-emit. `Double` is the canonical
+/// `quotes`, how plain string literals re-emit. `Double` is the canonical
 /// form (SPEC §3). `Single` re-emits `'…'` only when it is byte-lossless
-/// (content has no `'`, no backslash, no brace, no newline/tab — i.e. both
+/// (content has no `'`, no backslash, no brace, no newline/tab, i.e. both
 /// spellings denote the same value with zero escaping); anything else falls
 /// back to double. Quote-style `preserve` is impossible BY DESIGN: the AST
 /// stores the string's VALUE, not which quote character the source used, so
 /// there is nothing to preserve.
 ///
-/// Scope notes (honesty): keyword canonicalization is inherent to fmt — the
+/// Scope notes (honesty): keyword canonicalization is inherent to fmt, the
 /// parser repairs synonym spellings into the canonical AST, and fmt prints
 /// the AST, so `--canonical` would be a no-op flag and is deliberately not
 /// shipped. Soft `--width` wrapping is deferred (W47-v2): it changes token
@@ -1216,7 +1230,7 @@ pub enum QuoteMode {
 pub struct FmtConfig {
     pub indent: usize,
     pub quotes: QuoteMode,
-    /// W47-v2: soft line-width limit (`None` = off — the historical behavior,
+    /// W47-v2: soft line-width limit (`None` = off, the historical behavior,
     /// and what LSP formatting uses so editors keep their own wrap policy).
     /// When set, a post-print pass breaks lines longer than `width` at
     /// parser-proven-safe comma points only (see `wrap_width`).
@@ -1327,7 +1341,7 @@ fn str_lit(s: &str) -> String {
 /// W47: parse a minimal zero-dependency formatter config (`.operon-fmt.toml`).
 /// Only `indent` (positive integer) and `quotes` (`double`|`single`) are
 /// meaningful; section headers and comments are ignored; unknown keys are
-/// reported (not errors — Total Grammar spirit, forward-compatible) so the
+/// reported (not errors, Total Grammar spirit, forward-compatible) so the
 /// caller can surface them on stderr.
 pub fn parse_fmt_config(src: &str) -> (FmtConfig, Vec<String>) {
     let mut cfg = FmtConfig::default();
@@ -1369,7 +1383,7 @@ pub fn parse_fmt_config(src: &str) -> (FmtConfig, Vec<String>) {
 // DESIGN CONTRACT (why this is safe without touching the parser):
 //
 // The parser already tolerates newlines inside bracketed GROUPS wherever a
-// group's element loop calls `eat_newlines_inline()` at its top — call args
+// group's element loop calls `eat_newlines_inline()` at its top, call args
 // (bare calls, method calls, ?. calls), gene/sequence parameter lists (with
 // annotations and defaults), and list literals. A newline after a comma in
 // those positions is pure whitespace: the AST cannot change.
@@ -1378,15 +1392,15 @@ pub fn parse_fmt_config(src: &str) -> (FmtConfig, Vec<String>) {
 // consists entirely of `(` and `[`. Everything else is out of scope by law:
 //   - `{` groups are never broken (a text pass cannot tell a block brace
 //     from a map-literal brace; both are legal in fmt output);
-//   - string literals (including their interpolation regions) are opaque —
+//   - string literals (including their interpolation regions) are opaque,
 //     a comma inside a string is never a break point;
 //   - openers never break (the first element stays on the opener line);
 //   - closers stay glued to the last element (no dedicated closer line).
-// When a line has no breakable comma it stays long — honestly, visibly.
+// When a line has no breakable comma it stays long, honestly, visibly.
 //
 // Determinism: wrap_width is a pure function of (text, width, indent_unit).
 // It runs AFTER the canonical render, so fmt∘fmt re-renders the same
-// canonical text and re-wraps it identically — the byte-stability law holds
+// canonical text and re-wraps it identically, the byte-stability law holds
 // by construction, and tests/fmt_width.rs proves it corpus-wide together
 // with the two stronger laws: AST identity and zero re-parse notes.
 // ---------------------------------------------------------------------------
@@ -1405,14 +1419,14 @@ struct WidthBreak {
 /// bracket stack.
 ///
 /// Strings are modeled as a FRAME STACK, because interpolation carries REAL
-/// code — including nested strings — inside the quotes:
+/// code, including nested strings, inside the quotes:
 /// `"{cv.csv_escape(tricky, ",")}"`. A naive in-string flag closes the
 /// string at the nested `"` and the comma inside `","` looks like code.
 /// Here a `"` in code PUSHES a Str frame; a `"` in a Str frame pops it; a
 /// `{` in a Str frame pushes a Code frame (the interpolation region); a `}`
 /// popping that frame returns to the enclosing string. A comma is a
 /// candidate only when NO Str frame is open (the frame stack is just the
-/// bottom Code frame) — a newline anywhere inside a string would change the
+/// bottom Code frame), a newline anywhere inside a string would change the
 /// string's VALUE, so string regions are opaque end to end.
 fn scan_width_breaks(line: &str) -> Vec<WidthBreak> {
     // Code(Some(base)) = an interpolation region inside a string; `base` is
@@ -1480,7 +1494,7 @@ fn scan_width_breaks(line: &str) -> Vec<WidthBreak> {
 fn wrap_width(text: &str, width: usize, indent_unit: usize) -> String {
     let mut out = String::with_capacity(text.len() + text.len() / 8);
     // split_inclusive keeps every existing '\n' byte-exact (blank lines,
-    // the double blank between top-level definitions — nothing moves).
+    // the double blank between top-level definitions, nothing moves).
     for line in text.split_inclusive('\n') {
         let (content, nl) = match line.strip_suffix('\n') {
             Some(c) => (c, "\n"),
@@ -1753,6 +1767,11 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
         }
         Stmt::Loop(b) => {
             out.push_str("loop ");
+            fmt_block(b, ind, out);
+            out.push('\n');
+        }
+        Stmt::Scope(b) => {
+            out.push_str("scope ");
             fmt_block(b, ind, out);
             out.push('\n');
         }
@@ -2086,7 +2105,7 @@ fn fmt_pat(p: &MatchPat) -> String {
         MatchPat::Multi(ls) => ls.iter().map(fmt_expr).collect::<Vec<_>>().join(", "),
         MatchPat::Bind(n) => n.clone(),
         MatchPat::Wild => "_".into(),
-        // W02 (match-v2): roundtrip forms for the new patterns — fmt output
+        // W02 (match-v2): roundtrip forms for the new patterns, fmt output
         // re-parses to the same AST (checked by the fmt roundtrip gate).
         MatchPat::Variant(tag, None) => tag.clone(),
         MatchPat::Variant(tag, Some(p)) => format!("{}({})", tag, fmt_pat(p)),
@@ -2116,7 +2135,7 @@ fn fmt_params(ps: &[(String, Option<Expr>)]) -> String {
     fmt_params_ann(ps, &[])
 }
 
-/// W01 (L2c): params with annotations — roundtrip form `name: T = default`.
+/// W01 (L2c): params with annotations, roundtrip form `name: T = default`.
 /// `anns` may be shorter than `ps` (unannotated definitions).
 fn fmt_params_ann(ps: &[(String, Option<Expr>)], anns: &[Option<TypeAnn>]) -> String {
     ps.iter()
@@ -2219,7 +2238,7 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
         Expr::Int(i) => i.to_string(),
         Expr::Float(f) => crate::value::format_float(*f),
         Expr::Str(s) => str_lit(s), // W47: quote mode aware (single only when byte-lossless)
-        // W029: bytes literals round-trip byte-exactly — the same escape set
+        // W029: bytes literals round-trip byte-exactly, the same escape set
         // the lexer parses (short forms + \xNN), re-emitted deterministically.
         Expr::Bytes(b) => {
             let mut out = String::from("b\"");
@@ -2243,7 +2262,7 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
                 match p {
                     InterpPart::Lit(s) => {
                         // literal segments may contain braces that came from
-                        // \\{ \\} escapes — re-escape them or fmt corrupts the file
+                        // \\{ \\} escapes, re-escape them or fmt corrupts the file
                         out.push_str(
                             &s.replace('\\', "\\\\")
                                 .replace('"', "\\\"")
@@ -2380,12 +2399,12 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
             )
         }
         Expr::Ternary(c, a, b) => {
-            // cond slot: a nested ternary MUST be parenthesized — `a ? 0 : 2
+            // cond slot: a nested ternary MUST be parenthesized, `a ? 0 : 2
             // ? 3 : 4` re-parses as `a ? 0 : (2 ? 3 : 4)` and silently changes
             // meaning (wave-3 Critic-Q semantics bug)
             format!("{} ? {} : {}", fmt_prec(c, 2), fmt_expr(a), fmt_expr(b))
         }
-        // W06 (D-014): postfix `?!` binds tighter than every binary/ternary —
+        // W06 (D-014): postfix `?!` binds tighter than every binary/ternary,
         // the operand renders at max precedence and needs no parentheses.
         Expr::Propagate(e, _) => format!("{}?!", fmt_prec(e, 12)),
         Expr::New(n, args) => format!(
@@ -2469,7 +2488,7 @@ pub struct FixReport {
     pub s_dot: usize,
 }
 
-/// W65: the `operon fix` core — parse → migrate → canonicalize.
+/// W65: the `operon fix` core, parse → migrate → canonicalize.
 ///
 /// Pipeline: (1) source-level legacy-token migrations, string/comment-aware;
 /// (2) parse with Total Grammar repairs; (3) emit the canonical formatter
@@ -2500,7 +2519,7 @@ fn migrate_source(src: &str) -> (String, usize, usize) {
     let n = chars.len();
     let mut out = String::with_capacity(src.len() + 16);
     let mut i = 0usize;
-    let const_n = 0usize; // retired migration (W05 hotfix) — kept for report shape, always 0
+    let const_n = 0usize; // retired migration (W05 hotfix), kept for report shape, always 0
     let mut sdot_n = 0usize;
 
     while i < n {
@@ -2601,7 +2620,7 @@ fn migrate_source(src: &str) -> (String, usize, usize) {
             }
             let word: String = chars[start..i].iter().collect();
             // W05 hotfix (2026-09-27, red-main r5): `const` is a LIVE keyword
-            // again — immutable binding + deep freeze (SPEC §7 back-compat
+            // again, immutable binding + deep freeze (SPEC §7 back-compat
             // note). The W64 const→let migration is RETIRED: rewriting it
             // unfreezes the binding, which is a MEANING change, and fix is
             // forbidden from those (fix_corpus law 1). The counter stays in
@@ -2625,7 +2644,7 @@ fn migrate_source(src: &str) -> (String, usize, usize) {
     (out, const_n, sdot_n)
 }
 // ------------------------------------------------------------ docgen (W073)
-/// W073: `operon doc` — markdown API reference rendered from the AST.
+/// W073: `operon doc`, markdown API reference rendered from the AST.
 /// Parse-only (like check/fmt): no run, no capabilities beyond reading the
 /// input file. Docs come from W074 `##` comments; signatures reuse the
 /// formatter's parameter renderer so doc output can never drift from fmt.
@@ -2688,7 +2707,7 @@ pub fn doc_markdown(path: &str, prog: &Program) -> String {
     out.push_str(&format!("# {}\n\n", stem));
     doc_md_lines(&prog.module_doc, &mut out);
     out.push_str(&format!(
-        "> Generated by `operon doc {}` — parse-only API surface (signatures, marks, `##` docs). \
+        "> Generated by `operon doc {}`, parse-only API surface (signatures, marks, `##` docs). \
 Behavioral docs live in SPEC.md; network/regulation graphs: `operon graph`.\n\n",
         path
     ));
@@ -2712,7 +2731,7 @@ Behavioral docs live in SPEC.md; network/regulation graphs: `operon graph`.\n\n"
                 doc_md_lines(&sp.doc, &mut out);
                 for (vname, vgene) in &sp.variants {
                     out.push_str(&format!(
-                        "- variant `{}` — `{}`\n",
+                        "- variant `{}`, `{}`\n",
                         vname,
                         doc_gene_signature("gene", vgene)
                     ));

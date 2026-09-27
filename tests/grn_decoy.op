@@ -1,4 +1,4 @@
-# reg-bio-2 (C11): decoy binding sites — competitive titration. A decoy
+# reg-bio-2 (C11): decoy binding sites, competitive titration. A decoy
 # node bound to a regulator sequesters capacity x level(decoy) of it at
 # EVERY regulation read (free TF = total - sequestered, clamped at 0).
 # Overexpressing the sponge closes a gate that was open; emptying it

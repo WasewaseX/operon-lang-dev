@@ -1,9 +1,9 @@
-# std/time — duration & instant arithmetic on the L1d clock builtins.
+# std/time, duration & instant arithmetic on the L1d clock builtins.
 #
 # Everything here is PURE arithmetic over `unix_time()` timestamps (Int
 # seconds since the epoch) and the `date_parts(ts)` map. There is no
 # timezone support on purpose: the engine contract is UTC-only (SPEC §22,
-# determinism W89 — a timezone database would make output machine-dependent).
+# determinism W89, a timezone database would make output machine-dependent).
 # Wall-clock reads (`unix_time`) are inherently non-deterministic; differential
 # programs therefore pin PURE function behavior only (durations, formatting,
 # calendar math), never "now".

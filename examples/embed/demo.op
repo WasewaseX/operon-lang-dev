@@ -1,4 +1,4 @@
-# W076 embed demo — loaded by examples/embed via the tool-level API.
+# W076 embed demo, loaded by examples/embed via the tool-level API.
 # The host embedder supplies entry = "main" and captures promote() output
 # into its own sink; default-deny caps apply exactly as in the CLI.
 gene main() {

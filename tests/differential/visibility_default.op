@@ -1,4 +1,4 @@
-# differential: W24 default mode — `pub` is INERT (zero behavior change).
+# differential: W24 default mode, `pub` is INERT (zero behavior change).
 # Without the strict cell, the module exports everything (default-open),
 # and `pub gene`/`pub let` names are reachable both ways. Byte-identical.
 use vis_lib;

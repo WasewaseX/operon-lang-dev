@@ -1,13 +1,13 @@
 # `.cell` schema (W66)
 
-`.cell` is RUNTIME/ENVIRONMENT configuration — never a package manifest (that is
+`.cell` is RUNTIME/ENVIRONMENT configuration, never a package manifest (that is
 `operon.toml`, W19/W22). Loaded explicitly via `--cell`; an auto-detected cell cannot widen a
 sandbox (README security section). The engine consumes a flat `key = value` map
 (`src/genes.rs::parse_cell`).
 
 Validated by `operon lint f.op --cell c.cell`: unknown keys → `cell-unknown-key` warning,
 non-numeric value on a numeric key → `cell-type-mismatch` warning. Findings are advisory (Total
-Grammar: configuration problems never reject a run — an unknown key is ignored, which is
+Grammar: configuration problems never reject a run, an unknown key is ignored, which is
 exactly why the lint warning exists).
 
 ## Keys (generated sweep of `cell.get` call sites; source of truth: `src/lint.rs::CELL_KEYS`)
@@ -30,7 +30,7 @@ exactly why the lint warning exists).
 
 ## Rules
 
-1. Unknown keys are **ignored silently by the engine** (Total Grammar) and **warned by lint** —
+1. Unknown keys are **ignored silently by the engine** (Total Grammar) and **warned by lint**,
    a typo'd threshold must not look like a configured one.
 2. `allow.*` values are redacted from `methyl()` reads (security contract preserved).
 3. Future evolution: `schema = 1` key reserves a version stamp so a 2.x loader can reject (or

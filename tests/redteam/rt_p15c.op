@@ -1,4 +1,4 @@
-# rt_p15c — W007: the capture cap is a hard contract — a 10000-deep unwind
+# rt_p15c, W007: the capture cap is a hard contract, a 10000-deep unwind
 # keeps exactly 64 frames (unbounded chains would be an uncontained surface).
 gene rec(n) {
     if n <= 0 {

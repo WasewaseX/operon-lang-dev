@@ -1,11 +1,11 @@
-# loop-9 (C8): quorum sensing — the population layer, part 1: the pool.
+# loop-9 (C8): quorum sensing, the population layer, part 1: the pool.
 # Real biology: LuxI synthase charges the medium with AHL; extracellular
 # concentration scales with cell density; AiiA lactonase quenches it.
 # Operon models the medium as INTEGER molecule counts (u64, cap 1e9 =
-# level 1.0) — exact, order-free accumulation, and the only float op is
+# level 1.0), exact, order-free accumulation, and the only float op is
 # the read-side division count/1e9.
 # Fails-pre: quorum/secrete/quench/quorum_state were phantom calls
-# returning null — every assert burns on the pre-loop-9 core.
+# returning null, every assert burns on the pre-loop-9 core.
 autoinducer ahl
 frame proof {
     assert(quorum("ahl") == 0.0, "empty medium: level 0.0")
@@ -15,7 +15,7 @@ frame proof {
     secrete("ahl", 500000000)
     assert(quorum("ahl") == 1.0, "1e9 molecules = level 1.0 (saturated medium)")
     secrete("ahl", 500000000)
-    assert(quorum("ahl") == 1.0, "saturation: 1.5e9 requested clamps at 1e9 — never more")
+    assert(quorum("ahl") == 1.0, "saturation: 1.5e9 requested clamps at 1e9, never more")
     secrete("b", 0.7)
     assert(quorum("b") == 0.0, "Float 0.7 floors to 0 molecules (floor, never round)")
     secrete("c", -5)

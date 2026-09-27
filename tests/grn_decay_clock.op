@@ -1,7 +1,7 @@
-# reg-bio-2 (C2): the decay clock — time-driven decay on the call clock.
+# reg-bio-2 (C2): the decay clock, time-driven decay on the call clock.
 # decay_clock(n, f) fires one GRN decay step (fraction f) every n calls and
 # integrates the translation layer on the same tick. Decay now runs as
-# expression time passes, NOT only when someone calls grn_fire — real
+# expression time passes, NOT only when someone calls grn_fire, real
 # transcripts decay per unit time, not per regulatory event. n = 0
 # restores the event-driven contract (byte-identical default).
 regulate {

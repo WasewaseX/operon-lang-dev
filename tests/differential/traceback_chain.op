@@ -1,4 +1,4 @@
-# traceback_chain.op — W07 differential pin: e.chain (gene names AND
+# traceback_chain.op, W07 differential pin: e.chain (gene names AND
 # call-site lines) must be byte-identical on the Rust core and the oracle.
 gene inner() {
     raise overflow, "detonating"
