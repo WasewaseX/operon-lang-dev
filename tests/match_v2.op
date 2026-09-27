@@ -1,9 +1,9 @@
-# match_v2.op — W02: real pattern matching (match-v2 patterns).
+# match_v2.op, W02: real pattern matching (match-v2 patterns).
 # Variants (Some/None/Ok/Err with payload patterns), list patterns
 # (exact length + *rest tails), map patterns (key presence + sub-patterns),
 # or-patterns (first alternative binds), guards (see the bindings; a
 # contained guard is a miss, never a failure). Total Grammar: a shape that
-# cannot match falls through — it never rejects a run.
+# cannot match falls through, it never rejects a run.
 frame proof {
     # ---- variant patterns: payload capture
     let r = 0
@@ -363,7 +363,7 @@ frame proof {
     assert(tally == 1, "the subject expression ran exactly once")
 
     # ---- W06 interaction: `?!` inside a guard PROPAGATES (a return, not a
-    # failure) — it leaves the match and the gene returns the carried value.
+    # failure), it leaves the match and the gene returns the carried value.
     gene guard_prop() {
         match some(none()) {
             case Some(v) if (v?!) {

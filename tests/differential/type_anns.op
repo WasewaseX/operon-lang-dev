@@ -1,4 +1,4 @@
-# type_anns — W01 (L2c) differential pin: soft type annotations, byte-identical
+# type_anns, W01 (L2c) differential pin: soft type annotations, byte-identical
 # on both engines. Param/return enforcement, numeric widening (float accepts
 # int; int refuses float), unions, optional (null-accepting), implicit-null
 # return violations, let-annotation violations, defaults, any, families.

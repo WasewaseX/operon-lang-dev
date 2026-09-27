@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""harness.py — differential test harness.
+"""harness.py, differential test harness.
 
 Runs every .op program through BOTH implementations (Rust core binary and the
 Python oracle) and fails on any stdout divergence. This is the evidence engine
@@ -9,13 +9,13 @@ Usage: python3 bootstrap/harness.py [--bin ../bin/operon]
 """
 import subprocess, sys, os, argparse
 
-# S3 exclusion policy (sz, 2026-09-24) — builtins with NO exact-output golden,
+# S3 exclusion policy (sz, 2026-09-24), builtins with NO exact-output golden,
 # by nature, each accounted for:
-#   exit               — control-flow terminator; its exit-code contract is the
+#   exit              , control-flow terminator; its exit-code contract is the
 #                        harness itself (rust_code == py_code on every program)
-#   serve/recv_request/send_response — network server trio; timing-dependent,
+#   serve/recv_request/send_response, network server trio; timing-dependent,
 #                        containment covered by redteam suite instead
-#   repressi_start     — wall-clock thread ticker; manual rings (deterministic)
+#   repressi_start    , wall-clock thread ticker; manual rings (deterministic)
 #                        are covered via repressi_next/repressi_state
 # Every other builtin in src/interp.rs call_builtin has >= 1 differential
 # golden or a shape contract under tests/differential/.
@@ -37,7 +37,7 @@ def collect_op(root):
         # differential harness (both implementations would just time out)
         if "redteam" in dirpath:
             continue
-        # substrate-r1: capability-granted proofs need an operator cell —
+        # substrate-r1: capability-granted proofs need an operator cell,
         # the differential harness runs zero-grant by design
         if "granted" in dirpath:
             continue
@@ -46,7 +46,7 @@ def collect_op(root):
                 out.append(os.path.join(dirpath, f))
     return sorted(out)
 
-# loop-10 (F-7/F-8): granted-with-cell differential targets — the opt-in
+# loop-10 (F-7/F-8): granted-with-cell differential targets, the opt-in
 # Rho/queue proofs run under an explicit operator cell on BOTH cores.
 GRANTED_CELL_TARGETS = [
     ("tests/granted/rho_termination.op", "tests/granted/rho_termination.cell"),
@@ -54,7 +54,7 @@ GRANTED_CELL_TARGETS = [
     ("tests/granted/rho_prob.op", "tests/granted/rho_prob.cell"),
     ("tests/granted/rho_queue_shield.op", "tests/granted/rho_queue_shield.cell"),
     ("tests/granted/rho_worker.op", "tests/granted/rho_worker.cell"),
-    # W24: strict visibility — the fixture module exports ONLY pub-marked
+    # W24: strict visibility, the fixture module exports ONLY pub-marked
     # names; both engines must agree on what is exported and how private
     # reads contain (soft tier).
     ("tests/granted/visibility_strict.op", "tests/granted/visibility_strict.cell"),
@@ -76,7 +76,7 @@ def main():
             targets += collect_op(full)
 
     passed, failed, skipped = 0, 0, 0
-    print(f"differential harness — {len(targets)} program(s) × 2 implementations\n")
+    print(f"differential harness, {len(targets)} program(s) × 2 implementations\n")
     for t in targets:
         rel = os.path.relpath(t, root)
         rust_out, rust_code, _ = run([binpath, "run", t])
@@ -104,22 +104,22 @@ def main():
             # W59 diagnostics: an oracle that dies before producing output
             # used to surface as a wall of anonymous DIVERGEs (the oracle's
             # stderr was discarded). If the oracle side failed or went
-            # quiet, show the first lines of its stderr — the crash is
+            # quiet, show the first lines of its stderr, the crash is
             # there, not in the semantics.
             if py_code != 0 and not py_out.strip() and py_err.strip():
                 for line in py_err.strip().splitlines()[:6]:
                     print(f"    oracle stderr: {line}")
             failed += 1
-    # loop-10 (F-7/F-8): granted-with-cell targets — both implementations
+    # loop-10 (F-7/F-8): granted-with-cell targets, both implementations
     # under the SAME explicit --cell; stdout must match byte-for-byte like
     # every other target. This pins the Rho layer's ENTROPY-STREAM parity
-    # (the opt-in draws are the riskiest divergence surface — trap #4 of
+    # (the opt-in draws are the riskiest divergence surface, trap #4 of
     # the reg-bio-4 kinetics design).
     for rel_op, rel_cell in GRANTED_CELL_TARGETS:
         gop = os.path.join(root, rel_op)
         gcell = os.path.join(root, rel_cell)
         if not (os.path.isfile(gop) and os.path.isfile(gcell)):
-            print(f"  FAIL     {rel_op} (missing op or cell — granted targets are checked in, a missing one is a broken tree)")
+            print(f"  FAIL     {rel_op} (missing op or cell, granted targets are checked in, a missing one is a broken tree)")
             failed += 1
             continue
         rust_out, rust_code, _ = run([binpath, "run", gop, "--cell", gcell])

@@ -1,4 +1,4 @@
-# std/deque — double-ended queue + FIFO queue over plain lists.
+# std/deque, double-ended queue + FIFO queue over plain lists.
 #
 # Pure library: every function returns a NEW list (or a [value, rest] pair)
 # and never mutates its argument. This matters because assignment SHARES
@@ -8,13 +8,13 @@
 #
 # Honest cost model: back operations are O(1) amortized (the native push/pop),
 # front operations are O(n) (slice rebuild). For long queues with heavy front
-# traffic, restructure the algorithm — this module trades cost for zero new
+# traffic, restructure the algorithm, this module trades cost for zero new
 # engine surface.
 #
 # Pins: tests/std_deque.op + tests/differential/deque.op (byte-identical).
 
 gene __dq_copy(xs) {
-    # fresh list with the same elements (shallow — matches §19 sharing)
+    # fresh list with the same elements (shallow, matches §19 sharing)
     return xs.slice(0, len(xs))
 }
 
@@ -24,19 +24,19 @@ gene deque_from(xs) {
 }
 
 gene deque_push_back(dq, v) {
-    # add at the back — O(1) amortized
+    # add at the back, O(1) amortized
     let out = __dq_copy(dq)
     push(out, v)
     return out
 }
 
 gene deque_push_front(dq, v) {
-    # add at the front — O(n)
+    # add at the front, O(n)
     return [v] + dq
 }
 
 gene deque_pop_back(dq) {
-    # remove from the back — returns [value, rest]; [null, []] when empty
+    # remove from the back, returns [value, rest]; [null, []] when empty
     if len(dq) == 0 {
         return [null, []]
     }
@@ -44,7 +44,7 @@ gene deque_pop_back(dq) {
 }
 
 gene deque_pop_front(dq) {
-    # remove from the front — returns [value, rest]; [null, []] when empty
+    # remove from the front, returns [value, rest]; [null, []] when empty
     if len(dq) == 0 {
         return [null, []]
     }
@@ -78,7 +78,7 @@ gene queue_push(q, v) {
 }
 
 gene queue_pop(q) {
-    # dequeue from the front — returns [value, rest]; [null, []] when empty
+    # dequeue from the front, returns [value, rest]; [null, []] when empty
     return deque_pop_front(q)
 }
 

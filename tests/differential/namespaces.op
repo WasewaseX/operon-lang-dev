@@ -1,4 +1,4 @@
-# differential: W25 namespaces — the `::` separator form is sugar for `/`,
+# differential: W25 namespaces, the `::` separator form is sugar for `/`,
 # qualified access and flat aliases both work, and aliases rename the
 # namespace binding. Byte-identical on both engines; the SAME module loaded
 # under two spellings is the same repertoire.

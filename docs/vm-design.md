@@ -1,10 +1,10 @@
 # Operon VM design (W09 stage A1)
 
-Status: **A1 — design note, adopted** · Owner: dev-1 (builder-A) · Track: A1–A6 (W09)
+Status: **A1, design note, adopted** · Owner: dev-1 (builder-A) · Track: A1–A6 (W09)
 Target reader: a CS engineer implementing or reviewing the A-track (D-008: zero biology assumed).
 This document is the contract the A2–A6 phases implement against. It decides the value
 representation, the bytecode format, the calling/entropy/error/fuel contracts, and the phase
-gates. It defers JIT (W12), the optimizer pipeline (W11), and the disassembler UX (W10 — only
+gates. It defers JIT (W12), the optimizer pipeline (W11), and the disassembler UX (W10, only
 its hook is fixed here).
 
 ---
@@ -17,39 +17,39 @@ dispatch + `Rc<Env>` chain walk on every variable read and every call.
 | workload | operon (ms) | native-py (ms) | op/py |
 |---|---|---|---|
 | fib25 | 127.7 | 12.8 | **10.0x slower** |
-| loops | (see BENCH) | — | 4–8x slower |
+| loops | (see BENCH) |, | 4–8x slower |
 | grn | 33.2 | 8.6 | **3.9x slower** |
-| collections | — | — | ~1x (map memo already lands 8.6x vs CPython on the loop-3 fixture) |
+| collections |, |, | ~1x (map memo already lands 8.6x vs CPython on the loop-3 fixture) |
 
 The hot cost centers are (a) call funnels (fib25 = 242,785 calls), (b) variable resolution
-(Env chain walk per read), (c) per-node recursion in `eval`. Collections already do fine —
+(Env chain walk per read), (c) per-node recursion in `eval`. Collections already do fine,
 the VM must not regress them. Target: **VM ≥ 3x tree-walk on the BENCH set** (W09 done-when),
 which puts function-call-heavy code at parity with CPython or better.
 
 ## 2. Non-negotiable invariants (every phase re-proves them)
 
-1. **Differential byte-parity** — the oracle (Python, tree-walk) stays the reference engine.
+1. **Differential byte-parity**, the oracle (Python, tree-walk) stays the reference engine.
    The VM is Rust-side only. `bootstrap/harness.py` grows a `--vm` lane in A2: every corpus
    target must be byte-identical across {tree-walk Rust, VM Rust, oracle Python}. Today 154/154;
    any phase that cannot hold 154/154 on both lanes does not merge.
-2. **Entropy discipline** — the mirrored xorshift64* stream is program order. Draws happen at
+2. **Entropy discipline**, the mirrored xorshift64* stream is program order. Draws happen at
    the same AST nodes in the same order (telegraph promoter per call attempt, regulation
    captures, ring noise, quorum decay, Rho scan). The VM may not reorder, short-circuit, or
    batch any evaluation that can draw. Pinned today by telegraph/quorum/noise/rho corpus proofs.
-3. **Total Grammar** — nothing is rejected at compile time that the tree-walk parses. Notes
+3. **Total Grammar**, nothing is rejected at compile time that the tree-walk parses. Notes
    (wobble) surface at the same program points with the same text. The compiler emits IR for
    everything; recoverable conditions stay runtime notes, not compile errors.
-4. **Sandbox default-deny + containment** — capability checks, `mem_charge`, note caps, and
+4. **Sandbox default-deny + containment**, capability checks, `mem_charge`, note caps, and
    output caps are engine-level services, not bytecode. Fuel: every VM opcode has a charge
    **≥** its tree-walk construct charge (conservative table in §8) so every redteam payload
    contained under tree-walk (100/0) is contained under the VM. `scripts/redteam.sh` runs both
    engines in A4+.
-5. **Gate-funnel order** — RISC check → toggle → GRN pass (operon unit gate inside) →
+5. **Gate-funnel order**, RISC check → toggle → GRN pass (operon unit gate inside) →
    methylation → promoter telegraph, then `rbs`-weighted `trans_integrate`. This funnel is
    implemented ONCE and shared: the VM's `Call` routes through the same funnel code the
    tree-walk uses (§6). A reimplementation that drifts a gate order is a bug, not an
    optimization.
-6. **Version honesty (D-009)** — the VM ships behind `--vm` until A6 flips the default at a
+6. **Version honesty (D-009)**, the VM ships behind `--vm` until A6 flips the default at a
    milestone; `operon version` gains a `-vm` banner suffix only when the default flips.
 
 ## 2b. W11 stage 1 delivered: the optimization pipeline (2026-09-27, main)
@@ -105,17 +105,17 @@ Map(MapRef)/Gene/Seq/Obj/Variant`. Consequences and rationale:
   `SendValue` thread boundary keep working with zero adaptation.
 - Oracle parity is structural: the oracle models the same shapes; no new repr = no new
   parity surface.
-- `ListRef`/`MapRef` are `Rc<RefCell<...>>` sharing semantics (SPEC §19) — identity, aliasing,
+- `ListRef`/`MapRef` are `Rc<RefCell<...>>` sharing semantics (SPEC §19), identity, aliasing,
   and the D-013 no-cycle-reclamation decision carry over untouched.
 - Cost: values stay boxed/enumed (8–16 bytes + payload). The v1 win comes from **slot locals**
   (§6) and **no AST walk**, not from unboxing. If A5 profiling shows Int/Float boxing is the
-  remaining wall, A5 may add a tagged-array representation *inside* list storage only —
+  remaining wall, A5 may add a tagged-array representation *inside* list storage only,
   flagged now as the one sanctioned repr experiment; anything else requires a new A-doc.
 
 Variable resolution redesign (the actual parity-safe win): locals live in **frame slots**
 (indexed), not in the `Env` chain. Closure capture (genes returned from genes, lambdas) uses
 **captured cells**: a slot that is captured by an escaping inner function is allocated as a
-`Rc<RefCell<Value>>` cell instead of a raw slot — decided at compile time (the compiler knows
+`Rc<RefCell<Value>>` cell instead of a raw slot, decided at compile time (the compiler knows
 escapes), so runtime never checks. `Env`-chain semantics (block scoping, shadowing, the
 arm-child capture scopes of match-v2, proof-frame locals) are modeled by the compiler's scope
 numbering; behavior is pinned by the existing corpus, not by re-derivation.
@@ -131,13 +131,13 @@ OIR1 {
   consts:  [Const]        // pool: Int/Float/Str/Bytes-of-sorted-map-shape/Null
   genes:   [GeneMeta]     // name, arity, slot count, cell list, flags (entry/ires/variant table)
   code:    [u8]           // per-gene instruction sections, u8-opcode streams
-  maps:    [SrcMap]       // ip -> (line, col) — Stress.line, notes, and tracebacks (W007) read this
+  maps:    [SrcMap]       // ip -> (line, col), Stress.line, notes, and tracebacks (W007) read this
 }
 ```
 
 - Instruction encoding: `u8 opcode` + operands. Small operands are inline (`u8`/`u16`);
   large ones (const index, jump offset) are `u32` little-endian postfix. No variable-width
-  prefixes beyond opcode+fixed operands — decoding is a match on one byte.
+  prefixes beyond opcode+fixed operands, decoding is a match on one byte.
 - Jump offsets are `u32` byte deltas. A gene's code section is capped at 1 MiB of IR
   (parse-level size caps already bound source; this is the IR-side backstop, charged).
 - Const pool is interned by structural hash. Strings never re-allocate on repeat loads.
@@ -159,13 +159,13 @@ Arithmetic     Add Sub Mul Div Mod Neg          // Rust i64/f64 semantics EXACTL
 Compare        Eq Lt Le Gt Ge Not
 Jump           Jmp off | JmpIfF off             // pop-and-test uses the SAME truthy() order
 Calls          Call geneidx argc | CallV expr   // CallV = value-position callee (lambdas/genes
-                                                 // in maps) — resolves through the same funnel
+                                                 // in maps), resolves through the same funnel
 Return         Ret
 Data           MakeList n | MakeMap n | IndexGet | IndexSet | Slice
 Namespaces     ImportMod nameidx | ModGet m k
 ```
 
-Everything else (regex, threads, py(), kernel calls, all builtins) is `CallBuiltin idx argc` —
+Everything else (regex, threads, py(), kernel calls, all builtins) is `CallBuiltin idx argc`,
 builtins are NOT bytecode; they are the same Rust functions the tree-walk calls. This is what
 keeps A4 from being a rewrite: the entire builtin surface (including capability gating) is
 shared code.
@@ -194,13 +194,13 @@ CallFrame {
 
 - `Call` does: arity check (same note on mismatch) → **the shared gate funnel** (RISC → toggle
   → GRN unit/edges → methylation → promoter telegraph; entropy fast paths p/q∈{0,1} draw
-  nothing — same as today) → compile-time-known slot layout → execute body → `Ret`.
+  nothing, same as today) → compile-time-known slot layout → execute body → `Ret`.
 - The funnel code is factored OUT of the tree-walk path into a shared module in A3 so both
   engines call one implementation. Until then A2/A3 only run funnels via the existing
-  `call_named` path — i.e., A2 does not bypass the funnel, it charges it.
+  `call_named` path, i.e., A2 does not bypass the funnel, it charges it.
 - Worker cells (`spawn`): the worker compiles the same module (shared `Arc<OIR1>`), inherits
   regulation snapshots exactly as today (seed decorrelation included), and drains the SAME
-  run-wide `fuel_pool` (Arc<AtomicI64>) — the loop-5 rule "one pool per run" is structural.
+  run-wide `fuel_pool` (Arc<AtomicI64>), the loop-5 rule "one pool per run" is structural.
 - Deep recursion: frames move from the host stack to a heap-allocated frame stack with the
   existing depth cap (F-1 class). The cap value and the stress text stay identical.
 
@@ -210,12 +210,12 @@ CallFrame {
   The compiler emits a **stress table** per gene: `{ip_range -> rescue target}` for `rescue`
   constructs. Unwinding pops frames to the matching target, attaches the chain frame
   (gene name + `SrcMap` line), and continues. Propagation (`?!`) rides `Stress.prop` exactly
-  as today — the VM's pre-arm points are the same construct boundaries (gene return, rescue
+  as today, the VM's pre-arm points are the same construct boundaries (gene return, rescue
   crossing, proof runner, seq end, REPL).
 - Notes: the VM emits notes through the same sink; `SrcMap` gives identical file:line
   rendering. Note caps unchanged (parser/lexer caps stay; runtime note flood caps charge per
   note as today).
-- Proof frames: `operon test` compiles the whole file; proof frames run on the VM too —
+- Proof frames: `operon test` compiles the whole file; proof frames run on the VM too,
   the vacuous-proof and exited-early rules are runner-level, unchanged.
 
 ## 8. Fuel + containment charge table (conservative)
@@ -246,8 +246,8 @@ the session reverts the flag default (never the corpus).
 
 - No new parser keywords, no syntax changes (compile step is invisible to source).
 - No optimizer pipeline in v1 (W11 comes after A5's profiling data; const-folding that could
-  skip draws is FORBIDDEN until it proves stream-identity — a folded expression must draw or
+  skip draws is FORBIDDEN until it proves stream-identity, a folded expression must draw or
   not draw exactly as the unfolded one did).
 - No JIT (W12 stays parked; bytecode-first per the audit).
 - No repr churn beyond §3's sanctioned list-storage experiment.
-- The Python oracle never grows a VM — it is the reference, not a peer.
+- The Python oracle never grows a VM, it is the reference, not a peer.

@@ -1,4 +1,4 @@
-# rt_p15b — W007: the chain exposed on a rescue binding stays contained —
+# rt_p15b, W007: the chain exposed on a rescue binding stays contained,
 # printing it leaks no host state (frames are gene names + in-file lines only).
 gene probe() {
     raise overflow, "sandbox-probe"

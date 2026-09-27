@@ -1,4 +1,4 @@
-# sec-r5 F-13: inf/NaN are invalid JSON (RFC 8259) — bare `inf` tokens
+# sec-r5 F-13: inf/NaN are invalid JSON (RFC 8259), bare `inf` tokens
 # broke the round-trip contract. Non-finite floats serialize as null.
 gene main() {
     let inf = 1e308 * 10;

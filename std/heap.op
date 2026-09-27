@@ -1,21 +1,21 @@
-# std/heap — binary min-heap over plain lists (deterministic, pure).
+# std/heap, binary min-heap over plain lists (deterministic, pure).
 #
 # A heap is a list in the classic array layout: children of i live at
 # 2*i+1 and 2*i+2. Every function is PURE: it returns a NEW list (or a
-# [value, rest] pair) and never mutates its argument — assignment shares
+# [value, rest] pair) and never mutates its argument, assignment shares
 # containers (SPEC §19), so each function starts from a fresh slice-copy
 # and the differential corpus pins byte-identical results on both engines.
 #
 # Comparator convention (same as `sorted` / `xs.sort(cmp)`): cmp(a, b) is
 # true when a belongs BEFORE b (strictly). The default compares with `<`
 # (ints, floats, strings). Priority-queue idiom: store [priority, value]
-# pairs and pass `gene (x, y) => x[0] < y[0]` — ties stay deterministic
+# pairs and pass `gene (x, y) => x[0] < y[0]`, ties stay deterministic
 # because sifts only move on a strictly-before comparison.
 #
 # Pins: tests/std_heap.op + tests/differential/heap.op (byte-identical).
 
 gene __hp_copy(xs) {
-    # fresh list with the same elements (shallow — matches §19 sharing)
+    # fresh list with the same elements (shallow, matches §19 sharing)
     return xs.slice(0, len(xs))
 }
 
@@ -68,7 +68,7 @@ gene __heap_sift_down(h, i, n, cmp) {
 }
 
 gene heap_from(xs, cmp = null) {
-    # build a heap from any list — O(n) bottom-up sift-down on a copy
+    # build a heap from any list, O(n) bottom-up sift-down on a copy
     let h = __hp_copy(xs)
     let n = len(h)
     let i = divmod(n, 2)[0] - 1
@@ -80,14 +80,14 @@ gene heap_from(xs, cmp = null) {
 }
 
 gene heap_push(h, v, cmp = null) {
-    # add a value — O(log n) on a copy
+    # add a value, O(log n) on a copy
     let out = __hp_copy(h)
     push(out, v)
     return __heap_sift_up(out, len(out) - 1, cmp)
 }
 
 gene heap_pop(h, cmp = null) {
-    # remove the front (minimum) — returns [value, rest]; [null, []] when empty
+    # remove the front (minimum), returns [value, rest]; [null, []] when empty
     let n = len(h)
     if n == 0 {
         return [null, []]

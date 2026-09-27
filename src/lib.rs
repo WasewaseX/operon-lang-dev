@@ -1,9 +1,9 @@
-//! lib.rs — Operon language core.
+//! lib.rs, Operon language core.
 //!
 //! One module tree backs both the `operon` CLI binary and the cargo test
 //! targets. The native C++ kernel (runtime/codon_kernel.cpp) is compiled and
 //! linked by build.rs; its bindings plus the Rust symbol table/clock live in
-//! `ffi`. (sec-r2, audit A15: the C runtime kernel was deleted — interning
+//! `ffi`. (sec-r2, audit A15: the C runtime kernel was deleted, interning
 //! is ordinary Rust ownership now.)
 
 pub mod ast;

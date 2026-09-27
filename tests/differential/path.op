@@ -1,4 +1,4 @@
-# path differential — pure lexical shaping, byte-identical both engines
+# path differential, pure lexical shaping, byte-identical both engines
 use std/path;
 print("base: {path.path_base("a/b/c.txt")} {path.path_base("a/b/")} {path.path_base("c.txt")}")
 print("dir: {path.path_dir("a/b/c.txt")} {path.path_dir("c.txt")} {path.path_dir("/x")}")

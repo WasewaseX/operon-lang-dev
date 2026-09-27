@@ -27,7 +27,7 @@ Rule: every future security mechanism lands with (a) a row added or updated here
 | A5 | Network reputation | the HTTP client must not become an SSRF/CRLF-injection vector |
 | A6 | Interpreter integrity | malformed/hostile input may produce errors, never memory-unsafety, hangs, or crashes |
 | A7 | Supply-chain integrity | what builds and ships Operon (CI, toolchain, release assets) is pinned and auditable |
-| A8 | User trust in output | diagnostics show what the interpreter actually did (repairs, spans) — no silent divergence |
+| A8 | User trust in output | diagnostics show what the interpreter actually did (repairs, spans), no silent divergence |
 
 ## 3. Trust boundaries and untrusted inputs
 
@@ -58,8 +58,8 @@ Rule: every future security mechanism lands with (a) a row added or updated here
 
 | Threat | Mechanism | Evidence | Residual |
 |--------|-----------|----------|----------|
-| unbounded CPU | parse fuel + exec fuel + `--fuel` override, charged per construct (incl. unique fuel charge per site — sec-r4 F-series) | rt_p2d_fuel_gene, rt_p2f_uorf_fuel, rt_p2g_match_fuel | fuel math reviewed per sec wave |
-| unbounded memory | `mem_charge` across interp allocations (sec-r4), 2 GiB contract, file-byte charges, large-clone charges, non-scalar map-key bounded scan (512) + step charge | rt_p2h_mem_list, rt_p2k_json_big | Rc cycle retention — tracked as W13 (walk-safety is proven; lifetime reclamation is the open piece) |
+| unbounded CPU | parse fuel + exec fuel + `--fuel` override, charged per construct (incl. unique fuel charge per site, sec-r4 F-series) | rt_p2d_fuel_gene, rt_p2f_uorf_fuel, rt_p2g_match_fuel | fuel math reviewed per sec wave |
+| unbounded memory | `mem_charge` across interp allocations (sec-r4), 2 GiB contract, file-byte charges, large-clone charges, non-scalar map-key bounded scan (512) + step charge | rt_p2h_mem_list, rt_p2k_json_big | Rc cycle retention, tracked as W13 (walk-safety is proven; lifetime reclamation is the open piece) |
 | quadratic/explosive walks (stringify/repr/deep_eq on DAGs) | DAG memoization in `stringify`/`repr`/`deep_eq`; `deep_eq` depth 100k→16k | sec-r5 F-10, rt_p5c_cycle | none known |
 | thread bombs | spawn capability gate + worker-cell ceilings; CI uses `timeout -k 5 15` with rc137=HANG detection | rt_p4a/p4b/p4c/p4d/p4e | S9: runner-side TERM-resistance investigation open (builder-A) |
 | output flooding | run output cap 64 MiB | sec-r4 F-series | none known |
@@ -72,7 +72,7 @@ Rule: every future security mechanism lands with (a) a row added or updated here
 
 | Threat | Mechanism | Evidence | Residual |
 |--------|-----------|----------|----------|
-| NUL bytes, BOM/CRLF, mangled UTF-8 | lexer containment — errors/repairs, never crashes | rt_p7b/p7c/p7d/p7e/p7f/p7g(cell)/p7h/p7i/p7j | none known |
+| NUL bytes, BOM/CRLF, mangled UTF-8 | lexer containment, errors/repairs, never crashes | rt_p7b/p7c/p7d/p7e/p7f/p7g(cell)/p7h/p7i/p7j | none known |
 | NaN/Inf through JSON | json inf/nan → null (documented) | sec-r5 F-13, rt_p5e_nan_json | none known |
 | JSON bombs (depth/size) | json depth + size charges | rt_p2j_json_depth | none known |
 | string interpolation escape games | bounded interpolation (rt_p1f, rt_p6d_brescape, rt_p6e_qinterp) | rt suite | none known |
@@ -84,7 +84,7 @@ Rule: every future security mechanism lands with (a) a row added or updated here
 
 | Threat | Mechanism | Evidence | Residual |
 |--------|-----------|----------|----------|
-| silent bridge exposure | **default-off**: requires `--allow-py` AND Caps.py grant entries | substrate-r1 (d78f541), rt_p12a/b/c, tests/granted/ operator-cell suite | the subprocess inherits the user's Python env — an untrusted Python env = untrusted bridge (documented contract, W79) |
+| silent bridge exposure | **default-off**: requires `--allow-py` AND Caps.py grant entries | substrate-r1 (d78f541), rt_p12a/b/c, tests/granted/ operator-cell suite | the subprocess inherits the user's Python env, an untrusted Python env = untrusted bridge (documented contract, W79) |
 | bridge as cap bypass | py() calls are themselves capability-charged; granted suite asserts denial without grant | rt_p12* | none known |
 
 ### 4.5 Network (A5)
@@ -98,9 +98,9 @@ Rule: every future security mechanism lands with (a) a row added or updated here
 
 | Threat | Mechanism | Evidence | Residual |
 |--------|-----------|----------|----------|
-| CI action tampering | **all GitHub Actions SHA-pinned** (D-6, sec-r5) | ci.yml/release.yml | W99 adds advisory scanning (cargo-audit/deny) — open |
+| CI action tampering | **all GitHub Actions SHA-pinned** (D-6, sec-r5) | ci.yml/release.yml | W99 adds advisory scanning (cargo-audit/deny), open |
 | toolchain drift | pinned toolchain in CI | workflows | same |
-| release artifact tampering | release workflow builds from tagged commit; checksums published | release.yml | W60 per-target smoke — open |
+| release artifact tampering | release workflow builds from tagged commit; checksums published | release.yml | W60 per-target smoke, open |
 
 ## 5. What we do NOT protect against (honest residuals)
 
@@ -113,7 +113,7 @@ Rule: every future security mechanism lands with (a) a row added or updated here
    out of scope; Operon is not a security sandbox against the machine's own kernel.
 4. **Side channels** (timing across granted/ungranted branches): not a design goal today.
 5. **Rc cycle lifetime reclamation** (W13): walk-safety is proven; a pathological cycle
-   builder can retain memory up to the 2 GiB charge ceiling — bounded, not zero.
+   builder can retain memory up to the 2 GiB charge ceiling, bounded, not zero.
 6. **Formal verification**: invariants are test-proven (redteam + differential), not
    proof-carrying. Fuzzing (W51) is the next evidence tier.
 

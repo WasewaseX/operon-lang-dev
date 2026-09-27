@@ -1,4 +1,4 @@
-# numeric_literals — W031 differential pin: radix forms and separators
+# numeric_literals, W031 differential pin: radix forms and separators
 # evaluate identically on both engines.
 print(0xFF)
 print(0b1010)

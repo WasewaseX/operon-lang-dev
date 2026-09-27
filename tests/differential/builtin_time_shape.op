@@ -1,4 +1,4 @@
-# differential: S3 builtin coverage — time/process introspection (shape contracts)
+# differential: S3 builtin coverage, time/process introspection (shape contracts)
 # Builtins whose VALUES are wall-clock dependent (unix_time, now, clock, memory,
 # argv) are pinned by type/range assertions only: no clock value is ever printed,
 # so both implementations produce byte-identical output. The epoch-scale bounds

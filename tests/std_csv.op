@@ -1,4 +1,4 @@
-# differential: std/csv — quote-aware CSV parsing and serialization
+# differential: std/csv, quote-aware CSV parsing and serialization
 use std/csv as csv
 
 frame proof {

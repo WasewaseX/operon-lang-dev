@@ -1,34 +1,34 @@
-//! pybridge.rs — the Python substrate bridge (substrate-r1, loop-6).
+//! pybridge.rs, the Python substrate bridge (substrate-r1, loop-6).
 //!
 //! Owner directive: Operon is NOT built from zero. The substrate statement
 //! (D-010) is that Operon stands ON existing ecosystems:
-//!   * Rust  — the toolchain and host interpreter (already true, 46% of tree)
-//!   * C++   — the codon kernel that earned its place (Myers bit-parallel)
-//!   * Python — the scientific ecosystem, joined via THIS bridge.
+//!   * Rust , the toolchain and host interpreter (already true, 46% of tree)
+//!   * C++  , the codon kernel that earned its place (Myers bit-parallel)
+//!   * Python, the scientific ecosystem, joined via THIS bridge.
 //!
 //! DeepSeek's critique "libraries too small" is answered architecturally:
-//! a stdlib does not need 500,000 modules of its own — it needs a hard,
+//! a stdlib does not need 500,000 modules of its own, it needs a hard,
 //! capability-gated DOOR to the ecosystem that already has them (NumPy,
 //! SciPy, Biopython, pandas). Operon joins the 82.8% computational-biology
 //! wall instead of fighting it.
 //!
 //! Containment contract (all inherited from the run() precedent):
-//!   * capability `py` — default-deny, exact-match per MODULE name
+//!   * capability `py`, default-deny, exact-match per MODULE name
 //!     (`--allow-py math`); a grant to "os" is an explicit trust act, the
 //!     same trust model as --allow-run.
 //!   * the child is `python3 -X utf8 -I -B` (isolated mode: no user site,
-//!     PYTHON* env ignored) running an EMBEDDED runner — no files shipped.
+//!     PYTHON* env ignored) running an EMBEDDED runner, no files shipped.
 //!   * environment scrubbed to OS essentials (shared safe_base_env).
 //!   * wall-clock timeout (`.cell py.timeout_ms`, clamp 1..300_000, default
-//!     10_000) with kill + bounded drain — identical to run().
+//!     10_000) with kill + bounded drain, identical to run().
 //!   * stdout/stderr drained concurrently; output capped at MAX_CHILD_OUT
 //!     (single source of truth, shared with run()).
-//!   * the request is ONE JSON line on stdin, then the pipe CLOSES — an
+//!   * the request is ONE JSON line on stdin, then the pipe CLOSES, an
 //!     import-time stdin reader gets EOF, not a hang.
 //!   * the response is ONE JSON line as the LAST non-empty stdout line, so
 //!     a chatty module that prints during import or call cannot corrupt it.
 //!   * bridge failures are DATA (ok:false / code:-2), not interpreter
-//!     stresses — only capability denial raises `interference`, and only a
+//!     stresses, only capability denial raises `interference`, and only a
 //!     dead interpreter raises `missing`. The language never panics on a
 //!     misbehaving Python module.
 
@@ -134,7 +134,7 @@ fn resolve_python() -> Option<&'static str> {
         .as_deref()
 }
 
-/// Last non-empty stdout line — the protocol tolerates chatty modules.
+/// Last non-empty stdout line, the protocol tolerates chatty modules.
 fn last_line(s: &str) -> Option<&str> {
     s.lines().rev().map(str::trim).find(|l| !l.is_empty())
 }
@@ -178,7 +178,7 @@ pub fn py_call(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     // substrate-r1: the bridge child gets the SAME safe-base environment as
-    // run() children — OS essentials only, zero env grants of its own. With
+    // run() children, OS essentials only, zero env grants of its own. With
     // -I, PYTHON* variables are ignored anyway; this is defense in depth.
     crate::interp::safe_base_env(&mut cmd, &[]);
 
@@ -192,7 +192,7 @@ pub fn py_call(
         // drop == close: an import-time stdin reader gets EOF, not a hang
     }
 
-    // concurrent drainers, capped — same shape as run() (sec-r3/sec-r4)
+    // concurrent drainers, capped, same shape as run() (sec-r3/sec-r4)
     use std::sync::mpsc;
     let (tx_so, rx_so) = mpsc::channel::<Vec<u8>>();
     let (tx_se, rx_se) = mpsc::channel::<Vec<u8>>();
@@ -436,10 +436,10 @@ mod tests {
         if !need_python() {
             return;
         }
-        // `this` prints the Zen of Python AT IMPORT — stdout noise before the
+        // `this` prints the Zen of Python AT IMPORT, stdout noise before the
         // response line. The LAST non-empty line must still parse cleanly.
         let r = py_call("this", "x", "[]", 5_000).unwrap();
-        assert!(!r.ok, "this has no attr x — must be a typed AttributeError");
+        assert!(!r.ok, "this has no attr x, must be a typed AttributeError");
         assert!(r.error.as_deref().unwrap_or("").contains("AttributeError"));
     }
 

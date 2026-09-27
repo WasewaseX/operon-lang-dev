@@ -1,4 +1,4 @@
-# time differential — pure calendar/duration arithmetic (no wall-clock reads),
+# time differential, pure calendar/duration arithmetic (no wall-clock reads),
 # byte-identical both engines. UTC-only contract.
 use std/time;
 print("add: {time.time_add(1_727_385_600, 3_600)}")

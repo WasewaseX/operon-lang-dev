@@ -1,4 +1,4 @@
-# W029: first-class bytes — literal syntax, indexing, slicing, concat,
+# W029: first-class bytes, literal syntax, indexing, slicing, concat,
 # repeat ceilings, conversions (UTF-8-only, explicit), iteration, map
 # keys, JSON view, and the spawn-membrane. Pinned on BOTH engines;
 # companion: tests/differential/bytes.op (byte-identical stdout).

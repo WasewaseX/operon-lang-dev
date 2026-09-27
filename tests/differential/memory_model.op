@@ -1,4 +1,4 @@
-# memory_model — W014 differential pin: the copy-vs-share contract.
+# memory_model, W014 differential pin: the copy-vs-share contract.
 let a = [1, 2]
 let b = a
 push(b, 3)

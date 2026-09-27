@@ -1,11 +1,11 @@
-//! rna2.rs — W067 stage 2: the node-addressed `.rna` edit engine.
+//! rna2.rs, W067 stage 2: the node-addressed `.rna` edit engine.
 //!
 //! V1 (genes::apply_rna_checked, W068) edits TEXT SPANS: `edit target {
-//! replace "src" -> "dst"; }` — fragile under reformatting and
+//! replace "src" -> "dst"; }`, fragile under reformatting and
 //! substring-precise. V2 (this module) edits AST NODES: the current source
 //! is parsed fresh ("parse, don't slice"), rules address declarations by
 //! name+ordinal ("node addressing"), and the edited AST is REPRINTED with
-//! the canonical formatter ("reprint, don't splice") — so the output of an
+//! the canonical formatter ("reprint, don't splice"), so the output of an
 //! apply is fmt-stable by construction (fmt∘fmt = fmt is enforced
 //! corpus-wide, W047).
 //!
@@ -33,21 +33,21 @@
 //!   * COMMENT PREFLIGHT: the reprint drops plain `#` comments (only `##`
 //!     doc comments attached to declarations roundtrip, W074). A source
 //!     containing plain comments is REFUSED unless `--allow-comment-drop`.
-//!   * The patch grammar is a FILE FORMAT parsed here — the language
+//!   * The patch grammar is a FILE FORMAT parsed here, the language
 //!     surface never changes (bio-layer freeze, D-011/R9): `edit/replace`
 //!     stays in the grammar, this module never touches the shared
 //!     lexer/parser.
 //!
 //! Rename semantics (v2 scope, documented): `rename gene` rewrites the
-//! declaration name AND every `Ident` reference node in the file —
+//! declaration name AND every `Ident` reference node in the file,
 //! identifier-precise, but NOT scope-aware (a shadowing local of the same
 //! name is rewritten too; strictly safer than v1's substring replace).
 //! `rename phenotype` rewrites `New(...)` constructor nodes and type
 //! annotations; `rename method` rewrites `Method(...)/MethodSafe(...)`
-//! name strings (name-global — pick unique method names);
+//! name strings (name-global, pick unique method names);
 //! `rename splice` rewrites the root binding's identifier references;
 //! `rename fate` rewrites `FateNew(...)` nodes. `.cell`/CLI keys (variant
-//! selection, methylation targets) are configuration, not source — a patch
+//! selection, methylation targets) are configuration, not source, a patch
 //! edits source only.
 
 use crate::ast::*;
@@ -107,7 +107,7 @@ impl V2Target {
 pub enum V2Verb {
     Rename(String),
     Delete,
-    /// Whole-body replacement source (raw text, parsed at apply time — a
+    /// Whole-body replacement source (raw text, parsed at apply time, a
     /// parse error in the replacement refuses the whole apply).
     Body(String),
 }
@@ -134,7 +134,7 @@ pub struct Rna2RuleReport {
 }
 
 /// Result of a v2 apply. `new_text` is None when the all-or-nothing
-/// contract refused the apply (any rule missed) — nothing would be written.
+/// contract refused the apply (any rule missed), nothing would be written.
 #[derive(Debug, Clone)]
 pub struct Rna2Report {
     pub rules: Vec<Rna2RuleReport>,
@@ -223,7 +223,7 @@ fn scan_line_plain_hash(line: &str, in_triple: &mut bool) -> bool {
                 }
             }
             '#' => {
-                // `##` doc comment — attached ones roundtrip (W074); not flagged
+                // `##` doc comment, attached ones roundtrip (W074); not flagged
                 if i + 1 < n && chars[i + 1] == '#' {
                     return false;
                 }
@@ -237,7 +237,7 @@ fn scan_line_plain_hash(line: &str, in_triple: &mut bool) -> bool {
 
 // ------------------------------------------------------------ patch parser
 
-/// Parse a v2 patch (line-based FILE format — not language syntax).
+/// Parse a v2 patch (line-based FILE format, not language syntax).
 pub fn parse_v2_patch(src: &str) -> Result<Vec<V2Rule>, String> {
     let mut rules = Vec::new();
     let lines: Vec<&str> = src.lines().collect();
@@ -446,7 +446,7 @@ fn parse_target(toks: &[&str], is_rename: bool, line: usize) -> Result<V2Target,
     }
 }
 
-/// `name` or `name#2` — ordinal must be >= 1.
+/// `name` or `name#2`, ordinal must be >= 1.
 fn parse_name_ordinal(tok: &str) -> Option<(String, Option<usize>)> {
     match tok.split_once('#') {
         Some((name, ord)) => {
@@ -502,7 +502,7 @@ fn scan_body_line(
                 }
                 i += 1;
             }
-            '#' => break, // comment tail — excluded from content
+            '#' => break, // comment tail, excluded from content
             _ => i += 1,
         }
     }
@@ -545,7 +545,7 @@ pub fn apply_rna_v2(
     let comment_lines = plain_comment_lines(src);
     if !comment_lines.is_empty() && !allow_comment_drop {
         return Err(format!(
-            "rna v2: refused — plain '#' comments at lines [{}] would be lost by the AST reprint; \
+            "rna v2: refused, plain '#' comments at lines [{}] would be lost by the AST reprint; \
              convert them to '##' doc comments or pass --allow-comment-drop",
             comment_lines
                 .iter()
@@ -671,7 +671,7 @@ pub fn apply_rna_v2(
                             match p.methods.iter().filter(|m| m.name.as_deref() == Some(gene)).count() {
                                 0 => Err(format!("phenotype '{}' has no method '{}'", pheno, gene)),
                                 n if n > 1 => Err(format!(
-                                    "ambiguous: {} methods named '{}' in phenotype '{}' — rename the phenotype's methods one at a time",
+                                    "ambiguous: {} methods named '{}' in phenotype '{}', rename the phenotype's methods one at a time",
                                     n, gene, pheno
                                 )),
                                 _ => {
@@ -713,7 +713,7 @@ pub fn apply_rna_v2(
                         }
                     },
                     &mut RewriteCfg {
-                        // a fate's call sites are plain Ident nodes — the
+                        // a fate's call sites are plain Ident nodes, the
                         // parser never emits FateNew; the runtime fabricates
                         // it in call_value when the name is a fate registry
                         // hit. Rewriting Idents therefore rewrites the
@@ -847,7 +847,7 @@ pub fn apply_rna_v2(
                 collect_decl_paths(&prog.stmts, &mut Vec::new(), &mut paths, &pred_matches);
                 if *ordinal > paths.len() {
                     Err(format!(
-                        "only {} regulate statement(s) declared — '#{}' does not exist",
+                        "only {} regulate statement(s) declared, '#{}' does not exist",
                         paths.len(),
                         ordinal
                     ))
@@ -858,7 +858,7 @@ pub fn apply_rna_v2(
                 }
             }
             (V2Verb::Body(text), V2Target::Gene { name, ordinal }) => {
-                // parse the replacement FIRST — a parse error refuses the
+                // parse the replacement FIRST, a parse error refuses the
                 // whole apply (W067 design note §3)
                 let frag = crate::parser::parse(text);
                 let fatal: Vec<String> = frag
@@ -949,7 +949,7 @@ fn verb_name(v: &V2Verb) -> String {
 // ------------------------------------------------------------ decl lookup
 
 /// Paths of all declarations matching `kind` AND `name_pred`, in program
-/// order (top level + TAD/Block bodies — the same scope class v1's
+/// order (top level + TAD/Block bodies, the same scope class v1's
 /// gene_span targeted; Frame and gene bodies are NOT decl scope).
 fn collect_decl_paths(
     stmts: &[Stmt],
@@ -994,7 +994,7 @@ fn find_decl(
         (Some(n), _) => Ok(paths[n - 1].clone()),
         (None, 1) => Ok(paths[0].clone()),
         (None, total) => Err(format!(
-            "ambiguous: {} declarations named '{}' — address one by ordinal ({})",
+            "ambiguous: {} declarations named '{}', address one by ordinal ({})",
             total,
             name,
             (1..=total)
@@ -1079,14 +1079,14 @@ fn decl_fate_name(s: &Stmt) -> Option<&str> {
 /// mutation counter for the fate report.
 #[derive(Default)]
 pub struct RewriteCfg<'a> {
-    /// Ident(from) -> Ident(to) — gene/splice-root references
+    /// Ident(from) -> Ident(to), gene/splice-root references
     ident: Option<(&'a str, &'a str)>,
-    /// New(from, ...) -> New(to, ...) — phenotype constructor calls
+    /// New(from, ...) -> New(to, ...), phenotype constructor calls
     ctor: Option<(&'a str, &'a str)>,
 
-    /// Method(_, from, ...) — method name strings
+    /// Method(_, from, ...), method name strings
     method: Option<(&'a str, &'a str)>,
-    /// TypeAnn::Named(from) -> Named(to) — phenotype annotations
+    /// TypeAnn::Named(from) -> Named(to), phenotype annotations
     ann: Option<(&'a str, &'a str)>,
     /// external counter (None inside nested walks that must not double-count)
     counter: Option<&'a mut usize>,
@@ -1175,7 +1175,7 @@ fn rewrite_expr(e: &mut Expr, cfg: &mut RewriteCfg) {
                 }
             }
         }
-        // W029: bytes literals are leaves — nothing to rewrite inside
+        // W029: bytes literals are leaves, nothing to rewrite inside
         Expr::Bytes(_) => {}
         Expr::Interp(parts) => {
             for p in parts {
@@ -1245,7 +1245,7 @@ fn rewrite_expr(e: &mut Expr, cfg: &mut RewriteCfg) {
             }
             rewrite_expr(body, cfg);
         }
-        // FateNew is never parsed — the runtime fabricates it when a call's
+        // FateNew is never parsed, the runtime fabricates it when a call's
         // name resolves to a fate (interp call_value). Nothing to rewrite.
         Expr::FateNew(_) => {}
         Expr::New(name, args) => {
@@ -1372,7 +1372,7 @@ fn rewrite_stmt(s: &mut Stmt, cfg: &mut RewriteCfg) {
                 rewrite_stmts(&mut g.body, cfg);
             }
         }
-        // W04: trait default bodies are ordinary gene bodies — rewrite them;
+        // W04: trait default bodies are ordinary gene bodies, rewrite them;
         // required methods have no body.
         Stmt::Trait(t) => {
             let td = Arc::make_mut(t);

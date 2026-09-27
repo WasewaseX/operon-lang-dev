@@ -1,4 +1,4 @@
-//! genes.rs — the gene-features pipeline: methylation config (.cell), RNA
+//! genes.rs, the gene-features pipeline: methylation config (.cell), RNA
 //! edit patches (.rna), splice variant selection, module loading with TAD
 //! insulation, NMD sweep, ORF finder, and real-OS-thread tasks.
 
@@ -13,7 +13,7 @@ use std::sync::{mpsc, Arc, Mutex};
 
 // ------------------------------------------------------------ thread budget
 // A run may hold at most MAX_THREADS live worker cells. Exceeding the cap is
-// a catchable `overflow` stress, never a panic — thread bombs are contained.
+// a catchable `overflow` stress, never a panic, thread bombs are contained.
 const MAX_THREADS: usize = 256;
 const WORKER_STACK: usize = 256 * 1024 * 1024; // match-class native stack
 static LIVE_THREADS: AtomicUsize = AtomicUsize::new(0);
@@ -32,7 +32,7 @@ pub fn spawn_worker(f: impl FnOnce() + Send + 'static) -> Result<(), Stress> {
         return Err(Stress::new(
             "overflow",
             format!(
-                "thread cap ({}) reached — too many live workers",
+                "thread cap ({}) reached, too many live workers",
                 MAX_THREADS
             ),
         ));
@@ -124,7 +124,7 @@ impl RnaReport {
 
 /// Apply an RNA edit patch to source text with a full per-rule report.
 /// Semantics are IDENTICAL to `apply_rna` (same scan order, same all-
-/// occurrences replacement, same gene-span scoping) — this is the checked
+/// occurrences replacement, same gene-span scoping), this is the checked
 /// engine; `apply_rna` is its lossy view (W068: no more silent misses).
 pub fn apply_rna_checked(src: &str, patch_src: &str, file_stem: &str) -> RnaReport {
     let mut edits = Vec::new();
@@ -198,7 +198,7 @@ pub fn apply_rna_checked(src: &str, patch_src: &str, file_stem: &str) -> RnaRepo
 /// `str::replace` would replace).
 fn count_occurrences(hay: &str, needle: &str) -> usize {
     if needle.is_empty() {
-        return 0; // empty pattern: String::replace would insert everywhere —
+        return 0; // empty pattern: String::replace would insert everywhere,
                   // never a useful edit; treat as no-match rather than corrupt
     }
     let mut n = 0;
@@ -213,7 +213,7 @@ fn count_occurrences(hay: &str, needle: &str) -> usize {
 /// Apply an RNA edit patch to source text. Target matches either the file
 /// stem or a gene name; gene-scoped edits apply to that gene's source span
 /// (best effort: from `gene <name>` to the next top-level `gene ` at col 0).
-/// Lossy view over `apply_rna_checked` — kept for existing call sites
+/// Lossy view over `apply_rna_checked`, kept for existing call sites
 /// (`run --rna`, `build --rna`); new tooling should use the checked engine.
 pub fn apply_rna(src: &str, patch_src: &str, file_stem: &str) -> (String, Vec<String>) {
     let report = apply_rna_checked(src, patch_src, file_stem);
@@ -281,7 +281,7 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
             0,
             4,
             format!(
-            "cyclic import of '{}' — module still loading; its map fills when loading completes",
+            "cyclic import of '{}', module still loading; its map fills when loading completes",
             path
         ),
         );
@@ -300,7 +300,7 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
     // importing file's own project directory and the standard library are
     // ALWAYS importable (otherwise no `use` works under default-deny).
     // Imports that reach OUTSIDE those trees (arbitrary disk paths) require
-    // an explicit read capability — a program cannot execute random files.
+    // an explicit read capability, a program cannot execute random files.
     // canonicalized Windows paths carry backslashes: normalize both sides to
     // forward slashes so prefix comparison is platform-neutral
     fn under(resolved: &str, root: &Option<String>) -> bool {
@@ -323,7 +323,7 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
         .map(|p| p.to_string_lossy().replace('\\', "/"));
     let std_env = std::env::var("OPERON_STD").ok();
     // the managed std library is the REAL std directory (exe-relative,
-    // OPERON_STD override, or the interpreter's own tree) — never any path
+    // OPERON_STD override, or the interpreter's own tree), never any path
     // that merely *contains* a `/std/` component
     fn is_std_tree(resolved: &str, std_env: &Option<String>) -> bool {
         let mut roots: Vec<String> = Vec::new();
@@ -359,7 +359,7 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
         || under(&rc_resolved, &cwd)
         || is_std_tree(&rc_resolved, &std_env)
         // W19/W23: a vendored dependency from the lockfile is a runtime-
-        // managed tree too — the operator resolved + installed it (operon
+        // managed tree too, the operator resolved + installed it (operon
         // mod add/install), so it imports under default-deny exactly like
         // std/; an arbitrary cache dir never appears here (the mapping is
         // name → pinned rev dir from the checked-in lockfile).
@@ -371,7 +371,7 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
         if let Err(s) = interp.caps.check(&interp.caps.read, "read", &resolved) {
             // sec-r1 (audit C-7): keep the policy message for direct grants
             // debugging, but for the traversal class return the SAME string
-            // resolve_path uses — otherwise real-vs-ghost is distinguishable
+            // resolve_path uses, otherwise real-vs-ghost is distinguishable
             let traversal = path.contains("..")
                 || path.starts_with('/')
                 || path.starts_with("\\\\")
@@ -391,7 +391,7 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
         }
     }
     // sec-r1 (audit C-7 TOCTOU): read the CANONICALIZED path, mirroring the
-    // read_file builtin's check/open race fix — a symlink swapped between
+    // read_file builtin's check/open race fix, a symlink swapped between
     // the policy decision (canonicalize) and the read previously routed the
     // read outside the sandbox
     let rc_path = std::path::PathBuf::from(&rc_resolved);
@@ -496,7 +496,7 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
                 0,
                 4,
                 format!(
-                    "strict visibility: '{}' has no pub marks — default-open retained (add pub or anchor export)",
+                    "strict visibility: '{}' has no pub marks, default-open retained (add pub or anchor export)",
                     path
                 ),
             );
@@ -512,7 +512,7 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
         });
     }
     let modv = {
-        // fill the placeholder registered before the body ran — same Rc,
+        // fill the placeholder registered before the body ran, same Rc,
         // so cyclic importers holding it observe the completed data
         if let Some(Value::Map(m)) = interp.modules.get(path) {
             {
@@ -534,14 +534,14 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
     Ok(modv)
 }
 
-// NOTE: placeholder protocol — a module registers an EMPTY map in
+// NOTE: placeholder protocol, a module registers an EMPTY map in
 // interp.modules before its body runs; completion fills THAT
 // SAME map so cyclic importers holding the placeholder observe the data.
 
 fn resolve_path(interp: &Interp, path: &str) -> Result<String, String> {
     let p = path.trim_end_matches(".op").to_string() + ".op";
     // sec-r1 (audit C-7): with the sandbox on, traversal/absolute module
-    // names must not leak which outside paths exist — "not found" (ghost)
+    // names must not leak which outside paths exist, "not found" (ghost)
     // vs "blocked" (real file) was a filesystem existence oracle. That name
     // class gets ONE unified failure message; plain relative names inside
     // the project keep the precise "not found" for usable typos.
@@ -566,7 +566,7 @@ fn resolve_path(interp: &Interp, path: &str) -> Result<String, String> {
     candidates.push(Some(std::path::PathBuf::from(&p)));
     candidates.push(Some(std::path::PathBuf::from("std").join(&p)));
     // dx-r5 (audit P0-1): a clean `curl | sh` install ships std/ beside the
-    // binary, but resolve_path had no exe-relative candidate — `use std/…`
+    // binary, but resolve_path had no exe-relative candidate, `use std/…`
     // failed silently from any other CWD (silent-null-with-exit-0). Mirror
     // the caps layer's exe-relative std tree (genes.rs is_std_tree): the
     // install layout (…/bin/operon + …/std) and a dev layout (…/target/
@@ -604,7 +604,7 @@ fn resolve_path(interp: &Interp, path: &str) -> Result<String, String> {
     // tries <dir>/util.op (and bare `use my-lib` → <dir>/my-lib.op... the
     // module's own root). Deterministic: the lock pins name→rev→dir, no
     // globbing, and the standard roots above win first (a local checkout
-    // shadows the vendored copy — the developer's-tree-first rule).
+    // shadows the vendored copy, the developer's-tree-first rule).
     for (dep_name, dep_dir) in &interp.lock_dirs {
         let seg = format!("{}/", dep_name);
         let tail: Option<String> = if p == format!("{}.op", dep_name) {
@@ -619,7 +619,7 @@ fn resolve_path(interp: &Interp, path: &str) -> Result<String, String> {
         }
     }
     // W070: per-root attempt detail for the PLAIN name class only. The
-    // traversal class keeps its unified C-7 message — attempted-root detail
+    // traversal class keeps its unified C-7 message, attempted-root detail
     // for outside paths would resurrect the existence oracle C-7 removed.
     // `is_file` (not `exists`) so a directory named `foo.op` reports as
     // "not a regular file" instead of "resolving" and dying in the parser.
@@ -656,7 +656,7 @@ fn resolve_path(interp: &Interp, path: &str) -> Result<String, String> {
         return Err(unified_err(interp.caps.enabled && traversal));
     }
     Err(format!(
-        "module '{}' not found — tried: {}",
+        "module '{}' not found, tried: {}",
         path,
         attempts.join("; ")
     ))
@@ -872,7 +872,7 @@ pub enum SnapVal {
 
 /// Sendable argument: data serializes; named genes cross as references to
 /// the snapshot (the worker re-binds them from its inherited repertoire).
-/// Anonymous lambdas cannot cross — they arrive as null with a note.
+/// Anonymous lambdas cannot cross, they arrive as null with a note.
 pub enum SnapArg {
     Data(SendValue),
     GeneRef(String),
@@ -1034,7 +1034,7 @@ fn from_send_d(v: SendValue, d: u32) -> Value {
 /// Snapshot the parent global environment for a worker thread: gene
 /// definitions cross by Arc (they are immutable ASTs), data values cross by
 /// SendValue serialization. This gives tasks and sequences visibility of the
-/// whole module surface — cells share metabolites through signals, and worker
+/// whole module surface, cells share metabolites through signals, and worker
 /// cells inherit the module's gene repertoire.
 pub fn snapshot_globals(interp: &Interp) -> Vec<(String, SnapVal)> {
     let mut out: Vec<(String, SnapVal)> = Vec::new();
@@ -1051,7 +1051,7 @@ pub fn snapshot_globals(interp: &Interp) -> Vec<(String, SnapVal)> {
 }
 
 /// reg-r1 (regulation audit W1, severity HIGH): worker cells inherit the
-/// parent's REGULATION state — GRN edges + levels, methylation counters +
+/// parent's REGULATION state, GRN edges + levels, methylation counters +
 /// threshold, toggle pairs, enhance marks. The old snapshot carried only
 /// env values, so `spawn()` silently ungated the entire regulation layer:
 /// a `@methylate`-silenced gene printed "chromatin repressed" WHILE it
@@ -1065,7 +1065,7 @@ pub struct RegulationSnap {
     pub methyl_levels: Vec<(String, u32)>,
     pub methyl_threshold: u32,
     pub enhanced: Vec<String>,
-    /// reg-r3 (re-audit): the repressilator ring rides the snapshot too —
+    /// reg-r3 (re-audit): the repressilator ring rides the snapshot too,
     /// node names + the RAW ODE levels frozen at spawn, so a ring-sourced
     /// GRN gate vetoes identically inside the cell ("exactly as it does
     /// outside"). Workers are bounded cells: the ring is frozen at spawn
@@ -1073,7 +1073,7 @@ pub struct RegulationSnap {
     pub repressi_ring: Vec<String>,
     pub repressi_tick: u64,
     pub repressi_levels: Vec<f64>,
-    /// reg-bio (F-1): the telegraph promoter layer rides the snapshot —
+    /// reg-bio (F-1): the telegraph promoter layer rides the snapshot,
     /// promoter states are part of a cell's regulatory state, so a spawned
     /// cell (mitosis) inherits the parent's on/off promoters and burst
     /// counters, and later parent-side switches do not propagate
@@ -1091,7 +1091,7 @@ pub struct RegulationSnap {
     pub repressi_params: crate::interp::RepressiParams,
     pub enhance_delta: f64,
     /// reg-bio-2 (C1/C11): the translation layer and decoy sites ride the
-    /// snapshot — worker cells are whole regulatory cells (same contract
+    /// snapshot, worker cells are whole regulatory cells (same contract
     /// as every other regulation field).
     pub trans_edges: Vec<crate::ast::TransEdge>,
     pub trans_last: Vec<(String, u64)>,
@@ -1100,12 +1100,12 @@ pub struct RegulationSnap {
     pub ligands: Vec<String>,
     pub ligand_pools: Vec<(String, f64)>,
     pub grn_binds: Vec<crate::ast::BindDef>,
-    /// reg-bio-3 (C9): RISC entries ride the snapshot — a spawned cell is a
+    /// reg-bio-3 (C9): RISC entries ride the snapshot, a spawned cell is a
     /// whole regulatory cell: silencing redirects inside it too (13b fix:
     /// §13's inventory previously missed silences).
     pub silences: Vec<(String, Option<String>, f64, u32)>,
     /// loop-9 (C8): signal species names ride the snapshot (a worker needs
-    /// them for edge-source resolution). The MEDIUM itself does NOT — the
+    /// them for edge-source resolution). The MEDIUM itself does NOT, the
     /// shared pool is handed to the worker explicitly (environment, not
     /// cytoplasm: live, not frozen).
     pub signals: Vec<String>,
@@ -1113,13 +1113,13 @@ pub struct RegulationSnap {
     /// worker folds the parent's reader math exactly.
     pub m6a_reader: (f64, f64, u32),
     /// loop-9 (F-3): per-gene promoter attempt telemetry rides the snapshot
-    /// (name, attempts, on_total, episodes) — worker cells are whole
+    /// (name, attempts, on_total, episodes), worker cells are whole
     /// regulatory cells; telemetry must not desync from the host mid-burst.
     pub promoter_tel: Vec<(String, u64, u64, u64)>,
     /// loop-9 (R9): runtime burst overrides freeze at spawn (snapshot).
     pub burst_overrides: Vec<(String, f64, f64)>,
     /// loop-9 (F-4): runtime splice shifts freeze at spawn (snapshot
-    /// contract — later parent-side shifts do not propagate).
+    /// contract, later parent-side shifts do not propagate).
     pub splice_shift: Vec<(String, String)>,
     pub risc_escaped: Vec<String>,
     /// reg-bio-3 (A1/A7): polycistronic units (membership, order, rbs,
@@ -1129,18 +1129,18 @@ pub struct RegulationSnap {
     pub m6a_levels: Vec<(String, u32)>,
     pub generation: u64,
     pub copies: Vec<(String, u32)>,
-    /// loop-10 (F-7/F-8): resolved Rho/queue knobs ride the snapshot —
+    /// loop-10 (F-7/F-8): resolved Rho/queue knobs ride the snapshot,
     /// (armed, catch, queue_floor, queue_cap, drain). Worker cells fold the
     /// parent's termination math exactly (they do not inherit raw .cell).
     pub rho_knobs: (bool, f64, f64, f64, f64),
     /// loop-10 (F-8): the queue register freezes at spawn (snapshot
-    /// contract — later parent-side queue growth does not propagate).
+    /// contract, later parent-side queue growth does not propagate).
     pub ribo_queue: Vec<(String, f64)>,
 }
 
 pub fn snapshot_regulation(interp: &Interp) -> RegulationSnap {
     // reg-r3: freeze the ring at the spawn tick (levels via the same pure
-    // fold the host uses — bit-identical arithmetic)
+    // fold the host uses, bit-identical arithmetic)
     let (ring_tick, ring_levels) = {
         let tick = match &interp.repressi_atomic {
             Some(a) => a.load(std::sync::atomic::Ordering::SeqCst),
@@ -1222,7 +1222,7 @@ pub fn snapshot_regulation(interp: &Interp) -> RegulationSnap {
             .map(|(k, (a, b))| (k.clone(), *a, *b))
             .collect(),
         // loop-10 R10-c (parity jury F-1m): prefer the pinned reader knobs
-        // when already bound — the same worker-in-worker class as the rho
+        // when already bound, the same worker-in-worker class as the rho
         // fix below (re-resolving from an empty worker cell silently
         // resets the reader to defaults at depth >= 2).
         m6a_reader: interp.m6a_reader_pins.unwrap_or((
@@ -1255,7 +1255,7 @@ pub fn snapshot_regulation(interp: &Interp) -> RegulationSnap {
         generation: interp.generation,
         copies: interp.copies.iter().map(|(k, v)| (k.clone(), *v)).collect(),
         // loop-10 R10-b (parity jury F-1): prefer the pinned knobs when
-        // already bound (worker-in-worker snapshotting) — re-resolving from
+        // already bound (worker-in-worker snapshotting), re-resolving from
         // interp.cell (empty inside a worker) would silently disarm the
         // layer at depth >= 2 while the oracle stays armed.
         rho_knobs: interp.rho_pins.unwrap_or((
@@ -1301,7 +1301,7 @@ pub fn bind_regulation(ti: &mut Interp, s: &RegulationSnap) {
     ti.methyl_levels = s.methyl_levels.iter().cloned().collect();
     ti.methyl_threshold = s.methyl_threshold;
     ti.enhanced = s.enhanced.clone();
-    // reg-r3: ring nodes resolve to the frozen spawn levels — pin the
+    // reg-r3: ring nodes resolve to the frozen spawn levels, pin the
     // worker's cache to (spawn_tick, levels) so ring_gate_level returns
     // exactly what the host saw (no live ticking inside the cell)
     ti.repressi_ring = s.repressi_ring.clone();
@@ -1331,7 +1331,7 @@ pub fn bind_regulation(ti: &mut Interp, s: &RegulationSnap) {
     ti.silences = s.silences.clone();
     ti.risc_escaped = s.risc_escaped.iter().cloned().collect();
     // loop-9 (C8): signal species ride the snapshot; the MEDIUM arc is
-    // assigned by the spawner (shared, live — see spawn_task/seq_start).
+    // assigned by the spawner (shared, live, see spawn_task/seq_start).
     ti.signals = s.signals.clone();
     // loop-9 (F-6): resolved reader knobs pin the worker's math
     ti.m6a_reader_pins = Some(s.m6a_reader);
@@ -1421,7 +1421,7 @@ fn clone_send_d(sv: &SendValue, d: u32) -> SendValue {
 }
 
 // ------------------------------------------------------------ sequences
-/// Start a sequence worker: rendezvous channel makes pulls lazy — the worker
+/// Start a sequence worker: rendezvous channel makes pulls lazy, the worker
 /// blocks on each yield until the consumer pulls the next value.
 pub fn seq_start(
     def: Arc<GeneDef>,
@@ -1450,7 +1450,7 @@ pub fn seq_start(
         let result = run_seq_body(&mut ti, &def, conv_args, &tx);
         let (notes, stress) = match result {
             Ok(()) => (ti.notes, None),
-            // W06 (D-014): propagation inside a sequence ends the stream —
+            // W06 (D-014): propagation inside a sequence ends the stream,
             // sequences are streams, not answers, so the variant has no
             // return path; the stream ends cleanly (never leaked as a kind).
             Err(s) if s.prop.is_some() => {
@@ -1490,7 +1490,7 @@ fn run_seq_body(
         }
     }
     // Yield is the only interesting flow: everything else terminates the
-    // sequence (return value is dropped — sequences are streams, not answers).
+    // sequence (return value is dropped, sequences are streams, not answers).
     let _ = ti.exec_block(&fenv, &def.body)?;
     Ok(())
 }
@@ -1523,7 +1523,7 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
     if interp.tasks.len() >= 4096 {
         return Err(Stress::new(
             "overflow",
-            "too many live tasks (4096) — join() your spawns",
+            "too many live tasks (4096), join() your spawns",
         ));
     }
     // pre-flight depth check: a payload deeper than the SendValue cap must
@@ -1552,14 +1552,14 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
     let mut worker_chain = interp.cancel_chain.clone();
     worker_chain.push(cancel_flag.clone());
     let task_phase_in = task_phase.clone();
-    // loop-9 (C8): the worker holds the SAME live medium (environment —
+    // loop-9 (C8): the worker holds the SAME live medium (environment,
     // my secretion raises your activation across cells). Spawning adds a
     // cell to the culture, so the medium materializes here even when the
-    // host has not secreted yet — an empty shared pool reads exactly like
+    // host has not secreted yet, an empty shared pool reads exactly like
     // None (0.0 everywhere), so legacy behavior is unchanged.
     let host_medium = Some(interp.medium_arc());
     // reg-bio-2 (C3): the task id must be claimed BEFORE the worker body
-    // runs — the worker's RNG stream is derived from it (decorrelated
+    // runs, the worker's RNG stream is derived from it (decorrelated
     // promoter bursting across cells).
     let id = interp.next_task_id;
     interp.next_task_id += 1;
@@ -1571,10 +1571,10 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
         // loop-9 (C8): live shared medium
         ti.medium = host_medium;
         // reg-bio-2 (C3): worker cells do NOT all start from the same default
-        // seed — each derives its stream from its task id, so two cells
+        // seed, each derives its stream from its task id, so two cells
         // bursting under expr_on draw DIFFERENT promoter sequences. The old
         // behavior was synchronized bursting across cells (perfect
-        // correlation) — the exact opposite of extrinsic noise. Still fully
+        // correlation), the exact opposite of extrinsic noise. Still fully
         // deterministic: same program → same ids → same streams. The Python
         // oracle mirrors the derivation (save / derive / restore) inline.
         ti.rng = task_seed;
@@ -1585,13 +1585,13 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
         ti.caps = host_caps; // worker cells inherit the host's grants
         let conv_args: Vec<Value> = send_args.iter().map(|a| arg_from_snap(a, &snap)).collect();
         // reg-r1: worker cells call through the SAME name-dispatch funnel as
-        // the host — call_named evaluates the toggle/methyl/GRN gates that a
+        // the host, call_named evaluates the toggle/methyl/GRN gates that a
         // direct call_gene would bypass, so a repressed gene stays repressed
         let result = ti.call_named(&genv, &task_name, conv_args);
         let (rv, notes) = match result {
             Ok(v) => (to_send(&v), ti.notes),
             // W06 (D-014): a propagated variant IS the worker gene's return
-            // value — converted at the boundary, never leaked as a failure.
+            // value, converted at the boundary, never leaked as a failure.
             Err(s) if s.prop.is_some() => (to_send(&s.prop.unwrap()), ti.notes),
             Err(s) => (SendValue::Stress(s.kind, s.message), ti.notes),
         };
@@ -1879,7 +1879,7 @@ pub fn join_task(interp: &mut Interp, id: i64, timeout_ms: Option<u64>) -> Resul
             },
             None => match handle.rx.recv_timeout(std::time::Duration::from_secs(300)) {
                 // sec-r3 (re-audit #3): the unbounded join was a free host
-                // freeze — a worker looping `run("sleep", …)` kept the
+                // freeze, a worker looping `run("sleep", …)` kept the
                 // channel open for as long as its fuel lasted. The default
                 // join is now ceiling-bounded like the whole run (300 s):
                 // timed-out tasks stay joinable and join returns null.

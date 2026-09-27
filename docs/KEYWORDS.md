@@ -1,4 +1,4 @@
-# Operon keywords — GENERATED from src/parser.rs, do not hand-edit
+# Operon keywords, GENERATED from src/parser.rs, do not hand-edit
 
 The parser's reserved set (source of truth: `KEYWORDS` in `src/parser.rs`).
 
@@ -63,7 +63,7 @@ Analogy voice per D-008 (zero biology assumed; one-line programmer meaning).
 | `tad` | module boundary (TAD-insulated exports) |
 | `threshold` | gate cutoff |
 | `toggle` | boolean gate switch |
-| `trait` | *(analogy pending — file a docs finding)* |
+| `trait` | *(analogy pending, file a docs finding)* |
 | `use` | import module |
 | `variant` | named alternative implementation |
 | `while` | condition loop |

@@ -1,5 +1,5 @@
 # ============================================================
-# Roman numerals  — cookbook #13
+# Roman numerals , cookbook #13
 # you already know: an encoder/decoder pair with lookup tables
 # teaches: ordered tables as parallel lists, greedy encoding,
 #          subtractive decoding with a lookahead

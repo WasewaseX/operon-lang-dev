@@ -1,5 +1,5 @@
 # ============================================================
-# Caesar cipher  — cookbook #14
+# Caesar cipher , cookbook #14
 # you already know: ROT13 via str.translate / a substitution map
 # teaches: building translation tables from parallel strings, has()-first
 #          map access, case handling without char codes, char walk via slice

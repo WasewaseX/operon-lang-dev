@@ -1,6 +1,6 @@
 # differential: json round trip + seeded random
 # note: string interpolation treats { } as expression delimiters, so JSON
-# literals in source escape their braces (\{ \}) — the lexer unescapes them.
+# literals in source escape their braces (\{ \}), the lexer unescapes them.
 frame proof {
     let v = json_parse("\{\"a\": 1, \"b\": [1, 2, 3], \"c\": \"hi\"\}")
     assert(v.a == 1)

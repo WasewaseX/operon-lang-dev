@@ -1,8 +1,8 @@
-# std/serialize — the unified serialization front door (W34 stage 1).
+# std/serialize, the unified serialization front door (W34 stage 1).
 #
 # One naming surface, one error contract, per-format round-trip guarantees:
 #   to_json(v)        -> str            total for the supported value shapes
-#   from_json(text)   -> Result        ok(value) | err(message) — expected
+#   from_json(text)   -> Result        ok(value) | err(message), expected
 #                                      failures are values (D-014), never a
 #                                      crash and never a silent null
 #   to_csv_rows / from_csv_rows        tabular layer over std/csv semantics
@@ -10,9 +10,9 @@
 #
 # Stage 1 covers the value layer: null / bool / int / float / str / list /
 # map, plus Option/Result wrappers (they JSON-wrap as {"ok":…} / {"err":…} /
-# null — the D-014 wire shape). Phenotype instances wait for the W04 trait
-# hook — `trait Serializable { gene to_map() }` consumed by a format-generic
-# `serialize()` — whose shape is frozen in docs/specs/SERIALIZATION.md, so
+# null, the D-014 wire shape). Phenotype instances wait for the W04 trait
+# hook, `trait Serializable { gene to_map() }` consumed by a format-generic
+# `serialize()`, whose shape is frozen in docs/specs/SERIALIZATION.md, so
 # downstream code can adopt this module now and keep its calls when the hook
 # lands.
 #
@@ -25,15 +25,15 @@
 #   null / bool / int        exact
 #   float                    exact for finite values (JSON number text);
 #                            non-finite floats serialize as null (RFC 8259
-#                            honesty in json_str) — those DO NOT round-trip
+#                            honesty in json_str), those DO NOT round-trip
 #                            and roundtrip() reports false for them
 #   str                      exact (UTF-8 text)
 #   list / map               exact, recursively (structural == equality;
-#                            map keys are strings — insertion order is not
+#                            map keys are strings, insertion order is not
 #                            part of the JSON wire shape, but JSON objects
 #                            re-parse in document order, so == holds)
 #   option / result          wire shape {"ok":…}/{"err":…}/null; see the
-#                            pinned proof — re-parse does NOT rebuild the
+#                            pinned proof, re-parse does NOT rebuild the
 #                            wrapper (a single-key map is indistinguishable
 #                            from a map by design: wire fidelity, not tag
 #                            fidelity). Use the wrappers' json_str form
@@ -48,7 +48,7 @@ gene to_json(v) {
 
 gene from_json(text) {
     # Result-shaped parse: ok(value) | err(message). The underlying builtin
-    # raises a catchable `unfolded` Stress on invalid text — stage-1 policy
+    # raises a catchable `unfolded` Stress on invalid text, stage-1 policy
     # catches it HERE and hands back a value (the caller never writes
     # stress/rescue just to parse a string that might be junk).
     let v = null
@@ -65,11 +65,11 @@ gene from_json(text) {
 }
 
 gene to_csv_rows(rows, sep) {
-    # rows: a list of lists (raw cells, any scalar shape — str() coerced).
+    # rows: a list of lists (raw cells, any scalar shape, str() coerced).
     # Quoting follows std/csv semantics (RFC-4180 flavored): a cell that
     # contains the separator, a quote, or a newline is quoted; inner quotes
     # double. Written here rather than imported so the dispatcher has ONE
-    # dependency surface (the builtins) — stage 2 may re-route through
+    # dependency surface (the builtins), stage 2 may re-route through
     # std/csv once sibling imports are proven corpus-wide.
     let out = []
     for row in rows {
@@ -89,7 +89,7 @@ gene to_csv_rows(rows, sep) {
 
 gene from_csv_rows(text, sep) {
     # Result-shaped tabular parse (value layer: scalar cells as strings).
-    # Delegates the character-level state machine to std/csv's csv_parse —
+    # Delegates the character-level state machine to std/csv's csv_parse,
     # the one sibling import in this module, because re-implementing a
     # state machine here is exactly the drift W34 exists to prevent.
     use std/csv as csv
@@ -149,7 +149,7 @@ gene serialize(value, fmt) {
 
 gene deserialize(text, fmt) {
     # mirror of serialize(): Result-shaped, so a bad payload is a value the
-    # caller unwraps — the error contract never changes shape
+    # caller unwraps, the error contract never changes shape
     if fmt == "json" {
         return from_json(text)
     }

@@ -1,11 +1,11 @@
-# reg-bio-2 (D2b): occupancy repression — the thermodynamic
+# reg-bio-2 (D2b): occupancy repression, the thermodynamic
 # K^n/(K^n + R^n) multiplicative survival form. One fire recomputes the
 # whole network; each repressor applies its influence ONCE per pulse.
 # Two partial repressors (level 1.0, strength 0.5, threshold 0.5 →
 # influence 0.4 each) on a target at 1.0:
 #   subtractive (legacy): 1 - 0.4 - 0.4 = 0.2
 #   occupancy (survival): 1 x 0.6 x 0.6 = 0.36
-# Occupancy composes multiplicatively — repression can never overshoot,
+# Occupancy composes multiplicatively, repression can never overshoot,
 # and near-full occupancy approaches (never crosses) zero, while the
 # subtractive form overshoots to a hard zero.
 regulate {

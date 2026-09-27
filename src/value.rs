@@ -1,4 +1,4 @@
-//! value.rs — runtime values, display, truthiness, comparison, deep equality.
+//! value.rs, runtime values, display, truthiness, comparison, deep equality.
 
 use crate::ast::GeneDef;
 use std::cell::RefCell;
@@ -10,8 +10,8 @@ pub type ListRef = Rc<RefCell<Vec<Value>>>;
 
 /// dx-r3 (re-audit perf #7): maps keep their insertion-ordered Vec (repr,
 /// keys(), iteration order are part of the language contract) but gain a
-/// hash memo over (type tag, display) -> position, so the hot lookups —
-/// `m[k]`, `has`, `del`, member access, `map_insert` — are O(1) instead of
+/// hash memo over (type tag, display) -> position, so the hot lookups,
+/// `m[k]`, `has`, `del`, member access, `map_insert`, are O(1) instead of
 /// a linear deep_eq scan (the collections bench ran 40–55x CPython).
 /// The memo is a PREFILTER: candidate positions are always verified with
 /// deep_eq, so exotic equalities stay exact.
@@ -23,7 +23,7 @@ pub struct MapStore {
 
 /// sec-r5 (F-12): non-scalar keys (lists/maps) miss the hash memo and fall
 /// back to a linear deep_eq scan. Unbounded, that was quadratic CPU that
-/// burned zero fuel — 25k list-keyed inserts was a live hang. The scan is
+/// burned zero fuel, 25k list-keyed inserts was a live hang. The scan is
 /// now capped: beyond this many entries a non-scalar key is treated as
 /// absent (SPEC §9b). Scalar keys keep exact semantics via the memo.
 const NON_SCALAR_SCAN_CAP: usize = 512;
@@ -35,12 +35,12 @@ fn key_tag(v: &Value) -> (u8, String) {
         Value::Int(i) => (2, i.to_string()),
         Value::Float(f) => (3, f.to_string()),
         Value::Str(s) => (4, s.clone()),
-        // W029: bytes keys hit the memo via a length-tagged prefilter — the
+        // W029: bytes keys hit the memo via a length-tagged prefilter, the
         // memo is only a PREFILTER (candidates are deep_eq-verified and a
         // miss falls back to the exact full scan), so same-length collisions
         // stay exact, just O(n) instead of O(1).
         Value::Bytes(b) => (5, format!("b{}", b.len())),
-        // non-scalar keys are legal but rare — they simply miss the memo
+        // non-scalar keys are legal but rare, they simply miss the memo
         // and fall back to the linear scan
         _ => (255, String::new()),
     }
@@ -81,7 +81,7 @@ impl MapStore {
             // scalar keys keep exact semantics: full scan on memo miss
             return self.items.iter().position(|(k, _)| k.deep_eq(key));
         }
-        // sec-r5 (F-12): non-scalar keys — bounded scan (see NON_SCALAR_SCAN_CAP)
+        // sec-r5 (F-12): non-scalar keys, bounded scan (see NON_SCALAR_SCAN_CAP)
         self.items
             .iter()
             .take(NON_SCALAR_SCAN_CAP)
@@ -168,7 +168,7 @@ pub struct SeqState {
 }
 
 /// W06 (D-014): the four Option/Result variant tags. Option = Some|None,
-/// Result = Ok|Err — families are distinct (Some(x) != Ok(x)) so a value
+/// Result = Ok|Err, families are distinct (Some(x) != Ok(x)) so a value
 /// always remembers which contract it carries.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum VTag {
@@ -205,7 +205,7 @@ pub enum Value {
     Str(String),
     /// W029: first-class immutable bytes. Immutability keeps the memory
     /// model simple (no frozen interplay) and matches Python bytes; sharing
-    /// is Rc (assignment shares, like lists — SPEC §19a table row).
+    /// is Rc (assignment shares, like lists, SPEC §19a table row).
     Bytes(Rc<Vec<u8>>),
     List(ListRef),
     Map(MapRef),
@@ -220,17 +220,17 @@ pub enum Value {
 pub struct Stress {
     pub kind: String, // unfolded | missing | overflow | burned | interference | unwrap
     pub message: String,
-    /// dx-r3 (re-audit): source line the hard error originated from — the
+    /// dx-r3 (re-audit): source line the hard error originated from, the
     /// primary diagnostic gets a location, matching mainstream norms.
     pub line: usize,
     /// W007: gene call chain, captured as the stress unwinds through the
-    /// call funnel — INNERMOST frame first, (gene name, call-site line).
+    /// call funnel, INNERMOST frame first, (gene name, call-site line).
     /// Rendered on uncaught stress (main.rs) and exposed on rescue bindings
     /// via stress_map ("chain" key). Capped at 64 frames (note-cap
     /// discipline): a bounded chain is a contained chain.
     pub chain: Vec<(String, usize)>,
     /// W06 (D-014): propagation marker. Some(_) means this Stress is NOT a
-    /// failure — it is a `?!` propagation unwinding to the nearest enclosing
+    /// failure, it is a `?!` propagation unwinding to the nearest enclosing
     /// gene boundary, carrying the variant value to return. The payload is
     /// the marker itself: no user path (raise/stress statements, builtins)
     /// can construct a Stress with a payload, so rescue can never catch or
@@ -259,7 +259,7 @@ impl Stress {
             prop: None,
         }
     }
-    /// W06 (D-014): a propagation signal — a variant value unwinding to the
+    /// W06 (D-014): a propagation signal, a variant value unwinding to the
     /// nearest enclosing gene boundary, where it becomes the gene's return
     /// value. Never contained by rescue (catch sites pre-arm on `prop`).
     pub fn prop(line: usize, value: Value) -> Self {
@@ -302,7 +302,7 @@ impl Value {
             Value::List(l) => !l.borrow().is_empty(),
             Value::Map(m) => !m.borrow().is_empty(),
             Value::Gene(_, _) | Value::Seq(_, _) | Value::Obj(_, _) => true,
-            // W06: a carried success is truthy; a carried failure is falsy —
+            // W06: a carried success is truthy; a carried failure is falsy,
             // `if (result)` reads naturally without unwrapping.
             Value::Variant(VTag::SomeV, _) | Value::Variant(VTag::OkV, _) => true,
             Value::Variant(VTag::NoneV, _) | Value::Variant(VTag::ErrV, _) => false,
@@ -322,7 +322,7 @@ impl Value {
     /// with a `[...]` / `{...}` marker (CPython behavior), never recurses
     /// forever. Depth is capped too, so very deep (non-cyclic) nesting
     /// degrades gracefully instead of exhausting the native stack.
-    /// sec-r5 (F-10): the visited set is NOT unwound on exit — unwinding
+    /// sec-r5 (F-10): the visited set is NOT unwound on exit, unwinding
     /// made DAG-shaped values (l=[l,l] chains) re-walk exponentially (a
     /// 45-deep chain is 2^45 node visits: a live hang). Memoized: a shared
     /// subtree renders once; later references render the cycle marker.
@@ -339,7 +339,7 @@ impl Value {
             Value::Int(i) => i.to_string(),
             Value::Float(f) => format_float(*f),
             Value::Str(s) => format!("\"{}\"", escape_str(s)),
-            // W029: bytes repr mirrors mainstream b"..." spelling — printable
+            // W029: bytes repr mirrors mainstream b"..." spelling, printable
             // ASCII raw, the C escape set short-form, everything else \xNN.
             Value::Bytes(b) => format!("b\"{}\"", escape_bytes(b)),
             Value::List(l) => {
@@ -352,7 +352,7 @@ impl Value {
                     .iter()
                     .map(|v| v.repr_g(seen, depth + 1))
                     .collect();
-                // sec-r5 (F-10): visited id stays — memoized DAG containment
+                // sec-r5 (F-10): visited id stays, memoized DAG containment
                 format!("[{}]", items.join(", "))
             }
             Value::Map(m) => {
@@ -371,7 +371,7 @@ impl Value {
                         )
                     })
                     .collect();
-                // sec-r5 (F-10): visited id stays — memoized DAG containment
+                // sec-r5 (F-10): visited id stays, memoized DAG containment
                 format!("{{{}}}", items.join(", "))
             }
             Value::Gene(d, _) => match &d.name {
@@ -398,7 +398,7 @@ impl Value {
     /// Deep equality (maps order-insensitive). Cycle-safe: identity is
     /// checked first (a structure equals itself), and a pair of containers
     /// already being compared short-circuits to true; depth-capped.
-    /// sec-r5 (F-10): the compared-pair set is NOT unwound on exit — for
+    /// sec-r5 (F-10): the compared-pair set is NOT unwound on exit, for
     /// trees this is invisible (pairs are unique anyway); for DAG-shaped
     /// values it memoizes "this pair already verified equal", keeping the
     /// comparison linear instead of exponential (a 40-deep l=[l,l] twin
@@ -442,7 +442,7 @@ impl Value {
                         .iter()
                         .zip(lb.iter())
                         .all(|(x, y)| x.deep_eq_g(y, seen, depth + 1));
-                // sec-r5 (F-10): pair stays in `seen` — DAG memoization
+                // sec-r5 (F-10): pair stays in `seen`, DAG memoization
                 ok
             }
             (Value::Map(a), Value::Map(b)) => {
@@ -464,13 +464,13 @@ impl Value {
                             k.deep_eq_g(k2, seen, depth + 1) && v.deep_eq_g(v2, seen, depth + 1)
                         })
                     });
-                // sec-r5 (F-10): pair stays in `seen` — DAG memoization
+                // sec-r5 (F-10): pair stays in `seen`, DAG memoization
                 ok
             }
             (Value::Gene(d1, _), Value::Gene(d2, _)) => Arc::ptr_eq(d1, d2),
             (Value::Seq(d1, _), Value::Seq(d2, _)) => Arc::ptr_eq(d1, d2),
             // builder-B parity finding (W34 stage 2, PR #28 pin): instances are
-            // DATA, not handles — equal iff same class name AND deep-equal
+            // DATA, not handles, equal iff same class name AND deep-equal
             // field values. The old Arc::ptr_eq on the shared PhenoDef made
             // any two same-class instances == regardless of their fields
             // (the def pointer identifies the TYPE, not the instance state).
@@ -499,7 +499,7 @@ impl Value {
                             k.deep_eq_g(k2, seen, depth + 1) && v.deep_eq_g(v2, seen, depth + 1)
                         })
                     });
-                // sec-r5 (F-10): pair stays in `seen` — DAG memoization
+                // sec-r5 (F-10): pair stays in `seen`, DAG memoization
                 ok
             }
             // W06: variants are equal iff same tag and payloads are equal;
@@ -608,7 +608,7 @@ pub fn key_scalar(v: &Value) -> Option<Value> {
 }
 
 /// sec-r5 (F-12): true when a map key hits the hash memo (O(1) upsert).
-/// Non-scalar keys fall back to a linear deep_eq scan per operation —
+/// Non-scalar keys fall back to a linear deep_eq scan per operation,
 /// callers charge that scan to the fuel budget.
 pub fn key_is_scalar(v: &Value) -> bool {
     matches!(

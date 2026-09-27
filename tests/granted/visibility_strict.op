@@ -1,7 +1,7 @@
-# W24: strict visibility differential — under .cell modules.visibility=strict
+# W24: strict visibility differential, under .cell modules.visibility=strict
 # the fixture module exports ONLY its pub-marked names. Private names are
 # hidden from BOTH access surfaces: the qualified namespace read and the
-# flat alias binding — both are the SOFT tier (null + note, Total Grammar
+# flat alias binding, both are the SOFT tier (null + note, Total Grammar
 # tier 1), never a crash. The module's own internals keep working because
 # they are module-local (module code calling its own private genes is
 # unaffected by what the export map carries).

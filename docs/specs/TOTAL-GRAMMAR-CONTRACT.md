@@ -1,4 +1,4 @@
-# Total Grammar — semantic contract (W37)
+# Total Grammar, semantic contract (W37)
 
 Operon's defining promise is **nothing you write is ever rejected**. This document makes that
 promise precise, so "accepted" never silently means "silently wrong". Five levels, in order of
@@ -20,7 +20,7 @@ severity. Levels 1–4 always run; level 5 is the only place execution refuses t
 2. **Typos must not become data.** The historical behavior "unknown identifier becomes a
    string" is demoted from silent coercion to a **level-4 semantic warning** (`phantom-word`
    rule, planned): the program still runs (level 1–4 contract), but `check` flags it and
-   `--strict` fails it. Landing the warning requires the oracle-mirrored differential pass —
+   `--strict` fails it. Landing the warning requires the oracle-mirrored differential pass,
    tracked in ROADMAP-100 W37 before any runtime text changes.
 3. **Recovery is deterministic.** Two runs on the same source produce the same notes, byte for
    byte. Repairs never depend on environment or platform.
@@ -38,5 +38,5 @@ severity. Levels 1–4 always run; level 5 is the only place execution refuses t
 | `operon explain f.op` | every repair/recovery, rung names, strict verdict (W38) |
 | `operon check --format diag` | level 4 findings grouped error/warning/repair/style (W41) |
 | `operon lint f.op` | level-4 rule engine front door (W42/W43/W48) |
-| `operon ast f.op` | the post-repair AST — what actually executed (W39) |
+| `operon ast f.op` | the post-repair AST, what actually executed (W39) |
 | `operon-ls` | notes with rung tags as editor diagnostics (W46 continues) |

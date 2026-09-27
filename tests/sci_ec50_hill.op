@@ -1,19 +1,19 @@
-# W093 — Hill dose-response: the EC50 identity + the canonical n=2 curve.
+# W093, Hill dose-response: the EC50 identity + the canonical n=2 curve.
 # SPEC §11: a thresholded activating edge computes its influence as
 #     influence = strength * level^n / (level^n + threshold^n)
-# with per-edge Hill exponent n (default 2 — the classic Hill-Langmuir form).
+# with per-edge Hill exponent n (default 2, the classic Hill-Langmuir form).
 # By construction, level == threshold is the HALF-MAX point: the threshold
 # IS the EC50 (the definition of the half-maximal effective concentration,
-# Alon, "An Introduction to Systems Biology", ch. 2 — Hill-Langmuir input
+# Alon, "An Introduction to Systems Biology", ch. 2, Hill-Langmuir input
 # functions). This file pins the identity and five canonical curve points
 # on the n=2 curve with threshold t = 0.3 (strength 1.0):
 #     level = t/3   -> 1/(1+9)  = 0.1   (10% of max)
 #     level = t/2   -> 1/(1+4)  = 0.2   (Hill-2 quarter point)
-#     level = t     -> 1/(1+1)  = 0.5   (EC50 — the identity)
+#     level = t     -> 1/(1+1)  = 0.5   (EC50, the identity)
 #     level = 2t    -> 4/(4+1)  = 0.8
-#     level = 3t    -> 9/(9+1)  = 0.9   (90% of max — the 10-90 span)
+#     level = 3t    -> 9/(9+1)  = 0.9   (90% of max, the 10-90 span)
 # Tolerance 1e-12 (the same op order as the engine: repeated
-# multiplication, no powi — the W090 IEEE-754 parity contract).
+# multiplication, no powi, the W090 IEEE-754 parity contract).
 # Two surface notes pinned by construction here:
 #  - the network is STATEFUL (levels latch by max across fires), so each
 #    dose point resets the target to 0.0 first and the walk ascends;
@@ -64,7 +64,7 @@ frame proof {
         "dose-response is monotone increasing (10 -> 20 -> 50 -> 80 -> 90)")
 
     # the CALL gate is a separate surface: a thresholded edge vetoes calls
-    # while level(source) < t (T2a) — at level == t the call passes
+    # while level(source) < t (T2a), at level == t the call passes
     grn_set("reg", 0.3)
     assert(target() == "t-OUT", "call gate passes at level == threshold (EC50 gate)")
 }

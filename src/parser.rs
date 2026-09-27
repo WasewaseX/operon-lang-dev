@@ -1,13 +1,13 @@
-//! parser.rs — the Total Grammar parser.
+//! parser.rs, the Total Grammar parser.
 //!
 //! Law: no token stream is rejected. The ladder:
-//!   rung 1 — canonical match
-//!   rung 2 — synonym keywords (noted, repaired)
-//!   rung 3 — wobble: edit-distance repair when a keyword is REQUIRED
-//!   rung 4 — semantic fallback: skip/auto-close/stringify, always noted
+//!   rung 1, canonical match
+//!   rung 2, synonym keywords (noted, repaired)
+//!   rung 3, wobble: edit-distance repair when a keyword is REQUIRED
+//!   rung 4, semantic fallback: skip/auto-close/stringify, always noted
 //!
 //! Keyword repair only happens at positions where a keyword is syntactically
-//! required — identifiers in binding positions are never touched.
+//! required, identifiers in binding positions are never touched.
 
 use crate::ast::*;
 use crate::lexer::{lex, Tok};
@@ -84,14 +84,14 @@ const MARKS: &[&str] = &[
     "burst",
 ];
 
-/// Words that end a `use` path — the alias introducer and statement enders.
+/// Words that end a `use` path, the alias introducer and statement enders.
 fn use_path_boundary(w: &str) -> bool {
     w == "as" || w == "from"
 }
 
 /// W55 (ROADMAP-100): public read-only accessor for the reserved keyword set.
 /// Source of truth stays the `KEYWORDS` table above; generated docs
-/// (docs/KEYWORDS.md) mirror it — never the other way around.
+/// (docs/KEYWORDS.md) mirror it, never the other way around.
 pub fn keyword_list() -> &'static [&'static str] {
     KEYWORDS
 }
@@ -99,14 +99,14 @@ pub fn keyword_list() -> &'static [&'static str] {
 /// W45-v2 (LSP rename): true when `w` cannot be used as a plain identifier.
 /// Composition of the reserved-word surfaces, all read-only:
 ///   - canonical keywords (`KEYWORDS` above),
-///   - mark names (`MARKS` — the `@directive` class),
+///   - mark names (`MARKS`, the `@directive` class),
 ///   - the literal words the grammar reserves (`true`/`false`/`null` and the
 ///     canonicalized `ifnot`),
-///   - the synonym table (`fn`, `var`, `on`, … — a name that repairs into a
+///   - the synonym table (`fn`, `var`, `on`, …, a name that repairs into a
 ///     keyword is not a stable identifier).
 ///
 /// Read-only accessor in the W55 precedent; the tables above stay the single
-/// source of truth. Mirrored in the oracle? No — rename is an editor-side
+/// source of truth. Mirrored in the oracle? No, rename is an editor-side
 /// tool, no differential surface.
 pub fn is_reserved_for_identifier(w: &str) -> bool {
     if KEYWORDS.contains(&w) || MARKS.contains(&w) {
@@ -162,14 +162,14 @@ pub struct Parser {
     /// W074: `##` doc lines (line, text) in source order + consumption cursor.
     docs: Vec<(usize, String)>,
     doc_cursor: usize,
-    /// W074: line of the first non-newline token — a doc block entirely
+    /// W074: line of the first non-newline token, a doc block entirely
     /// above it and not hugging any decl is the module doc.
     first_tok_line: usize,
     module_doc_assigned: bool,
     module_doc: Vec<String>,
     /// W24: top-level names introduced via the contextual `pub` marker
     /// (`pub gene` / `pub let` / `pub const` / `pub phenotype`). `pub` is
-    /// NOT a keyword — an ordinary identifier named `pub` is untouched.
+    /// NOT a keyword, an ordinary identifier named `pub` is untouched.
     pub_names: Vec<String>,
 }
 
@@ -290,7 +290,7 @@ impl Parser {
         t
     }
     fn note(&mut self, line: usize, rung: u8, msg: impl Into<String>) {
-        // sec-r4 (F-3): parse-time notes were uncapped — a 3 MB file of
+        // sec-r4 (F-3): parse-time notes were uncapped, a 3 MB file of
         // syntax errors grew 1.5 M notes (646 MB RSS, 258 MB stderr). Same
         // 10k contract as Interp::note; past the cap, notes are suppressed.
         const PARSE_NOTE_CAP: usize = 10_000;
@@ -299,7 +299,7 @@ impl Parser {
                 self.notes.push(Note {
                     line,
                     rung: 4,
-                    message: "parse note cap (10000) reached — further notes suppressed".into(),
+                    message: "parse note cap (10000) reached, further notes suppressed".into(),
                 });
             }
             return;
@@ -319,7 +319,7 @@ impl Parser {
     // ---- W074: doc-comment attachment ---------------------------------
     /// Consume every doc line above `decl_line`, group them into blocks
     /// (a blank-line gap of 2+ source lines starts a new block), and attach
-    /// the LAST block — but only if it HUGS the declaration (doc line
+    /// the LAST block, but only if it HUGS the declaration (doc line
     /// immediately above the `gene`/`phenotype`/... keyword line). A top
     /// block separated from everything by a blank line and positioned before
     /// the first real token becomes the module doc. Docs are pure metadata:
@@ -427,7 +427,7 @@ impl Parser {
                 continue;
             }
             let before = self.pos;
-            // W24: contextual `pub` visibility marker — `pub gene` / `pub let`
+            // W24: contextual `pub` visibility marker, `pub gene` / `pub let`
             // / `pub const` / `pub phenotype` at TOP LEVEL records the name
             // for strict-mode export filtering. `pub` is not a keyword: an
             // identifier named `pub` (or `pub` in any other position) parses
@@ -479,12 +479,12 @@ impl Parser {
         match self.peek().clone() {
             Tok::Mark(m) => {
                 let line = self.line();
-                // W074: docs hug the whole declaration — above the marks.
+                // W074: docs hug the whole declaration, above the marks.
                 let doc = self.take_doc(line);
                 self.next();
                 let mark = self.repair_mark(m, line)?;
                 let mut marks = vec![mark];
-                // allow stacked marks — with newlines/semis between them
+                // allow stacked marks, with newlines/semis between them
                 // (loop-9: the dx-r6 newline bridge now applies BETWEEN
                 // marks too, so `@acetylate\n@riboswitch … gene` stacks)
                 loop {
@@ -521,7 +521,7 @@ impl Parser {
                         }
                     }
                 }
-                // loop-9 (F-5): `@riboswitch ligand off|on threshold t` — a
+                // loop-9 (F-5): `@riboswitch ligand off|on threshold t`, a
                 // cis aptamer on this gene's own transcript. `off` class:
                 // bound => terminator hairpin => OFF. `on` class: bound =>
                 // RBS exposed => ON. threshold optional (default 0.5).
@@ -581,7 +581,7 @@ impl Parser {
                         riboswitch = Some((lig, on, threshold));
                     }
                 }
-                // loop-9 (F-2): `@burst kon koff` — per-gene promoter
+                // loop-9 (F-2): `@burst kon koff`, per-gene promoter
                 // identity (two numbers, clamped 0..=1).
                 let mut burst: Option<(f64, f64)> = None;
                 if marks.iter().any(|m| m == "burst") {
@@ -612,8 +612,8 @@ impl Parser {
                     }
                     burst = Some((vals[0], vals[1]));
                 }
-                // dx-r6 (loop-5-a audit MED): an own-line mark —
-                //   @acetylate\ngene foo() —
+                // dx-r6 (loop-5-a audit MED): an own-line mark,
+                //   @acetylate\ngene foo(),
                 // never reached `gene`: the newline between mark and keyword
                 // wasn't eaten, the mark was dropped with a rung-4 note, and
                 // the same code silently changed regulation semantics vs its
@@ -678,7 +678,7 @@ impl Parser {
     fn parse_word_stmt(&mut self, w: &str) -> Option<Stmt> {
         // Statement-arm keywords: only these accept rung-2/3 repair. A bare
         // identifier that repairs to a NON-statement word (e.g. `n` → `in`)
-        // keeps its original spelling — binding positions are never repaired.
+        // keeps its original spelling, binding positions are never repaired.
         const ARMS: &[&str] = &[
             "gene",
             "let",
@@ -721,7 +721,7 @@ impl Parser {
         ];
         let mut word = w.to_string();
         // Expression-head detection: `i += 1`, `x = 2`, `f(...)`, `a[0]`,
-        // `s.trim()` — a word followed by these cannot be a keyword position,
+        // `s.trim()`, a word followed by these cannot be a keyword position,
         // so rung-2/3 repair is suppressed (protects short variable names
         // like `i` from repairing to `if`).
         let t1 = self.toks.get(self.pos + 1).map(|t| t.0.clone());
@@ -839,7 +839,7 @@ impl Parser {
                                     }
                                 }
                                 if matches!(self.peek(), Tok::LBrace) {
-                                    // default method: body parsed HERE — the
+                                    // default method: body parsed HERE, the
                                     // head (name + params) was already
                                     // consumed manually above, so parse_gene_def
                                     // would mis-parse from the brace.
@@ -899,7 +899,7 @@ impl Parser {
                 })))
             }
             "const" => {
-                // W05: `const NAME = expr` — immutable binding with deep-freeze
+                // W05: `const NAME = expr`, immutable binding with deep-freeze
                 // semantics (SPEC §7d). Destructuring degrades to a plain let
                 // (Total Grammar: degrade, never reject); a type annotation is
                 // parsed and dropped with a note (v1 scope).
@@ -946,7 +946,7 @@ impl Parser {
             }
             "let" => {
                 self.next();
-                // W05: contextual `mut` annotation — `let mut x = ...` is
+                // W05: contextual `mut` annotation, `let mut x = ...` is
                 // documentation-only in v2.x; consumed silently when `mut` is
                 // followed by the real name (so a variable literally named
                 // `mut` keeps working: `let mut = 5`).
@@ -955,7 +955,7 @@ impl Parser {
                         self.next();
                     }
                 }
-                // L1a: destructuring definitions — `let [a, b] = e`,
+                // L1a: destructuring definitions, `let [a, b] = e`,
                 // `let {x, y} = e` (patterns nest; `*rest` captures the tail).
                 if matches!(self.peek(), Tok::LBrack | Tok::LBrace) {
                     let pat = self.parse_destructure_pat();
@@ -971,7 +971,7 @@ impl Parser {
                     return Some(Stmt::LetPat(pat, Expr::Null));
                 }
                 let name = self.expect_ident()?;
-                // W01 (L2c): soft type annotation — `let n: int = 3`
+                // W01 (L2c): soft type annotation, `let n: int = 3`
                 if matches!(self.peek(), Tok::Colon) {
                     self.next();
                     let ann = self.parse_type_ann();
@@ -990,7 +990,7 @@ impl Parser {
                     self.end_stmt();
                     return Some(Stmt::LetAnn(name, ann, Expr::Null));
                 }
-                // L1a: `let a, b = 1, 2` — multi-define (all values evaluated
+                // L1a: `let a, b = 1, 2`, multi-define (all values evaluated
                 // before any name binds).
                 if matches!(self.peek(), Tok::Comma) {
                     let mut names = vec![name];
@@ -1077,7 +1077,7 @@ impl Parser {
             }
             "for" => {
                 self.next();
-                // L1a: destructuring loop target — `for [k, v] in pairs { }`.
+                // L1a: destructuring loop target, `for [k, v] in pairs { }`.
                 if matches!(self.peek(), Tok::LBrack | Tok::LBrace) {
                     let pat = self.parse_destructure_pat();
                     if !self.expect_kw("in") {
@@ -1216,7 +1216,7 @@ impl Parser {
                     self.next();
                     to = Some(self.expect_ident()?);
                 }
-                // reg-bio-3 (C9): stoichiometric RISC — `strength s` is the
+                // reg-bio-3 (C9): stoichiometric RISC, `strength s` is the
                 // per-site capture probability; `sites n` composes
                 // multiplicatively. Omitted = legacy binary silence.
                 let mut strength = 1.0;
@@ -1426,7 +1426,7 @@ impl Parser {
                             Tok::Ident(from) => {
                                 self.next();
                                 // reg-bio-2 (C1): `a translates b rate r decay d;`
-                                // — the translation layer. Not a cis-gate: a
+                                //, the translation layer. Not a cis-gate: a
                                 // production relation (mRNA -> protein).
                                 if self.expect_kw("translates") {
                                     let to = self.expect_ident().unwrap_or_default();
@@ -1478,7 +1478,7 @@ impl Parser {
                                     continue;
                                 }
                                 // reg-bio-2 (A4): `bind tf inducer lg k v;` /
-                                // `bind tf cofactor lg k v;` — allostery. The
+                                // `bind tf cofactor lg k v;`, allostery. The
                                 // binding modulates the TF's DNA-available
                                 // fraction at every regulation read. `bind` is
                                 // a HEAD keyword here (no edge source): the
@@ -1531,7 +1531,7 @@ impl Parser {
                                     self.end_stmt();
                                     continue;
                                 }
-                                // reg-bio-2 (A5): per-edge attenuator flag —
+                                // reg-bio-2 (A5): per-edge attenuator flag,
                                 // taken by the next edge build (std::mem::take).
                                 let mut attenuating = false;
                                 let inhibit = if self.expect_kw("activates") {
@@ -1539,7 +1539,7 @@ impl Parser {
                                 } else if self.expect_kw("inhibits") {
                                     true
                                 } else if self.expect_kw("attenuates") {
-                                    // reg-bio-2 (A5/C7): RNA-level attenuation —
+                                    // reg-bio-2 (A5/C7): RNA-level attenuation,
                                     // veto mechanics of an inhibitor, RNA-level
                                     // report, fire-phase inhibition.
                                     attenuating = true;
@@ -1572,7 +1572,7 @@ impl Parser {
                                         }
                                     }
                                     // reg-bio-2 (D2c): a strength is a binding
-                                    // weight, not an amplifier — clamped to the
+                                    // weight, not an amplifier, clamped to the
                                     // physical range and the propagation write
                                     // clamps influence at 1.0. Legacy programs
                                     // (0..=1) are untouched; out-of-range gets
@@ -1645,7 +1645,7 @@ impl Parser {
                                 if self.expect_kw("any") {
                                     any_edge = true;
                                 }
-                                // reg-bio-2 (D2b): optional occupancy repression —
+                                // reg-bio-2 (D2b): optional occupancy repression,
                                 // the multiplicative Kⁿ/(Kⁿ+Rⁿ) survival form.
                                 // Canonical edge order:
                                 //   strength -> threshold -> hill -> any -> occupy -> sum
@@ -1727,7 +1727,7 @@ impl Parser {
                 }
                 Some(Stmt::Regulate(edges, trans, binds))
             }
-            // reg-bio-2 (A4): `ligand iptg;` — a small-molecule pool. The
+            // reg-bio-2 (A4): `ligand iptg;`, a small-molecule pool. The
             // pool's level is set with ligand_set(name, v) or the `.cell
             // [ligand.<name>]` bath config, and a ligand named as an edge
             // source gates calls directly (riboswitch-style, protein-free).
@@ -1737,7 +1737,7 @@ impl Parser {
                 self.end_stmt();
                 Some(Stmt::Ligand(name))
             }
-            // loop-9 (C8): `autoinducer ahl;` — register a quorum-sensing
+            // loop-9 (C8): `autoinducer ahl;`, register a quorum-sensing
             // signal species into the process-global shared medium.
             // Idempotent; secrete() auto-registers too (ligand_set precedent).
             "autoinducer" => {
@@ -1746,7 +1746,7 @@ impl Parser {
                 self.end_stmt();
                 Some(Stmt::Autoinducer(name))
             }
-            // reg-bio-2 (C11): `decoy d for tf capacity 0.5;` — a decoy
+            // reg-bio-2 (C11): `decoy d for tf capacity 0.5;`, a decoy
             // binding site that titrates its regulator (competitive
             // sequestration: free TF = total − capacity × decoy level).
             "decoy" => {
@@ -1784,12 +1784,12 @@ impl Parser {
                 self.end_stmt();
                 Some(Stmt::Decoy(d, tf, cap))
             }
-            // reg-bio-3 (A1/A7): the polycistronic transcription unit —
+            // reg-bio-3 (A1/A7): the polycistronic transcription unit,
             // `operon lac { lacZ rbs 1.0; lacY rbs 0.6; lacA; }`. ONE
             // promoter drives N cistrons on ONE transcript; member ORDER is
             // load-bearing (RBS gradient + polarity exposure). `rbs` is the
             // per-cistron translation efficiency (Shine-Dalgarno strength,
-            // clamped 0..=1, default 1.0) — distinct from edge `strength`,
+            // clamped 0..=1, default 1.0), distinct from edge `strength`,
             // which is a binding weight.
             "operon" => {
                 self.next();
@@ -1889,7 +1889,7 @@ impl Parser {
                         _ => {}
                     }
                 }
-                // reg-bio (F-5): inline kinetics — plasmid engineering in
+                // reg-bio (F-5): inline kinetics, plasmid engineering in
                 // source. Canonical order: alpha, gamma, hill, basal, noise,
                 // seed; each keyword optional, each layers onto the current
                 // params (last declaration wins per-field).
@@ -2032,7 +2032,7 @@ impl Parser {
             "splice" => {
                 self.next();
                 let splice_line = self.line();
-                // W074: capture at arm start — variant genes' take_doc calls
+                // W074: capture at arm start, variant genes' take_doc calls
                 // must not steal the splice's own doc block.
                 let splice_doc = self.take_doc(splice_line);
                 let root = self.expect_ident()?;
@@ -2084,7 +2084,7 @@ impl Parser {
                                 self.next();
                                 let vname = self.expect_ident().unwrap_or_else(|| "v".into());
                                 // T2c: drain pending marks into the variant's
-                                // GeneDef — @m6a gives the variant selection
+                                // GeneDef, @m6a gives the variant selection
                                 // priority (choose_variant step 3); @acetylate
                                 // and @methylate ride on the resolved binding.
                                 let vmarks = std::mem::take(&mut pending_marks);
@@ -2229,7 +2229,7 @@ impl Parser {
             "phenotype" => {
                 self.next();
                 let pheno_line = self.line();
-                // W074: capture at arm start — inner method genes' take_doc
+                // W074: capture at arm start, inner method genes' take_doc
                 // calls must not steal the phenotype's own doc block.
                 let pheno_doc = self.take_doc(pheno_line);
                 let name = self.expect_ident()?;
@@ -2238,7 +2238,7 @@ impl Parser {
                     self.next();
                     parent = Some(self.expect_ident().unwrap_or_default());
                 }
-                // W04: optional `implements A, B, C` — the trait contract.
+                // W04: optional `implements A, B, C`, the trait contract.
                 // Contextual word (not a keyword): an ident named implements
                 // elsewhere is untouched.
                 let mut implements = Vec::new();
@@ -2381,7 +2381,7 @@ impl Parser {
             }
             _ => {
                 // bare-name definition: `main { ... }` and `route(req) { ... }`
-                // are gene definitions — the C-like entry/route idiom.
+                // are gene definitions, the C-like entry/route idiom.
                 // Lookahead: NAME '{' or NAME '(' ... ')' '{' (a plain call
                 // like `promote(x)` is followed by other tokens, not '{').
                 let is_def = {
@@ -2423,7 +2423,7 @@ impl Parser {
                     let line = self.line();
                     // dx-r3 (re-audit): bare `main { }` is the community's
                     // most common top-level form and the formatter's own
-                    // output style — it is canonical sugar (rung 1), not a
+                    // output style, it is canonical sugar (rung 1), not a
                     // repair. Other bare-name blocks stay rung 4.
                     let (rung, msg) = if word == "main" {
                         (
@@ -2498,7 +2498,7 @@ impl Parser {
     fn parse_use_path(&mut self) -> String {
         // path := segment (('/' | '.' | '-' | '::') segment)* ; segments are
         // plain identifiers. A boundary word ('as', statement keyword, etc.)
-        // ends the path — it is never glued into it. W25: `::` is the
+        // ends the path, it is never glued into it. W25: `::` is the
         // Rust-style separator, sugar for '/' (`use bio::sequence` =
         // `use bio/sequence`) so namespaces read like mainstream module paths.
         let mut cur = String::new();
@@ -2631,7 +2631,7 @@ impl Parser {
                         }
                     }
                     Tok::Comma if Self::is_assign_target(&e) => {
-                        // L1a: multiple assignment / swap — `a, b = b, a`,
+                        // L1a: multiple assignment / swap, `a, b = b, a`,
                         // `m.k, l[0] = x, y`. Parse the rest of the target
                         // list, require '=', then the RHS list (RHS is fully
                         // evaluated before any target is assigned). If no '='
@@ -2723,9 +2723,9 @@ impl Parser {
         matches!(e, Expr::Ident(_) | Expr::Index(..) | Expr::Member(..))
     }
 
-    /// W01 (L2c): type-annotation grammar — `name` (a type name), `name?`
+    /// W01 (L2c): type-annotation grammar, `name` (a type name), `name?`
     /// (optional), `a | b | ...` (union). Total Grammar: a malformed
-    /// annotation degrades to `any` with a note — never a rejection.
+    /// annotation degrades to `any` with a note, never a rejection.
     fn parse_type_ann(&mut self) -> TypeAnn {
         let first = self.parse_type_ann_atom();
         if matches!(self.peek(), Tok::Pipe) {
@@ -2767,7 +2767,7 @@ impl Parser {
         }
     }
 
-    /// L1a: destructuring pattern — `[a, b]`, `[head, *rest]`, `{x, y}`,
+    /// L1a: destructuring pattern, `[a, b]`, `[head, *rest]`, `{x, y}`,
     /// nested list patterns. Soft Total Grammar: unclosed brackets are
     /// auto-closed with a note; garbage elements bind wildcards.
     fn parse_destructure_pat(&mut self) -> Pat {
@@ -2871,7 +2871,7 @@ impl Parser {
         burst: Option<(f64, f64)>,
         doc: Vec<String>,
     ) -> Stmt {
-        // A13 (dx-r2): the def keyword's line — every definition-borne
+        // A13 (dx-r2): the def keyword's line, every definition-borne
         // runtime note (gates, silencing) points here.
         let def_line = self.line();
         let acetylate = marks.iter().any(|m| m == "acetylate");
@@ -2901,7 +2901,7 @@ impl Parser {
                 }
                 let before = self.pos;
                 let pname = self.expect_ident().unwrap_or_default();
-                // W01 (L2c): parameter annotation — `gene f(x: int) { }`
+                // W01 (L2c): parameter annotation, `gene f(x: int) { }`
                 let ann = if matches!(self.peek(), Tok::Colon) {
                     self.next();
                     Some(self.parse_type_ann())
@@ -2920,7 +2920,7 @@ impl Parser {
                     self.next();
                 }
                 if self.pos == before {
-                    // no progress: non-parameter token inside the signature —
+                    // no progress: non-parameter token inside the signature,
                     // auto-close instead of spinning (Total Grammar recovery)
                     let line = self.line();
                     self.note(line, 4, "unclosed parameter list; auto-closed");
@@ -2928,7 +2928,7 @@ impl Parser {
                 }
             }
         }
-        // W01 (L2c): return annotation — `gene f(x) -> int { }` (Tok::Arrow,
+        // W01 (L2c): return annotation, `gene f(x) -> int { }` (Tok::Arrow,
         // parsed before the uORF guard clause).
         let ret_ann = if matches!(self.peek(), Tok::Arrow) {
             self.next();
@@ -3086,7 +3086,7 @@ impl Parser {
         left
     }
 
-    /// L1a: `a ?? b` — sits between `or` and `and` so `a or b ?? c` reads as
+    /// L1a: `a ?? b`, sits between `or` and `and` so `a or b ?? c` reads as
     /// `a or (b ?? c)`. Associative, so a left-assoc loop is fine.
     fn parse_nullish(&mut self) -> Expr {
         let mut left = self.parse_and();
@@ -3246,7 +3246,7 @@ impl Parser {
     }
 
     fn parse_unary(&mut self) -> Expr {
-        // unary chains (`------x` ×1M) recurse natively — same depth cap as
+        // unary chains (`------x` ×1M) recurse natively, same depth cap as
         // paren/list nesting (S4 NEW-4)
         if self.depth >= 4096 {
             let line = self.line();
@@ -3386,7 +3386,7 @@ impl Parser {
                     }
                 }
                 Tok::QuestionDot => {
-                    // L1a: `a?.k` / `a?.k(args)` — null-safe member access.
+                    // L1a: `a?.k` / `a?.k(args)`, null-safe member access.
                     self.next();
                     match self.peek().clone() {
                         Tok::Ident(m) => {
@@ -3429,7 +3429,7 @@ impl Parser {
                     }
                 }
                 Tok::QuestionBang => {
-                    // W06 (D-014): `e?!` — Option/Result propagation, a
+                    // W06 (D-014): `e?!`, Option/Result propagation, a
                     // postfix operator (binds tighter than every binary op,
                     // repeats: Some(Some(x))?!?! unwraps twice).
                     let line = self.line();
@@ -3467,7 +3467,7 @@ impl Parser {
             }
             Tok::LParen => {
                 // nesting cap: a million-deep `((((…` must not exhaust the
-                // native stack (Critic-X rt_p1c3) — truncate as a rung-4 note
+                // native stack (Critic-X rt_p1c3), truncate as a rung-4 note
                 if self.depth >= 4096 {
                     let line = self.line();
                     self.note(line, 4, "expression nested deeper than 4096; truncated");
@@ -3567,7 +3567,7 @@ impl Parser {
                     }
                     "null" | "nil" | "nothing" => {
                         // W06 (D-014): 'none' was RETIRED from the null-synonym
-                        // set — it is now the Option constructor (none()). Bare
+                        // set, it is now the Option constructor (none()). Bare
                         // 'none' degrades to an unbound ident (phantom note),
                         // never a silent null.
                         if w != "null" {
@@ -3802,7 +3802,7 @@ impl Parser {
 
     /// W02 (match-v2) pattern grammar:
     ///   pattern  := atom ( '|' atom )*            (or-pattern, first hit binds)
-    ///             | pattern 'if' expr             (guard — sees the bindings)
+    ///             | pattern 'if' expr             (guard, sees the bindings)
     ///   atom     := literal | '_' | ident        (legacy forms, unchanged)
     ///             | 'Some'/'None'/'Ok'/'Err' [ '(' pattern ')' ]
     ///             | '[' pattern,... [ '*' ident ] ']'
@@ -3810,10 +3810,10 @@ impl Parser {
     /// Legacy literal comma-runs (`case 1, 2 =>`) keep their Multi shape and
     /// their legacy edge behavior byte-for-byte; everything new hangs off the
     /// atom/`|`/`if` rules. Total Grammar: a malformed pattern degrades to a
-    /// wildcard/bind with a note — never a rejection.
+    /// wildcard/bind with a note, never a rejection.
     fn parse_pattern(&mut self) -> MatchPat {
         let first = self.parse_pat_atom();
-        // Legacy literal comma-run — only for a leading literal, preserving
+        // Legacy literal comma-run, only for a leading literal, preserving
         // the pre-W02 shape (`case 1, 2 =>` → Multi) and edge behavior
         // (a non-literal in the run discards the collected literals).
         let leading_lit = match &first {
@@ -3870,7 +3870,7 @@ impl Parser {
                 };
             }
         }
-        // Or-pattern chain: `p1 | p2 | ...` — newlines are allowed before
+        // Or-pattern chain: `p1 | p2 | ...`, newlines are allowed before
         // any alternative (multi-line chains), before the guard check, and
         // nowhere else. Eating them here is safe: an arm body always starts
         // with `{` or `=>`, never with `|`/`if`.
@@ -3890,7 +3890,7 @@ impl Parser {
         } else {
             first
         };
-        // Guarded arm: `pat if cond` — applies to the WHOLE or-chain (the
+        // Guarded arm: `pat if cond`, applies to the WHOLE or-chain (the
         // condition sees whichever alternative won).
         if self.at_kw("if") {
             self.next();
@@ -3957,7 +3957,7 @@ impl Parser {
                         self.note(
                             line,
                             4,
-                            "empty variant payload pattern — treated as tag-only",
+                            "empty variant payload pattern, treated as tag-only",
                         );
                         None
                     } else {
@@ -3994,7 +3994,7 @@ impl Parser {
                 self.note(
                     line,
                     4,
-                    format!("unknown variant tag '{w}' — pattern treated as a binding"),
+                    format!("unknown variant tag '{w}', pattern treated as a binding"),
                 );
                 self.next();
                 if matches!(self.peek(), Tok::LParen) {

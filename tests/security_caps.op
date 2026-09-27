@@ -1,4 +1,4 @@
-# differential: capability sandbox — default-deny, catchable interference
+# differential: capability sandbox, default-deny, catchable interference
 frame proof {
     stress {
         let t = read_file("/etc/passwd")
@@ -24,7 +24,7 @@ frame proof {
     } rescue (e) {
         assert(e.kind == "interference")
     }
-    # substrate-r1: the py bridge joins default-deny — module granularity
+    # substrate-r1: the py bridge joins default-deny, module granularity
     stress {
         py("math", "sqrt", [2])
         assert(false)

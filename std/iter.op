@@ -1,4 +1,4 @@
-# std/iter — self-hosted iteration and higher-order utilities.
+# std/iter, self-hosted iteration and higher-order utilities.
 # Written in Operon, for Operon: the library layer grows the language itself.
 
 gene take(seq, n) {

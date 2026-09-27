@@ -1,4 +1,4 @@
-//! ls.rs — operon-ls language-server core (G5 seed).
+//! ls.rs, operon-ls language-server core (G5 seed).
 //!
 //! Pure analysis logic, unit-testable: `analyze` parses an editor buffer and
 //! produces diagnostics (Total Grammar parse notes + phantom calls from the
@@ -6,7 +6,7 @@
 //! textDocument/hover with a gene signature. The stdio JSON-RPC loop lives in
 //! `src/bin/operon-ls.rs`.
 //!
-//! Positions are LSP-style 0-based (line, UTF-16-free character columns —
+//! Positions are LSP-style 0-based (line, UTF-16-free character columns,
 //! the seed counts chars, which is exact for ASCII sources and close enough
 //! for the seed elsewhere).
 
@@ -27,13 +27,13 @@ pub struct Diagnostic {
     /// LSP severity: 1 error, 2 warning, 3 information, 4 hint.
     pub severity: u8,
     pub message: String,
-    /// W46: repair provenance — what the interpreter decided the token meant
+    /// W46: repair provenance, what the interpreter decided the token meant
     /// (canonical form + rung). Empty when nothing was repaired (phantoms,
     /// canonical teaching notes). Serialized as LSP relatedInformation.
     pub related: Vec<Related>,
 }
 
-/// W46: one repair-provenance entry — the span it applies to (same range as
+/// W46: one repair-provenance entry, the span it applies to (same range as
 /// the diagnostic in practice) and the canonical interpretation.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Related {
@@ -139,8 +139,8 @@ fn line_char_is_id(l: &str, idx: usize) -> bool {
 
 /// W46: extract the canonical token a repair note names. Covers the three
 /// repair phrasings the parser emits today:
-///   rung 2 — `synonym 'x' repaired to 'y'`
-///   rung 3 — `wobble: 'x' repaired to keyword 'y'` / `wobble: '@x' repaired to '@y'`
+///   rung 2, `synonym 'x' repaired to 'y'`
+///   rung 3, `wobble: 'x' repaired to keyword 'y'` / `wobble: '@x' repaired to '@y'`
 /// Rung-4 fallbacks name no canonical form ("unmatched '}' skipped") → None.
 fn canonical_from(msg: &str) -> Option<String> {
     for (pat, strip_at) in [
@@ -184,7 +184,7 @@ fn note_to_diagnostic(src: &str, n: &Note) -> Diagnostic {
     }
     let (col, len) = pick_span(line_text, target.as_deref());
     // W46: repair rungs (2 synonym, 3 wobble, 4+ fallback) carry provenance;
-    // rung-1 notes are canonical teaching notes — nothing was repaired.
+    // rung-1 notes are canonical teaching notes, nothing was repaired.
     let related = if n.rung >= 2 {
         match canonical_from(&n.message) {
             Some(canon) => vec![Related {
@@ -198,7 +198,7 @@ fn note_to_diagnostic(src: &str, n: &Note) -> Diagnostic {
                 col,
                 len,
                 message: format!(
-                    "parsed under fault tolerance ({} rung) — no canonical form",
+                    "parsed under fault tolerance ({} rung), no canonical form",
                     rung_label(n.rung)
                 ),
             }],
@@ -250,7 +250,7 @@ pub fn analyze(src: &str) -> LsDoc {
 }
 
 /// lsp-r1 (P0): analyze with the document's own directory as the first
-/// `use`-module search base — editors launch servers from arbitrary CWDs,
+/// `use`-module search base, editors launch servers from arbitrary CWDs,
 /// and module resolution must not depend on the process CWD.
 pub fn analyze_doc(src: &str, base_dir: Option<&str>) -> LsDoc {
     let mut doc = LsDoc::default();
@@ -310,7 +310,7 @@ pub fn analyze_doc(src: &str, base_dir: Option<&str>) -> LsDoc {
                 "phantom call: '{}' is called but not defined in this file (check)",
                 p
             ),
-            related: Vec::new(), // a phantom is not a repair — no provenance
+            related: Vec::new(), // a phantom is not a repair, no provenance
         };
         for (i, l) in src.lines().enumerate() {
             if let Some(pos) = l.find(p.as_str()) {
@@ -331,7 +331,7 @@ pub fn analyze_doc(src: &str, base_dir: Option<&str>) -> LsDoc {
     doc
 }
 
-/// W46: the repair provenance covering (line0, col0), if any — a diagnostic
+/// W46: the repair provenance covering (line0, col0), if any, a diagnostic
 /// whose span contains the position AND carries related entries.
 fn repair_at(doc: &LsDoc, line0: usize, col0: usize) -> Option<&Related> {
     doc.diagnostics
@@ -345,7 +345,7 @@ fn repair_at(doc: &LsDoc, line0: usize, col0: usize) -> Option<&Related> {
 /// Hover text (markdown) for the word under the cursor, per D-008:
 /// programmer-first, gene vocabulary as intuition aid, never a prerequisite.
 /// W46: hovering a repaired token shows what the interpreter decided it
-/// meant — provenance first, so the editor and the parser never disagree
+/// meant, provenance first, so the editor and the parser never disagree
 /// silently.
 pub fn hover(src: &str, doc: &LsDoc, line0: usize, col0: usize) -> Option<String> {
     let line = src.lines().nth(line0)?;
@@ -384,7 +384,7 @@ pub fn hover(src: &str, doc: &LsDoc, line0: usize, col0: usize) -> Option<String
             format!("\n\n----\n{}", g.doc.join("\n"))
         };
         return Some(format!(
-            "```operon\n{}\n```{}\n\ngene — Operon's named function (a callable unit of expression). \
+            "```operon\n{}\n```{}\n\ngene, Operon's named function (a callable unit of expression). \
 Calls may be gated by GRN thresholds, methylation, or toggle state (SPEC §11).{}{}",
             sig, doc_block, def, provenance
         ));
@@ -401,7 +401,7 @@ Calls may be gated by GRN thresholds, methylation, or toggle state (SPEC §11).{
             .map(|l| format!("\n\ndeclared at line {}", l + 1))
             .unwrap_or_default();
         return Some(format!(
-            "```operon\nsplice {} {{ {} }}\n```\n\nsplice — a dispatch group: the call `{}(...)` runs the \
+            "```operon\nsplice {} {{ {} }}\n```\n\nsplice, a dispatch group: the call `{}(...)` runs the \
 active variant (selection: .cell > CLI > @m6a > first declared).{}",
             sp.root, variants, sp.root, def
         ));
@@ -414,7 +414,7 @@ active variant (selection: .cell > CLI > @m6a > first declared).{}",
         ));
     }
 
-    // W46: not a gene/splice/builtin — but if the parser repaired this token
+    // W46: not a gene/splice/builtin, but if the parser repaired this token
     // (e.g. `retrn` → `return`, a synonym like `var`), hover answers with the
     // provenance instead of an empty null. The editor and the interpreter
     // then agree in one view.
@@ -428,7 +428,7 @@ active variant (selection: .cell > CLI > @m6a > first declared).{}",
     None
 }
 
-/// lsp-r1: textDocument/definition — the location of the definition of the
+/// lsp-r1: textDocument/definition, the location of the definition of the
 /// word under the cursor. Returns (line, col, len), 0-based line, of the
 /// `gene NAME` / `seq NAME` / `splice NAME` site. Builtins and unknown
 /// words resolve to None (the editor keeps the cursor).
@@ -464,7 +464,7 @@ pub fn definition(
     Some((dl, col, word.chars().count()))
 }
 
-/// W45: textDocument/references — every word-boundary occurrence of the
+/// W45: textDocument/references, every word-boundary occurrence of the
 /// identifier under the cursor, declaration included (includeDeclaration:
 /// true by LSP default). Grep-class by design (the ROADMAP-100 spec): span-
 /// accurate, single-file, no second parse. Mentions inside comments and
@@ -493,11 +493,11 @@ pub fn references(
     )
 }
 
-/// W45-v2: textDocument/prepareRename — the renamable span under the cursor.
+/// W45-v2: textDocument/prepareRename, the renamable span under the cursor.
 /// Returns (line, col, len, placeholder) or None when the position cannot be
 /// renamed. Refusals (all honest, all one-line-reasonable in the editor):
 ///   - the cursor is not on a code identifier (strings/comments/`@marks`
-///     never answer — `word_at` reads the raw line, the scan confirms code),
+///     never answer, `word_at` reads the raw line, the scan confirms code),
 ///   - the word is a keyword, literal, synonym, mark name or builtin:
 ///     exactly one of each exists, so renaming one is a language change,
 ///     not an edit (the W67 refusal discipline, editor-shaped).
@@ -514,7 +514,7 @@ pub fn prepare_rename(
     let word_of =
         |l: usize, c: usize, len: usize| -> String { lines[l][c..c + len].iter().collect() };
     // The cursor may sit anywhere inside the span (editors send the exact
-    // position; `word_at` also tolerates one-past-the-end — both accepted).
+    // position; `word_at` also tolerates one-past-the-end, both accepted).
     let span = scan_code_identifiers(src)
         .into_iter()
         .find(|&(l, c, len)| {
@@ -528,15 +528,15 @@ pub fn prepare_rename(
     Some((line0, span.1, span.2, word))
 }
 
-/// W45-v2: textDocument/rename — grep-class rename under the W67 discipline.
+/// W45-v2: textDocument/rename, grep-class rename under the W67 discipline.
 /// Same engine as references (zero drift between the two features): every
-/// code occurrence of the identifier under the cursor — declaration included,
-/// strings/comments/marks excluded, interpolated expressions included —
+/// code occurrence of the identifier under the cursor, declaration included,
+/// strings/comments/marks excluded, interpolated expressions included,
 /// becomes one TextEdit in a same-file WorkspaceEdit.
 ///
 /// All-or-nothing (the `operon rna` rule, editor-shaped): an invalid,
 /// reserved, builtin-target or already-taken new name refuses the WHOLE
-/// rename with an error — a partial rename that silently merges bindings
+/// rename with an error, a partial rename that silently merges bindings
 /// is the one outcome this must never produce. Identifier-precise, not
 /// scope-aware, like W67's rename; `operon check` after rename is cheap
 /// and catches a shadowing surprise the honest docs tell you about.
@@ -570,17 +570,17 @@ pub fn rename(
     }
     if crate::interp::BUILTIN_NAMES.contains(&new_name) {
         return Err(format!(
-            "'{}' is a builtin — renaming onto a builtin is refused",
+            "'{}' is a builtin, renaming onto a builtin is refused",
             new_name
         ));
     }
     // 2. The old name must be renameable (one engine: prepareRename's rules).
     let (_, _, _, word) = prepare_rename(src, doc, line0, col0)
         .ok_or_else(|| "cursor is not on a renameable identifier".to_string())?;
-    // 3. All-or-nothing: the target name must be free in this file — and a
+    // 3. All-or-nothing: the target name must be free in this file, and a
     // same-name "rename" is refused up front with its own honest reason.
     if new_name == word {
-        return Err("new name equals the current name — nothing to do".into());
+        return Err("new name equals the current name, nothing to do".into());
     }
     let lines: Vec<Vec<char>> = src.lines().map(|l| l.chars().collect()).collect();
     let taken = scan_code_identifiers(src)
@@ -592,7 +592,7 @@ pub fn rename(
         .count();
     if taken > 0 {
         return Err(format!(
-            "'{}' already occurs {} time(s) in this file — renaming would merge unrelated bindings",
+            "'{}' already occurs {} time(s) in this file, renaming would merge unrelated bindings",
             new_name, taken
         ));
     }
@@ -603,7 +603,7 @@ pub fn rename(
 /// Scanner states for the code-identifier walk. Mirrors the lexer's string
 /// rules exactly (plain strings span lines and process escapes with live
 /// `{..}` interpolation; `"""` triples are verbatim with a post-pass interp
-/// scan where escaped braces still count — the lexer quirk; `r"..."` raw
+/// scan where escaped braces still count, the lexer quirk; `r"..."` raw
 /// strings are verbatim to the closing quote).
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ScanState {
@@ -613,7 +613,7 @@ enum ScanState {
     RawStr,
 }
 
-/// W45: the shared code-identifier scanner — the ONE engine behind
+/// W45: the shared code-identifier scanner, the ONE engine behind
 /// references, prepareRename and rename (zero drift between features).
 /// Walks the whole document and returns every plain-identifier occurrence
 /// in CODE as (line, col, len):
@@ -662,7 +662,7 @@ fn scan_code_identifiers(src: &str) -> Vec<(usize, usize, usize)> {
                         continue;
                     }
                     if c == '@' && j + 1 < chars.len() && is_id(chars[j + 1]) {
-                        // @mark: the directive is one token class — its name
+                        // @mark: the directive is one token class, its name
                         // is not a plain-identifier occurrence
                         j += 1;
                         while j < chars.len() && is_id(chars[j]) {
@@ -714,7 +714,7 @@ fn scan_code_identifiers(src: &str) -> Vec<(usize, usize, usize)> {
                 }
                 ScanState::TripleStr => {
                     // mirrors the lexer: escapes processed to literal chars,
-                    // then the post-pass brace scan sees the PROCESSED text —
+                    // then the post-pass brace scan sees the PROCESSED text,
                     // so an escaped `\{` still counts toward interp depth
                     if c == '\\' && j + 1 < chars.len() {
                         match chars[j + 1] {
@@ -767,12 +767,12 @@ fn scan_code_identifiers(src: &str) -> Vec<(usize, usize, usize)> {
 /// tokenType integer on the wire. Must stay in lockstep with the legend
 /// advertised in the initialize capabilities (asserted by lsp_smoke).
 pub const SEMANTIC_TOKEN_TYPES: [&str; 6] = [
-    "keyword",  // 0 — parse-level words + @marks
-    "function", // 1 — genes, seqs, splice roots, builtins
-    "variable", // 2 — every other identifier
-    "string",   // 3 — quoted spans (opening to closing quote)
-    "number",   // 4 — numeric literals
-    "comment",  // 5 — `#` to end of line (incl. `##` doc comments)
+    "keyword",  // 0, parse-level words + @marks
+    "function", // 1, genes, seqs, splice roots, builtins
+    "variable", // 2, every other identifier
+    "string",   // 3, quoted spans (opening to closing quote)
+    "number",   // 4, numeric literals
+    "comment",  // 5, `#` to end of line (incl. `##` doc comments)
 ];
 
 /// One classified span from the line scanner: (col, len, tokenType).
@@ -794,7 +794,7 @@ fn scan_line_tokens(line: &str, doc: &LsDoc) -> Vec<ScanTok> {
         }
         if c == '"' {
             // quoted span: opening quote through the closing quote (or EOL
-            // for an unterminated string — the editor still gets the span)
+            // for an unterminated string, the editor still gets the span)
             let start = j;
             j += 1;
             while j < chars.len() && chars[j] != '"' {
@@ -847,7 +847,7 @@ fn scan_line_tokens(line: &str, doc: &LsDoc) -> Vec<ScanTok> {
     out
 }
 
-/// W45: textDocument/semanticTokens (full) — the whole document delta-encoded
+/// W45: textDocument/semanticTokens (full), the whole document delta-encoded
 /// per the LSP wire format: a flat `data` array of
 /// [deltaLine, deltaStartCol, length, tokenType, tokenModifiers=0] quints,
 /// tokens ordered by position. Editors that skip the capability degrade to
@@ -869,7 +869,7 @@ pub fn semantic_tokens(src: &str, doc: &LsDoc) -> Value {
     Value::List(Rc::new(RefCell::new(data)))
 }
 
-/// lsp-r1: textDocument/documentSymbol — the file's callable inventory
+/// lsp-r1: textDocument/documentSymbol, the file's callable inventory
 /// (genes, sequences, splices) as LSP DocumentSymbol values. Data the
 /// analyze() pass already collects; no second parse.
 pub fn document_symbols(src: &str, doc: &LsDoc) -> Value {
@@ -909,7 +909,7 @@ pub fn document_symbols(src: &str, doc: &LsDoc) -> Value {
     Value::List(Rc::new(RefCell::new(items)))
 }
 
-/// lsp-r1: textDocument/completion — a flat, editor-filtered inventory:
+/// lsp-r1: textDocument/completion, a flat, editor-filtered inventory:
 /// in-file genes/splices (with signatures), builtins, keywords, and
 /// top-level bindings. Kind codes: 3 = Function, 14 = Keyword, 6 = Variable.
 pub fn completions(src: &str, doc: &LsDoc) -> Vec<Value> {
@@ -957,7 +957,7 @@ pub fn completions(src: &str, doc: &LsDoc) -> Vec<Value> {
             &mut items,
         );
     }
-    // top-level bindings (v1: file-level lets — gene bodies come with the
+    // top-level bindings (v1: file-level lets, gene bodies come with the
     // AST-indexed completion pass; the editor filters client-side anyway)
     let prog = crate::parser::parse(src);
     for st in &prog.stmts {
@@ -986,7 +986,7 @@ pub fn completions(src: &str, doc: &LsDoc) -> Vec<Value> {
     items
 }
 
-/// lsp-r1: textDocument/formatting — the same canonical formatter `operon fmt`
+/// lsp-r1: textDocument/formatting, the same canonical formatter `operon fmt`
 /// uses, applied to the buffer. Returns the full-document replacement text.
 pub fn format_text(src: &str) -> Option<String> {
     let prog = crate::parser::parse(src);
@@ -1101,7 +1101,7 @@ main { let wobbles = caller() }
     #[test]
     fn hover_gives_gene_signature() {
         let doc = analyze(DEMO);
-        // line 0: "gene boost(x) { return x }" — hover the name at col 6
+        // line 0: "gene boost(x) { return x }", hover the name at col 6
         let h = hover(DEMO, &doc, 0, 6).expect("hover on gene def");
         assert!(h.contains("gene boost(x)"), "{}", h);
         assert!(h.contains("enhance"), "marks should be visible: {}", h);
@@ -1196,7 +1196,7 @@ main { let z = \"boost in a string\" }
                 .collect(),
             _ => panic!("not a list"),
         };
-        // quints: [dl, dc, len, ty, 0] — line 0 starts with keyword `gene`
+        // quints: [dl, dc, len, ty, 0], line 0 starts with keyword `gene`
         assert_eq!(&items[0..5], &[0, 0, 4, 0, 0]); // `gene` keyword, len 4
         assert_eq!(&items[5..10], &[0, 5, 5, 1, 0]); // `boost` function
                                                      // line 1: `let y = "hi" + 42` → dl=1 keyword, variable, string, number
@@ -1321,10 +1321,10 @@ main {
             .filter(|(_, w)| w == "boost")
             .map(|(p, _)| p)
             .collect();
-        // decl + the interpolated occurrence + the call — and NOT the
+        // decl + the interpolated occurrence + the call, and NOT the
         // comment (line 1) or the plain-string mention (line 3)
         assert_eq!(boost, vec![(0, 5), (4, 16), (5, 12)], "{:?}", boost);
-        // sanity: line 3 does carry code identifiers (let, s) — the string
+        // sanity: line 3 does carry code identifiers (let, s), the string
         // content after the quote is what got excluded, not the whole line
         let line3: Vec<String> = words_at(RENAME_DEMO)
             .into_iter()
@@ -1351,8 +1351,8 @@ main {
 
     #[test]
     fn scanner_tracks_multiline_and_raw_strings_like_the_lexer() {
-        // a plain string left open swallows the rest — nothing after counts
-        // (line 0: let, a, 1 — numbers are identifier-shaped, same as the
+        // a plain string left open swallows the rest, nothing after counts
+        // (line 0: let, a, 1, numbers are identifier-shaped, same as the
         // old scanner; lines 2-3 are string content after the open on line 1)
         let open = "let a = 1\nlet s = \"still open\nlet boost = 2\nboost(3)\n";
         let open_lines: Vec<usize> = {
@@ -1360,7 +1360,7 @@ main {
             v.iter().map(|((l, _), _)| *l).collect()
         };
         assert_eq!(open_lines, vec![0, 0, 0, 1, 1], "{:?}", open_lines);
-        // r"..." raw strings are skipped whole — opener and content never count
+        // r"..." raw strings are skipped whole, opener and content never count
         let raw = "gene f() { return r\"boost {boost}\" }\n";
         let raw_words: Vec<String> = words_at(raw).into_iter().map(|(_, w)| w).collect();
         assert_eq!(
@@ -1383,7 +1383,7 @@ main {
     #[test]
     fn prepare_rename_answers_on_code_identifiers_only() {
         let doc = analyze(RENAME_DEMO);
-        // declaration — the span start is returned, not the cursor position
+        // declaration, the span start is returned, not the cursor position
         let (l, c, len, ph) = prepare_rename(RENAME_DEMO, &doc, 0, 7).expect("on `boost` decl");
         assert_eq!((l, c, len, ph.as_str()), (0, 5, 5, "boost"));
         // keyword refusal (`return` on line 0, cols 16..22)
@@ -1397,7 +1397,7 @@ main {
             prepare_rename("let n = len(1)\n", &doc, 0, 9).is_none(),
             "`len` is a builtin"
         );
-        // synonym refusal (`val` repairs to `let` — not a stable identifier)
+        // synonym refusal (`val` repairs to `let`, not a stable identifier)
         assert!(prepare_rename("let val = 1\n", &doc, 0, 5).is_none());
     }
 
@@ -1413,7 +1413,7 @@ main {
         // illegal identifier refused
         assert!(rename(RENAME_DEMO, &doc, 0, 7, "9bad").is_err());
         assert!(rename(RENAME_DEMO, &doc, 0, 7, "").is_err());
-        // collision refused — `main` already exists in this file
+        // collision refused, `main` already exists in this file
         let err = rename(RENAME_DEMO, &doc, 0, 7, "main").unwrap_err();
         assert!(err.contains("merge unrelated bindings"), "{}", err);
         // cursor on a keyword refused
