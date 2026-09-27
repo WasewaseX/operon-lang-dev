@@ -281,9 +281,9 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
             0,
             4,
             format!(
-            "cyclic import of '{}', module still loading; its map fills when loading completes",
-            path
-        ),
+                "cyclic import of '{}', module still loading; its map fills when loading completes",
+                path
+            ),
         );
         if let Some(v) = interp.modules.get(path) {
             return Ok(v.clone());
