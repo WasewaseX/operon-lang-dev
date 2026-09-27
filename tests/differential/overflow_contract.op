@@ -1,0 +1,54 @@
+# differential: W32 overflow contract — byte-identical stdout on both
+# engines. Prints the exact stress kind + message for every integer
+# arithmetic surface, then the float contract (inf/nan are values for
+# * and /, ** overflow raises) and the boundary sanity values.
+gene mn() {
+    return -9223372036854775807 - 1
+}
+gene mx() {
+    return 9223372036854775807
+}
+gene t_add() { return mx() + 1 }
+gene t_sub() { return mn() - 1 }
+gene t_mul() { return mx() * 2 }
+gene t_mul_sq() { return mx() * mx() }
+gene t_pow() { return 2 ** 64 }
+gene t_pow_max() { return mx() ** 2 }
+gene t_pow_f() { return 1e300 ** 2 }
+gene t_fdiv() { return mn() // -1 }
+gene t_mod() { return mn() % -1 }
+gene t_fdiv_f() { return 9.5e18 // 1 }
+gene t_neg() { return -mn() }
+gene t_abs() { return abs(mn()) }
+gene t_shl_hi() { return 1 << 64 }
+gene t_shl_neg() { return 1 << -1 }
+gene t_div0() { return 1 / 0 }
+
+gene probe(f) {
+    stress {
+        return "ok -> " + str(f())
+    } rescue (e) {
+        return "stress[" + e.kind + "] " + e.message
+    }
+}
+
+gene main() {
+    print("add:      ", probe(t_add))
+    print("sub:      ", probe(t_sub))
+    print("mul:      ", probe(t_mul))
+    print("mul_sq:   ", probe(t_mul_sq))
+    print("int_pow:  ", probe(t_pow))
+    print("max_pow:  ", probe(t_pow_max))
+    print("float_pow:", probe(t_pow_f))
+    print("floordiv: ", probe(t_fdiv))
+    print("mod:      ", probe(t_mod))
+    print("fdiv_flt: ", probe(t_fdiv_f))
+    print("neg:      ", probe(t_neg))
+    print("abs:      ", probe(t_abs))
+    print("shl_hi:   ", probe(t_shl_hi))
+    print("shl_neg:  ", probe(t_shl_neg))
+    print("div0:     ", probe(t_div0))
+    print("boundaries:", mx(), mn() + 1, 1 << 63 == mn(), mx() % 10)
+    print("float_vals:", (1e308 * 10) > 0, 1e308 / 1e-308 > 0, !((1e308 * 10 - 1e308 * 10) == (1e308 * 10 - 1e308 * 10)))
+    print("widen:    ", mx() + 0.0 == 9223372036854775807.0)
+}

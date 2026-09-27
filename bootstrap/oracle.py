@@ -3890,6 +3890,11 @@ class Interp:
                     return q
                 if r == 0:
                     raise Stress("unfolded", "modulo by zero")
+                if l == -(2**63) and r == -1:
+                    # i64 corner: the quotient 2**63 does not fit, so the
+                    # Rust core raises before ever materializing the
+                    # remainder — the oracle must mirror that (W32 corpus).
+                    raise Stress("overflow", "int overflow in '%'")
                 # SPEC: sign follows divisor (= Python % semantics)
                 return l % r
             raise Stress("unfolded", f"cannot apply '{op}' to {type_name(l)} and {type_name(r)}")

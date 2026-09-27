@@ -3,8 +3,8 @@
 The standard library is pure `.op` — it runs on the Rust core like any
 program and is exercised by the proof suite (`tests/modules_std.op`,
 `tests/stdlib_selfhost.op`, and the per-module files `tests/std_*.op`:
-args, bio, collections, csv, fmt, fs, iter, json, math, random, set,
-strings, testing). Import with `use std/<module> as <alias>` and
+args, bigint, bio, collections, csv, fmt, fs, iter, json, math, random,
+set, strings, testing). Import with `use std/<module> as <alias>` and
 call with dot access: `s.capital("operon")`. The loader resolves `std/`
 exe-relative (installed trees) or from the interpreter's own tree; a
 `std/` next to your program wins.
@@ -12,6 +12,7 @@ exe-relative (installed trees) or from the interpreter's own tree; a
 | module | what it gives you |
 |---|---|
 | `std/args.op` | command-line argument shaping: `args_norm`, `args_positional`, `args_flag`, `args_has`, `args_value`, `args_get`, `args_number`, `args_subcommand` |
+| `std/bigint.op` | exact arbitrary-precision integers over sign-magnitude base-10^4 digit lists (pure `.op`, deterministic, byte-identical on both engines; the sanctioned path past the i64 no-wrap overflow contract): `big_from_int`, `big_from_str` (null on malformed input), `big_to_str`, `big_to_int` (null when the value does not fit i64 — never a clamp), `big_is_zero`, `big_neg` (zero canonicalizes, so `-0 == 0`), `big_abs`, `big_cmp` (full signed ordering), `big_add`, `big_sub`, `big_mul`, `big_pow` (int exponent ≥ 0, else null), `big_fact` |
 | `std/bio.op` | in-silico sequence utilities: `codon_usage`, `is_palindromic_site`, `melting_point`, `gc_skew` |
 | `std/collections.op` | list-shaped data work: `chunk`, `zip`, `group_by`, `take`, `flatten`, `count` |
 | `std/csv.op` | delimited data: `csv_escape`, `csv_row`, `csv_parse`, `csv_parse_line`, `csv_records`, `csv_column`, `csv_count_fields` |
