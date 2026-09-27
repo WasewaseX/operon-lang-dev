@@ -1,0 +1,51 @@
+# W18 cancellation inheritance (granted lane, Rust-only): a worker cell's
+# cancel chain carries every ancestor flag, so cancelling a parent cell
+# reaches descendants. The child's observation has to survive the parent
+# being torn down, so it writes its finding to a file under an explicit
+# write grant and the host reads it back after all joins settle.
+gene inherit_child() {
+    # the child enters its cooperation window immediately; the inherited
+    # parent flag fires the cancellation stress at its next boundary (or
+    # the poll sees it) and the rescue records which path ran. If the
+    # inheritance plumbing were broken, the loop would run to its bound
+    # and write "not-inherited".
+    stress {
+        for i in range(200) {
+            if (cancelled()) {
+                write_file("/tmp/op_w18_inherit.txt", "inherited-poll")
+                return "stopped"
+            }
+            run("sleep", 5)
+        }
+        write_file("/tmp/op_w18_inherit.txt", "not-inherited")
+        return "never-cancelled"
+    } rescue (e) {
+        if (e.kind == "cancelled") {
+            write_file("/tmp/op_w18_inherit.txt", "inherited")
+        }
+        return "stopped"
+    }
+}
+
+gene inherit_parent() {
+    let cid = spawn(inherit_child, [])
+    let r = join(cid)
+    return r
+}
+
+frame proof {
+    write_file("/tmp/op_w18_inherit.txt", "pending")
+    let p = spawn(inherit_parent, [])
+    # the parent is blocked joining the child when the flag lands; the
+    # child (spawned first, polling every few ms) observes the inherited
+    # flag well before its loop bound
+    run("sleep", 40)
+    let _ = cancel(p)
+    run("sleep", 250)
+    let _ = join(p)
+    let obs = read_file("/tmp/op_w18_inherit.txt")
+    assert(obs == "inherited" || obs == "inherited-poll", "child observed the inherited flag")
+}
+main {
+    promote("cancel-inherit: ok")
+}

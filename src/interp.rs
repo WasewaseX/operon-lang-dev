@@ -99,8 +99,35 @@ pub enum Flow {
     Cont,
 }
 
+/// W18: observable lifecycle phase of a task. The worker itself moves
+/// Running -> Done (or -> Cancelled when its last failure was the
+/// cancellation stress), so a state read never races the send. After join
+/// the phase lives on in `task_tombstones` so task_state keeps answering
+/// for ids that already left the registry.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum TaskState {
+    Running,
+    Done,
+    Cancelled,
+}
+
+impl TaskState {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            TaskState::Running => "running",
+            TaskState::Done => "done",
+            TaskState::Cancelled => "cancelled",
+        }
+    }
+}
+
 pub struct TaskHandle {
     pub rx: mpsc::Receiver<(crate::genes::SendValue, Vec<Note>)>,
+    /// W18: cooperative cancellation flag. Setting it asks the worker to
+    /// stop at its next fuel tick boundary; nothing is preempted.
+    pub cancel: Arc<AtomicBool>,
+    /// W18: worker-owned lifecycle phase (see TaskState above).
+    pub state: Arc<std::sync::Mutex<TaskState>>,
 }
 
 /// Children get the OS essentials plus explicitly env-granted variables —
@@ -653,6 +680,18 @@ pub struct Interp {
     pub cli_args: Vec<String>,
     pub tasks: HashMap<i64, TaskHandle>,
     pub next_task_id: i64,
+    /// W18: cancellation flags this interpreter must observe at tick
+    /// boundaries. The host chain is empty; a worker holds its own flag
+    /// plus every ancestor flag (cancelling a cell cancels its children).
+    pub cancel_chain: Vec<Arc<AtomicBool>>,
+    /// W18: terminal phases of already-joined tasks, so task_state()
+    /// keeps answering after the handle left the registry.
+    pub task_tombstones: HashMap<i64, TaskState>,
+    /// W18: inside a rescue handler the boundary raise is suppressed (the
+    /// handler must be able to act on a caught cancellation), while the
+    /// explicit `cancelled()` poll keeps reading the real chain. The step
+    /// budget and fuel pool still apply, so a handler cannot spin forever.
+    pub cancel_suppressed: bool,
     pub seq_tx: Option<mpsc::SyncSender<crate::value::SeqMsg>>,
     /// Process-wide step ceiling shared with every spawned worker: when
     /// present, the run's TOTAL fuel (host + all threads) drains this pool.
@@ -755,6 +794,9 @@ impl Interp {
             cli_args: Vec::new(),
             tasks: HashMap::new(),
             next_task_id: 1,
+            cancel_chain: Vec::new(),
+            task_tombstones: HashMap::new(),
+            cancel_suppressed: false,
             seq_tx: None,
             fuel_pool: None,
         }
@@ -822,6 +864,32 @@ impl Interp {
     }
 
     fn tick(&mut self) -> Result<(), Stress> {
+        self.tick_inner(true)?;
+        Ok(())
+    }
+
+    /// W18: the entry tick of a stress construct still counts steps and
+    /// fuel but does NOT observe the cancel chain. If it did, a cancel
+    /// that landed before the worker was scheduled would raise before the
+    /// handler exists, and no cooperative worker could ever run its own
+    /// rescue. Skipping it here means the first tick INSIDE the arm is
+    /// the one that raises, so the rescue always gets its window.
+    fn tick_uncancelled(&mut self) -> Result<(), Stress> {
+        self.tick_inner(false)?;
+        Ok(())
+    }
+
+    fn tick_inner(&mut self, check_cancel: bool) -> Result<(), Stress> {
+        // W18: cooperative cancellation is checked at fuel tick boundaries.
+        // A worker observes its own flag plus every ancestor flag; the host
+        // chain is empty and pays one branch for the empty check.
+        if check_cancel && !self.cancel_suppressed && !self.cancel_chain.is_empty() {
+            for f in &self.cancel_chain {
+                if f.load(std::sync::atomic::Ordering::Relaxed) {
+                    return Err(Stress::new("cancelled", "task cancelled"));
+                }
+            }
+        }
         self.steps += 1;
         // shared pool: every 65_536 steps, drain a chunk from the run-wide
         // pool so host + workers share one "steps per run" ceiling
@@ -1032,7 +1100,14 @@ impl Interp {
     }
 
     pub fn exec_stmt(&mut self, env: &Rc<Env>, stmt: &Stmt) -> Result<Flow, Stress> {
-        self.tick()?;
+        // W18: a stress construct must be allowed to enter its own handler
+        // (see tick_uncancelled); every other statement observes cancel at
+        // the ordinary boundary.
+        if matches!(stmt, Stmt::Stress { .. }) {
+            self.tick_uncancelled()?;
+        } else {
+            self.tick()?;
+        }
         match stmt {
             Stmt::Block(body) => {
                 let child = Env::new(Some(env.clone()));
@@ -1512,16 +1587,29 @@ impl Interp {
                                 // rescue entry is real work: charge it. A
                                 // `rescue { return f() }` retry-spin otherwise
                                 // dodges the fuel counter entirely (wave-3
-                                // Critic-X hang #1).
+                                // Critic-X hang #1). W18: the charge ticks are
+                                // cancel-lenient, or a caught cancellation
+                                // would re-raise here before the handler body
+                                // ever ran and no cooperative worker could
+                                // ever act on its own flag.
                                 for _ in 0..64 {
-                                    self.tick()?;
+                                    self.tick_uncancelled()?;
                                 }
                                 let child = Env::new(Some(env.clone()));
                                 if let Some(b) = binding {
                                     let m = self.stress_map(&stress);
                                     child.define(b, m);
                                 }
-                                match self.exec_block(&child, rbody)? {
+                                // W18: the handler runs with the boundary
+                                // raise suppressed so it can act on the
+                                // caught cancellation instead of dying at
+                                // its first statement. cancelled() still
+                                // polls the live chain inside here.
+                                let saved_suppress = self.cancel_suppressed;
+                                self.cancel_suppressed = true;
+                                let ran = self.exec_block(&child, rbody);
+                                self.cancel_suppressed = saved_suppress;
+                                match ran? {
                                     Flow::Norm => Ok(Flow::Norm),
                                     other => Ok(other),
                                 }
@@ -6785,6 +6873,15 @@ impl Interp {
                 };
                 crate::genes::join_task(self, id, timeout)
             }
+            // W18: cooperative cancellation surface (see genes.rs for the
+            // registry rules; the flag is only OBSERVED at tick boundaries)
+            "cancel" => crate::genes::cancel_task(self, args),
+            "task_state" => crate::genes::task_state_of(self, args),
+            "cancelled" => Ok(Value::Bool(
+                self.cancel_chain
+                    .iter()
+                    .any(|f| f.load(std::sync::atomic::Ordering::Relaxed)),
+            )),
             // -------------------------------------------------- math
             "floor" => Ok(Value::Int(match args.first() {
                 Some(Value::Int(i)) => *i,
@@ -10211,6 +10308,10 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "grn_state",
     "spawn",
     "join",
+    // W18: cooperative task cancellation
+    "cancel",
+    "task_state",
+    "cancelled",
     "floor",
     "ceil",
     "sqrt",

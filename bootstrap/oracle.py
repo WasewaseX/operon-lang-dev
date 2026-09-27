@@ -2786,6 +2786,7 @@ abs min max sum clock exit assert codon distance similar transcribe reverse_comp
 gc_content translate find_orf memory methyl methylate demethylate m6a_write m6a_erase passage grn_set grn_get fingerprint toggle_on toggle_state repressi_next
 repressi_state repressi_start grn_fire grn_state spawn join floor ceil sqrt pow random
 randomize chr ord now sleep argv read_file write_file append_file exists file_size read_dir run
+cancel task_state cancelled
 fs_delete fs_rename fs_mkdir re_replace
 bytes_from_str str_from_bytes bytes_from_list bytes_to_list read_file_bytes write_file_bytes
 http_get serve recv_request send_response json_parse json_str env call items py
@@ -5907,6 +5908,12 @@ class Interp:
                 self.next_id = _task_id
                 self.tasks = getattr(self, "tasks", {})
                 self.tasks[self.next_id] = result
+                # W18: the sequential engine ran the body inline, so the
+                # task is born finished; the phase tombstone mirrors the
+                # Rust registry's post-join answer
+                _tombs = getattr(self, "task_tombstones", {})
+                _tombs[self.next_id] = "done"
+                self.task_tombstones = _tombs
                 return self.next_id
             self.note(4, "spawn() needs a gene; null task")
             return None
@@ -5917,6 +5924,39 @@ class Interp:
                 return tasks.pop(tid)
             self.note(4, f"task {tid} already joined or unknown")
             return None
+        # W18: cooperative task cancellation. The sequential engine runs
+        # worker bodies inline at spawn time, so by the time a cancel can
+        # name a task that task has already finished; the flag surface
+        # still exists and answers with the same notes as the concurrent
+        # engine's late-cancel path. Timing shapes are Rust-lane evidence
+        # (tests/timing/, excluded from both walkers).
+        if name == "cancel":
+            tid = args[0] if args else None
+            if not isinstance(tid, int) or tid <= 0:
+                self.note(4, "cancel() needs a task id")
+                return False
+            tasks = getattr(self, "tasks", {})
+            tombs = getattr(self, "task_tombstones", {})
+            if tid in tasks or tid in tombs:
+                self.note(4, f"task {tid} already finished")
+                return False
+            self.note(4, f"task {tid} unknown or already joined")
+            return False
+        if name == "task_state":
+            tid = args[0] if args else None
+            if tid == 0:
+                return "done"
+            if not isinstance(tid, int) or tid < 0:
+                self.note(4, "task_state() needs a task id")
+                return None
+            tasks = getattr(self, "tasks", {})
+            tombs = getattr(self, "task_tombstones", {})
+            if tid in tasks or tid in tombs:
+                return "done"
+            self.note(4, f"task {tid} unknown or already joined")
+            return None
+        if name == "cancelled":
+            return False
         # ---- math
         if name == "floor":
             v = args[0] if args else 0
@@ -7249,6 +7289,12 @@ def main():
                     # substrate-r1: capability-granted proofs run only under
                     # an explicit operator cell (Rust runner skips them too)
                     if "granted" in root.replace(os.sep, "/"):
+                        continue
+                    # W18: cancellation timing proofs need real OS threads;
+                    # the sequential engine cannot observe mid-flight
+                    # cancellation, so this lane is Rust-only (the Rust
+                    # walker skips it too)
+                    if "timing" in root.replace(os.sep, "/"):
                         continue
                     for fn in sorted(fns):
                         if fn.endswith(".op"):

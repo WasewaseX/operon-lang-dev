@@ -25,6 +25,13 @@ echo "[2/3] Operon proof suite (Rust core)"
 ./bin/operon test tests/granted/rho_prob.op --cell tests/granted/rho_prob.cell
 ./bin/operon test tests/granted/rho_queue_shield.op --cell tests/granted/rho_queue_shield.cell
 ./bin/operon test tests/granted/rho_worker.op --cell tests/granted/rho_worker.cell
+# W18: cancellation timing proofs need real OS threads (the sequential
+# oracle cannot observe mid-flight ordering), so tests/timing/ is a
+# Rust-only lane with its own explicit cell; both test walkers skip it.
+./bin/operon test tests/timing/ --cell tests/timing/timing.cell
+# W18: cancellation inheritance — the child's observation lands in a file
+# under an explicit write grant (granted-lane pattern).
+./bin/operon test tests/granted/cancel_inherit.op --cell tests/granted/cancel_inherit.cell
 echo "[3/4] Differential harness (Rust core vs Python oracle)"
 python3 bootstrap/harness.py
 echo "[4/4] Oracle proof suite (the same frames on the second implementation)"
