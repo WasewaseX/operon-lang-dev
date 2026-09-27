@@ -2,9 +2,12 @@
 
 Status: **stage 2 SHIPPED** (node-addressed engine live behind the same CLI,
 `src/rna2.rs`, 14 pinned tests in `tests/rna_v2.rs`). The v1 engine remains
-the default for header-less patches (byte-compatible); stage 3 (span-rule
-deprecation) stays per the migration path below. The current `.rna` engine
-is span/text-based with the `operon
+the default for header-less patches (byte-compatible). **Stage 3 STARTED —
+step 1 (Info) shipped**: header-less (v1 span) patches now carry a deprecation
+marker per the W63 policy (stderr note + `"engine":"v1","deprecated":true` in
+`--json`); text semantics stay byte-compatible and unchanged. Steps 2–3
+(Warning severity, then removal one minor later) follow the migration path
+below. The current `.rna` engine is span/text-based with the `operon
 rna --check` safety mode (W068, PR #18) already shipped: dry-run default,
 per-rule fate report (target found/not, replacement count, affected gene),
 `--json`, exit 1 on a missed target. V2 is about WHAT the editor targets, not
