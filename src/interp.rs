@@ -467,7 +467,15 @@ pub struct Interp {
     /// thread boundary by serialization, so a worker's copies are fresh
     /// containers — the oracle mirrors this by parking the reachable frozen
     /// ids for the duration of an inline spawn body (SPEC §7d boundary).
+    ///
+    /// W05 hardening (rt_p18a probe 3): a raw address set observes ADDRESS
+    /// REUSE — a const binding that dies (gene-local const, dropped value)
+    /// can free its containers; the next allocation reuses the address and
+    /// an innocent fresh list would be falsely frozen. `frozen_keep` holds a
+    /// Value clone of every registered container, keeping the addresses
+    /// alive (and the walk's membership stable) for the interpreter's life.
     pub frozen: std::collections::HashSet<usize>,
+    pub frozen_keep: Vec<Value>,
     pub cell: HashMap<String, String>,
     pub cell_entry: Option<String>,
     pub base_dir: Option<String>,
@@ -721,6 +729,7 @@ impl Interp {
             methyl_quiet: false,
             methyl_noted: std::collections::HashSet::new(),
             frozen: std::collections::HashSet::new(),
+            frozen_keep: Vec::new(),
             methyl_levels: HashMap::new(),
             methyl_threshold: 3,
             asserts_run: 0,
@@ -2184,38 +2193,49 @@ impl Interp {
     }
 
     fn freeze_walk(&mut self, v: &Value, seen: &mut std::collections::HashSet<usize>) {
-        match v {
-            Value::List(l) => {
-                let p = Self::list_ptr(l);
-                if !seen.insert(p) {
-                    return;
+        // W05 hardening (rt_p18a): ITERATIVE worklist, not recursion — a
+        // 2000+-deep nested const literal must freeze without touching the
+        // interpreter stack (depth is attacker-controlled input).
+        // Registration keeps the container ALIVE via frozen_keep (address-
+        // reuse armor: a dropped const's freed address can never falsely
+        // freeze a fresh allocation).
+        let mut work: Vec<Value> = vec![v.clone()];
+        while let Some(cur) = work.pop() {
+            match cur {
+                Value::List(l) => {
+                    let p = Self::list_ptr(&l);
+                    if !seen.insert(p) {
+                        continue;
+                    }
+                    self.frozen.insert(p);
+                    self.frozen_keep.push(Value::List(l.clone()));
+                    for item in l.borrow().iter() {
+                        work.push(item.clone());
+                    }
                 }
-                self.frozen.insert(p);
-                for item in l.borrow().iter() {
-                    self.freeze_walk(item, seen);
+                Value::Map(m) => {
+                    let p = Self::map_ptr(&m);
+                    if !seen.insert(p) {
+                        continue;
+                    }
+                    self.frozen.insert(p);
+                    self.frozen_keep.push(Value::Map(m.clone()));
+                    for (k, val) in m.borrow().iter() {
+                        work.push(k.clone());
+                        work.push(val.clone());
+                    }
                 }
+                Value::Variant(_, Some(inner)) => work.push(*inner.clone()),
+                // Obj field STORES stay mutable (v1 scope, SPEC §7d): methods and
+                // member assignment on the phenotype keep working; nested lists /
+                // maps inside the fields ARE frozen.
+                Value::Obj(_, fields) => {
+                    for (_, val) in fields.borrow().iter() {
+                        work.push(val.clone());
+                    }
+                }
+                _ => {}
             }
-            Value::Map(m) => {
-                let p = Self::map_ptr(m);
-                if !seen.insert(p) {
-                    return;
-                }
-                self.frozen.insert(p);
-                for (k, val) in m.borrow().iter() {
-                    self.freeze_walk(k, seen);
-                    self.freeze_walk(val, seen);
-                }
-            }
-            Value::Variant(_, Some(inner)) => self.freeze_walk(inner, seen),
-            // Obj field STORES stay mutable (v1 scope, SPEC §7d): methods and
-            // member assignment on the phenotype keep working; nested lists /
-            // maps inside the fields ARE frozen.
-            Value::Obj(_, fields) => {
-                for (_, val) in fields.borrow().iter() {
-                    self.freeze_walk(val, seen);
-                }
-            }
-            _ => {}
         }
     }
 

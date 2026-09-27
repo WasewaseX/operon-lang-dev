@@ -8,8 +8,8 @@ README/SPEC/BENCH are forbidden — link here instead.
 - **Keywords (parser reserved set)**: 58 — table in [KEYWORDS.md](KEYWORDS.md)
 - **Std modules**: 20 (args, bio, collections, csv, deque, fmt, fs, heap, iter, json, math, motifs, path, random, seq, serialize, set, strings, testing, time)
 - **Std functions (.op-level `gene` defs)**: 198
-- **Red-team payload files**: 97
-- **Proof files**: 115 (of 238 test .op files)
+- **Red-team payload files**: 98
+- **Proof files**: 115 (of 239 test .op files)
 - **Proof run** (bin/operon): 134 files, 109 proofs, 1479 asserts
 - **Differential harness**: 166 match / 0 diverge (0 skipped) · granted lane: 7 cells
 - **CLI subcommands**: ast, bench, build, check, crispr, doc, explain, fix, fmt, graph, ir, keywords, lint, profile, repl, rna, run, test, version, watch

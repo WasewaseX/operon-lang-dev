@@ -1,0 +1,109 @@
+# rt_p18a — W05 (const/frozen): adversarial probes against the deep-freeze
+# registry. Every probe must stay CONTAINED: catchable `frozen` stress, no
+# panic, no false-freeze of unrelated containers (id-reuse armor), no
+# unbounded freeze-walk time, mutation via every surface denied.
+gene bury_lists(n, acc) {
+    if n <= 0 {
+        return acc
+    }
+    return bury_lists(n - 1, [acc])
+}
+
+# 1. DEEP freeze: 2000-deep nested list must freeze iteratively (no stack
+#    overflow) and the innermost cell must stay frozen through 2000 levels.
+const DEEP = bury_lists(2000, [7])
+inner = DEEP
+i = 0
+while i < 1999 {
+    inner = inner[0]
+    i = i + 1
+}
+fired = 0
+stress {
+    inner[0] = 99
+} rescue (e) {
+    if e.kind == "frozen" {
+        fired = 1
+    }
+}
+if fired != 1 {
+    print("p18a BREACH: deep-freeze missed at depth")
+}
+
+# 2. WIDE freeze: 20000-element list freeze + mutation denial
+const WIDE = range(20000)
+fired = 0
+stress {
+    WIDE[19999] = -1
+} rescue (e) {
+    if e.kind == "frozen" {
+        fired = 1
+    }
+}
+if fired != 1 {
+    print("p18a BREACH: wide-freeze missed")
+}
+
+# 3. ID-REUSE armor: a gene-local const's containers die with the call; a
+#    fresh list allocated afterwards (likely reusing freed capacity in a
+#    naive raw-id registry) must mutate SUCCEED — no false freeze.
+gene make_frozen_then_drop() {
+    const TEMP = [1, 2, 3]
+    return len(TEMP)
+}
+make_fresh = make_frozen_then_drop()
+fresh = [4, 5, 6]
+push(fresh, 7)
+if len(fresh) != 4 || fresh[2] != 6 {
+    print("p18a BREACH: false freeze after id reuse")
+}
+
+# 4. Mutation through EVERY surface on one frozen map: member set, index
+#    set, del-through-alias, push-into-nested-list
+const M = {"a": [1], "b": 2}
+alias2 = M
+surfaces = 0
+stress { M.b = 9 } rescue (e) { if e.kind == "frozen" { surfaces = surfaces + 1 } }
+stress { M["b"] = 9 } rescue (e) { if e.kind == "frozen" { surfaces = surfaces + 1 } }
+stress { del(alias2, "a") } rescue (e) { if e.kind == "frozen" { surfaces = surfaces + 1 } }
+stress { push(M.a, 5) } rescue (e) { if e.kind == "frozen" { surfaces = surfaces + 1 } }
+if surfaces != 4 {
+    print("p18a BREACH: a mutation surface escaped, caught", surfaces)
+}
+
+# 5. Variant payloads: frozen through unwrap
+const R = ok([1, 2])
+stress {
+    push(unwrap(R), 3)
+} rescue (e) {
+    if e.kind == "frozen" {
+        surfaces = surfaces + 1
+    }
+}
+if surfaces != 5 {
+    print("p18a BREACH: variant payload mutation escaped")
+}
+
+# 6. SHARED structure: a const value that references the same list three
+#    times must freeze once (insert-once) and stay frozen through every
+#    alias path.
+shared = range(5000)
+graph = [shared, shared, shared]
+const GRAPH = [graph, graph, graph]
+stress {
+    GRAPH[1][0][4999] = -1
+} rescue (e) {
+    if e.kind == "frozen" {
+        fired = 1
+    }
+}
+if fired != 1 {
+    print("p18a BREACH: shared-substructure alias escaped")
+}
+
+# 7. Reads after all that must be untouched
+if len(M.a) != 1 || M.a[0] != 1 || WIDE[0] != 0 || WIDE[19999] == -1 {
+    print("p18a BREACH: frozen value was actually mutated")
+}
+
+print("p18a-contained")

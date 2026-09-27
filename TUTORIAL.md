@@ -382,6 +382,32 @@ never fails the run. `|` alternatives (`case Ok(n) | Ok(2)`) try in order, first
 binds; a `case _` arm is the catch-all. Missing arms = silent fall-through, exactly
 like Total Grammar everywhere else.
 
+### 8c. `const`: values that refuse to change (W05)
+
+Two bindings, two promises. `let` is the everyday binding; `const` freezes the whole
+value — not just the name — for the rest of the run:
+
+```operon
+gene main() {
+    const SPEED = 299_792              # km/s (underscores are numeric literals)
+    const LANES = [1, 2, 3]
+    stress {
+        push(LANES, 4)                 # frozen — catchable, program continues
+    } rescue (e) {
+        print("denied:", e.kind)       # denied: frozen
+    }
+    print(SPEED, LANES)                # 299792 [1, 2, 3]
+}
+```
+
+Mutation of anything reachable from a `const` burns a catchable Stress `frozen` — the
+name itself (`SPEED = 5`), an element (`LANES[0] = 9`), a nested container, `push`/
+`pop`/`del`, or the same value through a different variable. Freezing follows the
+VALUE: copies escape (numbers always copy), and reads never burn. `let mut x = e`
+is accepted as a documentation-only marker (v2.x parses it, fmt tidies it). Programs
+that only read their consts run exactly as before — freezing is invisible until
+something actually tries to mutate (SPEC §7d).
+
 ## 9. The REPL
 
 ```sh
