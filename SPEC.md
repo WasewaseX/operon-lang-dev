@@ -521,7 +521,7 @@ All features are real, implemented, tested — none are decorative.
 
 - `frame proof { assert(...); ... }` — the **test reading frame** of the file. Skipped by `operon run`; executed by `operon test`. The same file encodes program + tests (two reading frames over one sequence).
 - `frame name { ... }` — named frames (metadata/optional scenes); runnable via `operon run --frame name`.
-- `operon test [paths...]` — default paths: `tests/` recursively. For each file: run its proof frames; a proof failure (Stress burned) is recorded; the suite continues (Total Grammar). A proof must **run to completion** — an early `return`/`break` inside a proof fails it ("exited early"), and a proof that exercises **zero assertions** fails it ("vacuous proof"). Exit code 1 if any failure. Report: files, proofs run, passed, failed, assertions exercised, wobble notes count. Current suite: 99 files / 92 proofs / 1171 assertions, all green on both implementations, plus 8 granted-lane proofs under explicit operator cells (py bridge, m6A decay cadence, and the 5 loop-10 Rho/queue proofs) — the differential harness verifies 128 byte-exact targets (123 zero-grant sweep + 5 granted-with-cell).
+- `operon test [paths...]` — default paths: `tests/` recursively. For each file: run its proof frames; a proof failure (Stress burned) is recorded; the suite continues (Total Grammar). A proof must **run to completion** — an early `return`/`break` inside a proof fails it ("exited early"), and a proof that exercises **zero assertions** fails it ("vacuous proof"). Exit code 1 if any failure. Report: files, proofs run, passed, failed, assertions exercised, wobble notes count. The current suite is all green on both implementations — files/proofs/assertions, the granted-lane cell count, and the differential-harness target split are GENERATED, never hand-typed: see docs/STATS.md (regenerate with `python3 scripts/gen_doc_stats.py`; `scripts/check_docs_sync.py` fails CI on any hand-typed drift).
 
 ## 13. Concurrency
 
@@ -726,9 +726,9 @@ This specification is **Operon 2.2.0**. `operon version` prints the implementati
 
 ## 18. Verification status (what the shipped suite proves)
 
-- Proof frames: **99 files / 92 proofs / 1,171 assertions**, green on the Rust core and the Python oracle.
-- Differential harness (Rust core vs Python oracle, program-level stdout): **128 programs, all MATCH**, plus the oracle runs the same proof suite (both implementations green, enforced in CI).
-- Red-team suite: **95 payloads, 0 breaches** (note-cap, fuel-charge, and output-cap containment verified live on the stochastic-expression, reg-bio-3, and Rho-termination surfaces).
+- Proof frames: green on the Rust core and the Python oracle — files/proofs/assertions are generated in docs/STATS.md.
+- Differential harness (Rust core vs Python oracle, program-level stdout): every target byte-exact on both the zero-grant and granted-with-cell lanes — match/diverge counts are generated in docs/STATS.md. The oracle also runs the same proof suite (both implementations green, enforced in CI).
+- Red-team suite: 0 breaches is the release gate; the payload count is generated in docs/STATS.md (note-cap, fuel-charge, and output-cap containment verified live on the stochastic-expression, reg-bio-3, and Rho-termination surfaces).
 - Playground smoke: expression-core subset in the browser, spec-aligned (unbound reads → null + note).
 
 ## 19. Memory model — binding, sharing, cycles (W014)

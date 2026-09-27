@@ -21,6 +21,12 @@
   "version",
   "watch"
  ],
+ "harness": {
+  "diverge": 0,
+  "granted_cells": 7,
+  "match": 154,
+  "skipped": 0
+ },
  "keyword_analogy_pending": [],
  "keyword_count": 58,
  "keywords": [
@@ -103,7 +109,7 @@
  ],
  "proof_files": 94,
  "proof_totals": {
-  "asserts": 103,
+  "asserts": 1346,
   "files": 122,
   "proofs": 103,
   "source": "bin/operon"

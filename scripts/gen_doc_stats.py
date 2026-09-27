@@ -114,15 +114,36 @@ def proof_totals_from_binary():
         if os.path.exists(p):
             try:
                 import subprocess
-                r = subprocess.run([p, "test", "tests", "--json"], cwd=ROOT,
+                r = subprocess.run([p, "test", "tests"], cwd=ROOT,
                                    capture_output=True, text=True, timeout=600)
-                j = json.loads(r.stdout.strip().splitlines()[-1])
-                return {"files": j.get("files"), "proofs": j.get("proofs"),
-                        "asserts": j.get("passed", 0) + j.get("failed", 0),
-                        "source": cand}
+                # human summary carries the assertion count; --json omits it
+                m = re.search(r"(\d+) file\(s\), (\d+) proof\(s\): (\d+) passed, "
+                              r"(\d+) failed \((\d+) assertion", r.stdout + r.stderr)
+                if not m:
+                    continue
+                return {"files": int(m.group(1)), "proofs": int(m.group(2)),
+                        "asserts": int(m.group(5)), "source": cand}
             except Exception:
                 continue
     return {"files": None, "proofs": None, "asserts": None, "source": "binary-not-built"}
+
+def harness_counts():
+    """Run the differential harness; parse 'result: N match, M diverge, K skipped'.
+    The granted lane (explicit operator cells) is reported alongside."""
+    import subprocess
+    try:
+        r = subprocess.run(["python3", "bootstrap/harness.py"], cwd=ROOT,
+                           capture_output=True, text=True, timeout=1800)
+        m = re.search(r"result: (\d+) match, (\d+) diverge, (\d+) skipped",
+                      r.stdout + r.stderr)
+        if not m:
+            return None
+        granted = len([p for p in os.listdir(os.path.join(ROOT, "tests", "granted"))
+                       if p.endswith(".op")]) if os.path.isdir(os.path.join(ROOT, "tests", "granted")) else 0
+        return {"match": int(m.group(1)), "diverge": int(m.group(2)),
+                "skipped": int(m.group(3)), "granted_cells": granted}
+    except Exception:
+        return None
 
 def compute():
     kw = keywords()
@@ -141,6 +162,7 @@ def compute():
         "proof_files": proof_files(),
         "test_op_files": test_op_files(),
         "proof_totals": proof_totals_from_binary(),
+        "harness": harness_counts(),
         "cli_subcommands": cli_subcommands(),
         "lsp_methods": lsp_methods(),
     }
@@ -167,6 +189,10 @@ def render(s):
                  f"{pt['proofs']} proofs, {pt['asserts']} asserts")
     else:
         L.append("- **Proof run**: binary not built — run scripts/build.sh then regenerate")
+    h = s.get("harness")
+    if h:
+        L.append(f"- **Differential harness**: {h['match']} match / {h['diverge']} diverge "
+                 f"({h['skipped']} skipped) · granted lane: {h['granted_cells']} cells")
     L.append(f"- **CLI subcommands**: {', '.join(s['cli_subcommands'])}")
     L.append(f"- **LSP methods**: {', '.join(s['lsp_methods'])}")
     L.append("\n## Std module inventory\n")

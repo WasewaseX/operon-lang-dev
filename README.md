@@ -177,7 +177,7 @@ Path grants are symlink-resolved; a grant that normalizes to the empty string is
 operon run f.op      [--entry g] [--variant v] [--cell c] [--rna r] [--frame n] [--ires] [--strict] [--fuel N]
                      [--allow-read p] [--allow-write p] [--allow-run prog] [--allow-net host:port] [--allow-env var] [--allow-all]
 operon check f.op    [--nmd | --nmd=purge] [--json]   # 100-point grade + letter; --json: phantoms/nmd arrays
-operon test [dirs]                                # proof-frame runner (80 files / 74 proofs / 930 assertions green)
+operon test [dirs]                                # proof-frame runner (files/proofs/assertions: docs/STATS.md)
 operon fmt f.op     [--write]                     # precedence-correct canonical formatter
 operon build f.op   [--variant v] [-o out.op]     # bake splices, strip proofs
 operon profile f.op                               # per-gene calls, exclusive self-µs, flags, maturation, enhance candidates
