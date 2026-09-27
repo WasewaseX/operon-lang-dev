@@ -482,4 +482,9 @@ pub struct Program {
     pub tad_exports: Vec<(String, Vec<String>)>, // tad name -> exported names
     pub tad_members: Vec<(String, Vec<String>)>, // tad name -> all defined names
     pub ires: Vec<String>,
+    /// W24: top-level names marked with the contextual `pub` marker.
+    /// Inert by default; under `.cell modules.visibility = strict` the
+    /// module exports ONLY these names (migration-safe: a strict module
+    /// with zero pub marks keeps default-open, with a note).
+    pub pub_exports: Vec<String>,
 }

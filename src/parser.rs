@@ -166,6 +166,10 @@ pub struct Parser {
     first_tok_line: usize,
     module_doc_assigned: bool,
     module_doc: Vec<String>,
+    /// W24: top-level names introduced via the contextual `pub` marker
+    /// (`pub gene` / `pub let` / `pub const` / `pub phenotype`). `pub` is
+    /// NOT a keyword — an ordinary identifier named `pub` is untouched.
+    pub_names: Vec<String>,
 }
 
 pub fn parse(src: &str) -> Program {
@@ -189,6 +193,7 @@ pub fn parse(src: &str) -> Program {
         first_tok_line,
         module_doc_assigned: false,
         module_doc: Vec::new(),
+        pub_names: Vec::new(),
     };
     let stmts = p.parse_program();
     notes.append(&mut p.notes);
@@ -200,6 +205,7 @@ pub fn parse(src: &str) -> Program {
         tad_members: Vec::new(),
         ires: Vec::new(),
         module_doc: p.module_doc.clone(),
+        pub_exports: p.pub_names.clone(),
         notes,
         stmts,
     };
@@ -420,6 +426,36 @@ impl Parser {
                 continue;
             }
             let before = self.pos;
+            // W24: contextual `pub` visibility marker — `pub gene` / `pub let`
+            // / `pub const` / `pub phenotype` at TOP LEVEL records the name
+            // for strict-mode export filtering. `pub` is not a keyword: an
+            // identifier named `pub` (or `pub` in any other position) parses
+            // exactly as before, so this is invisible unless used as a marker.
+            if let Tok::Ident(w) = self.peek().clone() {
+                if w == "pub" {
+                    let nxt = self.toks.get(self.pos + 1).map(|t| &t.0);
+                    if let Some(Tok::Ident(k)) = nxt {
+                        if matches!(k.as_str(), "gene" | "let" | "const" | "phenotype") {
+                            self.next(); // consume `pub`
+                            let s = self.parse_stmt();
+                            if let Some(st) = s {
+                                let name = match &st {
+                                    Stmt::Gene(g) => g.name.clone(),
+                                    Stmt::Let(n, _) | Stmt::LetConst(n, _) => Some(n.clone()),
+                                    Stmt::LetAnn(n, _, _) => Some(n.clone()),
+                                    Stmt::Pheno(pd) => Some(pd.name.clone()),
+                                    _ => None,
+                                };
+                                if let Some(n) = name {
+                                    self.pub_names.push(n);
+                                }
+                                out.push(st);
+                            }
+                            continue;
+                        }
+                    }
+                }
+            }
             if let Some(s) = self.parse_stmt() {
                 out.push(s);
             }
@@ -2467,10 +2503,7 @@ impl Parser {
                     cur.push_str(&w);
                     self.next();
                     // after a segment, only a separator may continue the path
-                    if !matches!(
-                        self.peek(),
-                        Tok::Slash | Tok::Dot | Tok::Minus | Tok::Colon
-                    ) {
+                    if !matches!(self.peek(), Tok::Slash | Tok::Dot | Tok::Minus | Tok::Colon) {
                         break;
                     }
                 }
@@ -2499,10 +2532,7 @@ impl Parser {
                 Tok::Str(s) => {
                     cur.push_str(&s);
                     self.next();
-                    if !matches!(
-                        self.peek(),
-                        Tok::Slash | Tok::Dot | Tok::Minus | Tok::Colon
-                    ) {
+                    if !matches!(self.peek(), Tok::Slash | Tok::Dot | Tok::Minus | Tok::Colon) {
                         break;
                     }
                 }
@@ -4089,5 +4119,6 @@ fn parse_snippet(src: &str, depth: u32) -> Parser {
         first_tok_line: 1,
         module_doc_assigned: false,
         module_doc: Vec::new(),
+        pub_names: Vec::new(),
     }
 }

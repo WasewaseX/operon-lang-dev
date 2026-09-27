@@ -1,0 +1,17 @@
+# W24: strict visibility differential — under .cell modules.visibility=strict
+# the fixture module exports ONLY its pub-marked names. Private names are
+# hidden from BOTH access surfaces: the qualified namespace read and the
+# flat alias binding — both are the SOFT tier (null + note, Total Grammar
+# tier 1), never a crash. The module's own internals keep working because
+# they are module-local (module code calling its own private genes is
+# unaffected by what the export map carries).
+use vis_lib;
+print(vis_lib.visible(21))
+print(vis_lib.VERSION)
+# private names: qualified access reads as null + note (soft tier)
+print(vis_lib.hidden_helper(1))
+# flat binding carries only pub names in strict mode: phantom call note + null
+print(hidden_helper(2))
+# the export map itself carries exactly the pub names
+print(has(vis_lib, "visible"), has(vis_lib, "VERSION"))
+print(has(vis_lib, "hidden_helper"), has(vis_lib, "SECRET"))
