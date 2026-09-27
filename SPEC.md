@@ -338,6 +338,7 @@ L.push(4) / M.del("a")        # method forms stress identically
 ## 8. Modules, TADs, anchors
 
 - `use path;` — path like `std/bio`, `./util`, `util` (`.op` appended if absent). Binds one name: basename, or `as name`. `use std/bio as b;` → `b.some_fn(...)`. Importing the same file twice executes it once (module cache).
+- **Namespace spellings (W25).** `::` is the Rust-style separator — `use std::bio;`, `use bio::sequence`, and multi-segment `use a::b::c` are EXACT sugar for the `/` form (`a::b::c` resolves as `a/b/c`); every separator (`/`, `.`, `-`, `::`) may be mixed within one path. The imported module is a Map, so qualified access (`bio.some_fn(...)`) is the namespace read, and — because the `use` also flat-binds every export beside the alias — the old flat spelling (`some_fn(...)`) keeps working beside it (back-compat is a PINNED behavior, not an accident: tests/differential/namespaces.op pins both spellings byte-identically on both engines, plus aliased namespaces where the same module is reachable under two binding names).
 - **Resolution algorithm (W069, pinned).** The path is tried against candidate roots **in order; first regular file wins**:
   | # | candidate root | class | notes |
   |---|---|---|---|

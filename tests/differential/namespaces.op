@@ -1,0 +1,23 @@
+# differential: W25 namespaces — the `::` separator form is sugar for `/`,
+# qualified access and flat aliases both work, and aliases rename the
+# namespace binding. Byte-identical on both engines; the SAME module loaded
+# under two spellings is the same repertoire.
+use std::set;
+use std/set as set2;
+use std::path;
+use std::strings;
+
+gene main() {
+    # qualified access (the namespace spelling)
+    print(set.set_eq(set.set_from([1, 2]), set.set_from([2, 1])))
+    print(set.set_count(set.set_union([1, 2], [2, 3])))
+    # aliased namespace: the same module under a different binding name
+    print(set2.set_count(set2.set_union([1, 2], [2, 3])))
+    # dotted-segment form (pre-existing separator) agrees with `::`
+    print(path.path_join(["a", "b"]))
+    # flat aliases kept beside the namespace (back-compat, both spellings)
+    print(strings.capital("operon"))
+    print(capital("hello"))
+    # nested data through the namespace map
+    print(has(set, "set_from"), type(set2))
+}

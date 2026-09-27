@@ -1874,6 +1874,7 @@ class P:
 
     def use_path(self):
         # segments joined by separators; boundary words ('as') never glue in
+        # W25 mirror: `::` is the Rust-style separator, sugar for '/'
         parts = []
         while True:
             t = self.peek()
@@ -1882,14 +1883,20 @@ class P:
                     break
                 parts.append(t[1]); self.next()
                 nt = self.peek()
-                if not (nt[0] == "SYM" and nt[1] in ("/", ".", "-")):
+                if not (nt[0] == "SYM" and nt[1] in ("/", ".", "-", ":")):
                     break
             elif t[0] == "SYM" and t[1] in ("/", ".", "-"):
                 parts.append(t[1]); self.next()
+            elif t[0] == "SYM" and t[1] == ":":
+                nt = self.toks[self.pos + 1] if self.pos + 1 < len(self.toks) else ("EOF", None, 0)
+                if nt[0] == "SYM" and nt[1] == ":":
+                    parts.append("/"); self.next(); self.next()
+                else:
+                    break
             elif t[0] == "STR":
                 parts.append(t[1]); self.next()
                 nt = self.peek()
-                if not (nt[0] == "SYM" and nt[1] in ("/", ".", "-")):
+                if not (nt[0] == "SYM" and nt[1] in ("/", ".", "-", ":")):
                     break
             else:
                 break
