@@ -382,6 +382,146 @@ fn walk_files(root: &Path, dir: &Path, rows: &mut Vec<String>) {
     }
 }
 
+// ---------------------------------------------------------------- registry
+// W21: the cheap first registry is a static git-index file: JSON LINES,
+// one flat object per line, append-only by convention (a later line for
+// the same name supersedes an earlier one). No server, no crates: the
+// file is shareable through git, which is the whole hosting model at
+// this stage. `operon mod add NAME --registry FILE` resolves NAME through
+// the index and then uses the ordinary git machinery; `operon mod publish`
+// appends the caller's own package as one line.
+
+#[derive(Debug, Clone)]
+pub struct RegistryEntry {
+    pub name: String,
+    pub version: String,
+    pub git: String,
+    pub rev: String,
+    pub sha256: String,
+    pub description: String,
+}
+
+/// Pull one `"key": "value"` string pair out of a flat JSON object line.
+/// Values must be JSON strings (no nesting, no numbers: every registry
+/// field is a string). Returns None when the key is absent.
+fn json_line_get(line: &str, key: &str) -> Option<String> {
+    let pat = format!("\"{}\"", key);
+    let mut rest = line;
+    loop {
+        let i = rest.find(&pat)?;
+        let after = &rest[i + pat.len()..];
+        let after = after.trim_start();
+        if !after.starts_with(':') {
+            rest = after;
+            continue;
+        }
+        let after = after[1..].trim_start();
+        if !after.starts_with('"') {
+            return None;
+        }
+        let mut out = String::new();
+        let mut chars = after[1..].chars();
+        while let Some(c) = chars.next() {
+            match c {
+                '"' => return Some(out),
+                '\\' => match chars.next() {
+                    Some('n') => out.push('\n'),
+                    Some('t') => out.push('\t'),
+                    Some('r') => out.push('\r'),
+                    Some('"') => out.push('"'),
+                    Some('\\') => out.push('\\'),
+                    Some(other) => {
+                        out.push('\\');
+                        out.push(other);
+                    }
+                    None => return None,
+                },
+                other => out.push(other),
+            }
+        }
+        return None;
+    }
+}
+
+fn json_escape(s: &str) -> String {
+    let mut out = String::new();
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            other => out.push(other),
+        }
+    }
+    out
+}
+
+/// Parse a registry index. Line-precise rejections (a registry that lies
+/// would resolve installs against the wrong code, so malformed lines are
+/// hard errors, never skipped).
+pub fn parse_registry(src: &str) -> Result<Vec<RegistryEntry>, String> {
+    let mut out = Vec::new();
+    for (i, raw) in src.lines().enumerate() {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let bad = |why: &str| format!("registry line {}: {}", i + 1, why);
+        if !line.starts_with('{') || !line.ends_with('}') {
+            return Err(bad("expected a flat JSON object"));
+        }
+        let name = json_line_get(line, "name").ok_or_else(|| bad("missing \"name\""))?;
+        if name.is_empty() {
+            return Err(bad("empty \"name\""));
+        }
+        let git = json_line_get(line, "git").ok_or_else(|| bad("missing \"git\""))?;
+        let rev = json_line_get(line, "rev").ok_or_else(|| bad("missing \"rev\""))?;
+        let version = json_line_get(line, "version").unwrap_or_default();
+        let sha256 = json_line_get(line, "sha256").unwrap_or_default();
+        let description = json_line_get(line, "description").unwrap_or_default();
+        out.push(RegistryEntry {
+            name,
+            version,
+            git,
+            rev,
+            sha256,
+            description,
+        });
+    }
+    Ok(out)
+}
+
+/// Resolve `name` against a registry file. The LAST matching line wins
+/// (append-only convention: republished versions land later in the file).
+fn registry_lookup(path: &str, name: &str) -> RegistryEntry {
+    let src = std::fs::read_to_string(path)
+        .unwrap_or_else(|e| die_pkg(&format!("cannot read registry '{}': {}", path, e)));
+    let entries = parse_registry(&src).unwrap_or_else(|e| die_pkg(&e));
+    let hits: Vec<&RegistryEntry> = entries.iter().filter(|e| e.name == name).collect();
+    match hits.last() {
+        Some(e) => (*e).clone(),
+        None => die_pkg(&format!("'{}' not in registry '{}'", name, path)),
+    }
+}
+
+/// Pull the `--registry FILE` flag out of a flag list (shared by publish).
+fn registry_path_from(rest: &[String], start: usize) -> (String, usize) {
+    let mut i = start;
+    while i < rest.len() {
+        if rest[i] == "--registry" {
+            let p = rest
+                .get(i + 1)
+                .cloned()
+                .unwrap_or_else(|| die_pkg("--registry needs a file path"));
+            return (p, i);
+        }
+        i += 1;
+    }
+    die_pkg("this subcommand needs --registry FILE (the static git index)");
+}
+
 /// Shallow-clone `url` at `rev` (or HEAD when None) into `dest`; returns the
 /// resolved full rev. Uses the git CLI (no crates, by policy).
 pub fn git_checkout(url: &str, rev: Option<&str>, dest: &Path) -> Result<String, String> {
@@ -633,22 +773,57 @@ pub fn mod_command(rest: &[String]) -> ! {
         }
         "add" => {
             let mut m = read_manifest();
-            let url = rest
+            let target = rest
                 .get(1)
                 .cloned()
-                .unwrap_or_else(|| die_pkg("add needs a git URL"));
-            // name: derived from the URL's basename, or --as NAME
-            let mut name = url
-                .trim_end_matches('/')
-                .rsplit('/')
-                .next()
-                .unwrap_or("dep")
-                .trim_end_matches(".git")
-                .to_string();
-            let mut rev = None;
+                .unwrap_or_else(|| die_pkg("add needs a git URL or a registry name"));
+            // W21: `add NAME --registry FILE` resolves NAME through the
+            // static git index first; everything else behaves like before.
+            let mut reg_path: Option<String> = None;
+            {
+                let mut i = 2;
+                while i < rest.len() {
+                    if rest[i] == "--registry" {
+                        reg_path = Some(rest.get(i + 1).cloned().unwrap_or_else(|| {
+                            die_pkg("--registry needs a file path")
+                        }));
+                    }
+                    i += 1;
+                }
+            }
+            let url;
+            let mut name;
+            let mut rev: Option<String> = None;
+            if let Some(rp) = &reg_path {
+                let entry = registry_lookup(rp, &target);
+                name = entry.name.clone();
+                url = entry.git.clone();
+                rev = Some(entry.rev.clone());
+                if !entry.sha256.is_empty() {
+                    println!(
+                        "resolved '{}' {} via registry (checksum {})",
+                        name,
+                        entry.version,
+                        &entry.sha256[..entry.sha256.len().min(12)]
+                    );
+                }
+            } else {
+                // name: derived from the URL's basename, or --as NAME
+                name = target
+                    .trim_end_matches('/')
+                    .rsplit('/')
+                    .next()
+                    .unwrap_or("dep")
+                    .trim_end_matches(".git")
+                    .to_string();
+                url = target.clone();
+            }
             let mut i = 2;
             while i < rest.len() {
                 match rest[i].as_str() {
+                    "--registry" => {
+                        i += 1; // consumed above
+                    }
                     "--as" => {
                         i += 1;
                         name = rest
@@ -738,6 +913,103 @@ pub fn mod_command(rest: &[String]) -> ! {
             std::fs::write("operon.lock", emit_lock(&lock)).expect("write operon.lock");
             println!("installed {} dep(s)", lock.len());
         }
+        "publish" => {
+            // W21: append this package to a static registry file as one
+            // JSON line. Requires: a git repo (for the HEAD rev), a git
+            // URL (--url or the 'origin' remote), and --registry FILE.
+            let m = read_manifest();
+            let (reg_path, _) = registry_path_from(rest, 1);
+            let mut url: Option<String> = None;
+            let mut desc = String::new();
+            let mut i = 1;
+            while i < rest.len() {
+                match rest[i].as_str() {
+                    "--registry" => {
+                        i += 1;
+                    }
+                    "--url" => {
+                        i += 1;
+                        url = Some(
+                            rest.get(i)
+                                .cloned()
+                                .unwrap_or_else(|| die_pkg("--url needs a git URL")),
+                        );
+                    }
+                    "--desc" => {
+                        i += 1;
+                        desc = rest
+                            .get(i)
+                            .cloned()
+                            .unwrap_or_else(|| die_pkg("--desc needs text"));
+                    }
+                    other => die_pkg(&format!("unknown flag '{}'", other)),
+                }
+                i += 1;
+            }
+            if url.is_none() {
+                let out = std::process::Command::new("git")
+                    .args(["remote", "get-url", "origin"])
+                    .output();
+                if let Ok(o) = out {
+                    if o.status.success() {
+                        url = Some(String::from_utf8_lossy(&o.stdout).trim().to_string());
+                    }
+                }
+            }
+            let url = match url {
+                Some(u) => u,
+                None => die_pkg("publish needs --url or a git 'origin' remote"),
+            };
+            let out = std::process::Command::new("git")
+                .args(["rev-parse", "HEAD"])
+                .output();
+            let rev = match out {
+                Ok(o) if o.status.success() => {
+                    String::from_utf8_lossy(&o.stdout).trim().to_string()
+                }
+                _ => die_pkg("publish needs a git repo with at least one commit"),
+            };
+            let checksum = checkout_checksum(std::path::Path::new("."));
+            let line = format!(
+                "{{\"name\": \"{}\", \"version\": \"{}\", \"git\": \"{}\", \"rev\": \"{}\", \"sha256\": \"{}\", \"description\": \"{}\"}}",
+                json_escape(&m.name),
+                json_escape(&m.version),
+                json_escape(&url),
+                json_escape(&rev),
+                json_escape(&checksum),
+                json_escape(&desc)
+            );
+            // idempotence: the same (name, version, rev) is not appended twice
+            if let Ok(existing) = std::fs::read_to_string(&reg_path) {
+                if let Ok(entries) = parse_registry(&existing) {
+                    if entries
+                        .iter()
+                        .any(|e| e.name == m.name && e.version == m.version && e.rev == rev)
+                    {
+                        println!(
+                            "{} {} already in registry at {}",
+                            m.name, m.version, &rev[..rev.len().min(7)]
+                        );
+                        std::process::exit(0);
+                    }
+                }
+            }
+            use std::io::Write;
+            let mut f = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&reg_path)
+                .unwrap_or_else(|e| die_pkg(&format!("cannot open registry '{}': {}", reg_path, e)));
+            writeln!(f, "{}", line)
+                .unwrap_or_else(|e| die_pkg(&format!("cannot write registry: {}", e)));
+            println!(
+                "published {} {} ({} rev {})",
+                m.name,
+                m.version,
+                url,
+                &rev[..rev.len().min(7)]
+            );
+        }
         "tree" => {
             let m = read_manifest();
             let lock = read_or_new_lock();
@@ -771,7 +1043,7 @@ pub fn mod_command(rest: &[String]) -> ! {
             }
         }
         other => die_pkg(&format!(
-            "unknown subcommand '{}' (init | add | remove | update | install | tree | verify)",
+            "unknown subcommand '{}' (init | add | remove | update | install | tree | verify | publish)",
             other
         )),
     }
