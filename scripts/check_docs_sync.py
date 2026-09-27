@@ -87,7 +87,10 @@ def main():
     spec_txt = open(os.path.join(ROOT, "SPEC.md"), encoding="utf-8").read()
     st = truth["spec"]["status"]
     ok_dev = re.fullmatch(r"v\d+\.\d+\.\d+-dev", st)
-    ok_tag = (st == truth["version"])
+    # normalize the optional v/V prefix so a tagged Status ("v2.2.0") matches
+    # Cargo's unprefixed "2.2.0" — the exact-match form could never pass,
+    # leaving the tagged-state branch dead code (D-009 needs both forms live)
+    ok_tag = (st.lstrip("vV") == truth["version"])
     if not (ok_dev or ok_tag):
         fails.append(f"W54: SPEC Status ('{st}') must be the Cargo version ('{truth['version']}') "
                      f"or a vX.Y.Z-dev milestone label (D-009)")

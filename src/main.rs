@@ -742,11 +742,12 @@ fn real_main() {
                     .map(|f| format!("\"{}\"", tools::json_escape(f)))
                     .collect();
                 println!(
-                    "{{\"files\":{},\"proofs\":{},\"passed\":{},\"failed\":{},\"failures\":[{}]}}",
+                    "{{\"files\":{},\"proofs\":{},\"passed\":{},\"failed\":{},\"asserts\":{},\"failures\":[{}]}}",
                     rep.files,
                     rep.proofs,
                     rep.passed,
                     rep.failed,
+                    rep.asserts,
                     fails.join(",")
                 );
             }
