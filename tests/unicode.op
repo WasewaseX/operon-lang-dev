@@ -1,0 +1,41 @@
+# unicode — W28 proof: documented string semantics (SPEC §3) — char vs
+# byte vs grapheme indexing, fold subset, char-indexed helpers.
+frame proof {
+    # len() counts CHARS (Unicode scalar values) on both cores
+    assert(len("héllo") == 5)
+    assert(len("日本語") == 3)
+
+    # indexing and slicing are char-indexed
+    assert("日本語"[1] == "本")
+    assert(char_at("日本語", 1) == "本")
+    assert(char_slice("héllo", 1, 3) == "él")
+    assert(char_at("abc", 99) == null)
+    assert(char_slice("héllo", 1, 999) == "éllo")
+
+    # grapheme clusters: documented subset (combining marks, ZWJ, flags)
+    assert(grapheme_len("abc") == 3)
+    assert(grapheme_len("é") == 1)
+    assert(grapheme_len("👨‍👩‍👧") == 1)
+    assert(grapheme_len("🇺🇸") == 1)
+    assert(grapheme_len("a🇺🇸b") == 3)
+    assert(len("👨‍👩‍👧") == 5 && grapheme_len("👨‍👩‍👧") == 1)
+
+    # case-fold subset: ASCII + Latin-1 + Latin Extended-A (even) + Greek
+    assert(fold_case("HELLO") == "hello")
+    assert(fold_case("ÉÀÞ") == "éàþ")
+    assert(fold_case("AuthProvider") == "authprovider")
+    assert(fold_case("ΩΟ") == "ωο")
+
+    # std/unicode helpers (codepoint round-trips + width + classes)
+    use std/unicode as u
+    assert(u.char_codes("abé") == [97, 98, 233])
+    assert(u.from_char_codes([104, 105]) == "hi")
+    assert(u.byte_width("aé日") == 6)
+    assert(u.byte_width("abc") == 3)
+    assert(u.is_upper("É"))
+    assert(u.is_lower("é"))
+    assert(u.is_digit("7"))
+    assert(u.is_alpha("Ο"))
+    assert(!u.is_alpha("7"))
+}
+print("unicode proof complete")

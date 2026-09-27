@@ -6999,6 +6999,74 @@ impl Interp {
                 }
                 Ok(Value::Str(out))
             }
+            // ---------------- W28: Unicode depth (SPEC §3, documented subset)
+            "grapheme_len" => {
+                // Grapheme-cluster count — DOCUMENTED SUBSET (no external
+                // deps): base + combining marks (U+0300-036F, U+1AB0-1AFF,
+                // U+1DC0-1DFF, U+20D0-20FF, U+FE20-FE2F), ZWJ (U+200D)
+                // sequences, and regional-indicator pairs (flags). This is
+                // the same rule set the oracle implements — byte-identical.
+                let s = args.first().map(|v| v.display()).unwrap_or_default();
+                Ok(Value::Int(grapheme_count(&s) as i64))
+            }
+            "fold_case" => {
+                // Case-FOLD subset: ASCII, Latin-1 Supplement (À-Þ),
+                // Latin Extended-A (U+0100-U+0137 even -> odd), Greek
+                // (U+0391-U+03A9). Everything else unchanged. Same table
+                // logic mirrored op-for-op in the oracle (SPEC §3).
+                let s = args.first().map(|v| v.display()).unwrap_or_default();
+                let out: String = s
+                    .chars()
+                    .map(|c| {
+                        let cp = c as u32;
+                        let folded = match cp {
+                            0x41..=0x5A => cp + 32,
+                            0xC0..=0xD6 | 0xD8..=0xDE => cp + 32,
+                            0x100..=0x137 if cp.is_multiple_of(2) => cp + 1,
+                            0x391..=0x3A9 if cp != 0x3A2 => cp + 32,
+                            _ => cp,
+                        };
+                        char::from_u32(folded).unwrap_or(c)
+                    })
+                    .collect();
+                Ok(Value::Str(out))
+            }
+            "char_at" => {
+                // char-indexed read (char = Unicode scalar value) — the
+                // SAME unit len(str) already counts on both cores.
+                let s = args.first().map(|v| v.display()).unwrap_or_default();
+                let i = match args.get(1) {
+                    Some(Value::Int(i)) => *i,
+                    _ => return Err(Stress::new("unfolded", "char_at(s, i) needs an int index")),
+                };
+                let chars: Vec<char> = s.chars().collect();
+                let j = if i < 0 { chars.len() as i64 + i } else { i };
+                if j >= 0 && (j as usize) < chars.len() {
+                    Ok(Value::Str(chars[j as usize].to_string()))
+                } else {
+                    self.note(self.cur_line, 4, "char_at out of range; null");
+                    Ok(Value::Null)
+                }
+            }
+            "char_slice" => {
+                // char-indexed slice [i, j), clamped — mirrors the oracle
+                let s = args.first().map(|v| v.display()).unwrap_or_default();
+                let (i, j) = match (args.get(1), args.get(2)) {
+                    (Some(Value::Int(a)), Some(Value::Int(b))) => (*a, *b),
+                    _ => {
+                        return Err(Stress::new(
+                            "unfolded",
+                            "char_slice(s, i, j) needs int bounds",
+                        ))
+                    }
+                };
+                let chars: Vec<char> = s.chars().collect();
+                let n = chars.len() as i64;
+                let a = (if i < 0 { n + i } else { i }).clamp(0, n) as usize;
+                let b = (if j < 0 { n + j } else { j }).clamp(0, n) as usize;
+                let hi = b.max(a);
+                Ok(Value::Str(chars[a..hi].iter().collect()))
+            }
             "random" => {
                 // xorshift64* — identical state machine in both implementations
                 let mut x = self.rng;
@@ -9855,6 +9923,11 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "unix_time",
     "date_parts",
     "date_fmt",
+    // W28 (SPEC §3): Unicode depth — documented subsets, oracle-mirrored
+    "grapheme_len",
+    "fold_case",
+    "char_at",
+    "char_slice",
     // W06 (D-014): first-class Option/Result
     "some",
     "none",
@@ -10075,4 +10148,56 @@ pub fn ann_matches(v: &Value, ann: &TypeAnn) -> bool {
         TypeAnn::Union(alts) => alts.iter().any(|a| ann_matches(v, a)),
         TypeAnn::Optional(inner) => matches!(v, Value::Null) || ann_matches(v, inner),
     }
+}
+
+// ------------------------------------------------------------------ W28
+/// W28 (SPEC §3): grapheme-cluster count over a DOCUMENTED SUBSET of the
+/// extended-grapheme rules (no external deps): a base char extends with
+/// combining marks (U+0300-036F, U+1AB0-1AFF, U+1DC0-1DFF, U+20D0-20FF,
+/// U+FE20-FE2F), ZWJ (U+200D) glues the previous and following char, and
+/// regional-indicator pairs (flags) are one cluster each. ASCII is a fast
+/// path. The Python oracle implements the identical rule set — the two
+/// counts can never diverge on the same input.
+pub fn grapheme_count(s: &str) -> usize {
+    let chars: Vec<char> = s.chars().collect();
+    let is_combining = |c: char| {
+        matches!(
+            c as u32,
+            0x0300..=0x036F | 0x1AB0..=0x1AFF | 0x1DC0..=0x1DFF | 0x20D0..=0x20FF | 0xFE20..=0xFE2F
+        )
+    };
+    let is_ri = |c: char| matches!(c as u32, 0x1F1E6..=0x1F1FF);
+    let n = chars.len();
+    let mut clusters = 0usize;
+    let mut i = 0usize;
+    while i < n {
+        clusters += 1;
+        if is_ri(chars[i]) {
+            // a flag = exactly one pair; a lone RI is its own cluster
+            if i + 1 < n && is_ri(chars[i + 1]) {
+                i += 2;
+            } else {
+                i += 1;
+            }
+            continue;
+        }
+        let mut j = i + 1;
+        let mut zwj_forward = chars[i] == '\u{200D}';
+        while j < n {
+            let c = chars[j];
+            if is_combining(c) {
+                j += 1;
+            } else if c == '\u{200D}' {
+                j += 1;
+                zwj_forward = true;
+            } else if zwj_forward {
+                j += 1;
+                zwj_forward = false;
+            } else {
+                break;
+            }
+        }
+        i = j;
+    }
+    clusters
 }

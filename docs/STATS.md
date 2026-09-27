@@ -7,12 +7,12 @@ README/SPEC/BENCH are forbidden — link here instead.
 - **Version**: 2.2.0  · SPEC Status: v2.3.0-dev
 - **Keywords (parser reserved set)**: 59 — table in [KEYWORDS.md](KEYWORDS.md)
   - analogy pending: trait
-- **Std modules**: 20 (args, bio, collections, csv, deque, fmt, fs, heap, iter, json, math, motifs, path, random, seq, serialize, set, strings, testing, time)
-- **Std functions (.op-level `gene` defs)**: 198
+- **Std modules**: 21 (args, bio, collections, csv, deque, fmt, fs, heap, iter, json, math, motifs, path, random, seq, serialize, set, strings, testing, time, unicode)
+- **Std functions (.op-level `gene` defs)**: 206
 - **Red-team payload files**: 98
-- **Proof files**: 116 (of 241 test .op files)
-- **Proof run** (bin/operon): 136 files, 110 proofs, 1489 asserts
-- **Differential harness**: 168 match / 0 diverge (0 skipped) · granted lane: 7 cells
+- **Proof files**: 117 (of 243 test .op files)
+- **Proof run** (bin/operon): 138 files, 111 proofs, 1515 asserts
+- **Differential harness**: 170 match / 0 diverge (0 skipped) · granted lane: 7 cells
 - **CLI subcommands**: ast, bench, build, check, crispr, doc, explain, fix, fmt, graph, ir, keywords, lint, profile, repl, rna, run, test, version, watch
 - **LSP methods**: initialize, shutdown, textDocument/completion, textDocument/definition, textDocument/didChange, textDocument/didClose, textDocument/didOpen, textDocument/documentSymbol, textDocument/formatting, textDocument/hover, textDocument/prepareRename, textDocument/publishDiagnostics, textDocument/references, textDocument/rename, textDocument/semanticTokens, textDocument/signatureHelp
 
@@ -40,3 +40,4 @@ README/SPEC/BENCH are forbidden — link here instead.
 | std/strings | 17 |
 | std/testing | 6 |
 | std/time | 10 |
+| std/unicode | 8 |

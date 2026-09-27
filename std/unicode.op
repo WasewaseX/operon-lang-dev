@@ -1,0 +1,94 @@
+# std/unicode — Unicode depth helpers over the language's documented
+# string semantics (SPEC §3): strings index by CHAR (Unicode scalar
+# value), len() counts chars, and grapheme clusters are the documented
+# subset behind grapheme_len(). Pure string arithmetic — no capabilities,
+# no filesystem, no external tables beyond the fold table mirrored in
+# both engines (SPEC §3).
+#
+# Pins: tests/unicode.op + tests/differential/unicode.op (byte-identical).
+
+gene upper(c) {
+    # one-char string -> uppercase form (fold-table inverse subset);
+    # non-alpha passes through unchanged
+    let lo = fold_case(c)
+    if lo == c {
+        return c
+    }
+    # the folded char differs: find the uppercase via table inversion for
+    # the documented ranges only (ASCII fast path)
+    let cp = ord(c)
+    if cp >= 97 && cp <= 122 {
+        return chr(cp - 32)
+    }
+    return c
+}
+
+gene is_upper(c) {
+    # true when c is an ASCII/Latin-1/Greek uppercase in the fold subset
+    let cp = ord(c)
+    let a = cp >= 65 && cp <= 90
+    let b = cp >= 192 && cp <= 214
+    let g = cp >= 216 && cp <= 222
+    let d = cp >= 913 && cp <= 929
+    let e = cp >= 931 && cp <= 939
+    return a || b || g || d || e
+}
+
+gene is_lower(c) {
+    let cp = ord(c)
+    let a = cp >= 97 && cp <= 122
+    let b = cp >= 224 && cp <= 246
+    let g = cp >= 248 && cp <= 254
+    let d = cp >= 945 && cp <= 961
+    let e = cp >= 963 && cp <= 969
+    return a || b || g || d || e
+}
+
+gene is_digit(c) {
+    let cp = ord(c)
+    return cp >= 48 && cp <= 57
+}
+
+gene is_alpha(c) {
+    return is_upper(c) || is_lower(c)
+}
+
+gene char_codes(s) {
+    # the string as a list of codepoints (char-indexed — matches len())
+    let out = []
+    for c in s {
+        push(out, ord(c))
+    }
+    return out
+}
+
+gene from_char_codes(codes) {
+    let out = ""
+    for cp in codes {
+        out = out + chr(cp)
+    }
+    return out
+}
+
+gene byte_width(s) {
+    # UTF-8 byte width of the char-indexed string (len() counts chars;
+    # this counts the bytes a UTF-8 encoder would emit) — subset rule:
+    # 1 byte < 0x80, 2 bytes < 0x800, 3 bytes < 0x10000, else 4
+    let total = 0
+    for c in s {
+        let cp = ord(c)
+        if cp < 128 {
+            total = total + 1
+        }
+        if cp >= 128 && cp < 2048 {
+            total = total + 2
+        }
+        if cp >= 2048 && cp < 65536 {
+            total = total + 3
+        }
+        if cp >= 65536 {
+            total = total + 4
+        }
+    }
+    return total
+}

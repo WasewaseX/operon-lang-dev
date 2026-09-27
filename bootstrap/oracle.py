@@ -121,6 +121,47 @@ def repressilator_levels(n, tick, params=None):
                 lv[j] = v if v > 0.0 else 0.0
     return lv
 
+def grapheme_count(s):
+    """W28 (SPEC 3): grapheme-cluster count over a DOCUMENTED SUBSET of the
+    extended-grapheme rules (mirror of the Rust core's grapheme_count):
+    base + combining marks (U+0300-036F, U+1AB0-1AFF, U+1DC0-1DFF,
+    U+20D0-20FF, U+FE20-FE2F), ZWJ (U+200D) glues prev+next, regional-
+    indicator pairs (flags) are one cluster each."""
+    chars = list(s)
+    combining = lambda cp: (0x0300 <= cp <= 0x036F or 0x1AB0 <= cp <= 0x1AFF or
+                            0x1DC0 <= cp <= 0x1DFF or 0x20D0 <= cp <= 0x20FF or
+                            0xFE20 <= cp <= 0xFE2F)
+    ri = lambda cp: 0x1F1E6 <= cp <= 0x1F1FF
+    n = len(chars)
+    clusters = 0
+    i = 0
+    while i < n:
+        clusters += 1
+        cp = ord(chars[i])
+        if ri(cp):
+            if i + 1 < n and ri(ord(chars[i + 1])):
+                i += 2
+            else:
+                i += 1
+            continue
+        j = i + 1
+        zwj_forward = cp == 0x200D
+        while j < n:
+            c2 = ord(chars[j])
+            if combining(c2):
+                j += 1
+            elif c2 == 0x200D:
+                j += 1
+                zwj_forward = True
+            elif zwj_forward:
+                j += 1
+                zwj_forward = False
+            else:
+                break
+        i = j
+    return clusters
+
+
 class Pheno:
     __slots__ = ("name", "parent", "fields", "methods", "implements")
     def __init__(self, name, parent, fields, methods, implements=None):
@@ -2645,6 +2686,7 @@ randomize chr ord now sleep argv read_file write_file append_file exists file_si
 fs_delete fs_rename fs_mkdir re_replace
 http_get serve recv_request send_response json_parse json_str env call items py
 re_match re_find re_groups unix_time date_parts date_fmt
+grapheme_len fold_case char_at char_slice
 some none ok err is_some is_none is_ok is_err unwrap unwrap_or
 enumerate zip sorted reversed any all first last take drop unique flatten chunk round clamp divmod""".split())
 
@@ -5764,6 +5806,41 @@ class Interp:
                     out.append(fmt[i])
                     i += 1
             return "".join(out)
+        if name in ("grapheme_len", "fold_case", "char_at", "char_slice"):
+            # W28 (SPEC §3): Unicode depth — documented subsets, mirror of
+            # the Rust core (identical rule set and fold table).
+            s = v_display(args[0]) if args else ""
+            if name == "grapheme_len":
+                return grapheme_count(s)
+            if name == "fold_case":
+                out = []
+                for ch in s:
+                    cp = ord(ch)
+                    if 0x41 <= cp <= 0x5A or 0xC0 <= cp <= 0xD6 or 0xD8 <= cp <= 0xDE:
+                        cp += 32
+                    elif 0x100 <= cp <= 0x137 and cp % 2 == 0:
+                        cp += 1
+                    elif 0x391 <= cp <= 0x3A9 and cp != 0x3A2:
+                        cp += 32
+                    out.append(chr(cp))
+                return "".join(out)
+            chars = list(s)
+            n = len(chars)
+            if name == "char_at":
+                i = args[1] if len(args) > 1 else 0
+                if not isinstance(i, int):
+                    raise Stress("unfolded", "char_at(s, i) needs an int index")
+                j = n + i if i < 0 else i
+                if 0 <= j < n:
+                    return chars[j]
+                self.note(4, "char_at out of range; null")
+                return None
+            # char_slice
+            i = args[1] if len(args) > 1 else 0
+            j = args[2] if len(args) > 2 else 0
+            a = max(0, min(n, n + i if i < 0 else i))
+            b = max(0, min(n, n + j if j < 0 else j))
+            return "".join(chars[a:max(a, b)])
         # ------------------------------------------------ Option / Result (W06, D-014)
         # Constructors + predicates + extraction. Error messages byte-match
         # the Rust core (Stress::at texts); families are distinct.
