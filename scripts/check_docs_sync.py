@@ -36,6 +36,18 @@ FORBIDDEN = [
      ["README.md", "BENCH.md"]),
     (r"\d+\s+attacks contained", "W53: red-team counts are generated (docs/STATS.md), never hand-typed",
      ["README.md", "BENCH.md"]),
+    (r"proof-frame runner \(\d+ files", "W53: suite counts are generated (docs/STATS.md), never hand-typed",
+     ["README.md"]),
+    (r"Current suite: \d+ files", "W53: suite counts are generated (docs/STATS.md), never hand-typed",
+     ["SPEC.md"]),
+    (r"\d+ files / \d+ proofs", "W53: suite counts are generated (docs/STATS.md), never hand-typed",
+     ["SPEC.md"]),
+    (r"\d+ byte-exact targets", "W53: differential counts are generated (docs/STATS.md), never hand-typed",
+     ["SPEC.md"]),
+    (r"\d+ programs, all MATCH", "W53: differential counts move every session — link docs/STATS.md",
+     ["SPEC.md"]),
+    (r"\d+ payloads, \d+ breaches", "W53: red-team counts are generated (docs/STATS.md), never hand-typed",
+     ["SPEC.md"]),
 ]
 
 def files_for(spec):
