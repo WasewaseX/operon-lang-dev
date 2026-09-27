@@ -454,7 +454,39 @@ impl Value {
             }
             (Value::Gene(d1, _), Value::Gene(d2, _)) => Arc::ptr_eq(d1, d2),
             (Value::Seq(d1, _), Value::Seq(d2, _)) => Arc::ptr_eq(d1, d2),
-            (Value::Obj(d1, _), Value::Obj(d2, _)) => Arc::ptr_eq(d1, d2),
+            // builder-B parity finding (W34 stage 2, PR #28 pin): instances are
+            // DATA, not handles — equal iff same class name AND deep-equal
+            // field values. The old Arc::ptr_eq on the shared PhenoDef made
+            // any two same-class instances == regardless of their fields
+            // (the def pointer identifies the TYPE, not the instance state).
+            // Closures (Gene) and streams (Seq) above stay identity-based:
+            // they are behavior handles, not data. Oracle mirrors this arm
+            // op-for-op (ObjInst in deep_eq).
+            (Value::Obj(d1, ma), Value::Obj(d2, mb)) => {
+                if d1.name != d2.name {
+                    return false;
+                }
+                if Rc::ptr_eq(ma, mb) {
+                    return true; // a structure equals itself
+                }
+                let pair = (
+                    Rc::as_ptr(ma) as *const u8 as usize,
+                    Rc::as_ptr(mb) as *const u8 as usize,
+                );
+                if !seen.insert(pair) {
+                    return true; // already comparing this pair (cycle)
+                }
+                let fa = ma.borrow();
+                let fb = mb.borrow();
+                let ok = fa.len() == fb.len()
+                    && fa.iter().all(|(k, v)| {
+                        fb.iter().any(|(k2, v2)| {
+                            k.deep_eq_g(k2, seen, depth + 1) && v.deep_eq_g(v2, seen, depth + 1)
+                        })
+                    });
+                // sec-r5 (F-10): pair stays in `seen` — DAG memoization
+                ok
+            }
             // W06: variants are equal iff same tag and payloads are equal;
             // families are distinct (Some(x) != Ok(x)) because the tag IS the
             // contract. None == None (no payload to compare).
