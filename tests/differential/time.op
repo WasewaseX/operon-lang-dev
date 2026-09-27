@@ -1,0 +1,12 @@
+# time differential — pure calendar/duration arithmetic (no wall-clock reads),
+# byte-identical both engines. UTC-only contract.
+use std/time;
+print("add: {time.time_add(1_727_385_600, 3_600)}")
+print("diff: {time.time_diff(1_000, 2_500)}")
+print("days: {time.time_days_between(1_727_385_600, 1_727_472_001)}")
+print("midnight: {time.time_midnight(1_727_385_600)}")
+print("date: {time.time_date_only(1_727_385_600)}")
+print("leap: {time.time_is_leap(2024)} {time.time_is_leap(1900)} {time.time_is_leap(2000)}")
+print("dim: {time.time_days_in_month(2024, 2)} {time.time_days_in_month(2023, 2)} {time.time_days_in_month(2023, 13)}")
+print("hms: {time.dur_hms(3615)} {time.dur_hms(360000)}")
+print("human: {time.dur_human(93784)} {time.dur_human(60)} {time.dur_human(0)} {time.dur_human(-7200)}")

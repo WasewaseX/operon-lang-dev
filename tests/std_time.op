@@ -1,0 +1,46 @@
+# std/time — W33 proof: pure duration/instant arithmetic over the L1d
+# clock builtins. UTC-only contract (no tz support, W89 determinism).
+# Wall-clock reads are never pinned; every assert uses fixed timestamps.
+use std/time;
+frame proof {
+    # instant arithmetic
+    assert(time.time_add(1_000, 60) == 1_060)
+    assert(time.time_add(1_000, -60) == 940)
+    assert(time.time_diff(100, 250) == 150)
+    assert(time.time_diff(250, 100) == -150)
+    assert(time.time_days_between(0, 86_400) == 1)
+    assert(time.time_days_between(1_727_385_600, 1_727_472_000) == 1)
+    # midnight floor
+    assert(time.time_midnight(1_727_385_600) == 1_727_308_800)
+    assert(time.time_midnight(86_400) == 86_400)
+    assert(time.time_midnight(86_399) == 0)
+    # calendar math (proleptic Gregorian, UTC)
+    assert(time.time_is_leap(2024))
+    assert(!time.time_is_leap(2023))
+    assert(!time.time_is_leap(1900))
+    assert(time.time_is_leap(2000))
+    assert(time.time_days_in_month(2024, 2) == 29)
+    assert(time.time_days_in_month(2023, 2) == 28)
+    assert(time.time_days_in_month(2023, 4) == 30)
+    assert(time.time_days_in_month(2023, 13) == 0)
+    assert(time.time_days_in_month(2023, 0) == 0)
+    # fixed-timestamp formatting (date_fmt is deterministic for fixed ts)
+    assert(time.time_date_only(1_727_385_600) == "2024-09-26")
+    # durations
+    assert(time.dur_hms(0) == "00:00:00")
+    assert(time.dur_hms(3615) == "01:00:15")
+    assert(time.dur_hms(86_399) == "23:59:59")
+    assert(time.dur_hms(360_000) == "100:00:00")
+    assert(time.dur_human(0) == "0s")
+    assert(time.dur_human(59) == "59s")
+    assert(time.dur_human(60) == "1m")
+    assert(time.dur_human(3_600) == "1h")
+    assert(time.dur_human(86_400) == "1d")
+    assert(time.dur_human(93_784) == "1d 2h 3m 4s")
+    assert(time.dur_human(-7_200) == "-2h")
+}
+main {
+    promote("dur: {time.dur_hms(45296)}")
+    promote("leap 2000: {time.time_is_leap(2000)}")
+    promote("feb 2024: {time.time_days_in_month(2024, 2)} days")
+}
