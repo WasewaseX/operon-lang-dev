@@ -1,0 +1,53 @@
+# W03 stage 1: callable-generic std APIs — one implementation serves every
+# element type (no per-type duplication), mismatch is a catchable `unfolded`
+# stress, and a callable VALUE is reusable across types. The policy this
+# pins is docs/specs/GENERICS.md stage 1.
+
+use std/iter;
+use std/collections;
+
+frame proof {
+    # --- one map, every element type
+    let nums = [3, 1, 2]
+    let strs = ["a", "bb", "ccc"]
+    let mixes = [1, "x", [2]]
+    assert(iter.map(nums, gene (x) => x * 2) == [6, 2, 4], "map int")
+    assert(iter.map(strs, gene (s) => len(s)) == [1, 2, 3], "map str")
+    assert(iter.map(mixes, gene (v) => type(v)) == ["int", "str", "list"], "map mixed types")
+
+    # --- a callable VALUE is first-class and reusable where ops make sense
+    let double = gene (x) => x + x
+    assert(iter.map(nums, double) == [6, 2, 4], "reuse on ints")
+    assert(iter.map(strs, double) == ["aa", "bbbb", "cccccc"], "reuse on strs")
+
+    # --- filter / fold / sort / group_by are equally type-generic
+    assert(iter.filter(nums, gene (x) => x > 1) == [3, 2], "filter")
+    assert(iter.fold(nums, 0, gene (acc, x) => acc + x) == 6, "fold int")
+    assert(iter.fold(strs, "", gene (acc, s) => acc + s) == "abbccc", "fold str")
+    assert(iter.sort_by_key(strs, gene (s) => len(s)) == ["a", "bb", "ccc"], "sort_by_key")
+    assert(collections.group_by(nums, gene (x) => x % 2) == {1: [3, 1], 0: [2]}, "group_by")
+
+    # --- method miss inside a callable is the SOFT tier: null + note
+    #     (Total Grammar tier 1 — both engines byte-identical)
+    assert(iter.map([1, 2], gene (x) => x.missing()) == [null, null], "method miss -> null + note")
+
+    # --- a real type mismatch inside the body is a catchable unfolded
+    #     stress at the use site (never a parse rejection)
+    stress {
+        let boom = iter.map(nums, gene (x) => x + "s")
+        assert(false, "mismatch must raise")
+    } rescue (e) {
+        assert(e.kind == "unfolded", "mismatch kind")
+    }
+
+    # --- the mismatch surfaces where the OPERATION runs, not at the call
+    #     of the std API (Total Grammar: nothing is rejected up front)
+    let late = false
+    stress {
+        iter.map(nums, gene (x) => { if x == 2 { return x + "s" } return x })
+        late = true
+    } rescue (e) {
+        late = true
+    }
+    assert(late, "resumed after contained mismatch")
+}
