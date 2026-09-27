@@ -214,7 +214,10 @@ impl Caps {
     pub fn denied(kind: &str, what: &str) -> Stress {
         Stress::new(
             "interference",
-            format!("{} denied, no capability grant covers '{}' (grant with --allow-{} or --allow-all)", kind, what, kind),
+            format!(
+                "{} denied, no capability grant covers '{}' (grant with --allow-{} or --allow-all)",
+                kind, what, kind
+            ),
         )
     }
     /// Lexical path normalization (no filesystem access, pure string math).
@@ -4503,10 +4506,7 @@ impl Interp {
             self.note(
                 dl,
                 4,
-                format!(
-                    "promoter inactive: '{}' burst-off, call returns null",
-                    name
-                ),
+                format!("promoter inactive: '{}' burst-off, call returns null", name),
             );
             return Ok(Value::Null);
         }
@@ -5102,10 +5102,7 @@ impl Interp {
             self.note(
                 dl,
                 4,
-                format!(
-                    "promoter inactive: '{}' burst-off, call returns null",
-                    name
-                ),
+                format!("promoter inactive: '{}' burst-off, call returns null", name),
             );
             return Ok(Value::Null);
         }
