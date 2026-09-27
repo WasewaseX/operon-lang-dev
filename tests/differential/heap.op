@@ -1,0 +1,14 @@
+# heap differential — deterministic min-heap ops, byte-identical both engines
+use std/heap;
+let h = heap.heap_from([5, 1, 4, 2, 3])
+print("heap: {h}")
+print("peek: {heap.heap_peek(h)}")
+let p = heap.heap_pop(h)
+print("pop: {p[0]} rest: {p[1]}")
+print("pushed: {heap.heap_push(h, 0)}")
+print("sorted: {heap.heap_sorted(heap.heap_from([9, 3, 7, 1, 8, 2, 6, 5, 4]))}")
+let cmp = gene (x, y) => x[0] < y[0]
+let pq = heap.heap_push(heap.heap_from([[2, "b"], [1, "a"]], cmp), [3, "c"], cmp)
+print("pq sorted: {heap.heap_sorted(pq, cmp)}")
+print("empty: {heap.heap_pop([])}")
+print("src intact: {h}")

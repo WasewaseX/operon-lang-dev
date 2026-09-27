@@ -1,0 +1,11 @@
+# deque differential — pure deque/queue ops, byte-identical both engines
+use std/deque;
+let dq = deque.deque_push_front(deque.deque_push_back(deque.deque_from([1, 2]), 3), 0)
+print("deque: {dq}")
+print("pop front: {deque.deque_pop_front(dq)}")
+print("pop back: {deque.deque_pop_back(dq)}")
+print("peeks: {deque.deque_peek_front(dq)} {deque.deque_peek_back(dq)}")
+print("empty: {deque.deque_pop_front([])}")
+let q = deque.queue_push(deque.queue_push(deque.queue_new(), "x"), "y")
+print("fifo: {deque.queue_pop(q)[0]} {deque.queue_pop(deque.queue_pop(q)[1])[0]}")
+print("src intact: {dq}")

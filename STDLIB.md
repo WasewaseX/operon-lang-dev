@@ -15,8 +15,10 @@ exe-relative (installed trees) or from the interpreter's own tree; a
 | `std/bio.op` | in-silico sequence utilities: `codon_usage`, `is_palindromic_site`, `melting_point`, `gc_skew` |
 | `std/collections.op` | list-shaped data work: `chunk`, `zip`, `group_by`, `take`, `flatten`, `count` |
 | `std/csv.op` | delimited data: `csv_escape`, `csv_row`, `csv_parse`, `csv_parse_line`, `csv_records`, `csv_column`, `csv_count_fields` |
+| `std/deque.op` | double-ended queue + FIFO queue over plain lists (pure: every function returns a NEW list or a `[value, rest]` pair — arguments are never mutated): `deque_from`, `deque_push_back`, `deque_push_front`, `deque_pop_back`, `deque_pop_front`, `deque_peek_front`, `deque_peek_back`, `queue_new`, `queue_push`, `queue_pop`, `queue_len` |
 | `std/fmt.op` | output formatting: `fmt_fixed`, `fmt_thousands`, `fmt_pct`, `fmt_bytes`, `fmt_cell`, `fmt_pad_cell`, `fmt_table`, `fmt_bool` |
 | `std/fs.op` | capability-safe file helpers (Stress-returning, never panicking): `fs_read_or`, `fs_read`, `fs_lines_or`, `fs_lines`, `strings_lines`, `fs_write_text`, `fs_write_lines`, `fs_append_line`, `fs_read_json_or`, `fs_write_json`, `fs_list_dir_or`, `fs_size_or` |
+| `std/heap.op` | deterministic binary min-heap over plain lists (array layout, pure copies; optional comparator gene with the `xs.sort` convention — `cmp(a,b)` true when a belongs before b; priority-queue idiom: `[priority, value]` pairs + `gene (x, y) => x[0] < y[0]`): `heap_from`, `heap_push`, `heap_pop` (returns `[value, rest]`), `heap_peek`, `heap_sorted`, `heap_len` |
 | `std/iter.op` | iterator adapters over lists: `take`, `drain`, `enumerate_pairs`, `zip`, `flatten`, `unique`, `chunk`, `range_step`, `map`, `filter`, `fold`, `scan`, `any`, `all`, `take_while`, `drop_while`, `find_first`, `index_of`, `intersperse`, `sliding`, `sort_by_key`, `reversed`, `concat_all` |
 | `std/json.op` | JSON navigation: `json_type`, `json_is_object`, `json_is_array`, `json_get_or`, `json_get`, `json_merge`, `json_pick`, `json_omit`, `json_flatten`, `json_flatten_into`, `json_compact` |
 | `std/math.op` | numeric helpers: `clamp`, `lerp`, `mean`, `variance`, `stddev`, `median`, `hill`, `sigmoid`, `digits`, `round`, `round_to`, `sign`, `gcd`, `lcm`, `factorial`, `isqrt`, `divmod`, `wrap` |
@@ -27,6 +29,7 @@ exe-relative (installed trees) or from the interpreter's own tree; a
 | `std/set.op` | set algebra over plain lists (a set is a list with unique members; equality is order-independent; every function is pure and returns a NEW list): `set_from`, `set_has`, `set_add`, `set_del`, `set_union`, `set_intersect`, `set_diff`, `set_symdiff`, `set_subset`, `set_eq`, `set_count` |
 | `std/strings.op` | everyday string shaping: `words`, `capital`, `pad_left`, `pad_right`, `starts_any`, `pad`, `strip_prefix`, `strip_suffix`, `is_blank`, `chars`, `lines`, `title_case`, `to_snake`, `to_camel`, `to_kebab`, `ellipsis`, `unquote` |
 | `std/testing.op` | minimal deterministic test harness (no I/O, nothing raised): `expect_eq`, `expect_true`, `expect_false`, `expect_near` (inclusive float tolerance), `expect_throws` (pass a zero-arg gene; any raise counts), `test_summary` — checks accumulate into the module's own tally, a failed expect is data and returns false |
+| `std/time.op` | pure duration & instant arithmetic over the L1d clock builtins (UTC-only contract — no timezone support, W89): `time_add`, `time_diff`, `time_days_between`, `time_midnight`, `time_date_only`, `time_is_leap`, `time_days_in_month`, `dur_hms` ("HH:MM:SS"), `dur_human` ("1d 2h 3m 4s") |
 
 Native kernels back the hot parts and are builtins, not imports:
 `distance(a, b)` (bit-parallel Myers edit distance, C++), `codon(seq)`

@@ -1,0 +1,131 @@
+# std/heap — binary min-heap over plain lists (deterministic, pure).
+#
+# A heap is a list in the classic array layout: children of i live at
+# 2*i+1 and 2*i+2. Every function is PURE: it returns a NEW list (or a
+# [value, rest] pair) and never mutates its argument — assignment shares
+# containers (SPEC §19), so each function starts from a fresh slice-copy
+# and the differential corpus pins byte-identical results on both engines.
+#
+# Comparator convention (same as `sorted` / `xs.sort(cmp)`): cmp(a, b) is
+# true when a belongs BEFORE b (strictly). The default compares with `<`
+# (ints, floats, strings). Priority-queue idiom: store [priority, value]
+# pairs and pass `gene (x, y) => x[0] < y[0]` — ties stay deterministic
+# because sifts only move on a strictly-before comparison.
+#
+# Pins: tests/std_heap.op + tests/differential/heap.op (byte-identical).
+
+gene __hp_copy(xs) {
+    # fresh list with the same elements (shallow — matches §19 sharing)
+    return xs.slice(0, len(xs))
+}
+
+gene __heap_less(cmp, a, b) {
+    if cmp == null {
+        return a < b
+    }
+    return cmp(a, b)
+}
+
+gene __heap_sift_up(h, i, cmp) {
+    # move the element at i up while it strictly precedes its parent
+    let j = i
+    while j > 0 {
+        let parent = divmod(j - 1, 2)[0]
+        if __heap_less(cmp, h[j], h[parent]) {
+            let tmp = h[j]
+            h[j] = h[parent]
+            h[parent] = tmp
+            j = parent
+        } else {
+            break
+        }
+    }
+    return h
+}
+
+gene __heap_sift_down(h, i, n, cmp) {
+    # move the element at i down within the first n slots
+    let j = i
+    loop {
+        let left = 2 * j + 1
+        let right = 2 * j + 2
+        let best = j
+        if left < n && __heap_less(cmp, h[left], h[best]) {
+            best = left
+        }
+        if right < n && __heap_less(cmp, h[right], h[best]) {
+            best = right
+        }
+        if best == j {
+            break
+        }
+        let tmp = h[j]
+        h[j] = h[best]
+        h[best] = tmp
+        j = best
+    }
+    return h
+}
+
+gene heap_from(xs, cmp = null) {
+    # build a heap from any list — O(n) bottom-up sift-down on a copy
+    let h = __hp_copy(xs)
+    let n = len(h)
+    let i = divmod(n, 2)[0] - 1
+    while i >= 0 {
+        __heap_sift_down(h, i, n, cmp)
+        i = i - 1
+    }
+    return h
+}
+
+gene heap_push(h, v, cmp = null) {
+    # add a value — O(log n) on a copy
+    let out = __hp_copy(h)
+    push(out, v)
+    return __heap_sift_up(out, len(out) - 1, cmp)
+}
+
+gene heap_pop(h, cmp = null) {
+    # remove the front (minimum) — returns [value, rest]; [null, []] when empty
+    let n = len(h)
+    if n == 0 {
+        return [null, []]
+    }
+    if n == 1 {
+        return [h[0], []]
+    }
+    let rest = __hp_copy(h)
+    let top = rest[0]
+    rest[0] = rest[n - 1]
+    let shrunk = rest.slice(0, n - 1)
+    __heap_sift_down(shrunk, 0, n - 1, cmp)
+    return [top, shrunk]
+}
+
+gene heap_peek(h) {
+    # front value without removing; null when empty
+    if len(h) == 0 {
+        return null
+    }
+    return h[0]
+}
+
+gene heap_sorted(h, cmp = null) {
+    # drain into ascending order (leaves the argument untouched)
+    let out = []
+    let cur = __hp_copy(h)
+    loop {
+        let pair = heap_pop(cur, cmp)
+        if pair[0] == null && len(pair[1]) == 0 {
+            break
+        }
+        push(out, pair[0])
+        cur = pair[1]
+    }
+    return out
+}
+
+gene heap_len(h) {
+    return len(h)
+}
