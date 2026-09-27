@@ -11,8 +11,12 @@
 //! Law 3 — canonical output: fix output re-parses with zero rung-2+ repair
 //! notes (the migration consumed the legacy surface it exists to consume).
 //!
-//! Targeted unit tests pin each v1 migration (const→let, s::→dot, synonym
-//! canonicalization) including string/comment awareness.
+//! Targeted unit tests pin each v1 migration (s::→dot, synonym
+//! canonicalization) including string/comment awareness. The const→let
+//! migration is RETIRED (W05 red-main r5 hotfix): `const` is live
+//! semantics — immutable binding + deep freeze — so a fixer rewrite to
+//! `let` would be a MEANING change, forbidden by law 1. A dedicated test
+//! pins the retirement.
 
 use operon::parser;
 use operon::tools::{fix_source, format_program};
@@ -77,12 +81,15 @@ fn law2_fix_is_idempotent() {
 
 #[test]
 fn law3_fix_output_reparses_canonical() {
+    // W05 hotfix: the const→let migration is RETIRED — const is live
+    // semantics (immutable binding + deep freeze); rewriting it would be a
+    // meaning change (law 1). The s::→dot migration (dx-r3 legacy) remains.
     let legacy = "\
 const limit = 3
 gene scaled(x) { var base = config::limit return base + x }
 ";
     let (fixed, rep) = fix_source(legacy);
-    assert_eq!(rep.const_to_let, 1);
+    assert_eq!(rep.const_to_let, 0, "const migration retired — always 0");
     assert_eq!(rep.s_dot, 1);
     assert!(rep.canonicalized >= 1, "var synonym must be counted");
     let prog = parser::parse(&fixed);
@@ -92,10 +99,31 @@ gene scaled(x) { var base = config::limit return base + x }
         "fixed source must parse canonical, got: {:?}",
         repairs
     );
-    assert!(!fixed.contains("const "), "const must be gone");
+    assert!(
+        fixed.contains("const limit"),
+        "live const must survive fix: {}",
+        fixed
+    );
     assert!(!fixed.contains("::"), ":: must be gone");
-    assert!(fixed.contains("let limit"), "{}", fixed);
     assert!(fixed.contains(".limit"), "{}", fixed);
+}
+
+#[test]
+fn const_is_live_fix_never_rewrites_it() {
+    // W05 red-main r5: const carries freeze semantics; a fixer rewrite to
+    // let would unfreeze the binding — a MEANING change, forbidden by law 1.
+    // This is the pin that failed CI on ecbff93 (const_freeze.op corpus law).
+    let src = "const x = 10";
+    let (fixed, rep) = fix_source(src);
+    assert_eq!(rep.const_to_let, 0, "retired migration is always 0");
+    assert!(
+        fixed.contains("const x"),
+        "const binding must survive: {}",
+        fixed
+    );
+    let canon_before = format_program(&parser::parse(src));
+    let canon_after = format_program(&parser::parse(&fixed));
+    assert_eq!(canon_before, canon_after, "law 1 holds on const programs");
 }
 
 #[test]

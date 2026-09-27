@@ -315,7 +315,12 @@ L.push(4) / M.del("a")        # method forms stress identically
   worker's fresh-container semantics).
 - **Back-compat**: programs whose `const` bindings are never reassigned
   and whose containers are never mutated run byte-identically to the old
-  `const → let` synonym (freeze draws nothing; corpus-verified).
+  `const → let` synonym (freeze draws nothing; corpus-verified). The
+  `operon fix` const→let migration is RETIRED (red-main r5 hotfix, W05):
+  `const` is live semantics — a fixer rewrite to `let` would unfreeze
+  bindings and change program meaning (fix_corpus law 1). The
+  `const_to_let` report field stays (always 0) for `--json` shape
+  stability.
 - **`let mut x`** parses: the `mut` annotation is documentation-only in
   v2.x (contextually consumed when followed by the binding name — a
   variable literally named `mut` keeps working).
