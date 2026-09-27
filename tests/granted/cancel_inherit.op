@@ -15,7 +15,7 @@ gene inherit_child() {
                 write_file("/tmp/op_w18_inherit.txt", "inherited-poll")
                 return "stopped"
             }
-            run("sleep", 5)
+            run("sleep", ["0.005"])
         }
         write_file("/tmp/op_w18_inherit.txt", "not-inherited")
         return "never-cancelled"
@@ -39,9 +39,9 @@ frame proof {
     # the parent is blocked joining the child when the flag lands; the
     # child (spawned first, polling every few ms) observes the inherited
     # flag well before its loop bound
-    run("sleep", 40)
+    run("sleep", ["0.04"])
     let _ = cancel(p)
-    run("sleep", 250)
+    run("sleep", ["0.25"])
     let _ = join(p)
     let obs = read_file("/tmp/op_w18_inherit.txt")
     assert(obs == "inherited" || obs == "inherited-poll", "child observed the inherited flag")

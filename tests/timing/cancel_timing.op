@@ -7,7 +7,7 @@
 # worker's next tick.
 
 gene slowpoke() {
-    run("sleep", 150)
+    run("sleep", ["0.15"])
     return 7
 }
 
@@ -21,7 +21,7 @@ gene coop() {
             if (cancelled()) {
                 return "stopped"
             }
-            run("sleep", 5)
+            run("sleep", ["0.005"])
         }
         return "never-cancelled"
     } rescue (e) {
@@ -50,7 +50,7 @@ frame proof {
     # flag) long before the cancel lands; the window's poll and the
     # engine's boundary raise resolve to the same value
     let c = spawn(coop, [])
-    run("sleep", 20)
+    run("sleep", ["0.02"])
     let _ = cancel(c)
     assert(join(c) == "stopped", "worker inside the window honours the flag")
     assert(task_state(c) == "done", "cooperative exit counts as done")

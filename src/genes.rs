@@ -1767,6 +1767,82 @@ pub fn task_state_of(interp: &mut Interp, args: Vec<Value>) -> Result<Value, Str
     Ok(Value::Null)
 }
 
+/// W15: task-group join-all. Joins every id in input order and returns
+/// the results as a list. Join semantics are unchanged: an already-joined
+/// or unknown id contributes null plus a note, so the result list stays
+/// position-aligned with the input list.
+pub fn wait_all_tasks(interp: &mut Interp, args: Vec<Value>) -> Result<Value, Stress> {
+    let ids = match args.first() {
+        Some(Value::List(l)) => l.borrow().clone(),
+        _ => {
+            interp.note(0, 4, "wait_all() needs a list of task ids");
+            return Ok(Value::List(Rc::new(RefCell::new(vec![]))));
+        }
+    };
+    let mut out = Vec::new();
+    for idv in &ids {
+        let id = match idv {
+            Value::Int(i) => *i,
+            _ => -1,
+        };
+        out.push(join_task(interp, id, None)?);
+    }
+    Ok(Value::List(Rc::new(RefCell::new(out))))
+}
+
+/// W15: select-style wait. Returns the id of the first task in the list
+/// whose worker has finished (in wall-clock completion order; ties resolve
+/// by scan order), or null + note when the timeout expires first. Polling
+/// implementation: the worker records its terminal phase before its result
+/// leaves, so a finished phase means join will not block for long. The
+/// sequential oracle cannot observe completion ordering; its children are
+/// all born finished, so it answers the first listed id (the differential
+/// corpus pins only the ordering-free shapes).
+pub fn wait_any_task(interp: &mut Interp, args: Vec<Value>) -> Result<Value, Stress> {
+    let ids: Vec<i64> = match args.first() {
+        Some(Value::List(l)) => l
+            .borrow()
+            .iter()
+            .filter_map(|v| match v {
+                Value::Int(i) => Some(*i),
+                _ => None,
+            })
+            .collect(),
+        _ => {
+            interp.note(0, 4, "wait_any() needs a list of task ids");
+            return Ok(Value::Null);
+        }
+    };
+    let timeout_ms = match args.get(1) {
+        Some(Value::Int(i)) if *i > 0 => (*i as u64).min(300_000),
+        Some(Value::Float(f)) if *f > 0.0 => (*f as u64).min(300_000),
+        _ => 30_000,
+    };
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
+    loop {
+        for id in &ids {
+            let done = if let Some(h) = interp.tasks.get(id) {
+                let phase = *h.state.lock().unwrap();
+                phase != crate::interp::TaskState::Running
+            } else {
+                interp.task_tombstones.contains_key(id)
+            };
+            if done {
+                return Ok(Value::Int(*id));
+            }
+        }
+        if std::time::Instant::now() >= deadline {
+            interp.note(
+                0,
+                4,
+                format!("wait_any timeout ({} ms); no task finished", timeout_ms),
+            );
+            return Ok(Value::Null);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+}
+
 pub fn join_task(interp: &mut Interp, id: i64, timeout_ms: Option<u64>) -> Result<Value, Stress> {
     // join by id; id 0 means "inline run already returned" (see spawn)
     if id == 0 {

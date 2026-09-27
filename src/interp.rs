@@ -6918,6 +6918,13 @@ impl Interp {
                     .iter()
                     .any(|f| f.load(std::sync::atomic::Ordering::Relaxed)),
             )),
+            // W15: task-group surface. wait_all joins every id in input
+            // order and returns the results as a list; wait_any returns
+            // the id of the first finished task in the list (polling the
+            // lifecycle phases, since the worker sets its phase before
+            // the result leaves).
+            "wait_all" => crate::genes::wait_all_tasks(self, args),
+            "wait_any" => crate::genes::wait_any_task(self, args),
             // -------------------------------------------------- math
             "floor" => Ok(Value::Int(match args.first() {
                 Some(Value::Int(i)) => *i,
@@ -10348,6 +10355,9 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "cancel",
     "task_state",
     "cancelled",
+    // W15: task-group surface
+    "wait_all",
+    "wait_any",
     "floor",
     "ceil",
     "sqrt",

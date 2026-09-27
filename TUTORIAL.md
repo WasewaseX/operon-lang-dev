@@ -464,7 +464,7 @@ Operon tasks are real OS threads. `spawn(gene, args)` starts one and returns a t
 
 ```
 gene slow(n) {
-    run("sleep", 50)        # needs a run grant; see the capability sandbox
+    run("sleep", ["0.05"])        # needs a run grant; see the capability sandbox
     return n * n
 }
 let t = spawn(slow, [12])
