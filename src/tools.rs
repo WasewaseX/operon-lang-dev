@@ -1628,6 +1628,10 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
         Stmt::Let(n, e) => {
             out.push_str(&format!("let {} = {}\n", n, fmt_expr(e)));
         }
+        // W05: const roundtrip (immutable binding, deep-freeze semantics)
+        Stmt::LetConst(n, e) => {
+            out.push_str(&format!("const {} = {}\n", n, fmt_expr(e)));
+        }
         // W01 (L2c): annotated definition roundtrip
         Stmt::LetAnn(n, ann, e) => {
             out.push_str(&format!("let {}: {} = {}\n", n, ann.render(), fmt_expr(e)));
