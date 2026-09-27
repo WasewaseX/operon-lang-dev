@@ -1,0 +1,48 @@
+# pheno_equality — builder-B parity finding RESOLUTION differential pin:
+# instance == compares class name + deep field values on BOTH engines
+# (byte-identical output required). Covers: equal fields true, differing
+# fields false, field-count mismatch false, cross-class false, subclass-name
+# part-of-value false, dedup sees deep equality, instance-keyed map lookup,
+# and the mutual-instance cycle staying cycle-safe.
+phenotype P {
+    let x = 0
+    let y = 0
+    gene init(a = 0, b = 0) { self.x = a; self.y = b; return self }
+}
+phenotype Q {
+    let x = 0
+    gene init(a = 0) { self.x = a; return self }
+}
+phenotype PR from P {
+    gene init(a = 0, b = 0) { self.x = a; self.y = b; return self }
+}
+phenotype PC {
+    let link = null
+    gene init() { return self }
+}
+let a = new P(1, 2)
+let b = new P(1, 2)
+let c = new P(1, 3)
+print("self: {a == a}")
+print("equal fields: {a == b}")
+print("differing fields: {a == c}")
+let d = new P(1)
+print("field count: {a == d}")
+let q = new Q(1)
+print("cross class: {a == q}")
+let pr = new PR(1, 2)
+print("subclass: {a == pr}")
+print("subclass equal: {pr == new PR(1, 2)}")
+let l1 = [a, b]
+let l2 = [new P(1, 2), new P(1, 2)]
+print("in lists: {l1 == l2}")
+print("dedup: {len(unique([a, b, c]))}")
+let mk = {}
+mk[a] = "found"
+print("key hit: {mk.get(b, \"nope\")}")
+print("key miss: {mk.get(c, \"nope\")}")
+let ca = new PC()
+let cb = new PC()
+ca.link = cb
+cb.link = ca
+print("cycle: {ca == cb}")

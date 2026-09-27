@@ -339,6 +339,31 @@ def deep_eq(a, b, _pairs=None):
         if a.payload is None or b.payload is None:
             return False
         return deep_eq(a.payload, b.payload, _pairs)
+    # builder-B parity finding (W34 stage 2, PR #28 pin): instances are DATA,
+    # not handles — equal iff same class name AND deep-equal field values.
+    # Mirror of the Rust Value::Obj arm (the old fall-through made every pair
+    # of distinct instances False regardless of state).
+    if isinstance(a, ObjInst) or isinstance(b, ObjInst):
+        if not (isinstance(a, ObjInst) and isinstance(b, ObjInst)):
+            return False
+        if a.defn.name != b.defn.name:
+            return False
+        fa, fb = a.fields, b.fields
+        if fa is fb:
+            return True  # a structure equals itself
+        if _pairs is None:
+            _pairs = set()
+        key = (id(fa), id(fb))
+        if key in _pairs:
+            return True  # already comparing this pair (cycle)
+        _pairs.add(key)
+        try:
+            if len(fa) != len(fb):
+                return False
+            return all(any(deep_eq(k, k2, _pairs) and deep_eq(v, v2, _pairs)
+                           for k2, v2 in fb.items()) for k, v in fa.items())
+        finally:
+            _pairs.discard(key)
     if type(a) is not type(b) and not (a is None and b is None):
         if isinstance(a, (int, float)) and isinstance(b, (int, float)):
             return a == b
@@ -3148,7 +3173,16 @@ class Interp:
                     if deep_eq(kk, iv):
                         cur = vv; break
                 nv = self.binop(op, cur, v) if op else v
-                key = iv if isinstance(iv, (str, int, float, bool)) else v_display(iv)
+                # pheno_equality pin: instance keys store AS INSTANCES (the
+                # Rust core keys maps by the actual value; v_display here
+                # stringified them into "<phenotype P>" — found by the
+                # builder-B parity-finding resolution differential).
+                # ObjInst is hashable (id-based), so dict storage works.
+                # Container keys (list/map) still fall back to display text —
+                # pre-existing divergence, no corpus exposure, filed for a
+                # future session.
+                key = iv if isinstance(iv, (str, int, float, bool)) else (
+                    iv if isinstance(iv, ObjInst) else v_display(iv))
                 tv[key] = nv
             else:
                 self.note(4, "index assignment on non-container ignored")

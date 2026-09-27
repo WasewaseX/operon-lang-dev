@@ -216,6 +216,7 @@ let o = new Name(args)               # construct (calls init if declared)
 - `self.f` reads and writes fields inside methods. Field access from outside: `o.f`. Missing fields → `null` + note.
 - Method dispatch: own methods first, then the parent chain. Missing method → `null` + note.
 - `type(o)` returns the phenotype name (`"Counter"`); `o.f = v` assigns a field. Phenotype instances cross `spawn` boundaries by serialization (they travel as maps carrying a hidden `#phenotype` key).
+- **Instance equality (dev1 ruling, closes the W34-stage-2 parity finding):** `==` on two instances is `true` iff the class names are equal AND every field deep-equals (`a == a` is always `true`; subclasses are distinct values — the class name is part of the value). Instances are DATA; genes (closures) and sequences stay identity-based — they are behavior handles. Instance-keyed maps (`m[a] = v`, `m.get(b)`) use the same deep equality in both implementations. Pins: `tests/pheno_equality.op` + byte-identical `tests/differential/pheno_equality.op` (mutual-instance cycles stay cycle-safe).
 - Marks may precede `gene` inside a phenotype (`@acetylate gene m() { ... }`).
 
 ## 7b. Sequences (generators)

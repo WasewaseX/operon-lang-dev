@@ -1,0 +1,70 @@
+# builder-B parity finding RESOLUTION (dev1 ruling, 2026-09-26): phenotype
+# instances are DATA — `==` compares class name + deep field values, in BOTH
+# engines. Before this ruling the Rust core compared the shared PhenoDef via
+# Arc::ptr_eq (any two same-class instances were == regardless of fields)
+# while the oracle fell through to identity (all distinct pairs !=). Neither
+# engine's old answer was a contract; this file pins the ruled one.
+# Closures (genes) and sequences stay identity-based: behavior handles, not
+# data. Cross-engine byte pin: tests/differential/pheno_equality.op
+phenotype P {
+    let x = 0
+    let y = 0
+    gene init(a = 0, b = 0) { self.x = a; self.y = b; return self }
+}
+phenotype Q {
+    let x = 0
+    gene init(a = 0) { self.x = a; return self }
+}
+phenotype PR from P {
+    gene init(a = 0, b = 0) { self.x = a; self.y = b; return self }
+}
+phenotype PC {
+    let link = null
+    gene init() { return self }
+}
+frame proof {
+    let a = new P(1, 2)
+    let b = new P(1, 2)
+    let c = new P(1, 3)
+    assert(a == a)                  # self-comparison (fast path)
+    assert(a == b)                  # same class + equal fields
+    assert(!(a == c))               # same class + differing fields
+    assert(a != c)
+    let d = new P(1)
+    assert(!(a == d))               # different field counts
+    let q = new Q(1)
+    assert(!(a == q))               # cross-class, same field values
+    let pr = new PR(1, 2)
+    assert(!(a == pr))              # subclass name is part of the value
+    assert(pr == new PR(1, 2))
+    # instances inside containers compare structurally
+    let l1 = [a, b]
+    let l2 = [new P(1, 2), new P(1, 2)]
+    assert(l1 == l2)
+    assert(unique([a, b, c]) == [a, c])   # deep-equality dedup sees a == b
+    # instance-keyed map lookup uses the same deep equality
+    let mk = {}
+    mk[a] = "found"
+    assert(mk.get(b, "nope") == "found")
+    assert(mk.get(c, "nope") == "nope")
+    # mutual-instance cycle stays cycle-safe (seen-pair set, like lists/maps)
+    let ca = new PC()
+    let cb = new PC()
+    ca.link = cb
+    cb.link = ca
+    assert(ca == cb)
+}
+main {
+    let a = new P(1, 2)
+    let b = new P(1, 2)
+    let c = new P(1, 3)
+    promote("a == b: {a == b}")
+    promote("a == c: {a == c}")
+    let q = new Q(1)
+    promote("a == q: {a == q}")
+    let pr = new PR(1, 2)
+    promote("a == pr: {a == pr}")
+    let mk = {}
+    mk[a] = "found"
+    promote("keyed by deep equality: {mk.get(b, \"nope\")}")
+}
