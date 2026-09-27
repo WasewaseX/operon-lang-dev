@@ -2548,7 +2548,12 @@ class Interp:
         # Frozen-ness does NOT cross the spawn boundary: the reachable ids are
         # parked for the duration of an inline spawn body (mirror of the Rust
         # per-worker fresh containers, SPEC §7d).
+        # W05 hardening (rt_p18a): frozen_keep HOLDS the registered containers
+        # so their id()s can never be recycled by a fresh allocation while the
+        # interpreter lives (CPython id-reuse would falsely freeze an innocent
+        # new list after a gene-local const is collected).
         self.frozen_ids = set()
+        self.frozen_keep = []
         # W069: importing-entry directory — candidate root #1 for `use`
         # (SPEC §8 resolution table). None until load_file sets it.
         self.base_dir = None
@@ -2733,23 +2738,30 @@ class Interp:
         self._freeze_walk(v, seen)
 
     def _freeze_walk(self, v, seen):
-        if isinstance(v, list):
-            p = id(v)
-            if p in seen:
-                return
-            seen.add(p)
-            self.frozen_ids.add(p)
-            for item in v:
-                self._freeze_walk(item, seen)
-        elif isinstance(v, dict):
-            p = id(v)
-            if p in seen:
-                return
-            seen.add(p)
-            self.frozen_ids.add(p)
-            for k, val in v.items():
-                self._freeze_walk(k, seen)
-                self._freeze_walk(val, seen)
+        # W05 hardening (rt_p18a): ITERATIVE worklist (depth-safe on deep
+        # literals) + keep-alive registration (address/id-reuse armor),
+        # mirroring the Rust frozen_keep registry.
+        work = [v]
+        while work:
+            cur = work.pop()
+            if isinstance(cur, list):
+                p = id(cur)
+                if p in seen:
+                    continue
+                seen.add(p)
+                self.frozen_ids.add(p)
+                self.frozen_keep.append(cur)
+                work.extend(cur)
+            elif isinstance(cur, dict):
+                p = id(cur)
+                if p in seen:
+                    continue
+                seen.add(p)
+                self.frozen_ids.add(p)
+                self.frozen_keep.append(cur)
+                for k, val in cur.items():
+                    work.append(k)
+                    work.append(val)
 
     def is_frozen(self, v):
         return isinstance(v, (list, dict)) and id(v) in self.frozen_ids

@@ -114,7 +114,7 @@
   "proofs": 109,
   "source": "bin/operon"
  },
- "redteam_files": 97,
+ "redteam_files": 98,
  "spec": {
   "h1": "# Operon \u2014 Language Specification",
   "status": "v2.3.0-dev"
@@ -203,6 +203,6 @@
    "module": "time"
   }
  ],
- "test_op_files": 238,
+ "test_op_files": 239,
  "version": "2.2.0"
 }
