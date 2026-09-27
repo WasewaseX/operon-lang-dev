@@ -2048,8 +2048,9 @@ usage:
   operon lint f.op [--cell c] [--json]
   operon keywords [--json]
   operon repl
-  operon mod init|add <url> [--rev r] [--as name]|remove <name>|update|install|tree|verify
-                  # package system (operon.toml manifest + operon.lock; W19/W20/W23)
+  operon mod init|add <url|name> [--registry f] [--rev r] [--as name]|remove <name>|update|install|tree|verify|publish
+                  # package system (operon.toml manifest + operon.lock; W19/W20/W23;
+                  # W21 static registry: add-by-name + publish, docs/specs/REGISTRY.md)
   operon build f.op [--variant v] [-o out.op]
   operon rna f.op patch.rna [--write] [--json] [--allow-comment-drop]
   operon graph f.op [--json]
