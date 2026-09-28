@@ -1,6 +1,6 @@
 # Operon, Language Specification
 
-**Status:** v2.3.0-dev, post-2.2 language amendments are landing incrementally (the generated inventory in [docs/STATS.md](docs/STATS.md) is the countable truth; D-009: version strings move only with the milestone). Last tagged release: 2.2.0. This document is the single contract implemented identically by:
+**Status:** v2.2.0, post-2.2 language amendments are landing incrementally (the generated inventory in [docs/STATS.md](docs/STATS.md) is the countable truth; D-009: version strings move only with the milestone). Last tagged release: 2.2.0. This document is the single contract implemented identically by:
 
 | Implementation | Language | Role |
 |---|---|---|

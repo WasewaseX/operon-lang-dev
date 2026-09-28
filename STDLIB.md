@@ -2,9 +2,10 @@
 
 The standard library is pure `.op`, it runs on the Rust core like any
 program and is exercised by the proof suite (`tests/modules_std.op`,
-`tests/stdlib_selfhost.op`, and the per-module files `tests/std_*.op`:
-args, bigint, bio, collections, csv, fmt, fs, iter, json, math, random,
-set, strings, testing). Import with `use std/<module> as <alias>` and
+`tests/stdlib_selfhost.op`, and the per-module files `tests/std_*.op`).
+The generated per-module inventory (module + function counts) lives in
+[docs/STATS.md](docs/STATS.md) and is the countable truth for sizes.
+Import with `use std/<module> as <alias>` and
 call with dot access: `s.capital("operon")`. The loader resolves `std/`
 exe-relative (installed trees) or from the interpreter's own tree; a
 `std/` next to your program wins.
@@ -12,7 +13,7 @@ exe-relative (installed trees) or from the interpreter's own tree; a
 | module | what it gives you |
 |---|---|
 | `std/args.op` | command-line argument shaping: `args_norm`, `args_positional`, `args_flag`, `args_has`, `args_value`, `args_get`, `args_number`, `args_subcommand` |
-| `std/bigint.op` | exact arbitrary-precision integers over sign-magnitude base-10^4 digit lists (pure `.op`, deterministic, byte-identical on both engines; the sanctioned path past the i64 no-wrap overflow contract): `big_from_int`, `big_from_str` (null on malformed input), `big_to_str`, `big_to_int` (null when the value does not fit i64, never a clamp), `big_is_zero`, `big_neg` (zero canonicalizes, so `-0 == 0`), `big_abs`, `big_cmp` (full signed ordering), `big_add`, `big_sub`, `big_mul`, `big_pow` (int exponent ≥ 0, else null), `big_fact` |
+| `std/bigint.op` | exact arbitrary-precision integers over sign-magnitude base-10^4 digit lists (pure `.op`, deterministic, byte-identical on both engines; the sanctioned path past the i64 no-wrap overflow contract): `big_from_int`, `big_from_str` (null on malformed input), `big_to_str`, `big_to_int` (null when the value does not fit i64, never a clamp), `big_is_zero`, `big_neg` (zero canonicalizes, so `-0 == 0`), `big_abs`, `big_cmp` (full signed ordering), `big_add`, `big_sub`, `big_mul`, `big_pow` (int exponent ≥ 0, else null), `big_fact`, `big_zero` |
 | `std/bio.op` | in-silico sequence utilities: `codon_usage`, `is_palindromic_site`, `melting_point`, `gc_skew` |
 | `std/collections.op` | list-shaped data work: `chunk`, `zip`, `group_by`, `take`, `flatten`, `count` |
 | `std/csv.op` | delimited data: `csv_escape`, `csv_row`, `csv_parse`, `csv_parse_line`, `csv_records`, `csv_column`, `csv_count_fields` |
@@ -32,6 +33,7 @@ exe-relative (installed trees) or from the interpreter's own tree; a
 | `std/strings.op` | everyday string shaping: `words`, `capital`, `pad_left`, `pad_right`, `starts_any`, `pad`, `strip_prefix`, `strip_suffix`, `is_blank`, `chars`, `lines`, `title_case`, `to_snake`, `to_camel`, `to_kebab`, `ellipsis`, `unquote` |
 | `std/testing.op` | minimal deterministic test harness (no I/O, nothing raised): `expect_eq`, `expect_true`, `expect_false`, `expect_near` (inclusive float tolerance), `expect_throws` (pass a zero-arg gene; any raise counts), `test_summary`, checks accumulate into the module's own tally, a failed expect is data and returns false |
 | `std/time.op` | pure duration & instant arithmetic over the L1d clock builtins (UTC-only contract, no timezone support, W89): `time_add`, `time_diff`, `time_days_between`, `time_midnight`, `time_date_only`, `time_is_leap`, `time_days_in_month`, `dur_hms` ("HH:MM:SS"), `dur_human` ("1d 2h 3m 4s"), `time_parse_iso` (ISO-8601 UTC subset parser: "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM:SS", fractional seconds truncated, trailing Z accepted, offsets rejected, null on malformed) |
+| `std/unicode.op` | Unicode depth helpers over the language's documented fold subset (SPEC §3, pure string arithmetic, no capabilities, no external tables): `upper`, `is_upper`, `is_lower`, `is_digit`, `is_alpha`, `char_codes`, `from_char_codes`, `byte_width` |
 
 Native kernels back the hot parts and are builtins, not imports:
 `distance(a, b)` (bit-parallel Myers edit distance, C++), `codon(seq)`

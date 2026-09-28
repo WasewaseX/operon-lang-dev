@@ -4,9 +4,8 @@ Source of truth: `scripts/gen_doc_stats.py` (run from repo root).
 Validated by `scripts/check_docs_sync.py`. Hand-typed numbers in
 README/SPEC/BENCH are forbidden, link here instead.
 
-- **Version**: 2.2.0  · SPEC Status: v2.3.0-dev
+- **Version**: 2.2.0  · SPEC Status: v2.2.0
 - **Keywords (parser reserved set)**: 60, table in [KEYWORDS.md](KEYWORDS.md)
-  - analogy pending: trait
 - **Std modules**: 22 (args, bigint, bio, collections, csv, deque, fmt, fs, heap, iter, json, math, motifs, path, random, seq, serialize, set, strings, testing, time, unicode)
 - **Std functions (.op-level `gene` defs)**: 229
 - **Red-team payload files**: 101
