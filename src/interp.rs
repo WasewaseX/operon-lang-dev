@@ -1351,6 +1351,8 @@ impl Interp {
                         }
                         let n = l.borrow().len() as i64;
                         let j = if *idx < 0 { n + *idx } else { *idx };
+                        // W013: insertion-time cycle detection (SPEC §19e)
+                        crate::value::cycle_note_insert(&Value::List(l.clone()), &val);
                         if j >= 0 && j < n {
                             l.borrow_mut()[j as usize] = val;
                         } else {
@@ -1365,6 +1367,8 @@ impl Interp {
                             return Err(Self::frozen_stress("list"));
                         }
                         let idx = self.as_index(&iv, l.borrow().len()).unwrap_or(usize::MAX);
+                        // W013: insertion-time cycle detection (SPEC §19e)
+                        crate::value::cycle_note_insert(&Value::List(l.clone()), &val);
                         if idx != usize::MAX && idx < l.borrow().len() {
                             l.borrow_mut()[idx] = val;
                         } else {
@@ -2358,6 +2362,8 @@ impl Interp {
                         }
                         let n = l.borrow().len() as i64;
                         let j = if *idx < 0 { n + *idx } else { *idx };
+                        // W013: insertion-time cycle detection (SPEC §19e)
+                        crate::value::cycle_note_insert(&Value::List(l.clone()), &val);
                         if j >= 0 && j < n {
                             l.borrow_mut()[j as usize] = val;
                         } else {
@@ -2371,6 +2377,8 @@ impl Interp {
                             return Err(Self::frozen_stress("list"));
                         }
                         let idx = self.as_index(&iv, l.borrow().len()).unwrap_or(usize::MAX);
+                        // W013: insertion-time cycle detection (SPEC §19e)
+                        crate::value::cycle_note_insert(&Value::List(l.clone()), &val);
                         if idx != usize::MAX && idx < l.borrow().len() {
                             l.borrow_mut()[idx] = val;
                         } else {
@@ -2562,6 +2570,10 @@ impl Interp {
             self.steps = self.steps.saturating_add(n);
         }
         // dx-r3: memoized upsert (was a linear deep_eq scan)
+        // W013: insertion-time cycle detection, before the edge lands, the
+        // VALUE edge is what can close a cycle (map KEYS are not walked,
+        // SPEC §19e)
+        crate::value::cycle_note_insert(&Value::Map(m.clone()), &val);
         m.borrow_mut().insert(key, val);
         Ok(())
     }
@@ -5251,7 +5263,13 @@ impl Interp {
     /// to null, the same silent rule the spawn wire always had).
     fn membrane_refusal(v: &Value) -> Option<Stress> {
         match v {
-            Value::Gene(_, _) | Value::Seq(_, _) | Value::Obj(_, _) | Value::Channel(_) => {
+            Value::Gene(_, _)
+            | Value::Seq(_, _)
+            | Value::Obj(_, _)
+            | Value::Channel(_)
+            // W013: a weak handle is a handle too, it never rides the wire
+            // (it would arrive pointing at a snapshot copy's target, a lie)
+            | Value::Weak(_) => {
                 Some(Stress::new(
                     "membrane",
                     format!(
@@ -5484,6 +5502,9 @@ impl Interp {
                         _ => 32,
                     };
                     mem_charge(bytes)?;
+                    // W013: insertion-time cycle detection, before the edge
+                    // lands (self-referencing containers register here)
+                    crate::value::cycle_note_insert(&Value::List(l.clone()), v);
                     l.borrow_mut().push(v.clone());
                     Ok(Value::List(l.clone()))
                 } else {
@@ -5506,6 +5527,8 @@ impl Interp {
                     }
                     let idx = self.as_index(i, l.borrow().len())?;
                     let idx = idx.min(l.borrow().len());
+                    // W013: insertion-time cycle detection (SPEC §19e)
+                    crate::value::cycle_note_insert(&Value::List(l.clone()), v);
                     l.borrow_mut().insert(idx, v.clone());
                     Ok(Value::List(l.clone()))
                 }
@@ -6428,8 +6451,68 @@ impl Interp {
                         Value::Str("allocs".into()),
                         Value::Int(unsafe_allocs() as i64),
                     ),
+                    // W013 (D-013): live detected cycles, insertion registers,
+                    // reclamation (weak dead or edge broken) prunes. Honest
+                    // accounting, not a GC, see SPEC §19e/§19f.
+                    (
+                        Value::Str("cycles".into()),
+                        Value::Int(crate::value::live_cycle_count()),
+                    ),
                 ]),
             )))),
+            // W013: weak handles. Supported targets are the container values
+            // (list, map, phenotype instance); everything else, small
+            // immutables and behavior handles alike, is refused (the simpler
+            // honest rule: a handle is only meaningful when the target CAN
+            // participate in a cycle or outlive a scope, SPEC §19f).
+            "weak" => match args.first() {
+                Some(Value::List(l)) => Ok(Value::Weak(crate::value::WeakHandle::List(
+                    Rc::downgrade(l),
+                ))),
+                Some(Value::Map(m)) => {
+                    Ok(Value::Weak(crate::value::WeakHandle::Map(Rc::downgrade(m))))
+                }
+                Some(Value::Obj(d, m)) => Ok(Value::Weak(crate::value::WeakHandle::Obj(
+                    Rc::downgrade(m),
+                    d.clone(),
+                ))),
+                Some(other) => Err(Stress::new(
+                    "unfolded",
+                    format!(
+                        "weak() needs a list, map, or phenotype, found {}",
+                        other.type_name()
+                    ),
+                )),
+                None => Err(Stress::new(
+                    "unfolded",
+                    "weak(v) needs a list, map, or phenotype",
+                )),
+            },
+            "strengthen" => match args.first() {
+                Some(Value::Weak(h)) => match h.upgrade_value() {
+                    // the target is alive: the SAME value comes back (same
+                    // Rc, mutation through it is visible through every
+                    // other alias, SPEC §19f)
+                    Some(v) => Ok(v),
+                    // no GC: the last strong ref freed it immediately
+                    None => {
+                        self.note(
+                            self.cur_line,
+                            4,
+                            "strengthen: weak target is no longer alive; null",
+                        );
+                        Ok(Value::Null)
+                    }
+                },
+                Some(other) => Err(Stress::new(
+                    "unfolded",
+                    format!(
+                        "strengthen(w) needs a weak handle, found {}",
+                        other.type_name()
+                    ),
+                )),
+                None => Err(Stress::new("unfolded", "strengthen(w) needs a weak handle")),
+            },
             "methyl" => {
                 let k = args.first().map(|v| v.display()).unwrap_or_default();
                 let d = args.get(1).cloned().unwrap_or(Value::Null);
@@ -9405,6 +9488,9 @@ impl Interp {
                             _ => 32,
                         };
                         mem_charge(bytes)?;
+                        // W013: insertion-time cycle detection, same rule as
+                        // the builtin form (SPEC §19e)
+                        crate::value::cycle_note_insert(&Value::List(l.clone()), v);
                         l.borrow_mut().push(v.clone());
                     }
                     Ok(Value::List(l.clone()))
@@ -10702,6 +10788,9 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "pop",
     "insert",
     "remove",
+    // W013: weak handles + the live-cycle gauge
+    "weak",
+    "strengthen",
     "keys",
     "values",
     "has",
