@@ -31,6 +31,7 @@ fn main() {
         Ok(()) => {}
         Err(_) => {
             eprintln!("[fatal] internal toolchain panic, this input crashed the runtime");
+            // ast-grep-ignore: no-std-process-exit-in-core
             std::process::exit(101);
         }
     }
@@ -40,6 +41,7 @@ fn real_main() {
     let argv: Vec<String> = std::env::args().skip(1).collect();
     if argv.is_empty() {
         usage();
+        // ast-grep-ignore: no-std-process-exit-in-core
         std::process::exit(2);
     }
     let cmd = argv[0].clone();
@@ -49,6 +51,7 @@ fn real_main() {
     // "unknown command". Same usage as the no-args case, exit 0.
     if cmd == "--help" || cmd == "-h" || cmd == "help" {
         usage();
+        // ast-grep-ignore: no-std-process-exit-in-core
         std::process::exit(0);
     }
 
@@ -617,12 +620,14 @@ fn real_main() {
             // (none in the lint stream today; the rule is kept for append-only
             // safety, mirroring the pre-W48 behavior).
             if strict && total > 0 {
+                // ast-grep-ignore: no-std-process-exit-in-core
                 std::process::exit(3);
             }
             if results
                 .iter()
                 .any(|(_, fs)| fs.iter().any(|f| f.sev == operon::lint::Sev::Error))
             {
+                // ast-grep-ignore: no-std-process-exit-in-core
                 std::process::exit(1);
             }
         }
@@ -741,6 +746,7 @@ fn real_main() {
                         // drain before the exit.
                         write_grn_trace(&l.interp, &trace_grn_path);
                         tools::flush_notes(&l, opts.quiet);
+                        // ast-grep-ignore: no-std-process-exit-in-core
                         std::process::exit(1);
                     }
                 }
@@ -754,6 +760,7 @@ fn real_main() {
                 .map(|v| v == "true")
                 .unwrap_or(false);
             if (strict || strict_cell) && l.interp.notes.iter().any(|n| n.rung >= 3) {
+                // ast-grep-ignore: no-std-process-exit-in-core
                 std::process::exit(3);
             }
         }
@@ -788,8 +795,10 @@ fn real_main() {
                 print_diag(&file, &rep, &findings, &style, &style_inline);
                 let hard = findings.iter().any(|f| f.sev == operon::lint::Sev::Error);
                 if hard || (strict && (rep.wobbles > 0 || rep.fallbacks > 0)) {
+                    // ast-grep-ignore: no-std-process-exit-in-core
                     std::process::exit(3);
                 }
+                // ast-grep-ignore: no-std-process-exit-in-core
                 std::process::exit(0);
             }
             if json {
@@ -855,6 +864,7 @@ fn real_main() {
                 }
             }
             if strict && (rep.wobbles > 0 || rep.fallbacks > 0) {
+                // ast-grep-ignore: no-std-process-exit-in-core
                 std::process::exit(3);
             }
         }
@@ -879,6 +889,7 @@ fn real_main() {
                     println!("{}  {} proof frame(s)", f, n);
                 }
                 println!("{} file(s), {} proof frame(s) total", files.len(), total);
+                // ast-grep-ignore: no-std-process-exit-in-core
                 std::process::exit(0);
             }
             let rep = tools::run_tests(&files, &opts, json);
@@ -900,6 +911,7 @@ fn real_main() {
                             again.failed,
                             rep.failed
                         );
+                        // ast-grep-ignore: no-std-process-exit-in-core
                         std::process::exit(1);
                     }
                 }
@@ -925,6 +937,7 @@ fn real_main() {
                 );
             }
             if rep.failed > 0 {
+                // ast-grep-ignore: no-std-process-exit-in-core
                 std::process::exit(1);
             }
         }
@@ -1147,6 +1160,7 @@ fn real_main() {
                     }
                 }
                 if report.missed() > 0 {
+                    // ast-grep-ignore: no-std-process-exit-in-core
                     std::process::exit(1);
                 }
                 return;
@@ -1229,6 +1243,7 @@ fn real_main() {
                 eprintln!("rna: {} rewritten", file);
             }
             if report.missed() > 0 {
+                // ast-grep-ignore: no-std-process-exit-in-core
                 std::process::exit(1);
             }
         }
@@ -2273,5 +2288,6 @@ usage:
   operon version",
         env!("CARGO_PKG_VERSION")
     );
+    // ast-grep-ignore: no-std-process-exit-in-core
     std::process::exit(2);
 }

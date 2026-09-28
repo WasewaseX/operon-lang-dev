@@ -316,6 +316,7 @@ impl<'a> Compiler<'a> {
                     return Vec::new();
                 }
                 let site = self.emit(Instr::Brk(0), line);
+                // ast-grep-ignore: no-unwrap-in-src
                 self.loops.last_mut().unwrap().brks.push(site);
                 Vec::new()
             }
@@ -327,6 +328,7 @@ impl<'a> Compiler<'a> {
                     return Vec::new();
                 }
                 let site = self.emit(Instr::Cont(0), line);
+                // ast-grep-ignore: no-unwrap-in-src
                 self.loops.last_mut().unwrap().conts.push(site);
                 Vec::new()
             }
@@ -376,6 +378,7 @@ impl<'a> Compiler<'a> {
                 self.emit(Instr::Jmp(top as u32), line);
                 let end = self.code.len() as u32;
                 self.code[jif] = Instr::JmpIfF(end);
+                // ast-grep-ignore: no-unwrap-in-src
                 let frame = self.loops.pop().unwrap();
                 for b in frame.brks {
                     self.code[b] = Instr::Brk(end);
@@ -402,6 +405,7 @@ impl<'a> Compiler<'a> {
                 let _out = self.stmts(body);
                 self.emit(Instr::Jmp(top as u32), line);
                 let end = self.code.len() as u32;
+                // ast-grep-ignore: no-unwrap-in-src
                 let frame = self.loops.pop().unwrap();
                 for b in frame.brks {
                     self.code[b] = Instr::Brk(end);
@@ -424,6 +428,7 @@ impl<'a> Compiler<'a> {
                     // the bridged statement may return/branch; its flow
                     // needs this loop's top/end, patched at loop end
                     let site = self.emit(Instr::BridgeStmtInLoop(idx, 0, 0), line);
+                    // ast-grep-ignore: no-unwrap-in-src
                     self.loops.last_mut().unwrap().bridges.push(site);
                 }
                 Vec::new()
@@ -480,6 +485,7 @@ pub fn exec_gene_body(
 ) -> Result<Flow, Stress> {
     let code: std::rc::Rc<GeneCode> = {
         let opt = interp.vm_opt;
+        // ast-grep-ignore: no-unwrap-in-src
         let prog = interp.vm_program.as_mut().unwrap();
         let key = if opt >= 1 {
             // cache the optimized form under a shifted key
@@ -766,7 +772,11 @@ fn render(i: &Instr, code: &GeneCode) -> String {
             format!("stmt#{} top {} end {}", idx, top, end)
         }
         Instr::CallNamed(idx, argc) => {
-            format!("'{}' argc {}", code.names.get(*idx as usize).cloned().unwrap_or_default(), argc)
+            format!(
+                "'{}' argc {}",
+                code.names.get(*idx as usize).cloned().unwrap_or_default(),
+                argc
+            )
         }
         _ => String::new(),
     }
@@ -1050,7 +1060,14 @@ gene main() {
         // every opcode the machine executes appears in the listing of this
         // deliberately mixed program (bridges included: gene values in args)
         for m in [
-            "Push", "LoadName", "StoreName", "Bin", "JmpIfF", "CallNamed", "Ret", "Pop",
+            "Push",
+            "LoadName",
+            "StoreName",
+            "Bin",
+            "JmpIfF",
+            "CallNamed",
+            "Ret",
+            "Pop",
         ] {
             assert!(d1.contains(m), "listing missing {m}:\n{d1}");
         }

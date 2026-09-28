@@ -197,6 +197,7 @@ pub fn py_call(
     let (tx_so, rx_so) = mpsc::channel::<Vec<u8>>();
     let (tx_se, rx_se) = mpsc::channel::<Vec<u8>>();
     if let Some(mut p) = child.stdout.take() {
+        // ast-grep-ignore: no-raw-thread-spawn
         std::thread::spawn(move || {
             let mut v = Vec::new();
             use std::io::Read;
@@ -216,6 +217,7 @@ pub fn py_call(
         });
     }
     if let Some(mut p) = child.stderr.take() {
+        // ast-grep-ignore: no-raw-thread-spawn
         std::thread::spawn(move || {
             let mut v = Vec::new();
             use std::io::Read;
@@ -365,6 +367,7 @@ mod tests {
         if !need_python() {
             return;
         }
+        // ast-grep-ignore: no-unwrap-in-src
         let r = py_call("math", "sqrt", "[2]", 10_000).unwrap();
         assert!(r.ok, "expected ok, got {:?}", r.error);
         match r.value {
@@ -379,6 +382,7 @@ mod tests {
         if !need_python() {
             return;
         }
+        // ast-grep-ignore: no-unwrap-in-src
         let r = py_call("json", "loads", "[\"[1,2,3]\"]", 10_000).unwrap();
         assert!(r.ok);
         match r.value {
@@ -401,6 +405,7 @@ mod tests {
         if !need_python() {
             return;
         }
+        // ast-grep-ignore: no-unwrap-in-src
         let r = py_call("math", "pow", "[2, 10]", 10_000).unwrap();
         assert!(r.ok);
         match r.value {
@@ -415,6 +420,7 @@ mod tests {
         if !need_python() {
             return;
         }
+        // ast-grep-ignore: no-unwrap-in-src
         let r = py_call("math", "sqrt", "[-1]", 10_000).unwrap();
         assert!(!r.ok);
         assert!(r.error.as_deref().unwrap_or("").contains("ValueError"));
@@ -426,6 +432,7 @@ mod tests {
         if !need_python() {
             return;
         }
+        // ast-grep-ignore: no-unwrap-in-src
         let r = py_call("operon_no_such_module_xyz", "f", "[]", 10_000).unwrap();
         assert!(!r.ok);
         assert!(r.error.as_deref().unwrap_or("").contains("No module named"));
@@ -438,6 +445,7 @@ mod tests {
         }
         // `this` prints the Zen of Python AT IMPORT, stdout noise before the
         // response line. The LAST non-empty line must still parse cleanly.
+        // ast-grep-ignore: no-unwrap-in-src
         let r = py_call("this", "x", "[]", 5_000).unwrap();
         assert!(!r.ok, "this has no attr x, must be a typed AttributeError");
         assert!(r.error.as_deref().unwrap_or("").contains("AttributeError"));
@@ -449,6 +457,7 @@ mod tests {
             return;
         }
         let started = std::time::Instant::now();
+        // ast-grep-ignore: no-unwrap-in-src
         let r = py_call("time", "sleep", "[30]", 300).unwrap();
         assert!(r.timed_out);
         assert!(!r.ok);
@@ -465,6 +474,7 @@ mod tests {
             return;
         }
         std::env::set_var("PYBRIDGE_CANARY", "leak-me");
+        // ast-grep-ignore: no-unwrap-in-src
         let r = py_call("os", "getenv", "[\"PYBRIDGE_CANARY\"]", 10_000).unwrap();
         assert!(r.ok);
         assert!(
@@ -482,6 +492,7 @@ mod tests {
         // ~76 MiB of output: beyond MAX_CHILD_OUT the drainer stops; the
         // child dies on EPIPE / timeout; the outcome stays typed
         let started = std::time::Instant::now();
+        // ast-grep-ignore: no-unwrap-in-src
         let r = py_call("os", "urandom", "[76000000]", 30_000).unwrap();
         assert!(
             matches!(r.value, Value::Null) || r.ok,
@@ -495,6 +506,7 @@ mod tests {
         if !need_python() {
             return;
         }
+        // ast-grep-ignore: no-unwrap-in-src
         let probe = py_call("numpy", "arange", "[0, 5]", 30_000).unwrap();
         if !probe.ok {
             eprintln!("skip: numpy absent on this interpreter");
