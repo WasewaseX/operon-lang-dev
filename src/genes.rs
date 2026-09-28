@@ -57,10 +57,151 @@ pub fn spawn_worker(f: impl FnOnce() + Send + 'static) -> Result<(), Stress> {
 }
 
 // ------------------------------------------------------------ .cell config
+
+/// W066: parse a `.cell` payload into the flat key/value map the engine
+/// consumes. Behavior is FROZEN (byte-identical map for every input, garbage
+/// included): the loader (`src/tools.rs`), the lint engine
+/// (`src/lint.rs::lint_cell`) and the differential parity all ride this
+/// function, so it never rejects, never notes, never panics — Total Grammar.
+/// Schema validation lives in the checked twin `parse_cell_checked`.
 pub fn parse_cell(src: &str) -> HashMap<String, String> {
+    parse_cell_checked(src).0
+}
+
+/// W066: one advisory `.cell` schema finding from the parse lane. `rule`
+/// reuses the check-time lint vocabulary from `src/lint.rs` verbatim —
+/// `cell-unknown-key` (W10) and `cell-type-mismatch` (W11) — so check and
+/// runtime tell ONE story about the same file. Notes are advisory: a bad
+/// key never rejects the run (unknown keys are ignored by the engine, that
+/// is exactly why the note exists).
+#[derive(Debug, Clone, PartialEq)]
+pub struct CellNote {
+    /// 1-based line in the .cell payload (0 = not attributable).
+    pub line: usize,
+    /// Stable lint rule name ("cell-unknown-key" / "cell-type-mismatch").
+    pub rule: &'static str,
+    /// Human message; names the key, the expectation and (for unknown keys)
+    /// the closest known key as a typo hint.
+    pub message: String,
+}
+
+/// W10 vocabulary (src/lint.rs): .cell key outside the schema.
+pub const CELL_UNKNOWN_KEY: &str = "cell-unknown-key";
+/// W11 vocabulary (src/lint.rs): .cell value of the wrong kind.
+pub const CELL_TYPE_MISMATCH: &str = "cell-type-mismatch";
+
+/// W066: the kind a schema key's value must have for the engine to use it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CellKind {
+    /// Parses as f64 (`grn.decay`).
+    Number,
+    /// Parses as i64 (`run.timeout_ms`; range nuances in the key's doc).
+    Integer,
+    /// The engine's bool vocabulary: "true" / "false" ("on"/"off" where the
+    /// reader honors them, e.g. scope.cancel_on_error).
+    Bool,
+    /// Taken verbatim (`cli.variant`, `allow.*` grants).
+    Str,
+}
+
+impl CellKind {
+    pub fn label(self) -> &'static str {
+        match self {
+            CellKind::Number => "number",
+            CellKind::Integer => "an integer",
+            CellKind::Bool => "a bool ('true'/'false')",
+            CellKind::Str => "a string",
+        }
+    }
+    fn accepts(self, v: &str) -> bool {
+        let t = v.trim();
+        match self {
+            CellKind::Number => t.parse::<f64>().is_ok(),
+            CellKind::Integer => t.parse::<i64>().is_ok(),
+            // scope.cancel_on_error flips OFF on "off"; the rest arm on
+            // "true" — the union of the honored vocabulary is accepted here,
+            // anything else gets an advisory note (never a rejection).
+            CellKind::Bool => matches!(t, "true" | "false" | "on" | "off"),
+            CellKind::Str => true,
+        }
+    }
+}
+
+/// W066: one declared key of the `.cell` schema — the runtime lane's source
+/// of truth. `docs/specs/CELL-SCHEMA.md` is the human mirror (kept in sync
+/// by tests/cell_schema.rs) and `src/lint.rs::CELL_KEYS` the check-time
+/// mirror (lint lane). Families end in `*` ("allow.*") and match by prefix.
+pub struct CellKeySpec {
+    /// Exact key ("m6a.decay") or family prefix ending in `*` ("allow.*").
+    pub name: &'static str,
+    pub kind: CellKind,
+    /// The value the engine behaves as when the key is absent
+    /// ("—" = opt-in family/key with no numeric default).
+    pub default: &'static str,
+    /// One-line effect, mirrored in docs/specs/CELL-SCHEMA.md.
+    pub doc: &'static str,
+    /// Since-when tag (loop/roadmap id or pre-M100), for evolution audits.
+    pub since: &'static str,
+}
+
+/// Every key the engine reads today (sweep of `cell.get` call sites in
+/// src/interp.rs, src/genes.rs, src/tools.rs, src/main.rs, src/pybridge.rs),
+/// alphabetically, exact keys before their family. The `methyl()` builtin
+/// additionally reads ANY key (introspection door; `allow.*` redacted).
+pub const CELL_SCHEMA: &[CellKeySpec] = &[
+    CellKeySpec { name: "allow.exit", kind: CellKind::Bool, default: "false", doc: "boolean exit capability; must ride an explicit --cell (auto-detected cells cannot grant)", since: "sec-r2 (audit C-11)" },
+    CellKeySpec { name: "allow.*", kind: CellKind::Str, default: "nothing granted", doc: "capability grant family: read/write/net/run/py/env carry comma-separated values, exit is boolean; auto-detected operon.cell grants are ignored with a note", since: "pre-M100 (sec-r2)" },
+    CellKeySpec { name: "cli.variant", kind: CellKind::Str, default: "—", doc: "pins splice-variant selection for every gene (CLI --variant is staged in as this key; selection: cell > @m6a > first declared)", since: "pre-M100" },
+    CellKeySpec { name: "entry", kind: CellKind::Str, default: "main / ires", doc: "entry gene override (CLI --entry wins over it)", since: "pre-M100" },
+    CellKeySpec { name: "enhance.delta", kind: CellKind::Number, default: "0.25", doc: "enhancer dose, 0..=1: threshold reduction applied by enhance", since: "reg-bio (F-6)" },
+    CellKeySpec { name: "expression.koff", kind: CellKind::Number, default: "0.1", doc: "telegraph promoter OFF probability per call attempt, 0..=1", since: "reg-bio (F-1)" },
+    CellKeySpec { name: "expression.kon", kind: CellKind::Number, default: "0.3", doc: "telegraph promoter ON probability per call attempt, 0..=1", since: "reg-bio (F-1)" },
+    CellKeySpec { name: "expression.seed", kind: CellKind::Integer, default: "0 (golden-ratio constant)", doc: "reseeds the shared mirrored xorshift64* stream behind promoter draws", since: "reg-bio (F-1)" },
+    CellKeySpec { name: "expression.stochastic", kind: CellKind::Bool, default: "false", doc: "enables per-call telegraph promoter draws (deterministic contract otherwise)", since: "reg-bio (F-1)" },
+    CellKeySpec { name: "grn.decay", kind: CellKind::Number, default: "0.0 (no decay)", doc: "GRN level dilution per grn_fire pulse / time tick, 0..=1", since: "A10 / reg-bio-2 (C2)" },
+    CellKeySpec { name: "grn.decay_calls", kind: CellKind::Integer, default: "— (event-driven only)", doc: "fires one GRN decay step every N calls when set (>=1)", since: "reg-bio-2 (C2)" },
+    CellKeySpec { name: "ligand.*", kind: CellKind::Number, default: "0.0", doc: "[ligand.<name>] bath default per species, 0..=1; runtime ligand_set wins over it", since: "reg-bio-2 (A4)" },
+    CellKeySpec { name: "m6a.decay", kind: CellKind::Number, default: "0.0 (no decay)", doc: "standalone m6A density decay fraction per cadence tick, 0..=1", since: "loop-9 (P0-4)" },
+    CellKeySpec { name: "m6a.decay_calls", kind: CellKind::Integer, default: "1", doc: "standalone m6A decay cadence in calls (>=1)", since: "loop-9 (P0-4)" },
+    CellKeySpec { name: "m6a.reader.decay", kind: CellKind::Number, default: "0.25", doc: "YTHDF2 fate: extra decay on marked transcripts, 0..=1", since: "loop-9 (F-6)" },
+    CellKeySpec { name: "m6a.reader.min_level", kind: CellKind::Integer, default: "2", doc: "reader engagement threshold on the 0..=3 mark lattice", since: "loop-9 (F-6)" },
+    CellKeySpec { name: "m6a.reader.translation", kind: CellKind::Number, default: "0.10", doc: "YTHDF1/3 fate: translation attenuation on marked transcripts, 0..=1", since: "loop-9 (F-6)" },
+    CellKeySpec { name: "methyl.maintenance", kind: CellKind::Number, default: "0.5", doc: "maintenance factor applied to methylation levels per passage(n), 0..=1", since: "pre-M100" },
+    CellKeySpec { name: "methylate.quiet", kind: CellKind::Bool, default: "false", doc: "suppresses the per-call methylation growth notes", since: "pre-M100 (A12)" },
+    CellKeySpec { name: "methylate.threshold", kind: CellKind::Integer, default: "3", doc: "graded silencing gate: calls blocked when methylation counter >= threshold (>=0)", since: "pre-M100 (T2b)" },
+    CellKeySpec { name: "modules.visibility", kind: CellKind::Str, default: "default visibility", doc: "\"strict\" enables W24 strict module export visibility (private containment)", since: "W24" },
+    CellKeySpec { name: "operon.polarity", kind: CellKind::Number, default: "0.5", doc: "transcriptional polarity survival factor for upstream cistrons, 0..=1", since: "loop-9 (P0-1)" },
+    CellKeySpec { name: "py.timeout_ms", kind: CellKind::Integer, default: "10000 (clamp 1..=300000)", doc: "py() wall-clock cap in milliseconds", since: "substrate-r1" },
+    CellKeySpec { name: "quorum.dilution", kind: CellKind::Number, default: "0.5", doc: "signal-medium dilution per passage(n) division, 0..=1", since: "loop-9 (C8)" },
+    CellKeySpec { name: "rho.catch", kind: CellKind::Number, default: "0.5", doc: "Rho catch-up probability base (distance decay q = 1-(1-catch)^d), 0..=1", since: "loop-10 (F-7)" },
+    CellKeySpec { name: "rho.queue_floor", kind: CellKind::Number, default: "0.5", doc: "rut-site occlusion floor for Rho termination", since: "loop-10 (F-7)" },
+    CellKeySpec { name: "rho.termination", kind: CellKind::Bool, default: "false", doc: "arms Rho-dependent termination (opt-in; legacy runs draw nothing)", since: "loop-10 (F-7)" },
+    CellKeySpec { name: "ribosome.drain", kind: CellKind::Number, default: "0.5", doc: "ribosome-queue drain rate per call", since: "loop-10 (F-8)" },
+    CellKeySpec { name: "ribosome.queue_cap", kind: CellKind::Number, default: "1.0", doc: "per-cistron ribosome-queue shield cap (0.0 = unshielded)", since: "loop-10 (F-7)" },
+    CellKeySpec { name: "repressi.alpha", kind: CellKind::Number, default: "10.0", doc: "repressilator production alpha (>0)", since: "reg-bio (F-5)" },
+    CellKeySpec { name: "repressi.basal", kind: CellKind::Number, default: "0.0", doc: "basal promoter leak (>=0)", since: "reg-bio (F-5)" },
+    CellKeySpec { name: "repressi.gamma", kind: CellKind::Number, default: "1.0", doc: "repressilator degradation gamma (>=0)", since: "reg-bio (F-5)" },
+    CellKeySpec { name: "repressi.hill", kind: CellKind::Integer, default: "4", doc: "Hill coefficient (integer 1..=8)", since: "reg-bio (F-5)" },
+    CellKeySpec { name: "repressi.noise", kind: CellKind::Number, default: "0.0 (off)", doc: "Euler substep kick amplitude, 0..=1", since: "reg-bio (F-5)" },
+    CellKeySpec { name: "repressi.seed", kind: CellKind::Integer, default: "0 (golden-ratio constant)", doc: "seeds the repressilator noise stream", since: "reg-bio (F-5)" },
+    CellKeySpec { name: "run.timeout_ms", kind: CellKind::Integer, default: "10000 (clamp 1..=300000)", doc: "run() child wall-clock cap in milliseconds; a timed-out child is killed and reported", since: "sec-r2 (audit A14)" },
+    CellKeySpec { name: "scope.cancel_on_error", kind: CellKind::Bool, default: "true", doc: "cancel child scopes on a stress unwind (\"off\" disables)", since: "W18" },
+    CellKeySpec { name: "variant.*", kind: CellKind::Str, default: "(@m6a > first declared)", doc: "variant.<root> pins the splice variant per gene root", since: "pre-M100" },
+    CellKeySpec { name: "wobble.strict", kind: CellKind::Bool, default: "false", doc: "cell-side --strict: run exits 3 when rung >= 3 repairs occurred", since: "W37" },
+];
+
+/// W066: parse + validate a `.cell` payload against `CELL_SCHEMA`. Returns
+/// the exact map `parse_cell` has always produced (same loop, same rules —
+/// the notes are an ADDITIVE advisory channel) plus one note per finding:
+/// unknown key -> `cell-unknown-key` (W10) with a closest-key typo hint,
+/// kind mismatch -> `cell-type-mismatch` (W11) with expected vs got.
+/// Notes never reject and are never printed here; the loader decides where
+/// they surface (Total Grammar: configuration problems never stop a run).
+pub fn parse_cell_checked(src: &str) -> (HashMap<String, String>, Vec<CellNote>) {
     let mut out = HashMap::new();
+    let mut notes = Vec::new();
     let mut section = String::new();
-    for line in src.lines() {
+    for (i, line) in src.lines().enumerate() {
         let t = line.trim();
         if t.is_empty() || t.starts_with('#') {
             continue;
@@ -77,10 +218,113 @@ pub fn parse_cell(src: &str) -> HashMap<String, String> {
             } else {
                 format!("{}.{}", section, k)
             };
+            let line_no = i + 1;
+            match cell_schema_kind(&key) {
+                None => {
+                    let hint = closest_cell_key(&key)
+                        .map(|c| format!(" did you mean '{}'?", c))
+                        .unwrap_or_default();
+                    notes.push(CellNote {
+                        line: line_no,
+                        rule: CELL_UNKNOWN_KEY,
+                        message: format!(
+                            ".cell key '{}' is not in the schema \
+                             (docs/specs/CELL-SCHEMA.md), typo? it will be \
+                             silently ignored{}",
+                            key, hint
+                        ),
+                    });
+                }
+                Some(kind) => {
+                    if !kind.accepts(&v) {
+                        notes.push(CellNote {
+                            line: line_no,
+                            rule: CELL_TYPE_MISMATCH,
+                            message: format!(
+                                ".cell key '{}' expects {}, got '{}'",
+                                key,
+                                kind.label(),
+                                v
+                            ),
+                        });
+                    }
+                }
+            }
             out.insert(key, v);
         }
     }
-    out
+    (out, notes)
+}
+
+/// The kind declared for `key`, exact rows first, then `*` families.
+fn cell_schema_kind(key: &str) -> Option<CellKind> {
+    for spec in CELL_SCHEMA {
+        if let Some(prefix) = spec.name.strip_suffix('*') {
+            if key.starts_with(prefix) {
+                return Some(spec.kind);
+            }
+        } else if spec.name == key {
+            return Some(spec.kind);
+        }
+    }
+    None
+}
+
+/// W066: closest known key for an unknown one — zero-dependency typo hint.
+/// Bounded Levenshtein over bytes plus a prefix/suffix affinity (covers the
+/// classic section-dropped case: "decay" -> "grn.decay"/"m6a.decay").
+/// Ties break deterministically: distance, then longer common prefix, then
+/// CELL_SCHEMA order. Returns None when nothing is plausibly a typo of it.
+fn closest_cell_key(unknown: &str) -> Option<&'static str> {
+    let mut best: Option<(&'static str, usize, usize)> = None; // (name, dist, prefix)
+    for spec in CELL_SCHEMA {
+        let name = spec.name;
+        let bare = name.strip_suffix('*').unwrap_or(name);
+        let d = edit_distance_bounded(unknown, bare, 3);
+        let p = common_prefix_len(unknown, bare);
+        // plausible typo: within edit distance 3, or the unknown is a
+        // prefix/suffix of a known key (3+ chars so single letters stay quiet)
+        let affinity = unknown.len() >= 3 && (bare.starts_with(unknown) || bare.ends_with(unknown));
+        if d > 3 && !affinity {
+            continue;
+        }
+        let better = match best {
+            None => true,
+            Some((_, bd, bp)) => d < bd || (d == bd && p > bp),
+        };
+        if better {
+            best = Some((name, d, p));
+        }
+    }
+    best.map(|(name, _, _)| name)
+}
+
+/// Levenshtein distance, bailing out once it exceeds `cap` (returns cap+1).
+fn edit_distance_bounded(a: &str, b: &str, cap: usize) -> usize {
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    if a.len().abs_diff(b.len()) > cap {
+        return cap + 1;
+    }
+    let mut prev: Vec<usize> = (0..=b.len()).collect();
+    let mut cur = vec![0usize; b.len() + 1];
+    for i in 1..=a.len() {
+        cur[0] = i;
+        let mut row_min = cur[0];
+        for j in 1..=b.len() {
+            let sub = prev[j - 1] + usize::from(a[i - 1] != b[j - 1]);
+            cur[j] = (prev[j] + 1).min(cur[j - 1] + 1).min(sub);
+            row_min = row_min.min(cur[j]);
+        }
+        if row_min > cap {
+            return cap + 1;
+        }
+        std::mem::swap(&mut prev, &mut cur);
+    }
+    prev[b.len()]
+}
+
+fn common_prefix_len(a: &str, b: &str) -> usize {
+    a.bytes().zip(b.bytes()).take_while(|(x, y)| x == y).count()
 }
 
 // ------------------------------------------------------------ .rna edits

@@ -1,0 +1,24 @@
+# W066: explicit operator cell for the .cell schema proof — one entry per
+# declared kind class (number / integer / bool / string grant / prefix
+# family), so the proof exercises the schema exactly as the loader sees it.
+# Explicit --cell only, granted-lane pattern (m6a_decay_cadence precedent):
+#   operon test tests/granted/cell_schema.op --cell tests/granted/cell_schema.cell
+[allow]
+read = /etc/hostname
+
+[rho]
+termination = true
+catch = 0.5
+
+[ribosome]
+queue_cap = 0.0
+
+m6a.reader.decay = 0.25
+m6a.reader.translation = 0.1
+m6a.reader.min_level = 2
+operon.polarity = 0.5
+quorum.dilution = 0.5
+methylate.threshold = 3
+expression.kon = 0.3
+repressi.alpha = 10.0
+run.timeout_ms = 10000

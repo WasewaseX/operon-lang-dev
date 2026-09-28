@@ -1,0 +1,19 @@
+// tg_sweep corpus 07: one envelope, every easy stress family — missing
+// (unbound name, absent index/key), burned (assert), division traps,
+// closed channels. Each lands in the SAME rescue: catchable Stress only.
+main {
+    stress {
+        no_such_binding_at_all
+        let l = [1]
+        l[99]
+        let m = {}
+        m.absent_key
+        assert(false)
+        let z = 1 / 0
+        let ch = channel()
+        close(ch)
+        recv(ch)
+    } rescue (e) {
+        e.kind
+    }
+}
