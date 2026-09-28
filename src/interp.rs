@@ -5465,7 +5465,7 @@ impl Interp {
             _ => 32,
         };
         mem_charge(bytes)?;
-        let mut st = ch.state.lock().unwrap();
+        let mut st = ch.state.lock().unwrap_or_else(|e| e.into_inner());
         if st.closed {
             return Err(Stress::new("closed_channel", "send on a closed channel"));
         }
@@ -5481,7 +5481,7 @@ impl Interp {
             _ => return Err(Stress::new("unfolded", "recv(ch) needs a channel")),
         };
         let slice = std::time::Duration::from_millis(Self::RECV_SLICE_MS);
-        let mut st = ch.state.lock().unwrap();
+        let mut st = ch.state.lock().unwrap_or_else(|e| e.into_inner());
         loop {
             if let Some(sv) = st.queue.pop_front() {
                 return Ok(crate::genes::from_send(sv));
@@ -5492,7 +5492,10 @@ impl Interp {
             }
             // blocked: wake-iteration fuel + cancel, the sleep shape
             self.blocking_wake(Self::RECV_SLICE_MS)?;
-            let (g, _timed_out) = ch.wake.wait_timeout(st, slice).unwrap();
+            let (g, _timed_out) = ch
+                .wake
+                .wait_timeout(st, slice)
+                .unwrap_or_else(|e| e.into_inner());
             st = g;
         }
     }
@@ -5502,7 +5505,7 @@ impl Interp {
             Some(Value::Channel(c)) => c.clone(),
             _ => return Err(Stress::new("unfolded", "close(ch) needs a channel")),
         };
-        let mut st = ch.state.lock().unwrap();
+        let mut st = ch.state.lock().unwrap_or_else(|e| e.into_inner());
         if st.closed {
             // idempotent + soft note (close is a state write, not a race;
             // Go panics here, we contain)
@@ -5579,7 +5582,7 @@ impl Interp {
             let mut any_open = false;
             let mut ready = None;
             for (i, c) in chans.iter().enumerate() {
-                let st = c.state.lock().unwrap();
+                let st = c.state.lock().unwrap_or_else(|e| e.into_inner());
                 if !st.queue.is_empty() {
                     // strict declaration order: the leftmost ready wins
                     ready = Some(i);
