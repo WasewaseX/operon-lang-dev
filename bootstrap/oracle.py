@@ -10,6 +10,7 @@ Deliberately sequential: spawn() runs tasks inline (deterministic), which is
 equivalent for the differential corpus.
 """
 import sys, os, math, json as _json
+import unicodedata  # W28 stage 2: THE reference implementation for NFC/NFD/category
 
 # ----------------------------------------------------------------------------
 # notes / values
@@ -2857,6 +2858,7 @@ bytes_from_str str_from_bytes bytes_from_list bytes_to_list read_file_bytes writ
 http_get serve recv_request send_response json_parse json_str env call items py
 re_match re_find re_groups unix_time date_parts date_fmt
 grapheme_len fold_case char_at char_slice
+norm_nfc norm_nfd casefold char_category
 some none ok err is_some is_none is_ok is_err unwrap unwrap_or
 enumerate zip sorted reversed any all first last take drop unique flatten chunk round clamp divmod
 channel send recv close select""".split())
@@ -6303,6 +6305,29 @@ class Interp:
             a = max(0, min(n, n + i if i < 0 else i))
             b = max(0, min(n, n + j if j < 0 else j))
             return "".join(chars[a:max(a, b)])
+        if name in ("norm_nfc", "norm_nfd", "casefold", "char_category"):
+            # W28 stage 2 (SPEC §3): normalization, full case folding,
+            # categories. The Rust core runs GENERATED tables (emitted from
+            # THIS stdlib module by scripts/gen_unicode_tables.py), here the
+            # stdlib is called directly, both cores agree by construction.
+            # Non-string argument = the standard `unfolded` type family,
+            # byte-matching the Rust core.
+            if not args or not isinstance(args[0], str):
+                raise Stress("unfolded", f"{name}(s) needs a string")
+            s = args[0]
+            if name == "norm_nfc":
+                return unicodedata.normalize("NFC", s)
+            if name == "norm_nfd":
+                return unicodedata.normalize("NFD", s)
+            if name == "casefold":
+                return s.casefold()
+            # char_category: ONE pinned shape, string in, the two-letter
+            # general category of its FIRST CHAR out; empty string is the
+            # soft tier (null + note), mirroring char_at's out-of-range tier.
+            if not s:
+                self.note(4, "char_category of empty string; null")
+                return None
+            return unicodedata.category(s[0])
         # ------------------------------------------------ Option / Result (W06, D-014)
         # Constructors + predicates + extraction. Error messages byte-match
         # the Rust core (Stress::at texts); families are distinct.
