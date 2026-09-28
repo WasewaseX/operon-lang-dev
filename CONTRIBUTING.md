@@ -165,7 +165,7 @@ Update the table in §10 when the bar moves, that edit is part of the PR that mo
 | `web/playground/**` | builder-B | |
 | `scripts/bench*`, `BENCH.md` | builder-B | |
 | `docs/**` (site), `TUTORIAL.md`, `README.md`, `CONTRIBUTING.md` | sz | README factual sections co-owned with builder-A |
-| `runtime/codon_kernel.cpp`, `runtime/operon_rt.[ch]` | builder-A | C/C++ kernels are load-bearing for wobble + codon scoring |
+| `runtime/codon_kernel.cpp` | builder-A | the C++ codon kernel is load-bearing for wobble + codon scoring; the legacy C kernel was deleted in sec-r2 (audit A15), interning lives in Rust `src/ffi.rs` |
 
 Cross-lane edits: propose in COMMS, wait for the lane owner's 👍 (or the owner's), keep the diff
 minimal, credit in the commit body.
@@ -279,14 +279,14 @@ intuition only, v3.5 frozen; D-009 2.2.0 = the gated Transcription milestone (2.
 
 ```bash
 export PATH="$HOME/.cargo/bin:$PATH"
-cargo build --release                       # core build (build.rs compiles C/C++ kernels)
+cargo build --release                       # core build (build.rs compiles the C++ codon kernel)
 cargo test --release                        # unit + proof suite + version gate
 cargo clippy -- -D warnings && cargo fmt --check
 cp target/release/operon bin/operon         # harness expects ./bin/operon
 python3 bootstrap/harness.py                # differential oracle, must end 0 diverge
 bash scripts/redteam.sh                     # containment suite, must end 0 breached
 python3 tests/lsp_smoke.py                  # LSP session smoke
-./target/release/operon test tests/         # proof suite directly: "26 file(s)… 281 assertion(s)"
+./target/release/operon test tests/         # proof suite directly (generated counts: docs/STATS.md)
 ```
 
 For interpreter behavior questions: write a tiny `.op`, run
