@@ -326,3 +326,36 @@ unicode stage 2) work in separate git worktrees so both may touch src/interp.rs
 without racing, and the integrator merges. The shared tree hosts the CLI check rework
 (W041 plus W043), the SPEC bio separation (W091), and the testing infrastructure pair
 (W050 plus W051).
+
+---
+
+## Pass 3 verdict (after batch 2, main @ 4cbf393)
+
+Batch 2 closed 9 items: W015, W028, W038, W041, W042, W043, W050, W051, W091. Gates at
+merge: cargo test 131 green, clippy 0, fmt clean, differential 204/204 + vm lane 198/198,
+LSP smoke green.
+
+The batch proved the worktree protocol: two semantic agents (channels in one worktree,
+unicode in another) touched src/interp.rs and bootstrap/oracle.py at the same time without
+racing, and the integrator merged both branches with one SPEC conflict to resolve. The
+property harness immediately paid for itself: on its FIRST real runs it found five real
+Rust-vs-oracle divergences (an oracle crash on str times null, the oracle computing bignum
+modulo where the Rust core raises overflow on a checked intermediate, and int-only repeat
+counts). All five were fixed and the minimal repros are now permanent differential pins.
+
+The fuzzer ran 93,429 executions in 150 seconds: zero crashes, zero hangs, 13,290
+contained. That is the containment model working under mutation pressure, and it is a
+number, not a claim.
+
+Honest remainders the batch exposed: the channels SPEC names a redteam payload
+(rt_p21a) that was not written yet, so W015 carries one honest REMAIN line. The unicode
+agent owed its proof corpus and the integrator wrote it (33 asserts), and in doing so
+caught its own wrong expectation about a-dotbelow-acute composition, which is exactly the
+kind of error the generated-tables approach exists to prevent.
+
+Board after pass 3: 87 items done or closed-as-specced, 13 open (W001, W002, W003, W006,
+W008, W009, W010, W011, W013, W016, W025, W026, W027), plus the two CI-only items (W059,
+W060) whose gates verify on the runner, and W065/W066 waiting on their lane rules. Batch 3
+attacks the concurrency-and-check arc: W016 async rides the W015 channels substrate, W009
+parity campaign decides whether the VM replaces the tree walk, W048 lint, W066 .cell
+schema, W037 contract sweep, W059/W060 CI.

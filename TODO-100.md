@@ -223,7 +223,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
 - Files: `SPEC.md`, `tests/differential/`.
 - Depends: W013 decision (states the *current* truth even if reclamation defers).
 
-### W015, Channels + select [P1] [dev-1] [L] [Track L2a] [partial: task groups wait_all/wait_any on main f0a3c1d; REMAIN: channel()/send/recv/close + select over multiple channels (L2a)]
+### W015, Channels + select [P1] [dev-1] [L] [Track L2a] [done: channel()/send/recv/close/select on main (batch2, merged from batch2-channels): unbounded FIFO, closed-and-empty recv = null, send-after-close = catchable closed_channel, SendValue membrane at send time incl. top-level handle refusal (membrane stress), fuel-accounted blocking (50ms/10ms slices, cancel-aware), select = builtin with strict declaration-order fairness (grammar stays frozen per W036), oracle mirrors the buffered path op-for-op with the wire transform; SPEC §13 channels block; tests/channels.op 39 asserts + differential/channels.op byte-identical; harness 202/202 + vm 196/196 at merge; REMAIN (honest): rt_p21a redteam payload named in SPEC not yet written, cross-thread shapes are Rust-lane evidence]
 - Goal: `channel()` primitive (buffered), `send/recv/close`, `select` over multiple channels,
   language-level, capability-gated like spawn.
 - Done when: producer/consumer differential programs are deterministic under seeding;
@@ -324,7 +324,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
 - Files: `std/*.op`, `tests/std_*.op`, `STDLIB.md`.
 - Note: `hashing`/`binary` unblock W029; `path` unblocks W019 ergonomics.
 
-### W028, Unicode depth for strings [P2] [dev-1] [L] [partial: stage 1 on main b0e12ba (byte/char/grapheme semantics + case-fold subset + std/unicode); REMAIN: NFC/NFD normalization, full case folding, category queries]
+### W028, Unicode depth for strings [P2] [dev-1] [L] [done: stage 2 on main (batch2, merged from batch2-unicode): norm_nfc/norm_nfd/casefold/char_category, tables GENERATED from Python unicodedata 15.0.0 by scripts/gen_unicode_tables.py (generator verifies all 1,114,112 codepoints incl. Hangul algorithmic jamo + composition exclusions BEFORE emitting, refuses to write on mismatch), oracle calls the same stdlib so both cores agree by construction; canonical-only (NFKD out of scope, documented), casefold is context-free full C+F (final-sigma is a lowercasing rule, not a folding rule); SPEC §3 stage-2 block; tests/unicode_depth.op 33 asserts + differential/unicode_depth.op byte-identical; harness 204/204 + vm 198/198 at merge]
 - Goal: normalization (NFC/NFD), grapheme segmentation, case folding, category queries;
   documented char-index semantics (byte vs char vs grapheme) for every string builtin.
 - Done when: `std/unicode.op` (pure .op where feasible) or builtins with SPEC §10b;
@@ -415,7 +415,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
 - Files: `SPEC.md`, `src/tools.rs`, `src/main.rs`, `tests/`.
 - Note: W001/W002/W006 build on this contract; land before them if possible.
 
-### W038, Repair explanation mode [P1] [dev-2] [M] [open]
+### W038, Repair explanation mode [P1] [dev-2] [M] [done: `operon explain file.op` (batch2, landed with the check rework): Total Grammar play-by-play from the parse notes (rung names canonical/synonym/wobble/fallback, counts, --json shape), --strict verdict line; operon-ls carries the same door for the editor (smoke-pinned)]
 - Goal: `operon explain file.op` shows original token → repaired token → reason → rung →
   resulting AST fragment; `operon fmt --show-repairs` for the diff view.
 - Done when: both commands exist; every repair note the parser emits is machine-listable;
@@ -436,14 +436,14 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
 - Files: `src/main.rs`, `SPEC.md`.
 - Depends: W009 for the real dump.
 
-### W041, `check` rework: diagnostics, not grades [P1] [dev-2] [M] [Track L3d] [open]
+### W041, `check` rework: diagnostics, not grades [P1] [dev-2] [M] [Track L3d] [done: diag is the DEFAULT output (batch2): sectioned error/warning/repair/style blocks with rule names + locations + summary line + exit 3 on hard errors; stable code scheme in lint.rs (E/W/N never renumber); --format score keeps the grade for one transition cycle (nothing in scripts/ or CI parses the grade); README/TUTORIAL quotes updated; builtin synonyms (print/echo/say/show) no longer phantom]
 - Goal: separate streams: `error / warning / style / repair / security / performance`;
   keep the 100-point score only behind `--score` (nobody's default view); add `check --json`.
 - Done when: output groups by severity with counts; CI consumes `--json`;
   README/docs updated; no invariant gates depend on the score number.
 - Files: `src/tools.rs`, `src/main.rs`, `README.md`, `tests/`.
 
-### W042, Static analysis depth [P1] [dev-2] [L] [partial: phantom/wobble/NMD/anchor checks live]
+### W042, Static analysis depth [P1] [dev-2] [L] [done at the pinned scope (batch2): unreachable match arm (after unguarded catch-all), unused binding, dead const rules in lint.rs with the allow-prefix suppression; the critique's rule-set cap is reached deliberately, more rules are out of scope by the same critique]
 - Goal: add: unreachable code, unused variables/genes/imports, shadowing, infinite-loop
   detection, constant conditions, dead stores, obvious type mismatches, duplicate match
   cases, unused capabilities, possible-null flow (synergy with W001).
@@ -452,7 +452,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
   warning-clean unless the warning is genuinely warranted); `check --json` classification.
 - Files: `src/tools.rs`, `tests/`, `SPEC.md`.
 
-### W043, Wrong-arity static detection [P1] [dev-2] [S] [open]
+### W043, Wrong-arity static detection [P1] [dev-2] [S] [done: arity table from parse, direct calls checked at lint level (error stream, wrong-arity code), method calls on statically-known phenotypes, dynamic calls excluded with the documented escape hatch (bare gene reference = dispatch by design); surfaced through the diag check output]
 - Goal: calls to known genes with too-few/too-many args = `check` error before execution.
 - Done when: arity table built from parse; direct calls checked; dynamic calls excluded
   with a documented escape hatch; tests.
@@ -504,7 +504,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
   invocations, tests.
 - Files: `src/tools.rs` (run_tests), `src/main.rs`, `scripts/test.sh`.
 
-### W050, Property-based testing [P2] [dev-2] [M] [partial: differential harness is the base]
+### W050, Property-based testing [P2] [dev-2] [M] [done: scripts/prop/prop_harness.py (batch2): 4 seeded generator lanes (arith/strings/colls/programs), differential property vs the oracle byte-for-byte, shrink-to-repro on mismatch into tests/property/repro/, determinism digest, opt-in script; the harness EARNED its keep on its first real runs: 5 real divergences found and fixed (oracle str*null crash, oracle bignum modulo vs checked-intermediate remainder, int-only repeat counts); 400 cases 0 findings at integration]
 - Goal: seeded random property programs: parser repair invariants (AST round-trip), JSON
   round-trip, regex vs oracle, GRN transition invariants (mass-balance/decay bounds),
   Total Grammar never-crash law.
@@ -513,7 +513,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
   criteria stated); first real bug hunt documented if found.
 - Files: `scripts/property.py`, `bootstrap/harness.py`, `.github/workflows/ci.yml`.
 
-### W051, Fuzzing infrastructure (S7) [P1] [dev-2] [L] [partial: redteam 95 payloads]
+### W051, Fuzzing infrastructure (S7) [P1] [dev-2] [L] [done: scripts/fuzz/fuzz.py (batch2): mutation-based runner (byte flips, truncations, chunk dup, bracket/quote injection, unicode splices) over the seed corpus with per-input timeout and wall budget, crash/hang corpus with manifest, contained-vs-clean-vs-finding classification; scripts/fuzz/TRIAGE.md: finding = bug to fix, not a number to brag about; first real run 93,429 execs / 150s: 0 crash 0 hang, 13,290 contained]
 - Goal: continuous fuzzing of lexer/parser/fmt/JSON/regex/module loader/`.cell`:
   cargo-fuzz targets (libFuzzer) for the Rust core + `scripts/fuzz_op.py` AFL-style
   .op mutator for the semantic layer.
@@ -826,7 +826,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
   already (release targets), add explicit float-parity assertion program.
 - Files: `docs/spec/DETERMINISM.md`, `tests/differential/`.
 
-### W091, Bio semantics separation [P1] [dev-3] [M] [blocked: SPEC lane, after builder-B W54 lands]
+### W091, Bio semantics separation [P1] [dev-3] [M] [done: SPEC §11a (batch2): contract header (scope, W036 freeze citation, BIO-CONTRACT + DETERMINISM pointers, D-008 voice rule), the one-paragraph quotable boundary test (bio iff behavior cannot be predicted without §11), 23-row boundary map with anchors, 9 crossing sentences marked at §3/§10/§13/§14/§15; bounded-region option chosen over renumbering move, reasoning recorded; docs sync checker still exit 0]
 - Goal: SPEC currently interleaves language semantics with biological modeling semantics.
   Split: language sections state syntax/evaluation ONLY; bio modeling moves to a dedicated
   volume (docs/spec/BIO-MODEL.md) referenced from SPEC §11.
