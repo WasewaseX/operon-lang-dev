@@ -294,9 +294,10 @@ fn real_main() {
             "--list" => list_only = true,
             "--repeat" => {
                 i += 1;
+                // W49: 1..=1000, a flake-hunt re-run cap, not an unbounded loop.
                 match rest.get(i).map(|s| s.parse::<usize>()) {
-                    Some(Ok(n)) if n >= 1 => repeat = n,
-                    _ => die("--repeat needs a number >= 1"),
+                    Some(Ok(n)) if (1..=1000).contains(&n) => repeat = n,
+                    _ => die("--repeat needs a number 1..=1000 (flake-hunt re-runs)"),
                 }
             }
             "--format" => {
@@ -380,7 +381,9 @@ fn real_main() {
         "repl" => {
             repl();
         }
-        // W39 (ROADMAP-100): AST dump, the Total Grammar debugging window.
+        // W39 (ROADMAP-100): AST dump, the Total Grammar structural window.
+        // Purely structural: repair notes are W38 `explain`'s surface and are
+        // never printed here, default or otherwise.
         "ast" => {
             let file = match positional.first() {
                 Some(f) => f.clone(),
@@ -389,12 +392,13 @@ fn real_main() {
             let src = std::fs::read_to_string(&file)
                 .unwrap_or_else(|e| die(&format!("cannot read {}: {}", file, e)));
             let prog = parser::parse(&src);
-            // W39 + fuzz finding (2026-09-26): `{:#?}` pretty-Debug grows
-            // quadratically with AST nesting depth (indent × depth), so a
+            // W39 + fuzz finding (2026-09-26): the pretty tree grows
+            // quadratically with nesting depth (indent x depth), so a
             // pathological-but-parseable input (thousands of `(`) turns `ast`
             // into a hang. check() parses the same file in milliseconds, the
             // parser is fine, the PRINTER is the problem. Guard: measure
-            // source nesting depth; beyond 400 levels print compact Debug.
+            // source nesting depth; beyond 400 print the compact one-line
+            // tree (same structure, no indentation).
             let depth = src
                 .bytes()
                 .fold((0usize, 0usize), |(d, m), b| match b {
@@ -408,33 +412,22 @@ fn real_main() {
                 .1;
             let pretty = depth <= 400;
             if json {
-                // v1: escaped Debug payload + structured counts; a stable-schema
-                // JSON printer is tracked as W39.2 in ROADMAP-100.
-                let dbg = if pretty {
-                    format!("{:#?}", prog.stmts)
-                } else {
-                    format!("{:?}", prog.stmts)
-                };
+                // W39.2: structural JSON, the same tree as the text form.
                 println!(
-                    "{{\"file\":\"{}\",\"format\":\"debug-v1\",\"stmts\":{},\"notes\":{},\"ast\":\"{}\"}}",
+                    "{{\"file\":\"{}\",\"format\":\"ast-json-v1\",\"stmts\":{},\"notes\":{},\"ast\":{}}}",
                     tools::json_escape(&file),
                     prog.stmts.len(),
                     prog.notes.len(),
-                    tools::json_escape(&dbg)
+                    tools::ast_dump_json(&prog)
                 );
+            } else if pretty {
+                println!("{}", tools::ast_dump(&prog, true));
             } else {
-                for n in &prog.notes {
-                    println!("[note] rung {}: line {}: {}", n.rung, n.line, n.message);
-                }
-                if pretty {
-                    println!("{:#?}", prog.stmts);
-                } else {
-                    eprintln!(
-                        "[ast] nesting depth {} exceeds 400, compact dump (pretty Debug is quadratic on deep trees)",
-                        depth
-                    );
-                    println!("{:?}", prog.stmts);
-                }
+                eprintln!(
+                    "[ast] nesting depth {} exceeds 400, compact dump (pretty dump is quadratic on deep trees)",
+                    depth
+                );
+                println!("{}", tools::ast_dump(&prog, false));
             }
         }
         // W38 (ROADMAP-100): explain, what did Total Grammar do to my file?
@@ -765,11 +758,11 @@ fn real_main() {
             };
             // W49 (ROADMAP-100): --list enumerates discovered files + proof
             // frame counts without executing; --filter substr narrows the
-            // selection; --repeat N re-runs and pins byte-identical results.
-            let mut files = tools::collect_test_files(&paths);
-            if let Some(f) = test_filter.as_ref() {
-                files.retain(|p| p.contains(f.as_str()));
-            }
+            // selection (substring match on the file path: proof frames are
+            // anonymous in the grammar, the file is the selectable test
+            // unit); --repeat N re-runs and pins byte-identical results.
+            // No flags: discovery unchanged, byte-identical to the old runner.
+            let files = tools::select_test_files(&paths, test_filter.as_deref());
             if list_only {
                 let mut total = 0usize;
                 for f in &files {
@@ -832,14 +825,30 @@ fn real_main() {
                 Some(f) => f.clone(),
                 None => die("fmt needs a file"),
             };
-            // W47: config file (.operon-fmt.toml in CWD, or --fmt-config PATH)
-            // loads first; explicit flags override file keys; defaults last.
+            // W47: layered formatter config. Precedence: flags > fmt file
+            // (.operon-fmt.toml, or --fmt-config PATH) > operon.toml [fmt]
+            // (project manifest, current directory) > defaults. Malformed
+            // sections and bad values fall back with a stderr note, never a
+            // crash; absent files change nothing (byte-identical output).
+            let mut cfg = tools::FmtConfig::default();
+            if let Ok(text) = std::fs::read_to_string("operon.toml") {
+                let (section, sec_notes) = tools::extract_toml_section(&text, "fmt");
+                for n in &sec_notes {
+                    eprintln!("fmt: operon.toml: {n}");
+                }
+                if !section.is_empty() {
+                    let (file_cfg, unknown) = tools::parse_fmt_config_from(cfg, &section);
+                    cfg = file_cfg;
+                    for u in &unknown {
+                        eprintln!("fmt: ignoring unknown [fmt] key in operon.toml: {u}");
+                    }
+                }
+            }
             let cfg_path = fmt_config_path
                 .clone()
                 .unwrap_or_else(|| ".operon-fmt.toml".to_string());
-            let mut cfg = tools::FmtConfig::default();
             if let Ok(text) = std::fs::read_to_string(&cfg_path) {
-                let (file_cfg, unknown) = tools::parse_fmt_config(&text);
+                let (file_cfg, unknown) = tools::parse_fmt_config_from(cfg, &text);
                 cfg = file_cfg;
                 for u in &unknown {
                     eprintln!("fmt: ignoring unknown config key in {cfg_path}: {u}");

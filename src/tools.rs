@@ -1150,6 +1150,19 @@ pub fn collect_test_files(paths: &[String]) -> Vec<String> {
     files
 }
 
+/// W49: the `--filter` selection rule, discovery plus a substring match on
+/// the file path. Proof frames are anonymous in the grammar (`frame proof {`
+/// carries no name), so the file is the selectable test unit; `--list`
+/// shows exactly what was selected. `filter = None` is byte-identical to
+/// bare discovery, the historical no-flags behavior.
+pub fn select_test_files(paths: &[String], filter: Option<&str>) -> Vec<String> {
+    let mut files = collect_test_files(paths);
+    if let Some(f) = filter {
+        files.retain(|p| p.contains(f));
+    }
+    files
+}
+
 /// W49: how many proof frames does this file declare? (cheap text scan used
 /// by `operon test --list`; the runner remains the authority for pass/fail).
 pub fn count_proof_frames(path: &str) -> usize {
@@ -1338,13 +1351,22 @@ fn str_lit(s: &str) -> String {
     }
 }
 
-/// W47: parse a minimal zero-dependency formatter config (`.operon-fmt.toml`).
-/// Only `indent` (positive integer) and `quotes` (`double`|`single`) are
-/// meaningful; section headers and comments are ignored; unknown keys are
-/// reported (not errors, Total Grammar spirit, forward-compatible) so the
-/// caller can surface them on stderr.
+/// W47: parse a minimal zero-dependency formatter config (`.operon-fmt.toml`
+/// or the `[fmt]` section of `operon.toml`). Only `indent` (positive
+/// integer), `quotes` (`double`|`single`) and `width` (0..=10000, 0 = off)
+/// are meaningful; section headers and comments are ignored; unknown keys
+/// and out-of-range values are reported (not errors, Total Grammar spirit,
+/// forward-compatible) so the caller can surface them on stderr. Malformed
+/// input never panics: the offending key keeps its current (base) value.
 pub fn parse_fmt_config(src: &str) -> (FmtConfig, Vec<String>) {
-    let mut cfg = FmtConfig::default();
+    parse_fmt_config_from(FmtConfig::default(), src)
+}
+
+/// W47: layered variant. Applies `src` keys ON TOP of `base`, so the CLI can
+/// stack defaults <- `operon.toml` [fmt] <- `.operon-fmt.toml` <- flags with
+/// one parser and one note format.
+pub fn parse_fmt_config_from(base: FmtConfig, src: &str) -> (FmtConfig, Vec<String>) {
+    let mut cfg = base;
     let mut unknown: Vec<String> = Vec::new();
     for raw in src.lines() {
         let line = raw.split('#').next().unwrap_or("").trim();
@@ -1375,6 +1397,39 @@ pub fn parse_fmt_config(src: &str) -> (FmtConfig, Vec<String>) {
         }
     }
     (cfg, unknown)
+}
+
+/// W47: extract the body lines of one `[section]` from a minimal TOML
+/// document (the `operon.toml` project manifest, W19's hand-written dialect).
+/// pkg.rs's `parse_manifest` is deliberately NOT reused: it REJECTS unknown
+/// keys with a hard error, while fmt config must fall back to defaults with
+/// a note, never error. Returns the section body (header excluded, key lines
+/// verbatim so `parse_fmt_config_from` stays the single key parser) plus
+/// notes for malformed headers. A missing section returns an empty body and
+/// no notes, so absent config = today's exact output, byte-identical.
+pub fn extract_toml_section(src: &str, section: &str) -> (String, Vec<String>) {
+    let mut body = String::new();
+    let mut notes: Vec<String> = Vec::new();
+    let mut inside = false;
+    for raw in src.lines() {
+        let line = raw.trim();
+        if line.starts_with('[') {
+            // any header (well-formed or not) ends the current section
+            inside = false;
+            if line.ends_with(']') && line.len() >= 3 {
+                let name = line[1..line.len() - 1].trim();
+                inside = name == section;
+            } else {
+                notes.push(format!("malformed section header, ignored: {line}"));
+            }
+            continue;
+        }
+        if inside && !line.is_empty() {
+            body.push_str(line);
+            body.push('\n');
+        }
+    }
+    (body, notes)
 }
 
 // ---------------------------------------------------------------------------
@@ -2412,6 +2467,627 @@ fn fmt_body_inline(body: &[Stmt]) -> String {
         fmt_expr(e)
     } else {
         "null".into()
+    }
+}
+
+// ------------------------------------------------------------ ast dump
+// W039 (ROADMAP-100): `operon ast`, the Total Grammar structural window.
+//
+// The dump is a hand-written compact walker, NOT the derived Debug: it must
+// be deterministic, stable across rustc versions, and purely structural.
+// Repair notes are W38 `explain`'s surface and never appear here; the dump
+// works on ANY parse (Total Grammar: every file parses, possibly with
+// repairs). One internal tree feeds two renderers, the indented text tree
+// and the --json form, so the two views cannot drift apart.
+
+/// One node of the dump tree. Leaf items carry scalar payloads, node items
+/// carry subtrees. Builders keep leaves before child nodes so the text
+/// renderer can inline the leaves on the opener line.
+enum DumpNode {
+    /// string payload, rendered quoted + escaped in both renderers
+    Str(String),
+    /// bare token (kind labels, numbers, operators), unquoted in the text tree
+    Tok(String),
+    /// a labelled subtree
+    Node(String, Vec<DumpNode>),
+}
+
+fn ds(s: &str) -> DumpNode {
+    DumpNode::Str(s.to_string())
+}
+
+fn dt<D: std::fmt::Display>(t: D) -> DumpNode {
+    DumpNode::Tok(t.to_string())
+}
+
+/// f64 payload: Debug (not Display) so 1.0 never renders as "1" and floats
+/// stay distinguishable from ints in the dump.
+fn df(f: f64) -> DumpNode {
+    DumpNode::Tok(format!("{f:?}"))
+}
+
+fn dn(kind: &str, items: Vec<DumpNode>) -> DumpNode {
+    DumpNode::Node(kind.to_string(), items)
+}
+
+fn d_doc(doc: &[String]) -> Option<DumpNode> {
+    if doc.is_empty() {
+        None
+    } else {
+        Some(dn("Doc", doc.iter().map(|s| ds(s)).collect()))
+    }
+}
+
+fn dunop(op: &UnOp) -> &'static str {
+    match op {
+        UnOp::Neg => "-",
+        UnOp::Not => "not",
+        UnOp::BitNot => "~",
+    }
+}
+
+/// compound assignment spelling (`+=`), source syntax, not bare operator
+fn dassign_op(op: &BinOp) -> String {
+    format!("{}=", fmt_op(*op))
+}
+
+fn d_args(args: &[Expr]) -> DumpNode {
+    dn("Args", args.iter().map(d_expr).collect())
+}
+
+fn d_body(stmts: &[Stmt]) -> DumpNode {
+    dn("Body", stmts.iter().map(d_stmt).collect())
+}
+
+fn d_ann(a: &TypeAnn) -> DumpNode {
+    match a {
+        TypeAnn::Named(n) => dn("Ann", vec![ds(n)]),
+        TypeAnn::Union(alts) => dn("AnnUnion", alts.iter().map(d_ann).collect()),
+        TypeAnn::Optional(inner) => dn("AnnOptional", vec![d_ann(inner)]),
+    }
+}
+
+/// bytes payload as lowercase hex (b"\xff\x00" dumps as "ff00")
+fn d_hex(bs: &[u8]) -> String {
+    let mut out = String::with_capacity(bs.len() * 2);
+    for b in bs {
+        out.push_str(&format!("{b:02x}"));
+    }
+    out
+}
+
+fn d_expr(e: &Expr) -> DumpNode {
+    match e {
+        Expr::Null => dn("Null", vec![]),
+        Expr::Bool(b) => dn("Bool", vec![dt(*b)]),
+        Expr::Int(n) => dn("Int", vec![dt(n)]),
+        Expr::Float(f) => dn("Float", vec![df(*f)]),
+        Expr::Str(s) => dn("Str", vec![ds(s)]),
+        Expr::Bytes(bs) => dn("Bytes", vec![ds(&d_hex(bs))]),
+        Expr::Interp(parts) => dn(
+            "Interp",
+            parts
+                .iter()
+                .map(|p| match p {
+                    InterpPart::Lit(s) => dn("Lit", vec![ds(s)]),
+                    InterpPart::Expr(x) => dn("Expr", vec![d_expr(x)]),
+                })
+                .collect(),
+        ),
+        Expr::List(items) => dn("List", items.iter().map(d_expr).collect()),
+        Expr::Map(pairs) => dn(
+            "Map",
+            pairs
+                .iter()
+                .map(|(k, v)| dn("Pair", vec![d_expr(k), d_expr(v)]))
+                .collect(),
+        ),
+        Expr::Ident(s) => dn("Ident", vec![ds(s)]),
+        Expr::Unary(op, x) => dn("Unary", vec![dt(dunop(op)), d_expr(x)]),
+        // dx-r4/A13 source-line stamps are metadata, not structure: omitted
+        Expr::Binary(op, l, r, _) => dn("Binary", vec![dt(fmt_op(*op)), d_expr(l), d_expr(r)]),
+        Expr::Call(f, args, _) => dn("Call", vec![d_expr(f), d_args(args)]),
+        Expr::Index(obj, idx, _) => dn("Index", vec![d_expr(obj), d_expr(idx)]),
+        Expr::Member(obj, name) => dn("Member", vec![d_expr(obj), ds(name)]),
+        Expr::MemberSafe(obj, name) => dn("MemberSafe", vec![d_expr(obj), ds(name)]),
+        Expr::Method(obj, name, args) => dn("Method", vec![d_expr(obj), ds(name), d_args(args)]),
+        Expr::MethodSafe(obj, name, args) => {
+            dn("MethodSafe", vec![d_expr(obj), ds(name), d_args(args)])
+        }
+        Expr::Lambda(g) => d_gene("Lambda", g),
+        Expr::Collect {
+            var,
+            iter,
+            filter,
+            body,
+        } => {
+            let mut items = vec![ds(var), d_expr(iter)];
+            if let Some(f) = filter {
+                items.push(dn("When", vec![d_expr(f)]));
+            }
+            items.push(dn("Do", vec![d_expr(body)]));
+            dn("Collect", items)
+        }
+        Expr::FateNew(s) => dn("FateNew", vec![ds(s)]),
+        Expr::New(name, args) => dn("New", vec![ds(name), d_args(args)]),
+        Expr::Ternary(c, a, b) => dn("Ternary", vec![d_expr(c), d_expr(a), d_expr(b)]),
+        Expr::Propagate(x, _) => dn("Propagate", vec![d_expr(x)]),
+    }
+}
+
+fn d_pat(p: &MatchPat) -> DumpNode {
+    match p {
+        MatchPat::Lit(e) => dn("Lit", vec![d_expr(e)]),
+        MatchPat::Multi(vs) => dn("Multi", vs.iter().map(d_expr).collect()),
+        MatchPat::Bind(s) => dn("Bind", vec![ds(s)]),
+        MatchPat::Wild => dn("Wild", vec![]),
+        MatchPat::Variant(name, sub) => {
+            let mut items = vec![ds(name)];
+            if let Some(sp) = sub {
+                items.push(d_pat(sp));
+            }
+            dn("Variant", items)
+        }
+        MatchPat::ListPat { elems, rest } => {
+            let mut items: Vec<DumpNode> = elems.iter().map(d_pat).collect();
+            if let Some(r) = rest {
+                items.push(dn("Rest", vec![ds(r)]));
+            }
+            dn("ListPat", items)
+        }
+        MatchPat::MapPat { keys } => dn(
+            "MapPat",
+            keys.iter()
+                .map(|(k, sub)| {
+                    let mut ki = vec![ds(k)];
+                    if let Some(sp) = sub {
+                        ki.push(d_pat(sp));
+                    }
+                    dn("Key", ki)
+                })
+                .collect(),
+        ),
+        MatchPat::Or(alts) => dn("Or", alts.iter().map(d_pat).collect()),
+        MatchPat::Guard(p, cond) => dn("Guard", vec![d_pat(p), d_expr(cond)]),
+    }
+}
+
+fn d_destructure(p: &Pat) -> DumpNode {
+    match p {
+        Pat::Bind(s) => dn("Bind", vec![ds(s)]),
+        Pat::List { elems, rest } => {
+            let mut items: Vec<DumpNode> = elems.iter().map(d_destructure).collect();
+            if let Some(r) = rest {
+                items.push(dn("Rest", vec![ds(r)]));
+            }
+            dn("PatList", items)
+        }
+        Pat::Map { keys } => dn("PatMap", keys.iter().map(|k| ds(k)).collect()),
+    }
+}
+
+/// gene/sequence/lambda/method definition; `kind` names the call site
+fn d_gene(kind: &str, g: &GeneDef) -> DumpNode {
+    let mut items: Vec<DumpNode> = Vec::new();
+    if let Some(n) = &g.name {
+        items.push(ds(n));
+    }
+    if let Some(d) = d_doc(&g.doc) {
+        items.push(d);
+    }
+    let mut params: Vec<DumpNode> = Vec::new();
+    for (i, (name, default)) in g.params.iter().enumerate() {
+        let mut pi = vec![ds(name)];
+        if let Some(Some(a)) = g.param_anns.get(i) {
+            pi.push(d_ann(a));
+        }
+        if let Some(d) = default {
+            pi.push(dn("Default", vec![d_expr(d)]));
+        }
+        params.push(dn("Param", pi));
+    }
+    items.push(dn("Params", params));
+    let mut marks: Vec<DumpNode> = Vec::new();
+    if g.acetylate {
+        marks.push(dt("acetylate"));
+    }
+    if g.methylate {
+        marks.push(dt("methylate"));
+    }
+    if g.m6a {
+        marks.push(dt("m6a"));
+    }
+    if g.copies != 1 {
+        marks.push(dt(format!("copies={}", g.copies)));
+    }
+    if !marks.is_empty() {
+        items.push(dn("Marks", marks));
+    }
+    if let Some((lig, on, thr)) = &g.riboswitch {
+        items.push(dn("Riboswitch", vec![ds(lig), dt(*on), df(*thr)]));
+    }
+    if let Some((kon, koff)) = &g.burst {
+        items.push(dn("Burst", vec![df(*kon), df(*koff)]));
+    }
+    if let Some((cond, gb)) = &g.guard {
+        items.push(dn("Guard", vec![d_expr(cond), d_body(gb)]));
+    }
+    if let Some(a) = &g.ret_ann {
+        items.push(dn("Ret", vec![d_ann(a)]));
+    }
+    items.push(d_body(&g.body));
+    dn(kind, items)
+}
+
+fn d_pheno(p: &PhenoDef) -> DumpNode {
+    let mut items: Vec<DumpNode> = vec![ds(&p.name)];
+    if let Some(d) = d_doc(&p.doc) {
+        items.push(d);
+    }
+    if let Some(parent) = &p.parent {
+        items.push(dn("From", vec![ds(parent)]));
+    }
+    if !p.implements.is_empty() {
+        items.push(dn(
+            "Implements",
+            p.implements.iter().map(|i| ds(i)).collect(),
+        ));
+    }
+    for (name, default) in &p.fields {
+        items.push(dn("Field", vec![ds(name), d_expr(default)]));
+    }
+    for m in &p.methods {
+        items.push(d_gene("Method", m));
+    }
+    dn("Pheno", items)
+}
+
+fn d_edge(e: &RegEdge) -> DumpNode {
+    let mut items = vec![ds(&e.from), ds(&e.to), df(e.strength)];
+    if e.inhibit {
+        items.push(dt("inhibit"));
+    }
+    if let Some(t) = e.threshold {
+        items.push(dt("threshold"));
+        items.push(df(t));
+    }
+    if let Some(h) = e.hill {
+        items.push(dt("hill"));
+        items.push(dt(h));
+    }
+    if e.any {
+        items.push(dt("any"));
+    }
+    if e.occupy {
+        items.push(dt("occupy"));
+    }
+    if e.sum {
+        items.push(dt("sum"));
+    }
+    if e.attenuates {
+        items.push(dt("attenuates"));
+    }
+    dn("Edge", items)
+}
+
+fn d_overrides(ov: &RepressiOverrides) -> DumpNode {
+    let mut items: Vec<DumpNode> = Vec::new();
+    if let Some(v) = ov.alpha {
+        items.push(dn("Alpha", vec![df(v)]));
+    }
+    if let Some(v) = ov.gamma {
+        items.push(dn("Gamma", vec![df(v)]));
+    }
+    if let Some(v) = ov.hill {
+        items.push(dn("Hill", vec![dt(v)]));
+    }
+    if let Some(v) = ov.basal {
+        items.push(dn("Basal", vec![df(v)]));
+    }
+    if let Some(v) = ov.noise {
+        items.push(dn("Noise", vec![df(v)]));
+    }
+    if let Some(v) = ov.seed {
+        items.push(dn("Seed", vec![dt(v)]));
+    }
+    dn("Overrides", items)
+}
+
+fn d_stmt(s: &Stmt) -> DumpNode {
+    match s {
+        Stmt::Let(name, e) => dn("Let", vec![ds(name), d_expr(e)]),
+        Stmt::LetConst(name, e) => dn("LetConst", vec![ds(name), d_expr(e)]),
+        Stmt::LetAnn(name, ann, e) => dn("LetAnn", vec![ds(name), d_ann(ann), d_expr(e)]),
+        Stmt::Assign(name, op, e) => {
+            let mut items = vec![ds(name)];
+            if let Some(op) = op {
+                items.push(dt(dassign_op(op)));
+            }
+            items.push(d_expr(e));
+            dn("Assign", items)
+        }
+        Stmt::IndexAssign(t, i, op, e) => {
+            let mut items = vec![d_expr(t), d_expr(i)];
+            if let Some(op) = op {
+                items.push(dt(dassign_op(op)));
+            }
+            items.push(d_expr(e));
+            dn("IndexAssign", items)
+        }
+        Stmt::MemberAssign(t, name, op, e) => {
+            let mut items = vec![d_expr(t), ds(name)];
+            if let Some(op) = op {
+                items.push(dt(dassign_op(op)));
+            }
+            items.push(d_expr(e));
+            dn("MemberAssign", items)
+        }
+        Stmt::LetPat(pat, e) => dn("LetPat", vec![d_destructure(pat), d_expr(e)]),
+        Stmt::ForPat(pat, iter, body) => dn(
+            "ForPat",
+            vec![d_destructure(pat), d_expr(iter), d_body(body)],
+        ),
+        Stmt::MultiAssign(targets, values, define) => {
+            let mut items = vec![dt(if *define { "define" } else { "assign" })];
+            items.extend(targets.iter().map(d_expr));
+            items.push(dn("Values", values.iter().map(d_expr).collect()));
+            dn("MultiAssign", items)
+        }
+        Stmt::If(arms, els) => {
+            let mut items: Vec<DumpNode> = arms
+                .iter()
+                .map(|(c, b)| dn("Arm", vec![d_expr(c), d_body(b)]))
+                .collect();
+            if let Some(b) = els {
+                items.push(dn("Else", vec![d_body(b)]));
+            }
+            dn("If", items)
+        }
+        Stmt::While(c, b) => dn("While", vec![d_expr(c), d_body(b)]),
+        Stmt::Loop(b) => dn("Loop", vec![d_body(b)]),
+        Stmt::Scope(b) => dn("Scope", vec![d_body(b)]),
+        Stmt::For(v, i, b) => dn("For", vec![ds(v), d_expr(i), d_body(b)]),
+        Stmt::Return(e) => dn("Return", e.iter().map(d_expr).collect()),
+        Stmt::Break => dn("Break", vec![]),
+        Stmt::Continue => dn("Continue", vec![]),
+        Stmt::ExprStmt(e) => dn("ExprStmt", vec![d_expr(e)]),
+        Stmt::Match(e, arms) => {
+            let mut items = vec![d_expr(e)];
+            items.extend(
+                arms.iter()
+                    .map(|(p, b)| dn("Arm", vec![d_pat(p), d_body(b)])),
+            );
+            dn("Match", items)
+        }
+        Stmt::Use(path, alias) => {
+            let mut items = vec![ds(path)];
+            if let Some(a) = alias {
+                items.push(ds(a));
+            }
+            dn("Use", items)
+        }
+        // W007 statement line is metadata, not structure: omitted
+        Stmt::Raise(kind, msg, _) => {
+            let mut items: Vec<DumpNode> = kind.iter().map(|k| ds(k)).collect();
+            items.push(d_expr(msg));
+            dn("Raise", items)
+        }
+        Stmt::Stress { kind, body, rescue } => {
+            let mut items: Vec<DumpNode> = kind.iter().map(|k| ds(k)).collect();
+            items.push(d_body(body));
+            if let Some((k, rb)) = rescue {
+                let mut ritems: Vec<DumpNode> = k.iter().map(|k| ds(k)).collect();
+                ritems.push(d_body(rb));
+                items.push(dn("Rescue", ritems));
+            }
+            dn("Stress", items)
+        }
+        Stmt::Gene(g) => d_gene("Gene", g),
+        Stmt::Splice(sp) => dn(
+            "Splice",
+            vec![ds(&sp.root)]
+                .into_iter()
+                .chain(
+                    sp.variants
+                        .iter()
+                        .map(|(n, g)| dn("Variant", vec![ds(n), d_gene("Gene", g)])),
+                )
+                .collect(),
+        ),
+        Stmt::Trait(t) => dn(
+            "Trait",
+            vec![ds(&t.name)]
+                .into_iter()
+                .chain(d_doc(&t.doc))
+                .chain(t.methods.iter().map(|m| {
+                    let mut mi = vec![ds(&m.name)];
+                    if m.required {
+                        mi.push(dt("required"));
+                    }
+                    if let Some(g) = &m.default {
+                        mi.push(d_gene("Default", g));
+                    }
+                    dn("Method", mi)
+                }))
+                .collect(),
+        ),
+        Stmt::Silence(old, new, strength, sites) => {
+            let mut items = vec![ds(old)];
+            if let Some(n) = new {
+                items.push(ds(n));
+            }
+            items.push(df(*strength));
+            items.push(dt(sites));
+            dn("Silence", items)
+        }
+        Stmt::Operon(name, members) => dn(
+            "Operon",
+            vec![ds(name)]
+                .into_iter()
+                .chain(
+                    members
+                        .iter()
+                        .map(|(n, rbs)| dn("Cistron", vec![ds(n), df(*rbs)])),
+                )
+                .collect(),
+        ),
+        Stmt::Enhance(names) => dn("Enhance", names.iter().map(|n| ds(n)).collect()),
+        Stmt::Ires(n) => dn("Ires", vec![ds(n)]),
+        Stmt::Fate(f) => {
+            let mut items = vec![ds(&f.name)];
+            if let Some(e) = &f.enter {
+                items.push(ds(e));
+            }
+            items.extend(
+                f.states
+                    .iter()
+                    .map(|(s, tg)| dn("State", vec![ds(s), ds(&tg.join("|"))])),
+            );
+            dn("Fate", items)
+        }
+        Stmt::Regulate(edges, trans, binds) => {
+            let mut items: Vec<DumpNode> = edges.iter().map(d_edge).collect();
+            items.extend(trans.iter().map(|t| {
+                let mut ti = vec![ds(&t.from), ds(&t.to)];
+                if let Some(r) = t.rate {
+                    ti.push(dt("rate"));
+                    ti.push(df(r));
+                }
+                if let Some(d) = t.decay {
+                    ti.push(dt("decay"));
+                    ti.push(df(d));
+                }
+                dn("Trans", ti)
+            }));
+            items.extend(binds.iter().map(|b| {
+                dn(
+                    "Bind",
+                    vec![
+                        ds(&b.tf),
+                        ds(&b.ligand),
+                        dt(if b.inducer { "inducer" } else { "cofactor" }),
+                        df(b.k),
+                    ],
+                )
+            }));
+            dn("Regulate", items)
+        }
+        Stmt::Ligand(n) => dn("Ligand", vec![ds(n)]),
+        Stmt::Autoinducer(n) => dn("Autoinducer", vec![ds(n)]),
+        Stmt::Toggle(a, b) => dn("Toggle", vec![ds(a), ds(b)]),
+        Stmt::Decoy(d, tf, c) => dn("Decoy", vec![ds(d), ds(tf), df(*c)]),
+        Stmt::Repressilator(ring, period, ov) => {
+            let mut items: Vec<DumpNode> = ring.iter().map(|r| ds(r)).collect();
+            if let Some(p) = period {
+                items.push(dt("period"));
+                items.push(df(*p));
+            }
+            items.push(d_overrides(ov));
+            dn("Repressilator", items)
+        }
+        Stmt::Frame {
+            name,
+            is_proof,
+            body,
+        } => {
+            let kind = if *is_proof { "Proof" } else { "Frame" };
+            dn(kind, vec![ds(name), d_body(body)])
+        }
+        Stmt::Edit(target, reps) => dn(
+            "Edit",
+            vec![ds(target)]
+                .into_iter()
+                .chain(reps.iter().map(|(f, t)| dn("Rep", vec![ds(f), ds(t)])))
+                .collect(),
+        ),
+        Stmt::AnchorExport(names) => dn("AnchorExport", names.iter().map(|n| ds(n)).collect()),
+        Stmt::AnchorImport(names) => dn("AnchorImport", names.iter().map(|n| ds(n)).collect()),
+        Stmt::Tad(name, body) => dn("Tad", vec![ds(name), d_body(body)]),
+        Stmt::Block(body) => dn("Block", vec![d_body(body)]),
+        Stmt::Seq(g) => d_gene("Seq", g),
+        Stmt::Yield(e) => dn("Yield", e.iter().map(d_expr).collect()),
+        Stmt::Pheno(p) => d_pheno(p),
+    }
+}
+
+fn d_program(prog: &Program) -> DumpNode {
+    dn("Program", prog.stmts.iter().map(d_stmt).collect())
+}
+
+/// W039: the `operon ast` text form. A deterministic, purely structural
+/// tree: one `(Kind ...)` node per AST node, string leaves quoted and
+/// escaped, child nodes indented two spaces per level. `pretty = false`
+/// renders the same tree on one line; that is the deep-nesting fallback,
+/// the pretty form is quadratic in source nesting depth (indent x depth).
+pub fn ast_dump(prog: &Program, pretty: bool) -> String {
+    sexpr(&d_program(prog), 0, pretty)
+}
+
+fn sexpr(n: &DumpNode, ind: usize, pretty: bool) -> String {
+    match n {
+        DumpNode::Str(s) => format!("\"{}\"", json_escape(s)),
+        DumpNode::Tok(t) => t.clone(),
+        DumpNode::Node(kind, items) => {
+            let kids: Vec<&DumpNode> = items
+                .iter()
+                .filter(|i| matches!(i, DumpNode::Node(..)))
+                .collect();
+            let mut out = String::new();
+            out.push('(');
+            out.push_str(kind);
+            if kids.is_empty() || !pretty {
+                for i in items {
+                    out.push(' ');
+                    out.push_str(&sexpr(i, ind, pretty));
+                }
+                out.push(')');
+            } else {
+                // leaves stay on the opener line, child nodes hang below
+                for i in items {
+                    if matches!(i, DumpNode::Node(..)) {
+                        continue;
+                    }
+                    out.push(' ');
+                    out.push_str(&sexpr(i, ind, pretty));
+                }
+                for k in kids {
+                    out.push('\n');
+                    out.push_str(&"  ".repeat(ind + 1));
+                    out.push_str(&sexpr(k, ind + 1, pretty));
+                }
+                out.push('\n');
+                out.push_str(&"  ".repeat(ind));
+                out.push(')');
+            }
+            out
+        }
+    }
+}
+
+/// W039: the same dump tree as JSON (what `operon ast --json` embeds in its
+/// report object). One `["Kind", ...]` array per node, payloads and labels
+/// as JSON strings, child nodes as nested arrays, so the --json form is the
+/// text form's exact structure by construction.
+pub fn ast_dump_json(prog: &Program) -> String {
+    djson(&d_program(prog))
+}
+
+fn djson(n: &DumpNode) -> String {
+    match n {
+        DumpNode::Str(s) => format!("\"{}\"", json_escape(s)),
+        DumpNode::Tok(t) => format!("\"{}\"", json_escape(t)),
+        DumpNode::Node(kind, items) => {
+            let mut out = String::new();
+            out.push_str("[\"");
+            out.push_str(&json_escape(kind));
+            out.push('"');
+            for i in items {
+                out.push(',');
+                out.push_str(&djson(i));
+            }
+            out.push(']');
+            out
+        }
     }
 }
 
