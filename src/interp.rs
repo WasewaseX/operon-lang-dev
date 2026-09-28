@@ -702,6 +702,11 @@ pub struct Interp {
     /// (bridged sub-ASTs and compiled bodies keyed by def pointer).
     pub vm: bool,
     pub vm_program: Option<crate::vm::VmProgram>,
+    /// W09: scratch operand stacks pooled across machine frames. fib25's
+    /// 243k calls allocated (and grew) a fresh operand Vec per call; the
+    /// pool hands each frame a warm stack instead. Bound: stacks larger
+    /// than 64 slots drop instead of pooling, memory stays flat.
+    pub vm_stack_pool: Vec<Vec<crate::value::Value>>,
     /// W11: the optimization level behind --opt (0 = off).
     pub vm_opt: u8,
     /// W08 phase 1: interactive debug hooks (`operon debug`). Break lines
@@ -818,6 +823,7 @@ impl Interp {
             scope_stack: Vec::new(),
             vm: false,
             vm_program: None,
+            vm_stack_pool: Vec::new(),
             vm_opt: 0,
             debug_breaks: HashSet::new(),
             debug_step: false,
@@ -2834,110 +2840,11 @@ impl Interp {
             Expr::Call(callee, args, call_line) => {
                 // A13 (dx-r2): builtin diagnostics carry the call site
                 self.cur_line = *call_line;
-                // check silences at call sites (RISC)
+                // check silences at call sites (RISC) + the named/free split;
+                // the shared tail (named_call_tail) is ALSO the VM's CallNamed
+                // path, so the machine rides the identical gate funnel.
                 if let Expr::Ident(name) = &**callee {
-                    // reg-bio-3 (C9): stoichiometric RISC, every entry for
-                    // the target is one binding site; the per-call capture
-                    // probability is 1 − Π(1−s_i)^sites_i. strength 1.0 /
-                    // one site = legacy binary redirect (no draw, the RNG
-                    // stream is untouched for legacy programs).
-                    let entries: Vec<(String, Option<String>, f64, u32)> = self
-                        .silences
-                        .iter()
-                        .filter(|(f, _, _, _)| f == name)
-                        .cloned()
-                        .collect();
-                    if let Some((_, first_to, first_s, first_sites)) = entries.first().cloned() {
-                        // acetylated genes are immune (checked BEFORE any
-                        // draw, immunity consumes no randomness)
-                        let immune = match env.get(name) {
-                            Some(Value::Gene(d, _)) => d.acetylate,
-                            _ => false,
-                        };
-                        if !immune {
-                            let mut surv = 1.0f64;
-                            for (_, _, s, sites) in &entries {
-                                let base = 1.0 - *s;
-                                let mut k = 0;
-                                while k < *sites {
-                                    surv *= base;
-                                    k += 1;
-                                }
-                            }
-                            let p = 1.0 - surv;
-                            // capture decision: deterministic draw on the
-                            // shared mirrored xorshift64* stream (same
-                            // discipline as the telegraph promoter); only
-                            // when the capture is genuinely probabilistic
-                            let captured = if p >= 1.0 {
-                                true
-                            } else {
-                                let mut x = self.rng;
-                                x ^= x >> 12;
-                                x ^= x << 25;
-                                x ^= x >> 27;
-                                self.rng = x;
-                                let u = ((x >> 11) as f64) / 9_007_199_254_740_992.0;
-                                if u < p {
-                                    true
-                                } else {
-                                    // escape: the call proceeds through the
-                                    // pinned funnel; note once per gene
-                                    if self.risc_escaped.insert(name.clone()) {
-                                        self.note(
-                                            0,
-                                            4,
-                                            format!(
-                                                "RISC escape: '{}' escaped silencing (strength {}, sites {})",
-                                                name,
-                                                crate::value::format_float(first_s),
-                                                first_sites
-                                            ),
-                                        );
-                                    }
-                                    false
-                                }
-                            };
-                            if captured {
-                                match first_to {
-                                    Some(to) => {
-                                        self.note(
-                                            0,
-                                            4,
-                                            format!("RISC: call to '{}' silenced → '{}'", name, to),
-                                        );
-                                        let target = env.get(&to).unwrap_or(Value::Null);
-                                        let mut argvs = Vec::new();
-                                        for a in args {
-                                            argvs.push(self.eval(env, a)?);
-                                        }
-                                        return self.call_value(env, &target, argvs);
-                                    }
-                                    // reg-bio (F-4): pure degradation, the transcript
-                                    // is destroyed, no replacement executes. A degraded
-                                    // call is not expression: it returns null BEFORE the
-                                    // call counters, exactly like the other silencing gates.
-                                    None => {
-                                        self.note(
-                                            0,
-                                            4,
-                                            format!(
-                                                "RISC: call to '{}' degraded (no replacement)",
-                                                name
-                                            ),
-                                        );
-                                        return Ok(Value::Null);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    // named call: user genes, builtins, wobble repair, phantoms
-                    let mut argvs = Vec::with_capacity(args.len());
-                    for a in args {
-                        argvs.push(self.eval(env, a)?);
-                    }
-                    return self.call_named(env, name, argvs);
+                    return self.named_call_tail(env, name, args, None);
                 }
                 let cv = self.eval(env, callee)?;
                 let mut argvs = Vec::with_capacity(args.len());
@@ -3610,6 +3517,144 @@ impl Interp {
                 Ok(Value::Null)
             }
         }
+    }
+
+    /// The named free-gene call tail, SHARED by the tree-walk (Expr::Call over
+    /// an ident) and the VM's CallNamed instruction (W09 native calls): the
+    /// RISC silencing gate, then argument evaluation unless the caller already
+    /// evaluated them (`pre`), then the call_named funnel. Byte-identical
+    /// behavior by construction: this is the moved code, not a rewrite.
+    fn named_call_tail(
+        &mut self,
+        env: &Rc<Env>,
+        name: &str,
+        args: &[Expr],
+        pre: Option<Vec<Value>>,
+    ) -> Result<Value, Stress> {
+        // reg-bio-3 (C9): stoichiometric RISC, every entry for
+        // the target is one binding site; the per-call capture
+        // probability is 1 − Π(1−s_i)^sites_i. strength 1.0 /
+        // one site = legacy binary redirect (no draw, the RNG
+        // stream is untouched for legacy programs).
+        let entries: Vec<(String, Option<String>, f64, u32)> = self
+            .silences
+            .iter()
+            .filter(|(f, _, _, _)| f == name)
+            .cloned()
+            .collect();
+        if let Some((_, first_to, first_s, first_sites)) = entries.first().cloned() {
+            // acetylated genes are immune (checked BEFORE any
+            // draw, immunity consumes no randomness)
+            let immune = match env.get(name) {
+                Some(Value::Gene(d, _)) => d.acetylate,
+                _ => false,
+            };
+            if !immune {
+                let mut surv = 1.0f64;
+                for (_, _, s, sites) in &entries {
+                    let base = 1.0 - *s;
+                    let mut k = 0;
+                    while k < *sites {
+                        surv *= base;
+                        k += 1;
+                    }
+                }
+                let p = 1.0 - surv;
+                // capture decision: deterministic draw on the
+                // shared mirrored xorshift64* stream (same
+                // discipline as the telegraph promoter); only
+                // when the capture is genuinely probabilistic
+                let captured = if p >= 1.0 {
+                    true
+                } else {
+                    let mut x = self.rng;
+                    x ^= x >> 12;
+                    x ^= x << 25;
+                    x ^= x >> 27;
+                    self.rng = x;
+                    let u = ((x >> 11) as f64) / 9_007_199_254_740_992.0;
+                    if u < p {
+                        true
+                    } else {
+                        // escape: the call proceeds through the
+                        // pinned funnel; note once per gene
+                        if self.risc_escaped.insert(name.to_string()) {
+                            self.note(
+                                0,
+                                4,
+                                format!(
+                                    "RISC escape: '{}' escaped silencing (strength {}, sites {})",
+                                    name,
+                                    crate::value::format_float(first_s),
+                                    first_sites
+                                ),
+                            );
+                        }
+                        false
+                    }
+                };
+                if captured {
+                    match first_to {
+                        Some(to) => {
+                            self.note(
+                                0,
+                                4,
+                                format!("RISC: call to '{}' silenced → '{}'", name, to),
+                            );
+                            let target = env.get(&to).unwrap_or(Value::Null);
+                            let argvs = match pre {
+                                Some(v) => v,
+                                None => {
+                                    let mut argvs = Vec::with_capacity(args.len());
+                                    for a in args {
+                                        argvs.push(self.eval(env, a)?);
+                                    }
+                                    argvs
+                                }
+                            };
+                            return self.call_value(env, &target, argvs);
+                        }
+                        // reg-bio (F-4): pure degradation, the transcript
+                        // is destroyed, no replacement executes. A degraded
+                        // call is not expression: it returns null BEFORE the
+                        // call counters, exactly like the other silencing gates.
+                        None => {
+                            self.note(
+                                0,
+                                4,
+                                format!(
+                                    "RISC: call to '{}' degraded (no replacement)",
+                                    name
+                                ),
+                            );
+                            return Ok(Value::Null);
+                        }
+                    }
+                }
+            }
+        }
+        let argvs = match pre {
+            Some(v) => v,
+            None => {
+                let mut argvs = Vec::with_capacity(args.len());
+                for a in args {
+                    argvs.push(self.eval(env, a)?);
+                }
+                argvs
+            }
+        };
+        self.call_named(env, name, argvs)
+    }
+
+    /// VM entry to the shared named-call tail: args are already on the
+    /// machine's stack (W09 CallNamed). Same gates, same notes, same funnel.
+    pub fn named_call_tail_vm(
+        &mut self,
+        env: &Rc<Env>,
+        name: &str,
+        argvs: Vec<Value>,
+    ) -> Result<Value, Stress> {
+        self.named_call_tail(env, name, &[], Some(argvs))
     }
 
     pub fn call_named(
