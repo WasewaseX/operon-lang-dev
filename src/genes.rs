@@ -1907,7 +1907,7 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
             SendValue::Stress(k, _) if k == "cancelled" => crate::interp::TaskState::Cancelled,
             _ => crate::interp::TaskState::Done,
         };
-        *task_phase_in.lock().unwrap() = phase;
+        *task_phase_in.lock().unwrap_or_else(|e| e.into_inner()) = phase;
         let _ = tx.send((rv, notes));
     })?;
     let _ = id; // claimed before spawn (C3); registered below
@@ -2016,7 +2016,7 @@ pub fn cancel_task(interp: &mut Interp, args: Vec<Value>) -> Result<Value, Stres
     if let Some(handle) = interp.tasks.get(&id) {
         let flag = handle.cancel.clone();
         let phase_cell = handle.state.clone();
-        let mut phase = phase_cell.lock().unwrap();
+        let mut phase = phase_cell.lock().unwrap_or_else(|e| e.into_inner());
         if *phase == crate::interp::TaskState::Running {
             flag.store(true, Ordering::Relaxed);
             *phase = crate::interp::TaskState::Cancelled;
@@ -2052,7 +2052,7 @@ pub fn task_state_of(interp: &mut Interp, args: Vec<Value>) -> Result<Value, Str
     }
     if let Some(handle) = interp.tasks.get(&id) {
         let phase_cell = handle.state.clone();
-        let phase = *phase_cell.lock().unwrap();
+        let phase = *phase_cell.lock().unwrap_or_else(|e| e.into_inner());
         return Ok(Value::Str(phase.as_str().into()));
     }
     if let Some(t) = interp.task_tombstones.get(&id) {
@@ -2118,7 +2118,7 @@ pub fn wait_any_task(interp: &mut Interp, args: Vec<Value>) -> Result<Value, Str
     loop {
         for id in &ids {
             let done = if let Some(h) = interp.tasks.get(id) {
-                let phase = *h.state.lock().unwrap();
+                let phase = *h.state.lock().unwrap_or_else(|e| e.into_inner());
                 phase != crate::interp::TaskState::Running
             } else {
                 interp.task_tombstones.contains_key(id)

@@ -1,6 +1,6 @@
 id: conventional-condvar-unwrap
-message: Condvar poisoning unwrap — conventional and accepted (poisoning means an invariant already broke); tracked so real unwraps stay visible
-severity: info
+message: 'v2.4.0 policy: no poisoning unwraps — use .wait_timeout(..).unwrap_or_else(|e| e.into_inner()); the former site was converted (TRIAGE.md). Any match here is a regression.'
+severity: warning
 language: Rust
 rule:
   pattern: $A.wait_timeout($B, $C).unwrap()

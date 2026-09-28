@@ -101,3 +101,31 @@ committed to `reports/` when it lands (see COMMS for the run record).
   continue-on-error, evidence over gates) and uploads SARIF artifacts, so the
   next environment reset or CI outage cannot silently re-redden main. Both of
   its actions are SHA-pinned (checkout v4.2.2, upload-artifact v4.6.2).
+
+## v2.4.0 addendum — the poisoning class is retired
+
+The 9 info findings accepted in v2.3.0 (8 `conventional-mutex-unwrap`, 1
+`conventional-condvar-unwrap`) were the standing debt of this ledger. In
+v2.4.0 they are FIXED, not re-accepted:
+
+- Every `.lock().unwrap()` (src/genes.rs x4, src/interp.rs x4) became
+  `.lock().unwrap_or_else(|e| e.into_inner())`.
+- The `wait_timeout` site (src/interp.rs, builtin_recv slice loop) became
+  `.wait_timeout(..).unwrap_or_else(|e| e.into_inner())`.
+
+Why this is a real robustness win, not cosmetics: a panic inside a worker
+while holding a channel-state or task-phase lock poisons it; under `unwrap`
+the NEXT thread touching that lock panics too, cascading one controlled
+failure into a thread-crash storm. `into_inner()` recovery keeps every
+unaffected invariant alive; the original panic still surfaces through its
+own join handle, so error attribution is unchanged. The Rust core behavior
+contract is untouched — differential 221/0 and vm 215/0 re-confirm parity at
+v2.4.0, proofs 129/129, cargo 184/0, redteam 106/0.
+
+Policy change: both sg-rules graduated from info/accepted to warning/
+forbidden. They stay in the ruleset as regression guards — any new
+poisoning unwrap is now a finding, not a convention.
+
+Battery refresh at v2.4.0: ast-grep 0 findings (rules as guards), semgrep
+0 unjustified, bandit 0 real, spc trend unchanged (see reports/ for the raw
+SARIF/JSON at the release SHA).
