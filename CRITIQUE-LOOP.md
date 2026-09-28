@@ -297,3 +297,32 @@ stdlib breadth) and two thirds cheap unclaimed tooling and truth items. The chea
 open because nobody claimed them, not because they are hard, which is itself the sharpest
 critique of the program so far: the hard things got built and the easy things waited. Batch
 one attacks that inversion directly.
+
+---
+
+## Pass 2 verdict (after batch 1, main @ c95c434 + cli_ast pin)
+
+Batch 1 closed 16 items: W036, W039, W044, W045, W046, W047, W049, W052, W053, W054,
+W055, W056, W057, W058, W062, W063. Gates after integration: cargo test 131 green
+(3 new ast pins, 5 fmt config pins, LSP smoke extended), clippy 0, fmt clean,
+differential 190/190 + vm lane 184/184, docs checker exit 0 (v2.2.0, 60 keywords,
+22 modules, 229 std funcs, 127 proof files, 101 redteam payloads).
+
+Honest critique of the batch: the four agents that hit deadline errors still left
+substantially complete work, which says the briefs were right but the agent time
+budget is the scarce resource. The integrator had to finish the LSP capability wiring
+was already complete (stale release binary was the real failure), write the ast dump
+pin test the agent promised but did not deliver, and apply the W62 policy patch by
+hand. Nothing semantic was touched, so the oracle never moved: the right shape for a
+truth-and-trust batch.
+
+What the batch exposed: lint.rs already carries arity, unused-gene, unreachable and
+shadowing rules (W042/W043 substrate is real), and the LSP agent's explain door
+already covers most of W038. The board was more done than the statuses said, which is
+the same lesson as pass 1, from the other direction.
+
+Batch 2 changes the protocol: the two semantic units (W015 channels and select, W028
+unicode stage 2) work in separate git worktrees so both may touch src/interp.rs
+without racing, and the integrator merges. The shared tree hosts the CLI check rework
+(W041 plus W043), the SPEC bio separation (W091), and the testing infrastructure pair
+(W050 plus W051).
