@@ -1,0 +1,211 @@
+# std/terminal, ANSI escape builders + text hygiene (pure Operon).
+#
+# Every builder returns a NEW string: wrap, never mutate. The escape
+# introducer is chr(27) (the lexer's \x escape is a bytes-only form, so
+# ESC is built, not written). strip_ansi runs a small state machine over
+# char-indexed reads; truncate_width counts PRINTED cells (escapes are
+# zero-width to it) by the simple documented rule: an escape starts at
+# ESC and ends at the first letter after "[".
+
+## Reset all attributes.
+gene t_reset() {
+    return chr(27) + "[0m"
+}
+
+## Bold (1), dim (2), underline (4).
+gene t_bold() {
+    return chr(27) + "[1m"
+}
+
+gene t_dim() {
+    return chr(27) + "[2m"
+}
+
+gene t_underline() {
+    return chr(27) + "[4m"
+}
+
+## Foreground by color name: black red green yellow blue magenta cyan white
+## and the bright forms (bright_red etc.); unknown names fall back to white.
+gene t_fg(name) {
+    return chr(27) + "[" + t_fg_code(name) + "m"
+}
+
+## Background by the same names.
+gene t_bg(name) {
+    return chr(27) + "[" + t_bg_code(name) + "m"
+}
+
+## 256-color foreground; out-of-range codes clamp to 0..255.
+gene t_fg256(n) {
+    if n < 0 {
+        n = 0
+    }
+    if n > 255 {
+        n = 255
+    }
+    return chr(27) + "[38;5;" + str(n) + "m"
+}
+
+## Remove ANSI escape sequences: ESC "[" ... one letter, or a lone ESC.
+gene t_strip_ansi(s) {
+    let out = ""
+    let i = 0
+    while i < len(s) {
+        let c = char_at(s, i)
+        if c == chr(27) {
+            i = i + 1
+            if i < len(s) and char_at(s, i) == "[" {
+                i = i + 1
+                while i < len(s) {
+                    let f = char_at(s, i)
+                    i = i + 1
+                    if f >= "A" and f <= "Z" {
+                        break
+                    }
+                    if f >= "a" and f <= "z" {
+                        break
+                    }
+                }
+            }
+            continue
+        }
+        out = out + c
+        i = i + 1
+    }
+    return out
+}
+
+## Truncate to w PRINTED cells (escapes cost nothing), appending "..." when
+## anything was cut. The ellipsis counts toward w. No escape is ever split:
+## the scan copies escapes free of charge and counts only text cells. A
+## string that already fits returns unchanged (never a pointless ellipsis);
+## below w = 3 there is no room for an ellipsis, nothing truncates.
+gene t_truncate_width(s, w) {
+    if w < 3 or t_print_width(s) <= w {
+        return s
+    }
+    let out = ""
+    let cells = 0
+    let i = 0
+    while i < len(s) {
+        let c = char_at(s, i)
+        if c == chr(27) {
+            out = out + c
+            i = i + 1
+            if i < len(s) and char_at(s, i) == "[" {
+                out = out + "["
+                i = i + 1
+                while i < len(s) {
+                    let f = char_at(s, i)
+                    out = out + f
+                    i = i + 1
+                    if (f >= "A" and f <= "Z") or (f >= "a" and f <= "z") {
+                        break
+                    }
+                }
+            }
+            continue
+        }
+        if cells >= w - 3 {
+            return out + "..."
+        }
+        out = out + c
+        cells = cells + 1
+        i = i + 1
+    }
+    return out
+}
+
+## Printed-cell count: text cells only, escape sequences are zero-width.
+gene t_print_width(s) {
+    let cells = 0
+    let i = 0
+    while i < len(s) {
+        let c = char_at(s, i)
+        if c == chr(27) {
+            i = i + 1
+            if i < len(s) and char_at(s, i) == "[" {
+                i = i + 1
+                while i < len(s) {
+                    let f = char_at(s, i)
+                    i = i + 1
+                    if (f >= "A" and f <= "Z") or (f >= "a" and f <= "z") {
+                        break
+                    }
+                }
+            }
+            continue
+        }
+        cells = cells + 1
+        i = i + 1
+    }
+    return cells
+}
+
+## True when the string carries any escape sequence.
+gene t_has_ansi(s) {
+    return t_has_ansi_at(s, 0)
+}
+
+# ------------------------------------------------------------- internals
+
+gene t_has_ansi_at(s, i) {
+    while i < len(s) {
+        if char_at(s, i) == chr(27) {
+            return true
+        }
+        i = i + 1
+    }
+    return false
+}
+
+## SGR parameter for a foreground: 3x normal, 9x bright band.
+gene t_fg_code(name) {
+    if t_starts_with(name, "bright_") {
+        return "9" + str(t_plain_digit(char_slice(name, 7, len(name))))
+    }
+    return "3" + str(t_plain_digit(name))
+}
+
+## SGR parameter for a background: 4x normal, 10x bright band.
+gene t_bg_code(name) {
+    if t_starts_with(name, "bright_") {
+        return "10" + str(t_plain_digit(char_slice(name, 7, len(name))))
+    }
+    return "4" + str(t_plain_digit(name))
+}
+
+gene t_plain_digit(name) {
+    if name == "black" {
+        return 0
+    }
+    if name == "red" {
+        return 1
+    }
+    if name == "green" {
+        return 2
+    }
+    if name == "yellow" {
+        return 3
+    }
+    if name == "blue" {
+        return 4
+    }
+    if name == "magenta" {
+        return 5
+    }
+    if name == "cyan" {
+        return 6
+    }
+    return 7
+}
+
+## Prefix test (pure char scan; strings carry no starts_with on either core).
+gene t_starts_with(s, prefix) {
+    let n = len(prefix)
+    if n > len(s) {
+        return false
+    }
+    return char_slice(s, 0, n) == prefix
+}

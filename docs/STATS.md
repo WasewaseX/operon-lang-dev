@@ -6,12 +6,12 @@ README/SPEC/BENCH are forbidden, link here instead.
 
 - **Version**: 2.2.0  · SPEC Status: v2.2.0
 - **Keywords (parser reserved set)**: 60, table in [KEYWORDS.md](KEYWORDS.md)
-- **Std modules**: 22 (args, bigint, bio, collections, csv, deque, fmt, fs, heap, iter, json, math, motifs, path, random, seq, serialize, set, strings, testing, time, unicode)
-- **Std functions (.op-level `gene` defs)**: 229
+- **Std modules**: 25 (args, bigint, bio, collections, csv, deque, fmt, fs, heap, iter, json, logging, math, motifs, path, random, seq, serialize, set, strings, terminal, testing, time, unicode, url)
+- **Std functions (.op-level `gene` defs)**: 261
 - **Red-team payload files**: 101
-- **Proof files**: 127 (of 268 test .op files)
-- **Proof run** (bin/operon): 154 files, 117 proofs, 1697 asserts
-- **Differential harness**: 190 match / 0 diverge (0 skipped) · granted lane: 10 cells
+- **Proof files**: 133 (of 287 test .op files)
+- **Proof run** (bin/operon): 172 files, 122 proofs, 1823 asserts
+- **Differential harness**: 208 match / 0 diverge (0 skipped) · granted lane: 11 cells
 - **CLI subcommands**: ast, bench, build, check, crispr, doc, explain, fix, fmt, graph, ir, keywords, lint, profile, repl, rna, test, version, watch
 - **LSP methods**: initialize, shutdown, textDocument/completion, textDocument/definition, textDocument/didChange, textDocument/didClose, textDocument/didOpen, textDocument/documentSymbol, textDocument/formatting, textDocument/hover, textDocument/prepareRename, textDocument/publishDiagnostics, textDocument/references, textDocument/rename, textDocument/semanticTokens, textDocument/signatureHelp
 
@@ -30,6 +30,7 @@ README/SPEC/BENCH are forbidden, link here instead.
 | std/heap | 10 |
 | std/iter | 23 |
 | std/json | 11 |
+| std/logging | 6 |
 | std/math | 18 |
 | std/motifs | 12 |
 | std/path | 9 |
@@ -38,6 +39,8 @@ README/SPEC/BENCH are forbidden, link here instead.
 | std/serialize | 8 |
 | std/set | 11 |
 | std/strings | 17 |
+| std/terminal | 16 |
 | std/testing | 6 |
 | std/time | 13 |
 | std/unicode | 8 |
+| std/url | 10 |
