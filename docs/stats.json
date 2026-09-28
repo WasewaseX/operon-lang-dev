@@ -1,12 +1,12 @@
 {
-  "generated_utc": "2026-09-26 14:44:36Z",
+  "generated_utc": "2026-09-28 20:49:22Z",
   "version": "2.2.0",
   "proofs": {
-    "files": 112,
-    "proofs": 98,
-    "passed": 98,
+    "files": 116,
+    "proofs": 100,
+    "passed": 100,
     "failed": 0,
-    "asserts": 1298
+    "asserts": 1420
   },
   "apps": {
     "files": 1,
@@ -19,7 +19,7 @@
     "files": 7
   },
   "differential": {
-    "match": 143,
+    "match": 147,
     "diverge": 0,
     "skipped": 0,
     "granted_targets": 5
@@ -30,7 +30,7 @@
     "breached": 0
   },
   "std": {
-    "modules": 15,
+    "modules": 16,
     "module_list": [
       "args",
       "bio",
@@ -42,13 +42,14 @@
       "json",
       "math",
       "motifs",
+      "path",
       "random",
       "seq",
       "set",
       "strings",
       "testing"
     ],
-    "genes": 149
+    "genes": 168
   },
   "keywords": {
     "count": 58,

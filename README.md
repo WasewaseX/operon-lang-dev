@@ -177,7 +177,7 @@ Path grants are symlink-resolved; a grant that normalizes to the empty string is
 operon run f.op      [--entry g] [--variant v] [--cell c] [--rna r] [--frame n] [--ires] [--strict] [--fuel N]
                      [--allow-read p] [--allow-write p] [--allow-run prog] [--allow-net host:port] [--allow-env var] [--allow-all]
 operon check f.op    [--nmd | --nmd=purge] [--json]   # 100-point grade + letter; --json: phantoms/nmd arrays
-operon test [dirs]                                # proof-frame runner (112 files / 98 proofs / 1,298 assertions green)
+operon test [dirs]                                # proof-frame runner (116 files / 100 proofs / 1,420 assertions green)
 operon fmt f.op     [--write]                     # precedence-correct canonical formatter
 operon build f.op   [--variant v] [-o out.op]     # bake splices, strip proofs
 operon profile f.op                               # per-gene calls, exclusive self-µs, flags, maturation, enhance candidates
@@ -234,7 +234,7 @@ Ranged (incremental) edits are ignored by design while `textDocumentSync = 1` (f
 ```console
 $ ./scripts/build.sh          # gcc + g++ the kernels, rustc the core
 OK: bin/operon
-$ ./scripts/test.sh           # 112 proof files (1,298 assertions), C++ kernel smoke
+$ ./scripts/test.sh           # 116 proof files (1,420 assertions), C++ kernel smoke
 $ python3 bootstrap/harness.py  # differential: 128/128 programs MATCH across implementations
 $ bash scripts/redteam.sh       # adversarial containment: 100 attacks contained, 0 breached
 $ bash scripts/bench.sh
@@ -251,7 +251,7 @@ Requires: rustc (≥1.70), gcc, g++. One build-dependency: the `cc` crate compil
 - **Genes**: named, anonymous, lambdas, defaults, closures, recursion, `guard` clauses, marks — plus **soft type annotations** (`gene f(x: int) -> int`, `let n: float`, unions `int | str`, optionals `T?` — boundary-checked as catchable Stress, W01/SPEC §7c) and **phenotype classes** (`phenotype P { let f = 0; gene init() {…} }`, `new P(...)`, `self`, `phenotype C from P`) and **sequence generators** (`sequence s() { yield v }` with `.next()`/`.collect()`, lazy worker-cell pull).
 - **Errors**: a four-tier hierarchy (SPEC §9) — null+note (soft miss) → **Option/Result values** (`some/none/ok/err`, `?!` propagation, `unwrap_or` defaults) → catchable `Stress{kind, message}` — `unfolded | missing | overflow | burned | interference | unwrap` — plus Total-Grammar runtime notes. Expected failures stay values; Stress is for contract violations. A program never crashes; worst case it narrates what it repaired.
 - **Concurrency**: `spawn(gene, args)` / `join(id)` — real OS threads with value serialization; sequences run on worker cells; timed repressilator threads.
-- **Modules**: `use std/bio;` — TAD-insulated, anchor-controlled exports, module cache, cycle-tolerant. Fifteen stdlib modules today: `args`, `bio`, `collections`, `csv`, `fmt`, `fs`, `iter`, `json`, `math`, `motifs`, `random`, `seq`, `set`, `strings`, `testing` — plus the capability-gated `py()` bridge for the scientific-Python deep end.
+- **Modules**: `use std/bio;` — TAD-insulated, anchor-controlled exports, module cache, cycle-tolerant. Sixteen stdlib modules today: `args`, `bio`, `collections`, `csv`, `fmt`, `fs`, `iter`, `json`, `math`, `motifs`, `path`, `random`, `seq`, `set`, `strings`, `testing` — plus the capability-gated `py()` bridge for the scientific-Python deep end.
 
 ## Repository layout
 
