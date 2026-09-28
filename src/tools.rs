@@ -1884,6 +1884,18 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
             }
         }
         Stmt::Gene(g) => {
+            // W64: deprecation marks round-trip canonically (metadata,
+            // never evaluated; SPEC §3 marks table)
+            if let Some(d) = &g.deprecated {
+                match &d.since {
+                    Some(s) => out.push_str(&format!(
+                        "@deprecated({}, since={}) ",
+                        str_lit(&d.message),
+                        str_lit(s)
+                    )),
+                    None => out.push_str(&format!("@deprecated({}) ", str_lit(&d.message))),
+                }
+            }
             if g.acetylate {
                 out.push_str("@acetylate ");
             }
