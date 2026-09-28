@@ -1178,6 +1178,42 @@ impl Parser {
                 let body = self.parse_block().unwrap_or_default();
                 Some(Stmt::Tad(name, body))
             }
+            "module" => {
+                // W025 stage 2: nested sub-module declaration. CONTEXTUAL:
+                // only `module NAME {` (newlines tolerated between the words)
+                // is the declaration; every other use of the word `module`
+                // stays an ordinary identifier (it is not in KEYWORDS, so
+                // pre-existing programs that bind `module` never change).
+                let is_decl = {
+                    let mut j = self.pos + 1;
+                    while matches!(
+                        self.toks.get(j).map(|t| &t.0),
+                        Some(Tok::Newline) | Some(Tok::Semi)
+                    ) {
+                        j += 1;
+                    }
+                    if !matches!(self.toks.get(j).map(|t| &t.0), Some(Tok::Ident(_))) {
+                        false
+                    } else {
+                        j += 1;
+                        while matches!(
+                            self.toks.get(j).map(|t| &t.0),
+                            Some(Tok::Newline) | Some(Tok::Semi)
+                        ) {
+                            j += 1;
+                        }
+                        matches!(self.toks.get(j).map(|t| &t.0), Some(Tok::LBrace))
+                    }
+                };
+                if !is_decl {
+                    return self.parse_assign_or_expr(w);
+                }
+                self.next();
+                let name = self.expect_ident()?;
+                self.eat_newlines();
+                let body = self.parse_block().unwrap_or_default();
+                Some(Stmt::Module(name, body))
+            }
             "anchor" => {
                 self.next();
                 let is_export = self.expect_kw("export");
@@ -2501,6 +2537,9 @@ impl Parser {
         // ends the path, it is never glued into it. W25: `::` is the
         // Rust-style separator, sugar for '/' (`use bio::sequence` =
         // `use bio/sequence`) so namespaces read like mainstream module paths.
+        // W025 stage 2: a trailing `*` after a separator is the wildcard
+        // form (`use mymod::seq::*`), carried as a literal `/*` suffix the
+        // interpreter strips before resolution.
         let mut cur = String::new();
         loop {
             match self.peek().clone() {
@@ -2543,6 +2582,14 @@ impl Parser {
                     if !matches!(self.peek(), Tok::Slash | Tok::Dot | Tok::Minus | Tok::Colon) {
                         break;
                     }
+                }
+                Tok::Star => {
+                    // W025 stage 2: wildcard tail, `use a::b::*` carries as
+                    // "a/b/*"; the interpreter strips the `/*` and flat-binds
+                    // the target table's exports.
+                    cur.push('*');
+                    self.next();
+                    break;
                 }
                 _ => break,
             }
@@ -3435,6 +3482,52 @@ impl Parser {
                     let line = self.line();
                     self.next();
                     e = Expr::Propagate(Box::new(e), line);
+                }
+                Tok::Colon
+                    if matches!(self.toks.get(self.pos + 1).map(|t| &t.0), Some(Tok::Colon)) =>
+                {
+                    // W025 stage 2: `e::name` is the namespace spelling of
+                    // `e.name` (stage 1 made `::` a use-path separator; stage 2
+                    // lets qualified reads and calls ride the same spelling
+                    // through nested tables). Exactly sugar for the Dot arm
+                    // below, the AST is identical.
+                    self.next();
+                    self.next();
+                    match self.peek().clone() {
+                        Tok::Ident(m) => {
+                            self.next();
+                            if matches!(self.peek(), Tok::LParen) {
+                                self.next();
+                                let mut args = Vec::new();
+                                loop {
+                                    self.eat_newlines_inline();
+                                    if matches!(self.peek(), Tok::RParen) {
+                                        self.next();
+                                        break;
+                                    }
+                                    if matches!(self.peek(), Tok::Eof) {
+                                        break;
+                                    }
+                                    args.push(self.parse_expr());
+                                    if matches!(self.peek(), Tok::Comma) {
+                                        self.next();
+                                    }
+                                }
+                                e = Expr::Method(Box::new(e), m, args);
+                            } else {
+                                e = Expr::Member(Box::new(e), m);
+                            }
+                        }
+                        other => {
+                            let line = self.line();
+                            self.note(
+                                line,
+                                4,
+                                format!("'::' followed by '{}'; member skipped", other.describe()),
+                            );
+                            break;
+                        }
+                    }
                 }
                 _ => break,
             }

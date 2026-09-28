@@ -466,6 +466,12 @@ pub enum Stmt {
     AnchorExport(Vec<String>),
     AnchorImport(Vec<String>),
     Tad(String, Vec<Stmt>),
+    /// W025 stage 2: nested sub-module declaration, `module seq { gene x() { … } }`
+    /// inside a module file (or any block). The body runs once in a fresh child
+    /// scope at declaration time; the child scope's names become the sub-module's
+    /// export table (a Map bound under `name`). Use paths stay file-first: a
+    /// `use` tries the flat file, then descends these nested tables (SPEC §8).
+    Module(String, Vec<Stmt>),
     Block(Vec<Stmt>),     // bare scoped block (Total Grammar repair product)
     Seq(Arc<GeneDef>),    // sequence definition (generator)
     Yield(Option<Expr>),  // yield inside a sequence body
