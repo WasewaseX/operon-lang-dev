@@ -1,7 +1,7 @@
-# reg-bio-3 (C10): gene dosage — @copies n. Copies amplify the CONCENTRATION
+# reg-bio-3 (C10): gene dosage, @copies n. Copies amplify the CONCENTRATION
 # the gene feeds its GRN edges (transcript amount under titration, saturating
 # on the 0..1 lattice), NOT the call's return value. A gene with 2 copies at
-# level 0.3 reads as 0.6 to its targets — real CNV: more copies, more
+# level 0.3 reads as 0.6 to its targets, real CNV: more copies, more
 # transcript, same per-transcript product.
 regulate {
     src activates tgt strength 1.0 threshold 0.5
@@ -12,7 +12,7 @@ frame proof {
     grn_set("src", 0.3)
     assert(tgt() == null, "0.3 < 0.5: single-copy dose is vetoed")
     assert(abs(grn_get("src") - 0.3) < 1e-12, "copies never touch the raw level")
-    # two copies double the effective dose — the gate opens
+    # two copies double the effective dose, the gate opens
     @copies 2 gene src() { return "doubled" }
     assert(tgt() == "t", "two copies: 0.3 x 2 = 0.6 >= 0.5, the gate opens")
     assert(src() == "doubled", "copies change transcript dose, never the per-call return")
@@ -20,7 +20,7 @@ frame proof {
     @copies 64 gene src() { return "amplified" }
     grn_set("src", 0.02)
     assert(tgt() == "t", "0.02 x 64 saturates the dose at 1.0 (still passes)")
-    assert(abs(grn_get("src") - 0.02) < 1e-12, "raw level still 0.02 — the dose is a READ-side effect")
+    assert(abs(grn_get("src") - 0.02) < 1e-12, "raw level still 0.02, the dose is a READ-side effect")
     # dosage reset: a plain redefinition restores single-copy dose
     gene src() { return "plain" }
     grn_set("src", 0.3)

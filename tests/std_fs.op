@@ -1,7 +1,7 @@
-# differential: std/fs — safe capability-gated wrappers
+# differential: std/fs, safe capability-gated wrappers
 #
 # The proof suite runs under DEFAULT-DENY (no --allow-read/--allow-write), so
-# every wrapper here takes its fallback path on both implementations — that is
+# every wrapper here takes its fallback path on both implementations, that is
 # exactly the containment contract being tested: no throw, honest fallback,
 # zero capability leakage. The success path needs grants and is exercised by
 # `bash scripts/b2_fs_demo.sh --allow-all` (manual, never in CI) and by the
@@ -9,7 +9,7 @@
 use std/fs as fsys
 
 frame proof {
-    # reads under denial: fallback / null / empty list — never a crash
+    # reads under denial: fallback / null / empty list, never a crash
     assert(fsys.fs_read_or("/tmp/operon_no_such_file_zz", "FB") == "FB")
     assert(fsys.fs_read("/tmp/operon_no_such_file_zz") == null)
     assert(fsys.fs_lines("/tmp/operon_no_such_file_zz") == null)

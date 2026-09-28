@@ -1,0 +1,3 @@
+# explicit operator cell for the W18 cancellation timing proofs
+[allow]
+run = "sleep"

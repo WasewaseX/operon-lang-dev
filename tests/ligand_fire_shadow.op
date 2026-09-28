@@ -1,7 +1,7 @@
 # loop-9 (P0-2): ligand-pool edge sources must survive a grn_fire.
 # The fire's endpoint-seeding loop used to insert ligand names into
-# grn_levels at 0.0 — and gate resolution reads grn_levels BEFORE the
-# ligand-pool fallback — so ONE unrelated fire permanently killed every
+# grn_levels at 0.0, and gate resolution reads grn_levels BEFORE the
+# ligand-pool fallback, so ONE unrelated fire permanently killed every
 # ligand gate for the rest of the run. Ligand-backed endpoints are now
 # skipped: their level lives in the metabolite pool and resolves through
 # the fallback exactly as before the first fire.

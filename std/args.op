@@ -1,7 +1,7 @@
-# std/args — command-line argument parsing helpers.
+# std/args, command-line argument parsing helpers.
 #
 # These operate on a LIST of argv strings so they stay unit-testable. The
-# real command line is available as the `argv()` builtin — pass it straight
+# real command line is available as the `argv()` builtin, pass it straight
 # in: `args_value(argv(), "out", "a.out")`.
 #
 # Reaching the program's own flags (dx-r6): the host CLI fails loudly on
@@ -21,11 +21,11 @@
 #
 # One documented ambiguity: a bare `--key` (no '=' form) consumes the next
 # item as its value even if that next item is itself a flag. Single-dash
-# flags never consume a following item — put their values in '=' form.
-# This keeps the parser dependency-free — no spec table required.
+# flags never consume a following item, put their values in '=' form.
+# This keeps the parser dependency-free, no spec table required.
 
 gene args_norm(name) {
-    # accept "verbose", "-v", "--verbose" — dash-prefixed stays, bare gets --
+    # accept "verbose", "-v", "--verbose", dash-prefixed stays, bare gets --
     if name.starts("-") {
         return name
     }
@@ -111,7 +111,7 @@ gene args_value(argv, name, default) {
 }
 
 gene args_get(argv, name) {
-    # args_value with null fallback — handy inside conditionals
+    # args_value with null fallback, handy inside conditionals
     return args_value(argv, name, null)
 }
 

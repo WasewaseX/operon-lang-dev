@@ -1,11 +1,11 @@
-# loop-10 (F-7): the read-through arm — rho.catch = 0.0 means the q=0 fast
+# loop-10 (F-7): the read-through arm, rho.catch = 0.0 means the q=0 fast
 # path breaks the scan with NO draw: the call reads through and counts a
 # transcript. Under Rho ON the D1 polarity factor is IDENTITY (the W2
 # composition rule: D2 resolves the upstream failure per call, so a
-# surviving transcript translates at FULL rate — pinned below as pc = 0.4;
+# surviving transcript translates at FULL rate, pinned below as pc = 0.4;
 # with Rho OFF the legacy D1 derate would give 0.2). Verification note
 # (R10-J2 F-3): for THIS program catch=0.0 is byte-identical to the layer
-# being absent — the separating evidence is compositional (the other rho
+# being absent, the separating evidence is compositional (the other rho
 # pins + the harness's same-cell stream parity).
 regulate {
     a translates pa rate 0.4
@@ -21,11 +21,11 @@ frame proof {
     randomize(7)
     let r1 = random()
     randomize(7)
-    assert(c() == "c", "catch 0.0: Rho never catches up — the call reads through")
+    assert(c() == "c", "catch 0.0: Rho never catches up, the call reads through")
     let r2 = random()
     assert(abs(r1 - r2) < 1e-12, "q=0 break consumed no draw (p=1 nakedness fast path)")
     assert(fingerprint().transcripts.abc == 1, "read-through counts the unit transcript")
-    # W2 composition: under Rho ON a SURVIVING transcript is whole — it
+    # W2 composition: under Rho ON a SURVIVING transcript is whole, it
     # translates at FULL rate (the D1 expected-value derate would
     # double-count the loss D2 resolves per call), so pc = 0.4 * 1.0 = 0.4
     grn_fire("a")

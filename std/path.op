@@ -1,155 +1,125 @@
-# std/path: lexical path helpers for "/"-separated path strings.
+# std/path, pure lexical path shaping. NO filesystem access: every
+# function is string arithmetic, needs no capability, and never touches
+# the disk (fs reads/writes stay in std/fs under the capability gates).
 #
-# Everything here is pure string surgery: no filesystem access, no
-# capability grants, no clock, no randomness, byte-deterministic. A path
-# is a plain string whose segments are separated by "/"; empty segments
-# (leading, trailing, or doubled separators) carry nothing. "Absolute"
-# only means the string starts with "/", there is no drive or host form.
+# Contract: POSIX-style separators (`/`), the language's own file APIs
+# are POSIX-shaped on every platform, so one separator form is the truth.
+# `path_norm` is purely lexical: it collapses `.` and `..` and duplicate
+# slashes WITHOUT resolving symlinks (a `..` that climbs past the root of
+# an absolute path is ignored; on a relative path it is kept).
+#
+# Pins: tests/std_path.op + tests/differential/path.op (byte-identical).
 
-# join(a, b): build one path from two segments. Trailing separators on a
-# are trimmed, the empty string contributes nothing, an absolute b (leading
-# "/") replaces a outright, and an all-separator a counts as the root.
-gene join(a, b) {
-    if b.starts("/") {
-        return b
-    }
-    let head = a
-    while len(head) > 0 and head.ends("/") {
-        head = head.slice(0, len(head) - 1)
-    }
-    if head == "" {
-        if a == "" {
-            return b
+gene __rfind(s, needle) {
+    # index of the LAST occurrence of needle in s; null when absent
+    let i = len(s) - len(needle)
+    while i >= 0 {
+        if s.slice(i, i + len(needle)) == needle {
+            return i
         }
-        return "/" + b
+        i = i - 1
     }
-    if b == "" {
-        return head
-    }
-    return head + "/" + b
+    return null
 }
 
-# split(p): the non-empty segments of p in order. Separators never appear
-# in the result: "/a//b/" -> ["a", "b"], while "" and "///" -> [].
-gene split(p) {
-    let raw = p.split("/")
-    let segs = []
-    for s in raw {
-        if s != "" {
-            push(segs, s)
-        }
+gene __trim_trailing(p, sep) {
+    let t = p
+    while len(t) > 0 && t.ends(sep) {
+        t = t.slice(0, len(t) - 1)
     }
-    return segs
+    return t
 }
 
-# base(p): the final segment. A trailing separator means the path names a
-# directory, and a directory has no base: base("a/b.txt") is "b.txt" while
-# base("a/b/"), base("/"), and base("") are "".
-gene base(p) {
-    if p.ends("/") {
+gene path_base(p) {
+    # final component: "a/b/c.txt" -> "c.txt"; "a/b/" -> "b"; "" -> ""
+    let trimmed = __trim_trailing(p, "/")
+    if trimmed == "" {
         return ""
     }
-    let segs = split(p)
-    let count = len(segs)
-    if count == 0 {
-        return ""
+    let idx = __rfind(trimmed, "/")
+    if idx == null {
+        return trimmed
     }
-    return segs[count - 1]
+    return trimmed.slice(idx + 1, len(trimmed))
 }
 
-# dir(p): everything before the last "/", trailing separators trimmed.
-# "" when p has no separator, "/" for the root and paths directly under it.
-# A trailing separator on p lands in the dir: dir("a/b/") is "a/b".
-gene dir(p) {
-    let size = len(p)
-    let last = 0 - 1
-    let idx = 0
-    while idx < size {
-        if p.slice(idx, idx + 1) == "/" {
-            last = idx
-        }
-        idx = idx + 1
+gene path_dir(p) {
+    # everything before the final component (no trailing slash):
+    # "a/b/c.txt" -> "a/b"; "c.txt" -> "."; "a/b/" -> "a"; "/x" -> "/"
+    let trimmed = __trim_trailing(p, "/")
+    let idx = __rfind(trimmed, "/")
+    if idx == null {
+        return "."
     }
-    if last < 0 {
-        return ""
+    if idx == 0 {
+        return "/"
     }
-    let head = p.slice(0, last)
-    while len(head) > 0 and head.ends("/") {
-        head = head.slice(0, len(head) - 1)
-    }
-    if head == "" {
-        if is_abs(p) {
-            return "/"
-        }
-        return ""
-    }
-    return head
+    return trimmed.slice(0, idx)
 }
 
-# ext(p): the extension of the final segment WITHOUT the dot, "" if none.
-# Starts at the LAST dot of the base name; a leading dot alone is a hidden
-# dotfile (".oprc" -> ""), and dots in directory names never count.
-gene ext(p) {
-    let name = base(p)
-    let size = len(name)
-    let last = 0 - 1
-    let idx = 0
-    while idx < size {
-        if name.slice(idx, idx + 1) == "." {
-            last = idx
-        }
-        idx = idx + 1
-    }
-    if last <= 0 {
+gene path_ext(p) {
+    # extension WITHOUT the dot, from the final component only;
+    # dotfiles (".hidden") have no extension; "" when none
+    let base = path_base(p)
+    let idx = __rfind(base, ".")
+    if idx == null || idx == 0 {
         return ""
     }
-    return name.slice(last + 1, size)
+    return base.slice(idx + 1, len(base))
 }
 
-# is_abs(p): true iff p starts with "/". No filesystem is consulted, the
-# empty path and every relative path answer false.
-gene is_abs(p) {
+gene path_is_abs(p) {
     return p.starts("/")
 }
 
-# norm(p): lexical collapse, no filesystem: doubled separators and "."
-# segments vanish, "seg/.." pairs cancel. ".." past the top of a relative
-# path stays ("../a" is "../a"); on an absolute path it is absorbed at the
-# root, and absolute results keep their leading "/". A relative path that
-# collapses to nothing is "" (no "." is synthesized).
-gene norm(p) {
-    let rooted = is_abs(p)
-    let segs = split(p)
-    let stack = []
-    for s in segs {
-        if s == "." {
+gene path_join(parts) {
+    # join a list of components with "/", empty parts dropped
+    let segs = []
+    for part in parts {
+        if part != "" {
+            push(segs, part)
+        }
+    }
+    return segs.join("/")
+}
+
+gene path_norm(p) {
+    # lexical normalization: collapse "//", drop "." segments, apply ".."
+    let abs = path_is_abs(p)
+    let segs = []
+    for seg in p.split("/") {
+        if seg == "" || seg == "." {
             continue
         }
-        if s == ".." {
-            let depth = len(stack)
-            if depth > 0 and stack[depth - 1] != ".." {
-                pop(stack)
+        if seg == ".." {
+            if len(segs) > 0 && segs[len(segs) - 1] != ".." {
+                pop(segs)
             } else {
-                if !rooted {
-                    push(stack, "..")
+                if !abs {
+                    push(segs, "..")
                 }
             }
+            # at an absolute root, ".." is ignored (climbing past / stays at /)
             continue
         }
-        push(stack, s)
+        push(segs, seg)
     }
-    let out = ""
-    let first = true
-    for s in stack {
-        if first {
-            out = s
-            first = false
-        } else {
-            out = out + "/" + s
-        }
+    let joined = segs.join("/")
+    if abs {
+        return "/" + joined
     }
-    if rooted {
-        return "/" + out
+    if joined == "" {
+        return "."
     }
-    return out
+    return joined
+}
+
+gene path_split_ext(p) {
+    # [stem, ext] of the final component ("a/b.tar.gz" -> ["b.tar", "gz"])
+    let base = path_base(p)
+    let idx = __rfind(base, ".")
+    if idx == null || idx == 0 {
+        return [base, ""]
+    }
+    return [base.slice(0, idx), base.slice(idx + 1, len(base))]
 }

@@ -1,8 +1,8 @@
 # sec-r5 F-9: large-string variable reads are deep copies. Before the fix,
 # 3 reads of a 500 MB string allocated 1.5 GB past the 2 GiB aggregate
-# ceiling (peak RSS 2.44 GB, clean exit — the contract was fictional).
+# ceiling (peak RSS 2.44 GB, clean exit, the contract was fictional).
 # Reads now enter the ceiling: the run ends with a containment note.
-# NOTE: the aggregate ceiling is monotonic — once crossed, even a rescue
+# NOTE: the aggregate ceiling is monotonic, once crossed, even a rescue
 # handler cannot allocate, so the run ends at top level (SPEC 9b). That
 # is the containment contract: a bounded note, never an OOM kill.
 gene main() {

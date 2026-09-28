@@ -1,5 +1,5 @@
 # reg-r1 regression (regulation audit W1): regulation state must survive
-# spawn()/sequences — a repressed off-side gene returns null on the host
+# spawn()/sequences, a repressed off-side gene returns null on the host
 # AND inside every worker cell. Pre-fix (fail-pre verified): workers
 # inherited NO regulation state, so both asserts burn on old cores.
 gene a() {

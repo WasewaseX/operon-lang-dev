@@ -1,0 +1,40 @@
+# differential: W029 first-class bytes, byte-identical stdout on both
+# engines (Rust Vec<u8> vs Python bytes, same spelling everywhere).
+gene probe(f) {
+    stress {
+        return "ok -> " + str(f())
+    } rescue (e) {
+        return "stress[" + e.kind + "] " + e.message
+    }
+}
+gene t_catch() { return b"x" + "text" }
+gene t_enc() { return bytes_from_str("x", "latin-1") }
+gene t_range() { return bytes_from_list([300]) }
+gene t_repeat() { return b"a" * 600000000 }
+gene t_concat() { return b"a" * 300000000 + b"b" * 300000000 }
+
+gene main() {
+    let b = b"hello"
+    print(b, type(b), len(b), b[0], b[-1])
+    print(b.slice(1, 3), b.slice(-3, -1), b.slice(0, 0), b.slice(3, 100))
+    print(b + b" world", b"ab" * 3, 3 * b"ab")
+    print(b"\x00\x01\xff\\q\"", b"h\xc3\xa9llo")
+    print(b == b"hello", b != b"world", b"" && "truthy-check")
+    print(bytes_from_str("héllo"), str_from_bytes(bytes_from_str("héllo")))
+    print(bytes_to_list(b"AB"), bytes_from_list([104, 105]), bytes_from_str("x", "UTF8"))
+    print(str_from_bytes(b"\xff\xfe"), bytes_from_list([]))
+    let acc = 0
+    for x in b"AB" { acc += x }
+    print(acc)
+    let m = {}
+    m[b"k"] = 1
+    m[b"k"] += 10
+    print(m, m[b"k"], {b"key": 7})
+    print(json_str(b"AB"), json_str([b"AB"]))
+    print(probe(t_catch))
+    print(probe(t_enc))
+    print(probe(t_range))
+    print(probe(t_repeat))
+    print(probe(t_concat))
+    print(type(b""), !b"", !(!b"a"))
+}

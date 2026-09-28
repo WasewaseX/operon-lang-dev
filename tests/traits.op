@@ -1,0 +1,129 @@
+# traits, W04 proof: trait declarations, required + default methods,
+# implements contract notes, virtual dispatch, inheritance interaction.
+frame proof {
+    # required + default methods; contract satisfied
+    trait Show {
+        gene describe() {
+            return "shape:" + self.display()
+        }
+    }
+    trait Big {
+        gene area()
+    }
+    phenotype Rect implements Show, Big {
+        let w = 0
+        let h = 0
+        gene init(w, h) {
+            self.w = w
+            self.h = h
+        }
+        gene area() {
+            return self.w * self.h
+        }
+        gene display() {
+            return "rect(" + str(self.w) + "x" + str(self.h) + ")"
+        }
+    }
+    let r = new Rect(3, 4)
+    assert(r.area() == 12)
+    assert(r.describe() == "shape:rect(3x4)")
+
+    # default method without own override; virtual dispatch hits the
+    # phenotype's OWN display
+    phenotype Square implements Show, Big {
+        let s = 1
+        gene init(s) {
+            self.s = s
+        }
+        gene display() {
+            return "square(" + str(self.s) + ")"
+        }
+    }
+    let q = new Square(5)
+    assert(q.display() == "square(5)")
+    assert(q.describe() == "shape:square(5)")
+
+    # a required method missing = construction note; the call wobbles null
+    # (the notes are observable through the run continuing, Total Grammar)
+    phenotype Broken implements Big {
+        let n = 1
+        gene init() {
+            self.n = n
+        }
+    }
+    let b = new Broken()
+    assert(b.area() == null)
+
+    # unknown trait: contract ignored with a note, instance still works
+    phenotype Loose implements NoSuchTrait {
+        let v = 7
+        gene init() {
+            self.v = v
+        }
+        gene display() {
+            return "loose"
+        }
+    }
+    let l = new Loose()
+    assert(l.display() == "loose")
+
+    # implements without a body after `phenotype Name` still parses (the
+    # clause is part of the header); inheritance + implements compose:
+    trait Named {
+        gene name()
+    }
+    phenotype Base implements Named {
+        let tag = "base"
+        gene name() {
+            return self.tag
+        }
+        gene shout() {
+            return self.name() + "!"
+        }
+    }
+    phenotype Child from Base implements Named {
+        gene name() {
+            return "child-of-" + self.tag
+        }
+    }
+    let c = new Child()
+    assert(c.name() == "child-of-base")
+    assert(c.shout() == "child-of-base!")
+
+    # redefinition of a trait: last wins
+    trait Greeter {
+        gene greet() {
+            return "hello"
+        }
+    }
+    trait Greeter {
+        gene greet() {
+            return "hi"
+        }
+    }
+    phenotype G implements Greeter {
+        gene init() {}
+        gene display() {
+            return "g"
+        }
+    }
+    let g = new G()
+    assert(g.greet() == "hi")
+
+    # traits with parameters in defaults
+    trait Adder {
+        gene plus(n) {
+            return self.base() + n
+        }
+        gene base()
+    }
+    phenotype Num implements Adder {
+        let base = 10
+        gene base() {
+            return self.base
+        }
+    }
+    let num = new Num()
+    assert(num.plus(5) == 15)
+}
+print("traits proof complete")

@@ -1,0 +1,23 @@
+# differential: W18 task cancellation (sequential-projection shapes)
+# The concurrent engine observes cancel flags at fuel tick boundaries; the
+# sequential oracle runs worker bodies inline at spawn time. Ordering
+# between threads is therefore NOT pinnable here. This file pins only the
+# shapes both engines produce byte for byte: post-join phases, tombstone
+# reads, and the contained paths (bad ids, unknown ids, host chain).
+# Mid-flight shapes are Rust-lane evidence under tests/timing/ plus the
+# rt_p20a storm payload.
+gene quick(n) { return n * 2 }
+
+let a = spawn(quick, [21])
+let v = join(a)
+print("join=" + str(v))
+print("state-after-join=" + task_state(a))
+print("cancel-after-join=" + str(cancel(a)))
+print("state-after-cancel=" + task_state(a))
+print("cancel0=" + str(cancel(0)))
+print("cancelneg=" + str(cancel(-7)))
+print("cancelunknown=" + str(cancel(424242)))
+print("state0=" + task_state(0))
+print("stateneg=" + str(task_state(-7)))
+print("stateunknown=" + str(task_state(424242)))
+print("host-cancelled=" + str(cancelled()))

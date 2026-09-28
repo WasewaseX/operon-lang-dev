@@ -1,5 +1,5 @@
-# type_anns.op — W01 (L2c): soft type annotations.
-# `gene f(x: int) -> int`, `let n: float = ...` — annotations are a SOFT
+# type_anns.op, W01 (L2c): soft type annotations.
+# `gene f(x: int) -> int`, `let n: float = ...`, annotations are a SOFT
 # contract enforced at the call funnel / binding time as catchable
 # `unfolded` Stress (SPEC §7a). Never a parse rejection; Total Grammar.
 frame proof {

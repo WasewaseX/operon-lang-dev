@@ -1,4 +1,4 @@
-# reg-bio p13b: noisy ring — noise=1.0 draws per substep must stay
+# reg-bio p13b: noisy ring, noise=1.0 draws per substep must stay
 # fuel-charged, deterministic, and bounded. The fold charges 20 steps per
 # tick like the noiseless ring; the seeded position-derived stream keeps
 # both implementations bit-identical. Containment: the loop completes with

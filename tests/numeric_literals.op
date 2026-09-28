@@ -1,4 +1,4 @@
-# numeric_literals.op — W031: radix prefixes and digit separators.
+# numeric_literals.op, W031: radix prefixes and digit separators.
 frame proof {
     assert(0xFF == 255, "hex literal")
     assert(0xff == 255, "hex lowercase")

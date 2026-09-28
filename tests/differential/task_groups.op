@@ -1,0 +1,19 @@
+# differential: W15 task groups (wait_all / wait_any)
+# Ordering-free shapes only. Both engines print identical facts.
+gene square(n) { return n * n }
+
+main {
+    let ids = []
+    for i in range(3) {
+        let t = spawn(square, [i + 2])
+        push(ids, t)
+    }
+    let res = wait_all(ids)
+    print("r0=" + str(res[0]) + " r1=" + str(res[1]) + " r2=" + str(res[2]))
+    let solo = spawn(square, [10])
+    print("any=" + str(wait_any([solo])))
+    let _ = join(solo)
+    print("any-joined=" + str(wait_any([solo])))
+    print("empty-any=" + str(wait_any([])))
+    print("empty-all=" + str(len(wait_all([]))))
+}

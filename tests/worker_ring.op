@@ -1,4 +1,4 @@
-# reg-r3 (re-audit) — the repressilator ring rides the spawn snapshot
+# reg-r3 (re-audit), the repressilator ring rides the spawn snapshot
 # A ring-sourced GRN gate must veto a call inside a worker cell EXACTLY as
 # it does outside (reg-r1's contract, formerly false for ring nodes: the
 # ring did not ride RegulationSnap and every ring node read 0.0 in the

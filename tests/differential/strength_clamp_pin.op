@@ -1,5 +1,5 @@
 # reg-bio-2 pin (jury request 12-score-invariants): the strength clamp is a
-# behavior-change path with zero prior corpus coverage — this differential
+# behavior-change path with zero prior corpus coverage, this differential
 # case pins the saturation in BOTH engines. strength 2.0 clamps to 1.0 at
 # parse (note, not error), so a clamped edge and a strength-1.0 edge are
 # bit-identical; influence follows the Hill dose-response

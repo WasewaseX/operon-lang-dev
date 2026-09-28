@@ -1,4 +1,4 @@
-# differential: std/set — set algebra over plain lists (pure, new-list results)
+# differential: std/set, set algebra over plain lists (pure, new-list results)
 use std/set as st
 
 frame proof {

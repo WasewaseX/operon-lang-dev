@@ -1,22 +1,12 @@
-# std/collections — self-hosted library written in Operon itself.
+# std/collections, self-hosted library written in Operon itself.
 # Runs on the Rust core; proves the language can carry its own weight.
 #
-# Container families (W026): queues, deques, and priority queues are plain
-# lists operated on IN PLACE. Operon containers share by reference (SPEC
-# §19), so a family gene that mutates the container mutates the caller's
-# value; the mutation genes also return the container so calls can chain.
-# Every pop returns an Option (W06): some(value) or none() when the
-# container is empty, so a pop never stresses. All params and returns carry
-# W001 soft annotations (SPEC §7c); element positions stay unannotated on
-# purpose so one family serves any element type (elements only need to be
-# mutually comparable where ordering matters).
-#
-# Priority queue convention: pq_pop returns the CURRENT MIN (smallest key
-# first). Internals are a sorted-insert list, chosen for clarity over a
-# binary heap: pq_push scans to the first key strictly greater than the
-# incoming one and inserts there, which is an honest O(n) per push;
-# pq_pop is then O(1) off the front. Scanning past equal keys inserts AFTER
-# them, so ties keep insertion order (FIFO among equal keys).
+# Every public gene carries W001 soft type annotations (SPEC §7c) on its
+# params and returns: the boundaries are checked at call time and a wrong
+# type unfolds into a catchable Stress naming the annotation. Element
+# positions stay unannotated on purpose so one gene serves any element
+# type. Queue/deque/heap container families live in std/deque.op and
+# std/heap.op; this module is the list-shaped data work (W026 stage 1).
 
 gene chunk(xs: list, size: int) -> list {
     let out = []
@@ -73,96 +63,4 @@ gene count(xs: list, pred: gene) -> int {
         }
     }
     return n
-}
-
-# ---- fifo queue: arrive at the back, leave from the head (first in, first out)
-
-gene fifo_new() -> list {
-    return []
-}
-
-gene fifo_push(q: list, v) -> list {
-    # appends v at the back; mutates q in place and returns it
-    push(q, v)
-    return q
-}
-
-gene fifo_pop(q: list) -> option {
-    # removes and returns some(head); none() when the queue is empty
-    if len(q) == 0 {
-        return none()
-    }
-    let head = q[0]
-    remove(q, 0)
-    return some(head)
-}
-
-gene fifo_len(q: list) -> int {
-    # how many elements are waiting in the container
-    return len(q)
-}
-
-gene fifo_to_list(q: list) -> list {
-    # snapshot copy in queue order: mutating it never touches the container
-    return q.slice(0, len(q))
-}
-
-# ---- deque: a list with both ends open (index 0 is the front)
-
-gene deque_push_front(q: list, v) -> list {
-    # inserts v at the front; mutates q in place and returns it
-    insert(q, 0, v)
-    return q
-}
-
-gene deque_push_back(q: list, v) -> list {
-    # appends v at the back; mutates q in place and returns it
-    push(q, v)
-    return q
-}
-
-gene deque_pop_front(q: list) -> option {
-    # removes and returns some(front); none() when empty
-    if len(q) == 0 {
-        return none()
-    }
-    let front = q[0]
-    remove(q, 0)
-    return some(front)
-}
-
-gene deque_pop_back(q: list) -> option {
-    # removes and returns some(back); none() when empty
-    if len(q) == 0 {
-        return none()
-    }
-    return some(pop(q))
-}
-
-# ---- priority queue: sorted-insert list, current-min pops first
-
-gene pq_new() -> list {
-    return []
-}
-
-gene pq_push(pq: list, v) -> list {
-    # O(n) insert: first index whose key is strictly greater than v;
-    # scanning past equal keys keeps ties in insertion order (FIFO ties).
-    # Elements must be mutually comparable (int/float mix freely).
-    let i = 0
-    while i < len(pq) and pq[i] <= v {
-        i += 1
-    }
-    insert(pq, i, v)
-    return pq
-}
-
-gene pq_pop(pq: list) -> option {
-    # removes and returns some(current min); none() when empty
-    if len(pq) == 0 {
-        return none()
-    }
-    let m = pq[0]
-    remove(pq, 0)
-    return some(m)
 }

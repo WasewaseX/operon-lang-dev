@@ -1,4 +1,4 @@
-# differential: std/fmt — presentation formatting
+# differential: std/fmt, presentation formatting
 use std/fmt as fm
 
 frame proof {

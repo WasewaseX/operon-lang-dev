@@ -1,4 +1,4 @@
-# mechanism coverage — wave-3 Critic-D gaps: guard uORF, variant params,
+# mechanism coverage, wave-3 Critic-D gaps: guard uORF, variant params,
 # codon non-DNA rejection, anchor-import verification, deep-spawn cap
 frame proof {
     # uORF leading guard: false condition trips the guard arm
