@@ -4010,8 +4010,11 @@ class Interp:
                 return l + r
             raise Stress("unfolded", f"cannot add {type_name(l)} and {type_name(r)}")
         if op in ("-", "*", "/", "//", "%"):
-            # string repetition (Python parity): "ab" * 3 / 3 * "ab"
-            if op == "*" and isinstance(l, str) and not isinstance(r, str):
+            # string repetition (Python parity): "ab" * 3 / 3 * "ab";
+            # the count must be a true int (Rust matches Value::Int only, so
+            # null/float/bool counts fall through to the generic arith error;
+            # found by the W050 property harness, strings lane case 19)
+            if op == "*" and isinstance(l, str) and isinstance(r, int) and not isinstance(r, bool):
                 n = int(r)
                 if n < 0:
                     raise Stress("unfolded", "repeat count must be non-negative")
@@ -4019,21 +4022,21 @@ class Interp:
                     raise Stress("overflow", "repeat exceeds the 512 MiB string ceiling")
                 return l * n
             # W029 mirror: bytes repetition (Python parity), same ceiling
-            if op == "*" and isinstance(l, bytes) and not isinstance(r, bytes):
+            if op == "*" and isinstance(l, bytes) and isinstance(r, int) and not isinstance(r, bool):
                 n = int(r)
                 if n < 0:
                     raise Stress("unfolded", "repeat count must be non-negative")
                 if n * len(l) > 512 * 1024 * 1024:
                     raise Stress("overflow", "repeat exceeds the 512 MiB bytes ceiling")
                 return l * n
-            if op == "*" and isinstance(r, str) and not isinstance(l, str):
+            if op == "*" and isinstance(r, str) and isinstance(l, int) and not isinstance(l, bool):
                 n = int(l)
                 if n < 0:
                     raise Stress("unfolded", "repeat count must be non-negative")
                 if n * len(r) > 512 * 1024 * 1024:
                     raise Stress("overflow", "repeat exceeds the 512 MiB string ceiling")
                 return r * n
-            if op == "*" and isinstance(r, bytes) and not isinstance(l, bytes):
+            if op == "*" and isinstance(r, bytes) and isinstance(l, int) and not isinstance(l, bool):
                 n = int(l)
                 if n < 0:
                     raise Stress("unfolded", "repeat count must be non-negative")
@@ -4071,8 +4074,26 @@ class Interp:
                     # Rust core raises before ever materializing the
                     # remainder, the oracle must mirror that (W32 corpus).
                     raise Stress("overflow", "int overflow in '%'")
-                # SPEC: sign follows divisor (= Python % semantics)
-                return l % r
+                # Mirror the Rust floor-remainder ALGORITHM, not just the
+                # result: Rust computes q (trunc divide, floored), then
+                # q*b and a-q*b through CHECKED i64 ops, so an intermediate
+                # that leaves i64 raises overflow even when the final
+                # remainder would fit. Python bignums never overflow, so
+                # without this mirror the oracle silently returns where the
+                # core raises (found by the W050 property harness, arith
+                # lane cases 76/88: i64::MIN % (2**63 - 1)).
+                q = abs(l) // abs(r)
+                if (l < 0) != (r < 0):
+                    q = -q
+                if (l < 0) != (r < 0) and q * r != l:
+                    q -= 1  # floor rounds down
+                rb = q * r
+                if not (-(2**63) <= rb <= 2**63 - 1):
+                    raise Stress("overflow", "int overflow in '%'")
+                m = l - rb
+                if not (-(2**63) <= m <= 2**63 - 1):
+                    raise Stress("overflow", "int overflow in '%'")
+                return m
             raise Stress("unfolded", f"cannot apply '{op}' to {type_name(l)} and {type_name(r)}")
         if op == "**":
             if isinstance(l, int) and isinstance(r, int) and not isinstance(l, bool) and not isinstance(r, bool) and r >= 0:
