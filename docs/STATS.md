@@ -6,12 +6,12 @@ README/SPEC/BENCH are forbidden, link here instead.
 
 - **Version**: 2.2.0  · SPEC Status: v2.2.0
 - **Keywords (parser reserved set)**: 60, table in [KEYWORDS.md](KEYWORDS.md)
-- **Std modules**: 26 (args, bigint, bio, collections, csv, deque, fmt, fs, graph, heap, iter, json, logging, math, motifs, path, random, seq, serialize, set, strings, terminal, testing, time, unicode, url)
-- **Std functions (.op-level `gene` defs)**: 284
+- **Std modules**: 28 (args, bigint, binary, bio, collections, csv, deque, fmt, fs, graph, hashing, heap, iter, json, logging, math, motifs, path, random, seq, serialize, set, strings, terminal, testing, time, unicode, url)
+- **Std functions (.op-level `gene` defs)**: 312
 - **Red-team payload files**: 103
-- **Proof files**: 137 (of 297 test .op files)
-- **Proof run** (bin/operon): 180 files, 126 proofs, 1922 asserts
-- **Differential harness**: 216 match / 0 diverge (0 skipped) · granted lane: 11 cells
+- **Proof files**: 139 (of 300 test .op files)
+- **Proof run** (bin/operon): 183 files, 128 proofs, 1963 asserts
+- **Differential harness**: 219 match / 0 diverge (0 skipped) · granted lane: 11 cells
 - **CLI subcommands**: ast, bench, build, check, crispr, doc, explain, fix, fmt, graph, ir, keywords, lint, profile, repl, rna, test, version, watch
 - **LSP methods**: initialize, shutdown, textDocument/completion, textDocument/definition, textDocument/didChange, textDocument/didClose, textDocument/didOpen, textDocument/documentSymbol, textDocument/formatting, textDocument/hover, textDocument/prepareRename, textDocument/publishDiagnostics, textDocument/references, textDocument/rename, textDocument/semanticTokens, textDocument/signatureHelp
 
@@ -21,6 +21,7 @@ README/SPEC/BENCH are forbidden, link here instead.
 |---|---|
 | std/args | 8 |
 | std/bigint | 20 |
+| std/binary | 17 |
 | std/bio | 4 |
 | std/collections | 6 |
 | std/csv | 7 |
@@ -28,6 +29,7 @@ README/SPEC/BENCH are forbidden, link here instead.
 | std/fmt | 8 |
 | std/fs | 12 |
 | std/graph | 23 |
+| std/hashing | 11 |
 | std/heap | 10 |
 | std/iter | 23 |
 | std/json | 11 |
