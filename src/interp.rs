@@ -5227,6 +5227,209 @@ impl Interp {
         }
     }
 
+    // ------------------------------------------------------- channels (W015)
+    // A channel is a behavior handle (Value::Channel) wrapping a thread-safe
+    // unbounded FIFO. The queue stores the WIRE form (SendValue): every
+    // payload crosses the same serialization a spawn boundary uses, even on
+    // the same-thread buffered path, so the membrane contract is one rule.
+    // Blocking (recv on empty+open, select with nothing ready) charges fuel
+    // per wake slice, exactly like sleep's wall-time-as-fuel shape, and
+    // observes the cancel chain, so a blocked cell wakes on cancel() and a
+    // blocked recv cannot outlive the run budget.
+
+    /// Blocking slice lengths: recv waits on the condvar in 50 ms slices,
+    /// select polls in 10 ms slices; both charge ms*1000 fuel steps per
+    /// wake (the sleep charge shape). 50 ms keeps a cancelled recv's wake
+    /// latency bounded without burning fuel on hot polling.
+    const RECV_SLICE_MS: u64 = 50;
+    const SELECT_SLICE_MS: u64 = 10;
+
+    /// W015 membrane rule: behavior handles (genes, sequences, phenotype
+    /// instances, other channels) cannot ride as payloads, they are refused
+    /// at send time with a catchable `membrane` stress. Data crosses (lists
+    /// and maps serialize deeply; nested handles inside containers degrade
+    /// to null, the same silent rule the spawn wire always had).
+    fn membrane_refusal(v: &Value) -> Option<Stress> {
+        match v {
+            Value::Gene(_, _) | Value::Seq(_, _) | Value::Obj(_, _) | Value::Channel(_) => {
+                Some(Stress::new(
+                    "membrane",
+                    format!(
+                        "send() refuses a {} payload; channels carry data, not handles",
+                        v.type_name()
+                    ),
+                ))
+            }
+            _ => None,
+        }
+    }
+
+    fn builtin_send(&mut self, args: Vec<Value>) -> Result<Value, Stress> {
+        let (ch, payload) = match (args.first(), args.get(1)) {
+            (Some(Value::Channel(c)), Some(v)) => (c.clone(), v.clone()),
+            _ => {
+                return Err(Stress::new(
+                    "unfolded",
+                    "send(ch, v) needs a channel and a value",
+                ))
+            }
+        };
+        if let Some(s) = Self::membrane_refusal(&payload) {
+            return Err(s);
+        }
+        // pre-flight depth: a payload deeper than the SendValue cap fails
+        // the SEND (catchable), it never smuggles a wire stress into the
+        // queue (same discipline as the spawn pre-flight)
+        if crate::genes::value_depth(&payload, 0) > 100_000 {
+            return Err(Stress::new("overflow", "send payload nesting too deep"));
+        }
+        // growth charge, the push() shape: an unbounded buffer is an
+        // allocator DoS unless every append pays the aggregate ceiling
+        let bytes = match &payload {
+            Value::Str(x) => x.len() as u64 + 48,
+            Value::List(x) => 16 * x.borrow().len() as u64 + 96,
+            _ => 32,
+        };
+        mem_charge(bytes)?;
+        let mut st = ch.state.lock().unwrap();
+        if st.closed {
+            return Err(Stress::new("closed_channel", "send on a closed channel"));
+        }
+        st.queue.push_back(crate::genes::to_send(&payload));
+        drop(st);
+        ch.wake.notify_one();
+        Ok(Value::Null)
+    }
+
+    fn builtin_recv(&mut self, args: Vec<Value>) -> Result<Value, Stress> {
+        let ch = match args.first() {
+            Some(Value::Channel(c)) => c.clone(),
+            _ => return Err(Stress::new("unfolded", "recv(ch) needs a channel")),
+        };
+        let slice = std::time::Duration::from_millis(Self::RECV_SLICE_MS);
+        let mut st = ch.state.lock().unwrap();
+        loop {
+            if let Some(sv) = st.queue.pop_front() {
+                return Ok(crate::genes::from_send(sv));
+            }
+            // closed AND empty is the only null recv can produce
+            if st.closed {
+                return Ok(Value::Null);
+            }
+            // blocked: wake-iteration fuel + cancel, the sleep shape
+            self.blocking_wake(Self::RECV_SLICE_MS)?;
+            let (g, _timed_out) = ch.wake.wait_timeout(st, slice).unwrap();
+            st = g;
+        }
+    }
+
+    fn builtin_close(&mut self, args: Vec<Value>) -> Result<Value, Stress> {
+        let ch = match args.first() {
+            Some(Value::Channel(c)) => c.clone(),
+            _ => return Err(Stress::new("unfolded", "close(ch) needs a channel")),
+        };
+        let mut st = ch.state.lock().unwrap();
+        if st.closed {
+            // idempotent + soft note (close is a state write, not a race;
+            // Go panics here, we contain)
+            drop(st);
+            self.note(self.cur_line, 4, "close of an already-closed channel");
+            return Ok(Value::Null);
+        }
+        st.closed = true;
+        drop(st);
+        // wake every waiter: blocked recvs observe closed+empty (null),
+        // blocked selects re-poll and can answer -1
+        ch.wake.notify_all();
+        Ok(Value::Null)
+    }
+
+    /// One wake iteration of a blocking channel operation: charge the slice
+    /// as fuel (shared pool + step budget, the exact sleep shape), then
+    /// observe the cancel chain so cancel() unblocks a parked cell.
+    fn blocking_wake(&mut self, slice_ms: u64) -> Result<(), Stress> {
+        let charge = slice_ms.saturating_mul(1000);
+        self.steps = self.steps.saturating_add(charge);
+        if let Some(pool) = &self.fuel_pool {
+            let left = pool.fetch_sub(charge as i64, std::sync::atomic::Ordering::Relaxed);
+            if left <= charge as i64 {
+                return Err(Stress::new(
+                    "overflow",
+                    "run-wide step budget exhausted (channel wait)",
+                ));
+            }
+        }
+        if self.steps > self.step_budget {
+            return Err(Stress::new(
+                "overflow",
+                "step budget exhausted (channel wait)",
+            ));
+        }
+        if !self.cancel_chain.is_empty() {
+            for f in &self.cancel_chain {
+                if f.load(std::sync::atomic::Ordering::Relaxed) {
+                    return Err(Stress::new("cancelled", "task cancelled"));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// W015 select: a BUILTIN, not syntax (grammar freeze, W036). Polls the
+    /// argument channels strictly in declaration order and returns the
+    /// 0-based index of the first one with a ready value (non-empty buffer);
+    /// ready-on-a-closed-channel still counts, its buffered values remain
+    /// receivable. All closed and nothing buffered anywhere answers -1.
+    /// Nothing ready with at least one channel open: block, re-polling in
+    /// order every slice (documented fairness: the leftmost ready channel
+    /// always wins, never a random arm), each wake charged as fuel.
+    fn builtin_select(&mut self, args: Vec<Value>) -> Result<Value, Stress> {
+        let mut chans: Vec<Arc<crate::value::ChannelShared>> = Vec::new();
+        for a in &args {
+            match a {
+                Value::Channel(c) => chans.push(c.clone()),
+                other => {
+                    return Err(Stress::new(
+                        "unfolded",
+                        format!("select() needs channels, got a {}", other.type_name()),
+                    ))
+                }
+            }
+        }
+        if chans.is_empty() {
+            // vacuous all-closed: nothing can ever become ready
+            self.note(self.cur_line, 4, "select() with no channels; -1");
+            return Ok(Value::Int(-1));
+        }
+        let poll = |chans: &[Arc<crate::value::ChannelShared>]| -> (Option<usize>, bool) {
+            let mut any_open = false;
+            let mut ready = None;
+            for (i, c) in chans.iter().enumerate() {
+                let st = c.state.lock().unwrap();
+                if !st.queue.is_empty() {
+                    // strict declaration order: the leftmost ready wins
+                    ready = Some(i);
+                    break;
+                }
+                if !st.closed {
+                    any_open = true;
+                }
+            }
+            (ready, any_open)
+        };
+        loop {
+            let (ready, any_open) = poll(&chans);
+            if let Some(i) = ready {
+                return Ok(Value::Int(i as i64));
+            }
+            if !any_open {
+                return Ok(Value::Int(-1));
+            }
+            self.blocking_wake(Self::SELECT_SLICE_MS)?;
+            std::thread::sleep(std::time::Duration::from_millis(Self::SELECT_SLICE_MS));
+        }
+    }
+
     // ------------------------------------------------------- builtins
     fn call_builtin(
         &mut self,
@@ -7062,6 +7265,12 @@ impl Interp {
             // the result leaves).
             "wait_all" => crate::genes::wait_all_tasks(self, args),
             "wait_any" => crate::genes::wait_any_task(self, args),
+            // -------------------------------------------------- channels (W015)
+            "channel" => Ok(Value::Channel(Arc::new(crate::value::ChannelShared::new()))),
+            "send" => self.builtin_send(args),
+            "recv" => self.builtin_recv(args),
+            "close" => self.builtin_close(args),
+            "select" => self.builtin_select(args),
             // -------------------------------------------------- math
             "floor" => Ok(Value::Int(match args.first() {
                 Some(Value::Int(i)) => *i,
@@ -10495,6 +10704,13 @@ pub const BUILTIN_NAMES: &[&str] = &[
     // W15: task-group surface
     "wait_all",
     "wait_any",
+    // W015: channels + select (builtins only, the `select { arm }` grammar
+    // stays frozen per W036)
+    "channel",
+    "send",
+    "recv",
+    "close",
+    "select",
     "floor",
     "ceil",
     "sqrt",
