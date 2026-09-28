@@ -1,0 +1,71 @@
+# collections_typed — W026 stage 1 differential pin: the typed container
+# families of std/collections.op (fifo, deque, priority queue) over fixed
+# inputs, byte-identical on both engines. Covers fifo arrival order, both
+# deque ends, min-first pq order with FIFO ties (int 1 before float 1.0),
+# string keys, and empty-container pops returning None.
+use std/collections as c
+
+print("== fifo ==")
+let q = c.fifo_new()
+c.fifo_push(q, "a")
+c.fifo_push(q, 2)
+c.fifo_push(q, "c")
+print("queue:", c.fifo_to_list(q))
+print("len:", c.fifo_len(q))
+print("pops:", unwrap(c.fifo_pop(q)), unwrap(c.fifo_pop(q)))
+print("rest:", c.fifo_to_list(q), "len:", c.fifo_len(q))
+c.fifo_push(q, "d")
+print("after push:", c.fifo_to_list(q))
+print("drain:", unwrap(c.fifo_pop(q)), unwrap(c.fifo_pop(q)), c.fifo_pop(q))
+print("len:", c.fifo_len(q))
+
+print("== deque ==")
+let d = c.fifo_new()
+c.deque_push_back(d, 1)
+c.deque_push_back(d, 2)
+c.deque_push_front(d, 0)
+c.deque_push_back(d, 3)
+c.deque_push_front(d, -1)
+print("deque:", c.fifo_to_list(d))
+print("front/back:", unwrap(c.deque_pop_front(d)), unwrap(c.deque_pop_back(d)))
+print("deque now:", c.fifo_to_list(d))
+print("drain:", unwrap(c.deque_pop_front(d)), unwrap(c.deque_pop_back(d)), unwrap(c.deque_pop_front(d)))
+print("empty pops:", c.deque_pop_front(d), c.deque_pop_back(d))
+
+print("== pq ==")
+let pq = c.pq_new()
+print("fresh pop:", c.pq_pop(pq))
+c.pq_push(pq, 5)
+c.pq_push(pq, 1)
+c.pq_push(pq, 4)
+c.pq_push(pq, 1)
+c.pq_push(pq, 3)
+c.pq_push(pq, 0)
+print("pq state:", c.fifo_to_list(pq))
+let order = []
+while c.fifo_len(pq) > 0 {
+    push(order, unwrap(c.pq_pop(pq)))
+}
+print("pq drains:", order)
+print("pq empty pop:", c.pq_pop(pq))
+
+print("== pq ties ==")
+let tie = c.pq_new()
+c.pq_push(tie, 1)
+c.pq_push(tie, 1.0)
+c.pq_push(tie, 0)
+print("tie state:", c.fifo_to_list(tie))
+print("tie pops:", str(unwrap(c.pq_pop(tie))), str(unwrap(c.pq_pop(tie))), str(unwrap(c.pq_pop(tie))))
+
+print("== pq strings ==")
+let words = c.pq_new()
+c.pq_push(words, "pear")
+c.pq_push(words, "apple")
+c.pq_push(words, "fig")
+c.pq_push(words, "apple")
+let worder = []
+while c.fifo_len(words) > 0 {
+    push(worder, unwrap(c.pq_pop(words)))
+}
+print("words drain:", worder)
+print("collections_typed differential complete")
