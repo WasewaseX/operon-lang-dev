@@ -360,7 +360,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
   SPEC §7, differential programs (parity vs Python ints via oracle is a gift here, use it).
 - Files: `src/value.rs`, `src/interp.rs` or `std/bigint.op`, `SPEC.md`.
 
-### W033, Date/time value types [P2] [dev-1] [M] [partial: L1d builtins + std/time.op duration/instant arithmetic on main 88d9b63 (UTC-only contract per W89); REMAIN: ISO-8601 parsing]
+### W033, Date/time value types [P2] [dev-1] [M] [done: main 855cf04, L1d builtins + std/time.op duration/instant arithmetic + time_parse_iso (ISO-8601 UTC subset, Hinnant days_from_civil, offsets rejected, null on malformed), UTC-only contract documented, 52 proof asserts + differential byte-identical]
 - Already: `unix_time/date_parts/date_fmt` (builder-A, interp.rs), monotonic clock/now
   pinned (SPEC §22).
 - Remaining: `Duration` arithmetic, timezone handling contract (UTC-only v1, documented),
