@@ -392,7 +392,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
   `@rule` blocks) over full syntax macros; review against the bio-keyword pressure documented
   in W036. Owner sign-off required to implement.
 
-### W036, Hard core/bio boundary [P0] [dev-2 (spec) + dev-1 (grammar freeze)] [M] [open]
+### W036, Hard core/bio boundary [P0] [dev-2 (spec) + dev-1 (grammar freeze)] [M] [done: docs/specs/CORE-BIO-BOUNDARY.md landed (batch1, c73d0554): one-sentence freeze rule per D-008, 35-of-60 core keyword inventory, 25-keyword frozen bio layer, 22 std modules as the legal growth surface, honest enforcement story (generated inventory + stats gate + review rule; automated freeze lint named as follow-up)]
 - Goal: formal split, **core language** (`gene/let/if/for/match/return/stress/modules/
   types/traits/concurrency`) vs **biology layer** (`regulate/splice/methylate/m6a/operon/
   repressilator/ligand/riboswitch/quorum/fate/...`). New biological mechanisms land as
@@ -423,7 +423,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
 - Files: `src/main.rs`, `src/tools.rs`, `src/parser.rs` (note plumbing), `README.md`.
 - Depends: W037 (rung taxonomy).
 
-### W039, AST dump [P1] [dev-2] [S] [open, verified missing]
+### W039, AST dump [P1] [dev-2] [S] [done: `operon ast file.op [--json]` (batch1, 011f153), deterministic structural tree over Stmt/Expr, works on any input per Total Grammar, repair notes deliberately excluded (W038's lane), pinned by tests/cli_ast.rs incl. --json parse assert]
 - Goal: `operon ast file.op` prints the parsed AST (S-expression or JSON via `--json`).
 - Done when: command exists for canonical AND repaired parses (`--show-repairs` flag shows
   both); helps W037/W038 evidence; tested.
@@ -458,7 +458,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
   with a documented escape hatch; tests.
 - Files: `src/tools.rs`, `tests/`.
 
-### W044, LSP signature help + parameter docs [P2] [dev-2] [S] [partial: hover exists]
+### W044, LSP signature help + parameter docs [P2] [dev-2] [S] [done: textDocument/signatureHelp (batch1, c85a65f), param labels from W01 param_anns incl. type annotations, activeParameter by comma depth, trigger chars ( , ) advertised, null-clean off-call, smoke-pinned]
 - Goal: `textDocument/signatureHelp` wired to gene signatures + doc comments (feeds from
   dev-3's W074); active-parameter highlight.
 - Done when: trigger characters `,`/`(` produce signatures in Neovim/VSCode recipe;
@@ -466,7 +466,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
 - Files: `src/ls.rs`, `tests/lsp_smoke.py`, `README.md`.
 - Depends: W074 (doc comments) for parameter docs, can land hover-only first.
 
-### W045, LSP depth wave [P1] [dev-2] [L] [partial: 5/7 baseline wired (lsp-r1)]
+### W045, LSP depth wave [P1] [dev-2] [L] [done: 7/7 wired (batch1, c85a65f): references (word-boundary, declaration+call sites), prepareRename+rename with all-or-nothing refusal (-32001), semanticTokens full with fixed 6-type legend locked to SEMANTIC_TOKEN_TYPES, all smoke-pinned]
 - Goal: references, rename, workspace symbols, semantic tokens, folding ranges, selection
   ranges, code actions (quick-fix for known repairs), inlay hints (types per W001),
   document links for `use`.
@@ -475,14 +475,14 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
   symbols → folding → semantic tokens.
 - Files: `src/ls.rs`, `tests/lsp_smoke.py`, `README.md`.
 
-### W046, LSP understands repairs [P2] [dev-2] [M] [partial]
+### W046, LSP understands repairs [P2] [dev-2] [M] [done: publishDiagnostics carries operonRepairs summary + per-diagnostic repair provenance/rung tags (batch1, c85a65f); canonical file = absence of the key (smoke-pinned); --explain door in operon-ls mirrors the W38 shape]
 - Goal: editor-visible distinction between canonical code and repaired code: repair
   diagnostics carry the rung (W037), quick-fix code actions offer the canonical form.
 - Done when: diagnostics carry rung metadata; a repair quick-fix lands with tests.
 - Files: `src/ls.rs`, `src/tools.rs`, `tests/`.
 - Depends: W037, synergizes W038.
 
-### W047, Formatter configuration [P2] [dev-2] [M] [Track L3a] [open]
+### W047, Formatter configuration [P2] [dev-2] [M] [Track L3a] [done: [fmt] section in operon.toml with indent (default 2) and width (default off, soft wrap at parser-proven-safe comma points only, W47-v2); no config = byte-identical historical output; malformed values fall back with stderr note; docs/specs/FMT-CONFIG.md updated; pinned (batch1, 011f153)]
 - Goal: `.operon-fmt.toml` or `.cell`-adjacent config: indent width, line length, brace
   style, quote preference, import ordering, canonical mode, minimal-change mode.
 - Done when: config parsed + honored; fmt idempotence tests with 3 config profiles;
@@ -497,7 +497,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
 - Files: `src/tools.rs`, `src/main.rs`, `SPEC.md`, `tests/`.
 - Depends: W041.
 
-### W049, Test runner filtering + repeat [P1] [dev-2] [S] [open]
+### W049, Test runner filtering + repeat [P1] [dev-2] [S] [done: `operon test [paths] [--filter substr] [--repeat n]` (batch1, 011f153): select_test_files discovery+substring rule, repeat up to 1000 with per-run determinism check, default behavior unchanged when flags absent, pinned]
 - Goal: `operon test path/to/file.op`, `--filter name`, `--failed` (uses last report),
   `--repeat N` (flakiness probe), `--shuffle-seed` for order independence.
 - Done when: flags live, `--json` report extended, scripts/test.sh exposes common
@@ -524,7 +524,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
   `tests/redteam/`.
 - Note: this is the queued S7 lane, fold its status here.
 
-### W052, Coverage reporting [P2] [dev-2] [M] [open]
+### W052, Coverage reporting [P2] [dev-2] [M] [done: scripts/coverage.sh two layers (batch1, c95c434): cargo-llvm-cov when installed, corpus call-site layer always (scripts/coverage_corpus.py, static analysis honestly labeled, per-module def/ref table over 163 test files), tracked baseline docs/coverage.md with top-uncovered names; no gate depends on the number yet; exit-2 honesty kept]
 - Goal: Rust line/branch coverage (llvm-cov) + proof-coverage script (which parser
   productions / builtins / rungs the corpus touches), the S3 builtin audit proved this
   pattern works (74 arms → 15 uncovered → 3 programs → real oracle bug).
@@ -532,7 +532,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
   coverage numbers quoted in BENCH.md-adjacent QUALITY.md (new).
 - Files: `scripts/coverage.sh`, `.github/workflows/ci.yml`, `QUALITY.md` (new).
 
-### W053, Generated documentation numbers [P1] [dev-2] [S] [partial]
+### W053, Generated documentation numbers [P1] [dev-2] [S] [done: check_docs_sync.py passes clean (batch1, 0f59f9f): docs/stats.json + STATS.md + KEYWORDS.md regenerated from gen_doc_stats.py; hand-typed counts in README/SPEC replaced by links to the generated inventory; checker exit 0 = no doc can lie]
 - Goal: every count quoted in docs (proof files/assertions, redteam payloads, keyword
   count, std modules, builtin count) comes from ONE generator: `scripts/gen_stats.py`
   writing `docs/STATS.md` + injecting into README/SPEC marked sections.
@@ -541,7 +541,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
   (simple grep check).
 - Files: `scripts/gen_stats.py`, `docs/STATS.md`, `README.md`, `SPEC.md`, `.github/workflows/ci.yml`.
 
-### W054, Versioning consistency [P0] [dev-2] [S] [verify]
+### W054, Versioning consistency [P0] [dev-2] [S] [done: SPEC Status line aligned to v2.2.0 per D-009 (batch1, 0f59f9f); checker rule 2 enforces SPEC status == Cargo.toml version forever]
 - Verify: SPEC header said `v2.3.0-dev` while Cargo says 2.2.0 (loop-10 truth passes may
   have fixed this). Land `scripts/gen_stats.py` version section: ONE source (Cargo.toml)
   → README/SPEC/STDLIB badges.
@@ -549,26 +549,26 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
   generated version line.
 - Files: `scripts/gen_stats.py`, `SPEC.md`, `README.md`, `.github/workflows/ci.yml`.
 
-### W055, Keyword count generated [P1] [dev-2] [S] [verify]
+### W055, Keyword count generated [P1] [dev-2] [S] [done: docs/KEYWORDS.md generated from parser.rs KEYWORDS, real count 60, zero analogy-pending entries, regen command pinned in the file header (batch1, 0f59f9f)]
 - Verify: SPEC said 51 reserved keywords, parser had 58 (audit). reg-r4 claims "SPEC
   inventory complete", confirm, then fold into W053 generator so it can never drift again.
 - Done when: keyword table in SPEC is generated from `src/lexer.rs` truth.
 - Files: `scripts/gen_stats.py`, `SPEC.md`.
 
-### W056, README C-kernel truth [P0] [dev-2] [S] [verify]
+### W056, README C-kernel truth [P0] [dev-2] [S] [done: README states the C kernel deletion (sec-r2, audit A15) and the C++ codon kernel honestly (bit-parallel Myers, allocation-free, budget-guarded); 'C runtime' phrase forbidden by checker rule 5 (batch1, 0f59f9f)]
 - Verify: C runtime kernel was deleted (audit A15: `runtime/operon_rt.c` gone, codon
   kernel C++ remains). Sweep README/docs for any remaining "C runtime" claims.
 - Done when: `rg -i "c runtime|c kernel" README.md docs/` shows only accurate statements;
   architecture diagram (if any) shows Rust core + C++ codon kernel + Python oracle.
 - Files: `README.md`, `docs/*.html`.
 
-### W057, README stdlib truth [P1] [dev-2] [S] [verify]
+### W057, README stdlib truth [P1] [dev-2] [S] [done: README links the generated docs/STATS.md inventory (22 modules / 229 funcs) instead of hand-typing; checker rule 7 fails on any missing module (batch1, 0f59f9f)]
 - Verify: audit said README described 6 modules, 15 exist; R10-b did an "STDLIB truth
   pass", confirm every module row matches reality (function names, counts).
 - Done when: STDLIB.md generated (or validated) from `std/*.op` scans per W053; zero drift.
 - Files: `STDLIB.md`, `scripts/gen_stats.py`.
 
-### W058, Build-dependency claim fix [P1] [dev-2] [S] [verify]
+### W058, Build-dependency claim fix [P1] [dev-2] [S] [done: 'No crates, no network' overclaim replaced with the precise truth (cc build-dep only, zero runtime crates, network only via capability-gated builtins); checker rule 6 enforces (batch1, 0f59f9f)]
 - Verify: README claims "no crates, no network, no external dependencies" but Cargo.toml
   uses `cc` as build-dep. Fix the sentence to the honest form: "runtime dependency surface
   = zero crates; build-time = `cc` only; network never required after bootstrap."
@@ -595,14 +595,14 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
   updated with verified commands.
 - Files: `packaging/`, `README.md`.
 
-### W062, LSP version compatibility policy [P3] [dev-2] [S] [open]
+### W062, LSP version compatibility policy [P3] [dev-2] [S] [done: docs/specs/LSP-VERSIONING.md gains the skew/minimum-handshake/client-detection section (batch1, c85a65f): same-crate binary targets, operonLsp.version + serverInfo.version detection policy, written handshake sequence, client rules for higher/lower versions]
 - Goal: operon ↔ operon-ls ↔ editor-extension compatibility matrix; operon-ls reports the
   Operon version it was built with in initialize.
 - Done when: initialize result carries version + capabilities; policy paragraph in
   CONTRIBUTING.md (LSP ships in-lockstep with the binary).
 - Files: `src/ls.rs`, `CONTRIBUTING.md`.
 
-### W063, Language compatibility policy [P1] [dev-2] [M] [partial]
+### W063, Language compatibility policy [P1] [dev-2] [M] [done: docs/specs/COMPATIBILITY.md completed (batch1, 73d0554): change classes (additive/semantic/repair-only) with four worked examples, 3-rung calendar-gated ladder citing the W067 stage 3 precedent, amendment staging per Iron Rules, post-2.2 compat table (6 amendments), honest limitations; D-002/D-009 cross-referenced]
 - Goal: written policy: 2.x runs all 2.x programs; Total Grammar repairs never change
   output within a minor; breaking changes require major; deprecations survive N releases
   (feeds W064); each release ships a compat changelog section.
