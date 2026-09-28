@@ -10959,7 +10959,10 @@ fn compose_pair(a: u32, b: u32) -> Option<u32> {
     if (0x1100..=0x1112).contains(&a) && (0x1161..=0x1175).contains(&b) {
         return Some(0xAC00 + ((a - 0x1100) * 21 + (b - 0x1161)) * 28);
     }
-    if (0xAC00..=0xD7A3).contains(&a) && (a - 0xAC00) % 28 == 0 && (0x11A8..=0x11C2).contains(&b) {
+    if (0xAC00..=0xD7A3).contains(&a)
+        && (a - 0xAC00).is_multiple_of(28)
+        && (0x11A8..=0x11C2).contains(&b)
+    {
         return Some(a + (b - 0x11A7));
     }
     crate::unicode_tables::compose_table(a, b)
