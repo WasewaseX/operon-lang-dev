@@ -146,6 +146,12 @@ pub fn edit_distance(a: &str, b: &str) -> i32 {
     {
         return DP_BUDGET_SENTINEL;
     }
+    // SAFETY: rt_edit_distance reads exactly a.len()/b.len() bytes from each
+    // pointer for the duration of the call only; both pointers come from live
+    // `&str` borrows held across the call, so they are valid and aligned.
+    // Cell-count budget (DP_CELL_BUDGET) and per-operand caps (FFI_OPERAND_CAP)
+    // are enforced above, so the kernel cannot over-read or overflow its
+    // bit-parallel DP buffers.
     unsafe {
         rt_edit_distance(
             a.as_ptr() as *const c_char,
@@ -153,12 +159,15 @@ pub fn edit_distance(a: &str, b: &str) -> i32 {
             b.as_ptr() as *const c_char,
             b.len(),
         )
-    }
+    } // ast-grep-ignore: no-unsafe-block-in-src
 }
 
 /// Codon-usage style score 0..100 (C++ kernel).
 pub fn codon_score(s: &str) -> i32 {
-    unsafe { rt_codon_score(s.as_ptr() as *const c_char, s.len()) }
+    // SAFETY: rt_codon_score reads exactly s.len() bytes from the pointer for
+    // the duration of the call only; the pointer comes from a live `&str`
+    // borrow held across the call, and the kernel performs no writes.
+    unsafe { rt_codon_score(s.as_ptr() as *const c_char, s.len()) } // ast-grep-ignore: no-unsafe-block-in-src
 }
 
 #[cfg(test)]

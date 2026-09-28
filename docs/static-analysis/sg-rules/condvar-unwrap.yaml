@@ -1,0 +1,9 @@
+id: conventional-condvar-unwrap
+message: Condvar poisoning unwrap — conventional and accepted (poisoning means an invariant already broke); tracked so real unwraps stay visible
+severity: info
+language: Rust
+rule:
+  pattern: $A.wait_timeout($B, $C).unwrap()
+paths:
+  include:
+    - src
