@@ -131,6 +131,19 @@ repair:
 summary: 0 error(s), 0 warning(s), 0 style, 1 repair note(s)
 ```
 
+Deprecating a gene (W064): mark it once, callers get a check warning with your
+migration text, the runtime never changes:
+
+```operon
+@deprecated("use twice() instead", since="2.4")
+gene old_double(n) { return n * 2 }
+```
+
+```console
+$ operon check app.op
+warning  app.op: 7: call to deprecated gene 'old_double' (since 2.4), use twice() instead, silence with '// allow: deprecated-use'
+```
+
 ## The gene-expression regulation layer
 
 Real mechanisms, real semantics, the professor-level feature set (fidelity is per-row; SPEC §16 carries the term audits):
