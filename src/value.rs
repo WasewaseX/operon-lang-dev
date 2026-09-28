@@ -154,6 +154,36 @@ impl FromIterator<(Value, Value)> for MapStore {
 pub type MapRef = Rc<RefCell<MapStore>>;
 pub type EnvRef = Rc<crate::interp::Env>;
 
+/// W015: shared channel state. The buffer holds the WIRE form (SendValue),
+/// the same serialization every value crosses a thread boundary through, so
+/// a channel is a thread-safe conduit by construction: nothing aliased ever
+/// sits in the queue (SPEC §13, §19d). Unbounded FIFO by design; growth is
+/// charged to the aggregate allocation ceiling at send time. The handle
+/// type (Value::Channel) itself stays non-Send like every other Value, it
+/// crosses spawn boundaries only through the snapshot's dedicated live
+/// handle lane (SnapVal::Channel), never through data serialization.
+pub struct ChannelShared {
+    pub state: std::sync::Mutex<ChanState>,
+    pub wake: std::sync::Condvar,
+}
+
+pub struct ChanState {
+    pub queue: std::collections::VecDeque<crate::genes::SendValue>,
+    pub closed: bool,
+}
+
+impl ChannelShared {
+    pub fn new() -> Self {
+        ChannelShared {
+            state: std::sync::Mutex::new(ChanState {
+                queue: std::collections::VecDeque::new(),
+                closed: false,
+            }),
+            wake: std::sync::Condvar::new(),
+        }
+    }
+}
+
 /// Message a sequence worker sends to its consumer over the rendezvous channel.
 pub enum SeqMsg {
     Yield(crate::genes::SendValue),
@@ -215,6 +245,12 @@ pub enum Value {
     /// W06 (D-014): first-class Option/Result variants. NoneV carries no
     /// payload; the other three always do.
     Variant(VTag, Option<Box<Value>>),
+    /// W015: a channel handle (unbounded FIFO buffer, created empty). The
+    /// handle is a behavior value like a gene: it never serializes through
+    /// the data membrane (send refuses it as a payload, nested handles
+    /// degrade to null), it crosses spawn boundaries LIVE via the snapshot
+    /// handle lane, and identity (Arc::ptr_eq) is the equality rule.
+    Channel(Arc<ChannelShared>),
 }
 
 pub struct Stress {
@@ -288,6 +324,7 @@ impl Value {
             Value::Seq(_, _) => "sequence",
             Value::Obj(_, _) => "phenotype",
             Value::Variant(t, _) => t.family(),
+            Value::Channel(_) => "channel",
         }
     }
 
@@ -302,6 +339,9 @@ impl Value {
             Value::List(l) => !l.borrow().is_empty(),
             Value::Map(m) => !m.borrow().is_empty(),
             Value::Gene(_, _) | Value::Seq(_, _) | Value::Obj(_, _) => true,
+            // W015: a channel handle is truthy like the other behavior
+            // handles (genes, sequences, phenotypes).
+            Value::Channel(_) => true,
             // W06: a carried success is truthy; a carried failure is falsy,
             // `if (result)` reads naturally without unwrapping.
             Value::Variant(VTag::SomeV, _) | Value::Variant(VTag::OkV, _) => true,
@@ -392,6 +432,10 @@ impl Value {
                 None => "<sequence lambda>".into(),
             },
             Value::Obj(d, _) => format!("<phenotype {}>", d.name),
+            // W015: address-free repr on purpose. A pointer-bearing repr
+            // would make `print(ch)` diverge between the two cores (and
+            // between runs); channels render anonymously like lambdas do.
+            Value::Channel(_) => "<channel>".into(),
         }
     }
 
@@ -469,6 +513,10 @@ impl Value {
             }
             (Value::Gene(d1, _), Value::Gene(d2, _)) => Arc::ptr_eq(d1, d2),
             (Value::Seq(d1, _), Value::Seq(d2, _)) => Arc::ptr_eq(d1, d2),
+            // W015: channels are behavior handles, identity is the equality
+            // rule (a copied handle to the same buffer IS the same channel;
+            // two distinct buffers never compare equal even when empty).
+            (Value::Channel(a), Value::Channel(b)) => Arc::ptr_eq(a, b),
             // builder-B parity finding (W34 stage 2, PR #28 pin): instances are
             // DATA, not handles, equal iff same class name AND deep-equal
             // field values. The old Arc::ptr_eq on the shared PhenoDef made

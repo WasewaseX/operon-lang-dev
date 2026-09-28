@@ -1,0 +1,137 @@
+# differential: W015 channels + select (sequential-projection shapes)
+# Single-threaded buffered path only: every send precedes its recv/select,
+# so the concurrent engine and the sequential oracle agree byte for byte.
+# The wire-membrane round trips pin the serialization both cores apply at
+# send time (map keys stringify, nested handles degrade, variants ride).
+phenotype Crumb {
+    let weight = 0
+}
+gene relay(ch) {
+    return "unused"
+}
+
+main {
+    # FIFO across mixed types
+    let ch = channel()
+    send(ch, 1)
+    send(ch, "two")
+    send(ch, [3, 4])
+    print(recv(ch))
+    print(recv(ch))
+    print(recv(ch))
+    print("type: " + type(ch))
+
+    # wire membrane: map keys stringify, nested handles degrade
+    let w = channel()
+    send(w, {7: "int key", 2.5: "float key"})
+    print(recv(w))
+    send(w, [channel(), null])
+    print(recv(w))
+
+    # variants ride with tag and payload
+    send(w, ok(41))
+    print(recv(w))
+    send(w, none())
+    print(recv(w))
+
+    # closed semantics
+    let c = channel()
+    send(c, 9)
+    close(c)
+    print(recv(c))
+    print(recv(c))
+    print(close(c))
+    print(close(c))
+    print(recv(c))
+
+    # send-after-close stress family
+    stress {
+        send(c, 1)
+    } rescue (e) {
+        print("closed: " + e.kind + " / " + e.message)
+    }
+
+    # membrane refusals
+    let m = channel()
+    let p = new Crumb()
+    p.weight = 5
+    stress {
+        send(m, p)
+    } rescue (e) {
+        print("mem1: " + e.kind + " / " + e.message)
+    }
+    stress {
+        send(m, m)
+    } rescue (e) {
+        print("mem2: " + e.kind)
+    }
+    stress {
+        send(m, relay)
+    } rescue (e) {
+        print("mem3: " + e.kind)
+    }
+    stress {
+        send(m, gene (x) => x)
+    } rescue (e) {
+        print("mem4: " + e.kind)
+    }
+
+    # the standard type family for non-channels
+    stress {
+        send(5, 1)
+    } rescue (e) {
+        print("type1: " + e.kind)
+    }
+    stress {
+        recv("nope")
+    } rescue (e) {
+        print("type2: " + e.kind)
+    }
+    stress {
+        close(null)
+    } rescue (e) {
+        print("type3: " + e.kind)
+    }
+    stress {
+        select(m, 7)
+    } rescue (e) {
+        print("type4: " + e.kind)
+    }
+
+    # select polls strictly in declaration order and consumes nothing
+    let a = channel()
+    let b = channel()
+    let d = channel()
+    send(b, "b")
+    print("sel1: " + str(select(a, b, d)))
+    send(a, "a")
+    send(b, "b2")
+    print("sel2: " + str(select(a, b, d)))
+    print("sel3: " + str(select(b, a)))
+    print(recv(a) + " " + recv(b) + " " + recv(b))
+
+    # closed-with-buffered is still ready; drained closed set answers -1
+    let f = channel()
+    send(f, "kept")
+    close(f)
+    print("sel4: " + str(select(f, d)))
+    close(a)
+    close(b)
+    close(d)
+    print("sel5: " + str(select(f, d)))
+    print("sel6: " + str(select(a, b, d)))
+    print("sel7: " + str(select()))
+    print("drained: " + str(recv(f)))
+
+    # 100-value storm keeps FIFO exactly
+    let big = channel()
+    for i in range(100) {
+        send(big, i)
+    }
+    let acc = 0
+    for i in range(100) {
+        acc = acc + recv(big)
+    }
+    print("sum: " + str(acc))
+    print("done")
+}
