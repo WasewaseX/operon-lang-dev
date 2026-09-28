@@ -21,6 +21,7 @@ exe-relative (installed trees) or from the interpreter's own tree; a
 | `std/json.op` | JSON navigation: `json_type`, `json_is_object`, `json_is_array`, `json_get_or`, `json_get`, `json_merge`, `json_pick`, `json_omit`, `json_flatten`, `json_flatten_into`, `json_compact` |
 | `std/math.op` | numeric helpers: `clamp`, `lerp`, `mean`, `variance`, `stddev`, `median`, `hill`, `sigmoid`, `digits`, `round`, `round_to`, `sign`, `gcd`, `lcm`, `factorial`, `isqrt`, `divmod`, `wrap` |
 | `std/motifs.op` | canonical regulatory-network circuits over the `regulate` layer: `motif_install` wires them, `motif_hill` is the engine's own dose-response transfer function, `motif_autoreg` / `ar` (negative autoregulation; `ar` is the short alias), `fc`/`motif_ffl` (coherent feed-forward persistence filter), `ic`/`motif_pulse` (incoherent feed-forward pulse compression), `tx`/`ty`/`motif_flip` (mutual-repression toggle), `motif_states` (the whole board's levels) |
+| `std/path.op` | lexical path helpers over "/"-separated strings (pure and deterministic, no filesystem access): `join`, `split`, `base`, `dir`, `ext`, `is_abs`, `norm` |
 | `std/random.op` | deterministic randomness over the core `random()`/`randomize(seed)` stream (mirrored xorshift64*, byte-identical under a fixed seed): `rand_below`, `rand_int` (inclusive both ends), `rand_pick`, `rand_shuffle` (Fisher-Yates, new list), `rand_weighted` (cumulative weights over the sum — weights MUST be non-negative; negative weights are undefined), `rand_chance` |
 | `std/seq.op` | sequence (worker-cell generator) combinators: `map_seq`, `filter_seq`, `take_seq`, `concat_seq`, `fib_seq`, `range_seq` — combinators take the SOURCE as a sequence-gene NAME (transcripts do not cross membranes); transformation genes travel freely |
 | `std/set.op` | set algebra over plain lists (a set is a list with unique members; equality is order-independent; every function is pure and returns a NEW list): `set_from`, `set_has`, `set_add`, `set_del`, `set_union`, `set_intersect`, `set_diff`, `set_symdiff`, `set_subset`, `set_eq`, `set_count` |
@@ -54,3 +55,21 @@ Discovery rules for agents and humans:
 - module genes are documented by their one-line headers in each file;
 - anything the module exports is importable — nothing is hidden;
 - new modules MUST land with a row here and proof coverage (SPEC §17).
+
+## std/path
+
+Lexical path helpers over plain "/"-separated strings. Pure string
+surgery: no filesystem access, no capability grants, no clock, no
+randomness. A path is absolute iff it starts with "/"; empty segments
+(leading, trailing, or doubled separators) carry nothing. Proof corpus:
+`tests/path_std.op`; differential pin: `tests/differential/path_std.op`.
+
+| gene | contract |
+|---|---|
+| `join(a, b)` | one path from two segments. Trailing separators on `a` are trimmed and the empty string contributes nothing; an absolute `b` (leading "/") replaces `a` outright; an `a` that is all separators counts as the root (`join("/", "b")` is "/b", `join("/", "")` is "/"); `b`'s trailing separators are kept |
+| `split(p)` | the non-empty segments of `p`, in order ("/a//b/" is ["a", "b"]; "", "/", and "///" are []) |
+| `base(p)` | the final segment. A trailing separator means the path names a directory, and a directory has no base: `base("a/b.txt")` is "b.txt" while `base("a/b/")`, `base("/")`, and `base("")` are "" |
+| `dir(p)` | everything before the last "/" of `p`, trailing separators trimmed: "" when there is no separator, "/" for the root and for paths directly under it (`dir("/b")` is "/"). A trailing separator on `p` lands in the dir (`dir("a/b/")` is "a/b") |
+| `ext(p)` | the final segment's extension WITHOUT the dot, "" when there is none. Starts at the LAST dot of the base name; a leading dot alone is a hidden dotfile, not an extension (".oprc" is "", ".oprc.bak" is "bak"); dots in directory names never count ("a.b/c" is "") |
+| `is_abs(p)` | true iff `p` starts with "/" |
+| `norm(p)` | lexical collapse: doubled separators vanish, "." segments vanish, "seg/.." pairs cancel. A ".." climbing past the top of a relative path stays ("../a" is "../a"); on an absolute path it is absorbed at the root ("/../a" is "/a") and absolute results keep their leading "/". A relative path that collapses to nothing is "" (no "." is synthesized) |
