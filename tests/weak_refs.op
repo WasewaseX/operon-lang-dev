@@ -1,0 +1,52 @@
+# W013: weak references and the live-cycle counter (D-013 option a+c).
+# A weak handle does NOT keep its target alive; there is no GC, so once the
+# last strong reference drops, strengthen() answers null (soft note). The
+# cycles field in memory() counts value subgraphs the engine detected as
+# involved in reference cycles. Companion: tests/differential/weak_refs.op.
+
+frame proof {
+    # --- alive round trips: strengthen returns the SAME value
+    let m = {a: 1, b: 2}
+    let w = weak(m)
+    assert(strengthen(w) == m, "strengthen returns the map while alive")
+    let l = [1, 2, 3]
+    let wl = weak(l)
+    assert(strengthen(wl) == l, "strengthen returns the list while alive")
+    phen shape {
+        let v = 7
+    }
+    let o = new shape()
+    let wo = weak(o)
+    let back = strengthen(wo)
+    assert(back == o, "phenotype identity survives the weak round trip")
+    assert(back.v == 7, "fields intact through strengthen")
+
+    # --- refusals: weak() needs a container or phenotype instance
+    stress {
+        weak(5)
+    } rescue (e) {
+        assert(e.kind == "unfolded", "weak on int is unfolded")
+        assert(e.message.contains("weak() needs"), "weak refusal message")
+    }
+    stress {
+        strengthen(m)
+    } rescue (e) {
+        assert(e.kind == "unfolded", "strengthen on a strong value is unfolded")
+    }
+
+    # --- a weak handle is a value: it can cross maps and compare to itself
+    let holder = {w: weak(l)}
+    assert(strengthen(holder.w) == l, "weak handle stored in a map still works")
+
+    # --- cycle accounting: a self-referencing list registers exactly one.
+    # Cycles PERSIST once detected (D-013: honest accounting, no GC), so a
+    # detected cycle stays in the count for the rest of the run.
+    let c = [1]
+    push(c, c)
+    assert(memory().cycles == 1, "one detected cycle after self-reference")
+    let d = [2]
+    push(d, d)
+    assert(memory().cycles == 2, "second cycle increments")
+
+    promote("weak_refs: all asserts green")
+}
