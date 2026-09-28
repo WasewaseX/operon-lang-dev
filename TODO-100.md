@@ -95,7 +95,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
   `bootstrap/oracle.py`, `SPEC.md`, `tests/differential/`.
 - Depends: none. Blocks W003/W026 typing story.
 
-### W002, Algebraic data types + match v2 [P1] [dev-1] [XL] [Track L2b] [partial: stage 1 match-v2 on main cb25d46 (variant payloads, list/map patterns, or-patterns, guards, capture scopes, oracle mirror, match_v2.op 45 asserts + rt_p17a); REMAIN: unreachable-arm detection in check (feeds W042)]
+### W002, Algebraic data types + match v2 [P1] [dev-1] [XL] [Track L2b] [done: stage 1 match-v2 on main cb25d46 (variant payloads, list/map patterns, or-patterns, guards, capture scopes, oracle mirror, match_v2.op 45 asserts + rt_p17a) + stage 2 batch 4 (unreachable-match-arm check rule W06 with a pattern-subsumption algebra, guard-transparent later arms, or-alternatives all-covered law, allow-comment suppression, tests/match_lint.rs, corpus finding-clean)]
 - Goal: match gains or-patterns, struct/map patterns, nested patterns, guards in every arm,
   and variant-style payloads; Option/Result-shaped matching becomes idiomatic once W006 lands.
 - Done when: `match x { 1 | 2 => .., [a, rest] => .., {k: v} if v > 0 => .. }` parses and
@@ -203,7 +203,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
 - Deliverable until un-deferred: one design paragraph in SPEC §VM (Cranelift vs hand-rolled
   option table) + the measurement plan that would justify it. Owner sign-off required to start.
 
-### W013, Memory-cycle strategy [P0] [dev-1] [L] [partial: D-013 decision recorded + SPEC §19 + memory_model.op on main 563a331; REMAIN: memory() live-cycle count + weak refs API (recommend (a)+(c) per audit)]
+### W013, Memory-cycle strategy [P0] [dev-1] [L] [done: batch 4 on branch batch4-mem merged (weak/deref/strengthen builtins over Value::Weak, memory().cycles live-cycle accounting per D-013, membrane refusals, rt_p21a + rt_p22a containment payloads, SPEC 14/19 contracts, weak_refs proof + differential byte-identical; break_cycle() consciously not landed: silent mid-flight graph mutation breaks identity semantics, weak refs are the sanctioned mechanism)]
 - Already done (evidence): sec-r5 DAG-memoized `stringify`/`repr`/`deep_eq` kills quadratic
   walks; cycle-safe JSON; equality/repr safety proven.
 - Remaining: pick reclamation strategy, (a) weak references API, (b) cycle collector at
@@ -297,13 +297,13 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
   in completion (feeds W045).
 - Files: `src/parser.rs`, `src/interp.rs`, `src/ls.rs`, `SPEC.md`, `tests/`.
 
-### W025, Dotted namespaces [P2] [dev-1] [M] [partial: '::' separator sugar on main 6b984f6 (use std::bio, multi-segment a::b::c, mixable with / . - separators, differential namespaces.op); REMAIN: nested sub-module declarations]
+### W025, Dotted namespaces [P2] [dev-1] [M] [done: stage 1 '::' separator sugar on main 6b984f6 + stage 2 batch 4 (contextual `module NAME { }` nested declarations, file-first multi-segment descent with bare-name-only std shortcut, wildcard `use a::b::*` tail, `::` read/call sugar, oracle mirror, differential namespaces2 byte-identical, namespaces2 proof 11 asserts, SPEC 8 stage-2 contract; one pre-existing Rust-only resolution divergence found and fixed by the new pins)]
 - Goal: `math.vector.add`-style nesting: modules may declare sub-modules; `use bio::seq::*`.
 - Done when: nested module syntax + qualified calls resolve per W069 algorithm; std modules
   keep flat compat via generated re-export blocks; SPEC §13.
 - Files: `src/parser.rs`, `src/interp.rs`, `std/*.op`, `SPEC.md`.
 
-### W026, Typed collections library [P2] [dev-1] [L] [partial: std/set (loop-10) + std/deque and std/heap on main 88d9b63 (deterministic, comparator-gene capable); REMAIN: Graph<T>, W003 annotation sugar over the containers]
+### W026, Typed collections library [P2] [dev-1] [L] [partial: std/set (loop-10) + std/deque and std/heap on main 88d9b63 + std/graph batch 4 (pure-Operon container: nodes/edges/add_edge/neighbors/topo/cycles, 62 proof asserts, differential byte-identical, api docs); REMAIN: W003 annotation sugar over the containers]
 - Goal: `Set<T>/Deque<T>/Queue<T>/Stack<T>/Heap<T>/Graph<T>` as `std/collections.op`
   constructs (dynamic today) that gain W003 annotation sugar; no new Rust builtins
   (oracle lane stays closed for std work).
@@ -312,7 +312,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
 - Files: `std/collections.op`, `tests/`, `STDLIB.md`.
 - Depends: W003 for annotations; containers themselves can land untyped first.
 
-### W027, Stdlib breadth to mainstream [P1] [dev-1 + any dev] [L] [partial: 22 modules / 226 functions on main f0527e5 era (adds path 09e81ba, deque/heap/time 88d9b63, serialize, unicode b0e12ba, bigint 1152851); REMAIN per audit list: process, env, logging, terminal, compression, hashing, url, http-high-level, walk, binary, db-stub]
+### W027, Stdlib breadth to mainstream [P1] [dev-1 + any dev] [L] [partial: 26 modules / 284 functions (adds path 09e81ba, deque/heap/time 88d9b63, serialize, unicode b0e12ba, bigint 1152851, graph batch4 (W026 lane), url/terminal/logging batch 4 wave 1); REMAIN per audit list: process, env, compression, hashing, walk, binary, http-high-level, db-stub (process/env/walk/compression/db need Rust builtins per their nature, hashing/binary are pure-.op feasible and queued wave 2)]
 - Already done (evidence): 15 modules `args bio collections csv fmt fs iter json math
   motifs random seq set strings testing` (loop-10 wave S landed set/testing/random).
 - Remaining per audit: `path`, `process`, `env`, `logging`, `terminal`, `compression`,
@@ -610,7 +610,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
   classified as additive (policy's first worked example).
 - Files: `SPEC.md`, `CHANGELOG.md` (exists? verify, else CONTRIBUTING section).
 
-### W064, Deprecation system [P2] [dev-2] [M] [open]
+[done: batch 4 on branch batch4-deprecate merged (@deprecated(message, since) mark as pure gene metadata, deprecated-use check rule W12 with migration text + ladder gate, allow-comment suppression, fmt canonical round-trip, oracle lenient parse mirror, runtime-neutrality proof + 5 Rust pins, SPEC 3 contract, README recipe; honest inventory: no core or std gene carries the mark yet, const is live semantics per W005)]
 - Goal: `@deprecated("use X instead", since="2.4")` marks on genes/keywords; emits check
   warnings with migration text; `--strict` fails; removal scheduled by W063 policy.
 - Done when: mark infrastructure + first real deprecation (`const → let` synonym per W005);
