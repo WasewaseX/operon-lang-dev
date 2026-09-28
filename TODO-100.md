@@ -199,7 +199,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
 - Files: `src/bytecode.rs` (pass infra), `src/vm.rs`, `BENCH.md`.
 - Depends: W009.
 
-### W012, JIT [P3] [dev-1] [XL] [deferred: audit orders VM → profiling → opt → JIT; deliverable until un-deferred lives in docs/vm-design.md (fiber-field reservation §6, async posture) — owner sign-off required to start]
+### W012, JIT [P3] [dev-1] [XL] [deferred: audit orders VM → profiling → opt → JIT; deliverable until un-deferred lives in docs/vm-design.md (fiber-field reservation §6, async posture); owner sign-off required to start]
 - Deliverable until un-deferred: one design paragraph in SPEC §VM (Cranelift vs hand-rolled
   option table) + the measurement plan that would justify it. Owner sign-off required to start.
 

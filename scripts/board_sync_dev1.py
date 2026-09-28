@@ -19,7 +19,7 @@ STATUS = {
     "W009": "partial: A1 design note adopted 372f30a (docs/vm-design.md); A2 OIR1 bytecode machine on main 09cf7c6, vm lane 184/184 vs the same oracle outputs; REMAIN: full-corpus parity campaign + fib25 ≥2x bench gate confirmation",
     "W010": "partial: stage 1 disasm rides OIR1 09cf7c6; REMAIN: annotated dump stability tests + every opcode documented in SPEC §VM",
     "W011": "partial: stage 1 on main 61249a8 (constant folding + jump threading behind --opt 1); REMAIN: DCE, trivial-gene inlining, monomorphic specialization, per-pass bench rows + toggle matrix",
-    "W012": "deferred: audit orders VM → profiling → opt → JIT; deliverable until un-deferred lives in docs/vm-design.md (fiber-field reservation §6, async posture) — owner sign-off required to start",
+    "W012": "deferred: audit orders VM → profiling → opt → JIT; deliverable until un-deferred lives in docs/vm-design.md (fiber-field reservation §6, async posture); owner sign-off required to start",
     "W013": "partial: D-013 decision recorded + SPEC §19 + memory_model.op on main 563a331; REMAIN: memory() live-cycle count + weak refs API (recommend (a)+(c) per audit)",
     "W014": "done: main 563a331, SPEC §19 + differential memory_model.op",
     "W015": "partial: task groups wait_all/wait_any on main f0a3c1d; REMAIN: channel()/send/recv/close + select over multiple channels (L2a)",
