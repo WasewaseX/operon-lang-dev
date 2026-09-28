@@ -54,7 +54,7 @@ Arithmetic:
 - Newlines terminate statements; `;` allowed and ignored (also `;;`, stray). Blocks are `{ ... }`.
 - Keywords (canonical, the parser's reserved set; the generated inventory with per-keyword programmer analogies lives in [docs/KEYWORDS.md](docs/KEYWORDS.md) and is never hand-typed here).
 - Literal words `true false null` and the logical words `and or not` are recognized in expression positions (not part of the reserved keyword table).
-- Marks: `@acetylate` `@methylate` `@m6a` `@copies` `@riboswitch` `@burst`.
+- Marks: `@acetylate` `@methylate` `@m6a` `@copies` `@riboswitch` `@burst`. The six declaration marks of the biology layer: lexical presence here, attachment in §7, semantics in §11 (part contract §11a).
 - `#` starts a line comment; `##` starts a **doc comment** (W074): consecutive `##` lines form a doc block that attaches to the declaration (`gene`/`sequence`/`phenotype`/`splice`/`fate`, including `@mark` lines above them) it immediately hugs, the doc's last line is exactly one line above the declaration keyword line. A doc block at the very top of the file that is separated from everything by a blank line becomes the **module doc**. Doc text is captured verbatim after the `##` marker (one leading space stripped). Docs are **pure metadata**: they never affect evaluation, repair rungs, or differential parity, the Python oracle ignores them as comments, and parity is not required for doc content (`tests/differential/doc_comments.op` pins neutrality). Docs survive `fmt` byte-exact (`fmt∘fmt = fmt` holds corpus-wide), surface in LSP hover and REPL `:doc name`, and are rendered by `operon doc` (W073).
 - `#` inside a string does NOT start a comment.
 
@@ -589,11 +589,130 @@ sec-r5 containment semantics worth stating plainly:
 **List methods:** `.map(f) .filter(f) .reduce(f, init) .each(f) .sort(cmp?) .reverse() .contains(x) .index_of(x) .slice(a,b) .join(sep) .len()` (cmp returns true when a before b)
 **Map methods:** `.keys() .values() .items() .has(k) .del(k) .len()`
 
+**Bio-layer note (§11a):** the codon-kernel family and sequence utilities in the core row above (`codon` `distance` `similar` `transcribe` `translate` `reverse_complement` `gc_content` `find_orf`) and the bio half of the regulation row (`toggle_*` `repressi_*` `grn_*` `methylate` `demethylate` `m6a_write` `m6a_erase` `passage` `expr_*`) are the biology layer's runtime surface; the mechanisms live in §11 and the crossings are stated once in §11a.
+
 ## 11. Gene-expression regulation layer (v2 core novelties)
+
+### 11a. The biology layer: contract header, freeze, and boundary (W091)
+
+**Scope.** §11 (this section) is the semantics home of the biology layer, and §16 is its
+vocabulary map for docs. The layer: the gene regulatory network and its call gates, the
+marks, stoichiometric silencing, alternative splicing and runtime variant swap, fate
+machines, signal pools and quorum, polycistronic `operon` units (Rho termination, ribosome
+queues), the telegraph promoter and bursting, the repressilator ring, the decay clock,
+two-tier translation, epigenetic dilution, and the `.rna` / `.cell` surfaces that configure
+them. The layer can gate, redirect, degrade, and meter calls; it cannot redefine what a
+value, a call, or a closure is: no statement in §11 or §16 changes the evaluation rules of
+§1-§10, the verification rules of §12, the concurrency rules of §13, the toolchain rules of
+§15, or the memory model of §19.
+
+**Freeze (W036).** No new biology-flavored syntax enters the core language: new mechanisms
+land as `std/*.op` libraries, as `.cell` keys, or as builtins with a DECISIONS entry. The
+governance, the frozen inventory, and the enforcement story (including its honest gap) live
+in `docs/specs/CORE-BIO-BOUNDARY.md`; the compatibility classes are
+`docs/specs/COMPATIBILITY.md` (W63/W64). What that freezes, and what this section
+documents: the 25 keywords frozen at W036 (regulation 10, signal pools 4, operons and
+oscillators 3, variant swap 3, fate machines 3, entry and editing 2), the 6 marks
+(`@acetylate` `@methylate` `@m6a` `@copies` `@riboswitch` `@burst`), the contextual
+statement spellings (`translates` `attenuates` `secrete` `quorum` `quench`, the edge
+modifiers `sum` `any` `occupy` `hill`, per-cistron `rbs`), and the `.cell` tuning keys.
+The live keyword table is generated ([docs/KEYWORDS.md](docs/KEYWORDS.md)) and is never
+counted by hand here.
+
+**Modeling contract.** Every mechanism below carries an honesty grade (REAL / APPROX /
+ABSTRACTION / SIMPLIFICATION) and an output-meaning statement in
+`docs/spec/BIO-CONTRACT.md`; a change confined to §11/§16 plus that contract is a
+bio-modeling change, never a language change (BIO-CONTRACT governance rule 4).
+
+**Determinism.** Bio evaluation is deterministic and seeded: same binary version + same
+source + same seed + same flags + same `.cell` gives byte-identical output, core and bio
+surface alike (`docs/spec/DETERMINISM.md`). Every stochastic mechanism in this layer draws
+from a deterministic seeded stream: the shared mirrored xorshift stream (silence capture,
+promoter bursts), worker streams derived from the task id (the D9 bullet below), or
+streams keyed to absolute position so a cached replay cannot diverge (repressilator
+noise); platform entropy never enters, and the p∈{0,1} no-draw discipline keeps legacy
+programs bit-identical.
+
+**Voice (D-008).** Within this specification, §11 and §16 are the one place the metaphor is
+load-bearing; every other section of this document, and the documents outside this part,
+keep the D-008 voice: zero biology assumed, gene vocabulary is an intuition aid with
+one-line programmer analogies ([docs/KEYWORDS.md](docs/KEYWORDS.md)), never a
+prerequisite. Each §11 bullet carries its own term audit where the name and the honest
+effect diverge.
+
+**The boundary, in one paragraph (a newcomer may quote this).** Operon has two layers. The
+core layer (§1-§10, §12, §13, §15, §19) is an ordinary dynamic language: values, genes
+(functions), phenotypes (classes), modules, stress containment, concurrency, toolchain,
+memory. The biology layer (§11, plus the vocabulary map in §16) is a frozen, optional set
+of bio-named mechanisms that ride on the core: they keep their own state, and they may
+gate, redirect, degrade, or meter calls, but they never change what a value, a call, or a
+closure is. The test: a construct is bio-layer iff its behavior cannot be predicted
+without reading §11; if the core sections alone predict it, it is core however biological
+its name (`fate` is a state machine, `splice`/`variant` is an implementation swap,
+`tad`/`anchor` is module insulation, `frame`/`proof` is verification). With no regulation
+declared and no marks attached, every program evaluates exactly as the core sections say,
+and all three implementations agree on that byte-for-byte.
+
+**Boundary map** (every bio construct with its anchor):
+
+| Constructs | Anchor | Layer |
+|---|---|---|
+| Frozen bio keywords: `regulate` `activates` `inhibits` `strength` `threshold` `enhance` `silence` `decoy` `bind` `toggle` / `ligand` `inducer` `cofactor` `autoinducer` / `operon` `period` `repressilator` / `splice` `variant` `replace` / `fate` `state` `enter` / `ires` `edit` | semantics §11, statement forms declared in §11, CLI §15 | bio (frozen) |
+| Marks `@acetylate` `@methylate` `@m6a` `@copies` `@riboswitch` `@burst` | lexical §3, attachment §7/§7a, semantics §11 | bio (frozen) |
+| Contextual spellings `translates` `attenuates` `secrete` `quorum` `quench`, edge modifiers `sum` `any` `occupy` `hill`, per-cistron `rbs` | §11 | bio (frozen) |
+| GRN evaluation: levels, waves, once-per-fire inhibition, thresholds, Hill coefficients, `occupy`, `sum` pooling, `decoy`, decay | §11 (`regulate` bullet) | bio |
+| Oscillator: `repressilator` ring, kinetics, seeded noise | §11 | bio |
+| Signal pools: `ligand`/`bind` allostery, `autoinducer` quorum, `quench` | §11 | bio |
+| Polycistronic units: `operon`, `rbs`, polarity, Rho termination, ribosome queues | §11 | bio |
+| Two-tier translation: `translates`, m6A reader fate | §11 | bio |
+| Epigenetics: methylation levels, `passage` dilution, `generation` | §11, counters §14 | bio |
+| Stochastic expression: telegraph promoter, `@burst`, `burst_set`, `promoter_telemetry` | §11, counters §14 | bio |
+| Variant swap: `splice`/`variant`, `splice_shift` | §11, builtin §10, CLI §15 | bio (semantically generic, grandfathered) |
+| Fate machines: `fate`/`state`/`enter` | §11 | bio (semantically generic, grandfathered) |
+| Entry and editing: `ires`, `.rna` `edit` patches | §11, CLI §15 | bio |
+| Check-time bio analysis: NMD sweep, codon-score grading | §11, §15 | bio |
+| `.cell` bio keys: `methylate.*`, `grn.*`, `rho.*`, `ribosome.*`, `m6a.*`, `enhance.delta`, `ligand.*`, `quorum.dilution`, `repressi.*`, `[expression]`, `operon.polarity` | §11 (`.cell` bullets), schema `docs/specs/CELL-SCHEMA.md` | bio tuning surface |
+| Bio builtins named in §10: `toggle_on` `toggle_state` `repressi_next` `repressi_state` `repressi_start` `grn_fire` `grn_state` `grn_set` `grn_get` `methylate` `demethylate` `m6a_write` `m6a_erase` `passage` `expr_on` `expr_off` | §10 regulation row, mechanisms §11 | bio |
+| Bio builtins introduced with their mechanisms: `burst_set`, `promoter_telemetry`, `splice_shift`, `secrete`, `quorum`, `quench`, `quorum_state`, `ligand`/`ligand_set` pool reads | §11 | bio |
+| Codon-kernel family: `distance` `similar` (kernel `runtime/codon_kernel.cpp`), `codon` scoring; sequence utilities `transcribe` `translate` `reverse_complement` `gc_content` `find_orf` | §10 core row, kernel `runtime/codon_kernel.cpp` | bio (kernel is the Rule-5 walled foreign-function surface) |
+| Bio telemetry: `bursts`, `transcripts`, `generation`, profile flags | §14 | bio counters inside a core map |
+| Bio CLI: `--variant`, `--rna`, `--ires`, `--cell`, `--trace-grn`, `check --nmd`, `operon crispr`, `build --variant` | §15 | bio tooling on the core CLI |
+| Bio state on workers: the regulation snapshot | §13 worker bullet | bio state via the core membrane |
+| Bio-NAMED core (name only, no bio semantics): `tad`/`anchor` (§8 module insulation), `frame`/`proof` (§12 verification), guard-as-uORF (§7), RNAi as the sandbox naming (§9b) | their own sections | CORE |
+
+**Crossings** (each stated once, one sentence):
+
+- Calls: every bio gate (RISC redirect, toggle, GRN veto, methylation, riboswitch,
+  promoter, opt-in Rho) executes on the core evaluator's gene-call funnel at one pinned
+  order (§11 gate-order bullet), after which the call is an ordinary core call or a null
+  return with a note.
+- Scheduling: bio-only scheduling is the gate ordering around a call; no bio gate spawns a
+  thread and no bio mechanism alters the fuel, join, or cancellation rules of §13 (the
+  repressilator's wall-clock timer is a clock input to the ring, §11, not a worker cell).
+- Snapshot: bio state reaches a worker only through the core spawn snapshot membrane
+  (§13, §19d), copied at spawn, never live-shared; the one documented exception is the
+  quorum medium, a process-global pool outside the snapshot with a join-before-read
+  contract (§11 quorum bullet).
+- Codon kernel: `distance()`/`similar()` are a foreign-function surface into the C++
+  kernel with its own budget guard (10M-cell DP ceiling, 64 KiB per-operand cap,
+  over-budget pairs never win a contest); `codon()` and the sequence builtins around them
+  are ordinary total functions.
+- Entropy: every bio draw comes from a deterministic seeded stream (the shared mirrored
+  xorshift stream, a worker stream derived from the task id, or a position-keyed stream for
+  cached ring noise), never from platform entropy, so bio and core randomness stay
+  replayable (`docs/spec/DETERMINISM.md`).
+- Errors: a bio gate never introduces a new failure channel; suppression is the core soft
+  tier (null + note) and bio failures surface through the ordinary §9 stress kinds.
+- Config: bio `.cell` keys ride the one runtime-only `.cell` loader (§11 W22 bullet) and,
+  like every key, can never grant capabilities (§9b).
+- Telemetry: bio counters (`bursts` `transcripts` `generation`) are keys in the core-owned
+  `fingerprint()` map (§14), emitted in sorted order (§11 D9 bullet).
+- Toolchain: every bio CLI verb calls the same parser, evaluator, and checker; there is no
+  separate bio runtime and no second evaluator (§15).
 
 All features are real, implemented, tested, none are decorative.
 
-- **`tad` / `anchor`**, §8. Module insulation with export anchors.
+- **`tad` / `anchor`**, §8. Module insulation with export anchors. (Core module semantics listed here because it shipped in the same v2 wave; the biology layer only borrows the name, §11a.)
 - **`enhance a, b, c;`**, super-enhancer cluster: marks genes with an **activation boost** (v2.2). Under the GRN call gate, an enhanced gene lowers every incoming activating threshold by **0.25** (floored at 0; the dose is tunable via `.cell enhance.delta`, reg-bio: real enhancer strength varies with binding-site number and affinity), an enhanced gene fires where an unenhanced one stays gated (e.g. regulator level 0.4: threshold 0.5 blocks the plain gene, passes the enhanced one). Genes without the mark are unaffected and edges without a threshold stay declarative, so old programs keep running (§5 default: the boost exists only where `enhance` was declared). `operon profile` shows the `enhanced` flag; `operon check` gives the file a codon-score bonus for enhanced hot genes; the NMD untranslated sweep skips enhanced genes.
 - **`@acetylate`**, histone acetylation mark: excluded from silence rewriting and immune to the silencing gates (active chromatin stays active, open chromatin wins, D-005); shown as `active` in profile. (Term audit, reg-bio: acetylation is permissiveness, neutralized lysine charges open the chromatin, not dispatch priority; the mark's honest effect is immunity, nothing else.)
 - **`@methylate`**, histone methylation mark: gene is repressed, **graded** (v2.2). Every executed `@methylate`-marked `gene` definition deepens that gene's silencing level by 1; an `@acetylate`-marked definition relaxes it by 1 (histone marks compete on the same chromatin). A call to a gene whose level has reached the threshold (default **3**, tunable via `.cell` `methylate.threshold = n`) is **blocked**: it returns `null` with a fallback note ("methylation silences: …, call returns null"), never reaches the gene body, and does not count in `fingerprint()`/burst telemetry, repressed means repressed. Below the threshold, calls execute and the first call emits the soft note "methylated call" (later calls are silent, the cell does not narrate every repression; suppressed entirely when `.cell` sets `methylate.quiet = true`). Marked genes are exempt from the NMD untranslated sweep, and `@acetylate` genes are exempt from the methylation gate itself (open chromatin wins). One mark (the common case) never silences, old programs keep running.
@@ -642,7 +761,7 @@ All features are real, implemented, tested, none are decorative.
 - **Cooperative cancellation (W18).** `cancel(id)` asks a live task to stop: it sets the task's cancel flag and the task observes it at its next fuel tick boundary, raising the catchable stress `[cancelled] "task cancelled"`. Nothing is preempted and no data is touched; a task that already finished answers `false` with a note, and so does an unknown id (soft tier). `cancel(0)`/`cancel(negative)` are contained the same way. The observed boundary is exactly the fuel tick boundary, with two deliberate exceptions so a worker can act on its own flag: the entry tick of a `stress` construct does not raise (the handler gets its window), and while a rescue handler runs the boundary raise is suppressed (the step budget still applies, so a handler cannot spin forever). `cancelled()` polls the live flag chain (true iff this task or any ancestor was asked to stop); on the host it is always false. `task_state(id)` reads the lifecycle phase without joining: `running` | `done` | `cancelled` for a live task, the same answer from the post-join tombstone, and null + note for an unknown id (`task_state(0)` is `done`, the inline-closure task). Cancellation is inherited: a worker's chain carries its own flag plus every ancestor flag, so cancelling a cell stops its whole descent at tick boundaries. A task cancelled before its gene ever reached a tick dies with the `[cancelled]` stress; a worker inside a `stress { ... } rescue (e) { ... }` window can rescue it and decide its own exit (that completion counts as `done`). `join` of a cancelled task returns the standard stress map `{kind: "cancelled", message: "task cancelled"}`. Sequential-oracle note: the oracle runs worker bodies inline at spawn time, so the differential corpus pins only the ordering-free shapes (tests/differential/cancel.op); the timing shapes are Rust-lane evidence under tests/timing/ plus the rt_p20a storm.
 - Thread panics are impossible by construction: any stress inside the thread is returned as a Stress Map value.
 - Memory model note (honesty): values are reference-counted; tasks communicate by args/results, not shared mutable state. Data races on shared globals are prevented by design (closures capture is by value at spawn time for non-local references).
-- **Worker cells inherit regulation state (reg-r1; reg-r4 inventory; reg-bio-3 extends).** A spawned task or sequence cell starts with a copy of the parent's GRN edges + levels, silences (stoichiometric RISC incl. escape bookkeeping), polycistronic operon units (membership, order, rbs, transcript counters), m6A levels, generation counter, gene-dosage registry, methylation counters + threshold, toggle pairs, enhance marks + enhancer dose (reg-bio), the telegraph promoter states + burst counters (reg-bio), **and the repressilator ring (node names + the raw ODE levels frozen at the spawn tick + the ring's kinetic parameters, the cell does not live-tick)**, frozen at spawn time. Worker calls dispatch through the same funnel as the host, so a toggle-repressed allele, a silenced (level ≥ threshold) gene, a GRN-vetoed call, or a burst-off promoter returns null inside the cell exactly as it does outside, regulation is part of the cell, not a host-side illusion. Later parent-side regulation changes do NOT propagate to already-running cells (snapshot semantics).
+- **Worker cells inherit regulation state (reg-r1; reg-r4 inventory; reg-bio-3 extends).** A spawned task or sequence cell starts with a copy of the parent's GRN edges + levels, silences (stoichiometric RISC incl. escape bookkeeping), polycistronic operon units (membership, order, rbs, transcript counters), m6A levels, generation counter, gene-dosage registry, methylation counters + threshold, toggle pairs, enhance marks + enhancer dose (reg-bio), the telegraph promoter states + burst counters (reg-bio), **and the repressilator ring (node names + the raw ODE levels frozen at the spawn tick + the ring's kinetic parameters, the cell does not live-tick)**, frozen at spawn time. Worker calls dispatch through the same funnel as the host, so a toggle-repressed allele, a silenced (level ≥ threshold) gene, a GRN-vetoed call, or a burst-off promoter returns null inside the cell exactly as it does outside, regulation is part of the cell, not a host-side illusion. Later parent-side regulation changes do NOT propagate to already-running cells (snapshot semantics). Crossing (§11a): the inherited regulation state is bio-layer state riding the core snapshot membrane (§19d); the membrane rules themselves are unchanged by it.
 - **Task groups (W15).** `wait_all(ids)` joins every id in input order and returns the results position-aligned with the input (join semantics per slot: already-joined or unknown ids contribute null + a note, so alignment never shifts). A failing child contributes its stress map like any join; the group call itself never raises. `wait_any(ids, timeout_ms?)` returns the id of the first task in the list whose worker has finished, in wall-clock completion order (ties resolve by scan order), or null + note when the timeout expires first (default 30 s, ceiling 300 s). Completion ORDER is inherently timing-dependent: the sequential oracle answers the first listed id, so the differential corpus pins only the ordering-free shapes (tests/differential/task_groups.op) and the ordering shape is Rust-lane evidence (tests/timing/wait_any.op). Bounded channels (chan/send/recv/close) and mutexes/atomics remain open on the W15 board entry; the L2a design lands as a separate note before any implementation.
 - **Structured concurrency: `scope { ... }` (W17).** Tasks spawned inside a scope block register on the innermost active scope and are joined at block exit, in spawn order, with results discarded, on EVERY flow path: normal fall-through, `return`/`break`/`continue` crossing the block, and stress. When the block unwinds by stress, cancel-on-error (default on; `.cell scope.cancel_on_error = off` to disable) asks each registered task to stop (§13 cancellation) BEFORE the reap; the original stress then propagates after the reap, so the caller's rescue sees the kind and message it would have seen without the scope. A child's own failure is contained as always (its stress map is discarded by the reap, the tombstone says `done`); scope exit never raises because a child failed. Joining a child manually inside the scope still works; the reap's re-join of the same id is contained (null + note). Nested scopes register independently. Sequence cells (§7b) are NOT scope-tracked (they are pulled to exhaustion by their consumer, not joined). Pinned by `tests/scope.op` + `tests/differential/scope.op` (byte-identical) and the Rust-only timing shapes in `tests/timing/scope_timing.op` (cancel-on-error tombstones, blocking reap).
 - Sequences (§7b) run on the same worker-cell substrate: each sequence body is a worker thread pulling through a rendezvous channel.
@@ -662,6 +781,7 @@ All features are real, implemented, tested, none are decorative.
 - Method: the run's global call clock is sliced into windows of 20 gene calls; each gene's count per window is a sample. A gene fired in bursts has a high variance/mean ratio; a constitutively expressed one sits near 0. Only complete bins count (a trailing partial bin is dropped).
 - `operon profile f.op`, runs instrumented, prints table: gene, calls, **exclusive self-time µs** (children subtracted), flags (`enhanced active repressed`), then a `mature · nascent · maturation` summary and **enhance candidates**, hot genes (called ≥ 10% as often as the most-called gene) that carry no `enhance` annotation.
 - The v2.0 telemetry keys `spliced` / `unspliced` / `velocity` (and the per-gene variance/mean noise key) are retired; `mature`/`nascent`/`maturation` carry the same biology honestly (maturation share, not velocity).
+- Crossing (§11a): the `bursts`, `transcripts`, and `generation` keys are bio-layer counters (mechanisms in §11); the call clock, the bins, `mature`/`nascent`/`maturation`, and the profile table are core telemetry that touches bio state only where the corresponding mechanism is in play.
 
 ## 15. Toolchain (Rust binary `operon`)
 
@@ -702,6 +822,8 @@ operon crispr f.op (--knockout gene | --matrix) [--json]
 operon bench f.op  [--iters n]
 operon version
 ```
+
+Crossing (§11a): the bio-layer flags and verbs in the block above (`--variant`, `--rna`, `--ires`, `--cell`, `--trace-grn`, `check --nmd`, `operon crispr`, `build --variant`) enter the biology layer (§11); the CLI process rules around them are core.
 
 **`operon-ls`**, language server (stdio LSP; lsp-r1 v2 → W45/W46): `initialize` / `shutdown` / `exit`, full-text document sync (ranged edits are ignored, never mis-applied), `textDocument/publishDiagnostics` (Total Grammar parse notes by rung + `tools check` phantom calls, resolved **CWD-independently**: document-relative → CWD → `std/` → exe-relative `std/` → cargo-manifest `std/`; repair-carrying diagnostics embed `relatedInformation` with the canonical interpretation, W46), `textDocument/hover` with gene/splice signatures **and repair provenance** (hovering a repaired token shows what the parser decided it meant), `textDocument/definition` (genes, sequences, splice roots), `textDocument/references` (W45: word-boundary occurrences, string/comment-aware, declaration included), `textDocument/semanticTokens/full` (W45: fixed six-type legend, keyword/function/variable/string/number/comment), `textDocument/prepareRename` + `textDocument/rename` (W45-v2: same scanner engine as references, every code occurrence becomes one WorkspaceEdit edit, strings/comments/`@marks` excluded, interpolated `{..}` expressions included because they are evaluated; identifier-precise, NOT scope-aware, `operon check` after rename is the honest follow-up; all-or-nothing: invalid/reserved/builtin/same-name/already-taken new names refuse the WHOLE rename as a JSON-RPC error -32001, mirroring W67's `operon rna` discipline), `textDocument/documentSymbol`, `textDocument/completion` (in-file genes with signatures, builtins, keywords, top-level bindings), and `textDocument/formatting` (the canonical `operon fmt` engine). Analysis is cached per document version; `didClose` drops the document and clears diagnostics. `operon-ls --explain FILE` prints the `operon explain` Total Grammar report (W38's second door). Contract version + feature list ride the `operonLsp` handshake block (W62; docs/specs/LSP-VERSIONING.md). Programmer-first by D-008: hovering `boost` shows `gene boost(x)` plus its marks (`@acetylate`, `@methylate`, `@m6a`, `enhance`) and a one-line analogy, gene vocabulary is an intuition aid, never a prerequisite. Zero external dependencies: request JSON is parsed by the language's own `json_parse`. Shipped in every release archive including the Windows zip; editor setup (Neovim / VS Code / Helix) is in README "Connect your editor".
 
