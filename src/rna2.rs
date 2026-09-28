@@ -1319,6 +1319,8 @@ fn rewrite_stmt(s: &mut Stmt, cfg: &mut RewriteCfg) {
         | Stmt::Scope(body)
         | Stmt::Frame { body, .. }
         | Stmt::Tad(_, body)
+        // W025 stage 2: fix rewrites reach inside nested sub-module tables
+        | Stmt::Module(_, body)
         | Stmt::Block(body) => rewrite_stmts(body, cfg),
         Stmt::For(_, it, body) => {
             rewrite_expr(it, cfg);
