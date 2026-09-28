@@ -186,6 +186,63 @@ class ObjInst:
     def __init__(self, defn, fields):
         self.defn, self.fields = defn, fields
 
+class Channel:
+    """W015 mirror: unbounded FIFO channel, created empty. The sequential
+    oracle never blocks (the differential corpus writes buffered sends
+    before recvs/selects), so the buffer is a plain list of WIRE-form
+    payloads: the Rust queue stores SendValue, and channel_wire below is
+    its sequential mirror, applied at send time on both cores so the
+    membrane contract is one rule on the same-thread buffered path too."""
+    __slots__ = ("buf", "closed")
+    def __init__(self):
+        self.buf = []
+        self.closed = False
+
+def channel_wire(v, _d=0):
+    """W015 mirror of the Rust channel wire serialization (genes.to_send_d):
+    map keys stringify through display, nested behavior handles (genes,
+    sequences, channels) degrade to null, nested phenotype instances become
+    maps carrying the hidden #phenotype key, variants ride with their
+    payload. Top-level handles never reach this function (send refuses them
+    with a catchable `membrane` stress first)."""
+    if _d > 100_000:
+        return None
+    if v is None or isinstance(v, (bool, int, float, str, bytes)):
+        return v
+    if isinstance(v, list):
+        return [channel_wire(x, _d + 1) for x in v]
+    if isinstance(v, dict):
+        return {(k if isinstance(k, str) else v_display(k)): channel_wire(x, _d + 1)
+                for k, x in v.items()}
+    if isinstance(v, Variant):
+        return Variant(v.tag, None if v.payload is None else channel_wire(v.payload, _d + 1))
+    if isinstance(v, ObjInst):
+        out = {"#phenotype": v.defn.name}
+        for k, x in v.fields.items():
+            out[k] = channel_wire(x, _d + 1)
+        return out
+    # Gene / SeqObj / Channel handles degrade to null, like the spawn wire
+    return None
+
+def channel_degrade_result(v, _d=0):
+    """W015 mirror of the Rust join-result path (genes.to_send_d): a channel
+    handle degrades to null, deeply inside containers, and a propagated
+    variant keeps its tag while its payload degrades. The wider result-path
+    wire gaps (map-key stringification, phenotype-to-map) predate W015 and
+    are corpus-avoided; this mirrors only the channel rule."""
+    if isinstance(v, Channel):
+        return None
+    if _d > 100_000:
+        return v
+    if isinstance(v, list):
+        return [channel_degrade_result(x, _d + 1) for x in v]
+    if isinstance(v, dict):
+        return {k: channel_degrade_result(x, _d + 1) for k, x in v.items()}
+    if isinstance(v, Variant):
+        return Variant(v.tag, None if v.payload is None
+                       else channel_degrade_result(v.payload, _d + 1))
+    return v
+
 class SeqObj:
     """Sequential-oracle sequence: values are produced by running the body to
     completion on first pull (buffered), then served one at a time. The Rust
@@ -327,6 +384,9 @@ def v_repr(v, _seen=None, _depth=0):
         return f"<sequence {v.gene.name}>" if v.gene.name else "<sequence lambda>"
     if isinstance(v, ObjInst):
         return f"<phenotype {v.defn.name}>"
+    # W015 mirror: address-free anonymous repr (see the Rust Channel arm)
+    if isinstance(v, Channel):
+        return "<channel>"
     return "<?>" 
 
 def v_display(v):
@@ -389,6 +449,7 @@ def type_name(v):
     if isinstance(v, SeqObj): return "sequence"
     if isinstance(v, ObjInst): return "phenotype"
     if isinstance(v, Variant): return "option" if v.tag in ("Some", "None") else "result"
+    if isinstance(v, Channel): return "channel"
     return "native"
 
 def deep_eq(a, b, _pairs=None):
@@ -2797,7 +2858,8 @@ http_get serve recv_request send_response json_parse json_str env call items py
 re_match re_find re_groups unix_time date_parts date_fmt
 grapheme_len fold_case char_at char_slice
 some none ok err is_some is_none is_ok is_err unwrap unwrap_or
-enumerate zip sorted reversed any all first last take drop unique flatten chunk round clamp divmod""".split())
+enumerate zip sorted reversed any all first last take drop unique flatten chunk round clamp divmod
+channel send recv close select""".split())
 
 BUILTIN_SYNONYMS = {"print": "promote", "echo": "promote", "say": "promote", "show": "promote"}
 
@@ -5959,6 +6021,11 @@ class Interp:
                         setattr(self, k2, v2)
                     self.rng = _saved_rng
                     self.task_note_prefix = _saved_prefix
+                # W015 mirror: the result crosses the join membrane, a
+                # channel handle degrades to null exactly like the Rust
+                # to_send path (deeply inside containers and variant
+                # payloads, both the return and the propagated paths)
+                result = channel_degrade_result(result)
                 self.next_id = _task_id
                 self.tasks = getattr(self, "tasks", {})
                 self.tasks[self.next_id] = result
@@ -6046,6 +6113,68 @@ class Interp:
                     return tid
             self.note(4, "wait_any timeout (30000 ms); no task finished")
             return None
+        # ---- W015: channels + select (builtins only, W036 grammar freeze).
+        # The sequential oracle mirrors the concurrent engine op-for-op on
+        # the buffered path; a program that would block raises the
+        # oracle-only `blocked` stress (the Rust core blocks under fuel),
+        # which the differential corpus never triggers by construction.
+        if name == "channel":
+            return Channel()
+        if name == "send":
+            ch = args[0] if args else None
+            if not isinstance(ch, Channel) or len(args) < 2:
+                raise Stress("unfolded", "send(ch, v) needs a channel and a value")
+            v = args[1]
+            # membrane first, then the depth pre-flight, then closed (the
+            # Rust order: a handle payload is refused even on a closed chan)
+            if isinstance(v, (Gene, SeqObj, ObjInst, Channel)):
+                raise Stress("membrane",
+                             f"send() refuses a {type_name(v)} payload; channels carry data, not handles")
+            _stack = [(v, 0)]
+            while _stack:
+                _item, _d = _stack.pop()
+                if _d > 100_000:
+                    raise Stress("overflow", "send payload nesting too deep")
+                if isinstance(_item, list):
+                    _stack.extend((x, _d + 1) for x in _item)
+                elif isinstance(_item, dict):
+                    _stack.extend((x, _d + 1) for x in _item.values())
+            if ch.closed:
+                raise Stress("closed_channel", "send on a closed channel")
+            ch.buf.append(channel_wire(v))
+            return None
+        if name == "recv":
+            ch = args[0] if args else None
+            if not isinstance(ch, Channel):
+                raise Stress("unfolded", "recv(ch) needs a channel")
+            if ch.buf:
+                return ch.buf.pop(0)
+            if ch.closed:
+                return None  # closed AND empty is the only null recv produces
+            raise Stress("blocked", "oracle cannot block on recv; buffered sends must precede recv")
+        if name == "close":
+            ch = args[0] if args else None
+            if not isinstance(ch, Channel):
+                raise Stress("unfolded", "close(ch) needs a channel")
+            if ch.closed:
+                self.note(4, "close of an already-closed channel")
+                return None
+            ch.closed = True
+            return None
+        if name == "select":
+            for c in args:
+                if not isinstance(c, Channel):
+                    raise Stress("unfolded", f"select() needs channels, got a {type_name(c)}")
+            if not args:
+                self.note(4, "select() with no channels; -1")
+                return -1
+            # strict declaration order: the leftmost ready channel wins
+            for i, c in enumerate(args):
+                if c.buf:
+                    return i
+            if all(c.closed for c in args):
+                return -1
+            raise Stress("blocked", "oracle cannot block on select; buffered sends must precede select")
         # ---- math
         if name == "floor":
             v = args[0] if args else 0
