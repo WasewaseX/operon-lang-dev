@@ -768,7 +768,7 @@ thread_local! {
     // Rc containers are thread-local by construction (the spawn membrane
     // never aliases across workers, SPEC 19d), so per-thread registries are
     // the correct scope: a worker cell accounts its own cycles.
-    static CYCLE_REGS: RefCell<Vec<CycleEntry>> = RefCell::new(Vec::new());
+    static CYCLE_REGS: RefCell<Vec<CycleEntry>> = const { RefCell::new(Vec::new()) };
 }
 
 fn list_addr(l: &ListRef) -> usize {
@@ -810,12 +810,26 @@ fn push_children(v: &Value, stack: &mut Vec<Value>) {
     }
 }
 
+/// Deterministic walk budget (rt_p22a armor): native graph walks are NOT
+/// fuel-accounted interpreter steps, so every cycle walk carries a hard
+/// visit cap. The cap never binds on sane graphs (corpus graphs visit
+/// dozens of nodes); on adversarial graphs it bounds the native work per
+/// container mutation and per memory() call. The cut is conservative AND
+/// deterministic (both cores visit in the same order and cut at the same
+/// node): insertion detection that runs out of budget does not register
+/// (best effort), liveness verification that runs out of budget keeps the
+/// entry counted (persistence is the D-013 default, death must be PROVEN).
+const WALK_BUDGET: u64 = 100_000;
+
 /// Does the walk from `v` reach the container at `root_addr`? Inserting `v`
 /// into that container then makes the container reachable from itself.
-fn walk_reaches(root_addr: usize, v: &Value) -> bool {
+/// Some(reached) when the walk completed, None when the budget ran out
+/// (inconclusive).
+fn walk_reaches(root_addr: usize, v: &Value) -> Option<bool> {
     let mut seen: HashSet<usize> = HashSet::new();
     let mut stack: Vec<Value> = vec![v.clone()];
-    walk_reaches_root(root_addr, &mut seen, &mut stack)
+    let mut budget = WALK_BUDGET;
+    walk_reaches_root(root_addr, &mut seen, &mut stack, &mut budget)
 }
 
 /// Register `target` as a live detected cycle (called after a positive
@@ -835,7 +849,9 @@ fn cycle_register_addr(addr: usize, weak: CycleWeak) {
             return; // this container is already the registered member
         }
         // subgraph dedupe: walk the target's reachable containers, if any
-        // is registered the group is already counted (one entry per cycle)
+        // is registered the group is already counted (one entry per cycle).
+        // Budgeted: an inconclusive dedupe registers anyway, the detection
+        // at the insertion already proved a cycle at the target.
         let mut seen: HashSet<usize> = HashSet::new();
         let mut stack: Vec<Value> = Vec::new();
         match &weak {
@@ -850,7 +866,12 @@ fn cycle_register_addr(addr: usize, weak: CycleWeak) {
                 }
             }
         }
+        let mut budget = WALK_BUDGET;
         while let Some(cur) = stack.pop() {
+            if budget == 0 {
+                break; // inconclusive: register the proven cycle
+            }
+            budget -= 1;
             match container_addr(&cur) {
                 Some(a) => {
                     if regs.iter().any(|e| e.addr == a) {
@@ -883,7 +904,10 @@ pub fn cycle_note_insert(target: &Value, v: &Value) {
     if !can_contain(v) {
         return;
     }
-    if walk_reaches(root, v) {
+    // an inconclusive detection walk (budget exhausted) does not register:
+    // best-effort detection, the conservative direction for the GAUGE is
+    // persistence of what is already registered
+    if walk_reaches(root, v) == Some(true) {
         let weak = match target {
             Value::List(l) => CycleWeak::List(Rc::downgrade(l)),
             Value::Map(m) | Value::Obj(_, m) => CycleWeak::Map(Rc::downgrade(m)),
@@ -900,30 +924,37 @@ pub fn live_cycle_count() -> i64 {
     CYCLE_REGS.with(|regs| {
         let mut regs = regs.borrow_mut();
         let mut n: i64 = 0;
+        // ONE budget shared by every verification in this call: the whole
+        // re-verify pass is bounded no matter how many cycles are registered.
+        let mut budget = WALK_BUDGET;
         regs.retain(|e| {
-            let still = match &e.weak {
+            let verdict = match &e.weak {
                 CycleWeak::List(w) => match w.upgrade() {
-                    None => false,
+                    None => Some(false),
                     Some(l) => {
                         // walk from the container's children: the container
                         // itself is the root, reaching it again is a cycle
                         let mut seen: HashSet<usize> = HashSet::new();
                         seen.insert(e.addr);
                         let mut stack: Vec<Value> = l.borrow().iter().cloned().collect();
-                        walk_reaches_root(e.addr, &mut seen, &mut stack)
+                        walk_reaches_root(e.addr, &mut seen, &mut stack, &mut budget)
                     }
                 },
                 CycleWeak::Map(w) => match w.upgrade() {
-                    None => false,
+                    None => Some(false),
                     Some(m) => {
                         let mut seen: HashSet<usize> = HashSet::new();
                         seen.insert(e.addr);
                         let mut stack: Vec<Value> =
                             m.borrow().iter().map(|(_, v)| v.clone()).collect();
-                        walk_reaches_root(e.addr, &mut seen, &mut stack)
+                        walk_reaches_root(e.addr, &mut seen, &mut stack, &mut budget)
                     }
                 },
             };
+            // Some(false): proven reclaimed or broken, drop the entry.
+            // Some(true): proven alive. None: budget exhausted, the entry
+            // stays counted (death must be PROVEN, persistence is D-013).
+            let still = verdict.unwrap_or(true);
             if still {
                 n += 1;
             }
@@ -935,12 +966,23 @@ pub fn live_cycle_count() -> i64 {
 
 /// Worklist walk seeded past the root (children of the candidate container):
 /// reaching `root_addr` again proves the container is reachable from itself.
-fn walk_reaches_root(root_addr: usize, seen: &mut HashSet<usize>, stack: &mut Vec<Value>) -> bool {
+/// Some(reached) when the walk completed, None when the shared budget ran
+/// out mid-walk (inconclusive, callers keep the conservative answer).
+fn walk_reaches_root(
+    root_addr: usize,
+    seen: &mut HashSet<usize>,
+    stack: &mut Vec<Value>,
+    budget: &mut u64,
+) -> Option<bool> {
     while let Some(cur) = stack.pop() {
+        if *budget == 0 {
+            return None;
+        }
+        *budget -= 1;
         match container_addr(&cur) {
             Some(a) => {
                 if a == root_addr {
-                    return true;
+                    return Some(true);
                 }
                 if seen.insert(a) {
                     push_children(&cur, stack);
@@ -953,5 +995,5 @@ fn walk_reaches_root(root_addr: usize, seen: &mut HashSet<usize>, stack: &mut Ve
             }
         }
     }
-    false
+    Some(false)
 }

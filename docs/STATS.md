@@ -8,10 +8,10 @@ README/SPEC/BENCH are forbidden, link here instead.
 - **Keywords (parser reserved set)**: 60, table in [KEYWORDS.md](KEYWORDS.md)
 - **Std modules**: 22 (args, bigint, bio, collections, csv, deque, fmt, fs, heap, iter, json, math, motifs, path, random, seq, serialize, set, strings, testing, time, unicode)
 - **Std functions (.op-level `gene` defs)**: 229
-- **Red-team payload files**: 101
-- **Proof files**: 127 (of 268 test .op files)
-- **Proof run** (bin/operon): 154 files, 117 proofs, 1697 asserts
-- **Differential harness**: 190 match / 0 diverge (0 skipped) · granted lane: 10 cells
+- **Red-team payload files**: 103
+- **Proof files**: 131 (of 287 test .op files)
+- **Proof run** (bin/operon): 170 files, 120 proofs, 1791 asserts
+- **Differential harness**: 206 match / 0 diverge (0 skipped) · granted lane: 11 cells
 - **CLI subcommands**: ast, bench, build, check, crispr, doc, explain, fix, fmt, graph, ir, keywords, lint, profile, repl, rna, test, version, watch
 - **LSP methods**: initialize, shutdown, textDocument/completion, textDocument/definition, textDocument/didChange, textDocument/didClose, textDocument/didOpen, textDocument/documentSymbol, textDocument/formatting, textDocument/hover, textDocument/prepareRename, textDocument/publishDiagnostics, textDocument/references, textDocument/rename, textDocument/semanticTokens, textDocument/signatureHelp
 

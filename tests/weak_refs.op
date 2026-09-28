@@ -4,6 +4,14 @@
 # cycles field in memory() counts value subgraphs the engine detected as
 # involved in reference cycles. Companion: tests/differential/weak_refs.op.
 
+# NOTE (audit): the reserved word is `phenotype` (phen is not a keyword); a
+# `phen ... {` declaration wobble-repairs into a derailment and the
+# phenotype weak path silently vanishes from the proof.
+phenotype shape {
+    let v = 0
+    gene init(start = 0) { self.v = start; return self }
+}
+
 frame proof {
     # --- alive round trips: strengthen returns the SAME value
     let m = {a: 1, b: 2}
@@ -12,14 +20,14 @@ frame proof {
     let l = [1, 2, 3]
     let wl = weak(l)
     assert(strengthen(wl) == l, "strengthen returns the list while alive")
-    phen shape {
-        let v = 7
-    }
-    let o = new shape()
+    let o = new shape(7)
     let wo = weak(o)
     let back = strengthen(wo)
     assert(back == o, "phenotype identity survives the weak round trip")
+    assert(type(back) == "shape", "strengthen rebuilds the phenotype kind")
     assert(back.v == 7, "fields intact through strengthen")
+    o.v = 9
+    assert(back.v == 9, "strengthen returns the same fields, not a copy")
 
     # --- refusals: weak() needs a container or phenotype instance
     stress {
@@ -38,15 +46,74 @@ frame proof {
     let holder = {w: weak(l)}
     assert(strengthen(holder.w) == l, "weak handle stored in a map still works")
 
-    # --- cycle accounting: a self-referencing list registers exactly one.
-    # Cycles PERSIST once detected (D-013: honest accounting, no GC), so a
-    # detected cycle stays in the count for the rest of the run.
+    # --- cycle accounting: a self-referencing list registers. The gauge is
+    # a PROCESS field (like every memory() key, cross-file cumulative for
+    # one binary invocation) and the suite runs many proofs in one process,
+    # where earlier files' Rc cycles leak by design (D-013: no GC, detected
+    # cycles persist). The proof therefore pins DELTAS, never absolutes:
+    # registration, second cycle, breakage pruning, re-registration.
+    let pre = memory().cycles
     let c = [1]
     push(c, c)
-    assert(memory().cycles == 1, "one detected cycle after self-reference")
+    assert(memory().cycles == pre + 1, "self-reference registers exactly one cycle")
     let d = [2]
     push(d, d)
-    assert(memory().cycles == 2, "second cycle increments")
+    assert(memory().cycles == pre + 2, "second cycle increments")
+
+    # --- cycle persistence and edge breaking: the count follows the graph.
+    # A detected cycle stays counted (D-013) until its death or breakage is
+    # PROVEN: popping the self edge prunes, re-pushing re-registers.
+    pop(d)
+    assert(memory().cycles == pre + 1, "breaking the self edge prunes the count")
+    push(d, d)
+    assert(memory().cycles == pre + 2, "re-closing the cycle re-registers")
+
+    # --- dead handles: a handle that outlives its target binding derefs to
+    # null (soft note, Rust lane). No GC: freeing is immediate at strong
+    # count zero, the note fires at the deref, not at the drop.
+    let wdead = mkdead()
+    assert(strengthen(wdead) == null, "deref of a dead handle is null")
+
+    # --- membranes: a weak handle never rides the wire. Top-level spawn
+    # arguments and channel payloads are REFUSED (catchable membrane
+    # stress); a handle nested inside a container degrades to null.
+    stress {
+        spawn(echoGene, [weak(m)])
+    } rescue (e) {
+        assert(e.kind == "membrane", "spawn refuses a weak payload")
+        assert(e.message.contains("spawn() refuses a weak payload"), "spawn refusal message")
+    }
+    stress {
+        send(channel(), weak(m))
+    } rescue (e) {
+        assert(e.kind == "membrane", "send refuses a weak payload")
+        assert(e.message.contains("send() refuses a weak payload"), "send refusal message")
+    }
+    let ch2 = channel()
+    send(ch2, [weak([1])])
+    let got = recv(ch2)
+    assert(type(got) == "list" && got[0] == null, "nested weak degrades to null on the wire")
+
+    # --- refusal arity: no-argument calls carry the exact Rust messages
+    stress {
+        weak()
+    } rescue (e) {
+        assert(e.message == "weak(v) needs a list, map, or phenotype", "no-arg weak message")
+    }
+    stress {
+        strengthen()
+    } rescue (e) {
+        assert(e.message == "strengthen(w) needs a weak handle", "no-arg strengthen message")
+    }
 
     promote("weak_refs: all asserts green")
+}
+
+gene mkdead() {
+    let gone = {x: 1}
+    return weak(gone)
+}
+
+gene echoGene(v) {
+    return v
 }
