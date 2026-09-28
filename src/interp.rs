@@ -7736,6 +7736,53 @@ impl Interp {
                 let hi = b.max(a);
                 Ok(Value::Str(chars[a..hi].iter().collect()))
             }
+            // ---------------- W28 stage 2: normalization, full folding,
+            // categories (SPEC §3). Non-string argument = the standard
+            // `unfolded` type Stress family, same shape as char_at.
+            "norm_nfc" | "norm_nfd" => {
+                let s = match args.first() {
+                    Some(Value::Str(s)) => s.clone(),
+                    _ => {
+                        return Err(Stress::new(
+                            "unfolded",
+                            format!("{}(s) needs a string", name),
+                        ))
+                    }
+                };
+                let r = if name == "norm_nfc" {
+                    nfc_str(&s)
+                } else {
+                    nfd_str(&s)
+                };
+                Ok(Value::Str(r))
+            }
+            "casefold" => {
+                // Full Unicode case folding (C+F), context-free, NOT
+                // locale-aware (folding owns no final-sigma rule; SPEC §3).
+                let s = match args.first() {
+                    Some(Value::Str(s)) => s.clone(),
+                    _ => return Err(Stress::new("unfolded", "casefold(s) needs a string")),
+                };
+                Ok(Value::Str(casefold_str(&s)))
+            }
+            "char_category" => {
+                // ONE pinned shape: string in, the two-letter general
+                // category of its FIRST CHAR out. Empty string is the soft
+                // tier (null + note), mirroring char_at's out-of-range tier.
+                let s = match args.first() {
+                    Some(Value::Str(s)) => s.clone(),
+                    _ => return Err(Stress::new("unfolded", "char_category(s) needs a string")),
+                };
+                match s.chars().next() {
+                    Some(c) => Ok(Value::Str(
+                        crate::unicode_tables::category(c as u32).to_string(),
+                    )),
+                    None => {
+                        self.note(self.cur_line, 4, "char_category of empty string; null");
+                        Ok(Value::Null)
+                    }
+                }
+            }
             "random" => {
                 // xorshift64*, identical state machine in both implementations
                 let mut x = self.rng;
@@ -10760,6 +10807,11 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "fold_case",
     "char_at",
     "char_slice",
+    // W28 stage 2: normalization, full case folding, categories
+    "norm_nfc",
+    "norm_nfd",
+    "casefold",
+    "char_category",
     // W06 (D-014): first-class Option/Result
     "some",
     "none",
@@ -11032,4 +11084,170 @@ pub fn grapheme_count(s: &str) -> usize {
         i = j;
     }
     clusters
+}
+
+// ---------------------------------------------------------- W28 stage 2
+// NFC/NFD normalization, full case folding, general categories (SPEC §3).
+// The tables live in the GENERATED src/unicode_tables.rs (emitted from
+// Python's unicodedata by scripts/gen_unicode_tables.py, the same module the
+// oracle calls, so both cores agree by construction). The four functions
+// below are the runtime mirror of the generator's verification model, which
+// was checked against unicodedata over all 1,114,112 codepoints, a
+// combining-mark pair sweep, composite+mark sweep and Hangul jamo sweeps
+// before the tables were allowed to be written.
+
+/// Push one scalar value as a char (tables only ever hold scalar values,
+/// so the None arm is unreachable armor).
+fn push_cp(out: &mut Vec<char>, cp: u32) {
+    if let Some(c) = char::from_u32(cp) {
+        out.push(c);
+    }
+}
+
+/// Hangul syllable -> jamo expansion (UAX #15, algorithmic, never tabulated).
+fn hangul_decomp_push(cp: u32, out: &mut Vec<char>) {
+    if (0xAC00..=0xD7A3).contains(&cp) {
+        let s = cp - 0xAC00;
+        push_cp(out, 0x1100 + s / 588);
+        push_cp(out, 0x1161 + (s % 588) / 28);
+        let t = s % 28;
+        if t != 0 {
+            push_cp(out, 0x11A7 + t);
+        }
+    }
+}
+
+/// Canonical ordering (UAX #15): each maximal run of nonzero-ccc chars is
+/// stable-sorted by combining class. Insertion sort with a strict compare,
+/// stability is required and runs are tiny in practice.
+fn canonical_order(chars: &mut [char]) {
+    let ccc = |c: char| crate::unicode_tables::ccc(c as u32) as u32;
+    let n = chars.len();
+    let mut i = 0usize;
+    while i < n {
+        if ccc(chars[i]) == 0 {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        while i < n && ccc(chars[i]) != 0 {
+            i += 1;
+        }
+        for j in start + 1..i {
+            let cj = ccc(chars[j]);
+            let mut k = j;
+            while k > start && ccc(chars[k - 1]) > cj {
+                chars.swap(k - 1, k);
+                k -= 1;
+            }
+        }
+    }
+}
+
+/// Decompose a string to canonical form (no composition): per-char table
+/// expansion (Hangul algorithmic), then one canonical-ordering pass over the
+/// WHOLE sequence, because combining runs span codepoint boundaries.
+fn decompose_to_chars(s: &str) -> Vec<char> {
+    let mut out: Vec<char> = Vec::with_capacity(s.len());
+    for c in s.chars() {
+        let cp = c as u32;
+        if (0xAC00..=0xD7A3).contains(&cp) {
+            hangul_decomp_push(cp, &mut out);
+            continue;
+        }
+        let d = crate::unicode_tables::canon_decomp(cp);
+        if d.is_empty() {
+            out.push(c);
+        } else {
+            for &x in d {
+                push_cp(&mut out, x);
+            }
+        }
+    }
+    canonical_order(&mut out);
+    out
+}
+
+/// One composition pair (Hangul L+V and LV+T are algorithmic per UAX #15;
+/// the tabulated pairs were derived empirically by the generator, so
+/// Full_Composition_Exclusion is honored by construction).
+fn compose_pair(a: u32, b: u32) -> Option<u32> {
+    if (0x1100..=0x1112).contains(&a) && (0x1161..=0x1175).contains(&b) {
+        return Some(0xAC00 + ((a - 0x1100) * 21 + (b - 0x1161)) * 28);
+    }
+    if (0xAC00..=0xD7A3).contains(&a)
+        && (a - 0xAC00).is_multiple_of(28)
+        && (0x11A8..=0x11C2).contains(&b)
+    {
+        return Some(a + (b - 0x11A7));
+    }
+    crate::unicode_tables::compose_table(a, b)
+}
+
+/// Left-to-right composition with the blocking rule (UAX #15): a combining
+/// char composes with the pending starter when nothing of class >= its own
+/// sits between them (`last_cc == 0` also admits starter pairs, which is
+/// what makes Hangul L+V and LV+T compose through the same rule).
+fn compose_chars(chars: Vec<char>) -> String {
+    let mut out: Vec<char> = Vec::with_capacity(chars.len());
+    let mut starter: Option<u32> = None;
+    let mut starter_pos = 0usize;
+    let mut last_cc = 0u32;
+    for &c in &chars {
+        let cp = c as u32;
+        let cc = crate::unicode_tables::ccc(cp) as u32;
+        if let Some(st) = starter {
+            if last_cc == 0 || last_cc < cc {
+                if let Some(comp) = compose_pair(st, cp) {
+                    if let Some(comp_c) = char::from_u32(comp) {
+                        out[starter_pos] = comp_c;
+                        starter = Some(comp);
+                        continue;
+                    }
+                }
+            }
+        }
+        if cc == 0 {
+            starter = Some(cp);
+            starter_pos = out.len();
+        }
+        last_cc = cc;
+        out.push(c);
+    }
+    out.into_iter().collect()
+}
+
+/// W028 (SPEC §3): NFD, canonical decomposition.
+pub fn nfd_str(s: &str) -> String {
+    decompose_to_chars(s).into_iter().collect()
+}
+
+/// W028 (SPEC §3): NFC, decompose + canonical order + compose.
+pub fn nfc_str(s: &str) -> String {
+    compose_chars(decompose_to_chars(s))
+}
+
+/// W028 (SPEC §3): full case folding (C+F tables), context-free by
+/// construction (folding owns no final-sigma rule; see SPEC).
+pub fn casefold_str(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match crate::unicode_tables::fold_char(c as u32) {
+            Some(seq) => {
+                for &x in seq {
+                    push_cp_str(&mut out, x, c);
+                }
+            }
+            None => out.push(c),
+        }
+    }
+    out
+}
+
+/// Table entries are valid scalar values; the fallback keeps the armor total.
+fn push_cp_str(out: &mut String, cp: u32, fallback: char) {
+    match char::from_u32(cp) {
+        Some(c) => out.push(c),
+        None => out.push(fallback),
+    }
 }
