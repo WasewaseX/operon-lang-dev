@@ -184,6 +184,12 @@ impl ChannelShared {
     }
 }
 
+impl Default for ChannelShared {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Message a sequence worker sends to its consumer over the rendezvous channel.
 pub enum SeqMsg {
     Yield(crate::genes::SendValue),
