@@ -126,7 +126,9 @@ promote("x = {x * 2}")  # x = 42
 $ operon run bad.op
 [fallback] unbound 'undefined_thing' read as null
 $ operon check bad.op
-operon check: bad.op, score 94/100 (grade A)
+repair:
+  bad.op: 1 note(s), 1 wobble(s), 0 fallback(s); run `operon explain bad.op` for the play-by-play
+summary: 0 error(s), 0 warning(s), 0 style, 1 repair note(s)
 ```
 
 ## The gene-expression regulation layer

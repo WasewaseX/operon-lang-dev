@@ -102,8 +102,10 @@ fn real_main() {
     let mut test_filter: Option<String> = None;
     let mut list_only = false;
     let mut repeat = 1usize;
-    // W41: check output format, "score" (default this cycle) | "diag"
-    let mut check_format = String::from("score");
+    // W41: check output format, "diag" is the default, "score" is the
+    // transitional escape (--format score) for anything that still wants the
+    // school-grade banner; nothing in scripts/ or CI parses the grade.
+    let mut check_format = String::from("diag");
     // W47 (ROADMAP-100): formatter configuration, file first, flags override
     let mut fmt_indent: Option<usize> = None;
     let mut fmt_quotes: Option<tools::QuoteMode> = None;
@@ -685,10 +687,9 @@ fn real_main() {
                 None => die("check needs a file"),
             };
             let rep = tools::check(&file, &opts, nmd, purge);
-            // W41 (ROADMAP-100): --format diag renders sectioned diagnostics
-            // (error/warning/repair/style) instead of the school-grade banner.
-            // Default stays `score` this cycle so CI runners keep parsing the
-            // old shape; the default flip lands after one green CI cycle.
+            // W41 (ROADMAP-100): diag is the default: sectioned diagnostics
+            // (error/warning/repair/style) with a summary line; --format score
+            // keeps the school-grade banner for one transition cycle.
             if check_format == "diag" && !json {
                 let src = std::fs::read_to_string(&file).unwrap_or_default();
                 let prog = parser::parse(&src);

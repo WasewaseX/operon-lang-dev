@@ -309,7 +309,7 @@ has you covered:
 
 ```sh
 operon run f.op --strict     # any wobble/fallback becomes a failure (exit 3)
-operon check f.op            # static diagnostics: dead code (NMD), scores, style
+operon check f.op            # static diagnostics: errors, warnings, style (W41)
 ```
 
 Hard failures still exist for real faults: `raise` throws a catchable stress
