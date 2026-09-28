@@ -27,7 +27,7 @@ The mandate: *"Rust, then C, then Python, then Operon, then C++, then HTML, then
 | rank | language | lines | share | role |
 |---|---|---|---|---|
 | 1 | **Rust** | 31,194 | ~45% | lexer, Total Grammar parser, evaluator, capability sandbox, symbol table, HTTP/JSON, toolchain CLI, REPL, `operon-ls` LSP seed (`src/`) |
-| 2 | **Operon** | 25,367 | ~37% | **self-hosted stdlib (22 modules, generated inventory in [docs/STATS.md](docs/STATS.md)), proof tests, red-team suite, differential corpus, GenomeLab** (`std/ tests/ examples/ apps/`) |
+| 2 | **Operon** | 25,367 | ~37% | **self-hosted stdlib (23 modules, generated inventory in [docs/STATS.md](docs/STATS.md)), proof tests, red-team suite, differential corpus, GenomeLab** (`std/ tests/ examples/ apps/`) |
 | 3 | **Python** | 7,642 | ~11% | bootstrap: reference oracle + differential harness (`bootstrap/`), test infrastructure only, nothing shipped depends on it |
 | 4 | **JavaScript** | 2,022 | ~3% | browser playground subset interpreter (`web/playground/app.js`) |
 | 5 | **HTML** | 1,346 | ~2% | documentation site (`docs/`) |
@@ -272,7 +272,7 @@ Requires: rustc (≥1.70), gcc, g++ (builds the C++ codon kernel). Zero runtime 
 - **Traits**: `trait Show { gene display() }` + `phenotype User implements Show` (W04/SPEC §8b), required methods (contract-checked at construction, notes never fatal) and default methods with virtual dispatch; composes with `from` inheritance.
 - **Errors**: a four-tier hierarchy (SPEC §9), null+note (soft miss) → **Option/Result values** (`some/none/ok/err`, `?!` propagation, `unwrap_or` defaults) → catchable `Stress{kind, message}`, `unfolded | missing | overflow | burned | interference | unwrap | frozen`, plus Total-Grammar runtime notes. Expected failures stay values; Stress is for contract violations. A program never crashes; worst case it narrates what it repaired.
 - **Concurrency**: `spawn(gene, args)` / `join(id)`, real OS threads with value serialization; sequences run on worker cells; timed repressilator threads.
-- **Modules**: `use std/bio;`, TAD-insulated, anchor-controlled exports, module cache, cycle-tolerant. Twenty-two stdlib modules today (generated per-module inventory: [docs/STATS.md](docs/STATS.md)): `args`, `bigint`, `bio`, `collections`, `csv`, `deque`, `fmt`, `fs`, `heap`, `iter`, `json`, `math`, `motifs`, `path`, `random`, `seq`, `serialize`, `set`, `strings`, `testing`, `time`, `unicode`, plus the capability-gated `py()` bridge for the scientific-Python deep end. `std/bigint` is the sanctioned escape past the i64 no-wrap overflow contract: exact arbitrary-precision arithmetic over digit lists (20! fits i64, 21! does not, `bigint.big_fact` answers both exactly).
+- **Modules**: `use std/bio;`, TAD-insulated, anchor-controlled exports, module cache, cycle-tolerant. Twenty-three stdlib modules today (generated per-module inventory: [docs/STATS.md](docs/STATS.md)): `args`, `bigint`, `bio`, `collections`, `csv`, `deque`, `fmt`, `fs`, `graph`, `heap`, `iter`, `json`, `math`, `motifs`, `path`, `random`, `seq`, `serialize`, `set`, `strings`, `testing`, `time`, `unicode`, plus the capability-gated `py()` bridge for the scientific-Python deep end. `std/bigint` is the sanctioned escape past the i64 no-wrap overflow contract: exact arbitrary-precision arithmetic over digit lists (20! fits i64, 21! does not, `bigint.big_fact` answers both exactly).
 
 ## Repository layout
 
