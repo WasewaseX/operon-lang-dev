@@ -295,6 +295,16 @@ gene handle(v: int | str) -> any { ... }             # union
   contracts on gene calls and definitions. `operon check`-time inference
   and reporting, typed collections (`List<T>` sugar), and type aliases are
   later stages of W01; sequencing is tracked in ROADMAP-100.
+- **W026, the collections sugar first slice:** the typed-collections
+  layer lives as pure `.op` std modules over map/list (`std/set`,
+  `std/deque`, `std/heap`, `std/graph`), and `std/graph.op` is the first
+  std module whose public genes carry these stage-1 annotations (the W003
+  sugar slice; set/deque/heap stay untyped until the mechanical pass
+  lands). Its determinism contract is the pinned node order: node order IS
+  the `nodes` map's insertion order (both cores keep map insertion order,
+  §19a), every traversal and tie-break follows it, ids are never sorted;
+  pinned by `tests/std_graph.op` and byte-exactly by
+  `tests/differential/graph.op`.
 
 ### 7d. Immutability, `const` bindings + deep freeze (W05)
 
