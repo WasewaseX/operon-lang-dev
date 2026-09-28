@@ -27,6 +27,11 @@ pub struct Diagnostic {
     /// LSP severity: 1 error, 2 warning, 3 information, 4 hint.
     pub severity: u8,
     pub message: String,
+    /// W46: the parse rung this diagnostic came from (1 canonical teaching
+    /// note, 2 synonym, 3 wobble, 4+ fallback; 0 = not a parse note, e.g. a
+    /// phantom call). Serialized as diagnostic.data.rung for machine readers;
+    /// the message carries the same tag for human ones.
+    pub rung: u8,
     /// W46: repair provenance, what the interpreter decided the token meant
     /// (canonical form + rung). Empty when nothing was repaired (phantoms,
     /// canonical teaching notes). Serialized as LSP relatedInformation.
@@ -46,7 +51,14 @@ pub struct Related {
 #[derive(Debug, Clone)]
 pub struct GeneInfo {
     pub name: String,
+    /// W44: rendered parameters, `name` or `name: T` (W01 stage 1
+    /// annotations). Default values are not re-rendered here; hover,
+    /// definition and completion all share this one rendering, which is
+    /// also what signatureHelp labels its parameters with.
     pub params: Vec<String>,
+    /// W44: rendered return annotation (the `-> T` type, arrow excluded),
+    /// None when unannotated (W01 stage 1).
+    pub ret: Option<String>,
     pub acetylate: bool,
     pub methylate: bool,
     pub m6a: bool,
@@ -213,6 +225,7 @@ fn note_to_diagnostic(src: &str, n: &Note) -> Diagnostic {
         severity: note_severity(n.rung),
         message: format!("{} ({} rung)", n.message, rung_label(n.rung)),
         related,
+        rung: n.rung,
     }
 }
 
@@ -277,7 +290,16 @@ pub fn analyze_doc(src: &str, base_dir: Option<&str>) -> LsDoc {
                 if let Some(n) = &g.name {
                     doc.genes.push(GeneInfo {
                         name: n.clone(),
-                        params: g.params.iter().map(|(p, _)| p.clone()).collect(),
+                        params: g
+                            .params
+                            .iter()
+                            .enumerate()
+                            .map(|(i, (p, _))| match g.param_anns.get(i) {
+                                Some(Some(a)) => format!("{}: {}", p, a.render()),
+                                _ => p.clone(),
+                            })
+                            .collect(),
+                        ret: g.ret_ann.as_ref().map(|a| a.render()),
                         acetylate: g.acetylate,
                         methylate: g.methylate,
                         m6a: g.m6a,
@@ -311,6 +333,7 @@ pub fn analyze_doc(src: &str, base_dir: Option<&str>) -> LsDoc {
                 p
             ),
             related: Vec::new(), // a phantom is not a repair, no provenance
+            rung: 0,             // and not a parse note either
         };
         for (i, l) in src.lines().enumerate() {
             if let Some(pos) = l.find(p.as_str()) {
@@ -357,6 +380,11 @@ pub fn hover(src: &str, doc: &LsDoc, line0: usize, col0: usize) -> Option<String
     if let Some(g) = doc.genes.iter().find(|g| g.name == word) {
         let kind = if g.seq { "seq" } else { "gene" };
         let mut sig = format!("{} {}({})", kind, g.name, g.params.join(", "));
+        // W44: W01 return annotations surface wherever the parameters do
+        if let Some(r) = &g.ret {
+            sig.push_str(" -> ");
+            sig.push_str(r);
+        }
         let mut marks = Vec::new();
         if g.acetylate {
             marks.push("@acetylate");
@@ -986,6 +1014,262 @@ pub fn completions(src: &str, doc: &LsDoc) -> Vec<Value> {
     items
 }
 
+// ---- W44: signature help ---------------------------------------------------
+
+/// One open call frame from the cursor scan: the callee word (None when the
+/// `(` follows nothing callable) and the top-level commas seen so far.
+struct CallFrame {
+    name: Option<String>,
+    commas: usize,
+}
+
+/// W44: textDocument/signatureHelp. The innermost unclosed call left of the
+/// cursor, resolved against the doc's gene table, the SAME resolution hover
+/// uses: in-file genes and seqs, W01 parameter annotations rendered
+/// `name: T`, the return annotation appended to the label, `##` doc lines as
+/// the documentation string. Builtins, splice roots and unknown callees
+/// answer null cleanly (an arity table is W43's job, not re-invented here),
+/// and so does a cursor outside any call. The scan is a forward, string-aware
+/// walk over the text before the cursor, multi-line calls included; string
+/// and comment contents are opaque (same rules as scan_code_identifiers), so
+/// a comma or paren inside a literal never skews activeParameter, and commas
+/// inside a nested call count for that call's own frame, not the outer one.
+pub fn signature_help(src: &str, doc: &LsDoc, line0: usize, col0: usize) -> Option<Value> {
+    // the full text before the cursor: every line above line0 plus the
+    // first col0 characters of line0 itself (multi-line calls must see
+    // their earlier argument lines; split on '\n' keeps CRLF exact, the
+    // \r just lands in the whitespace-transparent part of the scan)
+    let mut before: Vec<char> = Vec::new();
+    let mut found = false;
+    for (i, l) in src.split('\n').enumerate() {
+        if i == line0 {
+            before.extend(l.chars().take(col0));
+            found = true;
+            break;
+        }
+        before.extend(l.chars());
+        before.push('\n');
+    }
+    if !found {
+        return None; // cursor past the end of the document
+    }
+    let frame = scan_open_call(&before)?;
+    let g = doc
+        .genes
+        .iter()
+        .find(|g| Some(&g.name) == frame.name.as_ref())?;
+    let ret = g
+        .ret
+        .as_deref()
+        .map(|r| format!(" -> {}", r))
+        .unwrap_or_default();
+    let mut sig_pairs = vec![
+        (
+            "label",
+            Value::Str(format!("{}({}){}", g.name, g.params.join(", "), ret)),
+        ),
+        (
+            "parameters",
+            Value::List(Rc::new(RefCell::new(
+                g.params
+                    .iter()
+                    .map(|p| mapv(vec![("label", Value::Str(p.clone()))]))
+                    .collect(),
+            ))),
+        ),
+    ];
+    // W074 feed: `##` doc lines ride along as the documentation string
+    if !g.doc.is_empty() {
+        sig_pairs.push(("documentation", Value::Str(g.doc.join("\n"))));
+    }
+    let sig = mapv(sig_pairs);
+    let mut out = vec![
+        ("signatures", Value::List(Rc::new(RefCell::new(vec![sig])))),
+        ("activeSignature", Value::Int(0)),
+    ];
+    // an extra-argument comma sits past the last known parameter: omit
+    // activeParameter rather than point at a parameter that is not there
+    if frame.commas < g.params.len() {
+        out.push(("activeParameter", Value::Int(frame.commas as i64)));
+    }
+    Some(mapv(out))
+}
+
+/// The innermost unclosed call left of the cursor. String states mirror the
+/// lexer exactly like scan_code_identifiers (plain strings span lines and
+/// carry `{..}` interpolation, where a quote is content; `"""` triples are
+/// verbatim with the escaped-brace quirk; `r"..."` raw strings are verbatim),
+/// so the two scanner families never disagree about where code ends. The
+/// callee of an open `(` is the identifier that closes it, with only
+/// whitespace in between (`foo (` and a trailing newline both resolve;
+/// `let r = add(` resolves to `add`, not `letr`).
+fn scan_open_call(before: &[char]) -> Option<CallFrame> {
+    let is_id = |c: char| c.is_ascii_alphanumeric() || c == '_';
+    let mut stack: Vec<CallFrame> = Vec::new();
+    let mut word = String::new(); // identifier in progress (or just ended)
+    let mut in_word = false; // the previous char was part of `word`
+    let mut gap_ok = false; // only whitespace since `word` ended
+    let mut state = ScanState::Code;
+    let mut interp = 0usize;
+    let mut triple_interp = 0usize;
+    let mut i = 0usize;
+    while i < before.len() {
+        let c = before[i];
+        match state {
+            ScanState::Code => {
+                if c == '#' {
+                    while i < before.len() && before[i] != '\n' {
+                        i += 1; // comment: rest of the line is opaque
+                    }
+                    continue;
+                }
+                if c == 'r' && i + 1 < before.len() && before[i + 1] == '"' {
+                    state = ScanState::RawStr;
+                    word.clear();
+                    in_word = false;
+                    gap_ok = false;
+                    i += 2;
+                    continue;
+                }
+                if c == '"' && i + 2 < before.len() && before[i + 1] == '"' && before[i + 2] == '"'
+                {
+                    state = ScanState::TripleStr;
+                    triple_interp = 0;
+                    word.clear();
+                    in_word = false;
+                    gap_ok = false;
+                    i += 3;
+                    continue;
+                }
+                if c == '"' {
+                    state = ScanState::Str;
+                    interp = 0;
+                    word.clear();
+                    in_word = false;
+                    gap_ok = false;
+                    i += 1;
+                    continue;
+                }
+                if c == '@' && i + 1 < before.len() && is_id(before[i + 1]) {
+                    // @mark: directive + name skipped whole, never a callee
+                    word.clear();
+                    in_word = false;
+                    gap_ok = false;
+                    i += 2;
+                    while i < before.len() && is_id(before[i]) {
+                        i += 1;
+                    }
+                    continue;
+                }
+                if is_id(c) {
+                    if in_word {
+                        word.push(c);
+                    } else {
+                        word.clear();
+                        word.push(c);
+                        in_word = true;
+                    }
+                    gap_ok = true;
+                    i += 1;
+                    continue;
+                }
+                match c {
+                    '(' => {
+                        stack.push(CallFrame {
+                            name: if gap_ok && !word.is_empty() {
+                                Some(word.clone())
+                            } else {
+                                None
+                            },
+                            commas: 0,
+                        });
+                        word.clear();
+                        in_word = false;
+                        gap_ok = false;
+                    }
+                    ')' => {
+                        stack.pop();
+                        word.clear();
+                        in_word = false;
+                        gap_ok = false;
+                    }
+                    ',' => {
+                        if let Some(top) = stack.last_mut() {
+                            top.commas += 1;
+                        }
+                        word.clear();
+                        in_word = false;
+                        gap_ok = false;
+                    }
+                    _ => {
+                        if c.is_whitespace() {
+                            if in_word {
+                                in_word = false; // word ended, gap begins
+                                gap_ok = true;
+                            }
+                            // whitespace inside the gap keeps gap_ok true
+                        } else {
+                            // punctuation between the callee and `(` (an
+                            // operator, a prior comma) breaks the pairing
+                            word.clear();
+                            in_word = false;
+                            gap_ok = false;
+                        }
+                    }
+                }
+                i += 1;
+            }
+            ScanState::Str => {
+                if c == '\\' && i + 1 < before.len() {
+                    i += 2;
+                    continue;
+                }
+                if interp == 0 && c == '"' {
+                    state = ScanState::Code;
+                    i += 1;
+                    continue;
+                }
+                if c == '{' {
+                    interp += 1;
+                } else if c == '}' && interp > 0 {
+                    interp -= 1;
+                }
+                i += 1;
+            }
+            ScanState::TripleStr => {
+                if c == '\\' && i + 1 < before.len() {
+                    match before[i + 1] {
+                        '{' => triple_interp += 1,
+                        '}' => triple_interp = triple_interp.saturating_sub(1),
+                        _ => {}
+                    }
+                    i += 2;
+                    continue;
+                }
+                if c == '"' && i + 2 < before.len() && before[i + 1] == '"' && before[i + 2] == '"'
+                {
+                    state = ScanState::Code;
+                    i += 3;
+                    continue;
+                }
+                if c == '{' {
+                    triple_interp += 1;
+                } else if c == '}' && triple_interp > 0 {
+                    triple_interp -= 1;
+                }
+                i += 1;
+            }
+            ScanState::RawStr => {
+                if c == '"' {
+                    state = ScanState::Code;
+                }
+                i += 1;
+            }
+        }
+    }
+    stack.pop()
+}
+
 /// lsp-r1: textDocument/formatting, the same canonical formatter `operon fmt`
 /// uses, applied to the buffer. Returns the full-document replacement text.
 pub fn format_text(src: &str) -> Option<String> {
@@ -1006,6 +1290,17 @@ pub fn publish_params(uri: &str, diags: &[Diagnostic]) -> Value {
                 ("source", Value::Str("operon-check".into())),
                 ("message", Value::Str(d.message.clone())),
             ];
+            // W46: machine-readable rung tag on every repair-sourced
+            // diagnostic (the message carries the same tag for humans)
+            if d.rung >= 2 {
+                pairs.push((
+                    "data",
+                    mapv(vec![
+                        ("rung", Value::Str(rung_label(d.rung).into())),
+                        ("canonical", Value::Bool(false)),
+                    ]),
+                ));
+            }
             if !d.related.is_empty() {
                 let related: Vec<Value> = d
                     .related
@@ -1031,13 +1326,35 @@ pub fn publish_params(uri: &str, diags: &[Diagnostic]) -> Value {
             mapv(pairs)
         })
         .collect();
-    mapv(vec![
+    // W46: the repair summary, present only when the file is NOT canonical,
+    // so its absence is itself the "canonical source" signal editors and
+    // tests can rely on.
+    let repairs = diags.iter().filter(|d| d.rung >= 2).count();
+    let mut top = vec![
         ("uri", Value::Str(uri.into())),
         (
             "diagnostics",
             Value::List(std::rc::Rc::new(std::cell::RefCell::new(items))),
         ),
-    ])
+    ];
+    if repairs > 0 {
+        top.push((
+            "operonRepairs",
+            mapv(vec![
+                ("applied", Value::Int(repairs as i64)),
+                ("canonical", Value::Bool(false)),
+                (
+                    "note",
+                    Value::Str(format!(
+                        "{} repair{} applied, canonical form differs",
+                        repairs,
+                        if repairs == 1 { "" } else { "s" }
+                    )),
+                ),
+            ]),
+        ));
+    }
+    mapv(top)
 }
 
 pub fn range_value(line: usize, col: usize, len: usize) -> Value {
@@ -1283,6 +1600,167 @@ main { let z = \"boost in a string\" }
             Some("methylate")
         );
         assert_eq!(canonical_from("unmatched '}' skipped"), None);
+    }
+
+    // ---- W44: signature help ------------------------------------------------
+
+    const SIG_DEMO: &str = "\
+## power raises base to the exponent
+gene power(base: int, exp: int) -> int {
+    return base * exp
+}
+main {
+    let r = power(3, 4)
+    let q = unknown(1)
+}
+";
+
+    #[test]
+    fn signature_help_resolves_annotated_gene_and_active_param() {
+        let doc = analyze(SIG_DEMO);
+        // line 5: `    let r = power(3, 4)`, cursor right after `(` (col 18)
+        let v = signature_help(SIG_DEMO, &doc, 5, 18).expect("signature inside power(");
+        let text = json_of(&v);
+        assert!(
+            text.contains("\"label\":\"power(base: int, exp: int) -> int\""),
+            "{}",
+            text
+        );
+        // ParameterInformation objects, labels carry the W01 annotations
+        assert!(text.contains("\"label\":\"base: int\""), "{}", text);
+        assert!(text.contains("\"label\":\"exp: int\""), "{}", text);
+        // W074 feed: the `##` doc line is the documentation string
+        assert!(text.contains("raises base to the exponent"), "{}", text);
+        // zero commas inside the parens → the first parameter is active
+        assert!(text.contains("\"activeParameter\":0"), "{}", text);
+        // after the first comma (col 20 sits right past it) → parameter 1
+        let v1 = signature_help(SIG_DEMO, &doc, 5, 20).expect("signature after comma");
+        assert!(
+            json_of(&v1).contains("\"activeParameter\":1"),
+            "{}",
+            json_of(&v1)
+        );
+    }
+
+    #[test]
+    fn signature_help_is_null_clean_off_calls() {
+        let doc = analyze(SIG_DEMO);
+        // unknown callee (a phantom): null, never an error
+        assert!(
+            signature_help(SIG_DEMO, &doc, 6, 20).is_none(),
+            "phantom callee"
+        );
+        // builtin callee: no arity table here, null (W43's job)
+        let bsrc = "main { let n = len([1, 2]) }";
+        let bdoc = analyze(bsrc);
+        assert!(
+            signature_help(bsrc, &bdoc, 0, 21).is_none(),
+            "builtin callee"
+        );
+        // cursor outside any call
+        assert!(
+            signature_help(SIG_DEMO, &doc, 5, 4).is_none(),
+            "outside a call"
+        );
+        // cursor past EOF
+        assert!(signature_help(SIG_DEMO, &doc, 99, 0).is_none(), "past EOF");
+    }
+
+    #[test]
+    fn signature_help_ignores_strings_comments_and_nested_commas() {
+        let src = "\
+gene mix(a: str, b: int) { return a }
+main {
+    let s = mix(\"x, (y\", 2)
+}
+";
+        let doc = analyze(src);
+        // cursor after `2` (col 26, just before the `)`): the comma inside
+        // the string literal must not count and the `(` inside it must not
+        // open a frame → activeParameter 1
+        let v = signature_help(src, &doc, 2, 26).expect("signature after string arg");
+        let text = json_of(&v);
+        assert!(
+            text.contains("\"label\":\"mix(a: str, b: int)\""),
+            "{}",
+            text
+        );
+        assert!(text.contains("\"activeParameter\":1"), "{}", text);
+        // a nested call's commas belong to the nested frame: `mix("x", pow(1, 2`
+        let src2 = "gene mix(a: str, b: int) { return a }\ngene pow(x: int, y: int) { return x }\nmain { let r = mix(\"x\", pow(1, 2)) }\n";
+        let doc2 = analyze(src2);
+        let v2 = signature_help(src2, &doc2, 2, 30).expect("innermost call wins");
+        assert!(
+            json_of(&v2).contains("\"label\":\"pow(x: int, y: int)\""),
+            "{}",
+            json_of(&v2)
+        );
+        // multi-line call: commas on earlier lines count
+        let src3 = "gene add(x: int, y: int) { return x + y }\nmain {\n    let r = add(\n        1,\n        2\n    )\n}\n";
+        let doc3 = analyze(src3);
+        let v3 = signature_help(src3, &doc3, 4, 9).expect("multiline call");
+        assert!(
+            json_of(&v3).contains("\"activeParameter\":1"),
+            "{}",
+            json_of(&v3)
+        );
+    }
+
+    #[test]
+    fn signature_help_callee_survives_return_and_space_before_paren() {
+        let src = "gene add(x: int, y: int) { return x + y }\nmain {\n    return add(1, 2)\n}\n";
+        let doc = analyze(src);
+        // cursor right after `(` on the `return add(` line: the keyword in
+        // front must not leak into the callee name
+        let v = signature_help(src, &doc, 2, 15).expect("callee after return");
+        assert!(
+            json_of(&v).contains("\"label\":\"add(x: int, y: int)\""),
+            "{}",
+            json_of(&v)
+        );
+        // a single space between callee and paren still resolves
+        let src2 = "gene add(x: int, y: int) { return x + y }\nmain {\n    let v = add (1, 2)\n}\n";
+        let doc2 = analyze(src2);
+        let v2 = signature_help(src2, &doc2, 2, 17).expect("callee before spaced paren");
+        assert!(
+            json_of(&v2).contains("\"activeParameter\":0"),
+            "{}",
+            json_of(&v2)
+        );
+    }
+
+    /// Debug-render a Value through the crate's own JSON writer (tests assert
+    /// on wire shapes, not on internals).
+    fn json_of(v: &Value) -> String {
+        crate::interp::json_stringify(v)
+    }
+
+    // ---- W46: the publish-diagnostics repair summary -----------------------
+
+    #[test]
+    fn publish_params_carries_repair_summary_only_when_repaired() {
+        // canonical file: no operonRepairs field, absence = canonical signal
+        let clean = publish_params("file:///clean.op", &[]);
+        assert!(
+            !json_of(&clean).contains("operonRepairs"),
+            "{}",
+            json_of(&clean)
+        );
+        // repaired file: the summary names the count and the divergence
+        let doc = analyze("gene g() { retrn 1 }\n");
+        let diags: Vec<Diagnostic> = doc.diagnostics.clone();
+        let sum = publish_params("file:///w.op", &diags);
+        let text = json_of(&sum);
+        assert!(text.contains("\"operonRepairs\""), "{}", text);
+        assert!(text.contains("\"applied\":1"), "{}", text);
+        assert!(text.contains("\"canonical\":false"), "{}", text);
+        assert!(
+            text.contains("1 repair applied, canonical form differs"),
+            "{}",
+            text
+        );
+        // the machine rung tag rides diagnostic.data
+        assert!(text.contains("\"rung\":\"wobble\""), "{}", text);
     }
 
     // ---- W45-v2: prepareRename / rename + the shared scanner --------------
