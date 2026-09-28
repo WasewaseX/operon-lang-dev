@@ -1,20 +1,17 @@
 # W015: channels + select (proof frames)
 # Same-thread buffered use is the deterministic path: every blocking shape
 # here is fed (sends precede recvs/selects), so the sequential oracle agrees
-# with the concurrent engine on every assert. The cross-thread shapes pin the
-# LIVE-handle rule (spawn args carry the same shared buffer) and the
-# cancel-unblocks-recv rule. The oracle-only `blocked` stress is documented
-# in SPEC section 13; the differential corpus never triggers it.
+# with the concurrent engine on every assert. The LIVE cross-thread shapes
+# (a host send or a cancel reaching a worker parked in recv) are real-OS-
+# thread evidence and live in tests/timing/channel_cross.op; both walkers
+# skip the timing lane (W18 pattern). The oracle-only `blocked` stress is
+# documented in SPEC section 13; the differential corpus never triggers it.
 phenotype Box {
     let v = 0
 }
 gene doubler(ch) {
     let v = recv(ch)
     return v * 2
-}
-gene parked(ch) {
-    let v = recv(ch)
-    return v
 }
 gene feeder(ch) {
     send(ch, "from worker")
@@ -167,10 +164,17 @@ frame proof {
     assert(ordered, "500 values come back in order")
     assert(acc == 124750, "0..499 sums to 124750")
 
-    # ---- cross-thread: the handle crosses spawn LIVE (same buffer)
+    # ---- cross-thread: the handle crosses spawn LIVE (same buffer).
+    # The send is buffered BEFORE spawn so every blocking shape here stays
+    # fed (sends precede recvs, per the header rule). The LIVE
+    # send-after-spawn window (a real OS thread parked in recv) is
+    # Rust-lane evidence in tests/timing/channel_cross.op: the sequential
+    # oracle runs worker bodies eagerly at spawn and cannot observe
+    # mid-flight ordering, and both walkers skip the timing lane (W18
+    # pattern).
     let t = channel()
-    let worker = spawn(doubler, [t])
     send(t, 21)
+    let worker = spawn(doubler, [t])
     let joined = join(worker)
     assert(joined == 42, "worker recv sees a host send (join gave " + str(joined) + ")")
 
@@ -183,17 +187,19 @@ frame proof {
     let back = join(spawn(maker, []))
     assert(back == null, "a returned handle degrades to null on the join wire")
 
-    # ---- blocked recv + cancel: the parked cell wakes, nothing leaks
+    # ---- cancel containment, both-core pin. A worker parked in recv is a
+    # real-OS-thread shape: the sequential oracle runs worker bodies eagerly
+    # at spawn, so cancel of a LIVE parked task (it wakes, join reports the
+    # cancelled phase, the state reads back "cancelled") is Rust-lane
+    # evidence in tests/timing/channel_cross.op, and both walkers skip the
+    # timing lane (W18 pattern). Here: cancel of an already-joined task is a
+    # contained false with a note, and a closed channel still drains the
+    # values a finished worker left behind.
     let q = channel()
-    let sleeper = spawn(parked, [q])
-    for i in range(100_000) {
-        let _ = i
-    }
-    let _ = cancel(sleeper)
-    let r = join(sleeper, 10_000)
-    assert(type(r) == "map" and r.kind == "cancelled", "cancel unblocks a parked recv")
-    assert(task_state(sleeper) == "cancelled", "the cancelled cell reports its phase")
-    send(q, "after cancel")
+    let fin = spawn(feeder, [q])
+    let _ = join(fin)
+    assert(cancel(fin) == false, "cancel of a joined task is a contained false")
+    assert(task_state(fin) == "done", "the joined cell reports its phase")
     close(q)
-    assert(recv(q) == "after cancel", "the buffer survives the cancelled consumer")
+    assert(recv(q) == "from worker", "a closed channel still drains its buffer")
 }
