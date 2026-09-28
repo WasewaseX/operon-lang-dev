@@ -1,0 +1,46 @@
+# std/binary: byte-order packing and hex over the bytes type (pure).
+use std/binary as bin
+
+frame proof {
+    # hex encode: lowercase, both input kinds
+    assert(bin.bin_hex_encode("ABC") == "414243")
+    assert(bin.bin_hex_encode(b"\x00\xff") == "00ff")
+    assert(bin.bin_hex_encode("") == "")
+
+    # hex decode: round-trip, malformed shapes answer null
+    assert(bin.bin_hex_decode("48656c6c6f") == bytes_from_str("Hello"))
+    assert(bin.bin_hex_decode(bin.bin_hex_encode("round trip")) == bytes_from_str("round trip"))
+    assert(bin.bin_hex_decode("abc") == null, "odd length")
+    assert(bin.bin_hex_decode("zz") == null, "non-hex character")
+
+    # u16 lanes
+    assert(bin.bin_u16le(0x1234) == bytes_from_list([0x34, 0x12]))
+    assert(bin.bin_u16be(0x1234) == bytes_from_list([0x12, 0x34]))
+    assert(bin.bin_read_u16le(bin.bin_u16le(43981), 0) == 43981)
+    assert(bin.bin_read_u16be(bin.bin_u16be(43981), 0) == 43981)
+
+    # u32 lanes (DEADBEEF reads back in both orders)
+    assert(bin.bin_u32le(0xDEADBEEF) == bytes_from_list([0xEF, 0xBE, 0xAD, 0xDE]))
+    assert(bin.bin_read_u32be(bin.bin_u32be(3735928559), 0) == 3735928559)
+    assert(bin.bin_read_u32le(bin.bin_u32le(3735928559), 0) == 3735928559)
+
+    # i64 little endian: sign extension survives the round trip
+    assert(bin.bin_i64le(-2) == bytes_from_list([254, 255, 255, 255, 255, 255, 255, 255]))
+    assert(bin.bin_read_i64le(bin.bin_i64le(-2), 0) == -2)
+    assert(bin.bin_read_i64le(bin.bin_i64le(1), 0) == 1)
+    assert(bin.bin_read_i64le(bin.bin_i64le(0), 0) == 0)
+    assert(bin.bin_read_i64le(bin.bin_i64le(9223372036854775807), 0) == 9223372036854775807)
+    assert(bin.bin_read_i64le(bin.bin_i64le(-9223372036854775807 - 1), 0) == -9223372036854775807 - 1)
+
+    # bounds: short reads answer null, never crash
+    assert(bin.bin_read_u16le(b"\x01", 0) == null)
+    assert(bin.bin_read_u32le(b"\x01\x02\x03", 0) == null)
+    assert(bin.bin_read_i64le(b"\x01", 0) == null)
+    assert(bin.bin_read_u16le(b"\x01\x02", -1) == null)
+
+    # size counts UTF-8 bytes of a string
+    assert(bin.bin_size("hello") == 5)
+    assert(bin.bin_size(b"") == 0)
+
+    promote("binary: all asserts green")
+}
