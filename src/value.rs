@@ -701,6 +701,7 @@ fn key_repr_g(k: &Value, seen: &mut HashSet<usize>, depth: u32) -> String {
 fn is_identlike(s: &str) -> bool {
     !s.is_empty()
         && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        // ast-grep-ignore: no-unwrap-in-src
         && !s.chars().next().unwrap().is_ascii_digit()
 }
 

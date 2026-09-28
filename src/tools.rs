@@ -1524,6 +1524,13 @@ fn scan_width_breaks(line: &str) -> Vec<WidthBreak> {
             },
             Frame::Code(base) => match ch {
                 '"' => frames.push(Frame::Str),
+                // '#'-comment runs to end of line: nothing after it is code,
+                // so no break may exist past it. A wrapped comment loses its
+                // '##' prefix on continuation and re-parses as CODE (the
+                // std/binary.op corpus failure: "..., say so with a value"
+                // became a say() call). Breaks found before the comment stay
+                // valid; saturate and stop.
+                '#' => break,
                 '(' | '[' => stack.push(true),
                 '{' => stack.push(false),
                 '}' => match base {

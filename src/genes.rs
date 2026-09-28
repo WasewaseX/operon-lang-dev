@@ -508,6 +508,7 @@ pub fn choose_variant(interp: &Interp, sp: &SpliceDef) -> Option<(String, Arc<Ge
     }
     // 5. first declared
     // 4. first declared
+    // ast-grep-ignore: no-unwrap-in-src
     let first = sp.variants.first().unwrap();
     Some((first.0.clone(), first.1.clone()))
 }
@@ -1141,6 +1142,7 @@ pub fn arg_to_snap(v: &Value) -> SnapArg {
 
 fn arg_to_snap_d(v: &Value, d: u32) -> SnapArg {
     match v {
+        // ast-grep-ignore: no-unwrap-in-src
         Value::Gene(d2, _) if d2.name.is_some() => SnapArg::GeneRef(d2.name.clone().unwrap()),
         Value::Gene(d2, _) => SnapArg::Lambda(d2.clone()),
         // W015: a top-level channel argument crosses as a live handle
@@ -1885,6 +1887,7 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
             Ok(v) => (to_send(&v), ti.notes),
             // W06 (D-014): a propagated variant IS the worker gene's return
             // value, converted at the boundary, never leaked as a failure.
+            // ast-grep-ignore: no-unwrap-in-src
             Err(s) if s.prop.is_some() => (to_send(&s.prop.unwrap()), ti.notes),
             Err(s) => (SendValue::Stress(s.kind, s.message), ti.notes),
         };

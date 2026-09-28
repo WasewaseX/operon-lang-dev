@@ -344,9 +344,11 @@ impl Parser {
             if l.saturating_sub(prev_line) > 1 {
                 blocks.push(Vec::new());
             }
+            // ast-grep-ignore: no-unwrap-in-src
             blocks.last_mut().unwrap().push(t.clone());
             prev_line = *l;
         }
+        // ast-grep-ignore: no-unwrap-in-src
         let last = blocks.pop().unwrap();
         let last_line = prev_line; // line of the final consumed doc line
         let hugs = decl_line.saturating_sub(last_line) == 1;

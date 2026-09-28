@@ -1,0 +1,9 @@
+id: no-raw-thread-spawn
+message: raw thread spawn outside spawn governance — threads must go through the fuel/accounted spawn path
+severity: error
+language: Rust
+rule:
+  pattern: std::thread::spawn($F)
+paths:
+  include:
+    - src

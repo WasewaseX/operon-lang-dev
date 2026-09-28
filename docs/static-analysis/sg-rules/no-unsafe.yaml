@@ -1,0 +1,9 @@
+id: no-unsafe-block-in-src
+message: unsafe block in the interpreter core — must be justified line-by-line or removed
+severity: error
+language: Rust
+rule:
+  kind: unsafe_block
+paths:
+  include:
+    - src
