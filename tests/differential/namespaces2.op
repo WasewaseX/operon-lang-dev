@@ -1,0 +1,35 @@
+# differential: W025 stage 2 nested sub-modules. A module file may declare
+# `module name { ... }` tables; use paths resolve FILE-FIRST, then descend
+# the exported nested tables longest-prefix-first; `::` reads and calls are
+# exact sugar for the Dot form; the wildcard tail flat-binds exports without
+# binding the table itself. Byte-identical on both engines.
+use namespaces2_lib;
+use namespaces2_lib::seq;
+use namespaces2_lib::seq::*;
+use namespaces2_lib::seq::deep;
+use namespaces2_lib::counts;
+
+gene main() {
+    # the flat repertoire still binds beside the tables (back-compat)
+    print(flat_tag())
+    # the file module under its own binding
+    print(namespaces2_lib.seq.tag())
+    # `::` is the namespace spelling of the same member reads and calls
+    print(namespaces2_lib::seq::tag())
+    print(namespaces2_lib::seq::twice("ab"))
+    # the aliased table from a two-segment use path
+    print(seq.twice("xy"))
+    # a nested table inside a nested table (longest-prefix descent)
+    print(deep.tag())
+    print(namespaces2_lib::seq::deep::tag())
+    # data exports and closure over the table's own scope
+    print(counts.base)
+    print(counts.bump(5))
+    print(namespaces2_lib::counts::bump(7))
+    # the wildcard import flat-bound the seq repertoire (tag came from seq::*)
+    print(tag())
+    # table identity: the same table reached two ways is one value
+    print(seq.deep == deep)
+    # shadowing rule: a later flat declaration wins over the table name
+    print(has(namespaces2_lib, "seq"), type(counts))
+}

@@ -1275,6 +1275,28 @@ class P:
             self.next()
             name = self.ident()
             return ("tad", name, self.block())
+        if word == "module":
+            # W025 stage 2: nested sub-module declaration, CONTEXTUAL like the
+            # Rust core: only `module NAME {` (newlines tolerated between the
+            # words) is the declaration; every other use of the word `module`
+            # stays an ordinary identifier (it is not in KEYWORDS).
+            n_toks = len(self.toks)
+            j = self.pos + 1
+            while j < n_toks and (self.toks[j][0] == "NL" or self.toks[j][:2] == ("SYM", ";")):
+                j += 1
+            is_decl = j < n_toks and self.toks[j][0] == "IDENT"
+            if is_decl:
+                j += 1
+                while j < n_toks and (self.toks[j][0] == "NL" or self.toks[j][:2] == ("SYM", ";")):
+                    j += 1
+                is_decl = j < n_toks and self.toks[j][:2] == ("SYM", "{")
+            if not is_decl:
+                return self.assign_or_expr(w)
+            self.next()
+            name = self.ident()
+            while self.peek()[0] == "NL":
+                self.next()
+            return ("module", name, self.block())
         if word == "anchor":
             self.next()
             is_export = self.expect_kw("export")
@@ -1983,6 +2005,11 @@ class P:
                     parts.append("/"); self.next(); self.next()
                 else:
                     break
+            elif t[0] == "SYM" and t[1] == "*":
+                # W025 stage 2: wildcard tail, `use a::b::*` carries as
+                # "a/b/*"; the interpreter strips the `/*` and flat-binds the
+                # target table's exports.
+                parts.append("*"); self.next(); break
             elif t[0] == "STR":
                 parts.append(t[1]); self.next()
                 nt = self.peek()
@@ -2441,6 +2468,35 @@ class P:
                 else:
                     self.note(t2[2], 4, "'?.' followed by non-name; chain resolves to null")
                     e = ("member?", e, "")
+                    break
+            elif t[0] == "SYM" and t[1] == ":" and self.pos + 1 < len(self.toks) and self.toks[self.pos + 1][:2] == ("SYM", ":"):
+                # W025 stage 2: `e::name` is the namespace spelling of
+                # `e.name` (stage 1 made `::` a use-path separator; stage 2
+                # lets qualified reads and calls ride the same spelling
+                # through nested tables). Exactly sugar for the Dot arm
+                # above, the AST is identical.
+                self.next(); self.next()
+                t2 = self.peek()
+                if t2[0] == "IDENT":
+                    self.next()
+                    if self.peek() == ("SYM", "(", t2[2]):
+                        self.next()
+                        args = []
+                        while True:
+                            self.eat_nl()
+                            t3 = self.peek()
+                            if t3 == ("SYM", ")", t3[2]):
+                                self.next(); break
+                            if t3[0] == "EOF":
+                                break
+                            args.append(self.expr())
+                            if self.peek() == ("SYM", ",", t3[2]):
+                                self.next()
+                        e = ("method", e, t2[1], args)
+                    else:
+                        e = ("member", e, t2[1])
+                else:
+                    self.note(t2[2], 4, "'::' followed by non-name; member skipped")
                     break
             else:
                 return e
@@ -3672,13 +3728,61 @@ class Interp:
                     self.exec_block(child, body)
                     return
         elif k == "use":
-            modv = self.load_module(s[1])
-            name = s[2] or os.path.basename(s[1].replace("\\", "/")).split(".")[0].split("/")[-1]
-            env[name] = modv
-            # flat-bind ALL exports beside the alias map (genes AND data)
+            # W025 stage 2: a trailing `/*` marks the WILDCARD form, flat-bind
+            # the target table's exports without binding the module map itself
+            # (an explicit `as` alias still binds it). Resolution stays
+            # FILE-FIRST: the full path is tried as a file, then each shorter
+            # prefix is loaded as a file and the remaining segments descend
+            # the exported nested-module tables, longest prefix first (mirror
+            # of interp.rs Stmt::Use + descend_tables, SPEC §8).
+            path = s[1]
+            wildcard = path.endswith("/*")
+            base = path[:-2] if wildcard else path
+            modv = self.load_module(base)
+            if modv is None:
+                segs = base.split("/")
+                for kk in range(len(segs) - 1, 0, -1):
+                    rootv = self.load_module("/".join(segs[:kk]))
+                    if rootv is None:
+                        continue
+                    table = rootv
+                    hit = True
+                    for seg in segs[kk:]:
+                        nxt = table.get(seg) if isinstance(table, dict) else None
+                        if nxt is None:
+                            self.note(4, f"use '{path}': segment '{seg}' is not a nested module table; import binds nothing")
+                            hit = False
+                            break
+                        table = nxt
+                    if hit:
+                        modv = table
+                        break
+            name = s[2] or os.path.basename(base.replace("\\", "/")).split(".")[0].split("/")[-1]
+            if not wildcard or s[2]:
+                env[name] = modv if modv is not None else {}
+            # flat-bind ALL exports beside the alias map (genes AND data);
+            # for the wildcard form this flat bind IS the whole import
             if isinstance(modv, dict):
                 for kname, v in modv.items():
                     env[kname] = v
+        elif k == "module":
+            # W025 stage 2: nested sub-module table (mirror of interp.rs
+            # Stmt::Module). The body runs ONCE here in a fresh child scope;
+            # stress propagates to the enclosing containment exactly like a
+            # module-file top-level statement, flow signals end only their
+            # own statement. The child scope's own names become the export
+            # table, sorted like the file-module loader sorts them, so both
+            # engines print and flat-bind identically. Last declaration wins.
+            _, mname, mbody = s
+            child = self.new_scope(env)
+            for st in mbody:
+                try:
+                    self.exec_stmt(child, st)
+                except (Return, BreakLoop, ContinueLoop):
+                    pass
+            exports = {kk: vv for kk, vv in child.items()
+                       if isinstance(kk, str) and kk != "__parent__" and not kk.startswith("#")}
+            env[mname] = {kk: exports[kk] for kk in sorted(exports)}
         elif k == "raise":
             msg = self.eval(env, s[2])
             raise Stress(s[1] or "unfolded", v_display(msg))
@@ -7052,7 +7156,11 @@ class Interp:
                 cands.append(os.path.join(dep_dir, p[len(seg):]))
         resolved = next((c for c in cands if os.path.exists(c)), None)
         if resolved is None:
-            return {}
+            # W025 stage 2: None = not found, distinct from an existing but
+            # empty module ({}), so the nested-table descent can try the
+            # next file prefix. The use arm binds {} for a total failure,
+            # exactly as before.
+            return None
         src = open(resolved, encoding="utf-8", errors="replace").read()  # W59: explicit UTF-8 (Windows locale default is cp1252)
         self.loading.append(path)
         stmts, notes, pubs = parse(src)
