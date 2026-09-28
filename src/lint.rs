@@ -1,4 +1,4 @@
-//! lint.rs, W42/W43/W48/W66 (ROADMAP-100): the shared static-analysis rule
+//! lint.rs, W41/W42/W43/W48/W66 (ROADMAP-100): the shared static-analysis rule
 //! engine. `operon lint` is the standalone front door; `operon check` reuses
 //! the same findings for its diagnostics format. Check-only: the interpreter
 //! and the oracle are untouched, so runtime semantics and differential parity
@@ -7,8 +7,46 @@
 //! Philosophy (Total Grammar): lint findings are ADVISORY. Nothing here
 //! rejects a program; `--strict` escalation is a CLI-side policy (W37
 //! contract), never an interpreter behavior.
+//!
+//! ------------------------------------------------------------ W041 codes
+//! Stable diagnostic code scheme, mirrored in `operon check --help`. The
+//! letter is the severity stream (E error, W warning, N note), the number is
+//! the stable identity. NEVER renumber; new rules append. The rule name is
+//! carried alongside every finding so comments like `// allow: unused-gene`
+//! stay readable.
+//!
+//!   E00  unreadable-file        file could not be read (check-level)
+//!   E01  wrong-arity            call/new/method arg count vs a known def
+//!                                (W043: promoted to error per board)
+//!   W01  phantom-call           callee undefined in file/modules/builtins
+//!   W02  const-reassign         assignment to a const-bound name
+//!   W03  constant-condition     if/while over a literal constant
+//!   W04  unreachable-code       statement after return/raise
+//!   W05  duplicate-match-arm    same literal twice in one match
+//!   W06  unreachable-match-arm  arm after an unguarded catch-all (W042)
+//!   W07  unused-binding         let never read (W042)
+//!   W08  dead-const             const never referenced (W042)
+//!   W09  nmd:<kind>/anchor      NMD + anchor-import sweep findings
+//!   W10  cell-unknown-key       .cell key outside the schema (W66)
+//!   W11  cell-type-mismatch     .cell key expects a number (W66)
+//!   N01  unused-gene            defined, never called (library surface?)
+//!   N02  unused-import          module imported, never referenced
+//!   N03  infinite-loop-suspect  while over an always-true literal
+//!   N04  repair:r<n>            parser repair note, rung n (W037/W038)
+//!   N99  <unknown>              fallback for rules not in the table yet
+//!
+//! Location convention: findings carry a 1-based line when the AST span
+//! knows it (call sites do, A13); line 0 means file-level (def-order hint
+//! findings where the statement carries no span yet).
+//!
+//! Suppression (the allow mechanism): a source comment `// allow: rule1,
+//! rule2` (or `# allow: ...`) on the finding's line — or on the line
+//! directly above it — drops findings whose rule OR code matches; bare
+//! `// allow:` suppresses everything on that line. Best effort by design:
+//! def-hint findings (line approximated by statement order) may sit one or
+//! two lines off, call-site findings (real spans) are exact.
 
-use crate::ast::{Expr, Program, Stmt};
+use crate::ast::{Expr, MatchPat, Program, Stmt};
 use crate::genes;
 use std::collections::{HashMap, HashSet};
 
@@ -34,6 +72,8 @@ impl Sev {
 #[derive(Debug, Clone)]
 pub struct Finding {
     pub line: usize,
+    /// W041: stable diagnostic code (see the scheme table in the module doc).
+    pub code: &'static str,
     pub rule: String,
     pub sev: Sev,
     pub message: String,
@@ -43,10 +83,36 @@ impl Finding {
     fn new(line: usize, rule: &str, sev: Sev, message: String) -> Finding {
         Finding {
             line,
+            code: rule_code(rule),
             rule: rule.to_string(),
             sev,
             message,
         }
+    }
+}
+
+/// W041: rule name -> stable diagnostic code. Dynamic rule names
+/// (`nmd:<kind>`, `repair:r<n>`) are matched by prefix; anything not in the
+/// table lands on N99 rather than inventing a code ad hoc.
+pub fn rule_code(rule: &str) -> &'static str {
+    match rule {
+        "wrong-arity" => "E01",
+        "phantom-call" => "W01",
+        "const-reassign" => "W02",
+        "constant-condition" => "W03",
+        "unreachable-code" => "W04",
+        "duplicate-match-arm" => "W05",
+        "unreachable-match-arm" => "W06",
+        "unused-binding" => "W07",
+        "dead-const" => "W08",
+        "cell-unknown-key" => "W10",
+        "cell-type-mismatch" => "W11",
+        "unused-gene" => "N01",
+        "unused-import" => "N02",
+        "infinite-loop-suspect" => "N03",
+        r if r.starts_with("nmd:") || r == "anchor-import" => "W09",
+        r if r.starts_with("repair:") => "N04",
+        _ => "N99",
     }
 }
 
@@ -113,19 +179,35 @@ pub fn lint(prog: &Program) -> Vec<Finding> {
                 defined.entry(n.clone()).or_insert(line);
             }
         }
-        Stmt::Use(path, _) => {
+        Stmt::Use(path, alias) => {
+            // the alias is the callable prefix in this file (`use std/set as
+            // st` -> members are `st.x`); without an alias the last segment is
             let last = path.rsplit('/').next().unwrap_or(path).to_string();
-            imported.push((last, line));
+            imported.push((alias.clone().unwrap_or(last), line));
         }
         _ => {}
     });
     collect_calls_stmts(&prog.stmts, &mut called);
 
-    // W42: unused-gene (only when defined AND never called anywhere in-file;
-    // exported genes (anchor/tad exports) are library surface, skip them)
+    // W42: every name read anywhere (see collect_reads_stmts). A bare
+    // reference to a gene (e.g. `spawn(quick, ...)` passing the gene for
+    // dynamic dispatch) counts as a use: the call happens through the
+    // captured reference, the documented dynamic-call escape hatch.
+    let mut reads: HashSet<String> = HashSet::new();
+    collect_reads_stmts(&prog.stmts, &mut reads);
+
+    // W24 module surface: a file with explicit `pub` marks is a library
+    // module (default-open exports everything, and consumers may reference
+    // any name, sometimes only via strings: `has(mod, "NAME")`). In-file
+    // "unused" means nothing there, so the def-side rules stay silent.
+    let is_module = !prog.pub_exports.is_empty();
+
+    // W42: unused-gene (only when defined AND never called or referenced
+    // anywhere in-file; exported genes (anchor/tad exports, pub marks) are
+    // library surface, skip them)
     let exported: HashSet<String> = prog.anchor_exports.iter().cloned().collect();
     for (name, line) in &defined {
-        if name == "main" || exported.contains(name) {
+        if name == "main" || exported.contains(name) || is_module || reads.contains(name) {
             continue;
         }
         if !called.contains(name) {
@@ -140,7 +222,6 @@ pub fn lint(prog: &Program) -> Vec<Finding> {
             ));
         }
     }
-
     // W42: unused-import (module imported, none of its members referenced)
     for (name, line) in &imported {
         if !called
@@ -227,14 +308,282 @@ pub fn lint(prog: &Program) -> Vec<Finding> {
     });
     unreachable_scan(&prog.stmts, 1, &mut out);
     duplicate_match_arms(&prog.stmts, &mut out);
+    unreachable_match_arms(&prog.stmts, &mut out);
 
-    // W43: wrong-arity at call sites
+    // W43: wrong-arity at call sites. Free genes +, now, phenotype methods
+    // and `new` constructors where the receiver/phenotype is statically
+    // known in this file (see PhenoKnowledge below).
     let mut shadowed: HashSet<String> = HashSet::new();
     collect_shadowed_bindings(&prog.stmts, &mut shadowed);
-    arity_scan(&prog.stmts, &arities, &shadowed, &mut out);
+    let knowledge = PhenoKnowledge::collect(prog);
+    arity_scan(&prog.stmts, &arities, &shadowed, &knowledge, &mut out);
+
+    // W42 (critique-pinned set): unused binding + dead const. Name-level,
+    // file-wide, conservative: any read of the NAME anywhere (including
+    // inside gene bodies, closures, patterns, rescue blocks) retires the
+    // finding, so the rule can only stay silent on scope tricks, never
+    // misfire on them. `_`-prefixed names are exempt by convention; module
+    // files (pub marks) are exempt wholesale — their bindings are surface.
+    let mut candidates: Vec<(String, usize, bool)> = Vec::new(); // name, hint line, is_const
+    walk_all(&prog.stmts, &mut |st, line| match st {
+        Stmt::Let(n, _) | Stmt::LetAnn(n, _, _) => {
+            candidates.push((n.clone(), line, false));
+        }
+        Stmt::LetConst(n, _) => {
+            candidates.push((n.clone(), line, true));
+        }
+        _ => {}
+    });
+    // name-level rule: one finding per name (first binding wins the hint
+    // line) even when several scopes bind the same name
+    let mut reported: HashSet<String> = HashSet::new();
+    for (name, line, is_const) in candidates {
+        if is_module || name == "_" || name.starts_with('_') || !reported.insert(name.clone()) {
+            continue;
+        }
+        if reads.contains(&name) {
+            continue;
+        }
+        if is_const {
+            out.push(Finding::new(
+                line,
+                "dead-const",
+                Sev::Warning,
+                format!(
+                    "const '{}' is bound but never referenced in this file; \
+                     drop it, or silence with '// allow: dead-const'",
+                    name
+                ),
+            ));
+        } else {
+            out.push(Finding::new(
+                line,
+                "unused-binding",
+                Sev::Warning,
+                format!(
+                    "binding '{}' is never read in this file (dead store); \
+                     '_'-prefix or '// allow: unused-binding' silences",
+                    name
+                ),
+            ));
+        }
+    }
 
     out.sort_by_key(|f| (f.line, f.rule.clone()));
     out
+}
+
+/// W41: `lint` plus the allow-comment suppression pass (see the module-doc
+/// scheme table). CLI surfaces use this; bare `lint` stays the raw engine.
+pub fn lint_with_source(prog: &Program, src: &str) -> Vec<Finding> {
+    let mut out = lint(prog);
+    suppress_allowed(&mut out, src);
+    out
+}
+
+/// Parse `allow:` suppression comments: line -> Some(None) means "allow
+/// everything on this line", Some(Some(rules)) means "allow these rules".
+fn parse_allow(line: &str) -> Option<Option<Vec<String>>> {
+    // comment start: `#` (the language comment) or `//` (C-style tolerance)
+    let start = line.find('#').or_else(|| line.find("//"))?;
+    let comment = line[start + 1..].trim();
+    let rest = comment.strip_prefix("allow:")?.trim();
+    if rest.is_empty() {
+        return Some(None);
+    }
+    Some(Some(
+        rest.split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect(),
+    ))
+}
+
+fn suppress_allowed(out: &mut Vec<Finding>, src: &str) {
+    let mut allows: HashMap<usize, Option<Vec<String>>> = HashMap::new();
+    for (i, line) in src.lines().enumerate() {
+        if let Some(rules) = parse_allow(line) {
+            allows.insert(i + 1, rules);
+        }
+    }
+    if allows.is_empty() {
+        return;
+    }
+    out.retain(|f| {
+        if f.line == 0 {
+            return true; // file-level findings are not line-suppressible
+        }
+        for l in [f.line, f.line.saturating_sub(1)] {
+            if let Some(rules) = allows.get(&l) {
+                match rules {
+                    None => return false,
+                    Some(v) if v.iter().any(|r| r.as_str() == f.rule || r.as_str() == f.code) => {
+                        return false
+                    }
+                    _ => {}
+                }
+            }
+        }
+        true
+    });
+}
+
+// ------------------------------------------------------------ W43: phenotype knowledge
+
+/// What lint.rs can know about phenotype methods without running anything:
+/// same-file phenotype defs (+ their `from` lineage, + trait DEFAULT
+/// methods), and the let-bound receivers statically constructed with
+/// `new Pheno(...)`. Anything ambiguous (re-bound, assigned, shadowed,
+/// defined in another module) is simply absent => silent. This is the
+/// documented escape hatch: dynamic dispatch (map values, captured
+/// references, field-held callables, unknown receivers) is excluded.
+struct PhenoKnowledge {
+    /// var name -> phenotype name ("" tombstone = bound to something else)
+    receiver_pheno: HashMap<String, String>,
+    phenos: HashMap<String, Vec<(String, Arity)>>,
+    parents: HashMap<String, String>,
+    pheno_traits: HashMap<String, Vec<String>>,
+    traits: HashMap<String, Vec<(String, Arity)>>,
+}
+
+impl PhenoKnowledge {
+    fn collect(prog: &Program) -> PhenoKnowledge {
+        let mut phenos: HashMap<String, Vec<(String, Arity)>> = HashMap::new();
+        let mut parents: HashMap<String, String> = HashMap::new();
+        let mut pheno_traits: HashMap<String, Vec<String>> = HashMap::new();
+        let mut traits: HashMap<String, Vec<(String, Arity)>> = HashMap::new();
+        walk_all(&prog.stmts, &mut |st, _| match st {
+            Stmt::Pheno(p) => {
+                let methods = p
+                    .methods
+                    .iter()
+                    // a method whose params mention `self` has legacy shape
+                    // the runtime binds oddly; stay silent on it
+                    .filter(|g| !g.params.iter().any(|(n, _)| n == "self"))
+                    .map(|g| (g.name.clone().unwrap_or_default(), param_arity(&g.params)))
+                    .collect();
+                phenos.insert(p.name.clone(), methods);
+                if let Some(par) = &p.parent {
+                    parents.insert(p.name.clone(), par.clone());
+                }
+                if !p.implements.is_empty() {
+                    pheno_traits.insert(p.name.clone(), p.implements.clone());
+                }
+            }
+            Stmt::Trait(t) => {
+                let defaults = t
+                    .methods
+                    .iter()
+                    .filter_map(|m| m.default.as_ref())
+                    .filter(|g| !g.params.iter().any(|(n, _)| n == "self"))
+                    .map(|g| (g.name.clone().unwrap_or_default(), param_arity(&g.params)))
+                    .collect();
+                traits.insert(t.name.clone(), defaults);
+            }
+            _ => {}
+        });
+        // receiver bindings: only plain lets whose RHS is `new Pheno(...)`;
+        // any re-binding or assignment tombstones the name permanently.
+        let mut receiver_pheno: HashMap<String, String> = HashMap::new();
+        collect_receiver_knowledge(&prog.stmts, &mut receiver_pheno);
+        PhenoKnowledge {
+            receiver_pheno,
+            phenos,
+            parents,
+            pheno_traits,
+            traits,
+        }
+    }
+
+    /// First-hit dispatch order mirrors the runtime: own methods, then the
+    /// `from` lineage, then trait DEFAULT methods in `implements` order.
+    fn method_arity(&self, pheno: &str, name: &str, depth: usize) -> Option<Arity> {
+        if depth > 16 {
+            return None; // lineage cycle cap: stay silent, never loop
+        }
+        if let Some(list) = self.phenos.get(pheno) {
+            if let Some((_, a)) = list.iter().find(|(n, _)| n == name) {
+                return Some(*a);
+            }
+        }
+        if let Some(par) = self.parents.get(pheno) {
+            if let Some(a) = self.method_arity(par, name, depth + 1) {
+                return Some(a);
+            }
+        }
+        if let Some(ts) = self.pheno_traits.get(pheno) {
+            for t in ts {
+                if let Some(list) = self.traits.get(t) {
+                    if let Some((_, a)) = list.iter().find(|(n, _)| n == name) {
+                        return Some(*a);
+                    }
+                }
+            }
+        }
+        None
+    }
+}
+
+/// Receiver knowledge walker: block-scoped nesting only. Gene / phenotype /
+/// trait / splice bodies are separate scopes; a `let` there must never
+/// create receiver knowledge for other scopes.
+fn collect_receiver_knowledge(stmts: &[Stmt], rec: &mut HashMap<String, String>) {
+    for st in stmts {
+        match st {
+            Stmt::Let(n, e) | Stmt::LetAnn(n, _, e) => {
+                let ph = match e {
+                    Expr::New(pn, _) => Some(pn.clone()),
+                    _ => None,
+                };
+                match (rec.get(n).cloned(), ph) {
+                    (None, Some(p)) => {
+                        rec.insert(n.clone(), p);
+                    }
+                    _ => {
+                        // re-bound, assigned, or bound to a non-constructor:
+                        // tombstone (empty string) forever
+                        rec.insert(n.clone(), String::new());
+                    }
+                }
+            }
+            Stmt::Assign(n, _, _) => {
+                rec.insert(n.clone(), String::new());
+            }
+            Stmt::MultiAssign(targets, _, _) => {
+                for t in targets {
+                    if let Expr::Ident(n) = t {
+                        rec.insert(n.clone(), String::new());
+                    }
+                }
+            }
+            _ => {}
+        }
+        match st {
+            Stmt::If(arms, els) => {
+                for (_, b) in arms {
+                    collect_receiver_knowledge(b, rec);
+                }
+                if let Some(e) = els {
+                    collect_receiver_knowledge(e, rec);
+                }
+            }
+            Stmt::While(_, b)
+            | Stmt::Loop(b)
+            | Stmt::Scope(b)
+            | Stmt::Block(b)
+            | Stmt::Tad(_, b)
+            | Stmt::For(_, _, b)
+            | Stmt::ForPat(_, _, b) => collect_receiver_knowledge(b, rec),
+            Stmt::Frame { body, .. } => collect_receiver_knowledge(body, rec),
+            Stmt::Stress { body, rescue, .. } => {
+                collect_receiver_knowledge(body, rec);
+                if let Some((_, rb)) = rescue {
+                    collect_receiver_knowledge(rb, rec);
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 fn constant_condition(e: &Expr) -> Option<String> {
@@ -321,6 +670,189 @@ fn lit_key(e: &Expr) -> String {
     }
 }
 
+/// W42 (critique-pinned set): unreachable match arms, pure syntax. An arm
+/// placed after an unguarded catch-all (`_`, a binding pattern, or an
+/// or-pattern containing either) can never run. Guards make an arm
+/// fallible, so a guarded catch-all does NOT trigger the rule; literal
+/// duplicates are duplicate-match-arm's job. This is the check-time slice
+/// of W002 stage 2: full exhaustiveness/reachability lives with the pattern
+/// algebra in the semantic lane, this one needs nothing but the AST.
+fn unreachable_match_arms(stmts: &[Stmt], out: &mut Vec<Finding>) {
+    for st in stmts {
+        if let Stmt::Match(_, arms) = st {
+            let mut caught_all = false;
+            for (i, (pat, body)) in arms.iter().enumerate() {
+                if caught_all {
+                    out.push(Finding::new(
+                        body.first().and_then(stmt_line).unwrap_or(1),
+                        "unreachable-match-arm",
+                        Sev::Warning,
+                        format!(
+                            "match arm {} is unreachable: an earlier arm matches every value \
+                             (unguarded catch-all)",
+                            i + 1
+                        ),
+                    ));
+                }
+                if pat_is_catchall(pat) {
+                    caught_all = true;
+                }
+            }
+            for (_, body) in arms {
+                unreachable_match_arms(body, out);
+            }
+        }
+        for nested in stmt_nested_all(st) {
+            unreachable_match_arms(nested, out);
+        }
+    }
+}
+
+fn pat_is_catchall(pat: &MatchPat) -> bool {
+    match pat {
+        MatchPat::Wild | MatchPat::Bind(_) => true,
+        MatchPat::Or(alts) => alts.iter().any(pat_is_catchall),
+        _ => false, // guarded catch-alls can fail: never treated as catch-all
+    }
+}
+
+/// W42: every name READ anywhere in the statement list. Name-level and
+/// file-wide by design (conservative): it can only over-count reads, never
+/// under-count, so unused-binding/dead-const can only stay silent, never
+/// misfire. Exhaustive on purpose — a new Stmt/Expr variant must be
+/// triaged here or a real read could be missed.
+fn collect_reads_stmts(stmts: &[Stmt], reads: &mut HashSet<String>) {
+    for st in stmts {
+        for e in stmt_exprs_all(st) {
+            collect_reads_expr(e, reads);
+        }
+        // compound assignment reads its target name (`x += 1`); plain
+        // assignment does not (that is a dead store, the rule's whole point)
+        if let Stmt::Assign(n, Some(_), _) = st {
+            reads.insert(n.clone());
+        }
+        if let Stmt::Match(_, arms) = st {
+            for (pat, body) in arms {
+                collect_pat_reads(pat, reads);
+                collect_reads_stmts(body, reads);
+            }
+        }
+        for nested in stmt_nested_all(st) {
+            collect_reads_stmts(nested, reads);
+        }
+    }
+}
+
+/// Pattern positions can embed reads: guard conditions see the bindings,
+/// literal patterns may carry interpolated expressions.
+fn collect_pat_reads(pat: &MatchPat, reads: &mut HashSet<String>) {
+    match pat {
+        MatchPat::Lit(e) => collect_reads_expr(e, reads),
+        MatchPat::Multi(es) => {
+            for e in es {
+                collect_reads_expr(e, reads);
+            }
+        }
+        MatchPat::Guard(_, cond) => collect_reads_expr(cond, reads),
+        MatchPat::Variant(_, Some(inner)) => collect_pat_reads(inner, reads),
+        MatchPat::ListPat { elems, .. } => {
+            for p in elems {
+                collect_pat_reads(p, reads);
+            }
+        }
+        MatchPat::MapPat { keys } => {
+            for (_, sub) in keys {
+                if let Some(p) = sub {
+                    collect_pat_reads(p, reads);
+                }
+            }
+        }
+        MatchPat::Or(alts) => {
+            for p in alts {
+                collect_pat_reads(p, reads);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn collect_reads_expr(e: &Expr, reads: &mut HashSet<String>) {
+    match e {
+        Expr::Ident(n) => {
+            reads.insert(n.clone());
+        }
+        Expr::Interp(parts) => {
+            for p in parts {
+                if let crate::ast::InterpPart::Expr(x) = p {
+                    collect_reads_expr(x, reads);
+                }
+            }
+        }
+        Expr::List(items) => {
+            for i in items {
+                collect_reads_expr(i, reads);
+            }
+        }
+        Expr::Map(pairs) => {
+            for (k, v) in pairs {
+                collect_reads_expr(k, reads);
+                collect_reads_expr(v, reads);
+            }
+        }
+        Expr::Unary(_, a) => collect_reads_expr(a, reads),
+        Expr::Binary(_, a, b, _) => {
+            collect_reads_expr(a, reads);
+            collect_reads_expr(b, reads);
+        }
+        Expr::Call(c, args, _) => {
+            collect_reads_expr(c, reads);
+            for a in args {
+                collect_reads_expr(a, reads);
+            }
+        }
+        Expr::Index(a, b, _) => {
+            collect_reads_expr(a, reads);
+            collect_reads_expr(b, reads);
+        }
+        Expr::Member(a, _) | Expr::MemberSafe(a, _) => collect_reads_expr(a, reads),
+        Expr::Method(recv, _, args) | Expr::MethodSafe(recv, _, args) => {
+            collect_reads_expr(recv, reads);
+            for a in args {
+                collect_reads_expr(a, reads);
+            }
+        }
+        Expr::Lambda(g) => {
+            for (_, d) in &g.params {
+                if let Some(d) = d {
+                    collect_reads_expr(d, reads);
+                }
+            }
+            collect_reads_stmts(&g.body, reads);
+        }
+        Expr::Collect {
+            iter, filter, body, ..
+        } => {
+            collect_reads_expr(iter, reads);
+            if let Some(f) = filter {
+                collect_reads_expr(f, reads);
+            }
+            collect_reads_expr(body, reads);
+        }
+        Expr::New(_, args) => {
+            for a in args {
+                collect_reads_expr(a, reads);
+            }
+        }
+        Expr::Ternary(a, b, c) => {
+            collect_reads_expr(a, reads);
+            collect_reads_expr(b, reads);
+            collect_reads_expr(c, reads);
+        }
+        Expr::Propagate(a, _) => collect_reads_expr(a, reads),
+        _ => {}
+    }
+}
+
 fn collect_shadowed_bindings(stmts: &[Stmt], shadowed: &mut HashSet<String>) {
     for st in stmts {
         match st {
@@ -339,20 +871,138 @@ fn arity_scan(
     stmts: &[Stmt],
     arities: &HashMap<String, Arity>,
     shadowed: &HashSet<String>,
+    knowledge: &PhenoKnowledge,
     out: &mut Vec<Finding>,
 ) {
     for st in stmts {
-        scan_expr_arities(st_exprs(st), arities, shadowed, out);
-        if let Some(nested) = nested_stmts(st) {
-            arity_scan(nested, arities, shadowed, out);
-        }
+        scan_expr_arities(stmt_exprs_all(st), arities, shadowed, knowledge, out);
+        arity_scan_nested(st, arities, shadowed, knowledge, out);
     }
+}
+
+/// Complete statement nesting for call-site walks: every variant that holds
+/// statement bodies, scanned recursively (If: ALL arms + else, not just the
+/// first; Match arms; frames; stress/rescue; defs' bodies). Exhaustive on
+/// purpose — a new Stmt variant must be triaged here.
+fn arity_scan_nested(
+    st: &Stmt,
+    arities: &HashMap<String, Arity>,
+    shadowed: &HashSet<String>,
+    knowledge: &PhenoKnowledge,
+    out: &mut Vec<Finding>,
+) {
+    match st {
+        Stmt::If(arms, els) => {
+            for (_, b) in arms {
+                arity_scan(b, arities, shadowed, knowledge, out);
+            }
+            if let Some(e) = els {
+                arity_scan(e, arities, shadowed, knowledge, out);
+            }
+        }
+        Stmt::While(_, b)
+        | Stmt::Loop(b)
+        | Stmt::Scope(b)
+        | Stmt::Block(b)
+        | Stmt::Tad(_, b)
+        | Stmt::For(_, _, b)
+        | Stmt::ForPat(_, _, b) => arity_scan(b, arities, shadowed, knowledge, out),
+        Stmt::Frame { body, .. } => arity_scan(body, arities, shadowed, knowledge, out),
+        Stmt::Match(_, arms) => {
+            for (_, b) in arms {
+                arity_scan(b, arities, shadowed, knowledge, out);
+            }
+        }
+        Stmt::Stress { body, rescue, .. } => {
+            arity_scan(body, arities, shadowed, knowledge, out);
+            if let Some((_, rb)) = rescue {
+                arity_scan(rb, arities, shadowed, knowledge, out);
+            }
+        }
+        Stmt::Gene(g) | Stmt::Seq(g) => arity_scan(&g.body, arities, shadowed, knowledge, out),
+        Stmt::Pheno(p) => {
+            for m in &p.methods {
+                arity_scan(&m.body, arities, shadowed, knowledge, out);
+            }
+        }
+        Stmt::Trait(t) => {
+            for m in &t.methods {
+                if let Some(d) = &m.default {
+                    arity_scan(&d.body, arities, shadowed, knowledge, out);
+                }
+            }
+        }
+        Stmt::Splice(s) => {
+            for (_, g) in &s.variants {
+                arity_scan(&g.body, arities, shadowed, knowledge, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Exhaustive per-statement expression extractor (every variant that holds
+/// an Expr). The old st_exprs missed if-conditions, match scrutinees, index/
+/// member assignments, multi-assign and destructuring iterables, so call
+/// sites inside them were invisible to arity + call collection. Exhaustive
+/// on purpose — a new Stmt variant must be triaged here.
+fn stmt_exprs_all(st: &Stmt) -> Vec<&Expr> {
+    match st {
+        Stmt::Let(_, e) | Stmt::LetConst(_, e) | Stmt::LetAnn(_, _, e) => vec![e],
+        Stmt::LetPat(_, e) => vec![e],
+        Stmt::Assign(_, _, e) => vec![e],
+        Stmt::IndexAssign(t, i, _, v) => vec![t, i, v],
+        Stmt::MemberAssign(t, _, _, v) => vec![t, v],
+        Stmt::MultiAssign(ts, vs, _) => ts.iter().chain(vs.iter()).collect(),
+        Stmt::If(arms, _) => arms.iter().map(|(c, _)| c).collect(),
+        Stmt::While(c, _) => vec![c],
+        Stmt::For(_, it, _) => vec![it],
+        Stmt::ForPat(_, it, _) => vec![it],
+        Stmt::Return(Some(e)) => vec![e],
+        Stmt::ExprStmt(e) => vec![e],
+        Stmt::Match(scrut, _) => vec![scrut],
+        Stmt::Raise(_, e, _) => vec![e],
+        Stmt::Yield(Some(e)) => vec![e],
+        _ => vec![],
+    }
+}
+
+/// W043: one shared wrong-arity report for free genes, phenotype methods and
+/// `new` constructors. Promoted to ERROR per board W043 ("check error before
+/// execution"); still Total Grammar: advisory, the run recovers at runtime.
+fn arity_finding(
+    line: usize,
+    callee_desc: &str,
+    min: usize,
+    max: usize,
+    n: usize,
+    out: &mut Vec<Finding>,
+) {
+    let msg = if n < min {
+        format!(
+            "{} expects {} argument(s), got {}, \
+             missing args become Null at runtime (checkable via rescue)",
+            callee_desc,
+            plural(min),
+            n
+        )
+    } else {
+        format!(
+            "{} accepts at most {} argument(s), got {}, \
+             extras are ignored at runtime",
+            callee_desc,
+            plural(max),
+            n
+        )
+    };
+    out.push(Finding::new(line, "wrong-arity", Sev::Error, msg));
 }
 
 fn scan_expr_arities(
     exprs: Vec<&Expr>,
     arities: &HashMap<String, Arity>,
     shadowed: &HashSet<String>,
+    knowledge: &PhenoKnowledge,
     out: &mut Vec<Finding>,
 ) {
     for e in exprs {
@@ -362,32 +1012,8 @@ fn scan_expr_arities(
                     if !shadowed.contains(name) {
                         if let Some((min, max)) = arities.get(name) {
                             let n = args.len();
-                            if n < *min {
-                                out.push(Finding::new(
-                                    *line,
-                                    "wrong-arity",
-                                    Sev::Warning,
-                                    format!(
-                                        "'{}' expects {} argument(s), got {}, \
-                                         missing args become Null at runtime (checkable via rescue)",
-                                        name,
-                                        plural(*min),
-                                        n
-                                    ),
-                                ));
-                            } else if n > *max {
-                                out.push(Finding::new(
-                                    *line,
-                                    "wrong-arity",
-                                    Sev::Warning,
-                                    format!(
-                                        "'{}' accepts at most {} argument(s), got {}, \
-                                         extras are ignored at runtime",
-                                        name,
-                                        plural(*max),
-                                        n
-                                    ),
-                                ));
+                            if n < *min || n > *max {
+                                arity_finding(*line, &format!("'{}'", name), *min, *max, n, out);
                             }
                         }
                     }
@@ -396,36 +1022,104 @@ fn scan_expr_arities(
                     std::iter::once(&**callee).chain(args.iter()).collect(),
                     arities,
                     shadowed,
+                    knowledge,
                     out,
                 );
             }
-            Expr::Method(recv, _, args) | Expr::MethodSafe(recv, _, args) => {
-                // method arity lives in phenotype defs, v1 covers free genes only
+            Expr::Method(recv, mname, args) | Expr::MethodSafe(recv, mname, args) => {
+                // W43: method arity when the receiver is a statically known
+                // phenotype value (`let p = new Pheno(...)`, single binding,
+                // never re-bound) and the method resolves on the same-file
+                // lineage. Unknown receivers/methods are the escape hatch.
+                if let Expr::Ident(v) = &**recv {
+                    if let Some(pheno) = knowledge.receiver_pheno.get(v) {
+                        if !pheno.is_empty() {
+                            if let Some((min, max)) = knowledge.method_arity(pheno, mname, 0) {
+                                let n = args.len();
+                                if n < min || n > max {
+                                    arity_finding(
+                                        expr_line(recv).unwrap_or(0),
+                                        &format!("phenotype '{}' method '{}'", pheno, mname),
+                                        min,
+                                        max,
+                                        n,
+                                        out,
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
                 scan_expr_arities(
                     std::iter::once(&**recv).chain(args.iter()).collect(),
                     arities,
                     shadowed,
+                    knowledge,
                     out,
                 );
             }
-            Expr::Unary(_, a) => scan_expr_arities(vec![a], arities, shadowed, out),
-            Expr::Binary(_, a, b, _) => scan_expr_arities(vec![a, b], arities, shadowed, out),
-            Expr::Index(a, b, _) => scan_expr_arities(vec![a, b], arities, shadowed, out),
-            Expr::Ternary(a, b, c) => scan_expr_arities(vec![a, b, c], arities, shadowed, out),
-            Expr::Member(a, _) | Expr::MemberSafe(a, _) => {
-                scan_expr_arities(vec![a], arities, shadowed, out)
+            Expr::New(pname, args) => {
+                // `new Pheno(...)` forwards to the phenotype's `init`
+                if let Some((min, max)) = knowledge.method_arity(pname, "init", 0) {
+                    let n = args.len();
+                    if n < min || n > max {
+                        arity_finding(
+                            0,
+                            &format!("phenotype '{}' constructor (init)", pname),
+                            min,
+                            max,
+                            n,
+                            out,
+                        );
+                    }
+                }
+                scan_expr_arities(args.iter().collect(), arities, shadowed, knowledge, out);
             }
-            Expr::List(items) => scan_expr_arities(items.iter().collect(), arities, shadowed, out),
+            Expr::Lambda(g) => {
+                // closure bodies are ordinary code: scan them, and let
+                // param defaults flow through the expression scan
+                let defaults: Vec<&Expr> =
+                    g.params.iter().filter_map(|(_, d)| d.as_ref()).collect();
+                scan_expr_arities(defaults, arities, shadowed, knowledge, out);
+                arity_scan(&g.body, arities, shadowed, knowledge, out);
+            }
+            Expr::Propagate(a, _) => scan_expr_arities(vec![a], arities, shadowed, knowledge, out),
+            Expr::Collect {
+                iter, filter, body, ..
+            } => {
+                let mut parts = vec![&**iter, &**body];
+                if let Some(f) = filter {
+                    parts.push(f);
+                }
+                scan_expr_arities(parts, arities, shadowed, knowledge, out);
+            }
+            Expr::Unary(_, a) => scan_expr_arities(vec![a], arities, shadowed, knowledge, out),
+            Expr::Binary(_, a, b, _) => {
+                scan_expr_arities(vec![a, b], arities, shadowed, knowledge, out)
+            }
+            Expr::Index(a, b, _) => {
+                scan_expr_arities(vec![a, b], arities, shadowed, knowledge, out)
+            }
+            Expr::Ternary(a, b, c) => {
+                scan_expr_arities(vec![a, b, c], arities, shadowed, knowledge, out)
+            }
+            Expr::Member(a, _) | Expr::MemberSafe(a, _) => {
+                scan_expr_arities(vec![a], arities, shadowed, knowledge, out)
+            }
+            Expr::List(items) => {
+                scan_expr_arities(items.iter().collect(), arities, shadowed, knowledge, out)
+            }
             Expr::Map(pairs) => scan_expr_arities(
                 pairs.iter().flat_map(|(k, v)| [k, v]).collect(),
                 arities,
                 shadowed,
+                knowledge,
                 out,
             ),
             Expr::Interp(parts) => {
                 for p in parts {
                     if let crate::ast::InterpPart::Expr(x) = p {
-                        scan_expr_arities(vec![x], arities, shadowed, out);
+                        scan_expr_arities(vec![x], arities, shadowed, knowledge, out);
                     }
                 }
             }
@@ -573,60 +1267,70 @@ fn nested_stmts(st: &Stmt) -> Option<&[Stmt]> {
     }
 }
 
+/// Complete nesting: every statement that holds statement bodies, all of
+/// them (If: ALL arms + else; Match arms; frames; stress/rescue; defs).
+/// The legacy nested_stmts stays for the passes that predate it
+/// (unreachable_scan, duplicate_match_arms); new passes use this one.
+/// Exhaustive on purpose — a new Stmt variant must be triaged here.
+fn stmt_nested_all(st: &Stmt) -> Vec<&[Stmt]> {
+    match st {
+        Stmt::If(arms, els) => {
+            let mut out: Vec<&[Stmt]> = arms.iter().map(|(_, b)| &b[..]).collect();
+            if let Some(e) = els {
+                out.push(e);
+            }
+            out
+        }
+        Stmt::While(_, b)
+        | Stmt::Loop(b)
+        | Stmt::Scope(b)
+        | Stmt::Block(b)
+        | Stmt::Tad(_, b)
+        | Stmt::For(_, _, b)
+        | Stmt::ForPat(_, _, b) => vec![b.as_slice()],
+        Stmt::Frame { body, .. } => vec![body.as_slice()],
+        Stmt::Match(_, arms) => arms.iter().map(|(_, b)| &b[..]).collect(),
+        Stmt::Stress { body, rescue, .. } => {
+            let mut out = vec![body.as_slice()];
+            if let Some((_, rb)) = rescue {
+                out.push(rb.as_slice());
+            }
+            out
+        }
+        Stmt::Gene(g) | Stmt::Seq(g) => vec![&g.body[..]],
+        Stmt::Pheno(p) => p.methods.iter().map(|m| &m.body[..]).collect(),
+        Stmt::Trait(t) => t
+            .methods
+            .iter()
+            .filter_map(|m| m.default.as_ref())
+            .map(|d| &d.body[..])
+            .collect(),
+        Stmt::Splice(s) => s.variants.iter().map(|(_, g)| &g.body[..]).collect(),
+        _ => vec![],
+    }
+}
+
 fn walk_all<'a>(stmts: &'a [Stmt], f: &mut dyn FnMut(&'a Stmt, usize)) {
     for (i, st) in stmts.iter().enumerate() {
         let line = i + 1; // stable, only used for def-ordering hints
         f(st, line);
-        match st {
-            Stmt::If(arms, els) => {
-                for (_, b) in arms {
-                    walk_all(b, f);
-                }
-                if let Some(e) = els {
-                    walk_all(e, f);
-                }
-            }
-            Stmt::While(_, b) | Stmt::Loop(b) | Stmt::For(_, _, b) => walk_all(b, f),
-            Stmt::Block(b) | Stmt::Tad(_, b) => walk_all(b, f),
-            Stmt::Frame { .. } => {}
-            _ => {}
+        for nested in stmt_nested_all(st) {
+            walk_all(nested, f);
         }
-        if let Some(g) = stmt_gene(st) {
-            walk_all(&g.body, f);
-        }
-    }
-}
-
-fn stmt_gene(st: &Stmt) -> Option<&std::sync::Arc<crate::ast::GeneDef>> {
-    match st {
-        Stmt::Gene(g) | Stmt::Seq(g) => Some(g),
-        _ => None,
-    }
-}
-
-fn st_exprs(st: &Stmt) -> Vec<&Expr> {
-    match st {
-        Stmt::Let(_, e) | Stmt::Return(Some(e)) => vec![e],
-        Stmt::Assign(_, _, e) | Stmt::Raise(_, e, _) => vec![e],
-        Stmt::ExprStmt(e) => vec![e],
-        Stmt::While(c, _) => vec![c],
-        Stmt::For(_, it, _) => vec![it],
-        _ => vec![],
     }
 }
 
 fn collect_calls_stmts(stmts: &[Stmt], called: &mut HashSet<String>) {
     for st in stmts {
-        for e in st_exprs(st) {
+        for e in stmt_exprs_all(st) {
             collect_calls_expr(e, called);
         }
-        if let Stmt::Match(scrut, arms) = st {
-            collect_calls_expr(scrut, called);
+        if let Stmt::Match(_, arms) = st {
             for (_, body) in arms {
                 collect_calls_stmts(body, called);
             }
         }
-        if let Some(nested) = nested_stmts(st) {
+        for nested in stmt_nested_all(st) {
             collect_calls_stmts(nested, called);
         }
     }
@@ -645,7 +1349,13 @@ fn collect_calls_expr(e: &Expr, called: &mut HashSet<String>) {
                 collect_calls_expr(a, called);
             }
         }
-        Expr::Method(recv, _, args) | Expr::MethodSafe(recv, _, args) => {
+        Expr::Method(recv, mname, args) | Expr::MethodSafe(recv, mname, args) => {
+            // the method name and the dotted `recv.name` form both count as
+            // references (module-member calls are the dotted shape)
+            called.insert(mname.clone());
+            if let Expr::Ident(v) = &**recv {
+                called.insert(format!("{}.{}", v, mname));
+            }
             collect_calls_expr(recv, called);
             for a in args {
                 collect_calls_expr(a, called);
@@ -683,6 +1393,25 @@ fn collect_calls_expr(e: &Expr, called: &mut HashSet<String>) {
                     collect_calls_expr(x, called);
                 }
             }
+        }
+        Expr::Lambda(g) => {
+            // a gene called only from a closure body IS called
+            collect_calls_stmts(&g.body, called);
+        }
+        Expr::New(_, args) => {
+            for a in args {
+                collect_calls_expr(a, called);
+            }
+        }
+        Expr::Propagate(a, _) => collect_calls_expr(a, called),
+        Expr::Collect {
+            iter, filter, body, ..
+        } => {
+            collect_calls_expr(iter, called);
+            if let Some(f) = filter {
+                collect_calls_expr(f, called);
+            }
+            collect_calls_expr(body, called);
         }
         _ => {}
     }
