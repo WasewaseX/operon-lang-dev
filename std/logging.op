@@ -1,0 +1,86 @@
+# std/logging, leveled logging shapes (pure Operon, deterministic core).
+#
+# The CORE line format is deterministic: `[LEVEL] message`, nothing else.
+# Wall-clock timestamps are opt-in through `log_stamp` (the clock read
+# happens at the CALL SITE, so the core stays pure and every assert here
+# pins shapes, never absolute times). A logger is a plain map of gene
+# methods built by `make_logger`; the level filter compares symbolic
+# levels: debug < info < warn < error.
+
+## Numeric level of a symbolic name; unknown names are 1 (info).
+gene log_level(name) {
+    if name == "debug" {
+        return 0
+    }
+    if name == "warn" {
+        return 2
+    }
+    if name == "error" {
+        return 3
+    }
+    return 1
+}
+
+## Symbolic name of a numeric level (round-trips with log_level).
+gene log_level_name(n) {
+    if n <= 0 {
+        return "debug"
+    }
+    if n == 2 {
+        return "warn"
+    }
+    if n == 3 {
+        return "error"
+    }
+    return "info"
+}
+
+## The one line format: `[LEVEL] message` (upper-case level tag).
+gene log_line(level_name, msg) {
+    return "[" + level_name.upper() + "] " + str(msg)
+}
+
+## Opt-in timestamped line: `[LEVEL epoch message]`... no, keep it plain:
+## `[LEVEL epoch=<n>] message`, the epoch read happens HERE (impure by
+## design, the only impure gene in this module).
+gene log_stamp(level_name, msg) {
+    return "[" + level_name.upper() + " epoch=" + str(unix_time()) + "] " + str(msg)
+}
+
+## Build a logger: a map with .debug/.info/.warn/.error methods. Only the
+## levels at or above `min_level` emit; quieter calls return null (the
+## caller's flow is unaffected either way).
+gene make_logger(min_level) {
+    let min = min_level
+    return {
+        debug: gene (msg) {
+            if min <= log_level("debug") {
+                return log_line("debug", msg)
+            }
+            return null
+        },
+        info: gene (msg) {
+            if min <= log_level("info") {
+                return log_line("info", msg)
+            }
+            return null
+        },
+        warn: gene (msg) {
+            if min <= log_level("warn") {
+                return log_line("warn", msg)
+            }
+            return null
+        },
+        error: gene (msg) {
+            if min <= log_level("error") {
+                return log_line("error", msg)
+            }
+            return null
+        },
+    }
+}
+
+## Convenience: logger from a symbolic name, `make_logger_named("warn")`.
+gene make_logger_named(level_name) {
+    return make_logger(log_level(level_name))
+}
