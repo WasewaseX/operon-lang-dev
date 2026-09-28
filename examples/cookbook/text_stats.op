@@ -1,5 +1,5 @@
 # ============================================================
-# Text statistics  — cookbook #08
+# Text statistics , cookbook #08
 # you already know: wc -lwc + a longest-word scan
 # teaches: splitting/iterating text, string methods, chars(),
 #          running max/sum accumulators

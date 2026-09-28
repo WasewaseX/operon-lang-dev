@@ -1,4 +1,4 @@
-# differential: std/strings extensions — case/strip/lines/quote helpers
+# differential: std/strings extensions, case/strip/lines/quote helpers
 use std/strings as st
 
 frame proof {

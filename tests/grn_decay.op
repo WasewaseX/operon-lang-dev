@@ -1,7 +1,7 @@
-# A10 (reg-r2) — GRN decay: opt-in dilution, not a latch (SPEC §11)
+# A10 (reg-r2), GRN decay: opt-in dilution, not a latch (SPEC §11)
 # Without configuration the network is byte-identical to pre-A10 (levels
-# persist forever). With decay — .cell `[grn] decay = f` or the optional
-# grn_fire(seed, f) pulse argument — every level decays by the fraction
+# persist forever). With decay, .cell `[grn] decay = f` or the optional
+# grn_fire(seed, f) pulse argument, every level decays by the fraction
 # BEFORE each pulse: levels bleed off unless refreshed. Pre-A10 cores have no
 # pulse-argument form, so the assertions below fail there (verified).
 regulate {

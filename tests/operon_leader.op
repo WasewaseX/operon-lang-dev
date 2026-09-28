@@ -1,4 +1,4 @@
-# reg-bio-3 (A1/A7): the leader attenuator — an `attenuates` edge targeting
+# reg-bio-3 (A1/A7): the leader attenuator, an `attenuates` edge targeting
 # the UNIT is the trpL story: when the leader terminates, NO cistron of the
 # unit is transcribed (the whole polycistronic mRNA is lost). The outcome is
 # RNA-level: the message reports leader termination, wrapped in the unit gate.

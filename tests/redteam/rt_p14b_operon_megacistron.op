@@ -1,4 +1,4 @@
-# reg-bio-3: operon-construct abuse — a transcription unit with thousands of
+# reg-bio-3: operon-construct abuse, a transcription unit with thousands of
 # cistrons. Membership lookups are linear per gate read, so a megacistron
 # must stay bounded by the note cap / fuel contract (no hang, no OOM), and
 # the final call must still answer with a bounded run.

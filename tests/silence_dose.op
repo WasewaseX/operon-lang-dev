@@ -1,10 +1,10 @@
-# reg-bio-3 (C9): stoichiometric RISC — real RNAi is dose-dependent. The
+# reg-bio-3 (C9): stoichiometric RISC, real RNAi is dose-dependent. The
 # strength is the per-site capture probability; sites compose multiplicatively
 # (survival = (1-s)^n). A capture draw rides the SHARED mirrored xorshift64*
 # stream (telegraph-promoter discipline). Contracts pinned here:
 #   (1) p = 1 - (1-s)^sites is deterministic under randomize(seed);
 #   (2) strength-1.0 silence captures WITHOUT consuming entropy;
-#   (3) @acetylate immunity is checked BEFORE any draw — immune calls
+#   (3) @acetylate immunity is checked BEFORE any draw, immune calls
 #       leave the random() stream untouched.
 gene loud() { return "L" }
 gene quiet() { return "Q" }

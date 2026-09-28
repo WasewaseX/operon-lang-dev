@@ -1,0 +1,37 @@
+# std/terminal: ANSI builders + text hygiene (pure; ESC is built via chr).
+use std/terminal as t
+
+frame proof {
+    # the builders produce complete SGR sequences
+    assert(len(t.t_bold()) == 4)
+    assert(t.t_fg("red") == chr(27) + "[31m")
+    assert(t.t_bg("blue") == chr(27) + "[44m")
+    assert(t.t_fg("bright_cyan") == chr(27) + "[96m")
+    assert(t.t_fg256(5) == chr(27) + "[38;5;5m")
+    assert(t.t_fg256(-3) == chr(27) + "[38;5;0m")
+    assert(t.t_fg256(999) == chr(27) + "[38;5;255m")
+    assert(t.t_reset() == chr(27) + "[0m")
+
+    # strip_ansi removes complete sequences and lone ESC, keeps text
+    let painted = t.t_bold() + "hi" + t.t_reset() + " there"
+    assert(t.t_strip_ansi(painted) == "hi there")
+    assert(t.t_strip_ansi("plain") == "plain")
+    assert(t.t_strip_ansi("a" + chr(27) + "b") == "ab")
+
+    # truncate_width counts printed cells, escapes ride free
+    assert(t.t_truncate_width("abcdefg", 5) == "ab...")
+    assert(t.t_truncate_width("abc", 5) == "abc")
+    # below the ellipsis budget (w < 3) nothing truncates
+    assert(t.t_truncate_width(painted, 2) == painted)
+    # at w = 3 the first text cell already trips the budget, escapes ride
+    assert(len(t.t_truncate_width(painted, 3)) == len(t.t_bold()) + 3)
+
+    # has_ansi
+    assert(t.t_has_ansi("plain") == false)
+    assert(t.t_has_ansi(painted) == true)
+
+    # unknown color names fall back to white, deterministically
+    assert(t.t_fg("chartreuse") == t.t_fg("white"))
+
+    promote("terminal: all asserts green")
+}

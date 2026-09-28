@@ -1,5 +1,5 @@
 # ============================================================
-# Vending machine FSM  — cookbook #05
+# Vending machine FSM , cookbook #05
 # you already know: a machine as a dict of dicts
 # teaches: nested maps as transition tables, while-style loops,
 #          pos reset on terminal transition

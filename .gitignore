@@ -6,3 +6,6 @@ __pycache__/
 *.pyc
 *.built.op
 .DS_Store
+
+# W076: standalone embedding example (its own workspace/lockfile/target)
+examples/embed/target/

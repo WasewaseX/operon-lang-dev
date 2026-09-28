@@ -1,4 +1,4 @@
-# rt_p15a — W007: deep uncaught chain renders bounded and leaks nothing.
+# rt_p15a, W007: deep uncaught chain renders bounded and leaks nothing.
 # Run with --entry go (runner case arm): rc=1, chain capped at 64, no panic,
 # no host paths beyond the script path in the primary diagnostic.
 gene boom() {

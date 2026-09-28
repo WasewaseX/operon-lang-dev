@@ -1,0 +1,47 @@
+# rt_p20a: cancel storm (12 compute-bound cells; the runner box is a 4 GB
+# container, so the storm stays small on purpose: 12 x 256 MiB worker
+# stacks is the biggest reservation this environment can absorb). Cancel
+# lands mid-work (tick boundaries), everything is cancelled twice, bogus
+# ids get swept, then the registry drains. Containment: the run finishes
+# bounded, every surface answers, nothing panics or hangs. Cancellation
+# stresses and their notes are expected output.
+gene busy() {
+    let s = 0
+    for i in range(1_000_000) {
+        let s = s + i
+    }
+    return s
+}
+
+main {
+    let ids = []
+    for i in range(12) {
+        let t = spawn(busy, [])
+        push(ids, t)
+    }
+    # host spin: give the workers a slice of time to start computing
+    for i in range(100_000) {
+        let _ = i
+    }
+    # first wave: every live task gets a cancel request
+    for t in ids {
+        let _ = cancel(t)
+    }
+    # second wave: every task is already cancelled or done by now
+    for t in ids {
+        let _ = cancel(t)
+    }
+    # bogus-id sweep: zero, negative, huge, unknown-positive
+    let _ = cancel(0)
+    let _ = cancel(-1)
+    let _ = cancel(1099511627776)
+    let _ = cancel(999999)
+    let _ = task_state(0)
+    let _ = task_state(-1)
+    let _ = task_state(1099511627776)
+    # drain; cancelled workers stop at their next tick, survivors return
+    for t in ids {
+        let _ = join(t, 10_000)
+    }
+    print("contained: storm survived")
+}

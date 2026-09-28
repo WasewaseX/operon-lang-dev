@@ -7,7 +7,7 @@ O(N) queue update per call must stay inside the fuel/note contract
   c3    strength 0.0  -> p_g = 0 fast skip (degenerate silence is neutral)
   c700  strength 0.5  -> stochastic nakedness; if naked, the catch-up
                          probability at d=798 is 1-(1-catch)^798 = 1.0
-                         under catch 0.5 — deterministic catch (one draw:
+                         under catch 0.5, deterministic catch (one draw:
                          the q==1 fast path skips the catch-up draw)
   c1497 bare          -> deterministic nakedness at distance 2 (q = 0.75)
   c1498 strength 0.5  -> stochastic nakedness at distance 1 (q = 0.5)

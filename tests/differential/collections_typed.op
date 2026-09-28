@@ -1,71 +1,31 @@
-# collections_typed — W026 stage 1 differential pin: the typed container
-# families of std/collections.op (fifo, deque, priority queue) over fixed
-# inputs, byte-identical on both engines. Covers fifo arrival order, both
-# deque ends, min-first pq order with FIFO ties (int 1 before float 1.0),
-# string keys, and empty-container pops returning None.
+# collections_typed differential pin: W001 annotation boundaries on the
+# six std/collections genes, byte-identical on both engines. Acceptance
+# paths print real outputs; refusal paths print the caught Stress kind and
+# message so the two engines must agree on the annotation wording too.
 use std/collections as c
 
-print("== fifo ==")
-let q = c.fifo_new()
-c.fifo_push(q, "a")
-c.fifo_push(q, 2)
-c.fifo_push(q, "c")
-print("queue:", c.fifo_to_list(q))
-print("len:", c.fifo_len(q))
-print("pops:", unwrap(c.fifo_pop(q)), unwrap(c.fifo_pop(q)))
-print("rest:", c.fifo_to_list(q), "len:", c.fifo_len(q))
-c.fifo_push(q, "d")
-print("after push:", c.fifo_to_list(q))
-print("drain:", unwrap(c.fifo_pop(q)), unwrap(c.fifo_pop(q)), c.fifo_pop(q))
-print("len:", c.fifo_len(q))
+print("== accept ==")
+print(c.chunk([1, 2, 3, 4], 2))
+print(c.zip([1, 2], ["a", "b"]))
+print(c.take([9, 8, 7], 2))
+print(c.flatten([[1], [2, 3], []]))
+print(c.count([1, 2, 3, 4], gene(v) { return v > 2 }))
+print(c.group_by(["ax", "bx", "ay"], gene(s) { return s.slice(0, 1) }))
 
-print("== deque ==")
-let d = c.fifo_new()
-c.deque_push_back(d, 1)
-c.deque_push_back(d, 2)
-c.deque_push_front(d, 0)
-c.deque_push_back(d, 3)
-c.deque_push_front(d, -1)
-print("deque:", c.fifo_to_list(d))
-print("front/back:", unwrap(c.deque_pop_front(d)), unwrap(c.deque_pop_back(d)))
-print("deque now:", c.fifo_to_list(d))
-print("drain:", unwrap(c.deque_pop_front(d)), unwrap(c.deque_pop_back(d)), unwrap(c.deque_pop_front(d)))
-print("empty pops:", c.deque_pop_front(d), c.deque_pop_back(d))
-
-print("== pq ==")
-let pq = c.pq_new()
-print("fresh pop:", c.pq_pop(pq))
-c.pq_push(pq, 5)
-c.pq_push(pq, 1)
-c.pq_push(pq, 4)
-c.pq_push(pq, 1)
-c.pq_push(pq, 3)
-c.pq_push(pq, 0)
-print("pq state:", c.fifo_to_list(pq))
-let order = []
-while c.fifo_len(pq) > 0 {
-    push(order, unwrap(c.pq_pop(pq)))
+print("== refuse ==")
+gene probe(f) {
+    stress {
+        f()
+        return "no-stress"
+    } rescue (e) {
+        return "stress:" + e.message()
+    }
 }
-print("pq drains:", order)
-print("pq empty pop:", c.pq_pop(pq))
-
-print("== pq ties ==")
-let tie = c.pq_new()
-c.pq_push(tie, 1)
-c.pq_push(tie, 1.0)
-c.pq_push(tie, 0)
-print("tie state:", c.fifo_to_list(tie))
-print("tie pops:", str(unwrap(c.pq_pop(tie))), str(unwrap(c.pq_pop(tie))), str(unwrap(c.pq_pop(tie))))
-
-print("== pq strings ==")
-let words = c.pq_new()
-c.pq_push(words, "pear")
-c.pq_push(words, "apple")
-c.pq_push(words, "fig")
-c.pq_push(words, "apple")
-let worder = []
-while c.fifo_len(words) > 0 {
-    push(worder, unwrap(c.pq_pop(words)))
-}
-print("words drain:", worder)
-print("collections_typed differential complete")
+print(probe(gene() { return c.chunk("nope", 2) }))
+print(probe(gene() { return c.chunk([1], "two") }))
+print(probe(gene() { return c.take([1], 1.5) }))
+print(probe(gene() { return c.group_by([1], 5) }))
+print(probe(gene() { return c.count([1], "p") }))
+print(probe(gene() { return c.zip(null, [1]) }))
+print(probe(gene() { return c.flatten(3) }))
+print("done")

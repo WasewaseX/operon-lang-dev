@@ -1,0 +1,16 @@
+// tg_sweep corpus 10: weird but LEGAL — negative zero, huge literals,
+// shadowing, deep member chains on maps, extra closers in expression
+// position, repeated bindings. All of it runs; none of it panics.
+main {
+    stress {
+        let neg0 = -0.0
+        let huge = 123456789012345678901234567890
+        let shadow = 1
+        let shadow = shadow + 1
+        let deep = {a: {b: {c: {d: {e: 42}}}}}
+        deep.a.b.c.d.e
+        let chain = [[[[[42]]]]]
+        chain[0][0][0][0][0]
+    } rescue (e) {
+    }
+}

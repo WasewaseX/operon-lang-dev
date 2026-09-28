@@ -20,7 +20,7 @@ frame proof {
     assert(st.activator == true, "toggle on")
     assert(st.repressor == false, "mutual repression")
 
-    # repressilator manual ring — A11: emergent mutual repression (the ring
+    # repressilator manual ring, A11: emergent mutual repression (the ring
     # integrates the Elowitz–Leibler model; nothing is scheduled)
     repressi_next()
     repressi_next()

@@ -1,4 +1,4 @@
-# differential: std/testing — deterministic expect harness, tally, summary
+# differential: std/testing, deterministic expect harness, tally, summary
 use std/testing as t
 
 gene boom() {
@@ -16,7 +16,7 @@ frame proof {
     let f0 = t.t_state.failed
 
     # verdicts return, so proofs can assert on the harness itself; the two
-    # misses below are deliberate — a failed expect is data, not a crash
+    # misses below are deliberate, a failed expect is data, not a crash
     assert(t.expect_eq(1 + 1, 2, "arith"))
     assert(t.expect_eq([1, 2], [1, 2], "list deep equality"))
     assert(!t.expect_eq(1, 2, "deliberate miss"))

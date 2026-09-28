@@ -1,5 +1,5 @@
 # ============================================================
-# CSV report  — cookbook #02
+# CSV report , cookbook #02
 # you already know: the csv module + a group-by aggregate + tabulate
 # teaches: std/csv quote-aware parsing, num() for numeric fields,
 #          maps for grouping, std/fmt for an ASCII table

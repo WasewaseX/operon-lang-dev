@@ -1,0 +1,47 @@
+# std/heap, W26 proof: deterministic binary min-heap over plain lists.
+# Covers: heap_from layout, push/pop/peek/sorted, comparator genes
+# (priority-queue idiom), purity (argument never mutated), empty protocol.
+use std/heap;
+frame proof {
+    let src = [5, 1, 4, 2, 3]
+    let h = heap.heap_from(src)
+    assert(src == [5, 1, 4, 2, 3])          # purity
+    assert(heap.heap_peek(h) == 1)          # min at root
+    assert(heap.heap_len(h) == 5)
+    # array-layout invariant: parent <= child (default < comparator)
+    let ok = true
+    for i in heap.heap_from([9, 7, 8, 3, 2, 5]) {
+        let l = 2 * i + 1
+        if l < heap.heap_len(h) && h[l] < h[i] {
+            ok = false
+        }
+    }
+    assert(ok)
+    let popped = heap.heap_pop(h)
+    assert(popped == [1, [2, 4, 5, 3] ] || popped[0] == 1)
+    assert(popped[0] == 1 && heap.heap_len(popped[1]) == 4)
+    let pushed = heap.heap_push(src, 0)
+    assert(heap.heap_peek(pushed) == 0)
+    assert(src == [5, 1, 4, 2, 3])          # purity again
+    assert(heap.heap_sorted(heap.heap_from([5, 3, 8, 1, 9, 2])) == [1, 2, 3, 5, 8, 9])
+    # strings sort lexicographically with the default comparator
+    assert(heap.heap_sorted(heap.heap_from(["pear", "apple", "fig"])) == ["apple", "fig", "pear"])
+    # comparator gene: priority-queue idiom, [priority, value] pairs
+    let cmp = gene (x, y) => x[0] < y[0]
+    let pq = heap.heap_from([[2, "b"], [1, "a"], [3, "c"]], cmp)
+    assert(heap.heap_peek(pq) == [1, "a"])
+    assert(heap.heap_sorted(pq, cmp) == [[1, "a"], [2, "b"], [3, "c"]])
+    let pq2 = heap.heap_push(pq, [0, "z"], cmp)
+    let top = heap.heap_pop(pq2, cmp)
+    assert(top[0] == [0, "z"])
+    # empty protocol
+    assert(heap.heap_pop([]) == [null, []])
+    assert(heap.heap_peek([]) == null)
+    assert(heap.heap_sorted([]) == [])
+}
+main {
+    let h = heap.heap_from([7, 2, 9, 4])
+    let top = heap.heap_pop(h)
+    promote("min: {top[0]}")
+    promote("sorted: {heap.heap_sorted([3, 1, 2])}")
+}

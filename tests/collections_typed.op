@@ -1,140 +1,117 @@
-# collections_typed.op — W026 stage 1: typed collections.
-# Pins the fifo / deque / priority-queue families of std/collections.op
-# together with the W001 soft annotations the module now carries (SPEC §7c):
-# correct element types cross the annotated boundary, wrong ones raise
-# catchable Stress kind `unfolded` whose message names the annotation, and
-# the run continues afterwards.
+# collections_typed, W026 stage 1 pin: std/collections.op genes carry W001
+# soft annotations on every param and return (SPEC §7c). Correct types flow
+# through untouched; wrong types unfold into a catchable Stress at the call
+# boundary naming the annotation, and the run continues. Queue/deque/heap
+# families live in std/deque.op and std/heap.op (pinned by their own suites);
+# this file pins the annotation behavior of the six list-shaped data genes.
 use std/collections as c
 
 frame proof {
-    # ---- fifo: first in, first out
-    let q = c.fifo_new()
-    assert(q == [], "fifo_new is an empty list")
-    assert(c.fifo_len(q) == 0, "fifo_len of a fresh queue is 0")
-    c.fifo_push(q, 1)
-    c.fifo_push(q, 2)
-    c.fifo_push(q, 3)
-    assert(c.fifo_len(q) == 3, "fifo_len counts pushes")
-    assert(c.fifo_pop(q) == some(1), "fifo pops the head (first in)")
-    assert(c.fifo_pop(q) == some(2), "fifo keeps arrival order")
-    assert(c.fifo_len(q) == 1, "fifo_len tracks pops")
-    c.fifo_push(q, 4)
-    assert(c.fifo_pop(q) == some(3), "push after pop stays ordered")
-    assert(c.fifo_pop(q) == some(4), "fifo drains in order")
-    assert(c.fifo_pop(q) == none(), "fifo_pop on empty is none()")
-    assert(c.fifo_len(q) == 0, "drained queue reports len 0")
-    # mixed element types ride the same unannotated element slot
-    c.fifo_push(q, "a")
-    c.fifo_push(q, "b")
-    assert(c.fifo_pop(q) == some("a"), "fifo serves mixed element types in arrival order")
+    # correct-type acceptance: the six genes on int and string elements
+    let xs = [1, 2, 3, 4, 5, 6]
+    assert(c.chunk(xs, 2) == [[1, 2], [3, 4], [5, 6]], "chunk splits even groups")
+    assert(c.chunk(xs, 4) == [[1, 2, 3, 4], [5, 6]], "chunk keeps the short tail")
+    assert(c.chunk([7], 3) == [[7]], "chunk of one element is one group")
+    assert(c.zip([1, 2, 3], ["a", "b"]) == [[1, "a"], [2, "b"]], "zip stops at the shorter side")
+    assert(c.zip([], [1]) == [], "zip of an empty side is empty")
+    assert(c.take(xs, 3) == [1, 2, 3], "take keeps the first n")
+    assert(c.take(xs, 99) == xs, "take past the end is the whole list")
+    assert(c.take(xs, 0) == [], "take zero is empty")
+    assert(c.flatten([[1, 2], [], [3]]) == [1, 2, 3], "flatten preserves order")
+    assert(c.count(xs, gene(v) { return v % 2 == 0 }) == 3, "count respects the predicate")
+    assert(c.count([], gene(v) { return true }) == 0, "count of empty is zero")
+    let grouped = c.group_by(["ant", "bee", "ape"], gene(s) { return s.slice(0, 1) })
+    assert(grouped["a"] == ["ant", "ape"], "group_by buckets by key")
+    assert(grouped["b"] == ["bee"], "group_by keeps every bucket")
 
-    # ---- fifo_to_list: snapshot, not a live view
-    let snap = c.fifo_to_list(q)
-    assert(snap == ["b"], "fifo_to_list copies in queue order")
-    push(snap, "zz")
-    assert(c.fifo_to_list(q) == ["b"], "mutating the snapshot leaves the queue alone")
+    # elements are unannotated, so mixed containers flow through the genes
+    assert(c.chunk([1, "a", 2.5, null], 2) == [[1, "a"], [2.5, null]],
+        "unannotated element slots accept any value")
 
-    # ---- deque: both ends open
-    let d = c.fifo_new()
-    c.deque_push_back(d, 2)
-    c.deque_push_back(d, 3)
-    c.deque_push_front(d, 1)
-    c.deque_push_front(d, 0)
-    assert(c.fifo_to_list(d) == [0, 1, 2, 3], "deque grows at both ends")
-    assert(c.deque_pop_front(d) == some(0), "deque pops the front")
-    assert(c.deque_pop_back(d) == some(3), "deque pops the back")
-    assert(c.fifo_to_list(d) == [1, 2], "deque pops remove what they serve")
-    assert(c.deque_pop_back(d) == some(2) and c.deque_pop_front(d) == some(1), "deque drains from both ends")
-    assert(c.deque_pop_front(d) == none(), "deque_pop_front on empty is none()")
-    assert(c.deque_pop_back(d) == none(), "deque_pop_back on empty is none()")
-
-    # ---- pq: current-min first, ties keep insertion order
-    let pq = c.pq_new()
-    assert(c.pq_pop(pq) == none(), "pq_pop on empty is none()")
-    c.pq_push(pq, 5)
-    c.pq_push(pq, 1)
-    c.pq_push(pq, 4)
-    c.pq_push(pq, 1)
-    c.pq_push(pq, 3)
-    assert(c.fifo_len(pq) == 5, "pq_push grows the queue")
-    assert(c.pq_pop(pq) == some(1), "pq serves the current min")
-    assert(c.pq_pop(pq) == some(1), "equal keys served before bigger ones")
-    assert(c.pq_pop(pq) == some(3) and c.pq_pop(pq) == some(4) and c.pq_pop(pq) == some(5), "pq drains in ascending order")
-    assert(c.pq_pop(pq) == none(), "drained pq pops none()")
-    # observable tie order: int 1 enters before float 1.0 and stays ahead;
-    # str() distinguishes them where == would call them equal
-    let tie = c.pq_new()
-    c.pq_push(tie, 1)
-    c.pq_push(tie, 1.0)
-    assert(c.fifo_len(tie) == 2, "int and float keys both held")
-    assert(str(unwrap(c.pq_pop(tie))) == "1", "earlier equal key pops first (FIFO ties)")
-    assert(str(unwrap(c.pq_pop(tie))) == "1.0", "later equal key pops second")
-    # strings order lexicographically under the same convention
-    let words = c.pq_new()
-    c.pq_push(words, "pear")
-    c.pq_push(words, "apple")
-    assert(c.pq_pop(words) == some("apple"), "pq orders strings")
-    assert(c.pq_pop(words) == some("pear"), "then the larger string")
-
-    # ---- annotated boundaries accept the declared element types
-    assert(c.chunk([1, 2, 3, 4], 2) == [[1, 2], [3, 4]], "chunk accepts list + int")
-    assert(c.take([9, 8, 7], 2) == [9, 8], "take accepts list + int")
-    assert(c.zip([1], ["a"]) == [[1, "a"]], "zip accepts two lists")
-    assert(c.flatten([[1], [2]]) == [1, 2], "flatten accepts a list of lists")
-    assert(c.count([1, 2, 3], gene (v) => v > 1) == 2, "count accepts a list + gene")
-    assert(len(keys(c.group_by(["ax", "bx"], gene (s) => s.slice(0, 1)))) == 2, "group_by accepts a list + gene")
-    let fl = c.pq_new()
-    c.pq_push(fl, 1.5)
-    c.pq_push(fl, 2)
-    assert(unwrap(c.pq_pop(fl)) == 1.5, "pq accepts float and int keys on one queue")
-
-    # ---- annotated boundaries refuse wrong types: catchable Stress that
-    # names the annotation, then execution continues
+    # wrong types at annotated boundaries: catchable Stress kind `unfolded`
+    # whose message names the annotation; execution continues afterwards
     let hits = 0
     stress {
-        c.fifo_len(42)
+        c.chunk("nope", 2)
     } rescue (e) {
         hits += 1
-        assert(e.kind == "unfolded", "wrong-type call is catchable Stress")
-        assert(e.message == "argument 'q' for gene 'fifo_len' expects list, got int", "param violation names the annotation")
+        assert(e.kind == "unfolded", "boundary refusal is catchable Stress")
+        assert(e.message == "argument 'xs' for gene 'chunk' expects list, got str",
+            "list boundary names the annotation")
     }
-    assert(hits == 1, "list-param refusal raised exactly once")
+    assert(hits == 1, "chunk list refusal raised exactly once")
     stress {
-        c.chunk([1, 2], 2.5)
+        c.chunk(xs, "two")
     } rescue (e) {
         hits += 1
-        assert(e.message == "argument 'size' for gene 'chunk' expects int, got float", "int annotation refuses float (no narrowing)")
+        assert(e.message == "argument 'size' for gene 'chunk' expects int, got str",
+            "int boundary names the annotation")
     }
-    assert(hits == 2, "int-param refusal raised")
+    assert(hits == 2, "chunk size refusal raised")
     stress {
-        c.count([1], 7)
+        c.take(xs, 2.0)
     } rescue (e) {
         hits += 1
-        assert(e.message == "argument 'pred' for gene 'count' expects gene, got int", "gene annotation refuses a non-gene")
+        assert(e.message == "argument 'n' for gene 'take' expects int, got float",
+            "int annotation refuses float (no narrowing)")
     }
-    assert(hits == 3, "gene-param refusal raised")
+    assert(hits == 3, "take float refusal raised")
     stress {
-        c.pq_push("not-a-list", 1)
+        c.zip(42, [1])
     } rescue (e) {
         hits += 1
-        assert(e.message == "argument 'pq' for gene 'pq_push' expects list, got str", "pq refuses a string carrier")
+        assert(e.message == "argument 'a' for gene 'zip' expects list, got int",
+            "zip boundary names the annotation")
     }
-    assert(hits == 4, "boundary refusals never break the run")
-    # a refused call leaves the container untouched
-    let untouched = c.fifo_new()
-    c.fifo_push(untouched, 9)
+    assert(hits == 4, "zip refusal raised")
     stress {
-        c.fifo_pop(42)
+        c.flatten(3)
     } rescue (e) {
         hits += 1
-        assert(e.message == "argument 'q' for gene 'fifo_pop' expects list, got int", "pop param violation names its annotation")
+        assert(e.message == "argument 'xss' for gene 'flatten' expects list, got int",
+            "flatten boundary names the annotation")
     }
-    assert(hits == 5, "every refusal counted exactly once")
-    assert(c.fifo_pop(untouched) == some(9), "refused calls never touch the container")
-    # element slots stay unannotated on purpose: any value rides along
-    let optq = c.fifo_new()
-    c.fifo_push(optq, some(3))
-    assert(c.fifo_pop(optq) == some(some(3)), "elements may be any value, even an Option")
-}
+    assert(hits == 5, "flatten refusal raised")
+    stress {
+        c.group_by(xs, 5)
+    } rescue (e) {
+        hits += 1
+        assert(e.message == "argument 'keyf' for gene 'group_by' expects gene, got int",
+            "gene boundary names the annotation")
+    }
+    assert(hits == 6, "group_by keyfn refusal raised")
+    stress {
+        c.count(xs, "even")
+    } rescue (e) {
+        hits += 1
+        assert(e.message == "argument 'pred' for gene 'count' expects gene, got str",
+            "count pred boundary names the annotation")
+    }
+    assert(hits == 7, "count pred refusal raised")
+    stress {
+        c.group_by("ants", gene(s) { return s })
+    } rescue (e) {
+        hits += 1
+        assert(e.message == "argument 'xs' for gene 'group_by' expects list, got str",
+            "group_by list boundary names the annotation")
+    }
+    assert(hits == 8, "all eight boundary refusals raised exactly once each")
 
-print("collections_typed complete")
+    # a refusal caught inside a helper keeps execution coherent
+    gene safe_chunk(a, n) {
+        stress {
+            return c.chunk(a, n)
+        } rescue (e) {
+            return []
+        }
+    }
+    assert(safe_chunk([1, 2], 1) == [[1], [2]], "clean call crosses the wrapper")
+    assert(safe_chunk(9, 1) == [], "refusal falls into the helper's rescue")
+    assert(safe_chunk([1, 2], "x") == [], "wrong scalar caught by the helper too")
+
+    # annotations are optional everywhere: the unannotated wrapper composes
+    gene wrap(xs2, n) {
+        return c.chunk(xs2, n)
+    }
+    assert(wrap([1, 2, 3], 2) == [[1, 2], [3]], "unannotated wrapper composes with annotated gene")
+}

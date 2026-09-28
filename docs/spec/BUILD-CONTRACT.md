@@ -8,7 +8,7 @@ Baseline: main @ dd76caa · `operon build f.op [--variant v] [-o out.op]`
 ## 0. What `operon build` IS today (the honest contract)
 
 `operon build` is a **source-to-source specialization** step. It produces a regular
-`.op` source file — not bytecode, not IR, not a native executable. The audit's complaint
+`.op` source file, not bytecode, not IR, not a native executable. The audit's complaint
 ("the name suggests a compiler while the implementation is a source transformation") is
 correct; this document is the fix in the meantime, W085/W087 own the future.
 
@@ -33,7 +33,7 @@ input source
    runtime could never take under that variant).
 2. **Byte-stable**: same input bytes + same variant + same operon version ⇒ byte-identical
    output (DETERMINISM.md §6). No timestamps, no paths, no environment values are embedded.
-3. **Canonical form**: output is formatter-canonical — feeding it back through
+3. **Canonical form**: output is formatter-canonical, feeding it back through
    `operon fmt` is a no-op.
 4. **Standalone source**: the artifact needs nothing from the build step; it runs on any
    operon binary of a compatible version (compat policy: W63).
@@ -59,14 +59,14 @@ input source
 4. **Deterministic artifact for tests**: the byte-stable output makes build a fixture
    generator for round-trip tests.
 
-## 4. Roadmap (W085/W087 — owned by sz, M100)
+## 4. Roadmap (W085/W087, owned by sz, M100)
 
-1. **Stage 1 — bytecode bundle (post-W009)**: `operon build --target=bytecode` emits the
+1. **Stage 1, bytecode bundle (post-W009)**: `operon build --target=bytecode` emits the
    VM bundle; the tree-walk source remains the default target until the VM passes the full
    differential campaign (W009 gate).
-2. **Stage 2 — true standalone executable**: embed the bundle into a released operon
+2. **Stage 2, true standalone executable**: embed the bundle into a released operon
    runtime binary (`operon build --target=exe`, Rust embed, no external toolchain needed
    by the end user). Native codegen only if W011 profiling demands it (audit ordering).
-3. **Stage 3 — single-file bundle (W087)**: `operon bundle app.op` — source + bytecode +
+3. **Stage 3, single-file bundle (W087)**: `operon bundle app.op`, source + bytecode +
    stdlib deps + metadata in one portable artifact; design note: `docs/design/BUNDLE.md`.
 4. Until Stage 1 lands, `--target` is not accepted and this document is the contract.

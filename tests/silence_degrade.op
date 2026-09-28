@@ -1,10 +1,10 @@
-# reg-bio (F-4) — pure RISC degradation: `silence old;`
+# reg-bio (F-4), pure RISC degradation: `silence old;`
 #
-# miRNA/RISC DESTROYS a transcript — there is no replacement gene. The
+# miRNA/RISC DESTROYS a transcript, there is no replacement gene. The
 # redirect form (`silence old -> new;`) is allele replacement and stays;
 # the target-less form is degradation: calls return null with a note, and
 # a degraded call is not expression (it never reaches the call counters).
-# @acetylate genes are immune (open chromatin wins — D-005).
+# @acetylate genes are immune (open chromatin wins, D-005).
 gene ghost() { return "boo" }
 gene keeper() { return "kept" }
 @acetylate gene tough() { return "tough" }

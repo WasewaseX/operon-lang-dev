@@ -1,0 +1,7 @@
+gene main() {
+    stress {
+        promote(((-9223372036854775807 - 1) % 9223372036854775807))
+    } rescue (e) {
+        promote("ov:" + e.kind)
+    }
+}

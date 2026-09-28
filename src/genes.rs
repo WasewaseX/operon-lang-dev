@@ -1,4 +1,4 @@
-//! genes.rs — the gene-features pipeline: methylation config (.cell), RNA
+//! genes.rs, the gene-features pipeline: methylation config (.cell), RNA
 //! edit patches (.rna), splice variant selection, module loading with TAD
 //! insulation, NMD sweep, ORF finder, and real-OS-thread tasks.
 
@@ -8,12 +8,12 @@ use crate::value::{Stress, Value};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicUsize, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 
 // ------------------------------------------------------------ thread budget
 // A run may hold at most MAX_THREADS live worker cells. Exceeding the cap is
-// a catchable `overflow` stress, never a panic — thread bombs are contained.
+// a catchable `overflow` stress, never a panic, thread bombs are contained.
 const MAX_THREADS: usize = 256;
 const WORKER_STACK: usize = 256 * 1024 * 1024; // match-class native stack
 static LIVE_THREADS: AtomicUsize = AtomicUsize::new(0);
@@ -32,7 +32,7 @@ pub fn spawn_worker(f: impl FnOnce() + Send + 'static) -> Result<(), Stress> {
         return Err(Stress::new(
             "overflow",
             format!(
-                "thread cap ({}) reached — too many live workers",
+                "thread cap ({}) reached, too many live workers",
                 MAX_THREADS
             ),
         ));
@@ -57,10 +57,151 @@ pub fn spawn_worker(f: impl FnOnce() + Send + 'static) -> Result<(), Stress> {
 }
 
 // ------------------------------------------------------------ .cell config
+
+/// W066: parse a `.cell` payload into the flat key/value map the engine
+/// consumes. Behavior is FROZEN (byte-identical map for every input, garbage
+/// included): the loader (`src/tools.rs`), the lint engine
+/// (`src/lint.rs::lint_cell`) and the differential parity all ride this
+/// function, so it never rejects, never notes, never panics — Total Grammar.
+/// Schema validation lives in the checked twin `parse_cell_checked`.
 pub fn parse_cell(src: &str) -> HashMap<String, String> {
+    parse_cell_checked(src).0
+}
+
+/// W066: one advisory `.cell` schema finding from the parse lane. `rule`
+/// reuses the check-time lint vocabulary from `src/lint.rs` verbatim —
+/// `cell-unknown-key` (W10) and `cell-type-mismatch` (W11) — so check and
+/// runtime tell ONE story about the same file. Notes are advisory: a bad
+/// key never rejects the run (unknown keys are ignored by the engine, that
+/// is exactly why the note exists).
+#[derive(Debug, Clone, PartialEq)]
+pub struct CellNote {
+    /// 1-based line in the .cell payload (0 = not attributable).
+    pub line: usize,
+    /// Stable lint rule name ("cell-unknown-key" / "cell-type-mismatch").
+    pub rule: &'static str,
+    /// Human message; names the key, the expectation and (for unknown keys)
+    /// the closest known key as a typo hint.
+    pub message: String,
+}
+
+/// W10 vocabulary (src/lint.rs): .cell key outside the schema.
+pub const CELL_UNKNOWN_KEY: &str = "cell-unknown-key";
+/// W11 vocabulary (src/lint.rs): .cell value of the wrong kind.
+pub const CELL_TYPE_MISMATCH: &str = "cell-type-mismatch";
+
+/// W066: the kind a schema key's value must have for the engine to use it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CellKind {
+    /// Parses as f64 (`grn.decay`).
+    Number,
+    /// Parses as i64 (`run.timeout_ms`; range nuances in the key's doc).
+    Integer,
+    /// The engine's bool vocabulary: "true" / "false" ("on"/"off" where the
+    /// reader honors them, e.g. scope.cancel_on_error).
+    Bool,
+    /// Taken verbatim (`cli.variant`, `allow.*` grants).
+    Str,
+}
+
+impl CellKind {
+    pub fn label(self) -> &'static str {
+        match self {
+            CellKind::Number => "number",
+            CellKind::Integer => "an integer",
+            CellKind::Bool => "a bool ('true'/'false')",
+            CellKind::Str => "a string",
+        }
+    }
+    fn accepts(self, v: &str) -> bool {
+        let t = v.trim();
+        match self {
+            CellKind::Number => t.parse::<f64>().is_ok(),
+            CellKind::Integer => t.parse::<i64>().is_ok(),
+            // scope.cancel_on_error flips OFF on "off"; the rest arm on
+            // "true" — the union of the honored vocabulary is accepted here,
+            // anything else gets an advisory note (never a rejection).
+            CellKind::Bool => matches!(t, "true" | "false" | "on" | "off"),
+            CellKind::Str => true,
+        }
+    }
+}
+
+/// W066: one declared key of the `.cell` schema — the runtime lane's source
+/// of truth. `docs/specs/CELL-SCHEMA.md` is the human mirror (kept in sync
+/// by tests/cell_schema.rs) and `src/lint.rs::CELL_KEYS` the check-time
+/// mirror (lint lane). Families end in `*` ("allow.*") and match by prefix.
+pub struct CellKeySpec {
+    /// Exact key ("m6a.decay") or family prefix ending in `*` ("allow.*").
+    pub name: &'static str,
+    pub kind: CellKind,
+    /// The value the engine behaves as when the key is absent
+    /// ("—" = opt-in family/key with no numeric default).
+    pub default: &'static str,
+    /// One-line effect, mirrored in docs/specs/CELL-SCHEMA.md.
+    pub doc: &'static str,
+    /// Since-when tag (loop/roadmap id or pre-M100), for evolution audits.
+    pub since: &'static str,
+}
+
+/// Every key the engine reads today (sweep of `cell.get` call sites in
+/// src/interp.rs, src/genes.rs, src/tools.rs, src/main.rs, src/pybridge.rs),
+/// alphabetically, exact keys before their family. The `methyl()` builtin
+/// additionally reads ANY key (introspection door; `allow.*` redacted).
+pub const CELL_SCHEMA: &[CellKeySpec] = &[
+    CellKeySpec { name: "allow.exit", kind: CellKind::Bool, default: "false", doc: "boolean exit capability; must ride an explicit --cell (auto-detected cells cannot grant)", since: "sec-r2 (audit C-11)" },
+    CellKeySpec { name: "allow.*", kind: CellKind::Str, default: "nothing granted", doc: "capability grant family: read/write/net/run/py/env carry comma-separated values, exit is boolean; auto-detected operon.cell grants are ignored with a note", since: "pre-M100 (sec-r2)" },
+    CellKeySpec { name: "cli.variant", kind: CellKind::Str, default: "—", doc: "pins splice-variant selection for every gene (CLI --variant is staged in as this key; selection: cell > @m6a > first declared)", since: "pre-M100" },
+    CellKeySpec { name: "entry", kind: CellKind::Str, default: "main / ires", doc: "entry gene override (CLI --entry wins over it)", since: "pre-M100" },
+    CellKeySpec { name: "enhance.delta", kind: CellKind::Number, default: "0.25", doc: "enhancer dose, 0..=1: threshold reduction applied by enhance", since: "reg-bio (F-6)" },
+    CellKeySpec { name: "expression.koff", kind: CellKind::Number, default: "0.1", doc: "telegraph promoter OFF probability per call attempt, 0..=1", since: "reg-bio (F-1)" },
+    CellKeySpec { name: "expression.kon", kind: CellKind::Number, default: "0.3", doc: "telegraph promoter ON probability per call attempt, 0..=1", since: "reg-bio (F-1)" },
+    CellKeySpec { name: "expression.seed", kind: CellKind::Integer, default: "0 (golden-ratio constant)", doc: "reseeds the shared mirrored xorshift64* stream behind promoter draws", since: "reg-bio (F-1)" },
+    CellKeySpec { name: "expression.stochastic", kind: CellKind::Bool, default: "false", doc: "enables per-call telegraph promoter draws (deterministic contract otherwise)", since: "reg-bio (F-1)" },
+    CellKeySpec { name: "grn.decay", kind: CellKind::Number, default: "0.0 (no decay)", doc: "GRN level dilution per grn_fire pulse / time tick, 0..=1", since: "A10 / reg-bio-2 (C2)" },
+    CellKeySpec { name: "grn.decay_calls", kind: CellKind::Integer, default: "— (event-driven only)", doc: "fires one GRN decay step every N calls when set (>=1)", since: "reg-bio-2 (C2)" },
+    CellKeySpec { name: "ligand.*", kind: CellKind::Number, default: "0.0", doc: "[ligand.<name>] bath default per species, 0..=1; runtime ligand_set wins over it", since: "reg-bio-2 (A4)" },
+    CellKeySpec { name: "m6a.decay", kind: CellKind::Number, default: "0.0 (no decay)", doc: "standalone m6A density decay fraction per cadence tick, 0..=1", since: "loop-9 (P0-4)" },
+    CellKeySpec { name: "m6a.decay_calls", kind: CellKind::Integer, default: "1", doc: "standalone m6A decay cadence in calls (>=1)", since: "loop-9 (P0-4)" },
+    CellKeySpec { name: "m6a.reader.decay", kind: CellKind::Number, default: "0.25", doc: "YTHDF2 fate: extra decay on marked transcripts, 0..=1", since: "loop-9 (F-6)" },
+    CellKeySpec { name: "m6a.reader.min_level", kind: CellKind::Integer, default: "2", doc: "reader engagement threshold on the 0..=3 mark lattice", since: "loop-9 (F-6)" },
+    CellKeySpec { name: "m6a.reader.translation", kind: CellKind::Number, default: "0.10", doc: "YTHDF1/3 fate: translation attenuation on marked transcripts, 0..=1", since: "loop-9 (F-6)" },
+    CellKeySpec { name: "methyl.maintenance", kind: CellKind::Number, default: "0.5", doc: "maintenance factor applied to methylation levels per passage(n), 0..=1", since: "pre-M100" },
+    CellKeySpec { name: "methylate.quiet", kind: CellKind::Bool, default: "false", doc: "suppresses the per-call methylation growth notes", since: "pre-M100 (A12)" },
+    CellKeySpec { name: "methylate.threshold", kind: CellKind::Integer, default: "3", doc: "graded silencing gate: calls blocked when methylation counter >= threshold (>=0)", since: "pre-M100 (T2b)" },
+    CellKeySpec { name: "modules.visibility", kind: CellKind::Str, default: "default visibility", doc: "\"strict\" enables W24 strict module export visibility (private containment)", since: "W24" },
+    CellKeySpec { name: "operon.polarity", kind: CellKind::Number, default: "0.5", doc: "transcriptional polarity survival factor for upstream cistrons, 0..=1", since: "loop-9 (P0-1)" },
+    CellKeySpec { name: "py.timeout_ms", kind: CellKind::Integer, default: "10000 (clamp 1..=300000)", doc: "py() wall-clock cap in milliseconds", since: "substrate-r1" },
+    CellKeySpec { name: "quorum.dilution", kind: CellKind::Number, default: "0.5", doc: "signal-medium dilution per passage(n) division, 0..=1", since: "loop-9 (C8)" },
+    CellKeySpec { name: "rho.catch", kind: CellKind::Number, default: "0.5", doc: "Rho catch-up probability base (distance decay q = 1-(1-catch)^d), 0..=1", since: "loop-10 (F-7)" },
+    CellKeySpec { name: "rho.queue_floor", kind: CellKind::Number, default: "0.5", doc: "rut-site occlusion floor for Rho termination", since: "loop-10 (F-7)" },
+    CellKeySpec { name: "rho.termination", kind: CellKind::Bool, default: "false", doc: "arms Rho-dependent termination (opt-in; legacy runs draw nothing)", since: "loop-10 (F-7)" },
+    CellKeySpec { name: "ribosome.drain", kind: CellKind::Number, default: "0.5", doc: "ribosome-queue drain rate per call", since: "loop-10 (F-8)" },
+    CellKeySpec { name: "ribosome.queue_cap", kind: CellKind::Number, default: "1.0", doc: "per-cistron ribosome-queue shield cap (0.0 = unshielded)", since: "loop-10 (F-7)" },
+    CellKeySpec { name: "repressi.alpha", kind: CellKind::Number, default: "10.0", doc: "repressilator production alpha (>0)", since: "reg-bio (F-5)" },
+    CellKeySpec { name: "repressi.basal", kind: CellKind::Number, default: "0.0", doc: "basal promoter leak (>=0)", since: "reg-bio (F-5)" },
+    CellKeySpec { name: "repressi.gamma", kind: CellKind::Number, default: "1.0", doc: "repressilator degradation gamma (>=0)", since: "reg-bio (F-5)" },
+    CellKeySpec { name: "repressi.hill", kind: CellKind::Integer, default: "4", doc: "Hill coefficient (integer 1..=8)", since: "reg-bio (F-5)" },
+    CellKeySpec { name: "repressi.noise", kind: CellKind::Number, default: "0.0 (off)", doc: "Euler substep kick amplitude, 0..=1", since: "reg-bio (F-5)" },
+    CellKeySpec { name: "repressi.seed", kind: CellKind::Integer, default: "0 (golden-ratio constant)", doc: "seeds the repressilator noise stream", since: "reg-bio (F-5)" },
+    CellKeySpec { name: "run.timeout_ms", kind: CellKind::Integer, default: "10000 (clamp 1..=300000)", doc: "run() child wall-clock cap in milliseconds; a timed-out child is killed and reported", since: "sec-r2 (audit A14)" },
+    CellKeySpec { name: "scope.cancel_on_error", kind: CellKind::Bool, default: "true", doc: "cancel child scopes on a stress unwind (\"off\" disables)", since: "W18" },
+    CellKeySpec { name: "variant.*", kind: CellKind::Str, default: "(@m6a > first declared)", doc: "variant.<root> pins the splice variant per gene root", since: "pre-M100" },
+    CellKeySpec { name: "wobble.strict", kind: CellKind::Bool, default: "false", doc: "cell-side --strict: run exits 3 when rung >= 3 repairs occurred", since: "W37" },
+];
+
+/// W066: parse + validate a `.cell` payload against `CELL_SCHEMA`. Returns
+/// the exact map `parse_cell` has always produced (same loop, same rules —
+/// the notes are an ADDITIVE advisory channel) plus one note per finding:
+/// unknown key -> `cell-unknown-key` (W10) with a closest-key typo hint,
+/// kind mismatch -> `cell-type-mismatch` (W11) with expected vs got.
+/// Notes never reject and are never printed here; the loader decides where
+/// they surface (Total Grammar: configuration problems never stop a run).
+pub fn parse_cell_checked(src: &str) -> (HashMap<String, String>, Vec<CellNote>) {
     let mut out = HashMap::new();
+    let mut notes = Vec::new();
     let mut section = String::new();
-    for line in src.lines() {
+    for (i, line) in src.lines().enumerate() {
         let t = line.trim();
         if t.is_empty() || t.starts_with('#') {
             continue;
@@ -77,10 +218,113 @@ pub fn parse_cell(src: &str) -> HashMap<String, String> {
             } else {
                 format!("{}.{}", section, k)
             };
+            let line_no = i + 1;
+            match cell_schema_kind(&key) {
+                None => {
+                    let hint = closest_cell_key(&key)
+                        .map(|c| format!(" did you mean '{}'?", c))
+                        .unwrap_or_default();
+                    notes.push(CellNote {
+                        line: line_no,
+                        rule: CELL_UNKNOWN_KEY,
+                        message: format!(
+                            ".cell key '{}' is not in the schema \
+                             (docs/specs/CELL-SCHEMA.md), typo? it will be \
+                             silently ignored{}",
+                            key, hint
+                        ),
+                    });
+                }
+                Some(kind) => {
+                    if !kind.accepts(&v) {
+                        notes.push(CellNote {
+                            line: line_no,
+                            rule: CELL_TYPE_MISMATCH,
+                            message: format!(
+                                ".cell key '{}' expects {}, got '{}'",
+                                key,
+                                kind.label(),
+                                v
+                            ),
+                        });
+                    }
+                }
+            }
             out.insert(key, v);
         }
     }
-    out
+    (out, notes)
+}
+
+/// The kind declared for `key`, exact rows first, then `*` families.
+fn cell_schema_kind(key: &str) -> Option<CellKind> {
+    for spec in CELL_SCHEMA {
+        if let Some(prefix) = spec.name.strip_suffix('*') {
+            if key.starts_with(prefix) {
+                return Some(spec.kind);
+            }
+        } else if spec.name == key {
+            return Some(spec.kind);
+        }
+    }
+    None
+}
+
+/// W066: closest known key for an unknown one — zero-dependency typo hint.
+/// Bounded Levenshtein over bytes plus a prefix/suffix affinity (covers the
+/// classic section-dropped case: "decay" -> "grn.decay"/"m6a.decay").
+/// Ties break deterministically: distance, then longer common prefix, then
+/// CELL_SCHEMA order. Returns None when nothing is plausibly a typo of it.
+fn closest_cell_key(unknown: &str) -> Option<&'static str> {
+    let mut best: Option<(&'static str, usize, usize)> = None; // (name, dist, prefix)
+    for spec in CELL_SCHEMA {
+        let name = spec.name;
+        let bare = name.strip_suffix('*').unwrap_or(name);
+        let d = edit_distance_bounded(unknown, bare, 3);
+        let p = common_prefix_len(unknown, bare);
+        // plausible typo: within edit distance 3, or the unknown is a
+        // prefix/suffix of a known key (3+ chars so single letters stay quiet)
+        let affinity = unknown.len() >= 3 && (bare.starts_with(unknown) || bare.ends_with(unknown));
+        if d > 3 && !affinity {
+            continue;
+        }
+        let better = match best {
+            None => true,
+            Some((_, bd, bp)) => d < bd || (d == bd && p > bp),
+        };
+        if better {
+            best = Some((name, d, p));
+        }
+    }
+    best.map(|(name, _, _)| name)
+}
+
+/// Levenshtein distance, bailing out once it exceeds `cap` (returns cap+1).
+fn edit_distance_bounded(a: &str, b: &str, cap: usize) -> usize {
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    if a.len().abs_diff(b.len()) > cap {
+        return cap + 1;
+    }
+    let mut prev: Vec<usize> = (0..=b.len()).collect();
+    let mut cur = vec![0usize; b.len() + 1];
+    for i in 1..=a.len() {
+        cur[0] = i;
+        let mut row_min = cur[0];
+        for j in 1..=b.len() {
+            let sub = prev[j - 1] + usize::from(a[i - 1] != b[j - 1]);
+            cur[j] = (prev[j] + 1).min(cur[j - 1] + 1).min(sub);
+            row_min = row_min.min(cur[j]);
+        }
+        if row_min > cap {
+            return cap + 1;
+        }
+        std::mem::swap(&mut prev, &mut cur);
+    }
+    prev[b.len()]
+}
+
+fn common_prefix_len(a: &str, b: &str) -> usize {
+    a.bytes().zip(b.bytes()).take_while(|(x, y)| x == y).count()
 }
 
 // ------------------------------------------------------------ .rna edits
@@ -124,7 +368,7 @@ impl RnaReport {
 
 /// Apply an RNA edit patch to source text with a full per-rule report.
 /// Semantics are IDENTICAL to `apply_rna` (same scan order, same all-
-/// occurrences replacement, same gene-span scoping) — this is the checked
+/// occurrences replacement, same gene-span scoping), this is the checked
 /// engine; `apply_rna` is its lossy view (W068: no more silent misses).
 pub fn apply_rna_checked(src: &str, patch_src: &str, file_stem: &str) -> RnaReport {
     let mut edits = Vec::new();
@@ -198,7 +442,7 @@ pub fn apply_rna_checked(src: &str, patch_src: &str, file_stem: &str) -> RnaRepo
 /// `str::replace` would replace).
 fn count_occurrences(hay: &str, needle: &str) -> usize {
     if needle.is_empty() {
-        return 0; // empty pattern: String::replace would insert everywhere —
+        return 0; // empty pattern: String::replace would insert everywhere,
                   // never a useful edit; treat as no-match rather than corrupt
     }
     let mut n = 0;
@@ -213,7 +457,7 @@ fn count_occurrences(hay: &str, needle: &str) -> usize {
 /// Apply an RNA edit patch to source text. Target matches either the file
 /// stem or a gene name; gene-scoped edits apply to that gene's source span
 /// (best effort: from `gene <name>` to the next top-level `gene ` at col 0).
-/// Lossy view over `apply_rna_checked` — kept for existing call sites
+/// Lossy view over `apply_rna_checked`, kept for existing call sites
 /// (`run --rna`, `build --rna`); new tooling should use the checked engine.
 pub fn apply_rna(src: &str, patch_src: &str, file_stem: &str) -> (String, Vec<String>) {
     let report = apply_rna_checked(src, patch_src, file_stem);
@@ -281,9 +525,9 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
             0,
             4,
             format!(
-            "cyclic import of '{}' — module still loading; its map fills when loading completes",
-            path
-        ),
+                "cyclic import of '{}', module still loading; its map fills when loading completes",
+                path
+            ),
         );
         if let Some(v) = interp.modules.get(path) {
             return Ok(v.clone());
@@ -300,7 +544,7 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
     // importing file's own project directory and the standard library are
     // ALWAYS importable (otherwise no `use` works under default-deny).
     // Imports that reach OUTSIDE those trees (arbitrary disk paths) require
-    // an explicit read capability — a program cannot execute random files.
+    // an explicit read capability, a program cannot execute random files.
     // canonicalized Windows paths carry backslashes: normalize both sides to
     // forward slashes so prefix comparison is platform-neutral
     fn under(resolved: &str, root: &Option<String>) -> bool {
@@ -323,7 +567,7 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
         .map(|p| p.to_string_lossy().replace('\\', "/"));
     let std_env = std::env::var("OPERON_STD").ok();
     // the managed std library is the REAL std directory (exe-relative,
-    // OPERON_STD override, or the interpreter's own tree) — never any path
+    // OPERON_STD override, or the interpreter's own tree), never any path
     // that merely *contains* a `/std/` component
     fn is_std_tree(resolved: &str, std_env: &Option<String>) -> bool {
         let mut roots: Vec<String> = Vec::new();
@@ -357,12 +601,21 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
     }
     let managed = under(&rc_resolved, &interp.base_dir)
         || under(&rc_resolved, &cwd)
-        || is_std_tree(&rc_resolved, &std_env);
+        || is_std_tree(&rc_resolved, &std_env)
+        // W19/W23: a vendored dependency from the lockfile is a runtime-
+        // managed tree too, the operator resolved + installed it (operon
+        // mod add/install), so it imports under default-deny exactly like
+        // std/; an arbitrary cache dir never appears here (the mapping is
+        // name → pinned rev dir from the checked-in lockfile).
+        || interp
+            .lock_dirs
+            .iter()
+            .any(|(_, d)| under(&rc_resolved, &Some(d.clone())));
     if !managed && interp.caps.enabled {
         if let Err(s) = interp.caps.check(&interp.caps.read, "read", &resolved) {
             // sec-r1 (audit C-7): keep the policy message for direct grants
             // debugging, but for the traversal class return the SAME string
-            // resolve_path uses — otherwise real-vs-ghost is distinguishable
+            // resolve_path uses, otherwise real-vs-ghost is distinguishable
             let traversal = path.contains("..")
                 || path.starts_with('/')
                 || path.starts_with("\\\\")
@@ -382,7 +635,7 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
         }
     }
     // sec-r1 (audit C-7 TOCTOU): read the CANONICALIZED path, mirroring the
-    // read_file builtin's check/open race fix — a symlink swapped between
+    // read_file builtin's check/open race fix, a symlink swapped between
     // the policy decision (canonicalize) and the read previously routed the
     // read outside the sandbox
     let rc_path = std::path::PathBuf::from(&rc_resolved);
@@ -436,8 +689,17 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
     interp.loading.pop();
 
     // Exports: anchor export wins; else all top-level names; TAD insulation.
+    // W24: under `.cell modules.visibility = strict`, a module with pub
+    // marks exports ONLY those names (anchors still win when present);
+    // a strict module with zero pub marks keeps default-open (the
+    // migration path) and notes it once. Default mode: `pub` is inert.
     let has_any_anchor =
         !prog.anchor_exports.is_empty() || prog.tad_exports.iter().any(|(_, e)| !e.is_empty());
+    let strict = interp
+        .cell
+        .get("modules.visibility")
+        .map(|s| s.eq_ignore_ascii_case("strict"))
+        .unwrap_or(false);
     let mut exports: Vec<(Value, Value)> = Vec::new();
     let mut export_set: Vec<String> = prog.anchor_exports.clone();
     for (_, exps) in &prog.tad_exports {
@@ -449,7 +711,40 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
                 exports.push((Value::Str(name.clone()), v));
             }
         }
+    } else if strict && !prog.pub_exports.is_empty() {
+        for name in &prog.pub_exports {
+            if let Some(v) = menv.get(name) {
+                exports.push((Value::Str(name.clone()), v));
+            }
+        }
+        let total = menv
+            .vars
+            .borrow()
+            .iter()
+            .filter(|(k, _)| !k.starts_with('#'))
+            .count();
+        let hidden = total.saturating_sub(exports.len());
+        if hidden > 0 {
+            interp.note(
+                0,
+                4,
+                format!(
+                    "strict visibility: {} private name(s) hidden in '{}' (mark with pub or anchor export)",
+                    hidden, path
+                ),
+            );
+        }
     } else {
+        if strict {
+            interp.note(
+                0,
+                4,
+                format!(
+                    "strict visibility: '{}' has no pub marks, default-open retained (add pub or anchor export)",
+                    path
+                ),
+            );
+        }
         for (k, v) in menv.vars.borrow().iter() {
             if !k.starts_with('#') {
                 exports.push((Value::Str(k.clone()), v.clone()));
@@ -461,7 +756,7 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
         });
     }
     let modv = {
-        // fill the placeholder registered before the body ran — same Rc,
+        // fill the placeholder registered before the body ran, same Rc,
         // so cyclic importers holding it observe the completed data
         if let Some(Value::Map(m)) = interp.modules.get(path) {
             {
@@ -483,14 +778,14 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
     Ok(modv)
 }
 
-// NOTE: placeholder protocol — a module registers an EMPTY map in
+// NOTE: placeholder protocol, a module registers an EMPTY map in
 // interp.modules before its body runs; completion fills THAT
 // SAME map so cyclic importers holding the placeholder observe the data.
 
 fn resolve_path(interp: &Interp, path: &str) -> Result<String, String> {
     let p = path.trim_end_matches(".op").to_string() + ".op";
     // sec-r1 (audit C-7): with the sandbox on, traversal/absolute module
-    // names must not leak which outside paths exist — "not found" (ghost)
+    // names must not leak which outside paths exist, "not found" (ghost)
     // vs "blocked" (real file) was a filesystem existence oracle. That name
     // class gets ONE unified failure message; plain relative names inside
     // the project keep the precise "not found" for usable typos.
@@ -515,7 +810,7 @@ fn resolve_path(interp: &Interp, path: &str) -> Result<String, String> {
     candidates.push(Some(std::path::PathBuf::from(&p)));
     candidates.push(Some(std::path::PathBuf::from("std").join(&p)));
     // dx-r5 (audit P0-1): a clean `curl | sh` install ships std/ beside the
-    // binary, but resolve_path had no exe-relative candidate — `use std/…`
+    // binary, but resolve_path had no exe-relative candidate, `use std/…`
     // failed silently from any other CWD (silent-null-with-exit-0). Mirror
     // the caps layer's exe-relative std tree (genes.rs is_std_tree): the
     // install layout (…/bin/operon + …/std) and a dev layout (…/target/
@@ -529,8 +824,13 @@ fn resolve_path(interp: &Interp, path: &str) -> Result<String, String> {
             if let Some(root) = dir.parent() {
                 candidates.push(Some(root.join(&p)));
             }
-            // bare `use x`: try the exe-relative std trees by file name
-            if !p.starts_with("std/") {
+            // bare `use x`: try the exe-relative std trees by file name.
+            // BARE only: a multi-segment path (a/b/c) must never resolve by
+            // its tail, or `use mylib::seq` would hijack std/seq.op instead
+            // of descending mylib's exported nested tables (W025 stage 2;
+            // the oracle never had this candidate, so parity demands the
+            // single-segment restriction, not an oracle-side mirror).
+            if !p.starts_with("std/") && !p.contains('/') {
                 if let Some(fname) = std::path::Path::new(&p).file_name() {
                     candidates.push(Some(dir.join("std").join(fname)));
                     if let Some(root) = dir.parent() {
@@ -547,8 +847,28 @@ fn resolve_path(interp: &Interp, path: &str) -> Result<String, String> {
             .clone()
             .map(|d| std::path::PathBuf::from(d).join(&p)),
     );
+    // W19/W23 (root 7): the vendored dependency cache from operon.lock.
+    // A lock entry `name -> dir` resolves the leading path segment: with
+    // lock entry (my-lib, ~/.operon/deps/my-lib-abc123), `use my-lib/util`
+    // tries <dir>/util.op (and bare `use my-lib` → <dir>/my-lib.op... the
+    // module's own root). Deterministic: the lock pins name→rev→dir, no
+    // globbing, and the standard roots above win first (a local checkout
+    // shadows the vendored copy, the developer's-tree-first rule).
+    for (dep_name, dep_dir) in &interp.lock_dirs {
+        let seg = format!("{}/", dep_name);
+        let tail: Option<String> = if p == format!("{}.op", dep_name) {
+            Some(format!("{}.op", dep_name))
+        } else if p.starts_with(&seg) {
+            Some(p[seg.len()..].to_string())
+        } else {
+            None
+        };
+        if let Some(t) = tail {
+            candidates.push(Some(std::path::PathBuf::from(dep_dir).join(t)));
+        }
+    }
     // W070: per-root attempt detail for the PLAIN name class only. The
-    // traversal class keeps its unified C-7 message — attempted-root detail
+    // traversal class keeps its unified C-7 message, attempted-root detail
     // for outside paths would resurrect the existence oracle C-7 removed.
     // `is_file` (not `exists`) so a directory named `foo.op` reports as
     // "not a regular file" instead of "resolving" and dying in the parser.
@@ -585,7 +905,7 @@ fn resolve_path(interp: &Interp, path: &str) -> Result<String, String> {
         return Err(unified_err(interp.caps.enabled && traversal));
     }
     Err(format!(
-        "module '{}' not found — tried: {}",
+        "module '{}' not found, tried: {}",
         path,
         attempts.join("; ")
     ))
@@ -781,6 +1101,9 @@ pub enum SendValue {
     Int(i64),
     Float(f64),
     Str(String),
+    /// W029: bytes cross spawn/sequence boundaries losslessly (the spawn
+    /// wire snapshot-membrane rule: data values cross by serialization).
+    Bytes(Vec<u8>),
     List(Vec<SendValue>),
     Map(Vec<(String, SendValue)>),
     Stress(String, String),
@@ -790,19 +1113,26 @@ pub enum SendValue {
 }
 
 /// Sendable environment snapshot entry: gene definitions cross by Arc,
-/// data values cross by serialization.
+/// data values cross by serialization. W015: channel handles cross LIVE
+/// (the Arc to the shared buffer), they are the one behavior value with a
+/// thread-safe interior, so a spawned cell can send/recv on the same
+/// channel as its host; the queue stores the wire form, so the membrane
+/// still holds (nothing aliased is shared).
 pub enum SnapVal {
     Gene(Arc<GeneDef>),
     Data(SendValue),
+    Channel(Arc<crate::value::ChannelShared>),
 }
 
 /// Sendable argument: data serializes; named genes cross as references to
 /// the snapshot (the worker re-binds them from its inherited repertoire).
-/// Anonymous lambdas cannot cross — they arrive as null with a note.
+/// Anonymous lambdas cannot cross, they arrive as null with a note.
+/// W015: channel handles cross LIVE (same shared buffer on both sides).
 pub enum SnapArg {
     Data(SendValue),
     GeneRef(String),
     Lambda(Arc<GeneDef>),
+    Channel(Arc<crate::value::ChannelShared>),
 }
 
 pub fn arg_to_snap(v: &Value) -> SnapArg {
@@ -813,6 +1143,8 @@ fn arg_to_snap_d(v: &Value, d: u32) -> SnapArg {
     match v {
         Value::Gene(d2, _) if d2.name.is_some() => SnapArg::GeneRef(d2.name.clone().unwrap()),
         Value::Gene(d2, _) => SnapArg::Lambda(d2.clone()),
+        // W015: a top-level channel argument crosses as a live handle
+        Value::Channel(a) => SnapArg::Channel(a.clone()),
         other => SnapArg::Data(to_send_d(other, d)),
     }
 }
@@ -820,6 +1152,8 @@ fn arg_to_snap_d(v: &Value, d: u32) -> SnapArg {
 pub fn arg_from_snap(a: &SnapArg, snap: &[(String, SnapVal)]) -> Value {
     match a {
         SnapArg::Data(sv) => from_send(clone_send(sv)),
+        // W015: the live channel handle re-binds by Arc (same buffer)
+        SnapArg::Channel(arc) => Value::Channel(arc.clone()),
         SnapArg::GeneRef(n) => {
             for (name, sv) in snap {
                 if name == n {
@@ -836,7 +1170,7 @@ pub fn arg_from_snap(a: &SnapArg, snap: &[(String, SnapVal)]) -> Value {
 
 /// Maximum nesting depth of a value (cycle-safe: visited pointers never
 /// re-expand). Walk stops at the SendValue cap.
-fn value_depth(v: &Value, d: u32) -> u32 {
+pub(crate) fn value_depth(v: &Value, d: u32) -> u32 {
     if d > 100_000 {
         return d;
     }
@@ -887,6 +1221,7 @@ fn to_send_d(v: &Value, d: u32) -> SendValue {
         Value::Int(i) => SendValue::Int(*i),
         Value::Float(f) => SendValue::Float(*f),
         Value::Str(s) => SendValue::Str(s.clone()),
+        Value::Bytes(b) => SendValue::Bytes(b.as_ref().clone()),
         Value::List(l) => SendValue::List(l.borrow().iter().map(|x| to_send_d(x, d + 1)).collect()),
         Value::Map(m) => SendValue::Map(
             m.borrow()
@@ -896,6 +1231,18 @@ fn to_send_d(v: &Value, d: u32) -> SendValue {
         ),
         Value::Gene(_, _) => SendValue::Null,
         Value::Seq(_, _) => SendValue::Null,
+        // W015: a channel handle nested inside a container degrades to null
+        // during data serialization (same rule as genes/sequences); only
+        // top-level handles cross live (SnapArg::Channel / SnapVal::Channel)
+        Value::Channel(_) => SendValue::Null,
+        // W013: a weak handle degrades to null like every other handle when
+        // it crosses as DATA (nested inside a container, or a join-result
+        // value, it could never keep its meaning across the snapshot
+        // membrane: the copy's target is a different allocation). A
+        // TOP-LEVEL weak spawn argument and a weak channel payload are
+        // refused by their pre-flights before this arm is reached
+        // (SPEC §19f), so this arm is the nested/return-boundary rule.
+        Value::Weak(_) => SendValue::Null,
         Value::Variant(crate::value::VTag::NoneV, _) => SendValue::Variant("None".into(), None),
         Value::Variant(t, Some(p)) => {
             SendValue::Variant(t.tag_name().into(), Some(Box::new(to_send_d(p, d + 1))))
@@ -929,6 +1276,7 @@ fn from_send_d(v: SendValue, d: u32) -> Value {
         SendValue::Int(i) => Value::Int(i),
         SendValue::Float(f) => Value::Float(f),
         SendValue::Str(s) => Value::Str(s),
+        SendValue::Bytes(b) => Value::Bytes(Rc::new(b)),
         SendValue::List(l) => Value::List(Rc::new(RefCell::new(
             l.into_iter().map(|x| from_send_d(x, d + 1)).collect(),
         ))),
@@ -958,13 +1306,15 @@ fn from_send_d(v: SendValue, d: u32) -> Value {
 /// Snapshot the parent global environment for a worker thread: gene
 /// definitions cross by Arc (they are immutable ASTs), data values cross by
 /// SendValue serialization. This gives tasks and sequences visibility of the
-/// whole module surface — cells share metabolites through signals, and worker
+/// whole module surface, cells share metabolites through signals, and worker
 /// cells inherit the module's gene repertoire.
 pub fn snapshot_globals(interp: &Interp) -> Vec<(String, SnapVal)> {
     let mut out: Vec<(String, SnapVal)> = Vec::new();
     for (name, v) in interp.global.vars.borrow().iter() {
         match v {
             Value::Gene(d, _) => out.push((name.clone(), SnapVal::Gene(d.clone()))),
+            // W015: a global channel crosses as a live handle (same buffer)
+            Value::Channel(a) => out.push((name.clone(), SnapVal::Channel(a.clone()))),
             other => {
                 let sv = to_send(other);
                 out.push((name.clone(), SnapVal::Data(sv)));
@@ -975,7 +1325,7 @@ pub fn snapshot_globals(interp: &Interp) -> Vec<(String, SnapVal)> {
 }
 
 /// reg-r1 (regulation audit W1, severity HIGH): worker cells inherit the
-/// parent's REGULATION state — GRN edges + levels, methylation counters +
+/// parent's REGULATION state, GRN edges + levels, methylation counters +
 /// threshold, toggle pairs, enhance marks. The old snapshot carried only
 /// env values, so `spawn()` silently ungated the entire regulation layer:
 /// a `@methylate`-silenced gene printed "chromatin repressed" WHILE it
@@ -989,7 +1339,7 @@ pub struct RegulationSnap {
     pub methyl_levels: Vec<(String, u32)>,
     pub methyl_threshold: u32,
     pub enhanced: Vec<String>,
-    /// reg-r3 (re-audit): the repressilator ring rides the snapshot too —
+    /// reg-r3 (re-audit): the repressilator ring rides the snapshot too,
     /// node names + the RAW ODE levels frozen at spawn, so a ring-sourced
     /// GRN gate vetoes identically inside the cell ("exactly as it does
     /// outside"). Workers are bounded cells: the ring is frozen at spawn
@@ -997,7 +1347,7 @@ pub struct RegulationSnap {
     pub repressi_ring: Vec<String>,
     pub repressi_tick: u64,
     pub repressi_levels: Vec<f64>,
-    /// reg-bio (F-1): the telegraph promoter layer rides the snapshot —
+    /// reg-bio (F-1): the telegraph promoter layer rides the snapshot,
     /// promoter states are part of a cell's regulatory state, so a spawned
     /// cell (mitosis) inherits the parent's on/off promoters and burst
     /// counters, and later parent-side switches do not propagate
@@ -1015,7 +1365,7 @@ pub struct RegulationSnap {
     pub repressi_params: crate::interp::RepressiParams,
     pub enhance_delta: f64,
     /// reg-bio-2 (C1/C11): the translation layer and decoy sites ride the
-    /// snapshot — worker cells are whole regulatory cells (same contract
+    /// snapshot, worker cells are whole regulatory cells (same contract
     /// as every other regulation field).
     pub trans_edges: Vec<crate::ast::TransEdge>,
     pub trans_last: Vec<(String, u64)>,
@@ -1024,12 +1374,12 @@ pub struct RegulationSnap {
     pub ligands: Vec<String>,
     pub ligand_pools: Vec<(String, f64)>,
     pub grn_binds: Vec<crate::ast::BindDef>,
-    /// reg-bio-3 (C9): RISC entries ride the snapshot — a spawned cell is a
+    /// reg-bio-3 (C9): RISC entries ride the snapshot, a spawned cell is a
     /// whole regulatory cell: silencing redirects inside it too (13b fix:
     /// §13's inventory previously missed silences).
     pub silences: Vec<(String, Option<String>, f64, u32)>,
     /// loop-9 (C8): signal species names ride the snapshot (a worker needs
-    /// them for edge-source resolution). The MEDIUM itself does NOT — the
+    /// them for edge-source resolution). The MEDIUM itself does NOT, the
     /// shared pool is handed to the worker explicitly (environment, not
     /// cytoplasm: live, not frozen).
     pub signals: Vec<String>,
@@ -1037,13 +1387,13 @@ pub struct RegulationSnap {
     /// worker folds the parent's reader math exactly.
     pub m6a_reader: (f64, f64, u32),
     /// loop-9 (F-3): per-gene promoter attempt telemetry rides the snapshot
-    /// (name, attempts, on_total, episodes) — worker cells are whole
+    /// (name, attempts, on_total, episodes), worker cells are whole
     /// regulatory cells; telemetry must not desync from the host mid-burst.
     pub promoter_tel: Vec<(String, u64, u64, u64)>,
     /// loop-9 (R9): runtime burst overrides freeze at spawn (snapshot).
     pub burst_overrides: Vec<(String, f64, f64)>,
     /// loop-9 (F-4): runtime splice shifts freeze at spawn (snapshot
-    /// contract — later parent-side shifts do not propagate).
+    /// contract, later parent-side shifts do not propagate).
     pub splice_shift: Vec<(String, String)>,
     pub risc_escaped: Vec<String>,
     /// reg-bio-3 (A1/A7): polycistronic units (membership, order, rbs,
@@ -1053,18 +1403,18 @@ pub struct RegulationSnap {
     pub m6a_levels: Vec<(String, u32)>,
     pub generation: u64,
     pub copies: Vec<(String, u32)>,
-    /// loop-10 (F-7/F-8): resolved Rho/queue knobs ride the snapshot —
+    /// loop-10 (F-7/F-8): resolved Rho/queue knobs ride the snapshot,
     /// (armed, catch, queue_floor, queue_cap, drain). Worker cells fold the
     /// parent's termination math exactly (they do not inherit raw .cell).
     pub rho_knobs: (bool, f64, f64, f64, f64),
     /// loop-10 (F-8): the queue register freezes at spawn (snapshot
-    /// contract — later parent-side queue growth does not propagate).
+    /// contract, later parent-side queue growth does not propagate).
     pub ribo_queue: Vec<(String, f64)>,
 }
 
 pub fn snapshot_regulation(interp: &Interp) -> RegulationSnap {
     // reg-r3: freeze the ring at the spawn tick (levels via the same pure
-    // fold the host uses — bit-identical arithmetic)
+    // fold the host uses, bit-identical arithmetic)
     let (ring_tick, ring_levels) = {
         let tick = match &interp.repressi_atomic {
             Some(a) => a.load(std::sync::atomic::Ordering::SeqCst),
@@ -1146,7 +1496,7 @@ pub fn snapshot_regulation(interp: &Interp) -> RegulationSnap {
             .map(|(k, (a, b))| (k.clone(), *a, *b))
             .collect(),
         // loop-10 R10-c (parity jury F-1m): prefer the pinned reader knobs
-        // when already bound — the same worker-in-worker class as the rho
+        // when already bound, the same worker-in-worker class as the rho
         // fix below (re-resolving from an empty worker cell silently
         // resets the reader to defaults at depth >= 2).
         m6a_reader: interp.m6a_reader_pins.unwrap_or((
@@ -1179,7 +1529,7 @@ pub fn snapshot_regulation(interp: &Interp) -> RegulationSnap {
         generation: interp.generation,
         copies: interp.copies.iter().map(|(k, v)| (k.clone(), *v)).collect(),
         // loop-10 R10-b (parity jury F-1): prefer the pinned knobs when
-        // already bound (worker-in-worker snapshotting) — re-resolving from
+        // already bound (worker-in-worker snapshotting), re-resolving from
         // interp.cell (empty inside a worker) would silently disarm the
         // layer at depth >= 2 while the oracle stays armed.
         rho_knobs: interp.rho_pins.unwrap_or((
@@ -1225,7 +1575,7 @@ pub fn bind_regulation(ti: &mut Interp, s: &RegulationSnap) {
     ti.methyl_levels = s.methyl_levels.iter().cloned().collect();
     ti.methyl_threshold = s.methyl_threshold;
     ti.enhanced = s.enhanced.clone();
-    // reg-r3: ring nodes resolve to the frozen spawn levels — pin the
+    // reg-r3: ring nodes resolve to the frozen spawn levels, pin the
     // worker's cache to (spawn_tick, levels) so ring_gate_level returns
     // exactly what the host saw (no live ticking inside the cell)
     ti.repressi_ring = s.repressi_ring.clone();
@@ -1255,7 +1605,7 @@ pub fn bind_regulation(ti: &mut Interp, s: &RegulationSnap) {
     ti.silences = s.silences.clone();
     ti.risc_escaped = s.risc_escaped.iter().cloned().collect();
     // loop-9 (C8): signal species ride the snapshot; the MEDIUM arc is
-    // assigned by the spawner (shared, live — see spawn_task/seq_start).
+    // assigned by the spawner (shared, live, see spawn_task/seq_start).
     ti.signals = s.signals.clone();
     // loop-9 (F-6): resolved reader knobs pin the worker's math
     ti.m6a_reader_pins = Some(s.m6a_reader);
@@ -1284,6 +1634,7 @@ pub fn bind_snapshot(env: &Rc<Env>, snap: &[(String, SnapVal)]) {
     for (name, sv) in snap {
         let v = match sv {
             SnapVal::Gene(d) => Value::Gene(d.clone(), None),
+            SnapVal::Channel(a) => Value::Channel(a.clone()),
             SnapVal::Data(sv) => from_send(clone_send(sv)),
         };
         env.define(name, v);
@@ -1305,6 +1656,8 @@ pub fn snapshot_with_closure(interp: &Interp, closure: Option<&Rc<Env>>) -> Vec<
         for (name, v) in env.vars.borrow().iter() {
             match v {
                 Value::Gene(d, _) => out.push((name.clone(), SnapVal::Gene(d.clone()))),
+                // W015: closure-captured channels cross live too (same buffer)
+                Value::Channel(a) => out.push((name.clone(), SnapVal::Channel(a.clone()))),
                 other => out.push((name.clone(), SnapVal::Data(to_send(other)))),
             }
         }
@@ -1328,6 +1681,7 @@ fn clone_send_d(sv: &SendValue, d: u32) -> SendValue {
         SendValue::Int(i) => SendValue::Int(*i),
         SendValue::Float(f) => SendValue::Float(*f),
         SendValue::Str(s) => SendValue::Str(s.clone()),
+        SendValue::Bytes(b) => SendValue::Bytes(b.clone()),
         SendValue::List(l) => SendValue::List(l.iter().map(|x| clone_send_d(x, d + 1)).collect()),
         SendValue::Map(m) => SendValue::Map(
             m.iter()
@@ -1344,7 +1698,7 @@ fn clone_send_d(sv: &SendValue, d: u32) -> SendValue {
 }
 
 // ------------------------------------------------------------ sequences
-/// Start a sequence worker: rendezvous channel makes pulls lazy — the worker
+/// Start a sequence worker: rendezvous channel makes pulls lazy, the worker
 /// blocks on each yield until the consumer pulls the next value.
 pub fn seq_start(
     def: Arc<GeneDef>,
@@ -1373,7 +1727,7 @@ pub fn seq_start(
         let result = run_seq_body(&mut ti, &def, conv_args, &tx);
         let (notes, stress) = match result {
             Ok(()) => (ti.notes, None),
-            // W06 (D-014): propagation inside a sequence ends the stream —
+            // W06 (D-014): propagation inside a sequence ends the stream,
             // sequences are streams, not answers, so the variant has no
             // return path; the stream ends cleanly (never leaked as a kind).
             Err(s) if s.prop.is_some() => {
@@ -1413,7 +1767,7 @@ fn run_seq_body(
         }
     }
     // Yield is the only interesting flow: everything else terminates the
-    // sequence (return value is dropped — sequences are streams, not answers).
+    // sequence (return value is dropped, sequences are streams, not answers).
     let _ = ti.exec_block(&fenv, &def.body)?;
     Ok(())
 }
@@ -1446,8 +1800,24 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
     if interp.tasks.len() >= 4096 {
         return Err(Stress::new(
             "overflow",
-            "too many live tasks (4096) — join() your spawns",
+            "too many live tasks (4096), join() your spawns",
         ));
+    }
+    // W013 spawn membrane: a top-level weak handle is REFUSED (catchable
+    // `membrane` stress), never silently nulled. A weak handle's whole
+    // meaning is the allocation identity of its target in the creating
+    // cell; the snapshot wire could only deliver a lie (a null, or worse a
+    // handle re-pointed at a copy). Same family as the send() refusal:
+    // data crosses, handles ride their own documented lanes (genes by
+    // name, lambdas and channels live, instances as maps), weak handles
+    // ride none. Nested handles keep the degrade-to-null wire rule.
+    for a in &args {
+        if matches!(a, Value::Weak(_)) {
+            return Err(Stress::new(
+                "membrane",
+                "spawn() refuses a weak payload; weak handles cannot cross the snapshot membrane",
+            ));
+        }
     }
     // pre-flight depth check: a payload deeper than the SendValue cap must
     // fail the SPAWN (catchable stress), not smuggle a stress value across
@@ -1467,28 +1837,37 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
     let task_name = name.clone();
     let host_caps = interp.caps.clone();
     let host_fuel = interp.fuel_pool.clone();
-    // loop-9 (C8): the worker holds the SAME live medium (environment —
+    // W18: each task gets its own cancel flag + an observable lifecycle
+    // phase. The worker's chain = every ancestor flag + its own, so
+    // cancelling a cell cancels its whole descent at tick boundaries.
+    let cancel_flag = Arc::new(AtomicBool::new(false));
+    let task_phase = Arc::new(Mutex::new(crate::interp::TaskState::Running));
+    let mut worker_chain = interp.cancel_chain.clone();
+    worker_chain.push(cancel_flag.clone());
+    let task_phase_in = task_phase.clone();
+    // loop-9 (C8): the worker holds the SAME live medium (environment,
     // my secretion raises your activation across cells). Spawning adds a
     // cell to the culture, so the medium materializes here even when the
-    // host has not secreted yet — an empty shared pool reads exactly like
+    // host has not secreted yet, an empty shared pool reads exactly like
     // None (0.0 everywhere), so legacy behavior is unchanged.
     let host_medium = Some(interp.medium_arc());
     // reg-bio-2 (C3): the task id must be claimed BEFORE the worker body
-    // runs — the worker's RNG stream is derived from it (decorrelated
+    // runs, the worker's RNG stream is derived from it (decorrelated
     // promoter bursting across cells).
     let id = interp.next_task_id;
     interp.next_task_id += 1;
     let task_seed = 0x9E3779B97F4A7C15u64 ^ (id as u64).wrapping_mul(0x9E3779B97F4A7C15);
     spawn_worker(move || {
         let mut ti = Interp::new();
+        ti.cancel_chain = worker_chain;
         ti.fuel_pool = host_fuel;
         // loop-9 (C8): live shared medium
         ti.medium = host_medium;
         // reg-bio-2 (C3): worker cells do NOT all start from the same default
-        // seed — each derives its stream from its task id, so two cells
+        // seed, each derives its stream from its task id, so two cells
         // bursting under expr_on draw DIFFERENT promoter sequences. The old
         // behavior was synchronized bursting across cells (perfect
-        // correlation) — the exact opposite of extrinsic noise. Still fully
+        // correlation), the exact opposite of extrinsic noise. Still fully
         // deterministic: same program → same ids → same streams. The Python
         // oracle mirrors the derivation (save / derive / restore) inline.
         ti.rng = task_seed;
@@ -1499,13 +1878,13 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
         ti.caps = host_caps; // worker cells inherit the host's grants
         let conv_args: Vec<Value> = send_args.iter().map(|a| arg_from_snap(a, &snap)).collect();
         // reg-r1: worker cells call through the SAME name-dispatch funnel as
-        // the host — call_named evaluates the toggle/methyl/GRN gates that a
+        // the host, call_named evaluates the toggle/methyl/GRN gates that a
         // direct call_gene would bypass, so a repressed gene stays repressed
         let result = ti.call_named(&genv, &task_name, conv_args);
         let (rv, notes) = match result {
             Ok(v) => (to_send(&v), ti.notes),
             // W06 (D-014): a propagated variant IS the worker gene's return
-            // value — converted at the boundary, never leaked as a failure.
+            // value, converted at the boundary, never leaked as a failure.
             Err(s) if s.prop.is_some() => (to_send(&s.prop.unwrap()), ti.notes),
             Err(s) => (SendValue::Stress(s.kind, s.message), ti.notes),
         };
@@ -1516,10 +1895,32 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
                 n
             })
             .collect();
+        // W18: the worker itself records the terminal phase BEFORE the
+        // result leaves, so a concurrent task_state read never sees a
+        // half-finished task. A cancelled-run stress names the phase;
+        // everything else (including a late cancel that never landed on
+        // a tick) counts as done, because the gene did finish.
+        let phase = match &rv {
+            SendValue::Stress(k, _) if k == "cancelled" => crate::interp::TaskState::Cancelled,
+            _ => crate::interp::TaskState::Done,
+        };
+        *task_phase_in.lock().unwrap() = phase;
         let _ = tx.send((rv, notes));
     })?;
     let _ = id; // claimed before spawn (C3); registered below
-    interp.tasks.insert(id, crate::interp::TaskHandle { rx });
+    interp.tasks.insert(
+        id,
+        crate::interp::TaskHandle {
+            rx,
+            cancel: cancel_flag,
+            state: task_phase,
+        },
+    );
+    // W17: a spawn inside an active scope block registers on the innermost
+    // scope; the block reaps it at exit (structured concurrency).
+    if let Some(top) = interp.scope_stack.last_mut() {
+        top.push(id);
+    }
     Ok(Value::Int(id))
 }
 
@@ -1594,6 +1995,147 @@ fn def_has_lambda(def: &GeneDef) -> bool {
             .unwrap_or(false)
 }
 
+/// W18: ask a task to stop. The flag is observed by the worker at its next
+/// fuel tick boundary; nothing is preempted and no data is touched. The
+/// return value says whether the request landed on a task that can still
+/// act on it (true) or whether the task was already finished or unknown
+/// (false, with a rung-4 note saying which).
+pub fn cancel_task(interp: &mut Interp, args: Vec<Value>) -> Result<Value, Stress> {
+    let id = match args.first() {
+        Some(Value::Int(i)) => *i,
+        _ => -1,
+    };
+    if id <= 0 {
+        // id 0 is the inline-closure task (already returned)
+        interp.note(0, 4, "cancel() needs a task id");
+        return Ok(Value::Bool(false));
+    }
+    if let Some(handle) = interp.tasks.get(&id) {
+        let flag = handle.cancel.clone();
+        let phase_cell = handle.state.clone();
+        let mut phase = phase_cell.lock().unwrap();
+        if *phase == crate::interp::TaskState::Running {
+            flag.store(true, Ordering::Relaxed);
+            *phase = crate::interp::TaskState::Cancelled;
+            interp.note(0, 4, format!("cancel requested for task {}", id));
+            return Ok(Value::Bool(true));
+        }
+        interp.note(0, 4, format!("task {} already finished", id));
+        return Ok(Value::Bool(false));
+    }
+    if interp.task_tombstones.contains_key(&id) {
+        interp.note(0, 4, format!("task {} already finished", id));
+        return Ok(Value::Bool(false));
+    }
+    interp.note(0, 4, format!("task {} unknown or already joined", id));
+    Ok(Value::Bool(false))
+}
+
+/// W18: read a task's lifecycle phase without joining. Live tasks answer
+/// from the worker-owned phase; joined tasks answer from tombstones.
+/// Unknown ids (or already-forgotten ones) are contained at the soft tier.
+pub fn task_state_of(interp: &mut Interp, args: Vec<Value>) -> Result<Value, Stress> {
+    let id = match args.first() {
+        Some(Value::Int(i)) => *i,
+        _ => -1,
+    };
+    if id == 0 {
+        // inline-closure task: the body already ran to completion
+        return Ok(Value::Str("done".into()));
+    }
+    if id < 0 {
+        interp.note(0, 4, "task_state() needs a task id");
+        return Ok(Value::Null);
+    }
+    if let Some(handle) = interp.tasks.get(&id) {
+        let phase_cell = handle.state.clone();
+        let phase = *phase_cell.lock().unwrap();
+        return Ok(Value::Str(phase.as_str().into()));
+    }
+    if let Some(t) = interp.task_tombstones.get(&id) {
+        let s = t.as_str();
+        return Ok(Value::Str(s.into()));
+    }
+    interp.note(0, 4, format!("task {} unknown or already joined", id));
+    Ok(Value::Null)
+}
+
+/// W15: task-group join-all. Joins every id in input order and returns
+/// the results as a list. Join semantics are unchanged: an already-joined
+/// or unknown id contributes null plus a note, so the result list stays
+/// position-aligned with the input list.
+pub fn wait_all_tasks(interp: &mut Interp, args: Vec<Value>) -> Result<Value, Stress> {
+    let ids = match args.first() {
+        Some(Value::List(l)) => l.borrow().clone(),
+        _ => {
+            interp.note(0, 4, "wait_all() needs a list of task ids");
+            return Ok(Value::List(Rc::new(RefCell::new(vec![]))));
+        }
+    };
+    let mut out = Vec::new();
+    for idv in &ids {
+        let id = match idv {
+            Value::Int(i) => *i,
+            _ => -1,
+        };
+        out.push(join_task(interp, id, None)?);
+    }
+    Ok(Value::List(Rc::new(RefCell::new(out))))
+}
+
+/// W15: select-style wait. Returns the id of the first task in the list
+/// whose worker has finished (in wall-clock completion order; ties resolve
+/// by scan order), or null + note when the timeout expires first. Polling
+/// implementation: the worker records its terminal phase before its result
+/// leaves, so a finished phase means join will not block for long. The
+/// sequential oracle cannot observe completion ordering; its children are
+/// all born finished, so it answers the first listed id (the differential
+/// corpus pins only the ordering-free shapes).
+pub fn wait_any_task(interp: &mut Interp, args: Vec<Value>) -> Result<Value, Stress> {
+    let ids: Vec<i64> = match args.first() {
+        Some(Value::List(l)) => l
+            .borrow()
+            .iter()
+            .filter_map(|v| match v {
+                Value::Int(i) => Some(*i),
+                _ => None,
+            })
+            .collect(),
+        _ => {
+            interp.note(0, 4, "wait_any() needs a list of task ids");
+            return Ok(Value::Null);
+        }
+    };
+    let timeout_ms = match args.get(1) {
+        Some(Value::Int(i)) if *i > 0 => (*i as u64).min(300_000),
+        Some(Value::Float(f)) if *f > 0.0 => (*f as u64).min(300_000),
+        _ => 30_000,
+    };
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
+    loop {
+        for id in &ids {
+            let done = if let Some(h) = interp.tasks.get(id) {
+                let phase = *h.state.lock().unwrap();
+                phase != crate::interp::TaskState::Running
+            } else {
+                interp.task_tombstones.contains_key(id)
+            };
+            if done {
+                return Ok(Value::Int(*id));
+            }
+        }
+        if std::time::Instant::now() >= deadline {
+            interp.note(
+                0,
+                4,
+                format!("wait_any timeout ({} ms); no task finished", timeout_ms),
+            );
+            return Ok(Value::Null);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+}
+
 pub fn join_task(interp: &mut Interp, id: i64, timeout_ms: Option<u64>) -> Result<Value, Stress> {
     // join by id; id 0 means "inline run already returned" (see spawn)
     if id == 0 {
@@ -1630,7 +2172,7 @@ pub fn join_task(interp: &mut Interp, id: i64, timeout_ms: Option<u64>) -> Resul
             },
             None => match handle.rx.recv_timeout(std::time::Duration::from_secs(300)) {
                 // sec-r3 (re-audit #3): the unbounded join was a free host
-                // freeze — a worker looping `run("sleep", …)` kept the
+                // freeze, a worker looping `run("sleep", …)` kept the
                 // channel open for as long as its fuel lasted. The default
                 // join is now ceiling-bounded like the whole run (300 s):
                 // timed-out tasks stay joinable and join returns null.
@@ -1655,10 +2197,21 @@ pub fn join_task(interp: &mut Interp, id: i64, timeout_ms: Option<u64>) -> Resul
             for n in notes {
                 interp.notes.push(n);
             }
+            // W18: the handle left the registry; keep the terminal phase
+            // answerable for task_state(). A cancelled-run stress names
+            // the phase, everything else is a completed task.
+            let phase = match &v {
+                SendValue::Stress(k, _) if k == "cancelled" => crate::interp::TaskState::Cancelled,
+                _ => crate::interp::TaskState::Done,
+            };
+            interp.task_tombstones.insert(id, phase);
             Ok(from_send(v))
         }
         Err(_) => {
             interp.note(0, 4, format!("task {} channel closed", id));
+            interp
+                .task_tombstones
+                .insert(id, crate::interp::TaskState::Done);
             Ok(Value::Null)
         }
     }

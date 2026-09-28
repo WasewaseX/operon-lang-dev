@@ -1,12 +1,12 @@
-# std/random — deterministic randomness over the core xorshift64* stream.
+# std/random, deterministic randomness over the core xorshift64* stream.
 #
 # The engine's random() is a mirrored deterministic stream: the Rust core
 # and the Python oracle draw IDENTICAL sequences, and randomize(seed) pins
-# the state — same seed, same sequence, reproducible byte-for-byte. These
+# the state, same seed, same sequence, reproducible byte-for-byte. These
 # wrappers stay thin and pure so the pinning survives: rand_shuffle returns
 # a NEW list (the input is never mutated), rand_pick never touches its
 # argument. rand_below carries a tiny float bias (floor(random()*n) is not
-# perfectly uniform over n) — kept simple by contract, and deterministic
+# perfectly uniform over n), kept simple by contract, and deterministic
 # everywhere.
 
 gene rand_below(n) {
@@ -52,7 +52,7 @@ gene rand_shuffle(xs) {
 }
 
 gene rand_weighted(pairs) {
-    # pairs: [[value, weight], ...] — one draw, picked by cumulative weight
+    # pairs: [[value, weight], ...], one draw, picked by cumulative weight
     # over the sum; null when the weights sum to zero (or no pairs given)
     let total = 0
     for p in pairs {

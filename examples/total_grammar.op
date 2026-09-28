@@ -1,5 +1,5 @@
 # Total Grammar: nothing you write is rejected.
-# This file contains deliberate junk — it still parses, repairs, and runs.
+# This file contains deliberate junk, it still parses, repairs, and runs.
 gene main() {
     les x = 21                       # rung 3 wobble: 'les' repairs to 'let'
     promote("x = {x * 2}")

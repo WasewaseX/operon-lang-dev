@@ -1,16 +1,16 @@
-//! ffi.rs — native substrate of the Operon toolchain (sec-r2, audit A15).
+//! ffi.rs, native substrate of the Operon toolchain (sec-r2, audit A15).
 //!
 //! History: interning/arena/clock lived in a C kernel (runtime/operon_rt.c).
 //! Audit wave 1 proved that kernel's raw pointers were the single largest
-//! memory-safety surface of the whole project — two ASan-confirmed UAF/SEGV
-//! classes (C-5/C-6) traced to it — AND that the lexer discards every intern
+//! memory-safety surface of the whole project, two ASan-confirmed UAF/SEGV
+//! classes (C-5/C-6) traced to it, AND that the lexer discards every intern
 //! result (write-only). The evidence-based verdict (MASTER-PLAN A15) was to
 //! port the table into Rust and delete the C kernel outright: the entire UAF
 //! class is now structurally impossible, and the Win32/POSIX shim layer went
 //! with it.
 //!
 //! What remains native and load-bearing:
-//!   * codon_kernel.cpp — bit-parallel Myers edit distance + codon scoring.
+//!   * codon_kernel.cpp, bit-parallel Myers edit distance + codon scoring.
 //!     Pure computation, no allocation, no pointers retained, guarded by
 //!     DP_CELL_BUDGET before every hop. This kernel EARNED its place.
 //!
@@ -44,7 +44,7 @@ fn table() -> &'static Mutex<InternTable> {
 }
 
 /// Intern a string, returning its stable id. Equal bytes => equal id.
-/// Memory safety: no raw pointers, no arena, no manual reclaim — the table
+/// Memory safety: no raw pointers, no arena, no manual reclaim, the table
 /// is ordinary Rust ownership, so use-after-free cannot occur by construction.
 pub fn intern(s: &str) -> u32 {
     let mut t = table().lock().unwrap_or_else(|e| e.into_inner());
@@ -120,7 +120,7 @@ extern "C" {
 }
 
 /// DP cell budget for the C++ edit-distance kernel (sec-r1, audit C-1/C-8).
-/// An FFI call is fuel-blind — no step/fuel accounting can interrupt it — so
+/// An FFI call is fuel-blind, no step/fuel accounting can interrupt it, so
 /// the O(la*lb) budget must be enforced BEFORE the hop. One guard here
 /// protects `distance()`, `similar()`, the wobble-repair paths, and the
 /// parser's suggestion engine, which all funnel through this function.
@@ -128,7 +128,7 @@ pub const DP_CELL_BUDGET: usize = 10_000_000;
 
 /// Returned instead of a distance when the input pair exceeds the budget.
 /// No real distance can be i32::MAX, and every comparison site treats a
-/// bigger distance as a worse match — so over-budget pairs simply never
+/// bigger distance as a worse match, so over-budget pairs simply never
 /// win a "nearest" contest.
 pub const DP_BUDGET_SENTINEL: i32 = i32::MAX;
 

@@ -1,0 +1,199 @@
+# W015: channels + select (proof frames)
+# Same-thread buffered use is the deterministic path: every blocking shape
+# here is fed (sends precede recvs/selects), so the sequential oracle agrees
+# with the concurrent engine on every assert. The cross-thread shapes pin the
+# LIVE-handle rule (spawn args carry the same shared buffer) and the
+# cancel-unblocks-recv rule. The oracle-only `blocked` stress is documented
+# in SPEC section 13; the differential corpus never triggers it.
+phenotype Box {
+    let v = 0
+}
+gene doubler(ch) {
+    let v = recv(ch)
+    return v * 2
+}
+gene parked(ch) {
+    let v = recv(ch)
+    return v
+}
+gene feeder(ch) {
+    send(ch, "from worker")
+    return null
+}
+gene maker() {
+    return channel()
+}
+
+frame proof {
+    # ---- creation and identity
+    let ch = channel()
+    assert(type(ch) == "channel", "type() names the channel")
+    assert(ch, "a channel handle is truthy")
+    assert(ch == ch, "a handle equals itself")
+    assert(!(channel() == ch), "two buffers never compare equal")
+    assert(str(ch) == "<channel>", "repr is address-free")
+
+    # ---- FIFO order
+    send(ch, 1)
+    send(ch, "two")
+    send(ch, [3])
+    assert(recv(ch) == 1, "FIFO pops the oldest")
+    assert(recv(ch) == "two", "FIFO keeps order across types")
+    assert(recv(ch)[0] == 3, "containers ride the buffer")
+
+    # ---- wire membrane on the buffered path (map keys stringify)
+    let w = channel()
+    send(w, {7: "int key"})
+    let got = recv(w)
+    assert(got["7"] == "int key", "map keys cross as display strings")
+    assert(len(got) == 1, "round trip keeps the payload")
+
+    # ---- closed semantics: recv on closed-and-empty is null
+    let c = channel()
+    send(c, 9)
+    close(c)
+    assert(recv(c) == 9, "closed channel still delivers buffered values")
+    assert(recv(c) == null, "closed and empty recv is null")
+    close(c)
+    assert(recv(c) == null, "double close stays readable")
+
+    # ---- send after close is the catchable closed_channel stress
+    let caught = ""
+    stress {
+        send(c, 1)
+    } rescue (e) {
+        caught = e.kind
+    }
+    assert(caught == "closed_channel", "send on closed raises closed_channel")
+
+    # ---- the membrane refuses behavior handles at send time
+    let m = channel()
+    let p = new Box()
+    p.v = 5
+    stress {
+        send(m, p)
+    } rescue (e) {
+        caught = e.kind + ":" + e.message
+    }
+    assert(caught == "membrane:send() refuses a phenotype payload; channels carry data, not handles",
+           "phenotype payload refused")
+    stress {
+        send(m, m)
+    } rescue (e) {
+        caught = e.kind
+    }
+    assert(caught == "membrane", "channel payload refused")
+    stress {
+        send(m, doubler)
+    } rescue (e) {
+        caught = e.kind
+    }
+    assert(caught == "membrane", "gene payload refused")
+    stress {
+        send(m, gene (x) => x)
+    } rescue (e) {
+        caught = e.kind
+    }
+    assert(caught == "membrane", "lambda payload refused")
+
+    # ---- the type stress family for non-channels
+    stress {
+        send(5, 1)
+    } rescue (e) {
+        caught = e.kind
+    }
+    assert(caught == "unfolded", "send on a non-channel is unfolded")
+    stress {
+        recv("nope")
+    } rescue (e) {
+        caught = e.kind
+    }
+    assert(caught == "unfolded", "recv on a non-channel is unfolded")
+    stress {
+        close(null)
+    } rescue (e) {
+        caught = e.kind
+    }
+    assert(caught == "unfolded", "close on a non-channel is unfolded")
+    stress {
+        select(m, 7)
+    } rescue (e) {
+        caught = e.kind
+    }
+    assert(caught == "unfolded", "select over a non-channel is unfolded")
+
+    # ---- select: strict declaration order, leftmost ready wins
+    let a = channel()
+    let b = channel()
+    let d = channel()
+    send(b, "b")
+    assert(select(a, b, d) == 1, "the ready channel reports its index")
+    send(a, "a")
+    send(b, "b2")
+    assert(select(a, b, d) == 0, "leftmost ready wins, never random")
+    assert(select(b, a) == 0, "order follows the argument list")
+    assert(recv(a) == "a" and recv(b) == "b" and recv(b) == "b2",
+           "select did not consume the values")
+
+    # ---- closed-with-buffered is still ready for select
+    let f = channel()
+    send(f, "kept")
+    close(f)
+    assert(select(f, d) == 0, "closed with buffered values is ready")
+    assert(recv(f) == "kept", "buffered values survive close")
+    close(d)
+    assert(select(f, d) == -1, "drained closed set answers -1")
+
+    # ---- select -1 when all closed; empty arglist is the vacuous case
+    let e1 = channel()
+    let e2 = channel()
+    close(e1)
+    close(e2)
+    assert(select(e1, e2) == -1, "all closed answers -1")
+    assert(select() == -1, "no channels answers -1")
+
+    # ---- a storm of sends/recvs keeps FIFO exactly
+    let big = channel()
+    for i in range(500) {
+        send(big, i)
+    }
+    let acc = 0
+    let ordered = true
+    for i in range(500) {
+        let v = recv(big)
+        if (v != i) { ordered = false }
+        acc = acc + v
+    }
+    assert(ordered, "500 values come back in order")
+    assert(acc == 124750, "0..499 sums to 124750")
+
+    # ---- cross-thread: the handle crosses spawn LIVE (same buffer)
+    let t = channel()
+    let worker = spawn(doubler, [t])
+    send(t, 21)
+    let joined = join(worker)
+    assert(joined == 42, "worker recv sees a host send (join gave " + str(joined) + ")")
+
+    let u = channel()
+    let helper = spawn(feeder, [u])
+    let _ = join(helper)
+    assert(recv(u) == "from worker", "host recv sees a worker send")
+
+    # ---- a gene returning a channel degrades across join (wire rule)
+    let back = join(spawn(maker, []))
+    assert(back == null, "a returned handle degrades to null on the join wire")
+
+    # ---- blocked recv + cancel: the parked cell wakes, nothing leaks
+    let q = channel()
+    let sleeper = spawn(parked, [q])
+    for i in range(100_000) {
+        let _ = i
+    }
+    let _ = cancel(sleeper)
+    let r = join(sleeper, 10_000)
+    assert(type(r) == "map" and r.kind == "cancelled", "cancel unblocks a parked recv")
+    assert(task_state(sleeper) == "cancelled", "the cancelled cell reports its phase")
+    send(q, "after cancel")
+    close(q)
+    assert(recv(q) == "after cancel", "the buffer survives the cancelled consumer")
+}

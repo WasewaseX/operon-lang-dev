@@ -1,0 +1,10 @@
+use std/strings as st
+use std/unicode as uni
+
+gene main() {
+    stress {
+        promote("x" * 0.upper())
+    } rescue (e) {
+        promote("st:" + e.kind)
+    }
+}

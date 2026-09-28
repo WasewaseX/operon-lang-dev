@@ -1,4 +1,4 @@
-# L1a: iteration builtins — enumerate zip sorted reversed any all first last
+# L1a: iteration builtins, enumerate zip sorted reversed any all first last
 # take drop unique flatten chunk. All deterministic; oracle mirrors each.
 # Wrong-type inputs → Null + note (never a crash).
 frame proof {

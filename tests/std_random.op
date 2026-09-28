@@ -1,4 +1,4 @@
-# differential: std/random — seeded wrappers over the mirrored xorshift64* stream
+# differential: std/random, seeded wrappers over the mirrored xorshift64* stream
 use std/random as r
 
 frame proof {
@@ -16,7 +16,7 @@ frame proof {
     randomize(42)
     assert(r.rand_shuffle(hand) == ["q", "r", "s", "t", "p"] and hand == ["p", "q", "r", "s", "t"])
 
-    # same seed, same shuffle — determinism is the whole contract
+    # same seed, same shuffle, determinism is the whole contract
     randomize(7)
     let first = r.rand_shuffle([9, 8, 7, 6])
     randomize(7)

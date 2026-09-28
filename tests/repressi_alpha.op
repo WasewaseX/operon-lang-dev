@@ -1,4 +1,4 @@
-# reg-bio (F-5) — the α surface: production scale is load-bearing
+# reg-bio (F-5), the α surface: production scale is load-bearing
 #
 # The Elowitz–Leibler α sets the production scale of the ring. Raising α
 # (plasmid copy number / RBS strength in the published system) drives the
@@ -9,7 +9,7 @@ frame proof {
     let s0 = repressi_state()
     assert(s0.x == 5.0 && s0.y == 0.0 && s0.z == 0.0, "ring starts at the E-L init")
     # two ticks into the fold: the α=20 ring's y-node sits at ≈3.636 where
-    # the historical α=10 trajectory sits at ≈1.890 — production scale is
+    # the historical α=10 trajectory sits at ≈1.890, production scale is
     # load-bearing (values from the published parameterization, mirrored)
     repressi_next()
     repressi_next()

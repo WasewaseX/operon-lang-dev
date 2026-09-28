@@ -1,5 +1,5 @@
 # ============================================================
-# GOTCHA: builtins are not first-class values  — cookbook #17
+# GOTCHA: builtins are not first-class values , cookbook #17
 # you already know: in Python even len is a function you can pass
 # teaches: reading a builtin name gives null. Wrap it in a gene
 #          when a higher-order helper needs a callable.

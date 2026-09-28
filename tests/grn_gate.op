@@ -1,4 +1,4 @@
-# T2a — GRN level gates gene execution (SPEC §11, v2.2 honesty pass)
+# T2a, GRN level gates gene execution (SPEC §11, v2.2 honesty pass)
 # A gene with an incoming activating edge carrying an explicit threshold
 # only executes while the regulator's level is at/above that threshold.
 # This file FAILS on pre-T2a cores: the first proof assertion is false

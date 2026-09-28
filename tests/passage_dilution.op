@@ -1,7 +1,7 @@
-# reg-bio-3 (B2/B6): epigenetic inheritance — cell divisions. Marks DILUTE
+# reg-bio-3 (B2/B6): epigenetic inheritance, cell divisions. Marks DILUTE
 # unless maintained: each passage multiplies every methylation level by
 # `methyl.maintenance` (default 0.5 = the pure-dilution null model; 1.0 would
-# be perfect DNMT1-style maintenance) with half-down rounding — a diluted
+# be perfect DNMT1-style maintenance) with half-down rounding, a diluted
 # mark never reads as MORE repressed. `generation` counts divisions; spawn is
 # a thread, not a division, and never touches it.
 @methylate gene marked() { return "M" }
@@ -14,7 +14,7 @@ frame proof {
     assert(g == g0 + 2, "passage returns the generation counter")
     assert(fingerprint().generation == g0 + 2, "generation rides telemetry")
     assert(marked() == "M", "two divisions at dilution 0.5: level 3 -> 1 -> 0, expression returns")
-    # half-down contract: 3 dilutes to 1 (1.5 rounds DOWN to 1) — the mark
+    # half-down contract: 3 dilutes to 1 (1.5 rounds DOWN to 1), the mark
     # survives one division but no longer silences at threshold 3
     methylate("marked")
     methylate("marked")
