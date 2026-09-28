@@ -83,6 +83,11 @@ pub enum Instr {
     /// enter/leave a block scope (fresh child env, tree-walk shape)
     EnterScope,
     ExitScope,
+    /// W09 native calls: pop argc values, run the SHARED named-call tail
+    /// (RISC gate + call_named funnel, src/interp.rs named_call_tail), push
+    /// the result. Only Expr::Call over a bare identifier compiles to this;
+    /// method calls, gene-value calls and every exotic callee stay bridged.
+    CallNamed(u32, u32),
 }
 
 /// Bridged sub-AST arena plus the compiled bodies. Lives on the Interp
@@ -92,8 +97,12 @@ pub enum Instr {
 pub struct VmProgram {
     pub exprs: Vec<Expr>,
     pub stmts: Vec<Stmt>,
-    /// gene-definition pointer -> compiled body
-    pub codes: HashMap<usize, GeneCode>,
+    /// gene-definition pointer -> compiled body. Rc so a call hands the
+    /// body to the machine with a refcount bump, not a deep clone: fib25's
+    /// ~243k calls were cloning the whole code vec per call, which made the
+    /// machine SLOWER than the tree-walk (the bug the fib25 gate exists to
+    /// catch; measured 0.54x before, same outputs after).
+    pub codes: HashMap<usize, std::rc::Rc<GeneCode>>,
 }
 
 impl<'a> Compiler<'a> {
@@ -219,6 +228,21 @@ impl<'a> Compiler<'a> {
                     return false;
                 }
                 self.emit(Instr::Bin(*op), *op_line as u32);
+            }
+            Expr::Call(callee, args, call_line) => {
+                // W09 native calls: only the bare-identifier callee compiles
+                // to CallNamed; every other callee shape bridges whole (the
+                // machine evaluates the args natively either way, each arg
+                // pushing exactly one value, tree-walk order preserved).
+                let name = match &**callee {
+                    Expr::Ident(n) => n.clone(),
+                    _ => return false,
+                };
+                for a in args {
+                    self.expr_or_bridge(a, line);
+                }
+                let nidx = intern_name(&mut self.names, &name);
+                self.emit(Instr::CallNamed(nidx, args.len() as u32), *call_line as u32);
             }
             _ => return false,
         }
@@ -454,7 +478,7 @@ pub fn exec_gene_body(
     body: &[Stmt],
     env: &Rc<Env>,
 ) -> Result<Flow, Stress> {
-    let code = {
+    let code: std::rc::Rc<GeneCode> = {
         let opt = interp.vm_opt;
         let prog = interp.vm_program.as_mut().unwrap();
         let key = if opt >= 1 {
@@ -463,17 +487,19 @@ pub fn exec_gene_body(
         } else {
             def_key
         };
-        if let Some(cached) = prog.codes.get(&key) {
-            cached.clone()
-        } else {
-            let compiled = compile_body(name, body, prog);
-            let compiled = if opt >= 1 {
-                optimize(&compiled)
-            } else {
-                compiled
-            };
-            prog.codes.insert(key, compiled.clone());
-            compiled
+        match prog.codes.get(&key) {
+            Some(cached) => cached.clone(),
+            None => {
+                let compiled = compile_body(name, body, prog);
+                let compiled = if opt >= 1 {
+                    optimize(&compiled)
+                } else {
+                    compiled
+                };
+                let rc = std::rc::Rc::new(compiled);
+                prog.codes.insert(key, rc.clone());
+                rc
+            }
         }
     };
     exec_gene_code(interp, &code, env)
@@ -481,13 +507,36 @@ pub fn exec_gene_body(
 
 /// Execute a compiled gene body against the shared interpreter.
 fn exec_gene_code(interp: &mut Interp, code: &GeneCode, env: &Rc<Env>) -> Result<Flow, Stress> {
-    let mut stack: Vec<Value> = Vec::new();
+    // the operand stack comes from the per-interpreter pool: fib25 taught
+    // this lesson (243k fresh Vecs per run), the pool hands each frame a
+    // warm stack and takes it back on every exit path
+    let mut stack: Vec<Value> = match interp.vm_stack_pool.pop() {
+        Some(s) => s,
+        None => Vec::with_capacity(16),
+    };
+    stack.clear();
+    let out = exec_gene_code_inner(interp, code, env, &mut stack);
+    if stack.capacity() <= 64 {
+        interp.vm_stack_pool.push(stack);
+    }
+    out
+}
+
+fn exec_gene_code_inner(
+    interp: &mut Interp,
+    code: &GeneCode,
+    env: &Rc<Env>,
+    stack: &mut Vec<Value>,
+) -> Result<Flow, Stress> {
     let mut scopes: Vec<Rc<Env>> = Vec::new();
     let mut cur = env.clone();
     let mut ip: usize = 0;
     loop {
+        // dispatch borrows the instruction (no per-instruction clone; the
+        // machine must beat the tree-walk it replaced, the fib25 gate
+        // measures exactly this)
         let instr = match code.code.get(ip) {
-            Some(i) => i.clone(),
+            Some(i) => i,
             None => return Ok(Flow::Norm), // fell off the end
         };
         let line = code.lines[ip];
@@ -498,7 +547,7 @@ fn exec_gene_code(interp: &mut Interp, code: &GeneCode, env: &Rc<Env>) -> Result
         interp.tick()?;
         match instr {
             Instr::Push(idx) => {
-                let v = match code.consts.get(idx as usize) {
+                let v = match code.consts.get(*idx as usize) {
                     Some(Const::Null) | None => Value::Null,
                     Some(Const::Bool(b)) => Value::Bool(*b),
                     Some(Const::Int(i)) => Value::Int(*i),
@@ -508,7 +557,7 @@ fn exec_gene_code(interp: &mut Interp, code: &GeneCode, env: &Rc<Env>) -> Result
                 stack.push(v);
             }
             Instr::LoadName(idx) => {
-                let name = &code.names[idx as usize];
+                let name = &code.names[*idx as usize];
                 match cur.get(name) {
                     Some(v) => {
                         crate::interp::charge_clone(&v)?;
@@ -521,11 +570,11 @@ fn exec_gene_code(interp: &mut Interp, code: &GeneCode, env: &Rc<Env>) -> Result
                 }
             }
             Instr::LoadNameQuiet(idx) => {
-                let name = &code.names[idx as usize];
+                let name = &code.names[*idx as usize];
                 stack.push(cur.get(name).unwrap_or(Value::Null));
             }
             Instr::StoreName(idx) => {
-                let name = code.names[idx as usize].clone();
+                let name = code.names[*idx as usize].clone();
                 let v = stack.pop().unwrap_or(Value::Null);
                 if cur.get(&name).is_some() {
                     interp.note(0, 4, format!("rebinding '{}'", name));
@@ -533,7 +582,7 @@ fn exec_gene_code(interp: &mut Interp, code: &GeneCode, env: &Rc<Env>) -> Result
                 cur.define(&name, v);
             }
             Instr::AssignName(idx) => {
-                let name = code.names[idx as usize].clone();
+                let name = code.names[*idx as usize].clone();
                 let v = stack.pop().unwrap_or(Value::Null);
                 if cur.is_const(&name) {
                     return Err(Stress::new(
@@ -548,23 +597,23 @@ fn exec_gene_code(interp: &mut Interp, code: &GeneCode, env: &Rc<Env>) -> Result
             Instr::Bin(op) => {
                 let r = stack.pop().unwrap_or(Value::Null);
                 let l = stack.pop().unwrap_or(Value::Null);
-                let v = interp.apply_binop(&cur, op, &l, &r)?;
+                let v = interp.apply_binop(&cur, *op, &l, &r)?;
                 stack.push(v);
             }
             Instr::JmpIfF(t) => {
                 let v = stack.pop().unwrap_or(Value::Null);
                 if !v.truthy() {
-                    ip = t as usize;
+                    ip = *t as usize;
                 }
             }
-            Instr::Jmp(t) => ip = t as usize,
+            Instr::Jmp(t) => ip = *t as usize,
             Instr::EvalExpr(idx) => {
                 // clone the bridged node out of the arena (cheap: Arc'd
                 // children) so the mutable interpreter borrow is free
                 let e = interp
                     .vm_program
                     .as_ref()
-                    .and_then(|p| p.exprs.get(idx as usize))
+                    .and_then(|p| p.exprs.get(*idx as usize))
                     .cloned();
                 match e {
                     Some(e) => {
@@ -578,7 +627,7 @@ fn exec_gene_code(interp: &mut Interp, code: &GeneCode, env: &Rc<Env>) -> Result
                 let s = interp
                     .vm_program
                     .as_ref()
-                    .and_then(|p| p.stmts.get(idx as usize))
+                    .and_then(|p| p.stmts.get(*idx as usize))
                     .cloned();
                 if let Some(s) = s {
                     // the bridged statement's flow propagates exactly the
@@ -595,7 +644,7 @@ fn exec_gene_code(interp: &mut Interp, code: &GeneCode, env: &Rc<Env>) -> Result
                 let s = interp
                     .vm_program
                     .as_ref()
-                    .and_then(|p| p.stmts.get(idx as usize))
+                    .and_then(|p| p.stmts.get(*idx as usize))
                     .cloned();
                 if let Some(s) = s {
                     match interp.exec_stmt(&cur, &s)? {
@@ -605,8 +654,8 @@ fn exec_gene_code(interp: &mut Interp, code: &GeneCode, env: &Rc<Env>) -> Result
                         Flow::Ret(v) => return Ok(Flow::Ret(v)),
                         // a break/continue inside a bridged statement
                         // belongs to THIS compiled loop (compile-time fact)
-                        Flow::Brk => ip = end as usize,
-                        Flow::Cont => ip = top as usize,
+                        Flow::Brk => ip = *end as usize,
+                        Flow::Cont => ip = *top as usize,
                     }
                 }
             }
@@ -617,8 +666,8 @@ fn exec_gene_code(interp: &mut Interp, code: &GeneCode, env: &Rc<Env>) -> Result
                 let v = stack.pop().unwrap_or(Value::Null);
                 return Ok(Flow::Ret(v));
             }
-            Instr::Brk(t) => ip = t as usize,
-            Instr::Cont(t) => ip = t as usize,
+            Instr::Brk(t) => ip = *t as usize,
+            Instr::Cont(t) => ip = *t as usize,
             Instr::EnterScope => {
                 scopes.push(cur.clone());
                 cur = Env::new(Some(cur.clone()));
@@ -627,6 +676,17 @@ fn exec_gene_code(interp: &mut Interp, code: &GeneCode, env: &Rc<Env>) -> Result
                 if let Some(p) = scopes.pop() {
                     cur = p;
                 }
+            }
+            Instr::CallNamed(name_idx, argc) => {
+                // W09 native calls: pop the args in reverse, then ride the
+                // SHARED named-call tail (RISC gate + call_named funnel).
+                // The call line was stamped by the dispatch (call_line).
+                let name = code.names[*name_idx as usize].clone();
+                let n = *argc as usize;
+                let base = stack.len() - n;
+                let argvs: Vec<Value> = stack.drain(base..).collect();
+                let v = interp.named_call_tail_vm(&cur, &name, argvs)?;
+                stack.push(v);
             }
         }
     }
@@ -678,6 +738,7 @@ fn mnemonic(i: &Instr) -> &'static str {
         Instr::Cont(_) => "Cont",
         Instr::EnterScope => "EnterScope",
         Instr::ExitScope => "ExitScope",
+        Instr::CallNamed(_, _) => "CallNamed",
     }
 }
 
@@ -703,6 +764,9 @@ fn render(i: &Instr, code: &GeneCode) -> String {
         Instr::BridgeStmt(idx) => format!("stmt#{}", idx),
         Instr::BridgeStmtInLoop(idx, top, end) => {
             format!("stmt#{} top {} end {}", idx, top, end)
+        }
+        Instr::CallNamed(idx, argc) => {
+            format!("'{}' argc {}", code.names.get(*idx as usize).cloned().unwrap_or_default(), argc)
         }
         _ => String::new(),
     }
