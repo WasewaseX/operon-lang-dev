@@ -1,0 +1,75 @@
+# W28 stage 2: normalization (NFC/NFD), full case folding, general
+# categories. Tables are GENERATED from Python's unicodedata (see
+# scripts/gen_unicode_tables.py), the oracle calls that same module, so
+# both engines agree by construction. Companion:
+# tests/differential/unicode_depth.op (byte-identical stdout).
+# NOTE: Operon strings have no \u escapes, the combining marks and jamo
+# below are literal UTF-8 in this file, on purpose.
+
+frame proof {
+    # --- NFD: canonical decomposition, fully expanded
+    let nfd_ntilde = norm_nfd("ñ")
+    assert(nfd_ntilde == "ñ", "n tilde decomposes")
+    assert(len(nfd_ntilde) == 2, "decomposition length is 2")
+    assert(norm_nfd("ﬁ") == "ﬁ", "canonical only: fi ligature does NOT expand")
+    assert(norm_nfd("한") == "한", "Hangul syllable decomposes algorithmically")
+    assert(norm_nfd(" Shotgun ") == " Shotgun ", "ASCII is a fixed point")
+    assert(norm_nfd("é") == "é", "e acute decomposes")
+
+    # --- NFC: canonical composition with the blocking rule
+    assert(norm_nfc("é") == "é", "e + acute composes")
+    assert(norm_nfc(norm_nfd("ñ")) == "ñ", "NFC(NFD(x)) round trip")
+    assert(norm_nfc("한") == "한", "Hangul jamo composes")
+    assert(norm_nfc("ạ́") == "ạ́", "compose a+dotbelow, acute stays")
+    assert(norm_nfc("ạ́") == "ạ́", "canonical ordering first, same result")
+    assert(norm_nfc("̈́") == "̈́", "composition exclusion honored")
+
+    # --- round trip identity on composed text
+    assert(norm_nfc(norm_nfd("Áñ")) == norm_nfc("Áñ"), "round trip equals direct compose")
+
+    # --- casefold: full C+F, 1:many, context-free
+    assert(casefold("ß") == "ss", "sharp s folds to ss")
+    assert(casefold("ﬁ") == "fi", "ligature folds 1:many")
+    assert(casefold("ΑΣ") == "ασ", "sigma folds context-free, no final-sigma rule")
+    assert(casefold("Σσς") == "σσσ", "all sigma forms fold to sigma")
+    assert(casefold("İ") == "i̇", "dotted I folds to i + dot, no locale rule")
+    assert(casefold("ABC") == "abc", "ASCII folds")
+    assert(casefold("Θ") == "θ", "Greek folds")
+
+    # --- char_category: two-letter general category of the first char
+    assert(char_category("A") == "Lu", "A is Lu")
+    assert(char_category("a") == "Ll", "a is Ll")
+    assert(char_category("1") == "Nd", "digit is Nd")
+    assert(char_category("中") == "Lo", "CJK ideograph is Lo")
+    assert(char_category("́") == "Mn", "combining acute is Mn")
+    assert(char_category(" ") == "Zs", "space is Zs")
+    assert(char_category("Ω") == "Lu", "omega is Lu")
+
+    # --- stress family: non-string arguments are catchable unfolded
+    stress {
+        norm_nfc(5)
+    } rescue (e) {
+        assert(e.kind == "unfolded", "norm_nfc type stress")
+        assert(e.message == "norm_nfc(s) needs a string", "norm_nfc message")
+    }
+    stress {
+        norm_nfd([1])
+    } rescue (e) {
+        assert(e.kind == "unfolded", "norm_nfd type stress")
+    }
+    stress {
+        casefold(null)
+    } rescue (e) {
+        assert(e.kind == "unfolded", "casefold type stress")
+    }
+    stress {
+        char_category(9)
+    } rescue (e) {
+        assert(e.kind == "unfolded", "char_category type stress")
+    }
+
+    # --- soft tier: empty string category is null (note on stderr)
+    assert(char_category("") == null, "empty string category is null")
+
+    promote("unicode_depth: all asserts green")
+}
