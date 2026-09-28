@@ -1,0 +1,155 @@
+# std/path: lexical path helpers for "/"-separated path strings.
+#
+# Everything here is pure string surgery: no filesystem access, no
+# capability grants, no clock, no randomness, byte-deterministic. A path
+# is a plain string whose segments are separated by "/"; empty segments
+# (leading, trailing, or doubled separators) carry nothing. "Absolute"
+# only means the string starts with "/", there is no drive or host form.
+
+# join(a, b): build one path from two segments. Trailing separators on a
+# are trimmed, the empty string contributes nothing, an absolute b (leading
+# "/") replaces a outright, and an all-separator a counts as the root.
+gene join(a, b) {
+    if b.starts("/") {
+        return b
+    }
+    let head = a
+    while len(head) > 0 and head.ends("/") {
+        head = head.slice(0, len(head) - 1)
+    }
+    if head == "" {
+        if a == "" {
+            return b
+        }
+        return "/" + b
+    }
+    if b == "" {
+        return head
+    }
+    return head + "/" + b
+}
+
+# split(p): the non-empty segments of p in order. Separators never appear
+# in the result: "/a//b/" -> ["a", "b"], while "" and "///" -> [].
+gene split(p) {
+    let raw = p.split("/")
+    let segs = []
+    for s in raw {
+        if s != "" {
+            push(segs, s)
+        }
+    }
+    return segs
+}
+
+# base(p): the final segment. A trailing separator means the path names a
+# directory, and a directory has no base: base("a/b.txt") is "b.txt" while
+# base("a/b/"), base("/"), and base("") are "".
+gene base(p) {
+    if p.ends("/") {
+        return ""
+    }
+    let segs = split(p)
+    let count = len(segs)
+    if count == 0 {
+        return ""
+    }
+    return segs[count - 1]
+}
+
+# dir(p): everything before the last "/", trailing separators trimmed.
+# "" when p has no separator, "/" for the root and paths directly under it.
+# A trailing separator on p lands in the dir: dir("a/b/") is "a/b".
+gene dir(p) {
+    let size = len(p)
+    let last = 0 - 1
+    let idx = 0
+    while idx < size {
+        if p.slice(idx, idx + 1) == "/" {
+            last = idx
+        }
+        idx = idx + 1
+    }
+    if last < 0 {
+        return ""
+    }
+    let head = p.slice(0, last)
+    while len(head) > 0 and head.ends("/") {
+        head = head.slice(0, len(head) - 1)
+    }
+    if head == "" {
+        if is_abs(p) {
+            return "/"
+        }
+        return ""
+    }
+    return head
+}
+
+# ext(p): the extension of the final segment WITHOUT the dot, "" if none.
+# Starts at the LAST dot of the base name; a leading dot alone is a hidden
+# dotfile (".oprc" -> ""), and dots in directory names never count.
+gene ext(p) {
+    let name = base(p)
+    let size = len(name)
+    let last = 0 - 1
+    let idx = 0
+    while idx < size {
+        if name.slice(idx, idx + 1) == "." {
+            last = idx
+        }
+        idx = idx + 1
+    }
+    if last <= 0 {
+        return ""
+    }
+    return name.slice(last + 1, size)
+}
+
+# is_abs(p): true iff p starts with "/". No filesystem is consulted, the
+# empty path and every relative path answer false.
+gene is_abs(p) {
+    return p.starts("/")
+}
+
+# norm(p): lexical collapse, no filesystem: doubled separators and "."
+# segments vanish, "seg/.." pairs cancel. ".." past the top of a relative
+# path stays ("../a" is "../a"); on an absolute path it is absorbed at the
+# root, and absolute results keep their leading "/". A relative path that
+# collapses to nothing is "" (no "." is synthesized).
+gene norm(p) {
+    let rooted = is_abs(p)
+    let segs = split(p)
+    let stack = []
+    for s in segs {
+        if s == "." {
+            continue
+        }
+        if s == ".." {
+            let depth = len(stack)
+            if depth > 0 and stack[depth - 1] != ".." {
+                pop(stack)
+            } else {
+                if !rooted {
+                    push(stack, "..")
+                }
+            }
+            continue
+        }
+        push(stack, s)
+    }
+    let out = ""
+    let first = true
+    for s in stack {
+        if first {
+            out = s
+            first = false
+        } else {
+            out = out + "/" + s
+        }
+    }
+    if rooted {
+        return "/" + out
+    }
+    return out
+}
