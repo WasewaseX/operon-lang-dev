@@ -822,7 +822,7 @@ operon version
    `{..}` is interpolation.
 10. **Time (UTC civil calendar).** `unix_time()`, seconds since the epoch.
     `date_parts(ts)`, `{year, month, day, hour, min, sec, wday}` (Sunday=0).
-    `date_fmt(ts, fmt)`, `%Y %m %d %H %M %S` expansion.
+    `date_fmt(ts, fmt)`, `%Y %m %d %H %M %S` expansion. `std/time.op` layers pure duration and calendar arithmetic over these (W33) and adds `time_parse_iso(s)`: parses "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM:SS" into an Int timestamp; fractional seconds are accepted then truncated, a trailing `Z` is accepted, offset suffixes like `+01:00` are rejected (UTC-only module, W89), and any malformed input returns null.
 11. **String repetition.** `"ab" * 3` and `3 * "ab"`, Python parity, capped
     by the 512 MiB ceiling.
 12. **Join deadline.** `join(id, timeout_ms?)` returns null and notes when the

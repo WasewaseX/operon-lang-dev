@@ -112,7 +112,7 @@
  ],
  "proof_files": 127,
  "proof_totals": {
-  "asserts": 1675,
+  "asserts": 1697,
   "files": 154,
   "proofs": 117,
   "source": "bin/operon"
@@ -122,7 +122,7 @@
   "h1": "# Operon, Language Specification",
   "status": "v2.3.0-dev"
  },
- "std_function_count": 226,
+ "std_function_count": 229,
  "std_module_count": 22,
  "std_modules": [
   {
@@ -206,7 +206,7 @@
    "module": "testing"
   },
   {
-   "functions": 10,
+   "functions": 13,
    "module": "time"
   },
   {
