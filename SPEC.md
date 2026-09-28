@@ -174,6 +174,37 @@ silently. New in W02 (all mirrored op-for-op by the Python oracle, and by
   names (they are literals by construction), so guards are the supported
   way to test computed conditions.
 
+**Unreachable-arm report (W002 stage 2, check-side).** The static engine
+(`src/lint.rs`, rule `unreachable-match-arm`, stable code `W06`) reports an
+arm that can never run under first-match-wins: an arm placed after an
+UNGUARDED catch-all (`_`, a binding pattern, or an or-pattern containing
+either; the legacy comma-run holds plain literals only, so it can never
+hide a catch-all), or after a strictly broader arm whose shape provably
+covers every value the later arm can match (`Some(_)` before `Some(x)`,
+the bare tag before a payload arm, `[a, b]` before `[1, 2]`, `[1, *t]`
+before `[1, 2]`, `{x}` before `{x: 1}`, a literal inside an earlier
+or-/comma-run, nested payloads likewise). The report is a semantic WARNING
+on the lint stream (`operon lint`; `check --style` inlines it), advisory
+like every lint rule: Total Grammar never rejects a program, and the
+interpreter and the Python oracle are untouched, so runtime semantics and
+differential parity cannot drift from this check. Conservatism is the
+design bar (zero false positives): a GUARD on the earlier arm makes it
+fallible, so a guarded arm is never treated as covering anything, and a
+guard on the later (dead) arm does not save it, because first-match-wins
+means that guard can never evaluate; structural coverage is claimed only
+where the pattern algebra proves it (floats are excluded entirely, NaN
+never deep-equals itself; byte-string keys compare per byte, so distinct
+byte strings are never conflated; identical plain literal arms are left to
+the separate `duplicate-match-arm` rule, `W05`, which owns that symptom);
+or-alternatives must ALL be covered before the arm is reported. Findings
+carry file and line (the first line-bearing statement of the arm body;
+the AST keeps statement spans only on expression statements, so a column
+is not reported, and an arm whose body opens with spanless statements,
+a plain assignment say, anchors at the file's line 1, where only a
+line-1 allow comment can suppress it). Exhaustiveness
+(is some value class unhandled?) is intentionally NOT claimed here: that
+needs the full pattern algebra and stays with the semantic lane.
+
 ## 6. Expressions (precedence low → high)
 
 1. `cond ? a : b`, ternary, right-associative, lowest precedence
