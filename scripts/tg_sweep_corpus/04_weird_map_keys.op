@@ -1,0 +1,23 @@
+// tg_sweep corpus 04: weird-but-legal map keys — empty, spaces, emoji,
+// keyword spellings, numeric spellings, combining marks. Keys are data.
+main {
+    stress {
+        let m = {
+            "": 0,
+            " ": 1,
+            "a b": 2,
+            "🎉": 3,
+            "true": 4,
+            "1": 5,
+            "é": 6,
+            "let": 7,
+            "gene": 8
+        }
+        m[""]
+        m[" "]
+        m["a b"]
+        m["🎉"]
+        m["́"]
+    } rescue (e) {
+    }
+}
