@@ -2288,6 +2288,20 @@ pub fn fmt_expr(e: &Expr) -> String {
     fmt_prec(e, 0)
 }
 
+/// A map key that parsed to Expr::Null (a non-name, non-string literal key
+/// like `2.5:`; the parser notes it and keeps Null) prints in its WIRE
+/// canonical form `"null"`, the string the runtime's key stringification
+/// produces. Printing the bare word would REPARSE as the string key "null"
+/// and make the canonical form unstable: fix_corpus law 1 caught exactly
+/// that on the W015 channels differential (float key round trip).
+fn fmt_map_key(k: &Expr) -> String {
+    if matches!(k, Expr::Null) {
+        str_lit("null") // quote-mode aware: single-quote configs stay stable
+    } else {
+        fmt_prec(k, 0)
+    }
+}
+
 fn fmt_prec(e: &Expr, parent: u8) -> String {
     let needs_paren = nest_prec(e) < parent;
     let body = match e {
@@ -2352,7 +2366,7 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
             "{{{}}}",
             pairs
                 .iter()
-                .map(|(k, v)| format!("{}: {}", fmt_prec(k, 0), fmt_prec(v, 0)))
+                .map(|(k, v)| format!("{}: {}", fmt_map_key(k), fmt_prec(v, 0)))
                 .collect::<Vec<_>>()
                 .join(", ")
         ),

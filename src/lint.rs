@@ -417,7 +417,10 @@ fn suppress_allowed(out: &mut Vec<Finding>, src: &str) {
             if let Some(rules) = allows.get(&l) {
                 match rules {
                     None => return false,
-                    Some(v) if v.iter().any(|r| r.as_str() == f.rule || r.as_str() == f.code) => {
+                    Some(v)
+                        if v.iter()
+                            .any(|r| r.as_str() == f.rule || r.as_str() == f.code) =>
+                    {
                         return false
                     }
                     _ => {}
