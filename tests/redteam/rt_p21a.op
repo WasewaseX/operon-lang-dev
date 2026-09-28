@@ -1,0 +1,61 @@
+# rt_p21a, W013/W015 closure: close-while-recv + channel-leak containment.
+# Three probes, every one must stay CONTAINED (bounded, no hang, no panic):
+#   1. close-while-recv: a task parks in recv() on a channel nobody sends
+#      to; close() lands while it is parked. The parked recv must WAKE and
+#      answer null (closed+empty), join proves it was parked first (the
+#      first join times out) and collectable after the close.
+#   2. cancel-while-recv: a task parks forever on a never-sent channel;
+#      cancel() must wake it inside one 50 ms slice with the catchable
+#      `cancelled` stress, which the worker rescues and reports.
+#   3. leak storm: six workers park on six channels nobody ever sends to,
+#      closes, or cancels. The ONLY exits are fuel: a parked recv drains
+#      50k run-wide fuel per 50 ms wake (the sleep charge shape) and 50k of
+#      its own step budget, so every leak ends on the catchable `overflow`
+#      stress. redteam.sh runs this payload with a small --fuel pool so the
+#      exhaustion is observable in well under the 15 s wall clock.
+# Expected output lines are printed; the run must simply END (rc 0, the
+# "contained:" line last), never hang and never die to a signal.
+gene park_report(ch) {
+    # parks in recv on a channel nobody sends to; every exit is caught and
+    # named, a null means the channel was closed while we were parked
+    stress {
+        return str(recv(ch))
+    } rescue (e) {
+        return "rescued:" + e.kind
+    }
+}
+
+main {
+    # --- 1. close-while-recv
+    let ch = channel()
+    let t = spawn(park_report, [ch])
+    let r1 = join(t, 250)      # times out while parked (null + a note)
+    close(ch)                  # wake the parked recv: closed+empty -> null
+    let r2 = join(t, 4000)
+    # parked-then-closed and closed-before-park both print the same line
+    print("close-while-recv: " + str(r1) + "," + str(r2))
+
+    # --- 2. cancel-while-recv
+    let ch2 = channel()
+    let t2 = spawn(park_report, [ch2])
+    let _ = join(t2, 200)      # give it time to park (times out)
+    let _ = cancel(t2)
+    let r3 = join(t2, 4000)
+    print("cancel-while-recv: " + str(r3))
+
+    # --- 3. leak storm: nobody ever sends, closes, or cancels these
+    let ids = []
+    for i in range(6) {
+        let _ = i
+        push(ids, spawn(park_report, [channel()]))
+    }
+    let contained = 0
+    for t3 in ids {
+        let r = join(t3, 4000)
+        if str(r).contains("rescued:overflow") {
+            contained = contained + 1
+        }
+    }
+    print("leak-storm: " + str(contained) + "/6 overflow-contained")
+    print("contained: p21a survived")
+}

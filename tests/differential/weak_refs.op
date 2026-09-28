@@ -1,10 +1,18 @@
 # differential: W013 weak references + cycle counter, the agreement-safe
 # subset. Both engines agree by construction on: alive round trips, refusal
-# families, cycle registration increments, and strengthen-after-scope-drop
-# returning null. NOT pinned here: exact freeing timing across gene scopes
-# (the oracle has no refcounter; the counters persist by the no-GC design).
-phen p {
-    let v = 3
+# families (weak on non-container, strengthen on a strong value, no-argument
+# calls, the spawn and send membrane refusals), cycle registration
+# increments, self-relative cycle break/re-register deltas, the nested
+# handle wire rule, and strengthen-after-scope-drop returning null. NOT
+# pinned here: exact freeing timing across gene scopes (the oracle has no
+# refcounter, its registrations persist by the no-GC design), so absolute
+# cycle counts are only compared inside one gene scope; cross-gene shapes
+# use deltas.
+# NOTE (audit): the reserved word is `phenotype` (phen is not a keyword);
+# the phenotype shapes below use init + self so the field path is REAL.
+phenotype p {
+    let v = 0
+    gene init(start = 0) { self.v = start; return self }
 }
 gene wrap(f) {
     stress {
@@ -24,10 +32,11 @@ gene t_alive_list() {
     return strengthen(wl) == l
 }
 gene t_pheno() {
-    let o = new p()
+    let o = new p(3)
     let wo = weak(o)
     let back = strengthen(wo)
-    return back == o && back.v == 3
+    o.v = 4
+    return back == o && back.v == 4 && type(back) == "p"
 }
 gene t_refusal_int() {
     return weak(5)
@@ -48,6 +57,71 @@ gene t_drop_null() {
     let w = weak(m)
     return strengthen(w)
 }
+gene t_dead_handle() {
+    # the handle outlives the target binding: both engines answer null
+    # (Rust frees at strong-count zero; the oracle models aliveness by the
+    # live-binding scan on the scope chain)
+    let w = mkweak()
+    return str(strengthen(w))
+}
+gene mkweak() {
+    let m2 = {y: 2}
+    return weak(m2)
+}
+gene t_spawn_weak() {
+    let m = {x: 1}
+    let w = weak(m)
+    stress {
+        return str(spawn(sink, [w]))
+    } rescue (e) {
+        return "[" + e.kind + "] " + e.message
+    }
+}
+gene sink(v) {
+    return v
+}
+gene t_send_weak() {
+    let w = weak([9])
+    stress {
+        send(channel(), w)
+        return "sent"
+    } rescue (e) {
+        return "[" + e.kind + "] " + e.message
+    }
+}
+gene t_nested_wire() {
+    # a weak handle nested inside a container degrades to null on the wire
+    let ch = channel()
+    send(ch, [weak([1])])
+    let got = recv(ch)
+    return type(got) + ":" + str(got[0])
+}
+gene t_noarg_weak() {
+    stress {
+        return str(weak())
+    } rescue (e) {
+        return "[" + e.kind + "] " + e.message
+    }
+}
+gene t_noarg_strengthen() {
+    stress {
+        return str(strengthen())
+    } rescue (e) {
+        return "[" + e.kind + "] " + e.message
+    }
+}
+gene t_cycle_break() {
+    # self-relative deltas only: cross-gene absolute counts are NOT
+    # engine-agreed (the oracle registrations persist by design)
+    let c = [7]
+    push(c, c)
+    let before = memory().cycles
+    pop(c)
+    let after = memory().cycles
+    push(c, c)
+    let again = memory().cycles
+    return str(before - after) + "," + str(again - after)
+}
 gene main() {
     print(wrap(t_alive_map))
     print(wrap(t_alive_list))
@@ -56,5 +130,12 @@ gene main() {
     print(wrap(t_refusal_strong))
     print(wrap(t_cycles_two))
     print(wrap(t_drop_null))
+    print(wrap(t_dead_handle))
+    print(wrap(t_spawn_weak))
+    print(wrap(t_send_weak))
+    print(wrap(t_nested_wire))
+    print(wrap(t_noarg_weak))
+    print(wrap(t_noarg_strengthen))
+    print(wrap(t_cycle_break))
     print("done")
 }

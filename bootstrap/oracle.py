@@ -5331,6 +5331,12 @@ class Interp:
     # stringified, a pre-existing divergence the corpus avoids) and gene/
     # env capture cycles are not container edges, they are not counted.
 
+    # Deterministic walk budget (rt_p22a armor), the mirror of Rust
+    # WALK_BUDGET: native graph walks are not fuel-accounted, so every
+    # cycle walk carries a hard visit cap. Both cores visit in the same
+    # order and cut at the same node; the cap never binds on sane graphs.
+    WALK_BUDGET = 100_000
+
     def _weak_binding_alive(self, env, addr):
         # is the weak target still strongly referenced by ANY name binding on
         # the live scope chain? (containers that merely hold the value are a
@@ -5354,8 +5360,10 @@ class Interp:
     def _cycle_walk_reaches(self, root, v):
         # does the walk from v reach the container at address root?
         # (the seed is v itself: if v IS the target, inserting it closes a
-        # self-reference, push(a, a))
-        return self._cycle_walk_reaches_root(root, set(), [v])
+        # self-reference, push(a, a)). Returns True (reached), False
+        # (completed, not reached) or None (budget exhausted, inconclusive).
+        budget = [self.WALK_BUDGET]
+        return self._cycle_walk_reaches_root(root, set(), [v], budget)
 
     def _cycle_register(self, target):
         # register the target container (list / dict / instance fields dict)
@@ -5371,8 +5379,15 @@ class Interp:
             return
         stack, seen = [], set()
         stack.extend(target.values() if isinstance(target, dict) else target)
+        # budgeted dedupe walk: an inconclusive dedupe registers anyway,
+        # the detection at the insertion already proved a cycle at the
+        # target (mirror of the Rust dedupe budget)
+        budget = [self.WALK_BUDGET]
         while stack:
             cur = stack.pop()
+            if budget[0] == 0:
+                break  # inconclusive: register the proven cycle
+            budget[0] -= 1
             if isinstance(cur, list):
                 a = id(cur)
                 if a in registered: return  # a member of this subgraph is registered
@@ -5400,15 +5415,22 @@ class Interp:
         self.cycle_regs.append((target, addr))
 
     def _cycle_note_insert(self, target, v):
-        # insertion-time detection, called BEFORE the edge lands
+        # insertion-time detection, called BEFORE the edge lands; an
+        # inconclusive detection walk (budget exhausted) does not register:
+        # best-effort detection, the conservative direction for the GAUGE
+        # is persistence of what is already registered
         if isinstance(target, ObjInst):
             target = target.fields
-        if isinstance(v, (list, dict, ObjInst, Variant)) and self._cycle_walk_reaches(id(target), v):
+        if isinstance(v, (list, dict, ObjInst, Variant)) and \
+                self._cycle_walk_reaches(id(target), v) is True:
             self._cycle_register(target)
 
     def _live_cycles(self):
         self._cycle_prune()
         n, keep = 0, []
+        # ONE budget shared by every verification in this call: the whole
+        # re-verify pass is bounded no matter how many cycles are registered
+        budget = [self.WALK_BUDGET]
         for t, a in self.cycle_regs:
             if t is None:
                 continue
@@ -5419,16 +5441,26 @@ class Interp:
                 stack.extend(t.values())
             else:
                 stack.extend(t)
-            still = self._cycle_walk_reaches_root(a, seen, stack)
+            verdict = self._cycle_walk_reaches_root(a, seen, stack, budget)
+            # True: proven alive. False: proven reclaimed or broken, drop
+            # the entry. None: budget exhausted, the entry stays counted
+            # (death must be PROVEN, persistence is D-013).
+            still = verdict is not False
             if still:
                 n += 1
                 keep.append((t, a))
         self.cycle_regs = keep
         return n
 
-    def _cycle_walk_reaches_root(self, root, seen, stack):
+    def _cycle_walk_reaches_root(self, root, seen, stack, budget):
+        # budget is a one-element list shared by the callers; returns
+        # True (reached), False (completed, not reached) or None
+        # (budget exhausted mid-walk, inconclusive)
         while stack:
             cur = stack.pop()
+            if budget[0] == 0:
+                return None
+            budget[0] -= 1
             if isinstance(cur, list):
                 a = id(cur)
                 if a == root: return True
@@ -5740,7 +5772,10 @@ class Interp:
         if name == "weak":
             # W013: supported targets are the container values (list, map,
             # phenotype instance); everything else is refused (SPEC §19f).
-            v = args[0] if args else None
+            # No-argument call mirrors the Rust None-arm message exactly.
+            if not args:
+                raise Stress("unfolded", "weak(v) needs a list, map, or phenotype")
+            v = args[0]
             if isinstance(v, list):
                 self.weak_targets[id(v)] = ("list", v, None)
                 return WeakRef("list", id(v))
@@ -5753,7 +5788,10 @@ class Interp:
             raise Stress("unfolded",
                          f"weak() needs a list, map, or phenotype, found {type_name(v)}")
         if name == "strengthen":
-            w = args[0] if args else None
+            if not args:
+                # no-argument call mirrors the Rust None-arm message exactly
+                raise Stress("unfolded", "strengthen(w) needs a weak handle")
+            w = args[0]
             if not isinstance(w, WeakRef):
                 raise Stress("unfolded",
                              f"strengthen(w) needs a weak handle, found {type_name(w)}")
@@ -6133,6 +6171,16 @@ class Interp:
             callee = args[0] if args else None
             targs = args[1] if len(args) > 1 and isinstance(args[1], list) else []
             if isinstance(callee, Gene):
+                # W013 spawn membrane mirror: a top-level weak handle is
+                # REFUSED with the same catchable `membrane` stress as the
+                # Rust pre-flight (a weak handle's target identity cannot
+                # cross a cell boundary; nested handles keep the degrade-
+                # to-null wire rule)
+                for _a in targs:
+                    if isinstance(_a, WeakRef):
+                        raise Stress(
+                            "membrane",
+                            "spawn() refuses a weak payload; weak handles cannot cross the snapshot membrane")
                 # reg-r4: SendValue depth ceiling mirror (Rust SEND_DEPTH_CAP
                 # = 100_000), deep spawn payloads raise a catchable
                 # `overflow` stress exactly like the Rust serialization path
