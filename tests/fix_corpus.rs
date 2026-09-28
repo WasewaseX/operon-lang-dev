@@ -186,3 +186,41 @@ fn fix_dry_run_semantics_via_report_counts() {
         "fix output IS the canonical form of the input"
     );
 }
+
+#[test]
+fn fix_never_migrates_use_paths() {
+    // W025 made `::` exact sugar in use paths; the legacy `expr::field`
+    // migration is for method-call syntax only. Rewriting a use path to
+    // dots changes the canonical form (law 1) even though the meaning is
+    // the same. Pin: use lines stay verbatim, call sites still migrate.
+    let src = "use a::b::c\nuse std/set as s2\nuse std/path\nlet v = x::y()";
+    let (fixed, rep) = fix_source(src);
+    // fmt prints use paths in its canonical spelling (:: and / render alike),
+    // so the pin is on the DOTS never appearing: the buggy pass rewrote
+    // `use a::b::c` to `use a.b.c`, which changed the canonical form (law 1)
+    // even though the meaning was the same.
+    assert!(
+        !fixed.contains("use a.b.c") && !fixed.contains("use std.path"),
+        "use path must not be migrated: {}",
+        fixed
+    );
+    assert!(
+        fixed.contains("x.y()"),
+        "method-call :: still migrates: {}",
+        fixed
+    );
+    assert_eq!(rep.s_dot, 1, "only the call-site migration counts");
+    // law 3: the output reparses with zero rung-2+ repairs (the legacy
+    // surface was consumed). Law 1 does NOT apply to this input by design:
+    // `x::y()` parses as two repaired statements, `x.y()` as one method
+    // call, and replacing the legacy spelling with the supported one is
+    // exactly the migration's job. Use PATHS are different: there `::` is
+    // current sugar, which is why they must stay verbatim.
+    let prog = parser::parse(&fixed);
+    let repairs: Vec<_> = prog.notes.iter().filter(|n| n.rung >= 2).collect();
+    assert!(
+        repairs.is_empty(),
+        "fixed output must parse canonical: {:?}",
+        repairs
+    );
+}
