@@ -1,0 +1,53 @@
+# Maintainer: Operon contributors <https://github.com/WasewaseX/operon-lang-dev>
+# AUR -git package: tracks the main branch of the Operon toolchain.
+# Upstream: https://github.com/WasewaseX/operon-lang-dev
+# Build locally with: makepkg -si  (see https://wiki.archlinux.org/title/AUR)
+
+pkgname=operon-lang-git
+# Placeholder for the AUR web form; makepkg re-runs pkgver() on every build
+# unless --holdver is passed. Format: <base>.r<commits>.g<short-sha>.
+pkgver=2.2.0.r0.g0000000
+pkgrel=1
+pkgdesc="Gene-expression programming language: Total Grammar toolchain, Rust core, C++ kernels"
+arch=('x86_64' 'aarch64')
+url="https://github.com/WasewaseX/operon-lang-dev"
+license=('MIT')
+depends=()
+makedepends=('rust' 'gcc' 'git')  # git: VCS tool makepkg needs for git+ sources
+provides=('operon')
+conflicts=('operon')
+source=("${pkgname}::git+https://github.com/WasewaseX/operon-lang-dev.git")
+sha256sums=('SKIP')  # VCS source: makepkg verifies the checkout, not a hash
+
+pkgver() {
+  cd "${srcdir}/${pkgname}"
+  if git describe --long --tags >/dev/null 2>&1; then
+    # v2.2.0-3-gabc1234 -> 2.2.0.r3.gabc1234 (plain vX.Y.Z tags assumed)
+    git describe --long --tags | sed -e 's/^v//' -e 's/-/.r/' -e 's/-g/.g/'
+  else
+    # no tags yet: base version from Cargo.toml, plus commit count + short sha
+    local base
+    base="$(sed -n 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' Cargo.toml | head -n1)"
+    printf '%s.r%s.g%s' "${base:-0}" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+  fi
+}
+
+build() {
+  cd "${srcdir}/${pkgname}"
+  # upstream build: cargo release build, C++ kernel via build.rs and g++
+  ./scripts/build.sh
+}
+
+package() {
+  cd "${srcdir}/${pkgname}"
+  install -Dm755 bin/operon    "${pkgdir}/usr/bin/operon"
+  install -Dm755 bin/operon-ls "${pkgdir}/usr/bin/operon-ls"
+
+  # Runtime support files under /usr/lib/operon. The module loader resolves
+  # std/ exe-relative (src/genes.rs), so /usr/bin/std is a symlink into the
+  # managed tree; the capability layer canonicalizes both ends and grants it.
+  install -dm755 "${pkgdir}/usr/lib/operon"
+  cp -a std      "${pkgdir}/usr/lib/operon/std"
+  cp -a bootstrap "${pkgdir}/usr/lib/operon/bootstrap"
+  ln -s /usr/lib/operon/std "${pkgdir}/usr/bin/std"
+}
