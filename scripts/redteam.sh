@@ -104,6 +104,13 @@ for f in "$DIR"/rt_p*.op; do
             # M100 W007: uncaught deep chain via the exit-1 entry path —
             # rc must be 1 (dx-r1 honesty), render capped, no panic
             run_one "$f" --entry go ;;
+        *p21a*)
+            # W013/W015 closure: close-while-recv + parked-recv leak storm.
+            # A tiny run-wide fuel pool makes the containment observable: a
+            # recv parked on a channel nobody sends to drains 50k fuel per
+            # 50 ms wake (and its own step budget), so every leak must END
+            # on the catchable overflow stress, never hang.
+            run_one "$f" --fuel 600000 ;;
         *p15b*|*p15c*)
             # M100 W007: chain on rescue bindings — contained (rc=0),
             # frames leak nothing beyond gene names + in-file lines
