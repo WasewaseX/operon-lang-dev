@@ -2497,7 +2497,12 @@ pub fn fix_source(src: &str) -> (String, FixReport) {
 /// W65: the source-level migration pass. Walks the whole source char-wise
 /// (not line-wise) so triple-quoted, raw, and escaped strings stay intact;
 /// edits only CODE regions: comments and every string form are copied
-/// verbatim. Returns (new_source, const_count, s_dot_count).
+/// verbatim. `use` lines are copied verbatim too: since W025 the `::`
+/// separator in a use path is CURRENT sugar (exact spelling of `/`), not the
+/// legacy call syntax the `expr::field` migration exists to retire, so
+/// rewriting it would churn the canonical form for nothing (fix_corpus
+/// law 1 caught this on tests/differential/namespaces.op). Returns
+/// (new_source, const_count, s_dot_count).
 fn migrate_source(src: &str) -> (String, usize, usize) {
     let chars: Vec<char> = src.chars().collect();
     let n = chars.len();
@@ -2505,6 +2510,9 @@ fn migrate_source(src: &str) -> (String, usize, usize) {
     let mut i = 0usize;
     let const_n = 0usize; // retired migration (W05 hotfix), kept for report shape, always 0
     let mut sdot_n = 0usize;
+    // only whitespace since the last newline: a word here is a statement
+    // keyword, which is how use lines are recognized
+    let mut at_stmt_start = true;
 
     while i < n {
         let c = chars[i];
@@ -2583,13 +2591,17 @@ fn migrate_source(src: &str) -> (String, usize, usize) {
                 i += 1;
             }
             let word: String = chars[start..i].iter().collect();
-            // W05 hotfix (2026-09-27, red-main r5): `const` is a LIVE keyword
-            // again, immutable binding + deep freeze (SPEC §7 back-compat
-            // note). The W64 const→let migration is RETIRED: rewriting it
-            // unfreezes the binding, which is a MEANING change, and fix is
-            // forbidden from those (fix_corpus law 1). The counter stays in
-            // the report (always 0) so the --json shape never drifts.
             out.push_str(&word);
+            // a `use` line is path syntax, never a method call: copy the
+            // whole line verbatim so use-path separators stay as written
+            if at_stmt_start && word == "use" {
+                while i < n && chars[i] != '\n' {
+                    out.push(chars[i]);
+                    i += 1;
+                }
+                continue;
+            }
+            at_stmt_start = false;
             // migration 2: expr::field → expr.field (dx-r3 legacy spelling)
             if i + 1 < n && chars[i] == ':' && chars[i + 1] == ':' {
                 let followed_by_id =
@@ -2601,6 +2613,11 @@ fn migrate_source(src: &str) -> (String, usize, usize) {
                 }
             }
             continue;
+        }
+        if c == '\n' {
+            at_stmt_start = true;
+        } else if c != ' ' && c != '\t' && c != '\r' {
+            at_stmt_start = false;
         }
         out.push(c);
         i += 1;
