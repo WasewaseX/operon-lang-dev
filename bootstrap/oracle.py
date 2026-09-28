@@ -778,7 +778,9 @@ VALUE_SYNONYMS = {"yes": True, "on": True, "no": False, "off": False,
 # W06 (D-014) mirror: 'none' RETIRED from VALUE_SYNONYMS, it is now the
 # Option constructor none(); bare 'none' degrades to an unbound ident
 # (phantom note), never a silent null. Matches src/parser.rs.
-MARKS = {"acetylate", "methylate", "m6a", "copies", "riboswitch", "burst"}
+# W64: metadata-only deprecation mark, known so the wobble repair
+# never mangles it; the payload parse is lenient, runtime never reads it
+MARKS = {"acetylate", "methylate", "m6a", "copies", "riboswitch", "burst", "deprecated"}
 
 def edit_distance(a, b):
     if a == b:
@@ -1012,12 +1014,70 @@ class P:
                 if got < 2:
                     self.note(t[2], 4, "@burst needs kon and koff (0..=1); defaults 0.3/0.1")
                 burst = (vals[0], vals[1])
+            # W64: @deprecated("migration text", since="2.4") payload, metadata
+            # only (mirror of the Rust mark arm): parse leniently, attach to
+            # the gene tuple, never evaluate. Malformed shapes degrade to a
+            # rung-4 note, the mark is dropped, the gene keeps parsing.
+            deprecated = None
+            if "deprecated" in marks:
+                tt = self.peek()
+                if tt == ("SYM", "(", tt[2]) or (tt[0] == "SYM" and tt[1] == "("):
+                    self.next()
+                    msg = ""
+                    vt = self.peek()
+                    if vt[0] == "STR":
+                        self.next()
+                        msg = vt[1]
+                    else:
+                        self.note(vt[2], 4, f"@deprecated needs a string message; mark skipped")
+                    since = None
+                    nt = self.peek()
+                    if nt[0] == "SYM" and nt[1] == ",":
+                        self.next()
+                        st = self.peek()
+                        if st[0] == "IDENT" and st[1] == "since":
+                            self.next()
+                            if self.peek()[0] == "SYM" and self.peek()[1] == "=":
+                                self.next()
+                            vt2 = self.peek()
+                            if vt2[0] == "STR":
+                                self.next()
+                                since = vt2[1]
+                        elif st[0] == "STR":
+                            self.next()
+                            since = st[1]
+                        else:
+                            self.note(st[2], 4, "@deprecated since needs a string; ignored")
+                    et = self.peek()
+                    if et[0] == "SYM" and et[1] == ")":
+                        self.next()
+                    else:
+                        depth = 0
+                        while True:
+                            et = self.peek()
+                            if et[0] == "SYM" and et[1] == "(":
+                                depth += 1
+                            elif et[0] == "SYM" and et[1] == ")":
+                                self.next()
+                                if depth == 0:
+                                    break
+                                depth -= 1
+                                continue
+                            elif et[0] in ("NL", "EOF"):
+                                break
+                            self.next()
+                            continue
+                        self.note(t[2], 4, "@deprecated payload auto-closed")
+                    if msg:
+                        deprecated = (msg, since)
+                else:
+                    self.note(t[2], 4, "@deprecated needs a migration string; mark skipped")
             self.eat_nl()
             if not self.expect_kw("gene"):
                 self.note(t[2], 4, "mark must precede 'gene'; skipped line")
                 self.skip_line()
                 return None
-            return self.gene_def(marks, copies, riboswitch, burst)
+            return self.gene_def(marks, copies, riboswitch, burst, deprecated)
         if t[0] == "SYM" and t[1] == "{":
             self.note(t[2], 4, "bare block treated as scoped statements")
             return ("block", self.block())
@@ -2064,7 +2124,7 @@ class P:
         self.end_stmt()
         return ("expr", e)
 
-    def gene_def(self, marks, copies=1, riboswitch=None, burst=None):
+    def gene_def(self, marks, copies=1, riboswitch=None, burst=None, deprecated=None):
         ac = "acetylate" in marks
         me = "methylate" in marks
         m6 = "m6a" in marks

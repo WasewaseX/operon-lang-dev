@@ -135,6 +135,20 @@ pub struct GeneDef {
     /// W01: return annotation, `gene f() -> int { }`. Checked when the
     /// gene produces its return value (including a `?!`-propagated one).
     pub ret_ann: Option<TypeAnn>,
+    /// W64: `@deprecated("migration text", since="2.4")` metadata. Parse
+    /// and tooling surface only (lint `deprecated-use` findings, doc/fmt
+    /// round-trip); the interpreter never reads it, runtime is untouched.
+    pub deprecated: Option<Deprecation>,
+}
+
+/// W64: the structured payload of a deprecation mark.
+#[derive(Debug, Clone, Default)]
+pub struct Deprecation {
+    /// The migration text: what to use instead, why the mark exists.
+    pub message: String,
+    /// Optional calendar gate from the compatibility ladder (W63),
+    /// `since="2.4"`: the release that started the deprecation clock.
+    pub since: Option<String>,
 }
 
 /// W01 (L2c): the annotation grammar, `int`, `float`, `str`, `bool`,

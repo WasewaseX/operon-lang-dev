@@ -52,6 +52,7 @@
 //!   W09  nmd:<kind>/anchor      NMD + anchor-import sweep findings
 //!   W10  cell-unknown-key       .cell key outside the schema (W66)
 //!   W11  cell-type-mismatch     .cell key expects a number (W66)
+//!   W12  deprecated-use         call to an @deprecated-marked gene (W64)
 //!   N01  unused-gene            defined, never called (library surface?)
 //!   N02  unused-import          module imported, never referenced
 //!   N03  infinite-loop-suspect  while over an always-true literal
@@ -93,7 +94,9 @@ pub enum Stream {
 pub fn rule_stream(rule: &str) -> Stream {
     match rule {
         "wrong-arity" | "E01" | "const-reassign" | "W02" | "phantom-call" | "W01"
-        | "cell-unknown-key" | "W10" | "cell-type-mismatch" | "W11" => Stream::Check,
+        | "cell-unknown-key" | "W10" | "cell-type-mismatch" | "W11" | "deprecated-use" | "W12" => {
+            Stream::Check
+        }
         r if r.starts_with("nmd:") || r == "anchor-import" || r.starts_with("W09") => Stream::Check,
         _ => Stream::Lint,
     }
@@ -171,6 +174,7 @@ pub fn rule_code(rule: &str) -> &'static str {
         "unreachable-match-arm" => "W06",
         "unused-binding" => "W07",
         "dead-const" => "W08",
+        "deprecated-use" => "W12",
         "cell-unknown-key" => "W10",
         "cell-type-mismatch" => "W11",
         "unused-gene" => "N01",
@@ -407,6 +411,29 @@ pub fn lint(prog: &Program) -> Vec<Finding> {
     unreachable_scan(&prog.stmts, 1, &mut out);
     duplicate_match_arms(&prog.stmts, &mut out);
     unreachable_match_arms(&prog.stmts, &mut out);
+
+    // W64: deprecated-use at call sites. The def-side map fills from
+    // top-level AND nested defs (the scan registers nested marks as it
+    // descends); proofs and named frames are ordinary consumers.
+    let mut deprecations: DepMap = HashMap::new();
+    walk_all(&prog.stmts, &mut |st, _| {
+        if let Stmt::Gene(g) | Stmt::Seq(g) = st {
+            if let (Some(n), Some(d)) = (&g.name, &g.deprecated) {
+                deprecations
+                    .entry(n.clone())
+                    .or_insert((d.message.clone(), d.since.clone()));
+            }
+        }
+    });
+    if !deprecations.is_empty() {
+        deprecated_scan(&prog.stmts, &mut deprecations, &mut out);
+        for body in &prog.proofs {
+            deprecated_scan(body, &mut deprecations, &mut out);
+        }
+        for (_, body) in &prog.named_frames {
+            deprecated_scan(body, &mut deprecations, &mut out);
+        }
+    }
 
     // W43: wrong-arity at call sites. Free genes +, now, phenotype methods
     // and `new` constructors where the receiver/phenotype is statically
@@ -1184,6 +1211,151 @@ fn arity_scan_nested(
             }
         }
         _ => {}
+    }
+}
+
+// ------------------------------------------------------------ deprecated-use
+// W64: `@deprecated("text", since="x.y")` marks ride the gene as metadata;
+// the check surface turns CALL SITES of a marked gene into `deprecated-use`
+// warnings carrying the migration text. Runtime is untouched (the
+// interpreter never reads the field), so differential parity cannot drift.
+// Conservative by design: only free-gene calls (Expr::Call over an ident)
+// are flagged; method calls, dynamic dispatch through a bare gene
+// reference, and defs inside other files are the documented escape hatches.
+// A self-call inside the deprecated gene's own body is still a real use.
+
+type DepMap = HashMap<String, (String, Option<String>)>;
+
+fn deprecated_scan(stmts: &[Stmt], deps: &mut DepMap, out: &mut Vec<Finding>) {
+    for st in stmts {
+        // nested defs register their own marks before their bodies scan
+        if let Stmt::Gene(g) | Stmt::Seq(g) = st {
+            if let (Some(n), Some(d)) = (&g.name, &g.deprecated) {
+                deps.entry(n.clone())
+                    .or_insert((d.message.clone(), d.since.clone()));
+            }
+        }
+        deprecated_scan_expr(stmt_exprs_all(st), deps, out);
+        deprecated_scan_nested(st, deps, out);
+    }
+}
+
+fn deprecated_scan_nested(st: &Stmt, deps: &mut DepMap, out: &mut Vec<Finding>) {
+    match st {
+        Stmt::If(arms, els) => {
+            for (_, b) in arms {
+                deprecated_scan(b, deps, out);
+            }
+            if let Some(e) = els {
+                deprecated_scan(e, deps, out);
+            }
+        }
+        Stmt::While(_, b)
+        | Stmt::Loop(b)
+        | Stmt::Scope(b)
+        | Stmt::Block(b)
+        | Stmt::Tad(_, b)
+        | Stmt::For(_, _, b)
+        | Stmt::ForPat(_, _, b) => deprecated_scan(b, deps, out),
+        Stmt::Frame { body, .. } => deprecated_scan(body, deps, out),
+        Stmt::Match(_, arms) => {
+            for (_, b) in arms {
+                deprecated_scan(b, deps, out);
+            }
+        }
+        Stmt::Stress { body, rescue, .. } => {
+            deprecated_scan(body, deps, out);
+            if let Some((_, rb)) = rescue {
+                deprecated_scan(rb, deps, out);
+            }
+        }
+        Stmt::Gene(g) | Stmt::Seq(g) => deprecated_scan(&g.body, deps, out),
+        Stmt::Pheno(p) => {
+            for m in &p.methods {
+                deprecated_scan(&m.body, deps, out);
+            }
+        }
+        Stmt::Trait(t) => {
+            for m in &t.methods {
+                if let Some(d) = &m.default {
+                    deprecated_scan(&d.body, deps, out);
+                }
+            }
+        }
+        Stmt::Splice(s) => {
+            for (_, g) in &s.variants {
+                deprecated_scan(&g.body, deps, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn deprecated_scan_expr(exprs: Vec<&Expr>, deps: &DepMap, out: &mut Vec<Finding>) {
+    for e in exprs {
+        match e {
+            Expr::Call(callee, args, line) => {
+                if let Expr::Ident(name) = &**callee {
+                    if let Some((msg, since)) = deps.get(name) {
+                        let since_note = match since {
+                            Some(s) => format!(" (since {})", s),
+                            None => String::new(),
+                        };
+                        out.push(Finding::new(
+                            *line,
+                            "deprecated-use",
+                            Sev::Warning,
+                            format!(
+                                "call to deprecated gene '{}'{}, {}, silence with '// allow: deprecated-use'",
+                                name, since_note, msg
+                            ),
+                        ));
+                    }
+                }
+                deprecated_scan_expr(
+                    std::iter::once(&**callee).chain(args.iter()).collect(),
+                    deps,
+                    out,
+                );
+            }
+            Expr::Method(recv, _, args) | Expr::MethodSafe(recv, _, args) => {
+                deprecated_scan_expr(
+                    std::iter::once(&**recv).chain(args.iter()).collect(),
+                    deps,
+                    out,
+                );
+            }
+            Expr::New(_, args) => {
+                deprecated_scan_expr(args.iter().collect(), deps, out);
+            }
+            Expr::Lambda(g) => {
+                let defaults: Vec<&Expr> =
+                    g.params.iter().filter_map(|(_, d)| d.as_ref()).collect();
+                deprecated_scan_expr(defaults, deps, out);
+                let mut inner = deps.clone();
+                deprecated_scan(&g.body, &mut inner, out);
+            }
+            Expr::Propagate(a, _) => deprecated_scan_expr(vec![a], deps, out),
+            Expr::Collect {
+                iter, filter, body, ..
+            } => {
+                let mut parts = vec![&**iter, &**body];
+                if let Some(f) = filter {
+                    parts.push(f);
+                }
+                deprecated_scan_expr(parts, deps, out);
+            }
+            Expr::Unary(_, a) => deprecated_scan_expr(vec![a], deps, out),
+            Expr::Binary(_, a, b, _) => deprecated_scan_expr(vec![a, b], deps, out),
+            Expr::Index(a, b, _) => deprecated_scan_expr(vec![a, b], deps, out),
+            Expr::Ternary(a, b, c) => deprecated_scan_expr(vec![a, b, c], deps, out),
+            Expr::Member(a, _) | Expr::MemberSafe(a, _) => deprecated_scan_expr(vec![a], deps, out),
+            Expr::List(items) => deprecated_scan_expr(items.iter().collect(), deps, out),
+            Expr::Map(pairs) => {
+                deprecated_scan_expr(pairs.iter().flat_map(|(k, v)| [k, v]).collect(), deps, out)
+            }
+            _ => {}
+        }
     }
 }
 
