@@ -602,6 +602,10 @@ pub fn check_source(src: &str, nmd: bool, base_dir: Option<&str>) -> (CheckRepor
         if !defined.contains(c)
             && !module_genes.contains(c)
             && !crate::interp::BUILTIN_NAMES.contains(&c.as_str())
+            // builtin synonyms (print/echo/say/show for promote) are real
+            // builtins on the wire; without this check `print` read as a
+            // phantom (surfaced by the batch-2 check probes)
+            && !crate::interp::BUILTIN_SYNONYMS.iter().any(|(s, _)| s == c)
         {
             rep.phantoms.push(c.clone());
         }
