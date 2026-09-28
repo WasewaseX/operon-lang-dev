@@ -1,12 +1,35 @@
 //! lint.rs, W41/W42/W43/W48/W66 (ROADMAP-100): the shared static-analysis rule
-//! engine. `operon lint` is the standalone front door; `operon check` reuses
-//! the same findings for its diagnostics format. Check-only: the interpreter
-//! and the oracle are untouched, so runtime semantics and differential parity
-//! cannot drift from anything in here.
+//! engine. Two CLI surfaces read it with DIFFERENT rule streams (W048):
+//! `operon check` runs the correctness stream (arity, const safety, plus the
+//! check-side phantom/NMD/cell sweeps in tools.rs), `operon lint` runs the
+//! style/quality stream. One engine, one finding type, two views. The
+//! interpreter and the oracle are untouched, so runtime semantics and
+//! differential parity cannot drift from anything in here.
 //!
 //! Philosophy (Total Grammar): lint findings are ADVISORY. Nothing here
 //! rejects a program; `--strict` escalation is a CLI-side policy (W37
 //! contract), never an interpreter behavior.
+//!
+//! ------------------------------------------------------------ W048 streams
+//! `rule_stream()` partitions the rule set by OWNING COMMAND. The stable
+//! code stays attached to the rule wherever it prints:
+//!
+//!   check (correctness)  E01 wrong-arity, W02 const-reassign,
+//!                        W09 nmd:<kind>/anchor-import (tools.rs sweep),
+//!                        W10 cell-unknown-key, W11 cell-type-mismatch,
+//!                        W01 phantom-call (tools.rs sweep)
+//!   lint (style/quality) N01 unused-gene, N02 unused-import,
+//!                        W07 unused-binding, W08 dead-const,
+//!                        W03 constant-condition, N03 infinite-loop-suspect,
+//!                        W04 unreachable-code, W05 duplicate-match-arm,
+//!                        W06 unreachable-match-arm, N12 shadowed-binding
+//!
+//! N04 (`repair:r<n>`, parser repair notes) is lint-owned BY CONTRACT but
+//! not emitted by the engine yet: the corpus contains files that exercise
+//! Total Grammar recovery on purpose (examples/total_grammar.op and
+//! friends), so surfacing repairs as default-on lint findings would fire
+//! on intentional code. Parser repairs stay on their dedicated surfaces
+//! (`operon explain`, check's repair section) until a lint opt-in lands.
 //!
 //! ------------------------------------------------------------ W041 codes
 //! Stable diagnostic code scheme, mirrored in `operon check --help`. The
@@ -33,6 +56,7 @@
 //!   N02  unused-import          module imported, never referenced
 //!   N03  infinite-loop-suspect  while over an always-true literal
 //!   N04  repair:r<n>            parser repair note, rung n (W037/W038)
+//!   N12  shadowed-binding       re-let of a name in the same block (W048)
 //!   N99  <unknown>              fallback for rules not in the table yet
 //!
 //! Location convention: findings carry a 1-based line when the AST span
@@ -52,6 +76,48 @@ use std::collections::{HashMap, HashSet};
 
 // ------------------------------------------------------------ model
 
+/// W048: which CLI surface owns a rule. The partition is by COMMAND PURPOSE:
+/// `check` answers "is this program correct", `lint` answers "is this code
+/// clean". See the stream table in the module doc.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Stream {
+    /// correctness rules surfaced by `operon check`
+    Check,
+    /// style/quality rules surfaced by `operon lint`
+    Lint,
+}
+
+/// W048: rule ownership. Rule names OR stable codes resolve; dynamic rules
+/// match by prefix. Anything not named defaults to the lint stream (new
+/// style rules are append-only; the correctness set is closed, reviewed).
+pub fn rule_stream(rule: &str) -> Stream {
+    match rule {
+        "wrong-arity" | "E01" | "const-reassign" | "W02" | "phantom-call" | "W01"
+        | "cell-unknown-key" | "W10" | "cell-type-mismatch" | "W11" => Stream::Check,
+        r if r.starts_with("nmd:") || r == "anchor-import" || r.starts_with("W09") => Stream::Check,
+        _ => Stream::Lint,
+    }
+}
+
+/// W048: keep only the findings owned by one stream.
+pub fn filter_stream(findings: Vec<Finding>, s: Stream) -> Vec<Finding> {
+    findings
+        .into_iter()
+        .filter(|f| rule_stream(&f.rule) == s)
+        .collect()
+}
+
+/// W048: the `operon lint` surface of the engine, style/quality rules only.
+pub fn lint_style(prog: &Program) -> Vec<Finding> {
+    filter_stream(lint(prog), Stream::Lint)
+}
+
+/// W048: the `operon check` surface of the engine, correctness rules only
+/// (the phantom/NMD/cell sweeps stay in tools.rs, they need module loading).
+pub fn lint_correctness(prog: &Program) -> Vec<Finding> {
+    filter_stream(lint(prog), Stream::Check)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Sev {
     Style = 0,
@@ -69,7 +135,7 @@ impl Sev {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Finding {
     pub line: usize,
     /// W041: stable diagnostic code (see the scheme table in the module doc).
@@ -110,6 +176,7 @@ pub fn rule_code(rule: &str) -> &'static str {
         "unused-gene" => "N01",
         "unused-import" => "N02",
         "infinite-loop-suspect" => "N03",
+        "shadowed-binding" => "N12",
         r if r.starts_with("nmd:") || r == "anchor-import" => "W09",
         r if r.starts_with("repair:") => "N04",
         _ => "N99",
@@ -188,6 +255,26 @@ pub fn lint(prog: &Program) -> Vec<Finding> {
         _ => {}
     });
     collect_calls_stmts(&prog.stmts, &mut called);
+    // W48 corpus law: proof frames and named frames are CONSUMERS. A gene
+    // used only inside a proof frame IS used (the test suite is the
+    // consumer); flagging it was the loudest false positive on tests/*.op.
+    for body in &prog.proofs {
+        collect_calls_stmts(body, &mut called);
+    }
+    for (_, body) in &prog.named_frames {
+        collect_calls_stmts(body, &mut called);
+    }
+    // Genes defined inside a splice variant are the splice's dispatch
+    // surface: they are reached through the ROOT name (often from another
+    // file), so in-file call counts say nothing. Exempt them wholesale.
+    let mut splice_hooks: HashSet<String> = HashSet::new();
+    for st in &prog.stmts {
+        if let Stmt::Splice(s) = st {
+            for (_, g) in &s.variants {
+                collect_gene_names(&g.body, &mut splice_hooks);
+            }
+        }
+    }
 
     // W42: every name read anywhere (see collect_reads_stmts). A bare
     // reference to a gene (e.g. `spawn(quick, ...)` passing the gene for
@@ -195,19 +282,40 @@ pub fn lint(prog: &Program) -> Vec<Finding> {
     // captured reference, the documented dynamic-call escape hatch.
     let mut reads: HashSet<String> = HashSet::new();
     collect_reads_stmts(&prog.stmts, &mut reads);
+    for body in &prog.proofs {
+        collect_reads_stmts(body, &mut reads);
+    }
+    for (_, body) in &prog.named_frames {
+        collect_reads_stmts(body, &mut reads);
+    }
 
     // W24 module surface: a file with explicit `pub` marks is a library
     // module (default-open exports everything, and consumers may reference
     // any name, sometimes only via strings: `has(mod, "NAME")`). In-file
     // "unused" means nothing there, so the def-side rules stay silent.
     let is_module = !prog.pub_exports.is_empty();
+    // W48 corpus law: a file with NO `main` gene is a library module too
+    // (W24 default-open: every gene is importable surface; the linter is
+    // file-local and cannot see the consumers). This is what keeps std/*.op
+    // and the `use`-target helper modules (tests/differential/mod_res_lib*)
+    // clean without pub marks. Programs (with main) get the full check.
+    let has_main = prog
+        .stmts
+        .iter()
+        .any(|s| matches!(s, Stmt::Gene(g) if g.name.as_deref() == Some("main")));
+    let is_library = is_module || !has_main;
 
     // W42: unused-gene (only when defined AND never called or referenced
-    // anywhere in-file; exported genes (anchor/tad exports, pub marks) are
-    // library surface, skip them)
+    // anywhere in-file; exported genes (anchor/tad exports, pub marks) and
+    // splice-variant hooks are library surface, skip them)
     let exported: HashSet<String> = prog.anchor_exports.iter().cloned().collect();
     for (name, line) in &defined {
-        if name == "main" || exported.contains(name) || is_module || reads.contains(name) {
+        if name == "main"
+            || exported.contains(name)
+            || splice_hooks.contains(name)
+            || is_library
+            || reads.contains(name)
+        {
             continue;
         }
         if !called.contains(name) {
@@ -242,6 +350,10 @@ pub fn lint(prog: &Program) -> Vec<Finding> {
     // check is name-based and scope-insensitive BY DESIGN: any let/const
     // re-binding of the name anywhere retires the finding, so the rule can
     // only stay silent on shadowed bindings, never misfire on them.
+    // W48 corpus law: an assignment lexically inside a `stress` block is an
+    // EXPLICIT containment probe (the catchable frozen stress is the point,
+    // see tests/const_freeze.op), so the scan tracks stress nesting and
+    // stays silent there. Outside stress it stays a warning.
     let mut const_names: HashSet<String> = HashSet::new();
     let mut let_rebound: HashSet<String> = HashSet::new();
     walk_all(&prog.stmts, &mut |st, _| match st {
@@ -258,21 +370,7 @@ pub fn lint(prog: &Program) -> Vec<Finding> {
         }
         _ => {}
     });
-    walk_all(&prog.stmts, &mut |st, line| {
-        if let Stmt::Assign(n, _, _) = st {
-            if const_names.contains(n) && !let_rebound.contains(n) {
-                out.push(Finding::new(
-                    line,
-                    "const-reassign",
-                    Sev::Warning,
-                    format!(
-                        "assignment to const '{}' raises a catchable frozen stress at runtime",
-                        n
-                    ),
-                ));
-            }
-        }
-    });
+    const_reassign_scan(&prog.stmts, false, &const_names, &let_rebound, &mut out);
 
     // per-statement rules over the whole tree
     walk_all(&prog.stmts, &mut |st, line| {
@@ -320,28 +418,26 @@ pub fn lint(prog: &Program) -> Vec<Finding> {
 
     // W42 (critique-pinned set): unused binding + dead const. Name-level,
     // file-wide, conservative: any read of the NAME anywhere (including
-    // inside gene bodies, closures, patterns, rescue blocks) retires the
-    // finding, so the rule can only stay silent on scope tricks, never
-    // misfire on them. `_`-prefixed names are exempt by convention; module
-    // files (pub marks) are exempt wholesale — their bindings are surface.
-    let mut candidates: Vec<(String, usize, bool)> = Vec::new(); // name, hint line, is_const
-    walk_all(&prog.stmts, &mut |st, line| match st {
-        Stmt::Let(n, _) | Stmt::LetAnn(n, _, _) => {
-            candidates.push((n.clone(), line, false));
-        }
-        Stmt::LetConst(n, _) => {
-            candidates.push((n.clone(), line, true));
-        }
-        _ => {}
-    });
-    // name-level rule: one finding per name (first binding wins the hint
-    // line) even when several scopes bind the same name
+    // inside gene bodies, closures, patterns, rescue blocks, proof frames)
+    // retires the finding, so the rule can only stay silent on scope tricks,
+    // never misfire on them. `_`-prefixed names are exempt by convention;
+    // library files (no main gene / pub marks) are exempt wholesale — their
+    // bindings are surface. W48 corpus law: a binding is also exempt when
+    // (a) it is lexically inside a `stress` block — the RHS evaluation IS
+    // the probe (containment ceilings, frozen stresses), or (b) its
+    // initializer calls something — the binding may exist FOR that call's
+    // effect (spawn handles, profile snapshots), and only a pure dead store
+    // is reported.
+    let mut candidates: Vec<(String, usize, bool, bool)> = Vec::new(); // name, hint line, is_const, exempt
+    collect_binding_candidates(&prog.stmts, false, &mut candidates);
+    // name-level rule: one finding per name (first non-exempt binding wins
+    // the hint line) even when several scopes bind the same name
     let mut reported: HashSet<String> = HashSet::new();
-    for (name, line, is_const) in candidates {
-        if is_module || name == "_" || name.starts_with('_') || !reported.insert(name.clone()) {
+    for (name, line, is_const, exempt) in candidates {
+        if exempt || is_library || name == "_" || name.starts_with('_') {
             continue;
         }
-        if reads.contains(&name) {
+        if reads.contains(&name) || !reported.insert(name.clone()) {
             continue;
         }
         if is_const {
@@ -369,16 +465,163 @@ pub fn lint(prog: &Program) -> Vec<Finding> {
         }
     }
 
+    // N12 shadowed-binding: specified, DELIBERATELY not emitted. The corpus
+    // proves a same-block re-`let` is idiomatic Operon (loop-counter resets
+    // in tests/repressi_osc.op) and is pinned ON PURPOSE in tests/
+    // const_freeze.op ("const redefinition rebinds"). Without liveness
+    // analysis the rule cannot tell a reset from an accident, so default-on
+    // would be a false-positive machine against the zero-tolerance corpus
+    // bar. The N12 code stays reserved; see docs/specs/LINT.md.
+
     out.sort_by_key(|f| (f.line, f.rule.clone()));
     out
 }
 
+/// W48 helper: gene names defined anywhere under `stmts` (splice-variant
+/// hooks and nested defs alike).
+fn collect_gene_names(stmts: &[Stmt], out: &mut HashSet<String>) {
+    for st in stmts {
+        if let Stmt::Gene(g) = st {
+            if let Some(n) = &g.name {
+                out.insert(n.clone());
+            }
+        }
+        for nested in stmt_nested_all(st) {
+            collect_gene_names(nested, out);
+        }
+    }
+}
+
+/// W48: const-reassign walk that tracks `stress` nesting. Assignments inside
+/// a stress block (or its rescue) are explicit containment probes and stay
+/// silent; everything else keeps the W05 warning. Hint lines mirror
+/// `walk_all` (statement index within the block), matching the historical
+/// finding shape.
+fn const_reassign_scan(
+    stmts: &[Stmt],
+    in_stress: bool,
+    consts: &HashSet<String>,
+    let_rebound: &HashSet<String>,
+    out: &mut Vec<Finding>,
+) {
+    for (i, st) in stmts.iter().enumerate() {
+        if let Stmt::Assign(n, _, _) = st {
+            if !in_stress && consts.contains(n) && !let_rebound.contains(n) {
+                out.push(Finding::new(
+                    i + 1,
+                    "const-reassign",
+                    Sev::Warning,
+                    format!(
+                        "assignment to const '{}' raises a catchable frozen stress at runtime",
+                        n
+                    ),
+                ));
+            }
+        }
+        match st {
+            Stmt::Stress { body, rescue, .. } => {
+                const_reassign_scan(body, true, consts, let_rebound, out);
+                if let Some((_, rb)) = rescue {
+                    const_reassign_scan(rb, true, consts, let_rebound, out);
+                }
+            }
+            _ => {
+                for nested in stmt_nested_all(st) {
+                    const_reassign_scan(nested, in_stress, consts, let_rebound, out);
+                }
+            }
+        }
+    }
+}
+
+/// W48: binding-candidate walk with the stress/call-effect exemptions. A
+/// candidate is (name, hint line, is_const, exempt). Exempt candidates never
+/// win the name-level slot. Hint lines mirror `walk_all` (statement index
+/// within the block), matching the historical finding shape.
+fn collect_binding_candidates(
+    stmts: &[Stmt],
+    in_stress: bool,
+    out: &mut Vec<(String, usize, bool, bool)>,
+) {
+    for (i, st) in stmts.iter().enumerate() {
+        let hint = i + 1;
+        match st {
+            Stmt::Let(n, e) => out.push((n.clone(), hint, false, in_stress || expr_has_call(e))),
+            Stmt::LetAnn(n, _, e) => {
+                out.push((n.clone(), hint, false, in_stress || expr_has_call(e)))
+            }
+            Stmt::LetConst(n, e) => {
+                out.push((n.clone(), hint, true, in_stress || expr_has_call(e)))
+            }
+            _ => {}
+        }
+        let next_stress = matches!(st, Stmt::Stress { .. });
+        for nested in stmt_nested_all(st) {
+            collect_binding_candidates(nested, in_stress || next_stress, out);
+        }
+    }
+}
+
+/// W48: does this expression tree contain a call (or method/new/collection
+/// walk)? Conservative in the SILENT direction: any plausible effect makes
+/// the binding exempt from unused-binding.
+fn expr_has_call(e: &Expr) -> bool {
+    match e {
+        Expr::Call(..) | Expr::Method(..) | Expr::MethodSafe(..) | Expr::New(..) => true,
+        Expr::Collect {
+            iter, filter, body, ..
+        } => {
+            expr_has_call(iter)
+                || filter.as_ref().map(|f| expr_has_call(f)).unwrap_or(false)
+                || expr_has_call(body)
+        }
+        Expr::Unary(_, a) => expr_has_call(a),
+        Expr::Binary(_, a, b, _) => expr_has_call(a) || expr_has_call(b),
+        Expr::Index(a, b, _) => expr_has_call(a) || expr_has_call(b),
+        Expr::Member(a, _) | Expr::MemberSafe(a, _) => expr_has_call(a),
+        Expr::List(items) => items.iter().any(expr_has_call),
+        Expr::Map(pairs) => pairs
+            .iter()
+            .any(|(k, v)| expr_has_call(k) || expr_has_call(v)),
+        Expr::Interp(parts) => parts.iter().any(|p| match p {
+            crate::ast::InterpPart::Expr(x) => expr_has_call(x),
+            _ => false,
+        }),
+        Expr::Ternary(a, b, c) => expr_has_call(a) || expr_has_call(b) || expr_has_call(c),
+        Expr::Propagate(a, _) => expr_has_call(a),
+        _ => false,
+    }
+}
+
 /// W41: `lint` plus the allow-comment suppression pass (see the module-doc
-/// scheme table). CLI surfaces use this; bare `lint` stays the raw engine.
+/// scheme table). Kept for compatibility; the CLI surfaces apply
+/// `apply_allows` to their stream-filtered findings.
 pub fn lint_with_source(prog: &Program, src: &str) -> Vec<Finding> {
     let mut out = lint(prog);
-    suppress_allowed(&mut out, src);
+    apply_allows(&mut out, src);
     out
+}
+
+/// W41/W048: the allow-comment suppression pass (see the module-doc scheme
+/// table), public so BOTH CLI surfaces (lint and check) apply the same
+/// line-local mechanism to their stream-filtered findings.
+pub fn apply_allows(out: &mut Vec<Finding>, src: &str) {
+    suppress_allowed(out, src);
+}
+
+/// W048: CLI-side `--allow rule1,rule2`, layered ON TOP of the comment
+/// mechanism. A rule named here is dropped file-wide (rule name OR stable
+/// code), while `// allow:` comments stay line-local. Bare `all` is NOT
+/// special: `--allow` names rules, it does not switch the engine off.
+pub fn apply_cli_allows(out: &mut Vec<Finding>, rules: &[String]) {
+    if rules.is_empty() {
+        return;
+    }
+    out.retain(|f| {
+        !rules
+            .iter()
+            .any(|r| r.as_str() == f.rule || r.as_str() == f.code)
+    });
 }
 
 /// Parse `allow:` suppression comments: line -> Some(None) means "allow
@@ -1325,6 +1568,59 @@ fn walk_all<'a>(stmts: &'a [Stmt], f: &mut dyn FnMut(&'a Stmt, usize)) {
 
 fn collect_calls_stmts(stmts: &[Stmt], called: &mut HashSet<String>) {
     for st in stmts {
+        // W48 corpus law: the bio layer references genes by NAME in
+        // declarative statements — regulate edges, toggle alleles, operon
+        // units and members, silence sites, decoy targets, repressilator
+        // nodes, enhance marks. Those operands ARE uses (the runtime gates
+        // the named gene even when this file never calls it); ignoring them
+        // misfired unused-gene across the reg-bio test corpus.
+        match st {
+            Stmt::Regulate(edges, trans, binds) => {
+                for e in edges {
+                    called.insert(e.from.clone());
+                    called.insert(e.to.clone());
+                }
+                for t in trans {
+                    called.insert(t.from.clone());
+                    called.insert(t.to.clone());
+                }
+                for b in binds {
+                    called.insert(b.tf.clone());
+                    called.insert(b.ligand.clone());
+                }
+            }
+            Stmt::Silence(old, new, _, _) => {
+                called.insert(old.clone());
+                if let Some(n) = new {
+                    called.insert(n.clone());
+                }
+            }
+            Stmt::Operon(unit, members) => {
+                called.insert(unit.clone());
+                for (m, _) in members {
+                    called.insert(m.clone());
+                }
+            }
+            Stmt::Toggle(a, b) => {
+                called.insert(a.clone());
+                called.insert(b.clone());
+            }
+            Stmt::Decoy(d, tf, _) => {
+                called.insert(d.clone());
+                called.insert(tf.clone());
+            }
+            Stmt::Repressilator(nodes, _, _) => {
+                for n in nodes {
+                    called.insert(n.clone());
+                }
+            }
+            Stmt::Enhance(names) => {
+                for n in names {
+                    called.insert(n.clone());
+                }
+            }
+            _ => {}
+        }
         for e in stmt_exprs_all(st) {
             collect_calls_expr(e, called);
         }
@@ -1455,7 +1751,9 @@ mod tests {
 
     #[test]
     fn unused_gene_flagged() {
-        let f = lint_src("gene lonely() {\n    return 1\n}\n");
+        // a main gene makes this file a program; library files (no main) are
+        // exempt, see the W048 corpus law in lint()
+        let f = lint_src("gene lonely() {\n    return 1\n}\nmain {\n    print(1)\n}\n");
         assert!(has_rule(&f, "unused-gene"), "{:?}", f);
     }
 
@@ -1503,5 +1801,90 @@ mod tests {
             "gene add(a, b) {\n    return a + b\n}\ngene g() {\n    let add = 3\n    return add(1)\n}\ng()\n",
         );
         assert!(!has_rule(&f, "wrong-arity"), "{:?}", f);
+    }
+
+    // ------------------------------------------------------------ W048
+
+    #[test]
+    fn streams_partition_the_rules() {
+        // the split is by rule, not by severity: wrong-arity (E) and
+        // const-reassign (W) belong to check; the W-severity quality rules
+        // belong to lint
+        let src = "gene add(a, b) {\n    return a + b\n}\nconst k = 1\nif 1 { }\nlet dead = 7\nk = 2\nadd(1)\n";
+        let all = lint_src(src);
+        assert!(has_rule(&all, "wrong-arity"), "{:?}", all);
+        assert!(has_rule(&all, "const-reassign"), "{:?}", all);
+        assert!(has_rule(&all, "constant-condition"), "{:?}", all);
+        let check = filter_stream(all.clone(), Stream::Check);
+        assert!(has_rule(&check, "wrong-arity"));
+        assert!(has_rule(&check, "const-reassign"));
+        assert!(!has_rule(&check, "constant-condition"), "{:?}", check);
+        let style = filter_stream(all, Stream::Lint);
+        assert!(has_rule(&style, "constant-condition"));
+        assert!(!has_rule(&style, "wrong-arity"), "{:?}", style);
+        assert!(!has_rule(&style, "const-reassign"), "{:?}", style);
+        assert_eq!(lint_correctness(&parser::parse(src)), check);
+        assert_eq!(lint_style(&parser::parse(src)), style);
+    }
+
+    #[test]
+    fn shadowed_binding_deliberately_silent() {
+        // same-block re-`let` is idiomatic (see the N12 comment above), so
+        // the rule is reserved, not emitted: pinned here so a future
+        // liveness analysis makes the decision consciously, not by accident
+        let f = lint_src("let x = 1\nlet x = 2\nprint(x)\n");
+        assert!(!has_rule(&f, "shadowed-binding"), "{:?}", f);
+        // separate blocks (if arms): never interact either way
+        let f2 = lint_src("if true {\n    let y = 1\n} else {\n    let y = 2\n}\n");
+        assert!(!has_rule(&f2, "shadowed-binding"), "{:?}", f2);
+    }
+
+    #[test]
+    fn const_reassign_in_stress_is_silent() {
+        // explicit containment probe: assignment inside stress stays silent
+        let f = lint_src(
+            "const k = 1\nstress {\n    k = 2\n} rescue (e) {\n    print(e.kind)\n}\nprint(k)\n",
+        );
+        assert!(!has_rule(&f, "const-reassign"), "{:?}", f);
+        // outside stress it still fires
+        let f2 = lint_src("const k = 1\nk = 2\n");
+        assert!(has_rule(&f2, "const-reassign"), "{:?}", f2);
+    }
+
+    #[test]
+    fn effect_bindings_are_not_dead_stores() {
+        // the initializer calls something: the binding may exist for the call
+        let f =
+            lint_src("gene make() {\n    return 1\n}\nlet h = make()\nmain {\n    print(1)\n}\n");
+        assert!(!has_rule(&f, "unused-binding"), "{:?}", f);
+        // a pure dead store is still reported
+        let f2 = lint_src("let dead = 7\nmain {\n    print(1)\n}\n");
+        assert!(has_rule(&f2, "unused-binding"), "{:?}", f2);
+    }
+
+    #[test]
+    fn proof_frame_usage_retires_unused_gene() {
+        let f = lint_src(
+            "gene helper() {\n    return 21\n}\nframe proof {\n    assert(helper() == 21, \"ok\")\n}\n",
+        );
+        assert!(!has_rule(&f, "unused-gene"), "{:?}", f);
+    }
+
+    #[test]
+    fn library_file_without_main_is_exempt() {
+        // no main gene: library module (W24 default-open), def-side silent
+        let f = lint_src("gene lonely() {\n    return 1\n}\nlet dead = 7\n");
+        assert!(!has_rule(&f, "unused-gene"), "{:?}", f);
+        assert!(!has_rule(&f, "unused-binding"), "{:?}", f);
+    }
+
+    #[test]
+    fn cli_allow_drops_rules_by_name_and_code() {
+        let mut f = lint_src("let dead = 7\n");
+        apply_cli_allows(&mut f, &["unused-binding".to_string()]);
+        assert!(f.is_empty(), "{:?}", f);
+        let mut f2 = lint_src("let dead = 7\n");
+        apply_cli_allows(&mut f2, &["W07".to_string()]);
+        assert!(f2.is_empty(), "{:?}", f2);
     }
 }

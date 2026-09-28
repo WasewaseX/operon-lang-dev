@@ -1,0 +1,15 @@
+// tg_sweep corpus 09: comment storm — stray tokens between comments, a
+// half-open block comment, comment-only blocks. Comments are whitespace
+// with opinions; none of this may reject or panic.
+/* open one
+/* nested-ish */
+// stray token next:
+]]
+= = =
+main {
+    stress {
+    } rescue (e) {
+    }
+}
+// unterminated block comment below
+/* still open...
