@@ -824,8 +824,13 @@ fn resolve_path(interp: &Interp, path: &str) -> Result<String, String> {
             if let Some(root) = dir.parent() {
                 candidates.push(Some(root.join(&p)));
             }
-            // bare `use x`: try the exe-relative std trees by file name
-            if !p.starts_with("std/") {
+            // bare `use x`: try the exe-relative std trees by file name.
+            // BARE only: a multi-segment path (a/b/c) must never resolve by
+            // its tail, or `use mylib::seq` would hijack std/seq.op instead
+            // of descending mylib's exported nested tables (W025 stage 2;
+            // the oracle never had this candidate, so parity demands the
+            // single-segment restriction, not an oracle-side mirror).
+            if !p.starts_with("std/") && !p.contains('/') {
                 if let Some(fname) = std::path::Path::new(&p).file_name() {
                     candidates.push(Some(dir.join("std").join(fname)));
                     if let Some(root) = dir.parent() {
