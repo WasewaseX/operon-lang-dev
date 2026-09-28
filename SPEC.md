@@ -685,7 +685,11 @@ operon fmt f.op    [--write] [--indent N] [--quotes single|double] [--width N] [
                    # --width: soft wrap at parser-safe comma points only (W47-v2;
                    # docs/specs/FMT-CONFIG.md safe-break contract; AST never changes)
 operon fix f.op    [--write] [--json]  # legacy-surface migrator (W65): const→let, s::→dot, synonym canonicalization; dry-run default; meaning-preserving (canonical(fix(x)) == canonical(x), pinned corpus-wide)
-operon build f.op  --variant v -o out.op
+operon build f.op  --variant v -o out.op [--bundle] [--native]
+                   # W086 contract honesty: build emits specialized source (a
+                   # transformation, not a compiler); --bundle (W87, design:
+                   # docs/design/BUNDLE.md) and --native (W85) refuse with that
+                   # pointer instead of being silently ignored
 operon profile f.op
 operon run f.op --trace-grn trace.jsonl
                    # W095 GRN tick-stream: every engine update point (grn_fire pulse /
