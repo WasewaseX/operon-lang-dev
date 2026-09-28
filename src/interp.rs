@@ -1351,6 +1351,8 @@ impl Interp {
                         }
                         let n = l.borrow().len() as i64;
                         let j = if *idx < 0 { n + *idx } else { *idx };
+                        // W013: insertion-time cycle detection (SPEC §19e)
+                        crate::value::cycle_note_insert(&Value::List(l.clone()), &val);
                         if j >= 0 && j < n {
                             l.borrow_mut()[j as usize] = val;
                         } else {
@@ -1365,6 +1367,8 @@ impl Interp {
                             return Err(Self::frozen_stress("list"));
                         }
                         let idx = self.as_index(&iv, l.borrow().len()).unwrap_or(usize::MAX);
+                        // W013: insertion-time cycle detection (SPEC §19e)
+                        crate::value::cycle_note_insert(&Value::List(l.clone()), &val);
                         if idx != usize::MAX && idx < l.borrow().len() {
                             l.borrow_mut()[idx] = val;
                         } else {
@@ -1673,36 +1677,69 @@ impl Interp {
                 Ok(Flow::Norm)
             }
             Stmt::Use(path, alias) => {
-                match crate::genes::load_module(self, path) {
-                    Ok(modv) => {
-                        let name = alias.clone().unwrap_or_else(|| {
-                            std::path::Path::new(path)
-                                .file_stem()
-                                .map(|s| s.to_string_lossy().to_string())
-                                .unwrap_or_else(|| "mod".into())
-                        });
-                        env.define(&name, modv.clone());
-                        // flat-bind ALL exports beside the alias map: the whole
-                        // module repertoire (genes AND data like config lets)
-                        // stays addressable by name, workers and call()
-                        // resolve them without a prefix, and worker snapshots
-                        // carry module data across the membrane
-                        if let Value::Map(m) = &modv {
-                            let flat: Vec<(String, Value)> = m
-                                .borrow()
-                                .iter()
-                                .filter_map(|(k, v)| match k {
-                                    Value::Str(s) => Some((s.clone(), v.clone())),
-                                    _ => None,
-                                })
-                                .collect();
-                            for (kname, v) in flat {
-                                env.define(&kname, v);
+                // W025 stage 2: a trailing `/*` marks the WILDCARD form,
+                // flat-bind the target table's exports without binding the
+                // module map itself (an explicit `as` alias still binds it).
+                // Resolution stays FILE-FIRST, so every stage-1 program
+                // resolves exactly as before: the full path is tried as a
+                // file, then each shorter prefix is loaded as a file and the
+                // remaining segments descend the exported nested-module
+                // tables, longest prefix first (SPEC §8).
+                let (base, wildcard) = match path.strip_suffix("/*") {
+                    Some(b) => (b, true),
+                    None => (path.as_str(), false),
+                };
+                let mut bound: Option<Value> = None;
+                match crate::genes::load_module(self, base) {
+                    Ok(modv) => bound = Some(modv),
+                    Err(msg) => {
+                        let segs: Vec<&str> = base.split('/').collect();
+                        if segs.len() >= 2 {
+                            for k in (1..segs.len()).rev() {
+                                let prefix = segs[..k].join("/");
+                                if let Ok(rootv) = crate::genes::load_module(self, &prefix) {
+                                    if let Some(table) =
+                                        self.descend_tables(&rootv, &segs[k..], path)
+                                    {
+                                        bound = Some(table);
+                                        break;
+                                    }
+                                }
                             }
                         }
+                        if bound.is_none() {
+                            self.note(0, 4, format!("use '{}' failed: {}", path, msg));
+                        }
                     }
-                    Err(msg) => {
-                        self.note(0, 4, format!("use '{}' failed: {}", path, msg));
+                }
+                if let Some(modv) = bound {
+                    let name = alias.clone().unwrap_or_else(|| {
+                        std::path::Path::new(base)
+                            .file_stem()
+                            .map(|s| s.to_string_lossy().to_string())
+                            .unwrap_or_else(|| "mod".into())
+                    });
+                    if !wildcard || alias.is_some() {
+                        env.define(&name, modv.clone());
+                    }
+                    // flat-bind ALL exports beside the alias map: the whole
+                    // module repertoire (genes AND data like config lets)
+                    // stays addressable by name, workers and call()
+                    // resolve them without a prefix, and worker snapshots
+                    // carry module data across the membrane. For the wildcard
+                    // form this flat bind IS the whole import.
+                    if let Value::Map(m) = &modv {
+                        let flat: Vec<(String, Value)> = m
+                            .borrow()
+                            .iter()
+                            .filter_map(|(k, v)| match k {
+                                Value::Str(s) => Some((s.clone(), v.clone())),
+                                _ => None,
+                            })
+                            .collect();
+                        for (kname, v) in flat {
+                            env.define(&kname, v);
+                        }
                     }
                 }
                 Ok(Flow::Norm)
@@ -2092,6 +2129,41 @@ impl Interp {
                 // scope: members bind into the enclosing environment.
                 self.exec_block(env, body)
             }
+            Stmt::Module(name, body) => {
+                // W025 stage 2: nested sub-module table. The body runs ONCE,
+                // here, in a fresh child scope (stress propagates to the
+                // enclosing containment, exactly like a module-file top-level
+                // statement); the child scope's own names become the export
+                // table, sorted like the file-module loader sorts them so both
+                // engines print and flat-bind identically. Last declaration
+                // wins: a later `gene seq` re-binds over the table, the table
+                // stays reachable through whoever exported it.
+                let child = Env::new(Some(env.clone()));
+                for stmt in body {
+                    // flow signals (bare return/break/continue at table
+                    // scope) end that statement only, mirroring the module
+                    // file loader's per-statement loop.
+                    let _ = self.exec_stmt(&child, stmt)?;
+                }
+                let mut exports: Vec<(Value, Value)> = child
+                    .vars
+                    .borrow()
+                    .iter()
+                    .filter(|(k, _)| !k.starts_with('#'))
+                    .map(|(k, v)| (Value::Str(k.clone()), v.clone()))
+                    .collect();
+                exports.sort_by(|a, b| match (&a.0, &b.0) {
+                    (Value::Str(x), Value::Str(y)) => x.cmp(y),
+                    _ => std::cmp::Ordering::Equal,
+                });
+                env.define(
+                    name,
+                    Value::Map(Rc::new(RefCell::new(crate::value::MapStore::from_vec(
+                        exports,
+                    )))),
+                );
+                Ok(Flow::Norm)
+            }
             Stmt::Pheno(def) => {
                 self.phenos.insert(def.name.clone(), def.clone());
                 Ok(Flow::Norm)
@@ -2128,6 +2200,42 @@ impl Interp {
                 }
             }
         }
+    }
+
+    /// W025 stage 2: walk nested module tables after a file prefix loaded.
+    /// Each segment must be a string key of the current table whose value is
+    /// the next table (a Null value counts as missing, nothing is ever
+    /// reached through it). A missing segment notes and aborts the descent:
+    /// Total Grammar, the import binds nothing and the run continues.
+    fn descend_tables(&mut self, root: &Value, segs: &[&str], full: &str) -> Option<Value> {
+        let mut cur = root.clone();
+        for seg in segs {
+            let next = match &cur {
+                Value::Map(m) => m
+                    .borrow()
+                    .iter()
+                    .find(|(k, v)| {
+                        matches!(k, Value::Str(s) if s == seg) && !matches!(v, Value::Null)
+                    })
+                    .map(|(_, v)| v.clone()),
+                _ => None,
+            };
+            match next {
+                Some(v) => cur = v,
+                None => {
+                    self.note(
+                        0,
+                        4,
+                        format!(
+                            "use '{}': segment '{}' is not a nested module table; import binds nothing",
+                            full, seg
+                        ),
+                    );
+                    return None;
+                }
+            }
+        }
+        Some(cur)
     }
 
     /// L1a: shared member-read logic for `Expr::Member` and `Expr::MemberSafe`
@@ -2358,6 +2466,8 @@ impl Interp {
                         }
                         let n = l.borrow().len() as i64;
                         let j = if *idx < 0 { n + *idx } else { *idx };
+                        // W013: insertion-time cycle detection (SPEC §19e)
+                        crate::value::cycle_note_insert(&Value::List(l.clone()), &val);
                         if j >= 0 && j < n {
                             l.borrow_mut()[j as usize] = val;
                         } else {
@@ -2371,6 +2481,8 @@ impl Interp {
                             return Err(Self::frozen_stress("list"));
                         }
                         let idx = self.as_index(&iv, l.borrow().len()).unwrap_or(usize::MAX);
+                        // W013: insertion-time cycle detection (SPEC §19e)
+                        crate::value::cycle_note_insert(&Value::List(l.clone()), &val);
                         if idx != usize::MAX && idx < l.borrow().len() {
                             l.borrow_mut()[idx] = val;
                         } else {
@@ -2562,6 +2674,10 @@ impl Interp {
             self.steps = self.steps.saturating_add(n);
         }
         // dx-r3: memoized upsert (was a linear deep_eq scan)
+        // W013: insertion-time cycle detection, before the edge lands, the
+        // VALUE edge is what can close a cycle (map KEYS are not walked,
+        // SPEC §19e)
+        crate::value::cycle_note_insert(&Value::Map(m.clone()), &val);
         m.borrow_mut().insert(key, val);
         Ok(())
     }
@@ -5251,7 +5367,13 @@ impl Interp {
     /// to null, the same silent rule the spawn wire always had).
     fn membrane_refusal(v: &Value) -> Option<Stress> {
         match v {
-            Value::Gene(_, _) | Value::Seq(_, _) | Value::Obj(_, _) | Value::Channel(_) => {
+            Value::Gene(_, _)
+            | Value::Seq(_, _)
+            | Value::Obj(_, _)
+            | Value::Channel(_)
+            // W013: a weak handle is a handle too, it never rides the wire
+            // (it would arrive pointing at a snapshot copy's target, a lie)
+            | Value::Weak(_) => {
                 Some(Stress::new(
                     "membrane",
                     format!(
@@ -5484,6 +5606,9 @@ impl Interp {
                         _ => 32,
                     };
                     mem_charge(bytes)?;
+                    // W013: insertion-time cycle detection, before the edge
+                    // lands (self-referencing containers register here)
+                    crate::value::cycle_note_insert(&Value::List(l.clone()), v);
                     l.borrow_mut().push(v.clone());
                     Ok(Value::List(l.clone()))
                 } else {
@@ -5506,6 +5631,8 @@ impl Interp {
                     }
                     let idx = self.as_index(i, l.borrow().len())?;
                     let idx = idx.min(l.borrow().len());
+                    // W013: insertion-time cycle detection (SPEC §19e)
+                    crate::value::cycle_note_insert(&Value::List(l.clone()), v);
                     l.borrow_mut().insert(idx, v.clone());
                     Ok(Value::List(l.clone()))
                 }
@@ -6428,8 +6555,68 @@ impl Interp {
                         Value::Str("allocs".into()),
                         Value::Int(unsafe_allocs() as i64),
                     ),
+                    // W013 (D-013): live detected cycles, insertion registers,
+                    // reclamation (weak dead or edge broken) prunes. Honest
+                    // accounting, not a GC, see SPEC §19e/§19f.
+                    (
+                        Value::Str("cycles".into()),
+                        Value::Int(crate::value::live_cycle_count()),
+                    ),
                 ]),
             )))),
+            // W013: weak handles. Supported targets are the container values
+            // (list, map, phenotype instance); everything else, small
+            // immutables and behavior handles alike, is refused (the simpler
+            // honest rule: a handle is only meaningful when the target CAN
+            // participate in a cycle or outlive a scope, SPEC §19f).
+            "weak" => match args.first() {
+                Some(Value::List(l)) => Ok(Value::Weak(crate::value::WeakHandle::List(
+                    Rc::downgrade(l),
+                ))),
+                Some(Value::Map(m)) => {
+                    Ok(Value::Weak(crate::value::WeakHandle::Map(Rc::downgrade(m))))
+                }
+                Some(Value::Obj(d, m)) => Ok(Value::Weak(crate::value::WeakHandle::Obj(
+                    Rc::downgrade(m),
+                    d.clone(),
+                ))),
+                Some(other) => Err(Stress::new(
+                    "unfolded",
+                    format!(
+                        "weak() needs a list, map, or phenotype, found {}",
+                        other.type_name()
+                    ),
+                )),
+                None => Err(Stress::new(
+                    "unfolded",
+                    "weak(v) needs a list, map, or phenotype",
+                )),
+            },
+            "strengthen" => match args.first() {
+                Some(Value::Weak(h)) => match h.upgrade_value() {
+                    // the target is alive: the SAME value comes back (same
+                    // Rc, mutation through it is visible through every
+                    // other alias, SPEC §19f)
+                    Some(v) => Ok(v),
+                    // no GC: the last strong ref freed it immediately
+                    None => {
+                        self.note(
+                            self.cur_line,
+                            4,
+                            "strengthen: weak target is no longer alive; null",
+                        );
+                        Ok(Value::Null)
+                    }
+                },
+                Some(other) => Err(Stress::new(
+                    "unfolded",
+                    format!(
+                        "strengthen(w) needs a weak handle, found {}",
+                        other.type_name()
+                    ),
+                )),
+                None => Err(Stress::new("unfolded", "strengthen(w) needs a weak handle")),
+            },
             "methyl" => {
                 let k = args.first().map(|v| v.display()).unwrap_or_default();
                 let d = args.get(1).cloned().unwrap_or(Value::Null);
@@ -9405,6 +9592,9 @@ impl Interp {
                             _ => 32,
                         };
                         mem_charge(bytes)?;
+                        // W013: insertion-time cycle detection, same rule as
+                        // the builtin form (SPEC §19e)
+                        crate::value::cycle_note_insert(&Value::List(l.clone()), v);
                         l.borrow_mut().push(v.clone());
                     }
                     Ok(Value::List(l.clone()))
@@ -10702,6 +10892,9 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "pop",
     "insert",
     "remove",
+    // W013: weak handles + the live-cycle gauge
+    "weak",
+    "strengthen",
     "keys",
     "values",
     "has",

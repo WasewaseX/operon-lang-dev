@@ -10,6 +10,7 @@ Deliberately sequential: spawn() runs tasks inline (deterministic), which is
 equivalent for the differential corpus.
 """
 import sys, os, math, json as _json
+import weakref  # W013: weak handles, the mirror of the Rust WeakHandle
 import unicodedata  # W28 stage 2: THE reference implementation for NFC/NFD/category
 
 # ----------------------------------------------------------------------------
@@ -198,6 +199,27 @@ class Channel:
     def __init__(self):
         self.buf = []
         self.closed = False
+
+class WeakRef:
+    """W013 (D-013) mirror: opaque weak handle (the weak() builtin). Holds a
+    weakref to the target's backing store, it does NOT keep the value alive;
+    strengthen() returns null once the last strong reference is gone (the
+    Rust core frees at strong-count zero, no GC). Phenotype handles carry
+    the shared per-class definition so strengthen can rebuild the SAME
+    instance (same fields dict) while the instance is alive; holding the
+    definition never keeps an instance alive. addr is the target address at
+    handle creation, the identity rule for deep_eq (same as the Rust
+    same_target: same backing-store allocation)."""
+    __slots__ = ("kind", "addr", "defn")
+    def __init__(self, kind, addr, defn=None):
+        # no Python weakref here: plain list/dict are not weakref-able, and
+        # the oracle models the RULES deterministically instead. The target
+        # is registered strongly on the interpreter (self.weak_targets); the
+        # ALIVE question is answered by an env-chain identity scan at
+        # strengthen() time (a binding somewhere on the live scope chain
+        # holds the target = a strong reference exists). Same-thread,
+        # sequential: matches the Rust Rc semantics on every pin-able shape.
+        self.kind, self.addr, self.defn = kind, addr, defn
 
 def channel_wire(v, _d=0):
     """W015 mirror of the Rust channel wire serialization (genes.to_send_d):
@@ -388,6 +410,10 @@ def v_repr(v, _seen=None, _depth=0):
     # W015 mirror: address-free anonymous repr (see the Rust Channel arm)
     if isinstance(v, Channel):
         return "<channel>"
+    # W013 mirror: address-free for the same reason; the target's identity
+    # is observable only through strengthen(), never through repr.
+    if isinstance(v, WeakRef):
+        return "<weak>"
     return "<?>" 
 
 def v_display(v):
@@ -451,6 +477,9 @@ def type_name(v):
     if isinstance(v, ObjInst): return "phenotype"
     if isinstance(v, Variant): return "option" if v.tag in ("Some", "None") else "result"
     if isinstance(v, Channel): return "channel"
+    # W013 mirror: the handle type is its own name, the TARGET's type is not
+    # leaked (the handle may outlive the target).
+    if isinstance(v, WeakRef): return "weak"
     return "native"
 
 def deep_eq(a, b, _pairs=None):
@@ -501,6 +530,11 @@ def deep_eq(a, b, _pairs=None):
                            for k2, v2 in fb.items()) for k, v in fa.items())
         finally:
             _pairs.discard(key)
+    # W013 mirror: weak handles are identity-based like channels (same
+    # backing-store address), a handle never equals the target it references.
+    if isinstance(a, WeakRef) or isinstance(b, WeakRef):
+        return (isinstance(a, WeakRef) and isinstance(b, WeakRef)
+                and a.kind == b.kind and a.addr == b.addr)
     if type(a) is not type(b) and not (a is None and b is None):
         if isinstance(a, (int, float)) and isinstance(b, (int, float)):
             return a == b
@@ -778,7 +812,9 @@ VALUE_SYNONYMS = {"yes": True, "on": True, "no": False, "off": False,
 # W06 (D-014) mirror: 'none' RETIRED from VALUE_SYNONYMS, it is now the
 # Option constructor none(); bare 'none' degrades to an unbound ident
 # (phantom note), never a silent null. Matches src/parser.rs.
-MARKS = {"acetylate", "methylate", "m6a", "copies", "riboswitch", "burst"}
+# W64: metadata-only deprecation mark, known so the wobble repair
+# never mangles it; the payload parse is lenient, runtime never reads it
+MARKS = {"acetylate", "methylate", "m6a", "copies", "riboswitch", "burst", "deprecated"}
 
 def edit_distance(a, b):
     if a == b:
@@ -1012,12 +1048,70 @@ class P:
                 if got < 2:
                     self.note(t[2], 4, "@burst needs kon and koff (0..=1); defaults 0.3/0.1")
                 burst = (vals[0], vals[1])
+            # W64: @deprecated("migration text", since="2.4") payload, metadata
+            # only (mirror of the Rust mark arm): parse leniently, attach to
+            # the gene tuple, never evaluate. Malformed shapes degrade to a
+            # rung-4 note, the mark is dropped, the gene keeps parsing.
+            deprecated = None
+            if "deprecated" in marks:
+                tt = self.peek()
+                if tt == ("SYM", "(", tt[2]) or (tt[0] == "SYM" and tt[1] == "("):
+                    self.next()
+                    msg = ""
+                    vt = self.peek()
+                    if vt[0] == "STR":
+                        self.next()
+                        msg = vt[1]
+                    else:
+                        self.note(vt[2], 4, f"@deprecated needs a string message; mark skipped")
+                    since = None
+                    nt = self.peek()
+                    if nt[0] == "SYM" and nt[1] == ",":
+                        self.next()
+                        st = self.peek()
+                        if st[0] == "IDENT" and st[1] == "since":
+                            self.next()
+                            if self.peek()[0] == "SYM" and self.peek()[1] == "=":
+                                self.next()
+                            vt2 = self.peek()
+                            if vt2[0] == "STR":
+                                self.next()
+                                since = vt2[1]
+                        elif st[0] == "STR":
+                            self.next()
+                            since = st[1]
+                        else:
+                            self.note(st[2], 4, "@deprecated since needs a string; ignored")
+                    et = self.peek()
+                    if et[0] == "SYM" and et[1] == ")":
+                        self.next()
+                    else:
+                        depth = 0
+                        while True:
+                            et = self.peek()
+                            if et[0] == "SYM" and et[1] == "(":
+                                depth += 1
+                            elif et[0] == "SYM" and et[1] == ")":
+                                self.next()
+                                if depth == 0:
+                                    break
+                                depth -= 1
+                                continue
+                            elif et[0] in ("NL", "EOF"):
+                                break
+                            self.next()
+                            continue
+                        self.note(t[2], 4, "@deprecated payload auto-closed")
+                    if msg:
+                        deprecated = (msg, since)
+                else:
+                    self.note(t[2], 4, "@deprecated needs a migration string; mark skipped")
             self.eat_nl()
             if not self.expect_kw("gene"):
                 self.note(t[2], 4, "mark must precede 'gene'; skipped line")
                 self.skip_line()
                 return None
-            return self.gene_def(marks, copies, riboswitch, burst)
+            return self.gene_def(marks, copies, riboswitch, burst, deprecated)
         if t[0] == "SYM" and t[1] == "{":
             self.note(t[2], 4, "bare block treated as scoped statements")
             return ("block", self.block())
@@ -1275,6 +1369,28 @@ class P:
             self.next()
             name = self.ident()
             return ("tad", name, self.block())
+        if word == "module":
+            # W025 stage 2: nested sub-module declaration, CONTEXTUAL like the
+            # Rust core: only `module NAME {` (newlines tolerated between the
+            # words) is the declaration; every other use of the word `module`
+            # stays an ordinary identifier (it is not in KEYWORDS).
+            n_toks = len(self.toks)
+            j = self.pos + 1
+            while j < n_toks and (self.toks[j][0] == "NL" or self.toks[j][:2] == ("SYM", ";")):
+                j += 1
+            is_decl = j < n_toks and self.toks[j][0] == "IDENT"
+            if is_decl:
+                j += 1
+                while j < n_toks and (self.toks[j][0] == "NL" or self.toks[j][:2] == ("SYM", ";")):
+                    j += 1
+                is_decl = j < n_toks and self.toks[j][:2] == ("SYM", "{")
+            if not is_decl:
+                return self.assign_or_expr(w)
+            self.next()
+            name = self.ident()
+            while self.peek()[0] == "NL":
+                self.next()
+            return ("module", name, self.block())
         if word == "anchor":
             self.next()
             is_export = self.expect_kw("export")
@@ -1983,6 +2099,11 @@ class P:
                     parts.append("/"); self.next(); self.next()
                 else:
                     break
+            elif t[0] == "SYM" and t[1] == "*":
+                # W025 stage 2: wildcard tail, `use a::b::*` carries as
+                # "a/b/*"; the interpreter strips the `/*` and flat-binds the
+                # target table's exports.
+                parts.append("*"); self.next(); break
             elif t[0] == "STR":
                 parts.append(t[1]); self.next()
                 nt = self.peek()
@@ -2064,7 +2185,7 @@ class P:
         self.end_stmt()
         return ("expr", e)
 
-    def gene_def(self, marks, copies=1, riboswitch=None, burst=None):
+    def gene_def(self, marks, copies=1, riboswitch=None, burst=None, deprecated=None):
         ac = "acetylate" in marks
         me = "methylate" in marks
         m6 = "m6a" in marks
@@ -2441,6 +2562,35 @@ class P:
                 else:
                     self.note(t2[2], 4, "'?.' followed by non-name; chain resolves to null")
                     e = ("member?", e, "")
+                    break
+            elif t[0] == "SYM" and t[1] == ":" and self.pos + 1 < len(self.toks) and self.toks[self.pos + 1][:2] == ("SYM", ":"):
+                # W025 stage 2: `e::name` is the namespace spelling of
+                # `e.name` (stage 1 made `::` a use-path separator; stage 2
+                # lets qualified reads and calls ride the same spelling
+                # through nested tables). Exactly sugar for the Dot arm
+                # above, the AST is identical.
+                self.next(); self.next()
+                t2 = self.peek()
+                if t2[0] == "IDENT":
+                    self.next()
+                    if self.peek() == ("SYM", "(", t2[2]):
+                        self.next()
+                        args = []
+                        while True:
+                            self.eat_nl()
+                            t3 = self.peek()
+                            if t3 == ("SYM", ")", t3[2]):
+                                self.next(); break
+                            if t3[0] == "EOF":
+                                break
+                            args.append(self.expr())
+                            if self.peek() == ("SYM", ",", t3[2]):
+                                self.next()
+                        e = ("method", e, t2[1], args)
+                    else:
+                        e = ("member", e, t2[1])
+                else:
+                    self.note(t2[2], 4, "'::' followed by non-name; member skipped")
                     break
             else:
                 return e
@@ -2858,7 +3008,7 @@ bytes_from_str str_from_bytes bytes_from_list bytes_to_list read_file_bytes writ
 http_get serve recv_request send_response json_parse json_str env call items py
 re_match re_find re_groups unix_time date_parts date_fmt
 grapheme_len fold_case char_at char_slice
-norm_nfc norm_nfd casefold char_category
+norm_nfc norm_nfd casefold char_category weak strengthen
 some none ok err is_some is_none is_ok is_err unwrap unwrap_or
 enumerate zip sorted reversed any all first last take drop unique flatten chunk round clamp divmod
 channel send recv close select""".split())
@@ -2879,6 +3029,14 @@ class Interp:
         # new list after a gene-local const is collected).
         self.frozen_ids = set()
         self.frozen_keep = []
+        # W013 (D-013) mirror: live DETECTED-cycle registry. Entries are
+        # (weakref, addr) pairs; a registration is added when an insertion
+        # closes a cycle (see _cycle_note_list/_cycle_note_map below) and
+        # dies when the container is reclaimed (weakref dead) or the cycle
+        # edge was broken by mutation (the lazy re-verify in _live_cycles).
+        # Weakrefs only: accounting never extends a value's lifetime.
+        self.cycle_regs = []
+        self.weak_targets = {}  # W013: addr -> (kind, strong target, defn)
         # W069: importing-entry directory, candidate root #1 for `use`
         # (SPEC §8 resolution table). None until load_file sets it.
         self.base_dir = None
@@ -3505,6 +3663,7 @@ class Interp:
                     idx = None
                 cur = tv[idx] if (idx is not None and idx < len(tv)) else None
                 nv = self.binop(op, cur, v) if op else v
+                self._cycle_note_insert(tv, nv)  # W013: before the edge lands
                 if idx is not None and idx < len(tv):
                     tv[idx] = nv
                 else:
@@ -3529,6 +3688,7 @@ class Interp:
                 # W029 mirror: bytes are scalar keys (native hashable, exact).
                 key = iv if isinstance(iv, (str, int, float, bool, bytes)) else (
                     iv if isinstance(iv, ObjInst) else v_display(iv))
+                self._cycle_note_insert(tv, nv)  # W013: value edge (keys not walked)
                 tv[key] = nv
             else:
                 self.note(4, "index assignment on non-container ignored")
@@ -3538,12 +3698,16 @@ class Interp:
             v = self.eval(env, ve)
             if isinstance(tv, ObjInst):
                 cur = tv.fields.get(key)
-                tv.fields[key] = self.binop(op, cur, v) if op else v
+                nv = self.binop(op, cur, v) if op else v
+                self._cycle_note_insert(tv.fields, nv)  # W013: before the edge lands
+                tv.fields[key] = nv
             elif isinstance(tv, dict):
                 if self.is_frozen(tv):
                     raise self._frozen_stress("map")
                 cur = tv.get(key)
-                tv[key] = self.binop(op, cur, v) if op else v
+                nv = self.binop(op, cur, v) if op else v
+                self._cycle_note_insert(tv, nv)  # W013: before the edge lands
+                tv[key] = nv
             else:
                 self.note(4, "member assignment on non-map ignored")
         elif k == "if":
@@ -3672,13 +3836,61 @@ class Interp:
                     self.exec_block(child, body)
                     return
         elif k == "use":
-            modv = self.load_module(s[1])
-            name = s[2] or os.path.basename(s[1].replace("\\", "/")).split(".")[0].split("/")[-1]
-            env[name] = modv
-            # flat-bind ALL exports beside the alias map (genes AND data)
+            # W025 stage 2: a trailing `/*` marks the WILDCARD form, flat-bind
+            # the target table's exports without binding the module map itself
+            # (an explicit `as` alias still binds it). Resolution stays
+            # FILE-FIRST: the full path is tried as a file, then each shorter
+            # prefix is loaded as a file and the remaining segments descend
+            # the exported nested-module tables, longest prefix first (mirror
+            # of interp.rs Stmt::Use + descend_tables, SPEC §8).
+            path = s[1]
+            wildcard = path.endswith("/*")
+            base = path[:-2] if wildcard else path
+            modv = self.load_module(base)
+            if modv is None:
+                segs = base.split("/")
+                for kk in range(len(segs) - 1, 0, -1):
+                    rootv = self.load_module("/".join(segs[:kk]))
+                    if rootv is None:
+                        continue
+                    table = rootv
+                    hit = True
+                    for seg in segs[kk:]:
+                        nxt = table.get(seg) if isinstance(table, dict) else None
+                        if nxt is None:
+                            self.note(4, f"use '{path}': segment '{seg}' is not a nested module table; import binds nothing")
+                            hit = False
+                            break
+                        table = nxt
+                    if hit:
+                        modv = table
+                        break
+            name = s[2] or os.path.basename(base.replace("\\", "/")).split(".")[0].split("/")[-1]
+            if not wildcard or s[2]:
+                env[name] = modv if modv is not None else {}
+            # flat-bind ALL exports beside the alias map (genes AND data);
+            # for the wildcard form this flat bind IS the whole import
             if isinstance(modv, dict):
                 for kname, v in modv.items():
                     env[kname] = v
+        elif k == "module":
+            # W025 stage 2: nested sub-module table (mirror of interp.rs
+            # Stmt::Module). The body runs ONCE here in a fresh child scope;
+            # stress propagates to the enclosing containment exactly like a
+            # module-file top-level statement, flow signals end only their
+            # own statement. The child scope's own names become the export
+            # table, sorted like the file-module loader sorts them, so both
+            # engines print and flat-bind identically. Last declaration wins.
+            _, mname, mbody = s
+            child = self.new_scope(env)
+            for st in mbody:
+                try:
+                    self.exec_stmt(child, st)
+                except (Return, BreakLoop, ContinueLoop):
+                    pass
+            exports = {kk: vv for kk, vv in child.items()
+                       if isinstance(kk, str) and kk != "__parent__" and not kk.startswith("#")}
+            env[mname] = {kk: exports[kk] for kk in sorted(exports)}
         elif k == "raise":
             msg = self.eval(env, s[2])
             raise Stress(s[1] or "unfolded", v_display(msg))
@@ -5218,6 +5430,7 @@ class Interp:
             if name == "push":
                 if self.is_frozen(recv):
                     raise self._frozen_stress("list")
+                self._cycle_note_insert(recv, args[0])  # W013: before the edge lands
                 recv.append(args[0]); return recv
             if name == "pop":
                 if self.is_frozen(recv):
@@ -5269,6 +5482,171 @@ class Interp:
                 return self.call_value(env, recv[name], args)
         self.note(4, f"{type_name(recv)} has no method '{name}'; null")
         return None
+
+    # ---- W013 (D-013): live detected-cycle accounting -------------------
+    # Mirror of the Rust cycle registry (src/value.rs). The engine detects
+    # a cycle at container insertion time: inserting v into container C
+    # where C is reachable from v proves C is reachable from itself, so C
+    # registers once. memory().cycles re-verifies lazily: a registration
+    # dies when the container is reclaimed (weakref dead) or the cycle was
+    # broken by mutation (no longer reachable from itself). Walk scope:
+    # list items, map VALUES, phenotype field values, variant payloads;
+    # map keys are not walked (the oracle stores container keys display-
+    # stringified, a pre-existing divergence the corpus avoids) and gene/
+    # env capture cycles are not container edges, they are not counted.
+
+    # Deterministic walk budget (rt_p22a armor), the mirror of Rust
+    # WALK_BUDGET: native graph walks are not fuel-accounted, so every
+    # cycle walk carries a hard visit cap. Both cores visit in the same
+    # order and cut at the same node; the cap never binds on sane graphs.
+    WALK_BUDGET = 100_000
+
+    def _weak_binding_alive(self, env, addr):
+        # is the weak target still strongly referenced by ANY name binding on
+        # the live scope chain? (containers that merely hold the value are a
+        # Rust-lane shape the differential corpus deliberately avoids)
+        node = env
+        while node is not None:
+            for val in node.values():
+                if isinstance(val, ObjInst):
+                    if id(val.fields) == addr:
+                        return True
+                elif id(val) == addr:
+                    return True
+            node = node["__parent__"]
+        return False
+
+    def _cycle_prune(self):
+        # strong-ref registrations persist by design (no GC, D-013): a
+        # detected cycle stays in the gauge for the rest of the run
+        pass
+
+    def _cycle_walk_reaches(self, root, v):
+        # does the walk from v reach the container at address root?
+        # (the seed is v itself: if v IS the target, inserting it closes a
+        # self-reference, push(a, a)). Returns True (reached), False
+        # (completed, not reached) or None (budget exhausted, inconclusive).
+        budget = [self.WALK_BUDGET]
+        return self._cycle_walk_reaches_root(root, set(), [v], budget)
+
+    def _cycle_register(self, target):
+        # register the target container (list / dict / instance fields dict)
+        # once per address and once per subgraph: if any container reachable
+        # from the target is already registered, the cycle group was already
+        # counted through that member.
+        if isinstance(target, ObjInst):
+            target = target.fields
+        addr = id(target)
+        self._cycle_prune()
+        registered = {a for (_w, a) in self.cycle_regs}
+        if addr in registered:
+            return
+        stack, seen = [], set()
+        stack.extend(target.values() if isinstance(target, dict) else target)
+        # budgeted dedupe walk: an inconclusive dedupe registers anyway,
+        # the detection at the insertion already proved a cycle at the
+        # target (mirror of the Rust dedupe budget)
+        budget = [self.WALK_BUDGET]
+        while stack:
+            cur = stack.pop()
+            if budget[0] == 0:
+                break  # inconclusive: register the proven cycle
+            budget[0] -= 1
+            if isinstance(cur, list):
+                a = id(cur)
+                if a in registered: return  # a member of this subgraph is registered
+                if a in seen: continue
+                seen.add(a)
+                stack.extend(cur)
+            elif isinstance(cur, dict):
+                a = id(cur)
+                if a in registered: return
+                if a in seen: continue
+                seen.add(a)
+                stack.extend(cur.values())
+            elif isinstance(cur, ObjInst):
+                a = id(cur.fields)
+                if a in registered: return
+                if a in seen: continue
+                seen.add(a)
+                stack.extend(cur.fields.values())
+            elif isinstance(cur, Variant):
+                if cur.payload is not None:
+                    stack.append(cur.payload)
+        # no GC: cycles persist once detected, mirror the Rust gauge;
+        # strong refs keep the registration honest (a plain list/dict is
+        # not weakref-able, and persistence is the modeled semantics)
+        self.cycle_regs.append((target, addr))
+
+    def _cycle_note_insert(self, target, v):
+        # insertion-time detection, called BEFORE the edge lands; an
+        # inconclusive detection walk (budget exhausted) does not register:
+        # best-effort detection, the conservative direction for the GAUGE
+        # is persistence of what is already registered
+        if isinstance(target, ObjInst):
+            target = target.fields
+        if isinstance(v, (list, dict, ObjInst, Variant)) and \
+                self._cycle_walk_reaches(id(target), v) is True:
+            self._cycle_register(target)
+
+    def _live_cycles(self):
+        self._cycle_prune()
+        n, keep = 0, []
+        # ONE budget shared by every verification in this call: the whole
+        # re-verify pass is bounded no matter how many cycles are registered
+        budget = [self.WALK_BUDGET]
+        for t, a in self.cycle_regs:
+            if t is None:
+                continue
+            # re-verify: still reachable from itself (walk the CHILDREN,
+            # the container itself is the pre-seen root, never the seed)
+            seen, stack = {a}, []
+            if isinstance(t, dict):
+                stack.extend(t.values())
+            else:
+                stack.extend(t)
+            verdict = self._cycle_walk_reaches_root(a, seen, stack, budget)
+            # True: proven alive. False: proven reclaimed or broken, drop
+            # the entry. None: budget exhausted, the entry stays counted
+            # (death must be PROVEN, persistence is D-013).
+            still = verdict is not False
+            if still:
+                n += 1
+                keep.append((t, a))
+        self.cycle_regs = keep
+        return n
+
+    def _cycle_walk_reaches_root(self, root, seen, stack, budget):
+        # budget is a one-element list shared by the callers; returns
+        # True (reached), False (completed, not reached) or None
+        # (budget exhausted mid-walk, inconclusive)
+        while stack:
+            cur = stack.pop()
+            if budget[0] == 0:
+                return None
+            budget[0] -= 1
+            if isinstance(cur, list):
+                a = id(cur)
+                if a == root: return True
+                if a in seen: continue
+                seen.add(a)
+                stack.extend(cur)
+            elif isinstance(cur, dict):
+                a = id(cur)
+                if a == root: return True
+                if a in seen: continue
+                seen.add(a)
+                stack.extend(cur.values())
+            elif isinstance(cur, ObjInst):
+                a = id(cur.fields)
+                if a == root: return True
+                if a in seen: continue
+                seen.add(a)
+                stack.extend(cur.fields.values())
+            elif isinstance(cur, Variant):
+                if cur.payload is not None:
+                    stack.append(cur.payload)
+        return False
 
     # ---- builtins
     def builtin(self, env, name, args):
@@ -5331,6 +5709,7 @@ class Interp:
         if name == "push":
             if self.is_frozen(args[0]):
                 raise self._frozen_stress("list")
+            self._cycle_note_insert(args[0], args[1])  # W013: before the edge lands
             args[0].append(args[1]); return args[0]
         if name == "pop":
             if self.is_frozen(args[0]):
@@ -5340,6 +5719,7 @@ class Interp:
             if self.is_frozen(args[0]):
                 raise self._frozen_stress("list")
             idx = self.as_index(args[1], len(args[0]))
+            self._cycle_note_insert(args[0], args[2])  # W013: before the edge lands
             args[0].insert(min(idx, len(args[0])), args[2]); return args[0]
         if name == "remove":
             if self.is_frozen(args[0]):
@@ -5547,7 +5927,47 @@ class Interp:
             return out
         if name == "memory":
             import resource
-            return {"arena_bytes": 0, "interns": 0, "allocs": 0}
+            # W013 (D-013): the cycles field mirrors the Rust live detected-
+            # cycle gauge (insertion registers, reclamation prunes); the
+            # other three keys are Rust symbol-table gauges the sequential
+            # oracle does not have (zeros, the pre-existing shape contract).
+            return {"arena_bytes": 0, "interns": 0, "allocs": 0,
+                    "cycles": self._live_cycles()}
+        if name == "weak":
+            # W013: supported targets are the container values (list, map,
+            # phenotype instance); everything else is refused (SPEC §19f).
+            # No-argument call mirrors the Rust None-arm message exactly.
+            if not args:
+                raise Stress("unfolded", "weak(v) needs a list, map, or phenotype")
+            v = args[0]
+            if isinstance(v, list):
+                self.weak_targets[id(v)] = ("list", v, None)
+                return WeakRef("list", id(v))
+            if isinstance(v, dict):
+                self.weak_targets[id(v)] = ("map", v, None)
+                return WeakRef("map", id(v))
+            if isinstance(v, ObjInst):
+                self.weak_targets[id(v.fields)] = ("phenotype", v.fields, v.defn)
+                return WeakRef("phenotype", id(v.fields), v.defn)
+            raise Stress("unfolded",
+                         f"weak() needs a list, map, or phenotype, found {type_name(v)}")
+        if name == "strengthen":
+            if not args:
+                # no-argument call mirrors the Rust None-arm message exactly
+                raise Stress("unfolded", "strengthen(w) needs a weak handle")
+            w = args[0]
+            if not isinstance(w, WeakRef):
+                raise Stress("unfolded",
+                             f"strengthen(w) needs a weak handle, found {type_name(w)}")
+            entry = self.weak_targets.get(w.addr)
+            if entry is None or not self._weak_binding_alive(env, w.addr):
+                # no GC: the last strong ref freed the target immediately;
+                # the soft note is Rust-lane, the oracle just returns null
+                return None
+            t = entry[1]
+            if w.kind == "phenotype":
+                return ObjInst(w.defn, t)
+            return t
         if name == "methyl":
             k = v_display(args[0]) if args else ""
             d = args[1] if len(args) > 1 else None
@@ -5915,6 +6335,16 @@ class Interp:
             callee = args[0] if args else None
             targs = args[1] if len(args) > 1 and isinstance(args[1], list) else []
             if isinstance(callee, Gene):
+                # W013 spawn membrane mirror: a top-level weak handle is
+                # REFUSED with the same catchable `membrane` stress as the
+                # Rust pre-flight (a weak handle's target identity cannot
+                # cross a cell boundary; nested handles keep the degrade-
+                # to-null wire rule)
+                for _a in targs:
+                    if isinstance(_a, WeakRef):
+                        raise Stress(
+                            "membrane",
+                            "spawn() refuses a weak payload; weak handles cannot cross the snapshot membrane")
                 # reg-r4: SendValue depth ceiling mirror (Rust SEND_DEPTH_CAP
                 # = 100_000), deep spawn payloads raise a catchable
                 # `overflow` stress exactly like the Rust serialization path
@@ -6129,7 +6559,7 @@ class Interp:
             v = args[1]
             # membrane first, then the depth pre-flight, then closed (the
             # Rust order: a handle payload is refused even on a closed chan)
-            if isinstance(v, (Gene, SeqObj, ObjInst, Channel)):
+            if isinstance(v, (Gene, SeqObj, ObjInst, Channel, WeakRef)):
                 raise Stress("membrane",
                              f"send() refuses a {type_name(v)} payload; channels carry data, not handles")
             _stack = [(v, 0)]
@@ -7052,7 +7482,11 @@ class Interp:
                 cands.append(os.path.join(dep_dir, p[len(seg):]))
         resolved = next((c for c in cands if os.path.exists(c)), None)
         if resolved is None:
-            return {}
+            # W025 stage 2: None = not found, distinct from an existing but
+            # empty module ({}), so the nested-table descent can try the
+            # next file prefix. The use arm binds {} for a total failure,
+            # exactly as before.
+            return None
         src = open(resolved, encoding="utf-8", errors="replace").read()  # W59: explicit UTF-8 (Windows locale default is cp1252)
         self.loading.append(path)
         stmts, notes, pubs = parse(src)

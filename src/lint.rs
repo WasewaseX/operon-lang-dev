@@ -46,12 +46,14 @@
 //!   W03  constant-condition     if/while over a literal constant
 //!   W04  unreachable-code       statement after return/raise
 //!   W05  duplicate-match-arm    same literal twice in one match
-//!   W06  unreachable-match-arm  arm after an unguarded catch-all (W042)
+//!   W06  unreachable-match-arm  arm after an unguarded catch-all or a
+//!                                strictly broader earlier arm (W042/W002)
 //!   W07  unused-binding         let never read (W042)
 //!   W08  dead-const             const never referenced (W042)
 //!   W09  nmd:<kind>/anchor      NMD + anchor-import sweep findings
 //!   W10  cell-unknown-key       .cell key outside the schema (W66)
 //!   W11  cell-type-mismatch     .cell key expects a number (W66)
+//!   W12  deprecated-use         call to an @deprecated-marked gene (W64)
 //!   N01  unused-gene            defined, never called (library surface?)
 //!   N02  unused-import          module imported, never referenced
 //!   N03  infinite-loop-suspect  while over an always-true literal
@@ -93,7 +95,9 @@ pub enum Stream {
 pub fn rule_stream(rule: &str) -> Stream {
     match rule {
         "wrong-arity" | "E01" | "const-reassign" | "W02" | "phantom-call" | "W01"
-        | "cell-unknown-key" | "W10" | "cell-type-mismatch" | "W11" => Stream::Check,
+        | "cell-unknown-key" | "W10" | "cell-type-mismatch" | "W11" | "deprecated-use" | "W12" => {
+            Stream::Check
+        }
         r if r.starts_with("nmd:") || r == "anchor-import" || r.starts_with("W09") => Stream::Check,
         _ => Stream::Lint,
     }
@@ -171,6 +175,7 @@ pub fn rule_code(rule: &str) -> &'static str {
         "unreachable-match-arm" => "W06",
         "unused-binding" => "W07",
         "dead-const" => "W08",
+        "deprecated-use" => "W12",
         "cell-unknown-key" => "W10",
         "cell-type-mismatch" => "W11",
         "unused-gene" => "N01",
@@ -407,6 +412,29 @@ pub fn lint(prog: &Program) -> Vec<Finding> {
     unreachable_scan(&prog.stmts, 1, &mut out);
     duplicate_match_arms(&prog.stmts, &mut out);
     unreachable_match_arms(&prog.stmts, &mut out);
+
+    // W64: deprecated-use at call sites. The def-side map fills from
+    // top-level AND nested defs (the scan registers nested marks as it
+    // descends); proofs and named frames are ordinary consumers.
+    let mut deprecations: DepMap = HashMap::new();
+    walk_all(&prog.stmts, &mut |st, _| {
+        if let Stmt::Gene(g) | Stmt::Seq(g) = st {
+            if let (Some(n), Some(d)) = (&g.name, &g.deprecated) {
+                deprecations
+                    .entry(n.clone())
+                    .or_insert((d.message.clone(), d.since.clone()));
+            }
+        }
+    });
+    if !deprecations.is_empty() {
+        deprecated_scan(&prog.stmts, &mut deprecations, &mut out);
+        for body in &prog.proofs {
+            deprecated_scan(body, &mut deprecations, &mut out);
+        }
+        for (_, body) in &prog.named_frames {
+            deprecated_scan(body, &mut deprecations, &mut out);
+        }
+    }
 
     // W43: wrong-arity at call sites. Free genes +, now, phenotype methods
     // and `new` constructors where the receiver/phenotype is statically
@@ -916,37 +944,80 @@ fn lit_key(e: &Expr) -> String {
     }
 }
 
-/// W42 (critique-pinned set): unreachable match arms, pure syntax. An arm
-/// placed after an unguarded catch-all (`_`, a binding pattern, or an
-/// or-pattern containing either) can never run. Guards make an arm
-/// fallible, so a guarded catch-all does NOT trigger the rule; literal
-/// duplicates are duplicate-match-arm's job. This is the check-time slice
-/// of W002 stage 2: full exhaustiveness/reachability lives with the pattern
-/// algebra in the semantic lane, this one needs nothing but the AST.
+/// W42/W06 (W002 stage 2, check-side slice): unreachable match arms. An arm
+/// can never run when an EARLIER unguarded arm already matches every value
+/// it can match (first-match-wins is the runtime contract, SPEC §5a). Two
+/// reasons, in strength order:
+///
+///   1. unguarded catch-all: `_`, a binding pattern, or an or-pattern
+///      containing either (the legacy comma-run holds plain literals only,
+///      so it can never hide a catch-all; the parser degrades unknown
+///      capitalized tags to Bind at parse time, so a catch-all here is
+///      always runtime-true);
+///   2. a strictly broader shape: `Some(_)` before `Some(x)`, `[a, b]`
+///      before `[1, 2]`, `{x}` before `{x: 1, ...}`, a literal inside an
+///      earlier multi/or run, nested payloads likewise.
+///
+/// Conservatism is the design bar (zero false positives): a GUARD on the
+/// earlier arm makes it fallible, so a guarded arm subsumes nothing; a guard
+/// on the LATER arm is transparent (it only shrinks a set already covered,
+/// the guard itself can never evaluate). Structural coverage is claimed
+/// only where the pattern algebra proves it (see `pat_subsumes`); identical
+/// plain literal arms stay duplicate-match-arm's story (W05) so one symptom
+/// has one owner. This is the check-time slice of W002 stage 2: full
+/// exhaustiveness/reachability lives with the pattern algebra in the
+/// semantic lane, this one needs nothing but the AST.
 fn unreachable_match_arms(stmts: &[Stmt], out: &mut Vec<Finding>) {
     for st in stmts {
         if let Stmt::Match(_, arms) = st {
-            let mut caught_all = false;
             for (i, (pat, body)) in arms.iter().enumerate() {
-                if caught_all {
+                // scan earlier UNGUARDED arms only: `if` makes an arm able to
+                // miss, so it guarantees nothing about what follows
+                let mut catchall: Option<usize> = None;
+                let mut broader: Option<usize> = None;
+                for (j, (earlier, _)) in arms.iter().take(i).enumerate() {
+                    if matches!(earlier, MatchPat::Guard(_, _)) {
+                        continue;
+                    }
+                    if catchall.is_none() && pat_is_catchall(earlier) {
+                        catchall = Some(j);
+                    }
+                    if broader.is_none() && arm_subsumes(earlier, pat) {
+                        broader = Some(j);
+                    }
+                }
+                let finding = match catchall {
+                    Some(_) => Some(format!(
+                        "match arm {} is unreachable: an earlier arm matches every value \
+                         (unguarded catch-all)",
+                        i + 1
+                    )),
+                    None => broader.map(|j| {
+                        format!(
+                            "match arm {} is unreachable: arm {} already matches every value \
+                             it can match (broader arm first)",
+                            i + 1,
+                            j + 1
+                        )
+                    }),
+                };
+                if let Some(msg) = finding {
+                    // first body statement that knows its line; the AST keeps
+                    // statement spans only on expression statements (A13), so
+                    // an arm opening with spanless statements (a plain
+                    // assignment) stays file-anchored at line 1
+                    let line = body.iter().find_map(stmt_line).unwrap_or(1);
                     out.push(Finding::new(
-                        body.first().and_then(stmt_line).unwrap_or(1),
+                        line,
                         "unreachable-match-arm",
                         Sev::Warning,
-                        format!(
-                            "match arm {} is unreachable: an earlier arm matches every value \
-                             (unguarded catch-all)",
-                            i + 1
-                        ),
+                        msg,
                     ));
                 }
-                if pat_is_catchall(pat) {
-                    caught_all = true;
-                }
             }
-            for (_, body) in arms {
-                unreachable_match_arms(body, out);
-            }
+            // arm bodies are descended exactly once, via stmt_nested_all
+            // below: the pre-stage-2 code ALSO recursed into them manually,
+            // so an offender nested inside an arm body was reported twice
         }
         for nested in stmt_nested_all(st) {
             unreachable_match_arms(nested, out);
@@ -959,6 +1030,145 @@ fn pat_is_catchall(pat: &MatchPat) -> bool {
         MatchPat::Wild | MatchPat::Bind(_) => true,
         MatchPat::Or(alts) => alts.iter().any(pat_is_catchall),
         _ => false, // guarded catch-alls can fail: never treated as catch-all
+    }
+}
+
+/// Arm-level subsumption entry: identical plain literal arms are deferred to
+/// duplicate-match-arm (W05), which already reports them with an arm-number
+/// hint. Everything composite (multi-runs, or-alternatives, nested shapes,
+/// guards on the later arm) stays here: W05 cannot see those.
+fn arm_subsumes(earlier: &MatchPat, later: &MatchPat) -> bool {
+    if let (MatchPat::Lit(a), MatchPat::Lit(b)) = (earlier, later) {
+        if let (Some(k1), Some(k2)) = (lit_key_prim(a), lit_key_prim(b)) {
+            if k1 == k2 {
+                return false; // W05's finding, not this rule's
+            }
+        }
+    }
+    pat_subsumes(earlier, later)
+}
+
+/// Conservative structural subsumption: true only when EVERY value `later`
+/// can match is guaranteed to be matched by `earlier` first. Runtime mirror
+/// is `Interp::match_pat` (first-match-wins, deep_eq literals); when the
+/// algebra cannot prove coverage the answer is false, so the rule can stay
+/// silent on hard shapes (float cross-matching, computed literals) but never
+/// invent an unreachable arm.
+fn pat_subsumes(earlier: &MatchPat, later: &MatchPat) -> bool {
+    // a guard on the LATER side is transparent: the arm matches a subset of
+    // the inner pattern's values, and a covered subset stays covered
+    let later = match later {
+        MatchPat::Guard(inner, _) => inner,
+        p => p,
+    };
+    // alternation on the later side is reachable through ANY alternative,
+    // so coverage must hold for every one of them
+    match later {
+        MatchPat::Or(alts) => return alts.iter().all(|a| pat_subsumes(earlier, a)),
+        MatchPat::Multi(ls) => {
+            return ls
+                .iter()
+                .all(|e| pat_subsumes(earlier, &MatchPat::Lit(e.clone())))
+        }
+        _ => {}
+    }
+    match earlier {
+        // a guard can miss: an earlier guarded arm guarantees nothing
+        MatchPat::Guard(_, _) => false,
+        // catch-alls match every value (the parser degrades unknown
+        // capitalized tags to Bind, so Variant here is always a known family)
+        MatchPat::Wild | MatchPat::Bind(_) => true,
+        MatchPat::Or(alts) => alts.iter().any(|a| pat_subsumes(a, later)),
+        MatchPat::Multi(ls) => ls
+            .iter()
+            .any(|e| pat_subsumes(&MatchPat::Lit(e.clone()), later)),
+        MatchPat::Lit(e) => match later {
+            // float keys are excluded on purpose: NaN never deep_eq-equals
+            // itself, so an earlier float literal guarantees nothing
+            MatchPat::Lit(e2) => match (lit_key_prim(e), lit_key_prim(e2)) {
+                (Some(k1), Some(k2)) => k1 == k2,
+                _ => false,
+            },
+            _ => false,
+        },
+        MatchPat::Variant(tag, payload) => match later {
+            MatchPat::Variant(tag2, payload2) => {
+                // tags are case-sensitive and families are distinct
+                tag == tag2
+                    && match (payload, payload2) {
+                        // tag-only form matches the tag with ANY payload,
+                        // payload-less values included: it covers every
+                        // payload-carrying later pattern on the same tag
+                        (None, _) => true,
+                        // a payload-carrying earlier arm does NOT cover the
+                        // tag-only form: the runtime misses a payload pattern
+                        // against a payload-less value (match_pat's
+                        // (Some, None) arm), so coverage would be a guess
+                        (Some(_), None) => false,
+                        (Some(p1), Some(p2)) => pat_subsumes(p1, p2),
+                    }
+            }
+            _ => false,
+        },
+        MatchPat::ListPat { elems, rest } => match later {
+            MatchPat::ListPat {
+                elems: later_elems,
+                rest: later_rest,
+            } => {
+                let len_ok = match (rest, later_rest) {
+                    // exact-length earlier: only an exact same-length later
+                    // is fully covered; a later *rest matches longer lists
+                    (None, _) => later_rest.is_none() && later_elems.len() == elems.len(),
+                    // *rest earlier covers every later list at least as long
+                    (Some(_), _) => later_elems.len() >= elems.len(),
+                };
+                len_ok
+                    && elems
+                        .iter()
+                        .zip(later_elems)
+                        .all(|(a, b)| pat_subsumes(a, b))
+            }
+            _ => false,
+        },
+        MatchPat::MapPat { keys } => match later {
+            MatchPat::MapPat { keys: later_keys } => {
+                // the earlier arm's constraints must all be implied by the
+                // later arm: every key it requires must be required there
+                // too, with a sub-pattern the later one cannot escape
+                keys.iter().all(|(ek, ep)| {
+                    later_keys.iter().any(|(lk, lp)| {
+                        lk == ek
+                            && match (ep, lp) {
+                                (None, _) => true,
+                                (Some(e), None) => pat_subsumes(e, &MatchPat::Wild),
+                                (Some(e), Some(l)) => pat_subsumes(e, l),
+                            }
+                    })
+                })
+            }
+            _ => false,
+        },
+    }
+}
+
+/// Primitive literal identity for subsumption. Only constructor-held values
+/// whose runtime deep_eq is exact qualify; floats are excluded (NaN never
+/// equals itself) and anything computed returns None, so the rule stays
+/// silent where the runtime value could surprise the algebra. Bytes keys are
+/// per-byte hex, not from_utf8_lossy: lossy is not injective (b"\xff" and
+/// b"\xef\xbf\xbd" both collapse to U+FFFD), and equal keys here are claimed
+/// as coverage, so a collision would invent an unreachable arm.
+fn lit_key_prim(e: &Expr) -> Option<String> {
+    match e {
+        Expr::Int(v) => Some(format!("i:{}", v)),
+        Expr::Bool(b) => Some(format!("b:{}", b)),
+        Expr::Str(s) => Some(format!("s:{}", s)),
+        Expr::Null => Some("n:".to_string()),
+        Expr::Bytes(b) => {
+            let hex: String = b.iter().map(|x| format!("{:02x}", x)).collect();
+            Some(format!("y:{}", hex))
+        }
+        _ => None,
     }
 }
 
@@ -1184,6 +1394,151 @@ fn arity_scan_nested(
             }
         }
         _ => {}
+    }
+}
+
+// ------------------------------------------------------------ deprecated-use
+// W64: `@deprecated("text", since="x.y")` marks ride the gene as metadata;
+// the check surface turns CALL SITES of a marked gene into `deprecated-use`
+// warnings carrying the migration text. Runtime is untouched (the
+// interpreter never reads the field), so differential parity cannot drift.
+// Conservative by design: only free-gene calls (Expr::Call over an ident)
+// are flagged; method calls, dynamic dispatch through a bare gene
+// reference, and defs inside other files are the documented escape hatches.
+// A self-call inside the deprecated gene's own body is still a real use.
+
+type DepMap = HashMap<String, (String, Option<String>)>;
+
+fn deprecated_scan(stmts: &[Stmt], deps: &mut DepMap, out: &mut Vec<Finding>) {
+    for st in stmts {
+        // nested defs register their own marks before their bodies scan
+        if let Stmt::Gene(g) | Stmt::Seq(g) = st {
+            if let (Some(n), Some(d)) = (&g.name, &g.deprecated) {
+                deps.entry(n.clone())
+                    .or_insert((d.message.clone(), d.since.clone()));
+            }
+        }
+        deprecated_scan_expr(stmt_exprs_all(st), deps, out);
+        deprecated_scan_nested(st, deps, out);
+    }
+}
+
+fn deprecated_scan_nested(st: &Stmt, deps: &mut DepMap, out: &mut Vec<Finding>) {
+    match st {
+        Stmt::If(arms, els) => {
+            for (_, b) in arms {
+                deprecated_scan(b, deps, out);
+            }
+            if let Some(e) = els {
+                deprecated_scan(e, deps, out);
+            }
+        }
+        Stmt::While(_, b)
+        | Stmt::Loop(b)
+        | Stmt::Scope(b)
+        | Stmt::Block(b)
+        | Stmt::Tad(_, b)
+        | Stmt::For(_, _, b)
+        | Stmt::ForPat(_, _, b) => deprecated_scan(b, deps, out),
+        Stmt::Frame { body, .. } => deprecated_scan(body, deps, out),
+        Stmt::Match(_, arms) => {
+            for (_, b) in arms {
+                deprecated_scan(b, deps, out);
+            }
+        }
+        Stmt::Stress { body, rescue, .. } => {
+            deprecated_scan(body, deps, out);
+            if let Some((_, rb)) = rescue {
+                deprecated_scan(rb, deps, out);
+            }
+        }
+        Stmt::Gene(g) | Stmt::Seq(g) => deprecated_scan(&g.body, deps, out),
+        Stmt::Pheno(p) => {
+            for m in &p.methods {
+                deprecated_scan(&m.body, deps, out);
+            }
+        }
+        Stmt::Trait(t) => {
+            for m in &t.methods {
+                if let Some(d) = &m.default {
+                    deprecated_scan(&d.body, deps, out);
+                }
+            }
+        }
+        Stmt::Splice(s) => {
+            for (_, g) in &s.variants {
+                deprecated_scan(&g.body, deps, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn deprecated_scan_expr(exprs: Vec<&Expr>, deps: &DepMap, out: &mut Vec<Finding>) {
+    for e in exprs {
+        match e {
+            Expr::Call(callee, args, line) => {
+                if let Expr::Ident(name) = &**callee {
+                    if let Some((msg, since)) = deps.get(name) {
+                        let since_note = match since {
+                            Some(s) => format!(" (since {})", s),
+                            None => String::new(),
+                        };
+                        out.push(Finding::new(
+                            *line,
+                            "deprecated-use",
+                            Sev::Warning,
+                            format!(
+                                "call to deprecated gene '{}'{}, {}, silence with '// allow: deprecated-use'",
+                                name, since_note, msg
+                            ),
+                        ));
+                    }
+                }
+                deprecated_scan_expr(
+                    std::iter::once(&**callee).chain(args.iter()).collect(),
+                    deps,
+                    out,
+                );
+            }
+            Expr::Method(recv, _, args) | Expr::MethodSafe(recv, _, args) => {
+                deprecated_scan_expr(
+                    std::iter::once(&**recv).chain(args.iter()).collect(),
+                    deps,
+                    out,
+                );
+            }
+            Expr::New(_, args) => {
+                deprecated_scan_expr(args.iter().collect(), deps, out);
+            }
+            Expr::Lambda(g) => {
+                let defaults: Vec<&Expr> =
+                    g.params.iter().filter_map(|(_, d)| d.as_ref()).collect();
+                deprecated_scan_expr(defaults, deps, out);
+                let mut inner = deps.clone();
+                deprecated_scan(&g.body, &mut inner, out);
+            }
+            Expr::Propagate(a, _) => deprecated_scan_expr(vec![a], deps, out),
+            Expr::Collect {
+                iter, filter, body, ..
+            } => {
+                let mut parts = vec![&**iter, &**body];
+                if let Some(f) = filter {
+                    parts.push(f);
+                }
+                deprecated_scan_expr(parts, deps, out);
+            }
+            Expr::Unary(_, a) => deprecated_scan_expr(vec![a], deps, out),
+            Expr::Binary(_, a, b, _) => deprecated_scan_expr(vec![a, b], deps, out),
+            Expr::Index(a, b, _) => deprecated_scan_expr(vec![a, b], deps, out),
+            Expr::Ternary(a, b, c) => deprecated_scan_expr(vec![a, b, c], deps, out),
+            Expr::Member(a, _) | Expr::MemberSafe(a, _) => deprecated_scan_expr(vec![a], deps, out),
+            Expr::List(items) => deprecated_scan_expr(items.iter().collect(), deps, out),
+            Expr::Map(pairs) => {
+                deprecated_scan_expr(pairs.iter().flat_map(|(k, v)| [k, v]).collect(), deps, out)
+            }
+            _ => {}
+        }
     }
 }
 
@@ -1886,5 +2241,233 @@ mod tests {
         let mut f2 = lint_src("let dead = 7\n");
         apply_cli_allows(&mut f2, &["W07".to_string()]);
         assert!(f2.is_empty(), "{:?}", f2);
+    }
+
+    // ---------------------------------------------- W06 unreachable-match-arm
+
+    fn w06_hits(src: &str) -> Vec<Finding> {
+        lint_src(src)
+            .into_iter()
+            .filter(|x| x.rule == "unreachable-match-arm")
+            .collect()
+    }
+
+    #[test]
+    fn unreachable_arm_after_unguarded_catchall() {
+        let f = w06_hits(
+            "match 1 {\n    case _ {\n        print(1)\n    }\n    case 1 {\n        print(2)\n    }\n}\n",
+        );
+        assert_eq!(f.len(), 1, "{:?}", f);
+        assert_eq!(f[0].code, "W06", "stable code never renumbers");
+        assert_eq!(f[0].sev, Sev::Warning);
+        assert!(f[0].message.contains("unguarded catch-all"), "{:?}", f[0]);
+        assert_eq!(
+            f[0].line, 6,
+            "the finding points at the arm body's first line-bearing statement"
+        );
+    }
+
+    #[test]
+    fn binding_pattern_is_a_catchall_too() {
+        // `case x` binds every value, so the arms after it are dead (this is
+        // also what unknown capitalized tags degrade to at parse time)
+        let f = w06_hits(
+            "match 1 {\n    case x {\n        print(1)\n    }\n    case 1 {\n        print(2)\n    }\n    case 2 {\n        print(3)\n    }\n}\n",
+        );
+        assert_eq!(f.len(), 2, "both trailing arms are dead: {:?}", f);
+    }
+
+    #[test]
+    fn guarded_catchall_subsumes_nothing() {
+        // a guard can miss, so every arm after a guarded arm stays live
+        let f = w06_hits(
+            "match 1 {\n    case x if x > 5 {\n        print(1)\n    }\n    case 1 {\n        print(2)\n    }\n}\n",
+        );
+        assert!(f.is_empty(), "{:?}", f);
+    }
+
+    #[test]
+    fn guarded_arm_after_catchall_is_still_dead() {
+        // first-match-wins: the earlier unguarded `_` always hits, so the
+        // later guard never even evaluates (the guard is on the DEAD side)
+        let f = w06_hits(
+            "match 1 {\n    case _ {\n        print(1)\n    }\n    case x if x > 5 {\n        print(2)\n    }\n}\n",
+        );
+        assert_eq!(f.len(), 1, "{:?}", f);
+        assert!(f[0].message.contains("unguarded catch-all"), "{:?}", f[0]);
+    }
+
+    #[test]
+    fn or_pattern_catchall_and_literal_or() {
+        // an or-pattern CONTAINING a catch-all is a catch-all
+        let f = w06_hits(
+            "match 1 {\n    case 1 | _ {\n        print(1)\n    }\n    case 2 {\n        print(2)\n    }\n}\n",
+        );
+        assert_eq!(f.len(), 1, "{:?}", f);
+        // a literal-only or-pattern is not: the 9 arm stays live
+        let f2 = w06_hits(
+            "match 9 {\n    case 1 | 2 {\n        print(1)\n    }\n    case 9 {\n        print(2)\n    }\n}\n",
+        );
+        assert!(f2.is_empty(), "{:?}", f2);
+    }
+
+    #[test]
+    fn strictly_broader_variant_payload() {
+        // Some(_) covers every Some payload; the None arm is a different
+        // family and must stay live
+        let f = w06_hits(
+            "match some(1) {\n    case Some(_) {\n        print(1)\n    }\n    case Some(x) {\n        print(2)\n    }\n    case None {\n        print(3)\n    }\n}\n",
+        );
+        assert_eq!(f.len(), 1, "the None arm stays live: {:?}", f);
+        assert!(f[0].message.contains("broader arm first"), "{:?}", f[0]);
+        assert!(f[0].message.contains("arm 1"), "{:?}", f[0]);
+    }
+
+    #[test]
+    fn tag_only_variant_subsumes_payload_arms() {
+        // bare `Some` matches the tag with ANY payload (payload-less values
+        // included), so Some(x) after it is dead; the reverse order stays
+        // live: the runtime misses a payload pattern against a payload-less
+        // value, so Some(x) cannot prove coverage of the tag-only form
+        let f = w06_hits(
+            "match some(9) {\n    case Some {\n        print(1)\n    }\n    case Some(x) {\n        print(2)\n    }\n}\n",
+        );
+        assert_eq!(f.len(), 1, "{:?}", f);
+        let f2 = w06_hits(
+            "match some(9) {\n    case Some(x) {\n        print(1)\n    }\n    case Some {\n        print(2)\n    }\n}\n",
+        );
+        assert!(f2.is_empty(), "{:?}", f2);
+    }
+
+    #[test]
+    fn nested_variant_payload_coverage() {
+        let f = w06_hits(
+            "match some(some(1)) {\n    case Some(Some(_)) {\n        print(1)\n    }\n    case Some(Some(n)) {\n        print(2)\n    }\n}\n",
+        );
+        assert_eq!(f.len(), 1, "{:?}", f);
+        // the outer wildcard covers deeper payloads too
+        let f2 = w06_hits(
+            "match some(some(1)) {\n    case Some(_) {\n        print(1)\n    }\n    case Some(Some(n)) {\n        print(2)\n    }\n}\n",
+        );
+        assert_eq!(f2.len(), 1, "{:?}", f2);
+        // different families never cover each other
+        let f3 = w06_hits(
+            "match some(1) {\n    case Ok(_) {\n        print(1)\n    }\n    case Some(n) {\n        print(2)\n    }\n}\n",
+        );
+        assert!(f3.is_empty(), "{:?}", f3);
+    }
+
+    #[test]
+    fn list_shape_coverage() {
+        // [a, b] matches any 2-list, so [1, 2] after it is dead
+        let f = w06_hits(
+            "match [1, 2] {\n    case [a, b] {\n        print(1)\n    }\n    case [1, 2] {\n        print(2)\n    }\n}\n",
+        );
+        assert_eq!(f.len(), 1, "{:?}", f);
+        // length mismatch: both arms live
+        let f2 = w06_hits(
+            "match [1] {\n    case [_, _, _] {\n        print(1)\n    }\n    case [1] {\n        print(2)\n    }\n}\n",
+        );
+        assert!(f2.is_empty(), "{:?}", f2);
+        // a *rest earlier arm covers exact shapes at least as long
+        let f3 = w06_hits(
+            "match [1, 2] {\n    case [1, *t] {\n        print(1)\n    }\n    case [1, 2] {\n        print(2)\n    }\n}\n",
+        );
+        assert_eq!(f3.len(), 1, "{:?}", f3);
+        // an exact-length earlier arm cannot cover a *rest later arm (longer
+        // lists fall through to the rest arm)
+        let f4 = w06_hits(
+            "match [1, 2] {\n    case [1, 2] {\n        print(1)\n    }\n    case [1, *t] {\n        print(2)\n    }\n}\n",
+        );
+        assert!(f4.is_empty(), "{:?}", f4);
+    }
+
+    #[test]
+    fn map_shape_coverage() {
+        // {x} (presence only) covers {x: 1}
+        let f = w06_hits(
+            "match {x: 1} {\n    case {x} {\n        print(1)\n    }\n    case {x: 1} {\n        print(2)\n    }\n}\n",
+        );
+        assert_eq!(f.len(), 1, "{:?}", f);
+        // {x: 1} does NOT cover {x}: any value at x passes the later arm
+        let f2 = w06_hits(
+            "match {x: 5} {\n    case {x: 1} {\n        print(1)\n    }\n    case {x} {\n        print(2)\n    }\n}\n",
+        );
+        assert!(f2.is_empty(), "{:?}", f2);
+        // a key the earlier arm never requires leaves the later arm live
+        // (a map without y matches it and misses the earlier arm)
+        let f3 = w06_hits(
+            "match {x: 1} {\n    case {x, y} {\n        print(1)\n    }\n    case {x} {\n        print(2)\n    }\n}\n",
+        );
+        assert!(f3.is_empty(), "{:?}", f3);
+    }
+
+    #[test]
+    fn multi_run_literal_covers_later_literal() {
+        // legacy comma-run: `1, 2` covers a later `2`; W05 only sees plain
+        // literal arms, so this shape is this rule's to report
+        let f = w06_hits(
+            "match 2 {\n    case 1, 2 {\n        print(1)\n    }\n    case 2 {\n        print(2)\n    }\n}\n",
+        );
+        assert_eq!(f.len(), 1, "{:?}", f);
+    }
+
+    #[test]
+    fn identical_plain_literals_defer_to_duplicate_rule() {
+        // one symptom, one owner: W05 reports identical literal arms with a
+        // first-seen arm number; this rule stays out of that story
+        let f = lint_src(
+            "match 7 {\n    case 7 {\n        print(1)\n    }\n    case 7 {\n        print(2)\n    }\n}\n",
+        );
+        assert!(!has_rule(&f, "unreachable-match-arm"), "{:?}", f);
+        assert!(has_rule(&f, "duplicate-match-arm"), "{:?}", f);
+    }
+
+    #[test]
+    fn partially_covered_or_arm_stays_live() {
+        // Some(_) covers the Some(1) alternative but not None: the arm as a
+        // whole is reachable, so flagging it would be a false positive
+        let f = w06_hits(
+            "match none() {\n    case Some(_) {\n        print(1)\n    }\n    case Some(1) | None {\n        print(2)\n    }\n}\n",
+        );
+        assert!(f.is_empty(), "{:?}", f);
+    }
+
+    #[test]
+    fn nested_offender_reported_once() {
+        // regression pin: the pre-stage-2 walk descended arm bodies twice
+        // (manual recursion + stmt_nested_all), double-reporting offenders
+        // nested inside an arm body
+        let f = w06_hits(
+            "match 2 {\n    case Some(x) {\n        match 3 {\n            case _ {\n                print(1)\n            }\n            case 3 {\n                print(2)\n            }\n        }\n    }\n    case _ {\n        print(3)\n    }\n}\n",
+        );
+        assert_eq!(f.len(), 1, "one dead arm, one finding: {:?}", f);
+    }
+
+    #[test]
+    fn floats_never_subsume() {
+        // NaN never deep_eq-equals itself, so an earlier float literal
+        // guarantees nothing; the rule stays silent on floats by design
+        let f = w06_hits(
+            "match 1.5 {\n    case 1.5 {\n        print(1)\n    }\n    case 2.5 {\n        print(2)\n    }\n}\n",
+        );
+        assert!(f.is_empty(), "{:?}", f);
+    }
+
+    #[test]
+    fn bytes_keys_are_exact_not_lossy() {
+        // b"\xff" and b"\xef\xbf\xbd" (the UTF-8 encoding of U+FFFD) collapse
+        // to the same string under from_utf8_lossy; a lossy key would call
+        // the second arm unreachable even though deep_eq compares raw bytes
+        let f = w06_hits(
+            "match some(b\"\\xef\\xbf\\xbd\") {\n    case Some(b\"\\xff\") {\n        print(1)\n    }\n    case Some(b\"\\xef\\xbf\\xbd\") {\n        print(2)\n    }\n}\n",
+        );
+        assert!(f.is_empty(), "{:?}", f);
+        // identical byte payloads still subsume (first-match-wins) at the
+        // nested position W05 cannot see
+        let f2 = w06_hits(
+            "match some(b\"ab\") {\n    case Some(b\"ab\") {\n        print(1)\n    }\n    case Some(b\"ab\") {\n        print(2)\n    }\n}\n",
+        );
+        assert_eq!(f2.len(), 1, "{:?}", f2);
     }
 }
