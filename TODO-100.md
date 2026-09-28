@@ -102,7 +102,7 @@ clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK · CI success.
 > The VM (W009) starts only after W007/W006 land so the bytecode design targets the final
 > error model, not a moving one.
 
-### W001 — Optional static type annotations [P1] [dev-1] [XL] [Track L2c] [open]
+### W001 — Optional static type annotations [P1] [dev-1] [XL] [Track L2c] [partial: stage 1 (L2c soft annotations) on main 8f59164 — TypeAnn Named/Union/Optional on gene params/returns + let, call-funnel arg checks in BOTH funnels, check_ret_ann covers normal/?!-propagated/guard/implicit-null returns, typo-armor semantics (unknown ann matches NOTHING), float-widening/int-refusal rules, SPEC §7c, oracle byte-identical, tests/type_ann.op + differential + rt evidence, 4 needless_return clippy fixes; REMAIN: phenotype-field annotations, let-tuple annotations, container anns ride W003, check-diagnostic spans ride W042]
 - Goal: `gene add(a: int, b: int) -> int` parses and soft-checks; annotations are optional
   everywhere (gradual typing); unknown/unexpected types become semantic **warnings**, never
   rejections (Total Grammar preserved).
@@ -113,7 +113,7 @@ clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK · CI success.
   `bootstrap/oracle.py`, `SPEC.md`, `tests/differential/`.
 - Depends: none. Blocks W003/W026 typing story.
 
-### W002 — Algebraic data types + match v2 [P1] [dev-1] [XL] [Track L2b] [open]
+### W002 — Algebraic data types + match v2 [P1] [dev-1] [XL] [Track L2b] [partial: stage 1 (match-v2) on main cb25d46 — Variant/List/Map/Or/Guard patterns, first-match-wins, arm-child capture scopes, or-scratch lift, guard containment + ?!-return semantics, unknown-tag whole-subject fallback with payload consumed, oracle mirror byte-identical, tests/match_v2.op 45 asserts + differential + rt_p17a 8/8 contained, SPEC §5a, TUTORIAL §8b; REMAIN: unreachable-arm detection in check (feeds W042), constructor patterns for user tags ride W004]
 - Goal: match gains or-patterns, struct/map patterns, nested patterns, guards in every arm,
   and variant-style payloads; Option/Result-shaped matching becomes idiomatic once W006 lands.
 - Done when: `match x { 1 | 2 => .., [a, rest] => .., {k: v} if v > 0 => .. }` parses and
@@ -144,7 +144,7 @@ clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK · CI success.
   `bootstrap/oracle.py`, `SPEC.md`, `std/*.op`.
 - Depends: W001 recommended. L2d (operator overloading) is a special case of this.
 
-### W005 — Immutability split: let / const / mut [P2] [dev-1] [M] [open]
+### W005 — Immutability split: let / const / mut [P2] [dev-1] [M] [open] — **next core unit (batch 1)**
 - Goal: `let` = single-assignment binding (today's `let`), `const` = compile-time constant
   with literal-fold guarantee, `mut` re-binding for mutable containers; today's
   `const → let` synonym gets a deprecation note (feeds W064).
