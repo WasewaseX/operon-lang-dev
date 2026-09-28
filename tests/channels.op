@@ -171,7 +171,8 @@ frame proof {
     let t = channel()
     let worker = spawn(doubler, [t])
     send(t, 21)
-    assert(join(worker) == 42, "worker recv sees a host send")
+    let joined = join(worker)
+    assert(joined == 42, "worker recv sees a host send (join gave " + str(joined) + ")")
 
     let u = channel()
     let helper = spawn(feeder, [u])
