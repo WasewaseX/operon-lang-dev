@@ -1,0 +1,60 @@
+# differential: W013 weak references + cycle counter, the agreement-safe
+# subset. Both engines agree by construction on: alive round trips, refusal
+# families, cycle registration increments, and strengthen-after-scope-drop
+# returning null. NOT pinned here: exact freeing timing across gene scopes
+# (the oracle has no refcounter; the counters persist by the no-GC design).
+phen p {
+    let v = 3
+}
+gene wrap(f) {
+    stress {
+        return "ok " + str(f())
+    } rescue (e) {
+        return "stress[" + e.kind + "] " + e.message
+    }
+}
+gene t_alive_map() {
+    let m = {a: 1}
+    let w = weak(m)
+    return strengthen(w) == m
+}
+gene t_alive_list() {
+    let l = [1, 2]
+    let wl = weak(l)
+    return strengthen(wl) == l
+}
+gene t_pheno() {
+    let o = new p()
+    let wo = weak(o)
+    let back = strengthen(wo)
+    return back == o && back.v == 3
+}
+gene t_refusal_int() {
+    return weak(5)
+}
+gene t_refusal_strong() {
+    let m = {x: 1}
+    return strengthen(m)
+}
+gene t_cycles_two() {
+    let a = [1]
+    push(a, a)
+    let b = [2]
+    push(b, b)
+    return memory().cycles
+}
+gene t_drop_null() {
+    let m = {gone: 1}
+    let w = weak(m)
+    return strengthen(w)
+}
+gene main() {
+    print(wrap(t_alive_map))
+    print(wrap(t_alive_list))
+    print(wrap(t_pheno))
+    print(wrap(t_refusal_int))
+    print(wrap(t_refusal_strong))
+    print(wrap(t_cycles_two))
+    print(wrap(t_drop_null))
+    print("done")
+}

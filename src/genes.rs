@@ -986,6 +986,11 @@ fn to_send_d(v: &Value, d: u32) -> SendValue {
         // during data serialization (same rule as genes/sequences); only
         // top-level handles cross live (SnapArg::Channel / SnapVal::Channel)
         Value::Channel(_) => SendValue::Null,
+        // W013: a weak handle degrades to null like every other handle. It
+        // could never keep its meaning across the snapshot membrane (the
+        // copy's target is a different allocation), and a top-level weak is
+        // refused by the spawn/send pre-flight before this arm is reached.
+        Value::Weak(_) => SendValue::Null,
         Value::Variant(crate::value::VTag::NoneV, _) => SendValue::Variant("None".into(), None),
         Value::Variant(t, Some(p)) => {
             SendValue::Variant(t.tag_name().into(), Some(Box::new(to_send_d(p, d + 1))))

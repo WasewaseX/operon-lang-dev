@@ -3,7 +3,7 @@
 use crate::ast::GeneDef;
 use std::cell::RefCell;
 use std::collections::HashSet;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 use std::sync::Arc;
 
 pub type ListRef = Rc<RefCell<Vec<Value>>>;
@@ -257,6 +257,50 @@ pub enum Value {
     /// degrade to null), it crosses spawn boundaries LIVE via the snapshot
     /// handle lane, and identity (Arc::ptr_eq) is the equality rule.
     Channel(Arc<ChannelShared>),
+    /// W013 (D-013): an opaque weak handle (the `weak()` builtin). Holds a
+    /// WEAK reference to the target's backing store, it does NOT keep the
+    /// value alive (there is no tracing GC, an Rc value with zero strong
+    /// refs is freed immediately, so `strengthen` after the last strong ref
+    /// returns null). Like a channel handle it never serializes through the
+    /// data membrane (nested handles degrade to null, send refuses it at
+    /// the top level) and its repr is address-free so the two cores agree.
+    Weak(WeakHandle),
+}
+
+/// W013: the backing store behind a `weak()` handle. Phenotype instances
+/// carry the (shared, per-class) definition Arc so `strengthen` can rebuild
+/// the SAME instance (same fields Rc) while the instance is still alive;
+/// holding the definition never keeps an instance alive.
+#[derive(Clone)]
+pub enum WeakHandle {
+    List(std::rc::Weak<RefCell<Vec<Value>>>),
+    Map(std::rc::Weak<RefCell<MapStore>>),
+    Obj(std::rc::Weak<RefCell<MapStore>>, Arc<crate::ast::PhenoDef>),
+}
+
+impl WeakHandle {
+    /// The referenced value, or None once the last strong reference is gone
+    /// (no GC: freeing is immediate at strong-count zero, never deferred).
+    pub fn upgrade_value(&self) -> Option<Value> {
+        match self {
+            WeakHandle::List(w) => w.upgrade().map(Value::List),
+            WeakHandle::Map(w) => w.upgrade().map(Value::Map),
+            WeakHandle::Obj(w, d) => w.upgrade().map(|m| Value::Obj(d.clone(), m)),
+        }
+    }
+
+    /// Identity rule for weak handles (mirrors the channel rule): same
+    /// target address. Two handles compare equal iff they point at the same
+    /// allocation; a dead handle keeps its address so the comparison stays
+    /// total, and a dead target is unobservable past `strengthen` (null).
+    fn same_target(&self, other: &WeakHandle) -> bool {
+        match (self, other) {
+            (WeakHandle::List(a), WeakHandle::List(b)) => Weak::as_ptr(a) == Weak::as_ptr(b),
+            (WeakHandle::Map(a), WeakHandle::Map(b)) => Weak::as_ptr(a) == Weak::as_ptr(b),
+            (WeakHandle::Obj(a, _), WeakHandle::Obj(b, _)) => Weak::as_ptr(a) == Weak::as_ptr(b),
+            _ => false,
+        }
+    }
 }
 
 pub struct Stress {
@@ -331,6 +375,9 @@ impl Value {
             Value::Obj(_, _) => "phenotype",
             Value::Variant(t, _) => t.family(),
             Value::Channel(_) => "channel",
+            // W013: the handle type is its own name; the TARGET's type is
+            // not leaked (the handle may outlive the target).
+            Value::Weak(_) => "weak",
         }
     }
 
@@ -348,6 +395,9 @@ impl Value {
             // W015: a channel handle is truthy like the other behavior
             // handles (genes, sequences, phenotypes).
             Value::Channel(_) => true,
+            // W013: a weak handle is truthy like any other handle, it says
+            // nothing about whether the target is still alive.
+            Value::Weak(_) => true,
             // W06: a carried success is truthy; a carried failure is falsy,
             // `if (result)` reads naturally without unwrapping.
             Value::Variant(VTag::SomeV, _) | Value::Variant(VTag::OkV, _) => true,
@@ -442,6 +492,9 @@ impl Value {
             // would make `print(ch)` diverge between the two cores (and
             // between runs); channels render anonymously like lambdas do.
             Value::Channel(_) => "<channel>".into(),
+            // W013: address-free for the same reason; the target's identity
+            // is observable only through strengthen(), never through repr.
+            Value::Weak(_) => "<weak>".into(),
         }
     }
 
@@ -567,6 +620,9 @@ impl Value {
                         _ => false,
                     }
             }
+            // W013: weak handles are identity-based like channels, a handle
+            // never equals the target it references (data vs handle).
+            (Value::Weak(a), Value::Weak(b)) => a.same_target(b),
             _ => false,
         }
     }
@@ -674,4 +730,228 @@ pub fn key_is_scalar(v: &Value) -> bool {
             | Value::Str(_)
             | Value::Bytes(_)
     )
+}
+
+// ---------------------------------------------------------------- cycles
+// W013 (D-013): live DETECTED-cycle bookkeeping. The engine detects a
+// reference cycle at container insertion time: inserting `v` into container
+// `C` where `C` is already reachable from `v` proves `C` is reachable from
+// itself (C participates in a reference cycle), so C is registered once.
+// The registry holds WEAK references only, accounting never extends a
+// value's lifetime (D-013 rejected a tracing GC; this is honest accounting).
+//
+// The reported count re-verifies lazily: a registration dies when the
+// container is reclaimed (weak upgrade fails, the cycle was broken and the
+// strong count hit zero) or when the container is no longer reachable from
+// itself (the program broke the cycle edge by mutation). Insertion
+// increments, reclamation decrements.
+//
+// Walk scope: list items, map VALUES, phenotype field values, variant
+// payloads. Map keys are not walked (the oracle stores container keys
+// display-stringified, a pre-existing divergence the corpus avoids), and
+// gene/env capture cycles are engine-internal, not container edges, so
+// they are not counted either. The count is a detected-cycle gauge, not an
+// exact strongly-connected-component census.
+
+/// A weak handle to a registered cycle member's backing store.
+enum CycleWeak {
+    List(Weak<RefCell<Vec<Value>>>),
+    Map(Weak<RefCell<MapStore>>),
+}
+
+struct CycleEntry {
+    weak: CycleWeak,
+    addr: usize,
+}
+
+thread_local! {
+    // Rc containers are thread-local by construction (the spawn membrane
+    // never aliases across workers, SPEC 19d), so per-thread registries are
+    // the correct scope: a worker cell accounts its own cycles.
+    static CYCLE_REGS: RefCell<Vec<CycleEntry>> = RefCell::new(Vec::new());
+}
+
+fn list_addr(l: &ListRef) -> usize {
+    Rc::as_ptr(l) as *const u8 as usize
+}
+fn map_addr(m: &MapRef) -> usize {
+    Rc::as_ptr(m) as *const u8 as usize
+}
+
+/// The container's backing-store address (phenotype instances are tracked
+/// through their field map, the per-instance container).
+fn container_addr(v: &Value) -> Option<usize> {
+    match v {
+        Value::List(l) => Some(list_addr(l)),
+        Value::Map(m) => Some(map_addr(m)),
+        Value::Obj(_, m) => Some(map_addr(m)),
+        _ => None,
+    }
+}
+
+/// True when `v` is a value kind that can (transitively) hold a container;
+/// scalars short-circuit the insertion walk.
+fn can_contain(v: &Value) -> bool {
+    matches!(
+        v,
+        Value::List(_) | Value::Map(_) | Value::Obj(_, _) | Value::Variant(_, _)
+    )
+}
+
+/// Push the container-shaped children of `v` onto the walk worklist (map
+/// KEYS are deliberately not walked, see the section comment).
+fn push_children(v: &Value, stack: &mut Vec<Value>) {
+    match v {
+        Value::List(l) => stack.extend(l.borrow().iter().cloned()),
+        Value::Map(m) => stack.extend(m.borrow().iter().map(|(_, v)| v.clone())),
+        Value::Obj(_, m) => stack.extend(m.borrow().iter().map(|(_, v)| v.clone())),
+        Value::Variant(_, Some(p)) => stack.push((**p).clone()),
+        _ => {}
+    }
+}
+
+/// Does the walk from `v` reach the container at `root_addr`? Inserting `v`
+/// into that container then makes the container reachable from itself.
+fn walk_reaches(root_addr: usize, v: &Value) -> bool {
+    let mut seen: HashSet<usize> = HashSet::new();
+    let mut stack: Vec<Value> = vec![v.clone()];
+    walk_reaches_root(root_addr, &mut seen, &mut stack)
+}
+
+/// Register `target` as a live detected cycle (called after a positive
+/// detection). Dedupe: once per address, and once per subgraph, if any
+/// container reachable from the target is already registered, the cycle
+/// group was already counted through that member.
+fn cycle_register_addr(addr: usize, weak: CycleWeak) {
+    CYCLE_REGS.with(|regs| {
+        let mut regs = regs.borrow_mut();
+        // prune reclaimed registrations first (a dead entry's address can
+        // be reused by a fresh allocation, so prune-then-compare)
+        regs.retain(|e| match &e.weak {
+            CycleWeak::List(w) => w.upgrade().is_some(),
+            CycleWeak::Map(w) => w.upgrade().is_some(),
+        });
+        if regs.iter().any(|e| e.addr == addr) {
+            return; // this container is already the registered member
+        }
+        // subgraph dedupe: walk the target's reachable containers, if any
+        // is registered the group is already counted (one entry per cycle)
+        let mut seen: HashSet<usize> = HashSet::new();
+        let mut stack: Vec<Value> = Vec::new();
+        match &weak {
+            CycleWeak::List(w) => {
+                if let Some(l) = w.upgrade() {
+                    stack.extend(l.borrow().iter().cloned());
+                }
+            }
+            CycleWeak::Map(w) => {
+                if let Some(m) = w.upgrade() {
+                    stack.extend(m.borrow().iter().map(|(_, v)| v.clone()));
+                }
+            }
+        }
+        while let Some(cur) = stack.pop() {
+            match container_addr(&cur) {
+                Some(a) => {
+                    if regs.iter().any(|e| e.addr == a) {
+                        return; // a member of this subgraph is registered
+                    }
+                    if seen.insert(a) {
+                        push_children(&cur, &mut stack);
+                    }
+                }
+                None => {
+                    if let Value::Variant(_, Some(p)) = &cur {
+                        stack.push((**p).clone());
+                    }
+                }
+            }
+        }
+        regs.push(CycleEntry { weak, addr });
+    });
+}
+
+/// W013: insertion-time cycle detection. Called at every container
+/// mutation that adds an edge (push/insert/index write/map insert/field
+/// write) BEFORE the edge lands: if the inserted value already reaches the
+/// target container, the new edge closes a cycle and the target registers.
+pub fn cycle_note_insert(target: &Value, v: &Value) {
+    let root = match container_addr(target) {
+        Some(a) => a,
+        None => return,
+    };
+    if !can_contain(v) {
+        return;
+    }
+    if walk_reaches(root, v) {
+        let weak = match target {
+            Value::List(l) => CycleWeak::List(Rc::downgrade(l)),
+            Value::Map(m) | Value::Obj(_, m) => CycleWeak::Map(Rc::downgrade(m)),
+            _ => return,
+        };
+        cycle_register_addr(root, weak);
+    }
+}
+
+/// W013: the memory() field. Registrations whose container was reclaimed
+/// (weak dead) or whose cycle was broken by mutation (no longer reachable
+/// from itself) are pruned; the survivors are the live detected cycles.
+pub fn live_cycle_count() -> i64 {
+    CYCLE_REGS.with(|regs| {
+        let mut regs = regs.borrow_mut();
+        let mut n: i64 = 0;
+        regs.retain(|e| {
+            let still = match &e.weak {
+                CycleWeak::List(w) => match w.upgrade() {
+                    None => false,
+                    Some(l) => {
+                        // walk from the container's children: the container
+                        // itself is the root, reaching it again is a cycle
+                        let mut seen: HashSet<usize> = HashSet::new();
+                        seen.insert(e.addr);
+                        let mut stack: Vec<Value> = l.borrow().iter().cloned().collect();
+                        walk_reaches_root(e.addr, &mut seen, &mut stack)
+                    }
+                },
+                CycleWeak::Map(w) => match w.upgrade() {
+                    None => false,
+                    Some(m) => {
+                        let mut seen: HashSet<usize> = HashSet::new();
+                        seen.insert(e.addr);
+                        let mut stack: Vec<Value> =
+                            m.borrow().iter().map(|(_, v)| v.clone()).collect();
+                        walk_reaches_root(e.addr, &mut seen, &mut stack)
+                    }
+                },
+            };
+            if still {
+                n += 1;
+            }
+            still
+        });
+        n
+    })
+}
+
+/// Worklist walk seeded past the root (children of the candidate container):
+/// reaching `root_addr` again proves the container is reachable from itself.
+fn walk_reaches_root(root_addr: usize, seen: &mut HashSet<usize>, stack: &mut Vec<Value>) -> bool {
+    while let Some(cur) = stack.pop() {
+        match container_addr(&cur) {
+            Some(a) => {
+                if a == root_addr {
+                    return true;
+                }
+                if seen.insert(a) {
+                    push_children(&cur, stack);
+                }
+            }
+            None => {
+                if let Value::Variant(_, Some(p)) = &cur {
+                    stack.push((**p).clone());
+                }
+            }
+        }
+    }
+    false
 }
