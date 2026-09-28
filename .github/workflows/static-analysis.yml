@@ -1,0 +1,53 @@
+name: static-analysis
+
+# Multi-tool SAST battery, NON-BLOCKING by design (the B1 bench-job
+# precedent: evidence over gates). CodeQL stays the blocking security
+# gate per docs/codeql/README.md; this adds the orthogonal lenses:
+#   * ast-grep — structural rules (docs/static-analysis/sg-rules/)
+#   * bandit   — Python lanes (bootstrap/, scripts/)
+#   * semgrep  — p/rust + p/security-audit + p/secrets
+# Results land as SARIF/JSON artifacts + the triage ledger lives in
+# docs/static-analysis/TRIAGE.md. A new warning-class finding should be
+# triaged there the same session it appears — the ledger is the contract.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  sast:
+    name: ast-grep + bandit + semgrep
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v4.2.2 (SHA-pinned, sec-r1)
+
+      - name: Install tool set
+        run: |
+          npm install -g @ast-grep/cli
+          pipx install semgrep bandit 2>/dev/null || pipx install bandit
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: ast-grep structural scan (Rust core)
+        run: |
+          ast-grep scan src --format sarif > ast-grep.sarif || true
+          ast-grep scan src | tee ast-grep.txt || true
+
+      - name: bandit (Python lanes)
+        run: bandit -r bootstrap/ scripts/ -f json -o bandit.json || true
+
+      - name: semgrep (security packs)
+        run: semgrep scan --config p/rust --config p/security-audit --config p/secrets --sarif --output semgrep.sarif --quiet src/ bootstrap/ scripts/ .github/ || true
+
+      - name: Upload evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2 (SHA-pinned)
+        with:
+          name: sast-evidence
+          path: |
+            ast-grep.sarif
+            ast-grep.txt
+            bandit.json
+            semgrep.sarif
+          if-no-files-found: warn

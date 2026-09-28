@@ -27,5 +27,6 @@ pub mod vm;
 /// Lives here (not in the binary) because tool-layer entry points rely on it.
 pub fn die(msg: &str) -> ! {
     eprintln!("operon: {}", msg);
+    // ast-grep-ignore: no-std-process-exit-in-core
     std::process::exit(2);
 }
