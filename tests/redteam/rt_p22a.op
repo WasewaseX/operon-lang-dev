@@ -1,0 +1,114 @@
+# rt_p22a, W013 closure: deep cycle graph + the memory() cycle gauge under
+# adversarial graph shapes. Native graph walks are NOT interpreter steps, so
+# every cycle walk carries a hard WALK_BUDGET (100k visits, both engines cut
+# at the same node); this payload stresses the shapes the budget exists for:
+#   1. a 3000-node container ring (thousands of nodes, real Rc cycle):
+#      registration, weak-handle deref walk across 250 hops, edge breaking
+#      (prune) and re-closing (re-register) all bounded.
+#   2. thousands of distinct self-referencing lists: the gauge re-verifies
+#      every registration on EVERY memory() call; the whole pass is bounded
+#      by one shared walk budget and memory() must keep returning.
+#   3. a cycle whose verification walk EXCEEDS the budget (a hub/list 2-cycle
+#      carrying 150k members): detection still registers it (2 visits to
+#      prove the closing edge), re-verification runs out of budget mid-walk
+#      and keeps the entry counted (persistence is the D-013 default, death
+#      must be PROVEN), and memory() still returns, capped, no hang.
+#   4. dead-handle derefs inside the storm answer null (soft note), never a
+#      dangling read.
+# Containment: every print below is reached, the run ends rc 0 on the
+# "contained:" line, no panic, no hang, no signal death.
+gene mkdeadweak() {
+    let gone = {x: 1}
+    return weak(gone)
+}
+
+main {
+    let base = memory().cycles
+
+    # --- 1. the 3000-node ring
+    let ring = []
+    for i in range(3000) {
+        push(ring, [i])
+    }
+    for i in range(2999) {
+        push(ring[i], ring[i + 1])
+    }
+    push(ring[2999], ring[0])          # the closing edge: 3000-node cycle
+    let after_ring = memory().cycles
+    print("ring: " + str(after_ring - base) + " registered (expect 1)")
+
+    # --- deref walk via weak handles: 250 hops through the ring
+    let w = weak(ring[1500])
+    let cur = strengthen(w)
+    for j in range(250) {
+        cur = cur[1]
+    }
+    print("deref-walk: landed=" + str(cur == ring[1750]))
+    let whub = weak(ring[2999])
+    print("deref-tail: alive=" + str(strengthen(whub) == ring[2999]))
+    # bounded cyclic repr, no runaway output (the walk depth-caps)
+    print("repr-bounded: " + str(len(str(ring[0])) < 100000))
+
+    # --- edge breaking on the deep ring: prune, then re-close re-registers
+    let last = ring[2999]
+    last[1] = null                     # pop the closing edge
+    let broken = memory().cycles
+    print("ring-broken: pruned=" + str(broken == after_ring - 1))
+    push(ring[2999], ring[0])          # re-close the same ring
+    let reclosed = memory().cycles
+    print("ring-reclosed: back=" + str(reclosed == after_ring))
+
+    # --- 2. thousands of distinct self-referencing lists
+    for i in range(5000) {
+        let c = [i]
+        push(c, c)
+    }
+    let storm = memory().cycles
+    print("storm: total-delta=" + str(storm - base) + " (expect 5001)")
+
+    # repeated gauge reads over the full registration set: each call
+    # re-verifies ~8000 entries under ONE shared walk budget
+    let stable = true
+    for k in range(10) {
+        let _ = k
+        if memory().cycles != storm {
+            stable = false
+        }
+    }
+    print("gauge-loop: stable=" + str(stable) + " (terminated 10 reads)")
+
+    # --- 3a. a small star cycle that fully verifies
+    let big2 = []
+    for i in range(5000) {
+        push(big2, [i])
+    }
+    let hub2 = [big2]
+    push(big2, hub2)
+    let after_small = memory().cycles
+    print("star-small: delta=" + str(after_small - storm) + " (expect 1)")
+    let wh2 = weak(hub2)
+    print("star-small-deref: same=" + str(strengthen(wh2) == hub2))
+
+    # --- 3b. the over-budget star: verification exceeds the walk budget,
+    # the entry persists and memory() still returns (capped walk)
+    let big3 = []
+    for i in range(150000) {
+        push(big3, [i])
+    }
+    let hub3 = [big3]
+    push(big3, hub3)
+    let c1 = memory().cycles
+    let c2 = memory().cycles
+    print("star-big: registered=" + str(c1 - after_small) + " persistent=" + str(c1 == c2))
+
+    # --- 4. a dead handle derefs to null inside the storm
+    print("dead-deref: null=" + str(strengthen(mkdeadweak()) == null))
+
+    # --- bounded repr of a self-cycle (probed last: it adds a registration,
+    # every gauge delta above is already read)
+    let cc = [1]
+    push(cc, cc)
+    print("repr-self: " + str(cc))
+
+    print("contained: p22a survived")
+}

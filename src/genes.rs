@@ -824,8 +824,13 @@ fn resolve_path(interp: &Interp, path: &str) -> Result<String, String> {
             if let Some(root) = dir.parent() {
                 candidates.push(Some(root.join(&p)));
             }
-            // bare `use x`: try the exe-relative std trees by file name
-            if !p.starts_with("std/") {
+            // bare `use x`: try the exe-relative std trees by file name.
+            // BARE only: a multi-segment path (a/b/c) must never resolve by
+            // its tail, or `use mylib::seq` would hijack std/seq.op instead
+            // of descending mylib's exported nested tables (W025 stage 2;
+            // the oracle never had this candidate, so parity demands the
+            // single-segment restriction, not an oracle-side mirror).
+            if !p.starts_with("std/") && !p.contains('/') {
                 if let Some(fname) = std::path::Path::new(&p).file_name() {
                     candidates.push(Some(dir.join("std").join(fname)));
                     if let Some(root) = dir.parent() {
@@ -1230,6 +1235,14 @@ fn to_send_d(v: &Value, d: u32) -> SendValue {
         // during data serialization (same rule as genes/sequences); only
         // top-level handles cross live (SnapArg::Channel / SnapVal::Channel)
         Value::Channel(_) => SendValue::Null,
+        // W013: a weak handle degrades to null like every other handle when
+        // it crosses as DATA (nested inside a container, or a join-result
+        // value, it could never keep its meaning across the snapshot
+        // membrane: the copy's target is a different allocation). A
+        // TOP-LEVEL weak spawn argument and a weak channel payload are
+        // refused by their pre-flights before this arm is reached
+        // (SPEC §19f), so this arm is the nested/return-boundary rule.
+        Value::Weak(_) => SendValue::Null,
         Value::Variant(crate::value::VTag::NoneV, _) => SendValue::Variant("None".into(), None),
         Value::Variant(t, Some(p)) => {
             SendValue::Variant(t.tag_name().into(), Some(Box::new(to_send_d(p, d + 1))))
@@ -1789,6 +1802,22 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
             "overflow",
             "too many live tasks (4096), join() your spawns",
         ));
+    }
+    // W013 spawn membrane: a top-level weak handle is REFUSED (catchable
+    // `membrane` stress), never silently nulled. A weak handle's whole
+    // meaning is the allocation identity of its target in the creating
+    // cell; the snapshot wire could only deliver a lie (a null, or worse a
+    // handle re-pointed at a copy). Same family as the send() refusal:
+    // data crosses, handles ride their own documented lanes (genes by
+    // name, lambdas and channels live, instances as maps), weak handles
+    // ride none. Nested handles keep the degrade-to-null wire rule.
+    for a in &args {
+        if matches!(a, Value::Weak(_)) {
+            return Err(Stress::new(
+                "membrane",
+                "spawn() refuses a weak payload; weak handles cannot cross the snapshot membrane",
+            ));
+        }
     }
     // pre-flight depth check: a payload deeper than the SendValue cap must
     // fail the SPAWN (catchable stress), not smuggle a stress value across

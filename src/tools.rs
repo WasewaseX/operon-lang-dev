@@ -518,6 +518,12 @@ pub fn check(file: &str, opts: &Opts, nmd: bool, purge: bool) -> CheckReport {
 /// diagnostics, the demo-works/real-code-breaks failure mode, reproduced
 /// live by the loop-5-b audit.
 pub fn module_candidates(path: &str, base_dir: Option<&str>) -> Vec<std::path::PathBuf> {
+    // W025 stage 2: a wildcard `use a/b/*` carries the `*` in the path
+    // string; the check side reads module SOURCE for gene names, so strip
+    // the wildcard tail and read the base path (the runtime descends nested
+    // tables for the same import, here the flat file's names are the honest
+    // superset the checker can see without running the program).
+    let path = path.strip_suffix("/*").unwrap_or(path);
     let p = format!("{}.op", path.trim_end_matches(".op"));
     let mut out = Vec::new();
     if let Some(base) = base_dir {
@@ -1884,6 +1890,18 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
             }
         }
         Stmt::Gene(g) => {
+            // W64: deprecation marks round-trip canonically (metadata,
+            // never evaluated; SPEC §3 marks table)
+            if let Some(d) = &g.deprecated {
+                match &d.since {
+                    Some(s) => out.push_str(&format!(
+                        "@deprecated({}, since={}) ",
+                        str_lit(&d.message),
+                        str_lit(s)
+                    )),
+                    None => out.push_str(&format!("@deprecated({}) ", str_lit(&d.message))),
+                }
+            }
             if g.acetylate {
                 out.push_str("@acetylate ");
             }
@@ -2148,6 +2166,13 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
         Stmt::AnchorImport(ns) => out.push_str(&format!("anchor import {};\n", ns.join(", "))),
         Stmt::Tad(n, body) => {
             out.push_str(&format!("tad {} ", n));
+            fmt_block(body, ind, out);
+            out.push_str("\n\n");
+        }
+        Stmt::Module(n, body) => {
+            // W025 stage 2: nested sub-module declarations round-trip
+            // canonically beside tads.
+            out.push_str(&format!("module {} ", n));
             fmt_block(body, ind, out);
             out.push_str("\n\n");
         }
@@ -3021,6 +3046,8 @@ fn d_stmt(s: &Stmt) -> DumpNode {
         Stmt::AnchorExport(names) => dn("AnchorExport", names.iter().map(|n| ds(n)).collect()),
         Stmt::AnchorImport(names) => dn("AnchorImport", names.iter().map(|n| ds(n)).collect()),
         Stmt::Tad(name, body) => dn("Tad", vec![ds(name), d_body(body)]),
+        // W025 stage 2: nested sub-module tables dump beside tads
+        Stmt::Module(name, body) => dn("Module", vec![ds(name), d_body(body)]),
         Stmt::Block(body) => dn("Block", vec![d_body(body)]),
         Stmt::Seq(g) => d_gene("Seq", g),
         Stmt::Yield(e) => dn("Yield", e.iter().map(d_expr).collect()),

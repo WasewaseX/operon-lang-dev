@@ -63,7 +63,8 @@ Arithmetic:
 - Newlines terminate statements; `;` allowed and ignored (also `;;`, stray). Blocks are `{ ... }`.
 - Keywords (canonical, the parser's reserved set; the generated inventory with per-keyword programmer analogies lives in [docs/KEYWORDS.md](docs/KEYWORDS.md) and is never hand-typed here).
 - Literal words `true false null` and the logical words `and or not` are recognized in expression positions (not part of the reserved keyword table).
-- Marks: `@acetylate` `@methylate` `@m6a` `@copies` `@riboswitch` `@burst`. The six declaration marks of the biology layer: lexical presence here, attachment in §7, semantics in §11 (part contract §11a).
+- Marks: `@acetylate` `@methylate` `@m6a` `@copies` `@riboswitch` `@burst` `@deprecated`. The six declaration marks of the biology layer: lexical presence here, attachment in §7, semantics in §11 (part contract §11a). The seventh mark is the language-surface deprecation mark (W64, below).
+- `@deprecated("migration text", since="2.4")` (W64) marks a gene declaration as deprecated. The mark rides the gene as **pure metadata**: the interpreter never reads it, a marked gene runs, composes and dispatches exactly like any other gene (`tests/deprecate.op` pins runtime neutrality), and no differential parity is claimed (the oracle consumes the mark and drops it, like doc comments). The tooling surface owns the behavior: `operon check` reports a `deprecated-use` warning (stable code `W12`) at every static free-gene call site of a marked gene in the same file, carrying the migration text and the `since` gate; `--strict` escalates it per the strict table; `// allow: deprecated-use` on the call line silences it. Method calls, dynamic dispatch through a bare gene reference, and cross-file uses are the documented escape hatches (the check is file-local by design). Malformed payloads (`@deprecated(42)`, missing message) degrade to a rung-4 note and drop the mark, never a rejection. `fmt` re-emits the mark canonically and `fmt∘fmt = fmt` holds (`tests/deprecate_lint.rs` pins the warning, the escapes and the fmt fixpoint). Removal scheduling follows the compatibility ladder (docs/specs/COMPATIBILITY.md, W63). Honest inventory: NO core or std gene carries the mark today (`const` is live semantics per W05, its migration was retired), the machinery is future-proofing.
 - `#` starts a line comment; `##` starts a **doc comment** (W074): consecutive `##` lines form a doc block that attaches to the declaration (`gene`/`sequence`/`phenotype`/`splice`/`fate`, including `@mark` lines above them) it immediately hugs, the doc's last line is exactly one line above the declaration keyword line. A doc block at the very top of the file that is separated from everything by a blank line becomes the **module doc**. Doc text is captured verbatim after the `##` marker (one leading space stripped). Docs are **pure metadata**: they never affect evaluation, repair rungs, or differential parity, the Python oracle ignores them as comments, and parity is not required for doc content (`tests/differential/doc_comments.op` pins neutrality). Docs survive `fmt` byte-exact (`fmt∘fmt = fmt` holds corpus-wide), surface in LSP hover and REPL `:doc name`, and are rendered by `operon doc` (W073).
 - `#` inside a string does NOT start a comment.
 
@@ -173,6 +174,37 @@ silently. New in W02 (all mirrored op-for-op by the Python oracle, and by
   = matches either). Pattern literal expressions cannot call or reference
   names (they are literals by construction), so guards are the supported
   way to test computed conditions.
+
+**Unreachable-arm report (W002 stage 2, check-side).** The static engine
+(`src/lint.rs`, rule `unreachable-match-arm`, stable code `W06`) reports an
+arm that can never run under first-match-wins: an arm placed after an
+UNGUARDED catch-all (`_`, a binding pattern, or an or-pattern containing
+either; the legacy comma-run holds plain literals only, so it can never
+hide a catch-all), or after a strictly broader arm whose shape provably
+covers every value the later arm can match (`Some(_)` before `Some(x)`,
+the bare tag before a payload arm, `[a, b]` before `[1, 2]`, `[1, *t]`
+before `[1, 2]`, `{x}` before `{x: 1}`, a literal inside an earlier
+or-/comma-run, nested payloads likewise). The report is a semantic WARNING
+on the lint stream (`operon lint`; `check --style` inlines it), advisory
+like every lint rule: Total Grammar never rejects a program, and the
+interpreter and the Python oracle are untouched, so runtime semantics and
+differential parity cannot drift from this check. Conservatism is the
+design bar (zero false positives): a GUARD on the earlier arm makes it
+fallible, so a guarded arm is never treated as covering anything, and a
+guard on the later (dead) arm does not save it, because first-match-wins
+means that guard can never evaluate; structural coverage is claimed only
+where the pattern algebra proves it (floats are excluded entirely, NaN
+never deep-equals itself; byte-string keys compare per byte, so distinct
+byte strings are never conflated; identical plain literal arms are left to
+the separate `duplicate-match-arm` rule, `W05`, which owns that symptom);
+or-alternatives must ALL be covered before the arm is reported. Findings
+carry file and line (the first line-bearing statement of the arm body;
+the AST keeps statement spans only on expression statements, so a column
+is not reported, and an arm whose body opens with spanless statements,
+a plain assignment say, anchors at the file's line 1, where only a
+line-1 allow comment can suppress it). Exhaustiveness
+(is some value class unhandled?) is intentionally NOT claimed here: that
+needs the full pattern algebra and stays with the semantic lane.
 
 ## 6. Expressions (precedence low → high)
 
@@ -359,7 +391,7 @@ L.push(4) / M.del("a")        # method forms stress identically
 ## 8. Modules, TADs, anchors
 
 - `use path;`, path like `std/bio`, `./util`, `util` (`.op` appended if absent). Binds one name: basename, or `as name`. `use std/bio as b;` → `b.some_fn(...)`. Importing the same file twice executes it once (module cache).
-- **Namespace spellings (W25).** `::` is the Rust-style separator, `use std::bio;`, `use bio::sequence`, and multi-segment `use a::b::c` are EXACT sugar for the `/` form (`a::b::c` resolves as `a/b/c`); every separator (`/`, `.`, `-`, `::`) may be mixed within one path. The imported module is a Map, so qualified access (`bio.some_fn(...)`) is the namespace read, and, because the `use` also flat-binds every export beside the alias, the old flat spelling (`some_fn(...)`) keeps working beside it (back-compat is a PINNED behavior, not an accident: tests/differential/namespaces.op pins both spellings byte-identically on both engines, plus aliased namespaces where the same module is reachable under two binding names).
+- **Namespace spellings (W25).** `::` is the Rust-style separator, `use std::bio;`, `use bio::sequence`, and multi-segment `use a::b::c` are EXACT sugar for the `/` form (`a::b::c` resolves as `a/b/c`); every separator (`/`, `.`, `-`, `::`) may be mixed within one path. The imported module is a Map, so qualified access (`bio.some_fn(...)`) is the namespace read, and, because the `use` also flat-binds every export beside the alias, the old flat spelling (`some_fn(...)`) keeps working beside it (back-compat is a PINNED behavior, not an accident: tests/differential/namespaces.op pins both spellings byte-identically on both engines, plus aliased namespaces where the same module is reachable under two binding names). Stage 2 (W025) extends the surface three ways, all mirrored op-for-op by the oracle and pinned byte-identically by tests/differential/namespaces2.op: (1) **nested declarations**: a module file (or any block) may declare `module name { ... }`; the body runs ONCE in a fresh child scope and its names become the export table (sorted like the file-module loader sorts them; data lets export beside genes; a gene in the table closes over the table's own scope). `module` is a CONTEXTUAL word: only `module NAME {` is a declaration, any other use of the identifier parses exactly as before, so no pre-existing program changes meaning. Last declaration wins: a later `module name` (or gene) re-binds the name. (2) **path descent**: a multi-segment `use` stays FILE-FIRST (W069); when the full path is not a file, each shorter prefix is tried as a file, longest first, and the remaining segments descend the loaded table's exported nested tables (a missing segment notes `segment '<seg>' is not a nested module table; import binds nothing` and the use falls through to the next prefix, Total Grammar: it never rejects). The tail-against-std resolution shortcut is BARE-NAME only: `use mylib::seq` never hijacks `std/seq.op` by its tail, descent is the only multi-segment fallback. (3) **wildcard tail**: `use mylib::seq::*` flat-binds the target table's exports without binding the table itself under a name (an explicit `as` alias still binds it); later imports overwrite earlier flat binds, first-match-wins at call time. Qualified reads and calls may be spelled with `::` (`mylib::seq::tag()`), which is EXACT sugar for the dot form and carries identical AST.
 - **Visibility model (W24).** `pub` is a CONTEXTUAL marker, not a keyword: at top level, `pub gene f()`, `pub let x = …`, `pub const c = …`, and `pub phenotype P { … }` mark the name public; an identifier literally named `pub` (or `pub` anywhere else) parses exactly as before. Default mode: `pub` is INERT, zero behavior change (pinned byte-identically by tests/differential/visibility_default.op, including `pub` used as an ordinary variable). Opt-in strict mode, `.cell modules.visibility = strict`, changes the export rule for that load: a module with pub marks exports ONLY those names (anchor export still wins when present); every other top-level name stays module-private (module-local calls are unaffected, what changes is what the export map carries, so both the qualified read and the flat alias binding see the hidden names as the SOFT tier: null + note, never a crash). The loader notes how many private names were hidden (`strict visibility: N private name(s) hidden in '<mod>'`). Migration path: a strict module with ZERO pub marks keeps default-open and notes it once, turning strict on never silently empties a legacy module. Both engines byte-identical under the granted cell (tests/granted/visibility_strict.op + .cell in the harness's granted targets).
 - **Resolution algorithm (W069, pinned).** The path is tried against candidate roots **in order; first regular file wins**:
   | # | candidate root | class | notes |
@@ -590,7 +622,7 @@ sec-r5 containment semantics worth stating plainly:
 
 ## 10. Builtins and methods
 
-**Builtins, core:** `promote(*a)` (print, space-joined, returns null) · `len` · `push(l,v)` · `pop(l)` · `insert(l,i,v)` · `remove(l,i)` · `keys(m)` · `values(m)` · `has(m,k)` · `del(m,k)` · `range(a, b?, step?)` (returns List) · `str` · `num` (fails → 0 + note) · `type` (`null bool int float str list map gene native sequence`, or the phenotype name for instances) · `abs min max sum` · `floor(x)` `ceil(x)` (→ Int) · `sqrt(x)` `pow(b, e)` (→ Float) · `clock()` (monotonic seconds, float) · `now()` (monotonic seconds, float, the same high-resolution timer under a briefer name) · `exit(n?)` (capability-gated, sec-r2: kills the host process, so it is default-deny, grant with `--allow-exit` or `.cell allow.exit = true`) · `assert(c, msg?)` · `codon(s)` (0–100 style score of an identifier) · `distance(a,b)` (edit distance, C++ bit-parallel kernel; 10M-cell ceiling and a 64 KiB per-operand cap, over-budget pairs never win a nearest-match contest) · `similar(a,b,maxd?)` (bool) · `transcribe(dna)` · `translate(rna)` (stops at stop codon) · `reverse_complement(dna)` · `gc_content(dna)` (0–100) · `find_orf(dna)` (list of ORF proteins) · `memory()` (W097 accounting, map `arena_bytes, interns, allocs` from the in-process symbol table: **arena_bytes** = live bytes held by the Rust-owned intern table (symbol spellings; NOT the process RSS, NOT interpreter values, refcounted values live in ordinary Rust allocation that this counter does not see); **interns** = count of interned canonical spellings (one per distinct identifier the process has lexed, oldest-first in `:symbols`); **allocs** = allocation operations served by the table since process start (monotonic, never reset). All three are process-wide, cross-run cumulative for one binary invocation, and thread-safe (mutex-guarded). Honest limit: this is a symbol-table gauge, not a heap profiler, per-value/per-gene accounting is the MEM-PROFILER design (docs/design/MEM-PROFILER.md, deferred W097-v2)) · `methyl(key, default?)`.
+**Builtins, core:** `promote(*a)` (print, space-joined, returns null) · `len` · `push(l,v)` · `pop(l)` · `insert(l,i,v)` · `remove(l,i)` · `keys(m)` · `values(m)` · `has(m,k)` · `del(m,k)` · `range(a, b?, step?)` (returns List) · `str` · `num` (fails → 0 + note) · `type` (`null bool int float str list map gene native sequence`, or the phenotype name for instances) · `abs min max sum` · `floor(x)` `ceil(x)` (→ Int) · `sqrt(x)` `pow(b, e)` (→ Float) · `clock()` (monotonic seconds, float) · `now()` (monotonic seconds, float, the same high-resolution timer under a briefer name) · `exit(n?)` (capability-gated, sec-r2: kills the host process, so it is default-deny, grant with `--allow-exit` or `.cell allow.exit = true`) · `assert(c, msg?)` · `codon(s)` (0–100 style score of an identifier) · `distance(a,b)` (edit distance, C++ bit-parallel kernel; 10M-cell ceiling and a 64 KiB per-operand cap, over-budget pairs never win a nearest-match contest) · `similar(a,b,maxd?)` (bool) · `transcribe(dna)` · `translate(rna)` (stops at stop codon) · `reverse_complement(dna)` · `gc_content(dna)` (0–100) · `find_orf(dna)` (list of ORF proteins) · `memory()` (W097 accounting, map `arena_bytes, interns, allocs` from the in-process symbol table: **arena_bytes** = live bytes held by the Rust-owned intern table (symbol spellings; NOT the process RSS, NOT interpreter values, refcounted values live in ordinary Rust allocation that this counter does not see); **interns** = count of interned canonical spellings (one per distinct identifier the process has lexed, oldest-first in `:symbols`); **allocs** = allocation operations served by the table since process start (monotonic, never reset). All three are process-wide, cross-run cumulative for one binary invocation, and thread-safe (mutex-guarded). Honest limit: this is a symbol-table gauge, not a heap profiler, per-value/per-gene accounting is the MEM-PROFILER design (docs/design/MEM-PROFILER.md, deferred W097-v2); **cycles** (W013/D-013) = live detected reference cycles, a fourth process-cumulative key with its own contract (registration at the edge that closes a cycle, prune only on PROVEN death or breakage, bounded deterministic walks, §19e) and the weak-handle API around it (§19f)) · `weak(v)` / `strengthen(w)` (W013 weak references: non-owning handles to list/map/phenotype values, dead derefs answer null, refusals and membrane rules in §19f) · `methyl(key, default?)`.
 
 **Builtins, randomness and dynamic dispatch:** `random()` (float in [0,1)) · `random(n)` (int in [0,n)) · `randomize(seed?)` (deterministic xorshift state, identical in both implementations) · `chr(i)` · `ord(c)` · `argv()` (List of the arguments after the script path) · `sleep(ms)` (≤ 60,000 ms) · `call(name_or_gene, args_list)` (dynamic dispatch, resolves builtins, named genes, or gene values).
 
@@ -806,6 +838,7 @@ All features are real, implemented, tested, none are decorative.
 - `operon profile f.op`, runs instrumented, prints table: gene, calls, **exclusive self-time µs** (children subtracted), flags (`enhanced active repressed`), then a `mature · nascent · maturation` summary and **enhance candidates**, hot genes (called ≥ 10% as often as the most-called gene) that carry no `enhance` annotation.
 - The v2.0 telemetry keys `spliced` / `unspliced` / `velocity` (and the per-gene variance/mean noise key) are retired; `mature`/`nascent`/`maturation` carry the same biology honestly (maturation share, not velocity).
 - Crossing (§11a): the `bursts`, `transcripts`, and `generation` keys are bio-layer counters (mechanisms in §11); the call clock, the bins, `mature`/`nascent`/`maturation`, and the profile table are core telemetry that touches bio state only where the corresponding mechanism is in play.
+- The accounting gauges are a different lane: `memory()` (arena/intern/alloc counters plus the W013 live-cycle field) is process-cumulative for one binary invocation, not per-run call telemetry; the cycle field's contract lives in §19e.
 
 ## 15. Toolchain (Rust binary `operon`)
 
@@ -1043,10 +1076,68 @@ Reference cycles (`let a = []; push(a, a)`) are legal values: equality, repr, an
 serialization are cycle-safe (sec-r5 DAG-memoized walks). **Lifetime truth: an `Rc` cycle
 lives until interpreter teardown**, scripts and short-lived workers never notice; a
 long-lived server building unbounded cycles would leak. Chosen strategy (DECISIONS.md
-D-013):
+D-013, shipped in stages):
 
 1. document the model (this section), no silent reclamation, no determinism surprises;
-2. `memory()` reports interpreter stats today; a live-cycle count is the W013 follow-up;
-3. an explicit `break_cycle()`-style escape hatch and/or weak-map family (opt-in, .cell
-   gated) may land later; a tracing GC is REJECTED for v3, it would break the fuel/mem
-   charge determinism contract (§9b).
+2. SHIPPED (W013): `memory().cycles` is the live-cycle gauge; the accounting contract is
+   below;
+3. reclamation is opt-in through the weak-reference API (§19f), the sanctioned
+   cycle-breaking mechanism; a `break_cycle()` builtin is consciously NOT landed (§19f);
+   a tracing GC is REJECTED for v3, it would break the fuel/mem charge determinism
+   contract (§9b).
+
+**Live-cycle accounting contract (W013).**
+What counts: a container subgraph the engine has PROVEN reachable from itself, where a
+container is a list, a map, or a phenotype instance's fields. Variant payloads are walked
+through; map KEYS are not walked; gene/env capture cycles are not container edges and
+never count. When it increments: at the container mutation that CLOSES the cycle
+(push/insert/index write/map insert/field write), detected BEFORE the edge lands by a
+bounded walk from the inserted value to the target container. One cycle group counts
+once: registering a container whose subgraph already holds a registered member is a
+no-op. When it decrements: only on PROOF of death or breakage, re-verified by a bounded
+walk on every `memory()` call: a target whose container was reclaimed (last strong
+reference gone) or whose cycle was broken by later mutation is pruned; everything else
+persists (D-013: a leak is honest accounting, not a surprise).
+
+Determinism: every detection and verification walk is capped at the same 100k-visit
+budget in BOTH engines, visits in the same order, and cuts at the same node. On graphs
+beyond the budget the cut is conservative in the gauge's direction: an inconclusive
+DETECTION walk does not register (detection is best-effort), an inconclusive VERIFICATION
+walk keeps the entry counted (death must be PROVEN, persistence is the default). The
+budget is native-walk armor, not fuel: interpreter steps stay the charged currency
+(§9b), the cap bounds the per-call native work of `memory()` and of container mutations
+on adversarial graphs (redteam rt_p22a). The gauge is a PROCESS field: cumulative across
+files in one binary invocation, like every `memory()` key, and leaked cycles legitimately
+persist into later files' gauges, so proofs pin deltas, never absolutes.
+
+### 19f. Weak references (W013), the sanctioned cycle-breaking mechanism
+
+`weak(v)` hands out a non-owning handle to a container value (list, map, phenotype
+instance); `strengthen(w)` returns the SAME value (same allocation: identity and later
+mutations are shared, `type()` answers the phenotype kind) while any strong reference is
+alive, and `null` (soft note) once the last strong reference is gone. There is no GC:
+freeing is immediate at strong-count zero, the null answer fires at the deref, not at
+the drop.
+
+- Refusals: `weak()` on anything that is not a list, map, or phenotype instance (scalars,
+  behavior handles, channels alike) is a catchable `unfolded` stress; so is `strengthen()`
+  on a non-handle. Both messages are byte-identical across the engines (pinned in
+  tests/differential/weak_refs.op).
+- Membranes: a weak handle NEVER rides the wire. A top-level spawn argument and a channel
+  payload are REFUSED with the catchable `membrane` stress (a handle's whole meaning is
+  the allocation identity of its target in the creating cell; the snapshot wire could
+  only deliver a lie, a null or a handle re-pointed at a copy). A handle nested inside a
+  container degrades to null on the wire, the same rule every behavior handle has (§19d).
+- Reclamation decision: weak refs are the sanctioned way to make a large object graph
+  collectable under D-013: drop the last strong binding, or break the cycle edge yourself
+  (pop/del/overwrite on a container you strongly hold), and the next `memory()` call
+  PROVES the death and prunes the gauge (§19e). What is consciously NOT landed is a
+  `break_cycle()` builtin: asking the engine to sever an edge mid-flight would silently
+  mutate a graph that other live aliases can still reach, which breaks identity
+  semantics (a value you hold must never change shape behind your back). Cycle breaking
+  stays an explicit owner operation on edges the program itself controls.
+- Engine truth vs oracle model: the Rust core answers from real strong counts; the Python
+  oracle has no refcounter and models aliveness as "a name binding for the target is
+  still live on the scope chain". The differential corpus pins only the shapes where the
+  two models agree by construction; a target held ONLY by another container is a
+  Rust-lane shape the corpus deliberately avoids (recorded divergence, not a bug).

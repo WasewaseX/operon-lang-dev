@@ -82,6 +82,10 @@ const MARKS: &[&str] = &[
     "copies",
     "riboswitch",
     "burst",
+    // W64: metadata-only deprecation mark, `@deprecated("text", since="2.4")`.
+    // Known here so the wobble repair never mangles it; the payload parse
+    // lives in the mark arm, the data rides GeneDef, the runtime never reads it.
+    "deprecated",
 ];
 
 /// Words that end a `use` path, the alias introducer and statement enders.
@@ -612,6 +616,112 @@ impl Parser {
                     }
                     burst = Some((vals[0], vals[1]));
                 }
+                // W64: `@deprecated("migration text", since="2.4")` payload.
+                // Metadata only: parse it leniently, attach it to the gene,
+                // never evaluate it (SPEC §3 marks table). Any malformed
+                // shape degrades to a rung-4 note, the mark is dropped, the
+                // gene keeps parsing (Total Grammar).
+                let mut deprecated: Option<crate::ast::Deprecation> = None;
+                if marks.iter().any(|m| m == "deprecated") {
+                    match self.peek().clone() {
+                        Tok::LParen => {
+                            self.next();
+                            let msg = match self.peek().clone() {
+                                Tok::Str(s) => {
+                                    self.next();
+                                    s
+                                }
+                                other => {
+                                    let line = self.line();
+                                    self.note(
+                                        line,
+                                        4,
+                                        format!(
+                                            "@deprecated needs a string message; got {}, mark skipped",
+                                            other.describe()
+                                        ),
+                                    );
+                                    String::new()
+                                }
+                            };
+                            let mut since: Option<String> = None;
+                            // optional `, since = "x.y"` (the bare comma form
+                            // `, "x.y"` is accepted as since, lenient by design)
+                            if matches!(self.peek(), Tok::Comma) {
+                                self.next();
+                                self.eat_newlines_inline();
+                                match self.peek().clone() {
+                                    Tok::Ident(w) if w == "since" => {
+                                        self.next();
+                                        self.eat_newlines_inline();
+                                        if matches!(self.peek(), Tok::Eq) {
+                                            self.next();
+                                            self.eat_newlines_inline();
+                                        }
+                                        if let Tok::Str(s) = self.peek().clone() {
+                                            self.next();
+                                            since = Some(s);
+                                        }
+                                    }
+                                    Tok::Str(s) => {
+                                        self.next();
+                                        since = Some(s);
+                                    }
+                                    _ => {
+                                        let line = self.line();
+                                        self.note(
+                                            line,
+                                            4,
+                                            "@deprecated since needs a string; ignored",
+                                        );
+                                    }
+                                }
+                            }
+                            self.eat_newlines_inline();
+                            if matches!(self.peek(), Tok::RParen) {
+                                self.next();
+                            } else {
+                                // recover to the closing paren (or the line end)
+                                let mut depth = 0usize;
+                                loop {
+                                    match self.peek().clone() {
+                                        Tok::LParen => {
+                                            depth += 1;
+                                            self.next();
+                                        }
+                                        Tok::RParen => {
+                                            self.next();
+                                            if depth == 0 {
+                                                break;
+                                            }
+                                            depth -= 1;
+                                        }
+                                        Tok::Newline | Tok::Eof => break,
+                                        _ => {
+                                            self.next();
+                                        }
+                                    }
+                                }
+                                let line = self.line();
+                                self.note(line, 4, "@deprecated payload auto-closed");
+                            }
+                            if !msg.is_empty() {
+                                deprecated = Some(crate::ast::Deprecation {
+                                    message: msg,
+                                    since,
+                                });
+                            }
+                        }
+                        _ => {
+                            let line = self.line();
+                            self.note(
+                                line,
+                                4,
+                                "@deprecated needs a migration string; mark skipped",
+                            );
+                        }
+                    }
+                }
                 // dx-r6 (loop-5-a audit MED): an own-line mark,
                 //   @acetylate\ngene foo(),
                 // never reached `gene`: the newline between mark and keyword
@@ -626,7 +736,7 @@ impl Parser {
                     self.skip_line();
                     return None;
                 }
-                Some(self.parse_gene_def(marks, copies, riboswitch, burst, doc))
+                Some(self.parse_gene_def(marks, copies, riboswitch, burst, doc, deprecated))
             }
             Tok::Ident(w) => self.parse_word_stmt(&w),
             Tok::LBrace => {
@@ -766,7 +876,7 @@ impl Parser {
                 let l = self.line();
                 let doc = self.take_doc(l);
                 self.next();
-                Some(self.parse_gene_def(vec![], 1, None, None, doc))
+                Some(self.parse_gene_def(vec![], 1, None, None, doc, None))
             }
             "trait" => {
                 // W04 (SPEC §8b): `trait Name { gene m(); gene n() { ... } }`.
@@ -865,6 +975,7 @@ impl Parser {
                                             seq: false,
                                             riboswitch: None,
                                             burst: None,
+                                            deprecated: None,
                                             param_anns: vec![],
                                             ret_ann: None,
                                         })),
@@ -1177,6 +1288,42 @@ impl Parser {
                 let name = self.expect_ident()?;
                 let body = self.parse_block().unwrap_or_default();
                 Some(Stmt::Tad(name, body))
+            }
+            "module" => {
+                // W025 stage 2: nested sub-module declaration. CONTEXTUAL:
+                // only `module NAME {` (newlines tolerated between the words)
+                // is the declaration; every other use of the word `module`
+                // stays an ordinary identifier (it is not in KEYWORDS, so
+                // pre-existing programs that bind `module` never change).
+                let is_decl = {
+                    let mut j = self.pos + 1;
+                    while matches!(
+                        self.toks.get(j).map(|t| &t.0),
+                        Some(Tok::Newline) | Some(Tok::Semi)
+                    ) {
+                        j += 1;
+                    }
+                    if !matches!(self.toks.get(j).map(|t| &t.0), Some(Tok::Ident(_))) {
+                        false
+                    } else {
+                        j += 1;
+                        while matches!(
+                            self.toks.get(j).map(|t| &t.0),
+                            Some(Tok::Newline) | Some(Tok::Semi)
+                        ) {
+                            j += 1;
+                        }
+                        matches!(self.toks.get(j).map(|t| &t.0), Some(Tok::LBrace))
+                    }
+                };
+                if !is_decl {
+                    return self.parse_assign_or_expr(w);
+                }
+                self.next();
+                let name = self.expect_ident()?;
+                self.eat_newlines();
+                let body = self.parse_block().unwrap_or_default();
+                Some(Stmt::Module(name, body))
             }
             "anchor" => {
                 self.next();
@@ -2279,9 +2426,9 @@ impl Parser {
                                 if let Some(mark) = self.repair_mark(m, line) {
                                     let marks = vec![mark];
                                     if self.expect_kw("gene") {
-                                        if let Some(Stmt::Gene(g)) =
-                                            Some(self.parse_gene_def(marks, 1, None, None, doc))
-                                        {
+                                        if let Some(Stmt::Gene(g)) = Some(
+                                            self.parse_gene_def(marks, 1, None, None, doc, None),
+                                        ) {
                                             methods.push(g);
                                         }
                                     } else {
@@ -2306,7 +2453,7 @@ impl Parser {
                                 }
                                 self.next();
                                 if let Some(Stmt::Gene(g)) =
-                                    Some(self.parse_gene_def(vec![], 1, None, None, doc))
+                                    Some(self.parse_gene_def(vec![], 1, None, None, doc, None))
                                 {
                                     methods.push(g);
                                 }
@@ -2360,7 +2507,7 @@ impl Parser {
                 let l = self.line();
                 let doc = self.take_doc(l);
                 self.next();
-                let def = self.parse_gene_def(vec![], 1, None, None, doc);
+                let def = self.parse_gene_def(vec![], 1, None, None, doc, None);
                 match def {
                     Stmt::Gene(g) => {
                         let mut g2 = (*g).clone();
@@ -2501,6 +2648,9 @@ impl Parser {
         // ends the path, it is never glued into it. W25: `::` is the
         // Rust-style separator, sugar for '/' (`use bio::sequence` =
         // `use bio/sequence`) so namespaces read like mainstream module paths.
+        // W025 stage 2: a trailing `*` after a separator is the wildcard
+        // form (`use mymod::seq::*`), carried as a literal `/*` suffix the
+        // interpreter strips before resolution.
         let mut cur = String::new();
         loop {
             match self.peek().clone() {
@@ -2543,6 +2693,14 @@ impl Parser {
                     if !matches!(self.peek(), Tok::Slash | Tok::Dot | Tok::Minus | Tok::Colon) {
                         break;
                     }
+                }
+                Tok::Star => {
+                    // W025 stage 2: wildcard tail, `use a::b::*` carries as
+                    // "a/b/*"; the interpreter strips the `/*` and flat-binds
+                    // the target table's exports.
+                    cur.push('*');
+                    self.next();
+                    break;
                 }
                 _ => break,
             }
@@ -2870,6 +3028,7 @@ impl Parser {
         riboswitch: Option<(String, bool, f64)>,
         burst: Option<(f64, f64)>,
         doc: Vec<String>,
+        deprecated: Option<crate::ast::Deprecation>,
     ) -> Stmt {
         // A13 (dx-r2): the def keyword's line, every definition-borne
         // runtime note (gates, silencing) points here.
@@ -2979,6 +3138,7 @@ impl Parser {
                 seq: false,
                 riboswitch,
                 burst,
+                deprecated,
             };
             return Stmt::Gene(std::sync::Arc::new(def));
         }
@@ -2999,6 +3159,7 @@ impl Parser {
             seq: false,
             riboswitch,
             burst,
+            deprecated,
         };
         Stmt::Gene(std::sync::Arc::new(def))
     }
@@ -3436,6 +3597,52 @@ impl Parser {
                     self.next();
                     e = Expr::Propagate(Box::new(e), line);
                 }
+                Tok::Colon
+                    if matches!(self.toks.get(self.pos + 1).map(|t| &t.0), Some(Tok::Colon)) =>
+                {
+                    // W025 stage 2: `e::name` is the namespace spelling of
+                    // `e.name` (stage 1 made `::` a use-path separator; stage 2
+                    // lets qualified reads and calls ride the same spelling
+                    // through nested tables). Exactly sugar for the Dot arm
+                    // below, the AST is identical.
+                    self.next();
+                    self.next();
+                    match self.peek().clone() {
+                        Tok::Ident(m) => {
+                            self.next();
+                            if matches!(self.peek(), Tok::LParen) {
+                                self.next();
+                                let mut args = Vec::new();
+                                loop {
+                                    self.eat_newlines_inline();
+                                    if matches!(self.peek(), Tok::RParen) {
+                                        self.next();
+                                        break;
+                                    }
+                                    if matches!(self.peek(), Tok::Eof) {
+                                        break;
+                                    }
+                                    args.push(self.parse_expr());
+                                    if matches!(self.peek(), Tok::Comma) {
+                                        self.next();
+                                    }
+                                }
+                                e = Expr::Method(Box::new(e), m, args);
+                            } else {
+                                e = Expr::Member(Box::new(e), m);
+                            }
+                        }
+                        other => {
+                            let line = self.line();
+                            self.note(
+                                line,
+                                4,
+                                format!("'::' followed by '{}'; member skipped", other.describe()),
+                            );
+                            break;
+                        }
+                    }
+                }
                 _ => break,
             }
         }
@@ -3584,7 +3791,7 @@ impl Parser {
                         }
                         self.next();
                         // anonymous lambda in expression position
-                        match self.parse_gene_def(vec![], 1, None, None, Vec::new()) {
+                        match self.parse_gene_def(vec![], 1, None, None, Vec::new(), None) {
                             Stmt::Gene(def) => Expr::Lambda(def),
                             _ => Expr::Null,
                         }

@@ -188,6 +188,7 @@ match 5 {
         print("wild-first")
     }
     case 5 {
+        # allow: unreachable-match-arm, deliberate first-match-wins probe
         print("five-shadowed")
     }
 }
