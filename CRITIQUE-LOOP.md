@@ -359,3 +359,42 @@ W060) whose gates verify on the runner, and W065/W066 waiting on their lane rule
 attacks the concurrency-and-check arc: W016 async rides the W015 channels substrate, W009
 parity campaign decides whether the VM replaces the tree walk, W048 lint, W066 .cell
 schema, W037 contract sweep, W059/W060 CI.
+
+---
+
+## Pass 4 verdict (after batch 4, main @ bf46042 + board commit)
+
+Batch 4 closed 5 items (W002 stage 2, W013, W025 stage 2, W027 wave 1, W064) plus the
+parked W026 graph lane from the batch-3 session. Gates at integration: cargo test 77
+green, clippy 0 (all targets), fmt clean, proof suite 180 files / 126 proofs / 1,922
+asserts all green, differential 216/216 + vm lane 210/210, redteam 106/0, LSP smoke
+green, doc_api_check + check_docs_sync exit 0 (26 std modules / 284 functions).
+
+Honest critique of the batch: the five-agent fleet plan hit an infrastructure wall
+(agent launches died at a wall-clock deadline mid-run), so the integrator finished
+every unit by hand on the same branches, keeping the batch protocol (disjoint file
+domains, worktree isolation for shared-file lanes, one mergeable unit per item). The
+two agent-launched units that did get started (W002, W013/W025) left substantially
+complete work whose gate runs and tests the integrator completed, which matches pass
+2's lesson: briefs are right, agent wall-clock is the scarce resource.
+
+What the batch exposed, worth keeping on the record:
+- One REAL pre-existing bug died by differential pin: resolve_path's exe-relative std
+  shortcut matched multi-segment use paths by bare tail, so `use mylib::seq` hijacked
+  std/seq.op instead of descending mylib's nested tables. The oracle never had the
+  candidate, the Rust core now matches it (bare names only).
+- A rare suite-load flake in tests/channels.op (join under parallel load) was made
+  self-diagnosing: the assert now carries the join result in its message. 15+
+  consecutive green runs since; root cause still unidentified, treat any recurrence
+  as a P0.
+- The W57 docs guard taught a lesson: "Twenty-six stdlib modules" trips its six-std
+  word-boundary check; counts in that sentence are digits now.
+
+Board after pass 4: 93 of 100 done or closed-as-specced. Open: W001 (types stage 2),
+W003 (generics stage 2), W006 stage 2 (std null-to-Result), W008 (DAP), W009 (VM
+parity campaign + fib25 gate), W010 (disasm pins), W011 (opt pipeline stage 2), W016
+(async impl), W027 wave 2 (hashing, binary; then the builtin-needing modules), W059
+(Windows CI blocking, runner-gated), W060 (release smoke, runner-gated), W065
+(migrator, unblocked now that W064 + W047 landed). Batch 5 attacks the typing arc
+(W001/W003), async (W016 rides W015's channels substrate), the VM decision (W009
+parity campaign), the pure-.op wave 2 (hashing, binary), and W065.
