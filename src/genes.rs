@@ -864,19 +864,26 @@ pub enum SendValue {
 }
 
 /// Sendable environment snapshot entry: gene definitions cross by Arc,
-/// data values cross by serialization.
+/// data values cross by serialization. W015: channel handles cross LIVE
+/// (the Arc to the shared buffer), they are the one behavior value with a
+/// thread-safe interior, so a spawned cell can send/recv on the same
+/// channel as its host; the queue stores the wire form, so the membrane
+/// still holds (nothing aliased is shared).
 pub enum SnapVal {
     Gene(Arc<GeneDef>),
     Data(SendValue),
+    Channel(Arc<crate::value::ChannelShared>),
 }
 
 /// Sendable argument: data serializes; named genes cross as references to
 /// the snapshot (the worker re-binds them from its inherited repertoire).
 /// Anonymous lambdas cannot cross, they arrive as null with a note.
+/// W015: channel handles cross LIVE (same shared buffer on both sides).
 pub enum SnapArg {
     Data(SendValue),
     GeneRef(String),
     Lambda(Arc<GeneDef>),
+    Channel(Arc<crate::value::ChannelShared>),
 }
 
 pub fn arg_to_snap(v: &Value) -> SnapArg {
@@ -887,6 +894,8 @@ fn arg_to_snap_d(v: &Value, d: u32) -> SnapArg {
     match v {
         Value::Gene(d2, _) if d2.name.is_some() => SnapArg::GeneRef(d2.name.clone().unwrap()),
         Value::Gene(d2, _) => SnapArg::Lambda(d2.clone()),
+        // W015: a top-level channel argument crosses as a live handle
+        Value::Channel(a) => SnapArg::Channel(a.clone()),
         other => SnapArg::Data(to_send_d(other, d)),
     }
 }
@@ -894,6 +903,8 @@ fn arg_to_snap_d(v: &Value, d: u32) -> SnapArg {
 pub fn arg_from_snap(a: &SnapArg, snap: &[(String, SnapVal)]) -> Value {
     match a {
         SnapArg::Data(sv) => from_send(clone_send(sv)),
+        // W015: the live channel handle re-binds by Arc (same buffer)
+        SnapArg::Channel(arc) => Value::Channel(arc.clone()),
         SnapArg::GeneRef(n) => {
             for (name, sv) in snap {
                 if name == n {
@@ -910,7 +921,7 @@ pub fn arg_from_snap(a: &SnapArg, snap: &[(String, SnapVal)]) -> Value {
 
 /// Maximum nesting depth of a value (cycle-safe: visited pointers never
 /// re-expand). Walk stops at the SendValue cap.
-fn value_depth(v: &Value, d: u32) -> u32 {
+pub(crate) fn value_depth(v: &Value, d: u32) -> u32 {
     if d > 100_000 {
         return d;
     }
@@ -971,6 +982,10 @@ fn to_send_d(v: &Value, d: u32) -> SendValue {
         ),
         Value::Gene(_, _) => SendValue::Null,
         Value::Seq(_, _) => SendValue::Null,
+        // W015: a channel handle nested inside a container degrades to null
+        // during data serialization (same rule as genes/sequences); only
+        // top-level handles cross live (SnapArg::Channel / SnapVal::Channel)
+        Value::Channel(_) => SendValue::Null,
         Value::Variant(crate::value::VTag::NoneV, _) => SendValue::Variant("None".into(), None),
         Value::Variant(t, Some(p)) => {
             SendValue::Variant(t.tag_name().into(), Some(Box::new(to_send_d(p, d + 1))))
@@ -1041,6 +1056,8 @@ pub fn snapshot_globals(interp: &Interp) -> Vec<(String, SnapVal)> {
     for (name, v) in interp.global.vars.borrow().iter() {
         match v {
             Value::Gene(d, _) => out.push((name.clone(), SnapVal::Gene(d.clone()))),
+            // W015: a global channel crosses as a live handle (same buffer)
+            Value::Channel(a) => out.push((name.clone(), SnapVal::Channel(a.clone()))),
             other => {
                 let sv = to_send(other);
                 out.push((name.clone(), SnapVal::Data(sv)));
@@ -1360,6 +1377,7 @@ pub fn bind_snapshot(env: &Rc<Env>, snap: &[(String, SnapVal)]) {
     for (name, sv) in snap {
         let v = match sv {
             SnapVal::Gene(d) => Value::Gene(d.clone(), None),
+            SnapVal::Channel(a) => Value::Channel(a.clone()),
             SnapVal::Data(sv) => from_send(clone_send(sv)),
         };
         env.define(name, v);
@@ -1381,6 +1399,8 @@ pub fn snapshot_with_closure(interp: &Interp, closure: Option<&Rc<Env>>) -> Vec<
         for (name, v) in env.vars.borrow().iter() {
             match v {
                 Value::Gene(d, _) => out.push((name.clone(), SnapVal::Gene(d.clone()))),
+                // W015: closure-captured channels cross live too (same buffer)
+                Value::Channel(a) => out.push((name.clone(), SnapVal::Channel(a.clone()))),
                 other => out.push((name.clone(), SnapVal::Data(to_send(other)))),
             }
         }
