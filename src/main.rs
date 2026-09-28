@@ -106,6 +106,10 @@ fn real_main() {
     // transitional escape (--format score) for anything that still wants the
     // school-grade banner; nothing in scripts/ or CI parses the grade.
     let mut check_format = String::from("diag");
+    // W48: lint-side CLI allow list (--allow rule1,rule2, repeatable);
+    // check-side --style inlines the lint-owned style stream in diag output.
+    let mut lint_allows: Vec<String> = Vec::new();
+    let mut check_style = false;
     // W47 (ROADMAP-100): formatter configuration, file first, flags override
     let mut fmt_indent: Option<usize> = None;
     let mut fmt_quotes: Option<tools::QuoteMode> = None;
@@ -210,6 +214,27 @@ fn real_main() {
                 i += 1;
                 opts.cell = rest.get(i).cloned();
             }
+            // W48: file-wide lint suppression, `--allow unused-gene,dead-const`
+            // (repeatable). Rule names or stable codes. Line-local suppression
+            // stays with the '// allow:' comment mechanism.
+            "--allow" => {
+                i += 1;
+                match rest.get(i) {
+                    Some(list) => {
+                        for r in list.split(',') {
+                            let r = r.trim();
+                            if !r.is_empty() {
+                                lint_allows.push(r.to_string());
+                            }
+                        }
+                    }
+                    None => die("--allow needs a rule list (e.g. --allow unused-gene)"),
+                }
+            }
+            // W48: inline the lint-owned style stream in check's diag output
+            // (default: a labeled count + pointer, the split is about command
+            // purpose and defaults, not about hiding data)
+            "--style" => check_style = true,
             "--rna" => {
                 i += 1;
                 opts.rna = rest.get(i).cloned();
@@ -495,58 +520,109 @@ fn real_main() {
                 }
             }
         }
-        // W48/W42/W43 (ROADMAP-100): the linter front door, `check --format
-        // diag` shares this engine, so there is one rule set and two views.
+        // W48 (ROADMAP-100): the style/quality front door. `operon lint` runs
+        // ONLY the lint stream of the shared rule engine (see src/lint.rs for
+        // the ownership table); correctness lives in `operon check`. Flags:
+        //   --strict  any finding = exit 3 (CI gate policy, W37 escalation)
+        //   --allow   file-wide CLI suppression on top of '// allow:' comments
+        //   --json    {code,severity,line,rule,message} findings array
         "lint" => {
-            let file = match positional.first() {
-                Some(f) => f.clone(),
-                None => die("lint needs a file"),
-            };
-            let src = std::fs::read_to_string(&file)
-                .unwrap_or_else(|e| die(&format!("cannot read {}: {}", file, e)));
-            let prog = parser::parse(&src);
-            let mut findings = operon::lint::lint(&prog);
-            // W66: validate a .cell payload against the schema on request
-            if let Some(cell) = opts.cell.clone() {
-                match std::fs::read_to_string(&cell) {
-                    Ok(cs) => findings.extend(operon::lint::lint_cell(&cs)),
-                    Err(e) => die(&format!("cannot read {}: {}", cell, e)),
-                }
+            if positional.is_empty() {
+                die("lint needs at least one file");
             }
+            if let Some(f) = positional.iter().find(|p| std::path::Path::new(p).is_dir()) {
+                die(&format!(
+                    "lint: '{}' is a directory, pass .op files (or run `operon lint` per file)",
+                    f
+                ));
+            }
+            let mut results: Vec<(String, Vec<operon::lint::Finding>)> = Vec::new();
+            for file in &positional {
+                let src = std::fs::read_to_string(file)
+                    .unwrap_or_else(|e| die(&format!("cannot read {}: {}", file, e)));
+                let prog = parser::parse(&src);
+                let mut findings = operon::lint::lint_style(&prog);
+                // W66: validate a .cell payload against the schema on request;
+                // cell-schema rules are check-owned, they surface here only
+                // because the payload was explicitly handed to the linter
+                if let Some(cell) = opts.cell.clone() {
+                    match std::fs::read_to_string(&cell) {
+                        Ok(cs) => findings.extend(operon::lint::lint_cell(&cs)),
+                        Err(e) => die(&format!("cannot read {}: {}", cell, e)),
+                    }
+                }
+                // line-local comment suppression, then the file-wide --allow list
+                operon::lint::apply_allows(&mut findings, &src);
+                operon::lint::apply_cli_allows(&mut findings, &lint_allows);
+                results.push((file.clone(), findings));
+            }
+            let total: usize = results.iter().map(|(_, f)| f.len()).sum();
             if json {
-                let items: Vec<String> = findings
-                    .iter()
-                    .map(|f| {
-                        format!(
-                            "{{\"line\":{},\"rule\":\"{}\",\"severity\":\"{}\",\"message\":\"{}\"}}",
-                            f.line,
-                            f.rule,
-                            f.sev.name(),
-                            tools::json_escape(&f.message)
-                        )
-                    })
-                    .collect();
-                println!(
-                    "{{\"file\":\"{}\",\"findings\":[{}]}}",
-                    tools::json_escape(&file),
-                    items.join(",")
-                );
-            } else if findings.is_empty() {
-                println!("lint: {}, clean", file);
-            } else {
-                for f in &findings {
-                    println!(
-                        "  {}:{}: {} [{}] ({})",
-                        file,
-                        f.line,
-                        f.sev.name(),
-                        f.rule,
-                        f.message
-                    );
+                let file_json = |file: &str, fs: &[operon::lint::Finding]| {
+                    let items: Vec<String> = fs
+                        .iter()
+                        .map(|f| {
+                            format!(
+                                "{{\"code\":\"{}\",\"severity\":\"{}\",\"line\":{},\"rule\":\"{}\",\"message\":\"{}\"}}",
+                                f.code,
+                                f.sev.name(),
+                                f.line,
+                                f.rule,
+                                tools::json_escape(&f.message)
+                            )
+                        })
+                        .collect();
+                    format!(
+                        "{{\"file\":\"{}\",\"findings\":[{}]}}",
+                        tools::json_escape(file),
+                        items.join(",")
+                    )
+                };
+                if results.len() == 1 {
+                    // back-compat single-file shape (now with stable codes)
+                    println!("{}", file_json(&results[0].0, &results[0].1));
+                } else {
+                    let parts: Vec<String> =
+                        results.iter().map(|(f, fs)| file_json(f, fs)).collect();
+                    println!("{{\"results\":[{}],\"total\":{}}}", parts.join(","), total);
                 }
-                println!("lint: {} finding(s)", findings.len());
+            } else {
+                for (file, fs) in &results {
+                    if fs.is_empty() {
+                        println!("lint: {}, clean", file);
+                    } else {
+                        for f in fs {
+                            println!(
+                                "  {}:{}: {} [{}] ({})",
+                                file,
+                                f.line,
+                                f.sev.name(),
+                                f.rule,
+                                f.message
+                            );
+                        }
+                    }
+                }
+                if results.len() == 1 {
+                    if total > 0 {
+                        println!("lint: {} finding(s)", total);
+                    }
+                    // the clean single-file line was already printed above
+                } else {
+                    println!("lint: {} finding(s) in {} file(s)", total, results.len());
+                }
             }
-            if findings.iter().any(|f| f.sev == operon::lint::Sev::Error) {
+            // W48 exit-code contract: lint is advisory, exit 0 unless --strict
+            // escalates (any finding = 3) or an Error-severity finding exists
+            // (none in the lint stream today; the rule is kept for append-only
+            // safety, mirroring the pre-W48 behavior).
+            if strict && total > 0 {
+                std::process::exit(3);
+            }
+            if results
+                .iter()
+                .any(|(_, fs)| fs.iter().any(|f| f.sev == operon::lint::Sev::Error))
+            {
                 std::process::exit(1);
             }
         }
@@ -687,14 +763,29 @@ fn real_main() {
                 None => die("check needs a file"),
             };
             let rep = tools::check(&file, &opts, nmd, purge);
+            // W48 (ROADMAP-100): check = correctness. Its slice of the shared
+            // rule engine is wrong-arity + const-reassign; phantoms, NMD and
+            // cell keys stay check-side (tools.rs). The style/quality stream
+            // moved to `operon lint` and is NOT duplicated in the default
+            // diag output: a labeled count + pointer keeps the data visible
+            // without doubling the stream; --style inlines it.
+            let src = std::fs::read_to_string(&file).unwrap_or_default();
+            let prog = parser::parse(&src);
+            let mut findings = operon::lint::lint_correctness(&prog);
+            operon::lint::apply_allows(&mut findings, &src);
+            let mut style = operon::lint::lint_style(&prog);
+            operon::lint::apply_allows(&mut style, &src);
+            operon::lint::apply_cli_allows(&mut style, &lint_allows);
             // W41 (ROADMAP-100): diag is the default: sectioned diagnostics
             // (error/warning/repair/style) with a summary line; --format score
             // keeps the school-grade banner for one transition cycle.
             if check_format == "diag" && !json {
-                let src = std::fs::read_to_string(&file).unwrap_or_default();
-                let prog = parser::parse(&src);
-                let findings = operon::lint::lint(&prog);
-                print_diag(&file, &rep, &findings);
+                let style_inline: Vec<operon::lint::Finding> = if check_style {
+                    style.clone()
+                } else {
+                    Vec::new()
+                };
+                print_diag(&file, &rep, &findings, &style, &style_inline);
                 let hard = findings.iter().any(|f| f.sev == operon::lint::Sev::Error);
                 if hard || (strict && (rep.wobbles > 0 || rep.fallbacks > 0)) {
                     std::process::exit(3);
@@ -718,8 +809,23 @@ fn real_main() {
                     .iter()
                     .map(|p| format!("\"{}\"", tools::json_escape(p)))
                     .collect();
+                // W48: the findings array carries CHECK-owned rules only
+                // (correctness); style findings live in `operon lint --json`.
+                let f_json: Vec<String> = findings
+                    .iter()
+                    .map(|f| {
+                        format!(
+                            "{{\"code\":\"{}\",\"severity\":\"{}\",\"line\":{},\"rule\":\"{}\",\"message\":\"{}\"}}",
+                            f.code,
+                            f.sev.name(),
+                            f.line,
+                            f.rule,
+                            tools::json_escape(&f.message)
+                        )
+                    })
+                    .collect();
                 println!(
-                    "{{\"file\":\"{}\",\"score\":{},\"letter\":\"{}\",\"notes\":{},\"wobbles\":{},\"fallbacks\":{},\"phantoms\":[{}],\"nmd\":[{}]}}",
+                    "{{\"file\":\"{}\",\"score\":{},\"letter\":\"{}\",\"notes\":{},\"wobbles\":{},\"fallbacks\":{},\"phantoms\":[{}],\"nmd\":[{}],\"findings\":[{}]}}",
                     tools::json_escape(&file),
                     rep.score,
                     rep.letter,
@@ -727,7 +833,8 @@ fn real_main() {
                     rep.wobbles,
                     rep.fallbacks,
                     ph_json.join(","),
-                    nmd_json.join(",")
+                    nmd_json.join(","),
+                    f_json.join(",")
                 );
             } else {
                 println!(
@@ -2048,16 +2155,28 @@ fn repl_eval(l: &mut tools::Loaded, src: &str) {
 /// W41 (ROADMAP-100): sectioned diagnostics renderer, the check output that
 /// treats programmers as adults (what's wrong + the fix), with the school
 /// grade preserved under `--format score` for CI compatibility.
-fn print_diag(file: &str, rep: &tools::CheckReport, findings: &[operon::lint::Finding]) {
+///
+/// W48 stream split: `findings` carries the correctness stream; `style` is
+/// the lint-owned style stream (counted, not shown by default); when
+/// `--style` was passed, `style_inline` repeats the list to render inline
+/// under a clearly labeled header. Default output keeps a labeled count +
+/// pointer line — the split is about command purpose and defaults, not about
+/// hiding data.
+fn print_diag(
+    file: &str,
+    rep: &tools::CheckReport,
+    findings: &[operon::lint::Finding],
+    style: &[operon::lint::Finding],
+    style_inline: &[operon::lint::Finding],
+) {
     use operon::lint::Sev;
     let mut errors: Vec<&operon::lint::Finding> = Vec::new();
     let mut warnings: Vec<&operon::lint::Finding> = Vec::new();
-    let mut style: Vec<&operon::lint::Finding> = Vec::new();
     for f in findings {
         match f.sev {
             Sev::Error => errors.push(f),
             Sev::Warning => warnings.push(f),
-            Sev::Style => style.push(f),
+            Sev::Style => {} // unreachable in the correctness stream, kept for safety
         }
     }
     let section = |name: &str, items: &[&operon::lint::Finding]| {
@@ -2091,7 +2210,20 @@ fn print_diag(file: &str, rep: &tools::CheckReport, findings: &[operon::lint::Fi
             file, rep.notes, rep.wobbles, rep.fallbacks, file
         );
     }
-    section("style", &style);
+    // W48: the style stream is lint-owned. Default: one labeled line with the
+    // count and the pointer; --style renders the full section inline.
+    if !style_inline.is_empty() {
+        println!("style (owned by `operon lint`, advisory):");
+        for f in style_inline {
+            println!("  {}:{}: {} ({})", file, f.line, f.message, f.rule);
+        }
+    } else if !style.is_empty() {
+        println!(
+            "style (owned by `operon lint`): {} style finding(s), not shown here; run `operon lint {}` to see them",
+            style.len(),
+            file
+        );
+    }
     println!(
         "summary: {} error(s), {} warning(s), {} style, {} repair note(s)",
         n_errors,
@@ -2108,13 +2240,21 @@ usage:
   operon run f.op [--entry g] [--variant v] [--cell c] [--rna r] [--frame name] [--ires] [--strict] [--quiet]
                   [--fuel steps] [--allow-read path] [--allow-write path] [--allow-net host:port]
                   [--allow-run cmd] [--allow-py module] [--allow-exit] [--allow-env var] [--allow-all]
-  operon check f.op [--format diag|score] [--nmd | --nmd=purge] [--json]
+  operon check f.op [--format diag|score] [--nmd | --nmd=purge] [--json] [--style] [--strict]
+                  # W48 split: check = CORRECTNESS (wrong-arity, phantom-call, const-reassign,
+                  # cell keys, NMD). diag default shows correctness sections; the style stream is
+                  # summarized with a pointer to `operon lint` (--style inlines it).
+  operon lint f.op [more.op ...] [--strict] [--allow rule1,rule2] [--cell c] [--json]
+                  # W48 split: lint = STYLE/QUALITY only (unused-gene, unused-import,
+                  # unused-binding, dead-const, shadowed-binding, constant-condition,
+                  # infinite-loop-suspect, unreachable-code, duplicate/unreachable-match-arm).
+                  # --strict: any finding = exit 3; --allow: file-wide suppression on top of
+                  # '// allow: rule' comment suppression; --json: findings carry code/severity/line/rule/message
   operon test [paths...] [--json] [--filter substr] [--list] [--repeat n]
   operon fmt f.op [--write] [--indent N] [--quotes single|double] [--width N] [--fmt-config f]
   operon fix f.op [--write] [--json]   # migrate legacy surface (const→let, s::→dot), dry-run default
   operon ast f.op [--json]
   operon explain f.op [--json] [--strict]
-  operon lint f.op [--cell c] [--json]
   operon keywords [--json]
   operon repl
   operon debug f.op --break N   # W08 phase 1: REPL on line breaks (c s q bt vars p EXPR)
