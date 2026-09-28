@@ -13,7 +13,7 @@ exe-relative (installed trees) or from the interpreter's own tree; a
 |---|---|
 | `std/args.op` | command-line argument shaping: `args_norm`, `args_positional`, `args_flag`, `args_has`, `args_value`, `args_get`, `args_number`, `args_subcommand` |
 | `std/bio.op` | in-silico sequence utilities: `codon_usage`, `is_palindromic_site`, `melting_point`, `gc_skew` |
-| `std/collections.op` | list-shaped data work: `chunk`, `zip`, `group_by`, `take`, `flatten`, `count` |
+| `std/collections.op` | list-shaped data work: `chunk`, `zip`, `group_by`, `take`, `flatten`, `count`; fifo queues `fifo_new`, `fifo_push`, `fifo_pop`, `fifo_len`, `fifo_to_list`; deques `deque_push_front`, `deque_push_back`, `deque_pop_front`, `deque_pop_back`; priority queues `pq_new`, `pq_push`, `pq_pop` (current-min first, FIFO among equal keys, sorted-insert list: O(n) push, O(1) pop). Containers are plain lists mutated in place (the mutators also return the container for chaining); every pop returns an Option, `none()` when empty |
 | `std/csv.op` | delimited data: `csv_escape`, `csv_row`, `csv_parse`, `csv_parse_line`, `csv_records`, `csv_column`, `csv_count_fields` |
 | `std/fmt.op` | output formatting: `fmt_fixed`, `fmt_thousands`, `fmt_pct`, `fmt_bytes`, `fmt_cell`, `fmt_pad_cell`, `fmt_table`, `fmt_bool` |
 | `std/fs.op` | capability-safe file helpers (Stress-returning, never panicking): `fs_read_or`, `fs_read`, `fs_lines_or`, `fs_lines`, `strings_lines`, `fs_write_text`, `fs_write_lines`, `fs_append_line`, `fs_read_json_or`, `fs_write_json`, `fs_list_dir_or`, `fs_size_or` |
