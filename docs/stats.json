@@ -118,7 +118,7 @@
  "redteam_files": 103,
  "spec": {
   "h1": "# Operon, Language Specification",
-  "status": "v2.2.0"
+  "status": "v2.3.0"
  },
  "std_function_count": 312,
  "std_module_count": 28,
@@ -237,5 +237,5 @@
   }
  ],
  "test_op_files": 302,
- "version": "2.2.0"
+ "version": "2.3.0"
 }
