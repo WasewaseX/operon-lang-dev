@@ -1,0 +1,4 @@
+# ast-grep project configuration for operon — structural lint rules for the Rust core.
+# Run: ast-grep scan src  (or: ast-grep scan --format sarif src > report.sarif)
+ruleDirs:
+  - docs/static-analysis/sg-rules

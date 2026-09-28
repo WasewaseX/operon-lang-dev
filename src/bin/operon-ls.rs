@@ -69,6 +69,7 @@ fn explain_file(file: &str) {
         Ok(s) => s,
         Err(e) => {
             eprintln!("operon-ls: cannot read {}: {}", file, e);
+            // ast-grep-ignore: no-std-process-exit-in-core
             std::process::exit(2);
         }
     };
@@ -117,6 +118,7 @@ fn main() {
                     Some(f) => f.clone(),
                     None => {
                         eprintln!("operon-ls: --explain needs a file argument");
+                        // ast-grep-ignore: no-std-process-exit-in-core
                         std::process::exit(2);
                     }
                 };
@@ -127,6 +129,7 @@ fn main() {
                 eprintln!(
                     "operon-ls: unknown argument '{other}' (supported: --version, --explain FILE); the server reads LSP frames on stdio"
                 );
+                // ast-grep-ignore: no-std-process-exit-in-core
                 std::process::exit(2);
             }
         }
