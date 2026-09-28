@@ -845,7 +845,28 @@ All features are real, implemented, tested, none are decorative.
 - **`operon debug f.op --break N` (W08 phase 1)**: a statement-level trap in the tree-walk interpreter with a REPL on break: `c`/`continue` resumes, `s`/`step` breaks after the next statement, `p EXPR` evaluates in the current frame (same notes and stresses as a run), `vars` dumps the frame chain (values display-truncated), `bt` prints the call chain, `q` leaves with exit 0. EOF on stdin resumes to completion, so piped sessions are scriptable and never wedge. Workers are separate interpreters and never break. VM-offset breakpoints (DAP adapter, phase 2) are deferred to the A-track.
 
 
-- **`--vm` (W09 A2)**: run with gene bodies executed by the OIR1 bytecode machine (src/vm.rs; docs/vm-design.md §2a). Calls, the gate funnel, capabilities, notes and stress kinds are SHARED code, so output is byte-identical to the tree-walk by construction; the differential harness runs every corpus target on both engines against the oracle (the `--vm` lane must stay all-green). `operon ir f.op` prints the OIR1 listing (W10 stage 1; the disassembly of one compiled function is pinned by a unit test).
+- **`--vm` (W09 A2)**: run with gene bodies executed by the OIR1 bytecode machine (src/vm.rs; docs/vm-design.md §2a). Calls, the gate funnel, capabilities, notes and stress kinds are SHARED code, so output is byte-identical to the tree-walk by construction; the differential harness runs every corpus target on both engines against the oracle (the `--vm` lane must stay all-green). `operon ir f.op` prints the OIR1 listing, one line per instruction (`op idx | mnemonic | operands | line`), deterministic for the same source (a stability test compiles a mixed program twice and byte-compares the listing, W10). The opcode table, as executed by the machine and documented here:
+
+| opcode | operands | meaning |
+|---|---|---|
+| `Push` | const idx | push a constant (null/bool/int/float/str) |
+| `LoadName` | name idx | read a name (clone-charge + unbound note, the tree-walk read arm) |
+| `LoadNameQuiet` | name idx | read without note or charge (compound-assign target read) |
+| `StoreName` | name idx | `let` semantics: rebinding note + define |
+| `AssignName` | name idx | assignment semantics: const check, set, auto-declare note |
+| `Bin` | op | pop two, apply the shared `apply_binop` (exact kinds, messages, line stamps) |
+| `JmpIfF` | target | pop one, jump when falsy (same truthy() order) |
+| `Jmp` | target | unconditional jump |
+| `EvalExpr` | expr idx | BRIDGE: evaluate the arena expression with the tree-walk, push the result |
+| `BridgeStmt` | stmt idx | BRIDGE: execute the arena statement with the tree-walk |
+| `BridgeStmtInLoop` | stmt, top, end | bridge inside a compiled loop; the bridged flow re-enters the loop |
+| `Pop` | | discard one value (expression statements) |
+| `Ret` | | return the value on the stack |
+| `Brk`/`Cont` | target | break/continue out of the enclosing COMPILED loop (patched) |
+| `EnterScope`/`ExitScope` | | enter/leave a block scope (fresh child env) |
+| `CallNamed` | name idx, argc | native call (W09): pop argc args, run the SHARED named-call funnel (RISC gate included), push the result |
+
+Bridging is the Total Grammar escape: a construct the compiler does not lower natively either evaluates via the tree-walk or degrades to a bridge, nothing is rejected at compile time. The native/bridge split is invisible to program output by construction (shared code paths), which is what the vm lane of the differential harness pins.
 
 
 ```

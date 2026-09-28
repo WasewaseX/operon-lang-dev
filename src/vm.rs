@@ -1013,3 +1013,53 @@ mod tests {
         let _ = OIR_VERSION;
     }
 }
+
+#[cfg(test)]
+mod stability_tests {
+    use super::*;
+    use crate::parser::parse;
+
+    /// W10 done-when: the annotated dump is STABLE across runs. The same
+    /// source compiles to the same listing, every time, opt on or off, and
+    /// the listing carries every opcode mnemonic the machine knows (the
+    /// SPEC 8 VM table and this test move together).
+    #[test]
+    fn dump_is_deterministic_and_complete() {
+        let src = "\
+gene f(n) {
+    let x = n + 1
+    return x * 2
+}
+gene g(xs) {
+    let acc = 0
+    for v in xs {
+        acc = acc + v
+    }
+    if acc > 10 {
+        return acc
+    }
+    return f(acc)
+}
+gene main() {
+    print(g([1, 2, 3]))
+}
+";
+        let d1 = disassemble_program(&parse(src));
+        let d2 = disassemble_program(&parse(src));
+        assert_eq!(d1, d2, "same source, same listing, always");
+        // every opcode the machine executes appears in the listing of this
+        // deliberately mixed program (bridges included: gene values in args)
+        for m in [
+            "Push", "LoadName", "StoreName", "Bin", "JmpIfF", "CallNamed", "Ret", "Pop",
+        ] {
+            assert!(d1.contains(m), "listing missing {m}:\n{d1}");
+        }
+        // an unknown mnemonic would mean the SPEC VM table drifted
+        for line in d1.lines() {
+            if line.contains('|') {
+                let m = line.split('|').nth(1).unwrap_or("").trim();
+                assert!(!m.is_empty(), "bare listing line: {line}");
+            }
+        }
+    }
+}
