@@ -2,9 +2,18 @@
 # element type (no per-type duplication), mismatch is a catchable `unfolded`
 # stress, and a callable VALUE is reusable across types. The policy this
 # pins is docs/specs/GENERICS.md stage 1.
+#
+# Grammar note: arrow lambdas are expression-bodied (`=> expr`). A `{`
+# after `=>` starts a map literal, not a block, so the conditional-return
+# probe below lives in a named gene, which is where block bodies belong.
 
 use std/iter;
 use std/collections;
+
+gene noisy(x) {
+    if x == 2 { return x + "s" }
+    return x
+}
 
 frame proof {
     # --- one map, every element type
@@ -44,7 +53,7 @@ frame proof {
     #     of the std API (Total Grammar: nothing is rejected up front)
     let late = false
     stress {
-        iter.map(nums, gene (x) => { if x == 2 { return x + "s" } return x })
+        iter.map(nums, noisy)
         late = true
     } rescue (e) {
         late = true

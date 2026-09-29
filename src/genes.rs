@@ -57,10 +57,151 @@ pub fn spawn_worker(f: impl FnOnce() + Send + 'static) -> Result<(), Stress> {
 }
 
 // ------------------------------------------------------------ .cell config
+
+/// W066: parse a `.cell` payload into the flat key/value map the engine
+/// consumes. Behavior is FROZEN (byte-identical map for every input, garbage
+/// included): the loader (`src/tools.rs`), the lint engine
+/// (`src/lint.rs::lint_cell`) and the differential parity all ride this
+/// function, so it never rejects, never notes, never panics — Total Grammar.
+/// Schema validation lives in the checked twin `parse_cell_checked`.
 pub fn parse_cell(src: &str) -> HashMap<String, String> {
+    parse_cell_checked(src).0
+}
+
+/// W066: one advisory `.cell` schema finding from the parse lane. `rule`
+/// reuses the check-time lint vocabulary from `src/lint.rs` verbatim —
+/// `cell-unknown-key` (W10) and `cell-type-mismatch` (W11) — so check and
+/// runtime tell ONE story about the same file. Notes are advisory: a bad
+/// key never rejects the run (unknown keys are ignored by the engine, that
+/// is exactly why the note exists).
+#[derive(Debug, Clone, PartialEq)]
+pub struct CellNote {
+    /// 1-based line in the .cell payload (0 = not attributable).
+    pub line: usize,
+    /// Stable lint rule name ("cell-unknown-key" / "cell-type-mismatch").
+    pub rule: &'static str,
+    /// Human message; names the key, the expectation and (for unknown keys)
+    /// the closest known key as a typo hint.
+    pub message: String,
+}
+
+/// W10 vocabulary (src/lint.rs): .cell key outside the schema.
+pub const CELL_UNKNOWN_KEY: &str = "cell-unknown-key";
+/// W11 vocabulary (src/lint.rs): .cell value of the wrong kind.
+pub const CELL_TYPE_MISMATCH: &str = "cell-type-mismatch";
+
+/// W066: the kind a schema key's value must have for the engine to use it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CellKind {
+    /// Parses as f64 (`grn.decay`).
+    Number,
+    /// Parses as i64 (`run.timeout_ms`; range nuances in the key's doc).
+    Integer,
+    /// The engine's bool vocabulary: "true" / "false" ("on"/"off" where the
+    /// reader honors them, e.g. scope.cancel_on_error).
+    Bool,
+    /// Taken verbatim (`cli.variant`, `allow.*` grants).
+    Str,
+}
+
+impl CellKind {
+    pub fn label(self) -> &'static str {
+        match self {
+            CellKind::Number => "number",
+            CellKind::Integer => "an integer",
+            CellKind::Bool => "a bool ('true'/'false')",
+            CellKind::Str => "a string",
+        }
+    }
+    fn accepts(self, v: &str) -> bool {
+        let t = v.trim();
+        match self {
+            CellKind::Number => t.parse::<f64>().is_ok(),
+            CellKind::Integer => t.parse::<i64>().is_ok(),
+            // scope.cancel_on_error flips OFF on "off"; the rest arm on
+            // "true" — the union of the honored vocabulary is accepted here,
+            // anything else gets an advisory note (never a rejection).
+            CellKind::Bool => matches!(t, "true" | "false" | "on" | "off"),
+            CellKind::Str => true,
+        }
+    }
+}
+
+/// W066: one declared key of the `.cell` schema — the runtime lane's source
+/// of truth. `docs/specs/CELL-SCHEMA.md` is the human mirror (kept in sync
+/// by tests/cell_schema.rs) and `src/lint.rs::CELL_KEYS` the check-time
+/// mirror (lint lane). Families end in `*` ("allow.*") and match by prefix.
+pub struct CellKeySpec {
+    /// Exact key ("m6a.decay") or family prefix ending in `*` ("allow.*").
+    pub name: &'static str,
+    pub kind: CellKind,
+    /// The value the engine behaves as when the key is absent
+    /// ("—" = opt-in family/key with no numeric default).
+    pub default: &'static str,
+    /// One-line effect, mirrored in docs/specs/CELL-SCHEMA.md.
+    pub doc: &'static str,
+    /// Since-when tag (loop/roadmap id or pre-M100), for evolution audits.
+    pub since: &'static str,
+}
+
+/// Every key the engine reads today (sweep of `cell.get` call sites in
+/// src/interp.rs, src/genes.rs, src/tools.rs, src/main.rs, src/pybridge.rs),
+/// alphabetically, exact keys before their family. The `methyl()` builtin
+/// additionally reads ANY key (introspection door; `allow.*` redacted).
+pub const CELL_SCHEMA: &[CellKeySpec] = &[
+    CellKeySpec { name: "allow.exit", kind: CellKind::Bool, default: "false", doc: "boolean exit capability; must ride an explicit --cell (auto-detected cells cannot grant)", since: "sec-r2 (audit C-11)" },
+    CellKeySpec { name: "allow.*", kind: CellKind::Str, default: "nothing granted", doc: "capability grant family: read/write/net/run/py/env carry comma-separated values, exit is boolean; auto-detected operon.cell grants are ignored with a note", since: "pre-M100 (sec-r2)" },
+    CellKeySpec { name: "cli.variant", kind: CellKind::Str, default: "—", doc: "pins splice-variant selection for every gene (CLI --variant is staged in as this key; selection: cell > @m6a > first declared)", since: "pre-M100" },
+    CellKeySpec { name: "entry", kind: CellKind::Str, default: "main / ires", doc: "entry gene override (CLI --entry wins over it)", since: "pre-M100" },
+    CellKeySpec { name: "enhance.delta", kind: CellKind::Number, default: "0.25", doc: "enhancer dose, 0..=1: threshold reduction applied by enhance", since: "reg-bio (F-6)" },
+    CellKeySpec { name: "expression.koff", kind: CellKind::Number, default: "0.1", doc: "telegraph promoter OFF probability per call attempt, 0..=1", since: "reg-bio (F-1)" },
+    CellKeySpec { name: "expression.kon", kind: CellKind::Number, default: "0.3", doc: "telegraph promoter ON probability per call attempt, 0..=1", since: "reg-bio (F-1)" },
+    CellKeySpec { name: "expression.seed", kind: CellKind::Integer, default: "0 (golden-ratio constant)", doc: "reseeds the shared mirrored xorshift64* stream behind promoter draws", since: "reg-bio (F-1)" },
+    CellKeySpec { name: "expression.stochastic", kind: CellKind::Bool, default: "false", doc: "enables per-call telegraph promoter draws (deterministic contract otherwise)", since: "reg-bio (F-1)" },
+    CellKeySpec { name: "grn.decay", kind: CellKind::Number, default: "0.0 (no decay)", doc: "GRN level dilution per grn_fire pulse / time tick, 0..=1", since: "A10 / reg-bio-2 (C2)" },
+    CellKeySpec { name: "grn.decay_calls", kind: CellKind::Integer, default: "— (event-driven only)", doc: "fires one GRN decay step every N calls when set (>=1)", since: "reg-bio-2 (C2)" },
+    CellKeySpec { name: "ligand.*", kind: CellKind::Number, default: "0.0", doc: "[ligand.<name>] bath default per species, 0..=1; runtime ligand_set wins over it", since: "reg-bio-2 (A4)" },
+    CellKeySpec { name: "m6a.decay", kind: CellKind::Number, default: "0.0 (no decay)", doc: "standalone m6A density decay fraction per cadence tick, 0..=1", since: "loop-9 (P0-4)" },
+    CellKeySpec { name: "m6a.decay_calls", kind: CellKind::Integer, default: "1", doc: "standalone m6A decay cadence in calls (>=1)", since: "loop-9 (P0-4)" },
+    CellKeySpec { name: "m6a.reader.decay", kind: CellKind::Number, default: "0.25", doc: "YTHDF2 fate: extra decay on marked transcripts, 0..=1", since: "loop-9 (F-6)" },
+    CellKeySpec { name: "m6a.reader.min_level", kind: CellKind::Integer, default: "2", doc: "reader engagement threshold on the 0..=3 mark lattice", since: "loop-9 (F-6)" },
+    CellKeySpec { name: "m6a.reader.translation", kind: CellKind::Number, default: "0.10", doc: "YTHDF1/3 fate: translation attenuation on marked transcripts, 0..=1", since: "loop-9 (F-6)" },
+    CellKeySpec { name: "methyl.maintenance", kind: CellKind::Number, default: "0.5", doc: "maintenance factor applied to methylation levels per passage(n), 0..=1", since: "pre-M100" },
+    CellKeySpec { name: "methylate.quiet", kind: CellKind::Bool, default: "false", doc: "suppresses the per-call methylation growth notes", since: "pre-M100 (A12)" },
+    CellKeySpec { name: "methylate.threshold", kind: CellKind::Integer, default: "3", doc: "graded silencing gate: calls blocked when methylation counter >= threshold (>=0)", since: "pre-M100 (T2b)" },
+    CellKeySpec { name: "modules.visibility", kind: CellKind::Str, default: "default visibility", doc: "\"strict\" enables W24 strict module export visibility (private containment)", since: "W24" },
+    CellKeySpec { name: "operon.polarity", kind: CellKind::Number, default: "0.5", doc: "transcriptional polarity survival factor for upstream cistrons, 0..=1", since: "loop-9 (P0-1)" },
+    CellKeySpec { name: "py.timeout_ms", kind: CellKind::Integer, default: "10000 (clamp 1..=300000)", doc: "py() wall-clock cap in milliseconds", since: "substrate-r1" },
+    CellKeySpec { name: "quorum.dilution", kind: CellKind::Number, default: "0.5", doc: "signal-medium dilution per passage(n) division, 0..=1", since: "loop-9 (C8)" },
+    CellKeySpec { name: "rho.catch", kind: CellKind::Number, default: "0.5", doc: "Rho catch-up probability base (distance decay q = 1-(1-catch)^d), 0..=1", since: "loop-10 (F-7)" },
+    CellKeySpec { name: "rho.queue_floor", kind: CellKind::Number, default: "0.5", doc: "rut-site occlusion floor for Rho termination", since: "loop-10 (F-7)" },
+    CellKeySpec { name: "rho.termination", kind: CellKind::Bool, default: "false", doc: "arms Rho-dependent termination (opt-in; legacy runs draw nothing)", since: "loop-10 (F-7)" },
+    CellKeySpec { name: "ribosome.drain", kind: CellKind::Number, default: "0.5", doc: "ribosome-queue drain rate per call", since: "loop-10 (F-8)" },
+    CellKeySpec { name: "ribosome.queue_cap", kind: CellKind::Number, default: "1.0", doc: "per-cistron ribosome-queue shield cap (0.0 = unshielded)", since: "loop-10 (F-7)" },
+    CellKeySpec { name: "repressi.alpha", kind: CellKind::Number, default: "10.0", doc: "repressilator production alpha (>0)", since: "reg-bio (F-5)" },
+    CellKeySpec { name: "repressi.basal", kind: CellKind::Number, default: "0.0", doc: "basal promoter leak (>=0)", since: "reg-bio (F-5)" },
+    CellKeySpec { name: "repressi.gamma", kind: CellKind::Number, default: "1.0", doc: "repressilator degradation gamma (>=0)", since: "reg-bio (F-5)" },
+    CellKeySpec { name: "repressi.hill", kind: CellKind::Integer, default: "4", doc: "Hill coefficient (integer 1..=8)", since: "reg-bio (F-5)" },
+    CellKeySpec { name: "repressi.noise", kind: CellKind::Number, default: "0.0 (off)", doc: "Euler substep kick amplitude, 0..=1", since: "reg-bio (F-5)" },
+    CellKeySpec { name: "repressi.seed", kind: CellKind::Integer, default: "0 (golden-ratio constant)", doc: "seeds the repressilator noise stream", since: "reg-bio (F-5)" },
+    CellKeySpec { name: "run.timeout_ms", kind: CellKind::Integer, default: "10000 (clamp 1..=300000)", doc: "run() child wall-clock cap in milliseconds; a timed-out child is killed and reported", since: "sec-r2 (audit A14)" },
+    CellKeySpec { name: "scope.cancel_on_error", kind: CellKind::Bool, default: "true", doc: "cancel child scopes on a stress unwind (\"off\" disables)", since: "W18" },
+    CellKeySpec { name: "variant.*", kind: CellKind::Str, default: "(@m6a > first declared)", doc: "variant.<root> pins the splice variant per gene root", since: "pre-M100" },
+    CellKeySpec { name: "wobble.strict", kind: CellKind::Bool, default: "false", doc: "cell-side --strict: run exits 3 when rung >= 3 repairs occurred", since: "W37" },
+];
+
+/// W066: parse + validate a `.cell` payload against `CELL_SCHEMA`. Returns
+/// the exact map `parse_cell` has always produced (same loop, same rules —
+/// the notes are an ADDITIVE advisory channel) plus one note per finding:
+/// unknown key -> `cell-unknown-key` (W10) with a closest-key typo hint,
+/// kind mismatch -> `cell-type-mismatch` (W11) with expected vs got.
+/// Notes never reject and are never printed here; the loader decides where
+/// they surface (Total Grammar: configuration problems never stop a run).
+pub fn parse_cell_checked(src: &str) -> (HashMap<String, String>, Vec<CellNote>) {
     let mut out = HashMap::new();
+    let mut notes = Vec::new();
     let mut section = String::new();
-    for line in src.lines() {
+    for (i, line) in src.lines().enumerate() {
         let t = line.trim();
         if t.is_empty() || t.starts_with('#') {
             continue;
@@ -77,10 +218,113 @@ pub fn parse_cell(src: &str) -> HashMap<String, String> {
             } else {
                 format!("{}.{}", section, k)
             };
+            let line_no = i + 1;
+            match cell_schema_kind(&key) {
+                None => {
+                    let hint = closest_cell_key(&key)
+                        .map(|c| format!(" did you mean '{}'?", c))
+                        .unwrap_or_default();
+                    notes.push(CellNote {
+                        line: line_no,
+                        rule: CELL_UNKNOWN_KEY,
+                        message: format!(
+                            ".cell key '{}' is not in the schema \
+                             (docs/specs/CELL-SCHEMA.md), typo? it will be \
+                             silently ignored{}",
+                            key, hint
+                        ),
+                    });
+                }
+                Some(kind) => {
+                    if !kind.accepts(&v) {
+                        notes.push(CellNote {
+                            line: line_no,
+                            rule: CELL_TYPE_MISMATCH,
+                            message: format!(
+                                ".cell key '{}' expects {}, got '{}'",
+                                key,
+                                kind.label(),
+                                v
+                            ),
+                        });
+                    }
+                }
+            }
             out.insert(key, v);
         }
     }
-    out
+    (out, notes)
+}
+
+/// The kind declared for `key`, exact rows first, then `*` families.
+fn cell_schema_kind(key: &str) -> Option<CellKind> {
+    for spec in CELL_SCHEMA {
+        if let Some(prefix) = spec.name.strip_suffix('*') {
+            if key.starts_with(prefix) {
+                return Some(spec.kind);
+            }
+        } else if spec.name == key {
+            return Some(spec.kind);
+        }
+    }
+    None
+}
+
+/// W066: closest known key for an unknown one — zero-dependency typo hint.
+/// Bounded Levenshtein over bytes plus a prefix/suffix affinity (covers the
+/// classic section-dropped case: "decay" -> "grn.decay"/"m6a.decay").
+/// Ties break deterministically: distance, then longer common prefix, then
+/// CELL_SCHEMA order. Returns None when nothing is plausibly a typo of it.
+fn closest_cell_key(unknown: &str) -> Option<&'static str> {
+    let mut best: Option<(&'static str, usize, usize)> = None; // (name, dist, prefix)
+    for spec in CELL_SCHEMA {
+        let name = spec.name;
+        let bare = name.strip_suffix('*').unwrap_or(name);
+        let d = edit_distance_bounded(unknown, bare, 3);
+        let p = common_prefix_len(unknown, bare);
+        // plausible typo: within edit distance 3, or the unknown is a
+        // prefix/suffix of a known key (3+ chars so single letters stay quiet)
+        let affinity = unknown.len() >= 3 && (bare.starts_with(unknown) || bare.ends_with(unknown));
+        if d > 3 && !affinity {
+            continue;
+        }
+        let better = match best {
+            None => true,
+            Some((_, bd, bp)) => d < bd || (d == bd && p > bp),
+        };
+        if better {
+            best = Some((name, d, p));
+        }
+    }
+    best.map(|(name, _, _)| name)
+}
+
+/// Levenshtein distance, bailing out once it exceeds `cap` (returns cap+1).
+fn edit_distance_bounded(a: &str, b: &str, cap: usize) -> usize {
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    if a.len().abs_diff(b.len()) > cap {
+        return cap + 1;
+    }
+    let mut prev: Vec<usize> = (0..=b.len()).collect();
+    let mut cur = vec![0usize; b.len() + 1];
+    for i in 1..=a.len() {
+        cur[0] = i;
+        let mut row_min = cur[0];
+        for j in 1..=b.len() {
+            let sub = prev[j - 1] + usize::from(a[i - 1] != b[j - 1]);
+            cur[j] = (prev[j] + 1).min(cur[j - 1] + 1).min(sub);
+            row_min = row_min.min(cur[j]);
+        }
+        if row_min > cap {
+            return cap + 1;
+        }
+        std::mem::swap(&mut prev, &mut cur);
+    }
+    prev[b.len()]
+}
+
+fn common_prefix_len(a: &str, b: &str) -> usize {
+    a.bytes().zip(b.bytes()).take_while(|(x, y)| x == y).count()
 }
 
 // ------------------------------------------------------------ .rna edits
@@ -264,6 +508,7 @@ pub fn choose_variant(interp: &Interp, sp: &SpliceDef) -> Option<(String, Arc<Ge
     }
     // 5. first declared
     // 4. first declared
+    // ast-grep-ignore: no-unwrap-in-src
     let first = sp.variants.first().unwrap();
     Some((first.0.clone(), first.1.clone()))
 }
@@ -580,8 +825,13 @@ fn resolve_path(interp: &Interp, path: &str) -> Result<String, String> {
             if let Some(root) = dir.parent() {
                 candidates.push(Some(root.join(&p)));
             }
-            // bare `use x`: try the exe-relative std trees by file name
-            if !p.starts_with("std/") {
+            // bare `use x`: try the exe-relative std trees by file name.
+            // BARE only: a multi-segment path (a/b/c) must never resolve by
+            // its tail, or `use mylib::seq` would hijack std/seq.op instead
+            // of descending mylib's exported nested tables (W025 stage 2;
+            // the oracle never had this candidate, so parity demands the
+            // single-segment restriction, not an oracle-side mirror).
+            if !p.starts_with("std/") && !p.contains('/') {
                 if let Some(fname) = std::path::Path::new(&p).file_name() {
                     candidates.push(Some(dir.join("std").join(fname)));
                     if let Some(root) = dir.parent() {
@@ -864,19 +1114,26 @@ pub enum SendValue {
 }
 
 /// Sendable environment snapshot entry: gene definitions cross by Arc,
-/// data values cross by serialization.
+/// data values cross by serialization. W015: channel handles cross LIVE
+/// (the Arc to the shared buffer), they are the one behavior value with a
+/// thread-safe interior, so a spawned cell can send/recv on the same
+/// channel as its host; the queue stores the wire form, so the membrane
+/// still holds (nothing aliased is shared).
 pub enum SnapVal {
     Gene(Arc<GeneDef>),
     Data(SendValue),
+    Channel(Arc<crate::value::ChannelShared>),
 }
 
 /// Sendable argument: data serializes; named genes cross as references to
 /// the snapshot (the worker re-binds them from its inherited repertoire).
 /// Anonymous lambdas cannot cross, they arrive as null with a note.
+/// W015: channel handles cross LIVE (same shared buffer on both sides).
 pub enum SnapArg {
     Data(SendValue),
     GeneRef(String),
     Lambda(Arc<GeneDef>),
+    Channel(Arc<crate::value::ChannelShared>),
 }
 
 pub fn arg_to_snap(v: &Value) -> SnapArg {
@@ -885,8 +1142,11 @@ pub fn arg_to_snap(v: &Value) -> SnapArg {
 
 fn arg_to_snap_d(v: &Value, d: u32) -> SnapArg {
     match v {
+        // ast-grep-ignore: no-unwrap-in-src
         Value::Gene(d2, _) if d2.name.is_some() => SnapArg::GeneRef(d2.name.clone().unwrap()),
         Value::Gene(d2, _) => SnapArg::Lambda(d2.clone()),
+        // W015: a top-level channel argument crosses as a live handle
+        Value::Channel(a) => SnapArg::Channel(a.clone()),
         other => SnapArg::Data(to_send_d(other, d)),
     }
 }
@@ -894,6 +1154,8 @@ fn arg_to_snap_d(v: &Value, d: u32) -> SnapArg {
 pub fn arg_from_snap(a: &SnapArg, snap: &[(String, SnapVal)]) -> Value {
     match a {
         SnapArg::Data(sv) => from_send(clone_send(sv)),
+        // W015: the live channel handle re-binds by Arc (same buffer)
+        SnapArg::Channel(arc) => Value::Channel(arc.clone()),
         SnapArg::GeneRef(n) => {
             for (name, sv) in snap {
                 if name == n {
@@ -910,7 +1172,7 @@ pub fn arg_from_snap(a: &SnapArg, snap: &[(String, SnapVal)]) -> Value {
 
 /// Maximum nesting depth of a value (cycle-safe: visited pointers never
 /// re-expand). Walk stops at the SendValue cap.
-fn value_depth(v: &Value, d: u32) -> u32 {
+pub(crate) fn value_depth(v: &Value, d: u32) -> u32 {
     if d > 100_000 {
         return d;
     }
@@ -971,6 +1233,18 @@ fn to_send_d(v: &Value, d: u32) -> SendValue {
         ),
         Value::Gene(_, _) => SendValue::Null,
         Value::Seq(_, _) => SendValue::Null,
+        // W015: a channel handle nested inside a container degrades to null
+        // during data serialization (same rule as genes/sequences); only
+        // top-level handles cross live (SnapArg::Channel / SnapVal::Channel)
+        Value::Channel(_) => SendValue::Null,
+        // W013: a weak handle degrades to null like every other handle when
+        // it crosses as DATA (nested inside a container, or a join-result
+        // value, it could never keep its meaning across the snapshot
+        // membrane: the copy's target is a different allocation). A
+        // TOP-LEVEL weak spawn argument and a weak channel payload are
+        // refused by their pre-flights before this arm is reached
+        // (SPEC §19f), so this arm is the nested/return-boundary rule.
+        Value::Weak(_) => SendValue::Null,
         Value::Variant(crate::value::VTag::NoneV, _) => SendValue::Variant("None".into(), None),
         Value::Variant(t, Some(p)) => {
             SendValue::Variant(t.tag_name().into(), Some(Box::new(to_send_d(p, d + 1))))
@@ -1041,6 +1315,8 @@ pub fn snapshot_globals(interp: &Interp) -> Vec<(String, SnapVal)> {
     for (name, v) in interp.global.vars.borrow().iter() {
         match v {
             Value::Gene(d, _) => out.push((name.clone(), SnapVal::Gene(d.clone()))),
+            // W015: a global channel crosses as a live handle (same buffer)
+            Value::Channel(a) => out.push((name.clone(), SnapVal::Channel(a.clone()))),
             other => {
                 let sv = to_send(other);
                 out.push((name.clone(), SnapVal::Data(sv)));
@@ -1360,6 +1636,7 @@ pub fn bind_snapshot(env: &Rc<Env>, snap: &[(String, SnapVal)]) {
     for (name, sv) in snap {
         let v = match sv {
             SnapVal::Gene(d) => Value::Gene(d.clone(), None),
+            SnapVal::Channel(a) => Value::Channel(a.clone()),
             SnapVal::Data(sv) => from_send(clone_send(sv)),
         };
         env.define(name, v);
@@ -1381,6 +1658,8 @@ pub fn snapshot_with_closure(interp: &Interp, closure: Option<&Rc<Env>>) -> Vec<
         for (name, v) in env.vars.borrow().iter() {
             match v {
                 Value::Gene(d, _) => out.push((name.clone(), SnapVal::Gene(d.clone()))),
+                // W015: closure-captured channels cross live too (same buffer)
+                Value::Channel(a) => out.push((name.clone(), SnapVal::Channel(a.clone()))),
                 other => out.push((name.clone(), SnapVal::Data(to_send(other)))),
             }
         }
@@ -1526,6 +1805,22 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
             "too many live tasks (4096), join() your spawns",
         ));
     }
+    // W013 spawn membrane: a top-level weak handle is REFUSED (catchable
+    // `membrane` stress), never silently nulled. A weak handle's whole
+    // meaning is the allocation identity of its target in the creating
+    // cell; the snapshot wire could only deliver a lie (a null, or worse a
+    // handle re-pointed at a copy). Same family as the send() refusal:
+    // data crosses, handles ride their own documented lanes (genes by
+    // name, lambdas and channels live, instances as maps), weak handles
+    // ride none. Nested handles keep the degrade-to-null wire rule.
+    for a in &args {
+        if matches!(a, Value::Weak(_)) {
+            return Err(Stress::new(
+                "membrane",
+                "spawn() refuses a weak payload; weak handles cannot cross the snapshot membrane",
+            ));
+        }
+    }
     // pre-flight depth check: a payload deeper than the SendValue cap must
     // fail the SPAWN (catchable stress), not smuggle a stress value across
     for a in &args {
@@ -1592,6 +1887,7 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
             Ok(v) => (to_send(&v), ti.notes),
             // W06 (D-014): a propagated variant IS the worker gene's return
             // value, converted at the boundary, never leaked as a failure.
+            // ast-grep-ignore: no-unwrap-in-src
             Err(s) if s.prop.is_some() => (to_send(&s.prop.unwrap()), ti.notes),
             Err(s) => (SendValue::Stress(s.kind, s.message), ti.notes),
         };
@@ -1611,7 +1907,7 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
             SendValue::Stress(k, _) if k == "cancelled" => crate::interp::TaskState::Cancelled,
             _ => crate::interp::TaskState::Done,
         };
-        *task_phase_in.lock().unwrap() = phase;
+        *task_phase_in.lock().unwrap_or_else(|e| e.into_inner()) = phase;
         let _ = tx.send((rv, notes));
     })?;
     let _ = id; // claimed before spawn (C3); registered below
@@ -1720,7 +2016,7 @@ pub fn cancel_task(interp: &mut Interp, args: Vec<Value>) -> Result<Value, Stres
     if let Some(handle) = interp.tasks.get(&id) {
         let flag = handle.cancel.clone();
         let phase_cell = handle.state.clone();
-        let mut phase = phase_cell.lock().unwrap();
+        let mut phase = phase_cell.lock().unwrap_or_else(|e| e.into_inner());
         if *phase == crate::interp::TaskState::Running {
             flag.store(true, Ordering::Relaxed);
             *phase = crate::interp::TaskState::Cancelled;
@@ -1756,7 +2052,7 @@ pub fn task_state_of(interp: &mut Interp, args: Vec<Value>) -> Result<Value, Str
     }
     if let Some(handle) = interp.tasks.get(&id) {
         let phase_cell = handle.state.clone();
-        let phase = *phase_cell.lock().unwrap();
+        let phase = *phase_cell.lock().unwrap_or_else(|e| e.into_inner());
         return Ok(Value::Str(phase.as_str().into()));
     }
     if let Some(t) = interp.task_tombstones.get(&id) {
@@ -1822,7 +2118,7 @@ pub fn wait_any_task(interp: &mut Interp, args: Vec<Value>) -> Result<Value, Str
     loop {
         for id in &ids {
             let done = if let Some(h) = interp.tasks.get(id) {
-                let phase = *h.state.lock().unwrap();
+                let phase = *h.state.lock().unwrap_or_else(|e| e.into_inner());
                 phase != crate::interp::TaskState::Running
             } else {
                 interp.task_tombstones.contains_key(id)

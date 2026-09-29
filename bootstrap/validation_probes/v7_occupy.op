@@ -1,0 +1,42 @@
+# W093 validation probe, V7 (occupancy repression, thermodynamic survival).
+# Companion measurement program for bootstrap/validation_registry.json and
+# bootstrap/validation_report.py. It asserts NOTHING. The enforcing test
+# remains tests/grn_occupy.op. Mirrors its two fires exactly: two partial
+# repressors (influence 0.4 each) and two near-full repressors (influence
+# 1/(1+0.01) each). Occupancy composes multiplicatively:
+#   partial: 1 x 0.6 x 0.6 = 0.36   (subtractive legacy: 0.2)
+#   near-full: (1 - 0.990099...)^2, approaches but never crosses zero
+regulate {
+    sig activates target strength 1.0 threshold 0.2
+    r1 inhibits sub_target strength 0.5 threshold 0.5
+    r2 inhibits sub_target strength 0.5 threshold 0.5
+    r1 inhibits occ_target strength 0.5 threshold 0.5 occupy
+    r2 inhibits occ_target strength 0.5 threshold 0.5 occupy
+    r3 inhibits sub_full strength 1.0 threshold 0.1
+    r4 inhibits sub_full strength 1.0 threshold 0.1
+    r3 inhibits occ_full strength 1.0 threshold 0.1 occupy
+    r4 inhibits occ_full strength 1.0 threshold 0.1 occupy
+}
+gene target() { return "t" }
+gene sub_target() { return "sub" }
+gene occ_target() { return "occ" }
+gene sub_full() { return "subf" }
+gene occ_full() { return "occf" }
+grn_set("r1", 1.0)
+grn_set("r2", 1.0)
+grn_set("sub_target", 1.0)
+grn_set("occ_target", 1.0)
+grn_fire("sig")
+let s = grn_state()
+promote("RESULT v7_sub_partial={s.sub_target}")
+promote("RESULT v7_occ_partial={s.occ_target}")
+grn_set("r1", 0.0)
+grn_set("r2", 0.0)
+grn_set("r3", 1.0)
+grn_set("r4", 1.0)
+grn_set("sub_full", 1.0)
+grn_set("occ_full", 1.0)
+grn_fire("sig")
+let s3 = grn_state()
+promote("RESULT v7_sub_overshoot={s3.sub_full}")
+promote("RESULT v7_occ_survival={s3.occ_full}")

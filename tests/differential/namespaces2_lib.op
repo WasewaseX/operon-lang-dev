@@ -1,0 +1,31 @@
+# W025 stage 2 fixture: nested sub-module declarations. Runs standalone
+# harmlessly (prints nothing); imported by namespaces2.op on both engines.
+# The nested tables are the point: seq carries its own genes and a deeper
+# table, counts carries data plus a gene that closes over it.
+gene flat_tag() {
+    return "flat"
+}
+
+module seq {
+    gene tag() {
+        return "seq"
+    }
+
+    gene twice(s) {
+        return s + s
+    }
+
+    module deep {
+        gene tag() {
+            return "deep"
+        }
+    }
+}
+
+module counts {
+    let base = 10
+
+    gene bump(n) {
+        return n + base
+    }
+}

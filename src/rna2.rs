@@ -235,6 +235,20 @@ fn scan_line_plain_hash(line: &str, in_triple: &mut bool) -> bool {
     false
 }
 
+/// The comment-preflight refusal message. Shared VERBATIM by the apply path
+/// (`apply_rna_v2`) and check mode (W68) so the two contracts cannot drift.
+pub fn comment_refusal_msg(comment_lines: &[usize]) -> String {
+    format!(
+        "rna v2: refused, plain '#' comments at lines [{}] would be lost by the AST reprint; \
+         convert them to '##' doc comments or pass --allow-comment-drop",
+        comment_lines
+            .iter()
+            .map(|l| l.to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
+}
+
 // ------------------------------------------------------------ patch parser
 
 /// Parse a v2 patch (line-based FILE format, not language syntax).
@@ -544,15 +558,7 @@ pub fn apply_rna_v2(
     let rules = parse_v2_patch(patch_src)?;
     let comment_lines = plain_comment_lines(src);
     if !comment_lines.is_empty() && !allow_comment_drop {
-        return Err(format!(
-            "rna v2: refused, plain '#' comments at lines [{}] would be lost by the AST reprint; \
-             convert them to '##' doc comments or pass --allow-comment-drop",
-            comment_lines
-                .iter()
-                .map(|l| l.to_string())
-                .collect::<Vec<_>>()
-                .join(", ")
-        ));
+        return Err(comment_refusal_msg(&comment_lines));
     }
 
     // Parse, don't slice: a fresh AST from the CURRENT source.
@@ -946,6 +952,75 @@ fn verb_name(v: &V2Verb) -> String {
     }
 }
 
+// ------------------------------------------------------------ check (W68)
+
+/// W68: result of validating a v2 patch against its target WITHOUT applying
+/// anything. `check_rna_v2` runs the exact apply machinery in memory (the
+/// apply path is pure: parse -> edit AST -> reprint, no file IO), so the
+/// verdict is by construction what a real apply with the same flags would do.
+#[derive(Debug, Clone)]
+pub struct Rna2CheckReport {
+    /// the patch itself did not parse (rules never ran)
+    pub parse_error: Option<String>,
+    /// per-rule fate under the in-memory apply. Empty when the patch never
+    /// reached rule resolution: parse error or comment-preflight refusal,
+    /// mirroring the apply path's order (parse -> preflight -> rules).
+    pub rules: Vec<Rna2RuleReport>,
+    /// plain `#` comment lines found in the TARGET source (the reprint would
+    /// drop them)
+    pub comment_lines: Vec<usize>,
+    /// Some(refusal message) when the comment guard would refuse the apply
+    pub comment_refusal: Option<String>,
+    /// a real apply with the same flags would succeed end-to-end
+    pub would_apply: bool,
+    /// refusal reason whenever `would_apply` is false (patch parse error,
+    /// comment refusal, or the all-or-nothing miss summary; per-rule detail
+    /// lives in the rule rows)
+    pub reason: Option<String>,
+}
+
+/// Validate a v2 patch against a target without applying anything. Same
+/// gate order as `apply_rna_v2` (patch parse -> comment preflight -> rule
+/// resolution), so check and apply can never disagree.
+pub fn check_rna_v2(src: &str, patch_src: &str, allow_comment_drop: bool) -> Rna2CheckReport {
+    let comment_lines = plain_comment_lines(src);
+    let comment_refusal = if !comment_lines.is_empty() && !allow_comment_drop {
+        Some(comment_refusal_msg(&comment_lines))
+    } else {
+        None
+    };
+    let mut rep = Rna2CheckReport {
+        parse_error: None,
+        rules: Vec::new(),
+        comment_lines,
+        comment_refusal,
+        would_apply: false,
+        reason: None,
+    };
+    if let Err(e) = parse_v2_patch(patch_src) {
+        rep.parse_error = Some(e.clone());
+        rep.reason = Some(e);
+        return rep;
+    }
+    match apply_rna_v2(src, patch_src, allow_comment_drop) {
+        Ok(r) => {
+            let missed = r.missed();
+            rep.rules = r.rules;
+            if r.new_text.is_some() {
+                rep.would_apply = true;
+            } else {
+                rep.reason = Some(format!("all-or-nothing: {} rule(s) missed", missed));
+            }
+        }
+        Err(e) => {
+            // only the comment preflight can refuse here (the patch already
+            // parsed above); mirror the apply refusal verbatim
+            rep.reason = Some(e);
+        }
+    }
+    rep
+}
+
 // ------------------------------------------------------------ decl lookup
 
 /// Paths of all declarations matching `kind` AND `name_pred`, in program
@@ -1319,6 +1394,8 @@ fn rewrite_stmt(s: &mut Stmt, cfg: &mut RewriteCfg) {
         | Stmt::Scope(body)
         | Stmt::Frame { body, .. }
         | Stmt::Tad(_, body)
+        // W025 stage 2: fix rewrites reach inside nested sub-module tables
+        | Stmt::Module(_, body)
         | Stmt::Block(body) => rewrite_stmts(body, cfg),
         Stmt::For(_, it, body) => {
             rewrite_expr(it, cfg);

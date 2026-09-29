@@ -702,6 +702,11 @@ pub struct Interp {
     /// (bridged sub-ASTs and compiled bodies keyed by def pointer).
     pub vm: bool,
     pub vm_program: Option<crate::vm::VmProgram>,
+    /// W09: scratch operand stacks pooled across machine frames. fib25's
+    /// 243k calls allocated (and grew) a fresh operand Vec per call; the
+    /// pool hands each frame a warm stack instead. Bound: stacks larger
+    /// than 64 slots drop instead of pooling, memory stays flat.
+    pub vm_stack_pool: Vec<Vec<crate::value::Value>>,
     /// W11: the optimization level behind --opt (0 = off).
     pub vm_opt: u8,
     /// W08 phase 1: interactive debug hooks (`operon debug`). Break lines
@@ -818,6 +823,7 @@ impl Interp {
             scope_stack: Vec::new(),
             vm: false,
             vm_program: None,
+            vm_stack_pool: Vec::new(),
             vm_opt: 0,
             debug_breaks: HashSet::new(),
             debug_step: false,
@@ -1160,6 +1166,7 @@ impl Interp {
                 }
                 "q" | "quit" => {
                     eprintln!("[debug] quit");
+                    // ast-grep-ignore: no-std-process-exit-in-core
                     std::process::exit(0);
                 }
                 "bt" => {
@@ -1351,6 +1358,8 @@ impl Interp {
                         }
                         let n = l.borrow().len() as i64;
                         let j = if *idx < 0 { n + *idx } else { *idx };
+                        // W013: insertion-time cycle detection (SPEC §19e)
+                        crate::value::cycle_note_insert(&Value::List(l.clone()), &val);
                         if j >= 0 && j < n {
                             l.borrow_mut()[j as usize] = val;
                         } else {
@@ -1365,6 +1374,8 @@ impl Interp {
                             return Err(Self::frozen_stress("list"));
                         }
                         let idx = self.as_index(&iv, l.borrow().len()).unwrap_or(usize::MAX);
+                        // W013: insertion-time cycle detection (SPEC §19e)
+                        crate::value::cycle_note_insert(&Value::List(l.clone()), &val);
                         if idx != usize::MAX && idx < l.borrow().len() {
                             l.borrow_mut()[idx] = val;
                         } else {
@@ -1673,36 +1684,69 @@ impl Interp {
                 Ok(Flow::Norm)
             }
             Stmt::Use(path, alias) => {
-                match crate::genes::load_module(self, path) {
-                    Ok(modv) => {
-                        let name = alias.clone().unwrap_or_else(|| {
-                            std::path::Path::new(path)
-                                .file_stem()
-                                .map(|s| s.to_string_lossy().to_string())
-                                .unwrap_or_else(|| "mod".into())
-                        });
-                        env.define(&name, modv.clone());
-                        // flat-bind ALL exports beside the alias map: the whole
-                        // module repertoire (genes AND data like config lets)
-                        // stays addressable by name, workers and call()
-                        // resolve them without a prefix, and worker snapshots
-                        // carry module data across the membrane
-                        if let Value::Map(m) = &modv {
-                            let flat: Vec<(String, Value)> = m
-                                .borrow()
-                                .iter()
-                                .filter_map(|(k, v)| match k {
-                                    Value::Str(s) => Some((s.clone(), v.clone())),
-                                    _ => None,
-                                })
-                                .collect();
-                            for (kname, v) in flat {
-                                env.define(&kname, v);
+                // W025 stage 2: a trailing `/*` marks the WILDCARD form,
+                // flat-bind the target table's exports without binding the
+                // module map itself (an explicit `as` alias still binds it).
+                // Resolution stays FILE-FIRST, so every stage-1 program
+                // resolves exactly as before: the full path is tried as a
+                // file, then each shorter prefix is loaded as a file and the
+                // remaining segments descend the exported nested-module
+                // tables, longest prefix first (SPEC §8).
+                let (base, wildcard) = match path.strip_suffix("/*") {
+                    Some(b) => (b, true),
+                    None => (path.as_str(), false),
+                };
+                let mut bound: Option<Value> = None;
+                match crate::genes::load_module(self, base) {
+                    Ok(modv) => bound = Some(modv),
+                    Err(msg) => {
+                        let segs: Vec<&str> = base.split('/').collect();
+                        if segs.len() >= 2 {
+                            for k in (1..segs.len()).rev() {
+                                let prefix = segs[..k].join("/");
+                                if let Ok(rootv) = crate::genes::load_module(self, &prefix) {
+                                    if let Some(table) =
+                                        self.descend_tables(&rootv, &segs[k..], path)
+                                    {
+                                        bound = Some(table);
+                                        break;
+                                    }
+                                }
                             }
                         }
+                        if bound.is_none() {
+                            self.note(0, 4, format!("use '{}' failed: {}", path, msg));
+                        }
                     }
-                    Err(msg) => {
-                        self.note(0, 4, format!("use '{}' failed: {}", path, msg));
+                }
+                if let Some(modv) = bound {
+                    let name = alias.clone().unwrap_or_else(|| {
+                        std::path::Path::new(base)
+                            .file_stem()
+                            .map(|s| s.to_string_lossy().to_string())
+                            .unwrap_or_else(|| "mod".into())
+                    });
+                    if !wildcard || alias.is_some() {
+                        env.define(&name, modv.clone());
+                    }
+                    // flat-bind ALL exports beside the alias map: the whole
+                    // module repertoire (genes AND data like config lets)
+                    // stays addressable by name, workers and call()
+                    // resolve them without a prefix, and worker snapshots
+                    // carry module data across the membrane. For the wildcard
+                    // form this flat bind IS the whole import.
+                    if let Value::Map(m) = &modv {
+                        let flat: Vec<(String, Value)> = m
+                            .borrow()
+                            .iter()
+                            .filter_map(|(k, v)| match k {
+                                Value::Str(s) => Some((s.clone(), v.clone())),
+                                _ => None,
+                            })
+                            .collect();
+                        for (kname, v) in flat {
+                            env.define(&kname, v);
+                        }
                     }
                 }
                 Ok(Flow::Norm)
@@ -1736,6 +1780,7 @@ impl Interp {
                     // crosses stress/rescue boundaries on its way to the gene
                     // boundary. Must pre-arm BEFORE kind matching so rescue
                     // (including `rescue any`) can never contain or spoof it.
+                    // ast-grep-ignore: no-unwrap-in-src
                     Err(s) if s.prop.is_some() => Ok(Flow::Ret(s.prop.unwrap())),
                     Err(stress) => {
                         let kind_ok = match kind {
@@ -2092,6 +2137,41 @@ impl Interp {
                 // scope: members bind into the enclosing environment.
                 self.exec_block(env, body)
             }
+            Stmt::Module(name, body) => {
+                // W025 stage 2: nested sub-module table. The body runs ONCE,
+                // here, in a fresh child scope (stress propagates to the
+                // enclosing containment, exactly like a module-file top-level
+                // statement); the child scope's own names become the export
+                // table, sorted like the file-module loader sorts them so both
+                // engines print and flat-bind identically. Last declaration
+                // wins: a later `gene seq` re-binds over the table, the table
+                // stays reachable through whoever exported it.
+                let child = Env::new(Some(env.clone()));
+                for stmt in body {
+                    // flow signals (bare return/break/continue at table
+                    // scope) end that statement only, mirroring the module
+                    // file loader's per-statement loop.
+                    let _ = self.exec_stmt(&child, stmt)?;
+                }
+                let mut exports: Vec<(Value, Value)> = child
+                    .vars
+                    .borrow()
+                    .iter()
+                    .filter(|(k, _)| !k.starts_with('#'))
+                    .map(|(k, v)| (Value::Str(k.clone()), v.clone()))
+                    .collect();
+                exports.sort_by(|a, b| match (&a.0, &b.0) {
+                    (Value::Str(x), Value::Str(y)) => x.cmp(y),
+                    _ => std::cmp::Ordering::Equal,
+                });
+                env.define(
+                    name,
+                    Value::Map(Rc::new(RefCell::new(crate::value::MapStore::from_vec(
+                        exports,
+                    )))),
+                );
+                Ok(Flow::Norm)
+            }
             Stmt::Pheno(def) => {
                 self.phenos.insert(def.name.clone(), def.clone());
                 Ok(Flow::Norm)
@@ -2128,6 +2208,42 @@ impl Interp {
                 }
             }
         }
+    }
+
+    /// W025 stage 2: walk nested module tables after a file prefix loaded.
+    /// Each segment must be a string key of the current table whose value is
+    /// the next table (a Null value counts as missing, nothing is ever
+    /// reached through it). A missing segment notes and aborts the descent:
+    /// Total Grammar, the import binds nothing and the run continues.
+    fn descend_tables(&mut self, root: &Value, segs: &[&str], full: &str) -> Option<Value> {
+        let mut cur = root.clone();
+        for seg in segs {
+            let next = match &cur {
+                Value::Map(m) => m
+                    .borrow()
+                    .iter()
+                    .find(|(k, v)| {
+                        matches!(k, Value::Str(s) if s == seg) && !matches!(v, Value::Null)
+                    })
+                    .map(|(_, v)| v.clone()),
+                _ => None,
+            };
+            match next {
+                Some(v) => cur = v,
+                None => {
+                    self.note(
+                        0,
+                        4,
+                        format!(
+                            "use '{}': segment '{}' is not a nested module table; import binds nothing",
+                            full, seg
+                        ),
+                    );
+                    return None;
+                }
+            }
+        }
+        Some(cur)
     }
 
     /// L1a: shared member-read logic for `Expr::Member` and `Expr::MemberSafe`
@@ -2358,6 +2474,8 @@ impl Interp {
                         }
                         let n = l.borrow().len() as i64;
                         let j = if *idx < 0 { n + *idx } else { *idx };
+                        // W013: insertion-time cycle detection (SPEC §19e)
+                        crate::value::cycle_note_insert(&Value::List(l.clone()), &val);
                         if j >= 0 && j < n {
                             l.borrow_mut()[j as usize] = val;
                         } else {
@@ -2371,6 +2489,8 @@ impl Interp {
                             return Err(Self::frozen_stress("list"));
                         }
                         let idx = self.as_index(&iv, l.borrow().len()).unwrap_or(usize::MAX);
+                        // W013: insertion-time cycle detection (SPEC §19e)
+                        crate::value::cycle_note_insert(&Value::List(l.clone()), &val);
                         if idx != usize::MAX && idx < l.borrow().len() {
                             l.borrow_mut()[idx] = val;
                         } else {
@@ -2562,6 +2682,10 @@ impl Interp {
             self.steps = self.steps.saturating_add(n);
         }
         // dx-r3: memoized upsert (was a linear deep_eq scan)
+        // W013: insertion-time cycle detection, before the edge lands, the
+        // VALUE edge is what can close a cycle (map KEYS are not walked,
+        // SPEC §19e)
+        crate::value::cycle_note_insert(&Value::Map(m.clone()), &val);
         m.borrow_mut().insert(key, val);
         Ok(())
     }
@@ -2718,110 +2842,11 @@ impl Interp {
             Expr::Call(callee, args, call_line) => {
                 // A13 (dx-r2): builtin diagnostics carry the call site
                 self.cur_line = *call_line;
-                // check silences at call sites (RISC)
+                // check silences at call sites (RISC) + the named/free split;
+                // the shared tail (named_call_tail) is ALSO the VM's CallNamed
+                // path, so the machine rides the identical gate funnel.
                 if let Expr::Ident(name) = &**callee {
-                    // reg-bio-3 (C9): stoichiometric RISC, every entry for
-                    // the target is one binding site; the per-call capture
-                    // probability is 1 − Π(1−s_i)^sites_i. strength 1.0 /
-                    // one site = legacy binary redirect (no draw, the RNG
-                    // stream is untouched for legacy programs).
-                    let entries: Vec<(String, Option<String>, f64, u32)> = self
-                        .silences
-                        .iter()
-                        .filter(|(f, _, _, _)| f == name)
-                        .cloned()
-                        .collect();
-                    if let Some((_, first_to, first_s, first_sites)) = entries.first().cloned() {
-                        // acetylated genes are immune (checked BEFORE any
-                        // draw, immunity consumes no randomness)
-                        let immune = match env.get(name) {
-                            Some(Value::Gene(d, _)) => d.acetylate,
-                            _ => false,
-                        };
-                        if !immune {
-                            let mut surv = 1.0f64;
-                            for (_, _, s, sites) in &entries {
-                                let base = 1.0 - *s;
-                                let mut k = 0;
-                                while k < *sites {
-                                    surv *= base;
-                                    k += 1;
-                                }
-                            }
-                            let p = 1.0 - surv;
-                            // capture decision: deterministic draw on the
-                            // shared mirrored xorshift64* stream (same
-                            // discipline as the telegraph promoter); only
-                            // when the capture is genuinely probabilistic
-                            let captured = if p >= 1.0 {
-                                true
-                            } else {
-                                let mut x = self.rng;
-                                x ^= x >> 12;
-                                x ^= x << 25;
-                                x ^= x >> 27;
-                                self.rng = x;
-                                let u = ((x >> 11) as f64) / 9_007_199_254_740_992.0;
-                                if u < p {
-                                    true
-                                } else {
-                                    // escape: the call proceeds through the
-                                    // pinned funnel; note once per gene
-                                    if self.risc_escaped.insert(name.clone()) {
-                                        self.note(
-                                            0,
-                                            4,
-                                            format!(
-                                                "RISC escape: '{}' escaped silencing (strength {}, sites {})",
-                                                name,
-                                                crate::value::format_float(first_s),
-                                                first_sites
-                                            ),
-                                        );
-                                    }
-                                    false
-                                }
-                            };
-                            if captured {
-                                match first_to {
-                                    Some(to) => {
-                                        self.note(
-                                            0,
-                                            4,
-                                            format!("RISC: call to '{}' silenced → '{}'", name, to),
-                                        );
-                                        let target = env.get(&to).unwrap_or(Value::Null);
-                                        let mut argvs = Vec::new();
-                                        for a in args {
-                                            argvs.push(self.eval(env, a)?);
-                                        }
-                                        return self.call_value(env, &target, argvs);
-                                    }
-                                    // reg-bio (F-4): pure degradation, the transcript
-                                    // is destroyed, no replacement executes. A degraded
-                                    // call is not expression: it returns null BEFORE the
-                                    // call counters, exactly like the other silencing gates.
-                                    None => {
-                                        self.note(
-                                            0,
-                                            4,
-                                            format!(
-                                                "RISC: call to '{}' degraded (no replacement)",
-                                                name
-                                            ),
-                                        );
-                                        return Ok(Value::Null);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    // named call: user genes, builtins, wobble repair, phantoms
-                    let mut argvs = Vec::with_capacity(args.len());
-                    for a in args {
-                        argvs.push(self.eval(env, a)?);
-                    }
-                    return self.call_named(env, name, argvs);
+                    return self.named_call_tail(env, name, args, None);
                 }
                 let cv = self.eval(env, callee)?;
                 let mut argvs = Vec::with_capacity(args.len());
@@ -2850,6 +2875,7 @@ impl Interp {
                     (Value::Map(m), _) => {
                         let pos = m.borrow().position(&iv);
                         match pos {
+                            // ast-grep-ignore: no-unwrap-in-src
                             Some(i) => Ok(m.borrow().get(i).unwrap().1.clone()),
                             None => Err(Stress::new("missing", "key not found")),
                         }
@@ -3496,6 +3522,148 @@ impl Interp {
         }
     }
 
+    /// The named free-gene call tail, SHARED by the tree-walk (Expr::Call over
+    /// an ident) and the VM's CallNamed instruction (W09 native calls): the
+    /// RISC silencing gate, then argument evaluation unless the caller already
+    /// evaluated them (`pre`), then the call_named funnel. Byte-identical
+    /// behavior by construction: this is the moved code, not a rewrite.
+    fn named_call_tail(
+        &mut self,
+        env: &Rc<Env>,
+        name: &str,
+        args: &[Expr],
+        pre: Option<Vec<Value>>,
+    ) -> Result<Value, Stress> {
+        // reg-bio-3 (C9): stoichiometric RISC, every entry for
+        // the target is one binding site; the per-call capture
+        // probability is 1 − Π(1−s_i)^sites_i. strength 1.0 /
+        // one site = legacy binary redirect (no draw, the RNG
+        // stream is untouched for legacy programs).
+        // A5 fast path: no silences configured = the gate is
+        // observationally inert (no entries, no draw, no notes), so the
+        // per-call entries collect (one malloc) is skipped. Empty and
+        // non-empty runtimes behave identically; this only removes work.
+        let entries: Vec<(String, Option<String>, f64, u32)> = if self.silences.is_empty() {
+            Vec::new()
+        } else {
+            self.silences
+                .iter()
+                .filter(|(f, _, _, _)| f == name)
+                .cloned()
+                .collect()
+        };
+        if let Some((_, first_to, first_s, first_sites)) = entries.first().cloned() {
+            // acetylated genes are immune (checked BEFORE any
+            // draw, immunity consumes no randomness)
+            let immune = match env.get(name) {
+                Some(Value::Gene(d, _)) => d.acetylate,
+                _ => false,
+            };
+            if !immune {
+                let mut surv = 1.0f64;
+                for (_, _, s, sites) in &entries {
+                    let base = 1.0 - *s;
+                    let mut k = 0;
+                    while k < *sites {
+                        surv *= base;
+                        k += 1;
+                    }
+                }
+                let p = 1.0 - surv;
+                // capture decision: deterministic draw on the
+                // shared mirrored xorshift64* stream (same
+                // discipline as the telegraph promoter); only
+                // when the capture is genuinely probabilistic
+                let captured = if p >= 1.0 {
+                    true
+                } else {
+                    let mut x = self.rng;
+                    x ^= x >> 12;
+                    x ^= x << 25;
+                    x ^= x >> 27;
+                    self.rng = x;
+                    let u = ((x >> 11) as f64) / 9_007_199_254_740_992.0;
+                    if u < p {
+                        true
+                    } else {
+                        // escape: the call proceeds through the
+                        // pinned funnel; note once per gene
+                        if self.risc_escaped.insert(name.to_string()) {
+                            self.note(
+                                0,
+                                4,
+                                format!(
+                                    "RISC escape: '{}' escaped silencing (strength {}, sites {})",
+                                    name,
+                                    crate::value::format_float(first_s),
+                                    first_sites
+                                ),
+                            );
+                        }
+                        false
+                    }
+                };
+                if captured {
+                    match first_to {
+                        Some(to) => {
+                            self.note(
+                                0,
+                                4,
+                                format!("RISC: call to '{}' silenced → '{}'", name, to),
+                            );
+                            let target = env.get(&to).unwrap_or(Value::Null);
+                            let argvs = match pre {
+                                Some(v) => v,
+                                None => {
+                                    let mut argvs = Vec::with_capacity(args.len());
+                                    for a in args {
+                                        argvs.push(self.eval(env, a)?);
+                                    }
+                                    argvs
+                                }
+                            };
+                            return self.call_value(env, &target, argvs);
+                        }
+                        // reg-bio (F-4): pure degradation, the transcript
+                        // is destroyed, no replacement executes. A degraded
+                        // call is not expression: it returns null BEFORE the
+                        // call counters, exactly like the other silencing gates.
+                        None => {
+                            self.note(
+                                0,
+                                4,
+                                format!("RISC: call to '{}' degraded (no replacement)", name),
+                            );
+                            return Ok(Value::Null);
+                        }
+                    }
+                }
+            }
+        }
+        let argvs = match pre {
+            Some(v) => v,
+            None => {
+                let mut argvs = Vec::with_capacity(args.len());
+                for a in args {
+                    argvs.push(self.eval(env, a)?);
+                }
+                argvs
+            }
+        };
+        self.call_named(env, name, argvs)
+    }
+
+    /// VM entry to the shared named-call tail: args are already on the
+    /// machine's stack (W09 CallNamed). Same gates, same notes, same funnel.
+    pub fn named_call_tail_vm(
+        &mut self,
+        env: &Rc<Env>,
+        name: &str,
+        argvs: Vec<Value>,
+    ) -> Result<Value, Stress> {
+        self.named_call_tail(env, name, &[], Some(argvs))
+    }
+
     pub fn call_named(
         &mut self,
         env: &Rc<Env>,
@@ -3689,6 +3857,7 @@ impl Interp {
         if self.medium.is_none() {
             self.medium = Some(Arc::new(Mutex::new(HashMap::new())));
         }
+        // ast-grep-ignore: no-unwrap-in-src
         self.medium.as_ref().unwrap().clone()
     }
 
@@ -3886,6 +4055,7 @@ impl Interp {
             {
                 let (pos, rbs) = {
                     let u = &self.operons[ui];
+                    // ast-grep-ignore: no-unwrap-in-src
                     let pos = u.members.iter().position(|(m, _)| *m == t.from).unwrap();
                     (pos, u.members[pos].1)
                 };
@@ -4535,6 +4705,7 @@ impl Interp {
                 .iter()
                 .position(|u| u.members.iter().any(|(m, _)| *m == name))
             {
+                // ast-grep-ignore: no-unwrap-in-src
                 let pos = self.operons[rui]
                     .members
                     .iter()
@@ -4658,23 +4829,8 @@ impl Interp {
                 }
             }
         }
-        *self.call_counts.entry(name.clone()).or_insert(0) += 1;
-        // burst-index binning: 20 calls per bin, per gene (gene-expression
-        // burstiness is measured on per-gene time bins, not across genes)
-        self.call_clock += 1;
-        // reg-bio-2 (C2): the decay clock, time-driven decay + translation
-        // integration tick here (unset key = no-op).
-        // loop-9 (P0-4): the m6A lattice decays on its own cadence when no
-        // GRN clock is configured (inert without `m6a.decay`, byte-identical).
-        self.m6a_decay_own();
-        self.grn_decay_tick();
-        let bucket = self.call_clock / 20;
-        *self
-            .gene_buckets
-            .entry(name.clone())
-            .or_default()
-            .entry(bucket)
-            .or_insert(0) += 1;
+        // per-call bookkeeping (counters, clock, decay ticks, burst bins)
+        self.bump_call_bookkeeping(&name);
         // @methylate: transcriptionally repressed genes announce their first
         // call (suppressed by .cell `methylate.quiet = true`)
         if def.methylate && !self.methyl_quiet && !self.methyl_noted.contains(&name) {
@@ -4778,6 +4934,7 @@ impl Interp {
                             break;
                         }
                         Err(p) if p.prop.is_some() => {
+                            // ast-grep-ignore: no-unwrap-in-src
                             flowed = Flow::Ret(p.prop.unwrap());
                             break;
                         }
@@ -4804,10 +4961,10 @@ impl Interp {
         let result = if self.vm {
             // W09 A2: the compiled-body path. Param binding, the gate funnel
             // and guards ran above in the SHARED code; only the body
-            // execution swaps to the stack machine.
+            // execution swaps to the stack machine. `name` was computed at
+            // the funnel top — do NOT re-clone the def name per call.
             let key = std::sync::Arc::as_ptr(&def) as *const u8 as usize;
-            let name_for_vm = def.name.clone().unwrap_or_else(|| "<lambda>".into());
-            crate::vm::exec_gene_body(self, key, &name_for_vm, &def.body, &fenv)
+            crate::vm::exec_gene_body(self, key, &name, &def.body, &fenv)
         } else {
             self.exec_block(&fenv, &def.body)
         };
@@ -4816,6 +4973,7 @@ impl Interp {
         // signal unwinds here and becomes Flow::Ret (never a failure).
         let flowed = match result {
             Ok(f) => f,
+            // ast-grep-ignore: no-unwrap-in-src
             Err(p) if p.prop.is_some() => Flow::Ret(p.prop.unwrap()),
             Err(e) => return Err(e),
         };
@@ -4831,6 +4989,43 @@ impl Interp {
                 // no explicit return → null; a non-optional return
                 // annotation is violated by an implicit null too
                 self.check_ret_ann("gene", &name, &def.ret_ann, &Value::Null, false)
+            }
+        }
+    }
+
+    /// Per-call bookkeeping shared by BOTH call funnels (gene + phenotype
+    /// method), in the pinned order: call counter, run clock, the decay
+    /// ticks between them (reg-bio-2 C2 + loop-9 P0-4), then the burst-index
+    /// bin (reg-bio-2, 20 calls per bin, per gene — burstiness is measured
+    /// on per-gene time bins, not across genes). `name` is borrowed; the
+    /// counter maps clone it only on the first sight of a gene (get_mut
+    /// fast path — the clone-per-call malloc is the fib25-class cost).
+    fn bump_call_bookkeeping(&mut self, name: &str) {
+        match self.call_counts.get_mut(name) {
+            Some(c) => *c += 1,
+            None => {
+                self.call_counts.insert(name.to_string(), 1);
+            }
+        }
+        self.call_clock += 1;
+        // reg-bio-2 (C2): the decay clock, time-driven decay + translation
+        // integration tick here (unset key = no-op).
+        // loop-9 (P0-4): the m6A lattice decays on its own cadence when no
+        // GRN clock is configured (inert without `m6a.decay`, byte-identical).
+        self.m6a_decay_own();
+        self.grn_decay_tick();
+        let bucket = self.call_clock / 20;
+        match self.gene_buckets.get_mut(name) {
+            Some(bins) => match bins.get_mut(&bucket) {
+                Some(c) => *c += 1,
+                None => {
+                    bins.insert(bucket, 1);
+                }
+            },
+            None => {
+                let mut bins = HashMap::new();
+                bins.insert(bucket, 1);
+                self.gene_buckets.insert(name.to_string(), bins);
             }
         }
     }
@@ -5106,20 +5301,8 @@ impl Interp {
             );
             return Ok(Value::Null);
         }
-        *self.call_counts.entry(name.clone()).or_insert(0) += 1;
-        self.call_clock += 1;
-        // reg-bio-2 (C2): the decay clock ticks on the phenotype-method path
-        // too (both expression surfaces share one timebase).
-        // loop-9 (P0-4): standalone m6A cadence (same contract, both paths).
-        self.m6a_decay_own();
-        self.grn_decay_tick();
-        let bucket = self.call_clock / 20;
-        *self
-            .gene_buckets
-            .entry(name.clone())
-            .or_default()
-            .entry(bucket)
-            .or_insert(0) += 1;
+        // per-call bookkeeping (counters, clock, decay ticks, burst bins)
+        self.bump_call_bookkeeping(&name);
         if def.methylate && !self.methyl_quiet && !self.methyl_noted.contains(&name) {
             self.methyl_noted.insert(name.clone());
             self.note(
@@ -5188,6 +5371,7 @@ impl Interp {
                             break;
                         }
                         Err(p) if p.prop.is_some() => {
+                            // ast-grep-ignore: no-unwrap-in-src
                             flowed = Flow::Ret(p.prop.unwrap());
                             break;
                         }
@@ -5204,8 +5388,7 @@ impl Interp {
         let result = if self.vm {
             // W09 A2: the compiled-body path (see the call_gene_inner site)
             let key = std::sync::Arc::as_ptr(&def) as *const u8 as usize;
-            let name_for_vm = def.name.clone().unwrap_or_else(|| "<lambda>".into());
-            crate::vm::exec_gene_body(self, key, &name_for_vm, &def.body, &fenv)
+            crate::vm::exec_gene_body(self, key, &name, &def.body, &fenv)
         } else {
             self.exec_block(&fenv, &def.body)
         };
@@ -5214,6 +5397,7 @@ impl Interp {
         // signal unwinds here and becomes Flow::Ret (never a failure).
         let flowed = match result {
             Ok(f) => f,
+            // ast-grep-ignore: no-unwrap-in-src
             Err(p) if p.prop.is_some() => Flow::Ret(p.prop.unwrap()),
             Err(e) => return Err(e),
         };
@@ -5224,6 +5408,218 @@ impl Interp {
                 self.check_ret_ann("method", &name, &def.ret_ann, &v, true)
             }
             _ => self.check_ret_ann("method", &name, &def.ret_ann, &Value::Null, false),
+        }
+    }
+
+    // ------------------------------------------------------- channels (W015)
+    // A channel is a behavior handle (Value::Channel) wrapping a thread-safe
+    // unbounded FIFO. The queue stores the WIRE form (SendValue): every
+    // payload crosses the same serialization a spawn boundary uses, even on
+    // the same-thread buffered path, so the membrane contract is one rule.
+    // Blocking (recv on empty+open, select with nothing ready) charges fuel
+    // per wake slice, exactly like sleep's wall-time-as-fuel shape, and
+    // observes the cancel chain, so a blocked cell wakes on cancel() and a
+    // blocked recv cannot outlive the run budget.
+
+    /// Blocking slice lengths: recv waits on the condvar in 50 ms slices,
+    /// select polls in 10 ms slices; both charge ms*1000 fuel steps per
+    /// wake (the sleep charge shape). 50 ms keeps a cancelled recv's wake
+    /// latency bounded without burning fuel on hot polling.
+    const RECV_SLICE_MS: u64 = 50;
+    const SELECT_SLICE_MS: u64 = 10;
+
+    /// W015 membrane rule: behavior handles (genes, sequences, phenotype
+    /// instances, other channels) cannot ride as payloads, they are refused
+    /// at send time with a catchable `membrane` stress. Data crosses (lists
+    /// and maps serialize deeply; nested handles inside containers degrade
+    /// to null, the same silent rule the spawn wire always had).
+    fn membrane_refusal(v: &Value) -> Option<Stress> {
+        match v {
+            Value::Gene(_, _)
+            | Value::Seq(_, _)
+            | Value::Obj(_, _)
+            | Value::Channel(_)
+            // W013: a weak handle is a handle too, it never rides the wire
+            // (it would arrive pointing at a snapshot copy's target, a lie)
+            | Value::Weak(_) => {
+                Some(Stress::new(
+                    "membrane",
+                    format!(
+                        "send() refuses a {} payload; channels carry data, not handles",
+                        v.type_name()
+                    ),
+                ))
+            }
+            _ => None,
+        }
+    }
+
+    fn builtin_send(&mut self, args: Vec<Value>) -> Result<Value, Stress> {
+        let (ch, payload) = match (args.first(), args.get(1)) {
+            (Some(Value::Channel(c)), Some(v)) => (c.clone(), v.clone()),
+            _ => {
+                return Err(Stress::new(
+                    "unfolded",
+                    "send(ch, v) needs a channel and a value",
+                ))
+            }
+        };
+        if let Some(s) = Self::membrane_refusal(&payload) {
+            return Err(s);
+        }
+        // pre-flight depth: a payload deeper than the SendValue cap fails
+        // the SEND (catchable), it never smuggles a wire stress into the
+        // queue (same discipline as the spawn pre-flight)
+        if crate::genes::value_depth(&payload, 0) > 100_000 {
+            return Err(Stress::new("overflow", "send payload nesting too deep"));
+        }
+        // growth charge, the push() shape: an unbounded buffer is an
+        // allocator DoS unless every append pays the aggregate ceiling
+        let bytes = match &payload {
+            Value::Str(x) => x.len() as u64 + 48,
+            Value::List(x) => 16 * x.borrow().len() as u64 + 96,
+            _ => 32,
+        };
+        mem_charge(bytes)?;
+        let mut st = ch.state.lock().unwrap_or_else(|e| e.into_inner());
+        if st.closed {
+            return Err(Stress::new("closed_channel", "send on a closed channel"));
+        }
+        st.queue.push_back(crate::genes::to_send(&payload));
+        drop(st);
+        ch.wake.notify_one();
+        Ok(Value::Null)
+    }
+
+    fn builtin_recv(&mut self, args: Vec<Value>) -> Result<Value, Stress> {
+        let ch = match args.first() {
+            Some(Value::Channel(c)) => c.clone(),
+            _ => return Err(Stress::new("unfolded", "recv(ch) needs a channel")),
+        };
+        let slice = std::time::Duration::from_millis(Self::RECV_SLICE_MS);
+        let mut st = ch.state.lock().unwrap_or_else(|e| e.into_inner());
+        loop {
+            if let Some(sv) = st.queue.pop_front() {
+                return Ok(crate::genes::from_send(sv));
+            }
+            // closed AND empty is the only null recv can produce
+            if st.closed {
+                return Ok(Value::Null);
+            }
+            // blocked: wake-iteration fuel + cancel, the sleep shape
+            self.blocking_wake(Self::RECV_SLICE_MS)?;
+            let (g, _timed_out) = ch
+                .wake
+                .wait_timeout(st, slice)
+                .unwrap_or_else(|e| e.into_inner());
+            st = g;
+        }
+    }
+
+    fn builtin_close(&mut self, args: Vec<Value>) -> Result<Value, Stress> {
+        let ch = match args.first() {
+            Some(Value::Channel(c)) => c.clone(),
+            _ => return Err(Stress::new("unfolded", "close(ch) needs a channel")),
+        };
+        let mut st = ch.state.lock().unwrap_or_else(|e| e.into_inner());
+        if st.closed {
+            // idempotent + soft note (close is a state write, not a race;
+            // Go panics here, we contain)
+            drop(st);
+            self.note(self.cur_line, 4, "close of an already-closed channel");
+            return Ok(Value::Null);
+        }
+        st.closed = true;
+        drop(st);
+        // wake every waiter: blocked recvs observe closed+empty (null),
+        // blocked selects re-poll and can answer -1
+        ch.wake.notify_all();
+        Ok(Value::Null)
+    }
+
+    /// One wake iteration of a blocking channel operation: charge the slice
+    /// as fuel (shared pool + step budget, the exact sleep shape), then
+    /// observe the cancel chain so cancel() unblocks a parked cell.
+    fn blocking_wake(&mut self, slice_ms: u64) -> Result<(), Stress> {
+        let charge = slice_ms.saturating_mul(1000);
+        self.steps = self.steps.saturating_add(charge);
+        if let Some(pool) = &self.fuel_pool {
+            let left = pool.fetch_sub(charge as i64, std::sync::atomic::Ordering::Relaxed);
+            if left <= charge as i64 {
+                return Err(Stress::new(
+                    "overflow",
+                    "run-wide step budget exhausted (channel wait)",
+                ));
+            }
+        }
+        if self.steps > self.step_budget {
+            return Err(Stress::new(
+                "overflow",
+                "step budget exhausted (channel wait)",
+            ));
+        }
+        if !self.cancel_chain.is_empty() {
+            for f in &self.cancel_chain {
+                if f.load(std::sync::atomic::Ordering::Relaxed) {
+                    return Err(Stress::new("cancelled", "task cancelled"));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// W015 select: a BUILTIN, not syntax (grammar freeze, W036). Polls the
+    /// argument channels strictly in declaration order and returns the
+    /// 0-based index of the first one with a ready value (non-empty buffer);
+    /// ready-on-a-closed-channel still counts, its buffered values remain
+    /// receivable. All closed and nothing buffered anywhere answers -1.
+    /// Nothing ready with at least one channel open: block, re-polling in
+    /// order every slice (documented fairness: the leftmost ready channel
+    /// always wins, never a random arm), each wake charged as fuel.
+    fn builtin_select(&mut self, args: Vec<Value>) -> Result<Value, Stress> {
+        let mut chans: Vec<Arc<crate::value::ChannelShared>> = Vec::new();
+        for a in &args {
+            match a {
+                Value::Channel(c) => chans.push(c.clone()),
+                other => {
+                    return Err(Stress::new(
+                        "unfolded",
+                        format!("select() needs channels, got a {}", other.type_name()),
+                    ))
+                }
+            }
+        }
+        if chans.is_empty() {
+            // vacuous all-closed: nothing can ever become ready
+            self.note(self.cur_line, 4, "select() with no channels; -1");
+            return Ok(Value::Int(-1));
+        }
+        let poll = |chans: &[Arc<crate::value::ChannelShared>]| -> (Option<usize>, bool) {
+            let mut any_open = false;
+            let mut ready = None;
+            for (i, c) in chans.iter().enumerate() {
+                let st = c.state.lock().unwrap_or_else(|e| e.into_inner());
+                if !st.queue.is_empty() {
+                    // strict declaration order: the leftmost ready wins
+                    ready = Some(i);
+                    break;
+                }
+                if !st.closed {
+                    any_open = true;
+                }
+            }
+            (ready, any_open)
+        };
+        loop {
+            let (ready, any_open) = poll(&chans);
+            if let Some(i) = ready {
+                return Ok(Value::Int(i as i64));
+            }
+            if !any_open {
+                return Ok(Value::Int(-1));
+            }
+            self.blocking_wake(Self::SELECT_SLICE_MS)?;
+            std::thread::sleep(std::time::Duration::from_millis(Self::SELECT_SLICE_MS));
         }
     }
 
@@ -5281,6 +5677,9 @@ impl Interp {
                         _ => 32,
                     };
                     mem_charge(bytes)?;
+                    // W013: insertion-time cycle detection, before the edge
+                    // lands (self-referencing containers register here)
+                    crate::value::cycle_note_insert(&Value::List(l.clone()), v);
                     l.borrow_mut().push(v.clone());
                     Ok(Value::List(l.clone()))
                 } else {
@@ -5303,6 +5702,8 @@ impl Interp {
                     }
                     let idx = self.as_index(i, l.borrow().len())?;
                     let idx = idx.min(l.borrow().len());
+                    // W013: insertion-time cycle detection (SPEC §19e)
+                    crate::value::cycle_note_insert(&Value::List(l.clone()), v);
                     l.borrow_mut().insert(idx, v.clone());
                     Ok(Value::List(l.clone()))
                 }
@@ -5655,6 +6056,7 @@ impl Interp {
                     let mut v = l.borrow().clone();
                     match args.get(1) {
                         Some(Value::Gene(_, _)) => {
+                            // ast-grep-ignore: no-unwrap-in-src
                             let cmp = args.get(1).unwrap().clone();
                             // insertion sort with user comparator, the exact
                             // `.sort()` contract, non-mutating output
@@ -6022,8 +6424,11 @@ impl Interp {
                     self.note(self.cur_line, 4, "clamp needs three numbers; null");
                     return Ok(Value::Null);
                 }
+                // ast-grep-ignore: no-unwrap-in-src
                 let v = a.unwrap().clone();
+                // ast-grep-ignore: no-unwrap-in-src
                 let lo = lo.unwrap().clone();
+                // ast-grep-ignore: no-unwrap-in-src
                 let hi = hi.unwrap().clone();
                 if self.compare(&v, &lo).unwrap_or(std::cmp::Ordering::Equal)
                     == std::cmp::Ordering::Less
@@ -6080,6 +6485,7 @@ impl Interp {
                     Some(Value::Int(i)) => *i as i32,
                     _ => 0,
                 };
+                // ast-grep-ignore: no-std-process-exit-in-core
                 std::process::exit(code);
             }
             "assert" => {
@@ -6225,8 +6631,68 @@ impl Interp {
                         Value::Str("allocs".into()),
                         Value::Int(unsafe_allocs() as i64),
                     ),
+                    // W013 (D-013): live detected cycles, insertion registers,
+                    // reclamation (weak dead or edge broken) prunes. Honest
+                    // accounting, not a GC, see SPEC §19e/§19f.
+                    (
+                        Value::Str("cycles".into()),
+                        Value::Int(crate::value::live_cycle_count()),
+                    ),
                 ]),
             )))),
+            // W013: weak handles. Supported targets are the container values
+            // (list, map, phenotype instance); everything else, small
+            // immutables and behavior handles alike, is refused (the simpler
+            // honest rule: a handle is only meaningful when the target CAN
+            // participate in a cycle or outlive a scope, SPEC §19f).
+            "weak" => match args.first() {
+                Some(Value::List(l)) => Ok(Value::Weak(crate::value::WeakHandle::List(
+                    Rc::downgrade(l),
+                ))),
+                Some(Value::Map(m)) => {
+                    Ok(Value::Weak(crate::value::WeakHandle::Map(Rc::downgrade(m))))
+                }
+                Some(Value::Obj(d, m)) => Ok(Value::Weak(crate::value::WeakHandle::Obj(
+                    Rc::downgrade(m),
+                    d.clone(),
+                ))),
+                Some(other) => Err(Stress::new(
+                    "unfolded",
+                    format!(
+                        "weak() needs a list, map, or phenotype, found {}",
+                        other.type_name()
+                    ),
+                )),
+                None => Err(Stress::new(
+                    "unfolded",
+                    "weak(v) needs a list, map, or phenotype",
+                )),
+            },
+            "strengthen" => match args.first() {
+                Some(Value::Weak(h)) => match h.upgrade_value() {
+                    // the target is alive: the SAME value comes back (same
+                    // Rc, mutation through it is visible through every
+                    // other alias, SPEC §19f)
+                    Some(v) => Ok(v),
+                    // no GC: the last strong ref freed it immediately
+                    None => {
+                        self.note(
+                            self.cur_line,
+                            4,
+                            "strengthen: weak target is no longer alive; null",
+                        );
+                        Ok(Value::Null)
+                    }
+                },
+                Some(other) => Err(Stress::new(
+                    "unfolded",
+                    format!(
+                        "strengthen(w) needs a weak handle, found {}",
+                        other.type_name()
+                    ),
+                )),
+                None => Err(Stress::new("unfolded", "strengthen(w) needs a weak handle")),
+            },
             "methyl" => {
                 let k = args.first().map(|v| v.display()).unwrap_or_default();
                 let d = args.get(1).cloned().unwrap_or(Value::Null);
@@ -7062,6 +7528,12 @@ impl Interp {
             // the result leaves).
             "wait_all" => crate::genes::wait_all_tasks(self, args),
             "wait_any" => crate::genes::wait_any_task(self, args),
+            // -------------------------------------------------- channels (W015)
+            "channel" => Ok(Value::Channel(Arc::new(crate::value::ChannelShared::new()))),
+            "send" => self.builtin_send(args),
+            "recv" => self.builtin_recv(args),
+            "close" => self.builtin_close(args),
+            "select" => self.builtin_select(args),
             // -------------------------------------------------- math
             "floor" => Ok(Value::Int(match args.first() {
                 Some(Value::Int(i)) => *i,
@@ -7379,6 +7851,134 @@ impl Interp {
                     )),
                 }
             }
+            // ------------------------------------------------ try_* family (W06 stage 2)
+            // Result-returning variants of the failure-prone core builtins.
+            // The legacy null contracts stay the 2.x default (SPEC §9 compat
+            // note); these are ADDITIONS, each err payload is a message Str.
+            // Arity violations stay `unfolded` Stress (same rule as ok/err).
+            "try_num" => {
+                if args.len() != 1 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "try_num(s) needs exactly 1 argument",
+                    ));
+                }
+                let ok = |v: Value| Ok(Value::Variant(crate::value::VTag::OkV, Some(Box::new(v))));
+                let err = |msg: String| {
+                    Ok(Value::Variant(
+                        crate::value::VTag::ErrV,
+                        Some(Box::new(Value::Str(msg))),
+                    ))
+                };
+                match args.first() {
+                    Some(Value::Int(i)) => ok(Value::Int(*i)),
+                    Some(Value::Float(f)) => ok(Value::Float(*f)),
+                    Some(Value::Str(s)) => {
+                        let t = s.trim();
+                        if let Ok(i) = t.parse::<i64>() {
+                            ok(Value::Int(i))
+                        } else if let Ok(f) = t.parse::<f64>() {
+                            ok(Value::Float(f))
+                        } else {
+                            // the RAW string renders (the payload is stdout-
+                            // visible; the legacy num() note trims)
+                            err(format!("num('{}') failed", s))
+                        }
+                    }
+                    Some(other) => err(format!(
+                        "num() failed: cannot parse {} as a number",
+                        other.type_name()
+                    )),
+                    None => err("num() failed: missing argument".to_string()),
+                }
+            }
+            "try_index" => {
+                if args.len() != 2 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "try_index(l, i) needs exactly 2 arguments",
+                    ));
+                }
+                let err = |msg: String| {
+                    Ok(Value::Variant(
+                        crate::value::VTag::ErrV,
+                        Some(Box::new(Value::Str(msg))),
+                    ))
+                };
+                match (&args[0], &args[1]) {
+                    (Value::List(l), Value::Int(i)) => {
+                        let len = l.borrow().len();
+                        if *i < 0 || *i >= len as i64 {
+                            err(format!(
+                                "index {} out of range for list of length {}",
+                                i, len
+                            ))
+                        } else {
+                            let v = l.borrow()[*i as usize].clone();
+                            Ok(Value::Variant(crate::value::VTag::OkV, Some(Box::new(v))))
+                        }
+                    }
+                    (Value::List(_), other) => {
+                        err(format!("index needs an int, got {}", other.type_name()))
+                    }
+                    (other, _) => err(format!("try_index needs a list, got {}", other.type_name())),
+                }
+            }
+            "try_get" => {
+                if args.len() != 2 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "try_get(m, k) needs exactly 2 arguments",
+                    ));
+                }
+                let err = |msg: String| {
+                    Ok(Value::Variant(
+                        crate::value::VTag::ErrV,
+                        Some(Box::new(Value::Str(msg))),
+                    ))
+                };
+                match (&args[0], &args[1]) {
+                    (Value::Map(m), k) => match m.borrow().position(k) {
+                        Some(i) => {
+                            let v = m.borrow().items[i].1.clone();
+                            Ok(Value::Variant(crate::value::VTag::OkV, Some(Box::new(v))))
+                        }
+                        None => err(format!("no key '{}'", k.display())),
+                    },
+                    (other, _) => err(format!("try_get needs a map, got {}", other.type_name())),
+                }
+            }
+            "try_pop" => {
+                if args.len() != 1 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "try_pop(l) needs exactly 1 argument",
+                    ));
+                }
+                let err = |msg: String| {
+                    Ok(Value::Variant(
+                        crate::value::VTag::ErrV,
+                        Some(Box::new(Value::Str(msg))),
+                    ))
+                };
+                match args.first() {
+                    Some(Value::List(l)) => {
+                        let v = l.borrow_mut().pop();
+                        match v {
+                            Some(v) => {
+                                Ok(Value::Variant(crate::value::VTag::OkV, Some(Box::new(v))))
+                            }
+                            None => err("pop from an empty list".to_string()),
+                        }
+                    }
+                    Some(other) => err(format!("try_pop needs a list, got {}", other.type_name())),
+                    None => err("try_pop: missing argument".to_string()),
+                }
+            }
             // ------------------------------------------------ date / time (UTC civil calendar)
             "unix_time" => {
                 let now = std::time::SystemTime::now()
@@ -7526,6 +8126,53 @@ impl Interp {
                 let b = (if j < 0 { n + j } else { j }).clamp(0, n) as usize;
                 let hi = b.max(a);
                 Ok(Value::Str(chars[a..hi].iter().collect()))
+            }
+            // ---------------- W28 stage 2: normalization, full folding,
+            // categories (SPEC §3). Non-string argument = the standard
+            // `unfolded` type Stress family, same shape as char_at.
+            "norm_nfc" | "norm_nfd" => {
+                let s = match args.first() {
+                    Some(Value::Str(s)) => s.clone(),
+                    _ => {
+                        return Err(Stress::new(
+                            "unfolded",
+                            format!("{}(s) needs a string", name),
+                        ))
+                    }
+                };
+                let r = if name == "norm_nfc" {
+                    nfc_str(&s)
+                } else {
+                    nfd_str(&s)
+                };
+                Ok(Value::Str(r))
+            }
+            "casefold" => {
+                // Full Unicode case folding (C+F), context-free, NOT
+                // locale-aware (folding owns no final-sigma rule; SPEC §3).
+                let s = match args.first() {
+                    Some(Value::Str(s)) => s.clone(),
+                    _ => return Err(Stress::new("unfolded", "casefold(s) needs a string")),
+                };
+                Ok(Value::Str(casefold_str(&s)))
+            }
+            "char_category" => {
+                // ONE pinned shape: string in, the two-letter general
+                // category of its FIRST CHAR out. Empty string is the soft
+                // tier (null + note), mirroring char_at's out-of-range tier.
+                let s = match args.first() {
+                    Some(Value::Str(s)) => s.clone(),
+                    _ => return Err(Stress::new("unfolded", "char_category(s) needs a string")),
+                };
+                match s.chars().next() {
+                    Some(c) => Ok(Value::Str(
+                        crate::unicode_tables::category(c as u32).to_string(),
+                    )),
+                    None => {
+                        self.note(self.cur_line, 4, "char_category of empty string; null");
+                        Ok(Value::Null)
+                    }
+                }
             }
             "random" => {
                 // xorshift64*, identical state machine in both implementations
@@ -8357,6 +9004,7 @@ impl Interp {
                         // cap is now shared with the py bridge (one source).
                         use crate::pybridge::MAX_CHILD_OUT;
                         if let Some(mut p) = child.stdout.take() {
+                            // ast-grep-ignore: no-raw-thread-spawn
                             std::thread::spawn(move || {
                                 let mut v = Vec::new();
                                 use std::io::Read;
@@ -8376,6 +9024,7 @@ impl Interp {
                             });
                         }
                         if let Some(mut p) = child.stderr.take() {
+                            // ast-grep-ignore: no-raw-thread-spawn
                             std::thread::spawn(move || {
                                 let mut v = Vec::new();
                                 use std::io::Read;
@@ -9242,6 +9891,9 @@ impl Interp {
                             _ => 32,
                         };
                         mem_charge(bytes)?;
+                        // W013: insertion-time cycle detection, same rule as
+                        // the builtin form (SPEC §19e)
+                        crate::value::cycle_note_insert(&Value::List(l.clone()), v);
                         l.borrow_mut().push(v.clone());
                     }
                     Ok(Value::List(l.clone()))
@@ -9340,6 +9992,7 @@ impl Interp {
                     .find(|(k, _)| matches!(k, Value::Str(s) if s == name))
                 {
                     Some((_, Value::Gene(_, _))) => {
+                        // ast-grep-ignore: no-unwrap-in-src
                         let f = m
                             .borrow()
                             .iter()
@@ -9452,6 +10105,7 @@ pub fn serve_start(port: u16) -> Result<(), String> {
     let next2 = Arc::new(AtomicU64::new(1));
     const MAX_CONNECTIONS: usize = 256;
     let tx2 = tx.clone();
+    // ast-grep-ignore: no-raw-thread-spawn
     std::thread::spawn(move || {
         for stream in listener.incoming() {
             let mut stream = match stream {
@@ -9798,6 +10452,7 @@ impl ReParser {
             branches.push(self.concat()?);
         }
         if branches.len() == 1 {
+            // ast-grep-ignore: no-unwrap-in-src
             Ok(branches.pop().unwrap())
         } else {
             Ok(ReAst::Alt(branches))
@@ -9813,6 +10468,7 @@ impl ReParser {
         }
         Ok(match items.len() {
             0 => ReAst::Seq(Vec::new()),
+            // ast-grep-ignore: no-unwrap-in-src
             1 => items.pop().unwrap(),
             _ => ReAst::Seq(items),
         })
@@ -10171,6 +10827,7 @@ impl<'a> ReMatcher<'a> {
                 }
                 // need at least `min` completed iterations (ends[k] = k iters)
                 while ends.len() > *min && !ends.is_empty() {
+                    // ast-grep-ignore: no-unwrap-in-src
                     let (e, snap) = ends.last().unwrap().clone();
                     let save = caps.clone();
                     *caps = snap;
@@ -10539,6 +11196,9 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "pop",
     "insert",
     "remove",
+    // W013: weak handles + the live-cycle gauge
+    "weak",
+    "strengthen",
     "keys",
     "values",
     "has",
@@ -10588,6 +11248,13 @@ pub const BUILTIN_NAMES: &[&str] = &[
     // W15: task-group surface
     "wait_all",
     "wait_any",
+    // W015: channels + select (builtins only, the `select { arm }` grammar
+    // stays frozen per W036)
+    "channel",
+    "send",
+    "recv",
+    "close",
+    "select",
     "floor",
     "ceil",
     "sqrt",
@@ -10637,6 +11304,11 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "fold_case",
     "char_at",
     "char_slice",
+    // W28 stage 2: normalization, full case folding, categories
+    "norm_nfc",
+    "norm_nfd",
+    "casefold",
+    "char_category",
     // W06 (D-014): first-class Option/Result
     "some",
     "none",
@@ -10648,6 +11320,11 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "is_err",
     "unwrap",
     "unwrap_or",
+    // W06 stage 2: Result-returning variants of failure-prone builtins
+    "try_num",
+    "try_index",
+    "try_get",
+    "try_pop",
     "call",
     // L1a: iteration + numeric builtins
     "enumerate",
@@ -10914,4 +11591,170 @@ pub fn grapheme_count(s: &str) -> usize {
         i = j;
     }
     clusters
+}
+
+// ---------------------------------------------------------- W28 stage 2
+// NFC/NFD normalization, full case folding, general categories (SPEC §3).
+// The tables live in the GENERATED src/unicode_tables.rs (emitted from
+// Python's unicodedata by scripts/gen_unicode_tables.py, the same module the
+// oracle calls, so both cores agree by construction). The four functions
+// below are the runtime mirror of the generator's verification model, which
+// was checked against unicodedata over all 1,114,112 codepoints, a
+// combining-mark pair sweep, composite+mark sweep and Hangul jamo sweeps
+// before the tables were allowed to be written.
+
+/// Push one scalar value as a char (tables only ever hold scalar values,
+/// so the None arm is unreachable armor).
+fn push_cp(out: &mut Vec<char>, cp: u32) {
+    if let Some(c) = char::from_u32(cp) {
+        out.push(c);
+    }
+}
+
+/// Hangul syllable -> jamo expansion (UAX #15, algorithmic, never tabulated).
+fn hangul_decomp_push(cp: u32, out: &mut Vec<char>) {
+    if (0xAC00..=0xD7A3).contains(&cp) {
+        let s = cp - 0xAC00;
+        push_cp(out, 0x1100 + s / 588);
+        push_cp(out, 0x1161 + (s % 588) / 28);
+        let t = s % 28;
+        if t != 0 {
+            push_cp(out, 0x11A7 + t);
+        }
+    }
+}
+
+/// Canonical ordering (UAX #15): each maximal run of nonzero-ccc chars is
+/// stable-sorted by combining class. Insertion sort with a strict compare,
+/// stability is required and runs are tiny in practice.
+fn canonical_order(chars: &mut [char]) {
+    let ccc = |c: char| crate::unicode_tables::ccc(c as u32) as u32;
+    let n = chars.len();
+    let mut i = 0usize;
+    while i < n {
+        if ccc(chars[i]) == 0 {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        while i < n && ccc(chars[i]) != 0 {
+            i += 1;
+        }
+        for j in start + 1..i {
+            let cj = ccc(chars[j]);
+            let mut k = j;
+            while k > start && ccc(chars[k - 1]) > cj {
+                chars.swap(k - 1, k);
+                k -= 1;
+            }
+        }
+    }
+}
+
+/// Decompose a string to canonical form (no composition): per-char table
+/// expansion (Hangul algorithmic), then one canonical-ordering pass over the
+/// WHOLE sequence, because combining runs span codepoint boundaries.
+fn decompose_to_chars(s: &str) -> Vec<char> {
+    let mut out: Vec<char> = Vec::with_capacity(s.len());
+    for c in s.chars() {
+        let cp = c as u32;
+        if (0xAC00..=0xD7A3).contains(&cp) {
+            hangul_decomp_push(cp, &mut out);
+            continue;
+        }
+        let d = crate::unicode_tables::canon_decomp(cp);
+        if d.is_empty() {
+            out.push(c);
+        } else {
+            for &x in d {
+                push_cp(&mut out, x);
+            }
+        }
+    }
+    canonical_order(&mut out);
+    out
+}
+
+/// One composition pair (Hangul L+V and LV+T are algorithmic per UAX #15;
+/// the tabulated pairs were derived empirically by the generator, so
+/// Full_Composition_Exclusion is honored by construction).
+fn compose_pair(a: u32, b: u32) -> Option<u32> {
+    if (0x1100..=0x1112).contains(&a) && (0x1161..=0x1175).contains(&b) {
+        return Some(0xAC00 + ((a - 0x1100) * 21 + (b - 0x1161)) * 28);
+    }
+    if (0xAC00..=0xD7A3).contains(&a)
+        && (a - 0xAC00).is_multiple_of(28)
+        && (0x11A8..=0x11C2).contains(&b)
+    {
+        return Some(a + (b - 0x11A7));
+    }
+    crate::unicode_tables::compose_table(a, b)
+}
+
+/// Left-to-right composition with the blocking rule (UAX #15): a combining
+/// char composes with the pending starter when nothing of class >= its own
+/// sits between them (`last_cc == 0` also admits starter pairs, which is
+/// what makes Hangul L+V and LV+T compose through the same rule).
+fn compose_chars(chars: Vec<char>) -> String {
+    let mut out: Vec<char> = Vec::with_capacity(chars.len());
+    let mut starter: Option<u32> = None;
+    let mut starter_pos = 0usize;
+    let mut last_cc = 0u32;
+    for &c in &chars {
+        let cp = c as u32;
+        let cc = crate::unicode_tables::ccc(cp) as u32;
+        if let Some(st) = starter {
+            if last_cc == 0 || last_cc < cc {
+                if let Some(comp) = compose_pair(st, cp) {
+                    if let Some(comp_c) = char::from_u32(comp) {
+                        out[starter_pos] = comp_c;
+                        starter = Some(comp);
+                        continue;
+                    }
+                }
+            }
+        }
+        if cc == 0 {
+            starter = Some(cp);
+            starter_pos = out.len();
+        }
+        last_cc = cc;
+        out.push(c);
+    }
+    out.into_iter().collect()
+}
+
+/// W028 (SPEC §3): NFD, canonical decomposition.
+pub fn nfd_str(s: &str) -> String {
+    decompose_to_chars(s).into_iter().collect()
+}
+
+/// W028 (SPEC §3): NFC, decompose + canonical order + compose.
+pub fn nfc_str(s: &str) -> String {
+    compose_chars(decompose_to_chars(s))
+}
+
+/// W028 (SPEC §3): full case folding (C+F tables), context-free by
+/// construction (folding owns no final-sigma rule; see SPEC).
+pub fn casefold_str(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match crate::unicode_tables::fold_char(c as u32) {
+            Some(seq) => {
+                for &x in seq {
+                    push_cp_str(&mut out, x, c);
+                }
+            }
+            None => out.push(c),
+        }
+    }
+    out
+}
+
+/// Table entries are valid scalar values; the fallback keeps the armor total.
+fn push_cp_str(out: &mut String, cp: u32, fallback: char) {
+    match char::from_u32(cp) {
+        Some(c) => out.push(c),
+        None => out.push(fallback),
+    }
 }

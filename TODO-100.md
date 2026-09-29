@@ -63,35 +63,15 @@ Rules:
 
 Effort: S ≤ half session · M = 1–2 sessions · L = multi-session · XL = release-scale.
 
-## CURRENT GATE NUMBERS (2026-09-27, main @ 9aa5fad, post red-main-r5 fix + #25/#26/#27 merge chain, re-measured by sz)
+## CURRENT GATE NUMBERS (2026-09-28, main @ f0527e5, re-measured on a fresh build)
 
-differential **156/156 MATCH** · proofs **124 files / 104 proofs green (1376 asserts, 0 failed)** ·
-redteam **100 payloads / 0 breaches** · cargo test green (130+ tests) ·
-clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK (incl. rename asserts) · sec_regression ALL GREEN ·
-doc_api_check green · **embed gate green (W076: examples/embed path-dep crate builds + runs, promote() captured)** ·
-playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (file_io 100% noise threshold, PR #27).
+differential **190/190 MATCH** (10 granted cells) + vm lane **184/184** · proofs
+**154 files / 117 proofs / 1,675 assertions, 117 passed 0 failed** · redteam
+**104 contained / 0 breached** · cargo test green · clippy 0 · fmt clean · docs
+sync green · CodeQL **0 findings** (f0527e5) · CI success.
 
 > These numbers are re-measured every loop; when they change, update this header in the
 > same commit that lands work. If this header is stale, the per-level evidence links win.
-
-## TRACK L CROSS-LINK (MASTER-PLAN §7 folds into M100)
-
-| Track L | M100 level(s) | status |
-|---------|---------------|--------|
-| L1a null-safety/destructuring/builtins | done (PR #15) | closed |
-| L1b stdlib breadth | W027 | wip (builder-A, loop-10 wave S) |
-| L1c regex subset | done | closed (re_split verify-or-drop: see W027 note) |
-| L1d wall-clock time | W033 | done (unix_time/date_parts/date_fmt) |
-| L2a channels | W015 | queued (builder-A) |
-| L2b match patterns v2 | W002 | queued (builder-A) |
-| L2c type annotations | W001 | queued (builder-A) |
-| L2d operator overloading | W004 (partial) | open |
-| L2e pipeline `\|>` |, | blocked on sz grammar verdict |
-| L3a fmt config | W047 | open |
-| L3b doc | W073/W074 | **dev-3** |
-| L3c manifest | W019/W022/W023 | open |
-| L3d check --json | W041 | open |
-| L3e REPL v2 | W008 (partial) | open |
 
 ---
 ---
@@ -104,7 +84,7 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
 > The VM (W009) starts only after W007/W006 land so the bytecode design targets the final
 > error model, not a moving one.
 
-### W001, Optional static type annotations [P1] [dev-1] [XL] [Track L2c] [open]
+### W001, Optional static type annotations [P1] [dev-1] [XL] [Track L2c] [partial: stage 1 L2c soft annotations on main 8f59164 (gene param/return + let anns, unions, optionals, unknown-name typo armor, oracle op-for-op, type_anns.op 30 asserts + differential); REMAIN: check-time inference + reporting, List<T>/Map<K,V> sugar, type aliases]
 - Goal: `gene add(a: int, b: int) -> int` parses and soft-checks; annotations are optional
   everywhere (gradual typing); unknown/unexpected types become semantic **warnings**, never
   rejections (Total Grammar preserved).
@@ -115,7 +95,7 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
   `bootstrap/oracle.py`, `SPEC.md`, `tests/differential/`.
 - Depends: none. Blocks W003/W026 typing story.
 
-### W002, Algebraic data types + match v2 [P1] [dev-1] [XL] [Track L2b] [open]
+### W002, Algebraic data types + match v2 [P1] [dev-1] [XL] [Track L2b] [done: stage 1 match-v2 on main cb25d46 (variant payloads, list/map patterns, or-patterns, guards, capture scopes, oracle mirror, match_v2.op 45 asserts + rt_p17a) + stage 2 batch 4 (unreachable-match-arm check rule W06 with a pattern-subsumption algebra, guard-transparent later arms, or-alternatives all-covered law, allow-comment suppression, tests/match_lint.rs, corpus finding-clean)]
 - Goal: match gains or-patterns, struct/map patterns, nested patterns, guards in every arm,
   and variant-style payloads; Option/Result-shaped matching becomes idiomatic once W006 lands.
 - Done when: `match x { 1 | 2 => .., [a, rest] => .., {k: v} if v > 0 => .. }` parses and
@@ -125,7 +105,7 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
   `bootstrap/oracle.py`, `SPEC.md`, `tests/`.
 - Depends: none (builder-A already claimed via L2b).
 
-### W003, Generics [P1] [dev-1] [XL] [open]
+### W003, Generics [P1] [dev-1] [XL] [partial: stage 1 on main 56097b9 (docs/specs/GENERICS.md staged plan; callable-generic std APIs with zero per-type duplication; std_generics.op + differential generics.op); stage 2 type params rides W01; stage 3 explicit-instantiation monomorphism spec'd, deliberately unscheduled]
 - Goal: generic genes `gene map<T, U>(xs: List<T>, f: gene(T) -> U)` with monomorphized
   execution (no runtime cost), typed containers `List<T>`, `Map<K,V>` as annotation sugar
   over existing dynamic containers (soft-checked per W001).
@@ -135,7 +115,7 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
   `bootstrap/oracle.py`, `SPEC.md`.
 - Depends: W001. Phased: (a) generic genes, (b) container annotations, (c) trait bounds (W004).
 
-### W004, Traits / interfaces [P1] [dev-1] [XL] [open]
+### W004, Traits / interfaces [P1] [dev-1] [XL] [done: main 8f1b8a2, trait declarations + phenotype implements + default methods, both cores]
 - Goal: capability-oriented abstraction alongside phenotypes: `trait Show { gene show() }`,
   `phenotype User implements Show`. First four std traits: `Show`, `Eq`, `Serialize`
   (feeds W034), `Iterate`.
@@ -146,7 +126,7 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
   `bootstrap/oracle.py`, `SPEC.md`, `std/*.op`.
 - Depends: W001 recommended. L2d (operator overloading) is a special case of this.
 
-### W005, Immutability split: let / const / mut [P2] [dev-1] [M] [open]
+### W005, Immutability split: let / const / mut [P2] [dev-1] [M] [done: main ecbff93 const bindings + deep freeze, both cores; hardening b22f484 (registry keep-alive + iterative walk, rt_p18a); hotfix 796514c retired the fixer const-to-let migration since const is live semantics]
 - Goal: `let` = single-assignment binding (today's `let`), `const` = compile-time constant
   with literal-fold guarantee, `mut` re-binding for mutable containers; today's
   `const → let` synonym gets a deprecation note (feeds W064).
@@ -156,7 +136,7 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
   `bootstrap/oracle.py`, `SPEC.md`, `README.md`.
 - Depends: none. Coordinate with W064 (deprecation machinery, dev-2).
 
-### W006, First-class Option / Result [P0] [dev-1] [L] [partial: D-014 stage 1 on main c6ad132, Variant values (some/none/ok/err), ?! propagation (unforgeable Stress.prop marker; crosses rescue, no chain frames), 10 builtins, unwrap kind, none-synonym retirement, SPEC §9 four-tier hierarchy, oracle byte-identical, differential + proofs + rt_p16a; REMAIN: match-integration rides W002, std null→Result migration = stage 2 (compat note in SPEC §9)]
+### W006, First-class Option / Result [P0] [dev-1] [L] [partial: stage 1 D-014 on main c6ad132 (variant values, ?! propagation, 10 builtins, SPEC §9 hierarchy, oracle byte-identical, rt_p16a) + null-payload/non-finite-JSON parity fix 14bda8a; REMAIN: stage 2 std null-to-Result migration behind a compat note]
 - Goal: `Option<T>` / `Result<T, E>` as built-in variant values with `unwrap/unwrap_or/
   is_ok/is_err/?`-style propagation operator; Stress becomes purely the runtime containment
   mechanism (its current dual role as everyday error value ends).
@@ -180,7 +160,7 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
   `tests/redteam/`.
 - Partial today: `stress.line` render (dx-r5) is the seed. Keep behavior backward-compatible.
 
-### W008, Debugger (REPL v2 stepping + DAP later) [P2] [dev-1] [XL] [open]
+### W008, Debugger (REPL v2 stepping + DAP later) [P2] [dev-1] [XL] [partial: phase 1 debug REPL on main 1fb9803; REMAIN: stepping breadth + DAP adapter so VSCode gets the same via operon-ls]
 - Goal: breakpoints, step over/into/out, locals, watch, call-stack inspection in the REPL
   first (`:break`, `:step`, `:frame`, `:watch`); DAP adapter as a follow-up so VSCode gets
   the same via `operon-ls`.
@@ -191,7 +171,7 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
   `tests/repl.rs`, `TUTORIAL.md`.
 - Depends: W007 (stack infrastructure).
 
-### W009, Bytecode VM [P1] [dev-1] [XL] [open], **v3.0 flagship**
+### W009, Bytecode VM [P1] [dev-1] [XL] [partial: A1 design note adopted 372f30a (docs/vm-design.md); A2 OIR1 bytecode machine on main 09cf7c6, vm lane 184/184 vs the same oracle outputs; REMAIN: full-corpus parity campaign + fib25 ≥2x bench gate confirmation], **v3.0 flagship**
 - Goal: source → lexer → parser → AST → **bytecode** → stack VM; tree-walker stays as the
   differential reference forever (the oracle discipline, applied internally).
 - Done when: `operon run --vm` executes the full differential corpus (128/128) with
@@ -203,7 +183,7 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
   then compiler, then VM loop, then parity campaign. **Do not start JIT (W012) before this
   ships and is profiled.**
 
-### W010, Bytecode disassembler [P2] [dev-1] [M] [open]
+### W010, Bytecode disassembler [P2] [dev-1] [M] [partial: stage 1 disasm rides OIR1 09cf7c6; REMAIN: annotated dump stability tests + every opcode documented in SPEC §VM]
 - Goal: `operon compile app.op -o app.ob` + `operon disasm app.ob` printing annotated
   bytecode (op, operand, source span).
 - Done when: round-trip dump is stable across runs (feeds W088); every opcode documented in
@@ -211,7 +191,7 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
 - Files: `src/bytecode.rs`, `src/main.rs`, `SPEC.md`.
 - Depends: W009.
 
-### W011, Optimization pipeline [P2] [dev-1] [L] [open]
+### W011, Optimization pipeline [P2] [dev-1] [L] [partial: stage 1 on main 61249a8 (constant folding + jump threading behind --opt 1); REMAIN: DCE, trivial-gene inlining, monomorphic specialization, per-pass bench rows + toggle matrix]
 - Goal: constant folding, dead-code elimination, constant propagation, trivial-gene inlining,
   monomorphic call specialization, builtin/global resolution caching, list-op fast paths.
 - Done when: each optimization has a micro-benchmark delta (BENCH.md row) and a differential
@@ -219,11 +199,11 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
 - Files: `src/bytecode.rs` (pass infra), `src/vm.rs`, `BENCH.md`.
 - Depends: W009.
 
-### W012, JIT [P3] [dev-1] [XL] [deferred: audit orders VM → profiling → opt → JIT]
+### W012, JIT [P3] [dev-1] [XL] [deferred: audit orders VM → profiling → opt → JIT; deliverable until un-deferred lives in docs/vm-design.md (fiber-field reservation §6, async posture); owner sign-off required to start]
 - Deliverable until un-deferred: one design paragraph in SPEC §VM (Cranelift vs hand-rolled
   option table) + the measurement plan that would justify it. Owner sign-off required to start.
 
-### W013, Memory-cycle strategy [P0] [dev-1] [L] [partial: D-013 decision recorded (document model + opt-in escape hatch, tracing GC rejected); SPEC §19 + memory_model.op on main 563a331; memory() cycle-count + weak refs remain]
+### W013, Memory-cycle strategy [P0] [dev-1] [L] [done: batch 4 on branch batch4-mem merged (weak/deref/strengthen builtins over Value::Weak, memory().cycles live-cycle accounting per D-013, membrane refusals, rt_p21a + rt_p22a containment payloads, SPEC 14/19 contracts, weak_refs proof + differential byte-identical; break_cycle() consciously not landed: silent mid-flight graph mutation breaks identity semantics, weak refs are the sanctioned mechanism)]
 - Already done (evidence): sec-r5 DAG-memoized `stringify`/`repr`/`deep_eq` kills quadratic
   walks; cycle-safe JSON; equality/repr safety proven.
 - Remaining: pick reclamation strategy, (a) weak references API, (b) cycle collector at
@@ -243,7 +223,7 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
 - Files: `SPEC.md`, `tests/differential/`.
 - Depends: W013 decision (states the *current* truth even if reclamation defers).
 
-### W015, Channels + select [P1] [dev-1] [L] [Track L2a] [queued: builder-A]
+### W015, Channels + select [P1] [dev-1] [L] [Track L2a] [done: channel()/send/recv/close/select on main (batch2, merged from batch2-channels): unbounded FIFO, closed-and-empty recv = null, send-after-close = catchable closed_channel, SendValue membrane at send time incl. top-level handle refusal (membrane stress), fuel-accounted blocking (50ms/10ms slices, cancel-aware), select = builtin with strict declaration-order fairness (grammar stays frozen per W036), oracle mirrors the buffered path op-for-op with the wire transform; SPEC §13 channels block; tests/channels.op 39 asserts + differential/channels.op byte-identical; harness 202/202 + vm 196/196 at merge; REMAIN (honest): rt_p21a redteam payload named in SPEC not yet written, cross-thread shapes are Rust-lane evidence]
 - Goal: `channel()` primitive (buffered), `send/recv/close`, `select` over multiple channels,
   language-level, capability-gated like spawn.
 - Done when: producer/consumer differential programs are deterministic under seeding;
@@ -251,7 +231,7 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
   SPEC §16 (concurrency) rewritten.
 - Files: `src/interp.rs`, `src/value.rs`, `bootstrap/oracle.py`, `SPEC.md`, `tests/`.
 
-### W016, Async model [P2] [dev-1] [XL] [open]
+### W016, Async model [P2] [dev-1] [XL] [partial: spec sketch docs/specs/ASYNC.md on main cc35e95 (green threads over the VM loop, suspension at builtin boundaries only, fiber-field reservation carried in vm-design.md §6); REMAIN: implementation]
 - Goal: `async gene fetch() { await .. }` green-thread executor for HTTP/file/sleep; OS
   threads remain for CPU work.
 - Done when: async HTTP + timers run N=1000 concurrent waits under thread counts ≈ cores;
@@ -259,7 +239,7 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
 - Files: `src/interp.rs`, `src/value.rs`, `SPEC.md`.
 - Depends: W015. Do not start before channels land.
 
-### W017, Structured concurrency [P2] [dev-1] [M] [open]
+### W017, Structured concurrency [P2] [dev-1] [M] [done: main dc982a9, scope block with auto-join/auto-cancel semantics]
 - Goal: `scope { spawn t1; spawn t2 }`, tasks auto-join (or auto-cancel on Stress) at scope
   exit; un-joined spawn inside a scope becomes a `check` warning.
 - Done when: scope semantics + cancellation propagation defined and tested; redteam: leaked
@@ -267,14 +247,14 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
 - Files: `src/interp.rs`, `src/ast.rs`, `src/parser.rs`, `SPEC.md`.
 - Depends: W018 (cancel semantics) recommended.
 
-### W018, General task cancellation [P2] [dev-1] [M] [partial]
+### W018, General task cancellation [P2] [dev-1] [M] [done: main 1b71bd0, cooperative task cancellation]
 - Already: repressilator machinery has cancellation. Remaining: `cancel(id)`, `is_done(id)`,
   `task_state(id)` for plain spawn tasks + defined propagation (cancel → child tasks).
 - Done when: the three builtins exist, fuel-charged, capability-gated; differential programs;
   SPEC §16; oracle mirror.
 - Files: `src/interp.rs`, `bootstrap/oracle.py`, `SPEC.md`, `tests/`.
 
-### W019, Module system → package system [P1] [dev-1] [L] [Track L3c] [open]
+### W019, Module system → package system [P1] [dev-1] [L] [Track L3c] [done: main 8632a69, src/pkg.rs (in-house sha256, minimal-TOML manifest parser, deterministic transitive closure, vendored cache, managed-tree import gating) + scripts/pkg_e2e.sh offline lockfile run proven]
 - Goal: deterministic resolution for package projects: `operon.toml` declares deps (path +
   git + registry-stub), resolver builds the graph, `use pkg::mod` resolves through it.
 - Done when: resolution algorithm pinned in SPEC §13 (feeds W069); path deps work end-to-end;
@@ -282,7 +262,7 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
 - Files: `src/main.rs` (loader), `src/interp.rs`, `operon.toml` support, `SPEC.md`, `tests/`.
 - Depends: W022 (manifest format), W069 (resolution pin).
 
-### W020, Package manager CLI [P1] [dev-1] [L] [open]
+### W020, Package manager CLI [P1] [dev-1] [L] [done: main 8632a69, operon mod init/add/remove/update/install/tree/verify, git CLI, zero crates]
 - Goal: `operon init/add/remove/update/install/search/tree` operating on `operon.toml` +
   `operon.lock`.
 - Done when: init+add+install+tree work for path deps offline (registry stub = local dir
@@ -291,11 +271,11 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
 - Files: `src/main.rs`, new `src/pkg.rs`, `SPEC.md`, `README.md`, `tests/`.
 - Depends: W019, W022, W023.
 
-### W021, Central package registry [P3] [dev-1] [XL] [deferred: needs infra + owner decision]
+### W021, Central package registry [P3] [dev-1] [XL] [partial: static git-index registry on main 1b4941c (the cheap first version); hosted service stays deferred pending owner infrastructure decisions]
 - Deliverable until un-deferred: registry API sketch (SPEC §ecosystem) + local-dir stub
   contract consumed by W020. No hosted service.
 
-### W022, `operon.toml` manifest standard [P1] [dev-1] [M] [Track L3c] [open]
+### W022, `operon.toml` manifest standard [P1] [dev-1] [M] [Track L3c] [done: main 8e2d060 (written rule; .cell = runtime config ONLY, package metadata belongs to operon.toml)]
 - Goal: package/project metadata manifest, **separate from `.cell`** (runtime config stays
   in `.cell`, audit item 22).
 - Done when: schema (name, version, operon-version, deps, caps-profile, entry) defined in
@@ -303,27 +283,27 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
 - Files: `SPEC.md`, `src/pkg.rs`/`src/main.rs`, `tests/`.
 - Coordinate: format co-designed with dev-3's W066 schema code to avoid two validators.
 
-### W023, Lockfile `operon.lock` [P2] [dev-1] [M] [open]
+### W023, Lockfile `operon.lock` [P2] [dev-1] [M] [done: main 8632a69, operon.lock (name/git/rev/sha256 content checksum) + --locked drift rejection incl. transitive justification]
 - Goal: resolved dependency versions + checksums; reproducible installs.
 - Done when: lock written/updated by W020 commands; `operon install --frozen` fails on
   drift; format documented + versioned.
 - Files: `src/pkg.rs`, `SPEC.md`, `tests/`.
 - Depends: W020.
 
-### W024, Formal visibility model [P2] [dev-1] [M] [partial: anchors/exports exist]
+### W024, Formal visibility model [P2] [dev-1] [M] [done: main c656223, contextual pub marker (not a keyword) + .cell modules.visibility=strict + SPEC §8 visibility contract + granted-cell differential]
 - Goal: `pub/priv` per gene in modules; modules declare their public surface; `use` only
   binds public genes (privacy violation = semantic warning, hard under `--strict`).
 - Done when: grammar + enforcement + SPEC §13b + oracle + tests; LSP respects visibility
   in completion (feeds W045).
 - Files: `src/parser.rs`, `src/interp.rs`, `src/ls.rs`, `SPEC.md`, `tests/`.
 
-### W025, Dotted namespaces [P2] [dev-1] [M] [partial: use-as exists]
+### W025, Dotted namespaces [P2] [dev-1] [M] [done: stage 1 '::' separator sugar on main 6b984f6 + stage 2 batch 4 (contextual `module NAME { }` nested declarations, file-first multi-segment descent with bare-name-only std shortcut, wildcard `use a::b::*` tail, `::` read/call sugar, oracle mirror, differential namespaces2 byte-identical, namespaces2 proof 11 asserts, SPEC 8 stage-2 contract; one pre-existing Rust-only resolution divergence found and fixed by the new pins)]
 - Goal: `math.vector.add`-style nesting: modules may declare sub-modules; `use bio::seq::*`.
 - Done when: nested module syntax + qualified calls resolve per W069 algorithm; std modules
   keep flat compat via generated re-export blocks; SPEC §13.
 - Files: `src/parser.rs`, `src/interp.rs`, `std/*.op`, `SPEC.md`.
 
-### W026, Typed collections library [P2] [dev-1] [L] [open]
+### W026, Typed collections library [P2] [dev-1] [L] [partial: std/set (loop-10) + std/deque and std/heap on main 88d9b63 + std/graph batch 4 (pure-Operon container: nodes/edges/add_edge/neighbors/topo/cycles, 62 proof asserts, differential byte-identical, api docs); REMAIN: W003 annotation sugar over the containers]
 - Goal: `Set<T>/Deque<T>/Queue<T>/Stack<T>/Heap<T>/Graph<T>` as `std/collections.op`
   constructs (dynamic today) that gain W003 annotation sugar; no new Rust builtins
   (oracle lane stays closed for std work).
@@ -332,7 +312,7 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
 - Files: `std/collections.op`, `tests/`, `STDLIB.md`.
 - Depends: W003 for annotations; containers themselves can land untyped first.
 
-### W027, Stdlib breadth to mainstream [P1] [dev-1 + any dev] [L] [partial: 15 modules live]
+### W027, Stdlib breadth to mainstream [P1] [dev-1 + any dev] [L] [partial: 26 modules / 284 functions (adds path 09e81ba, deque/heap/time 88d9b63, serialize, unicode b0e12ba, bigint 1152851, graph batch4 (W026 lane), url/terminal/logging batch 4 wave 1); REMAIN per audit list: process, env, compression, hashing, walk, binary, http-high-level, db-stub (process/env/walk/compression/db need Rust builtins per their nature, hashing/binary are pure-.op feasible and queued wave 2)]
 - Already done (evidence): 15 modules `args bio collections csv fmt fs iter json math
   motifs random seq set strings testing` (loop-10 wave S landed set/testing/random).
 - Remaining per audit: `path`, `process`, `env`, `logging`, `terminal`, `compression`,
@@ -344,7 +324,7 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
 - Files: `std/*.op`, `tests/std_*.op`, `STDLIB.md`.
 - Note: `hashing`/`binary` unblock W029; `path` unblocks W019 ergonomics.
 
-### W028, Unicode depth for strings [P2] [dev-1] [L] [partial: unicode redteam payloads exist]
+### W028, Unicode depth for strings [P2] [dev-1] [L] [done: stage 2 on main (batch2, merged from batch2-unicode): norm_nfc/norm_nfd/casefold/char_category, tables GENERATED from Python unicodedata 15.0.0 by scripts/gen_unicode_tables.py (generator verifies all 1,114,112 codepoints incl. Hangul algorithmic jamo + composition exclusions BEFORE emitting, refuses to write on mismatch), oracle calls the same stdlib so both cores agree by construction; canonical-only (NFKD out of scope, documented), casefold is context-free full C+F (final-sigma is a lowercasing rule, not a folding rule); SPEC §3 stage-2 block; tests/unicode_depth.op 33 asserts + differential/unicode_depth.op byte-identical; harness 204/204 + vm 198/198 at merge]
 - Goal: normalization (NFC/NFD), grapheme segmentation, case folding, category queries;
   documented char-index semantics (byte vs char vs grapheme) for every string builtin.
 - Done when: `std/unicode.op` (pure .op where feasible) or builtins with SPEC §10b;
@@ -352,7 +332,7 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
   already proven (rt_p7j), extend with normalization storms.
 - Files: `std/unicode.op` or `src/interp.rs`, `SPEC.md`, `tests/`.
 
-### W029, First-class bytes type [P2] [dev-1] [L] [open]
+### W029, First-class bytes type [P2] [dev-1] [L] [done: main 08386fa, bytes kind + b"" literals with full escape set + conversions + read_file_bytes/write_file_bytes + SendValue membrane + oracle native-bytes mirror + rt_p19a]
 - Goal: `bytes` value (immutable buffer + builder), literals `b"..."`, indexing/slicing,
   conversions to/from str/list/numbers, std `hashing` consumes it (W027).
 - Done when: value variant + builtins + SPEC §7; capability model: file read-bytes gated by
@@ -360,7 +340,7 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
   oracle mirror.
 - Files: `src/value.rs`, `src/interp.rs`, `src/lexer.rs`, `bootstrap/oracle.py`, `SPEC.md`.
 
-### W030, Raw / multiline / byte strings [P2] [dev-1] [S] [done: main 563a331, r"..." + """...""" oracle-mirrored; b"..." → W029]
+### W030, Raw / multiline / byte strings [P2] [dev-1] [S] [done: main 563a331, r"..." + """...""" oracle-mirrored; b"..." landed with W029 (08386fa)]
 - Verify first: multiline strings + escape behavior are partially proven (rt_p6c/brescape);
   confirm what exists, then land `r"..."` raw + `b"..."` (with W029) + heredoc `'''...'''`
   if missing.
@@ -373,14 +353,14 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
   contract (f0fe2ec) with notes; oracle mirror; differential program.
 - Files: `src/lexer.rs`, `bootstrap/oracle.py`, `SPEC.md`, `tests/`.
 
-### W032, BigInt / Decimal [P3] [dev-1] [L] [open]
+### W032, BigInt / Decimal [P3] [dev-1] [L] [done: main 1152851, overflow contract pinned per-op both engines (i64::MIN%-1 oracle corner fixed) + std/bigint digit-list bignum (from_int/from_str/to_str/cmp/add/sub/mul/pow/fact/neg/abs) + SPEC decision note]
 - Goal: arbitrary-precision ints behind an explicit value variant or std module; Decimal
   for money/science.
 - Done when: decision recorded (builtin vs std via py()); if builtin: fuel/charge model,
   SPEC §7, differential programs (parity vs Python ints via oracle is a gift here, use it).
 - Files: `src/value.rs`, `src/interp.rs` or `std/bigint.op`, `SPEC.md`.
 
-### W033, Date/time value types [P2] [dev-1] [M] [partial: L1d landed]
+### W033, Date/time value types [P2] [dev-1] [M] [done: main 855cf04, L1d builtins + std/time.op duration/instant arithmetic + time_parse_iso (ISO-8601 UTC subset, Hinnant days_from_civil, offsets rejected, null on malformed), UTC-only contract documented, 52 proof asserts + differential byte-identical]
 - Already: `unix_time/date_parts/date_fmt` (builder-A, interp.rs), monotonic clock/now
   pinned (SPEC §22).
 - Remaining: `Duration` arithmetic, timezone handling contract (UTC-only v1, documented),
@@ -412,7 +392,7 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
   `@rule` blocks) over full syntax macros; review against the bio-keyword pressure documented
   in W036. Owner sign-off required to implement.
 
-### W036, Hard core/bio boundary [P0] [dev-2 (spec) + dev-1 (grammar freeze)] [M] [open]
+### W036, Hard core/bio boundary [P0] [dev-2 (spec) + dev-1 (grammar freeze)] [M] [done: docs/specs/CORE-BIO-BOUNDARY.md landed (batch1, c73d0554): one-sentence freeze rule per D-008, 35-of-60 core keyword inventory, 25-keyword frozen bio layer, 22 std modules as the legal growth surface, honest enforcement story (generated inventory + stats gate + review rule; automated freeze lint named as follow-up)]
 - Goal: formal split, **core language** (`gene/let/if/for/match/return/stress/modules/
   types/traits/concurrency`) vs **biology layer** (`regulate/splice/methylate/m6a/operon/
   repressilator/ligand/riboswitch/quorum/fate/...`). New biological mechanisms land as
@@ -435,7 +415,7 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
 - Files: `SPEC.md`, `src/tools.rs`, `src/main.rs`, `tests/`.
 - Note: W001/W002/W006 build on this contract; land before them if possible.
 
-### W038, Repair explanation mode [P1] [dev-2] [M] [open]
+### W038, Repair explanation mode [P1] [dev-2] [M] [done: `operon explain file.op` (batch2, landed with the check rework): Total Grammar play-by-play from the parse notes (rung names canonical/synonym/wobble/fallback, counts, --json shape), --strict verdict line; operon-ls carries the same door for the editor (smoke-pinned)]
 - Goal: `operon explain file.op` shows original token → repaired token → reason → rung →
   resulting AST fragment; `operon fmt --show-repairs` for the diff view.
 - Done when: both commands exist; every repair note the parser emits is machine-listable;
@@ -443,7 +423,7 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
 - Files: `src/main.rs`, `src/tools.rs`, `src/parser.rs` (note plumbing), `README.md`.
 - Depends: W037 (rung taxonomy).
 
-### W039, AST dump [P1] [dev-2] [S] [open, verified missing]
+### W039, AST dump [P1] [dev-2] [S] [done: `operon ast file.op [--json]` (batch1, 011f153), deterministic structural tree over Stmt/Expr, works on any input per Total Grammar, repair notes deliberately excluded (W038's lane), pinned by tests/cli_ast.rs incl. --json parse assert]
 - Goal: `operon ast file.op` prints the parsed AST (S-expression or JSON via `--json`).
 - Done when: command exists for canonical AND repaired parses (`--show-repairs` flag shows
   both); helps W037/W038 evidence; tested.
@@ -456,14 +436,14 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
 - Files: `src/main.rs`, `SPEC.md`.
 - Depends: W009 for the real dump.
 
-### W041, `check` rework: diagnostics, not grades [P1] [dev-2] [M] [Track L3d] [open]
+### W041, `check` rework: diagnostics, not grades [P1] [dev-2] [M] [Track L3d] [done: diag is the DEFAULT output (batch2): sectioned error/warning/repair/style blocks with rule names + locations + summary line + exit 3 on hard errors; stable code scheme in lint.rs (E/W/N never renumber); --format score keeps the grade for one transition cycle (nothing in scripts/ or CI parses the grade); README/TUTORIAL quotes updated; builtin synonyms (print/echo/say/show) no longer phantom]
 - Goal: separate streams: `error / warning / style / repair / security / performance`;
   keep the 100-point score only behind `--score` (nobody's default view); add `check --json`.
 - Done when: output groups by severity with counts; CI consumes `--json`;
   README/docs updated; no invariant gates depend on the score number.
 - Files: `src/tools.rs`, `src/main.rs`, `README.md`, `tests/`.
 
-### W042, Static analysis depth [P1] [dev-2] [L] [partial: phantom/wobble/NMD/anchor checks live]
+### W042, Static analysis depth [P1] [dev-2] [L] [done at the pinned scope (batch2): unreachable match arm (after unguarded catch-all), unused binding, dead const rules in lint.rs with the allow-prefix suppression; the critique's rule-set cap is reached deliberately, more rules are out of scope by the same critique]
 - Goal: add: unreachable code, unused variables/genes/imports, shadowing, infinite-loop
   detection, constant conditions, dead stores, obvious type mismatches, duplicate match
   cases, unused capabilities, possible-null flow (synergy with W001).
@@ -472,13 +452,13 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
   warning-clean unless the warning is genuinely warranted); `check --json` classification.
 - Files: `src/tools.rs`, `tests/`, `SPEC.md`.
 
-### W043, Wrong-arity static detection [P1] [dev-2] [S] [open]
+### W043, Wrong-arity static detection [P1] [dev-2] [S] [done: arity table from parse, direct calls checked at lint level (error stream, wrong-arity code), method calls on statically-known phenotypes, dynamic calls excluded with the documented escape hatch (bare gene reference = dispatch by design); surfaced through the diag check output]
 - Goal: calls to known genes with too-few/too-many args = `check` error before execution.
 - Done when: arity table built from parse; direct calls checked; dynamic calls excluded
   with a documented escape hatch; tests.
 - Files: `src/tools.rs`, `tests/`.
 
-### W044, LSP signature help + parameter docs [P2] [dev-2] [S] [partial: hover exists]
+### W044, LSP signature help + parameter docs [P2] [dev-2] [S] [done: textDocument/signatureHelp (batch1, c85a65f), param labels from W01 param_anns incl. type annotations, activeParameter by comma depth, trigger chars ( , ) advertised, null-clean off-call, smoke-pinned]
 - Goal: `textDocument/signatureHelp` wired to gene signatures + doc comments (feeds from
   dev-3's W074); active-parameter highlight.
 - Done when: trigger characters `,`/`(` produce signatures in Neovim/VSCode recipe;
@@ -486,7 +466,7 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
 - Files: `src/ls.rs`, `tests/lsp_smoke.py`, `README.md`.
 - Depends: W074 (doc comments) for parameter docs, can land hover-only first.
 
-### W045, LSP depth wave [P1] [dev-2] [L] [partial: 5/7 baseline wired (lsp-r1)]
+### W045, LSP depth wave [P1] [dev-2] [L] [done: 7/7 wired (batch1, c85a65f): references (word-boundary, declaration+call sites), prepareRename+rename with all-or-nothing refusal (-32001), semanticTokens full with fixed 6-type legend locked to SEMANTIC_TOKEN_TYPES, all smoke-pinned]
 - Goal: references, rename, workspace symbols, semantic tokens, folding ranges, selection
   ranges, code actions (quick-fix for known repairs), inlay hints (types per W001),
   document links for `use`.
@@ -495,14 +475,14 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
   symbols → folding → semantic tokens.
 - Files: `src/ls.rs`, `tests/lsp_smoke.py`, `README.md`.
 
-### W046, LSP understands repairs [P2] [dev-2] [M] [partial]
+### W046, LSP understands repairs [P2] [dev-2] [M] [done: publishDiagnostics carries operonRepairs summary + per-diagnostic repair provenance/rung tags (batch1, c85a65f); canonical file = absence of the key (smoke-pinned); --explain door in operon-ls mirrors the W38 shape]
 - Goal: editor-visible distinction between canonical code and repaired code: repair
   diagnostics carry the rung (W037), quick-fix code actions offer the canonical form.
 - Done when: diagnostics carry rung metadata; a repair quick-fix lands with tests.
 - Files: `src/ls.rs`, `src/tools.rs`, `tests/`.
 - Depends: W037, synergizes W038.
 
-### W047, Formatter configuration [P2] [dev-2] [M] [Track L3a] [open]
+### W047, Formatter configuration [P2] [dev-2] [M] [Track L3a] [done: [fmt] section in operon.toml with indent (default 2) and width (default off, soft wrap at parser-proven-safe comma points only, W47-v2); no config = byte-identical historical output; malformed values fall back with stderr note; docs/specs/FMT-CONFIG.md updated; pinned (batch1, 011f153)]
 - Goal: `.operon-fmt.toml` or `.cell`-adjacent config: indent width, line length, brace
   style, quote preference, import ordering, canonical mode, minimal-change mode.
 - Done when: config parsed + honored; fmt idempotence tests with 3 config profiles;
@@ -517,14 +497,14 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
 - Files: `src/tools.rs`, `src/main.rs`, `SPEC.md`, `tests/`.
 - Depends: W041.
 
-### W049, Test runner filtering + repeat [P1] [dev-2] [S] [open]
+### W049, Test runner filtering + repeat [P1] [dev-2] [S] [done: `operon test [paths] [--filter substr] [--repeat n]` (batch1, 011f153): select_test_files discovery+substring rule, repeat up to 1000 with per-run determinism check, default behavior unchanged when flags absent, pinned]
 - Goal: `operon test path/to/file.op`, `--filter name`, `--failed` (uses last report),
   `--repeat N` (flakiness probe), `--shuffle-seed` for order independence.
 - Done when: flags live, `--json` report extended, scripts/test.sh exposes common
   invocations, tests.
 - Files: `src/tools.rs` (run_tests), `src/main.rs`, `scripts/test.sh`.
 
-### W050, Property-based testing [P2] [dev-2] [M] [partial: differential harness is the base]
+### W050, Property-based testing [P2] [dev-2] [M] [done: scripts/prop/prop_harness.py (batch2): 4 seeded generator lanes (arith/strings/colls/programs), differential property vs the oracle byte-for-byte, shrink-to-repro on mismatch into tests/property/repro/, determinism digest, opt-in script; the harness EARNED its keep on its first real runs: 5 real divergences found and fixed (oracle str*null crash, oracle bignum modulo vs checked-intermediate remainder, int-only repeat counts); 400 cases 0 findings at integration]
 - Goal: seeded random property programs: parser repair invariants (AST round-trip), JSON
   round-trip, regex vs oracle, GRN transition invariants (mass-balance/decay bounds),
   Total Grammar never-crash law.
@@ -533,7 +513,7 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
   criteria stated); first real bug hunt documented if found.
 - Files: `scripts/property.py`, `bootstrap/harness.py`, `.github/workflows/ci.yml`.
 
-### W051, Fuzzing infrastructure (S7) [P1] [dev-2] [L] [partial: redteam 95 payloads]
+### W051, Fuzzing infrastructure (S7) [P1] [dev-2] [L] [done: scripts/fuzz/fuzz.py (batch2): mutation-based runner (byte flips, truncations, chunk dup, bracket/quote injection, unicode splices) over the seed corpus with per-input timeout and wall budget, crash/hang corpus with manifest, contained-vs-clean-vs-finding classification; scripts/fuzz/TRIAGE.md: finding = bug to fix, not a number to brag about; first real run 93,429 execs / 150s: 0 crash 0 hang, 13,290 contained]
 - Goal: continuous fuzzing of lexer/parser/fmt/JSON/regex/module loader/`.cell`:
   cargo-fuzz targets (libFuzzer) for the Rust core + `scripts/fuzz_op.py` AFL-style
   .op mutator for the semantic layer.
@@ -544,7 +524,7 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
   `tests/redteam/`.
 - Note: this is the queued S7 lane, fold its status here.
 
-### W052, Coverage reporting [P2] [dev-2] [M] [open]
+### W052, Coverage reporting [P2] [dev-2] [M] [done: scripts/coverage.sh two layers (batch1, c95c434): cargo-llvm-cov when installed, corpus call-site layer always (scripts/coverage_corpus.py, static analysis honestly labeled, per-module def/ref table over 163 test files), tracked baseline docs/coverage.md with top-uncovered names; no gate depends on the number yet; exit-2 honesty kept]
 - Goal: Rust line/branch coverage (llvm-cov) + proof-coverage script (which parser
   productions / builtins / rungs the corpus touches), the S3 builtin audit proved this
   pattern works (74 arms → 15 uncovered → 3 programs → real oracle bug).
@@ -552,7 +532,7 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
   coverage numbers quoted in BENCH.md-adjacent QUALITY.md (new).
 - Files: `scripts/coverage.sh`, `.github/workflows/ci.yml`, `QUALITY.md` (new).
 
-### W053, Generated documentation numbers [P1] [dev-2] [S] [partial]
+### W053, Generated documentation numbers [P1] [dev-2] [S] [done: check_docs_sync.py passes clean (batch1, 0f59f9f): docs/stats.json + STATS.md + KEYWORDS.md regenerated from gen_doc_stats.py; hand-typed counts in README/SPEC replaced by links to the generated inventory; checker exit 0 = no doc can lie]
 - Goal: every count quoted in docs (proof files/assertions, redteam payloads, keyword
   count, std modules, builtin count) comes from ONE generator: `scripts/gen_stats.py`
   writing `docs/STATS.md` + injecting into README/SPEC marked sections.
@@ -561,7 +541,7 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
   (simple grep check).
 - Files: `scripts/gen_stats.py`, `docs/STATS.md`, `README.md`, `SPEC.md`, `.github/workflows/ci.yml`.
 
-### W054, Versioning consistency [P0] [dev-2] [S] [verify]
+### W054, Versioning consistency [P0] [dev-2] [S] [done: SPEC Status line aligned to v2.2.0 per D-009 (batch1, 0f59f9f); checker rule 2 enforces SPEC status == Cargo.toml version forever]
 - Verify: SPEC header said `v2.3.0-dev` while Cargo says 2.2.0 (loop-10 truth passes may
   have fixed this). Land `scripts/gen_stats.py` version section: ONE source (Cargo.toml)
   → README/SPEC/STDLIB badges.
@@ -569,26 +549,26 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
   generated version line.
 - Files: `scripts/gen_stats.py`, `SPEC.md`, `README.md`, `.github/workflows/ci.yml`.
 
-### W055, Keyword count generated [P1] [dev-2] [S] [verify]
+### W055, Keyword count generated [P1] [dev-2] [S] [done: docs/KEYWORDS.md generated from parser.rs KEYWORDS, real count 60, zero analogy-pending entries, regen command pinned in the file header (batch1, 0f59f9f)]
 - Verify: SPEC said 51 reserved keywords, parser had 58 (audit). reg-r4 claims "SPEC
   inventory complete", confirm, then fold into W053 generator so it can never drift again.
 - Done when: keyword table in SPEC is generated from `src/lexer.rs` truth.
 - Files: `scripts/gen_stats.py`, `SPEC.md`.
 
-### W056, README C-kernel truth [P0] [dev-2] [S] [verify]
+### W056, README C-kernel truth [P0] [dev-2] [S] [done: README states the C kernel deletion (sec-r2, audit A15) and the C++ codon kernel honestly (bit-parallel Myers, allocation-free, budget-guarded); 'C runtime' phrase forbidden by checker rule 5 (batch1, 0f59f9f)]
 - Verify: C runtime kernel was deleted (audit A15: `runtime/operon_rt.c` gone, codon
   kernel C++ remains). Sweep README/docs for any remaining "C runtime" claims.
 - Done when: `rg -i "c runtime|c kernel" README.md docs/` shows only accurate statements;
   architecture diagram (if any) shows Rust core + C++ codon kernel + Python oracle.
 - Files: `README.md`, `docs/*.html`.
 
-### W057, README stdlib truth [P1] [dev-2] [S] [verify]
+### W057, README stdlib truth [P1] [dev-2] [S] [done: README links the generated docs/STATS.md inventory (22 modules / 229 funcs) instead of hand-typing; checker rule 7 fails on any missing module (batch1, 0f59f9f)]
 - Verify: audit said README described 6 modules, 15 exist; R10-b did an "STDLIB truth
   pass", confirm every module row matches reality (function names, counts).
 - Done when: STDLIB.md generated (or validated) from `std/*.op` scans per W053; zero drift.
 - Files: `STDLIB.md`, `scripts/gen_stats.py`.
 
-### W058, Build-dependency claim fix [P1] [dev-2] [S] [verify]
+### W058, Build-dependency claim fix [P1] [dev-2] [S] [done: 'No crates, no network' overclaim replaced with the precise truth (cc build-dep only, zero runtime crates, network only via capability-gated builtins); checker rule 6 enforces (batch1, 0f59f9f)]
 - Verify: README claims "no crates, no network, no external dependencies" but Cargo.toml
   uses `cc` as build-dep. Fix the sentence to the honest form: "runtime dependency surface
   = zero crates; build-time = `cc` only; network never required after bootstrap."
@@ -615,14 +595,14 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
   updated with verified commands.
 - Files: `packaging/`, `README.md`.
 
-### W062, LSP version compatibility policy [P3] [dev-2] [S] [open]
+### W062, LSP version compatibility policy [P3] [dev-2] [S] [done: docs/specs/LSP-VERSIONING.md gains the skew/minimum-handshake/client-detection section (batch1, c85a65f): same-crate binary targets, operonLsp.version + serverInfo.version detection policy, written handshake sequence, client rules for higher/lower versions]
 - Goal: operon ↔ operon-ls ↔ editor-extension compatibility matrix; operon-ls reports the
   Operon version it was built with in initialize.
 - Done when: initialize result carries version + capabilities; policy paragraph in
   CONTRIBUTING.md (LSP ships in-lockstep with the binary).
 - Files: `src/ls.rs`, `CONTRIBUTING.md`.
 
-### W063, Language compatibility policy [P1] [dev-2] [M] [partial]
+### W063, Language compatibility policy [P1] [dev-2] [M] [done: docs/specs/COMPATIBILITY.md completed (batch1, 73d0554): change classes (additive/semantic/repair-only) with four worked examples, 3-rung calendar-gated ladder citing the W067 stage 3 precedent, amendment staging per Iron Rules, post-2.2 compat table (6 amendments), honest limitations; D-002/D-009 cross-referenced]
 - Goal: written policy: 2.x runs all 2.x programs; Total Grammar repairs never change
   output within a minor; breaking changes require major; deprecations survive N releases
   (feeds W064); each release ships a compat changelog section.
@@ -630,7 +610,7 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
   classified as additive (policy's first worked example).
 - Files: `SPEC.md`, `CHANGELOG.md` (exists? verify, else CONTRIBUTING section).
 
-### W064, Deprecation system [P2] [dev-2] [M] [open]
+[done: batch 4 on branch batch4-deprecate merged (@deprecated(message, since) mark as pure gene metadata, deprecated-use check rule W12 with migration text + ladder gate, allow-comment suppression, fmt canonical round-trip, oracle lenient parse mirror, runtime-neutrality proof + 5 Rust pins, SPEC 3 contract, README recipe; honest inventory: no core or std gene carries the mark yet, const is live semantics per W005)]
 - Goal: `@deprecated("use X instead", since="2.4")` marks on genes/keywords; emits check
   warnings with migration text; `--strict` fails; removal scheduled by W063 policy.
 - Done when: mark infrastructure + first real deprecation (`const → let` synonym per W005);
@@ -846,7 +826,7 @@ playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (f
   already (release targets), add explicit float-parity assertion program.
 - Files: `docs/spec/DETERMINISM.md`, `tests/differential/`.
 
-### W091, Bio semantics separation [P1] [dev-3] [M] [blocked: SPEC lane, after builder-B W54 lands]
+### W091, Bio semantics separation [P1] [dev-3] [M] [done: SPEC §11a (batch2): contract header (scope, W036 freeze citation, BIO-CONTRACT + DETERMINISM pointers, D-008 voice rule), the one-paragraph quotable boundary test (bio iff behavior cannot be predicted without §11), 23-row boundary map with anchors, 9 crossing sentences marked at §3/§10/§13/§14/§15; bounded-region option chosen over renumbering move, reasoning recorded; docs sync checker still exit 0]
 - Goal: SPEC currently interleaves language semantics with biological modeling semantics.
   Split: language sections state syntax/evaluation ONLY; bio modeling moves to a dedicated
   volume (docs/spec/BIO-MODEL.md) referenced from SPEC §11.

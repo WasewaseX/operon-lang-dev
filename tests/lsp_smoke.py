@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
-"""LSP smoke test (G5 seed → lsp-r1 v2 → W45/W46/W45-v2): drives ./target/release/operon-ls.
+"""LSP smoke test (G5 seed → lsp-r1 v2 → W44/W45/W46/W45-v2): drives ./target/release/operon-ls.
 
-Covers: initialize handshake + advertised capabilities, publishDiagnostics
-(phantom call), hover with a gene signature, definition, references,
-semanticTokens, prepareRename + rename (all-or-nothing refusals), documentSymbol,
+Covers: initialize handshake + advertised capabilities (signatureHelp trigger
+chars included), publishDiagnostics (phantom call + repair provenance + the
+W46 operonRepairs summary), hover with a gene signature, definition,
+references (declaration + call sites + a variable used three times),
+semanticTokens (delta-encoded, legend-mapped), signatureHelp (W44: annotated
+two-parameter gene, activeParameter by comma depth, null-clean off-call),
+prepareRename + rename (all-or-nothing refusals), documentSymbol,
 completion, formatting, didClose state clearing, the CWD-independence fix
 (server launched from a foreign directory must not phantom stdlib calls),
 unknown-method error, shutdown/exit. Run from repo root:
@@ -64,9 +68,12 @@ assert caps["completionProvider"]["resolveProvider"] is False, caps
 # W45: semantic-token legend matches the core's fixed array
 _st = caps["semanticTokensProvider"]
 assert _st["full"] is True, _st
-assert _st["legend"]["tokenTypes"] == [
+_legend = _st["legend"]["tokenTypes"]
+assert _legend == [
     "keyword", "function", "variable", "string", "number", "comment"
-], _st["legend"]
+], _legend
+# W44: signature help advertises its trigger characters (call open + commas)
+assert caps["signatureHelpProvider"]["triggerCharacters"] == ["(", ","], caps
 
 # 2. initialized notification (no reply expected)
 send({"jsonrpc": "2.0", "method": "initialized", "params": {}})
@@ -74,7 +81,7 @@ send({"jsonrpc": "2.0", "method": "initialized", "params": {}})
 # 3. didOpen → publishDiagnostics with a phantom-call error
 text = (
     "gene boost(x) { return x }\n"
-    "main { let y = boost(1) + missing(2) }\n"
+    "main { let y = boost(1) + missing(2) + y * y }\n"
 )
 send({
     "jsonrpc": "2.0",
@@ -91,6 +98,8 @@ msgs = [x["message"] for x in d["params"]["diagnostics"]]
 assert any("missing" in m and "phantom" in m for m in msgs), msgs
 # diagnostics carry real ranges now (asserted by the wobble case below too)
 assert all("range" in x and "start" in x["range"] for x in d["params"]["diagnostics"]), msgs
+# W46: a canonical file carries NO repair summary, absence is the signal
+assert "operonRepairs" not in d["params"], d["params"]
 
 # 4. hover over the gene name on line 0 → signature markdown
 send({
@@ -122,7 +131,7 @@ assert r["id"] == 7, r
 assert r["result"]["range"]["start"]["line"] == 0, r
 assert r["result"]["uri"] == "file:///demo.op", r
 
-# 4b-W45. references on the boost call site → declaration + both calls
+# 4b-W45. references on the boost call site → declaration + the call site
 send({
     "jsonrpc": "2.0",
     "id": 21,
@@ -140,6 +149,25 @@ _lines = sorted(x["range"]["start"]["line"] for x in _locs)
 assert _lines == [0, 1], ("declaration + the one call site", _locs)
 assert _locs[0]["range"]["start"]["character"] == 5, ("declaration span", _locs)
 
+# 4b-W45. references on the variable y (decl + two uses = three positions,
+# all on the same line: `let y = ... + y * y`)
+send({
+    "jsonrpc": "2.0",
+    "id": 41,
+    "method": "textDocument/references",
+    "params": {
+        "textDocument": {"uri": "file:///demo.op"},
+        "position": {"line": 1, "character": 11},
+        "context": {"includeDeclaration": True},
+    },
+})
+r = recv()
+assert r["id"] == 41, r
+_ylocs = r["result"]
+assert len(_ylocs) == 3, ("decl + two uses of y", _ylocs)
+assert all(x["range"]["start"]["line"] == 1 for x in _ylocs), _ylocs
+assert sorted(x["range"]["start"]["character"] for x in _ylocs) == [11, 39, 43], _ylocs
+
 # 4b-W45. semanticTokens → delta-encoded, first token is the `gene` keyword
 send({
     "jsonrpc": "2.0",
@@ -155,6 +183,9 @@ assert len(_data) >= 15 and len(_data) % 5 == 0, _data[:15]
 assert _data[0:5] == [0, 0, 4, 0, 0], _data[0:5]
 # some token is classified function (boost/main/missing)
 assert any(_data[i + 3] == 1 for i in range(0, len(_data), 5)), _data
+# the legend maps non-empty: every emitted type index is inside the list
+# the initialize handshake advertised (a stray index would render wrong)
+assert all(0 <= _data[i + 3] < len(_legend) for i in range(0, len(_data), 5)), _data
 
 # 4b-W46. a wobble gets repair provenance: didOpen a file with `retrn`
 send({
@@ -174,6 +205,12 @@ assert any(
     and any("interpreted as 'return'" in ri["message"] for ri in x["relatedInformation"])
     for x in _wd
 ), _wd
+# W46: the rung tag is machine-readable on the diagnostic itself...
+assert _wd[0]["data"] == {"rung": "wobble", "canonical": False}, _wd[0]
+# ...and the publish carries the workspace-visible repair summary
+_rep = d["params"].get("operonRepairs")
+assert _rep and _rep["applied"] == 1 and _rep["canonical"] is False, d["params"]
+assert "canonical form differs" in _rep["note"], _rep
 # hovering the repaired token shows the provenance instead of a null
 send({
     "jsonrpc": "2.0",
@@ -189,6 +226,72 @@ assert r["id"] == 23, r
 assert r["result"] is not None, r
 assert "repair" in r["result"]["contents"]["value"], r["result"]
 assert "return" in r["result"]["contents"]["value"], r["result"]
+
+# 4c-W44. signatureHelp on a call with two annotated params (W01 types) and a
+## doc comment; trigger positions are right after `(` and right after a `,`
+send({
+    "jsonrpc": "2.0",
+    "method": "textDocument/didOpen",
+    "params": {
+        "textDocument": {"uri": "file:///sig.op", "languageId": "operon", "version": 1},
+        "text": (
+            "## power raises base to the exponent\n"
+            "gene power(base: int, exp: int) -> int { return base * exp }\n"
+            "main {\n"
+            "    let r = power(3, 4)\n"
+            "    let q = unknown(1)\n"
+            "}\n"
+        ),
+    },
+})
+d = recv()
+assert d["method"] == "textDocument/publishDiagnostics", d
+
+# right after the call open: first parameter active, annotations in labels
+send({
+    "jsonrpc": "2.0",
+    "id": 40,
+    "method": "textDocument/signatureHelp",
+    "params": {
+        "textDocument": {"uri": "file:///sig.op"},
+        "position": {"line": 3, "character": 18},
+    },
+})
+r = recv()
+assert r["id"] == 40, r
+_sig = r["result"]["signatures"][0]
+assert _sig["label"] == "power(base: int, exp: int) -> int", _sig
+assert [p["label"] for p in _sig["parameters"]] == ["base: int", "exp: int"], _sig
+assert r["result"]["activeSignature"] == 0, r["result"]
+assert r["result"]["activeParameter"] == 0, r["result"]
+# W074 feed: the `##` doc line rides along as the documentation
+assert "raises base to the exponent" in _sig["documentation"], _sig
+
+# right after the argument comma: activeParameter advances to 1
+send({
+    "jsonrpc": "2.0",
+    "id": 42,
+    "method": "textDocument/signatureHelp",
+    "params": {
+        "textDocument": {"uri": "file:///sig.op"},
+        "position": {"line": 3, "character": 20},
+    },
+})
+r = recv()
+assert r["id"] == 42 and r["result"]["activeParameter"] == 1, r
+
+# an unresolvable callee answers null cleanly (never an error)
+send({
+    "jsonrpc": "2.0",
+    "id": 44,
+    "method": "textDocument/signatureHelp",
+    "params": {
+        "textDocument": {"uri": "file:///sig.op"},
+        "position": {"line": 4, "character": 20},
+    },
+})
+r = recv()
+assert r["id"] == 44 and r["result"] is None, r
 
 # 4b-W45v2. rename — prepareRename + the all-or-nothing rename (W67 discipline)
 send({

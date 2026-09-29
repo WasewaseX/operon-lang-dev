@@ -1,6 +1,11 @@
 # Operon VM design (W09 stage A1)
 
-Status: **A1, design note, adopted** · Owner: dev-1 (builder-A) · Track: A1–A6 (W09)
+Status: **A1-A6: A1 adopted; A2 bridge architecture landed (2026-09-27); A3/A4
+full-corpus parity campaign green (219/219, redteam 106/0 both engines); W11
+stage-1 superinstructions landed; A5 perf pass reached cross-engine parity
+(0.88x -> 0.99x on fib25, see BENCH.md) with the >=3x stretch target still
+open under W11; A6 DEFAULT FLIP landed (v2.6.0, `--interp` escape hatch)**
+· Owner: dev-1 (builder-A) · Track: A1-A6 (W09)
 Target reader: a CS engineer implementing or reviewing the A-track (D-008: zero biology assumed).
 This document is the contract the A2–A6 phases implement against. It decides the value
 representation, the bytecode format, the calling/entropy/error/fuel contracts, and the phase
@@ -49,8 +54,9 @@ which puts function-call-heavy code at parity with CPython or better.
    implemented ONCE and shared: the VM's `Call` routes through the same funnel code the
    tree-walk uses (§6). A reimplementation that drifts a gate order is a bug, not an
    optimization.
-6. **Version honesty (D-009)**, the VM ships behind `--vm` until A6 flips the default at a
-   milestone; `operon version` gains a `-vm` banner suffix only when the default flips.
+6. **Version honesty (D-009)**, SATISFIED at the A6 flip: the default flipped at the v2.6.0
+   milestone and the banner gained the `-vm` suffix (`Operon 2.6.0-vm (rust-core, cpp-kernel)`);
+   `--interp` is the escape hatch named by §9 (pre-flip the flag was `--vm`, still accepted).
 
 ## 2b. W11 stage 1 delivered: the optimization pipeline (2026-09-27, main)
 
@@ -251,3 +257,30 @@ the session reverts the flag default (never the corpus).
 - No JIT (W12 stays parked; bytecode-first per the audit).
 - No repr churn beyond §3's sanctioned list-storage experiment.
 - The Python oracle never grows a VM, it is the reference, not a peer.
+
+---
+
+## 11. A6 delivered: the default flip (2026-09-30, v2.6.0)
+
+`operon run` now executes gene bodies on the OIR1 machine BY DEFAULT.
+Evidence and scope:
+
+- **Differential**: the harness's default lane (now the VM) 225/225 vs the
+  oracle; the renamed tree-walk lane (`--no-vm`) 219/219 vs the same oracle.
+  Both engines stay differentially pinned on every step; the labels
+  inverted at the flip, the coverage contract did not.
+- **Red-team**: 106 payloads contained, 0 breached on BOTH engines
+  (`OPERON_EXTRA_ARGS="--no-vm" bash scripts/redteam.sh` re-runs the suite
+  against the tree-walk).
+- **Escape hatch**: `--interp` (§9's name) or the `--no-vm` alias; `--vm`
+  remains accepted. Workers/sequences were always tree-walk (fresh Interps,
+  no vm_program) and stay so — A4's registration work remains the open
+  A-track item alongside the A5 ≥3x stretch.
+- **Banner**: `Operon 2.6.0-vm (rust-core, cpp-kernel)` (D-009 suffix).
+- **Perf at the flip** (median of 5, end-to-end): fib25 0.99x, loops 1.04x,
+  collections 1.00x, recursion 0.98x vs the tree-walk. The A5 campaign
+  cleared the 0.88x regression (def-name re-clone per call removed, SipHash
+  pointer-key cache -> identity hash, silences empty-gate malloc skipped,
+  call-counter entry clones -> get_mut fast path). The ≥3x stretch stays
+  OPEN under W11/A5 (slot locals, VM-native call lane); parity is the
+  shipped floor, not the ceiling.

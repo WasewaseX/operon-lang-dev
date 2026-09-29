@@ -1,6 +1,6 @@
 # Operon, Language Specification
 
-**Status:** v2.3.0-dev, post-2.2 language amendments are landing incrementally (the generated inventory in [docs/STATS.md](docs/STATS.md) is the countable truth; D-009: version strings move only with the milestone). Last tagged release: 2.2.0. This document is the single contract implemented identically by:
+**Status:** v2.6.0, post-2.4 language amendments are landing incrementally (the generated inventory in [docs/STATS.md](docs/STATS.md) is the countable truth; D-009: version strings move only with the milestone). Last tagged release: 2.5.0 (2.6.0 = the W09 A6 VM-default flip, untagged). This document is the single contract implemented identically by:
 
 | Implementation | Language | Role |
 |---|---|---|
@@ -47,14 +47,24 @@ Arithmetic:
   | char | one Unicode scalar value (Rust `char` / Python str code point) | `len(str)`, `s[i]`, `s.slice(i,j)`, `char_at(s,i)`, `char_slice(s,i,j)`, `ord`, `for c in s`, ALL string indexing is char-indexed, on BOTH cores (pinned by tests/unicode.op, tests/differential/unicode.op) |
   | grapheme | one user-perceived character | `grapheme_len(s)` over a DOCUMENTED subset (no external deps): base + combining marks (U+0300–036F, U+1AB0–1AFF, U+1DC0–1DFF, U+20D0–20FF, U+FE20–FE2F), ZWJ (U+200D) glues the previous and following char, regional-indicator pairs (flags) are one cluster; a lone RI is its own cluster |
   Example: `"👨‍👩‍👧"` is 5 chars / 1 grapheme; `"🇺🇸"` is 2 chars / 1 grapheme; `"日本語"` is 3 chars / 6 UTF-8 bytes / 3 graphemes.
-  **Case folding**: `fold_case(s)` implements a documented SUBSET, ASCII A–Z, Latin-1 Supplement (À–Ö, Ø–Þ), Latin Extended-A (U+0100–U+0137 even→odd), Greek (U+0391–U+03A9, full-range monotone; no final-sigma context rule). Everything else is unchanged. The identical table logic runs in both engines (byte-identical output); full Unicode case folding / normalization is a later stage of W28 and is NOT claimed by `fold_case`.
+  **Case folding**: `fold_case(s)` implements a documented SUBSET, ASCII A–Z, Latin-1 Supplement (À–Ö, Ø–Þ), Latin Extended-A (U+0100–U+0137 even→odd), Greek (U+0391–U+03A9, full-range monotone; no final-sigma context rule). Everything else is unchanged. The identical table logic runs in both engines (byte-identical output); full Unicode case folding / normalization is stage 2 of W28 and is NOT claimed by `fold_case` (it is `casefold` / `norm_nfc` / `norm_nfd`, next bullet).
+- **Normalization, full case folding, categories (W28 stage 2)**, generated tables, both engines:
+  **Tables are GENERATED, never hand-typed** (the W028 critique): `scripts/gen_unicode_tables.py` (Python stdlib only) emits `src/unicode_tables.rs` FROM Python's `unicodedata`, and the oracle calls that very same stdlib module, so the two cores agree by construction instead of by hand-copied data. The generator verifies BEFORE emitting (and refuses to write anything on mismatch): it runs the exact runtime algorithm against `unicodedata` over all 1,114,112 codepoints (`NFD`, `NFC`, and the round-trip bar `NFC(NFD(ch)) == unicodedata NFC(ch)`), a combining-mark pair sweep, a composite+mark sweep, and Hangul jamo sweeps. **Unicode version: unicodedata 15.0.0** (generator header, `unicode_tables::UNIDATA_VERSION`, and the oracle's interpreter must be the same Python); regenerating under a newer Python re-pins both cores at once.
+  `norm_nfd(s)` (canonical decomposition, UAX #15): per-codepoint canonical decompositions FULLY EXPANDED (Hangul syllables AC00–D7A3 are algorithmic, never tabulated), then ONE canonical-ordering pass over the whole sequence (each maximal run of nonzero combining class is stable-sorted by ccc). Expansions are stored already ordered per codepoint; the runtime ordering pass exists because combining runs span codepoint boundaries.
+  `norm_nfc(s)` (canonical composition, UAX #15): NFD, then left-to-right composition with the blocking rule (a combining char composes with the pending starter when nothing of class ≥ its own sits between them; the `last_cc == 0` admission is also what lets Hangul L+V and LV+T compose, algorithmically, under the same rule). Composition pairs were DERIVED EMPIRICALLY by the generator (every codepoint whose `NFC(NFD(c)) == c` contributes the pairs its re-composition walk needs, taken from ONE-LEVEL decompositions so multi-level forms like U+01D5 = U+00DC + U+0304 resolve through their intermediates), so Full_Composition_Exclusion is honored by construction (U+0344 never recomposes).
+  **Canonical only**: compatibility decompositions are OUT of scope (`norm_nfd("ﬁ") == "ﬁ"`; ligatures, circled, superscript, CJK compatibility forms never expand — that is NFKD/NFKC territory, not claimed by stage 2). Lone surrogates cannot reach the tables (Rust `str` cannot hold them).
+  `casefold(s)`: FULL Unicode case folding (the C+F tables, i.e. `str.casefold`), 1:many (`ß` → `ss`, `ﬁ` → `fi`), NOT locale-aware (Turkish: `İ` folds to `i` + U+0307, bytes `0x69 0xCC 0x87`; there is no Turkish İ→i special case), and CONTEXT-FREE: folding owns NO final-sigma rule (that rule belongs to lowercasing, not case folding), so `Σ`, `σ` and `ς` all fold to `σ` unconditionally in every position — `casefold("ΑΣ")` is `ασ`, never `ασς`. This is not a deviation from `str.casefold`; it IS `str.casefold` (the generator proves per-char application equals whole-string `casefold()` over a deterministic sample plus every sigma context). `fold_case` keeps its documented subset contract above; the two coexist.
+  `char_category(s)`: ONE pinned shape, string in, the two-letter general category (`Lu`, `Ll`, `Nd`, `Lo`, `Mn`, `Zs`, `Cn` for unassigned, …) of its FIRST CHAR out; empty string is the soft tier (null + note). The full category table ships run-length encoded (all 30 categories over the whole codepoint space).
+  **Error shape**: a non-string argument to any of the four is the standard catchable `unfolded` type Stress (`"norm_nfc(s) needs a string"`, `"norm_nfd(s) needs a string"`, `"casefold(s) needs a string"`, `"char_category(s) needs a string"`), the same family as `char_at`'s index Stress. A `char_decompose` helper was considered and dropped: `char_codes(norm_nfd(s))` (std/unicode) already expresses it, the surface stays small.
+  Pins: `tests/unicode_depth.op` + `tests/differential/unicode_depth.op` (byte-identical); proof corpus: the generator's printed verification run.
 - **The W029 bytes contract.** `bytes` is a first-class immutable value kind (Rust `Rc<Vec<u8>>`, Python `bytes`): literals `b"..."` / `b'...'` (a `'` form is a wobble-repair with a note), escapes `\n \t \r \\ \" \' \0 \xNN` (exactly two hex digits; a malformed `\x` is kept verbatim with a note), NO interpolation ever, non-ASCII source chars UTF-8-encoded with a note (Total Grammar: repair, never reject). `type()` → `bytes`; truthiness follows emptiness; equality is byte content; `len()` is the BYTE count. Indexing `b[i]` (negative from the end) yields the byte as an `int` 0–255; out-of-range is catchable `missing`. `b.slice(a, b)` uses Python-style clamped negatives and returns NEW bytes, bytes have NO mutators by design. `+` concatenates bytes (512 MiB per-op ceiling, `"bytes concat exceeds the 512 MiB ceiling"`), `*` repeats (same ceiling family); bytes and str NEVER coerce into each other (`b"x" + "y"` is catchable `unfolded`). Iteration (`for x in b`) yields ints 0–255. Bytes are legal SCALAR map keys (content equality, exact on both engines). Conversions are UTF-8-only with the encoding named explicitly: `bytes_from_str(s, enc?)` encodes infallibly (an Operon str IS valid UTF-8; unknown encoding names are `unfolded`), `str_from_bytes(b, enc?)` decodes and reports invalid UTF-8 as the SOFT tier (null + note naming the first bad byte), `bytes_from_list`/`bytes_to_list` bridge int lists (out-of-range values are `unfolded`). JSON view: bytes serialize as the lossless int list (`json_str(b"AB")` → `[65,66]`); JSON has no bytes type. File I/O mirrors the text forms' armor exactly (regular-files-only, charge-before-read, TOCTOU-verified handle, hardlink defense, same capability gates): `read_file_bytes(path)` / `write_file_bytes(path, b)`. Bytes cross the spawn membrane losslessly (SendValue::Bytes). The whole contract is pinned by `tests/bytes.op` + `tests/differential/bytes.op` (byte-identical) and attacked by `tests/redteam/rt_p19a_bytes.op` (ceilings, monotonic aggregate interaction, coercion, domain, index, capability gates).
 - Identifiers `[A-Za-z_][A-Za-z0-9_]*`.
 - Numbers: `42`, `3.14`, `1e3` (float). Negative via unary minus. Radix forms `0xFF`, `0b101010`, `0o755` (case-insensitive prefix; canonical value is the same Int). `_` digit separators allowed inside any numeric literal (`1_000_000`, `0xFF_FF`, `1_000.5`) and are stripped before parsing, the printed value is unaffected (canonical form stays decimal). A radix prefix with no valid digit after it lexes as decimal `0` followed by identifiers (`0x` → `0`, `x`). Out-of-range literals keep the existing saturate-to-0 note contract (f0fe2ec).
 - Newlines terminate statements; `;` allowed and ignored (also `;;`, stray). Blocks are `{ ... }`.
 - Keywords (canonical, the parser's reserved set; the generated inventory with per-keyword programmer analogies lives in [docs/KEYWORDS.md](docs/KEYWORDS.md) and is never hand-typed here).
 - Literal words `true false null` and the logical words `and or not` are recognized in expression positions (not part of the reserved keyword table).
-- Marks: `@acetylate` `@methylate` `@m6a` `@copies` `@riboswitch` `@burst`.
+- Marks: `@acetylate` `@methylate` `@m6a` `@copies` `@riboswitch` `@burst` `@deprecated`. The six declaration marks of the biology layer: lexical presence here, attachment in §7, semantics in §11 (part contract §11a). The seventh mark is the language-surface deprecation mark (W64, below).
+- `@deprecated("migration text", since="2.4")` (W64) marks a gene declaration as deprecated. The mark rides the gene as **pure metadata**: the interpreter never reads it, a marked gene runs, composes and dispatches exactly like any other gene (`tests/deprecate.op` pins runtime neutrality), and no differential parity is claimed (the oracle consumes the mark and drops it, like doc comments). The tooling surface owns the behavior: `operon check` reports a `deprecated-use` warning (stable code `W12`) at every static free-gene call site of a marked gene in the same file, carrying the migration text and the `since` gate; `--strict` escalates it per the strict table; `// allow: deprecated-use` on the call line silences it. Method calls, dynamic dispatch through a bare gene reference, and cross-file uses are the documented escape hatches (the check is file-local by design). Malformed payloads (`@deprecated(42)`, missing message) degrade to a rung-4 note and drop the mark, never a rejection. `fmt` re-emits the mark canonically and `fmt∘fmt = fmt` holds (`tests/deprecate_lint.rs` pins the warning, the escapes and the fmt fixpoint). Removal scheduling follows the compatibility ladder (docs/specs/COMPATIBILITY.md, W63). Honest inventory: NO core or std gene carries the mark today (`const` is live semantics per W05, its migration was retired), the machinery is future-proofing.
 - `#` starts a line comment; `##` starts a **doc comment** (W074): consecutive `##` lines form a doc block that attaches to the declaration (`gene`/`sequence`/`phenotype`/`splice`/`fate`, including `@mark` lines above them) it immediately hugs, the doc's last line is exactly one line above the declaration keyword line. A doc block at the very top of the file that is separated from everything by a blank line becomes the **module doc**. Doc text is captured verbatim after the `##` marker (one leading space stripped). Docs are **pure metadata**: they never affect evaluation, repair rungs, or differential parity, the Python oracle ignores them as comments, and parity is not required for doc content (`tests/differential/doc_comments.op` pins neutrality). Docs survive `fmt` byte-exact (`fmt∘fmt = fmt` holds corpus-wide), surface in LSP hover and REPL `:doc name`, and are rendered by `operon doc` (W073).
 - `#` inside a string does NOT start a comment.
 
@@ -164,6 +174,37 @@ silently. New in W02 (all mirrored op-for-op by the Python oracle, and by
   = matches either). Pattern literal expressions cannot call or reference
   names (they are literals by construction), so guards are the supported
   way to test computed conditions.
+
+**Unreachable-arm report (W002 stage 2, check-side).** The static engine
+(`src/lint.rs`, rule `unreachable-match-arm`, stable code `W06`) reports an
+arm that can never run under first-match-wins: an arm placed after an
+UNGUARDED catch-all (`_`, a binding pattern, or an or-pattern containing
+either; the legacy comma-run holds plain literals only, so it can never
+hide a catch-all), or after a strictly broader arm whose shape provably
+covers every value the later arm can match (`Some(_)` before `Some(x)`,
+the bare tag before a payload arm, `[a, b]` before `[1, 2]`, `[1, *t]`
+before `[1, 2]`, `{x}` before `{x: 1}`, a literal inside an earlier
+or-/comma-run, nested payloads likewise). The report is a semantic WARNING
+on the lint stream (`operon lint`; `check --style` inlines it), advisory
+like every lint rule: Total Grammar never rejects a program, and the
+interpreter and the Python oracle are untouched, so runtime semantics and
+differential parity cannot drift from this check. Conservatism is the
+design bar (zero false positives): a GUARD on the earlier arm makes it
+fallible, so a guarded arm is never treated as covering anything, and a
+guard on the later (dead) arm does not save it, because first-match-wins
+means that guard can never evaluate; structural coverage is claimed only
+where the pattern algebra proves it (floats are excluded entirely, NaN
+never deep-equals itself; byte-string keys compare per byte, so distinct
+byte strings are never conflated; identical plain literal arms are left to
+the separate `duplicate-match-arm` rule, `W05`, which owns that symptom);
+or-alternatives must ALL be covered before the arm is reported. Findings
+carry file and line (the first line-bearing statement of the arm body;
+the AST keeps statement spans only on expression statements, so a column
+is not reported, and an arm whose body opens with spanless statements,
+a plain assignment say, anchors at the file's line 1, where only a
+line-1 allow comment can suppress it). Exhaustiveness
+(is some value class unhandled?) is intentionally NOT claimed here: that
+needs the full pattern algebra and stays with the semantic lane.
 
 ## 6. Expressions (precedence low → high)
 
@@ -286,6 +327,16 @@ gene handle(v: int | str) -> any { ... }             # union
   contracts on gene calls and definitions. `operon check`-time inference
   and reporting, typed collections (`List<T>` sugar), and type aliases are
   later stages of W01; sequencing is tracked in ROADMAP-100.
+- **W026, the collections sugar first slice:** the typed-collections
+  layer lives as pure `.op` std modules over map/list (`std/set`,
+  `std/deque`, `std/heap`, `std/graph`), and `std/graph.op` is the first
+  std module whose public genes carry these stage-1 annotations (the W003
+  sugar slice; set/deque/heap stay untyped until the mechanical pass
+  lands). Its determinism contract is the pinned node order: node order IS
+  the `nodes` map's insertion order (both cores keep map insertion order,
+  §19a), every traversal and tie-break follows it, ids are never sorted;
+  pinned by `tests/std_graph.op` and byte-exactly by
+  `tests/differential/graph.op`.
 
 ### 7d. Immutability, `const` bindings + deep freeze (W05)
 
@@ -340,7 +391,7 @@ L.push(4) / M.del("a")        # method forms stress identically
 ## 8. Modules, TADs, anchors
 
 - `use path;`, path like `std/bio`, `./util`, `util` (`.op` appended if absent). Binds one name: basename, or `as name`. `use std/bio as b;` → `b.some_fn(...)`. Importing the same file twice executes it once (module cache).
-- **Namespace spellings (W25).** `::` is the Rust-style separator, `use std::bio;`, `use bio::sequence`, and multi-segment `use a::b::c` are EXACT sugar for the `/` form (`a::b::c` resolves as `a/b/c`); every separator (`/`, `.`, `-`, `::`) may be mixed within one path. The imported module is a Map, so qualified access (`bio.some_fn(...)`) is the namespace read, and, because the `use` also flat-binds every export beside the alias, the old flat spelling (`some_fn(...)`) keeps working beside it (back-compat is a PINNED behavior, not an accident: tests/differential/namespaces.op pins both spellings byte-identically on both engines, plus aliased namespaces where the same module is reachable under two binding names).
+- **Namespace spellings (W25).** `::` is the Rust-style separator, `use std::bio;`, `use bio::sequence`, and multi-segment `use a::b::c` are EXACT sugar for the `/` form (`a::b::c` resolves as `a/b/c`); every separator (`/`, `.`, `-`, `::`) may be mixed within one path. The imported module is a Map, so qualified access (`bio.some_fn(...)`) is the namespace read, and, because the `use` also flat-binds every export beside the alias, the old flat spelling (`some_fn(...)`) keeps working beside it (back-compat is a PINNED behavior, not an accident: tests/differential/namespaces.op pins both spellings byte-identically on both engines, plus aliased namespaces where the same module is reachable under two binding names). Stage 2 (W025) extends the surface three ways, all mirrored op-for-op by the oracle and pinned byte-identically by tests/differential/namespaces2.op: (1) **nested declarations**: a module file (or any block) may declare `module name { ... }`; the body runs ONCE in a fresh child scope and its names become the export table (sorted like the file-module loader sorts them; data lets export beside genes; a gene in the table closes over the table's own scope). `module` is a CONTEXTUAL word: only `module NAME {` is a declaration, any other use of the identifier parses exactly as before, so no pre-existing program changes meaning. Last declaration wins: a later `module name` (or gene) re-binds the name. (2) **path descent**: a multi-segment `use` stays FILE-FIRST (W069); when the full path is not a file, each shorter prefix is tried as a file, longest first, and the remaining segments descend the loaded table's exported nested tables (a missing segment notes `segment '<seg>' is not a nested module table; import binds nothing` and the use falls through to the next prefix, Total Grammar: it never rejects). The tail-against-std resolution shortcut is BARE-NAME only: `use mylib::seq` never hijacks `std/seq.op` by its tail, descent is the only multi-segment fallback. (3) **wildcard tail**: `use mylib::seq::*` flat-binds the target table's exports without binding the table itself under a name (an explicit `as` alias still binds it); later imports overwrite earlier flat binds, first-match-wins at call time. Qualified reads and calls may be spelled with `::` (`mylib::seq::tag()`), which is EXACT sugar for the dot form and carries identical AST.
 - **Visibility model (W24).** `pub` is a CONTEXTUAL marker, not a keyword: at top level, `pub gene f()`, `pub let x = …`, `pub const c = …`, and `pub phenotype P { … }` mark the name public; an identifier literally named `pub` (or `pub` anywhere else) parses exactly as before. Default mode: `pub` is INERT, zero behavior change (pinned byte-identically by tests/differential/visibility_default.op, including `pub` used as an ordinary variable). Opt-in strict mode, `.cell modules.visibility = strict`, changes the export rule for that load: a module with pub marks exports ONLY those names (anchor export still wins when present); every other top-level name stays module-private (module-local calls are unaffected, what changes is what the export map carries, so both the qualified read and the flat alias binding see the hidden names as the SOFT tier: null + note, never a crash). The loader notes how many private names were hidden (`strict visibility: N private name(s) hidden in '<mod>'`). Migration path: a strict module with ZERO pub marks keeps default-open and notes it once, turning strict on never silently empties a legacy module. Both engines byte-identical under the granted cell (tests/granted/visibility_strict.op + .cell in the harness's granted targets).
 - **Resolution algorithm (W069, pinned).** The path is tried against candidate roots **in order; first regular file wins**:
   | # | candidate root | class | notes |
@@ -436,7 +487,15 @@ contract, families are distinct (`some(1) != ok(1)`) and `type()` returns `optio
   plain value) it raises Stress kind `unwrap`, a *programmer-contract* violation, i.e.
   tier 3, deliberately rescue-catchable. Expected failures belong in the value layer
   (check `is_ok` first, or propagate).
-- **Repr**: `Ok(3)`, `Err("x")`, `Some(3)`, `None`. **Truthiness**: Some/Ok are truthy,
+- **The `try_*` family (W06 stage 2)**: Result-returning variants of the failure-prone
+  core builtins. `try_num(s)` (parse as int, then float, same rules as `num`; the err
+  payload renders the RAW input: `Err("num('x9') failed")`), `try_index(l, i)`
+  (`Err("index 3 out of range for list of length 3")`), `try_get(m, k)`
+  (`Err("no key 'zz'")`), `try_pop(l)` (`Err("pop from an empty list")`), the latter
+  still mutating. Non-matching argument TYPES are `Err` payloads (not stresses); wrong
+  ARITY stays an `unfolded` stress (the ok/err rule). Pinned on both engines:
+  tests/differential/try_family.op + tests/try_family.op.
+- - **Repr**: `Ok(3)`, `Err("x")`, `Some(3)`, `None`. **Truthiness**: Some/Ok are truthy,
   None/Err falsy (`if (result)` reads naturally). **JSON**: `{"ok":1}`, `{"err":"x"}`,
   `{"some":1}`; None serializes as `null` (in-memory lossless, JSON is a Map-shaped view).
 - **Equality**: same tag + equal payloads; `None == None`.
@@ -461,10 +520,12 @@ contract, families are distinct (`some(1) != ok(1)`) and `type()` returns `optio
 - Grammatically `?!` is one token, lexed before the ternary's bare `?`, the two never
   collide.
 
-**Compatibility note (stage-2 roadmap)**: std functions that fail today return `null`
-+tier-1 notes. They migrate to Result returns per-function, each documented in STDLIB.md
-at migration time; the null contract stays the default for 2.x so existing programs keep
-their byte-identical behavior.
+**Compatibility note (stage-2 roadmap, in progress)**: std functions and builtins that
+fail today return `null` + tier-1 notes or raise tier-3 stresses. They migrate to Result
+returns per-function, each documented at migration time; the null/stress contracts stay
+the default for 2.x so existing programs keep their byte-identical behavior. First
+migrated family (v2.6.0): the `try_*` core builtins above — additions, not replacements;
+the legacy `num`/index/key-read/pop contracts are pinned UNCHANGED in tests/try_family.op.
 
 Runtime failures raise a **Stress** value: Map `{"kind": Str, "message": Str}`. Kinds:
 `unfolded` (type errors), `missing` (bad index/key/member/null-deref), `overflow` (int overflow, depth limit, resource ceilings), `burned` (assertion failures, resource errors), `interference` (capability-sandbox denials, §9b), `unwrap` (D-014: `unwrap` on None/Err or a plain value), `any` (catch-all position only).
@@ -571,7 +632,7 @@ sec-r5 containment semantics worth stating plainly:
 
 ## 10. Builtins and methods
 
-**Builtins, core:** `promote(*a)` (print, space-joined, returns null) · `len` · `push(l,v)` · `pop(l)` · `insert(l,i,v)` · `remove(l,i)` · `keys(m)` · `values(m)` · `has(m,k)` · `del(m,k)` · `range(a, b?, step?)` (returns List) · `str` · `num` (fails → 0 + note) · `type` (`null bool int float str list map gene native sequence`, or the phenotype name for instances) · `abs min max sum` · `floor(x)` `ceil(x)` (→ Int) · `sqrt(x)` `pow(b, e)` (→ Float) · `clock()` (monotonic seconds, float) · `now()` (monotonic seconds, float, the same high-resolution timer under a briefer name) · `exit(n?)` (capability-gated, sec-r2: kills the host process, so it is default-deny, grant with `--allow-exit` or `.cell allow.exit = true`) · `assert(c, msg?)` · `codon(s)` (0–100 style score of an identifier) · `distance(a,b)` (edit distance, C++ bit-parallel kernel; 10M-cell ceiling and a 64 KiB per-operand cap, over-budget pairs never win a nearest-match contest) · `similar(a,b,maxd?)` (bool) · `transcribe(dna)` · `translate(rna)` (stops at stop codon) · `reverse_complement(dna)` · `gc_content(dna)` (0–100) · `find_orf(dna)` (list of ORF proteins) · `memory()` (W097 accounting, map `arena_bytes, interns, allocs` from the in-process symbol table: **arena_bytes** = live bytes held by the Rust-owned intern table (symbol spellings; NOT the process RSS, NOT interpreter values, refcounted values live in ordinary Rust allocation that this counter does not see); **interns** = count of interned canonical spellings (one per distinct identifier the process has lexed, oldest-first in `:symbols`); **allocs** = allocation operations served by the table since process start (monotonic, never reset). All three are process-wide, cross-run cumulative for one binary invocation, and thread-safe (mutex-guarded). Honest limit: this is a symbol-table gauge, not a heap profiler, per-value/per-gene accounting is the MEM-PROFILER design (docs/design/MEM-PROFILER.md, deferred W097-v2)) · `methyl(key, default?)`.
+**Builtins, core:** `promote(*a)` (print, space-joined, returns null) · `len` · `push(l,v)` · `pop(l)` · `insert(l,i,v)` · `remove(l,i)` · `keys(m)` · `values(m)` · `has(m,k)` · `del(m,k)` · `range(a, b?, step?)` (returns List) · `str` · `num` (fails → 0 + note) · `type` (`null bool int float str list map gene native sequence`, or the phenotype name for instances) · `abs min max sum` · `floor(x)` `ceil(x)` (→ Int) · `sqrt(x)` `pow(b, e)` (→ Float) · `clock()` (monotonic seconds, float) · `now()` (monotonic seconds, float, the same high-resolution timer under a briefer name) · `exit(n?)` (capability-gated, sec-r2: kills the host process, so it is default-deny, grant with `--allow-exit` or `.cell allow.exit = true`) · `assert(c, msg?)` · `codon(s)` (0–100 style score of an identifier) · `distance(a,b)` (edit distance, C++ bit-parallel kernel; 10M-cell ceiling and a 64 KiB per-operand cap, over-budget pairs never win a nearest-match contest) · `similar(a,b,maxd?)` (bool) · `transcribe(dna)` · `translate(rna)` (stops at stop codon) · `reverse_complement(dna)` · `gc_content(dna)` (0–100) · `find_orf(dna)` (list of ORF proteins) · `memory()` (W097 accounting, map `arena_bytes, interns, allocs` from the in-process symbol table: **arena_bytes** = live bytes held by the Rust-owned intern table (symbol spellings; NOT the process RSS, NOT interpreter values, refcounted values live in ordinary Rust allocation that this counter does not see); **interns** = count of interned canonical spellings (one per distinct identifier the process has lexed, oldest-first in `:symbols`); **allocs** = allocation operations served by the table since process start (monotonic, never reset). All three are process-wide, cross-run cumulative for one binary invocation, and thread-safe (mutex-guarded). Honest limit: this is a symbol-table gauge, not a heap profiler, per-value/per-gene accounting is the MEM-PROFILER design (docs/design/MEM-PROFILER.md, deferred W097-v2); **cycles** (W013/D-013) = live detected reference cycles, a fourth process-cumulative key with its own contract (registration at the edge that closes a cycle, prune only on PROVEN death or breakage, bounded deterministic walks, §19e) and the weak-handle API around it (§19f)) · `weak(v)` / `strengthen(w)` (W013 weak references: non-owning handles to list/map/phenotype values, dead derefs answer null, refusals and membrane rules in §19f) · `methyl(key, default?)`.
 
 **Builtins, randomness and dynamic dispatch:** `random()` (float in [0,1)) · `random(n)` (int in [0,n)) · `randomize(seed?)` (deterministic xorshift state, identical in both implementations) · `chr(i)` · `ord(c)` · `argv()` (List of the arguments after the script path) · `sleep(ms)` (≤ 60,000 ms) · `call(name_or_gene, args_list)` (dynamic dispatch, resolves builtins, named genes, or gene values).
 
@@ -583,17 +644,136 @@ sec-r5 containment semantics worth stating plainly:
 
 **Builtins, capability-gated (§9b; denied → Stress `interference`):** `read_file(p)` (regular files only, FIFOs/devices are refused `interference`, sec-r5) · `write_file(p, s)` · `append_file(p, s)` · `exists(p)` · `read_dir(p)` (List of names) · `fs_delete(p)` (files and EMPTY dirs; symlinks are refused outright, dx-r6) · `fs_rename(from, to)` (both paths need a write grant) · `fs_mkdir(p)` (create_dir_all semantics) · `run(prog, args?)` (map `code stdout stderr ok`; the child runs under a wall-clock timeout, `.cell run.timeout_ms`, default 10 s, clamped 1..300 000, and the child's wall time is charged as fuel exactly like `sleep`; output may be truncated when a grandchild holds the pipe past the 250 ms drain grace) · `py(module, "dotted.func", args?)` (substrate-r1 Python bridge; map `ok value error code`; per-module grant `--allow-py m`; isolated-mode child, timeout `.cell py.timeout_ms`, wall time is fuel, 64 MiB output cap; Python exceptions are data `ok:false`, never crashes, full contract in §9b) · `http_get(host, port?, path?)` (response body) · `serve(port?)` · `recv_request()` (map `conn method path body`, or null) · `send_response(conn, status?, ctype?, body?)` (status/ctype containing control characters are refused, no header injection) · `env(name)`.
 
-**Builtins, concurrency, telemetry, regulation:** `fingerprint()` (run telemetry, §14) · `spawn(f, args?)` → id · `join(id)` → value (default wait ceiling 300 s, timed-out tasks stay joinable, join returns null; explicit `join(id, ms)` unchanged) · `cancel(id)` / `task_state(id)` / `cancelled()` (W18 cooperative cancellation, full contract §13) · `wait_all(ids)` / `wait_any(ids, ms?)` (W15 task groups, §13) · `toggle_on(name)` · `toggle_state()` · `repressi_next()` · `repressi_state()` (fuel-charged: integrating new ring ticks costs 20 steps/tick) · `repressi_start(ms)` (one shared cancellable timer per run, restarting retires the old thread) · `grn_fire(name, decay?)` · `grn_state()` · `grn_set(name, v)` (write a node's level, clamped 0..1) · `grn_get(name)` (read a node's level) · `methylate(name)` / `demethylate(name)` (runtime methylation, same graded semantics as the `@methylate`/`@acetylate` marks: level +1 / saturating −1, gate applies at the next call; returns the gene's new level; keys are allocation-charged like any growth) · `m6a_write(name, n?)` / `m6a_erase(name, n?)` (reg-bio-3: quantitative m6A site density 0..=3, writer/eraser dose, default 1; resistance to redefinition requires level ≥ 1) · `passage(n)` (reg-bio-3: n cell divisions, methylation levels dilute by `.cell methyl.maintenance` with half-down rounding, `generation` advances; returns the generation) · `expr_on(kon?, koff?)` / `expr_off()` (reg-bio: the telegraph promoter layer, §11; in-source switch for stochastic expression, seeded via `randomize`).
+**Builtins, concurrency, telemetry, regulation:** `fingerprint()` (run telemetry, §14) · `spawn(f, args?)` → id · `join(id)` → value (default wait ceiling 300 s, timed-out tasks stay joinable, join returns null; explicit `join(id, ms)` unchanged) · `cancel(id)` / `task_state(id)` / `cancelled()` (W18 cooperative cancellation, full contract §13) · `wait_all(ids)` / `wait_any(ids, ms?)` (W15 task groups, §13) · `channel()` / `send(ch, v)` / `recv(ch)` / `close(ch)` / `select(ch...)` (W015 channels, full contract §13) · `toggle_on(name)` · `toggle_state()` · `repressi_next()` · `repressi_state()` (fuel-charged: integrating new ring ticks costs 20 steps/tick) · `repressi_start(ms)` (one shared cancellable timer per run, restarting retires the old thread) · `grn_fire(name, decay?)` · `grn_state()` · `grn_set(name, v)` (write a node's level, clamped 0..1) · `grn_get(name)` (read a node's level) · `methylate(name)` / `demethylate(name)` (runtime methylation, same graded semantics as the `@methylate`/`@acetylate` marks: level +1 / saturating −1, gate applies at the next call; returns the gene's new level; keys are allocation-charged like any growth) · `m6a_write(name, n?)` / `m6a_erase(name, n?)` (reg-bio-3: quantitative m6A site density 0..=3, writer/eraser dose, default 1; resistance to redefinition requires level ≥ 1) · `passage(n)` (reg-bio-3: n cell divisions, methylation levels dilute by `.cell methyl.maintenance` with half-down rounding, `generation` advances; returns the generation) · `expr_on(kon?, koff?)` / `expr_off()` (reg-bio: the telegraph promoter layer, §11; in-source switch for stochastic expression, seeded via `randomize`).
 
 **Str methods:** `.upper() .lower() .trim() .split(sep) .join(list) .replace(a,b) .contains(x) .starts(x) .ends(x) .repeat(n) .slice(a,b) .len()`
 **List methods:** `.map(f) .filter(f) .reduce(f, init) .each(f) .sort(cmp?) .reverse() .contains(x) .index_of(x) .slice(a,b) .join(sep) .len()` (cmp returns true when a before b)
 **Map methods:** `.keys() .values() .items() .has(k) .del(k) .len()`
 
+**Bio-layer note (§11a):** the codon-kernel family and sequence utilities in the core row above (`codon` `distance` `similar` `transcribe` `translate` `reverse_complement` `gc_content` `find_orf`) and the bio half of the regulation row (`toggle_*` `repressi_*` `grn_*` `methylate` `demethylate` `m6a_write` `m6a_erase` `passage` `expr_*`) are the biology layer's runtime surface; the mechanisms live in §11 and the crossings are stated once in §11a.
+
 ## 11. Gene-expression regulation layer (v2 core novelties)
+
+### 11a. The biology layer: contract header, freeze, and boundary (W091)
+
+**Scope.** §11 (this section) is the semantics home of the biology layer, and §16 is its
+vocabulary map for docs. The layer: the gene regulatory network and its call gates, the
+marks, stoichiometric silencing, alternative splicing and runtime variant swap, fate
+machines, signal pools and quorum, polycistronic `operon` units (Rho termination, ribosome
+queues), the telegraph promoter and bursting, the repressilator ring, the decay clock,
+two-tier translation, epigenetic dilution, and the `.rna` / `.cell` surfaces that configure
+them. The layer can gate, redirect, degrade, and meter calls; it cannot redefine what a
+value, a call, or a closure is: no statement in §11 or §16 changes the evaluation rules of
+§1-§10, the verification rules of §12, the concurrency rules of §13, the toolchain rules of
+§15, or the memory model of §19.
+
+**Freeze (W036).** No new biology-flavored syntax enters the core language: new mechanisms
+land as `std/*.op` libraries, as `.cell` keys, or as builtins with a DECISIONS entry. The
+governance, the frozen inventory, and the enforcement story (including its honest gap) live
+in `docs/specs/CORE-BIO-BOUNDARY.md`; the compatibility classes are
+`docs/specs/COMPATIBILITY.md` (W63/W64). What that freezes, and what this section
+documents: the 25 keywords frozen at W036 (regulation 10, signal pools 4, operons and
+oscillators 3, variant swap 3, fate machines 3, entry and editing 2), the 6 marks
+(`@acetylate` `@methylate` `@m6a` `@copies` `@riboswitch` `@burst`), the contextual
+statement spellings (`translates` `attenuates` `secrete` `quorum` `quench`, the edge
+modifiers `sum` `any` `occupy` `hill`, per-cistron `rbs`), and the `.cell` tuning keys.
+The live keyword table is generated ([docs/KEYWORDS.md](docs/KEYWORDS.md)) and is never
+counted by hand here.
+
+**Modeling contract.** Every mechanism below carries an honesty grade (REAL / APPROX /
+ABSTRACTION / SIMPLIFICATION) and an output-meaning statement in
+`docs/spec/BIO-CONTRACT.md`; a change confined to §11/§16 plus that contract is a
+bio-modeling change, never a language change (BIO-CONTRACT governance rule 4).
+
+**Determinism.** Bio evaluation is deterministic and seeded: same binary version + same
+source + same seed + same flags + same `.cell` gives byte-identical output, core and bio
+surface alike (`docs/spec/DETERMINISM.md`). Every stochastic mechanism in this layer draws
+from a deterministic seeded stream: the shared mirrored xorshift stream (silence capture,
+promoter bursts), worker streams derived from the task id (the D9 bullet below), or
+streams keyed to absolute position so a cached replay cannot diverge (repressilator
+noise); platform entropy never enters, and the p∈{0,1} no-draw discipline keeps legacy
+programs bit-identical.
+
+**Voice (D-008).** Within this specification, §11 and §16 are the one place the metaphor is
+load-bearing; every other section of this document, and the documents outside this part,
+keep the D-008 voice: zero biology assumed, gene vocabulary is an intuition aid with
+one-line programmer analogies ([docs/KEYWORDS.md](docs/KEYWORDS.md)), never a
+prerequisite. Each §11 bullet carries its own term audit where the name and the honest
+effect diverge.
+
+**The boundary, in one paragraph (a newcomer may quote this).** Operon has two layers. The
+core layer (§1-§10, §12, §13, §15, §19) is an ordinary dynamic language: values, genes
+(functions), phenotypes (classes), modules, stress containment, concurrency, toolchain,
+memory. The biology layer (§11, plus the vocabulary map in §16) is a frozen, optional set
+of bio-named mechanisms that ride on the core: they keep their own state, and they may
+gate, redirect, degrade, or meter calls, but they never change what a value, a call, or a
+closure is. The test: a construct is bio-layer iff its behavior cannot be predicted
+without reading §11; if the core sections alone predict it, it is core however biological
+its name (`fate` is a state machine, `splice`/`variant` is an implementation swap,
+`tad`/`anchor` is module insulation, `frame`/`proof` is verification). With no regulation
+declared and no marks attached, every program evaluates exactly as the core sections say,
+and all three implementations agree on that byte-for-byte.
+
+**Boundary map** (every bio construct with its anchor):
+
+| Constructs | Anchor | Layer |
+|---|---|---|
+| Frozen bio keywords: `regulate` `activates` `inhibits` `strength` `threshold` `enhance` `silence` `decoy` `bind` `toggle` / `ligand` `inducer` `cofactor` `autoinducer` / `operon` `period` `repressilator` / `splice` `variant` `replace` / `fate` `state` `enter` / `ires` `edit` | semantics §11, statement forms declared in §11, CLI §15 | bio (frozen) |
+| Marks `@acetylate` `@methylate` `@m6a` `@copies` `@riboswitch` `@burst` | lexical §3, attachment §7/§7a, semantics §11 | bio (frozen) |
+| Contextual spellings `translates` `attenuates` `secrete` `quorum` `quench`, edge modifiers `sum` `any` `occupy` `hill`, per-cistron `rbs` | §11 | bio (frozen) |
+| GRN evaluation: levels, waves, once-per-fire inhibition, thresholds, Hill coefficients, `occupy`, `sum` pooling, `decoy`, decay | §11 (`regulate` bullet) | bio |
+| Oscillator: `repressilator` ring, kinetics, seeded noise | §11 | bio |
+| Signal pools: `ligand`/`bind` allostery, `autoinducer` quorum, `quench` | §11 | bio |
+| Polycistronic units: `operon`, `rbs`, polarity, Rho termination, ribosome queues | §11 | bio |
+| Two-tier translation: `translates`, m6A reader fate | §11 | bio |
+| Epigenetics: methylation levels, `passage` dilution, `generation` | §11, counters §14 | bio |
+| Stochastic expression: telegraph promoter, `@burst`, `burst_set`, `promoter_telemetry` | §11, counters §14 | bio |
+| Variant swap: `splice`/`variant`, `splice_shift` | §11, builtin §10, CLI §15 | bio (semantically generic, grandfathered) |
+| Fate machines: `fate`/`state`/`enter` | §11 | bio (semantically generic, grandfathered) |
+| Entry and editing: `ires`, `.rna` `edit` patches | §11, CLI §15 | bio |
+| Check-time bio analysis: NMD sweep, codon-score grading | §11, §15 | bio |
+| `.cell` bio keys: `methylate.*`, `grn.*`, `rho.*`, `ribosome.*`, `m6a.*`, `enhance.delta`, `ligand.*`, `quorum.dilution`, `repressi.*`, `[expression]`, `operon.polarity` | §11 (`.cell` bullets), schema `docs/specs/CELL-SCHEMA.md` | bio tuning surface |
+| Bio builtins named in §10: `toggle_on` `toggle_state` `repressi_next` `repressi_state` `repressi_start` `grn_fire` `grn_state` `grn_set` `grn_get` `methylate` `demethylate` `m6a_write` `m6a_erase` `passage` `expr_on` `expr_off` | §10 regulation row, mechanisms §11 | bio |
+| Bio builtins introduced with their mechanisms: `burst_set`, `promoter_telemetry`, `splice_shift`, `secrete`, `quorum`, `quench`, `quorum_state`, `ligand`/`ligand_set` pool reads | §11 | bio |
+| Codon-kernel family: `distance` `similar` (kernel `runtime/codon_kernel.cpp`), `codon` scoring; sequence utilities `transcribe` `translate` `reverse_complement` `gc_content` `find_orf` | §10 core row, kernel `runtime/codon_kernel.cpp` | bio (kernel is the Rule-5 walled foreign-function surface) |
+| Bio telemetry: `bursts`, `transcripts`, `generation`, profile flags | §14 | bio counters inside a core map |
+| Bio CLI: `--variant`, `--rna`, `--ires`, `--cell`, `--trace-grn`, `check --nmd`, `operon crispr`, `build --variant` | §15 | bio tooling on the core CLI |
+| Bio state on workers: the regulation snapshot | §13 worker bullet | bio state via the core membrane |
+| Bio-NAMED core (name only, no bio semantics): `tad`/`anchor` (§8 module insulation), `frame`/`proof` (§12 verification), guard-as-uORF (§7), RNAi as the sandbox naming (§9b) | their own sections | CORE |
+
+**Crossings** (each stated once, one sentence):
+
+- Calls: every bio gate (RISC redirect, toggle, GRN veto, methylation, riboswitch,
+  promoter, opt-in Rho) executes on the core evaluator's gene-call funnel at one pinned
+  order (§11 gate-order bullet), after which the call is an ordinary core call or a null
+  return with a note.
+- Scheduling: bio-only scheduling is the gate ordering around a call; no bio gate spawns a
+  thread and no bio mechanism alters the fuel, join, or cancellation rules of §13 (the
+  repressilator's wall-clock timer is a clock input to the ring, §11, not a worker cell).
+- Snapshot: bio state reaches a worker only through the core spawn snapshot membrane
+  (§13, §19d), copied at spawn, never live-shared; the one documented exception is the
+  quorum medium, a process-global pool outside the snapshot with a join-before-read
+  contract (§11 quorum bullet).
+- Codon kernel: `distance()`/`similar()` are a foreign-function surface into the C++
+  kernel with its own budget guard (10M-cell DP ceiling, 64 KiB per-operand cap,
+  over-budget pairs never win a contest); `codon()` and the sequence builtins around them
+  are ordinary total functions.
+- Entropy: every bio draw comes from a deterministic seeded stream (the shared mirrored
+  xorshift stream, a worker stream derived from the task id, or a position-keyed stream for
+  cached ring noise), never from platform entropy, so bio and core randomness stay
+  replayable (`docs/spec/DETERMINISM.md`).
+- Errors: a bio gate never introduces a new failure channel; suppression is the core soft
+  tier (null + note) and bio failures surface through the ordinary §9 stress kinds.
+- Config: bio `.cell` keys ride the one runtime-only `.cell` loader (§11 W22 bullet) and,
+  like every key, can never grant capabilities (§9b).
+- Telemetry: bio counters (`bursts` `transcripts` `generation`) are keys in the core-owned
+  `fingerprint()` map (§14), emitted in sorted order (§11 D9 bullet).
+- Toolchain: every bio CLI verb calls the same parser, evaluator, and checker; there is no
+  separate bio runtime and no second evaluator (§15).
 
 All features are real, implemented, tested, none are decorative.
 
-- **`tad` / `anchor`**, §8. Module insulation with export anchors.
+- **`tad` / `anchor`**, §8. Module insulation with export anchors. (Core module semantics listed here because it shipped in the same v2 wave; the biology layer only borrows the name, §11a.)
 - **`enhance a, b, c;`**, super-enhancer cluster: marks genes with an **activation boost** (v2.2). Under the GRN call gate, an enhanced gene lowers every incoming activating threshold by **0.25** (floored at 0; the dose is tunable via `.cell enhance.delta`, reg-bio: real enhancer strength varies with binding-site number and affinity), an enhanced gene fires where an unenhanced one stays gated (e.g. regulator level 0.4: threshold 0.5 blocks the plain gene, passes the enhanced one). Genes without the mark are unaffected and edges without a threshold stay declarative, so old programs keep running (§5 default: the boost exists only where `enhance` was declared). `operon profile` shows the `enhanced` flag; `operon check` gives the file a codon-score bonus for enhanced hot genes; the NMD untranslated sweep skips enhanced genes.
 - **`@acetylate`**, histone acetylation mark: excluded from silence rewriting and immune to the silencing gates (active chromatin stays active, open chromatin wins, D-005); shown as `active` in profile. (Term audit, reg-bio: acetylation is permissiveness, neutralized lysine charges open the chromatin, not dispatch priority; the mark's honest effect is immunity, nothing else.)
 - **`@methylate`**, histone methylation mark: gene is repressed, **graded** (v2.2). Every executed `@methylate`-marked `gene` definition deepens that gene's silencing level by 1; an `@acetylate`-marked definition relaxes it by 1 (histone marks compete on the same chromatin). A call to a gene whose level has reached the threshold (default **3**, tunable via `.cell` `methylate.threshold = n`) is **blocked**: it returns `null` with a fallback note ("methylation silences: …, call returns null"), never reaches the gene body, and does not count in `fingerprint()`/burst telemetry, repressed means repressed. Below the threshold, calls execute and the first call emits the soft note "methylated call" (later calls are silent, the cell does not narrate every repression; suppressed entirely when `.cell` sets `methylate.quiet = true`). Marked genes are exempt from the NMD untranslated sweep, and `@acetylate` genes are exempt from the methylation gate itself (open chromatin wins). One mark (the common case) never silences, old programs keep running.
@@ -601,7 +781,7 @@ All features are real, implemented, tested, none are decorative.
 - **`silence old -> new strength s sites n;` / `silence old;`**, RISC-style silencing, now STOICHIOMETRIC (reg-bio-3, C9). The redirect form: every call to gene `old` is redirected to `new` with a note "RISC: call silenced". The target-less form (reg-bio) is **pure degradation**, real RISC/miRNA destroys the transcript, there is no replacement gene: every call to `old` returns null with a "RISC degraded" note, and a degraded call is not expression (it never reaches the call counters or burst telemetry). **Dose (reg-bio-3):** `strength s` is the per-site capture probability (clamped 0..=1, default 1.0) and each `silence` statement for the same target is one binding site (`sites n` composes multiplicatively, 1..=64): the per-call capture probability is `1 − Π(1−sᵢ)^sitesᵢ`. Real RNAi is dose-dependent, limiting RISC complexes give fractional knockdown, and multiple target sites compound. A sub-1.0 capture draws ONCE per call attempt on the shared mirrored xorshift64* stream (the telegraph-promoter discipline; the oracle mirrors it op-for-op); a captured call takes the redirect/degrade path, an escaped call proceeds through the pinned funnel with a one-time "RISC escape" note. `strength 1.0` with one site is the legacy binary redirect and consumes NO entropy, the `random()` stream is untouched for every legacy program. `@acetylate` genes are immune, and the immune check precedes any draw (immunity costs no randomness). Same-name splice variants resolve first, then silencing applies to the resolved name.
 - **NMD sweep** (`operon check --nmd`): "premature stops" = unreachable statements after an unconditional `return` (reported −4 each); "untranslated transcripts" = defined, never-called, non-exported, non-enhanced genes (info, −1). `--nmd purge` rewrites the file without them.
 - **`splice name { variant a { } variant b { } }`**, alternative splicing: `name(...)` dispatches to the active variant. Selection order: `.cell` `variant.name=v` > CLI `--variant v` > **m6a-marked variant** (v2.2) > first declared. Variant declarations may carry histone marks (v2.2): `@m6a variant v { }` makes `v` the m6a-priority variant; `@acetylate`/`@methylate` on a variant ride on the resolved binding (acetylate immunity applies when a marked variant is active). Marks stack and can precede the variant keyword in any order; a mark not followed by `variant` is noted and skipped. Variants take parameters. `operon build --variant a` bakes one variant into a standalone file (build caveat: a variant's parameter list is not yet carried into the baked file, bake param-less variants, or keep the splice in the source).
-- **`.rna` edit patches**, `edit target { replace "src" -> "dst"; }` where target is a file name or gene name; applied to that target's source text before parsing. CLI: `operon run app.op --rna hot.rna`. Each applied replacement emits a note. **Node-addressed v2 (W067)**: a patch whose first content line is `syntax: v2` dispatches to the AST editor instead, `rename <path> -> <new>`, `delete <path>`, `body gene NAME[#N] { ... }` over paths `gene NAME[#N]` / `splice ROOT` / `variant ROOT.NAME` / `phenotype NAME` / `method PHENO.GENE` / `fate NAME` / `regulate #N`; edits apply to a freshly parsed AST and the result is reprinted through the canonical formatter (apply output is fmt-stable by construction). All-or-nothing: any missed/ambiguous target refuses the whole patch (exit 1, per-rule fate report, nothing written); bare names shared by 2+ declarations require an ordinal (`gene foo#2`). The reprint drops plain `#` comments, so v2 refuses such sources unless `--allow-comment-drop`. CLI: `operon rna app.op patch.rna [--write] [--json] [--allow-comment-drop]`; header-less patches keep the v1 text semantics byte-for-byte. **v1 deprecation (W067 stage 3, W63 step 1, info since 2.2.0)**: on the `operon rna` editor path a header-less patch emits an info note on stderr and `--json` reports `"engine":"v1","deprecated":true`; the patched FILE output is unchanged. Severity escalates per W63 (warning, then removal one minor later); the `run --rna` pre-parse path is deliberately note-free (differential stderr parity). Design + as-built: `docs/design/RNA-V2.md`.
+- **`.rna` edit patches**, `edit target { replace "src" -> "dst"; }` where target is a file name or gene name; applied to that target's source text before parsing. CLI: `operon run app.op --rna hot.rna`. Each applied replacement emits a note. **Node-addressed v2 (W067)**: a patch whose first content line is `syntax: v2` dispatches to the AST editor instead, `rename <path> -> <new>`, `delete <path>`, `body gene NAME[#N] { ... }` over paths `gene NAME[#N]` / `splice ROOT` / `variant ROOT.NAME` / `phenotype NAME` / `method PHENO.GENE` / `fate NAME` / `regulate #N`; edits apply to a freshly parsed AST and the result is reprinted through the canonical formatter (apply output is fmt-stable by construction). All-or-nothing: any missed/ambiguous target refuses the whole patch (exit 1, per-rule fate report, nothing written); bare names shared by 2+ declarations require an ordinal (`gene foo#2`). The reprint drops plain `#` comments, so v2 refuses such sources unless `--allow-comment-drop`. CLI: `operon rna app.op patch.rna [--write] [--json] [--allow-comment-drop]`; header-less patches keep the v1 text semantics byte-for-byte. **v1 deprecation (W067 stage 3, W63 step 1, info since 2.2.0)**: on the `operon rna` editor path a header-less patch emits an info note on stderr and `--json` reports `"engine":"v1","deprecated":true`; the patched FILE output is unchanged. Severity escalates per W63 (warning, then removal one minor later); the `run --rna` pre-parse path is deliberately note-free (differential stderr parity). **Check mode (W068)**: `operon rna app.op patch.rna --check` validates the patch against its target and writes NOTHING, ever (`--check --write` refuses, exit 2): engine detection (v1/v2), per-rule span/node resolution + ambiguity fate, the v2 comment-preflight result (`ok|refused|allowed`), and whether a real apply with the same flags would succeed (`would_apply` in `--json`); exit 0 clean, 1 on any validation failure, 2 on usage errors. Design + as-built: `docs/design/RNA-V2.md`.
 - **`.cell` methylation config**, `key = value` lines, `[section]` headers, `#` comments. CLI `--cell f.cell`; else `operon.cell` auto-detected.
 - **`.cell` is RUNTIME configuration ONLY (W22, audit item 22)**, the hard boundary: `.cell` keys configure the interpreter for one run (behavior knobs, capability grants, feature flags). Package/project metadata, `name`, `version`, `operon-version`, `dependencies`/`deps`, `authors`, `license`, belongs in the **`operon.toml` manifest** (W19/W022, track L3c), never in `.cell`. The two files never merge: a package installed by a registry must be able to ship its own runtime config while the parent project's manifest stays authoritative. The `cell/package-keys` lint (W48) will warn when package-like keys appear in a `.cell`; until then, unknown keys are inert data readable via `methyl()` (the W66 formal schema, dev-3, defines the full key inventory). Read via `methyl("k", d?)`. Impl-consumed keys: `variant.<splice>` (active variant), `methylate.quiet` (suppress the methylated-call note), `methylate.threshold` (graded-silencing gate, default 3), `grn.decay` (default GRN pulse decay, reg-r2), `run.timeout_ms` (child-process wall-clock timeout for `run()`, default 10000, clamped 1..300000), `py.timeout_ms` (Python-bridge wall-clock timeout for `py()`, default 10000, clamped 1..300000, substrate-r1), `wobble.strict = true` (a run with any rung ≥ 3 note exits 3, same as `--strict`), `entry` (cap-independent default entry, below CLI `--entry` and above `main`), and `allow.*` capability grants, honored only with explicit `--cell` (§9b; `allow.exit = true` grants the exit capability, sec-r2), `operon.polarity` (loop-9 D1 expected-value polarity weight, default 0.5), and the loop-10 Rho/queue knobs: `rho.termination` (the opt-in layer switch, default off), `rho.catch` (per-cistron catch probability, clamp 0..1, default 0.5), `rho.queue_floor` (shield threshold, default 0.5), `ribosome.queue_cap` (queue saturation, default 1.0), `ribosome.drain` (per-integration drain, default 0.5).
 - **`ires name;`**, internal ribosome entry site: declares a cap-independent entry gene. `operon run --ires` overrides the canonical `main` entry and runs the first declared `ires` target; a file with no `main` uses it automatically. Entry precedence: CLI `--entry` > `.cell` `entry` > `main` > first `ires`.
@@ -642,8 +822,13 @@ All features are real, implemented, tested, none are decorative.
 - **Cooperative cancellation (W18).** `cancel(id)` asks a live task to stop: it sets the task's cancel flag and the task observes it at its next fuel tick boundary, raising the catchable stress `[cancelled] "task cancelled"`. Nothing is preempted and no data is touched; a task that already finished answers `false` with a note, and so does an unknown id (soft tier). `cancel(0)`/`cancel(negative)` are contained the same way. The observed boundary is exactly the fuel tick boundary, with two deliberate exceptions so a worker can act on its own flag: the entry tick of a `stress` construct does not raise (the handler gets its window), and while a rescue handler runs the boundary raise is suppressed (the step budget still applies, so a handler cannot spin forever). `cancelled()` polls the live flag chain (true iff this task or any ancestor was asked to stop); on the host it is always false. `task_state(id)` reads the lifecycle phase without joining: `running` | `done` | `cancelled` for a live task, the same answer from the post-join tombstone, and null + note for an unknown id (`task_state(0)` is `done`, the inline-closure task). Cancellation is inherited: a worker's chain carries its own flag plus every ancestor flag, so cancelling a cell stops its whole descent at tick boundaries. A task cancelled before its gene ever reached a tick dies with the `[cancelled]` stress; a worker inside a `stress { ... } rescue (e) { ... }` window can rescue it and decide its own exit (that completion counts as `done`). `join` of a cancelled task returns the standard stress map `{kind: "cancelled", message: "task cancelled"}`. Sequential-oracle note: the oracle runs worker bodies inline at spawn time, so the differential corpus pins only the ordering-free shapes (tests/differential/cancel.op); the timing shapes are Rust-lane evidence under tests/timing/ plus the rt_p20a storm.
 - Thread panics are impossible by construction: any stress inside the thread is returned as a Stress Map value.
 - Memory model note (honesty): values are reference-counted; tasks communicate by args/results, not shared mutable state. Data races on shared globals are prevented by design (closures capture is by value at spawn time for non-local references).
-- **Worker cells inherit regulation state (reg-r1; reg-r4 inventory; reg-bio-3 extends).** A spawned task or sequence cell starts with a copy of the parent's GRN edges + levels, silences (stoichiometric RISC incl. escape bookkeeping), polycistronic operon units (membership, order, rbs, transcript counters), m6A levels, generation counter, gene-dosage registry, methylation counters + threshold, toggle pairs, enhance marks + enhancer dose (reg-bio), the telegraph promoter states + burst counters (reg-bio), **and the repressilator ring (node names + the raw ODE levels frozen at the spawn tick + the ring's kinetic parameters, the cell does not live-tick)**, frozen at spawn time. Worker calls dispatch through the same funnel as the host, so a toggle-repressed allele, a silenced (level ≥ threshold) gene, a GRN-vetoed call, or a burst-off promoter returns null inside the cell exactly as it does outside, regulation is part of the cell, not a host-side illusion. Later parent-side regulation changes do NOT propagate to already-running cells (snapshot semantics).
-- **Task groups (W15).** `wait_all(ids)` joins every id in input order and returns the results position-aligned with the input (join semantics per slot: already-joined or unknown ids contribute null + a note, so alignment never shifts). A failing child contributes its stress map like any join; the group call itself never raises. `wait_any(ids, timeout_ms?)` returns the id of the first task in the list whose worker has finished, in wall-clock completion order (ties resolve by scan order), or null + note when the timeout expires first (default 30 s, ceiling 300 s). Completion ORDER is inherently timing-dependent: the sequential oracle answers the first listed id, so the differential corpus pins only the ordering-free shapes (tests/differential/task_groups.op) and the ordering shape is Rust-lane evidence (tests/timing/wait_any.op). Bounded channels (chan/send/recv/close) and mutexes/atomics remain open on the W15 board entry; the L2a design lands as a separate note before any implementation.
+- **Worker cells inherit regulation state (reg-r1; reg-r4 inventory; reg-bio-3 extends).** A spawned task or sequence cell starts with a copy of the parent's GRN edges + levels, silences (stoichiometric RISC incl. escape bookkeeping), polycistronic operon units (membership, order, rbs, transcript counters), m6A levels, generation counter, gene-dosage registry, methylation counters + threshold, toggle pairs, enhance marks + enhancer dose (reg-bio), the telegraph promoter states + burst counters (reg-bio), **and the repressilator ring (node names + the raw ODE levels frozen at the spawn tick + the ring's kinetic parameters, the cell does not live-tick)**, frozen at spawn time. Worker calls dispatch through the same funnel as the host, so a toggle-repressed allele, a silenced (level ≥ threshold) gene, a GRN-vetoed call, or a burst-off promoter returns null inside the cell exactly as it does outside, regulation is part of the cell, not a host-side illusion. Later parent-side regulation changes do NOT propagate to already-running cells (snapshot semantics). Crossing (§11a): the inherited regulation state is bio-layer state riding the core snapshot membrane (§19d); the membrane rules themselves are unchanged by it.
+- **Task groups (W15).** `wait_all(ids)` joins every id in input order and returns the results position-aligned with the input (join semantics per slot: already-joined or unknown ids contribute null + a note, so alignment never shifts). A failing child contributes its stress map like any join; the group call itself never raises. `wait_any(ids, ms?)` returns the id of the first task in the list whose worker has finished, in wall-clock completion order (ties resolve by scan order), or null + note when the timeout expires first (default 30 s, ceiling 300 s). Completion ORDER is inherently timing-dependent: the sequential oracle answers the first listed id, so the differential corpus pins only the ordering-free shapes (tests/differential/task_groups.op) and the ordering shape is Rust-lane evidence (tests/timing/wait_any.op). Mutexes/atomics remain open on the W15 board entry; channels landed below (W015).
+- **Channels + select (W015).** `channel()` creates an unbounded FIFO channel, empty at creation, and returns a channel handle (type name `channel`, repr `<channel>` address-free, truthy, identity-compared like the other behavior handles: a copied handle IS the same buffer, two buffers never compare equal). `send(ch, v)` appends and returns null. `recv(ch)` returns the OLDEST value; on an empty-and-open channel it blocks; on a closed-and-empty channel it returns null (null is the only closed signal, a sent null is indistinguishable from closed-empty by design; programs that need the distinction use non-null sentinels or select). `close(ch)` marks the channel closed and returns null; close is idempotent (second close: null + soft note; Go panics here, we contain). `select(ch1, ch2, ...)` is a BUILTIN, not syntax (the `select { recv a => ... }` grammar stays frozen per W036): it polls its argument channels strictly in declaration order and returns the 0-based int index of the first one holding a ready value (a non-empty buffer; a closed channel with buffered values is still ready and receivable). Fairness is by declaration order, documented, never random: the leftmost ready channel always wins, and with several values buffered on one channel select only reports the channel. If nothing is ready and every channel is closed, select returns -1; an empty argument list is the vacuous case and answers -1 with a note. If nothing is ready and at least one channel is open, select blocks until one becomes ready.
+  - **The wire membrane.** Every payload that enters a channel crosses the SendValue serialization the spawn boundary uses, EVEN on the same-thread buffered path (the queue stores the wire form, so the two cores agree op-for-op and the membrane holds by construction, SPEC §19d): map keys stringify through display (int key 1 is received as "1"), nested behavior handles (genes, sequences, channels) degrade to null, nested phenotype instances arrive as maps carrying the hidden `#phenotype` key, variants ride with their payload. A TOP-LEVEL behavior-handle payload (gene, sequence, phenotype instance, channel) is refused AT SEND TIME with the catchable `membrane` stress (`"send() refuses a phenotype payload; channels carry data, not handles"`), a deliberate tightening of the spawn wire where instances cross as maps: a thread that needs to pass behavior passes the gene name (a string), not the handle. A payload nested deeper than the SendValue cap (100k) fails the send with catchable `overflow` before anything is queued (same discipline as the spawn pre-flight), and every append is charged to the aggregate allocation ceiling exactly like `push`, so a send storm is a caught overflow, never an OOM.
+  - **The stress families.** send/recv/close on a non-channel, and select over any non-channel argument, raise the standard type stress `unfolded`. `send` on a closed channel raises the dedicated catchable family `closed_channel` (`"send on a closed channel"`), never a crash and never silent loss; check order is membrane, depth, allocation, closed, so a handle payload on a closed channel reports `membrane`. Everything here is catchable by `stress { } rescue (e) { }` and by `?!`-style propagation boundaries.
+  - **Threads and fuel.** Channel handles cross `spawn` boundaries LIVE (as a spawn argument, a captured global, or a closure capture): the worker re-binds the same shared buffer, so a host can send and a worker recv across a real OS thread. A channel nested INSIDE a container that crosses spawn degrades to null like any handle (the wire rule above), and a gene that RETURNS a channel across the join boundary degrades to null with the same rule. Blocking is fuel-accounted (wall time is fuel, the `sleep` shape, SPEC §9b): recv waits in 50 ms slices and select re-polls in 10 ms slices, each slice charging ms×1000 steps against the interpreter budget AND the run-wide shared pool, and each wake observes the cancel chain, so `cancel()` unblocks a parked cell within one slice (the blocked recv raises the catchable `cancelled` stress and the task exits, no leaked thread), and a never-fed channel drains the run budget into the catchable `overflow` stress instead of hanging forever. Same-thread buffered use charges nothing extra and is the deterministic path.
+  - **Oracle parity.** The sequential oracle mirrors every builtin op-for-op on the buffered path (list FIFO + closed flag + the same wire transform at send time, `channel_wire`), so differential programs are byte-identical. The oracle is single-threaded BY DESIGN and never blocks: a program that would block (recv on empty-and-open, select with nothing ready) raises the oracle-only `blocked` stress; the differential corpus never writes one (buffered sends precede recvs/selects), and the blocking shapes are Rust-lane evidence under tests/redteam/rt_p21a_channels.op. Pinned by tests/channels.op + tests/differential/channels.op (byte-identical) plus the redteam payload.
 - **Structured concurrency: `scope { ... }` (W17).** Tasks spawned inside a scope block register on the innermost active scope and are joined at block exit, in spawn order, with results discarded, on EVERY flow path: normal fall-through, `return`/`break`/`continue` crossing the block, and stress. When the block unwinds by stress, cancel-on-error (default on; `.cell scope.cancel_on_error = off` to disable) asks each registered task to stop (§13 cancellation) BEFORE the reap; the original stress then propagates after the reap, so the caller's rescue sees the kind and message it would have seen without the scope. A child's own failure is contained as always (its stress map is discarded by the reap, the tombstone says `done`); scope exit never raises because a child failed. Joining a child manually inside the scope still works; the reap's re-join of the same id is contained (null + note). Nested scopes register independently. Sequence cells (§7b) are NOT scope-tracked (they are pulled to exhaustion by their consumer, not joined). Pinned by `tests/scope.op` + `tests/differential/scope.op` (byte-identical) and the Rust-only timing shapes in `tests/timing/scope_timing.op` (cancel-on-error tombstones, blocking reap).
 - Sequences (§7b) run on the same worker-cell substrate: each sequence body is a worker thread pulling through a rendezvous channel.
 
@@ -662,13 +847,36 @@ All features are real, implemented, tested, none are decorative.
 - Method: the run's global call clock is sliced into windows of 20 gene calls; each gene's count per window is a sample. A gene fired in bursts has a high variance/mean ratio; a constitutively expressed one sits near 0. Only complete bins count (a trailing partial bin is dropped).
 - `operon profile f.op`, runs instrumented, prints table: gene, calls, **exclusive self-time µs** (children subtracted), flags (`enhanced active repressed`), then a `mature · nascent · maturation` summary and **enhance candidates**, hot genes (called ≥ 10% as often as the most-called gene) that carry no `enhance` annotation.
 - The v2.0 telemetry keys `spliced` / `unspliced` / `velocity` (and the per-gene variance/mean noise key) are retired; `mature`/`nascent`/`maturation` carry the same biology honestly (maturation share, not velocity).
+- Crossing (§11a): the `bursts`, `transcripts`, and `generation` keys are bio-layer counters (mechanisms in §11); the call clock, the bins, `mature`/`nascent`/`maturation`, and the profile table are core telemetry that touches bio state only where the corresponding mechanism is in play.
+- The accounting gauges are a different lane: `memory()` (arena/intern/alloc counters plus the W013 live-cycle field) is process-cumulative for one binary invocation, not per-run call telemetry; the cycle field's contract lives in §19e.
 
 ## 15. Toolchain (Rust binary `operon`)
 
 - **`operon debug f.op --break N` (W08 phase 1)**: a statement-level trap in the tree-walk interpreter with a REPL on break: `c`/`continue` resumes, `s`/`step` breaks after the next statement, `p EXPR` evaluates in the current frame (same notes and stresses as a run), `vars` dumps the frame chain (values display-truncated), `bt` prints the call chain, `q` leaves with exit 0. EOF on stdin resumes to completion, so piped sessions are scriptable and never wedge. Workers are separate interpreters and never break. VM-offset breakpoints (DAP adapter, phase 2) are deferred to the A-track.
 
 
-- **`--vm` (W09 A2)**: run with gene bodies executed by the OIR1 bytecode machine (src/vm.rs; docs/vm-design.md §2a). Calls, the gate funnel, capabilities, notes and stress kinds are SHARED code, so output is byte-identical to the tree-walk by construction; the differential harness runs every corpus target on both engines against the oracle (the `--vm` lane must stay all-green). `operon ir f.op` prints the OIR1 listing (W10 stage 1; the disassembly of one compiled function is pinned by a unit test).
+- **`--vm` / `--interp` (W09 A2/A6)**: since v2.6.0 the bytecode machine is the DEFAULT engine for gene bodies (src/vm.rs; docs/vm-design.md §2a); `--vm` remains accepted for explicitness and `--interp` opts back to the tree-walking interpreter (the A6 escape hatch, docs/vm-design.md §9). Calls, the gate funnel, capabilities, notes and stress kinds are SHARED code, so output is byte-identical across engines by construction; the differential harness runs every corpus target on BOTH engines against the oracle (default lane + tree-walk lane, both must stay all-green). `operon ir f.op` prints the OIR1 listing, one line per instruction (`op idx | mnemonic | operands | line`), deterministic for the same source (a stability test compiles a mixed program twice and byte-compares the listing, W10). The opcode table, as executed by the machine and documented here:
+
+| opcode | operands | meaning |
+|---|---|---|
+| `Push` | const idx | push a constant (null/bool/int/float/str) |
+| `LoadName` | name idx | read a name (clone-charge + unbound note, the tree-walk read arm) |
+| `LoadNameQuiet` | name idx | read without note or charge (compound-assign target read) |
+| `StoreName` | name idx | `let` semantics: rebinding note + define |
+| `AssignName` | name idx | assignment semantics: const check, set, auto-declare note |
+| `Bin` | op | pop two, apply the shared `apply_binop` (exact kinds, messages, line stamps) |
+| `JmpIfF` | target | pop one, jump when falsy (same truthy() order) |
+| `Jmp` | target | unconditional jump |
+| `EvalExpr` | expr idx | BRIDGE: evaluate the arena expression with the tree-walk, push the result |
+| `BridgeStmt` | stmt idx | BRIDGE: execute the arena statement with the tree-walk |
+| `BridgeStmtInLoop` | stmt, top, end | bridge inside a compiled loop; the bridged flow re-enters the loop |
+| `Pop` | | discard one value (expression statements) |
+| `Ret` | | return the value on the stack |
+| `Brk`/`Cont` | target | break/continue out of the enclosing COMPILED loop (patched) |
+| `EnterScope`/`ExitScope` | | enter/leave a block scope (fresh child env) |
+| `CallNamed` | name idx, argc | native call (W09): pop argc args, run the SHARED named-call funnel (RISC gate included), push the result |
+
+Bridging is the Total Grammar escape: a construct the compiler does not lower natively either evaluates via the tree-walk or degrades to a bridge, nothing is rejected at compile time. The native/bridge split is invisible to program output by construction (shared code paths), which is what the vm lane of the differential harness pins.
 
 
 ```
@@ -702,6 +910,8 @@ operon crispr f.op (--knockout gene | --matrix) [--json]
 operon bench f.op  [--iters n]
 operon version
 ```
+
+Crossing (§11a): the bio-layer flags and verbs in the block above (`--variant`, `--rna`, `--ires`, `--cell`, `--trace-grn`, `check --nmd`, `operon crispr`, `build --variant`) enter the biology layer (§11); the CLI process rules around them are core.
 
 **`operon-ls`**, language server (stdio LSP; lsp-r1 v2 → W45/W46): `initialize` / `shutdown` / `exit`, full-text document sync (ranged edits are ignored, never mis-applied), `textDocument/publishDiagnostics` (Total Grammar parse notes by rung + `tools check` phantom calls, resolved **CWD-independently**: document-relative → CWD → `std/` → exe-relative `std/` → cargo-manifest `std/`; repair-carrying diagnostics embed `relatedInformation` with the canonical interpretation, W46), `textDocument/hover` with gene/splice signatures **and repair provenance** (hovering a repaired token shows what the parser decided it meant), `textDocument/definition` (genes, sequences, splice roots), `textDocument/references` (W45: word-boundary occurrences, string/comment-aware, declaration included), `textDocument/semanticTokens/full` (W45: fixed six-type legend, keyword/function/variable/string/number/comment), `textDocument/prepareRename` + `textDocument/rename` (W45-v2: same scanner engine as references, every code occurrence becomes one WorkspaceEdit edit, strings/comments/`@marks` excluded, interpolated `{..}` expressions included because they are evaluated; identifier-precise, NOT scope-aware, `operon check` after rename is the honest follow-up; all-or-nothing: invalid/reserved/builtin/same-name/already-taken new names refuse the WHOLE rename as a JSON-RPC error -32001, mirroring W67's `operon rna` discipline), `textDocument/documentSymbol`, `textDocument/completion` (in-file genes with signatures, builtins, keywords, top-level bindings), and `textDocument/formatting` (the canonical `operon fmt` engine). Analysis is cached per document version; `didClose` drops the document and clears diagnostics. `operon-ls --explain FILE` prints the `operon explain` Total Grammar report (W38's second door). Contract version + feature list ride the `operonLsp` handshake block (W62; docs/specs/LSP-VERSIONING.md). Programmer-first by D-008: hovering `boost` shows `gene boost(x)` plus its marks (`@acetylate`, `@methylate`, `@m6a`, `enhance`) and a one-line analogy, gene vocabulary is an intuition aid, never a prerequisite. Zero external dependencies: request JSON is parsed by the language's own `json_parse`. Shipped in every release archive including the Windows zip; editor setup (Neovim / VS Code / Helix) is in README "Connect your editor".
 
@@ -822,7 +1032,7 @@ operon version
    `{..}` is interpolation.
 10. **Time (UTC civil calendar).** `unix_time()`, seconds since the epoch.
     `date_parts(ts)`, `{year, month, day, hour, min, sec, wday}` (Sunday=0).
-    `date_fmt(ts, fmt)`, `%Y %m %d %H %M %S` expansion.
+    `date_fmt(ts, fmt)`, `%Y %m %d %H %M %S` expansion. `std/time.op` layers pure duration and calendar arithmetic over these (W33) and adds `time_parse_iso(s)`: parses "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM:SS" into an Int timestamp; fractional seconds are accepted then truncated, a trailing `Z` is accepted, offset suffixes like `+01:00` are rejected (UTC-only module, W89), and any malformed input returns null.
 11. **String repetition.** `"ab" * 3` and `3 * "ab"`, Python parity, capped
     by the 512 MiB ceiling.
 12. **Join deadline.** `join(id, timeout_ms?)` returns null and notes when the
@@ -844,7 +1054,7 @@ module's placeholder map which fills when loading completes (with a rung-4
 note); map/filter/reduce/each run callbacks over a snapshot of the source
 list (callbacks may freely mutate the original).
 
-This specification is **Operon 2.2.0**. `operon version` prints the implementation banner `Operon 2.2.0 (rust-core, cpp-kernel)`, which matches this document. (sec-r2: the C runtime kernel was deleted, audit A15 proved its intern table was write-only and its raw pointers were the project's one ASan-confirmed memory-safety class; interning now lives in Rust, and the banner no longer claims a c-runtime.)
+This specification is **Operon 2.6.0**. `operon version` prints the implementation banner `Operon 2.6.0 (rust-core, cpp-kernel)`, which matches this document. (sec-r2: the C runtime kernel was deleted, audit A15 proved its intern table was write-only and its raw pointers were the project's one ASan-confirmed memory-safety class; interning now lives in Rust, and the banner no longer claims a c-runtime.)
 
 ## 18. Verification status (what the shipped suite proves)
 
@@ -897,10 +1107,68 @@ Reference cycles (`let a = []; push(a, a)`) are legal values: equality, repr, an
 serialization are cycle-safe (sec-r5 DAG-memoized walks). **Lifetime truth: an `Rc` cycle
 lives until interpreter teardown**, scripts and short-lived workers never notice; a
 long-lived server building unbounded cycles would leak. Chosen strategy (DECISIONS.md
-D-013):
+D-013, shipped in stages):
 
 1. document the model (this section), no silent reclamation, no determinism surprises;
-2. `memory()` reports interpreter stats today; a live-cycle count is the W013 follow-up;
-3. an explicit `break_cycle()`-style escape hatch and/or weak-map family (opt-in, .cell
-   gated) may land later; a tracing GC is REJECTED for v3, it would break the fuel/mem
-   charge determinism contract (§9b).
+2. SHIPPED (W013): `memory().cycles` is the live-cycle gauge; the accounting contract is
+   below;
+3. reclamation is opt-in through the weak-reference API (§19f), the sanctioned
+   cycle-breaking mechanism; a `break_cycle()` builtin is consciously NOT landed (§19f);
+   a tracing GC is REJECTED for v3, it would break the fuel/mem charge determinism
+   contract (§9b).
+
+**Live-cycle accounting contract (W013).**
+What counts: a container subgraph the engine has PROVEN reachable from itself, where a
+container is a list, a map, or a phenotype instance's fields. Variant payloads are walked
+through; map KEYS are not walked; gene/env capture cycles are not container edges and
+never count. When it increments: at the container mutation that CLOSES the cycle
+(push/insert/index write/map insert/field write), detected BEFORE the edge lands by a
+bounded walk from the inserted value to the target container. One cycle group counts
+once: registering a container whose subgraph already holds a registered member is a
+no-op. When it decrements: only on PROOF of death or breakage, re-verified by a bounded
+walk on every `memory()` call: a target whose container was reclaimed (last strong
+reference gone) or whose cycle was broken by later mutation is pruned; everything else
+persists (D-013: a leak is honest accounting, not a surprise).
+
+Determinism: every detection and verification walk is capped at the same 100k-visit
+budget in BOTH engines, visits in the same order, and cuts at the same node. On graphs
+beyond the budget the cut is conservative in the gauge's direction: an inconclusive
+DETECTION walk does not register (detection is best-effort), an inconclusive VERIFICATION
+walk keeps the entry counted (death must be PROVEN, persistence is the default). The
+budget is native-walk armor, not fuel: interpreter steps stay the charged currency
+(§9b), the cap bounds the per-call native work of `memory()` and of container mutations
+on adversarial graphs (redteam rt_p22a). The gauge is a PROCESS field: cumulative across
+files in one binary invocation, like every `memory()` key, and leaked cycles legitimately
+persist into later files' gauges, so proofs pin deltas, never absolutes.
+
+### 19f. Weak references (W013), the sanctioned cycle-breaking mechanism
+
+`weak(v)` hands out a non-owning handle to a container value (list, map, phenotype
+instance); `strengthen(w)` returns the SAME value (same allocation: identity and later
+mutations are shared, `type()` answers the phenotype kind) while any strong reference is
+alive, and `null` (soft note) once the last strong reference is gone. There is no GC:
+freeing is immediate at strong-count zero, the null answer fires at the deref, not at
+the drop.
+
+- Refusals: `weak()` on anything that is not a list, map, or phenotype instance (scalars,
+  behavior handles, channels alike) is a catchable `unfolded` stress; so is `strengthen()`
+  on a non-handle. Both messages are byte-identical across the engines (pinned in
+  tests/differential/weak_refs.op).
+- Membranes: a weak handle NEVER rides the wire. A top-level spawn argument and a channel
+  payload are REFUSED with the catchable `membrane` stress (a handle's whole meaning is
+  the allocation identity of its target in the creating cell; the snapshot wire could
+  only deliver a lie, a null or a handle re-pointed at a copy). A handle nested inside a
+  container degrades to null on the wire, the same rule every behavior handle has (§19d).
+- Reclamation decision: weak refs are the sanctioned way to make a large object graph
+  collectable under D-013: drop the last strong binding, or break the cycle edge yourself
+  (pop/del/overwrite on a container you strongly hold), and the next `memory()` call
+  PROVES the death and prunes the gauge (§19e). What is consciously NOT landed is a
+  `break_cycle()` builtin: asking the engine to sever an edge mid-flight would silently
+  mutate a graph that other live aliases can still reach, which breaks identity
+  semantics (a value you hold must never change shape behind your back). Cycle breaking
+  stays an explicit owner operation on edges the program itself controls.
+- Engine truth vs oracle model: the Rust core answers from real strong counts; the Python
+  oracle has no refcounter and models aliveness as "a name binding for the target is
+  still live on the scope chain". The differential corpus pins only the shapes where the
+  two models agree by construction; a target held ONLY by another container is a
+  Rust-lane shape the corpus deliberately avoids (recorded divergence, not a bug).

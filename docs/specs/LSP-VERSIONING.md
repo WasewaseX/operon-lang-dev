@@ -72,6 +72,38 @@ already-taken new name refuses the WHOLE rename as a JSON-RPC error
 (code -32001) so the editor can surface the reason, a silent null or a
 partial edit set are both contract violations.
 
+## Skew, minimum handshake, and client detection (W62)
+
+**Where skew can and cannot happen.** `operon-ls` is a second binary target of
+the same crate as the `operon` CLI (`src/bin/operon-ls.rs`), compiled from the
+same tree: one install always carries matching versions, and "operon-ls newer
+than the operon binary it wraps" cannot occur inside an install, because
+nothing is wrapped (the analysis and fmt engines are linked in, not shelled
+out to). The skew that CAN occur is between the server binary an editor
+launches and the `operon` a user runs in a terminal (two installs on PATH), or
+an editor holding a stale cached server path after an upgrade. The policy is
+detection, not prevention: the initialize result reports both numbers
+(`operonLsp.version` for the contract, `serverInfo.version` for the crate), a
+client that cares displays both, and the repo rule stays in-lockstep
+shipping: operon-ls rides the same release train as operon, never separately.
+
+**Minimum handshake.** initialize request -> initialize result
+(`operonLsp` + `capabilities` + `serverInfo`) -> `initialized` notification ->
+`textDocument/didOpen` with full text -> `publishDiagnostics` server-to-client.
+`shutdown` request -> null result -> `exit` notification ends the process. A
+malformed frame or stream end closes the session. Full-text sync only
+(`textDocumentSync = 1`); ranged edits are ignored, not mis-applied. lsp 1
+claims no workspace/configuration capabilities.
+
+**Client feature detection.** `operonLsp.features` is the authoritative gate;
+`capabilities` mirrors it in standard LSP vocabulary and the smoke test holds
+the two in lockstep. Clients gate each UI affordance on the named feature
+string and MUST ignore unrecognized strings (additive growth, change rule 1,
+never breaks an older client). Versions are integers, currently 1: a client
+facing a HIGHER version treats it as "plain LSP 3.17 defaults only" (unknown
+shape = contract break, change rule 2); a client facing a LOWER version than
+it requires gates everything off `operonLsp.features` and degrades cleanly.
+
 ## Change rules
 
 1. Adding a NEW feature to `features`/`capabilities` (and nothing else

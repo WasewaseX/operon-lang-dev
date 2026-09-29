@@ -1,7 +1,7 @@
 # OPERON BIOLOGICAL MODELING CONTRACT
 
 W092 of the M100 program · v1.0.0 · 2026-09-26 · owner: sz (dev-3)
-Companion to SPEC §11 (regulation layer) and SPEC §16 (biology ↔ feature map).
+Companion to SPEC §11 (regulation layer), SPEC §11a (the biology-layer contract header, freeze, and boundary map, W091), and SPEC §16 (biology ↔ feature map).
 Audience rule D-008: CS engineers first, biology is an intuition aid, never a prerequisite.
 
 ---

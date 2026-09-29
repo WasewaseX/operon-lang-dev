@@ -1,0 +1,196 @@
+# std/hashing, checksums and cryptographic hashing in pure Operon.
+#
+# Everything here is deterministic integer arithmetic over byte values, so
+# both engines agree byte-for-byte by construction (the differential corpus
+# pins the standard test vectors). All hashes accept a bytes value or a
+# plain string (encoded as UTF-8) and return an integer (32-bit checksums)
+# or a byte list (sha256). Honest scope note: a 64-bit hash (FNV-1a 64,
+# xxhash) would need 64x64 multiplication, which overflows the language's
+# i64 no-wrap contract; 32-bit sums stay safely inside it.
+
+## FNV-1a 32-bit: the small fast workhorse for map keys and cache keys.
+gene hash_fnv1a32(data) {
+    let acc = 0x811C9DC5
+    for b in hash_bytes_of(data) {
+        acc = acc ^ b
+        acc = (acc * 0x01000193) & 0xFFFFFFFF
+    }
+    return acc
+}
+
+## DJB2 (x * 33 ^ c): classic string hash, 32-bit domain.
+gene hash_djb2(data) {
+    let acc = 5381
+    for b in hash_bytes_of(data) {
+        acc = ((acc * 33) & 0xFFFFFFFF) ^ b
+    }
+    return acc
+}
+
+## SDBM: another classic, better avalanche than DJB2 at the low end.
+gene hash_sdbm(data) {
+    let acc = 0
+    for b in hash_bytes_of(data) {
+        acc = (b + (acc << 6) + (acc << 16) - acc) & 0xFFFFFFFF
+    }
+    return acc
+}
+
+## Adler-32 (RFC 1950): two mod-65521 sums, cheap and order-sensitive.
+gene hash_adler32(data) {
+    let s1 = 1
+    let s2 = 0
+    for x in hash_bytes_of(data) {
+        s1 = (s1 + x) % 65521
+        s2 = (s2 + s1) % 65521
+    }
+    return (s2 * 65536) + s1
+}
+
+## CRC-32 (IEEE 802.3, the zip/png polynomial), bitwise, no table.
+gene hash_crc32(data) {
+    let acc = 0xFFFFFFFF
+    for b in hash_bytes_of(data) {
+        acc = acc ^ b
+        let i = 0
+        while i < 8 {
+            if (acc & 1) == 1 {
+                acc = (acc >> 1) ^ 0xEDB88320
+            } else {
+                acc = acc >> 1
+            }
+            i = i + 1
+        }
+    }
+    return (acc ^ 0xFFFFFFFF) & 0xFFFFFFFF
+}
+
+## SHA-256 (FIPS 180-4), pure integer arithmetic over 32-bit lanes.
+## Returns the 32-byte digest as a byte list; sha256_hex renders it.
+gene sha256(data) {
+    let msg = hash_bytes_of(data)
+    let bitlen = len(msg) * 8
+    # padding: 0x80, zeros to 56 mod 64, then the 64-bit big-endian length
+    push(msg, 0x80)
+    while (len(msg) % 64) != 56 {
+        push(msg, 0)
+    }
+    let shift = 56
+    while shift >= 0 {
+        push(msg, (bitlen >> shift) & 0xFF)
+        shift = shift - 8
+    }
+    # initial state, one lane per digest word
+    let hv = [0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19]
+    let kc = [
+        0x428A2F98, 0x71374491, 0xB5C0FBCF, 0xE9B5DBA5, 0x3956C25B, 0x59F111F1, 0x923F82A4, 0xAB1C5ED5,
+        0xD807AA98, 0x12835B01, 0x243185BE, 0x550C7DC3, 0x72BE5D74, 0x80DEB1FE, 0x9BDC06A7, 0xC19BF174,
+        0xE49B69C1, 0xEFBE4786, 0x0FC19DC6, 0x240CA1CC, 0x2DE92C6F, 0x4A7484AA, 0x5CB0A9DC, 0x76F988DA,
+        0x983E5152, 0xA831C66D, 0xB00327C8, 0xBF597FC7, 0xC6E00BF3, 0xD5A79147, 0x06CA6351, 0x14292967,
+        0x27B70A85, 0x2E1B2138, 0x4D2C6DFC, 0x53380D13, 0x650A7354, 0x766A0ABB, 0x81C2C92E, 0x92722C85,
+        0xA2BFE8A1, 0xA81A664B, 0xC24B8B70, 0xC76C51A3, 0xD192E819, 0xD6990624, 0xF40E3585, 0x106AA070,
+        0x19A4C116, 0x1E376C08, 0x2748774C, 0x34B0BCB5, 0x391C0CB3, 0x4ED8AA4A, 0x5B9CCA4F, 0x682E6FF3,
+        0x748F82EE, 0x78A5636F, 0x84C87814, 0x8CC70208, 0x90BEFFFA, 0xA4506CEB, 0xBEF9A3F7, 0xC67178F2,
+    ]
+    let bi = 0
+    while bi < len(msg) {
+        # message schedule: 16 words from the block, 48 more mixed
+        let ws = []
+        let i = bi
+        while i < bi + 64 {
+            push(ws, (msg[i] << 24) + (msg[i + 1] << 16) + (msg[i + 2] << 8) + msg[i + 3])
+            i = i + 4
+        }
+        let t = 16
+        while t < 64 {
+            let s0 = __hash_rotr32(ws[t - 15], 7) ^ __hash_rotr32(ws[t - 15], 18) ^ (ws[t - 15] >> 3)
+            let s1 = __hash_rotr32(ws[t - 2], 17) ^ __hash_rotr32(ws[t - 2], 19) ^ (ws[t - 2] >> 10)
+            push(ws, (ws[t - 16] + s0 + ws[t - 7] + s1) & 0xFFFFFFFF)
+            t = t + 1
+        }
+        # compression
+        let wa = hv[0]
+        let wb = hv[1]
+        let wc = hv[2]
+        let wd = hv[3]
+        let we = hv[4]
+        let wf = hv[5]
+        let wg = hv[6]
+        let wh = hv[7]
+        let i2 = 0
+        while i2 < 64 {
+            let S1 = __hash_rotr32(we, 6) ^ __hash_rotr32(we, 11) ^ __hash_rotr32(we, 25)
+            let ch = (we & wf) ^ ((we ^ 0xFFFFFFFF) & wg)
+            let temp1 = (wh + S1 + ch + kc[i2] + ws[i2]) & 0xFFFFFFFF
+            let S0 = __hash_rotr32(wa, 2) ^ __hash_rotr32(wa, 13) ^ __hash_rotr32(wa, 22)
+            let maj = (wa & wb) ^ (wa & wc) ^ (wb & wc)
+            let temp2 = (S0 + maj) & 0xFFFFFFFF
+            wh = wg
+            wg = wf
+            wf = we
+            we = (wd + temp1) & 0xFFFFFFFF
+            wd = wc
+            wc = wb
+            wb = wa
+            wa = (temp1 + temp2) & 0xFFFFFFFF
+            i2 = i2 + 1
+        }
+        hv[0] = (hv[0] + wa) & 0xFFFFFFFF
+        hv[1] = (hv[1] + wb) & 0xFFFFFFFF
+        hv[2] = (hv[2] + wc) & 0xFFFFFFFF
+        hv[3] = (hv[3] + wd) & 0xFFFFFFFF
+        hv[4] = (hv[4] + we) & 0xFFFFFFFF
+        hv[5] = (hv[5] + wf) & 0xFFFFFFFF
+        hv[6] = (hv[6] + wg) & 0xFFFFFFFF
+        hv[7] = (hv[7] + wh) & 0xFFFFFFFF
+        bi = bi + 64
+    }
+    # digest: eight big-endian words
+    let out = []
+    for word in hv {
+        push(out, (word >> 24) & 0xFF)
+        push(out, (word >> 16) & 0xFF)
+        push(out, (word >> 8) & 0xFF)
+        push(out, word & 0xFF)
+    }
+    return out
+}
+
+## SHA-256 as the lowercase hex string (the usual interchange form).
+gene sha256_hex(data) {
+    let out = ""
+    for b in sha256(data) {
+        out = out + __hash_hex_byte(b)
+    }
+    return out
+}
+
+# ------------------------------------------------------------- internals
+
+## Byte view of the input: bytes stay as-is, strings encode as UTF-8.
+gene hash_bytes_of(data) {
+    if type(data) == "bytes" {
+        return bytes_to_list(data)
+    }
+    if type(data) == "str" {
+        return bytes_to_list(bytes_from_str(data))
+    }
+    return []
+}
+
+gene __hash_rotr32(x, n) {
+    return ((x >> n) | (x << (32 - n))) & 0xFFFFFFFF
+}
+
+gene __hash_hex_byte(b) {
+    let hi = b >> 4
+    let lo = b & 0xF
+    return __hash_hex_digit(hi) + __hash_hex_digit(lo)
+}
+
+gene __hash_hex_digit(v) {
+    if v < 10 {
+        return chr(48 + v)
+    }
+    return chr(87 + v)
+}

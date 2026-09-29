@@ -20,7 +20,8 @@ in between, "should work" is not a state we write down.
 | Nix | `packaging/nix/default.nix` | community | maintainer replaces `lib.fakeSha256`, extends the arch map as targets ship |
 | deb | `[package.metadata.deb]` in Cargo.toml | community | `cargo deb` in a clean env; CI packaging job = the validation upgrade path |
 | rpm | `[package.metadata.generate-rpm]` in Cargo.toml | community | `cargo generate-rpm` in a clean env; same upgrade path |
-| Homebrew | formula draft | staged | draft rides the B5 branch; the tap itself is owner-published |
+| Homebrew | `packaging/homebrew/operon.rb` | community | maintainer pins the tag tarball's `.sha256` into the formula, then owner-publishes the tap |
+| source release archive | `scripts/release.sh` → `dist/operon-<v>.tar.gz` + `SHA256SUMS` | validated locally | deterministic `git archive` re-tar (pinned mtime/uid/gid), `--verify` fail-closed; run it before tagging so SHA256SUMS is fresh |
 | winget | submission note | staged | rides the B5 branch; winget needs a signed/published stable URL |
 
 Marks are re-checked by `scripts/check_docs_sync.py` (W61 guard): every
@@ -38,6 +39,18 @@ main before merging, a plain merge would regress the README statistics
 that lands, this branch ships the NEW channels only and leaves the
 `[package.metadata.binstall]` table to B5's rebase, so the same table never
 exists twice.
+
+## Source release flow (scripts/release.sh)
+
+`scripts/release.sh` packs HEAD with `git archive` (tracked files only, so
+`target/`, `bin/`, `build/` and `dist/` itself cannot leak) into
+`dist/operon-<version>.tar.gz`, writes the archive's `.sha256` companion and
+a `SHA256SUMS` manifest, and re-tars with pinned metadata (mtime epoch 0,
+uid/gid 0) when GNU tar is available, so two runs of the same commit produce
+byte-identical archives. `--verify` checks an existing archive fail-closed;
+`--dry-run` prints the plan. The manifest is what `install.sh --verify`
+consumes: CI (or the maintainer) appends the per-asset hashes of the
+binary archives to the same `SHA256SUMS` before attaching it to a release.
 
 ## Publish checklist (owner/maintainer, per release)
 

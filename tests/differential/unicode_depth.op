@@ -1,0 +1,85 @@
+# differential: W28 stage 2 normalization, case folding, categories.
+# Byte-identical stdout on both engines: the Rust tables are generated
+# FROM Python's unicodedata (scripts/gen_unicode_tables.py), the oracle
+# calls that very module. NOTE: combining marks and jamo below are
+# literal UTF-8, Operon strings have no \u escapes.
+gene wrap(f) {
+    stress {
+        return "ok " + str(f())
+    } rescue (e) {
+        return "stress[" + e.kind + "] " + e.message
+    }
+}
+gene t_nfd_ntilde() {
+    let s = norm_nfd("ñ")
+    let out = ""
+    for i in range(len(s)) {
+        out = out + str(ord(char_at(s, i))) + ","
+    }
+    return out
+}
+gene t_nfd_hangul() {
+    let s = norm_nfd("한")
+    let out = ""
+    for i in range(len(s)) {
+        out = out + str(ord(char_at(s, i))) + ","
+    }
+    return out
+}
+gene t_nfd_lig() { return norm_nfd("ﬁ") == "ﬁ" }
+gene t_nfc_compose() {
+    let s = norm_nfc("a\u0323x")
+    return s
+}
+gene t_nfc_block() {
+    let s = norm_nfc("ạ́")
+    return str(ord(char_at(s, 0)))
+}
+gene t_nfc_excl() {
+    let s = norm_nfc("̈́")
+    return str(len(s)) + ":" + str(ord(char_at(s, 0))) + "," + str(ord(char_at(s, 1)))
+}
+gene t_fold_ss() { return casefold("ß") }
+gene t_fold_sigma() { return casefold("ΑΣ") + "/" + casefold("Σσς") }
+gene t_fold_idot() {
+    let s = casefold("İ")
+    let out = ""
+    for i in range(len(s)) {
+        out = out + str(ord(char_at(s, i))) + ","
+    }
+    return out
+}
+gene t_cat_A() { return char_category("A") }
+gene t_cat_1() { return char_category("1") }
+gene t_cat_han() { return char_category("中") }
+gene t_cat_mark() { return char_category("́") }
+gene t_cat_space() { return char_category(" ") }
+gene t_cat_empty() { return char_category("") }
+gene t_err_nfc() { return norm_nfc(5) }
+gene t_err_fold() { return casefold([1]) }
+gene t_err_cat() { return char_category(9) }
+gene t_roundtrip() {
+    return norm_nfc(norm_nfd("Áñ")) == norm_nfc("Áñ")
+}
+gene main() {
+    print(wrap(t_nfd_ntilde))
+    print(wrap(t_nfd_hangul))
+    print(wrap(t_nfd_lig))
+    print(wrap(t_nfc_compose))
+    print(wrap(t_nfc_block))
+    print(wrap(t_nfc_excl))
+    print(wrap(t_fold_ss))
+    print(wrap(t_fold_sigma))
+    print(wrap(t_fold_idot))
+    print(wrap(t_cat_A))
+    print(wrap(t_cat_1))
+    print(wrap(t_cat_han))
+    print(wrap(t_cat_mark))
+    print(wrap(t_cat_space))
+    print(wrap(t_cat_empty))
+    print(wrap(t_err_nfc))
+    print(wrap(t_err_fold))
+    print(wrap(t_err_cat))
+    print(wrap(t_roundtrip))
+    print("done")
+}

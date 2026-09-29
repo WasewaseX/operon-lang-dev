@@ -46,6 +46,7 @@ KEYWORD_ANALOGY = {
     "autoinducer": "quorum-sensing counter (population medium)",
     "bind": "attach a binding site", "inducer": "activating ligand",
     "cofactor": "ligand modifier", "operon": "polycistronic unit (batch of genes)",
+    "trait": "interface (required + default methods)",
 }
 
 def read(p):

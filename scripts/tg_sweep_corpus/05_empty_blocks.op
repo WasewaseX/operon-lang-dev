@@ -1,0 +1,18 @@
+// tg_sweep corpus 05: empty blocks everywhere — gene body, if/else arms,
+// loop body, frame, rescue. Empty must parse and run as a no-op.
+main {
+    stress {
+        if 1 {
+        } else {
+        }
+        for i in range(3) {
+        }
+        while 0 {
+        }
+    } rescue (e) {
+    }
+}
+gene empty() {
+}
+frame proof {
+}

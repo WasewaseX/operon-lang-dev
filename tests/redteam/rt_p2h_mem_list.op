@@ -1,6 +1,16 @@
+# rt_p2h: allocation flood against the run's aggregate ceiling. Unbounded
+# list growth must be stopped by the 2 GiB aggregate allocation ceiling as
+# a catchable overflow, never by the OOM killer or the process allocator.
+# Each iteration allocates a 1 MiB block so the ceiling trips in ~2000
+# pushes (well under the 15 s wall clock; the original 24-byte lists took
+# 7.7 s to reach 2 GiB and flaked the suite timeout on a loaded 2-core box,
+# same containment, faster trip). Containment: the overflow stress leaves
+# main (no rescue here ON PURPOSE), the run reports rc 1 with the
+# "[contained] [overflow] aggregate allocation ceiling" traceback, no
+# panic, no SIGSEGV, no OOM kill.
 gene main() {
     let l = []
     while true {
-        push(l, [1, 2, 3])
+        push(l, "x" * 1048576)
     }
 }
