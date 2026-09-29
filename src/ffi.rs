@@ -174,8 +174,19 @@ pub fn codon_score(s: &str) -> i32 {
 mod tests {
     use super::*;
 
+    // The intern table is process-global and thread-safe (Mutex), but cargo
+    // runs tests on PARALLEL threads, so any test asserting global counts
+    // (intern_count / table_bytes / table_allocs / symbols) can be polluted
+    // by a sibling interning concurrently. macOS arm64 scheduling exposed
+    // this live: table_bytes() saw 4114 = 12 + sibling's "x"x4096 + 6-byte
+    // "基因" (CI-native aarch64-apple-darwin release job, 2026-09-29).
+    // All table-touching tests serialize on this mutex; zero new deps.
+    // House style (v2.4.0): no poisoning unwrap.
+    static TABLE_TEST_LOCK: Mutex<()> = Mutex::new(());
+
     #[test]
     fn intern_ids_are_stable_and_equal_bytes_get_equal_ids() {
+        let _guard = TABLE_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         reset_for_tests();
         let a = intern("promoter");
         let b = intern("promoter");
@@ -191,6 +202,7 @@ mod tests {
 
     #[test]
     fn intern_table_tracks_bytes_allocs_and_symbols() {
+        let _guard = TABLE_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         reset_for_tests();
         intern("abcd"); // 4 bytes, 1 alloc
         intern("abcdefgh"); // 8 bytes, 1 alloc
@@ -202,6 +214,7 @@ mod tests {
 
     #[test]
     fn intern_handles_empty_and_unicode_and_long() {
+        let _guard = TABLE_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         reset_for_tests();
         assert_eq!(intern(""), 1); // empty string is internable
         let u1 = intern("基因");
