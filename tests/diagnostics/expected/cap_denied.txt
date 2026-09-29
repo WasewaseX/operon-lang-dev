@@ -1,0 +1,2 @@
+error[E1010]: read denied, no capability grant covers 'config.json' (grant with --allow-read or --allow-all)
+  at main
