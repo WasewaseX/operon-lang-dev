@@ -4,14 +4,14 @@ Source of truth: `scripts/gen_doc_stats.py` (run from repo root).
 Validated by `scripts/check_docs_sync.py`. Hand-typed numbers in
 README/SPEC/BENCH are forbidden, link here instead.
 
-- **Version**: 2.3.0  · SPEC Status: v2.3.0
+- **Version**: 2.4.0  · SPEC Status: v2.3.0
 - **Keywords (parser reserved set)**: 60, table in [KEYWORDS.md](KEYWORDS.md)
-- **Std modules**: 28 (args, bigint, binary, bio, collections, csv, deque, fmt, fs, graph, hashing, heap, iter, json, logging, math, motifs, path, random, seq, serialize, set, strings, terminal, testing, time, unicode, url)
-- **Std functions (.op-level `gene` defs)**: 312
+- **Std modules**: 30 (args, bigint, binary, bio, collections, csv, deque, env, fmt, fs, graph, hashing, heap, iter, json, logging, math, motifs, path, process, random, seq, serialize, set, strings, terminal, testing, time, unicode, url)
+- **Std functions (.op-level `gene` defs)**: 326
 - **Red-team payload files**: 103
-- **Proof files**: 140 (of 302 test .op files)
-- **Proof run** (bin/operon): 185 files, 129 proofs, 1998 asserts
-- **Differential harness**: 221 match / 0 diverge (0 skipped) · granted lane: 11 cells
+- **Proof files**: 144 (of 306 test .op files)
+- **Proof run** (bin/operon): 188 files, 132 proofs, 2025 asserts
+- **Differential harness**: 225 match / 0 diverge (0 skipped) · granted lane: 11 cells
 - **CLI subcommands**: ast, bench, build, check, crispr, doc, explain, fix, fmt, graph, ir, keywords, lint, profile, repl, rna, test, version, watch
 - **LSP methods**: initialize, shutdown, textDocument/completion, textDocument/definition, textDocument/didChange, textDocument/didClose, textDocument/didOpen, textDocument/documentSymbol, textDocument/formatting, textDocument/hover, textDocument/prepareRename, textDocument/publishDiagnostics, textDocument/references, textDocument/rename, textDocument/semanticTokens, textDocument/signatureHelp
 
@@ -26,6 +26,7 @@ README/SPEC/BENCH are forbidden, link here instead.
 | std/collections | 6 |
 | std/csv | 7 |
 | std/deque | 12 |
+| std/env | 6 |
 | std/fmt | 8 |
 | std/fs | 12 |
 | std/graph | 23 |
@@ -37,6 +38,7 @@ README/SPEC/BENCH are forbidden, link here instead.
 | std/math | 18 |
 | std/motifs | 12 |
 | std/path | 9 |
+| std/process | 8 |
 | std/random | 6 |
 | std/seq | 0 |
 | std/serialize | 8 |
