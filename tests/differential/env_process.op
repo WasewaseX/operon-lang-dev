@@ -1,0 +1,65 @@
+# differential: std/env + std/process, the capability contract end to end
+# Deny-by-default (D-005) is the deterministic golden: both engines must
+# raise the SAME catchable interference stress (same kind, same message)
+# for env reads and subprocess spawns, and the safe wrappers must degrade
+# to the SAME fallbacks. Observable behavior lives at top level (proof
+# frames do not execute under `operon run`); the frame below re-pins the
+# same contract for the `operon test` lane. The granted lane (a value
+# returned / a child actually spawning) needs operator grants and is
+# exercised outside the zero-grant harness.
+use std/env as em
+use std/process as pr
+
+print("get: " + str(em.env_get("OPERON_DIFF_VAR")))
+print("get_or: " + str(em.env_get_or("OPERON_DIFF_VAR", "fb")))
+print("has: " + str(em.env_has("OPERON_DIFF_VAR")))
+print("granted: " + str(em.env_granted("OPERON_DIFF_VAR")))
+stress {
+    em.env_require("OPERON_DIFF_VAR")
+    print("require: LEAKED")
+} rescue (e) {
+    print("require: " + e.kind + " | " + e.message)
+}
+stress {
+    em.env_fetch("OPERON_DIFF_VAR")
+    print("fetch: LEAKED")
+} rescue (e) {
+    print("fetch: " + e.kind + " | " + e.message)
+}
+stress {
+    env("OPERON_DIFF_VAR")
+    print("raw env: LEAKED")
+} rescue (e) {
+    print("raw env: " + e.kind + " | " + e.message)
+}
+stress {
+    run("echo", ["hi"])
+    print("raw run: LEAKED")
+} rescue (e) {
+    print("raw run: " + e.kind + " | " + e.message)
+}
+print("run_or: " + str(pr.process_run_or("echo", [], "fb")))
+print("ok: " + str(pr.process_ok("echo", [])))
+print("output_or: " + str(pr.process_output_or("echo", [], "fb")))
+print("lines_or: " + str(pr.process_lines_or("echo", [], ["fb"])))
+print("succeeded: " + str(pr.process_succeeded([1, 2])))
+print("code: " + str(pr.process_code("junk")))
+
+frame proof {
+    stress {
+        env("OPERON_DIFF_VAR")
+        assert(false, "env must be denied by default")
+    } rescue (e) {
+        assert(e.kind == "interference", "env deny kind")
+        assert(e.message == "env denied, no capability grant covers 'OPERON_DIFF_VAR' (grant with --allow-env or --allow-all)", "env deny message")
+    }
+    stress {
+        run("echo", ["hi"])
+        assert(false, "run must be denied by default")
+    } rescue (e) {
+        assert(e.kind == "interference", "run deny kind")
+        assert(e.message == "run denied, no capability grant covers 'echo' (grant with --allow-run or --allow-all)", "run deny message")
+    }
+    assert(em.env_get_or("OPERON_DIFF_VAR", "fb") == "fb", "wrapper fallback")
+    assert(pr.process_run_or("echo", [], "fb") == "fb", "wrapper fallback")
+}

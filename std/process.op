@@ -1,0 +1,118 @@
+# std/process, safe subprocess wrappers over the capability-gated run()
+# builtin.
+#
+# The raw builtin shape (identical on both engines): run(prog, args) answers
+# a map {code: int, stdout: str, stderr: str, ok: bool}, ok true only for a
+# clean exit. Three failure surfaces, each documented and catchable:
+#   - grant refusal (default-deny): catchable stress kind `interference`,
+#     message "run denied, no capability grant covers 'PROG' (grant with
+#     --allow-run or --allow-all)";
+#   - the program cannot be spawned: stress kind `missing` (only the KIND is
+#     contractual, the embedded OS error text is platform-specific);
+#   - the child overruns its wall-clock timeout: killed and reported IN-BAND
+#     (code -1, ok false), never a stress; timeout default 10 s, .cell key
+#     run.timeout_ms, clamped 1..300000.
+# Grants: `--allow-run PROG` per program (repeatable, `*` wildcards all), or
+# `allow.run = "A,B"` in a .cell loaded explicitly with --cell.
+#
+# Children inherit a SCRUBBED environment (OS essentials plus variables
+# granted with --allow-env), never the parent's full environment: secrets
+# cannot leak to a child through the environment. Child wall time is charged
+# as fuel (1000 steps/ms), so `while true { run("sleep", ...) }` drains the
+# same budget as any other loop.
+#
+# What this module adds (NO grants of its own, mirrors the std/fs wrapper
+# philosophy): graceful degradation, on a refused grant OR an unspawnable
+# program the wrappers answer your fallback (or null / false) instead of
+# stressing, plus shape-checked accessors for the result map. The timeout
+# contract is NOT contained away: a timed-out child still answers the result
+# map, ok false tells you what happened.
+#
+# GAP (recorded honestly, src/ frozen this batch): run() is the whole
+# process surface. There is no child cwd override, no stdin feed, no shell
+# form, no fire-and-forget (background) spawn, no child env override beyond
+# the grant scrub, and no pid/kill surface. Each needs a DECISIONS entry
+# before a builtin lands (background spawn in particular interacts with the
+# structured-concurrency join contract); this module implements only what
+# exists today.
+
+## The full run() result map, or null on refusal / unspawnable program.
+## Never stresses. The map shape is {code, stdout, stderr, ok}; a timed-out
+## child still answers the map (code -1, ok false).
+gene process_run(prog, args) {
+    return process_run_or(prog, args, null)
+}
+
+## The full run() result map, or `fallback` on refusal / unspawnable
+## program. Never stresses.
+gene process_run_or(prog, args, fallback) {
+    stress {
+        return run(prog, args)
+    } rescue (e) {
+        return fallback
+    }
+}
+
+## The child's stdout as one string, or null on refusal / unspawnable.
+gene process_output(prog, args) {
+    return process_output_or(prog, args, null)
+}
+
+## The child's stdout, or `fallback` on refusal / unspawnable.
+gene process_output_or(prog, args, fallback) {
+    let r = process_run_or(prog, args, null)
+    if r == null {
+        return fallback
+    }
+    return r.stdout
+}
+
+## The child's stdout split into lines (trailing empty piece dropped), or
+## `fallback` on refusal / unspawnable.
+gene process_lines_or(prog, args, fallback) {
+    let out = process_output_or(prog, args, null)
+    if out == null {
+        return fallback
+    }
+    let parts = out.split("\n")
+    let n = len(parts)
+    if n > 0 and parts[n - 1] == "" {
+        return parts.slice(0, n - 1)
+    }
+    return parts
+}
+
+## True only when the child runs and exits 0; false on refusal, unspawnable
+## program, timeout, or a non-zero exit (one answer, documented). Inspect
+## process_run yourself when the causes must be told apart.
+gene process_ok(prog, args) {
+    let r = process_run_or(prog, args, null)
+    if r == null {
+        return false
+    }
+    return r.ok == true
+}
+
+## Shape-checked accessor: true/false from a run() result map's ok field,
+## null on anything that is not a result map (wrong type or missing field).
+gene process_succeeded(result) {
+    if type(result) != "map" {
+        return null
+    }
+    if not has(result, "ok") {
+        return null
+    }
+    return result.ok == true
+}
+
+## Shape-checked accessor: the exit code from a run() result map, null on
+## anything that is not a result map.
+gene process_code(result) {
+    if type(result) != "map" {
+        return null
+    }
+    if not has(result, "code") {
+        return null
+    }
+    return result.code
+}
