@@ -192,3 +192,63 @@ ast-grep 0 · semgrep 0 unjustified · bandit 0 real · spc 1445 (see drift
 above) · **CodeQL 0 findings** (rust-security-and-quality, 0 extraction
 errors) · cargo 199/0 · proofs 132/132 (2025 asserts) · redteam 106/0 ·
 harness vm lane 224/0 · clippy/fmt clean.
+
+## Session-9 addendum (2026-09-29) — oracle re-baseline + self-scan-artifact class
+
+### The promised re-baseline is done: proofs 132/132 on BOTH cores
+
+Session-8's addendum carried a promise to @session-20: re-baseline the oracle
+lane count when the W015 channels parity fix lands on main. It landed
+(4406e62, live cross-thread shapes moved to the Rust-only `tests/timing/`
+lane per the W18 pattern; channels.op re-pinned with both-core-safe rules).
+Fresh runs at e96d118: **Rust core 132/132, Python oracle 132/132** — the
+both-cores-green contract holds again after the W015 breakage. Historical
+note: the v2.3.0/v2.4.0 ledgers recorded 128/129 (channels.op was the 1);
+that number is now obsolete everywhere — quote 132/132 (or whatever the
+fresh count is) at the current tree.
+
+### New false-positive class documented: the SAST self-scan artifact
+
+A bare `semgrep scan` (no path args) sweeps `docs/` too — and
+`docs/static-analysis/reports/*.sarif` are ARCHIVED FINDING REPORTS: their
+rule-description text contains secret-shaped example strings by definition.
+The first fresh scan this session produced a 9th semgrep finding:
+`generic.secrets.security.detected-facebook-token` at
+`reports/semgrep-84411fd.sarif:1` — the secrets scanner flagging the
+project's own committed evidence. Same class risk exists for docs/codeql/.
+Fixes, both shipped here:
+
+1. `.semgrepignore` at repo root excludes `docs/static-analysis/reports/`
+   and `docs/codeql/` — guards bare `semgrep scan` invocations.
+2. Canonical command stays what `static-analysis.yml` already does:
+   explicit path args (`src/ bootstrap/ scripts/ .github/`). CI was never
+   affected; only operator runs without paths could trip on it.
+
+### Operator note: sgconfig.yml lives at the REPO ROOT
+
+`ast-grep scan --config docs/static-analysis/sgconfig.yml` fails ("No such
+file or directory") — the config has always been `./sgconfig.yml` (repo
+root, per this file's §rules line 18) with `ruleDirs: docs/static-analysis/
+sg-rules`. Correct invocation: `ast-grep scan src` from the repo root
+(auto-discovers the root config). This session's first battery attempt used
+the wrong path and produced a silent 0-finding run (stderr swallowed) —
+operators should eyeball the stderr, not just the count.
+
+### Battery at e96d118 (all tools reinstalled after sandbox wipe #6)
+
+ast-grep 0 (poisoning-guard rules hold: no-unwrap/mutex/condvar all clean) ·
+semgrep 8/8 justified at CI scope (2 args, 2 unsafe-usage, 4 current-exe —
+same set as v2.4.0, no drift) · bandit 34 at CI scope (bootstrap/ + scripts/):
+30 previously-documented benign classes + 4 new from W093's
+`bootstrap/validation_report.py` — B404/B603 are the same benign subprocess
+class as harness.py/oracle.py; the 2 B105 findings are FALSE POSITIVES
+(bandit's hardcoded-password heuristic matches the dict key `"pass"` in
+`{"pass": True}` result rows) · spc 1445 (stable vs session-8) · **CodeQL 0
+findings** (rust-security-and-quality, 35/35 files, 0 extraction errors).
+Raw evidence: `reports/*-e96d118-s9.*`, `docs/codeql/2026-09-29-e96d118-s9.sarif`.
+
+### Gates at e96d118 (full sweep)
+
+cargo 199/0 · proofs 132/132 both cores (2025 asserts) · harness 230/0 + vm
+lane 224/0 · redteam 106/0 · clippy 0 · fmt clean · oracle lane RE-BASELINED
+(see top of this addendum).
