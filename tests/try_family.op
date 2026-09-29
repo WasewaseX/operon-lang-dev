@@ -1,0 +1,82 @@
+# W06 stage 2 — try_* family: Result-returning variants of the
+# failure-prone core builtins (SPEC §9 compat note). The legacy null
+# contracts are untouched; try_* additions are pinned here AND as a
+# differential target (tests/differential/try_family.op).
+
+frame proof {
+    # ---- try_num: int-first parse, then float, raw string in the payload
+    assert(is_ok(try_num("42")), "int parse is Ok")
+    assert(try_num("42") == ok(42), "payload is the int")
+    assert(try_num(" 2.5 ") == ok(2.5), "trim then float")
+    assert(is_err(try_num("x9")), "bad string is Err")
+    assert(try_num("x9") == err("num('x9') failed"), "exact message shape")
+    assert(try_num(7) == ok(7), "passthrough int")
+    assert(is_err(try_num([1])), "non-scalar refused as Err, not a stress")
+
+    # ---- try_index: range-checked read
+    let l = [10, 20]
+    assert(try_index(l, 0) == ok(10), "in range is Ok")
+    assert(try_index(l, 2) == err("index 2 out of range for list of length 2"), "exact range message")
+    assert(is_err(try_index(l, -1)), "negative refused")
+    assert(is_err(try_index("no", 0)), "non-list refused")
+
+    # ---- try_get: map lookup without the null+note miss
+    let m = {a: 1}
+    assert(try_get(m, "a") == ok(1), "hit is Ok")
+    assert(is_err(try_get(m, "zz")), "miss is Err")
+    assert(is_err(try_get(l, "a")), "non-map refused")
+
+    # ---- try_pop: mutating pop as a Result
+    let p = [1]
+    assert(try_pop(p) == ok(1), "pop returns the value")
+    assert(len(p) == 0, "pop mutates")
+    assert(is_err(try_pop(p)), "empty pop is Err, not a note")
+
+    # ---- composition with ?! and rescue (D-014 contract)
+    gene read_at(list, i) {
+        return try_index(list, i)?!
+    }
+    gene rescue_demo(list, i) {
+        stress {
+            let v = read_at(list, i)?!
+            return ok(v)
+        } rescue (e) {
+            return err(e.kind)
+        }
+    }
+    assert(read_at(l, 1) == 20, "?! unwraps Ok to the payload")
+    assert(rescue_demo(l, 99) == err("index 99 out of range for list of length 2"), "propagated Err IS the return value (crosses rescue, D-014)")
+    assert(rescue_demo(l, 0) == ok(10), "normal flow through the same rescue")
+    # the unwrap BUILTIN (not ?!) is the rescue-catchable exceptional tier
+    let caught_kind = ""
+    stress {
+        unwrap(try_num("nope"))
+    } rescue (e) {
+        caught_kind = e.kind
+    }
+    assert(caught_kind == "unwrap", "unwrap on Err raises the catchable unwrap stress")
+
+    # ---- the LEGACY contracts did not move (2.x compat): num stays
+    # null-contract; the missing/index surfaces stay tier-3 `missing`
+    # stresses — that is exactly why the try_* additions exist
+    assert(num("nope") == 0, "num stays null-contract (0 + note)")
+    let mut_probe = []
+    let legacy_pop = pop(mut_probe)
+    assert(legacy_pop == null, "pop stays null-contract on empty")
+    let legacy_key_kind = ""
+    stress {
+        let m2 = {}
+        m2["zz"]
+    } rescue (e) {
+        legacy_key_kind = e.kind
+    }
+    assert(legacy_key_kind == "missing", "missing key read stays a missing stress")
+    let legacy_idx_kind = ""
+    stress {
+        let l2 = [1]
+        l2[5]
+    } rescue (e) {
+        legacy_idx_kind = e.kind
+    }
+    assert(legacy_idx_kind == "missing", "out-of-range read stays a missing stress")
+}

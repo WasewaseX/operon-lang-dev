@@ -487,7 +487,15 @@ contract, families are distinct (`some(1) != ok(1)`) and `type()` returns `optio
   plain value) it raises Stress kind `unwrap`, a *programmer-contract* violation, i.e.
   tier 3, deliberately rescue-catchable. Expected failures belong in the value layer
   (check `is_ok` first, or propagate).
-- **Repr**: `Ok(3)`, `Err("x")`, `Some(3)`, `None`. **Truthiness**: Some/Ok are truthy,
+- **The `try_*` family (W06 stage 2)**: Result-returning variants of the failure-prone
+  core builtins. `try_num(s)` (parse as int, then float, same rules as `num`; the err
+  payload renders the RAW input: `Err("num('x9') failed")`), `try_index(l, i)`
+  (`Err("index 3 out of range for list of length 3")`), `try_get(m, k)`
+  (`Err("no key 'zz'")`), `try_pop(l)` (`Err("pop from an empty list")`), the latter
+  still mutating. Non-matching argument TYPES are `Err` payloads (not stresses); wrong
+  ARITY stays an `unfolded` stress (the ok/err rule). Pinned on both engines:
+  tests/differential/try_family.op + tests/try_family.op.
+- - **Repr**: `Ok(3)`, `Err("x")`, `Some(3)`, `None`. **Truthiness**: Some/Ok are truthy,
   None/Err falsy (`if (result)` reads naturally). **JSON**: `{"ok":1}`, `{"err":"x"}`,
   `{"some":1}`; None serializes as `null` (in-memory lossless, JSON is a Map-shaped view).
 - **Equality**: same tag + equal payloads; `None == None`.
@@ -512,10 +520,12 @@ contract, families are distinct (`some(1) != ok(1)`) and `type()` returns `optio
 - Grammatically `?!` is one token, lexed before the ternary's bare `?`, the two never
   collide.
 
-**Compatibility note (stage-2 roadmap)**: std functions that fail today return `null`
-+tier-1 notes. They migrate to Result returns per-function, each documented in STDLIB.md
-at migration time; the null contract stays the default for 2.x so existing programs keep
-their byte-identical behavior.
+**Compatibility note (stage-2 roadmap, in progress)**: std functions and builtins that
+fail today return `null` + tier-1 notes or raise tier-3 stresses. They migrate to Result
+returns per-function, each documented at migration time; the null/stress contracts stay
+the default for 2.x so existing programs keep their byte-identical behavior. First
+migrated family (v2.6.0): the `try_*` core builtins above — additions, not replacements;
+the legacy `num`/index/key-read/pop contracts are pinned UNCHANGED in tests/try_family.op.
 
 Runtime failures raise a **Stress** value: Map `{"kind": Str, "message": Str}`. Kinds:
 `unfolded` (type errors), `missing` (bad index/key/member/null-deref), `overflow` (int overflow, depth limit, resource ceilings), `burned` (assertion failures, resource errors), `interference` (capability-sandbox denials, §9b), `unwrap` (D-014: `unwrap` on None/Err or a plain value), `any` (catch-all position only).

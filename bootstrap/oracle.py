@@ -3009,7 +3009,7 @@ http_get serve recv_request send_response json_parse json_str env call items py
 re_match re_find re_groups unix_time date_parts date_fmt
 grapheme_len fold_case char_at char_slice
 norm_nfc norm_nfd casefold char_category weak strengthen
-some none ok err is_some is_none is_ok is_err unwrap unwrap_or
+some none ok err is_some is_none is_ok is_err unwrap unwrap_or try_num try_index try_get try_pop
 enumerate zip sorted reversed any all first last take drop unique flatten chunk round clamp divmod
 channel send recv close select""".split())
 
@@ -6810,6 +6810,57 @@ class Interp:
                     return v.payload
                 raise Stress("unwrap", f"unwrap on {v.tag}")
             raise Stress("unwrap", f"unwrap on a plain {type_name(v)} value")
+        # ---- try_* family (W06 stage 2): Result-returning variants of the
+        # failure-prone core builtins; err payload = message Str. The
+        # messages must match the Rust core byte-for-byte (stdout-visible).
+        if name == "try_num":
+            if len(args) != 1:
+                raise Stress("unfolded", "try_num(s) needs exactly 1 argument")
+            v = args[0]
+            if isinstance(v, bool):
+                return Variant("Err", "num() failed: cannot parse bool as a number")
+            if isinstance(v, (int, float)):
+                return Variant("Ok", v)
+            if isinstance(v, str):
+                t = v.strip()
+                try:
+                    return Variant("Ok", int(t))
+                except ValueError:
+                    try:
+                        return Variant("Ok", float(t))
+                    except ValueError:
+                        return Variant("Err", f"num('{v}') failed")
+            return Variant("Err", f"num() failed: cannot parse {type_name(v)} as a number")
+        if name == "try_index":
+            if len(args) != 2:
+                raise Stress("unfolded", "try_index(l, i) needs exactly 2 arguments")
+            l, i = args[0], args[1]
+            if not isinstance(l, list):
+                return Variant("Err", f"try_index needs a list, got {type_name(l)}")
+            if not isinstance(i, int) or isinstance(i, bool):
+                return Variant("Err", f"index needs an int, got {type_name(i)}")
+            if i < 0 or i >= len(l):
+                return Variant("Err", f"index {i} out of range for list of length {len(l)}")
+            return Variant("Ok", l[i])
+        if name == "try_get":
+            if len(args) != 2:
+                raise Stress("unfolded", "try_get(m, k) needs exactly 2 arguments")
+            m, k = args[0], args[1]
+            if not isinstance(m, dict):
+                return Variant("Err", f"try_get needs a map, got {type_name(m)}")
+            for mk, mv in m.items():
+                if deep_eq(mk, k):
+                    return Variant("Ok", mv)
+            return Variant("Err", f"no key '{v_display(k)}'")
+        if name == "try_pop":
+            if len(args) != 1:
+                raise Stress("unfolded", "try_pop(l) needs exactly 1 argument")
+            l = args[0]
+            if not isinstance(l, list):
+                return Variant("Err", f"try_pop needs a list, got {type_name(l)}")
+            if not l:
+                return Variant("Err", "pop from an empty list")
+            return Variant("Ok", l.pop())
         if name == "random":
             x = self.rng
             x ^= (x >> 12) & 0xFFFFFFFFFFFFFFFF
