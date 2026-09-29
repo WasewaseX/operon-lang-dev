@@ -449,7 +449,9 @@ gene main() {
 ```
 
 Bundled modules: `strings`, `collections`, `iter`, `math`, `seq`, `bio` (sequence utilities,
-also useful as plain string/list exercises). Native kernels back the heavy parts:
+also useful as plain string/list exercises), `env` + `process` (capability-gated reads of
+environment variables and subprocesses; a denied grant answers your fallback instead of
+crashing). Native kernels back the heavy parts:
 `distance(a, b)` is a bit-parallel edit distance in C++, `codon(seq)` is a usage scorer,
 call them like any function.
 
@@ -497,7 +499,7 @@ scope {
 
 ## 12. Where to go next
 
-- **Read the standard library**: `std/*.op`, six small modules, all Operon.
+- **Read the standard library**: `std/*.op`, all Operon, meant to be read.
 - **Read the proof suite**: `tests/`, 50 files, every language behavior asserted.
 - **Run the app**: `apps/genomelab/genomelab.op`, a small DNA-toolbox CLI built entirely in Operon.
 - **The spec**: `SPEC.md`, the full contract, organized by feature.
