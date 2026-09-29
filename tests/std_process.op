@@ -1,0 +1,36 @@
+# differential: std/process, capability-gated subprocess wrappers
+# Default-deny is the security invariant (D-005), so the deterministic
+# golden is the RESCUE contract: without a grant, run() refuses with a
+# byte-pinned interference message and every wrapper degrades to its
+# fallback instead of stressing. The granted lane (a child actually spawns,
+# the result map {code, stdout, stderr, ok} comes back) needs an operator
+# grant (`--allow-run prog`), not this zero-grant file.
+use std/process as pr
+
+frame proof {
+    # raw builtin: refusal is catchable, exact kind and message
+    stress {
+        run("echo", ["nope"])
+        assert(false, "run must be denied by default")
+    } rescue (e) {
+        assert(e.kind == "interference", "raw run deny kind")
+        assert(e.message == "run denied, no capability grant covers 'echo' (grant with --allow-run or --allow-all)", "raw run deny message is byte-pinned")
+    }
+
+    # graceful wrappers: fallbacks, never a stress
+    assert(pr.process_run("echo", ["nope"]) == null, "process_run: null on denial")
+    assert(pr.process_run_or("echo", ["nope"], "fb") == "fb", "process_run_or: fallback on denial")
+    assert(pr.process_output("echo", ["nope"]) == null, "process_output: null on denial")
+    assert(pr.process_output_or("echo", ["nope"], "fb") == "fb", "process_output_or: fallback on denial")
+    assert(pr.process_lines_or("echo", ["nope"], ["fb"]) == ["fb"], "process_lines_or: fallback on denial")
+    assert(pr.process_ok("echo", ["nope"]) == false, "process_ok: false on denial")
+
+    # shape-checked accessors refuse junk honestly (null, not a wrong answer)
+    assert(pr.process_succeeded("junk") == null, "process_succeeded refuses a string")
+    assert(pr.process_code(7) == null, "process_code refuses an int")
+    assert(pr.process_succeeded([]) == null, "process_succeeded refuses a list")
+}
+
+main {
+    promote("std/process: ok")
+}

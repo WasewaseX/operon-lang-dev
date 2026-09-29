@@ -1,0 +1,23 @@
+# W093 validation probe, V3 (ring kinetics, the basal-leak surface).
+# Companion measurement program for bootstrap/validation_registry.json and
+# bootstrap/validation_report.py. It asserts NOTHING. The enforcing test
+# remains tests/repressi_params.op. Folds 12 ticks with basal 0.5 and
+# records each node minimum: the basal leak lifts every ring minimum off
+# the zero floor (repressed promoters never reach zero).
+repressilator p -> q -> r basal 0.5
+let min_p = 5.0
+let min_q = 5.0
+let min_r = 5.0
+let i = 0
+while i < 12 {
+    repressi_next()
+    let st = repressi_state()
+    if st.p < min_p { min_p = st.p }
+    if st.q < min_q { min_q = st.q }
+    if st.r < min_r { min_r = st.r }
+    i = i + 1
+}
+promote("RESULT v3_basal_min_p={min_p}")
+promote("RESULT v3_basal_min_q={min_q}")
+promote("RESULT v3_basal_min_r={min_r}")
+promote("RESULT v3_basal_above_floor={min_p > 0.2 and min_q > 0.2 and min_r > 0.2}")

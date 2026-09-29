@@ -1,0 +1,48 @@
+# differential: std/env, capability-gated environment reads
+# Default-deny is the security invariant (D-005), so the deterministic
+# golden is the RESCUE contract: without a grant, the raw builtin refuses
+# with a byte-pinned interference message, the graceful wrappers answer
+# fallbacks instead of stressing, and the loud paths (env_fetch /
+# env_require) keep the refusal honest. The granted lane (a value actually
+# returned) needs an operator grant, it is exercised by
+# `--allow-env` / granted cells, not by this zero-grant file.
+use std/env as em
+
+frame proof {
+    # raw builtin: refusal is catchable, exact kind and message
+    stress {
+        env("OPERON_STD_ENV_PROBE")
+        assert(false, "env must be denied by default")
+    } rescue (e) {
+        assert(e.kind == "interference", "raw env deny kind")
+        assert(e.message == "env denied, no capability grant covers 'OPERON_STD_ENV_PROBE' (grant with --allow-env or --allow-all)", "raw env deny message is byte-pinned")
+    }
+
+    # graceful wrappers: fallbacks, never a stress
+    assert(em.env_get("OPERON_STD_ENV_PROBE") == null, "env_get: null on denial")
+    assert(em.env_get_or("OPERON_STD_ENV_PROBE", "fb") == "fb", "env_get_or: fallback on denial")
+    assert(em.env_has("OPERON_STD_ENV_PROBE") == false, "env_has: false on denial")
+    assert(em.env_granted("OPERON_STD_ENV_PROBE") == false, "env_granted: false on denial")
+
+    # loud paths: the refusal keeps its kind and canonical message
+    stress {
+        em.env_require("OPERON_STD_ENV_PROBE")
+        assert(false, "env_require must surface the refusal")
+    } rescue (e) {
+        assert(e.kind == "interference", "env_require keeps the interference kind")
+        assert(e.message == "env denied, no capability grant covers 'OPERON_STD_ENV_PROBE' (grant with --allow-env or --allow-all)", "env_require keeps the canonical message")
+    }
+    stress {
+        em.env_fetch("OPERON_STD_ENV_PROBE")
+        assert(false, "env_fetch must surface the refusal")
+    } rescue (e) {
+        assert(e.kind == "interference", "env_fetch keeps the interference kind")
+    }
+
+    # option tags stay distinct for the env_fetch contract
+    assert(is_none(none()) and is_some(some("x")), "option sanity")
+}
+
+main {
+    promote("std/env: ok")
+}

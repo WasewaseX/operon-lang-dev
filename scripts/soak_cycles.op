@@ -1,0 +1,43 @@
+# W13 soak: 300k iterations of (a) plain churn (freed immediately) and
+# (b) self-referencing pairs (leak by D-013, gauge must count them).
+# memory() sampled every 100k: the cycles gauge tracks the leaked pairs,
+# arena stays flat (the intern table is not touched by value churn), and
+# the prune path is probed at the end via the weak/drop pattern.
+gene churn() {
+    let junk = [[1, 2], {k: 3}]
+    return len(junk)
+}
+gene leak_pair() {
+    let a = []
+    let b = [a]
+    push(a, b)
+    return true
+}
+let i = 0
+let s0 = memory()
+while i < 1000000 {
+    let _ = churn()
+    leak_pair()
+    i += 1
+    if i % 250000 == 0 {
+        let m = memory()
+        print("at " + str(i) + ": cycles=" + str(m["cycles"]) + " arena=" + str(m["arena_bytes"]) + " interns=" + str(m["interns"]))
+    }
+}
+let s1 = memory()
+assert(s1["cycles"] > s0["cycles"], "cycle gauge grew with the leaked pairs")
+assert(s1["arena_bytes"] == s0["arena_bytes"], "intern table untouched by value churn")
+print("soak end: cycles=" + str(s1["cycles"]) + " allocs=" + str(s1["allocs"]))
+
+# --- prune path (SPEC 19e): a cycle BROKEN by mutation must be proven dead
+# and pruned by the gauge; death of the leaked pairs above can never be
+# proven (they keep each other alive), that is the D-013 honest leak.
+let base = memory()["cycles"]
+let selfy = []
+push(selfy, selfy)
+let grown = memory()["cycles"]
+assert(grown > base, "self-cycle registers")
+pop(selfy)
+let pruned = memory()["cycles"]
+assert(pruned == grown - 1, "breaking the edge prunes the registration")
+print("prune probe: grown=" + str(grown) + " pruned=" + str(pruned))

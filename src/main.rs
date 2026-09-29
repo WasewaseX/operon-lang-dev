@@ -31,6 +31,7 @@ fn main() {
         Ok(()) => {}
         Err(_) => {
             eprintln!("[fatal] internal toolchain panic, this input crashed the runtime");
+            // ast-grep-ignore: no-std-process-exit-in-core
             std::process::exit(101);
         }
     }
@@ -40,6 +41,7 @@ fn real_main() {
     let argv: Vec<String> = std::env::args().skip(1).collect();
     if argv.is_empty() {
         usage();
+        // ast-grep-ignore: no-std-process-exit-in-core
         std::process::exit(2);
     }
     let cmd = argv[0].clone();
@@ -49,6 +51,7 @@ fn real_main() {
     // "unknown command". Same usage as the no-args case, exit 0.
     if cmd == "--help" || cmd == "-h" || cmd == "help" {
         usage();
+        // ast-grep-ignore: no-std-process-exit-in-core
         std::process::exit(0);
     }
 
@@ -84,10 +87,16 @@ fn real_main() {
     // promise what build does not do; both refuse with their design pointer.
     let mut build_bundle = false;
     let mut build_native = false;
+    // W68: `operon rna --check` validates a patch and writes NOTHING, ever
+    let mut rna_check = false;
     let mut trace_grn_path: Option<String> = None;
-    // W09 A2: run gene bodies through the OIR1 bytecode machine (src/vm.rs);
-    // calls/gates stay on the shared path, so output is byte-identical
-    let mut use_vm = false;
+    // W09 A2/A6: run gene bodies through the OIR1 bytecode machine
+    // (src/vm.rs); calls/gates stay on the shared path, so output is
+    // byte-identical. DEFAULT ON since the A6 flip (v2.6.0 release
+    // boundary, D-009); --no-vm opts back to the tree-walk for the
+    // differential harness and debugging. The vm lane parity (219/219)
+    // and the differential harness hold for both engines.
+    let mut use_vm = true;
     // W08 phase 1: `operon debug` break lines (--break N, repeatable)
     #[allow(unused_assignments)]
     let mut debug_mode = false;
@@ -106,8 +115,14 @@ fn real_main() {
     let mut test_filter: Option<String> = None;
     let mut list_only = false;
     let mut repeat = 1usize;
-    // W41: check output format, "score" (default this cycle) | "diag"
-    let mut check_format = String::from("score");
+    // W41: check output format, "diag" is the default, "score" is the
+    // transitional escape (--format score) for anything that still wants the
+    // school-grade banner; nothing in scripts/ or CI parses the grade.
+    let mut check_format = String::from("diag");
+    // W48: lint-side CLI allow list (--allow rule1,rule2, repeatable);
+    // check-side --style inlines the lint-owned style stream in diag output.
+    let mut lint_allows: Vec<String> = Vec::new();
+    let mut check_style = false;
     // W47 (ROADMAP-100): formatter configuration, file first, flags override
     let mut fmt_indent: Option<usize> = None;
     let mut fmt_quotes: Option<tools::QuoteMode> = None;
@@ -212,6 +227,27 @@ fn real_main() {
                 i += 1;
                 opts.cell = rest.get(i).cloned();
             }
+            // W48: file-wide lint suppression, `--allow unused-gene,dead-const`
+            // (repeatable). Rule names or stable codes. Line-local suppression
+            // stays with the '// allow:' comment mechanism.
+            "--allow" => {
+                i += 1;
+                match rest.get(i) {
+                    Some(list) => {
+                        for r in list.split(',') {
+                            let r = r.trim();
+                            if !r.is_empty() {
+                                lint_allows.push(r.to_string());
+                            }
+                        }
+                    }
+                    None => die("--allow needs a rule list (e.g. --allow unused-gene)"),
+                }
+            }
+            // W48: inline the lint-owned style stream in check's diag output
+            // (default: a labeled count + pointer, the split is about command
+            // purpose and defaults, not about hiding data)
+            "--style" => check_style = true,
             "--rna" => {
                 i += 1;
                 opts.rna = rest.get(i).cloned();
@@ -249,6 +285,8 @@ fn real_main() {
             // W086: honest refusal flags for the build subcommand (W87/W85).
             "--bundle" => build_bundle = true,
             "--native" => build_native = true,
+            // W68: rna validation mode (no application, no file mutation)
+            "--check" => rna_check = true,
             // W067 v2: the AST reprint drops plain `#` comments; the v2 rna
             // engine refuses such files unless this flag is passed.
             "--allow-comment-drop" => allow_comment_drop = true,
@@ -263,9 +301,15 @@ fn real_main() {
                 }
                 trace_grn_path = p;
             }
-            // W09 A2: the bytecode lane (same semantics, machine-executed)
+            // W09 A2: the bytecode lane (same semantics, machine-executed);
+            // A6: it is the DEFAULT, the flag remains for explicitness
             "--vm" => {
                 use_vm = true;
+            }
+            // W09 A6: opt back to the tree-walking interpreter (--interp is
+            // the design-contract name, docs/vm-design.md §9; --no-vm alias)
+            "--interp" | "--no-vm" => {
+                use_vm = false;
             }
             // W11: the optimization pipeline level
             "--opt" => {
@@ -301,9 +345,10 @@ fn real_main() {
             "--list" => list_only = true,
             "--repeat" => {
                 i += 1;
+                // W49: 1..=1000, a flake-hunt re-run cap, not an unbounded loop.
                 match rest.get(i).map(|s| s.parse::<usize>()) {
-                    Some(Ok(n)) if n >= 1 => repeat = n,
-                    _ => die("--repeat needs a number >= 1"),
+                    Some(Ok(n)) if (1..=1000).contains(&n) => repeat = n,
+                    _ => die("--repeat needs a number 1..=1000 (flake-hunt re-runs)"),
                 }
             }
             "--format" => {
@@ -374,20 +419,22 @@ fn real_main() {
     match cmd.as_str() {
         "--version" | "-V" => {
             println!(
-                "Operon {} (rust-core, cpp-kernel)",
+                "Operon {}-vm (rust-core, cpp-kernel)",
                 env!("CARGO_PKG_VERSION")
             );
         }
         "version" => {
             println!(
-                "Operon {} (rust-core, cpp-kernel)",
+                "Operon {}-vm (rust-core, cpp-kernel)",
                 env!("CARGO_PKG_VERSION")
             );
         }
         "repl" => {
             repl();
         }
-        // W39 (ROADMAP-100): AST dump, the Total Grammar debugging window.
+        // W39 (ROADMAP-100): AST dump, the Total Grammar structural window.
+        // Purely structural: repair notes are W38 `explain`'s surface and are
+        // never printed here, default or otherwise.
         "ast" => {
             let file = match positional.first() {
                 Some(f) => f.clone(),
@@ -396,12 +443,13 @@ fn real_main() {
             let src = std::fs::read_to_string(&file)
                 .unwrap_or_else(|e| die(&format!("cannot read {}: {}", file, e)));
             let prog = parser::parse(&src);
-            // W39 + fuzz finding (2026-09-26): `{:#?}` pretty-Debug grows
-            // quadratically with AST nesting depth (indent × depth), so a
+            // W39 + fuzz finding (2026-09-26): the pretty tree grows
+            // quadratically with nesting depth (indent x depth), so a
             // pathological-but-parseable input (thousands of `(`) turns `ast`
             // into a hang. check() parses the same file in milliseconds, the
             // parser is fine, the PRINTER is the problem. Guard: measure
-            // source nesting depth; beyond 400 levels print compact Debug.
+            // source nesting depth; beyond 400 print the compact one-line
+            // tree (same structure, no indentation).
             let depth = src
                 .bytes()
                 .fold((0usize, 0usize), |(d, m), b| match b {
@@ -415,33 +463,22 @@ fn real_main() {
                 .1;
             let pretty = depth <= 400;
             if json {
-                // v1: escaped Debug payload + structured counts; a stable-schema
-                // JSON printer is tracked as W39.2 in ROADMAP-100.
-                let dbg = if pretty {
-                    format!("{:#?}", prog.stmts)
-                } else {
-                    format!("{:?}", prog.stmts)
-                };
+                // W39.2: structural JSON, the same tree as the text form.
                 println!(
-                    "{{\"file\":\"{}\",\"format\":\"debug-v1\",\"stmts\":{},\"notes\":{},\"ast\":\"{}\"}}",
+                    "{{\"file\":\"{}\",\"format\":\"ast-json-v1\",\"stmts\":{},\"notes\":{},\"ast\":{}}}",
                     tools::json_escape(&file),
                     prog.stmts.len(),
                     prog.notes.len(),
-                    tools::json_escape(&dbg)
+                    tools::ast_dump_json(&prog)
                 );
+            } else if pretty {
+                println!("{}", tools::ast_dump(&prog, true));
             } else {
-                for n in &prog.notes {
-                    println!("[note] rung {}: line {}: {}", n.rung, n.line, n.message);
-                }
-                if pretty {
-                    println!("{:#?}", prog.stmts);
-                } else {
-                    eprintln!(
-                        "[ast] nesting depth {} exceeds 400, compact dump (pretty Debug is quadratic on deep trees)",
-                        depth
-                    );
-                    println!("{:?}", prog.stmts);
-                }
+                eprintln!(
+                    "[ast] nesting depth {} exceeds 400, compact dump (pretty dump is quadratic on deep trees)",
+                    depth
+                );
+                println!("{}", tools::ast_dump(&prog, false));
             }
         }
         // W38 (ROADMAP-100): explain, what did Total Grammar do to my file?
@@ -507,58 +544,111 @@ fn real_main() {
                 }
             }
         }
-        // W48/W42/W43 (ROADMAP-100): the linter front door, `check --format
-        // diag` shares this engine, so there is one rule set and two views.
+        // W48 (ROADMAP-100): the style/quality front door. `operon lint` runs
+        // ONLY the lint stream of the shared rule engine (see src/lint.rs for
+        // the ownership table); correctness lives in `operon check`. Flags:
+        //   --strict  any finding = exit 3 (CI gate policy, W37 escalation)
+        //   --allow   file-wide CLI suppression on top of '// allow:' comments
+        //   --json    {code,severity,line,rule,message} findings array
         "lint" => {
-            let file = match positional.first() {
-                Some(f) => f.clone(),
-                None => die("lint needs a file"),
-            };
-            let src = std::fs::read_to_string(&file)
-                .unwrap_or_else(|e| die(&format!("cannot read {}: {}", file, e)));
-            let prog = parser::parse(&src);
-            let mut findings = operon::lint::lint(&prog);
-            // W66: validate a .cell payload against the schema on request
-            if let Some(cell) = opts.cell.clone() {
-                match std::fs::read_to_string(&cell) {
-                    Ok(cs) => findings.extend(operon::lint::lint_cell(&cs)),
-                    Err(e) => die(&format!("cannot read {}: {}", cell, e)),
-                }
+            if positional.is_empty() {
+                die("lint needs at least one file");
             }
+            if let Some(f) = positional.iter().find(|p| std::path::Path::new(p).is_dir()) {
+                die(&format!(
+                    "lint: '{}' is a directory, pass .op files (or run `operon lint` per file)",
+                    f
+                ));
+            }
+            let mut results: Vec<(String, Vec<operon::lint::Finding>)> = Vec::new();
+            for file in &positional {
+                let src = std::fs::read_to_string(file)
+                    .unwrap_or_else(|e| die(&format!("cannot read {}: {}", file, e)));
+                let prog = parser::parse(&src);
+                let mut findings = operon::lint::lint_style(&prog);
+                // W66: validate a .cell payload against the schema on request;
+                // cell-schema rules are check-owned, they surface here only
+                // because the payload was explicitly handed to the linter
+                if let Some(cell) = opts.cell.clone() {
+                    match std::fs::read_to_string(&cell) {
+                        Ok(cs) => findings.extend(operon::lint::lint_cell(&cs)),
+                        Err(e) => die(&format!("cannot read {}: {}", cell, e)),
+                    }
+                }
+                // line-local comment suppression, then the file-wide --allow list
+                operon::lint::apply_allows(&mut findings, &src);
+                operon::lint::apply_cli_allows(&mut findings, &lint_allows);
+                results.push((file.clone(), findings));
+            }
+            let total: usize = results.iter().map(|(_, f)| f.len()).sum();
             if json {
-                let items: Vec<String> = findings
-                    .iter()
-                    .map(|f| {
-                        format!(
-                            "{{\"line\":{},\"rule\":\"{}\",\"severity\":\"{}\",\"message\":\"{}\"}}",
-                            f.line,
-                            f.rule,
-                            f.sev.name(),
-                            tools::json_escape(&f.message)
-                        )
-                    })
-                    .collect();
-                println!(
-                    "{{\"file\":\"{}\",\"findings\":[{}]}}",
-                    tools::json_escape(&file),
-                    items.join(",")
-                );
-            } else if findings.is_empty() {
-                println!("lint: {}, clean", file);
-            } else {
-                for f in &findings {
-                    println!(
-                        "  {}:{}: {} [{}] ({})",
-                        file,
-                        f.line,
-                        f.sev.name(),
-                        f.rule,
-                        f.message
-                    );
+                let file_json = |file: &str, fs: &[operon::lint::Finding]| {
+                    let items: Vec<String> = fs
+                        .iter()
+                        .map(|f| {
+                            format!(
+                                "{{\"code\":\"{}\",\"severity\":\"{}\",\"line\":{},\"rule\":\"{}\",\"message\":\"{}\"}}",
+                                f.code,
+                                f.sev.name(),
+                                f.line,
+                                f.rule,
+                                tools::json_escape(&f.message)
+                            )
+                        })
+                        .collect();
+                    format!(
+                        "{{\"file\":\"{}\",\"findings\":[{}]}}",
+                        tools::json_escape(file),
+                        items.join(",")
+                    )
+                };
+                if results.len() == 1 {
+                    // back-compat single-file shape (now with stable codes)
+                    println!("{}", file_json(&results[0].0, &results[0].1));
+                } else {
+                    let parts: Vec<String> =
+                        results.iter().map(|(f, fs)| file_json(f, fs)).collect();
+                    println!("{{\"results\":[{}],\"total\":{}}}", parts.join(","), total);
                 }
-                println!("lint: {} finding(s)", findings.len());
+            } else {
+                for (file, fs) in &results {
+                    if fs.is_empty() {
+                        println!("lint: {}, clean", file);
+                    } else {
+                        for f in fs {
+                            println!(
+                                "  {}:{}: {} [{}] ({})",
+                                file,
+                                f.line,
+                                f.sev.name(),
+                                f.rule,
+                                f.message
+                            );
+                        }
+                    }
+                }
+                if results.len() == 1 {
+                    if total > 0 {
+                        println!("lint: {} finding(s)", total);
+                    }
+                    // the clean single-file line was already printed above
+                } else {
+                    println!("lint: {} finding(s) in {} file(s)", total, results.len());
+                }
             }
-            if findings.iter().any(|f| f.sev == operon::lint::Sev::Error) {
+            // W48 exit-code contract: lint is advisory, exit 0 unless --strict
+            // escalates (any finding = 3) or an Error-severity finding exists
+            // (none in the lint stream today; the rule is kept for append-only
+            // safety, mirroring the pre-W48 behavior).
+            if strict && total > 0 {
+                // ast-grep-ignore: no-std-process-exit-in-core
+                std::process::exit(3);
+            }
+            if results
+                .iter()
+                .any(|(_, fs)| fs.iter().any(|f| f.sev == operon::lint::Sev::Error))
+            {
+                // ast-grep-ignore: no-std-process-exit-in-core
                 std::process::exit(1);
             }
         }
@@ -677,6 +767,7 @@ fn real_main() {
                         // drain before the exit.
                         write_grn_trace(&l.interp, &trace_grn_path);
                         tools::flush_notes(&l, opts.quiet);
+                        // ast-grep-ignore: no-std-process-exit-in-core
                         std::process::exit(1);
                     }
                 }
@@ -690,6 +781,7 @@ fn real_main() {
                 .map(|v| v == "true")
                 .unwrap_or(false);
             if (strict || strict_cell) && l.interp.notes.iter().any(|n| n.rung >= 3) {
+                // ast-grep-ignore: no-std-process-exit-in-core
                 std::process::exit(3);
             }
         }
@@ -699,19 +791,35 @@ fn real_main() {
                 None => die("check needs a file"),
             };
             let rep = tools::check(&file, &opts, nmd, purge);
-            // W41 (ROADMAP-100): --format diag renders sectioned diagnostics
-            // (error/warning/repair/style) instead of the school-grade banner.
-            // Default stays `score` this cycle so CI runners keep parsing the
-            // old shape; the default flip lands after one green CI cycle.
+            // W48 (ROADMAP-100): check = correctness. Its slice of the shared
+            // rule engine is wrong-arity + const-reassign; phantoms, NMD and
+            // cell keys stay check-side (tools.rs). The style/quality stream
+            // moved to `operon lint` and is NOT duplicated in the default
+            // diag output: a labeled count + pointer keeps the data visible
+            // without doubling the stream; --style inlines it.
+            let src = std::fs::read_to_string(&file).unwrap_or_default();
+            let prog = parser::parse(&src);
+            let mut findings = operon::lint::lint_correctness(&prog);
+            operon::lint::apply_allows(&mut findings, &src);
+            let mut style = operon::lint::lint_style(&prog);
+            operon::lint::apply_allows(&mut style, &src);
+            operon::lint::apply_cli_allows(&mut style, &lint_allows);
+            // W41 (ROADMAP-100): diag is the default: sectioned diagnostics
+            // (error/warning/repair/style) with a summary line; --format score
+            // keeps the school-grade banner for one transition cycle.
             if check_format == "diag" && !json {
-                let src = std::fs::read_to_string(&file).unwrap_or_default();
-                let prog = parser::parse(&src);
-                let findings = operon::lint::lint(&prog);
-                print_diag(&file, &rep, &findings);
+                let style_inline: Vec<operon::lint::Finding> = if check_style {
+                    style.clone()
+                } else {
+                    Vec::new()
+                };
+                print_diag(&file, &rep, &findings, &style, &style_inline);
                 let hard = findings.iter().any(|f| f.sev == operon::lint::Sev::Error);
                 if hard || (strict && (rep.wobbles > 0 || rep.fallbacks > 0)) {
+                    // ast-grep-ignore: no-std-process-exit-in-core
                     std::process::exit(3);
                 }
+                // ast-grep-ignore: no-std-process-exit-in-core
                 std::process::exit(0);
             }
             if json {
@@ -731,8 +839,23 @@ fn real_main() {
                     .iter()
                     .map(|p| format!("\"{}\"", tools::json_escape(p)))
                     .collect();
+                // W48: the findings array carries CHECK-owned rules only
+                // (correctness); style findings live in `operon lint --json`.
+                let f_json: Vec<String> = findings
+                    .iter()
+                    .map(|f| {
+                        format!(
+                            "{{\"code\":\"{}\",\"severity\":\"{}\",\"line\":{},\"rule\":\"{}\",\"message\":\"{}\"}}",
+                            f.code,
+                            f.sev.name(),
+                            f.line,
+                            f.rule,
+                            tools::json_escape(&f.message)
+                        )
+                    })
+                    .collect();
                 println!(
-                    "{{\"file\":\"{}\",\"score\":{},\"letter\":\"{}\",\"notes\":{},\"wobbles\":{},\"fallbacks\":{},\"phantoms\":[{}],\"nmd\":[{}]}}",
+                    "{{\"file\":\"{}\",\"score\":{},\"letter\":\"{}\",\"notes\":{},\"wobbles\":{},\"fallbacks\":{},\"phantoms\":[{}],\"nmd\":[{}],\"findings\":[{}]}}",
                     tools::json_escape(&file),
                     rep.score,
                     rep.letter,
@@ -740,7 +863,8 @@ fn real_main() {
                     rep.wobbles,
                     rep.fallbacks,
                     ph_json.join(","),
-                    nmd_json.join(",")
+                    nmd_json.join(","),
+                    f_json.join(",")
                 );
             } else {
                 println!(
@@ -761,6 +885,7 @@ fn real_main() {
                 }
             }
             if strict && (rep.wobbles > 0 || rep.fallbacks > 0) {
+                // ast-grep-ignore: no-std-process-exit-in-core
                 std::process::exit(3);
             }
         }
@@ -772,11 +897,11 @@ fn real_main() {
             };
             // W49 (ROADMAP-100): --list enumerates discovered files + proof
             // frame counts without executing; --filter substr narrows the
-            // selection; --repeat N re-runs and pins byte-identical results.
-            let mut files = tools::collect_test_files(&paths);
-            if let Some(f) = test_filter.as_ref() {
-                files.retain(|p| p.contains(f.as_str()));
-            }
+            // selection (substring match on the file path: proof frames are
+            // anonymous in the grammar, the file is the selectable test
+            // unit); --repeat N re-runs and pins byte-identical results.
+            // No flags: discovery unchanged, byte-identical to the old runner.
+            let files = tools::select_test_files(&paths, test_filter.as_deref());
             if list_only {
                 let mut total = 0usize;
                 for f in &files {
@@ -785,6 +910,7 @@ fn real_main() {
                     println!("{}  {} proof frame(s)", f, n);
                 }
                 println!("{} file(s), {} proof frame(s) total", files.len(), total);
+                // ast-grep-ignore: no-std-process-exit-in-core
                 std::process::exit(0);
             }
             let rep = tools::run_tests(&files, &opts, json);
@@ -806,6 +932,7 @@ fn real_main() {
                             again.failed,
                             rep.failed
                         );
+                        // ast-grep-ignore: no-std-process-exit-in-core
                         std::process::exit(1);
                     }
                 }
@@ -831,6 +958,7 @@ fn real_main() {
                 );
             }
             if rep.failed > 0 {
+                // ast-grep-ignore: no-std-process-exit-in-core
                 std::process::exit(1);
             }
         }
@@ -839,14 +967,30 @@ fn real_main() {
                 Some(f) => f.clone(),
                 None => die("fmt needs a file"),
             };
-            // W47: config file (.operon-fmt.toml in CWD, or --fmt-config PATH)
-            // loads first; explicit flags override file keys; defaults last.
+            // W47: layered formatter config. Precedence: flags > fmt file
+            // (.operon-fmt.toml, or --fmt-config PATH) > operon.toml [fmt]
+            // (project manifest, current directory) > defaults. Malformed
+            // sections and bad values fall back with a stderr note, never a
+            // crash; absent files change nothing (byte-identical output).
+            let mut cfg = tools::FmtConfig::default();
+            if let Ok(text) = std::fs::read_to_string("operon.toml") {
+                let (section, sec_notes) = tools::extract_toml_section(&text, "fmt");
+                for n in &sec_notes {
+                    eprintln!("fmt: operon.toml: {n}");
+                }
+                if !section.is_empty() {
+                    let (file_cfg, unknown) = tools::parse_fmt_config_from(cfg, &section);
+                    cfg = file_cfg;
+                    for u in &unknown {
+                        eprintln!("fmt: ignoring unknown [fmt] key in operon.toml: {u}");
+                    }
+                }
+            }
             let cfg_path = fmt_config_path
                 .clone()
                 .unwrap_or_else(|| ".operon-fmt.toml".to_string());
-            let mut cfg = tools::FmtConfig::default();
             if let Ok(text) = std::fs::read_to_string(&cfg_path) {
-                let (file_cfg, unknown) = tools::parse_fmt_config(&text);
+                let (file_cfg, unknown) = tools::parse_fmt_config_from(cfg, &text);
                 cfg = file_cfg;
                 for u in &unknown {
                     eprintln!("fmt: ignoring unknown config key in {cfg_path}: {u}");
@@ -942,7 +1086,7 @@ fn real_main() {
             // to the node-addressed engine (parse → edit AST → canonical reprint,
             // all-or-nothing); absent header keeps v1 text semantics.
             if positional.len() < 2 {
-                die("rna needs: operon rna <file.op> <patch.rna> [--write] [--json] [--allow-comment-drop]");
+                die("rna needs: operon rna <file.op> <patch.rna> [--write] [--check] [--json] [--allow-comment-drop]");
             }
             let file = positional[0].clone();
             let patch_path = positional[1].clone();
@@ -954,6 +1098,195 @@ fn real_main() {
                 Ok(s) => s,
                 Err(e) => die(&format!("rna: cannot read {}: {}", patch_path, e)),
             };
+            // W68: `--check` validates the patch against the target and writes
+            // NOTHING, ever (`--check --write` is refused up front). It reports
+            // the engine detected (v1 header-less vs v2 `syntax: v2`), whether
+            // every referenced span/node resolves (ambiguity included), the v2
+            // comment preflight, and whether a real apply with the same flags
+            // would succeed — by running the exact apply machinery in memory
+            // (both engines are pure; file writes only ever happen in this CLI
+            // layer, and check never reaches them). Exit 0 = would apply
+            // cleanly, 1 = validation failure, 2 = usage/fatal (die()).
+            if rna_check && write {
+                die("rna: --check never writes; drop --write");
+            }
+            if rna_check {
+                if rna2::is_v2_patch(&patch_src) {
+                    let rep = rna2::check_rna_v2(&src, &patch_src, allow_comment_drop);
+                    let applied = rep.rules.iter().filter(|r| r.applied).count();
+                    let missed = rep.rules.iter().filter(|r| !r.target_found).count();
+                    let would_change = rep.would_apply && applied > 0;
+                    let preflight = if rep.comment_refusal.is_some() {
+                        "refused"
+                    } else if rep.comment_lines.is_empty() {
+                        "ok"
+                    } else {
+                        "allowed"
+                    };
+                    if json {
+                        let rows: Vec<String> = rep
+                            .rules
+                            .iter()
+                            .map(|r| {
+                                format!(
+                                    "{{\"verb\":\"{}\",\"target\":\"{}\",\"target_found\":{},\"applied\":{},\"detail\":\"{}\"}}",
+                                    r.verb,
+                                    tools::json_escape(&r.target),
+                                    r.target_found,
+                                    r.applied,
+                                    tools::json_escape(&r.detail)
+                                )
+                            })
+                            .collect();
+                        let lines: Vec<String> =
+                            rep.comment_lines.iter().map(|l| l.to_string()).collect();
+                        let mut out = format!(
+                            "{{\"engine\":\"v2\",\"check\":true,\"file\":\"{}\",\"patch\":\"{}\",\"rules\":[{}],\"applied\":{},\"missed\":{},\"would_change\":{},\"would_apply\":{},\"would_write\":false,\"comment_preflight\":\"{}\",\"comment_lines\":[{}]",
+                            tools::json_escape(&file),
+                            tools::json_escape(&patch_path),
+                            rows.join(","),
+                            applied,
+                            missed,
+                            would_change,
+                            rep.would_apply,
+                            preflight,
+                            lines.join(",")
+                        );
+                        if rep.would_apply {
+                            out.push('}');
+                        } else {
+                            out.push_str(&format!(
+                                ",\"refused\":true,\"reason\":\"{}\"}}",
+                                tools::json_escape(
+                                    rep.reason.as_deref().unwrap_or("would not apply")
+                                )
+                            ));
+                        }
+                        println!("{}", out);
+                    } else {
+                        println!(
+                            "rna check: {} <- {}, engine v2, {}",
+                            file,
+                            patch_path,
+                            if rep.would_apply {
+                                format!(
+                                    "would apply cleanly ({} rule(s), nothing written){}",
+                                    applied,
+                                    if would_change { "" } else { " (no change)" }
+                                )
+                            } else {
+                                "REFUSED, nothing written".to_string()
+                            }
+                        );
+                        if let Some(reason) = &rep.reason {
+                            println!("  reason: {}", reason);
+                        }
+                        for r in &rep.rules {
+                            if !r.target_found {
+                                println!("  MISS [{}] {}", r.target, r.detail);
+                            } else {
+                                println!("  ok   [{}] {}", r.target, r.detail);
+                            }
+                        }
+                        if rep.comment_refusal.is_none() && !rep.comment_lines.is_empty() {
+                            println!(
+                                "  note: plain '#' comments at lines [{}] will be dropped (--allow-comment-drop)",
+                                rep.comment_lines
+                                    .iter()
+                                    .map(|l| l.to_string())
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
+                            );
+                        }
+                    }
+                    if !rep.would_apply {
+                        // ast-grep-ignore: no-std-process-exit-in-core
+                        std::process::exit(1);
+                    }
+                    return;
+                }
+                // v1 (header-less) check: the same deprecation metadata as the
+                // apply path (stderr note + `deprecated:true` in --json), the
+                // same per-edit fate, nothing ever written.
+                eprintln!(
+                    "rna: note: header-less (v1 span) patches are deprecated (info, W63 step 1), add 'syntax: v2' and node-addressed rules; see docs/design/RNA-V2.md"
+                );
+                let stem = std::path::Path::new(&file)
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                let report = genes::apply_rna_checked(&src, &patch_src, &stem);
+                if json {
+                    let rows: Vec<String> = report
+                        .edits
+                        .iter()
+                        .map(|e| {
+                            format!(
+                                "{{\"target\":\"{}\",\"scope\":\"{}\",\"target_found\":{},\"from\":\"{}\",\"to\":\"{}\",\"hits\":{},\"applied\":{}}}",
+                                tools::json_escape(&e.target),
+                                if e.gene_scoped { "gene" } else { "anywhere" },
+                                e.target_found,
+                                tools::json_escape(&e.from),
+                                tools::json_escape(&e.to),
+                                e.hits,
+                                e.applied
+                            )
+                        })
+                        .collect();
+                    println!(
+                        "{{\"engine\":\"v1\",\"deprecated\":true,\"check\":true,\"file\":\"{}\",\"patch\":\"{}\",\"edits\":[{}],\"applied\":{},\"missed\":{},\"would_change\":{},\"would_apply\":{},\"would_write\":false}}",
+                        tools::json_escape(&file),
+                        tools::json_escape(&patch_path),
+                        rows.join(","),
+                        report.applied(),
+                        report.missed(),
+                        report.would_change(),
+                        report.missed() == 0
+                    );
+                } else {
+                    println!(
+                        "rna check: {} <- {}, engine v1 (deprecated), {}",
+                        file,
+                        patch_path,
+                        if report.missed() == 0 {
+                            format!(
+                                "would apply cleanly ({} edit(s), nothing written){}",
+                                report.applied(),
+                                if report.would_change() {
+                                    ""
+                                } else {
+                                    " (no change)"
+                                }
+                            )
+                        } else {
+                            format!("WOULD MISS ({} missed, nothing written)", report.missed())
+                        }
+                    );
+                    for e in &report.edits {
+                        let scope = if e.gene_scoped { "gene" } else { "anywhere" };
+                        if !e.target_found {
+                            println!("  MISS [{}] target gene '{}' not found", scope, e.target);
+                        } else if e.applied {
+                            println!(
+                                "  ok   [{}] {} '{}' -> '{}' ({} hit{})",
+                                scope,
+                                e.target,
+                                e.from,
+                                e.to,
+                                e.hits,
+                                if e.hits == 1 { "" } else { "s" }
+                            );
+                        } else {
+                            println!("  MISS [{}] {} '{}' not present", scope, e.target, e.from);
+                        }
+                    }
+                }
+                if report.missed() > 0 {
+                    // ast-grep-ignore: no-std-process-exit-in-core
+                    std::process::exit(1);
+                }
+                return;
+            }
             if rna2::is_v2_patch(&patch_src) {
                 let report = match rna2::apply_rna_v2(&src, &patch_src, allow_comment_drop) {
                     Ok(r) => r,
@@ -1037,6 +1370,7 @@ fn real_main() {
                     }
                 }
                 if report.missed() > 0 {
+                    // ast-grep-ignore: no-std-process-exit-in-core
                     std::process::exit(1);
                 }
                 return;
@@ -1119,6 +1453,7 @@ fn real_main() {
                 eprintln!("rna: {} rewritten", file);
             }
             if report.missed() > 0 {
+                // ast-grep-ignore: no-std-process-exit-in-core
                 std::process::exit(1);
             }
         }
@@ -2053,16 +2388,28 @@ fn repl_eval(l: &mut tools::Loaded, src: &str) {
 /// W41 (ROADMAP-100): sectioned diagnostics renderer, the check output that
 /// treats programmers as adults (what's wrong + the fix), with the school
 /// grade preserved under `--format score` for CI compatibility.
-fn print_diag(file: &str, rep: &tools::CheckReport, findings: &[operon::lint::Finding]) {
+///
+/// W48 stream split: `findings` carries the correctness stream; `style` is
+/// the lint-owned style stream (counted, not shown by default); when
+/// `--style` was passed, `style_inline` repeats the list to render inline
+/// under a clearly labeled header. Default output keeps a labeled count +
+/// pointer line — the split is about command purpose and defaults, not about
+/// hiding data.
+fn print_diag(
+    file: &str,
+    rep: &tools::CheckReport,
+    findings: &[operon::lint::Finding],
+    style: &[operon::lint::Finding],
+    style_inline: &[operon::lint::Finding],
+) {
     use operon::lint::Sev;
     let mut errors: Vec<&operon::lint::Finding> = Vec::new();
     let mut warnings: Vec<&operon::lint::Finding> = Vec::new();
-    let mut style: Vec<&operon::lint::Finding> = Vec::new();
     for f in findings {
         match f.sev {
             Sev::Error => errors.push(f),
             Sev::Warning => warnings.push(f),
-            Sev::Style => style.push(f),
+            Sev::Style => {} // unreachable in the correctness stream, kept for safety
         }
     }
     let section = |name: &str, items: &[&operon::lint::Finding]| {
@@ -2096,7 +2443,20 @@ fn print_diag(file: &str, rep: &tools::CheckReport, findings: &[operon::lint::Fi
             file, rep.notes, rep.wobbles, rep.fallbacks, file
         );
     }
-    section("style", &style);
+    // W48: the style stream is lint-owned. Default: one labeled line with the
+    // count and the pointer; --style renders the full section inline.
+    if !style_inline.is_empty() {
+        println!("style (owned by `operon lint`, advisory):");
+        for f in style_inline {
+            println!("  {}:{}: {} ({})", file, f.line, f.message, f.rule);
+        }
+    } else if !style.is_empty() {
+        println!(
+            "style (owned by `operon lint`): {} style finding(s), not shown here; run `operon lint {}` to see them",
+            style.len(),
+            file
+        );
+    }
     println!(
         "summary: {} error(s), {} warning(s), {} style, {} repair note(s)",
         n_errors,
@@ -2113,22 +2473,39 @@ usage:
   operon run f.op [--entry g] [--variant v] [--cell c] [--rna r] [--frame name] [--ires] [--strict] [--quiet]
                   [--fuel steps] [--allow-read path] [--allow-write path] [--allow-net host:port]
                   [--allow-run cmd] [--allow-py module] [--allow-exit] [--allow-env var] [--allow-all]
-  operon check f.op [--format diag|score] [--nmd | --nmd=purge] [--json]
+  operon check f.op [--format diag|score] [--nmd | --nmd=purge] [--json] [--style] [--strict]
+                  # W48 split: check = CORRECTNESS (wrong-arity, phantom-call, const-reassign,
+                  # cell keys, NMD). diag default shows correctness sections; the style stream is
+                  # summarized with a pointer to `operon lint` (--style inlines it).
+  operon lint f.op [more.op ...] [--strict] [--allow rule1,rule2] [--cell c] [--json]
+                  # W48 split: lint = STYLE/QUALITY only (unused-gene, unused-import,
+                  # unused-binding, dead-const, shadowed-binding, constant-condition,
+                  # infinite-loop-suspect, unreachable-code, duplicate/unreachable-match-arm).
+                  # --strict: any finding = exit 3; --allow: file-wide suppression on top of
+                  # '// allow: rule' comment suppression; --json: findings carry code/severity/line/rule/message
   operon test [paths...] [--json] [--filter substr] [--list] [--repeat n]
   operon fmt f.op [--write] [--indent N] [--quotes single|double] [--width N] [--fmt-config f]
   operon fix f.op [--write] [--json]   # migrate legacy surface (const→let, s::→dot), dry-run default
   operon ast f.op [--json]
   operon explain f.op [--json] [--strict]
-  operon lint f.op [--cell c] [--json]
   operon keywords [--json]
   operon repl
   operon debug f.op --break N   # W08 phase 1: REPL on line breaks (c s q bt vars p EXPR)
   operon mod init|add <url|name> [--registry f] [--rev r] [--as name]|remove <name>|update|install|tree|verify|publish
                   # package system (operon.toml manifest + operon.lock; W19/W20/W23;
                   # W21 static registry: add-by-name + publish, docs/specs/REGISTRY.md)
+<<<<<<< HEAD
   operon build f.op [--variant v] [-o out.op] [--bundle] [--native]
                   # --bundle/--native refuse honestly (W87/W85 planned; build emits specialized source)
   operon rna f.op patch.rna [--write] [--json] [--allow-comment-drop]
+=======
+  operon build f.op [--variant v] [-o out.op]
+  operon rna f.op patch.rna [--write] [--check] [--json] [--allow-comment-drop]
+                  # --check (W68): validate the patch against the target, report
+                  # span/node resolution + ambiguity + comment preflight +
+                  # would_apply (--json); writes NOTHING, ever; exit 1 on any
+                  # validation failure
+>>>>>>> origin/main
   operon graph f.op [--json]
   operon run f.op --trace-grn trace.jsonl   # W095: JSONL GRN tick-stream
   operon doc f.op|dir [...] [-o outdir] [--json]
@@ -2139,5 +2516,6 @@ usage:
   operon version",
         env!("CARGO_PKG_VERSION")
     );
+    // ast-grep-ignore: no-std-process-exit-in-core
     std::process::exit(2);
 }

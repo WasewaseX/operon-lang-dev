@@ -1,0 +1,13 @@
+id: no-unwrap-in-src
+message: unwrap() on Result/Option can panic in the interpreter core — match or expect-with-invariant instead (Mutex/Condvar poisoning unwraps are tracked by their own info rules)
+severity: warning
+language: Rust
+rule:
+  pattern: $V.unwrap()
+constraints:
+  V:
+    not:
+      regex: "\\.(lock|wait|wait_timeout|read|write)\\("
+paths:
+  include:
+    - src

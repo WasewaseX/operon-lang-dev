@@ -1,0 +1,14 @@
+// tg_sweep corpus 01: unbalanced everything — unclosed parens/braces/
+// brackets, stray closers, half a map literal. Total Grammar repairs all of
+// it (rungs 2-4); the program must still run contained, never panic.
+main {
+    stress {
+        let a = [1, 2, [3
+        let b = (1 + (2 * 3
+        let half_map = {x: 1, y
+        let stray = ]][[((
+        f(1
+    } rescue (e) {
+    }
+}
+gene f(x { return x }

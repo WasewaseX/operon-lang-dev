@@ -1,0 +1,13 @@
+// tg_sweep corpus 08: string edge cases — unterminated string, lone
+// backslash, embedded quotes and braces, a very long line. Strings must
+// stay strings under every repair.
+main {
+    stress {
+        let unterminated = "no closing quote
+        let lone = "backslash \"
+        let braces = "{{{ }}} ((("
+        let quotes =  "
+        let long = "x" * 1 + "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    } rescue (e) {
+    }
+}

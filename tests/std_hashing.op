@@ -1,0 +1,39 @@
+# std/hashing: checksums + SHA-256 in pure Operon, pinned to the standard
+# test vectors (FIPS 180-4, and the classic checksum check values).
+use std/hashing as hs
+
+frame proof {
+    # SHA-256 FIPS vectors, verified against Python hashlib when written
+    assert(hs.sha256_hex("") == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+    assert(hs.sha256_hex("abc") == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+    assert(hs.sha256_hex("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq")
+        == "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1")
+    # bytes input agrees with the string form
+    assert(hs.sha256_hex(b"abc") == hs.sha256_hex("abc"))
+
+    # sha256 returns 32 bytes
+    assert(len(hs.sha256("abc")) == 32)
+
+    # FNV-1a 32: empty is the offset basis, known values for short strings
+    assert(hs.hash_fnv1a32("") == 2166136261)
+    assert(hs.hash_fnv1a32("a") == 3826002220)
+    assert(hs.hash_fnv1a32("hello") == 1335831723)
+
+    # DJB2 / SDBM: deterministic anchors (self-pinned, both engines agree)
+    assert(hs.hash_djb2("hello") == 178056679)
+    assert(hs.hash_sdbm("hello") == 684824882)
+
+    # Adler-32 and CRC-32 against the classic check values
+    assert(hs.hash_adler32("Wikipedia") == 300286872)
+    assert(hs.hash_crc32("123456789") == 3421780262, "the standard CRC-32 check value")
+
+    # hashes differ across inputs (avalanche sanity, not a proof)
+    assert(hs.hash_fnv1a32("x") != hs.hash_fnv1a32("y"))
+
+    # multi-block message digests to 32 bytes deterministically
+    let long = "0123456789".repeat(50)
+    assert(len(hs.sha256(long)) == 32)
+    assert(hs.sha256_hex(long) == hs.sha256_hex(long))
+
+    promote("hashing: all asserts green")
+}

@@ -1,0 +1,28 @@
+# W093 validation probe, V8 (gene dosage, @copies n).
+# Companion measurement program for bootstrap/validation_registry.json and
+# bootstrap/validation_report.py. It asserts NOTHING. The enforcing test
+# remains tests/copies_dose.op. Mirrors its ladder exactly: single copy
+# vetoed, two copies open the gate, 64 copies saturate, redefinition
+# restores single-copy dose. Copies amplify the CONCENTRATION feeding GRN
+# edges, never the raw level and never the call return value.
+regulate {
+    src activates tgt strength 1.0 threshold 0.5
+}
+gene src() { return "s" }
+gene tgt() { return "t" }
+grn_set("src", 0.3)
+let v1 = tgt()
+promote("RESULT v8_single_vetoed={v1 == null}")
+promote("RESULT v8_raw_single={grn_get(\"src\")}")
+@copies 2 gene src() { return "doubled" }
+let v2 = tgt()
+promote("RESULT v8_double_gate_open={v2 == \"t\"}")
+@copies 64 gene src() { return "amplified" }
+grn_set("src", 0.02)
+let v3 = tgt()
+promote("RESULT v8_saturated_gate_open={v3 == \"t\"}")
+promote("RESULT v8_raw_saturated={grn_get(\"src\")}")
+gene src() { return "plain" }
+grn_set("src", 0.3)
+let v4 = tgt()
+promote("RESULT v8_reset_vetoed={v4 == null}")

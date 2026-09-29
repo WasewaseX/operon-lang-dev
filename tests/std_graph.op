@@ -1,0 +1,159 @@
+# std/graph, W026 proof: deterministic directed weighted graphs over maps.
+# Covers: canonical shape, insertion-order node/neighbor pins, edges
+# enumeration, bfs/dfs/topo orders, shortest path, reachability, remove
+# semantics, MST weights (incl. comparator + undirected reading), purity,
+# soft error shapes, and the W003 stage-1 annotation sugar on the API.
+use std/graph;
+frame proof {
+    # ---- canonical shape + empty protocol
+    let g = graph.graph_new()
+    assert(g == {nodes: {}, adj: {}}, "graph_new is the canonical empty shape")
+    assert(graph.graph_nodes(g) == [] and graph.graph_node_count(g) == 0)
+    assert(graph.graph_edges(g) == [] and graph.graph_edge_count(g) == 0)
+    assert(graph.graph_mst_weight(g) == 0, "empty graph spans with weight 0")
+    assert(graph.graph_neighbors(g, "x") == null, "neighbors of nothing is null")
+
+    # ---- add_node: purity, payload rules, position pins
+    let g1 = graph.graph_add_node(g, "lac")
+    assert(g == {nodes: {}, adj: {}}, "add_node never mutates its argument")
+    assert(g1["nodes"]["lac"] == null, "payload defaults to null")
+    assert(graph.graph_has_node(g1, "lac"))
+    let g1b = graph.graph_add_node(g1, "lac", "operon")
+    assert(g1b["nodes"]["lac"] == "operon", "re-adding a node updates its payload")
+    assert(graph.graph_nodes(g1b) == ["lac"], "re-adding keeps the pinned position")
+
+    # ---- the demo DAG, built node-order-first
+    let d0 = graph.graph_add_node(g, "lac")
+    let d1 = graph.graph_add_node(d0, "lacZ")
+    let d2 = graph.graph_add_node(d1, "lacY")
+    let d3 = graph.graph_add_node(d2, "lacI")
+    let d4 = graph.graph_add_node(d3, "lacA")
+    let dag = graph.graph_add_edge(d4, "lac", "lacZ")
+    dag = graph.graph_add_edge(dag, "lac", "lacI")
+    dag = graph.graph_add_edge(dag, "lacZ", "lacY")
+    dag = graph.graph_add_edge(dag, "lacI", "lacZ")
+    dag = graph.graph_add_edge(dag, "lacY", "lacA")
+    let snap = dag
+    assert(graph.graph_nodes(dag) == ["lac", "lacZ", "lacY", "lacI", "lacA"], "node order is nodes-map insertion order")
+    assert(graph.graph_node_count(dag) == 5 and graph.graph_edge_count(dag) == 5)
+    assert(graph.graph_edges(dag) == [["lac", "lacZ", 1], ["lac", "lacI", 1], ["lacZ", "lacY", 1], ["lacY", "lacA", 1], ["lacI", "lacZ", 1]], "edges: node order, then neighbor order")
+    assert(graph.graph_neighbors(dag, "lac") == ["lacZ", "lacI"], "neighbor order pinned")
+    assert(graph.graph_neighbors(dag, "ghost") == null, "absent node neighbors are null")
+    assert(graph.graph_weight(dag, "lac", "lacZ") == 1, "default weight is 1")
+    assert(graph.graph_weight(dag, "lacA", "lac") == null, "absent edge weight is null")
+    assert(graph.graph_has_edge(dag, "lacI", "lacZ") and !graph.graph_has_edge(dag, "lacZ", "lacI"))
+
+    # ---- weight overwrite keeps the neighbor position, never duplicates
+    let gw0 = graph.graph_add_edge(graph.graph_new(), "a", "b", 2)
+    let gw = graph.graph_add_edge(gw0, "a", "b", 7)
+    assert(graph.graph_weight(gw, "a", "b") == 7, "re-adding an edge replaces the weight")
+    assert(graph.graph_neighbors(gw, "a") == ["b"], "overwrite keeps the neighbor position")
+    let wf0 = graph.graph_add_edge(graph.graph_new(), "a", "b", 2.5)
+    assert(graph.graph_weight(wf0, "a", "b") == 2.5, "float weights are stored as given")
+
+    # ---- traversals: deterministic orders on the demo DAG
+    assert(graph.graph_bfs(dag, "lac") == ["lac", "lacZ", "lacI", "lacY", "lacA"], "bfs enqueues neighbors in pinned order")
+    assert(graph.graph_dfs(dag, "lac") == ["lac", "lacZ", "lacY", "lacA", "lacI"], "dfs is preorder, first neighbor first")
+    assert(graph.graph_bfs(dag, "ghost") == null and graph.graph_dfs(dag, "ghost") == null, "traversals from an absent start are null")
+    let iso = graph.graph_add_node(graph.graph_new(), "solo")
+    assert(graph.graph_bfs(iso, "solo") == ["solo"] and graph.graph_dfs(iso, "solo") == ["solo"])
+    assert(graph.graph_neighbors(iso, "solo") == [], "an existing isolated node has no neighbors")
+
+    # ---- topo: Kahn's with the insertion-order tie-break; cycles soft-refuse
+    assert(graph.graph_topo(dag) == ["lac", "lacI", "lacZ", "lacY", "lacA"], "zero-in-degree ties resolve by node order")
+    let c0 = graph.graph_add_edge(graph.graph_new(), "b", "c")
+    let c1 = graph.graph_add_edge(c0, "c", "a")
+    let cyc = graph.graph_add_edge(c1, "a", "b")
+    assert(graph.graph_topo(cyc) == null, "a cycle soft-refuses as null")
+    let sl = graph.graph_add_edge(graph.graph_new(), "x", "x")
+    assert(graph.graph_topo(sl) == null, "a self-loop is a cycle")
+    assert(graph.graph_has_edge(sl, "x", "x"))
+
+    # ---- reachability + shortest path
+    assert(graph.graph_reachable(dag, "lac", "lacA"))
+    assert(!graph.graph_reachable(dag, "lacA", "lac"), "edges are directed")
+    assert(!graph.graph_reachable(dag, "ghost", "lac"), "absent endpoints are just unreachable")
+    assert(graph.graph_shortest_path(dag, "lac", "lacZ") == ["lac", "lacZ"])
+    assert(graph.graph_shortest_path(dag, "lac", "lacA") == ["lac", "lacZ", "lacY", "lacA"], "unweighted BFS path")
+    assert(graph.graph_shortest_path(dag, "lacA", "lac") == null, "unreachable is null")
+    assert(graph.graph_shortest_path(dag, "ghost", "lac") == null, "absent endpoint is null")
+    assert(graph.graph_shortest_path(dag, "lac", "lac") == ["lac"], "a node reaches itself")
+
+    # ---- remove semantics
+    let rn = graph.graph_remove_node(dag, "lacI")
+    assert(graph.graph_nodes(rn) == ["lac", "lacZ", "lacY", "lacA"])
+    assert(graph.graph_edges(rn) == [["lac", "lacZ", 1], ["lacZ", "lacY", 1], ["lacY", "lacA", 1]], "remove_node drops the row and every in-edge")
+    assert(graph.graph_remove_node(dag, "ghost") == dag, "removing an absent node is a no-op copy")
+    let re = graph.graph_remove_edge(dag, "lac", "lacI")
+    assert(graph.graph_nodes(re) == ["lac", "lacZ", "lacY", "lacI", "lacA"], "remove_edge keeps both endpoint nodes")
+    assert(graph.graph_edge_count(re) == 4 and !graph.graph_has_edge(re, "lac", "lacI"))
+    assert(graph.graph_remove_edge(dag, "lac", "ghost") == dag, "absent edge removal is a no-op copy")
+    assert(dag == snap, "the demo graph survived every operation untouched")
+
+    # ---- MST over the undirected reading
+    let m0 = graph.graph_add_node(graph.graph_new(), "a")
+    let ma = graph.graph_add_node(m0, "b")
+    let mb = graph.graph_add_node(ma, "c")
+    let mc = graph.graph_add_node(mb, "d")
+    let m1 = graph.graph_add_edge(graph.graph_add_edge(mc, "a", "b", 4), "b", "a", 4)
+    m1 = graph.graph_add_edge(graph.graph_add_edge(m1, "a", "c", 1), "c", "a", 1)
+    m1 = graph.graph_add_edge(graph.graph_add_edge(m1, "b", "c", 2), "c", "b", 2)
+    m1 = graph.graph_add_edge(graph.graph_add_edge(m1, "b", "d", 5), "d", "b", 5)
+    m1 = graph.graph_add_edge(graph.graph_add_edge(m1, "c", "d", 8), "d", "c", 8)
+    assert(graph.graph_mst_weight(m1) == 8, "Kruskal with the default weight order")
+    assert(graph.graph_mst_weight(m1, gene (x, y) => x > y) == 17, "the comparator gene steers the tree (max spanning)")
+    let t0 = graph.graph_add_edge(graph.graph_new(), "a", "b", 1)
+    let t1 = graph.graph_add_edge(graph.graph_add_edge(t0, "b", "a", 1), "a", "c", 1)
+    let t2 = graph.graph_add_edge(graph.graph_add_edge(t1, "c", "a", 1), "b", "c", 1)
+    let tie = graph.graph_add_edge(t2, "c", "b", 1)
+    assert(graph.graph_mst_weight(tie) == 2, "equal weights tie-break by the pinned index")
+    let h0 = graph.graph_add_edge(graph.graph_new(), "x", "y", 1)
+    let h1 = graph.graph_add_edge(graph.graph_add_edge(h0, "y", "x", 1), "y", "z", 2)
+    let chain = graph.graph_add_edge(h1, "z", "y", 2)
+    assert(graph.graph_mst_weight(chain) == 3)
+    let fw = graph.graph_add_edge(graph.graph_add_edge(graph.graph_new(), "u", "v", 3), "v", "u", 9)
+    assert(graph.graph_mst_weight(fw) == 3, "the forward direction wins when both exist")
+    let rv = graph.graph_add_edge(graph.graph_new(), "v", "u", 5)
+    assert(graph.graph_mst_weight(rv) == 5, "a reverse-only edge still connects the pair")
+    let p0 = graph.graph_add_node(graph.graph_new(), "p")
+    let disc = graph.graph_add_node(p0, "q")
+    assert(graph.graph_mst_weight(disc) == null, "disconnected graphs have no spanning tree")
+    let lone = graph.graph_add_node(graph.graph_new(), "p")
+    assert(graph.graph_mst_weight(lone) == 0, "a single node spans with weight 0")
+
+    # ---- W003 stage-1 annotation sugar: the boundary is a soft contract
+    let hit = 0
+    stress {
+        graph.graph_add_node(g, 7)
+    } rescue (e) {
+        hit = 1
+        assert(e.kind == "unfolded", "ann violations are catchable unfolded stress")
+        assert(e.message == "argument 'id' for gene 'graph_add_node' expects str, got int", "the message names the param, the gene, the ann, and the type")
+    }
+    assert(hit == 1, "str id ann enforced at the call funnel")
+    stress {
+        graph.graph_add_edge(g, "a", "b", "heavy")
+    } rescue (e) {
+        hit = 2
+        assert(e.message == "argument 'weight' for gene 'graph_add_edge' expects float, got str", "float weight ann refuses a string (int widens, str does not)")
+    }
+    assert(hit == 2, "weight ann enforced")
+    stress {
+        graph.graph_mst_weight(m1, 5)
+    } rescue (e) {
+        hit = 3
+        assert(e.message == "argument 'cmp' for gene 'graph_mst_weight' expects gene?, got int", "optional gene ann renders canonically")
+    }
+    assert(hit == 3, "comparator ann enforced")
+    let maybe: list? = graph.graph_topo(cyc)
+    assert(maybe == null, "optional return ann accepts the soft null")
+    let ids: list = graph.graph_nodes(dag)
+    assert(len(ids) == 5, "annotated results flow into annotated lets")
+}
+
+main {
+    let demo = graph.graph_add_edge(graph.graph_add_node(graph.graph_new(), "lac"), "lac", "lacZ")
+    promote("std/graph: ok")
+    let ns = graph.graph_nodes(demo)
+    promote("nodes: {ns}")
+}
