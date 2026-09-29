@@ -83,6 +83,8 @@ fn real_main() {
     let mut purge = false;
     let mut write = false;
     let mut allow_comment_drop = false;
+    // W68: `operon rna --check` validates a patch and writes NOTHING, ever
+    let mut rna_check = false;
     let mut trace_grn_path: Option<String> = None;
     // W09 A2: run gene bodies through the OIR1 bytecode machine (src/vm.rs);
     // calls/gates stay on the shared path, so output is byte-identical
@@ -272,6 +274,8 @@ fn real_main() {
                 purge = true;
             }
             "--write" => write = true,
+            // W68: rna validation mode (no application, no file mutation)
+            "--check" => rna_check = true,
             // W067 v2: the AST reprint drops plain `#` comments; the v2 rna
             // engine refuses such files unless this flag is passed.
             "--allow-comment-drop" => allow_comment_drop = true,
@@ -1065,7 +1069,7 @@ fn real_main() {
             // to the node-addressed engine (parse → edit AST → canonical reprint,
             // all-or-nothing); absent header keeps v1 text semantics.
             if positional.len() < 2 {
-                die("rna needs: operon rna <file.op> <patch.rna> [--write] [--json] [--allow-comment-drop]");
+                die("rna needs: operon rna <file.op> <patch.rna> [--write] [--check] [--json] [--allow-comment-drop]");
             }
             let file = positional[0].clone();
             let patch_path = positional[1].clone();
@@ -1077,6 +1081,195 @@ fn real_main() {
                 Ok(s) => s,
                 Err(e) => die(&format!("rna: cannot read {}: {}", patch_path, e)),
             };
+            // W68: `--check` validates the patch against the target and writes
+            // NOTHING, ever (`--check --write` is refused up front). It reports
+            // the engine detected (v1 header-less vs v2 `syntax: v2`), whether
+            // every referenced span/node resolves (ambiguity included), the v2
+            // comment preflight, and whether a real apply with the same flags
+            // would succeed — by running the exact apply machinery in memory
+            // (both engines are pure; file writes only ever happen in this CLI
+            // layer, and check never reaches them). Exit 0 = would apply
+            // cleanly, 1 = validation failure, 2 = usage/fatal (die()).
+            if rna_check && write {
+                die("rna: --check never writes; drop --write");
+            }
+            if rna_check {
+                if rna2::is_v2_patch(&patch_src) {
+                    let rep = rna2::check_rna_v2(&src, &patch_src, allow_comment_drop);
+                    let applied = rep.rules.iter().filter(|r| r.applied).count();
+                    let missed = rep.rules.iter().filter(|r| !r.target_found).count();
+                    let would_change = rep.would_apply && applied > 0;
+                    let preflight = if rep.comment_refusal.is_some() {
+                        "refused"
+                    } else if rep.comment_lines.is_empty() {
+                        "ok"
+                    } else {
+                        "allowed"
+                    };
+                    if json {
+                        let rows: Vec<String> = rep
+                            .rules
+                            .iter()
+                            .map(|r| {
+                                format!(
+                                    "{{\"verb\":\"{}\",\"target\":\"{}\",\"target_found\":{},\"applied\":{},\"detail\":\"{}\"}}",
+                                    r.verb,
+                                    tools::json_escape(&r.target),
+                                    r.target_found,
+                                    r.applied,
+                                    tools::json_escape(&r.detail)
+                                )
+                            })
+                            .collect();
+                        let lines: Vec<String> =
+                            rep.comment_lines.iter().map(|l| l.to_string()).collect();
+                        let mut out = format!(
+                            "{{\"engine\":\"v2\",\"check\":true,\"file\":\"{}\",\"patch\":\"{}\",\"rules\":[{}],\"applied\":{},\"missed\":{},\"would_change\":{},\"would_apply\":{},\"would_write\":false,\"comment_preflight\":\"{}\",\"comment_lines\":[{}]",
+                            tools::json_escape(&file),
+                            tools::json_escape(&patch_path),
+                            rows.join(","),
+                            applied,
+                            missed,
+                            would_change,
+                            rep.would_apply,
+                            preflight,
+                            lines.join(",")
+                        );
+                        if rep.would_apply {
+                            out.push('}');
+                        } else {
+                            out.push_str(&format!(
+                                ",\"refused\":true,\"reason\":\"{}\"}}",
+                                tools::json_escape(
+                                    rep.reason.as_deref().unwrap_or("would not apply")
+                                )
+                            ));
+                        }
+                        println!("{}", out);
+                    } else {
+                        println!(
+                            "rna check: {} <- {}, engine v2, {}",
+                            file,
+                            patch_path,
+                            if rep.would_apply {
+                                format!(
+                                    "would apply cleanly ({} rule(s), nothing written){}",
+                                    applied,
+                                    if would_change { "" } else { " (no change)" }
+                                )
+                            } else {
+                                "REFUSED, nothing written".to_string()
+                            }
+                        );
+                        if let Some(reason) = &rep.reason {
+                            println!("  reason: {}", reason);
+                        }
+                        for r in &rep.rules {
+                            if !r.target_found {
+                                println!("  MISS [{}] {}", r.target, r.detail);
+                            } else {
+                                println!("  ok   [{}] {}", r.target, r.detail);
+                            }
+                        }
+                        if rep.comment_refusal.is_none() && !rep.comment_lines.is_empty() {
+                            println!(
+                                "  note: plain '#' comments at lines [{}] will be dropped (--allow-comment-drop)",
+                                rep.comment_lines
+                                    .iter()
+                                    .map(|l| l.to_string())
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
+                            );
+                        }
+                    }
+                    if !rep.would_apply {
+                        // ast-grep-ignore: no-std-process-exit-in-core
+                        std::process::exit(1);
+                    }
+                    return;
+                }
+                // v1 (header-less) check: the same deprecation metadata as the
+                // apply path (stderr note + `deprecated:true` in --json), the
+                // same per-edit fate, nothing ever written.
+                eprintln!(
+                    "rna: note: header-less (v1 span) patches are deprecated (info, W63 step 1), add 'syntax: v2' and node-addressed rules; see docs/design/RNA-V2.md"
+                );
+                let stem = std::path::Path::new(&file)
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                let report = genes::apply_rna_checked(&src, &patch_src, &stem);
+                if json {
+                    let rows: Vec<String> = report
+                        .edits
+                        .iter()
+                        .map(|e| {
+                            format!(
+                                "{{\"target\":\"{}\",\"scope\":\"{}\",\"target_found\":{},\"from\":\"{}\",\"to\":\"{}\",\"hits\":{},\"applied\":{}}}",
+                                tools::json_escape(&e.target),
+                                if e.gene_scoped { "gene" } else { "anywhere" },
+                                e.target_found,
+                                tools::json_escape(&e.from),
+                                tools::json_escape(&e.to),
+                                e.hits,
+                                e.applied
+                            )
+                        })
+                        .collect();
+                    println!(
+                        "{{\"engine\":\"v1\",\"deprecated\":true,\"check\":true,\"file\":\"{}\",\"patch\":\"{}\",\"edits\":[{}],\"applied\":{},\"missed\":{},\"would_change\":{},\"would_apply\":{},\"would_write\":false}}",
+                        tools::json_escape(&file),
+                        tools::json_escape(&patch_path),
+                        rows.join(","),
+                        report.applied(),
+                        report.missed(),
+                        report.would_change(),
+                        report.missed() == 0
+                    );
+                } else {
+                    println!(
+                        "rna check: {} <- {}, engine v1 (deprecated), {}",
+                        file,
+                        patch_path,
+                        if report.missed() == 0 {
+                            format!(
+                                "would apply cleanly ({} edit(s), nothing written){}",
+                                report.applied(),
+                                if report.would_change() {
+                                    ""
+                                } else {
+                                    " (no change)"
+                                }
+                            )
+                        } else {
+                            format!("WOULD MISS ({} missed, nothing written)", report.missed())
+                        }
+                    );
+                    for e in &report.edits {
+                        let scope = if e.gene_scoped { "gene" } else { "anywhere" };
+                        if !e.target_found {
+                            println!("  MISS [{}] target gene '{}' not found", scope, e.target);
+                        } else if e.applied {
+                            println!(
+                                "  ok   [{}] {} '{}' -> '{}' ({} hit{})",
+                                scope,
+                                e.target,
+                                e.from,
+                                e.to,
+                                e.hits,
+                                if e.hits == 1 { "" } else { "s" }
+                            );
+                        } else {
+                            println!("  MISS [{}] {} '{}' not present", scope, e.target, e.from);
+                        }
+                    }
+                }
+                if report.missed() > 0 {
+                    // ast-grep-ignore: no-std-process-exit-in-core
+                    std::process::exit(1);
+                }
+                return;
+            }
             if rna2::is_v2_patch(&patch_src) {
                 let report = match rna2::apply_rna_v2(&src, &patch_src, allow_comment_drop) {
                     Ok(r) => r,
@@ -2277,7 +2470,11 @@ usage:
                   # package system (operon.toml manifest + operon.lock; W19/W20/W23;
                   # W21 static registry: add-by-name + publish, docs/specs/REGISTRY.md)
   operon build f.op [--variant v] [-o out.op]
-  operon rna f.op patch.rna [--write] [--json] [--allow-comment-drop]
+  operon rna f.op patch.rna [--write] [--check] [--json] [--allow-comment-drop]
+                  # --check (W68): validate the patch against the target, report
+                  # span/node resolution + ambiguity + comment preflight +
+                  # would_apply (--json); writes NOTHING, ever; exit 1 on any
+                  # validation failure
   operon graph f.op [--json]
   operon run f.op --trace-grn trace.jsonl   # W095: JSONL GRN tick-stream
   operon doc f.op|dir [...] [-o outdir] [--json]
