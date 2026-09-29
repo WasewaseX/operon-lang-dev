@@ -52,8 +52,8 @@ class Variant:
         return v_repr(self)
 
 class Gene:
-    __slots__ = ("name", "params", "guard", "body", "acetylate", "methylate", "m6a", "copies", "seq", "riboswitch", "burst", "closure", "param_anns", "ret_ann")
-    def __init__(self, name, params, guard, body, ac=False, me=False, m6=False, copies=1, seq=False, riboswitch=None, burst=None, param_anns=None, ret_ann=None):
+    __slots__ = ("name", "params", "guard", "body", "acetylate", "methylate", "m6a", "copies", "seq", "riboswitch", "burst", "closure", "param_anns", "ret_ann", "type_params")
+    def __init__(self, name, params, guard, body, ac=False, me=False, m6=False, copies=1, seq=False, riboswitch=None, burst=None, param_anns=None, ret_ann=None, type_params=None):
         self.name, self.params, self.guard, self.body = name, params, guard, body
         self.acetylate, self.methylate, self.m6a, self.copies, self.seq = ac, me, m6, copies, seq
         # loop-9 (F-5): cis riboswitch (ligand, bound_means_on, threshold)
@@ -63,6 +63,8 @@ class Gene:
         # W01 (L2c): soft type annotations (mirror of GeneDef.param_anns/ret_ann)
         self.param_anns = param_anns if param_anns is not None else []
         self.ret_ann = ret_ann
+        # TYPED-MODE: declared generic type parameters (mirror of GeneDef.type_params)
+        self.type_params = type_params if type_params is not None else []
         self.closure = None
 
 ENHANCE_DELTA = 0.25  # T2e: super-enhancer activation boost (GRN threshold reduction)
@@ -436,11 +438,18 @@ def truthy(v):
 # W01 (L2c), soft annotation matching (mirror of interp.rs ann_matches).
 # A value matches by type_name(); `any` accepts everything; `float` accepts
 # int (safe numeric widening, `int` refuses float: no silent narrowing);
-# unions match any alternative; optionals additionally accept null.
+# TYPED-MODE: capitalization is normalized (`Int`≡`int`, mirrored as
+# ann_name_norm) and generic annotations match on their HEAD like the bare
+# name (`list[int]` enforces "is a list") — element types stay static-checker
+# business. Unions match any alternative; optionals additionally accept null.
+def ann_name_norm(name):
+    # TYPED-MODE mirror of interp.rs ann_name_norm.
+    return name.lower()
+
 def ann_matches(v, ann):
     k = ann[0]
     if k == "named":
-        name = ann[1]
+        name = ann_name_norm(ann[1])
         if name == "any":
             return True
         if type_name(v) == name:
@@ -449,7 +458,43 @@ def ann_matches(v, ann):
     if k == "union":
         return any(ann_matches(v, a) for a in ann[1])
     if k == "opt":
-        return v is None or ann_matches(v, ann[1])
+        # TYPED-MODE: optionals accept null, any value matching the inner
+        # type (the W01 law), AND the Option family (W06): None outright,
+        # Some(payload) when the payload matches.
+        if v is None:
+            return True
+        if isinstance(v, Variant):
+            if v.tag == "None":
+                return True
+            if v.tag == "Some":
+                return ann_matches(v.payload, ann[1])
+        return ann_matches(v, ann[1])
+    if k == "generic":
+        head = ann_name_norm(ann[1])
+        if head == "any":
+            return True
+        if head == "list":
+            return isinstance(v, list)
+        if head == "map":
+            return isinstance(v, dict)
+        if head == "option":
+            return v is None or (isinstance(v, Variant) and v.tag in ("Some", "None"))
+        if head == "result":
+            return isinstance(v, Variant) and v.tag in ("Ok", "Err")
+        # unknown generic head: bare-name fallback (typo never accepts all)
+        return type_name(v) == head or (head == "float" and isinstance(v, int) and not isinstance(v, bool))
+    return False
+
+def ann_is_typaram(ann, type_params):
+    # TYPED-MODE mirror of interp.rs ann_is_typaram: type parameters are
+    # erased at runtime; the soft contract is a no-op for a bare param name.
+    k = ann[0]
+    if k == "named":
+        return any(p == ann[1] for (p, _b) in type_params)
+    if k == "union":
+        return all(ann_is_typaram(a, type_params) for a in ann[1])
+    if k == "opt":
+        return ann_is_typaram(ann[1], type_params)
     return False
 
 def ann_render(ann):
@@ -461,6 +506,8 @@ def ann_render(ann):
         return " | ".join(ann_render(a) for a in ann[1])
     if k == "opt":
         return ann_render(ann[1]) + "?"
+    if k == "generic":
+        return ann[1] + "[" + ", ".join(ann_render(a) for a in ann[2]) + "]"
     return "any"
 
 def type_name(v):
@@ -2196,6 +2243,41 @@ class P:
         if t[0] == "IDENT" and t[1] != "guard":
             name = t[1]
             self.next()
+        # TYPED-MODE: declared generic type parameters, `gene first<T>(...)`
+        # (mirror of parser.rs: `<` in signature position, ident list with
+        # optional `: bound`).
+        type_params = []
+        t = self.peek()
+        if t[0] == "SYM" and t[1] == "<" and name is not None:
+            self.next()
+            while True:
+                self.eat_nl()
+                t = self.peek()
+                if t[0] == "SYM" and t[1] == ">":
+                    self.next()
+                    break
+                if t[0] == "EOF":
+                    self.note(t[2], 4, "type-parameter list auto-closed")
+                    break
+                if t[0] == "IDENT":
+                    self.next()
+                    bound = None
+                    t2 = self.peek()
+                    if t2[0] == "SYM" and t2[1] == ":":
+                        self.next()
+                        t3 = self.peek()
+                        if t3[0] == "IDENT":
+                            self.next()
+                            bound = t3[1]
+                        else:
+                            self.note(t3[2], 4, "type bound is not a name; dropped")
+                    type_params.append((t[1], bound))
+                    self.eat_nl()
+                    if self.peek()[0] == "SYM" and self.peek()[1] == ",":
+                        self.next()
+                else:
+                    self.note(t[2], 4, f"'{t[1]}' is not a type parameter name; list auto-closed")
+                    break
         params = []
         param_anns = []
         if self.peek() == ("SYM", "(", self.peek()[2]):
@@ -2251,9 +2333,9 @@ class P:
             self.next()
             e = self.expr()
             self.end_stmt()
-            return ("gene", Gene(name, params, guard, [("return", e)], ac, me, m6, copies, seq=False, riboswitch=riboswitch, burst=burst, param_anns=param_anns, ret_ann=ret_ann))
+            return ("gene", Gene(name, params, guard, [("return", e)], ac, me, m6, copies, seq=False, riboswitch=riboswitch, burst=burst, param_anns=param_anns, ret_ann=ret_ann, type_params=type_params))
         body = self.block()
-        return ("gene", Gene(name, params, guard, body, ac, me, m6, copies, seq=False, riboswitch=riboswitch, burst=burst, param_anns=param_anns, ret_ann=ret_ann))
+        return ("gene", Gene(name, params, guard, body, ac, me, m6, copies, seq=False, riboswitch=riboswitch, burst=burst, param_anns=param_anns, ret_ann=ret_ann, type_params=type_params))
 
     def block(self):
         if not (self.peek() == ("SYM", "{", self.peek()[2])):
@@ -2774,7 +2856,26 @@ class P:
         t = self.peek()
         if t[0] == "IDENT":
             self.next()
+            # TYPED-MODE: generic annotation, `list[int]`, `map[str, int]`
+            # (mirror of parser.rs type-args in annotation position).
             t2 = self.peek()
+            if t2[0] == "SYM" and t2[1] == "[":
+                self.next()
+                args = []
+                while True:
+                    self.eat_nl()
+                    t3 = self.peek()
+                    if t3[0] == "SYM" and t3[1] == "]":
+                        self.next()
+                        break
+                    if t3[0] == "EOF":
+                        self.note(t3[2], 4, "type-argument list auto-closed")
+                        break
+                    args.append(self.type_ann())
+                    self.eat_nl()
+                    if self.peek()[0] == "SYM" and self.peek()[1] == ",":
+                        self.next()
+                return ("generic", t[1], args)
             if t2[0] == "SYM" and t2[1] == "?":
                 self.next()
                 return ("opt", ("named", t[1]))
@@ -5136,13 +5237,13 @@ class Interp:
             if i < len(args):
                 # W01 (L2c): soft param annotation at the funnel (mirror).
                 anns = g.param_anns
-                if i < len(anns) and anns[i] is not None and not ann_matches(args[i], anns[i]):
+                if i < len(anns) and anns[i] is not None and not ann_is_typaram(anns[i], g.type_params) and not ann_matches(args[i], anns[i]):
                     raise Stress("unfolded", f"argument '{pname}' for gene '{name}' expects {ann_render(anns[i])}, got {type_name(args[i])}")
                 fenv[pname] = args[i]
             elif dflt is not None:
                 dv = self.eval(fenv, dflt)
                 anns = g.param_anns
-                if i < len(anns) and anns[i] is not None and not ann_matches(dv, anns[i]):
+                if i < len(anns) and anns[i] is not None and not ann_is_typaram(anns[i], g.type_params) and not ann_matches(dv, anns[i]):
                     raise Stress("unfolded", f"default of '{pname}' for gene '{name}' expects {ann_render(anns[i])}, got {type_name(dv)}")
                 fenv[pname] = dv
             else:
@@ -5191,10 +5292,10 @@ class Interp:
         if g.ret_ann is None:
             return v
         if explicit:
-            if not ann_matches(v, g.ret_ann):
+            if not ann_is_typaram(g.ret_ann, g.type_params) and not ann_matches(v, g.ret_ann):
                 raise Stress("unfolded", f"return of gene '{name}' expects {ann_render(g.ret_ann)}, got {type_name(v)}")
         else:
-            if not ann_matches(None, g.ret_ann):
+            if not ann_is_typaram(g.ret_ann, g.type_params) and not ann_matches(None, g.ret_ann):
                 raise Stress("unfolded", f"return of gene '{name}' expects {ann_render(g.ret_ann)}, got null (no return statement ran)")
         return v
 
@@ -5234,7 +5335,7 @@ class Interp:
                 if i < len(args):
                     # W01 (L2c): method param annotations, same soft contract.
                     anns = g.param_anns
-                    if i < len(anns) and anns[i] is not None and not ann_matches(args[i], anns[i]):
+                    if i < len(anns) and anns[i] is not None and not ann_is_typaram(anns[i], g.type_params) and not ann_matches(args[i], anns[i]):
                         raise Stress("unfolded", f"argument '{pname}' for method '{name}' expects {ann_render(anns[i])}, got {type_name(args[i])}")
                     fenv[pname] = args[i]
                 elif dflt is not None:
@@ -5279,10 +5380,10 @@ class Interp:
         if g.ret_ann is None:
             return v
         if explicit:
-            if not ann_matches(v, g.ret_ann):
+            if not ann_is_typaram(g.ret_ann, g.type_params) and not ann_matches(v, g.ret_ann):
                 raise Stress("unfolded", f"return of method '{name}' expects {ann_render(g.ret_ann)}, got {type_name(v)}")
         else:
-            if not ann_matches(None, g.ret_ann):
+            if not ann_is_typaram(g.ret_ann, g.type_params) and not ann_matches(None, g.ret_ann):
                 raise Stress("unfolded", f"return of method '{name}' expects {ann_render(g.ret_ann)}, got null (no return statement ran)")
         return v
 

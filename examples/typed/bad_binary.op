@@ -1,0 +1,4 @@
+## negative: int + str can only stress at runtime
+let a = 1
+let b = "x"
+print(a + b)

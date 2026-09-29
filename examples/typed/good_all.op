@@ -1,0 +1,74 @@
+## TYPED-MODE good-path corpus: annotations, inference, generics, traits,
+## Option/Result, exhaustiveness. Runs clean under --typed AND dynamically.
+gene add(a: Int, b: Int) -> Int {
+    return a + b
+}
+let n: int = add(2, 3)
+print(n)
+
+let xs: list[str] = ["a", "b"]
+print(xs.len())
+
+let scores: map[str, int] = {"alice": 90}
+print(scores.get("alice"))
+
+gene first<T>(items: list[T]) -> T? {
+    return items.get(0)
+}
+print(first([10, 20]))
+
+gene loudest<T: comparable>(a: T, b: T) -> T {
+    if a > b {
+        return a
+    }
+    return b
+}
+print(loudest(3, 9))
+print(loudest("apple", "pear"))
+
+gene div(a: Int, b: Int) -> result[int, str] {
+    if b == 0 {
+        return err("divide by zero")
+    }
+    return ok(a // b)
+}
+match div(10, 2) {
+    case Ok(v) { print("ok " + str(v)) }
+    case Err(e) { print("err " + e) }
+}
+match div(1, 0) {
+    case Ok(v) { print("ok " + str(v)) }
+    case Err(e) { print("err " + e) }
+}
+
+let maybe: int? = none()
+match maybe {
+    case Some(v) { print("some " + str(v)) }
+    case None { print("none") }
+}
+
+phenotype Point {
+    let x = 0
+    let y = 0
+    gene with(x0, y0) {
+        self.x = x0
+        self.y = y0
+        return self
+    }
+    gene mag() {
+        return (self.x ** 2 + self.y ** 2) ** 0.5
+    }
+}
+let p = new Point().with(3, 4)
+print(p.mag())
+
+trait Greeter {
+    gene greet()
+}
+phenotype Dog implements Greeter {
+    gene greet() {
+        return "woof"
+    }
+}
+let d = new Dog()
+print(d.greet())
