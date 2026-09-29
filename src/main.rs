@@ -63,6 +63,7 @@ fn real_main() {
         caps: interp::Caps::default(),
         profile: false,
         stdout_sink: None,
+        vm: false,
     };
     let mut json = false;
     let mut strict = false;
@@ -203,6 +204,8 @@ fn real_main() {
             "--json" => json = true,
             "--strict" => strict = true,
             "--quiet" => opts.quiet = true,
+            // W09 (A2): run compiled gene bodies on the bytecode VM
+            "--vm" => opts.vm = true,
             "--nmd" => nmd = true,
             "--nmd=purge" | "--purge" => {
                 nmd = true;
@@ -260,6 +263,12 @@ fn real_main() {
                 Ok(l) => l,
                 Err(e) => die(&e),
             };
+            // W09 (A2/A3): compile gene bodies for the bytecode VM. Must
+            // happen after load (top-level binds gene defs) and before the
+            // entry call; sequences/workers stay on the tree-walk.
+            if opts.vm {
+                tools::vm_compile(&mut l);
+            }
             if let Some(f) = fuel {
                 l.interp.step_budget = f;
             }
@@ -405,6 +414,17 @@ fn real_main() {
             }
             if rep.failed > 0 {
                 std::process::exit(1);
+            }
+        }
+        "disasm" => {
+            // W10: bytecode listing of compiled gene bodies (parse-only)
+            let file = match positional.first() {
+                Some(f) => f.clone(),
+                None => die("disasm needs a file"),
+            };
+            match tools::disasm_file(&file, json) {
+                Ok(out) => println!("{}", out),
+                Err(e) => die(&e),
             }
         }
         "fmt" => {
@@ -906,6 +926,7 @@ fn repl() {
             caps: interp::Caps::default(),
             profile: false,
             stdout_sink: None,
+            vm: false,
         },
     ) {
         Ok(l) => l,
@@ -999,6 +1020,7 @@ fn repl() {
                                 caps: interp::Caps::default(),
                                 profile: false,
                                 stdout_sink: None,
+                                vm: false,
                             };
                             let rep = tools::run_tests(&[arg.to_string()], &opts, false);
                             println!(
@@ -1068,6 +1090,7 @@ fn repl() {
                                 caps: interp::Caps::default(),
                                 profile: false,
                                 stdout_sink: None,
+                                vm: false,
                             },
                         ) {
                             Ok(nl) => nl,
@@ -1308,8 +1331,10 @@ usage:
   operon graph f.op [--json]
   operon watch f.op [args...]
   operon profile f.op
+  operon disasm f.op [--json]     W10: bytecode listing of compiled genes
   operon crispr f.op --knockout gene [--json]
   operon bench f.op [--iters n]
+  operon run f.op --vm            A2/A3: bytecode VM on gene bodies
   operon version",
         env!("CARGO_PKG_VERSION")
     );
