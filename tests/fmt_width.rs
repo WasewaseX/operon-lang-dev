@@ -25,6 +25,22 @@ use operon::tools::{format_program_with, parse_fmt_config, FmtConfig};
 
 fn corpus() -> Vec<std::path::PathBuf> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    // sandbox hygiene: only TRACKED .op files are the width corpus —
+    // untracked drafts from a parallel lane's working tree must not red the
+    // law (CI sees clean checkouts; degrade to include-all without git).
+    let tracked: Option<std::collections::HashSet<std::path::PathBuf>> =
+        std::process::Command::new("git")
+            .args(["ls-files", "std", "tests", "examples", "apps"])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| {
+                String::from_utf8_lossy(&o.stdout)
+                    .lines()
+                    .filter(|l| l.ends_with(".op"))
+                    .map(|l| root.join(l))
+                    .collect()
+            });
     let mut out = Vec::new();
     for dir in ["std", "tests", "examples", "apps"] {
         let base = root.join(dir);
@@ -43,7 +59,9 @@ fn corpus() -> Vec<std::path::PathBuf> {
                         continue;
                     }
                     stack.push(p);
-                } else if p.extension().map(|x| x == "op").unwrap_or(false) {
+                } else if p.extension().map(|x| x == "op").unwrap_or(false)
+                    && tracked.as_ref().is_some_and(|t| t.contains(&p))
+                {
                     out.push(p);
                 }
             }
