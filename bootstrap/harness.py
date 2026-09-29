@@ -106,7 +106,12 @@ def main():
             # stderr was discarded). If the oracle side failed or went
             # quiet, show the first lines of its stderr, the crash is
             # there, not in the semantics.
-            if py_code != 0 and not py_out.strip() and py_err.strip():
+            # W59 windows truth (2026-09-29): the old condition also
+            # required EMPTY oracle stdout, so a crash AFTER partial output
+            # (weak_refs.op: 5 lines, then a dead unix-only import died
+            # inside memory()) hid the traceback and stayed anonymous.
+            # Surface stderr on ANY oracle failure, not just silent ones.
+            if py_code != 0 and py_err.strip():
                 for line in py_err.strip().splitlines()[:6]:
                     print(f"    oracle stderr: {line}")
             failed += 1
@@ -134,7 +139,12 @@ def main():
             passed += 1
         else:
             print(f"  DIVERGE  {rel_op} (granted)")
-            if py_code != 0 and not py_out.strip() and py_err.strip():
+            # W59 windows truth (2026-09-29): the old condition also
+            # required EMPTY oracle stdout, so a crash AFTER partial output
+            # (weak_refs.op: 5 lines, then a dead unix-only import died
+            # inside memory()) hid the traceback and stayed anonymous.
+            # Surface stderr on ANY oracle failure, not just silent ones.
+            if py_code != 0 and py_err.strip():
                 for line in py_err.strip().splitlines()[:6]:
                     print(f"    oracle stderr: {line}")
             failed += 1
