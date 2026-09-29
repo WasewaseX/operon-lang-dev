@@ -1,0 +1,40 @@
+# W093 validation probe, V6 (stoichiometric RISC silencing dose-response).
+# Companion measurement program for bootstrap/validation_registry.json and
+# bootstrap/validation_report.py. It asserts NOTHING. The enforcing test
+# remains tests/silence_dose.op. Mirrors its call order exactly: the seeded
+# 20-call capture ladder, then the binary no-draw check, then the
+# @acetylate immunity check. Capture rides the SHARED mirrored xorshift64*
+# stream, so every number here is a parity pin, not a statistic.
+gene loud() { return "L" }
+gene quiet() { return "Q" }
+gene gone() { return "G" }
+@acetylate gene sacred() { return "S" }
+silence loud -> quiet strength 0.5
+silence loud -> quiet strength 0.5
+silence gone;
+silence sacred;
+randomize(42)
+let captured = 0
+let i = 0
+while i < 20 {
+    if loud() == "Q" {
+        captured = captured + 1
+    }
+    i = i + 1
+}
+promote("RESULT v6_capture_count={captured}")
+randomize(7)
+let r1 = random()
+randomize(7)
+let g1 = gone()
+let r2 = random()
+promote("RESULT v6_binary_captured={g1 == null}")
+promote("RESULT v6_no_draw_binary={r1 == r2}")
+promote("RESULT v6_stream_value={r1}")
+randomize(7)
+let r3 = random()
+randomize(7)
+let s1 = sacred()
+let r4 = random()
+promote("RESULT v6_immune_expresses={s1 == \"S\"}")
+promote("RESULT v6_no_draw_immune={r3 == r4}")
