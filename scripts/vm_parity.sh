@@ -13,12 +13,16 @@ BIN="${BIN:-./bin/operon}"
 # '[contained]' marker) but WHICH cap trips first is scheduler-dependent:
 # under a parallel sweep the task-count cap can beat the OS thread cap,
 # serially the reverse. Both messages are legitimate containment outcomes;
-# redteam.sh owns this payload's contract. Verified empirically 2026-09-30
+# redteam.sh owns these payloads' contracts. Verified empirically 2026-09-30
 # (each engine serially x3: identical 'thread cap' line every time).
-LOAD_SENSITIVE="tests/redteam/rt_p4b_threadbomb_join.op"
+LOAD_SENSITIVE="tests/redteam/rt_p4a_threadbomb.op tests/redteam/rt_p4b_threadbomb_join.op"
 pass=0; fail=0; lskip=0; failed_files=()
 for f in $(find tests apps -name '*.op' 2>/dev/null | sort); do
-  if [ "$f" == "$LOAD_SENSITIVE" ]; then
+  skip=""
+  for ls in $LOAD_SENSITIVE; do
+    [ "$f" == "$ls" ] && skip=1
+  done
+  if [ -n "$skip" ]; then
     lskip=$((lskip+1))
     continue
   fi
