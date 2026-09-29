@@ -631,6 +631,13 @@ warning[W07]: binding 'dead' is never read in this file (dead store); ...
   those. JSON surfaces are unchanged.
 - rc contracts unchanged: `lint` stays advisory (0, or 3 under
   `--strict`), `check` escalates on hard errors (3, dx-r9).
+- Color (W101 slice 3) is AUTO: ANSI codes appear only when the target
+  stream is a terminal; `NO_COLOR` (no-color.org) always suppresses; and
+  pipes, files and the golden gate receive byte-exact plain text. There
+  is no always-on flag by design: the golden fixtures are the contract,
+  and a flag that leaks codes into them would be a lie generator. The
+  caret row is width-correct on CJK source text (display width, not
+  char count, pads the underline).
 
 ## 9b. Security, the capability sandbox
 
