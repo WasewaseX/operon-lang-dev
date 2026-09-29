@@ -1247,6 +1247,11 @@ impl Interp {
             self.tick()?;
         }
         match stmt {
+            // W01-s2: a type alias is parse-time metadata, inert at runtime.
+            // The parser already resolved later annotations; executing does
+            // nothing (the VM bridges the statement here, so both cores run
+            // the same no-op).
+            Stmt::TypeAlias(..) => Ok(Flow::Norm),
             Stmt::Block(body) => {
                 let child = Env::new(Some(env.clone()));
                 self.exec_block(&child, body)
@@ -11426,6 +11431,19 @@ pub fn repressilator_gate_level(n: usize, tick: u64, node_index: usize) -> f64 {
 /// everything, and `float` accepts int (safe numeric widening, `int`
 /// refuses float: no silent narrowing). Unions match any alternative;
 /// optionals additionally accept null. Mirrored by oracle.ann_matches.
+///
+/// W01-s2 extends the same soft contract additively:
+/// - `TypeVar` (a gene's `<T>` parameter) accepts any value: generic genes
+///   run without runtime rejection, the check-time layer (types.rs) does
+///   the real unification per call site.
+/// - `Alias` matches as its parse-time-resolved target.
+/// - `App` checks payloads at the boundary: `List<int>` requires a list
+///   whose elements are all ints (an EMPTY list matches vacuously),
+///   `Map<str, int>` requires every key and value to match, `Option<T>` is
+///   exactly `T?` (null or T), `Result<T, E>` requires an Ok payload
+///   matching T or an Err payload matching E. An unknown head falls back
+///   to plain family-name matching ("list" without arguments behaves
+///   exactly as the bare `list` annotation always has).
 pub fn ann_matches(v: &Value, ann: &TypeAnn) -> bool {
     match ann {
         TypeAnn::Named(name) => {
@@ -11440,6 +11458,53 @@ pub fn ann_matches(v: &Value, ann: &TypeAnn) -> bool {
         }
         TypeAnn::Union(alts) => alts.iter().any(|a| ann_matches(v, a)),
         TypeAnn::Optional(inner) => matches!(v, Value::Null) || ann_matches(v, inner),
+        TypeAnn::TypeVar(_) => true,
+        TypeAnn::Alias { target, .. } => ann_matches(v, target),
+        TypeAnn::App { head, args } => match (head.as_str(), args.as_slice()) {
+            ("list" | "List" | "seq" | "Seq", [el]) => match v {
+                Value::List(l) => l.borrow().iter().all(|e| ann_matches(e, el)),
+                _ => false,
+            },
+            ("map" | "Map", [k, val]) => match v {
+                Value::Map(m) => m
+                    .borrow()
+                    .iter()
+                    .all(|(kk, vv)| ann_matches(kk, k) && ann_matches(vv, val)),
+                _ => false,
+            },
+            // Option<T> == T? per the W01-s2 spec: null and the NoneV
+            // variant always match; a SomeV matches when its payload does;
+            // a plain (non-variant) value matches by the inner annotation
+            // (the stage-1 `int?` behavior, preserved op-for-op).
+            ("option" | "Option" | "optional" | "opt", [inner]) => match v {
+                Value::Null => true,
+                Value::Variant(crate::value::VTag::NoneV, _) => true,
+                Value::Variant(crate::value::VTag::SomeV, payload) => match payload {
+                    Some(p) => ann_matches(p, inner),
+                    None => true, // tag-only form, payload unchecked
+                },
+                other => ann_matches(other, inner),
+            },
+            ("result" | "Result", [ok, err]) => match v {
+                Value::Variant(crate::value::VTag::OkV, payload) => match payload {
+                    Some(p) => ann_matches(p, ok),
+                    None => true, // tag-only form, payload unchecked
+                },
+                Value::Variant(crate::value::VTag::ErrV, payload) => match payload {
+                    Some(p) => ann_matches(p, err),
+                    None => true,
+                },
+                _ => false,
+            },
+            // unknown head or wrong arity: degrade to the family-name rule
+            // ("list" bare matched by type_name since W01 stage 1)
+            (head, _) => {
+                if head == "any" {
+                    return true;
+                }
+                v.type_name() == head || (head == "float" && matches!(v, Value::Int(_)))
+            }
+        },
     }
 }
 

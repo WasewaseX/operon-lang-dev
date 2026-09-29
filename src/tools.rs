@@ -1751,6 +1751,10 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
         Stmt::LetAnn(n, ann, e) => {
             out.push_str(&format!("let {}: {} = {}\n", n, ann.render(), fmt_expr(e)));
         }
+        // W01-s2: type alias roundtrip (`type Name = ann;`)
+        Stmt::TypeAlias(n, ann, _) => {
+            out.push_str(&format!("type {} = {}\n", n, ann.render()));
+        }
         Stmt::LetPat(p, e) => {
             out.push_str(&format!(
                 "let {} = {}\n",
@@ -1920,8 +1924,9 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
             }
             match &g.name {
                 Some(n) => out.push_str(&format!(
-                    "gene {}({}){}",
+                    "gene {}{}({}){}",
                     n,
+                    fmt_type_params(&g.type_params),
                     fmt_params_ann(&g.params, &g.param_anns),
                     match &g.ret_ann {
                         Some(a) => format!(" -> {}", a.render()),
@@ -2245,6 +2250,22 @@ fn fmt_params_ann(ps: &[(String, Option<Expr>)], anns: &[Option<TypeAnn>]) -> St
         })
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+/// W01-s2: canonical type-parameter list rendering, `<T, U: Show>`
+/// (empty list renders empty, no brackets).
+fn fmt_type_params(tps: &[(String, Option<TypeAnn>)]) -> String {
+    if tps.is_empty() {
+        return String::new();
+    }
+    let inner: Vec<String> = tps
+        .iter()
+        .map(|(n, bound)| match bound {
+            Some(b) => format!("{}: {}", n, b.render()),
+            None => n.clone(),
+        })
+        .collect();
+    format!("<{}>", inner.join(", "))
 }
 
 /// L1a: canonical form of a destructuring pattern.
@@ -2594,6 +2615,13 @@ fn d_ann(a: &TypeAnn) -> DumpNode {
         TypeAnn::Named(n) => dn("Ann", vec![ds(n)]),
         TypeAnn::Union(alts) => dn("AnnUnion", alts.iter().map(d_ann).collect()),
         TypeAnn::Optional(inner) => dn("AnnOptional", vec![d_ann(inner)]),
+        // W01-s2: generic application / type parameter / resolved alias
+        TypeAnn::App { head, args } => dn(
+            "AnnApp",
+            vec![ds(head), dn("Args", args.iter().map(d_ann).collect())],
+        ),
+        TypeAnn::TypeVar(n) => dn("AnnTypeVar", vec![ds(n)]),
+        TypeAnn::Alias { name, target } => dn("AnnAlias", vec![ds(name), d_ann(target)]),
     }
 }
 
@@ -2848,6 +2876,10 @@ fn d_stmt(s: &Stmt) -> DumpNode {
         Stmt::Let(name, e) => dn("Let", vec![ds(name), d_expr(e)]),
         Stmt::LetConst(name, e) => dn("LetConst", vec![ds(name), d_expr(e)]),
         Stmt::LetAnn(name, ann, e) => dn("LetAnn", vec![ds(name), d_ann(ann), d_expr(e)]),
+        // W01-s2: alias dump (name, resolved target, line)
+        Stmt::TypeAlias(name, ann, line) => {
+            dn("TypeAlias", vec![ds(name), d_ann(ann), dt(*line as i64)])
+        }
         Stmt::Assign(name, op, e) => {
             let mut items = vec![ds(name)];
             if let Some(op) = op {

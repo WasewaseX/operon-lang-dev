@@ -32,7 +32,7 @@ frame proof {
     }
     assert(ok == 1, "narrowing violation surfaces as catchable stress")
     # ---- return annotation enforced (explicit + implicit + propagated)
-    gene bad_ret() -> int {
+    gene bad_ret() -> int { // allow: type-mismatch
         return "oops"
     }
     let hit = 0
@@ -44,7 +44,7 @@ frame proof {
             "return mismatch names the gene, the ann, and the type")
     }
     assert(hit == 1, "return violation is catchable")
-    gene no_ret() -> int {
+    gene no_ret() -> int { // allow: null-return
         let x = 1
     }
     let hit2 = 0
@@ -118,7 +118,7 @@ frame proof {
     assert(dflt(9) == 9, "annotated param overridden")
     # ---- unknown annotation names parse fine but match nothing: a typo'd
     # type name surfaces loudly at the boundary (catchable), never silently
-    gene weird(x: Future) -> any {
+    gene weird(x: Future) -> any { // allow: unknown-type-name
         return "ran"
     }
     let hit5 = 0

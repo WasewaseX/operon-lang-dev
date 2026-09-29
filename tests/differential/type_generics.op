@@ -1,0 +1,91 @@
+# type_generics, W01-s2 differential pin: generic genes, container sugar,
+# aliases and the Option/Result payload contracts, byte-identical on both
+# engines. The runtime soft contract extends additively (TypeVar accepts
+# anything; List/Map check payloads; Option<T> is T?; Result checks Ok/Err
+# payloads; aliases match their parse-time-resolved target).
+gene id<T>(x: T) -> T {
+    return x
+}
+print(id(7), id("hi"), id([1, 2]))
+
+gene first<T>(xs: List<T>) -> T? {
+    return xs.get(0)
+}
+print(first([10, 20]), first([]))
+
+gene count<V>(m: Map<str, V>) -> int {
+    return len(m)
+}
+print(count({"a": 1, "b": 2}))
+
+# a mis-typed element stresses the boundary (concrete payload type)
+gene ints(xs: List<int>) -> int {
+    return len(xs)
+}
+stress {
+    ints(["a", "b"])
+} rescue (e) {
+    print("elem:", e.kind, e.message)
+}
+
+# Option<T> is T?: null, none(), some(t), and the plain inner all fit
+gene maybe(v: int) -> Option<int> {
+    if v > 0 {
+        return some(v)
+    }
+    return none()
+}
+print(maybe(3), maybe(0))
+gene plain_into_opt(x: int?) -> int? {
+    return x
+}
+print(plain_into_opt(null), plain_into_opt(5))
+
+# Result<T, E> payload contract
+gene parse(tag: str) -> Result<int, str> {
+    if tag == "n" {
+        return ok(42)
+    }
+    return err("bad tag")
+}
+print(parse("n"), parse("x"))
+gene wrong_err() -> Result<int, str> {
+    return err(7)
+}
+stress {
+    wrong_err()
+} rescue (e) {
+    print("err-payload:", e.kind, e.message)
+}
+
+# type aliases: parse-time resolution, runtime matches the target
+type UserId = int
+type Names = List<str>
+gene load(u: UserId) -> int {
+    return u * 2
+}
+print(load(21))
+gene shout(ns: Names) -> str {
+    return ns.join(",")
+}
+print(shout(["a", "b"]))
+stress {
+    load("not-an-id")
+} rescue (e) {
+    print("alias:", e.kind, e.message)
+}
+
+# generic + alias composition
+type Box = List<int>
+gene total<T>(xs: List<T>, zero: T) -> T {
+    return zero
+}
+let b: Box = [1, 2, 3]
+print(total(b, 0))
+
+# bare family names keep the stage-1 behavior
+gene flex(x: option) -> str {
+    return "flex"
+}
+print(flex(some(1)), flex(none()))
+print("type_generics differential complete")
