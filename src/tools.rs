@@ -3244,6 +3244,26 @@ fn migrate_source(src: &str) -> (String, usize, usize) {
 
     while i < n {
         let c = chars[i];
+        // W25 follow-up (2026-09-27): `::` is LIVE exact sugar in use paths
+        // (use std::bio — dev1's W25). A use line is copied VERBATIM: the
+        // separators are free spelling variants there (W25 contract), so the
+        // dx-r3 expr::field → expr.field repair below must never touch them
+        // (fix_corpus law 1: fix never changes canonical meaning — the
+        // formatter preserves the spelling the author chose). Expression
+        // context keeps the dx-r3 repair (law 3 pins it).
+        if c == 'u'
+            && (i == 0 || out.ends_with('\n'))
+            && i + 3 < n
+            && chars[i + 1] == 's'
+            && chars[i + 2] == 'e'
+            && (chars[i + 3] == ' ' || chars[i + 3] == '\t')
+        {
+            while i < n && chars[i] != '\n' {
+                out.push(chars[i]);
+                i += 1;
+            }
+            continue;
+        }
         // comments: verbatim to end of line (the newline itself re-enters code)
         if c == '#' {
             while i < n && chars[i] != '\n' {
