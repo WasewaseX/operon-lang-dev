@@ -3008,16 +3008,11 @@ bytes_from_str str_from_bytes bytes_from_list bytes_to_list read_file_bytes writ
 http_get serve recv_request send_response json_parse json_str env call items py
 re_match re_find re_groups unix_time date_parts date_fmt
 grapheme_len fold_case char_at char_slice
-<<<<<<< HEAD
-some none ok err is_some is_none is_ok is_err unwrap unwrap_or
-enumerate zip sorted reversed any all first last take drop unique flatten chunk round clamp divmod
-is_object object_fields object_from_map""".split())
-=======
 norm_nfc norm_nfd casefold char_category weak strengthen
 some none ok err is_some is_none is_ok is_err unwrap unwrap_or try_num try_index try_get try_pop
 enumerate zip sorted reversed any all first last take drop unique flatten chunk round clamp divmod
-channel send recv close select""".split())
->>>>>>> origin/main
+channel send recv close select
+is_object object_fields object_from_map""".split())
 
 BUILTIN_SYNONYMS = {"print": "promote", "echo": "promote", "say": "promote", "show": "promote"}
 

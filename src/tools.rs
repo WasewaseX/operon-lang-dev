@@ -2398,7 +2398,8 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
             "{{{}}}",
             pairs
                 .iter()
-                .map(|(k, v)| format!("{}: {}", fmt_map_key(k), fmt_prec(v, 0)))                .collect::<Vec<_>>()
+                .map(|(k, v)| format!("{}: {}", fmt_map_key(k), fmt_prec(v, 0)))
+                .collect::<Vec<_>>()
                 .join(", ")
         ),
         Expr::Ident(n) => n.clone(),
