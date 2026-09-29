@@ -181,7 +181,8 @@ gene main() {
     // runners we cannot reproduce locally (macos arm64 exit-code lie,
     // 2026-09-29 release-matrix run).
     assert_eq!(
-        rc, 1,
+        rc,
+        1,
         "uncaught stress exits 1 | stdout={:?} | stderr={:?} | trace_len={}",
         out,
         err,

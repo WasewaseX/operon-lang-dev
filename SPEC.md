@@ -1,6 +1,6 @@
 # Operon, Language Specification
 
-**Status:** v2.5.0, post-2.4 language amendments are landing incrementally (the generated inventory in [docs/STATS.md](docs/STATS.md) is the countable truth; D-009: version strings move only with the milestone). Last tagged release: 2.5.0. This document is the single contract implemented identically by:
+**Status:** v2.6.0, post-2.4 language amendments are landing incrementally (the generated inventory in [docs/STATS.md](docs/STATS.md) is the countable truth; D-009: version strings move only with the milestone). Last tagged release: 2.5.0 (2.6.0 = the W09 A6 VM-default flip, untagged). This document is the single contract implemented identically by:
 
 | Implementation | Language | Role |
 |---|---|---|
@@ -845,7 +845,7 @@ All features are real, implemented, tested, none are decorative.
 - **`operon debug f.op --break N` (W08 phase 1)**: a statement-level trap in the tree-walk interpreter with a REPL on break: `c`/`continue` resumes, `s`/`step` breaks after the next statement, `p EXPR` evaluates in the current frame (same notes and stresses as a run), `vars` dumps the frame chain (values display-truncated), `bt` prints the call chain, `q` leaves with exit 0. EOF on stdin resumes to completion, so piped sessions are scriptable and never wedge. Workers are separate interpreters and never break. VM-offset breakpoints (DAP adapter, phase 2) are deferred to the A-track.
 
 
-- **`--vm` (W09 A2)**: run with gene bodies executed by the OIR1 bytecode machine (src/vm.rs; docs/vm-design.md §2a). Calls, the gate funnel, capabilities, notes and stress kinds are SHARED code, so output is byte-identical to the tree-walk by construction; the differential harness runs every corpus target on both engines against the oracle (the `--vm` lane must stay all-green). `operon ir f.op` prints the OIR1 listing, one line per instruction (`op idx | mnemonic | operands | line`), deterministic for the same source (a stability test compiles a mixed program twice and byte-compares the listing, W10). The opcode table, as executed by the machine and documented here:
+- **`--vm` / `--interp` (W09 A2/A6)**: since v2.6.0 the bytecode machine is the DEFAULT engine for gene bodies (src/vm.rs; docs/vm-design.md §2a); `--vm` remains accepted for explicitness and `--interp` opts back to the tree-walking interpreter (the A6 escape hatch, docs/vm-design.md §9). Calls, the gate funnel, capabilities, notes and stress kinds are SHARED code, so output is byte-identical across engines by construction; the differential harness runs every corpus target on BOTH engines against the oracle (default lane + tree-walk lane, both must stay all-green). `operon ir f.op` prints the OIR1 listing, one line per instruction (`op idx | mnemonic | operands | line`), deterministic for the same source (a stability test compiles a mixed program twice and byte-compares the listing, W10). The opcode table, as executed by the machine and documented here:
 
 | opcode | operands | meaning |
 |---|---|---|
@@ -1044,7 +1044,7 @@ module's placeholder map which fills when loading completes (with a rung-4
 note); map/filter/reduce/each run callbacks over a snapshot of the source
 list (callbacks may freely mutate the original).
 
-This specification is **Operon 2.5.0**. `operon version` prints the implementation banner `Operon 2.5.0 (rust-core, cpp-kernel)`, which matches this document. (sec-r2: the C runtime kernel was deleted, audit A15 proved its intern table was write-only and its raw pointers were the project's one ASan-confirmed memory-safety class; interning now lives in Rust, and the banner no longer claims a c-runtime.)
+This specification is **Operon 2.6.0**. `operon version` prints the implementation banner `Operon 2.6.0 (rust-core, cpp-kernel)`, which matches this document. (sec-r2: the C runtime kernel was deleted, audit A15 proved its intern table was write-only and its raw pointers were the project's one ASan-confirmed memory-safety class; interning now lives in Rust, and the banner no longer claims a c-runtime.)
 
 ## 18. Verification status (what the shipped suite proves)
 

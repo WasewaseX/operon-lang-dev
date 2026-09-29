@@ -51,7 +51,9 @@ run_one() {
     # sz hotfix: -k 5 — a payload that ignores SIGTERM must die by SIGKILL;
     # plain `timeout 15` wedged CI for ~131 s on rt_p4a (TERM ignored, timeout
     # blocked until the process died on its own). rc 137 = SIGKILLed (hang).
-    timeout -k 5 15 ./bin/operon run "$f" "${grants[@]}" > "$TMP/out" 2> "$TMP/err"
+    # W09: OPERON_EXTRA_ARGS (e.g. --vm) re-runs the same containment gate
+    # against the bytecode engine; default empty = the tree-walk baseline.
+    timeout -k 5 15 ./bin/operon run ${OPERON_EXTRA_ARGS:-} "$f" "${grants[@]}" > "$TMP/out" 2> "$TMP/err"
     local rc=$?
     if [ $rc -eq 124 ] || [ $rc -eq 137 ]; then
         echo "HANG  $f"; return 1

@@ -104,6 +104,30 @@ pub enum Instr {
     CallNamed(u32, u32),
 }
 
+/// Identity hasher for pointer-keyed cache maps: a pointer is already a
+/// well-distributed u64, SipHash's mixing (the std default) is pure per-call
+/// overhead on the fib25 path (~243k lookups). Parity-neutral: the cache is
+/// invisible to outputs, notes, and fuel.
+#[derive(Default)]
+pub struct IdentityHash(u64);
+
+impl std::hash::Hasher for IdentityHash {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+    fn write(&mut self, bytes: &[u8]) {
+        for (i, b) in bytes.iter().enumerate() {
+            self.0 ^= (*b as u64) << ((i % 8) * 8);
+        }
+    }
+    fn write_u64(&mut self, n: u64) {
+        self.0 = n;
+    }
+    fn write_usize(&mut self, n: usize) {
+        self.0 = n as u64;
+    }
+}
+
 /// Bridged sub-AST arena plus the compiled bodies. Lives on the Interp
 /// while --vm runs; bridges clone their node out per execution (Expr/Stmt
 /// clones are cheap: children are Arc'd definitions and interned strings).
@@ -116,7 +140,7 @@ pub struct VmProgram {
     /// ~243k calls were cloning the whole code vec per call, which made the
     /// machine SLOWER than the tree-walk (the bug the fib25 gate exists to
     /// catch; measured 0.54x before, same outputs after).
-    pub codes: HashMap<usize, std::rc::Rc<GeneCode>>,
+    pub codes: HashMap<usize, std::rc::Rc<GeneCode>, std::hash::BuildHasherDefault<IdentityHash>>,
 }
 
 impl<'a> Compiler<'a> {

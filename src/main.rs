@@ -86,9 +86,13 @@ fn real_main() {
     // W68: `operon rna --check` validates a patch and writes NOTHING, ever
     let mut rna_check = false;
     let mut trace_grn_path: Option<String> = None;
-    // W09 A2: run gene bodies through the OIR1 bytecode machine (src/vm.rs);
-    // calls/gates stay on the shared path, so output is byte-identical
-    let mut use_vm = false;
+    // W09 A2/A6: run gene bodies through the OIR1 bytecode machine
+    // (src/vm.rs); calls/gates stay on the shared path, so output is
+    // byte-identical. DEFAULT ON since the A6 flip (v2.6.0 release
+    // boundary, D-009); --no-vm opts back to the tree-walk for the
+    // differential harness and debugging. The vm lane parity (219/219)
+    // and the differential harness hold for both engines.
+    let mut use_vm = true;
     // W08 phase 1: `operon debug` break lines (--break N, repeatable)
     #[allow(unused_assignments)]
     let mut debug_mode = false;
@@ -290,9 +294,15 @@ fn real_main() {
                 }
                 trace_grn_path = p;
             }
-            // W09 A2: the bytecode lane (same semantics, machine-executed)
+            // W09 A2: the bytecode lane (same semantics, machine-executed);
+            // A6: it is the DEFAULT, the flag remains for explicitness
             "--vm" => {
                 use_vm = true;
+            }
+            // W09 A6: opt back to the tree-walking interpreter (--interp is
+            // the design-contract name, docs/vm-design.md §9; --no-vm alias)
+            "--interp" | "--no-vm" => {
+                use_vm = false;
             }
             // W11: the optimization pipeline level
             "--opt" => {
@@ -402,13 +412,13 @@ fn real_main() {
     match cmd.as_str() {
         "--version" | "-V" => {
             println!(
-                "Operon {} (rust-core, cpp-kernel)",
+                "Operon {}-vm (rust-core, cpp-kernel)",
                 env!("CARGO_PKG_VERSION")
             );
         }
         "version" => {
             println!(
-                "Operon {} (rust-core, cpp-kernel)",
+                "Operon {}-vm (rust-core, cpp-kernel)",
                 env!("CARGO_PKG_VERSION")
             );
         }
