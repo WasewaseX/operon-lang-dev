@@ -608,6 +608,30 @@ Contract:
 - Pinned by scripts/diag_golden.sh (byte-exact fixtures under
   tests/diagnostics/); rc stays 1 (dx-r1).
 
+W101 slice 2 extends the same shape to the W041-coded streams (`check`
+correctness findings, `lint` style findings) in text mode:
+
+```
+warning[W07]: binding 'dead' is never read in this file (dead store); ...
+
+  --> <file>:<line>
+   |
+<line> | <source line>
+   |
+   = rule: <rule>
+```
+
+- The severity word prefixes the code: `error[E01]:`, `warning[W07]:`,
+  `style[N12]:`; the fatal block keeps its bare `error[<code>]:` header.
+- Findings carry line-only locations (W042 lane), so no caret row is
+  faked; the note line names the owning rule as provenance. Phantoms are
+  swept without line info and render header-only, code attached (W01).
+- Section headers (`error:` / `warning:` / `repair:` / `style ...`) and
+  the `summary:` line of `operon check` are unchanged; scripts parse
+  those. JSON surfaces are unchanged.
+- rc contracts unchanged: `lint` stays advisory (0, or 3 under
+  `--strict`), `check` escalates on hard errors (3, dx-r9).
+
 ## 9b. Security, the capability sandbox
 
 The runtime is **default-deny**: a program is an organism in a culture flask, and nothing outside the flask exists until the operator grants it. The builtins `read_file`, `write_file`, `append_file`, `exists`, `read_dir`, `file_size`, `fs_delete`, `fs_rename`, `fs_mkdir`, `run`, `py`, `http_get`, `serve`, `env`, and `exit` raise catchable Stress `interference` when no grant covers the access, RNA-interference: the cell's antiviral machinery silences the operation instead of crashing. `recv_request`/`send_response` poll a queue that only `serve` fills, so they are inert without a granted server.

@@ -1,0 +1,9 @@
+error:
+error[E01]: 'greet' accepts at most 1 argument(s), got 3, extras are ignored at runtime
+
+  --> tests/diagnostics/wrong_arity.op:2
+   |
+2 |   greet("a", "b", "c")
+   |
+   = rule: wrong-arity
+summary: 1 error(s), 0 warning(s), 0 style, 0 repair note(s)
