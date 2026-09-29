@@ -1,0 +1,7 @@
+# Evidence archives contain rule-message text and finding patterns by
+# definition; rescanning them trips the secrets scanner on the project's own
+# committed SARIF output (self-scan artifact class — TRIAGE.md session-9
+# addendum). The canonical scan targets src/ bootstrap/ scripts/ .github/
+# (static-analysis.yml); this file guards bare `semgrep scan` runs too.
+docs/static-analysis/reports/
+docs/codeql/
