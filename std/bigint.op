@@ -1,0 +1,339 @@
+# std/bigint, exact arbitrary-precision integers (W32 tutorial path).
+#
+# WHY THIS EXISTS: native Operon integers are i64 with a hard no-wrap
+# contract, every arithmetic surface raises catchable `overflow` at the
+# i64 boundary (SPEC §9 limits table; pinned op-by-op in
+# tests/overflow_contract.op). When a computation legitimately needs to
+# cross that boundary, factorials, cryptography-style exponents, exact
+# combinatorics, this module gives you unbounded integers built from
+# plain lists, so the whole thing is readable, auditable, and runs
+# byte-identically on BOTH engines (it is ordinary .op).
+#
+# REPRESENTATION (the one thing to memorize):
+#   a bignum is the 2-element list  [sign, limbs]
+#     sign  ∈ {1, -1}              (zero is ALWAYS canonicalized to 1)
+#     limbs = list of ints 0..9999, LITTLE-ENDIAN base-10^4 digits
+#   Example: -1234567890123 = [-1, [123, 6789, 2345, 12]]
+#   (123 + 6789*10^4 + 2345*10^8 + 12*10^12, negated)
+# High limbs are never zero (except the number zero itself = [1, [0]]),
+# so two values are equal exactly when their lists are ==.
+#
+# CONTRACT: every function is pure (arguments are never mutated, every
+# result is a NEW list), deterministic (no entropy, no capabilities,
+# no clocks), and never panics. Parsing functions return null on bad
+# input instead of guessing; big_to_int returns null when the value no
+# longer fits i64 (never a silent clamp). Costs are what you expect:
+# add/sub are O(limbs), mul is schoolbook O(n*m), fine for thousands
+# of digits, not a replacement for a real bignum kernel.
+#
+# Pins: tests/std_bigint.op (asserts, both engines) +
+# tests/differential/bigint.op (byte-identical output, both engines).
+
+gene __norm_limbs(ls) {
+    # drop high zero limbs; keep at least one digit
+    let n = len(ls)
+    while n > 1 && ls[n - 1] == 0 {
+        n = n - 1
+    }
+    return ls.slice(0, n)
+}
+
+gene __all_digits(t) {
+    let i = 0
+    while i < len(t) {
+        let c = t.slice(i, i + 1)
+        if !(c >= "0" && c <= "9") {
+            return false
+        }
+        i = i + 1
+    }
+    return true
+}
+
+gene __cmp_mag(x, y) {
+    # compare absolute magnitudes: -1 (x<y), 0, 1 (x>y)
+    if len(x) != len(y) {
+        if len(x) > len(y) { return 1 }
+        return -1
+    }
+    let i = len(x) - 1
+    while i >= 0 {
+        if x[i] != y[i] {
+            if x[i] > y[i] { return 1 }
+            return -1
+        }
+        i = i - 1
+    }
+    return 0
+}
+
+gene __add_mag(x, y) {
+    let n = len(x)
+    let m = len(y)
+    let k = n
+    if m > k { k = m }
+    let out = []
+    let carry = 0
+    let i = 0
+    while i < k {
+        let s = carry
+        if i < n { s = s + x[i] }
+        if i < m { s = s + y[i] }
+        push(out, s % 10000)
+        carry = s // 10000
+        i = i + 1
+    }
+    if carry > 0 {
+        push(out, carry)
+    }
+    return __norm_limbs(out)
+}
+
+gene __sub_mag(x, y) {
+    # requires |x| >= |y| (callers guarantee it via __cmp_mag)
+    let out = []
+    let borrow = 0
+    let i = 0
+    let n = len(x)
+    let m = len(y)
+    while i < n {
+        let d = x[i] - borrow
+        if i < m { d = d - y[i] }
+        if d < 0 {
+            d = d + 10000
+            borrow = 1
+        } else {
+            borrow = 0
+        }
+        push(out, d)
+        i = i + 1
+    }
+    return __norm_limbs(out)
+}
+
+gene big_zero() {
+    return [1, [0]]
+}
+
+gene big_is_zero(x) {
+    return len(x[1]) == 1 && x[1][0] == 0
+}
+
+gene big_from_int(n) {
+    if n == 0 {
+        return big_zero()
+    }
+    let sign = 1
+    if n < 0 { sign = -1 }
+    let m = abs(n)
+    let ls = []
+    while m > 0 {
+        push(ls, m % 10000)
+        m = m // 10000
+    }
+    return [sign, ls]
+}
+
+gene big_from_str(s) {
+    # optional leading sign, then digits ONLY, anything else is null
+    let t = s
+    let sign = 1
+    if len(t) > 0 && t.slice(0, 1) == "-" {
+        sign = -1
+        t = t.slice(1, len(t))
+    } elif len(t) > 0 && t.slice(0, 1) == "+" {
+        t = t.slice(1, len(t))
+    }
+    if len(t) == 0 || !__all_digits(t) {
+        return null
+    }
+    # left-pad to a multiple of 4 so grouping never splits a digit
+    let pad = (4 - (len(t) % 4)) % 4
+    let i = 0
+    while i < pad {
+        t = "0" + t
+        i = i + 1
+    }
+    let groups = []
+    i = 0
+    while i < len(t) {
+        push(groups, t.slice(i, i + 4))
+        i = i + 4
+    }
+    let ls = []
+    let gi = len(groups) - 1
+    while gi >= 0 {
+        let v = 0
+        let c = 0
+        while c < 4 {
+            v = v * 10 + __digit(groups[gi].slice(c, c + 1))
+            c = c + 1
+        }
+        push(ls, v)
+        gi = gi - 1
+    }
+    if len(ls) == 1 && ls[0] == 0 {
+        return big_zero()
+    }
+    return [sign, __norm_limbs(ls)]
+}
+
+gene __digit(c) {
+    if c >= "0" && c <= "9" {
+        # single ASCII digit -> its numeric value (cheap via group parse)
+        return num(c)
+    }
+    return 0
+}
+
+gene big_to_str(x) {
+    let sign = x[0]
+    let ls = x[1]
+    let n = len(ls)
+    let out = str(ls[n - 1])
+    let i = n - 2
+    while i >= 0 {
+        let g = str(ls[i])
+        while len(g) < 4 {
+            g = "0" + g
+        }
+        out = out + g
+        i = i - 1
+    }
+    if sign < 0 && !big_is_zero(x) {
+        out = "-" + out
+    }
+    return out
+}
+
+gene big_neg(x) {
+    if big_is_zero(x) {
+        return big_zero()
+    }
+    return [0 - x[0], x[1]]
+}
+
+gene big_abs(x) {
+    return [1, x[1]]
+}
+
+gene big_cmp(a, b) {
+    # -1 (a<b), 0 (a==b), 1 (a>b), full signed ordering
+    let sa = a[0]
+    let sb = b[0]
+    if sa != sb {
+        if sa > sb { return 1 }
+        return -1
+    }
+    let c = __cmp_mag(a[1], b[1])
+    if sa < 0 {
+        return 0 - c
+    }
+    return c
+}
+
+gene big_add(a, b) {
+    let sa = a[0]
+    let sb = b[0]
+    if sa == sb {
+        return [sa, __add_mag(a[1], b[1])]
+    }
+    # opposite signs: the larger magnitude wins and donates its sign
+    let c = __cmp_mag(a[1], b[1])
+    if c == 0 {
+        return big_zero()
+    }
+    if c > 0 {
+        return [sa, __sub_mag(a[1], b[1])]
+    }
+    return [sb, __sub_mag(b[1], a[1])]
+}
+
+gene big_sub(a, b) {
+    # a - b == a + (-b); big_neg normalizes zero, so 0 - 0 stays canonical
+    return big_add(a, big_neg(b))
+}
+
+gene big_mul(a, b) {
+    let x = a[1]
+    let y = b[1]
+    if big_is_zero(a) || big_is_zero(b) {
+        return big_zero()
+    }
+    let n = len(x)
+    let m = len(y)
+    let acc = []
+    let i = 0
+    while i < n + m {
+        push(acc, 0)
+        i = i + 1
+    }
+    i = 0
+    while i < n {
+        let carry = 0
+        let j = 0
+        while j < m {
+            let cur = acc[i + j] + x[i] * y[j] + carry
+            acc[i + j] = cur % 10000
+            carry = cur // 10000
+            j = j + 1
+        }
+        acc[i + m] = acc[i + m] + carry
+        i = i + 1
+    }
+    return [a[0] * b[0], __norm_limbs(acc)]
+}
+
+gene big_pow(x, n) {
+    # x ** n for int n >= 0 (repeated squaring is unnecessary at tutorial
+    # scale; repeated mul keeps the code obvious). Bad exponent -> null.
+    if type(n) != "int" || n < 0 {
+        return null
+    }
+    let out = big_from_int(1)
+    let base = [x[0], x[1]]
+    let k = n
+    while k > 0 {
+        out = big_mul(out, base)
+        k = k - 1
+    }
+    return out
+}
+
+gene big_fact(n) {
+    # n! for int n >= 0 (the classic "i64 dies at 21!" demo). Bad n -> null.
+    if type(n) != "int" || n < 0 {
+        return null
+    }
+    let out = big_from_int(1)
+    let i = 2
+    while i <= n {
+        out = big_mul(out, big_from_int(i))
+        i = i + 1
+    }
+    return out
+}
+
+gene big_to_int(x) {
+    # exact i64 when it fits, null when it does not (never a clamp)
+    let ls = x[1]
+    # i64::MAX = 9223372036854775807 -> little-endian base-10^4 limbs
+    # (grouped from the RIGHT: 922 | 3372 | 368 | 5477 | 5807; the third
+    # group is "0368" -> 368. i64::MIN+1 == 2^63 differs ONLY in the low
+    # limb: 5808, the boundary case this guard exists for.)
+    let lim = [5807, 5477, 368, 3372, 922]
+    let c = __cmp_mag(ls, lim)
+    if c > 0 {
+        return null
+    }
+    let v = 0
+    let i = len(ls) - 1
+    while i >= 0 {
+        v = v * 10000 + ls[i]
+        i = i - 1
+    }
+    if x[0] < 0 {
+        return 0 - v
+    }
+    return v
+}

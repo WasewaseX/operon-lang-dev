@@ -1,4 +1,4 @@
-# GenomeLab — Operon demo application.
+# GenomeLab, Operon demo application.
 # A small gene-analysis workbench: parses DNA records, reports ORFs, GC
 # content, codon usage, and runs a knockout screen on its own test frame.
 
@@ -86,7 +86,7 @@ gene main() {
             push(records, parse_record(">" + block))
         }
     }
-    promote("GenomeLab — Operon demo")
+    promote("GenomeLab, Operon demo")
     promote("=======================")
     for rec in records {
         let a = analyze(rec)

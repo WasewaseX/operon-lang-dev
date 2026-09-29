@@ -1,0 +1,28 @@
+# option_result_null, W06 (D-014) differential pin: NULL PAYLOADS are real
+# payloads. Found by the std_serialize proof (roundtrip(null) → from_json
+# "null" → ok(null) → unwrap raised on the oracle while Rust unwrapped).
+# Contract: ok(null)/some(null) carry the null VALUE; unwrap / unwrap_or /
+# ?! all return null. None/Err still unwind or take the default.
+# Byte-identical on both engines.
+print(ok(null))
+print(some(null))
+print(is_ok(ok(null)), is_err(ok(null)), is_none(some(null)))
+print(unwrap(ok(null)))
+print(unwrap(some(null)))
+print(unwrap_or(ok(null), "dflt"), unwrap_or(some(null), "dflt"))
+print(unwrap_or(none(), "dflt"), unwrap_or(err("boom"), "dflt"))
+print(json_str(ok(null)), json_str(some(null)))
+gene pass_through(v) {
+    return v?!
+}
+print(pass_through(ok(null)))
+print(pass_through(some(null)))
+gene wordy() {
+    return ok(null)?!
+}
+print(wordy())
+# equality at the wrapper level: ok(null) == ok(null), ok(null) != ok(0)
+print(ok(null) == ok(null), ok(null) == ok(0), some(null) == none())
+# repr + containment
+print([ok(null), some(null), none()])
+print("got:" + str(unwrap(ok(null)) == null))

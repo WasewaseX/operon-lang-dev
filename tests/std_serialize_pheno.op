@@ -1,0 +1,161 @@
+# differential: std/serialize stage 2 — phenotype instances (W34)
+#
+# Pins the structural-default wire contract: an instance emits the canonical
+# wire map (field map + hidden "#phenotype" identity key — the SAME shape
+# the spawn boundary uses), from_json rebuilds a real instance (methods
+# included) when the class is declared, unknown names are err() values, and
+# roundtrip() uses structural == for every shape, instances included
+# (instances are DATA — the parity resolution). Reconstruction is DATA
+# restore: init does NOT re-run.
+#
+# note: JSON text with object braces is built via chr(123)/chr(125) here,
+# because a bare { inside a string literal starts interpolation (SPEC).
+use std/serialize as ser
+
+phenotype Point {
+    let x = 0
+    let y = 0
+    let label = "origin"
+    gene area() {
+        return self.x * self.y
+    }
+}
+
+phenotype Point3 from Point {
+    let z = 0
+}
+
+phenotype Counter {
+    let n = 0
+    gene init(k) {
+        self.n = k
+    }
+    gene bump() {
+        self.n = self.n + 1
+        return self.n
+    }
+}
+
+phenotype Bag {
+    let items = []
+    let kid = null
+}
+
+phenotype Frac {
+    let v = 0.0
+}
+
+frame proof {
+    let OB = chr(123)
+    let CB = chr(125)
+
+    # ---- the wire shape: instance == spawn shape, byte-exact ----
+    let p = new Point()
+    assert(type(p) == "Point", "type(instance) is the phenotype name")
+    assert(ser.to_json(p) == OB + "\"#phenotype\":\"Point\",\"x\":0,\"y\":0,\"label\":\"origin\"" + CB,
+        "instance wire = field map + hidden tag, tag first")
+    assert(object_fields(p) == {"x": 0, "y": 0, "label": "origin"},
+        "object_fields returns the field map, insertion order")
+    assert(object_fields(42) == null, "object_fields on a non-instance is null")
+    assert(is_object(p) and not is_object(42) and not is_object({"x": 1}),
+        "is_object is the silent instance predicate")
+
+    # ---- rebuild: a real instance, methods included ----
+    let back = ser.from_json(ser.to_json(p))
+    assert(is_ok(back), "instance wire parses to ok()")
+    let q = unwrap(back)
+    assert(type(q) == "Point", "rebuild restores the phenotype class")
+    assert(q.x == 0 and q.label == "origin", "rebuild restores field data")
+    assert(q.area() == 0, "rebuilt instance dispatches methods")
+
+    # ---- round-trip: true via structural == (instances are DATA) ----
+    assert(ser.roundtrip(p, "json"), "instance round-trips")
+    # parity resolution pinned (answered from THIS module's stage-2 finding):
+    # == on instances is DATA equality — same class name + deep field values,
+    # both engines. The rebuild is a distinct object with equal fields, so it
+    # == the original; two instances carrying equal fields are ==; differing
+    # fields are not.
+    assert(q == p, "rebuild == original: instances are DATA")
+    let same = new Point()
+    assert(same == p, "two instances, equal fields -> ==")
+    let other = new Point()
+    other.x = 1
+    assert(!(other == p), "differing fields -> not ==")
+    assert(object_fields(q) == object_fields(p), "rebuild carries identical fields")
+
+    # ---- mutation rides the wire ----
+    p.x = 3
+    p.y = 4
+    let back2 = ser.from_json(ser.to_json(p))
+    assert(is_ok(back2) and unwrap(back2).area() == 12, "mutated fields rebuild (3*4=12)")
+
+    # ---- inheritance: child wire carries parent fields, keeps lineage ----
+    let c = new Point3()
+    c.z = 1
+    assert(type(c) == "Point3", "child type name")
+    assert(ser.roundtrip(c, "json"), "child instance round-trips")
+    let c2 = unwrap(ser.from_json(ser.to_json(c)))
+    assert(type(c2) == "Point3", "rebuild restores the child class")
+    assert(c2.label == "origin" and c2.z == 1, "parent defaults + own fields survive")
+    assert(c2.area() == 0, "parent method dispatches on rebuilt child")
+
+    # ---- init-constructed data rides; init does NOT re-run on rebuild ----
+    let ct = new Counter(7)
+    assert(ct.n == 7, "init ran on construction")
+    let ct2 = unwrap(ser.from_json(ser.to_json(ct)))
+    assert(is_ok(ser.from_json(ser.to_json(ct))), "rebuild does not stress")
+    assert(ct2.n == 7, "init-written field survives as DATA")
+    assert(ct2.bump() == 8, "methods work on the rebuilt instance (init stayed dead)")
+
+    # ---- nesting: instances inside fields, lists, and plain maps ----
+    let b = new Bag()
+    b.kid = p
+    b.items = [p, c]
+    assert(ser.roundtrip(b, "json"), "instance holding instances round-trips")
+    let b2 = unwrap(ser.from_json(ser.to_json(b)))
+    assert(type(b2.kid) == "Point" and b2.kid.x == 3, "nested instance rebuilds")
+    assert(type(b2.items[1]) == "Point3", "nested child in list rebuilds")
+    let holder = {"who": p, "many": [p, 1]}
+    assert(ser.roundtrip(holder, "json"), "instance inside a plain map round-trips")
+    let h2 = unwrap(ser.from_json(ser.to_json(holder)))
+    assert(type(h2["who"]) == "Point", "map-valued instance rebuilds")
+
+    # ---- unknown phenotype: err value, never a crash ----
+    let ghost = ser.from_json(OB + "\"#phenotype\":\"Ghost\",\"x\":1" + CB)
+    assert(is_err(ghost), "unknown class name is an err() value")
+
+    # ---- the reserved key: a plain map with the tag rebuilds (documented) ----
+    let tagged = ser.from_json(OB + "\"#phenotype\":\"Point\",\"x\":9" + CB)
+    assert(is_ok(tagged) and type(unwrap(tagged)) == "Point", "tag is reserved: plain map rebuilds")
+    assert(unwrap(tagged).x == 9, "reserved-tag rebuild carries the fields")
+
+    # ---- the honest gap: non-finite float fields do NOT round-trip ----
+    let f = new Frac()
+    f.v = 1e308 * 10 * 0.0
+    assert(json_str(f.v) == "null", "nan field serializes as null at the wire")
+    assert(ser.roundtrip(f, "json") == false, "non-finite field reports false, never a silent true")
+
+    # ---- W29 bytes: wire fidelity only (kind boundary is NOT rebuilt) ----
+    let bb = b"hi"
+    assert(ser.to_json(bb) == "[104,105]", "bytes rides the W29 int-list view, compact")
+    let bback = ser.from_json("[104,105]")
+    assert(is_ok(bback) and type(unwrap(bback)) == "list", "re-parse of the view is a plain int list")
+    assert(ser.roundtrip(bb, "json") == false, "roundtrip(bytes) honest false — the kind did not survive")
+    phenotype Blob {
+        let data = b"xy"
+    }
+    let blob = new Blob()
+    assert(ser.to_json(blob) == OB + "\"#phenotype\":\"Blob\",\"data\":[120,121]" + CB,
+        "instance bytes field rides the view inside the wire map")
+    let blob2 = unwrap(ser.from_json(ser.to_json(blob)))
+    assert(type(blob2) == "Blob", "bytes-field instance rebuilds")
+    assert(type(blob2.data) == "list" and blob2.data[0] == 120, "bytes field comes back as int-list DATA (wire fidelity, SPEC table)")
+
+    # ---- value layer unchanged (stage-1 contract holds under stage 2) ----
+    assert(ser.to_json(42) == "42", "int passthrough unchanged")
+    assert(ser.roundtrip({"a": 1, "b": [1, 2]}, "json"), "value-layer map round-trips")
+    assert(ser.roundtrip([1, [2, 3], "x"], "json"), "value-layer list round-trips")
+    assert(ser.serialize(p, "json") == ser.to_json(p), "serialize dispatches to to_json")
+    let dt = ser.deserialize(ser.to_json(ct), "json")
+    assert(is_ok(dt) and type(unwrap(dt)) == "Counter", "deserialize dispatches and rebuilds")
+}

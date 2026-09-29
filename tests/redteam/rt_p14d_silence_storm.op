@@ -1,4 +1,4 @@
-# reg-bio-3: silence-registry storm — thousands of silence statements plus
+# reg-bio-3: silence-registry storm, thousands of silence statements plus
 # repeated calls through the stoichiometric capture path. Registry entries,
 # notes, and per-call draws must all stay inside the fuel/note-cap contracts
 # (a bounded run, never a hang or an unbounded stderr).

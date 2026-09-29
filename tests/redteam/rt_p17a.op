@@ -1,4 +1,4 @@
-# rt_p17a — W02 (match-v2): pattern adversarial probes. Every probe must stay
+# rt_p17a, W02 (match-v2): pattern adversarial probes. Every probe must stay
 # CONTAINED: no panic, no unbounded output, bounded time. Deep runtime values
 # against shallow patterns, deep source patterns against deep values, wide
 # or-chains, wide map patterns, and pattern/recursion stack depth.
@@ -17,7 +17,7 @@ gene grow(n, acc) {
 gene go() {
     hit = 0
     # 1. a 2000-deep Some tower vs a 1-level pattern: matches the outermost
-    #    level in O(1) pattern work — the payload is bound, not descended.
+    #    level in O(1) pattern work, the payload is bound, not descended.
     tower = bury(2000, 1)
     match tower {
         case Some(v) {
@@ -70,7 +70,7 @@ gene go() {
             hit = hit + 1
         }
     }
-    # 5. wide map pattern: 40 keys present, all bound — bounded work.
+    # 5. wide map pattern: 40 keys present, all bound, bounded work.
     wide = {}
     for i in range(40) {
         wide["k" + str(i)] = i
@@ -92,15 +92,14 @@ gene go() {
     } else {
         hit = hit + 100
     }
-    # 6. unknown capitalized tag: soft bind fallback (no rejection) — the
+    # 6. unknown capitalized tag: soft bind fallback (no rejection), the
     #    arm HITS and binds the whole subject (payload consumed+ignored).
+    #    (no trailing arm here: `Weird(x)` degrades to a bind, an unguarded
+    #    catch-all, so a later arm would be dead and W06 would flag it)
     hit2 = 0
     match 5 {
         case Weird(x) {
             hit2 = 1
-        }
-        case other {
-            hit2 = 2
         }
     }
     if hit2 == 1 {
@@ -119,7 +118,7 @@ gene go() {
         }
     }
     # 8. pattern against a map with a NON-string key store: deep_eq key
-    #    lookup stays exact, no crash — the string key simply misses.
+    #    lookup stays exact, no crash, the string key simply misses.
     oddmap = {}
     oddmap[1] = "int-key"
     match oddmap {

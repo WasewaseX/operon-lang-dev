@@ -1,0 +1,1 @@
+gene mb(x) { return x * 2 }

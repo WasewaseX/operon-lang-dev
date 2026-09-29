@@ -1,6 +1,6 @@
 # ============================================================
-# CLI arguments  — cookbook #04
-# you already know: argparse / clap — flags, values, subcommands
+# CLI arguments , cookbook #04
+# you already know: argparse / clap, flags, values, subcommands
 # teaches: std/args parsing over a list of argv strings; argv() is
 #          the real command line, a demo list keeps the output fixed
 # run: operon run examples/cookbook/cli_greet.op
@@ -27,7 +27,7 @@ gene greet(argv_list) {
 }
 
 gene main() {
-    # argv() is what the shell gave us — empty when run without arguments
+    # argv() is what the shell gave us, empty when run without arguments
     promote("argv now: {argv()}")
 
     # a fixed demo line keeps this example deterministic; to parse the real
@@ -39,6 +39,6 @@ gene main() {
     let quiet = ["greet", "--name=Grace"]
     promote("parsed: {greet(quiet)}")
 
-    # unknown options are simply not there — check before you trust
+    # unknown options are simply not there, check before you trust
     promote("has --name? {ar.args_has(demo, "name")}  has --dry-run? {ar.args_has(demo, "dry-run")}")
 }

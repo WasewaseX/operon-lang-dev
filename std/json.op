@@ -1,10 +1,12 @@
-# std/json — helpers over the json_parse / json_str builtins.
-#
-# json_parse gives you the value; these helpers give you the everyday
-# navigation and reshaping layer. A "path" is a dot-separated walk:
-# "user.tags.0" steps into object key "user", then key "tags", then array
-# index 0. Missing steps return the fallback (null unless you pass one).
+## json, helpers over the json_parse / json_str builtins.
+## json_parse gives you the value; these helpers give you the everyday
+## navigation and reshaping layer. A "path" is a dot-separated walk:
+## "user.tags.0" steps into object key "user", then key "tags", then array
+## index 0. Missing steps return the fallback (null unless you pass one).
 
+
+## Map a JSON value to its schema-vocabulary type name
+## (object/array/null/boolean/number/string).
 gene json_type(v) {
     # JSON-schema vocabulary for type() values
     let t = type(v)
@@ -26,14 +28,17 @@ gene json_type(v) {
     return t
 }
 
+## True when v is a JSON object (a map).
 gene json_is_object(v) {
     return type(v) == "map"
 }
 
+## True when v is a JSON array (a list).
 gene json_is_array(v) {
     return type(v) == "list"
 }
 
+## Walk a dotted path; return fallback when any step is missing.
 gene json_get_or(v, path, fallback) {
     # walk a dotted path through objects (key) and arrays (index)
     let cur = v
@@ -65,10 +70,12 @@ gene json_get_or(v, path, fallback) {
     return cur
 }
 
+## Walk a dotted path; missing steps yield null.
 gene json_get(v, path) {
     return json_get_or(v, path, null)
 }
 
+## Shallow-merge two objects; b wins on key conflicts.
 gene json_merge(a, b) {
     # shallow merge: b's keys win
     let out = {}
@@ -81,6 +88,7 @@ gene json_merge(a, b) {
     return out
 }
 
+## Keep only the listed top-level keys of an object.
 gene json_pick(v, keep) {
     # top-level projection: only the listed keys
     let out = {}
@@ -95,6 +103,7 @@ gene json_pick(v, keep) {
     return out
 }
 
+## Remove the listed top-level keys from an object.
 gene json_omit(v, drop) {
     # inverse of pick: every key except the listed ones
     if type(v) != "map" {
@@ -115,6 +124,7 @@ gene json_omit(v, drop) {
     return out
 }
 
+## Flatten nested objects/arrays into dotted-path keys.
 gene json_flatten(v) {
     # {"a": {"b": 1}, "c": [2, 3]} -> {"a.b": 1, "c.0": 2, "c.1": 3}
     let out = {}
@@ -122,6 +132,7 @@ gene json_flatten(v) {
     return out
 }
 
+## Accumulator behind json_flatten.
 gene json_flatten_into(v, prefix, out) {
     if type(v) == "map" {
         let ks = keys(v)
@@ -161,6 +172,7 @@ gene json_flatten_into(v, prefix, out) {
     out[prefix] = v
 }
 
+## Drop null-valued keys recursively (clean payloads).
 gene json_compact(v) {
     # canonical round-trip: parse then re-serialize (drops formatting)
     return json_str(json_parse(v))

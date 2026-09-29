@@ -1,5 +1,5 @@
 # ============================================================
-# LRU cache  — cookbook #10
+# LRU cache , cookbook #10
 # you already know: functools.lru_cache / an OrderedDict LRU
 # teaches: combining a map (lookup) with a list (recency order),
 #          explicit eviction, hit/miss accounting

@@ -1,4 +1,4 @@
-# reg-bio-2 (B7): synergistic pooling — `sum` edges pool their weighted
+# reg-bio-2 (B7): synergistic pooling, `sum` edges pool their weighted
 # inputs (P = min(1, sum of strength*level)) and ONE Hill function of P
 # drives both the call gate and the fire influence. Two sub-threshold
 # inputs fire together (enhanceosome synergy); legacy AND members must
@@ -16,7 +16,7 @@ gene duo() { return "duo-ran" }
 gene solo() { return "solo-ran" }
 gene dummy() { return "dummy-ran" }
 frame proof {
-    # all three regulators at 0.3 — sub-threshold individually (0.3 < 0.5)
+    # all three regulators at 0.3, sub-threshold individually (0.3 < 0.5)
     grn_set("a", 0.3)
     grn_set("c", 0.3)
     grn_set("d", 0.3)

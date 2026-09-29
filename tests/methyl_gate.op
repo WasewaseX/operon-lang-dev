@@ -1,4 +1,4 @@
-# T2b — @methylate graded silencing (SPEC §11, v2.2 honesty pass, D-005)
+# T2b, @methylate graded silencing (SPEC §11, v2.2 honesty pass, D-005)
 # Each executed @methylate-marked definition deepens the gene's silencing
 # level; a call is blocked at level >= threshold (default 3, tunable via
 # .cell `methylate.threshold`). @acetylate defs relax the level, and

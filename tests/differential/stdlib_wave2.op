@@ -1,0 +1,23 @@
+# differential: stdlib wave 2 (hashing, binary). Pure Operon on both
+# engines from the same source; outputs pinned byte-identically.
+use std/hashing as hs
+use std/binary as bin
+
+gene main() {
+    print(hs.sha256_hex(""))
+    print(hs.sha256_hex("abc"))
+    print(hs.sha256_hex("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"))
+    print(hs.hash_fnv1a32(""), hs.hash_fnv1a32("a"), hs.hash_fnv1a32("hello"))
+    print(hs.hash_djb2("hello"), hs.hash_sdbm("hello"))
+    print(hs.hash_adler32("Wikipedia"), hs.hash_crc32("123456789"))
+    print(hs.sha256_hex("0123456789".repeat(50)))
+    print(bin.bin_hex_encode("ABC"), bin.bin_hex_encode(b"\x00\xff"))
+    print(bin.bin_hex_decode("48656c6c6f") == bytes_from_str("Hello"))
+    print(bin.bin_hex_decode("abc"), bin.bin_hex_decode("zz"))
+    print(bin.bin_u16le(0x1234) == bytes_from_list([0x34, 0x12]))
+    print(bin.bin_read_u32be(bin.bin_u32be(3735928559), 0))
+    print(bin.bin_read_i64le(bin.bin_i64le(-2), 0))
+    print(bin.bin_read_i64le(bin.bin_i64le(-9223372036854775807 - 1), 0))
+    print(bin.bin_read_u16le(b"\x01", 0), bin.bin_read_i64le(b"\x01", 0))
+    print(bin.bin_size("hello"))
+}

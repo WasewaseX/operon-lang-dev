@@ -1,10 +1,10 @@
-# loop-9 (P0-4): the standalone m6A decay cadence — an explicit-cell proof.
+# loop-9 (P0-4): the standalone m6A decay cadence, an explicit-cell proof.
 # The B3 decay block ran ONLY inside the GRN decay tick, so with no
 # `grn.decay_calls` and no decay-clock builtin configured,
 # `.cell m6a.decay` was a silent no-op (and shipped without any proof
 # covering the standalone case). The own-cadence path erases site density
 # every `m6a.decay_calls` calls (default 1), half-down rounding on the
-# 0..=3 lattice — a diluted mark never reads as MORE marked.
+# 0..=3 lattice, a diluted mark never reads as MORE marked.
 # Exercised ONLY via an explicit operator cell (the default proof runner
 # is zero-grant and skips tests/granted/):
 #   ./bin/operon test tests/granted/m6a_decay_cadence.op --cell tests/granted/m6a_decay_cadence.cell

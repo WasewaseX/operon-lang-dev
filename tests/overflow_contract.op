@@ -1,0 +1,124 @@
+# W32: the FULL integer-overflow contract, pinned with exact stress kinds
+# and messages, no silent wrap anywhere, on either engine. Every integer
+# arithmetic surface gets its exact boundary stress; float behavior is
+# pinned too (inf is a value for * and /, but ** overflow RAISES).
+# Companion differential corpus: tests/differential/overflow_contract.op
+# (byte-identical stdout on both engines).
+
+gene mn() {
+    # i64::MIN, built arithmetically: the bare literal would overflow
+    return -9223372036854775807 - 1
+}
+
+gene mx() {
+    return 9223372036854775807
+}
+
+gene t_add() { return mx() + 1 }
+gene t_sub() { return mn() - 1 }
+gene t_mul() { return mx() * 2 }
+gene t_mul_sq() { return mx() * mx() }
+gene t_pow() { return 2 ** 64 }
+gene t_pow_max() { return mx() ** 2 }
+gene t_pow_f() { return 1e300 ** 2 }
+gene t_fdiv() { return mn() // -1 }
+gene t_mod() { return mn() % -1 }
+gene t_fdiv_f() { return 9.5e18 // 1 }
+gene t_neg() { return -mn() }
+gene t_abs() { return abs(mn()) }
+gene t_shl_hi() { return 1 << 64 }
+gene t_shl_neg() { return 1 << -1 }
+gene t_div0() { return 1 / 0 }
+
+gene expect_ov(f, msg, why) {
+    stress {
+        f()
+        assert(false, "must raise: " + why)
+    } rescue (e) {
+        assert(e.kind == "overflow", why + ": kind")
+        assert(e.message == msg, why + ": exact message, got: " + e.message)
+    }
+}
+
+frame proof {
+    # --- addition / subtraction / multiplication at the boundary
+    expect_ov(t_add, "int overflow in '+'", "add")
+    expect_ov(t_sub, "int overflow in '-'", "sub")
+    expect_ov(t_mul, "int overflow in '*'", "mul")
+    expect_ov(t_mul_sq, "int overflow in '*'", "mul sq")
+
+    # --- in-place compound forms ride the same funnel
+    let a = mx()
+    stress {
+        a += 1
+        assert(false, "add-assign must raise")
+    } rescue (e) {
+        assert(e.kind == "overflow", "add-assign contained")
+    }
+
+    # --- exponentiation: int overflow raises; float ** overflow raises too
+    expect_ov(t_pow, "int overflow in '**'", "int pow")
+    expect_ov(t_pow_max, "int overflow in '**'", "max pow")
+    expect_ov(t_pow_f, "float '**' overflowed to infinity", "float pow")
+
+    # --- floor division / modulo at the MIN/-1 corner
+    expect_ov(t_fdiv, "int overflow in '//'", "floordiv corner")
+    expect_ov(t_mod, "int overflow in '%'", "mod corner")
+    # float floor-division whose quotient leaves i64
+    expect_ov(t_fdiv_f, "int overflow in '//'", "floordiv float range")
+
+    # --- unary negation and abs at exactly i64::MIN
+    expect_ov(t_neg, "int overflow in negation (i64::MIN)", "neg")
+    expect_ov(t_abs, "int overflow in abs(i64::MIN)", "abs")
+
+    # --- shifts: the amount must be 0..=63
+    expect_ov(t_shl_hi, "shift amount 64 out of range", "shl hi")
+    expect_ov(t_shl_neg, "shift amount -1 out of range", "shl neg")
+
+    # --- division by zero is unfolded, NOT overflow (the contract must
+    #     not conflate the two kinds)
+    stress {
+        let z = t_div0()
+        assert(false, "div by zero must raise")
+    } rescue (e) {
+        assert(e.kind == "unfolded", "div0 kind")
+    }
+
+    # --- the boundary values themselves are FINE (off-by-one armor)
+    assert(mx() + 0 == mx(), "max intact")
+    assert(mn() + 1 == -9223372036854775807, "min+1 exact")
+    assert(mx() - mx() == 0, "max-max")
+    assert(1 << 63 == mn(), "1<<63 is exactly i64::MIN (no raise: shift is checked on the AMOUNT)")
+    assert(1 << 62 == 4611686018427387904, "shl 62 exact")
+    assert(mx() // 1 == mx(), "floordiv by 1")
+    assert(mx() % 10 == 7, "max mod 10")
+
+    # --- float pins: * and / reach inf/nan silently (VALUES, not stresses);
+    #     only ** treats overflow as a stress. / by zero is unfolded.
+    let inf = 1e308 * 10
+    assert(inf > 0 && inf == inf, "float mul inf is a value")
+    assert(1e308 / 1e-308 > 0, "float div inf is a value")
+    let nan = inf - inf
+    assert(!(nan == nan), "nan is a value, not a stress")
+
+    # --- overflow is a CATCHABLE stress: execution resumes after rescue
+    let survived = false
+    stress {
+        let boom = mx() * 2
+    } rescue (e) {
+        survived = true
+    }
+    assert(survived, "overflow catchable, execution resumes")
+
+    # --- mixed promotion escapes i64 WITHOUT overflow (documented widening)
+    assert(mx() + 0.0 == 9223372036854775807.0, "widening to float is not overflow")
+
+    # --- the kind never leaks as a wrapped VALUE (the armor against the
+    #     one failure mode this whole contract exists to prevent)
+    stress {
+        let q = mx() + 1
+        assert(q == -9223372036854775807 - 2, "IMPOSSIBLE: wrap leaked")
+    } rescue (e) {
+        assert(e.kind == "overflow", "no wrap leaked past the gate")
+    }
+}

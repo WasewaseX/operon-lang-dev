@@ -1,7 +1,7 @@
 # ============================================================
-# Monte Carlo pi  — cookbook #06
+# Monte Carlo pi , cookbook #06
 # you already know: random.random() sampling on the unit square
-# teaches: a deterministic LCG (no wall clock — same output every
+# teaches: a deterministic LCG (no wall clock, same output every
 #          run, on every core), float math, std/fmt formatting
 # run: operon run examples/cookbook/monte_carlo_pi.op
 # expected output: examples/cookbook/expected/monte_carlo_pi.out

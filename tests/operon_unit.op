@@ -1,11 +1,11 @@
-# reg-bio-3 (A1/A7): the namesake construct — the polycistronic operon.
+# reg-bio-3 (A1/A7): the namesake construct, the polycistronic operon.
 # ONE promoter drives N cistrons on ONE transcript: a call to ANY cistron is
 # a transcription attempt of the WHOLE unit, so an edge targeting the UNIT
 # gates every member (induction acts on the unit's promoter). Per-cistron
-# `rbs` is the translation-efficiency multiplier (Shine-Dalgarno strength) —
+# `rbs` is the translation-efficiency multiplier (Shine-Dalgarno strength),
 # the lacZYA stoichiometric gradient lives in the two-tier protein nodes.
 # Polarity: upstream blocking (target-less RISC degradation) reduces
-# downstream yield — polarity^(#blocked upstream), default 0.5.
+# downstream yield, polarity^(#blocked upstream), default 0.5.
 regulate {
     activator activates lac strength 0.9 threshold 0.5
     lacZ translates pz rate 1.0
@@ -22,7 +22,7 @@ frame proof {
     assert(lacY() == null, "unit gate applies to every member (Y)")
     assert(lacA() == null, "unit gate applies to every member (A)")
     assert(fingerprint().transcripts.lac == 0, "suppressed calls are not expression: no transcripts")
-    # induction acts on the UNIT — one edge opens all three cistrons
+    # induction acts on the UNIT, one edge opens all three cistrons
     grn_set("activator", 0.9)
     assert(lacZ() == "z", "induced unit: Z expresses")
     assert(lacY() == "y", "induced unit: Y expresses through the same unit gate")

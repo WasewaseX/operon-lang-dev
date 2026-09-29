@@ -1,4 +1,4 @@
-# reg-bio-3: m6a_write/m6a_erase abuse — flooding the level registry with
+# reg-bio-3: m6a_write/m6a_erase abuse, flooding the level registry with
 # fresh keys in a loop. Every entry is an allocation charged against the
 # memory ceiling (methylate precedent), so the flood ends in a clean
 # containment note instead of unbounded growth.

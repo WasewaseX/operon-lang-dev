@@ -1,0 +1,28 @@
+# W093 validation probe, V4 (trp attenuation, corepressor polarity).
+# Companion measurement program for bootstrap/validation_registry.json and
+# bootstrap/validation_report.py. It asserts NOTHING. The enforcing test
+# remains tests/trp_attenuator.op. Mirrors its call order exactly:
+# repressor level set once, then the pool scanned scarcity (0.02) then
+# abundance (0.9).
+ligand trp
+regulate {
+    trpR inhibits trpE strength 0.9 threshold 0.3
+    bind trpR cofactor trp k 0.1
+    trp attenuates leader threshold 0.5
+}
+gene trpE() { return "trpE-ran" }
+gene leader() { return "leader-ran" }
+grn_set("trpR", 1.0)
+ligand_set("trp", 0.02)
+let s_trpE = trpE()
+let s_leader = leader()
+promote("RESULT v4_scarcity_trpE_on={s_trpE == \"trpE-ran\"}")
+promote("RESULT v4_scarcity_leader_on={s_leader == \"leader-ran\"}")
+ligand_set("trp", 0.9)
+let a_trpE = trpE()
+let a_leader = leader()
+promote("RESULT v4_abundance_trpE_suppressed={a_trpE == null}")
+promote("RESULT v4_abundance_leader_suppressed={a_leader == null}")
+promote("RESULT v4_trpR_unchanged={grn_get(\"trpR\") == 1.0}")
+let pool = ligand("trp")
+promote("RESULT v4_pool_readable={pool}")

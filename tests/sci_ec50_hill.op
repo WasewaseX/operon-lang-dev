@@ -1,0 +1,70 @@
+# W093, Hill dose-response: the EC50 identity + the canonical n=2 curve.
+# SPEC §11: a thresholded activating edge computes its influence as
+#     influence = strength * level^n / (level^n + threshold^n)
+# with per-edge Hill exponent n (default 2, the classic Hill-Langmuir form).
+# By construction, level == threshold is the HALF-MAX point: the threshold
+# IS the EC50 (the definition of the half-maximal effective concentration,
+# Alon, "An Introduction to Systems Biology", ch. 2, Hill-Langmuir input
+# functions). This file pins the identity and five canonical curve points
+# on the n=2 curve with threshold t = 0.3 (strength 1.0):
+#     level = t/3   -> 1/(1+9)  = 0.1   (10% of max)
+#     level = t/2   -> 1/(1+4)  = 0.2   (Hill-2 quarter point)
+#     level = t     -> 1/(1+1)  = 0.5   (EC50, the identity)
+#     level = 2t    -> 4/(4+1)  = 0.8
+#     level = 3t    -> 9/(9+1)  = 0.9   (90% of max, the 10-90 span)
+# Tolerance 1e-12 (the same op order as the engine: repeated
+# multiplication, no powi, the W090 IEEE-754 parity contract).
+# Two surface notes pinned by construction here:
+#  - the network is STATEFUL (levels latch by max across fires), so each
+#    dose point resets the target to 0.0 first and the walk ascends;
+#  - the fire gate is CALL-time only (grn_veto); level dynamics propagate
+#    on every grn_fire regardless, so the sub-threshold points are
+#    observable through grn_state.
+# The driver gene `sig` carries no edges: firing it seeds only itself.
+regulate {
+    reg activates target strength 1.0 threshold 0.3
+}
+gene sig() { return "driver" }
+gene reg() { return "reg" }
+gene target() { return "t-OUT" }
+frame proof {
+    # ascending dose ladder, target reset before each point (latch-off)
+    grn_set("target", 0.0)
+    grn_set("reg", 0.1)
+    grn_fire("sig")
+    let s5 = grn_state()
+    assert(abs(s5.target - 0.1) < 1e-12, "t/3 -> 10% of max")
+
+    grn_set("target", 0.0)
+    grn_set("reg", 0.15)
+    grn_fire("sig")
+    let s4 = grn_state()
+    assert(abs(s4.target - 0.2) < 1e-12, "t/2 -> 20% of max (Hill-2 quarter point, NOT 10%)")
+
+    grn_set("target", 0.0)
+    grn_set("reg", 0.3)
+    grn_fire("sig")
+    let s1 = grn_state()
+    assert(abs(s1.target - 0.5) < 1e-12, "EC50 identity: level == threshold -> influence = strength/2")
+
+    grn_set("target", 0.0)
+    grn_set("reg", 0.6)
+    grn_fire("sig")
+    let s3 = grn_state()
+    assert(abs(s3.target - 0.8) < 1e-12, "2t -> 80% of max")
+
+    grn_set("target", 0.0)
+    grn_set("reg", 0.9)
+    grn_fire("sig")
+    let s2 = grn_state()
+    assert(abs(s2.target - 0.9) < 1e-12, "3t -> 90% of max (10-90 span complete)")
+
+    # monotonicity: the input function is monotone increasing in the level
+    assert(s5.target < s4.target and s4.target < s1.target and s1.target < s3.target and s3.target < s2.target,
+        "dose-response is monotone increasing (10 -> 20 -> 50 -> 80 -> 90)")
+
+    # the CALL gate is a separate surface: a thresholded edge vetoes calls
+    # while level(source) < t (T2a), at level == t the call passes
+    grn_set("reg", 0.3)
+    assert(target() == "t-OUT", "call gate passes at level == threshold (EC50 gate)")
+}

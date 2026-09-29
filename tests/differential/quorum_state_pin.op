@@ -1,4 +1,4 @@
-# loop-9 (C8): the quorum differential golden — the C8 surface was invisible
+# loop-9 (C8): the quorum differential golden, the C8 surface was invisible
 # to the harness (frames never execute in run mode). This program drives the
 # pool through its main gene and PROMOTES the exact values, so the byte-exact
 # differential comparison covers secrete/quorum/quench/quorum_state.
