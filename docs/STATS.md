@@ -4,14 +4,14 @@ Source of truth: `scripts/gen_doc_stats.py` (run from repo root).
 Validated by `scripts/check_docs_sync.py`. Hand-typed numbers in
 README/SPEC/BENCH are forbidden, link here instead.
 
-- **Version**: 2.3.0  · SPEC Status: v2.3.0
+- **Version**: 2.4.0  · SPEC Status: v2.4.0
 - **Keywords (parser reserved set)**: 60, table in [KEYWORDS.md](KEYWORDS.md)
 - **Std modules**: 28 (args, bigint, binary, bio, collections, csv, deque, fmt, fs, graph, hashing, heap, iter, json, logging, math, motifs, path, random, seq, serialize, set, strings, terminal, testing, time, unicode, url)
 - **Std functions (.op-level `gene` defs)**: 312
 - **Red-team payload files**: 103
-- **Proof files**: 140 (of 302 test .op files)
+- **Proof files**: 141 (of 303 test .op files)
 - **Proof run** (bin/operon): 185 files, 129 proofs, 1998 asserts
-- **Differential harness**: 221 match / 0 diverge (0 skipped) · granted lane: 11 cells
+- **Differential harness**: 222 match / 0 diverge (0 skipped) · granted lane: 11 cells
 - **CLI subcommands**: ast, bench, build, check, crispr, doc, explain, fix, fmt, graph, ir, keywords, lint, profile, repl, rna, test, version, watch
 - **LSP methods**: initialize, shutdown, textDocument/completion, textDocument/definition, textDocument/didChange, textDocument/didClose, textDocument/didOpen, textDocument/documentSymbol, textDocument/formatting, textDocument/hover, textDocument/prepareRename, textDocument/publishDiagnostics, textDocument/references, textDocument/rename, textDocument/semanticTokens, textDocument/signatureHelp
 

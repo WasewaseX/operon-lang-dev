@@ -1,0 +1,43 @@
+# W093 validation probe, V2 (repressilator ring period).
+# Companion measurement program for bootstrap/validation_registry.json and
+# bootstrap/validation_report.py. It asserts NOTHING. The enforcing test
+# remains tests/sci_repressi_period.op. Mirrors its walk exactly: 3-tick
+# warmup, then a 30-tick window with local-maximum detection on node p
+# (strictly above both neighbors on the sampled tick grid).
+repressilator p -> q -> r
+repressi_next()
+repressi_next()
+repressi_next()
+let prev = repressi_state().p
+repressi_next()
+let cur = repressi_state().p
+let peaks = []
+let peak_idx = []
+let t = 0
+while t < 30 {
+    repressi_next()
+    let nxt = repressi_state().p
+    if cur > prev and cur > nxt {
+        peaks.push(cur)
+        peak_idx.push(t + 4)
+    }
+    prev = cur
+    cur = nxt
+    t = t + 1
+}
+promote("RESULT v2_peak_count={peaks.len()}")
+let i = 1
+let period_ok = true
+while i < peak_idx.len() {
+    if peak_idx[i] - peak_idx[i - 1] != 6 {
+        period_ok = false
+    }
+    i = i + 1
+}
+promote("RESULT v2_period_ticks_ok={period_ok}")
+let s1 = repressi_state()
+let s2 = repressi_state()
+promote("RESULT v2_stateless_fold={s1.p == s2.p and s1.q == s2.q and s1.r == s2.r}")
+if peaks.len() > 0 {
+    promote("RESULT v2_first_peak_amp={peaks[0]}")
+}
