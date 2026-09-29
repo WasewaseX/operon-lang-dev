@@ -7,8 +7,12 @@
 //! ambiguity refuses (ordinal guide given), plain `#` comments refuse
 //! (reprint drops them), body replacements parse FIRST. Patches WITHOUT the
 //! header keep v1 text semantics byte-compatible.
+//!
+//! W68 section: `operon rna --check` validation mode (library `check_rna_v2`
+//! and the CLI): engine detection, per-rule span/node fate, ambiguity, the
+//! comment preflight, would-apply verdict, JSON shapes, exit codes, no writes.
 
-use operon::rna2::{apply_rna_v2, is_v2_patch, parse_v2_patch, plain_comment_lines};
+use operon::rna2::{apply_rna_v2, check_rna_v2, is_v2_patch, parse_v2_patch, plain_comment_lines};
 use std::process::Command;
 
 const SRC: &str = r#"gene alpha(x) {
@@ -460,5 +464,366 @@ fn v1_write_output_bytes_unchanged_by_deprecation() {
     // the deprecation is METADATA ONLY: the file contract is byte-identical to
     // the pre-deprecation v1 engine (notes go to stderr, flags to --json)
     assert_eq!(after, "gene alpha(x) {\n  return x + 7\n}\n");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+// ------------------------------------------------------------ W68: check mode (validate, never apply)
+
+#[test]
+fn check_reports_ambiguity_and_clean_apply() {
+    // bare name shared by two decls: check must surface the same ambiguity
+    // refusal (with the ordinal guide) a real apply would raise
+    let rep = check_rna_v2(SRC, "syntax: v2\nrename gene alpha -> solo\n", false);
+    assert!(!rep.would_apply, "ambiguous patch does not apply cleanly");
+    assert!(rep
+        .reason
+        .as_deref()
+        .unwrap_or("")
+        .contains("all-or-nothing"));
+    assert_eq!(rep.rules.len(), 1);
+    assert!(
+        !rep.rules[0].target_found,
+        "ambiguity is a resolution failure"
+    );
+    assert!(rep.rules[0].detail.contains("ambiguous"));
+    assert!(rep.rules[0].detail.contains("alpha#1") && rep.rules[0].detail.contains("alpha#2"));
+    assert!(rep.parse_error.is_none(), "the patch itself parses");
+
+    // the ordinal-addressed variant resolves and WOULD apply
+    let ok = check_rna_v2(SRC, "syntax: v2\nrename gene alpha#2 -> big\n", false);
+    assert!(ok.would_apply);
+    assert!(
+        ok.reason.is_none(),
+        "a clean check carries no refusal reason"
+    );
+    assert_eq!(ok.rules.len(), 1);
+    assert!(ok.rules[0].target_found && ok.rules[0].applied);
+    assert!(
+        ok.comment_lines.is_empty() && ok.comment_refusal.is_none(),
+        "no comments in SRC, preflight clean"
+    );
+}
+
+#[test]
+fn check_parse_error_refuses_before_rules() {
+    let rep = check_rna_v2(SRC, "syntax: v2\neat gene alpha\n", false);
+    assert!(!rep.would_apply);
+    assert!(rep.parse_error.is_some(), "the parse error is first-class");
+    assert!(
+        rep.rules.is_empty(),
+        "rules never ran (apply order: parse -> preflight -> rules)"
+    );
+    assert!(
+        rep.reason
+            .as_deref()
+            .unwrap_or("")
+            .contains("patch parse error"),
+        "{}",
+        rep.reason.as_deref().unwrap_or("")
+    );
+}
+
+#[test]
+fn check_comment_preflight_mirrors_apply() {
+    let src = "# header comment\ngene f() {\n  return 1\n}\n";
+    // refused: same gate order as apply, no rule fates, refusal verbatim
+    let rep = check_rna_v2(src, "syntax: v2\ndelete gene f\n", false);
+    assert!(!rep.would_apply);
+    assert_eq!(rep.comment_lines, vec![1], "target comment lines reported");
+    assert!(rep.comment_refusal.is_some());
+    assert!(
+        rep.rules.is_empty(),
+        "preflight refuses before rule resolution, like apply"
+    );
+    assert_eq!(
+        rep.comment_refusal.as_deref(),
+        Some(operon::rna2::comment_refusal_msg(&[1]).as_str()),
+        "check carries the apply refusal VERBATIM (shared helper)"
+    );
+    // allowed: the same check under --allow-comment-drop would apply
+    let ok = check_rna_v2(src, "syntax: v2\ndelete gene f\n", true);
+    assert!(ok.would_apply);
+    assert!(ok.comment_refusal.is_none());
+    assert_eq!(
+        ok.comment_lines,
+        vec![1],
+        "lines stay visible under the flag"
+    );
+    assert_eq!(ok.rules.len(), 1, "rules ran and resolve");
+}
+
+#[test]
+fn check_cli_clean_patch_writes_nothing() {
+    let dir = unique_dir("chk_ok");
+    let src = dir.join("app.op");
+    let patch = dir.join("p.rna");
+    let before = "gene alpha(x) {\n  return x + 1\n}\n\ngene beta(y) {\n  return alpha(y)\n}\n";
+    std::fs::write(&src, before).unwrap();
+    std::fs::write(&patch, "syntax: v2\nrename gene alpha -> gamma\n").unwrap();
+    let (code, stdout, _stderr) = run_rna_cli(&dir, "app.op", "p.rna", &["--check"]);
+    assert_eq!(code, 0, "clean patch checks green: {}", stdout);
+    assert!(stdout.contains("engine v2"), "engine detected: {}", stdout);
+    assert!(stdout.contains("would apply cleanly"), "{}", stdout);
+    assert!(stdout.contains("nothing written"), "{}", stdout);
+    assert!(
+        stdout.contains("ok   [gene alpha]"),
+        "per-rule fate: {}",
+        stdout
+    );
+    assert_eq!(
+        std::fs::read_to_string(&src).unwrap(),
+        before,
+        "check NEVER writes"
+    );
+    // the guarantee is absolute: --check --write is a usage error (exit 2)
+    let out = Command::new(env!("CARGO_BIN_EXE_operon"))
+        .arg("rna")
+        .arg(&src)
+        .arg(&patch)
+        .args(["--check", "--write"])
+        .output()
+        .expect("run operon rna --check --write");
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "--check + --write refuses at the CLI layer"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&src).unwrap(),
+        before,
+        "still untouched after the refused combo"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn check_cli_missing_span_and_ambiguous_exit_1() {
+    let dir = unique_dir("chk_miss");
+    let src = dir.join("app.op");
+    let patch = dir.join("p.rna");
+    let before = "gene alpha(x) {\n  return x + 1\n}\n\ngene beta(y) {\n  return alpha(y)\n}\n";
+    std::fs::write(&src, before).unwrap();
+    std::fs::write(&patch, "syntax: v2\ndelete gene ghost\ndelete gene beta\n").unwrap();
+    let (code, stdout, _stderr) = run_rna_cli(&dir, "app.op", "p.rna", &["--check"]);
+    assert_eq!(code, 1, "a missed target fails the check: {}", stdout);
+    assert!(stdout.contains("REFUSED"), "{}", stdout);
+    assert!(stdout.contains("MISS [gene ghost]"), "{}", stdout);
+    assert!(
+        stdout.contains("ok   [gene beta]"),
+        "resolvable rules still report ok: {}",
+        stdout
+    );
+    assert_eq!(std::fs::read_to_string(&src).unwrap(), before);
+
+    // ambiguity: bare name over two decls, ordinal guide in the detail
+    let dup = dir.join("dup.op");
+    let patch2 = dir.join("p2.rna");
+    std::fs::write(
+        &dup,
+        "gene alpha(x) {\n  return x + 1\n}\n\ngene alpha(x) {\n  return x + 100\n}\n",
+    )
+    .unwrap();
+    std::fs::write(&patch2, "syntax: v2\nrename gene alpha -> solo\n").unwrap();
+    let (code2, stdout2, _stderr2) = run_rna_cli(&dir, "dup.op", "p2.rna", &["--check"]);
+    assert_eq!(code2, 1, "ambiguity fails the check: {}", stdout2);
+    assert!(
+        stdout2.contains("ambiguous") && stdout2.contains("alpha#1") && stdout2.contains("alpha#2"),
+        "ordinal guide present: {}",
+        stdout2
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn check_cli_comment_preflight_and_flag() {
+    let dir = unique_dir("chk_cmt");
+    let src = dir.join("c.op");
+    let patch = dir.join("p.rna");
+    let before = "# header\ngene f() {\n  return 1\n}\n";
+    std::fs::write(&src, before).unwrap();
+    std::fs::write(&patch, "syntax: v2\ndelete gene f\n").unwrap();
+    let (code, stdout, _stderr) = run_rna_cli(&dir, "c.op", "p.rna", &["--check"]);
+    assert_eq!(code, 1, "comment preflight fails the check: {}", stdout);
+    assert!(
+        stdout.contains("plain '#' comments at lines [1]"),
+        "refusal carries the apply wording verbatim: {}",
+        stdout
+    );
+    assert_eq!(std::fs::read_to_string(&src).unwrap(), before);
+    // with the flag the same check goes green (and states the drop cost)
+    let (code2, stdout2, _stderr2) =
+        run_rna_cli(&dir, "c.op", "p.rna", &["--check", "--allow-comment-drop"]);
+    assert_eq!(code2, 0, "flag lifts the preflight: {}", stdout2);
+    assert!(stdout2.contains("will be dropped"), "{}", stdout2);
+    assert_eq!(
+        std::fs::read_to_string(&src).unwrap(),
+        before,
+        "even a green check writes nothing"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn check_cli_v2_json_shapes() {
+    let dir = unique_dir("chk_json");
+    let src = dir.join("app.op");
+    let patch = dir.join("p.rna");
+    let before = "gene alpha(x) {\n  return x + 1\n}\n";
+    std::fs::write(&src, before).unwrap();
+    std::fs::write(&patch, "syntax: v2\nrename gene alpha -> gamma\n").unwrap();
+    let (code, stdout, _stderr) = run_rna_cli(&dir, "app.op", "p.rna", &["--check", "--json"]);
+    assert_eq!(code, 0, "{}", stdout);
+    for key in [
+        "\"engine\":\"v2\"",
+        "\"check\":true",
+        "\"would_apply\":true",
+        "\"would_write\":false",
+        "\"would_change\":true",
+        "\"applied\":1",
+        "\"missed\":0",
+        "\"comment_preflight\":\"ok\"",
+        "\"comment_lines\":[]",
+        "\"verb\":\"rename\"",
+        "\"target_found\":true",
+    ] {
+        assert!(stdout.contains(key), "clean JSON carries {key}: {}", stdout);
+    }
+    assert!(
+        !stdout.contains("\"refused\""),
+        "clean check is not refused: {}",
+        stdout
+    );
+
+    // miss -> refused:true + reason, would_apply:false
+    let patch2 = dir.join("miss.rna");
+    std::fs::write(&patch2, "syntax: v2\ndelete gene ghost\n").unwrap();
+    let (code2, stdout2, _stderr2) =
+        run_rna_cli(&dir, "app.op", "miss.rna", &["--check", "--json"]);
+    assert_eq!(code2, 1, "{}", stdout2);
+    for key in [
+        "\"would_apply\":false",
+        "\"would_write\":false",
+        "\"missed\":1",
+        "\"refused\":true",
+        "\"target_found\":false",
+    ] {
+        assert!(
+            stdout2.contains(key),
+            "missed JSON carries {key}: {}",
+            stdout2
+        );
+    }
+    assert!(
+        stdout2.contains("\"reason\":\"all-or-nothing"),
+        "{}",
+        stdout2
+    );
+
+    // parse error -> refused with the patch parse error as reason
+    let patch3 = dir.join("bad.rna");
+    std::fs::write(&patch3, "syntax: v2\neat gene alpha\n").unwrap();
+    let (code3, stdout3, _stderr3) = run_rna_cli(&dir, "app.op", "bad.rna", &["--check", "--json"]);
+    assert_eq!(code3, 1, "{}", stdout3);
+    assert!(
+        stdout3.contains("\"reason\":\"patch parse error"),
+        "{}",
+        stdout3
+    );
+    assert!(
+        stdout3.contains("\"rules\":[]"),
+        "rules never ran: {}",
+        stdout3
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn check_cli_v1_deprecation_interaction() {
+    let dir = unique_dir("chk_v1");
+    let src = dir.join("app.op");
+    let patch = dir.join("p.rna");
+    let before = "gene alpha(x) {\n  return x + 1\n}\n";
+    std::fs::write(&src, before).unwrap();
+    std::fs::write(&patch, "edit alpha { replace \"x + 1\" -> \"x + 7\" }").unwrap();
+    let (code, stdout, stderr) = run_rna_cli(&dir, "app.op", "p.rna", &["--check", "--json"]);
+    assert_eq!(code, 0, "v1 clean check exits 0: {}", stdout);
+    for key in [
+        "\"engine\":\"v1\"",
+        "\"deprecated\":true",
+        "\"check\":true",
+        "\"would_apply\":true",
+        "\"would_write\":false",
+        "\"applied\":1",
+        "\"hits\":1",
+    ] {
+        assert!(
+            stdout.contains(key),
+            "v1 check JSON carries {key}: {}",
+            stdout
+        );
+    }
+    assert!(
+        stderr.contains("deprecated (info, W63 step 1)"),
+        "the v1 deprecation note survives in check mode: {}",
+        stderr
+    );
+    assert_eq!(
+        std::fs::read_to_string(&src).unwrap(),
+        before,
+        "v1 check writes nothing"
+    );
+
+    // v1 miss: exit 1, miss row, still deprecated metadata
+    let patch2 = dir.join("miss.rna");
+    std::fs::write(&patch2, "edit ghost { replace \"x\" -> \"y\" }").unwrap();
+    let (code2, stdout2, _stderr2) =
+        run_rna_cli(&dir, "app.op", "miss.rna", &["--check", "--json"]);
+    assert_eq!(code2, 1, "{}", stdout2);
+    assert!(stdout2.contains("\"would_apply\":false"), "{}", stdout2);
+    assert!(stdout2.contains("\"missed\":1"), "{}", stdout2);
+
+    // v1 multi-hit: hit counts stay in the row (board: hit/miss/multi-hit)
+    let two = dir.join("two.op");
+    let patch3 = dir.join("multi.rna");
+    std::fs::write(
+        &two,
+        "gene a() {\n  return 1\n}\n\ngene b() {\n  return 2\n}\n",
+    )
+    .unwrap();
+    std::fs::write(&patch3, "edit anywhere { replace \"return\" -> \"yield\" }").unwrap();
+    let (code3, stdout3, _stderr3) =
+        run_rna_cli(&dir, "two.op", "multi.rna", &["--check", "--json"]);
+    assert_eq!(code3, 0, "{}", stdout3);
+    assert!(
+        stdout3.contains("\"hits\":2"),
+        "multi-hit counted: {}",
+        stdout3
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn check_cli_apply_path_untouched_by_check_mode() {
+    // the differential invariant: check mode must not perturb the apply
+    // path. Same patch, same files: apply (dry-run default, then --write)
+    // behaves exactly as before W68 landed.
+    let dir = unique_dir("chk_apply");
+    let src = dir.join("app.op");
+    let patch = dir.join("p.rna");
+    let before = "gene alpha(x) {\n  return x + 1\n}\n";
+    std::fs::write(&src, before).unwrap();
+    std::fs::write(&patch, "syntax: v2\nrename gene alpha -> gamma\n").unwrap();
+    let (code, stdout, _stderr) = run_rna_cli(&dir, "app.op", "p.rna", &["--write"]);
+    assert_eq!(code, 0, "{}", stdout);
+    assert!(
+        stdout.contains("1 applied, 0 missed"),
+        "apply report wording unchanged: {}",
+        stdout
+    );
+    assert_eq!(
+        std::fs::read_to_string(&src).unwrap(),
+        "gene gamma(x){\n  return x + 1\n}\n\n",
+        "apply still reprints through the canonical formatter"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
