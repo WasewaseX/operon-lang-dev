@@ -3011,7 +3011,8 @@ grapheme_len fold_case char_at char_slice
 norm_nfc norm_nfd casefold char_category weak strengthen
 some none ok err is_some is_none is_ok is_err unwrap unwrap_or try_num try_index try_get try_pop
 enumerate zip sorted reversed any all first last take drop unique flatten chunk round clamp divmod
-channel send recv close select""".split())
+channel send recv close select
+is_object object_fields object_from_map""".split())
 
 BUILTIN_SYNONYMS = {"print": "promote", "echo": "promote", "say": "promote", "show": "promote"}
 
@@ -7180,6 +7181,32 @@ class Interp:
         if name == "json_str":
             v = args[0] if args else None
             return self._json_str(v)
+        # ---- W34 stage 2: phenotype serialization primitives (mirror of the
+        # Rust arms: silent predicate + shallow field-map copy + wire-map
+        # rebuild; the wire shape is the spawn boundary's field map + hidden
+        # "#phenotype" key)
+        if name == "is_object":
+            return isinstance(args[0], ObjInst) if args else False
+        if name == "object_fields":
+            v = args[0] if args else None
+            if isinstance(v, ObjInst):
+                return dict(v.fields)
+            self.note(4, f"object_fields({type_name(v)}) on a non-phenotype value; null")
+            return None
+        if name == "object_from_map":
+            m = args[0] if args else None
+            if not isinstance(m, dict):
+                raise Stress("unfolded", f"object_from_map expects a map; got {type_name(m)}")
+            tag = m.get("#phenotype")
+            if tag is None:
+                raise Stress("unfolded", 'object_from_map: map has no "#phenotype" identity key')
+            decl = self.phenos.get(str(tag))
+            if decl is None:
+                raise Stress(
+                    "unfolded",
+                    f"object_from_map: phenotype '{tag}' not declared in this program",
+                )
+            return ObjInst(decl, {k: v for k, v in m.items() if k != "#phenotype"})
         # ---- env (capability-gated)
         if name == "env":
             nm = v_display(args[0]) if args else ""

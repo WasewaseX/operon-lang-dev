@@ -9337,6 +9337,99 @@ impl Interp {
                 let v = args.first().cloned().unwrap_or(Value::Null);
                 Ok(Value::Str(json_stringify(&v)))
             }
+            // -------------------------------------------------- W34 stage 2: phenotype serialization primitives
+            // Additive only (no existing path touched). The wire shape —
+            // field map + hidden "#phenotype" identity key — is the SAME
+            // shape the spawn boundary already uses (genes.rs to_send_d),
+            // so the language keeps ONE canonical phenotype wire format.
+            "is_object" => {
+                // Silent predicate: true iff the value is a phenotype
+                // instance. The note-free test walkers use instead of the
+                // object_fields(v) != null idiom (which would note per call).
+                Ok(Value::Bool(matches!(args.first(), Some(Value::Obj(_, _)))))
+            }
+            "object_fields" => {
+                // Shallow copy of an instance's field map, insertion order
+                // preserved. Total builtin: a non-instance yields null + a
+                // rung-4 note (num()-style honesty, never a stress).
+                match args.first() {
+                    Some(Value::Obj(_, m)) => {
+                        let out: crate::value::MapRef =
+                            Rc::new(RefCell::new(crate::value::MapStore::default()));
+                        for (k, v) in m.borrow().iter() {
+                            let _ = self.map_insert(&out, k.clone(), v.clone());
+                        }
+                        Ok(Value::Map(out))
+                    }
+                    Some(other) => {
+                        self.note(
+                            0,
+                            4,
+                            format!(
+                                "object_fields({}) on a non-phenotype value; null",
+                                other.type_name()
+                            ),
+                        );
+                        Ok(Value::Null)
+                    }
+                    None => Ok(Value::Null),
+                }
+            }
+            "object_from_map" => {
+                // Rebuild a phenotype instance from its wire map: the
+                // "#phenotype" entry names the class (must be declared in
+                // THIS program), remaining entries become fields in wire
+                // order. Data restore, not construction — init does NOT
+                // run and field defaults do NOT apply (the wire is the
+                // truth; absent fields read as null + note per SPEC §7a).
+                // Unknown/missing tag => catchable `unfolded` Stress, same
+                // contract as json_parse; std/serialize shapes it into an
+                // err value at the API line (D-014).
+                let m = match args.first() {
+                    Some(Value::Map(m)) => m.clone(),
+                    Some(other) => {
+                        return Err(Stress::new(
+                            "unfolded",
+                            format!("object_from_map expects a map; got {}", other.type_name()),
+                        ))
+                    }
+                    None => {
+                        return Err(Stress::new(
+                            "unfolded",
+                            "object_from_map expects a map; got nothing",
+                        ))
+                    }
+                };
+                let mut tag: Option<String> = None;
+                let out: crate::value::MapRef =
+                    Rc::new(RefCell::new(crate::value::MapStore::default()));
+                for (k, v) in m.borrow().iter() {
+                    if k.display() == "#phenotype" {
+                        tag = Some(v.display());
+                        continue;
+                    }
+                    let _ = self.map_insert(&out, k.clone(), v.clone());
+                }
+                let tag = match tag {
+                    Some(t) => t,
+                    None => {
+                        return Err(Stress::new(
+                            "unfolded",
+                            "object_from_map: map has no \"#phenotype\" identity key",
+                        ))
+                    }
+                };
+                match self.phenos.get(&tag).cloned() {
+                    Some(def) => Ok(Value::Obj(def, out)),
+                    None => Err(Stress::new(
+                        "unfolded",
+                        format!(
+                            "object_from_map: phenotype '{}' not declared in this program",
+                            tag
+                        ),
+                    )),
+                }
+            }
             // -------------------------------------------------- env (capability-gated)
             "env" => {
                 let name = args.first().map(|v| v.display()).unwrap_or_default();
@@ -11250,6 +11343,11 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "round",
     "clamp",
     "divmod",
+    // W34 stage 2: phenotype serialization primitives (wire shape = the
+    // spawn boundary's field map + hidden "#phenotype" key)
+    "is_object",
+    "object_fields",
+    "object_from_map",
 ];
 
 // ---------------------------------------------------------------- memory
