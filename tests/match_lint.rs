@@ -193,3 +193,56 @@ fn spanless_arm_body_anchors_at_line_one_and_suppresses_there() {
     operon::lint::apply_allows(&mut findings, src);
     assert!(findings.is_empty(), "line-1 allow must suppress");
 }
+
+#[test]
+fn fully_covered_or_alternatives_are_dead() {
+    // the all-covered side of the or law: EVERY alternative of the later
+    // or-pattern is covered by the earlier arm, so under first-match-wins
+    // the whole arm can never run (the partial side stays live, pinned in
+    // live_shapes_stay_silent_false_positive_budget)
+    let hits = w06(
+        "match some(1) {\n    case Some(_) {\n        print(1)\n    }\n    case Some(1) | Some(y) {\n        print(2)\n    }\n}\n",
+    );
+    assert_eq!(hits.len(), 1, "{:?}", hits);
+    assert!(hits[0].contains("broader arm first"), "{:?}", hits);
+}
+
+#[test]
+fn earlier_or_alternative_covers_through_any_alt() {
+    // an or-pattern matches through ANY alternative, so one covering
+    // alternative (Some(_) here) is enough to block the payload arm behind
+    // it; the None alternative only widens the earlier arm's own set
+    let hits = w06(
+        "match some(7) {\n    case None | Some(_) {\n        print(1)\n    }\n    case Some(x) {\n        print(2)\n    }\n}\n",
+    );
+    assert_eq!(hits.len(), 1, "{:?}", hits);
+    assert!(hits[0].contains("broader arm first"), "{:?}", hits);
+}
+
+#[test]
+fn reordered_multi_run_is_dead() {
+    // duplicate literal shapes stay this rule's story when they sit inside
+    // composite arms (duplicate-match-arm only sees plain literal arms):
+    // the earlier comma-run matches both values first, so the reordered run
+    // can never win first-match-wins
+    let hits = w06(
+        "match 2 {\n    case 1, 2 {\n        print(1)\n    }\n    case 2, 1 {\n        print(2)\n    }\n}\n",
+    );
+    assert_eq!(hits.len(), 1, "{:?}", hits);
+    assert!(hits[0].contains("broader arm first"), "{:?}", hits);
+}
+
+#[test]
+fn unknown_tag_arm_is_a_runtime_true_catchall() {
+    // the unknown-tag corner of the conservatism law: the parser degrades an
+    // unknown capitalized tag to a whole-subject binding (runtime-true
+    // catch-all, SPEC §5a), so arms behind it are genuinely dead and flagged
+    // (pinned against the live interpreter in the W02-s2 session notes);
+    // the ALGEBRA itself still never claims coverage for an unprovable
+    // shape, floats and computed literals stay silent by design
+    let hits = w06(
+        "match some(1) {\n    case Blob(v) {\n        print(1)\n    }\n    case Some(y) {\n        print(2)\n    }\n}\n",
+    );
+    assert_eq!(hits.len(), 1, "{:?}", hits);
+    assert!(hits[0].contains("unguarded catch-all"), "{:?}", hits);
+}
