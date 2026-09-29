@@ -1,0 +1,7 @@
+error[E1020]: detonating
+  --> tests/diagnostics/raise_overflow.op:2
+   |
+2 |   raise overflow, "detonating"
+   |
+   = kind: overflow
+  at main

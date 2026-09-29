@@ -1,0 +1,1 @@
+{"code": "E1020", "kind": "overflow", "message": "detonating", "file": "tests/diagnostics/raise_overflow.op", "line": 2, "column": null, "length": null, "chain": [{"gene": "main", "line": null}], "help": []}

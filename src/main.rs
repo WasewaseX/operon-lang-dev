@@ -86,6 +86,8 @@ fn real_main() {
     // W68: `operon rna --check` validates a patch and writes NOTHING, ever
     let mut rna_check = false;
     let mut trace_grn_path: Option<String> = None;
+    // W101: --json-errors, fatal diagnostics as one JSON object (SPEC 9a).
+    let mut json_errors = false;
     // W09 A2/A6: run gene bodies through the OIR1 bytecode machine
     // (src/vm.rs); calls/gates stay on the shared path, so output is
     // byte-identical. DEFAULT ON since the A6 flip (v2.6.0 release
@@ -283,6 +285,9 @@ fn real_main() {
             // W067 v2: the AST reprint drops plain `#` comments; the v2 rna
             // engine refuses such files unless this flag is passed.
             "--allow-comment-drop" => allow_comment_drop = true,
+            // W101: machine-readable fatal diagnostics (SPEC 9a schema), one
+            // JSON object on stderr instead of the rendered text block.
+            "--json-errors" => json_errors = true,
             // W095: GRN tick-stream, every engine update point (fire pulse
             // / decay tick) snapshots the sorted level map as one JSONL
             // frame; the buffer lands in the file after the run.
@@ -722,24 +727,22 @@ fn real_main() {
                 match result {
                     Ok(_) => {}
                     Err(s) => {
-                        // dx-r3 (re-audit): the PRIMARY diagnostic gets a
-                        // location when the stress carries its origin line,
-                        // matching mainstream norms where the fatal error is
-                        // the located one
-                        if s.line > 0 {
-                            eprintln!(
-                                "[contained] [{}] {}:{}: {}",
-                                s.kind, l.interp.file, s.line, s.message
+                        // W101: excellent errors. The rendered block (code,
+                        // snippet, note, help) replaces the old one-liner;
+                        // --json-errors swaps the whole block for one JSON
+                        // object (SPEC 9a). rc semantics and the W007 chain
+                        // rendering below are unchanged, downstream parsers
+                        // of stderr keep working.
+                        // The snippet source: re-read the script on the error
+                        // path (error path only; load_file owns the parse).
+                        let src_text = std::fs::read_to_string(&file).unwrap_or_default();
+                        if json_errors {
+                            eprint!(
+                                "{}",
+                                operon::diag::render_json(&l.interp.file, &src_text, &s)
                             );
                         } else {
-                            eprintln!("[contained] [{}] {}", s.kind, s.message);
-                        }
-                        // W007: call-chain traceback, innermost frame first,
-                        // each frame the gene and the call site that invoked
-                        // it. Render capped at 64 (the capture cap); the
-                        // chain leaks nothing beyond the script path already
-                        // printed above (no env, no cwd, no host paths).
-                        if !s.chain.is_empty() {
+                            eprint!("{}", operon::diag::render(&l.interp.file, &src_text, &s));
                             for (i, (name, line)) in s.chain.iter().enumerate() {
                                 if i >= 64 {
                                     eprintln!("  … {} more frame(s)", s.chain.len() - 64);
@@ -751,8 +754,15 @@ fn real_main() {
                                     eprintln!("  at {}", name);
                                 }
                             }
-                            eprintln!("  at main");
+                            if !s.chain.is_empty()
+                                && s.chain.last().map(|(n, _)| n.as_str()) != Some("main")
+                            {
+                                eprintln!("  at main");
+                            }
                         }
+                        // W007 chain rendering moved into the W101 block above
+                        // (capped at 64, "at main" tail preserved). In
+                        // --json-errors mode the chain is a JSON array field.
                         // dx-r1 (parity audit W2): a failing program must not
                         // report success, CI/shell pipelines trusted rc=0
                         // from scripts that died. 1 = uncaught top-level stress.
