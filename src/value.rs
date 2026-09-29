@@ -769,7 +769,22 @@ thread_local! {
     // Rc containers are thread-local by construction (the spawn membrane
     // never aliases across workers, SPEC 19d), so per-thread registries are
     // the correct scope: a worker cell accounts its own cycles.
-    static CYCLE_REGS: RefCell<Vec<CycleEntry>> = const { RefCell::new(Vec::new()) };
+    static CYCLE_REGS: RefCell<CycleRegistry> = RefCell::new(CycleRegistry {
+        regs: Vec::new(),
+        index: HashSet::new(),
+    });
+}
+
+/// The registry plus an address index. The index is a pure accelerator:
+/// the soak gate (scripts/soak_cycles.op, 300k leaked pairs) exposed an
+/// O(N^2) prune-and-scan per registration (12s at 50k, hang at 300k); the
+/// gauge contract is unchanged (identical counts, identical outputs), the
+/// membership test just stopped walking the whole Vec. Dead entries prune
+/// lazily ON TOUCH instead of eagerly per registration, so a hot
+/// no-dead-entries registration is O(1).
+struct CycleRegistry {
+    regs: Vec<CycleEntry>,
+    index: HashSet<usize>,
 }
 
 fn list_addr(l: &ListRef) -> usize {
@@ -838,16 +853,23 @@ fn walk_reaches(root_addr: usize, v: &Value) -> Option<bool> {
 /// container reachable from the target is already registered, the cycle
 /// group was already counted through that member.
 fn cycle_register_addr(addr: usize, weak: CycleWeak) {
-    CYCLE_REGS.with(|regs| {
-        let mut regs = regs.borrow_mut();
-        // prune reclaimed registrations first (a dead entry's address can
-        // be reused by a fresh allocation, so prune-then-compare)
-        regs.retain(|e| match &e.weak {
-            CycleWeak::List(w) => w.upgrade().is_some(),
-            CycleWeak::Map(w) => w.upgrade().is_some(),
-        });
-        if regs.iter().any(|e| e.addr == addr) {
-            return; // this container is already the registered member
+    CYCLE_REGS.with(|cell| {
+        let mut reg = cell.borrow_mut();
+        // dedupe: this exact container already the registered member. The
+        // index hit is O(1); on a hit the entry is verified alive (a dead
+        // entry prunes on touch, its address may have been reused).
+        if reg.index.contains(&addr) {
+            if let Some(e) = reg.regs.iter().find(|e| e.addr == addr) {
+                let alive = match &e.weak {
+                    CycleWeak::List(w) => w.upgrade().is_some(),
+                    CycleWeak::Map(w) => w.upgrade().is_some(),
+                };
+                if alive {
+                    return; // this container is already the registered member
+                }
+            }
+            reg.index.remove(&addr);
+            reg.regs.retain(|e| e.addr != addr);
         }
         // subgraph dedupe: walk the target's reachable containers, if any
         // is registered the group is already counted (one entry per cycle).
@@ -875,8 +897,22 @@ fn cycle_register_addr(addr: usize, weak: CycleWeak) {
             budget -= 1;
             match container_addr(&cur) {
                 Some(a) => {
-                    if regs.iter().any(|e| e.addr == a) {
-                        return; // a member of this subgraph is registered
+                    if reg.index.contains(&a) {
+                        // verify the hit is a LIVE registered member (dead
+                        // entries prune on touch, addresses get reused)
+                        if let Some(e) = reg.regs.iter().find(|e| e.addr == a) {
+                            let alive = match &e.weak {
+                                CycleWeak::List(w) => w.upgrade().is_some(),
+                                CycleWeak::Map(w) => w.upgrade().is_some(),
+                            };
+                            if alive {
+                                return; // a member of this subgraph is registered
+                            }
+                            reg.index.remove(&a);
+                            reg.regs.retain(|e| e.addr != a);
+                        } else {
+                            reg.index.remove(&a);
+                        }
                     }
                     if seen.insert(a) {
                         push_children(&cur, &mut stack);
@@ -889,7 +925,8 @@ fn cycle_register_addr(addr: usize, weak: CycleWeak) {
                 }
             }
         }
-        regs.push(CycleEntry { weak, addr });
+        reg.index.insert(addr);
+        reg.regs.push(CycleEntry { weak, addr });
     });
 }
 
@@ -922,13 +959,13 @@ pub fn cycle_note_insert(target: &Value, v: &Value) {
 /// (weak dead) or whose cycle was broken by mutation (no longer reachable
 /// from itself) are pruned; the survivors are the live detected cycles.
 pub fn live_cycle_count() -> i64 {
-    CYCLE_REGS.with(|regs| {
-        let mut regs = regs.borrow_mut();
+    CYCLE_REGS.with(|cell| {
+        let mut reg = cell.borrow_mut();
         let mut n: i64 = 0;
         // ONE budget shared by every verification in this call: the whole
         // re-verify pass is bounded no matter how many cycles are registered.
         let mut budget = WALK_BUDGET;
-        regs.retain(|e| {
+        reg.regs.retain(|e| {
             let verdict = match &e.weak {
                 CycleWeak::List(w) => match w.upgrade() {
                     None => Some(false),
@@ -961,6 +998,9 @@ pub fn live_cycle_count() -> i64 {
             }
             still
         });
+        // the index mirrors the post-prune Vec (rebuild is O(N) and this is
+        // the one place that bulk-prunes)
+        reg.index = reg.regs.iter().map(|e| e.addr).collect();
         n
     })
 }
