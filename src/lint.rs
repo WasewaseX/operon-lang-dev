@@ -54,6 +54,16 @@
 //!   W10  cell-unknown-key       .cell key outside the schema (W66)
 //!   W11  cell-type-mismatch     .cell key expects a number (W66)
 //!   W12  deprecated-use         call to an @deprecated-marked gene (W64)
+//!   E02  type-mismatch           W01-s2: annotated boundary violated at
+//!                                check time (arg/assign/declaration/return)
+//!   E03  no-method               W01-s2: method a closed receiver family
+//!                                cannot have (runtime yields null + note)
+//!   W13  unknown-type-name       W01-s2: annotation names nothing known
+//!   W14  null-return             W01-s2: provable null crossing a
+//!                                non-optional return annotation
+//!   W15  non-exhaustive-match    W01-s2: optional/result match missing a
+//!                                tag with no catch-all
+//!   W16  trait-bound-violation   W01-s2: argument cannot satisfy `T: Trait`
 //!   N01  unused-gene            defined, never called (library surface?)
 //!   N02  unused-import          module imported, never referenced
 //!   N03  infinite-loop-suspect  while over an always-true literal
@@ -95,7 +105,12 @@ pub enum Stream {
 pub fn rule_stream(rule: &str) -> Stream {
     match rule {
         "wrong-arity" | "E01" | "const-reassign" | "W02" | "phantom-call" | "W01"
-        | "cell-unknown-key" | "W10" | "cell-type-mismatch" | "W11" | "deprecated-use" | "W12" => {
+        | "cell-unknown-key" | "W10" | "cell-type-mismatch" | "W11" | "deprecated-use" | "W12"
+        // W01-s2: the static type system rides the check stream (it answers
+        // "is this program correct about its types")
+        | "type-mismatch" | "E02" | "no-method" | "E03" | "unknown-type-name" | "W13"
+        | "null-return" | "W14" | "non-exhaustive-match" | "W15"
+        | "trait-bound-violation" | "W16" => {
             Stream::Check
         }
         r if r.starts_with("nmd:") || r == "anchor-import" || r.starts_with("W09") => Stream::Check,
@@ -178,6 +193,13 @@ pub fn rule_code(rule: &str) -> &'static str {
         "deprecated-use" => "W12",
         "cell-unknown-key" => "W10",
         "cell-type-mismatch" => "W11",
+        // W01-s2 (static type system stage 2), appended per the ladder law
+        "type-mismatch" => "E02",
+        "no-method" => "E03",
+        "unknown-type-name" => "W13",
+        "null-return" => "W14",
+        "non-exhaustive-match" => "W15",
+        "trait-bound-violation" => "W16",
         "unused-gene" => "N01",
         "unused-import" => "N02",
         "infinite-loop-suspect" => "N03",
@@ -655,10 +677,20 @@ pub fn apply_cli_allows(out: &mut Vec<Finding>, rules: &[String]) {
 /// Parse `allow:` suppression comments: line -> Some(None) means "allow
 /// everything on this line", Some(Some(rules)) means "allow these rules".
 fn parse_allow(line: &str) -> Option<Option<Vec<String>>> {
-    // comment start: `#` (the language comment) or `//` (C-style tolerance)
-    let start = line.find('#').or_else(|| line.find("//"))?;
-    let comment = line[start + 1..].trim();
-    let rest = comment.strip_prefix("allow:")?.trim();
+    // comment start: `#` (the language comment) or `//` (C-style
+    // tolerance). Both markers are stripped WHOLE: the old code skipped a
+    // single character, which silently broke the documented `// allow:`
+    // form (the leading second slash made strip_prefix("allow:") fail and
+    // every C-style suppression was dead on arrival — surfaced by the
+    // W01-s2 type findings, the first rules whose intentional-code
+    // suppressions used the // form inside method bodies).
+    let at = line.find("# allow:").or_else(|| line.find("// allow:"))?;
+    let rest = line[at..]
+        .trim_start_matches('#')
+        .trim_start_matches('/')
+        .trim()
+        .strip_prefix("allow:")?
+        .trim();
     if rest.is_empty() {
         return Some(None);
     }

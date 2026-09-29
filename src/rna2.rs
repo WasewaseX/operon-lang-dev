@@ -1193,6 +1193,29 @@ fn rewrite_ann(ann: &mut TypeAnn, cfg: &mut RewriteCfg) {
             }
         }
         TypeAnn::Optional(inner) => rewrite_ann(inner, cfg),
+        // W01-s2: recurse into generic arguments and alias targets; a type
+        // parameter reference carries nothing to rename.
+        TypeAnn::App { head, args } => {
+            if let Some((from, to)) = cfg.ann {
+                if head == from {
+                    *head = to.to_string();
+                    cfg.bump();
+                }
+            }
+            for a in args {
+                rewrite_ann(a, cfg);
+            }
+        }
+        TypeAnn::TypeVar(_) => {}
+        TypeAnn::Alias { name, target } => {
+            if let Some((from, to)) = cfg.ann {
+                if name == from {
+                    *name = to.to_string();
+                    cfg.bump();
+                }
+            }
+            rewrite_ann(target, cfg);
+        }
     }
 }
 
@@ -1461,6 +1484,8 @@ fn rewrite_stmt(s: &mut Stmt, cfg: &mut RewriteCfg) {
             }
         }
         Stmt::Yield(Some(e)) => rewrite_expr(e, cfg),
+        // W01-s2: an alias target carries annotations, rewrite them too
+        Stmt::TypeAlias(_, ann, _) => rewrite_ann(ann, cfg),
         Stmt::Edit(..)
         | Stmt::Use(..)
         | Stmt::Break

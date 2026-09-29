@@ -425,6 +425,49 @@ fn real_main() {
         "repl" => {
             repl();
         }
+        // W01-s2 (static type system stage 2): `operon sig`, the resolved
+        // signature table. Declared signatures print from their annotations;
+        // unannotated genes get their return type INFERRED from their body
+        // (union of return-expression types) and are marked as such. This
+        // is the check-time layer's face: same engine as `operon check`'s
+        // type stream, zero runtime involvement.
+        "sig" => {
+            let file = match positional.first() {
+                Some(f) => f.clone(),
+                None => die("sig needs a file"),
+            };
+            let src = std::fs::read_to_string(&file)
+                .unwrap_or_else(|e| die(&format!("cannot read {}: {}", file, e)));
+            let prog = parser::parse(&src);
+            let sigs = operon::types::signatures(&prog);
+            if json {
+                let rows: Vec<String> = sigs
+                    .iter()
+                    .map(|s| {
+                        format!(
+                            "{{\"signature\":\"{}\",\"declared\":{},\"line\":{}}}",
+                            tools::json_escape(&s.text),
+                            s.declared,
+                            s.line
+                        )
+                    })
+                    .collect();
+                println!(
+                    "{{\"file\":\"{}\",\"signatures\":[{}]}}",
+                    tools::json_escape(&file),
+                    rows.join(",")
+                );
+            } else {
+                println!("operon sig: {}", file);
+                for s in &sigs {
+                    println!(
+                        "  {}{}",
+                        s.text,
+                        if s.declared { "" } else { "    # inferred" }
+                    );
+                }
+            }
+        }
         // W39 (ROADMAP-100): AST dump, the Total Grammar structural window.
         // Purely structural: repair notes are W38 `explain`'s surface and are
         // never printed here, default or otherwise.
@@ -793,6 +836,10 @@ fn real_main() {
             let src = std::fs::read_to_string(&file).unwrap_or_default();
             let prog = parser::parse(&src);
             let mut findings = operon::lint::lint_correctness(&prog);
+            // W01-s2: the static type system rides the check stream — its
+            // findings share the Finding shape, the allow-suppression and
+            // the stable-code ladder (E02/W13/... see src/types.rs).
+            findings.extend(operon::types::check(&prog));
             operon::lint::apply_allows(&mut findings, &src);
             let mut style = operon::lint::lint_style(&prog);
             operon::lint::apply_allows(&mut style, &src);
@@ -2462,6 +2509,9 @@ usage:
                   # W48 split: check = CORRECTNESS (wrong-arity, phantom-call, const-reassign,
                   # cell keys, NMD). diag default shows correctness sections; the style stream is
                   # summarized with a pointer to `operon lint` (--style inlines it).
+                  # W01-s2: the static type system rides this stream (type-mismatch E02,
+                  # no-method E03, unknown-type-name W13, null-return W14,
+                  # non-exhaustive-match W15, trait-bound-violation W16).
   operon lint f.op [more.op ...] [--strict] [--allow rule1,rule2] [--cell c] [--json]
                   # W48 split: lint = STYLE/QUALITY only (unused-gene, unused-import,
                   # unused-binding, dead-const, shadowed-binding, constant-condition,
@@ -2473,6 +2523,7 @@ usage:
   operon fix f.op [--write] [--json]   # migrate legacy surface (const→let, s::→dot), dry-run default
   operon ast f.op [--json]
   operon explain f.op [--json] [--strict]
+  operon sig f.op [--json]     # W01-s2: resolved signature table (declared + inferred)
   operon keywords [--json]
   operon repl
   operon debug f.op --break N   # W08 phase 1: REPL on line breaks (c s q bt vars p EXPR)

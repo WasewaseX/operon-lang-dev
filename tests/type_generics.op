@@ -1,0 +1,127 @@
+# type_generics.op, W01-s2 (static type system stage 2): generic genes,
+# container sugar, type aliases and the Option/Result payload contracts.
+# The RUNTIME soft contract extends additively: a TypeVar accepts anything
+# (the check-time layer does the real work), `List<int>` checks elements at
+# the boundary (empty lists match vacuously), `Option<T>` is `T?` (null,
+# NoneV, or a Some payload), `Result<T, E>` checks Ok/Err payloads, and a
+# `type` alias matches as its parse-time-resolved target. Never a parse
+# rejection; Total Grammar (SPEC §7a family, docs/specs/TYPES.md).
+frame proof {
+    # ---- generic identity: one definition, any payload type
+    gene id<T>(x: T) -> T {
+        return x
+    }
+    assert(id(7) == 7, "generic gene passes an int through")
+    assert(id("hi") == "hi", "generic gene passes a str through")
+    assert(id([1, 2]) == [1, 2], "generic gene passes a list through")
+
+    # ---- generic container param: List<T> element contract
+    gene first<T>(xs: List<T>) -> T? {
+        return xs.get(0)
+    }
+    assert(first([10, 20]) == 10, "List<T> accepts a well-typed list")
+    assert(first([]) == null, "empty list satisfies List<T> vacuously")
+
+    # ---- Map<K, V> boundary: every key and value is checked
+    gene count<V>(m: Map<str, V>) -> int {
+        return len(m)
+    }
+    assert(count({"a": 1, "b": 2}) == 2, "Map<str, V> accepts a str-keyed map")
+
+    # ---- a mis-typed element stresses the boundary (catchable, soft);
+    # the payload type must be CONCRETE for the runtime to check it (a
+    # bare List<T> TypeVar matches anything — that is the check-time
+    # layer's job, see tests/types_check.rs)
+    gene ints(xs: List<int>) -> int {
+        return len(xs)
+    }
+    let contained = 0
+    stress {
+        ints(["a", "b"])
+    } rescue (e) {
+        contained = 1
+    }
+    assert(contained == 1, "List<int> refuses a list of strings: unfolded stress")
+
+    # ---- Option<T> is T?: null, none(), some(t) and the plain inner all fit
+    gene maybe(v: int) -> Option<int> {
+        if v > 0 {
+            return some(v)
+        }
+        return none()
+    }
+    assert(maybe(3) == some(3), "some payload matches Option<int>")
+    assert(maybe(0) == none(), "none matches any Option<T>")
+    gene plain_into_opt(x: int?) -> int? {
+        return x
+    }
+    assert(plain_into_opt(null) == null, "null fits an optional annotation")
+    assert(plain_into_opt(5) == 5, "a plain int fits an optional annotation")
+
+    # ---- Result<T, E> payload contract: Ok checks T, Err checks E
+    gene parse(tag: str) -> Result<int, str> {
+        if tag == "n" {
+            return ok(42)
+        }
+        return err("bad tag")
+    }
+    assert(parse("n") == ok(42), "Ok payload matches Result's T")
+    assert(parse("x") == err("bad tag"), "Err payload matches Result's E")
+    # a Result<int, str> refuses an Err whose payload is not a str
+    gene wrong_err() -> Result<int, str> {
+        return err(7)
+    }
+    let res_hit = 0
+    stress {
+        wrong_err()
+    } rescue (e) {
+        res_hit = 1
+    }
+    assert(res_hit == 1, "Err payload mismatch stresses at the return boundary")
+
+    # ---- type aliases: parse-time resolution, runtime matches the target
+    type UserId = int
+    type Names = List<str>
+    gene load(u: UserId) -> int {
+        return u * 2
+    }
+    assert(load(21) == 42, "alias annotation matches its target type")
+    gene shout(ns: Names) -> str {
+        return ns.join(",")
+    }
+    assert(shout(["a", "b"]) == "a,b", "alias to List<str> checks elements")
+
+    # ---- an alias violation is the same unfolded family
+    let alias_hit = 0
+    stress {
+        load("not-an-id")
+    } rescue (e) {
+        alias_hit = 1
+    }
+    assert(alias_hit == 1, "UserId (alias of int) refuses a str")
+
+    # ---- generic + alias composition
+    type Box = List<int>
+    gene total<T>(xs: List<T>, zero: T) -> T {
+        return zero
+    }
+    let b: Box = [1, 2, 3]
+    assert(total(b, 0) == 0, "generic instantiates against an aliased container")
+
+    # ---- traits still run (W04 behavior untouched by the type layer)
+    trait Show {
+        gene display() { return "show" }
+    }
+    phenotype Widget implements Show {
+        gene display() { return "widget" }
+    }
+    let w = new Widget()
+    assert(w.display() == "widget", "phenotype method wins over trait default")
+
+    # ---- bare family names keep the stage-1 behavior
+    gene flex(x: option) -> str {
+        return "flex"
+    }
+    assert(flex(some(1)) == "flex", "bare option ann matches the family")
+    assert(flex(none()) == "flex", "bare option ann matches None too")
+}

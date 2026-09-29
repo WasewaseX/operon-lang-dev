@@ -18,7 +18,7 @@ stress {
 } rescue (e) {
     print("narrow:", e.kind, e.message)
 }
-gene bad_ret() -> int {
+gene bad_ret() -> int { // allow: type-mismatch
     return "oops"
 }
 stress {
@@ -26,7 +26,7 @@ stress {
 } rescue (e) {
     print("ret:", e.kind, e.message)
 }
-gene no_ret() -> int {
+gene no_ret() -> int { // allow: null-return
     let x = 1
 }
 stress {
@@ -83,7 +83,7 @@ stress {
     print("family:", e.kind, e.message)
 }
 print(o(some(9)), o(none()))
-gene weird(x: Future) -> any {
+gene weird(x: Future) -> any { // allow: unknown-type-name
     return "ran"
 }
 stress {

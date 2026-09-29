@@ -52,8 +52,8 @@ class Variant:
         return v_repr(self)
 
 class Gene:
-    __slots__ = ("name", "params", "guard", "body", "acetylate", "methylate", "m6a", "copies", "seq", "riboswitch", "burst", "closure", "param_anns", "ret_ann")
-    def __init__(self, name, params, guard, body, ac=False, me=False, m6=False, copies=1, seq=False, riboswitch=None, burst=None, param_anns=None, ret_ann=None):
+    __slots__ = ("name", "params", "guard", "body", "acetylate", "methylate", "m6a", "copies", "seq", "riboswitch", "burst", "closure", "param_anns", "ret_ann", "type_params")
+    def __init__(self, name, params, guard, body, ac=False, me=False, m6=False, copies=1, seq=False, riboswitch=None, burst=None, param_anns=None, ret_ann=None, type_params=None):
         self.name, self.params, self.guard, self.body = name, params, guard, body
         self.acetylate, self.methylate, self.m6a, self.copies, self.seq = ac, me, m6, copies, seq
         # loop-9 (F-5): cis riboswitch (ligand, bound_means_on, threshold)
@@ -63,6 +63,8 @@ class Gene:
         # W01 (L2c): soft type annotations (mirror of GeneDef.param_anns/ret_ann)
         self.param_anns = param_anns if param_anns is not None else []
         self.ret_ann = ret_ann
+        # W01-s2: declared type parameters (mirror of GeneDef.type_params)
+        self.type_params = type_params if type_params is not None else []
         self.closure = None
 
 ENHANCE_DELTA = 0.25  # T2e: super-enhancer activation boost (GRN threshold reduction)
@@ -450,6 +452,44 @@ def ann_matches(v, ann):
         return any(ann_matches(v, a) for a in ann[1])
     if k == "opt":
         return v is None or ann_matches(v, ann[1])
+    # W01-s2 (static type system stage 2), mirror of interp.rs ann_matches:
+    if k == "tvar":
+        return True
+    if k == "alias":
+        return ann_matches(v, ann[2])
+    if k == "app":
+        head, args = ann[1], ann[2]
+        if head in ("list", "List", "seq", "Seq") and len(args) == 1:
+            if not isinstance(v, list):
+                return False
+            return all(ann_matches(e, args[0]) for e in v)
+        if head in ("map", "Map") and len(args) == 2:
+            if not isinstance(v, dict):
+                return False
+            return all(ann_matches(ek, args[0]) and ann_matches(ev, args[1]) for (ek, ev) in v.items())
+        if head in ("option", "Option", "optional", "opt") and len(args) == 1:
+            if v is None:
+                return True
+            if isinstance(v, Variant) and v.tag == "None":
+                return True
+            if isinstance(v, Variant) and v.tag == "Some":
+                if v.payload is None:
+                    return True
+                return ann_matches(v.payload, args[0])
+            return ann_matches(v, args[0])
+        if head in ("result", "Result") and len(args) == 2:
+            if isinstance(v, Variant) and v.tag == "Ok":
+                if v.payload is None:
+                    return True
+                return ann_matches(v.payload, args[0])
+            if isinstance(v, Variant) and v.tag == "Err":
+                if v.payload is None:
+                    return True
+                return ann_matches(v.payload, args[1])
+            return False
+        if head == "any":
+            return True
+        return type_name(v) == head or (head == "float" and isinstance(v, int) and not isinstance(v, bool))
     return False
 
 def ann_render(ann):
@@ -461,6 +501,12 @@ def ann_render(ann):
         return " | ".join(ann_render(a) for a in ann[1])
     if k == "opt":
         return ann_render(ann[1]) + "?"
+    if k == "app":
+        return ann[1] + "<" + ", ".join(ann_render(a) for a in ann[2]) + ">"
+    if k == "tvar":
+        return ann[1]
+    if k == "alias":
+        return ann[1]
     return "any"
 
 def type_name(v):
@@ -845,6 +891,10 @@ class P:
         self.toks, self.pos, self.notes = toks, 0, notes
         # W24: contextual `pub` marker names (top level only)
         self.pub_names = []
+        # W01-s2: type aliases (declaration order) + enclosing gene type
+        # parameters (mirror of parser.rs type_aliases/type_params)
+        self.type_aliases = []
+        self.type_params = []
 
     def peek(self):
         return self.toks[self.pos]
@@ -1938,6 +1988,19 @@ class P:
         if word == "phenotype":
             self.next()
             name = self.ident()
+            # W01-s2: `type Name = ann` is the ALIAS form; `type Name {` is
+            # the phenotype synonym. Mirror of the Rust core (including the
+            # synonym-note retraction, so alias declarations carry no
+            # repair noise on either core).
+            t = self.peek()
+            if t[0] == "SYM" and t[1] == "=":
+                if self.notes and self.notes[-1].rung == 2 and self.notes[-1].message == "synonym 'type' repaired to 'phenotype'":
+                    self.notes.pop()
+                self.next()
+                target = self.type_ann()
+                self.end_stmt()
+                self.type_aliases.append((name, target))
+                return ("typealias", name, target)
             parent = None
             if self.at_ident("from"):
                 self.next()
@@ -2196,6 +2259,8 @@ class P:
         if t[0] == "IDENT" and t[1] != "guard":
             name = t[1]
             self.next()
+        # W01-s2: gene type parameters, in scope for the SIGNATURE only
+        type_params = self.type_params_list()
         params = []
         param_anns = []
         if self.peek() == ("SYM", "(", self.peek()[2]):
@@ -2231,6 +2296,9 @@ class P:
         if self.peek() == ("SYM", "->", self.peek()[2]):
             self.next()
             ret_ann = self.type_ann()
+        # W01-s2: signature fully parsed, the type-param scope ends here
+        for _ in type_params:
+            self.type_params.pop()
         guard = None
         self.eat_nl()
         if self.expect_kw("guard"):
@@ -2251,9 +2319,9 @@ class P:
             self.next()
             e = self.expr()
             self.end_stmt()
-            return ("gene", Gene(name, params, guard, [("return", e)], ac, me, m6, copies, seq=False, riboswitch=riboswitch, burst=burst, param_anns=param_anns, ret_ann=ret_ann))
+            return ("gene", Gene(name, params, guard, [("return", e)], ac, me, m6, copies, seq=False, riboswitch=riboswitch, burst=burst, param_anns=param_anns, ret_ann=ret_ann, type_params=type_params))
         body = self.block()
-        return ("gene", Gene(name, params, guard, body, ac, me, m6, copies, seq=False, riboswitch=riboswitch, burst=burst, param_anns=param_anns, ret_ann=ret_ann))
+        return ("gene", Gene(name, params, guard, body, ac, me, m6, copies, seq=False, riboswitch=riboswitch, burst=burst, param_anns=param_anns, ret_ann=ret_ann, type_params=type_params))
 
     def block(self):
         if not (self.peek() == ("SYM", "{", self.peek()[2])):
@@ -2759,6 +2827,8 @@ class P:
     # W01 (L2c): type-annotation grammar, `name`, `name?` (optional),
     # `a | b` (union). Malformed annotation degrades to any (Total Grammar).
     def type_ann(self):
+        # W01 (L2c) + W01-s2 mirror of parse_type_ann: atoms, `?`, unions,
+        # generic applications, type parameters and parse-time aliases.
         first = self.type_ann_atom()
         t = self.peek()
         if t[0] == "SYM" and t[1] == "|":
@@ -2774,14 +2844,88 @@ class P:
         t = self.peek()
         if t[0] == "IDENT":
             self.next()
+            w = t[1]
+            # W01-s2: generic application `List<int>`, `Map<str, int>`
+            t2 = self.peek()
+            if t2[0] == "SYM" and t2[1] == "<":
+                self.next()
+                args = []
+                while True:
+                    self.eat_nl()
+                    t3 = self.peek()
+                    if t3[0] == "SYM" and t3[1] == ">":
+                        self.next(); break
+                    if t3[0] == "EOF":
+                        self.note(t3[2], 4, "type arguments auto-closed")
+                        break
+                    args.append(self.type_ann())
+                    t3 = self.peek()
+                    if t3[0] == "SYM" and t3[1] == ",":
+                        self.next(); continue
+                    if t3[0] == "SYM" and t3[1] == ">":
+                        self.next(); break
+                    if t3[0] != "EOF":
+                        self.note(t3[2], 4, "malformed type arguments; annotation degrades to name match")
+                        guard = 0
+                        while not (t3[0] in ("EOF",) or (t3[0] == "SYM" and t3[1] in (">", "\n")) or t3[0] == "NL") and guard < 64:
+                            self.next()
+                            guard += 1
+                            t3 = self.peek()
+                        if t3[0] == "SYM" and t3[1] == ">":
+                            self.next()
+                        break
+                    break
+                if w in self.type_params:
+                    self.note(t[2], 4, f"type parameter '{w}' takes no arguments; treated as '{w}'")
+                    base = ("tvar", w)
+                else:
+                    base = ("app", w, args)
+            elif w in self.type_params:
+                base = ("tvar", w)
+            else:
+                hit = next(((an, tg) for (an, tg) in self.type_aliases if an == w), None)
+                base = ("alias", w, hit[1]) if hit else ("named", w)
             t2 = self.peek()
             if t2[0] == "SYM" and t2[1] == "?":
                 self.next()
-                return ("opt", ("named", t[1]))
-            return ("named", t[1])
+                return ("opt", base)
+            return base
         self.note(t[2], 4, f"'{t[1]}' is not a type name; annotation treated as any")
         self.next()
         return ("named", "any")
+
+    # W01-s2: gene type parameters, `gene id<T, U: Show>(...)` (mirror of
+    # parse_type_params; registered into scope for the signature only)
+    def type_params_list(self):
+        out = []
+        t = self.peek()
+        if not (t[0] == "SYM" and t[1] == "<"):
+            return out
+        self.next()
+        while True:
+            self.eat_nl()
+            t2 = self.peek()
+            if t2[0] == "SYM" and t2[1] == ">":
+                self.next(); break
+            if t2[0] == "EOF":
+                self.note(t2[2], 4, "type parameter list auto-closed")
+                break
+            if t2[0] == "SYM" and t2[1] == ",":
+                self.next(); continue
+            if t2[0] == "IDENT":
+                self.next()
+                bound = None
+                t3 = self.peek()
+                if t3[0] == "SYM" and t3[1] == ":":
+                    self.next()
+                    bound = self.type_ann()
+                out.append((t2[1], bound))
+            else:
+                self.note(t2[2], 4, f"'{t2[1]}' is not a type parameter; skipped")
+                self.next()
+        for (n, _) in out:
+            self.type_params.append(n)
+        return out
 
     def pattern(self):
         # W02 (match-v2) mirror of parser.rs parse_pattern: atom | or-chain |
@@ -3915,6 +4059,10 @@ class Interp:
                     self.exec_block(child, rbody)
                 else:
                     self.note(4, f"stress contained: [{st.kind}] {st.message}")
+        elif k == "typealias":
+            # W01-s2: parse-time metadata, inert at runtime (mirror of the
+            # Rust core's Stmt::TypeAlias no-op)
+            pass
         elif k == "gene":
             g = s[1]
             name = g.name or "<lambda>"

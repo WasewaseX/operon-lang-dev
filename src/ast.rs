@@ -135,6 +135,12 @@ pub struct GeneDef {
     /// W01: return annotation, `gene f() -> int { }`. Checked when the
     /// gene produces its return value (including a `?!`-propagated one).
     pub ret_ann: Option<TypeAnn>,
+    /// W01-s2 (static type system stage 2): declared type parameters,
+    /// `gene id<T>(x: T) -> T`. (name, optional bound) where the bound is a
+    /// trait annotation, `T: Show`. Metadata for the check-time layer
+    /// (types.rs) and fmt roundtrip; the runtime treats a TypeVar ann as
+    /// "accepts anything" so generic genes run identically on both cores.
+    pub type_params: Vec<(String, Option<TypeAnn>)>,
     /// W64: `@deprecated("migration text", since="2.4")` metadata. Parse
     /// and tooling surface only (lint `deprecated-use` findings, doc/fmt
     /// round-trip); the interpreter never reads it, runtime is untouched.
@@ -157,11 +163,39 @@ pub struct Deprecation {
 /// documented numeric widening (`float` accepts int; `int` refuses float)
 /// and `any` accepting everything. This is a SOFT contract: violations are
 /// recoverable Stress, never parse rejections.
+///
+/// W01-s2 (static type system stage 2) extends the grammar additively:
+/// generic applications (`List<int>`, `Map<str, int>`, `Option<int>`,
+/// `Result<int, str>`), type-parameter references (`T` inside
+/// `gene f<T>(x: T)`), and parse-time-resolved `type` aliases. The
+/// soft-contract philosophy is unchanged: every new form degrades to a
+/// recoverable diagnostic, never a parse rejection.
 #[derive(Debug, Clone)]
 pub enum TypeAnn {
     Named(String),
     Union(Vec<TypeAnn>),
     Optional(Box<TypeAnn>),
+    /// W01-s2: generic application, `List<int>`, `Map<str, int>`,
+    /// `Option<int>` (== `int?`), `Result<int, str>`. Matching checks the
+    /// payload elements at the boundary (an empty container matches
+    /// vacuously); an unknown head degrades to plain name matching.
+    App {
+        head: String,
+        args: Vec<TypeAnn>,
+    },
+    /// W01-s2: a type parameter of the enclosing gene, `T` in
+    /// `gene id<T>(x: T) -> T`. Matches any value at runtime (the
+    /// check-time layer does the real work by unification per call site).
+    TypeVar(String),
+    /// W01-s2: a `type` alias resolved at parse time to its target.
+    /// Renders as the alias NAME (fmt roundtrip stays byte-stable with the
+    /// source), matches as the target (runtime never sees an unresolved
+    /// alias unless the alias is declared after use — then it stays a
+    /// plain Named and the typo-armor rule applies).
+    Alias {
+        name: String,
+        target: Box<TypeAnn>,
+    },
 }
 
 impl TypeAnn {
@@ -176,6 +210,16 @@ impl TypeAnn {
                 .collect::<Vec<_>>()
                 .join(" | "),
             TypeAnn::Optional(inner) => format!("{}?", inner.render()),
+            TypeAnn::App { head, args } => format!(
+                "{}<{}>",
+                head,
+                args.iter()
+                    .map(|a| a.render())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            TypeAnn::TypeVar(n) => n.clone(),
+            TypeAnn::Alias { name, .. } => name.clone(),
         }
     }
 }
@@ -490,6 +534,12 @@ pub enum Stmt {
     Seq(Arc<GeneDef>),    // sequence definition (generator)
     Yield(Option<Expr>),  // yield inside a sequence body
     Pheno(Arc<PhenoDef>), // phenotype definition (user class)
+    /// W01-s2: `type Name = ann`, a type alias. Parse-time metadata: the
+    /// parser resolves later annotations naming `Name` into
+    /// `TypeAnn::Alias`, the statement itself is inert at runtime (never
+    /// evaluated, the VM bridges it to the tree-walk which no-ops it).
+    /// Line stamps diagnostics (duplicate alias, cycle) and fmt output.
+    TypeAlias(String, TypeAnn, usize),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -511,4 +561,9 @@ pub struct Program {
     /// module exports ONLY these names (migration-safe: a strict module
     /// with zero pub marks keeps default-open, with a note).
     pub pub_exports: Vec<String>,
+    /// W01-s2: `type Name = ann` declarations in declaration order (top
+    /// level only). The annotations themselves were resolved at parse time;
+    /// this table exists for the check-time layer (types.rs), `operon sig`,
+    /// and documentation tooling.
+    pub type_aliases: Vec<(String, TypeAnn)>,
 }

@@ -175,6 +175,15 @@ pub struct Parser {
     /// (`pub gene` / `pub let` / `pub const` / `pub phenotype`). `pub` is
     /// NOT a keyword, an ordinary identifier named `pub` is untouched.
     pub_names: Vec<String>,
+    /// W01-s2: `type Name = ann` declarations, in declaration order. An
+    /// annotation naming an alias BEFORE its declaration stays a plain
+    /// Named (the runtime typo-armor applies); after declaration the
+    /// alias resolves at parse time (TypeAnn::Alias).
+    type_aliases: Vec<(String, TypeAnn)>,
+    /// W01-s2: enclosing gene type parameters (a stack across nested
+    /// genes). Inside `gene id<T>(x: T)`, the name `T` in an annotation is
+    /// a TypeVar, not a Named lookup.
+    type_params: Vec<String>,
 }
 
 pub fn parse(src: &str) -> Program {
@@ -199,6 +208,8 @@ pub fn parse(src: &str) -> Program {
         module_doc_assigned: false,
         module_doc: Vec::new(),
         pub_names: Vec::new(),
+        type_aliases: Vec::new(),
+        type_params: Vec::new(),
     };
     let stmts = p.parse_program();
     notes.append(&mut p.notes);
@@ -211,6 +222,7 @@ pub fn parse(src: &str) -> Program {
         ires: Vec::new(),
         module_doc: p.module_doc.clone(),
         pub_exports: p.pub_names.clone(),
+        type_aliases: p.type_aliases.clone(),
         notes,
         stmts,
     };
@@ -980,6 +992,7 @@ impl Parser {
                                             deprecated: None,
                                             param_anns: vec![],
                                             ret_ann: None,
+                                            type_params: vec![],
                                         })),
                                     });
                                 } else {
@@ -2382,6 +2395,32 @@ impl Parser {
                 // calls must not steal the phenotype's own doc block.
                 let pheno_doc = self.take_doc(pheno_line);
                 let name = self.expect_ident()?;
+                // W01-s2: `type Name = ann` is a TYPE ALIAS; `type Name {`
+                // stays the phenotype synonym (the brace disambiguates).
+                // Aliases are parse-time metadata: the statement is inert at
+                // runtime, annotations that name the alias resolve to it
+                // from this point on (TypeAnn::Alias).
+                if matches!(self.peek(), Tok::Eq) {
+                    self.next();
+                    // The dispatcher's expect_kw already logged the
+                    // `'type' -> 'phenotype'` synonym note, but this shape
+                    // is NOT a repaired phenotype, it is the alias form
+                    // (`type Name = ann`). Retract that one note so alias
+                    // declarations carry no repair noise (check scores
+                    // would otherwise wobble on intentional code).
+                    if let Some(last) = self.notes.last() {
+                        if last.rung == 2
+                            && last.line == pheno_line
+                            && last.message == "synonym 'type' repaired to 'phenotype'"
+                        {
+                            self.notes.pop();
+                        }
+                    }
+                    let target = self.parse_type_ann();
+                    self.end_stmt();
+                    self.type_aliases.push((name.clone(), target.clone()));
+                    return Some(Stmt::TypeAlias(name, target, pheno_line));
+                }
                 let mut parent = None;
                 if self.at_kw("from") {
                     self.next();
@@ -2886,6 +2925,14 @@ impl Parser {
     /// W01 (L2c): type-annotation grammar, `name` (a type name), `name?`
     /// (optional), `a | b | ...` (union). Total Grammar: a malformed
     /// annotation degrades to `any` with a note, never a rejection.
+    ///
+    /// W01-s2 adds, additively: generic applications (`List<int>`,
+    /// `Map<str, int>`, `Option<int>`, `Result<int, str>`), type-parameter
+    /// references (`T` inside `gene f<T>`), and parse-time alias
+    /// resolution (a name declared by `type Name = ann` becomes an
+    /// Alias; before declaration it stays Named and the typo-armor
+    /// applies). Precedence inside a generic gene: type params shadow
+    /// aliases (lexical scoping, closest binding wins).
     fn parse_type_ann(&mut self) -> TypeAnn {
         let first = self.parse_type_ann_atom();
         if matches!(self.peek(), Tok::Pipe) {
@@ -2903,7 +2950,82 @@ impl Parser {
         match self.peek().clone() {
             Tok::Ident(w) => {
                 self.next();
-                let base = TypeAnn::Named(w);
+                // W01-s2: generic application, `List<int>`, `Map<str, int>`.
+                // Only inside an annotation context, so `<` can never be a
+                // comparison here. A malformed argument list degrades to
+                // the plain name (Total Grammar).
+                let base = if matches!(self.peek(), Tok::Lt) {
+                    self.next();
+                    let mut args: Vec<TypeAnn> = Vec::new();
+                    loop {
+                        self.eat_newlines_inline();
+                        if matches!(self.peek(), Tok::Gt) {
+                            self.next();
+                            break;
+                        }
+                        if matches!(self.peek(), Tok::Eof) {
+                            let line = self.line();
+                            self.note(line, 4, "type arguments auto-closed");
+                            break;
+                        }
+                        args.push(self.parse_type_ann());
+                        if matches!(self.peek(), Tok::Comma) {
+                            self.next();
+                            continue;
+                        }
+                        if matches!(self.peek(), Tok::Gt) {
+                            self.next();
+                            break;
+                        }
+                        if !matches!(self.peek(), Tok::Eof) {
+                            let line = self.line();
+                            self.note(
+                                line,
+                                4,
+                                "malformed type arguments; annotation degrades to name match",
+                            );
+                            // skip to the closing bracket so the parameter
+                            // list does not mis-parse
+                            let mut guard = 0;
+                            while !matches!(self.peek(), Tok::Gt | Tok::Eof | Tok::Newline)
+                                && guard < 64
+                            {
+                                self.next();
+                                guard += 1;
+                            }
+                            if matches!(self.peek(), Tok::Gt) {
+                                self.next();
+                            }
+                            break;
+                        }
+                        break;
+                    }
+                    if self.type_params.iter().any(|t| t == &w) {
+                        // a parameterized type variable (GAT shape) is not
+                        // supported; degrade to the bare TypeVar
+                        let line = self.line();
+                        self.note(
+                            line,
+                            4,
+                            format!(
+                                "type parameter '{}' takes no arguments; treated as '{}'",
+                                w, w
+                            ),
+                        );
+                        TypeAnn::TypeVar(w)
+                    } else {
+                        TypeAnn::App { head: w, args }
+                    }
+                } else if self.type_params.iter().any(|t| t == &w) {
+                    TypeAnn::TypeVar(w)
+                } else if let Some((_, target)) = self.type_aliases.iter().find(|(n, _)| n == &w) {
+                    TypeAnn::Alias {
+                        name: w,
+                        target: Box::new(target.clone()),
+                    }
+                } else {
+                    TypeAnn::Named(w)
+                };
                 if matches!(self.peek(), Tok::Question) {
                     self.next();
                     TypeAnn::Optional(Box::new(base))
@@ -2925,6 +3047,59 @@ impl Parser {
                 TypeAnn::Named("any".to_string())
             }
         }
+    }
+
+    /// W01-s2: gene type parameters, `gene id<T, U: Show>(...)`. Returns
+    /// the declared names (with optional trait bounds) and registers them
+    /// in the type-param scope so the signature annotations see them as
+    /// TypeVars. Malformed lists degrade with notes (Total Grammar).
+    fn parse_type_params(&mut self) -> Vec<(String, Option<TypeAnn>)> {
+        let mut out = Vec::new();
+        if !matches!(self.peek(), Tok::Lt) {
+            return out;
+        }
+        self.next();
+        loop {
+            self.eat_newlines_inline();
+            match self.peek().clone() {
+                Tok::Gt => {
+                    self.next();
+                    break;
+                }
+                Tok::Eof => {
+                    let line = self.line();
+                    self.note(line, 4, "type parameter list auto-closed");
+                    break;
+                }
+                Tok::Comma => {
+                    self.next();
+                }
+                Tok::Ident(w) => {
+                    self.next();
+                    // optional trait bound, `T: Show`
+                    let bound = if matches!(self.peek(), Tok::Colon) {
+                        self.next();
+                        Some(self.parse_type_ann())
+                    } else {
+                        None
+                    };
+                    out.push((w, bound));
+                }
+                other => {
+                    let line = self.line();
+                    self.note(
+                        line,
+                        4,
+                        format!("'{}' is not a type parameter; skipped", other.describe()),
+                    );
+                    self.next();
+                }
+            }
+        }
+        for (n, _) in &out {
+            self.type_params.push(n.clone());
+        }
+        out
     }
 
     /// L1a: destructuring pattern, `[a, b]`, `[head, *rest]`, `{x, y}`,
@@ -3045,6 +3220,12 @@ impl Parser {
             }
             _ => None,
         };
+        // W01-s2: gene type parameters, `gene id<T, U: Show>(x: T) -> U`.
+        // In scope for the SIGNATURE only (param + return annotations);
+        // popped before the body so nested genes never inherit them
+        // implicitly (a TypeVar outside its gene would be an unknown name,
+        // the typo-armor applies).
+        let type_params = self.parse_type_params();
         let mut params = Vec::new();
         let mut param_anns: Vec<Option<TypeAnn>> = Vec::new();
         if matches!(self.peek(), Tok::LParen) {
@@ -3097,6 +3278,12 @@ impl Parser {
         } else {
             None
         };
+        // W01-s2: the signature is fully parsed, the type-param scope ends
+        // here (popped in reverse so nested gene signatures interleave
+        // correctly).
+        for _ in &type_params {
+            self.type_params.pop();
+        }
         // uORF leading guard
         let mut guard = None;
         self.eat_newlines_inline();
@@ -3131,6 +3318,7 @@ impl Parser {
                 params,
                 param_anns,
                 ret_ann,
+                type_params,
                 guard,
                 body: vec![Stmt::Return(Some(e))],
                 acetylate,
@@ -3152,6 +3340,7 @@ impl Parser {
             params,
             param_anns,
             ret_ann,
+            type_params,
             guard,
             body,
             acetylate,
@@ -4333,6 +4522,8 @@ fn parse_snippet(src: &str, depth: u32) -> Parser {
         // snippet parsing (REPL fragments) carries no docs
         docs: Vec::new(),
         doc_cursor: 0,
+        type_aliases: Vec::new(),
+        type_params: Vec::new(),
         first_tok_line: 1,
         module_doc_assigned: false,
         module_doc: Vec::new(),
