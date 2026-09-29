@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=97 tag=c097
+
+print("c097-c0:", 3028 >= -5047)
+
+print("c097-c1:", 4465 >= -6257)
+
+print("c097-c2:", 3815 <= -4436)
+
+print("c097-c3:", 9577 <= -2177)
+
+print("c097-c4:", -8298 <= 942)
+
+print("c097-c5:", 3972 != 2258)
+
+print("c097-c6:", -8325 != -1030)
+
+print("c097-b0:", 18 < 21 && 21 < 6, 18 > 21 || 18 > 6)
+
+print("c097-b1:", 40 < 0 && 0 < 38, 40 > 0 || 40 > 38)
+
+print("c097-t0:", -649 > -788 ? "gt" : "le")
+
+print("c097-t1:", 2714 > 7090 ? "gt" : "le")
+
+print("c097-t2:", 6777 > -2634 ? "gt" : "le")
+
+print("c097-t3:", 8089 > 6604 ? "gt" : "le")
+
+let c097_n0 = null
+
+print("c097-n0:", c097_n0 ?? -954, c097_n0 == null)
+
+let c097_n1 = null
+
+print("c097-n1:", c097_n1 ?? -604, c097_n1 == null)
+
+let c097_n2 = null
+
+print("c097-n2:", c097_n2 ?? -4814, c097_n2 == null)
+
+print("c097-s0:", "fyl1" in "e4lCkifyl1", "fyl1" == "fyl1")
+
+print("c097-s1:", "6rqf" in "xvCc4w6rqf", "6rqf" == "6rqf")

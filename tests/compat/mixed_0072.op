@@ -1,0 +1,190 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20260930 idx=72 tag=m072
+
+gene m072_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m072-b0:", m072_b0({helix: 86, exon: 25, gene: 21})?!)
+
+gene m072_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m072-b1:", m072_b1({marker: 25, exon: 54, helix: 72})?!)
+
+gene m072_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m072_f0([25, 13, 33, 6, 16, 18]) {
+
+    case Ok(list) {
+
+        print("m072-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m072-f0:", "e:", m)
+
+    }
+
+}
+
+gene m072_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m072_f1([54, 58, 33, 59, 31, 9]) {
+
+    case Ok(list) {
+
+        print("m072-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m072-f1:", "e:", m)
+
+    }
+
+}
+
+let m072_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m072-cc0:", m072_cl0(8)(7), m072_cl0(7)(8))
+
+let m072_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m072-cc1:", m072_cl1(2)(5), m072_cl1(5)(2))
+
+let m072_data0 = some([some("marker"), none(), some(6)])
+
+match m072_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m072-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m072-x0:", "shape-miss")
+
+    }
+
+}
+
+let m072_data1 = some([some("plasmid"), none(), some(3)])
+
+match m072_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m072-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m072-x1:", "shape-miss")
+
+    }
+
+}

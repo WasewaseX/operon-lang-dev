@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=78 tag=c078
+
+print("c078-c0:", 6656 > -2271)
+
+print("c078-c1:", -6935 > -7091)
+
+print("c078-c2:", -5871 != 3616)
+
+print("c078-c3:", -6619 < -4191)
+
+print("c078-c4:", -1340 == -1576)
+
+print("c078-c5:", -3876 > 3031)
+
+print("c078-b0:", 9 < 2 && 2 < 16, 9 > 2 || 9 > 16)
+
+print("c078-b1:", 24 < 41 && 41 < 43, 24 > 41 || 24 > 43)
+
+print("c078-b2:", 44 < 20 && 20 < 45, 44 > 20 || 44 > 45)
+
+print("c078-t0:", 9103 > 2501 ? "gt" : "le")
+
+print("c078-t1:", 9295 > 704 ? "gt" : "le")
+
+print("c078-t2:", -8104 > -4335 ? "gt" : "le")
+
+let c078_n0 = null
+
+print("c078-n0:", c078_n0 ?? 6677, c078_n0 == null)
+
+let c078_n1 = null
+
+print("c078-n1:", c078_n1 ?? 1036, c078_n1 == null)
+
+let c078_n2 = null
+
+print("c078-n2:", c078_n2 ?? 2047, c078_n2 == null)
+
+print("c078-s0:", "lCA4" in "btdf66lCA4", "lCA4" == "lCA4")
+
+print("c078-s1:", "yuf3" in "hqBz04yuf3", "yuf3" == "yuf3")

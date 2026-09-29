@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20260930 idx=89 tag=m089
+
+let m089_m0 = {exon: -25, vector: -36, gene: 2, codon: -90}
+
+print("m089-m0:", m089_m0["exon"], len(m089_m0), m089_m0.has("exon"))
+
+let m089_m1 = {helix: -69, cell: 34, splicer: 53, exon: -14, plasmid: -5}
+
+print("m089-m1:", m089_m1["helix"], len(m089_m1), m089_m1.has("helix"))
+
+let m089_m2 = {enzyme: -50, marker: 64, helix: 90}
+
+print("m089-m2:", m089_m2["enzyme"], len(m089_m2), m089_m2.has("enzyme"))
+
+let m089_k0 = {marker: 41, cell: 22, codon: 17}
+
+let m089_ks0 = m089_k0.keys()
+
+let m089_sm0 = 0
+
+for k in m089_k0 { m089_sm0 += m089_k0[k] }
+
+print("m089-k0:", m089_sm0, m089_k0.keys().sort(), m089_k0.values().len())
+
+let m089_k1 = {ligase: 11, vector: 38, gene: 29}
+
+let m089_ks1 = m089_k1.keys()
+
+let m089_sm1 = 0
+
+for k in m089_k1 { m089_sm1 += m089_k1[k] }
+
+print("m089-k1:", m089_sm1, m089_k1.keys().sort(), m089_k1.values().len())
+
+let m089_w0 = {outer: {gene: 3, vector: 6, tag: "ok"}}}
+
+print("m089-w0:", m089_w0["outer"]["vector"], m089_w0["outer"]["tag"])
+
+let m089_w1 = {outer: {vector: 3, helix: 7, tag: "ok"}}}
+
+print("m089-w1:", m089_w1["outer"]["helix"], m089_w1["outer"]["tag"])

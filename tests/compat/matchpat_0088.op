@@ -1,0 +1,292 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20260930 idx=88 tag=m088
+
+let m088_s0 = some(6)
+
+match m088_s0 {
+
+    case Some(x) if x > 6 {
+
+        print("m088-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m088-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m088-m0:", "none")
+
+    }
+
+}
+
+let m088_s1 = some(6)
+
+match m088_s1 {
+
+    case Some(x) if x > 6 {
+
+        print("m088-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m088-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m088-m1:", "none")
+
+    }
+
+}
+
+let m088_s2 = some(6)
+
+match m088_s2 {
+
+    case Some(x) if x > 6 {
+
+        print("m088-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m088-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m088-m2:", "none")
+
+    }
+
+}
+
+let m088_ls0 = [1, 16, 9]
+
+match m088_ls0 {
+
+    case [1, *rest] {
+
+        print("m088-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m088-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m088-l0:", "other")
+
+    }
+
+}
+
+let m088_ls1 = [36, 33, 5]
+
+match m088_ls1 {
+
+    case [36, *rest] {
+
+        print("m088-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m088-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m088-l1:", "other")
+
+    }
+
+}
+
+let m088_ls2 = [29, 32, 24]
+
+match m088_ls2 {
+
+    case [29, *rest] {
+
+        print("m088-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m088-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m088-l2:", "other")
+
+    }
+
+}
+
+let m088_ls3 = [31, 46, 30]
+
+match m088_ls3 {
+
+    case [31, *rest] {
+
+        print("m088-l3:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m088-l3:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m088-l3:", "other")
+
+    }
+
+}
+
+let m088_mp0 = {ligase: -882, helix: 5626}
+
+match m088_mp0 {
+
+    case {ligase: p, helix: q} {
+
+        print("m088-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m088-mp0:", "miss")
+
+    }
+
+}
+
+let m088_mp1 = {marker: -7404, enzyme: -7182}
+
+match m088_mp1 {
+
+    case {marker: p, enzyme: q} {
+
+        print("m088-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m088-mp1:", "miss")
+
+    }
+
+}
+
+let m088_mp2 = {plasmid: -7772, ribose: -9219}
+
+match m088_mp2 {
+
+    case {plasmid: p, ribose: q} {
+
+        print("m088-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m088-mp2:", "miss")
+
+    }
+
+}
+
+let m088_r0 = ok(4)
+
+match m088_r0 {
+
+    case Ok(n) | Err(4) {
+
+        print("m088-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m088-r0:", "zero")
+
+    }
+
+}
+
+let m088_r1 = ok(5)
+
+match m088_r1 {
+
+    case Ok(n) | Err(5) {
+
+        print("m088-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m088-r1:", "zero")
+
+    }
+
+}
+
+match "gene" {
+
+    case "gene" {
+
+        print("m088-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m088-w0:", "alt")
+
+    }
+
+}
+
+match "cell" {
+
+    case "cell" {
+
+        print("m088-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m088-w1:", "alt")
+
+    }
+
+}

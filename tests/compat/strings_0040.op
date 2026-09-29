@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=40 tag=s040
+
+print("s040-m0:", "7o_kiw".upper(), "7o_kiw".slice(4), "7o_kiw".len())
+
+print("s040-m1:", "rpgr86n".upper(), "rpgr86n".slice(3), "rpgr86n".len())
+
+print("s040-m2:", "8dCc76k8w".upper(), "8dCc76k8w".slice(3), "8dCc76k8w".len())
+
+print("s040-m3:", "mnmybCwh2Bj9".upper(), "mnmybCwh2Bj9".slice(1), "mnmybCwh2Bj9".len())
+
+print("s040-m4:", "f17eftryrdqi".upper(), "f17eftryrdqi".slice(4), "f17eftryrdqi".len())
+
+print("s040-i0:", "_xr-{71}-f4_e")
+
+let s040_v0 = 71
+
+print("s040-v0:", "n={s040_v0}" + "!" * 1)
+
+print("s040-i1:", "iao-{47}-0ggf")
+
+let s040_v1 = 47
+
+print("s040-v1:", "n={s040_v1}" + "!" * 1)
+
+print("s040-i2:", "5pn-{39}-sCkz")
+
+let s040_v2 = 39
+
+print("s040-v2:", "n={s040_v2}" + "!" * 2)
+
+print("s040-i3:", "mra-{90}-aB81")
+
+let s040_v3 = 90
+
+print("s040-v3:", "n={s040_v3}" + "!" * 1)
+
+print("s040-i4:", "b05-{30}-yhq3")
+
+let s040_v4 = 30
+
+print("s040-v4:", "n={s040_v4}" + "!" * 1)
+
+print("s040-r0:", "rkn2suql".replace("r", "y1"), "rkn2suql".contains("kn"))
+
+print("s040-r1:", "64lvsvzi".replace("6", "34"), "64lvsvzi".contains("4l"))
+
+print("s040-j0:", ["skf", "aza", "by8", "6B_", "oCz"].join("-"))
+
+print("s040-j1:", ["u5i", "kac", "bvC", "xx1", "pCC"].join("-"))
+
+print("s040-a0:", "oiz88lr".at(1), "oiz88lr".trim() == "oiz88lr")
+
+print("s040-a1:", "f9ytau9".at(6), "f9ytau9".trim() == "f9ytau9")
+
+print("s040-a2:", "io5w3wi".at(6), "io5w3wi".trim() == "io5w3wi")

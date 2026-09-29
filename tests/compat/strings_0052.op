@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=52 tag=s052
+
+print("s052-m0:", "qa5n73".upper(), "qa5n73".slice(1), "qa5n73".len())
+
+print("s052-m1:", "Ccx5p17y0aCfaa".upper(), "Ccx5p17y0aCfaa".slice(3), "Ccx5p17y0aCfaa".len())
+
+print("s052-m2:", "_edx34uxyai".upper(), "_edx34uxyai".slice(3), "_edx34uxyai".len())
+
+print("s052-m3:", "a33cxBs".upper(), "a33cxBs".slice(2), "a33cxBs".len())
+
+print("s052-i0:", "3e_-{29}-mnco")
+
+let s052_v0 = 29
+
+print("s052-v0:", "n={s052_v0}" + "!" * 1)
+
+print("s052-i1:", "c_t-{27}-67oe")
+
+let s052_v1 = 27
+
+print("s052-v1:", "n={s052_v1}" + "!" * 3)
+
+print("s052-i2:", "cql-{96}-6ptt")
+
+let s052_v2 = 96
+
+print("s052-v2:", "n={s052_v2}" + "!" * 3)
+
+print("s052-r0:", "3abs__mv".replace("3", "ns"), "3abs__mv".contains("ab"))
+
+print("s052-r1:", "sz0en64f".replace("s", "hy"), "sz0en64f".contains("z0"))
+
+print("s052-r2:", "e935bBzc".replace("e", "b5"), "e935bBzc".contains("93"))
+
+print("s052-j0:", ["wzz", "rxg", "w9p"].join("-"))
+
+print("s052-j1:", ["u7B", "o9n", "rA5", "lbw"].join("-"))
+
+print("s052-a0:", "ml1vu63".at(6), "ml1vu63".trim() == "ml1vu63")
+
+print("s052-a1:", "2Bw9zsh".at(4), "2Bw9zsh".trim() == "2Bw9zsh")

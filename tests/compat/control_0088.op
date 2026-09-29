@@ -1,0 +1,138 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20260930 idx=88 tag=c088
+
+let c088_b0 = "start"
+
+if 107 > 80 { c088_b0 = "hi" } elif 107 > 40 { c088_b0 = "mid" } else { c088_b0 = "lo" }
+
+print("c088-i0:", c088_b0, 107)
+
+let c088_b1 = "start"
+
+if -12 > 80 { c088_b1 = "hi" } elif -12 > 40 { c088_b1 = "mid" } else { c088_b1 = "lo" }
+
+print("c088-i1:", c088_b1, -12)
+
+let c088_b2 = "start"
+
+if 27 > 80 { c088_b2 = "hi" } elif 27 > 40 { c088_b2 = "mid" } else { c088_b2 = "lo" }
+
+print("c088-i2:", c088_b2, 27)
+
+let c088_b3 = "start"
+
+if 43 > 80 { c088_b3 = "hi" } elif 43 > 40 { c088_b3 = "mid" } else { c088_b3 = "lo" }
+
+print("c088-i3:", c088_b3, 43)
+
+let c088_b4 = "start"
+
+if 39 > 80 { c088_b4 = "hi" } elif 39 > 40 { c088_b4 = "mid" } else { c088_b4 = "lo" }
+
+print("c088-i4:", c088_b4, 39)
+
+let c088_a0 = 0
+
+let c088_n0 = 0
+
+while c088_n0 < 5 {
+
+    c088_n0 += 1
+
+    if c088_n0 % 3 == 0 { continue }
+
+    if c088_n0 > 12 { break }
+
+    c088_a0 += c088_n0
+
+}
+
+print("c088-w0:", c088_a0, c088_n0)
+
+let c088_a1 = 0
+
+let c088_n1 = 0
+
+while c088_n1 < 18 {
+
+    c088_n1 += 3
+
+    if c088_n1 % 2 == 0 { continue }
+
+    if c088_n1 > 23 { break }
+
+    c088_a1 += c088_n1
+
+}
+
+print("c088-w1:", c088_a1, c088_n1)
+
+let c088_a2 = 0
+
+let c088_n2 = 0
+
+while c088_n2 < 7 {
+
+    c088_n2 += 4
+
+    if c088_n2 % 3 == 0 { continue }
+
+    if c088_n2 > 14 { break }
+
+    c088_a2 += c088_n2
+
+}
+
+print("c088-w2:", c088_a2, c088_n2)
+
+let c088_c0 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 2] {
+
+        c088_c0 += a * b
+
+    }
+
+}
+
+print("c088-l0:", c088_c0)
+
+let c088_c1 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 3] {
+
+        c088_c1 += a * b
+
+    }
+
+}
+
+print("c088-l1:", c088_c1)
+
+let c088_acc0 = ""
+
+loop {
+
+    c088_acc0 += "x"
+
+    if c088_acc0.len() >= 5 { break }
+
+}
+
+print("c088-o0:", c088_acc0)
+
+let c088_acc1 = ""
+
+loop {
+
+    c088_acc1 += "x"
+
+    if c088_acc1.len() >= 3 { break }
+
+}
+
+print("c088-o1:", c088_acc1)

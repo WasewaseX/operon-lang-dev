@@ -15,9 +15,12 @@ import sys, os, math, json as _json
 # notes / values
 
 class Note:
-    __slots__ = ("rung", "message")
-    def __init__(self, rung, message):
-        self.rung, self.message = rung, message
+    __slots__ = ("rung", "line", "message")
+    def __init__(self, rung, message, line=0):
+        # compat matrix fix: the Rust core stores the origin line on every
+        # note (ast.rs Note{line, rung, message}) and tools::flush_notes
+        # renders `[tag] file:line: msg`. The oracle now mirrors both.
+        self.rung, self.line, self.message = rung, line, message
 
 class Stress(Exception):
     def __init__(self, kind, message):
@@ -394,7 +397,7 @@ def lex(src):
                     line += 1
                 raw += src[i]; i += 1
             if not closed:
-                notes.append(Note(4, "unclosed raw string consumed to end of input"))
+                notes.append(Note(4, "unclosed raw string consumed to end of input", line))
             toks.append(("STR", raw, line))
             continue
         # W030 mirror: multiline triple-quoted strings """...""" — escapes and
@@ -417,7 +420,7 @@ def lex(src):
                     depth -= 1
                 raw += src[i]; i += 1
             if not closed:
-                notes.append(Note(4, "unclosed multiline string consumed to end of input"))
+                notes.append(Note(4, "unclosed multiline string consumed to end of input", line))
             toks.append(("INTERP" if interp else "STR", raw, line))
             continue
         if c == '"':
@@ -439,11 +442,11 @@ def lex(src):
                     depth -= 1
                 raw += ch; i2 += 1
             if not closed:
-                notes.append(Note(4, "unclosed string consumed to end of line"))
+                notes.append(Note(4, "unclosed string consumed to end of line", line))
             toks.append(("INTERP" if interp else "STR", raw, line))
             i = i2; continue
         if c == "'":
-            notes.append(Note(4, "single-quoted string repaired to double quotes"))
+            notes.append(Note(4, "single-quoted string repaired to double quotes", line))
             raw, i2, closed = "", i + 1, False
             while i2 < n:
                 ch = src[i2]
@@ -457,7 +460,7 @@ def lex(src):
                     line += 1
                 raw += ch; i2 += 1
             if not closed:
-                notes.append(Note(4, "unclosed string consumed to end of line"))
+                notes.append(Note(4, "unclosed string consumed to end of line", line))
             toks.append(("STR", raw, line))
             i = i2; continue
         if c == "@":
@@ -467,7 +470,7 @@ def lex(src):
             if j > i + 1:
                 toks.append(("MARK", src[i + 1:j], line))
             else:
-                notes.append(Note(4, "stray '@' skipped"))
+                notes.append(Note(4, "stray '@' skipped", line))
             i = j; continue
         if c.isdigit():
             # W031 mirror: radix prefixes 0x/0b/0o (case-insensitive) with `_`
@@ -485,7 +488,7 @@ def lex(src):
                     toks.append(("INT", val, line))
                     # i64 parity: out-of-range treated as 0 with the same note
                     if not (-2**63 <= val <= 2**63 - 1):
-                        notes.append(Note(4, f"integer '{raw}' out of range treated as 0"))
+                        notes.append(Note(4, f"integer '{raw}' out of range treated as 0", line))
                         toks[-1] = ("INT", 0, line)
                     i = j; continue
             j = i
@@ -511,7 +514,7 @@ def lex(src):
             try:
                 toks.append(("FLOAT", float(cleaned), line) if isf else (("INT", int(cleaned), line)))
             except ValueError:
-                notes.append(Note(4, f"malformed number '{text}' treated as 0"))
+                notes.append(Note(4, f"malformed number '{text}' treated as 0", line))
                 toks.append(("INT", 0, line))
             else:
                 # parity with the Rust lexer: an integer literal beyond i64
@@ -519,7 +522,7 @@ def lex(src):
                 # Rust core parses i64; a Python bignum would otherwise see
                 # a value the compiled engine never did)
                 if not isf and not (-2**63 <= int(cleaned) <= 2**63 - 1):
-                    notes.append(Note(4, f"integer '{text}' out of range treated as 0"))
+                    notes.append(Note(4, f"integer '{text}' out of range treated as 0", line))
                     toks[-1] = ("INT", 0, line)
             i = j; continue
         if c.isalpha() or c == "_":
@@ -541,7 +544,7 @@ def lex(src):
                 matched = True
                 break
         if not matched:
-            notes.append(Note(4, f"unexpected character '{c}' skipped"))
+            notes.append(Note(4, f"unexpected character '{c}' skipped", line))
             i += 1
     toks.append(("EOF", None, line))
     return toks, notes
@@ -612,7 +615,7 @@ class P:
         return t
 
     def note(self, line, rung, msg):
-        self.notes.append(Note(rung, msg))
+        self.notes.append(Note(rung, msg, line))
 
     def eat_nl(self):
         while self.peek()[0] in ("NL", "SYM") and (self.peek()[0] == "NL" or self.peek()[1] == ";"):
@@ -2449,9 +2452,30 @@ class P:
             self.note(t[2], 4, "dangling '-' in pattern treated as wildcard")
             self.next()
             return ("wild",)
-        self.note(t[2], 4, "pattern treated as wildcard")
+        self.note(t[2], 4, f"pattern '{describe_tok(t)}' treated as wildcard")
         self.next()
         return ("wild",)
+
+def describe_tok(t):
+    """Mirror of src/lexer.rs Tok::describe (dx-r1) for the token shapes
+    that can reach the pattern-wildcard arm."""
+    kind, val = t[0], t[1]
+    if kind == "IDENT":
+        return f"identifier '{val}'"
+    if kind == "INT":
+        return f"number {val}"
+    if kind == "FLOAT":
+        return f"number {val}"
+    if kind == "STR":
+        return f'string "{val}"'
+    if kind == "INTERP":
+        return f'interpolated string "{val}"'
+    if kind == "EOF":
+        return "end of input"
+    if kind == "NL":
+        return "end of line"
+    return f"'{val}'"
+
 
 def parse(src):
     toks, notes = lex(src)
@@ -2645,7 +2669,7 @@ class Interp:
         target[name] = val
         return True
 
-    def note(self, rung, msg):
+    def note(self, rung, msg, line=0):
         # loop-9 (C8): worker-note prefix parity — the Rust join path tags
         # every spawned worker note with "[task <name>] " (genes.rs); the
         # sequential oracle applies the same prefix while the spawn body
@@ -2653,7 +2677,9 @@ class Interp:
         prefix = getattr(self, "task_note_prefix", None)
         if prefix:
             msg = f"{prefix} {msg}"
-        self.notes.append(Note(rung, msg))
+        # compat matrix fix: notes carry the origin line (ast.rs parity);
+        # load_file threads the parser note's line through here
+        self.notes.append(Note(rung, msg, line))
 
     def tick(self):
         self.steps += 1
@@ -6284,7 +6310,7 @@ def load_file(path, cell=None, variant=None, rna=None, args=None, caps=None):
         src = src2
     stmts, notes = parse(src)
     for nt in notes:
-        it.note(nt.rung, nt.message)
+        it.note(nt.rung, nt.message, getattr(nt, "line", 0))
     it.ires = [s[1] for s in stmts if s[0] == "ires"]
     # capability grants from .cell allow.* keys — only an EXPLICITLY passed
     # --cell may grant; auto-detected operon.cell keys are ignored with a note
@@ -6481,7 +6507,12 @@ def main():
         it = run(pos[0], cell_dict, opts["variant"], opts["rna"], opts["entry"], opts["frame"], pos[1:], caps=opts.get("caps"))
         for nt in it.notes:
             tag = {1: "info", 2: "synonym", 3: "wobble"}.get(nt.rung, "fallback")
-            print(f"[{tag}] {nt.message}", file=sys.stderr)
+            # A13/dx-r2 mirror: notes carry real locations (compat matrix
+            # fix) — `[tag] file:line: msg` exactly like tools::flush_notes
+            if getattr(nt, "line", 0) > 0:
+                print(f"[{tag}] {pos[0]}:{nt.line}: {nt.message}", file=sys.stderr)
+            else:
+                print(f"[{tag}] {nt.message}", file=sys.stderr)
     elif cmd == "test":
         paths = pos or ["tests"]
         files = []

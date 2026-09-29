@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=28 tag=c028
+
+print("c028-c0:", -5797 > -9493)
+
+print("c028-c1:", -8906 < -8511)
+
+print("c028-c2:", 5563 != -1080)
+
+print("c028-c3:", -3331 > -1576)
+
+print("c028-c4:", -3749 >= -1683)
+
+print("c028-c5:", -4000 < -4136)
+
+print("c028-c6:", 2526 >= -2602)
+
+print("c028-b0:", 6 < 41 && 41 < 41, 6 > 41 || 6 > 41)
+
+print("c028-b1:", 25 < 18 && 18 < 40, 25 > 18 || 25 > 40)
+
+print("c028-b2:", 24 < 1 && 1 < 17, 24 > 1 || 24 > 17)
+
+print("c028-b3:", 19 < 17 && 17 < 35, 19 > 17 || 19 > 35)
+
+print("c028-t0:", 3056 > 2546 ? "gt" : "le")
+
+print("c028-t1:", -9825 > -8543 ? "gt" : "le")
+
+print("c028-t2:", 6406 > -5502 ? "gt" : "le")
+
+let c028_n0 = null
+
+print("c028-n0:", c028_n0 ?? 9884, c028_n0 == null)
+
+let c028_n1 = null
+
+print("c028-n1:", c028_n1 ?? 6678, c028_n1 == null)
+
+let c028_n2 = null
+
+print("c028-n2:", c028_n2 ?? 674, c028_n2 == null)
+
+print("c028-s0:", "ih41" in "e9a1hkih41", "ih41" == "ih41")
+
+print("c028-s1:", "0pgi" in "e0rv4g0pgi", "0pgi" == "0pgi")

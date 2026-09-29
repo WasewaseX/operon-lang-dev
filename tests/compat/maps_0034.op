@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20260930 idx=34 tag=m034
+
+let m034_m0 = {ribose: -29, plasmid: 69, gene: 85, exon: -38}
+
+print("m034-m0:", m034_m0["ribose"], len(m034_m0), m034_m0.has("ribose"))
+
+let m034_m1 = {splicer: 89, enzyme: -9, ribose: -25, ligase: -87}
+
+print("m034-m1:", m034_m1["splicer"], len(m034_m1), m034_m1.has("splicer"))
+
+let m034_m2 = {plasmid: 72, marker: -96, exon: 10}
+
+print("m034-m2:", m034_m2["plasmid"], len(m034_m2), m034_m2.has("plasmid"))
+
+let m034_k0 = {ribose: 46, ligase: 13, enzyme: 48}
+
+let m034_ks0 = m034_k0.keys()
+
+let m034_sm0 = 0
+
+for k in m034_k0 { m034_sm0 += m034_k0[k] }
+
+print("m034-k0:", m034_sm0, m034_k0.keys().sort(), m034_k0.values().len())
+
+let m034_k1 = {ligase: 17, vector: 14, marker: 21}
+
+let m034_ks1 = m034_k1.keys()
+
+let m034_sm1 = 0
+
+for k in m034_k1 { m034_sm1 += m034_k1[k] }
+
+print("m034-k1:", m034_sm1, m034_k1.keys().sort(), m034_k1.values().len())
+
+let m034_k2 = {helix: 38, marker: 11, vector: 45}
+
+let m034_ks2 = m034_k2.keys()
+
+let m034_sm2 = 0
+
+for k in m034_k2 { m034_sm2 += m034_k2[k] }
+
+print("m034-k2:", m034_sm2, m034_k2.keys().sort(), m034_k2.values().len())
+
+let m034_w0 = {outer: {vector: 2, splicer: 3, tag: "ok"}}}
+
+print("m034-w0:", m034_w0["outer"]["splicer"], m034_w0["outer"]["tag"])
+
+let m034_w1 = {outer: {ribose: 1, enzyme: 2, tag: "ok"}}}
+
+print("m034-w1:", m034_w1["outer"]["enzyme"], m034_w1["outer"]["tag"])

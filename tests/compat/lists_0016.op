@@ -1,0 +1,72 @@
+# compat corpus — generated, do not edit by hand
+# bucket=lists seed=20260930 idx=16 tag=l016
+
+let l016_l0 = [-36, -7, 47, -18, -31, -33]
+
+print("l016-l0:", l016_l0[5], l016_l0[-1], l016_l0.len())
+
+let l016_l1 = [44, 2, -44, 11]
+
+print("l016-l1:", l016_l1[0], l016_l1[-1], l016_l1.len())
+
+let l016_l2 = [30, -36, -26, -5, 30, 46, 0, -35]
+
+print("l016-l2:", l016_l2[7], l016_l2[-1], l016_l2.len())
+
+let l016_l3 = [17, 3, -35, 32, 6, 21, 2, 5]
+
+print("l016-l3:", l016_l3[0], l016_l3[-1], l016_l3.len())
+
+let l016_s0 = [-14, 91, 74, -80, 70, -51]
+
+print("l016-s0:", l016_s0.slice(1, 5), l016_s0.slice(-1))
+
+let l016_s1 = [-79, -49, -78, -21, -49, 13, -89]
+
+print("l016-s1:", l016_s1.slice(1, 2), l016_s1.slice(-3))
+
+let l016_s2 = [71, 27, 10, 85, -69, 80, 20]
+
+print("l016-s2:", l016_s2.slice(4, 6), l016_s2.slice(-3))
+
+let l016_r0 = [296, 181, 486, 825, 592, 312, 808]
+
+print("l016-r0:", l016_r0.sort(), l016_r0.reverse(), l016_r0.contains(312))
+
+let l016_r1 = [466, 109, 305, 406, 263, 807]
+
+print("l016-r1:", l016_r1.sort(), l016_r1.reverse(), l016_r1.contains(263))
+
+let l016_r2 = [349, 484, 318, 610, 245]
+
+print("l016-r2:", l016_r2.sort(), l016_r2.reverse(), l016_r2.contains(245))
+
+let l016_r3 = [913, 391, 211, 900, 532]
+
+print("l016-r3:", l016_r3.sort(), l016_r3.reverse(), l016_r3.contains(391))
+
+let l016_t0 = 0
+
+for v in [39, 15, 21, 39] { l016_t0 += v }
+
+print("l016-t0:", l016_t0)
+
+let l016_t1 = 0
+
+for v in [20, 23, 8, 40] { l016_t1 += v }
+
+print("l016-t1:", l016_t1)
+
+let l016_t2 = 0
+
+for v in [16, 34, 3] { l016_t2 += v }
+
+print("l016-t2:", l016_t2)
+
+let l016_n0 = [[9, 9, 8], [9, 9, 8], 77]
+
+print("l016-n0:", l016_n0[0][1], l016_n0[2])
+
+let l016_n1 = [[3, 6, 9], [3, 6, 9], 77]
+
+print("l016-n1:", l016_n1[0][2], l016_n1[2])

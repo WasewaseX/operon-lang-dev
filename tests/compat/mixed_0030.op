@@ -1,0 +1,230 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20260930 idx=30 tag=m030
+
+gene m030_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m030-b0:", m030_b0({cell: 39, enzyme: 36, marker: 19})?!)
+
+gene m030_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m030-b1:", m030_b1({cell: 21, exon: 9, splicer: 2})?!)
+
+gene m030_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m030_f0([42, 44, 32, 54]) {
+
+    case Ok(list) {
+
+        print("m030-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m030-f0:", "e:", m)
+
+    }
+
+}
+
+gene m030_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m030_f1([24, 40, 58, 23, 40, 49]) {
+
+    case Ok(list) {
+
+        print("m030-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m030-f1:", "e:", m)
+
+    }
+
+}
+
+gene m030_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m030_f2([14, 15, 41, 32, 9]) {
+
+    case Ok(list) {
+
+        print("m030-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m030-f2:", "e:", m)
+
+    }
+
+}
+
+let m030_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m030-cc0:", m030_cl0(14)(2), m030_cl0(2)(14))
+
+let m030_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m030-cc1:", m030_cl1(16)(1), m030_cl1(1)(16))
+
+let m030_data0 = some([some("vector"), none(), some(2)])
+
+match m030_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m030-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m030-x0:", "shape-miss")
+
+    }
+
+}
+
+let m030_data1 = some([some("codon"), none(), some(9)])
+
+match m030_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m030-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m030-x1:", "shape-miss")
+
+    }
+
+}

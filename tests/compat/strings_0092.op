@@ -1,0 +1,50 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=92 tag=s092
+
+print("s092-m0:", "1Ar8sn".upper(), "1Ar8sn".slice(4), "1Ar8sn".len())
+
+print("s092-m1:", "p6f9jk7".upper(), "p6f9jk7".slice(4), "p6f9jk7".len())
+
+print("s092-m2:", "qBpg770l0wAhmw".upper(), "qBpg770l0wAhmw".slice(1), "qBpg770l0wAhmw".len())
+
+print("s092-m3:", "Ajui02ezvk089".upper(), "Ajui02ezvk089".slice(1), "Ajui02ezvk089".len())
+
+print("s092-m4:", "pk13fx".upper(), "pk13fx".slice(3), "pk13fx".len())
+
+print("s092-i0:", "yxm-{88}-qt9u")
+
+let s092_v0 = 88
+
+print("s092-v0:", "n={s092_v0}" + "!" * 1)
+
+print("s092-i1:", "991-{64}-7039")
+
+let s092_v1 = 64
+
+print("s092-v1:", "n={s092_v1}" + "!" * 2)
+
+print("s092-i2:", "3na-{42}-v72y")
+
+let s092_v2 = 42
+
+print("s092-v2:", "n={s092_v2}" + "!" * 3)
+
+print("s092-i3:", "v9n-{87}-cybz")
+
+let s092_v3 = 87
+
+print("s092-v3:", "n={s092_v3}" + "!" * 2)
+
+print("s092-r0:", "amj5jaxx".replace("a", "6f"), "amj5jaxx".contains("mj"))
+
+print("s092-r1:", "_y0jiko6".replace("_", "c7"), "_y0jiko6".contains("y0"))
+
+print("s092-j0:", ["kvi", "5cq", "yj2", "7mk", "tqC"].join("-"))
+
+print("s092-j1:", ["7pf", "pwn", "r2m", "bxi"].join("-"))
+
+print("s092-j2:", ["odq", "xg2", "k2z"].join("-"))
+
+print("s092-a0:", "rsmwol_".at(4), "rsmwol_".trim() == "rsmwol_")
+
+print("s092-a1:", "d3t6Cnu".at(3), "d3t6Cnu".trim() == "d3t6Cnu")

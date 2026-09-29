@@ -175,6 +175,7 @@ Path grants are symlink-resolved; a grant that normalizes to the empty string is
 
 ```
 operon run f.op      [--entry g] [--variant v] [--cell c] [--rna r] [--frame n] [--ires] [--strict] [--fuel N]
+                     [--vm | --vm-opt]             # bytecode VM / VM + semantics-preserving optimizer
                      [--allow-read p] [--allow-write p] [--allow-run prog] [--allow-net host:port] [--allow-env var] [--allow-all]
 operon check f.op    [--nmd | --nmd=purge] [--json]   # 100-point grade + letter; --json: phantoms/nmd arrays
 operon test [dirs]                                # proof-frame runner (112 files / 98 proofs / 1,298 assertions green)112981,298
@@ -183,9 +184,35 @@ operon build f.op   [--variant v] [-o out.op]     # bake splices, strip proofs
 operon profile f.op                               # per-gene calls, exclusive self-µs, flags, maturation, enhance candidates
 operon crispr f.op  (--knockout gene | --matrix) [--json]
 operon bench f.op   [--iters n]
+operon disasm f.op                                # bytecode listing of compiled gene bodies
 operon-ls                                         # stdio LSP: diagnostics, hover, definition, symbols, completion, formatting (SPEC §15)
 operon version                                    # Operon 2.2.0 (rust-core, cpp-kernel) — banner matches SPEC 2.2.0
 ```
+
+## Reliability — the compatibility contract
+
+Reliability outranks features. The rule: **every optimization must
+preserve semantics**, and every engine pairing must agree **byte-for-byte**
+(stdout, stderr, exit code), including diagnostics. The machinery that
+enforces this (docs/COMPAT.md):
+
+- **5 engine axes**: tree-walk / bytecode VM / optimized VM / debug build /
+  Python oracle — 1,200-program generated corpus + 217 pinned programs,
+  all identical across every pairing (`scripts/compat_matrix.sh`).
+- **3-way VM parity**: every repo program byte-identical on tree-walk,
+  `--vm`, and `--vm-opt` (`scripts/vm_parity.sh`).
+- **Differential harness**: 1,343 programs Rust-vs-oracle
+  (`bootstrap/harness.py`).
+- **Parser fuzzer**: 1,000 hostile inputs per run (random bytes, unicode
+  salad, token salad, corpus mutations, depth bombs) — no panics, no hangs,
+  no containment breaches, engines agree (`scripts/fuzz_parser.py`).
+- **CI matrix**: Linux/macOS/Windows × release/debug × x86-64/aarch64/i686
+  (`.github/workflows/compat.yml`).
+
+The optimizer gate earned its keep the day it shipped: the first `--vm-opt`
+build panicked on a redteam payload (a legal jump-to-end target was
+indexed past the end insn); the corpus caught it, the fix landed, the
+corpus re-greened. That is the intended workflow.
 
 ## Connect your editor (operon-ls)
 

@@ -1,0 +1,190 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20260930 idx=8 tag=m008
+
+gene m008_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m008-b0:", m008_b0({ligase: 50, vector: 98, gene: 97})?!)
+
+gene m008_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m008-b1:", m008_b1({vector: 97, cell: 39, plasmid: 28})?!)
+
+gene m008_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m008_f0([18, 17, 53, 55, 40, 38]) {
+
+    case Ok(list) {
+
+        print("m008-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m008-f0:", "e:", m)
+
+    }
+
+}
+
+gene m008_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m008_f1([41, 60, 44, 59, 25, 18, 29, 29]) {
+
+    case Ok(list) {
+
+        print("m008-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m008-f1:", "e:", m)
+
+    }
+
+}
+
+let m008_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m008-cc0:", m008_cl0(9)(12), m008_cl0(12)(9))
+
+let m008_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m008-cc1:", m008_cl1(14)(11), m008_cl1(11)(14))
+
+let m008_data0 = some([some("marker"), none(), some(1)])
+
+match m008_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m008-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m008-x0:", "shape-miss")
+
+    }
+
+}
+
+let m008_data1 = some([some("ribose"), none(), some(6)])
+
+match m008_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m008-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m008-x1:", "shape-miss")
+
+    }
+
+}

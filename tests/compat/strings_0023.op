@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=23 tag=s023
+
+print("s023-m0:", "dCip2cBi6jcjpv".upper(), "dCip2cBi6jcjpv".slice(3), "dCip2cBi6jcjpv".len())
+
+print("s023-m1:", "BygAh9s".upper(), "BygAh9s".slice(2), "BygAh9s".len())
+
+print("s023-m2:", "A7wqtw2".upper(), "A7wqtw2".slice(2), "A7wqtw2".len())
+
+print("s023-m3:", "f3C7CnwCvvs4".upper(), "f3C7CnwCvvs4".slice(1), "f3C7CnwCvvs4".len())
+
+print("s023-i0:", "tv0-{37}-h7vl")
+
+let s023_v0 = 37
+
+print("s023-v0:", "n={s023_v0}" + "!" * 3)
+
+print("s023-i1:", "_au-{38}-rp0l")
+
+let s023_v1 = 38
+
+print("s023-v1:", "n={s023_v1}" + "!" * 3)
+
+print("s023-i2:", "kAq-{71}-g8dx")
+
+let s023_v2 = 71
+
+print("s023-v2:", "n={s023_v2}" + "!" * 2)
+
+print("s023-r0:", "pkiim20c".replace("p", "04"), "pkiim20c".contains("ki"))
+
+print("s023-r1:", "36gxrs9q".replace("3", "j2"), "36gxrs9q".contains("6g"))
+
+print("s023-j0:", ["0k1", "jwd", "spo", "kAr", "9s3"].join("-"))
+
+print("s023-j1:", ["ltl", "956", "8d9"].join("-"))
+
+print("s023-j2:", ["pfb", "t1o", "1mw"].join("-"))
+
+print("s023-a0:", "nrnoikC".at(1), "nrnoikC".trim() == "nrnoikC")
+
+print("s023-a1:", "rb5fu8_".at(5), "rb5fu8_".trim() == "rb5fu8_")
+
+print("s023-a2:", "swCs900".at(6), "swCs900".trim() == "swCs900")

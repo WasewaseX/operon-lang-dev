@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=44 tag=s044
+
+print("s044-m0:", "oulr504".upper(), "oulr504".slice(3), "oulr504".len())
+
+print("s044-m1:", "Bmuhzfon4vh".upper(), "Bmuhzfon4vh".slice(1), "Bmuhzfon4vh".len())
+
+print("s044-m2:", "b01Cu_Aka1n".upper(), "b01Cu_Aka1n".slice(2), "b01Cu_Aka1n".len())
+
+print("s044-m3:", "z_baj4x".upper(), "z_baj4x".slice(3), "z_baj4x".len())
+
+print("s044-i0:", "b_m-{28}-yw8e")
+
+let s044_v0 = 28
+
+print("s044-v0:", "n={s044_v0}" + "!" * 3)
+
+print("s044-i1:", "8cx-{82}-5zA0")
+
+let s044_v1 = 82
+
+print("s044-v1:", "n={s044_v1}" + "!" * 3)
+
+print("s044-i2:", "gc0-{76}-u6he")
+
+let s044_v2 = 76
+
+print("s044-v2:", "n={s044_v2}" + "!" * 2)
+
+print("s044-i3:", "t8e-{49}-nCri")
+
+let s044_v3 = 49
+
+print("s044-v3:", "n={s044_v3}" + "!" * 1)
+
+print("s044-i4:", "hju-{67}-4vda")
+
+let s044_v4 = 67
+
+print("s044-v4:", "n={s044_v4}" + "!" * 2)
+
+print("s044-r0:", "hhsshB0h".replace("h", "Bq"), "hhsshB0h".contains("hs"))
+
+print("s044-r1:", "xx70vq_o".replace("x", "kk"), "xx70vq_o".contains("x7"))
+
+print("s044-r2:", "bykdB_et".replace("b", "BC"), "bykdB_et".contains("yk"))
+
+print("s044-r3:", "1xgkbktA".replace("1", "d1"), "1xgkbktA".contains("xg"))
+
+print("s044-j0:", ["xww", "aem", "n9x", "CoB"].join("-"))
+
+print("s044-j1:", ["71_", "wyz", "ak5", "aAk", "mkp"].join("-"))
+
+print("s044-a0:", "sve_mAd".at(3), "sve_mAd".trim() == "sve_mAd")
+
+print("s044-a1:", "B2bAkfu".at(2), "B2bAkfu".trim() == "B2bAkfu")

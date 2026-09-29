@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=2 tag=s002
+
+print("s002-m0:", "gu14B78B".upper(), "gu14B78B".slice(2), "gu14B78B".len())
+
+print("s002-m1:", "8c2oeyp7".upper(), "8c2oeyp7".slice(2), "8c2oeyp7".len())
+
+print("s002-m2:", "r12zn1k67clq6".upper(), "r12zn1k67clq6".slice(2), "r12zn1k67clq6".len())
+
+print("s002-m3:", "z15ijtq2dire".upper(), "z15ijtq2dire".slice(4), "z15ijtq2dire".len())
+
+print("s002-i0:", "d4i-{40}-q6vh")
+
+let s002_v0 = 40
+
+print("s002-v0:", "n={s002_v0}" + "!" * 1)
+
+print("s002-i1:", "jw7-{95}-zbdB")
+
+let s002_v1 = 95
+
+print("s002-v1:", "n={s002_v1}" + "!" * 3)
+
+print("s002-i2:", "aqd-{62}-gBAB")
+
+let s002_v2 = 62
+
+print("s002-v2:", "n={s002_v2}" + "!" * 3)
+
+print("s002-i3:", "fpz-{24}-k9a7")
+
+let s002_v3 = 24
+
+print("s002-v3:", "n={s002_v3}" + "!" * 1)
+
+print("s002-i4:", "BiA-{88}-hqmh")
+
+let s002_v4 = 88
+
+print("s002-v4:", "n={s002_v4}" + "!" * 3)
+
+print("s002-r0:", "jr5n7og5".replace("j", "j8"), "jr5n7og5".contains("r5"))
+
+print("s002-r1:", "e5w4qw19".replace("e", "r_"), "e5w4qw19".contains("5w"))
+
+print("s002-j0:", ["Bd0", "xr7", "3gC", "t4i", "0Cb"].join("-"))
+
+print("s002-j1:", ["fsz", "h84", "b0v", "loa"].join("-"))
+
+print("s002-j2:", ["tux", "sxg", "ukm", "Aae"].join("-"))
+
+print("s002-a0:", "ll8mg_d".at(5), "ll8mg_d".trim() == "ll8mg_d")
+
+print("s002-a1:", "b9gd4rf".at(0), "b9gd4rf".trim() == "b9gd4rf")
+
+print("s002-a2:", "wgr7q69".at(5), "wgr7q69".trim() == "wgr7q69")

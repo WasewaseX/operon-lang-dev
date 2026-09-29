@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=72 tag=s072
+
+print("s072-m0:", "1jr4i01mm7alq".upper(), "1jr4i01mm7alq".slice(4), "1jr4i01mm7alq".len())
+
+print("s072-m1:", "i1v_d1py1".upper(), "i1v_d1py1".slice(4), "i1v_d1py1".len())
+
+print("s072-m2:", "7m7nasbw5p9".upper(), "7m7nasbw5p9".slice(2), "7m7nasbw5p9".len())
+
+print("s072-m3:", "flfh2v".upper(), "flfh2v".slice(1), "flfh2v".len())
+
+print("s072-i0:", "6Bz-{94}-8gtj")
+
+let s072_v0 = 94
+
+print("s072-v0:", "n={s072_v0}" + "!" * 3)
+
+print("s072-i1:", "_gq-{71}-rpf3")
+
+let s072_v1 = 71
+
+print("s072-v1:", "n={s072_v1}" + "!" * 3)
+
+print("s072-i2:", "h16-{37}-itB9")
+
+let s072_v2 = 37
+
+print("s072-v2:", "n={s072_v2}" + "!" * 2)
+
+print("s072-r0:", "9sqm4qf9".replace("9", "81"), "9sqm4qf9".contains("sq"))
+
+print("s072-r1:", "A06j530j".replace("A", "ey"), "A06j530j".contains("06"))
+
+print("s072-j0:", ["krd", "4yl", "qz4", "jhf", "loC"].join("-"))
+
+print("s072-j1:", ["d4q", "j0n", "hjt", "fil", "B5i"].join("-"))
+
+print("s072-a0:", "od4z2le".at(6), "od4z2le".trim() == "od4z2le")
+
+print("s072-a1:", "2Aa97vo".at(5), "2Aa97vo".trim() == "2Aa97vo")

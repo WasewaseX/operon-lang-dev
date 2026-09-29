@@ -1,0 +1,254 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20260930 idx=79 tag=m079
+
+gene m079_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m079-b0:", m079_b0({ligase: 93, enzyme: 5, ribose: 28})?!)
+
+gene m079_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m079-b1:", m079_b1({plasmid: 78, splicer: 25, enzyme: 80})?!)
+
+gene m079_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m079-b2:", m079_b2({splicer: 24, helix: 23, codon: 99})?!)
+
+gene m079_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m079_f0([59, 45, 43, 54]) {
+
+    case Ok(list) {
+
+        print("m079-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m079-f0:", "e:", m)
+
+    }
+
+}
+
+gene m079_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m079_f1([3, 20, 17, 30, 22, 53, 26, 59]) {
+
+    case Ok(list) {
+
+        print("m079-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m079-f1:", "e:", m)
+
+    }
+
+}
+
+gene m079_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m079_f2([5, 22, 16, 34]) {
+
+    case Ok(list) {
+
+        print("m079-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m079-f2:", "e:", m)
+
+    }
+
+}
+
+let m079_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m079-cc0:", m079_cl0(9)(16), m079_cl0(16)(9))
+
+let m079_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m079-cc1:", m079_cl1(20)(15), m079_cl1(15)(20))
+
+let m079_data0 = some([some("splicer"), none(), some(7)])
+
+match m079_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m079-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m079-x0:", "shape-miss")
+
+    }
+
+}
+
+let m079_data1 = some([some("ribose"), none(), some(4)])
+
+match m079_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m079-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m079-x1:", "shape-miss")
+
+    }
+
+}

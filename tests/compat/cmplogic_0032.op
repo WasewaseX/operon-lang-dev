@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=32 tag=c032
+
+print("c032-c0:", 7652 > 2149)
+
+print("c032-c1:", 463 < -3680)
+
+print("c032-c2:", -4083 >= 4613)
+
+print("c032-c3:", 245 < 8213)
+
+print("c032-c4:", 491 < -4515)
+
+print("c032-b0:", 16 < 32 && 32 < 0, 16 > 32 || 16 > 0)
+
+print("c032-b1:", 31 < 48 && 48 < 47, 31 > 48 || 31 > 47)
+
+print("c032-b2:", 50 < 8 && 8 < 24, 50 > 8 || 50 > 24)
+
+print("c032-b3:", 4 < 28 && 28 < 40, 4 > 28 || 4 > 40)
+
+print("c032-t0:", 3675 > -5273 ? "gt" : "le")
+
+print("c032-t1:", -6774 > 8350 ? "gt" : "le")
+
+print("c032-t2:", -675 > -4795 ? "gt" : "le")
+
+print("c032-t3:", -1362 > 6720 ? "gt" : "le")
+
+let c032_n0 = null
+
+print("c032-n0:", c032_n0 ?? -3222, c032_n0 == null)
+
+let c032_n1 = null
+
+print("c032-n1:", c032_n1 ?? -9283, c032_n1 == null)
+
+print("c032-s0:", "2c72" in "j6pqzl2c72", "2c72" == "2c72")
+
+print("c032-s1:", "kv3c" in "1Aavqakv3c", "kv3c" == "kv3c")

@@ -1,0 +1,54 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=97 tag=s097
+
+print("s097-m0:", "w_jB_r1xdwcdv".upper(), "w_jB_r1xdwcdv".slice(1), "w_jB_r1xdwcdv".len())
+
+print("s097-m1:", "aek8ft".upper(), "aek8ft".slice(4), "aek8ft".len())
+
+print("s097-m2:", "5fgpxnb1_9".upper(), "5fgpxnb1_9".slice(4), "5fgpxnb1_9".len())
+
+print("s097-m3:", "Brz6owqjif65i".upper(), "Brz6owqjif65i".slice(4), "Brz6owqjif65i".len())
+
+print("s097-m4:", "1ouyybb54".upper(), "1ouyybb54".slice(1), "1ouyybb54".len())
+
+print("s097-i0:", "qid-{92}-dmls")
+
+let s097_v0 = 92
+
+print("s097-v0:", "n={s097_v0}" + "!" * 1)
+
+print("s097-i1:", "x4y-{15}-z6g1")
+
+let s097_v1 = 15
+
+print("s097-v1:", "n={s097_v1}" + "!" * 1)
+
+print("s097-i2:", "z5n-{98}-g1Ci")
+
+let s097_v2 = 98
+
+print("s097-v2:", "n={s097_v2}" + "!" * 2)
+
+print("s097-i3:", "t2b-{22}-ut3a")
+
+let s097_v3 = 22
+
+print("s097-v3:", "n={s097_v3}" + "!" * 2)
+
+print("s097-r0:", "8ldyg17v".replace("8", "Av"), "8ldyg17v".contains("ld"))
+
+print("s097-r1:", "13xAwylj".replace("1", "ym"), "13xAwylj".contains("3x"))
+
+print("s097-r2:", "z6cv526v".replace("z", "9u"), "z6cv526v".contains("6c"))
+
+print("s097-r3:", "ahp1gu47".replace("a", "sv"), "ahp1gu47".contains("hp"))
+
+print("s097-j0:", ["g2z", "mlj", "c_e", "Cjw"].join("-"))
+
+print("s097-j1:", ["Bdh", "otf", "c6w"].join("-"))
+
+print("s097-a0:", "vcluo3a".at(5), "vcluo3a".trim() == "vcluo3a")
+
+print("s097-a1:", "o8A2uv1".at(3), "o8A2uv1".trim() == "o8A2uv1")
+
+print("s097-a2:", "8aq5lim".at(1), "8aq5lim".trim() == "8aq5lim")

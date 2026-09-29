@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=96 tag=s096
+
+print("s096-m0:", "C2ewC6".upper(), "C2ewC6".slice(1), "C2ewC6".len())
+
+print("s096-m1:", "8f2mk2cdm".upper(), "8f2mk2cdm".slice(3), "8f2mk2cdm".len())
+
+print("s096-m2:", "es9703AgC3og19".upper(), "es9703AgC3og19".slice(2), "es9703AgC3og19".len())
+
+print("s096-m3:", "B6C4c9B6mh2".upper(), "B6C4c9B6mh2".slice(4), "B6C4c9B6mh2".len())
+
+print("s096-m4:", "4mbdcu4BAh6wiA".upper(), "4mbdcu4BAh6wiA".slice(4), "4mbdcu4BAh6wiA".len())
+
+print("s096-i0:", "_hd-{30}-vcpf")
+
+let s096_v0 = 30
+
+print("s096-v0:", "n={s096_v0}" + "!" * 2)
+
+print("s096-i1:", "24q-{14}-0273")
+
+let s096_v1 = 14
+
+print("s096-v1:", "n={s096_v1}" + "!" * 1)
+
+print("s096-i2:", "8e_-{4}-8xzq")
+
+let s096_v2 = 4
+
+print("s096-v2:", "n={s096_v2}" + "!" * 1)
+
+print("s096-r0:", "A21r2rze".replace("A", "31"), "A21r2rze".contains("21"))
+
+print("s096-r1:", "jecpClym".replace("j", "g3"), "jecpClym".contains("ec"))
+
+print("s096-r2:", "zpvw863p".replace("z", "b6"), "zpvw863p".contains("pv"))
+
+print("s096-r3:", "r5ai5c4_".replace("r", "ft"), "r5ai5c4_".contains("5a"))
+
+print("s096-j0:", ["Cs1", "xyg", "td8", "7tp", "r9s"].join("-"))
+
+print("s096-j1:", ["eCw", "aug", "qte", "Bg7", "7uz"].join("-"))
+
+print("s096-a0:", "jyurqm6".at(1), "jyurqm6".trim() == "jyurqm6")
+
+print("s096-a1:", "s4x8a5n".at(6), "s4x8a5n".trim() == "s4x8a5n")

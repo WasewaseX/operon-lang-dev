@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=71 tag=c071
+
+print("c071-c0:", -4943 != -3235)
+
+print("c071-c1:", -1735 <= 4123)
+
+print("c071-c2:", -1852 < -6942)
+
+print("c071-c3:", -9707 <= 5515)
+
+print("c071-c4:", 3809 > -6810)
+
+print("c071-c5:", -1902 <= -713)
+
+print("c071-c6:", 8305 != -3919)
+
+print("c071-b0:", 6 < 23 && 23 < 37, 6 > 23 || 6 > 37)
+
+print("c071-b1:", 40 < 37 && 37 < 22, 40 > 37 || 40 > 22)
+
+print("c071-b2:", 33 < 5 && 5 < 4, 33 > 5 || 33 > 4)
+
+print("c071-b3:", 35 < 8 && 8 < 2, 35 > 8 || 35 > 2)
+
+print("c071-t0:", 5480 > 9835 ? "gt" : "le")
+
+print("c071-t1:", 4021 > -5667 ? "gt" : "le")
+
+print("c071-t2:", -8327 > -2317 ? "gt" : "le")
+
+print("c071-t3:", -5002 > 8767 ? "gt" : "le")
+
+let c071_n0 = null
+
+print("c071-n0:", c071_n0 ?? -7350, c071_n0 == null)
+
+let c071_n1 = null
+
+print("c071-n1:", c071_n1 ?? -4146, c071_n1 == null)
+
+print("c071-s0:", "x44v" in "fae76lx44v", "x44v" == "x44v")
+
+print("c071-s1:", "m_mw" in "68dAxtm_mw", "m_mw" == "m_mw")

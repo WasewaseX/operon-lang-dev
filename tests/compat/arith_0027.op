@@ -1,0 +1,24 @@
+# compat corpus — generated, do not edit by hand
+# bucket=arith seed=20260930 idx=27 tag=a027
+
+print("a027-0:", 235)
+
+print("a027-1:", (-447 * 5))
+
+print("a027-2:", 98)
+
+print("a027-3:", ((276 & (235 << 3)) >> 4))
+
+print("a027-4:", -91)
+
+print("a027-5:", (((200 & 419) + -300) % (3)))
+
+print("a027-f0:", 4.877)
+
+print("a027-f1:", ((18.55 + -6972) / 7.5))
+
+print("a027-f2:", (6259 / 7.5))
+
+print("a027-f3:", -8116)
+
+print("a027-neg:", -935, -((-446 & 160)))

@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=19 tag=s019
+
+print("s019-m0:", "x8fm1476jgktx".upper(), "x8fm1476jgktx".slice(1), "x8fm1476jgktx".len())
+
+print("s019-m1:", "Atdwepmm".upper(), "Atdwepmm".slice(3), "Atdwepmm".len())
+
+print("s019-m2:", "3hdhwpbe".upper(), "3hdhwpbe".slice(2), "3hdhwpbe".len())
+
+print("s019-m3:", "svd082tnp".upper(), "svd082tnp".slice(1), "svd082tnp".len())
+
+print("s019-i0:", "vve-{24}-mriz")
+
+let s019_v0 = 24
+
+print("s019-v0:", "n={s019_v0}" + "!" * 1)
+
+print("s019-i1:", "2a5-{45}-q6m7")
+
+let s019_v1 = 45
+
+print("s019-v1:", "n={s019_v1}" + "!" * 3)
+
+print("s019-i2:", "616-{55}-ryv1")
+
+let s019_v2 = 55
+
+print("s019-v2:", "n={s019_v2}" + "!" * 2)
+
+print("s019-r0:", "5372wCC8".replace("5", "fj"), "5372wCC8".contains("37"))
+
+print("s019-r1:", "9rvry07z".replace("9", "4i"), "9rvry07z".contains("rv"))
+
+print("s019-j0:", ["jsr", "lp4", "Csz", "lzf", "x9s"].join("-"))
+
+print("s019-j1:", ["v8i", "yyz", "ejo", "yit"].join("-"))
+
+print("s019-a0:", "st8hryA".at(2), "st8hryA".trim() == "st8hryA")
+
+print("s019-a1:", "vjjiA5u".at(4), "vjjiA5u".trim() == "vjjiA5u")

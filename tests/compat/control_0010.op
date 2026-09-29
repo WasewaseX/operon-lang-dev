@@ -1,0 +1,144 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20260930 idx=10 tag=c010
+
+let c010_b0 = "start"
+
+if 104 > 80 { c010_b0 = "hi" } elif 104 > 40 { c010_b0 = "mid" } else { c010_b0 = "lo" }
+
+print("c010-i0:", c010_b0, 104)
+
+let c010_b1 = "start"
+
+if 52 > 80 { c010_b1 = "hi" } elif 52 > 40 { c010_b1 = "mid" } else { c010_b1 = "lo" }
+
+print("c010-i1:", c010_b1, 52)
+
+let c010_b2 = "start"
+
+if 10 > 80 { c010_b2 = "hi" } elif 10 > 40 { c010_b2 = "mid" } else { c010_b2 = "lo" }
+
+print("c010-i2:", c010_b2, 10)
+
+let c010_b3 = "start"
+
+if 27 > 80 { c010_b3 = "hi" } elif 27 > 40 { c010_b3 = "mid" } else { c010_b3 = "lo" }
+
+print("c010-i3:", c010_b3, 27)
+
+let c010_a0 = 0
+
+let c010_n0 = 0
+
+while c010_n0 < 5 {
+
+    c010_n0 += 1
+
+    if c010_n0 % 2 == 0 { continue }
+
+    if c010_n0 > 14 { break }
+
+    c010_a0 += c010_n0
+
+}
+
+print("c010-w0:", c010_a0, c010_n0)
+
+let c010_a1 = 0
+
+let c010_n1 = 0
+
+while c010_n1 < 9 {
+
+    c010_n1 += 2
+
+    if c010_n1 % 2 == 0 { continue }
+
+    if c010_n1 > 12 { break }
+
+    c010_a1 += c010_n1
+
+}
+
+print("c010-w1:", c010_a1, c010_n1)
+
+let c010_a2 = 0
+
+let c010_n2 = 0
+
+while c010_n2 < 6 {
+
+    c010_n2 += 2
+
+    if c010_n2 % 2 == 0 { continue }
+
+    if c010_n2 > 10 { break }
+
+    c010_a2 += c010_n2
+
+}
+
+print("c010-w2:", c010_a2, c010_n2)
+
+let c010_c0 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 3] {
+
+        c010_c0 += a * b
+
+    }
+
+}
+
+print("c010-l0:", c010_c0)
+
+let c010_c1 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 4] {
+
+        c010_c1 += a * b
+
+    }
+
+}
+
+print("c010-l1:", c010_c1)
+
+let c010_acc0 = ""
+
+loop {
+
+    c010_acc0 += "x"
+
+    if c010_acc0.len() >= 3 { break }
+
+}
+
+print("c010-o0:", c010_acc0)
+
+let c010_acc1 = ""
+
+loop {
+
+    c010_acc1 += "x"
+
+    if c010_acc1.len() >= 6 { break }
+
+}
+
+print("c010-o1:", c010_acc1)
+
+let c010_acc2 = ""
+
+loop {
+
+    c010_acc2 += "x"
+
+    if c010_acc2.len() >= 4 { break }
+
+}
+
+print("c010-o2:", c010_acc2)

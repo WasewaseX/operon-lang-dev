@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=90 tag=c090
+
+print("c090-c0:", 9932 > -6579)
+
+print("c090-c1:", -6181 != -1690)
+
+print("c090-c2:", -882 == 9017)
+
+print("c090-c3:", -9215 > -7799)
+
+print("c090-c4:", -308 == -7802)
+
+print("c090-b0:", 17 < 11 && 11 < 20, 17 > 11 || 17 > 20)
+
+print("c090-b1:", 27 < 33 && 33 < 28, 27 > 33 || 27 > 28)
+
+print("c090-b2:", 32 < 9 && 9 < 36, 32 > 9 || 32 > 36)
+
+print("c090-t0:", 3767 > 1577 ? "gt" : "le")
+
+print("c090-t1:", -3700 > -6201 ? "gt" : "le")
+
+print("c090-t2:", -9147 > -4577 ? "gt" : "le")
+
+print("c090-t3:", 4519 > -7171 ? "gt" : "le")
+
+let c090_n0 = null
+
+print("c090-n0:", c090_n0 ?? -8879, c090_n0 == null)
+
+let c090_n1 = null
+
+print("c090-n1:", c090_n1 ?? 9379, c090_n1 == null)
+
+let c090_n2 = null
+
+print("c090-n2:", c090_n2 ?? -1118, c090_n2 == null)
+
+print("c090-s0:", "b2io" in "0mq7y5b2io", "b2io" == "b2io")
+
+print("c090-s1:", "1g4r" in "5b7lze1g4r", "1g4r" == "1g4r")

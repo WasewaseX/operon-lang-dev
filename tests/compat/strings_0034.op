@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=34 tag=s034
+
+print("s034-m0:", "9xCu9l0mzz".upper(), "9xCu9l0mzz".slice(4), "9xCu9l0mzz".len())
+
+print("s034-m1:", "1BhpwbadB".upper(), "1BhpwbadB".slice(3), "1BhpwbadB".len())
+
+print("s034-m2:", "1nbfilqkz".upper(), "1nbfilqkz".slice(3), "1nbfilqkz".len())
+
+print("s034-m3:", "Bzy_6t6".upper(), "Bzy_6t6".slice(3), "Bzy_6t6".len())
+
+print("s034-m4:", "ivugu9".upper(), "ivugu9".slice(4), "ivugu9".len())
+
+print("s034-m5:", "e52157n7wa".upper(), "e52157n7wa".slice(2), "e52157n7wa".len())
+
+print("s034-i0:", "m64-{87}-Cisb")
+
+let s034_v0 = 87
+
+print("s034-v0:", "n={s034_v0}" + "!" * 1)
+
+print("s034-i1:", "kf4-{77}-1w01")
+
+let s034_v1 = 77
+
+print("s034-v1:", "n={s034_v1}" + "!" * 2)
+
+print("s034-i2:", "hpp-{11}-wpz4")
+
+let s034_v2 = 11
+
+print("s034-v2:", "n={s034_v2}" + "!" * 3)
+
+print("s034-r0:", "ub9v_hBC".replace("u", "2p"), "ub9v_hBC".contains("b9"))
+
+print("s034-r1:", "ro_zeest".replace("r", "0B"), "ro_zeest".contains("o_"))
+
+print("s034-r2:", "h7nq9mCu".replace("h", "2r"), "h7nq9mCu".contains("7n"))
+
+print("s034-j0:", ["9u4", "eBp", "q5d", "pdg"].join("-"))
+
+print("s034-j1:", ["y1o", "oj3", "j81"].join("-"))
+
+print("s034-a0:", "iw44pt8".at(4), "iw44pt8".trim() == "iw44pt8")
+
+print("s034-a1:", "sp5mepj".at(0), "sp5mepj".trim() == "sp5mepj")
+
+print("s034-a2:", "lvfipfu".at(4), "lvfipfu".trim() == "lvfipfu")

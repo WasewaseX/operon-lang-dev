@@ -1,0 +1,74 @@
+# compat corpus — generated, do not edit by hand
+# bucket=lists seed=20260930 idx=64 tag=l064
+
+let l064_l0 = [-2, 5, -46, -13, 10, -21]
+
+print("l064-l0:", l064_l0[3], l064_l0[-1], l064_l0.len())
+
+let l064_l1 = [-3, 31, 16, 21, -42]
+
+print("l064-l1:", l064_l1[3], l064_l1[-1], l064_l1.len())
+
+let l064_l2 = [-25, 2, 26, -39, 32, -31, -36]
+
+print("l064-l2:", l064_l2[5], l064_l2[-1], l064_l2.len())
+
+let l064_l3 = [3, 49, -25, 8, 32, 19, 36]
+
+print("l064-l3:", l064_l3[1], l064_l3[-1], l064_l3.len())
+
+let l064_s0 = [-38, -18, -89, 44, -75, 96]
+
+print("l064-s0:", l064_s0.slice(2, 5), l064_s0.slice(-2))
+
+let l064_s1 = [-99, 96, 80, 53, 64]
+
+print("l064-s1:", l064_s1.slice(1, 4), l064_s1.slice(-1))
+
+let l064_s2 = [-82, -51, 14, 9, 8, -57, -90]
+
+print("l064-s2:", l064_s2.slice(5, 6), l064_s2.slice(-1))
+
+let l064_s3 = [26, -86, -1, 26, -9, 59]
+
+print("l064-s3:", l064_s3.slice(3, 4), l064_s3.slice(-2))
+
+let l064_s4 = [-13, 30, 74, 36, 23, 33]
+
+print("l064-s4:", l064_s4.slice(2, 4), l064_s4.slice(-2))
+
+let l064_r0 = [469, 586, 151, 72]
+
+print("l064-r0:", l064_r0.sort(), l064_r0.reverse(), l064_r0.contains(469))
+
+let l064_r1 = [421, 236, 178, 617, 416, 995]
+
+print("l064-r1:", l064_r1.sort(), l064_r1.reverse(), l064_r1.contains(236))
+
+let l064_r2 = [960, 325, 632, 933]
+
+print("l064-r2:", l064_r2.sort(), l064_r2.reverse(), l064_r2.contains(632))
+
+let l064_r3 = [789, 295, 117, 835]
+
+print("l064-r3:", l064_r3.sort(), l064_r3.reverse(), l064_r3.contains(117))
+
+let l064_t0 = 0
+
+for v in [29, 38, 20, 15, 9, 14] { l064_t0 += v }
+
+print("l064-t0:", l064_t0)
+
+let l064_t1 = 0
+
+for v in [5, 9, 11, 28] { l064_t1 += v }
+
+print("l064-t1:", l064_t1)
+
+let l064_n0 = [[2, 6, 4], [2, 6, 4], 77]
+
+print("l064-n0:", l064_n0[0][1], l064_n0[2])
+
+let l064_n1 = [[8, 7, 7], [8, 7, 7], 77]
+
+print("l064-n1:", l064_n1[0][1], l064_n1[2])

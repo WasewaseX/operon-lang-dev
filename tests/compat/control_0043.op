@@ -1,0 +1,156 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20260930 idx=43 tag=c043
+
+let c043_b0 = "start"
+
+if -14 > 80 { c043_b0 = "hi" } elif -14 > 40 { c043_b0 = "mid" } else { c043_b0 = "lo" }
+
+print("c043-i0:", c043_b0, -14)
+
+let c043_b1 = "start"
+
+if 114 > 80 { c043_b1 = "hi" } elif 114 > 40 { c043_b1 = "mid" } else { c043_b1 = "lo" }
+
+print("c043-i1:", c043_b1, 114)
+
+let c043_b2 = "start"
+
+if 23 > 80 { c043_b2 = "hi" } elif 23 > 40 { c043_b2 = "mid" } else { c043_b2 = "lo" }
+
+print("c043-i2:", c043_b2, 23)
+
+let c043_a0 = 0
+
+let c043_n0 = 0
+
+while c043_n0 < 12 {
+
+    c043_n0 += 3
+
+    if c043_n0 % 2 == 0 { continue }
+
+    if c043_n0 > 19 { break }
+
+    c043_a0 += c043_n0
+
+}
+
+print("c043-w0:", c043_a0, c043_n0)
+
+let c043_a1 = 0
+
+let c043_n1 = 0
+
+while c043_n1 < 15 {
+
+    c043_n1 += 3
+
+    if c043_n1 % 2 == 0 { continue }
+
+    if c043_n1 > 20 { break }
+
+    c043_a1 += c043_n1
+
+}
+
+print("c043-w1:", c043_a1, c043_n1)
+
+let c043_a2 = 0
+
+let c043_n2 = 0
+
+while c043_n2 < 6 {
+
+    c043_n2 += 2
+
+    if c043_n2 % 2 == 0 { continue }
+
+    if c043_n2 > 15 { break }
+
+    c043_a2 += c043_n2
+
+}
+
+print("c043-w2:", c043_a2, c043_n2)
+
+let c043_a3 = 0
+
+let c043_n3 = 0
+
+while c043_n3 < 7 {
+
+    c043_n3 += 4
+
+    if c043_n3 % 3 == 0 { continue }
+
+    if c043_n3 > 14 { break }
+
+    c043_a3 += c043_n3
+
+}
+
+print("c043-w3:", c043_a3, c043_n3)
+
+let c043_c0 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 2] {
+
+        c043_c0 += a * b
+
+    }
+
+}
+
+print("c043-l0:", c043_c0)
+
+let c043_c1 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 3] {
+
+        c043_c1 += a * b
+
+    }
+
+}
+
+print("c043-l1:", c043_c1)
+
+let c043_acc0 = ""
+
+loop {
+
+    c043_acc0 += "x"
+
+    if c043_acc0.len() >= 5 { break }
+
+}
+
+print("c043-o0:", c043_acc0)
+
+let c043_acc1 = ""
+
+loop {
+
+    c043_acc1 += "x"
+
+    if c043_acc1.len() >= 5 { break }
+
+}
+
+print("c043-o1:", c043_acc1)
+
+let c043_acc2 = ""
+
+loop {
+
+    c043_acc2 += "x"
+
+    if c043_acc2.len() >= 6 { break }
+
+}
+
+print("c043-o2:", c043_acc2)

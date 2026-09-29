@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20260930 idx=57 tag=m057
+
+let m057_m0 = {splicer: -30, gene: -24, marker: 32}
+
+print("m057-m0:", m057_m0["splicer"], len(m057_m0), m057_m0.has("splicer"))
+
+let m057_m1 = {vector: -74, plasmid: -86, codon: 81, gene: 15}
+
+print("m057-m1:", m057_m1["vector"], len(m057_m1), m057_m1.has("vector"))
+
+let m057_m2 = {codon: 25, helix: 95, exon: -29}
+
+print("m057-m2:", m057_m2["codon"], len(m057_m2), m057_m2.has("codon"))
+
+let m057_m3 = {enzyme: -40, ligase: -79, exon: -38, ribose: -1, helix: 21}
+
+print("m057-m3:", m057_m3["enzyme"], len(m057_m3), m057_m3.has("enzyme"))
+
+let m057_k0 = {enzyme: 42, gene: 46, codon: 22}
+
+let m057_ks0 = m057_k0.keys()
+
+let m057_sm0 = 0
+
+for k in m057_k0 { m057_sm0 += m057_k0[k] }
+
+print("m057-k0:", m057_sm0, m057_k0.keys().sort(), m057_k0.values().len())
+
+let m057_k1 = {ligase: 27, cell: 26, vector: 32}
+
+let m057_ks1 = m057_k1.keys()
+
+let m057_sm1 = 0
+
+for k in m057_k1 { m057_sm1 += m057_k1[k] }
+
+print("m057-k1:", m057_sm1, m057_k1.keys().sort(), m057_k1.values().len())
+
+let m057_k2 = {helix: 39, codon: 20, splicer: 42}
+
+let m057_ks2 = m057_k2.keys()
+
+let m057_sm2 = 0
+
+for k in m057_k2 { m057_sm2 += m057_k2[k] }
+
+print("m057-k2:", m057_sm2, m057_k2.keys().sort(), m057_k2.values().len())
+
+let m057_w0 = {outer: {ligase: 6, splicer: 7, tag: "ok"}}}
+
+print("m057-w0:", m057_w0["outer"]["splicer"], m057_w0["outer"]["tag"])
+
+let m057_w1 = {outer: {exon: 3, vector: 8, tag: "ok"}}}
+
+print("m057-w1:", m057_w1["outer"]["vector"], m057_w1["outer"]["tag"])

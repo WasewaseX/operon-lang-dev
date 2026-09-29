@@ -1,0 +1,146 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20260930 idx=37 tag=c037
+
+let c037_b0 = "start"
+
+if 1 > 80 { c037_b0 = "hi" } elif 1 > 40 { c037_b0 = "mid" } else { c037_b0 = "lo" }
+
+print("c037-i0:", c037_b0, 1)
+
+let c037_b1 = "start"
+
+if 98 > 80 { c037_b1 = "hi" } elif 98 > 40 { c037_b1 = "mid" } else { c037_b1 = "lo" }
+
+print("c037-i1:", c037_b1, 98)
+
+let c037_b2 = "start"
+
+if 20 > 80 { c037_b2 = "hi" } elif 20 > 40 { c037_b2 = "mid" } else { c037_b2 = "lo" }
+
+print("c037-i2:", c037_b2, 20)
+
+let c037_b3 = "start"
+
+if 43 > 80 { c037_b3 = "hi" } elif 43 > 40 { c037_b3 = "mid" } else { c037_b3 = "lo" }
+
+print("c037-i3:", c037_b3, 43)
+
+let c037_a0 = 0
+
+let c037_n0 = 0
+
+while c037_n0 < 16 {
+
+    c037_n0 += 2
+
+    if c037_n0 % 2 == 0 { continue }
+
+    if c037_n0 > 25 { break }
+
+    c037_a0 += c037_n0
+
+}
+
+print("c037-w0:", c037_a0, c037_n0)
+
+let c037_a1 = 0
+
+let c037_n1 = 0
+
+while c037_n1 < 19 {
+
+    c037_n1 += 4
+
+    if c037_n1 % 3 == 0 { continue }
+
+    if c037_n1 > 24 { break }
+
+    c037_a1 += c037_n1
+
+}
+
+print("c037-w1:", c037_a1, c037_n1)
+
+let c037_a2 = 0
+
+let c037_n2 = 0
+
+while c037_n2 < 6 {
+
+    c037_n2 += 3
+
+    if c037_n2 % 3 == 0 { continue }
+
+    if c037_n2 > 14 { break }
+
+    c037_a2 += c037_n2
+
+}
+
+print("c037-w2:", c037_a2, c037_n2)
+
+let c037_c0 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 4] {
+
+        c037_c0 += a * b
+
+    }
+
+}
+
+print("c037-l0:", c037_c0)
+
+let c037_c1 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 4] {
+
+        c037_c1 += a * b
+
+    }
+
+}
+
+print("c037-l1:", c037_c1)
+
+let c037_c2 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 4] {
+
+        c037_c2 += a * b
+
+    }
+
+}
+
+print("c037-l2:", c037_c2)
+
+let c037_acc0 = ""
+
+loop {
+
+    c037_acc0 += "x"
+
+    if c037_acc0.len() >= 4 { break }
+
+}
+
+print("c037-o0:", c037_acc0)
+
+let c037_acc1 = ""
+
+loop {
+
+    c037_acc1 += "x"
+
+    if c037_acc1.len() >= 4 { break }
+
+}
+
+print("c037-o1:", c037_acc1)

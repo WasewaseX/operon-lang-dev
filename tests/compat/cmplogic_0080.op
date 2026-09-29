@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=80 tag=c080
+
+print("c080-c0:", -1836 >= -3275)
+
+print("c080-c1:", -530 == 2757)
+
+print("c080-c2:", -9856 != 7119)
+
+print("c080-c3:", -1552 != 3269)
+
+print("c080-c4:", 5404 >= -4987)
+
+print("c080-b0:", 42 < 42 && 42 < 21, 42 > 42 || 42 > 21)
+
+print("c080-b1:", 27 < 40 && 40 < 4, 27 > 40 || 27 > 4)
+
+print("c080-b2:", 11 < 13 && 13 < 36, 11 > 13 || 11 > 36)
+
+print("c080-b3:", 41 < 2 && 2 < 42, 41 > 2 || 41 > 42)
+
+print("c080-t0:", -2845 > 7302 ? "gt" : "le")
+
+print("c080-t1:", 963 > -2944 ? "gt" : "le")
+
+print("c080-t2:", 7439 > 1 ? "gt" : "le")
+
+print("c080-t3:", -2786 > -851 ? "gt" : "le")
+
+let c080_n0 = null
+
+print("c080-n0:", c080_n0 ?? -1807, c080_n0 == null)
+
+let c080_n1 = null
+
+print("c080-n1:", c080_n1 ?? 1289, c080_n1 == null)
+
+print("c080-s0:", "6s13" in "sefwh96s13", "6s13" == "6s13")
+
+print("c080-s1:", "3xh1" in "A029n23xh1", "3xh1" == "3xh1")

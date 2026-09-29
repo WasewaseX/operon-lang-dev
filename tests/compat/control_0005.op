@@ -1,0 +1,156 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20260930 idx=5 tag=c005
+
+let c005_b0 = "start"
+
+if 115 > 80 { c005_b0 = "hi" } elif 115 > 40 { c005_b0 = "mid" } else { c005_b0 = "lo" }
+
+print("c005-i0:", c005_b0, 115)
+
+let c005_b1 = "start"
+
+if 61 > 80 { c005_b1 = "hi" } elif 61 > 40 { c005_b1 = "mid" } else { c005_b1 = "lo" }
+
+print("c005-i1:", c005_b1, 61)
+
+let c005_b2 = "start"
+
+if 20 > 80 { c005_b2 = "hi" } elif 20 > 40 { c005_b2 = "mid" } else { c005_b2 = "lo" }
+
+print("c005-i2:", c005_b2, 20)
+
+let c005_b3 = "start"
+
+if 54 > 80 { c005_b3 = "hi" } elif 54 > 40 { c005_b3 = "mid" } else { c005_b3 = "lo" }
+
+print("c005-i3:", c005_b3, 54)
+
+let c005_b4 = "start"
+
+if 13 > 80 { c005_b4 = "hi" } elif 13 > 40 { c005_b4 = "mid" } else { c005_b4 = "lo" }
+
+print("c005-i4:", c005_b4, 13)
+
+let c005_a0 = 0
+
+let c005_n0 = 0
+
+while c005_n0 < 11 {
+
+    c005_n0 += 2
+
+    if c005_n0 % 2 == 0 { continue }
+
+    if c005_n0 > 19 { break }
+
+    c005_a0 += c005_n0
+
+}
+
+print("c005-w0:", c005_a0, c005_n0)
+
+let c005_a1 = 0
+
+let c005_n1 = 0
+
+while c005_n1 < 18 {
+
+    c005_n1 += 4
+
+    if c005_n1 % 3 == 0 { continue }
+
+    if c005_n1 > 21 { break }
+
+    c005_a1 += c005_n1
+
+}
+
+print("c005-w1:", c005_a1, c005_n1)
+
+let c005_a2 = 0
+
+let c005_n2 = 0
+
+while c005_n2 < 17 {
+
+    c005_n2 += 3
+
+    if c005_n2 % 3 == 0 { continue }
+
+    if c005_n2 > 25 { break }
+
+    c005_a2 += c005_n2
+
+}
+
+print("c005-w2:", c005_a2, c005_n2)
+
+let c005_a3 = 0
+
+let c005_n3 = 0
+
+while c005_n3 < 12 {
+
+    c005_n3 += 3
+
+    if c005_n3 % 3 == 0 { continue }
+
+    if c005_n3 > 16 { break }
+
+    c005_a3 += c005_n3
+
+}
+
+print("c005-w3:", c005_a3, c005_n3)
+
+let c005_c0 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 2] {
+
+        c005_c0 += a * b
+
+    }
+
+}
+
+print("c005-l0:", c005_c0)
+
+let c005_c1 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 3] {
+
+        c005_c1 += a * b
+
+    }
+
+}
+
+print("c005-l1:", c005_c1)
+
+let c005_acc0 = ""
+
+loop {
+
+    c005_acc0 += "x"
+
+    if c005_acc0.len() >= 7 { break }
+
+}
+
+print("c005-o0:", c005_acc0)
+
+let c005_acc1 = ""
+
+loop {
+
+    c005_acc1 += "x"
+
+    if c005_acc1.len() >= 7 { break }
+
+}
+
+print("c005-o1:", c005_acc1)

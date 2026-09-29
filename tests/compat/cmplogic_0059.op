@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=59 tag=c059
+
+print("c059-c0:", -1200 > -4612)
+
+print("c059-c1:", 5857 < 9243)
+
+print("c059-c2:", 4568 > 4075)
+
+print("c059-c3:", -6707 <= 6154)
+
+print("c059-c4:", -8206 >= 1099)
+
+print("c059-c5:", 1205 != -1231)
+
+print("c059-c6:", -1398 < -3578)
+
+print("c059-b0:", 15 < 12 && 12 < 45, 15 > 12 || 15 > 45)
+
+print("c059-b1:", 35 < 48 && 48 < 2, 35 > 48 || 35 > 2)
+
+print("c059-b2:", 36 < 27 && 27 < 19, 36 > 27 || 36 > 19)
+
+print("c059-b3:", 38 < 48 && 48 < 27, 38 > 48 || 38 > 27)
+
+print("c059-t0:", 1882 > -243 ? "gt" : "le")
+
+print("c059-t1:", 871 > 7066 ? "gt" : "le")
+
+let c059_n0 = null
+
+print("c059-n0:", c059_n0 ?? 6616, c059_n0 == null)
+
+let c059_n1 = null
+
+print("c059-n1:", c059_n1 ?? -856, c059_n1 == null)
+
+print("c059-s0:", "Anwh" in "4zhcqlAnwh", "Anwh" == "Anwh")
+
+print("c059-s1:", "fwmn" in "4itB9gfwmn", "fwmn" == "fwmn")

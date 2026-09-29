@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=89 tag=s089
+
+print("s089-m0:", "r5jjld022zs8dd".upper(), "r5jjld022zs8dd".slice(4), "r5jjld022zs8dd".len())
+
+print("s089-m1:", "tb0i3zq5".upper(), "tb0i3zq5".slice(3), "tb0i3zq5".len())
+
+print("s089-m2:", "jAagzgAeryb".upper(), "jAagzgAeryb".slice(3), "jAagzgAeryb".len())
+
+print("s089-m3:", "exbd12tkvbfq".upper(), "exbd12tkvbfq".slice(3), "exbd12tkvbfq".len())
+
+print("s089-m4:", "hfpsyb3".upper(), "hfpsyb3".slice(4), "hfpsyb3".len())
+
+print("s089-i0:", "mu0-{85}-8r9e")
+
+let s089_v0 = 85
+
+print("s089-v0:", "n={s089_v0}" + "!" * 3)
+
+print("s089-i1:", "hBz-{74}-zml9")
+
+let s089_v1 = 74
+
+print("s089-v1:", "n={s089_v1}" + "!" * 2)
+
+print("s089-i2:", "e_2-{13}-f_Ad")
+
+let s089_v2 = 13
+
+print("s089-v2:", "n={s089_v2}" + "!" * 2)
+
+print("s089-r0:", "ri0iqkfn".replace("r", "C7"), "ri0iqkfn".contains("i0"))
+
+print("s089-r1:", "4w2hj2kf".replace("4", "nk"), "4w2hj2kf".contains("w2"))
+
+print("s089-r2:", "cbow6v56".replace("c", "wm"), "cbow6v56".contains("bo"))
+
+print("s089-j0:", ["aqv", "f0m", "_aA", "xAa"].join("-"))
+
+print("s089-j1:", ["ko5", "2z6", "jhv"].join("-"))
+
+print("s089-a0:", "qA9jCbi".at(4), "qA9jCbi".trim() == "qA9jCbi")
+
+print("s089-a1:", "slbp6fn".at(1), "slbp6fn".trim() == "slbp6fn")
+
+print("s089-a2:", "53rcnzm".at(5), "53rcnzm".trim() == "53rcnzm")

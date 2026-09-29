@@ -1,0 +1,114 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20260930 idx=73 tag=c073
+
+let c073_b0 = "start"
+
+if 20 > 80 { c073_b0 = "hi" } elif 20 > 40 { c073_b0 = "mid" } else { c073_b0 = "lo" }
+
+print("c073-i0:", c073_b0, 20)
+
+let c073_b1 = "start"
+
+if 29 > 80 { c073_b1 = "hi" } elif 29 > 40 { c073_b1 = "mid" } else { c073_b1 = "lo" }
+
+print("c073-i1:", c073_b1, 29)
+
+let c073_b2 = "start"
+
+if 55 > 80 { c073_b2 = "hi" } elif 55 > 40 { c073_b2 = "mid" } else { c073_b2 = "lo" }
+
+print("c073-i2:", c073_b2, 55)
+
+let c073_b3 = "start"
+
+if 13 > 80 { c073_b3 = "hi" } elif 13 > 40 { c073_b3 = "mid" } else { c073_b3 = "lo" }
+
+print("c073-i3:", c073_b3, 13)
+
+let c073_a0 = 0
+
+let c073_n0 = 0
+
+while c073_n0 < 13 {
+
+    c073_n0 += 3
+
+    if c073_n0 % 3 == 0 { continue }
+
+    if c073_n0 > 22 { break }
+
+    c073_a0 += c073_n0
+
+}
+
+print("c073-w0:", c073_a0, c073_n0)
+
+let c073_a1 = 0
+
+let c073_n1 = 0
+
+while c073_n1 < 9 {
+
+    c073_n1 += 2
+
+    if c073_n1 % 2 == 0 { continue }
+
+    if c073_n1 > 12 { break }
+
+    c073_a1 += c073_n1
+
+}
+
+print("c073-w1:", c073_a1, c073_n1)
+
+let c073_c0 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 4] {
+
+        c073_c0 += a * b
+
+    }
+
+}
+
+print("c073-l0:", c073_c0)
+
+let c073_c1 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 3] {
+
+        c073_c1 += a * b
+
+    }
+
+}
+
+print("c073-l1:", c073_c1)
+
+let c073_acc0 = ""
+
+loop {
+
+    c073_acc0 += "x"
+
+    if c073_acc0.len() >= 3 { break }
+
+}
+
+print("c073-o0:", c073_acc0)
+
+let c073_acc1 = ""
+
+loop {
+
+    c073_acc1 += "x"
+
+    if c073_acc1.len() >= 4 { break }
+
+}
+
+print("c073-o1:", c073_acc1)

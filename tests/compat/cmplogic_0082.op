@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=82 tag=c082
+
+print("c082-c0:", 6392 > 7576)
+
+print("c082-c1:", 2745 > -6572)
+
+print("c082-c2:", -1863 != 6096)
+
+print("c082-c3:", -497 == -662)
+
+print("c082-c4:", 7507 == -7558)
+
+print("c082-c5:", -1561 >= -122)
+
+print("c082-c6:", 2141 < 4101)
+
+print("c082-b0:", 29 < 22 && 22 < 38, 29 > 22 || 29 > 38)
+
+print("c082-b1:", 24 < 14 && 14 < 36, 24 > 14 || 24 > 36)
+
+print("c082-b2:", 30 < 13 && 13 < 30, 30 > 13 || 30 > 30)
+
+print("c082-b3:", 1 < 13 && 13 < 10, 1 > 13 || 1 > 10)
+
+print("c082-t0:", -2692 > -7762 ? "gt" : "le")
+
+print("c082-t1:", -8460 > 4323 ? "gt" : "le")
+
+print("c082-t2:", -2094 > -5603 ? "gt" : "le")
+
+let c082_n0 = null
+
+print("c082-n0:", c082_n0 ?? -9052, c082_n0 == null)
+
+let c082_n1 = null
+
+print("c082-n1:", c082_n1 ?? 1630, c082_n1 == null)
+
+print("c082-s0:", "lB9C" in "qBvxfclB9C", "lB9C" == "lB9C")
+
+print("c082-s1:", "rygi" in "kbBlflrygi", "rygi" == "rygi")

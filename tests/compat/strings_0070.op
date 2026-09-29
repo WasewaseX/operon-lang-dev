@@ -1,0 +1,62 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=70 tag=s070
+
+print("s070-m0:", "uC4gys".upper(), "uC4gys".slice(1), "uC4gys".len())
+
+print("s070-m1:", "2As509s0v0vxb".upper(), "2As509s0v0vxb".slice(4), "2As509s0v0vxb".len())
+
+print("s070-m2:", "w49sAdBAsqjg".upper(), "w49sAdBAsqjg".slice(3), "w49sAdBAsqjg".len())
+
+print("s070-m3:", "mp1d3lkw67cy9g".upper(), "mp1d3lkw67cy9g".slice(3), "mp1d3lkw67cy9g".len())
+
+print("s070-m4:", "8Bd58vz7Bw4Aa".upper(), "8Bd58vz7Bw4Aa".slice(3), "8Bd58vz7Bw4Aa".len())
+
+print("s070-m5:", "v5b5i4gx1yC".upper(), "v5b5i4gx1yC".slice(3), "v5b5i4gx1yC".len())
+
+print("s070-i0:", "uo4-{46}-kAAt")
+
+let s070_v0 = 46
+
+print("s070-v0:", "n={s070_v0}" + "!" * 1)
+
+print("s070-i1:", "qay-{83}-08yC")
+
+let s070_v1 = 83
+
+print("s070-v1:", "n={s070_v1}" + "!" * 2)
+
+print("s070-i2:", "nw4-{60}-d12u")
+
+let s070_v2 = 60
+
+print("s070-v2:", "n={s070_v2}" + "!" * 2)
+
+print("s070-i3:", "pkb-{19}-_mpw")
+
+let s070_v3 = 19
+
+print("s070-v3:", "n={s070_v3}" + "!" * 3)
+
+print("s070-i4:", "lsa-{45}-tybh")
+
+let s070_v4 = 45
+
+print("s070-v4:", "n={s070_v4}" + "!" * 1)
+
+print("s070-r0:", "yzj8A1A0".replace("y", "At"), "yzj8A1A0".contains("zj"))
+
+print("s070-r1:", "aCl8ph7k".replace("a", "7n"), "aCl8ph7k".contains("Cl"))
+
+print("s070-r2:", "p1vnAkbj".replace("p", "vi"), "p1vnAkbj".contains("1v"))
+
+print("s070-j0:", ["137", "70p", "542", "29y"].join("-"))
+
+print("s070-j1:", ["hi_", "q58", "enh", "3Ca"].join("-"))
+
+print("s070-j2:", ["ws0", "BeC", "boi"].join("-"))
+
+print("s070-a0:", "p8mjv1m".at(3), "p8mjv1m".trim() == "p8mjv1m")
+
+print("s070-a1:", "s7rtsco".at(2), "s7rtsco".trim() == "s7rtsco")
+
+print("s070-a2:", "rah_u1h".at(3), "rah_u1h".trim() == "rah_u1h")
