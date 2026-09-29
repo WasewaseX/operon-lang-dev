@@ -23,7 +23,7 @@
  "harness": {
   "diverge": 0,
   "granted_cells": 11,
-  "match": 225,
+  "match": 227,
   "skipped": 0
  },
  "keyword_analogy_pending": [],
@@ -108,11 +108,11 @@
   "textDocument/semanticTokens",
   "textDocument/signatureHelp"
  ],
- "proof_files": 144,
+ "proof_files": 145,
  "proof_totals": {
-  "asserts": 2025,
-  "files": 188,
-  "proofs": 132,
+  "asserts": 2050,
+  "files": 190,
+  "proofs": 133,
   "source": "bin/operon"
  },
  "redteam_files": 103,
@@ -244,6 +244,6 @@
    "module": "url"
   }
  ],
- "test_op_files": 306,
+ "test_op_files": 308,
  "version": "2.6.0"
 }

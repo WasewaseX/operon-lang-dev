@@ -7851,6 +7851,134 @@ impl Interp {
                     )),
                 }
             }
+            // ------------------------------------------------ try_* family (W06 stage 2)
+            // Result-returning variants of the failure-prone core builtins.
+            // The legacy null contracts stay the 2.x default (SPEC §9 compat
+            // note); these are ADDITIONS, each err payload is a message Str.
+            // Arity violations stay `unfolded` Stress (same rule as ok/err).
+            "try_num" => {
+                if args.len() != 1 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "try_num(s) needs exactly 1 argument",
+                    ));
+                }
+                let ok = |v: Value| Ok(Value::Variant(crate::value::VTag::OkV, Some(Box::new(v))));
+                let err = |msg: String| {
+                    Ok(Value::Variant(
+                        crate::value::VTag::ErrV,
+                        Some(Box::new(Value::Str(msg))),
+                    ))
+                };
+                match args.first() {
+                    Some(Value::Int(i)) => ok(Value::Int(*i)),
+                    Some(Value::Float(f)) => ok(Value::Float(*f)),
+                    Some(Value::Str(s)) => {
+                        let t = s.trim();
+                        if let Ok(i) = t.parse::<i64>() {
+                            ok(Value::Int(i))
+                        } else if let Ok(f) = t.parse::<f64>() {
+                            ok(Value::Float(f))
+                        } else {
+                            // the RAW string renders (the payload is stdout-
+                            // visible; the legacy num() note trims)
+                            err(format!("num('{}') failed", s))
+                        }
+                    }
+                    Some(other) => err(format!(
+                        "num() failed: cannot parse {} as a number",
+                        other.type_name()
+                    )),
+                    None => err("num() failed: missing argument".to_string()),
+                }
+            }
+            "try_index" => {
+                if args.len() != 2 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "try_index(l, i) needs exactly 2 arguments",
+                    ));
+                }
+                let err = |msg: String| {
+                    Ok(Value::Variant(
+                        crate::value::VTag::ErrV,
+                        Some(Box::new(Value::Str(msg))),
+                    ))
+                };
+                match (&args[0], &args[1]) {
+                    (Value::List(l), Value::Int(i)) => {
+                        let len = l.borrow().len();
+                        if *i < 0 || *i >= len as i64 {
+                            err(format!(
+                                "index {} out of range for list of length {}",
+                                i, len
+                            ))
+                        } else {
+                            let v = l.borrow()[*i as usize].clone();
+                            Ok(Value::Variant(crate::value::VTag::OkV, Some(Box::new(v))))
+                        }
+                    }
+                    (Value::List(_), other) => {
+                        err(format!("index needs an int, got {}", other.type_name()))
+                    }
+                    (other, _) => err(format!("try_index needs a list, got {}", other.type_name())),
+                }
+            }
+            "try_get" => {
+                if args.len() != 2 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "try_get(m, k) needs exactly 2 arguments",
+                    ));
+                }
+                let err = |msg: String| {
+                    Ok(Value::Variant(
+                        crate::value::VTag::ErrV,
+                        Some(Box::new(Value::Str(msg))),
+                    ))
+                };
+                match (&args[0], &args[1]) {
+                    (Value::Map(m), k) => match m.borrow().position(k) {
+                        Some(i) => {
+                            let v = m.borrow().items[i].1.clone();
+                            Ok(Value::Variant(crate::value::VTag::OkV, Some(Box::new(v))))
+                        }
+                        None => err(format!("no key '{}'", k.display())),
+                    },
+                    (other, _) => err(format!("try_get needs a map, got {}", other.type_name())),
+                }
+            }
+            "try_pop" => {
+                if args.len() != 1 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "try_pop(l) needs exactly 1 argument",
+                    ));
+                }
+                let err = |msg: String| {
+                    Ok(Value::Variant(
+                        crate::value::VTag::ErrV,
+                        Some(Box::new(Value::Str(msg))),
+                    ))
+                };
+                match args.first() {
+                    Some(Value::List(l)) => {
+                        let v = l.borrow_mut().pop();
+                        match v {
+                            Some(v) => {
+                                Ok(Value::Variant(crate::value::VTag::OkV, Some(Box::new(v))))
+                            }
+                            None => err("pop from an empty list".to_string()),
+                        }
+                    }
+                    Some(other) => err(format!("try_pop needs a list, got {}", other.type_name())),
+                    None => err("try_pop: missing argument".to_string()),
+                }
+            }
             // ------------------------------------------------ date / time (UTC civil calendar)
             "unix_time" => {
                 let now = std::time::SystemTime::now()
@@ -11099,6 +11227,11 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "is_err",
     "unwrap",
     "unwrap_or",
+    // W06 stage 2: Result-returning variants of failure-prone builtins
+    "try_num",
+    "try_index",
+    "try_get",
+    "try_pop",
     "call",
     // L1a: iteration + numeric builtins
     "enumerate",
