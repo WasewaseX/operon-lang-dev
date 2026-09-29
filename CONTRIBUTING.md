@@ -215,6 +215,33 @@ Rules of the chain:
   SPEC: a SPEC sentence describing deterministic output should be able to name
   the differential/proof program that pins it.
 
+### 8b. The two-track review rule (W091 enforcement)
+
+SPEC holds two kinds of content and the boundary between them is load-bearing
+(SPEC §11a, the biology-layer contract header and boundary map):
+
+- **Language track**: syntax, evaluation, gates, clamps, defaults, knobs,
+  error shapes. Changes here are LANGUAGE changes and need the full gate
+  battery plus an oracle mirror where behavior is observable.
+- **Biology track**: mechanism rationale, term audits, not-modeled lists,
+  honesty labels (BIO-CONTRACT.md). Changes here are MODELING changes and
+  must not move program behavior by one bit.
+
+Rules every mixed-track PR must obey (reviewers enforce at lane check):
+
+1. **Label your hunks.** A PR that touches both tracks separates them (commit
+   or hunk level) and says which is which.
+2. **A bio-analogy rewording can never justify a behavior change**, and a
+   behavior change can never hide behind a bio-analogy rewording. If a PR
+   claims "docs only" but the differential output moves, the PR is wrong.
+3. **The boundary itself is guarded**: `check_docs_sync.py` fails when the
+   §11a contract header, its BIO-CONTRACT/DETERMINISM pointers, or the
+   recorded crossing markers in SPEC go missing. Deleting a boundary marker
+   is a language-track change and needs a DECISIONS.md entry.
+4. **Crossings are stated once, in §11a's crossing sentences.** New overlaps
+   between the tracks get a crossing sentence there, not prose sprinkled
+   through both tracks.
+
 ---
 
 ## 9. Security and capability model
