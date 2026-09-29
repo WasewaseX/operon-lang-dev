@@ -128,7 +128,7 @@ Rules the hook must obey (checked at the W04-stage review):
 
 ## Downstream rule
 
-Code that serializes phenotype instances today can use this module directly
-- the structural default is live. When the W04 hook lands, a phenotype that
+Code that serializes phenotype instances today can use this module directly:
+the structural default is live. When the W04 hook lands, a phenotype that
 wants a CUSTOM projection declares `Serializable`, implements `to_map()`,
 and the dispatcher prefers it; call sites do not change.
