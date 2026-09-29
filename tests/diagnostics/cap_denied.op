@@ -1,0 +1,4 @@
+gene main() {
+  data = read_file("config.json")
+  print(data)
+}

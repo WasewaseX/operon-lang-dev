@@ -34,6 +34,8 @@ echo "[2/3] Operon proof suite (Rust core)"
 ./bin/operon test tests/granted/cancel_inherit.op --cell tests/granted/cancel_inherit.cell
 echo "[3/4] Differential harness (Rust core vs Python oracle)"
 python3 bootstrap/harness.py
+echo "[4.5/4] W101 diagnostic golden gate"
+bash scripts/diag_golden.sh
 echo "[4/4] Oracle proof suite (the same frames on the second implementation)"
 python3 bootstrap/oracle.py test tests/
 echo "ALL GREEN"
