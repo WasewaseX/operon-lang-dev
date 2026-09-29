@@ -1,0 +1,13 @@
+{
+  "runs": [
+    {
+      "results": [],
+      "tool": {
+        "driver": {
+          "name": "ast-grep"
+        }
+      }
+    }
+  ],
+  "version": "0.45.3"
+}

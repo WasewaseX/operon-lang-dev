@@ -1,0 +1,54 @@
+# W06 stage 2 — the try_* family (Result-returning variants of the
+# failure-prone core builtins). Differential target: Rust core AND the
+# Python oracle must print byte-identical output. The legacy null
+# contracts stay the 2.x default (SPEC §9 compat note); these are
+# additions. Every message payload here is stdout-visible and pinned.
+
+# ---- try_num: same parse rules as num (trim, int first, then float)
+print(try_num("42"))
+print(try_num("  7  "))
+print(try_num("-3"))
+print(try_num("2.5"))
+print(try_num("1e2"))
+print(try_num("x9"))
+print(try_num(""))
+print(try_num(12))
+print(try_num(0.5))
+print(try_num(true))
+print(try_num([1]))
+# ---- try_index: ok in range, err with the exact shape message
+let l = [10, 20, 30]
+print(try_index(l, 0))
+print(try_index(l, 2))
+print(try_index(l, 3))
+print(try_index(l, -1))
+print(try_index(l, "1"))
+print(try_index(l, 1.5))
+print(try_index({a: 1}, 0))
+# ---- try_get: map key access as a Result
+let m = {a: 1, "b c": 2}
+print(try_get(m, "a"))
+print(try_get(m, "b c"))
+print(try_get(m, "zz"))
+print(try_get(m, 3))
+print(try_get(l, "a"))
+# ---- try_pop: mutating pop as a Result
+let p = [1, 2]
+print(try_pop(p))
+print(p)
+print(try_pop(p))
+print(try_pop(p))
+print(try_pop(42))
+# ---- composition: ?! unwraps Ok payloads and propagates Err through the
+# rescue boundary as the `unwrap` stress (the D-014 contract)
+gene read_at(list, i) {
+    return try_index(list, i)?!
+}
+print(read_at(l, 1))
+stress {
+    print(read_at(l, 99)?!)
+} rescue (e) {
+    print("contained: " + e.kind)
+}
+# is_ok / is_err discriminate without unwrap
+print(is_ok(try_num("5")) == is_err(try_num("nope")))

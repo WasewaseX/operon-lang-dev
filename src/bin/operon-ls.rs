@@ -1,13 +1,16 @@
-//! operon-ls — Operon language server (G5 seed → lsp-r1 v2 → W45/W46): stdio LSP.
+//! operon-ls — Operon language server (G5 seed → lsp-r1 v2 → W44/W45/W46): stdio LSP.
 //!
 //! Features: initialize / shutdown / exit, full-text document sync (ranged
 //! edits are ignored, not mis-applied), publishDiagnostics (Total Grammar
 //! parse notes + `tools check` phantoms — resolved CWD-independently since
-//! lsp-r1, repair provenance as relatedInformation since W46),
+//! lsp-r1, repair provenance as relatedInformation + data.rung + the
+//! operonRepairs summary since W46),
 //! textDocument/hover with gene signatures + repair provenance,
 //! textDocument/definition, textDocument/references (W45),
 //! textDocument/semanticTokens (W45), textDocument/prepareRename +
 //! textDocument/rename (W45-v2 — grep-class, W67 all-or-nothing discipline),
+//! textDocument/signatureHelp (W44 — trigger chars `(` and `,`, resolved
+//! against the doc's gene table, annotations + doc comments included),
 //! textDocument/documentSymbol,
 //! textDocument/completion, textDocument/formatting (the canonical
 //! `operon fmt` engine), and `--explain FILE` wrapping the W38 rung report.
@@ -22,8 +25,8 @@
 use operon::interp::{json_parse, json_stringify};
 use operon::ls::{
     analyze_doc, completions, definition, document_symbols, format_text, hover, mapv,
-    prepare_rename, publish_params, range_value, references, rename, semantic_tokens, LsDoc,
-    SEMANTIC_TOKEN_TYPES,
+    prepare_rename, publish_params, range_value, references, rename, semantic_tokens,
+    signature_help, LsDoc, SEMANTIC_TOKEN_TYPES,
 };
 use operon::value::Value;
 use std::collections::HashMap;
@@ -66,6 +69,7 @@ fn explain_file(file: &str) {
         Ok(s) => s,
         Err(e) => {
             eprintln!("operon-ls: cannot read {}: {}", file, e);
+            // ast-grep-ignore: no-std-process-exit-in-core
             std::process::exit(2);
         }
     };
@@ -114,6 +118,7 @@ fn main() {
                     Some(f) => f.clone(),
                     None => {
                         eprintln!("operon-ls: --explain needs a file argument");
+                        // ast-grep-ignore: no-std-process-exit-in-core
                         std::process::exit(2);
                     }
                 };
@@ -124,6 +129,7 @@ fn main() {
                 eprintln!(
                     "operon-ls: unknown argument '{other}' (supported: --version, --explain FILE); the server reads LSP frames on stdio"
                 );
+                // ast-grep-ignore: no-std-process-exit-in-core
                 std::process::exit(2);
             }
         }
@@ -206,6 +212,18 @@ fn main() {
                             ),
                             ("documentSymbolProvider", Value::Bool(true)),
                             ("documentFormattingProvider", Value::Bool(true)),
+                            (
+                                // W44: signatures fire on the call open and on
+                                // every argument comma (Neovim/VSCode recipes)
+                                "signatureHelpProvider",
+                                mapv(vec![(
+                                    "triggerCharacters",
+                                    Value::List(std::rc::Rc::new(std::cell::RefCell::new(vec![
+                                        Value::Str("(".into()),
+                                        Value::Str(",".into()),
+                                    ]))),
+                                )]),
+                            ),
                             (
                                 "completionProvider",
                                 mapv(vec![("resolveProvider", Value::Bool(false))]),
@@ -404,11 +422,12 @@ fn main() {
                     .map(|e| mapv(vec![("data", semantic_tokens(&e.src, &e.analyzed))]));
                 send(&mut stdout, id.unwrap_or(Value::Null), response, &None);
             }
-            // W44 (ROADMAP-100): signature help — the innermost unclosed call
-            // left of the cursor, resolved against the doc's gene definitions.
+            // W44: signature help — the innermost unclosed call left of the
+            // cursor, resolved against the cached doc's gene table (the same
+            // resolution hover uses); unknown callees answer null
             "textDocument/signatureHelp" => {
-                let response = with_doc_position(&docs, &params, |src, _doc, line, ch| {
-                    signature_help(src, line, ch)
+                let response = with_doc_position(&docs, &params, |src, doc, line, ch| {
+                    signature_help(src, doc, line, ch)
                 });
                 send(&mut stdout, id.unwrap_or(Value::Null), response, &None);
             }
@@ -641,91 +660,4 @@ fn as_int(v: &Value) -> Option<i64> {
         Value::Float(f) => Some(*f as i64),
         _ => None,
     }
-}
-
-// ------------------------------------------------------------ W44 signature help
-
-/// W44 (ROADMAP-100): textDocument/signatureHelp. Self-contained line scan:
-/// find the innermost unclosed `(` left of the cursor, name the callee, count
-/// top-level commas for activeParameter, resolve the gene's params from the
-/// doc source. Builtins/phenotype methods are v2 (arity table = W43's).
-fn signature_help(src: &str, line: usize, ch: usize) -> Option<Value> {
-    let mut offset = 0usize;
-    for (i, l) in src.lines().enumerate() {
-        if i == line {
-            break;
-        }
-        offset += l.len() + 1;
-    }
-    let rest = src.get(offset..)?;
-    let before: Vec<char> = rest.chars().take(ch).collect();
-    let mut depth = 0i32;
-    let mut open: Option<usize> = None;
-    let mut commas = 0i32;
-    let mut i = before.len();
-    while i > 0 {
-        i -= 1;
-        match before[i] {
-            ')' => depth += 1,
-            '(' => {
-                if depth == 0 {
-                    open = Some(i);
-                    break;
-                }
-                depth -= 1;
-            }
-            ',' if depth == 0 => commas += 1,
-            _ => {}
-        }
-    }
-    let open = open?;
-    let mut j = open;
-    while j > 0 && before[j - 1].is_whitespace() {
-        j -= 1;
-    }
-    let mut name = String::new();
-    while j > 0 && (before[j - 1].is_alphanumeric() || before[j - 1] == '_') {
-        j -= 1;
-        name.insert(0, before[j]);
-    }
-    if name.is_empty() {
-        return None;
-    }
-    let params = gene_params(src, &name)?;
-    let label = format!("{}({})", name, params.join(", "));
-    let sig = mapv(vec![
-        ("label", Value::Str(label)),
-        (
-            "parameters",
-            Value::List(std::rc::Rc::new(std::cell::RefCell::new(
-                params.iter().map(|p| Value::Str(p.clone())).collect(),
-            ))),
-        ),
-    ]);
-    Some(mapv(vec![
-        (
-            "signatures",
-            Value::List(std::rc::Rc::new(std::cell::RefCell::new(vec![sig]))),
-        ),
-        ("activeSignature", Value::Int(0)),
-        ("activeParameter", Value::Int(commas.max(0) as i64)),
-    ]))
-}
-
-/// Extract `gene <name>(a, b = 1)` parameter names from the document source.
-fn gene_params(src: &str, name: &str) -> Option<Vec<String>> {
-    let pat = format!("gene {}(", name);
-    let idx = src.find(&pat)? + pat.len();
-    let rest = src.get(idx..)?;
-    let end = rest.find(')')?;
-    let inner = &rest[..end];
-    let params: Vec<String> = inner
-        .split(',')
-        .map(|p| {
-            // `a` or `b = default` — the name is the first word
-            p.split_whitespace().next().unwrap_or("").to_string()
-        })
-        .filter(|p| !p.is_empty())
-        .collect();
-    Some(params)
 }

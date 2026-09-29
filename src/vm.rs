@@ -61,6 +61,15 @@ pub enum Instr {
     AssignName(u32),
     /// shared apply_binop (exact kinds, messages, line stamps)
     Bin(BinOp),
+    /// W11 superinstruction: pop lhs, push consts[idx] as rhs, apply the
+    /// SAME apply_binop. Fuses the measured Push+Bin pair (fib25 histogram:
+    /// 96% of Pushes feed a Bin); identical evaluation order and stress
+    /// surface, one tick instead of two.
+    BinImm(BinOp, u32),
+    /// W11 superinstruction: read name (the EXACT LoadName arm: clone-charge
+    /// plus the unbound note), then apply_binop against consts[idx]. Fuses
+    /// measured LoadName+Push+Bin triple (`n < 2`, `n - 1`, `a = a + 1`).
+    LoadBinImm(u32, BinOp, u32),
     /// jump if the popped value is falsy (same truthy() order)
     JmpIfF(u32),
     Jmp(u32),
@@ -71,11 +80,16 @@ pub enum Instr {
     /// bridge inside a COMPILED loop: the bridged statement's flow must
     /// reach the right loop (Ret exits the gene, Brk jumps to the loop
     /// end, Cont jumps to the loop top). top/end are patched at loop end.
-    BridgeStmtInLoop(u32, u32, u32),
+    /// The 4th operand is the scope unwind count for that site: the scopes
+    /// opened since the loop top, restored before the jump lands.
+    BridgeStmtInLoop(u32, u32, u32, u32),
     /// pop one value (expression statements)
     Pop,
     /// return the value on the stack
     Ret,
+    /// W11 superinstruction: read name (exact LoadName arm) and return it.
+    /// Fuses the measured LoadName+Ret pair (every `return <name>` tail).
+    RetName(u32),
     /// break/continue out of the enclosing COMPILED loop (patched target);
     /// a break/continue with no compiled loop compiles as a bridge instead
     Brk(u32),
@@ -83,6 +97,35 @@ pub enum Instr {
     /// enter/leave a block scope (fresh child env, tree-walk shape)
     EnterScope,
     ExitScope,
+    /// W09 native calls: pop argc values, run the SHARED named-call tail
+    /// (RISC gate + call_named funnel, src/interp.rs named_call_tail), push
+    /// the result. Only Expr::Call over a bare identifier compiles to this;
+    /// method calls, gene-value calls and every exotic callee stay bridged.
+    CallNamed(u32, u32),
+}
+
+/// Identity hasher for pointer-keyed cache maps: a pointer is already a
+/// well-distributed u64, SipHash's mixing (the std default) is pure per-call
+/// overhead on the fib25 path (~243k lookups). Parity-neutral: the cache is
+/// invisible to outputs, notes, and fuel.
+#[derive(Default)]
+pub struct IdentityHash(u64);
+
+impl std::hash::Hasher for IdentityHash {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+    fn write(&mut self, bytes: &[u8]) {
+        for (i, b) in bytes.iter().enumerate() {
+            self.0 ^= (*b as u64) << ((i % 8) * 8);
+        }
+    }
+    fn write_u64(&mut self, n: u64) {
+        self.0 = n;
+    }
+    fn write_usize(&mut self, n: usize) {
+        self.0 = n as u64;
+    }
 }
 
 /// Bridged sub-AST arena plus the compiled bodies. Lives on the Interp
@@ -92,8 +135,12 @@ pub enum Instr {
 pub struct VmProgram {
     pub exprs: Vec<Expr>,
     pub stmts: Vec<Stmt>,
-    /// gene-definition pointer -> compiled body
-    pub codes: HashMap<usize, GeneCode>,
+    /// gene-definition pointer -> compiled body. Rc so a call hands the
+    /// body to the machine with a refcount bump, not a deep clone: fib25's
+    /// ~243k calls were cloning the whole code vec per call, which made the
+    /// machine SLOWER than the tree-walk (the bug the fib25 gate exists to
+    /// catch; measured 0.54x before, same outputs after).
+    pub codes: HashMap<usize, std::rc::Rc<GeneCode>, std::hash::BuildHasherDefault<IdentityHash>>,
 }
 
 impl<'a> Compiler<'a> {
@@ -101,7 +148,7 @@ impl<'a> Compiler<'a> {
     /// instruction's first operand, which patching preserves.
     fn stmt_idx_of(&self, site: usize) -> u32 {
         match self.code[site] {
-            Instr::BridgeStmtInLoop(idx, _, _) => idx,
+            Instr::BridgeStmtInLoop(idx, _, _, _) => idx,
             _ => 0,
         }
     }
@@ -123,17 +170,46 @@ fn intern_name(v: &mut Vec<String>, s: &str) -> u32 {
     (v.len() - 1) as u32
 }
 
+/// W11: the literal shapes that may ride inside a superinstruction. Scalars
+/// only, no operators: a Unary minus must keep its own runtime checked path,
+/// and anything with a sub-expression must stay a real instruction sequence.
+fn literal_const(e: &Expr) -> Option<Const> {
+    match e {
+        Expr::Null => Some(Const::Null),
+        Expr::Bool(b) => Some(Const::Bool(*b)),
+        Expr::Int(i) => Some(Const::Int(*i)),
+        Expr::Float(f) => Some(Const::Float(*f)),
+        Expr::Str(s) => Some(Const::Str(s.clone())),
+        _ => None,
+    }
+}
+
+/// Materialize a constant exactly the way the Push arm does (shared by the
+/// superinstructions so their operand values cannot drift from Push's).
+fn const_value(consts: &[Const], idx: u32) -> Value {
+    match consts.get(idx as usize) {
+        Some(Const::Null) | None => Value::Null,
+        Some(Const::Bool(b)) => Value::Bool(*b),
+        Some(Const::Int(i)) => Value::Int(*i),
+        Some(Const::Float(f)) => Value::Float(*f),
+        Some(Const::Str(s)) => Value::Str(s.clone()),
+    }
+}
+
 struct LoopFrame {
-    /// unresolved Brk sites (patched to the loop end)
+    /// unresolved Brk sites (patched to the loop end; each site already
+    /// carries its scope unwinds inline, emitted before the Brk)
     brks: Vec<usize>,
     /// unresolved Cont sites (patched to the loop top)
     conts: Vec<usize>,
-    /// bridged statements inside this loop (patched with top+end so their
-    /// internal break/continue flow lands on the right loop)
-    bridges: Vec<usize>,
-    /// reserved: the loop top ip, patched into bridge sites at loop end
-    #[allow(dead_code)]
-    top: usize,
+    /// bridged statements inside this loop: (site, scope unwinds) patched
+    /// with cont/brk targets at loop end so their internal break/continue
+    /// flow lands on the right loop with the right envs restored
+    bridges: Vec<(usize, usize)>,
+    /// the compiler scope_depth at the loop top: every Brk/Cont/bridge
+    /// flow unwinds (scope_depth - depth) scopes, the exact child envs the
+    /// tree-walk abandons when its exec_block frames return
+    depth: usize,
 }
 
 struct Compiler<'a> {
@@ -144,6 +220,10 @@ struct Compiler<'a> {
     code: Vec<Instr>,
     lines: Vec<u32>,
     loops: Vec<LoopFrame>,
+    /// scopes currently open (EnterScope minus ExitScope emitted): the
+    /// machine restores them with ExitScope; break/continue and bridged
+    /// loop flow must unwind exactly this many against the loop's depth
+    scope_depth: usize,
 }
 
 /// Statement source line for the line table (W07 stamps live on the Raise
@@ -166,6 +246,19 @@ impl<'a> Compiler<'a> {
             code: Vec::new(),
             lines: Vec::new(),
             loops: Vec::new(),
+            scope_depth: 0,
+        }
+    }
+
+    /// Emit the ExitScope instructions that undo every scope opened since
+    /// the innermost compiled loop's top (its per-iteration scope included):
+    /// the tree-walk abandons those child envs when the break's Flow
+    /// unwinds its exec_block frames; the machine restores `cur` the same
+    /// way, so a `let` inside a loop body can never leak across a break.
+    fn emit_scope_unwinds(&mut self) {
+        let depth = self.loops.last().map(|f| f.depth).unwrap_or(0);
+        for _ in depth..self.scope_depth {
+            self.emit(Instr::ExitScope, 0);
         }
     }
 
@@ -212,13 +305,54 @@ impl<'a> Compiler<'a> {
                     BinOp::And | BinOp::Or | BinOp::Nullish | BinOp::In => return false,
                     _ => {}
                 }
+                // W11 superinstruction: `name op literal` (3 instrs -> 1).
+                // The literal is ALWAYS the rhs: evaluation order (lhs read
+                // first) and non-commutative ops (Sub/Div/concat) rule out
+                // any operand reordering, so this is a pure fusion.
+                if let (Expr::Ident(name), Some(c)) = (&**l, literal_const(r)) {
+                    let nidx = intern_name(&mut self.names, name);
+                    let cidx = intern_const(&mut self.consts, c);
+                    self.emit(Instr::LoadBinImm(nidx, *op, cidx), *op_line as u32);
+                    return true;
+                }
                 if !self.expr(l, line) {
                     return false;
                 }
+                // W11 superinstruction: literal rhs (Push+Bin -> BinImm).
+                if let Some(c) = literal_const(r) {
+                    let cidx = intern_const(&mut self.consts, c);
+                    self.emit(Instr::BinImm(*op, cidx), *op_line as u32);
+                    return true;
+                }
+                let mark = self.code.len();
                 if !self.expr(r, line) {
                     return false;
                 }
+                // rhs compiled natively as exactly one Push -> fold it.
+                if self.code.len() == mark + 1 {
+                    if let Instr::Push(idx) = self.code[mark] {
+                        self.code.truncate(mark);
+                        self.lines.truncate(mark);
+                        self.emit(Instr::BinImm(*op, idx), *op_line as u32);
+                        return true;
+                    }
+                }
                 self.emit(Instr::Bin(*op), *op_line as u32);
+            }
+            Expr::Call(callee, args, call_line) => {
+                // W09 native calls: only the bare-identifier callee compiles
+                // to CallNamed; every other callee shape bridges whole (the
+                // machine evaluates the args natively either way, each arg
+                // pushing exactly one value, tree-walk order preserved).
+                let name = match &**callee {
+                    Expr::Ident(n) => n.clone(),
+                    _ => return false,
+                };
+                for a in args {
+                    self.expr_or_bridge(a, line);
+                }
+                let nidx = intern_name(&mut self.names, &name);
+                self.emit(Instr::CallNamed(nidx, args.len() as u32), *call_line as u32);
             }
             _ => return false,
         }
@@ -273,6 +407,12 @@ impl<'a> Compiler<'a> {
                 Vec::new()
             }
             Stmt::Return(Some(e)) => {
+                // W11 superinstruction: `return <name>` tail (2 instrs -> 1)
+                if let Expr::Ident(name) = e {
+                    let nidx = intern_name(&mut self.names, name);
+                    self.emit(Instr::RetName(nidx), line);
+                    return Vec::new();
+                }
                 self.expr_or_bridge(e, line);
                 self.emit(Instr::Ret, line);
                 Vec::new()
@@ -291,7 +431,9 @@ impl<'a> Compiler<'a> {
                     self.emit(Instr::BridgeStmt(idx), line);
                     return Vec::new();
                 }
+                self.emit_scope_unwinds();
                 let site = self.emit(Instr::Brk(0), line);
+                // ast-grep-ignore: no-unwrap-in-src
                 self.loops.last_mut().unwrap().brks.push(site);
                 Vec::new()
             }
@@ -302,35 +444,58 @@ impl<'a> Compiler<'a> {
                     self.emit(Instr::BridgeStmt(idx), line);
                     return Vec::new();
                 }
+                self.emit_scope_unwinds();
                 let site = self.emit(Instr::Cont(0), line);
+                // ast-grep-ignore: no-unwrap-in-src
                 self.loops.last_mut().unwrap().conts.push(site);
                 Vec::new()
             }
             Stmt::Block(body) => {
+                // the tree-walk's Block arm runs the body in a fresh child
+                // scope ("exactly like `for name`"); EnterScope/ExitScope
+                // mirror it, and the depth bookkeeping lets a break inside
+                // the block unwind it on the way out
                 self.emit(Instr::EnterScope, line);
+                self.scope_depth += 1;
                 let out = self.stmts(body);
                 self.emit(Instr::ExitScope, line);
+                self.scope_depth -= 1;
                 out
             }
             Stmt::If(branches, els) => {
-                // each branch: cond, JmpIfF(next), body, Jmp(end)
+                // each branch: cond, JmpIfF(next), EnterScope, body,
+                // ExitScope, Jmp(end). The tree-walk runs every branch body
+                // in a FRESH child env (exec_block with a new child) and
+                // stops at the first truthy branch; the machine mirrors
+                // both, so a `let` inside a branch cannot leak past it.
                 let mut end_jumps: Vec<usize> = Vec::new();
                 let mut out: Vec<usize> = Vec::new();
-                let last = branches.len();
+                let last = branches.len().saturating_sub(1);
                 for (i, (cond, body)) in branches.iter().enumerate() {
                     self.expr_or_bridge(cond, line);
                     let jif = self.emit(Instr::JmpIfF(0), line);
+                    self.emit(Instr::EnterScope, line);
+                    self.scope_depth += 1;
                     out.extend(self.stmts(body));
-                    let jmp = self.emit(Instr::Jmp(0), line);
-                    end_jumps.push(jmp);
+                    self.emit(Instr::ExitScope, line);
+                    self.scope_depth -= 1;
+                    // the LAST branch with no else falls into the end
+                    // directly: its Jmp would target exactly the next
+                    // instruction (a runtime no-op), so it is not emitted.
+                    if !(i == last && els.is_none()) {
+                        let jmp = self.emit(Instr::Jmp(0), line);
+                        end_jumps.push(jmp);
+                    }
                     let next = self.code.len() as u32;
                     self.code[jif] = Instr::JmpIfF(next);
-                    let _ = i;
                 }
                 if let Some(eb) = els {
+                    // else body: fresh child scope, exactly like a branch
+                    self.emit(Instr::EnterScope, line);
+                    self.scope_depth += 1;
                     out.extend(self.stmts(eb));
-                } else {
-                    let _ = last;
+                    self.emit(Instr::ExitScope, line);
+                    self.scope_depth -= 1;
                 }
                 let end = self.code.len() as u32;
                 for j in end_jumps {
@@ -344,14 +509,23 @@ impl<'a> Compiler<'a> {
                     brks: Vec::new(),
                     conts: Vec::new(),
                     bridges: Vec::new(),
-                    top,
+                    depth: self.scope_depth,
                 });
                 self.expr_or_bridge(cond, line);
                 let jif = self.emit(Instr::JmpIfF(0), line);
+                // per-iteration scope: the tree-walk builds a fresh child
+                // env for EVERY iteration and evaluates the cond OUTSIDE it
+                // (a `let` in the body is per-iteration; the machine must
+                // not let it leak into the next iteration or past the loop)
+                self.emit(Instr::EnterScope, line);
+                self.scope_depth += 1;
                 let _out = self.stmts(body);
+                self.emit(Instr::ExitScope, line);
+                self.scope_depth -= 1;
                 self.emit(Instr::Jmp(top as u32), line);
                 let end = self.code.len() as u32;
                 self.code[jif] = Instr::JmpIfF(end);
+                // ast-grep-ignore: no-unwrap-in-src
                 let frame = self.loops.pop().unwrap();
                 for b in frame.brks {
                     self.code[b] = Instr::Brk(end);
@@ -359,9 +533,13 @@ impl<'a> Compiler<'a> {
                 for c in frame.conts {
                     self.code[c] = Instr::Cont(top as u32);
                 }
-                for bidx in frame.bridges {
-                    self.code[bidx] =
-                        Instr::BridgeStmtInLoop(self.stmt_idx_of(bidx), top as u32, end);
+                for (bidx, unwinds) in frame.bridges {
+                    self.code[bidx] = Instr::BridgeStmtInLoop(
+                        self.stmt_idx_of(bidx),
+                        top as u32,
+                        end,
+                        unwinds as u32,
+                    );
                 }
                 // break/continue sites were recorded on THIS loop's frame
                 // and patched above; nothing propagates to an outer loop
@@ -373,11 +551,18 @@ impl<'a> Compiler<'a> {
                     brks: Vec::new(),
                     conts: Vec::new(),
                     bridges: Vec::new(),
-                    top,
+                    depth: self.scope_depth,
                 });
+                // per-iteration scope: the tree-walk builds a fresh child
+                // env for every iteration of a bare loop, exactly like while
+                self.emit(Instr::EnterScope, line);
+                self.scope_depth += 1;
                 let _out = self.stmts(body);
+                self.emit(Instr::ExitScope, line);
+                self.scope_depth -= 1;
                 self.emit(Instr::Jmp(top as u32), line);
                 let end = self.code.len() as u32;
+                // ast-grep-ignore: no-unwrap-in-src
                 let frame = self.loops.pop().unwrap();
                 for b in frame.brks {
                     self.code[b] = Instr::Brk(end);
@@ -385,9 +570,13 @@ impl<'a> Compiler<'a> {
                 for c in frame.conts {
                     self.code[c] = Instr::Cont(top as u32);
                 }
-                for bidx in frame.bridges {
-                    self.code[bidx] =
-                        Instr::BridgeStmtInLoop(self.stmt_idx_of(bidx), top as u32, end);
+                for (bidx, unwinds) in frame.bridges {
+                    self.code[bidx] = Instr::BridgeStmtInLoop(
+                        self.stmt_idx_of(bidx),
+                        top as u32,
+                        end,
+                        unwinds as u32,
+                    );
                 }
                 Vec::new()
             }
@@ -398,9 +587,15 @@ impl<'a> Compiler<'a> {
                     self.emit(Instr::BridgeStmt(idx), line);
                 } else {
                     // the bridged statement may return/branch; its flow
-                    // needs this loop's top/end, patched at loop end
-                    let site = self.emit(Instr::BridgeStmtInLoop(idx, 0, 0), line);
-                    self.loops.last_mut().unwrap().bridges.push(site);
+                    // needs this loop's cont/brk targets (patched at loop
+                    // end) plus the count of scopes opened since the loop
+                    // top, so a bridged break/continue restores the envs
+                    // the tree-walk abandons on its way out
+                    // ast-grep-ignore: no-unwrap-in-src
+                    let unwinds = self.scope_depth - self.loops.last().unwrap().depth;
+                    let site = self.emit(Instr::BridgeStmtInLoop(idx, 0, 0, unwinds as u32), line);
+                    // ast-grep-ignore: no-unwrap-in-src
+                    self.loops.last_mut().unwrap().bridges.push((site, unwinds));
                 }
                 Vec::new()
             }
@@ -454,8 +649,9 @@ pub fn exec_gene_body(
     body: &[Stmt],
     env: &Rc<Env>,
 ) -> Result<Flow, Stress> {
-    let code = {
+    let code: std::rc::Rc<GeneCode> = {
         let opt = interp.vm_opt;
+        // ast-grep-ignore: no-unwrap-in-src
         let prog = interp.vm_program.as_mut().unwrap();
         let key = if opt >= 1 {
             // cache the optimized form under a shifted key
@@ -463,17 +659,19 @@ pub fn exec_gene_body(
         } else {
             def_key
         };
-        if let Some(cached) = prog.codes.get(&key) {
-            cached.clone()
-        } else {
-            let compiled = compile_body(name, body, prog);
-            let compiled = if opt >= 1 {
-                optimize(&compiled)
-            } else {
-                compiled
-            };
-            prog.codes.insert(key, compiled.clone());
-            compiled
+        match prog.codes.get(&key) {
+            Some(cached) => cached.clone(),
+            None => {
+                let compiled = compile_body(name, body, prog);
+                let compiled = if opt >= 1 {
+                    optimize(&compiled)
+                } else {
+                    compiled
+                };
+                let rc = std::rc::Rc::new(compiled);
+                prog.codes.insert(key, rc.clone());
+                rc
+            }
         }
     };
     exec_gene_code(interp, &code, env)
@@ -481,13 +679,36 @@ pub fn exec_gene_body(
 
 /// Execute a compiled gene body against the shared interpreter.
 fn exec_gene_code(interp: &mut Interp, code: &GeneCode, env: &Rc<Env>) -> Result<Flow, Stress> {
-    let mut stack: Vec<Value> = Vec::new();
+    // the operand stack comes from the per-interpreter pool: fib25 taught
+    // this lesson (243k fresh Vecs per run), the pool hands each frame a
+    // warm stack and takes it back on every exit path
+    let mut stack: Vec<Value> = match interp.vm_stack_pool.pop() {
+        Some(s) => s,
+        None => Vec::with_capacity(16),
+    };
+    stack.clear();
+    let out = exec_gene_code_inner(interp, code, env, &mut stack);
+    if stack.capacity() <= 64 {
+        interp.vm_stack_pool.push(stack);
+    }
+    out
+}
+
+fn exec_gene_code_inner(
+    interp: &mut Interp,
+    code: &GeneCode,
+    env: &Rc<Env>,
+    stack: &mut Vec<Value>,
+) -> Result<Flow, Stress> {
     let mut scopes: Vec<Rc<Env>> = Vec::new();
     let mut cur = env.clone();
     let mut ip: usize = 0;
     loop {
+        // dispatch borrows the instruction (no per-instruction clone; the
+        // machine must beat the tree-walk it replaced, the fib25 gate
+        // measures exactly this)
         let instr = match code.code.get(ip) {
-            Some(i) => i.clone(),
+            Some(i) => i,
             None => return Ok(Flow::Norm), // fell off the end
         };
         let line = code.lines[ip];
@@ -498,17 +719,11 @@ fn exec_gene_code(interp: &mut Interp, code: &GeneCode, env: &Rc<Env>) -> Result
         interp.tick()?;
         match instr {
             Instr::Push(idx) => {
-                let v = match code.consts.get(idx as usize) {
-                    Some(Const::Null) | None => Value::Null,
-                    Some(Const::Bool(b)) => Value::Bool(*b),
-                    Some(Const::Int(i)) => Value::Int(*i),
-                    Some(Const::Float(f)) => Value::Float(*f),
-                    Some(Const::Str(s)) => Value::Str(s.clone()),
-                };
+                let v = const_value(&code.consts, *idx);
                 stack.push(v);
             }
             Instr::LoadName(idx) => {
-                let name = &code.names[idx as usize];
+                let name = &code.names[*idx as usize];
                 match cur.get(name) {
                     Some(v) => {
                         crate::interp::charge_clone(&v)?;
@@ -521,11 +736,11 @@ fn exec_gene_code(interp: &mut Interp, code: &GeneCode, env: &Rc<Env>) -> Result
                 }
             }
             Instr::LoadNameQuiet(idx) => {
-                let name = &code.names[idx as usize];
+                let name = &code.names[*idx as usize];
                 stack.push(cur.get(name).unwrap_or(Value::Null));
             }
             Instr::StoreName(idx) => {
-                let name = code.names[idx as usize].clone();
+                let name = code.names[*idx as usize].clone();
                 let v = stack.pop().unwrap_or(Value::Null);
                 if cur.get(&name).is_some() {
                     interp.note(0, 4, format!("rebinding '{}'", name));
@@ -533,7 +748,7 @@ fn exec_gene_code(interp: &mut Interp, code: &GeneCode, env: &Rc<Env>) -> Result
                 cur.define(&name, v);
             }
             Instr::AssignName(idx) => {
-                let name = code.names[idx as usize].clone();
+                let name = code.names[*idx as usize].clone();
                 let v = stack.pop().unwrap_or(Value::Null);
                 if cur.is_const(&name) {
                     return Err(Stress::new(
@@ -548,23 +763,52 @@ fn exec_gene_code(interp: &mut Interp, code: &GeneCode, env: &Rc<Env>) -> Result
             Instr::Bin(op) => {
                 let r = stack.pop().unwrap_or(Value::Null);
                 let l = stack.pop().unwrap_or(Value::Null);
-                let v = interp.apply_binop(&cur, op, &l, &r)?;
+                let v = interp.apply_binop(&cur, *op, &l, &r)?;
+                stack.push(v);
+            }
+            Instr::BinImm(op, cidx) => {
+                // W11: identical to Bin with the rhs taken from the constant
+                // pool (the folded Push); same apply_binop, same order
+                // (lhs was evaluated first, by construction of the code).
+                let r = const_value(&code.consts, *cidx);
+                let l = stack.pop().unwrap_or(Value::Null);
+                let v = interp.apply_binop(&cur, *op, &l, &r)?;
+                stack.push(v);
+            }
+            Instr::LoadBinImm(nidx, op, cidx) => {
+                // W11: the EXACT LoadName read (clone-charge + unbound
+                // note) composed with the EXACT Bin arm. Nothing else may
+                // differ: the unbound note text and the charge are output
+                // and fuel contract respectively.
+                let name = &code.names[*nidx as usize];
+                let l = match cur.get(name) {
+                    Some(v) => {
+                        crate::interp::charge_clone(&v)?;
+                        v
+                    }
+                    None => {
+                        interp.note(0, 4, format!("unbound '{}' read as null", name));
+                        Value::Null
+                    }
+                };
+                let r = const_value(&code.consts, *cidx);
+                let v = interp.apply_binop(&cur, *op, &l, &r)?;
                 stack.push(v);
             }
             Instr::JmpIfF(t) => {
                 let v = stack.pop().unwrap_or(Value::Null);
                 if !v.truthy() {
-                    ip = t as usize;
+                    ip = *t as usize;
                 }
             }
-            Instr::Jmp(t) => ip = t as usize,
+            Instr::Jmp(t) => ip = *t as usize,
             Instr::EvalExpr(idx) => {
                 // clone the bridged node out of the arena (cheap: Arc'd
                 // children) so the mutable interpreter borrow is free
                 let e = interp
                     .vm_program
                     .as_ref()
-                    .and_then(|p| p.exprs.get(idx as usize))
+                    .and_then(|p| p.exprs.get(*idx as usize))
                     .cloned();
                 match e {
                     Some(e) => {
@@ -578,7 +822,7 @@ fn exec_gene_code(interp: &mut Interp, code: &GeneCode, env: &Rc<Env>) -> Result
                 let s = interp
                     .vm_program
                     .as_ref()
-                    .and_then(|p| p.stmts.get(idx as usize))
+                    .and_then(|p| p.stmts.get(*idx as usize))
                     .cloned();
                 if let Some(s) = s {
                     // the bridged statement's flow propagates exactly the
@@ -591,11 +835,11 @@ fn exec_gene_code(interp: &mut Interp, code: &GeneCode, env: &Rc<Env>) -> Result
                     }
                 }
             }
-            Instr::BridgeStmtInLoop(idx, top, end) => {
+            Instr::BridgeStmtInLoop(idx, cont_t, brk_t, unwinds) => {
                 let s = interp
                     .vm_program
                     .as_ref()
-                    .and_then(|p| p.stmts.get(idx as usize))
+                    .and_then(|p| p.stmts.get(*idx as usize))
                     .cloned();
                 if let Some(s) = s {
                     match interp.exec_stmt(&cur, &s)? {
@@ -604,9 +848,26 @@ fn exec_gene_code(interp: &mut Interp, code: &GeneCode, env: &Rc<Env>) -> Result
                         // gene's return (the tree-walk contract)
                         Flow::Ret(v) => return Ok(Flow::Ret(v)),
                         // a break/continue inside a bridged statement
-                        // belongs to THIS compiled loop (compile-time fact)
-                        Flow::Brk => ip = end as usize,
-                        Flow::Cont => ip = top as usize,
+                        // belongs to THIS compiled loop (compile-time fact);
+                        // the scopes opened since the loop top are unwound
+                        // first, the envs the tree-walk abandons when its
+                        // exec_block frames return
+                        Flow::Brk => {
+                            for _ in 0..*unwinds {
+                                if let Some(p) = scopes.pop() {
+                                    cur = p;
+                                }
+                            }
+                            ip = *brk_t as usize;
+                        }
+                        Flow::Cont => {
+                            for _ in 0..*unwinds {
+                                if let Some(p) = scopes.pop() {
+                                    cur = p;
+                                }
+                            }
+                            ip = *cont_t as usize;
+                        }
                     }
                 }
             }
@@ -617,8 +878,23 @@ fn exec_gene_code(interp: &mut Interp, code: &GeneCode, env: &Rc<Env>) -> Result
                 let v = stack.pop().unwrap_or(Value::Null);
                 return Ok(Flow::Ret(v));
             }
-            Instr::Brk(t) => ip = t as usize,
-            Instr::Cont(t) => ip = t as usize,
+            Instr::RetName(nidx) => {
+                // W11: the EXACT LoadName read composed with Ret.
+                let name = &code.names[*nidx as usize];
+                let v = match cur.get(name) {
+                    Some(v) => {
+                        crate::interp::charge_clone(&v)?;
+                        v
+                    }
+                    None => {
+                        interp.note(0, 4, format!("unbound '{}' read as null", name));
+                        Value::Null
+                    }
+                };
+                return Ok(Flow::Ret(v));
+            }
+            Instr::Brk(t) => ip = *t as usize,
+            Instr::Cont(t) => ip = *t as usize,
             Instr::EnterScope => {
                 scopes.push(cur.clone());
                 cur = Env::new(Some(cur.clone()));
@@ -627,6 +903,19 @@ fn exec_gene_code(interp: &mut Interp, code: &GeneCode, env: &Rc<Env>) -> Result
                 if let Some(p) = scopes.pop() {
                     cur = p;
                 }
+            }
+            Instr::CallNamed(name_idx, argc) => {
+                // W09 native calls: pop the args in reverse, then ride the
+                // SHARED named-call tail (RISC gate + call_named funnel).
+                // The call line was stamped by the dispatch (call_line).
+                // The name is borrowed, not cloned: fib25 measures 242k
+                // calls and the clone was a malloc per call.
+                let name = code.names[*name_idx as usize].as_str();
+                let n = *argc as usize;
+                let base = stack.len() - n;
+                let argvs: Vec<Value> = stack.drain(base..).collect();
+                let v = interp.named_call_tail_vm(&cur, name, argvs)?;
+                stack.push(v);
             }
         }
     }
@@ -667,6 +956,8 @@ fn mnemonic(i: &Instr) -> &'static str {
         Instr::StoreName(_) => "StoreName",
         Instr::AssignName(_) => "AssignName",
         Instr::Bin(_) => "Bin",
+        Instr::BinImm(..) => "BinImm",
+        Instr::LoadBinImm(..) => "LoadBinImm",
         Instr::JmpIfF(_) => "JmpIfF",
         Instr::Jmp(_) => "Jmp",
         Instr::EvalExpr(_) => "EvalExpr",
@@ -674,10 +965,12 @@ fn mnemonic(i: &Instr) -> &'static str {
         Instr::BridgeStmtInLoop(..) => "BridgeStmtInLoop",
         Instr::Pop => "Pop",
         Instr::Ret => "Ret",
+        Instr::RetName(_) => "RetName",
         Instr::Brk(_) => "Brk",
         Instr::Cont(_) => "Cont",
         Instr::EnterScope => "EnterScope",
         Instr::ExitScope => "ExitScope",
+        Instr::CallNamed(_, _) => "CallNamed",
     }
 }
 
@@ -692,23 +985,50 @@ fn render(i: &Instr, code: &GeneCode) -> String {
         Instr::LoadName(idx)
         | Instr::LoadNameQuiet(idx)
         | Instr::StoreName(idx)
-        | Instr::AssignName(idx) => code
+        | Instr::AssignName(idx)
+        | Instr::RetName(idx) => code
             .names
             .get(*idx as usize)
             .cloned()
             .unwrap_or_else(|| format!("c{}", idx)),
         Instr::Bin(op) => format!("{:?}", op),
+        Instr::BinImm(op, idx) => format!("{:?} {}", op, render_const(code, *idx)),
+        Instr::LoadBinImm(nidx, op, idx) => format!(
+            "'{}' {:?} {}",
+            code.names.get(*nidx as usize).cloned().unwrap_or_default(),
+            op,
+            render_const(code, *idx)
+        ),
         Instr::JmpIfF(t) | Instr::Jmp(t) | Instr::Brk(t) | Instr::Cont(t) => format!("-> {}", t),
         Instr::EvalExpr(idx) => format!("expr#{}", idx),
         Instr::BridgeStmt(idx) => format!("stmt#{}", idx),
-        Instr::BridgeStmtInLoop(idx, top, end) => {
-            format!("stmt#{} top {} end {}", idx, top, end)
+        Instr::BridgeStmtInLoop(idx, cont_t, brk_t, unwinds) => {
+            format!(
+                "stmt#{} cont {} brk {} unwinds {}",
+                idx, cont_t, brk_t, unwinds
+            )
+        }
+        Instr::CallNamed(idx, argc) => {
+            format!(
+                "'{}' argc {}",
+                code.names.get(*idx as usize).cloned().unwrap_or_default(),
+                argc
+            )
         }
         _ => String::new(),
     }
 }
 
-/// W11 stage 1: the optimization pipeline. Two draw-free, provably
+fn render_const(code: &GeneCode, idx: u32) -> String {
+    match code.consts.get(idx as usize) {
+        Some(Const::Str(s)) => format!("c{} {:?}", idx, s),
+        Some(Const::Int(v)) => format!("c{} {}", idx, v),
+        Some(other) => format!("c{} {:?}", idx, other),
+        None => format!("c{} <missing>", idx),
+    }
+}
+
+/// W11 stage 1+2: the optimization pipeline. Draw-free, provably
 /// behavior-preserving passes over the OIR1:
 ///   1. constant folding: Push a, Push b, Bin -> Push (folded). Only pure
 ///      Int/Float arithmetic folds, and only when the operation cannot
@@ -716,6 +1036,9 @@ fn render(i: &Instr, code: &GeneCode) -> String {
 ///      stays runtime (the stress kind+message are the contract).
 ///   2. jump threading: a Jmp whose target is another Jmp follows the
 ///      chain; an unconditional Jmp to the NEXT instruction disappears.
+///   3. reachability DCE: instructions that cannot be reached from ip 0
+///      (dead code after a Ret, abandoned jump islands) are dropped. They
+///      never execute, so no tick, note, draw or output can change.
 ///      Folding never touches a draw or a call: those are Bridge/EvalExpr
 ///      instructions, and the folder must not reorder or remove draws
 ///      (the entropy discipline, vm-design.md invariant 2).
@@ -723,7 +1046,9 @@ pub fn optimize(code: &GeneCode) -> GeneCode {
     let mut consts = code.consts.clone();
     let mut code = code.clone();
 
-    // pass 1: constant folding (fixpoint, bounded)
+    // pass 1: constant folding (fixpoint, bounded). Both Bin shapes fold:
+    // the Push/Push/Bin triple and the W11 fused Push/BinImm pair (the
+    // folded form of a literal rhs).
     for _round in 0..8 {
         let mut folded = false;
         let mut i = 0;
@@ -740,6 +1065,20 @@ pub fn optimize(code: &GeneCode) -> GeneCode {
                     remap_after_removal(&mut code, i + 1, 2);
                     folded = true;
                     continue; // try to fold the result into its neighbor
+                }
+            }
+            i += 1;
+        }
+        let mut i = 0;
+        while i + 1 < code.code.len() {
+            if let (Instr::Push(a), Instr::BinImm(op, b)) = (&code.code[i], &code.code[i + 1]) {
+                if let Some(newc) = fold_consts(&mut consts, *a, *b, *op) {
+                    code.code[i] = Instr::Push(newc);
+                    code.code.remove(i + 1);
+                    code.lines.remove(i + 1);
+                    remap_after_removal(&mut code, i + 1, 1);
+                    folded = true;
+                    continue;
                 }
             }
             i += 1;
@@ -786,6 +1125,60 @@ pub fn optimize(code: &GeneCode) -> GeneCode {
         }
         if !changed {
             break;
+        }
+    }
+
+    // pass 3: reachability DCE. Mark from ip 0 following fallthrough and
+    // every jump target; keep the marked instructions in order and remap
+    // every target through the old->new table. A target may legally be
+    // code.len() ("fall off the end"), so the table has n+1 slots.
+    {
+        let n = code.code.len();
+        let mut mask = vec![false; n];
+        let mut work = vec![0usize];
+        while let Some(ip) = work.pop() {
+            if ip >= n || mask[ip] {
+                continue;
+            }
+            mask[ip] = true;
+            match &code.code[ip] {
+                Instr::Jmp(t) | Instr::Brk(t) | Instr::Cont(t) => work.push(*t as usize),
+                Instr::JmpIfF(t) => {
+                    work.push(*t as usize);
+                    work.push(ip + 1);
+                }
+                Instr::Ret | Instr::RetName(_) => {}
+                _ => work.push(ip + 1),
+            }
+        }
+        if mask.iter().any(|m| !*m) {
+            let mut map = vec![0u32; n + 1];
+            let mut next = 0u32;
+            for i in 0..n {
+                if mask[i] {
+                    map[i] = next;
+                    next += 1;
+                }
+            }
+            map[n] = next; // the fall-off-the-end target
+            let mut new_code = Vec::with_capacity(next as usize);
+            let mut new_lines = Vec::with_capacity(next as usize);
+            for (i, keep) in mask.iter().enumerate() {
+                if !keep {
+                    continue;
+                }
+                let mut instr = code.code[i].clone();
+                match &mut instr {
+                    Instr::Jmp(t) | Instr::JmpIfF(t) | Instr::Brk(t) | Instr::Cont(t) => {
+                        *t = map[*t as usize];
+                    }
+                    _ => {}
+                }
+                new_code.push(instr);
+                new_lines.push(code.lines[i]);
+            }
+            code.code = new_code;
+            code.lines = new_lines;
         }
     }
 
@@ -936,16 +1329,153 @@ mod tests {
             })
             .collect();
         let expected = vec![
-            "LoadName n",
-            "Push c0 1",
-            "Bin Add",
+            // W11: `n + 1` and `x * 2` are the measured LoadName+Push+Bin
+            // triples, fused to LoadBinImm (the read arm inside is byte-exact
+            // LoadName: clone-charge + unbound note).
+            "LoadBinImm 'n' Add c0 1",
             "StoreName x",
-            "LoadName x",
-            "Push c1 2",
-            "Bin Mul",
+            "LoadBinImm 'x' Mul c1 2",
             "Ret",
         ];
         assert_eq!(rendered, expected, "OIR1 encoding drifted");
         let _ = OIR_VERSION;
+    }
+
+    /// W11 stage 2: the fib25 gate's measured hot shapes fuse to
+    /// superinstructions, one tick each, same apply_binop, same read arm.
+    #[test]
+    fn fuses_the_fib25_hot_shapes() {
+        let src = "gene f(n) {\n    if n < 2 { return n }\n    return n * 2 + 1\n}\n";
+        let parsed = crate::parser::parse(src);
+        let mut body: Vec<Stmt> = Vec::new();
+        for s in &parsed.stmts {
+            if let Stmt::Gene(g) = s {
+                body = g.body.clone();
+            }
+        }
+        let mut prog = VmProgram::default();
+        let code = compile_body("f", &body, &mut prog);
+        let rendered: Vec<String> = code
+            .code
+            .iter()
+            .map(|i| {
+                let r = render(i, &code);
+                if r.is_empty() {
+                    mnemonic(i).to_string()
+                } else {
+                    format!("{} {}", mnemonic(i), r)
+                }
+            })
+            .collect();
+        let expected = vec![
+            // W11: `n < 2` fuses to LoadBinImm; the branch body runs in its
+            // own scope (the tree-walk's fresh child env) and the last
+            // branch with no else falls into the end (no trailing Jmp);
+            // `return n` fuses to RetName; `n * 2` fuses and `+ 1` rides
+            // BinImm.
+            "LoadBinImm 'n' Lt c0 2",
+            "JmpIfF -> 5",
+            "EnterScope",
+            "RetName n",
+            "ExitScope",
+            "LoadBinImm 'n' Mul c0 2",
+            "BinImm Add c1 1",
+            "Ret",
+        ];
+        assert_eq!(rendered, expected, "superinstruction fusion drifted");
+    }
+
+    /// W11 stage 2: reachability DCE drops only code after an unconditional
+    /// exit; the jump targets survive remapped and in range.
+    #[test]
+    fn dce_drops_only_unreachable_code() {
+        let src = "gene f() {\n    return 1\n    print(\"dead\")\n}\n";
+        let parsed = crate::parser::parse(src);
+        let mut body: Vec<Stmt> = Vec::new();
+        for s in &parsed.stmts {
+            if let Stmt::Gene(g) = s {
+                body = g.body.clone();
+            }
+        }
+        let mut prog = VmProgram::default();
+        let raw = compile_body("f", &body, &mut prog);
+        // the raw body carries the dead call (CallNamed print + Pop)
+        assert!(
+            render(&raw.code[3], &raw).starts_with("'print'"),
+            "fixture stale"
+        );
+        let opt = optimize(&raw);
+        let names: Vec<String> = opt.code.iter().map(|i| mnemonic(i).to_string()).collect();
+        assert_eq!(
+            names,
+            vec!["Push", "Ret"],
+            "DCE must keep the live prefix and drop the dead tail"
+        );
+        // every surviving target stays in range (no dangling remap)
+        for i in &opt.code {
+            if let Instr::Jmp(t) | Instr::JmpIfF(t) | Instr::Brk(t) | Instr::Cont(t) = i {
+                assert!((*t as usize) <= opt.code.len(), "DCE remap out of range");
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod stability_tests {
+    use super::*;
+    use crate::parser::parse;
+
+    /// W10 done-when: the annotated dump is STABLE across runs. The same
+    /// source compiles to the same listing, every time, opt on or off, and
+    /// the listing carries every opcode mnemonic the machine knows (the
+    /// SPEC 8 VM table and this test move together).
+    #[test]
+    fn dump_is_deterministic_and_complete() {
+        let src = "\
+gene f(n) {
+    let x = n + 1
+    return x * 2
+}
+gene g(xs) {
+    let acc = 0
+    for v in xs {
+        acc = acc + v
+    }
+    if acc > 10 {
+        return acc
+    }
+    return f(acc)
+}
+gene main() {
+    print(g([1, 2, 3]))
+}
+";
+        let d1 = disassemble_program(&parse(src));
+        let d2 = disassemble_program(&parse(src));
+        assert_eq!(d1, d2, "same source, same listing, always");
+        // every opcode the machine executes appears in the listing of this
+        // deliberately mixed program (bridges included: gene values in args;
+        // W11 superinstructions included: `acc > 10` and `return acc` fuse)
+        for m in [
+            "Push",
+            "LoadName",
+            "StoreName",
+            "Bin",
+            "LoadBinImm",
+            "RetName",
+            "JmpIfF",
+            "CallNamed",
+            "Ret",
+            "Pop",
+        ] {
+            assert!(d1.contains(m), "listing missing {m}:\n{d1}");
+        }
+        // an unknown mnemonic would mean the SPEC VM table drifted
+        for line in d1.lines() {
+            if line.contains('|') {
+                let m = line.split('|').nth(1).unwrap_or("").trim();
+                assert!(!m.is_empty(), "bare listing line: {line}");
+            }
+        }
     }
 }

@@ -22,23 +22,23 @@ The mandate: *"Rust, then C, then Python, then Operon, then C++, then HTML, then
 - Python as bootstrap (not implementation) is the right reduction from v1's 100%-Python mistake.
 - One point withheld: **Operon below Python is a snapshot, not a destiny.** Mainstream languages converge on self-hosting (Rust in Rust, Go in Go, TypeScript in TypeScript). Operon's share must grow release over release, the stdlib is already pure `.op`.
 
-### Measured composition (v2.2.0, `bash scripts/stack_report.sh`)
+### Measured composition (main @ a976b91, `bash scripts/stack_report.sh`)
 
 | rank | language | lines | share | role |
 |---|---|---|---|---|
-| 1 | **Rust** | 15,937 | ~46% | lexer, Total Grammar parser, evaluator, capability sandbox, symbol table, HTTP/JSON, toolchain CLI, REPL, `operon-ls` LSP seed (`src/`) |
-| 2 | **Operon** | 17,248 | ~35% | **self-hosted stdlib (16 modules incl. `std/motifs`, `std/set`, `std/testing`, `std/random`, `std/serialize`), proof tests, red-team suite, differential corpus, GenomeLab** (`std/ tests/ examples/ apps/`) |
-| 3 | **Python** | 5,129 | ~15% | bootstrap: reference oracle + differential harness (`bootstrap/`), test infrastructure only, nothing shipped depends on it |
-| 4 | **JavaScript** | 1,834 | ~5% | browser playground subset interpreter (`web/playground/app.js`) |
-| 5 | **HTML** | 1,263 | ~4% | documentation site (`docs/`) |
-| 6 | **CSS** | 293 | ~1% | docs + playground styling |
-| 7 | **Shell** | 311 | ~1% | build/test/bench/stack/install scripts (`scripts/`) |
-| 8 | **C++** | 134 | <1% | algorithm kernel: bit-parallel edit distance, codon-usage scoring (`runtime/codon_kernel.cpp` + its smoke driver) |
-| 9 | **TypeScript** | 18 | <1% | playground type surface (`app.d.ts`) |
+| 1 | **Rust** | 31,194 | ~45% | lexer, Total Grammar parser, evaluator, capability sandbox, symbol table, HTTP/JSON, toolchain CLI, REPL, `operon-ls` LSP seed (`src/`) |
+| 2 | **Operon** | 25,367 | ~37% | **self-hosted stdlib (30 modules, generated inventory in [docs/STATS.md](docs/STATS.md)), proof tests, red-team suite, differential corpus, GenomeLab** (`std/ tests/ examples/ apps/`) |
+| 3 | **Python** | 7,642 | ~11% | bootstrap: reference oracle + differential harness (`bootstrap/`), test infrastructure only, nothing shipped depends on it |
+| 4 | **JavaScript** | 2,022 | ~3% | browser playground subset interpreter (`web/playground/app.js`) |
+| 5 | **HTML** | 1,346 | ~2% | documentation site (`docs/`) |
+| 6 | **Shell** | 954 | ~1% | build/test/bench/stack/install scripts (`scripts/`) |
+| 7 | **CSS** | 311 | <1% | docs + playground styling |
+| 8 | **C++** | 148 | <1% | algorithm kernel: bit-parallel edit distance, codon-usage scoring (`runtime/codon_kernel.cpp` + its smoke driver) |
+| 9 | **TypeScript** | 23 | <1% | playground type surface (`app.d.ts`) |
 
 **Honest deviations from the requested order, and why:**
 
-1. **Python (2) > C++ (8).** The oracle is not "too much Python", it is the differential engine that proves the Rust core correct (128/128 program-level output matches). Deleting it would save lines and lose verification.
+1. **Python (rank 3) > C++ (rank 8).** The oracle is not "too much Python", it is the differential engine that proves the Rust core correct (differential harness, generated counts in [docs/STATS.md](docs/STATS.md)). Deleting it would save lines and lose verification.
 2. **The C kernel was deleted on purpose (sec-r2, audit A15).** The audit proved it was write-only (the lexer discarded every intern result) and that its raw-pointer arena was the project's one ASan-confirmed memory-safety class. Interning now lives in Rust (`src/ffi.rs`): same stable-id semantics, `memory()` still reports table stats, and the entire UAF class is structurally impossible. The C++ codon kernel STAYED because it earned its place: bit-parallel Myers is genuinely hot (`distance()`, `similar()`, wobble repair, parser suggestions), allocation-free, and budget-guarded.
 3. **Operon (2) has overtaken everything except Rust.** Between v2.1.0 and v2.2.0 the `.op` share grew from ~7% to ~27% (proof suite, red-team containment, differential corpus, stdlib). `std/` runs on the Rust core today; every release self-hosts more. That is exactly how Rust/Go/TS historically converged.
 
@@ -126,7 +126,22 @@ promote("x = {x * 2}")  # x = 42
 $ operon run bad.op
 [fallback] unbound 'undefined_thing' read as null
 $ operon check bad.op
-operon check: bad.op, score 94/100 (grade A)
+repair:
+  bad.op: 1 note(s), 1 wobble(s), 0 fallback(s); run `operon explain bad.op` for the play-by-play
+summary: 0 error(s), 0 warning(s), 0 style, 1 repair note(s)
+```
+
+Deprecating a gene (W064): mark it once, callers get a check warning with your
+migration text, the runtime never changes:
+
+```operon
+@deprecated("use twice() instead", since="2.4")
+gene old_double(n) { return n * 2 }
+```
+
+```console
+$ operon check app.op
+warning  app.op: 7: call to deprecated gene 'old_double' (since 2.4), use twice() instead, silence with '// allow: deprecated-use'
 ```
 
 ## The gene-expression regulation layer
@@ -184,7 +199,7 @@ operon profile f.op                               # per-gene calls, exclusive se
 operon crispr f.op  (--knockout gene | --matrix) [--json]
 operon bench f.op   [--iters n]
 operon-ls                                         # stdio LSP: diagnostics, hover, definition, symbols, completion, formatting (SPEC §15)
-operon version                                    # Operon 2.2.0 (rust-core, cpp-kernel), banner matches SPEC 2.2.0
+operon version                                    # Operon 2.6.0-vm (rust-core, cpp-kernel), banner matches SPEC 2.6.0; -vm = the bytecode machine is the run default (W09 A6)
 ```
 
 ## Connect your editor (operon-ls)
@@ -238,7 +253,9 @@ Every channel below carries an honest validation mark (the full ledger lives in 
 | GitHub release (linux x64+arm64, macos x64+arm64, windows) | download `operon-<v>-<target>.tar.gz` / `.zip` + verify the companion `.sha256` | **validated**, per-artifact release smoke in CI |
 | install script | `curl -fsSL https://raw.githubusercontent.com/WasewaseX/operon-lang-dev/main/scripts/install.sh \| sh` | community (runs on your machine) |
 | from source | `./scripts/build.sh` or `cargo install --path .` | **validated**, the CI cargo gate builds this exact path |
-| cargo-binstall / Homebrew / winget | metadata + drafts | staged, land with the B5 stack merge (docs/PACKAGING.md) |
+| cargo-binstall / winget | metadata + drafts | staged, land with the B5 stack merge (docs/PACKAGING.md) |
+| Homebrew formula | `packaging/homebrew/operon.rb` | community draft, builds the version tarball from source |
+| source release archive | `scripts/release.sh` → `dist/operon-<v>.tar.gz` + `SHA256SUMS` (+ `--verify`) | validated locally, CI wiring pending |
 | Scoop (Windows) | `packaging/scoop/operon.json` | community draft |
 | AUR (release / git) | `packaging/aur/PKGBUILD` · `packaging/aur/PKGBUILD.git` | community drafts |
 | Nix | `packaging/nix/default.nix` | community draft |
@@ -270,7 +287,7 @@ Requires: rustc (≥1.70), gcc, g++ (builds the C++ codon kernel). Zero runtime 
 - **Traits**: `trait Show { gene display() }` + `phenotype User implements Show` (W04/SPEC §8b), required methods (contract-checked at construction, notes never fatal) and default methods with virtual dispatch; composes with `from` inheritance.
 - **Errors**: a four-tier hierarchy (SPEC §9), null+note (soft miss) → **Option/Result values** (`some/none/ok/err`, `?!` propagation, `unwrap_or` defaults) → catchable `Stress{kind, message}`, `unfolded | missing | overflow | burned | interference | unwrap | frozen`, plus Total-Grammar runtime notes. Expected failures stay values; Stress is for contract violations. A program never crashes; worst case it narrates what it repaired.
 - **Concurrency**: `spawn(gene, args)` / `join(id)`, real OS threads with value serialization; sequences run on worker cells; timed repressilator threads.
-- **Modules**: `use std/bio;`, TAD-insulated, anchor-controlled exports, module cache, cycle-tolerant. Twenty-two stdlib modules today: `args`, `bigint`, `bio`, `collections`, `csv`, `deque`, `fmt`, `fs`, `heap`, `iter`, `json`, `math`, `motifs`, `path`, `random`, `seq`, `serialize`, `set`, `strings`, `testing`, `time`, `unicode`, plus the capability-gated `py()` bridge for the scientific-Python deep end. `std/bigint` is the sanctioned escape past the i64 no-wrap overflow contract: exact arbitrary-precision arithmetic over digit lists (20! fits i64, 21! does not, `bigint.big_fact` answers both exactly).
+- **Modules**: `use std/bio;`, TAD-insulated, anchor-controlled exports, module cache, cycle-tolerant. 30 stdlib modules today (generated per-module inventory: [docs/STATS.md](docs/STATS.md)): `args`, `bigint`, `binary`, `bio`, `collections`, `csv`, `deque`, `env`, `fmt`, `fs`, `graph`, `hashing`, `heap`, `iter`, `json`, `logging`, `math`, `motifs`, `path`, `process`, `random`, `seq`, `serialize`, `set`, `strings`, `terminal`, `testing`, `time`, `unicode`, `url`, plus the capability-gated `py()` bridge for the scientific-Python deep end. `std/bigint` is the sanctioned escape past the i64 no-wrap overflow contract: exact arbitrary-precision arithmetic over digit lists (20! fits i64, 21! does not, `bigint.big_fact` answers both exactly).
 
 ## Repository layout
 

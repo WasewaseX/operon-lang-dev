@@ -40,3 +40,22 @@ severity. Levels 1–4 always run; level 5 is the only place execution refuses t
 | `operon lint f.op` | level-4 rule engine front door (W42/W43/W48) |
 | `operon ast f.op` | the post-repair AST, what actually executed (W39) |
 | `operon-ls` | notes with rung tags as editor diagnostics (W46 continues) |
+
+## The sweep, as-built (W037, batch 3)
+
+`scripts/tg_sweep.py [--bin PATH] [--timeout SECS] [--json OUT]` runs every parseable
+program under tests/, examples/, std/, apps/ (redteam payloads excluded, they are
+adversarial by design) and classifies each from REAL behavior only: clean (exit 0),
+contained (exit 1-3, the documented failure fates), panic (signal, 101, or panic text in
+the stream), hang (per-file wall-clock timeout). A parseable program must never panic or
+hang; that is the line the sweep proves.
+
+First full run (2026-09-28, batch 3): 1,071 programs, 1,052 clean, 19 contained, 0 panic,
+0 hang. The corpus strip (10 hand-written nasty-but-parseable programs under
+scripts/tg_sweep_corpus/) is clean-or-contained line by line. Sweep findings are bugs to
+fix, not numbers to brag about; a panic row is a contract violation and blocks the verdict.
+
+Operational note: the sweep's per-file timeout competes with concurrent load on the same
+box (release builds, harness runs). task_groups.op, which spawns real worker threads, was
+observed timing out at the 20 s default under load and passing cleanly at 45 s and
+standalone. Run the sweep on a quiet box or with --timeout 45 before believing a hang row.

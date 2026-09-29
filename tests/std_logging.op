@@ -1,0 +1,45 @@
+# std/logging: leveled lines, symbolic filters (the core is deterministic;
+# wall-clock reads are opt-in and shape-checked, never pinned absolute).
+use std/logging as l
+
+frame proof {
+    # the one line format
+    assert(l.log_line("info", "boot") == "[INFO] boot")
+    assert(l.log_line("error", "disk " + "full") == "[ERROR] disk full")
+    assert(l.log_line("warn", 42) == "[WARN] 42")
+
+    # levels round-trip; unknown names are info
+    assert(l.log_level("debug") == 0 and l.log_level("info") == 1)
+    assert(l.log_level("warn") == 2 and l.log_level("error") == 3)
+    assert(l.log_level_name(0) == "debug" and l.log_level_name(1) == "info")
+    assert(l.log_level_name(2) == "warn" and l.log_level_name(3) == "error")
+    assert(l.log_level_name(l.log_level("warn")) == "warn")
+
+    # the filter: warn-logger silences debug and info, passes warn and error
+    let log = l.make_logger_named("warn")
+    assert(log.debug("hidden") == null)
+    assert(log.info("hidden") == null)
+    assert(log.warn("careful") == "[WARN] careful")
+    assert(log.error("bad") == "[ERROR] bad")
+
+    # a debug-logger passes everything
+    let all = l.make_logger(l.log_level("debug"))
+    assert(all.debug("visible") == "[DEBUG] visible")
+    assert(all.error("loud") == "[ERROR] loud")
+
+    # an error-logger passes only errors
+    let quiet = l.make_logger(3)
+    assert(quiet.warn("hidden") == null)
+    assert(quiet.error("only") == "[ERROR] only")
+
+    # numeric constructor agrees with the symbolic one
+    let bynum = l.make_logger(l.log_level("info"))
+    assert(bynum.info("shown") == "[INFO] shown")
+
+    # log_stamp: shape only, never a pinned absolute time
+    let stamped = l.log_stamp("info", "tick")
+    assert(type(stamped) == "str")
+    assert(stamped.contains("[INFO epoch=") and stamped.contains("] tick"))
+
+    promote("logging: all asserts green")
+}

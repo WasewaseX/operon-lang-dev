@@ -1,0 +1,226 @@
+{
+  "errors": [],
+  "generated_at": "2026-09-29T09:55:01Z",
+  "metrics": {
+    "_totals": {
+      "CONFIDENCE.HIGH": 6,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 2,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 8,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 7545,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "bootstrap/harness.py": {
+      "CONFIDENCE.HIGH": 2,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 2,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 127,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "bootstrap/oracle.py": {
+      "CONFIDENCE.HIGH": 2,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 2,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 7071,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "bootstrap/validation_report.py": {
+      "CONFIDENCE.HIGH": 2,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 2,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 4,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 347,
+      "nosec": 0,
+      "skipped_tests": 0
+    }
+  },
+  "results": [
+    {
+      "code": "9 \"\"\"\n10 import subprocess, sys, os, argparse\n11 \n",
+      "col_offset": 0,
+      "end_col_offset": 36,
+      "filename": "bootstrap/harness.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 78,
+        "link": "https://cwe.mitre.org/data/definitions/78.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Consider possible security implications associated with the subprocess module.",
+      "line_number": 10,
+      "line_range": [
+        10
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess",
+      "test_id": "B404",
+      "test_name": "blacklist"
+    },
+    {
+      "code": "27     # byte comparable instead of fatal.\n28     p = subprocess.run(cmd, capture_output=True, text=True,\n29                        encoding=\"utf-8\", errors=\"replace\", timeout=timeout)\n30     return p.stdout, p.returncode, p.stderr\n",
+      "col_offset": 8,
+      "end_col_offset": 75,
+      "filename": "bootstrap/harness.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 78,
+        "link": "https://cwe.mitre.org/data/definitions/78.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "subprocess call - check for execution of untrusted input.",
+      "line_number": 28,
+      "line_range": [
+        28,
+        29
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html",
+      "test_id": "B603",
+      "test_name": "subprocess_without_shell_equals_true"
+    },
+    {
+      "code": "7083             self.cap_check(\"run\", \"run\", prog)\n7084             import subprocess as _sp\n7085             try:\n",
+      "col_offset": 12,
+      "end_col_offset": 36,
+      "filename": "bootstrap/oracle.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 78,
+        "link": "https://cwe.mitre.org/data/definitions/78.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Consider possible security implications associated with the subprocess module.",
+      "line_number": 7084,
+      "line_range": [
+        7084
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess",
+      "test_id": "B404",
+      "test_name": "blacklist"
+    },
+    {
+      "code": "7085             try:\n7086                 cp = _sp.run([prog] + pargs, capture_output=True, text=True)\n7087                 return {\"code\": cp.returncode, \"stdout\": cp.stdout, \"stderr\": cp.stderr, \"ok\": cp.returncode == 0}\n",
+      "col_offset": 21,
+      "end_col_offset": 76,
+      "filename": "bootstrap/oracle.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 78,
+        "link": "https://cwe.mitre.org/data/definitions/78.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "subprocess call - check for execution of untrusted input.",
+      "line_number": 7086,
+      "line_range": [
+        7086
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html",
+      "test_id": "B603",
+      "test_name": "subprocess_without_shell_equals_true"
+    },
+    {
+      "code": "33 \"\"\"\n34 import argparse, json, os, platform, re, subprocess, sys\n35 from datetime import datetime, timezone\n",
+      "col_offset": 0,
+      "end_col_offset": 56,
+      "filename": "bootstrap/validation_report.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 78,
+        "link": "https://cwe.mitre.org/data/definitions/78.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Consider possible security implications associated with the subprocess module.",
+      "line_number": 34,
+      "line_range": [
+        34
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess",
+      "test_id": "B404",
+      "test_name": "blacklist"
+    },
+    {
+      "code": "151 def run(cmd, timeout=120):\n152     p = subprocess.run(cmd, capture_output=True, text=True, encoding=\"utf-8\",\n153                        errors=\"replace\", timeout=timeout, cwd=ROOT)\n154     return p.stdout, p.returncode, p.stderr\n",
+      "col_offset": 8,
+      "end_col_offset": 67,
+      "filename": "bootstrap/validation_report.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 78,
+        "link": "https://cwe.mitre.org/data/definitions/78.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "subprocess call - check for execution of untrusted input.",
+      "line_number": 152,
+      "line_range": [
+        152,
+        153
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html",
+      "test_id": "B603",
+      "test_name": "subprocess_without_shell_equals_true"
+    },
+    {
+      "code": "205     rep = {\"id\": rid, \"title\": entry[\"title\"], \"tests\": [], \"probe_parity\": {},\n206            \"quantities\": [], \"pass\": True}\n207 \n208     # 1. enforcing tests, both runners\n",
+      "col_offset": 29,
+      "end_col_offset": 35,
+      "filename": "bootstrap/validation_report.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 259,
+        "link": "https://cwe.mitre.org/data/definitions/259.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Possible hardcoded password: 'True'",
+      "line_number": 206,
+      "line_range": [
+        205,
+        206
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b105_hardcoded_password_string.html",
+      "test_id": "B105",
+      "test_name": "hardcoded_password_string"
+    },
+    {
+      "code": "246                 \"name\": name, \"expected\": expected, \"observed\": None,\n247                 \"comparison\": kind, \"tolerance\": tol, \"pass\": False,\n248                 \"detail\": \"probe did not report this quantity\"})\n249             rep[\"pass\"] = False\n250             continue\n251         obs = observed[name]\n",
+      "col_offset": 54,
+      "end_col_offset": 60,
+      "filename": "bootstrap/validation_report.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 259,
+        "link": "https://cwe.mitre.org/data/definitions/259.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Possible hardcoded password: 'False'",
+      "line_number": 247,
+      "line_range": [
+        245,
+        246,
+        247,
+        248
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b105_hardcoded_password_string.html",
+      "test_id": "B105",
+      "test_name": "hardcoded_password_string"
+    }
+  ]
+}

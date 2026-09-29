@@ -11,7 +11,10 @@ below. The current `.rna` engine is span/text-based with the `operon
 rna --check` safety mode (W068, PR #18) already shipped: dry-run default,
 per-rule fate report (target found/not, replacement count, affected gene),
 `--json`, exit 1 on a missed target. V2 is about WHAT the editor targets, not
-about safety, that part exists.
+about safety, that part exists. **W68 adds the explicit validation flag**:
+`operon rna f.op patch.rna --check` validates (engine detection, span/node
+fate, ambiguity, comment preflight, `would_apply`) and writes nothing, ever,
+for either engine — see the `--check` section at the end of this note.
 
 ## Problem
 
@@ -99,3 +102,34 @@ settle (this file is that design note).
   bodies (the same scope class v1's gene_span targeted); Frame and gene-body
   statements are not decl scope. `.cell`/CLI keys (variant selection,
   methylation targets) are configuration, a patch edits source only.
+
+## `--check`: validate without applying (W68)
+
+`operon rna f.op patch.rna --check` validates a patch against its target and
+writes NOTHING, ever (`--check` + `--write` is a usage error, exit 2; the
+guarantee is absolute, not a default). It works for both engines and reports:
+
+* **Engine detected**, `v1` (header-less) vs `v2` (`syntax: v2` header); a v1
+  check carries the same deprecation metadata as the apply path (the stderr
+  info note + `"engine":"v1","deprecated":true` in `--json`).
+* **Per-rule span/node fate**: whether each referenced target resolves, with
+  the detail rows a real apply would print (miss rows carry the reason;
+  bare-name ambiguity reports the ordinal guide `foo#1, foo#2, ...`).
+* **Comment preflight (v2)**: the plain `#` comment lines found in the TARGET
+  and whether the reprint guard would refuse (`comment_preflight`:
+  `ok|refused|allowed` + `comment_lines` in `--json`; `--allow-comment-drop`
+  lifts the refusal, the at-risk lines stay visible).
+* **Would-apply verdict**: `would_apply` in `--json` and the human summary.
+  Check runs the EXACT apply machinery in memory (`rna2::check_rna_v2` calls
+  `apply_rna_v2`, which is pure — file writes only ever happen in the CLI
+  layer) with the same gate order (patch parse → comment preflight → rule
+  resolution), so the verdict is by construction what a real apply with the
+  same flags would do; the refusal reason is carried verbatim.
+
+Exit codes: **0** = the patch would apply cleanly, **1** = validation failure
+(patch parse error, comment-preflight refusal, any missed/ambiguous target),
+**2** = usage/fatal (missing arguments, unreadable files, `--check --write`).
+`--json` shape mirrors the apply shapes per engine (flat object, `engine` +
+per-rule/per-edit rows) plus `check:true`, `would_apply`, `would_write:false`
+and the preflight fields. The apply path is untouched: default `operon rna`
+stays a checked dry-run and `--write` applies.

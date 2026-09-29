@@ -186,6 +186,61 @@ ship early without waiting for the VM. Targets 4, 6, 8 are tree-walk
 mitigations worth doing only if the tree walker stays as the fallback core
 after v3.0, which the differential harness needs it to.
 
+## The --vm lane (W09, measured 2026-09-28, native-calls wave)
+
+The OIR1 bytecode machine runs the FULL differential corpus byte-identically
+against the same oracle outputs (vm lane 213/213; the differential harness
+prints the split). The design's fib25 gate asked for a 2x speedup over the
+tree-walk. Honest measurement, median of 7 runs, same box:
+
+| config | fib25 (ms) | vs tree-walk |
+|---|---:|---:|
+| tree-walk (default) | 145.3 | 1.00x |
+| --vm | 164.7 | **0.88x (slower)** |
+| --vm --opt 1 | 165.0 | 0.88x |
+
+A5 campaign update (2026-09-30, pre-flip): the call-path mallocs are gone
+(def-name re-clone per call, SipHash on the pointer-keyed code cache, the
+silences empty-gate entries collect, the call-counter entry clones) and the
+machine sits at parity end-to-end, median of 5:
+
+| config | fib25 | loops | collections | recursion |
+|---|---:|---:|---:|---:|
+| tree-walk | 139.3ms | 67.0ms | 49.4ms | 256.6ms |
+| VM (default since v2.6.0) | 141.2ms | 64.6ms | 49.4ms | 261.5ms |
+| ratio | 0.99x | 1.04x | 1.00x | 0.98x |
+
+A6 flip (2026-09-30, v2.6.0): the VM is the run default, `--interp` (or
+`--no-vm`) escapes to the tree-walk, the banner carries the `-vm` suffix.
+The >=3x stretch target stays OPEN under W11/A5; parity is the shipped
+floor, not the ceiling.
+
+The gate is **honestly missed** at stage A2, and the campaign that measured it
+found and fixed three real machine regressions along the way:
+
+1. the compiled body was deep-cloned (Vec of instructions + consts + names)
+   on EVERY call; the cache now hands out Rc<GeneCode> (refcount bump).
+2. calls were bridge-only: every Expr::Call round-tripped through the
+   tree-walk. Bare-identifier calls now compile to a native CallNamed
+   instruction that rides the SHARED named-call funnel (RISC gate included),
+   so the machine and the tree-walk cannot disagree on gates or notes.
+3. a fresh operand Vec was allocated per call; stacks are now pooled per
+   interpreter (stacks over 64 slots drop, memory stays flat).
+
+The structural reason the gate is still missed: A2 shares the call funnel, the
+gate chain and every note with the tree-walk (that sharing is WHY the vm lane
+is byte-identical), and the machine pays one fuel tick per instruction where
+the tree-walk pays one per statement/expression node, so a flattened body of
+~15 instructions pays ~1.5x the tick volume of the same body walked as ~10
+nodes. On call-free workloads the machine sits at parity (loops 1.01x,
+collections 1.02x, large_map 1.00x).
+
+Next levers, in the audit's own order (VM -> profiling -> opt -> JIT): W011
+depth (superinstructions for LoadName/Push/Bin triples, which cuts both the
+instruction count and the tick volume), then W012 (JIT, owner-gated) which is
+where the 2x class of speedup has always lived. The 0.88x is recorded here so
+nobody re-discovers it by surprise.
+
 ## Baseline tracking
 
 | version | commit | date | fib25 op/py | loops op/py | collections op/py | grn op/py |

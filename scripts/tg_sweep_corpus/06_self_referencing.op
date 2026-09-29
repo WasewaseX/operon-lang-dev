@@ -1,0 +1,16 @@
+// tg_sweep corpus 06: self-referencing structures — a list that contains
+// itself, a map that contains itself. Cycles are data; the runtime must
+// contain any walk over them (repr/index/len), never crash.
+main {
+    stress {
+        let l = [1, 2]
+        push(l, l)
+        len(l)
+        l[2][0]
+        let m = {}
+        m["self"] = m
+        has(m, "self")
+        keys(m)
+    } rescue (e) {
+    }
+}

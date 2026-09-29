@@ -10,7 +10,8 @@ and fails on:
      "N attacks contained", "canonical, N" keyword counts (W53/W55)
   5. stale architecture claims: "C runtime" anywhere in md/html docs (W56)
   6. dependency overclaim "No crates, no network" (W58)
-  7. README stdlib inventory missing a real std module (W57)
+  7. README/STDLIB.md stdlib inventory missing a real std module (W57)
+  7b. keyword without a D-008 analogy, or docs/KEYWORDS.md drift (W55)
 Run:  python3 scripts/check_docs_sync.py   (from repo root; exit 1 on drift)
 """
 import json, os, re, sys
@@ -106,6 +107,20 @@ def main():
                 line = txt[:m.start()].count("\n") + 1
                 fails.append(f"{os.path.relpath(p, ROOT)}:{line}: /{pat}/, {why}")
 
+    # W55. the keyword table is generated and every keyword carries a
+    # D-008 analogy; a pending entry means the table can silently lie
+    if truth["keyword_analogy_pending"]:
+        fails.append("W55: %d keyword(s) lack a D-008 analogy (%s), "
+                     "fill KEYWORD_ANALOGY in gen_doc_stats.py and regenerate"
+                     % (len(truth["keyword_analogy_pending"]),
+                        ", ".join(truth["keyword_analogy_pending"])))
+    kp = os.path.join(ROOT, "docs", "KEYWORDS.md")
+    if not os.path.exists(kp):
+        fails.append("W55: docs/KEYWORDS.md missing, run scripts/gen_doc_stats.py")
+    elif f"Count: **{truth['keyword_count']}**" not in open(kp, encoding="utf-8").read():
+        fails.append("W55: docs/KEYWORDS.md count line does not match the parser's "
+                     "reserved set, regenerate (gen_doc_stats.py)")
+
     # 7. README stdlib inventory completeness (W57)
     readme = open(os.path.join(ROOT, "README.md"), encoding="utf-8").read()
     for m in truth["std_modules"]:
@@ -113,6 +128,12 @@ def main():
             fails.append(f"W57: README stdlib inventory missing module '{m['module']}'")
     if re.search(r"\b(six|Six)\s+std", readme):
         fails.append("W57: README still says 'six std' modules")
+
+    # 7b. STDLIB.md must name every real std module (W57)
+    stdlib = open(os.path.join(ROOT, "STDLIB.md"), encoding="utf-8").read()
+    for m in truth["std_modules"]:
+        if f"std/{m['module']}" not in stdlib:
+            fails.append(f"W57: STDLIB.md inventory missing module 'std/{m['module']}'")
 
     # 8. packaging channel ledger ↔ README install matrix ↔ packaging/ dir
     #    (W61): the matrix must name every channel file that exists, and
