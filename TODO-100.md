@@ -826,7 +826,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
   already (release targets), add explicit float-parity assertion program.
 - Files: `docs/spec/DETERMINISM.md`, `tests/differential/`.
 
-### W091, Bio semantics separation [P1] [dev-3] [M] [done: SPEC §11a (batch2): contract header (scope, W036 freeze citation, BIO-CONTRACT + DETERMINISM pointers, D-008 voice rule), the one-paragraph quotable boundary test (bio iff behavior cannot be predicted without §11), 23-row boundary map with anchors, 9 crossing sentences marked at §3/§10/§13/§14/§15; bounded-region option chosen over renumbering move, reasoning recorded; docs sync checker still exit 0]
+### W091, Bio semantics separation [P1] [dev-3] [M] [done: SPEC §11a (batch2): contract header (scope, W036 freeze citation, BIO-CONTRACT + DETERMINISM pointers, D-008 voice rule), the one-paragraph quotable boundary test (bio iff behavior cannot be predicted without §11), 23-row boundary map with anchors, 9 crossing sentences marked at §3/§10/§13/§14/§15; bounded-region option chosen over renumbering move, reasoning recorded; docs sync checker still exit 0; ENFORCEMENT (sz follow-up, PR sz/w091-enforcement): CONTRIBUTING 8b two-track review rule (mixed-track PRs label hunks, bio rewording cannot justify behavior change) + check_docs_sync.py guards (11a header with W091 tag, BIO-CONTRACT + DETERMINISM pointers in the 11a region, Crossing (11a) markers minimum 3, negative-tested both)]
 - Goal: SPEC currently interleaves language semantics with biological modeling semantics.
   Split: language sections state syntax/evaluation ONLY; bio modeling moves to a dedicated
   volume (docs/spec/BIO-MODEL.md) referenced from SPEC §11.
