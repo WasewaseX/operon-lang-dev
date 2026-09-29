@@ -1,0 +1,11 @@
+# W093 validation probe, V3 (ring kinetics, the alpha surface).
+# Companion measurement program for bootstrap/validation_registry.json and
+# bootstrap/validation_report.py. It asserts NOTHING. The enforcing tests
+# remain tests/repressi_params.op and tests/repressi_alpha.op. One ring per
+# process (a second repressilator declaration replaces the ring), so the
+# alpha surface and the basal surface get separate probe files.
+repressilator x -> y -> z alpha 20
+repressi_next()
+repressi_next()
+let hi = repressi_state()
+promote("RESULT v3_alpha20_y2={hi.y}")
