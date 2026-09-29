@@ -83,6 +83,10 @@ fn real_main() {
     let mut purge = false;
     let mut write = false;
     let mut allow_comment_drop = false;
+    // W086 build-contract honesty: the flags EXIST so the CLI cannot silently
+    // promise what build does not do; both refuse with their design pointer.
+    let mut build_bundle = false;
+    let mut build_native = false;
     // W68: `operon rna --check` validates a patch and writes NOTHING, ever
     let mut rna_check = false;
     let mut trace_grn_path: Option<String> = None;
@@ -278,6 +282,9 @@ fn real_main() {
                 purge = true;
             }
             "--write" => write = true,
+            // W086: honest refusal flags for the build subcommand (W87/W85).
+            "--bundle" => build_bundle = true,
+            "--native" => build_native = true,
             // W68: rna validation mode (no application, no file mutation)
             "--check" => rna_check = true,
             // W067 v2: the AST reprint drops plain `#` comments; the v2 rna
@@ -1451,6 +1458,14 @@ fn real_main() {
             }
         }
         "build" => {
+            // W086 build-contract honesty: refuse the planned modes explicitly
+            // instead of silently ignoring the flags (help text matches reality).
+            if build_native {
+                die("operon build --native: native executable compilation is not implemented yet (W85; build today emits specialized source, see SPEC tools section)");
+            }
+            if build_bundle {
+                die("operon build --bundle: single-file bundling is not implemented yet (W87 deferred; design: docs/design/BUNDLE.md)");
+            }
             let file = match positional.first() {
                 Some(f) => f.clone(),
                 None => die("build needs a file"),
@@ -2479,12 +2494,18 @@ usage:
   operon mod init|add <url|name> [--registry f] [--rev r] [--as name]|remove <name>|update|install|tree|verify|publish
                   # package system (operon.toml manifest + operon.lock; W19/W20/W23;
                   # W21 static registry: add-by-name + publish, docs/specs/REGISTRY.md)
+<<<<<<< HEAD
+  operon build f.op [--variant v] [-o out.op] [--bundle] [--native]
+                  # --bundle/--native refuse honestly (W87/W85 planned; build emits specialized source)
+  operon rna f.op patch.rna [--write] [--json] [--allow-comment-drop]
+=======
   operon build f.op [--variant v] [-o out.op]
   operon rna f.op patch.rna [--write] [--check] [--json] [--allow-comment-drop]
                   # --check (W68): validate the patch against the target, report
                   # span/node resolution + ambiguity + comment preflight +
                   # would_apply (--json); writes NOTHING, ever; exit 1 on any
                   # validation failure
+>>>>>>> origin/main
   operon graph f.op [--json]
   operon run f.op --trace-grn trace.jsonl   # W095: JSONL GRN tick-stream
   operon doc f.op|dir [...] [-o outdir] [--json]
