@@ -99,6 +99,28 @@ def main():
         fails.append(f"W54: SPEC H1 carries a version ('{truth['spec']['h1']}'), "
                      f"version lives ONLY in the Status line")
 
+    # W091 enforcement (sz follow-up): the two-track boundary is load-bearing
+    # (CONTRIBUTING §8b). These guards fail when the §11a contract header, its
+    # pointers, or the recorded crossing markers go missing silently. Removing
+    # a boundary marker is a language-track change and needs a DECISIONS.md
+    # entry plus a same-PR update of the minimum counts recorded here.
+    m11a = re.search(r"^### 11a\. .*(W091)", spec_txt, re.M)
+    if not m11a:
+        fails.append("W091: SPEC §11a contract header missing (the biology-layer "
+                     "boundary map must stay a first-class section)")
+    else:
+        end11a = re.search(r"^### ", spec_txt[m11a.end():], re.M)
+        region = spec_txt[m11a.start():m11a.end() + (end11a.start() if end11a else 0)]
+        if "docs/spec/BIO-CONTRACT.md" not in region:
+            fails.append("W091: SPEC §11a no longer points at docs/spec/BIO-CONTRACT.md")
+        if "DETERMINISM" not in region:
+            fails.append("W091: SPEC §11a no longer carries its DETERMINISM pointer")
+    crossings = len(re.findall(r"Crossing \(§11a\)", spec_txt))
+    if crossings < 3:
+        fails.append(f"W091: SPEC has {crossings} 'Crossing (§11a)' marker(s), "
+                     f"minimum 3 (the live count this guard was born with; "
+                     f"additions are fine, silent regressions are not)")
+
     # 4/5/6. forbidden hand-typed/stale patterns
     for pat, why, scope in FORBIDDEN:
         for p in files_for(scope):
