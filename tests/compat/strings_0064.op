@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=64 tag=s064
+
+print("s064-m0:", "oz0c11ubC".upper(), "oz0c11ubC".slice(2), "oz0c11ubC".len())
+
+print("s064-m1:", "1c47qapr".upper(), "1c47qapr".slice(4), "1c47qapr".len())
+
+print("s064-m2:", "24Bntnou".upper(), "24Bntnou".slice(3), "24Bntnou".len())
+
+print("s064-m3:", "ev78ptur".upper(), "ev78ptur".slice(4), "ev78ptur".len())
+
+print("s064-m4:", "h5vii4bj5".upper(), "h5vii4bj5".slice(1), "h5vii4bj5".len())
+
+print("s064-i0:", "e_j-{11}-nowl")
+
+let s064_v0 = 11
+
+print("s064-v0:", "n={s064_v0}" + "!" * 3)
+
+print("s064-i1:", "4ya-{19}-wkr8")
+
+let s064_v1 = 19
+
+print("s064-v1:", "n={s064_v1}" + "!" * 1)
+
+print("s064-i2:", "nhC-{13}-Atq8")
+
+let s064_v2 = 13
+
+print("s064-v2:", "n={s064_v2}" + "!" * 3)
+
+print("s064-r0:", "wsk6jwqr".replace("w", "lb"), "wsk6jwqr".contains("sk"))
+
+print("s064-r1:", "04d23__k".replace("0", "w5"), "04d23__k".contains("4d"))
+
+print("s064-r2:", "fd7cre5n".replace("f", "p1"), "fd7cre5n".contains("d7"))
+
+print("s064-r3:", "vdn7vhu4".replace("v", "j9"), "vdn7vhu4".contains("dn"))
+
+print("s064-j0:", ["2Aa", "3i_", "umz", "15v"].join("-"))
+
+print("s064-j1:", ["z6e", "ptl", "wa8", "wAc"].join("-"))
+
+print("s064-a0:", "7vguf94".at(0), "7vguf94".trim() == "7vguf94")
+
+print("s064-a1:", "cC0qpoe".at(6), "cC0qpoe".trim() == "cC0qpoe")
+
+print("s064-a2:", "f6d77eg".at(5), "f6d77eg".trim() == "f6d77eg")

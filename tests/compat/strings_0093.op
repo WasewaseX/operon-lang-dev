@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=93 tag=s093
+
+print("s093-m0:", "4Aza4pa3".upper(), "4Aza4pa3".slice(1), "4Aza4pa3".len())
+
+print("s093-m1:", "xkswc6kx1fi5_b".upper(), "xkswc6kx1fi5_b".slice(4), "xkswc6kx1fi5_b".len())
+
+print("s093-m2:", "1BaoaB".upper(), "1BaoaB".slice(2), "1BaoaB".len())
+
+print("s093-m3:", "6xbm4AAr9ojqd".upper(), "6xbm4AAr9ojqd".slice(2), "6xbm4AAr9ojqd".len())
+
+print("s093-i0:", "ln1-{5}-1xeh")
+
+let s093_v0 = 5
+
+print("s093-v0:", "n={s093_v0}" + "!" * 3)
+
+print("s093-i1:", "sym-{72}-yl9d")
+
+let s093_v1 = 72
+
+print("s093-v1:", "n={s093_v1}" + "!" * 3)
+
+print("s093-i2:", "yu5-{17}-Ccil")
+
+let s093_v2 = 17
+
+print("s093-v2:", "n={s093_v2}" + "!" * 2)
+
+print("s093-i3:", "fgd-{82}-jwvv")
+
+let s093_v3 = 82
+
+print("s093-v3:", "n={s093_v3}" + "!" * 3)
+
+print("s093-r0:", "nztlm66f".replace("n", "kB"), "nztlm66f".contains("zt"))
+
+print("s093-r1:", "5C90sev8".replace("5", "m4"), "5C90sev8".contains("C9"))
+
+print("s093-r2:", "83huAzvp".replace("8", "vB"), "83huAzvp".contains("3h"))
+
+print("s093-r3:", "BhriABxt".replace("B", "i_"), "BhriABxt".contains("hr"))
+
+print("s093-j0:", ["yee", "m07", "ju7", "9ho"].join("-"))
+
+print("s093-j1:", ["bfr", "i0a", "m0b", "mCg", "lhl"].join("-"))
+
+print("s093-a0:", "wb0h6v6".at(1), "wb0h6v6".trim() == "wb0h6v6")
+
+print("s093-a1:", "Cop4g0f".at(5), "Cop4g0f".trim() == "Cop4g0f")
+
+print("s093-a2:", "ei9fAwc".at(1), "ei9fAwc".trim() == "ei9fAwc")

@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=95 tag=c095
+
+print("c095-c0:", -9259 < 6498)
+
+print("c095-c1:", -8740 <= 5368)
+
+print("c095-c2:", -485 >= 9306)
+
+print("c095-c3:", -6856 >= -3888)
+
+print("c095-c4:", 8485 >= 3742)
+
+print("c095-c5:", -8124 == 3495)
+
+print("c095-b0:", 36 < 12 && 12 < 15, 36 > 12 || 36 > 15)
+
+print("c095-b1:", 19 < 20 && 20 < 45, 19 > 20 || 19 > 45)
+
+print("c095-b2:", 9 < 10 && 10 < 1, 9 > 10 || 9 > 1)
+
+print("c095-b3:", 16 < 26 && 26 < 40, 16 > 26 || 16 > 40)
+
+print("c095-t0:", -8365 > 6429 ? "gt" : "le")
+
+print("c095-t1:", 3986 > 9130 ? "gt" : "le")
+
+print("c095-t2:", 1288 > -4268 ? "gt" : "le")
+
+print("c095-t3:", 2101 > 9582 ? "gt" : "le")
+
+let c095_n0 = null
+
+print("c095-n0:", c095_n0 ?? -1458, c095_n0 == null)
+
+let c095_n1 = null
+
+print("c095-n1:", c095_n1 ?? -5384, c095_n1 == null)
+
+print("c095-s0:", "tg_f" in "ixBApAtg_f", "tg_f" == "tg_f")
+
+print("c095-s1:", "u6y5" in "C36knou6y5", "u6y5" == "u6y5")

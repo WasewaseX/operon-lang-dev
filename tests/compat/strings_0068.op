@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=68 tag=s068
+
+print("s068-m0:", "cquv1oire6db0".upper(), "cquv1oire6db0".slice(1), "cquv1oire6db0".len())
+
+print("s068-m1:", "eh_Awtm2p".upper(), "eh_Awtm2p".slice(3), "eh_Awtm2p".len())
+
+print("s068-m2:", "0dylw5n13ppd8".upper(), "0dylw5n13ppd8".slice(2), "0dylw5n13ppd8".len())
+
+print("s068-m3:", "nAadrg79vz".upper(), "nAadrg79vz".slice(3), "nAadrg79vz".len())
+
+print("s068-m4:", "z7gfCcujgto_".upper(), "z7gfCcujgto_".slice(1), "z7gfCcujgto_".len())
+
+print("s068-i0:", "ndd-{30}-02wB")
+
+let s068_v0 = 30
+
+print("s068-v0:", "n={s068_v0}" + "!" * 1)
+
+print("s068-i1:", "xwi-{26}-rqCv")
+
+let s068_v1 = 26
+
+print("s068-v1:", "n={s068_v1}" + "!" * 2)
+
+print("s068-i2:", "o_0-{21}-e6zB")
+
+let s068_v2 = 21
+
+print("s068-v2:", "n={s068_v2}" + "!" * 3)
+
+print("s068-r0:", "xgznjght".replace("x", "Ac"), "xgznjght".contains("gz"))
+
+print("s068-r1:", "o06Cb4fu".replace("o", "o8"), "o06Cb4fu".contains("06"))
+
+print("s068-j0:", ["brn", "ris", "cl9", "xds", "imu"].join("-"))
+
+print("s068-j1:", ["2rk", "20c", "001", "cco"].join("-"))
+
+print("s068-j2:", ["q64", "9nA", "3c8", "4h0", "qt0"].join("-"))
+
+print("s068-a0:", "392vm86".at(5), "392vm86".trim() == "392vm86")
+
+print("s068-a1:", "c9bxmwb".at(1), "c9bxmwb".trim() == "c9bxmwb")

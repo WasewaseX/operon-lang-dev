@@ -1,0 +1,50 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=30 tag=s030
+
+print("s030-m0:", "6ujzv8v".upper(), "6ujzv8v".slice(4), "6ujzv8v".len())
+
+print("s030-m1:", "19uviAcu41oynB".upper(), "19uviAcu41oynB".slice(2), "19uviAcu41oynB".len())
+
+print("s030-m2:", "9t23bBcp8g".upper(), "9t23bBcp8g".slice(3), "9t23bBcp8g".len())
+
+print("s030-m3:", "zv7gec".upper(), "zv7gec".slice(2), "zv7gec".len())
+
+print("s030-m4:", "_sxzgl_vyvu6x".upper(), "_sxzgl_vyvu6x".slice(4), "_sxzgl_vyvu6x".len())
+
+print("s030-i0:", "4rk-{81}-va3e")
+
+let s030_v0 = 81
+
+print("s030-v0:", "n={s030_v0}" + "!" * 1)
+
+print("s030-i1:", "sty-{56}-ix8p")
+
+let s030_v1 = 56
+
+print("s030-v1:", "n={s030_v1}" + "!" * 3)
+
+print("s030-i2:", "eex-{91}-yBCz")
+
+let s030_v2 = 91
+
+print("s030-v2:", "n={s030_v2}" + "!" * 1)
+
+print("s030-i3:", "BmA-{88}-tByz")
+
+let s030_v3 = 88
+
+print("s030-v3:", "n={s030_v3}" + "!" * 1)
+
+print("s030-r0:", "_okelxyw".replace("_", "78"), "_okelxyw".contains("ok"))
+
+print("s030-r1:", "a4f1Ci9d".replace("a", "ix"), "a4f1Ci9d".contains("4f"))
+
+print("s030-j0:", ["glx", "4vt", "q3d"].join("-"))
+
+print("s030-j1:", ["r26", "x61", "s44", "u9B"].join("-"))
+
+print("s030-a0:", "_8t99ie".at(4), "_8t99ie".trim() == "_8t99ie")
+
+print("s030-a1:", "9uewkup".at(2), "9uewkup".trim() == "9uewkup")
+
+print("s030-a2:", "l2ep5eg".at(6), "l2ep5eg".trim() == "l2ep5eg")

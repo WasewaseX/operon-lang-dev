@@ -1,0 +1,214 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20260930 idx=90 tag=m090
+
+gene m090_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m090-b0:", m090_b0({splicer: 1, gene: 82, ribose: 60})?!)
+
+gene m090_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m090-b1:", m090_b1({codon: 2, exon: 83, plasmid: 3})?!)
+
+gene m090_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m090-b2:", m090_b2({ribose: 5, marker: 66, enzyme: 89})?!)
+
+gene m090_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m090_f0([6, 34, 20, 11, 49, 19, 38]) {
+
+    case Ok(list) {
+
+        print("m090-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m090-f0:", "e:", m)
+
+    }
+
+}
+
+gene m090_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m090_f1([36, 18, 28, 56, 52, 24, 58]) {
+
+    case Ok(list) {
+
+        print("m090-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m090-f1:", "e:", m)
+
+    }
+
+}
+
+let m090_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m090-cc0:", m090_cl0(13)(4), m090_cl0(4)(13))
+
+let m090_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m090-cc1:", m090_cl1(10)(20), m090_cl1(20)(10))
+
+let m090_data0 = some([some("cell"), none(), some(3)])
+
+match m090_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m090-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m090-x0:", "shape-miss")
+
+    }
+
+}
+
+let m090_data1 = some([some("helix"), none(), some(2)])
+
+match m090_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m090-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m090-x1:", "shape-miss")
+
+    }
+
+}

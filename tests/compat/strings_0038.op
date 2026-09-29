@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=38 tag=s038
+
+print("s038-m0:", "d_24pwirw".upper(), "d_24pwirw".slice(1), "d_24pwirw".len())
+
+print("s038-m1:", "Bq621k9uc_i46p".upper(), "Bq621k9uc_i46p".slice(2), "Bq621k9uc_i46p".len())
+
+print("s038-m2:", "n4kbafafrm0".upper(), "n4kbafafrm0".slice(3), "n4kbafafrm0".len())
+
+print("s038-m3:", "poCqaaC".upper(), "poCqaaC".slice(4), "poCqaaC".len())
+
+print("s038-m4:", "5ti5rcCub5".upper(), "5ti5rcCub5".slice(4), "5ti5rcCub5".len())
+
+print("s038-i0:", "eus-{86}-92k1")
+
+let s038_v0 = 86
+
+print("s038-v0:", "n={s038_v0}" + "!" * 3)
+
+print("s038-i1:", "e4q-{40}-r8zn")
+
+let s038_v1 = 40
+
+print("s038-v1:", "n={s038_v1}" + "!" * 2)
+
+print("s038-i2:", "sCr-{17}-leon")
+
+let s038_v2 = 17
+
+print("s038-v2:", "n={s038_v2}" + "!" * 3)
+
+print("s038-r0:", "14x1axhw".replace("1", "q9"), "14x1axhw".contains("4x"))
+
+print("s038-r1:", "zua8c_dx".replace("z", "48"), "zua8c_dx".contains("ua"))
+
+print("s038-j0:", ["_i5", "i5q", "B4A", "iBl", "i3C"].join("-"))
+
+print("s038-j1:", ["Anl", "5bn", "fw7", "gwn"].join("-"))
+
+print("s038-j2:", ["1d0", "A4k", "t1i"].join("-"))
+
+print("s038-a0:", "Chto1oc".at(5), "Chto1oc".trim() == "Chto1oc")
+
+print("s038-a1:", "9lq3371".at(5), "9lq3371".trim() == "9lq3371")

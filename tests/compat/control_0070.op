@@ -1,0 +1,150 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20260930 idx=70 tag=c070
+
+let c070_b0 = "start"
+
+if 85 > 80 { c070_b0 = "hi" } elif 85 > 40 { c070_b0 = "mid" } else { c070_b0 = "lo" }
+
+print("c070-i0:", c070_b0, 85)
+
+let c070_b1 = "start"
+
+if 113 > 80 { c070_b1 = "hi" } elif 113 > 40 { c070_b1 = "mid" } else { c070_b1 = "lo" }
+
+print("c070-i1:", c070_b1, 113)
+
+let c070_b2 = "start"
+
+if 59 > 80 { c070_b2 = "hi" } elif 59 > 40 { c070_b2 = "mid" } else { c070_b2 = "lo" }
+
+print("c070-i2:", c070_b2, 59)
+
+let c070_b3 = "start"
+
+if 113 > 80 { c070_b3 = "hi" } elif 113 > 40 { c070_b3 = "mid" } else { c070_b3 = "lo" }
+
+print("c070-i3:", c070_b3, 113)
+
+let c070_a0 = 0
+
+let c070_n0 = 0
+
+while c070_n0 < 13 {
+
+    c070_n0 += 1
+
+    if c070_n0 % 2 == 0 { continue }
+
+    if c070_n0 > 19 { break }
+
+    c070_a0 += c070_n0
+
+}
+
+print("c070-w0:", c070_a0, c070_n0)
+
+let c070_a1 = 0
+
+let c070_n1 = 0
+
+while c070_n1 < 6 {
+
+    c070_n1 += 3
+
+    if c070_n1 % 3 == 0 { continue }
+
+    if c070_n1 > 13 { break }
+
+    c070_a1 += c070_n1
+
+}
+
+print("c070-w1:", c070_a1, c070_n1)
+
+let c070_a2 = 0
+
+let c070_n2 = 0
+
+while c070_n2 < 18 {
+
+    c070_n2 += 4
+
+    if c070_n2 % 2 == 0 { continue }
+
+    if c070_n2 > 27 { break }
+
+    c070_a2 += c070_n2
+
+}
+
+print("c070-w2:", c070_a2, c070_n2)
+
+let c070_a3 = 0
+
+let c070_n3 = 0
+
+while c070_n3 < 7 {
+
+    c070_n3 += 3
+
+    if c070_n3 % 2 == 0 { continue }
+
+    if c070_n3 > 16 { break }
+
+    c070_a3 += c070_n3
+
+}
+
+print("c070-w3:", c070_a3, c070_n3)
+
+let c070_c0 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 4] {
+
+        c070_c0 += a * b
+
+    }
+
+}
+
+print("c070-l0:", c070_c0)
+
+let c070_c1 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 3] {
+
+        c070_c1 += a * b
+
+    }
+
+}
+
+print("c070-l1:", c070_c1)
+
+let c070_acc0 = ""
+
+loop {
+
+    c070_acc0 += "x"
+
+    if c070_acc0.len() >= 5 { break }
+
+}
+
+print("c070-o0:", c070_acc0)
+
+let c070_acc1 = ""
+
+loop {
+
+    c070_acc1 += "x"
+
+    if c070_acc1.len() >= 4 { break }
+
+}
+
+print("c070-o1:", c070_acc1)

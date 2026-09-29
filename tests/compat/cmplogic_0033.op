@@ -1,0 +1,34 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=33 tag=c033
+
+print("c033-c0:", 3739 != -9135)
+
+print("c033-c1:", -2015 != 3226)
+
+print("c033-c2:", 6230 > -2143)
+
+print("c033-c3:", 9466 != 6537)
+
+print("c033-c4:", 730 == 5134)
+
+print("c033-c5:", 3274 > 7840)
+
+print("c033-b0:", 30 < 11 && 11 < 18, 30 > 11 || 30 > 18)
+
+print("c033-b1:", 11 < 6 && 6 < 4, 11 > 6 || 11 > 4)
+
+print("c033-t0:", 7350 > 3792 ? "gt" : "le")
+
+print("c033-t1:", 38 > -2552 ? "gt" : "le")
+
+let c033_n0 = null
+
+print("c033-n0:", c033_n0 ?? -248, c033_n0 == null)
+
+let c033_n1 = null
+
+print("c033-n1:", c033_n1 ?? 2503, c033_n1 == null)
+
+print("c033-s0:", "dhum" in "gml9pydhum", "dhum" == "dhum")
+
+print("c033-s1:", "342k" in "t0e2A8342k", "342k" == "342k")

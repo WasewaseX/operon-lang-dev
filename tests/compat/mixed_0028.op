@@ -1,0 +1,214 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20260930 idx=28 tag=m028
+
+gene m028_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m028-b0:", m028_b0({gene: 72, ligase: 9, enzyme: 67})?!)
+
+gene m028_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m028-b1:", m028_b1({plasmid: 57, ribose: 93, enzyme: 26})?!)
+
+gene m028_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m028-b2:", m028_b2({codon: 17, vector: 15, enzyme: 12})?!)
+
+gene m028_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m028_f0([58, 6, 52, 43, 56, 29]) {
+
+    case Ok(list) {
+
+        print("m028-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m028-f0:", "e:", m)
+
+    }
+
+}
+
+gene m028_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m028_f1([23, 40, 17, 33, 45, 1, 38]) {
+
+    case Ok(list) {
+
+        print("m028-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m028-f1:", "e:", m)
+
+    }
+
+}
+
+let m028_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m028-cc0:", m028_cl0(11)(18), m028_cl0(18)(11))
+
+let m028_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m028-cc1:", m028_cl1(9)(1), m028_cl1(1)(9))
+
+let m028_data0 = some([some("enzyme"), none(), some(5)])
+
+match m028_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m028-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m028-x0:", "shape-miss")
+
+    }
+
+}
+
+let m028_data1 = some([some("codon"), none(), some(4)])
+
+match m028_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m028-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m028-x1:", "shape-miss")
+
+    }
+
+}

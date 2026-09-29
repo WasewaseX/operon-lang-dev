@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=50 tag=c050
+
+print("c050-c0:", 584 == 7811)
+
+print("c050-c1:", 9257 == 2528)
+
+print("c050-c2:", 2430 > 9966)
+
+print("c050-c3:", -277 <= -6109)
+
+print("c050-c4:", 7913 <= 6174)
+
+print("c050-b0:", 6 < 11 && 11 < 8, 6 > 11 || 6 > 8)
+
+print("c050-b1:", 35 < 16 && 16 < 33, 35 > 16 || 35 > 33)
+
+print("c050-b2:", 31 < 11 && 11 < 6, 31 > 11 || 31 > 6)
+
+print("c050-b3:", 37 < 31 && 31 < 37, 37 > 31 || 37 > 37)
+
+print("c050-t0:", -7469 > 8676 ? "gt" : "le")
+
+print("c050-t1:", 5336 > -8956 ? "gt" : "le")
+
+print("c050-t2:", 6656 > 9430 ? "gt" : "le")
+
+let c050_n0 = null
+
+print("c050-n0:", c050_n0 ?? 2802, c050_n0 == null)
+
+let c050_n1 = null
+
+print("c050-n1:", c050_n1 ?? -3058, c050_n1 == null)
+
+let c050_n2 = null
+
+print("c050-n2:", c050_n2 ?? 8570, c050_n2 == null)
+
+print("c050-s0:", "6_32" in "BC_js46_32", "6_32" == "6_32")
+
+print("c050-s1:", "smve" in "25w605smve", "smve" == "smve")

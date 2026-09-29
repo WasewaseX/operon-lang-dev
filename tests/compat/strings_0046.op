@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=46 tag=s046
+
+print("s046-m0:", "yen7nnmC6AvnA".upper(), "yen7nnmC6AvnA".slice(1), "yen7nnmC6AvnA".len())
+
+print("s046-m1:", "8quqiohx_Ail".upper(), "8quqiohx_Ail".slice(2), "8quqiohx_Ail".len())
+
+print("s046-m2:", "tvou2cbA".upper(), "tvou2cbA".slice(4), "tvou2cbA".len())
+
+print("s046-m3:", "mlu22doajzm4y".upper(), "mlu22doajzm4y".slice(2), "mlu22doajzm4y".len())
+
+print("s046-m4:", "rtbjdB6".upper(), "rtbjdB6".slice(4), "rtbjdB6".len())
+
+print("s046-m5:", "pvaayqlyk".upper(), "pvaayqlyk".slice(1), "pvaayqlyk".len())
+
+print("s046-i0:", "1oj-{32}-_Aky")
+
+let s046_v0 = 32
+
+print("s046-v0:", "n={s046_v0}" + "!" * 1)
+
+print("s046-i1:", "va6-{19}-sxrg")
+
+let s046_v1 = 19
+
+print("s046-v1:", "n={s046_v1}" + "!" * 2)
+
+print("s046-i2:", "_u9-{44}-hCb9")
+
+let s046_v2 = 44
+
+print("s046-v2:", "n={s046_v2}" + "!" * 1)
+
+print("s046-r0:", "g1Citlhr".replace("g", "2k"), "g1Citlhr".contains("1C"))
+
+print("s046-r1:", "dzpjylwe".replace("d", "ib"), "dzpjylwe".contains("zp"))
+
+print("s046-r2:", "B32jnvwy".replace("B", "At"), "B32jnvwy".contains("32"))
+
+print("s046-r3:", "vqzqiz2_".replace("v", "1v"), "vqzqiz2_".contains("qz"))
+
+print("s046-j0:", ["8u1", "o0m", "Cb6"].join("-"))
+
+print("s046-j1:", ["gcc", "CCC", "c3s", "aqj"].join("-"))
+
+print("s046-a0:", "vcv_3AB".at(2), "vcv_3AB".trim() == "vcv_3AB")
+
+print("s046-a1:", "pltop2m".at(2), "pltop2m".trim() == "pltop2m")

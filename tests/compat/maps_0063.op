@@ -1,0 +1,50 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20260930 idx=63 tag=m063
+
+let m063_m0 = {cell: 39, exon: -68, enzyme: 12, marker: 90, plasmid: 46}
+
+print("m063-m0:", m063_m0["cell"], len(m063_m0), m063_m0.has("cell"))
+
+let m063_m1 = {helix: 24, exon: -7, ligase: -81, gene: -57, codon: 95}
+
+print("m063-m1:", m063_m1["helix"], len(m063_m1), m063_m1.has("helix"))
+
+let m063_m2 = {ribose: -65, vector: -65, plasmid: -53, exon: 82}
+
+print("m063-m2:", m063_m2["ribose"], len(m063_m2), m063_m2.has("ribose"))
+
+let m063_m3 = {ribose: -96, gene: 97, marker: -65, ligase: -84}
+
+print("m063-m3:", m063_m3["ribose"], len(m063_m3), m063_m3.has("ribose"))
+
+let m063_m4 = {enzyme: 71, ligase: -77, ribose: -36, plasmid: -53, helix: -18}
+
+print("m063-m4:", m063_m4["enzyme"], len(m063_m4), m063_m4.has("enzyme"))
+
+let m063_k0 = {plasmid: 7, ligase: 27, cell: 13}
+
+let m063_ks0 = m063_k0.keys()
+
+let m063_sm0 = 0
+
+for k in m063_k0 { m063_sm0 += m063_k0[k] }
+
+print("m063-k0:", m063_sm0, m063_k0.keys().sort(), m063_k0.values().len())
+
+let m063_k1 = {helix: 45, gene: 43, splicer: 41}
+
+let m063_ks1 = m063_k1.keys()
+
+let m063_sm1 = 0
+
+for k in m063_k1 { m063_sm1 += m063_k1[k] }
+
+print("m063-k1:", m063_sm1, m063_k1.keys().sort(), m063_k1.values().len())
+
+let m063_w0 = {outer: {gene: 7, enzyme: 7, tag: "ok"}}}
+
+print("m063-w0:", m063_w0["outer"]["enzyme"], m063_w0["outer"]["tag"])
+
+let m063_w1 = {outer: {codon: 1, splicer: 4, tag: "ok"}}}
+
+print("m063-w1:", m063_w1["outer"]["splicer"], m063_w1["outer"]["tag"])

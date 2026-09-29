@@ -1,0 +1,50 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20260930 idx=71 tag=m071
+
+let m071_m0 = {vector: 95, codon: -94, exon: -91, enzyme: -78}
+
+print("m071-m0:", m071_m0["vector"], len(m071_m0), m071_m0.has("vector"))
+
+let m071_m1 = {marker: -9, ribose: -77, enzyme: -39, helix: 91}
+
+print("m071-m1:", m071_m1["marker"], len(m071_m1), m071_m1.has("marker"))
+
+let m071_m2 = {enzyme: 92, ribose: 74, codon: 25}
+
+print("m071-m2:", m071_m2["enzyme"], len(m071_m2), m071_m2.has("enzyme"))
+
+let m071_m3 = {plasmid: -4, marker: 71, ribose: -29}
+
+print("m071-m3:", m071_m3["plasmid"], len(m071_m3), m071_m3.has("plasmid"))
+
+let m071_m4 = {ribose: -41, marker: -81, ligase: -75, plasmid: -29, splicer: -89}
+
+print("m071-m4:", m071_m4["ribose"], len(m071_m4), m071_m4.has("ribose"))
+
+let m071_k0 = {plasmid: 39, helix: 12, exon: 32}
+
+let m071_ks0 = m071_k0.keys()
+
+let m071_sm0 = 0
+
+for k in m071_k0 { m071_sm0 += m071_k0[k] }
+
+print("m071-k0:", m071_sm0, m071_k0.keys().sort(), m071_k0.values().len())
+
+let m071_k1 = {cell: 8, gene: 15, plasmid: 30}
+
+let m071_ks1 = m071_k1.keys()
+
+let m071_sm1 = 0
+
+for k in m071_k1 { m071_sm1 += m071_k1[k] }
+
+print("m071-k1:", m071_sm1, m071_k1.keys().sort(), m071_k1.values().len())
+
+let m071_w0 = {outer: {helix: 5, gene: 9, tag: "ok"}}}
+
+print("m071-w0:", m071_w0["outer"]["gene"], m071_w0["outer"]["tag"])
+
+let m071_w1 = {outer: {cell: 9, vector: 3, tag: "ok"}}}
+
+print("m071-w1:", m071_w1["outer"]["vector"], m071_w1["outer"]["tag"])

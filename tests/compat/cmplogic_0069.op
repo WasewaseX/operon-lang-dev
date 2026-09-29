@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=69 tag=c069
+
+print("c069-c0:", 6202 > 8136)
+
+print("c069-c1:", 5624 >= -3403)
+
+print("c069-c2:", -9902 >= -7573)
+
+print("c069-c3:", 3156 != -3600)
+
+print("c069-c4:", -8627 > 7107)
+
+print("c069-c5:", 5571 > 6143)
+
+print("c069-c6:", 3287 == 6344)
+
+print("c069-b0:", 50 < 7 && 7 < 20, 50 > 7 || 50 > 20)
+
+print("c069-b1:", 41 < 11 && 11 < 49, 41 > 11 || 41 > 49)
+
+print("c069-b2:", 24 < 18 && 18 < 1, 24 > 18 || 24 > 1)
+
+print("c069-t0:", -5177 > -705 ? "gt" : "le")
+
+print("c069-t1:", -9521 > 5444 ? "gt" : "le")
+
+print("c069-t2:", -3131 > 4564 ? "gt" : "le")
+
+let c069_n0 = null
+
+print("c069-n0:", c069_n0 ?? 7737, c069_n0 == null)
+
+let c069_n1 = null
+
+print("c069-n1:", c069_n1 ?? 9444, c069_n1 == null)
+
+let c069_n2 = null
+
+print("c069-n2:", c069_n2 ?? -844, c069_n2 == null)
+
+print("c069-s0:", "tvz9" in "7qgCb_tvz9", "tvz9" == "tvz9")
+
+print("c069-s1:", "e5ln" in "Bqfmnce5ln", "e5ln" == "e5ln")

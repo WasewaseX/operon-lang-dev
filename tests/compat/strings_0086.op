@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=86 tag=s086
+
+print("s086-m0:", "C8dp1c5".upper(), "C8dp1c5".slice(4), "C8dp1c5".len())
+
+print("s086-m1:", "t9uf9n".upper(), "t9uf9n".slice(1), "t9uf9n".len())
+
+print("s086-m2:", "4gu_6126l3".upper(), "4gu_6126l3".slice(4), "4gu_6126l3".len())
+
+print("s086-m3:", "dAclqxgzscbl".upper(), "dAclqxgzscbl".slice(1), "dAclqxgzscbl".len())
+
+print("s086-m4:", "hAidpujb_gz".upper(), "hAidpujb_gz".slice(1), "hAidpujb_gz".len())
+
+print("s086-i0:", "lAB-{16}-jko_")
+
+let s086_v0 = 16
+
+print("s086-v0:", "n={s086_v0}" + "!" * 3)
+
+print("s086-i1:", "3bn-{3}-4_kj")
+
+let s086_v1 = 3
+
+print("s086-v1:", "n={s086_v1}" + "!" * 2)
+
+print("s086-i2:", "A5B-{1}-bmAz")
+
+let s086_v2 = 1
+
+print("s086-v2:", "n={s086_v2}" + "!" * 3)
+
+print("s086-r0:", "pv7rhA47".replace("p", "5r"), "pv7rhA47".contains("v7"))
+
+print("s086-r1:", "8x5Ao2bj".replace("8", "l4"), "8x5Ao2bj".contains("x5"))
+
+print("s086-r2:", "ztepaf2g".replace("z", "5i"), "ztepaf2g".contains("te"))
+
+print("s086-j0:", ["A05", "gxb", "1yz"].join("-"))
+
+print("s086-j1:", ["lar", "s73", "dfn", "B96"].join("-"))
+
+print("s086-j2:", ["ele", "9jC", "yex"].join("-"))
+
+print("s086-a0:", "_b2uq6b".at(6), "_b2uq6b".trim() == "_b2uq6b")
+
+print("s086-a1:", "f0xCkb1".at(3), "f0xCkb1".trim() == "f0xCkb1")
+
+print("s086-a2:", "6cAmB2C".at(2), "6cAmB2C".trim() == "6cAmB2C")

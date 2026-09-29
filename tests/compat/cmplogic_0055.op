@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=55 tag=c055
+
+print("c055-c0:", -1564 > 7491)
+
+print("c055-c1:", 9883 < -3724)
+
+print("c055-c2:", -247 <= -7490)
+
+print("c055-c3:", 3384 <= -5814)
+
+print("c055-c4:", 1340 == -9902)
+
+print("c055-c5:", 1665 != 8731)
+
+print("c055-c6:", -840 <= 2656)
+
+print("c055-b0:", 5 < 45 && 45 < 49, 5 > 45 || 5 > 49)
+
+print("c055-b1:", 19 < 44 && 44 < 29, 19 > 44 || 19 > 29)
+
+print("c055-t0:", 53 > 5294 ? "gt" : "le")
+
+print("c055-t1:", -9200 > -9088 ? "gt" : "le")
+
+print("c055-t2:", -7207 > 5377 ? "gt" : "le")
+
+print("c055-t3:", 3142 > -5937 ? "gt" : "le")
+
+let c055_n0 = null
+
+print("c055-n0:", c055_n0 ?? 6194, c055_n0 == null)
+
+let c055_n1 = null
+
+print("c055-n1:", c055_n1 ?? -6009, c055_n1 == null)
+
+let c055_n2 = null
+
+print("c055-n2:", c055_n2 ?? 4026, c055_n2 == null)
+
+print("c055-s0:", "kmer" in "lA6_qbkmer", "kmer" == "kmer")
+
+print("c055-s1:", "xsz9" in "Asxmrmxsz9", "xsz9" == "xsz9")

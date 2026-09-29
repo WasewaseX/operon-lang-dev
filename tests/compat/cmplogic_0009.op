@@ -1,0 +1,38 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=9 tag=c009
+
+print("c009-c0:", -4589 <= 215)
+
+print("c009-c1:", 1880 >= -2770)
+
+print("c009-c2:", 7100 >= 6642)
+
+print("c009-c3:", -6197 <= -2704)
+
+print("c009-c4:", 4562 > 873)
+
+print("c009-c5:", 1529 > -5510)
+
+print("c009-b0:", 22 < 16 && 16 < 40, 22 > 16 || 22 > 40)
+
+print("c009-b1:", 1 < 8 && 8 < 36, 1 > 8 || 1 > 36)
+
+print("c009-b2:", 24 < 10 && 10 < 12, 24 > 10 || 24 > 12)
+
+print("c009-t0:", 9307 > 9140 ? "gt" : "le")
+
+print("c009-t1:", -523 > -1694 ? "gt" : "le")
+
+print("c009-t2:", -1218 > 3698 ? "gt" : "le")
+
+let c009_n0 = null
+
+print("c009-n0:", c009_n0 ?? -9408, c009_n0 == null)
+
+let c009_n1 = null
+
+print("c009-n1:", c009_n1 ?? 2008, c009_n1 == null)
+
+print("c009-s0:", "i2v2" in "iqgldoi2v2", "i2v2" == "i2v2")
+
+print("c009-s1:", "peyd" in "a0ku1cpeyd", "peyd" == "peyd")

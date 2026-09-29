@@ -1,0 +1,60 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20260930 idx=55 tag=m055
+
+let m055_m0 = {plasmid: 13, ribose: -46, codon: 26}
+
+print("m055-m0:", m055_m0["plasmid"], len(m055_m0), m055_m0.has("plasmid"))
+
+let m055_m1 = {vector: -73, marker: 76, ligase: -2}
+
+print("m055-m1:", m055_m1["vector"], len(m055_m1), m055_m1.has("vector"))
+
+let m055_m2 = {exon: 86, codon: 48, ribose: -81}
+
+print("m055-m2:", m055_m2["exon"], len(m055_m2), m055_m2.has("exon"))
+
+let m055_m3 = {plasmid: 87, ligase: -21, ribose: 97, codon: 86}
+
+print("m055-m3:", m055_m3["plasmid"], len(m055_m3), m055_m3.has("plasmid"))
+
+let m055_m4 = {gene: 20, cell: 25, plasmid: -86, marker: -25}
+
+print("m055-m4:", m055_m4["gene"], len(m055_m4), m055_m4.has("gene"))
+
+let m055_k0 = {marker: 42, gene: 22, codon: 36}
+
+let m055_ks0 = m055_k0.keys()
+
+let m055_sm0 = 0
+
+for k in m055_k0 { m055_sm0 += m055_k0[k] }
+
+print("m055-k0:", m055_sm0, m055_k0.keys().sort(), m055_k0.values().len())
+
+let m055_k1 = {ligase: 35, gene: 10, cell: 14}
+
+let m055_ks1 = m055_k1.keys()
+
+let m055_sm1 = 0
+
+for k in m055_k1 { m055_sm1 += m055_k1[k] }
+
+print("m055-k1:", m055_sm1, m055_k1.keys().sort(), m055_k1.values().len())
+
+let m055_k2 = {exon: 37, codon: 18, ribose: 1}
+
+let m055_ks2 = m055_k2.keys()
+
+let m055_sm2 = 0
+
+for k in m055_k2 { m055_sm2 += m055_k2[k] }
+
+print("m055-k2:", m055_sm2, m055_k2.keys().sort(), m055_k2.values().len())
+
+let m055_w0 = {outer: {plasmid: 3, splicer: 8, tag: "ok"}}}
+
+print("m055-w0:", m055_w0["outer"]["splicer"], m055_w0["outer"]["tag"])
+
+let m055_w1 = {outer: {splicer: 6, codon: 2, tag: "ok"}}}
+
+print("m055-w1:", m055_w1["outer"]["codon"], m055_w1["outer"]["tag"])

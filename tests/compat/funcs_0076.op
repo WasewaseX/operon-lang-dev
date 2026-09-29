@@ -1,0 +1,174 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20260930 idx=76 tag=f076
+
+gene f076_g0(p, q = 1, r = 73) {
+
+    return p * 43 + q - r
+
+}
+
+print("f076-d0:", f076_g0(9), f076_g0(9, 41), f076_g0(9, 1, 73))
+
+gene f076_g1(p, q = 82, r = 4) {
+
+    return p * 76 + q - r
+
+}
+
+print("f076-d1:", f076_g1(35), f076_g1(35, 81), f076_g1(35, 82, 4))
+
+gene f076_g2(p, q = 30, r = 86) {
+
+    return p * 66 + q - r
+
+}
+
+print("f076-d2:", f076_g2(11), f076_g2(11, 83), f076_g2(11, 30, 86))
+
+gene f076_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f076_fib0(n - 1) + f076_fib0(n - 2)
+
+}
+
+print("f076-fib0:", f076_fib0(9))
+
+gene f076_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f076_fib1(n - 1) + f076_fib1(n - 2)
+
+}
+
+print("f076-fib1:", f076_fib1(12))
+
+gene f076_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f076_gcd0(b, a % b)
+
+}
+
+print("f076-gcd0:", f076_gcd0(148, 99))
+
+gene f076_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f076_gcd1(b, a % b)
+
+}
+
+print("f076-gcd1:", f076_gcd1(506, 496))
+
+gene f076_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f076_c0 = f076_mk0(6)
+
+f076_c0(2)
+
+print("f076-cl0:", f076_c0(6))
+
+gene f076_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f076_c1 = f076_mk1(15)
+
+f076_c1(8)
+
+print("f076-cl1:", f076_c1(6))
+
+gene f076_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f076-hof0:", f076_tw0(gene (z) => z * 2 + 1, 14))
+
+gene f076_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f076-hof1:", f076_tw1(gene (z) => z * 2 + 1, 4))
+
+gene f076_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f076-dg0:", f076_sd0(895247))
+
+gene f076_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f076-dg1:", f076_sd1(887626))

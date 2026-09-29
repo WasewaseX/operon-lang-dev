@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=16 tag=s016
+
+print("s016-m0:", "8cB71CBAvz".upper(), "8cB71CBAvz".slice(2), "8cB71CBAvz".len())
+
+print("s016-m1:", "5Ae8cu1rxbrek8".upper(), "5Ae8cu1rxbrek8".slice(4), "5Ae8cu1rxbrek8".len())
+
+print("s016-m2:", "qcblfcyA8bzzn".upper(), "qcblfcyA8bzzn".slice(4), "qcblfcyA8bzzn".len())
+
+print("s016-m3:", "2p3BCj".upper(), "2p3BCj".slice(3), "2p3BCj".len())
+
+print("s016-i0:", "Cuh-{43}-80zi")
+
+let s016_v0 = 43
+
+print("s016-v0:", "n={s016_v0}" + "!" * 3)
+
+print("s016-i1:", "BeB-{29}-0f_b")
+
+let s016_v1 = 29
+
+print("s016-v1:", "n={s016_v1}" + "!" * 3)
+
+print("s016-i2:", "v0n-{95}-itek")
+
+let s016_v2 = 95
+
+print("s016-v2:", "n={s016_v2}" + "!" * 3)
+
+print("s016-r0:", "m_e8_tdB".replace("m", "a2"), "m_e8_tdB".contains("_e"))
+
+print("s016-r1:", "oz4fg2vc".replace("o", "cg"), "oz4fg2vc".contains("z4"))
+
+print("s016-r2:", "A0cAz8cC".replace("A", "p0"), "A0cAz8cC".contains("0c"))
+
+print("s016-j0:", ["j3b", "w95", "Atf"].join("-"))
+
+print("s016-j1:", ["zn2", "5A4", "17B", "47n"].join("-"))
+
+print("s016-a0:", "ifj7294".at(2), "ifj7294".trim() == "ifj7294")
+
+print("s016-a1:", "qi8rqbC".at(2), "qi8rqbC".trim() == "qi8rqbC")
+
+print("s016-a2:", "afpt_gu".at(4), "afpt_gu".trim() == "afpt_gu")

@@ -1,0 +1,214 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20260930 idx=77 tag=m077
+
+gene m077_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m077-b0:", m077_b0({ribose: 33, ligase: 55, enzyme: 4})?!)
+
+gene m077_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m077-b1:", m077_b1({ribose: 47, ligase: 35, splicer: 8})?!)
+
+gene m077_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m077-b2:", m077_b2({plasmid: 69, gene: 27, vector: 75})?!)
+
+gene m077_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m077_f0([45, 27, 50, 36, 29, 45, 18]) {
+
+    case Ok(list) {
+
+        print("m077-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m077-f0:", "e:", m)
+
+    }
+
+}
+
+gene m077_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m077_f1([59, 5, 8, 17, 58, 1]) {
+
+    case Ok(list) {
+
+        print("m077-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m077-f1:", "e:", m)
+
+    }
+
+}
+
+let m077_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m077-cc0:", m077_cl0(12)(10), m077_cl0(10)(12))
+
+let m077_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m077-cc1:", m077_cl1(14)(20), m077_cl1(20)(14))
+
+let m077_data0 = some([some("splicer"), none(), some(5)])
+
+match m077_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m077-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m077-x0:", "shape-miss")
+
+    }
+
+}
+
+let m077_data1 = some([some("codon"), none(), some(6)])
+
+match m077_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m077-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m077-x1:", "shape-miss")
+
+    }
+
+}

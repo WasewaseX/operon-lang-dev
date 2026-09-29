@@ -1,0 +1,64 @@
+# compat corpus — generated, do not edit by hand
+# bucket=lists seed=20260930 idx=68 tag=l068
+
+let l068_l0 = [-14, -48, -11, 18, 37, 0]
+
+print("l068-l0:", l068_l0[3], l068_l0[-1], l068_l0.len())
+
+let l068_l1 = [-15, -13, -45, -18, 5, 0, -48]
+
+print("l068-l1:", l068_l1[2], l068_l1[-1], l068_l1.len())
+
+let l068_l2 = [30, 1, -39, -4]
+
+print("l068-l2:", l068_l2[0], l068_l2[-1], l068_l2.len())
+
+let l068_l3 = [-2, -25, -21, 38]
+
+print("l068-l3:", l068_l3[0], l068_l3[-1], l068_l3.len())
+
+let l068_s0 = [-42, -95, -93, -21, 9]
+
+print("l068-s0:", l068_s0.slice(2, 3), l068_s0.slice(-3))
+
+let l068_s1 = [-29, 28, -15, 95, 51, 88]
+
+print("l068-s1:", l068_s1.slice(3, 5), l068_s1.slice(-2))
+
+let l068_s2 = [-90, 52, -26, -32, 80, -32, -8, 52]
+
+print("l068-s2:", l068_s2.slice(4, 7), l068_s2.slice(-3))
+
+let l068_r0 = [298, 142, 450, 201, 55]
+
+print("l068-r0:", l068_r0.sort(), l068_r0.reverse(), l068_r0.contains(142))
+
+let l068_r1 = [52, 494, 77, 660, 121, 503]
+
+print("l068-r1:", l068_r1.sort(), l068_r1.reverse(), l068_r1.contains(494))
+
+let l068_t0 = 0
+
+for v in [32, 28, 4] { l068_t0 += v }
+
+print("l068-t0:", l068_t0)
+
+let l068_t1 = 0
+
+for v in [26, 15, 22] { l068_t1 += v }
+
+print("l068-t1:", l068_t1)
+
+let l068_t2 = 0
+
+for v in [29, 31, 5, 34] { l068_t2 += v }
+
+print("l068-t2:", l068_t2)
+
+let l068_n0 = [[8, 3, 1], [8, 3, 1], 77]
+
+print("l068-n0:", l068_n0[0][0], l068_n0[2])
+
+let l068_n1 = [[4, 9, 7], [4, 9, 7], 77]
+
+print("l068-n1:", l068_n1[0][0], l068_n1[2])

@@ -1,0 +1,180 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20260930 idx=68 tag=f068
+
+gene f068_g0(p, q = 34, r = 60) {
+
+    return p * 24 + q - r
+
+}
+
+print("f068-d0:", f068_g0(-35), f068_g0(-35, 47), f068_g0(-35, 34, 60))
+
+gene f068_g1(p, q = 67, r = 17) {
+
+    return p * 8 + q - r
+
+}
+
+print("f068-d1:", f068_g1(19), f068_g1(19, 50), f068_g1(19, 67, 17))
+
+gene f068_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f068_fib0(n - 1) + f068_fib0(n - 2)
+
+}
+
+print("f068-fib0:", f068_fib0(12))
+
+gene f068_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f068_fib1(n - 1) + f068_fib1(n - 2)
+
+}
+
+print("f068-fib1:", f068_fib1(7))
+
+gene f068_fib2(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f068_fib2(n - 1) + f068_fib2(n - 2)
+
+}
+
+print("f068-fib2:", f068_fib2(7))
+
+gene f068_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f068_gcd0(b, a % b)
+
+}
+
+print("f068-gcd0:", f068_gcd0(411, 686))
+
+gene f068_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f068_gcd1(b, a % b)
+
+}
+
+print("f068-gcd1:", f068_gcd1(395, 991))
+
+gene f068_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f068_c0 = f068_mk0(34)
+
+f068_c0(3)
+
+print("f068-cl0:", f068_c0(1))
+
+gene f068_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f068_c1 = f068_mk1(33)
+
+f068_c1(6)
+
+print("f068-cl1:", f068_c1(2))
+
+gene f068_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f068-hof0:", f068_tw0(gene (z) => z * 2 + 1, 29))
+
+gene f068_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f068-hof1:", f068_tw1(gene (z) => z * 2 + 1, 27))
+
+gene f068_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f068-dg0:", f068_sd0(96399))
+
+gene f068_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f068-dg1:", f068_sd1(529960))

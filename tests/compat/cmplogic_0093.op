@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=93 tag=c093
+
+print("c093-c0:", 1506 == -7419)
+
+print("c093-c1:", 4942 > 9926)
+
+print("c093-c2:", -5632 != 7575)
+
+print("c093-c3:", 1056 >= 6845)
+
+print("c093-c4:", -1648 != 5403)
+
+print("c093-c5:", -9907 == 5485)
+
+print("c093-b0:", 4 < 4 && 4 < 35, 4 > 4 || 4 > 35)
+
+print("c093-b1:", 48 < 7 && 7 < 19, 48 > 7 || 48 > 19)
+
+print("c093-b2:", 4 < 50 && 50 < 43, 4 > 50 || 4 > 43)
+
+print("c093-b3:", 21 < 24 && 24 < 6, 21 > 24 || 21 > 6)
+
+print("c093-t0:", -4487 > 5330 ? "gt" : "le")
+
+print("c093-t1:", -6283 > 7539 ? "gt" : "le")
+
+print("c093-t2:", 1121 > 8213 ? "gt" : "le")
+
+print("c093-t3:", -8581 > -1410 ? "gt" : "le")
+
+let c093_n0 = null
+
+print("c093-n0:", c093_n0 ?? 9547, c093_n0 == null)
+
+let c093_n1 = null
+
+print("c093-n1:", c093_n1 ?? -2369, c093_n1 == null)
+
+let c093_n2 = null
+
+print("c093-n2:", c093_n2 ?? -361, c093_n2 == null)
+
+print("c093-s0:", "zcoe" in "3nluw1zcoe", "zcoe" == "zcoe")
+
+print("c093-s1:", "ucBe" in "3CC5AhucBe", "ucBe" == "ucBe")

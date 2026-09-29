@@ -1,0 +1,158 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20260930 idx=34 tag=c034
+
+let c034_b0 = "start"
+
+if 8 > 80 { c034_b0 = "hi" } elif 8 > 40 { c034_b0 = "mid" } else { c034_b0 = "lo" }
+
+print("c034-i0:", c034_b0, 8)
+
+let c034_b1 = "start"
+
+if 18 > 80 { c034_b1 = "hi" } elif 18 > 40 { c034_b1 = "mid" } else { c034_b1 = "lo" }
+
+print("c034-i1:", c034_b1, 18)
+
+let c034_b2 = "start"
+
+if 26 > 80 { c034_b2 = "hi" } elif 26 > 40 { c034_b2 = "mid" } else { c034_b2 = "lo" }
+
+print("c034-i2:", c034_b2, 26)
+
+let c034_a0 = 0
+
+let c034_n0 = 0
+
+while c034_n0 < 9 {
+
+    c034_n0 += 3
+
+    if c034_n0 % 2 == 0 { continue }
+
+    if c034_n0 > 15 { break }
+
+    c034_a0 += c034_n0
+
+}
+
+print("c034-w0:", c034_a0, c034_n0)
+
+let c034_a1 = 0
+
+let c034_n1 = 0
+
+while c034_n1 < 10 {
+
+    c034_n1 += 1
+
+    if c034_n1 % 3 == 0 { continue }
+
+    if c034_n1 > 18 { break }
+
+    c034_a1 += c034_n1
+
+}
+
+print("c034-w1:", c034_a1, c034_n1)
+
+let c034_a2 = 0
+
+let c034_n2 = 0
+
+while c034_n2 < 10 {
+
+    c034_n2 += 1
+
+    if c034_n2 % 2 == 0 { continue }
+
+    if c034_n2 > 14 { break }
+
+    c034_a2 += c034_n2
+
+}
+
+print("c034-w2:", c034_a2, c034_n2)
+
+let c034_a3 = 0
+
+let c034_n3 = 0
+
+while c034_n3 < 19 {
+
+    c034_n3 += 1
+
+    if c034_n3 % 2 == 0 { continue }
+
+    if c034_n3 > 22 { break }
+
+    c034_a3 += c034_n3
+
+}
+
+print("c034-w3:", c034_a3, c034_n3)
+
+let c034_c0 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 2] {
+
+        c034_c0 += a * b
+
+    }
+
+}
+
+print("c034-l0:", c034_c0)
+
+let c034_c1 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 3] {
+
+        c034_c1 += a * b
+
+    }
+
+}
+
+print("c034-l1:", c034_c1)
+
+let c034_c2 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 3] {
+
+        c034_c2 += a * b
+
+    }
+
+}
+
+print("c034-l2:", c034_c2)
+
+let c034_acc0 = ""
+
+loop {
+
+    c034_acc0 += "x"
+
+    if c034_acc0.len() >= 4 { break }
+
+}
+
+print("c034-o0:", c034_acc0)
+
+let c034_acc1 = ""
+
+loop {
+
+    c034_acc1 += "x"
+
+    if c034_acc1.len() >= 6 { break }
+
+}
+
+print("c034-o1:", c034_acc1)

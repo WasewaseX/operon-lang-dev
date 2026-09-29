@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=98 tag=c098
+
+print("c098-c0:", 1667 == 457)
+
+print("c098-c1:", 9733 != 1782)
+
+print("c098-c2:", -891 <= 6328)
+
+print("c098-c3:", 4351 <= 9304)
+
+print("c098-c4:", 2933 > 2230)
+
+print("c098-c5:", -7900 > -5388)
+
+print("c098-c6:", 2910 > -1082)
+
+print("c098-b0:", 32 < 34 && 34 < 33, 32 > 34 || 32 > 33)
+
+print("c098-b1:", 43 < 45 && 45 < 0, 43 > 45 || 43 > 0)
+
+print("c098-t0:", -5737 > -1673 ? "gt" : "le")
+
+print("c098-t1:", 1676 > 9464 ? "gt" : "le")
+
+print("c098-t2:", -7525 > 6632 ? "gt" : "le")
+
+let c098_n0 = null
+
+print("c098-n0:", c098_n0 ?? 6150, c098_n0 == null)
+
+let c098_n1 = null
+
+print("c098-n1:", c098_n1 ?? 7738, c098_n1 == null)
+
+let c098_n2 = null
+
+print("c098-n2:", c098_n2 ?? -1469, c098_n2 == null)
+
+print("c098-s0:", "irby" in "7nlC7_irby", "irby" == "irby")
+
+print("c098-s1:", "jpmj" in "853eBbjpmj", "jpmj" == "jpmj")

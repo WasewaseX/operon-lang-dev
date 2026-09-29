@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=90 tag=s090
+
+print("s090-m0:", "6An64fu".upper(), "6An64fu".slice(1), "6An64fu".len())
+
+print("s090-m1:", "lgdvs9tjpdx47".upper(), "lgdvs9tjpdx47".slice(3), "lgdvs9tjpdx47".len())
+
+print("s090-m2:", "k_x34Bdp4wx".upper(), "k_x34Bdp4wx".slice(2), "k_x34Bdp4wx".len())
+
+print("s090-m3:", "4oxkzy".upper(), "4oxkzy".slice(4), "4oxkzy".len())
+
+print("s090-m4:", "pot4kcCp_bp".upper(), "pot4kcCp_bp".slice(4), "pot4kcCp_bp".len())
+
+print("s090-i0:", "5C4-{73}-06A0")
+
+let s090_v0 = 73
+
+print("s090-v0:", "n={s090_v0}" + "!" * 2)
+
+print("s090-i1:", "jsm-{55}-0_lc")
+
+let s090_v1 = 55
+
+print("s090-v1:", "n={s090_v1}" + "!" * 1)
+
+print("s090-i2:", "7_q-{66}-C6xb")
+
+let s090_v2 = 66
+
+print("s090-v2:", "n={s090_v2}" + "!" * 3)
+
+print("s090-r0:", "szk40kwo".replace("s", "jy"), "szk40kwo".contains("zk"))
+
+print("s090-r1:", "uys91ols".replace("u", "By"), "uys91ols".contains("ys"))
+
+print("s090-r2:", "6i6zjCia".replace("6", "qk"), "6i6zjCia".contains("i6"))
+
+print("s090-r3:", "thukyfth".replace("t", "6_"), "thukyfth".contains("hu"))
+
+print("s090-j0:", ["rti", "r_C", "sf7", "yyf"].join("-"))
+
+print("s090-j1:", ["Amd", "bdw", "64r", "xr7"].join("-"))
+
+print("s090-a0:", "87l294z".at(5), "87l294z".trim() == "87l294z")
+
+print("s090-a1:", "CCchm0d".at(5), "CCchm0d".trim() == "CCchm0d")

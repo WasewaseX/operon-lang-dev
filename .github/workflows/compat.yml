@@ -1,0 +1,92 @@
+name: compat
+
+# The reliability gate (docs/COMPAT.md): every push runs the differential
+# harness, the 3-way VM parity gate, the compat matrix, and the fuzzer
+# across OS x build-profile x word-size. Every optimization must preserve
+# semantics — enforced by identical bytes from every cell of the matrix.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  matrix:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # primary OS coverage, release profile
+          - os: ubuntu-latest
+            profile: release
+          - os: macos-latest
+            profile: release
+          - os: windows-latest
+            profile: release
+          # build-profile axis (A4): debug vs release on the primary OS
+          - os: ubuntu-latest
+            profile: debug
+          # word-size axis: 32-bit x86 (Linux), where usize/pointer-size
+          # and long-double behaviors would surface
+          - os: ubuntu-latest
+            profile: release
+            target: i686-unknown-linux-gnu
+          - os: ubuntu-latest
+            profile: release
+            target: aarch64-unknown-linux-gnu
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross toolchain (32-bit / aarch64 Linux)
+        if: matrix.target == 'i686-unknown-linux-gnu'
+        run: sudo apt-get update && sudo apt-get install -y gcc-multilib g++-multilib
+      - name: Install cross toolchain (aarch64)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          echo 'CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc' >> $GITHUB_ENV
+
+      - name: Build
+        run: cargo build --release
+        env:
+          CARGO_BUILD_TARGET: ${{ matrix.target }}
+
+      - name: Build (debug profile axis)
+        if: matrix.profile == 'debug' && !matrix.target
+        run: cargo build
+
+      - name: Unit tests
+        if: matrix.profile == 'release' && !matrix.target
+        run: cargo test --release
+
+      - name: Differential harness (Rust vs Python oracle)
+        run: python3 bootstrap/harness.py
+
+      - name: 3-way VM parity (tree-walk / vm / vm-opt)
+        shell: bash
+        run: bash scripts/vm_parity.sh
+
+      - name: Compat matrix (fresh randomized programs + full corpus)
+        shell: bash
+        run: bash scripts/compat_matrix.sh
+        env:
+          GEN: "1"
+          FRESH: "300"
+
+      - name: Parser fuzzer
+        shell: bash
+        run: python3 scripts/fuzz_parser.py --n 500 --seed 20260930 --exec
+
+      - name: Redteam containment
+        if: matrix.profile == 'release' && !matrix.target
+        shell: bash
+        run: bash scripts/redteam.sh

@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=15 tag=s015
+
+print("s015-m0:", "ka4php_c".upper(), "ka4php_c".slice(1), "ka4php_c".len())
+
+print("s015-m1:", "fm5wnki".upper(), "fm5wnki".slice(3), "fm5wnki".len())
+
+print("s015-m2:", "dfjtdwvCr2".upper(), "dfjtdwvCr2".slice(4), "dfjtdwvCr2".len())
+
+print("s015-m3:", "AtvChq".upper(), "AtvChq".slice(2), "AtvChq".len())
+
+print("s015-i0:", "n1y-{56}-wtq9")
+
+let s015_v0 = 56
+
+print("s015-v0:", "n={s015_v0}" + "!" * 1)
+
+print("s015-i1:", "1hj-{36}-5d2z")
+
+let s015_v1 = 36
+
+print("s015-v1:", "n={s015_v1}" + "!" * 3)
+
+print("s015-i2:", "npl-{1}-1z4h")
+
+let s015_v2 = 1
+
+print("s015-v2:", "n={s015_v2}" + "!" * 1)
+
+print("s015-i3:", "uwo-{27}-n4t2")
+
+let s015_v3 = 27
+
+print("s015-v3:", "n={s015_v3}" + "!" * 2)
+
+print("s015-i4:", "44B-{41}-djy8")
+
+let s015_v4 = 41
+
+print("s015-v4:", "n={s015_v4}" + "!" * 3)
+
+print("s015-r0:", "y52_Bq45".replace("y", "_j"), "y52_Bq45".contains("52"))
+
+print("s015-r1:", "dCor4yky".replace("d", "_5"), "dCor4yky".contains("Co"))
+
+print("s015-j0:", ["rqb", "ve4", "kkx", "9z8"].join("-"))
+
+print("s015-j1:", ["ykh", "yw3", "h8u", "h9m", "j53"].join("-"))
+
+print("s015-a0:", "o_yim8f".at(4), "o_yim8f".trim() == "o_yim8f")
+
+print("s015-a1:", "yB_hB4w".at(5), "yB_hB4w".trim() == "yB_hB4w")

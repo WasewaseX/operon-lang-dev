@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=10 tag=s010
+
+print("s010-m0:", "Cq7vhCuu4u1".upper(), "Cq7vhCuu4u1".slice(1), "Cq7vhCuu4u1".len())
+
+print("s010-m1:", "dynkA1r2mq1z7".upper(), "dynkA1r2mq1z7".slice(1), "dynkA1r2mq1z7".len())
+
+print("s010-m2:", "rfr3tuf7d".upper(), "rfr3tuf7d".slice(3), "rfr3tuf7d".len())
+
+print("s010-m3:", "Bv8Cg5jA842".upper(), "Bv8Cg5jA842".slice(3), "Bv8Cg5jA842".len())
+
+print("s010-m4:", "fwzu38dhn_98_C".upper(), "fwzu38dhn_98_C".slice(1), "fwzu38dhn_98_C".len())
+
+print("s010-i0:", "8mf-{35}-5z82")
+
+let s010_v0 = 35
+
+print("s010-v0:", "n={s010_v0}" + "!" * 1)
+
+print("s010-i1:", "5e_-{42}-xsxu")
+
+let s010_v1 = 42
+
+print("s010-v1:", "n={s010_v1}" + "!" * 1)
+
+print("s010-i2:", "l66-{8}-rz0p")
+
+let s010_v2 = 8
+
+print("s010-v2:", "n={s010_v2}" + "!" * 1)
+
+print("s010-r0:", "0v14r1ip".replace("0", "kk"), "0v14r1ip".contains("v1"))
+
+print("s010-r1:", "ithhdqlw".replace("i", "xc"), "ithhdqlw".contains("th"))
+
+print("s010-r2:", "njyx00s5".replace("n", "ij"), "njyx00s5".contains("jy"))
+
+print("s010-r3:", "35oql5ae".replace("3", "4t"), "35oql5ae".contains("5o"))
+
+print("s010-j0:", ["q42", "6xc", "tp3", "790", "uxj"].join("-"))
+
+print("s010-j1:", ["chb", "1ux", "0zk", "9hw"].join("-"))
+
+print("s010-a0:", "hirhhng".at(4), "hirhhng".trim() == "hirhhng")
+
+print("s010-a1:", "bgku0d5".at(4), "bgku0d5".trim() == "bgku0d5")
+
+print("s010-a2:", "v759x3B".at(4), "v759x3B".trim() == "v759x3B")

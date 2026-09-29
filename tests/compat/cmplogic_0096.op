@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=96 tag=c096
+
+print("c096-c0:", -1565 >= -3741)
+
+print("c096-c1:", 2180 > 6122)
+
+print("c096-c2:", 8003 == -538)
+
+print("c096-c3:", -3560 != -7382)
+
+print("c096-c4:", 4782 >= -4396)
+
+print("c096-c5:", 2678 >= -7021)
+
+print("c096-b0:", 45 < 19 && 19 < 29, 45 > 19 || 45 > 29)
+
+print("c096-b1:", 1 < 42 && 42 < 22, 1 > 42 || 1 > 22)
+
+print("c096-b2:", 2 < 2 && 2 < 2, 2 > 2 || 2 > 2)
+
+print("c096-b3:", 25 < 45 && 45 < 5, 25 > 45 || 25 > 5)
+
+print("c096-t0:", 2384 > 5370 ? "gt" : "le")
+
+print("c096-t1:", -4099 > -7255 ? "gt" : "le")
+
+let c096_n0 = null
+
+print("c096-n0:", c096_n0 ?? 1055, c096_n0 == null)
+
+let c096_n1 = null
+
+print("c096-n1:", c096_n1 ?? 9799, c096_n1 == null)
+
+let c096_n2 = null
+
+print("c096-n2:", c096_n2 ?? -8362, c096_n2 == null)
+
+print("c096-s0:", "7Bgo" in "Clkuhm7Bgo", "7Bgo" == "7Bgo")
+
+print("c096-s1:", "ntg8" in "k77w15ntg8", "ntg8" == "ntg8")

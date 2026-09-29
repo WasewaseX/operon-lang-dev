@@ -1,0 +1,244 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20260930 idx=10 tag=m010
+
+let m010_s0 = some(2)
+
+match m010_s0 {
+
+    case Some(x) if x > 2 {
+
+        print("m010-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m010-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m010-m0:", "none")
+
+    }
+
+}
+
+let m010_s1 = some(6)
+
+match m010_s1 {
+
+    case Some(x) if x > 6 {
+
+        print("m010-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m010-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m010-m1:", "none")
+
+    }
+
+}
+
+let m010_s2 = some(8)
+
+match m010_s2 {
+
+    case Some(x) if x > 8 {
+
+        print("m010-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m010-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m010-m2:", "none")
+
+    }
+
+}
+
+let m010_ls0 = [33, 13, 46]
+
+match m010_ls0 {
+
+    case [33, *rest] {
+
+        print("m010-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m010-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m010-l0:", "other")
+
+    }
+
+}
+
+let m010_ls1 = [42, 22, 31]
+
+match m010_ls1 {
+
+    case [42, *rest] {
+
+        print("m010-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m010-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m010-l1:", "other")
+
+    }
+
+}
+
+let m010_mp0 = {cell: 2010, vector: -1966}
+
+match m010_mp0 {
+
+    case {cell: p, vector: q} {
+
+        print("m010-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m010-mp0:", "miss")
+
+    }
+
+}
+
+let m010_mp1 = {vector: -4141, gene: 7126}
+
+match m010_mp1 {
+
+    case {vector: p, gene: q} {
+
+        print("m010-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m010-mp1:", "miss")
+
+    }
+
+}
+
+let m010_r0 = ok(4)
+
+match m010_r0 {
+
+    case Ok(n) | Err(4) {
+
+        print("m010-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m010-r0:", "zero")
+
+    }
+
+}
+
+let m010_r1 = ok(5)
+
+match m010_r1 {
+
+    case Ok(n) | Err(5) {
+
+        print("m010-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m010-r1:", "zero")
+
+    }
+
+}
+
+let m010_r2 = ok(3)
+
+match m010_r2 {
+
+    case Ok(n) | Err(3) {
+
+        print("m010-r2:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m010-r2:", "zero")
+
+    }
+
+}
+
+match "ligase" {
+
+    case "ligase" {
+
+        print("m010-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m010-w0:", "alt")
+
+    }
+
+}
+
+match "ribose" {
+
+    case "ribose" {
+
+        print("m010-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m010-w1:", "alt")
+
+    }
+
+}

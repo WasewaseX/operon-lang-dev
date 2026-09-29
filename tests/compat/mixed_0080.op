@@ -1,0 +1,230 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20260930 idx=80 tag=m080
+
+gene m080_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m080-b0:", m080_b0({helix: 43, gene: 46, ribose: 90})?!)
+
+gene m080_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m080-b1:", m080_b1({ligase: 69, ribose: 95, helix: 18})?!)
+
+gene m080_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m080_f0([3, 20, 2, 9, 46, 35, 15]) {
+
+    case Ok(list) {
+
+        print("m080-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m080-f0:", "e:", m)
+
+    }
+
+}
+
+gene m080_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m080_f1([28, 56, 15, 52, 58, 9]) {
+
+    case Ok(list) {
+
+        print("m080-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m080-f1:", "e:", m)
+
+    }
+
+}
+
+gene m080_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m080_f2([30, 49, 55, 39, 49, 46, 53]) {
+
+    case Ok(list) {
+
+        print("m080-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m080-f2:", "e:", m)
+
+    }
+
+}
+
+let m080_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m080-cc0:", m080_cl0(20)(20), m080_cl0(20)(20))
+
+let m080_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m080-cc1:", m080_cl1(14)(11), m080_cl1(11)(14))
+
+let m080_data0 = some([some("helix"), none(), some(8)])
+
+match m080_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m080-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m080-x0:", "shape-miss")
+
+    }
+
+}
+
+let m080_data1 = some([some("ligase"), none(), some(5)])
+
+match m080_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m080-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m080-x1:", "shape-miss")
+
+    }
+
+}

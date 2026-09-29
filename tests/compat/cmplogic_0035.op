@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=35 tag=c035
+
+print("c035-c0:", -5673 > 8181)
+
+print("c035-c1:", 9933 > -6733)
+
+print("c035-c2:", 4384 > 5423)
+
+print("c035-c3:", -668 == 389)
+
+print("c035-c4:", 2064 == 2567)
+
+print("c035-c5:", 9776 == -5364)
+
+print("c035-b0:", 37 < 40 && 40 < 4, 37 > 40 || 37 > 4)
+
+print("c035-b1:", 26 < 33 && 33 < 29, 26 > 33 || 26 > 29)
+
+print("c035-b2:", 37 < 24 && 24 < 31, 37 > 24 || 37 > 31)
+
+print("c035-b3:", 5 < 18 && 18 < 40, 5 > 18 || 5 > 40)
+
+print("c035-t0:", 6887 > -8885 ? "gt" : "le")
+
+print("c035-t1:", -7481 > 7830 ? "gt" : "le")
+
+print("c035-t2:", 8601 > 8965 ? "gt" : "le")
+
+let c035_n0 = null
+
+print("c035-n0:", c035_n0 ?? 8749, c035_n0 == null)
+
+let c035_n1 = null
+
+print("c035-n1:", c035_n1 ?? -1750, c035_n1 == null)
+
+let c035_n2 = null
+
+print("c035-n2:", c035_n2 ?? 157, c035_n2 == null)
+
+print("c035-s0:", "yufm" in "vr5zwCyufm", "yufm" == "yufm")
+
+print("c035-s1:", "49qk" in "neAv0o49qk", "49qk" == "49qk")

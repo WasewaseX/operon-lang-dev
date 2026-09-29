@@ -1,0 +1,50 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=49 tag=s049
+
+print("s049-m0:", "5C8u99oss".upper(), "5C8u99oss".slice(3), "5C8u99oss".len())
+
+print("s049-m1:", "wA2uhh5cAsns".upper(), "wA2uhh5cAsns".slice(3), "wA2uhh5cAsns".len())
+
+print("s049-m2:", "ed32t2".upper(), "ed32t2".slice(1), "ed32t2".len())
+
+print("s049-m3:", "B2ngvwr".upper(), "B2ngvwr".slice(4), "B2ngvwr".len())
+
+print("s049-i0:", "yaf-{18}-_tiA")
+
+let s049_v0 = 18
+
+print("s049-v0:", "n={s049_v0}" + "!" * 2)
+
+print("s049-i1:", "5Cf-{67}-r1vc")
+
+let s049_v1 = 67
+
+print("s049-v1:", "n={s049_v1}" + "!" * 3)
+
+print("s049-i2:", "mw_-{31}-yb04")
+
+let s049_v2 = 31
+
+print("s049-v2:", "n={s049_v2}" + "!" * 3)
+
+print("s049-i3:", "5Aj-{33}-3kng")
+
+let s049_v3 = 33
+
+print("s049-v3:", "n={s049_v3}" + "!" * 2)
+
+print("s049-r0:", "axCxc9n4".replace("a", "BB"), "axCxc9n4".contains("xC"))
+
+print("s049-r1:", "cdtwask4".replace("c", "6q"), "cdtwask4".contains("dt"))
+
+print("s049-r2:", "AlohhCu3".replace("A", "a8"), "AlohhCu3".contains("lo"))
+
+print("s049-r3:", "thAnBn1m".replace("t", "gC"), "thAnBn1m".contains("hA"))
+
+print("s049-j0:", ["rf4", "lpB", "7mc", "bp2"].join("-"))
+
+print("s049-j1:", ["tqB", "70b", "e58"].join("-"))
+
+print("s049-a0:", "03u18zh".at(3), "03u18zh".trim() == "03u18zh")
+
+print("s049-a1:", "AlBx8ph".at(2), "AlBx8ph".trim() == "AlBx8ph")

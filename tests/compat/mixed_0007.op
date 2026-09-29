@@ -1,0 +1,214 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20260930 idx=7 tag=m007
+
+gene m007_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m007-b0:", m007_b0({cell: 64, ligase: 70, splicer: 87})?!)
+
+gene m007_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m007-b1:", m007_b1({codon: 77, enzyme: 37, vector: 18})?!)
+
+gene m007_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m007-b2:", m007_b2({splicer: 87, ribose: 28, plasmid: 1})?!)
+
+gene m007_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m007_f0([58, 51, 50, 27, 3, 21, 57, 41]) {
+
+    case Ok(list) {
+
+        print("m007-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m007-f0:", "e:", m)
+
+    }
+
+}
+
+gene m007_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m007_f1([3, 18, 20, 56, 1, 35]) {
+
+    case Ok(list) {
+
+        print("m007-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m007-f1:", "e:", m)
+
+    }
+
+}
+
+let m007_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m007-cc0:", m007_cl0(7)(14), m007_cl0(14)(7))
+
+let m007_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m007-cc1:", m007_cl1(16)(20), m007_cl1(20)(16))
+
+let m007_data0 = some([some("codon"), none(), some(2)])
+
+match m007_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m007-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m007-x0:", "shape-miss")
+
+    }
+
+}
+
+let m007_data1 = some([some("plasmid"), none(), some(3)])
+
+match m007_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m007-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m007-x1:", "shape-miss")
+
+    }
+
+}

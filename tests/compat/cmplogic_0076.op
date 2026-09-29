@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=76 tag=c076
+
+print("c076-c0:", 9603 > -1956)
+
+print("c076-c1:", 9356 == 7671)
+
+print("c076-c2:", -7485 >= 5554)
+
+print("c076-c3:", -4552 >= -9763)
+
+print("c076-c4:", 9107 != -5457)
+
+print("c076-b0:", 44 < 12 && 12 < 37, 44 > 12 || 44 > 37)
+
+print("c076-b1:", 12 < 35 && 35 < 33, 12 > 35 || 12 > 33)
+
+print("c076-b2:", 47 < 25 && 25 < 41, 47 > 25 || 47 > 41)
+
+print("c076-t0:", 3778 > 6058 ? "gt" : "le")
+
+print("c076-t1:", 3331 > -4215 ? "gt" : "le")
+
+print("c076-t2:", -1382 > -757 ? "gt" : "le")
+
+print("c076-t3:", 2162 > -5714 ? "gt" : "le")
+
+let c076_n0 = null
+
+print("c076-n0:", c076_n0 ?? -4211, c076_n0 == null)
+
+let c076_n1 = null
+
+print("c076-n1:", c076_n1 ?? 7022, c076_n1 == null)
+
+let c076_n2 = null
+
+print("c076-n2:", c076_n2 ?? 9099, c076_n2 == null)
+
+print("c076-s0:", "dfix" in "sdi1cCdfix", "dfix" == "dfix")
+
+print("c076-s1:", "jou4" in "lx46e0jou4", "jou4" == "jou4")

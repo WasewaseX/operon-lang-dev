@@ -1,0 +1,54 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=69 tag=s069
+
+print("s069-m0:", "inAg4yk9k".upper(), "inAg4yk9k".slice(3), "inAg4yk9k".len())
+
+print("s069-m1:", "i29thjk".upper(), "i29thjk".slice(3), "i29thjk".len())
+
+print("s069-m2:", "i7i7ccie".upper(), "i7i7ccie".slice(1), "i7i7ccie".len())
+
+print("s069-m3:", "vwwtjs6jyt2t".upper(), "vwwtjs6jyt2t".slice(2), "vwwtjs6jyt2t".len())
+
+print("s069-i0:", "tir-{65}-dkwg")
+
+let s069_v0 = 65
+
+print("s069-v0:", "n={s069_v0}" + "!" * 3)
+
+print("s069-i1:", "v0_-{92}-Bp6p")
+
+let s069_v1 = 92
+
+print("s069-v1:", "n={s069_v1}" + "!" * 1)
+
+print("s069-i2:", "cqn-{10}-fn5z")
+
+let s069_v2 = 10
+
+print("s069-v2:", "n={s069_v2}" + "!" * 2)
+
+print("s069-i3:", "c6n-{39}-rklw")
+
+let s069_v3 = 39
+
+print("s069-v3:", "n={s069_v3}" + "!" * 3)
+
+print("s069-i4:", "man-{73}-By9e")
+
+let s069_v4 = 73
+
+print("s069-v4:", "n={s069_v4}" + "!" * 1)
+
+print("s069-r0:", "oxh6r87n".replace("o", "sc"), "oxh6r87n".contains("xh"))
+
+print("s069-r1:", "3hta7r35".replace("3", "od"), "3hta7r35".contains("ht"))
+
+print("s069-j0:", ["2ie", "otc", "c8B"].join("-"))
+
+print("s069-j1:", ["91p", "gAi", "4oa", "Bqn", "Bsc"].join("-"))
+
+print("s069-j2:", ["w9v", "4h2", "vyC", "b2x"].join("-"))
+
+print("s069-a0:", "2oq0m9n".at(5), "2oq0m9n".trim() == "2oq0m9n")
+
+print("s069-a1:", "o9m4nb6".at(4), "o9m4nb6".trim() == "o9m4nb6")

@@ -1,0 +1,62 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=75 tag=s075
+
+print("s075-m0:", "s9hz6r".upper(), "s9hz6r".slice(2), "s9hz6r".len())
+
+print("s075-m1:", "7h8ewycpi".upper(), "7h8ewycpi".slice(2), "7h8ewycpi".len())
+
+print("s075-m2:", "qg5zB25c4Cg".upper(), "qg5zB25c4Cg".slice(1), "qg5zB25c4Cg".len())
+
+print("s075-m3:", "dqpCembBxmnc".upper(), "dqpCembBxmnc".slice(3), "dqpCembBxmnc".len())
+
+print("s075-m4:", "yy0fBeC7ys".upper(), "yy0fBeC7ys".slice(4), "yy0fBeC7ys".len())
+
+print("s075-i0:", "mv0-{90}-vpvc")
+
+let s075_v0 = 90
+
+print("s075-v0:", "n={s075_v0}" + "!" * 2)
+
+print("s075-i1:", "8av-{45}-_x9h")
+
+let s075_v1 = 45
+
+print("s075-v1:", "n={s075_v1}" + "!" * 3)
+
+print("s075-i2:", "8_f-{81}-Cer3")
+
+let s075_v2 = 81
+
+print("s075-v2:", "n={s075_v2}" + "!" * 2)
+
+print("s075-i3:", "B3B-{34}-yswk")
+
+let s075_v3 = 34
+
+print("s075-v3:", "n={s075_v3}" + "!" * 1)
+
+print("s075-i4:", "kpm-{51}-1Byv")
+
+let s075_v4 = 51
+
+print("s075-v4:", "n={s075_v4}" + "!" * 1)
+
+print("s075-r0:", "BbgCoj4n".replace("B", "fx"), "BbgCoj4n".contains("bg"))
+
+print("s075-r1:", "caa2xuma".replace("c", "pj"), "caa2xuma".contains("aa"))
+
+print("s075-r2:", "qzri9pB7".replace("q", "6k"), "qzri9pB7".contains("zr"))
+
+print("s075-r3:", "zareh1xb".replace("z", "bA"), "zareh1xb".contains("ar"))
+
+print("s075-j0:", ["nzw", "mdn", "9tl", "3r7", "_cq"].join("-"))
+
+print("s075-j1:", ["oxy", "nic", "f0j", "Aqf", "xn0"].join("-"))
+
+print("s075-j2:", ["56e", "Cuk", "uBh"].join("-"))
+
+print("s075-a0:", "cqbAhdj".at(5), "cqbAhdj".trim() == "cqbAhdj")
+
+print("s075-a1:", "8Chch1p".at(2), "8Chch1p".trim() == "8Chch1p")
+
+print("s075-a2:", "e3neBjp".at(4), "e3neBjp".trim() == "e3neBjp")

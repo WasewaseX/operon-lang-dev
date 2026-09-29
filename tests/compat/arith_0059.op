@@ -1,0 +1,22 @@
+# compat corpus — generated, do not edit by hand
+# bucket=arith seed=20260930 idx=59 tag=a059
+
+print("a059-0:", -385)
+
+print("a059-1:", -392)
+
+print("a059-2:", -208)
+
+print("a059-3:", (-264 // (12)))
+
+print("a059-4:", -267)
+
+print("a059-f0:", 19.1)
+
+print("a059-f1:", (7687 / 7.5))
+
+print("a059-f2:", ((4295 + 3992) / 4))
+
+print("a059-f3:", 9480)
+
+print("a059-neg:", -606, -((((-400 % (3)) << 4) >> 1)))
