@@ -64,6 +64,7 @@ fn real_main() {
         profile: false,
         stdout_sink: None,
         vm: false,
+        vm_opt: false,
     };
     let mut json = false;
     let mut strict = false;
@@ -206,6 +207,12 @@ fn real_main() {
             "--quiet" => opts.quiet = true,
             // W09 (A2): run compiled gene bodies on the bytecode VM
             "--vm" => opts.vm = true,
+            // W11 (R1): VM + semantics-preserving optimizer (must stay
+            // byte-identical vs --vm; enforced by the compat matrix)
+            "--vm-opt" => {
+                opts.vm = true;
+                opts.vm_opt = true;
+            }
             "--nmd" => nmd = true,
             "--nmd=purge" | "--purge" => {
                 nmd = true;
@@ -267,7 +274,7 @@ fn real_main() {
             // happen after load (top-level binds gene defs) and before the
             // entry call; sequences/workers stay on the tree-walk.
             if opts.vm {
-                tools::vm_compile(&mut l);
+                tools::vm_compile_opt(&mut l, opts.vm_opt);
             }
             if let Some(f) = fuel {
                 l.interp.step_budget = f;
@@ -927,6 +934,7 @@ fn repl() {
             profile: false,
             stdout_sink: None,
             vm: false,
+            vm_opt: false,
         },
     ) {
         Ok(l) => l,
@@ -1021,6 +1029,7 @@ fn repl() {
                                 profile: false,
                                 stdout_sink: None,
                                 vm: false,
+                                vm_opt: false,
                             };
                             let rep = tools::run_tests(&[arg.to_string()], &opts, false);
                             println!(
@@ -1091,6 +1100,7 @@ fn repl() {
                                 profile: false,
                                 stdout_sink: None,
                                 vm: false,
+                                vm_opt: false,
                             },
                         ) {
                             Ok(nl) => nl,

@@ -83,17 +83,23 @@ pub enum Insn {
     // delegation (total coverage)
     Stmt(Rc<Stmt>),
     Expr(Rc<Expr>),
+    /// W11 (R1): filler left by the optimizer where a folded insn used to
+    /// be. Executes as nothing (no tick, no effect); keeps every pc stable
+    /// so folding never has to rewrite jump targets.
+    Nop,
 }
 
 /// The compiled unit for one program: gene bodies keyed by their
-/// `Arc<GeneDef>` identity pointer, plus delegation coverage stats.
+/// `Arc<GeneDef>` identity pointer, plus delegation coverage stats. Codes
+/// are un-wrapped so the W11 optimizer can rewrite them before the caller
+/// pins them behind `Rc` for execution.
 pub struct Unit {
-    pub funcs: Vec<(usize, Rc<FuncCode>)>,
+    pub funcs: Vec<(usize, FuncCode)>,
     pub delegated: Vec<&'static str>,
 }
 
 struct Compiler {
-    funcs: Vec<(usize, Rc<FuncCode>)>,
+    funcs: Vec<(usize, FuncCode)>,
     seen: std::collections::HashSet<usize>,
     delegated: Vec<&'static str>,
 }
@@ -167,7 +173,7 @@ impl Compiler {
                 self.delegated.push(tag);
             }
         }
-        self.funcs.push((key, Rc::new(fc.finish())));
+        self.funcs.push((key, fc.finish()));
     }
 
     fn walk_stmt_exprs(&mut self, s: &Stmt) {
@@ -340,7 +346,9 @@ impl Compiler {
                     }
                 }
             }
-            Expr::Collect { iter, filter, body, .. } => {
+            Expr::Collect {
+                iter, filter, body, ..
+            } => {
                 self.walk_expr(iter);
                 if let Some(f) = filter {
                     self.walk_expr(f);
@@ -874,6 +882,218 @@ impl FuncCompiler {
     }
 }
 
+// --------------------------------------------------------------- W11: opt
+
+/// W11 (R1): semantics-preserving optimization pass, run by `--vm-opt`.
+///
+/// The reliability rule (docs/COMPAT.md): every optimization must preserve
+/// semantics, and that is enforced by running opt vs unopt byte-identical
+/// over the whole corpus. To make the proof easy, the pass is deliberately
+/// small and conservative:
+///
+///   1. Constant folding — ONLY ops that cannot stress at runtime are
+///      folded (checked arithmetic that succeeded, non-zero divisors,
+///      scalar comparisons). An op whose runtime result would be a stress
+///      is left alone so the VM produces the identical stress at the
+///      identical point with the identical message. Float arithmetic is
+///      never folded (platform conservatism; same binary evaluates it
+///      identically at runtime).
+///   2. Fold windows overlapping any control-transfer target are refused;
+///      folded-out insns become `Nop`, so every pc stays valid and no
+///      jump target ever needs rewriting for folding.
+///   3. Jump threading — a jump whose target is itself an unconditional
+///      `Jmp` is re-pointed at the final target (operand rewrite only,
+///      fixpoint-bounded).
+///
+/// `Insn::Line` stamps are never folded away: the `cur_line` trajectory is
+/// identical with and without the pass, so tracebacks are byte-identical.
+pub fn optimize(code: &mut FuncCode) {
+    // 1. every pc any control-transfer insn names (over-inclusion is safe:
+    //    it only refuses folds).
+    let mut targets: std::collections::HashSet<usize> = std::collections::HashSet::new();
+    for (pc, insn) in code.insns.iter().enumerate() {
+        let _ = pc;
+        for t in insn_targets(insn) {
+            targets.insert(t as usize);
+        }
+    }
+    let frozen = |i: usize, targets: &std::collections::HashSet<usize>| targets.contains(&i);
+
+    // 2. constant folding, adjacency windows.
+    let mut i = 0;
+    while i < code.insns.len() {
+        // binary: [Const a, Const b, Bin op] -> [Nop, Nop, Const folded]
+        if i + 2 < code.insns.len() {
+            if let (Insn::Const(a), Insn::Const(b), Insn::Bin(op)) =
+                (&code.insns[i], &code.insns[i + 1], &code.insns[i + 2])
+            {
+                let (a, b, op) = (*a, *b, *op);
+                if !frozen(i, &targets) && !frozen(i + 1, &targets) && !frozen(i + 2, &targets) {
+                    if let Some(v) =
+                        fold_bin(op, &code.consts[a as usize], &code.consts[b as usize])
+                    {
+                        let k = code.consts.len() as u32;
+                        code.consts.push(v);
+                        code.insns[i] = Insn::Nop;
+                        code.insns[i + 1] = Insn::Nop;
+                        code.insns[i + 2] = Insn::Const(k);
+                        i += 3;
+                        continue;
+                    }
+                }
+            }
+        }
+        // unary: [Const a, Un op] -> [Nop, Const folded]
+        if i + 1 < code.insns.len() {
+            if let (Insn::Const(a), Insn::Un(op)) = (&code.insns[i], &code.insns[i + 1]) {
+                let (a, op) = (*a, *op);
+                if !frozen(i, &targets) && !frozen(i + 1, &targets) {
+                    if let Some(v) = fold_un(op, &code.consts[a as usize]) {
+                        let k = code.consts.len() as u32;
+                        code.consts.push(v);
+                        code.insns[i] = Insn::Nop;
+                        code.insns[i + 1] = Insn::Const(k);
+                        i += 2;
+                        continue;
+                    }
+                }
+            }
+        }
+        i += 1;
+    }
+
+    // 3. jump threading (operand rewrite only; fixpoint-bounded).
+    for _round in 0..8 {
+        let mut changed = false;
+        for i in 0..code.insns.len() {
+            let t = match &code.insns[i] {
+                Insn::Jmp(t)
+                | Insn::JmpIfFalse(t)
+                | Insn::AndJmp(t)
+                | Insn::OrJmp(t)
+                | Insn::NullishJmp(t) => *t as usize,
+                _ => continue,
+            };
+            // t == insns.len() is a legal "jump to the end" target (the VM
+            // treats pc == len as a normal return); there is no insn to
+            // thread through, so leave it alone.
+            if t >= code.insns.len() {
+                continue;
+            }
+            if let Insn::Jmp(u) = code.insns[t] {
+                if u as usize != t {
+                    match &mut code.insns[i] {
+                        Insn::Jmp(x)
+                        | Insn::JmpIfFalse(x)
+                        | Insn::AndJmp(x)
+                        | Insn::OrJmp(x)
+                        | Insn::NullishJmp(x) => *x = u,
+                        _ => unreachable!(),
+                    }
+                    changed = true;
+                }
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+}
+
+/// Every pc operand a control-transfer insn names (used to keep folds away
+/// from jump targets). Over-inclusive by design: CatchTrim's operand is a
+/// stack depth, not a pc, but naming it only refuses an occasional fold.
+fn insn_targets(insn: &Insn) -> Vec<u32> {
+    match insn {
+        Insn::Jmp(t)
+        | Insn::JmpIfFalse(t)
+        | Insn::AndJmp(t)
+        | Insn::OrJmp(t)
+        | Insn::NullishJmp(t)
+        | Insn::IterNext(t)
+        | Insn::IfDegraded(_, t)
+        | Insn::CatchTrim(t) => vec![*t],
+        Insn::LoopEnter(a, b) => vec![*a, *b],
+        Insn::CatchEnter(_, a, b) => vec![*a, *b],
+        _ => Vec::new(),
+    }
+}
+
+/// Compile-time fold of a binary op over constants. Mirrors the runtime
+/// arms in interp.rs `apply_binop` for the SAFE subset only; `None` means
+/// "not provably stress-free" and the VM will evaluate it at runtime
+/// exactly as the unoptimized code would.
+fn fold_bin(op: BinOp, l: &Value, r: &Value) -> Option<Value> {
+    use BinOp::*;
+    match (op, l, r) {
+        // int arithmetic: fold only when the checked op succeeds; on
+        // overflow the runtime produces the identical stress untouched.
+        (Add, Value::Int(a), Value::Int(b)) => a.checked_add(*b).map(Value::Int),
+        (Sub, Value::Int(a), Value::Int(b)) => a.checked_sub(*b).map(Value::Int),
+        (Mul, Value::Int(a), Value::Int(b)) => a.checked_mul(*b).map(Value::Int),
+        // floor division / modulo: mirrored arm-exact from interp.rs;
+        // refused (None) on every stress-producing input.
+        (FloorDiv, Value::Int(a), Value::Int(b)) => {
+            if *b == 0 || (*a == i64::MIN && *b == -1) {
+                return None;
+            }
+            let mut q = a / b;
+            if (*a < 0) != (*b < 0) && q.checked_mul(*b)? != *a {
+                q -= 1;
+            }
+            Some(Value::Int(q))
+        }
+        (Mod, Value::Int(a), Value::Int(b)) => {
+            if *b == 0 || (*a == i64::MIN && *b == -1) {
+                return None;
+            }
+            let mut q = a / b;
+            if (*a < 0) != (*b < 0) && q.checked_mul(*b)? != *a {
+                q -= 1;
+            }
+            let rb = q.checked_mul(*b)?;
+            Some(Value::Int(a.checked_sub(rb)?))
+        }
+        // bitwise: total, stress-free, two's complement
+        (BitAnd, Value::Int(a), Value::Int(b)) => Some(Value::Int(a & b)),
+        (BitOr, Value::Int(a), Value::Int(b)) => Some(Value::Int(a | b)),
+        (BitXor, Value::Int(a), Value::Int(b)) => Some(Value::Int(a ^ b)),
+        // scalar equality (deep_eq on scalars is structural ==)
+        (Eq, Value::Int(a), Value::Int(b)) => Some(Value::Bool(a == b)),
+        (Eq, Value::Str(a), Value::Str(b)) => Some(Value::Bool(a == b)),
+        (Eq, Value::Bool(a), Value::Bool(b)) => Some(Value::Bool(a == b)),
+        (Eq, Value::Null, Value::Null) => Some(Value::Bool(true)),
+        (Neq, Value::Int(a), Value::Int(b)) => Some(Value::Bool(a != b)),
+        (Neq, Value::Str(a), Value::Str(b)) => Some(Value::Bool(a != b)),
+        (Neq, Value::Bool(a), Value::Bool(b)) => Some(Value::Bool(a != b)),
+        (Neq, Value::Null, Value::Null) => Some(Value::Bool(false)),
+        // ordering on ints and strings (interp `compare` uses a.cmp(b))
+        (Lt, Value::Int(a), Value::Int(b)) => Some(Value::Bool(a < b)),
+        (Le, Value::Int(a), Value::Int(b)) => Some(Value::Bool(a <= b)),
+        (Gt, Value::Int(a), Value::Int(b)) => Some(Value::Bool(a > b)),
+        (Ge, Value::Int(a), Value::Int(b)) => Some(Value::Bool(a >= b)),
+        (Lt, Value::Str(a), Value::Str(b)) => Some(Value::Bool(a < b)),
+        (Le, Value::Str(a), Value::Str(b)) => Some(Value::Bool(a <= b)),
+        (Gt, Value::Str(a), Value::Str(b)) => Some(Value::Bool(a > b)),
+        (Ge, Value::Str(a), Value::Str(b)) => Some(Value::Bool(a >= b)),
+        // everything else (float arithmetic, shifts, Pow, In, mixed
+        // types, container equality) evaluates at runtime, unchanged.
+        _ => None,
+    }
+}
+
+/// Compile-time fold of a unary op over a constant (safe subset).
+fn fold_un(op: UnOp, v: &Value) -> Option<Value> {
+    match (op, v) {
+        (UnOp::Neg, Value::Int(a)) => a.checked_neg().map(Value::Int),
+        // float negation is an IEEE-exact sign flip on every platform
+        (UnOp::Neg, Value::Float(f)) => Some(Value::Float(-*f)),
+        (UnOp::Not, Value::Bool(b)) => Some(Value::Bool(!*b)),
+        (UnOp::BitNot, Value::Int(a)) => Some(Value::Int(!*a)),
+        _ => None,
+    }
+}
+
 /// Compile a whole program into its unit of gene function codes.
 pub fn compile_program(prog: &Program) -> Unit {
     let mut c = Compiler::new();
@@ -881,7 +1101,11 @@ pub fn compile_program(prog: &Program) -> Unit {
         c.collect_stmt(s);
     }
     // proof frames and named frames can carry gene defs too
-    for frame in prog.proofs.iter().chain(prog.named_frames.iter().map(|(_, b)| b)) {
+    for frame in prog
+        .proofs
+        .iter()
+        .chain(prog.named_frames.iter().map(|(_, b)| b))
+    {
         for s in frame {
             c.collect_stmt(s);
         }
