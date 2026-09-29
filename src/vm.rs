@@ -232,7 +232,6 @@ impl<'a> Compiler<'a> {
     /// unwinds its exec_block frames; the machine restores `cur` the same
     /// way, so a `let` inside a loop body can never leak across a break.
     fn emit_scope_unwinds(&mut self) {
-        // ast-grep-ignore: no-unwrap-in-src
         let depth = self.loops.last().map(|f| f.depth).unwrap_or(0);
         for _ in depth..self.scope_depth {
             self.emit(Instr::ExitScope, 0);
