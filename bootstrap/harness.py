@@ -149,20 +149,22 @@ def main():
                     print(f"    oracle stderr: {line}")
             failed += 1
     print(f"\nresult: {passed} match, {failed} diverge, {skipped} skipped")
-    # W09 A2: the bytecode lane. Every target runs again with --vm and is
-    # compared against the SAME oracle output. Calls/gates/entropy run on
-    # the shared path inside the VM, so output must be byte-identical;
-    # bridged constructs are the tree-walk itself. A target that passes
-    # tree-walk but fails --vm is a VM parity bug, not an oracle issue.
+    # W09 A6 (post-flip): the DEFAULT run IS the bytecode machine, and the
+    # main lane above pins it against the oracle. This lane keeps the OTHER
+    # engine (the tree-walk, --no-vm) pinned against the same oracle
+    # outputs, so both engines stay differentially covered on every step.
+    # Pre-flip this lane ran --vm explicitly; the labels inverted at the
+    # A6 boundary, the coverage contract (both engines, whole corpus) did
+    # not change.
     vm_pass, vm_fail = 0, 0
-    print(f"\n--vm lane (bytecode machine vs the same oracle output)")
+    print(f"\n--no-vm lane (tree-walk engine vs the same oracle output)")
     for t in targets:
         rel = os.path.relpath(t, root)
-        vm_out, vm_code, _ = run([binpath, "run", t, "--vm"])
+        vm_out, vm_code, _ = run([binpath, "run", t, "--no-vm"])
         try:
             py_out, py_code, py_err = run([sys.executable, oracle, "run", t])
         except subprocess.TimeoutExpired:
-            print(f"  TIMEOUT  {rel} (oracle, vm lane)")
+            print(f"  TIMEOUT  {rel} (oracle, tree-walk lane)")
             vm_fail += 1
             continue
         if vm_out == py_out and vm_code == py_code:
@@ -175,12 +177,12 @@ def main():
                 v = vo[i] if i < len(vo) else "<missing>"
                 p_ = po[i] if i < len(po) else "<missing>"
                 if v != p_:
-                    print(f"    vm    : {v}")
+                    print(f"    tree  : {v}")
                     print(f"    oracle: {p_}")
             if vm_code != py_code:
-                print(f"    exit codes: vm={vm_code} oracle={py_code}")
+                print(f"    exit codes: tree={vm_code} oracle={py_code}")
             vm_fail += 1
-    print(f"vm lane result: {vm_pass} match, {vm_fail} diverge")
+    print(f"tree-walk lane result: {vm_pass} match, {vm_fail} diverge")
     sys.exit(1 if (failed or vm_fail) else 0)
 
 if __name__ == "__main__":

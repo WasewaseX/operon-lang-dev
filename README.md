@@ -199,7 +199,7 @@ operon profile f.op                               # per-gene calls, exclusive se
 operon crispr f.op  (--knockout gene | --matrix) [--json]
 operon bench f.op   [--iters n]
 operon-ls                                         # stdio LSP: diagnostics, hover, definition, symbols, completion, formatting (SPEC §15)
-operon version                                    # Operon 2.2.0 (rust-core, cpp-kernel), banner matches SPEC 2.2.0
+operon version                                    # Operon 2.6.0-vm (rust-core, cpp-kernel), banner matches SPEC 2.6.0; -vm = the bytecode machine is the run default (W09 A6)
 ```
 
 ## Connect your editor (operon-ls)

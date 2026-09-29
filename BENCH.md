@@ -199,6 +199,22 @@ tree-walk. Honest measurement, median of 7 runs, same box:
 | --vm | 164.7 | **0.88x (slower)** |
 | --vm --opt 1 | 165.0 | 0.88x |
 
+A5 campaign update (2026-09-30, pre-flip): the call-path mallocs are gone
+(def-name re-clone per call, SipHash on the pointer-keyed code cache, the
+silences empty-gate entries collect, the call-counter entry clones) and the
+machine sits at parity end-to-end, median of 5:
+
+| config | fib25 | loops | collections | recursion |
+|---|---:|---:|---:|---:|
+| tree-walk | 139.3ms | 67.0ms | 49.4ms | 256.6ms |
+| VM (default since v2.6.0) | 141.2ms | 64.6ms | 49.4ms | 261.5ms |
+| ratio | 0.99x | 1.04x | 1.00x | 0.98x |
+
+A6 flip (2026-09-30, v2.6.0): the VM is the run default, `--interp` (or
+`--no-vm`) escapes to the tree-walk, the banner carries the `-vm` suffix.
+The >=3x stretch target stays OPEN under W11/A5; parity is the shipped
+floor, not the ceiling.
+
 The gate is **honestly missed** at stage A2, and the campaign that measured it
 found and fixed three real machine regressions along the way:
 

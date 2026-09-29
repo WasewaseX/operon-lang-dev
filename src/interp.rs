@@ -3539,12 +3539,19 @@ impl Interp {
         // probability is 1 − Π(1−s_i)^sites_i. strength 1.0 /
         // one site = legacy binary redirect (no draw, the RNG
         // stream is untouched for legacy programs).
-        let entries: Vec<(String, Option<String>, f64, u32)> = self
-            .silences
-            .iter()
-            .filter(|(f, _, _, _)| f == name)
-            .cloned()
-            .collect();
+        // A5 fast path: no silences configured = the gate is
+        // observationally inert (no entries, no draw, no notes), so the
+        // per-call entries collect (one malloc) is skipped. Empty and
+        // non-empty runtimes behave identically; this only removes work.
+        let entries: Vec<(String, Option<String>, f64, u32)> = if self.silences.is_empty() {
+            Vec::new()
+        } else {
+            self.silences
+                .iter()
+                .filter(|(f, _, _, _)| f == name)
+                .cloned()
+                .collect()
+        };
         if let Some((_, first_to, first_s, first_sites)) = entries.first().cloned() {
             // acetylated genes are immune (checked BEFORE any
             // draw, immunity consumes no randomness)
@@ -4822,23 +4829,8 @@ impl Interp {
                 }
             }
         }
-        *self.call_counts.entry(name.clone()).or_insert(0) += 1;
-        // burst-index binning: 20 calls per bin, per gene (gene-expression
-        // burstiness is measured on per-gene time bins, not across genes)
-        self.call_clock += 1;
-        // reg-bio-2 (C2): the decay clock, time-driven decay + translation
-        // integration tick here (unset key = no-op).
-        // loop-9 (P0-4): the m6A lattice decays on its own cadence when no
-        // GRN clock is configured (inert without `m6a.decay`, byte-identical).
-        self.m6a_decay_own();
-        self.grn_decay_tick();
-        let bucket = self.call_clock / 20;
-        *self
-            .gene_buckets
-            .entry(name.clone())
-            .or_default()
-            .entry(bucket)
-            .or_insert(0) += 1;
+        // per-call bookkeeping (counters, clock, decay ticks, burst bins)
+        self.bump_call_bookkeeping(&name);
         // @methylate: transcriptionally repressed genes announce their first
         // call (suppressed by .cell `methylate.quiet = true`)
         if def.methylate && !self.methyl_quiet && !self.methyl_noted.contains(&name) {
@@ -4969,10 +4961,10 @@ impl Interp {
         let result = if self.vm {
             // W09 A2: the compiled-body path. Param binding, the gate funnel
             // and guards ran above in the SHARED code; only the body
-            // execution swaps to the stack machine.
+            // execution swaps to the stack machine. `name` was computed at
+            // the funnel top — do NOT re-clone the def name per call.
             let key = std::sync::Arc::as_ptr(&def) as *const u8 as usize;
-            let name_for_vm = def.name.clone().unwrap_or_else(|| "<lambda>".into());
-            crate::vm::exec_gene_body(self, key, &name_for_vm, &def.body, &fenv)
+            crate::vm::exec_gene_body(self, key, &name, &def.body, &fenv)
         } else {
             self.exec_block(&fenv, &def.body)
         };
@@ -4997,6 +4989,43 @@ impl Interp {
                 // no explicit return → null; a non-optional return
                 // annotation is violated by an implicit null too
                 self.check_ret_ann("gene", &name, &def.ret_ann, &Value::Null, false)
+            }
+        }
+    }
+
+    /// Per-call bookkeeping shared by BOTH call funnels (gene + phenotype
+    /// method), in the pinned order: call counter, run clock, the decay
+    /// ticks between them (reg-bio-2 C2 + loop-9 P0-4), then the burst-index
+    /// bin (reg-bio-2, 20 calls per bin, per gene — burstiness is measured
+    /// on per-gene time bins, not across genes). `name` is borrowed; the
+    /// counter maps clone it only on the first sight of a gene (get_mut
+    /// fast path — the clone-per-call malloc is the fib25-class cost).
+    fn bump_call_bookkeeping(&mut self, name: &str) {
+        match self.call_counts.get_mut(name) {
+            Some(c) => *c += 1,
+            None => {
+                self.call_counts.insert(name.to_string(), 1);
+            }
+        }
+        self.call_clock += 1;
+        // reg-bio-2 (C2): the decay clock, time-driven decay + translation
+        // integration tick here (unset key = no-op).
+        // loop-9 (P0-4): the m6A lattice decays on its own cadence when no
+        // GRN clock is configured (inert without `m6a.decay`, byte-identical).
+        self.m6a_decay_own();
+        self.grn_decay_tick();
+        let bucket = self.call_clock / 20;
+        match self.gene_buckets.get_mut(name) {
+            Some(bins) => match bins.get_mut(&bucket) {
+                Some(c) => *c += 1,
+                None => {
+                    bins.insert(bucket, 1);
+                }
+            },
+            None => {
+                let mut bins = HashMap::new();
+                bins.insert(bucket, 1);
+                self.gene_buckets.insert(name.to_string(), bins);
             }
         }
     }
@@ -5272,20 +5301,8 @@ impl Interp {
             );
             return Ok(Value::Null);
         }
-        *self.call_counts.entry(name.clone()).or_insert(0) += 1;
-        self.call_clock += 1;
-        // reg-bio-2 (C2): the decay clock ticks on the phenotype-method path
-        // too (both expression surfaces share one timebase).
-        // loop-9 (P0-4): standalone m6A cadence (same contract, both paths).
-        self.m6a_decay_own();
-        self.grn_decay_tick();
-        let bucket = self.call_clock / 20;
-        *self
-            .gene_buckets
-            .entry(name.clone())
-            .or_default()
-            .entry(bucket)
-            .or_insert(0) += 1;
+        // per-call bookkeeping (counters, clock, decay ticks, burst bins)
+        self.bump_call_bookkeeping(&name);
         if def.methylate && !self.methyl_quiet && !self.methyl_noted.contains(&name) {
             self.methyl_noted.insert(name.clone());
             self.note(
@@ -5371,8 +5388,7 @@ impl Interp {
         let result = if self.vm {
             // W09 A2: the compiled-body path (see the call_gene_inner site)
             let key = std::sync::Arc::as_ptr(&def) as *const u8 as usize;
-            let name_for_vm = def.name.clone().unwrap_or_else(|| "<lambda>".into());
-            crate::vm::exec_gene_body(self, key, &name_for_vm, &def.body, &fenv)
+            crate::vm::exec_gene_body(self, key, &name, &def.body, &fenv)
         } else {
             self.exec_block(&fenv, &def.body)
         };
