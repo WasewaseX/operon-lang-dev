@@ -33,6 +33,9 @@ pub struct Opts {
     /// W09 (A2/A3): compile gene bodies to bytecode and execute them on
     /// the stack-machine VM (docs/VM.md). Output must stay byte-identical.
     pub vm: bool,
+    /// W11 (R1): run the semantics-preserving optimizer after compilation.
+    /// Implies vm. Output must stay byte-identical vs plain --vm.
+    pub vm_opt: bool,
 }
 
 pub struct Loaded {
@@ -365,10 +368,21 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
 /// Compilation is total (delegation leaves), so this never fails — the
 /// coverage list is informational only and must never touch program output.
 pub fn vm_compile(l: &mut Loaded) {
+    vm_compile_opt(l, false)
+}
+
+/// W09 (A2) + W11 (R1): compile gene bodies for the bytecode VM. With
+/// `opt` the semantics-preserving optimizer runs over every FuncCode; the
+/// result must stay byte-identical vs the unoptimized run (enforced by
+/// scripts/compat_matrix.sh, rule R1 in docs/COMPAT.md).
+pub fn vm_compile_opt(l: &mut Loaded, opt: bool) {
     let unit = crate::compile::compile_program(&l.prog);
     let mut m = std::collections::HashMap::new();
-    for (key, code) in unit.funcs {
-        m.insert(key, code);
+    for (key, mut code) in unit.funcs {
+        if opt {
+            crate::compile::optimize(&mut code);
+        }
+        m.insert(key, std::rc::Rc::new(code));
     }
     l.interp.vm_funcs = Some(m);
 }
@@ -400,9 +414,13 @@ pub fn disasm_file(file: &str, json_mode: bool) -> Result<String, String> {
                     out.push(',');
                 }
                 f2 = false;
-                out.push_str(&format!("{{\"i\":{},\"op\":{}\"}}", i, jstr(&insn_name(insn))));
+                out.push_str(&format!(
+                    "{{\"i\":{},\"op\":{}\"}}",
+                    i,
+                    jstr(&insn_name(insn))
+                ));
             }
-            out.push_str(&format!("]}}"));
+            out.push_str("]}");
         } else {
             out.push_str(&format!("fn {} ({} insns):\n", code.name, code.insns.len()));
             for (i, insn) in code.insns.iter().enumerate() {
@@ -412,7 +430,7 @@ pub fn disasm_file(file: &str, json_mode: bool) -> Result<String, String> {
         }
     }
     if json_mode {
-        out.push_str(&format!("]}}"));
+        out.push_str("]}");
     }
     Ok(out)
 }
@@ -471,6 +489,7 @@ fn insn_name(i: &crate::compile::Insn) -> String {
         RaiseStmt(..) => "RaiseStmt".into(),
         Stmt(_) => "Stmt".into(),
         Expr(_) => "Expr".into(),
+        Nop => "Nop".into(),
     }
 }
 
@@ -533,6 +552,7 @@ fn insn_text(i: &crate::compile::Insn) -> String {
         ),
         Stmt(_) => "Stmt <delegated>".into(),
         Expr(_) => "Expr <delegated>".into(),
+        Nop => "Nop".into(),
     }
 }
 

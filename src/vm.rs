@@ -8,7 +8,7 @@
 //! points the tree-walk arms stamp.
 
 use crate::compile::{FuncCode, Insn};
-use crate::interp::{charge_clone, ann_matches, Env, Flow, Interp};
+use crate::interp::{ann_matches, charge_clone, Env, Flow, Interp};
 use crate::value::{SeqState, Stress, Value};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -125,13 +125,21 @@ impl Interp {
         }
         match first_to {
             Some(to) => {
-                self.note(0, 4, format!("RISC: call to '{}' silenced → '{}'", name, to));
+                self.note(
+                    0,
+                    4,
+                    format!("RISC: call to '{}' silenced → '{}'", name, to),
+                );
                 let target = env.get(&to).unwrap_or(Value::Null);
                 Ok(Mark::Redirect(target))
             }
             // reg-bio (F-4): pure degradation — no replacement executes
             None => {
-                self.note(0, 4, format!("RISC: call to '{}' degraded (no replacement)", name));
+                self.note(
+                    0,
+                    4,
+                    format!("RISC: call to '{}' degraded (no replacement)", name),
+                );
                 Ok(Mark::Degraded)
             }
         }
@@ -538,7 +546,7 @@ impl Interp {
                                 self.seq_pull(st)?
                             }
                             Iter::Items(items, cur) => {
-                                let out = if *cur < items.len() {
+                                if *cur < items.len() {
                                     let v = items[*cur].clone();
                                     *cur += 1;
                                     // the materialized path ticks AFTER fetch
@@ -546,8 +554,7 @@ impl Interp {
                                     Some(v)
                                 } else {
                                     None
-                                };
-                                out
+                                }
                             }
                         };
                         match item {
@@ -655,6 +662,9 @@ impl Interp {
                         let v = self.eval(&env, e)?;
                         stack.push(v);
                     }
+                    // W11: optimizer filler — executes as nothing (no tick,
+                    // no stack effect); pcs never move, targets stay valid.
+                    Insn::Nop => {}
                 }
                 pc += 1;
                 Ok(())
@@ -663,8 +673,8 @@ impl Interp {
             if let Err(err) = step {
                 // W06 (D-014): propagation is a RETURN, pre-armed BEFORE kind
                 // matching at every catch site
-                if err.prop.is_some() {
-                    return Ok(Flow::Ret(err.prop.unwrap()));
+                if let Some(p) = err.prop {
+                    return Ok(Flow::Ret(p));
                 }
                 let mut s = Some(err);
                 let mut handled = false;
@@ -675,7 +685,7 @@ impl Interp {
                     }
                     let kind_ok = match &catches[ci].kind {
                         None => true,
-                        Some(k) => s.as_ref().map_or(false, |st| k == &st.kind || k == "any"),
+                        Some(k) => s.as_ref().is_some_and(|st| k == &st.kind || k == "any"),
                     };
                     if kind_ok {
                         let c = catches.remove(ci);
