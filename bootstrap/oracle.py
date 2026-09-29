@@ -5926,7 +5926,11 @@ class Interp:
                 i += 1
             return out
         if name == "memory":
-            import resource
+            # W59 windows truth (2026-09-29): a dead `import resource` sat
+            # here - unix-only module, zero usages - and every memory()
+            # call died with ModuleNotFoundError on Windows (first divergence
+            # in tests/differential/weak_refs.op, the CI-native windows job).
+            # The import is gone; the dict below never referenced it.
             # W013 (D-013): the cycles field mirrors the Rust live detected-
             # cycle gauge (insertion registers, reclamation prunes); the
             # other three keys are Rust symbol-table gauges the sequential
