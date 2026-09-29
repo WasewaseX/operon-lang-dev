@@ -941,3 +941,16 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
 5. If the environment resets: re-clone both repos, read this file + `collab/COMMS.md`
    tail + `/home/z/my-project/worklog.md` (if present), rebuild toolchain per
    `collab/guide.md`, continue from the sprint table above.
+
+### W101 - Excellent errors [P0, owner directive 2026-09-29] [dev-3] [L] [slice 1 done: sz/w101-excellent-errors]
+- Owner ask: hobby-language errors -> trusted-language errors: spans, line+column, snippets,
+  error codes, cause chains, suggestions, fix-it hints, stack traces, machine-readable JSON.
+- Slice 1 (this PR): src/diag.rs (code catalog E1xxx + rustc-style renderer + --json-errors
+  JSON diagnostics), runner wiring (block replaces the old one-liner; chain tail deduplicated),
+  scripts/diag_golden.sh golden gate (3 fixtures, byte-exact, rc=1 pinned), SPEC 9a.1 contract.
+  Stresses as VALUES untouched (oracle parity safe, notes byte-identical).
+- Slice 2 (queued): line attach at the denial sites (Caps::denied callers hold the call line),
+  did-you-mean suggestions for unknown names, LSP consumption of the JSON schema.
+- Slice 3 (dev-1 lane): column spans in the AST (dx-r2 spans carry line only), caret
+  threading; then parser/check diagnostics adopt the same codes.
+- Done when: all owner bullets are true for the FATAL surface and the golden gate runs in CI.

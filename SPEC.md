@@ -572,6 +572,42 @@ chains keep the 64 innermost frames).
   AND call-site lines), differential-pinned in `tests/differential/traceback_chain.op`
   and shape-pinned in `tests/traceback_shape.op`.
 
+### 9a.1. Error codes and rendered diagnostics (W101, owner directive)
+
+Every UNCAUGHT fatal stress (a stress that escapes the entry-gene call path to
+the runner) renders as a located block on stderr:
+
+```
+error[<code>]: <message>
+
+  --> <file>:<line>
+   |
+<line> | <source line>
+   |
+   = <note: the grant clause of a denial, else the kind>
+```
+
+Contract:
+- Codes are stable (E1xxx) and derived from (kind, message) by src/diag.rs:
+  E1002 missing, E1003 unfolded, E1004 unwrap, E1010 read, E1011 write,
+  E1012 net, E1013 exit/env, E1014 spawn, E1015 py, E1016 clock, E1019
+  other-capability, E1020 overflow, E1021 burned, E1000 unclassified.
+  New families append; codes never renumber.
+- The W007 call chain renders after the block, innermost frame first, capped
+  at 64, `at main` tail deduplicated against the entry frame.
+- `--json-errors` replaces the block with ONE JSON object on stderr:
+  code, kind, message, file, line, column, length, chain (gene+line array),
+  help (the --allow-* tokens extracted from the message itself). Unknown
+  location fields are null, never guessed.
+- The caret row appears only for capability denials whose failing call name
+  is found on the raise line (the AST is line-only today; columns arrive
+  with span threading, a dev-1 lane item). No other kind fakes a caret.
+- Stresses caught by rescue or soft-contained at the top level keep their
+  existing note format (parity surface, mirrored in the oracle); this section
+  governs the FATAL surface only.
+- Pinned by scripts/diag_golden.sh (byte-exact fixtures under
+  tests/diagnostics/); rc stays 1 (dx-r1).
+
 ## 9b. Security, the capability sandbox
 
 The runtime is **default-deny**: a program is an organism in a culture flask, and nothing outside the flask exists until the operator grants it. The builtins `read_file`, `write_file`, `append_file`, `exists`, `read_dir`, `file_size`, `fs_delete`, `fs_rename`, `fs_mkdir`, `run`, `py`, `http_get`, `serve`, `env`, and `exit` raise catchable Stress `interference` when no grant covers the access, RNA-interference: the cell's antiviral machinery silences the operation instead of crashing. `recv_request`/`send_response` poll a queue that only `serve` fills, so they are inert without a granted server.
