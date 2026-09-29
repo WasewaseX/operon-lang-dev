@@ -1,6 +1,6 @@
 # Operon, Language Specification
 
-**Status:** v2.3.0, post-2.3 language amendments are landing incrementally (the generated inventory in [docs/STATS.md](docs/STATS.md) is the countable truth; D-009: version strings move only with the milestone). Last tagged release: 2.2.0 (v2.3.0 release prep on main). This document is the single contract implemented identically by:
+**Status:** v2.4.0, post-2.4 language amendments are landing incrementally (the generated inventory in [docs/STATS.md](docs/STATS.md) is the countable truth; D-009: version strings move only with the milestone). Last tagged release: 2.2.0 (v2.3.0 release prep on main). This document is the single contract implemented identically by:
 
 | Implementation | Language | Role |
 |---|---|---|
@@ -1044,7 +1044,7 @@ module's placeholder map which fills when loading completes (with a rung-4
 note); map/filter/reduce/each run callbacks over a snapshot of the source
 list (callbacks may freely mutate the original).
 
-This specification is **Operon 2.3.0**. `operon version` prints the implementation banner `Operon 2.3.0 (rust-core, cpp-kernel)`, which matches this document. (sec-r2: the C runtime kernel was deleted, audit A15 proved its intern table was write-only and its raw pointers were the project's one ASan-confirmed memory-safety class; interning now lives in Rust, and the banner no longer claims a c-runtime.)
+This specification is **Operon 2.4.0**. `operon version` prints the implementation banner `Operon 2.4.0 (rust-core, cpp-kernel)`, which matches this document. (sec-r2: the C runtime kernel was deleted, audit A15 proved its intern table was write-only and its raw pointers were the project's one ASan-confirmed memory-safety class; interning now lives in Rust, and the banner no longer claims a c-runtime.)
 
 ## 18. Verification status (what the shipped suite proves)
 
