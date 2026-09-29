@@ -175,8 +175,18 @@ gene main() {
   raise "boom"
 }
 "#;
-    let (rc, _out, err, trace) = run_trace(src);
-    assert_eq!(rc, 1, "uncaught stress exits 1");
+    let (rc, out, err, trace) = run_trace(src);
+    // harness lesson (W100 session-2): a failing child's stderr must not
+    // anonymize — surface everything or the failure is undebuggable on
+    // runners we cannot reproduce locally (macos arm64 exit-code lie,
+    // 2026-09-29 release-matrix run).
+    assert_eq!(
+        rc, 1,
+        "uncaught stress exits 1 | stdout={:?} | stderr={:?} | trace_len={}",
+        out,
+        err,
+        trace.len()
+    );
     assert!(err.contains("boom"), "the failure is reported");
     assert!(
         trace.contains("\"phase\":\"fire\""),
