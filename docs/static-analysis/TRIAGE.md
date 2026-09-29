@@ -129,3 +129,66 @@ poisoning unwrap is now a finding, not a convention.
 Battery refresh at v2.4.0: ast-grep 0 findings (rules as guards), semgrep
 0 unjustified, bandit 0 real, spc trend unchanged (see reports/ for the raw
 SARIF/JSON at the release SHA).
+
+## Session-8 addendum — high-severity class audit + batch-1 drift (main @ ec32c0c + corpus hygiene)
+
+The v2.3.0/v2.4.0 ledger recorded spc counts as raw numbers. This pass audits
+every sev-3+ class sample-by-sample/sample-by-sample and measures the drift
+that dev1's batch-1 units introduced.
+
+### Drift since v2.4.0 (1419 → 1445, +26)
+
+All +26 are in batch-1's lane and in structural/style classes only:
+complex_flow +15, dynamic_memory +5, nested_conditionals +4,
+multiple_returns +2 (vm.rs +22, rna2.rs +3, main.rs +1 — the new W11
+superinstruction dispatch arms are big match tables; that is what fused ops
+look like to a complexity counter). ZERO growth in any security-relevant
+class: unsafe_file_op, race_condition, eval_usage, unsafe_input,
+unbounded_loops all unchanged.
+
+### High-severity class audit (sev 3–5)
+
+- **eval_usage (2, sev 5) — 0 true.** Both hits are the ffi.rs `unsafe {}`
+  blocks (rt_edit_distance / rt_codon_score); spc's eval rule misfires on
+  `unsafe {` + kernel symbol names. Both sites carry SAFETY docs and the
+  DP_CELL_BUDGET / FFI_OPERAND_CAP caps.
+- **race_condition (10, sev 3) — 0 true.** All ten are
+  `Ordering::Relaxed` atomics: cancel-flag polls (no ordering-dependent
+  data; polled in loops, so visibility is eventual by construction), the
+  fuel-pool fetch_sub (exact-count atomic RMW; ordering irrelevant to a
+  monotone budget), and the ALLOC_BYTES ceiling (monotone fetch_add with a
+  saturating compare). Relaxed is the correct memory order at every site.
+- **unsafe_input (2, sev 4) — 0 true.** REPL stdin read_line and
+  `env::args` — the input surface of a CLI toolchain; the language's
+  capability system governs what programs can do with them.
+- **unbounded_loops (68, sev 5) — 0 true, sampled per file class.** Parser
+  loops break on Tok::Eof and advance pos with a no-progress skip; the VM
+  dispatch loop pays `interp.tick()?` (fuel) every iteration and falls off
+  code end; the stress wait loop is deadline-bounded (timeout capped at
+  300 s); the stdout/stderr drainers are 64 MiB-capped; the REPL is
+  user-driven. Containment on hostile input is redteam's job — 106/0.
+- **unsafe_file_op (45, sev 3) — 0 true, sampled.** All sampled sites are
+  the stdlib FS builtins, which sit behind the capability gate
+  (caps_policy.op / security_caps.op pin this).
+- **set_timeout (30, sev 4) — 0 true.** spc's JS heuristic misreads
+  bounded `Duration`/`thread::sleep` poll schedules.
+
+### Real find of the pass: corpus-walker sandbox hygiene (fixed)
+
+fix_corpus law1 went RED in this sandbox: `examples/cookbook/fsm_turnstile.op`
+— an UNTRACKED draft left by a parallel lane — was swept by the corpus
+walker, and its (draft-quality) source red the meaning-preservation law. CI
+never sees this (clean checkout), which is exactly why it must be fixed
+here: any developer with stray drafts gets a false red. All three law
+walkers (fix_corpus.rs, fmt_idempotence.rs, fmt_width.rs) now filter to
+`git ls-files`-tracked .op files, degrading to include-all when git is
+absent (source tarballs). Also removed a stale ast-grep suppression
+directive in vm.rs left behind by the batch-1 refactor (stale suppressions
+hide future real findings).
+
+### Battery at ec32c0c + hygiene fix
+
+ast-grep 0 · semgrep 0 unjustified · bandit 0 real · spc 1445 (see drift
+above) · **CodeQL 0 findings** (rust-security-and-quality, 0 extraction
+errors) · cargo 199/0 · proofs 132/132 (2025 asserts) · redteam 106/0 ·
+harness vm lane 224/0 · clippy/fmt clean.

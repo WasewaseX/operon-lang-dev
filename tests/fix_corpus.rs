@@ -21,8 +21,32 @@
 use operon::parser;
 use operon::tools::{fix_source, format_program};
 
+/// sandbox hygiene: only TRACKED .op files are law-corpus. Untracked drafts
+/// left in a working tree by a parallel lane must not red the corpus laws —
+/// on CI the strays do not exist (clean checkout), so the filter only fires
+/// in dirty sandboxes. Degrades to include-all when git is unavailable
+/// (source tarballs without .git).
+fn tracked_op_files() -> Option<std::collections::HashSet<std::path::PathBuf>> {
+    let listing = std::process::Command::new("git")
+        .args(["ls-files", "std", "tests", "examples", "apps"])
+        .output()
+        .ok()?;
+    if !listing.status.success() {
+        return None;
+    }
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    Some(
+        String::from_utf8_lossy(&listing.stdout)
+            .lines()
+            .filter(|l| l.ends_with(".op"))
+            .map(|l| root.join(l))
+            .collect(),
+    )
+}
+
 fn corpus() -> Vec<std::path::PathBuf> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let tracked = tracked_op_files();
     let mut out = Vec::new();
     for dir in ["std", "tests", "examples", "apps"] {
         let base = root.join(dir);
@@ -40,7 +64,9 @@ fn corpus() -> Vec<std::path::PathBuf> {
                         continue;
                     }
                     stack.push(p);
-                } else if p.extension().map(|x| x == "op").unwrap_or(false) {
+                } else if p.extension().map(|x| x == "op").unwrap_or(false)
+                    && tracked.as_ref().is_some_and(|t| t.contains(&p))
+                {
                     out.push(p);
                 }
             }
