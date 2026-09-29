@@ -21,6 +21,94 @@
 //!   denial that produced it.
 
 use crate::value::Stress;
+use std::io::IsTerminal;
+
+/// W101 slice 3: color policy. Auto: only a terminal gets ANSI codes;
+/// NO_COLOR (the de-facto no-color.org convention) always wins; pipes,
+/// files and the golden gate stay byte-exact plain text. There is no
+/// always-on flag on purpose: the golden fixtures are the contract, and
+/// a --color=always that leaks into them would be a lie generator.
+pub fn color_enabled(stream_is_tty: bool) -> bool {
+    std::env::var_os("NO_COLOR").is_none() && stream_is_tty
+}
+
+/// Escape sequences are BUILT at runtime from pieces: no ANSI byte
+/// sequence appears literally in this source file, so nothing in the
+/// pipeline can strip a parameter and silently change the palette.
+fn ansi(params: &str) -> String {
+    let mut s = String::new();
+    s.push('\u{1b}');
+    s.push('[');
+    s.push_str(params);
+    s
+}
+fn c_reset() -> String {
+    ansi("0m")
+}
+fn c_dim() -> String {
+    ansi("2m")
+}
+fn c_bold() -> String {
+    ansi("1m")
+}
+fn c_red() -> String {
+    ansi("31m")
+}
+fn c_yellow() -> String {
+    ansi("33m")
+}
+fn c_cyan() -> String {
+    ansi("36m")
+}
+fn c_blue() -> String {
+    ansi("34m")
+}
+
+/// Severity word -> ANSI parameter. Unknown words render plain rather
+/// than guessing a palette entry.
+fn sev_code(sev: &str) -> &'static str {
+    match sev {
+        "error" => "31m",
+        "warning" => "33m",
+        "style" => "36m",
+        _ => "",
+    }
+}
+
+/// Display width of one char, the East-Asian-ambiguous-free subset: wide
+/// ranges get 2, the common combining block gets 0, everything else 1.
+/// Hand-rolled because the runtime is zero-dependency by policy; the
+/// ranges below cover CJK ideographs, kana, Hangul and fullwidth forms,
+/// which is every script our own corpus renders in carets today.
+fn char_width(c: char) -> usize {
+    let u = c as u32;
+    if (0x0300..=0x036F).contains(&u) {
+        return 0; // combining diacritics
+    }
+    let wide = (0x1100..=0x115F).contains(&u)
+        || (0x2E80..=0x303E).contains(&u)
+        || (0x3041..=0x33FF).contains(&u)
+        || (0x3400..=0x4DBF).contains(&u)
+        || (0x4E00..=0x9FFF).contains(&u)
+        || (0xA000..=0xA4CF).contains(&u)
+        || (0xAC00..=0xD7A3).contains(&u)
+        || (0xF900..=0xFAFF).contains(&u)
+        || (0xFE30..=0xFE4F).contains(&u)
+        || (0xFF00..=0xFF60).contains(&u)
+        || (0xFFE0..=0xFFE6).contains(&u)
+        || (0x20000..=0x2FFFD).contains(&u)
+        || (0x30000..=0x3FFFD).contains(&u);
+    if wide {
+        2
+    } else {
+        1
+    }
+}
+
+/// Display width of a str (caret alignment must survive CJK source text).
+fn str_width(s: &str) -> usize {
+    s.chars().map(char_width).sum()
+}
 
 /// The error-code catalog (SPEC §9a). One code per user-visible failure
 /// family, stable across releases; new families append, never renumber.
@@ -82,8 +170,15 @@ fn help_lines(message: &str) -> Vec<String> {
 /// word of the message is the failing call/builtin name (read_file 'x': ...);
 /// underline its first occurrence on the line. Other kinds honestly get no
 /// caret (the AST is line-only today; dx-r2 spans do not carry columns).
-/// Returns (col 0-based, len), or None.
-fn locate_caret(kind: &str, line_text: &str, message: &str) -> Option<(usize, usize)> {
+/// Returns (char column, char length, byte offset, byte length): the char
+/// pair feeds the JSON schema, the byte pair feeds width-correct caret
+/// padding (CJK text must not tear the underline off its target).
+/// Returns None when there is no honest caret.
+fn locate_caret(
+    kind: &str,
+    line_text: &str,
+    message: &str,
+) -> Option<(usize, usize, usize, usize)> {
     if kind != "interference" {
         return None;
     }
@@ -97,8 +192,8 @@ fn locate_caret(kind: &str, line_text: &str, message: &str) -> Option<(usize, us
         return None;
     }
     let byte_col = line_text.find(&name)?;
-    let col = line_text[..byte_col].chars().count();
-    Some((col, name.chars().count()))
+    let char_col = line_text[..byte_col].chars().count();
+    Some((char_col, name.chars().count(), byte_col, name.len()))
 }
 
 fn note_line(message: &str) -> Option<String> {
@@ -120,28 +215,64 @@ pub fn render_finding(
     rule: &str,
     line: usize,
     message: &str,
+    color: bool,
 ) -> String {
-    let mut out = format!("{}[{}]: {}\n", sev, code, message);
+    let c = if color { sev_code(sev) } else { "" };
+    let mut out = if c.is_empty() {
+        format!("{}[{}]: {}\n", sev, code, message)
+    } else {
+        format!(
+            "{}{}{}[{}]{}: {}\n",
+            c_bold(),
+            ansi(c),
+            sev,
+            code,
+            c_reset(),
+            message
+        )
+    };
     if line == 0 {
         return out;
     }
     let line_text = src.lines().nth(line - 1).unwrap_or("");
     let num = line.to_string();
     let pad = num.len();
+    let dim = if color { c_dim() } else { String::new() };
+    let blue = if color { c_blue() } else { String::new() };
+    let reset = if color { c_reset() } else { String::new() };
     out.push_str(&format!("\n  --> {}:{}\n", file, line));
-    out.push_str(&format!("{:>w$} |\n", "", w = pad + 1));
-    out.push_str(&format!("{} | {}\n", num, line_text));
-    out.push_str(&format!("{:>w$} |\n", "", w = pad + 1));
-    out.push_str(&format!("{:>w$} = rule: {}\n", "", rule, w = pad + 1));
+    out.push_str(&format!("{}{:>w$} |{}\n", dim, "", reset, w = pad + 1));
+    out.push_str(&format!("{}{} |{} {}\n", blue, num, reset, line_text));
+    out.push_str(&format!("{}{:>w$} |{}\n", dim, "", reset, w = pad + 1));
+    out.push_str(&format!(
+        "{}{:>w$} = rule: {}{}\n",
+        dim,
+        "",
+        rule,
+        reset,
+        w = pad + 1
+    ));
     out
 }
 
 /// The rendered text block (rustc shape). The W007 chain lines are appended
 /// in the runner's established format after the block so existing parsers of
 /// our stderr (cookbook expected files, redteam rc checks) keep working.
-pub fn render(file: &str, src: &str, s: &Stress) -> String {
+pub fn render(file: &str, src: &str, s: &Stress, color: bool) -> String {
     let code = code_for(&s.kind, &s.message);
-    let mut out = format!("error[{}]: {}\n", code, s.message);
+    let header = if color {
+        format!(
+            "{}{}error[{}]{}: {}\n",
+            c_bold(),
+            c_red(),
+            code,
+            c_reset(),
+            s.message
+        )
+    } else {
+        format!("error[{}]: {}\n", code, s.message)
+    };
+    let mut out = header;
     if s.line == 0 {
         out.push('\n');
         return out;
@@ -149,23 +280,46 @@ pub fn render(file: &str, src: &str, s: &Stress) -> String {
     let line_text = src.lines().nth(s.line - 1).unwrap_or("");
     let num = s.line.to_string();
     let pad = num.len();
+    let dim = if color { c_dim() } else { String::new() };
+    let blue = if color { c_blue() } else { String::new() };
+    let reset = if color { c_reset() } else { String::new() };
     out.push_str(&format!("\n  --> {}:{}\n", file, s.line));
-    out.push_str(&format!("{:>w$} |\n", "", w = pad + 1));
-    out.push_str(&format!("{} | {}\n", num, line_text));
-    if let Some((col, len)) = locate_caret(&s.kind, line_text, &s.message) {
+    out.push_str(&format!("{}{:>w$} |{}\n", dim, "", reset, w = pad + 1));
+    out.push_str(&format!("{}{} |{} {}\n", blue, num, reset, line_text));
+    if let Some((_cc, _cl, bc, bl)) = locate_caret(&s.kind, line_text, &s.message) {
+        let lead = str_width(&line_text[..bc]);
+        let mark = str_width(&line_text[bc..bc + bl]).max(1);
+        let caret = if color { c_red() } else { String::new() };
         out.push_str(&format!(
-            "{:>w$} | {}{}\n",
+            "{}{:>w$} | {}{}{}{}\n",
+            dim,
             "",
-            " ".repeat(col),
-            "^".repeat(len.max(1)),
-            w = pad + 1
+            reset,
+            " ".repeat(lead),
+            caret,
+            "^".repeat(mark),
+            w = pad + 1,
         ));
     }
-    out.push_str(&format!("{:>w$} |\n", "", w = pad + 1));
+    out.push_str(&format!("{}{:>w$} |{}\n", dim, "", reset, w = pad + 1));
     if let Some(note) = note_line(&s.message) {
-        out.push_str(&format!("{:>w$} = {}\n", "", note, w = pad + 1));
+        out.push_str(&format!(
+            "{}{:>w$} = {}{}\n",
+            dim,
+            "",
+            note,
+            reset,
+            w = pad + 1
+        ));
     } else {
-        out.push_str(&format!("{:>w$} = kind: {}\n", "", s.kind, w = pad + 1));
+        out.push_str(&format!(
+            "{}{:>w$} = kind: {}{}\n",
+            dim,
+            "",
+            s.kind,
+            reset,
+            w = pad + 1
+        ));
     }
     if !help_lines(&s.message).is_empty() {
         out.push_str("\nhelp: run with:\n");
@@ -187,7 +341,7 @@ pub fn render_json(file: &str, src: &str, s: &Stress) -> String {
         ""
     };
     let (col, len) = locate_caret(&s.kind, line_text, &s.message)
-        .map(|(c, l)| (c.to_string(), l.to_string()))
+        .map(|(c, l, _, _)| (c.to_string(), l.to_string()))
         .unwrap_or_else(|| ("null".into(), "null".into()));
     let chain: Vec<String> = s
         .chain
@@ -240,4 +394,76 @@ fn json_str(v: &str) -> String {
     }
     out.push('"');
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn width_survives_cjk_source_text() {
+        // the caret must land under the call name even when CJK text
+        // precedes it: display width, not char count, aligns the row
+        let line = "let \u{8def}\u{5f84} = read_file('x')";
+        assert_eq!(str_width("\u{8def}\u{5f84}"), 4);
+        assert_eq!(str_width(line), line.chars().count() + 2);
+    }
+
+    #[test]
+    fn json_columns_stay_char_based() {
+        // JSON consumers get the char column (SPEC 9a schema), the text
+        // renderer gets the byte offset for padding; both come from one
+        // locate_caret call so they cannot disagree
+        let line = "\u{6f2c}\u{5b57} read_file('x')";
+        let (cc, cl, bc, bl) =
+            locate_caret("interference", line, "read_file denied: no grant").unwrap();
+        assert_eq!((cc, cl), (3, 9));
+        assert_eq!((bc, bl), (7, 9));
+    }
+
+    #[test]
+    fn color_is_off_for_pipes_and_honors_no_color() {
+        // pipes/files/goldens never get ANSI codes; NO_COLOR wins even on
+        // a (pretend) tty
+        assert!(!color_enabled(false));
+        std::env::set_var("NO_COLOR", "1");
+        assert!(!color_enabled(true));
+        std::env::remove_var("NO_COLOR");
+    }
+
+    #[test]
+    fn plain_and_colored_blocks_carry_the_same_content() {
+        let src = "gene main() {\n  let dead = 1\n}\n";
+        let plain = render_finding(
+            "f.op",
+            src,
+            "warning",
+            "W07",
+            "unused-binding",
+            2,
+            "msg",
+            false,
+        );
+        assert!(!plain.contains('\x1b'), "pipe output must be plain");
+        let colored = render_finding(
+            "f.op",
+            src,
+            "warning",
+            "W07",
+            "unused-binding",
+            2,
+            "msg",
+            true,
+        );
+        assert!(colored.contains(&c_yellow()));
+        assert!(colored.contains(&c_reset()));
+        // the visible words are identical: severity+code header, location
+        // and rule note appear in both; escapes wrap, never replace, words
+        assert!(colored.contains("warning[W07]"));
+        assert!(colored.contains(": msg"));
+        for marker in ["--> f.op:2", "let dead = 1", "= rule: unused-binding"] {
+            assert!(plain.contains(marker), "plain missing: {}", marker);
+            assert!(colored.contains(marker), "colored missing: {}", marker);
+        }
+    }
 }

@@ -10,6 +10,8 @@ use operon::parser;
 use operon::pkg;
 use operon::rna2;
 use operon::tools;
+// W101 slice 3: IsTerminal drives the auto color policy for diagnostics
+use std::io::IsTerminal;
 
 use operon::ast::Stmt;
 use operon::die;
@@ -621,6 +623,7 @@ fn real_main() {
                         println!("lint: {}, clean", file);
                     } else {
                         let fsrc = std::fs::read_to_string(file).unwrap_or_default();
+                        let color = operon::diag::color_enabled(std::io::stdout().is_terminal());
                         for f in fs {
                             print!(
                                 "{}",
@@ -631,7 +634,8 @@ fn real_main() {
                                     &f.code,
                                     &f.rule,
                                     f.line,
-                                    &f.message
+                                    &f.message,
+                                    color
                                 )
                             );
                         }
@@ -754,7 +758,15 @@ fn real_main() {
                                 operon::diag::render_json(&l.interp.file, &src_text, &s)
                             );
                         } else {
-                            eprint!("{}", operon::diag::render(&l.interp.file, &src_text, &s));
+                            eprint!(
+                                "{}",
+                                operon::diag::render(
+                                    &l.interp.file,
+                                    &src_text,
+                                    &s,
+                                    operon::diag::color_enabled(std::io::stderr().is_terminal())
+                                )
+                            );
                             for (i, (name, line)) in s.chain.iter().enumerate() {
                                 if i >= 64 {
                                     eprintln!("  … {} more frame(s)", s.chain.len() - 64);
@@ -2419,6 +2431,7 @@ fn print_diag(
     style_inline: &[operon::lint::Finding],
 ) {
     use operon::lint::Sev;
+    let color = operon::diag::color_enabled(std::io::stdout().is_terminal());
     let mut errors: Vec<&operon::lint::Finding> = Vec::new();
     let mut warnings: Vec<&operon::lint::Finding> = Vec::new();
     for f in findings {
@@ -2441,7 +2454,7 @@ fn print_diag(
             print!(
                 "{}",
                 operon::diag::render_finding(
-                    file, src, name, &&f.code, &f.rule, f.line, &f.message
+                    file, src, name, &f.code, &f.rule, f.line, &f.message, color
                 )
             );
         }
@@ -2479,7 +2492,7 @@ fn print_diag(
             print!(
                 "{}",
                 operon::diag::render_finding(
-                    file, src, "style", &&f.code, &f.rule, f.line, &f.message
+                    file, src, "style", &f.code, &f.rule, f.line, &f.message, color
                 )
             );
         }
