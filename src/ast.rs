@@ -135,6 +135,20 @@ pub struct GeneDef {
     /// W01: return annotation, `gene f() -> int { }`. Checked when the
     /// gene produces its return value (including a `?!`-propagated one).
     pub ret_ann: Option<TypeAnn>,
+    /// W64: `@deprecated("migration text", since="2.4")` metadata. Parse
+    /// and tooling surface only (lint `deprecated-use` findings, doc/fmt
+    /// round-trip); the interpreter never reads it, runtime is untouched.
+    pub deprecated: Option<Deprecation>,
+}
+
+/// W64: the structured payload of a deprecation mark.
+#[derive(Debug, Clone, Default)]
+pub struct Deprecation {
+    /// The migration text: what to use instead, why the mark exists.
+    pub message: String,
+    /// Optional calendar gate from the compatibility ladder (W63),
+    /// `since="2.4"`: the release that started the deprecation clock.
+    pub since: Option<String>,
 }
 
 /// W01 (L2c): the annotation grammar, `int`, `float`, `str`, `bool`,
@@ -466,6 +480,12 @@ pub enum Stmt {
     AnchorExport(Vec<String>),
     AnchorImport(Vec<String>),
     Tad(String, Vec<Stmt>),
+    /// W025 stage 2: nested sub-module declaration, `module seq { gene x() { … } }`
+    /// inside a module file (or any block). The body runs once in a fresh child
+    /// scope at declaration time; the child scope's names become the sub-module's
+    /// export table (a Map bound under `name`). Use paths stay file-first: a
+    /// `use` tries the flat file, then descends these nested tables (SPEC §8).
+    Module(String, Vec<Stmt>),
     Block(Vec<Stmt>),     // bare scoped block (Total Grammar repair product)
     Seq(Arc<GeneDef>),    // sequence definition (generator)
     Yield(Option<Expr>),  // yield inside a sequence body

@@ -1,0 +1,36 @@
+# W066: the .cell schema, exercised as loaded configuration (both cores).
+# Sanity-first granted-lane idiom (m6a_decay_cadence precedent): the first
+# assert burns when the file is run zero-grant, which means the contract is
+# NOT being exercised — run it with its cell:
+#   operon test tests/granted/cell_schema.op --cell tests/granted/cell_schema.cell
+# Pins: every declared key reads back TYPED, unknown keys are ignored by the
+# engine (the read falls back to the caller default — the note lane lives in
+# tests/cell_schema.rs), and the run stays silent: no repair output, no
+# rejections, a schema-conformant cell is invisible on stdout.
+frame proof {
+    # sanity: the cell must actually be present, otherwise this file is
+    # being run zero-grant and the contract is not exercisable
+    assert(methyl("m6a.reader.decay", 0.0) == 0.25, "operator cell carries the schema keys")
+    # every declared kind reads back typed (int -> int, number -> float,
+    # bool -> bool; same-typed comparisons on both cores)
+    assert(methyl("m6a.reader.min_level") == 2, "integer key reads as int")
+    assert(methyl("methylate.threshold") == 3, "integer key threshold")
+    assert(methyl("run.timeout_ms") == 10000, "integer key timeout")
+    assert(methyl("operon.polarity") == 0.5, "number key reads as float")
+    assert(methyl("rho.catch") == 0.5, "number key rho.catch")
+    assert(methyl("quorum.dilution") == 0.5, "number key quorum.dilution")
+    assert(methyl("expression.kon") == 0.3, "number key expression.kon")
+    assert(methyl("repressi.alpha") == 10.0, "number key repressi.alpha")
+    assert(methyl("m6a.reader.translation") == 0.1, "number key m6a.reader.translation")
+    assert(methyl("rho.termination") == true, "bool key reads as bool")
+    # [section] composition lands as section.key
+    assert(methyl("ribosome.queue_cap") == 0.0, "[ribosome] queue_cap composed")
+    # unknown keys are IGNORED by the engine: reads fall back
+    assert(methyl("m6a.reader.decayy") == null, "typo'd key is absent, not data")
+    assert(methyl("m6a.reader.decayy", 99) == 99, "unknown key falls back to caller default")
+    assert(methyl("decay", "absent") == "absent", "top-level stray key is not a schema key")
+    assert(methyl("ligand.atp", 0.0) == 0.0, "unset family member defaults to the caller value")
+}
+main {
+    promote("cell schema: keys read typed, unknown keys ignored, run silent")
+}

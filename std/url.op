@@ -1,0 +1,206 @@
+# std/url, percent-encoding and URL shaping over plain strings (pure Operon).
+#
+# Deterministic by construction: `url_query_encode` sorts keys before it
+# builds the query string (canonical output for the same map), and every
+# decode is lenient per the Total Grammar spirit: a malformed escape keeps
+# its raw characters instead of failing. Encoding uses the RFC 3986
+# unreserved set (A-Z a-z 0-9 - _ . ~); spaces become %20.
+
+## Percent-encode: every byte outside the unreserved set becomes %XX.
+gene url_encode(s) {
+    let out = ""
+    let i = 0
+    while i < len(s) {
+        let c = char_at(s, i)
+        if url_is_unreserved(c) {
+            out = out + c
+        } else {
+            out = out + url_hex_escape(ord(c))
+        }
+        i = i + 1
+    }
+    return out
+}
+
+## Decode %XX (and "+" as space, the query form); a malformed escape keeps
+## its raw characters. Lenient by contract, never fails.
+gene url_decode(s) {
+    let out = ""
+    let i = 0
+    while i < len(s) {
+        let c = char_at(s, i)
+        if c == "+" {
+            out = out + " "
+            i = i + 1
+            continue
+        }
+        if c == "%" and i + 2 < len(s) {
+            let hi = url_hex_value(char_at(s, i + 1))
+            let lo = url_hex_value(char_at(s, i + 2))
+            if hi >= 0 and lo >= 0 {
+                out = out + chr(hi * 16 + lo)
+                i = i + 3
+                continue
+            }
+        }
+        out = out + c
+        i = i + 1
+    }
+    return out
+}
+
+## Parse scheme://host[:port]/path?query into a map. Missing pieces are ""
+## and {}; the query part becomes a map of decoded key/value pairs. A
+## string with no "://" parses as a bare path (scheme "").
+gene url_parse(u) {
+    let rest = u
+    let scheme = ""
+    let scheme_end = url_index_of(u, "://")
+    if scheme_end >= 0 {
+        scheme = char_slice(u, 0, scheme_end)
+        rest = char_slice(u, scheme_end + 3, len(u))
+    }
+    # one "/" separates authority from path; "?" separates the query
+    let slash = url_index_of(rest, "/")
+    let qmark = url_index_of(rest, "?")
+    let authority = rest
+    let path = ""
+    let query = ""
+    if qmark >= 0 {
+        query = char_slice(rest, qmark + 1, len(rest))
+        rest = char_slice(rest, 0, qmark)
+    }
+    if slash >= 0 {
+        authority = char_slice(rest, 0, slash)
+        path = char_slice(rest, slash, len(rest))
+    } else {
+        if qmark >= 0 {
+            authority = rest
+        }
+    }
+    let host = authority
+    let port = ""
+    let colon = url_rindex_of(authority, ":")
+    if colon >= 0 {
+        host = char_slice(authority, 0, colon)
+        port = char_slice(authority, colon + 1, len(authority))
+    }
+    let params = {}
+    if len(query) > 0 {
+        for pair in query.split("&") {
+            if len(pair) == 0 {
+                continue
+            }
+            let eq = url_index_of(pair, "=")
+            if eq >= 0 {
+                params[url_decode(char_slice(pair, 0, eq))] = url_decode(char_slice(pair, eq + 1, len(pair)))
+            } else {
+                params[url_decode(pair)] = ""
+            }
+        }
+    }
+    let out = {}
+    out["scheme"] = scheme
+    out["host"] = host
+    out["port"] = port
+    out["path"] = path
+    out["query"] = params
+    return out
+}
+
+## Map to a canonical query string: keys sorted, both sides encoded,
+## "k=v" pairs joined with "&" (an empty map gives "").
+gene url_query_encode(m) {
+    let ks = keys(m).sort()
+    let parts = []
+    for k in ks {
+        push(parts, url_encode(k) + "=" + url_encode(m[k]))
+    }
+    let out = ""
+    let i = 0
+    while i < len(parts) {
+        if i > 0 {
+            out = out + "&"
+        }
+        out = out + parts[i]
+        i = i + 1
+    }
+    return out
+}
+
+# ------------------------------------------------------------- internals
+
+## The RFC 3986 unreserved set, one character at a time.
+gene url_is_unreserved(c) {
+    if c >= "A" and c <= "Z" {
+        return true
+    }
+    if c >= "a" and c <= "z" {
+        return true
+    }
+    if c >= "0" and c <= "9" {
+        return true
+    }
+    return c == "-" or c == "_" or c == "." or c == "~"
+}
+
+## Uppercase two-digit hex for one code point (// keeps the digits integer;
+## a float into chr degrades to empty on both cores).
+gene url_hex_escape(cp) {
+    return "%" + url_hex_digit(cp // 16) + url_hex_digit(cp % 16)
+}
+
+gene url_hex_digit(v) {
+    if v < 10 {
+        return chr(48 + v)
+    }
+    return chr(65 + v - 10)
+}
+
+## Hex digit value, -1 on anything else (drives the lenient decode).
+gene url_hex_value(c) {
+    if c >= "0" and c <= "9" {
+        return ord(c) - 48
+    }
+    if c >= "a" and c <= "f" {
+        return ord(c) - 87
+    }
+    if c >= "A" and c <= "F" {
+        return ord(c) - 55
+    }
+    return -1
+}
+
+## Leftmost index of a needle (pure char scan; strings carry no index_of
+## on either core), -1 when absent.
+gene url_index_of(s, needle) {
+    let n = len(needle)
+    if n == 0 {
+        return 0
+    }
+    let lim = len(s) - n
+    let i = 0
+    while i <= lim {
+        if char_slice(s, i, i + n) == needle {
+            return i
+        }
+        i = i + 1
+    }
+    return -1
+}
+
+## Rightmost index of a needle, -1 when absent.
+gene url_rindex_of(s, needle) {
+    let n = len(needle)
+    if n == 0 {
+        return len(s)
+    }
+    let i = len(s) - n
+    while i >= 0 {
+        if char_slice(s, i, i + n) == needle {
+            return i
+        }
+        i = i - 1
+    }
+    return -1
+}

@@ -63,7 +63,7 @@ Analogy voice per D-008 (zero biology assumed; one-line programmer meaning).
 | `tad` | module boundary (TAD-insulated exports) |
 | `threshold` | gate cutoff |
 | `toggle` | boolean gate switch |
-| `trait` | *(analogy pending, file a docs finding)* |
+| `trait` | interface (required + default methods) |
 | `use` | import module |
 | `variant` | named alternative implementation |
 | `while` | condition loop |
@@ -71,5 +71,3 @@ Analogy voice per D-008 (zero biology assumed; one-line programmer meaning).
 
 Literal words `true false null` and logical `and or not` are recognized in
 expression positions but are not part of the reserved table (SPEC §3).
-
-NOTE: 1 keyword(s) lack a D-008 analogy: trait.

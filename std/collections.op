@@ -1,7 +1,14 @@
 # std/collections, self-hosted library written in Operon itself.
 # Runs on the Rust core; proves the language can carry its own weight.
+#
+# Every public gene carries W001 soft type annotations (SPEC §7c) on its
+# params and returns: the boundaries are checked at call time and a wrong
+# type unfolds into a catchable Stress naming the annotation. Element
+# positions stay unannotated on purpose so one gene serves any element
+# type. Queue/deque/heap container families live in std/deque.op and
+# std/heap.op; this module is the list-shaped data work (W026 stage 1).
 
-gene chunk(xs, size) {
+gene chunk(xs: list, size: int) -> list {
     let out = []
     let cur = []
     for v in xs {
@@ -17,12 +24,12 @@ gene chunk(xs, size) {
     return out
 }
 
-gene zip(a, b) {
+gene zip(a: list, b: list) -> list {
     let n = min(len(a), len(b))
     return for i in range(0, n) collect [a[i], b[i]]
 }
 
-gene group_by(xs, keyf) {
+gene group_by(xs: list, keyf: gene) -> map {
     let out = {}
     for v in xs {
         let k = keyf(v)
@@ -34,11 +41,11 @@ gene group_by(xs, keyf) {
     return out
 }
 
-gene take(xs, n) {
+gene take(xs: list, n: int) -> list {
     return xs.slice(0, n)
 }
 
-gene flatten(xss) {
+gene flatten(xss: list) -> list {
     let out = []
     for xs in xss {
         for v in xs {
@@ -48,7 +55,7 @@ gene flatten(xss) {
     return out
 }
 
-gene count(xs, pred) {
+gene count(xs: list, pred: gene) -> int {
     let n = 0
     for v in xs {
         if pred(v) {

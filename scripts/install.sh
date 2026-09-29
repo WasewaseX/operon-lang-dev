@@ -2,7 +2,26 @@
 # install.sh — Operon installer (T3).
 # Usage:  curl -fsSL https://raw.githubusercontent.com/WasewaseX/operon-lang-dev/main/scripts/install.sh | sh
 # Env:    OPERON_VERSION (default: latest release)  OPERON_INSTALL_DIR (default: ~/.local/bin)
+# Flags:  --verify (B1-U3): require a SHA256SUMS manifest for the release and
+#         fail closed when it is missing or does not list the asset. Without
+#         the flag, behavior is unchanged: the per-asset .sha256 check stays
+#         mandatory and fail-closed, the manifest is checked when present.
 set -eu
+
+# flag parsing (B1-U3): --verify only; every pre-existing env-driven
+# behavior is untouched
+INSTALL_MODE="install"
+for arg in "$@"; do
+  case "$arg" in
+    --verify) INSTALL_MODE="verify" ;;
+    -h|--help)
+      echo "usage: install.sh [--verify]"
+      echo "  --verify  require the release SHA256SUMS manifest and fail closed"
+      echo "            if it is missing or does not list the asset"
+      exit 0 ;;
+    *) echo "error: unknown argument '$arg' (supported: --verify)" >&2; exit 1 ;;
+  esac
+done
 
 REPO="WasewaseX/operon-lang-dev"
 VER="${OPERON_VERSION:-latest}"
@@ -50,6 +69,39 @@ if ! curl -fsSL "$URL.sha256" -o "$TMP/$ASSET.sha256"; then
 fi
 (cd "$TMP" && $SHASUM -c "$ASSET.sha256" >/dev/null) && echo "==> checksum ok" \
   || { echo "error: checksum mismatch; refusing to install" >&2; exit 1; }
+
+# B1-U3 (supply chain): SHA256SUMS manifest cross-check. Maintainers publish
+# a SHA256SUMS file (see scripts/release.sh, packaging/README.md) next to the
+# release assets; CI asset hashes are appended so one manifest covers the
+# whole release. When the manifest exists, the downloaded asset is also
+# verified against it before anything is installed. --verify makes the
+# manifest mandatory and fail-closed.
+SUMS_URL="https://github.com/$REPO/releases/download/${VER}/SHA256SUMS"
+if curl -fsSL "$SUMS_URL" -o "$TMP/SHA256SUMS" 2>/dev/null; then
+  WANT=$(tr -s ' \t' ' ' < "$TMP/SHA256SUMS" | while IFS=' ' read -r h n; do
+    [ "$n" = "$ASSET" ] && printf '%s\n' "$h"
+  done | head -n1)
+  WANT=$(printf '%s' "$WANT" | tr 'A-Z' 'a-z')
+  GOT=$($SHASUM "$TMP/$ASSET" | cut -d' ' -f1)
+  if [ -z "$WANT" ]; then
+    if [ "$INSTALL_MODE" = "verify" ]; then
+      echo "error: $ASSET is not listed in the SHA256SUMS manifest; refusing to install (fail closed, --verify)" >&2
+      exit 1
+    fi
+    echo "==> note: $ASSET not listed in SHA256SUMS; per-asset checksum already verified"
+  elif [ "$WANT" != "$GOT" ]; then
+    echo "error: SHA256SUMS manifest mismatch for $ASSET; refusing to install" >&2
+    exit 1
+  else
+    echo "==> SHA256SUMS manifest ok"
+  fi
+else
+  if [ "$INSTALL_MODE" = "verify" ]; then
+    echo "error: no SHA256SUMS manifest published for release $VER; refusing to install (fail closed, --verify)" >&2
+    exit 1
+  fi
+  echo "==> note: no SHA256SUMS manifest for this release; per-asset checksum still enforced"
+fi
 
 mkdir -p "$DEST"
 tar xzf "$TMP/$ASSET" -C "$TMP"

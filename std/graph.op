@@ -1,0 +1,449 @@
+# std/graph, directed weighted graphs over plain maps/lists (deterministic, pure).
+#
+# Canonical shape (the ONLY representation this module produces or accepts):
+#
+#   g = {nodes: {}, adj: {}}
+#
+#   g["nodes"]  map: node id -> payload value (null when no payload was given)
+#   g["adj"]    map: node id -> map of (neighbor id -> edge weight)
+#
+# Node ids are strings (gene names by convention); weights are numbers,
+# default 1. Edges are DIRECTED; `graph_add_edge(g, a, b)` auto-creates
+# missing endpoints (payload null) in the order they appear.
+#
+# DETERMINISM CONTRACT (pinned, do not improvise):
+#   NODE ORDER is the insertion order of g["nodes"]: first add wins the
+#   position, re-adding keeps it, remove + re-add moves to the end (plain
+#   map upsert semantics; maps are insertion-ordered on BOTH cores, SPEC
+#   §19a). NEIGHBOR ORDER is the insertion order of the node's own adj row
+#   (re-adding an edge replaces the weight, keeps the neighbor's position).
+#   Every list this module returns (nodes, neighbors, edges, bfs, dfs,
+#   topo, shortest_path) and every tie-break (the topo Kahn scan, the MST
+#   candidate scan) follows that pinned order. Node ids are NEVER compared
+#   or sorted; only edge WEIGHTS are, via the optional strictly-before
+#   comparator (the heap convention, cmp(a, b) true when a belongs before
+#   b) or the default `<`, with the pinned enumeration index as the final
+#   tie-break so the weight order is always total.
+#
+# Purity: every function returns a NEW graph/list and never mutates its
+# argument (assignment shares containers, SPEC §19). Copies are shallow
+# over payloads and weights: the structure is fresh, value handles alias.
+#
+# Soft failures (the set/deque/heap style, never a Stress): an absent node
+# yields null from graph_neighbors/graph_bfs/graph_dfs/graph_topo inputs
+# and false from graph_has_node/graph_has_edge/graph_reachable; removals
+# of absent things return an unchanged copy; graph_topo on a cyclic graph
+# returns null; graph_shortest_path returns null when unreachable;
+# graph_mst_weight returns null when the graph is disconnected (no
+# spanning tree) and 0 for fewer than two nodes.
+#
+# Honest cost model: every mutation copies the two maps (O(V+E)); bfs,
+# dfs, shortest_path O(V+E); topo O(V^2) (the Kahn scan re-walks node
+# order to pin the tie-break); graph_mst_weight enumerates all undirected
+# pairs (O(V^2)) and insertion-sorts them with a pure comparator.
+#
+# Pins: tests/std_graph.op + tests/differential/graph.op (byte-identical).
+
+gene __gr_copy(g) {
+    # fresh two-level copy (rows are fresh maps, payloads/weights alias)
+    let nodes = {}
+    for id in g["nodes"] {
+        nodes[id] = g["nodes"][id]
+    }
+    let adj = {}
+    for id in g["adj"] {
+        let row = {}
+        for nb in g["adj"][id] {
+            row[nb] = g["adj"][id][nb]
+        }
+        adj[id] = row
+    }
+    return {nodes: nodes, adj: adj}
+}
+
+gene __gr_row(adj, id) {
+    # the node's adjacency row, or an empty row when it has none
+    if has(adj, id) {
+        return adj[id]
+    }
+    return {}
+}
+
+gene graph_new() -> map {
+    # the empty graph: no nodes, no edges
+    return {nodes: {}, adj: {}}
+}
+
+gene graph_add_node(g: map, id: str, value: any = null) -> map {
+    # NEW graph with the node present; re-adding updates the payload and
+    # keeps the node's pinned position
+    let out = __gr_copy(g)
+    out["nodes"][id] = value
+    if !has(out["adj"], id) {
+        out["adj"][id] = {}
+    }
+    return out
+}
+
+gene graph_add_edge(g: map, from: str, to: str, weight: float = 1) -> map {
+    # NEW graph with the directed edge from -> to; missing endpoints are
+    # auto-created (payload null) in the order they appear; re-adding the
+    # edge replaces its weight and keeps the neighbor's pinned position
+    let out = __gr_copy(g)
+    if !has(out["nodes"], from) {
+        out["nodes"][from] = null
+        out["adj"][from] = {}
+    }
+    if !has(out["nodes"], to) {
+        out["nodes"][to] = null
+        out["adj"][to] = {}
+    }
+    out["adj"][from][to] = weight
+    return out
+}
+
+gene graph_remove_node(g: map, id: str) -> map {
+    # NEW graph without the node: its payload, its adj row, and every
+    # in-edge pointing at it are gone; an absent id returns an unchanged
+    # copy
+    let out = __gr_copy(g)
+    if !has(out["nodes"], id) {
+        return out
+    }
+    del(out["nodes"], id)
+    del(out["adj"], id)
+    for u in out["adj"] {
+        del(out["adj"][u], id)
+    }
+    return out
+}
+
+gene graph_remove_edge(g: map, from: str, to: str) -> map {
+    # NEW graph without the directed edge; both nodes survive (nodes are
+    # removed explicitly), an absent edge returns an unchanged copy
+    let out = __gr_copy(g)
+    if has(out["adj"], from) {
+        del(out["adj"][from], to)
+    }
+    return out
+}
+
+gene graph_has_node(g: map, id: str) -> bool {
+    # true when the id is a node
+    return has(g["nodes"], id)
+}
+
+gene graph_has_edge(g: map, a: str, b: str) -> bool {
+    # true when the directed edge a -> b exists
+    return has(__gr_row(g["adj"], a), b)
+}
+
+gene graph_weight(g: map, a: str, b: str) -> float? {
+    # the weight of a -> b, or null when the edge is absent (float accepts
+    # int by the §7c widening rule, so int weights pass the ann)
+    if !has(g["adj"], a) {
+        return null
+    }
+    if !has(g["adj"][a], b) {
+        return null
+    }
+    return g["adj"][a][b]
+}
+
+gene graph_nodes(g: map) -> list {
+    # every node id in the pinned node order
+    return keys(g["nodes"])
+}
+
+gene graph_node_count(g: map) -> int {
+    # how many nodes the graph has
+    return len(g["nodes"])
+}
+
+gene graph_neighbors(g: map, id: str) -> list? {
+    # the ids a -> ? reaches, in the pinned neighbor order; null when the
+    # node is absent (an existing isolated node has [])
+    if !has(g["nodes"], id) {
+        return null
+    }
+    return keys(__gr_row(g["adj"], id))
+}
+
+gene graph_edges(g: map) -> list {
+    # every edge as a [from, to, weight] triple, from in node order and to
+    # in neighbor order; THE canonical edge enumeration, the same order
+    # graph_mst_weight scans
+    let out = []
+    for u in g["adj"] {
+        for v in __gr_row(g["adj"], u) {
+            push(out, [u, v, g["adj"][u][v]])
+        }
+    }
+    return out
+}
+
+gene graph_edge_count(g: map) -> int {
+    # how many directed edges the graph has
+    let n = 0
+    for u in g["adj"] {
+        n = n + len(__gr_row(g["adj"], u))
+    }
+    return n
+}
+
+gene graph_bfs(g: map, start: str) -> list? {
+    # breadth-first visit order from start, neighbors enqueued in pinned
+    # order; null when start is absent
+    if !has(g["nodes"], start) {
+        return null
+    }
+    let visited = {}
+    visited[start] = true
+    let queue = [start]
+    let out = []
+    while len(queue) > 0 {
+        let u = queue[0]
+        queue = queue.slice(1, len(queue))
+        push(out, u)
+        for v in __gr_row(g["adj"], u) {
+            if !has(visited, v) {
+                visited[v] = true
+                push(queue, v)
+            }
+        }
+    }
+    return out
+}
+
+gene graph_dfs(g: map, start: str) -> list? {
+    # depth-first PREORDER from start, neighbors taken in pinned order
+    # (the explicit stack pushes them reversed so the first neighbor is
+    # explored first); null when start is absent
+    if !has(g["nodes"], start) {
+        return null
+    }
+    let visited = {}
+    let out = []
+    let stack = [start]
+    while len(stack) > 0 {
+        let u = stack[len(stack) - 1]
+        stack = stack.slice(0, len(stack) - 1)
+        if has(visited, u) {
+            continue
+        }
+        visited[u] = true
+        push(out, u)
+        let nbrs = keys(__gr_row(g["adj"], u))
+        let i = len(nbrs) - 1
+        while i >= 0 {
+            if !has(visited, nbrs[i]) {
+                push(stack, nbrs[i])
+            }
+            i = i - 1
+        }
+    }
+    return out
+}
+
+gene graph_reachable(g: map, a: str, b: str) -> bool {
+    # true when b is reachable from a (false when either endpoint is absent)
+    if !has(g["nodes"], a) || !has(g["nodes"], b) {
+        return false
+    }
+    let visited = {}
+    visited[a] = true
+    let queue = [a]
+    while len(queue) > 0 {
+        let u = queue[0]
+        queue = queue.slice(1, len(queue))
+        if u == b {
+            return true
+        }
+        for v in __gr_row(g["adj"], u) {
+            if !has(visited, v) {
+                visited[v] = true
+                push(queue, v)
+            }
+        }
+    }
+    return false
+}
+
+gene graph_topo(g: map) -> list? {
+    # Kahn's algorithm over the pinned node order: each round emits the
+    # FIRST zero-in-degree node in node order, so equal candidates always
+    # resolve by insertion order; null when no order exists (a cycle,
+    # including a self-loop)
+    let indeg = {}
+    for u in g["nodes"] {
+        indeg[u] = 0
+    }
+    for u in g["adj"] {
+        for v in __gr_row(g["adj"], u) {
+            if has(indeg, v) {
+                indeg[v] = indeg[v] + 1
+            }
+        }
+    }
+    let out = []
+    let total = len(g["nodes"])
+    let emitted = 0
+    while emitted < total {
+        let pick = null
+        for u in g["nodes"] {
+            if has(indeg, u) && indeg[u] == 0 {
+                pick = u
+                break
+            }
+        }
+        if pick == null {
+            return null
+        }
+        del(indeg, pick)
+        push(out, pick)
+        emitted = emitted + 1
+        for v in __gr_row(g["adj"], pick) {
+            if has(indeg, v) {
+                indeg[v] = indeg[v] - 1
+            }
+        }
+    }
+    return out
+}
+
+gene graph_shortest_path(g: map, a: str, b: str) -> list? {
+    # fewest-edges path a -> b (unweighted BFS), parents recorded in pinned
+    # neighbor order; null when unreachable or an endpoint is absent;
+    # [a] when a == b
+    if !has(g["nodes"], a) || !has(g["nodes"], b) {
+        return null
+    }
+    if a == b {
+        return [a]
+    }
+    let visited = {}
+    visited[a] = true
+    let parent = {}
+    let queue = [a]
+    let found = false
+    while len(queue) > 0 && !found {
+        let u = queue[0]
+        queue = queue.slice(1, len(queue))
+        for v in __gr_row(g["adj"], u) {
+            if !has(visited, v) {
+                visited[v] = true
+                parent[v] = u
+                if v == b {
+                    found = true
+                    break
+                }
+                push(queue, v)
+            }
+        }
+    }
+    if !found {
+        return null
+    }
+    let back = [b]
+    let cur = b
+    while has(parent, cur) {
+        cur = parent[cur]
+        push(back, cur)
+    }
+    let out = []
+    let i = len(back) - 1
+    while i >= 0 {
+        push(out, back[i])
+        i = i - 1
+    }
+    return out
+}
+
+gene __gr_pair_edges(g) {
+    # every UNDIRECTED pair as [u, v, w, i]: u earlier in node order than v,
+    # weight = the forward edge when present, else the reverse edge, else
+    # the pair does not exist; i is the pinned enumeration index (the final
+    # weight tie-break)
+    let ids = keys(g["nodes"])
+    let out = []
+    let i = 0
+    for ui in range(0, len(ids)) {
+        for vi in range(ui + 1, len(ids)) {
+            let u = ids[ui]
+            let v = ids[vi]
+            let w = null
+            if has(__gr_row(g["adj"], u), v) {
+                w = g["adj"][u][v]
+            } elif has(__gr_row(g["adj"], v), u) {
+                w = g["adj"][v][u]
+            }
+            if w != null {
+                push(out, [u, v, w, i])
+                i = i + 1
+            }
+        }
+    }
+    return out
+}
+
+gene __gr_less(cmp, a, b) {
+    # strictly-before on weights with the pinned index as the final
+    # tie-break: the order is total, so the pure insertion sort inside
+    # `sorted` is fully determined. cmp follows the heap convention
+    # (cmp(x, y) true when x belongs before y); null means the default `<`
+    if a[2] == b[2] {
+        return a[3] < b[3]
+    }
+    if cmp == null {
+        return a[2] < b[2]
+    }
+    if cmp(a[2], b[2]) {
+        return true
+    }
+    return false
+}
+
+gene graph_mst_weight(g: map, cmp: gene? = null) -> any {
+    # total weight of a minimum spanning tree over the UNDIRECTED reading
+    # of the graph (a pair {u, v} is connected when either direction
+    # carries an edge; the forward direction's weight wins when both
+    # exist). Kruskal over the pinned pair enumeration, weights ordered by
+    # cmp (default `<`, ties broken by the pinned index). 0 for fewer than
+    # two nodes; null when disconnected (no spanning tree). Weights must
+    # be numbers (the sum needs arithmetic).
+    let ids = keys(g["nodes"])
+    let n = len(ids)
+    if n < 2 {
+        return 0
+    }
+    let parent = {}
+    for u in ids {
+        parent[u] = u
+    }
+    let total = 0
+    let picked = 0
+    let order = sorted(__gr_pair_edges(g), gene (a, b) => __gr_less(cmp, a, b))
+    for e in order {
+        # union-find with path halving; the union hangs the later root
+        # under the earlier one (u precedes v in node order)
+        let ru = e[0]
+        while parent[ru] != ru {
+            parent[ru] = parent[parent[ru]]
+            ru = parent[ru]
+        }
+        let rv = e[1]
+        while parent[rv] != rv {
+            parent[rv] = parent[parent[rv]]
+            rv = parent[rv]
+        }
+        if ru != rv {
+            parent[rv] = ru
+            total = total + e[2]
+            picked = picked + 1
+        }
+    }
+    if picked == n - 1 {
+        return total
+    }
+    return null
+}

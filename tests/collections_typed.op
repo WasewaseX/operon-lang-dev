@@ -1,0 +1,117 @@
+# collections_typed, W026 stage 1 pin: std/collections.op genes carry W001
+# soft annotations on every param and return (SPEC §7c). Correct types flow
+# through untouched; wrong types unfold into a catchable Stress at the call
+# boundary naming the annotation, and the run continues. Queue/deque/heap
+# families live in std/deque.op and std/heap.op (pinned by their own suites);
+# this file pins the annotation behavior of the six list-shaped data genes.
+use std/collections as c
+
+frame proof {
+    # correct-type acceptance: the six genes on int and string elements
+    let xs = [1, 2, 3, 4, 5, 6]
+    assert(c.chunk(xs, 2) == [[1, 2], [3, 4], [5, 6]], "chunk splits even groups")
+    assert(c.chunk(xs, 4) == [[1, 2, 3, 4], [5, 6]], "chunk keeps the short tail")
+    assert(c.chunk([7], 3) == [[7]], "chunk of one element is one group")
+    assert(c.zip([1, 2, 3], ["a", "b"]) == [[1, "a"], [2, "b"]], "zip stops at the shorter side")
+    assert(c.zip([], [1]) == [], "zip of an empty side is empty")
+    assert(c.take(xs, 3) == [1, 2, 3], "take keeps the first n")
+    assert(c.take(xs, 99) == xs, "take past the end is the whole list")
+    assert(c.take(xs, 0) == [], "take zero is empty")
+    assert(c.flatten([[1, 2], [], [3]]) == [1, 2, 3], "flatten preserves order")
+    assert(c.count(xs, gene(v) { return v % 2 == 0 }) == 3, "count respects the predicate")
+    assert(c.count([], gene(v) { return true }) == 0, "count of empty is zero")
+    let grouped = c.group_by(["ant", "bee", "ape"], gene(s) { return s.slice(0, 1) })
+    assert(grouped["a"] == ["ant", "ape"], "group_by buckets by key")
+    assert(grouped["b"] == ["bee"], "group_by keeps every bucket")
+
+    # elements are unannotated, so mixed containers flow through the genes
+    assert(c.chunk([1, "a", 2.5, null], 2) == [[1, "a"], [2.5, null]],
+        "unannotated element slots accept any value")
+
+    # wrong types at annotated boundaries: catchable Stress kind `unfolded`
+    # whose message names the annotation; execution continues afterwards
+    let hits = 0
+    stress {
+        c.chunk("nope", 2)
+    } rescue (e) {
+        hits += 1
+        assert(e.kind == "unfolded", "boundary refusal is catchable Stress")
+        assert(e.message == "argument 'xs' for gene 'chunk' expects list, got str",
+            "list boundary names the annotation")
+    }
+    assert(hits == 1, "chunk list refusal raised exactly once")
+    stress {
+        c.chunk(xs, "two")
+    } rescue (e) {
+        hits += 1
+        assert(e.message == "argument 'size' for gene 'chunk' expects int, got str",
+            "int boundary names the annotation")
+    }
+    assert(hits == 2, "chunk size refusal raised")
+    stress {
+        c.take(xs, 2.0)
+    } rescue (e) {
+        hits += 1
+        assert(e.message == "argument 'n' for gene 'take' expects int, got float",
+            "int annotation refuses float (no narrowing)")
+    }
+    assert(hits == 3, "take float refusal raised")
+    stress {
+        c.zip(42, [1])
+    } rescue (e) {
+        hits += 1
+        assert(e.message == "argument 'a' for gene 'zip' expects list, got int",
+            "zip boundary names the annotation")
+    }
+    assert(hits == 4, "zip refusal raised")
+    stress {
+        c.flatten(3)
+    } rescue (e) {
+        hits += 1
+        assert(e.message == "argument 'xss' for gene 'flatten' expects list, got int",
+            "flatten boundary names the annotation")
+    }
+    assert(hits == 5, "flatten refusal raised")
+    stress {
+        c.group_by(xs, 5)
+    } rescue (e) {
+        hits += 1
+        assert(e.message == "argument 'keyf' for gene 'group_by' expects gene, got int",
+            "gene boundary names the annotation")
+    }
+    assert(hits == 6, "group_by keyfn refusal raised")
+    stress {
+        c.count(xs, "even")
+    } rescue (e) {
+        hits += 1
+        assert(e.message == "argument 'pred' for gene 'count' expects gene, got str",
+            "count pred boundary names the annotation")
+    }
+    assert(hits == 7, "count pred refusal raised")
+    stress {
+        c.group_by("ants", gene(s) { return s })
+    } rescue (e) {
+        hits += 1
+        assert(e.message == "argument 'xs' for gene 'group_by' expects list, got str",
+            "group_by list boundary names the annotation")
+    }
+    assert(hits == 8, "all eight boundary refusals raised exactly once each")
+
+    # a refusal caught inside a helper keeps execution coherent
+    gene safe_chunk(a, n) {
+        stress {
+            return c.chunk(a, n)
+        } rescue (e) {
+            return []
+        }
+    }
+    assert(safe_chunk([1, 2], 1) == [[1], [2]], "clean call crosses the wrapper")
+    assert(safe_chunk(9, 1) == [], "refusal falls into the helper's rescue")
+    assert(safe_chunk([1, 2], "x") == [], "wrong scalar caught by the helper too")
+
+    # annotations are optional everywhere: the unannotated wrapper composes
+    gene wrap(xs2, n) {
+        return c.chunk(xs2, n)
+    }
+    assert(wrap([1, 2, 3], 2) == [[1, 2], [3]], "unannotated wrapper composes with annotated gene")
+}

@@ -146,6 +146,12 @@ pub fn edit_distance(a: &str, b: &str) -> i32 {
     {
         return DP_BUDGET_SENTINEL;
     }
+    // SAFETY: rt_edit_distance reads exactly a.len()/b.len() bytes from each
+    // pointer for the duration of the call only; both pointers come from live
+    // `&str` borrows held across the call, so they are valid and aligned.
+    // Cell-count budget (DP_CELL_BUDGET) and per-operand caps (FFI_OPERAND_CAP)
+    // are enforced above, so the kernel cannot over-read or overflow its
+    // bit-parallel DP buffers.
     unsafe {
         rt_edit_distance(
             a.as_ptr() as *const c_char,
@@ -153,20 +159,34 @@ pub fn edit_distance(a: &str, b: &str) -> i32 {
             b.as_ptr() as *const c_char,
             b.len(),
         )
-    }
+    } // ast-grep-ignore: no-unsafe-block-in-src
 }
 
 /// Codon-usage style score 0..100 (C++ kernel).
 pub fn codon_score(s: &str) -> i32 {
-    unsafe { rt_codon_score(s.as_ptr() as *const c_char, s.len()) }
+    // SAFETY: rt_codon_score reads exactly s.len() bytes from the pointer for
+    // the duration of the call only; the pointer comes from a live `&str`
+    // borrow held across the call, and the kernel performs no writes.
+    unsafe { rt_codon_score(s.as_ptr() as *const c_char, s.len()) } // ast-grep-ignore: no-unsafe-block-in-src
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    // The intern table is process-global and thread-safe (Mutex), but cargo
+    // runs tests on PARALLEL threads, so any test asserting global counts
+    // (intern_count / table_bytes / table_allocs / symbols) can be polluted
+    // by a sibling interning concurrently. macOS arm64 scheduling exposed
+    // this live: table_bytes() saw 4114 = 12 + sibling's "x"x4096 + 6-byte
+    // "基因" (CI-native aarch64-apple-darwin release job, 2026-09-29).
+    // All table-touching tests serialize on this mutex; zero new deps.
+    // House style (v2.4.0): no poisoning unwrap.
+    static TABLE_TEST_LOCK: Mutex<()> = Mutex::new(());
+
     #[test]
     fn intern_ids_are_stable_and_equal_bytes_get_equal_ids() {
+        let _guard = TABLE_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         reset_for_tests();
         let a = intern("promoter");
         let b = intern("promoter");
@@ -182,6 +202,7 @@ mod tests {
 
     #[test]
     fn intern_table_tracks_bytes_allocs_and_symbols() {
+        let _guard = TABLE_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         reset_for_tests();
         intern("abcd"); // 4 bytes, 1 alloc
         intern("abcdefgh"); // 8 bytes, 1 alloc
@@ -193,6 +214,7 @@ mod tests {
 
     #[test]
     fn intern_handles_empty_and_unicode_and_long() {
+        let _guard = TABLE_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         reset_for_tests();
         assert_eq!(intern(""), 1); // empty string is internable
         let u1 = intern("基因");

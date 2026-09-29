@@ -1,0 +1,26 @@
+# differential: stdlib wave 1 (url, terminal, logging). Pure Operon
+# modules run on both engines from the same source; this program pins the
+# outputs byte-identically (timestamp-free lines only).
+use std/url as u
+use std/terminal as t
+use std/logging as l
+
+gene main() {
+    print(u.url_encode("a b/c~d_e.f-g"))
+    print(u.url_decode("a%20b+c%2Fd%zz"))
+    let m = u.url_parse("https://example.org:8443/a/b?x=1&y=a%20b")
+    print(m["scheme"], m["host"], m["port"], m["path"])
+    print(m["query"]["x"], m["query"]["y"])
+    print(u.url_query_encode({z: "1 2", a: "&="}))
+    print(u.url_query_encode(u.url_parse("https://h/p?b=2&a=1")["query"]))
+    print(t.t_fg("red") == chr(27) + "[31m")
+    print(t.t_strip_ansi(t.t_bold() + "hi" + t.t_reset() + " there"))
+    print(t.t_truncate_width("abcdefg", 5))
+    print(t.t_has_ansi("plain"), t.t_has_ansi(t.t_dim() + "x"))
+    let log = l.make_logger_named("warn")
+    print(log.debug("hidden"), log.info("hidden"))
+    print(log.warn("careful"))
+    print(log.error("bad"))
+    print(l.log_line("info", "boot"))
+    print(l.log_level("error"), l.log_level_name(2))
+}

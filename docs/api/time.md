@@ -22,3 +22,12 @@
 
 ## `gene __p2(n)`
 
+<<<<<<< HEAD
+=======
+## `gene __is_digits(s)`
+
+## `gene __days_from_civil(y, m, d)`
+
+## `gene time_parse_iso(s)`
+
+>>>>>>> origin/main

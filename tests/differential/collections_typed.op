@@ -1,0 +1,31 @@
+# collections_typed differential pin: W001 annotation boundaries on the
+# six std/collections genes, byte-identical on both engines. Acceptance
+# paths print real outputs; refusal paths print the caught Stress kind and
+# message so the two engines must agree on the annotation wording too.
+use std/collections as c
+
+print("== accept ==")
+print(c.chunk([1, 2, 3, 4], 2))
+print(c.zip([1, 2], ["a", "b"]))
+print(c.take([9, 8, 7], 2))
+print(c.flatten([[1], [2, 3], []]))
+print(c.count([1, 2, 3, 4], gene(v) { return v > 2 }))
+print(c.group_by(["ax", "bx", "ay"], gene(s) { return s.slice(0, 1) }))
+
+print("== refuse ==")
+gene probe(f) {
+    stress {
+        f()
+        return "no-stress"
+    } rescue (e) {
+        return "stress:" + e.message()
+    }
+}
+print(probe(gene() { return c.chunk("nope", 2) }))
+print(probe(gene() { return c.chunk([1], "two") }))
+print(probe(gene() { return c.take([1], 1.5) }))
+print(probe(gene() { return c.group_by([1], 5) }))
+print(probe(gene() { return c.count([1], "p") }))
+print(probe(gene() { return c.zip(null, [1]) }))
+print(probe(gene() { return c.flatten(3) }))
+print("done")

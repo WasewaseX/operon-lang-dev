@@ -94,13 +94,12 @@ gene go() {
     }
     # 6. unknown capitalized tag: soft bind fallback (no rejection), the
     #    arm HITS and binds the whole subject (payload consumed+ignored).
+    #    (no trailing arm here: `Weird(x)` degrades to a bind, an unguarded
+    #    catch-all, so a later arm would be dead and W06 would flag it)
     hit2 = 0
     match 5 {
         case Weird(x) {
             hit2 = 1
-        }
-        case other {
-            hit2 = 2
         }
     }
     if hit2 == 1 {

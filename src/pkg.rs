@@ -223,6 +223,7 @@ fn extract_field(val: &str, field: &str, idx: usize) -> Result<String, String> {
             )
         })?;
     let rest = &val[start..];
+    // ast-grep-ignore: no-unwrap-in-src
     let eq = rest.find('=').unwrap();
     let after = rest[eq + 1..].trim();
     let quote = after.find('"').ok_or_else(|| {
@@ -607,6 +608,7 @@ pub fn apply_lock(interp: &mut crate::interp::Interp) {
 
 fn die_pkg(msg: &str) -> ! {
     eprintln!("operon mod: {}", msg);
+    // ast-grep-ignore: no-std-process-exit-in-core
     std::process::exit(2);
 }
 
@@ -990,6 +992,7 @@ pub fn mod_command(rest: &[String]) -> ! {
                             "{} {} already in registry at {}",
                             m.name, m.version, &rev[..rev.len().min(7)]
                         );
+                        // ast-grep-ignore: no-std-process-exit-in-core
                         std::process::exit(0);
                     }
                 }
@@ -1039,6 +1042,7 @@ pub fn mod_command(rest: &[String]) -> ! {
                 }
             }
             if bad > 0 {
+                // ast-grep-ignore: no-std-process-exit-in-core
                 std::process::exit(1);
             }
         }
@@ -1047,6 +1051,7 @@ pub fn mod_command(rest: &[String]) -> ! {
             other
         )),
     }
+    // ast-grep-ignore: no-std-process-exit-in-core
     std::process::exit(0);
 }
 
