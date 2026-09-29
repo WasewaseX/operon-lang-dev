@@ -29,3 +29,7 @@ preserves the one pre-fix finding for the audit trail.
 Fresh database over the current tree (vm.rs, pkg.rs registry, debugger,
 cancellation, scope, task groups included): rust-security-and-quality suite
 returns 0 findings. Evidence: rust-security-and-quality.sarif in this folder.
+
+## Re-run after the PR #28 merge (2026-09-27, merged tree: d9b1034 + main f0527e5)
+
+Fresh database over the merged tree (30 source files, 0 extraction errors): rust-security-and-quality suite returns 0 findings. Evidence: rust-security-and-quality.sarif in this folder.
