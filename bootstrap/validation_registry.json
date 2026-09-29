@@ -1,0 +1,153 @@
+{
+  "schema": "operon-validation-registry/1",
+  "single_source_of_truth": {
+    "file": "bootstrap/validation_registry.json",
+    "consumers": [
+      "bootstrap/validation_report.py (runs the proofs, parses the probes, compares observed vs expected)",
+      "docs/spec/VALIDATION.md TOLERANCE FRAMEWORK section (generated block, verified by validation_report.py --check-doc)"
+    ],
+    "rule": "Every expected value, comparison kind, tolerance magnitude and repro command lives HERE and nowhere else. Test files keep their enforcing asserts; if a test file and this registry ever disagree, the report goes red and the live run decides."
+  },
+  "framework": {
+    "determinism_premise": "The engine is deterministic: same binary version + same source + same seed + same flags + same .cell gives byte-identical stdout (docs/spec/DETERMINISM.md section 1), and all kinetics use only +, -, *, / with a fixed op order (bit-reproducible across the release matrix, DETERMINISM section 5). There is no run-to-run jitter to absorb. Every tolerance in this registry exists to guard FUTURE REFACTORS: wide enough that a legitimate re-association of floating-point operations (a few ulps) still passes, many orders of magnitude narrower than any change to the modeled system itself (curve form, constants, integration order, gate semantics).",
+    "comparison_kinds": {
+      "absolute": "pass iff abs(observed - expected) < tolerance. The house value is 1e-12: expectations are written in the same op order the engine computes (repeated multiplication, never powi, the W090 IEEE-754 parity contract), so the true numerical noise floor against the derivation is ~1 ulp (1e-16 class for O(1) quantities); 1e-12 leaves four orders of magnitude of refactor headroom while staying far below the smallest modeled quantity.",
+      "relative": "pass iff abs(observed - expected) < tolerance * abs(expected). For quantities whose scale is parameter-dependent; the same refactor-guard rationale applies. Not needed by any current row.",
+      "significant-figure": "pass iff observed and expected agree to N significant digits (tolerance field carries N). The right kind for future rows whose expectation is a value PUBLISHED with limited digits (dose-curve datasets), where quoting more digits than the source would be false precision. Not needed by any current row.",
+      "exact": "pass iff observed and expected are identical (bools, integers, and floats compared via their formatted value, bit-identical). For DISCRETE quantities: counts, booleans, peak grids, and stream values of the pure-integer xorshift. No numerical slack is defensible for a deterministic discrete quantity."
+    }
+  },
+  "entries": [
+    {
+      "id": "V1",
+      "title": "Hill dose-response, thresholded activating edge (n=2): the EC50 identity and the five canonical curve points",
+      "source": "Hill-Langmuir input function; EC50 = the half-max point (Alon, An Introduction to Systems Biology, ch. 2). Mapped by SPEC section 11: influence = strength * level^n / (level^n + threshold^n), n=2 default, so threshold t IS the EC50.",
+      "enforcing_tests": ["tests/sci_ec50_hill.op"],
+      "probes": ["bootstrap/validation_probes/v1_hill.op"],
+      "why": "The expectations are the closed form of the n=2 curve at the five canonical points (t/3, t/2, t, 2t, 3t with t = 0.3, strength 1.0), and the engine evaluates strength * L*L / (L*L + t*t) in exactly the op order the expectation is written in (repeated multiplication, no powi, W090). Live worst case is one ulp (the t/3 point reads 0.10000000000000002 against 0.1, a 1.4e-17 gap), so 1e-12 absolute is a refactor guard, not a jitter allowance. Fails-pre: any change to the influence formula, the gate semantics, or the level-latch behavior.",
+      "repro": "bash scripts/build.sh && ./bin/operon test tests/sci_ec50_hill.op && python3 bootstrap/validation_report.py --entry V1",
+      "quantities": [
+        { "name": "v1_t3", "derivation": "level = t/3 = 0.1: 1/(1+9) = 0.1 (10% of max)", "expected": 0.1, "comparison": "absolute", "tolerance": 1e-12 },
+        { "name": "v1_t2", "derivation": "level = t/2 = 0.15: 1/(1+4) = 0.2 (Hill-2 quarter point, NOT 10%)", "expected": 0.2, "comparison": "absolute", "tolerance": 1e-12 },
+        { "name": "v1_t1", "derivation": "level = t = 0.3: 1/(1+1) = 0.5 (the EC50 identity: level == threshold is the half-max point)", "expected": 0.5, "comparison": "absolute", "tolerance": 1e-12 },
+        { "name": "v1_2t", "derivation": "level = 2t = 0.6: 4/(4+1) = 0.8", "expected": 0.8, "comparison": "absolute", "tolerance": 1e-12 },
+        { "name": "v1_3t", "derivation": "level = 3t = 0.9: 9/(9+1) = 0.9 (the 10-90 span complete)", "expected": 0.9, "comparison": "absolute", "tolerance": 1e-12 }
+      ]
+    },
+    {
+      "id": "V2",
+      "title": "Repressilator ring period (repressilator p -> q -> r, T2d discrete integration): peak-to-peak period 6 ring ticks",
+      "source": "Elowitz & Leibler (2000), Nature 403:335, a synthetic three-repressor ring. Mapped by SPEC section 11 (T2d): dA/dt = alpha/(1+R^4) - gamma*A (alpha=10, gamma=1, h=4), 20 Euler substeps of dt=0.05 per ring tick, so one tick = 1.0 dimensionless time unit.",
+      "enforcing_tests": ["tests/sci_repressi_period.op"],
+      "probes": ["bootstrap/validation_probes/v2_period.op"],
+      "why": "The period is a DISCRETE structural quantity: 5 local maxima of node p in a fixed 30-tick window after a 3-tick warmup, consecutive peaks exactly 6 ticks apart (period 5 or 7 would give 6 or 4 peaks and fail). The Euler fold uses only +, -, *, / with a fixed op order, so the peak grid is bit-reproducible and no numerical slack is defensible: exact. Peak amplitudes are deliberately NOT pinned: they are still relaxing toward the limit cycle from the initial condition, a documented property, not a published-number claim (the enforcing test pins amplitudes only as stateless-fold identity, the W089 determinism contract). Fails-pre: a drifted period (integration changed), a hardcoded drive schedule, or a stateful fold.",
+      "repro": "bash scripts/build.sh && ./bin/operon test tests/sci_repressi_period.op && python3 bootstrap/validation_report.py --entry V2",
+      "quantities": [
+        { "name": "v2_peak_count", "derivation": "local maxima of node p in the 30-tick window (ticks 6, 12, 18, 24, 30): 5 peaks = peak-to-peak period 6 ticks = 6.0 dimensionless time units", "expected": 5, "comparison": "exact", "tolerance": null },
+        { "name": "v2_period_ticks_ok", "derivation": "every consecutive peak-index distance equals 6 ticks (structural period check, not just a count)", "expected": true, "comparison": "exact", "tolerance": null },
+        { "name": "v2_stateless_fold", "derivation": "repressi_state() twice at the same tick: identical p, q, r (the W089 stateless-fold determinism contract)", "expected": true, "comparison": "exact", "tolerance": null }
+      ]
+    },
+    {
+      "id": "V3",
+      "title": "Ring kinetics parameters (alpha, gamma, hill, basal, noise, seed): the alpha surface and the basal-leak surface",
+      "source": "Same system as V2 (Elowitz & Leibler 2000) with the kinetic overlay documented in SPEC section 11; the defaults (alpha=10, gamma=1, h=4, basal=0, noise=0) are bit-identical to the historical constants.",
+      "enforcing_tests": ["tests/repressi_params.op", "tests/repressi_alpha.op"],
+      "probes": ["bootstrap/validation_probes/v3_alpha.op", "bootstrap/validation_probes/v3_basal.op"],
+      "why": "The alpha-surface expectation is re-derived INDEPENDENTLY from the documented parameterization (alpha=20, gamma=1, h=4, 20 Euler substeps of dt=0.05, Jacobi update from the snapshot, init [5,0,0]): a plain Python fold of the published system gives 3.6355225619570213 and the live engine gives 3.6355225619570213, agreement to the last bit, so 1e-12 absolute guards refactors only. The basal minima carry the same derivation status (independent fold agrees bit-for-bit); the behavioral floor (every minimum above 0.2, repressed promoters never reach zero) mirrors the enforcing test as an exact boolean. Fails-pre: any change to the fold, the parameter plumbing, or the basal term.",
+      "repro": "bash scripts/build.sh && ./bin/operon test tests/repressi_params.op && ./bin/operon test tests/repressi_alpha.op && python3 bootstrap/validation_report.py --entry V3",
+      "quantities": [
+        { "name": "v3_alpha20_y2", "derivation": "alpha=20 ring, node y after 2 ticks (the enforcing test's window is 3.6 < y < 3.7; the exact fold value is 3.6355225619570213)", "expected": 3.6355225619570213, "comparison": "absolute", "tolerance": 1e-12 },
+        { "name": "v3_basal_min_p", "derivation": "basal=0.5 ring, minimum of node p over 12 ticks (independent fold: 0.794555574088881)", "expected": 0.794555574088881, "comparison": "absolute", "tolerance": 1e-12 },
+        { "name": "v3_basal_min_q", "derivation": "basal=0.5 ring, minimum of node q over 12 ticks (independent fold: 0.36236427270474075)", "expected": 0.36236427270474075, "comparison": "absolute", "tolerance": 1e-12 },
+        { "name": "v3_basal_min_r", "derivation": "basal=0.5 ring, minimum of node r over 12 ticks (independent fold: 0.8578301366963166)", "expected": 0.8578301366963166, "comparison": "absolute", "tolerance": 1e-12 },
+        { "name": "v3_basal_above_floor", "derivation": "all three minima above the 0.2 behavioral floor (the enforcing test's claim, mirrored exactly)", "expected": true, "comparison": "exact", "tolerance": null }
+      ]
+    },
+    {
+      "id": "V4",
+      "title": "trp attenuation (attenuates edge) and corepressor polarity: outcome contract",
+      "source": "Prokaryotic transcription attenuation (trp operon, Yanofsky 1981); the corepressor polarity (binding INCREASES repressor DNA affinity) is the lac inverse. Mechanism labeled APPROXIMATION in docs/spec/BIO-CONTRACT.md (RNA-level veto with dose threshold, no anti-terminator structure modeling).",
+      "enforcing_tests": ["tests/trp_attenuator.op"],
+      "probes": ["bootstrap/validation_probes/v4_trp.op"],
+      "why": "This row's contract is behavioral: the observable is which calls express (a return value) and which are vetoed (null). Booleans compared exact, because a tolerance on a discrete outcome is meaningless. The one numeric quantity (pool readback after ligand_set 0.9) is a pass-through of a stored value, so 1e-12 absolute is generous and only guards a refactor of the pool plumbing. Fails-pre: a polarity flip (inducer semantics on a corepressor), a lost attenuates veto, or a gate-order change.",
+      "repro": "bash scripts/build.sh && ./bin/operon test tests/trp_attenuator.op && python3 bootstrap/validation_report.py --entry V4",
+      "quantities": [
+        { "name": "v4_scarcity_trpE_on", "derivation": "pool 0.02: occupancy 0.02/0.12 < threshold 0.3, the aporepressor state, trpE expresses", "expected": true, "comparison": "exact", "tolerance": null },
+        { "name": "v4_scarcity_leader_on", "derivation": "pool 0.02 < attenuator threshold 0.5: the leader reads through", "expected": true, "comparison": "exact", "tolerance": null },
+        { "name": "v4_abundance_trpE_suppressed", "derivation": "pool 0.9: the cofactor binds, the inhibits edge vetoes the call", "expected": true, "comparison": "exact", "tolerance": null },
+        { "name": "v4_abundance_leader_suppressed", "derivation": "pool 0.9 >= attenuator threshold 0.5: the leader transcript terminates", "expected": true, "comparison": "exact", "tolerance": null },
+        { "name": "v4_trpR_unchanged", "derivation": "the regulator LEVEL never moved (allostery acts on the binding state, not dilution)", "expected": true, "comparison": "exact", "tolerance": null },
+        { "name": "v4_pool_readable", "derivation": "ligand(\"trp\") reads back the stored 0.9 (pass-through value)", "expected": 0.9, "comparison": "absolute", "tolerance": 1e-12 }
+      ]
+    },
+    {
+      "id": "V5",
+      "title": "Cis riboswitch (@riboswitch ligand class threshold): per-gene 5'UTR sensor, off/on polarity and gate order",
+      "source": "Cis-acting metabolite-binding aptamers: TPP/purine/SAM off class vs adenine/glycine on class (Serganov & Nudler 2013 review). Per-gene sensor over a cell-wide metabolite pool; gate order methylation -> riboswitch -> promoter.",
+      "enforcing_tests": ["tests/riboswitch_cis.op"],
+      "probes": ["bootstrap/validation_probes/v5_riboswitch.op"],
+      "why": "Behavioral row: the contract is the bound-state polarity per class plus the cis property (an unmarked gene under the SAME pool is unaffected) plus the gate order (acetylation does not immunize against an RNA-level hairpin). All observables are discrete express/suppress outcomes, so every row is an exact boolean; a numeric tolerance would be decoration. Fails-pre: a polarity inversion (on/off classes swapped), a pool-wide (trans) leak into the unmarked gene, or a gate-order change.",
+      "repro": "bash scripts/build.sh && ./bin/operon test tests/riboswitch_cis.op && python3 bootstrap/validation_report.py --entry V5",
+      "quantities": [
+        { "name": "v5_off_bound_suppressed", "derivation": "off class, pool 0.9 >= 0.5: terminator hairpin folds, call suppressed", "expected": true, "comparison": "exact", "tolerance": null },
+        { "name": "v5_off_released_expresses", "derivation": "off class, pool 0.1 < 0.5: hairpin released, transcript expresses", "expected": true, "comparison": "exact", "tolerance": null },
+        { "name": "v5_on_unbound_suppressed", "derivation": "on class, pool 0.1: RBS sequestered, call suppressed", "expected": true, "comparison": "exact", "tolerance": null },
+        { "name": "v5_on_bound_expresses", "derivation": "on class, pool 0.9: RBS exposed, transcript expresses", "expected": true, "comparison": "exact", "tolerance": null },
+        { "name": "v5_cis_plain_ignores_pool", "derivation": "the CIS property: the unmarked gene expresses under the same bound pool", "expected": true, "comparison": "exact", "tolerance": null },
+        { "name": "v5_cis_marked_responds", "derivation": "the CIS property: the marked gene under the same pool is suppressed", "expected": true, "comparison": "exact", "tolerance": null },
+        { "name": "v5_acetylate_no_immunity", "derivation": "gate order: acetylation (chromatin permission) does not immunize against the RNA hairpin", "expected": true, "comparison": "exact", "tolerance": null },
+        { "name": "v5_hairpin_released_expresses", "derivation": "pool released: the acetylated gene expresses normally", "expected": true, "comparison": "exact", "tolerance": null }
+      ]
+    },
+    {
+      "id": "V6",
+      "title": "Stoichiometric RISC silencing (silence old -> new strength s sites n): multiplicative dose-response on a seeded stream",
+      "source": "RNAi dose-response: per-site capture probability with multiplicative site composition, survival = (1-s)^n. sites clamped 1..=64, strength clamped 0..=1; strength 1.0 with one site is the legacy binary redirect with no entropy draw.",
+      "enforcing_tests": ["tests/silence_dose.op"],
+      "probes": ["bootstrap/validation_probes/v6_silence.op"],
+      "why": "The capture count (16 of 20 calls at p = 1-(1-0.5)^2 = 0.75) is a PARITY PIN of the shared mirrored xorshift64* stream under randomize(42), not a statistic over random draws: the stream is pure integer arithmetic (DETERMINISM section 4), so the count is exact and no other tolerance is defensible. The stream value row (first draw after randomize(7)) pins the same property bit-identically. The no-draw rows pin entropy-stream discipline (binary capture and the @acetylate immune check must not consume a draw): exact booleans. Fails-pre: an entropy-stream change (a breaking change per DETERMINISM section 8), a lost immune pre-check, or a composition change.",
+      "repro": "bash scripts/build.sh && ./bin/operon test tests/silence_dose.op && python3 bootstrap/validation_report.py --entry V6",
+      "quantities": [
+        { "name": "v6_capture_count", "derivation": "20 calls at p = 1-(1-0.5)^2 = 0.75 under randomize(42): the deterministic capture count is 16 (parity pin)", "expected": 16, "comparison": "exact", "tolerance": null },
+        { "name": "v6_binary_captured", "derivation": "strength 1.0, one site: capture WITHOUT any entropy draw (legacy binary redirect)", "expected": true, "comparison": "exact", "tolerance": null },
+        { "name": "v6_no_draw_binary", "derivation": "random() before and after the binary capture, same seed: identical value, the stream is untouched", "expected": true, "comparison": "exact", "tolerance": null },
+        { "name": "v6_stream_value", "derivation": "first random() after randomize(7): a pure-integer-stream value, bit-identical on every platform (DETERMINISM section 4)", "expected": 1.2732925824820995e-11, "comparison": "exact", "tolerance": null },
+        { "name": "v6_immune_expresses", "derivation": "@acetylate immunity is checked BEFORE any draw: the immune transcript expresses", "expected": true, "comparison": "exact", "tolerance": null },
+        { "name": "v6_no_draw_immune", "derivation": "random() before and after the immune call, same seed: identical value, no entropy spent", "expected": true, "comparison": "exact", "tolerance": null }
+      ]
+    },
+    {
+      "id": "V7",
+      "title": "Occupancy repression (occupy inhibiting edges): multiplicative thermodynamic survival K^n/(K^n+R^n)",
+      "source": "Thermodynamic occupancy survival: repression composed multiplicatively (each repressor contributes a survival factor 1 - influence), so it cannot overshoot and full occupancy approaches but never crosses zero. The legacy subtractive form (1 - sum of influences) is pinned alongside as the contrast.",
+      "enforcing_tests": ["tests/grn_occupy.op"],
+      "probes": ["bootstrap/validation_probes/v7_occupy.op"],
+      "why": "The expectations are closed forms: two partial repressors (level 1.0, strength 0.5, threshold 0.5, influence 0.4 each) give survival 1 * 0.6 * 0.6 = 0.36 and the legacy subtractive form gives 1 - 0.4 - 0.4 = 0.2; two near-full repressors (influence 1/(1+0.01) each) give survival (1 - 1/1.01)^2 (hand-derived 9.802960494069213e-05, live 9.802960494069226e-05, a 1.3e-17 gap) and the subtractive form overshoots to a hard-clamped 0.0. The engine composes in the derivation's op order, so observed gaps are one-ulp class; 1e-12 absolute guards re-association only. The hard-zero row is exact (the subtractive overshoot is a clamp, not a small number). Fails-pre: a composition change (multiplicative to subtractive or back), an overshoot into negatives, or an influence-formula change.",
+      "repro": "bash scripts/build.sh && ./bin/operon test tests/grn_occupy.op && python3 bootstrap/validation_report.py --entry V7",
+      "quantities": [
+        { "name": "v7_sub_partial", "derivation": "subtractive legacy: 1 - 0.4 - 0.4 = 0.2 (live reads 0.19999999999999996, one-ulp class)", "expected": 0.2, "comparison": "absolute", "tolerance": 1e-12 },
+        { "name": "v7_occ_partial", "derivation": "occupancy survival: 1 * 0.6 * 0.6 = 0.36", "expected": 0.36, "comparison": "absolute", "tolerance": 1e-12 },
+        { "name": "v7_sub_overshoot", "derivation": "two near-full subtractive repressors overshoot and clamp to a hard 0.0 (discrete clamp outcome)", "expected": 0.0, "comparison": "exact", "tolerance": null },
+        { "name": "v7_occ_survival", "derivation": "occupancy near-full survival: (1 - 1/1.01)^2, approaches but never crosses zero", "expected": 9.802960494069226e-05, "comparison": "absolute", "tolerance": 1e-12 }
+      ]
+    },
+    {
+      "id": "V8",
+      "title": "Gene dosage (@copies n): read-side dose amplification on GRN edges",
+      "source": "Copy-number amplification of transcript concentration feeding GRN edges (not return values): n copies at level L read as min(1, n*L) to their targets; copies clamp 1..=64 at parse.",
+      "enforcing_tests": ["tests/copies_dose.op"],
+      "probes": ["bootstrap/validation_probes/v8_copies.op"],
+      "why": "The dose effect is observable as discrete gate outcomes (vetoed vs passes at threshold 0.5), so those rows are exact booleans: 0.3 single-copy is vetoed, 0.3 x 2 = 0.6 opens the gate, 0.02 x 64 saturates and still passes, and a plain redefinition restores the veto. The raw-level readbacks are pass-through stored values (copies never touch the raw level), so 1e-12 absolute is generous and only guards the readback plumbing. Fails-pre: dose applied to return values, to the raw level, or lost saturation/clamp.",
+      "repro": "bash scripts/build.sh && ./bin/operon test tests/copies_dose.op && python3 bootstrap/validation_report.py --entry V8",
+      "quantities": [
+        { "name": "v8_single_vetoed", "derivation": "single copy at level 0.3 < threshold 0.5: the gate vetoes the call", "expected": true, "comparison": "exact", "tolerance": null },
+        { "name": "v8_raw_single", "derivation": "grn_get(\"src\") reads back 0.3: copies never touch the raw level (pass-through)", "expected": 0.3, "comparison": "absolute", "tolerance": 1e-12 },
+        { "name": "v8_double_gate_open", "derivation": "two copies: 0.3 x 2 = 0.6 >= 0.5, the gate opens (dose is a READ-side effect)", "expected": true, "comparison": "exact", "tolerance": null },
+        { "name": "v8_saturated_gate_open", "derivation": "64 copies at 0.02: 1.28 saturates at the 1.0 lattice ceiling, the gate still passes", "expected": true, "comparison": "exact", "tolerance": null },
+        { "name": "v8_raw_saturated", "derivation": "grn_get(\"src\") still reads 0.02: saturation happens on the dose read, not the stored level", "expected": 0.02, "comparison": "absolute", "tolerance": 1e-12 },
+        { "name": "v8_reset_vetoed", "derivation": "a plain redefinition restores single-copy dose: 0.3 < 0.5 is vetoed again", "expected": true, "comparison": "exact", "tolerance": null }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,73 @@
+# differential: std/serialize, the unified serialization front door (W34)
+#
+# Pins the stage-1 contract: Result-shaped errors (D-014), the round-trip
+# table per value type, the wire fidelity of Option/Result wrappers, and the
+# format-generic serialize/deserialize dispatch. Round-trip guarantees are
+# checked with structural equality (==), the same law docs/specs/
+# SERIALIZATION.md normatively states.
+#
+# note: JSON text with object braces is built via chr(123)/chr(125) here,
+# because a bare { inside a string literal starts interpolation (SPEC).
+use std/serialize as ser
+use std/csv as csv
+
+frame proof {
+    # ---- error contract: junk text is an err() value, never a crash ----
+    # (the junk payload starts with chr(123): a bare { inside a string
+    # literal would start interpolation, the same rule std_json pins)
+    let bad = ser.from_json(chr(123) + "not json")
+    assert(is_err(bad), "invalid JSON -> err()")
+    assert(type(bad) == "result", "from_json returns the result family")
+    assert(unwrap_or(bad, "fallback") == "fallback", "unwrap_or recovers")
+
+    # ---- round-trip table: exact for the scalar layer ----
+    assert(ser.roundtrip(null, "json"), "null round-trips")
+    assert(ser.roundtrip(true, "json"), "bool round-trips")
+    assert(ser.roundtrip(7, "json"), "int round-trips")
+    assert(ser.roundtrip(-3, "json"), "negative int round-trips")
+    assert(ser.roundtrip(2.5, "json"), "float round-trips")
+    assert(ser.roundtrip("héllo \"operon\"", "json"), "str with quotes round-trips")
+    assert(ser.roundtrip([1, [2, 3], "x"], "json"), "nested list round-trips")
+
+    # ---- map round-trip: document-order objects survive structurally ----
+    let OB = chr(123)
+    let CB = chr(125)
+    let m = ser.from_json(OB + "\"k\": 1, \"inner\": [true, null]" + CB)
+    assert(is_ok(m), "object parses to ok()")
+    assert(unwrap(m)["k"] == 1, "map field survives")
+    assert(unwrap(m)["inner"] == [true, null], "nested list in map survives")
+    assert(ser.roundtrip({"a": 1, "b": [1, 2]}, "json"), "map literal round-trips")
+
+    # ---- the honest gap: non-finite floats do NOT round-trip ----
+    # json_str emits null for them (RFC 8259 honesty, SPEC §10); roundtrip()
+    # reports false instead of pretending
+    let nan = 1e308 * 10 * 0.0
+    assert(json_str(nan) == "null", "nan serializes as null")
+    assert(!ser.roundtrip(nan, "json"), "nan does not round-trip, reported honestly")
+
+    # ---- Option/Result wire fidelity: single-key shape, tag NOT rebuilt ----
+    assert(json_str(ok(1)) == OB + "\"ok\":1" + CB, "Ok wire shape (compact)")
+    assert(json_str(err("e")) == OB + "\"err\":\"e\"" + CB, "Err wire shape (compact)")
+    assert(json_str(none()) == "null", "None wire shape")
+    let back = ser.from_json(json_str(ok(1)))
+    assert(is_ok(back), "the wire text re-parses")
+    assert(unwrap(back) == {"ok": 1}, "wire is a map, tag fidelity is the caller's rebuild")
+    assert(ser.roundtrip({"ok": 1}, "json"), "the wire shape itself round-trips")
+
+    # ---- csv layer: rows of scalars, Result-shaped parse ----
+    let rows = [["a", "b"], ["1", "x,y"]]
+    let text = ser.to_csv_rows(rows, ",")
+    assert(text == "a,b\n1,\"x,y\"", "csv quoting matches std/csv semantics")
+    let reparsed = ser.from_csv_rows(text, ",")
+    assert(is_ok(reparsed), "csv parse -> ok()")
+    assert(unwrap(reparsed) == rows, "csv rows round-trip")
+    assert(csv.csv_escape("p,q", ",") == "\"p,q\"", "std/csv still reachable directly")
+
+    # ---- format-generic dispatch + unsupported-format honesty ----
+    assert(ser.serialize([1, 2], "json") == "[1,2]", "serialize() dispatches json")
+    assert(is_ok(ser.deserialize("[1, 2]", "json")), "deserialize() dispatches json")
+    assert(ser.supported_formats() == ["json", "csv"], "format inventory")
+    assert(is_err(ser.serialize(1, "yaml")), "unsupported format -> err(), not a crash")
+    assert(is_err(ser.deserialize("x", "yaml")), "unsupported format on deserialize too")
+    assert(!ser.roundtrip({}, "yaml"), "roundtrip() on unknown format is false")
+}

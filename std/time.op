@@ -1,0 +1,185 @@
+gene time_add(ts, secs){
+  return ts + secs
+}
+
+gene time_diff(a, b){
+  return b - a
+}
+
+gene time_days_between(a, b){
+  return divmod(b - a, 86400)[0]
+}
+
+gene time_midnight(ts){
+  return ts - ts % 86400
+}
+
+gene time_date_only(ts){
+  return date_fmt(ts, "%Y-%m-%d")
+}
+
+gene time_is_leap(year){
+  if year % 4 != 0 {
+    return false
+  }
+  if year % 100 != 0 {
+    return true
+  }
+  return year % 400 == 0
+}
+
+gene time_days_in_month(year, month){
+  let lengths = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+  if month < 1 or month > 12 {
+    return 0
+  }
+  if month == 2 and time_is_leap(year) {
+    return 29
+  }
+  return lengths[month]
+}
+
+gene dur_hms(secs){
+  let t = secs
+  if t < 0 {
+    t = 0 - t
+  }
+  let h = divmod(t, 3600)[0]
+  let m = divmod(t % 3600, 60)[0]
+  let s = t % 60
+  return "{__p2(h)}:{__p2(m)}:{__p2(s)}"
+}
+
+gene dur_human(secs){
+  let t = secs
+  let sign = ""
+  if t < 0 {
+    sign = "-"
+    t = 0 - t
+  }
+  let d = divmod(t, 86400)[0]
+  let h = divmod(t % 86400, 3600)[0]
+  let m = divmod(t % 3600, 60)[0]
+  let s = t % 60
+  let parts = []
+  if d > 0 {
+    push(parts, "{d}d")
+  }
+  if h > 0 {
+    push(parts, "{h}h")
+  }
+  if m > 0 {
+    push(parts, "{m}m")
+  }
+  if s > 0 or len(parts) == 0 {
+    push(parts, "{s}s")
+  }
+  let joined = ""
+  for p in parts {
+    if joined != "" {
+      joined = joined + " "
+    }
+    joined = joined + p
+  }
+  return sign + joined
+}
+
+gene __p2(n){
+  if n < 10 {
+    return "0" + str(n)
+  }
+  return str(n)
+}
+
+gene __is_digits(s){
+  if len(s) == 0 {
+    return false
+  }
+  for c in s {
+    if c < "0" or c > "9" {
+      return false
+    }
+  }
+  return true
+}
+
+gene __days_from_civil(y, m, d){
+  let yy = y
+  if m <= 2 {
+    yy = yy - 1
+  }
+  let era = divmod(yy, 400)[0]
+  let yoe = yy - era * 400
+  let mp = m - 3
+  if m <= 2 {
+    mp = m + 9
+  }
+  let doy = divmod(153 * mp + 2, 5)[0] + d - 1
+  let doe = yoe * 365 + divmod(yoe, 4)[0] - divmod(yoe, 100)[0] + doy
+  return era * 146097 + doe - 719468
+}
+
+gene time_parse_iso(s){
+  if type(s) != "str" {
+    return null
+  }
+  let t = s
+  if len(t) > 0 {
+    let last = t.slice(len(t) - 1, len(t))
+    if last == "Z" or last == "z" {
+      t = t.slice(0, len(t) - 1)
+    }
+  }
+  if len(t) < 10 {
+    return null
+  }
+  if not __is_digits(t.slice(0, 4)) or not __is_digits(t.slice(5, 7)) or not __is_digits(t.slice(8, 10)) {
+    return null
+  }
+  if t.slice(4, 5) != "-" or t.slice(7, 8) != "-" {
+    return null
+  }
+  let y = num(t.slice(0, 4))
+  let mo = num(t.slice(5, 7))
+  let d = num(t.slice(8, 10))
+  if mo < 1 or mo > 12 {
+    return null
+  }
+  if d < 1 or d > time_days_in_month(y, mo) {
+    return null
+  }
+  let secs = 0
+  if len(t) > 10 {
+    if len(t) < 19 {
+      return null
+    }
+    let sep = t.slice(10, 11)
+    if sep != "T" and sep != "t" and sep != " " {
+      return null
+    }
+    if not __is_digits(t.slice(11, 13)) or not __is_digits(t.slice(14, 16)) or not __is_digits(t.slice(17, 19)) {
+      return null
+    }
+    if t.slice(13, 14) != ":" or t.slice(16, 17) != ":" {
+      return null
+    }
+    let h = num(t.slice(11, 13))
+    let mi = num(t.slice(14, 16))
+    let ss = num(t.slice(17, 19))
+    if h > 23 or mi > 59 or ss > 59 {
+      return null
+    }
+    secs = h * 3600 + mi * 60 + ss
+    let rest = t.slice(19, len(t))
+    if len(rest) > 0 {
+      if t.slice(19, 20) != "." {
+        return null
+      }
+      if not __is_digits(t.slice(20, len(t))) {
+        return null
+      }
+    }
+  }
+  return __days_from_civil(y, mo, d) * 86400 + secs
+}
+

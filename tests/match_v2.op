@@ -1,9 +1,14 @@
-# match_v2.op — W02: real pattern matching (match-v2 patterns).
+# allow: unreachable-match-arm
+# match_v2.op, W02: real pattern matching (match-v2 patterns).
 # Variants (Some/None/Ok/Err with payload patterns), list patterns
 # (exact length + *rest tails), map patterns (key presence + sub-patterns),
 # or-patterns (first alternative binds), guards (see the bindings; a
 # contained guard is a miss, never a failure). Total Grammar: a shape that
-# cannot match falls through — it never rejects a run.
+# cannot match falls through, it never rejects a run.
+# (the line-1 allow exists for the deliberate dead arm in the arm-order
+# probe below: first-match-wins keeps it dead, and its spanless body
+# anchors the W06 finding at this file's line 1, where a comment can
+# still reach it)
 frame proof {
     # ---- variant patterns: payload capture
     let r = 0
@@ -232,12 +237,15 @@ frame proof {
     assert(r == 2, "first matching alternative provides the bindings")
 
     # ---- first-hit-wins even when it binds nothing
+    # (the fallback arm must stay REACHABLE, e.g. `case _`: arm 1's Ok(n)
+    # alternative already covers every Ok value, so a second Ok arm there
+    # would be dead code, which W06 unreachable-match-arm rightly flags)
     r = "untouched"
     match ok(2) {
         case Ok(2) | Ok(n) {
             r = n
         }
-        case Ok(n) {
+        case _ {
             r = "second"
         }
     }
@@ -363,7 +371,7 @@ frame proof {
     assert(tally == 1, "the subject expression ran exactly once")
 
     # ---- W06 interaction: `?!` inside a guard PROPAGATES (a return, not a
-    # failure) — it leaves the match and the gene returns the carried value.
+    # failure), it leaves the match and the gene returns the carried value.
     gene guard_prop() {
         match some(none()) {
             case Some(v) if (v?!) {

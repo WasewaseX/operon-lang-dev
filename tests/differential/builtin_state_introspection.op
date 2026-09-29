@@ -1,12 +1,12 @@
-# differential: S3 builtin coverage — state introspection builtins
+# differential: S3 builtin coverage, state introspection builtins
 # grn_state(), items() and methyl() are pure readers over interpreter state,
 # so their goldens are fully deterministic:
-#   grn_state — level map after one grn_fire (levels asserted, never printed
+#   grn_state, level map after one grn_fire (levels asserted, never printed
 #               as floats; key count is exact)
-#   items     — map -> list of pairs in INSERTION order (both implementations
+#   items    , map -> list of pairs in INSERTION order (both implementations
 #               preserve it); the map comes from json_parse, itself a
 #               golden-covered builtin
-#   methyl    — .cell reader; no .cell file is present, so the explicit
+#   methyl   , .cell reader; no .cell file is present, so the explicit
 #               default-value path is what gets pinned
 regulate {
     signal activates kinase strength 0.9

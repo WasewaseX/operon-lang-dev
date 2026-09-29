@@ -1,7 +1,7 @@
-# reg-bio-2 (A4): the lac operon's dual control — allostery with the RIGHT
+# reg-bio-2 (A4): the lac operon's dual control, allostery with the RIGHT
 # polarity. LacI is a repressor whose ligand (allolactose/IPTG) REDUCES its
 # DNA affinity; CRP is an activator whose cofactor cAMP is required for
-# binding. Induction changes the LIGAND pool, never the regulator's level —
+# binding. Induction changes the LIGAND pool, never the regulator's level,
 # the mechanism is allostery, not dilution.
 ligand iptg
 ligand camp
@@ -18,7 +18,7 @@ frame proof {
     grn_set("crp", 1.0)
     # no ligands: the repressor sits on the operator, the cofactor is absent
     assert(lacZ() == null, "no inducer, no cAMP: repressed AND unactivated")
-    # add IPTG: the repressor leaves the DNA — its LEVEL is unchanged
+    # add IPTG: the repressor leaves the DNA, its LEVEL is unchanged
     ligand_set("iptg", 0.9)
     assert(abs(grn_get("lacI") - 1.0) < 1e-12, "the repressor's LEVEL never changed (allostery, not dilution)")
     assert(lacZ() == null, "IPTG alone: repression relieved but CAP-cAMP still off (glucose high)")
@@ -26,7 +26,7 @@ frame proof {
     ligand_set("camp", 0.9)
     assert(lacZ() == "beta-gal", "IPTG + cAMP: the lac operon expresses")
     assert(grn_get("crp") == 1.0, "CRP level unchanged throughout (cofactor modulates affinity)")
-    # polarity mirror: remove IPTG again — repression snaps back
+    # polarity mirror: remove IPTG again, repression snaps back
     ligand_set("iptg", 0.0)
     assert(lacZ() == null, "inducer removed: the repressor returns to the DNA")
 }

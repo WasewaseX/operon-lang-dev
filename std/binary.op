@@ -1,0 +1,166 @@
+# std/binary, byte-order packing and hex over the bytes type (pure Operon).
+#
+# Every write returns a NEW bytes value (built through bytes_from_list),
+# every read takes a bytes value plus an offset and returns null on a short
+# read (bounds are the caller's contract, never a crash). Integers follow
+# the language's i64 no-wrap contract: u32/i64 lanes only, 64-bit writes
+# encode two's complement.
+
+## Lowercase hex of a bytes value (or a string's UTF-8 bytes).
+gene bin_hex_encode(data) {
+    let out = ""
+    for b in bin_bytes_of(data) {
+        out = out + __bin_hex_byte(b)
+    }
+    return out
+}
+
+## Hex to bytes; a non-hex character or an odd length returns null
+## (a malformed decode is a caller bug, say so with a value, not a crash).
+gene bin_hex_decode(s) {
+    if (len(s) % 2) != 0 {
+        return null
+    }
+    let out = []
+    let i = 0
+    while i < len(s) {
+        let hi = __bin_hex_val(char_at(s, i))
+        let lo = __bin_hex_val(char_at(s, i + 1))
+        if hi < 0 or lo < 0 {
+            return null
+        }
+        push(out, hi * 16 + lo)
+        i = i + 2
+    }
+    return bytes_from_list(out)
+}
+
+## Unsigned 16-bit, little endian, to 2 bytes.
+gene bin_u16le(v) {
+    return bytes_from_list([v & 0xFF, (v >> 8) & 0xFF])
+}
+
+## Unsigned 16-bit, big endian, to 2 bytes.
+gene bin_u16be(v) {
+    return bytes_from_list([(v >> 8) & 0xFF, v & 0xFF])
+}
+
+## Unsigned 32-bit, little endian, to 4 bytes.
+gene bin_u32le(v) {
+    return bytes_from_list([v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF, (v >> 24) & 0xFF])
+}
+
+## Unsigned 32-bit, big endian, to 4 bytes.
+gene bin_u32be(v) {
+    return bytes_from_list([(v >> 24) & 0xFF, (v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF])
+}
+
+## Signed 64-bit, little endian, two's complement, to 8 bytes.
+gene bin_i64le(v) {
+    let out = []
+    let i = 0
+    while i < 8 {
+        push(out, (v >> (i * 8)) & 0xFF)
+        i = i + 1
+    }
+    return bytes_from_list(out)
+}
+
+## Read u16 little/big endian at byte offset `at`; null on a short read.
+gene bin_read_u16le(data, at) {
+    let bs = bin_bytes_of(data)
+    if at < 0 or at + 2 > len(bs) {
+        return null
+    }
+    return bs[at] + (bs[at + 1] << 8)
+}
+
+gene bin_read_u16be(data, at) {
+    let bs = bin_bytes_of(data)
+    if at < 0 or at + 2 > len(bs) {
+        return null
+    }
+    return (bs[at] << 8) + bs[at + 1]
+}
+
+## Read u32 little/big endian at byte offset `at`; null on a short read.
+gene bin_read_u32le(data, at) {
+    let bs = bin_bytes_of(data)
+    if at < 0 or at + 4 > len(bs) {
+        return null
+    }
+    return bs[at] + (bs[at + 1] << 8) + (bs[at + 2] << 16) + (bs[at + 3] << 24)
+}
+
+gene bin_read_u32be(data, at) {
+    let bs = bin_bytes_of(data)
+    if at < 0 or at + 4 > len(bs) {
+        return null
+    }
+    return (bs[at] << 24) + (bs[at + 1] << 16) + (bs[at + 2] << 8) + bs[at + 3]
+}
+
+## Read i64 little endian at byte offset `at`, sign-extended; null on a short
+## read. The accumulation keeps bit 63 out of the shifts (the language's
+## shift contract caps amounts at 63): seven bytes accumulate unsigned, the
+## eighth contributes its low 7 bits and its top bit decides the sign.
+gene bin_read_i64le(data, at) {
+    let bs = bin_bytes_of(data)
+    if at < 0 or at + 8 > len(bs) {
+        return null
+    }
+    let v = 0
+    let i = 0
+    while i < 7 {
+        v = v + (bs[at + i] << (i * 8))
+        i = i + 1
+    }
+    v = v + ((bs[at + 7] & 0x7F) << 56)
+    if ((bs[at + 7] >> 7) & 1) == 1 {
+        # -2^63 spelled as (-(2^63 - 1)) - 1: the bare 2^63 literal is out of
+        # the language's i64 range, this form stays inside it at every step
+        return (-9223372036854775807 - 1) + v
+    }
+    return v
+}
+
+## Byte count of a bytes value or a string's UTF-8 encoding.
+gene bin_size(data) {
+    return len(bin_bytes_of(data))
+}
+
+# ------------------------------------------------------------- internals
+
+gene bin_bytes_of(data) {
+    if type(data) == "bytes" {
+        return bytes_to_list(data)
+    }
+    if type(data) == "str" {
+        return bytes_to_list(bytes_from_str(data))
+    }
+    return []
+}
+
+gene __bin_hex_byte(b) {
+    return __bin_hex_digit(b >> 4) + __bin_hex_digit(b & 0xF)
+}
+
+gene __bin_hex_digit(v) {
+    if v < 10 {
+        return chr(48 + v)
+    }
+    return chr(87 + v)
+}
+
+gene __bin_hex_val(c) {
+    if c >= "0" and c <= "9" {
+        return ord(c) - 48
+    }
+    if c >= "a" and c <= "f" {
+        return ord(c) - 87
+    }
+    if c >= "A" and c <= "F" {
+        return ord(c) - 55
+    }
+    return -1
+}

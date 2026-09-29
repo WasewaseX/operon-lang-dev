@@ -1,0 +1,274 @@
+# std/serialize, the unified serialization front door (W34).
+#
+# One naming surface, one error contract, per-format round-trip guarantees:
+#   to_json(v)        -> str            total for the supported value shapes
+#   from_json(text)   -> Result        ok(value) | err(message), expected
+#                                      failures are values (D-014), never a
+#                                      crash and never a silent null
+#   to_csv_rows / from_csv_rows        tabular layer over std/csv semantics
+#   roundtrip(value, fmt) -> bool      to → from → structural equality
+#
+# Stage 1 covers the value layer: null / bool / int / float / str / list /
+# map, plus Option/Result wrappers (they JSON-wrap as {"ok":…} / {"err":…} /
+# null, the D-014 wire shape).
+#
+# Stage 2 covers phenotype instances with a STRUCTURAL default: an instance
+# emits the canonical wire map, its field map plus the hidden "#phenotype"
+# identity key, the exact shape the spawn boundary already uses (SPEC §7a) -
+# and deserialize rebuilds a real instance from it (the class must be
+# declared in the deserializing program; unknown name is an err value).
+# "#phenotype" is a RESERVED wire key (spawn already implies this): a plain
+# map carrying it rebuilds as an instance, and an instance field must not
+# use the name. When the W04 trait hook lands (`trait Serializable { gene
+# to_map() }`, shape frozen in docs/specs/SERIALIZATION.md), it slots in as
+# an OVERRIDE of this structural default, same signature, no breaking
+# change; the wire rules below do not move.
+#
+# Stage-2 round-trip guarantees (json format, instances):
+#   instance                 exact, recursively (nested instances inside
+#                            fields/lists/maps rebuild as instances)
+#   reconstruction is DATA restore: init does NOT re-run and field defaults
+#                            do NOT apply, the wire is the truth; absent
+#                            fields read as null + note (SPEC §7a)
+#   equality note            == on instances is DATA equality since the
+#                            parity resolution (class name + deep field
+#                            values, both engines), roundtrip() uses the
+#                            same structural == for every shape
+#   non-finite float fields  die at the wire (null) exactly like the value
+#                            layer, roundtrip() reports false, never a
+#                            silent true
+#
+# Why a dispatcher over the bare json_str/json_parse builtins: exactly one
+# place owns the error contract (Result, not a stress across the API line,
+# not a silent null), one place pins the round-trip table per type, and one
+# migration point when W04 lands the trait hook and stage 2 adds formats.
+#
+# Round-trip guarantees (value layer, json format):
+#   null / bool / int        exact
+#   float                    exact for finite values (JSON number text);
+#                            non-finite floats serialize as null (RFC 8259
+#                            honesty in json_str), those DO NOT round-trip
+#                            and roundtrip() reports false for them
+#   str                      exact (UTF-8 text)
+#   list / map               exact, recursively (structural == equality;
+#                            map keys are strings, insertion order is not
+#                            part of the JSON wire shape, but JSON objects
+#                            re-parse in document order, so == holds)
+#   option / result          wire shape {"ok":…}/{"err":…}/null; see the
+#                            pinned proof, re-parse does NOT rebuild the
+#                            wrapper (a single-key map is indistinguishable
+#                            from a map by design: wire fidelity, not tag
+#                            fidelity). Use the wrappers' json_str form
+#                            when the tag must survive, then rebuild at the
+#                            far end with is_ok/has_key.
+#   bytes (W29)              wire fidelity only: the W29 int-list view
+#                            (compact, e.g. [104,105]); re-parse is a plain
+#                            int list, the kind boundary is NOT rebuilt,
+#                            roundtrip() reports false (SPEC table row)
+
+# ---- W34 stage 2: phenotype wire layer (internal helpers) ----
+
+# value -> wire: instances become their tagged field map (tag FIRST, spawn
+# shape), containers recurse, leaves pass through. The reserved-key
+# collision (an instance field literally named "#phenotype") raises a
+# catchable `unfolded` stress, callers at the API line shape it into an
+# err value; the wire never lies by silently dropping or renaming.
+gene __to_wire(v) {
+    if is_object(v) {
+        let fm = object_fields(v)
+        if has(fm, "#phenotype") {
+            raise unfolded, "phenotype field name \"#phenotype\" is reserved by the wire format"
+        }
+        let wire = { "#phenotype": type(v) }
+        for k in keys(fm) {
+            wire[k] = __to_wire(fm[k])
+        }
+        return wire
+    }
+    let t = type(v)
+    if t == "list" {
+        let out = []
+        for x in v {
+            out.push(__to_wire(x))
+        }
+        return out
+    }
+    if t == "map" {
+        let out = {}
+        for k in keys(v) {
+            out[k] = __to_wire(v[k])
+        }
+        return out
+    }
+    return v
+}
+
+# wire -> value, bottom-up: a map carrying "#phenotype" rebuilds into a
+# real instance via the object_from_map builtin (unknown class name raises
+# a catchable `unfolded` stress, from_json shapes it into an err value).
+gene __from_wire(v) {
+    let t = type(v)
+    if t == "list" {
+        let out = []
+        for x in v {
+            out.push(__from_wire(x))
+        }
+        return out
+    }
+    if t == "map" {
+        let rebuilt = {}
+        for k in keys(v) {
+            rebuilt[k] = __from_wire(v[k])
+        }
+        if has(rebuilt, "#phenotype") {
+            return object_from_map(rebuilt)
+        }
+        return rebuilt
+    }
+    return v
+}
+
+# ---- value layer (stage 1) ----
+
+gene to_json(v) {
+    # total: every supported value shape emits valid JSON (RFC 8259);
+    # non-finite floats become null inside json_str (SPEC §10). Stage 2:
+    # instances emit the canonical wire map, so an instance and its
+    # spawn-crossed map are byte-identical on the wire. The one unsupported
+    # shape, a "#phenotype"-named field, returns an err(...) value, never
+    # a stress across the API line.
+    let out = null
+    let problem = ""
+    stress {
+        out = json_str(__to_wire(v))
+    } rescue (e) {
+        problem = e.message
+    }
+    if problem != "" {
+        return err(problem)
+    }
+    return out
+}
+
+gene from_json(text) {
+    # Result-shaped parse: ok(value) | err(message). The underlying builtin
+    # raises a catchable `unfolded` Stress on invalid text, stage-1 policy
+    # catches it HERE and hands back a value (the caller never writes
+    # stress/rescue just to parse a string that might be junk). Stage 2:
+    # tagged wire maps rebuild into instances inside the same catch scope,
+    # so an unknown "#phenotype" name is an err(...) value too.
+    let v = null
+    let problem = ""
+    stress {
+        v = __from_wire(json_parse(str(text)))
+    } rescue (e) {
+        problem = e.message
+    }
+    if problem != "" {
+        return err(problem)
+    }
+    return ok(v)
+}
+
+gene to_csv_rows(rows, sep) {
+    # rows: a list of lists (raw cells, any scalar shape, str() coerced).
+    # Quoting follows std/csv semantics (RFC-4180 flavored): a cell that
+    # contains the separator, a quote, or a newline is quoted; inner quotes
+    # double. Written here rather than imported so the dispatcher has ONE
+    # dependency surface (the builtins), stage 2 may re-route through
+    # std/csv once sibling imports are proven corpus-wide.
+    let out = []
+    for row in rows {
+        let parts = []
+        for cell in row {
+            let f = str(cell)
+            if f.contains(sep) or f.contains("\"") or f.contains("\n") {
+                parts.push("\"" + f.replace("\"", "\"\"") + "\"")
+            } else {
+                parts.push(f)
+            }
+        }
+        out.push(parts.join(sep))
+    }
+    return out.join("\n")
+}
+
+gene from_csv_rows(text, sep) {
+    # Result-shaped tabular parse (value layer: scalar cells as strings).
+    # Delegates the character-level state machine to std/csv's csv_parse,
+    # the one sibling import in this module, because re-implementing a
+    # state machine here is exactly the drift W34 exists to prevent.
+    use std/csv as csv
+    let rows = csv.csv_parse(str(text), sep)
+    if rows == null {
+        return err("csv parse failed")
+    }
+    return ok(rows)
+}
+
+gene supported_formats() {
+    # the stage-1 format inventory; stage 2 grows this list, callers that
+    # branch on it stay source-compatible
+    return ["json", "csv"]
+}
+
+gene roundtrip(value, fmt) {
+    # to → from → structural equality. The contract-checker the proofs and
+    # the cookbook use: if roundtrip(v, "json") is true, a consumer on the
+    # far side receives a value that == the original. ONE comparison rule
+    # for every shape, ==, instances included: the parity resolution made
+    # instance == data equality (class name + deep field values, both
+    # engines), so the rebuilt instance equals the original exactly when
+    # the wire carried everything. Non-finite floats die at the wire (null)
+    # on every path, so they report false here, never a silent true.
+    if fmt == "json" {
+        let text = to_json(value)
+        if is_err(text) {
+            return false
+        }
+        let parsed = from_json(text)
+        if is_err(parsed) {
+            return false
+        }
+        return unwrap(parsed) == value
+    }
+    if fmt == "csv" {
+        # csv is a row-string layer, not a value-tree format: only a list
+        # of lists of scalars is required to round-trip
+        if type(value) != "list" {
+            return false
+        }
+        let text = to_csv_rows(value, ",")
+        let parsed = from_csv_rows(text, ",")
+        if is_err(parsed) {
+            return false
+        }
+        return unwrap(parsed) == value
+    }
+    return false
+}
+
+gene serialize(value, fmt) {
+    # the W04 entry point: today format-generic dispatch for the value
+    # layer; when the trait hook lands, phenotype instances flow through
+    # the same signature (Serializable.to_map() → map → format).
+    if fmt == "json" {
+        return to_json(value)
+    }
+    if fmt == "csv" {
+        return to_csv_rows(value, ",")
+    }
+    return err("unsupported format: " + str(fmt))
+}
+
+gene deserialize(text, fmt) {
+    # mirror of serialize(): Result-shaped, so a bad payload is a value the
+    # caller unwraps, the error contract never changes shape
+    if fmt == "json" {
+        return from_json(text)
+    }
+    if fmt == "csv" {
+        return from_csv_rows(text, ",")
+    }
+    return err("unsupported format: " + str(fmt))
+}

@@ -1,0 +1,47 @@
+# traits, W04 differential pin: trait dispatch, defaults, virtual calls,
+# contract notes. Byte-identical on both engines.
+trait Show {
+    gene describe() {
+        return "shape:" + self.display()
+    }
+}
+trait Big {
+    gene area()
+}
+trait Greet {
+    gene greet(n) {
+        return "hi " + n
+    }
+}
+phenotype Rect implements Show, Big {
+    let w = 0
+    let h = 0
+    gene init(w, h) {
+        self.w = w
+        self.h = h
+    }
+    gene area() {
+        return self.w * self.h
+    }
+    gene display() {
+        return "rect(" + str(self.w) + "x" + str(self.h) + ")"
+    }
+}
+phenotype Square implements Show, Greet {
+    let s = 1
+    gene init(s) {
+        self.s = s
+    }
+    gene display() {
+        return "square(" + str(self.s) + ")"
+    }
+}
+let r = new Rect(3, 4)
+print(r.area())
+print(r.describe())
+let q = new Square(5)
+print(q.display())
+print(q.describe())
+print(q.greet("op"))
+print(new Rect(2, 3).area())
+print("done")

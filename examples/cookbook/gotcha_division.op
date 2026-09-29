@@ -1,5 +1,5 @@
 # ============================================================
-# GOTCHA: division, integer division, floored modulo  — cookbook #18
+# GOTCHA: division, integer division, floored modulo , cookbook #18
 # you already know: Python's / vs // vs % (Operon matches Python)
 # teaches: `/` is always float division; `//` is integer division;
 #          `%` is FLOORED - the sign follows the divisor, which is

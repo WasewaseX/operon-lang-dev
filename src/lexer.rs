@@ -1,4 +1,4 @@
-//! lexer.rs — tokenizer. Produces raw tokens; keyword recognition happens in
+//! lexer.rs, tokenizer. Produces raw tokens; keyword recognition happens in
 //! the parser so the wobble ladder (rungs 2/3) can repair at the positions
 //! where a keyword is actually required.
 
@@ -11,6 +11,7 @@ pub enum Tok {
     Float(f64),
     Str(String),    // no interpolation present
     Interp(String), // raw content, contains {..} parts
+    Bytes(Vec<u8>), // W029: b"..." byte-string literal (no interpolation)
     Mark(String),   // @word
     Newline,
     LBrace,
@@ -43,9 +44,9 @@ pub enum Tok {
     Shl,
     Shr,
     Question,
-    QuestionDot,      // ?. — optional chaining (L1a)
-    QuestionQuestion, // ?? — null coalescing (L1a)
-    QuestionBang,     // ?! — Option/Result propagation (W06, D-014)
+    QuestionDot,      // ?., optional chaining (L1a)
+    QuestionQuestion, // ??, null coalescing (L1a)
+    QuestionBang,     // ?!, Option/Result propagation (W06, D-014)
     Eq,
     EqEq,
     Neq,
@@ -72,6 +73,7 @@ impl Tok {
             Tok::Float(f) => format!("number {}", f),
             Tok::Str(s) => format!("string \"{}\"", s),
             Tok::Interp(s) => format!("interpolated string \"{}\"", s),
+            Tok::Bytes(_) => "bytes literal b\"...\"".to_string(),
             Tok::Mark(m) => format!("mark '@{}'", m),
             Tok::Newline => "end of line".to_string(),
             Tok::LBrace => "'{'".to_string(),
@@ -127,9 +129,15 @@ impl Tok {
 pub struct Lexed {
     pub toks: Vec<(Tok, usize)>, // token + line
     pub notes: Vec<Note>,
+    /// W074: `##` doc-comment lines, in source order, (line, text after the
+    /// `##` marker with one leading space stripped). Pure metadata: docs are
+    /// NOT tokens, so the token stream (and every existing consumer of it,
+    /// wobble scoring, repair rungs, the differential oracle) is untouched.
+    /// Plain `#` comments stay invisible exactly as before.
+    pub docs: Vec<(usize, String)>,
 }
 
-// sec-r4 (F-3): parse-time note cap — mirrors the Parser/Interp 10k contract.
+// sec-r4 (F-3): parse-time note cap, mirrors the Parser/Interp 10k contract.
 // A 3 MB file of repairable errors used to grow 1.5 M notes (646 MB RSS).
 fn lex_note(buf: &mut Vec<Note>, n: Note) {
     const LEX_NOTE_CAP: usize = 10_000;
@@ -149,6 +157,7 @@ fn lex_note(buf: &mut Vec<Note>, n: Note) {
 pub fn lex(src: &str) -> Lexed {
     let mut toks: Vec<(Tok, usize)> = Vec::new();
     let mut notes: Vec<Note> = Vec::new();
+    let mut docs: Vec<(usize, String)> = Vec::new();
     let chars: Vec<char> = src.chars().collect();
     let mut i = 0usize;
     let mut line = 1usize;
@@ -181,13 +190,30 @@ pub fn lex(src: &str) -> Lexed {
         }
         // comments
         if c == '#' {
+            // W074: `##` opens a DOC comment, captured as metadata (Lexed
+            // docs), never emitted as a token. The marker must be exactly
+            // two `#` (a `###` line is a doc whose text starts with `#`,
+            // same convention as markdown headings inside doc text).
+            if i + 1 < n && chars[i + 1] == '#' {
+                i += 2;
+                let mut text = String::new();
+                if i < n && chars[i] == ' ' {
+                    i += 1; // one leading space after the marker is stripped
+                }
+                while i < n && chars[i] != '\n' {
+                    text.push(chars[i]);
+                    i += 1;
+                }
+                docs.push((line, text));
+                continue;
+            }
             while i < n && chars[i] != '\n' {
                 i += 1;
             }
             continue;
         }
         // strings
-        // W030: raw strings r"..." — no escapes, no interpolation; ends at
+        // W030: raw strings r"...", no escapes, no interpolation; ends at
         // the closing quote (newlines allowed; the raw content is verbatim).
         // A bare `r` identifier that is NOT followed by a quote is untouched.
         if c == 'r' && i + 1 < n && chars[i + 1] == '"' {
@@ -224,7 +250,116 @@ pub fn lex(src: &str) -> Lexed {
             push!(Tok::Str(raw));
             continue;
         }
-        // W030: multiline triple-quoted strings """...""" — escapes and
+        // W029: byte strings b"..." / b'...', bytes literals. Escape set:
+        // \n \t \r \\ \" \' \0 \xNN (exactly two hex digits); unknown escapes
+        // keep the backslash + char verbatim (Python bytes convention); no
+        // interpolation ever ({ and } are plain bytes). A non-ASCII source
+        // char is UTF-8 encoded with a note (Total Grammar: repair, never
+        // reject). Unclosed literals consume to end of input with a note.
+        if (c == 'b' || c == 'B') && i + 1 < n && (chars[i + 1] == '"' || chars[i + 1] == '\'') {
+            let quote = chars[i + 1];
+            if quote == '\'' {
+                lex_note(
+                    &mut notes,
+                    Note {
+                        line,
+                        rung: 4,
+                        message: "single-quoted bytes literal repaired to double quotes".into(),
+                    },
+                );
+            }
+            i += 2; // skip b + quote
+            let mut out: Vec<u8> = Vec::new();
+            let mut closed = false;
+            while i < n {
+                if chars[i] == quote {
+                    i += 1;
+                    closed = true;
+                    break;
+                }
+                if chars[i] == '\\' && i + 1 < n {
+                    let e = chars[i + 1];
+                    match e {
+                        'n' => out.push(b'\n'),
+                        't' => out.push(b'\t'),
+                        'r' => out.push(b'\r'),
+                        '0' => out.push(0),
+                        '\\' => out.push(b'\\'),
+                        '"' => out.push(b'"'),
+                        '\'' => out.push(b'\''),
+                        'x' => {
+                            // \xNN, exactly two hex digits; malformed keeps
+                            // the text verbatim (with a note) instead of
+                            // rejecting the program
+                            let hex = |ch: char| ch.is_ascii_hexdigit();
+                            if i + 3 < n && hex(chars[i + 2]) && hex(chars[i + 3]) {
+                                let hi = chars[i + 2].to_digit(16).unwrap_or(0) as u8;
+                                let lo = chars[i + 3].to_digit(16).unwrap_or(0) as u8;
+                                out.push(hi * 16 + lo);
+                                i += 4;
+                                continue;
+                            }
+                            lex_note(
+                                &mut notes,
+                                Note {
+                                    line,
+                                    rung: 4,
+                                    message: "malformed \\x escape in bytes literal kept verbatim"
+                                        .into(),
+                                },
+                            );
+                            out.push(b'\\');
+                            out.push(b'x');
+                        }
+                        _ => {
+                            out.push(b'\\');
+                            // UTF-8-encode the escaped char (parity with the
+                            // oracle mirror; ASCII chars are 1 byte anyway)
+                            let mut buf = [0u8; 4];
+                            for byte in e.encode_utf8(&mut buf).as_bytes() {
+                                out.push(*byte);
+                            }
+                        }
+                    }
+                    i += 2;
+                    continue;
+                }
+                if chars[i] == '\n' {
+                    line += 1;
+                }
+                if chars[i] as u32 > 127 {
+                    // non-ASCII: UTF-8 encode the char (repair-with-note)
+                    let mut buf = [0u8; 4];
+                    for byte in chars[i].encode_utf8(&mut buf).as_bytes() {
+                        out.push(*byte);
+                    }
+                    lex_note(
+                        &mut notes,
+                        Note {
+                            line,
+                            rung: 4,
+                            message: "non-ASCII char in bytes literal encoded as UTF-8".into(),
+                        },
+                    );
+                } else {
+                    out.push(chars[i] as u8);
+                }
+                i += 1;
+            }
+            if !closed {
+                lex_note(
+                    &mut notes,
+                    Note {
+                        line,
+                        rung: 4,
+                        message: "unclosed bytes literal consumed to end of input".into(),
+                    },
+                );
+            }
+            push!(Tok::Bytes(out));
+            continue;
+        }
+        // W030: multiline triple-quoted strings """...""", escapes and
         // interpolation still processed; content is verbatim (no implicit
         // indent stripping); can contain single/double quotes freely.
         if c == '"' && i + 2 < n && chars[i + 1] == '"' && chars[i + 2] == '"' {
@@ -355,7 +490,7 @@ pub fn lex(src: &str) -> Lexed {
         }
         // numbers
         if c.is_ascii_digit() {
-            // W031: radix prefixes — 0x hex, 0b binary, 0o octal (case-insensitive
+            // W031: radix prefixes, 0x hex, 0b binary, 0o octal (case-insensitive
             // prefix), with `_` digit separators. A prefix with no valid digit
             // after it falls through to decimal lexing (`0x` = 0 then ident `x`).
             if c == '0' && i + 1 < n && matches!(chars[i + 1], 'x' | 'X' | 'b' | 'B' | 'o' | 'O') {
@@ -448,7 +583,7 @@ pub fn lex(src: &str) -> Lexed {
             }
             continue;
         }
-        // identifiers / keywords — every name is interned into the in-process
+        // identifiers / keywords, every name is interned into the in-process
         // symbol table (src/ffi.rs, Rust-owned since sec-r2/A15), the canonical
         // record of all symbols in all files: memory() stats, REPL :symbols,
         // and the future LSP goto-definition all read from it
@@ -636,7 +771,7 @@ pub fn lex(src: &str) -> Lexed {
             }
             '?' => {
                 // L1a: '??' = null coalescing; '?.' = optional chaining
-                // (only when not followed by a digit — a float literal can
+                // (only when not followed by a digit, a float literal can
                 // never start with '.', but a ternary 'a ?. 5' space-form
                 // must not eat the dot; digit guard keeps '?' + '.' separate
                 // for any future numeric forms).
@@ -653,7 +788,7 @@ pub fn lex(src: &str) -> Lexed {
                 } else if i + 1 < n && chars[i + 1] == '!' {
                     // W06 (D-014): '?!' = Option/Result propagation. Binds as
                     // a POSTFIX operator (parse_postfix), so it can never
-                    // collide with the ternary's bare '?' — '?!' is lexed as
+                    // collide with the ternary's bare '?', '?!' is lexed as
                     // one token before the '?' fallthrough.
                     push!(Tok::QuestionBang);
                     i += 2;
@@ -677,7 +812,7 @@ pub fn lex(src: &str) -> Lexed {
     }
 
     push!(Tok::Eof);
-    Lexed { toks, notes }
+    Lexed { toks, notes, docs }
 }
 
 /// Lex a double-quoted (or repaired single-quoted) string starting at the

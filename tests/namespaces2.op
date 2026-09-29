@@ -1,0 +1,52 @@
+# W025 stage 2: nested sub-module declarations (proof frames).
+# A module file may declare `module name { ... }` tables; use paths resolve
+# FILE-FIRST, then descend the exported nested tables longest-prefix-first;
+# `::` reads and calls are exact sugar for the Dot form; the wildcard tail
+# flat-binds exports without binding the table itself. The fixture lib lives
+# beside the differential program (root 1) and is shared with it.
+use differential/namespaces2_lib;
+use differential/namespaces2_lib::seq;
+use differential/namespaces2_lib::seq::*;
+
+frame proof {
+    # the file module table under its own binding, nested genes callable
+    assert(namespaces2_lib.seq.tag() == "seq", "the file module carries nested tables")
+    assert(namespaces2_lib::seq::tag() == "seq", ":: is exact sugar for the dot form")
+
+    # the aliased table from a two-segment use path
+    assert(seq.twice("ab") == "abab", "a two-segment use binds the nested table")
+
+    # a nested table inside a nested table (longest-prefix descent)
+    assert(namespaces2_lib.seq.deep.tag() == "deep", "a nested table nests one more level")
+
+    # data exports and closure over the table's own scope
+    assert(namespaces2_lib.counts.base == 10, "data lets export beside genes")
+    assert(namespaces2_lib.counts.bump(5) == 15, "a table gene closes over its own scope")
+
+    # the wildcard import flat-bound the seq repertoire
+    assert(tag() == "seq", "the wildcard tail flat-binds the table's exports")
+    assert(has(seq, "twice"), "the explicit table binding stays reachable")
+
+    # flat repertoire back-compat beside the tables
+    assert(flat_tag() == "flat", "the flat repertoire still binds beside the tables")
+
+    # contextual keyword: the word module stays an ordinary identifier when
+    # it is not a `module NAME {` declaration
+    let module = 7
+    assert(module == 7, "module is a contextual word, binding still works")
+
+    # last declaration wins: a later gene re-binds over the table name
+    module seq2 {
+        gene tag() {
+            return "first"
+        }
+    }
+    module seq2 {
+        gene tag() {
+            return "second"
+        }
+    }
+    assert(seq2.tag() == "second", "a later table declaration re-binds the name")
+
+    promote("namespaces2: all asserts green")
+}

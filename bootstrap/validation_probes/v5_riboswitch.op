@@ -1,0 +1,34 @@
+# W093 validation probe, V5 (cis riboswitch, per-gene 5'UTR sensor).
+# Companion measurement program for bootstrap/validation_registry.json and
+# bootstrap/validation_report.py. It asserts NOTHING. The enforcing test
+# remains tests/riboswitch_cis.op. Mirrors its call order exactly: off-class
+# bound then released, on-class unbound then bound, cis control, gate order.
+ligand tpp
+ligand ade
+@riboswitch tpp off threshold 0.5 gene tppOperon() { return "TPP-OFF" }
+@riboswitch ade on gene addA() { return "ADE-ON" }
+gene plainGene() { return "PLAIN" }
+@acetylate
+@riboswitch tpp off threshold 0.5 gene bothMarks() { return "BOTH" }
+ligand_set("tpp", 0.9)
+let o1 = tppOperon()
+promote("RESULT v5_off_bound_suppressed={o1 == null}")
+ligand_set("tpp", 0.1)
+let o2 = tppOperon()
+promote("RESULT v5_off_released_expresses={o2 == \"TPP-OFF\"}")
+ligand_set("ade", 0.1)
+let o3 = addA()
+promote("RESULT v5_on_unbound_suppressed={o3 == null}")
+ligand_set("ade", 0.9)
+let o4 = addA()
+promote("RESULT v5_on_bound_expresses={o4 == \"ADE-ON\"}")
+ligand_set("tpp", 0.9)
+let o5 = plainGene()
+let o6 = tppOperon()
+promote("RESULT v5_cis_plain_ignores_pool={o5 == \"PLAIN\"}")
+promote("RESULT v5_cis_marked_responds={o6 == null}")
+let o7 = bothMarks()
+promote("RESULT v5_acetylate_no_immunity={o7 == null}")
+ligand_set("tpp", 0.1)
+let o8 = bothMarks()
+promote("RESULT v5_hairpin_released_expresses={o8 == \"BOTH\"}")

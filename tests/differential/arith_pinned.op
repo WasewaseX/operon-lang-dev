@@ -1,4 +1,4 @@
-# differential: semantics pinning — modulo sign, floor division, NaN, negatives
+# differential: semantics pinning, modulo sign, floor division, NaN, negatives
 promote(7 % 3)
 promote(-7 % 3)
 promote(7 % -3)

@@ -1,0 +1,257 @@
+{
+  "runs": [
+    {
+      "results": [
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/genes.rs"
+                },
+                "region": {
+                  "byteLength": 29,
+                  "byteOffset": 82908,
+                  "endColumn": 39,
+                  "endLine": 1910,
+                  "snippet": {
+                    "text": "task_phase_in.lock().unwrap()"
+                  },
+                  "startColumn": 10,
+                  "startLine": 1910
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Mutex poisoning unwrap — conventional and accepted (poisoning means an invariant already broke); tracked separately so real unwraps stay visible"
+          },
+          "ruleId": "conventional-mutex-unwrap"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/genes.rs"
+                },
+                "region": {
+                  "byteLength": 26,
+                  "byteOffset": 87100,
+                  "endColumn": 51,
+                  "endLine": 2019,
+                  "snippet": {
+                    "text": "phase_cell.lock().unwrap()"
+                  },
+                  "startColumn": 25,
+                  "startLine": 2019
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Mutex poisoning unwrap — conventional and accepted (poisoning means an invariant already broke); tracked separately so real unwraps stay visible"
+          },
+          "ruleId": "conventional-mutex-unwrap"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/genes.rs"
+                },
+                "region": {
+                  "byteLength": 26,
+                  "byteOffset": 88566,
+                  "endColumn": 48,
+                  "endLine": 2055,
+                  "snippet": {
+                    "text": "phase_cell.lock().unwrap()"
+                  },
+                  "startColumn": 22,
+                  "startLine": 2055
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Mutex poisoning unwrap — conventional and accepted (poisoning means an invariant already broke); tracked separately so real unwraps stay visible"
+          },
+          "ruleId": "conventional-mutex-unwrap"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/genes.rs"
+                },
+                "region": {
+                  "byteLength": 23,
+                  "byteOffset": 91228,
+                  "endColumn": 53,
+                  "endLine": 2121,
+                  "snippet": {
+                    "text": "h.state.lock().unwrap()"
+                  },
+                  "startColumn": 30,
+                  "startLine": 2121
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Mutex poisoning unwrap — conventional and accepted (poisoning means an invariant already broke); tracked separately so real unwraps stay visible"
+          },
+          "ruleId": "conventional-mutex-unwrap"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/interp.rs"
+                },
+                "region": {
+                  "byteLength": 40,
+                  "byteOffset": 241043,
+                  "endColumn": 75,
+                  "endLine": 5498,
+                  "snippet": {
+                    "text": "ch.wake.wait_timeout(st, slice).unwrap()"
+                  },
+                  "startColumn": 35,
+                  "startLine": 5498
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Condvar poisoning unwrap — conventional and accepted (poisoning means an invariant already broke); tracked so real unwraps stay visible"
+          },
+          "ruleId": "conventional-condvar-unwrap"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/interp.rs"
+                },
+                "region": {
+                  "byteLength": 24,
+                  "byteOffset": 239939,
+                  "endColumn": 46,
+                  "endLine": 5471,
+                  "snippet": {
+                    "text": "ch.state.lock().unwrap()"
+                  },
+                  "startColumn": 22,
+                  "startLine": 5471
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Mutex poisoning unwrap — conventional and accepted (poisoning means an invariant already broke); tracked separately so real unwraps stay visible"
+          },
+          "ruleId": "conventional-mutex-unwrap"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/interp.rs"
+                },
+                "region": {
+                  "byteLength": 24,
+                  "byteOffset": 240574,
+                  "endColumn": 46,
+                  "endLine": 5487,
+                  "snippet": {
+                    "text": "ch.state.lock().unwrap()"
+                  },
+                  "startColumn": 22,
+                  "startLine": 5487
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Mutex poisoning unwrap — conventional and accepted (poisoning means an invariant already broke); tracked separately so real unwraps stay visible"
+          },
+          "ruleId": "conventional-mutex-unwrap"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/interp.rs"
+                },
+                "region": {
+                  "byteLength": 24,
+                  "byteOffset": 241402,
+                  "endColumn": 46,
+                  "endLine": 5508,
+                  "snippet": {
+                    "text": "ch.state.lock().unwrap()"
+                  },
+                  "startColumn": 22,
+                  "startLine": 5508
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Mutex poisoning unwrap — conventional and accepted (poisoning means an invariant already broke); tracked separately so real unwraps stay visible"
+          },
+          "ruleId": "conventional-mutex-unwrap"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/interp.rs"
+                },
+                "region": {
+                  "byteLength": 23,
+                  "byteOffset": 244761,
+                  "endColumn": 49,
+                  "endLine": 5585,
+                  "snippet": {
+                    "text": "c.state.lock().unwrap()"
+                  },
+                  "startColumn": 26,
+                  "startLine": 5585
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Mutex poisoning unwrap — conventional and accepted (poisoning means an invariant already broke); tracked separately so real unwraps stay visible"
+          },
+          "ruleId": "conventional-mutex-unwrap"
+        }
+      ],
+      "tool": {
+        "driver": {
+          "name": "ast-grep"
+        }
+      }
+    }
+  ],
+  "version": "0.45.3"
+}

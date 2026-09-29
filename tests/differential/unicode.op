@@ -1,0 +1,16 @@
+# unicode, W28 differential pin: char/byte/grapheme semantics, fold
+# subset, char-indexed ops. Byte-identical on both engines.
+print(len("héllo"), len("日本語"))
+print("日本語"[1], char_at("日本語", 2))
+print(char_slice("héllo", 0, 2), char_slice("héllo", -3, -1))
+print(grapheme_len("é"), grapheme_len("👨‍👩‍👧"), grapheme_len("🇺🇸"))
+print(grapheme_len("a🇺🇸b"), len("👨‍👩‍👧"))
+print(fold_case("HÉLLO ΟΩ"))
+print(fold_case("AuthProvider123"))
+print(char_at("abc", 99))
+use std/unicode as u
+print(u.char_codes("aé"))
+print(u.from_char_codes([240, 130, 130]))
+print(u.byte_width("aé日🇺"))
+print(u.is_upper("É"), u.is_lower("x"), u.is_alpha("Ο"), u.is_digit("3"))
+print("done")

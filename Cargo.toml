@@ -1,6 +1,6 @@
 [package]
 name = "operon"
-version = "2.2.0"
+version = "2.6.0"
 edition = "2021"
 license = "MIT"
 description = "Operon — the gene-expression language. Total Grammar toolchain (Rust core, C/C++ load-bearing kernels)."
@@ -27,3 +27,37 @@ codegen-units = 16
 panic = "unwind"
 # dx-r1 (audit W13): stripped release binaries (measured 1.6 MB on linux x64)
 strip = true
+
+# W61 (ROADMAP-100): distribution metadata — community drafts, inert to
+# cargo build. CI-validated when a packaging job lands (see docs/PACKAGING.md).
+# The [package.metadata.binstall] table lands with the B5 stack merge and
+# lives beside these; the tables are independent by design.
+[package.metadata.deb]
+maintainer = "Operon maintainers <https://github.com/WasewaseX/operon-lang-dev>"
+copyright = "WasewaseX"
+license-file = ["LICENSE", "0"]
+extended-description = """\
+Operon — the gene-expression language. A Total Grammar language where nothing \
+you write is ever rejected: it wobbles, repairs, and runs. Ships the operon \
+interpreter, the operon-ls language server, and the self-hosted std/ library."""
+depends = "$auto"
+section = "devel"
+priority = "optional"
+assets = [
+    ["target/release/operon", "usr/bin/", "755"],
+    ["target/release/operon-ls", "usr/bin/", "755"],
+    ["std/*", "usr/lib/operon/std/", "644"],
+    ["README.md", "usr/share/doc/operon/README", "644"],
+]
+
+[package.metadata.generate-rpm]
+name = "operon-lang"
+summary = "The gene-expression language — Total Grammar toolchain"
+description = "Operon — the gene-expression language. A Total Grammar language where nothing you write is ever rejected: it wobbles, repairs, and runs."
+license = "MIT"
+group = "Development/Languages"
+assets = [
+    { source = "target/release/operon", dest = "/usr/bin/operon", mode = "755" },
+    { source = "target/release/operon-ls", dest = "/usr/bin/operon-ls", mode = "755" },
+    { source = "std/*", dest = "/usr/lib/operon/std/", mode = "644" },
+]

@@ -1,8 +1,8 @@
-# T2d / A11 (reg-r2) — repressilator dynamics (SPEC §11)
+# T2d / A11 (reg-r2), repressilator dynamics (SPEC §11)
 # repressi_state() integrates the discrete Elowitz–Leibler ring:
 #   dA/dt = alpha / (1 + R^4) − gamma*A,  20 Euler substeps of dt=0.05 per
 #   ring tick (alpha=10, gamma=1), node j repressed by node (j+n−1)%n.
-# The oscillation is EMERGENT from mutual repression — no node is driven
+# The oscillation is EMERGENT from mutual repression, no node is driven
 # on a schedule. Pre-A11 cores return the hardcoded 0.5^t drive schedule
 # (peaks of exactly 1.0, no repression), so the amplitude and lag
 # assertions below FAIL there (verified).
@@ -12,7 +12,7 @@ frame proof {
     repressi_next()
     repressi_next()
     repressi_next()
-    # state is a pure function of the tick count — same tick, same levels
+    # state is a pure function of the tick count, same tick, same levels
     let s1 = repressi_state()
     let s2 = repressi_state()
     assert(s1.p == s2.p and s1.q == s2.q, "stateless fold: deterministic")
