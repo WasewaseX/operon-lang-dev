@@ -107,6 +107,35 @@ fn note_line(message: &str) -> Option<String> {
     Some(message[start..].trim_end().to_string())
 }
 
+/// Render one finding (the W041-coded lint/check streams) as a located
+/// block in the same shape as the fatal renderer, severity-prefixed:
+/// `error[E01]:`, `warning[W07]:`, `style[N12]:`. Findings carry
+/// line-only locations today, so no caret row is faked (SPEC 9a.1);
+/// the note line names the owning rule, which is the finding's provenance.
+pub fn render_finding(
+    file: &str,
+    src: &str,
+    sev: &str,
+    code: &str,
+    rule: &str,
+    line: usize,
+    message: &str,
+) -> String {
+    let mut out = format!("{}[{}]: {}\n", sev, code, message);
+    if line == 0 {
+        return out;
+    }
+    let line_text = src.lines().nth(line - 1).unwrap_or("");
+    let num = line.to_string();
+    let pad = num.len();
+    out.push_str(&format!("\n  --> {}:{}\n", file, line));
+    out.push_str(&format!("{:>w$} |\n", "", w = pad + 1));
+    out.push_str(&format!("{} | {}\n", num, line_text));
+    out.push_str(&format!("{:>w$} |\n", "", w = pad + 1));
+    out.push_str(&format!("{:>w$} = rule: {}\n", "", rule, w = pad + 1));
+    out
+}
+
 /// The rendered text block (rustc shape). The W007 chain lines are appended
 /// in the runner's established format after the block so existing parsers of
 /// our stderr (cookbook expected files, redteam rc checks) keep working.

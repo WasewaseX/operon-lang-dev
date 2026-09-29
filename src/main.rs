@@ -620,14 +620,19 @@ fn real_main() {
                     if fs.is_empty() {
                         println!("lint: {}, clean", file);
                     } else {
+                        let fsrc = std::fs::read_to_string(file).unwrap_or_default();
                         for f in fs {
-                            println!(
-                                "  {}:{}: {} [{}] ({})",
-                                file,
-                                f.line,
-                                f.sev.name(),
-                                f.rule,
-                                f.message
+                            print!(
+                                "{}",
+                                operon::diag::render_finding(
+                                    file,
+                                    &fsrc,
+                                    f.sev.name(),
+                                    &f.code,
+                                    &f.rule,
+                                    f.line,
+                                    &f.message
+                                )
                             );
                         }
                     }
@@ -823,7 +828,7 @@ fn real_main() {
                 } else {
                     Vec::new()
                 };
-                print_diag(&file, &rep, &findings, &style, &style_inline);
+                print_diag(&file, &src, &rep, &findings, &style, &style_inline);
                 let hard = findings.iter().any(|f| f.sev == operon::lint::Sev::Error);
                 if hard || (strict && (rep.wobbles > 0 || rep.fallbacks > 0)) {
                     // ast-grep-ignore: no-std-process-exit-in-core
@@ -2407,6 +2412,7 @@ fn repl_eval(l: &mut tools::Loaded, src: &str) {
 /// hiding data.
 fn print_diag(
     file: &str,
+    src: &str,
     rep: &tools::CheckReport,
     findings: &[operon::lint::Finding],
     style: &[operon::lint::Finding],
@@ -2422,19 +2428,28 @@ fn print_diag(
             Sev::Style => {} // unreachable in the correctness stream, kept for safety
         }
     }
+    // W101 slice 2: findings render as located blocks (SPEC 9a.1), severity
+    // prefixed, W041 code attached, the note line names the owning rule.
+    // The section headers and the summary line stay verbatim: scripts parse
+    // those, only the per-finding lines gained a location.
     let section = |name: &str, items: &[&operon::lint::Finding]| {
         if items.is_empty() {
             return;
         }
         println!("{}:", name);
         for f in items {
-            println!("  {}:{}: {} ({})", file, f.line, f.message, f.rule);
+            print!(
+                "{}",
+                operon::diag::render_finding(
+                    file, src, name, &&f.code, &f.rule, f.line, &f.message
+                )
+            );
         }
     };
     let mut n_errors = errors.len();
     if !rep.parsed {
         println!("error:");
-        println!("  {}: file could not be read", file);
+        println!("  error[E00]: file could not be read");
         n_errors += 1;
     }
     section("error", &errors);
@@ -2442,7 +2457,10 @@ fn print_diag(
     if !rep.phantoms.is_empty() {
         println!("warning:");
         for p in &rep.phantoms {
-            println!("  {}: phantom call: {}", file, p);
+            // phantoms are swept by name in tools.rs and carry no line today;
+            // the code attaches, the location honestly does not (line-only
+            // sweeps, SPEC 9a.1: unknown location fields are never guessed).
+            println!("  warning[W01]: phantom call: {}", p);
         }
     }
     section("warning", &warnings);
@@ -2458,7 +2476,12 @@ fn print_diag(
     if !style_inline.is_empty() {
         println!("style (owned by `operon lint`, advisory):");
         for f in style_inline {
-            println!("  {}:{}: {} ({})", file, f.line, f.message, f.rule);
+            print!(
+                "{}",
+                operon::diag::render_finding(
+                    file, src, "style", &&f.code, &f.rule, f.line, &f.message
+                )
+            );
         }
     } else if !style.is_empty() {
         println!(
