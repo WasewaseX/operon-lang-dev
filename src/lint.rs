@@ -23,6 +23,12 @@
 //!                        W03 constant-condition, N03 infinite-loop-suspect,
 //!                        W04 unreachable-code, W05 duplicate-match-arm,
 //!                        W06 unreachable-match-arm, N12 shadowed-binding
+//!   check --typed       T01 type-mismatch, T02 unknown-member,
+//!                        T03 arg-type-mismatch, T04 unknown-type,
+//!                        T05 non-exhaustive-match, T06 propagate-non-variant,
+//!                        T07 trait-method-missing, T08 bound-violation,
+//!                        T09 assign-type-change, T10 return-missing
+//!                        (TYPED-MODE: the static type checker, src/typecheck.rs)
 //!
 //! N04 (`repair:r<n>`, parser repair notes) is lint-owned BY CONTRACT but
 //! not emitted by the engine yet: the corpus contains files that exercise
@@ -184,6 +190,18 @@ pub fn rule_code(rule: &str) -> &'static str {
         "shadowed-binding" => "N12",
         r if r.starts_with("nmd:") || r == "anchor-import" => "W09",
         r if r.starts_with("repair:") => "N04",
+        // TYPED-MODE: T-series, the static type checker's stream
+        // (src/typecheck.rs, TYPED-MODE.md §10)
+        "type-mismatch" => "T01",
+        "unknown-member" => "T02",
+        "arg-type-mismatch" => "T03",
+        "unknown-type" => "T04",
+        "non-exhaustive-match" => "T05",
+        "propagate-non-variant" => "T06",
+        "trait-method-missing" => "T07",
+        "bound-violation" => "T08",
+        "assign-type-change" => "T09",
+        "return-missing" => "T10",
         _ => "N99",
     }
 }
@@ -907,7 +925,7 @@ fn unreachable_scan(stmts: &[Stmt], line_hint: usize, out: &mut Vec<Finding>) {
 
 fn duplicate_match_arms(stmts: &[Stmt], out: &mut Vec<Finding>) {
     for st in stmts {
-        if let Stmt::Match(_, arms) = st {
+        if let Stmt::Match(_, arms, _) = st {
             let mut seen: HashMap<String, usize> = HashMap::new();
             for (pat, body) in arms {
                 if let crate::ast::MatchPat::Lit(e) = pat {
@@ -969,7 +987,7 @@ fn lit_key(e: &Expr) -> String {
 /// semantic lane, this one needs nothing but the AST.
 fn unreachable_match_arms(stmts: &[Stmt], out: &mut Vec<Finding>) {
     for st in stmts {
-        if let Stmt::Match(_, arms) = st {
+        if let Stmt::Match(_, arms, _) = st {
             for (i, (pat, body)) in arms.iter().enumerate() {
                 // scan earlier UNGUARDED arms only: `if` makes an arm able to
                 // miss, so it guarantees nothing about what follows
@@ -1187,7 +1205,7 @@ fn collect_reads_stmts(stmts: &[Stmt], reads: &mut HashSet<String>) {
         if let Stmt::Assign(n, Some(_), _) = st {
             reads.insert(n.clone());
         }
-        if let Stmt::Match(_, arms) = st {
+        if let Stmt::Match(_, arms, _) = st {
             for (pat, body) in arms {
                 collect_pat_reads(pat, reads);
                 collect_reads_stmts(body, reads);
@@ -1271,7 +1289,7 @@ fn collect_reads_expr(e: &Expr, reads: &mut HashSet<String>) {
             collect_reads_expr(b, reads);
         }
         Expr::Member(a, _) | Expr::MemberSafe(a, _) => collect_reads_expr(a, reads),
-        Expr::Method(recv, _, args) | Expr::MethodSafe(recv, _, args) => {
+        Expr::Method(recv, _, args, _) | Expr::MethodSafe(recv, _, args, _) => {
             collect_reads_expr(recv, reads);
             for a in args {
                 collect_reads_expr(a, reads);
@@ -1364,7 +1382,7 @@ fn arity_scan_nested(
         | Stmt::For(_, _, b)
         | Stmt::ForPat(_, _, b) => arity_scan(b, arities, shadowed, knowledge, out),
         Stmt::Frame { body, .. } => arity_scan(body, arities, shadowed, knowledge, out),
-        Stmt::Match(_, arms) => {
+        Stmt::Match(_, arms, _) => {
             for (_, b) in arms {
                 arity_scan(b, arities, shadowed, knowledge, out);
             }
@@ -1441,7 +1459,7 @@ fn deprecated_scan_nested(st: &Stmt, deps: &mut DepMap, out: &mut Vec<Finding>) 
         | Stmt::For(_, _, b)
         | Stmt::ForPat(_, _, b) => deprecated_scan(b, deps, out),
         Stmt::Frame { body, .. } => deprecated_scan(body, deps, out),
-        Stmt::Match(_, arms) => {
+        Stmt::Match(_, arms, _) => {
             for (_, b) in arms {
                 deprecated_scan(b, deps, out);
             }
@@ -1501,7 +1519,7 @@ fn deprecated_scan_expr(exprs: Vec<&Expr>, deps: &DepMap, out: &mut Vec<Finding>
                     out,
                 );
             }
-            Expr::Method(recv, _, args) | Expr::MethodSafe(recv, _, args) => {
+            Expr::Method(recv, _, args, _) | Expr::MethodSafe(recv, _, args, _) => {
                 deprecated_scan_expr(
                     std::iter::once(&**recv).chain(args.iter()).collect(),
                     deps,
@@ -1561,7 +1579,7 @@ fn stmt_exprs_all(st: &Stmt) -> Vec<&Expr> {
         Stmt::ForPat(_, it, _) => vec![it],
         Stmt::Return(Some(e)) => vec![e],
         Stmt::ExprStmt(e) => vec![e],
-        Stmt::Match(scrut, _) => vec![scrut],
+        Stmt::Match(scrut, _, _) => vec![scrut],
         Stmt::Raise(_, e, _) => vec![e],
         Stmt::Yield(Some(e)) => vec![e],
         _ => vec![],
@@ -1627,7 +1645,7 @@ fn scan_expr_arities(
                     out,
                 );
             }
-            Expr::Method(recv, mname, args) | Expr::MethodSafe(recv, mname, args) => {
+            Expr::Method(recv, mname, args, _) | Expr::MethodSafe(recv, mname, args, _) => {
                 // W43: method arity when the receiver is a statically known
                 // phenotype value (`let p = new Pheno(...)`, single binding,
                 // never re-bound) and the method resolves on the same-file
@@ -1890,7 +1908,7 @@ fn stmt_nested_all(st: &Stmt) -> Vec<&[Stmt]> {
         | Stmt::For(_, _, b)
         | Stmt::ForPat(_, _, b) => vec![b.as_slice()],
         Stmt::Frame { body, .. } => vec![body.as_slice()],
-        Stmt::Match(_, arms) => arms.iter().map(|(_, b)| &b[..]).collect(),
+        Stmt::Match(_, arms, _) => arms.iter().map(|(_, b)| &b[..]).collect(),
         Stmt::Stress { body, rescue, .. } => {
             let mut out = vec![body.as_slice()];
             if let Some((_, rb)) = rescue {
@@ -1979,7 +1997,7 @@ fn collect_calls_stmts(stmts: &[Stmt], called: &mut HashSet<String>) {
         for e in stmt_exprs_all(st) {
             collect_calls_expr(e, called);
         }
-        if let Stmt::Match(_, arms) = st {
+        if let Stmt::Match(_, arms, _) = st {
             for (_, body) in arms {
                 collect_calls_stmts(body, called);
             }
@@ -2003,7 +2021,7 @@ fn collect_calls_expr(e: &Expr, called: &mut HashSet<String>) {
                 collect_calls_expr(a, called);
             }
         }
-        Expr::Method(recv, mname, args) | Expr::MethodSafe(recv, mname, args) => {
+        Expr::Method(recv, mname, args, _) | Expr::MethodSafe(recv, mname, args, _) => {
             // the method name and the dotted `recv.name` form both count as
             // references (module-member calls are the dotted shape)
             called.insert(mname.clone());

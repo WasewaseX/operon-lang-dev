@@ -746,13 +746,13 @@ fn collect_calls(prog: &Program, defined: &mut HashSet<String>, called: &mut Vec
                     walk_expr(a, called);
                 }
             }
-            Expr::Method(r, _, args) => {
+            Expr::Method(r, _, args, _) => {
                 walk_expr(r, called);
                 for a in args {
                     walk_expr(a, called);
                 }
             }
-            Expr::MethodSafe(r, _, args) => {
+            Expr::MethodSafe(r, _, args, _) => {
                 walk_expr(r, called);
                 for a in args {
                     walk_expr(a, called);
@@ -838,7 +838,7 @@ fn collect_calls(prog: &Program, defined: &mut HashSet<String>, called: &mut Vec
                 walk_expr(it, called);
                 walk_stmts(b, defined, called);
             }
-            Stmt::Match(sub, cases) => {
+            Stmt::Match(sub, cases, _) => {
                 walk_expr(sub, called);
                 for (p, b) in cases {
                     match p {
@@ -1857,7 +1857,7 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
         Stmt::Break => out.push_str("break\n"),
         Stmt::Continue => out.push_str("continue\n"),
         Stmt::ExprStmt(e) => out.push_str(&format!("{}\n", fmt_expr(e))),
-        Stmt::Match(sub, cases) => {
+        Stmt::Match(sub, cases, _) => {
             out.push_str(&format!("match {} ", fmt_expr(sub)));
             out.push_str("{\n");
             for (p, b) in cases {
@@ -2445,7 +2445,7 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
         Expr::Index(t, i, _) => format!("{}[{}]", fmt_expr(t), fmt_expr(i)),
         Expr::Member(t, k) => format!("{}.{}", fmt_expr(t), k),
         Expr::MemberSafe(t, k) => format!("{}?.{}", fmt_expr(t), k),
-        Expr::MethodSafe(t, m, args) => format!(
+        Expr::MethodSafe(t, m, args, _) => format!(
             "{}?.{}({})",
             fmt_expr(t),
             m,
@@ -2454,7 +2454,7 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
-        Expr::Method(t, m, args) => format!(
+        Expr::Method(t, m, args, _) => format!(
             "{}.{}({})",
             fmt_expr(t),
             m,
@@ -2594,6 +2594,12 @@ fn d_ann(a: &TypeAnn) -> DumpNode {
         TypeAnn::Named(n) => dn("Ann", vec![ds(n)]),
         TypeAnn::Union(alts) => dn("AnnUnion", alts.iter().map(d_ann).collect()),
         TypeAnn::Optional(inner) => dn("AnnOptional", vec![d_ann(inner)]),
+        TypeAnn::Generic(name, args) => dn(
+            "AnnGeneric",
+            std::iter::once(ds(name))
+                .chain(args.iter().map(d_ann))
+                .collect(),
+        ),
     }
 }
 
@@ -2640,8 +2646,8 @@ fn d_expr(e: &Expr) -> DumpNode {
         Expr::Index(obj, idx, _) => dn("Index", vec![d_expr(obj), d_expr(idx)]),
         Expr::Member(obj, name) => dn("Member", vec![d_expr(obj), ds(name)]),
         Expr::MemberSafe(obj, name) => dn("MemberSafe", vec![d_expr(obj), ds(name)]),
-        Expr::Method(obj, name, args) => dn("Method", vec![d_expr(obj), ds(name), d_args(args)]),
-        Expr::MethodSafe(obj, name, args) => {
+        Expr::Method(obj, name, args, _) => dn("Method", vec![d_expr(obj), ds(name), d_args(args)]),
+        Expr::MethodSafe(obj, name, args, _) => {
             dn("MethodSafe", vec![d_expr(obj), ds(name), d_args(args)])
         }
         Expr::Lambda(g) => d_gene("Lambda", g),
@@ -2901,7 +2907,7 @@ fn d_stmt(s: &Stmt) -> DumpNode {
         Stmt::Break => dn("Break", vec![]),
         Stmt::Continue => dn("Continue", vec![]),
         Stmt::ExprStmt(e) => dn("ExprStmt", vec![d_expr(e)]),
-        Stmt::Match(e, arms) => {
+        Stmt::Match(e, arms, _) => {
             let mut items = vec![d_expr(e)];
             items.extend(
                 arms.iter()

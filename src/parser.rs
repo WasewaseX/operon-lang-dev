@@ -980,6 +980,7 @@ impl Parser {
                                             deprecated: None,
                                             param_anns: vec![],
                                             ret_ann: None,
+                                            type_params: vec![],
                                         })),
                                     });
                                 } else {
@@ -1234,6 +1235,7 @@ impl Parser {
                 Some(Stmt::Continue)
             }
             "match" => {
+                let match_line = self.line();
                 self.next();
                 let subject = self.parse_expr();
                 let mut cases: Vec<(MatchPat, Vec<Stmt>)> = Vec::new();
@@ -1273,7 +1275,7 @@ impl Parser {
                     let line = self.line();
                     self.note(line, 4, "match without cases; treated as null");
                 }
-                Some(Stmt::Match(subject, cases))
+                Some(Stmt::Match(subject, cases, match_line))
             }
             "use" => {
                 self.next();
@@ -2903,6 +2905,36 @@ impl Parser {
         match self.peek().clone() {
             Tok::Ident(w) => {
                 self.next();
+                // TYPED-MODE: generic annotation, `list[int]`, `map[str, int]`,
+                // `result[int, str]`. Bracketed type args are unambiguous in
+                // annotation position (Total-Grammar soft: unclosed lists
+                // auto-close with a note, never a reject).
+                if matches!(self.peek(), Tok::LBrack) {
+                    self.next();
+                    let mut args: Vec<TypeAnn> = Vec::new();
+                    loop {
+                        self.eat_newlines_inline();
+                        match self.peek().clone() {
+                            Tok::RBrack => {
+                                self.next();
+                                break;
+                            }
+                            Tok::Eof => {
+                                let line = self.line();
+                                self.note(line, 4, "type-argument list auto-closed");
+                                break;
+                            }
+                            _ => {
+                                args.push(self.parse_type_ann());
+                                self.eat_newlines_inline();
+                                if matches!(self.peek(), Tok::Comma) {
+                                    self.next();
+                                }
+                            }
+                        }
+                    }
+                    return TypeAnn::Generic(w, args);
+                }
                 let base = TypeAnn::Named(w);
                 if matches!(self.peek(), Tok::Question) {
                     self.next();
@@ -3045,6 +3077,65 @@ impl Parser {
             }
             _ => None,
         };
+        // TYPED-MODE: declared generic type parameters, `gene first<T>(...)`.
+        // `<` directly after the gene name in signature position is
+        // unambiguous (expressions never follow a gene NAME); bounds are
+        // plain idents (`T: numeric`, `U: Drawable`). Soft: unclosed lists
+        // auto-close with a note.
+        let mut type_params: Vec<(String, Option<String>)> = Vec::new();
+        if matches!(self.peek(), Tok::Lt) && name.is_some() {
+            self.next();
+            loop {
+                self.eat_newlines_inline();
+                match self.peek().clone() {
+                    Tok::Gt => {
+                        self.next();
+                        break;
+                    }
+                    Tok::Eof => {
+                        let line = self.line();
+                        self.note(line, 4, "type-parameter list auto-closed");
+                        break;
+                    }
+                    Tok::Ident(p) => {
+                        self.next();
+                        let bound = if matches!(self.peek(), Tok::Colon) {
+                            self.next();
+                            match self.peek().clone() {
+                                Tok::Ident(b) => {
+                                    self.next();
+                                    Some(b)
+                                }
+                                _ => {
+                                    let line = self.line();
+                                    self.note(line, 4, "type bound is not a name; dropped");
+                                    None
+                                }
+                            }
+                        } else {
+                            None
+                        };
+                        type_params.push((p, bound));
+                        self.eat_newlines_inline();
+                        if matches!(self.peek(), Tok::Comma) {
+                            self.next();
+                        }
+                    }
+                    other => {
+                        let line = self.line();
+                        self.note(
+                            line,
+                            4,
+                            format!(
+                                "'{}' is not a type parameter name; list auto-closed",
+                                other.describe()
+                            ),
+                        );
+                        break;
+                    }
+                }
+            }
+        };
         let mut params = Vec::new();
         let mut param_anns: Vec<Option<TypeAnn>> = Vec::new();
         if matches!(self.peek(), Tok::LParen) {
@@ -3131,6 +3222,7 @@ impl Parser {
                 params,
                 param_anns,
                 ret_ann,
+                type_params,
                 guard,
                 body: vec![Stmt::Return(Some(e))],
                 acetylate,
@@ -3152,6 +3244,7 @@ impl Parser {
             params,
             param_anns,
             ret_ann,
+            type_params,
             guard,
             body,
             acetylate,
@@ -3512,6 +3605,7 @@ impl Parser {
                 }
                 Tok::Dot => {
                     self.next();
+                    let method_line = self.line();
                     match self.peek().clone() {
                         Tok::Ident(m) => {
                             self.next();
@@ -3532,7 +3626,7 @@ impl Parser {
                                         self.next();
                                     }
                                 }
-                                e = Expr::Method(Box::new(e), m, args);
+                                e = Expr::Method(Box::new(e), m, args, method_line);
                             } else {
                                 e = Expr::Member(Box::new(e), m);
                             }
@@ -3551,6 +3645,7 @@ impl Parser {
                 Tok::QuestionDot => {
                     // L1a: `a?.k` / `a?.k(args)`, null-safe member access.
                     self.next();
+                    let method_line = self.line();
                     match self.peek().clone() {
                         Tok::Ident(m) => {
                             self.next();
@@ -3571,7 +3666,7 @@ impl Parser {
                                         self.next();
                                     }
                                 }
-                                e = Expr::MethodSafe(Box::new(e), m, args);
+                                e = Expr::MethodSafe(Box::new(e), m, args, method_line);
                             } else {
                                 e = Expr::MemberSafe(Box::new(e), m);
                             }
@@ -3609,6 +3704,7 @@ impl Parser {
                     // below, the AST is identical.
                     self.next();
                     self.next();
+                    let method_line = self.line();
                     match self.peek().clone() {
                         Tok::Ident(m) => {
                             self.next();
@@ -3629,7 +3725,7 @@ impl Parser {
                                         self.next();
                                     }
                                 }
-                                e = Expr::Method(Box::new(e), m, args);
+                                e = Expr::Method(Box::new(e), m, args, method_line);
                             } else {
                                 e = Expr::Member(Box::new(e), m);
                             }

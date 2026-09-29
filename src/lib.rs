@@ -20,6 +20,7 @@ pub mod pkg;
 pub mod pybridge;
 pub mod rna2;
 pub mod tools;
+pub mod typecheck;
 pub mod unicode_tables;
 pub mod value;
 pub mod vm;
