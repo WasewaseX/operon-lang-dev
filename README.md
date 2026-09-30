@@ -108,6 +108,15 @@ Run any of them: `operon run examples/cookbook/word_freq.op`. Re-verify all:
 
 ---
 
+## Reading the errors
+
+Diagnostics are part of the language contract, not an afterthought: stable
+error codes (E1xxx for fatals, E2xxx for repairs), located blocks with
+width-correct carets, did-you-mean suggestions that mirror the runtime
+wobble ladder, machine-applicable fixes, and `--json-errors` for tools.
+The guide is [docs/errors.md](docs/errors.md); the byte-exact fixtures are
+part of the standard gate suite.
+
 ## Total Grammar, the 4-rung ladder
 
 No `.op` file is ever rejected. Parse problems become **notes**:
