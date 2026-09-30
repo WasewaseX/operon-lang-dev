@@ -7,6 +7,7 @@
 //! is ordinary Rust ownership now.)
 
 pub mod ast;
+pub mod compile;
 pub mod ffi;
 pub mod genes;
 pub mod graph;
@@ -14,9 +15,11 @@ pub mod interp;
 pub mod lexer;
 pub mod ls;
 pub mod parser;
+pub mod pkg;
 pub mod pybridge;
 pub mod tools;
 pub mod value;
+pub mod vm;
 
 /// Fatal CLI error: print to stderr and exit with status 2.
 /// Lives here (not in the binary) because tool-layer entry points rely on it.

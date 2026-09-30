@@ -1,0 +1,10 @@
+[package]
+name = "postgres"
+version = "1.0.0"
+description = "PostgreSQL access for Operon through the py() substrate bridge — parameterized queries, rows as maps, capability-gated like every bridge call"
+authors = ["Operon ecosystem builders"]
+license = "MIT"
+keywords = ["postgres", "sql", "database", "py"]
+entry = "postgres.op"
+
+[dependencies]

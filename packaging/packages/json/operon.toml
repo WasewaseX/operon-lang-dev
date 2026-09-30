@@ -1,0 +1,10 @@
+[package]
+name = "json"
+version = "1.0.0"
+description = "JSON toolkit extras for Operon — path lookup, deep merge, stringifying. Core json_parse/json_str stay in std (std shadows the bare name; use json/extra for this package)"
+authors = ["Operon ecosystem builders"]
+license = "MIT"
+keywords = ["json", "encode", "decode"]
+entry = "extra.op"
+
+[dependencies]

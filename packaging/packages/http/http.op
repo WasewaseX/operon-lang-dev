@@ -1,0 +1,93 @@
+# http - an Operon registry package (entry module).
+#
+# Thin, honest helpers over the core http_get builtin. Everything here is
+# capability-gated by the runtime exactly like a hand-written call: the
+# caller needs --allow-net host:port for each host it dials. deny-by-default
+# is never bypassed by a package.
+#
+#   operon add http
+#   use http
+#   let body = http.get("example.com", "/index.html")
+
+gene get(host, path) {
+    # http_get(host, port, path) -> response body (stress [missing] on error)
+    return http_get(host, 80, path);
+}
+
+gene get_port(host, port, path) {
+    if port < 1 or port > 65535 {
+        raise unfolded, "http.get_port: port out of range";
+    }
+    return http_get(host, port, path);
+}
+
+gene get_json(host, path) {
+    return json_parse(get(host, path));
+}
+
+gene escape(s) {
+    # percent-encode the RFC 3986 reserved set + space, % first
+    let out = s;
+    out = out.replace("%", "%25");
+    out = out.replace(" ", "%20");
+    out = out.replace("\"", "%22");
+    out = out.replace("<", "%3C");
+    out = out.replace(">", "%3E");
+    out = out.replace("#", "%23");
+    out = out.replace("|", "%7C");
+    out = out.replace("\\", "%5C");
+    out = out.replace("^", "%5E");
+    out = out.replace("~", "%7E");
+    out = out.replace("[", "%5B");
+    out = out.replace("]", "%5D");
+    out = out.replace("`", "%60");
+    out = out.replace(";", "%3B");
+    out = out.replace("/", "%2F");
+    out = out.replace("?", "%3F");
+    out = out.replace(":", "%3A");
+    out = out.replace("@", "%40");
+    out = out.replace("=", "%3D");
+    out = out.replace("&", "%26");
+    out = out.replace("$", "%24");
+    # literal braces in source strings enter the interpolation grammar, so
+    # the brace replacements are spelled through chr()
+    out = out.replace(chr(123), "%7B");
+    out = out.replace(chr(125), "%7D");
+    return out;
+}
+
+gene keys_of(m) {
+    let ks = [];
+    for pair in items(m) {
+        push(ks, pair[0]);
+    }
+    return sorted(ks);
+}
+
+gene query(params) {
+    # map of key -> value to an application/x-www-form-urlencoded query string
+    let parts = [];
+    for k in keys_of(params) {
+        push(parts, escape(k) + "=" + escape(params[k]));
+    }
+    return "&".join(parts);
+}
+
+gene with_query(host, path, params) {
+    let q = query(params);
+    if q == "" {
+        return get(host, path);
+    }
+    let sep = "?";
+    if path.contains("?") {
+        sep = "&";
+    }
+    return get(host, path + sep + q);
+}
+
+gene download_to_file(host, path, dest) {
+    # caller needs both the net grant and a write grant for dest
+    let body = get(host, path);
+    write_file(dest, body);
+    return len(body);
+}

@@ -29,4 +29,8 @@ echo "[3/4] Differential harness (Rust core vs Python oracle)"
 python3 bootstrap/harness.py
 echo "[4/4] Oracle proof suite (the same frames on the second implementation)"
 python3 bootstrap/oracle.py test tests/
+# ai/ecosystem (W19): package CLI end-to-end — new/add/run/lock/search/publish/
+# remove/update over the dir + HTTP registries, sha256 pinning, immutability.
+echo "[5/5] Package system e2e (tests/package/pkg_e2e.sh)"
+bash tests/package/pkg_e2e.sh bin/operon
 echo "ALL GREEN"

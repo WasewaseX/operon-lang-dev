@@ -455,6 +455,10 @@ pub struct Interp {
     /// 1 - (1-s)^sites over all entries for the target. strength 1.0 with
     /// one site = the legacy binary redirect, bit-identical.
     pub silences: Vec<(String, Option<String>, f64, u32)>,
+    /// W09: compiled gene bodies for `--vm` mode, keyed by the gene def's
+    /// Arc identity pointer. None = VM off; workers get fresh Interps with
+    /// None (sequences stay on the tree-walk — docs/VM.md §6).
+    pub vm_funcs: Option<std::collections::HashMap<usize, std::rc::Rc<crate::compile::FuncCode>>>,
     /// reg-bio-3 (A1/A7): polycistronic transcription units — the namesake
     /// construct. One promoter drives N cistrons on ONE transcript; member
     /// order is load-bearing (RBS gradient + polarity exposure).
@@ -623,6 +627,7 @@ impl Interp {
             file: "<repl>".to_string(),
             stdout_sink: None,
             silences: Vec::new(),
+            vm_funcs: None,
             operons: Vec::new(),
             risc_escaped: std::collections::HashSet::new(),
             m6a_levels: HashMap::new(),
@@ -736,10 +741,8 @@ impl Interp {
         Ok(Value::Str(s.repeat(n as usize)))
     }
 
-    fn tick(&mut self) -> Result<(), Stress> {
+    pub(crate) fn tick(&mut self) -> Result<(), Stress> {
         self.steps += 1;
-        // shared pool: every 65_536 steps, drain a chunk from the run-wide
-        // pool so host + workers share one "steps per run" ceiling
         if self.steps.is_multiple_of(65_536) {
             if let Some(pool) = &self.fuel_pool {
                 let left = pool.fetch_sub(65_536, std::sync::atomic::Ordering::Relaxed);
@@ -1745,7 +1748,7 @@ impl Interp {
 
     /// L1a: shared member-read logic for `Expr::Member` and `Expr::MemberSafe`
     /// (the safe form null-checks the receiver before calling this).
-    fn member_value(&mut self, tv: Value, key: &str) -> Result<Value, Stress> {
+    pub(crate) fn member_value(&mut self, tv: Value, key: &str) -> Result<Value, Stress> {
         match &tv {
             Value::Map(m) => match m
                 .borrow()
@@ -3069,6 +3072,21 @@ impl Interp {
         Ok(Value::Null)
     }
 
+    /// W09: execute a gene body — bytecode when the def is compiled and the
+    /// VM is on, tree-walk otherwise. One hook inside the funnels so every
+    /// caller (eval calls, builtins, methods, entry resolution) inherits
+    /// the choice without a second implementation of any semantics.
+    fn exec_gene_body(&mut self, def: &Arc<GeneDef>, fenv: &Rc<Env>) -> Result<Flow, Stress> {
+        let code = self
+            .vm_funcs
+            .as_ref()
+            .and_then(|m| m.get(&(Arc::as_ptr(def) as *const u8 as usize)).cloned());
+        match code {
+            Some(c) => self.vm_exec(&c, fenv),
+            None => self.exec_block(fenv, &def.body),
+        }
+    }
+
     pub fn call_gene(
         &mut self,
         def: Arc<GeneDef>,
@@ -4257,7 +4275,7 @@ impl Interp {
                 return self.check_ret_ann("gene", &name, &def.ret_ann, &gv, true);
             }
         }
-        let result = self.exec_block(&fenv, &def.body);
+        let result = self.exec_gene_body(&def, &fenv);
         self.close_timing(&name);
         // W06 (D-014): a propagated variant IS the gene's return value — the
         // signal unwinds here and becomes Flow::Ret (never a failure).
@@ -4613,7 +4631,7 @@ impl Interp {
                 });
             }
         }
-        let result = self.exec_block(&fenv, &def.body);
+        let result = self.exec_gene_body(&def, &fenv);
         self.close_timing(&name);
         // W06 (D-014): a propagated variant IS the gene's return value — the
         // signal unwinds here and becomes Flow::Ret (never a failure).
@@ -7790,7 +7808,7 @@ impl Interp {
     }
 
     // ------------------------------------------------------- methods
-    fn call_method(
+    pub(crate) fn call_method(
         &mut self,
         env: &Rc<Env>,
         recv: Value,
@@ -9577,7 +9595,7 @@ pub fn mem_charge(bytes: u64) -> Result<(), Stress> {
 /// large string is a fresh allocation of its full byte size. Copies above
 /// 64 KiB enter the aggregate ceiling; smaller ones stay uncharged so
 /// normal loops (a 50-byte word read a million times) are not taxed.
-fn charge_clone(v: &Value) -> Result<(), Stress> {
+pub(crate) fn charge_clone(v: &Value) -> Result<(), Stress> {
     if let Value::Str(s) = v {
         if s.len() > 64 * 1024 {
             mem_charge(s.len() as u64)?;

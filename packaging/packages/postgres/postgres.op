@@ -1,0 +1,59 @@
+# postgres - an Operon registry package.
+#
+# PostgreSQL access rides the py() substrate bridge (D-010-A): one granted
+# call away from the deep end, with the deny-by-default sandbox fully in
+# force. The Python side lives in py/operon_pg.py inside this package -
+# after install it sits at operon_modules/postgres/py, so:
+#
+#   pip install psycopg2-binary
+#   PYTHONPATH=operon_modules/postgres/py operon run --allow-py operon_pg --allow-env DATABASE_URL
+#
+# Every query is parameterized through psycopg2 (%s placeholders) - the
+# package refuses to build SQL by string concatenation, which is how SQL
+# injection happens. The connection string comes from the environment via
+# env("DATABASE_URL"), itself a capability (--allow-env DATABASE_URL).
+
+gene connect_env() {
+    # read the DSN from the environment (grant: --allow-env DATABASE_URL)
+    let dsn = env("DATABASE_URL");
+    if dsn == "" {
+        raise missing, "postgres.connect_env: DATABASE_URL is not set";
+    }
+    return dsn;
+}
+
+gene query(dsn, sql, params) {
+    # SELECT -> list of row maps (columns by name)
+    return py("operon_pg", "query", [dsn, sql, params]);
+}
+
+gene query_one(dsn, sql, params) {
+    # SELECT a single row -> row map, or the option none() when absent
+    return py("operon_pg", "query_one", [dsn, sql, params]);
+}
+
+gene execute(dsn, sql, params) {
+    # INSERT/UPDATE/DELETE -> affected row count
+    return py("operon_pg", "execute", [dsn, sql, params]);
+}
+
+gene healthy(dsn) {
+    # cheap liveness probe: SELECT 1
+    stress {
+        let rows = query(dsn, "SELECT 1 AS ok", []);
+        return rows.len() == 1;
+    } rescue (e) {
+        return false;
+    }
+}
+
+gene migrate(dsn, statements) {
+    # run a list of DDL statements in order; stop at the first failure and
+    # report how far the migration got (the caller decides what to roll back)
+    let done = 0;
+    for stmt in statements {
+        execute(dsn, stmt, []);
+        done = done + 1;
+    }
+    return done;
+}

@@ -1,0 +1,132 @@
+{
+  "generated_utc": "2026-09-26 14:44:36Z",
+  "version": "2.2.0",
+  "proofs": {
+    "files": 112,
+    "proofs": 98,
+    "passed": 98,
+    "failed": 0,
+    "asserts": 1298
+  },
+  "apps": {
+    "files": 1,
+    "proofs": 1,
+    "passed": 1,
+    "failed": 0,
+    "asserts": 7
+  },
+  "granted": {
+    "files": 7
+  },
+  "differential": {
+    "match": 143,
+    "diverge": 0,
+    "skipped": 0,
+    "granted_targets": 5
+  },
+  "redteam": {
+    "files": 97,
+    "contained": 100,
+    "breached": 0
+  },
+  "std": {
+    "modules": 15,
+    "module_list": [
+      "args",
+      "bio",
+      "collections",
+      "csv",
+      "fmt",
+      "fs",
+      "iter",
+      "json",
+      "math",
+      "motifs",
+      "random",
+      "seq",
+      "set",
+      "strings",
+      "testing"
+    ],
+    "genes": 149
+  },
+  "keywords": {
+    "count": 58,
+    "list": [
+      "gene",
+      "let",
+      "if",
+      "elif",
+      "else",
+      "while",
+      "loop",
+      "for",
+      "in",
+      "return",
+      "break",
+      "continue",
+      "match",
+      "case",
+      "use",
+      "tad",
+      "anchor",
+      "export",
+      "import",
+      "enhance",
+      "silence",
+      "stress",
+      "rescue",
+      "raise",
+      "fate",
+      "state",
+      "regulate",
+      "activates",
+      "inhibits",
+      "strength",
+      "toggle",
+      "repressilator",
+      "period",
+      "frame",
+      "proof",
+      "guard",
+      "splice",
+      "variant",
+      "edit",
+      "replace",
+      "ires",
+      "as",
+      "collect",
+      "enter",
+      "phenotype",
+      "sequence",
+      "yield",
+      "new",
+      "threshold",
+      "from",
+      "self",
+      "decoy",
+      "ligand",
+      "autoinducer",
+      "bind",
+      "inducer",
+      "cofactor",
+      "operon"
+    ]
+  },
+  "lsp": {
+    "methods": [
+      "exit",
+      "initialize",
+      "shutdown",
+      "textDocument/completion",
+      "textDocument/definition",
+      "textDocument/didChange",
+      "textDocument/didClose",
+      "textDocument/didOpen",
+      "textDocument/documentSymbol",
+      "textDocument/formatting",
+      "textDocument/hover",
+      "textDocument/publishDiagnostics"
+    ]
+  }
+}

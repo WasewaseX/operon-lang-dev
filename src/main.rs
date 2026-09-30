@@ -7,12 +7,15 @@ use operon::genes;
 use operon::graph;
 use operon::interp;
 use operon::parser;
+use operon::pkg;
 use operon::tools;
 
 use operon::ast::Stmt;
 use operon::die;
 use operon::tools::Opts;
 use operon::value::Value;
+
+use std::path::Path;
 
 fn main() {
     // The evaluator recurses through exec_block → eval → call_gene; deep
@@ -63,6 +66,7 @@ fn real_main() {
         caps: interp::Caps::default(),
         profile: false,
         stdout_sink: None,
+        vm: false,
     };
     let mut json = false;
     let mut strict = false;
@@ -76,6 +80,7 @@ fn real_main() {
     let mut knockout = String::new();
     let mut iters = 20usize;
     let mut outfile = String::new();
+    let mut template: Option<String> = None;
     let mut positional: Vec<String> = Vec::new();
 
     let mut i = 0;
@@ -200,9 +205,15 @@ fn real_main() {
                 outfile = rest.get(i).cloned().unwrap_or_default();
             }
             "--ires" => opts.use_ires = true,
+            "--template" => {
+                i += 1;
+                template = rest.get(i).cloned();
+            }
             "--json" => json = true,
             "--strict" => strict = true,
             "--quiet" => opts.quiet = true,
+            // W09 (A2): run compiled gene bodies on the bytecode VM
+            "--vm" => opts.vm = true,
             "--nmd" => nmd = true,
             "--nmd=purge" | "--purge" => {
                 nmd = true;
@@ -250,16 +261,161 @@ fn real_main() {
         "repl" => {
             repl();
         }
-        "run" => {
-            let file = match positional.first() {
-                Some(f) => f.clone(),
-                None => die("run needs a file"),
+        // ---------------- package management (W19, ai/ecosystem) ----------------
+        "new" => {
+            let name = positional
+                .first()
+                .cloned()
+                .unwrap_or_else(|| die("new needs a project name: operon new myapp"));
+            let tpl = template
+                .clone()
+                .or_else(|| positional.get(1).cloned())
+                .unwrap_or_else(|| pkg::TEMPLATE_BIN.to_string());
+            match pkg::scaffold(Path::new(&name), &tpl, &name) {
+                Ok(files) => {
+                    println!("created {} (template: {})", name, tpl);
+                    for f in &files {
+                        println!("  + {}", f);
+                    }
+                    println!("next steps: cd {} && operon run", name);
+                }
+                Err(e) => die(&e),
+            }
+        }
+        "add" => {
+            let spec = positional
+                .first()
+                .cloned()
+                .unwrap_or_else(|| die("add needs a package: operon add http[@^1.0]"));
+            let (name, req_raw) = match spec.split_once('@') {
+                Some((n, r)) => (n.to_string(), r.to_string()),
+                None => (spec, String::new()),
             };
-            opts.args = positional[1..].to_vec();
+            if !pkg::valid_name(&name) {
+                die(&format!("invalid package name '{}'", name));
+            }
+            let dir = std::env::current_dir().unwrap_or_default();
+            let mut manifest = pkg::Manifest::load_dir(&dir).unwrap_or_else(|e| die(&e));
+            let reg = pkg::Registry::from_env_or_default();
+            // requirement: explicit @req, or caret-of-latest (npm-like default)
+            let req_str = if req_raw.is_empty() {
+                let idx = reg.fetch_index(&name).unwrap_or_else(|e| die(&e));
+                match idx.pick(&pkg::Req::parse("*").unwrap_or_else(|_| die("internal: *"))) {
+                    Some(v) => format!("^{}", v.version),
+                    None => die(&format!(
+                        "package '{}' has no versions in the registry",
+                        name
+                    )),
+                }
+            } else {
+                req_raw
+            };
+            let req = pkg::Req::parse(&req_str)
+                .unwrap_or_else(|e| die(&format!("bad requirement '{}': {}", req_str, e)));
+            manifest.deps.insert(name.clone(), req);
+            pkg_write_manifest_and_sync(&dir, &manifest, &reg, false);
+        }
+        "remove" => {
+            let name = positional
+                .first()
+                .cloned()
+                .unwrap_or_else(|| die("remove needs a package name"));
+            let dir = std::env::current_dir().unwrap_or_default();
+            let mut manifest = pkg::Manifest::load_dir(&dir).unwrap_or_else(|e| die(&e));
+            if manifest.deps.remove(&name).is_none() {
+                die(&format!("'{}' is not a dependency in operon.toml", name));
+            }
+            let reg = pkg::Registry::from_env_or_default();
+            pkg_write_manifest_and_sync(&dir, &manifest, &reg, false);
+            // prune the removed package's module dir if re-lock dropped it
+            let still_locked = pkg::Lockfile::load(&dir)
+                .map(|l| l.find(&name).is_some())
+                .unwrap_or(false);
+            if !still_locked {
+                pkg::remove_installed(&dir, &name).unwrap_or_else(|e| die(&e));
+                println!("removed {} (pruned operon_modules/{})", name, name);
+            }
+        }
+        "update" => {
+            let dir = std::env::current_dir().unwrap_or_default();
+            let manifest = pkg::Manifest::load_dir(&dir).unwrap_or_else(|e| die(&e));
+            let reg = pkg::Registry::from_env_or_default();
+            // v0 semantics: `operon update` re-resolves the WHOLE graph within
+            // the manifest's requirements (the resolver is deterministic, so a
+            // single-package refresh is equivalent — it cannot drift).
+            // `operon add pkg@req` remains the way to move a requirement.
+            pkg_write_manifest_and_sync(&dir, &manifest, &reg, true);
+        }
+        "publish" => {
+            let dir = std::env::current_dir().unwrap_or_default();
+            let manifest = pkg::Manifest::load_dir(&dir).unwrap_or_else(|e| die(&e));
+            let (env, bytes) = pkg::build_envelope(&dir, &manifest).unwrap_or_else(|e| die(&e));
+            let sha = pkg::sha256_hex(&bytes);
+            if !outfile.is_empty() {
+                // outbox mode: write the artifact locally for upload over
+                // https (the zero-crates core has no TLS; docs/PACKAGING.md)
+                std::fs::write(&outfile, &bytes)
+                    .unwrap_or_else(|e| die(&format!("write {}: {}", outfile, e)));
+                println!("outbox: {} ({} {})", outfile, env.name, env.version);
+                println!(
+                    "upload: curl -fsS -X POST -H 'Authorization: Bearer $OPERON_TOKEN' -H 'Content-Type: application/json' --data-binary @{} $REGISTRY_URL/api/publish",
+                    outfile
+                );
+            } else {
+                let reg = pkg::Registry::from_env_or_default();
+                let token = std::env::var("OPERON_TOKEN").unwrap_or_default();
+                let msg = reg.publish(&bytes, &token).unwrap_or_else(|e| die(&e));
+                println!("{}", msg);
+            }
+            println!("sha256: {}", sha);
+        }
+        "search" => {
+            let q = positional.join(" ");
+            let reg = pkg::Registry::from_env_or_default();
+            let rows = reg.search(&q).unwrap_or_else(|e| die(&e));
+            if rows.is_empty() {
+                println!("no packages matched '{}'", q);
+            } else {
+                println!("{:<22} {:<10} description", "package", "latest");
+                for (name, latest, desc) in rows {
+                    println!("{:<22} {:<10} {}", name, latest, desc);
+                }
+            }
+        }
+        "run" => {
+            // project mode (W19): `operon run` with no .op file runs the
+            // operon.toml entry; positional args that are not .op files
+            // become program argv. Bare-file runs are byte-unchanged.
+            let cwd = std::env::current_dir().unwrap_or_default();
+            let first_is_file = positional
+                .first()
+                .map(|f| f.ends_with(".op") || Path::new(f).is_file())
+                .unwrap_or(false);
+            let file = if first_is_file {
+                positional.first().cloned().unwrap()
+            } else if cwd.join("operon.toml").is_file() {
+                pkg_auto_install(&cwd);
+                let m = pkg::Manifest::load_dir(&cwd).unwrap_or_else(|e| die(&e));
+                eprintln!("operon: project entry {} (operon.toml)", m.entry);
+                m.entry
+            } else {
+                die("run needs a file (or an operon.toml project)")
+            };
+            if first_is_file {
+                opts.args = positional[1..].to_vec();
+            } else {
+                opts.args = positional.clone();
+            }
             let mut l = match tools::load_file(&file, &opts) {
                 Ok(l) => l,
                 Err(e) => die(&e),
             };
+            // W09 (A2/A3): compile gene bodies for the bytecode VM. Must
+            // happen after load (top-level binds gene defs) and before the
+            // entry call; sequences/workers stay on the tree-walk.
+            if opts.vm {
+                tools::vm_compile(&mut l);
+            }
             if let Some(f) = fuel {
                 l.interp.step_budget = f;
             }
@@ -407,6 +563,17 @@ fn real_main() {
                 std::process::exit(1);
             }
         }
+        "disasm" => {
+            // W10: bytecode listing of compiled gene bodies (parse-only)
+            let file = match positional.first() {
+                Some(f) => f.clone(),
+                None => die("disasm needs a file"),
+            };
+            match tools::disasm_file(&file, json) {
+                Ok(out) => println!("{}", out),
+                Err(e) => die(&e),
+            }
+        }
         "fmt" => {
             let file = match positional.first() {
                 Some(f) => f.clone(),
@@ -510,9 +677,20 @@ fn real_main() {
             }
         }
         "build" => {
+            // project mode: `operon build` with no file bakes the manifest
+            // entry (same proof-strip + variant bake as the file form)
+            let cwd = std::env::current_dir().unwrap_or_default();
             let file = match positional.first() {
                 Some(f) => f.clone(),
-                None => die("build needs a file"),
+                None => {
+                    if cwd.join("operon.toml").is_file() {
+                        let m = pkg::Manifest::load_dir(&cwd).unwrap_or_else(|e| die(&e));
+                        eprintln!("operon: project entry {} (operon.toml)", m.entry);
+                        m.entry
+                    } else {
+                        die("build needs a file")
+                    }
+                }
             };
             let src = std::fs::read_to_string(&file).unwrap_or_default();
             let stem = std::path::Path::new(&file)
@@ -906,6 +1084,7 @@ fn repl() {
             caps: interp::Caps::default(),
             profile: false,
             stdout_sink: None,
+            vm: false,
         },
     ) {
         Ok(l) => l,
@@ -999,6 +1178,7 @@ fn repl() {
                                 caps: interp::Caps::default(),
                                 profile: false,
                                 stdout_sink: None,
+                                vm: false,
                             };
                             let rep = tools::run_tests(&[arg.to_string()], &opts, false);
                             println!(
@@ -1068,6 +1248,7 @@ fn repl() {
                                 caps: interp::Caps::default(),
                                 profile: false,
                                 stdout_sink: None,
+                                vm: false,
                             },
                         ) {
                             Ok(nl) => nl,
@@ -1292,6 +1473,67 @@ fn repl_eval(l: &mut tools::Loaded, src: &str) {
     }
 }
 
+/// add/remove shared tail: rewrite operon.toml from the manifest, re-lock
+/// (frozen when the existing lock still satisfies, unless force_resolve),
+/// install the lock graph, and print the result.
+fn pkg_write_manifest_and_sync(
+    dir: &Path,
+    manifest: &pkg::Manifest,
+    reg: &pkg::Registry,
+    force_resolve: bool,
+) {
+    let toml_src = manifest.to_toml();
+    std::fs::write(dir.join("operon.toml"), &toml_src)
+        .unwrap_or_else(|e| die(&format!("write operon.toml: {}", e)));
+    // frozen path: an existing lock that still satisfies the manifest wins
+    // (reproducibility: `operon add` of an already-satisfied dep never bumps
+    // anything); only a broken/missing lock or an explicit `update` resolves.
+    let frozen = if force_resolve {
+        None
+    } else {
+        pkg::Lockfile::load(dir).filter(|l| pkg::lock_satisfies(manifest, l))
+    };
+    let frozen_kind = frozen.is_some();
+    let lock = match frozen {
+        Some(l) => l,
+        None => pkg::resolve(manifest, reg).unwrap_or_else(|e| die(&e)),
+    };
+    std::fs::write(dir.join("operon.lock"), lock.to_bytes())
+        .unwrap_or_else(|e| die(&format!("write operon.lock: {}", e)));
+    let installed = pkg::install_from_lock(dir, &lock, reg).unwrap_or_else(|e| die(&e));
+    for i in &installed {
+        println!("  + {} installed", i);
+    }
+    println!(
+        "operon.lock: {} package(s) pinned ({} resolution)",
+        lock.packages.len(),
+        if frozen_kind { "frozen" } else { "resolved" }
+    );
+}
+
+/// `operon run` project mode: silently materialize the lock graph before the
+/// entry loads (npm-ci-like), so a fresh clone runs without a manual step.
+fn pkg_auto_install(dir: &Path) {
+    let lock = match pkg::Lockfile::load(dir) {
+        Some(l) => l,
+        None => return,
+    };
+    let missing = lock
+        .packages
+        .iter()
+        .any(|p| !dir.join(pkg::MODULES_DIR).join(&p.name).is_dir());
+    if !missing {
+        return;
+    }
+    let reg = pkg::Registry::from_env_or_default();
+    let installed = pkg::install_from_lock(dir, &lock, &reg)
+        .unwrap_or_else(|e| die(&format!("dependency install failed: {}", e)));
+    eprintln!(
+        "operon: installed {} package(s) from operon.lock",
+        installed.len()
+    );
+}
+
 fn usage() {
     eprintln!(
         "Operon {} — the gene-expression language (Total Grammar)
@@ -1299,6 +1541,7 @@ usage:
   operon run f.op [--entry g] [--variant v] [--cell c] [--rna r] [--frame name] [--ires] [--strict] [--quiet]
                   [--fuel steps] [--allow-read path] [--allow-write path] [--allow-net host:port]
                   [--allow-run cmd] [--allow-py module] [--allow-exit] [--allow-env var] [--allow-all]
+  operon run                     run the project entry (operon.toml + operon.lock)
   operon check f.op [--nmd | --nmd=purge] [--json]
   operon test [paths...] [--json]
   operon fmt f.op [--write]
@@ -1308,8 +1551,17 @@ usage:
   operon graph f.op [--json]
   operon watch f.op [args...]
   operon profile f.op
+  operon disasm f.op [--json]     W10: bytecode listing of compiled genes
   operon crispr f.op --knockout gene [--json]
   operon bench f.op [--iters n]
+  operon run f.op --vm            A2/A3: bytecode VM on gene bodies
+packages (W19, ai/ecosystem — registry: OPERON_REGISTRY=<dir|http://url>, default ./registry):
+  operon new <name> [bin|lib]     scaffold a project from a template
+  operon add <pkg>[@req]          add a dependency, resolve, write operon.lock, install
+  operon remove <pkg>             drop a dependency, re-lock, prune
+  operon update                   re-resolve within requirements, refresh operon.lock
+  operon publish [-o out.opkg]    publish the project (or write an upload outbox bundle)
+  operon search [query]           search the registry (name/description/deps)
   operon version",
         env!("CARGO_PKG_VERSION")
     );

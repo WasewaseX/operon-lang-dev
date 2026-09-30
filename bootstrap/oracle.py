@@ -6061,7 +6061,17 @@ class Interp:
         std_dir = os.environ.get("OPERON_STD")
         if std_dir:
             cands.append(os.path.join(std_dir, p))
-        resolved = next((c for c in cands if os.path.exists(c)), None)
+        # ai/ecosystem: registry-installed packages — mirrors the package
+        # candidates genes.rs resolve_path appends LAST (success-only paths;
+        # failure messages untouched). Layout contract: pkg.rs install puts
+        # the entry at operon_modules/<pkg>/<entry-basename> with siblings
+        # beside it, so `use http` hits operon_modules/http/http.op and
+        # `use http/client` hits operon_modules/http/client.op.
+        cands.append(os.path.join("operon_modules", p))
+        bare = path[:-3] if path.endswith(".op") else path
+        if "/" not in bare:
+            cands.append(os.path.join("operon_modules", bare, p))
+        resolved = next((c for c in cands if os.path.isfile(c)), None)
         if resolved is None:
             return {}
         src = open(resolved).read()

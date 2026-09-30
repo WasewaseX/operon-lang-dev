@@ -177,11 +177,14 @@ Path grants are symlink-resolved; a grant that normalizes to the empty string is
 operon run f.op      [--entry g] [--variant v] [--cell c] [--rna r] [--frame n] [--ires] [--strict] [--fuel N]
                      [--allow-read p] [--allow-write p] [--allow-run prog] [--allow-net host:port] [--allow-env var] [--allow-all]
 operon check f.op    [--nmd | --nmd=purge] [--json]   # 100-point grade + letter; --json: phantoms/nmd arrays
-operon test [dirs]                                # proof-frame runner (80 files / 74 proofs / 930 assertions green)
+operon test [dirs]                                # proof-frame runner (113 files / 99 proofs / 1,302 assertions green)
 operon fmt f.op     [--write]                     # precedence-correct canonical formatter
 operon build f.op   [--variant v] [-o out.op]     # bake splices, strip proofs
 operon profile f.op                               # per-gene calls, exclusive self-µs, flags, maturation, enhance candidates
 operon crispr f.op  (--knockout gene | --matrix) [--json]
+operon new <name> [bin|lib]                        # scaffold a project (W19)
+operon add <pkg>[@req] / remove / update           # deps: resolve + operon.lock + install
+operon publish [-o out.opkg] / search [query]      # registry round-trip (docs/PACKAGING.md)
 operon bench f.op   [--iters n]
 operon-ls                                         # stdio LSP: diagnostics, hover, definition, symbols, completion, formatting (SPEC §15)
 operon version                                    # Operon 2.2.0 (rust-core, cpp-kernel) — banner matches SPEC 2.2.0
@@ -234,9 +237,9 @@ Ranged (incremental) edits are ignored by design while `textDocumentSync = 1` (f
 ```console
 $ ./scripts/build.sh          # gcc + g++ the kernels, rustc the core
 OK: bin/operon
-$ ./scripts/test.sh           # 99 proof files (1,171 assertions), C++ kernel smoke
-$ python3 bootstrap/harness.py  # differential: 128/128 programs MATCH across implementations
-$ bash scripts/redteam.sh       # adversarial containment: 95 attacks contained, 0 breached
+$ ./scripts/test.sh           # 113 proof files (1,302 assertions), C++ kernel smoke
+$ python3 bootstrap/harness.py  # differential: 144/144 programs MATCH across implementations
+$ bash scripts/redteam.sh       # adversarial containment: 100 attacks contained, 0 breached
 $ bash scripts/bench.sh
 ```
 
