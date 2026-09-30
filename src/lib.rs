@@ -7,6 +7,7 @@
 //! is ordinary Rust ownership now.)
 
 pub mod ast;
+pub mod asyncrt;
 pub mod diag;
 pub mod ffi;
 pub mod genes;

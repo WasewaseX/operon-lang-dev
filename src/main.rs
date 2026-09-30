@@ -756,7 +756,7 @@ fn real_main() {
             if use_vm {
                 l.interp.vm = true;
                 l.interp.vm_opt = opt_level;
-                l.interp.vm_program = Some(operon::vm::VmProgram::default());
+                l.interp.vm_program = Some(std::rc::Rc::new(operon::vm::VmProgram::default()));
             }
             if debug_mode {
                 l.interp.debug_file = file.clone();

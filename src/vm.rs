@@ -17,9 +17,10 @@
 //! in globals for the whole run, so pointer identity is stable for the
 //! cache's lifetime).
 
-use crate::ast::{BinOp, Expr, Stmt};
+use crate::ast::{BinOp, Expr, Stmt, TypeAnn};
 use crate::interp::{Env, Flow, Interp};
 use crate::value::{Stress, Value};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -138,16 +139,42 @@ impl std::hash::Hasher for IdentityHash {
 /// Bridged sub-AST arena plus the compiled bodies. Lives on the Interp
 /// while --vm runs; bridges clone their node out per execution (Expr/Stmt
 /// clones are cheap: children are Arc'd definitions and interned strings).
+/// W16: held as `Rc<VmProgram>` so fiber interps share THE program (bridged
+/// statements are arena INDICES — a fiber must see the same arena); the
+/// codes cache sits behind a RefCell because compiles mutate it. The cache
+/// is invisible to outputs/notes/fuel (parity-neutral by construction).
 #[derive(Default)]
 pub struct VmProgram {
-    pub exprs: Vec<Expr>,
-    pub stmts: Vec<Stmt>,
+    pub exprs: RefCell<Vec<Expr>>,
+    pub stmts: RefCell<Vec<Stmt>>,
     /// gene-definition pointer -> compiled body. Rc so a call hands the
     /// body to the machine with a refcount bump, not a deep clone: fib25's
     /// ~243k calls were cloning the whole code vec per call, which made the
     /// machine SLOWER than the tree-walk (the bug the fib25 gate exists to
     /// catch; measured 0.54x before, same outputs after).
-    pub codes: HashMap<usize, std::rc::Rc<GeneCode>, std::hash::BuildHasherDefault<IdentityHash>>,
+    pub codes:
+        RefCell<HashMap<usize, std::rc::Rc<GeneCode>, std::hash::BuildHasherDefault<IdentityHash>>>,
+}
+
+/// W16: one resumable VM frame — the machine's full execution state. Fresh
+/// calls run exactly as before (locals mirror these fields; zero hot-path
+/// change); a fiber park writes the state back so the scheduler can resume
+/// the frame later. `ret_ann`/`name` ride only on fiber frames (they are
+/// what a resumed frame's completion needs, since its call_gene tail never
+/// runs); None/skipped on the hot path (no clone, no cost).
+pub struct FrameState {
+    pub code: std::rc::Rc<GeneCode>,
+    pub ip: usize,
+    pub stack: Vec<Value>,
+    pub scopes: Vec<Rc<Env>>,
+    pub cur: Rc<Env>,
+    /// parked at the CallNamed this frame will be resumed into
+    pub at_park: bool,
+    /// the frame went through a park/resume cycle (its ret_ann is checked
+    /// at completion by the scheduler, not by call_gene)
+    pub was_resumed: bool,
+    pub ret_ann: Option<TypeAnn>,
+    pub name: Option<String>,
 }
 
 impl<'a> Compiler<'a> {
@@ -627,8 +654,10 @@ impl<'a> Compiler<'a> {
 
 /// Compile a gene body. Infallible: every construct either compiles native
 /// or bridges (Total Grammar: nothing is rejected at compile time).
-pub fn compile_body(name: &str, body: &[Stmt], prog: &mut VmProgram) -> GeneCode {
-    let mut c = Compiler::new(&mut prog.exprs, &mut prog.stmts);
+pub fn compile_body(name: &str, body: &[Stmt], prog: &VmProgram) -> GeneCode {
+    let mut exprs = prog.exprs.borrow_mut();
+    let mut stmts = prog.stmts.borrow_mut();
+    let mut c = Compiler::new(&mut exprs, &mut stmts);
     let pending = c.stmts(body);
     // a body-level break/continue cannot reach a compiled loop target:
     // it would be a bare flow the tree-walk resolves at its own boundary.
@@ -656,25 +685,29 @@ pub fn compile_body(name: &str, body: &[Stmt], prog: &mut VmProgram) -> GeneCode
 
 /// Compile (or fetch from cache) the body of a gene definition and execute
 /// it. Called from call_gene_inner with the freshly built frame env.
+/// `ret_ann` rides through so a fiber frame carries its completion check
+/// (the fiber's call_gene tail never runs when the body parks).
 pub fn exec_gene_body(
     interp: &mut Interp,
     def_key: usize,
     name: &str,
     body: &[Stmt],
     env: &Rc<Env>,
+    ret_ann: Option<&TypeAnn>,
 ) -> Result<Flow, Stress> {
     let code: std::rc::Rc<GeneCode> = {
         let opt = interp.vm_opt;
         // ast-grep-ignore: no-unwrap-in-src
-        let prog = interp.vm_program.as_mut().unwrap();
+        let prog = interp.vm_program.as_ref().unwrap();
         let key = if opt >= 1 {
             // cache the optimized form under a shifted key
             def_key.wrapping_add(1usize << 62)
         } else {
             def_key
         };
-        match prog.codes.get(&key) {
-            Some(cached) => cached.clone(),
+        let cached = prog.codes.borrow().get(&key).cloned();
+        match cached {
+            Some(cached) => cached,
             None => {
                 let compiled = compile_body(name, body, prog);
                 let compiled = if opt >= 1 {
@@ -683,16 +716,22 @@ pub fn exec_gene_body(
                     compiled
                 };
                 let rc = std::rc::Rc::new(compiled);
-                prog.codes.insert(key, rc.clone());
+                prog.codes.borrow_mut().insert(key, rc.clone());
                 rc
             }
         }
     };
-    exec_gene_code(interp, &code, env)
+    exec_gene_code(interp, &code, env, ret_ann, name)
 }
 
 /// Execute a compiled gene body against the shared interpreter.
-fn exec_gene_code(interp: &mut Interp, code: &GeneCode, env: &Rc<Env>) -> Result<Flow, Stress> {
+fn exec_gene_code(
+    interp: &mut Interp,
+    code: &std::rc::Rc<GeneCode>,
+    env: &Rc<Env>,
+    ret_ann: Option<&TypeAnn>,
+    name: &str,
+) -> Result<Flow, Stress> {
     // the operand stack comes from the per-interpreter pool: fib25 taught
     // this lesson (243k fresh Vecs per run), the pool hands each frame a
     // warm stack and takes it back on every exit path
@@ -701,35 +740,104 @@ fn exec_gene_code(interp: &mut Interp, code: &GeneCode, env: &Rc<Env>) -> Result
         None => Vec::with_capacity(16),
     };
     stack.clear();
-    let out = exec_gene_code_inner(interp, code, env, &mut stack);
+    let mut st = FrameState {
+        code: code.clone(),
+        ip: 0,
+        stack,
+        scopes: Vec::new(),
+        cur: env.clone(),
+        at_park: false,
+        was_resumed: false,
+        // fiber frames carry their completion check; hot-path frames skip it
+        ret_ann: if interp.fiber_active {
+            ret_ann.cloned()
+        } else {
+            None
+        },
+        name: if interp.fiber_active {
+            Some(name.to_string())
+        } else {
+            None
+        },
+    };
+    let out = exec_frame(interp, code, &mut st, None);
+    if let Err(s) = &out {
+        if crate::asyncrt::is_fiber_park(s) {
+            // W16: the frame parked — its state moves to the fiber's
+            // collection (the unwind assembles the chain outermost-first;
+            // the pooled stack does NOT come back, it belongs to the frame
+            // until the fiber resumes).
+            interp.fiber_frames.insert(0, st);
+            return out;
+        }
+    }
+    let stack = std::mem::take(&mut st.stack);
     if stack.capacity() <= 64 {
         interp.vm_stack_pool.push(stack);
     }
     out
 }
 
-fn exec_gene_code_inner(
+/// W16: the machine step over ONE resumable frame. Fresh runs are the old
+/// `exec_gene_code_inner` byte-for-byte (locals mirror the FrameState;
+/// hot-path cost unchanged). `resume` is Some only when the scheduler is
+/// continuing a parked frame: the first instruction executed is the parked
+/// CallNamed, which consumes the delivered value/error instead of calling.
+pub fn exec_frame(
     interp: &mut Interp,
     code: &GeneCode,
-    env: &Rc<Env>,
-    stack: &mut Vec<Value>,
+    st: &mut FrameState,
+    resume: Option<Result<Value, Stress>>,
 ) -> Result<Flow, Stress> {
-    let mut scopes: Vec<Rc<Env>> = Vec::new();
-    let mut cur = env.clone();
-    let mut ip: usize = 0;
+    let mut scopes = std::mem::take(&mut st.scopes);
+    let mut cur = st.cur.clone();
+    let mut ip: usize = st.ip;
+    let mut stack = std::mem::take(&mut st.stack);
+    // resume delivery happens in the CallNamed arm (guarded by st.at_park:
+    // ip points exactly at the parked call when the scheduler re-enters)
+    let out = exec_frame_loop(
+        interp,
+        code,
+        st,
+        &mut scopes,
+        &mut cur,
+        &mut ip,
+        &mut stack,
+        resume,
+    );
+    // write the machine state back so a park carried it (completed or
+    // failed frames are dead — the write-back is harmless)
+    st.ip = ip;
+    st.scopes = scopes;
+    st.cur = cur;
+    st.stack = stack;
+    out
+}
+
+#[allow(clippy::too_many_arguments)]
+fn exec_frame_loop(
+    interp: &mut Interp,
+    code: &GeneCode,
+    st: &mut FrameState,
+    scopes: &mut Vec<Rc<Env>>,
+    cur: &mut Rc<Env>,
+    ip: &mut usize,
+    stack: &mut Vec<Value>,
+    mut resume: Option<Result<Value, Stress>>,
+) -> Result<Flow, Stress> {
     loop {
         // dispatch borrows the instruction (no per-instruction clone; the
         // machine must beat the tree-walk it replaced, the fib25 gate
         // measures exactly this)
-        let instr = match code.code.get(ip) {
+        let instr = match code.code.get(*ip) {
             Some(i) => i,
             None => return Ok(Flow::Norm), // fell off the end
         };
-        let line = code.lines[ip];
+        let line = code.lines[*ip];
         if line > 0 {
             interp.cur_line = line as usize;
         }
-        ip += 1;
+        *ip += 1;
         interp.tick()?;
         match instr {
             Instr::Push(idx) => {
@@ -777,7 +885,7 @@ fn exec_gene_code_inner(
             Instr::Bin(op) => {
                 let r = stack.pop().unwrap_or(Value::Null);
                 let l = stack.pop().unwrap_or(Value::Null);
-                let v = interp.apply_binop(&cur, *op, &l, &r)?;
+                let v = interp.apply_binop(cur, *op, &l, &r)?;
                 stack.push(v);
             }
             Instr::BinImm(op, cidx) => {
@@ -786,7 +894,7 @@ fn exec_gene_code_inner(
                 // (lhs was evaluated first, by construction of the code).
                 let r = const_value(&code.consts, *cidx);
                 let l = stack.pop().unwrap_or(Value::Null);
-                let v = interp.apply_binop(&cur, *op, &l, &r)?;
+                let v = interp.apply_binop(cur, *op, &l, &r)?;
                 stack.push(v);
             }
             Instr::LoadBinImm(nidx, op, cidx) => {
@@ -806,27 +914,32 @@ fn exec_gene_code_inner(
                     }
                 };
                 let r = const_value(&code.consts, *cidx);
-                let v = interp.apply_binop(&cur, *op, &l, &r)?;
+                let v = interp.apply_binop(cur, *op, &l, &r)?;
                 stack.push(v);
             }
             Instr::JmpIfF(t) => {
                 let v = stack.pop().unwrap_or(Value::Null);
                 if !v.truthy() {
-                    ip = *t as usize;
+                    *ip = *t as usize;
                 }
             }
-            Instr::Jmp(t) => ip = *t as usize,
+            Instr::Jmp(t) => *ip = *t as usize,
             Instr::EvalExpr(idx) => {
                 // clone the bridged node out of the arena (cheap: Arc'd
                 // children) so the mutable interpreter borrow is free
                 let e = interp
                     .vm_program
                     .as_ref()
-                    .and_then(|p| p.exprs.get(*idx as usize))
-                    .cloned();
+                    .and_then(|p| p.exprs.borrow().get(*idx as usize).cloned());
                 match e {
                     Some(e) => {
-                        let v = interp.eval(&cur, &e)?;
+                        // W16: bridged code cannot rewind safely, so await
+                        // shaped builtins inside it fall back to blocking
+                        // (the hook refuses parks at suspend_depth > 0)
+                        interp.vm_suspend_depth += 1;
+                        let r = interp.eval(cur, &e);
+                        interp.vm_suspend_depth -= 1;
+                        let v = r?;
                         stack.push(v);
                     }
                     None => stack.push(Value::Null),
@@ -836,14 +949,16 @@ fn exec_gene_code_inner(
                 let s = interp
                     .vm_program
                     .as_ref()
-                    .and_then(|p| p.stmts.get(*idx as usize))
-                    .cloned();
+                    .and_then(|p| p.stmts.borrow().get(*idx as usize).cloned());
                 if let Some(s) = s {
                     // the bridged statement's flow propagates exactly the
                     // way exec_block would propagate it (Ret leaves the
                     // gene; Brk/Cont reach the gene boundary, where the
                     // shared code turns them into a null return)
-                    match interp.exec_stmt(&cur, &s)? {
+                    interp.vm_suspend_depth += 1;
+                    let r = interp.exec_stmt(cur, &s);
+                    interp.vm_suspend_depth -= 1;
+                    match r? {
                         Flow::Norm => {}
                         other => return Ok(other),
                     }
@@ -853,10 +968,12 @@ fn exec_gene_code_inner(
                 let s = interp
                     .vm_program
                     .as_ref()
-                    .and_then(|p| p.stmts.get(*idx as usize))
-                    .cloned();
+                    .and_then(|p| p.stmts.borrow().get(*idx as usize).cloned());
                 if let Some(s) = s {
-                    match interp.exec_stmt(&cur, &s)? {
+                    interp.vm_suspend_depth += 1;
+                    let r = interp.exec_stmt(cur, &s);
+                    interp.vm_suspend_depth -= 1;
+                    match r? {
                         Flow::Norm => {}
                         // a return from inside a bridged statement IS the
                         // gene's return (the tree-walk contract)
@@ -869,18 +986,18 @@ fn exec_gene_code_inner(
                         Flow::Brk => {
                             for _ in 0..*unwinds {
                                 if let Some(p) = scopes.pop() {
-                                    cur = p;
+                                    *cur = p;
                                 }
                             }
-                            ip = *brk_t as usize;
+                            *ip = *brk_t as usize;
                         }
                         Flow::Cont => {
                             for _ in 0..*unwinds {
                                 if let Some(p) = scopes.pop() {
-                                    cur = p;
+                                    *cur = p;
                                 }
                             }
-                            ip = *cont_t as usize;
+                            *ip = *cont_t as usize;
                         }
                     }
                 }
@@ -910,18 +1027,31 @@ fn exec_gene_code_inner(
                 };
                 return Ok(Flow::Ret(v));
             }
-            Instr::Brk(t) => ip = *t as usize,
-            Instr::Cont(t) => ip = *t as usize,
+            Instr::Brk(t) => *ip = *t as usize,
+            Instr::Cont(t) => *ip = *t as usize,
             Instr::EnterScope => {
                 scopes.push(cur.clone());
-                cur = Env::new(Some(cur.clone()));
+                *cur = Env::new(Some(cur.clone()));
             }
             Instr::ExitScope => {
                 if let Some(p) = scopes.pop() {
-                    cur = p;
+                    *cur = p;
                 }
             }
             Instr::CallNamed(name_idx, argc) => {
+                // W16 resume delivery: the scheduler resumed this frame at
+                // its parked call — the awaited value (or the nested gene's
+                // return, or the `cancelled` stress) arrives here instead
+                // of a re-call. The delivery consumes the resume exactly
+                // once, at the parked instruction.
+                if st.at_park {
+                    if let Some(r) = resume.take() {
+                        st.at_park = false;
+                        let v = r?;
+                        stack.push(v);
+                        continue;
+                    }
+                }
                 // W09 native calls: pop the args in reverse, then ride the
                 // SHARED named-call tail (RISC gate + call_named funnel).
                 // The call line was stamped pre-args by the Nop (the
@@ -933,8 +1063,23 @@ fn exec_gene_code_inner(
                 let n = *argc as usize;
                 let base = stack.len() - n;
                 let argvs: Vec<Value> = stack.drain(base..).collect();
-                let v = interp.named_call_tail_vm(&cur, name, argvs)?;
-                stack.push(v);
+                let r = interp.named_call_tail_vm(cur, name, argvs);
+                match r {
+                    Ok(v) => stack.push(v),
+                    Err(s) => {
+                        if crate::asyncrt::is_fiber_park(&s) {
+                            // W16: the call parked an awaitable — rewind ip
+                            // to THIS instruction (the resume re-enters
+                            // here), mark the frame, and let the marker
+                            // unwind (each enclosing frame saves itself the
+                            // same way).
+                            st.at_park = true;
+                            *ip -= 1;
+                            return Err(s);
+                        }
+                        return Err(s);
+                    }
+                }
             }
         }
     }
@@ -945,11 +1090,11 @@ fn exec_gene_code_inner(
 pub fn disassemble_program(prog: &crate::ast::Program) -> String {
     let mut out = String::new();
     out.push_str(&format!("OIR{} disassembly\n", OIR_VERSION));
-    let mut vmprog = VmProgram::default();
+    let vmprog = VmProgram::default();
     for s in &prog.stmts {
         if let Stmt::Gene(g) = s {
             let name = g.name.clone().unwrap_or_else(|| "<lambda>".into());
-            let code = compile_body(&name, &g.body, &mut vmprog);
+            let code = compile_body(&name, &g.body, &vmprog);
             out.push_str(&format!("\ngene {} ({} instr(s))\n", name, code.code.len()));
             for (i, instr) in code.code.iter().enumerate() {
                 out.push_str(&format!(
@@ -1315,8 +1460,8 @@ mod tests {
                 body = g.body.clone();
             }
         }
-        let mut prog = VmProgram::default();
-        let raw = compile_body("f", &body, &mut prog);
+        let prog = VmProgram::default();
+        let raw = compile_body("f", &body, &prog);
         let opt = optimize(&raw);
         // the folded body is exactly: Push 42, Ret
         let names: Vec<String> = opt.code.iter().map(|i| mnemonic(i).to_string()).collect();
@@ -1344,8 +1489,8 @@ mod tests {
         }
         let (name, body) = found.expect("gene present");
         assert_eq!(name, "f");
-        let mut prog = VmProgram::default();
-        let code = compile_body("f", &body, &mut prog);
+        let prog = VmProgram::default();
+        let code = compile_body("f", &body, &prog);
         let rendered: Vec<String> = code
             .code
             .iter()
@@ -1383,8 +1528,8 @@ mod tests {
                 body = g.body.clone();
             }
         }
-        let mut prog = VmProgram::default();
-        let code = compile_body("f", &body, &mut prog);
+        let prog = VmProgram::default();
+        let code = compile_body("f", &body, &prog);
         let rendered: Vec<String> = code
             .code
             .iter()
@@ -1427,8 +1572,8 @@ mod tests {
                 body = g.body.clone();
             }
         }
-        let mut prog = VmProgram::default();
-        let raw = compile_body("f", &body, &mut prog);
+        let prog = VmProgram::default();
+        let raw = compile_body("f", &body, &prog);
         // the raw body carries the dead call (Nop stamp + CallNamed print +
         // Pop); the pre-arg Nop stamp (rt_p22a fix) shifts the call to [4]
         assert!(
