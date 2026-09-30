@@ -513,16 +513,23 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
   criteria stated); first real bug hunt documented if found.
 - Files: `scripts/property.py`, `bootstrap/harness.py`, `.github/workflows/ci.yml`.
 
-### W051, Fuzzing infrastructure (S7) [P1] [dev-2] [L] [done: scripts/fuzz/fuzz.py (batch2): mutation-based runner (byte flips, truncations, chunk dup, bracket/quote injection, unicode splices) over the seed corpus with per-input timeout and wall budget, crash/hang corpus with manifest, contained-vs-clean-vs-finding classification; scripts/fuzz/TRIAGE.md: finding = bug to fix, not a number to brag about; first real run 93,429 execs / 150s: 0 crash 0 hang, 13,290 contained]
+### W051, Fuzzing infrastructure (S7) [P1] [dev-2] [L] [done: scripts/fuzz/fuzz.py (batch2): mutation-based runner (byte flips, truncations, chunk dup, bracket/quote injection, unicode splices) over the seed corpus with per-input timeout and wall budget, crash/hang corpus with manifest, contained-vs-clean-vs-finding classification; scripts/fuzz/TRIAGE.md: finding = bug to fix, not a number to brag about; first real run 93,429 execs / 150s: 0 crash 0 hang, 13,290 contained; S7 standing-lane epic CLOSED 2026-10-01 at 100%: stage 1 baseline + surface inventory (docs/FUZZING.md), stage 2 differential at scale (scripts/fuzz/fuzz_diff.py, D1-D5+R1, 2400 programs x 5 surfaces, 0 findings, ed1ed57), stage 3 exec-surface (scripts/fuzz/fuzz_exec.py, E1 default-deny + E1b breach sentinel + E2 fuel + E3 rna --check/doc/graph/disasm/crispr never-write-and-contained, 9000-program deep sweep 0 findings), stage 4 triage pipeline exercised end-to-end (fuzz-r3 C1 multibyte panic found, minimized, fixed, regression .op + diag_golden fixture, da481bf), stage 5 CI (operon-ci fuzz job FAST pre-merge fixed-seed 20261001 FAIL-on-finding + fuzz-nightly deep sweeps on date-derived seed, schedule 17:03 UTC), stage 6 docs (FUZZING.md lane contract + README Fuzzing section + this board entry); disasm usage-drift repair: usage advertised `operon disasm [--json]` while the dispatcher had no arm (W10 handler lost in a merge), restored against vm::disassemble_program with a JSON renderer]
 - Goal: continuous fuzzing of lexer/parser/fmt/JSON/regex/module loader/`.cell`:
   cargo-fuzz targets (libFuzzer) for the Rust core + `scripts/fuzz_op.py` AFL-style
   .op mutator for the semantic layer.
 - Done when: 4+ cargo-fuzz targets run 10 min each in a weekly CI job + nightly smoke;
   crash → minimized testcase → redteam payload pipeline documented; every fuzz-discovered
   crash = redteam regression test forever.
+  [S7 status: the standing black-box lane (mutation + differential + exec-surface) is
+  CLOSED at 100% with CI enforcement; the cargo-fuzz libFuzzer layer remains the
+  documented deeper step (FUZZING.md "NOT YET fuzzed") — the standing lane is the
+  zero-setup daily driver that runs in CI today.]
 - Files: `fuzz/` (cargo-fuzz crate), `.github/workflows/fuzz.yml`, `scripts/fuzz_op.py`,
   `tests/redteam/`.
-- Note: this is the queued S7 lane, fold its status here.
+- Note: this is the queued S7 lane, fold its status here. [Folded: the S7 lane lives in
+  scripts/fuzz/ (fuzz.py, fuzz_diff.py, fuzz_exec.py, TRIAGE.md) with CI jobs in
+  .github/workflows/ci.yml (fuzz, fuzz-nightly); live tracker:
+  collab/FUZZ-EPIC-PROGRESS.md in the vault.]
 
 ### W052, Coverage reporting [P2] [dev-2] [M] [done: scripts/coverage.sh two layers (batch1, c95c434): cargo-llvm-cov when installed, corpus call-site layer always (scripts/coverage_corpus.py, static analysis honestly labeled, per-module def/ref table over 163 test files), tracked baseline docs/coverage.md with top-uncovered names; no gate depends on the number yet; exit-2 honesty kept]
 - Goal: Rust line/branch coverage (llvm-cov) + proof-coverage script (which parser

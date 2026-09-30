@@ -127,6 +127,17 @@ wobble ladder, machine-applicable fixes, and `--json-errors` for tools.
 The guide is [docs/errors.md](docs/errors.md); the byte-exact fixtures are
 part of the standard gate suite.
 
+## Fuzzing
+
+The Total Grammar promise ("every input must not crash") is held against
+inputs nobody wrote yet, not only the ones people wrote: three
+deterministic-seed fuzz lanes (mutation-based, differential at scale,
+exec-surface with capability-escape generation) run locally in seconds and
+in CI on every push. A finding is a bug to fix, never a number to brag
+about. The lane contract, the tool table, and the recorded baselines live
+in [docs/FUZZING.md](docs/FUZZING.md); triage is
+[scripts/fuzz/TRIAGE.md](scripts/fuzz/TRIAGE.md).
+
 ## Total Grammar, the 4-rung ladder
 
 No `.op` file is ever rejected. Parse problems become **notes**:
