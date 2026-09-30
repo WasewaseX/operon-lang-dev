@@ -43,6 +43,12 @@ fn in_dir(dir: &std::path::Path, args: &[&str]) -> (i32, String, String) {
         .args(args)
         .current_dir(dir)
         .env("HOME", home)
+        // hermetic: strip any inherited OPERON_* cache/registry overrides —
+        // the sandbox's own HOME must own the caches and the seed registry
+        // (the bash gate isolates exactly the same three).
+        .env_remove("OPERON_DEPS")
+        .env_remove("OPERON_REGISTRY")
+        .env_remove("OPERON_REGISTRY_HOME")
         .output()
         .expect("run operon");
     (
@@ -158,6 +164,43 @@ fn lockfile_is_byte_stable_across_resolutions() {
         "same manifest+registry -> byte-identical lockfile"
     );
     let _ = deps;
+}
+
+/// Two completely fresh states — separate project dirs, separate HOMEs
+/// (the seed registry re-materializes under ~/.operon/registry per HOME),
+/// separate deps caches — and the same `new demo` + `add web` (web -> http
+/// transitively) must end at BYTE-identical operon.lock files. The lock
+/// carries registry:NAME sources, content revs and checksums: zero machine
+/// locality, so a second machine resolves to the same bytes (W23's
+/// reproducibility contract; mirrors scripts/pkg_e2e.sh step 9).
+#[test]
+fn lockfile_is_byte_identical_from_completely_fresh_caches() {
+    let a = sandbox("lockfresh_a");
+    let b = sandbox("lockfresh_b");
+    let _ = in_dir(&a.join("proj"), &["new", "demo"]);
+    let _ = in_dir(&b.join("proj"), &["new", "demo"]);
+    let root_a = a.join("proj").join("demo");
+    let root_b = b.join("proj").join("demo");
+    let (rc, _, err) = in_dir(&root_a, &["add", "web"]);
+    assert_eq!(rc, 0, "add web in sandbox A (stderr: {})", err);
+    let (rc, _, err) = in_dir(&root_b, &["add", "web"]);
+    assert_eq!(rc, 0, "add web in sandbox B (stderr: {})", err);
+    // each fresh HOME got its own seed registry materialization
+    assert!(a.join("home/.operon/registry/index.jsonl").is_file());
+    assert!(b.join("home/.operon/registry/index.jsonl").is_file());
+    // BYTES, not strings: the comparison must be byte-exact
+    let lock_a = std::fs::read(root_a.join("operon.lock")).expect("lock A");
+    let lock_b = std::fs::read(root_b.join("operon.lock")).expect("lock B");
+    assert!(!lock_a.is_empty(), "lock A non-empty");
+    assert_eq!(
+        lock_a, lock_b,
+        "fresh caches + re-materialized seed registries -> byte-identical lockfile"
+    );
+    let text = String::from_utf8(lock_a).expect("utf8 lock");
+    assert!(
+        text.contains("git = \"registry:web\"") && text.contains("git = \"registry:http\""),
+        "lock pins the registry sources for web AND its transitive http"
+    );
 }
 
 #[test]
