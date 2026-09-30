@@ -102,6 +102,13 @@ pub enum Instr {
     /// the result. Only Expr::Call over a bare identifier compiles to this;
     /// method calls, gene-value calls and every exotic callee stay bridged.
     CallNamed(u32, u32),
+    /// compat-matrix fix (rt_p22a, 2026-09-30): a line stamp that executes
+    /// as nothing. The tree-walk stamps Expr::Call's line at ARM ENTRY,
+    /// before any argument evaluates, and never re-stamps after; the per-
+    /// insn line table can only stamp when an insn executes, so a stamp
+    /// BEFORE the arg insns needs a real (no-effect) insn. Costs one tick
+    /// ("never cheaper than the tree-walk" holds); invisible to output.
+    Nop,
 }
 
 /// Identity hasher for pointer-keyed cache maps: a pointer is already a
@@ -348,11 +355,18 @@ impl<'a> Compiler<'a> {
                     Expr::Ident(n) => n.clone(),
                     _ => return false,
                 };
+                let nidx = intern_name(&mut self.names, &name);
+                // tree-walk stamp discipline: Expr::Call stamps the call
+                // line at ARM ENTRY, before any argument evaluates, and
+                // never re-stamps after (its builtin diagnostics carry the
+                // LAST argument's line — rt_p22a's strengthen note). The
+                // pre-arg Nop carries the stamp; the call insn itself must
+                // not re-stamp post-args.
+                self.emit(Instr::Nop, *call_line as u32);
                 for a in args {
                     self.expr_or_bridge(a, line);
                 }
-                let nidx = intern_name(&mut self.names, &name);
-                self.emit(Instr::CallNamed(nidx, args.len() as u32), *call_line as u32);
+                self.emit(Instr::CallNamed(nidx, args.len() as u32), 0);
             }
             _ => return false,
         }
@@ -874,6 +888,9 @@ fn exec_gene_code_inner(
             Instr::Pop => {
                 stack.pop();
             }
+            Instr::Nop => {
+                // executes as nothing; exists to carry a line stamp
+            }
             Instr::Ret => {
                 let v = stack.pop().unwrap_or(Value::Null);
                 return Ok(Flow::Ret(v));
@@ -907,7 +924,9 @@ fn exec_gene_code_inner(
             Instr::CallNamed(name_idx, argc) => {
                 // W09 native calls: pop the args in reverse, then ride the
                 // SHARED named-call tail (RISC gate + call_named funnel).
-                // The call line was stamped by the dispatch (call_line).
+                // The call line was stamped pre-args by the Nop (the
+                // tree-walk stamps at arm entry and never re-stamps after
+                // the args — this insn carries line 0 on purpose).
                 // The name is borrowed, not cloned: fib25 measures 242k
                 // calls and the clone was a malloc per call.
                 let name = code.names[*name_idx as usize].as_str();
@@ -964,6 +983,7 @@ fn mnemonic(i: &Instr) -> &'static str {
         Instr::BridgeStmt(_) => "BridgeStmt",
         Instr::BridgeStmtInLoop(..) => "BridgeStmtInLoop",
         Instr::Pop => "Pop",
+        Instr::Nop => "Nop",
         Instr::Ret => "Ret",
         Instr::RetName(_) => "RetName",
         Instr::Brk(_) => "Brk",
@@ -1245,7 +1265,17 @@ fn fold_consts(consts: &mut Vec<Const>, a: u32, b: u32, op: BinOp) -> Option<u32
             Add => Const::Float(x + y),
             Sub => Const::Float(x - y),
             Mul => Const::Float(x * y),
-            Div => Const::Float(x / y),
+            Div => {
+                // compat-matrix finding (rt_p5a_arith, 2026-09-30): the
+                // runtime stresses on float division by zero (interp
+                // apply_binop: "division by zero"), so a zero divisor must
+                // NOT fold — the runtime stress IS the contract. Covers
+                // -0.0 as well: IEEE == treats -0.0 == 0.0.
+                if y == 0.0 {
+                    return None;
+                }
+                Const::Float(x / y)
+            }
             Eq => Const::Bool(x == y),
             Neq => Const::Bool(x != y),
             Lt => Const::Bool(x < y),
@@ -1399,9 +1429,10 @@ mod tests {
         }
         let mut prog = VmProgram::default();
         let raw = compile_body("f", &body, &mut prog);
-        // the raw body carries the dead call (CallNamed print + Pop)
+        // the raw body carries the dead call (Nop stamp + CallNamed print +
+        // Pop); the pre-arg Nop stamp (rt_p22a fix) shifts the call to [4]
         assert!(
-            render(&raw.code[3], &raw).starts_with("'print'"),
+            render(&raw.code[4], &raw).starts_with("'print'"),
             "fixture stale"
         );
         let opt = optimize(&raw);

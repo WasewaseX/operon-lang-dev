@@ -5,9 +5,9 @@
 # tests/compat_fresh/) through every engine axis and requires byte-identical
 # stdout+stderr+exit-code across ALL of them:
 #
-#   A1  tree-walk      (Rust release)
-#   A2  bytecode VM    (Rust release, --vm)
-#   A3  optimized VM   (Rust release, --vm-opt)   <- rule R1: optimizations
+#   A1  tree-walk      (Rust release, --no-vm; the VM is the default)
+#   A2  bytecode VM    (Rust release, default)
+#   A3  optimized VM   (Rust release, --opt 1)    <- rule R1: optimizations
 #                                                      must preserve semantics
 #   A4  tree-walk      (Rust DEBUG build)          <- build profile axis
 #   A5  Python oracle                              <- implementation axis
@@ -35,11 +35,12 @@ if [ "$GEN" == "1" ]; then
 fi
 
 # ---- debug build (A4) -----------------------------------------------------
+# Always build (incremental, a no-op when current): a STALE debug binary is
+# worse than none — it silently tests last week's engine (found the hard way
+# when the debug binary predated the --no-vm flag and every program "failed").
 if [ "$DEBUG_BIN" == "1" ]; then
-  if [ ! -x target/debug/operon ]; then
-    echo "building debug binary..."
-    cargo build >/dev/null 2>&1 || { echo "debug build FAILED"; exit 1; }
-  fi
+  echo "building/refreshing debug binary..."
+  cargo build >/dev/null 2>&1 || { echo "debug build FAILED"; exit 1; }
 fi
 
 mapfile -t FILES < <(find tests/compat tests/compat_fresh -name '*.op' 2>/dev/null | sort)
@@ -57,11 +58,11 @@ tmpa=$(mktemp); tmpb=$(mktemp); tmpc=$(mktemp); tmpd=$(mktemp); tmpe=$(mktemp)
 trap 'rm -f "$tmpa" "$tmpb" "$tmpc" "$tmpd" "$tmpe"' EXIT
 
 for f in "${FILES[@]}"; do
-  ./bin/operon run "$f" >"$tmpa" 2>"$tmpa.err"; arc=$?
-  ./bin/operon run --vm "$f" >"$tmpb" 2>"$tmpb.err"; brc=$?
-  ./bin/operon run --vm-opt "$f" >"$tmpc" 2>"$tmpc.err"; crc=$?
+  ./bin/operon run --no-vm "$f" >"$tmpa" 2>"$tmpa.err"; arc=$?
+  ./bin/operon run "$f" >"$tmpb" 2>"$tmpb.err"; brc=$?
+  ./bin/operon run --opt 1 "$f" >"$tmpc" 2>"$tmpc.err"; crc=$?
   if [ "$DEBUG_BIN" == "1" ]; then
-    ./target/debug/operon run "$f" >"$tmpd" 2>"$tmpd.err"; drc=$?
+    ./target/debug/operon run --no-vm "$f" >"$tmpd" 2>"$tmpd.err"; drc=$?
   fi
   python3 bootstrap/oracle.py run "$f" >"$tmpe" 2>"$tmpe.err"; erc=$?
 
