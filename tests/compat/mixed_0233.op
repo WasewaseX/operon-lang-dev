@@ -1,0 +1,254 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=233 tag=m233
+
+gene m233_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m233-b0:", m233_b0({cell: 8, splicer: 32, exon: 1})?!)
+
+gene m233_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m233-b1:", m233_b1({splicer: 15, vector: 33, codon: 30})?!)
+
+gene m233_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m233-b2:", m233_b2({vector: 30, exon: 24, ligase: 12})?!)
+
+gene m233_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m233_f0([26, 38, 45, 25, 26, 9]) {
+
+    case Ok(list) {
+
+        print("m233-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m233-f0:", "e:", m)
+
+    }
+
+}
+
+gene m233_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m233_f1([13, 24, 17, 52, 2]) {
+
+    case Ok(list) {
+
+        print("m233-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m233-f1:", "e:", m)
+
+    }
+
+}
+
+gene m233_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m233_f2([59, 37, 17, 48, 56, 7, 3, 8]) {
+
+    case Ok(list) {
+
+        print("m233-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m233-f2:", "e:", m)
+
+    }
+
+}
+
+let m233_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m233-cc0:", m233_cl0(4)(4), m233_cl0(4)(4))
+
+let m233_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m233-cc1:", m233_cl1(15)(11), m233_cl1(11)(15))
+
+let m233_data0 = some([some("plasmid"), none(), some(2)])
+
+match m233_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m233-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m233-x0:", "shape-miss")
+
+    }
+
+}
+
+let m233_data1 = some([some("enzyme"), none(), some(7)])
+
+match m233_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m233-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m233-x1:", "shape-miss")
+
+    }
+
+}

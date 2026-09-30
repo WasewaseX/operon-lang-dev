@@ -1,0 +1,286 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=105 tag=m105
+
+let m105_s0 = some(4)
+
+match m105_s0 {
+
+    case Some(x) if x > 4 {
+
+        print("m105-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m105-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m105-m0:", "none")
+
+    }
+
+}
+
+let m105_s1 = some(8)
+
+match m105_s1 {
+
+    case Some(x) if x > 8 {
+
+        print("m105-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m105-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m105-m1:", "none")
+
+    }
+
+}
+
+let m105_s2 = some(4)
+
+match m105_s2 {
+
+    case Some(x) if x > 4 {
+
+        print("m105-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m105-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m105-m2:", "none")
+
+    }
+
+}
+
+let m105_ls0 = [37, 21, 6]
+
+match m105_ls0 {
+
+    case [37, *rest] {
+
+        print("m105-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m105-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m105-l0:", "other")
+
+    }
+
+}
+
+let m105_ls1 = [26, 2, 47]
+
+match m105_ls1 {
+
+    case [26, *rest] {
+
+        print("m105-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m105-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m105-l1:", "other")
+
+    }
+
+}
+
+let m105_ls2 = [8, 3, 15]
+
+match m105_ls2 {
+
+    case [8, *rest] {
+
+        print("m105-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m105-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m105-l2:", "other")
+
+    }
+
+}
+
+let m105_mp0 = {enzyme: -9052, ligase: 1947}
+
+match m105_mp0 {
+
+    case {enzyme: p, ligase: q} {
+
+        print("m105-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m105-mp0:", "miss")
+
+    }
+
+}
+
+let m105_mp1 = {marker: -9669, cell: 7692}
+
+match m105_mp1 {
+
+    case {marker: p, cell: q} {
+
+        print("m105-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m105-mp1:", "miss")
+
+    }
+
+}
+
+let m105_mp2 = {enzyme: 1987, splicer: -4540}
+
+match m105_mp2 {
+
+    case {enzyme: p, splicer: q} {
+
+        print("m105-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m105-mp2:", "miss")
+
+    }
+
+}
+
+let m105_r0 = ok(5)
+
+match m105_r0 {
+
+    case Ok(n) | Err(5) {
+
+        print("m105-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m105-r0:", "zero")
+
+    }
+
+}
+
+let m105_r1 = ok(2)
+
+match m105_r1 {
+
+    case Ok(n) | Err(2) {
+
+        print("m105-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m105-r1:", "zero")
+
+    }
+
+}
+
+let m105_r2 = ok(5)
+
+match m105_r2 {
+
+    case Ok(n) | Err(5) {
+
+        print("m105-r2:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m105-r2:", "zero")
+
+    }
+
+}
+
+match "ligase" {
+
+    case "ligase" {
+
+        print("m105-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m105-w0:", "alt")
+
+    }
+
+}
+
+match "enzyme" {
+
+    case "enzyme" {
+
+        print("m105-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m105-w1:", "alt")
+
+    }
+
+}

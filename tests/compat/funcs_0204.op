@@ -1,0 +1,180 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=204 tag=f204
+
+gene f204_g0(p, q = 85, r = 31) {
+
+    return p * 31 + q - r
+
+}
+
+print("f204-d0:", f204_g0(7), f204_g0(7, 34), f204_g0(7, 85, 31))
+
+gene f204_g1(p, q = 88, r = 77) {
+
+    return p * 82 + q - r
+
+}
+
+print("f204-d1:", f204_g1(27), f204_g1(27, 19), f204_g1(27, 88, 77))
+
+gene f204_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f204_fib0(n - 1) + f204_fib0(n - 2)
+
+}
+
+print("f204-fib0:", f204_fib0(12))
+
+gene f204_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f204_fib1(n - 1) + f204_fib1(n - 2)
+
+}
+
+print("f204-fib1:", f204_fib1(11))
+
+gene f204_fib2(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f204_fib2(n - 1) + f204_fib2(n - 2)
+
+}
+
+print("f204-fib2:", f204_fib2(13))
+
+gene f204_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f204_gcd0(b, a % b)
+
+}
+
+print("f204-gcd0:", f204_gcd0(365, 917))
+
+gene f204_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f204_gcd1(b, a % b)
+
+}
+
+print("f204-gcd1:", f204_gcd1(114, 987))
+
+gene f204_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f204_c0 = f204_mk0(18)
+
+f204_c0(5)
+
+print("f204-cl0:", f204_c0(2))
+
+gene f204_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f204_c1 = f204_mk1(12)
+
+f204_c1(9)
+
+print("f204-cl1:", f204_c1(6))
+
+gene f204_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f204-hof0:", f204_tw0(gene (z) => z * 2 + 1, 12))
+
+gene f204_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f204-hof1:", f204_tw1(gene (z) => z * 2 + 1, 4))
+
+gene f204_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f204-dg0:", f204_sd0(120094))
+
+gene f204_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f204-dg1:", f204_sd1(780734))

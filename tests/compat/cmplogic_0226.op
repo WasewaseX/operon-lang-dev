@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=226 tag=c226
+
+print("c226-c0:", -4013 <= -4142)
+
+print("c226-c1:", -7561 < 3604)
+
+print("c226-c2:", -683 != -8997)
+
+print("c226-c3:", 1702 != -4284)
+
+print("c226-c4:", 4415 >= -8845)
+
+print("c226-b0:", 45 < 8 && 8 < 5, 45 > 8 || 45 > 5)
+
+print("c226-b1:", 41 < 30 && 30 < 23, 41 > 30 || 41 > 23)
+
+print("c226-b2:", 16 < 38 && 38 < 38, 16 > 38 || 16 > 38)
+
+print("c226-b3:", 2 < 6 && 6 < 38, 2 > 6 || 2 > 38)
+
+print("c226-t0:", -6406 > 6663 ? "gt" : "le")
+
+print("c226-t1:", -9560 > 2646 ? "gt" : "le")
+
+print("c226-t2:", -2229 > -9683 ? "gt" : "le")
+
+let c226_n0 = null
+
+print("c226-n0:", c226_n0 ?? -9190, c226_n0 == null)
+
+let c226_n1 = null
+
+print("c226-n1:", c226_n1 ?? 2404, c226_n1 == null)
+
+let c226_n2 = null
+
+print("c226-n2:", c226_n2 ?? 8944, c226_n2 == null)
+
+print("c226-s0:", "5fcC" in "5m555a5fcC", "5fcC" == "5fcC")
+
+print("c226-s1:", "au11" in "_As6rxau11", "au11" == "au11")

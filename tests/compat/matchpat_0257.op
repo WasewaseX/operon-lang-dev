@@ -1,0 +1,286 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=257 tag=m257
+
+let m257_s0 = some(4)
+
+match m257_s0 {
+
+    case Some(x) if x > 4 {
+
+        print("m257-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m257-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m257-m0:", "none")
+
+    }
+
+}
+
+let m257_s1 = some(7)
+
+match m257_s1 {
+
+    case Some(x) if x > 7 {
+
+        print("m257-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m257-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m257-m1:", "none")
+
+    }
+
+}
+
+let m257_s2 = some(1)
+
+match m257_s2 {
+
+    case Some(x) if x > 1 {
+
+        print("m257-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m257-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m257-m2:", "none")
+
+    }
+
+}
+
+let m257_ls0 = [31, 39, 12]
+
+match m257_ls0 {
+
+    case [31, *rest] {
+
+        print("m257-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m257-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m257-l0:", "other")
+
+    }
+
+}
+
+let m257_ls1 = [7, 13, 10]
+
+match m257_ls1 {
+
+    case [7, *rest] {
+
+        print("m257-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m257-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m257-l1:", "other")
+
+    }
+
+}
+
+let m257_ls2 = [29, 13, 1]
+
+match m257_ls2 {
+
+    case [29, *rest] {
+
+        print("m257-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m257-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m257-l2:", "other")
+
+    }
+
+}
+
+let m257_mp0 = {marker: -2983, helix: 7158}
+
+match m257_mp0 {
+
+    case {marker: p, helix: q} {
+
+        print("m257-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m257-mp0:", "miss")
+
+    }
+
+}
+
+let m257_mp1 = {cell: -4706, plasmid: -8849}
+
+match m257_mp1 {
+
+    case {cell: p, plasmid: q} {
+
+        print("m257-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m257-mp1:", "miss")
+
+    }
+
+}
+
+let m257_mp2 = {splicer: -7454, ligase: -3511}
+
+match m257_mp2 {
+
+    case {splicer: p, ligase: q} {
+
+        print("m257-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m257-mp2:", "miss")
+
+    }
+
+}
+
+let m257_r0 = ok(3)
+
+match m257_r0 {
+
+    case Ok(n) | Err(3) {
+
+        print("m257-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m257-r0:", "zero")
+
+    }
+
+}
+
+let m257_r1 = ok(5)
+
+match m257_r1 {
+
+    case Ok(n) | Err(5) {
+
+        print("m257-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m257-r1:", "zero")
+
+    }
+
+}
+
+let m257_r2 = ok(3)
+
+match m257_r2 {
+
+    case Ok(n) | Err(3) {
+
+        print("m257-r2:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m257-r2:", "zero")
+
+    }
+
+}
+
+match "exon" {
+
+    case "exon" {
+
+        print("m257-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m257-w0:", "alt")
+
+    }
+
+}
+
+match "splicer" {
+
+    case "splicer" {
+
+        print("m257-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m257-w1:", "alt")
+
+    }
+
+}

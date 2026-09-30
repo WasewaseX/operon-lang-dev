@@ -1,0 +1,50 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=121 tag=s121
+
+print("s121-m0:", "xaqx11".upper(), "xaqx11".slice(4), "xaqx11".len())
+
+print("s121-m1:", "qfoweobqb".upper(), "qfoweobqb".slice(3), "qfoweobqb".len())
+
+print("s121-m2:", "kf75n0Ahi".upper(), "kf75n0Ahi".slice(2), "kf75n0Ahi".len())
+
+print("s121-m3:", "wpB8fq1i3".upper(), "wpB8fq1i3".slice(2), "wpB8fq1i3".len())
+
+print("s121-m4:", "3sAf7vmlp14j".upper(), "3sAf7vmlp14j".slice(4), "3sAf7vmlp14j".len())
+
+print("s121-m5:", "81wlmkho5406y2".upper(), "81wlmkho5406y2".slice(3), "81wlmkho5406y2".len())
+
+print("s121-i0:", "c4o-{77}-2hAl")
+
+let s121_v0 = 77
+
+print("s121-v0:", "n={s121_v0}" + "!" * 1)
+
+print("s121-i1:", "A9g-{31}-z3hn")
+
+let s121_v1 = 31
+
+print("s121-v1:", "n={s121_v1}" + "!" * 3)
+
+print("s121-i2:", "ctn-{22}-hvg6")
+
+let s121_v2 = 22
+
+print("s121-v2:", "n={s121_v2}" + "!" * 3)
+
+print("s121-r0:", "faxs7dwe".replace("f", "9o"), "faxs7dwe".contains("ax"))
+
+print("s121-r1:", "4nlskf7q".replace("4", "up"), "4nlskf7q".contains("nl"))
+
+print("s121-r2:", "f8vpxcC2".replace("f", "w6"), "f8vpxcC2".contains("8v"))
+
+print("s121-r3:", "v22rj264".replace("v", "Ac"), "v22rj264".contains("22"))
+
+print("s121-j0:", ["Ciw", "B50", "gqv", "v9d"].join("-"))
+
+print("s121-j1:", ["a_l", "oqx", "vB4", "ur0"].join("-"))
+
+print("s121-j2:", ["g8j", "icu", "xhc", "Cs2", "5tj"].join("-"))
+
+print("s121-a0:", "7et10nv".at(2), "7et10nv".trim() == "7et10nv")
+
+print("s121-a1:", "zk7nusu".at(3), "zk7nusu".trim() == "zk7nusu")

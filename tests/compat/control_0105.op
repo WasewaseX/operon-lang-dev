@@ -1,0 +1,156 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=105 tag=c105
+
+let c105_b0 = "start"
+
+if 98 > 80 { c105_b0 = "hi" } elif 98 > 40 { c105_b0 = "mid" } else { c105_b0 = "lo" }
+
+print("c105-i0:", c105_b0, 98)
+
+let c105_b1 = "start"
+
+if 34 > 80 { c105_b1 = "hi" } elif 34 > 40 { c105_b1 = "mid" } else { c105_b1 = "lo" }
+
+print("c105-i1:", c105_b1, 34)
+
+let c105_b2 = "start"
+
+if 106 > 80 { c105_b2 = "hi" } elif 106 > 40 { c105_b2 = "mid" } else { c105_b2 = "lo" }
+
+print("c105-i2:", c105_b2, 106)
+
+let c105_a0 = 0
+
+let c105_n0 = 0
+
+while c105_n0 < 17 {
+
+    c105_n0 += 3
+
+    if c105_n0 % 3 == 0 { continue }
+
+    if c105_n0 > 21 { break }
+
+    c105_a0 += c105_n0
+
+}
+
+print("c105-w0:", c105_a0, c105_n0)
+
+let c105_a1 = 0
+
+let c105_n1 = 0
+
+while c105_n1 < 10 {
+
+    c105_n1 += 3
+
+    if c105_n1 % 3 == 0 { continue }
+
+    if c105_n1 > 18 { break }
+
+    c105_a1 += c105_n1
+
+}
+
+print("c105-w1:", c105_a1, c105_n1)
+
+let c105_a2 = 0
+
+let c105_n2 = 0
+
+while c105_n2 < 11 {
+
+    c105_n2 += 1
+
+    if c105_n2 % 3 == 0 { continue }
+
+    if c105_n2 > 20 { break }
+
+    c105_a2 += c105_n2
+
+}
+
+print("c105-w2:", c105_a2, c105_n2)
+
+let c105_a3 = 0
+
+let c105_n3 = 0
+
+while c105_n3 < 16 {
+
+    c105_n3 += 2
+
+    if c105_n3 % 2 == 0 { continue }
+
+    if c105_n3 > 21 { break }
+
+    c105_a3 += c105_n3
+
+}
+
+print("c105-w3:", c105_a3, c105_n3)
+
+let c105_c0 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 2] {
+
+        c105_c0 += a * b
+
+    }
+
+}
+
+print("c105-l0:", c105_c0)
+
+let c105_c1 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 2] {
+
+        c105_c1 += a * b
+
+    }
+
+}
+
+print("c105-l1:", c105_c1)
+
+let c105_acc0 = ""
+
+loop {
+
+    c105_acc0 += "x"
+
+    if c105_acc0.len() >= 7 { break }
+
+}
+
+print("c105-o0:", c105_acc0)
+
+let c105_acc1 = ""
+
+loop {
+
+    c105_acc1 += "x"
+
+    if c105_acc1.len() >= 5 { break }
+
+}
+
+print("c105-o1:", c105_acc1)
+
+let c105_acc2 = ""
+
+loop {
+
+    c105_acc2 += "x"
+
+    if c105_acc2.len() >= 6 { break }
+
+}
+
+print("c105-o2:", c105_acc2)

@@ -1,0 +1,170 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=201 tag=c201
+
+let c201_b0 = "start"
+
+if 7 > 80 { c201_b0 = "hi" } elif 7 > 40 { c201_b0 = "mid" } else { c201_b0 = "lo" }
+
+print("c201-i0:", c201_b0, 7)
+
+let c201_b1 = "start"
+
+if 102 > 80 { c201_b1 = "hi" } elif 102 > 40 { c201_b1 = "mid" } else { c201_b1 = "lo" }
+
+print("c201-i1:", c201_b1, 102)
+
+let c201_b2 = "start"
+
+if 116 > 80 { c201_b2 = "hi" } elif 116 > 40 { c201_b2 = "mid" } else { c201_b2 = "lo" }
+
+print("c201-i2:", c201_b2, 116)
+
+let c201_a0 = 0
+
+let c201_n0 = 0
+
+while c201_n0 < 6 {
+
+    c201_n0 += 1
+
+    if c201_n0 % 3 == 0 { continue }
+
+    if c201_n0 > 8 { break }
+
+    c201_a0 += c201_n0
+
+}
+
+print("c201-w0:", c201_a0, c201_n0)
+
+let c201_a1 = 0
+
+let c201_n1 = 0
+
+while c201_n1 < 9 {
+
+    c201_n1 += 3
+
+    if c201_n1 % 3 == 0 { continue }
+
+    if c201_n1 > 13 { break }
+
+    c201_a1 += c201_n1
+
+}
+
+print("c201-w1:", c201_a1, c201_n1)
+
+let c201_a2 = 0
+
+let c201_n2 = 0
+
+while c201_n2 < 15 {
+
+    c201_n2 += 1
+
+    if c201_n2 % 3 == 0 { continue }
+
+    if c201_n2 > 22 { break }
+
+    c201_a2 += c201_n2
+
+}
+
+print("c201-w2:", c201_a2, c201_n2)
+
+let c201_a3 = 0
+
+let c201_n3 = 0
+
+while c201_n3 < 12 {
+
+    c201_n3 += 2
+
+    if c201_n3 % 3 == 0 { continue }
+
+    if c201_n3 > 19 { break }
+
+    c201_a3 += c201_n3
+
+}
+
+print("c201-w3:", c201_a3, c201_n3)
+
+let c201_c0 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 2] {
+
+        c201_c0 += a * b
+
+    }
+
+}
+
+print("c201-l0:", c201_c0)
+
+let c201_c1 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 4] {
+
+        c201_c1 += a * b
+
+    }
+
+}
+
+print("c201-l1:", c201_c1)
+
+let c201_c2 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 2] {
+
+        c201_c2 += a * b
+
+    }
+
+}
+
+print("c201-l2:", c201_c2)
+
+let c201_acc0 = ""
+
+loop {
+
+    c201_acc0 += "x"
+
+    if c201_acc0.len() >= 6 { break }
+
+}
+
+print("c201-o0:", c201_acc0)
+
+let c201_acc1 = ""
+
+loop {
+
+    c201_acc1 += "x"
+
+    if c201_acc1.len() >= 3 { break }
+
+}
+
+print("c201-o1:", c201_acc1)
+
+let c201_acc2 = ""
+
+loop {
+
+    c201_acc2 += "x"
+
+    if c201_acc2.len() >= 6 { break }
+
+}
+
+print("c201-o2:", c201_acc2)

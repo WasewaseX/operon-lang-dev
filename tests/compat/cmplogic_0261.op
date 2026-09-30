@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=261 tag=c261
+
+print("c261-c0:", -5178 != 7972)
+
+print("c261-c1:", 2841 > -3253)
+
+print("c261-c2:", 6720 > -3848)
+
+print("c261-c3:", -6109 >= -2769)
+
+print("c261-c4:", 7736 != 9035)
+
+print("c261-c5:", 9261 > -5408)
+
+print("c261-b0:", 24 < 28 && 28 < 29, 24 > 28 || 24 > 29)
+
+print("c261-b1:", 39 < 8 && 8 < 5, 39 > 8 || 39 > 5)
+
+print("c261-b2:", 3 < 9 && 9 < 13, 3 > 9 || 3 > 13)
+
+print("c261-b3:", 13 < 27 && 27 < 15, 13 > 27 || 13 > 15)
+
+print("c261-t0:", 4651 > 3673 ? "gt" : "le")
+
+print("c261-t1:", -8510 > -4220 ? "gt" : "le")
+
+print("c261-t2:", -1419 > 9560 ? "gt" : "le")
+
+print("c261-t3:", 4207 > -1813 ? "gt" : "le")
+
+let c261_n0 = null
+
+print("c261-n0:", c261_n0 ?? -7760, c261_n0 == null)
+
+let c261_n1 = null
+
+print("c261-n1:", c261_n1 ?? -2173, c261_n1 == null)
+
+print("c261-s0:", "0puf" in "pl6lvs0puf", "0puf" == "0puf")
+
+print("c261-s1:", "ly7c" in "tcho_8ly7c", "ly7c" == "ly7c")

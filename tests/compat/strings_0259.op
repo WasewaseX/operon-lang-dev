@@ -1,0 +1,54 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=259 tag=s259
+
+print("s259-m0:", "ljcejk_frkj".upper(), "ljcejk_frkj".slice(2), "ljcejk_frkj".len())
+
+print("s259-m1:", "tdBnc7".upper(), "tdBnc7".slice(2), "tdBnc7".len())
+
+print("s259-m2:", "B5bsrqoy2sdmx".upper(), "B5bsrqoy2sdmx".slice(2), "B5bsrqoy2sdmx".len())
+
+print("s259-m3:", "o5BCBs_zt".upper(), "o5BCBs_zt".slice(4), "o5BCBs_zt".len())
+
+print("s259-i0:", "chq-{39}-Atfr")
+
+let s259_v0 = 39
+
+print("s259-v0:", "n={s259_v0}" + "!" * 1)
+
+print("s259-i1:", "dsd-{54}-x18l")
+
+let s259_v1 = 54
+
+print("s259-v1:", "n={s259_v1}" + "!" * 2)
+
+print("s259-i2:", "c4k-{74}-bx2z")
+
+let s259_v2 = 74
+
+print("s259-v2:", "n={s259_v2}" + "!" * 2)
+
+print("s259-i3:", "5_y-{28}-_kzr")
+
+let s259_v3 = 28
+
+print("s259-v3:", "n={s259_v3}" + "!" * 3)
+
+print("s259-r0:", "sgsvvhm2".replace("s", "n5"), "sgsvvhm2".contains("gs"))
+
+print("s259-r1:", "bq8hdzsB".replace("b", "qw"), "bq8hdzsB".contains("q8"))
+
+print("s259-r2:", "epwafclk".replace("e", "sw"), "epwafclk".contains("pw"))
+
+print("s259-r3:", "cuotudeu".replace("c", "6r"), "cuotudeu".contains("uo"))
+
+print("s259-j0:", ["Avh", "ipn", "q3q", "nhe"].join("-"))
+
+print("s259-j1:", ["fAu", "ur9", "Apb"].join("-"))
+
+print("s259-j2:", ["cnf", "_5m", "em8"].join("-"))
+
+print("s259-a0:", "9rAC5dq".at(5), "9rAC5dq".trim() == "9rAC5dq")
+
+print("s259-a1:", "fuxAz7b".at(5), "fuxAz7b".trim() == "fuxAz7b")
+
+print("s259-a2:", "q331j23".at(0), "q331j23".trim() == "q331j23")

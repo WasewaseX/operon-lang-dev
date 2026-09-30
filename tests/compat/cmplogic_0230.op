@@ -1,0 +1,36 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=230 tag=c230
+
+print("c230-c0:", -1624 != -5146)
+
+print("c230-c1:", -6184 < -1061)
+
+print("c230-c2:", 2658 < -6661)
+
+print("c230-c3:", -3615 != 3454)
+
+print("c230-c4:", 6307 == -2837)
+
+print("c230-b0:", 39 < 35 && 35 < 21, 39 > 35 || 39 > 21)
+
+print("c230-b1:", 11 < 7 && 7 < 2, 11 > 7 || 11 > 2)
+
+print("c230-b2:", 45 < 0 && 0 < 14, 45 > 0 || 45 > 14)
+
+print("c230-t0:", -8139 > -5137 ? "gt" : "le")
+
+print("c230-t1:", 1389 > -3724 ? "gt" : "le")
+
+print("c230-t2:", -5229 > -1116 ? "gt" : "le")
+
+let c230_n0 = null
+
+print("c230-n0:", c230_n0 ?? -8957, c230_n0 == null)
+
+let c230_n1 = null
+
+print("c230-n1:", c230_n1 ?? 6651, c230_n1 == null)
+
+print("c230-s0:", "3vz2" in "2trpz53vz2", "3vz2" == "3vz2")
+
+print("c230-s1:", "mril" in "ddffccmril", "mril" == "mril")

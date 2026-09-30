@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=253 tag=s253
+
+print("s253-m0:", "ns41je".upper(), "ns41je".slice(1), "ns41je".len())
+
+print("s253-m1:", "ldyld75sy5BCfe".upper(), "ldyld75sy5BCfe".slice(2), "ldyld75sy5BCfe".len())
+
+print("s253-m2:", "4wp54x47wrng0".upper(), "4wp54x47wrng0".slice(4), "4wp54x47wrng0".len())
+
+print("s253-m3:", "i0pt8dbr1hm63B".upper(), "i0pt8dbr1hm63B".slice(3), "i0pt8dbr1hm63B".len())
+
+print("s253-i0:", "88h-{82}-7sCa")
+
+let s253_v0 = 82
+
+print("s253-v0:", "n={s253_v0}" + "!" * 1)
+
+print("s253-i1:", "v94-{77}-0hgb")
+
+let s253_v1 = 77
+
+print("s253-v1:", "n={s253_v1}" + "!" * 1)
+
+print("s253-i2:", "mpq-{63}-0n43")
+
+let s253_v2 = 63
+
+print("s253-v2:", "n={s253_v2}" + "!" * 1)
+
+print("s253-r0:", "3wpA8g75".replace("3", "jw"), "3wpA8g75".contains("wp"))
+
+print("s253-r1:", "_iukm6z9".replace("_", "7_"), "_iukm6z9".contains("iu"))
+
+print("s253-r2:", "fit6yBxe".replace("f", "AC"), "fit6yBxe".contains("it"))
+
+print("s253-r3:", "bnjy21rq".replace("b", "a2"), "bnjy21rq".contains("nj"))
+
+print("s253-j0:", ["n4x", "hxq", "56u"].join("-"))
+
+print("s253-j1:", ["7co", "ac8", "9BA"].join("-"))
+
+print("s253-j2:", ["bms", "26g", "glB", "uzn", "i88"].join("-"))
+
+print("s253-a0:", "C3c571q".at(6), "C3c571q".trim() == "C3c571q")
+
+print("s253-a1:", "g86dg0q".at(3), "g86dg0q".trim() == "g86dg0q")

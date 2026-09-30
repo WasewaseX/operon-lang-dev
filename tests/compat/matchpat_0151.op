@@ -1,0 +1,310 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=151 tag=m151
+
+let m151_s0 = some(4)
+
+match m151_s0 {
+
+    case Some(x) if x > 4 {
+
+        print("m151-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m151-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m151-m0:", "none")
+
+    }
+
+}
+
+let m151_s1 = some(7)
+
+match m151_s1 {
+
+    case Some(x) if x > 7 {
+
+        print("m151-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m151-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m151-m1:", "none")
+
+    }
+
+}
+
+let m151_s2 = some(6)
+
+match m151_s2 {
+
+    case Some(x) if x > 6 {
+
+        print("m151-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m151-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m151-m2:", "none")
+
+    }
+
+}
+
+let m151_ls0 = [11, 50, 24]
+
+match m151_ls0 {
+
+    case [11, *rest] {
+
+        print("m151-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m151-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m151-l0:", "other")
+
+    }
+
+}
+
+let m151_ls1 = [38, 21, 17]
+
+match m151_ls1 {
+
+    case [38, *rest] {
+
+        print("m151-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m151-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m151-l1:", "other")
+
+    }
+
+}
+
+let m151_ls2 = [40, 34, 14]
+
+match m151_ls2 {
+
+    case [40, *rest] {
+
+        print("m151-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m151-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m151-l2:", "other")
+
+    }
+
+}
+
+let m151_ls3 = [33, 12, 12]
+
+match m151_ls3 {
+
+    case [33, *rest] {
+
+        print("m151-l3:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m151-l3:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m151-l3:", "other")
+
+    }
+
+}
+
+let m151_mp0 = {codon: 7018, cell: -2881}
+
+match m151_mp0 {
+
+    case {codon: p, cell: q} {
+
+        print("m151-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m151-mp0:", "miss")
+
+    }
+
+}
+
+let m151_mp1 = {ligase: 3291, vector: -7088}
+
+match m151_mp1 {
+
+    case {ligase: p, vector: q} {
+
+        print("m151-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m151-mp1:", "miss")
+
+    }
+
+}
+
+let m151_mp2 = {gene: -5242, ligase: 5396}
+
+match m151_mp2 {
+
+    case {gene: p, ligase: q} {
+
+        print("m151-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m151-mp2:", "miss")
+
+    }
+
+}
+
+let m151_r0 = ok(2)
+
+match m151_r0 {
+
+    case Ok(n) | Err(2) {
+
+        print("m151-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m151-r0:", "zero")
+
+    }
+
+}
+
+let m151_r1 = ok(1)
+
+match m151_r1 {
+
+    case Ok(n) | Err(1) {
+
+        print("m151-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m151-r1:", "zero")
+
+    }
+
+}
+
+let m151_r2 = ok(4)
+
+match m151_r2 {
+
+    case Ok(n) | Err(4) {
+
+        print("m151-r2:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m151-r2:", "zero")
+
+    }
+
+}
+
+match "plasmid" {
+
+    case "plasmid" {
+
+        print("m151-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m151-w0:", "alt")
+
+    }
+
+}
+
+match "codon" {
+
+    case "codon" {
+
+        print("m151-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m151-w1:", "alt")
+
+    }
+
+}

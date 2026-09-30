@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=243 tag=m243
+
+let m243_m0 = {cell: -62, splicer: 25, gene: -38}
+
+print("m243-m0:", m243_m0["cell"], len(m243_m0), m243_m0.has("cell"))
+
+let m243_m1 = {marker: 80, cell: -78, exon: -21}
+
+print("m243-m1:", m243_m1["marker"], len(m243_m1), m243_m1.has("marker"))
+
+let m243_m2 = {exon: -63, helix: -2, enzyme: -87, ligase: -16}
+
+print("m243-m2:", m243_m2["exon"], len(m243_m2), m243_m2.has("exon"))
+
+let m243_m3 = {ribose: 0, splicer: 77, vector: -41, marker: 98, exon: -31}
+
+print("m243-m3:", m243_m3["ribose"], len(m243_m3), m243_m3.has("ribose"))
+
+let m243_k0 = {vector: 43, exon: 37, splicer: 34}
+
+let m243_ks0 = m243_k0.keys()
+
+let m243_sm0 = 0
+
+for k in m243_k0 { m243_sm0 += m243_k0[k] }
+
+print("m243-k0:", m243_sm0, m243_k0.keys().sort(), m243_k0.values().len())
+
+let m243_k1 = {gene: 8, plasmid: 32, marker: 19}
+
+let m243_ks1 = m243_k1.keys()
+
+let m243_sm1 = 0
+
+for k in m243_k1 { m243_sm1 += m243_k1[k] }
+
+print("m243-k1:", m243_sm1, m243_k1.keys().sort(), m243_k1.values().len())
+
+let m243_k2 = {exon: 16, marker: 1, cell: 30}
+
+let m243_ks2 = m243_k2.keys()
+
+let m243_sm2 = 0
+
+for k in m243_k2 { m243_sm2 += m243_k2[k] }
+
+print("m243-k2:", m243_sm2, m243_k2.keys().sort(), m243_k2.values().len())
+
+let m243_w0 = {outer: {ligase: 5, vector: 5, tag: "ok"}}}
+
+print("m243-w0:", m243_w0["outer"]["vector"], m243_w0["outer"]["tag"])
+
+let m243_w1 = {outer: {ligase: 6, vector: 6, tag: "ok"}}}
+
+print("m243-w1:", m243_w1["outer"]["vector"], m243_w1["outer"]["tag"])

@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=129 tag=s129
+
+print("s129-m0:", "ot5xiw91j".upper(), "ot5xiw91j".slice(4), "ot5xiw91j".len())
+
+print("s129-m1:", "7CfvAwm".upper(), "7CfvAwm".slice(2), "7CfvAwm".len())
+
+print("s129-m2:", "b2b4k0f8rcB".upper(), "b2b4k0f8rcB".slice(3), "b2b4k0f8rcB".len())
+
+print("s129-m3:", "84j9ee2v2ts".upper(), "84j9ee2v2ts".slice(4), "84j9ee2v2ts".len())
+
+print("s129-i0:", "mj6-{37}-szmf")
+
+let s129_v0 = 37
+
+print("s129-v0:", "n={s129_v0}" + "!" * 3)
+
+print("s129-i1:", "Bbf-{54}-4143")
+
+let s129_v1 = 54
+
+print("s129-v1:", "n={s129_v1}" + "!" * 3)
+
+print("s129-i2:", "4hw-{68}-puv5")
+
+let s129_v2 = 68
+
+print("s129-v2:", "n={s129_v2}" + "!" * 2)
+
+print("s129-r0:", "h9t134t0".replace("h", "lz"), "h9t134t0".contains("9t"))
+
+print("s129-r1:", "q7xf1hzz".replace("q", "bk"), "q7xf1hzz".contains("7x"))
+
+print("s129-j0:", ["bCq", "k8z", "uBA", "5kz"].join("-"))
+
+print("s129-j1:", ["d1w", "aj9", "Bir", "8px"].join("-"))
+
+print("s129-a0:", "eot6fth".at(6), "eot6fth".trim() == "eot6fth")
+
+print("s129-a1:", "lb6c9tc".at(2), "lb6c9tc".trim() == "lb6c9tc")

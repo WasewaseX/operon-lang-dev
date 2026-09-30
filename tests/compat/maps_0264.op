@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=264 tag=m264
+
+let m264_m0 = {ligase: -69, cell: -25, codon: 43, exon: -82}
+
+print("m264-m0:", m264_m0["ligase"], len(m264_m0), m264_m0.has("ligase"))
+
+let m264_m1 = {cell: 72, ribose: -84, marker: 49, plasmid: -79}
+
+print("m264-m1:", m264_m1["cell"], len(m264_m1), m264_m1.has("cell"))
+
+let m264_m2 = {splicer: 42, cell: 30, helix: -72, enzyme: -40, ligase: -40}
+
+print("m264-m2:", m264_m2["splicer"], len(m264_m2), m264_m2.has("splicer"))
+
+let m264_m3 = {splicer: 55, vector: 32, exon: -29}
+
+print("m264-m3:", m264_m3["splicer"], len(m264_m3), m264_m3.has("splicer"))
+
+let m264_k0 = {exon: 19, vector: 14, cell: 42}
+
+let m264_ks0 = m264_k0.keys()
+
+let m264_sm0 = 0
+
+for k in m264_k0 { m264_sm0 += m264_k0[k] }
+
+print("m264-k0:", m264_sm0, m264_k0.keys().sort(), m264_k0.values().len())
+
+let m264_k1 = {ligase: 19, exon: 26, enzyme: 45}
+
+let m264_ks1 = m264_k1.keys()
+
+let m264_sm1 = 0
+
+for k in m264_k1 { m264_sm1 += m264_k1[k] }
+
+print("m264-k1:", m264_sm1, m264_k1.keys().sort(), m264_k1.values().len())
+
+let m264_k2 = {enzyme: 4, exon: 12, vector: 3}
+
+let m264_ks2 = m264_k2.keys()
+
+let m264_sm2 = 0
+
+for k in m264_k2 { m264_sm2 += m264_k2[k] }
+
+print("m264-k2:", m264_sm2, m264_k2.keys().sort(), m264_k2.values().len())
+
+let m264_w0 = {outer: {vector: 6, plasmid: 1, tag: "ok"}}}
+
+print("m264-w0:", m264_w0["outer"]["plasmid"], m264_w0["outer"]["tag"])
+
+let m264_w1 = {outer: {helix: 8, vector: 2, tag: "ok"}}}
+
+print("m264-w1:", m264_w1["outer"]["vector"], m264_w1["outer"]["tag"])

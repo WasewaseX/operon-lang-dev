@@ -1,0 +1,214 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=228 tag=m228
+
+gene m228_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m228-b0:", m228_b0({gene: 81, enzyme: 77, helix: 49})?!)
+
+gene m228_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m228-b1:", m228_b1({marker: 10, enzyme: 56, ribose: 56})?!)
+
+gene m228_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m228-b2:", m228_b2({ribose: 22, plasmid: 41, gene: 69})?!)
+
+gene m228_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m228_f0([55, 23, 37, 42, 50]) {
+
+    case Ok(list) {
+
+        print("m228-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m228-f0:", "e:", m)
+
+    }
+
+}
+
+gene m228_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m228_f1([23, 27, 30, 25, 19, 14, 50]) {
+
+    case Ok(list) {
+
+        print("m228-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m228-f1:", "e:", m)
+
+    }
+
+}
+
+let m228_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m228-cc0:", m228_cl0(3)(2), m228_cl0(2)(3))
+
+let m228_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m228-cc1:", m228_cl1(19)(10), m228_cl1(10)(19))
+
+let m228_data0 = some([some("ligase"), none(), some(3)])
+
+match m228_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m228-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m228-x0:", "shape-miss")
+
+    }
+
+}
+
+let m228_data1 = some([some("helix"), none(), some(4)])
+
+match m228_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m228-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m228-x1:", "shape-miss")
+
+    }
+
+}

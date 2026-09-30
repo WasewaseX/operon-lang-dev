@@ -1,0 +1,214 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=128 tag=m128
+
+gene m128_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m128-b0:", m128_b0({cell: 54, helix: 67, gene: 26})?!)
+
+gene m128_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m128-b1:", m128_b1({enzyme: 81, splicer: 81, marker: 38})?!)
+
+gene m128_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m128-b2:", m128_b2({helix: 14, exon: 7, marker: 51})?!)
+
+gene m128_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m128_f0([42, 56, 14, 11, 43, 26, 9, 28]) {
+
+    case Ok(list) {
+
+        print("m128-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m128-f0:", "e:", m)
+
+    }
+
+}
+
+gene m128_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m128_f1([59, 55, 50, 31, 39, 28]) {
+
+    case Ok(list) {
+
+        print("m128-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m128-f1:", "e:", m)
+
+    }
+
+}
+
+let m128_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m128-cc0:", m128_cl0(9)(8), m128_cl0(8)(9))
+
+let m128_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m128-cc1:", m128_cl1(10)(6), m128_cl1(6)(10))
+
+let m128_data0 = some([some("ligase"), none(), some(9)])
+
+match m128_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m128-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m128-x0:", "shape-miss")
+
+    }
+
+}
+
+let m128_data1 = some([some("splicer"), none(), some(4)])
+
+match m128_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m128-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m128-x1:", "shape-miss")
+
+    }
+
+}

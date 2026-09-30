@@ -1,0 +1,140 @@
+# compat corpus — generated, do not edit by hand
+# bucket=optres seed=20261030 idx=168 tag=o168
+
+gene o168_f0(n) {
+
+    if n > -4371 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o168_u0(n) {
+
+    let v = o168_f0(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o168-p0:", o168_u0(-5400), o168_u0(-4356))
+
+gene o168_f1(n) {
+
+    if n > 1274 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o168_u1(n) {
+
+    let v = o168_f1(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o168-p1:", o168_u1(-9084), o168_u1(1293))
+
+gene o168_f2(n) {
+
+    if n > -8597 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o168_u2(n) {
+
+    let v = o168_f2(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o168-p2:", o168_u2(-3927), o168_u2(-8589))
+
+gene o168_f3(n) {
+
+    if n > -7325 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o168_u3(n) {
+
+    let v = o168_f3(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o168-p3:", o168_u3(-9062), o168_u3(-7315))
+
+gene o168_f4(n) {
+
+    if n > -1177 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o168_u4(n) {
+
+    let v = o168_f4(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o168-p4:", o168_u4(7422), o168_u4(-1172))
+
+print("o168-o0:", is_ok(ok(8660)), is_none(none()), is_err(err("8660")), is_some(some(8660)))
+
+print("o168-u0:", unwrap_or(none(), 8660), unwrap_or(err("x"), 8659), unwrap_or(ok(8660), 0))
+
+print("o168-o1:", is_ok(ok(-7655)), is_none(none()), is_err(err("-7655")), is_some(some(-7655)))
+
+print("o168-u1:", unwrap_or(none(), -7655), unwrap_or(err("x"), -7656), unwrap_or(ok(-7655), 0))
+
+print("o168-o2:", is_ok(ok(-8348)), is_none(none()), is_err(err("-8348")), is_some(some(-8348)))
+
+print("o168-u2:", unwrap_or(none(), -8348), unwrap_or(err("x"), -8349), unwrap_or(ok(-8348), 0))
+
+print("o168-e0:", ok(2891) == ok(2891), some(2891) == ok(2891), none() == none(), err(1) == err(2))
+
+print("o168-j0:", json_str(ok(2891)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o168-e1:", ok(-493) == ok(-493), some(-493) == ok(-493), none() == none(), err(1) == err(2))
+
+print("o168-j1:", json_str(ok(-493)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o168-n0:", some(some(15))?!?!, unwrap(ok(78)) + unwrap(some(63)))
+
+print("o168-s0:", "v=" + str(ok(15)?!), some("63k")?! + "!")
+
+print("o168-n1:", some(some(26))?!?!, unwrap(ok(55)) + unwrap(some(29)))
+
+print("o168-s1:", "v=" + str(ok(26)?!), some("29k")?! + "!")

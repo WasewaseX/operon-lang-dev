@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=244 tag=s244
+
+print("s244-m0:", "m_ai79".upper(), "m_ai79".slice(1), "m_ai79".len())
+
+print("s244-m1:", "jeinht1gi0s3sC".upper(), "jeinht1gi0s3sC".slice(1), "jeinht1gi0s3sC".len())
+
+print("s244-m2:", "iwh80_fms".upper(), "iwh80_fms".slice(4), "iwh80_fms".len())
+
+print("s244-m3:", "9uBmggmb".upper(), "9uBmggmb".slice(2), "9uBmggmb".len())
+
+print("s244-m4:", "n3jlqhm3ma".upper(), "n3jlqhm3ma".slice(1), "n3jlqhm3ma".len())
+
+print("s244-i0:", "3tA-{44}-8l80")
+
+let s244_v0 = 44
+
+print("s244-v0:", "n={s244_v0}" + "!" * 3)
+
+print("s244-i1:", "fk7-{87}-qeAx")
+
+let s244_v1 = 87
+
+print("s244-v1:", "n={s244_v1}" + "!" * 2)
+
+print("s244-i2:", "zz_-{78}-507_")
+
+let s244_v2 = 78
+
+print("s244-v2:", "n={s244_v2}" + "!" * 2)
+
+print("s244-r0:", "aBi1rng0".replace("a", "2u"), "aBi1rng0".contains("Bi"))
+
+print("s244-r1:", "apdl4k9C".replace("a", "ez"), "apdl4k9C".contains("pd"))
+
+print("s244-j0:", ["nrn", "5j9", "r7g", "0sA", "ugB"].join("-"))
+
+print("s244-j1:", ["cay", "7si", "m9o", "Ak4", "xmv"].join("-"))
+
+print("s244-j2:", ["m5l", "Be6", "kzf", "ewn"].join("-"))
+
+print("s244-a0:", "01a4m2y".at(4), "01a4m2y".trim() == "01a4m2y")
+
+print("s244-a1:", "94Be78j".at(4), "94Be78j".trim() == "94Be78j")
+
+print("s244-a2:", "fBuuty7".at(0), "fBuuty7".trim() == "fBuuty7")

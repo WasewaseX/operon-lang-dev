@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=257 tag=s257
+
+print("s257-m0:", "s_tm9o3cw5b".upper(), "s_tm9o3cw5b".slice(4), "s_tm9o3cw5b".len())
+
+print("s257-m1:", "_p6dtts19".upper(), "_p6dtts19".slice(3), "_p6dtts19".len())
+
+print("s257-m2:", "vCtmaBqdgC".upper(), "vCtmaBqdgC".slice(2), "vCtmaBqdgC".len())
+
+print("s257-m3:", "2poahzmupm2wk".upper(), "2poahzmupm2wk".slice(2), "2poahzmupm2wk".len())
+
+print("s257-m4:", "n7d6z952hlB".upper(), "n7d6z952hlB".slice(1), "n7d6z952hlB".len())
+
+print("s257-i0:", "B48-{74}-gx1h")
+
+let s257_v0 = 74
+
+print("s257-v0:", "n={s257_v0}" + "!" * 2)
+
+print("s257-i1:", "Bf9-{19}-76ej")
+
+let s257_v1 = 19
+
+print("s257-v1:", "n={s257_v1}" + "!" * 2)
+
+print("s257-i2:", "va5-{33}-duvB")
+
+let s257_v2 = 33
+
+print("s257-v2:", "n={s257_v2}" + "!" * 2)
+
+print("s257-r0:", "AnCzbavu".replace("A", "dB"), "AnCzbavu".contains("nC"))
+
+print("s257-r1:", "aoA3slm2".replace("a", "58"), "aoA3slm2".contains("oA"))
+
+print("s257-j0:", ["ftv", "qpr", "r4A", "zl4"].join("-"))
+
+print("s257-j1:", ["jfz", "80s", "2ma"].join("-"))
+
+print("s257-a0:", "isgavob".at(6), "isgavob".trim() == "isgavob")
+
+print("s257-a1:", "uBByatx".at(6), "uBByatx".trim() == "uBByatx")
+
+print("s257-a2:", "fiBdAe_".at(2), "fiBdAe_".trim() == "fiBdAe_")

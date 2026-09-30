@@ -1,0 +1,58 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=218 tag=s218
+
+print("s218-m0:", "hu_fu15pB".upper(), "hu_fu15pB".slice(2), "hu_fu15pB".len())
+
+print("s218-m1:", "praC2Ae3jB3".upper(), "praC2Ae3jB3".slice(1), "praC2Ae3jB3".len())
+
+print("s218-m2:", "j7i_ub86".upper(), "j7i_ub86".slice(3), "j7i_ub86".len())
+
+print("s218-m3:", "aC4s5a559d".upper(), "aC4s5a559d".slice(1), "aC4s5a559d".len())
+
+print("s218-m4:", "hhyiaojeyBin".upper(), "hhyiaojeyBin".slice(4), "hhyiaojeyBin".len())
+
+print("s218-i0:", "98q-{88}-C8lt")
+
+let s218_v0 = 88
+
+print("s218-v0:", "n={s218_v0}" + "!" * 3)
+
+print("s218-i1:", "mxj-{34}-144m")
+
+let s218_v1 = 34
+
+print("s218-v1:", "n={s218_v1}" + "!" * 3)
+
+print("s218-i2:", "y1k-{95}-kajc")
+
+let s218_v2 = 95
+
+print("s218-v2:", "n={s218_v2}" + "!" * 1)
+
+print("s218-i3:", "mwj-{73}-4a9o")
+
+let s218_v3 = 73
+
+print("s218-v3:", "n={s218_v3}" + "!" * 1)
+
+print("s218-i4:", "zh6-{14}-sr9a")
+
+let s218_v4 = 14
+
+print("s218-v4:", "n={s218_v4}" + "!" * 2)
+
+print("s218-r0:", "wta5q0pg".replace("w", "7j"), "wta5q0pg".contains("ta"))
+
+print("s218-r1:", "6sd0z882".replace("6", "lw"), "6sd0z882".contains("sd"))
+
+print("s218-j0:", ["q0i", "4xk", "Cca"].join("-"))
+
+print("s218-j1:", ["22x", "bvu", "9rt", "zl1"].join("-"))
+
+print("s218-j2:", ["g3v", "Cyj", "w0c"].join("-"))
+
+print("s218-a0:", "skki2fk".at(1), "skki2fk".trim() == "skki2fk")
+
+print("s218-a1:", "y8mn_z3".at(4), "y8mn_z3".trim() == "y8mn_z3")
+
+print("s218-a2:", "A77e_84".at(5), "A77e_84".trim() == "A77e_84")

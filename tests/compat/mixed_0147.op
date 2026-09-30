@@ -1,0 +1,214 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=147 tag=m147
+
+gene m147_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m147-b0:", m147_b0({ribose: 92, ligase: 34, helix: 79})?!)
+
+gene m147_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m147-b1:", m147_b1({gene: 24, helix: 1, exon: 4})?!)
+
+gene m147_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m147-b2:", m147_b2({cell: 68, plasmid: 28, enzyme: 43})?!)
+
+gene m147_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m147_f0([55, 55, 39, 7, 60]) {
+
+    case Ok(list) {
+
+        print("m147-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m147-f0:", "e:", m)
+
+    }
+
+}
+
+gene m147_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m147_f1([3, 31, 49, 24, 2, 1]) {
+
+    case Ok(list) {
+
+        print("m147-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m147-f1:", "e:", m)
+
+    }
+
+}
+
+let m147_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m147-cc0:", m147_cl0(12)(5), m147_cl0(5)(12))
+
+let m147_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m147-cc1:", m147_cl1(13)(11), m147_cl1(11)(13))
+
+let m147_data0 = some([some("gene"), none(), some(8)])
+
+match m147_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m147-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m147-x0:", "shape-miss")
+
+    }
+
+}
+
+let m147_data1 = some([some("exon"), none(), some(1)])
+
+match m147_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m147-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m147-x1:", "shape-miss")
+
+    }
+
+}

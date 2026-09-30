@@ -1,0 +1,214 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=247 tag=m247
+
+gene m247_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m247-b0:", m247_b0({vector: 92, gene: 87, ribose: 39})?!)
+
+gene m247_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m247-b1:", m247_b1({ligase: 91, ribose: 27, splicer: 41})?!)
+
+gene m247_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m247-b2:", m247_b2({codon: 98, plasmid: 27, gene: 63})?!)
+
+gene m247_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m247_f0([51, 28, 21, 13, 3, 12, 46, 55]) {
+
+    case Ok(list) {
+
+        print("m247-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m247-f0:", "e:", m)
+
+    }
+
+}
+
+gene m247_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m247_f1([5, 51, 33, 50, 15]) {
+
+    case Ok(list) {
+
+        print("m247-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m247-f1:", "e:", m)
+
+    }
+
+}
+
+let m247_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m247-cc0:", m247_cl0(20)(10), m247_cl0(10)(20))
+
+let m247_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m247-cc1:", m247_cl1(5)(15), m247_cl1(15)(5))
+
+let m247_data0 = some([some("helix"), none(), some(6)])
+
+match m247_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m247-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m247-x0:", "shape-miss")
+
+    }
+
+}
+
+let m247_data1 = some([some("marker"), none(), some(9)])
+
+match m247_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m247-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m247-x1:", "shape-miss")
+
+    }
+
+}

@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=204 tag=m204
+
+let m204_m0 = {plasmid: 95, exon: -69, ligase: 82, splicer: -5}
+
+print("m204-m0:", m204_m0["plasmid"], len(m204_m0), m204_m0.has("plasmid"))
+
+let m204_m1 = {gene: 80, plasmid: 38, codon: -39}
+
+print("m204-m1:", m204_m1["gene"], len(m204_m1), m204_m1.has("gene"))
+
+let m204_m2 = {ligase: -46, ribose: -92, codon: 49}
+
+print("m204-m2:", m204_m2["ligase"], len(m204_m2), m204_m2.has("ligase"))
+
+let m204_m3 = {enzyme: -28, vector: -6, gene: 33, marker: -8}
+
+print("m204-m3:", m204_m3["enzyme"], len(m204_m3), m204_m3.has("enzyme"))
+
+let m204_k0 = {exon: 29, ribose: 5, helix: 24}
+
+let m204_ks0 = m204_k0.keys()
+
+let m204_sm0 = 0
+
+for k in m204_k0 { m204_sm0 += m204_k0[k] }
+
+print("m204-k0:", m204_sm0, m204_k0.keys().sort(), m204_k0.values().len())
+
+let m204_k1 = {codon: 15, exon: 1, vector: 9}
+
+let m204_ks1 = m204_k1.keys()
+
+let m204_sm1 = 0
+
+for k in m204_k1 { m204_sm1 += m204_k1[k] }
+
+print("m204-k1:", m204_sm1, m204_k1.keys().sort(), m204_k1.values().len())
+
+let m204_w0 = {outer: {cell: 7, codon: 5, tag: "ok"}}}
+
+print("m204-w0:", m204_w0["outer"]["codon"], m204_w0["outer"]["tag"])
+
+let m204_w1 = {outer: {vector: 1, splicer: 3, tag: "ok"}}}
+
+print("m204-w1:", m204_w1["outer"]["splicer"], m204_w1["outer"]["tag"])

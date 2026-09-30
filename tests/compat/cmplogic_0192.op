@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=192 tag=c192
+
+print("c192-c0:", 8468 != 5112)
+
+print("c192-c1:", 6750 > 8291)
+
+print("c192-c2:", 6888 > 8379)
+
+print("c192-c3:", 8569 >= -9318)
+
+print("c192-b0:", 50 < 42 && 42 < 29, 50 > 42 || 50 > 29)
+
+print("c192-b1:", 37 < 7 && 7 < 47, 37 > 7 || 37 > 47)
+
+print("c192-b2:", 5 < 10 && 10 < 19, 5 > 10 || 5 > 19)
+
+print("c192-b3:", 34 < 29 && 29 < 14, 34 > 29 || 34 > 14)
+
+print("c192-t0:", -4471 > 693 ? "gt" : "le")
+
+print("c192-t1:", -2275 > 9728 ? "gt" : "le")
+
+print("c192-t2:", 8404 > 7877 ? "gt" : "le")
+
+let c192_n0 = null
+
+print("c192-n0:", c192_n0 ?? 3093, c192_n0 == null)
+
+let c192_n1 = null
+
+print("c192-n1:", c192_n1 ?? 2397, c192_n1 == null)
+
+let c192_n2 = null
+
+print("c192-n2:", c192_n2 ?? 4408, c192_n2 == null)
+
+print("c192-s0:", "5diw" in "m5a0575diw", "5diw" == "5diw")
+
+print("c192-s1:", "8_uz" in "dzsc8m8_uz", "8_uz" == "8_uz")

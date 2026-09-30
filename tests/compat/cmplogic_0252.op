@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=252 tag=c252
+
+print("c252-c0:", 4636 < -5790)
+
+print("c252-c1:", -7722 >= -502)
+
+print("c252-c2:", -2029 == 439)
+
+print("c252-c3:", 1719 <= -2556)
+
+print("c252-c4:", 1524 == -340)
+
+print("c252-c5:", 1588 < 1400)
+
+print("c252-c6:", 1191 != 4659)
+
+print("c252-b0:", 7 < 19 && 19 < 48, 7 > 19 || 7 > 48)
+
+print("c252-b1:", 30 < 2 && 2 < 5, 30 > 2 || 30 > 5)
+
+print("c252-b2:", 4 < 7 && 7 < 12, 4 > 7 || 4 > 12)
+
+print("c252-b3:", 10 < 24 && 24 < 43, 10 > 24 || 10 > 43)
+
+print("c252-t0:", -9837 > -6818 ? "gt" : "le")
+
+print("c252-t1:", -8090 > 6524 ? "gt" : "le")
+
+print("c252-t2:", 6214 > -9402 ? "gt" : "le")
+
+let c252_n0 = null
+
+print("c252-n0:", c252_n0 ?? 7532, c252_n0 == null)
+
+let c252_n1 = null
+
+print("c252-n1:", c252_n1 ?? 1638, c252_n1 == null)
+
+let c252_n2 = null
+
+print("c252-n2:", c252_n2 ?? -5398, c252_n2 == null)
+
+print("c252-s0:", "7or9" in "B93c_57or9", "7or9" == "7or9")
+
+print("c252-s1:", "l82u" in "y5dj7ol82u", "l82u" == "l82u")

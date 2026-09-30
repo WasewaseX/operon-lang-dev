@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=261 tag=s261
+
+print("s261-m0:", "ACs5qoqqemo0h".upper(), "ACs5qoqqemo0h".slice(3), "ACs5qoqqemo0h".len())
+
+print("s261-m1:", "4f1s_pu8oA0j".upper(), "4f1s_pu8oA0j".slice(1), "4f1s_pu8oA0j".len())
+
+print("s261-m2:", "kv9o6y".upper(), "kv9o6y".slice(4), "kv9o6y".len())
+
+print("s261-m3:", "u46bg5g76czg7".upper(), "u46bg5g76czg7".slice(4), "u46bg5g76czg7".len())
+
+print("s261-m4:", "bilpwp".upper(), "bilpwp".slice(4), "bilpwp".len())
+
+print("s261-i0:", "6cr-{52}-xm_7")
+
+let s261_v0 = 52
+
+print("s261-v0:", "n={s261_v0}" + "!" * 2)
+
+print("s261-i1:", "blq-{54}-C5jx")
+
+let s261_v1 = 54
+
+print("s261-v1:", "n={s261_v1}" + "!" * 3)
+
+print("s261-i2:", "2v4-{91}-fq2g")
+
+let s261_v2 = 91
+
+print("s261-v2:", "n={s261_v2}" + "!" * 3)
+
+print("s261-r0:", "kbghjpph".replace("k", "te"), "kbghjpph".contains("bg"))
+
+print("s261-r1:", "l14Cxc_1".replace("l", "39"), "l14Cxc_1".contains("14"))
+
+print("s261-j0:", ["09i", "qf5", "2t5", "1vc"].join("-"))
+
+print("s261-j1:", ["aq4", "yg6", "9Cl", "h0m"].join("-"))
+
+print("s261-j2:", ["nan", "rhq", "hq7", "c1h"].join("-"))
+
+print("s261-a0:", "bdlxa1c".at(6), "bdlxa1c".trim() == "bdlxa1c")
+
+print("s261-a1:", "Auwkm1m".at(2), "Auwkm1m".trim() == "Auwkm1m")
+
+print("s261-a2:", "s_8eyzl".at(3), "s_8eyzl".trim() == "s_8eyzl")

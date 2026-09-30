@@ -1,0 +1,58 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=123 tag=s123
+
+print("s123-m0:", "wps1ehxl".upper(), "wps1ehxl".slice(4), "wps1ehxl".len())
+
+print("s123-m1:", "adxr5tu845B".upper(), "adxr5tu845B".slice(3), "adxr5tu845B".len())
+
+print("s123-m2:", "2npkgAly".upper(), "2npkgAly".slice(4), "2npkgAly".len())
+
+print("s123-m3:", "A78f2d1015u2".upper(), "A78f2d1015u2".slice(3), "A78f2d1015u2".len())
+
+print("s123-i0:", "kB3-{5}-7s6s")
+
+let s123_v0 = 5
+
+print("s123-v0:", "n={s123_v0}" + "!" * 1)
+
+print("s123-i1:", "_fg-{6}-1cgq")
+
+let s123_v1 = 6
+
+print("s123-v1:", "n={s123_v1}" + "!" * 2)
+
+print("s123-i2:", "o3z-{44}-ri_0")
+
+let s123_v2 = 44
+
+print("s123-v2:", "n={s123_v2}" + "!" * 2)
+
+print("s123-i3:", "B79-{80}-5kj_")
+
+let s123_v3 = 80
+
+print("s123-v3:", "n={s123_v3}" + "!" * 1)
+
+print("s123-i4:", "3dA-{90}-qslk")
+
+let s123_v4 = 90
+
+print("s123-v4:", "n={s123_v4}" + "!" * 2)
+
+print("s123-r0:", "ht6hvxra".replace("h", "wa"), "ht6hvxra".contains("t6"))
+
+print("s123-r1:", "y76jrugx".replace("y", "np"), "y76jrugx".contains("76"))
+
+print("s123-r2:", "f__0vsxa".replace("f", "iu"), "f__0vsxa".contains("__"))
+
+print("s123-r3:", "2lrBcl4b".replace("2", "po"), "2lrBcl4b".contains("lr"))
+
+print("s123-j0:", ["Atk", "ngr", "_j_"].join("-"))
+
+print("s123-j1:", ["byc", "0kw", "p77", "dp3"].join("-"))
+
+print("s123-a0:", "2sfd9to".at(5), "2sfd9to".trim() == "2sfd9to")
+
+print("s123-a1:", "_rk68x8".at(4), "_rk68x8".trim() == "_rk68x8")
+
+print("s123-a2:", "cabp9oB".at(1), "cabp9oB".trim() == "cabp9oB")

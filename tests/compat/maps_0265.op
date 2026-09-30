@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=265 tag=m265
+
+let m265_m0 = {marker: -45, cell: -35, helix: 98, enzyme: 87}
+
+print("m265-m0:", m265_m0["marker"], len(m265_m0), m265_m0.has("marker"))
+
+let m265_m1 = {codon: -93, helix: 18, vector: 71, plasmid: -44}
+
+print("m265-m1:", m265_m1["codon"], len(m265_m1), m265_m1.has("codon"))
+
+let m265_m2 = {vector: 60, plasmid: 29, cell: 89, enzyme: 63, exon: -35}
+
+print("m265-m2:", m265_m2["vector"], len(m265_m2), m265_m2.has("vector"))
+
+let m265_m3 = {ligase: 62, enzyme: 86, marker: 24}
+
+print("m265-m3:", m265_m3["ligase"], len(m265_m3), m265_m3.has("ligase"))
+
+let m265_k0 = {plasmid: 50, codon: 4, exon: 45}
+
+let m265_ks0 = m265_k0.keys()
+
+let m265_sm0 = 0
+
+for k in m265_k0 { m265_sm0 += m265_k0[k] }
+
+print("m265-k0:", m265_sm0, m265_k0.keys().sort(), m265_k0.values().len())
+
+let m265_k1 = {enzyme: 25, codon: 43, ribose: 11}
+
+let m265_ks1 = m265_k1.keys()
+
+let m265_sm1 = 0
+
+for k in m265_k1 { m265_sm1 += m265_k1[k] }
+
+print("m265-k1:", m265_sm1, m265_k1.keys().sort(), m265_k1.values().len())
+
+let m265_w0 = {outer: {plasmid: 9, helix: 6, tag: "ok"}}}
+
+print("m265-w0:", m265_w0["outer"]["helix"], m265_w0["outer"]["tag"])
+
+let m265_w1 = {outer: {splicer: 4, ligase: 8, tag: "ok"}}}
+
+print("m265-w1:", m265_w1["outer"]["ligase"], m265_w1["outer"]["tag"])

@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=250 tag=s250
+
+print("s250-m0:", "0rBdko".upper(), "0rBdko".slice(2), "0rBdko".len())
+
+print("s250-m1:", "3fzjdi2oBsgx".upper(), "3fzjdi2oBsgx".slice(4), "3fzjdi2oBsgx".len())
+
+print("s250-m2:", "x80B2tmkAnyki".upper(), "x80B2tmkAnyki".slice(3), "x80B2tmkAnyki".len())
+
+print("s250-m3:", "egh0Bu3".upper(), "egh0Bu3".slice(4), "egh0Bu3".len())
+
+print("s250-i0:", "5fw-{75}-tlg6")
+
+let s250_v0 = 75
+
+print("s250-v0:", "n={s250_v0}" + "!" * 2)
+
+print("s250-i1:", "u7s-{36}-AscB")
+
+let s250_v1 = 36
+
+print("s250-v1:", "n={s250_v1}" + "!" * 2)
+
+print("s250-i2:", "mnd-{24}-BiBA")
+
+let s250_v2 = 24
+
+print("s250-v2:", "n={s250_v2}" + "!" * 2)
+
+print("s250-r0:", "9t6ruCyt".replace("9", "pg"), "9t6ruCyt".contains("t6"))
+
+print("s250-r1:", "9nw4v79f".replace("9", "cc"), "9nw4v79f".contains("nw"))
+
+print("s250-r2:", "u_f9li4C".replace("u", "ib"), "u_f9li4C".contains("_f"))
+
+print("s250-r3:", "lfAtfChg".replace("l", "jn"), "lfAtfChg".contains("fA"))
+
+print("s250-j0:", ["3j9", "czk", "qvi"].join("-"))
+
+print("s250-j1:", ["9Bg", "dxu", "z10"].join("-"))
+
+print("s250-j2:", ["eq2", "86C", "Clv"].join("-"))
+
+print("s250-a0:", "yce43c3".at(6), "yce43c3".trim() == "yce43c3")
+
+print("s250-a1:", "Aatw5sm".at(1), "Aatw5sm".trim() == "Aatw5sm")

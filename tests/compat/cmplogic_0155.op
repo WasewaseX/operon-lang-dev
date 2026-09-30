@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=155 tag=c155
+
+print("c155-c0:", -9844 <= -3239)
+
+print("c155-c1:", 7146 < 1187)
+
+print("c155-c2:", 8630 < -9483)
+
+print("c155-c3:", 4068 == 2047)
+
+print("c155-c4:", -5568 <= 5468)
+
+print("c155-b0:", 30 < 34 && 34 < 35, 30 > 34 || 30 > 35)
+
+print("c155-b1:", 11 < 0 && 0 < 43, 11 > 0 || 11 > 43)
+
+print("c155-b2:", 32 < 24 && 24 < 46, 32 > 24 || 32 > 46)
+
+print("c155-b3:", 12 < 26 && 26 < 39, 12 > 26 || 12 > 39)
+
+print("c155-t0:", -6948 > -9756 ? "gt" : "le")
+
+print("c155-t1:", 5238 > -6479 ? "gt" : "le")
+
+print("c155-t2:", 7982 > -1743 ? "gt" : "le")
+
+print("c155-t3:", -5751 > 6121 ? "gt" : "le")
+
+let c155_n0 = null
+
+print("c155-n0:", c155_n0 ?? 4968, c155_n0 == null)
+
+let c155_n1 = null
+
+print("c155-n1:", c155_n1 ?? 4834, c155_n1 == null)
+
+let c155_n2 = null
+
+print("c155-n2:", c155_n2 ?? 2676, c155_n2 == null)
+
+print("c155-s0:", "zrcq" in "92mCitzrcq", "zrcq" == "zrcq")
+
+print("c155-s1:", "o7g6" in "inshjmo7g6", "o7g6" == "o7g6")

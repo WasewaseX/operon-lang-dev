@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=179 tag=m179
+
+let m179_m0 = {exon: 91, codon: 29, marker: 33, splicer: -42}
+
+print("m179-m0:", m179_m0["exon"], len(m179_m0), m179_m0.has("exon"))
+
+let m179_m1 = {marker: -55, cell: -68, vector: 56}
+
+print("m179-m1:", m179_m1["marker"], len(m179_m1), m179_m1.has("marker"))
+
+let m179_m2 = {vector: 2, splicer: 51, cell: 82}
+
+print("m179-m2:", m179_m2["vector"], len(m179_m2), m179_m2.has("vector"))
+
+let m179_m3 = {codon: 49, ribose: -86, ligase: -90, exon: 18, cell: -13}
+
+print("m179-m3:", m179_m3["codon"], len(m179_m3), m179_m3.has("codon"))
+
+let m179_k0 = {gene: 6, ligase: 46, codon: 41}
+
+let m179_ks0 = m179_k0.keys()
+
+let m179_sm0 = 0
+
+for k in m179_k0 { m179_sm0 += m179_k0[k] }
+
+print("m179-k0:", m179_sm0, m179_k0.keys().sort(), m179_k0.values().len())
+
+let m179_k1 = {exon: 15, cell: 28, splicer: 8}
+
+let m179_ks1 = m179_k1.keys()
+
+let m179_sm1 = 0
+
+for k in m179_k1 { m179_sm1 += m179_k1[k] }
+
+print("m179-k1:", m179_sm1, m179_k1.keys().sort(), m179_k1.values().len())
+
+let m179_k2 = {ribose: 22, cell: 8, vector: 49}
+
+let m179_ks2 = m179_k2.keys()
+
+let m179_sm2 = 0
+
+for k in m179_k2 { m179_sm2 += m179_k2[k] }
+
+print("m179-k2:", m179_sm2, m179_k2.keys().sort(), m179_k2.values().len())
+
+let m179_w0 = {outer: {ribose: 8, codon: 4, tag: "ok"}}}
+
+print("m179-w0:", m179_w0["outer"]["codon"], m179_w0["outer"]["tag"])
+
+let m179_w1 = {outer: {ribose: 5, gene: 6, tag: "ok"}}}
+
+print("m179-w1:", m179_w1["outer"]["gene"], m179_w1["outer"]["tag"])

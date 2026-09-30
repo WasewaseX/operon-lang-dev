@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=158 tag=s158
+
+print("s158-m0:", "cxssc4yds".upper(), "cxssc4yds".slice(1), "cxssc4yds".len())
+
+print("s158-m1:", "rcoxkp9A7Bfgo".upper(), "rcoxkp9A7Bfgo".slice(2), "rcoxkp9A7Bfgo".len())
+
+print("s158-m2:", "b4CwBjcr".upper(), "b4CwBjcr".slice(4), "b4CwBjcr".len())
+
+print("s158-m3:", "4jkb5dsd".upper(), "4jkb5dsd".slice(2), "4jkb5dsd".len())
+
+print("s158-m4:", "fji2C3w2sheA".upper(), "fji2C3w2sheA".slice(3), "fji2C3w2sheA".len())
+
+print("s158-m5:", "37wwx3hj".upper(), "37wwx3hj".slice(2), "37wwx3hj".len())
+
+print("s158-i0:", "lh8-{15}-76f3")
+
+let s158_v0 = 15
+
+print("s158-v0:", "n={s158_v0}" + "!" * 2)
+
+print("s158-i1:", "zle-{22}-jb9A")
+
+let s158_v1 = 22
+
+print("s158-v1:", "n={s158_v1}" + "!" * 2)
+
+print("s158-i2:", "jm5-{96}-l5yi")
+
+let s158_v2 = 96
+
+print("s158-v2:", "n={s158_v2}" + "!" * 1)
+
+print("s158-i3:", "i4x-{2}-g_dw")
+
+let s158_v3 = 2
+
+print("s158-v3:", "n={s158_v3}" + "!" * 2)
+
+print("s158-r0:", "zrw068B7".replace("z", "uj"), "zrw068B7".contains("rw"))
+
+print("s158-r1:", "zzyw89kf".replace("z", "ps"), "zzyw89kf".contains("zy"))
+
+print("s158-r2:", "2xC8op5A".replace("2", "en"), "2xC8op5A".contains("xC"))
+
+print("s158-j0:", ["of8", "p7x", "q36", "0nd", "6w_"].join("-"))
+
+print("s158-j1:", ["9f7", "1t4", "pbe", "gtk"].join("-"))
+
+print("s158-j2:", ["8f2", "z1h", "hcz"].join("-"))
+
+print("s158-a0:", "x7owc3m".at(5), "x7owc3m".trim() == "x7owc3m")
+
+print("s158-a1:", "Br1kz58".at(4), "Br1kz58".trim() == "Br1kz58")
+
+print("s158-a2:", "lBqgAwi".at(1), "lBqgAwi".trim() == "lBqgAwi")

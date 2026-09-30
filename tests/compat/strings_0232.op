@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=232 tag=s232
+
+print("s232-m0:", "iuw26llsm".upper(), "iuw26llsm".slice(4), "iuw26llsm".len())
+
+print("s232-m1:", "9i0p35uCp".upper(), "9i0p35uCp".slice(2), "9i0p35uCp".len())
+
+print("s232-m2:", "pCz80Atwm6ahn".upper(), "pCz80Atwm6ahn".slice(3), "pCz80Atwm6ahn".len())
+
+print("s232-m3:", "46xwvrajzBe".upper(), "46xwvrajzBe".slice(2), "46xwvrajzBe".len())
+
+print("s232-i0:", "ut0-{40}-9zyd")
+
+let s232_v0 = 40
+
+print("s232-v0:", "n={s232_v0}" + "!" * 3)
+
+print("s232-i1:", "l8o-{65}-AaCv")
+
+let s232_v1 = 65
+
+print("s232-v1:", "n={s232_v1}" + "!" * 2)
+
+print("s232-i2:", "awk-{77}-fq62")
+
+let s232_v2 = 77
+
+print("s232-v2:", "n={s232_v2}" + "!" * 1)
+
+print("s232-r0:", "lwph9Bp0".replace("l", "_8"), "lwph9Bp0".contains("wp"))
+
+print("s232-r1:", "61ednecy".replace("6", "xl"), "61ednecy".contains("1e"))
+
+print("s232-r2:", "ffm0dyuv".replace("f", "3w"), "ffm0dyuv".contains("fm"))
+
+print("s232-j0:", ["qjm", "0e6", "c02", "zhu"].join("-"))
+
+print("s232-j1:", ["j_y", "wd3", "3Bd"].join("-"))
+
+print("s232-j2:", ["csC", "9dj", "w2p", "dzk", "Bi9"].join("-"))
+
+print("s232-a0:", "t1bh4qj".at(2), "t1bh4qj".trim() == "t1bh4qj")
+
+print("s232-a1:", "2soqdkx".at(6), "2soqdkx".trim() == "2soqdkx")
+
+print("s232-a2:", "he6as3r".at(3), "he6as3r".trim() == "he6as3r")

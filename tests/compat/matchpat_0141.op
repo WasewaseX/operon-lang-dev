@@ -1,0 +1,316 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=141 tag=m141
+
+let m141_s0 = some(1)
+
+match m141_s0 {
+
+    case Some(x) if x > 1 {
+
+        print("m141-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m141-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m141-m0:", "none")
+
+    }
+
+}
+
+let m141_s1 = some(8)
+
+match m141_s1 {
+
+    case Some(x) if x > 8 {
+
+        print("m141-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m141-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m141-m1:", "none")
+
+    }
+
+}
+
+let m141_s2 = some(3)
+
+match m141_s2 {
+
+    case Some(x) if x > 3 {
+
+        print("m141-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m141-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m141-m2:", "none")
+
+    }
+
+}
+
+let m141_s3 = some(3)
+
+match m141_s3 {
+
+    case Some(x) if x > 3 {
+
+        print("m141-m3:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m141-m3:", "small", x)
+
+    }
+
+    case None {
+
+        print("m141-m3:", "none")
+
+    }
+
+}
+
+let m141_s4 = some(3)
+
+match m141_s4 {
+
+    case Some(x) if x > 3 {
+
+        print("m141-m4:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m141-m4:", "small", x)
+
+    }
+
+    case None {
+
+        print("m141-m4:", "none")
+
+    }
+
+}
+
+let m141_ls0 = [31, 20, 45]
+
+match m141_ls0 {
+
+    case [31, *rest] {
+
+        print("m141-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m141-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m141-l0:", "other")
+
+    }
+
+}
+
+let m141_ls1 = [31, 28, 6]
+
+match m141_ls1 {
+
+    case [31, *rest] {
+
+        print("m141-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m141-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m141-l1:", "other")
+
+    }
+
+}
+
+let m141_ls2 = [38, 2, 41]
+
+match m141_ls2 {
+
+    case [38, *rest] {
+
+        print("m141-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m141-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m141-l2:", "other")
+
+    }
+
+}
+
+let m141_mp0 = {ribose: 4430, ligase: 8304}
+
+match m141_mp0 {
+
+    case {ribose: p, ligase: q} {
+
+        print("m141-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m141-mp0:", "miss")
+
+    }
+
+}
+
+let m141_mp1 = {exon: 5961, cell: -8099}
+
+match m141_mp1 {
+
+    case {exon: p, cell: q} {
+
+        print("m141-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m141-mp1:", "miss")
+
+    }
+
+}
+
+let m141_mp2 = {ribose: -5737, marker: 5210}
+
+match m141_mp2 {
+
+    case {ribose: p, marker: q} {
+
+        print("m141-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m141-mp2:", "miss")
+
+    }
+
+}
+
+let m141_r0 = ok(5)
+
+match m141_r0 {
+
+    case Ok(n) | Err(5) {
+
+        print("m141-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m141-r0:", "zero")
+
+    }
+
+}
+
+let m141_r1 = ok(3)
+
+match m141_r1 {
+
+    case Ok(n) | Err(3) {
+
+        print("m141-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m141-r1:", "zero")
+
+    }
+
+}
+
+match "marker" {
+
+    case "marker" {
+
+        print("m141-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m141-w0:", "alt")
+
+    }
+
+}
+
+match "exon" {
+
+    case "exon" {
+
+        print("m141-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m141-w1:", "alt")
+
+    }
+
+}

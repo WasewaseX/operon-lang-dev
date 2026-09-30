@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=217 tag=s217
+
+print("s217-m0:", "kw8kczq".upper(), "kw8kczq".slice(3), "kw8kczq".len())
+
+print("s217-m1:", "qkz0jnfmj0a".upper(), "qkz0jnfmj0a".slice(1), "qkz0jnfmj0a".len())
+
+print("s217-m2:", "zprtB0gnvrbh".upper(), "zprtB0gnvrbh".slice(2), "zprtB0gnvrbh".len())
+
+print("s217-m3:", "6i8yqsdr".upper(), "6i8yqsdr".slice(1), "6i8yqsdr".len())
+
+print("s217-i0:", "koa-{14}-k8mz")
+
+let s217_v0 = 14
+
+print("s217-v0:", "n={s217_v0}" + "!" * 3)
+
+print("s217-i1:", "0cc-{60}-n3_p")
+
+let s217_v1 = 60
+
+print("s217-v1:", "n={s217_v1}" + "!" * 1)
+
+print("s217-i2:", "xk1-{79}-7yCi")
+
+let s217_v2 = 79
+
+print("s217-v2:", "n={s217_v2}" + "!" * 3)
+
+print("s217-i3:", "z_B-{84}-BtkC")
+
+let s217_v3 = 84
+
+print("s217-v3:", "n={s217_v3}" + "!" * 1)
+
+print("s217-r0:", "g6n4C4o_".replace("g", "bc"), "g6n4C4o_".contains("6n"))
+
+print("s217-r1:", "v62rlq2q".replace("v", "_A"), "v62rlq2q".contains("62"))
+
+print("s217-r2:", "hrs1fzAC".replace("h", "ca"), "hrs1fzAC".contains("rs"))
+
+print("s217-r3:", "7ABqta4m".replace("7", "5l"), "7ABqta4m".contains("AB"))
+
+print("s217-j0:", ["ljr", "vuf", "y1n"].join("-"))
+
+print("s217-j1:", ["5b8", "fCb", "xxo"].join("-"))
+
+print("s217-a0:", "qi8ra2t".at(3), "qi8ra2t".trim() == "qi8ra2t")
+
+print("s217-a1:", "9xnv4jx".at(6), "9xnv4jx".trim() == "9xnv4jx")
+
+print("s217-a2:", "B_A0jx7".at(0), "B_A0jx7".trim() == "B_A0jx7")

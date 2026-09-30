@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=192 tag=s192
+
+print("s192-m0:", "t6ui06".upper(), "t6ui06".slice(1), "t6ui06".len())
+
+print("s192-m1:", "o6Av76881g8i".upper(), "o6Av76881g8i".slice(3), "o6Av76881g8i".len())
+
+print("s192-m2:", "6xBw0ex1C".upper(), "6xBw0ex1C".slice(4), "6xBw0ex1C".len())
+
+print("s192-m3:", "Bsptdz".upper(), "Bsptdz".slice(4), "Bsptdz".len())
+
+print("s192-i0:", "d6C-{54}-7B3_")
+
+let s192_v0 = 54
+
+print("s192-v0:", "n={s192_v0}" + "!" * 1)
+
+print("s192-i1:", "ime-{22}-kjBv")
+
+let s192_v1 = 22
+
+print("s192-v1:", "n={s192_v1}" + "!" * 2)
+
+print("s192-i2:", "3Ch-{14}-viic")
+
+let s192_v2 = 14
+
+print("s192-v2:", "n={s192_v2}" + "!" * 1)
+
+print("s192-r0:", "0gs6gcyw".replace("0", "g5"), "0gs6gcyw".contains("gs"))
+
+print("s192-r1:", "52awr_5o".replace("5", "dh"), "52awr_5o".contains("2a"))
+
+print("s192-r2:", "jbul90my".replace("j", "js"), "jbul90my".contains("bu"))
+
+print("s192-r3:", "A4xopi4n".replace("A", "kB"), "A4xopi4n".contains("4x"))
+
+print("s192-j0:", ["yny", "6la", "rub", "3_B", "j3e"].join("-"))
+
+print("s192-j1:", ["Aje", "oiq", "wer", "xsA"].join("-"))
+
+print("s192-a0:", "e2lpm6w".at(0), "e2lpm6w".trim() == "e2lpm6w")
+
+print("s192-a1:", "njwg7b1".at(4), "njwg7b1".trim() == "njwg7b1")
+
+print("s192-a2:", "_vv2xvn".at(0), "_vv2xvn".trim() == "_vv2xvn")

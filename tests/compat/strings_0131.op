@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=131 tag=s131
+
+print("s131-m0:", "yqbx_z".upper(), "yqbx_z".slice(2), "yqbx_z".len())
+
+print("s131-m1:", "cxnf4B".upper(), "cxnf4B".slice(2), "cxnf4B".len())
+
+print("s131-m2:", "ykpgit464B".upper(), "ykpgit464B".slice(1), "ykpgit464B".len())
+
+print("s131-m3:", "ruB63li".upper(), "ruB63li".slice(3), "ruB63li".len())
+
+print("s131-m4:", "d6n7kwA".upper(), "d6n7kwA".slice(4), "d6n7kwA".len())
+
+print("s131-m5:", "cto4hr".upper(), "cto4hr".slice(4), "cto4hr".len())
+
+print("s131-i0:", "1p3-{16}-Aqzi")
+
+let s131_v0 = 16
+
+print("s131-v0:", "n={s131_v0}" + "!" * 2)
+
+print("s131-i1:", "6gq-{51}-2Ccn")
+
+let s131_v1 = 51
+
+print("s131-v1:", "n={s131_v1}" + "!" * 2)
+
+print("s131-i2:", "itd-{50}-wyxp")
+
+let s131_v2 = 50
+
+print("s131-v2:", "n={s131_v2}" + "!" * 1)
+
+print("s131-i3:", "k0t-{10}-0gy1")
+
+let s131_v3 = 10
+
+print("s131-v3:", "n={s131_v3}" + "!" * 1)
+
+print("s131-r0:", "rn3ug7bo".replace("r", "ej"), "rn3ug7bo".contains("n3"))
+
+print("s131-r1:", "1u5o685h".replace("1", "za"), "1u5o685h".contains("u5"))
+
+print("s131-r2:", "xttjjee9".replace("x", "cx"), "xttjjee9".contains("tt"))
+
+print("s131-r3:", "fjhpg55d".replace("f", "m1"), "fjhpg55d".contains("jh"))
+
+print("s131-j0:", ["8gt", "460", "zi1", "1lb", "n5w"].join("-"))
+
+print("s131-j1:", ["es1", "2g8", "8rt", "tkd"].join("-"))
+
+print("s131-a0:", "3iadggg".at(4), "3iadggg".trim() == "3iadggg")
+
+print("s131-a1:", "eueiesx".at(5), "eueiesx".trim() == "eueiesx")
+
+print("s131-a2:", "26oC90v".at(2), "26oC90v".trim() == "26oC90v")

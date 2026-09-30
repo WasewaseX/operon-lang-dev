@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=159 tag=s159
+
+print("s159-m0:", "t9axAd".upper(), "t9axAd".slice(2), "t9axAd".len())
+
+print("s159-m1:", "qprBoeob".upper(), "qprBoeob".slice(4), "qprBoeob".len())
+
+print("s159-m2:", "9Brujkrddj9r9z".upper(), "9Brujkrddj9r9z".slice(4), "9Brujkrddj9r9z".len())
+
+print("s159-m3:", "lc4foe1f".upper(), "lc4foe1f".slice(1), "lc4foe1f".len())
+
+print("s159-m4:", "wge4phwf".upper(), "wge4phwf".slice(4), "wge4phwf".len())
+
+print("s159-m5:", "8Cz0pBs6sb33wt".upper(), "8Cz0pBs6sb33wt".slice(3), "8Cz0pBs6sb33wt".len())
+
+print("s159-i0:", "ysf-{10}-cklo")
+
+let s159_v0 = 10
+
+print("s159-v0:", "n={s159_v0}" + "!" * 1)
+
+print("s159-i1:", "omx-{31}-z3mC")
+
+let s159_v1 = 31
+
+print("s159-v1:", "n={s159_v1}" + "!" * 3)
+
+print("s159-i2:", "mp_-{51}-5eru")
+
+let s159_v2 = 51
+
+print("s159-v2:", "n={s159_v2}" + "!" * 3)
+
+print("s159-r0:", "B88ys5dC".replace("B", "8A"), "B88ys5dC".contains("88"))
+
+print("s159-r1:", "_wv7v1w2".replace("_", "5o"), "_wv7v1w2".contains("wv"))
+
+print("s159-j0:", ["8cu", "yf5", "lvp"].join("-"))
+
+print("s159-j1:", ["h6o", "8mt", "zq4", "B2g", "tvo"].join("-"))
+
+print("s159-j2:", ["clo", "rdz", "12r"].join("-"))
+
+print("s159-a0:", "ue66l76".at(2), "ue66l76".trim() == "ue66l76")
+
+print("s159-a1:", "ul3bsq5".at(2), "ul3bsq5".trim() == "ul3bsq5")

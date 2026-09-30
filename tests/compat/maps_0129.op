@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=129 tag=m129
+
+let m129_m0 = {exon: 54, gene: 79, splicer: 85, plasmid: -32}
+
+print("m129-m0:", m129_m0["exon"], len(m129_m0), m129_m0.has("exon"))
+
+let m129_m1 = {exon: 38, vector: 21, cell: -75, marker: 32, ligase: -1}
+
+print("m129-m1:", m129_m1["exon"], len(m129_m1), m129_m1.has("exon"))
+
+let m129_m2 = {vector: -73, gene: -46, codon: 28, enzyme: 73}
+
+print("m129-m2:", m129_m2["vector"], len(m129_m2), m129_m2.has("vector"))
+
+let m129_k0 = {enzyme: 42, codon: 9, gene: 3}
+
+let m129_ks0 = m129_k0.keys()
+
+let m129_sm0 = 0
+
+for k in m129_k0 { m129_sm0 += m129_k0[k] }
+
+print("m129-k0:", m129_sm0, m129_k0.keys().sort(), m129_k0.values().len())
+
+let m129_k1 = {ribose: 35, marker: 6, plasmid: 20}
+
+let m129_ks1 = m129_k1.keys()
+
+let m129_sm1 = 0
+
+for k in m129_k1 { m129_sm1 += m129_k1[k] }
+
+print("m129-k1:", m129_sm1, m129_k1.keys().sort(), m129_k1.values().len())
+
+let m129_w0 = {outer: {plasmid: 8, vector: 4, tag: "ok"}}}
+
+print("m129-w0:", m129_w0["outer"]["vector"], m129_w0["outer"]["tag"])
+
+let m129_w1 = {outer: {helix: 8, cell: 5, tag: "ok"}}}
+
+print("m129-w1:", m129_w1["outer"]["cell"], m129_w1["outer"]["tag"])

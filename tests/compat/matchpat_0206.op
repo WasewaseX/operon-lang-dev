@@ -1,0 +1,334 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=206 tag=m206
+
+let m206_s0 = some(3)
+
+match m206_s0 {
+
+    case Some(x) if x > 3 {
+
+        print("m206-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m206-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m206-m0:", "none")
+
+    }
+
+}
+
+let m206_s1 = some(6)
+
+match m206_s1 {
+
+    case Some(x) if x > 6 {
+
+        print("m206-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m206-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m206-m1:", "none")
+
+    }
+
+}
+
+let m206_s2 = some(6)
+
+match m206_s2 {
+
+    case Some(x) if x > 6 {
+
+        print("m206-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m206-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m206-m2:", "none")
+
+    }
+
+}
+
+let m206_s3 = some(6)
+
+match m206_s3 {
+
+    case Some(x) if x > 6 {
+
+        print("m206-m3:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m206-m3:", "small", x)
+
+    }
+
+    case None {
+
+        print("m206-m3:", "none")
+
+    }
+
+}
+
+let m206_s4 = some(7)
+
+match m206_s4 {
+
+    case Some(x) if x > 7 {
+
+        print("m206-m4:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m206-m4:", "small", x)
+
+    }
+
+    case None {
+
+        print("m206-m4:", "none")
+
+    }
+
+}
+
+let m206_ls0 = [15, 5, 43]
+
+match m206_ls0 {
+
+    case [15, *rest] {
+
+        print("m206-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m206-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m206-l0:", "other")
+
+    }
+
+}
+
+let m206_ls1 = [44, 4, 5]
+
+match m206_ls1 {
+
+    case [44, *rest] {
+
+        print("m206-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m206-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m206-l1:", "other")
+
+    }
+
+}
+
+let m206_ls2 = [29, 10, 29]
+
+match m206_ls2 {
+
+    case [29, *rest] {
+
+        print("m206-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m206-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m206-l2:", "other")
+
+    }
+
+}
+
+let m206_mp0 = {gene: 1226, ribose: -519}
+
+match m206_mp0 {
+
+    case {gene: p, ribose: q} {
+
+        print("m206-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m206-mp0:", "miss")
+
+    }
+
+}
+
+let m206_mp1 = {ribose: 930, plasmid: -4825}
+
+match m206_mp1 {
+
+    case {ribose: p, plasmid: q} {
+
+        print("m206-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m206-mp1:", "miss")
+
+    }
+
+}
+
+let m206_mp2 = {vector: -9949, marker: -8603}
+
+match m206_mp2 {
+
+    case {vector: p, marker: q} {
+
+        print("m206-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m206-mp2:", "miss")
+
+    }
+
+}
+
+let m206_r0 = ok(2)
+
+match m206_r0 {
+
+    case Ok(n) | Err(2) {
+
+        print("m206-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m206-r0:", "zero")
+
+    }
+
+}
+
+let m206_r1 = ok(4)
+
+match m206_r1 {
+
+    case Ok(n) | Err(4) {
+
+        print("m206-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m206-r1:", "zero")
+
+    }
+
+}
+
+let m206_r2 = ok(5)
+
+match m206_r2 {
+
+    case Ok(n) | Err(5) {
+
+        print("m206-r2:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m206-r2:", "zero")
+
+    }
+
+}
+
+match "marker" {
+
+    case "marker" {
+
+        print("m206-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m206-w0:", "alt")
+
+    }
+
+}
+
+match "helix" {
+
+    case "helix" {
+
+        print("m206-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m206-w1:", "alt")
+
+    }
+
+}

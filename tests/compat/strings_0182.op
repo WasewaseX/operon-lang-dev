@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=182 tag=s182
+
+print("s182-m0:", "C6BobebjAt".upper(), "C6BobebjAt".slice(3), "C6BobebjAt".len())
+
+print("s182-m1:", "hepub_8ort7_6p".upper(), "hepub_8ort7_6p".slice(2), "hepub_8ort7_6p".len())
+
+print("s182-m2:", "333lrwrk9eC7".upper(), "333lrwrk9eC7".slice(4), "333lrwrk9eC7".len())
+
+print("s182-m3:", "cr8mjlkxvB".upper(), "cr8mjlkxvB".slice(3), "cr8mjlkxvB".len())
+
+print("s182-m4:", "yxa8y65h".upper(), "yxa8y65h".slice(3), "yxa8y65h".len())
+
+print("s182-m5:", "dlgBgeo".upper(), "dlgBgeo".slice(3), "dlgBgeo".len())
+
+print("s182-i0:", "lf4-{80}-ywet")
+
+let s182_v0 = 80
+
+print("s182-v0:", "n={s182_v0}" + "!" * 3)
+
+print("s182-i1:", "A7h-{25}-v5gB")
+
+let s182_v1 = 25
+
+print("s182-v1:", "n={s182_v1}" + "!" * 2)
+
+print("s182-i2:", "fo4-{32}-B78h")
+
+let s182_v2 = 32
+
+print("s182-v2:", "n={s182_v2}" + "!" * 2)
+
+print("s182-i3:", "5fa-{32}-xm1_")
+
+let s182_v3 = 32
+
+print("s182-v3:", "n={s182_v3}" + "!" * 3)
+
+print("s182-r0:", "ACr1eycf".replace("A", "j2"), "ACr1eycf".contains("Cr"))
+
+print("s182-r1:", "qt61n8n5".replace("q", "_1"), "qt61n8n5".contains("t6"))
+
+print("s182-r2:", "dqlgaodu".replace("d", "fj"), "dqlgaodu".contains("ql"))
+
+print("s182-j0:", ["rbf", "ysl", "Axi"].join("-"))
+
+print("s182-j1:", ["we0", "o71", "AyC", "y3v", "l3a"].join("-"))
+
+print("s182-j2:", ["flc", "4a0", "d0d"].join("-"))
+
+print("s182-a0:", "bmmpr9k".at(5), "bmmpr9k".trim() == "bmmpr9k")
+
+print("s182-a1:", "dif_vir".at(3), "dif_vir".trim() == "dif_vir")
+
+print("s182-a2:", "cA34Bpm".at(2), "cA34Bpm".trim() == "cA34Bpm")

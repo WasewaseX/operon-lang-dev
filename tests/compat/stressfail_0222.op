@@ -1,0 +1,222 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=222 tag=s222
+
+stress {
+
+    print("s222-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s222-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s222-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s222-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s222-mz:", 86 % 0)
+
+} rescue (e) {
+
+    print("s222-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s222-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s222-of1:", "caught", e.kind, e.message)
+
+}
+
+gene s222_r0() {
+
+    raise "s222-3p_z27"
+
+}
+
+stress {
+
+    s222_r0()
+
+    print("s222-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s222-r0:", e.kind, e.message)
+
+}
+
+gene s222_r1() {
+
+    raise "s222-wry16A"
+
+}
+
+stress {
+
+    s222_r1()
+
+    print("s222-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s222-r1:", e.kind, e.message)
+
+}
+
+gene s222_r2() {
+
+    raise "s222-vb_r1i"
+
+}
+
+stress {
+
+    s222_r2()
+
+    print("s222-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s222-r2:", e.kind, e.message)
+
+}
+
+let s222_xs0 = [16, 5, 10]
+
+stress {
+
+    print("s222-x0:", s222_xs0[4])
+
+} rescue (e) {
+
+    print("s222-x0:", "caught", e.kind)
+
+}
+
+let s222_xs1 = [27, 40, 42, 31]
+
+stress {
+
+    print("s222-x1:", s222_xs1[6])
+
+} rescue (e) {
+
+    print("s222-x1:", "caught", e.kind)
+
+}
+
+let s222_xs2 = [14, 6, 34, 46]
+
+stress {
+
+    print("s222-x2:", s222_xs2[9])
+
+} rescue (e) {
+
+    print("s222-x2:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s222-0"
+
+    } rescue (e) {
+
+        print("s222-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s222-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s222-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s222-d0-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s222-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s222-1"
+
+    } rescue (e) {
+
+        print("s222-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s222-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s222-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s222-d1-top:", outer.message)
+
+}

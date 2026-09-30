@@ -1,0 +1,202 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=171 tag=f171
+
+gene f171_g0(p, q = 46, r = 48) {
+
+    return p * 13 + q - r
+
+}
+
+print("f171-d0:", f171_g0(-43), f171_g0(-43, 62), f171_g0(-43, 46, 48))
+
+gene f171_g1(p, q = 17, r = 2) {
+
+    return p * 58 + q - r
+
+}
+
+print("f171-d1:", f171_g1(-4), f171_g1(-4, 70), f171_g1(-4, 17, 2))
+
+gene f171_g2(p, q = 68, r = 80) {
+
+    return p * 37 + q - r
+
+}
+
+print("f171-d2:", f171_g2(20), f171_g2(20, 96), f171_g2(20, 68, 80))
+
+gene f171_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f171_fib0(n - 1) + f171_fib0(n - 2)
+
+}
+
+print("f171-fib0:", f171_fib0(10))
+
+gene f171_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f171_fib1(n - 1) + f171_fib1(n - 2)
+
+}
+
+print("f171-fib1:", f171_fib1(12))
+
+gene f171_fib2(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f171_fib2(n - 1) + f171_fib2(n - 2)
+
+}
+
+print("f171-fib2:", f171_fib2(10))
+
+gene f171_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f171_gcd0(b, a % b)
+
+}
+
+print("f171-gcd0:", f171_gcd0(17, 127))
+
+gene f171_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f171_gcd1(b, a % b)
+
+}
+
+print("f171-gcd1:", f171_gcd1(146, 275))
+
+gene f171_gcd2(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f171_gcd2(b, a % b)
+
+}
+
+print("f171-gcd2:", f171_gcd2(131, 270))
+
+gene f171_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f171_c0 = f171_mk0(15)
+
+f171_c0(4)
+
+print("f171-cl0:", f171_c0(5))
+
+gene f171_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f171_c1 = f171_mk1(10)
+
+f171_c1(3)
+
+print("f171-cl1:", f171_c1(3))
+
+gene f171_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f171-hof0:", f171_tw0(gene (z) => z * 2 + 1, 29))
+
+gene f171_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f171-hof1:", f171_tw1(gene (z) => z * 2 + 1, 7))
+
+gene f171_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f171-dg0:", f171_sd0(845384))
+
+gene f171_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f171-dg1:", f171_sd1(243605))

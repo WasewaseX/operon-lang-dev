@@ -1,0 +1,202 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=265 tag=f265
+
+gene f265_g0(p, q = 12, r = 46) {
+
+    return p * 60 + q - r
+
+}
+
+print("f265-d0:", f265_g0(-8), f265_g0(-8, 2), f265_g0(-8, 12, 46))
+
+gene f265_g1(p, q = 89, r = 82) {
+
+    return p * 5 + q - r
+
+}
+
+print("f265-d1:", f265_g1(-7), f265_g1(-7, 65), f265_g1(-7, 89, 82))
+
+gene f265_g2(p, q = 66, r = 57) {
+
+    return p * 35 + q - r
+
+}
+
+print("f265-d2:", f265_g2(-25), f265_g2(-25, 93), f265_g2(-25, 66, 57))
+
+gene f265_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f265_fib0(n - 1) + f265_fib0(n - 2)
+
+}
+
+print("f265-fib0:", f265_fib0(11))
+
+gene f265_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f265_fib1(n - 1) + f265_fib1(n - 2)
+
+}
+
+print("f265-fib1:", f265_fib1(11))
+
+gene f265_fib2(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f265_fib2(n - 1) + f265_fib2(n - 2)
+
+}
+
+print("f265-fib2:", f265_fib2(10))
+
+gene f265_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f265_gcd0(b, a % b)
+
+}
+
+print("f265-gcd0:", f265_gcd0(956, 187))
+
+gene f265_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f265_gcd1(b, a % b)
+
+}
+
+print("f265-gcd1:", f265_gcd1(55, 400))
+
+gene f265_gcd2(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f265_gcd2(b, a % b)
+
+}
+
+print("f265-gcd2:", f265_gcd2(22, 751))
+
+gene f265_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f265_c0 = f265_mk0(36)
+
+f265_c0(5)
+
+print("f265-cl0:", f265_c0(6))
+
+gene f265_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f265_c1 = f265_mk1(36)
+
+f265_c1(4)
+
+print("f265-cl1:", f265_c1(1))
+
+gene f265_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f265-hof0:", f265_tw0(gene (z) => z * 2 + 1, 9))
+
+gene f265_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f265-hof1:", f265_tw1(gene (z) => z * 2 + 1, 7))
+
+gene f265_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f265-dg0:", f265_sd0(616224))
+
+gene f265_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f265-dg1:", f265_sd1(128844))

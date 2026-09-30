@@ -1,0 +1,50 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=263 tag=s263
+
+print("s263-m0:", "0v_z8j4b".upper(), "0v_z8j4b".slice(3), "0v_z8j4b".len())
+
+print("s263-m1:", "fkm9ac".upper(), "fkm9ac".slice(1), "fkm9ac".len())
+
+print("s263-m2:", "pp4vl40sv8zy".upper(), "pp4vl40sv8zy".slice(2), "pp4vl40sv8zy".len())
+
+print("s263-m3:", "rB0iuqkvxj".upper(), "rB0iuqkvxj".slice(2), "rB0iuqkvxj".len())
+
+print("s263-i0:", "rC1-{34}-gi4b")
+
+let s263_v0 = 34
+
+print("s263-v0:", "n={s263_v0}" + "!" * 2)
+
+print("s263-i1:", "ny_-{50}-vzc3")
+
+let s263_v1 = 50
+
+print("s263-v1:", "n={s263_v1}" + "!" * 1)
+
+print("s263-i2:", "6de-{62}-z4tw")
+
+let s263_v2 = 62
+
+print("s263-v2:", "n={s263_v2}" + "!" * 3)
+
+print("s263-i3:", "ymo-{2}-46mm")
+
+let s263_v3 = 2
+
+print("s263-v3:", "n={s263_v3}" + "!" * 3)
+
+print("s263-r0:", "ptmlu5rg".replace("p", "sq"), "ptmlu5rg".contains("tm"))
+
+print("s263-r1:", "dCpim262".replace("d", "mg"), "dCpim262".contains("Cp"))
+
+print("s263-j0:", ["q2x", "3vq", "0s6"].join("-"))
+
+print("s263-j1:", ["x26", "BlA", "ako", "ua5"].join("-"))
+
+print("s263-j2:", ["wCs", "C8d", "gC8", "bfg"].join("-"))
+
+print("s263-a0:", "levgprw".at(3), "levgprw".trim() == "levgprw")
+
+print("s263-a1:", "uehk6vb".at(0), "uehk6vb".trim() == "uehk6vb")
+
+print("s263-a2:", "w9kok2e".at(6), "w9kok2e".trim() == "w9kok2e")

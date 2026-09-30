@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=119 tag=c119
+
+print("c119-c0:", 9667 == 2868)
+
+print("c119-c1:", -9109 == -417)
+
+print("c119-c2:", -1222 > -3972)
+
+print("c119-c3:", 9023 != -8262)
+
+print("c119-c4:", -416 >= -357)
+
+print("c119-b0:", 49 < 9 && 9 < 23, 49 > 9 || 49 > 23)
+
+print("c119-b1:", 3 < 34 && 34 < 33, 3 > 34 || 3 > 33)
+
+print("c119-t0:", -9343 > 3112 ? "gt" : "le")
+
+print("c119-t1:", -1570 > -1272 ? "gt" : "le")
+
+print("c119-t2:", -3195 > 3952 ? "gt" : "le")
+
+print("c119-t3:", -7295 > -1727 ? "gt" : "le")
+
+let c119_n0 = null
+
+print("c119-n0:", c119_n0 ?? 5093, c119_n0 == null)
+
+let c119_n1 = null
+
+print("c119-n1:", c119_n1 ?? 483, c119_n1 == null)
+
+let c119_n2 = null
+
+print("c119-n2:", c119_n2 ?? 5438, c119_n2 == null)
+
+print("c119-s0:", "9se4" in "jvvB3l9se4", "9se4" == "9se4")
+
+print("c119-s1:", "qeby" in "vlw85bqeby", "qeby" == "qeby")

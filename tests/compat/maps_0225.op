@@ -1,0 +1,60 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=225 tag=m225
+
+let m225_m0 = {marker: 42, exon: 21, gene: -24, enzyme: -22}
+
+print("m225-m0:", m225_m0["marker"], len(m225_m0), m225_m0.has("marker"))
+
+let m225_m1 = {cell: -49, ligase: 91, vector: -58, codon: 11}
+
+print("m225-m1:", m225_m1["cell"], len(m225_m1), m225_m1.has("cell"))
+
+let m225_m2 = {marker: -53, splicer: 31, gene: 56, ligase: 15, ribose: -51}
+
+print("m225-m2:", m225_m2["marker"], len(m225_m2), m225_m2.has("marker"))
+
+let m225_m3 = {exon: 62, ribose: -41, gene: -50, enzyme: -74}
+
+print("m225-m3:", m225_m3["exon"], len(m225_m3), m225_m3.has("exon"))
+
+let m225_m4 = {marker: 24, cell: 21, ligase: 89, enzyme: -12}
+
+print("m225-m4:", m225_m4["marker"], len(m225_m4), m225_m4.has("marker"))
+
+let m225_k0 = {gene: 9, exon: 31, plasmid: 44}
+
+let m225_ks0 = m225_k0.keys()
+
+let m225_sm0 = 0
+
+for k in m225_k0 { m225_sm0 += m225_k0[k] }
+
+print("m225-k0:", m225_sm0, m225_k0.keys().sort(), m225_k0.values().len())
+
+let m225_k1 = {cell: 48, marker: 27, plasmid: 34}
+
+let m225_ks1 = m225_k1.keys()
+
+let m225_sm1 = 0
+
+for k in m225_k1 { m225_sm1 += m225_k1[k] }
+
+print("m225-k1:", m225_sm1, m225_k1.keys().sort(), m225_k1.values().len())
+
+let m225_k2 = {plasmid: 29, codon: 44, vector: 40}
+
+let m225_ks2 = m225_k2.keys()
+
+let m225_sm2 = 0
+
+for k in m225_k2 { m225_sm2 += m225_k2[k] }
+
+print("m225-k2:", m225_sm2, m225_k2.keys().sort(), m225_k2.values().len())
+
+let m225_w0 = {outer: {exon: 2, plasmid: 5, tag: "ok"}}}
+
+print("m225-w0:", m225_w0["outer"]["plasmid"], m225_w0["outer"]["tag"])
+
+let m225_w1 = {outer: {marker: 8, plasmid: 7, tag: "ok"}}}
+
+print("m225-w1:", m225_w1["outer"]["plasmid"], m225_w1["outer"]["tag"])

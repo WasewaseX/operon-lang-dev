@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=256 tag=s256
+
+print("s256-m0:", "i5imfBmk".upper(), "i5imfBmk".slice(2), "i5imfBmk".len())
+
+print("s256-m1:", "Bv_772im51k4".upper(), "Bv_772im51k4".slice(4), "Bv_772im51k4".len())
+
+print("s256-m2:", "mavvz15a9cv74r".upper(), "mavvz15a9cv74r".slice(2), "mavvz15a9cv74r".len())
+
+print("s256-m3:", "1ojhh14Bm9e".upper(), "1ojhh14Bm9e".slice(1), "1ojhh14Bm9e".len())
+
+print("s256-m4:", "0khdqA".upper(), "0khdqA".slice(4), "0khdqA".len())
+
+print("s256-m5:", "1eogf9q65".upper(), "1eogf9q65".slice(3), "1eogf9q65".len())
+
+print("s256-i0:", "wu5-{84}-5h_5")
+
+let s256_v0 = 84
+
+print("s256-v0:", "n={s256_v0}" + "!" * 1)
+
+print("s256-i1:", "ju6-{66}-pnx5")
+
+let s256_v1 = 66
+
+print("s256-v1:", "n={s256_v1}" + "!" * 1)
+
+print("s256-i2:", "n00-{16}-ka1i")
+
+let s256_v2 = 16
+
+print("s256-v2:", "n={s256_v2}" + "!" * 1)
+
+print("s256-i3:", "vf5-{54}-1erk")
+
+let s256_v3 = 54
+
+print("s256-v3:", "n={s256_v3}" + "!" * 2)
+
+print("s256-r0:", "sw1gpkdv".replace("s", "_e"), "sw1gpkdv".contains("w1"))
+
+print("s256-r1:", "rd94vcBg".replace("r", "nh"), "rd94vcBg".contains("d9"))
+
+print("s256-j0:", ["c4B", "r05", "Bh2"].join("-"))
+
+print("s256-j1:", ["z7A", "jsv", "70f", "c8m", "Bg3"].join("-"))
+
+print("s256-a0:", "mtc1tzc".at(6), "mtc1tzc".trim() == "mtc1tzc")
+
+print("s256-a1:", "4us7db9".at(6), "4us7db9".trim() == "4us7db9")
+
+print("s256-a2:", "AhfBBr4".at(5), "AhfBBr4".trim() == "AhfBBr4")

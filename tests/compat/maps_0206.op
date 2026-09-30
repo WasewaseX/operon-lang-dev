@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=206 tag=m206
+
+let m206_m0 = {helix: -53, exon: 38, marker: 61}
+
+print("m206-m0:", m206_m0["helix"], len(m206_m0), m206_m0.has("helix"))
+
+let m206_m1 = {ribose: 21, enzyme: -52, ligase: 76, gene: 11, splicer: -96}
+
+print("m206-m1:", m206_m1["ribose"], len(m206_m1), m206_m1.has("ribose"))
+
+let m206_m2 = {ligase: 78, gene: -66, vector: 34, exon: -28}
+
+print("m206-m2:", m206_m2["ligase"], len(m206_m2), m206_m2.has("ligase"))
+
+let m206_m3 = {exon: -92, marker: 7, ligase: -66, vector: 57}
+
+print("m206-m3:", m206_m3["exon"], len(m206_m3), m206_m3.has("exon"))
+
+let m206_k0 = {gene: 28, cell: 40, ligase: 24}
+
+let m206_ks0 = m206_k0.keys()
+
+let m206_sm0 = 0
+
+for k in m206_k0 { m206_sm0 += m206_k0[k] }
+
+print("m206-k0:", m206_sm0, m206_k0.keys().sort(), m206_k0.values().len())
+
+let m206_k1 = {enzyme: 46, splicer: 28, ligase: 7}
+
+let m206_ks1 = m206_k1.keys()
+
+let m206_sm1 = 0
+
+for k in m206_k1 { m206_sm1 += m206_k1[k] }
+
+print("m206-k1:", m206_sm1, m206_k1.keys().sort(), m206_k1.values().len())
+
+let m206_w0 = {outer: {vector: 4, ribose: 2, tag: "ok"}}}
+
+print("m206-w0:", m206_w0["outer"]["ribose"], m206_w0["outer"]["tag"])
+
+let m206_w1 = {outer: {gene: 9, plasmid: 5, tag: "ok"}}}
+
+print("m206-w1:", m206_w1["outer"]["plasmid"], m206_w1["outer"]["tag"])

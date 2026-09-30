@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=113 tag=m113
+
+let m113_m0 = {marker: -38, cell: 62, splicer: -1}
+
+print("m113-m0:", m113_m0["marker"], len(m113_m0), m113_m0.has("marker"))
+
+let m113_m1 = {enzyme: 91, marker: -56, ligase: -76, codon: -76}
+
+print("m113-m1:", m113_m1["enzyme"], len(m113_m1), m113_m1.has("enzyme"))
+
+let m113_m2 = {plasmid: 89, codon: -70, marker: -76}
+
+print("m113-m2:", m113_m2["plasmid"], len(m113_m2), m113_m2.has("plasmid"))
+
+let m113_m3 = {plasmid: 72, ligase: -20, ribose: -19}
+
+print("m113-m3:", m113_m3["plasmid"], len(m113_m3), m113_m3.has("plasmid"))
+
+let m113_k0 = {splicer: 35, gene: 9, enzyme: 16}
+
+let m113_ks0 = m113_k0.keys()
+
+let m113_sm0 = 0
+
+for k in m113_k0 { m113_sm0 += m113_k0[k] }
+
+print("m113-k0:", m113_sm0, m113_k0.keys().sort(), m113_k0.values().len())
+
+let m113_k1 = {helix: 7, ligase: 8, vector: 12}
+
+let m113_ks1 = m113_k1.keys()
+
+let m113_sm1 = 0
+
+for k in m113_k1 { m113_sm1 += m113_k1[k] }
+
+print("m113-k1:", m113_sm1, m113_k1.keys().sort(), m113_k1.values().len())
+
+let m113_w0 = {outer: {cell: 6, splicer: 2, tag: "ok"}}}
+
+print("m113-w0:", m113_w0["outer"]["splicer"], m113_w0["outer"]["tag"])
+
+let m113_w1 = {outer: {ribose: 5, cell: 5, tag: "ok"}}}
+
+print("m113-w1:", m113_w1["outer"]["cell"], m113_w1["outer"]["tag"])

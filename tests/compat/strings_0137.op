@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=137 tag=s137
+
+print("s137-m0:", "asd0Awv5lscw6m".upper(), "asd0Awv5lscw6m".slice(2), "asd0Awv5lscw6m".len())
+
+print("s137-m1:", "BbekfBa8p7".upper(), "BbekfBa8p7".slice(2), "BbekfBa8p7".len())
+
+print("s137-m2:", "ziu8z236b7t".upper(), "ziu8z236b7t".slice(1), "ziu8z236b7t".len())
+
+print("s137-m3:", "w1bfC4".upper(), "w1bfC4".slice(4), "w1bfC4".len())
+
+print("s137-m4:", "87xsla87".upper(), "87xsla87".slice(4), "87xsla87".len())
+
+print("s137-m5:", "Aqkd_9xk64q".upper(), "Aqkd_9xk64q".slice(2), "Aqkd_9xk64q".len())
+
+print("s137-i0:", "C46-{19}-ic3i")
+
+let s137_v0 = 19
+
+print("s137-v0:", "n={s137_v0}" + "!" * 2)
+
+print("s137-i1:", "fbo-{76}-xz9o")
+
+let s137_v1 = 76
+
+print("s137-v1:", "n={s137_v1}" + "!" * 1)
+
+print("s137-i2:", "6jr-{6}-s28C")
+
+let s137_v2 = 6
+
+print("s137-v2:", "n={s137_v2}" + "!" * 1)
+
+print("s137-r0:", "_sab1v_C".replace("_", "yx"), "_sab1v_C".contains("sa"))
+
+print("s137-r1:", "cvitm8l2".replace("c", "Ba"), "cvitm8l2".contains("vi"))
+
+print("s137-r2:", "r0n26p2t".replace("r", "6h"), "r0n26p2t".contains("0n"))
+
+print("s137-j0:", ["_il", "upa", "xeu"].join("-"))
+
+print("s137-j1:", ["l7d", "v4a", "636"].join("-"))
+
+print("s137-a0:", "Ax70gvp".at(6), "Ax70gvp".trim() == "Ax70gvp")
+
+print("s137-a1:", "ex3B8wb".at(6), "ex3B8wb".trim() == "ex3B8wb")
+
+print("s137-a2:", "v9065fp".at(1), "v9065fp".trim() == "v9065fp")

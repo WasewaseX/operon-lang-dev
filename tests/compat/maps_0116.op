@@ -1,0 +1,60 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=116 tag=m116
+
+let m116_m0 = {marker: 94, enzyme: -38, codon: 29, exon: 33}
+
+print("m116-m0:", m116_m0["marker"], len(m116_m0), m116_m0.has("marker"))
+
+let m116_m1 = {cell: 65, plasmid: -52, ribose: -48, codon: -44, marker: -87}
+
+print("m116-m1:", m116_m1["cell"], len(m116_m1), m116_m1.has("cell"))
+
+let m116_m2 = {plasmid: -90, splicer: 44, enzyme: -90, codon: -99}
+
+print("m116-m2:", m116_m2["plasmid"], len(m116_m2), m116_m2.has("plasmid"))
+
+let m116_m3 = {exon: 57, ligase: -58, ribose: -27, vector: 81, codon: -19}
+
+print("m116-m3:", m116_m3["exon"], len(m116_m3), m116_m3.has("exon"))
+
+let m116_m4 = {exon: -78, cell: -18, gene: -78}
+
+print("m116-m4:", m116_m4["exon"], len(m116_m4), m116_m4.has("exon"))
+
+let m116_k0 = {marker: 21, codon: 28, plasmid: 17}
+
+let m116_ks0 = m116_k0.keys()
+
+let m116_sm0 = 0
+
+for k in m116_k0 { m116_sm0 += m116_k0[k] }
+
+print("m116-k0:", m116_sm0, m116_k0.keys().sort(), m116_k0.values().len())
+
+let m116_k1 = {helix: 25, codon: 39, cell: 3}
+
+let m116_ks1 = m116_k1.keys()
+
+let m116_sm1 = 0
+
+for k in m116_k1 { m116_sm1 += m116_k1[k] }
+
+print("m116-k1:", m116_sm1, m116_k1.keys().sort(), m116_k1.values().len())
+
+let m116_k2 = {marker: 33, cell: 26, splicer: 9}
+
+let m116_ks2 = m116_k2.keys()
+
+let m116_sm2 = 0
+
+for k in m116_k2 { m116_sm2 += m116_k2[k] }
+
+print("m116-k2:", m116_sm2, m116_k2.keys().sort(), m116_k2.values().len())
+
+let m116_w0 = {outer: {gene: 7, marker: 5, tag: "ok"}}}
+
+print("m116-w0:", m116_w0["outer"]["marker"], m116_w0["outer"]["tag"])
+
+let m116_w1 = {outer: {codon: 6, exon: 4, tag: "ok"}}}
+
+print("m116-w1:", m116_w1["outer"]["exon"], m116_w1["outer"]["tag"])

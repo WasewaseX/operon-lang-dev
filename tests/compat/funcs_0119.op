@@ -1,0 +1,166 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=119 tag=f119
+
+gene f119_g0(p, q = 29, r = 87) {
+
+    return p * 7 + q - r
+
+}
+
+print("f119-d0:", f119_g0(46), f119_g0(46, 79), f119_g0(46, 29, 87))
+
+gene f119_g1(p, q = 53, r = 45) {
+
+    return p * 87 + q - r
+
+}
+
+print("f119-d1:", f119_g1(-2), f119_g1(-2, 9), f119_g1(-2, 53, 45))
+
+gene f119_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f119_fib0(n - 1) + f119_fib0(n - 2)
+
+}
+
+print("f119-fib0:", f119_fib0(12))
+
+gene f119_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f119_fib1(n - 1) + f119_fib1(n - 2)
+
+}
+
+print("f119-fib1:", f119_fib1(11))
+
+gene f119_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f119_gcd0(b, a % b)
+
+}
+
+print("f119-gcd0:", f119_gcd0(223, 941))
+
+gene f119_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f119_gcd1(b, a % b)
+
+}
+
+print("f119-gcd1:", f119_gcd1(547, 844))
+
+gene f119_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f119_c0 = f119_mk0(35)
+
+f119_c0(8)
+
+print("f119-cl0:", f119_c0(6))
+
+gene f119_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f119_c1 = f119_mk1(33)
+
+f119_c1(5)
+
+print("f119-cl1:", f119_c1(8))
+
+gene f119_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f119-hof0:", f119_tw0(gene (z) => z * 2 + 1, 10))
+
+gene f119_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f119-hof1:", f119_tw1(gene (z) => z * 2 + 1, 13))
+
+gene f119_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f119-dg0:", f119_sd0(10600))
+
+gene f119_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f119-dg1:", f119_sd1(599192))

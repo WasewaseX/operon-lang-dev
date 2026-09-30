@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=139 tag=c139
+
+print("c139-c0:", -2686 >= 625)
+
+print("c139-c1:", 7740 == -8432)
+
+print("c139-c2:", -6495 > 7893)
+
+print("c139-c3:", 5539 != -7781)
+
+print("c139-c4:", 3127 <= -1351)
+
+print("c139-b0:", 48 < 41 && 41 < 21, 48 > 41 || 48 > 21)
+
+print("c139-b1:", 27 < 6 && 6 < 8, 27 > 6 || 27 > 8)
+
+print("c139-b2:", 49 < 30 && 30 < 32, 49 > 30 || 49 > 32)
+
+print("c139-b3:", 1 < 35 && 35 < 29, 1 > 35 || 1 > 29)
+
+print("c139-t0:", 1132 > -3222 ? "gt" : "le")
+
+print("c139-t1:", -2832 > 3468 ? "gt" : "le")
+
+print("c139-t2:", -7845 > -5405 ? "gt" : "le")
+
+print("c139-t3:", -4397 > 3018 ? "gt" : "le")
+
+let c139_n0 = null
+
+print("c139-n0:", c139_n0 ?? -872, c139_n0 == null)
+
+let c139_n1 = null
+
+print("c139-n1:", c139_n1 ?? -8020, c139_n1 == null)
+
+print("c139-s0:", "y972" in "qjmaB4y972", "y972" == "y972")
+
+print("c139-s1:", "pc7r" in "9Aggropc7r", "pc7r" == "pc7r")

@@ -1,0 +1,138 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=256 tag=c256
+
+let c256_b0 = "start"
+
+if 71 > 80 { c256_b0 = "hi" } elif 71 > 40 { c256_b0 = "mid" } else { c256_b0 = "lo" }
+
+print("c256-i0:", c256_b0, 71)
+
+let c256_b1 = "start"
+
+if 94 > 80 { c256_b1 = "hi" } elif 94 > 40 { c256_b1 = "mid" } else { c256_b1 = "lo" }
+
+print("c256-i1:", c256_b1, 94)
+
+let c256_b2 = "start"
+
+if -5 > 80 { c256_b2 = "hi" } elif -5 > 40 { c256_b2 = "mid" } else { c256_b2 = "lo" }
+
+print("c256-i2:", c256_b2, -5)
+
+let c256_a0 = 0
+
+let c256_n0 = 0
+
+while c256_n0 < 15 {
+
+    c256_n0 += 1
+
+    if c256_n0 % 2 == 0 { continue }
+
+    if c256_n0 > 17 { break }
+
+    c256_a0 += c256_n0
+
+}
+
+print("c256-w0:", c256_a0, c256_n0)
+
+let c256_a1 = 0
+
+let c256_n1 = 0
+
+while c256_n1 < 14 {
+
+    c256_n1 += 2
+
+    if c256_n1 % 3 == 0 { continue }
+
+    if c256_n1 > 16 { break }
+
+    c256_a1 += c256_n1
+
+}
+
+print("c256-w1:", c256_a1, c256_n1)
+
+let c256_a2 = 0
+
+let c256_n2 = 0
+
+while c256_n2 < 9 {
+
+    c256_n2 += 3
+
+    if c256_n2 % 3 == 0 { continue }
+
+    if c256_n2 > 15 { break }
+
+    c256_a2 += c256_n2
+
+}
+
+print("c256-w2:", c256_a2, c256_n2)
+
+let c256_c0 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 4] {
+
+        c256_c0 += a * b
+
+    }
+
+}
+
+print("c256-l0:", c256_c0)
+
+let c256_c1 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 2] {
+
+        c256_c1 += a * b
+
+    }
+
+}
+
+print("c256-l1:", c256_c1)
+
+let c256_acc0 = ""
+
+loop {
+
+    c256_acc0 += "x"
+
+    if c256_acc0.len() >= 6 { break }
+
+}
+
+print("c256-o0:", c256_acc0)
+
+let c256_acc1 = ""
+
+loop {
+
+    c256_acc1 += "x"
+
+    if c256_acc1.len() >= 7 { break }
+
+}
+
+print("c256-o1:", c256_acc1)
+
+let c256_acc2 = ""
+
+loop {
+
+    c256_acc2 += "x"
+
+    if c256_acc2.len() >= 4 { break }
+
+}
+
+print("c256-o2:", c256_acc2)

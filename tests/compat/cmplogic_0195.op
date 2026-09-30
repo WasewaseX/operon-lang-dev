@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=195 tag=c195
+
+print("c195-c0:", 3275 >= 7716)
+
+print("c195-c1:", -9556 <= 8330)
+
+print("c195-c2:", 3261 <= 9151)
+
+print("c195-c3:", 2436 == 1837)
+
+print("c195-c4:", -4389 == -7480)
+
+print("c195-b0:", 0 < 50 && 50 < 34, 0 > 50 || 0 > 34)
+
+print("c195-b1:", 23 < 11 && 11 < 38, 23 > 11 || 23 > 38)
+
+print("c195-b2:", 41 < 9 && 9 < 26, 41 > 9 || 41 > 26)
+
+print("c195-b3:", 33 < 33 && 33 < 29, 33 > 33 || 33 > 29)
+
+print("c195-t0:", 3801 > -2659 ? "gt" : "le")
+
+print("c195-t1:", -2179 > -8498 ? "gt" : "le")
+
+print("c195-t2:", 3473 > -4420 ? "gt" : "le")
+
+print("c195-t3:", 8221 > 3924 ? "gt" : "le")
+
+let c195_n0 = null
+
+print("c195-n0:", c195_n0 ?? 8594, c195_n0 == null)
+
+let c195_n1 = null
+
+print("c195-n1:", c195_n1 ?? -3917, c195_n1 == null)
+
+let c195_n2 = null
+
+print("c195-n2:", c195_n2 ?? 8888, c195_n2 == null)
+
+print("c195-s0:", "Ccfr" in "c3224ACcfr", "Ccfr" == "Ccfr")
+
+print("c195-s1:", "3fqr" in "hC5mw83fqr", "3fqr" == "3fqr")

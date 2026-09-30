@@ -1,0 +1,36 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=235 tag=c235
+
+print("c235-c0:", 7481 <= -8853)
+
+print("c235-c1:", 8047 == -4726)
+
+print("c235-c2:", -6715 >= 6710)
+
+print("c235-c3:", 940 >= 590)
+
+print("c235-c4:", 882 <= 9289)
+
+print("c235-b0:", 40 < 37 && 37 < 40, 40 > 37 || 40 > 40)
+
+print("c235-b1:", 10 < 17 && 17 < 20, 10 > 17 || 10 > 20)
+
+print("c235-t0:", -3021 > 8349 ? "gt" : "le")
+
+print("c235-t1:", 4279 > -449 ? "gt" : "le")
+
+let c235_n0 = null
+
+print("c235-n0:", c235_n0 ?? 9393, c235_n0 == null)
+
+let c235_n1 = null
+
+print("c235-n1:", c235_n1 ?? 4183, c235_n1 == null)
+
+let c235_n2 = null
+
+print("c235-n2:", c235_n2 ?? -6896, c235_n2 == null)
+
+print("c235-s0:", "nk43" in "6cjog9nk43", "nk43" == "nk43")
+
+print("c235-s1:", "12sj" in "ujr9mB12sj", "12sj" == "12sj")

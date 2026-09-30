@@ -1,0 +1,214 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=115 tag=m115
+
+gene m115_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m115-b0:", m115_b0({marker: 9, vector: 61, gene: 45})?!)
+
+gene m115_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m115-b1:", m115_b1({ligase: 20, vector: 5, codon: 2})?!)
+
+gene m115_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m115-b2:", m115_b2({helix: 91, codon: 27, vector: 94})?!)
+
+gene m115_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m115_f0([60, 42, 16, 17, 51]) {
+
+    case Ok(list) {
+
+        print("m115-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m115-f0:", "e:", m)
+
+    }
+
+}
+
+gene m115_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m115_f1([49, 44, 50, 58, 54]) {
+
+    case Ok(list) {
+
+        print("m115-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m115-f1:", "e:", m)
+
+    }
+
+}
+
+let m115_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m115-cc0:", m115_cl0(14)(2), m115_cl0(2)(14))
+
+let m115_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m115-cc1:", m115_cl1(3)(8), m115_cl1(8)(3))
+
+let m115_data0 = some([some("ribose"), none(), some(6)])
+
+match m115_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m115-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m115-x0:", "shape-miss")
+
+    }
+
+}
+
+let m115_data1 = some([some("exon"), none(), some(4)])
+
+match m115_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m115-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m115-x1:", "shape-miss")
+
+    }
+
+}

@@ -1,0 +1,58 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=176 tag=s176
+
+print("s176-m0:", "ow8z5C4jso".upper(), "ow8z5C4jso".slice(4), "ow8z5C4jso".len())
+
+print("s176-m1:", "7ftp1_Bvc".upper(), "7ftp1_Bvc".slice(1), "7ftp1_Bvc".len())
+
+print("s176-m2:", "m9psroBcrBr9m".upper(), "m9psroBcrBr9m".slice(3), "m9psroBcrBr9m".len())
+
+print("s176-m3:", "dgst1558lAz15".upper(), "dgst1558lAz15".slice(4), "dgst1558lAz15".len())
+
+print("s176-m4:", "_yc4lpzrfB".upper(), "_yc4lpzrfB".slice(4), "_yc4lpzrfB".len())
+
+print("s176-m5:", "cCf01gwiiq".upper(), "cCf01gwiiq".slice(1), "cCf01gwiiq".len())
+
+print("s176-i0:", "v_i-{31}-u5Ca")
+
+let s176_v0 = 31
+
+print("s176-v0:", "n={s176_v0}" + "!" * 2)
+
+print("s176-i1:", "5ua-{71}-hpvj")
+
+let s176_v1 = 71
+
+print("s176-v1:", "n={s176_v1}" + "!" * 3)
+
+print("s176-i2:", "5vk-{56}-9qe2")
+
+let s176_v2 = 56
+
+print("s176-v2:", "n={s176_v2}" + "!" * 1)
+
+print("s176-i3:", "Baa-{50}-Bfyv")
+
+let s176_v3 = 50
+
+print("s176-v3:", "n={s176_v3}" + "!" * 1)
+
+print("s176-i4:", "3ho-{4}-l3_8")
+
+let s176_v4 = 4
+
+print("s176-v4:", "n={s176_v4}" + "!" * 3)
+
+print("s176-r0:", "up3yBlz4".replace("u", "92"), "up3yBlz4".contains("p3"))
+
+print("s176-r1:", "c7xerCcA".replace("c", "mp"), "c7xerCcA".contains("7x"))
+
+print("s176-j0:", ["qko", "33p", "oo2", "49b", "ce5"].join("-"))
+
+print("s176-j1:", ["9pC", "j23", "cah"].join("-"))
+
+print("s176-j2:", ["zgd", "miv", "o7k"].join("-"))
+
+print("s176-a0:", "ol97me1".at(4), "ol97me1".trim() == "ol97me1")
+
+print("s176-a1:", "Cn7f3t2".at(3), "Cn7f3t2".trim() == "Cn7f3t2")

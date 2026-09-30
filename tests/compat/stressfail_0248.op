@@ -1,0 +1,182 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=248 tag=s248
+
+stress {
+
+    print("s248-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s248-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s248-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s248-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s248-mz:", 73 % 0)
+
+} rescue (e) {
+
+    print("s248-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s248-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s248-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s248-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s248-of2:", "caught", e.kind, e.message)
+
+}
+
+gene s248_r0() {
+
+    raise "s248-heurc6"
+
+}
+
+stress {
+
+    s248_r0()
+
+    print("s248-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s248-r0:", e.kind, e.message)
+
+}
+
+gene s248_r1() {
+
+    raise "s248-fvrfbc"
+
+}
+
+stress {
+
+    s248_r1()
+
+    print("s248-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s248-r1:", e.kind, e.message)
+
+}
+
+let s248_xs0 = [19, 24, 43]
+
+stress {
+
+    print("s248-x0:", s248_xs0[7])
+
+} rescue (e) {
+
+    print("s248-x0:", "caught", e.kind)
+
+}
+
+let s248_xs1 = [15, 33, 42]
+
+stress {
+
+    print("s248-x1:", s248_xs1[4])
+
+} rescue (e) {
+
+    print("s248-x1:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s248-0"
+
+    } rescue (e) {
+
+        print("s248-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s248-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s248-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s248-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s248-1"
+
+    } rescue (e) {
+
+        print("s248-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s248-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s248-d1-top:", outer.message)
+
+}

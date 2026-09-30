@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=154 tag=c154
+
+print("c154-c0:", -8065 != -1693)
+
+print("c154-c1:", 9603 < -4657)
+
+print("c154-c2:", 2302 >= -3911)
+
+print("c154-c3:", -1698 < -1911)
+
+print("c154-c4:", -7978 != 7335)
+
+print("c154-b0:", 47 < 22 && 22 < 23, 47 > 22 || 47 > 23)
+
+print("c154-b1:", 45 < 49 && 49 < 28, 45 > 49 || 45 > 28)
+
+print("c154-b2:", 30 < 5 && 5 < 45, 30 > 5 || 30 > 45)
+
+print("c154-t0:", 8527 > 1709 ? "gt" : "le")
+
+print("c154-t1:", -8339 > 8010 ? "gt" : "le")
+
+print("c154-t2:", 389 > 6368 ? "gt" : "le")
+
+let c154_n0 = null
+
+print("c154-n0:", c154_n0 ?? 1016, c154_n0 == null)
+
+let c154_n1 = null
+
+print("c154-n1:", c154_n1 ?? 3322, c154_n1 == null)
+
+let c154_n2 = null
+
+print("c154-n2:", c154_n2 ?? 101, c154_n2 == null)
+
+print("c154-s0:", "CeuB" in "aa5fu5CeuB", "CeuB" == "CeuB")
+
+print("c154-s1:", "j5Bo" in "zrendpj5Bo", "j5Bo" == "j5Bo")

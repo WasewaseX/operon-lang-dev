@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=235 tag=m235
+
+let m235_m0 = {gene: 23, plasmid: -97, ligase: -54, ribose: -73, marker: 37}
+
+print("m235-m0:", m235_m0["gene"], len(m235_m0), m235_m0.has("gene"))
+
+let m235_m1 = {gene: -83, helix: 66, codon: 67}
+
+print("m235-m1:", m235_m1["gene"], len(m235_m1), m235_m1.has("gene"))
+
+let m235_m2 = {codon: -25, plasmid: -1, exon: 48}
+
+print("m235-m2:", m235_m2["codon"], len(m235_m2), m235_m2.has("codon"))
+
+let m235_m3 = {splicer: -92, helix: -42, plasmid: 29}
+
+print("m235-m3:", m235_m3["splicer"], len(m235_m3), m235_m3.has("splicer"))
+
+let m235_k0 = {exon: 2, enzyme: 8, vector: 12}
+
+let m235_ks0 = m235_k0.keys()
+
+let m235_sm0 = 0
+
+for k in m235_k0 { m235_sm0 += m235_k0[k] }
+
+print("m235-k0:", m235_sm0, m235_k0.keys().sort(), m235_k0.values().len())
+
+let m235_k1 = {helix: 6, enzyme: 17, codon: 29}
+
+let m235_ks1 = m235_k1.keys()
+
+let m235_sm1 = 0
+
+for k in m235_k1 { m235_sm1 += m235_k1[k] }
+
+print("m235-k1:", m235_sm1, m235_k1.keys().sort(), m235_k1.values().len())
+
+let m235_k2 = {ribose: 8, codon: 38, gene: 44}
+
+let m235_ks2 = m235_k2.keys()
+
+let m235_sm2 = 0
+
+for k in m235_k2 { m235_sm2 += m235_k2[k] }
+
+print("m235-k2:", m235_sm2, m235_k2.keys().sort(), m235_k2.values().len())
+
+let m235_w0 = {outer: {vector: 9, marker: 6, tag: "ok"}}}
+
+print("m235-w0:", m235_w0["outer"]["marker"], m235_w0["outer"]["tag"])
+
+let m235_w1 = {outer: {ligase: 9, plasmid: 1, tag: "ok"}}}
+
+print("m235-w1:", m235_w1["outer"]["plasmid"], m235_w1["outer"]["tag"])

@@ -1,0 +1,180 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=205 tag=f205
+
+gene f205_g0(p, q = 87, r = 18) {
+
+    return p * 4 + q - r
+
+}
+
+print("f205-d0:", f205_g0(-45), f205_g0(-45, 2), f205_g0(-45, 87, 18))
+
+gene f205_g1(p, q = 65, r = 45) {
+
+    return p * 98 + q - r
+
+}
+
+print("f205-d1:", f205_g1(2), f205_g1(2, 59), f205_g1(2, 65, 45))
+
+gene f205_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f205_fib0(n - 1) + f205_fib0(n - 2)
+
+}
+
+print("f205-fib0:", f205_fib0(7))
+
+gene f205_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f205_fib1(n - 1) + f205_fib1(n - 2)
+
+}
+
+print("f205-fib1:", f205_fib1(7))
+
+gene f205_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f205_gcd0(b, a % b)
+
+}
+
+print("f205-gcd0:", f205_gcd0(370, 461))
+
+gene f205_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f205_gcd1(b, a % b)
+
+}
+
+print("f205-gcd1:", f205_gcd1(955, 935))
+
+gene f205_gcd2(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f205_gcd2(b, a % b)
+
+}
+
+print("f205-gcd2:", f205_gcd2(174, 778))
+
+gene f205_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f205_c0 = f205_mk0(40)
+
+f205_c0(4)
+
+print("f205-cl0:", f205_c0(1))
+
+gene f205_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f205_c1 = f205_mk1(19)
+
+f205_c1(2)
+
+print("f205-cl1:", f205_c1(6))
+
+gene f205_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f205-hof0:", f205_tw0(gene (z) => z * 2 + 1, 2))
+
+gene f205_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f205-hof1:", f205_tw1(gene (z) => z * 2 + 1, 14))
+
+gene f205_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f205-dg0:", f205_sd0(933498))
+
+gene f205_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f205-dg1:", f205_sd1(570742))

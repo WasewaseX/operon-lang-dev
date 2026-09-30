@@ -1,0 +1,170 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=194 tag=c194
+
+let c194_b0 = "start"
+
+if -18 > 80 { c194_b0 = "hi" } elif -18 > 40 { c194_b0 = "mid" } else { c194_b0 = "lo" }
+
+print("c194-i0:", c194_b0, -18)
+
+let c194_b1 = "start"
+
+if 47 > 80 { c194_b1 = "hi" } elif 47 > 40 { c194_b1 = "mid" } else { c194_b1 = "lo" }
+
+print("c194-i1:", c194_b1, 47)
+
+let c194_b2 = "start"
+
+if 39 > 80 { c194_b2 = "hi" } elif 39 > 40 { c194_b2 = "mid" } else { c194_b2 = "lo" }
+
+print("c194-i2:", c194_b2, 39)
+
+let c194_b3 = "start"
+
+if 15 > 80 { c194_b3 = "hi" } elif 15 > 40 { c194_b3 = "mid" } else { c194_b3 = "lo" }
+
+print("c194-i3:", c194_b3, 15)
+
+let c194_b4 = "start"
+
+if 96 > 80 { c194_b4 = "hi" } elif 96 > 40 { c194_b4 = "mid" } else { c194_b4 = "lo" }
+
+print("c194-i4:", c194_b4, 96)
+
+let c194_a0 = 0
+
+let c194_n0 = 0
+
+while c194_n0 < 20 {
+
+    c194_n0 += 4
+
+    if c194_n0 % 2 == 0 { continue }
+
+    if c194_n0 > 29 { break }
+
+    c194_a0 += c194_n0
+
+}
+
+print("c194-w0:", c194_a0, c194_n0)
+
+let c194_a1 = 0
+
+let c194_n1 = 0
+
+while c194_n1 < 6 {
+
+    c194_n1 += 1
+
+    if c194_n1 % 3 == 0 { continue }
+
+    if c194_n1 > 9 { break }
+
+    c194_a1 += c194_n1
+
+}
+
+print("c194-w1:", c194_a1, c194_n1)
+
+let c194_a2 = 0
+
+let c194_n2 = 0
+
+while c194_n2 < 13 {
+
+    c194_n2 += 1
+
+    if c194_n2 % 3 == 0 { continue }
+
+    if c194_n2 > 18 { break }
+
+    c194_a2 += c194_n2
+
+}
+
+print("c194-w2:", c194_a2, c194_n2)
+
+let c194_a3 = 0
+
+let c194_n3 = 0
+
+while c194_n3 < 12 {
+
+    c194_n3 += 1
+
+    if c194_n3 % 2 == 0 { continue }
+
+    if c194_n3 > 18 { break }
+
+    c194_a3 += c194_n3
+
+}
+
+print("c194-w3:", c194_a3, c194_n3)
+
+let c194_c0 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 3] {
+
+        c194_c0 += a * b
+
+    }
+
+}
+
+print("c194-l0:", c194_c0)
+
+let c194_c1 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 4] {
+
+        c194_c1 += a * b
+
+    }
+
+}
+
+print("c194-l1:", c194_c1)
+
+let c194_c2 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 3] {
+
+        c194_c2 += a * b
+
+    }
+
+}
+
+print("c194-l2:", c194_c2)
+
+let c194_acc0 = ""
+
+loop {
+
+    c194_acc0 += "x"
+
+    if c194_acc0.len() >= 4 { break }
+
+}
+
+print("c194-o0:", c194_acc0)
+
+let c194_acc1 = ""
+
+loop {
+
+    c194_acc1 += "x"
+
+    if c194_acc1.len() >= 3 { break }
+
+}
+
+print("c194-o1:", c194_acc1)

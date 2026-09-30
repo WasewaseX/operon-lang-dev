@@ -1,0 +1,152 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=218 tag=c218
+
+let c218_b0 = "start"
+
+if 75 > 80 { c218_b0 = "hi" } elif 75 > 40 { c218_b0 = "mid" } else { c218_b0 = "lo" }
+
+print("c218-i0:", c218_b0, 75)
+
+let c218_b1 = "start"
+
+if 110 > 80 { c218_b1 = "hi" } elif 110 > 40 { c218_b1 = "mid" } else { c218_b1 = "lo" }
+
+print("c218-i1:", c218_b1, 110)
+
+let c218_b2 = "start"
+
+if 98 > 80 { c218_b2 = "hi" } elif 98 > 40 { c218_b2 = "mid" } else { c218_b2 = "lo" }
+
+print("c218-i2:", c218_b2, 98)
+
+let c218_b3 = "start"
+
+if 80 > 80 { c218_b3 = "hi" } elif 80 > 40 { c218_b3 = "mid" } else { c218_b3 = "lo" }
+
+print("c218-i3:", c218_b3, 80)
+
+let c218_b4 = "start"
+
+if 1 > 80 { c218_b4 = "hi" } elif 1 > 40 { c218_b4 = "mid" } else { c218_b4 = "lo" }
+
+print("c218-i4:", c218_b4, 1)
+
+let c218_a0 = 0
+
+let c218_n0 = 0
+
+while c218_n0 < 11 {
+
+    c218_n0 += 4
+
+    if c218_n0 % 2 == 0 { continue }
+
+    if c218_n0 > 19 { break }
+
+    c218_a0 += c218_n0
+
+}
+
+print("c218-w0:", c218_a0, c218_n0)
+
+let c218_a1 = 0
+
+let c218_n1 = 0
+
+while c218_n1 < 19 {
+
+    c218_n1 += 1
+
+    if c218_n1 % 3 == 0 { continue }
+
+    if c218_n1 > 23 { break }
+
+    c218_a1 += c218_n1
+
+}
+
+print("c218-w1:", c218_a1, c218_n1)
+
+let c218_a2 = 0
+
+let c218_n2 = 0
+
+while c218_n2 < 5 {
+
+    c218_n2 += 4
+
+    if c218_n2 % 2 == 0 { continue }
+
+    if c218_n2 > 7 { break }
+
+    c218_a2 += c218_n2
+
+}
+
+print("c218-w2:", c218_a2, c218_n2)
+
+let c218_c0 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 2] {
+
+        c218_c0 += a * b
+
+    }
+
+}
+
+print("c218-l0:", c218_c0)
+
+let c218_c1 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 3] {
+
+        c218_c1 += a * b
+
+    }
+
+}
+
+print("c218-l1:", c218_c1)
+
+let c218_c2 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 3] {
+
+        c218_c2 += a * b
+
+    }
+
+}
+
+print("c218-l2:", c218_c2)
+
+let c218_acc0 = ""
+
+loop {
+
+    c218_acc0 += "x"
+
+    if c218_acc0.len() >= 7 { break }
+
+}
+
+print("c218-o0:", c218_acc0)
+
+let c218_acc1 = ""
+
+loop {
+
+    c218_acc1 += "x"
+
+    if c218_acc1.len() >= 7 { break }
+
+}
+
+print("c218-o1:", c218_acc1)

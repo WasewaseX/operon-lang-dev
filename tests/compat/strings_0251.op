@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=251 tag=s251
+
+print("s251-m0:", "uj7n8b38m".upper(), "uj7n8b38m".slice(2), "uj7n8b38m".len())
+
+print("s251-m1:", "pwb2yin4".upper(), "pwb2yin4".slice(3), "pwb2yin4".len())
+
+print("s251-m2:", "Bsk_pc8_xdhk6h".upper(), "Bsk_pc8_xdhk6h".slice(3), "Bsk_pc8_xdhk6h".len())
+
+print("s251-m3:", "6339wd92xzb".upper(), "6339wd92xzb".slice(2), "6339wd92xzb".len())
+
+print("s251-i0:", "h6q-{12}-_j48")
+
+let s251_v0 = 12
+
+print("s251-v0:", "n={s251_v0}" + "!" * 3)
+
+print("s251-i1:", "rdd-{41}-6j9q")
+
+let s251_v1 = 41
+
+print("s251-v1:", "n={s251_v1}" + "!" * 2)
+
+print("s251-i2:", "atw-{89}-tcea")
+
+let s251_v2 = 89
+
+print("s251-v2:", "n={s251_v2}" + "!" * 1)
+
+print("s251-i3:", "aAs-{94}-9j95")
+
+let s251_v3 = 94
+
+print("s251-v3:", "n={s251_v3}" + "!" * 2)
+
+print("s251-r0:", "j5gnij_6".replace("j", "kz"), "j5gnij_6".contains("5g"))
+
+print("s251-r1:", "Bhox5awn".replace("B", "Bv"), "Bhox5awn".contains("ho"))
+
+print("s251-r2:", "BBy9qnka".replace("B", "ib"), "BBy9qnka".contains("By"))
+
+print("s251-j0:", ["6bz", "uhp", "jr2", "50o"].join("-"))
+
+print("s251-j1:", ["e2x", "7a7", "so6", "vh7"].join("-"))
+
+print("s251-j2:", ["071", "usg", "5om"].join("-"))
+
+print("s251-a0:", "azq3kur".at(6), "azq3kur".trim() == "azq3kur")
+
+print("s251-a1:", "z3Aej_w".at(6), "z3Aej_w".trim() == "z3Aej_w")
+
+print("s251-a2:", "26o_63n".at(6), "26o_63n".trim() == "26o_63n")

@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=131 tag=m131
+
+let m131_m0 = {exon: 69, helix: -63, vector: -17, splicer: 11, enzyme: 62}
+
+print("m131-m0:", m131_m0["exon"], len(m131_m0), m131_m0.has("exon"))
+
+let m131_m1 = {vector: -23, splicer: -97, plasmid: 17}
+
+print("m131-m1:", m131_m1["vector"], len(m131_m1), m131_m1.has("vector"))
+
+let m131_m2 = {plasmid: -9, marker: -7, helix: -18, exon: 75}
+
+print("m131-m2:", m131_m2["plasmid"], len(m131_m2), m131_m2.has("plasmid"))
+
+let m131_m3 = {ribose: -66, plasmid: 1, gene: -43, cell: 2}
+
+print("m131-m3:", m131_m3["ribose"], len(m131_m3), m131_m3.has("ribose"))
+
+let m131_k0 = {helix: 28, cell: 23, marker: 25}
+
+let m131_ks0 = m131_k0.keys()
+
+let m131_sm0 = 0
+
+for k in m131_k0 { m131_sm0 += m131_k0[k] }
+
+print("m131-k0:", m131_sm0, m131_k0.keys().sort(), m131_k0.values().len())
+
+let m131_k1 = {splicer: 28, exon: 20, vector: 31}
+
+let m131_ks1 = m131_k1.keys()
+
+let m131_sm1 = 0
+
+for k in m131_k1 { m131_sm1 += m131_k1[k] }
+
+print("m131-k1:", m131_sm1, m131_k1.keys().sort(), m131_k1.values().len())
+
+let m131_w0 = {outer: {ligase: 3, marker: 3, tag: "ok"}}}
+
+print("m131-w0:", m131_w0["outer"]["marker"], m131_w0["outer"]["tag"])
+
+let m131_w1 = {outer: {splicer: 7, enzyme: 5, tag: "ok"}}}
+
+print("m131-w1:", m131_w1["outer"]["enzyme"], m131_w1["outer"]["tag"])

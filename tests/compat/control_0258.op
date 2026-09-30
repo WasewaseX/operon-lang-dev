@@ -1,0 +1,170 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=258 tag=c258
+
+let c258_b0 = "start"
+
+if 32 > 80 { c258_b0 = "hi" } elif 32 > 40 { c258_b0 = "mid" } else { c258_b0 = "lo" }
+
+print("c258-i0:", c258_b0, 32)
+
+let c258_b1 = "start"
+
+if 83 > 80 { c258_b1 = "hi" } elif 83 > 40 { c258_b1 = "mid" } else { c258_b1 = "lo" }
+
+print("c258-i1:", c258_b1, 83)
+
+let c258_b2 = "start"
+
+if 59 > 80 { c258_b2 = "hi" } elif 59 > 40 { c258_b2 = "mid" } else { c258_b2 = "lo" }
+
+print("c258-i2:", c258_b2, 59)
+
+let c258_b3 = "start"
+
+if 36 > 80 { c258_b3 = "hi" } elif 36 > 40 { c258_b3 = "mid" } else { c258_b3 = "lo" }
+
+print("c258-i3:", c258_b3, 36)
+
+let c258_b4 = "start"
+
+if 0 > 80 { c258_b4 = "hi" } elif 0 > 40 { c258_b4 = "mid" } else { c258_b4 = "lo" }
+
+print("c258-i4:", c258_b4, 0)
+
+let c258_a0 = 0
+
+let c258_n0 = 0
+
+while c258_n0 < 5 {
+
+    c258_n0 += 1
+
+    if c258_n0 % 2 == 0 { continue }
+
+    if c258_n0 > 12 { break }
+
+    c258_a0 += c258_n0
+
+}
+
+print("c258-w0:", c258_a0, c258_n0)
+
+let c258_a1 = 0
+
+let c258_n1 = 0
+
+while c258_n1 < 14 {
+
+    c258_n1 += 3
+
+    if c258_n1 % 2 == 0 { continue }
+
+    if c258_n1 > 21 { break }
+
+    c258_a1 += c258_n1
+
+}
+
+print("c258-w1:", c258_a1, c258_n1)
+
+let c258_a2 = 0
+
+let c258_n2 = 0
+
+while c258_n2 < 13 {
+
+    c258_n2 += 4
+
+    if c258_n2 % 3 == 0 { continue }
+
+    if c258_n2 > 21 { break }
+
+    c258_a2 += c258_n2
+
+}
+
+print("c258-w2:", c258_a2, c258_n2)
+
+let c258_a3 = 0
+
+let c258_n3 = 0
+
+while c258_n3 < 19 {
+
+    c258_n3 += 3
+
+    if c258_n3 % 3 == 0 { continue }
+
+    if c258_n3 > 23 { break }
+
+    c258_a3 += c258_n3
+
+}
+
+print("c258-w3:", c258_a3, c258_n3)
+
+let c258_c0 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 2] {
+
+        c258_c0 += a * b
+
+    }
+
+}
+
+print("c258-l0:", c258_c0)
+
+let c258_c1 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 3] {
+
+        c258_c1 += a * b
+
+    }
+
+}
+
+print("c258-l1:", c258_c1)
+
+let c258_c2 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 2] {
+
+        c258_c2 += a * b
+
+    }
+
+}
+
+print("c258-l2:", c258_c2)
+
+let c258_acc0 = ""
+
+loop {
+
+    c258_acc0 += "x"
+
+    if c258_acc0.len() >= 7 { break }
+
+}
+
+print("c258-o0:", c258_acc0)
+
+let c258_acc1 = ""
+
+loop {
+
+    c258_acc1 += "x"
+
+    if c258_acc1.len() >= 3 { break }
+
+}
+
+print("c258-o1:", c258_acc1)

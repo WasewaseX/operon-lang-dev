@@ -1,0 +1,254 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=125 tag=m125
+
+gene m125_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m125-b0:", m125_b0({splicer: 39, exon: 92, marker: 20})?!)
+
+gene m125_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m125-b1:", m125_b1({ligase: 38, marker: 33, helix: 54})?!)
+
+gene m125_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m125-b2:", m125_b2({codon: 29, exon: 61, splicer: 70})?!)
+
+gene m125_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m125_f0([23, 38, 44, 47, 34, 57, 53]) {
+
+    case Ok(list) {
+
+        print("m125-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m125-f0:", "e:", m)
+
+    }
+
+}
+
+gene m125_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m125_f1([53, 1, 8, 46, 3, 51, 12, 13]) {
+
+    case Ok(list) {
+
+        print("m125-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m125-f1:", "e:", m)
+
+    }
+
+}
+
+gene m125_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m125_f2([41, 45, 24, 20]) {
+
+    case Ok(list) {
+
+        print("m125-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m125-f2:", "e:", m)
+
+    }
+
+}
+
+let m125_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m125-cc0:", m125_cl0(4)(13), m125_cl0(13)(4))
+
+let m125_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m125-cc1:", m125_cl1(3)(7), m125_cl1(7)(3))
+
+let m125_data0 = some([some("vector"), none(), some(1)])
+
+match m125_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m125-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m125-x0:", "shape-miss")
+
+    }
+
+}
+
+let m125_data1 = some([some("splicer"), none(), some(5)])
+
+match m125_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m125-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m125-x1:", "shape-miss")
+
+    }
+
+}

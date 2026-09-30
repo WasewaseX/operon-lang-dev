@@ -1,0 +1,230 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=153 tag=m153
+
+gene m153_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m153-b0:", m153_b0({plasmid: 7, marker: 28, cell: 13})?!)
+
+gene m153_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m153-b1:", m153_b1({ribose: 28, vector: 33, helix: 86})?!)
+
+gene m153_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m153_f0([27, 1, 15, 12, 6]) {
+
+    case Ok(list) {
+
+        print("m153-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m153-f0:", "e:", m)
+
+    }
+
+}
+
+gene m153_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m153_f1([49, 49, 15, 19]) {
+
+    case Ok(list) {
+
+        print("m153-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m153-f1:", "e:", m)
+
+    }
+
+}
+
+gene m153_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m153_f2([30, 35, 31, 25, 27, 26]) {
+
+    case Ok(list) {
+
+        print("m153-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m153-f2:", "e:", m)
+
+    }
+
+}
+
+let m153_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m153-cc0:", m153_cl0(4)(15), m153_cl0(15)(4))
+
+let m153_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m153-cc1:", m153_cl1(7)(8), m153_cl1(8)(7))
+
+let m153_data0 = some([some("helix"), none(), some(8)])
+
+match m153_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m153-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m153-x0:", "shape-miss")
+
+    }
+
+}
+
+let m153_data1 = some([some("helix"), none(), some(6)])
+
+match m153_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m153-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m153-x1:", "shape-miss")
+
+    }
+
+}

@@ -1,0 +1,214 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=168 tag=s168
+
+stress {
+
+    print("s168-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s168-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s168-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s168-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s168-mz:", 63 % 0)
+
+} rescue (e) {
+
+    print("s168-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s168-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s168-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s168-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s168-of2:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s168-m1:", 9223372036854775807 % -1)
+
+} rescue (e) {
+
+    print("s168-m1:", "caught", e.kind, e.message)
+
+}
+
+gene s168_r0() {
+
+    raise "s168-0lCwqb"
+
+}
+
+stress {
+
+    s168_r0()
+
+    print("s168-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s168-r0:", e.kind, e.message)
+
+}
+
+gene s168_r1() {
+
+    raise "s168-u1es63"
+
+}
+
+stress {
+
+    s168_r1()
+
+    print("s168-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s168-r1:", e.kind, e.message)
+
+}
+
+let s168_xs0 = [5, 32, 11]
+
+stress {
+
+    print("s168-x0:", s168_xs0[8])
+
+} rescue (e) {
+
+    print("s168-x0:", "caught", e.kind)
+
+}
+
+let s168_xs1 = [42, 29]
+
+stress {
+
+    print("s168-x1:", s168_xs1[7])
+
+} rescue (e) {
+
+    print("s168-x1:", "caught", e.kind)
+
+}
+
+let s168_xs2 = [24, 14, 25, 6]
+
+stress {
+
+    print("s168-x2:", s168_xs2[9])
+
+} rescue (e) {
+
+    print("s168-x2:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s168-0"
+
+    } rescue (e) {
+
+        print("s168-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s168-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s168-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s168-d0-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s168-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s168-1"
+
+    } rescue (e) {
+
+        print("s168-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s168-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s168-d1-top:", outer.message)
+
+}

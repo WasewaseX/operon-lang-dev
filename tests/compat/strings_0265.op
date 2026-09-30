@@ -1,0 +1,50 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=265 tag=s265
+
+print("s265-m0:", "vaf9AyoxvB2".upper(), "vaf9AyoxvB2".slice(3), "vaf9AyoxvB2".len())
+
+print("s265-m1:", "qa2c8y".upper(), "qa2c8y".slice(3), "qa2c8y".len())
+
+print("s265-m2:", "gC31bf16cx".upper(), "gC31bf16cx".slice(4), "gC31bf16cx".len())
+
+print("s265-m3:", "n0f49oxC1".upper(), "n0f49oxC1".slice(1), "n0f49oxC1".len())
+
+print("s265-m4:", "g208pitB8".upper(), "g208pitB8".slice(1), "g208pitB8".len())
+
+print("s265-i0:", "dq5-{33}-xlfv")
+
+let s265_v0 = 33
+
+print("s265-v0:", "n={s265_v0}" + "!" * 2)
+
+print("s265-i1:", "708-{60}-vA9e")
+
+let s265_v1 = 60
+
+print("s265-v1:", "n={s265_v1}" + "!" * 1)
+
+print("s265-i2:", "bp_-{26}-kevn")
+
+let s265_v2 = 26
+
+print("s265-v2:", "n={s265_v2}" + "!" * 1)
+
+print("s265-r0:", "ir3ev5yn".replace("i", "l3"), "ir3ev5yn".contains("r3"))
+
+print("s265-r1:", "dzd3qsgi".replace("d", "x6"), "dzd3qsgi".contains("zd"))
+
+print("s265-r2:", "Bz_q8qzy".replace("B", "r3"), "Bz_q8qzy".contains("z_"))
+
+print("s265-r3:", "m4fdaiqd".replace("m", "6l"), "m4fdaiqd".contains("4f"))
+
+print("s265-j0:", ["3e4", "adi", "jk5", "w5q", "304"].join("-"))
+
+print("s265-j1:", ["7uz", "__8", "l6n"].join("-"))
+
+print("s265-j2:", ["rpr", "5jA", "vz0", "pl6", "1km"].join("-"))
+
+print("s265-a0:", "f_jgey4".at(5), "f_jgey4".trim() == "f_jgey4")
+
+print("s265-a1:", "Ckswg7k".at(5), "Ckswg7k".trim() == "Ckswg7k")
+
+print("s265-a2:", "Cs2mAmc".at(5), "Cs2mAmc".trim() == "Cs2mAmc")

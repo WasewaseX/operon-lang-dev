@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=142 tag=m142
+
+let m142_m0 = {ligase: 34, splicer: 67, marker: -50, gene: -98, helix: 74}
+
+print("m142-m0:", m142_m0["ligase"], len(m142_m0), m142_m0.has("ligase"))
+
+let m142_m1 = {splicer: 8, marker: -41, cell: -43, ligase: -41, codon: 88}
+
+print("m142-m1:", m142_m1["splicer"], len(m142_m1), m142_m1.has("splicer"))
+
+let m142_m2 = {vector: -90, enzyme: 63, plasmid: 43, codon: -69, cell: 91}
+
+print("m142-m2:", m142_m2["vector"], len(m142_m2), m142_m2.has("vector"))
+
+let m142_m3 = {plasmid: 14, gene: -59, marker: -74}
+
+print("m142-m3:", m142_m3["plasmid"], len(m142_m3), m142_m3.has("plasmid"))
+
+let m142_k0 = {exon: 4, vector: 15, helix: 30}
+
+let m142_ks0 = m142_k0.keys()
+
+let m142_sm0 = 0
+
+for k in m142_k0 { m142_sm0 += m142_k0[k] }
+
+print("m142-k0:", m142_sm0, m142_k0.keys().sort(), m142_k0.values().len())
+
+let m142_k1 = {gene: 5, ligase: 49, ribose: 1}
+
+let m142_ks1 = m142_k1.keys()
+
+let m142_sm1 = 0
+
+for k in m142_k1 { m142_sm1 += m142_k1[k] }
+
+print("m142-k1:", m142_sm1, m142_k1.keys().sort(), m142_k1.values().len())
+
+let m142_w0 = {outer: {helix: 3, cell: 4, tag: "ok"}}}
+
+print("m142-w0:", m142_w0["outer"]["cell"], m142_w0["outer"]["tag"])
+
+let m142_w1 = {outer: {codon: 9, ribose: 4, tag: "ok"}}}
+
+print("m142-w1:", m142_w1["outer"]["ribose"], m142_w1["outer"]["tag"])

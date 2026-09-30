@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=126 tag=s126
+
+print("s126-m0:", "vgs_nlfiyxtl2k".upper(), "vgs_nlfiyxtl2k".slice(2), "vgs_nlfiyxtl2k".len())
+
+print("s126-m1:", "iepp0Ay3wp9".upper(), "iepp0Ay3wp9".slice(2), "iepp0Ay3wp9".len())
+
+print("s126-m2:", "ahpkri9hpbCan".upper(), "ahpkri9hpbCan".slice(1), "ahpkri9hpbCan".len())
+
+print("s126-m3:", "ctze7vva3ty".upper(), "ctze7vva3ty".slice(4), "ctze7vva3ty".len())
+
+print("s126-i0:", "iiw-{87}-gvtu")
+
+let s126_v0 = 87
+
+print("s126-v0:", "n={s126_v0}" + "!" * 3)
+
+print("s126-i1:", "cep-{9}-ps08")
+
+let s126_v1 = 9
+
+print("s126-v1:", "n={s126_v1}" + "!" * 1)
+
+print("s126-i2:", "_vy-{86}-d0zo")
+
+let s126_v2 = 86
+
+print("s126-v2:", "n={s126_v2}" + "!" * 1)
+
+print("s126-r0:", "7Ab2kcm8".replace("7", "Bq"), "7Ab2kcm8".contains("Ab"))
+
+print("s126-r1:", "52eeslfd".replace("5", "91"), "52eeslfd".contains("2e"))
+
+print("s126-r2:", "Acylddq0".replace("A", "je"), "Acylddq0".contains("cy"))
+
+print("s126-j0:", ["ed_", "2li", "8Cp", "yCn"].join("-"))
+
+print("s126-j1:", ["lml", "AA7", "2mq", "_tv", "dk8"].join("-"))
+
+print("s126-a0:", "0a1ijm8".at(1), "0a1ijm8".trim() == "0a1ijm8")
+
+print("s126-a1:", "6bzj1wk".at(5), "6bzj1wk".trim() == "6bzj1wk")

@@ -1,0 +1,50 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=247 tag=s247
+
+print("s247-m0:", "_3tdn63".upper(), "_3tdn63".slice(2), "_3tdn63".len())
+
+print("s247-m1:", "42z719lmc63v".upper(), "42z719lmc63v".slice(1), "42z719lmc63v".len())
+
+print("s247-m2:", "zpy1bw85p20lj".upper(), "zpy1bw85p20lj".slice(2), "zpy1bw85p20lj".len())
+
+print("s247-m3:", "40_zrBgxsu".upper(), "40_zrBgxsu".slice(1), "40_zrBgxsu".len())
+
+print("s247-m4:", "n27C2v_762z".upper(), "n27C2v_762z".slice(3), "n27C2v_762z".len())
+
+print("s247-i0:", "51e-{67}-ep1v")
+
+let s247_v0 = 67
+
+print("s247-v0:", "n={s247_v0}" + "!" * 2)
+
+print("s247-i1:", "es1-{10}-v0Ay")
+
+let s247_v1 = 10
+
+print("s247-v1:", "n={s247_v1}" + "!" * 3)
+
+print("s247-i2:", "rco-{52}-79dy")
+
+let s247_v2 = 52
+
+print("s247-v2:", "n={s247_v2}" + "!" * 2)
+
+print("s247-i3:", "gBx-{47}-_1je")
+
+let s247_v3 = 47
+
+print("s247-v3:", "n={s247_v3}" + "!" * 3)
+
+print("s247-r0:", "wwzjAbsm".replace("w", "vd"), "wwzjAbsm".contains("wz"))
+
+print("s247-r1:", "vl_c_7j8".replace("v", "j2"), "vl_c_7j8".contains("l_"))
+
+print("s247-r2:", "Afan2a_7".replace("A", "ms"), "Afan2a_7".contains("fa"))
+
+print("s247-j0:", ["q_v", "6Bg", "7ff", "rpB", "uA0"].join("-"))
+
+print("s247-j1:", ["6bx", "mje", "n21", "6a6"].join("-"))
+
+print("s247-a0:", "3id3mvd".at(6), "3id3mvd".trim() == "3id3mvd")
+
+print("s247-a1:", "b384i77".at(2), "b384i77".trim() == "b384i77")

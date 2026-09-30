@@ -1,0 +1,202 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=180 tag=f180
+
+gene f180_g0(p, q = 43, r = 31) {
+
+    return p * 64 + q - r
+
+}
+
+print("f180-d0:", f180_g0(-19), f180_g0(-19, 8), f180_g0(-19, 43, 31))
+
+gene f180_g1(p, q = 72, r = 22) {
+
+    return p * 22 + q - r
+
+}
+
+print("f180-d1:", f180_g1(31), f180_g1(31, 4), f180_g1(31, 72, 22))
+
+gene f180_g2(p, q = 26, r = 28) {
+
+    return p * 14 + q - r
+
+}
+
+print("f180-d2:", f180_g2(-50), f180_g2(-50, 52), f180_g2(-50, 26, 28))
+
+gene f180_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f180_fib0(n - 1) + f180_fib0(n - 2)
+
+}
+
+print("f180-fib0:", f180_fib0(10))
+
+gene f180_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f180_fib1(n - 1) + f180_fib1(n - 2)
+
+}
+
+print("f180-fib1:", f180_fib1(13))
+
+gene f180_fib2(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f180_fib2(n - 1) + f180_fib2(n - 2)
+
+}
+
+print("f180-fib2:", f180_fib2(11))
+
+gene f180_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f180_gcd0(b, a % b)
+
+}
+
+print("f180-gcd0:", f180_gcd0(249, 289))
+
+gene f180_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f180_gcd1(b, a % b)
+
+}
+
+print("f180-gcd1:", f180_gcd1(140, 73))
+
+gene f180_gcd2(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f180_gcd2(b, a % b)
+
+}
+
+print("f180-gcd2:", f180_gcd2(491, 637))
+
+gene f180_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f180_c0 = f180_mk0(25)
+
+f180_c0(6)
+
+print("f180-cl0:", f180_c0(1))
+
+gene f180_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f180_c1 = f180_mk1(28)
+
+f180_c1(2)
+
+print("f180-cl1:", f180_c1(6))
+
+gene f180_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f180-hof0:", f180_tw0(gene (z) => z * 2 + 1, 18))
+
+gene f180_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f180-hof1:", f180_tw1(gene (z) => z * 2 + 1, 5))
+
+gene f180_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f180-dg0:", f180_sd0(591598))
+
+gene f180_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f180-dg1:", f180_sd1(920736))

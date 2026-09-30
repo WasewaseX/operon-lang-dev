@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=221 tag=m221
+
+let m221_m0 = {ribose: -97, codon: -86, ligase: -2}
+
+print("m221-m0:", m221_m0["ribose"], len(m221_m0), m221_m0.has("ribose"))
+
+let m221_m1 = {plasmid: 88, helix: 57, ribose: 83, ligase: 81, splicer: 24}
+
+print("m221-m1:", m221_m1["plasmid"], len(m221_m1), m221_m1.has("plasmid"))
+
+let m221_m2 = {exon: -42, splicer: -26, cell: 26, marker: 17, codon: -16}
+
+print("m221-m2:", m221_m2["exon"], len(m221_m2), m221_m2.has("exon"))
+
+let m221_k0 = {vector: 31, ligase: 50, plasmid: 49}
+
+let m221_ks0 = m221_k0.keys()
+
+let m221_sm0 = 0
+
+for k in m221_k0 { m221_sm0 += m221_k0[k] }
+
+print("m221-k0:", m221_sm0, m221_k0.keys().sort(), m221_k0.values().len())
+
+let m221_k1 = {ribose: 41, codon: 17, exon: 10}
+
+let m221_ks1 = m221_k1.keys()
+
+let m221_sm1 = 0
+
+for k in m221_k1 { m221_sm1 += m221_k1[k] }
+
+print("m221-k1:", m221_sm1, m221_k1.keys().sort(), m221_k1.values().len())
+
+let m221_k2 = {ribose: 26, gene: 8, vector: 6}
+
+let m221_ks2 = m221_k2.keys()
+
+let m221_sm2 = 0
+
+for k in m221_k2 { m221_sm2 += m221_k2[k] }
+
+print("m221-k2:", m221_sm2, m221_k2.keys().sort(), m221_k2.values().len())
+
+let m221_w0 = {outer: {helix: 2, plasmid: 5, tag: "ok"}}}
+
+print("m221-w0:", m221_w0["outer"]["plasmid"], m221_w0["outer"]["tag"])
+
+let m221_w1 = {outer: {codon: 1, vector: 1, tag: "ok"}}}
+
+print("m221-w1:", m221_w1["outer"]["vector"], m221_w1["outer"]["tag"])

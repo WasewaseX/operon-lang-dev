@@ -1,0 +1,60 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=119 tag=m119
+
+let m119_m0 = {ribose: -2, codon: 50, cell: 25, exon: 51}
+
+print("m119-m0:", m119_m0["ribose"], len(m119_m0), m119_m0.has("ribose"))
+
+let m119_m1 = {cell: 35, exon: -9, vector: -62}
+
+print("m119-m1:", m119_m1["cell"], len(m119_m1), m119_m1.has("cell"))
+
+let m119_m2 = {splicer: 49, vector: -19, ligase: -36, marker: 3, cell: 34}
+
+print("m119-m2:", m119_m2["splicer"], len(m119_m2), m119_m2.has("splicer"))
+
+let m119_m3 = {vector: 19, helix: -65, ligase: 41, cell: 11, ribose: 45}
+
+print("m119-m3:", m119_m3["vector"], len(m119_m3), m119_m3.has("vector"))
+
+let m119_m4 = {plasmid: 26, enzyme: 66, exon: -97}
+
+print("m119-m4:", m119_m4["plasmid"], len(m119_m4), m119_m4.has("plasmid"))
+
+let m119_k0 = {codon: 4, exon: 41, plasmid: 34}
+
+let m119_ks0 = m119_k0.keys()
+
+let m119_sm0 = 0
+
+for k in m119_k0 { m119_sm0 += m119_k0[k] }
+
+print("m119-k0:", m119_sm0, m119_k0.keys().sort(), m119_k0.values().len())
+
+let m119_k1 = {ligase: 9, ribose: 19, helix: 24}
+
+let m119_ks1 = m119_k1.keys()
+
+let m119_sm1 = 0
+
+for k in m119_k1 { m119_sm1 += m119_k1[k] }
+
+print("m119-k1:", m119_sm1, m119_k1.keys().sort(), m119_k1.values().len())
+
+let m119_k2 = {splicer: 31, enzyme: 6, vector: 17}
+
+let m119_ks2 = m119_k2.keys()
+
+let m119_sm2 = 0
+
+for k in m119_k2 { m119_sm2 += m119_k2[k] }
+
+print("m119-k2:", m119_sm2, m119_k2.keys().sort(), m119_k2.values().len())
+
+let m119_w0 = {outer: {plasmid: 2, marker: 5, tag: "ok"}}}
+
+print("m119-w0:", m119_w0["outer"]["marker"], m119_w0["outer"]["tag"])
+
+let m119_w1 = {outer: {helix: 5, gene: 8, tag: "ok"}}}
+
+print("m119-w1:", m119_w1["outer"]["gene"], m119_w1["outer"]["tag"])

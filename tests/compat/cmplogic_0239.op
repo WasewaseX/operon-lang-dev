@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=239 tag=c239
+
+print("c239-c0:", -6160 < -9615)
+
+print("c239-c1:", 521 < 3557)
+
+print("c239-c2:", 3293 > -9170)
+
+print("c239-c3:", -1335 >= -2993)
+
+print("c239-c4:", 8908 > -1616)
+
+print("c239-c5:", 8370 < 9788)
+
+print("c239-b0:", 34 < 8 && 8 < 48, 34 > 8 || 34 > 48)
+
+print("c239-b1:", 4 < 25 && 25 < 20, 4 > 25 || 4 > 20)
+
+print("c239-b2:", 19 < 29 && 29 < 46, 19 > 29 || 19 > 46)
+
+print("c239-b3:", 6 < 6 && 6 < 3, 6 > 6 || 6 > 3)
+
+print("c239-t0:", -1389 > -1508 ? "gt" : "le")
+
+print("c239-t1:", -5258 > 6402 ? "gt" : "le")
+
+print("c239-t2:", 6907 > 4603 ? "gt" : "le")
+
+let c239_n0 = null
+
+print("c239-n0:", c239_n0 ?? 9480, c239_n0 == null)
+
+let c239_n1 = null
+
+print("c239-n1:", c239_n1 ?? -7935, c239_n1 == null)
+
+let c239_n2 = null
+
+print("c239-n2:", c239_n2 ?? -7876, c239_n2 == null)
+
+print("c239-s0:", "qzBh" in "sarb3tqzBh", "qzBh" == "qzBh")
+
+print("c239-s1:", "0ubx" in "owdblm0ubx", "0ubx" == "0ubx")

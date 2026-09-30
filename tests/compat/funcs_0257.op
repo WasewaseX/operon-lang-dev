@@ -1,0 +1,194 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=257 tag=f257
+
+gene f257_g0(p, q = 34, r = 39) {
+
+    return p * 50 + q - r
+
+}
+
+print("f257-d0:", f257_g0(-43), f257_g0(-43, 60), f257_g0(-43, 34, 39))
+
+gene f257_g1(p, q = 25, r = 3) {
+
+    return p * 15 + q - r
+
+}
+
+print("f257-d1:", f257_g1(6), f257_g1(6, 58), f257_g1(6, 25, 3))
+
+gene f257_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f257_fib0(n - 1) + f257_fib0(n - 2)
+
+}
+
+print("f257-fib0:", f257_fib0(8))
+
+gene f257_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f257_fib1(n - 1) + f257_fib1(n - 2)
+
+}
+
+print("f257-fib1:", f257_fib1(13))
+
+gene f257_fib2(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f257_fib2(n - 1) + f257_fib2(n - 2)
+
+}
+
+print("f257-fib2:", f257_fib2(7))
+
+gene f257_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f257_gcd0(b, a % b)
+
+}
+
+print("f257-gcd0:", f257_gcd0(828, 741))
+
+gene f257_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f257_gcd1(b, a % b)
+
+}
+
+print("f257-gcd1:", f257_gcd1(650, 92))
+
+gene f257_gcd2(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f257_gcd2(b, a % b)
+
+}
+
+print("f257-gcd2:", f257_gcd2(206, 51))
+
+gene f257_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f257_c0 = f257_mk0(4)
+
+f257_c0(7)
+
+print("f257-cl0:", f257_c0(8))
+
+gene f257_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f257_c1 = f257_mk1(4)
+
+f257_c1(8)
+
+print("f257-cl1:", f257_c1(5))
+
+gene f257_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f257-hof0:", f257_tw0(gene (z) => z * 2 + 1, 25))
+
+gene f257_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f257-hof1:", f257_tw1(gene (z) => z * 2 + 1, 11))
+
+gene f257_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f257-dg0:", f257_sd0(18767))
+
+gene f257_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f257-dg1:", f257_sd1(748912))

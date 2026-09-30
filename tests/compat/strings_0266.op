@@ -1,0 +1,50 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=266 tag=s266
+
+print("s266-m0:", "q10n6d2petjx".upper(), "q10n6d2petjx".slice(2), "q10n6d2petjx".len())
+
+print("s266-m1:", "4uyB4hh01q2oln".upper(), "4uyB4hh01q2oln".slice(1), "4uyB4hh01q2oln".len())
+
+print("s266-m2:", "zk2eyh98ei".upper(), "zk2eyh98ei".slice(2), "zk2eyh98ei".len())
+
+print("s266-m3:", "wxgz00xt5nh4".upper(), "wxgz00xt5nh4".slice(3), "wxgz00xt5nh4".len())
+
+print("s266-m4:", "laiB68744Ata".upper(), "laiB68744Ata".slice(1), "laiB68744Ata".len())
+
+print("s266-i0:", "t4d-{89}-6vBu")
+
+let s266_v0 = 89
+
+print("s266-v0:", "n={s266_v0}" + "!" * 1)
+
+print("s266-i1:", "_g8-{37}-2jv_")
+
+let s266_v1 = 37
+
+print("s266-v1:", "n={s266_v1}" + "!" * 1)
+
+print("s266-i2:", "5s6-{75}-tAw6")
+
+let s266_v2 = 75
+
+print("s266-v2:", "n={s266_v2}" + "!" * 3)
+
+print("s266-i3:", "uiz-{54}-dCdA")
+
+let s266_v3 = 54
+
+print("s266-v3:", "n={s266_v3}" + "!" * 3)
+
+print("s266-r0:", "t0blx9f5".replace("t", "s0"), "t0blx9f5".contains("0b"))
+
+print("s266-r1:", "7so_Cpq3".replace("7", "s9"), "7so_Cpq3".contains("so"))
+
+print("s266-j0:", ["_7r", "r2q", "r8a", "4z_", "4j2"].join("-"))
+
+print("s266-j1:", ["oj1", "fqn", "mn6"].join("-"))
+
+print("s266-a0:", "ql17g5j".at(2), "ql17g5j".trim() == "ql17g5j")
+
+print("s266-a1:", "uyetCgw".at(4), "uyetCgw".trim() == "uyetCgw")
+
+print("s266-a2:", "41rylv6".at(4), "41rylv6".trim() == "41rylv6")

@@ -1,0 +1,164 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=262 tag=c262
+
+let c262_b0 = "start"
+
+if 80 > 80 { c262_b0 = "hi" } elif 80 > 40 { c262_b0 = "mid" } else { c262_b0 = "lo" }
+
+print("c262-i0:", c262_b0, 80)
+
+let c262_b1 = "start"
+
+if 38 > 80 { c262_b1 = "hi" } elif 38 > 40 { c262_b1 = "mid" } else { c262_b1 = "lo" }
+
+print("c262-i1:", c262_b1, 38)
+
+let c262_b2 = "start"
+
+if -2 > 80 { c262_b2 = "hi" } elif -2 > 40 { c262_b2 = "mid" } else { c262_b2 = "lo" }
+
+print("c262-i2:", c262_b2, -2)
+
+let c262_b3 = "start"
+
+if -7 > 80 { c262_b3 = "hi" } elif -7 > 40 { c262_b3 = "mid" } else { c262_b3 = "lo" }
+
+print("c262-i3:", c262_b3, -7)
+
+let c262_b4 = "start"
+
+if 10 > 80 { c262_b4 = "hi" } elif 10 > 40 { c262_b4 = "mid" } else { c262_b4 = "lo" }
+
+print("c262-i4:", c262_b4, 10)
+
+let c262_a0 = 0
+
+let c262_n0 = 0
+
+while c262_n0 < 15 {
+
+    c262_n0 += 4
+
+    if c262_n0 % 3 == 0 { continue }
+
+    if c262_n0 > 20 { break }
+
+    c262_a0 += c262_n0
+
+}
+
+print("c262-w0:", c262_a0, c262_n0)
+
+let c262_a1 = 0
+
+let c262_n1 = 0
+
+while c262_n1 < 5 {
+
+    c262_n1 += 3
+
+    if c262_n1 % 3 == 0 { continue }
+
+    if c262_n1 > 13 { break }
+
+    c262_a1 += c262_n1
+
+}
+
+print("c262-w1:", c262_a1, c262_n1)
+
+let c262_a2 = 0
+
+let c262_n2 = 0
+
+while c262_n2 < 14 {
+
+    c262_n2 += 4
+
+    if c262_n2 % 3 == 0 { continue }
+
+    if c262_n2 > 16 { break }
+
+    c262_a2 += c262_n2
+
+}
+
+print("c262-w2:", c262_a2, c262_n2)
+
+let c262_c0 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 2] {
+
+        c262_c0 += a * b
+
+    }
+
+}
+
+print("c262-l0:", c262_c0)
+
+let c262_c1 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 2] {
+
+        c262_c1 += a * b
+
+    }
+
+}
+
+print("c262-l1:", c262_c1)
+
+let c262_c2 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 4] {
+
+        c262_c2 += a * b
+
+    }
+
+}
+
+print("c262-l2:", c262_c2)
+
+let c262_acc0 = ""
+
+loop {
+
+    c262_acc0 += "x"
+
+    if c262_acc0.len() >= 4 { break }
+
+}
+
+print("c262-o0:", c262_acc0)
+
+let c262_acc1 = ""
+
+loop {
+
+    c262_acc1 += "x"
+
+    if c262_acc1.len() >= 7 { break }
+
+}
+
+print("c262-o1:", c262_acc1)
+
+let c262_acc2 = ""
+
+loop {
+
+    c262_acc2 += "x"
+
+    if c262_acc2.len() >= 4 { break }
+
+}
+
+print("c262-o2:", c262_acc2)

@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=171 tag=c171
+
+print("c171-c0:", -3986 < 1833)
+
+print("c171-c1:", 9214 != 2449)
+
+print("c171-c2:", 5207 > 100)
+
+print("c171-c3:", 4930 == -6028)
+
+print("c171-c4:", 1829 >= -9265)
+
+print("c171-c5:", -1614 > -2588)
+
+print("c171-c6:", 3071 == 3547)
+
+print("c171-b0:", 6 < 19 && 19 < 47, 6 > 19 || 6 > 47)
+
+print("c171-b1:", 6 < 2 && 2 < 24, 6 > 2 || 6 > 24)
+
+print("c171-b2:", 1 < 4 && 4 < 28, 1 > 4 || 1 > 28)
+
+print("c171-t0:", 5448 > 6147 ? "gt" : "le")
+
+print("c171-t1:", 3146 > -7365 ? "gt" : "le")
+
+print("c171-t2:", 2855 > -5860 ? "gt" : "le")
+
+let c171_n0 = null
+
+print("c171-n0:", c171_n0 ?? 2325, c171_n0 == null)
+
+let c171_n1 = null
+
+print("c171-n1:", c171_n1 ?? -6360, c171_n1 == null)
+
+print("c171-s0:", "ko7C" in "kzx1xuko7C", "ko7C" == "ko7C")
+
+print("c171-s1:", "65lB" in "keriwe65lB", "65lB" == "65lB")

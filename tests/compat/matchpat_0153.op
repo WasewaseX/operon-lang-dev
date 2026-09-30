@@ -1,0 +1,262 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=153 tag=m153
+
+let m153_s0 = some(4)
+
+match m153_s0 {
+
+    case Some(x) if x > 4 {
+
+        print("m153-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m153-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m153-m0:", "none")
+
+    }
+
+}
+
+let m153_s1 = some(5)
+
+match m153_s1 {
+
+    case Some(x) if x > 5 {
+
+        print("m153-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m153-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m153-m1:", "none")
+
+    }
+
+}
+
+let m153_s2 = some(6)
+
+match m153_s2 {
+
+    case Some(x) if x > 6 {
+
+        print("m153-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m153-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m153-m2:", "none")
+
+    }
+
+}
+
+let m153_ls0 = [38, 45, 16]
+
+match m153_ls0 {
+
+    case [38, *rest] {
+
+        print("m153-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m153-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m153-l0:", "other")
+
+    }
+
+}
+
+let m153_ls1 = [8, 8, 20]
+
+match m153_ls1 {
+
+    case [8, *rest] {
+
+        print("m153-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m153-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m153-l1:", "other")
+
+    }
+
+}
+
+let m153_mp0 = {ligase: -5648, exon: 5259}
+
+match m153_mp0 {
+
+    case {ligase: p, exon: q} {
+
+        print("m153-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m153-mp0:", "miss")
+
+    }
+
+}
+
+let m153_mp1 = {plasmid: 8983, ribose: 9068}
+
+match m153_mp1 {
+
+    case {plasmid: p, ribose: q} {
+
+        print("m153-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m153-mp1:", "miss")
+
+    }
+
+}
+
+let m153_mp2 = {ligase: 3927, enzyme: 536}
+
+match m153_mp2 {
+
+    case {ligase: p, enzyme: q} {
+
+        print("m153-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m153-mp2:", "miss")
+
+    }
+
+}
+
+let m153_r0 = ok(1)
+
+match m153_r0 {
+
+    case Ok(n) | Err(1) {
+
+        print("m153-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m153-r0:", "zero")
+
+    }
+
+}
+
+let m153_r1 = ok(4)
+
+match m153_r1 {
+
+    case Ok(n) | Err(4) {
+
+        print("m153-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m153-r1:", "zero")
+
+    }
+
+}
+
+let m153_r2 = ok(5)
+
+match m153_r2 {
+
+    case Ok(n) | Err(5) {
+
+        print("m153-r2:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m153-r2:", "zero")
+
+    }
+
+}
+
+match "exon" {
+
+    case "exon" {
+
+        print("m153-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m153-w0:", "alt")
+
+    }
+
+}
+
+match "plasmid" {
+
+    case "plasmid" {
+
+        print("m153-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m153-w1:", "alt")
+
+    }
+
+}

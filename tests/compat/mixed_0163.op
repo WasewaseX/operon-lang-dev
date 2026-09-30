@@ -1,0 +1,214 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=163 tag=m163
+
+gene m163_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m163-b0:", m163_b0({codon: 72, gene: 15, cell: 15})?!)
+
+gene m163_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m163-b1:", m163_b1({codon: 18, splicer: 46, marker: 55})?!)
+
+gene m163_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m163-b2:", m163_b2({marker: 77, plasmid: 22, helix: 11})?!)
+
+gene m163_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m163_f0([46, 28, 28, 29, 20, 38]) {
+
+    case Ok(list) {
+
+        print("m163-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m163-f0:", "e:", m)
+
+    }
+
+}
+
+gene m163_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m163_f1([5, 12, 45, 14, 44, 50, 57, 10]) {
+
+    case Ok(list) {
+
+        print("m163-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m163-f1:", "e:", m)
+
+    }
+
+}
+
+let m163_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m163-cc0:", m163_cl0(14)(18), m163_cl0(18)(14))
+
+let m163_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m163-cc1:", m163_cl1(20)(10), m163_cl1(10)(20))
+
+let m163_data0 = some([some("plasmid"), none(), some(2)])
+
+match m163_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m163-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m163-x0:", "shape-miss")
+
+    }
+
+}
+
+let m163_data1 = some([some("helix"), none(), some(8)])
+
+match m163_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m163-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m163-x1:", "shape-miss")
+
+    }
+
+}

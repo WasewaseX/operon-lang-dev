@@ -1,0 +1,146 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=242 tag=c242
+
+let c242_b0 = "start"
+
+if -20 > 80 { c242_b0 = "hi" } elif -20 > 40 { c242_b0 = "mid" } else { c242_b0 = "lo" }
+
+print("c242-i0:", c242_b0, -20)
+
+let c242_b1 = "start"
+
+if 81 > 80 { c242_b1 = "hi" } elif 81 > 40 { c242_b1 = "mid" } else { c242_b1 = "lo" }
+
+print("c242-i1:", c242_b1, 81)
+
+let c242_b2 = "start"
+
+if 36 > 80 { c242_b2 = "hi" } elif 36 > 40 { c242_b2 = "mid" } else { c242_b2 = "lo" }
+
+print("c242-i2:", c242_b2, 36)
+
+let c242_b3 = "start"
+
+if 17 > 80 { c242_b3 = "hi" } elif 17 > 40 { c242_b3 = "mid" } else { c242_b3 = "lo" }
+
+print("c242-i3:", c242_b3, 17)
+
+let c242_a0 = 0
+
+let c242_n0 = 0
+
+while c242_n0 < 12 {
+
+    c242_n0 += 1
+
+    if c242_n0 % 3 == 0 { continue }
+
+    if c242_n0 > 18 { break }
+
+    c242_a0 += c242_n0
+
+}
+
+print("c242-w0:", c242_a0, c242_n0)
+
+let c242_a1 = 0
+
+let c242_n1 = 0
+
+while c242_n1 < 17 {
+
+    c242_n1 += 3
+
+    if c242_n1 % 3 == 0 { continue }
+
+    if c242_n1 > 21 { break }
+
+    c242_a1 += c242_n1
+
+}
+
+print("c242-w1:", c242_a1, c242_n1)
+
+let c242_a2 = 0
+
+let c242_n2 = 0
+
+while c242_n2 < 18 {
+
+    c242_n2 += 2
+
+    if c242_n2 % 2 == 0 { continue }
+
+    if c242_n2 > 26 { break }
+
+    c242_a2 += c242_n2
+
+}
+
+print("c242-w2:", c242_a2, c242_n2)
+
+let c242_c0 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 4] {
+
+        c242_c0 += a * b
+
+    }
+
+}
+
+print("c242-l0:", c242_c0)
+
+let c242_c1 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 2] {
+
+        c242_c1 += a * b
+
+    }
+
+}
+
+print("c242-l1:", c242_c1)
+
+let c242_c2 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 4] {
+
+        c242_c2 += a * b
+
+    }
+
+}
+
+print("c242-l2:", c242_c2)
+
+let c242_acc0 = ""
+
+loop {
+
+    c242_acc0 += "x"
+
+    if c242_acc0.len() >= 5 { break }
+
+}
+
+print("c242-o0:", c242_acc0)
+
+let c242_acc1 = ""
+
+loop {
+
+    c242_acc1 += "x"
+
+    if c242_acc1.len() >= 3 { break }
+
+}
+
+print("c242-o1:", c242_acc1)

@@ -1,0 +1,176 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=112 tag=c112
+
+let c112_b0 = "start"
+
+if -10 > 80 { c112_b0 = "hi" } elif -10 > 40 { c112_b0 = "mid" } else { c112_b0 = "lo" }
+
+print("c112-i0:", c112_b0, -10)
+
+let c112_b1 = "start"
+
+if -17 > 80 { c112_b1 = "hi" } elif -17 > 40 { c112_b1 = "mid" } else { c112_b1 = "lo" }
+
+print("c112-i1:", c112_b1, -17)
+
+let c112_b2 = "start"
+
+if 83 > 80 { c112_b2 = "hi" } elif 83 > 40 { c112_b2 = "mid" } else { c112_b2 = "lo" }
+
+print("c112-i2:", c112_b2, 83)
+
+let c112_b3 = "start"
+
+if -11 > 80 { c112_b3 = "hi" } elif -11 > 40 { c112_b3 = "mid" } else { c112_b3 = "lo" }
+
+print("c112-i3:", c112_b3, -11)
+
+let c112_a0 = 0
+
+let c112_n0 = 0
+
+while c112_n0 < 14 {
+
+    c112_n0 += 2
+
+    if c112_n0 % 2 == 0 { continue }
+
+    if c112_n0 > 23 { break }
+
+    c112_a0 += c112_n0
+
+}
+
+print("c112-w0:", c112_a0, c112_n0)
+
+let c112_a1 = 0
+
+let c112_n1 = 0
+
+while c112_n1 < 10 {
+
+    c112_n1 += 3
+
+    if c112_n1 % 2 == 0 { continue }
+
+    if c112_n1 > 12 { break }
+
+    c112_a1 += c112_n1
+
+}
+
+print("c112-w1:", c112_a1, c112_n1)
+
+let c112_a2 = 0
+
+let c112_n2 = 0
+
+while c112_n2 < 14 {
+
+    c112_n2 += 4
+
+    if c112_n2 % 3 == 0 { continue }
+
+    if c112_n2 > 19 { break }
+
+    c112_a2 += c112_n2
+
+}
+
+print("c112-w2:", c112_a2, c112_n2)
+
+let c112_a3 = 0
+
+let c112_n3 = 0
+
+while c112_n3 < 14 {
+
+    c112_n3 += 3
+
+    if c112_n3 % 2 == 0 { continue }
+
+    if c112_n3 > 18 { break }
+
+    c112_a3 += c112_n3
+
+}
+
+print("c112-w3:", c112_a3, c112_n3)
+
+let c112_c0 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 4] {
+
+        c112_c0 += a * b
+
+    }
+
+}
+
+print("c112-l0:", c112_c0)
+
+let c112_c1 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 2] {
+
+        c112_c1 += a * b
+
+    }
+
+}
+
+print("c112-l1:", c112_c1)
+
+let c112_c2 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 3] {
+
+        c112_c2 += a * b
+
+    }
+
+}
+
+print("c112-l2:", c112_c2)
+
+let c112_acc0 = ""
+
+loop {
+
+    c112_acc0 += "x"
+
+    if c112_acc0.len() >= 5 { break }
+
+}
+
+print("c112-o0:", c112_acc0)
+
+let c112_acc1 = ""
+
+loop {
+
+    c112_acc1 += "x"
+
+    if c112_acc1.len() >= 7 { break }
+
+}
+
+print("c112-o1:", c112_acc1)
+
+let c112_acc2 = ""
+
+loop {
+
+    c112_acc2 += "x"
+
+    if c112_acc2.len() >= 3 { break }
+
+}
+
+print("c112-o2:", c112_acc2)

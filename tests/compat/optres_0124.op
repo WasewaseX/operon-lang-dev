@@ -1,0 +1,100 @@
+# compat corpus — generated, do not edit by hand
+# bucket=optres seed=20261030 idx=124 tag=o124
+
+gene o124_f0(n) {
+
+    if n > -6249 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o124_u0(n) {
+
+    let v = o124_f0(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o124-p0:", o124_u0(324), o124_u0(-6246))
+
+gene o124_f1(n) {
+
+    if n > -8054 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o124_u1(n) {
+
+    let v = o124_f1(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o124-p1:", o124_u1(4944), o124_u1(-8052))
+
+gene o124_f2(n) {
+
+    if n > 7078 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o124_u2(n) {
+
+    let v = o124_f2(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o124-p2:", o124_u2(3738), o124_u2(7095))
+
+print("o124-o0:", is_ok(ok(6095)), is_none(none()), is_err(err("6095")), is_some(some(6095)))
+
+print("o124-u0:", unwrap_or(none(), 6095), unwrap_or(err("x"), 6094), unwrap_or(ok(6095), 0))
+
+print("o124-o1:", is_ok(ok(478)), is_none(none()), is_err(err("478")), is_some(some(478)))
+
+print("o124-u1:", unwrap_or(none(), 478), unwrap_or(err("x"), 477), unwrap_or(ok(478), 0))
+
+print("o124-o2:", is_ok(ok(8643)), is_none(none()), is_err(err("8643")), is_some(some(8643)))
+
+print("o124-u2:", unwrap_or(none(), 8643), unwrap_or(err("x"), 8642), unwrap_or(ok(8643), 0))
+
+print("o124-o3:", is_ok(ok(-9324)), is_none(none()), is_err(err("-9324")), is_some(some(-9324)))
+
+print("o124-u3:", unwrap_or(none(), -9324), unwrap_or(err("x"), -9325), unwrap_or(ok(-9324), 0))
+
+print("o124-e0:", ok(-9876) == ok(-9876), some(-9876) == ok(-9876), none() == none(), err(1) == err(2))
+
+print("o124-j0:", json_str(ok(-9876)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o124-e1:", ok(50) == ok(50), some(50) == ok(50), none() == none(), err(1) == err(2))
+
+print("o124-j1:", json_str(ok(50)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o124-n0:", some(some(49))?!?!, unwrap(ok(111)) + unwrap(some(62)))
+
+print("o124-s0:", "v=" + str(ok(49)?!), some("62k")?! + "!")
+
+print("o124-n1:", some(some(4))?!?!, unwrap(ok(9)) + unwrap(some(5)))
+
+print("o124-s1:", "v=" + str(ok(4)?!), some("5k")?! + "!")

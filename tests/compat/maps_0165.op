@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=165 tag=m165
+
+let m165_m0 = {splicer: 88, enzyme: -1, codon: 24}
+
+print("m165-m0:", m165_m0["splicer"], len(m165_m0), m165_m0.has("splicer"))
+
+let m165_m1 = {splicer: -32, ligase: -52, gene: 92}
+
+print("m165-m1:", m165_m1["splicer"], len(m165_m1), m165_m1.has("splicer"))
+
+let m165_m2 = {codon: -67, helix: -45, exon: 29}
+
+print("m165-m2:", m165_m2["codon"], len(m165_m2), m165_m2.has("codon"))
+
+let m165_k0 = {enzyme: 17, splicer: 12, helix: 18}
+
+let m165_ks0 = m165_k0.keys()
+
+let m165_sm0 = 0
+
+for k in m165_k0 { m165_sm0 += m165_k0[k] }
+
+print("m165-k0:", m165_sm0, m165_k0.keys().sort(), m165_k0.values().len())
+
+let m165_k1 = {vector: 33, helix: 21, cell: 3}
+
+let m165_ks1 = m165_k1.keys()
+
+let m165_sm1 = 0
+
+for k in m165_k1 { m165_sm1 += m165_k1[k] }
+
+print("m165-k1:", m165_sm1, m165_k1.keys().sort(), m165_k1.values().len())
+
+let m165_k2 = {enzyme: 20, gene: 38, splicer: 47}
+
+let m165_ks2 = m165_k2.keys()
+
+let m165_sm2 = 0
+
+for k in m165_k2 { m165_sm2 += m165_k2[k] }
+
+print("m165-k2:", m165_sm2, m165_k2.keys().sort(), m165_k2.values().len())
+
+let m165_w0 = {outer: {ligase: 5, marker: 8, tag: "ok"}}}
+
+print("m165-w0:", m165_w0["outer"]["marker"], m165_w0["outer"]["tag"])
+
+let m165_w1 = {outer: {cell: 2, codon: 7, tag: "ok"}}}
+
+print("m165-w1:", m165_w1["outer"]["codon"], m165_w1["outer"]["tag"])

@@ -1,0 +1,168 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=178 tag=c178
+
+let c178_b0 = "start"
+
+if 36 > 80 { c178_b0 = "hi" } elif 36 > 40 { c178_b0 = "mid" } else { c178_b0 = "lo" }
+
+print("c178-i0:", c178_b0, 36)
+
+let c178_b1 = "start"
+
+if -10 > 80 { c178_b1 = "hi" } elif -10 > 40 { c178_b1 = "mid" } else { c178_b1 = "lo" }
+
+print("c178-i1:", c178_b1, -10)
+
+let c178_b2 = "start"
+
+if 8 > 80 { c178_b2 = "hi" } elif 8 > 40 { c178_b2 = "mid" } else { c178_b2 = "lo" }
+
+print("c178-i2:", c178_b2, 8)
+
+let c178_b3 = "start"
+
+if -19 > 80 { c178_b3 = "hi" } elif -19 > 40 { c178_b3 = "mid" } else { c178_b3 = "lo" }
+
+print("c178-i3:", c178_b3, -19)
+
+let c178_b4 = "start"
+
+if 75 > 80 { c178_b4 = "hi" } elif 75 > 40 { c178_b4 = "mid" } else { c178_b4 = "lo" }
+
+print("c178-i4:", c178_b4, 75)
+
+let c178_a0 = 0
+
+let c178_n0 = 0
+
+while c178_n0 < 8 {
+
+    c178_n0 += 1
+
+    if c178_n0 % 3 == 0 { continue }
+
+    if c178_n0 > 12 { break }
+
+    c178_a0 += c178_n0
+
+}
+
+print("c178-w0:", c178_a0, c178_n0)
+
+let c178_a1 = 0
+
+let c178_n1 = 0
+
+while c178_n1 < 13 {
+
+    c178_n1 += 4
+
+    if c178_n1 % 3 == 0 { continue }
+
+    if c178_n1 > 18 { break }
+
+    c178_a1 += c178_n1
+
+}
+
+print("c178-w1:", c178_a1, c178_n1)
+
+let c178_a2 = 0
+
+let c178_n2 = 0
+
+while c178_n2 < 8 {
+
+    c178_n2 += 3
+
+    if c178_n2 % 3 == 0 { continue }
+
+    if c178_n2 > 17 { break }
+
+    c178_a2 += c178_n2
+
+}
+
+print("c178-w2:", c178_a2, c178_n2)
+
+let c178_a3 = 0
+
+let c178_n3 = 0
+
+while c178_n3 < 18 {
+
+    c178_n3 += 2
+
+    if c178_n3 % 3 == 0 { continue }
+
+    if c178_n3 > 21 { break }
+
+    c178_a3 += c178_n3
+
+}
+
+print("c178-w3:", c178_a3, c178_n3)
+
+let c178_c0 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 2] {
+
+        c178_c0 += a * b
+
+    }
+
+}
+
+print("c178-l0:", c178_c0)
+
+let c178_c1 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 3] {
+
+        c178_c1 += a * b
+
+    }
+
+}
+
+print("c178-l1:", c178_c1)
+
+let c178_acc0 = ""
+
+loop {
+
+    c178_acc0 += "x"
+
+    if c178_acc0.len() >= 4 { break }
+
+}
+
+print("c178-o0:", c178_acc0)
+
+let c178_acc1 = ""
+
+loop {
+
+    c178_acc1 += "x"
+
+    if c178_acc1.len() >= 3 { break }
+
+}
+
+print("c178-o1:", c178_acc1)
+
+let c178_acc2 = ""
+
+loop {
+
+    c178_acc2 += "x"
+
+    if c178_acc2.len() >= 4 { break }
+
+}
+
+print("c178-o2:", c178_acc2)

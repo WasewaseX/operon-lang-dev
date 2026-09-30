@@ -1,0 +1,182 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=174 tag=c174
+
+let c174_b0 = "start"
+
+if -15 > 80 { c174_b0 = "hi" } elif -15 > 40 { c174_b0 = "mid" } else { c174_b0 = "lo" }
+
+print("c174-i0:", c174_b0, -15)
+
+let c174_b1 = "start"
+
+if -13 > 80 { c174_b1 = "hi" } elif -13 > 40 { c174_b1 = "mid" } else { c174_b1 = "lo" }
+
+print("c174-i1:", c174_b1, -13)
+
+let c174_b2 = "start"
+
+if 71 > 80 { c174_b2 = "hi" } elif 71 > 40 { c174_b2 = "mid" } else { c174_b2 = "lo" }
+
+print("c174-i2:", c174_b2, 71)
+
+let c174_b3 = "start"
+
+if 44 > 80 { c174_b3 = "hi" } elif 44 > 40 { c174_b3 = "mid" } else { c174_b3 = "lo" }
+
+print("c174-i3:", c174_b3, 44)
+
+let c174_b4 = "start"
+
+if 16 > 80 { c174_b4 = "hi" } elif 16 > 40 { c174_b4 = "mid" } else { c174_b4 = "lo" }
+
+print("c174-i4:", c174_b4, 16)
+
+let c174_a0 = 0
+
+let c174_n0 = 0
+
+while c174_n0 < 10 {
+
+    c174_n0 += 3
+
+    if c174_n0 % 3 == 0 { continue }
+
+    if c174_n0 > 13 { break }
+
+    c174_a0 += c174_n0
+
+}
+
+print("c174-w0:", c174_a0, c174_n0)
+
+let c174_a1 = 0
+
+let c174_n1 = 0
+
+while c174_n1 < 20 {
+
+    c174_n1 += 1
+
+    if c174_n1 % 3 == 0 { continue }
+
+    if c174_n1 > 27 { break }
+
+    c174_a1 += c174_n1
+
+}
+
+print("c174-w1:", c174_a1, c174_n1)
+
+let c174_a2 = 0
+
+let c174_n2 = 0
+
+while c174_n2 < 15 {
+
+    c174_n2 += 3
+
+    if c174_n2 % 2 == 0 { continue }
+
+    if c174_n2 > 17 { break }
+
+    c174_a2 += c174_n2
+
+}
+
+print("c174-w2:", c174_a2, c174_n2)
+
+let c174_a3 = 0
+
+let c174_n3 = 0
+
+while c174_n3 < 20 {
+
+    c174_n3 += 2
+
+    if c174_n3 % 3 == 0 { continue }
+
+    if c174_n3 > 23 { break }
+
+    c174_a3 += c174_n3
+
+}
+
+print("c174-w3:", c174_a3, c174_n3)
+
+let c174_c0 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 4] {
+
+        c174_c0 += a * b
+
+    }
+
+}
+
+print("c174-l0:", c174_c0)
+
+let c174_c1 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 3] {
+
+        c174_c1 += a * b
+
+    }
+
+}
+
+print("c174-l1:", c174_c1)
+
+let c174_c2 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 3] {
+
+        c174_c2 += a * b
+
+    }
+
+}
+
+print("c174-l2:", c174_c2)
+
+let c174_acc0 = ""
+
+loop {
+
+    c174_acc0 += "x"
+
+    if c174_acc0.len() >= 7 { break }
+
+}
+
+print("c174-o0:", c174_acc0)
+
+let c174_acc1 = ""
+
+loop {
+
+    c174_acc1 += "x"
+
+    if c174_acc1.len() >= 3 { break }
+
+}
+
+print("c174-o1:", c174_acc1)
+
+let c174_acc2 = ""
+
+loop {
+
+    c174_acc2 += "x"
+
+    if c174_acc2.len() >= 3 { break }
+
+}
+
+print("c174-o2:", c174_acc2)

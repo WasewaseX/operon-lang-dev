@@ -1,0 +1,286 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=134 tag=m134
+
+let m134_s0 = some(8)
+
+match m134_s0 {
+
+    case Some(x) if x > 8 {
+
+        print("m134-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m134-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m134-m0:", "none")
+
+    }
+
+}
+
+let m134_s1 = some(3)
+
+match m134_s1 {
+
+    case Some(x) if x > 3 {
+
+        print("m134-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m134-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m134-m1:", "none")
+
+    }
+
+}
+
+let m134_s2 = some(8)
+
+match m134_s2 {
+
+    case Some(x) if x > 8 {
+
+        print("m134-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m134-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m134-m2:", "none")
+
+    }
+
+}
+
+let m134_ls0 = [50, 22, 18]
+
+match m134_ls0 {
+
+    case [50, *rest] {
+
+        print("m134-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m134-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m134-l0:", "other")
+
+    }
+
+}
+
+let m134_ls1 = [33, 31, 13]
+
+match m134_ls1 {
+
+    case [33, *rest] {
+
+        print("m134-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m134-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m134-l1:", "other")
+
+    }
+
+}
+
+let m134_ls2 = [48, 21, 44]
+
+match m134_ls2 {
+
+    case [48, *rest] {
+
+        print("m134-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m134-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m134-l2:", "other")
+
+    }
+
+}
+
+let m134_mp0 = {helix: 9937, plasmid: 7766}
+
+match m134_mp0 {
+
+    case {helix: p, plasmid: q} {
+
+        print("m134-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m134-mp0:", "miss")
+
+    }
+
+}
+
+let m134_mp1 = {gene: 7525, marker: 7899}
+
+match m134_mp1 {
+
+    case {gene: p, marker: q} {
+
+        print("m134-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m134-mp1:", "miss")
+
+    }
+
+}
+
+let m134_mp2 = {plasmid: 3106, exon: 9467}
+
+match m134_mp2 {
+
+    case {plasmid: p, exon: q} {
+
+        print("m134-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m134-mp2:", "miss")
+
+    }
+
+}
+
+let m134_r0 = ok(2)
+
+match m134_r0 {
+
+    case Ok(n) | Err(2) {
+
+        print("m134-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m134-r0:", "zero")
+
+    }
+
+}
+
+let m134_r1 = ok(3)
+
+match m134_r1 {
+
+    case Ok(n) | Err(3) {
+
+        print("m134-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m134-r1:", "zero")
+
+    }
+
+}
+
+let m134_r2 = ok(5)
+
+match m134_r2 {
+
+    case Ok(n) | Err(5) {
+
+        print("m134-r2:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m134-r2:", "zero")
+
+    }
+
+}
+
+match "gene" {
+
+    case "gene" {
+
+        print("m134-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m134-w0:", "alt")
+
+    }
+
+}
+
+match "codon" {
+
+    case "codon" {
+
+        print("m134-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m134-w1:", "alt")
+
+    }
+
+}

@@ -1,0 +1,202 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=107 tag=f107
+
+gene f107_g0(p, q = 70, r = 99) {
+
+    return p * 21 + q - r
+
+}
+
+print("f107-d0:", f107_g0(-25), f107_g0(-25, 19), f107_g0(-25, 70, 99))
+
+gene f107_g1(p, q = 86, r = 5) {
+
+    return p * 75 + q - r
+
+}
+
+print("f107-d1:", f107_g1(24), f107_g1(24, 71), f107_g1(24, 86, 5))
+
+gene f107_g2(p, q = 7, r = 51) {
+
+    return p * 40 + q - r
+
+}
+
+print("f107-d2:", f107_g2(-10), f107_g2(-10, 86), f107_g2(-10, 7, 51))
+
+gene f107_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f107_fib0(n - 1) + f107_fib0(n - 2)
+
+}
+
+print("f107-fib0:", f107_fib0(11))
+
+gene f107_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f107_fib1(n - 1) + f107_fib1(n - 2)
+
+}
+
+print("f107-fib1:", f107_fib1(13))
+
+gene f107_fib2(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f107_fib2(n - 1) + f107_fib2(n - 2)
+
+}
+
+print("f107-fib2:", f107_fib2(11))
+
+gene f107_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f107_gcd0(b, a % b)
+
+}
+
+print("f107-gcd0:", f107_gcd0(169, 695))
+
+gene f107_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f107_gcd1(b, a % b)
+
+}
+
+print("f107-gcd1:", f107_gcd1(268, 442))
+
+gene f107_gcd2(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f107_gcd2(b, a % b)
+
+}
+
+print("f107-gcd2:", f107_gcd2(131, 378))
+
+gene f107_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f107_c0 = f107_mk0(9)
+
+f107_c0(8)
+
+print("f107-cl0:", f107_c0(8))
+
+gene f107_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f107_c1 = f107_mk1(2)
+
+f107_c1(4)
+
+print("f107-cl1:", f107_c1(3))
+
+gene f107_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f107-hof0:", f107_tw0(gene (z) => z * 2 + 1, 9))
+
+gene f107_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f107-hof1:", f107_tw1(gene (z) => z * 2 + 1, 6))
+
+gene f107_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f107-dg0:", f107_sd0(840229))
+
+gene f107_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f107-dg1:", f107_sd1(730844))

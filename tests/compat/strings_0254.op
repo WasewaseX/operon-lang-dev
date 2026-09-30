@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=254 tag=s254
+
+print("s254-m0:", "dmAufuvCp".upper(), "dmAufuvCp".slice(4), "dmAufuvCp".len())
+
+print("s254-m1:", "xlfB_kmano9Ci".upper(), "xlfB_kmano9Ci".slice(1), "xlfB_kmano9Ci".len())
+
+print("s254-m2:", "g_3wvdvCl".upper(), "g_3wvdvCl".slice(2), "g_3wvdvCl".len())
+
+print("s254-m3:", "2ya389j3go5".upper(), "2ya389j3go5".slice(1), "2ya389j3go5".len())
+
+print("s254-m4:", "_uzxynm".upper(), "_uzxynm".slice(4), "_uzxynm".len())
+
+print("s254-i0:", "asB-{18}-ncp2")
+
+let s254_v0 = 18
+
+print("s254-v0:", "n={s254_v0}" + "!" * 1)
+
+print("s254-i1:", "sBu-{37}-fAha")
+
+let s254_v1 = 37
+
+print("s254-v1:", "n={s254_v1}" + "!" * 2)
+
+print("s254-i2:", "q_r-{84}-dlAo")
+
+let s254_v2 = 84
+
+print("s254-v2:", "n={s254_v2}" + "!" * 3)
+
+print("s254-r0:", "Az3w1ivh".replace("A", "in"), "Az3w1ivh".contains("z3"))
+
+print("s254-r1:", "eu308gdA".replace("e", "4B"), "eu308gdA".contains("u3"))
+
+print("s254-r2:", "1_lCvqoj".replace("1", "st"), "1_lCvqoj".contains("_l"))
+
+print("s254-j0:", ["wrC", "eCa", "4w_", "tdB"].join("-"))
+
+print("s254-j1:", ["44u", "_fB", "Cfo", "ly9", "zzq"].join("-"))
+
+print("s254-a0:", "cz60nbs".at(4), "cz60nbs".trim() == "cz60nbs")
+
+print("s254-a1:", "htqB8A2".at(6), "htqB8A2".trim() == "htqB8A2")

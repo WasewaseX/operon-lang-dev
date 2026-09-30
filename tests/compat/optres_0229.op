@@ -1,0 +1,118 @@
+# compat corpus — generated, do not edit by hand
+# bucket=optres seed=20261030 idx=229 tag=o229
+
+gene o229_f0(n) {
+
+    if n > -6851 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o229_u0(n) {
+
+    let v = o229_f0(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o229-p0:", o229_u0(-3342), o229_u0(-6843))
+
+gene o229_f1(n) {
+
+    if n > -9966 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o229_u1(n) {
+
+    let v = o229_f1(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o229-p1:", o229_u1(-78), o229_u1(-9965))
+
+gene o229_f2(n) {
+
+    if n > 3213 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o229_u2(n) {
+
+    let v = o229_f2(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o229-p2:", o229_u2(9391), o229_u2(3216))
+
+gene o229_f3(n) {
+
+    if n > -4440 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o229_u3(n) {
+
+    let v = o229_f3(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o229-p3:", o229_u3(-5029), o229_u3(-4433))
+
+print("o229-o0:", is_ok(ok(-1231)), is_none(none()), is_err(err("-1231")), is_some(some(-1231)))
+
+print("o229-u0:", unwrap_or(none(), -1231), unwrap_or(err("x"), -1232), unwrap_or(ok(-1231), 0))
+
+print("o229-o1:", is_ok(ok(-8883)), is_none(none()), is_err(err("-8883")), is_some(some(-8883)))
+
+print("o229-u1:", unwrap_or(none(), -8883), unwrap_or(err("x"), -8884), unwrap_or(ok(-8883), 0))
+
+print("o229-o2:", is_ok(ok(1264)), is_none(none()), is_err(err("1264")), is_some(some(1264)))
+
+print("o229-u2:", unwrap_or(none(), 1264), unwrap_or(err("x"), 1263), unwrap_or(ok(1264), 0))
+
+print("o229-e0:", ok(6342) == ok(6342), some(6342) == ok(6342), none() == none(), err(1) == err(2))
+
+print("o229-j0:", json_str(ok(6342)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o229-e1:", ok(4572) == ok(4572), some(4572) == ok(4572), none() == none(), err(1) == err(2))
+
+print("o229-j1:", json_str(ok(4572)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o229-n0:", some(some(56))?!?!, unwrap(ok(101)) + unwrap(some(45)))
+
+print("o229-s0:", "v=" + str(ok(56)?!), some("45k")?! + "!")
+
+print("o229-n1:", some(some(62))?!?!, unwrap(ok(117)) + unwrap(some(55)))
+
+print("o229-s1:", "v=" + str(ok(62)?!), some("55k")?! + "!")

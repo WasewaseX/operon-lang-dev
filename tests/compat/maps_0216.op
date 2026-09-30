@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=216 tag=m216
+
+let m216_m0 = {helix: 30, enzyme: -90, gene: -42}
+
+print("m216-m0:", m216_m0["helix"], len(m216_m0), m216_m0.has("helix"))
+
+let m216_m1 = {splicer: 90, gene: 96, marker: 16, ribose: 14}
+
+print("m216-m1:", m216_m1["splicer"], len(m216_m1), m216_m1.has("splicer"))
+
+let m216_m2 = {splicer: -38, ligase: -48, ribose: 3, marker: 78}
+
+print("m216-m2:", m216_m2["splicer"], len(m216_m2), m216_m2.has("splicer"))
+
+let m216_m3 = {marker: 59, splicer: 21, plasmid: 76, exon: 21}
+
+print("m216-m3:", m216_m3["marker"], len(m216_m3), m216_m3.has("marker"))
+
+let m216_k0 = {enzyme: 21, ribose: 33, vector: 37}
+
+let m216_ks0 = m216_k0.keys()
+
+let m216_sm0 = 0
+
+for k in m216_k0 { m216_sm0 += m216_k0[k] }
+
+print("m216-k0:", m216_sm0, m216_k0.keys().sort(), m216_k0.values().len())
+
+let m216_k1 = {splicer: 37, plasmid: 45, vector: 50}
+
+let m216_ks1 = m216_k1.keys()
+
+let m216_sm1 = 0
+
+for k in m216_k1 { m216_sm1 += m216_k1[k] }
+
+print("m216-k1:", m216_sm1, m216_k1.keys().sort(), m216_k1.values().len())
+
+let m216_w0 = {outer: {cell: 9, exon: 7, tag: "ok"}}}
+
+print("m216-w0:", m216_w0["outer"]["exon"], m216_w0["outer"]["tag"])
+
+let m216_w1 = {outer: {codon: 3, gene: 5, tag: "ok"}}}
+
+print("m216-w1:", m216_w1["outer"]["gene"], m216_w1["outer"]["tag"])

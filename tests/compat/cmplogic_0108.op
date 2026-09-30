@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=108 tag=c108
+
+print("c108-c0:", -6002 <= 6640)
+
+print("c108-c1:", -9461 <= 2359)
+
+print("c108-c2:", -7483 > -1366)
+
+print("c108-c3:", 6655 <= -3704)
+
+print("c108-c4:", 5765 > 5072)
+
+print("c108-c5:", -8621 >= 4947)
+
+print("c108-c6:", -2216 > -9708)
+
+print("c108-b0:", 5 < 41 && 41 < 7, 5 > 41 || 5 > 7)
+
+print("c108-b1:", 39 < 39 && 39 < 5, 39 > 39 || 39 > 5)
+
+print("c108-b2:", 10 < 46 && 46 < 43, 10 > 46 || 10 > 43)
+
+print("c108-b3:", 19 < 36 && 36 < 21, 19 > 36 || 19 > 21)
+
+print("c108-t0:", 8902 > -5157 ? "gt" : "le")
+
+print("c108-t1:", -7117 > 731 ? "gt" : "le")
+
+print("c108-t2:", 6397 > -5093 ? "gt" : "le")
+
+let c108_n0 = null
+
+print("c108-n0:", c108_n0 ?? -1546, c108_n0 == null)
+
+let c108_n1 = null
+
+print("c108-n1:", c108_n1 ?? -2278, c108_n1 == null)
+
+print("c108-s0:", "2s62" in "mA_b4q2s62", "2s62" == "2s62")
+
+print("c108-s1:", "pAy0" in "olm0cqpAy0", "pAy0" == "pAy0")

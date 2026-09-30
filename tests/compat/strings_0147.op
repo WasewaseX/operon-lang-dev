@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=147 tag=s147
+
+print("s147-m0:", "wvh31h".upper(), "wvh31h".slice(4), "wvh31h".len())
+
+print("s147-m1:", "6f856pt85c".upper(), "6f856pt85c".slice(4), "6f856pt85c".len())
+
+print("s147-m2:", "k3cud415wBlyyc".upper(), "k3cud415wBlyyc".slice(2), "k3cud415wBlyyc".len())
+
+print("s147-m3:", "ddjws54snv".upper(), "ddjws54snv".slice(3), "ddjws54snv".len())
+
+print("s147-i0:", "eAu-{83}-pAs4")
+
+let s147_v0 = 83
+
+print("s147-v0:", "n={s147_v0}" + "!" * 2)
+
+print("s147-i1:", "icA-{81}-r7m1")
+
+let s147_v1 = 81
+
+print("s147-v1:", "n={s147_v1}" + "!" * 2)
+
+print("s147-i2:", "r6j-{93}-gpik")
+
+let s147_v2 = 93
+
+print("s147-v2:", "n={s147_v2}" + "!" * 1)
+
+print("s147-r0:", "aq_mv4um".replace("a", "e4"), "aq_mv4um".contains("q_"))
+
+print("s147-r1:", "6_3yklj0".replace("6", "Ay"), "6_3yklj0".contains("_3"))
+
+print("s147-j0:", ["vpv", "y6B", "4xm"].join("-"))
+
+print("s147-j1:", ["zBj", "yix", "gir", "cAi"].join("-"))
+
+print("s147-j2:", ["lkA", "m5m", "3h9", "3pv"].join("-"))
+
+print("s147-a0:", "0d_50s3".at(3), "0d_50s3".trim() == "0d_50s3")
+
+print("s147-a1:", "hk4vyax".at(2), "hk4vyax".trim() == "hk4vyax")

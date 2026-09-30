@@ -1,0 +1,274 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=131 tag=m131
+
+let m131_s0 = some(9)
+
+match m131_s0 {
+
+    case Some(x) if x > 9 {
+
+        print("m131-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m131-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m131-m0:", "none")
+
+    }
+
+}
+
+let m131_s1 = some(1)
+
+match m131_s1 {
+
+    case Some(x) if x > 1 {
+
+        print("m131-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m131-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m131-m1:", "none")
+
+    }
+
+}
+
+let m131_s2 = some(7)
+
+match m131_s2 {
+
+    case Some(x) if x > 7 {
+
+        print("m131-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m131-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m131-m2:", "none")
+
+    }
+
+}
+
+let m131_ls0 = [1, 50, 17]
+
+match m131_ls0 {
+
+    case [1, *rest] {
+
+        print("m131-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m131-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m131-l0:", "other")
+
+    }
+
+}
+
+let m131_ls1 = [10, 42, 40]
+
+match m131_ls1 {
+
+    case [10, *rest] {
+
+        print("m131-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m131-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m131-l1:", "other")
+
+    }
+
+}
+
+let m131_ls2 = [4, 8, 43]
+
+match m131_ls2 {
+
+    case [4, *rest] {
+
+        print("m131-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m131-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m131-l2:", "other")
+
+    }
+
+}
+
+let m131_ls3 = [49, 47, 3]
+
+match m131_ls3 {
+
+    case [49, *rest] {
+
+        print("m131-l3:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m131-l3:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m131-l3:", "other")
+
+    }
+
+}
+
+let m131_mp0 = {splicer: -9304, enzyme: 6153}
+
+match m131_mp0 {
+
+    case {splicer: p, enzyme: q} {
+
+        print("m131-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m131-mp0:", "miss")
+
+    }
+
+}
+
+let m131_mp1 = {vector: -1661, ribose: -9471}
+
+match m131_mp1 {
+
+    case {vector: p, ribose: q} {
+
+        print("m131-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m131-mp1:", "miss")
+
+    }
+
+}
+
+let m131_r0 = ok(1)
+
+match m131_r0 {
+
+    case Ok(n) | Err(1) {
+
+        print("m131-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m131-r0:", "zero")
+
+    }
+
+}
+
+let m131_r1 = ok(1)
+
+match m131_r1 {
+
+    case Ok(n) | Err(1) {
+
+        print("m131-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m131-r1:", "zero")
+
+    }
+
+}
+
+match "ribose" {
+
+    case "ribose" {
+
+        print("m131-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m131-w0:", "alt")
+
+    }
+
+}
+
+match "splicer" {
+
+    case "splicer" {
+
+        print("m131-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m131-w1:", "alt")
+
+    }
+
+}

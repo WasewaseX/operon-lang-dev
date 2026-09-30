@@ -1,0 +1,60 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=102 tag=s102
+
+print("s102-m0:", "B1_yy0hf0c7zw".upper(), "B1_yy0hf0c7zw".slice(3), "B1_yy0hf0c7zw".len())
+
+print("s102-m1:", "fa_46By4c".upper(), "fa_46By4c".slice(1), "fa_46By4c".len())
+
+print("s102-m2:", "4x1CtwA_".upper(), "4x1CtwA_".slice(1), "4x1CtwA_".len())
+
+print("s102-m3:", "vxhCyjh".upper(), "vxhCyjh".slice(4), "vxhCyjh".len())
+
+print("s102-m4:", "C_ons8".upper(), "C_ons8".slice(4), "C_ons8".len())
+
+print("s102-m5:", "utwqtk29y9".upper(), "utwqtk29y9".slice(3), "utwqtk29y9".len())
+
+print("s102-i0:", "nsl-{72}-qcjk")
+
+let s102_v0 = 72
+
+print("s102-v0:", "n={s102_v0}" + "!" * 1)
+
+print("s102-i1:", "sxb-{95}-2inr")
+
+let s102_v1 = 95
+
+print("s102-v1:", "n={s102_v1}" + "!" * 2)
+
+print("s102-i2:", "2yi-{55}-me7z")
+
+let s102_v2 = 55
+
+print("s102-v2:", "n={s102_v2}" + "!" * 3)
+
+print("s102-i3:", "u0a-{61}-x7sp")
+
+let s102_v3 = 61
+
+print("s102-v3:", "n={s102_v3}" + "!" * 2)
+
+print("s102-i4:", "blj-{48}-y330")
+
+let s102_v4 = 48
+
+print("s102-v4:", "n={s102_v4}" + "!" * 3)
+
+print("s102-r0:", "j52glCsa".replace("j", "bu"), "j52glCsa".contains("52"))
+
+print("s102-r1:", "97_8wqp7".replace("9", "v0"), "97_8wqp7".contains("7_"))
+
+print("s102-r2:", "uak1t_71".replace("u", "ru"), "uak1t_71".contains("ak"))
+
+print("s102-r3:", "Crqjoj9u".replace("C", "t4"), "Crqjoj9u".contains("rq"))
+
+print("s102-j0:", ["bbg", "pvt", "_m5"].join("-"))
+
+print("s102-j1:", ["4o3", "xeg", "ark"].join("-"))
+
+print("s102-a0:", "z1trfn4".at(1), "z1trfn4".trim() == "z1trfn4")
+
+print("s102-a1:", "AA679ou".at(6), "AA679ou".trim() == "AA679ou")

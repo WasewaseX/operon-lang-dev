@@ -1,0 +1,60 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=101 tag=s101
+
+print("s101-m0:", "wf05sp9uxo".upper(), "wf05sp9uxo".slice(4), "wf05sp9uxo".len())
+
+print("s101-m1:", "1nlwi6w9".upper(), "1nlwi6w9".slice(1), "1nlwi6w9".len())
+
+print("s101-m2:", "BB_otz17wj".upper(), "BB_otz17wj".slice(4), "BB_otz17wj".len())
+
+print("s101-m3:", "_cdyqz0yB6w".upper(), "_cdyqz0yB6w".slice(1), "_cdyqz0yB6w".len())
+
+print("s101-m4:", "a2cfA4".upper(), "a2cfA4".slice(1), "a2cfA4".len())
+
+print("s101-m5:", "Cjcwn1Bc".upper(), "Cjcwn1Bc".slice(3), "Cjcwn1Bc".len())
+
+print("s101-i0:", "p8x-{70}-gn1w")
+
+let s101_v0 = 70
+
+print("s101-v0:", "n={s101_v0}" + "!" * 1)
+
+print("s101-i1:", "6o9-{72}-r21b")
+
+let s101_v1 = 72
+
+print("s101-v1:", "n={s101_v1}" + "!" * 2)
+
+print("s101-i2:", "n1t-{57}-1dde")
+
+let s101_v2 = 57
+
+print("s101-v2:", "n={s101_v2}" + "!" * 2)
+
+print("s101-i3:", "3cz-{7}-j9cp")
+
+let s101_v3 = 7
+
+print("s101-v3:", "n={s101_v3}" + "!" * 2)
+
+print("s101-i4:", "ghk-{31}-4qih")
+
+let s101_v4 = 31
+
+print("s101-v4:", "n={s101_v4}" + "!" * 1)
+
+print("s101-r0:", "4nghp9j_".replace("4", "8b"), "4nghp9j_".contains("ng"))
+
+print("s101-r1:", "wd0wjAsz".replace("w", "Au"), "wd0wjAsz".contains("d0"))
+
+print("s101-j0:", ["ytA", "ozC", "7yw", "rnf"].join("-"))
+
+print("s101-j1:", ["jtB", "pe0", "rpt", "ff0"].join("-"))
+
+print("s101-j2:", ["A9t", "5ah", "m1m", "y47", "68p"].join("-"))
+
+print("s101-a0:", "3109wqB".at(5), "3109wqB".trim() == "3109wqB")
+
+print("s101-a1:", "h83uBex".at(2), "h83uBex".trim() == "h83uBex")
+
+print("s101-a2:", "3gzb51d".at(1), "3gzb51d".trim() == "3gzb51d")

@@ -1,0 +1,218 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=171 tag=s171
+
+stress {
+
+    print("s171-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s171-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s171-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s171-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s171-mz:", 56 % 0)
+
+} rescue (e) {
+
+    print("s171-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s171-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s171-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s171-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s171-of2:", "caught", e.kind, e.message)
+
+}
+
+gene s171_r0() {
+
+    raise "s171-cwxA_y"
+
+}
+
+stress {
+
+    s171_r0()
+
+    print("s171-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s171-r0:", e.kind, e.message)
+
+}
+
+gene s171_r1() {
+
+    raise "s171-mbjaAC"
+
+}
+
+stress {
+
+    s171_r1()
+
+    print("s171-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s171-r1:", e.kind, e.message)
+
+}
+
+gene s171_r2() {
+
+    raise "s171-rajv3a"
+
+}
+
+stress {
+
+    s171_r2()
+
+    print("s171-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s171-r2:", e.kind, e.message)
+
+}
+
+gene s171_r3() {
+
+    raise "s171-e6rn9n"
+
+}
+
+stress {
+
+    s171_r3()
+
+    print("s171-r3:", "unreachable")
+
+} rescue (e) {
+
+    print("s171-r3:", e.kind, e.message)
+
+}
+
+let s171_xs0 = [14, 3]
+
+stress {
+
+    print("s171-x0:", s171_xs0[6])
+
+} rescue (e) {
+
+    print("s171-x0:", "caught", e.kind)
+
+}
+
+let s171_xs1 = [34, 47, 7, 11]
+
+stress {
+
+    print("s171-x1:", s171_xs1[5])
+
+} rescue (e) {
+
+    print("s171-x1:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s171-0"
+
+    } rescue (e) {
+
+        print("s171-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s171-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s171-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s171-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s171-1"
+
+    } rescue (e) {
+
+        print("s171-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s171-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s171-d1-top:", outer.message)
+
+}

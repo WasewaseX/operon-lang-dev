@@ -1,0 +1,122 @@
+# compat corpus — generated, do not edit by hand
+# bucket=optres seed=20261030 idx=239 tag=o239
+
+gene o239_f0(n) {
+
+    if n > -5709 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o239_u0(n) {
+
+    let v = o239_f0(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o239-p0:", o239_u0(7323), o239_u0(-5695))
+
+gene o239_f1(n) {
+
+    if n > -9552 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o239_u1(n) {
+
+    let v = o239_f1(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o239-p1:", o239_u1(3681), o239_u1(-9544))
+
+gene o239_f2(n) {
+
+    if n > -1107 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o239_u2(n) {
+
+    let v = o239_f2(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o239-p2:", o239_u2(5990), o239_u2(-1100))
+
+gene o239_f3(n) {
+
+    if n > -4841 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o239_u3(n) {
+
+    let v = o239_f3(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o239-p3:", o239_u3(6292), o239_u3(-4824))
+
+print("o239-o0:", is_ok(ok(-5527)), is_none(none()), is_err(err("-5527")), is_some(some(-5527)))
+
+print("o239-u0:", unwrap_or(none(), -5527), unwrap_or(err("x"), -5528), unwrap_or(ok(-5527), 0))
+
+print("o239-o1:", is_ok(ok(836)), is_none(none()), is_err(err("836")), is_some(some(836)))
+
+print("o239-u1:", unwrap_or(none(), 836), unwrap_or(err("x"), 835), unwrap_or(ok(836), 0))
+
+print("o239-o2:", is_ok(ok(-9737)), is_none(none()), is_err(err("-9737")), is_some(some(-9737)))
+
+print("o239-u2:", unwrap_or(none(), -9737), unwrap_or(err("x"), -9738), unwrap_or(ok(-9737), 0))
+
+print("o239-o3:", is_ok(ok(1453)), is_none(none()), is_err(err("1453")), is_some(some(1453)))
+
+print("o239-u3:", unwrap_or(none(), 1453), unwrap_or(err("x"), 1452), unwrap_or(ok(1453), 0))
+
+print("o239-e0:", ok(6697) == ok(6697), some(6697) == ok(6697), none() == none(), err(1) == err(2))
+
+print("o239-j0:", json_str(ok(6697)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o239-e1:", ok(1095) == ok(1095), some(1095) == ok(1095), none() == none(), err(1) == err(2))
+
+print("o239-j1:", json_str(ok(1095)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o239-n0:", some(some(92))?!?!, unwrap(ok(109)) + unwrap(some(17)))
+
+print("o239-s0:", "v=" + str(ok(92)?!), some("17k")?! + "!")
+
+print("o239-n1:", some(some(97))?!?!, unwrap(ok(116)) + unwrap(some(19)))
+
+print("o239-s1:", "v=" + str(ok(97)?!), some("19k")?! + "!")

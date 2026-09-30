@@ -1,0 +1,244 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=180 tag=m180
+
+let m180_s0 = some(4)
+
+match m180_s0 {
+
+    case Some(x) if x > 4 {
+
+        print("m180-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m180-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m180-m0:", "none")
+
+    }
+
+}
+
+let m180_s1 = some(6)
+
+match m180_s1 {
+
+    case Some(x) if x > 6 {
+
+        print("m180-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m180-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m180-m1:", "none")
+
+    }
+
+}
+
+let m180_s2 = some(8)
+
+match m180_s2 {
+
+    case Some(x) if x > 8 {
+
+        print("m180-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m180-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m180-m2:", "none")
+
+    }
+
+}
+
+let m180_ls0 = [25, 34, 22]
+
+match m180_ls0 {
+
+    case [25, *rest] {
+
+        print("m180-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m180-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m180-l0:", "other")
+
+    }
+
+}
+
+let m180_ls1 = [2, 14, 49]
+
+match m180_ls1 {
+
+    case [2, *rest] {
+
+        print("m180-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m180-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m180-l1:", "other")
+
+    }
+
+}
+
+let m180_mp0 = {ligase: -7926, exon: -3010}
+
+match m180_mp0 {
+
+    case {ligase: p, exon: q} {
+
+        print("m180-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m180-mp0:", "miss")
+
+    }
+
+}
+
+let m180_mp1 = {plasmid: 8448, helix: -8297}
+
+match m180_mp1 {
+
+    case {plasmid: p, helix: q} {
+
+        print("m180-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m180-mp1:", "miss")
+
+    }
+
+}
+
+let m180_mp2 = {ribose: -3723, enzyme: -3513}
+
+match m180_mp2 {
+
+    case {ribose: p, enzyme: q} {
+
+        print("m180-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m180-mp2:", "miss")
+
+    }
+
+}
+
+let m180_r0 = ok(3)
+
+match m180_r0 {
+
+    case Ok(n) | Err(3) {
+
+        print("m180-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m180-r0:", "zero")
+
+    }
+
+}
+
+let m180_r1 = ok(4)
+
+match m180_r1 {
+
+    case Ok(n) | Err(4) {
+
+        print("m180-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m180-r1:", "zero")
+
+    }
+
+}
+
+match "helix" {
+
+    case "helix" {
+
+        print("m180-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m180-w0:", "alt")
+
+    }
+
+}
+
+match "codon" {
+
+    case "codon" {
+
+        print("m180-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m180-w1:", "alt")
+
+    }
+
+}

@@ -1,0 +1,194 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=134 tag=f134
+
+gene f134_g0(p, q = 1, r = 33) {
+
+    return p * 2 + q - r
+
+}
+
+print("f134-d0:", f134_g0(36), f134_g0(36, 98), f134_g0(36, 1, 33))
+
+gene f134_g1(p, q = 90, r = 34) {
+
+    return p * 89 + q - r
+
+}
+
+print("f134-d1:", f134_g1(6), f134_g1(6, 64), f134_g1(6, 90, 34))
+
+gene f134_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f134_fib0(n - 1) + f134_fib0(n - 2)
+
+}
+
+print("f134-fib0:", f134_fib0(8))
+
+gene f134_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f134_fib1(n - 1) + f134_fib1(n - 2)
+
+}
+
+print("f134-fib1:", f134_fib1(10))
+
+gene f134_fib2(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f134_fib2(n - 1) + f134_fib2(n - 2)
+
+}
+
+print("f134-fib2:", f134_fib2(13))
+
+gene f134_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f134_gcd0(b, a % b)
+
+}
+
+print("f134-gcd0:", f134_gcd0(851, 376))
+
+gene f134_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f134_gcd1(b, a % b)
+
+}
+
+print("f134-gcd1:", f134_gcd1(50, 646))
+
+gene f134_gcd2(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f134_gcd2(b, a % b)
+
+}
+
+print("f134-gcd2:", f134_gcd2(219, 937))
+
+gene f134_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f134_c0 = f134_mk0(27)
+
+f134_c0(2)
+
+print("f134-cl0:", f134_c0(5))
+
+gene f134_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f134_c1 = f134_mk1(5)
+
+f134_c1(7)
+
+print("f134-cl1:", f134_c1(7))
+
+gene f134_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f134-hof0:", f134_tw0(gene (z) => z * 2 + 1, 10))
+
+gene f134_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f134-hof1:", f134_tw1(gene (z) => z * 2 + 1, 22))
+
+gene f134_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f134-dg0:", f134_sd0(799060))
+
+gene f134_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f134-dg1:", f134_sd1(270066))

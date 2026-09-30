@@ -1,0 +1,254 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=203 tag=m203
+
+gene m203_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m203-b0:", m203_b0({enzyme: 13, cell: 52, plasmid: 16})?!)
+
+gene m203_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m203-b1:", m203_b1({ligase: 52, gene: 15, marker: 73})?!)
+
+gene m203_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m203-b2:", m203_b2({ligase: 36, ribose: 38, gene: 33})?!)
+
+gene m203_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m203_f0([47, 39, 9, 46, 50, 60]) {
+
+    case Ok(list) {
+
+        print("m203-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m203-f0:", "e:", m)
+
+    }
+
+}
+
+gene m203_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m203_f1([26, 19, 24, 18, 53]) {
+
+    case Ok(list) {
+
+        print("m203-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m203-f1:", "e:", m)
+
+    }
+
+}
+
+gene m203_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m203_f2([32, 14, 42, 51]) {
+
+    case Ok(list) {
+
+        print("m203-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m203-f2:", "e:", m)
+
+    }
+
+}
+
+let m203_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m203-cc0:", m203_cl0(15)(18), m203_cl0(18)(15))
+
+let m203_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m203-cc1:", m203_cl1(19)(11), m203_cl1(11)(19))
+
+let m203_data0 = some([some("cell"), none(), some(7)])
+
+match m203_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m203-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m203-x0:", "shape-miss")
+
+    }
+
+}
+
+let m203_data1 = some([some("exon"), none(), some(9)])
+
+match m203_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m203-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m203-x1:", "shape-miss")
+
+    }
+
+}

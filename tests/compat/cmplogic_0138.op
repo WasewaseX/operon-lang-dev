@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=138 tag=c138
+
+print("c138-c0:", -4348 != -6927)
+
+print("c138-c1:", -3821 >= -6066)
+
+print("c138-c2:", -4283 >= -5669)
+
+print("c138-c3:", 9561 != -9459)
+
+print("c138-b0:", 29 < 32 && 32 < 41, 29 > 32 || 29 > 41)
+
+print("c138-b1:", 26 < 41 && 41 < 32, 26 > 41 || 26 > 32)
+
+print("c138-b2:", 50 < 29 && 29 < 14, 50 > 29 || 50 > 14)
+
+print("c138-b3:", 42 < 29 && 29 < 32, 42 > 29 || 42 > 32)
+
+print("c138-t0:", 4317 > 194 ? "gt" : "le")
+
+print("c138-t1:", 5912 > -3036 ? "gt" : "le")
+
+print("c138-t2:", -3281 > -549 ? "gt" : "le")
+
+print("c138-t3:", -5362 > 810 ? "gt" : "le")
+
+let c138_n0 = null
+
+print("c138-n0:", c138_n0 ?? -4467, c138_n0 == null)
+
+let c138_n1 = null
+
+print("c138-n1:", c138_n1 ?? 664, c138_n1 == null)
+
+let c138_n2 = null
+
+print("c138-n2:", c138_n2 ?? -3166, c138_n2 == null)
+
+print("c138-s0:", "kphp" in "lpm_kdkphp", "kphp" == "kphp")
+
+print("c138-s1:", "x1ot" in "xfj1b1x1ot", "x1ot" == "x1ot")

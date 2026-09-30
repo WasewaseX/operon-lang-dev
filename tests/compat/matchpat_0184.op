@@ -1,0 +1,316 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=184 tag=m184
+
+let m184_s0 = some(9)
+
+match m184_s0 {
+
+    case Some(x) if x > 9 {
+
+        print("m184-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m184-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m184-m0:", "none")
+
+    }
+
+}
+
+let m184_s1 = some(8)
+
+match m184_s1 {
+
+    case Some(x) if x > 8 {
+
+        print("m184-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m184-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m184-m1:", "none")
+
+    }
+
+}
+
+let m184_s2 = some(2)
+
+match m184_s2 {
+
+    case Some(x) if x > 2 {
+
+        print("m184-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m184-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m184-m2:", "none")
+
+    }
+
+}
+
+let m184_s3 = some(9)
+
+match m184_s3 {
+
+    case Some(x) if x > 9 {
+
+        print("m184-m3:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m184-m3:", "small", x)
+
+    }
+
+    case None {
+
+        print("m184-m3:", "none")
+
+    }
+
+}
+
+let m184_s4 = some(3)
+
+match m184_s4 {
+
+    case Some(x) if x > 3 {
+
+        print("m184-m4:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m184-m4:", "small", x)
+
+    }
+
+    case None {
+
+        print("m184-m4:", "none")
+
+    }
+
+}
+
+let m184_ls0 = [4, 40, 4]
+
+match m184_ls0 {
+
+    case [4, *rest] {
+
+        print("m184-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m184-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m184-l0:", "other")
+
+    }
+
+}
+
+let m184_ls1 = [24, 36, 9]
+
+match m184_ls1 {
+
+    case [24, *rest] {
+
+        print("m184-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m184-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m184-l1:", "other")
+
+    }
+
+}
+
+let m184_ls2 = [14, 35, 46]
+
+match m184_ls2 {
+
+    case [14, *rest] {
+
+        print("m184-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m184-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m184-l2:", "other")
+
+    }
+
+}
+
+let m184_mp0 = {plasmid: -6371, enzyme: -1845}
+
+match m184_mp0 {
+
+    case {plasmid: p, enzyme: q} {
+
+        print("m184-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m184-mp0:", "miss")
+
+    }
+
+}
+
+let m184_mp1 = {cell: 8095, ligase: 8945}
+
+match m184_mp1 {
+
+    case {cell: p, ligase: q} {
+
+        print("m184-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m184-mp1:", "miss")
+
+    }
+
+}
+
+let m184_r0 = ok(4)
+
+match m184_r0 {
+
+    case Ok(n) | Err(4) {
+
+        print("m184-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m184-r0:", "zero")
+
+    }
+
+}
+
+let m184_r1 = ok(4)
+
+match m184_r1 {
+
+    case Ok(n) | Err(4) {
+
+        print("m184-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m184-r1:", "zero")
+
+    }
+
+}
+
+let m184_r2 = ok(2)
+
+match m184_r2 {
+
+    case Ok(n) | Err(2) {
+
+        print("m184-r2:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m184-r2:", "zero")
+
+    }
+
+}
+
+match "vector" {
+
+    case "vector" {
+
+        print("m184-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m184-w0:", "alt")
+
+    }
+
+}
+
+match "enzyme" {
+
+    case "enzyme" {
+
+        print("m184-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m184-w1:", "alt")
+
+    }
+
+}

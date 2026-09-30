@@ -1,0 +1,36 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=209 tag=c209
+
+print("c209-c0:", -1114 != -3152)
+
+print("c209-c1:", -1529 == -4105)
+
+print("c209-c2:", 1246 != -9175)
+
+print("c209-c3:", -7349 != 2364)
+
+print("c209-b0:", 10 < 12 && 12 < 2, 10 > 12 || 10 > 2)
+
+print("c209-b1:", 37 < 41 && 41 < 11, 37 > 41 || 37 > 11)
+
+print("c209-t0:", -9267 > -4104 ? "gt" : "le")
+
+print("c209-t1:", 4201 > 2856 ? "gt" : "le")
+
+print("c209-t2:", -4890 > -6422 ? "gt" : "le")
+
+let c209_n0 = null
+
+print("c209-n0:", c209_n0 ?? -3557, c209_n0 == null)
+
+let c209_n1 = null
+
+print("c209-n1:", c209_n1 ?? -8084, c209_n1 == null)
+
+let c209_n2 = null
+
+print("c209-n2:", c209_n2 ?? -1742, c209_n2 == null)
+
+print("c209-s0:", "zptz" in "2tpsryzptz", "zptz" == "zptz")
+
+print("c209-s1:", "a2Cz" in "l5edtca2Cz", "a2Cz" == "a2Cz")

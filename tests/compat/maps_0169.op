@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=169 tag=m169
+
+let m169_m0 = {vector: 1, plasmid: -81, enzyme: -99, codon: -34, helix: 12}
+
+print("m169-m0:", m169_m0["vector"], len(m169_m0), m169_m0.has("vector"))
+
+let m169_m1 = {marker: 40, vector: -85, enzyme: -93, exon: -23}
+
+print("m169-m1:", m169_m1["marker"], len(m169_m1), m169_m1.has("marker"))
+
+let m169_m2 = {splicer: -38, exon: 95, marker: 23, codon: -82, plasmid: 98}
+
+print("m169-m2:", m169_m2["splicer"], len(m169_m2), m169_m2.has("splicer"))
+
+let m169_m3 = {enzyme: 44, gene: -13, vector: -50}
+
+print("m169-m3:", m169_m3["enzyme"], len(m169_m3), m169_m3.has("enzyme"))
+
+let m169_k0 = {gene: 37, helix: 29, marker: 34}
+
+let m169_ks0 = m169_k0.keys()
+
+let m169_sm0 = 0
+
+for k in m169_k0 { m169_sm0 += m169_k0[k] }
+
+print("m169-k0:", m169_sm0, m169_k0.keys().sort(), m169_k0.values().len())
+
+let m169_k1 = {ligase: 14, marker: 27, vector: 21}
+
+let m169_ks1 = m169_k1.keys()
+
+let m169_sm1 = 0
+
+for k in m169_k1 { m169_sm1 += m169_k1[k] }
+
+print("m169-k1:", m169_sm1, m169_k1.keys().sort(), m169_k1.values().len())
+
+let m169_w0 = {outer: {splicer: 3, codon: 9, tag: "ok"}}}
+
+print("m169-w0:", m169_w0["outer"]["codon"], m169_w0["outer"]["tag"])
+
+let m169_w1 = {outer: {marker: 6, gene: 3, tag: "ok"}}}
+
+print("m169-w1:", m169_w1["outer"]["gene"], m169_w1["outer"]["tag"])

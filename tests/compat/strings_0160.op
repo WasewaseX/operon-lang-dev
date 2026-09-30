@@ -1,0 +1,50 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=160 tag=s160
+
+print("s160-m0:", "0q56bBshl9".upper(), "0q56bBshl9".slice(1), "0q56bBshl9".len())
+
+print("s160-m1:", "fau5kh".upper(), "fau5kh".slice(1), "fau5kh".len())
+
+print("s160-m2:", "e7Cs0f".upper(), "e7Cs0f".slice(1), "e7Cs0f".len())
+
+print("s160-m3:", "yp0s8c1ea".upper(), "yp0s8c1ea".slice(4), "yp0s8c1ea".len())
+
+print("s160-m4:", "uqgBhkms6g".upper(), "uqgBhkms6g".slice(4), "uqgBhkms6g".len())
+
+print("s160-i0:", "nyh-{37}-gdwl")
+
+let s160_v0 = 37
+
+print("s160-v0:", "n={s160_v0}" + "!" * 3)
+
+print("s160-i1:", "2cj-{46}-mgt0")
+
+let s160_v1 = 46
+
+print("s160-v1:", "n={s160_v1}" + "!" * 2)
+
+print("s160-i2:", "o5m-{46}-ij6k")
+
+let s160_v2 = 46
+
+print("s160-v2:", "n={s160_v2}" + "!" * 1)
+
+print("s160-i3:", "ydi-{12}-3g8p")
+
+let s160_v3 = 12
+
+print("s160-v3:", "n={s160_v3}" + "!" * 2)
+
+print("s160-r0:", "6_qadBor".replace("6", "wo"), "6_qadBor".contains("_q"))
+
+print("s160-r1:", "r3Ad8i5A".replace("r", "1k"), "r3Ad8i5A".contains("3A"))
+
+print("s160-r2:", "zuyCauCp".replace("z", "_o"), "zuyCauCp".contains("uy"))
+
+print("s160-j0:", ["b6l", "8ud", "fdk"].join("-"))
+
+print("s160-j1:", ["7y2", "Cem", "bjy"].join("-"))
+
+print("s160-a0:", "plqkngC".at(3), "plqkngC".trim() == "plqkngC")
+
+print("s160-a1:", "zyib402".at(1), "zyib402".trim() == "zyib402")

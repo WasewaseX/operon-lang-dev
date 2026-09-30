@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=142 tag=c142
+
+print("c142-c0:", -26 > 5319)
+
+print("c142-c1:", -4218 != 7920)
+
+print("c142-c2:", -3696 < -2352)
+
+print("c142-c3:", 2264 == -2751)
+
+print("c142-c4:", -2805 > 7084)
+
+print("c142-c5:", 7061 == 4142)
+
+print("c142-b0:", 50 < 5 && 5 < 29, 50 > 5 || 50 > 29)
+
+print("c142-b1:", 38 < 3 && 3 < 6, 38 > 3 || 38 > 6)
+
+print("c142-b2:", 7 < 48 && 48 < 4, 7 > 48 || 7 > 4)
+
+print("c142-t0:", -3832 > -417 ? "gt" : "le")
+
+print("c142-t1:", -5650 > -6957 ? "gt" : "le")
+
+print("c142-t2:", -9328 > 1363 ? "gt" : "le")
+
+let c142_n0 = null
+
+print("c142-n0:", c142_n0 ?? 3885, c142_n0 == null)
+
+let c142_n1 = null
+
+print("c142-n1:", c142_n1 ?? -4030, c142_n1 == null)
+
+let c142_n2 = null
+
+print("c142-n2:", c142_n2 ?? 5400, c142_n2 == null)
+
+print("c142-s0:", "A_hp" in "lxwbrAA_hp", "A_hp" == "A_hp")
+
+print("c142-s1:", "2hnz" in "c66kzz2hnz", "2hnz" == "2hnz")

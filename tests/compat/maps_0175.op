@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=175 tag=m175
+
+let m175_m0 = {vector: -44, plasmid: -99, cell: 34, exon: 20, enzyme: -74}
+
+print("m175-m0:", m175_m0["vector"], len(m175_m0), m175_m0.has("vector"))
+
+let m175_m1 = {marker: 75, exon: 63, cell: 16}
+
+print("m175-m1:", m175_m1["marker"], len(m175_m1), m175_m1.has("marker"))
+
+let m175_m2 = {enzyme: -50, codon: 82, cell: -72, gene: -27}
+
+print("m175-m2:", m175_m2["enzyme"], len(m175_m2), m175_m2.has("enzyme"))
+
+let m175_m3 = {gene: -4, helix: 96, codon: -41, vector: -4, marker: 17}
+
+print("m175-m3:", m175_m3["gene"], len(m175_m3), m175_m3.has("gene"))
+
+let m175_k0 = {ribose: 19, ligase: 36, marker: 39}
+
+let m175_ks0 = m175_k0.keys()
+
+let m175_sm0 = 0
+
+for k in m175_k0 { m175_sm0 += m175_k0[k] }
+
+print("m175-k0:", m175_sm0, m175_k0.keys().sort(), m175_k0.values().len())
+
+let m175_k1 = {cell: 7, helix: 41, ligase: 14}
+
+let m175_ks1 = m175_k1.keys()
+
+let m175_sm1 = 0
+
+for k in m175_k1 { m175_sm1 += m175_k1[k] }
+
+print("m175-k1:", m175_sm1, m175_k1.keys().sort(), m175_k1.values().len())
+
+let m175_k2 = {gene: 31, enzyme: 19, ligase: 34}
+
+let m175_ks2 = m175_k2.keys()
+
+let m175_sm2 = 0
+
+for k in m175_k2 { m175_sm2 += m175_k2[k] }
+
+print("m175-k2:", m175_sm2, m175_k2.keys().sort(), m175_k2.values().len())
+
+let m175_w0 = {outer: {marker: 7, helix: 5, tag: "ok"}}}
+
+print("m175-w0:", m175_w0["outer"]["helix"], m175_w0["outer"]["tag"])
+
+let m175_w1 = {outer: {marker: 3, gene: 5, tag: "ok"}}}
+
+print("m175-w1:", m175_w1["outer"]["gene"], m175_w1["outer"]["tag"])

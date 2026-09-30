@@ -1,0 +1,250 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=250 tag=s250
+
+stress {
+
+    print("s250-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s250-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s250-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s250-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s250-mz:", 4 % 0)
+
+} rescue (e) {
+
+    print("s250-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s250-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s250-of1:", "caught", e.kind, e.message)
+
+}
+
+gene s250_r0() {
+
+    raise "s250-8_3xBc"
+
+}
+
+stress {
+
+    s250_r0()
+
+    print("s250-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s250-r0:", e.kind, e.message)
+
+}
+
+gene s250_r1() {
+
+    raise "s250-ayjtak"
+
+}
+
+stress {
+
+    s250_r1()
+
+    print("s250-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s250-r1:", e.kind, e.message)
+
+}
+
+gene s250_r2() {
+
+    raise "s250-h0i8rq"
+
+}
+
+stress {
+
+    s250_r2()
+
+    print("s250-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s250-r2:", e.kind, e.message)
+
+}
+
+gene s250_r3() {
+
+    raise "s250-nwvnjh"
+
+}
+
+stress {
+
+    s250_r3()
+
+    print("s250-r3:", "unreachable")
+
+} rescue (e) {
+
+    print("s250-r3:", e.kind, e.message)
+
+}
+
+let s250_xs0 = [34, 2, 22]
+
+stress {
+
+    print("s250-x0:", s250_xs0[4])
+
+} rescue (e) {
+
+    print("s250-x0:", "caught", e.kind)
+
+}
+
+let s250_xs1 = [11, 13, 45]
+
+stress {
+
+    print("s250-x1:", s250_xs1[8])
+
+} rescue (e) {
+
+    print("s250-x1:", "caught", e.kind)
+
+}
+
+let s250_xs2 = [49, 30]
+
+stress {
+
+    print("s250-x2:", s250_xs2[5])
+
+} rescue (e) {
+
+    print("s250-x2:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s250-0"
+
+    } rescue (e) {
+
+        print("s250-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s250-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s250-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s250-d0-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s250-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s250-1"
+
+    } rescue (e) {
+
+        print("s250-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s250-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s250-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s250-d1-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s250-d1-top:", outer.message)
+
+}

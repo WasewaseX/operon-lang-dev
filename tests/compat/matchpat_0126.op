@@ -1,0 +1,268 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=126 tag=m126
+
+let m126_s0 = some(9)
+
+match m126_s0 {
+
+    case Some(x) if x > 9 {
+
+        print("m126-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m126-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m126-m0:", "none")
+
+    }
+
+}
+
+let m126_s1 = some(8)
+
+match m126_s1 {
+
+    case Some(x) if x > 8 {
+
+        print("m126-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m126-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m126-m1:", "none")
+
+    }
+
+}
+
+let m126_s2 = some(2)
+
+match m126_s2 {
+
+    case Some(x) if x > 2 {
+
+        print("m126-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m126-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m126-m2:", "none")
+
+    }
+
+}
+
+let m126_s3 = some(8)
+
+match m126_s3 {
+
+    case Some(x) if x > 8 {
+
+        print("m126-m3:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m126-m3:", "small", x)
+
+    }
+
+    case None {
+
+        print("m126-m3:", "none")
+
+    }
+
+}
+
+let m126_ls0 = [30, 17, 40]
+
+match m126_ls0 {
+
+    case [30, *rest] {
+
+        print("m126-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m126-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m126-l0:", "other")
+
+    }
+
+}
+
+let m126_ls1 = [17, 49, 39]
+
+match m126_ls1 {
+
+    case [17, *rest] {
+
+        print("m126-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m126-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m126-l1:", "other")
+
+    }
+
+}
+
+let m126_mp0 = {gene: 3269, plasmid: -4112}
+
+match m126_mp0 {
+
+    case {gene: p, plasmid: q} {
+
+        print("m126-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m126-mp0:", "miss")
+
+    }
+
+}
+
+let m126_mp1 = {ribose: 6963, codon: -1824}
+
+match m126_mp1 {
+
+    case {ribose: p, codon: q} {
+
+        print("m126-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m126-mp1:", "miss")
+
+    }
+
+}
+
+let m126_r0 = ok(5)
+
+match m126_r0 {
+
+    case Ok(n) | Err(5) {
+
+        print("m126-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m126-r0:", "zero")
+
+    }
+
+}
+
+let m126_r1 = ok(1)
+
+match m126_r1 {
+
+    case Ok(n) | Err(1) {
+
+        print("m126-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m126-r1:", "zero")
+
+    }
+
+}
+
+let m126_r2 = ok(1)
+
+match m126_r2 {
+
+    case Ok(n) | Err(1) {
+
+        print("m126-r2:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m126-r2:", "zero")
+
+    }
+
+}
+
+match "vector" {
+
+    case "vector" {
+
+        print("m126-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m126-w0:", "alt")
+
+    }
+
+}
+
+match "ligase" {
+
+    case "ligase" {
+
+        print("m126-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m126-w1:", "alt")
+
+    }
+
+}

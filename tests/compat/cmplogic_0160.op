@@ -1,0 +1,38 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=160 tag=c160
+
+print("c160-c0:", 5493 <= -4294)
+
+print("c160-c1:", -791 != -8908)
+
+print("c160-c2:", -8583 != 6654)
+
+print("c160-c3:", 9341 <= 1128)
+
+print("c160-c4:", 5861 > -5125)
+
+print("c160-c5:", 2261 > 4106)
+
+print("c160-c6:", -5440 >= -5532)
+
+print("c160-b0:", 4 < 3 && 3 < 17, 4 > 3 || 4 > 17)
+
+print("c160-b1:", 7 < 7 && 7 < 47, 7 > 7 || 7 > 47)
+
+print("c160-b2:", 26 < 27 && 27 < 3, 26 > 27 || 26 > 3)
+
+print("c160-t0:", 1518 > 9418 ? "gt" : "le")
+
+print("c160-t1:", 3147 > -6053 ? "gt" : "le")
+
+let c160_n0 = null
+
+print("c160-n0:", c160_n0 ?? -2320, c160_n0 == null)
+
+let c160_n1 = null
+
+print("c160-n1:", c160_n1 ?? -2118, c160_n1 == null)
+
+print("c160-s0:", "kAor" in "s0p9htkAor", "kAor" == "kAor")
+
+print("c160-s1:", "ruBj" in "p68_41ruBj", "ruBj" == "ruBj")

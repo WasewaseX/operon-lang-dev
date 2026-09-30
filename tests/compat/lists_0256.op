@@ -1,0 +1,70 @@
+# compat corpus — generated, do not edit by hand
+# bucket=lists seed=20261030 idx=256 tag=l256
+
+let l256_l0 = [-19, 6, -45, -19, -35, -31]
+
+print("l256-l0:", l256_l0[4], l256_l0[-1], l256_l0.len())
+
+let l256_l1 = [17, 42, -7, -48, -36, 10]
+
+print("l256-l1:", l256_l1[3], l256_l1[-1], l256_l1.len())
+
+let l256_l2 = [31, -15, 40, -3]
+
+print("l256-l2:", l256_l2[0], l256_l2[-1], l256_l2.len())
+
+let l256_l3 = [-19, -21, 26, -45]
+
+print("l256-l3:", l256_l3[3], l256_l3[-1], l256_l3.len())
+
+let l256_s0 = [-88, 81, 32, 64, 39]
+
+print("l256-s0:", l256_s0.slice(1, 4), l256_s0.slice(-1))
+
+let l256_s1 = [56, 37, 50, 14, -36, -5, 92, -73]
+
+print("l256-s1:", l256_s1.slice(2, 5), l256_s1.slice(-3))
+
+let l256_s2 = [-41, 48, 90, 10, -74, 25, 51, -73, -77]
+
+print("l256-s2:", l256_s2.slice(3, 7), l256_s2.slice(-2))
+
+let l256_s3 = [-76, 3, 50, 46, 35, 74, 26]
+
+print("l256-s3:", l256_s3.slice(4, 6), l256_s3.slice(-1))
+
+let l256_r0 = [506, 485, 60, 305]
+
+print("l256-r0:", l256_r0.sort(), l256_r0.reverse(), l256_r0.contains(506))
+
+let l256_r1 = [685, 331, 323, 248, 821, 912]
+
+print("l256-r1:", l256_r1.sort(), l256_r1.reverse(), l256_r1.contains(912))
+
+let l256_r2 = [17, 669, 818, 506]
+
+print("l256-r2:", l256_r2.sort(), l256_r2.reverse(), l256_r2.contains(818))
+
+let l256_r3 = [981, 439, 723, 530, 492, 257]
+
+print("l256-r3:", l256_r3.sort(), l256_r3.reverse(), l256_r3.contains(492))
+
+let l256_t0 = 0
+
+for v in [24, 20, 40, 10, 23] { l256_t0 += v }
+
+print("l256-t0:", l256_t0)
+
+let l256_t1 = 0
+
+for v in [17, 30, 18] { l256_t1 += v }
+
+print("l256-t1:", l256_t1)
+
+let l256_n0 = [[1, 7, 8], [1, 7, 8], 77]
+
+print("l256-n0:", l256_n0[0][2], l256_n0[2])
+
+let l256_n1 = [[2, 5, 4], [2, 5, 4], 77]
+
+print("l256-n1:", l256_n1[0][2], l256_n1[2])

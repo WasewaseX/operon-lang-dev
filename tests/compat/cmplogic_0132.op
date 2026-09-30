@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=132 tag=c132
+
+print("c132-c0:", 1172 < 5560)
+
+print("c132-c1:", -6149 >= 4526)
+
+print("c132-c2:", -7286 != -2533)
+
+print("c132-c3:", 9472 == 4046)
+
+print("c132-c4:", -6601 <= 4492)
+
+print("c132-b0:", 22 < 33 && 33 < 11, 22 > 33 || 22 > 11)
+
+print("c132-b1:", 13 < 35 && 35 < 36, 13 > 35 || 13 > 36)
+
+print("c132-b2:", 26 < 43 && 43 < 19, 26 > 43 || 26 > 19)
+
+print("c132-b3:", 24 < 5 && 5 < 33, 24 > 5 || 24 > 33)
+
+print("c132-t0:", 3721 > 4862 ? "gt" : "le")
+
+print("c132-t1:", 7332 > 41 ? "gt" : "le")
+
+print("c132-t2:", 6193 > 2221 ? "gt" : "le")
+
+print("c132-t3:", 9306 > -6361 ? "gt" : "le")
+
+let c132_n0 = null
+
+print("c132-n0:", c132_n0 ?? 4233, c132_n0 == null)
+
+let c132_n1 = null
+
+print("c132-n1:", c132_n1 ?? 4227, c132_n1 == null)
+
+let c132_n2 = null
+
+print("c132-n2:", c132_n2 ?? -1517, c132_n2 == null)
+
+print("c132-s0:", "pa34" in "1ecm9jpa34", "pa34" == "pa34")
+
+print("c132-s1:", "l2qu" in "1gct0gl2qu", "l2qu" == "l2qu")

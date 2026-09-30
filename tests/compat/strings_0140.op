@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=140 tag=s140
+
+print("s140-m0:", "A_digwd".upper(), "A_digwd".slice(2), "A_digwd".len())
+
+print("s140-m1:", "dnb6C2l".upper(), "dnb6C2l".slice(3), "dnb6C2l".len())
+
+print("s140-m2:", "1rbqjd47qrngB6".upper(), "1rbqjd47qrngB6".slice(3), "1rbqjd47qrngB6".len())
+
+print("s140-m3:", "Coqgb16ff".upper(), "Coqgb16ff".slice(2), "Coqgb16ff".len())
+
+print("s140-i0:", "v6n-{77}-ux93")
+
+let s140_v0 = 77
+
+print("s140-v0:", "n={s140_v0}" + "!" * 1)
+
+print("s140-i1:", "7sg-{41}-ogk5")
+
+let s140_v1 = 41
+
+print("s140-v1:", "n={s140_v1}" + "!" * 2)
+
+print("s140-i2:", "vkg-{36}-k6iw")
+
+let s140_v2 = 36
+
+print("s140-v2:", "n={s140_v2}" + "!" * 3)
+
+print("s140-i3:", "pvv-{55}-vkAr")
+
+let s140_v3 = 55
+
+print("s140-v3:", "n={s140_v3}" + "!" * 1)
+
+print("s140-i4:", "8B2-{0}-ymp9")
+
+let s140_v4 = 0
+
+print("s140-v4:", "n={s140_v4}" + "!" * 2)
+
+print("s140-r0:", "n39gwtxA".replace("n", "he"), "n39gwtxA".contains("39"))
+
+print("s140-r1:", "aka7ljqf".replace("a", "pi"), "aka7ljqf".contains("ka"))
+
+print("s140-j0:", ["u7a", "yyj", "put", "r03"].join("-"))
+
+print("s140-j1:", ["gyt", "5Cj", "zg3", "kgx"].join("-"))
+
+print("s140-a0:", "9apfaen".at(6), "9apfaen".trim() == "9apfaen")
+
+print("s140-a1:", "er11bwd".at(1), "er11bwd".trim() == "er11bwd")

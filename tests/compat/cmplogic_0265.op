@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=265 tag=c265
+
+print("c265-c0:", 815 >= 3495)
+
+print("c265-c1:", 3884 <= -535)
+
+print("c265-c2:", -5628 <= -7152)
+
+print("c265-c3:", 8741 != -4358)
+
+print("c265-c4:", -3939 >= 4708)
+
+print("c265-c5:", -7279 >= -6627)
+
+print("c265-b0:", 26 < 25 && 25 < 23, 26 > 25 || 26 > 23)
+
+print("c265-b1:", 5 < 21 && 21 < 47, 5 > 21 || 5 > 47)
+
+print("c265-t0:", -9849 > 4577 ? "gt" : "le")
+
+print("c265-t1:", -9054 > 8578 ? "gt" : "le")
+
+print("c265-t2:", -2795 > 2186 ? "gt" : "le")
+
+let c265_n0 = null
+
+print("c265-n0:", c265_n0 ?? 1930, c265_n0 == null)
+
+let c265_n1 = null
+
+print("c265-n1:", c265_n1 ?? 485, c265_n1 == null)
+
+let c265_n2 = null
+
+print("c265-n2:", c265_n2 ?? 4592, c265_n2 == null)
+
+print("c265-s0:", "0v3v" in "phk2n40v3v", "0v3v" == "0v3v")
+
+print("c265-s1:", "4zzA" in "dfhouk4zzA", "4zzA" == "4zzA")

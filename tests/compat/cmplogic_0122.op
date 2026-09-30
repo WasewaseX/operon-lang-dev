@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=122 tag=c122
+
+print("c122-c0:", 9699 >= -8520)
+
+print("c122-c1:", 5347 < 1380)
+
+print("c122-c2:", 6141 <= 1917)
+
+print("c122-c3:", -3254 < -7260)
+
+print("c122-c4:", 404 < 5629)
+
+print("c122-c5:", -6772 != -1374)
+
+print("c122-c6:", 9826 != 6134)
+
+print("c122-b0:", 50 < 48 && 48 < 48, 50 > 48 || 50 > 48)
+
+print("c122-b1:", 7 < 6 && 6 < 12, 7 > 6 || 7 > 12)
+
+print("c122-b2:", 29 < 48 && 48 < 46, 29 > 48 || 29 > 46)
+
+print("c122-t0:", -6388 > 9044 ? "gt" : "le")
+
+print("c122-t1:", 7891 > -2185 ? "gt" : "le")
+
+print("c122-t2:", -6693 > -2959 ? "gt" : "le")
+
+let c122_n0 = null
+
+print("c122-n0:", c122_n0 ?? -4703, c122_n0 == null)
+
+let c122_n1 = null
+
+print("c122-n1:", c122_n1 ?? 370, c122_n1 == null)
+
+let c122_n2 = null
+
+print("c122-n2:", c122_n2 ?? -4409, c122_n2 == null)
+
+print("c122-s0:", "tBgg" in "cw2xevtBgg", "tBgg" == "tBgg")
+
+print("c122-s1:", "jb8s" in "mu330xjb8s", "jb8s" == "jb8s")

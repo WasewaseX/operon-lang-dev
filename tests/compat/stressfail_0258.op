@@ -1,0 +1,240 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=258 tag=s258
+
+stress {
+
+    print("s258-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s258-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s258-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s258-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s258-mz:", 47 % 0)
+
+} rescue (e) {
+
+    print("s258-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s258-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s258-of1:", "caught", e.kind, e.message)
+
+}
+
+gene s258_r0() {
+
+    raise "s258-Awq9k6"
+
+}
+
+stress {
+
+    s258_r0()
+
+    print("s258-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s258-r0:", e.kind, e.message)
+
+}
+
+gene s258_r1() {
+
+    raise "s258-cbxsgf"
+
+}
+
+stress {
+
+    s258_r1()
+
+    print("s258-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s258-r1:", e.kind, e.message)
+
+}
+
+gene s258_r2() {
+
+    raise "s258-qliqA4"
+
+}
+
+stress {
+
+    s258_r2()
+
+    print("s258-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s258-r2:", e.kind, e.message)
+
+}
+
+gene s258_r3() {
+
+    raise "s258-5r4kcB"
+
+}
+
+stress {
+
+    s258_r3()
+
+    print("s258-r3:", "unreachable")
+
+} rescue (e) {
+
+    print("s258-r3:", e.kind, e.message)
+
+}
+
+let s258_xs0 = [44, 29, 26, 16]
+
+stress {
+
+    print("s258-x0:", s258_xs0[7])
+
+} rescue (e) {
+
+    print("s258-x0:", "caught", e.kind)
+
+}
+
+let s258_xs1 = [23, 45, 4]
+
+stress {
+
+    print("s258-x1:", s258_xs1[6])
+
+} rescue (e) {
+
+    print("s258-x1:", "caught", e.kind)
+
+}
+
+let s258_xs2 = [27, 13]
+
+stress {
+
+    print("s258-x2:", s258_xs2[4])
+
+} rescue (e) {
+
+    print("s258-x2:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s258-0"
+
+    } rescue (e) {
+
+        print("s258-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s258-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s258-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s258-d0-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s258-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s258-1"
+
+    } rescue (e) {
+
+        print("s258-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s258-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s258-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s258-d1-top:", outer.message)
+
+}

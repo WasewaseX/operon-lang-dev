@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=149 tag=c149
+
+print("c149-c0:", -8363 > -8485)
+
+print("c149-c1:", -371 < -2514)
+
+print("c149-c2:", 7472 <= 1391)
+
+print("c149-c3:", 5193 < -6599)
+
+print("c149-c4:", 4496 != 6767)
+
+print("c149-c5:", 7194 <= 1927)
+
+print("c149-b0:", 30 < 19 && 19 < 9, 30 > 19 || 30 > 9)
+
+print("c149-b1:", 50 < 31 && 31 < 39, 50 > 31 || 50 > 39)
+
+print("c149-t0:", -5810 > -8341 ? "gt" : "le")
+
+print("c149-t1:", 1721 > 8007 ? "gt" : "le")
+
+print("c149-t2:", -7588 > 4240 ? "gt" : "le")
+
+let c149_n0 = null
+
+print("c149-n0:", c149_n0 ?? -4872, c149_n0 == null)
+
+let c149_n1 = null
+
+print("c149-n1:", c149_n1 ?? 4061, c149_n1 == null)
+
+let c149_n2 = null
+
+print("c149-n2:", c149_n2 ?? -4487, c149_n2 == null)
+
+print("c149-s0:", "mj3j" in "jA13z5mj3j", "mj3j" == "mj3j")
+
+print("c149-s1:", "si5A" in "B2aqA2si5A", "si5A" == "si5A")

@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=205 tag=m205
+
+let m205_m0 = {plasmid: -10, ligase: 35, marker: -87}
+
+print("m205-m0:", m205_m0["plasmid"], len(m205_m0), m205_m0.has("plasmid"))
+
+let m205_m1 = {plasmid: 99, splicer: -82, cell: -82, helix: 48}
+
+print("m205-m1:", m205_m1["plasmid"], len(m205_m1), m205_m1.has("plasmid"))
+
+let m205_m2 = {splicer: 54, codon: -61, cell: -34, ribose: 95}
+
+print("m205-m2:", m205_m2["splicer"], len(m205_m2), m205_m2.has("splicer"))
+
+let m205_m3 = {exon: -88, codon: -31, cell: 68, helix: 49}
+
+print("m205-m3:", m205_m3["exon"], len(m205_m3), m205_m3.has("exon"))
+
+let m205_k0 = {gene: 42, ligase: 46, vector: 1}
+
+let m205_ks0 = m205_k0.keys()
+
+let m205_sm0 = 0
+
+for k in m205_k0 { m205_sm0 += m205_k0[k] }
+
+print("m205-k0:", m205_sm0, m205_k0.keys().sort(), m205_k0.values().len())
+
+let m205_k1 = {cell: 43, gene: 33, plasmid: 11}
+
+let m205_ks1 = m205_k1.keys()
+
+let m205_sm1 = 0
+
+for k in m205_k1 { m205_sm1 += m205_k1[k] }
+
+print("m205-k1:", m205_sm1, m205_k1.keys().sort(), m205_k1.values().len())
+
+let m205_k2 = {plasmid: 16, splicer: 21, marker: 20}
+
+let m205_ks2 = m205_k2.keys()
+
+let m205_sm2 = 0
+
+for k in m205_k2 { m205_sm2 += m205_k2[k] }
+
+print("m205-k2:", m205_sm2, m205_k2.keys().sort(), m205_k2.values().len())
+
+let m205_w0 = {outer: {gene: 1, cell: 3, tag: "ok"}}}
+
+print("m205-w0:", m205_w0["outer"]["cell"], m205_w0["outer"]["tag"])
+
+let m205_w1 = {outer: {enzyme: 5, ribose: 7, tag: "ok"}}}
+
+print("m205-w1:", m205_w1["outer"]["ribose"], m205_w1["outer"]["tag"])

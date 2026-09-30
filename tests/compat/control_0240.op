@@ -1,0 +1,170 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=240 tag=c240
+
+let c240_b0 = "start"
+
+if 7 > 80 { c240_b0 = "hi" } elif 7 > 40 { c240_b0 = "mid" } else { c240_b0 = "lo" }
+
+print("c240-i0:", c240_b0, 7)
+
+let c240_b1 = "start"
+
+if -2 > 80 { c240_b1 = "hi" } elif -2 > 40 { c240_b1 = "mid" } else { c240_b1 = "lo" }
+
+print("c240-i1:", c240_b1, -2)
+
+let c240_b2 = "start"
+
+if 71 > 80 { c240_b2 = "hi" } elif 71 > 40 { c240_b2 = "mid" } else { c240_b2 = "lo" }
+
+print("c240-i2:", c240_b2, 71)
+
+let c240_b3 = "start"
+
+if 42 > 80 { c240_b3 = "hi" } elif 42 > 40 { c240_b3 = "mid" } else { c240_b3 = "lo" }
+
+print("c240-i3:", c240_b3, 42)
+
+let c240_b4 = "start"
+
+if 60 > 80 { c240_b4 = "hi" } elif 60 > 40 { c240_b4 = "mid" } else { c240_b4 = "lo" }
+
+print("c240-i4:", c240_b4, 60)
+
+let c240_a0 = 0
+
+let c240_n0 = 0
+
+while c240_n0 < 16 {
+
+    c240_n0 += 4
+
+    if c240_n0 % 2 == 0 { continue }
+
+    if c240_n0 > 22 { break }
+
+    c240_a0 += c240_n0
+
+}
+
+print("c240-w0:", c240_a0, c240_n0)
+
+let c240_a1 = 0
+
+let c240_n1 = 0
+
+while c240_n1 < 11 {
+
+    c240_n1 += 4
+
+    if c240_n1 % 2 == 0 { continue }
+
+    if c240_n1 > 14 { break }
+
+    c240_a1 += c240_n1
+
+}
+
+print("c240-w1:", c240_a1, c240_n1)
+
+let c240_a2 = 0
+
+let c240_n2 = 0
+
+while c240_n2 < 15 {
+
+    c240_n2 += 3
+
+    if c240_n2 % 3 == 0 { continue }
+
+    if c240_n2 > 23 { break }
+
+    c240_a2 += c240_n2
+
+}
+
+print("c240-w2:", c240_a2, c240_n2)
+
+let c240_a3 = 0
+
+let c240_n3 = 0
+
+while c240_n3 < 5 {
+
+    c240_n3 += 2
+
+    if c240_n3 % 3 == 0 { continue }
+
+    if c240_n3 > 9 { break }
+
+    c240_a3 += c240_n3
+
+}
+
+print("c240-w3:", c240_a3, c240_n3)
+
+let c240_c0 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 4] {
+
+        c240_c0 += a * b
+
+    }
+
+}
+
+print("c240-l0:", c240_c0)
+
+let c240_c1 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 3] {
+
+        c240_c1 += a * b
+
+    }
+
+}
+
+print("c240-l1:", c240_c1)
+
+let c240_c2 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 3] {
+
+        c240_c2 += a * b
+
+    }
+
+}
+
+print("c240-l2:", c240_c2)
+
+let c240_acc0 = ""
+
+loop {
+
+    c240_acc0 += "x"
+
+    if c240_acc0.len() >= 5 { break }
+
+}
+
+print("c240-o0:", c240_acc0)
+
+let c240_acc1 = ""
+
+loop {
+
+    c240_acc1 += "x"
+
+    if c240_acc1.len() >= 7 { break }
+
+}
+
+print("c240-o1:", c240_acc1)

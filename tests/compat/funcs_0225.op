@@ -1,0 +1,188 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=225 tag=f225
+
+gene f225_g0(p, q = 49, r = 16) {
+
+    return p * 2 + q - r
+
+}
+
+print("f225-d0:", f225_g0(48), f225_g0(48, 14), f225_g0(48, 49, 16))
+
+gene f225_g1(p, q = 5, r = 43) {
+
+    return p * 32 + q - r
+
+}
+
+print("f225-d1:", f225_g1(-31), f225_g1(-31, 38), f225_g1(-31, 5, 43))
+
+gene f225_g2(p, q = 62, r = 29) {
+
+    return p * 1 + q - r
+
+}
+
+print("f225-d2:", f225_g2(-33), f225_g2(-33, 36), f225_g2(-33, 62, 29))
+
+gene f225_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f225_fib0(n - 1) + f225_fib0(n - 2)
+
+}
+
+print("f225-fib0:", f225_fib0(11))
+
+gene f225_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f225_fib1(n - 1) + f225_fib1(n - 2)
+
+}
+
+print("f225-fib1:", f225_fib1(9))
+
+gene f225_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f225_gcd0(b, a % b)
+
+}
+
+print("f225-gcd0:", f225_gcd0(639, 716))
+
+gene f225_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f225_gcd1(b, a % b)
+
+}
+
+print("f225-gcd1:", f225_gcd1(993, 366))
+
+gene f225_gcd2(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f225_gcd2(b, a % b)
+
+}
+
+print("f225-gcd2:", f225_gcd2(494, 570))
+
+gene f225_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f225_c0 = f225_mk0(35)
+
+f225_c0(1)
+
+print("f225-cl0:", f225_c0(4))
+
+gene f225_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f225_c1 = f225_mk1(28)
+
+f225_c1(6)
+
+print("f225-cl1:", f225_c1(6))
+
+gene f225_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f225-hof0:", f225_tw0(gene (z) => z * 2 + 1, 22))
+
+gene f225_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f225-hof1:", f225_tw1(gene (z) => z * 2 + 1, 13))
+
+gene f225_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f225-dg0:", f225_sd0(807885))
+
+gene f225_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f225-dg1:", f225_sd1(572867))

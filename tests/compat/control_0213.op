@@ -1,0 +1,146 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=213 tag=c213
+
+let c213_b0 = "start"
+
+if 118 > 80 { c213_b0 = "hi" } elif 118 > 40 { c213_b0 = "mid" } else { c213_b0 = "lo" }
+
+print("c213-i0:", c213_b0, 118)
+
+let c213_b1 = "start"
+
+if 74 > 80 { c213_b1 = "hi" } elif 74 > 40 { c213_b1 = "mid" } else { c213_b1 = "lo" }
+
+print("c213-i1:", c213_b1, 74)
+
+let c213_b2 = "start"
+
+if 71 > 80 { c213_b2 = "hi" } elif 71 > 40 { c213_b2 = "mid" } else { c213_b2 = "lo" }
+
+print("c213-i2:", c213_b2, 71)
+
+let c213_b3 = "start"
+
+if 13 > 80 { c213_b3 = "hi" } elif 13 > 40 { c213_b3 = "mid" } else { c213_b3 = "lo" }
+
+print("c213-i3:", c213_b3, 13)
+
+let c213_b4 = "start"
+
+if 52 > 80 { c213_b4 = "hi" } elif 52 > 40 { c213_b4 = "mid" } else { c213_b4 = "lo" }
+
+print("c213-i4:", c213_b4, 52)
+
+let c213_a0 = 0
+
+let c213_n0 = 0
+
+while c213_n0 < 8 {
+
+    c213_n0 += 3
+
+    if c213_n0 % 3 == 0 { continue }
+
+    if c213_n0 > 17 { break }
+
+    c213_a0 += c213_n0
+
+}
+
+print("c213-w0:", c213_a0, c213_n0)
+
+let c213_a1 = 0
+
+let c213_n1 = 0
+
+while c213_n1 < 20 {
+
+    c213_n1 += 3
+
+    if c213_n1 % 2 == 0 { continue }
+
+    if c213_n1 > 24 { break }
+
+    c213_a1 += c213_n1
+
+}
+
+print("c213-w1:", c213_a1, c213_n1)
+
+let c213_c0 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 3] {
+
+        c213_c0 += a * b
+
+    }
+
+}
+
+print("c213-l0:", c213_c0)
+
+let c213_c1 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 2] {
+
+        c213_c1 += a * b
+
+    }
+
+}
+
+print("c213-l1:", c213_c1)
+
+let c213_c2 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 4] {
+
+        c213_c2 += a * b
+
+    }
+
+}
+
+print("c213-l2:", c213_c2)
+
+let c213_acc0 = ""
+
+loop {
+
+    c213_acc0 += "x"
+
+    if c213_acc0.len() >= 5 { break }
+
+}
+
+print("c213-o0:", c213_acc0)
+
+let c213_acc1 = ""
+
+loop {
+
+    c213_acc1 += "x"
+
+    if c213_acc1.len() >= 4 { break }
+
+}
+
+print("c213-o1:", c213_acc1)
+
+let c213_acc2 = ""
+
+loop {
+
+    c213_acc2 += "x"
+
+    if c213_acc2.len() >= 4 { break }
+
+}
+
+print("c213-o2:", c213_acc2)

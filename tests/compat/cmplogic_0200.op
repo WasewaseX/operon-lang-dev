@@ -1,0 +1,36 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=200 tag=c200
+
+print("c200-c0:", 6423 < 1041)
+
+print("c200-c1:", 8170 > -1180)
+
+print("c200-c2:", -6335 >= -9989)
+
+print("c200-c3:", 5975 > -5206)
+
+print("c200-b0:", 50 < 36 && 36 < 29, 50 > 36 || 50 > 29)
+
+print("c200-b1:", 41 < 27 && 27 < 13, 41 > 27 || 41 > 13)
+
+print("c200-b2:", 12 < 50 && 50 < 5, 12 > 50 || 12 > 5)
+
+print("c200-t0:", -8965 > 9024 ? "gt" : "le")
+
+print("c200-t1:", 9545 > -6866 ? "gt" : "le")
+
+let c200_n0 = null
+
+print("c200-n0:", c200_n0 ?? 9683, c200_n0 == null)
+
+let c200_n1 = null
+
+print("c200-n1:", c200_n1 ?? 521, c200_n1 == null)
+
+let c200_n2 = null
+
+print("c200-n2:", c200_n2 ?? 6531, c200_n2 == null)
+
+print("c200-s0:", "pzvu" in "a1nfjipzvu", "pzvu" == "pzvu")
+
+print("c200-s1:", "x9cg" in "sA39prx9cg", "x9cg" == "x9cg")

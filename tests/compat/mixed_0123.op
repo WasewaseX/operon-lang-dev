@@ -1,0 +1,190 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=123 tag=m123
+
+gene m123_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m123-b0:", m123_b0({ligase: 24, splicer: 46, plasmid: 70})?!)
+
+gene m123_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m123-b1:", m123_b1({ribose: 17, helix: 70, vector: 38})?!)
+
+gene m123_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m123_f0([55, 4, 40, 5, 1, 28, 1, 30]) {
+
+    case Ok(list) {
+
+        print("m123-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m123-f0:", "e:", m)
+
+    }
+
+}
+
+gene m123_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m123_f1([56, 11, 10, 29, 32]) {
+
+    case Ok(list) {
+
+        print("m123-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m123-f1:", "e:", m)
+
+    }
+
+}
+
+let m123_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m123-cc0:", m123_cl0(16)(2), m123_cl0(2)(16))
+
+let m123_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m123-cc1:", m123_cl1(10)(8), m123_cl1(8)(10))
+
+let m123_data0 = some([some("vector"), none(), some(3)])
+
+match m123_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m123-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m123-x0:", "shape-miss")
+
+    }
+
+}
+
+let m123_data1 = some([some("plasmid"), none(), some(2)])
+
+match m123_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m123-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m123-x1:", "shape-miss")
+
+    }
+
+}

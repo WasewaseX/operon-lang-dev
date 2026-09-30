@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=112 tag=m112
+
+let m112_m0 = {exon: -1, ribose: -90, splicer: -26, plasmid: 3}
+
+print("m112-m0:", m112_m0["exon"], len(m112_m0), m112_m0.has("exon"))
+
+let m112_m1 = {marker: 64, ribose: -41, plasmid: -27, vector: 0}
+
+print("m112-m1:", m112_m1["marker"], len(m112_m1), m112_m1.has("marker"))
+
+let m112_m2 = {plasmid: -18, exon: 70, ribose: -3}
+
+print("m112-m2:", m112_m2["plasmid"], len(m112_m2), m112_m2.has("plasmid"))
+
+let m112_m3 = {exon: 20, enzyme: -83, ligase: -2, vector: 86}
+
+print("m112-m3:", m112_m3["exon"], len(m112_m3), m112_m3.has("exon"))
+
+let m112_k0 = {marker: 20, ligase: 31, enzyme: 16}
+
+let m112_ks0 = m112_k0.keys()
+
+let m112_sm0 = 0
+
+for k in m112_k0 { m112_sm0 += m112_k0[k] }
+
+print("m112-k0:", m112_sm0, m112_k0.keys().sort(), m112_k0.values().len())
+
+let m112_k1 = {marker: 15, splicer: 49, codon: 15}
+
+let m112_ks1 = m112_k1.keys()
+
+let m112_sm1 = 0
+
+for k in m112_k1 { m112_sm1 += m112_k1[k] }
+
+print("m112-k1:", m112_sm1, m112_k1.keys().sort(), m112_k1.values().len())
+
+let m112_w0 = {outer: {enzyme: 6, splicer: 3, tag: "ok"}}}
+
+print("m112-w0:", m112_w0["outer"]["splicer"], m112_w0["outer"]["tag"])
+
+let m112_w1 = {outer: {ligase: 4, ribose: 6, tag: "ok"}}}
+
+print("m112-w1:", m112_w1["outer"]["ribose"], m112_w1["outer"]["tag"])

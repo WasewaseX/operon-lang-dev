@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=240 tag=c240
+
+print("c240-c0:", 5838 != 473)
+
+print("c240-c1:", -9087 >= -7576)
+
+print("c240-c2:", 5096 > 3529)
+
+print("c240-c3:", 6049 == 7820)
+
+print("c240-c4:", -5546 >= 1551)
+
+print("c240-c5:", 1601 == 6745)
+
+print("c240-b0:", 39 < 5 && 5 < 22, 39 > 5 || 39 > 22)
+
+print("c240-b1:", 0 < 5 && 5 < 13, 0 > 5 || 0 > 13)
+
+print("c240-b2:", 0 < 18 && 18 < 28, 0 > 18 || 0 > 28)
+
+print("c240-b3:", 22 < 49 && 49 < 20, 22 > 49 || 22 > 20)
+
+print("c240-t0:", -8807 > -9002 ? "gt" : "le")
+
+print("c240-t1:", -9646 > 1640 ? "gt" : "le")
+
+print("c240-t2:", 4029 > -6618 ? "gt" : "le")
+
+print("c240-t3:", 3225 > 9997 ? "gt" : "le")
+
+let c240_n0 = null
+
+print("c240-n0:", c240_n0 ?? 8510, c240_n0 == null)
+
+let c240_n1 = null
+
+print("c240-n1:", c240_n1 ?? 5512, c240_n1 == null)
+
+let c240_n2 = null
+
+print("c240-n2:", c240_n2 ?? -2021, c240_n2 == null)
+
+print("c240-s0:", "xxqn" in "evg87uxxqn", "xxqn" == "xxqn")
+
+print("c240-s1:", "gxwq" in "xogo0igxwq", "gxwq" == "gxwq")

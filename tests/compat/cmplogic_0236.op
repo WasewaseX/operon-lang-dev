@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=236 tag=c236
+
+print("c236-c0:", -5660 >= -7608)
+
+print("c236-c1:", 2106 <= 7076)
+
+print("c236-c2:", 6470 < -3359)
+
+print("c236-c3:", 4635 < 615)
+
+print("c236-c4:", 6125 >= -265)
+
+print("c236-c5:", 7732 >= 8067)
+
+print("c236-c6:", -9645 <= 8009)
+
+print("c236-b0:", 0 < 1 && 1 < 44, 0 > 1 || 0 > 44)
+
+print("c236-b1:", 4 < 20 && 20 < 20, 4 > 20 || 4 > 20)
+
+print("c236-b2:", 0 < 24 && 24 < 50, 0 > 24 || 0 > 50)
+
+print("c236-t0:", -414 > -1677 ? "gt" : "le")
+
+print("c236-t1:", -8503 > 8400 ? "gt" : "le")
+
+print("c236-t2:", 5976 > -6188 ? "gt" : "le")
+
+print("c236-t3:", 509 > -780 ? "gt" : "le")
+
+let c236_n0 = null
+
+print("c236-n0:", c236_n0 ?? 2151, c236_n0 == null)
+
+let c236_n1 = null
+
+print("c236-n1:", c236_n1 ?? -3225, c236_n1 == null)
+
+let c236_n2 = null
+
+print("c236-n2:", c236_n2 ?? 2753, c236_n2 == null)
+
+print("c236-s0:", "b8aC" in "9lhomCb8aC", "b8aC" == "b8aC")
+
+print("c236-s1:", "xzwC" in "y68xBzxzwC", "xzwC" == "xzwC")

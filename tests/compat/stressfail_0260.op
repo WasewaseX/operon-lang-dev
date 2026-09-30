@@ -1,0 +1,232 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=260 tag=s260
+
+stress {
+
+    print("s260-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s260-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s260-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s260-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s260-mz:", 88 % 0)
+
+} rescue (e) {
+
+    print("s260-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s260-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s260-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s260-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s260-of2:", "caught", e.kind, e.message)
+
+}
+
+gene s260_r0() {
+
+    raise "s260-hr0yi_"
+
+}
+
+stress {
+
+    s260_r0()
+
+    print("s260-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s260-r0:", e.kind, e.message)
+
+}
+
+gene s260_r1() {
+
+    raise "s260-3_o1mp"
+
+}
+
+stress {
+
+    s260_r1()
+
+    print("s260-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s260-r1:", e.kind, e.message)
+
+}
+
+gene s260_r2() {
+
+    raise "s260-ajBibs"
+
+}
+
+stress {
+
+    s260_r2()
+
+    print("s260-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s260-r2:", e.kind, e.message)
+
+}
+
+let s260_xs0 = [2, 14]
+
+stress {
+
+    print("s260-x0:", s260_xs0[3])
+
+} rescue (e) {
+
+    print("s260-x0:", "caught", e.kind)
+
+}
+
+let s260_xs1 = [21, 28, 22]
+
+stress {
+
+    print("s260-x1:", s260_xs1[6])
+
+} rescue (e) {
+
+    print("s260-x1:", "caught", e.kind)
+
+}
+
+let s260_xs2 = [27, 41, 2]
+
+stress {
+
+    print("s260-x2:", s260_xs2[6])
+
+} rescue (e) {
+
+    print("s260-x2:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s260-0"
+
+    } rescue (e) {
+
+        print("s260-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s260-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s260-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s260-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s260-1"
+
+    } rescue (e) {
+
+        print("s260-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s260-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s260-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s260-d1-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s260-d1-top:", outer.message)
+
+}

@@ -1,0 +1,188 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=151 tag=f151
+
+gene f151_g0(p, q = 20, r = 97) {
+
+    return p * 12 + q - r
+
+}
+
+print("f151-d0:", f151_g0(49), f151_g0(49, 52), f151_g0(49, 20, 97))
+
+gene f151_g1(p, q = 51, r = 91) {
+
+    return p * 20 + q - r
+
+}
+
+print("f151-d1:", f151_g1(18), f151_g1(18, 71), f151_g1(18, 51, 91))
+
+gene f151_g2(p, q = 48, r = 46) {
+
+    return p * 20 + q - r
+
+}
+
+print("f151-d2:", f151_g2(29), f151_g2(29, 80), f151_g2(29, 48, 46))
+
+gene f151_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f151_fib0(n - 1) + f151_fib0(n - 2)
+
+}
+
+print("f151-fib0:", f151_fib0(10))
+
+gene f151_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f151_fib1(n - 1) + f151_fib1(n - 2)
+
+}
+
+print("f151-fib1:", f151_fib1(12))
+
+gene f151_fib2(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f151_fib2(n - 1) + f151_fib2(n - 2)
+
+}
+
+print("f151-fib2:", f151_fib2(12))
+
+gene f151_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f151_gcd0(b, a % b)
+
+}
+
+print("f151-gcd0:", f151_gcd0(662, 559))
+
+gene f151_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f151_gcd1(b, a % b)
+
+}
+
+print("f151-gcd1:", f151_gcd1(127, 287))
+
+gene f151_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f151_c0 = f151_mk0(38)
+
+f151_c0(3)
+
+print("f151-cl0:", f151_c0(7))
+
+gene f151_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f151_c1 = f151_mk1(8)
+
+f151_c1(7)
+
+print("f151-cl1:", f151_c1(8))
+
+gene f151_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f151-hof0:", f151_tw0(gene (z) => z * 2 + 1, 4))
+
+gene f151_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f151-hof1:", f151_tw1(gene (z) => z * 2 + 1, 1))
+
+gene f151_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f151-dg0:", f151_sd0(461845))
+
+gene f151_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f151-dg1:", f151_sd1(523907))

@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=243 tag=c243
+
+print("c243-c0:", 3775 != 1281)
+
+print("c243-c1:", 3446 <= -3301)
+
+print("c243-c2:", -7361 != 533)
+
+print("c243-c3:", -8029 > -7844)
+
+print("c243-c4:", -5626 <= 8185)
+
+print("c243-c5:", 3158 <= -3994)
+
+print("c243-c6:", 6275 >= 191)
+
+print("c243-b0:", 41 < 21 && 21 < 42, 41 > 21 || 41 > 42)
+
+print("c243-b1:", 43 < 27 && 27 < 31, 43 > 27 || 43 > 31)
+
+print("c243-b2:", 45 < 13 && 13 < 19, 45 > 13 || 45 > 19)
+
+print("c243-b3:", 33 < 35 && 35 < 27, 33 > 35 || 33 > 27)
+
+print("c243-t0:", 9065 > -3853 ? "gt" : "le")
+
+print("c243-t1:", -5770 > 1198 ? "gt" : "le")
+
+let c243_n0 = null
+
+print("c243-n0:", c243_n0 ?? -1501, c243_n0 == null)
+
+let c243_n1 = null
+
+print("c243-n1:", c243_n1 ?? -3830, c243_n1 == null)
+
+let c243_n2 = null
+
+print("c243-n2:", c243_n2 ?? -6872, c243_n2 == null)
+
+print("c243-s0:", "uqsw" in "c4zlcuuqsw", "uqsw" == "uqsw")
+
+print("c243-s1:", "Ajq1" in "3CdevoAjq1", "Ajq1" == "Ajq1")

@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=181 tag=c181
+
+print("c181-c0:", 9058 == 1475)
+
+print("c181-c1:", -4210 <= 3695)
+
+print("c181-c2:", -9873 > -3418)
+
+print("c181-c3:", -7086 <= 3076)
+
+print("c181-c4:", -5570 < -5831)
+
+print("c181-c5:", -958 >= -6778)
+
+print("c181-c6:", -2441 == 2372)
+
+print("c181-b0:", 10 < 21 && 21 < 13, 10 > 21 || 10 > 13)
+
+print("c181-b1:", 2 < 20 && 20 < 25, 2 > 20 || 2 > 25)
+
+print("c181-b2:", 9 < 45 && 45 < 23, 9 > 45 || 9 > 23)
+
+print("c181-t0:", -1957 > -1234 ? "gt" : "le")
+
+print("c181-t1:", -5979 > -8751 ? "gt" : "le")
+
+print("c181-t2:", -3279 > 1105 ? "gt" : "le")
+
+print("c181-t3:", 6900 > -847 ? "gt" : "le")
+
+let c181_n0 = null
+
+print("c181-n0:", c181_n0 ?? 5680, c181_n0 == null)
+
+let c181_n1 = null
+
+print("c181-n1:", c181_n1 ?? 8936, c181_n1 == null)
+
+print("c181-s0:", "_v1k" in "ihB6ar_v1k", "_v1k" == "_v1k")
+
+print("c181-s1:", "a4hB" in "46dg0ta4hB", "a4hB" == "a4hB")

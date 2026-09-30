@@ -1,0 +1,220 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=196 tag=s196
+
+stress {
+
+    print("s196-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s196-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s196-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s196-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s196-mz:", 10 % 0)
+
+} rescue (e) {
+
+    print("s196-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s196-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s196-of1:", "caught", e.kind, e.message)
+
+}
+
+gene s196_r0() {
+
+    raise "s196-C3pnkx"
+
+}
+
+stress {
+
+    s196_r0()
+
+    print("s196-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s196-r0:", e.kind, e.message)
+
+}
+
+gene s196_r1() {
+
+    raise "s196-hge499"
+
+}
+
+stress {
+
+    s196_r1()
+
+    print("s196-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s196-r1:", e.kind, e.message)
+
+}
+
+gene s196_r2() {
+
+    raise "s196-_ktitb"
+
+}
+
+stress {
+
+    s196_r2()
+
+    print("s196-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s196-r2:", e.kind, e.message)
+
+}
+
+let s196_xs0 = [22, 11]
+
+stress {
+
+    print("s196-x0:", s196_xs0[3])
+
+} rescue (e) {
+
+    print("s196-x0:", "caught", e.kind)
+
+}
+
+let s196_xs1 = [7, 43]
+
+stress {
+
+    print("s196-x1:", s196_xs1[5])
+
+} rescue (e) {
+
+    print("s196-x1:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s196-0"
+
+    } rescue (e) {
+
+        print("s196-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s196-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s196-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s196-d0-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s196-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s196-1"
+
+    } rescue (e) {
+
+        print("s196-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s196-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s196-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s196-d1-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s196-d1-top:", outer.message)
+
+}

@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=221 tag=s221
+
+print("s221-m0:", "e53o62pe9mi5l1".upper(), "e53o62pe9mi5l1".slice(2), "e53o62pe9mi5l1".len())
+
+print("s221-m1:", "i4jtkhdzerz".upper(), "i4jtkhdzerz".slice(3), "i4jtkhdzerz".len())
+
+print("s221-m2:", "eh5izdwqtnb1Cr".upper(), "eh5izdwqtnb1Cr".slice(3), "eh5izdwqtnb1Cr".len())
+
+print("s221-m3:", "Az9pbnhrzcm".upper(), "Az9pbnhrzcm".slice(4), "Az9pbnhrzcm".len())
+
+print("s221-m4:", "k_t6curotk".upper(), "k_t6curotk".slice(1), "k_t6curotk".len())
+
+print("s221-i0:", "bot-{24}-mv8n")
+
+let s221_v0 = 24
+
+print("s221-v0:", "n={s221_v0}" + "!" * 1)
+
+print("s221-i1:", "8x_-{40}-zqsm")
+
+let s221_v1 = 40
+
+print("s221-v1:", "n={s221_v1}" + "!" * 2)
+
+print("s221-i2:", "obo-{19}-ci4u")
+
+let s221_v2 = 19
+
+print("s221-v2:", "n={s221_v2}" + "!" * 3)
+
+print("s221-r0:", "ltxc8yb0".replace("l", "e5"), "ltxc8yb0".contains("tx"))
+
+print("s221-r1:", "r7q50_af".replace("r", "ja"), "r7q50_af".contains("7q"))
+
+print("s221-r2:", "wB9rhf5d".replace("w", "n2"), "wB9rhf5d".contains("B9"))
+
+print("s221-r3:", "obrihbBx".replace("o", "1i"), "obrihbBx".contains("br"))
+
+print("s221-j0:", ["17t", "cgq", "ynA", "yt8", "5qh"].join("-"))
+
+print("s221-j1:", ["02x", "_t8", "36s", "ot5"].join("-"))
+
+print("s221-a0:", "ze5umr4".at(0), "ze5umr4".trim() == "ze5umr4")
+
+print("s221-a1:", "zCmonjl".at(1), "zCmonjl".trim() == "zCmonjl")
+
+print("s221-a2:", "srhx_90".at(4), "srhx_90".trim() == "srhx_90")

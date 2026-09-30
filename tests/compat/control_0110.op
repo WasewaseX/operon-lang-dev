@@ -1,0 +1,146 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=110 tag=c110
+
+let c110_b0 = "start"
+
+if 19 > 80 { c110_b0 = "hi" } elif 19 > 40 { c110_b0 = "mid" } else { c110_b0 = "lo" }
+
+print("c110-i0:", c110_b0, 19)
+
+let c110_b1 = "start"
+
+if 0 > 80 { c110_b1 = "hi" } elif 0 > 40 { c110_b1 = "mid" } else { c110_b1 = "lo" }
+
+print("c110-i1:", c110_b1, 0)
+
+let c110_b2 = "start"
+
+if 51 > 80 { c110_b2 = "hi" } elif 51 > 40 { c110_b2 = "mid" } else { c110_b2 = "lo" }
+
+print("c110-i2:", c110_b2, 51)
+
+let c110_b3 = "start"
+
+if 45 > 80 { c110_b3 = "hi" } elif 45 > 40 { c110_b3 = "mid" } else { c110_b3 = "lo" }
+
+print("c110-i3:", c110_b3, 45)
+
+let c110_b4 = "start"
+
+if 69 > 80 { c110_b4 = "hi" } elif 69 > 40 { c110_b4 = "mid" } else { c110_b4 = "lo" }
+
+print("c110-i4:", c110_b4, 69)
+
+let c110_a0 = 0
+
+let c110_n0 = 0
+
+while c110_n0 < 6 {
+
+    c110_n0 += 4
+
+    if c110_n0 % 3 == 0 { continue }
+
+    if c110_n0 > 10 { break }
+
+    c110_a0 += c110_n0
+
+}
+
+print("c110-w0:", c110_a0, c110_n0)
+
+let c110_a1 = 0
+
+let c110_n1 = 0
+
+while c110_n1 < 12 {
+
+    c110_n1 += 1
+
+    if c110_n1 % 2 == 0 { continue }
+
+    if c110_n1 > 15 { break }
+
+    c110_a1 += c110_n1
+
+}
+
+print("c110-w1:", c110_a1, c110_n1)
+
+let c110_c0 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 2] {
+
+        c110_c0 += a * b
+
+    }
+
+}
+
+print("c110-l0:", c110_c0)
+
+let c110_c1 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 2] {
+
+        c110_c1 += a * b
+
+    }
+
+}
+
+print("c110-l1:", c110_c1)
+
+let c110_c2 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 3] {
+
+        c110_c2 += a * b
+
+    }
+
+}
+
+print("c110-l2:", c110_c2)
+
+let c110_acc0 = ""
+
+loop {
+
+    c110_acc0 += "x"
+
+    if c110_acc0.len() >= 7 { break }
+
+}
+
+print("c110-o0:", c110_acc0)
+
+let c110_acc1 = ""
+
+loop {
+
+    c110_acc1 += "x"
+
+    if c110_acc1.len() >= 5 { break }
+
+}
+
+print("c110-o1:", c110_acc1)
+
+let c110_acc2 = ""
+
+loop {
+
+    c110_acc2 += "x"
+
+    if c110_acc2.len() >= 4 { break }
+
+}
+
+print("c110-o2:", c110_acc2)

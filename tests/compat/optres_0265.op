@@ -1,0 +1,122 @@
+# compat corpus — generated, do not edit by hand
+# bucket=optres seed=20261030 idx=265 tag=o265
+
+gene o265_f0(n) {
+
+    if n > -7851 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o265_u0(n) {
+
+    let v = o265_f0(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o265-p0:", o265_u0(-1978), o265_u0(-7846))
+
+gene o265_f1(n) {
+
+    if n > -1764 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o265_u1(n) {
+
+    let v = o265_f1(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o265-p1:", o265_u1(-4189), o265_u1(-1758))
+
+gene o265_f2(n) {
+
+    if n > -8492 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o265_u2(n) {
+
+    let v = o265_f2(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o265-p2:", o265_u2(-6789), o265_u2(-8482))
+
+gene o265_f3(n) {
+
+    if n > 8241 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o265_u3(n) {
+
+    let v = o265_f3(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o265-p3:", o265_u3(-4447), o265_u3(8252))
+
+print("o265-o0:", is_ok(ok(6041)), is_none(none()), is_err(err("6041")), is_some(some(6041)))
+
+print("o265-u0:", unwrap_or(none(), 6041), unwrap_or(err("x"), 6040), unwrap_or(ok(6041), 0))
+
+print("o265-o1:", is_ok(ok(-9406)), is_none(none()), is_err(err("-9406")), is_some(some(-9406)))
+
+print("o265-u1:", unwrap_or(none(), -9406), unwrap_or(err("x"), -9407), unwrap_or(ok(-9406), 0))
+
+print("o265-o2:", is_ok(ok(-3105)), is_none(none()), is_err(err("-3105")), is_some(some(-3105)))
+
+print("o265-u2:", unwrap_or(none(), -3105), unwrap_or(err("x"), -3106), unwrap_or(ok(-3105), 0))
+
+print("o265-o3:", is_ok(ok(-492)), is_none(none()), is_err(err("-492")), is_some(some(-492)))
+
+print("o265-u3:", unwrap_or(none(), -492), unwrap_or(err("x"), -493), unwrap_or(ok(-492), 0))
+
+print("o265-e0:", ok(1879) == ok(1879), some(1879) == ok(1879), none() == none(), err(1) == err(2))
+
+print("o265-j0:", json_str(ok(1879)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o265-e1:", ok(-6466) == ok(-6466), some(-6466) == ok(-6466), none() == none(), err(1) == err(2))
+
+print("o265-j1:", json_str(ok(-6466)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o265-n0:", some(some(43))?!?!, unwrap(ok(133)) + unwrap(some(90)))
+
+print("o265-s0:", "v=" + str(ok(43)?!), some("90k")?! + "!")
+
+print("o265-n1:", some(some(68))?!?!, unwrap(ok(83)) + unwrap(some(15)))
+
+print("o265-s1:", "v=" + str(ok(68)?!), some("15k")?! + "!")

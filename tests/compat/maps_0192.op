@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=192 tag=m192
+
+let m192_m0 = {cell: 14, ribose: 98, ligase: -67, exon: 34, vector: 25}
+
+print("m192-m0:", m192_m0["cell"], len(m192_m0), m192_m0.has("cell"))
+
+let m192_m1 = {codon: -99, marker: -10, exon: -57}
+
+print("m192-m1:", m192_m1["codon"], len(m192_m1), m192_m1.has("codon"))
+
+let m192_m2 = {ribose: 26, splicer: 79, plasmid: 13}
+
+print("m192-m2:", m192_m2["ribose"], len(m192_m2), m192_m2.has("ribose"))
+
+let m192_m3 = {enzyme: -44, ligase: 53, plasmid: 25}
+
+print("m192-m3:", m192_m3["enzyme"], len(m192_m3), m192_m3.has("enzyme"))
+
+let m192_k0 = {codon: 13, ligase: 41, plasmid: 46}
+
+let m192_ks0 = m192_k0.keys()
+
+let m192_sm0 = 0
+
+for k in m192_k0 { m192_sm0 += m192_k0[k] }
+
+print("m192-k0:", m192_sm0, m192_k0.keys().sort(), m192_k0.values().len())
+
+let m192_k1 = {cell: 23, plasmid: 7, ribose: 38}
+
+let m192_ks1 = m192_k1.keys()
+
+let m192_sm1 = 0
+
+for k in m192_k1 { m192_sm1 += m192_k1[k] }
+
+print("m192-k1:", m192_sm1, m192_k1.keys().sort(), m192_k1.values().len())
+
+let m192_w0 = {outer: {gene: 9, ribose: 7, tag: "ok"}}}
+
+print("m192-w0:", m192_w0["outer"]["ribose"], m192_w0["outer"]["tag"])
+
+let m192_w1 = {outer: {exon: 1, marker: 1, tag: "ok"}}}
+
+print("m192-w1:", m192_w1["outer"]["marker"], m192_w1["outer"]["tag"])

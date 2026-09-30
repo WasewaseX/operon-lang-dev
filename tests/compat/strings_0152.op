@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=152 tag=s152
+
+print("s152-m0:", "lqyw1cdq51Bk".upper(), "lqyw1cdq51Bk".slice(3), "lqyw1cdq51Bk".len())
+
+print("s152-m1:", "p_q4ywt".upper(), "p_q4ywt".slice(3), "p_q4ywt".len())
+
+print("s152-m2:", "3_Bsz_bc5wB".upper(), "3_Bsz_bc5wB".slice(4), "3_Bsz_bc5wB".len())
+
+print("s152-m3:", "bd0djtyqC_fhu".upper(), "bd0djtyqC_fhu".slice(3), "bd0djtyqC_fhu".len())
+
+print("s152-m4:", "Avrmmita2".upper(), "Avrmmita2".slice(4), "Avrmmita2".len())
+
+print("s152-i0:", "9gs-{6}-r5za")
+
+let s152_v0 = 6
+
+print("s152-v0:", "n={s152_v0}" + "!" * 3)
+
+print("s152-i1:", "x2i-{85}-i0ra")
+
+let s152_v1 = 85
+
+print("s152-v1:", "n={s152_v1}" + "!" * 2)
+
+print("s152-i2:", "qig-{39}-2s5c")
+
+let s152_v2 = 39
+
+print("s152-v2:", "n={s152_v2}" + "!" * 1)
+
+print("s152-r0:", "3h9pqvag".replace("3", "wt"), "3h9pqvag".contains("h9"))
+
+print("s152-r1:", "gl_hhdo6".replace("g", "6v"), "gl_hhdo6".contains("l_"))
+
+print("s152-j0:", ["gyB", "u8e", "jp7"].join("-"))
+
+print("s152-j1:", ["e2A", "1kx", "5xb", "C0k"].join("-"))
+
+print("s152-a0:", "6Ahk_gx".at(2), "6Ahk_gx".trim() == "6Ahk_gx")
+
+print("s152-a1:", "lBluqq4".at(1), "lBluqq4".trim() == "lBluqq4")

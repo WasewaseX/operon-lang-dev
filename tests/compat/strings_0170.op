@@ -1,0 +1,50 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=170 tag=s170
+
+print("s170-m0:", "i7Bxwm_phj".upper(), "i7Bxwm_phj".slice(3), "i7Bxwm_phj".len())
+
+print("s170-m1:", "d4rmz6Be1zw".upper(), "d4rmz6Be1zw".slice(4), "d4rmz6Be1zw".len())
+
+print("s170-m2:", "pd6l11AkAq".upper(), "pd6l11AkAq".slice(4), "pd6l11AkAq".len())
+
+print("s170-m3:", "fguypl2ji8cCn".upper(), "fguypl2ji8cCn".slice(2), "fguypl2ji8cCn".len())
+
+print("s170-m4:", "08gtdA".upper(), "08gtdA".slice(2), "08gtdA".len())
+
+print("s170-i0:", "9b0-{71}-hku2")
+
+let s170_v0 = 71
+
+print("s170-v0:", "n={s170_v0}" + "!" * 1)
+
+print("s170-i1:", "m0A-{91}-om_B")
+
+let s170_v1 = 91
+
+print("s170-v1:", "n={s170_v1}" + "!" * 1)
+
+print("s170-i2:", "ixn-{86}-kkBu")
+
+let s170_v2 = 86
+
+print("s170-v2:", "n={s170_v2}" + "!" * 1)
+
+print("s170-i3:", "A_d-{76}-Ci1c")
+
+let s170_v3 = 76
+
+print("s170-v3:", "n={s170_v3}" + "!" * 2)
+
+print("s170-r0:", "k_f4fdmr".replace("k", "0b"), "k_f4fdmr".contains("_f"))
+
+print("s170-r1:", "hBAd8azf".replace("h", "sm"), "hBAd8azf".contains("BA"))
+
+print("s170-j0:", ["ave", "ksu", "q1w", "7ci"].join("-"))
+
+print("s170-j1:", ["dre", "aAw", "dk1"].join("-"))
+
+print("s170-j2:", ["g9B", "b5A", "mhm", "thB", "807"].join("-"))
+
+print("s170-a0:", "yps1j9l".at(2), "yps1j9l".trim() == "yps1j9l")
+
+print("s170-a1:", "qihfft2".at(3), "qihfft2".trim() == "qihfft2")

@@ -1,0 +1,292 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=259 tag=m259
+
+let m259_s0 = some(7)
+
+match m259_s0 {
+
+    case Some(x) if x > 7 {
+
+        print("m259-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m259-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m259-m0:", "none")
+
+    }
+
+}
+
+let m259_s1 = some(6)
+
+match m259_s1 {
+
+    case Some(x) if x > 6 {
+
+        print("m259-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m259-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m259-m1:", "none")
+
+    }
+
+}
+
+let m259_s2 = some(1)
+
+match m259_s2 {
+
+    case Some(x) if x > 1 {
+
+        print("m259-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m259-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m259-m2:", "none")
+
+    }
+
+}
+
+let m259_s3 = some(5)
+
+match m259_s3 {
+
+    case Some(x) if x > 5 {
+
+        print("m259-m3:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m259-m3:", "small", x)
+
+    }
+
+    case None {
+
+        print("m259-m3:", "none")
+
+    }
+
+}
+
+let m259_s4 = some(9)
+
+match m259_s4 {
+
+    case Some(x) if x > 9 {
+
+        print("m259-m4:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m259-m4:", "small", x)
+
+    }
+
+    case None {
+
+        print("m259-m4:", "none")
+
+    }
+
+}
+
+let m259_ls0 = [27, 30, 7]
+
+match m259_ls0 {
+
+    case [27, *rest] {
+
+        print("m259-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m259-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m259-l0:", "other")
+
+    }
+
+}
+
+let m259_ls1 = [40, 50, 27]
+
+match m259_ls1 {
+
+    case [40, *rest] {
+
+        print("m259-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m259-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m259-l1:", "other")
+
+    }
+
+}
+
+let m259_mp0 = {splicer: -5473, cell: 3619}
+
+match m259_mp0 {
+
+    case {splicer: p, cell: q} {
+
+        print("m259-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m259-mp0:", "miss")
+
+    }
+
+}
+
+let m259_mp1 = {helix: 2678, marker: 6684}
+
+match m259_mp1 {
+
+    case {helix: p, marker: q} {
+
+        print("m259-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m259-mp1:", "miss")
+
+    }
+
+}
+
+let m259_mp2 = {splicer: -5704, vector: -7703}
+
+match m259_mp2 {
+
+    case {splicer: p, vector: q} {
+
+        print("m259-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m259-mp2:", "miss")
+
+    }
+
+}
+
+let m259_r0 = ok(5)
+
+match m259_r0 {
+
+    case Ok(n) | Err(5) {
+
+        print("m259-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m259-r0:", "zero")
+
+    }
+
+}
+
+let m259_r1 = ok(1)
+
+match m259_r1 {
+
+    case Ok(n) | Err(1) {
+
+        print("m259-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m259-r1:", "zero")
+
+    }
+
+}
+
+match "vector" {
+
+    case "vector" {
+
+        print("m259-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m259-w0:", "alt")
+
+    }
+
+}
+
+match "codon" {
+
+    case "codon" {
+
+        print("m259-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m259-w1:", "alt")
+
+    }
+
+}

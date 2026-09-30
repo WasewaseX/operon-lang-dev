@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=244 tag=c244
+
+print("c244-c0:", 6155 == 139)
+
+print("c244-c1:", 8720 < 5658)
+
+print("c244-c2:", -7887 != 7015)
+
+print("c244-c3:", 3778 > -8599)
+
+print("c244-b0:", 5 < 36 && 36 < 30, 5 > 36 || 5 > 30)
+
+print("c244-b1:", 7 < 20 && 20 < 16, 7 > 20 || 7 > 16)
+
+print("c244-b2:", 49 < 17 && 17 < 42, 49 > 17 || 49 > 42)
+
+print("c244-b3:", 24 < 8 && 8 < 1, 24 > 8 || 24 > 1)
+
+print("c244-t0:", -1794 > 8021 ? "gt" : "le")
+
+print("c244-t1:", -7210 > -7134 ? "gt" : "le")
+
+print("c244-t2:", 1024 > -6576 ? "gt" : "le")
+
+print("c244-t3:", 7884 > 4184 ? "gt" : "le")
+
+let c244_n0 = null
+
+print("c244-n0:", c244_n0 ?? -3946, c244_n0 == null)
+
+let c244_n1 = null
+
+print("c244-n1:", c244_n1 ?? 3055, c244_n1 == null)
+
+let c244_n2 = null
+
+print("c244-n2:", c244_n2 ?? -4670, c244_n2 == null)
+
+print("c244-s0:", "utld" in "C3q8zuutld", "utld" == "utld")
+
+print("c244-s1:", "1zgz" in "hrkr8u1zgz", "1zgz" == "1zgz")

@@ -1,0 +1,176 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=171 tag=c171
+
+let c171_b0 = "start"
+
+if 52 > 80 { c171_b0 = "hi" } elif 52 > 40 { c171_b0 = "mid" } else { c171_b0 = "lo" }
+
+print("c171-i0:", c171_b0, 52)
+
+let c171_b1 = "start"
+
+if 49 > 80 { c171_b1 = "hi" } elif 49 > 40 { c171_b1 = "mid" } else { c171_b1 = "lo" }
+
+print("c171-i1:", c171_b1, 49)
+
+let c171_b2 = "start"
+
+if 35 > 80 { c171_b2 = "hi" } elif 35 > 40 { c171_b2 = "mid" } else { c171_b2 = "lo" }
+
+print("c171-i2:", c171_b2, 35)
+
+let c171_b3 = "start"
+
+if 32 > 80 { c171_b3 = "hi" } elif 32 > 40 { c171_b3 = "mid" } else { c171_b3 = "lo" }
+
+print("c171-i3:", c171_b3, 32)
+
+let c171_a0 = 0
+
+let c171_n0 = 0
+
+while c171_n0 < 16 {
+
+    c171_n0 += 3
+
+    if c171_n0 % 2 == 0 { continue }
+
+    if c171_n0 > 18 { break }
+
+    c171_a0 += c171_n0
+
+}
+
+print("c171-w0:", c171_a0, c171_n0)
+
+let c171_a1 = 0
+
+let c171_n1 = 0
+
+while c171_n1 < 9 {
+
+    c171_n1 += 3
+
+    if c171_n1 % 3 == 0 { continue }
+
+    if c171_n1 > 17 { break }
+
+    c171_a1 += c171_n1
+
+}
+
+print("c171-w1:", c171_a1, c171_n1)
+
+let c171_a2 = 0
+
+let c171_n2 = 0
+
+while c171_n2 < 15 {
+
+    c171_n2 += 4
+
+    if c171_n2 % 2 == 0 { continue }
+
+    if c171_n2 > 23 { break }
+
+    c171_a2 += c171_n2
+
+}
+
+print("c171-w2:", c171_a2, c171_n2)
+
+let c171_a3 = 0
+
+let c171_n3 = 0
+
+while c171_n3 < 18 {
+
+    c171_n3 += 2
+
+    if c171_n3 % 2 == 0 { continue }
+
+    if c171_n3 > 26 { break }
+
+    c171_a3 += c171_n3
+
+}
+
+print("c171-w3:", c171_a3, c171_n3)
+
+let c171_c0 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 3] {
+
+        c171_c0 += a * b
+
+    }
+
+}
+
+print("c171-l0:", c171_c0)
+
+let c171_c1 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 3] {
+
+        c171_c1 += a * b
+
+    }
+
+}
+
+print("c171-l1:", c171_c1)
+
+let c171_c2 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 3] {
+
+        c171_c2 += a * b
+
+    }
+
+}
+
+print("c171-l2:", c171_c2)
+
+let c171_acc0 = ""
+
+loop {
+
+    c171_acc0 += "x"
+
+    if c171_acc0.len() >= 3 { break }
+
+}
+
+print("c171-o0:", c171_acc0)
+
+let c171_acc1 = ""
+
+loop {
+
+    c171_acc1 += "x"
+
+    if c171_acc1.len() >= 4 { break }
+
+}
+
+print("c171-o1:", c171_acc1)
+
+let c171_acc2 = ""
+
+loop {
+
+    c171_acc2 += "x"
+
+    if c171_acc2.len() >= 5 { break }
+
+}
+
+print("c171-o2:", c171_acc2)

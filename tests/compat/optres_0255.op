@@ -1,0 +1,118 @@
+# compat corpus — generated, do not edit by hand
+# bucket=optres seed=20261030 idx=255 tag=o255
+
+gene o255_f0(n) {
+
+    if n > -1090 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o255_u0(n) {
+
+    let v = o255_f0(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o255-p0:", o255_u0(-9618), o255_u0(-1085))
+
+gene o255_f1(n) {
+
+    if n > -8485 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o255_u1(n) {
+
+    let v = o255_f1(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o255-p1:", o255_u1(8399), o255_u1(-8475))
+
+gene o255_f2(n) {
+
+    if n > -6019 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o255_u2(n) {
+
+    let v = o255_f2(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o255-p2:", o255_u2(-1664), o255_u2(-6008))
+
+gene o255_f3(n) {
+
+    if n > -5665 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o255_u3(n) {
+
+    let v = o255_f3(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o255-p3:", o255_u3(4789), o255_u3(-5649))
+
+print("o255-o0:", is_ok(ok(-6364)), is_none(none()), is_err(err("-6364")), is_some(some(-6364)))
+
+print("o255-u0:", unwrap_or(none(), -6364), unwrap_or(err("x"), -6365), unwrap_or(ok(-6364), 0))
+
+print("o255-o1:", is_ok(ok(-8978)), is_none(none()), is_err(err("-8978")), is_some(some(-8978)))
+
+print("o255-u1:", unwrap_or(none(), -8978), unwrap_or(err("x"), -8979), unwrap_or(ok(-8978), 0))
+
+print("o255-o2:", is_ok(ok(-5196)), is_none(none()), is_err(err("-5196")), is_some(some(-5196)))
+
+print("o255-u2:", unwrap_or(none(), -5196), unwrap_or(err("x"), -5197), unwrap_or(ok(-5196), 0))
+
+print("o255-e0:", ok(-7226) == ok(-7226), some(-7226) == ok(-7226), none() == none(), err(1) == err(2))
+
+print("o255-j0:", json_str(ok(-7226)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o255-e1:", ok(1428) == ok(1428), some(1428) == ok(1428), none() == none(), err(1) == err(2))
+
+print("o255-j1:", json_str(ok(1428)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o255-n0:", some(some(12))?!?!, unwrap(ok(48)) + unwrap(some(36)))
+
+print("o255-s0:", "v=" + str(ok(12)?!), some("36k")?! + "!")
+
+print("o255-n1:", some(some(70))?!?!, unwrap(ok(95)) + unwrap(some(25)))
+
+print("o255-s1:", "v=" + str(ok(70)?!), some("25k")?! + "!")

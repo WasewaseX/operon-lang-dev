@@ -1,0 +1,230 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=169 tag=m169
+
+gene m169_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m169-b0:", m169_b0({codon: 61, gene: 91, vector: 32})?!)
+
+gene m169_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m169-b1:", m169_b1({exon: 59, vector: 24, ligase: 97})?!)
+
+gene m169_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m169_f0([10, 56, 45, 23, 52, 9, 43]) {
+
+    case Ok(list) {
+
+        print("m169-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m169-f0:", "e:", m)
+
+    }
+
+}
+
+gene m169_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m169_f1([30, 11, 42, 26, 50, 37]) {
+
+    case Ok(list) {
+
+        print("m169-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m169-f1:", "e:", m)
+
+    }
+
+}
+
+gene m169_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m169_f2([49, 19, 42, 29, 10, 12, 38, 41]) {
+
+    case Ok(list) {
+
+        print("m169-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m169-f2:", "e:", m)
+
+    }
+
+}
+
+let m169_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m169-cc0:", m169_cl0(18)(11), m169_cl0(11)(18))
+
+let m169_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m169-cc1:", m169_cl1(15)(13), m169_cl1(13)(15))
+
+let m169_data0 = some([some("ribose"), none(), some(8)])
+
+match m169_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m169-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m169-x0:", "shape-miss")
+
+    }
+
+}
+
+let m169_data1 = some([some("vector"), none(), some(8)])
+
+match m169_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m169-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m169-x1:", "shape-miss")
+
+    }
+
+}

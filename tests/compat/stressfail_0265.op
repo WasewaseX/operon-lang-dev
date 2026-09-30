@@ -1,0 +1,240 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=265 tag=s265
+
+stress {
+
+    print("s265-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s265-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s265-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s265-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s265-mz:", 29 % 0)
+
+} rescue (e) {
+
+    print("s265-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s265-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s265-of1:", "caught", e.kind, e.message)
+
+}
+
+gene s265_r0() {
+
+    raise "s265-ljvkpd"
+
+}
+
+stress {
+
+    s265_r0()
+
+    print("s265-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s265-r0:", e.kind, e.message)
+
+}
+
+gene s265_r1() {
+
+    raise "s265-vm68t0"
+
+}
+
+stress {
+
+    s265_r1()
+
+    print("s265-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s265-r1:", e.kind, e.message)
+
+}
+
+gene s265_r2() {
+
+    raise "s265-rzzvyi"
+
+}
+
+stress {
+
+    s265_r2()
+
+    print("s265-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s265-r2:", e.kind, e.message)
+
+}
+
+gene s265_r3() {
+
+    raise "s265-6Aus5c"
+
+}
+
+stress {
+
+    s265_r3()
+
+    print("s265-r3:", "unreachable")
+
+} rescue (e) {
+
+    print("s265-r3:", e.kind, e.message)
+
+}
+
+let s265_xs0 = [2, 35, 41]
+
+stress {
+
+    print("s265-x0:", s265_xs0[8])
+
+} rescue (e) {
+
+    print("s265-x0:", "caught", e.kind)
+
+}
+
+let s265_xs1 = [41, 25, 50]
+
+stress {
+
+    print("s265-x1:", s265_xs1[8])
+
+} rescue (e) {
+
+    print("s265-x1:", "caught", e.kind)
+
+}
+
+let s265_xs2 = [21, 10]
+
+stress {
+
+    print("s265-x2:", s265_xs2[7])
+
+} rescue (e) {
+
+    print("s265-x2:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s265-0"
+
+    } rescue (e) {
+
+        print("s265-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s265-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s265-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s265-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s265-1"
+
+    } rescue (e) {
+
+        print("s265-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s265-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s265-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s265-d1-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s265-d1-top:", outer.message)
+
+}

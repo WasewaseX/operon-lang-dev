@@ -1,0 +1,268 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=187 tag=m187
+
+let m187_s0 = some(2)
+
+match m187_s0 {
+
+    case Some(x) if x > 2 {
+
+        print("m187-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m187-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m187-m0:", "none")
+
+    }
+
+}
+
+let m187_s1 = some(6)
+
+match m187_s1 {
+
+    case Some(x) if x > 6 {
+
+        print("m187-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m187-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m187-m1:", "none")
+
+    }
+
+}
+
+let m187_s2 = some(1)
+
+match m187_s2 {
+
+    case Some(x) if x > 1 {
+
+        print("m187-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m187-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m187-m2:", "none")
+
+    }
+
+}
+
+let m187_ls0 = [20, 45, 10]
+
+match m187_ls0 {
+
+    case [20, *rest] {
+
+        print("m187-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m187-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m187-l0:", "other")
+
+    }
+
+}
+
+let m187_ls1 = [39, 14, 1]
+
+match m187_ls1 {
+
+    case [39, *rest] {
+
+        print("m187-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m187-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m187-l1:", "other")
+
+    }
+
+}
+
+let m187_ls2 = [11, 30, 16]
+
+match m187_ls2 {
+
+    case [11, *rest] {
+
+        print("m187-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m187-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m187-l2:", "other")
+
+    }
+
+}
+
+let m187_mp0 = {splicer: -1458, enzyme: -2157}
+
+match m187_mp0 {
+
+    case {splicer: p, enzyme: q} {
+
+        print("m187-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m187-mp0:", "miss")
+
+    }
+
+}
+
+let m187_mp1 = {vector: -3901, cell: 7981}
+
+match m187_mp1 {
+
+    case {vector: p, cell: q} {
+
+        print("m187-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m187-mp1:", "miss")
+
+    }
+
+}
+
+let m187_r0 = ok(1)
+
+match m187_r0 {
+
+    case Ok(n) | Err(1) {
+
+        print("m187-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m187-r0:", "zero")
+
+    }
+
+}
+
+let m187_r1 = ok(3)
+
+match m187_r1 {
+
+    case Ok(n) | Err(3) {
+
+        print("m187-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m187-r1:", "zero")
+
+    }
+
+}
+
+let m187_r2 = ok(5)
+
+match m187_r2 {
+
+    case Ok(n) | Err(5) {
+
+        print("m187-r2:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m187-r2:", "zero")
+
+    }
+
+}
+
+match "helix" {
+
+    case "helix" {
+
+        print("m187-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m187-w0:", "alt")
+
+    }
+
+}
+
+match "codon" {
+
+    case "codon" {
+
+        print("m187-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m187-w1:", "alt")
+
+    }
+
+}

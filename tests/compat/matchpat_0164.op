@@ -1,0 +1,340 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=164 tag=m164
+
+let m164_s0 = some(1)
+
+match m164_s0 {
+
+    case Some(x) if x > 1 {
+
+        print("m164-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m164-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m164-m0:", "none")
+
+    }
+
+}
+
+let m164_s1 = some(6)
+
+match m164_s1 {
+
+    case Some(x) if x > 6 {
+
+        print("m164-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m164-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m164-m1:", "none")
+
+    }
+
+}
+
+let m164_s2 = some(3)
+
+match m164_s2 {
+
+    case Some(x) if x > 3 {
+
+        print("m164-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m164-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m164-m2:", "none")
+
+    }
+
+}
+
+let m164_s3 = some(3)
+
+match m164_s3 {
+
+    case Some(x) if x > 3 {
+
+        print("m164-m3:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m164-m3:", "small", x)
+
+    }
+
+    case None {
+
+        print("m164-m3:", "none")
+
+    }
+
+}
+
+let m164_s4 = some(7)
+
+match m164_s4 {
+
+    case Some(x) if x > 7 {
+
+        print("m164-m4:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m164-m4:", "small", x)
+
+    }
+
+    case None {
+
+        print("m164-m4:", "none")
+
+    }
+
+}
+
+let m164_ls0 = [26, 14, 40]
+
+match m164_ls0 {
+
+    case [26, *rest] {
+
+        print("m164-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m164-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m164-l0:", "other")
+
+    }
+
+}
+
+let m164_ls1 = [26, 42, 2]
+
+match m164_ls1 {
+
+    case [26, *rest] {
+
+        print("m164-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m164-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m164-l1:", "other")
+
+    }
+
+}
+
+let m164_ls2 = [24, 42, 50]
+
+match m164_ls2 {
+
+    case [24, *rest] {
+
+        print("m164-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m164-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m164-l2:", "other")
+
+    }
+
+}
+
+let m164_ls3 = [42, 4, 23]
+
+match m164_ls3 {
+
+    case [42, *rest] {
+
+        print("m164-l3:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m164-l3:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m164-l3:", "other")
+
+    }
+
+}
+
+let m164_mp0 = {codon: 3786, enzyme: 1663}
+
+match m164_mp0 {
+
+    case {codon: p, enzyme: q} {
+
+        print("m164-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m164-mp0:", "miss")
+
+    }
+
+}
+
+let m164_mp1 = {enzyme: -4187, ligase: -422}
+
+match m164_mp1 {
+
+    case {enzyme: p, ligase: q} {
+
+        print("m164-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m164-mp1:", "miss")
+
+    }
+
+}
+
+let m164_mp2 = {ligase: -7852, vector: -6746}
+
+match m164_mp2 {
+
+    case {ligase: p, vector: q} {
+
+        print("m164-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m164-mp2:", "miss")
+
+    }
+
+}
+
+let m164_r0 = ok(2)
+
+match m164_r0 {
+
+    case Ok(n) | Err(2) {
+
+        print("m164-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m164-r0:", "zero")
+
+    }
+
+}
+
+let m164_r1 = ok(3)
+
+match m164_r1 {
+
+    case Ok(n) | Err(3) {
+
+        print("m164-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m164-r1:", "zero")
+
+    }
+
+}
+
+match "cell" {
+
+    case "cell" {
+
+        print("m164-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m164-w0:", "alt")
+
+    }
+
+}
+
+match "marker" {
+
+    case "marker" {
+
+        print("m164-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m164-w1:", "alt")
+
+    }
+
+}

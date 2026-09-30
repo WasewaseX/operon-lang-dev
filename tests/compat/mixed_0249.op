@@ -1,0 +1,230 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=249 tag=m249
+
+gene m249_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m249-b0:", m249_b0({ligase: 35, helix: 91, gene: 37})?!)
+
+gene m249_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m249-b1:", m249_b1({cell: 43, helix: 49, ligase: 68})?!)
+
+gene m249_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m249_f0([50, 17, 57, 59]) {
+
+    case Ok(list) {
+
+        print("m249-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m249-f0:", "e:", m)
+
+    }
+
+}
+
+gene m249_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m249_f1([31, 29, 11, 40, 20]) {
+
+    case Ok(list) {
+
+        print("m249-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m249-f1:", "e:", m)
+
+    }
+
+}
+
+gene m249_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m249_f2([13, 53, 45, 53, 29, 14, 54]) {
+
+    case Ok(list) {
+
+        print("m249-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m249-f2:", "e:", m)
+
+    }
+
+}
+
+let m249_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m249-cc0:", m249_cl0(12)(16), m249_cl0(16)(12))
+
+let m249_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m249-cc1:", m249_cl1(2)(11), m249_cl1(11)(2))
+
+let m249_data0 = some([some("cell"), none(), some(2)])
+
+match m249_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m249-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m249-x0:", "shape-miss")
+
+    }
+
+}
+
+let m249_data1 = some([some("helix"), none(), some(1)])
+
+match m249_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m249-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m249-x1:", "shape-miss")
+
+    }
+
+}

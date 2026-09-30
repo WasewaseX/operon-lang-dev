@@ -1,0 +1,166 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=227 tag=f227
+
+gene f227_g0(p, q = 89, r = 87) {
+
+    return p * 37 + q - r
+
+}
+
+print("f227-d0:", f227_g0(5), f227_g0(5, 87), f227_g0(5, 89, 87))
+
+gene f227_g1(p, q = 48, r = 45) {
+
+    return p * 3 + q - r
+
+}
+
+print("f227-d1:", f227_g1(-3), f227_g1(-3, 39), f227_g1(-3, 48, 45))
+
+gene f227_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f227_fib0(n - 1) + f227_fib0(n - 2)
+
+}
+
+print("f227-fib0:", f227_fib0(7))
+
+gene f227_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f227_fib1(n - 1) + f227_fib1(n - 2)
+
+}
+
+print("f227-fib1:", f227_fib1(7))
+
+gene f227_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f227_gcd0(b, a % b)
+
+}
+
+print("f227-gcd0:", f227_gcd0(64, 432))
+
+gene f227_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f227_gcd1(b, a % b)
+
+}
+
+print("f227-gcd1:", f227_gcd1(543, 740))
+
+gene f227_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f227_c0 = f227_mk0(40)
+
+f227_c0(8)
+
+print("f227-cl0:", f227_c0(5))
+
+gene f227_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f227_c1 = f227_mk1(22)
+
+f227_c1(1)
+
+print("f227-cl1:", f227_c1(6))
+
+gene f227_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f227-hof0:", f227_tw0(gene (z) => z * 2 + 1, 8))
+
+gene f227_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f227-hof1:", f227_tw1(gene (z) => z * 2 + 1, 12))
+
+gene f227_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f227-dg0:", f227_sd0(166643))
+
+gene f227_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f227-dg1:", f227_sd1(202735))

@@ -1,0 +1,190 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=223 tag=m223
+
+gene m223_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m223-b0:", m223_b0({marker: 34, splicer: 75, helix: 10})?!)
+
+gene m223_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m223-b1:", m223_b1({cell: 50, splicer: 96, helix: 25})?!)
+
+gene m223_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m223_f0([49, 29, 56, 31, 22, 9, 21]) {
+
+    case Ok(list) {
+
+        print("m223-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m223-f0:", "e:", m)
+
+    }
+
+}
+
+gene m223_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m223_f1([15, 28, 6, 59, 60, 57, 41]) {
+
+    case Ok(list) {
+
+        print("m223-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m223-f1:", "e:", m)
+
+    }
+
+}
+
+let m223_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m223-cc0:", m223_cl0(8)(5), m223_cl0(5)(8))
+
+let m223_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m223-cc1:", m223_cl1(7)(5), m223_cl1(5)(7))
+
+let m223_data0 = some([some("splicer"), none(), some(9)])
+
+match m223_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m223-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m223-x0:", "shape-miss")
+
+    }
+
+}
+
+let m223_data1 = some([some("cell"), none(), some(3)])
+
+match m223_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m223-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m223-x1:", "shape-miss")
+
+    }
+
+}

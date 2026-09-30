@@ -1,0 +1,174 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=253 tag=f253
+
+gene f253_g0(p, q = 48, r = 37) {
+
+    return p * 4 + q - r
+
+}
+
+print("f253-d0:", f253_g0(14), f253_g0(14, 95), f253_g0(14, 48, 37))
+
+gene f253_g1(p, q = 94, r = 23) {
+
+    return p * 74 + q - r
+
+}
+
+print("f253-d1:", f253_g1(-4), f253_g1(-4, 43), f253_g1(-4, 94, 23))
+
+gene f253_g2(p, q = 41, r = 53) {
+
+    return p * 63 + q - r
+
+}
+
+print("f253-d2:", f253_g2(38), f253_g2(38, 60), f253_g2(38, 41, 53))
+
+gene f253_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f253_fib0(n - 1) + f253_fib0(n - 2)
+
+}
+
+print("f253-fib0:", f253_fib0(12))
+
+gene f253_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f253_fib1(n - 1) + f253_fib1(n - 2)
+
+}
+
+print("f253-fib1:", f253_fib1(12))
+
+gene f253_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f253_gcd0(b, a % b)
+
+}
+
+print("f253-gcd0:", f253_gcd0(52, 194))
+
+gene f253_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f253_gcd1(b, a % b)
+
+}
+
+print("f253-gcd1:", f253_gcd1(216, 29))
+
+gene f253_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f253_c0 = f253_mk0(38)
+
+f253_c0(8)
+
+print("f253-cl0:", f253_c0(9))
+
+gene f253_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f253_c1 = f253_mk1(27)
+
+f253_c1(4)
+
+print("f253-cl1:", f253_c1(6))
+
+gene f253_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f253-hof0:", f253_tw0(gene (z) => z * 2 + 1, 20))
+
+gene f253_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f253-hof1:", f253_tw1(gene (z) => z * 2 + 1, 27))
+
+gene f253_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f253-dg0:", f253_sd0(628096))
+
+gene f253_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f253-dg1:", f253_sd1(25430))

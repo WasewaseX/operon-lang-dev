@@ -1,0 +1,194 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=208 tag=s208
+
+stress {
+
+    print("s208-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s208-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s208-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s208-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s208-mz:", 25 % 0)
+
+} rescue (e) {
+
+    print("s208-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s208-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s208-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s208-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s208-of2:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s208-m1:", 9223372036854775807 % -1)
+
+} rescue (e) {
+
+    print("s208-m1:", "caught", e.kind, e.message)
+
+}
+
+gene s208_r0() {
+
+    raise "s208-87ghCs"
+
+}
+
+stress {
+
+    s208_r0()
+
+    print("s208-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s208-r0:", e.kind, e.message)
+
+}
+
+gene s208_r1() {
+
+    raise "s208-ocpC77"
+
+}
+
+stress {
+
+    s208_r1()
+
+    print("s208-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s208-r1:", e.kind, e.message)
+
+}
+
+let s208_xs0 = [12, 35, 10, 30]
+
+stress {
+
+    print("s208-x0:", s208_xs0[6])
+
+} rescue (e) {
+
+    print("s208-x0:", "caught", e.kind)
+
+}
+
+let s208_xs1 = [19, 12, 12, 18]
+
+stress {
+
+    print("s208-x1:", s208_xs1[8])
+
+} rescue (e) {
+
+    print("s208-x1:", "caught", e.kind)
+
+}
+
+let s208_xs2 = [11, 30]
+
+stress {
+
+    print("s208-x2:", s208_xs2[5])
+
+} rescue (e) {
+
+    print("s208-x2:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s208-0"
+
+    } rescue (e) {
+
+        print("s208-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s208-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s208-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s208-1"
+
+    } rescue (e) {
+
+        print("s208-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s208-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s208-d1-top:", outer.message)
+
+}

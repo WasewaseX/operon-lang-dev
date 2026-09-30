@@ -1,0 +1,172 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=263 tag=s263
+
+stress {
+
+    print("s263-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s263-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s263-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s263-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s263-mz:", 64 % 0)
+
+} rescue (e) {
+
+    print("s263-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s263-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s263-of1:", "caught", e.kind, e.message)
+
+}
+
+gene s263_r0() {
+
+    raise "s263-vfjnk4"
+
+}
+
+stress {
+
+    s263_r0()
+
+    print("s263-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s263-r0:", e.kind, e.message)
+
+}
+
+gene s263_r1() {
+
+    raise "s263-okc9qk"
+
+}
+
+stress {
+
+    s263_r1()
+
+    print("s263-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s263-r1:", e.kind, e.message)
+
+}
+
+let s263_xs0 = [16, 1, 12, 23]
+
+stress {
+
+    print("s263-x0:", s263_xs0[9])
+
+} rescue (e) {
+
+    print("s263-x0:", "caught", e.kind)
+
+}
+
+let s263_xs1 = [25, 7, 12, 10]
+
+stress {
+
+    print("s263-x1:", s263_xs1[6])
+
+} rescue (e) {
+
+    print("s263-x1:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s263-0"
+
+    } rescue (e) {
+
+        print("s263-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s263-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s263-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s263-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s263-1"
+
+    } rescue (e) {
+
+        print("s263-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s263-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s263-d1-top:", outer.message)
+
+}
