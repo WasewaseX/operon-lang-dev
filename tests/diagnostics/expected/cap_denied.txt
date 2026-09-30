@@ -1,2 +1,11 @@
 error[E1010]: read denied, no capability grant covers 'config.json' (grant with --allow-read or --allow-all)
+  --> tests/diagnostics/cap_denied.op:2
+   |
+2 |   data = read_file("config.json")
+   |          ^^^^
+   |
+   = no capability grant covers 'config.json' (grant with --allow-read or --allow-all)
+help: run with:
+      --allow-read
+      --allow-all
   at main
