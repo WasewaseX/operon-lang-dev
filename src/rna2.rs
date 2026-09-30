@@ -1193,6 +1193,9 @@ fn rewrite_ann(ann: &mut TypeAnn, cfg: &mut RewriteCfg) {
             }
         }
         TypeAnn::Optional(inner) => rewrite_ann(inner, cfg),
+        // W01-s2: an alias descends into its target (its NAME is the
+        // alias identity, never rewritten)
+        TypeAnn::Alias { target, .. } => rewrite_ann(target, cfg),
         // TYPED-MODE: generic annotations rewrite their head name and
         // descend into the type arguments (same rename law as Named)
         TypeAnn::Generic(head, args) => {
@@ -1359,6 +1362,8 @@ fn rewrite_expr(e: &mut Expr, cfg: &mut RewriteCfg) {
 
 fn rewrite_stmt(s: &mut Stmt, cfg: &mut RewriteCfg) {
     match s {
+        // W01-s2: alias declarations rewrite their target annotation
+        Stmt::TypeAlias(_, target, _) => rewrite_ann(target, cfg),
         Stmt::Let(_, e)
         | Stmt::LetConst(_, e)
         | Stmt::Assign(_, _, e)

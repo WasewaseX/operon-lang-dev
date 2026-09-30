@@ -1751,6 +1751,10 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
         Stmt::LetAnn(n, ann, e) => {
             out.push_str(&format!("let {}: {} = {}\n", n, ann.render(), fmt_expr(e)));
         }
+        // W01-s2: type alias roundtrip (parse-time metadata, inert at runtime)
+        Stmt::TypeAlias(n, target, _) => {
+            out.push_str(&format!("type {} = {}\n", n, target.render()));
+        }
         Stmt::LetPat(p, e) => {
             out.push_str(&format!(
                 "let {} = {}\n",
@@ -2594,6 +2598,9 @@ fn d_ann(a: &TypeAnn) -> DumpNode {
         TypeAnn::Named(n) => dn("Ann", vec![ds(n)]),
         TypeAnn::Union(alts) => dn("AnnUnion", alts.iter().map(d_ann).collect()),
         TypeAnn::Optional(inner) => dn("AnnOptional", vec![d_ann(inner)]),
+        TypeAnn::Alias { name, target } => {
+            dn("AnnAlias", vec![ds(name), d_ann(target)])
+        }
         TypeAnn::Generic(name, args) => dn(
             "AnnGeneric",
             std::iter::once(ds(name))
@@ -2854,6 +2861,7 @@ fn d_stmt(s: &Stmt) -> DumpNode {
         Stmt::Let(name, e) => dn("Let", vec![ds(name), d_expr(e)]),
         Stmt::LetConst(name, e) => dn("LetConst", vec![ds(name), d_expr(e)]),
         Stmt::LetAnn(name, ann, e) => dn("LetAnn", vec![ds(name), d_ann(ann), d_expr(e)]),
+        Stmt::TypeAlias(name, target, _) => dn("TypeAlias", vec![ds(name), d_ann(target)]),
         Stmt::Assign(name, op, e) => {
             let mut items = vec![ds(name)];
             if let Some(op) = op {

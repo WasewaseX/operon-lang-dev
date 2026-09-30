@@ -472,6 +472,10 @@ def ann_matches(v, ann):
             if v.tag == "Some":
                 return ann_matches(v.payload, ann[1])
         return ann_matches(v, ann[1])
+    if k == "alias":
+        # W01-s2: an alias matches as its parse-time-resolved target
+        # (mirror of interp.rs TypeAnn::Alias law).
+        return ann_matches(v, ann[2])
     if k == "generic":
         head = ann_name_norm(ann[1])
         if head == "any":
@@ -498,6 +502,7 @@ def ann_is_typaram(ann, type_params):
         return all(ann_is_typaram(a, type_params) for a in ann[1])
     if k == "opt":
         return ann_is_typaram(ann[1], type_params)
+    # W01-s2: an alias resolves to its concrete target
     return False
 
 def ann_render(ann):
@@ -511,6 +516,8 @@ def ann_render(ann):
         return ann_render(ann[1]) + "?"
     if k == "generic":
         return ann[1] + "[" + ", ".join(ann_render(a) for a in ann[2]) + "]"
+    if k == "alias":
+        return ann[1]
     return "any"
 
 def type_name(v):
@@ -895,6 +902,11 @@ class P:
         self.toks, self.pos, self.notes = toks, 0, notes
         # W24: contextual `pub` marker names (top level only)
         self.pub_names = []
+        # W01-s2 type aliases (mirror of parser.rs type_aliases +
+        # type_param_stack): declared `type Name = ann` pairs in declaration
+        # order + enclosing gene type parameters (shadow aliases).
+        self.type_aliases = []
+        self.type_param_stack = []
 
     def peek(self):
         return self.toks[self.pos]
@@ -1183,10 +1195,16 @@ class P:
         t1 = self.toks[self.pos + 1] if self.pos + 1 < len(self.toks) else ("EOF", None, 0)
         expr_head = (t1[0] == "SYM" and t1[1] in ("=", "(", "[", ".", "+=", "-=", "*=", "/=", "%="))
         word = w
+        # W01-s2: `type Name = ...` is the type-alias form; the repair to
+        # 'phenotype' happens silently (the alias arm intercepts first).
+        t2 = self.toks[self.pos + 2] if self.pos + 2 < len(self.toks) else ("EOF", None, 0)
+        alias_head = (w == "type" and t1[0] == "IDENT"
+                      and t2[0] == "SYM" and t2[1] == "=")
         if w not in KEYWORDS and not expr_head:
             syn = SYNONYMS.get(w)
             if syn and syn in ARMS:
-                self.note(self.peek()[2], 2, f"synonym '{w}' repaired to '{syn}'")
+                if not alias_head:
+                    self.note(self.peek()[2], 2, f"synonym '{w}' repaired to '{syn}'")
                 word = syn
             else:
                 wk = wobble_keyword(w)
@@ -1987,6 +2005,20 @@ class P:
             return ("ires", name)
         if word == "phenotype":
             self.next()
+            # W01-s2 type aliases: `type Name = ann` (mirror of parser.rs).
+            t = self.peek()
+            t2 = self.toks[self.pos + 1] if self.pos + 1 < len(self.toks) else ("EOF", None, 0)
+            if t[0] == "IDENT" and t2[0] == "SYM" and t2[1] == "=":
+                alias_line = t[2]
+                name = self.ident()
+                self.next()  # '='
+                target = self.type_ann()
+                self.end_stmt()
+                if any(n == name for (n, _t) in self.type_aliases):
+                    self.note(alias_line, 2, f"duplicate type alias '{name}'; first declaration wins")
+                else:
+                    self.type_aliases.append((name, target))
+                return ("typealias", name, target, alias_line)
             name = self.ident()
             parent = None
             if self.at_ident("from"):
@@ -2281,6 +2313,10 @@ class P:
                 else:
                     self.note(t[2], 4, f"'{t[1]}' is not a type parameter name; list auto-closed")
                     break
+        # W01-s2: type parameter names shadow aliases inside the body's
+        # annotations (mirror of parser.rs type_param_stack push/pop).
+        for (p, _b) in type_params:
+            self.type_param_stack.append(p)
         params = []
         param_anns = []
         if self.peek() == ("SYM", "(", self.peek()[2]):
@@ -2336,8 +2372,12 @@ class P:
             self.next()
             e = self.expr()
             self.end_stmt()
+            for _p in type_params:
+                self.type_param_stack.pop()
             return ("gene", Gene(name, params, guard, [("return", e)], ac, me, m6, copies, seq=False, riboswitch=riboswitch, burst=burst, param_anns=param_anns, ret_ann=ret_ann, type_params=type_params))
         body = self.block()
+        for _p in type_params:
+            self.type_param_stack.pop()
         return ("gene", Gene(name, params, guard, body, ac, me, m6, copies, seq=False, riboswitch=riboswitch, burst=burst, param_anns=param_anns, ret_ann=ret_ann, type_params=type_params))
 
     def block(self):
@@ -2881,11 +2921,21 @@ class P:
                 return ("generic", t[1], args)
             if t2[0] == "SYM" and t2[1] == "?":
                 self.next()
-                return ("opt", ("named", t[1]))
-            return ("named", t[1])
+                return ("opt", self.type_ann_atom_resolved(t[1]))
+            return self.type_ann_atom_resolved(t[1])
         self.note(t[2], 4, f"'{t[1]}' is not a type name; annotation treated as any")
         self.next()
         return ("named", "any")
+
+    def type_ann_atom_resolved(self, w):
+        # W01-s2 (mirror of parser.rs): a declared alias resolves at parse
+        # time; an enclosing gene's type parameter never does.
+        if any(p == w for p in self.type_param_stack):
+            return ("named", w)
+        for (n, target) in self.type_aliases:
+            if n == w:
+                return ("alias", n, target)
+        return ("named", w)
 
     def pattern(self):
         # W02 (match-v2) mirror of parser.rs parse_pattern: atom | or-chain |
@@ -3621,6 +3671,10 @@ class Interp:
     def exec_stmt(self, env, s):
         self.tick()
         k = s[0]
+        if k == "typealias":
+            # W01-s2: a type-alias declaration is parse-time metadata; the
+            # runtime is inert (mirror of interp.rs Stmt::TypeAlias law).
+            return
         if k == "block":
             self.exec_block(self.new_scope(env), s[1])
         elif k == "const":
