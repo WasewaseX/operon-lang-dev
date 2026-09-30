@@ -43,6 +43,7 @@ Rules:
 ```
 operon mod publish --registry FILE [--url GIT] [--desc TEXT]   # append THIS package
 operon mod add NAME --registry FILE [--rev OVERRIDE] [--as N]  # resolve + install
+operon mod search [QUERY] [--registry FILE]                    # search the chain
 ```
 
 - `publish` reads the local `operon.toml` (name, version), takes `git rev-parse HEAD`
@@ -52,8 +53,14 @@ operon mod add NAME --registry FILE [--rev OVERRIDE] [--as N]  # resolve + insta
 - `add NAME --registry FILE` resolves NAME to `{git, rev}` and then runs the ordinary
   install path: full transitive closure, `operon.lock` pinning, checksum verification,
   `--locked` drift detection. An explicit `--rev` overrides the registry's pin.
-- `$OPERON_REGISTRY` is NOT consulted by design: an implicit registry would make
-  resolution depend on the environment. The flag is always explicit.
+- `search [QUERY]` reads the registry through the same source the resolver would use
+  (§5 chain: flag > env > manifest > bundled seed) and prints `name version  description`
+  for the latest line per name whose name or description matches QUERY
+  (case-insensitive substring). An empty query lists the registry. A miss prints
+  `no packages matching '…'` and exits 0 — a miss is an answer, not an error.
+- Note: an early draft of this section said `$OPERON_REGISTRY` is not consulted;
+  that stopped being true in W21-r1 — the env override is source 2 of the chain
+  below, and the e2e gates exercise it (`pkg_hosted_e2e.sh`, `pkg_e2e.sh`).
 
 ## 4. Threat notes
 
@@ -131,3 +138,47 @@ same rules as a local file — malformed lines are hard errors with line
 numbers. Publishing to a remote index URL is refused: appending is a
 filesystem/git operation, point `--registry` at a writable checkout and
 push.
+
+## 9. The hosted tier (W19 items 5/7/10, ai/ecosystem-r2)
+
+A static file (or §7's dev server) cannot accept publishes, answer
+searches, or track metadata. The hosted tier is the deliberately small
+dynamic service that completes the sketch the project always aimed at:
+
+```
+Operon CLI  ->  Registry API (packaging/registry/app.py)
+                    ->  PostgreSQL (Render) / SQLite (local)
+                    ->  package metadata (the same NDJSON index lines)
+                    ->  Git/source artifacts (cloned by the client)
+```
+
+It speaks the SAME wire contract as §2 — `/index.jsonl` is the index,
+byte-exact — so the stock client consumes it with zero compiler changes:
+
+```
+OPERON_REGISTRY=https://<service>.onrender.com/index.jsonl operon add http
+OPERON_REGISTRY=https://<service>.onrender.com/index.jsonl operon search http
+```
+
+Publishing posts one index line with a Bearer token (the CLI's remote
+append refusal stands — POST is the hosted append, done by CI/tooling;
+a CLI flag is future work):
+
+```
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  --data-binary @line.json https://<service>.onrender.com/api/publish
+```
+
+Rules the API enforces (mirroring the client, not inventing new ones):
+
+- `(name, version)` is immutable — a republish is 409; fix forward.
+- `dir` lines are rejected — remote registries publish git URLs only (§6).
+- tokens unset = publish disabled (403) — a registry you cannot
+  accidentally leave wide open.
+- lines are stored whole and served byte-exact (the sha256 contract).
+
+Deployment: `packaging/registry/render.yaml` is a Render blueprint (web
+service + free PostgreSQL, DATABASE_URL wired, OPERON_TOKENS set in the
+dashboard). `scripts/pkg_hosted_e2e.sh` boots the service locally and
+proves the full loop — publish → POST → search → add → verify → run —
+with the stock CLI and no compiler changes.

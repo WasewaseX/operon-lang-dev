@@ -72,7 +72,8 @@ fn real_main() {
         pkg::registry_command(rest);
     }
     match cmd.as_str() {
-        "init" | "add" | "remove" | "update" | "install" | "tree" | "verify" | "publish" => {
+        "init" | "add" | "remove" | "update" | "install" | "tree" | "verify" | "publish"
+        | "search" => {
             let mut full: Vec<String> = Vec::with_capacity(rest.len() + 1);
             full.push(cmd.clone());
             full.extend_from_slice(rest);
