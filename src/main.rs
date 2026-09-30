@@ -2540,7 +2540,8 @@ usage:
   operon mod init|add <url|name> [--registry f] [--rev r] [--as name]|remove <name>|update|install|tree|verify|publish
                   # package system (operon.toml manifest + operon.lock; W19/W20/W23;
                   # W21 static registry: add-by-name + publish, docs/specs/REGISTRY.md)
-  operon build f.op [--variant v] [-o out.op]
+  operon build f.op [--variant v] [-o out.op] [--bundle] [--native]
+                  # --bundle/--native refuse honestly (W87/W85 planned; build emits specialized source)
   operon rna f.op patch.rna [--write] [--check] [--json] [--allow-comment-drop]
                   # --check (W68): validate the patch against the target, report
                   # span/node resolution + ambiguity + comment preflight +
