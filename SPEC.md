@@ -1035,6 +1035,14 @@ let o: int? = none()    # Optional accepts null, the bare type, none(),
   contract is a no-op for a bare parameter name; real constraints live in
   the static checker. Capitalized annotations (`Int`, `Str`) are aliases of
   the lowercase primitives in BOTH cores.
+- **Type aliases (W01-s2):** `type Metrics = map[str, float]` declares an
+  alias; annotations naming it resolve at PARSE time to the target, so the
+  runtime soft contract is the TARGET's law (the alias statement itself is
+  inert at runtime, the VM bridges it to the tree-walk which no-ops it).
+  Declare before use: an annotation naming an alias BEFORE its declaration
+  stays a plain Named and the typo-armor rule applies. Duplicate alias: a
+  rung-2 note, first declaration wins. A gene's type parameters shadow
+  aliases in annotation position. Mirrored op-for-op by the oracle.
 - **As-built + non-goals:** `docs/design/TYPED-MODE.md`. Tests:
   `tests/typecheck.rs` (41 cases), `examples/typed/` (good-path corpus +
   `bad_*` negatives pinned by the gate).

@@ -1,6 +1,6 @@
 # TYPED-MODE.md — the Operon static type system (typed mode)
 
-Status: ACTIVE design (builder-B, session-8). Implemented by `src/typeck.rs`.
+Status: ACTIVE design (builder-B, session-8). Implemented by `src/typeck.rs` (checker) + `src/types.rs` (lattice). The normative contract is [docs/specs/TYPE-SYSTEM.md](../specs/TYPE-SYSTEM.md).
 Law: **additive**. The dynamic side is untouched — typed mode is a compile-time
 gate, never a new runtime. Programs without annotations check trivially clean
 of obligations they did not state.
