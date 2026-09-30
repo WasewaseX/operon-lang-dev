@@ -1,0 +1,3 @@
+gene main() {
+  print("hi")
+}

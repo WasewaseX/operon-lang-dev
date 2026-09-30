@@ -12,20 +12,20 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 fails=0
 
-# check <fixture> <mode> <expected> [subcommand] [want_rc]
+# check <fixture> <mode> <expected> [subcommand] [want_rc] [extra args]
 check() {
     local fixture="$1" mode="$2" expected="$3"
-    local sub="${4:-run}" want_rc="${5:-1}"
+    local sub="${4:-run}" want_rc="${5:-1}" extra="${6:-}"
     local err rc flag=""
     if [ "$mode" = "json" ]; then
         if [ "$sub" = "run" ]; then flag="--json-errors"; else flag="--json"; fi
     fi
     if [ "$sub" = "run" ]; then
         # fatal blocks print to stderr; stdout may carry program output
-        err=$(./bin/operon run "$fixture" $flag 2>&1 >/dev/null); rc=$?
+        err=$(./bin/operon run "$fixture" $flag $extra 2>&1 >/dev/null); rc=$?
     else
         # lint/check print to stdout; keep stderr out of the golden
-        err=$(./bin/operon "$sub" "$fixture" $flag 2>/dev/null); rc=$?
+        err=$(./bin/operon "$sub" "$fixture" $flag $extra 2>/dev/null); rc=$?
     fi
     # notes flush AFTER the block; only the block lines are pinned here.
     # Blank lines are stripped on both sides: the line-0 path renders a
@@ -50,6 +50,11 @@ check tests/diagnostics/raise_overflow.op json tests/diagnostics/expected/raise_
 check tests/diagnostics/cap_denied.op     text tests/diagnostics/expected/cap_denied.txt
 check tests/diagnostics/unused_binding.op text tests/diagnostics/expected/unused_binding.txt lint 0
 check tests/diagnostics/wrong_arity.op    text tests/diagnostics/expected/wrong_arity.txt    check 3
+# W101 slice 6: the typo'd entry is a fatal with did-you-mean (rc 1, dx-r1);
+# the phantom is a located, suggested, machine-applicable-fix warning.
+check tests/diagnostics/entry_typo.op      text tests/diagnostics/expected/entry_typo.txt      run 1 "--entry maiin"
+check tests/diagnostics/entry_typo.op      json tests/diagnostics/expected/entry_typo.json    run 1 "--entry maiin"
+check tests/diagnostics/phantom_suggest.op text tests/diagnostics/expected/phantom_suggest.txt check 0
 
 if [ $fails -gt 0 ]; then
     echo "diag_golden: $fails failure(s); re-derive expected files from real runs, never hand-patch them"

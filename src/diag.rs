@@ -193,6 +193,38 @@ impl Span {
             byte_len: name.len(),
         })
     }
+
+    /// W101 slice 6: the word-boundary variant. The first occurrence of
+    /// `name` as a WHOLE token (a bare substring hit inside a longer
+    /// identifier, `min` inside `admin`, would underline the wrong word).
+    /// None when the name never appears as a token on the line.
+    pub fn of_token_word(line: usize, line_text: &str, name: &str) -> Option<Span> {
+        let is_id = |i: usize| {
+            line_text[i..]
+                .chars()
+                .next()
+                .map(|c| c.is_ascii_alphanumeric() || c == '_')
+                .unwrap_or(false)
+        };
+        let mut from = 0usize;
+        while let Some(pos) = line_text[from..].find(name) {
+            let abs = from + pos;
+            let after = abs + name.len();
+            let left_ok = abs == 0 || !is_id(abs - 1);
+            let right_ok = after >= line_text.len() || !is_id(after);
+            if left_ok && right_ok {
+                return Some(Span {
+                    line,
+                    col: line_text[..abs].chars().count() + 1,
+                    len: name.chars().count(),
+                    byte_col: abs,
+                    byte_len: name.len(),
+                });
+            }
+            from = abs + 1;
+        }
+        None
+    }
 }
 
 /// W101 slice 5: one underlined range plus its message. Primary labels mark
@@ -289,6 +321,70 @@ fn label_rows(
     format!("{}{:>w$} | {}{}\n", dim, "", reset, row, w = pad + 1)
 }
 
+/// W101 slice 6: did-you-mean, the render-side twin of the runtime wobble
+/// ladder. Same thresholds as the interpreter's nearest-callable repair (the
+/// two must never disagree about what "near" means): distance 1 for short
+/// names, 2 otherwise; zero-dependency via ffi::edit_distance. Sorted by
+/// (distance, name) so the output is deterministic; capped at 3 because a
+/// longer list is noise, not help.
+pub fn did_you_mean(name: &str, candidates: &[&str]) -> Vec<String> {
+    let max = if name.chars().count() <= 4 { 1 } else { 2 };
+    let mut hits: Vec<(i32, String)> = Vec::new();
+    for c in candidates {
+        if *c == name {
+            continue; // the name itself is not a suggestion
+        }
+        let d = crate::ffi::edit_distance(name, c);
+        if d <= max {
+            hits.push((d, c.to_string()));
+        }
+    }
+    hits.sort();
+    hits.dedup();
+    hits.truncate(3);
+    hits.into_iter().map(|(_, c)| c).collect()
+}
+
+/// W101 slice 6: a machine-applicable source edit. Char column + length feed
+/// the JSON schema (same convention as the labels array); `note` says what
+/// applying it does, in the operator's words, not the engine's.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SuggestedFix {
+    pub line: usize,
+    pub column: usize,
+    pub length: usize,
+    pub replacement: String,
+    pub note: String,
+}
+
+impl SuggestedFix {
+    pub fn to_json(&self) -> String {
+        format!(
+            "{{\"line\": {}, \"column\": {}, \"length\": {}, \"replacement\": {}, \"note\": {}}}",
+            self.line,
+            self.column,
+            self.length,
+            json_str(&self.replacement),
+            json_str(&self.note),
+        )
+    }
+}
+
+/// The help line(s) for a suggestion list: one candidate reads as a direct
+/// question, several as an honest shortlist, none renders nothing.
+/// Public because print_diag composes phantom messages with the same wording
+/// (one source of truth for the did-you-mean sentence shape).
+pub fn suggestion_help(suggestions: &[String]) -> Option<String> {
+    match suggestions.len() {
+        0 => None,
+        1 => Some(format!("did you mean '{}'?", suggestions[0])),
+        _ => {
+            let list: Vec<String> = suggestions.iter().map(|s| format!("'{}'", s)).collect();
+            Some(format!("some similar names: {}", list.join(", ")))
+        }
+    }
+}
+
 fn note_line(message: &str) -> Option<String> {
     // The explanatory "= ..." note: the grant clause of a denial, verbatim.
     let start = message.find("no capability grant")?;
@@ -310,6 +406,24 @@ pub fn render_finding(
     line: usize,
     message: &str,
     color: bool,
+) -> String {
+    render_finding_labeled(file, src, sev, code, rule, line, message, color, &[])
+}
+
+/// W101 slice 6: the labeled variant — same block, plus underline rows for
+/// the caller's labels. Phantoms underline their call token here; findings
+/// that have no honest token stay on the unlabeled path (empty slice).
+#[allow(clippy::too_many_arguments)] // the labeled finding shape IS 9-wide
+pub fn render_finding_labeled(
+    file: &str,
+    src: &str,
+    sev: &str,
+    code: &str,
+    rule: &str,
+    line: usize,
+    message: &str,
+    color: bool,
+    labels: &[Label],
 ) -> String {
     let c = if color { sev_code(sev) } else { "" };
     let mut out = if c.is_empty() {
@@ -337,6 +451,15 @@ pub fn render_finding(
     out.push_str(&format!("\n  --> {}:{}\n", file, line));
     out.push_str(&format!("{}{:>w$} |{}\n", dim, "", reset, w = pad + 1));
     out.push_str(&format!("{}{} |{} {}\n", blue, num, reset, line_text));
+    if !labels.is_empty() {
+        let refs: Vec<&Label> = labels.iter().collect();
+        let (pc, sc) = if color {
+            (ansi(sev_code(sev)), c_blue())
+        } else {
+            (String::new(), String::new())
+        };
+        out.push_str(&label_rows(line_text, &refs, pad, &dim, &reset, &pc, &sc));
+    }
     out.push_str(&format!("{}{:>w$} |{}\n", dim, "", reset, w = pad + 1));
     out.push_str(&format!(
         "{}{:>w$} = rule: {}{}\n",
@@ -352,7 +475,11 @@ pub fn render_finding(
 /// The rendered text block (rustc shape). The W007 chain lines are appended
 /// in the runner's established format after the block so existing parsers of
 /// our stderr (cookbook expected files, redteam rc checks) keep working.
-pub fn render(file: &str, src: &str, s: &Stress, color: bool) -> String {
+/// `suggestions` (W101 slice 6) are did-you-mean names for the failing name;
+/// they render as the FIRST help section (name-level help before grant-level
+/// help), and keep rendering when the block is header-only (line 0), which
+/// is the typo'd --entry shape.
+pub fn render(file: &str, src: &str, s: &Stress, color: bool, suggestions: &[String]) -> String {
     let code = code_for(&s.kind, &s.message);
     let header = if color {
         format!(
@@ -368,6 +495,9 @@ pub fn render(file: &str, src: &str, s: &Stress, color: bool) -> String {
     };
     let mut out = header;
     if s.line == 0 {
+        if let Some(h) = suggestion_help(suggestions) {
+            out.push_str(&format!("\nhelp: {}\n", h));
+        }
         out.push('\n');
         return out;
     }
@@ -408,6 +538,9 @@ pub fn render(file: &str, src: &str, s: &Stress, color: bool) -> String {
             w = pad + 1
         ));
     }
+    if let Some(h) = suggestion_help(suggestions) {
+        out.push_str(&format!("\nhelp: {}\n", h));
+    }
     if !help_lines(&s.message).is_empty() {
         out.push_str("\nhelp: run with:\n");
         for h in help_lines(&s.message) {
@@ -422,7 +555,8 @@ pub fn render(file: &str, src: &str, s: &Stress, color: bool) -> String {
 /// located caret) are null, never guessed. `labels` (W101 slice 5) carries
 /// every located range as {line, column, length, text, primary}; an error
 /// with no honest location renders an empty array, not a fabricated one.
-pub fn render_json(file: &str, src: &str, s: &Stress) -> String {
+/// `suggestions` (W101 slice 6) is the did-you-mean shortlist.
+pub fn render_json(file: &str, src: &str, s: &Stress, suggestions: &[String]) -> String {
     let code = code_for(&s.kind, &s.message);
     let line_text = if s.line > 0 {
         src.lines().nth(s.line - 1).unwrap_or("")
@@ -463,9 +597,10 @@ pub fn render_json(file: &str, src: &str, s: &Stress) -> String {
         })
         .collect();
     let help: Vec<String> = help_lines(&s.message).iter().map(|h| json_str(h)).collect();
+    let sug: Vec<String> = suggestions.iter().map(|s| json_str(s)).collect();
     format!(
         "{{\"code\": {}, \"kind\": {}, \"message\": {}, \"file\": {}, \
-         \"line\": {}, \"column\": {}, \"length\": {}, \"chain\": [{}], \"help\": [{}], \"labels\": [{}]}}\n",
+         \"line\": {}, \"column\": {}, \"length\": {}, \"chain\": [{}], \"help\": [{}], \"labels\": [{}], \"suggestions\": [{}]}}\n",
         json_str(code),
         json_str(&s.kind),
         json_str(&s.message),
@@ -480,6 +615,7 @@ pub fn render_json(file: &str, src: &str, s: &Stress) -> String {
         chain.join(", "),
         help.join(", "),
         labels_json.join(", "),
+        sug.join(", "),
     )
 }
 
@@ -592,6 +728,58 @@ mod tests {
         std::env::set_var("NO_COLOR", "1");
         assert!(!color_enabled(true));
         std::env::remove_var("NO_COLOR");
+    }
+
+    #[test]
+    fn did_you_mean_matches_the_runtime_wobble_thresholds() {
+        // the render-side suggestion and the interpreter's nearest-callable
+        // repair must agree on what "near" means: distance 1 for short
+        // names, 2 for longer ones
+        let cands = vec!["main", "mini", "promote", "print"];
+        assert_eq!(did_you_mean("maiin", &cands), vec!["main".to_string()]);
+        // 6 chars, distance 2 to BOTH "promote" (sub n→m, insert o) and
+        // "print" (sub o→i, delete e) → both in range, deterministic order
+        assert_eq!(
+            did_you_mean("pronte", &cands),
+            vec!["print".to_string(), "promote".to_string()]
+        );
+        // 5 chars, distance 3 to the nearest ("maaai" → "main") → honest empty
+        assert!(did_you_mean("maaai", &cands).is_empty());
+        // the name itself is never its own suggestion
+        assert!(did_you_mean("main", &cands).is_empty());
+        // far-off names suggest nothing, honestly
+        assert!(did_you_mean("zzzzzz", &cands).is_empty());
+        // deterministic order, capped at 3
+        let many = vec!["aa", "ab", "ac", "ad", "ae"];
+        let got = did_you_mean("ax", &many);
+        assert_eq!(
+            got,
+            vec!["aa".to_string(), "ab".to_string(), "ac".to_string()]
+        );
+    }
+
+    #[test]
+    fn of_token_word_respects_identifier_boundaries() {
+        let line = "admin(min)";
+        // "min" inside "admin" is NOT the token; the standalone min() call is
+        let span = Span::of_token_word(1, line, "min").unwrap();
+        assert_eq!(span.byte_col, 6);
+        assert_eq!(span.col, 7);
+        // no token occurrence → no span, never a guessed one
+        assert!(Span::of_token_word(1, line, "pad").is_none());
+    }
+
+    #[test]
+    fn suggestion_help_reads_like_a_question() {
+        assert!(suggestion_help(&[]).is_none());
+        assert_eq!(
+            suggestion_help(&["main".to_string()]).unwrap(),
+            "did you mean 'main'?"
+        );
+        assert_eq!(
+            suggestion_help(&["a".to_string(), "b".to_string()]).unwrap(),
+            "some similar names: 'a', 'b'"
+        );
     }
 
     #[test]

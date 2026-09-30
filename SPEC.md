@@ -648,6 +648,31 @@ warning[W07]: binding 'dead' is never read in this file (dead store); ...
   honest location exists). Unknown locations are still null, never
   guessed; existing fixtures render byte-identically because today's
   single-caret heuristic is just the one-primary-label case.
+- W101 slice 6 adds the suggestion layer. `did_you_mean` (render-side)
+  mirrors the runtime wobble ladder's thresholds exactly (edit distance
+  1 for names up to 4 chars, 2 beyond) so the renderer and the
+  interpreter never disagree about what "near" means; output is
+  deterministic (distance, then name) and capped at 3.
+  - **Entry validation (rc contract)**: `--entry g` names a gene the
+    program must define. An undefined entry gene is a FATAL (rc 1,
+    dx-r1): `error[E1002]: entry gene 'g' is not defined in this program`
+    with a did-you-mean help line; the old behavior (wobble-repair to the
+    nearest builtin, run nothing, exit 0) was a silent no-op disaster and
+    is retired. `--json-errors` carries `suggestions` (additive array).
+  - **Phantom calls grow evidence**: check's phantom sweep records the
+    call-site line (Expr::Call stamps it), the did-you-mean shortlist
+    against defined genes + module exports + builtins, and a
+    machine-applicable `SuggestedFix` (line, char column, length,
+    replacement, note) when the token is locatable on its line.
+    Word-boundary locating: `min` inside `admin` never underlines. The
+    check --json `phantoms` items are objects now
+    (`{name, line, suggestions, fix}` — additive; `fix` is null when
+    none). Text output renders the located block with a caret under the
+    call token, the suggestion in the header, and a
+    `help: machine-applicable fix: ...` line; a phantom with no honest
+    line stays header-only.
+  - Help sections order: name-level help (did-you-mean) first, then
+    grant-level help (`--allow-*` tokens), then the W007 chain.
 
 ## 9b. Security, the capability sandbox
 

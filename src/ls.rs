@@ -149,6 +149,25 @@ fn line_char_is_id(l: &str, idx: usize) -> bool {
         .unwrap_or(false)
 }
 
+/// W101 slice 6: the char column of `name`'s first WORD-BOUNDARY occurrence
+/// in `l` (a bare substring hit inside a longer identifier like `admin` for
+/// `min` would underline the wrong token). None when the name never appears
+/// as a whole token on the line.
+fn locate_name_in_line(l: &str, name: &str) -> Option<usize> {
+    let mut from = 0usize;
+    while let Some(pos) = l[from..].find(name) {
+        let abs = from + pos;
+        let after = abs + name.len();
+        let left_ok = abs == 0 || !line_char_is_id(l, abs - 1);
+        let right_ok = after >= l.len() || !line_char_is_id(l, after);
+        if left_ok && right_ok {
+            return Some(l[..abs].chars().count());
+        }
+        from = abs + 1;
+    }
+    None
+}
+
 /// W46: extract the canonical token a repair note names. Covers the three
 /// repair phrasings the parser emits today:
 ///   rung 2, `synonym 'x' repaired to 'y'`
@@ -322,31 +341,41 @@ pub fn analyze_doc(src: &str, base_dir: Option<&str>) -> LsDoc {
     // phantoms from the same engine `operon check` uses (defined-vs-called)
     let (rep, _) = check_source(src, false, base_dir);
     for p in &rep.phantoms {
-        // underline the first bare occurrence of the name
+        let name = &p.name;
+        // W101 slice 6: the phantom carries its call line; locate the token
+        // on THAT line instead of scanning the whole file for the first hit.
         let mut diag = Diagnostic {
-            line: 0,
+            line: if p.line > 0 { p.line - 1 } else { 0 },
             col: 0,
-            len: p.chars().count(),
+            len: name.chars().count(),
             severity: 1,
             message: format!(
                 "phantom call: '{}' is called but not defined in this file (check)",
-                p
+                name
             ),
             related: Vec::new(), // a phantom is not a repair, no provenance
             rung: 0,             // and not a parse note either
         };
-        for (i, l) in src.lines().enumerate() {
-            if let Some(pos) = l.find(p.as_str()) {
-                if pos == 0 || !line_char_is_id(l, pos - 1) {
-                    let after = pos + p.len();
-                    if after >= l.len() || !line_char_is_id(l, after) {
-                        let col = l[..pos].chars().count();
-                        diag.line = i;
-                        diag.col = col;
-                        break;
-                    }
+        let located = if p.line > 0 {
+            src.lines()
+                .nth(p.line - 1)
+                .and_then(|l| locate_name_in_line(l, name).map(|col| (p.line - 1, col)))
+        } else {
+            None
+        };
+        let located = located.or_else(|| {
+            // no honest call line (or token not on it): fall back to the
+            // first word-boundary occurrence in the file
+            for (i, l) in src.lines().enumerate() {
+                if let Some(col) = locate_name_in_line(l, name) {
+                    return Some((i, col));
                 }
             }
+            None
+        });
+        if let Some((line0, col)) = located {
+            diag.line = line0;
+            diag.col = col;
         }
         doc.diagnostics.push(diag);
     }
