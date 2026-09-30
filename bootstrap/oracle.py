@@ -320,6 +320,34 @@ def channel_degrade_result(v, _d=0):
                        else channel_degrade_result(v.payload, _d + 1))
     return v
 
+
+def wire_key(k):
+    """W016: the spawn-membrane key form — Rust genes.to_send_d stringifies
+    every map key with Value::display (str stays bare, every other scalar
+    renders repr-shaped), so an int-keyed map joins as a str-keyed map."""
+    if isinstance(k, str):
+        return k
+    return v_repr(k)
+
+
+def join_wire_result(v, _d=0):
+    """W016 mirror of the full Rust join-result membrane (genes.to_send_d):
+    the W015 channel rule PLUS the map-key stringification the W016
+    membrane proof pins on both cores (`got["1"]` after joining a task
+    that returned {1: "one"}). Depth caps match the Rust SEND_DEPTH_CAP."""
+    if isinstance(v, Channel):
+        return None
+    if _d > 100_000:
+        return v
+    if isinstance(v, list):
+        return [join_wire_result(x, _d + 1) for x in v]
+    if isinstance(v, dict):
+        return {wire_key(k): join_wire_result(x, _d + 1) for k, x in v.items()}
+    if isinstance(v, Variant):
+        return Variant(v.tag, None if v.payload is None
+                       else join_wire_result(v.payload, _d + 1))
+    return v
+
 class SeqObj:
     """Sequential-oracle sequence: values are produced by running the body to
     completion on first pull (buffered), then served one at a time. The Rust
@@ -6535,11 +6563,11 @@ class Interp:
                         setattr(self, k2, v2)
                     self.rng = _saved_rng
                     self.task_note_prefix = _saved_prefix
-                # W015 mirror: the result crosses the join membrane, a
-                # channel handle degrades to null exactly like the Rust
-                # to_send path (deeply inside containers and variant
-                # payloads, both the return and the propagated paths)
-                result = channel_degrade_result(result)
+                # W016: the result crosses the join membrane — the full
+                # Rust to_send_d wire: channel-handle degrade (W015) PLUS
+                # map-key stringification (the membrane proof pins
+                # got["1"] on both cores)
+                result = join_wire_result(result)
                 self.next_id = _task_id
                 self.tasks = getattr(self, "tasks", {})
                 self.tasks[self.next_id] = result
@@ -6556,7 +6584,11 @@ class Interp:
                     _scopes[-1].append(self.next_id)
                 return self.next_id
             self.note(4, "spawn() needs a gene; null task")
-            return None
+            # W016 parity mirror: the Rust spawn contract answers a
+            # non-gene callee with the null task id -1 (genes.rs
+            # spawn_task), not Python None — pin the same sentinel here so
+            # `print(spawn(42, []))` diffs clean across the cores.
+            return -1
         if name == "join":
             tid = args[0] if args else None
             tasks = getattr(self, "tasks", {})
