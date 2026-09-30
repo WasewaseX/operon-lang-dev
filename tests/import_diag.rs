@@ -36,7 +36,10 @@ fn missing_import_prints_full_probe_list() {
     let dir = std::env::temp_dir().join(format!("operon_w070_{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("temp dir");
     let (code, stdout, stderr) = run_missing_import(&dir, "missing_mod");
-    let combined = format!("{}{}", stdout, stderr);
+    // W70 windows fix (sz hotfix): candidate paths render with the OS
+    // separator; normalize to forward slashes so the golden asserts are
+    // portable instead of hardcoding one platform's spelling.
+    let combined = format!("{}{}", stdout, stderr).replace('\\', "/");
 
     // the program still runs (Total Grammar: failed use is a repair note)
     assert!(stdout.contains("body ran"), "program body executed");
@@ -95,7 +98,8 @@ fn hit_import_does_not_emit_tried_list() {
         "{}{}",
         String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr)
-    );
+    )
+    .replace('\\', "/");
     assert!(
         !combined.contains("not found, tried:"),
         "no probe list on hit"
