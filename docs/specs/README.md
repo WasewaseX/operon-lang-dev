@@ -12,6 +12,7 @@ area; conflicts resolve toward SPEC.md, then these files, then code comments.
 | [FMT-CONFIG.md](FMT-CONFIG.md) | W47 | landed (indent/quotes + config file; byte-stability law corpus-wide; `--width` honestly deferred) |
 | SERIALIZATION.md | W34 | landed (stage 1) + stage 2 landed via PR #28, the W04 trait hook stays spec'd as the future OVERRIDE |
 | [GENERICS.md](GENERICS.md) | W03 | landed stage 1 (callable-generic std, zero duplication); stages 2–3 specified, deliberately unscheduled |
+| [TYPE-SYSTEM.md](TYPE-SYSTEM.md) | W01 | landed (stage 1 soft annotations on main; stage 2 check-time layer + aliases: typeck/types split, T-codes, oracle parity) |
 | [ASYNC.md](ASYNC.md) | W16 | spec-only this cycle per roadmap, green threads over the VM loop, frame-field reservation carried in vm-design.md §6 from A2 |
 | [MACROS design](../design/MACROS.md) | W35 | draft complete, models priced, Model A (declarative, rules-as-data) recommended, staged migration of the 7 hardcoded bio arms, open questions filed for sz ratification |
 | [LSP-VERSIONING.md](LSP-VERSIONING.md) | W62 | landed (operon-ls --version pin line, operonLsp handshake block, editor pinning table; smoke-enforced) |
