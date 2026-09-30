@@ -3648,7 +3648,21 @@ impl Interp {
                 argvs
             }
         };
-        self.call_named(env, name, argvs)
+        let mut result = self.call_named(env, name, argvs);
+        if let Err(s) = &mut result {
+            // W101: capability denials raised inside builtins carry line 0
+            // (Caps::denied is a static constructor without interp access),
+            // so the fatal block degraded to a header-only render for the
+            // most common fatal in the language. The call funnel knows the
+            // call site: attach it ONCE here for the interference family;
+            // both the interp and the VM (named_call_tail_vm) funnel through
+            // this line, and a stress that already carries a line (raise
+            // statements) is never overwritten.
+            if s.kind == "interference" && s.line == 0 {
+                s.line = self.cur_line;
+            }
+        }
+        result
     }
 
     /// VM entry to the shared named-call tail: args are already on the

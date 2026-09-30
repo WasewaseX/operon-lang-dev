@@ -1,0 +1,4 @@
+gene main() {
+  print("数据表")
+  read_file("数据.txt")
+}

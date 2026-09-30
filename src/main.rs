@@ -2430,11 +2430,19 @@ fn repl_flush_new_notes(l: &tools::Loaded, start: usize) {
             3 => "wobble",
             _ => "fallback",
         };
+        // W101 slice 7: the same derived E2xxx code the run-path flush uses,
+        // so a repair reads identically in the REPL and in a script run.
+        let code = operon::diag::note_code(&n.message);
+        let tag_s = if code.is_empty() {
+            tag.to_string()
+        } else {
+            format!("{} {}", tag, code)
+        };
         // A13 (dx-r2): real locations when the note carries a line
         if n.line > 0 {
-            println!("  [{}] {}:{}: {}", tag, l.interp.file, n.line, n.message);
+            println!("  [{}] {}:{}: {}", tag_s, l.interp.file, n.line, n.message);
         } else {
-            println!("  [{}] {}", tag, n.message);
+            println!("  [{}] {}", tag_s, n.message);
         }
     }
 }

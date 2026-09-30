@@ -1,0 +1,11 @@
+error[E1010]: read denied, no capability grant covers '数据.txt' (grant with --allow-read or --allow-all)
+  --> tests/diagnostics/cap_denied_cjk.op:3
+   |
+3 |   read_file("数据.txt")
+   |   ^^^^
+   |
+   = no capability grant covers '数据.txt' (grant with --allow-read or --allow-all)
+help: run with:
+      --allow-read
+      --allow-all
+  at main

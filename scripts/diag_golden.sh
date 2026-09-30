@@ -58,6 +58,11 @@ check tests/diagnostics/phantom_suggest.op text tests/diagnostics/expected/phant
 # W101 slice 7: parse/repair notes carry derived E2xxx codes in the flush;
 # the program itself SUCCEEDS (repair, never reject → rc 0).
 check tests/diagnostics/repair_notes.op    text tests/diagnostics/expected/repair_notes.txt run 0
+# W101 slice 9: denials raise at the call line now — the located block and
+# the caret are pinned for the ASCII and the CJK (display-width) case, and
+# the JSON carries non-null column/length + labels.
+check tests/diagnostics/cap_denied.op      json tests/diagnostics/expected/cap_denied.json
+check tests/diagnostics/cap_denied_cjk.op  text tests/diagnostics/expected/cap_denied_cjk.txt
 
 if [ $fails -gt 0 ]; then
     echo "diag_golden: $fails failure(s); re-derive expected files from real runs, never hand-patch them"
