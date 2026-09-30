@@ -701,7 +701,7 @@ pub struct Interp {
     /// W09 A2: the bytecode lane flag (set by --vm) + the shared arenas
     /// (bridged sub-ASTs and compiled bodies keyed by def pointer).
     pub vm: bool,
-    pub vm_program: Option<crate::vm::VmProgram>,
+    pub vm_program: Option<std::rc::Rc<crate::vm::VmProgram>>,
     /// W09: scratch operand stacks pooled across machine frames. fib25's
     /// 243k calls allocated (and grew) a fresh operand Vec per call; the
     /// pool hands each frame a warm stack instead. Bound: stacks larger
@@ -719,6 +719,21 @@ pub struct Interp {
     /// Process-wide step ceiling shared with every spawned worker: when
     /// present, the run's TOTAL fuel (host + all threads) drains this pool.
     pub fuel_pool: Option<Arc<std::sync::atomic::AtomicI64>>,
+    /// W16 async runtime. `vm_suspend_depth` counts bridged (tree-walk)
+    /// frames between the machine and an awaitable: parks are refused there
+    /// (the Rust stack cannot rewind) and the builtin blocks as today.
+    /// `fiber_active` marks an interpreter running a fiber body (the hook
+    /// gate). `fiber_park` carries the wake request up to the scheduler.
+    /// `fiber_frames` collects the parking frame chain during the unwind.
+    /// `fiber_tasks` is the per-interp fiber registry (the thread `tasks`
+    /// namespace, same join/cancel/state surface). `fiber_task_id` is this
+    /// fiber's program-visible task id (-1 = host or thread worker).
+    pub vm_suspend_depth: u32,
+    pub fiber_active: bool,
+    pub fiber_park: Option<crate::asyncrt::ParkReq>,
+    pub fiber_frames: Vec<crate::vm::FrameState>,
+    pub fiber_tasks: HashMap<i64, crate::asyncrt::FiberHandle>,
+    pub fiber_task_id: i64,
 }
 
 /// `Interp` is never `Default::default()`d with semantics on purpose:
@@ -830,6 +845,12 @@ impl Interp {
             debug_file: String::new(),
             seq_tx: None,
             fuel_pool: None,
+            vm_suspend_depth: 0,
+            fiber_active: false,
+            fiber_park: None,
+            fiber_frames: Vec::new(),
+            fiber_tasks: HashMap::new(),
+            fiber_task_id: -1,
         }
     }
 
@@ -971,6 +992,9 @@ impl Interp {
                     // it leaves the statement and heads for the gene
                     // boundary (never contained).
                     Err(s) if s.prop.is_some() => return Err(s),
+                    // W16: the fiber park marker is not a failure, it must
+                    // reach the scheduler (never contained, never spoofed)
+                    Err(s) if crate::asyncrt::is_fiber_park(&s) => return Err(s),
                     Err(s) => {
                         self.note(
                             0,
@@ -992,6 +1016,8 @@ impl Interp {
                     let lv = match self.eval(env, l) {
                         Ok(v) => v,
                         Err(s) if s.prop.is_some() => return Err(s),
+                        // W16: park marker passes, never contained
+                        Err(s) if crate::asyncrt::is_fiber_park(&s) => return Err(s),
                         Err(s) => {
                             self.note(
                                 0,
@@ -1101,6 +1127,8 @@ impl Interp {
                         Ok(v) => v.truthy(),
                         // W06: propagation is a return, never a failure.
                         Err(s) if s.prop.is_some() => return Err(s),
+                        // W16: park marker passes, never contained
+                        Err(s) if crate::asyncrt::is_fiber_park(&s) => return Err(s),
                         Err(s) => {
                             self.note(
                                 0,
@@ -1780,6 +1808,10 @@ impl Interp {
                     // (including `rescue any`) can never contain or spoof it.
                     // ast-grep-ignore: no-unwrap-in-src
                     Err(s) if s.prop.is_some() => Ok(Flow::Ret(s.prop.unwrap())),
+                    // W16: the fiber park marker unwinds to the scheduler,
+                    // never into a user rescue (a rescue can never contain
+                    // or observe it; the kind is NUL-prefixed, unspeakable)
+                    Err(s) if crate::asyncrt::is_fiber_park(&s) => Err(s),
                     Err(stress) => {
                         let kind_ok = match kind {
                             None => true,
@@ -2724,6 +2756,8 @@ impl Interp {
                             // W06 (D-014): propagation is a return, it leaves
                             // the interpolation and heads for the gene boundary.
                             Err(s) if s.prop.is_some() => return Err(s),
+                            // W16: park marker passes, never contained
+                            Err(s) if crate::asyncrt::is_fiber_park(&s) => return Err(s),
                             Err(s) => {
                                 // a stressed interpolation degrades to "null",
                                 // the surrounding statement still produces output
@@ -3797,6 +3831,9 @@ impl Interp {
             // W06 (D-014): propagation is a return, not a failure, no chain
             // frame. A returned variant is not an error in flight.
             Err(s) if s.prop.is_some() => Err(s),
+            // W16: the park marker unwinds bare (no chain frames — it is
+            // not a failure of this gene, it is a scheduler signal)
+            Err(s) if crate::asyncrt::is_fiber_park(&s) => Err(s),
             Err(mut s) => {
                 // innermost frame appends first; bounded at 64 (note-cap
                 // discipline, an unbounded chain is an uncontained one)
@@ -4882,7 +4919,13 @@ impl Interp {
                 }
                 fenv.define(pname, a.clone());
             } else if let Some(d) = default {
-                let dv = self.eval(&fenv, d).unwrap_or(Value::Null);
+                let dv = match self.eval(&fenv, d) {
+                    Ok(v) => v,
+                    // W16: a default expression may await; the park marker
+                    // must unwind (a null here would desync the fiber)
+                    Err(s) if crate::asyncrt::is_fiber_park(&s) => return Err(s),
+                    Err(_) => Value::Null,
+                };
                 if let Some(ann) = def.param_anns.get(i).and_then(|a| a.as_ref()) {
                     if !ann_matches(&dv, ann) {
                         return Err(Stress::new(
@@ -4932,7 +4975,12 @@ impl Interp {
             .push((name.clone(), start.unwrap_or(0.0), 0.0));
         // uORF guard
         if let Some((cond, gbody)) = &def.guard {
-            let ok = self.eval(&fenv, cond).map(|v| v.truthy()).unwrap_or(false);
+            let ok = match self.eval(&fenv, cond) {
+                Ok(v) => v.truthy(),
+                // W16: a guard condition may await; the park marker unwinds
+                Err(s) if crate::asyncrt::is_fiber_park(&s) => return Err(s),
+                Err(_) => false,
+            };
             if !ok {
                 self.note(dl, 4, format!("guard tripped calling {}", name));
                 let mut flowed = Flow::Norm;
@@ -4976,7 +5024,7 @@ impl Interp {
             // execution swaps to the stack machine. `name` was computed at
             // the funnel top — do NOT re-clone the def name per call.
             let key = std::sync::Arc::as_ptr(&def) as *const u8 as usize;
-            crate::vm::exec_gene_body(self, key, &name, &def.body, &fenv)
+            crate::vm::exec_gene_body(self, key, &name, &def.body, &fenv, def.ret_ann.as_ref())
         } else {
             self.exec_block(&fenv, &def.body)
         };
@@ -5044,8 +5092,10 @@ impl Interp {
 
     /// W01 (L2c): the shared soft return-annotation check. `explicit=false`
     /// means the gene fell off the end (implicit null), the message names
-    /// it. Mirrored by oracle `_check_ret`.
-    fn check_ret_ann(
+    /// it. Mirrored by oracle `_check_ret`. W16: crate-visible — the fiber
+    /// scheduler applies it for frames that ever parked (their call_gene
+    /// tail never ran).
+    pub(crate) fn check_ret_ann(
         &self,
         what: &str,
         name: &str,
@@ -5347,7 +5397,13 @@ impl Interp {
                 }
                 fenv.define(pname, a.clone());
             } else if let Some(d) = default {
-                let dv = self.eval(&fenv, d).unwrap_or(Value::Null);
+                let dv = match self.eval(&fenv, d) {
+                    Ok(v) => v,
+                    // W16: a default expression may await; the park marker
+                    // must unwind (a null here would desync the fiber)
+                    Err(s) if crate::asyncrt::is_fiber_park(&s) => return Err(s),
+                    Err(_) => Value::Null,
+                };
                 fenv.define(pname, dv);
             } else {
                 self.note(
@@ -5369,7 +5425,12 @@ impl Interp {
         self.call_stack
             .push((name.clone(), start.unwrap_or(0.0), 0.0));
         if let Some((cond, gbody)) = &def.guard {
-            let ok = self.eval(&fenv, cond).map(|v| v.truthy()).unwrap_or(false);
+            let ok = match self.eval(&fenv, cond) {
+                Ok(v) => v.truthy(),
+                // W16: a guard condition may await; the park marker unwinds
+                Err(s) if crate::asyncrt::is_fiber_park(&s) => return Err(s),
+                Err(_) => false,
+            };
             if !ok {
                 self.note(dl, 4, format!("guard tripped calling {}", name));
                 let mut flowed = Flow::Norm;
@@ -5400,7 +5461,7 @@ impl Interp {
         let result = if self.vm {
             // W09 A2: the compiled-body path (see the call_gene_inner site)
             let key = std::sync::Arc::as_ptr(&def) as *const u8 as usize;
-            crate::vm::exec_gene_body(self, key, &name, &def.body, &fenv)
+            crate::vm::exec_gene_body(self, key, &name, &def.body, &fenv, def.ret_ann.as_ref())
         } else {
             self.exec_block(&fenv, &def.body)
         };
@@ -5437,8 +5498,10 @@ impl Interp {
     /// select polls in 10 ms slices; both charge ms*1000 fuel steps per
     /// wake (the sleep charge shape). 50 ms keeps a cancelled recv's wake
     /// latency bounded without burning fuel on hot polling.
-    const RECV_SLICE_MS: u64 = 50;
-    const SELECT_SLICE_MS: u64 = 10;
+    /// W015 blocking-slice constants, shared with the W16 fiber pump (the
+    /// wake cadence and the fuel slices must stay identical on both paths).
+    pub const RECV_SLICE_MS: u64 = 50;
+    pub const SELECT_SLICE_MS: u64 = 10;
 
     /// W015 membrane rule: behavior handles (genes, sequences, phenotype
     /// instances, other channels) cannot ride as payloads, they are refused
@@ -5580,6 +5643,27 @@ impl Interp {
         Ok(())
     }
 
+    /// W16: the sleep fuel shape (ms×1000 against the step budget AND the
+    /// shared run-wide pool), shared verbatim by the blocking builtin and
+    /// the fiber park path — one charge law, two execution substrates.
+    pub(crate) fn sleep_charge(&mut self, ms: u64) -> Result<(), Stress> {
+        let charge = ms.saturating_mul(1000);
+        self.steps = self.steps.saturating_add(charge);
+        if let Some(pool) = &self.fuel_pool {
+            let left = pool.fetch_sub(charge as i64, std::sync::atomic::Ordering::Relaxed);
+            if left <= charge as i64 {
+                return Err(Stress::new(
+                    "overflow",
+                    "run-wide step budget exhausted (sleep)",
+                ));
+            }
+        }
+        if self.steps > self.step_budget {
+            return Err(Stress::new("overflow", "step budget exhausted (sleep)"));
+        }
+        Ok(())
+    }
+
     /// W015 select: a BUILTIN, not syntax (grammar freeze, W036). Polls the
     /// argument channels strictly in declaration order and returns the
     /// 0-based index of the first one with a ready value (non-empty buffer);
@@ -5642,6 +5726,17 @@ impl Interp {
         name: &str,
         args: Vec<Value>,
     ) -> Result<Value, Stress> {
+        // W16: the await-shaped builtin hook. A fiber interp at a NATIVE
+        // position (vm_suspend_depth == 0) parks here on sleep / recv /
+        // select instead of blocking the pump; everything else (the host,
+        // thread workers, bridged positions) runs the builtin exactly as
+        // before. The hook returns None for every non-awaitable name and
+        // every type error (the builtin arm keeps its own stress text).
+        if self.fiber_active && self.vm_suspend_depth == 0 {
+            if let Some(r) = crate::asyncrt::fiber_suspend_point(self, name, &args) {
+                return r;
+            }
+        }
         match name {
             "promote" => {
                 let parts: Vec<String> = args.iter().map(|v| v.display()).collect();
@@ -8560,20 +8655,8 @@ impl Interp {
                 let ms = ms.min(60_000);
                 // fuel charge: a sleeping worker drains the shared pool in
                 // proportion to its wall time, sleep-loops cannot run forever
-                let charge = ms.saturating_mul(1000);
-                self.steps = self.steps.saturating_add(charge);
-                if let Some(pool) = &self.fuel_pool {
-                    let left = pool.fetch_sub(charge as i64, std::sync::atomic::Ordering::Relaxed);
-                    if left <= charge as i64 {
-                        return Err(Stress::new(
-                            "overflow",
-                            "run-wide step budget exhausted (sleep)",
-                        ));
-                    }
-                }
-                if self.steps > self.step_budget {
-                    return Err(Stress::new("overflow", "step budget exhausted (sleep)"));
-                }
+                // (W16: the SAME helper charges the fiber park path)
+                self.sleep_charge(ms)?;
                 std::thread::sleep(std::time::Duration::from_millis(ms));
                 Ok(Value::Null)
             }
