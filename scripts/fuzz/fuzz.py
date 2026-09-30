@@ -235,7 +235,7 @@ def main():
     print(f"  corpus: {len(seeds)} file(s) "
           f"(tests + tests/redteam + examples/** + std; {skipped} skipped > "
           f"{args.max_file_bytes // 1024} KiB)")
-    print(f"  targets: check / ast --json / fmt (parse-only; contained rc "
+    print(f"  targets: check / ast --json / fmt / explain [--json] (parse-only; contained rc "
           f"1-3 is the EXPECTED redteam outcome, never a finding)")
 
     rnd = random.Random(args.seed)
@@ -256,7 +256,12 @@ def main():
         mut, chain = mutate(data, rnd)
         with open(TMP, "wb") as fh:
             fh.write(mut)
-        for argv in (["check", TMP], ["ast", TMP, "--json"], ["fmt", TMP]):
+        # S7 slice 1: `explain` joins the target row (it was excluded as a
+        # batch-2 WIP lane; the surface is stable now and its --json shape is
+        # contract-pinned). Parse-only by construction: explain never runs
+        # the program, so redteam seeds stay contained here too.
+        for argv in (["check", TMP], ["ast", TMP, "--json"], ["fmt", TMP],
+                     ["explain", TMP], ["explain", TMP, "--json"]):
             rc, out, err = probe([binpath] + argv, args.per_input_timeout)
             kind, detail = classify(rc, err)
             stats[kind] += 1
