@@ -1,0 +1,126 @@
+# json/extra - an Operon registry package.
+#
+# The core already ships json_parse/json_str (std/json, which wins the bare
+# "use json" name on purpose: the standard library is the trusted substrate).
+# This package is the EXTENSION surface - "use json/extra" after
+# "operon add json" - for the helpers a JSON toolkit grows over time:
+# path lookup, deep merge, byte-stable pretty printing, path probing.
+
+gene keys_of(m) {
+    let ks = [];
+    for pair in items(m) {
+        push(ks, pair[0]);
+    }
+    return sorted(ks);
+}
+
+gene map_get_or(m, k, d) {
+    # a missing key is catchable [missing] stress; questions never raise
+    stress {
+        return m[k];
+    } rescue (e) {
+        return d;
+    }
+}
+
+gene step(v, k) {
+    # one path segment: maps by key, lists by index; everything else raises
+    stress {
+        return v[k];
+    } rescue (e) {
+        raise missing, "json.get_path: segment not found";
+    }
+}
+
+gene get_path(v, keys) {
+    # walk a JSON value by a list of keys/indices; catchable [missing] stress
+    # when the path does not exist - Total Grammar style
+    let cur = v;
+    for k in keys {
+        cur = step(cur, k);
+    }
+    return cur;
+}
+
+gene get_path_or(v, keys, fallback) {
+    # total twin of get_path: never raises, returns the fallback instead
+    stress {
+        return get_path(v, keys);
+    } rescue (e) {
+        return fallback;
+    }
+}
+
+gene has_path(v, keys) {
+    # path existence probe - a question, not an error. Named has_path (not
+    # has) because the core builtin `has` owns that name.
+    stress {
+        get_path(v, keys);
+        return true;
+    } rescue (e) {
+        return false;
+    }
+}
+
+gene merge(a, b) {
+    # b wins on scalar conflicts; maps merge recursively; lists concatenate
+    if type(a) == "map" and type(b) == "map" {
+        let out = {};
+        for pair in items(a) {
+            out[pair[0]] = pair[1];
+        }
+        for pair in items(b) {
+            if type(map_get_or(out, pair[0], null)) == "map" and type(pair[1]) == "map" {
+                out[pair[0]] = merge(map_get_or(out, pair[0], {}), pair[1]);
+            } else {
+                out[pair[0]] = pair[1];
+            }
+        }
+        return out;
+    }
+    if type(a) == "list" and type(b) == "list" {
+        let out = [];
+        for v in a {
+            push(out, v);
+        }
+        for v in b {
+            push(out, v);
+        }
+        return out;
+    }
+    return b;
+}
+
+gene render(v, indent, depth) {
+    # byte-stable rendering: sorted keys, one level per indent unit -
+    # golden-test friendly output. Braces are spelled through chr() because a
+    # literal brace in a source string enters the interpolation grammar.
+    let pad = " ".repeat(indent * depth);
+    let open = chr(123);
+    let close = chr(125);
+    if type(v) == "map" {
+        if items(v).len() == 0 {
+            return open + close;
+        }
+        let parts = [];
+        for k in keys_of(v) {
+            push(parts, pad + "  \"" + k + "\": " + render(v[k], indent, depth + 1));
+        }
+        return open + "\n" + ",\n".join(parts) + "\n" + pad + close;
+    }
+    if type(v) == "list" {
+        if v.len() == 0 {
+            return "[]";
+        }
+        let parts = [];
+        for item in v {
+            push(parts, pad + "  " + render(item, indent, depth + 1));
+        }
+        return "[\n" + ",\n".join(parts) + "\n" + pad + "]";
+    }
+    return json_str(v);
+}
+
+gene pretty(v, indent) {
+    return render(v, indent, 0);
+}

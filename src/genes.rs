@@ -547,6 +547,39 @@ fn resolve_path(interp: &Interp, path: &str) -> Result<String, String> {
             .clone()
             .map(|d| std::path::PathBuf::from(d).join(&p)),
     );
+    // ai/ecosystem (W19): registry-installed packages, tried LAST so they can
+    // only ADD success paths — failure notes and the C-7 unified traversal
+    // message are untouched. Layout contract from pkg.rs install: the entry
+    // file lands at operon_modules/<pkg>/<entry-basename> with siblings
+    // beside it, so `use http` hits operon_modules/http/http.op and
+    // `use http/client` hits operon_modules/http/client.op (flat form), and
+    // a bare-name package-dir form covers entry files named like the package.
+    // The tree lives INSIDE the project, so the sandbox prefix check below
+    // admits it without any new capability grant (imports stay read-only).
+    candidates.push(Some(std::path::PathBuf::from("operon_modules").join(&p)));
+    if let Some(base) = &interp.base_dir {
+        candidates.push(Some(
+            std::path::PathBuf::from(base)
+                .join("operon_modules")
+                .join(&p),
+        ));
+    }
+    let bare = path.trim_end_matches(".op").to_string();
+    if !bare.contains('/') {
+        candidates.push(Some(
+            std::path::PathBuf::from("operon_modules")
+                .join(&bare)
+                .join(&p),
+        ));
+        if let Some(base) = &interp.base_dir {
+            candidates.push(Some(
+                std::path::PathBuf::from(base)
+                    .join("operon_modules")
+                    .join(&bare)
+                    .join(&p),
+            ));
+        }
+    }
     // W070: per-root attempt detail for the PLAIN name class only. The
     // traversal class keeps its unified C-7 message — attempted-root detail
     // for outside paths would resurrect the existence oracle C-7 removed.

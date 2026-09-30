@@ -1,0 +1,28 @@
+# Render deployment — Operon Registry API (ai/ecosystem)
+# Creates the web service + a free PostgreSQL instance and wires DATABASE_URL.
+# Render blueprint docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: operon-registry
+    runtime: python
+    plan: free
+    rootDir: packaging/registry
+    buildCommand: pip install -r requirements.txt
+    # app.py: `main()` runs the stdlib server; gunicorn binds the WSGI `app`
+    startCommand: gunicorn -w 2 -t 60 --bind 0.0.0.0:$PORT app:app
+    healthCheckPath: /healthz
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: operon-registry-db
+          property: connectionString
+      - key: OPERON_TOKENS
+        sync: false   # set in the Render dashboard: comma-separated publish tokens
+      - key: PYTHON_VERSION
+        value: "3.12.4"
+
+databases:
+  - name: operon-registry-db
+    plan: free
+    databaseName: operon
+    user: operon

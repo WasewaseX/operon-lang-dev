@@ -1,0 +1,11 @@
+[package]
+name = "web"
+version = "1.0.0"
+description = "Web app helpers for Operon — HTML escaping, response maps, a routes table, and cookie/header utilities for the core serve() builtin"
+authors = ["Operon ecosystem builders"]
+license = "MIT"
+keywords = ["web", "html", "server", "routes"]
+entry = "web.op"
+
+[dependencies]
+http = "^1.0"

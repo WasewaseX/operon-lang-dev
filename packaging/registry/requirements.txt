@@ -1,0 +1,4 @@
+# Hosted-registry requirements (Render deploy). Local dev + CI need none of
+# these: app.py falls back to the standard library (http.server + sqlite3).
+gunicorn==23.0.0
+psycopg2-binary==2.9.10
