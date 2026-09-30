@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=200 tag=s200
+
+print("s200-m0:", "e9lw3qi_".upper(), "e9lw3qi_".slice(4), "e9lw3qi_".len())
+
+print("s200-m1:", "Cc1ha4fs".upper(), "Cc1ha4fs".slice(3), "Cc1ha4fs".len())
+
+print("s200-m2:", "o_Celt6d".upper(), "o_Celt6d".slice(3), "o_Celt6d".len())
+
+print("s200-m3:", "4qrecrBck".upper(), "4qrecrBck".slice(4), "4qrecrBck".len())
+
+print("s200-m4:", "pA8ypgw7rt_".upper(), "pA8ypgw7rt_".slice(1), "pA8ypgw7rt_".len())
+
+print("s200-i0:", "efh-{45}-yC2v")
+
+let s200_v0 = 45
+
+print("s200-v0:", "n={s200_v0}" + "!" * 2)
+
+print("s200-i1:", "uia-{40}-4z0_")
+
+let s200_v1 = 40
+
+print("s200-v1:", "n={s200_v1}" + "!" * 1)
+
+print("s200-i2:", "s1s-{16}-mte5")
+
+let s200_v2 = 16
+
+print("s200-v2:", "n={s200_v2}" + "!" * 1)
+
+print("s200-i3:", "fje-{8}-ou5x")
+
+let s200_v3 = 8
+
+print("s200-v3:", "n={s200_v3}" + "!" * 3)
+
+print("s200-i4:", "nho-{81}-3cbi")
+
+let s200_v4 = 81
+
+print("s200-v4:", "n={s200_v4}" + "!" * 2)
+
+print("s200-r0:", "x1rryA3p".replace("x", "vr"), "x1rryA3p".contains("1r"))
+
+print("s200-r1:", "j684svj1".replace("j", "am"), "j684svj1".contains("68"))
+
+print("s200-r2:", "fgmvth7n".replace("f", "xj"), "fgmvth7n".contains("gm"))
+
+print("s200-j0:", ["9gB", "ckz", "swB", "9cz"].join("-"))
+
+print("s200-j1:", ["bwb", "h1h", "p6g"].join("-"))
+
+print("s200-a0:", "3iotwt1".at(5), "3iotwt1".trim() == "3iotwt1")
+
+print("s200-a1:", "1i49mpo".at(4), "1i49mpo".trim() == "1i49mpo")

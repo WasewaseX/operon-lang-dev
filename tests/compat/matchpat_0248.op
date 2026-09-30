@@ -1,0 +1,340 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=248 tag=m248
+
+let m248_s0 = some(1)
+
+match m248_s0 {
+
+    case Some(x) if x > 1 {
+
+        print("m248-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m248-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m248-m0:", "none")
+
+    }
+
+}
+
+let m248_s1 = some(5)
+
+match m248_s1 {
+
+    case Some(x) if x > 5 {
+
+        print("m248-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m248-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m248-m1:", "none")
+
+    }
+
+}
+
+let m248_s2 = some(5)
+
+match m248_s2 {
+
+    case Some(x) if x > 5 {
+
+        print("m248-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m248-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m248-m2:", "none")
+
+    }
+
+}
+
+let m248_s3 = some(8)
+
+match m248_s3 {
+
+    case Some(x) if x > 8 {
+
+        print("m248-m3:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m248-m3:", "small", x)
+
+    }
+
+    case None {
+
+        print("m248-m3:", "none")
+
+    }
+
+}
+
+let m248_s4 = some(6)
+
+match m248_s4 {
+
+    case Some(x) if x > 6 {
+
+        print("m248-m4:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m248-m4:", "small", x)
+
+    }
+
+    case None {
+
+        print("m248-m4:", "none")
+
+    }
+
+}
+
+let m248_ls0 = [34, 34, 37]
+
+match m248_ls0 {
+
+    case [34, *rest] {
+
+        print("m248-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m248-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m248-l0:", "other")
+
+    }
+
+}
+
+let m248_ls1 = [21, 8, 26]
+
+match m248_ls1 {
+
+    case [21, *rest] {
+
+        print("m248-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m248-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m248-l1:", "other")
+
+    }
+
+}
+
+let m248_ls2 = [37, 18, 35]
+
+match m248_ls2 {
+
+    case [37, *rest] {
+
+        print("m248-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m248-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m248-l2:", "other")
+
+    }
+
+}
+
+let m248_ls3 = [20, 17, 42]
+
+match m248_ls3 {
+
+    case [20, *rest] {
+
+        print("m248-l3:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m248-l3:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m248-l3:", "other")
+
+    }
+
+}
+
+let m248_mp0 = {plasmid: 7165, helix: 5349}
+
+match m248_mp0 {
+
+    case {plasmid: p, helix: q} {
+
+        print("m248-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m248-mp0:", "miss")
+
+    }
+
+}
+
+let m248_mp1 = {gene: -304, enzyme: 4922}
+
+match m248_mp1 {
+
+    case {gene: p, enzyme: q} {
+
+        print("m248-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m248-mp1:", "miss")
+
+    }
+
+}
+
+let m248_mp2 = {marker: -9611, splicer: -3446}
+
+match m248_mp2 {
+
+    case {marker: p, splicer: q} {
+
+        print("m248-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m248-mp2:", "miss")
+
+    }
+
+}
+
+let m248_r0 = ok(2)
+
+match m248_r0 {
+
+    case Ok(n) | Err(2) {
+
+        print("m248-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m248-r0:", "zero")
+
+    }
+
+}
+
+let m248_r1 = ok(1)
+
+match m248_r1 {
+
+    case Ok(n) | Err(1) {
+
+        print("m248-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m248-r1:", "zero")
+
+    }
+
+}
+
+match "helix" {
+
+    case "helix" {
+
+        print("m248-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m248-w0:", "alt")
+
+    }
+
+}
+
+match "cell" {
+
+    case "cell" {
+
+        print("m248-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m248-w1:", "alt")
+
+    }
+
+}

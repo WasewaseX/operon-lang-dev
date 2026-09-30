@@ -1,0 +1,230 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=144 tag=m144
+
+gene m144_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m144-b0:", m144_b0({codon: 86, marker: 1, exon: 65})?!)
+
+gene m144_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m144-b1:", m144_b1({splicer: 90, plasmid: 78, ribose: 69})?!)
+
+gene m144_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m144_f0([48, 8, 24, 26, 12, 29, 27]) {
+
+    case Ok(list) {
+
+        print("m144-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m144-f0:", "e:", m)
+
+    }
+
+}
+
+gene m144_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m144_f1([16, 54, 59, 31]) {
+
+    case Ok(list) {
+
+        print("m144-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m144-f1:", "e:", m)
+
+    }
+
+}
+
+gene m144_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m144_f2([22, 23, 44, 24, 45, 49]) {
+
+    case Ok(list) {
+
+        print("m144-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m144-f2:", "e:", m)
+
+    }
+
+}
+
+let m144_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m144-cc0:", m144_cl0(1)(20), m144_cl0(20)(1))
+
+let m144_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m144-cc1:", m144_cl1(7)(9), m144_cl1(9)(7))
+
+let m144_data0 = some([some("ligase"), none(), some(3)])
+
+match m144_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m144-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m144-x0:", "shape-miss")
+
+    }
+
+}
+
+let m144_data1 = some([some("vector"), none(), some(7)])
+
+match m144_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m144-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m144-x1:", "shape-miss")
+
+    }
+
+}

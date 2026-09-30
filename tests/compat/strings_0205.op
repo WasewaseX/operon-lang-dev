@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=205 tag=s205
+
+print("s205-m0:", "1Bo3k24sq9".upper(), "1Bo3k24sq9".slice(4), "1Bo3k24sq9".len())
+
+print("s205-m1:", "Ce4yxuceqjypj".upper(), "Ce4yxuceqjypj".slice(3), "Ce4yxuceqjypj".len())
+
+print("s205-m2:", "bmCgw1_a".upper(), "bmCgw1_a".slice(2), "bmCgw1_a".len())
+
+print("s205-m3:", "vre_Cc_".upper(), "vre_Cc_".slice(4), "vre_Cc_".len())
+
+print("s205-i0:", "5dz-{99}-cAml")
+
+let s205_v0 = 99
+
+print("s205-v0:", "n={s205_v0}" + "!" * 2)
+
+print("s205-i1:", "gyw-{87}-w5nv")
+
+let s205_v1 = 87
+
+print("s205-v1:", "n={s205_v1}" + "!" * 1)
+
+print("s205-i2:", "8zu-{90}-6cwA")
+
+let s205_v2 = 90
+
+print("s205-v2:", "n={s205_v2}" + "!" * 1)
+
+print("s205-i3:", "xdc-{11}-xCvn")
+
+let s205_v3 = 11
+
+print("s205-v3:", "n={s205_v3}" + "!" * 1)
+
+print("s205-i4:", "A8o-{89}-jgyy")
+
+let s205_v4 = 89
+
+print("s205-v4:", "n={s205_v4}" + "!" * 1)
+
+print("s205-r0:", "lqgrh71l".replace("l", "lq"), "lqgrh71l".contains("qg"))
+
+print("s205-r1:", "ez2h0a5w".replace("e", "ih"), "ez2h0a5w".contains("z2"))
+
+print("s205-j0:", ["o6g", "bye", "22C", "zBm", "xzx"].join("-"))
+
+print("s205-j1:", ["nh4", "1gn", "9Ap"].join("-"))
+
+print("s205-a0:", "rC91gA4".at(4), "rC91gA4".trim() == "rC91gA4")
+
+print("s205-a1:", "dAgC2wr".at(1), "dAgC2wr".trim() == "dAgC2wr")

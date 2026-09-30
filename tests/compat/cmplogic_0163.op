@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=163 tag=c163
+
+print("c163-c0:", 6586 != 7764)
+
+print("c163-c1:", -1366 == 821)
+
+print("c163-c2:", 7772 == -8812)
+
+print("c163-c3:", 7544 != 4152)
+
+print("c163-c4:", -1277 <= -2142)
+
+print("c163-c5:", 1143 > -8883)
+
+print("c163-c6:", 5960 > 1979)
+
+print("c163-b0:", 33 < 4 && 4 < 2, 33 > 4 || 33 > 2)
+
+print("c163-b1:", 32 < 23 && 23 < 5, 32 > 23 || 32 > 5)
+
+print("c163-b2:", 6 < 22 && 22 < 37, 6 > 22 || 6 > 37)
+
+print("c163-b3:", 5 < 32 && 32 < 36, 5 > 32 || 5 > 36)
+
+print("c163-t0:", -3044 > 5224 ? "gt" : "le")
+
+print("c163-t1:", 5659 > 3539 ? "gt" : "le")
+
+print("c163-t2:", 5720 > -9491 ? "gt" : "le")
+
+let c163_n0 = null
+
+print("c163-n0:", c163_n0 ?? -6484, c163_n0 == null)
+
+let c163_n1 = null
+
+print("c163-n1:", c163_n1 ?? -8898, c163_n1 == null)
+
+print("c163-s0:", "dk6A" in "o56ttgdk6A", "dk6A" == "dk6A")
+
+print("c163-s1:", "8v1q" in "jiwAw68v1q", "8v1q" == "8v1q")

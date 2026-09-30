@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=124 tag=m124
+
+let m124_m0 = {cell: -36, enzyme: -1, codon: 8, gene: -19}
+
+print("m124-m0:", m124_m0["cell"], len(m124_m0), m124_m0.has("cell"))
+
+let m124_m1 = {plasmid: 91, cell: 72, helix: -52}
+
+print("m124-m1:", m124_m1["plasmid"], len(m124_m1), m124_m1.has("plasmid"))
+
+let m124_m2 = {helix: 19, gene: -68, splicer: 5, vector: -1, ribose: 51}
+
+print("m124-m2:", m124_m2["helix"], len(m124_m2), m124_m2.has("helix"))
+
+let m124_k0 = {enzyme: 41, helix: 34, marker: 48}
+
+let m124_ks0 = m124_k0.keys()
+
+let m124_sm0 = 0
+
+for k in m124_k0 { m124_sm0 += m124_k0[k] }
+
+print("m124-k0:", m124_sm0, m124_k0.keys().sort(), m124_k0.values().len())
+
+let m124_k1 = {plasmid: 6, exon: 44, ligase: 19}
+
+let m124_ks1 = m124_k1.keys()
+
+let m124_sm1 = 0
+
+for k in m124_k1 { m124_sm1 += m124_k1[k] }
+
+print("m124-k1:", m124_sm1, m124_k1.keys().sort(), m124_k1.values().len())
+
+let m124_w0 = {outer: {cell: 5, marker: 3, tag: "ok"}}}
+
+print("m124-w0:", m124_w0["outer"]["marker"], m124_w0["outer"]["tag"])
+
+let m124_w1 = {outer: {codon: 3, ribose: 6, tag: "ok"}}}
+
+print("m124-w1:", m124_w1["outer"]["ribose"], m124_w1["outer"]["tag"])

@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=125 tag=c125
+
+print("c125-c0:", -3100 != -5585)
+
+print("c125-c1:", 782 == 7587)
+
+print("c125-c2:", -2172 != -7302)
+
+print("c125-c3:", 2183 >= 7089)
+
+print("c125-c4:", -4161 != -6540)
+
+print("c125-c5:", -5311 < -6608)
+
+print("c125-c6:", 9111 == 5529)
+
+print("c125-b0:", 6 < 26 && 26 < 8, 6 > 26 || 6 > 8)
+
+print("c125-b1:", 37 < 47 && 47 < 47, 37 > 47 || 37 > 47)
+
+print("c125-b2:", 29 < 44 && 44 < 27, 29 > 44 || 29 > 27)
+
+print("c125-b3:", 49 < 4 && 4 < 41, 49 > 4 || 49 > 41)
+
+print("c125-t0:", 3614 > -4654 ? "gt" : "le")
+
+print("c125-t1:", -2943 > 6354 ? "gt" : "le")
+
+print("c125-t2:", -9870 > 3636 ? "gt" : "le")
+
+print("c125-t3:", 5760 > 7027 ? "gt" : "le")
+
+let c125_n0 = null
+
+print("c125-n0:", c125_n0 ?? 2223, c125_n0 == null)
+
+let c125_n1 = null
+
+print("c125-n1:", c125_n1 ?? -7176, c125_n1 == null)
+
+print("c125-s0:", "xoh8" in "usfnwaxoh8", "xoh8" == "xoh8")
+
+print("c125-s1:", "a3_p" in "nBzjgua3_p", "a3_p" == "a3_p")

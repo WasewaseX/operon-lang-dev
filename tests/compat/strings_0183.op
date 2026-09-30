@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=183 tag=s183
+
+print("s183-m0:", "qgymskrn".upper(), "qgymskrn".slice(3), "qgymskrn".len())
+
+print("s183-m1:", "6zaagx4hzCmvf".upper(), "6zaagx4hzCmvf".slice(3), "6zaagx4hzCmvf".len())
+
+print("s183-m2:", "edoeed9po".upper(), "edoeed9po".slice(1), "edoeed9po".len())
+
+print("s183-m3:", "clbmbf5ee3k".upper(), "clbmbf5ee3k".slice(2), "clbmbf5ee3k".len())
+
+print("s183-i0:", "bbz-{46}-81fl")
+
+let s183_v0 = 46
+
+print("s183-v0:", "n={s183_v0}" + "!" * 2)
+
+print("s183-i1:", "Be4-{57}-mfgB")
+
+let s183_v1 = 57
+
+print("s183-v1:", "n={s183_v1}" + "!" * 1)
+
+print("s183-i2:", "92n-{74}-ju87")
+
+let s183_v2 = 74
+
+print("s183-v2:", "n={s183_v2}" + "!" * 2)
+
+print("s183-r0:", "pr4m4f1w".replace("p", "cz"), "pr4m4f1w".contains("r4"))
+
+print("s183-r1:", "epcgyoqy".replace("e", "hq"), "epcgyoqy".contains("pc"))
+
+print("s183-j0:", ["pBt", "al7", "79C", "C36", "haz"].join("-"))
+
+print("s183-j1:", ["c5l", "17n", "gd5", "kte", "834"].join("-"))
+
+print("s183-j2:", ["hcl", "4yq", "yB9"].join("-"))
+
+print("s183-a0:", "Bh6p_pa".at(5), "Bh6p_pa".trim() == "Bh6p_pa")
+
+print("s183-a1:", "AjbCf7i".at(4), "AjbCf7i".trim() == "AjbCf7i")
+
+print("s183-a2:", "j217shm".at(0), "j217shm".trim() == "j217shm")

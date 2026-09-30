@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=100 tag=s100
+
+print("s100-m0:", "la3csq_tsAo".upper(), "la3csq_tsAo".slice(1), "la3csq_tsAo".len())
+
+print("s100-m1:", "o8bngjv".upper(), "o8bngjv".slice(3), "o8bngjv".len())
+
+print("s100-m2:", "0hCaAzuh6".upper(), "0hCaAzuh6".slice(1), "0hCaAzuh6".len())
+
+print("s100-m3:", "_Aia2v1xb".upper(), "_Aia2v1xb".slice(1), "_Aia2v1xb".len())
+
+print("s100-m4:", "b92uy089c0".upper(), "b92uy089c0".slice(3), "b92uy089c0".len())
+
+print("s100-i0:", "cdj-{94}-vvzt")
+
+let s100_v0 = 94
+
+print("s100-v0:", "n={s100_v0}" + "!" * 1)
+
+print("s100-i1:", "18v-{48}-zjcy")
+
+let s100_v1 = 48
+
+print("s100-v1:", "n={s100_v1}" + "!" * 3)
+
+print("s100-i2:", "401-{84}-wgiC")
+
+let s100_v2 = 84
+
+print("s100-v2:", "n={s100_v2}" + "!" * 2)
+
+print("s100-r0:", "2oBl_nwr".replace("2", "nf"), "2oBl_nwr".contains("oB"))
+
+print("s100-r1:", "byydf6ix".replace("b", "kf"), "byydf6ix".contains("yy"))
+
+print("s100-r2:", "6kris9kq".replace("6", "nz"), "6kris9kq".contains("kr"))
+
+print("s100-j0:", ["z83", "nad", "avl", "ez5", "gr2"].join("-"))
+
+print("s100-j1:", ["8jz", "deq", "u7B"].join("-"))
+
+print("s100-j2:", ["zsC", "Ay3", "cs0"].join("-"))
+
+print("s100-a0:", "t69aBuo".at(3), "t69aBuo".trim() == "t69aBuo")
+
+print("s100-a1:", "ilucr4p".at(6), "ilucr4p".trim() == "ilucr4p")

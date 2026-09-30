@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=144 tag=m144
+
+let m144_m0 = {plasmid: 89, enzyme: -35, gene: -13, splicer: 43}
+
+print("m144-m0:", m144_m0["plasmid"], len(m144_m0), m144_m0.has("plasmid"))
+
+let m144_m1 = {splicer: 9, ligase: -87, exon: -74, gene: -73, codon: 52}
+
+print("m144-m1:", m144_m1["splicer"], len(m144_m1), m144_m1.has("splicer"))
+
+let m144_m2 = {codon: -56, marker: -22, ligase: 6}
+
+print("m144-m2:", m144_m2["codon"], len(m144_m2), m144_m2.has("codon"))
+
+let m144_m3 = {ligase: -77, exon: -97, gene: 5}
+
+print("m144-m3:", m144_m3["ligase"], len(m144_m3), m144_m3.has("ligase"))
+
+let m144_k0 = {gene: 40, vector: 45, exon: 46}
+
+let m144_ks0 = m144_k0.keys()
+
+let m144_sm0 = 0
+
+for k in m144_k0 { m144_sm0 += m144_k0[k] }
+
+print("m144-k0:", m144_sm0, m144_k0.keys().sort(), m144_k0.values().len())
+
+let m144_k1 = {plasmid: 36, exon: 23, cell: 46}
+
+let m144_ks1 = m144_k1.keys()
+
+let m144_sm1 = 0
+
+for k in m144_k1 { m144_sm1 += m144_k1[k] }
+
+print("m144-k1:", m144_sm1, m144_k1.keys().sort(), m144_k1.values().len())
+
+let m144_k2 = {plasmid: 15, exon: 49, vector: 24}
+
+let m144_ks2 = m144_k2.keys()
+
+let m144_sm2 = 0
+
+for k in m144_k2 { m144_sm2 += m144_k2[k] }
+
+print("m144-k2:", m144_sm2, m144_k2.keys().sort(), m144_k2.values().len())
+
+let m144_w0 = {outer: {gene: 8, vector: 2, tag: "ok"}}}
+
+print("m144-w0:", m144_w0["outer"]["vector"], m144_w0["outer"]["tag"])
+
+let m144_w1 = {outer: {cell: 6, ligase: 3, tag: "ok"}}}
+
+print("m144-w1:", m144_w1["outer"]["ligase"], m144_w1["outer"]["tag"])

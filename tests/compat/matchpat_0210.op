@@ -1,0 +1,244 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=210 tag=m210
+
+let m210_s0 = some(2)
+
+match m210_s0 {
+
+    case Some(x) if x > 2 {
+
+        print("m210-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m210-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m210-m0:", "none")
+
+    }
+
+}
+
+let m210_s1 = some(9)
+
+match m210_s1 {
+
+    case Some(x) if x > 9 {
+
+        print("m210-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m210-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m210-m1:", "none")
+
+    }
+
+}
+
+let m210_s2 = some(9)
+
+match m210_s2 {
+
+    case Some(x) if x > 9 {
+
+        print("m210-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m210-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m210-m2:", "none")
+
+    }
+
+}
+
+let m210_ls0 = [7, 47, 48]
+
+match m210_ls0 {
+
+    case [7, *rest] {
+
+        print("m210-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m210-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m210-l0:", "other")
+
+    }
+
+}
+
+let m210_ls1 = [46, 29, 30]
+
+match m210_ls1 {
+
+    case [46, *rest] {
+
+        print("m210-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m210-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m210-l1:", "other")
+
+    }
+
+}
+
+let m210_mp0 = {ribose: -3088, codon: 6446}
+
+match m210_mp0 {
+
+    case {ribose: p, codon: q} {
+
+        print("m210-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m210-mp0:", "miss")
+
+    }
+
+}
+
+let m210_mp1 = {vector: -9147, ribose: 6588}
+
+match m210_mp1 {
+
+    case {vector: p, ribose: q} {
+
+        print("m210-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m210-mp1:", "miss")
+
+    }
+
+}
+
+let m210_r0 = ok(4)
+
+match m210_r0 {
+
+    case Ok(n) | Err(4) {
+
+        print("m210-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m210-r0:", "zero")
+
+    }
+
+}
+
+let m210_r1 = ok(3)
+
+match m210_r1 {
+
+    case Ok(n) | Err(3) {
+
+        print("m210-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m210-r1:", "zero")
+
+    }
+
+}
+
+let m210_r2 = ok(5)
+
+match m210_r2 {
+
+    case Ok(n) | Err(5) {
+
+        print("m210-r2:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m210-r2:", "zero")
+
+    }
+
+}
+
+match "cell" {
+
+    case "cell" {
+
+        print("m210-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m210-w0:", "alt")
+
+    }
+
+}
+
+match "cell" {
+
+    case "cell" {
+
+        print("m210-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m210-w1:", "alt")
+
+    }
+
+}

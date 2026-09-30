@@ -1,0 +1,214 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=261 tag=m261
+
+gene m261_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m261-b0:", m261_b0({vector: 82, codon: 44, ligase: 53})?!)
+
+gene m261_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m261-b1:", m261_b1({splicer: 51, cell: 12, ribose: 57})?!)
+
+gene m261_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m261-b2:", m261_b2({exon: 62, plasmid: 41, helix: 35})?!)
+
+gene m261_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m261_f0([53, 34, 18, 35, 22, 24]) {
+
+    case Ok(list) {
+
+        print("m261-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m261-f0:", "e:", m)
+
+    }
+
+}
+
+gene m261_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m261_f1([17, 30, 5, 33, 16, 50]) {
+
+    case Ok(list) {
+
+        print("m261-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m261-f1:", "e:", m)
+
+    }
+
+}
+
+let m261_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m261-cc0:", m261_cl0(3)(5), m261_cl0(5)(3))
+
+let m261_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m261-cc1:", m261_cl1(16)(15), m261_cl1(15)(16))
+
+let m261_data0 = some([some("ribose"), none(), some(6)])
+
+match m261_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m261-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m261-x0:", "shape-miss")
+
+    }
+
+}
+
+let m261_data1 = some([some("gene"), none(), some(5)])
+
+match m261_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m261-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m261-x1:", "shape-miss")
+
+    }
+
+}

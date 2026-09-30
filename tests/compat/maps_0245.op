@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=245 tag=m245
+
+let m245_m0 = {marker: -74, splicer: 26, cell: 65, helix: 86, enzyme: -1}
+
+print("m245-m0:", m245_m0["marker"], len(m245_m0), m245_m0.has("marker"))
+
+let m245_m1 = {ribose: -18, helix: 39, vector: -89, enzyme: -14}
+
+print("m245-m1:", m245_m1["ribose"], len(m245_m1), m245_m1.has("ribose"))
+
+let m245_m2 = {vector: 51, codon: 65, enzyme: -8, gene: 32, exon: -69}
+
+print("m245-m2:", m245_m2["vector"], len(m245_m2), m245_m2.has("vector"))
+
+let m245_m3 = {codon: 26, gene: -5, splicer: -92, helix: -68, enzyme: 20}
+
+print("m245-m3:", m245_m3["codon"], len(m245_m3), m245_m3.has("codon"))
+
+let m245_k0 = {ribose: 40, vector: 49, gene: 34}
+
+let m245_ks0 = m245_k0.keys()
+
+let m245_sm0 = 0
+
+for k in m245_k0 { m245_sm0 += m245_k0[k] }
+
+print("m245-k0:", m245_sm0, m245_k0.keys().sort(), m245_k0.values().len())
+
+let m245_k1 = {exon: 39, splicer: 6, ribose: 1}
+
+let m245_ks1 = m245_k1.keys()
+
+let m245_sm1 = 0
+
+for k in m245_k1 { m245_sm1 += m245_k1[k] }
+
+print("m245-k1:", m245_sm1, m245_k1.keys().sort(), m245_k1.values().len())
+
+let m245_w0 = {outer: {plasmid: 3, codon: 7, tag: "ok"}}}
+
+print("m245-w0:", m245_w0["outer"]["codon"], m245_w0["outer"]["tag"])
+
+let m245_w1 = {outer: {ligase: 1, exon: 7, tag: "ok"}}}
+
+print("m245-w1:", m245_w1["outer"]["exon"], m245_w1["outer"]["tag"])

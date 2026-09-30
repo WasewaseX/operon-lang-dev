@@ -1,0 +1,174 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=216 tag=f216
+
+gene f216_g0(p, q = 39, r = 33) {
+
+    return p * 96 + q - r
+
+}
+
+print("f216-d0:", f216_g0(38), f216_g0(38, 6), f216_g0(38, 39, 33))
+
+gene f216_g1(p, q = 6, r = 44) {
+
+    return p * 6 + q - r
+
+}
+
+print("f216-d1:", f216_g1(-15), f216_g1(-15, 42), f216_g1(-15, 6, 44))
+
+gene f216_g2(p, q = 99, r = 59) {
+
+    return p * 5 + q - r
+
+}
+
+print("f216-d2:", f216_g2(-5), f216_g2(-5, 78), f216_g2(-5, 99, 59))
+
+gene f216_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f216_fib0(n - 1) + f216_fib0(n - 2)
+
+}
+
+print("f216-fib0:", f216_fib0(11))
+
+gene f216_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f216_fib1(n - 1) + f216_fib1(n - 2)
+
+}
+
+print("f216-fib1:", f216_fib1(7))
+
+gene f216_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f216_gcd0(b, a % b)
+
+}
+
+print("f216-gcd0:", f216_gcd0(44, 352))
+
+gene f216_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f216_gcd1(b, a % b)
+
+}
+
+print("f216-gcd1:", f216_gcd1(733, 728))
+
+gene f216_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f216_c0 = f216_mk0(20)
+
+f216_c0(9)
+
+print("f216-cl0:", f216_c0(3))
+
+gene f216_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f216_c1 = f216_mk1(23)
+
+f216_c1(1)
+
+print("f216-cl1:", f216_c1(1))
+
+gene f216_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f216-hof0:", f216_tw0(gene (z) => z * 2 + 1, 29))
+
+gene f216_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f216-hof1:", f216_tw1(gene (z) => z * 2 + 1, 7))
+
+gene f216_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f216-dg0:", f216_sd0(716885))
+
+gene f216_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f216-dg1:", f216_sd1(441605))

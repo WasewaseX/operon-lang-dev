@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=248 tag=c248
+
+print("c248-c0:", 9525 <= 82)
+
+print("c248-c1:", 1248 < -8147)
+
+print("c248-c2:", 8981 <= -1925)
+
+print("c248-c3:", -4598 <= 3882)
+
+print("c248-c4:", -7593 != 3184)
+
+print("c248-c5:", 2200 != 3516)
+
+print("c248-c6:", -9666 >= 4934)
+
+print("c248-b0:", 26 < 14 && 14 < 10, 26 > 14 || 26 > 10)
+
+print("c248-b1:", 33 < 33 && 33 < 0, 33 > 33 || 33 > 0)
+
+print("c248-b2:", 16 < 37 && 37 < 29, 16 > 37 || 16 > 29)
+
+print("c248-b3:", 40 < 22 && 22 < 5, 40 > 22 || 40 > 5)
+
+print("c248-t0:", 4349 > -5398 ? "gt" : "le")
+
+print("c248-t1:", 7743 > -7560 ? "gt" : "le")
+
+let c248_n0 = null
+
+print("c248-n0:", c248_n0 ?? 1316, c248_n0 == null)
+
+let c248_n1 = null
+
+print("c248-n1:", c248_n1 ?? 5539, c248_n1 == null)
+
+let c248_n2 = null
+
+print("c248-n2:", c248_n2 ?? 8205, c248_n2 == null)
+
+print("c248-s0:", "laAj" in "fokhfmlaAj", "laAj" == "laAj")
+
+print("c248-s1:", "dmez" in "snb_ppdmez", "dmez" == "dmez")

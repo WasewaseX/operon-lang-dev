@@ -1,0 +1,36 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=157 tag=c157
+
+print("c157-c0:", 8828 > 4147)
+
+print("c157-c1:", 4086 < 6721)
+
+print("c157-c2:", 684 <= 4862)
+
+print("c157-c3:", 1232 >= -864)
+
+print("c157-c4:", -8215 < -3194)
+
+print("c157-b0:", 6 < 8 && 8 < 48, 6 > 8 || 6 > 48)
+
+print("c157-b1:", 27 < 44 && 44 < 35, 27 > 44 || 27 > 35)
+
+print("c157-b2:", 11 < 47 && 47 < 5, 11 > 47 || 11 > 5)
+
+print("c157-t0:", -5876 > -4438 ? "gt" : "le")
+
+print("c157-t1:", 7235 > 1008 ? "gt" : "le")
+
+print("c157-t2:", 1121 > -1272 ? "gt" : "le")
+
+let c157_n0 = null
+
+print("c157-n0:", c157_n0 ?? -8518, c157_n0 == null)
+
+let c157_n1 = null
+
+print("c157-n1:", c157_n1 ?? -9917, c157_n1 == null)
+
+print("c157-s0:", "v_gp" in "dkvrAdv_gp", "v_gp" == "v_gp")
+
+print("c157-s1:", "uabz" in "v4B7ufuabz", "uabz" == "uabz")

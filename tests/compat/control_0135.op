@@ -1,0 +1,156 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=135 tag=c135
+
+let c135_b0 = "start"
+
+if 105 > 80 { c135_b0 = "hi" } elif 105 > 40 { c135_b0 = "mid" } else { c135_b0 = "lo" }
+
+print("c135-i0:", c135_b0, 105)
+
+let c135_b1 = "start"
+
+if 90 > 80 { c135_b1 = "hi" } elif 90 > 40 { c135_b1 = "mid" } else { c135_b1 = "lo" }
+
+print("c135-i1:", c135_b1, 90)
+
+let c135_b2 = "start"
+
+if 66 > 80 { c135_b2 = "hi" } elif 66 > 40 { c135_b2 = "mid" } else { c135_b2 = "lo" }
+
+print("c135-i2:", c135_b2, 66)
+
+let c135_a0 = 0
+
+let c135_n0 = 0
+
+while c135_n0 < 7 {
+
+    c135_n0 += 3
+
+    if c135_n0 % 3 == 0 { continue }
+
+    if c135_n0 > 11 { break }
+
+    c135_a0 += c135_n0
+
+}
+
+print("c135-w0:", c135_a0, c135_n0)
+
+let c135_a1 = 0
+
+let c135_n1 = 0
+
+while c135_n1 < 10 {
+
+    c135_n1 += 4
+
+    if c135_n1 % 2 == 0 { continue }
+
+    if c135_n1 > 12 { break }
+
+    c135_a1 += c135_n1
+
+}
+
+print("c135-w1:", c135_a1, c135_n1)
+
+let c135_a2 = 0
+
+let c135_n2 = 0
+
+while c135_n2 < 5 {
+
+    c135_n2 += 3
+
+    if c135_n2 % 3 == 0 { continue }
+
+    if c135_n2 > 12 { break }
+
+    c135_a2 += c135_n2
+
+}
+
+print("c135-w2:", c135_a2, c135_n2)
+
+let c135_a3 = 0
+
+let c135_n3 = 0
+
+while c135_n3 < 11 {
+
+    c135_n3 += 1
+
+    if c135_n3 % 2 == 0 { continue }
+
+    if c135_n3 > 19 { break }
+
+    c135_a3 += c135_n3
+
+}
+
+print("c135-w3:", c135_a3, c135_n3)
+
+let c135_c0 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 2] {
+
+        c135_c0 += a * b
+
+    }
+
+}
+
+print("c135-l0:", c135_c0)
+
+let c135_c1 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 3] {
+
+        c135_c1 += a * b
+
+    }
+
+}
+
+print("c135-l1:", c135_c1)
+
+let c135_acc0 = ""
+
+loop {
+
+    c135_acc0 += "x"
+
+    if c135_acc0.len() >= 3 { break }
+
+}
+
+print("c135-o0:", c135_acc0)
+
+let c135_acc1 = ""
+
+loop {
+
+    c135_acc1 += "x"
+
+    if c135_acc1.len() >= 5 { break }
+
+}
+
+print("c135-o1:", c135_acc1)
+
+let c135_acc2 = ""
+
+loop {
+
+    c135_acc2 += "x"
+
+    if c135_acc2.len() >= 4 { break }
+
+}
+
+print("c135-o2:", c135_acc2)

@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=251 tag=c251
+
+print("c251-c0:", 2119 <= 6677)
+
+print("c251-c1:", -6717 > -2925)
+
+print("c251-c2:", -9805 > 2183)
+
+print("c251-c3:", 7603 != -3467)
+
+print("c251-c4:", -711 < -1148)
+
+print("c251-c5:", 2721 == 7407)
+
+print("c251-c6:", 8828 > -3474)
+
+print("c251-b0:", 42 < 24 && 24 < 44, 42 > 24 || 42 > 44)
+
+print("c251-b1:", 4 < 18 && 18 < 3, 4 > 18 || 4 > 3)
+
+print("c251-b2:", 2 < 39 && 39 < 23, 2 > 39 || 2 > 23)
+
+print("c251-b3:", 33 < 1 && 1 < 2, 33 > 1 || 33 > 2)
+
+print("c251-t0:", -3327 > -792 ? "gt" : "le")
+
+print("c251-t1:", 9942 > 5553 ? "gt" : "le")
+
+print("c251-t2:", -8400 > 7606 ? "gt" : "le")
+
+print("c251-t3:", -9292 > -2006 ? "gt" : "le")
+
+let c251_n0 = null
+
+print("c251-n0:", c251_n0 ?? -5376, c251_n0 == null)
+
+let c251_n1 = null
+
+print("c251-n1:", c251_n1 ?? -6661, c251_n1 == null)
+
+let c251_n2 = null
+
+print("c251-n2:", c251_n2 ?? -4110, c251_n2 == null)
+
+print("c251-s0:", "ce1m" in "AA_19uce1m", "ce1m" == "ce1m")
+
+print("c251-s1:", "xz8t" in "1i0Cjsxz8t", "xz8t" == "xz8t")

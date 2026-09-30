@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=233 tag=m233
+
+let m233_m0 = {vector: -44, gene: -81, ribose: -99, marker: 85}
+
+print("m233-m0:", m233_m0["vector"], len(m233_m0), m233_m0.has("vector"))
+
+let m233_m1 = {exon: -58, helix: -55, vector: 30}
+
+print("m233-m1:", m233_m1["exon"], len(m233_m1), m233_m1.has("exon"))
+
+let m233_m2 = {cell: 61, gene: 44, enzyme: 5, marker: -23}
+
+print("m233-m2:", m233_m2["cell"], len(m233_m2), m233_m2.has("cell"))
+
+let m233_m3 = {splicer: 51, enzyme: 97, codon: 1, gene: 58, vector: -6}
+
+print("m233-m3:", m233_m3["splicer"], len(m233_m3), m233_m3.has("splicer"))
+
+let m233_k0 = {cell: 35, codon: 39, plasmid: 46}
+
+let m233_ks0 = m233_k0.keys()
+
+let m233_sm0 = 0
+
+for k in m233_k0 { m233_sm0 += m233_k0[k] }
+
+print("m233-k0:", m233_sm0, m233_k0.keys().sort(), m233_k0.values().len())
+
+let m233_k1 = {plasmid: 42, exon: 17, vector: 48}
+
+let m233_ks1 = m233_k1.keys()
+
+let m233_sm1 = 0
+
+for k in m233_k1 { m233_sm1 += m233_k1[k] }
+
+print("m233-k1:", m233_sm1, m233_k1.keys().sort(), m233_k1.values().len())
+
+let m233_k2 = {vector: 26, gene: 1, codon: 13}
+
+let m233_ks2 = m233_k2.keys()
+
+let m233_sm2 = 0
+
+for k in m233_k2 { m233_sm2 += m233_k2[k] }
+
+print("m233-k2:", m233_sm2, m233_k2.keys().sort(), m233_k2.values().len())
+
+let m233_w0 = {outer: {splicer: 5, codon: 1, tag: "ok"}}}
+
+print("m233-w0:", m233_w0["outer"]["codon"], m233_w0["outer"]["tag"])
+
+let m233_w1 = {outer: {enzyme: 6, splicer: 6, tag: "ok"}}}
+
+print("m233-w1:", m233_w1["outer"]["splicer"], m233_w1["outer"]["tag"])

@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=162 tag=s162
+
+print("s162-m0:", "5hjwnitdaie".upper(), "5hjwnitdaie".slice(3), "5hjwnitdaie".len())
+
+print("s162-m1:", "t49zBiar74".upper(), "t49zBiar74".slice(4), "t49zBiar74".len())
+
+print("s162-m2:", "wxqq_i".upper(), "wxqq_i".slice(1), "wxqq_i".len())
+
+print("s162-m3:", "By_c5zw4".upper(), "By_c5zw4".slice(3), "By_c5zw4".len())
+
+print("s162-i0:", "mdg-{38}-pp15")
+
+let s162_v0 = 38
+
+print("s162-v0:", "n={s162_v0}" + "!" * 3)
+
+print("s162-i1:", "g20-{50}-5zvB")
+
+let s162_v1 = 50
+
+print("s162-v1:", "n={s162_v1}" + "!" * 3)
+
+print("s162-i2:", "9zC-{42}-nmCx")
+
+let s162_v2 = 42
+
+print("s162-v2:", "n={s162_v2}" + "!" * 1)
+
+print("s162-r0:", "Cy0limgf".replace("C", "aB"), "Cy0limgf".contains("y0"))
+
+print("s162-r1:", "tpB7uore".replace("t", "nz"), "tpB7uore".contains("pB"))
+
+print("s162-j0:", ["1eh", "nkh", "c_0", "uzb", "2s7"].join("-"))
+
+print("s162-j1:", ["pbb", "m1j", "k2g", "opo"].join("-"))
+
+print("s162-j2:", ["n1_", "3n4", "uxq", "thn"].join("-"))
+
+print("s162-a0:", "1lp6sg8".at(0), "1lp6sg8".trim() == "1lp6sg8")
+
+print("s162-a1:", "A8cCu8f".at(3), "A8cCu8f".trim() == "A8cCu8f")
+
+print("s162-a2:", "qv0AAlv".at(6), "qv0AAlv".trim() == "qv0AAlv")

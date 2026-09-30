@@ -1,0 +1,310 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=264 tag=m264
+
+let m264_s0 = some(9)
+
+match m264_s0 {
+
+    case Some(x) if x > 9 {
+
+        print("m264-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m264-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m264-m0:", "none")
+
+    }
+
+}
+
+let m264_s1 = some(2)
+
+match m264_s1 {
+
+    case Some(x) if x > 2 {
+
+        print("m264-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m264-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m264-m1:", "none")
+
+    }
+
+}
+
+let m264_s2 = some(6)
+
+match m264_s2 {
+
+    case Some(x) if x > 6 {
+
+        print("m264-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m264-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m264-m2:", "none")
+
+    }
+
+}
+
+let m264_s3 = some(6)
+
+match m264_s3 {
+
+    case Some(x) if x > 6 {
+
+        print("m264-m3:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m264-m3:", "small", x)
+
+    }
+
+    case None {
+
+        print("m264-m3:", "none")
+
+    }
+
+}
+
+let m264_ls0 = [8, 17, 24]
+
+match m264_ls0 {
+
+    case [8, *rest] {
+
+        print("m264-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m264-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m264-l0:", "other")
+
+    }
+
+}
+
+let m264_ls1 = [26, 49, 43]
+
+match m264_ls1 {
+
+    case [26, *rest] {
+
+        print("m264-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m264-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m264-l1:", "other")
+
+    }
+
+}
+
+let m264_ls2 = [15, 3, 48]
+
+match m264_ls2 {
+
+    case [15, *rest] {
+
+        print("m264-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m264-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m264-l2:", "other")
+
+    }
+
+}
+
+let m264_mp0 = {ribose: -8905, vector: -5851}
+
+match m264_mp0 {
+
+    case {ribose: p, vector: q} {
+
+        print("m264-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m264-mp0:", "miss")
+
+    }
+
+}
+
+let m264_mp1 = {codon: -9770, enzyme: 8786}
+
+match m264_mp1 {
+
+    case {codon: p, enzyme: q} {
+
+        print("m264-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m264-mp1:", "miss")
+
+    }
+
+}
+
+let m264_mp2 = {enzyme: 9677, helix: 8186}
+
+match m264_mp2 {
+
+    case {enzyme: p, helix: q} {
+
+        print("m264-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m264-mp2:", "miss")
+
+    }
+
+}
+
+let m264_r0 = ok(5)
+
+match m264_r0 {
+
+    case Ok(n) | Err(5) {
+
+        print("m264-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m264-r0:", "zero")
+
+    }
+
+}
+
+let m264_r1 = ok(1)
+
+match m264_r1 {
+
+    case Ok(n) | Err(1) {
+
+        print("m264-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m264-r1:", "zero")
+
+    }
+
+}
+
+let m264_r2 = ok(5)
+
+match m264_r2 {
+
+    case Ok(n) | Err(5) {
+
+        print("m264-r2:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m264-r2:", "zero")
+
+    }
+
+}
+
+match "gene" {
+
+    case "gene" {
+
+        print("m264-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m264-w0:", "alt")
+
+    }
+
+}
+
+match "gene" {
+
+    case "gene" {
+
+        print("m264-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m264-w1:", "alt")
+
+    }
+
+}

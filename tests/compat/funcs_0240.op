@@ -1,0 +1,188 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=240 tag=f240
+
+gene f240_g0(p, q = 6, r = 86) {
+
+    return p * 78 + q - r
+
+}
+
+print("f240-d0:", f240_g0(13), f240_g0(13, 46), f240_g0(13, 6, 86))
+
+gene f240_g1(p, q = 64, r = 48) {
+
+    return p * 31 + q - r
+
+}
+
+print("f240-d1:", f240_g1(44), f240_g1(44, 1), f240_g1(44, 64, 48))
+
+gene f240_g2(p, q = 44, r = 99) {
+
+    return p * 10 + q - r
+
+}
+
+print("f240-d2:", f240_g2(18), f240_g2(18, 45), f240_g2(18, 44, 99))
+
+gene f240_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f240_fib0(n - 1) + f240_fib0(n - 2)
+
+}
+
+print("f240-fib0:", f240_fib0(7))
+
+gene f240_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f240_fib1(n - 1) + f240_fib1(n - 2)
+
+}
+
+print("f240-fib1:", f240_fib1(11))
+
+gene f240_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f240_gcd0(b, a % b)
+
+}
+
+print("f240-gcd0:", f240_gcd0(223, 532))
+
+gene f240_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f240_gcd1(b, a % b)
+
+}
+
+print("f240-gcd1:", f240_gcd1(388, 635))
+
+gene f240_gcd2(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f240_gcd2(b, a % b)
+
+}
+
+print("f240-gcd2:", f240_gcd2(909, 981))
+
+gene f240_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f240_c0 = f240_mk0(25)
+
+f240_c0(1)
+
+print("f240-cl0:", f240_c0(6))
+
+gene f240_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f240_c1 = f240_mk1(4)
+
+f240_c1(1)
+
+print("f240-cl1:", f240_c1(9))
+
+gene f240_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f240-hof0:", f240_tw0(gene (z) => z * 2 + 1, 8))
+
+gene f240_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f240-hof1:", f240_tw1(gene (z) => z * 2 + 1, 20))
+
+gene f240_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f240-dg0:", f240_sd0(995339))
+
+gene f240_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f240-dg1:", f240_sd1(531009))

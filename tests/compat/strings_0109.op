@@ -1,0 +1,58 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=109 tag=s109
+
+print("s109-m0:", "nuzhigltupa03".upper(), "nuzhigltupa03".slice(2), "nuzhigltupa03".len())
+
+print("s109-m1:", "_qz307pg".upper(), "_qz307pg".slice(3), "_qz307pg".len())
+
+print("s109-m2:", "tz8fxfr7r4jel".upper(), "tz8fxfr7r4jel".slice(4), "tz8fxfr7r4jel".len())
+
+print("s109-m3:", "k6fyAfj14fa".upper(), "k6fyAfj14fa".slice(3), "k6fyAfj14fa".len())
+
+print("s109-m4:", "8vfsdlme".upper(), "8vfsdlme".slice(1), "8vfsdlme".len())
+
+print("s109-m5:", "jekvrBru57dBw".upper(), "jekvrBru57dBw".slice(4), "jekvrBru57dBw".len())
+
+print("s109-i0:", "yq9-{40}-z4qa")
+
+let s109_v0 = 40
+
+print("s109-v0:", "n={s109_v0}" + "!" * 3)
+
+print("s109-i1:", "d3o-{82}-0eb1")
+
+let s109_v1 = 82
+
+print("s109-v1:", "n={s109_v1}" + "!" * 3)
+
+print("s109-i2:", "p0r-{80}-t8oo")
+
+let s109_v2 = 80
+
+print("s109-v2:", "n={s109_v2}" + "!" * 1)
+
+print("s109-i3:", "Cgd-{69}-6cd0")
+
+let s109_v3 = 69
+
+print("s109-v3:", "n={s109_v3}" + "!" * 2)
+
+print("s109-i4:", "5m9-{14}-zmkg")
+
+let s109_v4 = 14
+
+print("s109-v4:", "n={s109_v4}" + "!" * 3)
+
+print("s109-r0:", "en2ya4f7".replace("e", "jk"), "en2ya4f7".contains("n2"))
+
+print("s109-r1:", "j7tra7qd".replace("j", "0y"), "j7tra7qd".contains("7t"))
+
+print("s109-j0:", ["37h", "hcq", "7o2", "oh3", "frl"].join("-"))
+
+print("s109-j1:", ["on0", "27w", "j0k", "ux0"].join("-"))
+
+print("s109-j2:", ["mwu", "3Bk", "c0n"].join("-"))
+
+print("s109-a0:", "6BofvCb".at(3), "6BofvCb".trim() == "6BofvCb")
+
+print("s109-a1:", "cdsAwjw".at(3), "cdsAwjw".trim() == "cdsAwjw")

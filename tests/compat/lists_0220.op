@@ -1,0 +1,62 @@
+# compat corpus — generated, do not edit by hand
+# bucket=lists seed=20261030 idx=220 tag=l220
+
+let l220_l0 = [16, 0, 26, 24, -20]
+
+print("l220-l0:", l220_l0[1], l220_l0[-1], l220_l0.len())
+
+let l220_l1 = [13, -33, 35, 19]
+
+print("l220-l1:", l220_l1[3], l220_l1[-1], l220_l1.len())
+
+let l220_l2 = [18, -37, -20, -30]
+
+print("l220-l2:", l220_l2[3], l220_l2[-1], l220_l2.len())
+
+let l220_l3 = [35, 40, 26, 14, -23]
+
+print("l220-l3:", l220_l3[3], l220_l3[-1], l220_l3.len())
+
+let l220_s0 = [24, -41, 87, -86, 45, 99, 14, -60, -80]
+
+print("l220-s0:", l220_s0.slice(5, 7), l220_s0.slice(-2))
+
+let l220_s1 = [-12, -97, -61, -21, -44, 62]
+
+print("l220-s1:", l220_s1.slice(2, 3), l220_s1.slice(-1))
+
+let l220_s2 = [-67, -62, 98, 46, 76, 48]
+
+print("l220-s2:", l220_s2.slice(2, 3), l220_s2.slice(-2))
+
+let l220_r0 = [462, 34, 158, 783, 598, 932, 956]
+
+print("l220-r0:", l220_r0.sort(), l220_r0.reverse(), l220_r0.contains(956))
+
+let l220_r1 = [339, 857, 511, 983, 697, 463]
+
+print("l220-r1:", l220_r1.sort(), l220_r1.reverse(), l220_r1.contains(511))
+
+let l220_r2 = [288, 87, 579, 667]
+
+print("l220-r2:", l220_r2.sort(), l220_r2.reverse(), l220_r2.contains(579))
+
+let l220_t0 = 0
+
+for v in [6, 20, 5, 29, 32] { l220_t0 += v }
+
+print("l220-t0:", l220_t0)
+
+let l220_t1 = 0
+
+for v in [10, 7, 7] { l220_t1 += v }
+
+print("l220-t1:", l220_t1)
+
+let l220_n0 = [[4, 7, 4], [4, 7, 4], 77]
+
+print("l220-n0:", l220_n0[0][2], l220_n0[2])
+
+let l220_n1 = [[6, 7, 5], [6, 7, 5], 77]
+
+print("l220-n1:", l220_n1[0][0], l220_n1[2])

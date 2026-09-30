@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=234 tag=c234
+
+print("c234-c0:", -8101 < -3113)
+
+print("c234-c1:", 1749 < 5206)
+
+print("c234-c2:", -8516 <= 6973)
+
+print("c234-c3:", 5477 != 6761)
+
+print("c234-c4:", -6503 >= 4809)
+
+print("c234-c5:", -9891 < -1019)
+
+print("c234-b0:", 34 < 37 && 37 < 18, 34 > 37 || 34 > 18)
+
+print("c234-b1:", 3 < 5 && 5 < 35, 3 > 5 || 3 > 35)
+
+print("c234-b2:", 38 < 20 && 20 < 4, 38 > 20 || 38 > 4)
+
+print("c234-t0:", 8319 > 4274 ? "gt" : "le")
+
+print("c234-t1:", -7908 > -8198 ? "gt" : "le")
+
+print("c234-t2:", 9053 > 3203 ? "gt" : "le")
+
+print("c234-t3:", 3605 > 5943 ? "gt" : "le")
+
+let c234_n0 = null
+
+print("c234-n0:", c234_n0 ?? 8439, c234_n0 == null)
+
+let c234_n1 = null
+
+print("c234-n1:", c234_n1 ?? 8481, c234_n1 == null)
+
+let c234_n2 = null
+
+print("c234-n2:", c234_n2 ?? -7532, c234_n2 == null)
+
+print("c234-s0:", "hs0h" in "p86tu5hs0h", "hs0h" == "hs0h")
+
+print("c234-s1:", "waoC" in "fB5dn4waoC", "waoC" == "waoC")

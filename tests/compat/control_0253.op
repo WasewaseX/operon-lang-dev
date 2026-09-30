@@ -1,0 +1,150 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=253 tag=c253
+
+let c253_b0 = "start"
+
+if 37 > 80 { c253_b0 = "hi" } elif 37 > 40 { c253_b0 = "mid" } else { c253_b0 = "lo" }
+
+print("c253-i0:", c253_b0, 37)
+
+let c253_b1 = "start"
+
+if 70 > 80 { c253_b1 = "hi" } elif 70 > 40 { c253_b1 = "mid" } else { c253_b1 = "lo" }
+
+print("c253-i1:", c253_b1, 70)
+
+let c253_b2 = "start"
+
+if -7 > 80 { c253_b2 = "hi" } elif -7 > 40 { c253_b2 = "mid" } else { c253_b2 = "lo" }
+
+print("c253-i2:", c253_b2, -7)
+
+let c253_b3 = "start"
+
+if 29 > 80 { c253_b3 = "hi" } elif 29 > 40 { c253_b3 = "mid" } else { c253_b3 = "lo" }
+
+print("c253-i3:", c253_b3, 29)
+
+let c253_a0 = 0
+
+let c253_n0 = 0
+
+while c253_n0 < 5 {
+
+    c253_n0 += 1
+
+    if c253_n0 % 3 == 0 { continue }
+
+    if c253_n0 > 10 { break }
+
+    c253_a0 += c253_n0
+
+}
+
+print("c253-w0:", c253_a0, c253_n0)
+
+let c253_a1 = 0
+
+let c253_n1 = 0
+
+while c253_n1 < 7 {
+
+    c253_n1 += 1
+
+    if c253_n1 % 2 == 0 { continue }
+
+    if c253_n1 > 12 { break }
+
+    c253_a1 += c253_n1
+
+}
+
+print("c253-w1:", c253_a1, c253_n1)
+
+let c253_a2 = 0
+
+let c253_n2 = 0
+
+while c253_n2 < 8 {
+
+    c253_n2 += 4
+
+    if c253_n2 % 3 == 0 { continue }
+
+    if c253_n2 > 15 { break }
+
+    c253_a2 += c253_n2
+
+}
+
+print("c253-w2:", c253_a2, c253_n2)
+
+let c253_a3 = 0
+
+let c253_n3 = 0
+
+while c253_n3 < 15 {
+
+    c253_n3 += 3
+
+    if c253_n3 % 2 == 0 { continue }
+
+    if c253_n3 > 18 { break }
+
+    c253_a3 += c253_n3
+
+}
+
+print("c253-w3:", c253_a3, c253_n3)
+
+let c253_c0 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 4] {
+
+        c253_c0 += a * b
+
+    }
+
+}
+
+print("c253-l0:", c253_c0)
+
+let c253_c1 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 4] {
+
+        c253_c1 += a * b
+
+    }
+
+}
+
+print("c253-l1:", c253_c1)
+
+let c253_acc0 = ""
+
+loop {
+
+    c253_acc0 += "x"
+
+    if c253_acc0.len() >= 3 { break }
+
+}
+
+print("c253-o0:", c253_acc0)
+
+let c253_acc1 = ""
+
+loop {
+
+    c253_acc1 += "x"
+
+    if c253_acc1.len() >= 4 { break }
+
+}
+
+print("c253-o1:", c253_acc1)

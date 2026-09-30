@@ -1,0 +1,152 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=124 tag=c124
+
+let c124_b0 = "start"
+
+if 76 > 80 { c124_b0 = "hi" } elif 76 > 40 { c124_b0 = "mid" } else { c124_b0 = "lo" }
+
+print("c124-i0:", c124_b0, 76)
+
+let c124_b1 = "start"
+
+if -14 > 80 { c124_b1 = "hi" } elif -14 > 40 { c124_b1 = "mid" } else { c124_b1 = "lo" }
+
+print("c124-i1:", c124_b1, -14)
+
+let c124_b2 = "start"
+
+if 52 > 80 { c124_b2 = "hi" } elif 52 > 40 { c124_b2 = "mid" } else { c124_b2 = "lo" }
+
+print("c124-i2:", c124_b2, 52)
+
+let c124_a0 = 0
+
+let c124_n0 = 0
+
+while c124_n0 < 14 {
+
+    c124_n0 += 4
+
+    if c124_n0 % 3 == 0 { continue }
+
+    if c124_n0 > 16 { break }
+
+    c124_a0 += c124_n0
+
+}
+
+print("c124-w0:", c124_a0, c124_n0)
+
+let c124_a1 = 0
+
+let c124_n1 = 0
+
+while c124_n1 < 9 {
+
+    c124_n1 += 2
+
+    if c124_n1 % 3 == 0 { continue }
+
+    if c124_n1 > 13 { break }
+
+    c124_a1 += c124_n1
+
+}
+
+print("c124-w1:", c124_a1, c124_n1)
+
+let c124_a2 = 0
+
+let c124_n2 = 0
+
+while c124_n2 < 13 {
+
+    c124_n2 += 3
+
+    if c124_n2 % 2 == 0 { continue }
+
+    if c124_n2 > 20 { break }
+
+    c124_a2 += c124_n2
+
+}
+
+print("c124-w2:", c124_a2, c124_n2)
+
+let c124_c0 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 4] {
+
+        c124_c0 += a * b
+
+    }
+
+}
+
+print("c124-l0:", c124_c0)
+
+let c124_c1 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 4] {
+
+        c124_c1 += a * b
+
+    }
+
+}
+
+print("c124-l1:", c124_c1)
+
+let c124_c2 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 3] {
+
+        c124_c2 += a * b
+
+    }
+
+}
+
+print("c124-l2:", c124_c2)
+
+let c124_acc0 = ""
+
+loop {
+
+    c124_acc0 += "x"
+
+    if c124_acc0.len() >= 7 { break }
+
+}
+
+print("c124-o0:", c124_acc0)
+
+let c124_acc1 = ""
+
+loop {
+
+    c124_acc1 += "x"
+
+    if c124_acc1.len() >= 5 { break }
+
+}
+
+print("c124-o1:", c124_acc1)
+
+let c124_acc2 = ""
+
+loop {
+
+    c124_acc2 += "x"
+
+    if c124_acc2.len() >= 3 { break }
+
+}
+
+print("c124-o2:", c124_acc2)

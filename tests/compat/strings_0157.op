@@ -1,0 +1,58 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=157 tag=s157
+
+print("s157-m0:", "jd8Ahbqrzlyb".upper(), "jd8Ahbqrzlyb".slice(2), "jd8Ahbqrzlyb".len())
+
+print("s157-m1:", "v9Cltdde_i".upper(), "v9Cltdde_i".slice(4), "v9Cltdde_i".len())
+
+print("s157-m2:", "t39ggoAqmz3B".upper(), "t39ggoAqmz3B".slice(3), "t39ggoAqmz3B".len())
+
+print("s157-m3:", "h9dBi7".upper(), "h9dBi7".slice(2), "h9dBi7".len())
+
+print("s157-i0:", "p5x-{20}-jClB")
+
+let s157_v0 = 20
+
+print("s157-v0:", "n={s157_v0}" + "!" * 1)
+
+print("s157-i1:", "c2b-{21}-qj92")
+
+let s157_v1 = 21
+
+print("s157-v1:", "n={s157_v1}" + "!" * 1)
+
+print("s157-i2:", "g5h-{63}-yA0n")
+
+let s157_v2 = 63
+
+print("s157-v2:", "n={s157_v2}" + "!" * 3)
+
+print("s157-i3:", "etv-{78}-3o8j")
+
+let s157_v3 = 78
+
+print("s157-v3:", "n={s157_v3}" + "!" * 3)
+
+print("s157-i4:", "qbf-{44}-uBlc")
+
+let s157_v4 = 44
+
+print("s157-v4:", "n={s157_v4}" + "!" * 3)
+
+print("s157-r0:", "dnx6o4lz".replace("d", "v4"), "dnx6o4lz".contains("nx"))
+
+print("s157-r1:", "rzjgxcf4".replace("r", "vs"), "rzjgxcf4".contains("zj"))
+
+print("s157-r2:", "dwgheiqm".replace("d", "ut"), "dwgheiqm".contains("wg"))
+
+print("s157-r3:", "rgetenul".replace("r", "_8"), "rgetenul".contains("ge"))
+
+print("s157-j0:", ["r4u", "3mC", "c7C", "ed5", "to8"].join("-"))
+
+print("s157-j1:", ["fwk", "c8r", "693"].join("-"))
+
+print("s157-a0:", "pCikjuf".at(2), "pCikjuf".trim() == "pCikjuf")
+
+print("s157-a1:", "z2i9was".at(3), "z2i9was".trim() == "z2i9was")
+
+print("s157-a2:", "opmqraB".at(2), "opmqraB".trim() == "opmqraB")

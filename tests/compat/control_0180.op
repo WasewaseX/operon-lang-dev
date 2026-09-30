@@ -1,0 +1,162 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=180 tag=c180
+
+let c180_b0 = "start"
+
+if 97 > 80 { c180_b0 = "hi" } elif 97 > 40 { c180_b0 = "mid" } else { c180_b0 = "lo" }
+
+print("c180-i0:", c180_b0, 97)
+
+let c180_b1 = "start"
+
+if 34 > 80 { c180_b1 = "hi" } elif 34 > 40 { c180_b1 = "mid" } else { c180_b1 = "lo" }
+
+print("c180-i1:", c180_b1, 34)
+
+let c180_b2 = "start"
+
+if 103 > 80 { c180_b2 = "hi" } elif 103 > 40 { c180_b2 = "mid" } else { c180_b2 = "lo" }
+
+print("c180-i2:", c180_b2, 103)
+
+let c180_b3 = "start"
+
+if 53 > 80 { c180_b3 = "hi" } elif 53 > 40 { c180_b3 = "mid" } else { c180_b3 = "lo" }
+
+print("c180-i3:", c180_b3, 53)
+
+let c180_a0 = 0
+
+let c180_n0 = 0
+
+while c180_n0 < 20 {
+
+    c180_n0 += 3
+
+    if c180_n0 % 3 == 0 { continue }
+
+    if c180_n0 > 26 { break }
+
+    c180_a0 += c180_n0
+
+}
+
+print("c180-w0:", c180_a0, c180_n0)
+
+let c180_a1 = 0
+
+let c180_n1 = 0
+
+while c180_n1 < 11 {
+
+    c180_n1 += 1
+
+    if c180_n1 % 2 == 0 { continue }
+
+    if c180_n1 > 20 { break }
+
+    c180_a1 += c180_n1
+
+}
+
+print("c180-w1:", c180_a1, c180_n1)
+
+let c180_a2 = 0
+
+let c180_n2 = 0
+
+while c180_n2 < 6 {
+
+    c180_n2 += 1
+
+    if c180_n2 % 2 == 0 { continue }
+
+    if c180_n2 > 10 { break }
+
+    c180_a2 += c180_n2
+
+}
+
+print("c180-w2:", c180_a2, c180_n2)
+
+let c180_a3 = 0
+
+let c180_n3 = 0
+
+while c180_n3 < 16 {
+
+    c180_n3 += 4
+
+    if c180_n3 % 2 == 0 { continue }
+
+    if c180_n3 > 25 { break }
+
+    c180_a3 += c180_n3
+
+}
+
+print("c180-w3:", c180_a3, c180_n3)
+
+let c180_c0 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 3] {
+
+        c180_c0 += a * b
+
+    }
+
+}
+
+print("c180-l0:", c180_c0)
+
+let c180_c1 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 3] {
+
+        c180_c1 += a * b
+
+    }
+
+}
+
+print("c180-l1:", c180_c1)
+
+let c180_acc0 = ""
+
+loop {
+
+    c180_acc0 += "x"
+
+    if c180_acc0.len() >= 4 { break }
+
+}
+
+print("c180-o0:", c180_acc0)
+
+let c180_acc1 = ""
+
+loop {
+
+    c180_acc1 += "x"
+
+    if c180_acc1.len() >= 7 { break }
+
+}
+
+print("c180-o1:", c180_acc1)
+
+let c180_acc2 = ""
+
+loop {
+
+    c180_acc2 += "x"
+
+    if c180_acc2.len() >= 6 { break }
+
+}
+
+print("c180-o2:", c180_acc2)

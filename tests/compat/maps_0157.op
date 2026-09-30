@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=157 tag=m157
+
+let m157_m0 = {ligase: -15, vector: 91, codon: 8, marker: 33}
+
+print("m157-m0:", m157_m0["ligase"], len(m157_m0), m157_m0.has("ligase"))
+
+let m157_m1 = {ligase: -71, helix: 16, plasmid: 93}
+
+print("m157-m1:", m157_m1["ligase"], len(m157_m1), m157_m1.has("ligase"))
+
+let m157_m2 = {splicer: -73, enzyme: 74, helix: -8, cell: -69}
+
+print("m157-m2:", m157_m2["splicer"], len(m157_m2), m157_m2.has("splicer"))
+
+let m157_m3 = {ribose: -14, vector: -76, enzyme: 20, gene: -71, marker: 8}
+
+print("m157-m3:", m157_m3["ribose"], len(m157_m3), m157_m3.has("ribose"))
+
+let m157_k0 = {exon: 29, helix: 17, gene: 9}
+
+let m157_ks0 = m157_k0.keys()
+
+let m157_sm0 = 0
+
+for k in m157_k0 { m157_sm0 += m157_k0[k] }
+
+print("m157-k0:", m157_sm0, m157_k0.keys().sort(), m157_k0.values().len())
+
+let m157_k1 = {marker: 14, splicer: 46, cell: 44}
+
+let m157_ks1 = m157_k1.keys()
+
+let m157_sm1 = 0
+
+for k in m157_k1 { m157_sm1 += m157_k1[k] }
+
+print("m157-k1:", m157_sm1, m157_k1.keys().sort(), m157_k1.values().len())
+
+let m157_k2 = {vector: 24, enzyme: 12, gene: 32}
+
+let m157_ks2 = m157_k2.keys()
+
+let m157_sm2 = 0
+
+for k in m157_k2 { m157_sm2 += m157_k2[k] }
+
+print("m157-k2:", m157_sm2, m157_k2.keys().sort(), m157_k2.values().len())
+
+let m157_w0 = {outer: {gene: 4, cell: 2, tag: "ok"}}}
+
+print("m157-w0:", m157_w0["outer"]["cell"], m157_w0["outer"]["tag"])
+
+let m157_w1 = {outer: {cell: 7, helix: 2, tag: "ok"}}}
+
+print("m157-w1:", m157_w1["outer"]["helix"], m157_w1["outer"]["tag"])

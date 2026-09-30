@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=138 tag=m138
+
+let m138_m0 = {enzyme: -34, cell: 92, marker: -99, vector: 18}
+
+print("m138-m0:", m138_m0["enzyme"], len(m138_m0), m138_m0.has("enzyme"))
+
+let m138_m1 = {exon: -10, codon: 15, enzyme: 63, gene: -10}
+
+print("m138-m1:", m138_m1["exon"], len(m138_m1), m138_m1.has("exon"))
+
+let m138_m2 = {splicer: -66, marker: -24, gene: -80}
+
+print("m138-m2:", m138_m2["splicer"], len(m138_m2), m138_m2.has("splicer"))
+
+let m138_m3 = {gene: -62, splicer: -10, cell: -23, ribose: 11, helix: 6}
+
+print("m138-m3:", m138_m3["gene"], len(m138_m3), m138_m3.has("gene"))
+
+let m138_k0 = {cell: 17, ribose: 32, marker: 4}
+
+let m138_ks0 = m138_k0.keys()
+
+let m138_sm0 = 0
+
+for k in m138_k0 { m138_sm0 += m138_k0[k] }
+
+print("m138-k0:", m138_sm0, m138_k0.keys().sort(), m138_k0.values().len())
+
+let m138_k1 = {plasmid: 22, vector: 28, codon: 45}
+
+let m138_ks1 = m138_k1.keys()
+
+let m138_sm1 = 0
+
+for k in m138_k1 { m138_sm1 += m138_k1[k] }
+
+print("m138-k1:", m138_sm1, m138_k1.keys().sort(), m138_k1.values().len())
+
+let m138_w0 = {outer: {enzyme: 6, cell: 8, tag: "ok"}}}
+
+print("m138-w0:", m138_w0["outer"]["cell"], m138_w0["outer"]["tag"])
+
+let m138_w1 = {outer: {vector: 4, ribose: 3, tag: "ok"}}}
+
+print("m138-w1:", m138_w1["outer"]["ribose"], m138_w1["outer"]["tag"])

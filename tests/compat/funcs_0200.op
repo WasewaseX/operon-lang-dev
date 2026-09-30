@@ -1,0 +1,194 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=200 tag=f200
+
+gene f200_g0(p, q = 86, r = 85) {
+
+    return p * 22 + q - r
+
+}
+
+print("f200-d0:", f200_g0(-5), f200_g0(-5, 63), f200_g0(-5, 86, 85))
+
+gene f200_g1(p, q = 47, r = 81) {
+
+    return p * 74 + q - r
+
+}
+
+print("f200-d1:", f200_g1(42), f200_g1(42, 20), f200_g1(42, 47, 81))
+
+gene f200_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f200_fib0(n - 1) + f200_fib0(n - 2)
+
+}
+
+print("f200-fib0:", f200_fib0(10))
+
+gene f200_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f200_fib1(n - 1) + f200_fib1(n - 2)
+
+}
+
+print("f200-fib1:", f200_fib1(7))
+
+gene f200_fib2(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f200_fib2(n - 1) + f200_fib2(n - 2)
+
+}
+
+print("f200-fib2:", f200_fib2(12))
+
+gene f200_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f200_gcd0(b, a % b)
+
+}
+
+print("f200-gcd0:", f200_gcd0(270, 989))
+
+gene f200_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f200_gcd1(b, a % b)
+
+}
+
+print("f200-gcd1:", f200_gcd1(184, 847))
+
+gene f200_gcd2(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f200_gcd2(b, a % b)
+
+}
+
+print("f200-gcd2:", f200_gcd2(430, 45))
+
+gene f200_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f200_c0 = f200_mk0(5)
+
+f200_c0(6)
+
+print("f200-cl0:", f200_c0(1))
+
+gene f200_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f200_c1 = f200_mk1(26)
+
+f200_c1(3)
+
+print("f200-cl1:", f200_c1(5))
+
+gene f200_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f200-hof0:", f200_tw0(gene (z) => z * 2 + 1, 26))
+
+gene f200_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f200-hof1:", f200_tw1(gene (z) => z * 2 + 1, 6))
+
+gene f200_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f200-dg0:", f200_sd0(114625))
+
+gene f200_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f200-dg1:", f200_sd1(453290))

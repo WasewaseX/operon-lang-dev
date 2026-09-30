@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=136 tag=c136
+
+print("c136-c0:", -3508 == 5557)
+
+print("c136-c1:", -3173 < -2960)
+
+print("c136-c2:", -4509 > 1117)
+
+print("c136-c3:", -4143 < -4856)
+
+print("c136-c4:", 8867 == 5636)
+
+print("c136-c5:", -9794 < 3340)
+
+print("c136-c6:", 9364 == -3546)
+
+print("c136-b0:", 6 < 37 && 37 < 3, 6 > 37 || 6 > 3)
+
+print("c136-b1:", 46 < 35 && 35 < 12, 46 > 35 || 46 > 12)
+
+print("c136-b2:", 39 < 11 && 11 < 22, 39 > 11 || 39 > 22)
+
+print("c136-b3:", 12 < 12 && 12 < 23, 12 > 12 || 12 > 23)
+
+print("c136-t0:", -8502 > -4587 ? "gt" : "le")
+
+print("c136-t1:", 5735 > 5379 ? "gt" : "le")
+
+let c136_n0 = null
+
+print("c136-n0:", c136_n0 ?? -9024, c136_n0 == null)
+
+let c136_n1 = null
+
+print("c136-n1:", c136_n1 ?? -9276, c136_n1 == null)
+
+let c136_n2 = null
+
+print("c136-n2:", c136_n2 ?? 4855, c136_n2 == null)
+
+print("c136-s0:", "ggef" in "8af1t4ggef", "ggef" == "ggef")
+
+print("c136-s1:", "nA4m" in "ugc7afnA4m", "nA4m" == "nA4m")

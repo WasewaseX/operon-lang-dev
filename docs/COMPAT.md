@@ -31,11 +31,16 @@ every axis combination for every program in the corpus.** Not
 1. **Pinned corpus** (`tests/differential/`, `tests/`, `apps/`): hand-written
    feature pins, 217 programs. Every language feature lands together with
    its pin (this predates the reliability push and remains the rule).
-2. **Generated corpus** (`tests/compat/`, 1,200 programs, committed):
-   produced by `scripts/gen_corpus.py --seed 20260930 --count 1200` across
-   12 buckets — arith, cmplogic, strings, lists, maps, control, funcs,
-   matchpat, optres, stressfail, nums, mixed. Regenerate bit-identically
-   from the seed; the manifest records provenance.
+2. **Generated corpus** (`tests/compat/`, 3,204 programs, committed):
+   1,200 programs from `scripts/gen_corpus.py --seed 20260930 --count 1200`
+   plus a 2,004-program extension wave from `--seed 20261030 --start 1200
+   --count 2004` (per-bucket numbering continues at idx 0100; 267 programs
+   per bucket across the same 12 buckets: arith, cmplogic, strings, lists,
+   maps, control, funcs, matchpat, optres, stressfail, nums, mixed). Each
+   wave regenerates bit-identically from its seed (re-verified at the
+   scale-up); every program's header carries bucket/seed/idx, and
+   `scripts/gen_corpus.py --manifest-scan --out tests/compat` rebuilds
+   MANIFEST.json from the committed file set.
 3. **Fresh corpus** (`tests/compat_fresh/`, not committed): 800 new
    randomized programs generated per run from a rolling daily seed
    (`GEN=1 scripts/compat_matrix.sh`). Yesterday's fresh corpus is today's
@@ -58,8 +63,9 @@ where deliberately wrapped in `stress/rescue` with fixed probes.
 | redteam | `bash scripts/redteam.sh` | 100 adversarial payloads contained, 0 breached |
 
 The differential harness itself runs two lanes (VM-by-default and
-tree-walk) against the same oracle — 2,232 programs each as of this
-document. Full sweep, all gates, ~15 minutes on a laptop. The CI workflow
+tree-walk) against the same oracle: 4,236 programs each as of this
+document (the corpus scale-up added 2,004 to every walking gate). Full
+sweep, all gates, ~15 minutes on a laptop. The CI workflow
 (`.github/workflows/compat.yml`) runs all of them across
 Linux/macOS/Windows, release/debug, and 32-bit/64-bit/ARM targets.
 
@@ -101,12 +107,18 @@ not by tuning:
 |---------|--------|-------|
 | `tests/redteam/rt_p4a_threadbomb.op`, `rt_p4b_threadbomb_join.op` | Containment is deterministic (rc=1, `[contained]`), but *which* cap trips first (task cap 4096 vs OS thread cap 256) is scheduler-dependent under a parallel sweep. Verified serially: identical output across all engines, 3 runs each. | redteam.sh owns the payload contract |
 
-The diagnostic channel (stderr notes) is byte-parity as of 2026-09-30:
-parser and lexer notes carry `file:line` and the offending token text in
-both engines (`tools::flush_notes` format). Known remaining gap: *runtime*
-interp notes carry a line in Rust but not yet in the oracle — unreachable
-by any current gate (no corpus program emits a runtime note), filed as
-oracle-parity backlog.
+The diagnostic channel (stderr notes) is byte-parity on the generated
+corpus: parser and lexer notes carry `file:line` and the offending token
+text in both engines (`tools::flush_notes` format), and the derived E2xxx
+note codes render identically: the W101 note-code catalog (14888da)
+initially landed Rust-only, and the compat matrix caught the divergence on
+the enlarged corpus (the maps/mixed buckets emit parse-repair notes on
+almost every program); the oracle now mirrors `diag::note_code`
+family-for-family. Known remaining gap: *runtime* interp notes carry a
+line in Rust but not yet in the oracle, unreachable by the generated
+corpus (no compat program emits a runtime note) and tolerated by the
+differential harness (stdout + exit code only), filed as oracle-parity
+backlog.
 
 ## 6. Fuzzer contract
 

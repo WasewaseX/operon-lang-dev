@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=190 tag=m190
+
+let m190_m0 = {plasmid: 58, ligase: -59, gene: -30, enzyme: -93, splicer: -19}
+
+print("m190-m0:", m190_m0["plasmid"], len(m190_m0), m190_m0.has("plasmid"))
+
+let m190_m1 = {exon: -92, splicer: 17, vector: -97}
+
+print("m190-m1:", m190_m1["exon"], len(m190_m1), m190_m1.has("exon"))
+
+let m190_m2 = {enzyme: 52, vector: -51, marker: 72, gene: 45, cell: -85}
+
+print("m190-m2:", m190_m2["enzyme"], len(m190_m2), m190_m2.has("enzyme"))
+
+let m190_m3 = {vector: -43, marker: -34, ligase: 64, plasmid: -50}
+
+print("m190-m3:", m190_m3["vector"], len(m190_m3), m190_m3.has("vector"))
+
+let m190_k0 = {ligase: 41, marker: 16, enzyme: 9}
+
+let m190_ks0 = m190_k0.keys()
+
+let m190_sm0 = 0
+
+for k in m190_k0 { m190_sm0 += m190_k0[k] }
+
+print("m190-k0:", m190_sm0, m190_k0.keys().sort(), m190_k0.values().len())
+
+let m190_k1 = {enzyme: 11, vector: 19, cell: 6}
+
+let m190_ks1 = m190_k1.keys()
+
+let m190_sm1 = 0
+
+for k in m190_k1 { m190_sm1 += m190_k1[k] }
+
+print("m190-k1:", m190_sm1, m190_k1.keys().sort(), m190_k1.values().len())
+
+let m190_w0 = {outer: {gene: 4, exon: 1, tag: "ok"}}}
+
+print("m190-w0:", m190_w0["outer"]["exon"], m190_w0["outer"]["tag"])
+
+let m190_w1 = {outer: {ribose: 5, codon: 2, tag: "ok"}}}
+
+print("m190-w1:", m190_w1["outer"]["codon"], m190_w1["outer"]["tag"])

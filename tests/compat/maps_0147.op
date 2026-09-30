@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=147 tag=m147
+
+let m147_m0 = {exon: -48, ribose: 61, enzyme: 59, gene: -75, vector: -52}
+
+print("m147-m0:", m147_m0["exon"], len(m147_m0), m147_m0.has("exon"))
+
+let m147_m1 = {plasmid: -77, helix: -93, codon: 99, ribose: -3}
+
+print("m147-m1:", m147_m1["plasmid"], len(m147_m1), m147_m1.has("plasmid"))
+
+let m147_m2 = {splicer: 14, cell: 51, vector: 31, ribose: -63}
+
+print("m147-m2:", m147_m2["splicer"], len(m147_m2), m147_m2.has("splicer"))
+
+let m147_m3 = {vector: -60, exon: -26, splicer: -16}
+
+print("m147-m3:", m147_m3["vector"], len(m147_m3), m147_m3.has("vector"))
+
+let m147_k0 = {exon: 9, codon: 27, helix: 35}
+
+let m147_ks0 = m147_k0.keys()
+
+let m147_sm0 = 0
+
+for k in m147_k0 { m147_sm0 += m147_k0[k] }
+
+print("m147-k0:", m147_sm0, m147_k0.keys().sort(), m147_k0.values().len())
+
+let m147_k1 = {gene: 32, ribose: 43, ligase: 42}
+
+let m147_ks1 = m147_k1.keys()
+
+let m147_sm1 = 0
+
+for k in m147_k1 { m147_sm1 += m147_k1[k] }
+
+print("m147-k1:", m147_sm1, m147_k1.keys().sort(), m147_k1.values().len())
+
+let m147_w0 = {outer: {marker: 1, ligase: 4, tag: "ok"}}}
+
+print("m147-w0:", m147_w0["outer"]["ligase"], m147_w0["outer"]["tag"])
+
+let m147_w1 = {outer: {ligase: 8, exon: 5, tag: "ok"}}}
+
+print("m147-w1:", m147_w1["outer"]["exon"], m147_w1["outer"]["tag"])

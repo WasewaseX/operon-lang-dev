@@ -1,0 +1,60 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=203 tag=m203
+
+let m203_m0 = {marker: -39, splicer: -61, helix: 10, gene: -92, exon: 93}
+
+print("m203-m0:", m203_m0["marker"], len(m203_m0), m203_m0.has("marker"))
+
+let m203_m1 = {plasmid: 91, ligase: 26, codon: -64}
+
+print("m203-m1:", m203_m1["plasmid"], len(m203_m1), m203_m1.has("plasmid"))
+
+let m203_m2 = {exon: 97, gene: 25, helix: -61, cell: -46, codon: -81}
+
+print("m203-m2:", m203_m2["exon"], len(m203_m2), m203_m2.has("exon"))
+
+let m203_m3 = {helix: -53, cell: 74, gene: 26}
+
+print("m203-m3:", m203_m3["helix"], len(m203_m3), m203_m3.has("helix"))
+
+let m203_m4 = {marker: -25, gene: -76, enzyme: 3, codon: -99, helix: 94}
+
+print("m203-m4:", m203_m4["marker"], len(m203_m4), m203_m4.has("marker"))
+
+let m203_k0 = {gene: 30, ribose: 44, exon: 34}
+
+let m203_ks0 = m203_k0.keys()
+
+let m203_sm0 = 0
+
+for k in m203_k0 { m203_sm0 += m203_k0[k] }
+
+print("m203-k0:", m203_sm0, m203_k0.keys().sort(), m203_k0.values().len())
+
+let m203_k1 = {splicer: 47, codon: 13, ligase: 24}
+
+let m203_ks1 = m203_k1.keys()
+
+let m203_sm1 = 0
+
+for k in m203_k1 { m203_sm1 += m203_k1[k] }
+
+print("m203-k1:", m203_sm1, m203_k1.keys().sort(), m203_k1.values().len())
+
+let m203_k2 = {marker: 46, exon: 34, gene: 15}
+
+let m203_ks2 = m203_k2.keys()
+
+let m203_sm2 = 0
+
+for k in m203_k2 { m203_sm2 += m203_k2[k] }
+
+print("m203-k2:", m203_sm2, m203_k2.keys().sort(), m203_k2.values().len())
+
+let m203_w0 = {outer: {gene: 6, splicer: 6, tag: "ok"}}}
+
+print("m203-w0:", m203_w0["outer"]["splicer"], m203_w0["outer"]["tag"])
+
+let m203_w1 = {outer: {helix: 3, ribose: 7, tag: "ok"}}}
+
+print("m203-w1:", m203_w1["outer"]["ribose"], m203_w1["outer"]["tag"])

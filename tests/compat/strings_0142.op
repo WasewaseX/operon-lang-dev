@@ -1,0 +1,58 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=142 tag=s142
+
+print("s142-m0:", "8ax8a2n868hgt".upper(), "8ax8a2n868hgt".slice(2), "8ax8a2n868hgt".len())
+
+print("s142-m1:", "7bjwqngymBu".upper(), "7bjwqngymBu".slice(1), "7bjwqngymBu".len())
+
+print("s142-m2:", "w1fdyc5i7fz".upper(), "w1fdyc5i7fz".slice(2), "w1fdyc5i7fz".len())
+
+print("s142-m3:", "246mut5sdqvd6n".upper(), "246mut5sdqvd6n".slice(4), "246mut5sdqvd6n".len())
+
+print("s142-i0:", "cb9-{53}-knku")
+
+let s142_v0 = 53
+
+print("s142-v0:", "n={s142_v0}" + "!" * 2)
+
+print("s142-i1:", "l8d-{12}-_m_u")
+
+let s142_v1 = 12
+
+print("s142-v1:", "n={s142_v1}" + "!" * 3)
+
+print("s142-i2:", "gbm-{48}-w2qr")
+
+let s142_v2 = 48
+
+print("s142-v2:", "n={s142_v2}" + "!" * 1)
+
+print("s142-i3:", "l9z-{48}-trmo")
+
+let s142_v3 = 48
+
+print("s142-v3:", "n={s142_v3}" + "!" * 2)
+
+print("s142-i4:", "jri-{52}-xr6m")
+
+let s142_v4 = 52
+
+print("s142-v4:", "n={s142_v4}" + "!" * 1)
+
+print("s142-r0:", "qj8o9ryc".replace("q", "40"), "qj8o9ryc".contains("j8"))
+
+print("s142-r1:", "vypyyhAA".replace("v", "2C"), "vypyyhAA".contains("yp"))
+
+print("s142-r2:", "37_xppf7".replace("3", "nz"), "37_xppf7".contains("7_"))
+
+print("s142-j0:", ["m2e", "zmr", "g6C", "8wg", "bzc"].join("-"))
+
+print("s142-j1:", ["jkw", "BCp", "ly1", "z_s"].join("-"))
+
+print("s142-j2:", ["cyh", "s1a", "tfr", "pev"].join("-"))
+
+print("s142-a0:", "24s7ccf".at(0), "24s7ccf".trim() == "24s7ccf")
+
+print("s142-a1:", "w9qs7Bw".at(3), "w9qs7Bw".trim() == "w9qs7Bw")
+
+print("s142-a2:", "pk0nbn7".at(4), "pk0nbn7".trim() == "pk0nbn7")

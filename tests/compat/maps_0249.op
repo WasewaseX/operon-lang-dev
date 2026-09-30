@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=249 tag=m249
+
+let m249_m0 = {plasmid: -44, marker: -57, gene: 74}
+
+print("m249-m0:", m249_m0["plasmid"], len(m249_m0), m249_m0.has("plasmid"))
+
+let m249_m1 = {enzyme: -43, codon: -51, vector: 82, exon: -4}
+
+print("m249-m1:", m249_m1["enzyme"], len(m249_m1), m249_m1.has("enzyme"))
+
+let m249_m2 = {cell: -82, gene: -53, marker: 53}
+
+print("m249-m2:", m249_m2["cell"], len(m249_m2), m249_m2.has("cell"))
+
+let m249_k0 = {codon: 8, ligase: 17, exon: 3}
+
+let m249_ks0 = m249_k0.keys()
+
+let m249_sm0 = 0
+
+for k in m249_k0 { m249_sm0 += m249_k0[k] }
+
+print("m249-k0:", m249_sm0, m249_k0.keys().sort(), m249_k0.values().len())
+
+let m249_k1 = {exon: 46, ligase: 26, ribose: 28}
+
+let m249_ks1 = m249_k1.keys()
+
+let m249_sm1 = 0
+
+for k in m249_k1 { m249_sm1 += m249_k1[k] }
+
+print("m249-k1:", m249_sm1, m249_k1.keys().sort(), m249_k1.values().len())
+
+let m249_w0 = {outer: {vector: 3, exon: 7, tag: "ok"}}}
+
+print("m249-w0:", m249_w0["outer"]["exon"], m249_w0["outer"]["tag"])
+
+let m249_w1 = {outer: {cell: 2, vector: 9, tag: "ok"}}}
+
+print("m249-w1:", m249_w1["outer"]["vector"], m249_w1["outer"]["tag"])

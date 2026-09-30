@@ -1,0 +1,188 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=256 tag=f256
+
+gene f256_g0(p, q = 61, r = 61) {
+
+    return p * 38 + q - r
+
+}
+
+print("f256-d0:", f256_g0(10), f256_g0(10, 98), f256_g0(10, 61, 61))
+
+gene f256_g1(p, q = 80, r = 97) {
+
+    return p * 55 + q - r
+
+}
+
+print("f256-d1:", f256_g1(38), f256_g1(38, 13), f256_g1(38, 80, 97))
+
+gene f256_g2(p, q = 91, r = 84) {
+
+    return p * 88 + q - r
+
+}
+
+print("f256-d2:", f256_g2(28), f256_g2(28, 47), f256_g2(28, 91, 84))
+
+gene f256_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f256_fib0(n - 1) + f256_fib0(n - 2)
+
+}
+
+print("f256-fib0:", f256_fib0(12))
+
+gene f256_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f256_fib1(n - 1) + f256_fib1(n - 2)
+
+}
+
+print("f256-fib1:", f256_fib1(13))
+
+gene f256_fib2(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f256_fib2(n - 1) + f256_fib2(n - 2)
+
+}
+
+print("f256-fib2:", f256_fib2(12))
+
+gene f256_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f256_gcd0(b, a % b)
+
+}
+
+print("f256-gcd0:", f256_gcd0(307, 503))
+
+gene f256_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f256_gcd1(b, a % b)
+
+}
+
+print("f256-gcd1:", f256_gcd1(492, 60))
+
+gene f256_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f256_c0 = f256_mk0(25)
+
+f256_c0(7)
+
+print("f256-cl0:", f256_c0(4))
+
+gene f256_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f256_c1 = f256_mk1(18)
+
+f256_c1(8)
+
+print("f256-cl1:", f256_c1(9))
+
+gene f256_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f256-hof0:", f256_tw0(gene (z) => z * 2 + 1, 17))
+
+gene f256_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f256-hof1:", f256_tw1(gene (z) => z * 2 + 1, 2))
+
+gene f256_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f256-dg0:", f256_sd0(863198))
+
+gene f256_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f256-dg1:", f256_sd1(870959))

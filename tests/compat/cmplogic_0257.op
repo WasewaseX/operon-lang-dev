@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=257 tag=c257
+
+print("c257-c0:", 1852 != -5556)
+
+print("c257-c1:", 2625 < 752)
+
+print("c257-c2:", 6528 == 8148)
+
+print("c257-c3:", 5444 == -450)
+
+print("c257-c4:", -6431 >= 4652)
+
+print("c257-b0:", 5 < 29 && 29 < 12, 5 > 29 || 5 > 12)
+
+print("c257-b1:", 29 < 2 && 2 < 11, 29 > 2 || 29 > 11)
+
+print("c257-b2:", 5 < 13 && 13 < 7, 5 > 13 || 5 > 7)
+
+print("c257-b3:", 6 < 28 && 28 < 13, 6 > 28 || 6 > 13)
+
+print("c257-t0:", 5106 > 3414 ? "gt" : "le")
+
+print("c257-t1:", 4546 > 3296 ? "gt" : "le")
+
+print("c257-t2:", 8475 > -6484 ? "gt" : "le")
+
+print("c257-t3:", 2513 > -9839 ? "gt" : "le")
+
+let c257_n0 = null
+
+print("c257-n0:", c257_n0 ?? -2708, c257_n0 == null)
+
+let c257_n1 = null
+
+print("c257-n1:", c257_n1 ?? -4908, c257_n1 == null)
+
+let c257_n2 = null
+
+print("c257-n2:", c257_n2 ?? -6734, c257_n2 == null)
+
+print("c257-s0:", "eqec" in "ddrhq5eqec", "eqec" == "eqec")
+
+print("c257-s1:", "j0yd" in "ec0AA6j0yd", "j0yd" == "j0yd")

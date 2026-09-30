@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=180 tag=m180
+
+let m180_m0 = {exon: -89, ligase: -89, vector: 19, marker: 73, gene: -70}
+
+print("m180-m0:", m180_m0["exon"], len(m180_m0), m180_m0.has("exon"))
+
+let m180_m1 = {plasmid: 95, codon: 97, ribose: -78, splicer: 65}
+
+print("m180-m1:", m180_m1["plasmid"], len(m180_m1), m180_m1.has("plasmid"))
+
+let m180_m2 = {vector: -60, marker: -82, codon: -60, cell: -76, splicer: 88}
+
+print("m180-m2:", m180_m2["vector"], len(m180_m2), m180_m2.has("vector"))
+
+let m180_k0 = {ribose: 45, gene: 31, ligase: 5}
+
+let m180_ks0 = m180_k0.keys()
+
+let m180_sm0 = 0
+
+for k in m180_k0 { m180_sm0 += m180_k0[k] }
+
+print("m180-k0:", m180_sm0, m180_k0.keys().sort(), m180_k0.values().len())
+
+let m180_k1 = {exon: 39, gene: 45, marker: 44}
+
+let m180_ks1 = m180_k1.keys()
+
+let m180_sm1 = 0
+
+for k in m180_k1 { m180_sm1 += m180_k1[k] }
+
+print("m180-k1:", m180_sm1, m180_k1.keys().sort(), m180_k1.values().len())
+
+let m180_w0 = {outer: {enzyme: 6, ligase: 9, tag: "ok"}}}
+
+print("m180-w0:", m180_w0["outer"]["ligase"], m180_w0["outer"]["tag"])
+
+let m180_w1 = {outer: {vector: 7, plasmid: 5, tag: "ok"}}}
+
+print("m180-w1:", m180_w1["outer"]["plasmid"], m180_w1["outer"]["tag"])

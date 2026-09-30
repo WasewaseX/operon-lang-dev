@@ -1,0 +1,58 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=235 tag=s235
+
+print("s235-m0:", "3zk6fo".upper(), "3zk6fo".slice(3), "3zk6fo".len())
+
+print("s235-m1:", "bjgog7".upper(), "bjgog7".slice(3), "bjgog7".len())
+
+print("s235-m2:", "ApAgv25ee1euq".upper(), "ApAgv25ee1euq".slice(3), "ApAgv25ee1euq".len())
+
+print("s235-m3:", "7sBkcqzdmAh".upper(), "7sBkcqzdmAh".slice(1), "7sBkcqzdmAh".len())
+
+print("s235-i0:", "8uf-{47}-wjC1")
+
+let s235_v0 = 47
+
+print("s235-v0:", "n={s235_v0}" + "!" * 3)
+
+print("s235-i1:", "55a-{63}-eegn")
+
+let s235_v1 = 63
+
+print("s235-v1:", "n={s235_v1}" + "!" * 2)
+
+print("s235-i2:", "bcv-{20}-h2gw")
+
+let s235_v2 = 20
+
+print("s235-v2:", "n={s235_v2}" + "!" * 2)
+
+print("s235-i3:", "_85-{22}-Bkyh")
+
+let s235_v3 = 22
+
+print("s235-v3:", "n={s235_v3}" + "!" * 1)
+
+print("s235-i4:", "w0n-{93}-e5uf")
+
+let s235_v4 = 93
+
+print("s235-v4:", "n={s235_v4}" + "!" * 1)
+
+print("s235-r0:", "x0zye2ew".replace("x", "xB"), "x0zye2ew".contains("0z"))
+
+print("s235-r1:", "vmwC1k7_".replace("v", "tg"), "vmwC1k7_".contains("mw"))
+
+print("s235-r2:", "8vmbpzoj".replace("8", "9p"), "8vmbpzoj".contains("vm"))
+
+print("s235-j0:", ["9xf", "3z7", "jCr"].join("-"))
+
+print("s235-j1:", ["C5c", "2d2", "0rA", "jhf", "41C"].join("-"))
+
+print("s235-j2:", ["xy6", "rgp", "qoe", "zlx", "8oq"].join("-"))
+
+print("s235-a0:", "1truxsn".at(6), "1truxsn".trim() == "1truxsn")
+
+print("s235-a1:", "y9fjosd".at(6), "y9fjosd".trim() == "y9fjosd")
+
+print("s235-a2:", "w2z83Bo".at(3), "w2z83Bo".trim() == "w2z83Bo")

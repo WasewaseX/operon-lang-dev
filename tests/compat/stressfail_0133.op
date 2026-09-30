@@ -1,0 +1,222 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=133 tag=s133
+
+stress {
+
+    print("s133-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s133-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s133-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s133-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s133-mz:", 76 % 0)
+
+} rescue (e) {
+
+    print("s133-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s133-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s133-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s133-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s133-of2:", "caught", e.kind, e.message)
+
+}
+
+gene s133_r0() {
+
+    raise "s133-45hAuv"
+
+}
+
+stress {
+
+    s133_r0()
+
+    print("s133-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s133-r0:", e.kind, e.message)
+
+}
+
+gene s133_r1() {
+
+    raise "s133-kef2nv"
+
+}
+
+stress {
+
+    s133_r1()
+
+    print("s133-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s133-r1:", e.kind, e.message)
+
+}
+
+gene s133_r2() {
+
+    raise "s133-mCngjz"
+
+}
+
+stress {
+
+    s133_r2()
+
+    print("s133-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s133-r2:", e.kind, e.message)
+
+}
+
+let s133_xs0 = [1, 37, 17]
+
+stress {
+
+    print("s133-x0:", s133_xs0[6])
+
+} rescue (e) {
+
+    print("s133-x0:", "caught", e.kind)
+
+}
+
+let s133_xs1 = [23, 50, 20, 50]
+
+stress {
+
+    print("s133-x1:", s133_xs1[8])
+
+} rescue (e) {
+
+    print("s133-x1:", "caught", e.kind)
+
+}
+
+let s133_xs2 = [49, 40]
+
+stress {
+
+    print("s133-x2:", s133_xs2[4])
+
+} rescue (e) {
+
+    print("s133-x2:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s133-0"
+
+    } rescue (e) {
+
+        print("s133-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s133-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s133-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s133-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s133-1"
+
+    } rescue (e) {
+
+        print("s133-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s133-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s133-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s133-d1-top:", outer.message)
+
+}

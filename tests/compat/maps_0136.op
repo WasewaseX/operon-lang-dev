@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=136 tag=m136
+
+let m136_m0 = {helix: 45, enzyme: -95, ligase: -46, plasmid: 28, splicer: -49}
+
+print("m136-m0:", m136_m0["helix"], len(m136_m0), m136_m0.has("helix"))
+
+let m136_m1 = {gene: 22, enzyme: -34, codon: -55}
+
+print("m136-m1:", m136_m1["gene"], len(m136_m1), m136_m1.has("gene"))
+
+let m136_m2 = {helix: 91, marker: 59, ligase: 71, splicer: 73}
+
+print("m136-m2:", m136_m2["helix"], len(m136_m2), m136_m2.has("helix"))
+
+let m136_k0 = {codon: 4, ribose: 34, enzyme: 1}
+
+let m136_ks0 = m136_k0.keys()
+
+let m136_sm0 = 0
+
+for k in m136_k0 { m136_sm0 += m136_k0[k] }
+
+print("m136-k0:", m136_sm0, m136_k0.keys().sort(), m136_k0.values().len())
+
+let m136_k1 = {ribose: 30, marker: 30, plasmid: 21}
+
+let m136_ks1 = m136_k1.keys()
+
+let m136_sm1 = 0
+
+for k in m136_k1 { m136_sm1 += m136_k1[k] }
+
+print("m136-k1:", m136_sm1, m136_k1.keys().sort(), m136_k1.values().len())
+
+let m136_k2 = {splicer: 1, plasmid: 45, marker: 16}
+
+let m136_ks2 = m136_k2.keys()
+
+let m136_sm2 = 0
+
+for k in m136_k2 { m136_sm2 += m136_k2[k] }
+
+print("m136-k2:", m136_sm2, m136_k2.keys().sort(), m136_k2.values().len())
+
+let m136_w0 = {outer: {plasmid: 7, ligase: 5, tag: "ok"}}}
+
+print("m136-w0:", m136_w0["outer"]["ligase"], m136_w0["outer"]["tag"])
+
+let m136_w1 = {outer: {ribose: 5, helix: 7, tag: "ok"}}}
+
+print("m136-w1:", m136_w1["outer"]["helix"], m136_w1["outer"]["tag"])

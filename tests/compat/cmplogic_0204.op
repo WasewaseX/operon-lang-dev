@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=204 tag=c204
+
+print("c204-c0:", 6760 > -9485)
+
+print("c204-c1:", 2036 > -8444)
+
+print("c204-c2:", 7580 > 9176)
+
+print("c204-c3:", -2275 > 4571)
+
+print("c204-c4:", 1627 != 4041)
+
+print("c204-c5:", 9194 > -578)
+
+print("c204-c6:", -8529 < -2170)
+
+print("c204-b0:", 47 < 10 && 10 < 38, 47 > 10 || 47 > 38)
+
+print("c204-b1:", 18 < 21 && 21 < 1, 18 > 21 || 18 > 1)
+
+print("c204-b2:", 28 < 33 && 33 < 38, 28 > 33 || 28 > 38)
+
+print("c204-t0:", 8738 > -9373 ? "gt" : "le")
+
+print("c204-t1:", 9380 > -9968 ? "gt" : "le")
+
+print("c204-t2:", -7118 > 4564 ? "gt" : "le")
+
+print("c204-t3:", 2776 > -4178 ? "gt" : "le")
+
+let c204_n0 = null
+
+print("c204-n0:", c204_n0 ?? 9455, c204_n0 == null)
+
+let c204_n1 = null
+
+print("c204-n1:", c204_n1 ?? -2069, c204_n1 == null)
+
+let c204_n2 = null
+
+print("c204-n2:", c204_n2 ?? 7207, c204_n2 == null)
+
+print("c204-s0:", "0s2n" in "mdtlj40s2n", "0s2n" == "0s2n")
+
+print("c204-s1:", "j6be" in "ov3b83j6be", "j6be" == "j6be")

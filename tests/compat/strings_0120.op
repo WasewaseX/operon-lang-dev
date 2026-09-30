@@ -1,0 +1,54 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=120 tag=s120
+
+print("s120-m0:", "nnfy8s".upper(), "nnfy8s".slice(4), "nnfy8s".len())
+
+print("s120-m1:", "w6u3yl".upper(), "w6u3yl".slice(4), "w6u3yl".len())
+
+print("s120-m2:", "uhip1cafc".upper(), "uhip1cafc".slice(3), "uhip1cafc".len())
+
+print("s120-m3:", "15ngAtCf".upper(), "15ngAtCf".slice(3), "15ngAtCf".len())
+
+print("s120-m4:", "x46jdf1Cdg".upper(), "x46jdf1Cdg".slice(4), "x46jdf1Cdg".len())
+
+print("s120-m5:", "i7dCrfm".upper(), "i7dCrfm".slice(4), "i7dCrfm".len())
+
+print("s120-i0:", "pyw-{88}-1iAs")
+
+let s120_v0 = 88
+
+print("s120-v0:", "n={s120_v0}" + "!" * 1)
+
+print("s120-i1:", "uzm-{64}-vvmu")
+
+let s120_v1 = 64
+
+print("s120-v1:", "n={s120_v1}" + "!" * 2)
+
+print("s120-i2:", "qda-{6}-lkAr")
+
+let s120_v2 = 6
+
+print("s120-v2:", "n={s120_v2}" + "!" * 2)
+
+print("s120-i3:", "goy-{41}-twq4")
+
+let s120_v3 = 41
+
+print("s120-v3:", "n={s120_v3}" + "!" * 2)
+
+print("s120-r0:", "xk1u_xA_".replace("x", "sk"), "xk1u_xA_".contains("k1"))
+
+print("s120-r1:", "Anni6n0v".replace("A", "03"), "Anni6n0v".contains("nn"))
+
+print("s120-r2:", "2eqAkihx".replace("2", "0C"), "2eqAkihx".contains("eq"))
+
+print("s120-j0:", ["mCn", "ge2", "dnf"].join("-"))
+
+print("s120-j1:", ["ieg", "3kl", "w3n", "iBo", "nf4"].join("-"))
+
+print("s120-j2:", ["l_n", "5jb", "gj5", "rcr", "q53"].join("-"))
+
+print("s120-a0:", "zor7uqu".at(3), "zor7uqu".trim() == "zor7uqu")
+
+print("s120-a1:", "xpgq8q_".at(1), "xpgq8q_".trim() == "xpgq8q_")

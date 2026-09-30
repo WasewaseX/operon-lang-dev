@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=122 tag=s122
+
+print("s122-m0:", "odiokdbbhnC".upper(), "odiokdbbhnC".slice(1), "odiokdbbhnC".len())
+
+print("s122-m1:", "ob_ot2".upper(), "ob_ot2".slice(2), "ob_ot2".len())
+
+print("s122-m2:", "3xxt7b8mt0tx".upper(), "3xxt7b8mt0tx".slice(2), "3xxt7b8mt0tx".len())
+
+print("s122-m3:", "hed_8w67ttbtzg".upper(), "hed_8w67ttbtzg".slice(4), "hed_8w67ttbtzg".len())
+
+print("s122-i0:", "zwp-{63}-6bmx")
+
+let s122_v0 = 63
+
+print("s122-v0:", "n={s122_v0}" + "!" * 2)
+
+print("s122-i1:", "74j-{45}-bgn2")
+
+let s122_v1 = 45
+
+print("s122-v1:", "n={s122_v1}" + "!" * 2)
+
+print("s122-i2:", "30o-{65}-fBsv")
+
+let s122_v2 = 65
+
+print("s122-v2:", "n={s122_v2}" + "!" * 2)
+
+print("s122-i3:", "tec-{31}-knxB")
+
+let s122_v3 = 31
+
+print("s122-v3:", "n={s122_v3}" + "!" * 3)
+
+print("s122-r0:", "xziuhnvp".replace("x", "r3"), "xziuhnvp".contains("zi"))
+
+print("s122-r1:", "4ia_hfjt".replace("4", "28"), "4ia_hfjt".contains("ia"))
+
+print("s122-r2:", "x6301sit".replace("x", "en"), "x6301sit".contains("63"))
+
+print("s122-r3:", "bcogrr8c".replace("b", "4o"), "bcogrr8c".contains("co"))
+
+print("s122-j0:", ["oAg", "cAi", "bxx", "Cpf"].join("-"))
+
+print("s122-j1:", ["a3C", "11w", "e8x", "2ak", "gzs"].join("-"))
+
+print("s122-j2:", ["uhc", "6gA", "_6_", "det", "d8n"].join("-"))
+
+print("s122-a0:", "umC9yw_".at(1), "umC9yw_".trim() == "umC9yw_")
+
+print("s122-a1:", "6uA7fmq".at(0), "6uA7fmq".trim() == "6uA7fmq")

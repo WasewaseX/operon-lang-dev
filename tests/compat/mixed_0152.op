@@ -1,0 +1,254 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=152 tag=m152
+
+gene m152_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m152-b0:", m152_b0({vector: 52, ribose: 2, splicer: 53})?!)
+
+gene m152_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m152-b1:", m152_b1({ligase: 51, cell: 80, enzyme: 44})?!)
+
+gene m152_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m152-b2:", m152_b2({enzyme: 19, splicer: 32, exon: 77})?!)
+
+gene m152_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m152_f0([12, 40, 24, 27, 34, 20, 40]) {
+
+    case Ok(list) {
+
+        print("m152-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m152-f0:", "e:", m)
+
+    }
+
+}
+
+gene m152_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m152_f1([24, 46, 30, 43, 26, 10]) {
+
+    case Ok(list) {
+
+        print("m152-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m152-f1:", "e:", m)
+
+    }
+
+}
+
+gene m152_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m152_f2([7, 37, 36, 2, 60, 29, 46, 37]) {
+
+    case Ok(list) {
+
+        print("m152-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m152-f2:", "e:", m)
+
+    }
+
+}
+
+let m152_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m152-cc0:", m152_cl0(3)(17), m152_cl0(17)(3))
+
+let m152_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m152-cc1:", m152_cl1(8)(4), m152_cl1(4)(8))
+
+let m152_data0 = some([some("gene"), none(), some(5)])
+
+match m152_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m152-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m152-x0:", "shape-miss")
+
+    }
+
+}
+
+let m152_data1 = some([some("codon"), none(), some(3)])
+
+match m152_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m152-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m152-x1:", "shape-miss")
+
+    }
+
+}

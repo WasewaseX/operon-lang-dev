@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=260 tag=m260
+
+let m260_m0 = {ligase: -9, plasmid: -85, vector: 77, splicer: 68, gene: -7}
+
+print("m260-m0:", m260_m0["ligase"], len(m260_m0), m260_m0.has("ligase"))
+
+let m260_m1 = {ligase: -2, enzyme: -60, plasmid: -19, helix: -38, codon: 48}
+
+print("m260-m1:", m260_m1["ligase"], len(m260_m1), m260_m1.has("ligase"))
+
+let m260_m2 = {marker: -7, plasmid: -5, exon: -77, ligase: -89, splicer: -75}
+
+print("m260-m2:", m260_m2["marker"], len(m260_m2), m260_m2.has("marker"))
+
+let m260_k0 = {cell: 21, splicer: 6, exon: 34}
+
+let m260_ks0 = m260_k0.keys()
+
+let m260_sm0 = 0
+
+for k in m260_k0 { m260_sm0 += m260_k0[k] }
+
+print("m260-k0:", m260_sm0, m260_k0.keys().sort(), m260_k0.values().len())
+
+let m260_k1 = {marker: 13, ligase: 14, enzyme: 3}
+
+let m260_ks1 = m260_k1.keys()
+
+let m260_sm1 = 0
+
+for k in m260_k1 { m260_sm1 += m260_k1[k] }
+
+print("m260-k1:", m260_sm1, m260_k1.keys().sort(), m260_k1.values().len())
+
+let m260_w0 = {outer: {marker: 6, splicer: 6, tag: "ok"}}}
+
+print("m260-w0:", m260_w0["outer"]["splicer"], m260_w0["outer"]["tag"])
+
+let m260_w1 = {outer: {vector: 2, cell: 9, tag: "ok"}}}
+
+print("m260-w1:", m260_w1["outer"]["cell"], m260_w1["outer"]["tag"])

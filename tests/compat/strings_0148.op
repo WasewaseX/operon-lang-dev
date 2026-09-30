@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=148 tag=s148
+
+print("s148-m0:", "bs1rvA_".upper(), "bs1rvA_".slice(3), "bs1rvA_".len())
+
+print("s148-m1:", "cc995tr36".upper(), "cc995tr36".slice(4), "cc995tr36".len())
+
+print("s148-m2:", "6df3qgt65a6w".upper(), "6df3qgt65a6w".slice(4), "6df3qgt65a6w".len())
+
+print("s148-m3:", "kx610sje".upper(), "kx610sje".slice(3), "kx610sje".len())
+
+print("s148-i0:", "cA9-{75}-at0s")
+
+let s148_v0 = 75
+
+print("s148-v0:", "n={s148_v0}" + "!" * 1)
+
+print("s148-i1:", "Cf3-{70}-hiz3")
+
+let s148_v1 = 70
+
+print("s148-v1:", "n={s148_v1}" + "!" * 1)
+
+print("s148-i2:", "llu-{32}-djAp")
+
+let s148_v2 = 32
+
+print("s148-v2:", "n={s148_v2}" + "!" * 3)
+
+print("s148-i3:", "p4p-{39}-iB0o")
+
+let s148_v3 = 39
+
+print("s148-v3:", "n={s148_v3}" + "!" * 1)
+
+print("s148-i4:", "cs5-{41}-7qma")
+
+let s148_v4 = 41
+
+print("s148-v4:", "n={s148_v4}" + "!" * 3)
+
+print("s148-r0:", "1gnlmbrB".replace("1", "gd"), "1gnlmbrB".contains("gn"))
+
+print("s148-r1:", "t6po3wa2".replace("t", "_0"), "t6po3wa2".contains("6p"))
+
+print("s148-r2:", "9827q34k".replace("9", "60"), "9827q34k".contains("82"))
+
+print("s148-r3:", "3uuyj0xt".replace("3", "ox"), "3uuyj0xt".contains("uu"))
+
+print("s148-j0:", ["ei1", "5iB", "qmB", "58f", "1xd"].join("-"))
+
+print("s148-j1:", ["gq_", "pi0", "y0o", "Bss", "z4v"].join("-"))
+
+print("s148-a0:", "ntc11pa".at(0), "ntc11pa".trim() == "ntc11pa")
+
+print("s148-a1:", "rll83b5".at(1), "rll83b5".trim() == "rll83b5")

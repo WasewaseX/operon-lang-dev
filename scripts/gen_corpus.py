@@ -20,6 +20,17 @@ Determinism contract for generated programs:
 
 Usage:
     python3 scripts/gen_corpus.py --seed 20260930 --count 1200 --out tests/compat
+
+Incremental extension (appends new programs to an existing corpus without
+overwriting: per-bucket numbering continues at idx = start // len(BUCKETS)):
+
+    python3 scripts/gen_corpus.py --seed 20261030 --start 1200 --count 2004 \
+        --out tests/compat
+
+Manifest rebuild from the committed file set (parses each program's header
+comment for bucket/seed/idx, so the manifest always matches the files):
+
+    python3 scripts/gen_corpus.py --manifest-scan --out tests/compat
 """
 import argparse
 import json
@@ -646,21 +657,62 @@ GEN = {
 }
 
 
+def scan_manifest(out):
+    """Build the manifest from the .op files already present in `out`.
+
+    Each generated program carries its provenance in the header comment
+    (`# bucket=... seed=... idx=... tag=...`), so the manifest can always be
+    rebuilt from the committed file set — across multiple generation waves
+    with different seeds — and stays consistent with what is actually there.
+    """
+    import re
+    files = []
+    for name in sorted(os.listdir(out)):
+        if not name.endswith(".op"):
+            continue
+        with open(os.path.join(out, name)) as f:
+            f.readline()  # "# compat corpus — generated, do not edit by hand"
+            header = f.readline().strip()
+        m = re.match(r"# bucket=(\S+) seed=(\d+) idx=(\d+) tag=(\S+)", header)
+        if not m:
+            sys.exit(f"unparseable corpus header in {name}: {header!r}")
+        files.append({"file": name, "bucket": m.group(1),
+                      "seed": int(m.group(2)), "idx": int(m.group(3))})
+    return files
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--seed", type=int, default=20260930)
     ap.add_argument("--count", type=int, default=1200)
+    ap.add_argument("--start", type=int, default=0,
+                    help="first global program index; per-bucket file "
+                         "numbering continues at start // len(BUCKETS)")
     ap.add_argument("--out", default="tests/compat")
     ap.add_argument("--manifest", action="store_true")
+    ap.add_argument("--manifest-scan", action="store_true",
+                    help="rebuild MANIFEST.json from the .op files already "
+                         "in --out instead of writing only this run's files")
     args = ap.parse_args()
 
     missing = [b for b, fn in GEN.items() if fn is None]
     if missing:
         sys.exit(f"unregistered buckets: {missing}")
 
+    if args.manifest_scan:
+        files = scan_manifest(args.out)
+        seeds = sorted({f["seed"] for f in files})
+        manifest = {"seed": seeds[0], "seeds": seeds, "count": len(files),
+                    "buckets": BUCKETS, "files": files}
+        with open(os.path.join(args.out, "MANIFEST.json"), "w") as f:
+            json.dump(manifest, f, indent=1)
+        print(f"manifest: {len(files)} programs, seeds {seeds} -> "
+              f"{os.path.join(args.out, 'MANIFEST.json')}")
+        return
+
     os.makedirs(args.out, exist_ok=True)
     files = []
-    for i in range(args.count):
+    for i in range(args.start, args.start + args.count):
         bucket = BUCKETS[i % len(BUCKETS)]
         idx = i // len(BUCKETS)
         tag = f"{bucket[0]}{idx:03d}"
@@ -681,7 +733,8 @@ def main():
         with open(os.path.join(args.out, "MANIFEST.json"), "w") as f:
             json.dump({"seed": args.seed, "count": len(files),
                        "buckets": BUCKETS, "files": files}, f, indent=1)
-    print(f"generated {len(files)} programs across {len(BUCKETS)} buckets -> {args.out}")
+    print(f"generated {len(files)} programs across {len(BUCKETS)} buckets "
+          f"(idx {args.start}..{args.start + args.count - 1}) -> {args.out}")
 
 
 if __name__ == "__main__":

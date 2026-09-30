@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=187 tag=m187
+
+let m187_m0 = {exon: 27, splicer: -50, enzyme: 25, gene: 51, plasmid: -58}
+
+print("m187-m0:", m187_m0["exon"], len(m187_m0), m187_m0.has("exon"))
+
+let m187_m1 = {splicer: 80, gene: -99, marker: -95, plasmid: -12, codon: 23}
+
+print("m187-m1:", m187_m1["splicer"], len(m187_m1), m187_m1.has("splicer"))
+
+let m187_m2 = {helix: 56, splicer: 34, vector: -69, exon: 62}
+
+print("m187-m2:", m187_m2["helix"], len(m187_m2), m187_m2.has("helix"))
+
+let m187_k0 = {helix: 48, gene: 23, enzyme: 3}
+
+let m187_ks0 = m187_k0.keys()
+
+let m187_sm0 = 0
+
+for k in m187_k0 { m187_sm0 += m187_k0[k] }
+
+print("m187-k0:", m187_sm0, m187_k0.keys().sort(), m187_k0.values().len())
+
+let m187_k1 = {splicer: 48, helix: 39, codon: 43}
+
+let m187_ks1 = m187_k1.keys()
+
+let m187_sm1 = 0
+
+for k in m187_k1 { m187_sm1 += m187_k1[k] }
+
+print("m187-k1:", m187_sm1, m187_k1.keys().sort(), m187_k1.values().len())
+
+let m187_k2 = {plasmid: 4, ligase: 43, cell: 31}
+
+let m187_ks2 = m187_k2.keys()
+
+let m187_sm2 = 0
+
+for k in m187_k2 { m187_sm2 += m187_k2[k] }
+
+print("m187-k2:", m187_sm2, m187_k2.keys().sort(), m187_k2.values().len())
+
+let m187_w0 = {outer: {enzyme: 9, cell: 8, tag: "ok"}}}
+
+print("m187-w0:", m187_w0["outer"]["cell"], m187_w0["outer"]["tag"])
+
+let m187_w1 = {outer: {helix: 1, splicer: 9, tag: "ok"}}}
+
+print("m187-w1:", m187_w1["outer"]["splicer"], m187_w1["outer"]["tag"])

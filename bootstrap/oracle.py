@@ -24,6 +24,57 @@ class Note:
         # renders `[tag] file:line: msg`. The oracle now mirrors both.
         self.rung, self.line, self.message = rung, line, message
 
+# W101 slice 7 mirror of diag.rs::note_code (SPEC 9a.1): the derived E2xxx
+# code rides the tag in flush output (`[fallback E2012] ...`). Ordered
+# substring families, specific first, generic last; new families APPEND and
+# codes never renumber. A message matching nothing renders uncoded, exactly
+# like the Rust side. corpus-r3: this mirror was missing after 14888da and
+# every parse-repair note diverged from the engines in the compat matrix.
+def note_code(message):
+    if "note cap" in message:
+        return "E2000"
+    if "single-quoted string repaired" in message:
+        return "E2001"
+    if "single-quoted bytes literal repaired" in message:
+        return "E2002"
+    if "malformed \\x escape" in message:
+        return "E2003"
+    if "non-ASCII char in bytes literal" in message:
+        return "E2004"
+    if "unclosed bytes literal" in message:
+        return "E2005"
+    if "unclosed multiline string" in message or "unclosed raw string" in message:
+        return "E2006"
+    if "stray '@' skipped" in message:
+        return "E2007"
+    if "out of range treated as 0" in message:
+        return "E2008"
+    if "malformed number" in message:
+        return "E2009"
+    if message.startswith("synonym "):
+        return "E2010"
+    if message.startswith("wobble: "):
+        return "E2011"
+    if "unmatched '}' skipped" in message:
+        return "E2012"
+    if "auto-closed" in message:
+        return "E2013"
+    if "unknown mark '@" in message:
+        return "E2018"
+    if "binds null" in message:
+        return "E2015"
+    if "needs " in message or "missing 'in'" in message:
+        return "E2016"
+    if "treated as" in message:
+        return "E2017"
+    if "null substituted" in message:
+        return "E2019"
+    if "skipped" in message:
+        return "E2014"
+    if message.startswith("phantom call to "):
+        return "E2030"
+    return ""
+
 class Stress(Exception):
     def __init__(self, kind, message):
         self.kind, self.message = kind, message
@@ -8058,12 +8109,16 @@ def main():
         it = run(pos[0], cell_dict, opts["variant"], opts["rna"], opts["entry"], opts["frame"], pos[1:], caps=opts.get("caps"))
         for nt in it.notes:
             tag = {1: "info", 2: "synonym", 3: "wobble"}.get(nt.rung, "fallback")
+            # W101 slice 7 mirror: derived E2xxx code rides the tag when the
+            # message maps to a catalog family, exactly like flush_notes.
+            code = note_code(nt.message)
+            tag_s = f"{tag} {code}" if code else tag
             # A13/dx-r2 mirror: notes carry real locations (compat matrix
             # fix) — `[tag] file:line: msg` exactly like tools::flush_notes
             if getattr(nt, "line", 0) > 0:
-                print(f"[{tag}] {pos[0]}:{nt.line}: {nt.message}", file=sys.stderr)
+                print(f"[{tag_s}] {pos[0]}:{nt.line}: {nt.message}", file=sys.stderr)
             else:
-                print(f"[{tag}] {nt.message}", file=sys.stderr)
+                print(f"[{tag_s}] {nt.message}", file=sys.stderr)
     elif cmd == "test":
         paths = pos or ["tests"]
         files = []

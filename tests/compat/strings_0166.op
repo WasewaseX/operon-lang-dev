@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=166 tag=s166
+
+print("s166-m0:", "np8omw".upper(), "np8omw".slice(2), "np8omw".len())
+
+print("s166-m1:", "zB4rhk4rbuo".upper(), "zB4rhk4rbuo".slice(1), "zB4rhk4rbuo".len())
+
+print("s166-m2:", "zsqqjy".upper(), "zsqqjy".slice(4), "zsqqjy".len())
+
+print("s166-m3:", "5zt3hvomwq".upper(), "5zt3hvomwq".slice(4), "5zt3hvomwq".len())
+
+print("s166-m4:", "j62rB5jgyioh".upper(), "j62rB5jgyioh".slice(2), "j62rB5jgyioh".len())
+
+print("s166-i0:", "u5v-{57}-vxqy")
+
+let s166_v0 = 57
+
+print("s166-v0:", "n={s166_v0}" + "!" * 2)
+
+print("s166-i1:", "1d0-{99}-C0mr")
+
+let s166_v1 = 99
+
+print("s166-v1:", "n={s166_v1}" + "!" * 1)
+
+print("s166-i2:", "ntp-{54}-hi40")
+
+let s166_v2 = 54
+
+print("s166-v2:", "n={s166_v2}" + "!" * 2)
+
+print("s166-r0:", "_wdjax_u".replace("_", "ef"), "_wdjax_u".contains("wd"))
+
+print("s166-r1:", "2y9c4dsh".replace("2", "nu"), "2y9c4dsh".contains("y9"))
+
+print("s166-r2:", "fq7xAx5y".replace("f", "ky"), "fq7xAx5y".contains("q7"))
+
+print("s166-r3:", "CCruxzi1".replace("C", "he"), "CCruxzi1".contains("Cr"))
+
+print("s166-j0:", ["ou1", "50m", "rqc"].join("-"))
+
+print("s166-j1:", ["9qc", "wzw", "4wb"].join("-"))
+
+print("s166-a0:", "yBqty8k".at(4), "yBqty8k".trim() == "yBqty8k")
+
+print("s166-a1:", "3rjcClw".at(2), "3rjcClw".trim() == "3rjcClw")
+
+print("s166-a2:", "x5h5qwg".at(2), "x5h5qwg".trim() == "x5h5qwg")

@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=208 tag=c208
+
+print("c208-c0:", 9269 >= 6799)
+
+print("c208-c1:", 6354 >= -2480)
+
+print("c208-c2:", 6427 <= -3024)
+
+print("c208-c3:", -5955 >= -1422)
+
+print("c208-b0:", 3 < 33 && 33 < 18, 3 > 33 || 3 > 18)
+
+print("c208-b1:", 34 < 39 && 39 < 23, 34 > 39 || 34 > 23)
+
+print("c208-b2:", 17 < 17 && 17 < 4, 17 > 17 || 17 > 4)
+
+print("c208-b3:", 41 < 8 && 8 < 41, 41 > 8 || 41 > 41)
+
+print("c208-t0:", 3041 > -141 ? "gt" : "le")
+
+print("c208-t1:", 5893 > 8007 ? "gt" : "le")
+
+print("c208-t2:", -2991 > -8525 ? "gt" : "le")
+
+print("c208-t3:", 4422 > -2936 ? "gt" : "le")
+
+let c208_n0 = null
+
+print("c208-n0:", c208_n0 ?? -8905, c208_n0 == null)
+
+let c208_n1 = null
+
+print("c208-n1:", c208_n1 ?? 962, c208_n1 == null)
+
+let c208_n2 = null
+
+print("c208-n2:", c208_n2 ?? 2192, c208_n2 == null)
+
+print("c208-s0:", "5irc" in "inlnkj5irc", "5irc" == "5irc")
+
+print("c208-s1:", "94ye" in "avwufv94ye", "94ye" == "94ye")

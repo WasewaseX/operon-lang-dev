@@ -1,0 +1,188 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=124 tag=f124
+
+gene f124_g0(p, q = 25, r = 65) {
+
+    return p * 37 + q - r
+
+}
+
+print("f124-d0:", f124_g0(-34), f124_g0(-34, 31), f124_g0(-34, 25, 65))
+
+gene f124_g1(p, q = 35, r = 41) {
+
+    return p * 54 + q - r
+
+}
+
+print("f124-d1:", f124_g1(23), f124_g1(23, 46), f124_g1(23, 35, 41))
+
+gene f124_g2(p, q = 61, r = 47) {
+
+    return p * 88 + q - r
+
+}
+
+print("f124-d2:", f124_g2(13), f124_g2(13, 45), f124_g2(13, 61, 47))
+
+gene f124_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f124_fib0(n - 1) + f124_fib0(n - 2)
+
+}
+
+print("f124-fib0:", f124_fib0(12))
+
+gene f124_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f124_fib1(n - 1) + f124_fib1(n - 2)
+
+}
+
+print("f124-fib1:", f124_fib1(7))
+
+gene f124_fib2(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f124_fib2(n - 1) + f124_fib2(n - 2)
+
+}
+
+print("f124-fib2:", f124_fib2(7))
+
+gene f124_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f124_gcd0(b, a % b)
+
+}
+
+print("f124-gcd0:", f124_gcd0(210, 452))
+
+gene f124_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f124_gcd1(b, a % b)
+
+}
+
+print("f124-gcd1:", f124_gcd1(952, 643))
+
+gene f124_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f124_c0 = f124_mk0(35)
+
+f124_c0(4)
+
+print("f124-cl0:", f124_c0(6))
+
+gene f124_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f124_c1 = f124_mk1(8)
+
+f124_c1(5)
+
+print("f124-cl1:", f124_c1(4))
+
+gene f124_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f124-hof0:", f124_tw0(gene (z) => z * 2 + 1, 6))
+
+gene f124_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f124-hof1:", f124_tw1(gene (z) => z * 2 + 1, 17))
+
+gene f124_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f124-dg0:", f124_sd0(625473))
+
+gene f124_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f124-dg1:", f124_sd1(314513))

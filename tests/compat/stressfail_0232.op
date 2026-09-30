@@ -1,0 +1,182 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=232 tag=s232
+
+stress {
+
+    print("s232-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s232-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s232-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s232-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s232-mz:", 51 % 0)
+
+} rescue (e) {
+
+    print("s232-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s232-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s232-of1:", "caught", e.kind, e.message)
+
+}
+
+gene s232_r0() {
+
+    raise "s232-ochoga"
+
+}
+
+stress {
+
+    s232_r0()
+
+    print("s232-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s232-r0:", e.kind, e.message)
+
+}
+
+gene s232_r1() {
+
+    raise "s232-w8tk9g"
+
+}
+
+stress {
+
+    s232_r1()
+
+    print("s232-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s232-r1:", e.kind, e.message)
+
+}
+
+let s232_xs0 = [39, 44, 33]
+
+stress {
+
+    print("s232-x0:", s232_xs0[4])
+
+} rescue (e) {
+
+    print("s232-x0:", "caught", e.kind)
+
+}
+
+let s232_xs1 = [39, 31]
+
+stress {
+
+    print("s232-x1:", s232_xs1[5])
+
+} rescue (e) {
+
+    print("s232-x1:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s232-0"
+
+    } rescue (e) {
+
+        print("s232-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s232-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s232-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s232-1"
+
+    } rescue (e) {
+
+        print("s232-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s232-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s232-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s232-d1-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s232-d1-top:", outer.message)
+
+}

@@ -1,0 +1,292 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=138 tag=m138
+
+let m138_s0 = some(4)
+
+match m138_s0 {
+
+    case Some(x) if x > 4 {
+
+        print("m138-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m138-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m138-m0:", "none")
+
+    }
+
+}
+
+let m138_s1 = some(8)
+
+match m138_s1 {
+
+    case Some(x) if x > 8 {
+
+        print("m138-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m138-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m138-m1:", "none")
+
+    }
+
+}
+
+let m138_s2 = some(6)
+
+match m138_s2 {
+
+    case Some(x) if x > 6 {
+
+        print("m138-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m138-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m138-m2:", "none")
+
+    }
+
+}
+
+let m138_s3 = some(8)
+
+match m138_s3 {
+
+    case Some(x) if x > 8 {
+
+        print("m138-m3:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m138-m3:", "small", x)
+
+    }
+
+    case None {
+
+        print("m138-m3:", "none")
+
+    }
+
+}
+
+let m138_s4 = some(1)
+
+match m138_s4 {
+
+    case Some(x) if x > 1 {
+
+        print("m138-m4:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m138-m4:", "small", x)
+
+    }
+
+    case None {
+
+        print("m138-m4:", "none")
+
+    }
+
+}
+
+let m138_ls0 = [31, 3, 45]
+
+match m138_ls0 {
+
+    case [31, *rest] {
+
+        print("m138-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m138-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m138-l0:", "other")
+
+    }
+
+}
+
+let m138_ls1 = [20, 43, 4]
+
+match m138_ls1 {
+
+    case [20, *rest] {
+
+        print("m138-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m138-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m138-l1:", "other")
+
+    }
+
+}
+
+let m138_mp0 = {enzyme: -390, cell: 698}
+
+match m138_mp0 {
+
+    case {enzyme: p, cell: q} {
+
+        print("m138-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m138-mp0:", "miss")
+
+    }
+
+}
+
+let m138_mp1 = {exon: 3537, codon: -4734}
+
+match m138_mp1 {
+
+    case {exon: p, codon: q} {
+
+        print("m138-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m138-mp1:", "miss")
+
+    }
+
+}
+
+let m138_mp2 = {helix: -3725, plasmid: 7170}
+
+match m138_mp2 {
+
+    case {helix: p, plasmid: q} {
+
+        print("m138-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m138-mp2:", "miss")
+
+    }
+
+}
+
+let m138_r0 = ok(5)
+
+match m138_r0 {
+
+    case Ok(n) | Err(5) {
+
+        print("m138-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m138-r0:", "zero")
+
+    }
+
+}
+
+let m138_r1 = ok(1)
+
+match m138_r1 {
+
+    case Ok(n) | Err(1) {
+
+        print("m138-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m138-r1:", "zero")
+
+    }
+
+}
+
+match "ribose" {
+
+    case "ribose" {
+
+        print("m138-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m138-w0:", "alt")
+
+    }
+
+}
+
+match "ligase" {
+
+    case "ligase" {
+
+        print("m138-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m138-w1:", "alt")
+
+    }
+
+}

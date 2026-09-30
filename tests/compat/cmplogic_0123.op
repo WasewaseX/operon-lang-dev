@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=123 tag=c123
+
+print("c123-c0:", -2187 == -3856)
+
+print("c123-c1:", -5465 >= -8896)
+
+print("c123-c2:", 3987 == 7298)
+
+print("c123-c3:", -4794 <= 9830)
+
+print("c123-b0:", 8 < 3 && 3 < 6, 8 > 3 || 8 > 6)
+
+print("c123-b1:", 9 < 44 && 44 < 36, 9 > 44 || 9 > 36)
+
+print("c123-b2:", 10 < 27 && 27 < 36, 10 > 27 || 10 > 36)
+
+print("c123-b3:", 23 < 3 && 3 < 42, 23 > 3 || 23 > 42)
+
+print("c123-t0:", -7829 > 8310 ? "gt" : "le")
+
+print("c123-t1:", -5773 > 1208 ? "gt" : "le")
+
+print("c123-t2:", 4970 > 3287 ? "gt" : "le")
+
+print("c123-t3:", 8403 > -2454 ? "gt" : "le")
+
+let c123_n0 = null
+
+print("c123-n0:", c123_n0 ?? -5920, c123_n0 == null)
+
+let c123_n1 = null
+
+print("c123-n1:", c123_n1 ?? -8424, c123_n1 == null)
+
+let c123_n2 = null
+
+print("c123-n2:", c123_n2 ?? 2303, c123_n2 == null)
+
+print("c123-s0:", "mxyk" in "ts4z5amxyk", "mxyk" == "mxyk")
+
+print("c123-s1:", "knf8" in "Cvcv09knf8", "knf8" == "knf8")

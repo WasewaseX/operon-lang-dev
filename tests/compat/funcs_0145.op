@@ -1,0 +1,188 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=145 tag=f145
+
+gene f145_g0(p, q = 37, r = 44) {
+
+    return p * 18 + q - r
+
+}
+
+print("f145-d0:", f145_g0(11), f145_g0(11, 36), f145_g0(11, 37, 44))
+
+gene f145_g1(p, q = 89, r = 26) {
+
+    return p * 11 + q - r
+
+}
+
+print("f145-d1:", f145_g1(14), f145_g1(14, 51), f145_g1(14, 89, 26))
+
+gene f145_g2(p, q = 10, r = 29) {
+
+    return p * 86 + q - r
+
+}
+
+print("f145-d2:", f145_g2(47), f145_g2(47, 27), f145_g2(47, 10, 29))
+
+gene f145_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f145_fib0(n - 1) + f145_fib0(n - 2)
+
+}
+
+print("f145-fib0:", f145_fib0(13))
+
+gene f145_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f145_fib1(n - 1) + f145_fib1(n - 2)
+
+}
+
+print("f145-fib1:", f145_fib1(9))
+
+gene f145_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f145_gcd0(b, a % b)
+
+}
+
+print("f145-gcd0:", f145_gcd0(694, 201))
+
+gene f145_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f145_gcd1(b, a % b)
+
+}
+
+print("f145-gcd1:", f145_gcd1(870, 400))
+
+gene f145_gcd2(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f145_gcd2(b, a % b)
+
+}
+
+print("f145-gcd2:", f145_gcd2(98, 696))
+
+gene f145_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f145_c0 = f145_mk0(35)
+
+f145_c0(5)
+
+print("f145-cl0:", f145_c0(1))
+
+gene f145_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f145_c1 = f145_mk1(38)
+
+f145_c1(3)
+
+print("f145-cl1:", f145_c1(8))
+
+gene f145_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f145-hof0:", f145_tw0(gene (z) => z * 2 + 1, 5))
+
+gene f145_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f145-hof1:", f145_tw1(gene (z) => z * 2 + 1, 4))
+
+gene f145_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f145-dg0:", f145_sd0(587179))
+
+gene f145_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f145-dg1:", f145_sd1(282693))

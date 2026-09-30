@@ -1,0 +1,122 @@
+# compat corpus — generated, do not edit by hand
+# bucket=optres seed=20261030 idx=200 tag=o200
+
+gene o200_f0(n) {
+
+    if n > -8440 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o200_u0(n) {
+
+    let v = o200_f0(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o200-p0:", o200_u0(-9046), o200_u0(-8426))
+
+gene o200_f1(n) {
+
+    if n > -4624 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o200_u1(n) {
+
+    let v = o200_f1(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o200-p1:", o200_u1(-8149), o200_u1(-4612))
+
+gene o200_f2(n) {
+
+    if n > 9575 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o200_u2(n) {
+
+    let v = o200_f2(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o200-p2:", o200_u2(-6058), o200_u2(9593))
+
+gene o200_f3(n) {
+
+    if n > -212 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o200_u3(n) {
+
+    let v = o200_f3(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o200-p3:", o200_u3(-7154), o200_u3(-208))
+
+print("o200-o0:", is_ok(ok(-671)), is_none(none()), is_err(err("-671")), is_some(some(-671)))
+
+print("o200-u0:", unwrap_or(none(), -671), unwrap_or(err("x"), -672), unwrap_or(ok(-671), 0))
+
+print("o200-o1:", is_ok(ok(-7790)), is_none(none()), is_err(err("-7790")), is_some(some(-7790)))
+
+print("o200-u1:", unwrap_or(none(), -7790), unwrap_or(err("x"), -7791), unwrap_or(ok(-7790), 0))
+
+print("o200-o2:", is_ok(ok(3368)), is_none(none()), is_err(err("3368")), is_some(some(3368)))
+
+print("o200-u2:", unwrap_or(none(), 3368), unwrap_or(err("x"), 3367), unwrap_or(ok(3368), 0))
+
+print("o200-o3:", is_ok(ok(4432)), is_none(none()), is_err(err("4432")), is_some(some(4432)))
+
+print("o200-u3:", unwrap_or(none(), 4432), unwrap_or(err("x"), 4431), unwrap_or(ok(4432), 0))
+
+print("o200-e0:", ok(-1235) == ok(-1235), some(-1235) == ok(-1235), none() == none(), err(1) == err(2))
+
+print("o200-j0:", json_str(ok(-1235)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o200-e1:", ok(9984) == ok(9984), some(9984) == ok(9984), none() == none(), err(1) == err(2))
+
+print("o200-j1:", json_str(ok(9984)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o200-n0:", some(some(58))?!?!, unwrap(ok(105)) + unwrap(some(47)))
+
+print("o200-s0:", "v=" + str(ok(58)?!), some("47k")?! + "!")
+
+print("o200-n1:", some(some(3))?!?!, unwrap(ok(99)) + unwrap(some(96)))
+
+print("o200-s1:", "v=" + str(ok(3)?!), some("96k")?! + "!")

@@ -1,0 +1,144 @@
+# compat corpus — generated, do not edit by hand
+# bucket=optres seed=20261030 idx=170 tag=o170
+
+gene o170_f0(n) {
+
+    if n > -7527 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o170_u0(n) {
+
+    let v = o170_f0(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o170-p0:", o170_u0(-9230), o170_u0(-7513))
+
+gene o170_f1(n) {
+
+    if n > -1033 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o170_u1(n) {
+
+    let v = o170_f1(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o170-p1:", o170_u1(6422), o170_u1(-1031))
+
+gene o170_f2(n) {
+
+    if n > -407 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o170_u2(n) {
+
+    let v = o170_f2(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o170-p2:", o170_u2(-1075), o170_u2(-396))
+
+gene o170_f3(n) {
+
+    if n > -866 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o170_u3(n) {
+
+    let v = o170_f3(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o170-p3:", o170_u3(-5099), o170_u3(-863))
+
+gene o170_f4(n) {
+
+    if n > 1617 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o170_u4(n) {
+
+    let v = o170_f4(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o170-p4:", o170_u4(8284), o170_u4(1619))
+
+print("o170-o0:", is_ok(ok(6295)), is_none(none()), is_err(err("6295")), is_some(some(6295)))
+
+print("o170-u0:", unwrap_or(none(), 6295), unwrap_or(err("x"), 6294), unwrap_or(ok(6295), 0))
+
+print("o170-o1:", is_ok(ok(9496)), is_none(none()), is_err(err("9496")), is_some(some(9496)))
+
+print("o170-u1:", unwrap_or(none(), 9496), unwrap_or(err("x"), 9495), unwrap_or(ok(9496), 0))
+
+print("o170-o2:", is_ok(ok(3342)), is_none(none()), is_err(err("3342")), is_some(some(3342)))
+
+print("o170-u2:", unwrap_or(none(), 3342), unwrap_or(err("x"), 3341), unwrap_or(ok(3342), 0))
+
+print("o170-o3:", is_ok(ok(-830)), is_none(none()), is_err(err("-830")), is_some(some(-830)))
+
+print("o170-u3:", unwrap_or(none(), -830), unwrap_or(err("x"), -831), unwrap_or(ok(-830), 0))
+
+print("o170-e0:", ok(9531) == ok(9531), some(9531) == ok(9531), none() == none(), err(1) == err(2))
+
+print("o170-j0:", json_str(ok(9531)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o170-e1:", ok(8646) == ok(8646), some(8646) == ok(8646), none() == none(), err(1) == err(2))
+
+print("o170-j1:", json_str(ok(8646)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o170-n0:", some(some(69))?!?!, unwrap(ok(162)) + unwrap(some(93)))
+
+print("o170-s0:", "v=" + str(ok(69)?!), some("93k")?! + "!")
+
+print("o170-n1:", some(some(71))?!?!, unwrap(ok(92)) + unwrap(some(21)))
+
+print("o170-s1:", "v=" + str(ok(71)?!), some("21k")?! + "!")

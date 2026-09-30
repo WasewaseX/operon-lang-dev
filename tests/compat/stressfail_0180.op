@@ -1,0 +1,202 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=180 tag=s180
+
+stress {
+
+    print("s180-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s180-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s180-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s180-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s180-mz:", 42 % 0)
+
+} rescue (e) {
+
+    print("s180-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s180-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s180-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s180-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s180-of2:", "caught", e.kind, e.message)
+
+}
+
+gene s180_r0() {
+
+    raise "s180-82d5s1"
+
+}
+
+stress {
+
+    s180_r0()
+
+    print("s180-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s180-r0:", e.kind, e.message)
+
+}
+
+gene s180_r1() {
+
+    raise "s180-0uldd5"
+
+}
+
+stress {
+
+    s180_r1()
+
+    print("s180-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s180-r1:", e.kind, e.message)
+
+}
+
+let s180_xs0 = [48, 42, 40]
+
+stress {
+
+    print("s180-x0:", s180_xs0[7])
+
+} rescue (e) {
+
+    print("s180-x0:", "caught", e.kind)
+
+}
+
+let s180_xs1 = [5, 16]
+
+stress {
+
+    print("s180-x1:", s180_xs1[7])
+
+} rescue (e) {
+
+    print("s180-x1:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s180-0"
+
+    } rescue (e) {
+
+        print("s180-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s180-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s180-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s180-d0-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s180-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s180-1"
+
+    } rescue (e) {
+
+        print("s180-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s180-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s180-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s180-d1-top:", outer.message)
+
+}

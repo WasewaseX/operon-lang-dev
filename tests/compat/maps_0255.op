@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=255 tag=m255
+
+let m255_m0 = {vector: 50, helix: -22, exon: 61, codon: -55, splicer: -82}
+
+print("m255-m0:", m255_m0["vector"], len(m255_m0), m255_m0.has("vector"))
+
+let m255_m1 = {exon: 2, cell: -9, plasmid: 45, ligase: -74}
+
+print("m255-m1:", m255_m1["exon"], len(m255_m1), m255_m1.has("exon"))
+
+let m255_m2 = {marker: -46, cell: 48, splicer: -22}
+
+print("m255-m2:", m255_m2["marker"], len(m255_m2), m255_m2.has("marker"))
+
+let m255_m3 = {codon: 74, enzyme: 40, plasmid: 66, exon: -17}
+
+print("m255-m3:", m255_m3["codon"], len(m255_m3), m255_m3.has("codon"))
+
+let m255_k0 = {vector: 34, exon: 27, codon: 28}
+
+let m255_ks0 = m255_k0.keys()
+
+let m255_sm0 = 0
+
+for k in m255_k0 { m255_sm0 += m255_k0[k] }
+
+print("m255-k0:", m255_sm0, m255_k0.keys().sort(), m255_k0.values().len())
+
+let m255_k1 = {gene: 30, exon: 21, splicer: 32}
+
+let m255_ks1 = m255_k1.keys()
+
+let m255_sm1 = 0
+
+for k in m255_k1 { m255_sm1 += m255_k1[k] }
+
+print("m255-k1:", m255_sm1, m255_k1.keys().sort(), m255_k1.values().len())
+
+let m255_k2 = {helix: 44, exon: 46, cell: 49}
+
+let m255_ks2 = m255_k2.keys()
+
+let m255_sm2 = 0
+
+for k in m255_k2 { m255_sm2 += m255_k2[k] }
+
+print("m255-k2:", m255_sm2, m255_k2.keys().sort(), m255_k2.values().len())
+
+let m255_w0 = {outer: {cell: 5, ligase: 2, tag: "ok"}}}
+
+print("m255-w0:", m255_w0["outer"]["ligase"], m255_w0["outer"]["tag"])
+
+let m255_w1 = {outer: {cell: 4, enzyme: 2, tag: "ok"}}}
+
+print("m255-w1:", m255_w1["outer"]["enzyme"], m255_w1["outer"]["tag"])

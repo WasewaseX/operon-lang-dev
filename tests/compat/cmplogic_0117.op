@@ -1,0 +1,36 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=117 tag=c117
+
+print("c117-c0:", 1768 <= -4340)
+
+print("c117-c1:", 4671 == 8851)
+
+print("c117-c2:", 7292 == 8597)
+
+print("c117-c3:", 4518 < -2983)
+
+print("c117-c4:", -4833 > -8121)
+
+print("c117-b0:", 13 < 44 && 44 < 2, 13 > 44 || 13 > 2)
+
+print("c117-b1:", 15 < 27 && 27 < 25, 15 > 27 || 15 > 25)
+
+print("c117-b2:", 18 < 28 && 28 < 32, 18 > 28 || 18 > 32)
+
+print("c117-t0:", 241 > 4949 ? "gt" : "le")
+
+print("c117-t1:", -4863 > 1354 ? "gt" : "le")
+
+print("c117-t2:", -6253 > -2088 ? "gt" : "le")
+
+let c117_n0 = null
+
+print("c117-n0:", c117_n0 ?? -2092, c117_n0 == null)
+
+let c117_n1 = null
+
+print("c117-n1:", c117_n1 ?? 6156, c117_n1 == null)
+
+print("c117-s0:", "fnnl" in "cbwd8xfnnl", "fnnl" == "fnnl")
+
+print("c117-s1:", "7471" in "h6txhv7471", "7471" == "7471")

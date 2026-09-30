@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=150 tag=m150
+
+let m150_m0 = {marker: -24, gene: 65, plasmid: 83}
+
+print("m150-m0:", m150_m0["marker"], len(m150_m0), m150_m0.has("marker"))
+
+let m150_m1 = {plasmid: 27, enzyme: -90, exon: -82, codon: -89}
+
+print("m150-m1:", m150_m1["plasmid"], len(m150_m1), m150_m1.has("plasmid"))
+
+let m150_m2 = {enzyme: -27, marker: 54, exon: -90}
+
+print("m150-m2:", m150_m2["enzyme"], len(m150_m2), m150_m2.has("enzyme"))
+
+let m150_k0 = {helix: 29, marker: 15, vector: 2}
+
+let m150_ks0 = m150_k0.keys()
+
+let m150_sm0 = 0
+
+for k in m150_k0 { m150_sm0 += m150_k0[k] }
+
+print("m150-k0:", m150_sm0, m150_k0.keys().sort(), m150_k0.values().len())
+
+let m150_k1 = {marker: 38, enzyme: 41, exon: 7}
+
+let m150_ks1 = m150_k1.keys()
+
+let m150_sm1 = 0
+
+for k in m150_k1 { m150_sm1 += m150_k1[k] }
+
+print("m150-k1:", m150_sm1, m150_k1.keys().sort(), m150_k1.values().len())
+
+let m150_k2 = {splicer: 32, cell: 10, gene: 47}
+
+let m150_ks2 = m150_k2.keys()
+
+let m150_sm2 = 0
+
+for k in m150_k2 { m150_sm2 += m150_k2[k] }
+
+print("m150-k2:", m150_sm2, m150_k2.keys().sort(), m150_k2.values().len())
+
+let m150_w0 = {outer: {splicer: 7, plasmid: 9, tag: "ok"}}}
+
+print("m150-w0:", m150_w0["outer"]["plasmid"], m150_w0["outer"]["tag"])
+
+let m150_w1 = {outer: {helix: 6, cell: 8, tag: "ok"}}}
+
+print("m150-w1:", m150_w1["outer"]["cell"], m150_w1["outer"]["tag"])

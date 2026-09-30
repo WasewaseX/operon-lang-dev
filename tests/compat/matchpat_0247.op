@@ -1,0 +1,244 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=247 tag=m247
+
+let m247_s0 = some(1)
+
+match m247_s0 {
+
+    case Some(x) if x > 1 {
+
+        print("m247-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m247-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m247-m0:", "none")
+
+    }
+
+}
+
+let m247_s1 = some(6)
+
+match m247_s1 {
+
+    case Some(x) if x > 6 {
+
+        print("m247-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m247-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m247-m1:", "none")
+
+    }
+
+}
+
+let m247_s2 = some(8)
+
+match m247_s2 {
+
+    case Some(x) if x > 8 {
+
+        print("m247-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m247-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m247-m2:", "none")
+
+    }
+
+}
+
+let m247_ls0 = [26, 20, 18]
+
+match m247_ls0 {
+
+    case [26, *rest] {
+
+        print("m247-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m247-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m247-l0:", "other")
+
+    }
+
+}
+
+let m247_ls1 = [23, 32, 43]
+
+match m247_ls1 {
+
+    case [23, *rest] {
+
+        print("m247-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m247-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m247-l1:", "other")
+
+    }
+
+}
+
+let m247_mp0 = {vector: -8897, ligase: 7243}
+
+match m247_mp0 {
+
+    case {vector: p, ligase: q} {
+
+        print("m247-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m247-mp0:", "miss")
+
+    }
+
+}
+
+let m247_mp1 = {enzyme: 8701, helix: -7984}
+
+match m247_mp1 {
+
+    case {enzyme: p, helix: q} {
+
+        print("m247-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m247-mp1:", "miss")
+
+    }
+
+}
+
+let m247_mp2 = {cell: -6864, vector: -6500}
+
+match m247_mp2 {
+
+    case {cell: p, vector: q} {
+
+        print("m247-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m247-mp2:", "miss")
+
+    }
+
+}
+
+let m247_r0 = ok(5)
+
+match m247_r0 {
+
+    case Ok(n) | Err(5) {
+
+        print("m247-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m247-r0:", "zero")
+
+    }
+
+}
+
+let m247_r1 = ok(1)
+
+match m247_r1 {
+
+    case Ok(n) | Err(1) {
+
+        print("m247-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m247-r1:", "zero")
+
+    }
+
+}
+
+match "enzyme" {
+
+    case "enzyme" {
+
+        print("m247-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m247-w0:", "alt")
+
+    }
+
+}
+
+match "enzyme" {
+
+    case "enzyme" {
+
+        print("m247-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m247-w1:", "alt")
+
+    }
+
+}

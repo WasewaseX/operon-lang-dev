@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=177 tag=m177
+
+let m177_m0 = {ribose: 16, helix: 82, splicer: 32, vector: -96}
+
+print("m177-m0:", m177_m0["ribose"], len(m177_m0), m177_m0.has("ribose"))
+
+let m177_m1 = {plasmid: -49, codon: 54, vector: -41}
+
+print("m177-m1:", m177_m1["plasmid"], len(m177_m1), m177_m1.has("plasmid"))
+
+let m177_m2 = {splicer: 77, helix: 30, gene: 55, plasmid: 24}
+
+print("m177-m2:", m177_m2["splicer"], len(m177_m2), m177_m2.has("splicer"))
+
+let m177_m3 = {vector: 39, plasmid: 44, enzyme: -99, helix: -90}
+
+print("m177-m3:", m177_m3["vector"], len(m177_m3), m177_m3.has("vector"))
+
+let m177_k0 = {splicer: 12, ribose: 18, cell: 39}
+
+let m177_ks0 = m177_k0.keys()
+
+let m177_sm0 = 0
+
+for k in m177_k0 { m177_sm0 += m177_k0[k] }
+
+print("m177-k0:", m177_sm0, m177_k0.keys().sort(), m177_k0.values().len())
+
+let m177_k1 = {vector: 43, plasmid: 12, gene: 35}
+
+let m177_ks1 = m177_k1.keys()
+
+let m177_sm1 = 0
+
+for k in m177_k1 { m177_sm1 += m177_k1[k] }
+
+print("m177-k1:", m177_sm1, m177_k1.keys().sort(), m177_k1.values().len())
+
+let m177_k2 = {ligase: 18, vector: 2, codon: 41}
+
+let m177_ks2 = m177_k2.keys()
+
+let m177_sm2 = 0
+
+for k in m177_k2 { m177_sm2 += m177_k2[k] }
+
+print("m177-k2:", m177_sm2, m177_k2.keys().sort(), m177_k2.values().len())
+
+let m177_w0 = {outer: {ligase: 1, enzyme: 4, tag: "ok"}}}
+
+print("m177-w0:", m177_w0["outer"]["enzyme"], m177_w0["outer"]["tag"])
+
+let m177_w1 = {outer: {helix: 1, ligase: 1, tag: "ok"}}}
+
+print("m177-w1:", m177_w1["outer"]["ligase"], m177_w1["outer"]["tag"])

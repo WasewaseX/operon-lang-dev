@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=264 tag=s264
+
+print("s264-m0:", "jfBb80".upper(), "jfBb80".slice(1), "jfBb80".len())
+
+print("s264-m1:", "f25sCi7adltcj".upper(), "f25sCi7adltcj".slice(3), "f25sCi7adltcj".len())
+
+print("s264-m2:", "yga8bBBcb".upper(), "yga8bBBcb".slice(1), "yga8bBBcb".len())
+
+print("s264-m3:", "juy_31".upper(), "juy_31".slice(2), "juy_31".len())
+
+print("s264-m4:", "kztijqAi381b0".upper(), "kztijqAi381b0".slice(3), "kztijqAi381b0".len())
+
+print("s264-i0:", "5cl-{36}-k2Bw")
+
+let s264_v0 = 36
+
+print("s264-v0:", "n={s264_v0}" + "!" * 1)
+
+print("s264-i1:", "bm8-{39}-n6ia")
+
+let s264_v1 = 39
+
+print("s264-v1:", "n={s264_v1}" + "!" * 3)
+
+print("s264-i2:", "bns-{12}-iwyl")
+
+let s264_v2 = 12
+
+print("s264-v2:", "n={s264_v2}" + "!" * 2)
+
+print("s264-i3:", "h2_-{48}-lbzs")
+
+let s264_v3 = 48
+
+print("s264-v3:", "n={s264_v3}" + "!" * 3)
+
+print("s264-i4:", "iya-{28}-d_Bz")
+
+let s264_v4 = 28
+
+print("s264-v4:", "n={s264_v4}" + "!" * 1)
+
+print("s264-r0:", "yu8h5exh".replace("y", "8n"), "yu8h5exh".contains("u8"))
+
+print("s264-r1:", "nrfrdehj".replace("n", "z5"), "nrfrdehj".contains("rf"))
+
+print("s264-j0:", ["baj", "cb5", "j6u"].join("-"))
+
+print("s264-j1:", ["6eh", "gnz", "48z"].join("-"))
+
+print("s264-a0:", "39jBz6q".at(1), "39jBz6q".trim() == "39jBz6q")
+
+print("s264-a1:", "n846tin".at(1), "n846tin".trim() == "n846tin")
+
+print("s264-a2:", "az9Cf3k".at(4), "az9Cf3k".trim() == "az9Cf3k")

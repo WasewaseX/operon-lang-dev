@@ -1,0 +1,50 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=180 tag=s180
+
+print("s180-m0:", "u51_Bte".upper(), "u51_Bte".slice(1), "u51_Bte".len())
+
+print("s180-m1:", "4wosh08".upper(), "4wosh08".slice(3), "4wosh08".len())
+
+print("s180-m2:", "giCm_udyd4r".upper(), "giCm_udyd4r".slice(1), "giCm_udyd4r".len())
+
+print("s180-m3:", "jubkegmg0x3AA0".upper(), "jubkegmg0x3AA0".slice(4), "jubkegmg0x3AA0".len())
+
+print("s180-m4:", "28cx5o0b1ji".upper(), "28cx5o0b1ji".slice(3), "28cx5o0b1ji".len())
+
+print("s180-i0:", "p_e-{51}-geir")
+
+let s180_v0 = 51
+
+print("s180-v0:", "n={s180_v0}" + "!" * 1)
+
+print("s180-i1:", "pf5-{97}-ltw1")
+
+let s180_v1 = 97
+
+print("s180-v1:", "n={s180_v1}" + "!" * 2)
+
+print("s180-i2:", "y8j-{94}-i4pw")
+
+let s180_v2 = 94
+
+print("s180-v2:", "n={s180_v2}" + "!" * 3)
+
+print("s180-i3:", "zvp-{61}-0aCh")
+
+let s180_v3 = 61
+
+print("s180-v3:", "n={s180_v3}" + "!" * 1)
+
+print("s180-r0:", "ygg25f2j".replace("y", "zo"), "ygg25f2j".contains("gg"))
+
+print("s180-r1:", "y40zedq5".replace("y", "o4"), "y40zedq5".contains("40"))
+
+print("s180-r2:", "pm5onk0A".replace("p", "dv"), "pm5onk0A".contains("m5"))
+
+print("s180-j0:", ["y8_", "ubn", "1gA"].join("-"))
+
+print("s180-j1:", ["3zk", "skv", "nuz"].join("-"))
+
+print("s180-a0:", "sxs59mi".at(2), "sxs59mi".trim() == "sxs59mi")
+
+print("s180-a1:", "wi40qy_".at(2), "wi40qy_".trim() == "wi40qy_")

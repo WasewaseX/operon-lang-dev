@@ -1,0 +1,144 @@
+# compat corpus — generated, do not edit by hand
+# bucket=optres seed=20261030 idx=173 tag=o173
+
+gene o173_f0(n) {
+
+    if n > -9136 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o173_u0(n) {
+
+    let v = o173_f0(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o173-p0:", o173_u0(860), o173_u0(-9131))
+
+gene o173_f1(n) {
+
+    if n > -7222 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o173_u1(n) {
+
+    let v = o173_f1(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o173-p1:", o173_u1(-5289), o173_u1(-7219))
+
+gene o173_f2(n) {
+
+    if n > -1282 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o173_u2(n) {
+
+    let v = o173_f2(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o173-p2:", o173_u2(4021), o173_u2(-1269))
+
+gene o173_f3(n) {
+
+    if n > 8047 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o173_u3(n) {
+
+    let v = o173_f3(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o173-p3:", o173_u3(-6179), o173_u3(8052))
+
+gene o173_f4(n) {
+
+    if n > 471 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o173_u4(n) {
+
+    let v = o173_f4(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o173-p4:", o173_u4(4481), o173_u4(482))
+
+print("o173-o0:", is_ok(ok(-7595)), is_none(none()), is_err(err("-7595")), is_some(some(-7595)))
+
+print("o173-u0:", unwrap_or(none(), -7595), unwrap_or(err("x"), -7596), unwrap_or(ok(-7595), 0))
+
+print("o173-o1:", is_ok(ok(6144)), is_none(none()), is_err(err("6144")), is_some(some(6144)))
+
+print("o173-u1:", unwrap_or(none(), 6144), unwrap_or(err("x"), 6143), unwrap_or(ok(6144), 0))
+
+print("o173-o2:", is_ok(ok(6893)), is_none(none()), is_err(err("6893")), is_some(some(6893)))
+
+print("o173-u2:", unwrap_or(none(), 6893), unwrap_or(err("x"), 6892), unwrap_or(ok(6893), 0))
+
+print("o173-o3:", is_ok(ok(4124)), is_none(none()), is_err(err("4124")), is_some(some(4124)))
+
+print("o173-u3:", unwrap_or(none(), 4124), unwrap_or(err("x"), 4123), unwrap_or(ok(4124), 0))
+
+print("o173-e0:", ok(-9878) == ok(-9878), some(-9878) == ok(-9878), none() == none(), err(1) == err(2))
+
+print("o173-j0:", json_str(ok(-9878)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o173-e1:", ok(1444) == ok(1444), some(1444) == ok(1444), none() == none(), err(1) == err(2))
+
+print("o173-j1:", json_str(ok(1444)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o173-n0:", some(some(37))?!?!, unwrap(ok(84)) + unwrap(some(47)))
+
+print("o173-s0:", "v=" + str(ok(37)?!), some("47k")?! + "!")
+
+print("o173-n1:", some(some(92))?!?!, unwrap(ok(179)) + unwrap(some(87)))
+
+print("o173-s1:", "v=" + str(ok(92)?!), some("87k")?! + "!")

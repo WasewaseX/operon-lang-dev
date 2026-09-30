@@ -1,0 +1,250 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=118 tag=m118
+
+let m118_s0 = some(5)
+
+match m118_s0 {
+
+    case Some(x) if x > 5 {
+
+        print("m118-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m118-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m118-m0:", "none")
+
+    }
+
+}
+
+let m118_s1 = some(6)
+
+match m118_s1 {
+
+    case Some(x) if x > 6 {
+
+        print("m118-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m118-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m118-m1:", "none")
+
+    }
+
+}
+
+let m118_s2 = some(4)
+
+match m118_s2 {
+
+    case Some(x) if x > 4 {
+
+        print("m118-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m118-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m118-m2:", "none")
+
+    }
+
+}
+
+let m118_s3 = some(4)
+
+match m118_s3 {
+
+    case Some(x) if x > 4 {
+
+        print("m118-m3:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m118-m3:", "small", x)
+
+    }
+
+    case None {
+
+        print("m118-m3:", "none")
+
+    }
+
+}
+
+let m118_ls0 = [21, 18, 16]
+
+match m118_ls0 {
+
+    case [21, *rest] {
+
+        print("m118-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m118-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m118-l0:", "other")
+
+    }
+
+}
+
+let m118_ls1 = [39, 6, 50]
+
+match m118_ls1 {
+
+    case [39, *rest] {
+
+        print("m118-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m118-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m118-l1:", "other")
+
+    }
+
+}
+
+let m118_mp0 = {ligase: -6172, vector: 8268}
+
+match m118_mp0 {
+
+    case {ligase: p, vector: q} {
+
+        print("m118-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m118-mp0:", "miss")
+
+    }
+
+}
+
+let m118_mp1 = {plasmid: 5473, helix: -4942}
+
+match m118_mp1 {
+
+    case {plasmid: p, helix: q} {
+
+        print("m118-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m118-mp1:", "miss")
+
+    }
+
+}
+
+let m118_r0 = ok(2)
+
+match m118_r0 {
+
+    case Ok(n) | Err(2) {
+
+        print("m118-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m118-r0:", "zero")
+
+    }
+
+}
+
+let m118_r1 = ok(1)
+
+match m118_r1 {
+
+    case Ok(n) | Err(1) {
+
+        print("m118-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m118-r1:", "zero")
+
+    }
+
+}
+
+match "ligase" {
+
+    case "ligase" {
+
+        print("m118-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m118-w0:", "alt")
+
+    }
+
+}
+
+match "enzyme" {
+
+    case "enzyme" {
+
+        print("m118-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m118-w1:", "alt")
+
+    }
+
+}

@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=169 tag=c169
+
+print("c169-c0:", 4385 > -9145)
+
+print("c169-c1:", 5852 >= 9142)
+
+print("c169-c2:", -3108 != -4604)
+
+print("c169-c3:", 6167 <= 236)
+
+print("c169-c4:", -618 != 3248)
+
+print("c169-c5:", 3029 > 3875)
+
+print("c169-b0:", 31 < 19 && 19 < 27, 31 > 19 || 31 > 27)
+
+print("c169-b1:", 7 < 30 && 30 < 6, 7 > 30 || 7 > 6)
+
+print("c169-b2:", 31 < 18 && 18 < 26, 31 > 18 || 31 > 26)
+
+print("c169-b3:", 28 < 45 && 45 < 45, 28 > 45 || 28 > 45)
+
+print("c169-t0:", -5500 > -9057 ? "gt" : "le")
+
+print("c169-t1:", -2871 > 9552 ? "gt" : "le")
+
+print("c169-t2:", 6140 > 9686 ? "gt" : "le")
+
+let c169_n0 = null
+
+print("c169-n0:", c169_n0 ?? -7483, c169_n0 == null)
+
+let c169_n1 = null
+
+print("c169-n1:", c169_n1 ?? -2015, c169_n1 == null)
+
+print("c169-s0:", "3wfn" in "03imbf3wfn", "3wfn" == "3wfn")
+
+print("c169-s1:", "0uip" in "7By6de0uip", "0uip" == "0uip")

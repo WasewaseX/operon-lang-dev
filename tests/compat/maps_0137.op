@@ -1,0 +1,50 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=137 tag=m137
+
+let m137_m0 = {exon: -35, marker: 9, enzyme: 0, codon: 26, cell: -20}
+
+print("m137-m0:", m137_m0["exon"], len(m137_m0), m137_m0.has("exon"))
+
+let m137_m1 = {enzyme: -56, exon: 7, gene: -23, plasmid: 79, vector: 77}
+
+print("m137-m1:", m137_m1["enzyme"], len(m137_m1), m137_m1.has("enzyme"))
+
+let m137_m2 = {ribose: 55, enzyme: -63, marker: -57, cell: 82}
+
+print("m137-m2:", m137_m2["ribose"], len(m137_m2), m137_m2.has("ribose"))
+
+let m137_m3 = {ligase: 11, splicer: 56, marker: -27, cell: -64, vector: -62}
+
+print("m137-m3:", m137_m3["ligase"], len(m137_m3), m137_m3.has("ligase"))
+
+let m137_m4 = {codon: 70, ligase: 27, splicer: -19, helix: -45}
+
+print("m137-m4:", m137_m4["codon"], len(m137_m4), m137_m4.has("codon"))
+
+let m137_k0 = {plasmid: 24, codon: 36, splicer: 27}
+
+let m137_ks0 = m137_k0.keys()
+
+let m137_sm0 = 0
+
+for k in m137_k0 { m137_sm0 += m137_k0[k] }
+
+print("m137-k0:", m137_sm0, m137_k0.keys().sort(), m137_k0.values().len())
+
+let m137_k1 = {exon: 22, gene: 11, plasmid: 4}
+
+let m137_ks1 = m137_k1.keys()
+
+let m137_sm1 = 0
+
+for k in m137_k1 { m137_sm1 += m137_k1[k] }
+
+print("m137-k1:", m137_sm1, m137_k1.keys().sort(), m137_k1.values().len())
+
+let m137_w0 = {outer: {exon: 2, ribose: 4, tag: "ok"}}}
+
+print("m137-w0:", m137_w0["outer"]["ribose"], m137_w0["outer"]["tag"])
+
+let m137_w1 = {outer: {plasmid: 7, helix: 3, tag: "ok"}}}
+
+print("m137-w1:", m137_w1["outer"]["helix"], m137_w1["outer"]["tag"])

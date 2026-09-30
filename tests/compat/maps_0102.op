@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=102 tag=m102
+
+let m102_m0 = {ribose: -4, splicer: 37, ligase: -90, gene: -83, marker: -3}
+
+print("m102-m0:", m102_m0["ribose"], len(m102_m0), m102_m0.has("ribose"))
+
+let m102_m1 = {ligase: -78, splicer: -17, helix: -37, marker: -99, gene: 10}
+
+print("m102-m1:", m102_m1["ligase"], len(m102_m1), m102_m1.has("ligase"))
+
+let m102_m2 = {helix: 48, exon: 74, plasmid: -38}
+
+print("m102-m2:", m102_m2["helix"], len(m102_m2), m102_m2.has("helix"))
+
+let m102_k0 = {ribose: 17, plasmid: 50, cell: 41}
+
+let m102_ks0 = m102_k0.keys()
+
+let m102_sm0 = 0
+
+for k in m102_k0 { m102_sm0 += m102_k0[k] }
+
+print("m102-k0:", m102_sm0, m102_k0.keys().sort(), m102_k0.values().len())
+
+let m102_k1 = {ribose: 8, splicer: 20, vector: 16}
+
+let m102_ks1 = m102_k1.keys()
+
+let m102_sm1 = 0
+
+for k in m102_k1 { m102_sm1 += m102_k1[k] }
+
+print("m102-k1:", m102_sm1, m102_k1.keys().sort(), m102_k1.values().len())
+
+let m102_k2 = {splicer: 26, enzyme: 22, codon: 18}
+
+let m102_ks2 = m102_k2.keys()
+
+let m102_sm2 = 0
+
+for k in m102_k2 { m102_sm2 += m102_k2[k] }
+
+print("m102-k2:", m102_sm2, m102_k2.keys().sort(), m102_k2.values().len())
+
+let m102_w0 = {outer: {ribose: 2, marker: 2, tag: "ok"}}}
+
+print("m102-w0:", m102_w0["outer"]["marker"], m102_w0["outer"]["tag"])
+
+let m102_w1 = {outer: {marker: 5, splicer: 8, tag: "ok"}}}
+
+print("m102-w1:", m102_w1["outer"]["splicer"], m102_w1["outer"]["tag"])

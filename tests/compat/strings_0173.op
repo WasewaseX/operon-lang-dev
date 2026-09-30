@@ -1,0 +1,50 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=173 tag=s173
+
+print("s173-m0:", "9ArB73".upper(), "9ArB73".slice(2), "9ArB73".len())
+
+print("s173-m1:", "2_2bkl".upper(), "2_2bkl".slice(4), "2_2bkl".len())
+
+print("s173-m2:", "2telkij1m1woo3".upper(), "2telkij1m1woo3".slice(1), "2telkij1m1woo3".len())
+
+print("s173-m3:", "b7lo774ykvfc79".upper(), "b7lo774ykvfc79".slice(3), "b7lo774ykvfc79".len())
+
+print("s173-i0:", "kit-{71}-o46_")
+
+let s173_v0 = 71
+
+print("s173-v0:", "n={s173_v0}" + "!" * 1)
+
+print("s173-i1:", "mal-{35}-s4jk")
+
+let s173_v1 = 35
+
+print("s173-v1:", "n={s173_v1}" + "!" * 1)
+
+print("s173-i2:", "w0h-{4}-q9zr")
+
+let s173_v2 = 4
+
+print("s173-v2:", "n={s173_v2}" + "!" * 1)
+
+print("s173-i3:", "lww-{55}-2sjv")
+
+let s173_v3 = 55
+
+print("s173-v3:", "n={s173_v3}" + "!" * 1)
+
+print("s173-r0:", "d7dsx3m0".replace("d", "8_"), "d7dsx3m0".contains("7d"))
+
+print("s173-r1:", "h3tn6omA".replace("h", "ij"), "h3tn6omA".contains("3t"))
+
+print("s173-r2:", "w3alfCxu".replace("w", "2u"), "w3alfCxu".contains("3a"))
+
+print("s173-r3:", "5p1zne_p".replace("5", "ts"), "5p1zne_p".contains("p1"))
+
+print("s173-j0:", ["0g6", "pf2", "j0v", "B_B", "9Cx"].join("-"))
+
+print("s173-j1:", ["e6C", "n8o", "ffg", "87p", "lAh"].join("-"))
+
+print("s173-a0:", "4ssBx3t".at(2), "4ssBx3t".trim() == "4ssBx3t")
+
+print("s173-a1:", "l4qCqbq".at(0), "l4qCqbq".trim() == "l4qCqbq")

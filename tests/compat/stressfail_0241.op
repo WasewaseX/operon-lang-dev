@@ -1,0 +1,200 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=241 tag=s241
+
+stress {
+
+    print("s241-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s241-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s241-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s241-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s241-mz:", 93 % 0)
+
+} rescue (e) {
+
+    print("s241-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s241-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s241-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s241-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s241-of2:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s241-m1:", 9223372036854775807 % -1)
+
+} rescue (e) {
+
+    print("s241-m1:", "caught", e.kind, e.message)
+
+}
+
+gene s241_r0() {
+
+    raise "s241-CB8_5x"
+
+}
+
+stress {
+
+    s241_r0()
+
+    print("s241-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s241-r0:", e.kind, e.message)
+
+}
+
+gene s241_r1() {
+
+    raise "s241-mo095y"
+
+}
+
+stress {
+
+    s241_r1()
+
+    print("s241-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s241-r1:", e.kind, e.message)
+
+}
+
+gene s241_r2() {
+
+    raise "s241-c0l5hz"
+
+}
+
+stress {
+
+    s241_r2()
+
+    print("s241-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s241-r2:", e.kind, e.message)
+
+}
+
+let s241_xs0 = [31, 42, 31]
+
+stress {
+
+    print("s241-x0:", s241_xs0[5])
+
+} rescue (e) {
+
+    print("s241-x0:", "caught", e.kind)
+
+}
+
+let s241_xs1 = [26, 31]
+
+stress {
+
+    print("s241-x1:", s241_xs1[5])
+
+} rescue (e) {
+
+    print("s241-x1:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s241-0"
+
+    } rescue (e) {
+
+        print("s241-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s241-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s241-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s241-1"
+
+    } rescue (e) {
+
+        print("s241-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s241-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s241-d1-top:", outer.message)
+
+}

@@ -1,0 +1,120 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=265 tag=c265
+
+let c265_b0 = "start"
+
+if 7 > 80 { c265_b0 = "hi" } elif 7 > 40 { c265_b0 = "mid" } else { c265_b0 = "lo" }
+
+print("c265-i0:", c265_b0, 7)
+
+let c265_b1 = "start"
+
+if 38 > 80 { c265_b1 = "hi" } elif 38 > 40 { c265_b1 = "mid" } else { c265_b1 = "lo" }
+
+print("c265-i1:", c265_b1, 38)
+
+let c265_b2 = "start"
+
+if 26 > 80 { c265_b2 = "hi" } elif 26 > 40 { c265_b2 = "mid" } else { c265_b2 = "lo" }
+
+print("c265-i2:", c265_b2, 26)
+
+let c265_a0 = 0
+
+let c265_n0 = 0
+
+while c265_n0 < 18 {
+
+    c265_n0 += 4
+
+    if c265_n0 % 3 == 0 { continue }
+
+    if c265_n0 > 25 { break }
+
+    c265_a0 += c265_n0
+
+}
+
+print("c265-w0:", c265_a0, c265_n0)
+
+let c265_a1 = 0
+
+let c265_n1 = 0
+
+while c265_n1 < 14 {
+
+    c265_n1 += 4
+
+    if c265_n1 % 3 == 0 { continue }
+
+    if c265_n1 > 19 { break }
+
+    c265_a1 += c265_n1
+
+}
+
+print("c265-w1:", c265_a1, c265_n1)
+
+let c265_c0 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 2] {
+
+        c265_c0 += a * b
+
+    }
+
+}
+
+print("c265-l0:", c265_c0)
+
+let c265_c1 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 3] {
+
+        c265_c1 += a * b
+
+    }
+
+}
+
+print("c265-l1:", c265_c1)
+
+let c265_acc0 = ""
+
+loop {
+
+    c265_acc0 += "x"
+
+    if c265_acc0.len() >= 5 { break }
+
+}
+
+print("c265-o0:", c265_acc0)
+
+let c265_acc1 = ""
+
+loop {
+
+    c265_acc1 += "x"
+
+    if c265_acc1.len() >= 6 { break }
+
+}
+
+print("c265-o1:", c265_acc1)
+
+let c265_acc2 = ""
+
+loop {
+
+    c265_acc2 += "x"
+
+    if c265_acc2.len() >= 4 { break }
+
+}
+
+print("c265-o2:", c265_acc2)

@@ -1,0 +1,60 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=225 tag=s225
+
+print("s225-m0:", "ua2i0kfwc6Abm".upper(), "ua2i0kfwc6Abm".slice(1), "ua2i0kfwc6Abm".len())
+
+print("s225-m1:", "g1655d2l6Bqovw".upper(), "g1655d2l6Bqovw".slice(4), "g1655d2l6Bqovw".len())
+
+print("s225-m2:", "9r8rgmbfx".upper(), "9r8rgmbfx".slice(1), "9r8rgmbfx".len())
+
+print("s225-m3:", "p034lmss".upper(), "p034lmss".slice(3), "p034lmss".len())
+
+print("s225-m4:", "irbsAfupm2".upper(), "irbsAfupm2".slice(1), "irbsAfupm2".len())
+
+print("s225-m5:", "xgo43a9vt4A2B".upper(), "xgo43a9vt4A2B".slice(4), "xgo43a9vt4A2B".len())
+
+print("s225-i0:", "hj8-{48}-osse")
+
+let s225_v0 = 48
+
+print("s225-v0:", "n={s225_v0}" + "!" * 1)
+
+print("s225-i1:", "anr-{10}-__qm")
+
+let s225_v1 = 10
+
+print("s225-v1:", "n={s225_v1}" + "!" * 3)
+
+print("s225-i2:", "yca-{29}-yvo9")
+
+let s225_v2 = 29
+
+print("s225-v2:", "n={s225_v2}" + "!" * 3)
+
+print("s225-i3:", "Bkf-{33}-sztj")
+
+let s225_v3 = 33
+
+print("s225-v3:", "n={s225_v3}" + "!" * 3)
+
+print("s225-i4:", "t3s-{94}-vhpy")
+
+let s225_v4 = 94
+
+print("s225-v4:", "n={s225_v4}" + "!" * 1)
+
+print("s225-r0:", "gokhgB8l".replace("g", "bv"), "gokhgB8l".contains("ok"))
+
+print("s225-r1:", "1orlt_nt".replace("1", "js"), "1orlt_nt".contains("or"))
+
+print("s225-r2:", "67nfbi16".replace("6", "nr"), "67nfbi16".contains("7n"))
+
+print("s225-r3:", "ormeg0b_".replace("o", "hl"), "ormeg0b_".contains("rm"))
+
+print("s225-j0:", ["3qm", "61_", "Cyt", "ykv"].join("-"))
+
+print("s225-j1:", ["_uc", "g4u", "jk8"].join("-"))
+
+print("s225-a0:", "iA6g1j_".at(4), "iA6g1j_".trim() == "iA6g1j_")
+
+print("s225-a1:", "r3hukAp".at(3), "r3hukAp".trim() == "r3hukAp")

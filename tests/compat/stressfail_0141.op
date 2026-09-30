@@ -1,0 +1,182 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=141 tag=s141
+
+stress {
+
+    print("s141-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s141-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s141-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s141-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s141-mz:", 51 % 0)
+
+} rescue (e) {
+
+    print("s141-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s141-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s141-of1:", "caught", e.kind, e.message)
+
+}
+
+gene s141_r0() {
+
+    raise "s141-lrwc4r"
+
+}
+
+stress {
+
+    s141_r0()
+
+    print("s141-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s141-r0:", e.kind, e.message)
+
+}
+
+gene s141_r1() {
+
+    raise "s141-gsxmbe"
+
+}
+
+stress {
+
+    s141_r1()
+
+    print("s141-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s141-r1:", e.kind, e.message)
+
+}
+
+let s141_xs0 = [41, 6, 47]
+
+stress {
+
+    print("s141-x0:", s141_xs0[4])
+
+} rescue (e) {
+
+    print("s141-x0:", "caught", e.kind)
+
+}
+
+let s141_xs1 = [46, 48]
+
+stress {
+
+    print("s141-x1:", s141_xs1[3])
+
+} rescue (e) {
+
+    print("s141-x1:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s141-0"
+
+    } rescue (e) {
+
+        print("s141-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s141-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s141-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s141-1"
+
+    } rescue (e) {
+
+        print("s141-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s141-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s141-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s141-d1-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s141-d1-top:", outer.message)
+
+}

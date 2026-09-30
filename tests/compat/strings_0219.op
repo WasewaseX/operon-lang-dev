@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=219 tag=s219
+
+print("s219-m0:", "iwkcm_cn".upper(), "iwkcm_cn".slice(4), "iwkcm_cn".len())
+
+print("s219-m1:", "ai_peCmfv".upper(), "ai_peCmfv".slice(3), "ai_peCmfv".len())
+
+print("s219-m2:", "B0Aycw2cnhpt".upper(), "B0Aycw2cnhpt".slice(3), "B0Aycw2cnhpt".len())
+
+print("s219-m3:", "Bk0i1dCorjs".upper(), "Bk0i1dCorjs".slice(4), "Bk0i1dCorjs".len())
+
+print("s219-m4:", "8rjs4o".upper(), "8rjs4o".slice(2), "8rjs4o".len())
+
+print("s219-i0:", "bbs-{84}-hveh")
+
+let s219_v0 = 84
+
+print("s219-v0:", "n={s219_v0}" + "!" * 1)
+
+print("s219-i1:", "cCc-{81}-5amz")
+
+let s219_v1 = 81
+
+print("s219-v1:", "n={s219_v1}" + "!" * 2)
+
+print("s219-i2:", "4y6-{62}-j2dh")
+
+let s219_v2 = 62
+
+print("s219-v2:", "n={s219_v2}" + "!" * 2)
+
+print("s219-i3:", "f7v-{23}-_wy_")
+
+let s219_v3 = 23
+
+print("s219-v3:", "n={s219_v3}" + "!" * 2)
+
+print("s219-r0:", "hBcif6wv".replace("h", "ss"), "hBcif6wv".contains("Bc"))
+
+print("s219-r1:", "qhfpb6e_".replace("q", "k_"), "qhfpb6e_".contains("hf"))
+
+print("s219-j0:", ["zam", "Cdr", "scz"].join("-"))
+
+print("s219-j1:", ["l1a", "deC", "9vd"].join("-"))
+
+print("s219-a0:", "lg2srq8".at(1), "lg2srq8".trim() == "lg2srq8")
+
+print("s219-a1:", "5wms2f5".at(6), "5wms2f5".trim() == "5wms2f5")

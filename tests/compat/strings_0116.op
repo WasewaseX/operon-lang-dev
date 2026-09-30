@@ -1,0 +1,54 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=116 tag=s116
+
+print("s116-m0:", "a6tmfhy18z1j".upper(), "a6tmfhy18z1j".slice(4), "a6tmfhy18z1j".len())
+
+print("s116-m1:", "A2o8tfqxnl5vlC".upper(), "A2o8tfqxnl5vlC".slice(1), "A2o8tfqxnl5vlC".len())
+
+print("s116-m2:", "8e_wol3".upper(), "8e_wol3".slice(2), "8e_wol3".len())
+
+print("s116-m3:", "Anesg7lki".upper(), "Anesg7lki".slice(4), "Anesg7lki".len())
+
+print("s116-i0:", "0Av-{85}-vnij")
+
+let s116_v0 = 85
+
+print("s116-v0:", "n={s116_v0}" + "!" * 1)
+
+print("s116-i1:", "fs7-{36}-_n_1")
+
+let s116_v1 = 36
+
+print("s116-v1:", "n={s116_v1}" + "!" * 2)
+
+print("s116-i2:", "u92-{85}-dozp")
+
+let s116_v2 = 85
+
+print("s116-v2:", "n={s116_v2}" + "!" * 3)
+
+print("s116-i3:", "9ej-{17}-r1Ce")
+
+let s116_v3 = 17
+
+print("s116-v3:", "n={s116_v3}" + "!" * 2)
+
+print("s116-i4:", "35f-{27}-n08d")
+
+let s116_v4 = 27
+
+print("s116-v4:", "n={s116_v4}" + "!" * 3)
+
+print("s116-r0:", "8yAyg5Bj".replace("8", "_9"), "8yAyg5Bj".contains("yA"))
+
+print("s116-r1:", "fxm8y6o3".replace("f", "zz"), "fxm8y6o3".contains("xm"))
+
+print("s116-j0:", ["qu6", "A95", "wgA"].join("-"))
+
+print("s116-j1:", ["tuz", "dtc", "A0s", "gop"].join("-"))
+
+print("s116-j2:", ["80k", "lng", "3bc", "8ym", "yrf"].join("-"))
+
+print("s116-a0:", "g2r8y64".at(2), "g2r8y64".trim() == "g2r8y64")
+
+print("s116-a1:", "0qld413".at(4), "0qld413".trim() == "0qld413")

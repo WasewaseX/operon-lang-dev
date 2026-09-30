@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=210 tag=c210
+
+print("c210-c0:", -1141 <= -4806)
+
+print("c210-c1:", 3475 == -6006)
+
+print("c210-c2:", -4442 > -2980)
+
+print("c210-c3:", -8550 < -8932)
+
+print("c210-c4:", 5892 > -3498)
+
+print("c210-c5:", 6863 >= 8095)
+
+print("c210-b0:", 42 < 40 && 40 < 49, 42 > 40 || 42 > 49)
+
+print("c210-b1:", 49 < 16 && 16 < 29, 49 > 16 || 49 > 29)
+
+print("c210-b2:", 34 < 8 && 8 < 49, 34 > 8 || 34 > 49)
+
+print("c210-b3:", 30 < 27 && 27 < 12, 30 > 27 || 30 > 12)
+
+print("c210-t0:", 851 > -7887 ? "gt" : "le")
+
+print("c210-t1:", -5745 > 5335 ? "gt" : "le")
+
+print("c210-t2:", 3967 > 3695 ? "gt" : "le")
+
+print("c210-t3:", 2918 > -1475 ? "gt" : "le")
+
+let c210_n0 = null
+
+print("c210-n0:", c210_n0 ?? 9969, c210_n0 == null)
+
+let c210_n1 = null
+
+print("c210-n1:", c210_n1 ?? -7809, c210_n1 == null)
+
+let c210_n2 = null
+
+print("c210-n2:", c210_n2 ?? 9065, c210_n2 == null)
+
+print("c210-s0:", "r5uu" in "qemn8xr5uu", "r5uu" == "r5uu")
+
+print("c210-s1:", "nrdj" in "pykywenrdj", "nrdj" == "nrdj")

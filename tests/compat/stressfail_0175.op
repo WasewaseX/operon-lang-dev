@@ -1,0 +1,210 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=175 tag=s175
+
+stress {
+
+    print("s175-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s175-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s175-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s175-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s175-mz:", 22 % 0)
+
+} rescue (e) {
+
+    print("s175-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s175-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s175-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s175-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s175-of2:", "caught", e.kind, e.message)
+
+}
+
+gene s175_r0() {
+
+    raise "s175-xs9i8r"
+
+}
+
+stress {
+
+    s175_r0()
+
+    print("s175-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s175-r0:", e.kind, e.message)
+
+}
+
+gene s175_r1() {
+
+    raise "s175-3cilno"
+
+}
+
+stress {
+
+    s175_r1()
+
+    print("s175-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s175-r1:", e.kind, e.message)
+
+}
+
+gene s175_r2() {
+
+    raise "s175-ceukyC"
+
+}
+
+stress {
+
+    s175_r2()
+
+    print("s175-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s175-r2:", e.kind, e.message)
+
+}
+
+let s175_xs0 = [28, 7, 46]
+
+stress {
+
+    print("s175-x0:", s175_xs0[7])
+
+} rescue (e) {
+
+    print("s175-x0:", "caught", e.kind)
+
+}
+
+let s175_xs1 = [48, 46, 39]
+
+stress {
+
+    print("s175-x1:", s175_xs1[8])
+
+} rescue (e) {
+
+    print("s175-x1:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s175-0"
+
+    } rescue (e) {
+
+        print("s175-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s175-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s175-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s175-d0-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s175-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s175-1"
+
+    } rescue (e) {
+
+        print("s175-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s175-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s175-d1-top:", outer.message)
+
+}

@@ -1,0 +1,238 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=100 tag=s100
+
+stress {
+
+    print("s100-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s100-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s100-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s100-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s100-mz:", 81 % 0)
+
+} rescue (e) {
+
+    print("s100-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s100-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s100-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s100-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s100-of2:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s100-m1:", 9223372036854775807 % -1)
+
+} rescue (e) {
+
+    print("s100-m1:", "caught", e.kind, e.message)
+
+}
+
+gene s100_r0() {
+
+    raise "s100-jxlfCd"
+
+}
+
+stress {
+
+    s100_r0()
+
+    print("s100-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s100-r0:", e.kind, e.message)
+
+}
+
+gene s100_r1() {
+
+    raise "s100-h4mk4n"
+
+}
+
+stress {
+
+    s100_r1()
+
+    print("s100-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s100-r1:", e.kind, e.message)
+
+}
+
+gene s100_r2() {
+
+    raise "s100-8hviAt"
+
+}
+
+stress {
+
+    s100_r2()
+
+    print("s100-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s100-r2:", e.kind, e.message)
+
+}
+
+gene s100_r3() {
+
+    raise "s100-xij4l5"
+
+}
+
+stress {
+
+    s100_r3()
+
+    print("s100-r3:", "unreachable")
+
+} rescue (e) {
+
+    print("s100-r3:", e.kind, e.message)
+
+}
+
+let s100_xs0 = [49, 28, 1]
+
+stress {
+
+    print("s100-x0:", s100_xs0[8])
+
+} rescue (e) {
+
+    print("s100-x0:", "caught", e.kind)
+
+}
+
+let s100_xs1 = [15, 13, 9, 43]
+
+stress {
+
+    print("s100-x1:", s100_xs1[6])
+
+} rescue (e) {
+
+    print("s100-x1:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s100-0"
+
+    } rescue (e) {
+
+        print("s100-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s100-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s100-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s100-d0-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s100-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s100-1"
+
+    } rescue (e) {
+
+        print("s100-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s100-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s100-d1-top:", outer.message)
+
+}

@@ -1,0 +1,150 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=228 tag=c228
+
+let c228_b0 = "start"
+
+if 102 > 80 { c228_b0 = "hi" } elif 102 > 40 { c228_b0 = "mid" } else { c228_b0 = "lo" }
+
+print("c228-i0:", c228_b0, 102)
+
+let c228_b1 = "start"
+
+if 86 > 80 { c228_b1 = "hi" } elif 86 > 40 { c228_b1 = "mid" } else { c228_b1 = "lo" }
+
+print("c228-i1:", c228_b1, 86)
+
+let c228_b2 = "start"
+
+if 29 > 80 { c228_b2 = "hi" } elif 29 > 40 { c228_b2 = "mid" } else { c228_b2 = "lo" }
+
+print("c228-i2:", c228_b2, 29)
+
+let c228_b3 = "start"
+
+if 110 > 80 { c228_b3 = "hi" } elif 110 > 40 { c228_b3 = "mid" } else { c228_b3 = "lo" }
+
+print("c228-i3:", c228_b3, 110)
+
+let c228_a0 = 0
+
+let c228_n0 = 0
+
+while c228_n0 < 20 {
+
+    c228_n0 += 3
+
+    if c228_n0 % 2 == 0 { continue }
+
+    if c228_n0 > 27 { break }
+
+    c228_a0 += c228_n0
+
+}
+
+print("c228-w0:", c228_a0, c228_n0)
+
+let c228_a1 = 0
+
+let c228_n1 = 0
+
+while c228_n1 < 13 {
+
+    c228_n1 += 2
+
+    if c228_n1 % 2 == 0 { continue }
+
+    if c228_n1 > 22 { break }
+
+    c228_a1 += c228_n1
+
+}
+
+print("c228-w1:", c228_a1, c228_n1)
+
+let c228_a2 = 0
+
+let c228_n2 = 0
+
+while c228_n2 < 8 {
+
+    c228_n2 += 4
+
+    if c228_n2 % 3 == 0 { continue }
+
+    if c228_n2 > 10 { break }
+
+    c228_a2 += c228_n2
+
+}
+
+print("c228-w2:", c228_a2, c228_n2)
+
+let c228_a3 = 0
+
+let c228_n3 = 0
+
+while c228_n3 < 14 {
+
+    c228_n3 += 4
+
+    if c228_n3 % 3 == 0 { continue }
+
+    if c228_n3 > 16 { break }
+
+    c228_a3 += c228_n3
+
+}
+
+print("c228-w3:", c228_a3, c228_n3)
+
+let c228_c0 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 4] {
+
+        c228_c0 += a * b
+
+    }
+
+}
+
+print("c228-l0:", c228_c0)
+
+let c228_c1 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 2] {
+
+        c228_c1 += a * b
+
+    }
+
+}
+
+print("c228-l1:", c228_c1)
+
+let c228_acc0 = ""
+
+loop {
+
+    c228_acc0 += "x"
+
+    if c228_acc0.len() >= 3 { break }
+
+}
+
+print("c228-o0:", c228_acc0)
+
+let c228_acc1 = ""
+
+loop {
+
+    c228_acc1 += "x"
+
+    if c228_acc1.len() >= 3 { break }
+
+}
+
+print("c228-o1:", c228_acc1)

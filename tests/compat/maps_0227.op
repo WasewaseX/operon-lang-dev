@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=227 tag=m227
+
+let m227_m0 = {ligase: 69, helix: 24, enzyme: -45}
+
+print("m227-m0:", m227_m0["ligase"], len(m227_m0), m227_m0.has("ligase"))
+
+let m227_m1 = {exon: -31, ligase: 24, vector: 13}
+
+print("m227-m1:", m227_m1["exon"], len(m227_m1), m227_m1.has("exon"))
+
+let m227_m2 = {ribose: 82, vector: 25, enzyme: -19, plasmid: -52, ligase: -5}
+
+print("m227-m2:", m227_m2["ribose"], len(m227_m2), m227_m2.has("ribose"))
+
+let m227_m3 = {cell: 90, plasmid: 60, marker: 63, helix: 64, ligase: -43}
+
+print("m227-m3:", m227_m3["cell"], len(m227_m3), m227_m3.has("cell"))
+
+let m227_k0 = {cell: 50, codon: 29, splicer: 8}
+
+let m227_ks0 = m227_k0.keys()
+
+let m227_sm0 = 0
+
+for k in m227_k0 { m227_sm0 += m227_k0[k] }
+
+print("m227-k0:", m227_sm0, m227_k0.keys().sort(), m227_k0.values().len())
+
+let m227_k1 = {splicer: 45, plasmid: 18, ligase: 37}
+
+let m227_ks1 = m227_k1.keys()
+
+let m227_sm1 = 0
+
+for k in m227_k1 { m227_sm1 += m227_k1[k] }
+
+print("m227-k1:", m227_sm1, m227_k1.keys().sort(), m227_k1.values().len())
+
+let m227_w0 = {outer: {cell: 5, marker: 7, tag: "ok"}}}
+
+print("m227-w0:", m227_w0["outer"]["marker"], m227_w0["outer"]["tag"])
+
+let m227_w1 = {outer: {splicer: 4, ligase: 2, tag: "ok"}}}
+
+print("m227-w1:", m227_w1["outer"]["ligase"], m227_w1["outer"]["tag"])

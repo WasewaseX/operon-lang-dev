@@ -1,0 +1,214 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=240 tag=m240
+
+gene m240_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m240-b0:", m240_b0({gene: 46, ribose: 48, cell: 3})?!)
+
+gene m240_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m240-b1:", m240_b1({vector: 37, exon: 31, ribose: 94})?!)
+
+gene m240_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m240-b2:", m240_b2({plasmid: 26, enzyme: 36, exon: 15})?!)
+
+gene m240_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m240_f0([1, 18, 17, 46, 30]) {
+
+    case Ok(list) {
+
+        print("m240-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m240-f0:", "e:", m)
+
+    }
+
+}
+
+gene m240_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m240_f1([44, 56, 9, 38, 5, 58, 16]) {
+
+    case Ok(list) {
+
+        print("m240-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m240-f1:", "e:", m)
+
+    }
+
+}
+
+let m240_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m240-cc0:", m240_cl0(12)(14), m240_cl0(14)(12))
+
+let m240_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m240-cc1:", m240_cl1(18)(14), m240_cl1(14)(18))
+
+let m240_data0 = some([some("gene"), none(), some(9)])
+
+match m240_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m240-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m240-x0:", "shape-miss")
+
+    }
+
+}
+
+let m240_data1 = some([some("ligase"), none(), some(6)])
+
+match m240_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m240-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m240-x1:", "shape-miss")
+
+    }
+
+}

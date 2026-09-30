@@ -1,0 +1,144 @@
+# compat corpus — generated, do not edit by hand
+# bucket=optres seed=20261030 idx=253 tag=o253
+
+gene o253_f0(n) {
+
+    if n > 8192 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o253_u0(n) {
+
+    let v = o253_f0(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o253-p0:", o253_u0(2569), o253_u0(8208))
+
+gene o253_f1(n) {
+
+    if n > -6932 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o253_u1(n) {
+
+    let v = o253_f1(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o253-p1:", o253_u1(6884), o253_u1(-6930))
+
+gene o253_f2(n) {
+
+    if n > -2242 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o253_u2(n) {
+
+    let v = o253_f2(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o253-p2:", o253_u2(-7564), o253_u2(-2237))
+
+gene o253_f3(n) {
+
+    if n > -4778 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o253_u3(n) {
+
+    let v = o253_f3(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o253-p3:", o253_u3(-5082), o253_u3(-4759))
+
+gene o253_f4(n) {
+
+    if n > 189 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o253_u4(n) {
+
+    let v = o253_f4(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o253-p4:", o253_u4(1496), o253_u4(206))
+
+print("o253-o0:", is_ok(ok(-1604)), is_none(none()), is_err(err("-1604")), is_some(some(-1604)))
+
+print("o253-u0:", unwrap_or(none(), -1604), unwrap_or(err("x"), -1605), unwrap_or(ok(-1604), 0))
+
+print("o253-o1:", is_ok(ok(7320)), is_none(none()), is_err(err("7320")), is_some(some(7320)))
+
+print("o253-u1:", unwrap_or(none(), 7320), unwrap_or(err("x"), 7319), unwrap_or(ok(7320), 0))
+
+print("o253-o2:", is_ok(ok(-6550)), is_none(none()), is_err(err("-6550")), is_some(some(-6550)))
+
+print("o253-u2:", unwrap_or(none(), -6550), unwrap_or(err("x"), -6551), unwrap_or(ok(-6550), 0))
+
+print("o253-o3:", is_ok(ok(4493)), is_none(none()), is_err(err("4493")), is_some(some(4493)))
+
+print("o253-u3:", unwrap_or(none(), 4493), unwrap_or(err("x"), 4492), unwrap_or(ok(4493), 0))
+
+print("o253-e0:", ok(8669) == ok(8669), some(8669) == ok(8669), none() == none(), err(1) == err(2))
+
+print("o253-j0:", json_str(ok(8669)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o253-e1:", ok(-1453) == ok(-1453), some(-1453) == ok(-1453), none() == none(), err(1) == err(2))
+
+print("o253-j1:", json_str(ok(-1453)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o253-n0:", some(some(29))?!?!, unwrap(ok(65)) + unwrap(some(36)))
+
+print("o253-s0:", "v=" + str(ok(29)?!), some("36k")?! + "!")
+
+print("o253-n1:", some(some(51))?!?!, unwrap(ok(68)) + unwrap(some(17)))
+
+print("o253-s1:", "v=" + str(ok(51)?!), some("17k")?! + "!")

@@ -1,0 +1,250 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=236 tag=m236
+
+let m236_s0 = some(3)
+
+match m236_s0 {
+
+    case Some(x) if x > 3 {
+
+        print("m236-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m236-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m236-m0:", "none")
+
+    }
+
+}
+
+let m236_s1 = some(1)
+
+match m236_s1 {
+
+    case Some(x) if x > 1 {
+
+        print("m236-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m236-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m236-m1:", "none")
+
+    }
+
+}
+
+let m236_s2 = some(2)
+
+match m236_s2 {
+
+    case Some(x) if x > 2 {
+
+        print("m236-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m236-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m236-m2:", "none")
+
+    }
+
+}
+
+let m236_s3 = some(7)
+
+match m236_s3 {
+
+    case Some(x) if x > 7 {
+
+        print("m236-m3:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m236-m3:", "small", x)
+
+    }
+
+    case None {
+
+        print("m236-m3:", "none")
+
+    }
+
+}
+
+let m236_ls0 = [3, 37, 38]
+
+match m236_ls0 {
+
+    case [3, *rest] {
+
+        print("m236-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m236-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m236-l0:", "other")
+
+    }
+
+}
+
+let m236_ls1 = [16, 40, 13]
+
+match m236_ls1 {
+
+    case [16, *rest] {
+
+        print("m236-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m236-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m236-l1:", "other")
+
+    }
+
+}
+
+let m236_mp0 = {vector: -3348, ribose: -6513}
+
+match m236_mp0 {
+
+    case {vector: p, ribose: q} {
+
+        print("m236-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m236-mp0:", "miss")
+
+    }
+
+}
+
+let m236_mp1 = {plasmid: -1643, codon: 1400}
+
+match m236_mp1 {
+
+    case {plasmid: p, codon: q} {
+
+        print("m236-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m236-mp1:", "miss")
+
+    }
+
+}
+
+let m236_r0 = ok(1)
+
+match m236_r0 {
+
+    case Ok(n) | Err(1) {
+
+        print("m236-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m236-r0:", "zero")
+
+    }
+
+}
+
+let m236_r1 = ok(5)
+
+match m236_r1 {
+
+    case Ok(n) | Err(5) {
+
+        print("m236-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m236-r1:", "zero")
+
+    }
+
+}
+
+match "helix" {
+
+    case "helix" {
+
+        print("m236-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m236-w0:", "alt")
+
+    }
+
+}
+
+match "splicer" {
+
+    case "splicer" {
+
+        print("m236-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m236-w1:", "alt")
+
+    }
+
+}

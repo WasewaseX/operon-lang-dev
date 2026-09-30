@@ -1,0 +1,202 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=165 tag=f165
+
+gene f165_g0(p, q = 84, r = 85) {
+
+    return p * 49 + q - r
+
+}
+
+print("f165-d0:", f165_g0(41), f165_g0(41, 41), f165_g0(41, 84, 85))
+
+gene f165_g1(p, q = 59, r = 15) {
+
+    return p * 59 + q - r
+
+}
+
+print("f165-d1:", f165_g1(3), f165_g1(3, 96), f165_g1(3, 59, 15))
+
+gene f165_g2(p, q = 26, r = 70) {
+
+    return p * 68 + q - r
+
+}
+
+print("f165-d2:", f165_g2(18), f165_g2(18, 39), f165_g2(18, 26, 70))
+
+gene f165_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f165_fib0(n - 1) + f165_fib0(n - 2)
+
+}
+
+print("f165-fib0:", f165_fib0(10))
+
+gene f165_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f165_fib1(n - 1) + f165_fib1(n - 2)
+
+}
+
+print("f165-fib1:", f165_fib1(12))
+
+gene f165_fib2(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f165_fib2(n - 1) + f165_fib2(n - 2)
+
+}
+
+print("f165-fib2:", f165_fib2(9))
+
+gene f165_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f165_gcd0(b, a % b)
+
+}
+
+print("f165-gcd0:", f165_gcd0(346, 835))
+
+gene f165_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f165_gcd1(b, a % b)
+
+}
+
+print("f165-gcd1:", f165_gcd1(871, 60))
+
+gene f165_gcd2(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f165_gcd2(b, a % b)
+
+}
+
+print("f165-gcd2:", f165_gcd2(540, 401))
+
+gene f165_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f165_c0 = f165_mk0(15)
+
+f165_c0(9)
+
+print("f165-cl0:", f165_c0(4))
+
+gene f165_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f165_c1 = f165_mk1(10)
+
+f165_c1(2)
+
+print("f165-cl1:", f165_c1(7))
+
+gene f165_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f165-hof0:", f165_tw0(gene (z) => z * 2 + 1, 27))
+
+gene f165_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f165-hof1:", f165_tw1(gene (z) => z * 2 + 1, 20))
+
+gene f165_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f165-dg0:", f165_sd0(960891))
+
+gene f165_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f165-dg1:", f165_sd1(824646))

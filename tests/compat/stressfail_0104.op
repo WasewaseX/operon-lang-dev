@@ -1,0 +1,220 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=104 tag=s104
+
+stress {
+
+    print("s104-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s104-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s104-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s104-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s104-mz:", 52 % 0)
+
+} rescue (e) {
+
+    print("s104-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s104-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s104-of1:", "caught", e.kind, e.message)
+
+}
+
+gene s104_r0() {
+
+    raise "s104-uaa2m3"
+
+}
+
+stress {
+
+    s104_r0()
+
+    print("s104-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s104-r0:", e.kind, e.message)
+
+}
+
+gene s104_r1() {
+
+    raise "s104-37x1ti"
+
+}
+
+stress {
+
+    s104_r1()
+
+    print("s104-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s104-r1:", e.kind, e.message)
+
+}
+
+gene s104_r2() {
+
+    raise "s104-rdfB3k"
+
+}
+
+stress {
+
+    s104_r2()
+
+    print("s104-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s104-r2:", e.kind, e.message)
+
+}
+
+gene s104_r3() {
+
+    raise "s104-t9l6hz"
+
+}
+
+stress {
+
+    s104_r3()
+
+    print("s104-r3:", "unreachable")
+
+} rescue (e) {
+
+    print("s104-r3:", e.kind, e.message)
+
+}
+
+let s104_xs0 = [22, 8, 41]
+
+stress {
+
+    print("s104-x0:", s104_xs0[7])
+
+} rescue (e) {
+
+    print("s104-x0:", "caught", e.kind)
+
+}
+
+let s104_xs1 = [41, 9, 40]
+
+stress {
+
+    print("s104-x1:", s104_xs1[4])
+
+} rescue (e) {
+
+    print("s104-x1:", "caught", e.kind)
+
+}
+
+let s104_xs2 = [24, 19]
+
+stress {
+
+    print("s104-x2:", s104_xs2[5])
+
+} rescue (e) {
+
+    print("s104-x2:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s104-0"
+
+    } rescue (e) {
+
+        print("s104-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s104-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s104-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s104-1"
+
+    } rescue (e) {
+
+        print("s104-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s104-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s104-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s104-d1-top:", outer.message)
+
+}

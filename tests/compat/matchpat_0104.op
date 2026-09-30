@@ -1,0 +1,292 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=104 tag=m104
+
+let m104_s0 = some(7)
+
+match m104_s0 {
+
+    case Some(x) if x > 7 {
+
+        print("m104-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m104-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m104-m0:", "none")
+
+    }
+
+}
+
+let m104_s1 = some(2)
+
+match m104_s1 {
+
+    case Some(x) if x > 2 {
+
+        print("m104-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m104-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m104-m1:", "none")
+
+    }
+
+}
+
+let m104_s2 = some(9)
+
+match m104_s2 {
+
+    case Some(x) if x > 9 {
+
+        print("m104-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m104-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m104-m2:", "none")
+
+    }
+
+}
+
+let m104_s3 = some(3)
+
+match m104_s3 {
+
+    case Some(x) if x > 3 {
+
+        print("m104-m3:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m104-m3:", "small", x)
+
+    }
+
+    case None {
+
+        print("m104-m3:", "none")
+
+    }
+
+}
+
+let m104_s4 = some(2)
+
+match m104_s4 {
+
+    case Some(x) if x > 2 {
+
+        print("m104-m4:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m104-m4:", "small", x)
+
+    }
+
+    case None {
+
+        print("m104-m4:", "none")
+
+    }
+
+}
+
+let m104_ls0 = [50, 49, 10]
+
+match m104_ls0 {
+
+    case [50, *rest] {
+
+        print("m104-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m104-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m104-l0:", "other")
+
+    }
+
+}
+
+let m104_ls1 = [1, 5, 49]
+
+match m104_ls1 {
+
+    case [1, *rest] {
+
+        print("m104-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m104-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m104-l1:", "other")
+
+    }
+
+}
+
+let m104_mp0 = {ligase: 6029, exon: 1690}
+
+match m104_mp0 {
+
+    case {ligase: p, exon: q} {
+
+        print("m104-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m104-mp0:", "miss")
+
+    }
+
+}
+
+let m104_mp1 = {gene: 4050, cell: -1649}
+
+match m104_mp1 {
+
+    case {gene: p, cell: q} {
+
+        print("m104-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m104-mp1:", "miss")
+
+    }
+
+}
+
+let m104_mp2 = {cell: -6781, marker: -8837}
+
+match m104_mp2 {
+
+    case {cell: p, marker: q} {
+
+        print("m104-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m104-mp2:", "miss")
+
+    }
+
+}
+
+let m104_r0 = ok(2)
+
+match m104_r0 {
+
+    case Ok(n) | Err(2) {
+
+        print("m104-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m104-r0:", "zero")
+
+    }
+
+}
+
+let m104_r1 = ok(4)
+
+match m104_r1 {
+
+    case Ok(n) | Err(4) {
+
+        print("m104-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m104-r1:", "zero")
+
+    }
+
+}
+
+match "gene" {
+
+    case "gene" {
+
+        print("m104-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m104-w0:", "alt")
+
+    }
+
+}
+
+match "splicer" {
+
+    case "splicer" {
+
+        print("m104-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m104-w1:", "alt")
+
+    }
+
+}

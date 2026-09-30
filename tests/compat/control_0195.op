@@ -1,0 +1,156 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=195 tag=c195
+
+let c195_b0 = "start"
+
+if 65 > 80 { c195_b0 = "hi" } elif 65 > 40 { c195_b0 = "mid" } else { c195_b0 = "lo" }
+
+print("c195-i0:", c195_b0, 65)
+
+let c195_b1 = "start"
+
+if -10 > 80 { c195_b1 = "hi" } elif -10 > 40 { c195_b1 = "mid" } else { c195_b1 = "lo" }
+
+print("c195-i1:", c195_b1, -10)
+
+let c195_b2 = "start"
+
+if 120 > 80 { c195_b2 = "hi" } elif 120 > 40 { c195_b2 = "mid" } else { c195_b2 = "lo" }
+
+print("c195-i2:", c195_b2, 120)
+
+let c195_b3 = "start"
+
+if 91 > 80 { c195_b3 = "hi" } elif 91 > 40 { c195_b3 = "mid" } else { c195_b3 = "lo" }
+
+print("c195-i3:", c195_b3, 91)
+
+let c195_b4 = "start"
+
+if 8 > 80 { c195_b4 = "hi" } elif 8 > 40 { c195_b4 = "mid" } else { c195_b4 = "lo" }
+
+print("c195-i4:", c195_b4, 8)
+
+let c195_a0 = 0
+
+let c195_n0 = 0
+
+while c195_n0 < 7 {
+
+    c195_n0 += 1
+
+    if c195_n0 % 3 == 0 { continue }
+
+    if c195_n0 > 9 { break }
+
+    c195_a0 += c195_n0
+
+}
+
+print("c195-w0:", c195_a0, c195_n0)
+
+let c195_a1 = 0
+
+let c195_n1 = 0
+
+while c195_n1 < 5 {
+
+    c195_n1 += 4
+
+    if c195_n1 % 3 == 0 { continue }
+
+    if c195_n1 > 10 { break }
+
+    c195_a1 += c195_n1
+
+}
+
+print("c195-w1:", c195_a1, c195_n1)
+
+let c195_a2 = 0
+
+let c195_n2 = 0
+
+while c195_n2 < 13 {
+
+    c195_n2 += 1
+
+    if c195_n2 % 2 == 0 { continue }
+
+    if c195_n2 > 16 { break }
+
+    c195_a2 += c195_n2
+
+}
+
+print("c195-w2:", c195_a2, c195_n2)
+
+let c195_a3 = 0
+
+let c195_n3 = 0
+
+while c195_n3 < 7 {
+
+    c195_n3 += 4
+
+    if c195_n3 % 2 == 0 { continue }
+
+    if c195_n3 > 16 { break }
+
+    c195_a3 += c195_n3
+
+}
+
+print("c195-w3:", c195_a3, c195_n3)
+
+let c195_c0 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 4] {
+
+        c195_c0 += a * b
+
+    }
+
+}
+
+print("c195-l0:", c195_c0)
+
+let c195_c1 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 4] {
+
+        c195_c1 += a * b
+
+    }
+
+}
+
+print("c195-l1:", c195_c1)
+
+let c195_acc0 = ""
+
+loop {
+
+    c195_acc0 += "x"
+
+    if c195_acc0.len() >= 6 { break }
+
+}
+
+print("c195-o0:", c195_acc0)
+
+let c195_acc1 = ""
+
+loop {
+
+    c195_acc1 += "x"
+
+    if c195_acc1.len() >= 7 { break }
+
+}
+
+print("c195-o1:", c195_acc1)

@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=149 tag=s149
+
+print("s149-m0:", "rlsd80ndwa0".upper(), "rlsd80ndwa0".slice(4), "rlsd80ndwa0".len())
+
+print("s149-m1:", "dzaBm8mjCzupq".upper(), "dzaBm8mjCzupq".slice(3), "dzaBm8mjCzupq".len())
+
+print("s149-m2:", "6nzw9yh".upper(), "6nzw9yh".slice(2), "6nzw9yh".len())
+
+print("s149-m3:", "AslAeq8tquB".upper(), "AslAeq8tquB".slice(2), "AslAeq8tquB".len())
+
+print("s149-i0:", "f36-{34}-kg9k")
+
+let s149_v0 = 34
+
+print("s149-v0:", "n={s149_v0}" + "!" * 3)
+
+print("s149-i1:", "0c_-{27}-sx5b")
+
+let s149_v1 = 27
+
+print("s149-v1:", "n={s149_v1}" + "!" * 3)
+
+print("s149-i2:", "az4-{60}-vBpx")
+
+let s149_v2 = 60
+
+print("s149-v2:", "n={s149_v2}" + "!" * 1)
+
+print("s149-r0:", "_0nvm_31".replace("_", "7g"), "_0nvm_31".contains("0n"))
+
+print("s149-r1:", "CCem_g5z".replace("C", "je"), "CCem_g5z".contains("Ce"))
+
+print("s149-j0:", ["8pl", "0fq", "pzr", "08r", "4eb"].join("-"))
+
+print("s149-j1:", ["ygn", "yvh", "osx", "axx", "2sw"].join("-"))
+
+print("s149-j2:", ["3_u", "jq0", "2p_", "vBz"].join("-"))
+
+print("s149-a0:", "ryjihd4".at(4), "ryjihd4".trim() == "ryjihd4")
+
+print("s149-a1:", "hd445pB".at(5), "hd445pB".trim() == "hd445pB")

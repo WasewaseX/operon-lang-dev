@@ -1,0 +1,230 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=137 tag=m137
+
+gene m137_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m137-b0:", m137_b0({marker: 19, plasmid: 90, cell: 39})?!)
+
+gene m137_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m137-b1:", m137_b1({helix: 87, cell: 65, enzyme: 91})?!)
+
+gene m137_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m137_f0([52, 53, 42, 40, 53]) {
+
+    case Ok(list) {
+
+        print("m137-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m137-f0:", "e:", m)
+
+    }
+
+}
+
+gene m137_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m137_f1([36, 24, 19, 38, 43, 22]) {
+
+    case Ok(list) {
+
+        print("m137-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m137-f1:", "e:", m)
+
+    }
+
+}
+
+gene m137_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m137_f2([27, 43, 35, 34, 12, 58, 55, 31]) {
+
+    case Ok(list) {
+
+        print("m137-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m137-f2:", "e:", m)
+
+    }
+
+}
+
+let m137_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m137-cc0:", m137_cl0(13)(2), m137_cl0(2)(13))
+
+let m137_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m137-cc1:", m137_cl1(20)(16), m137_cl1(16)(20))
+
+let m137_data0 = some([some("enzyme"), none(), some(1)])
+
+match m137_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m137-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m137-x0:", "shape-miss")
+
+    }
+
+}
+
+let m137_data1 = some([some("plasmid"), none(), some(9)])
+
+match m137_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m137-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m137-x1:", "shape-miss")
+
+    }
+
+}

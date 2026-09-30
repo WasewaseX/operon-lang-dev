@@ -1,0 +1,292 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=255 tag=m255
+
+let m255_s0 = some(9)
+
+match m255_s0 {
+
+    case Some(x) if x > 9 {
+
+        print("m255-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m255-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m255-m0:", "none")
+
+    }
+
+}
+
+let m255_s1 = some(4)
+
+match m255_s1 {
+
+    case Some(x) if x > 4 {
+
+        print("m255-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m255-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m255-m1:", "none")
+
+    }
+
+}
+
+let m255_s2 = some(6)
+
+match m255_s2 {
+
+    case Some(x) if x > 6 {
+
+        print("m255-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m255-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m255-m2:", "none")
+
+    }
+
+}
+
+let m255_s3 = some(9)
+
+match m255_s3 {
+
+    case Some(x) if x > 9 {
+
+        print("m255-m3:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m255-m3:", "small", x)
+
+    }
+
+    case None {
+
+        print("m255-m3:", "none")
+
+    }
+
+}
+
+let m255_s4 = some(6)
+
+match m255_s4 {
+
+    case Some(x) if x > 6 {
+
+        print("m255-m4:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m255-m4:", "small", x)
+
+    }
+
+    case None {
+
+        print("m255-m4:", "none")
+
+    }
+
+}
+
+let m255_ls0 = [24, 33, 14]
+
+match m255_ls0 {
+
+    case [24, *rest] {
+
+        print("m255-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m255-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m255-l0:", "other")
+
+    }
+
+}
+
+let m255_ls1 = [49, 1, 6]
+
+match m255_ls1 {
+
+    case [49, *rest] {
+
+        print("m255-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m255-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m255-l1:", "other")
+
+    }
+
+}
+
+let m255_mp0 = {plasmid: -4684, splicer: -7164}
+
+match m255_mp0 {
+
+    case {plasmid: p, splicer: q} {
+
+        print("m255-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m255-mp0:", "miss")
+
+    }
+
+}
+
+let m255_mp1 = {ligase: -9408, marker: -7987}
+
+match m255_mp1 {
+
+    case {ligase: p, marker: q} {
+
+        print("m255-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m255-mp1:", "miss")
+
+    }
+
+}
+
+let m255_r0 = ok(1)
+
+match m255_r0 {
+
+    case Ok(n) | Err(1) {
+
+        print("m255-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m255-r0:", "zero")
+
+    }
+
+}
+
+let m255_r1 = ok(2)
+
+match m255_r1 {
+
+    case Ok(n) | Err(2) {
+
+        print("m255-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m255-r1:", "zero")
+
+    }
+
+}
+
+let m255_r2 = ok(5)
+
+match m255_r2 {
+
+    case Ok(n) | Err(5) {
+
+        print("m255-r2:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m255-r2:", "zero")
+
+    }
+
+}
+
+match "marker" {
+
+    case "marker" {
+
+        print("m255-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m255-w0:", "alt")
+
+    }
+
+}
+
+match "codon" {
+
+    case "codon" {
+
+        print("m255-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m255-w1:", "alt")
+
+    }
+
+}

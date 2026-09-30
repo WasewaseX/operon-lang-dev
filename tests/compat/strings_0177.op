@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=177 tag=s177
+
+print("s177-m0:", "_w6Cvmb".upper(), "_w6Cvmb".slice(1), "_w6Cvmb".len())
+
+print("s177-m1:", "gAqyBng8_B".upper(), "gAqyBng8_B".slice(3), "gAqyBng8_B".len())
+
+print("s177-m2:", "_quhmoCc9b".upper(), "_quhmoCc9b".slice(4), "_quhmoCc9b".len())
+
+print("s177-m3:", "t1ph3rsv".upper(), "t1ph3rsv".slice(3), "t1ph3rsv".len())
+
+print("s177-m4:", "_y2f67lf_z".upper(), "_y2f67lf_z".slice(2), "_y2f67lf_z".len())
+
+print("s177-m5:", "evw00adriC".upper(), "evw00adriC".slice(1), "evw00adriC".len())
+
+print("s177-i0:", "swq-{57}-gogj")
+
+let s177_v0 = 57
+
+print("s177-v0:", "n={s177_v0}" + "!" * 1)
+
+print("s177-i1:", "avn-{93}-Aljj")
+
+let s177_v1 = 93
+
+print("s177-v1:", "n={s177_v1}" + "!" * 1)
+
+print("s177-i2:", "e3g-{57}-8jfw")
+
+let s177_v2 = 57
+
+print("s177-v2:", "n={s177_v2}" + "!" * 3)
+
+print("s177-i3:", "n1y-{1}-jtCs")
+
+let s177_v3 = 1
+
+print("s177-v3:", "n={s177_v3}" + "!" * 3)
+
+print("s177-i4:", "0tz-{27}-al_h")
+
+let s177_v4 = 27
+
+print("s177-v4:", "n={s177_v4}" + "!" * 1)
+
+print("s177-r0:", "vsdejjpp".replace("v", "tt"), "vsdejjpp".contains("sd"))
+
+print("s177-r1:", "o9wttyca".replace("o", "pu"), "o9wttyca".contains("9w"))
+
+print("s177-j0:", ["mxz", "2fA", "h6r", "n9k", "xCo"].join("-"))
+
+print("s177-j1:", ["ez4", "Alw", "Cvr", "3_v"].join("-"))
+
+print("s177-a0:", "y83j3qz".at(1), "y83j3qz".trim() == "y83j3qz")
+
+print("s177-a1:", "byr0At1".at(1), "byr0At1".trim() == "byr0At1")

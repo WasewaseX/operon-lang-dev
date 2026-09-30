@@ -1,0 +1,70 @@
+# compat corpus — generated, do not edit by hand
+# bucket=lists seed=20261030 idx=122 tag=l122
+
+let l122_l0 = [1, 39, -34, 8]
+
+print("l122-l0:", l122_l0[1], l122_l0[-1], l122_l0.len())
+
+let l122_l1 = [19, 36, -1, 34]
+
+print("l122-l1:", l122_l1[0], l122_l1[-1], l122_l1.len())
+
+let l122_l2 = [-32, -30, 4, 44, -15]
+
+print("l122-l2:", l122_l2[3], l122_l2[-1], l122_l2.len())
+
+let l122_l3 = [-2, -6, -16, -1]
+
+print("l122-l3:", l122_l3[1], l122_l3[-1], l122_l3.len())
+
+let l122_s0 = [-8, 87, -94, -16, -46, 14, 60, -94]
+
+print("l122-s0:", l122_s0.slice(2, 4), l122_s0.slice(-1))
+
+let l122_s1 = [41, -64, -2, -23, -76, 15, -66, -80, 82]
+
+print("l122-s1:", l122_s1.slice(3, 5), l122_s1.slice(-2))
+
+let l122_s2 = [-78, 11, -15, 57, 46, 7, 98, -63, 28]
+
+print("l122-s2:", l122_s2.slice(6, 7), l122_s2.slice(-3))
+
+let l122_s3 = [-96, 72, 68, 87, 97]
+
+print("l122-s3:", l122_s3.slice(2, 3), l122_s3.slice(-3))
+
+let l122_r0 = [509, 979, 31, 990, 548, 395, 186]
+
+print("l122-r0:", l122_r0.sort(), l122_r0.reverse(), l122_r0.contains(186))
+
+let l122_r1 = [99, 377, 893, 73, 310, 171]
+
+print("l122-r1:", l122_r1.sort(), l122_r1.reverse(), l122_r1.contains(310))
+
+let l122_r2 = [736, 361, 114, 284]
+
+print("l122-r2:", l122_r2.sort(), l122_r2.reverse(), l122_r2.contains(736))
+
+let l122_r3 = [967, 735, 745, 793, 494]
+
+print("l122-r3:", l122_r3.sort(), l122_r3.reverse(), l122_r3.contains(494))
+
+let l122_t0 = 0
+
+for v in [39, 15, 40, 25, 34] { l122_t0 += v }
+
+print("l122-t0:", l122_t0)
+
+let l122_t1 = 0
+
+for v in [26, 35, 25, 11, 9, 21] { l122_t1 += v }
+
+print("l122-t1:", l122_t1)
+
+let l122_n0 = [[8, 3, 4], [8, 3, 4], 77]
+
+print("l122-n0:", l122_n0[0][2], l122_n0[2])
+
+let l122_n1 = [[3, 7, 9], [3, 7, 9], 77]
+
+print("l122-n1:", l122_n1[0][2], l122_n1[2])

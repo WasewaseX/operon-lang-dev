@@ -1,0 +1,36 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=260 tag=c260
+
+print("c260-c0:", -8778 <= -7760)
+
+print("c260-c1:", 5371 == -5517)
+
+print("c260-c2:", -8362 < -6462)
+
+print("c260-c3:", 7785 >= -3570)
+
+print("c260-b0:", 7 < 26 && 26 < 24, 7 > 26 || 7 > 24)
+
+print("c260-b1:", 4 < 30 && 30 < 27, 4 > 30 || 4 > 27)
+
+print("c260-b2:", 50 < 7 && 7 < 40, 50 > 7 || 50 > 40)
+
+print("c260-b3:", 10 < 33 && 33 < 20, 10 > 33 || 10 > 20)
+
+print("c260-t0:", 7833 > 3930 ? "gt" : "le")
+
+print("c260-t1:", 1377 > -6924 ? "gt" : "le")
+
+print("c260-t2:", 8261 > -3888 ? "gt" : "le")
+
+let c260_n0 = null
+
+print("c260-n0:", c260_n0 ?? 8243, c260_n0 == null)
+
+let c260_n1 = null
+
+print("c260-n1:", c260_n1 ?? 4621, c260_n1 == null)
+
+print("c260-s0:", "kyB8" in "myxmrAkyB8", "kyB8" == "kyB8")
+
+print("c260-s1:", "deqd" in "jcoBd3deqd", "deqd" == "deqd")

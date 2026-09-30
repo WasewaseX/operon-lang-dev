@@ -1,0 +1,202 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=104 tag=f104
+
+gene f104_g0(p, q = 39, r = 99) {
+
+    return p * 46 + q - r
+
+}
+
+print("f104-d0:", f104_g0(-21), f104_g0(-21, 27), f104_g0(-21, 39, 99))
+
+gene f104_g1(p, q = 14, r = 61) {
+
+    return p * 20 + q - r
+
+}
+
+print("f104-d1:", f104_g1(-19), f104_g1(-19, 34), f104_g1(-19, 14, 61))
+
+gene f104_g2(p, q = 37, r = 50) {
+
+    return p * 1 + q - r
+
+}
+
+print("f104-d2:", f104_g2(-8), f104_g2(-8, 67), f104_g2(-8, 37, 50))
+
+gene f104_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f104_fib0(n - 1) + f104_fib0(n - 2)
+
+}
+
+print("f104-fib0:", f104_fib0(11))
+
+gene f104_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f104_fib1(n - 1) + f104_fib1(n - 2)
+
+}
+
+print("f104-fib1:", f104_fib1(12))
+
+gene f104_fib2(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f104_fib2(n - 1) + f104_fib2(n - 2)
+
+}
+
+print("f104-fib2:", f104_fib2(10))
+
+gene f104_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f104_gcd0(b, a % b)
+
+}
+
+print("f104-gcd0:", f104_gcd0(324, 287))
+
+gene f104_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f104_gcd1(b, a % b)
+
+}
+
+print("f104-gcd1:", f104_gcd1(393, 548))
+
+gene f104_gcd2(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f104_gcd2(b, a % b)
+
+}
+
+print("f104-gcd2:", f104_gcd2(742, 529))
+
+gene f104_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f104_c0 = f104_mk0(2)
+
+f104_c0(5)
+
+print("f104-cl0:", f104_c0(6))
+
+gene f104_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f104_c1 = f104_mk1(26)
+
+f104_c1(5)
+
+print("f104-cl1:", f104_c1(5))
+
+gene f104_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f104-hof0:", f104_tw0(gene (z) => z * 2 + 1, 5))
+
+gene f104_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f104-hof1:", f104_tw1(gene (z) => z * 2 + 1, 14))
+
+gene f104_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f104-dg0:", f104_sd0(901655))
+
+gene f104_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f104-dg1:", f104_sd1(70875))

@@ -1,0 +1,60 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=165 tag=s165
+
+print("s165-m0:", "166qcB".upper(), "166qcB".slice(3), "166qcB".len())
+
+print("s165-m1:", "Bfrim1".upper(), "Bfrim1".slice(3), "Bfrim1".len())
+
+print("s165-m2:", "xpnx9_qj01pca".upper(), "xpnx9_qj01pca".slice(4), "xpnx9_qj01pca".len())
+
+print("s165-m3:", "AC4c_2zwccs2kz".upper(), "AC4c_2zwccs2kz".slice(4), "AC4c_2zwccs2kz".len())
+
+print("s165-m4:", "sxzvh_Asixnb".upper(), "sxzvh_Asixnb".slice(3), "sxzvh_Asixnb".len())
+
+print("s165-m5:", "a_t39zb4o".upper(), "a_t39zb4o".slice(1), "a_t39zb4o".len())
+
+print("s165-i0:", "iCv-{60}-v0a6")
+
+let s165_v0 = 60
+
+print("s165-v0:", "n={s165_v0}" + "!" * 3)
+
+print("s165-i1:", "2cr-{21}-k6Cp")
+
+let s165_v1 = 21
+
+print("s165-v1:", "n={s165_v1}" + "!" * 2)
+
+print("s165-i2:", "3yd-{5}-hhe7")
+
+let s165_v2 = 5
+
+print("s165-v2:", "n={s165_v2}" + "!" * 1)
+
+print("s165-i3:", "mCp-{42}-krn1")
+
+let s165_v3 = 42
+
+print("s165-v3:", "n={s165_v3}" + "!" * 1)
+
+print("s165-i4:", "4u3-{26}-45ge")
+
+let s165_v4 = 26
+
+print("s165-v4:", "n={s165_v4}" + "!" * 1)
+
+print("s165-r0:", "6mg48_jr".replace("6", "bg"), "6mg48_jr".contains("mg"))
+
+print("s165-r1:", "sddseeA9".replace("s", "34"), "sddseeA9".contains("dd"))
+
+print("s165-r2:", "fhdlpC77".replace("f", "lm"), "fhdlpC77".contains("hd"))
+
+print("s165-j0:", ["bc5", "tbv", "3ws", "amr", "15g"].join("-"))
+
+print("s165-j1:", ["7_5", "nbp", "nbB", "nwt", "oz4"].join("-"))
+
+print("s165-a0:", "o6rwivo".at(6), "o6rwivo".trim() == "o6rwivo")
+
+print("s165-a1:", "b2tz4Cy".at(1), "b2tz4Cy".trim() == "b2tz4Cy")
+
+print("s165-a2:", "7we_0av".at(6), "7we_0av".trim() == "7we_0av")

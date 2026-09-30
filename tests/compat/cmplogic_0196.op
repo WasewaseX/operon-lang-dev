@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=196 tag=c196
+
+print("c196-c0:", 7076 != 2997)
+
+print("c196-c1:", -6544 < 6066)
+
+print("c196-c2:", -1328 != 4936)
+
+print("c196-c3:", -6741 == 4693)
+
+print("c196-c4:", -8489 != 9487)
+
+print("c196-b0:", 9 < 29 && 29 < 3, 9 > 29 || 9 > 3)
+
+print("c196-b1:", 18 < 22 && 22 < 19, 18 > 22 || 18 > 19)
+
+print("c196-b2:", 14 < 26 && 26 < 47, 14 > 26 || 14 > 47)
+
+print("c196-b3:", 42 < 3 && 3 < 32, 42 > 3 || 42 > 32)
+
+print("c196-t0:", 1483 > -5525 ? "gt" : "le")
+
+print("c196-t1:", -6035 > -9673 ? "gt" : "le")
+
+let c196_n0 = null
+
+print("c196-n0:", c196_n0 ?? -1368, c196_n0 == null)
+
+let c196_n1 = null
+
+print("c196-n1:", c196_n1 ?? 2243, c196_n1 == null)
+
+let c196_n2 = null
+
+print("c196-n2:", c196_n2 ?? 8491, c196_n2 == null)
+
+print("c196-s0:", "2es_" in "9c1gvn2es_", "2es_" == "2es_")
+
+print("c196-s1:", "teeo" in "Cmjwh8teeo", "teeo" == "teeo")

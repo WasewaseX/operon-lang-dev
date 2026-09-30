@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=249 tag=s249
+
+print("s249-m0:", "bso479y".upper(), "bso479y".slice(1), "bso479y".len())
+
+print("s249-m1:", "3ayql5dn".upper(), "3ayql5dn".slice(2), "3ayql5dn".len())
+
+print("s249-m2:", "A_5_5a8s_d0B".upper(), "A_5_5a8s_d0B".slice(1), "A_5_5a8s_d0B".len())
+
+print("s249-m3:", "ios7qmuw0A".upper(), "ios7qmuw0A".slice(2), "ios7qmuw0A".len())
+
+print("s249-i0:", "7ka-{73}-xjBn")
+
+let s249_v0 = 73
+
+print("s249-v0:", "n={s249_v0}" + "!" * 1)
+
+print("s249-i1:", "7zj-{31}-3zp7")
+
+let s249_v1 = 31
+
+print("s249-v1:", "n={s249_v1}" + "!" * 3)
+
+print("s249-i2:", "unA-{66}-s1kp")
+
+let s249_v2 = 66
+
+print("s249-v2:", "n={s249_v2}" + "!" * 3)
+
+print("s249-i3:", "viq-{50}-s4ib")
+
+let s249_v3 = 50
+
+print("s249-v3:", "n={s249_v3}" + "!" * 1)
+
+print("s249-r0:", "by3xCC5l".replace("b", "ll"), "by3xCC5l".contains("y3"))
+
+print("s249-r1:", "38al930x".replace("3", "vo"), "38al930x".contains("8a"))
+
+print("s249-r2:", "ycfhpmpu".replace("y", "yB"), "ycfhpmpu".contains("cf"))
+
+print("s249-j0:", ["BnB", "xrd", "4qj"].join("-"))
+
+print("s249-j1:", ["srb", "37A", "y5f", "vyy", "eie"].join("-"))
+
+print("s249-j2:", ["hp6", "8ae", "4r8", "iy4", "uBv"].join("-"))
+
+print("s249-a0:", "55mgymw".at(4), "55mgymw".trim() == "55mgymw")
+
+print("s249-a1:", "l4t0deb".at(2), "l4t0deb".trim() == "l4t0deb")
+
+print("s249-a2:", "xbxyhpp".at(1), "xbxyhpp".trim() == "xbxyhpp")

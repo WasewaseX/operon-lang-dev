@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=171 tag=m171
+
+let m171_m0 = {splicer: -49, cell: -2, helix: -66, vector: 43}
+
+print("m171-m0:", m171_m0["splicer"], len(m171_m0), m171_m0.has("splicer"))
+
+let m171_m1 = {codon: 5, gene: -40, marker: 16, vector: -41}
+
+print("m171-m1:", m171_m1["codon"], len(m171_m1), m171_m1.has("codon"))
+
+let m171_m2 = {ribose: -78, codon: -31, ligase: 4, vector: -17}
+
+print("m171-m2:", m171_m2["ribose"], len(m171_m2), m171_m2.has("ribose"))
+
+let m171_k0 = {ligase: 43, exon: 45, plasmid: 8}
+
+let m171_ks0 = m171_k0.keys()
+
+let m171_sm0 = 0
+
+for k in m171_k0 { m171_sm0 += m171_k0[k] }
+
+print("m171-k0:", m171_sm0, m171_k0.keys().sort(), m171_k0.values().len())
+
+let m171_k1 = {enzyme: 47, splicer: 44, marker: 33}
+
+let m171_ks1 = m171_k1.keys()
+
+let m171_sm1 = 0
+
+for k in m171_k1 { m171_sm1 += m171_k1[k] }
+
+print("m171-k1:", m171_sm1, m171_k1.keys().sort(), m171_k1.values().len())
+
+let m171_w0 = {outer: {enzyme: 8, marker: 1, tag: "ok"}}}
+
+print("m171-w0:", m171_w0["outer"]["marker"], m171_w0["outer"]["tag"])
+
+let m171_w1 = {outer: {plasmid: 7, ribose: 6, tag: "ok"}}}
+
+print("m171-w1:", m171_w1["outer"]["ribose"], m171_w1["outer"]["tag"])

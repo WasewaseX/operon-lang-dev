@@ -1,0 +1,146 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=160 tag=c160
+
+let c160_b0 = "start"
+
+if 55 > 80 { c160_b0 = "hi" } elif 55 > 40 { c160_b0 = "mid" } else { c160_b0 = "lo" }
+
+print("c160-i0:", c160_b0, 55)
+
+let c160_b1 = "start"
+
+if 92 > 80 { c160_b1 = "hi" } elif 92 > 40 { c160_b1 = "mid" } else { c160_b1 = "lo" }
+
+print("c160-i1:", c160_b1, 92)
+
+let c160_b2 = "start"
+
+if 35 > 80 { c160_b2 = "hi" } elif 35 > 40 { c160_b2 = "mid" } else { c160_b2 = "lo" }
+
+print("c160-i2:", c160_b2, 35)
+
+let c160_b3 = "start"
+
+if 26 > 80 { c160_b3 = "hi" } elif 26 > 40 { c160_b3 = "mid" } else { c160_b3 = "lo" }
+
+print("c160-i3:", c160_b3, 26)
+
+let c160_a0 = 0
+
+let c160_n0 = 0
+
+while c160_n0 < 15 {
+
+    c160_n0 += 4
+
+    if c160_n0 % 3 == 0 { continue }
+
+    if c160_n0 > 18 { break }
+
+    c160_a0 += c160_n0
+
+}
+
+print("c160-w0:", c160_a0, c160_n0)
+
+let c160_a1 = 0
+
+let c160_n1 = 0
+
+while c160_n1 < 8 {
+
+    c160_n1 += 1
+
+    if c160_n1 % 2 == 0 { continue }
+
+    if c160_n1 > 13 { break }
+
+    c160_a1 += c160_n1
+
+}
+
+print("c160-w1:", c160_a1, c160_n1)
+
+let c160_a2 = 0
+
+let c160_n2 = 0
+
+while c160_n2 < 10 {
+
+    c160_n2 += 2
+
+    if c160_n2 % 3 == 0 { continue }
+
+    if c160_n2 > 16 { break }
+
+    c160_a2 += c160_n2
+
+}
+
+print("c160-w2:", c160_a2, c160_n2)
+
+let c160_c0 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 4] {
+
+        c160_c0 += a * b
+
+    }
+
+}
+
+print("c160-l0:", c160_c0)
+
+let c160_c1 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 3] {
+
+        c160_c1 += a * b
+
+    }
+
+}
+
+print("c160-l1:", c160_c1)
+
+let c160_c2 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 2] {
+
+        c160_c2 += a * b
+
+    }
+
+}
+
+print("c160-l2:", c160_c2)
+
+let c160_acc0 = ""
+
+loop {
+
+    c160_acc0 += "x"
+
+    if c160_acc0.len() >= 7 { break }
+
+}
+
+print("c160-o0:", c160_acc0)
+
+let c160_acc1 = ""
+
+loop {
+
+    c160_acc1 += "x"
+
+    if c160_acc1.len() >= 7 { break }
+
+}
+
+print("c160-o1:", c160_acc1)

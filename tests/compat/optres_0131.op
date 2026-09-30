@@ -1,0 +1,96 @@
+# compat corpus — generated, do not edit by hand
+# bucket=optres seed=20261030 idx=131 tag=o131
+
+gene o131_f0(n) {
+
+    if n > 9335 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o131_u0(n) {
+
+    let v = o131_f0(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o131-p0:", o131_u0(-867), o131_u0(9353))
+
+gene o131_f1(n) {
+
+    if n > 3023 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o131_u1(n) {
+
+    let v = o131_f1(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o131-p1:", o131_u1(-5215), o131_u1(3038))
+
+gene o131_f2(n) {
+
+    if n > -5563 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o131_u2(n) {
+
+    let v = o131_f2(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o131-p2:", o131_u2(-6287), o131_u2(-5553))
+
+print("o131-o0:", is_ok(ok(2048)), is_none(none()), is_err(err("2048")), is_some(some(2048)))
+
+print("o131-u0:", unwrap_or(none(), 2048), unwrap_or(err("x"), 2047), unwrap_or(ok(2048), 0))
+
+print("o131-o1:", is_ok(ok(1548)), is_none(none()), is_err(err("1548")), is_some(some(1548)))
+
+print("o131-u1:", unwrap_or(none(), 1548), unwrap_or(err("x"), 1547), unwrap_or(ok(1548), 0))
+
+print("o131-o2:", is_ok(ok(7350)), is_none(none()), is_err(err("7350")), is_some(some(7350)))
+
+print("o131-u2:", unwrap_or(none(), 7350), unwrap_or(err("x"), 7349), unwrap_or(ok(7350), 0))
+
+print("o131-e0:", ok(411) == ok(411), some(411) == ok(411), none() == none(), err(1) == err(2))
+
+print("o131-j0:", json_str(ok(411)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o131-e1:", ok(7593) == ok(7593), some(7593) == ok(7593), none() == none(), err(1) == err(2))
+
+print("o131-j1:", json_str(ok(7593)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o131-n0:", some(some(84))?!?!, unwrap(ok(155)) + unwrap(some(71)))
+
+print("o131-s0:", "v=" + str(ok(84)?!), some("71k")?! + "!")
+
+print("o131-n1:", some(some(67))?!?!, unwrap(ok(78)) + unwrap(some(11)))
+
+print("o131-s1:", "v=" + str(ok(67)?!), some("11k")?! + "!")

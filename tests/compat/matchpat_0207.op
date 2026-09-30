@@ -1,0 +1,310 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=207 tag=m207
+
+let m207_s0 = some(8)
+
+match m207_s0 {
+
+    case Some(x) if x > 8 {
+
+        print("m207-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m207-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m207-m0:", "none")
+
+    }
+
+}
+
+let m207_s1 = some(5)
+
+match m207_s1 {
+
+    case Some(x) if x > 5 {
+
+        print("m207-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m207-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m207-m1:", "none")
+
+    }
+
+}
+
+let m207_s2 = some(8)
+
+match m207_s2 {
+
+    case Some(x) if x > 8 {
+
+        print("m207-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m207-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m207-m2:", "none")
+
+    }
+
+}
+
+let m207_s3 = some(3)
+
+match m207_s3 {
+
+    case Some(x) if x > 3 {
+
+        print("m207-m3:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m207-m3:", "small", x)
+
+    }
+
+    case None {
+
+        print("m207-m3:", "none")
+
+    }
+
+}
+
+let m207_ls0 = [33, 2, 25]
+
+match m207_ls0 {
+
+    case [33, *rest] {
+
+        print("m207-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m207-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m207-l0:", "other")
+
+    }
+
+}
+
+let m207_ls1 = [38, 19, 28]
+
+match m207_ls1 {
+
+    case [38, *rest] {
+
+        print("m207-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m207-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m207-l1:", "other")
+
+    }
+
+}
+
+let m207_ls2 = [35, 44, 13]
+
+match m207_ls2 {
+
+    case [35, *rest] {
+
+        print("m207-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m207-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m207-l2:", "other")
+
+    }
+
+}
+
+let m207_mp0 = {exon: -5690, marker: 1682}
+
+match m207_mp0 {
+
+    case {exon: p, marker: q} {
+
+        print("m207-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m207-mp0:", "miss")
+
+    }
+
+}
+
+let m207_mp1 = {helix: 9861, plasmid: -4035}
+
+match m207_mp1 {
+
+    case {helix: p, plasmid: q} {
+
+        print("m207-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m207-mp1:", "miss")
+
+    }
+
+}
+
+let m207_mp2 = {helix: -2055, codon: 5187}
+
+match m207_mp2 {
+
+    case {helix: p, codon: q} {
+
+        print("m207-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m207-mp2:", "miss")
+
+    }
+
+}
+
+let m207_r0 = ok(5)
+
+match m207_r0 {
+
+    case Ok(n) | Err(5) {
+
+        print("m207-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m207-r0:", "zero")
+
+    }
+
+}
+
+let m207_r1 = ok(5)
+
+match m207_r1 {
+
+    case Ok(n) | Err(5) {
+
+        print("m207-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m207-r1:", "zero")
+
+    }
+
+}
+
+let m207_r2 = ok(3)
+
+match m207_r2 {
+
+    case Ok(n) | Err(3) {
+
+        print("m207-r2:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m207-r2:", "zero")
+
+    }
+
+}
+
+match "helix" {
+
+    case "helix" {
+
+        print("m207-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m207-w0:", "alt")
+
+    }
+
+}
+
+match "helix" {
+
+    case "helix" {
+
+        print("m207-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m207-w1:", "alt")
+
+    }
+
+}

@@ -1,0 +1,38 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=221 tag=c221
+
+print("c221-c0:", 5246 >= 3540)
+
+print("c221-c1:", 2751 != -9135)
+
+print("c221-c2:", 9821 <= 559)
+
+print("c221-c3:", 3578 <= -887)
+
+print("c221-b0:", 8 < 4 && 4 < 45, 8 > 4 || 8 > 45)
+
+print("c221-b1:", 33 < 34 && 34 < 34, 33 > 34 || 33 > 34)
+
+print("c221-b2:", 26 < 9 && 9 < 7, 26 > 9 || 26 > 7)
+
+print("c221-t0:", 9738 > 5384 ? "gt" : "le")
+
+print("c221-t1:", -3704 > -8916 ? "gt" : "le")
+
+print("c221-t2:", 4786 > -6074 ? "gt" : "le")
+
+let c221_n0 = null
+
+print("c221-n0:", c221_n0 ?? 8469, c221_n0 == null)
+
+let c221_n1 = null
+
+print("c221-n1:", c221_n1 ?? 5097, c221_n1 == null)
+
+let c221_n2 = null
+
+print("c221-n2:", c221_n2 ?? 967, c221_n2 == null)
+
+print("c221-s0:", "ddcs" in "31831gddcs", "ddcs" == "ddcs")
+
+print("c221-s1:", "anmw" in "7kCea8anmw", "anmw" == "anmw")

@@ -1,0 +1,292 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=241 tag=m241
+
+let m241_s0 = some(5)
+
+match m241_s0 {
+
+    case Some(x) if x > 5 {
+
+        print("m241-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m241-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m241-m0:", "none")
+
+    }
+
+}
+
+let m241_s1 = some(5)
+
+match m241_s1 {
+
+    case Some(x) if x > 5 {
+
+        print("m241-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m241-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m241-m1:", "none")
+
+    }
+
+}
+
+let m241_s2 = some(1)
+
+match m241_s2 {
+
+    case Some(x) if x > 1 {
+
+        print("m241-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m241-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m241-m2:", "none")
+
+    }
+
+}
+
+let m241_ls0 = [29, 30, 1]
+
+match m241_ls0 {
+
+    case [29, *rest] {
+
+        print("m241-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m241-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m241-l0:", "other")
+
+    }
+
+}
+
+let m241_ls1 = [42, 35, 5]
+
+match m241_ls1 {
+
+    case [42, *rest] {
+
+        print("m241-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m241-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m241-l1:", "other")
+
+    }
+
+}
+
+let m241_ls2 = [14, 50, 36]
+
+match m241_ls2 {
+
+    case [14, *rest] {
+
+        print("m241-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m241-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m241-l2:", "other")
+
+    }
+
+}
+
+let m241_ls3 = [18, 26, 4]
+
+match m241_ls3 {
+
+    case [18, *rest] {
+
+        print("m241-l3:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m241-l3:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m241-l3:", "other")
+
+    }
+
+}
+
+let m241_mp0 = {vector: 5585, gene: -5058}
+
+match m241_mp0 {
+
+    case {vector: p, gene: q} {
+
+        print("m241-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m241-mp0:", "miss")
+
+    }
+
+}
+
+let m241_mp1 = {splicer: -8670, exon: 483}
+
+match m241_mp1 {
+
+    case {splicer: p, exon: q} {
+
+        print("m241-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m241-mp1:", "miss")
+
+    }
+
+}
+
+let m241_mp2 = {enzyme: -4443, ribose: 814}
+
+match m241_mp2 {
+
+    case {enzyme: p, ribose: q} {
+
+        print("m241-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m241-mp2:", "miss")
+
+    }
+
+}
+
+let m241_r0 = ok(5)
+
+match m241_r0 {
+
+    case Ok(n) | Err(5) {
+
+        print("m241-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m241-r0:", "zero")
+
+    }
+
+}
+
+let m241_r1 = ok(5)
+
+match m241_r1 {
+
+    case Ok(n) | Err(5) {
+
+        print("m241-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m241-r1:", "zero")
+
+    }
+
+}
+
+match "plasmid" {
+
+    case "plasmid" {
+
+        print("m241-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m241-w0:", "alt")
+
+    }
+
+}
+
+match "gene" {
+
+    case "gene" {
+
+        print("m241-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m241-w1:", "alt")
+
+    }
+
+}

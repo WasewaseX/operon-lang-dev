@@ -1,0 +1,230 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=101 tag=m101
+
+gene m101_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m101-b0:", m101_b0({enzyme: 67, plasmid: 53, ribose: 57})?!)
+
+gene m101_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m101-b1:", m101_b1({enzyme: 90, marker: 71, gene: 20})?!)
+
+gene m101_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m101_f0([18, 6, 30, 22]) {
+
+    case Ok(list) {
+
+        print("m101-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m101-f0:", "e:", m)
+
+    }
+
+}
+
+gene m101_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m101_f1([41, 26, 9, 47, 18]) {
+
+    case Ok(list) {
+
+        print("m101-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m101-f1:", "e:", m)
+
+    }
+
+}
+
+gene m101_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m101_f2([58, 4, 53, 1]) {
+
+    case Ok(list) {
+
+        print("m101-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m101-f2:", "e:", m)
+
+    }
+
+}
+
+let m101_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m101-cc0:", m101_cl0(11)(9), m101_cl0(9)(11))
+
+let m101_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m101-cc1:", m101_cl1(13)(15), m101_cl1(15)(13))
+
+let m101_data0 = some([some("ligase"), none(), some(2)])
+
+match m101_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m101-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m101-x0:", "shape-miss")
+
+    }
+
+}
+
+let m101_data1 = some([some("enzyme"), none(), some(5)])
+
+match m101_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m101-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m101-x1:", "shape-miss")
+
+    }
+
+}

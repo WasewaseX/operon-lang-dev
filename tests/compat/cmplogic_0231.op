@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=231 tag=c231
+
+print("c231-c0:", 8778 < 9545)
+
+print("c231-c1:", 6204 <= 90)
+
+print("c231-c2:", -865 > -7991)
+
+print("c231-c3:", 633 > 2968)
+
+print("c231-c4:", 3839 < 6817)
+
+print("c231-c5:", 1778 < 2627)
+
+print("c231-c6:", 1916 < -6341)
+
+print("c231-b0:", 20 < 46 && 46 < 47, 20 > 46 || 20 > 47)
+
+print("c231-b1:", 26 < 42 && 42 < 9, 26 > 42 || 26 > 9)
+
+print("c231-t0:", 3665 > 1004 ? "gt" : "le")
+
+print("c231-t1:", -7882 > 153 ? "gt" : "le")
+
+print("c231-t2:", 4333 > -9183 ? "gt" : "le")
+
+print("c231-t3:", -1717 > -5325 ? "gt" : "le")
+
+let c231_n0 = null
+
+print("c231-n0:", c231_n0 ?? 3106, c231_n0 == null)
+
+let c231_n1 = null
+
+print("c231-n1:", c231_n1 ?? -5016, c231_n1 == null)
+
+print("c231-s0:", "74y9" in "ex7iAm74y9", "74y9" == "74y9")
+
+print("c231-s1:", "jtve" in "pkdl2njtve", "jtve" == "jtve")

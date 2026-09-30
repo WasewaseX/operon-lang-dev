@@ -1,0 +1,50 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=103 tag=s103
+
+print("s103-m0:", "Be8uaapx4bdib".upper(), "Be8uaapx4bdib".slice(1), "Be8uaapx4bdib".len())
+
+print("s103-m1:", "anmyw_8oj_re11".upper(), "anmyw_8oj_re11".slice(1), "anmyw_8oj_re11".len())
+
+print("s103-m2:", "1i_0t56xaCn6n".upper(), "1i_0t56xaCn6n".slice(2), "1i_0t56xaCn6n".len())
+
+print("s103-m3:", "qagzd6".upper(), "qagzd6".slice(1), "qagzd6".len())
+
+print("s103-m4:", "qh3fjhtngc2sC".upper(), "qh3fjhtngc2sC".slice(3), "qh3fjhtngc2sC".len())
+
+print("s103-i0:", "i7s-{3}-lw5l")
+
+let s103_v0 = 3
+
+print("s103-v0:", "n={s103_v0}" + "!" * 1)
+
+print("s103-i1:", "te7-{37}-egh6")
+
+let s103_v1 = 37
+
+print("s103-v1:", "n={s103_v1}" + "!" * 1)
+
+print("s103-i2:", "Aiy-{53}-viv2")
+
+let s103_v2 = 53
+
+print("s103-v2:", "n={s103_v2}" + "!" * 3)
+
+print("s103-i3:", "jcv-{11}-jqyr")
+
+let s103_v3 = 11
+
+print("s103-v3:", "n={s103_v3}" + "!" * 1)
+
+print("s103-r0:", "7lem929A".replace("7", "9u"), "7lem929A".contains("le"))
+
+print("s103-r1:", "l_uAepf1".replace("l", "C2"), "l_uAepf1".contains("_u"))
+
+print("s103-j0:", ["y7b", "yci", "dzt"].join("-"))
+
+print("s103-j1:", ["xjx", "trx", "749"].join("-"))
+
+print("s103-j2:", ["era", "3zq", "xfr", "x72"].join("-"))
+
+print("s103-a0:", "7euC6mx".at(0), "7euC6mx".trim() == "7euC6mx")
+
+print("s103-a1:", "a77hv26".at(0), "a77hv26".trim() == "a77hv26")

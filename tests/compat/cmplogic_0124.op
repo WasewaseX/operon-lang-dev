@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=124 tag=c124
+
+print("c124-c0:", -9375 != 2093)
+
+print("c124-c1:", 4825 >= -4313)
+
+print("c124-c2:", -9504 < -2290)
+
+print("c124-c3:", 7559 == 7602)
+
+print("c124-c4:", 7555 >= -723)
+
+print("c124-b0:", 21 < 23 && 23 < 16, 21 > 23 || 21 > 16)
+
+print("c124-b1:", 7 < 0 && 0 < 12, 7 > 0 || 7 > 12)
+
+print("c124-b2:", 6 < 25 && 25 < 39, 6 > 25 || 6 > 39)
+
+print("c124-t0:", 7404 > 5677 ? "gt" : "le")
+
+print("c124-t1:", -1653 > 912 ? "gt" : "le")
+
+print("c124-t2:", 4975 > 4726 ? "gt" : "le")
+
+let c124_n0 = null
+
+print("c124-n0:", c124_n0 ?? -2754, c124_n0 == null)
+
+let c124_n1 = null
+
+print("c124-n1:", c124_n1 ?? -5033, c124_n1 == null)
+
+let c124_n2 = null
+
+print("c124-n2:", c124_n2 ?? 8829, c124_n2 == null)
+
+print("c124-s0:", "t6_j" in "567jvht6_j", "t6_j" == "t6_j")
+
+print("c124-s1:", "_llt" in "A1v_sd_llt", "_llt" == "_llt")

@@ -1,0 +1,60 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=253 tag=m253
+
+let m253_m0 = {plasmid: 28, helix: 44, ribose: -15, enzyme: 55}
+
+print("m253-m0:", m253_m0["plasmid"], len(m253_m0), m253_m0.has("plasmid"))
+
+let m253_m1 = {splicer: 74, helix: -18, vector: 7}
+
+print("m253-m1:", m253_m1["splicer"], len(m253_m1), m253_m1.has("splicer"))
+
+let m253_m2 = {splicer: 30, codon: 64, helix: 50}
+
+print("m253-m2:", m253_m2["splicer"], len(m253_m2), m253_m2.has("splicer"))
+
+let m253_m3 = {plasmid: -58, helix: 56, exon: -45}
+
+print("m253-m3:", m253_m3["plasmid"], len(m253_m3), m253_m3.has("plasmid"))
+
+let m253_m4 = {exon: 32, helix: -85, cell: -25, enzyme: -16, plasmid: 24}
+
+print("m253-m4:", m253_m4["exon"], len(m253_m4), m253_m4.has("exon"))
+
+let m253_k0 = {ribose: 49, vector: 14, splicer: 34}
+
+let m253_ks0 = m253_k0.keys()
+
+let m253_sm0 = 0
+
+for k in m253_k0 { m253_sm0 += m253_k0[k] }
+
+print("m253-k0:", m253_sm0, m253_k0.keys().sort(), m253_k0.values().len())
+
+let m253_k1 = {splicer: 20, ligase: 45, vector: 3}
+
+let m253_ks1 = m253_k1.keys()
+
+let m253_sm1 = 0
+
+for k in m253_k1 { m253_sm1 += m253_k1[k] }
+
+print("m253-k1:", m253_sm1, m253_k1.keys().sort(), m253_k1.values().len())
+
+let m253_k2 = {enzyme: 11, ligase: 15, gene: 25}
+
+let m253_ks2 = m253_k2.keys()
+
+let m253_sm2 = 0
+
+for k in m253_k2 { m253_sm2 += m253_k2[k] }
+
+print("m253-k2:", m253_sm2, m253_k2.keys().sort(), m253_k2.values().len())
+
+let m253_w0 = {outer: {vector: 1, ribose: 4, tag: "ok"}}}
+
+print("m253-w0:", m253_w0["outer"]["ribose"], m253_w0["outer"]["tag"])
+
+let m253_w1 = {outer: {ribose: 6, helix: 3, tag: "ok"}}}
+
+print("m253-w1:", m253_w1["outer"]["helix"], m253_w1["outer"]["tag"])

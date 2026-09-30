@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=219 tag=c219
+
+print("c219-c0:", -9165 > -5827)
+
+print("c219-c1:", -481 > 2711)
+
+print("c219-c2:", -2576 >= -4106)
+
+print("c219-c3:", -9797 < 9683)
+
+print("c219-c4:", -2098 >= -6022)
+
+print("c219-c5:", 949 > -6014)
+
+print("c219-c6:", 1325 >= -6919)
+
+print("c219-b0:", 19 < 36 && 36 < 45, 19 > 36 || 19 > 45)
+
+print("c219-b1:", 50 < 47 && 47 < 26, 50 > 47 || 50 > 26)
+
+print("c219-b2:", 10 < 16 && 16 < 11, 10 > 16 || 10 > 11)
+
+print("c219-t0:", 3895 > 900 ? "gt" : "le")
+
+print("c219-t1:", 6053 > -6262 ? "gt" : "le")
+
+print("c219-t2:", 7096 > -1420 ? "gt" : "le")
+
+print("c219-t3:", 2651 > 1508 ? "gt" : "le")
+
+let c219_n0 = null
+
+print("c219-n0:", c219_n0 ?? 5327, c219_n0 == null)
+
+let c219_n1 = null
+
+print("c219-n1:", c219_n1 ?? 1277, c219_n1 == null)
+
+let c219_n2 = null
+
+print("c219-n2:", c219_n2 ?? 8650, c219_n2 == null)
+
+print("c219-s0:", "dcnr" in "s7plbwdcnr", "dcnr" == "dcnr")
+
+print("c219-s1:", "wBla" in "wngl0lwBla", "wBla" == "wBla")

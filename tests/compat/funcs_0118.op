@@ -1,0 +1,180 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=118 tag=f118
+
+gene f118_g0(p, q = 99, r = 50) {
+
+    return p * 20 + q - r
+
+}
+
+print("f118-d0:", f118_g0(11), f118_g0(11, 18), f118_g0(11, 99, 50))
+
+gene f118_g1(p, q = 18, r = 31) {
+
+    return p * 75 + q - r
+
+}
+
+print("f118-d1:", f118_g1(16), f118_g1(16, 59), f118_g1(16, 18, 31))
+
+gene f118_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f118_fib0(n - 1) + f118_fib0(n - 2)
+
+}
+
+print("f118-fib0:", f118_fib0(13))
+
+gene f118_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f118_fib1(n - 1) + f118_fib1(n - 2)
+
+}
+
+print("f118-fib1:", f118_fib1(11))
+
+gene f118_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f118_gcd0(b, a % b)
+
+}
+
+print("f118-gcd0:", f118_gcd0(42, 577))
+
+gene f118_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f118_gcd1(b, a % b)
+
+}
+
+print("f118-gcd1:", f118_gcd1(770, 840))
+
+gene f118_gcd2(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f118_gcd2(b, a % b)
+
+}
+
+print("f118-gcd2:", f118_gcd2(291, 906))
+
+gene f118_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f118_c0 = f118_mk0(25)
+
+f118_c0(4)
+
+print("f118-cl0:", f118_c0(3))
+
+gene f118_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f118_c1 = f118_mk1(35)
+
+f118_c1(3)
+
+print("f118-cl1:", f118_c1(5))
+
+gene f118_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f118-hof0:", f118_tw0(gene (z) => z * 2 + 1, 29))
+
+gene f118_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f118-hof1:", f118_tw1(gene (z) => z * 2 + 1, 21))
+
+gene f118_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f118-dg0:", f118_sd0(681618))
+
+gene f118_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f118-dg1:", f118_sd1(882686))

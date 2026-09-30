@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=107 tag=s107
+
+print("s107-m0:", "7o0ywc72".upper(), "7o0ywc72".slice(3), "7o0ywc72".len())
+
+print("s107-m1:", "svhck93f4Ce".upper(), "svhck93f4Ce".slice(1), "svhck93f4Ce".len())
+
+print("s107-m2:", "ntozcbixC".upper(), "ntozcbixC".slice(4), "ntozcbixC".len())
+
+print("s107-m3:", "p8lw4vfgam5".upper(), "p8lw4vfgam5".slice(1), "p8lw4vfgam5".len())
+
+print("s107-m4:", "10n6eC37sA".upper(), "10n6eC37sA".slice(3), "10n6eC37sA".len())
+
+print("s107-i0:", "j8r-{60}-2q0B")
+
+let s107_v0 = 60
+
+print("s107-v0:", "n={s107_v0}" + "!" * 2)
+
+print("s107-i1:", "r_C-{39}-46xy")
+
+let s107_v1 = 39
+
+print("s107-v1:", "n={s107_v1}" + "!" * 1)
+
+print("s107-i2:", "2Bs-{76}-bkaf")
+
+let s107_v2 = 76
+
+print("s107-v2:", "n={s107_v2}" + "!" * 1)
+
+print("s107-r0:", "fr_zcyr3".replace("f", "fB"), "fr_zcyr3".contains("r_"))
+
+print("s107-r1:", "553g2g5a".replace("5", "iy"), "553g2g5a".contains("53"))
+
+print("s107-j0:", ["1_3", "jib", "v9v"].join("-"))
+
+print("s107-j1:", ["b4o", "yrB", "yxC", "rce", "cql"].join("-"))
+
+print("s107-j2:", ["m91", "9w4", "rsa"].join("-"))
+
+print("s107-a0:", "lro4iC5".at(2), "lro4iC5".trim() == "lro4iC5")
+
+print("s107-a1:", "zAeggo1".at(1), "zAeggo1".trim() == "zAeggo1")
+
+print("s107-a2:", "29C228s".at(2), "29C228s".trim() == "29C228s")

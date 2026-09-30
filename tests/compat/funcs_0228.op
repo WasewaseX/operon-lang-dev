@@ -1,0 +1,188 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=228 tag=f228
+
+gene f228_g0(p, q = 52, r = 86) {
+
+    return p * 50 + q - r
+
+}
+
+print("f228-d0:", f228_g0(-23), f228_g0(-23, 22), f228_g0(-23, 52, 86))
+
+gene f228_g1(p, q = 42, r = 88) {
+
+    return p * 97 + q - r
+
+}
+
+print("f228-d1:", f228_g1(3), f228_g1(3, 17), f228_g1(3, 42, 88))
+
+gene f228_g2(p, q = 44, r = 5) {
+
+    return p * 12 + q - r
+
+}
+
+print("f228-d2:", f228_g2(17), f228_g2(17, 45), f228_g2(17, 44, 5))
+
+gene f228_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f228_fib0(n - 1) + f228_fib0(n - 2)
+
+}
+
+print("f228-fib0:", f228_fib0(9))
+
+gene f228_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f228_fib1(n - 1) + f228_fib1(n - 2)
+
+}
+
+print("f228-fib1:", f228_fib1(7))
+
+gene f228_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f228_gcd0(b, a % b)
+
+}
+
+print("f228-gcd0:", f228_gcd0(95, 567))
+
+gene f228_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f228_gcd1(b, a % b)
+
+}
+
+print("f228-gcd1:", f228_gcd1(307, 529))
+
+gene f228_gcd2(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f228_gcd2(b, a % b)
+
+}
+
+print("f228-gcd2:", f228_gcd2(366, 966))
+
+gene f228_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f228_c0 = f228_mk0(7)
+
+f228_c0(6)
+
+print("f228-cl0:", f228_c0(9))
+
+gene f228_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f228_c1 = f228_mk1(10)
+
+f228_c1(2)
+
+print("f228-cl1:", f228_c1(5))
+
+gene f228_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f228-hof0:", f228_tw0(gene (z) => z * 2 + 1, 24))
+
+gene f228_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f228-hof1:", f228_tw1(gene (z) => z * 2 + 1, 8))
+
+gene f228_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f228-dg0:", f228_sd0(762620))
+
+gene f228_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f228-dg1:", f228_sd1(29962))

@@ -1,0 +1,180 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=239 tag=f239
+
+gene f239_g0(p, q = 8, r = 43) {
+
+    return p * 25 + q - r
+
+}
+
+print("f239-d0:", f239_g0(-44), f239_g0(-44, 84), f239_g0(-44, 8, 43))
+
+gene f239_g1(p, q = 66, r = 95) {
+
+    return p * 84 + q - r
+
+}
+
+print("f239-d1:", f239_g1(25), f239_g1(25, 77), f239_g1(25, 66, 95))
+
+gene f239_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f239_fib0(n - 1) + f239_fib0(n - 2)
+
+}
+
+print("f239-fib0:", f239_fib0(9))
+
+gene f239_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f239_fib1(n - 1) + f239_fib1(n - 2)
+
+}
+
+print("f239-fib1:", f239_fib1(7))
+
+gene f239_fib2(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f239_fib2(n - 1) + f239_fib2(n - 2)
+
+}
+
+print("f239-fib2:", f239_fib2(13))
+
+gene f239_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f239_gcd0(b, a % b)
+
+}
+
+print("f239-gcd0:", f239_gcd0(274, 634))
+
+gene f239_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f239_gcd1(b, a % b)
+
+}
+
+print("f239-gcd1:", f239_gcd1(496, 769))
+
+gene f239_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f239_c0 = f239_mk0(8)
+
+f239_c0(6)
+
+print("f239-cl0:", f239_c0(4))
+
+gene f239_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f239_c1 = f239_mk1(30)
+
+f239_c1(5)
+
+print("f239-cl1:", f239_c1(8))
+
+gene f239_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f239-hof0:", f239_tw0(gene (z) => z * 2 + 1, 19))
+
+gene f239_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f239-hof1:", f239_tw1(gene (z) => z * 2 + 1, 10))
+
+gene f239_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f239-dg0:", f239_sd0(88451))
+
+gene f239_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f239-dg1:", f239_sd1(121500))

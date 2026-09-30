@@ -1,0 +1,268 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=132 tag=m132
+
+let m132_s0 = some(6)
+
+match m132_s0 {
+
+    case Some(x) if x > 6 {
+
+        print("m132-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m132-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m132-m0:", "none")
+
+    }
+
+}
+
+let m132_s1 = some(1)
+
+match m132_s1 {
+
+    case Some(x) if x > 1 {
+
+        print("m132-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m132-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m132-m1:", "none")
+
+    }
+
+}
+
+let m132_s2 = some(4)
+
+match m132_s2 {
+
+    case Some(x) if x > 4 {
+
+        print("m132-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m132-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m132-m2:", "none")
+
+    }
+
+}
+
+let m132_s3 = some(6)
+
+match m132_s3 {
+
+    case Some(x) if x > 6 {
+
+        print("m132-m3:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m132-m3:", "small", x)
+
+    }
+
+    case None {
+
+        print("m132-m3:", "none")
+
+    }
+
+}
+
+let m132_ls0 = [33, 13, 27]
+
+match m132_ls0 {
+
+    case [33, *rest] {
+
+        print("m132-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m132-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m132-l0:", "other")
+
+    }
+
+}
+
+let m132_ls1 = [29, 38, 8]
+
+match m132_ls1 {
+
+    case [29, *rest] {
+
+        print("m132-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m132-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m132-l1:", "other")
+
+    }
+
+}
+
+let m132_mp0 = {plasmid: -7868, codon: 1192}
+
+match m132_mp0 {
+
+    case {plasmid: p, codon: q} {
+
+        print("m132-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m132-mp0:", "miss")
+
+    }
+
+}
+
+let m132_mp1 = {helix: 2477, enzyme: 2586}
+
+match m132_mp1 {
+
+    case {helix: p, enzyme: q} {
+
+        print("m132-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m132-mp1:", "miss")
+
+    }
+
+}
+
+let m132_mp2 = {marker: 2526, gene: 77}
+
+match m132_mp2 {
+
+    case {marker: p, gene: q} {
+
+        print("m132-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m132-mp2:", "miss")
+
+    }
+
+}
+
+let m132_r0 = ok(3)
+
+match m132_r0 {
+
+    case Ok(n) | Err(3) {
+
+        print("m132-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m132-r0:", "zero")
+
+    }
+
+}
+
+let m132_r1 = ok(4)
+
+match m132_r1 {
+
+    case Ok(n) | Err(4) {
+
+        print("m132-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m132-r1:", "zero")
+
+    }
+
+}
+
+match "ligase" {
+
+    case "ligase" {
+
+        print("m132-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m132-w0:", "alt")
+
+    }
+
+}
+
+match "vector" {
+
+    case "vector" {
+
+        print("m132-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m132-w1:", "alt")
+
+    }
+
+}

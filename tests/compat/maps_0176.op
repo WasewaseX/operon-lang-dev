@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=176 tag=m176
+
+let m176_m0 = {gene: -54, exon: -56, ligase: 82}
+
+print("m176-m0:", m176_m0["gene"], len(m176_m0), m176_m0.has("gene"))
+
+let m176_m1 = {vector: 34, splicer: 57, gene: -92}
+
+print("m176-m1:", m176_m1["vector"], len(m176_m1), m176_m1.has("vector"))
+
+let m176_m2 = {cell: -62, plasmid: 65, vector: -19}
+
+print("m176-m2:", m176_m2["cell"], len(m176_m2), m176_m2.has("cell"))
+
+let m176_m3 = {exon: 54, marker: -49, codon: 83, splicer: 34, ligase: -51}
+
+print("m176-m3:", m176_m3["exon"], len(m176_m3), m176_m3.has("exon"))
+
+let m176_k0 = {vector: 40, ligase: 45, ribose: 46}
+
+let m176_ks0 = m176_k0.keys()
+
+let m176_sm0 = 0
+
+for k in m176_k0 { m176_sm0 += m176_k0[k] }
+
+print("m176-k0:", m176_sm0, m176_k0.keys().sort(), m176_k0.values().len())
+
+let m176_k1 = {exon: 9, cell: 26, marker: 20}
+
+let m176_ks1 = m176_k1.keys()
+
+let m176_sm1 = 0
+
+for k in m176_k1 { m176_sm1 += m176_k1[k] }
+
+print("m176-k1:", m176_sm1, m176_k1.keys().sort(), m176_k1.values().len())
+
+let m176_w0 = {outer: {cell: 2, codon: 2, tag: "ok"}}}
+
+print("m176-w0:", m176_w0["outer"]["codon"], m176_w0["outer"]["tag"])
+
+let m176_w1 = {outer: {splicer: 1, helix: 2, tag: "ok"}}}
+
+print("m176-w1:", m176_w1["outer"]["helix"], m176_w1["outer"]["tag"])

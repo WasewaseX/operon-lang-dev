@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=214 tag=m214
+
+let m214_m0 = {vector: 94, ligase: -50, plasmid: 42}
+
+print("m214-m0:", m214_m0["vector"], len(m214_m0), m214_m0.has("vector"))
+
+let m214_m1 = {cell: -46, helix: 24, marker: 26, gene: 29, plasmid: -80}
+
+print("m214-m1:", m214_m1["cell"], len(m214_m1), m214_m1.has("cell"))
+
+let m214_m2 = {exon: -61, ligase: 53, vector: 55, plasmid: 50, codon: -72}
+
+print("m214-m2:", m214_m2["exon"], len(m214_m2), m214_m2.has("exon"))
+
+let m214_m3 = {ribose: 82, codon: 49, cell: -2, splicer: 10}
+
+print("m214-m3:", m214_m3["ribose"], len(m214_m3), m214_m3.has("ribose"))
+
+let m214_k0 = {marker: 41, ligase: 21, exon: 21}
+
+let m214_ks0 = m214_k0.keys()
+
+let m214_sm0 = 0
+
+for k in m214_k0 { m214_sm0 += m214_k0[k] }
+
+print("m214-k0:", m214_sm0, m214_k0.keys().sort(), m214_k0.values().len())
+
+let m214_k1 = {ribose: 27, ligase: 20, gene: 13}
+
+let m214_ks1 = m214_k1.keys()
+
+let m214_sm1 = 0
+
+for k in m214_k1 { m214_sm1 += m214_k1[k] }
+
+print("m214-k1:", m214_sm1, m214_k1.keys().sort(), m214_k1.values().len())
+
+let m214_w0 = {outer: {plasmid: 7, marker: 7, tag: "ok"}}}
+
+print("m214-w0:", m214_w0["outer"]["marker"], m214_w0["outer"]["tag"])
+
+let m214_w1 = {outer: {plasmid: 1, ligase: 9, tag: "ok"}}}
+
+print("m214-w1:", m214_w1["outer"]["ligase"], m214_w1["outer"]["tag"])

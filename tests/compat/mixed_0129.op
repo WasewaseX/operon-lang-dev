@@ -1,0 +1,254 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=129 tag=m129
+
+gene m129_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m129-b0:", m129_b0({ribose: 15, enzyme: 5, helix: 86})?!)
+
+gene m129_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m129-b1:", m129_b1({gene: 7, enzyme: 87, cell: 30})?!)
+
+gene m129_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m129-b2:", m129_b2({splicer: 52, gene: 1, exon: 98})?!)
+
+gene m129_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m129_f0([22, 7, 2, 31, 42, 47, 25]) {
+
+    case Ok(list) {
+
+        print("m129-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m129-f0:", "e:", m)
+
+    }
+
+}
+
+gene m129_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m129_f1([52, 5, 44, 29, 16, 52, 22]) {
+
+    case Ok(list) {
+
+        print("m129-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m129-f1:", "e:", m)
+
+    }
+
+}
+
+gene m129_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m129_f2([14, 9, 37, 8, 51, 10, 17, 15]) {
+
+    case Ok(list) {
+
+        print("m129-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m129-f2:", "e:", m)
+
+    }
+
+}
+
+let m129_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m129-cc0:", m129_cl0(4)(5), m129_cl0(5)(4))
+
+let m129_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m129-cc1:", m129_cl1(20)(5), m129_cl1(5)(20))
+
+let m129_data0 = some([some("cell"), none(), some(7)])
+
+match m129_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m129-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m129-x0:", "shape-miss")
+
+    }
+
+}
+
+let m129_data1 = some([some("splicer"), none(), some(3)])
+
+match m129_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m129-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m129-x1:", "shape-miss")
+
+    }
+
+}

@@ -1,0 +1,58 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=209 tag=s209
+
+print("s209-m0:", "Bh5euBc69".upper(), "Bh5euBc69".slice(3), "Bh5euBc69".len())
+
+print("s209-m1:", "2b_soveizCAy".upper(), "2b_soveizCAy".slice(2), "2b_soveizCAy".len())
+
+print("s209-m2:", "pwk8lfxu9hkl3g".upper(), "pwk8lfxu9hkl3g".slice(3), "pwk8lfxu9hkl3g".len())
+
+print("s209-m3:", "jcdl49_x".upper(), "jcdl49_x".slice(3), "jcdl49_x".len())
+
+print("s209-m4:", "77qqk0leCr13".upper(), "77qqk0leCr13".slice(3), "77qqk0leCr13".len())
+
+print("s209-m5:", "C8tzrtmungbtvA".upper(), "C8tzrtmungbtvA".slice(3), "C8tzrtmungbtvA".len())
+
+print("s209-i0:", "1fy-{15}-vnk7")
+
+let s209_v0 = 15
+
+print("s209-v0:", "n={s209_v0}" + "!" * 1)
+
+print("s209-i1:", "yde-{75}-w5pi")
+
+let s209_v1 = 75
+
+print("s209-v1:", "n={s209_v1}" + "!" * 2)
+
+print("s209-i2:", "drm-{87}-ljsu")
+
+let s209_v2 = 87
+
+print("s209-v2:", "n={s209_v2}" + "!" * 1)
+
+print("s209-i3:", "C7u-{95}-B07q")
+
+let s209_v3 = 95
+
+print("s209-v3:", "n={s209_v3}" + "!" * 2)
+
+print("s209-i4:", "78u-{68}-v1pA")
+
+let s209_v4 = 68
+
+print("s209-v4:", "n={s209_v4}" + "!" * 3)
+
+print("s209-r0:", "hxdzyfy_".replace("h", "8z"), "hxdzyfy_".contains("xd"))
+
+print("s209-r1:", "lbBktmvv".replace("l", "37"), "lbBktmvv".contains("bB"))
+
+print("s209-j0:", ["j7f", "Cms", "qhn", "l_3", "gvf"].join("-"))
+
+print("s209-j1:", ["_w9", "0o2", "v75"].join("-"))
+
+print("s209-a0:", "00AlxA2".at(6), "00AlxA2".trim() == "00AlxA2")
+
+print("s209-a1:", "4gnmsxv".at(3), "4gnmsxv".trim() == "4gnmsxv")
+
+print("s209-a2:", "fio_Cfb".at(6), "fio_Cfb".trim() == "fio_Cfb")

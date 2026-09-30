@@ -1,0 +1,146 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=169 tag=c169
+
+let c169_b0 = "start"
+
+if 0 > 80 { c169_b0 = "hi" } elif 0 > 40 { c169_b0 = "mid" } else { c169_b0 = "lo" }
+
+print("c169-i0:", c169_b0, 0)
+
+let c169_b1 = "start"
+
+if 13 > 80 { c169_b1 = "hi" } elif 13 > 40 { c169_b1 = "mid" } else { c169_b1 = "lo" }
+
+print("c169-i1:", c169_b1, 13)
+
+let c169_b2 = "start"
+
+if 29 > 80 { c169_b2 = "hi" } elif 29 > 40 { c169_b2 = "mid" } else { c169_b2 = "lo" }
+
+print("c169-i2:", c169_b2, 29)
+
+let c169_b3 = "start"
+
+if 32 > 80 { c169_b3 = "hi" } elif 32 > 40 { c169_b3 = "mid" } else { c169_b3 = "lo" }
+
+print("c169-i3:", c169_b3, 32)
+
+let c169_b4 = "start"
+
+if 33 > 80 { c169_b4 = "hi" } elif 33 > 40 { c169_b4 = "mid" } else { c169_b4 = "lo" }
+
+print("c169-i4:", c169_b4, 33)
+
+let c169_a0 = 0
+
+let c169_n0 = 0
+
+while c169_n0 < 17 {
+
+    c169_n0 += 1
+
+    if c169_n0 % 2 == 0 { continue }
+
+    if c169_n0 > 21 { break }
+
+    c169_a0 += c169_n0
+
+}
+
+print("c169-w0:", c169_a0, c169_n0)
+
+let c169_a1 = 0
+
+let c169_n1 = 0
+
+while c169_n1 < 17 {
+
+    c169_n1 += 1
+
+    if c169_n1 % 3 == 0 { continue }
+
+    if c169_n1 > 24 { break }
+
+    c169_a1 += c169_n1
+
+}
+
+print("c169-w1:", c169_a1, c169_n1)
+
+let c169_c0 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 2] {
+
+        c169_c0 += a * b
+
+    }
+
+}
+
+print("c169-l0:", c169_c0)
+
+let c169_c1 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 2] {
+
+        c169_c1 += a * b
+
+    }
+
+}
+
+print("c169-l1:", c169_c1)
+
+let c169_c2 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 2] {
+
+        c169_c2 += a * b
+
+    }
+
+}
+
+print("c169-l2:", c169_c2)
+
+let c169_acc0 = ""
+
+loop {
+
+    c169_acc0 += "x"
+
+    if c169_acc0.len() >= 6 { break }
+
+}
+
+print("c169-o0:", c169_acc0)
+
+let c169_acc1 = ""
+
+loop {
+
+    c169_acc1 += "x"
+
+    if c169_acc1.len() >= 3 { break }
+
+}
+
+print("c169-o1:", c169_acc1)
+
+let c169_acc2 = ""
+
+loop {
+
+    c169_acc2 += "x"
+
+    if c169_acc2.len() >= 7 { break }
+
+}
+
+print("c169-o2:", c169_acc2)

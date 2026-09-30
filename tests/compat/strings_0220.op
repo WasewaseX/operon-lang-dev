@@ -1,0 +1,64 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=220 tag=s220
+
+print("s220-m0:", "8wy0o0Aoyz3".upper(), "8wy0o0Aoyz3".slice(2), "8wy0o0Aoyz3".len())
+
+print("s220-m1:", "8kn841rB1js6".upper(), "8kn841rB1js6".slice(3), "8kn841rB1js6".len())
+
+print("s220-m2:", "69l1o3tc7_".upper(), "69l1o3tc7_".slice(2), "69l1o3tc7_".len())
+
+print("s220-m3:", "mC9aqqg0w_oe".upper(), "mC9aqqg0w_oe".slice(3), "mC9aqqg0w_oe".len())
+
+print("s220-m4:", "y08Bzr_lhch".upper(), "y08Bzr_lhch".slice(1), "y08Bzr_lhch".len())
+
+print("s220-m5:", "kmbA__e47".upper(), "kmbA__e47".slice(1), "kmbA__e47".len())
+
+print("s220-i0:", "C24-{92}-yshe")
+
+let s220_v0 = 92
+
+print("s220-v0:", "n={s220_v0}" + "!" * 2)
+
+print("s220-i1:", "t5e-{69}-1B7r")
+
+let s220_v1 = 69
+
+print("s220-v1:", "n={s220_v1}" + "!" * 3)
+
+print("s220-i2:", "_90-{9}-xskl")
+
+let s220_v2 = 9
+
+print("s220-v2:", "n={s220_v2}" + "!" * 3)
+
+print("s220-i3:", "Byk-{21}-3gxr")
+
+let s220_v3 = 21
+
+print("s220-v3:", "n={s220_v3}" + "!" * 1)
+
+print("s220-i4:", "ihx-{66}-k34w")
+
+let s220_v4 = 66
+
+print("s220-v4:", "n={s220_v4}" + "!" * 1)
+
+print("s220-r0:", "gvjz3k4k".replace("g", "ak"), "gvjz3k4k".contains("vj"))
+
+print("s220-r1:", "7jpuoxsw".replace("7", "wA"), "7jpuoxsw".contains("jp"))
+
+print("s220-r2:", "spg9k828".replace("s", "q1"), "spg9k828".contains("pg"))
+
+print("s220-r3:", "2imjzbyy".replace("2", "ep"), "2imjzbyy".contains("im"))
+
+print("s220-j0:", ["jtn", "jdx", "dBm"].join("-"))
+
+print("s220-j1:", ["1wc", "syf", "ukq", "CC1", "opg"].join("-"))
+
+print("s220-j2:", ["1dt", "oAi", "BCz"].join("-"))
+
+print("s220-a0:", "hie3m4q".at(6), "hie3m4q".trim() == "hie3m4q")
+
+print("s220-a1:", "pbrB8ju".at(5), "pbrB8ju".trim() == "pbrB8ju")
+
+print("s220-a2:", "aykpu9a".at(1), "aykpu9a".trim() == "aykpu9a")

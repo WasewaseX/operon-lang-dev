@@ -1,0 +1,162 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=133 tag=c133
+
+let c133_b0 = "start"
+
+if 103 > 80 { c133_b0 = "hi" } elif 103 > 40 { c133_b0 = "mid" } else { c133_b0 = "lo" }
+
+print("c133-i0:", c133_b0, 103)
+
+let c133_b1 = "start"
+
+if 36 > 80 { c133_b1 = "hi" } elif 36 > 40 { c133_b1 = "mid" } else { c133_b1 = "lo" }
+
+print("c133-i1:", c133_b1, 36)
+
+let c133_b2 = "start"
+
+if 37 > 80 { c133_b2 = "hi" } elif 37 > 40 { c133_b2 = "mid" } else { c133_b2 = "lo" }
+
+print("c133-i2:", c133_b2, 37)
+
+let c133_b3 = "start"
+
+if 14 > 80 { c133_b3 = "hi" } elif 14 > 40 { c133_b3 = "mid" } else { c133_b3 = "lo" }
+
+print("c133-i3:", c133_b3, 14)
+
+let c133_a0 = 0
+
+let c133_n0 = 0
+
+while c133_n0 < 15 {
+
+    c133_n0 += 3
+
+    if c133_n0 % 3 == 0 { continue }
+
+    if c133_n0 > 17 { break }
+
+    c133_a0 += c133_n0
+
+}
+
+print("c133-w0:", c133_a0, c133_n0)
+
+let c133_a1 = 0
+
+let c133_n1 = 0
+
+while c133_n1 < 18 {
+
+    c133_n1 += 4
+
+    if c133_n1 % 2 == 0 { continue }
+
+    if c133_n1 > 26 { break }
+
+    c133_a1 += c133_n1
+
+}
+
+print("c133-w1:", c133_a1, c133_n1)
+
+let c133_a2 = 0
+
+let c133_n2 = 0
+
+while c133_n2 < 13 {
+
+    c133_n2 += 1
+
+    if c133_n2 % 3 == 0 { continue }
+
+    if c133_n2 > 19 { break }
+
+    c133_a2 += c133_n2
+
+}
+
+print("c133-w2:", c133_a2, c133_n2)
+
+let c133_a3 = 0
+
+let c133_n3 = 0
+
+while c133_n3 < 14 {
+
+    c133_n3 += 1
+
+    if c133_n3 % 2 == 0 { continue }
+
+    if c133_n3 > 22 { break }
+
+    c133_a3 += c133_n3
+
+}
+
+print("c133-w3:", c133_a3, c133_n3)
+
+let c133_c0 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 4] {
+
+        c133_c0 += a * b
+
+    }
+
+}
+
+print("c133-l0:", c133_c0)
+
+let c133_c1 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 4] {
+
+        c133_c1 += a * b
+
+    }
+
+}
+
+print("c133-l1:", c133_c1)
+
+let c133_acc0 = ""
+
+loop {
+
+    c133_acc0 += "x"
+
+    if c133_acc0.len() >= 6 { break }
+
+}
+
+print("c133-o0:", c133_acc0)
+
+let c133_acc1 = ""
+
+loop {
+
+    c133_acc1 += "x"
+
+    if c133_acc1.len() >= 3 { break }
+
+}
+
+print("c133-o1:", c133_acc1)
+
+let c133_acc2 = ""
+
+loop {
+
+    c133_acc2 += "x"
+
+    if c133_acc2.len() >= 4 { break }
+
+}
+
+print("c133-o2:", c133_acc2)

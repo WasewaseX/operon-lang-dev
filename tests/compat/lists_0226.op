@@ -1,0 +1,84 @@
+# compat corpus — generated, do not edit by hand
+# bucket=lists seed=20261030 idx=226 tag=l226
+
+let l226_l0 = [4, 34, 27, -47, 4, -40, -25, -26]
+
+print("l226-l0:", l226_l0[6], l226_l0[-1], l226_l0.len())
+
+let l226_l1 = [24, -35, 50, 12, 47]
+
+print("l226-l1:", l226_l1[4], l226_l1[-1], l226_l1.len())
+
+let l226_l2 = [-18, -6, 35, 40]
+
+print("l226-l2:", l226_l2[3], l226_l2[-1], l226_l2.len())
+
+let l226_l3 = [12, 12, 32, 18, -50, 31, 22, -32]
+
+print("l226-l3:", l226_l3[0], l226_l3[-1], l226_l3.len())
+
+let l226_l4 = [-23, 1, 49, -44, -8, -18]
+
+print("l226-l4:", l226_l4[3], l226_l4[-1], l226_l4.len())
+
+let l226_s0 = [74, -91, 18, -30, 89, 70]
+
+print("l226-s0:", l226_s0.slice(3, 4), l226_s0.slice(-1))
+
+let l226_s1 = [85, -61, 10, -42, -1]
+
+print("l226-s1:", l226_s1.slice(2, 4), l226_s1.slice(-3))
+
+let l226_s2 = [23, 7, 36, 75, 61, 17, -12, -55]
+
+print("l226-s2:", l226_s2.slice(6, 7), l226_s2.slice(-3))
+
+let l226_s3 = [-36, 19, -63, 18, -5, 43, -5]
+
+print("l226-s3:", l226_s3.slice(1, 6), l226_s3.slice(-1))
+
+let l226_s4 = [18, 33, -8, -55, 34]
+
+print("l226-s4:", l226_s4.slice(1, 4), l226_s4.slice(-2))
+
+let l226_r0 = [264, 174, 642, 128, 845, 717]
+
+print("l226-r0:", l226_r0.sort(), l226_r0.reverse(), l226_r0.contains(128))
+
+let l226_r1 = [623, 558, 733, 970, 61, 324]
+
+print("l226-r1:", l226_r1.sort(), l226_r1.reverse(), l226_r1.contains(623))
+
+let l226_r2 = [319, 308, 356, 935, 782]
+
+print("l226-r2:", l226_r2.sort(), l226_r2.reverse(), l226_r2.contains(935))
+
+let l226_r3 = [641, 667, 65, 820]
+
+print("l226-r3:", l226_r3.sort(), l226_r3.reverse(), l226_r3.contains(65))
+
+let l226_t0 = 0
+
+for v in [9, 8, 27, 3, 7] { l226_t0 += v }
+
+print("l226-t0:", l226_t0)
+
+let l226_t1 = 0
+
+for v in [10, 4, 20] { l226_t1 += v }
+
+print("l226-t1:", l226_t1)
+
+let l226_t2 = 0
+
+for v in [13, 39, 38, 8] { l226_t2 += v }
+
+print("l226-t2:", l226_t2)
+
+let l226_n0 = [[7, 3, 1], [7, 3, 1], 77]
+
+print("l226-n0:", l226_n0[0][2], l226_n0[2])
+
+let l226_n1 = [[7, 7, 2], [7, 7, 2], 77]
+
+print("l226-n1:", l226_n1[0][2], l226_n1[2])

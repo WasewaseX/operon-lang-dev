@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=164 tag=c164
+
+print("c164-c0:", -7456 < 8543)
+
+print("c164-c1:", 5877 == -6060)
+
+print("c164-c2:", -6128 < -2701)
+
+print("c164-c3:", 4872 >= -6864)
+
+print("c164-c4:", 9099 <= 7581)
+
+print("c164-c5:", 7855 >= 418)
+
+print("c164-c6:", 3582 == -1778)
+
+print("c164-b0:", 30 < 30 && 30 < 30, 30 > 30 || 30 > 30)
+
+print("c164-b1:", 10 < 25 && 25 < 50, 10 > 25 || 10 > 50)
+
+print("c164-b2:", 46 < 24 && 24 < 21, 46 > 24 || 46 > 21)
+
+print("c164-b3:", 2 < 11 && 11 < 26, 2 > 11 || 2 > 26)
+
+print("c164-t0:", 3028 > 1185 ? "gt" : "le")
+
+print("c164-t1:", -3019 > -9006 ? "gt" : "le")
+
+print("c164-t2:", 7869 > 407 ? "gt" : "le")
+
+print("c164-t3:", -5962 > -8260 ? "gt" : "le")
+
+let c164_n0 = null
+
+print("c164-n0:", c164_n0 ?? -8125, c164_n0 == null)
+
+let c164_n1 = null
+
+print("c164-n1:", c164_n1 ?? 7492, c164_n1 == null)
+
+let c164_n2 = null
+
+print("c164-n2:", c164_n2 ?? -297, c164_n2 == null)
+
+print("c164-s0:", "bC4B" in "0i7nksbC4B", "bC4B" == "bC4B")
+
+print("c164-s1:", "87Ae" in "d2w4qo87Ae", "87Ae" == "87Ae")

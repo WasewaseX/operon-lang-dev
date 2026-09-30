@@ -1,0 +1,60 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=184 tag=m184
+
+let m184_m0 = {ligase: 2, codon: -72, cell: 12, exon: 14, marker: 86}
+
+print("m184-m0:", m184_m0["ligase"], len(m184_m0), m184_m0.has("ligase"))
+
+let m184_m1 = {gene: 74, splicer: 47, exon: 44}
+
+print("m184-m1:", m184_m1["gene"], len(m184_m1), m184_m1.has("gene"))
+
+let m184_m2 = {splicer: 13, helix: -64, vector: 96}
+
+print("m184-m2:", m184_m2["splicer"], len(m184_m2), m184_m2.has("splicer"))
+
+let m184_m3 = {vector: 56, plasmid: 94, exon: 72, codon: 44}
+
+print("m184-m3:", m184_m3["vector"], len(m184_m3), m184_m3.has("vector"))
+
+let m184_m4 = {plasmid: -94, codon: -83, marker: 13}
+
+print("m184-m4:", m184_m4["plasmid"], len(m184_m4), m184_m4.has("plasmid"))
+
+let m184_k0 = {vector: 35, helix: 21, cell: 2}
+
+let m184_ks0 = m184_k0.keys()
+
+let m184_sm0 = 0
+
+for k in m184_k0 { m184_sm0 += m184_k0[k] }
+
+print("m184-k0:", m184_sm0, m184_k0.keys().sort(), m184_k0.values().len())
+
+let m184_k1 = {codon: 45, enzyme: 44, plasmid: 18}
+
+let m184_ks1 = m184_k1.keys()
+
+let m184_sm1 = 0
+
+for k in m184_k1 { m184_sm1 += m184_k1[k] }
+
+print("m184-k1:", m184_sm1, m184_k1.keys().sort(), m184_k1.values().len())
+
+let m184_k2 = {marker: 1, splicer: 45, enzyme: 7}
+
+let m184_ks2 = m184_k2.keys()
+
+let m184_sm2 = 0
+
+for k in m184_k2 { m184_sm2 += m184_k2[k] }
+
+print("m184-k2:", m184_sm2, m184_k2.keys().sort(), m184_k2.values().len())
+
+let m184_w0 = {outer: {helix: 1, marker: 5, tag: "ok"}}}
+
+print("m184-w0:", m184_w0["outer"]["marker"], m184_w0["outer"]["tag"])
+
+let m184_w1 = {outer: {ligase: 8, vector: 9, tag: "ok"}}}
+
+print("m184-w1:", m184_w1["outer"]["vector"], m184_w1["outer"]["tag"])

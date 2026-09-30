@@ -1,0 +1,122 @@
+# compat corpus — generated, do not edit by hand
+# bucket=optres seed=20261030 idx=264 tag=o264
+
+gene o264_f0(n) {
+
+    if n > -6380 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o264_u0(n) {
+
+    let v = o264_f0(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o264-p0:", o264_u0(-7587), o264_u0(-6370))
+
+gene o264_f1(n) {
+
+    if n > 3106 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o264_u1(n) {
+
+    let v = o264_f1(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o264-p1:", o264_u1(-9225), o264_u1(3117))
+
+gene o264_f2(n) {
+
+    if n > -7765 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o264_u2(n) {
+
+    let v = o264_f2(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o264-p2:", o264_u2(-4600), o264_u2(-7747))
+
+gene o264_f3(n) {
+
+    if n > 5689 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o264_u3(n) {
+
+    let v = o264_f3(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o264-p3:", o264_u3(-40), o264_u3(5698))
+
+print("o264-o0:", is_ok(ok(4080)), is_none(none()), is_err(err("4080")), is_some(some(4080)))
+
+print("o264-u0:", unwrap_or(none(), 4080), unwrap_or(err("x"), 4079), unwrap_or(ok(4080), 0))
+
+print("o264-o1:", is_ok(ok(6821)), is_none(none()), is_err(err("6821")), is_some(some(6821)))
+
+print("o264-u1:", unwrap_or(none(), 6821), unwrap_or(err("x"), 6820), unwrap_or(ok(6821), 0))
+
+print("o264-o2:", is_ok(ok(-2128)), is_none(none()), is_err(err("-2128")), is_some(some(-2128)))
+
+print("o264-u2:", unwrap_or(none(), -2128), unwrap_or(err("x"), -2129), unwrap_or(ok(-2128), 0))
+
+print("o264-o3:", is_ok(ok(7619)), is_none(none()), is_err(err("7619")), is_some(some(7619)))
+
+print("o264-u3:", unwrap_or(none(), 7619), unwrap_or(err("x"), 7618), unwrap_or(ok(7619), 0))
+
+print("o264-e0:", ok(3790) == ok(3790), some(3790) == ok(3790), none() == none(), err(1) == err(2))
+
+print("o264-j0:", json_str(ok(3790)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o264-e1:", ok(5309) == ok(5309), some(5309) == ok(5309), none() == none(), err(1) == err(2))
+
+print("o264-j1:", json_str(ok(5309)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o264-n0:", some(some(7))?!?!, unwrap(ok(61)) + unwrap(some(54)))
+
+print("o264-s0:", "v=" + str(ok(7)?!), some("54k")?! + "!")
+
+print("o264-n1:", some(some(1))?!?!, unwrap(ok(4)) + unwrap(some(3)))
+
+print("o264-s1:", "v=" + str(ok(1)?!), some("3k")?! + "!")

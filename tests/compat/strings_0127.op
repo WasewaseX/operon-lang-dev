@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=127 tag=s127
+
+print("s127-m0:", "e4wo6mBwkkd0sA".upper(), "e4wo6mBwkkd0sA".slice(2), "e4wo6mBwkkd0sA".len())
+
+print("s127-m1:", "n1qCd4m_".upper(), "n1qCd4m_".slice(3), "n1qCd4m_".len())
+
+print("s127-m2:", "t_nk0imanwp2b3".upper(), "t_nk0imanwp2b3".slice(1), "t_nk0imanwp2b3".len())
+
+print("s127-m3:", "okdtgakyCrC_x".upper(), "okdtgakyCrC_x".slice(4), "okdtgakyCrC_x".len())
+
+print("s127-i0:", "x0y-{65}-9vqy")
+
+let s127_v0 = 65
+
+print("s127-v0:", "n={s127_v0}" + "!" * 2)
+
+print("s127-i1:", "7Aq-{65}-fv6y")
+
+let s127_v1 = 65
+
+print("s127-v1:", "n={s127_v1}" + "!" * 2)
+
+print("s127-i2:", "6hk-{79}-cnz1")
+
+let s127_v2 = 79
+
+print("s127-v2:", "n={s127_v2}" + "!" * 1)
+
+print("s127-r0:", "l3fAh9te".replace("l", "2j"), "l3fAh9te".contains("3f"))
+
+print("s127-r1:", "sgzw4eBz".replace("s", "on"), "sgzw4eBz".contains("gz"))
+
+print("s127-r2:", "8r9vgwlA".replace("8", "v5"), "8r9vgwlA".contains("r9"))
+
+print("s127-r3:", "jAm7_02y".replace("j", "f4"), "jAm7_02y".contains("Am"))
+
+print("s127-j0:", ["ail", "oe5", "jt2", "tqt", "7i6"].join("-"))
+
+print("s127-j1:", ["qhb", "2p0", "8xq", "vim"].join("-"))
+
+print("s127-j2:", ["ktC", "t3v", "l5v", "au8"].join("-"))
+
+print("s127-a0:", "xAhwC7A".at(2), "xAhwC7A".trim() == "xAhwC7A")
+
+print("s127-a1:", "cj5xx85".at(6), "cj5xx85".trim() == "cj5xx85")

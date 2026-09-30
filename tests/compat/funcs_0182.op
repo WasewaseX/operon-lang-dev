@@ -1,0 +1,188 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=182 tag=f182
+
+gene f182_g0(p, q = 23, r = 15) {
+
+    return p * 99 + q - r
+
+}
+
+print("f182-d0:", f182_g0(10), f182_g0(10, 42), f182_g0(10, 23, 15))
+
+gene f182_g1(p, q = 24, r = 69) {
+
+    return p * 69 + q - r
+
+}
+
+print("f182-d1:", f182_g1(16), f182_g1(16, 10), f182_g1(16, 24, 69))
+
+gene f182_g2(p, q = 55, r = 39) {
+
+    return p * 68 + q - r
+
+}
+
+print("f182-d2:", f182_g2(42), f182_g2(42, 76), f182_g2(42, 55, 39))
+
+gene f182_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f182_fib0(n - 1) + f182_fib0(n - 2)
+
+}
+
+print("f182-fib0:", f182_fib0(8))
+
+gene f182_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f182_fib1(n - 1) + f182_fib1(n - 2)
+
+}
+
+print("f182-fib1:", f182_fib1(11))
+
+gene f182_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f182_gcd0(b, a % b)
+
+}
+
+print("f182-gcd0:", f182_gcd0(948, 765))
+
+gene f182_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f182_gcd1(b, a % b)
+
+}
+
+print("f182-gcd1:", f182_gcd1(96, 724))
+
+gene f182_gcd2(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f182_gcd2(b, a % b)
+
+}
+
+print("f182-gcd2:", f182_gcd2(953, 608))
+
+gene f182_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f182_c0 = f182_mk0(11)
+
+f182_c0(9)
+
+print("f182-cl0:", f182_c0(4))
+
+gene f182_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f182_c1 = f182_mk1(40)
+
+f182_c1(3)
+
+print("f182-cl1:", f182_c1(5))
+
+gene f182_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f182-hof0:", f182_tw0(gene (z) => z * 2 + 1, 26))
+
+gene f182_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f182-hof1:", f182_tw1(gene (z) => z * 2 + 1, 24))
+
+gene f182_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f182-dg0:", f182_sd0(147149))
+
+gene f182_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f182-dg1:", f182_sd1(984832))

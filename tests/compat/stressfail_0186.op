@@ -1,0 +1,240 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=186 tag=s186
+
+stress {
+
+    print("s186-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s186-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s186-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s186-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s186-mz:", 8 % 0)
+
+} rescue (e) {
+
+    print("s186-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s186-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s186-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s186-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s186-of2:", "caught", e.kind, e.message)
+
+}
+
+gene s186_r0() {
+
+    raise "s186-sgaq7d"
+
+}
+
+stress {
+
+    s186_r0()
+
+    print("s186-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s186-r0:", e.kind, e.message)
+
+}
+
+gene s186_r1() {
+
+    raise "s186-ggfuhj"
+
+}
+
+stress {
+
+    s186_r1()
+
+    print("s186-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s186-r1:", e.kind, e.message)
+
+}
+
+gene s186_r2() {
+
+    raise "s186-g9A9ds"
+
+}
+
+stress {
+
+    s186_r2()
+
+    print("s186-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s186-r2:", e.kind, e.message)
+
+}
+
+gene s186_r3() {
+
+    raise "s186-Aa33cx"
+
+}
+
+stress {
+
+    s186_r3()
+
+    print("s186-r3:", "unreachable")
+
+} rescue (e) {
+
+    print("s186-r3:", e.kind, e.message)
+
+}
+
+let s186_xs0 = [16, 39, 29, 26]
+
+stress {
+
+    print("s186-x0:", s186_xs0[8])
+
+} rescue (e) {
+
+    print("s186-x0:", "caught", e.kind)
+
+}
+
+let s186_xs1 = [28, 18, 31, 14]
+
+stress {
+
+    print("s186-x1:", s186_xs1[7])
+
+} rescue (e) {
+
+    print("s186-x1:", "caught", e.kind)
+
+}
+
+let s186_xs2 = [3, 42, 47, 30]
+
+stress {
+
+    print("s186-x2:", s186_xs2[7])
+
+} rescue (e) {
+
+    print("s186-x2:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s186-0"
+
+    } rescue (e) {
+
+        print("s186-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s186-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s186-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s186-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s186-1"
+
+    } rescue (e) {
+
+        print("s186-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s186-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s186-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s186-d1-top:", outer.message)
+
+}

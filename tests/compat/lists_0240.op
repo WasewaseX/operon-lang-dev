@@ -1,0 +1,58 @@
+# compat corpus — generated, do not edit by hand
+# bucket=lists seed=20261030 idx=240 tag=l240
+
+let l240_l0 = [-11, 11, -40, 15]
+
+print("l240-l0:", l240_l0[2], l240_l0[-1], l240_l0.len())
+
+let l240_l1 = [-34, -5, 27, 13]
+
+print("l240-l1:", l240_l1[3], l240_l1[-1], l240_l1.len())
+
+let l240_l2 = [37, 46, -2, 49, 7, -19, -46]
+
+print("l240-l2:", l240_l2[1], l240_l2[-1], l240_l2.len())
+
+let l240_l3 = [-4, -21, 22, 43, 29, 42]
+
+print("l240-l3:", l240_l3[1], l240_l3[-1], l240_l3.len())
+
+let l240_s0 = [43, 26, 75, -14, 85]
+
+print("l240-s0:", l240_s0.slice(2, 4), l240_s0.slice(-2))
+
+let l240_s1 = [-41, 12, 1, 95, -15, 83, -68]
+
+print("l240-s1:", l240_s1.slice(2, 5), l240_s1.slice(-3))
+
+let l240_s2 = [7, 75, -71, 81, -66, -77, 10, 26]
+
+print("l240-s2:", l240_s2.slice(1, 4), l240_s2.slice(-2))
+
+let l240_r0 = [169, 180, 10, 231]
+
+print("l240-r0:", l240_r0.sort(), l240_r0.reverse(), l240_r0.contains(231))
+
+let l240_r1 = [551, 171, 533, 429, 341]
+
+print("l240-r1:", l240_r1.sort(), l240_r1.reverse(), l240_r1.contains(533))
+
+let l240_t0 = 0
+
+for v in [26, 29, 32] { l240_t0 += v }
+
+print("l240-t0:", l240_t0)
+
+let l240_t1 = 0
+
+for v in [19, 13, 20] { l240_t1 += v }
+
+print("l240-t1:", l240_t1)
+
+let l240_n0 = [[5, 6, 5], [5, 6, 5], 77]
+
+print("l240-n0:", l240_n0[0][2], l240_n0[2])
+
+let l240_n1 = [[5, 8, 9], [5, 8, 9], 77]
+
+print("l240-n1:", l240_n1[0][2], l240_n1[2])

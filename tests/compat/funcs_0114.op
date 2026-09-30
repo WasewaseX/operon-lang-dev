@@ -1,0 +1,188 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=114 tag=f114
+
+gene f114_g0(p, q = 69, r = 74) {
+
+    return p * 74 + q - r
+
+}
+
+print("f114-d0:", f114_g0(8), f114_g0(8, 30), f114_g0(8, 69, 74))
+
+gene f114_g1(p, q = 85, r = 41) {
+
+    return p * 59 + q - r
+
+}
+
+print("f114-d1:", f114_g1(42), f114_g1(42, 55), f114_g1(42, 85, 41))
+
+gene f114_g2(p, q = 21, r = 53) {
+
+    return p * 51 + q - r
+
+}
+
+print("f114-d2:", f114_g2(-29), f114_g2(-29, 81), f114_g2(-29, 21, 53))
+
+gene f114_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f114_fib0(n - 1) + f114_fib0(n - 2)
+
+}
+
+print("f114-fib0:", f114_fib0(11))
+
+gene f114_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f114_fib1(n - 1) + f114_fib1(n - 2)
+
+}
+
+print("f114-fib1:", f114_fib1(13))
+
+gene f114_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f114_gcd0(b, a % b)
+
+}
+
+print("f114-gcd0:", f114_gcd0(669, 700))
+
+gene f114_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f114_gcd1(b, a % b)
+
+}
+
+print("f114-gcd1:", f114_gcd1(389, 198))
+
+gene f114_gcd2(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f114_gcd2(b, a % b)
+
+}
+
+print("f114-gcd2:", f114_gcd2(972, 245))
+
+gene f114_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f114_c0 = f114_mk0(3)
+
+f114_c0(7)
+
+print("f114-cl0:", f114_c0(5))
+
+gene f114_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f114_c1 = f114_mk1(25)
+
+f114_c1(2)
+
+print("f114-cl1:", f114_c1(5))
+
+gene f114_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f114-hof0:", f114_tw0(gene (z) => z * 2 + 1, 14))
+
+gene f114_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f114-hof1:", f114_tw1(gene (z) => z * 2 + 1, 9))
+
+gene f114_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f114-dg0:", f114_sd0(841760))
+
+gene f114_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f114-dg1:", f114_sd1(988879))

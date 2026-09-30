@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=105 tag=s105
+
+print("s105-m0:", "CrhsAd39d".upper(), "CrhsAd39d".slice(3), "CrhsAd39d".len())
+
+print("s105-m1:", "9BBlxnipoyuk".upper(), "9BBlxnipoyuk".slice(2), "9BBlxnipoyuk".len())
+
+print("s105-m2:", "22b75swczeBy".upper(), "22b75swczeBy".slice(3), "22b75swczeBy".len())
+
+print("s105-m3:", "o2k7cv5n9k0".upper(), "o2k7cv5n9k0".slice(4), "o2k7cv5n9k0".len())
+
+print("s105-m4:", "2oelqBAA09".upper(), "2oelqBAA09".slice(4), "2oelqBAA09".len())
+
+print("s105-i0:", "pfl-{19}-xA2B")
+
+let s105_v0 = 19
+
+print("s105-v0:", "n={s105_v0}" + "!" * 1)
+
+print("s105-i1:", "_A5-{14}-izad")
+
+let s105_v1 = 14
+
+print("s105-v1:", "n={s105_v1}" + "!" * 1)
+
+print("s105-i2:", "7ps-{27}-vfCn")
+
+let s105_v2 = 27
+
+print("s105-v2:", "n={s105_v2}" + "!" * 1)
+
+print("s105-r0:", "Anrcch0A".replace("A", "5j"), "Anrcch0A".contains("nr"))
+
+print("s105-r1:", "irCj52dm".replace("i", "zi"), "irCj52dm".contains("rC"))
+
+print("s105-r2:", "iywgtcBj".replace("i", "3A"), "iywgtcBj".contains("yw"))
+
+print("s105-r3:", "eA1v0hea".replace("e", "p7"), "eA1v0hea".contains("A1"))
+
+print("s105-j0:", ["C_s", "ci9", "7bB", "aev"].join("-"))
+
+print("s105-j1:", ["1mc", "yh9", "7p2"].join("-"))
+
+print("s105-j2:", ["i5w", "nhw", "mjB", "v5j"].join("-"))
+
+print("s105-a0:", "_vab05a".at(1), "_vab05a".trim() == "_vab05a")
+
+print("s105-a1:", "wmwfddo".at(3), "wmwfddo".trim() == "wmwfddo")

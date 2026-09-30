@@ -1,0 +1,166 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=254 tag=f254
+
+gene f254_g0(p, q = 43, r = 16) {
+
+    return p * 73 + q - r
+
+}
+
+print("f254-d0:", f254_g0(-16), f254_g0(-16, 36), f254_g0(-16, 43, 16))
+
+gene f254_g1(p, q = 21, r = 95) {
+
+    return p * 69 + q - r
+
+}
+
+print("f254-d1:", f254_g1(-48), f254_g1(-48, 63), f254_g1(-48, 21, 95))
+
+gene f254_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f254_fib0(n - 1) + f254_fib0(n - 2)
+
+}
+
+print("f254-fib0:", f254_fib0(12))
+
+gene f254_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f254_fib1(n - 1) + f254_fib1(n - 2)
+
+}
+
+print("f254-fib1:", f254_fib1(8))
+
+gene f254_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f254_gcd0(b, a % b)
+
+}
+
+print("f254-gcd0:", f254_gcd0(249, 81))
+
+gene f254_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f254_gcd1(b, a % b)
+
+}
+
+print("f254-gcd1:", f254_gcd1(355, 422))
+
+gene f254_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f254_c0 = f254_mk0(13)
+
+f254_c0(5)
+
+print("f254-cl0:", f254_c0(5))
+
+gene f254_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f254_c1 = f254_mk1(26)
+
+f254_c1(7)
+
+print("f254-cl1:", f254_c1(3))
+
+gene f254_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f254-hof0:", f254_tw0(gene (z) => z * 2 + 1, 28))
+
+gene f254_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f254-hof1:", f254_tw1(gene (z) => z * 2 + 1, 11))
+
+gene f254_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f254-dg0:", f254_sd0(882904))
+
+gene f254_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f254-dg1:", f254_sd1(661854))

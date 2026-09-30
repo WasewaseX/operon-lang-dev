@@ -1,0 +1,32 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=128 tag=c128
+
+print("c128-c0:", 9333 != 7728)
+
+print("c128-c1:", 8982 != 5176)
+
+print("c128-c2:", -4112 >= -8793)
+
+print("c128-c3:", -6975 == 183)
+
+print("c128-b0:", 49 < 47 && 47 < 30, 49 > 47 || 49 > 30)
+
+print("c128-b1:", 35 < 36 && 36 < 49, 35 > 36 || 35 > 49)
+
+print("c128-b2:", 50 < 47 && 47 < 42, 50 > 47 || 50 > 42)
+
+print("c128-t0:", -9338 > 3102 ? "gt" : "le")
+
+print("c128-t1:", -7312 > 8596 ? "gt" : "le")
+
+let c128_n0 = null
+
+print("c128-n0:", c128_n0 ?? 3655, c128_n0 == null)
+
+let c128_n1 = null
+
+print("c128-n1:", c128_n1 ?? -9924, c128_n1 == null)
+
+print("c128-s0:", "3nv3" in "51a7ti3nv3", "3nv3" == "3nv3")
+
+print("c128-s1:", "gokq" in "brCfpCgokq", "gokq" == "gokq")

@@ -1,0 +1,210 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=246 tag=s246
+
+stress {
+
+    print("s246-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s246-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s246-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s246-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s246-mz:", 8 % 0)
+
+} rescue (e) {
+
+    print("s246-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s246-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s246-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s246-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s246-of2:", "caught", e.kind, e.message)
+
+}
+
+gene s246_r0() {
+
+    raise "s246-60gaph"
+
+}
+
+stress {
+
+    s246_r0()
+
+    print("s246-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s246-r0:", e.kind, e.message)
+
+}
+
+gene s246_r1() {
+
+    raise "s246-ur1yk9"
+
+}
+
+stress {
+
+    s246_r1()
+
+    print("s246-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s246-r1:", e.kind, e.message)
+
+}
+
+gene s246_r2() {
+
+    raise "s246-x988_0"
+
+}
+
+stress {
+
+    s246_r2()
+
+    print("s246-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s246-r2:", e.kind, e.message)
+
+}
+
+let s246_xs0 = [17, 46, 15]
+
+stress {
+
+    print("s246-x0:", s246_xs0[7])
+
+} rescue (e) {
+
+    print("s246-x0:", "caught", e.kind)
+
+}
+
+let s246_xs1 = [25, 41, 29]
+
+stress {
+
+    print("s246-x1:", s246_xs1[6])
+
+} rescue (e) {
+
+    print("s246-x1:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s246-0"
+
+    } rescue (e) {
+
+        print("s246-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s246-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s246-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s246-1"
+
+    } rescue (e) {
+
+        print("s246-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s246-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s246-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s246-d1-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s246-d1-top:", outer.message)
+
+}

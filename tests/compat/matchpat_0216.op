@@ -1,0 +1,274 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=216 tag=m216
+
+let m216_s0 = some(6)
+
+match m216_s0 {
+
+    case Some(x) if x > 6 {
+
+        print("m216-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m216-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m216-m0:", "none")
+
+    }
+
+}
+
+let m216_s1 = some(5)
+
+match m216_s1 {
+
+    case Some(x) if x > 5 {
+
+        print("m216-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m216-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m216-m1:", "none")
+
+    }
+
+}
+
+let m216_s2 = some(2)
+
+match m216_s2 {
+
+    case Some(x) if x > 2 {
+
+        print("m216-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m216-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m216-m2:", "none")
+
+    }
+
+}
+
+let m216_s3 = some(2)
+
+match m216_s3 {
+
+    case Some(x) if x > 2 {
+
+        print("m216-m3:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m216-m3:", "small", x)
+
+    }
+
+    case None {
+
+        print("m216-m3:", "none")
+
+    }
+
+}
+
+let m216_ls0 = [9, 48, 30]
+
+match m216_ls0 {
+
+    case [9, *rest] {
+
+        print("m216-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m216-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m216-l0:", "other")
+
+    }
+
+}
+
+let m216_ls1 = [7, 19, 5]
+
+match m216_ls1 {
+
+    case [7, *rest] {
+
+        print("m216-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m216-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m216-l1:", "other")
+
+    }
+
+}
+
+let m216_ls2 = [41, 11, 38]
+
+match m216_ls2 {
+
+    case [41, *rest] {
+
+        print("m216-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m216-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m216-l2:", "other")
+
+    }
+
+}
+
+let m216_mp0 = {gene: 3389, exon: 7323}
+
+match m216_mp0 {
+
+    case {gene: p, exon: q} {
+
+        print("m216-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m216-mp0:", "miss")
+
+    }
+
+}
+
+let m216_mp1 = {cell: -3873, exon: 2966}
+
+match m216_mp1 {
+
+    case {cell: p, exon: q} {
+
+        print("m216-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m216-mp1:", "miss")
+
+    }
+
+}
+
+let m216_r0 = ok(5)
+
+match m216_r0 {
+
+    case Ok(n) | Err(5) {
+
+        print("m216-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m216-r0:", "zero")
+
+    }
+
+}
+
+let m216_r1 = ok(2)
+
+match m216_r1 {
+
+    case Ok(n) | Err(2) {
+
+        print("m216-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m216-r1:", "zero")
+
+    }
+
+}
+
+match "ligase" {
+
+    case "ligase" {
+
+        print("m216-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m216-w0:", "alt")
+
+    }
+
+}
+
+match "ligase" {
+
+    case "ligase" {
+
+        print("m216-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m216-w1:", "alt")
+
+    }
+
+}

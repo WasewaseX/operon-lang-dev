@@ -1,0 +1,170 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=225 tag=c225
+
+let c225_b0 = "start"
+
+if 34 > 80 { c225_b0 = "hi" } elif 34 > 40 { c225_b0 = "mid" } else { c225_b0 = "lo" }
+
+print("c225-i0:", c225_b0, 34)
+
+let c225_b1 = "start"
+
+if 41 > 80 { c225_b1 = "hi" } elif 41 > 40 { c225_b1 = "mid" } else { c225_b1 = "lo" }
+
+print("c225-i1:", c225_b1, 41)
+
+let c225_b2 = "start"
+
+if 117 > 80 { c225_b2 = "hi" } elif 117 > 40 { c225_b2 = "mid" } else { c225_b2 = "lo" }
+
+print("c225-i2:", c225_b2, 117)
+
+let c225_a0 = 0
+
+let c225_n0 = 0
+
+while c225_n0 < 12 {
+
+    c225_n0 += 4
+
+    if c225_n0 % 2 == 0 { continue }
+
+    if c225_n0 > 17 { break }
+
+    c225_a0 += c225_n0
+
+}
+
+print("c225-w0:", c225_a0, c225_n0)
+
+let c225_a1 = 0
+
+let c225_n1 = 0
+
+while c225_n1 < 6 {
+
+    c225_n1 += 2
+
+    if c225_n1 % 2 == 0 { continue }
+
+    if c225_n1 > 10 { break }
+
+    c225_a1 += c225_n1
+
+}
+
+print("c225-w1:", c225_a1, c225_n1)
+
+let c225_a2 = 0
+
+let c225_n2 = 0
+
+while c225_n2 < 14 {
+
+    c225_n2 += 1
+
+    if c225_n2 % 2 == 0 { continue }
+
+    if c225_n2 > 22 { break }
+
+    c225_a2 += c225_n2
+
+}
+
+print("c225-w2:", c225_a2, c225_n2)
+
+let c225_a3 = 0
+
+let c225_n3 = 0
+
+while c225_n3 < 9 {
+
+    c225_n3 += 3
+
+    if c225_n3 % 2 == 0 { continue }
+
+    if c225_n3 > 15 { break }
+
+    c225_a3 += c225_n3
+
+}
+
+print("c225-w3:", c225_a3, c225_n3)
+
+let c225_c0 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 2] {
+
+        c225_c0 += a * b
+
+    }
+
+}
+
+print("c225-l0:", c225_c0)
+
+let c225_c1 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 3] {
+
+        c225_c1 += a * b
+
+    }
+
+}
+
+print("c225-l1:", c225_c1)
+
+let c225_c2 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 3] {
+
+        c225_c2 += a * b
+
+    }
+
+}
+
+print("c225-l2:", c225_c2)
+
+let c225_acc0 = ""
+
+loop {
+
+    c225_acc0 += "x"
+
+    if c225_acc0.len() >= 7 { break }
+
+}
+
+print("c225-o0:", c225_acc0)
+
+let c225_acc1 = ""
+
+loop {
+
+    c225_acc1 += "x"
+
+    if c225_acc1.len() >= 6 { break }
+
+}
+
+print("c225-o1:", c225_acc1)
+
+let c225_acc2 = ""
+
+loop {
+
+    c225_acc2 += "x"
+
+    if c225_acc2.len() >= 4 { break }
+
+}
+
+print("c225-o2:", c225_acc2)

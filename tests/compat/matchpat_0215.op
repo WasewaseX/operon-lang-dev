@@ -1,0 +1,262 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=215 tag=m215
+
+let m215_s0 = some(6)
+
+match m215_s0 {
+
+    case Some(x) if x > 6 {
+
+        print("m215-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m215-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m215-m0:", "none")
+
+    }
+
+}
+
+let m215_s1 = some(6)
+
+match m215_s1 {
+
+    case Some(x) if x > 6 {
+
+        print("m215-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m215-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m215-m1:", "none")
+
+    }
+
+}
+
+let m215_s2 = some(8)
+
+match m215_s2 {
+
+    case Some(x) if x > 8 {
+
+        print("m215-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m215-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m215-m2:", "none")
+
+    }
+
+}
+
+let m215_ls0 = [44, 49, 23]
+
+match m215_ls0 {
+
+    case [44, *rest] {
+
+        print("m215-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m215-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m215-l0:", "other")
+
+    }
+
+}
+
+let m215_ls1 = [36, 22, 6]
+
+match m215_ls1 {
+
+    case [36, *rest] {
+
+        print("m215-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m215-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m215-l1:", "other")
+
+    }
+
+}
+
+let m215_mp0 = {ribose: -9611, splicer: -9984}
+
+match m215_mp0 {
+
+    case {ribose: p, splicer: q} {
+
+        print("m215-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m215-mp0:", "miss")
+
+    }
+
+}
+
+let m215_mp1 = {codon: -9752, exon: -2615}
+
+match m215_mp1 {
+
+    case {codon: p, exon: q} {
+
+        print("m215-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m215-mp1:", "miss")
+
+    }
+
+}
+
+let m215_mp2 = {gene: -2186, marker: 8933}
+
+match m215_mp2 {
+
+    case {gene: p, marker: q} {
+
+        print("m215-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m215-mp2:", "miss")
+
+    }
+
+}
+
+let m215_r0 = ok(1)
+
+match m215_r0 {
+
+    case Ok(n) | Err(1) {
+
+        print("m215-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m215-r0:", "zero")
+
+    }
+
+}
+
+let m215_r1 = ok(3)
+
+match m215_r1 {
+
+    case Ok(n) | Err(3) {
+
+        print("m215-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m215-r1:", "zero")
+
+    }
+
+}
+
+let m215_r2 = ok(3)
+
+match m215_r2 {
+
+    case Ok(n) | Err(3) {
+
+        print("m215-r2:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m215-r2:", "zero")
+
+    }
+
+}
+
+match "gene" {
+
+    case "gene" {
+
+        print("m215-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m215-w0:", "alt")
+
+    }
+
+}
+
+match "ribose" {
+
+    case "ribose" {
+
+        print("m215-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m215-w1:", "alt")
+
+    }
+
+}

@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=250 tag=c250
+
+print("c250-c0:", 1085 > -8750)
+
+print("c250-c1:", -4816 == -4230)
+
+print("c250-c2:", 9669 != -6031)
+
+print("c250-c3:", -6865 != -2014)
+
+print("c250-c4:", 9840 >= -3294)
+
+print("c250-c5:", 4275 > -6117)
+
+print("c250-b0:", 38 < 35 && 35 < 29, 38 > 35 || 38 > 29)
+
+print("c250-b1:", 29 < 20 && 20 < 43, 29 > 20 || 29 > 43)
+
+print("c250-b2:", 27 < 41 && 41 < 19, 27 > 41 || 27 > 19)
+
+print("c250-b3:", 35 < 28 && 28 < 36, 35 > 28 || 35 > 36)
+
+print("c250-t0:", 7806 > 9242 ? "gt" : "le")
+
+print("c250-t1:", 6379 > -239 ? "gt" : "le")
+
+print("c250-t2:", 9439 > -8918 ? "gt" : "le")
+
+print("c250-t3:", -3108 > 3739 ? "gt" : "le")
+
+let c250_n0 = null
+
+print("c250-n0:", c250_n0 ?? 9561, c250_n0 == null)
+
+let c250_n1 = null
+
+print("c250-n1:", c250_n1 ?? -9009, c250_n1 == null)
+
+let c250_n2 = null
+
+print("c250-n2:", c250_n2 ?? -4884, c250_n2 == null)
+
+print("c250-s0:", "kmpi" in "Ax4gn1kmpi", "kmpi" == "kmpi")
+
+print("c250-s1:", "erg6" in "oc74tmerg6", "erg6" == "erg6")

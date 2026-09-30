@@ -1,0 +1,54 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=136 tag=s136
+
+print("s136-m0:", "oa5a0ouw".upper(), "oa5a0ouw".slice(2), "oa5a0ouw".len())
+
+print("s136-m1:", "uAn7jm".upper(), "uAn7jm".slice(3), "uAn7jm".len())
+
+print("s136-m2:", "z750829".upper(), "z750829".slice(4), "z750829".len())
+
+print("s136-m3:", "AqlseB".upper(), "AqlseB".slice(4), "AqlseB".len())
+
+print("s136-m4:", "2llnmcA".upper(), "2llnmcA".slice(3), "2llnmcA".len())
+
+print("s136-m5:", "768udu5".upper(), "768udu5".slice(1), "768udu5".len())
+
+print("s136-i0:", "7aC-{19}-d0Aw")
+
+let s136_v0 = 19
+
+print("s136-v0:", "n={s136_v0}" + "!" * 1)
+
+print("s136-i1:", "1Cl-{65}-ndiC")
+
+let s136_v1 = 65
+
+print("s136-v1:", "n={s136_v1}" + "!" * 3)
+
+print("s136-i2:", "86C-{39}-bBpn")
+
+let s136_v2 = 39
+
+print("s136-v2:", "n={s136_v2}" + "!" * 1)
+
+print("s136-i3:", "A_r-{48}-ppkC")
+
+let s136_v3 = 48
+
+print("s136-v3:", "n={s136_v3}" + "!" * 1)
+
+print("s136-r0:", "A5ir6kes".replace("A", "d0"), "A5ir6kes".contains("5i"))
+
+print("s136-r1:", "f3di8d02".replace("f", "h7"), "f3di8d02".contains("3d"))
+
+print("s136-r2:", "otmrrBwe".replace("o", "cb"), "otmrrBwe".contains("tm"))
+
+print("s136-j0:", ["vrB", "jaC", "Bh9", "7l5", "zfn"].join("-"))
+
+print("s136-j1:", ["qhy", "zpg", "v9b", "8es", "eei"].join("-"))
+
+print("s136-a0:", "yg_s00k".at(2), "yg_s00k".trim() == "yg_s00k")
+
+print("s136-a1:", "rh5tjky".at(4), "rh5tjky".trim() == "rh5tjky")
+
+print("s136-a2:", "Cihv_77".at(6), "Cihv_77".trim() == "Cihv_77")

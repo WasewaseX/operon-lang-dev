@@ -1,0 +1,120 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=255 tag=c255
+
+let c255_b0 = "start"
+
+if 48 > 80 { c255_b0 = "hi" } elif 48 > 40 { c255_b0 = "mid" } else { c255_b0 = "lo" }
+
+print("c255-i0:", c255_b0, 48)
+
+let c255_b1 = "start"
+
+if 105 > 80 { c255_b1 = "hi" } elif 105 > 40 { c255_b1 = "mid" } else { c255_b1 = "lo" }
+
+print("c255-i1:", c255_b1, 105)
+
+let c255_b2 = "start"
+
+if 54 > 80 { c255_b2 = "hi" } elif 54 > 40 { c255_b2 = "mid" } else { c255_b2 = "lo" }
+
+print("c255-i2:", c255_b2, 54)
+
+let c255_b3 = "start"
+
+if -4 > 80 { c255_b3 = "hi" } elif -4 > 40 { c255_b3 = "mid" } else { c255_b3 = "lo" }
+
+print("c255-i3:", c255_b3, -4)
+
+let c255_b4 = "start"
+
+if 80 > 80 { c255_b4 = "hi" } elif 80 > 40 { c255_b4 = "mid" } else { c255_b4 = "lo" }
+
+print("c255-i4:", c255_b4, 80)
+
+let c255_a0 = 0
+
+let c255_n0 = 0
+
+while c255_n0 < 11 {
+
+    c255_n0 += 1
+
+    if c255_n0 % 2 == 0 { continue }
+
+    if c255_n0 > 18 { break }
+
+    c255_a0 += c255_n0
+
+}
+
+print("c255-w0:", c255_a0, c255_n0)
+
+let c255_a1 = 0
+
+let c255_n1 = 0
+
+while c255_n1 < 7 {
+
+    c255_n1 += 3
+
+    if c255_n1 % 3 == 0 { continue }
+
+    if c255_n1 > 16 { break }
+
+    c255_a1 += c255_n1
+
+}
+
+print("c255-w1:", c255_a1, c255_n1)
+
+let c255_c0 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 2] {
+
+        c255_c0 += a * b
+
+    }
+
+}
+
+print("c255-l0:", c255_c0)
+
+let c255_c1 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 3] {
+
+        c255_c1 += a * b
+
+    }
+
+}
+
+print("c255-l1:", c255_c1)
+
+let c255_acc0 = ""
+
+loop {
+
+    c255_acc0 += "x"
+
+    if c255_acc0.len() >= 5 { break }
+
+}
+
+print("c255-o0:", c255_acc0)
+
+let c255_acc1 = ""
+
+loop {
+
+    c255_acc1 += "x"
+
+    if c255_acc1.len() >= 7 { break }
+
+}
+
+print("c255-o1:", c255_acc1)

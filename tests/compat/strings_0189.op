@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=189 tag=s189
+
+print("s189-m0:", "lvd8_e".upper(), "lvd8_e".slice(3), "lvd8_e".len())
+
+print("s189-m1:", "z88d5bi52xbf".upper(), "z88d5bi52xbf".slice(3), "z88d5bi52xbf".len())
+
+print("s189-m2:", "6ew9h5t72dlo".upper(), "6ew9h5t72dlo".slice(2), "6ew9h5t72dlo".len())
+
+print("s189-m3:", "2mh6xw9xpsuu".upper(), "2mh6xw9xpsuu".slice(4), "2mh6xw9xpsuu".len())
+
+print("s189-m4:", "CdmiA5xzwi".upper(), "CdmiA5xzwi".slice(4), "CdmiA5xzwi".len())
+
+print("s189-m5:", "37epg25".upper(), "37epg25".slice(3), "37epg25".len())
+
+print("s189-i0:", "zcx-{13}-f8f8")
+
+let s189_v0 = 13
+
+print("s189-v0:", "n={s189_v0}" + "!" * 3)
+
+print("s189-i1:", "t1a-{46}-6q6r")
+
+let s189_v1 = 46
+
+print("s189-v1:", "n={s189_v1}" + "!" * 1)
+
+print("s189-i2:", "h9_-{78}-n48c")
+
+let s189_v2 = 78
+
+print("s189-v2:", "n={s189_v2}" + "!" * 1)
+
+print("s189-r0:", "83wB96Cc".replace("8", "az"), "83wB96Cc".contains("3w"))
+
+print("s189-r1:", "C3b88jvx".replace("C", "vb"), "C3b88jvx".contains("3b"))
+
+print("s189-r2:", "qi__xzxf".replace("q", "mo"), "qi__xzxf".contains("i_"))
+
+print("s189-j0:", ["pus", "Axd", "bao", "h8r"].join("-"))
+
+print("s189-j1:", ["8dn", "gbz", "6_B", "pCc", "p4h"].join("-"))
+
+print("s189-a0:", "urix0v7".at(1), "urix0v7".trim() == "urix0v7")
+
+print("s189-a1:", "bh0qdv7".at(2), "bh0qdv7".trim() == "bh0qdv7")
+
+print("s189-a2:", "Cyx6r9B".at(0), "Cyx6r9B".trim() == "Cyx6r9B")

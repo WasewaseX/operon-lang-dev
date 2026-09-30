@@ -1,0 +1,50 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=224 tag=s224
+
+print("s224-m0:", "p1hgl2g".upper(), "p1hgl2g".slice(1), "p1hgl2g".len())
+
+print("s224-m1:", "jatgek".upper(), "jatgek".slice(4), "jatgek".len())
+
+print("s224-m2:", "gCg82e".upper(), "gCg82e".slice(4), "gCg82e".len())
+
+print("s224-m3:", "yfv0kw".upper(), "yfv0kw".slice(1), "yfv0kw".len())
+
+print("s224-m4:", "k8zk2y5faBrAi".upper(), "k8zk2y5faBrAi".slice(3), "k8zk2y5faBrAi".len())
+
+print("s224-m5:", "zx1cr9degdlr".upper(), "zx1cr9degdlr".slice(4), "zx1cr9degdlr".len())
+
+print("s224-i0:", "dht-{31}-fic_")
+
+let s224_v0 = 31
+
+print("s224-v0:", "n={s224_v0}" + "!" * 3)
+
+print("s224-i1:", "9pl-{11}-e67s")
+
+let s224_v1 = 11
+
+print("s224-v1:", "n={s224_v1}" + "!" * 1)
+
+print("s224-i2:", "dfA-{52}-ozxh")
+
+let s224_v2 = 52
+
+print("s224-v2:", "n={s224_v2}" + "!" * 1)
+
+print("s224-r0:", "smyfCvul".replace("s", "_m"), "smyfCvul".contains("my"))
+
+print("s224-r1:", "yoj4dl64".replace("y", "nC"), "yoj4dl64".contains("oj"))
+
+print("s224-r2:", "0jdCedak".replace("0", "t_"), "0jdCedak".contains("jd"))
+
+print("s224-r3:", "2i07690a".replace("2", "C5"), "2i07690a".contains("i0"))
+
+print("s224-j0:", ["akB", "a2g", "n76", "ti5"].join("-"))
+
+print("s224-j1:", ["7g0", "bgv", "rx0", "5xq"].join("-"))
+
+print("s224-j2:", ["ler", "58t", "34A", "u1v"].join("-"))
+
+print("s224-a0:", "1eddbw3".at(4), "1eddbw3".trim() == "1eddbw3")
+
+print("s224-a1:", "9jbufpt".at(6), "9jbufpt".trim() == "9jbufpt")

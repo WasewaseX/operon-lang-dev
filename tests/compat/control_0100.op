@@ -1,0 +1,162 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=100 tag=c100
+
+let c100_b0 = "start"
+
+if 65 > 80 { c100_b0 = "hi" } elif 65 > 40 { c100_b0 = "mid" } else { c100_b0 = "lo" }
+
+print("c100-i0:", c100_b0, 65)
+
+let c100_b1 = "start"
+
+if 43 > 80 { c100_b1 = "hi" } elif 43 > 40 { c100_b1 = "mid" } else { c100_b1 = "lo" }
+
+print("c100-i1:", c100_b1, 43)
+
+let c100_b2 = "start"
+
+if 82 > 80 { c100_b2 = "hi" } elif 82 > 40 { c100_b2 = "mid" } else { c100_b2 = "lo" }
+
+print("c100-i2:", c100_b2, 82)
+
+let c100_b3 = "start"
+
+if 25 > 80 { c100_b3 = "hi" } elif 25 > 40 { c100_b3 = "mid" } else { c100_b3 = "lo" }
+
+print("c100-i3:", c100_b3, 25)
+
+let c100_a0 = 0
+
+let c100_n0 = 0
+
+while c100_n0 < 8 {
+
+    c100_n0 += 3
+
+    if c100_n0 % 3 == 0 { continue }
+
+    if c100_n0 > 10 { break }
+
+    c100_a0 += c100_n0
+
+}
+
+print("c100-w0:", c100_a0, c100_n0)
+
+let c100_a1 = 0
+
+let c100_n1 = 0
+
+while c100_n1 < 8 {
+
+    c100_n1 += 1
+
+    if c100_n1 % 3 == 0 { continue }
+
+    if c100_n1 > 12 { break }
+
+    c100_a1 += c100_n1
+
+}
+
+print("c100-w1:", c100_a1, c100_n1)
+
+let c100_a2 = 0
+
+let c100_n2 = 0
+
+while c100_n2 < 6 {
+
+    c100_n2 += 3
+
+    if c100_n2 % 2 == 0 { continue }
+
+    if c100_n2 > 13 { break }
+
+    c100_a2 += c100_n2
+
+}
+
+print("c100-w2:", c100_a2, c100_n2)
+
+let c100_a3 = 0
+
+let c100_n3 = 0
+
+while c100_n3 < 16 {
+
+    c100_n3 += 2
+
+    if c100_n3 % 2 == 0 { continue }
+
+    if c100_n3 > 22 { break }
+
+    c100_a3 += c100_n3
+
+}
+
+print("c100-w3:", c100_a3, c100_n3)
+
+let c100_c0 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 4] {
+
+        c100_c0 += a * b
+
+    }
+
+}
+
+print("c100-l0:", c100_c0)
+
+let c100_c1 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 4] {
+
+        c100_c1 += a * b
+
+    }
+
+}
+
+print("c100-l1:", c100_c1)
+
+let c100_acc0 = ""
+
+loop {
+
+    c100_acc0 += "x"
+
+    if c100_acc0.len() >= 3 { break }
+
+}
+
+print("c100-o0:", c100_acc0)
+
+let c100_acc1 = ""
+
+loop {
+
+    c100_acc1 += "x"
+
+    if c100_acc1.len() >= 6 { break }
+
+}
+
+print("c100-o1:", c100_acc1)
+
+let c100_acc2 = ""
+
+loop {
+
+    c100_acc2 += "x"
+
+    if c100_acc2.len() >= 6 { break }
+
+}
+
+print("c100-o2:", c100_acc2)

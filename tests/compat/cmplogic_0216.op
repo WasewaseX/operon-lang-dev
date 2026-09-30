@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=216 tag=c216
+
+print("c216-c0:", 5040 <= 427)
+
+print("c216-c1:", 4464 > 9061)
+
+print("c216-c2:", 1967 <= -7519)
+
+print("c216-c3:", -5914 > -1188)
+
+print("c216-c4:", 7584 >= -4407)
+
+print("c216-c5:", 4796 != -1352)
+
+print("c216-b0:", 23 < 25 && 25 < 34, 23 > 25 || 23 > 34)
+
+print("c216-b1:", 3 < 21 && 21 < 35, 3 > 21 || 3 > 35)
+
+print("c216-b2:", 0 < 9 && 9 < 37, 0 > 9 || 0 > 37)
+
+print("c216-t0:", -8667 > 6084 ? "gt" : "le")
+
+print("c216-t1:", -2298 > -6701 ? "gt" : "le")
+
+print("c216-t2:", 5054 > -5957 ? "gt" : "le")
+
+print("c216-t3:", 7086 > -4400 ? "gt" : "le")
+
+let c216_n0 = null
+
+print("c216-n0:", c216_n0 ?? -7264, c216_n0 == null)
+
+let c216_n1 = null
+
+print("c216-n1:", c216_n1 ?? -9619, c216_n1 == null)
+
+print("c216-s0:", "kCe6" in "uvxsCvkCe6", "kCe6" == "kCe6")
+
+print("c216-s1:", "uoaA" in "syC6j2uoaA", "uoaA" == "uoaA")

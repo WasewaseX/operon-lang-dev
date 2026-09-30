@@ -1,0 +1,260 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=205 tag=s205
+
+stress {
+
+    print("s205-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s205-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s205-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s205-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s205-mz:", 30 % 0)
+
+} rescue (e) {
+
+    print("s205-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s205-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s205-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s205-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s205-of2:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s205-m1:", 9223372036854775807 % -1)
+
+} rescue (e) {
+
+    print("s205-m1:", "caught", e.kind, e.message)
+
+}
+
+gene s205_r0() {
+
+    raise "s205-wnmyto"
+
+}
+
+stress {
+
+    s205_r0()
+
+    print("s205-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s205-r0:", e.kind, e.message)
+
+}
+
+gene s205_r1() {
+
+    raise "s205-9_a89p"
+
+}
+
+stress {
+
+    s205_r1()
+
+    print("s205-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s205-r1:", e.kind, e.message)
+
+}
+
+gene s205_r2() {
+
+    raise "s205-ce9ovp"
+
+}
+
+stress {
+
+    s205_r2()
+
+    print("s205-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s205-r2:", e.kind, e.message)
+
+}
+
+gene s205_r3() {
+
+    raise "s205-Cgwdd0"
+
+}
+
+stress {
+
+    s205_r3()
+
+    print("s205-r3:", "unreachable")
+
+} rescue (e) {
+
+    print("s205-r3:", e.kind, e.message)
+
+}
+
+let s205_xs0 = [46, 24, 9, 32]
+
+stress {
+
+    print("s205-x0:", s205_xs0[5])
+
+} rescue (e) {
+
+    print("s205-x0:", "caught", e.kind)
+
+}
+
+let s205_xs1 = [43, 14, 20, 32]
+
+stress {
+
+    print("s205-x1:", s205_xs1[5])
+
+} rescue (e) {
+
+    print("s205-x1:", "caught", e.kind)
+
+}
+
+let s205_xs2 = [47, 43, 50]
+
+stress {
+
+    print("s205-x2:", s205_xs2[4])
+
+} rescue (e) {
+
+    print("s205-x2:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s205-0"
+
+    } rescue (e) {
+
+        print("s205-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s205-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s205-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s205-d0-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s205-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s205-1"
+
+    } rescue (e) {
+
+        print("s205-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s205-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s205-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s205-d1-top:", outer.message)
+
+}

@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=119 tag=s119
+
+print("s119-m0:", "tcBfzpf4A".upper(), "tcBfzpf4A".slice(4), "tcBfzpf4A".len())
+
+print("s119-m1:", "jckh8bvvg4xod".upper(), "jckh8bvvg4xod".slice(2), "jckh8bvvg4xod".len())
+
+print("s119-m2:", "fxwxvh9i094p6".upper(), "fxwxvh9i094p6".slice(4), "fxwxvh9i094p6".len())
+
+print("s119-m3:", "5zkCezmA".upper(), "5zkCezmA".slice(2), "5zkCezmA".len())
+
+print("s119-m4:", "3bdehydj_r".upper(), "3bdehydj_r".slice(1), "3bdehydj_r".len())
+
+print("s119-m5:", "u5m49pir".upper(), "u5m49pir".slice(3), "u5m49pir".len())
+
+print("s119-i0:", "yu2-{80}-049r")
+
+let s119_v0 = 80
+
+print("s119-v0:", "n={s119_v0}" + "!" * 2)
+
+print("s119-i1:", "Alh-{54}-pzwa")
+
+let s119_v1 = 54
+
+print("s119-v1:", "n={s119_v1}" + "!" * 1)
+
+print("s119-i2:", "81x-{87}-651v")
+
+let s119_v2 = 87
+
+print("s119-v2:", "n={s119_v2}" + "!" * 1)
+
+print("s119-i3:", "2_a-{69}-mwfu")
+
+let s119_v3 = 69
+
+print("s119-v3:", "n={s119_v3}" + "!" * 1)
+
+print("s119-r0:", "ijjwC5r2".replace("i", "7o"), "ijjwC5r2".contains("jj"))
+
+print("s119-r1:", "cyqB7pwp".replace("c", "2p"), "cyqB7pwp".contains("yq"))
+
+print("s119-j0:", ["o4t", "585", "pu4", "ad2"].join("-"))
+
+print("s119-j1:", ["26b", "72B", "qxj", "81y"].join("-"))
+
+print("s119-a0:", "6eianxu".at(4), "6eianxu".trim() == "6eianxu")
+
+print("s119-a1:", "l8C8pvm".at(5), "l8C8pvm".trim() == "l8C8pvm")
+
+print("s119-a2:", "ruo8zn6".at(1), "ruo8zn6".trim() == "ruo8zn6")

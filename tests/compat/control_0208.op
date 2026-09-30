@@ -1,0 +1,152 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=208 tag=c208
+
+let c208_b0 = "start"
+
+if 70 > 80 { c208_b0 = "hi" } elif 70 > 40 { c208_b0 = "mid" } else { c208_b0 = "lo" }
+
+print("c208-i0:", c208_b0, 70)
+
+let c208_b1 = "start"
+
+if 70 > 80 { c208_b1 = "hi" } elif 70 > 40 { c208_b1 = "mid" } else { c208_b1 = "lo" }
+
+print("c208-i1:", c208_b1, 70)
+
+let c208_b2 = "start"
+
+if 35 > 80 { c208_b2 = "hi" } elif 35 > 40 { c208_b2 = "mid" } else { c208_b2 = "lo" }
+
+print("c208-i2:", c208_b2, 35)
+
+let c208_a0 = 0
+
+let c208_n0 = 0
+
+while c208_n0 < 18 {
+
+    c208_n0 += 4
+
+    if c208_n0 % 3 == 0 { continue }
+
+    if c208_n0 > 20 { break }
+
+    c208_a0 += c208_n0
+
+}
+
+print("c208-w0:", c208_a0, c208_n0)
+
+let c208_a1 = 0
+
+let c208_n1 = 0
+
+while c208_n1 < 6 {
+
+    c208_n1 += 4
+
+    if c208_n1 % 3 == 0 { continue }
+
+    if c208_n1 > 8 { break }
+
+    c208_a1 += c208_n1
+
+}
+
+print("c208-w1:", c208_a1, c208_n1)
+
+let c208_a2 = 0
+
+let c208_n2 = 0
+
+while c208_n2 < 9 {
+
+    c208_n2 += 2
+
+    if c208_n2 % 2 == 0 { continue }
+
+    if c208_n2 > 18 { break }
+
+    c208_a2 += c208_n2
+
+}
+
+print("c208-w2:", c208_a2, c208_n2)
+
+let c208_c0 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 2] {
+
+        c208_c0 += a * b
+
+    }
+
+}
+
+print("c208-l0:", c208_c0)
+
+let c208_c1 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 4] {
+
+        c208_c1 += a * b
+
+    }
+
+}
+
+print("c208-l1:", c208_c1)
+
+let c208_c2 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 2] {
+
+        c208_c2 += a * b
+
+    }
+
+}
+
+print("c208-l2:", c208_c2)
+
+let c208_acc0 = ""
+
+loop {
+
+    c208_acc0 += "x"
+
+    if c208_acc0.len() >= 4 { break }
+
+}
+
+print("c208-o0:", c208_acc0)
+
+let c208_acc1 = ""
+
+loop {
+
+    c208_acc1 += "x"
+
+    if c208_acc1.len() >= 3 { break }
+
+}
+
+print("c208-o1:", c208_acc1)
+
+let c208_acc2 = ""
+
+loop {
+
+    c208_acc2 += "x"
+
+    if c208_acc2.len() >= 4 { break }
+
+}
+
+print("c208-o2:", c208_acc2)

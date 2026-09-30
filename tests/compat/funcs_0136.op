@@ -1,0 +1,174 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=136 tag=f136
+
+gene f136_g0(p, q = 75, r = 51) {
+
+    return p * 94 + q - r
+
+}
+
+print("f136-d0:", f136_g0(2), f136_g0(2, 61), f136_g0(2, 75, 51))
+
+gene f136_g1(p, q = 20, r = 52) {
+
+    return p * 53 + q - r
+
+}
+
+print("f136-d1:", f136_g1(-32), f136_g1(-32, 74), f136_g1(-32, 20, 52))
+
+gene f136_g2(p, q = 51, r = 78) {
+
+    return p * 79 + q - r
+
+}
+
+print("f136-d2:", f136_g2(46), f136_g2(46, 77), f136_g2(46, 51, 78))
+
+gene f136_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f136_fib0(n - 1) + f136_fib0(n - 2)
+
+}
+
+print("f136-fib0:", f136_fib0(9))
+
+gene f136_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f136_fib1(n - 1) + f136_fib1(n - 2)
+
+}
+
+print("f136-fib1:", f136_fib1(12))
+
+gene f136_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f136_gcd0(b, a % b)
+
+}
+
+print("f136-gcd0:", f136_gcd0(336, 915))
+
+gene f136_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f136_gcd1(b, a % b)
+
+}
+
+print("f136-gcd1:", f136_gcd1(733, 791))
+
+gene f136_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f136_c0 = f136_mk0(33)
+
+f136_c0(9)
+
+print("f136-cl0:", f136_c0(1))
+
+gene f136_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f136_c1 = f136_mk1(39)
+
+f136_c1(8)
+
+print("f136-cl1:", f136_c1(2))
+
+gene f136_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f136-hof0:", f136_tw0(gene (z) => z * 2 + 1, 12))
+
+gene f136_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f136-hof1:", f136_tw1(gene (z) => z * 2 + 1, 17))
+
+gene f136_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f136-dg0:", f136_sd0(516981))
+
+gene f136_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f136-dg1:", f136_sd1(972787))

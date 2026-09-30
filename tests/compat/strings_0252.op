@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=252 tag=s252
+
+print("s252-m0:", "nkBB__Czdk9h50".upper(), "nkBB__Czdk9h50".slice(1), "nkBB__Czdk9h50".len())
+
+print("s252-m1:", "i_eBChti".upper(), "i_eBChti".slice(4), "i_eBChti".len())
+
+print("s252-m2:", "nstiAni".upper(), "nstiAni".slice(1), "nstiAni".len())
+
+print("s252-m3:", "1ouhz_".upper(), "1ouhz_".slice(2), "1ouhz_".len())
+
+print("s252-m4:", "baB37cr2ik5".upper(), "baB37cr2ik5".slice(1), "baB37cr2ik5".len())
+
+print("s252-m5:", "nmhfyjq".upper(), "nmhfyjq".slice(4), "nmhfyjq".len())
+
+print("s252-i0:", "7cw-{23}-khdc")
+
+let s252_v0 = 23
+
+print("s252-v0:", "n={s252_v0}" + "!" * 3)
+
+print("s252-i1:", "a_b-{36}-ltqg")
+
+let s252_v1 = 36
+
+print("s252-v1:", "n={s252_v1}" + "!" * 3)
+
+print("s252-i2:", "ksB-{61}-8cma")
+
+let s252_v2 = 61
+
+print("s252-v2:", "n={s252_v2}" + "!" * 2)
+
+print("s252-i3:", "per-{47}-9Cx9")
+
+let s252_v3 = 47
+
+print("s252-v3:", "n={s252_v3}" + "!" * 2)
+
+print("s252-r0:", "AwAvwpoc".replace("A", "at"), "AwAvwpoc".contains("wA"))
+
+print("s252-r1:", "apbc9i7w".replace("a", "vC"), "apbc9i7w".contains("pb"))
+
+print("s252-r2:", "ko07j022".replace("k", "nd"), "ko07j022".contains("o0"))
+
+print("s252-r3:", "ei3rrflg".replace("e", "_z"), "ei3rrflg".contains("i3"))
+
+print("s252-j0:", ["g9f", "pz9", "i8a", "lxu", "dvy"].join("-"))
+
+print("s252-j1:", ["9rj", "r1a", "qr2"].join("-"))
+
+print("s252-a0:", "60t3pha".at(3), "60t3pha".trim() == "60t3pha")
+
+print("s252-a1:", "6htfCx2".at(4), "6htfCx2".trim() == "6htfCx2")
+
+print("s252-a2:", "71utqrz".at(5), "71utqrz".trim() == "71utqrz")
