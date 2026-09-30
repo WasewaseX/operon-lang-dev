@@ -205,6 +205,58 @@ mv "$DEMO/operon.toml.keep" "$DEMO/operon.toml"
 (cd "$DEMO" && iso_env "$LOCKA/home" "$LOCKA/deps" "$BIN" run --locked src/app.op 2>/dev/null | grep -q "matched=lock")
 check $? "restored manifest passes --locked again"
 
+# ---- 12. SEMANTIC VERSION REQUIREMENTS (item 4, ai/ecosystem-r3)
+# A multi-version registry built in the sandbox: same package name, four
+# index lines over one dir-sourced package tree. The dir rev IS the content
+# checksum, so first an unconditional add resolves it (last-wins = 1.0.0)
+# and the TRUE rev lands in the lock; the index lines are then patched to
+# that truth — exactly what `operon publish` would have written. After that:
+# the requirement must pick the HIGHEST satisfying line, refuse
+# unsatisfiable requirements honestly, record req+version in manifest and
+# lock, and make --locked catch version drift.
+SEM="$WORK/semver"; mkdir -p "$SEM/reg/packages/beta" "$SEM/proj"
+printf '[package]\nname = "beta"\nversion = "0.1.0"\ndescription = "test pkg"\nentry = "beta.op"\n' > "$SEM/reg/packages/beta/operon.toml"
+printf 'value = 1;\n' > "$SEM/reg/packages/beta/beta.op"
+for V in 0.1.0 0.1.5 0.2.0 1.0.0; do
+  printf '{"name": "beta", "version": "%s", "git": "https://example.com/beta.git", "dir": "%s/reg/packages/beta", "rev": "placeholder-%s", "sha256": "", "description": "test pkg"}\n' "$V" "$SEM" "$V" >> "$SEM/reg/index.jsonl"
+done
+(cd "$SEM/proj" && iso_env "$SEM/home" "$SEM/deps" "$BIN" new reqapp >/dev/null 2>&1 && cd reqapp \
+  && iso_env "$SEM/home" "$SEM/deps" "$BIN" add beta --registry "$SEM/reg/index.jsonl" >/dev/null 2>&1)
+TRUE_REV=$(grep '^rev' "$SEM/proj/reqapp/operon.lock" | cut -d'"' -f2)
+sed -i "s/\"rev\": \"placeholder-[^\"]*\"/\"rev\": \"$TRUE_REV\"/g" "$SEM/reg/index.jsonl"
+(cd "$SEM/proj/reqapp" && iso_env "$SEM/home" "$SEM/deps" "$BIN" remove beta >/dev/null 2>&1)
+# capture (not pipe): a grep -q on a live pipe exits early and can SIGPIPE
+# the producer — the captured form tests the output, not the timing
+ADD_OUT=$(cd "$SEM/proj/reqapp" && iso_env "$SEM/home" "$SEM/deps" "$BIN" add "beta@^0.1" --registry "$SEM/reg/index.jsonl" 2>&1); ADD_RC=$?
+[ "$ADD_RC" = "0" ] && printf '%s\n' "$ADD_OUT" | grep -q "resolved 'beta' 0.1.5"
+check $? "add beta@^0.1 picks the HIGHEST satisfying version (0.1.5)"
+grep -q 'version = "\^0.1"' "$SEM/proj/reqapp/operon.toml"
+check $? "manifest records the requirement"
+grep -q '^version = "0.1.5"' "$SEM/proj/reqapp/operon.lock" && grep -q '^req = "\^0.1"' "$SEM/proj/reqapp/operon.lock"
+check $? "lock records resolved version + req"
+(cd "$SEM/proj/reqapp" && iso_env "$SEM/home" "$SEM/deps" "$BIN" run --locked src/main.op >/dev/null 2>&1)
+check $? "program runs with the req-pinned dep"
+# --locked catches version drift: lock says 0.1.5, hand-bump past the req
+cp "$SEM/proj/reqapp/operon.lock" "$SEM/proj/reqapp/operon.lock.keep"
+sed -i 's/^version = "0.1.5"/version = "0.2.0"/' "$SEM/proj/reqapp/operon.lock"
+(cd "$SEM/proj/reqapp" && iso_env "$SEM/home" "$SEM/deps" "$BIN" run --locked src/main.op >/dev/null 2>"$SEM/vdrift.err")
+[ "$?" != "0" ] && grep -q "does not satisfy" "$SEM/vdrift.err"
+check $? "--locked fails when the lock version leaves the requirement"
+mv "$SEM/proj/reqapp/operon.lock.keep" "$SEM/proj/reqapp/operon.lock"
+# unsatisfiable requirement = honest error listing availability
+(cd "$SEM/proj/reqapp" && iso_env "$SEM/home" "$SEM/deps" "$BIN" add "json@^9.0" --registry "$SEM/reg/index.jsonl" >/dev/null 2>"$SEM/unsat.err")
+[ "$?" != "0" ] && grep -q "satisfies" "$SEM/unsat.err"
+check $? "unsatisfiable requirement fails loudly (error names it)"
+# malformed requirement = loud parse error, never a silent URL add
+(cd "$SEM/proj/reqapp" && iso_env "$SEM/home" "$SEM/deps" "$BIN" add "beta@^abc" --registry "$SEM/reg/index.jsonl" >/dev/null 2>"$SEM/badreq.err")
+[ "$?" != "0" ] && grep -q "version requirement" "$SEM/badreq.err"
+check $? "malformed requirement fails loudly"
+# no-req add keeps last-wins (zero behavior change for existing projects)
+(cd "$SEM/proj/reqapp" && iso_env "$SEM/home" "$SEM/deps" "$BIN" remove beta >/dev/null 2>&1)
+ADD_OUT=$(cd "$SEM/proj/reqapp" && iso_env "$SEM/home" "$SEM/deps" "$BIN" add beta --registry "$SEM/reg/index.jsonl" 2>&1); ADD_RC=$?
+[ "$ADD_RC" = "0" ] && printf '%s\n' "$ADD_OUT" | grep -q "resolved 'beta' 1.0.0"
+check $? "add without @req keeps the last-wins rule (1.0.0)"
+
 echo "pkg_e2e: $pass passed, $fail failed"
 [ "$fail" = "0" ] && echo "PKG E2E GREEN"
 rm -rf "$WORK"

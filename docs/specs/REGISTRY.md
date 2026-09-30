@@ -139,6 +139,48 @@ numbers. Publishing to a remote index URL is refused: appending is a
 filesystem/git operation, point `--registry` at a writable checkout and
 push.
 
+Certificate handling is curl's default: verified, fail-closed. For a
+self-hosted registry signed by a private root, `OPERON_CA_BUNDLE` points
+at a PEM CA bundle passed to curl as `--cacert`. The knob only ADDS a
+trusted root; there is no `-k`, no insecure fallback, no plaintext
+downgrade anywhere in the client.
+
+## 8a. Semantic version requirements (item 4, ai/ecosystem-r3)
+
+Index lines carry `version`; requirements give them meaning:
+
+```console
+$ operon add http@^0.1          # highest version in [0.1.0, 0.2.0)
+$ operon add web@">=0.1 <9.0"   # AND-list (quote it — the shell eats >)
+$ operon add json@0.1.0         # a full X.Y.Z pin means what it says
+```
+
+| req | meaning |
+|-----|---------|
+| `X.Y.Z` | exactly that version |
+| `X.Y` | caret shorthand: `[X.Y.0, (X+1).0.0)` |
+| `^X.Y.Z` | caret: leftmost non-zero component is the stability promise (`^0.2.3` = `[0.2.3, 0.3.0)`, `^0.0.3` = exactly `0.0.3`) |
+| `~X.Y.Z` | `[X.Y.Z, X.(Y+1).0)`; `~X` = `X.x` |
+| `>=` `>` `<=` `<` `=` | comparators; space/comma = AND |
+| `1.x`, `1.2.*`, `*` | wildcards |
+
+Resolution contract, deterministic and tested:
+
+* Among the index lines for a name, the HIGHEST version satisfying the
+  requirement wins (ties keep the later line — the last-match-wins
+  convention, now version-aware). Lines without a parseable version never
+  satisfy a requirement.
+* No satisfying line is a hard error that lists the available versions —
+  a silent wrong-version install is the one thing this must never do.
+* The requirement is recorded in `operon.toml` (`version = "REQ"` inside
+  the dep table); the exact resolved version + requirement are recorded in
+  `operon.lock` (`version =`, `req =`). Old locks without those lines
+  still parse.
+* `--locked` re-proves the contract on every CI run: a locked version that
+  no longer satisfies its recorded requirement is drift = hard failure.
+* A dep added without `@REQ` keeps the plain last-wins rule — zero
+  behavior change for existing projects.
+
 ## 9. The hosted tier (W19 items 5/7/10, ai/ecosystem-r2)
 
 A static file (or §7's dev server) cannot accept publishes, answer

@@ -18,7 +18,32 @@ use operon::die;
 use operon::tools::Opts;
 use operon::value::Value;
 
+/// ai/ecosystem-r3 hardening: die the Unix way when stdout closes early.
+/// A CLI whose consumer exits first (`operon add x | grep -q ...`,
+/// `operon run f.op | head -1`) used to panic in println! (exit 101, a
+/// scary backtrace for a normal `head`); with SIGPIPE at SIG_DFL the
+/// process dies the way cat/grep do — silently, 141 under a shell.
+/// Zero crates: `signal(2)` is declared through the C ABI that the Rust
+/// standard library already links on every Unix target (SIGPIPE = 13,
+/// SIG_DFL = 0 on Linux and macOS). Windows has no SIGPIPE; its console
+/// piping semantics differ and are left untouched.
+/// The differential/proof harnesses always read full output, so nothing
+/// pinned changes.
+#[cfg(unix)]
+fn reset_sigpipe_to_default() {
+    unsafe {
+        extern "C" {
+            fn signal(signum: i32, handler: usize) -> usize;
+        }
+        signal(13, 0);
+    }
+}
+
+#[cfg(not(unix))]
+fn reset_sigpipe_to_default() {}
+
 fn main() {
+    reset_sigpipe_to_default();
     // The evaluator recurses through exec_block → eval → call_gene; deep
     // Operon recursion needs a real stack. The toolchain therefore runs on a
     // dedicated worker with a 512 MiB stack, and the interpreter's own depth
@@ -2684,7 +2709,11 @@ usage:
   operon repl
   operon debug f.op --break N   # W08 phase 1: REPL on line breaks (c s q bt vars p EXPR)
   operon new NAME [--lib] [--here]   scaffold a project (operon.toml + src + a green smoke test)
-  operon add NAME [--registry FILE]   pull a dependency from the registry
+  operon add NAME[@REQ] [--registry FILE]   pull a dependency from the registry
+                  # REQ (item 4, ai/ecosystem-r3): ^1.2 ~1.2 >=1 <2 =X.Y.Z 1.x *
+                  # (AND-lists ok). The HIGHEST registry version satisfying REQ wins;
+                  # the req lands in operon.toml, the exact version in operon.lock,
+                  # and --locked re-proves the pin still satisfies it.
                   # chain: --registry > OPERON_REGISTRY > operon.toml [registry] > bundled seed;
                   # an explicit --registry on a project without a pin is recorded in operon.toml
   operon remove|update|install|tree|verify|publish   the rest of the package verbs

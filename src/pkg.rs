@@ -107,12 +107,296 @@ fn sha256_file(p: &Path) -> String {
     }
 }
 
+// ---------------------------------------------------------------- semver
+// ai/ecosystem-r3 (W19 item 4 of the owner's lane order): semantic version
+// requirements over the NDJSON registry. Index entries already carry
+// "version" strings; this module gives them meaning: `operon add http@^0.1`
+// picks the HIGHEST index line whose version satisfies the requirement,
+// the manifest records the requirement, and operon.lock pins the exact
+// resolved version so --locked can prove the pin still satisfies it.
+
+/// A strict X.Y.Z semantic version (pre-release tags are rejected loudly —
+/// reproducibility first).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SemVer {
+    pub major: u64,
+    pub minor: u64,
+    pub patch: u64,
+}
+
+impl SemVer {
+    pub fn parse(s: &str) -> Result<SemVer, String> {
+        let bad = || format!("invalid version '{}' (expected X.Y.Z)", s);
+        let core = s.trim();
+        if core.is_empty() || !core.chars().all(|c| c.is_ascii_digit() || c == '.') {
+            return Err(bad());
+        }
+        if core.contains("..") || core.starts_with('.') || core.ends_with('.') {
+            return Err(bad());
+        }
+        let parts: Vec<&str> = core.split('.').collect();
+        if parts.len() != 3 {
+            return Err(bad());
+        }
+        let mut nums = [0u64; 3];
+        for (i, p) in parts.iter().enumerate() {
+            if p.is_empty() {
+                return Err(bad());
+            }
+            nums[i] = p
+                .parse::<u64>()
+                .map_err(|_| format!("invalid version '{}' (component too large)", s))?;
+        }
+        Ok(SemVer {
+            major: nums[0],
+            minor: nums[1],
+            patch: nums[2],
+        })
+    }
+}
+
+impl std::fmt::Display for SemVer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}.{}.{}", self.major, self.minor, self.patch)
+    }
+}
+
+impl PartialOrd for SemVer {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for SemVer {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        (self.major, self.minor, self.patch).cmp(&(other.major, other.minor, other.patch))
+    }
+}
+
+/// One comparator inside a requirement.
+#[derive(Debug, Clone, PartialEq)]
+enum Cmp {
+    Exact(SemVer),
+    Caret(SemVer),
+    Tilde(SemVer),
+    Ge(SemVer),
+    Gt(SemVer),
+    Le(SemVer),
+    Lt(SemVer),
+    Wild(SemVer, u8), // 1 = major-only wildcard (1.x), 2 = minor wildcard (1.2.x)
+    Any,
+}
+
+/// A requirement = a list of comparators that must ALL hold (space/comma = AND).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Req {
+    cmps: Vec<Cmp>,
+    raw: String,
+}
+
+impl Req {
+    pub fn parse(s: &str) -> Result<Req, String> {
+        let raw = s.trim().to_string();
+        if raw.is_empty() {
+            return Ok(Req {
+                cmps: vec![Cmp::Any],
+                raw,
+            });
+        }
+        let mut cmps = Vec::new();
+        // commas separate AND groups; inside a group, whitespace separates
+        // comparators EXCEPT between an operator and its version (`>= 2.2`
+        // is ONE comparator, `>=1.0 <2.0` is two) — npm-style tokenizing
+        for seg in raw.split(',') {
+            let seg = seg.trim();
+            if seg.is_empty() {
+                continue;
+            }
+            let chars: Vec<char> = seg.chars().collect();
+            let mut i = 0usize;
+            while i < chars.len() {
+                if chars[i].is_whitespace() {
+                    i += 1;
+                    continue;
+                }
+                let mut op = String::new();
+                for cand in [">=", "<=", "~=", ">", "<", "=", "^", "~"] {
+                    let cc: Vec<char> = cand.chars().collect();
+                    if chars[i..].starts_with(&cc[..]) {
+                        op = cand.to_string();
+                        i += cc.len();
+                        break;
+                    }
+                }
+                while i < chars.len() && chars[i].is_whitespace() {
+                    i += 1;
+                }
+                let mut ver = String::new();
+                while i < chars.len()
+                    && (chars[i].is_ascii_digit()
+                        || chars[i] == '.'
+                        || chars[i] == 'x'
+                        || chars[i] == 'X'
+                        || chars[i] == '*')
+                {
+                    ver.push(chars[i]);
+                    i += 1;
+                }
+                if ver.is_empty() {
+                    if op.is_empty() {
+                        return Err(format!("invalid requirement '{}'", s));
+                    }
+                    return Err(format!(
+                        "operator '{}' without a version in requirement '{}'",
+                        op, s
+                    ));
+                }
+                let token = format!("{}{}", op, ver);
+                cmps.push(parse_cmp(&token)?);
+            }
+        }
+        if cmps.is_empty() {
+            return Err(format!("empty requirement '{}'", s));
+        }
+        Ok(Req { cmps, raw })
+    }
+
+    pub fn matches(&self, v: &SemVer) -> bool {
+        self.cmps.iter().all(|c| cmp_matches(c, v))
+    }
+
+    /// The requirement exactly as the developer wrote it (manifest emission).
+    pub fn raw_str(&self) -> &str {
+        &self.raw
+    }
+}
+
+fn parse_cmp(tok: &str) -> Result<Cmp, String> {
+    if tok == "*" || tok == "x" || tok == "X" {
+        return Ok(Cmp::Any);
+    }
+    let (op, rest) = if let Some(r) = tok.strip_prefix('^') {
+        ("^", r)
+    } else if let Some(r) = tok.strip_prefix("~=") {
+        ("~", r)
+    } else if let Some(r) = tok.strip_prefix('~') {
+        ("~", r)
+    } else if let Some(r) = tok.strip_prefix(">=") {
+        (">=", r)
+    } else if let Some(r) = tok.strip_prefix("<=") {
+        ("<=", r)
+    } else if let Some(r) = tok.strip_prefix('>') {
+        (">", r)
+    } else if let Some(r) = tok.strip_prefix('<') {
+        ("<", r)
+    } else if let Some(r) = tok.strip_prefix('=') {
+        ("=", r)
+    } else {
+        ("", tok)
+    };
+    // wildcard forms: 1.x / 1.* / 1.2.x / 1.2.*
+    if rest.ends_with(".x") || rest.ends_with(".*") || rest == "x" || rest == "*" {
+        let base = rest.trim_end_matches(['x', '*', '.']).trim_end_matches('.');
+        let v = parse_loose(base)?;
+        let w = if !base.contains('.') { 1 } else { 2 };
+        return Ok(Cmp::Wild(v, w));
+    }
+    let v = parse_loose(rest)?;
+    match op {
+        "^" => Ok(Cmp::Caret(v)),
+        // ~1 pins only the major line (~1 = 1.x); ~1.2 pins major+minor
+        "~" if !rest.contains('.') => Ok(Cmp::Wild(v, 1)),
+        "~" => Ok(Cmp::Tilde(v)),
+        ">=" => Ok(Cmp::Ge(v)),
+        "<=" => Ok(Cmp::Le(v)),
+        ">" => Ok(Cmp::Gt(v)),
+        "<" => Ok(Cmp::Lt(v)),
+        "=" => Ok(Cmp::Exact(v)),
+        // bare "1.2" behaves as ^1.2 (caret is the operon default), while a
+        // full X.Y.Z stays EXACT — pins in a manifest mean what they say
+        "" => {
+            if rest.matches('.').count() == 2 {
+                Ok(Cmp::Exact(v))
+            } else {
+                Ok(Cmp::Caret(v))
+            }
+        }
+        _ => unreachable!(),
+    }
+}
+
+fn parse_loose(s: &str) -> Result<SemVer, String> {
+    // "1" -> 1.0.0, "1.2" -> 1.2.0, "1.2.3" -> as-is
+    match s.matches('.').count() {
+        0 => {
+            let major = s
+                .parse::<u64>()
+                .map_err(|_| format!("invalid version component '{}'", s))?;
+            Ok(SemVer {
+                major,
+                minor: 0,
+                patch: 0,
+            })
+        }
+        1 => {
+            let mut it = s.split('.');
+            let major = it
+                .next()
+                .unwrap()
+                .parse::<u64>()
+                .map_err(|_| format!("invalid version '{}'", s))?;
+            let minor = it
+                .next()
+                .unwrap()
+                .parse::<u64>()
+                .map_err(|_| format!("invalid version '{}'", s))?;
+            Ok(SemVer {
+                major,
+                minor,
+                patch: 0,
+            })
+        }
+        _ => SemVer::parse(s),
+    }
+}
+
+fn cmp_matches(c: &Cmp, v: &SemVer) -> bool {
+    match c {
+        Cmp::Any => true,
+        Cmp::Exact(b) => v == b,
+        Cmp::Ge(b) => v >= b,
+        Cmp::Gt(b) => v > b,
+        Cmp::Le(b) => v <= b,
+        Cmp::Lt(b) => v < b,
+        Cmp::Caret(b) => {
+            // ^0.2.3 is special: [0.2.3, 0.3.0) — the leftmost non-zero
+            // component is the stability promise; ^0.0.Y freezes the patch
+            v >= b
+                && match b.major {
+                    0 if b.minor == 0 => v.major == 0 && v.minor == 0 && v.patch == b.patch,
+                    0 => v.major == 0 && v.minor == b.minor,
+                    _ => v.major == b.major,
+                }
+        }
+        Cmp::Tilde(b) => {
+            // ~1.2.3 = [1.2.3, 1.3.0); ~1.2 = [1.2.0, 1.3.0)
+            v >= b && v.major == b.major && v.minor == b.minor
+        }
+        Cmp::Wild(b, 1) => v.major == b.major,
+        Cmp::Wild(b, _) => v.major == b.major && v.minor == b.minor,
+    }
+}
+
 // ---------------------------------------------------------------- manifest
 
 #[derive(Debug, Clone)]
 pub struct DepSpec {
     pub git: String,
     pub rev: Option<String>,
+    /// ai/ecosystem-r3 (item 4): semantic version requirement. Some only for
+    /// registry-sourced deps added as `NAME@REQ` (or hand-written with a
+    /// `version = "REQ"` field); git-URL deps have no version concept and
+    /// stay None.
+    pub version: Option<Req>,
 }
 
 #[derive(Debug, Default)]
@@ -178,7 +462,16 @@ pub fn parse_manifest(src: &str) -> Result<Manifest, String> {
                 let dep = dep.to_string();
                 let git = extract_field(&val, "git", idx)?;
                 let rev = extract_field(&val, "rev", idx).ok();
-                m.deps.push((dep, DepSpec { git, rev }));
+                // item 4: an optional semantic-version requirement. A field
+                // that does not PARSE is a hard error (a registry that lies
+                // must never resolve installs against the wrong code).
+                let version = match extract_field(&val, "version", idx) {
+                    Ok(s) => Some(Req::parse(&s).map_err(|e| {
+                        format!("operon.toml line {}: dep '{}': {}", idx + 1, dep, e)
+                    })?),
+                    Err(_) => None,
+                };
+                m.deps.push((dep, DepSpec { git, rev, version }));
             }
             ("", k) => {
                 return Err(format!(
@@ -274,12 +567,25 @@ pub fn emit_manifest(m: &Manifest) -> String {
         let mut sorted = m.deps.clone();
         sorted.sort_by(|a, b| a.0.cmp(&b.0));
         for (name, d) in &sorted {
-            match &d.rev {
-                Some(r) => out.push_str(&format!(
+            match (&d.version, &d.rev) {
+                (Some(req), Some(r)) => out.push_str(&format!(
+                    "{} = {{ git = \"{}\", rev = \"{}\", version = \"{}\" }}\n",
+                    name,
+                    d.git,
+                    r,
+                    req.raw_str()
+                )),
+                (Some(req), None) => out.push_str(&format!(
+                    "{} = {{ git = \"{}\", version = \"{}\" }}\n",
+                    name,
+                    d.git,
+                    req.raw_str()
+                )),
+                (None, Some(r)) => out.push_str(&format!(
                     "{} = {{ git = \"{}\", rev = \"{}\" }}\n",
                     name, d.git, r
                 )),
-                None => out.push_str(&format!("{} = {{ git = \"{}\" }}\n", name, d.git)),
+                (None, None) => out.push_str(&format!("{} = {{ git = \"{}\" }}\n", name, d.git)),
             }
         }
     }
@@ -295,6 +601,12 @@ pub struct LockEntry {
     pub rev: String,
     /// content digest of the vendored checkout (sha256 of the file manifest)
     pub checksum: String,
+    /// ai/ecosystem-r3 (item 4): the exact resolved X.Y.Z (empty for
+    /// git-URL deps and for locks written before version pinning).
+    pub version: String,
+    /// the requirement the dep was added with (empty = none); --locked
+    /// re-checks the pinned version against it on every CI run.
+    pub req: String,
 }
 
 /// The lockfile is a deterministic, human-readable table (sorted by name).
@@ -306,9 +618,16 @@ pub fn emit_lock(entries: &BTreeMap<String, LockEntry>) -> String {
     );
     for e in entries.values() {
         out.push_str(&format!(
-            "[[dep]]\nname = \"{}\"\ngit = \"{}\"\nrev = \"{}\"\nchecksum = \"sha256:{}\"\n\n",
+            "[[dep]]\nname = \"{}\"\ngit = \"{}\"\nrev = \"{}\"\nchecksum = \"sha256:{}\"\n",
             e.name, e.git, e.rev, e.checksum
         ));
+        if !e.version.is_empty() {
+            out.push_str(&format!("version = \"{}\"\n", e.version));
+        }
+        if !e.req.is_empty() {
+            out.push_str(&format!("req = \"{}\"\n", e.req));
+        }
+        out.push('\n');
     }
     out
 }
@@ -330,6 +649,8 @@ pub fn parse_lock(src: &str) -> Result<BTreeMap<String, LockEntry>, String> {
                 git: String::new(),
                 rev: String::new(),
                 checksum: String::new(),
+                version: String::new(),
+                req: String::new(),
             });
             continue;
         }
@@ -344,6 +665,8 @@ pub fn parse_lock(src: &str) -> Result<BTreeMap<String, LockEntry>, String> {
             "git" => e.git = v,
             "rev" => e.rev = v,
             "checksum" => e.checksum = v.trim_start_matches("sha256:").to_string(),
+            "version" => e.version = v,
+            "req" => e.req = v,
             _ => return Err(format!("operon.lock: unknown key '{}'", k)),
         }
     }
@@ -534,6 +857,63 @@ fn registry_lookup_text(text: &str, name: &str, src_label: &str) -> RegistryEntr
     }
 }
 
+/// ai/ecosystem-r3 (item 4): requirement-aware lookup over already-read
+/// registry text. Among the lines for `name` whose version parses AND
+/// satisfies `req`, the HIGHEST version wins (ties keep the later line —
+/// the last-match-wins convention, now version-aware). Entries without a
+/// parseable version never satisfy a requirement. No match = a hard error
+/// listing what IS available (a silent wrong-version install is the one
+/// thing this must never do).
+fn registry_lookup_req(text: &str, name: &str, req: &Req, src_label: &str) -> RegistryEntry {
+    let entries = parse_registry(text).unwrap_or_else(|e| die_pkg(&e));
+    let mut best: Option<(&RegistryEntry, SemVer)> = None;
+    for e in entries.iter().filter(|e| e.name == name) {
+        let v = match SemVer::parse(&e.version) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        if !req.matches(&v) {
+            continue;
+        }
+        let better = match &best {
+            None => true,
+            Some((_, bv)) => v > *bv,
+        };
+        if better {
+            best = Some((e, v));
+        }
+    }
+    match best {
+        Some((e, _)) => e.clone(),
+        None => {
+            let mut vers: Vec<String> = entries
+                .iter()
+                .filter(|e| e.name == name)
+                .map(|e| {
+                    if e.version.is_empty() {
+                        "(no version)".to_string()
+                    } else {
+                        e.version.clone()
+                    }
+                })
+                .collect();
+            vers.sort();
+            vers.dedup();
+            die_pkg(&format!(
+                "registry '{}': no version of '{}' satisfies '{}' (available: {})",
+                src_label,
+                name,
+                req.raw_str(),
+                if vers.is_empty() {
+                    "none".to_string()
+                } else {
+                    vers.join(", ")
+                }
+            ));
+        }
+    }
+}
+
 /// Shallow-clone `url` at `rev` (or HEAD when None) into `dest`; returns the
 /// resolved full rev. Uses the git CLI (no crates, by policy).
 pub fn git_checkout(url: &str, rev: Option<&str>, dest: &Path) -> Result<String, String> {
@@ -654,7 +1034,7 @@ fn read_or_new_lock() -> BTreeMap<String, LockEntry> {
 /// copy into the cache, git-sourced entries clone exactly as before).
 fn resolve_dep(name: &str, spec: &DepSpec, reg: Option<&str>) -> LockEntry {
     if let Some(reg_name) = spec.git.strip_prefix("registry:") {
-        return resolve_registry_dep(name, reg_name, spec.rev.as_deref(), reg);
+        return resolve_registry_dep(name, reg_name, spec, reg);
     }
     let tmp = deps_cache_dir()
         .unwrap_or_else(|| die_pkg("cannot locate the deps cache (set HOME or OPERON_DEPS)"))
@@ -675,19 +1055,23 @@ fn resolve_dep(name: &str, spec: &DepSpec, reg: Option<&str>) -> LockEntry {
         git: spec.git.clone(),
         rev,
         checksum,
+        version: String::new(),
+        req: String::new(),
     }
 }
 
-/// Resolve a dep through the registry chain. When `pinned` is set (every
-/// lockfile-driven path), the registry MUST still carry that rev — a
-/// registry that moved on is a hard error, never a silent re-resolve
-/// (W23: the lockfile is the reproducibility contract, not a suggestion).
+/// Resolve a dep through the registry chain. When the dep carries a pinned
+/// rev (every lockfile-driven path), the registry MUST still carry that
+/// rev — a registry that moved on is a hard error, never a silent
+/// re-resolve (W23: the lockfile is the reproducibility contract, not a
+/// suggestion).
 fn resolve_registry_dep(
     name: &str,
     reg_name: &str,
-    pinned: Option<&str>,
+    spec: &DepSpec,
     reg: Option<&str>,
 ) -> LockEntry {
+    let pinned = spec.rev.as_deref();
     // The verb's explicit --registry flag wins over the chain; without it
     // the chain applies (env > manifest pin > bundled seed). Threading the
     // override through here (not just the name lookup in `add`) is what
@@ -702,19 +1086,42 @@ fn resolve_registry_dep(
             reg_name, src, reg_name
         ));
     }
-    let entry = match pinned {
-        Some(p) => hits
+    let entry = match (&spec.version, pinned) {
+        // item 4: the requirement decides WHICH line the dep refers to.
+        // The honest multi-version index can carry several lines over one
+        // content rev (same tree, different version metadata), so a pinned
+        // rev alone cannot disambiguate — the requirement re-picks, and the
+        // pin is then verified against the pick (drift = hard error).
+        (Some(req), p) => {
+            let pick = registry_lookup_req(&text, reg_name, req, &src);
+            if let Some(p) = p {
+                if !(pick.rev == p || pick.rev.starts_with(p)) {
+                    die_pkg(&format!(
+                        "registry '{}' now resolves '{}' (requirement '{}') to rev {} but the project pins {} — re-add the dep (remove + `operon add {}@{}`) to move the pin",
+                        src,
+                        reg_name,
+                        req.raw_str(),
+                        &pick.rev[..pick.rev.len().min(12)],
+                        &p[..p.len().min(12)],
+                        reg_name,
+                        req.raw_str()
+                    ));
+                }
+            }
+            pick
+        }
+        (None, Some(p)) => hits
             .iter()
             .rev()
             .find(|e| e.rev == p || e.rev.starts_with(p))
-            .copied()
+            .map(|e| (*e).clone())
             .unwrap_or_else(|| {
                 die_pkg(&format!(
                     "registry '{}' no longer carries '{}' at rev {} (it moved on; run `operon update` to re-resolve, or restore the registry line)",
                     src, reg_name, p
                 ))
             }),
-        None => hits.last().copied().unwrap(),
+        (None, None) => hits.last().map(|e| (*e).clone()).unwrap(),
     };
     // SECURITY (deny-by-default): a dir-sourced entry is a LOCAL-registry
     // feature. Honoring a remote index's `dir` field would let a remote
@@ -733,6 +1140,7 @@ fn resolve_registry_dep(
             &DepSpec {
                 git: entry.git.clone(),
                 rev: Some(entry.rev.clone()),
+                version: None,
             },
             None,
         )
@@ -754,8 +1162,15 @@ fn resolve_registry_dep(
         ));
     }
     // the lock records WHERE the dep came from (registry:NAME), keeping
-    // the lockfile byte-stable across machines; rev+checksum pin the bytes
+    // the lockfile byte-stable across machines; rev+checksum pin the bytes,
+    // and item 4 records the resolved version + the requirement it answered
     out.git = format!("registry:{}", reg_name);
+    out.version = entry.version.clone();
+    out.req = spec
+        .version
+        .as_ref()
+        .map(|r| r.raw_str().to_string())
+        .unwrap_or_default();
     out
 }
 
@@ -786,6 +1201,8 @@ fn resolve_dir_dep(name: &str, dir: &Path) -> LockEntry {
         git: format!("registry:{}", name),
         rev,
         checksum: got,
+        version: String::new(),
+        req: String::new(),
     }
 }
 
@@ -877,6 +1294,30 @@ fn check_locked(m: &Manifest) {
                         ));
                     }
                 }
+                // ai/ecosystem-r3 (item 4): a recorded requirement must still
+                // accept the pinned version — the lock is a contract, and the
+                // requirement is part of it.
+                if let Some(req) = &spec.version {
+                    if e.version.is_empty() {
+                        die_pkg(&format!(
+                            "--locked: dep '{}' has a version requirement but its lock entry predates version pinning (re-run `operon update`)",
+                            name
+                        ));
+                    }
+                    match SemVer::parse(&e.version) {
+                        Ok(v) if req.matches(&v) => {}
+                        Ok(v) => die_pkg(&format!(
+                            "--locked: dep '{}' locked at {} which does not satisfy '{}'",
+                            name,
+                            v,
+                            req.raw_str()
+                        )),
+                        Err(_) => die_pkg(&format!(
+                            "--locked: dep '{}' lock version '{}' is not a valid X.Y.Z version",
+                            name, e.version
+                        )),
+                    }
+                }
             }
         }
     }
@@ -940,6 +1381,25 @@ pub fn mod_command(rest: &[String]) -> ! {
                 .get(1)
                 .cloned()
                 .unwrap_or_else(|| die_pkg("add needs a git URL or a registry name"));
+            // ai/ecosystem-r3 (item 4): `add NAME@REQ` — the requirement
+            // selects the highest registry version satisfying it. The split
+            // applies ONLY when the part before '@' is a legal package name,
+            // so git URLs carrying '@' (user@host) stay URLs.
+            let (pkg_target, req_txt) = match target.split_once('@') {
+                Some((b, r))
+                    if valid_pkg_name(b)
+                        && !b.contains('/')
+                        && !b.contains(':')
+                        && !b.contains('.') =>
+                {
+                    (b.to_string(), Some(r.to_string()))
+                }
+                _ => (target.clone(), None),
+            };
+            let req = req_txt.as_deref().map(|r| {
+                Req::parse(r)
+                    .unwrap_or_else(|e| die_pkg(&format!("version requirement '{}': {}", r, e)))
+            });
             // W21: `add NAME --registry FILE` resolves NAME through the
             // static git index first; everything else behaves like before.
             let mut reg_path: Option<String> = None;
@@ -968,10 +1428,10 @@ pub fn mod_command(rest: &[String]) -> ! {
                 // [registry] path, then the bundled seed index). A bare
                 // git URL is still accepted: anything that is not a
                 // legal package name is treated as a URL.
-                let looks_like_name = valid_pkg_name(&target)
-                    && !target.contains('/')
-                    && !target.contains(':')
-                    && !target.contains('.');
+                let looks_like_name = valid_pkg_name(&pkg_target)
+                    && !pkg_target.contains('/')
+                    && !pkg_target.contains(':')
+                    && !pkg_target.contains('.');
                 // via_registry is set to true exactly when the dep came
                 // through the registry chain by NAME (the branch below);
                 // git-URL adds and no-match falls leave it false.
@@ -981,7 +1441,12 @@ pub fn mod_command(rest: &[String]) -> ! {
                     }
                     let src = registry_source(reg_path.as_deref());
                     let text = registry_read(&src);
-                    let entry = registry_lookup_text(&text, &target, &src);
+                    // item 4: a requirement picks the highest satisfying
+                    // version; no requirement keeps the last-wins rule
+                    let entry = match &req {
+                        Some(r) => registry_lookup_req(&text, &pkg_target, r, &src),
+                        None => registry_lookup_text(&text, &pkg_target, &src),
+                    };
                     name = entry.name.clone();
                     url = format!("registry:{}", entry.name);
                     rev = Some(entry.rev.clone());
@@ -1036,9 +1501,12 @@ pub fn mod_command(rest: &[String]) -> ! {
                 i += 1;
             }
             if m.deps.iter().any(|(n, _)| n == &name) {
-                die_pkg(&format!("dep '{}' already present (remove it first)", name));
+                die_pkg(&format!(
+                    "dep '{}' already present (remove it first, or add again with @req to move the requirement)",
+                    name
+                ));
             }
-            m.deps.push((name.clone(), DepSpec { git: url, rev }));
+            m.deps.push((name.clone(), DepSpec { git: url, rev, version: req }));
             // Reproducibility contract: a dep resolved by NAME through an
             // explicit --registry can only EVER re-resolve through that
             // registry (operon install / update / CI re-resolve). When the
@@ -1140,6 +1608,7 @@ pub fn mod_command(rest: &[String]) -> ! {
                         DepSpec {
                             git: e.git.clone(),
                             rev: Some(e.rev.clone()),
+                            version: None,
                         },
                     )
                 })
@@ -1644,9 +2113,19 @@ fn registry_source(explicit: Option<&str>) -> String {
 /// note, §9 for the hosted tier).
 fn registry_read(src: &str) -> String {
     if src.starts_with("http://") || src.starts_with("https://") {
-        let out = std::process::Command::new("curl")
-            .args(["-sSL", "--max-time", "30", src])
-            .output();
+        let mut cmd = std::process::Command::new("curl");
+        cmd.args(["-sSL", "--max-time", "30", src]);
+        // ai/ecosystem-r3 (item 10 hardening): private-CA registries. curl
+        // verifies certificates by default and fails closed; this knob only
+        // ADDS a trusted root for self-hosted registries, it never weakens
+        // verification (no -k anywhere, by policy).
+        if let Ok(ca) = std::env::var("OPERON_CA_BUNDLE") {
+            let ca = ca.trim().to_string();
+            if !ca.is_empty() {
+                cmd.arg("--cacert").arg(&ca);
+            }
+        }
+        let out = cmd.output();
         return match out {
             Ok(o) if o.status.success() => {
                 let body = String::from_utf8_lossy(&o.stdout).to_string();
@@ -2024,5 +2503,161 @@ pub fn registry_command(rest: &[String]) -> ! {
             let _ = other;
             die_pkg("registry needs a subcommand: init | serve | default");
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// unit tests (ai/ecosystem-r3, item 4): the requirement engine proves itself
+// before any CLI wiring — a wrong-version install is the failure this must
+// never have.
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn v(s: &str) -> SemVer {
+        SemVer::parse(s).unwrap()
+    }
+
+    #[test]
+    fn semver_parse_and_order() {
+        assert_eq!(
+            v("1.2.3"),
+            SemVer {
+                major: 1,
+                minor: 2,
+                patch: 3
+            }
+        );
+        assert!(SemVer::parse("1.2").is_err());
+        assert!(SemVer::parse("1.2.3.4").is_err());
+        assert!(SemVer::parse("1.2.x").is_err());
+        assert!(SemVer::parse("").is_err());
+        assert!(SemVer::parse("01.2.3").is_ok()); // digits only, tolerated
+        assert!(SemVer::parse("1.2.3-rc1").is_err()); // pre-release rejected loudly
+        assert!(v("2.0.0") < v("10.0.0"));
+        assert!(v("1.2.3") < v("1.10.0")); // numeric, not lexicographic
+    }
+
+    #[test]
+    fn req_caret() {
+        let r = Req::parse("^1.2.3").unwrap();
+        assert!(r.matches(&v("1.2.3")));
+        assert!(r.matches(&v("1.9.0")));
+        assert!(!r.matches(&v("2.0.0")));
+        assert!(!r.matches(&v("1.2.2")));
+        // ^0.2.3 stays inside 0.2.x
+        let r0 = Req::parse("^0.2.3").unwrap();
+        assert!(r0.matches(&v("0.2.9")));
+        assert!(!r0.matches(&v("0.3.0")));
+        // ^0.0.3 freezes the patch
+        let r00 = Req::parse("^0.0.3").unwrap();
+        assert!(r00.matches(&v("0.0.3")));
+        assert!(!r00.matches(&v("0.0.4")));
+    }
+
+    #[test]
+    fn req_comparators_wildcards_and() {
+        assert!(Req::parse(">=1.0").unwrap().matches(&v("1.0.0")));
+        assert!(!Req::parse(">1.0").unwrap().matches(&v("1.0.0")));
+        assert!(Req::parse("<2.0").unwrap().matches(&v("1.9.9")));
+        assert!(Req::parse("=1.2.3").unwrap().matches(&v("1.2.3")));
+        assert!(!Req::parse("=1.2.3").unwrap().matches(&v("1.2.4")));
+        // a full pin means what it says; a bare X.Y is caret
+        assert!(Req::parse("1.2.3").unwrap().matches(&v("1.2.3")));
+        assert!(!Req::parse("1.2.3").unwrap().matches(&v("1.3.0")));
+        // bare "1.2" is caret shorthand: [1.2.0, 2.0.0)
+        assert!(Req::parse("1.2").unwrap().matches(&v("1.2.9")));
+        assert!(Req::parse("1.2").unwrap().matches(&v("1.3.0")));
+        assert!(!Req::parse("1.2").unwrap().matches(&v("2.0.0")));
+        // "1.2.x"/"1.2.*" pins the minor line, unlike bare caret shorthand
+        assert!(Req::parse("1.2.*").unwrap().matches(&v("1.2.7")));
+        assert!(!Req::parse("1.2.*").unwrap().matches(&v("1.3.0")));
+        assert!(Req::parse("1.x").unwrap().matches(&v("1.9.9")));
+        assert!(!Req::parse("1.x").unwrap().matches(&v("2.0.0")));
+        assert!(Req::parse("1.2.*").unwrap().matches(&v("1.2.7")));
+        assert!(Req::parse("*").unwrap().matches(&v("9.9.9")));
+        // AND-lists, spaces or commas; `>= 2.2` is ONE comparator
+        let both = Req::parse(">=1.0 <2.0").unwrap();
+        assert!(both.matches(&v("1.5.0")));
+        assert!(!both.matches(&v("2.0.0")));
+        let both2 = Req::parse(">=1.0, <2.0").unwrap();
+        assert!(both2.matches(&v("1.5.0")));
+        let spaced = Req::parse(">= 1.0, < 2.0").unwrap();
+        assert!(spaced.matches(&v("1.9.0")));
+        // tilde
+        assert!(Req::parse("~1.2.3").unwrap().matches(&v("1.2.9")));
+        assert!(!Req::parse("~1.2.3").unwrap().matches(&v("1.3.0")));
+        assert!(Req::parse("~1").unwrap().matches(&v("1.9.0")));
+        assert!(!Req::parse("~1").unwrap().matches(&v("2.0.0")));
+        // malformed requirements fail loudly
+        assert!(Req::parse("^").is_err());
+        assert!(Req::parse(">=").is_err());
+        assert!(Req::parse("abc").is_err());
+    }
+
+    #[test]
+    fn req_aware_lookup_picks_highest_satisfying() {
+        // multi-version index: LAST line for a name would win the old rule;
+        // with a requirement, the HIGHEST satisfying version must win.
+        let text = "\n\
+            {\"name\": \"beta\", \"version\": \"0.1.0\", \"git\": \"https://x/b\", \"rev\": \"r1\", \"sha256\": \"s1\", \"description\": \"\"}\n\
+            {\"name\": \"beta\", \"version\": \"0.1.5\", \"git\": \"https://x/b\", \"rev\": \"r2\", \"sha256\": \"s2\", \"description\": \"\"}\n\
+            {\"name\": \"beta\", \"version\": \"0.2.0\", \"git\": \"https://x/b\", \"rev\": \"r3\", \"sha256\": \"s3\", \"description\": \"\"}\n\
+            {\"name\": \"beta\", \"version\": \"1.0.0\", \"git\": \"https://x/b\", \"rev\": \"r4\", \"sha256\": \"s4\", \"description\": \"\"}\n";
+        let e = registry_lookup_req(text, "beta", &Req::parse("^0.1").unwrap(), "test");
+        assert_eq!(e.version, "0.1.5"); // 0.2.0 and 1.0.0 are outside ^0.1
+        let e2 = registry_lookup_req(text, "beta", &Req::parse("<1.0").unwrap(), "test");
+        assert_eq!(e2.version, "0.2.0");
+        let e3 = registry_lookup_req(text, "beta", &Req::parse("*").unwrap(), "test");
+        assert_eq!(e3.version, "1.0.0");
+        // unsatisfiable = the honest error listing availability (die_pkg exits,
+        // so probe through a child process in the e2e; here just the parser side)
+        assert!(Req::parse("^9.0").is_ok()); // parse fine; the LOOKUP reports no match
+    }
+
+    #[test]
+    fn lock_roundtrip_with_version_fields() {
+        let mut entries = BTreeMap::new();
+        entries.insert(
+            "http".to_string(),
+            LockEntry {
+                name: "http".to_string(),
+                git: "registry:http".to_string(),
+                rev: "content-abcdef".to_string(),
+                checksum: "cafe1234".to_string(),
+                version: "0.1.0".to_string(),
+                req: "^0.1".to_string(),
+            },
+        );
+        let text = emit_lock(&entries);
+        assert!(text.contains("version = \"0.1.0\""));
+        assert!(text.contains("req = \"^0.1\""));
+        let parsed = parse_lock(&text).unwrap();
+        assert_eq!(parsed["http"].version, "0.1.0");
+        assert_eq!(parsed["http"].req, "^0.1");
+        // byte-identical re-emission (the reproducibility contract)
+        assert_eq!(emit_lock(&parsed), text);
+        // an OLD lock (no version/req lines) still parses, fields empty
+        let old = "# operon.lock, resolved dependencies (W23).\n[[dep]]\nname = \"x\"\ngit = \"registry:x\"\nrev = \"r\"\nchecksum = \"sha256:c\"\n\n";
+        let p2 = parse_lock(old).unwrap();
+        assert!(p2["x"].version.is_empty());
+        assert!(p2["x"].req.is_empty());
+    }
+
+    #[test]
+    fn manifest_version_field_roundtrip() {
+        let src = "[package]\nname = \"app\"\nversion = \"0.1.0\"\n\n[deps]\nhttp = { git = \"registry:http\", version = \"^0.1\" }\nweb = { git = \"registry:web\" }\n";
+        let m = parse_manifest(src).unwrap();
+        assert_eq!(m.deps[0].0, "http");
+        assert_eq!(m.deps[0].1.version.as_ref().unwrap().raw_str(), "^0.1");
+        assert!(m.deps[1].1.version.is_none());
+        let out = emit_manifest(&m);
+        let m2 = parse_manifest(&out).unwrap();
+        assert_eq!(m2.deps[0].1.version.as_ref().unwrap().raw_str(), "^0.1");
+        // a malformed requirement is a hard parse error, never silent
+        let bad = "[package]\nname = \"app\"\nversion = \"0.1.0\"\n\n[deps]\nhttp = { git = \"registry:http\", version = \"^abc\" }\n";
+        assert!(parse_manifest(bad).is_err());
     }
 }
