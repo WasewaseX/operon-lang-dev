@@ -734,6 +734,9 @@ pub struct Interp {
     pub fiber_frames: Vec<crate::vm::FrameState>,
     pub fiber_tasks: HashMap<i64, crate::asyncrt::FiberHandle>,
     pub fiber_task_id: i64,
+    /// W16: the io.pool lane rides the fiber (workers inherit no raw .cell),
+    /// so nested spawns inside a fiber stay on the fiber substrate.
+    pub io_pool: bool,
 }
 
 /// `Interp` is never `Default::default()`d with semantics on purpose:
@@ -851,6 +854,7 @@ impl Interp {
             fiber_frames: Vec::new(),
             fiber_tasks: HashMap::new(),
             fiber_task_id: -1,
+            io_pool: false,
         }
     }
 
@@ -5581,6 +5585,10 @@ impl Interp {
             if st.closed {
                 return Ok(Value::Null);
             }
+            // W16: an async run stays live while the host blocks — one
+            // deterministic scheduler step between wake slices (a no-op
+            // when no fibers exist)
+            crate::asyncrt::pump_step();
             // blocked: wake-iteration fuel + cancel, the sleep shape
             self.blocking_wake(Self::RECV_SLICE_MS)?;
             let (g, _timed_out) = ch
@@ -5714,6 +5722,8 @@ impl Interp {
             if !any_open {
                 return Ok(Value::Int(-1));
             }
+            // W16: keep async runs live while a host select blocks
+            crate::asyncrt::pump_step();
             self.blocking_wake(Self::SELECT_SLICE_MS)?;
             std::thread::sleep(std::time::Duration::from_millis(Self::SELECT_SLICE_MS));
         }
@@ -8657,7 +8667,24 @@ impl Interp {
                 // proportion to its wall time, sleep-loops cannot run forever
                 // (W16: the SAME helper charges the fiber park path)
                 self.sleep_charge(ms)?;
-                std::thread::sleep(std::time::Duration::from_millis(ms));
+                // W16: a host sleep inside an async run PUMPS the scheduler
+                // until its deadline instead of blocking the whole run —
+                // fibers make progress, wake order stays deterministic
+                if crate::asyncrt::has_fibers() {
+                    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(ms);
+                    while std::time::Instant::now() < deadline {
+                        crate::asyncrt::pump_step();
+                        if !crate::asyncrt::has_fibers() {
+                            break;
+                        }
+                        let now = std::time::Instant::now();
+                        if now < deadline {
+                            std::thread::sleep(std::time::Duration::from_millis(1));
+                        }
+                    }
+                } else {
+                    std::thread::sleep(std::time::Duration::from_millis(ms));
+                }
                 Ok(Value::Null)
             }
             "argv" => Ok(Value::List(Rc::new(RefCell::new(
