@@ -1,0 +1,62 @@
+# type_aliases.op, W01-s2 (static type system stage 2): type aliases.
+# `type Name = ann` declares an alias; annotations naming it resolve at
+# PARSE time to the target, so the runtime soft contract is the TARGET's
+# law (the alias statement itself is inert at runtime — never evaluated,
+# never a parse rejection; Total Grammar, SPEC §7a). Declare before use:
+# an annotation naming an alias BEFORE its declaration stays a plain
+# Named and the typo-armor rule applies.
+frame proof {
+    # ---- aliases are inert at runtime and resolve to the target's law
+    type Metrics = map[str, float]
+    type Ids = list[int]
+
+    gene count(m: Metrics) -> int {
+        return len(m)
+    }
+    gene total(xs: Ids) -> int {
+        return len(xs)
+    }
+    assert(count({"a": 1.5, "b": 2.5}) == 2, "alias param accepts its target shape")
+    assert(total([1, 2, 3]) == 3, "second alias param accepts its target shape")
+
+    # ---- the alias enforces the TARGET's contract at the boundary:
+    # a list passed where Metrics (a map) is declared stresses, catchable
+    let contained = 0
+    stress {
+        count([1, 2, 3])
+    } rescue (e) {
+        contained = 1
+    }
+    assert(contained == 1, "alias refuses a non-map like its target would")
+
+    # ---- aliases compose: an alias may name another declared alias
+    type Ints = Ids
+    gene sum(xs: Ints) -> int {
+        let acc = 0
+        for v in xs {
+            acc = acc + v
+        }
+        return acc
+    }
+    assert(sum([1, 2, 3, 4]) == 10, "alias-of-alias resolves transitively")
+
+    # ---- duplicate alias: the first declaration wins (rung-2 note, no
+    # parse rejection), programs keep running
+    type Dup = int
+    type Dup = str
+    gene reflect(v: Dup) -> int {
+        return v
+    }
+    assert(reflect(5) == 5, "duplicate alias: first declaration (int) wins")
+
+    # ---- option/result aliases keep the variant-family law
+    type Lookup = result[int, str]
+    gene find(m: map[str, int], k: str) -> Lookup {
+        if has(m, k) {
+            return ok(m[k])
+        }
+        return err("missing key")
+    }
+    assert(find({"a": 1}, "a") == ok(1), "result alias accepts the ok family")
+    assert(find({}, "z") == err("missing key"), "result alias accepts the err family")
+}
