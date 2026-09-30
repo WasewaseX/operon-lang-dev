@@ -15,6 +15,7 @@ scripts/fuzz/fuzz.py and in scripts/fuzz/TRIAGE.md.
 |---|---|---|---|
 | scripts/fuzz/fuzz.py (W051) | mutation-based black-box | check, ast --json, fmt, explain [--json] | --seed S |
 | scripts/fuzz_parser.py | grammar-aware generation | parser via exec engines | --seed S |
+| scripts/fuzz/fuzz_diff.py (S7 s2) | grammar-aware differential, at scale | run (VM + tree-walk) vs oracle, check rc contract, check --json shape parity | --seed S |
 | scripts/gen_corpus.py | grammar-aware corpus generator | compat matrix input | --seed S |
 | scripts/compat_matrix.sh | differential matrix | tree-walk / VM / VM-opt / debug / oracle | fixed corpus + seed |
 
@@ -40,7 +41,9 @@ NOT YET fuzzed (the S7 roadmap, in order):
   (slice 3)
 - differential fuzzing at scale: Rust vs Python oracle byte-identical
   stdout over THOUSANDS of generated programs per round, plus
-  `check --json` shape parity (slice 2)
+  `check --json` shape parity — DONE (slice 2, scripts/fuzz/fuzz_diff.py;
+  reuses gen_corpus.py's bucket generators verbatim, so
+  fuzz_diff(seed, i) == gen_corpus(seed, i) program for program)
 - redteam-directed generation: capability-escape attempts seeded from the
   denial vocabulary (slice 3)
 
@@ -49,6 +52,7 @@ NOT YET fuzzed (the S7 roadmap, in order):
 ```
 python3 scripts/fuzz/fuzz.py --time-budget 120 --execs 300 --seed 20260930
 python3 scripts/fuzz_parser.py --n 500 --seed 20260930 --exec
+python3 scripts/fuzz/fuzz_diff.py --n 2400 --seed 20260930 --time-budget 480
 FAST=1 bash scripts/compat_matrix.sh        # 10% sample
 ```
 
@@ -63,3 +67,7 @@ reoccur invisibly.
   clean=219 contained=81 crash=0 hang=0
 - fuzz_parser.py seed 20260930, 200 inputs, exec mode: no panics, no
   hangs, no breaches, engines agree
+- fuzz_diff.py seed 20260930, 2400 generated programs x 5 surfaces
+  (run VM, run tree-walk, oracle, check, check --json) = 12,000 execs in
+  244s: 0 divergences, 0 rc-contract violations, 0 shape-parity
+  violations, 0 panics/hangs; all 12 buckets x 200

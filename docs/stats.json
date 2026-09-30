@@ -23,7 +23,7 @@
  "harness": {
   "diverge": 0,
   "granted_cells": 11,
-  "match": 232,
+  "match": 1436,
   "skipped": 0
  },
  "keyword_analogy_pending": [],
@@ -111,7 +111,7 @@
  "proof_files": 146,
  "proof_totals": {
   "asserts": 2095,
-  "files": 195,
+  "files": 1399,
   "proofs": 134,
   "source": "bin/operon"
  },
@@ -244,6 +244,6 @@
    "module": "url"
   }
  ],
- "test_op_files": 313,
+ "test_op_files": 1517,
  "version": "2.6.0"
 }
