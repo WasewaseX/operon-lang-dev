@@ -1,0 +1,33 @@
+# W16 async proofs: nested async — a fiber spawning a fiber.
+# The io.pool lane rides the fiber (workers inherit no raw .cell), so
+# nested spawns stay on the green-thread substrate; ids are per-interp
+# namespaces exactly like thread tasks.
+
+gene inner(n) {
+    sleep(0)
+    return n + 1
+}
+
+gene outer(n) {
+    let t = spawn(inner, [n])
+    return join(t) * 10
+}
+
+frame proof {
+    let t = spawn(outer, [4])
+    assert(join(t) == 50, "nested fiber join chains the value")
+
+    # depth-2: grandchild fibers
+    gene mid(n) {
+        let t = spawn(inner, [n])
+        return join(t)
+    }
+    gene top(n) {
+        let t = spawn(mid, [n])
+        return join(t)
+    }
+    let t2 = spawn(top, [9])
+    assert(join(t2) == 10, "depth-2 nested fibers")
+
+    print("async_nested complete")
+}

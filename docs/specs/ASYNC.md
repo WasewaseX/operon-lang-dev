@@ -1,9 +1,9 @@
-# ASYNC, the async model spec sketch (W16, ROADMAP-100)
+# ASYNC, the async model spec (W16, ROADMAP-100)
 
-Status: **spec only, deliberately**. The roadmap's W16 gate for this cycle
-is "spec accepted; the VM design reserves frame fields for it", no
-implementation. Normative when the time comes; conflicts resolve toward
-SPEC.md and docs/vm-design.md.
+Status: **implemented on `builder/w016-async`** (W016 stage 2; the dynamic
+side is untouched — every law below is opt-in behind `.cell io.pool` +
+`--vm`, and without them `spawn` is byte-for-byte the thread path it always
+was). Conflicts resolve toward SPEC.md and docs/vm-design.md.
 
 ## Why async waits for the VM (the honest dependency)
 
@@ -63,3 +63,76 @@ one enum tag + one u32):
   channels are the coordination primitive; D-005/D-013 principles
   apply: choose the deterministic, testable mechanism).
 - Real preemption, it would break byte-parity differential testing.
+
+## 9. The W016 implementation contract (what landed)
+
+**The substrate.** `spawn` keeps its signature and its prep byte-for-byte
+(snapshot membrane, regulation freeze, capability inheritance, shared
+run-wide fuel pool, live medium, derived RNG stream, cancel chain — the
+SAME code runs before the lane fork). Under `.cell io.pool` + `--vm` the
+prepared task becomes a **fiber**: a parked VM frame chain plus a worker
+`Interp` running on the host thread's scheduler loop. Without that cell
+the task is an OS thread, exactly as before. `src/asyncrt.rs` owns the
+scheduler; `src/vm.rs` owns the resumable `FrameState`.
+
+**Suspension points are explicit and narrow.** A fiber parks ONLY at a
+native `CallNamed` position calling an await-shaped builtin — `sleep`,
+`recv`, `select` — through the hook at the top of `call_builtin`. A park
+requested from a BRIDGED position (inside `stress {}` windows, `match`
+guards, comprehensions — anything the VM delegated to the tree-walk) is
+REFUSED and the builtin takes its existing blocking path: the Rust call
+stack there cannot rewind, and the blocking shape is today's
+byte-parity-tested behavior. The park unwinds as an internal marker stress
+whose kind is NUL-prefixed (`\u{0}fiber-park`) — unspeakable by any source
+program — and every containment site (rescue arms, pattern/guard
+containment, interpolation, the gene chain builder) explicitly lets it
+pass, so a user `stress {} rescue any` can never observe, contain, or
+spoof it.
+
+**The scheduler is a plain queue.** One scheduler per run, pumped only from
+the host thread (host blocking ops + joins). Ready order is FIFO;
+run-to-completion until a suspension point; the wake scan processes parked
+fibers in registration order; same-deadline sleeps wake FIFO. A running
+fiber segment is taken OUT of the scheduler map while it executes (the
+take-run-return protocol), so nested spawns/joins/parks re-enter freely.
+Wake order for equal deadlines is deterministic; `--repeat` on the proof
+runner pins byte-identical results
+(tests/async/timing/async_wake_order.op).
+
+**Fuel is per-run, shared across fibers** — the sleep charge is the EXACT
+helper the blocking builtin uses (ms×1000 against the step budget AND the
+shared pool), channel parks charge the wake-slice shape on the same
+50 ms/10 ms cadence the blocking builtins pay, and a failed charge WAKES
+the parked fiber with the catchable `overflow` stress at its suspension
+point: a parked fiber can never outlive the run's budget. Suspension does
+not refund fuel.
+
+**Cancellation is the W18 contract verbatim.** `cancel(id)` sets the flag
+(observed at wake/tick boundaries; nothing preempted). A fiber parked on
+an awaitable wakes with the catchable `cancelled` stress at the suspension
+point (a 10 s sleep cancels in ~2 ms); a running fiber observes at its
+next tick; a pre-tick cancel dies with `[cancelled]` before the body runs.
+Join returns the standard stress map; the tombstone says `cancelled`.
+Cancellation chains inherit (cancelling a cell stops its descent).
+
+**Capabilities and diagnostics.** A fiber has exactly the spawning cell's
+grants (worker-cell rule; the sandbox is untouched). Fiber notes are
+prefixed `[task <id> <name>]` at completion so containment names the fiber
+with its W18 task id. `join`/`cancel`/`task_state`/`wait_all`/`wait_any`
+treat fibers and threads identically; join timeouts answer null + note and
+keep the fiber joinable (the deadline is enforced strictly even across
+blocking segments).
+
+**Containment.** The live-task cap (4096) spans both registries — the
+fiber leak storm ends on the catchable overflow
+(tests/redteam/rt_p24a_fiber_leak.op). The cancel storm proves no parked
+fiber outlives its join (rt_p24b). The never-fed park drains the budget
+into overflow (rt_p24c).
+
+**Out of scope (unchanged from §8, plus what this landing deliberately
+does not do):** no fs/py parking yet (they execute inline inside the
+fiber's segment — bounded by the same fuel, deterministic, documented);
+no colored functions; no work stealing; no preemption; the sequential
+oracle mirrors async programs with children-born-finished inline, so the
+differential corpus pins only the ordering-free shapes — the timing shapes
+are Rust-lane evidence under tests/async/timing/.

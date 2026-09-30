@@ -1,0 +1,28 @@
+# W16 timing lane (Rust-only): 1200 concurrent sleeps on bounded OS threads.
+# 1200 fibers park on the VM loop — ZERO extra OS threads (the thread path
+# would hit the 256-thread cap and overflow-contain). All 1200 join with
+# their values. The sequential oracle cannot observe wall-clock concurrency;
+# this file is timing-class evidence, not differential.
+gene sleeper(i) {
+    sleep(20)
+    return i
+}
+
+frame proof {
+    let ids = []
+    for i in range(1200) {
+        push(ids, spawn(sleeper, [i]))
+    }
+    assert(len(ids) == 1200, "1200 fibers spawned (thread cap is 256)")
+    let res = wait_all(ids)
+    let ok = 0
+    for i in range(1200) {
+        if res[i] == i {
+            ok = ok + 1
+        }
+    }
+    assert(ok == 1200, "every fiber's value crosses join position-aligned")
+}
+main {
+    promote("async-sleeps-timing: ok (1200 parked fibers, bounded threads)")
+}
