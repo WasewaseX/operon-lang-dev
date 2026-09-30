@@ -909,7 +909,7 @@ pub fn mod_command(rest: &[String]) -> ! {
     let sub = match rest.first() {
         Some(s) => s.as_str(),
         None => die_pkg(
-            "mod needs a subcommand: init | add | remove | update | install | tree | verify",
+            "mod needs a subcommand: init | add | remove | update | install | tree | verify | search",
         ),
     };
     match sub {
@@ -1320,8 +1320,68 @@ pub fn mod_command(rest: &[String]) -> ! {
                 std::process::exit(1);
             }
         }
+        "search" => {
+            // ai/ecosystem-r2 (W19 item 3, owner's lane order): search the
+            // registry chain exactly the way `add` resolves it — same
+            // source resolution (flag > env > manifest > bundled seed),
+            // same fetch (file or curl for http(s)), same line parser.
+            // A query is a case-insensitive substring over name and
+            // description; empty query lists the registry. The LAST line
+            // per name wins, matching what the resolver would install.
+            let mut query = String::new();
+            let mut reg_path: Option<String> = None;
+            {
+                let mut i = 1;
+                while i < rest.len() {
+                    match rest[i].as_str() {
+                        "--registry" => {
+                            reg_path = Some(
+                                rest.get(i + 1).cloned().unwrap_or_else(|| {
+                                    die_pkg("--registry needs a file path or URL")
+                                }),
+                            );
+                            i += 2;
+                        }
+                        other => {
+                            if other.starts_with('-') {
+                                die_pkg(&format!("search: unknown flag '{}'", other));
+                            }
+                            if !query.is_empty() {
+                                die_pkg("search takes one query (name or description substring)");
+                            }
+                            query = other.to_string();
+                            i += 1;
+                        }
+                    }
+                }
+            }
+            let src = registry_source(reg_path.as_deref());
+            let text = registry_read(&src);
+            let entries = parse_registry(&text).unwrap_or_else(|e| die_pkg(&e));
+            let mut latest: std::collections::BTreeMap<String, &RegistryEntry> =
+                std::collections::BTreeMap::new();
+            for e in &entries {
+                latest.insert(e.name.clone(), e);
+            }
+            let q = query.to_lowercase();
+            let hits: Vec<&RegistryEntry> = latest
+                .into_values()
+                .filter(|e| {
+                    q.is_empty()
+                        || e.name.to_lowercase().contains(&q)
+                        || e.description.to_lowercase().contains(&q)
+                })
+                .collect();
+            if hits.is_empty() {
+                println!("no packages matching '{}' in {}", query, src);
+            } else {
+                for e in hits {
+                    println!("{} {}  {}", e.name, e.version, e.description);
+                }
+            }
+        }
         other => die_pkg(&format!(
-            "unknown subcommand '{}' (init | add | remove | update | install | tree | verify | publish)",
+            "unknown subcommand '{}' (init | add | remove | update | install | tree | verify | publish | search)",
             other
         )),
     }
@@ -1580,7 +1640,8 @@ fn registry_source(explicit: Option<&str>) -> String {
 
 /// Read a registry source: a local file path, or an http(s):// index
 /// fetched with curl (the same trust class as the git CLI this toolchain
-/// already shells out to; see docs/REGISTRY.md §5 for the threat note).
+/// already shells out to; see docs/specs/REGISTRY.md §5 for the threat
+/// note, §9 for the hosted tier).
 fn registry_read(src: &str) -> String {
     if src.starts_with("http://") || src.starts_with("https://") {
         let out = std::process::Command::new("curl")
