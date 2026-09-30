@@ -1,0 +1,1 @@
+{"code": "E1002", "kind": "missing", "message": "entry gene 'maiin' is not defined in this program", "file": "tests/diagnostics/entry_typo.op", "line": null, "column": null, "length": null, "chain": [], "help": [], "labels": [], "suggestions": ["main"]}

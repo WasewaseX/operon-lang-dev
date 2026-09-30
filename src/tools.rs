@@ -454,6 +454,18 @@ pub fn run_entry(l: &mut Loaded, opts: &Opts) -> Result<Value, Stress> {
 }
 
 // ------------------------------------------------------------ check
+/// W101 slice 6: a phantom call with its evidence. `line` is the call site
+/// when the AST carries it (Expr::Call stamps its line), else 0 — an unknown
+/// location stays 0, never guessed. `suggestions` is the did-you-mean
+/// shortlist against defined genes + module exports + builtins; `fix` is the
+/// machine-applicable edit when the name token is locatable on its line.
+pub struct PhantomCall {
+    pub name: String,
+    pub line: usize,
+    pub suggestions: Vec<String>,
+    pub fix: Option<crate::diag::SuggestedFix>,
+}
+
 pub struct CheckReport {
     pub score: i64,
     pub letter: char,
@@ -461,7 +473,7 @@ pub struct CheckReport {
     pub wobbles: usize,
     pub fallbacks: usize,
     pub nmd: Vec<(String, String)>, // kind, message
-    pub phantoms: Vec<String>,
+    pub phantoms: Vec<PhantomCall>,
     pub parsed: bool,
 }
 
@@ -571,9 +583,10 @@ pub fn check_source(src: &str, nmd: bool, base_dir: Option<&str>) -> (CheckRepor
     rep.notes = prog.notes.len();
     rep.score -= (rung2 as i64) + (rep.wobbles as i64) * 2 + (rep.fallbacks as i64) * 3;
 
-    // all called names (for phantoms AND the NMD untranslated detector)
+    // all called names + call-site lines (for phantoms, their did-you-mean
+    // suggestions, AND the NMD untranslated detector)
     let mut defined: HashSet<String> = HashSet::new();
-    let mut called: Vec<String> = Vec::new();
+    let mut called: Vec<(String, usize)> = Vec::new();
     collect_calls(&prog, &mut defined, &mut called);
     // genes exported by `use`d modules count as defined (they are callable)
     let mut module_genes: HashSet<String> = HashSet::new();
@@ -604,7 +617,7 @@ pub fn check_source(src: &str, nmd: bool, base_dir: Option<&str>) -> (CheckRepor
             }
         }
     }
-    for c in &called {
+    for (c, line) in &called {
         if !defined.contains(c)
             && !module_genes.contains(c)
             && !crate::interp::BUILTIN_NAMES.contains(&c.as_str())
@@ -613,7 +626,33 @@ pub fn check_source(src: &str, nmd: bool, base_dir: Option<&str>) -> (CheckRepor
             // phantom (surfaced by the batch-2 check probes)
             && !crate::interp::BUILTIN_SYNONYMS.iter().any(|(s, _)| s == c)
         {
-            rep.phantoms.push(c.clone());
+            // W101 slice 6: did-you-mean against every name this file can
+            // legitimately call, plus the machine-applicable fix when the
+            // token is locatable on the call line.
+            let mut cands: Vec<&str> = defined.iter().map(|s| s.as_str()).collect();
+            cands.extend(module_genes.iter().map(|s| s.as_str()));
+            cands.extend(crate::interp::BUILTIN_NAMES.iter().copied());
+            let suggestions = crate::diag::did_you_mean(c, &cands);
+            let fix = if *line > 0 {
+                let line_text = src.lines().nth(line - 1).unwrap_or("");
+                crate::diag::Span::of_token_word(*line, line_text, c).and_then(|sp| {
+                    suggestions.first().map(|s| crate::diag::SuggestedFix {
+                        line: sp.line,
+                        column: sp.col,
+                        length: sp.len,
+                        replacement: s.clone(),
+                        note: format!("replace '{}' with '{}'", c, s),
+                    })
+                })
+            } else {
+                None
+            };
+            rep.phantoms.push(PhantomCall {
+                name: c.clone(),
+                line: *line,
+                suggestions,
+                fix,
+            });
         }
     }
     rep.score -= (rep.phantoms.len() as i64) * 2;
@@ -675,7 +714,7 @@ pub fn check_source(src: &str, nmd: bool, base_dir: Option<&str>) -> (CheckRepor
     }
     let mut bonus = 0i64;
     for name in &enhanced {
-        if defined.contains(name) && called.contains(name) {
+        if defined.contains(name) && called.iter().any(|(n, _)| n == name) {
             let cs = crate::ffi::codon_score(name) as i64;
             bonus += (cs - 50) / 20; // 50-100 → 0..2 per hot gene
         }
@@ -683,7 +722,7 @@ pub fn check_source(src: &str, nmd: bool, base_dir: Option<&str>) -> (CheckRepor
     rep.score += bonus.min(6);
 
     if nmd {
-        let calledv: Vec<String> = called.clone();
+        let calledv: Vec<String> = called.iter().map(|(n, _)| n.clone()).collect();
         let findings = genes::nmd_sweep(&prog, &calledv, &enhanced);
         for f in &findings {
             rep.nmd.push((f.kind.to_string(), f.message.clone()));
@@ -732,14 +771,15 @@ fn purge_stmt(s: &mut Stmt) {
     }
 }
 
-fn collect_calls(prog: &Program, defined: &mut HashSet<String>, called: &mut Vec<String>) {
-    fn walk_expr(e: &Expr, called: &mut Vec<String>) {
+fn collect_calls(prog: &Program, defined: &mut HashSet<String>, called: &mut Vec<(String, usize)>) {
+    fn walk_expr(e: &Expr, called: &mut Vec<(String, usize)>) {
         match e {
-            Expr::Call(f, args, _) => {
+            Expr::Call(f, args, line) => {
                 if let Expr::Ident(n) = &**f {
-                    // record EVERY named call, the NMD untranslated detector
-                    // needs the full transcription record, not just phantoms
-                    called.push(n.clone());
+                    // record EVERY named call with its line, the NMD
+                    // untranslated detector needs the full transcription
+                    // record, not just phantoms
+                    called.push((n.clone(), *line));
                 }
                 walk_expr(f, called);
                 for a in args {
@@ -785,12 +825,16 @@ fn collect_calls(prog: &Program, defined: &mut HashSet<String>, called: &mut Vec
             _ => {}
         }
     }
-    fn walk_stmts(stmts: &[Stmt], defined: &mut HashSet<String>, called: &mut Vec<String>) {
+    fn walk_stmts(
+        stmts: &[Stmt],
+        defined: &mut HashSet<String>,
+        called: &mut Vec<(String, usize)>,
+    ) {
         for s in stmts {
             walk_stmt(s, defined, called);
         }
     }
-    fn walk_stmt(s: &Stmt, defined: &mut HashSet<String>, called: &mut Vec<String>) {
+    fn walk_stmt(s: &Stmt, defined: &mut HashSet<String>, called: &mut Vec<(String, usize)>) {
         match s {
             Stmt::Gene(g) => {
                 if let Some(n) = &g.name {

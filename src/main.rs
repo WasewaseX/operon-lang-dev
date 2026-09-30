@@ -739,6 +739,54 @@ fn real_main() {
                 );
             }
             if opts.frame.is_none() {
+                // W101 slice 6: a typo'd --entry used to wobble-repair to the
+                // nearest builtin and exit 0 having run NOTHING (the silent
+                // no-op disaster). An explicitly requested entry gene that
+                // the program does not define is a fatal, located, suggested
+                // diagnostic now: rc 1 (dx-r1), did-you-mean attached.
+                if let Some(e) = &opts.entry {
+                    let mut gene_names: Vec<String> = Vec::new();
+                    for st in &l.prog.stmts {
+                        match st {
+                            operon::ast::Stmt::Gene(g) | operon::ast::Stmt::Seq(g) => {
+                                if let Some(n) = &g.name {
+                                    gene_names.push(n.clone());
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    if !gene_names.iter().any(|n| n == e) {
+                        let cands: Vec<&str> = gene_names.iter().map(|s| s.as_str()).collect();
+                        let sug = operon::diag::did_you_mean(e, &cands);
+                        let s = operon::value::Stress::new(
+                            "missing",
+                            format!("entry gene '{}' is not defined in this program", e),
+                        );
+                        let src_text = std::fs::read_to_string(&file).unwrap_or_default();
+                        if json_errors {
+                            eprint!(
+                                "{}",
+                                operon::diag::render_json(&l.interp.file, &src_text, &s, &sug)
+                            );
+                        } else {
+                            eprint!(
+                                "{}",
+                                operon::diag::render(
+                                    &l.interp.file,
+                                    &src_text,
+                                    &s,
+                                    operon::diag::color_enabled(std::io::stderr().is_terminal()),
+                                    &sug
+                                )
+                            );
+                        }
+                        write_grn_trace(&l.interp, &trace_grn_path);
+                        tools::flush_notes(&l, opts.quiet);
+                        // ast-grep-ignore: no-std-process-exit-in-core
+                        std::process::exit(1);
+                    }
+                }
                 let result = tools::run_entry(&mut l, &opts);
                 match result {
                     Ok(_) => {}
@@ -755,7 +803,7 @@ fn real_main() {
                         if json_errors {
                             eprint!(
                                 "{}",
-                                operon::diag::render_json(&l.interp.file, &src_text, &s)
+                                operon::diag::render_json(&l.interp.file, &src_text, &s, &[])
                             );
                         } else {
                             eprint!(
@@ -764,7 +812,8 @@ fn real_main() {
                                     &l.interp.file,
                                     &src_text,
                                     &s,
-                                    operon::diag::color_enabled(std::io::stderr().is_terminal())
+                                    operon::diag::color_enabled(std::io::stderr().is_terminal()),
+                                    &[]
                                 )
                             );
                             for (i, (name, line)) in s.chain.iter().enumerate() {
@@ -864,7 +913,25 @@ fn real_main() {
                 let ph_json: Vec<String> = rep
                     .phantoms
                     .iter()
-                    .map(|p| format!("\"{}\"", tools::json_escape(p)))
+                    .map(|p| {
+                        let sug: Vec<String> = p
+                            .suggestions
+                            .iter()
+                            .map(|s| format!("\"{}\"", tools::json_escape(s)))
+                            .collect();
+                        let fix = p
+                            .fix
+                            .as_ref()
+                            .map(|f| f.to_json())
+                            .unwrap_or_else(|| "null".into());
+                        format!(
+                            "{{\"name\":\"{}\",\"line\":{},\"suggestions\":[{}],\"fix\":{}}}",
+                            tools::json_escape(&p.name),
+                            p.line,
+                            sug.join(","),
+                            fix
+                        )
+                    })
                     .collect();
                 // W48: the findings array carries CHECK-owned rules only
                 // (correctness); style findings live in `operon lint --json`.
@@ -905,7 +972,8 @@ fn real_main() {
                     );
                 }
                 if !rep.phantoms.is_empty() {
-                    println!("  phantom calls: {}", rep.phantoms.join(", "));
+                    let names: Vec<String> = rep.phantoms.iter().map(|p| p.name.clone()).collect();
+                    println!("  phantom calls: {}", names.join(", "));
                 }
                 for (k, m) in &rep.nmd {
                     println!("  nmd[{}]: {}", k, m);
@@ -2470,10 +2538,49 @@ fn print_diag(
     if !rep.phantoms.is_empty() {
         println!("warning:");
         for p in &rep.phantoms {
-            // phantoms are swept by name in tools.rs and carry no line today;
-            // the code attaches, the location honestly does not (line-only
-            // sweeps, SPEC 9a.1: unknown location fields are never guessed).
-            println!("  warning[W01]: phantom call: {}", p);
+            // W101 slice 6: phantoms carry their call line now (Expr::Call
+            // stamps it), so they render as located blocks; a phantom with no
+            // honest line stays header-only. The message carries the
+            // did-you-mean shortlist; the machine-applicable fix renders as a
+            // second help line (the structured edit rides the --json shape).
+            let mut msg = format!(
+                "phantom call '{}' is called but not defined in this file",
+                p.name
+            );
+            if let Some(h) = operon::diag::suggestion_help(&p.suggestions) {
+                msg.push_str(&format!(" ({})", h));
+            }
+            if p.line > 0 {
+                let line_text = src.lines().nth(p.line - 1).unwrap_or("");
+                let labels = operon::diag::Span::of_token_word(p.line, line_text, &p.name)
+                    .map(|sp| {
+                        vec![operon::diag::Label {
+                            span: sp,
+                            text: String::new(),
+                            primary: true,
+                        }]
+                    })
+                    .unwrap_or_default();
+                print!(
+                    "{}",
+                    operon::diag::render_finding_labeled(
+                        file,
+                        src,
+                        "warning",
+                        "W01",
+                        "phantom-call",
+                        p.line,
+                        &msg,
+                        color,
+                        &labels
+                    )
+                );
+                if let Some(f) = &p.fix {
+                    println!("help: machine-applicable fix: {}", f.note);
+                }
+            } else {
+                println!("  warning[W01]: {}", msg);
+            }
         }
     }
     section("warning", &warnings);
