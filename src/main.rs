@@ -1970,7 +1970,7 @@ fn repl() {
             caps: interp::Caps::default(),
             profile: false,
             stdout_sink: None,
-                },
+        },
     ) {
         Ok(l) => l,
         Err(_) => {
@@ -2064,7 +2064,7 @@ fn repl() {
                                 caps: interp::Caps::default(),
                                 profile: false,
                                 stdout_sink: None,
-                                                                            };
+                            };
                             let rep = tools::run_tests(&[arg.to_string()], &opts, false);
                             println!(
                                 "  {}: {}/{} proof(s) passed ({} assertion(s))",
@@ -2188,7 +2188,7 @@ fn repl() {
                                 caps: interp::Caps::default(),
                                 profile: false,
                                 stdout_sink: None,
-                                                                            },
+                            },
                         ) {
                             Ok(nl) => nl,
                             Err(_) => tools::Loaded {

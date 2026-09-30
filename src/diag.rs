@@ -167,19 +167,53 @@ fn help_lines(message: &str) -> Vec<String> {
     out
 }
 
+/// W101 slice 5: a located range in one source line. Char columns feed the
+/// JSON schema (SPEC 9a), byte offsets feed width-correct caret padding (CJK
+/// text must not tear the underline off its target). `line` is 1-based; a
+/// zero line means "unknown location", and an unknown location is NEVER
+/// upgraded to a guessed one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Span {
+    pub line: usize,
+    pub col: usize,
+    pub len: usize,
+    pub byte_col: usize,
+    pub byte_len: usize,
+}
+
+impl Span {
+    /// The span of `name`'s first occurrence on `line_text`.
+    pub fn of_token(line: usize, line_text: &str, name: &str) -> Option<Span> {
+        let byte_col = line_text.find(name)?;
+        Some(Span {
+            line,
+            col: line_text[..byte_col].chars().count() + 1,
+            len: name.chars().count(),
+            byte_col,
+            byte_len: name.len(),
+        })
+    }
+}
+
+/// W101 slice 5: one underlined range plus its message. Primary labels mark
+/// the caret row (`^^^^`), secondary labels add context (`----`); a label
+/// with empty text underlines silently. This is the engine's input shape:
+/// today's heuristic locate site produces zero or one primary label, and the
+/// multi-label path exists so the next consumers (did-you-mean, check) never
+/// grow a second, divergent renderer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Label {
+    pub span: Span,
+    pub text: String,
+    pub primary: bool,
+}
+
 /// Locate the caret on the raise line, CAPABILITY DENIALS ONLY: the first
 /// word of the message is the failing call/builtin name (read_file 'x': ...);
 /// underline its first occurrence on the line. Other kinds honestly get no
 /// caret (the AST is line-only today; dx-r2 spans do not carry columns).
-/// Returns (char column, char length, byte offset, byte length): the char
-/// pair feeds the JSON schema, the byte pair feeds width-correct caret
-/// padding (CJK text must not tear the underline off its target).
 /// Returns None when there is no honest caret.
-fn locate_caret(
-    kind: &str,
-    line_text: &str,
-    message: &str,
-) -> Option<(usize, usize, usize, usize)> {
+fn locate_span(kind: &str, line: usize, line_text: &str, message: &str) -> Option<Span> {
     if kind != "interference" {
         return None;
     }
@@ -192,9 +226,67 @@ fn locate_caret(
     if name.is_empty() {
         return None;
     }
-    let byte_col = line_text.find(&name)?;
-    let char_col = line_text[..byte_col].chars().count();
-    Some((char_col, name.chars().count(), byte_col, name.len()))
+    Span::of_token(line, line_text, &name)
+}
+
+/// W101 slice 5: the multi-label locate site. Today's heuristic produces at
+/// most ONE primary label (the capability-denial caret); the function is the
+/// single place later consumers extend, so the renderer never grows a second
+/// locate path.
+fn located_labels(kind: &str, line: usize, line_text: &str, message: &str) -> Vec<Label> {
+    match locate_span(kind, line, line_text, message) {
+        Some(span) => vec![Label {
+            span,
+            text: String::new(),
+            primary: true,
+        }],
+        None => Vec::new(),
+    }
+}
+
+/// W101 slice 5: render the underline row(s) for one source line's labels.
+/// Same-line labels render on ONE row, left to right, primary `^` and
+/// secondary `-`; a secondary that overlaps an earlier segment is dropped
+/// honestly (an underline that starts inside another is a lie about where
+/// things are). Each label's text renders after its own segment. The math is
+/// display-width based, so CJK source keeps the underline under its target.
+fn label_rows(
+    line_text: &str,
+    labels: &[&Label],
+    pad: usize,
+    dim: &str,
+    reset: &str,
+    primary_c: &str,
+    secondary_c: &str,
+) -> String {
+    let mut segs: Vec<&&Label> = labels.iter().collect();
+    segs.sort_by_key(|l| l.span.byte_col);
+    let mut row = String::new();
+    let mut cursor = 0usize; // byte offset in line_text where the next mark may start
+    let mut drew_any = false;
+    for l in segs {
+        if l.span.byte_col < cursor || l.span.byte_col > line_text.len() {
+            continue; // overlap or out of range: degrade, never lie
+        }
+        let lead = str_width(&line_text[cursor..l.span.byte_col]);
+        let mark = str_width(&line_text[l.span.byte_col..l.span.byte_col + l.span.byte_len]).max(1);
+        row.push_str(&" ".repeat(lead));
+        let c = if l.primary { primary_c } else { secondary_c };
+        row.push_str(c);
+        let ch = if l.primary { '^' } else { '-' };
+        row.push_str(&ch.to_string().repeat(mark));
+        row.push_str(reset);
+        if !l.text.is_empty() {
+            row.push(' ');
+            row.push_str(&l.text);
+        }
+        cursor = l.span.byte_col + l.span.byte_len;
+        drew_any = true;
+    }
+    if !drew_any {
+        return String::new();
+    }
+    format!("{}{:>w$} | {}{}\n", dim, "", reset, row, w = pad + 1)
 }
 
 fn note_line(message: &str) -> Option<String> {
@@ -288,21 +380,14 @@ pub fn render(file: &str, src: &str, s: &Stress, color: bool) -> String {
     out.push_str(&format!("\n  --> {}:{}\n", file, s.line));
     out.push_str(&format!("{}{:>w$} |{}\n", dim, "", reset, w = pad + 1));
     out.push_str(&format!("{}{} |{} {}\n", blue, num, reset, line_text));
-    if let Some((_cc, _cl, bc, bl)) = locate_caret(&s.kind, line_text, &s.message) {
-        let lead = str_width(&line_text[..bc]);
-        let mark = str_width(&line_text[bc..bc + bl]).max(1);
-        let caret = if color { c_red() } else { String::new() };
-        out.push_str(&format!(
-            "{}{:>w$} | {}{}{}{}\n",
-            dim,
-            "",
-            reset,
-            " ".repeat(lead),
-            caret,
-            "^".repeat(mark),
-            w = pad + 1,
-        ));
-    }
+    let labels = located_labels(&s.kind, s.line, line_text, &s.message);
+    let refs: Vec<&Label> = labels.iter().collect();
+    let (pc, sc) = if color {
+        (c_red(), c_blue())
+    } else {
+        (String::new(), String::new())
+    };
+    out.push_str(&label_rows(line_text, &refs, pad, &dim, &reset, &pc, &sc));
     out.push_str(&format!("{}{:>w$} |{}\n", dim, "", reset, w = pad + 1));
     if let Some(note) = note_line(&s.message) {
         out.push_str(&format!(
@@ -334,7 +419,9 @@ pub fn render(file: &str, src: &str, s: &Stress, color: bool) -> String {
 
 /// Machine-readable form (--json-errors). One object per fatal stress; the
 /// schema is SPEC §9a's table. Fields a caller cannot know (column without a
-/// located caret) are null, never guessed.
+/// located caret) are null, never guessed. `labels` (W101 slice 5) carries
+/// every located range as {line, column, length, text, primary}; an error
+/// with no honest location renders an empty array, not a fabricated one.
 pub fn render_json(file: &str, src: &str, s: &Stress) -> String {
     let code = code_for(&s.kind, &s.message);
     let line_text = if s.line > 0 {
@@ -342,9 +429,24 @@ pub fn render_json(file: &str, src: &str, s: &Stress) -> String {
     } else {
         ""
     };
-    let (col, len) = locate_caret(&s.kind, line_text, &s.message)
-        .map(|(c, l, _, _)| (c.to_string(), l.to_string()))
+    let labels = located_labels(&s.kind, s.line, line_text, &s.message);
+    let (col, len) = labels
+        .first()
+        .map(|l| (l.span.col.to_string(), l.span.len.to_string()))
         .unwrap_or_else(|| ("null".into(), "null".into()));
+    let labels_json: Vec<String> = labels
+        .iter()
+        .map(|l| {
+            format!(
+                "{{\"line\": {}, \"column\": {}, \"length\": {}, \"text\": {}, \"primary\": {}}}",
+                l.span.line,
+                l.span.col,
+                l.span.len,
+                json_str(&l.text),
+                l.primary,
+            )
+        })
+        .collect();
     let chain: Vec<String> = s
         .chain
         .iter()
@@ -363,7 +465,7 @@ pub fn render_json(file: &str, src: &str, s: &Stress) -> String {
     let help: Vec<String> = help_lines(&s.message).iter().map(|h| json_str(h)).collect();
     format!(
         "{{\"code\": {}, \"kind\": {}, \"message\": {}, \"file\": {}, \
-         \"line\": {}, \"column\": {}, \"length\": {}, \"chain\": [{}], \"help\": [{}]}}\n",
+         \"line\": {}, \"column\": {}, \"length\": {}, \"chain\": [{}], \"help\": [{}], \"labels\": [{}]}}\n",
         json_str(code),
         json_str(&s.kind),
         json_str(&s.message),
@@ -377,6 +479,7 @@ pub fn render_json(file: &str, src: &str, s: &Stress) -> String {
         len,
         chain.join(", "),
         help.join(", "),
+        labels_json.join(", "),
     )
 }
 
@@ -415,12 +518,70 @@ mod tests {
     fn json_columns_stay_char_based() {
         // JSON consumers get the char column (SPEC 9a schema), the text
         // renderer gets the byte offset for padding; both come from one
-        // locate_caret call so they cannot disagree
+        // locate_span call so they cannot disagree
         let line = "\u{6f2c}\u{5b57} read_file('x')";
-        let (cc, cl, bc, bl) =
-            locate_caret("interference", line, "read_file denied: no grant").unwrap();
-        assert_eq!((cc, cl), (3, 9));
-        assert_eq!((bc, bl), (7, 9));
+        let span = locate_span("interference", 3, line, "read_file denied: no grant").unwrap();
+        assert_eq!((span.col, span.len), (4, 9));
+        assert_eq!((span.byte_col, span.byte_len), (7, 9));
+        assert_eq!(span.line, 3);
+    }
+
+    #[test]
+    fn multi_label_row_orders_segments_and_marks_kinds() {
+        // two same-line labels: primary under the target, secondary context
+        // left of it, each with its text; secondary renders dashes
+        let line = "let x = handle(a, b)";
+        let labels = vec![
+            Label {
+                span: Span::of_token(1, line, "handle").unwrap(),
+                text: String::new(),
+                primary: true,
+            },
+            Label {
+                span: Span::of_token(1, line, "b").unwrap(),
+                text: "second arg".into(),
+                primary: false,
+            },
+        ];
+        let refs: Vec<&Label> = labels.iter().collect();
+        let row = label_rows(line, &refs, 1, "", "", "", "");
+        let body = row.split("| ").nth(1).unwrap();
+        // byte order wins: the primary underline under `handle` renders
+        // first, then the secondary with its text after it
+        assert!(body.contains("^^^^^^"));
+        assert!(body.contains("- second arg"));
+        assert!(body.find("^^^^^^").unwrap() < body.find("- second").unwrap());
+    }
+
+    #[test]
+    fn overlapping_secondary_label_is_dropped_not_lied_about() {
+        // a secondary span starting INSIDE the primary's underline would
+        // double-mark the same bytes; the honest render drops it
+        let line = "read_file('x')";
+        let labels = vec![
+            Label {
+                span: Span::of_token(1, line, "read_file").unwrap(),
+                text: String::new(),
+                primary: true,
+            },
+            Label {
+                span: Span::of_token(1, line, "ile").unwrap(),
+                text: "overlaps".into(),
+                primary: false,
+            },
+        ];
+        let refs: Vec<&Label> = labels.iter().collect();
+        let row = label_rows(line, &refs, 1, "", "", "", "");
+        assert!(!row.contains("overlaps"));
+        assert!(row.contains("^^^^"));
+    }
+
+    #[test]
+    fn label_rows_degrade_to_empty_without_labels() {
+        // no honest location: no caret row at all (never a guessed one)
+        let line = "let ok = 1";
+        let row = label_rows(line, &[], 1, "", "", "", "");
+        assert!(row.is_empty());
     }
 
     #[test]

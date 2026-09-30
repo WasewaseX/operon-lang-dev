@@ -638,6 +638,16 @@ warning[W07]: binding 'dead' is never read in this file (dead store); ...
   and a flag that leaks codes into them would be a lie generator. The
   caret row is width-correct on CJK source text (display width, not
   char count, pads the underline).
+- W101 slice 5 gives the engine a real span type: `Span` (line, char
+  column, char length + the byte offsets that drive width-correct
+  padding) and `Label` (a Span, its text, and a primary/secondary kind).
+  The fatal renderer consumes labels through ONE locate site; a secondary
+  label that would overlap an earlier segment on the same line is dropped,
+  never double-marked. `--json-errors` gains an additive `labels` array
+  (`{line, column, length, text, primary}` per label; empty when no
+  honest location exists). Unknown locations are still null, never
+  guessed; existing fixtures render byte-identically because today's
+  single-caret heuristic is just the one-primary-label case.
 
 ## 9b. Security, the capability sandbox
 
