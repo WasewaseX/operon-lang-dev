@@ -2683,8 +2683,11 @@ usage:
   operon repl
   operon debug f.op --break N   # W08 phase 1: REPL on line breaks (c s q bt vars p EXPR)
   operon new NAME [--lib] [--here]   scaffold a project (operon.toml + src + a green smoke test)
-  operon add NAME        pull a dependency from the registry (env/manifest/seed chain, W21-r1)
+  operon add NAME [--registry FILE]   pull a dependency from the registry
+                  # chain: --registry > OPERON_REGISTRY > operon.toml [registry] > bundled seed;
+                  # an explicit --registry on a project without a pin is recorded in operon.toml
   operon remove|update|install|tree|verify|publish   the rest of the package verbs
+                  # update/install accept --registry too; verify pins --locked (manifest/lock drift = error)
   operon registry init|serve|default   stand up a read-only HTTP registry (W21-r1)
   operon mod ...         the same package verbs, explicit spelling (W19/W20/W23;
                   operon.toml manifest + operon.lock; docs/specs/REGISTRY.md)

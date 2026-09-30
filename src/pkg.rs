@@ -652,9 +652,9 @@ fn read_or_new_lock() -> BTreeMap<String, LockEntry> {
 /// Two source classes: `git URL` (clone, shallow, rev-pinned) and
 /// `registry:NAME` (the W21-r1 registry chain; dir-sourced seed packages
 /// copy into the cache, git-sourced entries clone exactly as before).
-fn resolve_dep(name: &str, spec: &DepSpec) -> LockEntry {
+fn resolve_dep(name: &str, spec: &DepSpec, reg: Option<&str>) -> LockEntry {
     if let Some(reg_name) = spec.git.strip_prefix("registry:") {
-        return resolve_registry_dep(name, reg_name, spec.rev.as_deref());
+        return resolve_registry_dep(name, reg_name, spec.rev.as_deref(), reg);
     }
     let tmp = deps_cache_dir()
         .unwrap_or_else(|| die_pkg("cannot locate the deps cache (set HOME or OPERON_DEPS)"))
@@ -682,8 +682,17 @@ fn resolve_dep(name: &str, spec: &DepSpec) -> LockEntry {
 /// lockfile-driven path), the registry MUST still carry that rev — a
 /// registry that moved on is a hard error, never a silent re-resolve
 /// (W23: the lockfile is the reproducibility contract, not a suggestion).
-fn resolve_registry_dep(name: &str, reg_name: &str, pinned: Option<&str>) -> LockEntry {
-    let src = registry_source(None);
+fn resolve_registry_dep(
+    name: &str,
+    reg_name: &str,
+    pinned: Option<&str>,
+    reg: Option<&str>,
+) -> LockEntry {
+    // The verb's explicit --registry flag wins over the chain; without it
+    // the chain applies (env > manifest pin > bundled seed). Threading the
+    // override through here (not just the name lookup in `add`) is what
+    // makes `add NAME --registry F` actually VENDOR from F.
+    let src = registry_source(reg);
     let text = registry_read(&src);
     let entries = parse_registry(&text).unwrap_or_else(|e| die_pkg(&e));
     let hits: Vec<&RegistryEntry> = entries.iter().filter(|e| e.name == reg_name).collect();
@@ -725,6 +734,7 @@ fn resolve_registry_dep(name: &str, reg_name: &str, pinned: Option<&str>) -> Loc
                 git: entry.git.clone(),
                 rev: Some(entry.rev.clone()),
             },
+            None,
         )
     } else {
         let d = std::path::PathBuf::from(&entry.dir);
@@ -813,7 +823,7 @@ fn copy_tree(src: &Path, dst: &Path) -> Result<(), String> {
 /// Walk the dependency closure: the manifest's deps plus every dep's own
 /// operon.toml deps, transitively, cycle-safe, SORTED name order so the
 /// lockfile is byte-identical on every machine.
-fn resolve_closure(m: &Manifest) -> BTreeMap<String, LockEntry> {
+fn resolve_closure(m: &Manifest, reg: Option<&str>) -> BTreeMap<String, LockEntry> {
     let mut out: BTreeMap<String, LockEntry> = BTreeMap::new();
     let mut queue: Vec<(String, DepSpec)> = m.deps.clone();
     queue.sort_by(|a, b| a.0.cmp(&b.0));
@@ -823,7 +833,7 @@ fn resolve_closure(m: &Manifest) -> BTreeMap<String, LockEntry> {
             continue;
         }
         seen.push(name.clone());
-        let entry = resolve_dep(&name, &spec);
+        let entry = resolve_dep(&name, &spec, reg);
         if let Some(dir) = cache_dir_for(&name, &entry.rev) {
             if let Some(sub) = manifest_in(&dir) {
                 let mut subdeps = sub.deps;
@@ -947,6 +957,11 @@ pub fn mod_command(rest: &[String]) -> ! {
             let url;
             let mut name;
             let mut rev: Option<String> = None;
+            // true only when the dep actually came through the registry
+            // chain by NAME; the reproducibility pin below must not fire
+            // for plain git-URL adds. Declared out here: the pin runs after
+            // the flag loop, outside the resolve block.
+            let mut via_registry = false;
             {
                 // W21-r1: `add NAME` resolves through the registry chain
                 // (explicit --registry, OPERON_REGISTRY, the manifest's
@@ -957,7 +972,13 @@ pub fn mod_command(rest: &[String]) -> ! {
                     && !target.contains('/')
                     && !target.contains(':')
                     && !target.contains('.');
+                // via_registry is set to true exactly when the dep came
+                // through the registry chain by NAME (the branch below);
+                // git-URL adds and no-match falls leave it false.
                 if looks_like_name || reg_path.is_some() {
+                    if looks_like_name {
+                        via_registry = true;
+                    }
                     let src = registry_source(reg_path.as_deref());
                     let text = registry_read(&src);
                     let entry = registry_lookup_text(&text, &target, &src);
@@ -1018,7 +1039,25 @@ pub fn mod_command(rest: &[String]) -> ! {
                 die_pkg(&format!("dep '{}' already present (remove it first)", name));
             }
             m.deps.push((name.clone(), DepSpec { git: url, rev }));
-            let lock = resolve_closure(&m);
+            // Reproducibility contract: a dep resolved by NAME through an
+            // explicit --registry can only EVER re-resolve through that
+            // registry (operon install / update / CI re-resolve). When the
+            // project has no [registry] pin yet, record it; a conflicting
+            // pin is a hard error, never a silent re-target.
+            if via_registry {
+                if let Some(rp) = &reg_path {
+                    if m.registry.is_empty() {
+                        m.registry = rp.clone();
+                        println!("registry pinned in operon.toml: {}", rp);
+                    } else if m.registry != *rp {
+                        die_pkg(&format!(
+                            "project pins registry '{}' in operon.toml but --registry '{}' was passed; reconcile the two (one project, one registry)",
+                            m.registry, rp
+                        ));
+                    }
+                }
+            }
+            let lock = resolve_closure(&m, reg_path.as_deref());
             write_manifest(&m);
             std::fs::write("operon.lock", emit_lock(&lock)).expect("write operon.lock");
             println!("added '{}' ({} dep(s) locked)", name, lock.len());
@@ -1043,19 +1082,47 @@ pub fn mod_command(rest: &[String]) -> ! {
         }
         "update" => {
             let m = read_manifest();
-            let lock = resolve_closure(&m);
+            let mut reg_path: Option<String> = None;
+            {
+                let mut i = 1;
+                while i < rest.len() {
+                    if rest[i] == "--registry" {
+                        reg_path = Some(
+                            rest.get(i + 1)
+                                .cloned()
+                                .unwrap_or_else(|| die_pkg("--registry needs a file path")),
+                        );
+                    }
+                    i += 1;
+                }
+            }
+            let lock = resolve_closure(&m, reg_path.as_deref());
             std::fs::write("operon.lock", emit_lock(&lock)).expect("write operon.lock");
             println!("re-resolved {} dep(s)", lock.len());
         }
         "install" => {
             let m = read_manifest();
             let existing = read_or_new_lock();
+            let mut reg_path: Option<String> = None;
+            {
+                let mut i = 1;
+                while i < rest.len() {
+                    if rest[i] == "--registry" {
+                        reg_path = Some(
+                            rest.get(i + 1)
+                                .cloned()
+                                .unwrap_or_else(|| die_pkg("--registry needs a file path")),
+                        );
+                    }
+                    i += 1;
+                }
+            }
             // Install from the lock when it agrees with the manifest (the
             // offline path); resolve anything missing, then re-emit.
             let mut lock = existing;
             for (name, spec) in &m.deps {
                 if !lock.contains_key(name) {
-                    let e = resolve_dep(name, spec);
+                    let e = resolve_dep(name, spec, reg_path.as_deref());
                     lock.insert(name.clone(), e);
                 }
             }
@@ -1078,7 +1145,7 @@ pub fn mod_command(rest: &[String]) -> ! {
                 })
                 .collect();
             for (name, spec) in missing {
-                let fresh = resolve_dep(&name, &spec);
+                let fresh = resolve_dep(&name, &spec, reg_path.as_deref());
                 lock.insert(name, fresh);
             }
             std::fs::write("operon.lock", emit_lock(&lock)).expect("write operon.lock");
