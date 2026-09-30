@@ -762,7 +762,7 @@ mod tests {
         // two same-line labels: primary under the target, secondary context
         // left of it, each with its text; secondary renders dashes
         let line = "let x = handle(a, b)";
-        let labels = vec![
+        let labels = [
             Label {
                 span: Span::of_token(1, line, "handle").unwrap(),
                 text: String::new(),
@@ -789,7 +789,7 @@ mod tests {
         // a secondary span starting INSIDE the primary's underline would
         // double-mark the same bytes; the honest render drops it
         let line = "read_file('x')";
-        let labels = vec![
+        let labels = [
             Label {
                 span: Span::of_token(1, line, "read_file").unwrap(),
                 text: String::new(),
