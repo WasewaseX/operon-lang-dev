@@ -123,7 +123,7 @@ fn real_main() {
     // transitional escape (--format score) for anything that still wants the
     // school-grade banner; nothing in scripts/ or CI parses the grade.
     let mut check_format = String::from("diag");
-    // TYPED-MODE: static type checking gate. `--typed` runs the typecheck
+    // TYPED-MODE: static type checking gate. `--typed` runs the type-check
     // pass before execution (run) or folds T-series findings into the check
     // stream (check). Additive: without the flag, nothing changes.
     let mut typed = false;
@@ -716,7 +716,7 @@ fn real_main() {
                 let src = std::fs::read_to_string(&file)
                     .unwrap_or_else(|e| die(&format!("cannot read {}: {}", file, e)));
                 let prog = parser::parse(&src);
-                let tfinds = operon::typecheck::check_program(&prog);
+                let tfinds = operon::typeck::check_program(&prog);
                 let hard: Vec<_> = tfinds
                     .iter()
                     .filter(|f| f.sev == operon::lint::Sev::Error)
@@ -871,7 +871,7 @@ fn real_main() {
             let prog = parser::parse(&src);
             // TYPED-MODE: T-series findings join the check stream under --typed
             let typed_findings: Vec<operon::lint::Finding> = if typed {
-                operon::typecheck::check_program(&prog)
+                operon::typeck::check_program(&prog)
             } else {
                 Vec::new()
             };

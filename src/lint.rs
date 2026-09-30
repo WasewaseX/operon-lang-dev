@@ -28,7 +28,7 @@
 //!                        T05 non-exhaustive-match, T06 propagate-non-variant,
 //!                        T07 trait-method-missing, T08 bound-violation,
 //!                        T09 assign-type-change, T10 return-missing
-//!                        (TYPED-MODE: the static type checker, src/typecheck.rs)
+//!                        (TYPED-MODE: the static type checker, src/typeck.rs)
 //!
 //! N04 (`repair:r<n>`, parser repair notes) is lint-owned BY CONTRACT but
 //! not emitted by the engine yet: the corpus contains files that exercise
@@ -191,7 +191,7 @@ pub fn rule_code(rule: &str) -> &'static str {
         r if r.starts_with("nmd:") || r == "anchor-import" => "W09",
         r if r.starts_with("repair:") => "N04",
         // TYPED-MODE: T-series, the static type checker's stream
-        // (src/typecheck.rs, TYPED-MODE.md §10)
+        // (src/typeck.rs, TYPED-MODE.md §10)
         "type-mismatch" => "T01",
         "unknown-member" => "T02",
         "arg-type-mismatch" => "T03",

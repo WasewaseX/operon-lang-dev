@@ -1,4 +1,4 @@
-//! TYPED-MODE: static type checker tests (src/typecheck.rs).
+//! TYPED-MODE: static type checker tests (src/typeck.rs).
 //!
 //! Law: the checker is additive — every test here either (a) catches a
 //! bad program statically, or (b) proves a good program checks clean.
@@ -8,7 +8,7 @@
 use operon::ast::Program;
 use operon::lint::Sev;
 use operon::parser;
-use operon::typecheck::check_program;
+use operon::typeck::check_program;
 
 fn check(src: &str) -> Vec<(usize, &'static str, Sev)> {
     let prog: Program = parser::parse(src);
