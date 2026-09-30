@@ -71,3 +71,26 @@ reoccur invisibly.
   (run VM, run tree-walk, oracle, check, check --json) = 12,000 execs in
   244s: 0 divergences, 0 rc-contract violations, 0 shape-parity
   violations, 0 panics/hangs; all 12 buckets x 200
+
+## fuzz-r3 deep sweep (record)
+
+The one-off deep sweeps behind the current baseline, run on the FIXED
+binary (see the finding below):
+
+- fuzz.py seed 20261030, 3000 execs: clean=2213 contained=787 crash=0
+  hang=0, no findings
+- fuzz_parser.py seed 777, 1000 inputs, exec mode: no panics, no hangs,
+  no breaches, engines agree
+
+## Findings (the fuzzer doing its job)
+
+- fuzz-r3 (found by fuzz.py seed 20260930, execs 896/1051/1606, crash
+  corpus preserved in fuzz_corpus/ with MANIFEST.jsonl): `operon check`
+  panicked (rc 101) in `Span::of_token_word` — the phantom-label scan
+  sliced at byte indexes that can sit INSIDE a multibyte character
+  (a sigma, U+2028, and a CJK char in the three inputs; all from
+  unicode_splice mutations of real test files). Delta-minimized to the
+  5-byte program `字d(`. Fixed in src/diag.rs: char-boundary-safe
+  slicing plus advance-by-character restart, unit-tested with the
+  minimized case, pinned as tests/diagnostics/char_boundary_phantom.op
+  in the diag_golden gate. All three crash inputs now exit 0.
