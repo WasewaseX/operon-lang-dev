@@ -73,6 +73,14 @@ prerequisite. **[TUTORIAL.md](TUTORIAL.md)** takes you from `hello.op` to proof 
 splice variants, regulation-as-feature-flags and the REPL, with every example verified
 against the toolchain. Then try `operon repl`, `:help` is your friend.
 
+Want types? Operon runs **dynamic** (scripting, REPL) and adds an opt-in
+**typed mode**: `gene add(a: Int, b: Int) -> Int`, generics (`gene first<T>
+(items: list[T]) -> T?`), trait contracts, Option/Result with `?!`, and
+match-exhaustiveness — all checked at compile time (`operon run --typed`,
+`operon check --typed`) while the dynamic side stays byte-identical. The
+flagship catch: `x = 10; x.name()` is rejected before the program starts.
+See [docs/design/TYPED-MODE.md](docs/design/TYPED-MODE.md) and SPEC §16a.
+
 ---
 
 ## Cookbook, small real programs to steal from
