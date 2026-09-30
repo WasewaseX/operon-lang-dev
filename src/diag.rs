@@ -198,9 +198,22 @@ impl Span {
     /// `name` as a WHOLE token (a bare substring hit inside a longer
     /// identifier, `min` inside `admin`, would underline the wrong word).
     /// None when the name never appears as a token on the line.
+    ///
+    /// fuzz-r3: every index here can sit next to multibyte text (a phantom
+    /// call beside CJK/math/separator chars), so no byte slice may assume
+    /// char boundaries — found by scripts/fuzz/fuzz.py seed 20260930
+    /// (fuzz_corpus/crash_20260930_*.op, rc 101 at this line).
     pub fn of_token_word(line: usize, line_text: &str, name: &str) -> Option<Span> {
+        // `i` is one byte left of (or right at) a match; it can land inside
+        // a multibyte char. Walk back to the char CONTAINING i — a multibyte
+        // char is never ASCII alphanumeric/underscore, so the classification
+        // of a boundary stays identical to the ASCII-only reading.
         let is_id = |i: usize| {
-            line_text[i..]
+            let mut s = i;
+            while s > 0 && !line_text.is_char_boundary(s) {
+                s -= 1;
+            }
+            line_text[s..]
                 .chars()
                 .next()
                 .map(|c| c.is_ascii_alphanumeric() || c == '_')
@@ -221,7 +234,10 @@ impl Span {
                     byte_len: name.len(),
                 });
             }
-            from = abs + 1;
+            // Advance one CHARACTER, not one byte: abs + 1 can sit inside
+            // the first matched char, and a next match can only START on a
+            // char boundary anyway, so byte-stepping never found more.
+            from = abs + name.chars().next().map_or(1, |c| c.len_utf8());
         }
         None
     }
@@ -893,6 +909,25 @@ mod tests {
         assert_eq!(span.col, 7);
         // no token occurrence → no span, never a guessed one
         assert!(Span::of_token_word(1, line, "pad").is_none());
+    }
+
+    #[test]
+    fn of_token_word_multibyte_neighbors_never_panic() {
+        // fuzz-r3 finding (fuzz_corpus/crash_20260930_1606.op, delta-minimized
+        // to these 5 bytes): a phantom label scan beside multibyte chars used
+        // to slice at a non-char-boundary byte index (rc 101, diag.rs).
+        // the exact minimized finding: match preceded by a 3-byte char
+        let span = Span::of_token_word(1, "\u{5b57}d(", "d").expect("word boundary holds");
+        assert_eq!(span.byte_col, 3);
+        assert_eq!(span.col, 2);
+        assert_eq!(span.len, 1);
+        // CJK char right of the match terminates the word
+        assert!(Span::of_token_word(1, "dx\u{5b57}d(", "dx").is_some());
+        // separator char (U+2028) as the left neighbor
+        assert!(Span::of_token_word(1, "\u{2028}zz\u{2028}zz", "zz").is_some());
+        // rejected first match forces the restart-scan path: from must land
+        // on a char boundary (used to re-slice mid-char inside the scan)
+        assert!(Span::of_token_word(1, "a\u{5b57}zz", "\u{5b57}z").is_none());
     }
 
     #[test]
