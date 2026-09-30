@@ -16,6 +16,12 @@
 #   operon remove             manifest + lock stay in sync
 #   operon registry init/serve + curl client    read-only HTTP surface
 #   remote dir-source refusal security probe
+#   fresh caches -> same lock  byte-identical operon.lock from two fully
+#                              independent HOMEs + deps caches (the seed
+#                              registry re-materializes under each HOME)
+#   cold offline install       wipe the deps cache; install re-materializes
+#                              every dep from the lock pins; verify + run
+#   lock is the contract       manifest rev drift = --locked hard failure
 set -uo pipefail
 cd "$(dirname "$0")/.."
 BIN="${BIN:-./bin/operon}"
@@ -125,6 +131,79 @@ OUT=$(cd "$WORK/proj/myapp" && OPERON_REGISTRY=http://127.0.0.1:$((PORT + 1))/in
 echo "$OUT" | grep -q "remote but its entry for"
 check $? "remote registry with dir-sourced entries refused (security)"
 kill $SRV $SRV2 2>/dev/null
+
+# ---- 9. REPRODUCIBILITY: byte-identical lockfile across completely fresh caches
+# Two fully independent states: each sandbox gets its own HOME (the seed
+# registry re-materializes under ~/.operon/registry), its own OPERON_DEPS,
+# and no OPERON_REGISTRY_HOME. The same `new demo` + `add web` (which pulls
+# transitive http) must end at the SAME operon.lock BYTES — W23's contract:
+# same inputs, same revs, same checksums, zero locality in the lock.
+iso_env() { env -u OPERON_REGISTRY_HOME HOME="$1" OPERON_DEPS="$2" "${@:3}"; }
+fresh_demo() { # $1 = sandbox root; prints the lockfile sha256 on success
+  ( cd "$1/proj" \
+    && iso_env "$1/home" "$1/deps" "$BIN" new demo >/dev/null 2>&1 \
+    && cd demo \
+    && iso_env "$1/home" "$1/deps" "$BIN" add web >/dev/null 2>&1 \
+    && sha256sum operon.lock | cut -d' ' -f1 )
+}
+LOCKA="$WORK/lockA"; LOCKB="$WORK/lockB"
+mkdir -p "$LOCKA/proj" "$LOCKB/proj"
+LOCKA_SHA=$(fresh_demo "$LOCKA"); LOCKB_SHA=$(fresh_demo "$LOCKB")
+[ -n "$LOCKA_SHA" ] && [ -n "$LOCKB_SHA" ]
+check $? "both fresh sandboxes resolved demo + web (locks captured)"
+[ -f "$LOCKA/home/.operon/registry/index.jsonl" ] && [ -f "$LOCKB/home/.operon/registry/index.jsonl" ]
+check $? "seed registry re-materialized under EACH fresh HOME"
+if [ "$LOCKA_SHA" = "$LOCKB_SHA" ]; then
+  ok "operon.lock byte-identical across completely fresh caches (sha ${LOCKA_SHA:0:16})"
+else
+  bad "operon.lock byte-identical across completely fresh caches" "sha A=$LOCKA_SHA sha B=$LOCKB_SHA"
+  diff "$LOCKA/proj/demo/operon.lock" "$LOCKB/proj/demo/operon.lock" | head -20 || true
+fi
+
+# ---- 10. OFFLINE INSTALL FROM LOCK ONLY
+# The lockfile is the contract: wipe the deps cache ENTIRELY, then `operon
+# install` must re-materialize every dep from the lock pins alone
+# (registry:NAME + rev, resolved against the seed registry, no network),
+# verify must go green, and the app must run — while the lock bytes stay put.
+DEMO="$LOCKA/proj/demo"
+cat > "$DEMO/src/app.op" <<'EOF'
+use web
+gene main() {
+    let router = web.web_router_new()
+    let router = web.web_route_add(router, "GET", "/greet/:name", 0)
+    let hit = web.web_match(router, "GET", "/greet/lock")
+    promote("matched=" + hit.params["name"])
+}
+EOF
+(cd "$DEMO" && iso_env "$LOCKA/home" "$LOCKA/deps" "$BIN" run src/app.op 2>/dev/null | grep -q "matched=lock")
+check $? "app main runs against the vendored web dep (pre-install)"
+rm -rf "$LOCKA/deps"
+(cd "$DEMO" && iso_env "$LOCKA/home" "$LOCKA/deps" "$BIN" install >/dev/null 2>&1)
+check $? "operon install re-materializes from lockfile pins (cold cache, offline)"
+LWEBREV=$(grep -A2 'name = "web"' "$DEMO/operon.lock" | grep '^rev' | cut -d'"' -f2 | cut -c1-12)
+LHTTPREV=$(grep -A2 'name = "http"' "$DEMO/operon.lock" | grep '^rev' | cut -d'"' -f2 | cut -c1-12)
+[ -d "$LOCKA/deps/web-$LWEBREV" ] && [ -d "$LOCKA/deps/http-$LHTTPREV" ]
+check $? "cache dirs re-materialized at the locked revs (web+$LWEBREV, http+$LHTTPREV)"
+(cd "$DEMO" && iso_env "$LOCKA/home" "$LOCKA/deps" "$BIN" verify >/dev/null 2>&1)
+check $? "operon verify green after the cold install"
+[ "$(sha256sum "$DEMO/operon.lock" | cut -d' ' -f1)" = "$LOCKA_SHA" ]
+check $? "install did not move the lock bytes"
+(cd "$DEMO" && iso_env "$LOCKA/home" "$LOCKA/deps" "$BIN" run src/app.op 2>/dev/null | grep -q "matched=lock")
+check $? "app main runs after the cold offline install"
+
+# ---- 11. LOCK IS THE CONTRACT: manifest drift is a hard --locked failure
+# Hand-edit operon.toml to drift from the lock (bogus rev), then use the
+# real --locked check (wired to pkg::check_locked_manifest via `operon run
+# --locked`): it must refuse to execute with a rev-drift error. Restore.
+cp "$DEMO/operon.toml" "$DEMO/operon.toml.keep"
+sed -i 's/rev = "content-[^"]*"/rev = "content-0000000000000000"/' "$DEMO/operon.toml"
+(cd "$DEMO" && iso_env "$LOCKA/home" "$LOCKA/deps" "$BIN" run --locked src/app.op >/dev/null 2>"$WORK/drift.err")
+DRIFT_RC=$?
+[ "$DRIFT_RC" != "0" ] && grep -q "rev drift" "$WORK/drift.err"
+check $? "--locked fails on manifest/lock rev drift (rc=$DRIFT_RC)" "$(cat "$WORK/drift.err")"
+mv "$DEMO/operon.toml.keep" "$DEMO/operon.toml"
+(cd "$DEMO" && iso_env "$LOCKA/home" "$LOCKA/deps" "$BIN" run --locked src/app.op 2>/dev/null | grep -q "matched=lock")
+check $? "restored manifest passes --locked again"
 
 echo "pkg_e2e: $pass passed, $fail failed"
 [ "$fail" = "0" ] && echo "PKG E2E GREEN"
