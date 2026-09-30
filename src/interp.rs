@@ -1669,7 +1669,7 @@ impl Interp {
                 self.eval(env, e)?;
                 Ok(Flow::Norm)
             }
-            Stmt::Match(subject, cases) => {
+            Stmt::Match(subject, cases, _match_line) => {
                 let sv = self.eval(env, subject)?;
                 for (pat, body) in cases {
                     // One fresh child scope per arm, pattern captures live
@@ -2912,7 +2912,7 @@ impl Interp {
                 }
                 self.member_value(tv, key)
             }
-            Expr::Method(t, name, args) => {
+            Expr::Method(t, name, args, _method_line) => {
                 let tv = self.eval(env, t)?;
                 let mut argvs = Vec::with_capacity(args.len());
                 for a in args {
@@ -2920,7 +2920,7 @@ impl Interp {
                 }
                 self.call_method(env, tv, name, argvs)
             }
-            Expr::MethodSafe(t, name, args) => {
+            Expr::MethodSafe(t, name, args, _method_line) => {
                 // L1a: `a?.k(args)`, same contract as `?.` members.
                 let tv = self.eval(env, t)?;
                 if matches!(tv, Value::Null) {
@@ -4853,7 +4853,7 @@ impl Interp {
                 // mismatch = catchable unfolded Stress naming the param,
                 // the gene, the expected and the actual type.
                 if let Some(ann) = def.param_anns.get(i).and_then(|a| a.as_ref()) {
-                    if !ann_matches(a, ann) {
+                    if !ann_is_typaram(ann, &def.type_params) && !ann_matches(a, ann) {
                         return Err(Stress::new(
                             "unfolded",
                             format!(
@@ -4870,7 +4870,7 @@ impl Interp {
             } else if let Some(d) = default {
                 let dv = self.eval(&fenv, d).unwrap_or(Value::Null);
                 if let Some(ann) = def.param_anns.get(i).and_then(|a| a.as_ref()) {
-                    if !ann_matches(&dv, ann) {
+                    if !ann_is_typaram(ann, &def.type_params) && !ann_matches(&dv, ann) {
                         return Err(Stress::new(
                             "unfolded",
                             format!(
@@ -4953,7 +4953,14 @@ impl Interp {
                 };
                 // W01 (L2c): a guard-branch return is the gene's return,
                 // the annotation applies here too.
-                return self.check_ret_ann("gene", &name, &def.ret_ann, &gv, true);
+                return self.check_ret_ann(
+                    "gene",
+                    &name,
+                    &def.ret_ann,
+                    &gv,
+                    true,
+                    &def.type_params,
+                );
             }
         }
         let result = if self.vm {
@@ -4981,12 +4988,19 @@ impl Interp {
                 // the gene actually returns (including a `?!`-propagated
                 // variant). Mismatch = catchable unfolded Stress; the W007
                 // chain still applies on the error path.
-                self.check_ret_ann("gene", &name, &def.ret_ann, &v, true)
+                self.check_ret_ann("gene", &name, &def.ret_ann, &v, true, &def.type_params)
             }
             _ => {
                 // no explicit return → null; a non-optional return
                 // annotation is violated by an implicit null too
-                self.check_ret_ann("gene", &name, &def.ret_ann, &Value::Null, false)
+                self.check_ret_ann(
+                    "gene",
+                    &name,
+                    &def.ret_ann,
+                    &Value::Null,
+                    false,
+                    &def.type_params,
+                )
             }
         }
     }
@@ -5038,10 +5052,11 @@ impl Interp {
         ann: &Option<TypeAnn>,
         v: &Value,
         explicit: bool,
+        type_params: &[(String, Option<String>)],
     ) -> Result<Value, Stress> {
         if let Some(ann) = ann {
             if explicit {
-                if !ann_matches(v, ann) {
+                if !ann_is_typaram(ann, type_params) && !ann_matches(v, ann) {
                     return Err(Stress::new(
                         "unfolded",
                         format!(
@@ -5318,7 +5333,7 @@ impl Interp {
             if let Some(a) = args.get(i) {
                 // W01 (L2c): method param annotations, same soft contract.
                 if let Some(ann) = def.param_anns.get(i).and_then(|a| a.as_ref()) {
-                    if !ann_matches(a, ann) {
+                    if !ann_is_typaram(ann, &def.type_params) && !ann_matches(a, ann) {
                         return Err(Stress::new(
                             "unfolded",
                             format!(
@@ -5403,9 +5418,16 @@ impl Interp {
             Flow::Ret(v) => {
                 // W01 (L2c): phenotype methods enforce return annotations
                 // under the same soft contract as genes (SPEC §7c).
-                self.check_ret_ann("method", &name, &def.ret_ann, &v, true)
+                self.check_ret_ann("method", &name, &def.ret_ann, &v, true, &def.type_params)
             }
-            _ => self.check_ret_ann("method", &name, &def.ret_ann, &Value::Null, false),
+            _ => self.check_ret_ann(
+                "method",
+                &name,
+                &def.ret_ann,
+                &Value::Null,
+                false,
+                &def.type_params,
+            ),
         }
     }
 
@@ -11518,24 +11540,77 @@ pub fn repressilator_gate_level(n: usize, tick: u64, node_index: usize) -> f64 {
 }
 
 /// W01 (L2c): soft annotation matching. A value matches a type annotation by
-/// `Value::type_name()`, with two documented relaxations: `any` accepts
-/// everything, and `float` accepts int (safe numeric widening, `int`
-/// refuses float: no silent narrowing). Unions match any alternative;
+/// `Value::type_name()`, with three documented relaxations: `any` accepts
+/// everything, `float` accepts int (safe numeric widening, `int` refuses
+/// float: no silent narrowing), and TYPED-MODE capitalization is normalized
+/// (`Int`≡`int`, `Str`≡`str`, ... — the user-facing canonical spellings).
+/// Generic annotations (`list[int]`, TYPED-MODE) match on their HEAD like
+/// the bare name: element types are the static checker's business, the
+/// runtime soft contract stays shallow. Unions match any alternative;
 /// optionals additionally accept null. Mirrored by oracle.ann_matches.
 pub fn ann_matches(v: &Value, ann: &TypeAnn) -> bool {
     match ann {
         TypeAnn::Named(name) => {
-            if name == "any" {
+            if ann_name_norm(name) == "any" {
                 return true;
             }
-            if v.type_name() == name.as_str() {
+            if v.type_name() == ann_name_norm(name) {
                 return true;
             }
             // numeric widening: int is acceptable where float is declared
-            name == "float" && matches!(v, Value::Int(_))
+            ann_name_norm(name) == "float" && matches!(v, Value::Int(_))
         }
         TypeAnn::Union(alts) => alts.iter().any(|a| ann_matches(v, a)),
-        TypeAnn::Optional(inner) => matches!(v, Value::Null) || ann_matches(v, inner),
+        // TYPED-MODE: an optional accepts null, any value matching its
+        // inner type (the W01 law), AND the Option family (W06): None
+        // outright, Some(payload) when the payload matches.
+        TypeAnn::Optional(inner) => match v {
+            Value::Null => true,
+            Value::Variant(t, Some(p)) if *t == crate::value::VTag::SomeV => ann_matches(p, inner),
+            Value::Variant(t, _) if *t == crate::value::VTag::NoneV => true,
+            other => ann_matches(other, inner),
+        },
+        // generic head matching: list[int] enforces "is a list", map[k, v]
+        // "is a map", option[t] additionally accepts null (mirrors Optional),
+        // result[t, e] matches the variant family. Element types are ignored
+        // here (shallow runtime contract; the static checker owns depth).
+        TypeAnn::Generic(name, _args) => {
+            let head = ann_name_norm(name);
+            match head.as_str() {
+                "any" => true,
+                "list" => matches!(v, Value::List(_)),
+                "map" => matches!(v, Value::Map(_)),
+                "option" => {
+                    matches!(v, Value::Null)
+                        || matches!(v, Value::Variant(t, _) if t.family() == "option")
+                }
+                "result" => matches!(v, Value::Variant(t, _) if t.family() == "result"),
+                // unknown generic head: fall back to the bare-name rule so a
+                // typo'd annotation never silently accepts everything
+                _ => v.type_name() == head || (head == "float" && matches!(v, Value::Int(_))),
+            }
+        }
+    }
+}
+
+/// TYPED-MODE: case-normalized annotation name (`Int`→`int`, `Str`→`str`).
+/// Mirrored by oracle.ann_name_norm.
+pub fn ann_name_norm(name: &str) -> String {
+    name.to_ascii_lowercase()
+}
+
+/// TYPED-MODE: does this annotation name (only) a declared generic type
+/// parameter? Type parameters are ERASED at runtime: the soft contract is
+/// a no-op for them (any value satisfies `T`), while the static checker
+/// owns the real constraint. Mirrored by oracle.ann_is_typaram.
+pub fn ann_is_typaram(ann: &TypeAnn, type_params: &[(String, Option<String>)]) -> bool {
+    match ann {
+        TypeAnn::Named(n) => type_params.iter().any(|(p, _)| p == n),
+        TypeAnn::Union(alts) => alts.iter().all(|a| ann_is_typaram(a, type_params)),
+        TypeAnn::Optional(inner) => ann_is_typaram(inner, type_params),
+        // generic heads: list[T] etc. enforce their shallow runtime shape,
+        // only a BARE parameter name is erased
+        TypeAnn::Generic(_, _) => false,
     }
 }
 

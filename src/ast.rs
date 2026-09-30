@@ -42,9 +42,11 @@ pub enum Expr {
     /// L1a: `a?.k`, Null receiver yields Null (silent); otherwise identical
     /// to Member.
     MemberSafe(Box<Expr>, String),
-    Method(Box<Expr>, String, Vec<Expr>),
+    /// TYPED-MODE: source line of the method call, static member errors
+    /// (`int has no method 'name'`) locate themselves like Call/Index do.
+    Method(Box<Expr>, String, Vec<Expr>, usize),
     /// L1a: `a?.k(args)`, Null-safe method call (same contract).
-    MethodSafe(Box<Expr>, String, Vec<Expr>),
+    MethodSafe(Box<Expr>, String, Vec<Expr>, usize),
     Lambda(Arc<GeneDef>),
     Collect {
         var: String,
@@ -139,6 +141,11 @@ pub struct GeneDef {
     /// and tooling surface only (lint `deprecated-use` findings, doc/fmt
     /// round-trip); the interpreter never reads it, runtime is untouched.
     pub deprecated: Option<Deprecation>,
+    /// TYPED-MODE: declared generic type parameters, `gene first<T>(...)`.
+    /// (name, optional bound) — the bound is a trait/constraint name. Pure
+    /// metadata for the static checker and fmt/doc round-trip; the dynamic
+    /// evaluator never reads it.
+    pub type_params: Vec<(String, Option<String>)>,
 }
 
 /// W64: the structured payload of a deprecation mark.
@@ -162,6 +169,12 @@ pub enum TypeAnn {
     Named(String),
     Union(Vec<TypeAnn>),
     Optional(Box<TypeAnn>),
+    /// TYPED-MODE: generic annotation, `list[int]`, `map[str, int]`,
+    /// `result[int, str]`, `option[t]`. The name is the head; the args are
+    /// the bracketed parameters. Runtime soft matching treats a generic
+    /// annotation's HEAD like the bare name (list[int] enforces "is a
+    /// list") — element types are the static checker's business.
+    Generic(String, Vec<TypeAnn>),
 }
 
 impl TypeAnn {
@@ -176,6 +189,14 @@ impl TypeAnn {
                 .collect::<Vec<_>>()
                 .join(" | "),
             TypeAnn::Optional(inner) => format!("{}?", inner.render()),
+            TypeAnn::Generic(name, args) => format!(
+                "{}[{}]",
+                name,
+                args.iter()
+                    .map(|a| a.render())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
         }
     }
 }
@@ -422,7 +443,9 @@ pub enum Stmt {
     Break,
     Continue,
     ExprStmt(Expr),
-    Match(Expr, Vec<(MatchPat, Vec<Stmt>)>),
+    /// TYPED-MODE: the match statement carries its source line so static
+    /// exhaustiveness findings (T05) locate themselves.
+    Match(Expr, Vec<(MatchPat, Vec<Stmt>)>, usize),
     Use(String, Option<String>),        // path, alias
     Raise(Option<String>, Expr, usize), // kind, message, statement line (W007)
     Stress {

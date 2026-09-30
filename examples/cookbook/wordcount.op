@@ -1,0 +1,54 @@
+# cookbook/wordcount — the classic, with std/strings + std/iter
+#
+# Count word frequencies in a paragraph and show the top 3.
+# `sort_by_key` ≈ sort with a computed key; `fold` ≈ reduce.
+#
+# Run:  operon run examples/cookbook/wordcount.op
+#
+# --- expected output ---
+# 1. operon (2)
+# 2. the (2)
+# 3. language (1)
+# distinct words: 8
+# ----------------------
+
+use std/strings as st
+use std/iter as it
+use std/collections as col
+
+main {
+    let text = "the operon language reads like the lab notebook of a language designer operon keeps the metaphors honest"
+
+    # words() splits on whitespace and drops empties
+    let ws = st.words(text)
+
+    # frequency map: fold a map up from the word list
+    let freq = it.fold(ws, {}, gene (acc, w) {
+        let c = 0
+        if has(acc, w) {
+            c = acc[w]
+        }
+        acc[w] = c + 1
+        return acc
+    })
+
+    # top 3 by count, ties broken by word for determinism
+    let pairs = it.map(keys(freq), gene (k) {
+        return [freq[k], k]
+    })
+    let ranked = pairs.sort(gene (a, b) {
+        if a[0] == b[0] {
+            return a[1] < b[1]
+        }
+        return a[0] > b[0]
+    })
+
+    let top = it.take(ranked, 3)
+    let i = 1
+    for p in top {
+        promote("{i}. {p[1]} ({p[0]})")
+        i = i + 1
+    }
+    promote("distinct words: {len(freq)}")
+    let _ = col.count([1], gene (x) => true)
+}

@@ -123,6 +123,10 @@ fn real_main() {
     // transitional escape (--format score) for anything that still wants the
     // school-grade banner; nothing in scripts/ or CI parses the grade.
     let mut check_format = String::from("diag");
+    // TYPED-MODE: static type checking gate. `--typed` runs the typecheck
+    // pass before execution (run) or folds T-series findings into the check
+    // stream (check). Additive: without the flag, nothing changes.
+    let mut typed = false;
     // W48: lint-side CLI allow list (--allow rule1,rule2, repeatable);
     // check-side --style inlines the lint-owned style stream in diag output.
     let mut lint_allows: Vec<String> = Vec::new();
@@ -278,6 +282,7 @@ fn real_main() {
             "--ires" => opts.use_ires = true,
             "--json" => json = true,
             "--strict" => strict = true,
+            "--typed" => typed = true,
             "--locked" => locked = true,
             "--quiet" => opts.quiet = true,
             "--nmd" => nmd = true,
@@ -705,6 +710,44 @@ fn real_main() {
             if locked && std::path::Path::new("operon.toml").exists() {
                 pkg::check_locked_manifest();
             }
+            // TYPED-MODE: the compile-time gate. Type errors abort BEFORE
+            // execution; the dynamic side only ever sees a clean program.
+            if typed {
+                let src = std::fs::read_to_string(&file)
+                    .unwrap_or_else(|e| die(&format!("cannot read {}: {}", file, e)));
+                let prog = parser::parse(&src);
+                let tfinds = operon::typecheck::check_program(&prog);
+                let hard: Vec<_> = tfinds
+                    .iter()
+                    .filter(|f| f.sev == operon::lint::Sev::Error)
+                    .collect();
+                let soft: Vec<_> = tfinds
+                    .iter()
+                    .filter(|f| f.sev != operon::lint::Sev::Error)
+                    .collect();
+                if !hard.is_empty() {
+                    for f in &tfinds {
+                        eprintln!("type-error {}:{}: {} [{}]", file, f.line, f.message, f.code);
+                    }
+                    eprintln!(
+                        "operon: {} type error(s) in {} (--typed gate; not executed)",
+                        hard.len(),
+                        file
+                    );
+                    // ast-grep-ignore: no-std-process-exit-in-core
+                    std::process::exit(3);
+                }
+                if !soft.is_empty() {
+                    for f in &soft {
+                        eprintln!("type-note {}:{}: {} [{}]", file, f.line, f.message, f.code);
+                    }
+                    if strict {
+                        eprintln!("operon: --strict refuses type warnings");
+                        // ast-grep-ignore: no-std-process-exit-in-core
+                        std::process::exit(3);
+                    }
+                }
+            }
             opts.args = positional[1..].to_vec();
             let mut l = match tools::load_file(&file, &opts) {
                 Ok(l) => l,
@@ -826,6 +869,12 @@ fn real_main() {
             // without doubling the stream; --style inlines it.
             let src = std::fs::read_to_string(&file).unwrap_or_default();
             let prog = parser::parse(&src);
+            // TYPED-MODE: T-series findings join the check stream under --typed
+            let typed_findings: Vec<operon::lint::Finding> = if typed {
+                operon::typecheck::check_program(&prog)
+            } else {
+                Vec::new()
+            };
             let mut findings = operon::lint::lint_correctness(&prog);
             operon::lint::apply_allows(&mut findings, &src);
             let mut style = operon::lint::lint_style(&prog);
@@ -840,9 +889,23 @@ fn real_main() {
                 } else {
                     Vec::new()
                 };
-                print_diag(&file, &src, &rep, &findings, &style, &style_inline);
-                let hard = findings.iter().any(|f| f.sev == operon::lint::Sev::Error);
-                if hard || (strict && (rep.wobbles > 0 || rep.fallbacks > 0)) {
+                print_diag(
+                    &file,
+                    &src,
+                    &rep,
+                    &findings,
+                    &style,
+                    &style_inline,
+                    &typed_findings,
+                );
+                let hard = findings.iter().any(|f| f.sev == operon::lint::Sev::Error)
+                    || typed_findings
+                        .iter()
+                        .any(|f| f.sev == operon::lint::Sev::Error);
+                let typed_soft = typed_findings
+                    .iter()
+                    .any(|f| f.sev == operon::lint::Sev::Warning);
+                if hard || (strict && (rep.wobbles > 0 || rep.fallbacks > 0 || typed_soft)) {
                     // ast-grep-ignore: no-std-process-exit-in-core
                     std::process::exit(3);
                 }
@@ -868,7 +931,10 @@ fn real_main() {
                     .collect();
                 // W48: the findings array carries CHECK-owned rules only
                 // (correctness); style findings live in `operon lint --json`.
-                let f_json: Vec<String> = findings
+                // TYPED-MODE: T-series findings ride the same array under --typed.
+                let all_findings: Vec<&operon::lint::Finding> =
+                    findings.iter().chain(typed_findings.iter()).collect();
+                let f_json: Vec<String> = all_findings
                     .iter()
                     .map(|f| {
                         format!(
@@ -2422,6 +2488,7 @@ fn repl_eval(l: &mut tools::Loaded, src: &str) {
 /// under a clearly labeled header. Default output keeps a labeled count +
 /// pointer line — the split is about command purpose and defaults, not about
 /// hiding data.
+#[allow(clippy::too_many_arguments)] // TYPED-MODE: the typed stream is the 8th
 fn print_diag(
     file: &str,
     src: &str,
@@ -2429,6 +2496,7 @@ fn print_diag(
     findings: &[operon::lint::Finding],
     style: &[operon::lint::Finding],
     style_inline: &[operon::lint::Finding],
+    typed: &[operon::lint::Finding],
 ) {
     use operon::lint::Sev;
     let color = operon::diag::color_enabled(std::io::stdout().is_terminal());
@@ -2441,10 +2509,13 @@ fn print_diag(
             Sev::Style => {} // unreachable in the correctness stream, kept for safety
         }
     }
-    // W101 slice 2: findings render as located blocks (SPEC 9a.1), severity
-    // prefixed, W041 code attached, the note line names the owning rule.
-    // The section headers and the summary line stay verbatim: scripts parse
-    // those, only the per-finding lines gained a location.
+    // TYPED-MODE: T-series findings get their own sectioned stream; errors
+    // escalate the summary counts, warnings stay advisory. W101 slice 2:
+    // findings render as located blocks (SPEC 9a.1) via diag::render_finding.
+    let t_errors: Vec<&operon::lint::Finding> =
+        typed.iter().filter(|f| f.sev == Sev::Error).collect();
+    let t_warnings: Vec<&operon::lint::Finding> =
+        typed.iter().filter(|f| f.sev == Sev::Warning).collect();
     let section = |name: &str, items: &[&operon::lint::Finding]| {
         if items.is_empty() {
             return;
@@ -2459,14 +2530,18 @@ fn print_diag(
             );
         }
     };
-    let mut n_errors = errors.len();
+    let mut n_errors = errors.len() + t_errors.len();
     if !rep.parsed {
         println!("error:");
         println!("  error[E00]: file could not be read");
         n_errors += 1;
     }
     section("error", &errors);
-    let n_warnings = warnings.len() + rep.phantoms.len();
+    if !typed.is_empty() {
+        section("type-error (TYPED-MODE)", &t_errors);
+        section("type-note (TYPED-MODE)", &t_warnings);
+    }
+    let n_warnings = warnings.len() + rep.phantoms.len() + t_warnings.len();
     if !rep.phantoms.is_empty() {
         println!("warning:");
         for p in &rep.phantoms {
@@ -2519,10 +2594,12 @@ usage:
   operon run f.op [--entry g] [--variant v] [--cell c] [--rna r] [--frame name] [--ires] [--strict] [--quiet]
                   [--fuel steps] [--allow-read path] [--allow-write path] [--allow-net host:port]
                   [--allow-run cmd] [--allow-py module] [--allow-exit] [--allow-env var] [--allow-all]
-  operon check f.op [--format diag|score] [--nmd | --nmd=purge] [--json] [--style] [--strict]
+                  [--typed]  # TYPED-MODE: compile-time type gate; errors abort before execution
+  operon check f.op [--format diag|score] [--nmd | --nmd=purge] [--json] [--style] [--strict] [--typed]
                   # W48 split: check = CORRECTNESS (wrong-arity, phantom-call, const-reassign,
                   # cell keys, NMD). diag default shows correctness sections; the style stream is
                   # summarized with a pointer to `operon lint` (--style inlines it).
+                  # --typed: static type checking (TYPED-MODE, T-series findings)
   operon lint f.op [more.op ...] [--strict] [--allow rule1,rule2] [--cell c] [--json]
                   # W48 split: lint = STYLE/QUALITY only (unused-gene, unused-import,
                   # unused-binding, dead-const, shadowed-binding, constant-condition,
