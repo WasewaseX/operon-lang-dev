@@ -113,6 +113,18 @@ for f in "$DIR"/rt_p*.op; do
             # 50 ms wake (and its own step budget), so every leak must END
             # on the catchable overflow stress, never hang.
             run_one "$f" --fuel 600000 ;;
+        *p24a*|*p24b*)
+            # W016: async containment — the fiber leak storm rides the
+            # live-task cap (4096) and the cancel storm proves no parked
+            # fiber outlives its join (the io.pool cell is required: without
+            # it the payloads take the thread path and prove nothing about
+            # fibers).
+            run_one "$f" --cell "$DIR/async.cell" --entry go ;;
+        *p24c*)
+            # W016: the never-fed park drains the run-wide pool (operator-set
+            # small --fuel) into the catchable overflow at the suspension
+            # point — a parked fiber can never outlive the run's budget.
+            run_one "$f" --cell "$DIR/async.cell" --entry go --fuel 600000 ;;
         *p15b*|*p15c*)
             # M100 W007: chain on rescue bindings — contained (rc=0),
             # frames leak nothing beyond gene names + in-file lines

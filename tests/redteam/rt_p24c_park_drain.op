@@ -1,0 +1,18 @@
+# W16 redteam: the never-fed channel fuel drain. A fiber parks on recv
+# forever; the wake-slice cadence (50k steps per 50 ms, the blocking
+# builtin's exact shape) drains the shared run-wide pool into the catchable
+# overflow stress — a parked fiber can never outlive the run's budget.
+gene drainer(ch) {
+    recv(ch)
+    return 1
+}
+gene go() {
+    let ch = channel()
+    let t = spawn(drainer, [ch])
+    let r = join(t, 2000)
+    if r == null {
+        print("p24c-breach: no containment within 2s")
+    } else {
+        print("p24c-contained " + str(r["kind"]))
+    }
+}

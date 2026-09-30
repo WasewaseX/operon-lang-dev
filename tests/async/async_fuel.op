@@ -1,0 +1,18 @@
+# W16 async proofs: the containment contracts are unchanged by async.
+# A runaway fiber (unbounded recursion) is bounded by the SAME depth limit
+# as a thread worker; the stress surfaces on the joined value as a map
+# (never a panic, never a silent loss). The shared run-wide fuel pool rides
+# the fiber exactly as it rides a thread (the sleep/wake slice charges use
+# the same helpers); the budget-exhaustion shapes are Rust-lane evidence in
+# tests/redteam (they need a small operator-set --fuel).
+
+gene runaway(n) {
+    return runaway(n + 1)
+}
+
+frame proof {
+    let t = spawn(runaway, [0])
+    let r = join(t)
+    assert(r["kind"] != null, "a runaway fiber is contained with a stress map")
+    print("async_fuel complete")
+}

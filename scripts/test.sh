@@ -29,6 +29,15 @@ echo "[2/3] Operon proof suite (Rust core)"
 # oracle cannot observe mid-flight ordering), so tests/timing/ is a
 # Rust-only lane with its own explicit cell; both test walkers skip it.
 ./bin/operon test tests/timing/ --cell tests/timing/timing.cell
+# W16: the async lanes. The proof pair runs the SAME files twice — with the
+# io.pool cell (fibers on the VM loop) and without (threads) — the pair is
+# the substrate-equivalence evidence. The timing lane exercises 1200 parked
+# fibers (bounded OS threads) and the FIFO wake order (--repeat pins
+# determinism).
+./bin/operon test tests/async/ --cell tests/async/async.cell
+./bin/operon test tests/async/
+./bin/operon test tests/async/timing/async_sleeps.op --cell tests/async/async.cell
+./bin/operon test tests/async/timing/async_wake_order.op --cell tests/async/async.cell --repeat 3
 # W18: cancellation inheritance — the child's observation lands in a file
 # under an explicit write grant (granted-lane pattern).
 ./bin/operon test tests/granted/cancel_inherit.op --cell tests/granted/cancel_inherit.cell

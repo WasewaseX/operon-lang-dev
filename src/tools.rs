@@ -1105,6 +1105,13 @@ pub fn run_tests(paths: &[String], opts: &Opts, json: bool) -> TestReport {
         rep.notes += l.interp.notes.len();
         let genv = l.interp.global.clone();
         l.interp.proof_mode = true;
+        // W16: the test lane runs the A6 default engine (the VM, same as
+        // `operon run`) — spawned genes inside proof frames compile and the
+        // async fiber lane can engage under io.pool cells. The corpus is
+        // parity-proven under BOTH engines (scripts/vm_parity.sh), so this
+        // changes the substrate, never the observable results.
+        l.interp.vm = true;
+        l.interp.vm_program = Some(std::rc::Rc::new(crate::vm::VmProgram::default()));
         let mut file_failed = false;
         let mut proof_failures: Vec<String> = Vec::new();
         for (i, proof) in l.prog.proofs.iter().enumerate() {

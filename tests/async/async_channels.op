@@ -1,0 +1,91 @@
+# W16 async proofs: channels over fibers — suspended recv, close-wake,
+# select ordering, the wire membrane and the closed_channel family.
+
+gene consumer(ch) {
+    let total = 0
+    loop {
+        let v = recv(ch)
+        if v == null {
+            break
+        }
+        total = total + v
+    }
+    return total
+}
+
+gene producer(ch, n) {
+    for i in range(n) {
+        send(ch, i * i)
+    }
+    close(ch)
+    return n
+}
+
+frame proof {
+    # producer/consumer: the consumer's recv parks (empty channel), the
+    # pump interleaves both fibers, close(ch) ends the consumer
+    let ch = channel()
+    let p = spawn(producer, [ch, 5])
+    let c = spawn(consumer, [ch])
+    assert(join(c) == 30, "suspended recv drains 0+1+4+9+16")
+    assert(join(p) == 5, "producer returns its count")
+
+    # buffered path: same-thread sends are receivable without parking
+    let b = channel()
+    send(b, "x")
+    send(b, "y")
+    assert(recv(b) == "x", "FIFO order on the buffered path")
+    assert(recv(b) == "y", "second buffered recv")
+
+    # close wakes: recv on a closed-and-open-emptied channel is null
+    close(b)
+    assert(recv(b) == null, "closed+empty recv is null")
+    assert(close(b) == null, "close is idempotent")
+
+    # send on a closed channel: the catchable closed_channel family
+    let g = channel()
+    close(g)
+    let caught = ""
+    stress {
+        send(g, 1)
+    } rescue (e) {
+        caught = e.kind
+    }
+    assert(caught == "closed_channel", "send on closed is closed_channel")
+
+    # select: buffered channels answer the leftmost ready (declaration order)
+    let s1 = channel()
+    let s2 = channel()
+    send(s2, "two")
+    send(s1, "one")
+    assert(select(s1, s2) == 0, "leftmost ready wins (declaration order)")
+    assert(select(s2, s1) == 0, "leftmost ready wins (swapped order)")
+
+    # select over all-closed channels: -1 (drain first: a closed channel
+    # with buffered values is still ready by contract)
+    assert(recv(s1) == "one", "drain s1")
+    assert(recv(s2) == "two", "drain s2")
+    close(s1)
+    close(s2)
+    assert(select(s1, s2) == -1, "all closed answers -1")
+
+    # select with buffered values on a closed channel is still ready
+    let s3 = channel()
+    send(s3, "last")
+    close(s3)
+    assert(select(s3) == 0, "closed channel with buffered values is ready")
+    assert(recv(s3) == "last", "closed buffered values stay receivable")
+
+    # the wire membrane: a channel handle payload is refused at send time
+    let outer = channel()
+    let inner = channel()
+    let caught2 = ""
+    stress {
+        send(outer, inner)
+    } rescue (e) {
+        caught2 = e.kind
+    }
+    assert(caught2 == "membrane", "the membrane refuses channel payloads")
+
+    print("async_channels complete")
+}

@@ -372,9 +372,21 @@ pub fn step_once() -> bool {
                     wake_ids.push(g);
                 }
                 Wake::Charge(ms) => {
-                    let _ = charge_wake_slice(&mut f.interp, ms);
-                    if let Some(p) = f.park.as_mut() {
-                        p.touch();
+                    // containment: a failed charge (the run-wide pool or the
+                    // fiber's own budget exhausted) WAKES the fiber with the
+                    // overflow stress at its suspension point — a parked
+                    // fiber can never outlive the run's budget
+                    match charge_wake_slice(&mut f.interp, ms) {
+                        Ok(()) => {
+                            if let Some(p) = f.park.as_mut() {
+                                p.touch();
+                            }
+                        }
+                        Err(s) => {
+                            f.park = None;
+                            f.resume = Some(Err(s));
+                            wake_ids.push(g);
+                        }
                     }
                 }
             }
