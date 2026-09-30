@@ -52,13 +52,33 @@ jobs:
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu qemu-user-static
           echo 'CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc' >> $GITHUB_ENV
 
+      # r7 fix (sz, red-main hotfix): CARGO_BUILD_TARGET was exported EMPTY on
+      # every non-cross leg, which cargo rejects — the whole matrix has been
+      # red since introduction. The build now passes --target only when set,
+      # and ALWAYS exposes the produced binary at bin/operon (the one path
+      # harness.py, vm_parity.sh, compat_matrix.sh and fuzz_parser.py exec);
+      # cross-built aarch64 binaries execute transparently under
+      # qemu-user-static binfmt.
       - name: Build
-        run: cargo build --release
+        shell: bash
         env:
-          CARGO_BUILD_TARGET: ${{ matrix.target }}
+          CT: ${{ matrix.target }}
+        run: |
+          mkdir -p bin
+          if [ -n "$CT" ]; then
+            cargo build --release --target "$CT"
+            cp "target/$CT/release/operon" bin/operon
+          else
+            cargo build --release
+            if [ -f target/release/operon.exe ]; then
+              cp target/release/operon.exe bin/operon.exe
+            else
+              cp target/release/operon bin/operon
+            fi
+          fi
 
       - name: Build (debug profile axis)
         if: matrix.profile == 'debug' && !matrix.target
