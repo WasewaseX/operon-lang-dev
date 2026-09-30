@@ -2409,14 +2409,14 @@ impl Parser {
                 // the `type` -> `phenotype` synonym never fires on the alias
                 // form; `type Name { ... }` (brace form) is still a phenotype.
                 if matches!(self.peek(), Tok::Ident(_)) && matches!(self.peek2(), Tok::Eq) {
+                    let alias_line = self.line();
                     let name = self.expect_ident().unwrap_or_default();
                     self.next(); // '='
                     let target = self.parse_type_ann();
                     self.end_stmt();
                     if let Some(existing) = self.type_aliases.iter().find(|(n, _)| *n == name) {
-                        let line = self.line();
                         self.note(
-                            line,
+                            alias_line,
                             2,
                             format!(
                                 "duplicate type alias '{}'; first declaration ({}) wins",
@@ -2427,7 +2427,7 @@ impl Parser {
                     } else {
                         self.type_aliases.push((name.clone(), target.clone()));
                     }
-                    return Some(Stmt::TypeAlias(name, target, self.line()));
+                    return Some(Stmt::TypeAlias(name, target, alias_line));
                 }
                 let pheno_line = self.line();
                 // W074: capture at arm start, inner method genes' take_doc

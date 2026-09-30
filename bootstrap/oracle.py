@@ -2014,8 +2014,13 @@ class P:
                 self.next()  # '='
                 target = self.type_ann()
                 self.end_stmt()
-                if any(n == name for (n, _t) in self.type_aliases):
-                    self.note(alias_line, 2, f"duplicate type alias '{name}'; first declaration wins")
+                dup = None
+                for (n, t0) in self.type_aliases:
+                    if n == name:
+                        dup = t0
+                        break
+                if dup is not None:
+                    self.note(alias_line, 2, f"duplicate type alias '{name}'; first declaration ({ann_render(dup)}) wins")
                 else:
                     self.type_aliases.append((name, target))
                 return ("typealias", name, target, alias_line)
