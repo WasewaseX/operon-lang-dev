@@ -192,11 +192,14 @@ pub fn fiber_mode(interp: &Interp) -> bool {
     if !interp.vm {
         return false;
     }
-    let on = interp
-        .cell
-        .get("io.pool")
-        .map(|v| v == "on" || v == "true" || v == "1")
-        .unwrap_or(false);
+    // the host reads the `.cell io.pool` key; fibers carry the lane flag
+    // (workers inherit no raw .cell) so nested spawns stay on the substrate
+    let on = interp.io_pool
+        || interp
+            .cell
+            .get("io.pool")
+            .map(|v| v == "on" || v == "true" || v == "1")
+            .unwrap_or(false);
     if !on {
         return false;
     }
@@ -262,8 +265,15 @@ pub fn launch(parts: FiberParts) -> FiberHandle {
 /// front ready fiber to completion-or-park. Returns false when nothing was
 /// runnable (callers do their own slice wait, exactly like today's
 /// blocking builtins).
+///
+/// Borrow discipline: the running fiber is REMOVED from the scheduler map
+/// before its segment executes (phase 2 runs with the RefCell borrow
+/// RELEASED) — a fiber body spawns fibers, joins, and parks, and each of
+/// those re-enters the scheduler. A re-entrant `borrow_mut` would panic;
+/// the take-run-return protocol is what makes nesting sound.
 pub fn step_once() -> bool {
-    with_sched(|rt| {
+    // ---- phase 1: wake scan + dequeue (under the borrow)
+    let running = with_sched(|rt| {
         let now = std::time::Instant::now();
         // wake pass in registration order (deterministic FIFO ties)
         let mut parked: Vec<(u64, u64)> = rt
@@ -372,36 +382,42 @@ pub fn step_once() -> bool {
         for g in wake_ids {
             rt.ready.push_back(g);
         }
-        // run one ready fiber segment (FIFO)
-        match rt.ready.pop_front() {
-            Some(g) => {
-                if let Some(mut f) = rt.fibers.remove(&g) {
-                    run_segment(&mut f);
-                    if f.finished {
-                        // record the terminal phase (the worker-side rule:
-                        // BEFORE the result becomes visible)
-                        let cancelled = matches!(
-                            &*f.done.lock().unwrap_or_else(|e| e.into_inner()),
-                            Some(FiberOutcome {
-                                value: SendValue::Stress(k, _),
-                                ..
-                            }) if k == "cancelled"
-                        );
-                        *f.state.lock().unwrap_or_else(|e| e.into_inner()) = if cancelled {
-                            TaskState::Cancelled
-                        } else {
-                            TaskState::Done
-                        };
-                    } else {
-                        rt.fibers.insert(g, f);
-                    }
-                }
-                true
-            }
-            None => false,
-        }
-    })
-    .unwrap_or(false)
+        // dequeue the next ready fiber and TAKE it out (the borrow releases
+        // before the segment runs)
+        rt.ready
+            .pop_front()
+            .and_then(|g| rt.fibers.remove(&g).map(|f| (g, f)))
+    });
+    // ---- phase 2: run the segment (NO scheduler borrow held — nested
+    // spawn/join/park re-enter freely)
+    let Some((g, mut f)) = running.flatten() else {
+        return false; // nothing runnable
+    };
+    run_segment(&mut f);
+    if f.finished {
+        // record the terminal phase (the worker-side rule: BEFORE the
+        // result becomes visible)
+        let cancelled = matches!(
+            &*f.done.lock().unwrap_or_else(|e| e.into_inner()),
+            Some(FiberOutcome {
+                value: SendValue::Stress(k, _),
+                ..
+            }) if k == "cancelled"
+        );
+        *f.state.lock().unwrap_or_else(|e| e.into_inner()) = if cancelled {
+            TaskState::Cancelled
+        } else {
+            TaskState::Done
+        };
+        // phase 3: the finished fiber is dropped (outcome already published)
+        true
+    } else {
+        // phase 3: return the parked fiber to the scheduler
+        with_sched(|rt| {
+            rt.fibers.insert(g, f);
+        });
+        true
+    }
 }
 
 /// The wake-slice charge: the exact `blocking_wake` shape (shared pool +
@@ -476,9 +492,14 @@ fn run_segment(f: &mut Fiber) {
                         finish(f, Err(s));
                         return;
                     }
-                    // parked inside the body: frames adopted above; if none
-                    // arrived the park had no VM frame (cannot happen: the
-                    // hook refuses parks at suspend_depth > 0) — fail safe.
+                    // parked inside the body: the frames were adopted above
+                    // and the wake request rides on the interpreter — take
+                    // it so the scheduler can wake this fiber (the resume
+                    // path does the same after ITS park).
+                    f.park = f.interp.fiber_park.take();
+                    // no VM frame arrived would mean the hook parked at
+                    // suspend_depth > 0 (it refuses to) — fail safe rather
+                    // than lose the fiber silently.
                     if f.frames.is_empty() {
                         finish(
                             f,
@@ -735,14 +756,19 @@ pub fn pump_step() {
     }
 }
 
-/// Pump until the given fiber handle leaves `Running` (join's fiber lane).
-/// Honors the join ceilings by returning on `deadline`; the caller applies
-/// the timeout notes/returns exactly like the thread lane.
-pub fn pump_until(state: &Mutex<TaskState>, deadline: Option<std::time::Instant>) -> bool {
+/// Pump until the fiber's completion outcome lands (join's fiber lane).
+/// The OUTCOME, not the phase, is the join signal: `cancel()` flips the
+/// phase immediately (the thread-path contract) while the fiber still has
+/// to unwind; the outcome lands exactly when the worker would have sent on
+/// its channel. Honors the join ceilings by returning on `deadline`.
+pub fn pump_until_done(
+    done: &Mutex<Option<FiberOutcome>>,
+    deadline: Option<std::time::Instant>,
+) -> bool {
     loop {
         {
-            let st = state.lock().unwrap_or_else(|e| e.into_inner());
-            if *st != TaskState::Running {
+            let d = done.lock().unwrap_or_else(|e| e.into_inner());
+            if d.is_some() {
                 return true;
             }
         }
@@ -750,6 +776,23 @@ pub fn pump_until(state: &Mutex<TaskState>, deadline: Option<std::time::Instant>
             if std::time::Instant::now() >= d {
                 return false;
             }
+        }
+        // a segment can BLOCK past the deadline (bridged awaits fall back
+        // to the blocking builtins) — an outcome that lands during such a
+        // step still answers null: the join timeout contract says "join(id,
+        // ms) returns null when the worker exceeds it", the fiber stays
+        // joinable and a later join picks the value up.
+        if let Some(d) = deadline {
+            if std::time::Instant::now() >= d {
+                return false;
+            }
+        }
+        let had_outcome = {
+            let d = done.lock().unwrap_or_else(|e| e.into_inner());
+            d.is_some()
+        };
+        if had_outcome {
+            return true;
         }
         if !step_once() {
             // nothing runnable: sleep to the next wake or a bounded slice
@@ -762,10 +805,11 @@ pub fn pump_until(state: &Mutex<TaskState>, deadline: Option<std::time::Instant>
                 std::thread::sleep(until - now2);
             }
         }
+        // the step may have overshot the deadline (a blocking segment): an
+        // outcome landing past the deadline answers null per the contract
         if let Some(d) = deadline {
             if std::time::Instant::now() >= d {
-                let st = state.lock().unwrap_or_else(|e| e.into_inner());
-                return *st != TaskState::Running;
+                return false;
             }
         }
     }

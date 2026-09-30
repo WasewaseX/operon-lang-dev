@@ -1831,7 +1831,7 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
         let _ = interp.call_gene(def, None, args)?;
         return Ok(Value::Int(0));
     }
-    if interp.tasks.len() >= 4096 {
+    if interp.tasks.len() + crate::asyncrt::live_fibers() >= 4096 {
         return Err(Stress::new(
             "overflow",
             "too many live tasks (4096), join() your spawns",
@@ -1891,6 +1891,51 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
     let id = interp.next_task_id;
     interp.next_task_id += 1;
     let task_seed = 0x9E3779B97F4A7C15u64 ^ (id as u64).wrapping_mul(0x9E3779B97F4A7C15);
+    // ---------------------------------------------------------- W16 fiber lane
+    // `.cell io.pool` + `--vm` runs the SAME task as a green thread on the
+    // VM loop instead of an OS thread. The snapshot membrane, capability
+    // inheritance, shared fuel pool, live medium, RNG derivation and cancel
+    // chain are byte-identical to the thread path (the same prep code ran
+    // above); only the execution substrate differs. The sequential oracle
+    // mirrors this lane inline (children are born finished there), so the
+    // differential corpus stays byte-identical.
+    if crate::asyncrt::fiber_mode(interp) {
+        let mut ti = Interp::new();
+        ti.cancel_chain = worker_chain;
+        ti.fuel_pool = host_fuel;
+        ti.medium = host_medium;
+        ti.rng = task_seed;
+        ti.vm = interp.vm;
+        ti.vm_opt = interp.vm_opt;
+        ti.vm_program = interp.vm_program.clone();
+        ti.caps = host_caps; // worker cells inherit the host's grants
+        ti.file = interp.file.clone();
+        ti.fiber_task_id = id;
+        ti.io_pool = true; // nested spawns stay on the fiber substrate
+        let genv = Env::new(None);
+        bind_snapshot(&genv, &snap);
+        bind_regulation(&mut ti, &rsnap);
+        ti.global = genv.clone();
+        let conv_args: Vec<Value> = send_args.iter().map(|a| arg_from_snap(a, &snap)).collect();
+        let handle = crate::asyncrt::launch(crate::asyncrt::FiberParts {
+            name: task_name.clone(),
+            interp: ti,
+            entry: crate::asyncrt::FiberEntry {
+                genv,
+                task_name: task_name.clone(),
+                args: conv_args,
+            },
+            cancel: cancel_flag.clone(),
+        });
+        interp.fiber_tasks.insert(id, handle);
+        // W17: a spawn inside an active scope block registers on the
+        // innermost scope; the block reaps it at exit (the join below
+        // handles the fiber registry).
+        if let Some(top) = interp.scope_stack.last_mut() {
+            top.push(id);
+        }
+        return Ok(Value::Int(id));
+    }
     spawn_worker(move || {
         let mut ti = Interp::new();
         ti.cancel_chain = worker_chain;
@@ -2045,6 +2090,21 @@ pub fn cancel_task(interp: &mut Interp, args: Vec<Value>) -> Result<Value, Stres
         interp.note(0, 4, "cancel() needs a task id");
         return Ok(Value::Bool(false));
     }
+    if let Some(handle) = interp.fiber_tasks.get(&id) {
+        // W16 fiber lane: same contract as the thread lane — the flag is
+        // observed at the fiber's wake/tick boundaries, nothing preempted.
+        let flag = handle.cancel.clone();
+        let phase_cell = handle.state.clone();
+        let mut phase = phase_cell.lock().unwrap_or_else(|e| e.into_inner());
+        if *phase == crate::interp::TaskState::Running {
+            flag.store(true, Ordering::Relaxed);
+            *phase = crate::interp::TaskState::Cancelled;
+            interp.note(0, 4, format!("cancel requested for task {}", id));
+            return Ok(Value::Bool(true));
+        }
+        interp.note(0, 4, format!("task {} already finished", id));
+        return Ok(Value::Bool(false));
+    }
     if let Some(handle) = interp.tasks.get(&id) {
         let flag = handle.cancel.clone();
         let phase_cell = handle.state.clone();
@@ -2081,6 +2141,11 @@ pub fn task_state_of(interp: &mut Interp, args: Vec<Value>) -> Result<Value, Str
     if id < 0 {
         interp.note(0, 4, "task_state() needs a task id");
         return Ok(Value::Null);
+    }
+    if let Some(handle) = interp.fiber_tasks.get(&id) {
+        let phase_cell = handle.state.clone();
+        let phase = *phase_cell.lock().unwrap_or_else(|e| e.into_inner());
+        return Ok(Value::Str(phase.as_str().into()));
     }
     if let Some(handle) = interp.tasks.get(&id) {
         let phase_cell = handle.state.clone();
@@ -2152,6 +2217,12 @@ pub fn wait_any_task(interp: &mut Interp, args: Vec<Value>) -> Result<Value, Str
             let done = if let Some(h) = interp.tasks.get(id) {
                 let phase = *h.state.lock().unwrap_or_else(|e| e.into_inner());
                 phase != crate::interp::TaskState::Running
+            } else if let Some(fh) = interp.fiber_tasks.get(id) {
+                // W16: the fiber's completion OUTCOME is the signal (the
+                // phase flips early on cancel); pump so fibers progress
+                // while wait_any polls
+                crate::asyncrt::pump_step();
+                fh.done.lock().unwrap_or_else(|e| e.into_inner()).is_some()
             } else {
                 interp.task_tombstones.contains_key(id)
             };
@@ -2159,6 +2230,7 @@ pub fn wait_any_task(interp: &mut Interp, args: Vec<Value>) -> Result<Value, Str
                 return Ok(Value::Int(*id));
             }
         }
+        crate::asyncrt::pump_step();
         if std::time::Instant::now() >= deadline {
             interp.note(
                 0,
@@ -2180,6 +2252,63 @@ pub fn join_task(interp: &mut Interp, id: i64, timeout_ms: Option<u64>) -> Resul
         interp.note(0, 4, "join() needs a task id");
         return Ok(Value::Null);
     }
+    // -------------------------------------------------------- W16 fiber join
+    // The fiber lane joins through the scheduler pump: run ready fibers
+    // (deterministically, FIFO) until THIS fiber's completion outcome lands
+    // — the outcome, not the phase, is the join signal (cancel() flips the
+    // phase immediately; the outcome lands when the body actually exits).
+    // Timeouts keep the fiber joinable, exactly like the thread lane.
+    if let Some(h) = interp.fiber_tasks.remove(&id) {
+        let ceiling = timeout_ms.unwrap_or(300_000).min(600_000);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(ceiling);
+        if !crate::asyncrt::pump_until_done(&h.done, Some(deadline)) {
+            interp.note(
+                0,
+                4,
+                format!("join timeout ({} ms) on task {}", ceiling, id),
+            );
+            interp.fiber_tasks.insert(id, h); // keep the task joinable later
+            return Ok(Value::Null);
+        }
+        let outcome = h.done.lock().unwrap_or_else(|e| e.into_inner()).take();
+        match outcome {
+            Some(o) => {
+                for n in o.notes {
+                    interp.notes.push(n);
+                }
+                let phase = match &o.value {
+                    SendValue::Stress(k, _) if k == "cancelled" => {
+                        crate::interp::TaskState::Cancelled
+                    }
+                    _ => crate::interp::TaskState::Done,
+                };
+                interp.task_tombstones.insert(id, phase);
+                Ok(from_send(o.value))
+            }
+            None => {
+                // phase left Running with no outcome (defensive: cannot
+                // happen — the pump publishes both together)
+                interp.note(0, 4, format!("task {} channel closed", id));
+                interp
+                    .task_tombstones
+                    .insert(id, crate::interp::TaskState::Done);
+                Ok(Value::Null)
+            }
+        }
+    } else {
+        join_thread_task(interp, id, timeout_ms)
+    }
+}
+
+/// The thread lane of join (the pre-W16 body, unchanged): block on the
+/// worker's channel with the documented ceilings. Fibers (if any) are
+/// pumped between slice waits so an async run stays live while a thread
+/// join blocks.
+fn join_thread_task(
+    interp: &mut Interp,
+    id: i64,
+    timeout_ms: Option<u64>,
+) -> Result<Value, Stress> {
     let handle = match interp.tasks.remove(&id) {
         Some(h) => h,
         None => {
