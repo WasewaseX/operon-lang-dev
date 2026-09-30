@@ -15,7 +15,11 @@ BIN="${BIN:-./bin/operon}"
 # serially the reverse. Both messages are legitimate containment outcomes;
 # redteam.sh owns these payloads' contracts. Verified empirically 2026-09-30
 # (each engine serially x3: identical 'thread cap' line every time).
-LOAD_SENSITIVE="tests/redteam/rt_p4a_threadbomb.op tests/redteam/rt_p4b_threadbomb_join.op"
+# Load-sensitive redteam payloads: cap-trip / cancel order is scheduler-
+# dependent (containment itself is deterministic; verified x3 x3 engines
+# serially). Same documented class as rt_p4a/rt_p4b; rt_p20a joined after
+# a 5-run flake measurement (1/5 divergent note ordering, 5/5 contained).
+LOAD_SENSITIVE="tests/redteam/rt_p4a_threadbomb.op tests/redteam/rt_p4b_threadbomb_join.op tests/redteam/rt_p20a_cancel_storm.op"
 pass=0; fail=0; lskip=0; failed_files=()
 for f in $(find tests apps -name '*.op' 2>/dev/null | sort); do
   skip=""

@@ -120,6 +120,12 @@ pub struct Manifest {
     pub name: String,
     pub version: String,
     pub operon_version: String,
+    /// W21-r1: default registry source for this project (a registry file
+    /// path or an http(s):// index URL). Empty = the chain resolves it:
+    /// OPERON_REGISTRY env, then this field, then the bundled seed index.
+    pub registry: String,
+    /// One-line human description (publish uses it; parse-only otherwise).
+    pub description: String,
     /// insertion-ordered; resolution sorts by name for determinism
     pub deps: Vec<(String, DepSpec)>,
 }
@@ -127,6 +133,11 @@ pub struct Manifest {
 impl Manifest {
     pub fn find_dep(&self, name: &str) -> Option<&DepSpec> {
         self.deps.iter().find(|(n, _)| n == name).map(|(_, d)| d)
+    }
+
+    /// W20-r1: true when the manifest declares any dependency at all.
+    pub fn has_deps(&self) -> bool {
+        !self.deps.is_empty()
     }
 }
 
@@ -161,6 +172,8 @@ pub fn parse_manifest(src: &str) -> Result<Manifest, String> {
             ("package", "name") => m.name = unquote(&val)?,
             ("package", "version") => m.version = unquote(&val)?,
             ("package", "operon-version") => m.operon_version = unquote(&val)?,
+            ("registry", "path") => m.registry = unquote(&val)?,
+            ("package", "description") => m.description = unquote(&val)?,
             ("deps", dep) => {
                 let dep = dep.to_string();
                 let git = extract_field(&val, "git", idx)?;
@@ -249,6 +262,13 @@ pub fn emit_manifest(m: &Manifest) -> String {
         out.push_str(&format!("operon-version = \"{}\"\n", m.operon_version));
     }
     out.push('\n');
+    if !m.description.is_empty() {
+        out.push_str(&format!("description = \"{}\"\n", m.description));
+    }
+    if !m.registry.is_empty() {
+        out.push_str("[registry]\n");
+        out.push_str(&format!("path = \"{}\"\n\n", m.registry));
+    }
     if !m.deps.is_empty() {
         out.push_str("[deps]\n");
         let mut sorted = m.deps.clone();
@@ -400,6 +420,10 @@ pub struct RegistryEntry {
     pub rev: String,
     pub sha256: String,
     pub description: String,
+    /// W21-r1: a directory source (the seed registry and local dev
+    /// registries publish "dir" lines; the package tree is copied into
+    /// the vendored cache instead of a git clone). Empty = git-sourced.
+    pub dir: String,
 }
 
 /// Pull one `"key": "value"` string pair out of a flat JSON object line.
@@ -482,6 +506,7 @@ pub fn parse_registry(src: &str) -> Result<Vec<RegistryEntry>, String> {
         let version = json_line_get(line, "version").unwrap_or_default();
         let sha256 = json_line_get(line, "sha256").unwrap_or_default();
         let description = json_line_get(line, "description").unwrap_or_default();
+        let dir = json_line_get(line, "dir").unwrap_or_default();
         out.push(RegistryEntry {
             name,
             version,
@@ -489,38 +514,24 @@ pub fn parse_registry(src: &str) -> Result<Vec<RegistryEntry>, String> {
             rev,
             sha256,
             description,
+            dir,
         });
     }
     Ok(out)
 }
 
-/// Resolve `name` against a registry file. The LAST matching line wins
-/// (append-only convention: republished versions land later in the file).
-fn registry_lookup(path: &str, name: &str) -> RegistryEntry {
-    let src = std::fs::read_to_string(path)
-        .unwrap_or_else(|e| die_pkg(&format!("cannot read registry '{}': {}", path, e)));
-    let entries = parse_registry(&src).unwrap_or_else(|e| die_pkg(&e));
+/// Lookup over already-read registry text (URL registries are fetched
+/// once per command, then parsed here). Same last-match-wins rule.
+fn registry_lookup_text(text: &str, name: &str, src_label: &str) -> RegistryEntry {
+    let entries = parse_registry(text).unwrap_or_else(|e| die_pkg(&e));
     let hits: Vec<&RegistryEntry> = entries.iter().filter(|e| e.name == name).collect();
     match hits.last() {
         Some(e) => (*e).clone(),
-        None => die_pkg(&format!("'{}' not in registry '{}'", name, path)),
+        None => die_pkg(&format!(
+            "'{}' not in registry '{}' (searched with `operon add {}`)",
+            name, src_label, name
+        )),
     }
-}
-
-/// Pull the `--registry FILE` flag out of a flag list (shared by publish).
-fn registry_path_from(rest: &[String], start: usize) -> (String, usize) {
-    let mut i = start;
-    while i < rest.len() {
-        if rest[i] == "--registry" {
-            let p = rest
-                .get(i + 1)
-                .cloned()
-                .unwrap_or_else(|| die_pkg("--registry needs a file path"));
-            return (p, i);
-        }
-        i += 1;
-    }
-    die_pkg("this subcommand needs --registry FILE (the static git index)");
 }
 
 /// Shallow-clone `url` at `rev` (or HEAD when None) into `dest`; returns the
@@ -638,7 +649,13 @@ fn read_or_new_lock() -> BTreeMap<String, LockEntry> {
 
 /// Resolve `name` at `spec` into the vendored cache; returns the LockEntry.
 /// Deterministic: same rev + same bytes → same cache dir + same checksum.
+/// Two source classes: `git URL` (clone, shallow, rev-pinned) and
+/// `registry:NAME` (the W21-r1 registry chain; dir-sourced seed packages
+/// copy into the cache, git-sourced entries clone exactly as before).
 fn resolve_dep(name: &str, spec: &DepSpec) -> LockEntry {
+    if let Some(reg_name) = spec.git.strip_prefix("registry:") {
+        return resolve_registry_dep(name, reg_name, spec.rev.as_deref());
+    }
     let tmp = deps_cache_dir()
         .unwrap_or_else(|| die_pkg("cannot locate the deps cache (set HOME or OPERON_DEPS)"))
         .join("tmp-checkout");
@@ -658,6 +675,138 @@ fn resolve_dep(name: &str, spec: &DepSpec) -> LockEntry {
         git: spec.git.clone(),
         rev,
         checksum,
+    }
+}
+
+/// Resolve a dep through the registry chain. When `pinned` is set (every
+/// lockfile-driven path), the registry MUST still carry that rev — a
+/// registry that moved on is a hard error, never a silent re-resolve
+/// (W23: the lockfile is the reproducibility contract, not a suggestion).
+fn resolve_registry_dep(name: &str, reg_name: &str, pinned: Option<&str>) -> LockEntry {
+    let src = registry_source(None);
+    let text = registry_read(&src);
+    let entries = parse_registry(&text).unwrap_or_else(|e| die_pkg(&e));
+    let hits: Vec<&RegistryEntry> = entries.iter().filter(|e| e.name == reg_name).collect();
+    if hits.is_empty() {
+        die_pkg(&format!(
+            "'{}' not in registry '{}' (operon add {} would fail the same way)",
+            reg_name, src, reg_name
+        ));
+    }
+    let entry = match pinned {
+        Some(p) => hits
+            .iter()
+            .rev()
+            .find(|e| e.rev == p || e.rev.starts_with(p))
+            .copied()
+            .unwrap_or_else(|| {
+                die_pkg(&format!(
+                    "registry '{}' no longer carries '{}' at rev {} (it moved on; run `operon update` to re-resolve, or restore the registry line)",
+                    src, reg_name, p
+                ))
+            }),
+        None => hits.last().copied().unwrap(),
+    };
+    // SECURITY (deny-by-default): a dir-sourced entry is a LOCAL-registry
+    // feature. Honoring a remote index's `dir` field would let a remote
+    // registry direct this machine to copy arbitrary local directories
+    // into the dep cache — a remote-controlled file copy. Remote
+    // registries publish git URLs, period.
+    if !entry.dir.is_empty() && (src.starts_with("http://") || src.starts_with("https://")) {
+        die_pkg(&format!(
+            "registry '{}' is remote but its entry for '{}' is dir-sourced; remote registries publish git URLs only (dir sources are a local-registry feature)",
+            src, reg_name
+        ));
+    }
+    let mut out = if entry.dir.is_empty() {
+        resolve_dep(
+            name,
+            &DepSpec {
+                git: entry.git.clone(),
+                rev: Some(entry.rev.clone()),
+            },
+        )
+    } else {
+        let d = std::path::PathBuf::from(&entry.dir);
+        if !d.is_dir() {
+            die_pkg(&format!(
+                "registry entry '{}' points at directory '{}' which is missing (re-materialize the registry or fix the index line)",
+                reg_name,
+                d.display()
+            ));
+        }
+        resolve_dir_dep(name, &d)
+    };
+    if !entry.sha256.is_empty() && out.checksum != entry.sha256 {
+        die_pkg(&format!(
+            "checksum mismatch for '{}' (registry published {}, vendored {}): the index and the package tree disagree, refusing to lock",
+            name, entry.sha256, out.checksum
+        ));
+    }
+    // the lock records WHERE the dep came from (registry:NAME), keeping
+    // the lockfile byte-stable across machines; rev+checksum pin the bytes
+    out.git = format!("registry:{}", reg_name);
+    out
+}
+
+/// Resolve a directory-sourced package (seed registry, local dev
+/// registries): copy the tree into the vendored cache. The rev IS the
+/// content: `content-` + first 16 hex of the checksum, so the same bytes
+/// always land in the same cache dir on every machine. The copy is
+/// verified by re-checksumming the destination.
+fn resolve_dir_dep(name: &str, dir: &Path) -> LockEntry {
+    let checksum = checkout_checksum(dir);
+    let rev = format!("content-{}", &checksum[..checksum.len().min(16)]);
+    let dest = cache_dir_for(name, &rev).unwrap_or_else(|| die_pkg("cannot locate the deps cache"));
+    let _ = std::fs::remove_dir_all(&dest);
+    if let Some(parent) = dest.parent() {
+        std::fs::create_dir_all(parent)
+            .unwrap_or_else(|e| die_pkg(&format!("cache mkdir failed: {}", e)));
+    }
+    copy_tree(dir, &dest).unwrap_or_else(|e| die_pkg(&format!("cache copy failed: {}", e)));
+    let got = checkout_checksum(&dest);
+    if got != checksum {
+        die_pkg(&format!(
+            "vendored copy of '{}' does not match its source ({} != {}): refusing to lock",
+            name, got, checksum
+        ));
+    }
+    LockEntry {
+        name: name.to_string(),
+        git: format!("registry:{}", name),
+        rev,
+        checksum: got,
+    }
+}
+
+/// Recursively copy a package tree (files + dirs, `.git` skipped). Used
+/// by the dir-source resolution path; byte-exact by construction (the
+/// caller re-checksums the destination).
+fn copy_tree(src: &Path, dst: &Path) -> Result<(), String> {
+    if src.is_dir() {
+        std::fs::create_dir_all(dst).map_err(|e| format!("mkdir {}: {}", dst.display(), e))?;
+        let entries =
+            std::fs::read_dir(src).map_err(|e| format!("readdir {}: {}", src.display(), e))?;
+        for entry in entries {
+            let entry = entry.map_err(|e| format!("dir entry: {}", e))?;
+            let name = entry.file_name();
+            let name = name.to_string_lossy().to_string();
+            if name == ".git" || name == ".gitignore" {
+                continue;
+            }
+            let s = src.join(&name);
+            let d = dst.join(&name);
+            if s.is_dir() {
+                copy_tree(&s, &d)?;
+            } else {
+                std::fs::copy(&s, &d).map_err(|e| format!("copy {}: {}", s.display(), e))?;
+            }
+        }
+        Ok(())
+    } else {
+        std::fs::copy(src, dst)
+            .map(|_| ())
+            .map_err(|e| format!("copy {}: {}", src.display(), e))
     }
 }
 
@@ -768,6 +917,8 @@ pub fn mod_command(rest: &[String]) -> ! {
                 name: name.clone(),
                 version: "0.1.0".to_string(),
                 operon_version: env!("CARGO_PKG_VERSION").to_string(),
+                registry: String::new(),
+                description: String::new(),
                 deps: Vec::new(),
             };
             write_manifest(&m);
@@ -796,29 +947,47 @@ pub fn mod_command(rest: &[String]) -> ! {
             let url;
             let mut name;
             let mut rev: Option<String> = None;
-            if let Some(rp) = &reg_path {
-                let entry = registry_lookup(rp, &target);
-                name = entry.name.clone();
-                url = entry.git.clone();
-                rev = Some(entry.rev.clone());
-                if !entry.sha256.is_empty() {
+            {
+                // W21-r1: `add NAME` resolves through the registry chain
+                // (explicit --registry, OPERON_REGISTRY, the manifest's
+                // [registry] path, then the bundled seed index). A bare
+                // git URL is still accepted: anything that is not a
+                // legal package name is treated as a URL.
+                let looks_like_name = valid_pkg_name(&target)
+                    && !target.contains('/')
+                    && !target.contains(':')
+                    && !target.contains('.');
+                if looks_like_name || reg_path.is_some() {
+                    let src = registry_source(reg_path.as_deref());
+                    let text = registry_read(&src);
+                    let entry = registry_lookup_text(&text, &target, &src);
+                    name = entry.name.clone();
+                    url = format!("registry:{}", entry.name);
+                    rev = Some(entry.rev.clone());
+                    let source_note = if entry.dir.is_empty() {
+                        "git"
+                    } else {
+                        "dir"
+                    };
                     println!(
-                        "resolved '{}' {} via registry (checksum {})",
+                        "resolved '{}' {} via registry {} ({} source, checksum {})",
                         name,
                         entry.version,
+                        src,
+                        source_note,
                         &entry.sha256[..entry.sha256.len().min(12)]
                     );
+                } else {
+                    // name: derived from the URL's basename, or --as NAME
+                    name = target
+                        .trim_end_matches('/')
+                        .rsplit('/')
+                        .next()
+                        .unwrap_or("dep")
+                        .trim_end_matches(".git")
+                        .to_string();
+                    url = target.clone();
                 }
-            } else {
-                // name: derived from the URL's basename, or --as NAME
-                name = target
-                    .trim_end_matches('/')
-                    .rsplit('/')
-                    .next()
-                    .unwrap_or("dep")
-                    .trim_end_matches(".git")
-                    .to_string();
-                url = target.clone();
             }
             let mut i = 2;
             while i < rest.len() {
@@ -918,9 +1087,47 @@ pub fn mod_command(rest: &[String]) -> ! {
         "publish" => {
             // W21: append this package to a static registry file as one
             // JSON line. Requires: a git repo (for the HEAD rev), a git
-            // URL (--url or the 'origin' remote), and --registry FILE.
+            // URL (--url or the 'origin' remote), and a WRITABLE registry
+            // target (--registry FILE, OPERON_REGISTRY, or the manifest's
+            // [registry] path — the bundled seed index is not publishable,
+            // it is rebuilt from embedded bytes on toolchain upgrade, and
+            // a remote index URL has no append semantics over HTTP).
             let m = read_manifest();
-            let (reg_path, _) = registry_path_from(rest, 1);
+            let mut reg_path: Option<String> = None;
+            {
+                let mut i = 1;
+                while i < rest.len() {
+                    if rest[i] == "--registry" {
+                        reg_path = Some(
+                            rest.get(i + 1)
+                                .cloned()
+                                .unwrap_or_else(|| die_pkg("--registry needs a file path")),
+                        );
+                    }
+                    i += 1;
+                }
+            }
+            let reg_path = match reg_path {
+                Some(r) => r,
+                None => {
+                    let env_reg =
+                        std::env::var("OPERON_REGISTRY").ok().filter(|s| !s.trim().is_empty());
+                    let man_reg = manifest_in(Path::new("."))
+                        .map(|mm| mm.registry)
+                        .filter(|s| !s.is_empty());
+                    match env_reg.or(man_reg) {
+                        Some(s) => s,
+                        None => die_pkg(
+                            "publish needs --registry FILE, OPERON_REGISTRY, or [registry] path in operon.toml (the bundled seed index is not publishable)",
+                        ),
+                    }
+                }
+            };
+            if reg_path.starts_with("http://") || reg_path.starts_with("https://") {
+                die_pkg(
+                    "publish cannot append to a remote index URL — point --registry at a writable checkout of the registry file (git is the transport)",
+                );
+            }
             let mut url: Option<String> = None;
             let mut desc = String::new();
             let mut i = 1;
@@ -1091,4 +1298,603 @@ fn print_tree(
 pub fn check_locked_manifest() {
     let m = read_manifest();
     check_locked(&m);
+}
+
+// ------------------------------------------------------- W21-r1: the chain
+
+/// The seed package table: embedded at compile time, materialized under
+/// the registry home on first use. Embedded strings mean `operon add
+/// http` works offline on a fresh machine with zero network — the
+/// mainstream first-run experience, byte-identical everywhere.
+struct SeedPkg {
+    name: &'static str,
+    version: &'static str,
+    description: &'static str,
+    files: &'static [(&'static str, &'static str)],
+}
+
+const SEED_PACKAGES: &[SeedPkg] = &[
+    SeedPkg {
+        name: "http",
+        version: "0.1.0",
+        description: "HTTP envelope toolkit: request/response, headers, query, cookies, URL join",
+        files: &[
+            (
+                "operon.toml",
+                include_str!("../registry/packages/http/operon.toml"),
+            ),
+            ("http.op", include_str!("../registry/packages/http/http.op")),
+            (
+                "test_http.op",
+                include_str!("../registry/packages/http/test_http.op"),
+            ),
+        ],
+    },
+    SeedPkg {
+        name: "json",
+        version: "0.1.0",
+        description:
+            "JSON toolkit: canonical form, RFC 6901 pointers, schema-lite, JSON Lines, diff",
+        files: &[
+            (
+                "operon.toml",
+                include_str!("../registry/packages/json/operon.toml"),
+            ),
+            ("json.op", include_str!("../registry/packages/json/json.op")),
+            (
+                "test_json.op",
+                include_str!("../registry/packages/json/test_json.op"),
+            ),
+        ],
+    },
+    SeedPkg {
+        name: "postgres",
+        version: "0.1.0",
+        description:
+            "PostgreSQL text layer: DSN parse/build, quoting, placeholders, arrays, LIMIT guard",
+        files: &[
+            (
+                "operon.toml",
+                include_str!("../registry/packages/postgres/operon.toml"),
+            ),
+            (
+                "postgres.op",
+                include_str!("../registry/packages/postgres/postgres.op"),
+            ),
+            (
+                "test_postgres.op",
+                include_str!("../registry/packages/postgres/test_postgres.op"),
+            ),
+        ],
+    },
+    SeedPkg {
+        name: "web",
+        version: "0.1.0",
+        description: "Routing layer: :param/*splat router, request envelopes, forms, responses",
+        files: &[
+            (
+                "operon.toml",
+                include_str!("../registry/packages/web/operon.toml"),
+            ),
+            ("web.op", include_str!("../registry/packages/web/web.op")),
+            (
+                "test_web.op",
+                include_str!("../registry/packages/web/test_web.op"),
+            ),
+        ],
+    },
+];
+
+/// Digest over the whole embedded seed table (names + every file's
+/// bytes, in table order). The registry marker stores this: when the
+/// toolchain's seed changes, the digest changes, the fast path misses,
+/// and the registry rebuilds from the new embedded bytes.
+fn seed_digest() -> String {
+    let mut buf: Vec<u8> = Vec::new();
+    for pkg in SEED_PACKAGES {
+        buf.extend_from_slice(pkg.name.as_bytes());
+        buf.extend_from_slice(pkg.version.as_bytes());
+        buf.extend_from_slice(pkg.description.as_bytes());
+        for (n, b) in pkg.files {
+            buf.extend_from_slice(n.as_bytes());
+            buf.extend_from_slice(b.as_bytes());
+        }
+    }
+    sha256_hex(&buf)
+}
+
+/// The registry home: `OPERON_REGISTRY_HOME` or `~/.operon/registry`.
+pub fn registry_home() -> Option<PathBuf> {
+    if let Ok(d) = std::env::var("OPERON_REGISTRY_HOME") {
+        if !d.is_empty() {
+            return Some(PathBuf::from(d));
+        }
+    }
+    std::env::var("HOME")
+        .ok()
+        .map(|h| PathBuf::from(h).join(".operon").join("registry"))
+}
+
+/// Materialize the bundled seed registry (idempotent, self-verifying).
+/// Returns the index path. The packages/ tree is rebuilt whenever the
+/// marker does not match the current binary's seed content, so `operon
+/// add http` after an upgrade serves the NEW http, never a stale copy.
+fn materialize_seed() -> String {
+    let home = registry_home().unwrap_or_else(|| {
+        die_pkg("cannot locate the registry home (set HOME or OPERON_REGISTRY_HOME)")
+    });
+    let index = home.join("index.jsonl");
+    let marker = home.join("seed.sha256");
+    // fast path: already materialized AND the marker matches THIS binary's
+    // embedded seed content (a toolchain upgrade rebuilds; stale packages
+    // are never served after an upgrade)
+    if index.is_file() && marker.is_file() {
+        if let Ok(want) = std::fs::read_to_string(&marker) {
+            if want.trim() == seed_digest() {
+                let mut fresh = true;
+                for pkg in SEED_PACKAGES {
+                    let dir = home.join("packages").join(pkg.name);
+                    if !dir.is_dir() || checkout_checksum(&dir).is_empty() {
+                        fresh = false;
+                        break;
+                    }
+                }
+                if fresh {
+                    return index.to_string_lossy().to_string();
+                }
+            }
+        }
+    }
+    // rebuild: packages from embedded bytes, index from the written bytes
+    std::fs::create_dir_all(home.join("packages"))
+        .unwrap_or_else(|e| die_pkg(&format!("registry mkdir failed: {}", e)));
+    let mut lines = vec![
+        "# operon seed registry (W21-r1).".to_string(),
+        "# Materialized from the toolchain's embedded packages on first use;".to_string(),
+        "# every line pins rev + sha256 and a dir source under packages/.".to_string(),
+        "# Append your own lines (or point OPERON_REGISTRY at your own index)".to_string(),
+        "# to grow beyond the seed. LAST matching line for a name wins.".to_string(),
+    ];
+    for pkg in SEED_PACKAGES {
+        let dir = home.join("packages").join(pkg.name);
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir)
+            .unwrap_or_else(|e| die_pkg(&format!("package mkdir failed: {}", e)));
+        for (name, body) in pkg.files {
+            std::fs::write(dir.join(name), body)
+                .unwrap_or_else(|e| die_pkg(&format!("seed write {} failed: {}", name, e)));
+        }
+        let sha = checkout_checksum(&dir);
+        lines.push(format!(
+            "{{\"name\": \"{}\", \"version\": \"{}\", \"git\": \"seed:{}\", \"rev\": \"content-{}\", \"sha256\": \"{}\", \"dir\": \"{}\", \"description\": \"{}\"}}",
+            pkg.name,
+            pkg.version,
+            pkg.name,
+            &sha[..sha.len().min(16)],
+            sha,
+            json_escape(&dir.to_string_lossy()),
+            json_escape(pkg.description),
+        ));
+    }
+    let body = lines.join("\n") + "\n";
+    std::fs::write(&index, &body)
+        .unwrap_or_else(|e| die_pkg(&format!("index write failed: {}", e)));
+    // the marker records the digest of the embedded seed content: the
+    // next binary with different seed bytes rebuilds the registry
+    let _ = std::fs::write(&marker, seed_digest());
+    index.to_string_lossy().to_string()
+}
+
+/// The registry resolution chain (W21-r1). Order: explicit --registry,
+/// OPERON_REGISTRY env, the project manifest's [registry] path, and
+/// finally the bundled seed index (materialized on first use). The first
+/// source that is SET wins — a project can pin its own registry even
+/// when the env var is exported, by... no: env beats manifest (an
+/// explicit machine-level override should win over a checked-in file),
+/// explicit beats both.
+fn registry_source(explicit: Option<&str>) -> String {
+    if let Some(e) = explicit {
+        if !e.is_empty() {
+            return e.to_string();
+        }
+    }
+    if let Ok(v) = std::env::var("OPERON_REGISTRY") {
+        if !v.trim().is_empty() {
+            return v.trim().to_string();
+        }
+    }
+    if let Some(m) = manifest_in(Path::new(".")) {
+        if !m.registry.is_empty() {
+            return m.registry;
+        }
+    }
+    materialize_seed()
+}
+
+/// Read a registry source: a local file path, or an http(s):// index
+/// fetched with curl (the same trust class as the git CLI this toolchain
+/// already shells out to; see docs/REGISTRY.md §5 for the threat note).
+fn registry_read(src: &str) -> String {
+    if src.starts_with("http://") || src.starts_with("https://") {
+        let out = std::process::Command::new("curl")
+            .args(["-sSL", "--max-time", "30", src])
+            .output();
+        return match out {
+            Ok(o) if o.status.success() => {
+                let body = String::from_utf8_lossy(&o.stdout).to_string();
+                if body.trim().is_empty() {
+                    die_pkg(&format!(
+                        "registry '{}': fetched an empty index (wrong URL? server down?)",
+                        src
+                    ));
+                }
+                body
+            }
+            Ok(o) => die_pkg(&format!(
+                "registry '{}': curl exited {} ({} bytes)",
+                src,
+                o.status,
+                o.stdout.len()
+            )),
+            Err(e) => die_pkg(&format!(
+                "registry '{}': curl unavailable ({}) — install curl or use a file registry",
+                src, e
+            )),
+        };
+    }
+    std::fs::read_to_string(src)
+        .unwrap_or_else(|e| die_pkg(&format!("cannot read registry '{}': {}", src, e)))
+}
+
+/// True when `name` is a legal package name (lowercase ident-ish: the
+/// same character class operon.toml's name field accepts).
+fn valid_pkg_name(name: &str) -> bool {
+    if name.is_empty() || name.len() > 64 {
+        return false;
+    }
+    let mut chars = name.chars();
+    if let Some(first) = chars.next() {
+        if !(first.is_ascii_lowercase() || first == '_') {
+            return false;
+        }
+    }
+    chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-')
+}
+
+// ------------------------------------------------------ W20-r1: operon new
+
+/// `operon new NAME [--lib] [--here]` — scaffold a project.
+///   default : operon.toml + src/main.op + tests/smoke.op (runs green)
+///   --lib   : operon.toml + src/NAME.op with a self-test proof frame
+///   --here  : scaffold into the current directory instead of NAME/
+pub fn new_command(rest: &[String]) -> ! {
+    let mut name: Option<String> = None;
+    let mut lib = false;
+    let mut here = false;
+    let mut i = 0;
+    while i < rest.len() {
+        match rest[i].as_str() {
+            "--lib" => lib = true,
+            "--here" => here = true,
+            other => {
+                if other.starts_with('-') {
+                    die_pkg(&format!(
+                        "unknown flag '{}' (new takes NAME, --lib, --here)",
+                        other
+                    ));
+                }
+                if name.is_some() {
+                    die_pkg("new takes exactly one NAME");
+                }
+                name = Some(other.to_string());
+            }
+        }
+        i += 1;
+    }
+    let name = match name {
+        Some(n) => n,
+        None => die_pkg("new needs a project name: operon new myapp"),
+    };
+    if !valid_pkg_name(&name) {
+        die_pkg(&format!(
+            "'{}' is not a valid package name (lowercase letters, digits, '-' and '_' only)",
+            name
+        ));
+    }
+    let root = if here {
+        PathBuf::from(".")
+    } else {
+        PathBuf::from(&name)
+    };
+    if !here && root.exists() {
+        die_pkg(&format!("'{}' already exists", name));
+    }
+    if root.join("operon.toml").exists() {
+        die_pkg("there is already an operon.toml here");
+    }
+    std::fs::create_dir_all(root.join("src"))
+        .unwrap_or_else(|e| die_pkg(&format!("mkdir failed: {}", e)));
+    if !lib {
+        std::fs::create_dir_all(root.join("tests"))
+            .unwrap_or_else(|e| die_pkg(&format!("mkdir failed: {}", e)));
+    }
+    let version = env!("CARGO_PKG_VERSION").to_string();
+    let mut toml = String::new();
+    toml.push_str(&format!(
+        "# {} — created by `operon new`\n\n[package]\nname = \"{}\"\nversion = \"0.1.0\"\noperon-version = \"{}\"\n\n[deps]\n",
+        name, name, version
+    ));
+    std::fs::write(root.join("operon.toml"), toml)
+        .unwrap_or_else(|e| die_pkg(&format!("write operon.toml failed: {}", e)));
+    let gene_prefix = name.replace('-', "_");
+    if lib {
+        let lib_src = format!(
+            "# {name} — library scaffolded by `operon new --lib`.\n# Consumers import it with `use {name}` (after this package is a dependency).\n\ngene {gp}_double(n) {{\n    return n * 2\n}}\n\nframe proof {{\n    assert({gp}_double(21) == 42, \"double\")\n    assert({gp}_double(0) == 0, \"zero\")\n}}\n",
+            name = name,
+            gp = gene_prefix
+        );
+        std::fs::write(root.join("src").join(format!("{}.op", name)), lib_src)
+            .unwrap_or_else(|e| die_pkg(&format!("write src failed: {}", e)));
+        println!("created {} (library)", name);
+    } else {
+        let main_src = format!(
+            "# {name} — scaffolded by `operon new`.\n# Run it:            operon run src/main.op\n# Run the tests:     operon test\n# Add a dependency:  operon add http        (then `use http` in your code)\n\ngene greet(who) {{\n    return \"hello, {r}\"\n}}\n\ngene main() {{\n    promote(greet(\"operon\"))\n}}\n",
+            name = name,
+            r = "{who}"
+        );
+        std::fs::write(root.join("src").join("main.op"), main_src)
+            .unwrap_or_else(|e| die_pkg(&format!("write src failed: {}", e)));
+        let smoke = "# smoke test — `operon test` runs every proof frame it finds.\nuse src/main\n\nframe proof {\n    assert(greet(\"operon\") == \"hello, operon\", \"greet\")\n    assert(greet(\"\") == \"hello, \", \"empty name is total\")\n}\n"
+            .to_string();
+        std::fs::write(root.join("tests").join("smoke.op"), smoke)
+            .unwrap_or_else(|e| die_pkg(&format!("write tests failed: {}", e)));
+        println!("created {} (application)", name);
+    }
+    println!("\nnext steps:");
+    if !here {
+        println!("  cd {}", name);
+    }
+    println!("  operon run src/main.op     # (applications)");
+    println!("  operon test                # run the smoke test");
+    println!("  operon add <package>       # pull a dependency from the registry");
+    // ast-grep-ignore: no-std-process-exit-in-core
+    std::process::exit(0);
+}
+
+// ------------------------------------------------- W21-r1: registry server
+
+/// `operon registry init DIR` — create an empty local registry: an index
+/// (JSON lines, comment-headed) plus a packages/ tree to publish into.
+fn registry_init(dir: &str) -> ! {
+    let root = PathBuf::from(dir);
+    if root.join("index.jsonl").exists() {
+        die_pkg(&format!("'{}' already has an index.jsonl", dir));
+    }
+    std::fs::create_dir_all(root.join("packages"))
+        .unwrap_or_else(|e| die_pkg(&format!("mkdir failed: {}", e)));
+    let index = "# my operon registry.\n# One JSON object per line:\n# {\"name\": \"beta\", \"version\": \"0.1.0\", \"git\": \"https://...\", \"rev\": \"...\", \"sha256\": \"...\", \"description\": \"...\"}\n# Dir-sourced packages add \"dir\": \"/abs/path/to/package-tree\" instead of a clone.\n# LAST matching line for a name wins (append-only by convention).\n";
+    std::fs::write(root.join("index.jsonl"), index)
+        .unwrap_or_else(|e| die_pkg(&format!("write index failed: {}", e)));
+    let readme = format!(
+        "# operon registry\n\nServe it:      operon registry serve {} --port 7331\nClients add:   OPERON_REGISTRY=http://127.0.0.1:7331/index.jsonl\n               operon add <package>\nPublish into it: operon publish --registry {}/index.jsonl\n",
+        dir, dir
+    );
+    std::fs::write(root.join("README.md"), readme)
+        .unwrap_or_else(|e| die_pkg(&format!("write README failed: {}", e)));
+    println!("created registry at {} (index.jsonl + packages/)", dir);
+    // ast-grep-ignore: no-std-process-exit-in-core
+    std::process::exit(0);
+}
+
+/// `operon registry serve DIR [--port N] [--host H]` — a read-only HTTP
+/// server over the registry directory. Serves exactly three route
+/// classes, nothing else, no listing, no dotfiles, no path traversal:
+///   GET /health        → "ok"
+///   GET /index.jsonl   → the index file
+///   GET /pkg/NAME/FILE → a file under DIR/packages/NAME/ (validated)
+/// deny-by-default is the whole security model: every request that is
+/// not one of these shapes gets a 404 before any path is opened.
+fn registry_serve(rest: &[String]) -> ! {
+    let mut dir = ".".to_string();
+    let mut port: u16 = 7331;
+    let mut host = "127.0.0.1".to_string();
+    let mut i = 0;
+    while i < rest.len() {
+        match rest[i].as_str() {
+            "--port" => {
+                i += 1;
+                port = rest
+                    .get(i)
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or_else(|| die_pkg("--port needs a number"));
+            }
+            "--host" => {
+                i += 1;
+                host = rest
+                    .get(i)
+                    .cloned()
+                    .unwrap_or_else(|| die_pkg("--host needs an address"));
+            }
+            other => {
+                if other.starts_with('-') {
+                    die_pkg(&format!("unknown flag '{}'", other));
+                }
+                dir = other.to_string();
+            }
+        }
+        i += 1;
+    }
+    let root = std::fs::canonicalize(PathBuf::from(&dir))
+        .unwrap_or_else(|e| die_pkg(&format!("cannot serve '{}': {}", dir, e)));
+    if !root.join("index.jsonl").is_file() {
+        die_pkg(&format!(
+            "'{}' has no index.jsonl (run `operon registry init {}` first)",
+            dir, dir
+        ));
+    }
+    let listener = std::net::TcpListener::bind((host.as_str(), port))
+        .unwrap_or_else(|e| die_pkg(&format!("cannot bind {}:{}: {}", host, port, e)));
+    println!("operon registry serving {}", root.display());
+    println!("  index:   http://{}:{}/index.jsonl", host, port);
+    println!("  health:  http://{}:{}/health", host, port);
+    println!(
+        "  clients: OPERON_REGISTRY=http://{}:{}/index.jsonl operon add <package>",
+        host, port
+    );
+    let root = std::sync::Arc::new(root);
+    for stream in listener.incoming() {
+        match stream {
+            Ok(s) => {
+                let root = std::sync::Arc::clone(&root);
+                std::thread::spawn(move || {
+                    serve_one(s, &root);
+                });
+            }
+            Err(_) => continue,
+        }
+    }
+    // ast-grep-ignore: no-std-process-exit-in-core
+    std::process::exit(0);
+}
+
+use std::io::{Read as IoRead, Write as IoWrite};
+
+/// One served connection. Bounded request head (16 KB), one response,
+/// close. Every file read goes through `serve_safe_path`.
+fn serve_one(mut stream: std::net::TcpStream, root: &Path) {
+    let mut buf: Vec<u8> = Vec::with_capacity(1024);
+    let mut chunk = [0u8; 1024];
+    loop {
+        match stream.read(&mut chunk) {
+            Ok(0) => break,
+            Ok(n) => {
+                buf.extend_from_slice(&chunk[..n]);
+                if buf.windows(4).any(|w| w == b"\r\n\r\n") || buf.len() > 16 * 1024 {
+                    break;
+                }
+            }
+            Err(_) => return,
+        }
+    }
+    let head = String::from_utf8_lossy(&buf);
+    let mut parts = head.split_whitespace();
+    let method = parts.next().unwrap_or("");
+    let path = parts.next().unwrap_or("");
+    let (status, ctype, body) = if method != "GET" {
+        (
+            "405 Method Not Allowed",
+            "text/plain",
+            b"method not allowed\n".to_vec(),
+        )
+    } else {
+        match route_registry(path, root) {
+            Some((ctype, body)) => ("200 OK", ctype, body),
+            None => ("404 Not Found", "text/plain", b"not found\n".to_vec()),
+        }
+    };
+    let resp = format!(
+        "HTTP/1.1 {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        status,
+        ctype,
+        body.len()
+    );
+    let _ = stream.write_all(resp.as_bytes());
+    let _ = stream.write_all(&body);
+    let _ = stream.flush();
+}
+
+/// Route a validated GET. Returns (content-type, body) or None.
+fn route_registry(path: &str, root: &Path) -> Option<(&'static str, Vec<u8>)> {
+    if path == "/health" {
+        return Some(("text/plain", b"ok\n".to_vec()));
+    }
+    if path == "/index.jsonl" {
+        let body = std::fs::read(root.join("index.jsonl")).ok()?;
+        return Some(("application/x-ndjson", body));
+    }
+    if let Some(rest) = path.strip_prefix("/pkg/") {
+        // /pkg/NAME/FILE… — every segment validated BEFORE any path is
+        // built: a traversal attempt never becomes a path, it becomes a 404.
+        let segs: Vec<&str> = rest.split('/').collect();
+        if segs.len() < 2 {
+            return None;
+        }
+        let name = segs[0];
+        if !valid_pkg_name(name) {
+            return None;
+        }
+        let mut target = root.join("packages").join(name);
+        for seg in &segs[1..] {
+            if seg.is_empty()
+                || *seg == "."
+                || *seg == ".."
+                || seg.contains('\\')
+                || seg.contains('%')
+            {
+                return None;
+            }
+            if seg.starts_with('.') {
+                return None; // no dotfiles, no dot-directories
+            }
+            target = target.join(seg);
+        }
+        let body = std::fs::read(&target).ok()?;
+        let ctype = if target.to_string_lossy().ends_with(".op")
+            || target.to_string_lossy().ends_with(".toml")
+        {
+            "text/plain; charset=utf-8"
+        } else {
+            "application/octet-stream"
+        };
+        return Some((ctype, body));
+    }
+    None
+}
+
+/// `operon registry init|serve|default` — the registry tooling group.
+pub fn registry_command(rest: &[String]) -> ! {
+    match rest.first().map(|s| s.as_str()) {
+        Some("init") => {
+            let dir = rest
+                .get(1)
+                .cloned()
+                .unwrap_or_else(|| die_pkg("registry init needs a directory"));
+            registry_init(&dir);
+        }
+        Some("serve") => registry_serve(&rest[1..]),
+        Some("default") => {
+            // DX probe: print the resolved chain without touching anything
+            let explicit = std::env::var("OPERON_REGISTRY")
+                .ok()
+                .filter(|s| !s.trim().is_empty());
+            match explicit {
+                Some(e) => {
+                    println!("OPERON_REGISTRY: {}", e);
+                }
+                None => {
+                    if let Some(m) = manifest_in(Path::new(".")) {
+                        if !m.registry.is_empty() {
+                            println!("operon.toml [registry]: {}", m.registry);
+                            // ast-grep-ignore: no-std-process-exit-in-core
+                            std::process::exit(0);
+                        }
+                    }
+                    println!("default: the bundled seed registry (materialized on first add)");
+                    if let Some(h) = registry_home() {
+                        println!("home:    {}", h.join("index.jsonl").display());
+                    }
+                    println!("seed packages:");
+                    for pkg in SEED_PACKAGES {
+                        println!("  {:<10} {} — {}", pkg.name, pkg.version, pkg.description);
+                    }
+                }
+            }
+            // ast-grep-ignore: no-std-process-exit-in-core
+            std::process::exit(0);
+        }
+        other => {
+            let _ = other;
+            die_pkg("registry needs a subcommand: init | serve | default");
+        }
+    }
 }

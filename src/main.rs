@@ -62,6 +62,24 @@ fn real_main() {
     if cmd == "mod" {
         pkg::mod_command(rest);
     }
+    // W20-r1: top-level package commands. The `mod` group stays the
+    // explicit spelling; these are the day-one verbs developers expect
+    // (operon new myapp, operon add http, operon publish ...).
+    if cmd == "new" {
+        pkg::new_command(rest);
+    }
+    if cmd == "registry" {
+        pkg::registry_command(rest);
+    }
+    match cmd.as_str() {
+        "init" | "add" | "remove" | "update" | "install" | "tree" | "verify" | "publish" => {
+            let mut full: Vec<String> = Vec::with_capacity(rest.len() + 1);
+            full.push(cmd.clone());
+            full.extend_from_slice(rest);
+            pkg::mod_command(&full);
+        }
+        _ => {}
+    }
 
     // extract flags
     let mut opts = Opts {
@@ -2656,9 +2674,12 @@ usage:
   operon keywords [--json]
   operon repl
   operon debug f.op --break N   # W08 phase 1: REPL on line breaks (c s q bt vars p EXPR)
-  operon mod init|add <url|name> [--registry f] [--rev r] [--as name]|remove <name>|update|install|tree|verify|publish
-                  # package system (operon.toml manifest + operon.lock; W19/W20/W23;
-                  # W21 static registry: add-by-name + publish, docs/specs/REGISTRY.md)
+  operon new NAME [--lib] [--here]   scaffold a project (operon.toml + src + a green smoke test)
+  operon add NAME        pull a dependency from the registry (env/manifest/seed chain, W21-r1)
+  operon remove|update|install|tree|verify|publish   the rest of the package verbs
+  operon registry init|serve|default   stand up a read-only HTTP registry (W21-r1)
+  operon mod ...         the same package verbs, explicit spelling (W19/W20/W23;
+                  operon.toml manifest + operon.lock; docs/specs/REGISTRY.md)
   operon build f.op [--variant v] [-o out.op] [--bundle] [--native]
                   # --bundle/--native refuse honestly (W87/W85 planned; build emits specialized source)
   operon rna f.op patch.rna [--write] [--check] [--json] [--allow-comment-drop]

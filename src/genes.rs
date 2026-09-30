@@ -905,6 +905,38 @@ fn resolve_path(interp: &Interp, path: &str) -> Result<String, String> {
     if traversal {
         return Err(unified_err(interp.caps.enabled && traversal));
     }
+    // W20-r1: a lockfile-aware hint turns the classic fresh-clone failure
+    // ("module 'http' not found") into the one-line fix. Two honest
+    // shapes: the dep is pinned but not installed (run `operon install`),
+    // or the dep IS installed but the module path inside it is wrong.
+    // The hint only fires for single/multi-segment names that actually
+    // match a lock entry — never for std or relative imports.
+    if !path.contains('.') {
+        let stem = path.trim_end_matches(".op");
+        let head = stem.split('/').next().unwrap_or("");
+        for (dep_name, dep_dir) in &interp.lock_dirs {
+            if *dep_name == head {
+                if !std::path::Path::new(dep_dir).is_dir() {
+                    return Err(format!(
+                        "module '{}' not found — dependency '{}' is pinned in operon.lock but not installed; run: operon install",
+                        path, head
+                    ));
+                }
+                let want = if stem.contains('/') {
+                    format!("{}.op", &stem[head.len() + 1..])
+                } else {
+                    format!("{}.op", head)
+                };
+                if !std::path::Path::new(dep_dir).join(&want).is_file() {
+                    return Err(format!(
+                        "module '{}' not found — dependency '{}' is installed but ships no '{}'",
+                        path, head, want
+                    ));
+                }
+                break;
+            }
+        }
+    }
     Err(format!(
         "module '{}' not found, tried: {}",
         path,

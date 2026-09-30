@@ -1,0 +1,396 @@
+# pkg postgres — the PostgreSQL text-layer toolkit (pure Operon).
+#
+# The deterministic, offline half of talking to a database: parse and
+# build connection URIs, quote identifiers and literals safely, escape
+# LIKE patterns, fill numbered placeholders with quoted values, encode
+# array literals, and coerce LIMIT/OFFSET candidates into safe integers.
+# The wire protocol and sockets live elsewhere (the sandbox denies
+# network by default); every string that ever reaches a server is built
+# HERE, where it can be tested byte-for-byte.
+#
+# Determinism contract: quoting is total (any value in, a safe SQL
+# literal out), DSN parsing is lenient (missing parts are empty strings,
+# never stresses), and placeholder filling is positional and exact.
+
+# ------------------------------------------------------------------ DSN
+
+## Parse postgres://user:pass@host:port/db?k=v into a flat map. Missing
+## pieces are "" / {} / the documented default (port 5432). A URI with no
+## scheme parses as a bare host (the psql fallback form).
+gene pg_dsn_parse(uri) {
+    let out = {user: "", password: "", host: "", port: 5432, database: "", params: {}}
+    let rest = uri
+    let scheme = pg_index_of(rest, "://")
+    if scheme >= 0 {
+        rest = rest.slice(scheme + 3, len(rest))
+    }
+    # params first (everything after the first "?")
+    let q = pg_index_of(rest, "?")
+    if q >= 0 {
+        out["params"] = pg_query_parse(rest.slice(q + 1, len(rest)))
+        rest = rest.slice(0, q)
+    }
+    # userinfo
+    let at = pg_index_of(rest, "@")
+    if at >= 0 {
+        let info = rest.slice(0, at)
+        rest = rest.slice(at + 1, len(rest))
+        let colon = pg_index_of(info, ":")
+        if colon >= 0 {
+            out["user"] = info.slice(0, colon)
+            out["password"] = info.slice(colon + 1, len(info))
+        } else {
+            out["user"] = info
+        }
+    }
+    # host:port/database
+    let slash = pg_index_of(rest, "/")
+    let hostpart = rest
+    if slash >= 0 {
+        hostpart = rest.slice(0, slash)
+        out["database"] = pg_uri_decode(rest.slice(slash + 1, len(rest)))
+    }
+    if pg_starts(hostpart, "[") {
+        # IPv6 literal form [::1]:5432
+        let close = pg_index_of(hostpart, "]")
+        if close > 0 {
+            out["host"] = hostpart.slice(1, close)
+            let cport = pg_index_of(hostpart, ":")
+            if close + 1 < len(hostpart) {
+                let p = pg_int_or(hostpart.slice(close + 2, len(hostpart)), 5432)
+                out["port"] = p
+            }
+        }
+    } else {
+        let colon = pg_rindex_of(hostpart, ":")
+        if colon >= 0 {
+            out["host"] = hostpart.slice(0, colon)
+            out["port"] = pg_int_or(hostpart.slice(colon + 1, len(hostpart)), 5432)
+        } else {
+            out["host"] = hostpart
+        }
+    }
+    return out
+}
+
+## Build a canonical URI from a DSN map (same shape pg_dsn_parse emits).
+## password is omitted when empty; params serialize in sorted key order.
+gene pg_dsn_build(dsn) {
+    let out = "postgresql://"
+    if len(dsn["user"]) > 0 {
+        out = out + pg_uri_encode(dsn["user"])
+        if len(dsn["password"]) > 0 {
+            out = out + ":" + pg_uri_encode(dsn["password"])
+        }
+        out = out + "@"
+    }
+    out = out + dsn["host"]
+    if dsn["port"] != 5432 {
+        out = out + ":" + str(dsn["port"])
+    }
+    if len(dsn["database"]) > 0 {
+        out = out + "/" + dsn["database"]
+    }
+    let params = dsn["params"]
+    if len(keys(params)) > 0 {
+        let ks = keys(params).sort()
+        let parts = []
+        for k in ks {
+            parts.push(pg_uri_encode(k) + "=" + pg_uri_encode(params[k]))
+        }
+        out = out + "?" + parts.join("&")
+    }
+    return out
+}
+
+gene pg_query_parse(qs) {
+    let m = {}
+    for pair in qs.split("&") {
+        if len(pair) == 0 {
+            continue
+        }
+        let eq = pg_index_of(pair, "=")
+        if eq < 0 {
+            m[pg_uri_decode(pair)] = ""
+            continue
+        }
+        m[pg_uri_decode(pair.slice(0, eq))] = pg_uri_decode(pair.slice(eq + 1, len(pair)))
+    }
+    return m
+}
+
+# ------------------------------------------------------------- primitives
+
+gene pg_index_of(s, needle) {
+    let nlen = len(needle)
+    let slen = len(s)
+    if nlen == 0 {
+        return 0
+    }
+    let i = 0
+    while i + nlen <= slen {
+        if s.slice(i, i + nlen) == needle {
+            return i
+        }
+        i = i + 1
+    }
+    return -1
+}
+
+gene pg_rindex_of(s, needle) {
+    let nlen = len(needle)
+    let slen = len(s)
+    if nlen == 0 {
+        return slen
+    }
+    let i = slen - nlen
+    while i >= 0 {
+        if s.slice(i, i + nlen) == needle {
+            return i
+        }
+        i = i - 1
+    }
+    return -1
+}
+
+gene pg_starts(s, prefix) {
+    if len(s) < len(prefix) {
+        return false
+    }
+    return s.slice(0, len(prefix)) == prefix
+}
+
+gene pg_is_digit(c) {
+    return c >= "0" and c <= "9"
+}
+
+gene pg_int_or(s, fallback) {
+    if len(s) == 0 {
+        return fallback
+    }
+    let i = 0
+    while i < len(s) {
+        if not pg_is_digit(s[i]) {
+            return fallback
+        }
+        i = i + 1
+    }
+    let v = 0
+    let j = 0
+    while j < len(s) {
+        v = v * 10 + (ord(s[j]) - 48)
+        j = j + 1
+    }
+    return v
+}
+
+gene pg_hex_digit(v) {
+    if v < 10 {
+        return chr(48 + v)
+    }
+    return chr(87 + v)
+}
+
+## Percent-encode a URI component with the conservative set (everything
+## but A-Z a-z 0-9 - _ . ~ escapes).
+gene pg_uri_encode(s) {
+    let out = ""
+    let i = 0
+    while i < len(s) {
+        let c = s[i]
+        let safe = false
+        if c >= "A" and c <= "Z" {
+            safe = true
+        }
+        if c >= "a" and c <= "z" {
+            safe = true
+        }
+        if c >= "0" and c <= "9" {
+            safe = true
+        }
+        if c == "-" or c == "_" or c == "." or c == "~" {
+            safe = true
+        }
+        if safe {
+            out = out + c
+        } else {
+            let v = ord(c)
+            out = out + "%" + pg_hex_digit(v // 16) + pg_hex_digit(v % 16)
+        }
+        i = i + 1
+    }
+    return out
+}
+
+gene pg_uri_decode(s) {
+    let out = ""
+    let i = 0
+    let n = len(s)
+    while i < n {
+        let c = s[i]
+        if c == "%" and i + 2 < n {
+            let hi = pg_hexval(s[i + 1])
+            let lo = pg_hexval(s[i + 2])
+            if hi >= 0 and lo >= 0 {
+                out = out + chr(hi * 16 + lo)
+                i = i + 3
+                continue
+            }
+        }
+        out = out + c
+        i = i + 1
+    }
+    return out
+}
+
+gene pg_hexval(c) {
+    if c >= "0" and c <= "9" {
+        return ord(c) - 48
+    }
+    if c >= "a" and c <= "f" {
+        return ord(c) - 87
+    }
+    if c >= "A" and c <= "F" {
+        return ord(c) - 55
+    }
+    return -1
+}
+
+# ----------------------------------------------------------------- quoting
+
+## Quote an identifier for SQL: double quotes, inner quotes doubled
+## (pg_quote_ident("user table") -> "user table" with real quotes).
+gene pg_quote_ident(name) {
+    return "\"" + str(name).replace("\"", "\"\"") + "\""
+}
+
+## Quote a value as a SQL literal. null -> NULL, true/false -> TRUE/FALSE,
+## numbers pass through str(), strings get single quotes with inner
+## quotes doubled and backslashes doubled (E''-safe by default).
+gene pg_quote_literal(v) {
+    let t = type(v)
+    if t == "null" {
+        return "NULL"
+    }
+    if t == "bool" {
+        if v {
+            return "TRUE"
+        }
+        return "FALSE"
+    }
+    if t == "int" or t == "float" {
+        return str(v)
+    }
+    let s = str(v)
+    let doubled = s.replace("'", "''").replace("\\", "\\\\")
+    return "'" + doubled + "'"
+}
+
+## Escape a string for use inside a LIKE pattern with the standard
+## backslash escape character: \\, % and _ are escaped, everything else
+## passes through.
+gene pg_quote_like(s) {
+    let out = ""
+    let i = 0
+    while i < len(s) {
+        let c = s[i]
+        if c == "\\" or c == "%" or c == "_" {
+            out = out + "\\" + c
+        } else {
+            out = out + c
+        }
+        i = i + 1
+    }
+    return out
+}
+
+# ------------------------------------------------------------ placeholders
+
+## Fill $1..$9 placeholders in `sql` from the `params` list (positional,
+## 1-based, values quoted with pg_quote_literal). A placeholder with no
+## parameter at that position is left EXACTLY as written (visible in the
+## output, never silently empty). "$" not followed by a digit is literal.
+gene pg_placeholders(sql, params) {
+    let out = ""
+    let i = 0
+    let n = len(sql)
+    while i < n {
+        let c = sql[i]
+        if c == "$" and i + 1 < n and pg_is_digit(sql[i + 1]) {
+            let num = ord(sql[i + 1]) - 48
+            if num >= 1 and num <= len(params) {
+                out = out + pg_quote_literal(params[num - 1])
+                i = i + 2
+                continue
+            }
+            out = out + c
+            i = i + 1
+            continue
+        }
+        out = out + c
+        i = i + 1
+    }
+    return out
+}
+
+## Count the numbered placeholders a statement actually uses (max $n).
+gene pg_placeholder_count(sql) {
+    let mx = 0
+    let i = 0
+    let n = len(sql)
+    while i < n {
+        if sql[i] == "$" and i + 1 < n and pg_is_digit(sql[i + 1]) {
+            let num = ord(sql[i + 1]) - 48
+            if num > mx {
+                mx = num
+            }
+        }
+        i = i + 1
+    }
+    return mx
+}
+
+# ------------------------------------------------------------------ arrays
+
+## Encode a list as a PostgreSQL array literal for `elem_type` (e.g.
+## "int", "text"): elements quoted per pg_quote_literal, comma-separated
+## inside ARRAY[...] with a ::type[] cast. Empty list -> the typed empty
+## form '[]'::type[]... actually PostgreSQL's canonical empty is
+## ARRAY[]::type[], which is what we emit.
+gene pg_array_encode(list, elem_type) {
+    let parts = []
+    for v in list {
+        parts.push(pg_quote_literal(v))
+    }
+    return "ARRAY[" + parts.join(", ") + "]::" + elem_type + "[]"
+}
+
+# ------------------------------------------------------------------- LIMIT
+
+## Coerce a LIMIT/OFFSET candidate into a safe non-negative integer:
+## int passes (negatives clamp to 0), numeric strings parse, anything
+## else returns the fallback. This is the guard rails for
+## "LIMIT {pg_limit_safe(n, 50)}" so a hostile n cannot shape SQL.
+gene pg_limit_safe(n, fallback) {
+    let t = type(n)
+    if t == "int" {
+        if n < 0 {
+            return 0
+        }
+        return n
+    }
+    if t == "float" {
+        if n < 0 {
+            return 0
+        }
+        return n // 1
+    }
+    if t == "str" {
+        let parsed = pg_int_or(n, -1)
+        if parsed < 0 {
+            return fallback
+        }
+        return parsed
+    }
+    return fallback
+}
