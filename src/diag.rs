@@ -21,7 +21,6 @@
 //!   denial that produced it.
 
 use crate::value::Stress;
-use std::io::IsTerminal;
 
 /// W101 slice 3: color policy. Auto: only a terminal gets ANSI codes;
 /// NO_COLOR (the de-facto no-color.org convention) always wins; pipes,
@@ -54,9 +53,11 @@ fn c_bold() -> String {
 fn c_red() -> String {
     ansi("31m")
 }
+#[allow(dead_code)] // W101 palette: reserved for the warning sev rendering
 fn c_yellow() -> String {
     ansi("33m")
 }
+#[allow(dead_code)] // W101 palette: reserved for the info sev rendering
 fn c_cyan() -> String {
     ansi("36m")
 }
@@ -207,6 +208,7 @@ fn note_line(message: &str) -> Option<String> {
 /// `error[E01]:`, `warning[W07]:`, `style[N12]:`. Findings carry
 /// line-only locations today, so no caret row is faked (SPEC 9a.1);
 /// the note line names the owning rule, which is the finding's provenance.
+#[allow(clippy::too_many_arguments)] // the finding shape IS 8-wide (SPEC 9a.1)
 pub fn render_finding(
     file: &str,
     src: &str,

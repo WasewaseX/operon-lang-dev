@@ -14,9 +14,9 @@ fixed in the same commit.
 
 | # | Axis | Pairing | Gate |
 |---|------|---------|------|
-| A1 | tree-walk | Rust, release | every gate |
-| A2 | bytecode VM | Rust, release, `--vm` | vm_parity, compat_matrix, fuzz `--exec` |
-| A3 | optimized VM | Rust, release, `--vm-opt` | vm_parity, compat_matrix (rule R1) |
+| A1 | tree-walk | Rust, release, `--no-vm` | every gate |
+| A2 | bytecode VM | Rust, release (the DEFAULT engine) | vm_parity, compat_matrix, fuzz `--exec` |
+| A3 | optimized VM | Rust, release, `--opt 1` | vm_parity, compat_matrix (rule R1) |
 | A4 | build profile | Rust, debug build | compat_matrix |
 | A5 | implementation | Python oracle | harness, compat_matrix |
 | F  | hostile input | fuzzer classes R/U/T/D/S | fuzz_parser (`--exec` adds A1-vs-A2) |
@@ -57,20 +57,26 @@ where deliberately wrapped in `stress/rescue` with fixed probes.
 | parser fuzzer | `python3 scripts/fuzz_parser.py --exec` | no panics, no hangs, no containment breaches; engines agree where execution is reachable |
 | redteam | `bash scripts/redteam.sh` | 100 adversarial payloads contained, 0 breached |
 
-Full sweep, all gates, ~4 minutes on a laptop. The CI workflow
+The differential harness itself runs two lanes (VM-by-default and
+tree-walk) against the same oracle — 2,232 programs each as of this
+document. Full sweep, all gates, ~15 minutes on a laptop. The CI workflow
 (`.github/workflows/compat.yml`) runs all of them across
 Linux/macOS/Windows, release/debug, and 32-bit/64-bit/ARM targets.
 
 ## 4. Rule R1: optimizations are semantics-preserving by construction
 
-`--vm-opt` runs `compile::optimize()`. The pass is deliberately small and
-each transform is safe by argument, not by tuning:
+`--opt 1` runs the VM optimizer (`vm::optimize()` over the OIR1 code).
+The pass is deliberately small and each transform is safe by argument,
+not by tuning:
 
 - **Constant folding** only folds ops that *cannot stress at runtime*
   (checked arithmetic that succeeded, non-zero divisors, scalar
   comparisons). An op whose runtime result would be a stress is left
   untouched, so the VM raises the identical stress at the identical point.
-  Float arithmetic is never folded (platform conservatism).
+  Float division by zero is the worked example: `fold_consts` refuses a
+  zero (or -0.0) divisor because `apply_binop` stresses on it at runtime
+  (found by the matrix on rt_p5a_arith the day the gates went live).
+  Other float arithmetic folds: IEEE-deterministic on one platform.
 - **Folding uses `Nop` replacement** — program counters never move, so no
   jump target ever needs rewriting; folds overlapping any control-transfer
   target are refused outright.
@@ -79,11 +85,15 @@ each transform is safe by argument, not by tuning:
 - **`Insn::Line` stamps are never folded** — the `cur_line` trajectory is
   identical with and without the pass, so tracebacks are byte-identical.
 
-**The gate earned its keep on day one**: the first `--vm-opt` build
-panicked (index past the end insn) on `rt_p5a_arith.op` from the existing
-redteam corpus, because a jump-to-end target (`t == len`) is legal and the
-threading loop indexed it. Reproduced, bounds-checked, re-greened — within
-minutes of the pass existing.
+**The gate has earned its keep three times**:
+1. the first optimizer build panicked on `rt_p5a_arith.op` (a legal
+   jump-to-end target, `t == len`, was indexed); bounds-checked, re-greened;
+2. the merged OIR1 optimizer folded `0.0 / 0.0` to `nan` where the runtime
+   stresses (float Div had no zero-divisor guard); fixed in `fold_consts`;
+3. the OIR1 call compile stamped the call line AFTER the arguments, so
+   builtin diagnostics carried the call site instead of the last argument
+   (rt_p22a: line 105 vs the tree-walk's 22). Fixed with a pre-arg `Nop`
+   stamp — the tree-walk stamps at arm entry and never re-stamps.
 
 ## 5. Known exclusions (each with a reason and an owner)
 

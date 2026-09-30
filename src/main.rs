@@ -76,8 +76,6 @@ fn real_main() {
         caps: interp::Caps::default(),
         profile: false,
         stdout_sink: None,
-        vm: false,
-        vm_opt: false,
     };
     let mut json = false;
     let mut strict = false;
@@ -282,14 +280,6 @@ fn real_main() {
             "--strict" => strict = true,
             "--locked" => locked = true,
             "--quiet" => opts.quiet = true,
-            // W09 (A2): run compiled gene bodies on the bytecode VM
-            "--vm" => opts.vm = true,
-            // W11 (R1): VM + semantics-preserving optimizer (must stay
-            // byte-identical vs --vm; enforced by the compat matrix)
-            "--vm-opt" => {
-                opts.vm = true;
-                opts.vm_opt = true;
-            }
             "--nmd" => nmd = true,
             "--nmd=purge" | "--purge" => {
                 nmd = true;
@@ -641,7 +631,7 @@ fn real_main() {
                                     file,
                                     &fsrc,
                                     f.sev.name(),
-                                    &f.code,
+                                    f.code,
                                     &f.rule,
                                     f.line,
                                     &f.message,
@@ -720,12 +710,6 @@ fn real_main() {
                 Ok(l) => l,
                 Err(e) => die(&e),
             };
-            // W09 (A2/A3): compile gene bodies for the bytecode VM. Must
-            // happen after load (top-level binds gene defs) and before the
-            // entry call; sequences/workers stay on the tree-walk.
-            if opts.vm {
-                tools::vm_compile_opt(&mut l, opts.vm_opt);
-            }
             if let Some(f) = fuel {
                 l.interp.step_budget = f;
             }
@@ -1003,17 +987,6 @@ fn real_main() {
             if rep.failed > 0 {
                 // ast-grep-ignore: no-std-process-exit-in-core
                 std::process::exit(1);
-            }
-        }
-        "disasm" => {
-            // W10: bytecode listing of compiled gene bodies (parse-only)
-            let file = match positional.first() {
-                Some(f) => f.clone(),
-                None => die("disasm needs a file"),
-            };
-            match tools::disasm_file(&file, json) {
-                Ok(out) => println!("{}", out),
-                Err(e) => die(&e),
             }
         }
         "fmt" => {
@@ -1997,9 +1970,7 @@ fn repl() {
             caps: interp::Caps::default(),
             profile: false,
             stdout_sink: None,
-            vm: false,
-            vm_opt: false,
-        },
+                },
     ) {
         Ok(l) => l,
         Err(_) => {
@@ -2093,9 +2064,7 @@ fn repl() {
                                 caps: interp::Caps::default(),
                                 profile: false,
                                 stdout_sink: None,
-                                vm: false,
-                                vm_opt: false,
-                            };
+                                                                            };
                             let rep = tools::run_tests(&[arg.to_string()], &opts, false);
                             println!(
                                 "  {}: {}/{} proof(s) passed ({} assertion(s))",
@@ -2219,9 +2188,7 @@ fn repl() {
                                 caps: interp::Caps::default(),
                                 profile: false,
                                 stdout_sink: None,
-                                vm: false,
-                                vm_opt: false,
-                            },
+                                                                            },
                         ) {
                             Ok(nl) => nl,
                             Err(_) => tools::Loaded {
@@ -2487,7 +2454,7 @@ fn print_diag(
             print!(
                 "{}",
                 operon::diag::render_finding(
-                    file, src, name, &f.code, &f.rule, f.line, &f.message, color
+                    file, src, name, f.code, &f.rule, f.line, &f.message, color
                 )
             );
         }
@@ -2525,7 +2492,7 @@ fn print_diag(
             print!(
                 "{}",
                 operon::diag::render_finding(
-                    file, src, "style", &f.code, &f.rule, f.line, &f.message, color
+                    file, src, "style", f.code, &f.rule, f.line, &f.message, color
                 )
             );
         }

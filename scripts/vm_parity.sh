@@ -26,11 +26,11 @@ for f in $(find tests apps -name '*.op' 2>/dev/null | sort); do
     lskip=$((lskip+1))
     continue
   fi
-  a_out=$("$BIN" run "$f" 2>/tmp/vmp_a_err); a_rc=$?
+  a_out=$("$BIN" run --no-vm "$f" 2>/tmp/vmp_a_err); a_rc=$?
   a_err=$(cat /tmp/vmp_a_err)
-  b_out=$("$BIN" run --vm "$f" 2>/tmp/vmp_b_err); b_rc=$?
+  b_out=$("$BIN" run "$f" 2>/tmp/vmp_b_err); b_rc=$?
   b_err=$(cat /tmp/vmp_b_err)
-  c_out=$("$BIN" run --vm-opt "$f" 2>/tmp/vmp_c_err); c_rc=$?
+  c_out=$("$BIN" run --opt 1 "$f" 2>/tmp/vmp_c_err); c_rc=$?
   c_err=$(cat /tmp/vmp_c_err)
   if [ "$a_out" == "$b_out" ] && [ "$a_err" == "$b_err" ] && [ "$a_rc" == "$b_rc" ] \
      && [ "$a_out" == "$c_out" ] && [ "$a_err" == "$c_err" ] && [ "$a_rc" == "$c_rc" ]; then

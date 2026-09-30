@@ -746,7 +746,6 @@ impl Interp {
             trace_grn: None,
             trace_grn_tick: 0,
             silences: Vec::new(),
-            vm_funcs: None,
             operons: Vec::new(),
             risc_escaped: std::collections::HashSet::new(),
             m6a_levels: HashMap::new(),
@@ -3750,21 +3749,6 @@ impl Interp {
         }
         self.note(0, 4, format!("phantom call to '{}'; result null", name));
         Ok(Value::Null)
-    }
-
-    /// W09: execute a gene body — bytecode when the def is compiled and the
-    /// VM is on, tree-walk otherwise. One hook inside the funnels so every
-    /// caller (eval calls, builtins, methods, entry resolution) inherits
-    /// the choice without a second implementation of any semantics.
-    fn exec_gene_body(&mut self, def: &Arc<GeneDef>, fenv: &Rc<Env>) -> Result<Flow, Stress> {
-        let code = self
-            .vm_funcs
-            .as_ref()
-            .and_then(|m| m.get(&(Arc::as_ptr(def) as *const u8 as usize)).cloned());
-        match code {
-            Some(c) => self.vm_exec(&c, fenv),
-            None => self.exec_block(fenv, &def.body),
-        }
     }
 
     pub fn call_gene(
