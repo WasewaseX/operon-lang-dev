@@ -55,6 +55,9 @@ check tests/diagnostics/wrong_arity.op    text tests/diagnostics/expected/wrong_
 check tests/diagnostics/entry_typo.op      text tests/diagnostics/expected/entry_typo.txt      run 1 "--entry maiin"
 check tests/diagnostics/entry_typo.op      json tests/diagnostics/expected/entry_typo.json    run 1 "--entry maiin"
 check tests/diagnostics/phantom_suggest.op text tests/diagnostics/expected/phantom_suggest.txt check 0
+# W101 slice 7: parse/repair notes carry derived E2xxx codes in the flush;
+# the program itself SUCCEEDS (repair, never reject → rc 0).
+check tests/diagnostics/repair_notes.op    text tests/diagnostics/expected/repair_notes.txt run 0
 
 if [ $fails -gt 0 ]; then
     echo "diag_golden: $fails failure(s); re-derive expected files from real runs, never hand-patch them"
