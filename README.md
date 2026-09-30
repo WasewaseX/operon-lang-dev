@@ -77,10 +77,12 @@ against the toolchain. Then try `operon repl`, `:help` is your friend.
 
 ## Cookbook, small real programs to steal from
 
-`examples/cookbook/` holds 18 runnable programs (14 everyday recipes + 4 gotcha tours),
-each ≤80 lines with a header that says what it teaches. Every output is deterministic
-and **verified by `bash scripts/cookbook.sh` on the Rust core AND the Python oracle**,
-an example that rots or diverges fails CI instead of lying to you.
+`examples/cookbook/` holds 19 runnable programs (15 everyday recipes + 4 gotcha tours),
+each ≤80 lines with a header that says what it teaches, plus the [packages chapter](examples/cookbook/packages.sh),
+a shell transcript that walks the package CLI end to end. Every output is deterministic
+and **verified by `bash scripts/cookbook.sh` on the Rust core AND the Python oracle**
+(the packages chapter runs on the Rust core only; the oracle is an interpreter, not a
+package manager). An example that rots or diverges fails CI instead of lying to you.
 
 | program | you already know it as | teaches |
 |---|---|---|
@@ -102,8 +104,16 @@ an example that rots or diverges fails CI instead of lying to you.
 | [gotcha_synonyms](examples/cookbook/gotcha_synonyms.op) | reserved words | `off/next/type/show…` repair to keywords/aliases, safe naming |
 | [gotcha_builtins_not_values](examples/cookbook/gotcha_builtins_not_values.op) | `print` is a value in Python | builtins read as null; wrap them in a gene |
 | [gotcha_division](examples/cookbook/gotcha_division.op) | Python `/` vs `//` vs `%` | floored modulo, cyclic indexing, money math |
+| [option_pipeline](examples/cookbook/option_pipeline.op) | Rust's `Option`/`Result` + `?` | expected failures as values, `?!` propagation, `unwrap_or` defaults |
 
-Run any of them: `operon run examples/cookbook/word_freq.op`. Re-verify all:
+The packages chapter is a transcript, not a `.op` program: [examples/cookbook/packages.sh](examples/cookbook/packages.sh)
+executes the whole workflow for real (`operon new` → `add` → `tree` → `run` → `test` → `verify`)
+inside a throwaway sandbox (`HOME`/`OPERON_DEPS`/`OPERON_REGISTRY_HOME` pointed at a temp
+dir, the same pattern as `scripts/pkg_e2e.sh`) and diffs the frozen session transcript.
+Same gate, applied to the CLI.
+
+Run any of them: `operon run examples/cookbook/word_freq.op` (or
+`bash examples/cookbook/packages.sh` to print the package session). Re-verify all:
 `bash scripts/cookbook.sh`.
 
 ---
@@ -265,6 +275,12 @@ materializes on first use, so the first add works offline. Point
 `operon run --locked`, which fails on any manifest-lockfile drift, and
 `operon registry serve DIR` stands up a read-only HTTP registry in one
 command.
+
+The whole flow, every command run for real and gate-verified:
+[examples/cookbook/packages.sh](examples/cookbook/packages.sh), the cookbook's
+packages chapter. Depth lives in docs/specs/REGISTRY.md (registry format,
+resolution chain, hosting) and docs/PACKAGING.md (how the `operon` binary
+itself reaches machines).
 
 ## Connect your editor (operon-ls)
 
