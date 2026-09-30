@@ -10,6 +10,7 @@ use operon::parser;
 use operon::pkg;
 use operon::rna2;
 use operon::tools;
+use operon::vm;
 // W101 slice 3: IsTerminal drives the auto color policy for diagnostics
 use std::io::IsTerminal;
 
@@ -1949,6 +1950,22 @@ fn real_main() {
                 println!("{}", graph::to_json(&g));
             } else {
                 print!("{}", graph::to_dot(&g));
+            }
+        }
+        "disasm" => {
+            // W10: bytecode listing of compiled gene bodies. Parse-only
+            // (like check/fmt/graph/doc): compile_body never executes,
+            // no capabilities beyond reading the file.
+            let file = match positional.first() {
+                Some(f) => f.clone(),
+                None => die("disasm needs a file"),
+            };
+            let src = std::fs::read_to_string(&file).unwrap_or_default();
+            let prog = parser::parse(&src);
+            if json {
+                println!("{}", vm::disassemble_program_json(&prog));
+            } else {
+                print!("{}", vm::disassemble_program(&prog));
             }
         }
         "crispr" => {
