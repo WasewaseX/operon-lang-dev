@@ -1,0 +1,567 @@
+# pkg http, the HTTP envelope toolkit (pure Operon, deterministic).
+#
+# Everything a client or server needs BEFORE a socket exists: parse a raw
+# request head into a map, build a raw response from parts, canonicalize
+# and case-insensitively look up headers, encode/decode percent escapes
+# and urlencoded forms, parse/build cookies, join URLs, and answer status
+# questions. Network I/O itself lives outside this package (the sandbox
+# denies sockets by default); this layer is the pure part every real
+# client and server reuses, and it is fully testable offline.
+#
+# Determinism contract: http_query_encode sorts keys before building the
+# query string (same map, same bytes); decoders are lenient per the Total
+# Grammar spirit (a malformed escape keeps its raw characters instead of
+# failing).
+
+# ------------------------------------------------------------- primitives
+
+## First index of `needle` in `s`, or -1. Byte-plain (no regex).
+gene http_index_of(s, needle) {
+    let nlen = len(needle)
+    let slen = len(s)
+    if nlen == 0 {
+        return 0
+    }
+    let i = 0
+    while i + nlen <= slen {
+        if s.slice(i, i + nlen) == needle {
+            return i
+        }
+        i = i + 1
+    }
+    return -1
+}
+
+## Last index of `needle` in `s`, or -1.
+gene http_rindex_of(s, needle) {
+    let nlen = len(needle)
+    let slen = len(s)
+    if nlen == 0 {
+        return slen
+    }
+    let i = slen - nlen
+    while i >= 0 {
+        if s.slice(i, i + nlen) == needle {
+            return i
+        }
+        i = i - 1
+    }
+    return -1
+}
+
+## True when `s` begins with `prefix`.
+gene http_starts(s, prefix) {
+    let plen = len(prefix)
+    if len(s) < plen {
+        return false
+    }
+    return s.slice(0, plen) == prefix
+}
+
+## True when `s` ends with `suffix`.
+gene http_ends(s, suffix) {
+    let slen = len(s)
+    let xlen = len(suffix)
+    if slen < xlen {
+        return false
+    }
+    return s.slice(slen - xlen, slen) == suffix
+}
+
+## RFC 3986 unreserved set: A-Z a-z 0-9 - _ . ~
+gene http_is_unreserved(c) {
+    if c >= "A" and c <= "Z" {
+        return true
+    }
+    if c >= "a" and c <= "z" {
+        return true
+    }
+    if c >= "0" and c <= "9" {
+        return true
+    }
+    return c == "-" or c == "_" or c == "." or c == "~"
+}
+
+gene http_hex_digit(v) {
+    if v < 10 {
+        return chr(48 + v)
+    }
+    return chr(65 + v - 10)
+}
+
+gene http_hex_value(c) {
+    if c >= "0" and c <= "9" {
+        return ord(c) - 48
+    }
+    if c >= "a" and c <= "f" {
+        return ord(c) - 87
+    }
+    if c >= "A" and c <= "F" {
+        return ord(c) - 55
+    }
+    return -1
+}
+
+## Percent-encode every character outside the unreserved set (spaces
+## become %20, never +). Same string in, same string out.
+gene http_percent_encode(s) {
+    let out = ""
+    let i = 0
+    while i < len(s) {
+        let c = s[i]
+        if http_is_unreserved(c) {
+            out = out + c
+        } else {
+            let v = ord(c)
+            if v < 128 {
+                out = out + "%" + http_hex_digit(v // 16) + http_hex_digit(v % 16)
+            } else {
+                # non-ASCII: keep the character itself (the decoder is
+                # byte-oriented; passing raw Unicode through preserves it)
+                out = out + c
+            }
+        }
+        i = i + 1
+    }
+    return out
+}
+
+## Decode %XX escapes; when `plus_space` is true "+" means space (the
+## query form). A malformed escape keeps its raw characters.
+gene http_percent_decode(s, plus_space) {
+    let out = ""
+    let i = 0
+    let n = len(s)
+    while i < n {
+        let c = s[i]
+        if plus_space and c == "+" {
+            out = out + " "
+            i = i + 1
+            continue
+        }
+        if c == "%" and i + 2 < n {
+            let hi = http_hex_value(s[i + 1])
+            let lo = http_hex_value(s[i + 2])
+            if hi >= 0 and lo >= 0 {
+                out = out + chr(hi * 16 + lo)
+                i = i + 3
+                continue
+            }
+        }
+        out = out + c
+        i = i + 1
+    }
+    return out
+}
+
+# ----------------------------------------------------------------- query
+
+## Serialize a flat map into a canonical urlencoded query string: keys are
+## SORTED (deterministic output), values percent-encoded with + for space.
+gene http_query_encode(m) {
+    let ks = keys(m).sort()
+    let parts = []
+    for k in ks {
+        parts.push(http_percent_encode(str(k)) + "=" + http_percent_encode(str(m[k])))
+    }
+    return parts.join("&")
+}
+
+## Parse `a=1&b=two` (with or without the leading "?") into a flat map.
+## Keys and values are decoded (+ becomes space). Duplicate keys: the LAST
+## occurrence wins, which is the rule most form decoders apply. Malformed
+## pairs (no "=") are kept with an empty-string value, never dropped.
+gene http_query_parse(qs) {
+    let m = {}
+    let s = qs
+    if http_starts(s, "?") {
+        s = s.slice(1, len(s))
+    }
+    if len(s) == 0 {
+        return m
+    }
+    for pair in s.split("&") {
+        if len(pair) == 0 {
+            continue
+        }
+        let eq = http_index_of(pair, "=")
+        if eq < 0 {
+            m[http_percent_decode(pair, true)] = ""
+            continue
+        }
+        let k = http_percent_decode(pair.slice(0, eq), true)
+        let v = http_percent_decode(pair.slice(eq + 1, len(pair)), true)
+        m[k] = v
+    }
+    return m
+}
+
+# ---------------------------------------------------------------- headers
+
+## Canonical header form: "content-type" -> "Content-Type" (hyphen-split,
+## first letter capitalized, rest lowered). Unknown shapes pass through
+## unchanged so an already-canonical header round-trips.
+gene http_header_canonical(name) {
+    let out = ""
+    let cap = true
+    let i = 0
+    while i < len(name) {
+        let c = name[i]
+        if c == "-" {
+            out = out + "-"
+            cap = true
+        } else {
+            if cap {
+                out = out + c.upper()
+                cap = false
+            } else {
+                out = out + c.lower()
+            }
+        }
+        i = i + 1
+    }
+    return out
+}
+
+## Parse header lines ("Name: value", one per line) into a map keyed by
+## the canonical header name. Continuation lines (leading space/tab) fold
+## onto the previous value with a single space, per RFC 9110 obs-fold.
+gene http_headers_parse(lines) {
+    let m = {}
+    let last = ""
+    for raw in lines {
+        let line = raw.trim()
+        if len(line) == 0 {
+            continue
+        }
+        if (raw[0] == " " or raw[0] == "\t") and last != "" {
+            m[last] = m[last] + " " + line
+            continue
+        }
+        let colon = http_index_of(line, ":")
+        if colon <= 0 {
+            continue
+        }
+        let name = http_header_canonical(line.slice(0, colon).trim())
+        let value = line.slice(colon + 1, len(line)).trim()
+        m[name] = value
+        last = name
+    }
+    return m
+}
+
+## Case-insensitive header lookup over a headers map. Missing names
+## resolve to "" (never a stress), so `if http_header_get(h, "X") == ""`
+## is the intended miss test.
+gene http_header_get(headers, name) {
+    return http_headers_lookup(headers, http_header_canonical(name))
+}
+
+gene http_headers_lookup(headers, canonical) {
+    for k in keys(headers) {
+        if http_header_canonical(k) == canonical {
+            return headers[k]
+        }
+    }
+    return ""
+}
+
+# --------------------------------------------------------------- request
+
+## Parse a raw request head (request line + headers, body excluded) into:
+## {method, target, path, version, query_map, headers}. The query string
+## is decoded into `query_map` as well, so handlers never re-parse it.
+gene http_request_parse(raw) {
+    let lines = raw.split("\n")
+    let first = ""
+    for line in lines {
+        if len(line.trim()) > 0 {
+            first = line.trim()
+            break
+        }
+    }
+    let parts = first.split(" ")
+    let method = ""
+    let target = "/"
+    let version = "HTTP/1.1"
+    if len(parts) >= 1 {
+        method = parts[0]
+    }
+    if len(parts) >= 2 {
+        target = parts[1]
+    }
+    if len(parts) >= 3 {
+        version = parts[2]
+    }
+    let path = target
+    let qmark = http_index_of(target, "?")
+    let query_map = {}
+    if qmark >= 0 {
+        path = target.slice(0, qmark)
+        query_map = http_query_parse(target.slice(qmark + 1, len(target)))
+    }
+    # headers: every line after the request line until the blank line
+    let hls = []
+    let seen_first = false
+    for line in lines {
+        if not seen_first {
+            if len(line.trim()) == 0 {
+                continue
+            }
+            if line.trim() == first {
+                seen_first = true
+                continue
+            }
+            continue
+        }
+        if len(line.trim()) == 0 {
+            break
+        }
+        hls.push(line)
+    }
+    return {
+        method: method,
+        target: target,
+        path: path,
+        version: version,
+        query_map: query_map,
+        headers: http_headers_parse(hls)
+    }
+}
+
+# --------------------------------------------------------------- response
+
+## Reason phrases for the status codes every handler actually uses.
+gene http_status_reason(code) {
+    let m = {
+        "100": "Continue",
+        "101": "Switching Protocols",
+        "200": "OK",
+        "201": "Created",
+        "202": "Accepted",
+        "204": "No Content",
+        "301": "Moved Permanently",
+        "302": "Found",
+        "303": "See Other",
+        "304": "Not Modified",
+        "307": "Temporary Redirect",
+        "308": "Permanent Redirect",
+        "400": "Bad Request",
+        "401": "Unauthorized",
+        "403": "Forbidden",
+        "404": "Not Found",
+        "405": "Method Not Allowed",
+        "409": "Conflict",
+        "410": "Gone",
+        "413": "Payload Too Large",
+        "415": "Unsupported Media Type",
+        "418": "I'm a teapot",
+        "422": "Unprocessable Content",
+        "429": "Too Many Requests",
+        "500": "Internal Server Error",
+        "501": "Not Implemented",
+        "502": "Bad Gateway",
+        "503": "Service Unavailable",
+        "504": "Gateway Timeout"
+    }
+    let key = str(code)
+    let out = ""
+    for k in keys(m) {
+        if k == key {
+            out = m[k]
+        }
+    }
+    return out
+}
+
+## The response class of a status code: its first digit as a string
+## ("1".."5"), or "" for nonsense input.
+gene http_status_class(code) {
+    let s = str(code)
+    if len(s) < 1 {
+        return ""
+    }
+    return s.slice(0, 1)
+}
+
+gene http_status_is_informational(code) {
+    return http_status_class(code) == "1"
+}
+
+gene http_status_is_success(code) {
+    return http_status_class(code) == "2"
+}
+
+gene http_status_is_redirect(code) {
+    return http_status_class(code) == "3"
+}
+
+gene http_status_is_client_error(code) {
+    return http_status_class(code) == "4"
+}
+
+gene http_status_is_server_error(code) {
+    return http_status_class(code) == "5"
+}
+
+## Build a raw HTTP/1.1 response string from parts. Headers map is
+## emitted as given (canonicalize with http_header_canonical when
+## building the map); Content-Length is computed from the body when the
+## caller did not supply it. Deterministic: same inputs, same bytes.
+gene http_response_build(status, headers, body) {
+    let reason = http_status_reason(status)
+    if reason == "" {
+        reason = "Unknown"
+    }
+    let out = "HTTP/1.1 " + str(status) + " " + reason + "\r\n"
+    let have_len = false
+    for k in keys(headers) {
+        if http_header_canonical(k) == "Content-Length" {
+            have_len = true
+        }
+        out = out + http_header_canonical(k) + ": " + str(headers[k]) + "\r\n"
+    }
+    if not have_len {
+        out = out + "Content-Length: " + str(len(body)) + "\r\n"
+    }
+    out = out + "\r\n"
+    return out + body
+}
+
+## A JSON-content response envelope ready for http_response_build.
+gene http_response_json(status, body_json) {
+    return http_response_build(status, {"Content-Type": "application/json"}, body_json)
+}
+
+## A redirect response to `location` (301 when `permanent`, else 302).
+gene http_response_redirect(location, permanent) {
+    let code = 302
+    if permanent {
+        code = 301
+    }
+    return http_response_build(code, {"Location": location}, "")
+}
+
+# ---------------------------------------------------------------- cookies
+
+## Parse a Cookie header value ("a=1; b=two") into a flat map. Pair-wise
+## semicolon split, first "=" splits name/value, values are NOT
+## percent-decoded (cookie values are opaque per RFC 6265).
+gene http_cookie_parse(header) {
+    let m = {}
+    for pair in header.split(";") {
+        let p = pair.trim()
+        if len(p) == 0 {
+            continue
+        }
+        let eq = http_index_of(p, "=")
+        if eq < 0 {
+            m[p] = ""
+            continue
+        }
+        m[p.slice(0, eq).trim()] = p.slice(eq + 1, len(p)).trim()
+    }
+    return m
+}
+
+## Build a Set-Cookie header value with an optional attributes map
+## ({Path: "/", MaxAge: "3600", Secure: "", HttpOnly: ""}). Attributes
+## emit in the map's insertion order; empty-valued attributes (Secure,
+## HttpOnly) emit bare.
+gene http_cookie_build(name, value, attrs) {
+    let out = name + "=" + value
+    for k in keys(attrs) {
+        out = out + "; " + k
+        let v = str(attrs[k])
+        if len(v) > 0 {
+            out = out + "=" + v
+        }
+    }
+    return out
+}
+
+# -------------------------------------------------------------------- URL
+
+## Merge a relative reference against a base URL (the RFC 3986 common
+## cases): absolute reference (has "://") wins; scheme-relative ("//host")
+## keeps the base scheme; absolute path ("/x") replaces the path; the
+## empty reference returns the base.
+gene http_url_join(base, rel) {
+    if len(rel) == 0 {
+        return base
+    }
+    if http_index_of(rel, "://") >= 0 {
+        return rel
+    }
+    if http_starts(rel, "//") {
+        let scheme_end = http_index_of(base, "://")
+        if scheme_end < 0 {
+            return rel
+        }
+        return base.slice(0, scheme_end) + ":" + rel
+    }
+    if http_starts(rel, "/") {
+        let scheme_end = http_index_of(base, "://")
+        if scheme_end < 0 {
+            return rel
+        }
+        let after = base.slice(scheme_end + 3, len(base))
+        let slash = http_index_of(after, "/")
+        if slash < 0 {
+            return base + rel
+        }
+        return base.slice(0, scheme_end + 3 + slash) + rel
+    }
+    # same-directory relative: replace the last path segment of base
+    # (RFC 3986 merge: "h.io/api/v1" + "users" -> "h.io/api/users")
+    let scheme_end = http_index_of(base, "://")
+    if scheme_end < 0 {
+        return rel
+    }
+    let after = base.slice(scheme_end + 3, len(base))
+    let slash = http_rindex_of(after, "/")
+    if slash < 0 {
+        return rel
+    }
+    return base.slice(0, scheme_end + 3 + slash + 1) + rel
+}
+
+## Basic auth header value for the given credentials (RFC 7617 shape),
+## with standard base64 and "=" padding.
+gene http_basic_auth(user, pass) {
+    let creds = user + ":" + pass
+    let alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+    let out = ""
+    let i = 0
+    let n = len(creds)
+    while i < n {
+        let b1 = ord(creds[i])
+        let b2 = 0
+        let b3 = 0
+        let have2 = false
+        let have3 = false
+        if i + 1 < n {
+            b2 = ord(creds[i + 1])
+            have2 = true
+        }
+        if i + 2 < n {
+            b3 = ord(creds[i + 2])
+            have3 = true
+        }
+        let trip = b1 * 65536 + b2 * 256 + b3
+        out = out + alphabet.slice((trip // 262144) % 64, (trip // 262144) % 64 + 1)
+        out = out + alphabet.slice((trip // 4096) % 64, (trip // 4096) % 64 + 1)
+        if have2 {
+            out = out + alphabet.slice((trip // 64) % 64, (trip // 64) % 64 + 1)
+        } else {
+            out = out + "="
+        }
+        if have3 {
+            out = out + alphabet.slice(trip % 64, trip % 64 + 1)
+        } else {
+            out = out + "="
+        }
+        i = i + 3
+    }
+    return "Basic " + out
+}

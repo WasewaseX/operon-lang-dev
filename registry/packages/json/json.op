@@ -1,0 +1,502 @@
+# pkg json — the JSON toolkit (pure Operon, deterministic).
+#
+# The working set beyond parse/stringify: RFC 6901 JSON pointers (get and
+# immutable set), canonical serialization (keys sorted recursively, same
+# value, same bytes), a schema-lite validator, JSON Lines encode/decode,
+# and a structural diff. Decoding reuses std/serialize's from_json (one
+# parser, one behavior, everywhere).
+#
+# Determinism contract: json_canonical sorts object keys at every depth,
+# emits minimal separators, and never depends on insertion order. A
+# canonical string is a content address for the value.
+
+use std/serialize
+
+# ------------------------------------------------------------- canonical
+
+## Escape a string per RFC 8259: quote, backslash, and control
+## characters use the shortest legal escape; everything else passes
+## through as-is.
+gene json_escape_string(s) {
+    let out = "\""
+    let i = 0
+    let n = len(s)
+    while i < n {
+        let c = s[i]
+        if c == "\"" {
+            out = out + "\\\""
+        } else {
+            if c == "\\" {
+                out = out + "\\\\"
+            } else {
+                if c == "\n" {
+                    out = out + "\\n"
+                } else {
+                    if c == "\t" {
+                        out = out + "\\t"
+                    } else {
+                        if c == "\r" {
+                            out = out + "\\r"
+                        } else {
+                            if ord(c) < 32 {
+                                out = out + "\\u" + json_hex4(ord(c))
+                            } else {
+                                out = out + c
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        i = i + 1
+    }
+    return out + "\""
+}
+
+gene json_hex4(v) {
+    let digits = "0123456789abcdef"
+    let out = ""
+    let shift = 12
+    while shift >= 0 {
+        out = out + digits.slice((v // json_pow16(shift)) % 16, (v // json_pow16(shift)) % 16 + 1)
+        shift = shift - 4
+    }
+    return out
+}
+
+gene json_pow16(e) {
+    let p = 1
+    let i = 0
+    while i < e {
+        p = p * 16
+        i = i + 1
+    }
+    return p
+}
+
+## Canonical serialization: object keys sorted (byte order) at every
+## depth, minimal separators, no spaces. Scalars via str(); true/false/
+## null bare. This is the content-address form of a value.
+gene json_canonical(v) {
+    let t = type(v)
+    if t == "map" {
+        let ks = keys(v).sort()
+        let parts = []
+        for k in ks {
+            parts.push(json_escape_string(k) + ":" + json_canonical(v[k]))
+        }
+        return "\{" + parts.join(",") + "\}"
+    }
+    if t == "list" {
+        let parts = []
+        for x in v {
+            parts.push(json_canonical(x))
+        }
+        return "[" + parts.join(",") + "]"
+    }
+    if t == "null" {
+        return "null"
+    }
+    if t == "bool" {
+        if v {
+            return "true"
+        }
+        return "false"
+    }
+    if t == "str" {
+        return json_escape_string(v)
+    }
+    return str(v)
+}
+
+# --------------------------------------------------------------- pointers
+
+## Decode a reference token: ~1 becomes /, ~0 becomes ~ (RFC 6901 §4).
+## Applied once per pointer segment after splitting on "/".
+gene json_token_decode(t) {
+    let out = ""
+    let i = 0
+    let n = len(t)
+    while i < n {
+        let c = t[i]
+        if c == "~" and i + 1 < n {
+            let nxt = t[i + 1]
+            if nxt == "0" {
+                out = out + "~"
+                i = i + 2
+                continue
+            }
+            if nxt == "1" {
+                out = out + "/"
+                i = i + 2
+                continue
+            }
+        }
+        out = out + c
+        i = i + 1
+    }
+    return out
+}
+
+## RFC 6901 pointer get: "" returns the whole document; "/a/0" descends
+## maps by key and lists by index. A pointer that cannot resolve (missing
+## key, out-of-range index, descending through a scalar) returns null —
+## total, never a stress.
+gene json_pointer_get(v, ptr) {
+    if len(ptr) == 0 {
+        return v
+    }
+    if json_char_at(ptr, 0) != "/" {
+        return null
+    }
+    let rest = json_token_decode(ptr.slice(1, len(ptr)))
+    let slash = json_index_of(rest, "/")
+    let raw = rest
+    let tail = ""
+    if slash >= 0 {
+        raw = rest.slice(0, slash)
+        tail = rest.slice(slash, len(rest))
+    }
+    let key = json_token_decode(raw)
+    let t = type(v)
+    if t == "map" {
+        let has = false
+        for k in keys(v) {
+            if k == key {
+                has = true
+            }
+        }
+        if not has {
+            return null
+        }
+        return json_pointer_get(v[key], tail)
+    }
+    if t == "list" {
+        let idx = json_index_get(raw)
+        if idx < 0 or idx >= len(v) {
+            return null
+        }
+        return json_pointer_get(v[idx], tail)
+    }
+    return null
+}
+
+gene json_char_at(s, i) {
+    return s.slice(i, i + 1)
+}
+
+gene json_index_of(s, needle) {
+    let nlen = len(needle)
+    let slen = len(s)
+    if nlen == 0 {
+        return 0
+    }
+    let i = 0
+    while i + nlen <= slen {
+        if s.slice(i, i + nlen) == needle {
+            return i
+        }
+        i = i + 1
+    }
+    return -1
+}
+
+gene json_index_get(t) {
+    # integer parse; non-numeric → -1 (RFC 6901 forbids "01", "-1" etc.
+    # as array tokens; a strict lexical check plus a numeric read)
+    if len(t) == 0 {
+        return -1
+    }
+    let i = 0
+    let n = len(t)
+    while i < n {
+        let c = t[i]
+        if c < "0" or c > "9" {
+            return -1
+        }
+        i = i + 1
+    }
+    if len(t) > 1 and json_char_at(t, 0) == "0" {
+        return -1
+    }
+    let v = 0
+    let j = 0
+    while j < n {
+        v = v * 10 + (ord(t[j]) - 48)
+        j = j + 1
+    }
+    return v
+}
+
+## RFC 6901 pointer set, immutable: returns a NEW document with `val` at
+## `ptr`. Intermediate containers are created on the way down (maps for
+## token steps, growing lists for index steps). The input is never
+## mutated. Descending a scalar creates a map there (lenient by contract).
+gene json_pointer_set(v, ptr, val) {
+    if len(ptr) == 0 {
+        return val
+    }
+    if json_char_at(ptr, 0) != "/" {
+        return v
+    }
+    let rest = json_token_decode(ptr.slice(1, len(ptr)))
+    let slash = json_index_of(rest, "/")
+    let raw = rest
+    let tail = ""
+    if slash >= 0 {
+        raw = rest.slice(0, slash)
+        tail = rest.slice(slash, len(rest))
+    }
+    let key = json_token_decode(raw)
+    let t = type(v)
+    if t == "list" {
+        let idx = json_index_get(raw)
+        if idx < 0 {
+            return v
+        }
+        let out = []
+        let i = 0
+        while i < len(v) {
+            out.push(v[i])
+            i = i + 1
+        }
+        while len(out) <= idx {
+            out.push(null)
+        }
+        let cur = null
+        if idx < len(out) {
+            cur = out[idx]
+        }
+        out[idx] = json_pointer_set(cur, tail, val)
+        return out
+    }
+    # scalar or map both become/remain maps here
+    let out = {}
+    if t == "map" {
+        for k in keys(v) {
+            out[k] = v[k]
+        }
+    }
+    out[key] = json_pointer_set(json_map_get_or(out, key, null), tail, val)
+    return out
+}
+
+gene json_map_get_or(m, k, fallback) {
+    for kk in keys(m) {
+        if kk == k {
+            return m[kk]
+        }
+    }
+    return fallback
+}
+
+# ----------------------------------------------------------------- schema
+
+## Schema-lite validation. A schema is a map:
+##   {type: "object"|"array"|"string"|"number"|"boolean"|"null"|"any",
+##    required: [key...], fields: {key: schema}, items: schema}
+## Returns the list of violation paths ("$.user.age"); empty = valid.
+## Unknown type names validate nothing (a typo in the schema is
+## reported as a violation of the checked value, never a crash).
+gene json_schema_check(v, schema) {
+    return json_schema_at(v, schema, "$")
+}
+
+gene json_schema_at(v, schema, at) {
+    let errs = []
+    let want = json_schema_str(schema, "type", "any")
+    let got = json_type(v)
+    if want != "any" and got != want {
+        errs.push(at + " is " + got + ", want " + want)
+        return errs
+    }
+    if got == "object" {
+        for k in json_schema_list(schema, "required") {
+            let has = false
+            for kk in keys(v) {
+                if kk == k {
+                    has = true
+                }
+            }
+            if not has {
+                errs.push(at + "." + k + " required, missing")
+            }
+        }
+        let fields = json_schema_str(schema, "fields", "")
+        if type(fields) == "map" {
+            for k in keys(fields) {
+                let has = false
+                for kk in keys(v) {
+                    if kk == k {
+                        has = true
+                    }
+                }
+                if has {
+                    let sub = json_schema_at(v[k], fields[k], at + "." + k)
+                    for e in sub {
+                        errs.push(e)
+                    }
+                }
+            }
+        }
+    }
+    if got == "array" {
+        let items = json_map_get_or(schema, "items", "")
+        if type(items) == "map" {
+            let i = 0
+            while i < len(v) {
+                let sub = json_schema_at(v[i], items, at + "[" + str(i) + "]")
+                for e in sub {
+                    errs.push(e)
+                }
+                i = i + 1
+            }
+        }
+    }
+    return errs
+}
+
+gene json_schema_str(m, k, fallback) {
+    return json_map_get_or(m, k, fallback)
+}
+
+gene json_schema_list(m, k) {
+    let v = json_map_get_or(m, k, "")
+    if type(v) == "list" {
+        return v
+    }
+    return []
+}
+
+gene json_type(v) {
+    let t = type(v)
+    if t == "map" {
+        return "object"
+    }
+    if t == "list" {
+        return "array"
+    }
+    if t == "null" {
+        return "null"
+    }
+    if t == "bool" {
+        return "boolean"
+    }
+    if t == "int" or t == "float" {
+        return "number"
+    }
+    return "string"
+}
+
+# ------------------------------------------------------------- JSON Lines
+
+## JSON Lines encode: one canonical JSON value per line, no trailing
+## newline after the last record (so the output is byte-stable).
+gene json_lines_encode(values) {
+    let lines = []
+    for v in values {
+        lines.push(json_canonical(v))
+    }
+    return lines.join("\n")
+}
+
+## JSON Lines decode: one value per line; blank lines are skipped; a
+## malformed line becomes null in its position (lenient, positional —
+## the line count always matches the non-blank line count).
+gene json_lines_decode(text) {
+    let out = []
+    for line in text.split("\n") {
+        let t = line.trim()
+        if len(t) == 0 {
+            continue
+        }
+        let r = serialize.from_json(t)
+        let done = false
+        match r {
+            case Ok(v) {
+                out.push(v)
+                done = true
+            }
+            case Err(e) {
+                out.push(null)
+                done = true
+            }
+        }
+        if not done {
+            out.push(null)
+        }
+    }
+    return out
+}
+
+# ------------------------------------------------------------------- diff
+
+## Structural diff of two documents: a list of {path, kind} rows where
+## kind is "added" | "removed" | "changed". Arrays compare positionally
+## (index paths "$[2]"), maps by key ("$.k"). Canonical, deterministic.
+gene json_diff(a, b) {
+    return json_diff_at(a, b, "$")
+}
+
+gene json_diff_at(a, b, at) {
+    let rows = []
+    let ta = json_type(a)
+    let tb = json_type(b)
+    if ta != tb {
+        rows.push({path: at, kind: "changed"})
+        return rows
+    }
+    if ta == "object" {
+        for k in keys(a) {
+            let has = false
+            for kb in keys(b) {
+                if kb == k {
+                    has = true
+                }
+            }
+            if not has {
+                rows.push({path: at + "." + k, kind: "removed"})
+            }
+        }
+        for k in keys(b) {
+            let has = false
+            for ka in keys(a) {
+                if ka == k {
+                    has = true
+                }
+            }
+            if not has {
+                rows.push({path: at + "." + k, kind: "added"})
+                continue
+            }
+            let sub = json_diff_at(a[k], b[k], at + "." + k)
+            for r in sub {
+                rows.push(r)
+            }
+        }
+        return rows
+    }
+    if ta == "array" {
+        let i = 0
+        while i < len(a) and i < len(b) {
+            let sub = json_diff_at(a[i], b[i], at + "[" + str(i) + "]")
+            for r in sub {
+                rows.push(r)
+            }
+            i = i + 1
+        }
+        while i < len(a) {
+            rows.push({path: at + "[" + str(i) + "]", kind: "removed"})
+            i = i + 1
+        }
+        while i < len(b) {
+            rows.push({path: at + "[" + str(i) + "]", kind: "added"})
+            i = i + 1
+        }
+        return rows
+    }
+    if a != b {
+        rows.push({path: at, kind: "changed"})
+    }
+    return rows
+}

@@ -229,6 +229,34 @@ build panicked on a redteam payload (a legal jump-to-end target was
 indexed past the end insn); the corpus caught it, the fix landed, the
 corpus re-greened. That is the intended workflow.
 
+## Packages — the first-class workflow
+
+The day-one verbs a developer expects, all backed by `operon.toml` +
+`operon.lock` (resolved revs + sha256 checksums, byte-stable across
+machines; docs/specs/REGISTRY.md):
+
+```
+operon new myapp          # scaffold: manifest, src/main.op, a green smoke test
+operon test               # runs the smoke proof
+operon add http           # pull a package from the registry — zero flags
+operon add web            # web depends on http: the closure handles it
+operon run src/main.op
+operon tree               # what is resolved, at which rev, from where
+operon verify             # every vendored tree matches its checksum
+operon remove web
+operon update             # re-resolve the whole closure
+operon publish            # append your package to a registry index
+```
+
+`operon add NAME` needs no setup: a seed registry (http, json, postgres,
+web — real, tested, pure-Operon packages) ships inside the binary and
+materializes on first use, so the first add works offline. Point
+`OPERON_REGISTRY` at your own index (a file, or an http(s) URL) or set
+`[registry] path` in operon.toml to publish and consume your own. CI pins
+`operon run --locked`, which fails on any manifest-lockfile drift, and
+`operon registry serve DIR` stands up a read-only HTTP registry in one
+command.
+
 ## Connect your editor (operon-ls)
 
 `operon-ls` is a zero-dependency stdio language server shipped in every release archive (and in the Windows zip since lsp-r1). It wires the real Total Grammar parser and the `check` engine into your editor, the same diagnostics you get from `operon check`, no second implementation:

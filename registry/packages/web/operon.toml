@@ -1,0 +1,13 @@
+# web — the routing layer (pure Operon, depends on pkg http).
+# A first-match-wins router with :param and *splat patterns, decoded
+# request envelopes, form bodies, and response helpers. Depends on the
+# http package (transitive dependency demo, resolved through operon.lock).
+
+[package]
+name = "web"
+version = "0.1.0"
+operon-version = "2.2"
+description = "Routing layer: :param/*splat router, request envelopes, forms, responses"
+
+[deps]
+http = { git = "registry:http" }

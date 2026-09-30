@@ -70,3 +70,64 @@ operon mod add NAME --registry FILE [--rev OVERRIDE] [--as N]  # resolve + insta
 `scripts/registry_e2e.sh` proves the loop end to end: publish two fixture packages
 into one index, resolve a consumer's dependency by NAME through the index, install
 offline from the lockfile, verify checksums, and re-publish idempotently.
+
+## 5. The resolution chain (W21-r1)
+
+`operon add NAME` resolves NAME through the first SET source in this chain:
+
+| order | source | set by |
+|---|---|---|
+| 1 | explicit flag | `--registry FILE` |
+| 2 | machine override | `OPERON_REGISTRY` env (file path or http(s):// index URL) |
+| 3 | project pin | `[registry] path = "..."` in operon.toml |
+| 4 | bundled seed | materialized on first use under `~/.operon/registry/` |
+
+The seed ships INSIDE the binary (embedded package trees: http, json,
+postgres, web). First `add` materializes `~/.operon/registry/{index.jsonl,
+packages/}` and every later add re-verifies content checksums. A marker
+file (`seed.sha256`) records the digest of the embedded seed; a toolchain
+upgrade with different seed content rebuilds the registry rather than
+serving stale packages. `operon registry default` prints the resolved
+source without touching anything.
+
+## 6. Registry entries gain `dir`
+
+A line may carry `"dir": "/abs/path/to/package-tree"` instead of pointing
+a `git` URL at a clone. Dir-sourced entries are resolved by COPYING the
+tree into the vendored cache; the rev IS the content (`content-` + 16 hex
+of the same checksum routine the lockfile uses), so the same bytes land
+in the same cache dir on every machine and the lockfile stays byte-stable.
+
+**Security rule (deny-by-default):** `dir` is a LOCAL-registry feature.
+A registry served over http(s):// that publishes a `dir` entry is REFUSED
+at resolve time — honoring it would let a remote registry direct this
+machine to copy arbitrary local directories into the dep cache. Remote
+registries publish git URLs; period.
+
+## 7. Hosting a registry
+
+The cheapest real deployment is a checkout plus any static file server:
+
+```
+operon registry init /srv/operon-registry      # index.jsonl + packages/
+# append entries (operon publish --registry …/index.jsonl, or edit)
+operon registry serve /srv/operon-registry --port 7331
+# clients:
+OPERON_REGISTRY=http://your.host:7331/index.jsonl operon add beta
+```
+
+`operon registry serve` is deliberately minimal and read-only: it serves
+`/health`, `/index.jsonl`, and `/pkg/NAME/FILE` (validated segments, no
+dotfiles, no traversal, 405 for anything but GET) and nothing else. It is
+the dev/preview server; for a public deployment put a real reverse proxy
+in front and keep the registry directory read-only to the server process.
+
+## 8. Client fetch over HTTP(S)
+
+An `http(s)://` registry source is fetched with `curl -sSL --max-time 30`
+(the same trust class the toolchain already accepts for `git`; no HTTP
+stack, no crates, by policy). A fetched index is parsed by exactly the
+same rules as a local file — malformed lines are hard errors with line
+numbers. Publishing to a remote index URL is refused: appending is a
+filesystem/git operation, point `--registry` at a writable checkout and
+push.
