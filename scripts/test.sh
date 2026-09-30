@@ -36,6 +36,16 @@ echo "[2/3] Operon proof suite (Rust core)"
 # determinism).
 ./bin/operon test tests/async/ --cell tests/async/async.cell
 ./bin/operon test tests/async/
+# W16-v2: cancellation + structured-scope liveness proofs assert the
+# CONCURRENT substrate contract (a fresh spawn is live; a parked cancel
+# wakes before its deadline). The sequential oracle runs children inline
+# (born finished) and can never observe these shapes — the W18 timing
+# precedent — so they live in tests/async/timing/ (both bulk walkers skip
+# "timing") and ride here as an explicit substrate pair.
+./bin/operon test tests/async/timing/async_cancel.op --cell tests/async/async.cell
+./bin/operon test tests/async/timing/async_cancel.op
+./bin/operon test tests/async/timing/async_scope.op --cell tests/async/async.cell
+./bin/operon test tests/async/timing/async_scope.op
 ./bin/operon test tests/async/timing/async_sleeps.op --cell tests/async/async.cell
 ./bin/operon test tests/async/timing/async_wake_order.op --cell tests/async/async.cell --repeat 3
 # W18: cancellation inheritance — the child's observation lands in a file

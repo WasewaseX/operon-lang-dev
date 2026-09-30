@@ -15,7 +15,17 @@ use std::sync::{mpsc, Arc, Mutex};
 // A run may hold at most MAX_THREADS live worker cells. Exceeding the cap is
 // a catchable `overflow` stress, never a panic, thread bombs are contained.
 const MAX_THREADS: usize = 256;
-const WORKER_STACK: usize = 256 * 1024 * 1024; // match-class native stack
+// The worker's native stack must outlast the interpreter depth limit
+// (10_000) at the profile's frame cost, so the limit — not the host — is
+// what contains runaway recursion (async_fuel.op pins this). Release
+// frames fit 10_000 levels in 256 MiB; DEBUG frames are several times
+// fatter and abort the process before the limit fires, which broke the
+// cargo_proof debug gate. W016-v2: debug builds get the headroom, the
+// release contract is byte-identical.
+#[cfg(debug_assertions)]
+const WORKER_STACK: usize = 1 << 30; // debug: fat frames, same 10_000 levels
+#[cfg(not(debug_assertions))]
+const WORKER_STACK: usize = 256 * 1024 * 1024; // release: match-class native stack
 static LIVE_THREADS: AtomicUsize = AtomicUsize::new(0);
 
 struct ThreadGuard;
