@@ -16,6 +16,7 @@ scripts/fuzz/fuzz.py and in scripts/fuzz/TRIAGE.md.
 | scripts/fuzz/fuzz.py (W051) | mutation-based black-box | check, ast --json, fmt, explain [--json] | --seed S |
 | scripts/fuzz_parser.py | grammar-aware generation | parser via exec engines | --seed S |
 | scripts/fuzz/fuzz_diff.py (S7 s2) | grammar-aware differential, at scale | run (VM + tree-walk) vs oracle, check rc contract, check --json shape parity | --seed S |
+| scripts/fuzz/fuzz_exec.py (S7 s3) | grammar-aware + redteam-directed escape generation | run default-deny + fuel cap (E1/E1b/E2), rna --check / doc / graph / disasm / crispr (E3) | --seed S |
 | scripts/gen_corpus.py | grammar-aware corpus generator | compat matrix input | --seed S |
 | scripts/compat_matrix.sh | differential matrix | tree-walk / VM / VM-opt / debug / oracle | fixed corpus + seed |
 
@@ -32,20 +33,38 @@ Fuzzed TODAY (parse/tooling layer, all inputs must end clean or contained):
 Fuzzed by the grammar generator (fuzz_parser.py): lexer + parser + the
 exec engines in agreement mode (tree-walk vs oracle).
 
+Fuzzed by the exec-surface lane (S7 slice 3, fuzz_exec.py):
+
+- `operon run` under a default-deny profile (zero grants) with a fuel
+  cap: the contained-or-clean property (E1) plus the breach sentinel
+  (E1b) — escape-shaped programs print EXECBREACH only on the
+  effect-success path, so an ungranted effect that ever executes is a
+  finding independent of the exit code
+- the capability funnel itself: programs seeded from the denial
+  vocabulary (read_file/write_file/append_file/read_file_bytes/
+  write_file_bytes/exists/file_size/read_dir/fs_delete/fs_rename/
+  fs_mkdir/http_get/run/py/env/exit) with adversarial argument shapes
+  (traversal, escape paths, symlink names, hosts, commands, modules),
+  bare and stress/rescue-wrapped and loop-wrapped (E2: fuel exhaustion
+  is the expected end, never a hang), spliced into real bucket programs
+- the tooling surfaces (E3): `rna <f> <patch> --check` (both text and
+  --json; plus the never-writes property — input bytes hashed
+  before/after must match), `doc [--json]`, `graph [--json]`,
+  `disasm [--json]`, `crispr --knockout G [--json]` on generated and
+  byte-mutated programs
+
 NOT YET fuzzed (the S7 roadmap, in order):
 
-- `operon run` on generated programs under a default-deny, fuel-capped,
-  timed profile (the exec-surface property: contained-or-clean, never
-  panic/hang; slice 3)
-- `rna --check`, `doc`, `graph --json`, `crispr`, `disasm` tooling surfaces
-  (slice 3)
 - differential fuzzing at scale: Rust vs Python oracle byte-identical
   stdout over THOUSANDS of generated programs per round, plus
   `check --json` shape parity — DONE (slice 2, scripts/fuzz/fuzz_diff.py;
   reuses gen_corpus.py's bucket generators verbatim, so
   fuzz_diff(seed, i) == gen_corpus(seed, i) program for program)
 - redteam-directed generation: capability-escape attempts seeded from the
-  denial vocabulary (slice 3)
+  denial vocabulary — DONE (slice 3, the escape leg of fuzz_exec.py)
+- libFuzzer in-process targets (cargo-fuzz) for the Rust core: the deeper
+  layer W051's done-when names; the black-box lanes above are the
+  zero-setup daily driver that runs in CI today
 
 ## Running it
 
@@ -53,8 +72,14 @@ NOT YET fuzzed (the S7 roadmap, in order):
 python3 scripts/fuzz/fuzz.py --time-budget 120 --execs 300 --seed 20260930
 python3 scripts/fuzz_parser.py --n 500 --seed 20260930 --exec
 python3 scripts/fuzz/fuzz_diff.py --n 2400 --seed 20260930 --time-budget 480
+python3 scripts/fuzz/fuzz_exec.py --n 900 --seed 20261001 --time-budget 600
 FAST=1 bash scripts/compat_matrix.sh        # 10% sample
 ```
+
+In CI (S7 stage 5): the FAST pre-merge `fuzz` job runs all three lanes
+with fixed seed 20261001 and time-boxed budgets — a finding FAILS the
+run; the nightly `fuzz-nightly` job (schedule + workflow_dispatch) runs
+the full deep sweeps on a date-derived seed recorded in the log.
 
 Exit code 1 = findings exist. They are SAVED under fuzz_corpus/ with a
 MANIFEST.jsonl line each: triage them (scripts/fuzz/TRIAGE.md), do not
@@ -71,6 +96,11 @@ reoccur invisibly.
   (run VM, run tree-walk, oracle, check, check --json) = 12,000 execs in
   244s: 0 divergences, 0 rc-contract violations, 0 shape-parity
   violations, 0 panics/hangs; all 12 buckets x 200
+- fuzz_exec.py seed 20261001, 900 programs (run:301, escape:301,
+  tooling:298 legs): E1/E1b/E2/E3 all hold, 0 findings
+- fuzz_exec.py seed 20261030 deep sweep, 9000 programs (3001/3001/2998)
+  in 59s: 0 findings — default-deny run path, fuel counter and tooling
+  surfaces hold contained-or-clean
 
 ## fuzz-r3 deep sweep (record)
 

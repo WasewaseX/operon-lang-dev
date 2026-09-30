@@ -967,6 +967,47 @@ pub fn disassemble_program(prog: &crate::ast::Program) -> String {
     out
 }
 
+/// `operon disasm --json`: the same compile pass as `disassemble_program`
+/// (shared VmProgram, per-gene GeneCode, identical instruction indexes),
+/// rendered as a self-describing JSON document. Pairs with `graph --json`.
+pub fn disassemble_program_json(prog: &crate::ast::Program) -> String {
+    let esc = |s: &str| crate::tools::json_escape(s);
+    let mut out = String::new();
+    out.push_str(&format!(
+        "{{\"format\":\"operon-oir\",\"version\":{},\"genes\":[",
+        OIR_VERSION
+    ));
+    let mut vmprog = VmProgram::default();
+    let mut first_gene = true;
+    for s in &prog.stmts {
+        if let Stmt::Gene(g) = s {
+            let name = g.name.clone().unwrap_or_else(|| "<lambda>".into());
+            let code = compile_body(&name, &g.body, &mut vmprog);
+            if !first_gene {
+                out.push(',');
+            }
+            first_gene = false;
+            out.push_str(&format!("{{\"name\":\"{}\",\"instrs\":[", esc(&name)));
+            let mut first_insn = true;
+            for (i, instr) in code.code.iter().enumerate() {
+                if !first_insn {
+                    out.push(',');
+                }
+                first_insn = false;
+                out.push_str(&format!(
+                    "{{\"i\":{},\"op\":\"{}\",\"text\":\"{}\"}}",
+                    i,
+                    esc(mnemonic(instr)),
+                    esc(&render(instr, &code))
+                ));
+            }
+            out.push_str("]}");
+        }
+    }
+    out.push_str("]}");
+    out
+}
+
 fn mnemonic(i: &Instr) -> &'static str {
     match i {
         Instr::Push(_) => "Push",
