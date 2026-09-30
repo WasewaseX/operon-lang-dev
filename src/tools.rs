@@ -2598,9 +2598,7 @@ fn d_ann(a: &TypeAnn) -> DumpNode {
         TypeAnn::Named(n) => dn("Ann", vec![ds(n)]),
         TypeAnn::Union(alts) => dn("AnnUnion", alts.iter().map(d_ann).collect()),
         TypeAnn::Optional(inner) => dn("AnnOptional", vec![d_ann(inner)]),
-        TypeAnn::Alias { name, target } => {
-            dn("AnnAlias", vec![ds(name), d_ann(target)])
-        }
+        TypeAnn::Alias { name, target } => dn("AnnAlias", vec![ds(name), d_ann(target)]),
         TypeAnn::Generic(name, args) => dn(
             "AnnGeneric",
             std::iter::once(ds(name))

@@ -1444,7 +1444,6 @@ fn collect_traits_stmt(st: &Stmt, table: &mut HashMap<(String, String), bool>) {
     }
 }
 
-
 // ==================================================================== pattern bindings
 fn pat_binding(pat: &MatchPat, scrut: &Ty) -> Option<(String, Ty)> {
     match pat {
@@ -1504,4 +1503,3 @@ fn bind_pat(pat: &Pat, ty: Ty, env: &mut Env) {
         }
     }
 }
-

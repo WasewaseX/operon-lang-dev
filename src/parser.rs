@@ -2987,7 +2987,7 @@ impl Parser {
                 }
                 // W01-s2: a declared alias resolves at parse time; an
                 // enclosing gene's type parameter never does (shadowing).
-                let base = if !self.type_param_stack.iter().any(|p| *p == w) {
+                let base = if !self.type_param_stack.contains(&w) {
                     match self.type_aliases.iter().find(|(n, _)| *n == w) {
                         Some((n, target)) => TypeAnn::Alias {
                             name: n.clone(),

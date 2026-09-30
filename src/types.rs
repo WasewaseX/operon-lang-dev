@@ -561,8 +561,6 @@ pub fn pat_covers_ty(pat: &MatchPat, ty: &Ty) -> bool {
 // ================================================================= entry
 
 /// Run the static type check over a parsed program. Returns the T-series
-/// findings in source order (line 0 findings last for stable output).
-
 // ==================================================================== trait tables + named-type constructors
 pub fn trait_declared(name: &str) -> bool {
     TRAIT_TABLE.with(|t| t.borrow().keys().any(|(tn, _)| tn == name))
