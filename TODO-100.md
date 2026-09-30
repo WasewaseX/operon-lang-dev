@@ -942,15 +942,14 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
    tail + `/home/z/my-project/worklog.md` (if present), rebuild toolchain per
    `collab/guide.md`, continue from the sprint table above.
 
-### W101 - Excellent errors [P0, owner directive 2026-09-29] [dev-3] [L] [slice 1 done: sz/w101-excellent-errors]
+### W101 - Excellent errors [P0, owner directive 2026-09-29] [dev-3] [L] [DONE 2026-09-30: session-25, 10 slices, tracker ERRORS-EPIC-PROGRESS.md 100%]
 - Owner ask: hobby-language errors -> trusted-language errors: spans, line+column, snippets,
   error codes, cause chains, suggestions, fix-it hints, stack traces, machine-readable JSON.
 - Slice 1 (this PR): src/diag.rs (code catalog E1xxx + rustc-style renderer + --json-errors
   JSON diagnostics), runner wiring (block replaces the old one-liner; chain tail deduplicated),
   scripts/diag_golden.sh golden gate (3 fixtures, byte-exact, rc=1 pinned), SPEC 9a.1 contract.
   Stresses as VALUES untouched (oracle parity safe, notes byte-identical).
-- Slice 2 (queued): line attach at the denial sites (Caps::denied callers hold the call line),
-  did-you-mean suggestions for unknown names, LSP consumption of the JSON schema.
+- Slice 2 (landed session-25): line attach at the denial sites done via the named-call funnel (8be81dd); did-you-mean + SuggestedFix landed (c2b8fb5); LSP JSON consumption rides the evidence schema (check --json fix objects, operon-ls uses phantom lines).
 - Slice 3 (dev-1 lane): column spans in the AST (dx-r2 spans carry line only), caret
   threading; then parser/check diagnostics adopt the same codes.
-- Done when: all owner bullets are true for the FATAL surface and the golden gate runs in CI.
+- Done when: all owner bullets are true for the FATAL surface and the golden gate runs in CI. DONE (session-25): spans/line+column (Span/Label + denial line attach), snippets (rustc-style blocks, CJK width-correct), error codes (E1xxx + E2xxx catalogs, docs/diagnostics-inventory.md), cause chains (W007 kept), suggestions (did_you_mean mirrors wobble thresholds; entry-typo fatal), fix-it hints (SuggestedFix on phantoms), stack traces (W007 chain), machine-readable JSON (labels/suggestions/fix). Golden gate: 10 fixtures in scripts/diag_golden.sh wired into scripts/test.sh; user guide docs/errors.md; red-main hotfix r6 (windows import_diag separators + playground manifest regen) landed f5f315b.
