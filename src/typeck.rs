@@ -218,6 +218,9 @@ impl Checker {
                 let a: Vec<Ty> = args.iter().map(|x| self.ann_to_ty_in(x, tps)).collect();
                 generic_to_ty(head, &a)
             }
+            // W01-s2: an alias resolves as its target (the parser already
+            // refused forward references, so the target is fully known)
+            TypeAnn::Alias { target, .. } => self.ann_to_ty_in(target, tps),
         }
     }
 
@@ -270,6 +273,9 @@ impl Checker {
                     self.ann_unknown_names(a, type_params, line);
                 }
             }
+            // W01-s2: an alias annotation is known by construction (the
+            // parser resolved it); only its target can name something unknown
+            TypeAnn::Alias { target, .. } => self.ann_unknown_names(target, type_params, line),
             TypeAnn::Optional(inner) => self.ann_unknown_names(inner, type_params, line),
             TypeAnn::Generic(head, args) => {
                 let norm = head.to_ascii_lowercase();

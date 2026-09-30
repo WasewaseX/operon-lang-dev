@@ -175,6 +175,16 @@ pub enum TypeAnn {
     /// annotation's HEAD like the bare name (list[int] enforces "is a
     /// list") — element types are the static checker's business.
     Generic(String, Vec<TypeAnn>),
+    /// W01-s2 type aliases: an annotation naming a declared alias
+    /// (`type Metrics = map[str, float]`, then `m: Metrics`). The parser
+    /// resolves the name at parse time; matching is the TARGET's law
+    /// (runtime + checker both recurse into `target`). No forward
+    /// references: an annotation naming an alias BEFORE its declaration
+    /// stays a plain `Named` and the typo-armor rule applies.
+    Alias {
+        name: String,
+        target: Box<TypeAnn>,
+    },
 }
 
 impl TypeAnn {
@@ -197,6 +207,7 @@ impl TypeAnn {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
+            TypeAnn::Alias { name, .. } => name.clone(),
         }
     }
 }
@@ -419,6 +430,12 @@ pub enum Stmt {
     /// checked when the statement binds (mismatch = catchable `unfolded`
     /// Stress, SPEC §7a); the binding itself is an ordinary `let`.
     LetAnn(String, TypeAnn, Expr),
+    /// W01-s2: `type Name = ann`, a type alias. Parse-time metadata: the
+    /// parser resolves later annotations naming `Name` into
+    /// `TypeAnn::Alias`, and the statement itself is inert at runtime
+    /// (the tree-walk no-ops it; the VM bridges it there). The line
+    /// stamps the duplicate-alias note and fmt output.
+    TypeAlias(String, TypeAnn, usize),
     Assign(String, Option<BinOp>, Expr), // name (op=)? expr
     IndexAssign(Expr, Expr, Option<BinOp>, Expr), // target[i] (op=)? expr
     MemberAssign(Expr, String, Option<BinOp>, Expr), // target.k (op=)? expr

@@ -1245,6 +1245,10 @@ impl Interp {
             self.tick()?;
         }
         match stmt {
+            // W01-s2: a type-alias declaration is parse-time metadata; the
+            // runtime is inert (annotations referencing it already resolved
+            // to TypeAnn::Alias in the parser).
+            Stmt::TypeAlias(..) => Ok(Flow::Norm),
             Stmt::Block(body) => {
                 let child = Env::new(Some(env.clone()));
                 self.exec_block(&child, body)
@@ -11570,6 +11574,10 @@ pub fn ann_matches(v: &Value, ann: &TypeAnn) -> bool {
             Value::Variant(t, _) if *t == crate::value::VTag::NoneV => true,
             other => ann_matches(other, inner),
         },
+        // W01-s2: an alias matches as its parse-time-resolved target
+        // (runtime annotations stay the compatibility fallback; the alias
+        // is sugar for the target annotation, never a new runtime type).
+        TypeAnn::Alias { target, .. } => ann_matches(v, target),
         // generic head matching: list[int] enforces "is a list", map[k, v]
         // "is a map", option[t] additionally accepts null (mirrors Optional),
         // result[t, e] matches the variant family. Element types are ignored
@@ -11611,6 +11619,8 @@ pub fn ann_is_typaram(ann: &TypeAnn, type_params: &[(String, Option<String>)]) -
         // generic heads: list[T] etc. enforce their shallow runtime shape,
         // only a BARE parameter name is erased
         TypeAnn::Generic(_, _) => false,
+        // W01-s2: an alias resolves to its target, which is concrete
+        TypeAnn::Alias { .. } => false,
     }
 }
 
