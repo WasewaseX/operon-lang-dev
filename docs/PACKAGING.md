@@ -157,18 +157,47 @@ Source of truth: `packaging/packages/`. Seed a local registry with
 
 ## Publishing over https
 
-The zero-crates core has no TLS stack, so the client dials `http://` and
-local directories. For an https registry: `operon publish -o out.opkg`
-writes the outbox bundle, then one curl:
+The default build stays zero-external-crates and speaks `http://` and local
+directory registries. For https — which is what the hosted registry on
+Render serves at the edge — compile the opt-in TLS variant (pure-Rust
+rustls, one flag, nothing else pulled into the default build):
 
 ```console
-$ curl -fsS -X POST -H "Authorization: Bearer $OPERON_TOKEN" \
-    -H "Content-Type: application/json" \
-    --data-binary @out.opkg $REGISTRY_URL/api/publish
+$ cargo build --release --features tls
 ```
 
-A TLS client (rustls behind a feature flag) is the named next step; it was
-deferred rather than silently promised.
+That build dials `https://` registries directly; publish, search, add,
+update and run all work over https exactly as over http (same request and
+response bytes, only the pipe differs):
+
+```console
+$ OPERON_REGISTRY=https://operon-registry.onrender.com \
+  OPERON_TOKEN=... operon publish
+```
+
+**Self-hosted registries with an internal CA.** If your registry runs a
+certificate your OS trust store does not know (a company CA, a self-signed
+lab CA), point `OPERON_CA_FILE` at the CA's PEM bundle. The client then
+builds the chain to that anchor and still refuses anything unverifiable —
+an untrusted certificate is an error, never a warning:
+
+```console
+$ OPERON_REGISTRY=https://registry.internal.example OPERON_CA_FILE=ca.pem operon add http
+```
+
+The registry service itself can serve TLS directly for self-hosting
+(Render terminates TLS for you, so this is only needed when you front the
+service yourself): set `OPERON_TLS_CERT` and `OPERON_TLS_KEY` in the
+environment and `python3 app.py` speaks https.
+
+The full https lifecycle is gated by `scripts/pkg_tls_e2e.sh`: it builds
+the `tls` variant, generates a CA-signed server certificate in the
+internal-CA shape, boots the real registry over TLS and drives
+publish → search → add → run → lock-reproducibility through it, plus the
+negative checks (no CA file → untrusted rejection; no token → 403;
+republish → 409 immutable). Without the `tls` feature the client refuses
+https loudly and names the exact rebuild command — silent downgrades are
+not a thing here.
 
 ## Where the tests live
 
@@ -176,14 +205,20 @@ deferred rather than silently promised.
   lockfile/deterministic-resolution unit tests (cargo test).
 * `tests/package/pkg_e2e.sh`: 38 end-to-end checks over both transports,
   wired as step [5/5] of `scripts/test.sh`.
+* `scripts/pkg_tls_e2e.sh`: 21 https end-to-end checks (TLS build, internal-
+  CA handshake, publish/search/add/run/lock over https, untrusted-CA and
+  no-token rejections, default-build refusal message, real-internet
+  roundtrip).
 * `operon_modules/demo_pkg/` + `tests/differential/package_resolve.op`:
   the installed-layout import path is pinned byte-identically on both
   cores (Rust + oracle) in the differential harness (144/144).
 
 ## Known limits (honest list)
 
-* No TLS in the client (see above). No git/source-artifact transport yet —
-  the registry envelope is the only source shape.
+* https needs the `tls` feature build (see above); the default binary
+  refuses it with the exact rebuild command rather than a raw connection
+  error. No git/source-artifact transport yet — the registry envelope is
+  the only source shape.
 * Pre-release versions are rejected loudly, not sorted subtly.
 * `operon publish` rewrites `operon.toml` from the parsed manifest (comments
   and unknown keys in `[dependencies]` are normalized away).

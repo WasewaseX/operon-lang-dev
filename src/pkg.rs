@@ -11,10 +11,11 @@
 //!   * registry transports: local directory registries and plain HTTP/1.1
 //!   * package envelopes (JSON + base64 files, sha256-pinned) for publish/install
 //!
-//! TLS is deliberately out of scope for this build (no crates policy): the
-//! registry client speaks `file://`-style local paths and `http://`. The
-//! hosted registry on Render is reachable over http for local dev and the
-//! publish outbox flow covers https upload (docs/PACKAGING.md).
+//! Registry transports: `file://`-style local paths and `http://` in the
+//! default zero-external-crates build. Compiled with `--features tls`
+//! (opt-in, pure-Rust rustls) the same client dials `https://` registries
+//! — Render serves https at the edge — and `OPERON_CA_FILE` accepts a PEM
+//! bundle for self-hosted registries running an internal CA.
 //!
 //! Every routine here is unit-tested at the bottom of this file; end-to-end
 //! CLI behavior is tested by tests/package/pkg_e2e.sh.
@@ -1078,8 +1079,28 @@ impl std::fmt::Display for PkgError {
     }
 }
 
+/// https gate (ai/ecosystem item 10): builds without the `tls` feature
+/// refuse https registry URLs with an actionable message; builds compiled
+/// with `--features tls` dial them (rustls).
+fn https_unsupported(base: &str, op: &str) -> Result<(), String> {
+    #[cfg(not(feature = "tls"))]
+    {
+        if base.starts_with("https://") {
+            return Err(format!(
+                "registry '{}' uses https, which this build cannot {} (compiled without TLS). Rebuild with `cargo build --features tls`, or use the local registry (OPERON_REGISTRY=<dir>) / an http mirror. See docs/PACKAGING.md.",
+                base, op
+            ));
+        }
+    }
+    #[cfg(feature = "tls")]
+    {
+        let _ = (base, op);
+    }
+    Ok(())
+}
+
 /// A registry the CLI can talk to: a local directory (the dev/test shape)
-/// or an http:// endpoint (the hosted shape, same URL surface).
+/// or an http(s):// endpoint (the hosted shape, same URL surface).
 #[derive(Debug, Clone)]
 pub enum Registry {
     Dir(PathBuf),
@@ -1099,8 +1120,8 @@ impl Registry {
         } else if s.starts_with("http://") {
             Registry::Http(s.trim_end_matches('/').to_string())
         } else if s.starts_with("https://") {
-            // this build has no TLS stack (zero-crates core); surface the
-            // limit honestly instead of a connection error downstream
+            // the per-operation https_unsupported gate surfaces an honest
+            // error on no-tls builds instead of a connection error downstream
             Registry::Http(s.trim_end_matches('/').to_string())
         } else {
             Registry::Dir(PathBuf::from(s))
@@ -1130,12 +1151,7 @@ impl Registry {
                 parse_index_json(&body)
             }
             Registry::Http(base) => {
-                if base.starts_with("https://") {
-                    return Err(format!(
-                        "registry '{}' uses https, which this build cannot dial (no TLS in the zero-crates core). Use the local registry (OPERON_REGISTRY=<dir>) or an http mirror; https client support is tracked in docs/PACKAGING.md.",
-                        base
-                    ));
-                }
+                https_unsupported(base, "dial")?;
                 let url = format!("{}/api/packages/{}", base, name);
                 let (status, body) = http_request("GET", &url, &[], None)?;
                 if status == 404 {
@@ -1160,11 +1176,7 @@ impl Registry {
                     .map_err(|e| format!("artifact {}/{} unreadable: {}", name, ver, e))
             }
             Registry::Http(base) => {
-                if base.starts_with("https://") {
-                    return Err(
-                        "https artifact download is not supported by this build (no TLS)".into(),
-                    );
-                }
+                https_unsupported(base, "download from")?;
                 let url = format!("{}/api/packages/{}/{}/download", base, name, ver);
                 let (status, body) = http_request("GET", &url, &[], None)?;
                 if status != 200 {
@@ -1213,9 +1225,7 @@ impl Registry {
                 Ok(out)
             }
             Registry::Http(base) => {
-                if base.starts_with("https://") {
-                    return Err("https search is not supported by this build (no TLS)".into());
-                }
+                https_unsupported(base, "search")?;
                 let q = if query.is_empty() {
                     String::new()
                 } else {
@@ -1280,9 +1290,7 @@ impl Registry {
                 Ok(format!("published {} {} to {}", name, ver, root.display()))
             }
             Registry::Http(base) => {
-                if base.starts_with("https://") {
-                    return Err("https publish is not supported by this build (no TLS); use the publish outbox flow (docs/PACKAGING.md)".into());
-                }
+                https_unsupported(base, "publish to")?;
                 let url = format!("{}/api/publish", base);
                 let hdrs = vec![
                     ("Content-Type".to_string(), "application/json".to_string()),
@@ -1329,36 +1337,73 @@ fn urlencode(s: &str) -> String {
 }
 
 /// Minimal HTTP/1.1 client over std::net — enough for the registry surface.
-/// Returns (status, body). 10s connect/read timeouts; no redirects followed
-/// (registries answer 200 directly; a 3xx surfaces as an error the user sees).
+/// Returns (status, body). 10s connect/30s read timeouts; no redirects
+/// followed (registries answer 200 directly; a 3xx surfaces as an error the
+/// user sees). https URLs dial through rustls on `--features tls` builds
+/// and refuse with an actionable error otherwise.
 pub fn http_request(
     method: &str,
     url: &str,
     headers: &[(String, String)],
     body: Option<&[u8]>,
 ) -> Result<(u16, String), String> {
+    if let Some(rest) = url.strip_prefix("https://") {
+        #[cfg(not(feature = "tls"))]
+        {
+            let _ = rest;
+            return Err(format!(
+                "https is not supported by this build (compiled without TLS): '{}'. Rebuild with `cargo build --features tls`.",
+                url
+            ));
+        }
+        #[cfg(feature = "tls")]
+        {
+            return https_request(method, rest, headers, body);
+        }
+    }
     let rest = url
         .strip_prefix("http://")
-        .ok_or_else(|| format!("unsupported URL '{}' (http:// only in this build)", url))?;
-    let (hostport, path) = match rest.find('/') {
-        Some(i) => (&rest[..i], &rest[i..]),
-        None => (rest, "/"),
-    };
+        .ok_or_else(|| format!("unsupported URL '{}' (http/https only)", url))?;
+    let (hostport, path) = split_hostpath(rest);
+    let mut stream = tcp_connect(&hostport)?;
+    write_request(&mut stream, method, &hostport, &path, headers, body)?;
+    let buf = read_all_stream(&mut stream)?;
+    parse_http_response(buf)
+}
+
+/// host[:port] + path from the text after a scheme prefix.
+fn split_hostpath(rest: &str) -> (String, String) {
+    match rest.find('/') {
+        Some(i) => (rest[..i].to_string(), rest[i..].to_string()),
+        None => (rest.to_string(), "/".to_string()),
+    }
+}
+
+fn tcp_connect(hostport: &str) -> Result<std::net::TcpStream, String> {
     let addrs = hostport
         .to_socket_addrs()
         .map_err(|e| format!("cannot resolve '{}': {}", hostport, e))?
         .collect::<Vec<_>>();
     let addr = addrs.first().copied().ok_or("host resolved to nothing")?;
-    let mut stream =
-        std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(10))
-            .map_err(|e| format!("connect to {} failed: {}", hostport, e))?;
-    use std::io::{Read, Write};
+    let stream = std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(10))
+        .map_err(|e| format!("connect to {} failed: {}", hostport, e))?;
     stream
         .set_read_timeout(Some(std::time::Duration::from_secs(30)))
         .ok();
     stream
         .set_write_timeout(Some(std::time::Duration::from_secs(30)))
         .ok();
+    Ok(stream)
+}
+
+fn write_request<T: std::io::Read + std::io::Write>(
+    stream: &mut T,
+    method: &str,
+    hostport: &str,
+    path: &str,
+    headers: &[(String, String)],
+    body: Option<&[u8]>,
+) -> Result<(), String> {
     let mut req = format!(
         "{} {} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nUser-Agent: operon-pkg/1\r\n",
         method, path, hostport
@@ -1376,8 +1421,17 @@ pub fn http_request(
     if let Some(b) = body {
         stream.write_all(b).map_err(|e| e.to_string())?;
     }
+    stream.flush().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn read_all_stream<T: std::io::Read>(stream: &mut T) -> Result<Vec<u8>, String> {
     let mut buf = Vec::new();
     stream.read_to_end(&mut buf).map_err(|e| e.to_string())?;
+    Ok(buf)
+}
+
+fn parse_http_response(buf: Vec<u8>) -> Result<(u16, String), String> {
     let sep = b"\r\n\r\n";
     let split = buf
         .windows(sep.len())
@@ -1401,6 +1455,77 @@ pub fn http_request(
         .and_then(|s| s.parse().ok())
         .ok_or("malformed HTTP status line")?;
     Ok((status, String::from_utf8_lossy(&body_final).to_string()))
+}
+
+/// https transport (cargo feature `tls`): a rustls client over the webpki
+/// root store, plus `OPERON_CA_FILE` (PEM) for self-hosted registries
+/// running an internal CA. The request and response bytes are exactly the
+/// plain-http ones — only the pipe differs.
+#[cfg(feature = "tls")]
+fn https_request(
+    method: &str,
+    hostpath: &str,
+    headers: &[(String, String)],
+    body: Option<&[u8]>,
+) -> Result<(u16, String), String> {
+    use std::sync::Arc;
+    let (hostport, path) = split_hostpath(hostpath);
+    let dial = if hostport.contains(':') {
+        hostport.clone()
+    } else {
+        format!("{}:443", hostport)
+    };
+    let host = match hostport.rsplit_once(':') {
+        Some((h, p)) if p.parse::<u16>().is_ok() => h.to_string(),
+        _ => hostport.clone(),
+    };
+    let mut tcp = tcp_connect(&dial)?;
+
+    let mut roots = rustls::RootCertStore::empty();
+    roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    // self-hosted registries often run an internal CA: OPERON_CA_FILE (PEM)
+    if let Ok(ca) = std::env::var("OPERON_CA_FILE") {
+        if !ca.trim().is_empty() {
+            use rustls_pki_types::pem::PemObject;
+            let iter = rustls_pki_types::CertificateDer::pem_file_iter(&ca)
+                .map_err(|e| format!("cannot read OPERON_CA_FILE '{}': {}", ca, e))?;
+            let mut n = 0usize;
+            for cert in iter {
+                let cert = cert.map_err(|e| format!("bad PEM in '{}': {}", ca, e))?;
+                roots
+                    .add(cert)
+                    .map_err(|e| format!("bad CA certificate in '{}': {}", ca, e))?;
+                n += 1;
+            }
+            if n == 0 {
+                return Err(format!("OPERON_CA_FILE '{}' contains no certificates", ca));
+            }
+        }
+    }
+
+    let sni = rustls_pki_types::ServerName::try_from(host.clone())
+        .map_err(|e| format!("bad registry hostname '{}': {}", host, e))?;
+    let config = rustls::ClientConfig::builder()
+        .with_root_certificates(roots)
+        .with_no_client_auth();
+    let mut conn = rustls::ClientConnection::new(Arc::new(config), sni)
+        .map_err(|e| format!("TLS setup failed: {}", e))?;
+    let mut tls = rustls::Stream::new(&mut conn, &mut tcp);
+    write_request(&mut tls, method, &hostport, &path, headers, body)?;
+    // read_to_end guarantees bytes read before an error stay in `buf`.
+    // Many TLS terminators (Python ssl, some proxies) close the socket
+    // without sending TLS close_notify; rustls surfaces that as
+    // UnexpectedEof. With Connection: close framing, EOF is the legitimate
+    // end of the body — exactly what the plain-http path relies on — so
+    // keep what was received instead of failing the whole response.
+    use std::io::Read;
+    let mut buf = Vec::new();
+    match tls.read_to_end(&mut buf) {
+        Ok(_) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {}
+        Err(e) => return Err(e.to_string()),
+    }
+    parse_http_response(buf)
 }
 
 fn decode_chunked(mut data: &[u8]) -> Vec<u8> {
@@ -2400,7 +2525,7 @@ pub fn template_files(template: &str, name: &str) -> Result<Vec<(String, String)
             (
                 format!("lib/{}.op", name),
                 format!(
-                    "# {} - an Operon library\n\nexport hello\n\ngene hello(name) {{\n    return \"hello, \" + name;\n}}\n",
+                    "# {} - an Operon library\n\ngene hello(name) {{\n    return \"hello, \" + name;\n}}\n",
                     name
                 ),
             ),

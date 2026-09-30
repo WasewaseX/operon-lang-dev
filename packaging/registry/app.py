@@ -384,9 +384,22 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
+    # Self-hosted https in one env pair (Render terminates TLS at the edge,
+    # so this is only needed when you front the service yourself):
+    #   OPERON_TLS_CERT=cert.pem OPERON_TLS_KEY=key.pem python3 app.py
+    cert = os.environ.get("OPERON_TLS_CERT", "").strip()
+    key = os.environ.get("OPERON_TLS_KEY", "").strip()
+    scheme = "http"
+    if cert and key:
+        import ssl
+
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ctx.load_cert_chain(cert, key)
+        server.socket = ctx.wrap_socket(server.socket, server_side=True)
+        scheme = "https"
     print(
-        f"operon-registry listening on :{PORT} "
-        f"({'postgres' if _db_url() else 'sqlite'})",
+        f"operon-registry listening on :{PORT} ({scheme}, "
+        f"{'postgres' if _db_url() else 'sqlite'})",
         flush=True,
     )
     server.serve_forever()

@@ -21,6 +21,7 @@ tests/package/
   pkg_e2e.sh           the 38-check end-to-end gate (runs in scripts/test.sh)
 scripts/
   pkg_seed_registry.py builds the deterministic envelopes into a dir registry
+  pkg_tls_e2e.sh       the 21-check https gate (TLS build + internal-CA registry)
 ```
 
 ## The dependency flow (who calls whom)
@@ -29,7 +30,8 @@ scripts/
 Operon CLI (src/main.rs: new/add/remove/update/publish/search)
    |
 src/pkg.rs  — manifest, semver, resolver, lockfile, envelopes, sha256,
-   |          HTTP/1.1 + directory transports (zero external crates)
+   |          HTTP/1.1 + directory transports (zero external crates);
+   |          https via opt-in `--features tls` (rustls) + OPERON_CA_FILE
    v
 Registry API (packaging/registry/app.py)
    |
@@ -53,3 +55,7 @@ Package envelopes (.opkg) -> installed to operon_modules/<pkg>/
    identical `operon.lock`. This is unit-tested, not aspirational.
 5. Both cores import packages identically — the differential corpus pins
    the installed-layout import path byte-for-byte.
+6. https is opt-in (`--features tls`), never a silent downgrade: the
+   default build refuses https with the exact rebuild command; TLS
+   verification is real — an untrusted certificate errors, and
+   `OPERON_CA_FILE` is the only bypass, for internal CAs.

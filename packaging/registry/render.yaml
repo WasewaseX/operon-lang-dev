@@ -11,6 +11,9 @@ services:
     # app.py: `main()` runs the stdlib server; gunicorn binds the WSGI `app`
     startCommand: gunicorn -w 2 -t 60 --bind 0.0.0.0:$PORT app:app
     healthCheckPath: /healthz
+    # Render serves https at the edge; the Operon CLI dials it with the
+    # opt-in TLS build: `cargo build --release --features tls`
+    # (docs/PACKAGING.md "Publishing over https").
     envVars:
       - key: DATABASE_URL
         fromDatabase:

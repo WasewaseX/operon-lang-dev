@@ -20,6 +20,18 @@ path = "src/main.rs"
 [build-dependencies]
 cc = "1"
 
+# ai/ecosystem item 10 (release distribution): the default build stays
+# zero-external-crates; `--features tls` adds a pure-Rust TLS stack so the
+# package client can dial https registries (Render serves https at the edge).
+[dependencies]
+rustls = { version = "0.23", optional = true, default-features = false, features = ["ring", "std", "tls12"] }
+rustls-pki-types = { version = "1", optional = true }
+webpki-roots = { version = "0.26", optional = true }
+
+[features]
+default = []
+tls = ["dep:rustls", "dep:rustls-pki-types", "dep:webpki-roots"]
+
 [profile.release]
 opt-level = 3
 lto = false
