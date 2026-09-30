@@ -459,6 +459,26 @@ call them like any function.
 like `allow.read`). **`.rna` files** are scripted text patches applied before a run, handy
 for mechanical edits across many programs. Both are plain text; see SPEC §9 for their keys.
 
+### Packages: dependencies with `operon add`
+
+Modules you write live in your repo. Dependencies come from a registry, and the workflow
+is the one you already know from cargo/npm:
+
+```
+operon new myapp     # scaffold: operon.toml, src/main.op, a green smoke test
+operon add http      # pull a package by name, zero flags, works offline
+operon run src/app.op   # `use http` just works: vendored, checksum-verified
+```
+
+`operon add` records the pin in `operon.toml` and the exact rev + sha256 in
+`operon.lock`; `operon tree`, `operon test`, `operon verify` and `operon run --locked`
+keep the project honest. No account, no network setup: a seed registry (http, json,
+postgres, web: real, tested, pure-Operon packages) ships inside the binary and
+materializes on first use. The whole walk-through, every command run for real and
+gate-verified, is the cookbook's [packages chapter](examples/cookbook/packages.sh);
+the registry format, resolution chain and hosting are spec'd in
+[docs/specs/REGISTRY.md](docs/specs/REGISTRY.md).
+
 ## 11. Concurrency: spawn, cancel, and scope
 
 Operon tasks are real OS threads. `spawn(gene, args)` starts one and returns a task id;
@@ -502,6 +522,7 @@ scope {
 - **Read the standard library**: `std/*.op`, all Operon, meant to be read.
 - **Read the proof suite**: `tests/`, 50 files, every language behavior asserted.
 - **Run the app**: `apps/genomelab/genomelab.op`, a small DNA-toolbox CLI built entirely in Operon.
+- **Try the package workflow**: `operon new` + `operon add`, walked command by command in the cookbook's [packages chapter](examples/cookbook/packages.sh).
 - **The spec**: `SPEC.md`, the full contract, organized by feature.
 - **The roadmap**: where the language goes next (a bytecode VM for speed, more self-hosting).
 
