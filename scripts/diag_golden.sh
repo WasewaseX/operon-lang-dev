@@ -55,6 +55,9 @@ check tests/diagnostics/wrong_arity.op    text tests/diagnostics/expected/wrong_
 check tests/diagnostics/entry_typo.op      text tests/diagnostics/expected/entry_typo.txt      run 1 "--entry maiin"
 check tests/diagnostics/entry_typo.op      json tests/diagnostics/expected/entry_typo.json    run 1 "--entry maiin"
 check tests/diagnostics/phantom_suggest.op text tests/diagnostics/expected/phantom_suggest.txt check 0
+# fuzz-r3: phantom label beside multibyte text (crash_20260930_1606.op,
+# delta-minimized to 5 bytes) — the warning must RENDER, never panic rc 101.
+check tests/diagnostics/char_boundary_phantom.op text tests/diagnostics/expected/char_boundary_phantom.txt check 0
 # W101 slice 7: parse/repair notes carry derived E2xxx codes in the flush;
 # the program itself SUCCEEDS (repair, never reject → rc 0).
 check tests/diagnostics/repair_notes.op    text tests/diagnostics/expected/repair_notes.txt run 0

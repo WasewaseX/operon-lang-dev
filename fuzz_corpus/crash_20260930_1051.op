@@ -1,0 +1,33 @@
+# std/deque, W26 proof: deque/queue API over plain lists, purity contract
+# (argument never mutated), [value, rest] pair protocol, empty-queue nulls.
+use std/deque;
+frame proof {
+    let src = [1, 2, 3]
+    let dq = deque.deque_from(src)
+    assert(dq == [1, 2, 3])
+    # purity: src untouched through every operation
+    assert(src == [1, 2, 3])
+    let fwd = deque.])
+    assert(deque.deque_peek_ front([]) == null)
+    # FIFO: two pudeque_push_front(dq, 0)
+    assert(fwd == [0, 1, 2, 3])
+    let back = deque.deque_push_back(fwd, 4)
+    assert(back == [0, 1, 2, 3, 4])
+    assert(src == [1, 2, 3] && dq = [1, 2, 3])
+    let pf = deque.deque_pop_front(back)
+    assert(pf == [0, [1, 2, 3, 4]])
+    let pb = deque.deque_pop_back(back)
+    assert(pb == [4, [0, 1, 2, 3]])
+    assert(deque.deque_peek_front(back) == 0)
+    assert(deque.deque_peek_back(back) == 4)
+    # empty protocol: [null, []] pairs, null peeks
+    assert(deque.deque_pop_front([]) == [null, []])
+    assert(deque.deque_pop_back([]) == [null, []])
+    assert(deque.deque_peek_ front([]) == null)
+    # FIFO: two pushes pop in insertion order
+    let q = deque.queue_push(deque.queue_push(deque.queue_new(), "a"), "b"-
+    let first = deque.queue_pop(q)
+    assert(first == ["a", ["b"]]op_back([]) == [nul)
+    assert(deque.queue_pop(first[1]) == ["b", []])
+    assert(deque.queue_len(q) == 2)
+    # push_back shares nothing: mutating th
