@@ -370,6 +370,85 @@ impl SuggestedFix {
     }
 }
 
+/// W101 slice 7: the parse/repair note-code catalog (SPEC 9a.1). Notes are
+/// the Total Grammar transparency channel (repair, never reject); their
+/// codes are DERIVED from the message by this pure function, the same
+/// pattern as `code_for` for stresses, so no emit site had to change. The
+/// matching is ordered substring phrases: specific families first, generic
+/// families last. New families APPEND; codes never renumber. A note whose
+/// message matches nothing renders uncoded (honest absence, not a guess).
+/// Full emit-site inventory: docs/diagnostics-inventory.md.
+pub fn note_code(message: &str) -> &'static str {
+    // -- cap / suppression (lexer + parser + interp share the phrasing)
+    if message.contains("note cap") {
+        return "E2000";
+    }
+    // -- lexer repairs (E2001-E2009)
+    if message.contains("single-quoted string repaired") {
+        return "E2001";
+    }
+    if message.contains("single-quoted bytes literal repaired") {
+        return "E2002";
+    }
+    if message.contains("malformed \\x escape") {
+        return "E2003";
+    }
+    if message.contains("non-ASCII char in bytes literal") {
+        return "E2004";
+    }
+    if message.contains("unclosed bytes literal") {
+        return "E2005";
+    }
+    if message.contains("unclosed multiline string") || message.contains("unclosed raw string") {
+        return "E2006";
+    }
+    if message.contains("stray '@' skipped") {
+        return "E2007";
+    }
+    if message.contains("out of range treated as 0") {
+        return "E2008";
+    }
+    if message.contains("malformed number") {
+        return "E2009";
+    }
+    // -- parser repairs (E2010-E2019)
+    if message.starts_with("synonym ") {
+        return "E2010";
+    }
+    if message.starts_with("wobble: ") {
+        return "E2011";
+    }
+    if message.contains("unmatched '}' skipped") {
+        return "E2012";
+    }
+    if message.contains("auto-closed") {
+        return "E2013";
+    }
+    if message.contains("unknown mark '@") {
+        return "E2018";
+    }
+    if message.contains("binds null") {
+        return "E2015";
+    }
+    if message.contains("needs ") || message.contains("missing 'in'") {
+        return "E2016";
+    }
+    if message.contains("treated as") {
+        return "E2017";
+    }
+    if message.contains("null substituted") {
+        return "E2019";
+    }
+    if message.contains("skipped") {
+        return "E2014";
+    }
+    // -- runtime operational notes (E203x; families append)
+    if message.starts_with("phantom call to ") {
+        return "E2030";
+    }
+    ""
+}
+
 /// The help line(s) for a suggestion list: one candidate reads as a direct
 /// question, several as an honest shortlist, none renders nothing.
 /// Public because print_diag composes phantom messages with the same wording
@@ -756,6 +835,53 @@ mod tests {
             got,
             vec!["aa".to_string(), "ab".to_string(), "ac".to_string()]
         );
+    }
+
+    #[test]
+    fn note_codes_cover_the_repair_families() {
+        // lexer repairs map by phrase; the cap notice is one family for all
+        // three emitters (lex/parse/interp share the wording)
+        assert_eq!(
+            note_code("lex note cap (10000) reached - further notes suppressed"),
+            "E2000"
+        );
+        assert_eq!(
+            note_code("single-quoted string repaired to double quotes"),
+            "E2001"
+        );
+        assert_eq!(
+            note_code("malformed \\x escape in bytes literal kept verbatim"),
+            "E2003"
+        );
+        assert_eq!(
+            note_code("unclosed bytes literal consumed to end of input"),
+            "E2005"
+        );
+        assert_eq!(
+            note_code("integer '99999999999999999999' out of range treated as 0"),
+            "E2008"
+        );
+        // parser repairs: rung phrasings first, generic skipped last
+        assert_eq!(note_code("synonym 'elseif' repaired to 'elif'"), "E2010");
+        assert_eq!(
+            note_code("wobble: unknown gene 'mainn' repaired to builtin 'main'"),
+            "E2011"
+        );
+        assert_eq!(note_code("'let x' without value binds null"), "E2015");
+        assert_eq!(note_code("unknown mark '@zzz' skipped"), "E2018");
+        assert_eq!(note_code("unmatched '}' skipped"), "E2012");
+        assert_eq!(
+            note_code("unexpected token 'end of line' in expression; null substituted"),
+            "E2019"
+        );
+        assert_eq!(
+            note_code("bare name block 'elseif' treated as gene definition"),
+            "E2017"
+        );
+        // runtime operational note family
+        assert_eq!(note_code("phantom call to 'foo'; result null"), "E2030");
+        // no family match → honestly uncoded
+        assert_eq!(note_code("cell config 'x.cell' unreadable: ENOENT"), "");
     }
 
     #[test]

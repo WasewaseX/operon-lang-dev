@@ -514,10 +514,11 @@ fn real_main() {
                     .iter()
                     .map(|n| {
                         format!(
-                            "{{\"line\":{},\"rung\":{},\"rung_name\":\"{}\",\"message\":\"{}\"}}",
+                            "{{\"line\":{},\"rung\":{},\"rung_name\":\"{}\",\"code\":{},\"message\":\"{}\"}}",
                             n.line,
                             n.rung,
                             rung_name(n.rung),
+                            tools::json_escape(operon::diag::note_code(&n.message)),
                             tools::json_escape(&n.message)
                         )
                     })
@@ -537,7 +538,18 @@ fn real_main() {
                     println!("  canonical, no repairs, no recoveries");
                 }
                 for n in &prog.notes {
-                    println!("  [{}] line {}: {}", rung_name(n.rung), n.line, n.message);
+                    let code = operon::diag::note_code(&n.message);
+                    if code.is_empty() {
+                        println!("  [{}] line {}: {}", rung_name(n.rung), n.line, n.message);
+                    } else {
+                        println!(
+                            "  [{} {}] line {}: {}",
+                            rung_name(n.rung),
+                            code,
+                            n.line,
+                            n.message
+                        );
+                    }
                 }
                 let w = prog.notes.iter().filter(|n| n.rung == 3).count();
                 let fb = prog.notes.iter().filter(|n| n.rung >= 4).count();

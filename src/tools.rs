@@ -3217,11 +3217,20 @@ pub fn flush_notes(l: &Loaded, quiet: bool) {
             3 => "wobble",
             _ => "fallback",
         };
+        // W101 slice 7: the derived E2xxx code rides the tag when the note's
+        // message maps to a catalog family (docs/diagnostics-inventory.md);
+        // uncoded notes render exactly as before.
+        let code = crate::diag::note_code(&n.message);
+        let tag_s = if code.is_empty() {
+            tag.to_string()
+        } else {
+            format!("{} {}", tag, code)
+        };
         // A13 (dx-r2): real locations when the note carries a line
         if n.line > 0 {
-            let _ = writeln!(w, "[{}] {}:{}: {}", tag, l.interp.file, n.line, n.message);
+            let _ = writeln!(w, "[{}] {}:{}: {}", tag_s, l.interp.file, n.line, n.message);
         } else {
-            let _ = writeln!(w, "[{}] {}", tag, n.message);
+            let _ = writeln!(w, "[{}] {}", tag_s, n.message);
         }
     }
 }
