@@ -34,7 +34,7 @@ Commands:
 | `b N` | add a breakpoint at line N (fires immediately, even mid-session) |
 | `b del N` | delete the breakpoint at line N |
 | `b list` | list active breakpoints |
-| `bt` | the call chain, innermost last |
+| `bt` | the call chain, innermost last, each frame with its current source line (`at work (line 6)`) — W008-P1: outer frames carry their live call-site lines (captured while a session is armed; a frame with no line — the entry frame before any call — prints bare) |
 | `vars` | dump the frame chain's variables (innermost first, 8 frames) |
 | `p EXPR` | evaluate EXPR in the current frame |
 | `q` / `quit` | end the session, exit code 0 |
@@ -67,7 +67,7 @@ Requests (stdin), replies `{"id":N,"ok":true,...}` / `{"id":N,"ok":false,"error"
 {"id":2,"cmd":"next"} {"id":2,"cmd":"stepIn"} {"id":2,"cmd":"stepOut"}
 {"id":3,"cmd":"until","args":{"line":9}}
 {"id":4,"cmd":"breakpoints","args":{"add":[9],"remove":[3]}}
-{"id":5,"cmd":"stack"}      # frames, innermost first
+{"id":5,"cmd":"stack"}      # frames, innermost first; each frame carries its current source line (W008-P1: outer frames report their live call-site line, null only when no line is known)
 {"id":6,"cmd":"vars"}       # scopes with rendered variable maps
 {"id":7,"cmd":"eval","args":{"expr":"z * 100"}}
 {"id":8,"cmd":"status"}     # line + depth
