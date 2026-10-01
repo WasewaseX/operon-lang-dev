@@ -2,8 +2,10 @@
 
 Normative for how Operon grows generic programming. Conflicts resolve
 toward SPEC.md, then this file. Status: **stage 1 is the shipped reality;
-stages 2–3 are specified and deliberately unscheduled**, stdlib growth
-must never block on them (the W03 decision).
+stage 2's machinery is LANDED (parser, static checker, runtime contracts —
+the ai/type-system merge) and ADOPTED by std (std/typed.op, 2026-10-02);
+stage 3 is specified and deliberately unscheduled**, stdlib growth must
+never block on it (the W03 decision).
 
 ## What "generic" means here
 
@@ -45,8 +47,8 @@ The contract the stdlib already upholds, now pinned as policy:
   (SPEC §8); it does not abstract over its field types and must never be
   presented as a generic mechanism (the W03 audit finding, restated).
 
-## Stage 2, documentation-only type parameters (specified; rides W01
-stage-2 annotations)
+## Stage 2, documentation-only type parameters (machinery LANDED; ADOPTED
+by std 2026-10-02)
 
 `gene map<T, U>(f, l)` parses; the annotations are checked by the same
 L2c soft-contract machinery as `gene f(x: int) -> int`, catchable
@@ -65,6 +67,22 @@ survives stage 3:
    raised by the existing annotation checker, identical in kind and
    containment to W01 stage 1. No new execution semantics.
 4. The fmt round-trip (W47) preserves parameter lists byte-exactly.
+
+**Adoption (std/typed.op, the W003 done-when's "typed wrappers" slice).**
+Seven generic wrappers over the callable-generic core — `map<T, U>`,
+`filter<T>`, `fold<S, T>`, `first<T>` (`T?`), `zip<T, U>`, `lookup<K, V>`
+(`map[K, V]`, named lookup because a module gene named `get` shadows the
+map method `m.get`), `sort_by_key<T, K>` — one wrapper per core gene, zero
+per-type duplication (the W03 gate). The wrappers pin the implemented
+boundary rule: a BARE type parameter erases at runtime (any value
+satisfies it; the static checker owns the depth), while a parameterized
+container annotation (`list[T]`, `map[K, V]`) enforces the SHALLOW is-a
+shape at the boundary, the refusal wording byte-identical on both engines
+("argument 'xs' for gene 'map' expects list[T], got str"). Pins:
+`tests/std_typed.op` (proof frame, 19 assertions), the differential
+`tests/differential/typed_wrappers.op` (acceptance, two-type
+instantiation, refusal wording, erasure), and the W01-s2 corpus
+`tests/differential/type_generics.op` (bounds `T: numeric`, aliases).
 
 ## Stage 3, real parametric polymorphism (specified; deliberately
 unscheduled)

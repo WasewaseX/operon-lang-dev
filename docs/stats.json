@@ -105,7 +105,7 @@
   "textDocument/semanticTokens",
   "textDocument/signatureHelp"
  ],
- "proof_files": 160,
+ "proof_files": 161,
  "proof_totals": {
   "asserts": null,
   "files": null,
@@ -118,7 +118,7 @@
   "status": "v2.7.0"
  },
  "std_function_count": 328,
- "std_module_count": 30,
+ "std_module_count": 31,
  "std_modules": [
   {
    "functions": 8,
@@ -233,6 +233,10 @@
    "module": "time"
   },
   {
+   "functions": 0,
+   "module": "typed"
+  },
+  {
    "functions": 8,
    "module": "unicode"
   },
@@ -241,6 +245,6 @@
    "module": "url"
   }
  ],
- "test_op_files": 3540,
+ "test_op_files": 3544,
  "version": "2.7.0"
 }

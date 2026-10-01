@@ -834,6 +834,20 @@ modeling track is a docs change — see CONTRIBUTING §8b.
 
 - **Gate order (reg-r4, pinned; reg-bio extends the tail):** for every call, named, value-bound (higher-order), RISC-redirected, sequence-creation, and worker-cell, the gates apply in ONE order: **RISC redirect first** (silencing rewrites the callee, so it wins), then the **toggle gate**, then the **GRN veto**, then the **methylation gate**, then the **promoter gate** (the burst draw is the promoter's own stochastic dynamics, downstream of every trans/epigenetic gate). Value-bound gene calls pass the toggle gate like named calls (an unqualified "the pair gates calls"); a ring node named by an edge source contributes its normalized oscillation level only when no explicit `grn_set`/`grn_fire` level exists (explicit levels win).
 
+**Modeling contract.** Every mechanism below carries an honesty grade (REAL / APPROX /
+ABSTRACTION / SIMPLIFICATION) and an output-meaning statement in
+`docs/spec/BIO-CONTRACT.md`; a change confined to §11/§16 plus that contract is a
+bio-modeling change, never a language change (BIO-CONTRACT governance rule 4).
+
+**Determinism.** Bio evaluation is deterministic and seeded: same binary version + same
+source + same seed + same flags + same `.cell` gives byte-identical output, core and bio
+surface alike (`docs/spec/DETERMINISM.md`). Every stochastic mechanism in this layer draws
+from a deterministic seeded stream: the shared mirrored xorshift stream (silence capture,
+promoter bursts), worker streams derived from the task id (the D9 bullet below), or
+streams keyed to absolute position so a cached replay cannot diverge (repressilator
+noise); platform entropy never enters, and the p∈{0,1} no-draw discipline keeps legacy
+programs bit-identical.
+
 ## 12. Frames, proofs, overlapping reading frames
 
 - `frame proof { assert(...); ... }`, the **test reading frame** of the file. Skipped by `operon run`; executed by `operon test`. The same file encodes program + tests (two reading frames over one sequence).

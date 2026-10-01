@@ -18,7 +18,7 @@ gene probe(f) {
         f()
         return "no-stress"
     } rescue (e) {
-        return "stress:" + e.message()
+        return "stress:" + e.message
     }
 }
 print(probe(gene() { return c.chunk("nope", 2) }))
