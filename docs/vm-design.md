@@ -103,17 +103,33 @@ gene provably does not use.
 
 The safe design, when picked up:
 
-1. **Trivial-gene fast dispatch (runtime, not compile-time).** Precompute
-   on the CACHED GeneCode a triviality bit: body compiles to a
-   shapes-only sequence (Push/LoadName/Bin/BinImm/Ret/RetName only - no
-   bridges, no calls, no scopes), arity == params, no param/return
-   annotations, no defaults, no guards, and NO regulation configured on
-   the GeneDef (GRN/methylation/riboswitch/promoter/RHO all absent - a
-   cheap predicate on the def). The fast path still routes through
-   named_call_tail (toggles/silences still checked) and still executes
-   every gate that EXISTS; the skip is env-construction + bookkeeping
-   only when the predicate says the gene has none. Evidence bar: full
-   vm_parity corpus both engines + fuzz_diff + the redteam shadowing set.
+1. **Trivial-gene fast dispatch (runtime, not compile-time) — DELIVERED
+   (2026-10-01, this batch).** As built, in two halves. CODE half:
+   `shapes_only()` on the CACHED GeneCode (computed in gene_code_cached
+   AFTER optimize_with — folding can only shrink a shapes-only body into
+   more whitelist shapes, never out of them), stored as the `trivial` bit
+   on GeneCode. Whitelist = the designed Push/LoadName/Bin/BinImm/Ret/
+   RetName PLUS the fused pure-read shapes LoadNameQuiet/LoadBinImm, Pop
+   and Nop — each addition provably read-only or no-op; StoreName,
+   AssignName, scopes, bridges, calls and ALL jump shapes disqualify.
+   DEF half (checked per call in call_gene_inner, cheap field reads):
+   zero args, zero params, no guard, no param/return annotations, no
+   acetylate/methylate/m6a/riboswitch/burst, copies == 1, not seq. The
+   fast path executes the cached body against the parent env (closure or
+   global) directly — the frame env it skips is provably EMPTY — and
+   duplicates the slow tail verbatim (timing push/close_timing,
+   propagation-as-return, check_ret_ann). Everything with semantics runs
+   BEFORE the divergence point: RISC, toggle, GRN, methylation,
+   riboswitch, promoter, RHO, operon transcripts/queue,
+   bump_call_bookkeeping, the methylate announcement; the extra-args note
+   cannot fire (zero params AND zero args). The fiber hook falls back to
+   the prepared-frame path (a spawn needs a real frame to park). Reads
+   stay LIVE per execution — only the code is cached, never a value — so
+   rebound globals, unbound-read notes and shadowing ride the same bytes.
+   Evidence: tests/w011_trivial_dispatch.op (the anti-stale-evidence
+   program) in the vm_parity corpus all four axes, unit test
+   trivial_bit_shape_matrix, full corpus + redteam runs recorded in the
+   batch commit.
 2. **Monomorphic specialization.** Per-call-site resolution cache keyed
    by (call-site ip, resolved callee identity), validated against a
    definition-generation counter bumped by EVERY binding write path
@@ -123,7 +139,7 @@ The safe design, when picked up:
    + a BENCH.md row on fib25 (the workload where the funnel actually
    shows).
 
-Both stay on the W011 board REMAIN until their evidence bars run green.
+Item 2 remains on the W011 board REMAIN until its evidence bars run green.
 
 ## 2a. A2 delivered: the bridge architecture (2026-09-27, main)
 
