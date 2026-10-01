@@ -326,10 +326,17 @@ gene handle(v: int | str) -> any { ... }             # union
     return statement ran)`; declare `-> T?` when null is legitimate.
   - **`let x: T = e`** checks at binding: `type annotation violated: 'x'
     expects int, got str`. On a mismatch the binding does NOT happen.
-- **Staged model** (this stage = stage 1): annotations are runtime
-  contracts on gene calls and definitions. `operon check`-time inference
-  and reporting, typed collections (`List<T>` sugar), and type aliases are
-  later stages of W01; sequencing is tracked in ROADMAP-100.
+- **Staged model** (stage 1 = runtime contracts, this section; stage 2 =
+  check-time layer — LANDED): annotations are runtime contracts on gene
+  calls and definitions, and the static check-time layer has landed:
+  `operon check --typed` reports the T01..T10 finding classes (unknown
+  member, binding/return/argument mismatch, unknown-name note, ...), type
+  aliases (`type UserId = int`) resolve into every law below, and gene
+  type params parse and check. TYPE-SYSTEM.md (docs/specs/) is normative
+  for every type surface; the dynamic side stays frozen (a typed finding
+  never changes what `run` does). Known open: typed collections sugar —
+  `List<T>` parses but list-literal inference still degrades
+  conservatively; sequencing is tracked in ROADMAP-100.
 - **W026, the collections sugar first slice:** the typed-collections
   layer lives as pure `.op` std modules over map/list (`std/set`,
   `std/deque`, `std/heap`, `std/graph`), and `std/graph.op` is the first
