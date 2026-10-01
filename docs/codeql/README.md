@@ -33,3 +33,9 @@ returns 0 findings. Evidence: rust-security-and-quality.sarif in this folder.
 ## Re-run after the PR #28 merge (2026-09-27, merged tree: d9b1034 + main f0527e5)
 
 Fresh database over the merged tree (30 source files, 0 extraction errors): rust-security-and-quality suite returns 0 findings. Evidence: rust-security-and-quality.sarif in this folder.
+
+Run (2026-10-01, main @ c4d258f, v2.7.0 merge): **0 findings** —
+`2026-10-01-v270-result-migration.sarif` (45 Rust files extracted, 30 rules,
+security-and-quality suite, CLI 2.27.1). Fresh-sandbox re-install of the CLI
+from the official bundle; query pack codeql/rust-queries@0.1.43 downloaded on
+first resolve. Covers the W006 wave-2 Result builtins merged in PR #43.
