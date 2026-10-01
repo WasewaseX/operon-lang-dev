@@ -241,6 +241,41 @@ instruction count and the tick volume), then W012 (JIT, owner-gated) which is
 where the 2x class of speedup has always lived. The 0.88x is recorded here so
 nobody re-discovers it by surprise.
 
+## The W011 per-pass matrix (measured 2026-10-01, dev-1)
+
+The toggle matrix's measured answer (`bash scripts/bench_opt_passes.sh`,
+min-of-5 process wall time, identical binaries; the differential
+requirement — byte-identical stdout+rc across EVERY config — is enforced
+inside the script and rode vm_parity's 3536-program corpus gate the same
+day). Workloads: fib25 (recursion/call-funnel), lists.op (NEW, the
+resolution-chain workload: 500k push/len/pop through
+CallNamed -> call_named -> call_builtin), loops (arithmetic while).
+
+| workload | tree-walk | vm | stage1 | all(+prop) | fold | fold,prop | thread | dce |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| fib25 | 141ms | 143ms | 143ms | 144ms | 144ms | 143ms | 143ms | 144ms |
+| lists | 427ms | 434ms | 436ms | 437ms | 435ms | 432ms | 432ms | 433ms |
+| loops | 66ms | 66ms | 64ms | 64ms | 64ms | 65ms | 64ms | 65ms |
+
+Honest reading (the delta rows the W011 done-when asks for):
+
+- **The passes are semantics-cheap and perf-neutral at these workloads**
+  (within +/-1-2ms run-to-run noise). fib25 is call-funnel-bound: the gate
+  funnel + env machinery dominate, and folding/propagation shave
+  instructions that are a single-digit percentage of one recursion step.
+  loops ties because its loop bodies are already LoadBinImm superinsns.
+- **lists.op is dispatch-bound, not lookup-bound**: after the W011
+  resolution cache (the per-call linear scans over BUILTIN_NAMES ~90
+  strcmps and BUILTIN_SYNONYMS became OnceLock hash lookups), the
+  remaining per-call cost is the SEMANTIC contract itself — mem_charge +
+  cycle-note insertion on push (sec-r1/reg-bio-2, security-mandated), the
+  env-chain shadow check (a user gene may shadow any builtin), and the
+  per-tick accounting. That is the floor the contract sets, not overhead.
+- The >=3x stretch stays where the A5 campaign left it: gated on the call
+  funnel (W12 JIT class), not on more local passes. W011's value is the
+  instruction-count reduction + the toggle/bench/differential
+  infrastructure, shipped honest.
+
 ## Baseline tracking
 
 | version | commit | date | fib25 op/py | loops op/py | collections op/py | grn op/py |

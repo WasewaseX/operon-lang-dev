@@ -2424,6 +2424,32 @@ mod tests {
         assert_eq!(run(0), run(1), "opt0 == opt1 stage-1 only");
     }
 
+    /// W011 resolution caching: the OnceLock hash structures are exact
+    /// mirrors of the linear tables — no duplicate keys, same membership,
+    /// same canonical targets (collect() keeps last, find() keeps first;
+    /// the test pins that this can never matter).
+    #[test]
+    fn resolution_cache_mirrors_linear_tables() {
+        let set = crate::interp::builtin_name_set();
+        assert_eq!(
+            set.len(),
+            crate::interp::BUILTIN_NAMES.len(),
+            "duplicate builtin name would silently drop arms"
+        );
+        for k in crate::interp::BUILTIN_NAMES {
+            assert!(set.contains(k), "missing builtin '{}'", k);
+        }
+        let map = crate::interp::builtin_synonym_map();
+        assert_eq!(
+            map.len(),
+            crate::interp::BUILTIN_SYNONYMS.len(),
+            "duplicate synonym key would flip canonicalization"
+        );
+        for (s, canon) in crate::interp::BUILTIN_SYNONYMS {
+            assert_eq!(map.get(s), Some(canon), "synonym '{}' drifted", s);
+        }
+    }
+
     /// W11 stage 1: the folding pass removes constant arithmetic without
     /// changing the program's observable encoding of jumps.
     #[test]
