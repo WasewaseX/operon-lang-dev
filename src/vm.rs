@@ -1073,18 +1073,27 @@ fn fiber_return_stack(interp: &mut Interp, stack: Vec<Value>) {
 /// Begin a fiber on a named call: ride the SAME funnel (named_call_tail_vm
 /// → call_named → call_value → call_gene → call_gene_inner) with the hook
 /// armed, so RISC redirects, wobble repairs and toggle vetoes behave
-/// exactly as the sync machine sees them. Returns Err when the call did not
-/// reach a gene body (builtin target, vetoed call, guard return).
+/// exactly as the sync machine sees them.
+pub enum FiberBegin {
+    /// the call reached a gene body: the fiber starts on its frame
+    Fiber(Fiber),
+    /// the funnel returned WITHOUT executing a body — RISC degradation,
+    /// toggle repression, a gate veto, a uORF guard return, a phantom
+    /// call: the value IS the call's result (a thread worker running the
+    /// same call would complete with exactly this value)
+    Completed(Value),
+}
+
 pub fn fiber_call_begin(
     interp: &mut Interp,
     env: &Rc<Env>,
     name: &str,
     argvs: Vec<Value>,
-) -> Result<Fiber, Stress> {
+) -> Result<FiberBegin, Stress> {
     interp.fiber_hook = true;
     let r = interp.named_call_tail_vm(env, name, argvs);
     interp.fiber_hook = false;
-    r?;
+    let v = r?;
     match interp.fiber_hook_out.take() {
         Some(ff) => {
             let mut fiber = Fiber {
@@ -1095,12 +1104,9 @@ pub fn fiber_call_begin(
                 wake_result: None,
             };
             fiber_push_frame(interp, &mut fiber, ff)?;
-            Ok(fiber)
+            Ok(FiberBegin::Fiber(fiber))
         }
-        None => Err(Stress::new(
-            "unfolded",
-            format!("fiber target '{}' did not reach a gene body", name),
-        )),
+        None => Ok(FiberBegin::Completed(v)),
     }
 }
 
@@ -2178,7 +2184,10 @@ mod fiber_tests {
     /// slice 2's scheduler adds the deterministic ordering on top).
     fn run_fiber(interp: &mut Interp, name: &str, args: Vec<Value>) -> Result<Value, Stress> {
         let g = interp.global.clone();
-        let mut fiber = fiber_call_begin(interp, &g, name, args)?;
+        let mut fiber = match fiber_call_begin(interp, &g, name, args)? {
+            FiberBegin::Fiber(f) => f,
+            FiberBegin::Completed(v) => return Ok(v),
+        };
         loop {
             match fiber_run(interp, &mut fiber)? {
                 FiberOutcome::Done(v) => return Ok(v),
@@ -2398,14 +2407,18 @@ mod fiber_tests {
     }
 
     #[test]
-    fn fiber_call_begin_refuses_non_gene_targets() {
+    fn fiber_call_begin_completes_non_gene_targets() {
         // a builtin target executes through the funnel and never reaches a
-        // gene body: the fiber refuses (spawn validates genes first; this
-        // is the machine-level backstop)
+        // gene body: the call's value comes back as Completed (the exact
+        // observable a thread worker running the same call would produce;
+        // spawn validates genes before the lane split anyway)
         let mut interp = setup("gene f() {\n return 1\n}\n");
         let g = interp.global.clone();
-        let r = fiber_call_begin(&mut interp, &g, "floor", vec![Value::Int(1)]);
-        assert!(r.is_err());
+        let r = fiber_call_begin(&mut interp, &g, "floor", vec![Value::Float(2.5)]);
+        match r {
+            Ok(FiberBegin::Completed(v)) => assert_eq!(v.display(), "2"),
+            other => panic!("expected Completed, got {:?}", other.is_err()),
+        }
     }
 
     fn ok_out(r: Result<FiberOutcome, Stress>, what: &str) -> FiberOutcome {
@@ -2415,9 +2428,10 @@ mod fiber_tests {
         }
     }
 
-    fn ok_fiber(r: Result<Fiber, Stress>, what: &str) -> Fiber {
+    fn ok_fiber(r: Result<FiberBegin, Stress>, what: &str) -> Fiber {
         match r {
-            Ok(v) => v,
+            Ok(FiberBegin::Fiber(f)) => f,
+            Ok(FiberBegin::Completed(_)) => panic!("{what}: expected a fiber body"),
             Err(s) => panic!("{what}: {}: {}", s.kind, s.message),
         }
     }

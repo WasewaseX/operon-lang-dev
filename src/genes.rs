@@ -160,6 +160,7 @@ pub const CELL_SCHEMA: &[CellKeySpec] = &[
     CellKeySpec { name: "expression.stochastic", kind: CellKind::Bool, default: "false", doc: "enables per-call telegraph promoter draws (deterministic contract otherwise)", since: "reg-bio (F-1)" },
     CellKeySpec { name: "grn.decay", kind: CellKind::Number, default: "0.0 (no decay)", doc: "GRN level dilution per grn_fire pulse / time tick, 0..=1", since: "A10 / reg-bio-2 (C2)" },
     CellKeySpec { name: "grn.decay_calls", kind: CellKind::Integer, default: "— (event-driven only)", doc: "fires one GRN decay step every N calls when set (>=1)", since: "reg-bio-2 (C2)" },
+    CellKeySpec { name: "io.pool", kind: CellKind::Str, default: "thread", doc: "spawn lane: \"thread\" (default, real OS threads) or \"fiber\" (W16: spawned tasks run as fibers on the VM loop with a FIFO deterministic scheduler and a virtual clock; requires --vm, the default lane) ", since: "W16 (async epic)" },
     CellKeySpec { name: "ligand.*", kind: CellKind::Number, default: "0.0", doc: "[ligand.<name>] bath default per species, 0..=1; runtime ligand_set wins over it", since: "reg-bio-2 (A4)" },
     CellKeySpec { name: "m6a.decay", kind: CellKind::Number, default: "0.0 (no decay)", doc: "standalone m6A density decay fraction per cadence tick, 0..=1", since: "loop-9 (P0-4)" },
     CellKeySpec { name: "m6a.decay_calls", kind: CellKind::Integer, default: "1", doc: "standalone m6A decay cadence in calls (>=1)", since: "loop-9 (P0-4)" },
@@ -1866,7 +1867,6 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
     };
     let rsnap = snapshot_regulation(interp);
     let send_args: Vec<SnapArg> = args.iter().map(arg_to_snap).collect();
-    let (tx, rx) = mpsc::channel::<(SendValue, Vec<Note>)>();
     let global_note = format!("[task {}]", name);
     let task_name = name.clone();
     let host_caps = interp.caps.clone();
@@ -1891,6 +1891,38 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
     let id = interp.next_task_id;
     interp.next_task_id += 1;
     let task_seed = 0x9E3779B97F4A7C15u64 ^ (id as u64).wrapping_mul(0x9E3779B97F4A7C15);
+    // W16: the lane split. `.cell io.pool = fiber` (+ the VM lane, the
+    // default) runs the task as a FIBER on the VM loop with the FIFO
+    // deterministic scheduler; every other spawn rides the OS-thread
+    // worker exactly as before. The snapshot membrane, id assignment,
+    // seed derivation, caps/fuel/medium inheritance and the task registry
+    // are IDENTICAL by construction (the shared code above decides them);
+    // only the execution vehicle differs.
+    let fiber_lane = interp.vm
+        && interp
+            .cell
+            .get("io.pool")
+            .map(|v| v == "fiber")
+            .unwrap_or(false);
+    if fiber_lane {
+        return spawn_fiber_task(
+            interp,
+            id,
+            &task_name,
+            snap,
+            rsnap,
+            send_args,
+            task_seed,
+            host_caps,
+            host_fuel,
+            host_medium,
+            worker_chain,
+            cancel_flag,
+            task_phase,
+        );
+    }
+    let wake_for_workers = interp.sched_wake.clone();
+    let (tx, rx) = mpsc::channel::<(SendValue, Vec<Note>)>();
     spawn_worker(move || {
         let mut ti = Interp::new();
         ti.cancel_chain = worker_chain;
@@ -1910,6 +1942,11 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
         bind_regulation(&mut ti, &rsnap);
         ti.global = genv.clone();
         ti.caps = host_caps; // worker cells inherit the host's grants
+                             // W16: a thread worker shares the host's wake queue so its sends
+                             // also wake fibers parked on the same channels (the request is
+                             // consumed at the scheduler's next drain boundary; without a
+                             // scheduler this is None and costs nothing)
+        ti.sched_wake = wake_for_workers;
         let conv_args: Vec<Value> = send_args.iter().map(|a| arg_from_snap(a, &snap)).collect();
         // reg-r1: worker cells call through the SAME name-dispatch funnel as
         // the host, call_named evaluates the toggle/methyl/GRN gates that a
@@ -1946,7 +1983,7 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
     interp.tasks.insert(
         id,
         crate::interp::TaskHandle {
-            rx,
+            rx: Some(rx),
             cancel: cancel_flag,
             state: task_phase,
         },
@@ -1957,6 +1994,147 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
         top.push(id);
     }
     Ok(Value::Int(id))
+}
+
+/// W16: the fiber spawn lane. Builds the task interp with the SAME worker
+/// setup the thread lane uses (snapshot membrane, regulation snap,
+/// task-id-derived rng, host caps, shared fuel pool, shared medium, cancel
+/// chain), then hands the prepared frame to the scheduler instead of an OS
+/// thread. Birth-finished tasks (gate veto, guard return, RISC degradation)
+/// carry the same value the thread worker's call_named would have returned.
+#[allow(clippy::too_many_arguments)]
+fn spawn_fiber_task(
+    interp: &mut Interp,
+    id: i64,
+    task_name: &str,
+    snap: Vec<(String, SnapVal)>,
+    rsnap: RegulationSnap,
+    send_args: Vec<SnapArg>,
+    task_seed: u64,
+    host_caps: crate::interp::Caps,
+    host_fuel: Option<Arc<std::sync::atomic::AtomicI64>>,
+    host_medium: Option<Arc<Mutex<HashMap<String, u64>>>>,
+    worker_chain: Vec<Arc<AtomicBool>>,
+    cancel_flag: Arc<AtomicBool>,
+    task_phase: Arc<Mutex<crate::interp::TaskState>>,
+) -> Result<Value, Stress> {
+    // the scheduler is created on the first fiber spawn; the wake queue is
+    // shared with every task interp. NO lane note: the spec's "callers
+    // cannot tell" is byte-level (a lane-announcing note would break the
+    // parity contract the differential harness pins).
+    if interp.sched.is_none() {
+        let sched = crate::sched::AsyncSched::new();
+        let wake = sched.wake_reqs.clone();
+        interp.sched = Some(sched);
+        interp.sched_wake = Some(wake);
+    }
+    let wake_arc = interp.sched_wake.clone();
+    let mut ti = Interp::new();
+    ti.cancel_chain = worker_chain;
+    ti.fuel_pool = host_fuel;
+    ti.medium = host_medium;
+    ti.rng = task_seed;
+    let genv = Env::new(None);
+    bind_snapshot(&genv, &snap);
+    bind_regulation(&mut ti, &rsnap);
+    ti.global = genv.clone();
+    ti.caps = host_caps;
+    // the fiber lane IS the VM lane: the task compiles into its own arena
+    ti.vm = true;
+    ti.vm_opt = interp.vm_opt;
+    ti.vm_program = Some(crate::vm::VmProgram::default());
+    ti.sched_wake = wake_arc;
+    let conv_args: Vec<Value> = send_args.iter().map(|a| arg_from_snap(a, &snap)).collect();
+    // the SAME funnel the thread worker rides (call_named: toggle, RISC,
+    // wobble, the whole gate order) — armed so the body becomes a frame
+    let begin = crate::vm::fiber_call_begin(&mut ti, &genv, task_name, conv_args);
+    let task_name_owned = task_name.to_string();
+    let sched = match interp.sched.as_mut() {
+        Some(s) => s,
+        None => panic!("scheduler vanished between creation and use"),
+    };
+    match begin {
+        Ok(crate::vm::FiberBegin::Fiber(fiber)) => {
+            sched.ready.push_back(crate::sched::FiberTask {
+                id,
+                name: task_name_owned,
+                interp: ti,
+                fiber,
+                cancel: cancel_flag,
+                state: task_phase,
+                result: None,
+                done: false,
+            });
+        }
+        Ok(crate::vm::FiberBegin::Completed(v)) => {
+            // the funnel answered without a body (veto/repression/guard):
+            // the task is born finished with that exact value
+            let mut ft = birth_finished_task(id, task_name_owned, ti, cancel_flag, task_phase);
+            ft.finish_ok(v);
+            sched.finished.push(ft);
+        }
+        Err(s) => {
+            // a funnel stress (e.g. an argument-annotation mismatch) fails
+            // the task at birth — the thread worker would send the same
+            // SendValue::Stress over the wire
+            let mut ft = birth_finished_task(id, task_name_owned, ti, cancel_flag, task_phase);
+            ft.finish_err(s);
+            sched.finished.push(ft);
+        }
+    }
+    // the registry handle shares the SAME cancel/phase arcs the scheduler
+    // entry holds (cancel() and task_state() work identically both lanes)
+    let (handle_cancel, handle_state) = {
+        let s = match interp.sched.as_ref() {
+            Some(s) => s,
+            None => panic!("scheduler vanished before handle registration"),
+        };
+        let arc = s
+            .ready
+            .back()
+            .or_else(|| s.finished.last())
+            .unwrap_or_else(|| panic!("fiber task missing from the scheduler"));
+        (arc.cancel.clone(), arc.state.clone())
+    };
+    interp.tasks.insert(
+        id,
+        crate::interp::TaskHandle {
+            rx: None,
+            cancel: handle_cancel,
+            state: handle_state,
+        },
+    );
+    // W17: structured concurrency reaps fiber ids the same way (join_task
+    // drains the scheduler)
+    if let Some(top) = interp.scope_stack.last_mut() {
+        top.push(id);
+    }
+    Ok(Value::Int(id))
+}
+
+fn birth_finished_task(
+    id: i64,
+    name: String,
+    interp: Interp,
+    cancel: Arc<AtomicBool>,
+    state: Arc<Mutex<crate::interp::TaskState>>,
+) -> crate::sched::FiberTask {
+    crate::sched::FiberTask {
+        id,
+        name,
+        interp,
+        fiber: crate::vm::Fiber {
+            frames: Vec::new(),
+            fiber_state: crate::vm::FiberState::Done,
+            wake_deadline: None,
+            cancel_flag: false,
+            wake_result: None,
+        },
+        cancel,
+        state,
+        result: None,
+        done: false,
+    }
 }
 
 fn def_has_lambda(def: &GeneDef) -> bool {
@@ -2159,6 +2337,17 @@ pub fn wait_any_task(interp: &mut Interp, args: Vec<Value>) -> Result<Value, Str
                 return Ok(Value::Int(*id));
             }
         }
+        // W16: fiber tasks progress only when the scheduler drains — a
+        // listed fiber task must get its turns before the wall-clock poll
+        // decides anything (the drain is virtual: no wall time passes)
+        if let Some(sched) = interp.sched.as_mut() {
+            if sched.has_pending() {
+                sched.drain(&mut |s: &crate::sched::AsyncSched| {
+                    ids.iter().any(|id| s.finished.iter().any(|t| t.id == *id))
+                });
+                continue;
+            }
+        }
         if std::time::Instant::now() >= deadline {
             interp.note(
                 0,
@@ -2187,17 +2376,86 @@ pub fn join_task(interp: &mut Interp, id: i64, timeout_ms: Option<u64>) -> Resul
             return Ok(Value::Null);
         }
     };
+    // W16: fiber task — the scheduler owns the execution and the result.
+    // The drain runs to completion (or the VIRTUAL timeout/ceiling: the
+    // thread lane's 300 s wall ceiling becomes 300_000 virtual ms, the
+    // same observable: null + note + the task stays joinable).
+    if handle.rx.is_none() {
+        if let Some(sched) = interp.sched.as_mut() {
+            let start = sched.now_ms;
+            let deadline = match timeout_ms {
+                Some(ms) => Some(start + ms.min(600_000)),
+                // the thread lane's default ceiling, virtualized
+                None => Some(start + 300_000),
+            };
+            sched.drain(&mut |s: &crate::sched::AsyncSched| {
+                if s.finished.iter().any(|t| t.id == id) {
+                    return true;
+                }
+                match deadline {
+                    Some(d) => s.now_ms >= d,
+                    None => false,
+                }
+            });
+            if let Some((sv, notes)) = sched.take_finished(id) {
+                for n in notes {
+                    interp.notes.push(n);
+                }
+                let phase = match &sv {
+                    SendValue::Stress(k, _) if k == "cancelled" => {
+                        crate::interp::TaskState::Cancelled
+                    }
+                    _ => crate::interp::TaskState::Done,
+                };
+                interp.task_tombstones.insert(id, phase);
+                return Ok(from_send(sv));
+            }
+            // not finished: virtual timeout, or the scheduler stalled (the
+            // task waits on a delivery that can never come — the same
+            // observable as the thread lane's ceiling: null, joinable later)
+            interp.tasks.insert(id, handle);
+            match timeout_ms {
+                Some(ms) => interp.note(0, 4, format!("join timeout ({} ms) on task {}", ms, id)),
+                None => interp.note(
+                    0,
+                    4,
+                    format!("join timeout (300000 ms ceiling) on task {}", id),
+                ),
+            }
+            return Ok(Value::Null);
+        }
+        interp.note(0, 4, format!("task {} channel closed", id));
+        interp
+            .task_tombstones
+            .insert(id, crate::interp::TaskState::Done);
+        return Ok(Value::Null);
+    }
     // optional deadline: join(id, ms) returns null when the worker exceeds it
+    let crate::interp::TaskHandle {
+        rx,
+        cancel: task_cancel,
+        state: task_state,
+    } = handle;
+    let rx = match rx {
+        Some(rx) => rx,
+        // handled above (fiber branch); structurally unreachable here
+        None => panic!("fiber task reached the thread join path"),
+    };
     let received: Result<(crate::genes::SendValue, Vec<Note>), std::sync::mpsc::RecvTimeoutError> =
         match timeout_ms {
-            Some(ms) => match handle
-                .rx
-                .recv_timeout(std::time::Duration::from_millis(ms.min(600_000)))
-            {
+            Some(ms) => match rx.recv_timeout(std::time::Duration::from_millis(ms.min(600_000))) {
                 Ok(pair) => Ok(pair),
                 Err(mpsc::RecvTimeoutError::Timeout) => {
                     interp.note(0, 4, format!("join timeout ({} ms) on task {}", ms, id));
-                    interp.tasks.insert(id, handle); // keep the task joinable later
+                    // keep the task joinable later
+                    interp.tasks.insert(
+                        id,
+                        crate::interp::TaskHandle {
+                            rx: Some(rx),
+                            cancel: task_cancel,
+                            state: task_state,
+                        },
+                    );
                     return Ok(Value::Null);
                 }
                 Err(_) => {
@@ -2205,7 +2463,7 @@ pub fn join_task(interp: &mut Interp, id: i64, timeout_ms: Option<u64>) -> Resul
                     return Ok(Value::Null);
                 }
             },
-            None => match handle.rx.recv_timeout(std::time::Duration::from_secs(300)) {
+            None => match rx.recv_timeout(std::time::Duration::from_secs(300)) {
                 // sec-r3 (re-audit #3): the unbounded join was a free host
                 // freeze, a worker looping `run("sleep", …)` kept the
                 // channel open for as long as its fuel lasted. The default
@@ -2218,7 +2476,15 @@ pub fn join_task(interp: &mut Interp, id: i64, timeout_ms: Option<u64>) -> Resul
                         4,
                         format!("join timeout (300000 ms ceiling) on task {}", id),
                     );
-                    interp.tasks.insert(id, handle); // keep the task joinable later
+                    // keep the task joinable later
+                    interp.tasks.insert(
+                        id,
+                        crate::interp::TaskHandle {
+                            rx: Some(rx),
+                            cancel: task_cancel,
+                            state: task_state,
+                        },
+                    );
                     return Ok(Value::Null);
                 }
                 Err(_) => {

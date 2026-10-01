@@ -27,7 +27,7 @@ redacted from `methyl()` reads (security contract, SPEC §9b).
 
 ## The schema (source of truth: `src/genes.rs::CELL_SCHEMA`)
 
-38 declarations: 35 exact keys + 3 prefix families (`allow.*`, `ligand.*`, `variant.*`).
+39 declarations: 36 exact keys + 3 prefix families (`allow.*`, `ligand.*`, `variant.*`).
 Mechanical sync between this table and `CELL_SCHEMA` is pinned by `tests/cell_schema.rs`
 (`schema_doc_lists_every_declared_key`); the two must move in the same PR.
 
@@ -44,6 +44,7 @@ Mechanical sync between this table and `CELL_SCHEMA` is pinned by `tests/cell_sc
 | `expression.stochastic` | bool | `false` | enables per-call telegraph promoter draws; the deterministic contract holds otherwise (SPEC §11) | reg-bio (F-1) |
 | `grn.decay` | number (0..=1) | `0.0` (no decay) | GRN level dilution per `grn_fire` pulse / time tick (SPEC §11) | A10 / reg-bio-2 (C2) |
 | `grn.decay_calls` | integer (>=1) | — (event-driven only) | fires one GRN decay step every N calls when set (SPEC §11) | reg-bio-2 (C2) |
+| `io.pool` | `"thread"` or `"fiber"` | `thread` | spawn lane: `thread` = real OS threads (the historical lane); `fiber` = W16 spawned tasks run as fibers on the VM loop under the FIFO deterministic scheduler with a virtual clock (requires the VM lane, which is the default; requires `--vm`) | W16 (async epic) |
 | `ligand.*` | number (0..=1) | `0.0` | `[ligand.<name>]` bath default per species; the runtime `ligand_set` pool wins over it (SPEC §11) | reg-bio-2 (A4) |
 | `m6a.decay` | number (0..=1) | `0.0` (no decay) | standalone m6A density decay fraction per cadence tick (SPEC §11) | loop-9 (P0-4) |
 | `m6a.decay_calls` | integer (>=1) | `1` | standalone m6A decay cadence in calls (SPEC §11) | loop-9 (P0-4) |
