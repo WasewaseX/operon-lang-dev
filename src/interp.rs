@@ -18,6 +18,32 @@ pub struct Env {
     pub consts: RefCell<std::collections::HashSet<String>>,
 }
 
+/// W011 stage-3 item 2: the definition generation. Bumped by EVERY binding
+/// write — Env::define / set / define_const are the only three mutators of
+/// any env's vars map (audit: no other `vars.borrow_mut()` exists outside
+/// `impl Env`), so a bump inside them covers let/assign/const/auto-declare/
+/// pattern-capture/`operon` redefinition completely. PARAM binding is
+/// deliberately exempt (Env::define_param): a cached call site only ever
+/// stores a resolution that reached the GLOBAL env, and a frame's own
+/// params cannot shadow a name that resolved past them — if a param shared
+/// the name, the walk would have hit the param and the site would have
+/// stored nothing. Relaxed ordering suffices: envs are per-interpreter
+/// (workers own frozen cytoplasm copies, never shared env chains), the
+/// cache lives on the same interpreter as the envs it resolves, and a
+/// single thread observes its own atomic writes in program order.
+static DEF_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Current definition generation (the mono-cache validation epoch).
+pub fn def_gen() -> u64 {
+    use std::sync::atomic::Ordering::Relaxed;
+    DEF_GEN.load(Relaxed)
+}
+
+fn def_gen_bump() {
+    use std::sync::atomic::Ordering::Relaxed;
+    DEF_GEN.fetch_add(1, Relaxed);
+}
+
 impl Env {
     pub fn new(parent: Option<Rc<Env>>) -> Rc<Env> {
         Rc::new(Env {
@@ -28,6 +54,7 @@ impl Env {
     }
     /// W05: a const binding, records the name so later assignment stresses.
     pub fn define_const(&self, name: &str, val: Value) {
+        def_gen_bump();
         self.vars.borrow_mut().insert(name.to_string(), val);
         self.consts.borrow_mut().insert(name.to_string());
     }
@@ -60,6 +87,7 @@ impl Env {
     }
     /// Assign: rebind where found, else define in this (current) scope.
     pub fn set(&self, name: &str, val: Value) -> bool {
+        def_gen_bump();
         if self.vars.borrow().contains_key(name) {
             self.vars.borrow_mut().insert(name.to_string(), val);
             return true;
@@ -76,8 +104,37 @@ impl Env {
         false
     }
     pub fn define(&self, name: &str, val: Value) {
+        def_gen_bump();
         self.vars.borrow_mut().insert(name.to_string(), val);
     }
+    /// W011 stage-3 item 2: param binding WITHOUT a generation bump. Sound
+    /// because cached call sites only store GLOBAL-level resolutions, and
+    /// a frame's own params can never shadow a name that resolved past
+    /// them (see the DEF_GEN doc). call_gene_inner binds args here.
+    pub fn define_param(&self, name: &str, val: Value) {
+        self.vars.borrow_mut().insert(name.to_string(), val);
+    }
+    /// W011 stage-3 item 2: `get` with origin tracking — returns the value
+    /// and the ADDRESS of the env whose map satisfied the read. The
+    /// mono-cache stores a resolution only when the origin is the GLOBAL
+    /// env (or the walk missed entirely): call-scoped origins (frame envs)
+    /// are per-call state whose identity changes every call and whose
+    /// contents are param-dependent, so they are never cached — a site
+    /// whose callee lives in a frame binding re-resolves every call.
+    pub fn get_from(env: &Rc<Env>, name: &str) -> Option<(Value, usize)> {
+        if let Some(v) = env.vars.borrow().get(name) {
+            return Some((v.clone(), std::rc::Rc::as_ptr(env) as usize));
+        }
+        let mut node = env.parent.clone();
+        while let Some(cur) = node {
+            if let Some(v) = cur.vars.borrow().get(name) {
+                return Some((v.clone(), std::rc::Rc::as_ptr(&cur) as usize));
+            }
+            node = cur.parent.clone();
+        }
+        None
+    }
+
     /// W02 (match-v2): this scope's own bindings (no parent walk), used to
     /// lift an or-pattern alternative's captures from its scratch scope into
     /// the arm scope after the alternative hits. Pure copy; iteration order
@@ -733,6 +790,12 @@ pub struct Interp {
     pub vm_stack_pool: Vec<Vec<crate::value::Value>>,
     /// W11: the optimization level behind --opt (0 = off).
     pub vm_opt: u8,
+    /// W011 stage-3 item 2: the monomorphic call-site cache, keyed by
+    /// (code-object address, site ip), storing the resolution result with
+    /// the definition generation at resolution time. Per-interpreter by
+    /// construction: workers build fresh interps and copy only inherited
+    /// knobs, never this map — a spawned cell always re-resolves.
+    pub mono_cache: HashMap<(usize, u32), (u64, Option<Value>)>,
     /// W011 toggle matrix: an explicit --opt-passes set. None = derive
     /// from vm_opt (1 = STAGE1, 2 = ALL); Some(set) is authoritative,
     /// including PassSet::NONE (compile-only). Process-constant.
@@ -876,6 +939,7 @@ impl Interp {
             vm_stack_pool: Vec::new(),
             vm_opt: 0,
             opt_passes: None,
+            mono_cache: HashMap::new(),
             debug_breaks: HashSet::new(),
             debug_step: false,
             debug_step_depth: None,
@@ -3337,7 +3401,7 @@ impl Interp {
                 // the shared tail (named_call_tail) is ALSO the VM's CallNamed
                 // path, so the machine rides the identical gate funnel.
                 if let Expr::Ident(name) = &**callee {
-                    return self.named_call_tail(env, name, args, None);
+                    return self.named_call_tail(env, name, args, None, None);
                 }
                 let cv = self.eval(env, callee)?;
                 let mut argvs = Vec::with_capacity(args.len());
@@ -4024,6 +4088,7 @@ impl Interp {
         name: &str,
         args: &[Expr],
         pre: Option<Vec<Value>>,
+        site: Option<(usize, u32)>,
     ) -> Result<Value, Stress> {
         // reg-bio-3 (C9): stoichiometric RISC, every entry for
         // the target is one binding site; the per-call capture
@@ -4141,7 +4206,7 @@ impl Interp {
                 argvs
             }
         };
-        let mut result = self.call_named(env, name, argvs);
+        let mut result = self.call_named(env, name, argvs, site);
         if let Err(s) = &mut result {
             // W101: capability denials raised inside builtins carry line 0
             // (Caps::denied is a static constructor without interp access),
@@ -4165,8 +4230,9 @@ impl Interp {
         env: &Rc<Env>,
         name: &str,
         argvs: Vec<Value>,
+        site: Option<(usize, u32)>,
     ) -> Result<Value, Stress> {
-        self.named_call_tail(env, name, &[], Some(argvs))
+        self.named_call_tail(env, name, &[], Some(argvs), site)
     }
 
     pub fn call_named(
@@ -4174,6 +4240,7 @@ impl Interp {
         env: &Rc<Env>,
         name: &str,
         args: Vec<Value>,
+        site: Option<(usize, u32)>,
     ) -> Result<Value, Stress> {
         // toggle bistability gate: the repressed allele of a toggle pair refuses
         // calls (acetylated genes override repression, open chromatin wins)
@@ -4200,8 +4267,48 @@ impl Interp {
         if let Some(&canon) = builtin_synonym_map().get(name) {
             return self.call_builtin(env, canon, args);
         }
-        // user gene
-        if let Some(v) = env.get(name) {
+        // user gene — fronted by the W011 stage-3 monomorphic site cache.
+        // A VM site (code object + ip) that resolved through the env chain
+        // stores the resolution with the PRE-call definition generation; a
+        // hit under an unchanged generation skips the env walk and runs the
+        // SAME call_value funnel (depth, GRN, methylation, annotations —
+        // everything inside still executes). Cached resolutions are ONLY
+        // global-level hits and full env-misses (origin-checked via
+        // get_from): a resolution that stopped INSIDE the frame (param,
+        // local, gene value in a frame binding) belongs to call-scoped
+        // state and stores nothing, so frame-dependent callees re-resolve
+        // every call. Any binding write anywhere bumps DEF_GEN (the bump
+        // lives inside Env's three mutators) and invalidates every entry;
+        // writes the callee performs also bump past the stored pre-call
+        // generation. The tree-walk passes site = None — the cache is
+        // dispatch metadata, byte-invisible either way.
+        if let Some(key) = site {
+            let gen = def_gen();
+            let hit = match self.mono_cache.get(&key) {
+                Some((g, cached)) if *g == gen => Some(cached.clone()),
+                _ => None,
+            };
+            match hit {
+                Some(Some(v)) => return self.call_value(env, &v, args),
+                Some(None) => {} // cached env-miss: the builtin branches decide
+                None => {
+                    // miss: full resolution; cached ONLY when the origin is
+                    // the global env (stable, top-level state) or the walk
+                    // missed — under the current (pre-call) generation
+                    match Env::get_from(env, name) {
+                        Some((v, origin)) => {
+                            if origin == std::rc::Rc::as_ptr(&self.global) as usize {
+                                self.mono_cache.insert(key, (def_gen(), Some(v.clone())));
+                            }
+                            return self.call_value(env, &v, args);
+                        }
+                        None => {
+                            self.mono_cache.insert(key, (def_gen(), None));
+                        }
+                    }
+                }
+            }
+        } else if let Some(v) = env.get(name) {
             return self.call_value(env, &v, args);
         }
         // builtin
@@ -5451,7 +5558,7 @@ impl Interp {
                         ));
                     }
                 }
-                fenv.define(pname, a.clone());
+                fenv.define_param(pname, a.clone());
             } else if let Some(d) = default {
                 // W16: disarm the fiber lane across the default expression
                 // (user code that may call sleep/recv — a suspension here
@@ -5475,7 +5582,7 @@ impl Interp {
                         ));
                     }
                 }
-                fenv.define(pname, dv);
+                fenv.define_param(pname, dv);
             } else {
                 self.note(
                     dl,
@@ -5485,7 +5592,7 @@ impl Interp {
                         pname, name
                     ),
                 );
-                fenv.define(pname, Value::Null);
+                fenv.define_param(pname, Value::Null);
             }
         }
         if args.len() > def.params.len() && !def.params.is_empty() {
@@ -5963,7 +6070,7 @@ impl Interp {
                         ));
                     }
                 }
-                fenv.define(pname, a.clone());
+                fenv.define_param(pname, a.clone());
             } else if let Some(d) = default {
                 // W16: disarm across the default expression (same rule as
                 // the gene funnel: no frame exists to park)
@@ -5972,7 +6079,7 @@ impl Interp {
                 let dv = self.eval(&fenv, d).unwrap_or(Value::Null);
                 self.fiber_armed = saved_armed;
                 self.fiber_hook = saved_hook;
-                fenv.define(pname, dv);
+                fenv.define_param(pname, dv);
             } else {
                 self.note(
                     dl,
@@ -5982,7 +6089,7 @@ impl Interp {
                         pname, name
                     ),
                 );
-                fenv.define(pname, Value::Null);
+                fenv.define_param(pname, Value::Null);
             }
         }
         let start = if self.profiling {

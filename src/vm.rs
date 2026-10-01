@@ -999,7 +999,12 @@ fn exec_gene_code_inner(
                 let n = *argc as usize;
                 let base = stack.len() - n;
                 let argvs: Vec<Value> = stack.drain(base..).collect();
-                let v = interp.named_call_tail_vm(&cur, name, argvs)?;
+                let v = interp.named_call_tail_vm(
+                    &cur,
+                    name,
+                    argvs,
+                    Some((code as *const GeneCode as usize, (ip - 1) as u32)),
+                )?;
                 stack.push(v);
             }
         }
@@ -1146,7 +1151,7 @@ pub fn fiber_call_begin(
     argvs: Vec<Value>,
 ) -> Result<FiberBegin, Stress> {
     interp.fiber_hook = true;
-    let r = interp.named_call_tail_vm(env, name, argvs);
+    let r = interp.named_call_tail_vm(env, name, argvs, None);
     interp.fiber_hook = false;
     let v = r?;
     match interp.fiber_hook_out.take() {
@@ -1592,7 +1597,12 @@ fn fiber_run_inner(interp: &mut Interp, fiber: &mut Fiber) -> Result<FiberOutcom
                 let base = stack.len() - n;
                 let argvs: Vec<Value> = stack.drain(base..).collect();
                 interp.fiber_hook = true;
-                let r = interp.named_call_tail_vm(cur, name, argvs);
+                let r = interp.named_call_tail_vm(
+                    cur,
+                    name,
+                    argvs,
+                    Some((std::rc::Rc::as_ptr(code) as usize, cur_ip as u32)),
+                );
                 interp.fiber_hook = false;
                 let v = r?;
                 match interp.fiber_hook_out.take() {
@@ -2470,7 +2480,7 @@ mod tests {
             for s in &parsed.stmts {
                 let _ = interp.exec_stmt(&g, s);
             }
-            let out = match interp.named_call_tail_vm(&g, "f", vec![Value::Int(21)]) {
+            let out = match interp.named_call_tail_vm(&g, "f", vec![Value::Int(21)], None) {
                 Ok(v) => v,
                 Err(_) => panic!("f(21) must not stress"),
             };
@@ -2784,7 +2794,7 @@ mod fiber_tests {
     /// CallNamed arm uses.
     fn run_sync(interp: &mut Interp, name: &str, args: Vec<Value>) -> Result<Value, Stress> {
         let g = interp.global.clone();
-        interp.named_call_tail_vm(&g, name, args)
+        interp.named_call_tail_vm(&g, name, args, None)
     }
 
     /// The fiber engine: begin on the shared funnel, drive to completion.

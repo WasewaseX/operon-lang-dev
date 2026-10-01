@@ -1951,7 +1951,7 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
         // reg-r1: worker cells call through the SAME name-dispatch funnel as
         // the host, call_named evaluates the toggle/methyl/GRN gates that a
         // direct call_gene would bypass, so a repressed gene stays repressed
-        let result = ti.call_named(&genv, &task_name, conv_args);
+        let result = ti.call_named(&genv, &task_name, conv_args, None);
         let (rv, notes) = match result {
             Ok(v) => (to_send(&v), ti.notes),
             // W06 (D-014): a propagated variant IS the worker gene's return

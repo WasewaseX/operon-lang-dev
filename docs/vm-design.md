@@ -130,16 +130,31 @@ The safe design, when picked up:
    program) in the vm_parity corpus all four axes, unit test
    trivial_bit_shape_matrix, full corpus + redteam runs recorded in the
    batch commit.
-2. **Monomorphic specialization.** Per-call-site resolution cache keyed
-   by (call-site ip, resolved callee identity), validated against a
-   definition-generation counter bumped by EVERY binding write path
-   (define, set, auto-declare). Invalidation-complete by construction;
-   honest only if the counter is bumped from exactly those three paths.
-   Evidence bar: the redteam shadowing corpus + the differential harness
-   + a BENCH.md row on fib25 (the workload where the funnel actually
-   shows).
+2. **Monomorphic specialization — DELIVERED (2026-10-01, this batch).**
+   As built: the DEF_GEN generation counter (process-global AtomicU64,
+   Relaxed) bumped INSIDE Env's three mutators (define/set/define_const —
+   the audited-only mutators of any vars map, so let/assign/const/
+   auto-declare/pattern-capture are covered completely); param binding is
+   deliberately exempt (Env::define_param) with the shadowing-safety
+   argument: a cached site only stores GLOBAL-level resolutions, and a
+   frame's own params cannot shadow a name that resolved past them (if a
+   param shared the name, the walk would have hit the param and the site
+   would have stored nothing — origin-checked via Env::get_from). The
+   cache lives on the Interp keyed by (code-object address, site ip);
+   both VM machines supply the key (sync machine: code pointer + ip-1,
+   fiber machine: frame Rc + cur_ip), the tree-walk passes None. Entries
+   store the PRE-call generation, so any write the callee performs
+   invalidates the site; cached values are global-hits (Value::Gene or a
+   global's callee value) and full env-misses (the builtin branches then
+   decide). Workers start with an empty cache (fresh interps never copy
+   the map). Evidence bar RUN GREEN: redteam 109 contained / 0 breached
+   (the shadowing corpus), vm_parity 3537 identical / 0 divergent all
+   four axes, fuzz_diff 600x5 0 findings, BENCH.md fib25 row measured
+   143.9ms -> 145.9ms (1.01x, within run noise — dispatch is
+   semantics-bound, recorded honestly).
 
-Item 2 remains on the W011 board REMAIN until its evidence bars run green.
+Both items' evidence bars have run green; W011's enumerated list is
+fully delivered.
 
 ## 2a. A2 delivered: the bridge architecture (2026-09-27, main)
 

@@ -215,6 +215,29 @@ A6 flip (2026-09-30, v2.6.0): the VM is the run default, `--interp` (or
 The >=3x stretch target stays OPEN under W11/A5; parity is the shipped
 floor, not the ceiling.
 
+## The W011 stage-3 dispatch work (measured 2026-10-01, median of 7, same box)
+
+Both remaining §2c items landed with the full differential gate (vm_parity
+3537/0 all four axes, redteam 109/0, fuzz_diff 600x5 0 findings, clippy 0,
+fmt clean) and the fib25 row the design note demanded:
+
+| config | fib25 (ms) | delta |
+|---|---:|---:|
+| trivial-gene dispatch in (item 1, 4834575), mono-cache absent | 143.9 | 1.00x |
+| mono-cache active (item 2, stash-verified rebuild) | 145.9 | 1.01x (within run noise) |
+
+The honest verdict repeats the W011 matrix conclusion: **dispatch is
+semantics-bound, not lookup-bound.** The mono-cache skips exactly one
+env-chain walk (frame miss -> global hit) per call and pays one hash probe +
+generation check for it; the funnel's mem_charge/cycle-note security charges
+remain the floor, and fib25's 242,785 calls amortize both to noise. The items
+stay in the language because the enumerated W011 list is now fully delivered
+with parity proof, the machinery is real (2 chain-node lookups saved per
+global-gene call, more on deep chains), and the cache is invalidation-complete
+by construction (generation bumps inside Env's three mutators; param binding
+exempt with the shadowing-safety argument in DEF_GEN's doc). fib(25) output
+pinned 75025 in every run of both configs.
+
 The gate is **honestly missed** at stage A2, and the campaign that measured it
 found and fixed three real machine regressions along the way:
 

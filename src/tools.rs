@@ -414,7 +414,7 @@ pub fn run_entry(l: &mut Loaded, opts: &Opts) -> Result<Value, Stress> {
                 }
             };
             let invoked = match target {
-                Value::Null => l.interp.call_named(&genv, &entry, vec![argv]),
+                Value::Null => l.interp.call_named(&genv, &entry, vec![argv], None),
                 v => {
                     let has_params = match &v {
                         Value::Gene(d, _) => !d.params.is_empty(),
