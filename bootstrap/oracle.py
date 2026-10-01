@@ -8301,6 +8301,12 @@ def main():
                     # walker skips it too)
                     if "timing" in root.replace(os.sep, "/"):
                         continue
+                    # W08r: the async corpus is cell-gated (io.pool =
+                    # "fiber"); the thread lane's wall-clock fuel charging
+                    # is runner-speed-dependent (the Rust walker skips it
+                    # too)
+                    if "async" in root.replace(os.sep, "/"):
+                        continue
                     for fn in sorted(fns):
                         if fn.endswith(".op"):
                             files.append(os.path.join(root, fn))

@@ -1253,6 +1253,17 @@ fn collect_op_files(dir: &Path, out: &mut Vec<String>) {
                 if p.file_name().map(|n| n == "timing").unwrap_or(false) {
                     continue;
                 }
+                // W08r: the async corpus is cell-gated (io.pool = "fiber",
+                // the deterministic virtual clock). Without the cell the
+                // thread lane charges parked workers per real millisecond,
+                // so fuel burn depends on the RUNNER'S SPEED — CI's slow
+                // shared runners burned the pool on identical files that
+                // pass locally. Exercised explicitly by scripts/test.sh
+                // with tests/async/async.cell; lane parity is pinned by
+                // tests/async_parity.rs (byte-identical two-lane programs).
+                if p.file_name().map(|n| n == "async").unwrap_or(false) {
+                    continue;
+                }
                 collect_op_files(&p, out);
             } else if p.extension().map(|x| x == "op").unwrap_or(false) {
                 out.push(p.to_string_lossy().to_string());
