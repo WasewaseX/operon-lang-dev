@@ -9,6 +9,18 @@ Usage: python3 bootstrap/harness.py [--bin ../bin/operon]
 """
 import subprocess, sys, os, argparse
 
+# F6/#50 (reliab lane, 2026-10-02): Windows runner consoles and pipes default
+# to cp1252, and this harness PRINTS program output (promote() payloads carry
+# '✓' and friends). On the windows-release compat leg the harness died
+# mid-divergence — UnicodeEncodeError on U+2713 while printing the rust side
+# of a caps_policy.op detail — masking the real comparison behind a crash.
+# The evidence engine must always be able to speak its own corpus: force
+# UTF-8 with replace-on-error (never fatal). Python 3.7+; guarded so exotic
+# builds without reconfigure keep the old behavior instead of crashing here.
+for _s in (sys.stdout, sys.stderr):
+    if hasattr(_s, "reconfigure"):
+        _s.reconfigure(encoding="utf-8", errors="replace")
+
 # S3 exclusion policy (sz, 2026-09-24), builtins with NO exact-output golden,
 # by nature, each accounted for:
 #   exit              , control-flow terminator; its exit-code contract is the

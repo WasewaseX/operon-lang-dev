@@ -52,8 +52,16 @@ jobs:
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu qemu-user-static
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu qemu-user-static libc6-arm64-cross
           echo 'CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc' >> $GITHUB_ENV
+          # F6/#50 (reliab lane, 2026-10-02): the cross-built aarch64 binary
+          # is dynamically linked against aarch64 glibc; under qemu-user its
+          # ELF interpreter (/lib/ld-linux-aarch64.so.1) must resolve inside
+          # the TARGET sysroot, which an x86_64 runner does not have — every
+          # program died at exec with rust=255 (qemu "Could not open"
+          # the loader). libc6-arm64-cross installs the aarch64 loader under
+          # /usr/aarch64-linux-gnu; QEMU_LD_PREFIX points qemu-user there.
+          echo 'QEMU_LD_PREFIX=/usr/aarch64-linux-gnu' >> $GITHUB_ENV
 
       # r7 fix (sz, red-main hotfix): CARGO_BUILD_TARGET was exported EMPTY on
       # every non-cross leg, which cargo rejects — the whole matrix has been
