@@ -1,0 +1,65 @@
+# std/typed — W003 stage-2 typed wrappers over the callable-generic std core.
+#
+# GENERICS.md stage 2 is the normative contract here. The <T, U> spellings
+# name the slots for readers and the LSP hover; a bare type parameter ERASES
+# at runtime (any value satisfies T — the static checker owns the depth,
+# docs/specs/TYPE-SYSTEM.md), while a parameterized container annotation
+# (list[T], map[K, V]) enforces the SHALLOW is-a shape at the boundary: a
+# wrong container kind unfolds into a catchable Stress naming the annotation
+# ("argument 'xs' for gene 'map' expects list[T], got str"), never a parse
+# rejection (Total Grammar, SPEC §7a). Element types stay the checker's
+# business; the runtime refuses only the container kind.
+#
+# One wrapper per callable-generic core gene and zero per-type duplication
+# (the W03 gate: no map_int/map_str may ever be added — stage 1 proved one
+# implementation serves every element type). Each wrapper delegates to the
+# single core implementation; the typed boundary it adds is the point.
+# Sibling imports use the gene-level `use std/<mod> as <alias>` form, the
+# one loader-proven pattern for std-on-std imports (the serialize.op
+# precedent).
+
+gene map<T, U>(xs: list[T], f: gene) -> list[U] {
+    # transform each item; one implementation serves every element type
+    use std/iter as it
+    return it.map(xs, f)
+}
+
+gene filter<T>(xs: list[T], pred: gene) -> list[T] {
+    # keep the items the predicate accepts, order preserved
+    use std/iter as it
+    return it.filter(xs, pred)
+}
+
+gene fold<S, T>(xs: list[T], init: S, f: gene) -> S {
+    # left fold; the accumulator type is independent of the element type
+    use std/iter as it
+    return it.fold(xs, init, f)
+}
+
+gene first<T>(xs: list[T]) -> T? {
+    # the first element, or null on empty (find_first with an always-true
+    # predicate: first is the single core, not a re-implementation)
+    use std/iter as it
+    return it.find_first(xs, gene (x) { return true })
+}
+
+gene zip<T, U>(a: list[T], b: list[U]) -> list {
+    # pair up to the shorter input; pairs are 2-element lists
+    use std/collections as coll
+    return coll.zip(a, b)
+}
+
+gene lookup<K, V>(m: map[K, V], k) -> V? {
+    # map read by key (named lookup, never `get`: a module gene named
+# get shadows the map method m.get inside this module — name-proven, not
+# worth a loader special case): the value or null on a missing key (the soft
+    # indexing law, never a Stress)
+    return m.get(k)
+}
+
+gene sort_by_key<T, K>(xs: list[T], keyf: gene) -> list[T] {
+    # stable key sort; keys are their own type parameter, the comparator
+    # contract matches xs.sort (keyf(a) before keyf(b))
+    use std/iter as it
+    return it.sort_by_key(xs, keyf)
+}
