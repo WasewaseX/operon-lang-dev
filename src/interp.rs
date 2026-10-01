@@ -742,6 +742,14 @@ pub struct Interp {
     /// workers are separate Interps and never break.
     pub debug_breaks: HashSet<usize>,
     pub debug_step: bool,
+    /// W08r stage 1: depth-aware stepping. Some(d) = the step request only
+    /// traps when the call depth is back down to d (that is what `next`
+    /// step-over and `finish` step-out are); None = trap at any depth
+    /// (`s` step-into). Cleared at every stop.
+    pub debug_step_depth: Option<usize>,
+    /// W08r stage 1: one-shot continue-to-line target (`until N`); cleared
+    /// when it fires so a later breakpoint on the same line still stops.
+    pub debug_until: Option<usize>,
     pub debug_file: String,
     pub seq_tx: Option<mpsc::SyncSender<crate::value::SeqMsg>>,
     /// Process-wide step ceiling shared with every spawned worker: when
@@ -862,6 +870,8 @@ impl Interp {
             opt_passes: None,
             debug_breaks: HashSet::new(),
             debug_step: false,
+            debug_step_depth: None,
+            debug_until: None,
             debug_file: String::new(),
             seq_tx: None,
             fuel_pool: None,
@@ -1163,27 +1173,66 @@ impl Interp {
             // reflects the statement that just ran; a hit (or a step
             // request from the previous trap) opens the REPL. Only the
             // host interpreter has hooks set; workers never break.
-            if self.debug_step || self.debug_breaks.contains(&self.cur_line) {
-                self.debug_repl(env);
+            // W08r stage 1: the trap is depth-aware — a step request that
+            // carries a depth (next/finish) only fires when the call stack
+            // has unwound back to that depth, so stepping never descends
+            // into the bodies called from the stepped-over statement. The
+            // one-shot until target fires before breakpoints are consulted
+            // and clears itself so the same line still breaks later.
+            // Breakpoints match the statement's OWN line first (extracted
+            // from its line-bearing expression nodes): cur_line is stamped
+            // by nested evaluation, so after `let a = work(10)` it reports
+            // the LAST line inside work, not the call site — a break on the
+            // call line could never fire off cur_line alone. cur_line stays
+            // as the fallback for line-silent statements.
+            let stmt_bp_hit = match s.first_line() {
+                Some(l) => self.debug_breaks.contains(&l),
+                None => false,
+            };
+            let depth_ok = match self.debug_step_depth {
+                Some(d) => self.call_stack.len() <= d,
+                None => true,
+            };
+            let stmt_line = s.first_line();
+            let until_hit = match self.debug_until {
+                Some(u) => Some(u) == stmt_line || u == self.cur_line,
+                None => false,
+            };
+            if until_hit
+                || stmt_bp_hit
+                || self.debug_breaks.contains(&self.cur_line)
+                || (self.debug_step && depth_ok)
+            {
+                if until_hit {
+                    self.debug_until = None;
+                }
+                self.debug_step_depth = None;
+                self.debug_repl(env, stmt_line);
             }
         }
         Ok(Flow::Norm)
     }
 
     /// W08 phase 1: the on-break REPL. Reads stdin; EOF resumes (piped
-    /// sessions terminate cleanly instead of wedging). Commands: c/continue
-    /// (resume), s/step (break after the next statement), p EXPR (evaluate
-    /// in the current frame), vars (dump the frame chain), bt (call chain),
+    /// sessions terminate cleanly instead of wedging). W08r stage 1
+    /// commands: c/continue (resume), s/step (step-into: break after the
+    /// next statement at any depth), n/next (step-over), fin/finish
+    /// (step-out), until N (continue-to-line, one-shot), b N / b del N /
+    /// b list (live breakpoint management), p EXPR (evaluate in the
+    /// current frame), vars (dump the frame chain), bt (call chain),
     /// q (leave the debugger with exit code 0).
-    fn debug_repl(&mut self, env: &Rc<Env>) {
+    fn debug_repl(&mut self, env: &Rc<Env>, stmt_line: Option<usize>) {
         use std::io::Write as _;
+        let shown = stmt_line.unwrap_or(self.cur_line);
         loop {
-            print!("(dbg) ");
+            print!("(dbg) line {} > ", shown);
             let _ = std::io::stdout().flush();
             let mut line = String::new();
             if std::io::stdin().read_line(&mut line).unwrap_or(0) == 0 {
                 // EOF: resume to completion so piped sessions never wedge
                 self.debug_step = false;
+                self.debug_step_depth = None;
+                self.debug_until = None;
                 self.debug_breaks.clear();
                 return;
             }
@@ -1195,7 +1244,64 @@ impl Interp {
                 }
                 "s" | "step" => {
                     self.debug_step = true;
+                    self.debug_step_depth = None;
                     return;
+                }
+                "n" | "next" => {
+                    // step-over: resume, but only trap once the call stack
+                    // is back at (or above) the depth the request was made at
+                    self.debug_step = true;
+                    self.debug_step_depth = Some(self.call_stack.len());
+                    return;
+                }
+                "fin" | "finish" => {
+                    // step-out: trap when the current frame has returned
+                    self.debug_step = true;
+                    self.debug_step_depth = Some(self.call_stack.len().saturating_sub(1));
+                    return;
+                }
+                other if other.starts_with("until ") => match other[6..].trim().parse::<usize>() {
+                    Ok(n) => {
+                        self.debug_until = Some(n);
+                        self.debug_step = false;
+                        return;
+                    }
+                    Err(_) => eprintln!("(dbg) until needs a line number"),
+                },
+                other if other.starts_with("b ") || other == "b" => {
+                    let rest = other[1..].trim();
+                    if rest == "list" {
+                        let mut bs: Vec<usize> = self.debug_breaks.iter().copied().collect();
+                        bs.sort_unstable();
+                        if bs.is_empty() {
+                            println!("  (no breakpoints)");
+                        } else {
+                            for b in bs {
+                                println!("  line {}", b);
+                            }
+                        }
+                    } else if let Some(del) = rest.strip_prefix("del ") {
+                        match del.trim().parse::<usize>() {
+                            Ok(n) => {
+                                if self.debug_breaks.remove(&n) {
+                                    println!("  deleted line {}", n);
+                                } else {
+                                    // informational response, not an error: it
+                                    // must reach stdout for protocol clients
+                                    println!("(dbg) no breakpoint at line {}", n);
+                                }
+                            }
+                            Err(_) => eprintln!("(dbg) b del needs a line number"),
+                        }
+                    } else {
+                        match rest.parse::<usize>() {
+                            Ok(n) => {
+                                self.debug_breaks.insert(n);
+                                println!("  breakpoint at line {}", n);
+                            }
+                            Err(_) => eprintln!("(dbg) b needs: b N | b del N | b list"),
+                        }
+                    }
                 }
                 "q" | "quit" => {
                     eprintln!("[debug] quit");
@@ -1263,7 +1369,9 @@ impl Interp {
                             None => eprintln!("(dbg) cannot evaluate '{}'", src),
                         }
                     } else {
-                        eprintln!("(dbg) commands: c | s | q | bt | vars | p EXPR");
+                        eprintln!(
+                            "(dbg) commands: c | s | n | fin | until N | b N | b del N | b list | bt | vars | p EXPR | q"
+                        );
                     }
                 }
             }
@@ -2733,6 +2841,8 @@ impl Interp {
         match e {
             Expr::Null => Ok(Value::Null),
             Expr::Bool(b) => Ok(Value::Bool(*b)),
+            // W08r: the parser's transparent position marker — pure passthrough
+            Expr::At(inner, _) => self.eval(env, inner),
             Expr::Int(i) => Ok(Value::Int(*i)),
             Expr::Float(f) => Ok(Value::Float(*f)),
             Expr::Str(s) => Ok(Value::Str(s.clone())),

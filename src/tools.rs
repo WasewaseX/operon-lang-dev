@@ -2385,6 +2385,9 @@ fn fmt_map_key(k: &Expr) -> String {
 fn fmt_prec(e: &Expr, parent: u8) -> String {
     let needs_paren = nest_prec(e) < parent;
     let body = match e {
+        // W08r: the position marker is metadata — fmt renders the wrapped
+        // expression only, so output is byte-identical to pre-marker source
+        Expr::At(inner, _) => fmt_prec(inner, parent),
         Expr::Null => "null".into(),
         Expr::Bool(true) => "true".into(),
         Expr::Bool(false) => "false".into(),
@@ -2663,6 +2666,9 @@ fn d_hex(bs: &[u8]) -> String {
 
 fn d_expr(e: &Expr) -> DumpNode {
     match e {
+        // W08r: dump stays byte-identical with pre-marker output — the
+        // marker is transparent metadata, not program structure
+        Expr::At(inner, _) => d_expr(inner),
         Expr::Null => dn("Null", vec![]),
         Expr::Bool(b) => dn("Bool", vec![dt(*b)]),
         Expr::Int(n) => dn("Int", vec![dt(n)]),

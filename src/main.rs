@@ -2821,7 +2821,10 @@ usage:
   operon explain f.op [--json] [--strict]
   operon keywords [--json]
   operon repl
-  operon debug f.op --break N   # W08 phase 1: REPL on line breaks (c s q bt vars p EXPR)
+  operon debug f.op --break N   # W08r debugger (interp lane): breaks at line N, then
+                  # c | s(tep-into) | n(ext, step-over) | fin(ish, step-out) |
+                  # until N | b N | b del N | b list | bt | vars | p EXPR | q
+                  # (--protocol=json serves the same state over NDJSON)
   operon new NAME [--lib] [--here]   scaffold a project (operon.toml + src + a green smoke test)
   operon add NAME[@REQ] [--registry FILE]   pull a dependency from the registry
                   # REQ (item 4, ai/ecosystem-r3): ^1.2 ~1.2 >=1 <2 =X.Y.Z 1.x *

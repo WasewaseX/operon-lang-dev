@@ -372,6 +372,12 @@ impl<'a> Compiler<'a> {
                 }
                 self.emit(Instr::CallNamed(nidx, args.len() as u32), 0);
             }
+            // W08r: the parser's transparent position marker compiles as its
+            // inner expression, attributed to the marker's line (this also
+            // gives line-silent statements a real line in the VM line table)
+            Expr::At(inner, l) => {
+                return self.expr(inner, *l as u32);
+            }
             _ => return false,
         }
         true
