@@ -190,10 +190,13 @@ CallFrame {
   base:   u32,          // operand-stack base in the frame's value stack
   slots:  Vec<Value>,   // locals; escaped slots are Rc<RefCell<Value>> cells
   ret:    Flow-slot,    // normal return vs ?!-propagated return vs stress
-  // --- W16/A2 reservation (docs/specs/ASYNC.md): carried from A2 onward,
-  // unused until async lands; cost = one enum tag + one u32 + one bool.
+  // --- W16 (docs/specs/ASYNC.md): LANDED 2026-10-01. The fiber machine
+  // (src/vm.rs) owns Vec<VmFrame> — the heap frame stack this section
+  // reserved — with fiber_state / wake_deadline / cancel_flag as real
+  // fields; native gene calls push frames through the one hook in
+  // call_gene_inner so the gate funnel stays shared.
   fiber:  Running | SuspendedOn(WakeReason),  // park at builtin calls only
-  wake_deadline: Option<u32>,                 // timer-wheel slot
+  wake_deadline: Option<u64>,                 // timer-wheel slot (virtual ms)
   cancel_flag: bool                           // W18 cooperative cancellation
 }
 ```
