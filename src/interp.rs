@@ -5049,7 +5049,7 @@ impl Interp {
                 });
                 return Ok(Value::Null);
             }
-            crate::vm::exec_gene_body(self, key, &name, &def.body, &fenv)
+            crate::vm::exec_gene_body(self, key, &name, &def.body, &def.type_params, &fenv)
         } else {
             self.exec_block(&fenv, &def.body)
         };
@@ -5487,7 +5487,7 @@ impl Interp {
         let result = if self.vm {
             // W09 A2: the compiled-body path (see the call_gene_inner site)
             let key = std::sync::Arc::as_ptr(&def) as *const u8 as usize;
-            crate::vm::exec_gene_body(self, key, &name, &def.body, &fenv)
+            crate::vm::exec_gene_body(self, key, &name, &def.body, &def.type_params, &fenv)
         } else {
             self.exec_block(&fenv, &def.body)
         };

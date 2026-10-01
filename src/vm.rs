@@ -41,6 +41,10 @@ pub enum Const {
 #[derive(Debug, Clone)]
 pub struct GeneCode {
     pub name: String,
+    /// TYPED-MODE: the gene's type parameters, carried so the fiber lane's
+    /// pop-time return-annotation check treats type params exactly like the
+    /// tree-walk lane (ann_is_typaram needs the enclosing gene's params).
+    pub type_params: Vec<(String, Option<String>)>,
     pub consts: Vec<Const>,
     pub names: Vec<String>,
     pub code: Vec<Instr>,
@@ -627,7 +631,12 @@ impl<'a> Compiler<'a> {
 
 /// Compile a gene body. Infallible: every construct either compiles native
 /// or bridges (Total Grammar: nothing is rejected at compile time).
-pub fn compile_body(name: &str, body: &[Stmt], prog: &mut VmProgram) -> GeneCode {
+pub fn compile_body(
+    name: &str,
+    body: &[Stmt],
+    prog: &mut VmProgram,
+    type_params: &[(String, Option<String>)],
+) -> GeneCode {
     let mut c = Compiler::new(&mut prog.exprs, &mut prog.stmts);
     let pending = c.stmts(body);
     // a body-level break/continue cannot reach a compiled loop target:
@@ -651,6 +660,7 @@ pub fn compile_body(name: &str, body: &[Stmt], prog: &mut VmProgram) -> GeneCode
         names: c.names,
         code: c.code,
         lines: c.lines,
+        type_params: type_params.to_vec(),
     }
 }
 
@@ -661,9 +671,10 @@ pub fn exec_gene_body(
     def_key: usize,
     name: &str,
     body: &[Stmt],
+    type_params: &[(String, Option<String>)],
     env: &Rc<Env>,
 ) -> Result<Flow, Stress> {
-    let code = gene_code_cached(interp, def_key, name, body);
+    let code = gene_code_cached(interp, def_key, name, body, type_params);
     exec_gene_code(interp, &code, env)
 }
 
@@ -676,6 +687,7 @@ pub(crate) fn gene_code_cached(
     def_key: usize,
     name: &str,
     body: &[Stmt],
+    type_params: &[(String, Option<String>)],
 ) -> std::rc::Rc<GeneCode> {
     let opt = interp.vm_opt;
     // ast-grep-ignore: no-unwrap-in-src
@@ -693,7 +705,7 @@ pub(crate) fn gene_code_cached(
     match prog.codes.get(&key) {
         Some(cached) => cached.clone(),
         None => {
-            let compiled = compile_body(name, body, prog);
+            let compiled = compile_body(name, body, prog, type_params);
             let compiled = if opt >= 1 {
                 optimize(&compiled)
             } else {
@@ -1120,7 +1132,13 @@ pub fn fiber_call_begin(
 /// Ret/unwind, keeping the counter symmetric with the sync machine.
 fn fiber_push_frame(interp: &mut Interp, fiber: &mut Fiber, ff: FiberFrame) -> Result<(), Stress> {
     interp.depth += 1;
-    let code = gene_code_cached(interp, ff.def_key, &ff.name, &ff.def.body);
+    let code = gene_code_cached(
+        interp,
+        ff.def_key,
+        &ff.name,
+        &ff.def.body,
+        &ff.def.type_params,
+    );
     let mut stack = match interp.vm_stack_pool.pop() {
         Some(s) => s,
         None => Vec::with_capacity(16),
@@ -1155,7 +1173,14 @@ fn fiber_pop_frame(
         None => return Ok(Step::Finished(v)),
     };
     interp.depth = interp.depth.saturating_sub(1);
-    let checked = interp.check_ret_ann("gene", &fr.gene, &fr.ret_ann, &v, explicit);
+    let checked = interp.check_ret_ann(
+        "gene",
+        &fr.gene,
+        &fr.ret_ann,
+        &v,
+        explicit,
+        &fr.code.type_params,
+    );
     fiber_return_stack(interp, fr.stack);
     let v = match checked {
         Ok(v) => v,
@@ -1551,7 +1576,7 @@ pub fn disassemble_program(prog: &crate::ast::Program) -> String {
     for s in &prog.stmts {
         if let Stmt::Gene(g) = s {
             let name = g.name.clone().unwrap_or_else(|| "<lambda>".into());
-            let code = compile_body(&name, &g.body, &mut vmprog);
+            let code = compile_body(&name, &g.body, &mut vmprog, &g.type_params);
             out.push_str(&format!("\ngene {} ({} instr(s))\n", name, code.code.len()));
             for (i, instr) in code.code.iter().enumerate() {
                 out.push_str(&format!(
@@ -1584,7 +1609,7 @@ pub fn disassemble_program_json(prog: &crate::ast::Program) -> String {
     for s in &prog.stmts {
         if let Stmt::Gene(g) = s {
             let name = g.name.clone().unwrap_or_else(|| "<lambda>".into());
-            let code = compile_body(&name, &g.body, &mut vmprog);
+            let code = compile_body(&name, &g.body, &mut vmprog, &g.type_params);
             if !first_gene {
                 out.push(',');
             }
@@ -1847,6 +1872,7 @@ pub fn optimize(code: &GeneCode) -> GeneCode {
 
     GeneCode {
         name: code.name,
+        type_params: code.type_params,
         consts,
         names: code.names,
         code: code.code,
@@ -1959,7 +1985,7 @@ mod tests {
             }
         }
         let mut prog = VmProgram::default();
-        let raw = compile_body("f", &body, &mut prog);
+        let raw = compile_body("f", &body, &mut prog, &[]);
         let opt = optimize(&raw);
         // the folded body is exactly: Push 42, Ret
         let names: Vec<String> = opt.code.iter().map(|i| mnemonic(i).to_string()).collect();
@@ -1988,7 +2014,7 @@ mod tests {
         let (name, body) = found.expect("gene present");
         assert_eq!(name, "f");
         let mut prog = VmProgram::default();
-        let code = compile_body("f", &body, &mut prog);
+        let code = compile_body("f", &body, &mut prog, &[]);
         let rendered: Vec<String> = code
             .code
             .iter()
@@ -2027,7 +2053,7 @@ mod tests {
             }
         }
         let mut prog = VmProgram::default();
-        let code = compile_body("f", &body, &mut prog);
+        let code = compile_body("f", &body, &mut prog, &[]);
         let rendered: Vec<String> = code
             .code
             .iter()
@@ -2071,7 +2097,7 @@ mod tests {
             }
         }
         let mut prog = VmProgram::default();
-        let raw = compile_body("f", &body, &mut prog);
+        let raw = compile_body("f", &body, &mut prog, &[]);
         // the raw body carries the dead call (Nop stamp + CallNamed print +
         // Pop); the pre-arg Nop stamp (rt_p22a fix) shifts the call to [4]
         assert!(
