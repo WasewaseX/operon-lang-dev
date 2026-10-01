@@ -36,20 +36,26 @@ for f in $(find tests apps -name '*.op' 2>/dev/null | sort); do
   b_err=$(cat /tmp/vmp_b_err)
   c_out=$("$BIN" run --opt 1 "$f" 2>/tmp/vmp_c_err); c_rc=$?
   c_err=$(cat /tmp/vmp_c_err)
+  # W011: the FULL pipeline level rides the same gate (new passes must
+  # stay byte-identical over the whole corpus the day they land)
+  d_out=$("$BIN" run --opt 2 "$f" 2>/tmp/vmp_d_err); d_rc=$?
+  d_err=$(cat /tmp/vmp_d_err)
   if [ "$a_out" == "$b_out" ] && [ "$a_err" == "$b_err" ] && [ "$a_rc" == "$b_rc" ] \
-     && [ "$a_out" == "$c_out" ] && [ "$a_err" == "$c_err" ] && [ "$a_rc" == "$c_rc" ]; then
+     && [ "$a_out" == "$c_out" ] && [ "$a_err" == "$c_err" ] && [ "$a_rc" == "$c_rc" ] \
+     && [ "$a_out" == "$d_out" ] && [ "$a_err" == "$d_err" ] && [ "$a_rc" == "$d_rc" ]; then
     pass=$((pass+1))
   else
     fail=$((fail+1)); failed_files+=("$f")
     if [ "${VERBOSE:-0}" == "1" ]; then
-      echo "PARITY FAIL: $f (rc $a_rc vs $b_rc vs $c_rc)"
+      echo "PARITY FAIL: $f (rc $a_rc vs $b_rc vs $c_rc vs $d_rc)"
       diff <(printf '%s' "$a_out") <(printf '%s' "$b_out") | head -10
       diff <(printf '%s' "$b_out") <(printf '%s' "$c_out") | head -10
-      diff <(printf '%s' "$a_err") <(printf '%s' "$c_err") | head -10
+      diff <(printf '%s' "$b_out") <(printf '%s' "$d_out") | head -10
+      diff <(printf '%s' "$a_err") <(printf '%s' "$d_err") | head -10
     fi
   fi
 done
-echo "vm parity (tree-walk/vm/vm-opt): $pass identical, $fail divergent, $lskip load-sensitive (documented)"
+echo "vm parity (tree-walk/vm/opt1/opt2): $pass identical, $fail divergent, $lskip load-sensitive (documented)"
 if [ "$fail" -gt 0 ]; then
   printf '  divergent: %s\n' "${failed_files[@]}"
   exit 1
