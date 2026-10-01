@@ -135,6 +135,17 @@ wobble ladder, machine-applicable fixes, and `--json-errors` for tools.
 The guide is [docs/errors.md](docs/errors.md); the byte-exact fixtures are
 part of the standard gate suite.
 
+## Debugging
+
+`operon debug` is a statement-level interactive debugger: line breakpoints,
+step-into/over/out, one-shot run-to-line, live breakpoint management, frame
+variables and expression evaluation — plus a machine surface for tools:
+`--protocol=json` (NDJSON on stdio) and `operon dap` (the Debug Adapter
+Protocol adapter, so VS Code and every other DAP client debug Operon
+natively; the extension lives in `editors/vscode/`). The guide is
+[docs/DEBUGGER.md](docs/DEBUGGER.md); all three surfaces have standing
+e2e gates.
+
 ## Fuzzing
 
 The Total Grammar promise ("every input must not crash") is held against
