@@ -1,6 +1,6 @@
 # Operon, Language Specification
 
-**Status:** v2.6.0, post-2.4 language amendments are landing incrementally (the generated inventory in [docs/STATS.md](docs/STATS.md) is the countable truth; D-009: version strings move only with the milestone). Last tagged release: 2.5.0 (2.6.0 = the W09 A6 VM-default flip, untagged). This document is the single contract implemented identically by:
+**Status:** v2.7.0, post-2.4 language amendments are landing incrementally (the generated inventory in [docs/STATS.md](docs/STATS.md) is the countable truth; D-009: version strings move only with the milestone). Last tagged release: 2.5.0 (2.6.0 = the W09 A6 VM-default flip, untagged; 2.7.0 = the W06 stage-2 wave-2 Result migration, untagged). This document is the single contract implemented identically by:
 
 | Implementation | Language | Role |
 |---|---|---|
@@ -529,6 +529,23 @@ returns per-function, each documented at migration time; the null/stress contrac
 the default for 2.x so existing programs keep their byte-identical behavior. First
 migrated family (v2.6.0): the `try_*` core builtins above — additions, not replacements;
 the legacy `num`/index/key-read/pop contracts are pinned UNCHANGED in tests/try_family.op.
+Wave 2 (v2.7.0): the extraction, environment and parsing families — `try_first(v)` /
+`try_last(v)` (legacy `first`/`last`: null + note on empty/wrong-type; the `Err` payload
+is the legacy note text minus the `"; null"` suffix), `try_char_at(s, i)`
+(`Err("char_at index 5 out of range for string of length 5")`, the `try_index` shape;
+a non-int index is an `Err` payload, not a stress), `try_env(name)`
+(`Err("env 'X' is not set")` on the granted lane; a capability denial STAYS an
+`interference` Stress — containment is tier 3, never a value — so zero-grant programs
+see the refusal exactly as with `env`), `try_json_parse(s)` (legacy raises `unfolded`
+on malformed input; the `Err` payload is the raw-input echo
+`Err("json_parse('<raw>') failed")`), `try_re_groups(pat, s)` (legacy bare `null` on
+no-match; `Err("no match")`, malformed pattern → `Err("re_groups('<pat>') failed")`;
+the 2M-step ReDoS ceiling STAYS an `overflow` Stress — resource ceilings are tier 3).
+**Engine-neutral payload law**: `Err` payloads are stdout-visible, so they must render
+byte-identically on both cores — they are raw-input echoes or fixed strings, never the
+underlying engine's parse-error text (the two engines' JSON and regex libraries disagree
+on wording). The granted `try_env` outcomes are pinned in tests/granted/try_env_wave2.op
+(explicit cell); the zero-grant refusal is pinned in tests/try_family.op.
 
 Runtime failures raise a **Stress** value: Map `{"kind": Str, "message": Str}`. Kinds:
 `unfolded` (type errors), `missing` (bad index/key/member/null-deref), `overflow` (int overflow, depth limit, resource ceilings), `burned` (assertion failures, resource errors), `interference` (capability-sandbox denials, §9b), `unwrap` (D-014: `unwrap` on None/Err or a plain value), `any` (catch-all position only).
@@ -1064,7 +1081,7 @@ module's placeholder map which fills when loading completes (with a rung-4
 note); map/filter/reduce/each run callbacks over a snapshot of the source
 list (callbacks may freely mutate the original).
 
-This specification is **Operon 2.6.0**. `operon version` prints the implementation banner `Operon 2.6.0 (rust-core, cpp-kernel)`, which matches this document. (sec-r2: the C runtime kernel was deleted, audit A15 proved its intern table was write-only and its raw pointers were the project's one ASan-confirmed memory-safety class; interning now lives in Rust, and the banner no longer claims a c-runtime.)
+This specification is **Operon 2.7.0**. `operon version` prints the implementation banner `Operon 2.7.0 (rust-core, cpp-kernel)`, which matches this document. (sec-r2: the C runtime kernel was deleted, audit A15 proved its intern table was write-only and its raw pointers were the project's one ASan-confirmed memory-safety class; interning now lives in Rust, and the banner no longer claims a c-runtime.)
 
 ## 18. Verification status (what the shipped suite proves)
 

@@ -3241,6 +3241,7 @@ re_match re_find re_groups unix_time date_parts date_fmt
 grapheme_len fold_case char_at char_slice
 norm_nfc norm_nfd casefold char_category weak strengthen
 some none ok err is_some is_none is_ok is_err unwrap unwrap_or try_num try_index try_get try_pop
+try_first try_last try_char_at try_env try_json_parse try_re_groups
 enumerate zip sorted reversed any all first last take drop unique flatten chunk round clamp divmod
 channel send recv close select
 is_object object_fields object_from_map""".split())
@@ -7099,6 +7100,82 @@ class Interp:
             if not l:
                 return Variant("Err", "pop from an empty list")
             return Variant("Ok", l.pop())
+        # ---- try_* wave 2 (W06 stage 2, v2.7.0): extraction, environment
+        # and parsing families. Same law as wave 1: Result-returning
+        # ADDITIONS, legacy null/stress contracts stay pinned. Err payloads
+        # are engine-neutral by construction — raw-input echoes or fixed
+        # strings, never the underlying engine's parse-error text.
+        if name == "try_first":
+            if len(args) != 1:
+                raise Stress("unfolded", "try_first(v) needs exactly 1 argument")
+            v = args[0]
+            if isinstance(v, list):
+                if not v:
+                    return Variant("Err", "first of an empty list")
+                return Variant("Ok", v[0])
+            if isinstance(v, str):
+                if not v:
+                    return Variant("Err", "first of an empty string")
+                return Variant("Ok", v[0])
+            return Variant("Err", f"first of a {type_name(v)}")
+        if name == "try_last":
+            if len(args) != 1:
+                raise Stress("unfolded", "try_last(v) needs exactly 1 argument")
+            v = args[0]
+            if isinstance(v, list):
+                if not v:
+                    return Variant("Err", "last of an empty list")
+                return Variant("Ok", v[-1])
+            if isinstance(v, str):
+                if not v:
+                    return Variant("Err", "last of an empty string")
+                return Variant("Ok", v[-1])
+            return Variant("Err", f"last of a {type_name(v)}")
+        if name == "try_char_at":
+            if len(args) != 2:
+                raise Stress("unfolded", "try_char_at(s, i) needs exactly 2 arguments")
+            s = v_display(args[0])
+            i = args[1]
+            if not isinstance(i, int) or isinstance(i, bool):
+                return Variant("Err", f"char_at needs an int index, got {type_name(i)}")
+            chars = list(s)
+            j = len(chars) + i if i < 0 else i
+            if 0 <= j < len(chars):
+                return Variant("Ok", chars[j])
+            return Variant("Err", f"char_at index {i} out of range for string of length {len(chars)}")
+        if name == "try_env":
+            if len(args) != 1:
+                raise Stress("unfolded", "try_env(name) needs exactly 1 argument")
+            nm = v_display(args[0])
+            self.cap_check("env", "env", nm)
+            if nm in os.environ:
+                return Variant("Ok", os.environ[nm])
+            return Variant("Err", f"env '{nm}' is not set")
+        if name == "try_json_parse":
+            if len(args) != 1:
+                raise Stress("unfolded", "try_json_parse(s) needs exactly 1 argument")
+            s = v_display(args[0])
+            try:
+                return Variant("Ok", _json.loads(s, object_pairs_hook=lambda pairs: dict(pairs)))
+            except ValueError:
+                return Variant("Err", f"json_parse('{s}') failed")
+        if name == "try_re_groups":
+            if len(args) != 2:
+                raise Stress("unfolded", "try_re_groups(pat, s) needs exactly 2 arguments")
+            import re as _re
+            pat = v_display(args[0])
+            subj = v_display(args[1])
+            try:
+                rx = _re.compile(pat)
+            except _re.error:
+                return Variant("Err", f"re_groups('{pat}') failed")
+            try:
+                m = rx.search(subj, 0)
+                if m is None:
+                    return Variant("Err", "no match")
+                return Variant("Ok", [g for g in m.groups()])
+            except RecursionError:
+                raise Stress("overflow", "regex backtracking exceeded 2M steps")
         if name == "random":
             x = self.rng
             x ^= (x >> 12) & 0xFFFFFFFFFFFFFFFF
