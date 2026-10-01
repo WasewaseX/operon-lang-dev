@@ -700,8 +700,12 @@ pub fn exec_gene_body(
         // ast-grep-ignore: no-unwrap-in-src
         let prog = interp.vm_program.as_ref().unwrap();
         let key = if opt >= 1 {
-            // cache the optimized form under a shifted key
-            def_key.wrapping_add(1usize << 62)
+            // cache the optimized form under a shifted key. W016-v3: the tag
+            // is the second-highest bit of usize — on 64-bit this is bit 62,
+            // the exact key W009 shipped; the literal `1usize << 62` was a
+            // compile-time arithmetic_overflow on 32-bit targets (the
+            // compat matrix i686 cell has been red since W009 on main).
+            def_key.wrapping_add(1usize << (usize::BITS - 2))
         } else {
             def_key
         };
