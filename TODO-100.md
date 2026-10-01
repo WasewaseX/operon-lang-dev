@@ -231,7 +231,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
   SPEC §16 (concurrency) rewritten.
 - Files: `src/interp.rs`, `src/value.rs`, `bootstrap/oracle.py`, `SPEC.md`, `tests/`.
 
-### W016, Async model [P2] [dev-1] [XL] [partial: spec sketch docs/specs/ASYNC.md on main cc35e95 (green threads over the VM loop, suspension at builtin boundaries only, fiber-field reservation carried in vm-design.md §6); REMAIN: implementation]
+### W016, Async model [P2] [dev-1] [XL] [implemented: sz lane 2026-10-01, 7dfcbc7..1c64802 — fibers over the VM loop (heap VmFrame stack per vm-design §6), FIFO deterministic scheduler with a virtual clock (src/sched.rs), .cell io.pool=fiber gate, sleep/recv/select suspension at compiled call sites with the documented bridged fallback, join/wait/scope/cancel lane-blind, fuel-as-liveness at the thread lane's exact rate; lane parity pinned by tests/async_parity.rs (8 two-lane programs byte-identical: stdout/notes/rc/lifecycle); ASYNC.md §9 is the shipped contract, CELL-SCHEMA 39 declarations; NOTE: a parallel W016 implementation exists (builder-B W016-v3, PR #42, review-ready, bounded-thread parking + ASYNC.md §9/SPEC 13) — the two landings are reconciled by the owner's call; thread path is byte-for-byte unchanged on BOTH landings]
 - Goal: `async gene fetch() { await .. }` green-thread executor for HTTP/file/sleep; OS
   threads remain for CPU work.
 - Done when: async HTTP + timers run N=1000 concurrent waits under thread counts ≈ cores;

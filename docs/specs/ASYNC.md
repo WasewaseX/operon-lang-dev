@@ -1,8 +1,9 @@
-# ASYNC, the async model spec sketch (W16, ROADMAP-100)
+# ASYNC, the async model spec (W16, ROADMAP-100)
 
-Status: **spec only, deliberately**. The roadmap's W16 gate for this cycle
-is "spec accepted; the VM design reserves frame fields for it", no
-implementation. Normative when the time comes; conflicts resolve toward
+Status: **IMPLEMENTED (W16, 2026-10-01)** — the model below is normative
+AND live: `.cell io.pool = fiber` runs spawned tasks as fibers on the VM
+loop (src/sched.rs + the fiber machine in src/vm.rs). The implementation
+contract is §9 at the bottom of this file; conflicts resolve toward
 SPEC.md and docs/vm-design.md.
 
 ## Why async waits for the VM (the honest dependency)
@@ -63,3 +64,57 @@ one enum tag + one u32):
   channels are the coordination primitive; D-005/D-013 principles
   apply: choose the deterministic, testable mechanism).
 - Real preemption, it would break byte-parity differential testing.
+
+## 9. Implementation contract (W16, the shipped behavior)
+
+- **Lane gate.** `spawn` splits AFTER the shared pre-flight (weak-handle
+  refusal, depth cap, id claim, seed derivation, membrane snapshot): with
+  `.cell io.pool = fiber` (and the VM lane, the default) the task becomes a
+  FIBER; every other spawn rides the OS-thread worker exactly as before.
+  The snapshot membrane, caps/fuel/medium/cancel inheritance and the task
+  registry are the same code on both lanes — identical by construction,
+  not by promise (tests/async_parity.rs pins byte parity per program:
+  stdout, notes, rc, lifecycle).
+- **The frame stack.** A fiber owns `Vec<VmFrame>` — the heap frame stack
+  vm-design §6 reserved. Named-gene calls inside a fiber push frames
+  through the ONE hook at call_gene_inner's body-exec point, so RISC ->
+  toggle -> GRN -> methylation -> riboswitch -> promoter -> RHO, param
+  binding, uORF guards and call bookkeeping run in the SHARED funnel; the
+  fiber machine never reimplements a gate. `fiber_state`, `wake_deadline`
+  and `cancel_flag` are real fields now.
+- **The scheduler is a plain queue.** FIFO ready; run-to-completion until
+  a suspension point; a send wakes the FIRST-parked waiter on that channel;
+  selects re-poll in declaration order (leftmost ready wins) and re-park
+  at the back; timers wake in deadline order, ties in park order. Wake
+  order is pinned by tests (tests/async_parity.rs wake-order repeat pin,
+  src/sched.rs unit pins).
+- **The clock is virtual.** `sleep` parks with `wake_deadline`; when
+  nothing is ready the scheduler jumps to the earliest deadline. Parked
+  receivers are charged 1000 steps per virtual ms — the thread lane's
+  exact rate — so fuel stays the liveness guard: a program that would
+  deadlock dies with the identical overflow stress, deterministically.
+  Sleep charges ms*1000 at the call, on both lanes; suspension never
+  refunds fuel.
+- **Suspension points.** `sleep`, `recv`, `select` park when reached at a
+  compiled call site of the fiber's own frames. Reached inside bridged
+  tree-walk code, uORF guards or default-arg evaluation they degrade to
+  the thread lane's blocking behavior (blocking mid-turn cannot reorder a
+  cooperative scheduler — it is deterministic, just not interleaved).
+- **Cancellation (W18) is unchanged.** `cancel()` sets the shared flag;
+  ticks observe it; a chan-parked fiber unblocks at the next boundary and
+  fails with the catchable `cancelled` stress; the phase register names
+  `cancelled` (everything else is `done`), both lanes.
+- **Join/wait/task_state are lane-blind.** join(id) drains the scheduler;
+  the thread lane's 300 s wall ceiling becomes 300_000 virtual ms with the
+  same observable (null + note + the task stays joinable). wait_all/
+  wait_any/scope reaping ride the same drain. task_state reads the same
+  phase register.
+- **Unjoined tasks at program end are abandoned** on both lanes (threads
+  are detached; the scheduler drops with the interp) — deterministic
+  programs never observe the difference, racy ones cannot be pinned
+  anyway.
+- **Parity evidence.** tests/async_parity.rs: the same program on
+  `io.pool = fiber` and `io.pool = thread` produces identical stdout,
+  identical notes and identical lifecycle observables — join ordering,
+  cancellation, membrane refusals, fuel-exhaustion wire shape, note
+  prefixes, FIFO wake stability across repeats.
