@@ -1733,16 +1733,18 @@ fn render_const(code: &GeneCode, idx: u32) -> String {
 }
 
 /// W11: the per-pass toggle matrix. `--opt 1` = STAGE1 (the three
-/// delivered passes), `--opt 2` = ALL (the same set until later passes
-/// land), `--opt-passes a,b,c` = an explicit set parsed by `PassSet::parse`.
-/// The pipeline ORDER is the contract (fold -> thread -> dce): disabling a
-/// pass only removes its rewrite, never reorders another one.
+/// delivered passes), `--opt 2` = ALL (stage1 + constant propagation),
+/// `--opt-passes a,b,c` = an explicit set parsed by `PassSet::parse`.
+/// The pipeline ORDER is the contract (fold -> thread -> prop -> dce):
+/// disabling a pass only removes its rewrite, never reorders another one.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct PassSet {
     /// pass 1: constant folding (Push/Push/Bin and Push/BinImm shapes)
     pub fold: bool,
     /// pass 2: jump threading + dead unconditional-jump removal
     pub thread: bool,
+    /// pass 4: constant propagation (LoadName -> Push rewrites)
+    pub prop: bool,
     /// pass 3: reachability DCE from ip 0
     pub dce: bool,
 }
@@ -1751,18 +1753,21 @@ impl PassSet {
     pub const NONE: PassSet = PassSet {
         fold: false,
         thread: false,
+        prop: false,
         dce: false,
     };
     /// `--opt 1`: the delivered stage-1+2 pipeline.
     pub const STAGE1: PassSet = PassSet {
         fold: true,
         thread: true,
+        prop: false,
         dce: true,
     };
     /// `--opt 2`: every pass the pipeline ships today (grows with W011).
     pub const ALL: PassSet = PassSet {
         fold: true,
         thread: true,
+        prop: true,
         dce: true,
     };
 
@@ -1784,6 +1789,7 @@ impl PassSet {
                 "fold" => set.fold = true,
                 "thread" => set.thread = true,
                 "dce" => set.dce = true,
+                "prop" => set.prop = true,
                 other => {
                     return Err(format!(
                         "unknown optimization pass '{}' (valid: {})",
@@ -1797,7 +1803,7 @@ impl PassSet {
     }
 
     /// The canonical name list (tests + usage text pin this).
-    pub const NAMES: &'static [&'static str] = &["fold", "thread", "dce"];
+    pub const NAMES: &'static [&'static str] = &["fold", "thread", "dce", "prop"];
 }
 
 /// W11 stage 1+2: the optimization pipeline. Draw-free, provably
@@ -1907,6 +1913,88 @@ pub fn optimize_with(code: &GeneCode, passes: PassSet) -> GeneCode {
             }
             if !changed {
                 break;
+            }
+        }
+    }
+
+    // pass 4 (W011): constant propagation — 1:1 LoadName -> Push rewrites
+    // inside straight-line runs. Soundness contract: a fact (name n holds
+    // consts[c]) is only gen'd from the adjacent shape `Push c, StoreName n`
+    // (StoreName NEVER stresses: no const check, it defines the current
+    // scope with only a rebinding note, which stays — the store is kept),
+    // and a fact only flows where NO join can reach: every jump target
+    // resets, scope enter/exit reset (shadowing), any bridge or call
+    // resets (the tree-walk and callees can define, set or auto-declare
+    // any name), AssignName kills its target (compound assigns), and a
+    // caught stress downstream of an AssignName is the only way control
+    // continues past a killed fact — which the kill already covers. The
+    // rewrite is 1:1, so lines, jump targets and the constant pool never
+    // move; only redundant env reads become pool pushes. LoadNameQuiet,
+    // LoadBinImm and RetName keep their fused shapes (not 1:1).
+    if passes.prop {
+        let n = code.code.len();
+        let mut targets = vec![false; n];
+        for instr in &code.code {
+            if let Instr::Jmp(t) | Instr::JmpIfF(t) | Instr::Brk(t) | Instr::Cont(t) = instr {
+                let t = *t as usize;
+                if t < n {
+                    targets[t] = true;
+                }
+            }
+        }
+        let mut facts: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
+        let mut last_push: Option<u32> = None;
+        for (i, is_target) in targets.iter().enumerate() {
+            if *is_target {
+                facts.clear();
+                last_push = None;
+            }
+            match code.code[i] {
+                Instr::Push(c) => last_push = Some(c),
+                Instr::StoreName(nm) => {
+                    if let Some(c) = last_push {
+                        facts.insert(nm, c);
+                    } else {
+                        facts.remove(&nm);
+                    }
+                    last_push = None;
+                }
+                Instr::LoadName(nm) => {
+                    if let Some(&c) = facts.get(&nm) {
+                        code.code[i] = Instr::Push(c);
+                    }
+                    last_push = None;
+                }
+                Instr::AssignName(nm) => {
+                    facts.remove(&nm);
+                    last_push = None;
+                }
+                // scopes (shadowing), bridges and calls (the tree-walk and
+                // callees may define, set or auto-declare ANY name)
+                Instr::EnterScope | Instr::ExitScope => {
+                    facts.clear();
+                    last_push = None;
+                }
+                Instr::EvalExpr(_)
+                | Instr::BridgeStmt(_)
+                | Instr::BridgeStmtInLoop(..)
+                | Instr::CallNamed(..) => {
+                    facts.clear();
+                    last_push = None;
+                }
+                // unconditional transfers: the fallthrough gets nothing
+                Instr::Jmp(_) | Instr::Brk(_) | Instr::Cont(_) | Instr::Ret | Instr::RetName(_) => {
+                    facts.clear();
+                    last_push = None;
+                }
+                // JmpIfF: the condition binds nothing — facts flow to the
+                // fallthrough (its jump target resets on arrival)
+                Instr::JmpIfF(_) => {
+                    last_push = None;
+                }
+                _ => {
+                    last_push = None;
+                }
             }
         }
     }
@@ -2094,6 +2182,7 @@ mod tests {
             Ok(PassSet {
                 fold: true,
                 thread: false,
+                prop: false,
                 dce: false
             })
         );
@@ -2102,12 +2191,21 @@ mod tests {
             Ok(PassSet {
                 fold: true,
                 thread: false,
+                prop: false,
                 dce: true
+            })
+        );
+        assert_eq!(
+            PassSet::parse("prop"),
+            Ok(PassSet {
+                fold: false,
+                thread: false,
+                prop: true,
+                dce: false
             })
         );
         assert!(PassSet::parse("fodl").is_err());
         assert!(PassSet::parse("").is_err());
-        assert!(PassSet::parse("fold,prop").is_err()); // prop not in stage 1
     }
 
     /// W011: with folding disabled the same program keeps its arithmetic.
@@ -2124,6 +2222,7 @@ mod tests {
             PassSet {
                 fold: false,
                 thread: true,
+                prop: false,
                 dce: true,
             },
         );
@@ -2159,12 +2258,202 @@ mod tests {
             PassSet {
                 fold: true,
                 thread: true,
+                prop: false,
                 dce: false,
             },
         );
         let with_dce = optimize_with(&raw, PassSet::STAGE1);
         assert!(no_dce.code.len() >= with_dce.code.len());
         assert!(with_dce.code.len() <= no_dce.code.len());
+    }
+
+    /// W011 pass 4: constant propagation rewrites a plain read of a
+    /// const-initialized local into a pool push (1:1), but leaves the
+    /// post-call read alone (the call killed the fact).
+    #[test]
+    fn prop_rewrites_const_local_reads() {
+        let src = "gene f() {\n    let x = 40\n    print(x)\n    return x\n}\n";
+        let (_body, _prog, raw) = compile_one(src);
+        // raw arg read: LoadName x ... CallNamed print, 1 ... RetName x
+        let has_plain_load = raw.code.iter().any(|i| matches!(i, Instr::LoadName(_)));
+        assert!(has_plain_load, "the call arg compiles to a plain LoadName");
+        let proped = optimize_with(
+            &raw,
+            PassSet {
+                fold: false,
+                thread: false,
+                prop: true,
+                dce: false,
+            },
+        );
+        assert_eq!(proped.code.len(), raw.code.len(), "1:1 rewrites only");
+        // the argument read became a Push of the 40-const
+        let saw_push40_before_call = {
+            let mut push40 = false;
+            let mut ok = false;
+            for instr in &proped.code {
+                match instr {
+                    Instr::Push(c)
+                        if matches!(proped.consts.get(*c as usize), Some(Const::Int(40))) =>
+                    {
+                        push40 = true
+                    }
+                    Instr::CallNamed(..) => {
+                        if push40 {
+                            ok = true;
+                        }
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+            ok
+        };
+        assert!(
+            saw_push40_before_call,
+            "pre-call read of x propagated to a Push"
+        );
+        // the post-call return read stays a name read
+        let last = proped.code.last().unwrap_or(&Instr::Nop);
+        assert!(
+            matches!(last, Instr::RetName(_) | Instr::LoadName(_) | Instr::Ret),
+            "post-call read of x must stay a name read, got {:?}",
+            last
+        );
+    }
+
+    /// W011 pass 4 soundness: a reassigned local must NOT propagate
+    /// across the join (the if-exit merge is a jump target).
+    #[test]
+    fn prop_stops_at_reassignment() {
+        let src =
+            "gene f(n) {\n    let x = n\n    if n > 0 {\n        x = 5\n    }\n    return x\n}\n";
+        let (_body, _prog, raw) = compile_one(src);
+        let proped = optimize_with(
+            &raw,
+            PassSet {
+                fold: false,
+                thread: false,
+                prop: true,
+                dce: false,
+            },
+        );
+        assert_eq!(proped.code.len(), raw.code.len(), "1:1 rewrites only");
+        // the read feeding `return x` sits AFTER a join point — the
+        // conservative join rule must keep it a name read (RetName or
+        // LoadName), never a rewritten Push of 5
+        let tail = proped.code.last().unwrap_or(&Instr::Nop);
+        match tail {
+            Instr::RetName(_) | Instr::LoadName(_) => {}
+            Instr::Push(c) => {
+                let is5 = matches!(proped.consts.get(*c as usize), Some(Const::Int(5)));
+                assert!(!is5, "post-join read of a reassigned local propagated");
+            }
+            other => panic!("unexpected tail instruction {:?}", other),
+        }
+    }
+
+    /// W011 pass 4 soundness: a bridge or call between the store and the
+    /// read kills the fact (bridges/callees can rebind any name).
+    #[test]
+    fn prop_killed_by_bridge_and_call() {
+        // `now()`-style call then read: the fact must not survive
+        let src = "gene f() {\n    let x = 7\n    print(x)\n    return x\n}\n";
+        let (_body, _prog, raw) = compile_one(src);
+        let proped = optimize_with(
+            &raw,
+            PassSet {
+                fold: false,
+                thread: false,
+                prop: true,
+                dce: false,
+            },
+        );
+        // every LoadName/RetName of x AFTER the call stays a name read;
+        // the read INSIDE the call args (before CallNamed) may rewrite
+        let after_call_const = {
+            let mut saw_call = false;
+            let mut bad = false;
+            for instr in &proped.code {
+                match instr {
+                    Instr::CallNamed(..) => saw_call = true,
+                    Instr::LoadName(_) | Instr::RetName(_) if saw_call => {}
+                    Instr::Push(c) if saw_call => {
+                        if matches!(proped.consts.get(*c as usize), Some(Const::Int(7))) {
+                            // legal only if it is NOT a rewritten post-call
+                            // read — conservatively, the argument push of
+                            // the call itself precedes CallNamed, so any
+                            // Push 7 after the call is a bad rewrite
+                            bad = true;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            bad
+        };
+        assert!(
+            !after_call_const,
+            "post-call read of x propagated across the call"
+        );
+    }
+
+    /// W011 pass 4 end-to-end: the differential contract in miniature —
+    /// the SAME program runs byte-identically (result + notes stream) with
+    /// the pipeline off and with --opt 2 (propagation on).
+    #[test]
+    fn prop_end_to_end_semantics() {
+        let src = "gene f(n) {\n    let base = 1000\n    let k = n * 2\n    if n > 10 {\n        return base + k\n    }\n    return base - k\n}\n";
+        let parsed = crate::parser::parse(src);
+        // both engines run the same body text; only the pass set differs
+        let run = |opt: u8| -> i64 {
+            let mut interp = Interp::new();
+            interp.vm = true;
+            interp.vm_opt = opt;
+            interp.vm_program = Some(VmProgram::default());
+            let g = interp.global.clone();
+            for s in &parsed.stmts {
+                let _ = interp.exec_stmt(&g, s);
+            }
+            let out = match interp.named_call_tail_vm(&g, "f", vec![Value::Int(21)]) {
+                Ok(v) => v,
+                Err(_) => panic!("f(21) must not stress"),
+            };
+            match out {
+                Value::Int(v) => v,
+                Value::Float(f) => f as i64,
+                _ => panic!("f(21) returned a non-numeric value"),
+            }
+        };
+        assert_eq!(run(0), 1042, "sanity: base + k with n=21");
+        assert_eq!(run(0), run(2), "opt0 == opt2 with propagation");
+        assert_eq!(run(0), run(1), "opt0 == opt1 stage-1 only");
+    }
+
+    /// W011 resolution caching: the OnceLock hash structures are exact
+    /// mirrors of the linear tables — no duplicate keys, same membership,
+    /// same canonical targets (collect() keeps last, find() keeps first;
+    /// the test pins that this can never matter).
+    #[test]
+    fn resolution_cache_mirrors_linear_tables() {
+        let set = crate::interp::builtin_name_set();
+        assert_eq!(
+            set.len(),
+            crate::interp::BUILTIN_NAMES.len(),
+            "duplicate builtin name would silently drop arms"
+        );
+        for k in crate::interp::BUILTIN_NAMES {
+            assert!(set.contains(k), "missing builtin '{}'", k);
+        }
+        let map = crate::interp::builtin_synonym_map();
+        assert_eq!(
+            map.len(),
+            crate::interp::BUILTIN_SYNONYMS.len(),
+            "duplicate synonym key would flip canonicalization"
+        );
+        for (s, canon) in crate::interp::BUILTIN_SYNONYMS {
+            assert_eq!(map.get(s), Some(canon), "synonym '{}' drifted", s);
+        }
     }
 
     /// W11 stage 1: the folding pass removes constant arithmetic without

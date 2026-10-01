@@ -76,9 +76,54 @@ not share entries. Evidence: unit tests pin the folded shape of
 `return 6 * 7` and the exact DCE drops (`dce_drops_only_unreachable_code`);
 the corpus parity gate `scripts/vm_parity.sh` runs every tests/**.op and
 apps/**.op byte-identical across --no-vm, default VM, and --opt 1.
-REMAIN on the W11 board entry: constant propagation, trivial-gene inlining,
-monomorphic call specialization, builtin/global resolution caching, list-op
-fast paths, per-pass bench rows + the toggle matrix.
+REMAIN on the W11 board entry: trivial-gene inlining, monomorphic call
+specialization, builtin/global resolution caching, list-op fast paths,
+per-pass bench rows. LANDED since: the toggle matrix (--opt-passes
+fold,thread,dce,prop | none | all, --opt 2 = full) and pass 4 constant
+propagation (1:1 LoadName -> Push rewrites inside straight-line runs;
+every jump target, scope edge, bridge and call resets the facts — full
+corpus byte-identical on the --opt 2 parity axis).
+
+## 2c. W11 stage 3 design: trivial-gene inlining + monomorphic specialization (designed, gated - 2026-10-01)
+
+Both remaining W011 passes share one structural prerequisite the current
+compiler does not have: a compile-time symbol table. CallNamed compiles
+from a bare identifier; the callee resolves at RUNTIME through the
+dynamic chain (env shadow check first - a user gene may shadow any
+builtin, and a binding may change between calls). Inlining a body at
+compile time would risk executing a stale definition; caching a call-site
+resolution (the classic monomorphic-site cache) would skip that same
+dynamic re-resolution.
+
+The measured answer (BENCH.md W011 matrix) reframes the value honestly:
+dispatch is semantics-bound, not lookup-bound - the gate funnel, the
+mem_charge/cycle-note security charges, and the env-chain shadow check
+ARE the contract. A trivial-gene fast path can only skip machinery the
+gene provably does not use.
+
+The safe design, when picked up:
+
+1. **Trivial-gene fast dispatch (runtime, not compile-time).** Precompute
+   on the CACHED GeneCode a triviality bit: body compiles to a
+   shapes-only sequence (Push/LoadName/Bin/BinImm/Ret/RetName only - no
+   bridges, no calls, no scopes), arity == params, no param/return
+   annotations, no defaults, no guards, and NO regulation configured on
+   the GeneDef (GRN/methylation/riboswitch/promoter/RHO all absent - a
+   cheap predicate on the def). The fast path still routes through
+   named_call_tail (toggles/silences still checked) and still executes
+   every gate that EXISTS; the skip is env-construction + bookkeeping
+   only when the predicate says the gene has none. Evidence bar: full
+   vm_parity corpus both engines + fuzz_diff + the redteam shadowing set.
+2. **Monomorphic specialization.** Per-call-site resolution cache keyed
+   by (call-site ip, resolved callee identity), validated against a
+   definition-generation counter bumped by EVERY binding write path
+   (define, set, auto-declare). Invalidation-complete by construction;
+   honest only if the counter is bumped from exactly those three paths.
+   Evidence bar: the redteam shadowing corpus + the differential harness
+   + a BENCH.md row on fib25 (the workload where the funnel actually
+   shows).
+
+Both stay on the W011 board REMAIN until their evidence bars run green.
 
 ## 2a. A2 delivered: the bridge architecture (2026-09-27, main)
 

@@ -3853,7 +3853,7 @@ impl Interp {
             }
         }
         // canonical builtin synonyms (print/echo/say/show → promote)
-        if let Some((_, canon)) = BUILTIN_SYNONYMS.iter().find(|(s, _)| *s == name) {
+        if let Some(&canon) = builtin_synonym_map().get(name) {
             return self.call_builtin(env, canon, args);
         }
         // user gene
@@ -3861,7 +3861,7 @@ impl Interp {
             return self.call_value(env, &v, args);
         }
         // builtin
-        if BUILTIN_NAMES.contains(&name) {
+        if builtin_name_set().contains(name) {
             return self.call_builtin(env, name, args);
         }
         // wobble: nearest callable
@@ -9764,9 +9764,12 @@ impl Interp {
                 };
                 match &target {
                     Value::Str(name) => {
-                        if BUILTIN_SYNONYMS.iter().any(|(s, _)| s == name)
-                            || BUILTIN_NAMES.contains(&name.as_str())
+                        if builtin_synonym_map().contains_key(name.as_str())
+                            || builtin_name_set().contains(name.as_str())
                         {
+                            // a synonym target is canonicalized by
+                            // call_builtin's own synonym handling upstream;
+                            // keep the raw name here (pre-existing order)
                             return self.call_builtin(env, name, call_args);
                         }
                         let v = env.get(name).unwrap_or(Value::Null);
@@ -11491,6 +11494,26 @@ pub const BUILTIN_SYNONYMS: &[(&str, &str)] = &[
     ("say", "promote"),
     ("show", "promote"),
 ];
+
+/// W011 builtin/global resolution caching: every call walked these tables
+/// LINEARLY (a ~90-entry strcmp scan for membership, a 4-entry scan for
+/// synonym canonicalization) before any builtin body could run. Both
+/// tables are static, so the lookups precompute into hash structures
+/// exactly once (std::sync::OnceLock — zero external crates). Semantics
+/// are identical: same keys, same canonical targets, no duplicate keys
+/// in the source tables (pinned by the resolution_cache tests).
+pub(crate) fn builtin_name_set() -> &'static std::collections::HashSet<&'static str> {
+    static SET: std::sync::OnceLock<std::collections::HashSet<&'static str>> =
+        std::sync::OnceLock::new();
+    SET.get_or_init(|| BUILTIN_NAMES.iter().copied().collect())
+}
+
+pub(crate) fn builtin_synonym_map() -> &'static std::collections::HashMap<&'static str, &'static str>
+{
+    static MAP: std::sync::OnceLock<std::collections::HashMap<&'static str, &'static str>> =
+        std::sync::OnceLock::new();
+    MAP.get_or_init(|| BUILTIN_SYNONYMS.iter().copied().collect())
+}
 
 pub const BUILTIN_NAMES: &[&str] = &[
     "promote",

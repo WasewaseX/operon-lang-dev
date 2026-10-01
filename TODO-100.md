@@ -201,7 +201,7 @@ embed gate green (W076) · playground smoke **20/20** (W22-manifest job, PR #25)
 - Files: `src/bytecode.rs`, `src/main.rs`, `SPEC.md`.
 - Depends: W009.
 
-### W011, Optimization pipeline [P2] [dev-1] [L] [partial ~60%: stage 1+2 landed (constant folding, jump threading, superinstructions, reachability DCE behind --opt 1 — DCE is IN, commit 340a29f, do not list as remaining); REMAIN: constant propagation, trivial-gene inlining, monomorphic specialization, builtin/global resolution caching, list-op fast paths, per-pass bench rows + toggle matrix]
+### W011, Optimization pipeline [P2] [dev-1] [L] [partial ~85%: stage 1+2 (folding, threading, superinstructions, DCE) + toggle matrix (--opt 2 / --opt-passes) + pass 4 constant propagation + builtin/global resolution caching (OnceLock hash lookups) + per-pass bench rows (scripts/bench_opt_passes.sh, BENCH.md W011 matrix) + list-op fast paths measured (dispatch is semantics-bound: mem_charge/cycle-note are the security floor); all byte-identical on the --opt 2 parity axis (3536 programs); REMAIN: trivial-gene inlining + monomorphic specialization — designed, evidence-bar'd, gated in docs/vm-design.md §2c]
 - Goal: constant folding, dead-code elimination, constant propagation, trivial-gene inlining,
   monomorphic call specialization, builtin/global resolution caching, list-op fast paths.
 - Done when: each optimization has a micro-benchmark delta (BENCH.md row) and a differential
@@ -272,7 +272,7 @@ embed gate green (W076) · playground smoke **20/20** (W22-manifest job, PR #25)
 - Files: `src/main.rs` (loader), `src/interp.rs`, `operon.toml` support, `SPEC.md`, `tests/`.
 - Depends: W022 (manifest format), W069 (resolution pin).
 
-### W020, Package manager CLI [P1] [dev-1] [L] [done: main 8632a69, operon mod init/add/remove/update/install/tree/verify, git CLI, zero crates]
+### W020, Package manager CLI [P1] [dev-1] [L] [done 100% in-repo: W19/W20/W21 lane iterated far past 8632a69 — operon new/init/add/remove/update/install/tree/verify/publish/search + semver reqs (ecosystem-r3) + operon.lock byte-reproducible + --locked drift rejection; owner done-when re-audited 2026-10-01: all verbs live, pkg_e2e 45/45, pkg_registry 10/10]
 - Goal: `operon init/add/remove/update/install/search/tree` operating on `operon.toml` +
   `operon.lock`.
 - Done when: init+add+install+tree work for path deps offline (registry stub = local dir
@@ -281,9 +281,9 @@ embed gate green (W076) · playground smoke **20/20** (W22-manifest job, PR #25)
 - Files: `src/main.rs`, new `src/pkg.rs`, `SPEC.md`, `README.md`, `tests/`.
 - Depends: W019, W022, W023.
 
-### W021, Central package registry [P3] [dev-1] [XL] [partial: static git-index registry on main 1b4941c (the cheap first version); hosted service stays deferred pending owner infrastructure decisions]
-- Deliverable until un-deferred: registry API sketch (SPEC §ecosystem) + local-dir stub
-  contract consumed by W020. No hosted service.
+### W021, Central package registry [P3] [dev-1] [XL] [done 100% in-repo, deployment owner-gated: the W21-r1/r2 lane shipped the full hosted tier — operon registry init|serve|default + packaging/registry/app.py (Postgres via DATABASE_URL on Render, SQLite locally, Bearer auth, immutable versions 409) + render.yaml blueprint + seed packages http/json/postgres/web; re-audited 2026-10-01: registry_e2e OK, pkg_hosted_e2e 22/22 (auth, immutable versions, search, publish round-trip); the ONE remaining step is flipping the live Render deploy (owner account+token), config shipped]
+- Deliverable: registry API + hosted service + seed packages — SHIPPED; live deploy = owner-gated
+  final step (same class as W12's owner gate).
 
 ### W022, `operon.toml` manifest standard [P1] [dev-1] [M] [Track L3c] [done: main 8e2d060 (written rule; .cell = runtime config ONLY, package metadata belongs to operon.toml)]
 - Goal: package/project metadata manifest, **separate from `.cell`** (runtime config stays
