@@ -122,7 +122,9 @@ impl TaskState {
 }
 
 pub struct TaskHandle {
-    pub rx: mpsc::Receiver<(crate::genes::SendValue, Vec<Note>)>,
+    /// W16: None = a fiber task (the scheduler owns its interp; results
+    /// live in AsyncSched::finished until join). Some(rx) = a thread task.
+    pub rx: Option<mpsc::Receiver<(crate::genes::SendValue, Vec<Note>)>>,
     /// W18: cooperative cancellation flag. Setting it asks the worker to
     /// stop at its next fuel tick boundary; nothing is preempted.
     pub cancel: Arc<AtomicBool>,
@@ -5608,6 +5610,22 @@ impl Interp {
                 });
                 return Ok(Value::Null);
             }
+            // W16: fibers may be about to deliver — give the scheduler its
+            // turns before this thread blocks on the condvar (a fiber send
+            // lands in the wake queue; without the drain the condvar would
+            // wait for a thread that may not exist)
+            if let Some(sched) = self.sched.as_mut() {
+                if sched.has_pending() {
+                    drop(st);
+                    let ch2 = ch.clone();
+                    sched.drain(&mut |_s: &crate::sched::AsyncSched| {
+                        let st2 = ch2.state.lock().unwrap_or_else(|e| e.into_inner());
+                        !st2.queue.is_empty() || st2.closed
+                    });
+                    st = ch.state.lock().unwrap_or_else(|e| e.into_inner());
+                    continue;
+                }
+            }
             // blocked: wake-iteration fuel + cancel, the sleep shape
             self.blocking_wake(Self::RECV_SLICE_MS)?;
             let (g, _timed_out) = ch
@@ -5738,10 +5756,9 @@ impl Interp {
             if !any_open {
                 return Ok(Value::Int(-1));
             }
-            // W16: fiber lane — one slice charge then park on ALL the
-            // channels; on wake the scheduler re-polls in declaration
-            // order (leftmost ready wins, the same contract) and delivers
-            // the index as the awaited value.
+            // W16: fiber lane — park on ALL the channels; on wake the
+            // scheduler re-polls in declaration order (leftmost ready wins,
+            // the same contract) and delivers the index as the awaited value.
             if self.fiber_armed {
                 self.cancel_check()?;
                 self.fiber_pending = Some(crate::vm::PendingWake::Chan {
@@ -5749,6 +5766,22 @@ impl Interp {
                     select: true,
                 });
                 return Ok(Value::Int(-1));
+            }
+            // W16: give parked fibers their turns before this thread sleeps
+            if let Some(sched) = self.sched.as_mut() {
+                if sched.has_pending() {
+                    let chans2 = chans.clone();
+                    sched.drain(&mut |_s: &crate::sched::AsyncSched| {
+                        for c in &chans2 {
+                            let st2 = c.state.lock().unwrap_or_else(|e| e.into_inner());
+                            if !st2.queue.is_empty() || st2.closed {
+                                return true;
+                            }
+                        }
+                        false
+                    });
+                    continue;
+                }
             }
             self.blocking_wake(Self::SELECT_SLICE_MS)?;
             std::thread::sleep(std::time::Duration::from_millis(Self::SELECT_SLICE_MS));

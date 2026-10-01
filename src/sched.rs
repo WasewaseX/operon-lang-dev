@@ -73,14 +73,14 @@ pub struct FiberTask {
 }
 
 impl FiberTask {
-    fn finish_ok(&mut self, v: Value) {
+    pub(crate) fn finish_ok(&mut self, v: Value) {
         let notes = Self::prefixed(&self.interp.notes, &self.name);
         *self.state.lock().unwrap_or_else(|e| e.into_inner()) = TaskState::Done;
         self.result = Some((crate::genes::to_send(&v), notes));
         self.done = true;
     }
 
-    fn finish_err(&mut self, s: Stress) {
+    pub(crate) fn finish_err(&mut self, s: Stress) {
         let notes = Self::prefixed(&self.interp.notes, &self.name);
         // W18: a cancelled-run stress names the phase; everything else
         // counts as done (the worker thread's exact rule)
@@ -414,7 +414,7 @@ impl AsyncSched {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vm::{fiber_call_begin, VmProgram};
+    use crate::vm::{fiber_call_begin, FiberBegin, VmProgram};
     use std::time::Instant;
 
     /// Parse a program, bind its top-level statements in the interp's own
@@ -434,8 +434,11 @@ mod tests {
     fn task(id: i64, name: &str, src: &str, entry: &str) -> FiberTask {
         let mut interp = setup(src);
         let g = interp.global.clone();
-        let fiber = fiber_call_begin(&mut interp, &g, entry, vec![])
-            .unwrap_or_else(|s| panic!("{name}: begin failed: {}: {}", s.kind, s.message));
+        let fiber = match fiber_call_begin(&mut interp, &g, entry, vec![]) {
+            Ok(FiberBegin::Fiber(f)) => f,
+            Ok(FiberBegin::Completed(_)) => panic!("{name}: test target must reach a body"),
+            Err(s) => panic!("{name}: begin failed: {}: {}", s.kind, s.message),
+        };
         let cancel = Arc::new(AtomicBool::new(false));
         // the worker discipline: the task interp's chain ends with its OWN
         // flag so ticks and cancel observations see the shared truth
@@ -530,13 +533,17 @@ mod tests {
         let mut tb = task(1, "b", src_b, "w");
         tb.interp.global.define("ch", Value::Channel(ch.clone()));
         let g = tb.interp.global.clone();
-        tb.fiber = fiber_call_begin(&mut tb.interp, &g, "w", vec![])
-            .unwrap_or_else(|s| panic!("b begin: {}", s.message));
+        tb.fiber = match fiber_call_begin(&mut tb.interp, &g, "w", vec![]) {
+            Ok(FiberBegin::Fiber(f)) => f,
+            _ => panic!("b begin must reach a body"),
+        };
         let mut tc = task(2, "c", src_b, "w");
         tc.interp.global.define("ch", Value::Channel(ch.clone()));
         let g = tc.interp.global.clone();
-        tc.fiber = fiber_call_begin(&mut tc.interp, &g, "w", vec![])
-            .unwrap_or_else(|s| panic!("c begin: {}", s.message));
+        tc.fiber = match fiber_call_begin(&mut tc.interp, &g, "w", vec![]) {
+            Ok(FiberBegin::Fiber(f)) => f,
+            _ => panic!("c begin must reach a body"),
+        };
         sched.ready.push_back(tb);
         sched.ready.push_back(tc);
         drain_to_stall(&mut sched);
@@ -576,8 +583,10 @@ mod tests {
         let mut tb = task(1, "b", src, "w");
         tb.interp.global.define("ch", Value::Channel(ch.clone()));
         let g = tb.interp.global.clone();
-        tb.fiber = fiber_call_begin(&mut tb.interp, &g, "w", vec![])
-            .unwrap_or_else(|s| panic!("begin: {}", s.message));
+        tb.fiber = match fiber_call_begin(&mut tb.interp, &g, "w", vec![]) {
+            Ok(FiberBegin::Fiber(f)) => f,
+            _ => panic!("begin must reach a body"),
+        };
         sched.ready.push_back(tb);
         drain_to_stall(&mut sched);
         assert_eq!(sched.chan_parks.len(), 1);
@@ -613,8 +622,10 @@ mod tests {
         let mut tb = task(1, "b", src, "w");
         tb.interp.global.define("ch", Value::Channel(ch.clone()));
         let g = tb.interp.global.clone();
-        tb.fiber = fiber_call_begin(&mut tb.interp, &g, "w", vec![])
-            .unwrap_or_else(|s| panic!("begin: {}", s.message));
+        tb.fiber = match fiber_call_begin(&mut tb.interp, &g, "w", vec![]) {
+            Ok(FiberBegin::Fiber(f)) => f,
+            _ => panic!("begin must reach a body"),
+        };
         sched.ready.push_back(tb);
         let t0 = Instant::now();
         sched.drain(&mut stop_all);
@@ -635,8 +646,10 @@ mod tests {
         let mut tr = task(1, "r", src_r, "w");
         tr.interp.global.define("ch", Value::Channel(ch.clone()));
         let g = tr.interp.global.clone();
-        tr.fiber = fiber_call_begin(&mut tr.interp, &g, "w", vec![])
-            .unwrap_or_else(|s| panic!("begin: {}", s.message));
+        tr.fiber = match fiber_call_begin(&mut tr.interp, &g, "w", vec![]) {
+            Ok(FiberBegin::Fiber(f)) => f,
+            _ => panic!("begin must reach a body"),
+        };
         let pool = Arc::new(std::sync::atomic::AtomicI64::new(1_000_000_000));
         tr.interp.fuel_pool = Some(pool.clone());
         sched.ready.push_back(tr);
@@ -665,8 +678,10 @@ mod tests {
         ts.interp.global.define("ch0", Value::Channel(c0.clone()));
         ts.interp.global.define("ch1", Value::Channel(c1.clone()));
         let g = ts.interp.global.clone();
-        ts.fiber = fiber_call_begin(&mut ts.interp, &g, "w", vec![])
-            .unwrap_or_else(|s| panic!("begin: {}", s.message));
+        ts.fiber = match fiber_call_begin(&mut ts.interp, &g, "w", vec![]) {
+            Ok(FiberBegin::Fiber(f)) => f,
+            _ => panic!("begin must reach a body"),
+        };
         sched.ready.push_back(ts);
         drain_to_stall(&mut sched);
         assert!(
@@ -695,8 +710,10 @@ mod tests {
         ts2.interp.global.define("ch0", Value::Channel(c2.clone()));
         ts2.interp.global.define("ch1", Value::Channel(c3.clone()));
         let g = ts2.interp.global.clone();
-        ts2.fiber = fiber_call_begin(&mut ts2.interp, &g, "w", vec![])
-            .unwrap_or_else(|s| panic!("begin: {}", s.message));
+        ts2.fiber = match fiber_call_begin(&mut ts2.interp, &g, "w", vec![]) {
+            Ok(FiberBegin::Fiber(f)) => f,
+            _ => panic!("begin must reach a body"),
+        };
         sched2.ready.push_back(ts2);
         drain_to_stall(&mut sched2);
         {
