@@ -1,0 +1,14 @@
+# W011 bench: constant folding + block-local propagation domain
+gene check() {
+    let a = 2
+    let b = 3
+    let c = a * b + 17
+    let total = 0
+    let i = 0
+    while i < 300000 {
+        total = total + i % 7
+        i = i + 1
+    }
+    return str(c) + ":" + str(total)
+}
+print(check())

@@ -33,6 +33,16 @@ pub struct Opts {
     /// W09 (A2/A3): compile gene bodies to bytecode and execute them on
     /// the stack-machine VM (docs/VM.md). Output must stay byte-identical.
     pub vm: bool,
+    /// W011: optimizer switches (docs/OPTIMIZER.md). `opt` is the level
+    /// (0 = none, 1 = fold+thread+dce, 2 = +constant propagation);
+    /// `opt_passes` pins an explicit pass set; `fast` toggles the engine
+    /// fast paths (trivial-body return, lazy traceback frames, builtin
+    /// dispatch tables). All are byte-identical by construction — the
+    /// parity gates re-run the whole corpus through every combination.
+    pub opt: u8,
+    pub opt_passes: Option<String>,
+    pub fast: bool,
+    pub dump_opt: bool,
 }
 
 pub struct Loaded {
@@ -365,12 +375,34 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
 /// Compilation is total (delegation leaves), so this never fails — the
 /// coverage list is informational only and must never touch program output.
 pub fn vm_compile(l: &mut Loaded) {
-    let unit = crate::compile::compile_program(&l.prog);
+    let cfg = crate::opt::OptConfig::default();
+    vm_compile_opts(l, &cfg);
+}
+
+/// W011: VM compilation with the semantics-preserving optimization
+/// pipeline applied (docs/OPTIMIZER.md). Returns the per-function
+/// --dump-optimized report (empty unless cfg.dump).
+pub fn vm_compile_opts(l: &mut Loaded, cfg: &crate::opt::OptConfig) -> String {
+    let mut unit = crate::compile::compile_program(&l.prog);
+    let stats = crate::opt::optimize_unit(&mut unit, cfg);
+    l.interp.fast_trivial = cfg.fast_engine;
     let mut m = std::collections::HashMap::new();
     for (key, code) in unit.funcs {
         m.insert(key, code);
     }
     l.interp.vm_funcs = Some(m);
+    if cfg.dump {
+        stats.render()
+    } else {
+        String::new()
+    }
+}
+
+/// W011: build the OptConfig from parsed CLI options.
+pub fn opt_config_from(opts: &Opts) -> Result<crate::opt::OptConfig, String> {
+    let mut cfg = crate::opt::OptConfig::from_cli(opts.opt, opts.opt_passes.as_deref(), opts.fast)?;
+    cfg.dump = opts.dump_opt;
+    Ok(cfg)
 }
 
 /// W10: bytecode disassembler — text listing (or JSON) of every compiled
@@ -475,6 +507,7 @@ fn insn_name(i: &crate::compile::Insn) -> String {
         RaiseStmt(..) => "RaiseStmt".into(),
         Stmt(_) => "Stmt".into(),
         Expr(_) => "Expr".into(),
+        Nop => "Nop".into(),
     }
 }
 
@@ -537,6 +570,7 @@ fn insn_text(i: &crate::compile::Insn) -> String {
         ),
         Stmt(_) => "Stmt <delegated>".into(),
         Expr(_) => "Expr <delegated>".into(),
+        Nop => "Nop".into(),
     }
 }
 

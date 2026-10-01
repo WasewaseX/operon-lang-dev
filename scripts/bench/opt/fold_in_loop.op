@@ -1,0 +1,12 @@
+# W011 bench: constant expressions INSIDE the hot loop — the tree-walk
+# re-evaluates them every iteration; O1 folds them once at compile time.
+gene check() {
+    let total = 0
+    let i = 0
+    while i < 400000 {
+        total = total + (64 * 4) % 7 * 3 - 2
+        i = i + 1
+    }
+    return str(total)
+}
+print(check())

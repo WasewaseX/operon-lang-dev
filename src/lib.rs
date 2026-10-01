@@ -14,6 +14,7 @@ pub mod graph;
 pub mod interp;
 pub mod lexer;
 pub mod ls;
+pub mod opt;
 pub mod parser;
 pub mod pkg;
 pub mod pybridge;

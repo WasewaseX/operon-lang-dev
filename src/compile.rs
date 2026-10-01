@@ -83,6 +83,10 @@ pub enum Insn {
     // delegation (total coverage)
     Stmt(Rc<Stmt>),
     Expr(Rc<Expr>),
+    /// W011 optimizer scratch slot: fold rewrites leave Nops where folded
+    /// insns used to be; the DCE pass removes them. Never emitted by the
+    /// compiler itself; the VM arm is a no-op.
+    Nop,
 }
 
 /// The compiled unit for one program: gene bodies keyed by their
@@ -444,10 +448,19 @@ impl FuncCompiler {
     }
 
     fn konst(&mut self, v: Value) -> u32 {
-        // dedupe identical constants (cheap linear scan; pools are small)
+        // dedupe identical constants (cheap linear scan; pools are small).
+        // W011 fix: floats dedupe on BIT pattern — IEEE 0.0 == -0.0, and
+        // reusing a +0.0 slot for a -0.0 literal flips its printed sign
+        // (the tree-walk has no pool and would print -0.0 — a parity bug).
         for (i, c) in self.consts.iter().enumerate() {
-            if c.deep_eq(&v) && std::mem::discriminant(c) == std::mem::discriminant(&v) {
-                return i as u32;
+            if std::mem::discriminant(c) == std::mem::discriminant(&v) {
+                let same = match (c, &v) {
+                    (Value::Float(a), Value::Float(b)) => a.to_bits() == b.to_bits(),
+                    _ => c.deep_eq(&v),
+                };
+                if same {
+                    return i as u32;
+                }
             }
         }
         self.consts.push(v);

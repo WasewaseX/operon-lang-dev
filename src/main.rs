@@ -67,6 +67,10 @@ fn real_main() {
         profile: false,
         stdout_sink: None,
         vm: false,
+        opt: 1,
+        opt_passes: None,
+        fast: true,
+        dump_opt: false,
     };
     let mut json = false;
     let mut strict = false;
@@ -214,6 +218,29 @@ fn real_main() {
             "--quiet" => opts.quiet = true,
             // W09 (A2): run compiled gene bodies on the bytecode VM
             "--vm" => opts.vm = true,
+            // W011: optimization switches (docs/OPTIMIZER.md) — both the
+            // discrete (`--opt 2`) and attached (`--opt=2`) forms
+            "--opt" | "--opt=0" | "--opt=1" | "--opt=2" => {
+                let v = if a == "--opt" {
+                    i += 1;
+                    rest.get(i).cloned().unwrap_or_default()
+                } else {
+                    a.trim_start_matches("--opt=").to_string()
+                };
+                match v.as_str() {
+                    "0" | "1" | "2" => opts.opt = v.parse().unwrap_or(1),
+                    other => die(&format!("--opt needs 0, 1, or 2 (got '{}')", other)),
+                }
+            }
+            "--opt-passes" => {
+                i += 1;
+                opts.opt_passes = Some(rest.get(i).cloned().unwrap_or_default());
+            }
+            s if s.starts_with("--opt-passes=") => {
+                opts.opt_passes = Some(s.trim_start_matches("--opt-passes=").to_string());
+            }
+            "--no-fast" => opts.fast = false,
+            "--dump-optimized" => opts.dump_opt = true,
             "--nmd" => nmd = true,
             "--nmd=purge" | "--purge" => {
                 nmd = true;
@@ -414,7 +441,13 @@ fn real_main() {
             // happen after load (top-level binds gene defs) and before the
             // entry call; sequences/workers stay on the tree-walk.
             if opts.vm {
-                tools::vm_compile(&mut l);
+                // W011: compile + optimize (byte-identical by construction;
+                // parity gates: scripts/vm_parity.sh + scripts/opt_parity.sh)
+                let cfg = tools::opt_config_from(&opts).unwrap_or_else(|e| die(&e));
+                let dump = tools::vm_compile_opts(&mut l, &cfg);
+                if opts.dump_opt {
+                    eprint!("{}", dump);
+                }
             }
             if let Some(f) = fuel {
                 l.interp.step_budget = f;
@@ -1085,6 +1118,10 @@ fn repl() {
             profile: false,
             stdout_sink: None,
             vm: false,
+            opt: 1,
+            opt_passes: None,
+            fast: true,
+            dump_opt: false,
         },
     ) {
         Ok(l) => l,
@@ -1179,6 +1216,10 @@ fn repl() {
                                 profile: false,
                                 stdout_sink: None,
                                 vm: false,
+                                opt: 1,
+                                opt_passes: None,
+                                fast: true,
+                                dump_opt: false,
                             };
                             let rep = tools::run_tests(&[arg.to_string()], &opts, false);
                             println!(
@@ -1249,6 +1290,10 @@ fn repl() {
                                 profile: false,
                                 stdout_sink: None,
                                 vm: false,
+                                opt: 1,
+                                opt_passes: None,
+                                fast: true,
+                                dump_opt: false,
                             },
                         ) {
                             Ok(nl) => nl,
