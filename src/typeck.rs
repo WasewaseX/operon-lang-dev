@@ -614,6 +614,9 @@ impl Checker {
         match e {
             Expr::Null => Ty::Null,
             Expr::Bool(_) => Ty::Bool,
+            // W08r: transparent position marker — the marker line is the
+            // better finding hint than the wrapped literal's own absence
+            Expr::At(inner, l) => self.infer(inner, env, *l),
             Expr::Int(_) => Ty::Int,
             Expr::Float(_) => Ty::Float,
             Expr::Str(_) => Ty::Str,

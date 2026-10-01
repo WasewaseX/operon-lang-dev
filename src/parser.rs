@@ -304,6 +304,18 @@ impl Parser {
         let i = self.pos.min(self.toks.len() - 1);
         self.toks[i].1
     }
+    /// W08r: wrap a line-silent statement expression (pure literals/idents:
+    /// nothing inside the tree carries a source line) in a transparent
+    /// position marker, so the debugger can attribute the statement to its
+    /// source line. Evaluation/compilation/lint/typecheck pass straight
+    /// through the marker; fmt and dump render it away.
+    fn at_line(&self, e: Expr, line: usize) -> Expr {
+        if crate::ast::expr_first_line(&e).is_none() {
+            Expr::At(Box::new(e), line)
+        } else {
+            e
+        }
+    }
     fn next(&mut self) -> Tok {
         let t = self.toks[self.pos].0.clone();
         if self.pos < self.toks.len() - 1 {
@@ -1076,13 +1088,14 @@ impl Parser {
                 if matches!(self.peek(), Tok::Eq) {
                     self.next();
                     let e = self.parse_expr();
+                    let line = self.line();
                     self.end_stmt();
-                    return Some(Stmt::LetConst(name, e));
+                    return Some(Stmt::LetConst(name, self.at_line(e, line)));
                 }
                 let line = self.line();
                 self.note(line, 4, "const without '=' binds null");
                 self.end_stmt();
-                Some(Stmt::LetConst(name, Expr::Null))
+                Some(Stmt::LetConst(name, self.at_line(Expr::Null, line)))
             }
             "let" => {
                 self.next();
@@ -1102,13 +1115,14 @@ impl Parser {
                     if matches!(self.peek(), Tok::Eq) {
                         self.next();
                         let e = self.parse_expr();
+                        let line = self.line();
                         self.end_stmt();
-                        return Some(Stmt::LetPat(pat, e));
+                        return Some(Stmt::LetPat(pat, self.at_line(e, line)));
                     }
                     let line = self.line();
                     self.note(line, 4, "destructured 'let' without value binds nulls");
                     self.end_stmt();
-                    return Some(Stmt::LetPat(pat, Expr::Null));
+                    return Some(Stmt::LetPat(pat, self.at_line(Expr::Null, line)));
                 }
                 let name = self.expect_ident()?;
                 // W01 (L2c): soft type annotation, `let n: int = 3`
@@ -1118,8 +1132,9 @@ impl Parser {
                     if matches!(self.peek(), Tok::Eq) {
                         self.next();
                         let e = self.parse_expr();
+                        let line = self.line();
                         self.end_stmt();
-                        return Some(Stmt::LetAnn(name, ann, e));
+                        return Some(Stmt::LetAnn(name, ann, self.at_line(e, line)));
                     }
                     let line = self.line();
                     self.note(
@@ -1128,7 +1143,7 @@ impl Parser {
                         format!("'let {name}: {}' without value binds null", ann.render()),
                     );
                     self.end_stmt();
-                    return Some(Stmt::LetAnn(name, ann, Expr::Null));
+                    return Some(Stmt::LetAnn(name, ann, self.at_line(Expr::Null, line)));
                 }
                 // L1a: `let a, b = 1, 2`, multi-define (all values evaluated
                 // before any name binds).
@@ -1156,16 +1171,17 @@ impl Parser {
                     let values: Vec<Expr> = targets.iter().map(|_| Expr::Null).collect();
                     return Some(Stmt::MultiAssign(targets, values, true));
                 }
-                let line = self.line();
                 if matches!(self.peek(), Tok::Eq) {
                     self.next();
                     let e = self.parse_expr();
+                    let line = self.line();
                     self.end_stmt();
-                    Some(Stmt::Let(name, e))
+                    Some(Stmt::Let(name, self.at_line(e, line)))
                 } else {
+                    let line = self.line();
                     self.note(line, 4, format!("'let {}' without value binds null", name));
                     self.end_stmt();
-                    Some(Stmt::Let(name, Expr::Null))
+                    Some(Stmt::Let(name, self.at_line(Expr::Null, line)))
                 }
             }
             "if" | "ifnot" => {
@@ -2810,19 +2826,26 @@ impl Parser {
                 self.next(); // name
                 self.next(); // =
                 let val = self.parse_expr();
+                let line = self.line();
                 self.end_stmt();
-                Some(Stmt::Assign(w.to_string(), None, val))
+                Some(Stmt::Assign(w.to_string(), None, self.at_line(val, line)))
             }
             A::Compound(op) => {
                 self.next(); // name
                 self.next(); // op=
                 let val = self.parse_expr();
+                let line = self.line();
                 self.end_stmt();
-                Some(Stmt::Assign(w.to_string(), Some(op), val))
+                Some(Stmt::Assign(
+                    w.to_string(),
+                    Some(op),
+                    self.at_line(val, line),
+                ))
             }
             A::None => {
                 // expression statement (may be index/member assignment)
                 let e = self.parse_expr();
+                let stmt_line = self.line();
                 match self.peek().clone() {
                     Tok::Eq => {
                         self.next();
@@ -2838,7 +2861,7 @@ impl Parser {
                                     4,
                                     "assignment target must be a name, index or member; value computed and dropped",
                                 );
-                                Some(Stmt::ExprStmt(other))
+                                Some(Stmt::ExprStmt(self.at_line(other, stmt_line)))
                             }
                         }
                     }
@@ -2878,7 +2901,7 @@ impl Parser {
                         );
                         self.skip_line();
                         self.end_stmt();
-                        Some(Stmt::ExprStmt(e))
+                        Some(Stmt::ExprStmt(self.at_line(e, stmt_line)))
                     }
                     Tok::PlusEq
                     | Tok::MinusEq
@@ -2903,7 +2926,7 @@ impl Parser {
                             other => {
                                 let line = self.line();
                                 self.note(line, 4, "compound assignment target invalid; dropped");
-                                Some(Stmt::ExprStmt(other))
+                                Some(Stmt::ExprStmt(self.at_line(other, stmt_line)))
                             }
                         }
                     }
@@ -2922,7 +2945,7 @@ impl Parser {
                             self.skip_line();
                         }
                         self.end_stmt();
-                        Some(Stmt::ExprStmt(e))
+                        Some(Stmt::ExprStmt(self.at_line(e, stmt_line)))
                     }
                 }
             }

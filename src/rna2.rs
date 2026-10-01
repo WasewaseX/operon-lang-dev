@@ -1258,6 +1258,8 @@ fn rewrite_pat(p: &mut MatchPat, cfg: &mut RewriteCfg) {
 
 fn rewrite_expr(e: &mut Expr, cfg: &mut RewriteCfg) {
     match e {
+        // W08r: transparent position marker — rewrite through it
+        Expr::At(inner, _) => rewrite_expr(inner, cfg),
         Expr::Ident(s) => {
             if let Some((from, to)) = cfg.ident {
                 if s == from {
