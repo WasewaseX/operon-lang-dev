@@ -663,32 +663,43 @@ pub fn exec_gene_body(
     body: &[Stmt],
     env: &Rc<Env>,
 ) -> Result<Flow, Stress> {
-    let code: std::rc::Rc<GeneCode> = {
-        let opt = interp.vm_opt;
-        // ast-grep-ignore: no-unwrap-in-src
-        let prog = interp.vm_program.as_mut().unwrap();
-        let key = if opt >= 1 {
-            // cache the optimized form under a shifted key
-            def_key.wrapping_add(1usize << 62)
-        } else {
-            def_key
-        };
-        match prog.codes.get(&key) {
-            Some(cached) => cached.clone(),
-            None => {
-                let compiled = compile_body(name, body, prog);
-                let compiled = if opt >= 1 {
-                    optimize(&compiled)
-                } else {
-                    compiled
-                };
-                let rc = std::rc::Rc::new(compiled);
-                prog.codes.insert(key, rc.clone());
-                rc
-            }
-        }
-    };
+    let code = gene_code_cached(interp, def_key, name, body);
     exec_gene_code(interp, &code, env)
+}
+
+/// Compile (or fetch from the cache) a gene body. Same key discipline as
+/// before: the optimized form lives under a shifted key when vm_opt >= 1.
+/// W16: shared by the sync machine (exec_gene_body) and the fiber machine
+/// (fiber_push_frame) so both engines can never drift on the encoding.
+pub(crate) fn gene_code_cached(
+    interp: &mut Interp,
+    def_key: usize,
+    name: &str,
+    body: &[Stmt],
+) -> std::rc::Rc<GeneCode> {
+    let opt = interp.vm_opt;
+    // ast-grep-ignore: no-unwrap-in-src
+    let prog = interp.vm_program.as_mut().unwrap();
+    let key = if opt >= 1 {
+        // cache the optimized form under a shifted key
+        def_key.wrapping_add(1usize << 62)
+    } else {
+        def_key
+    };
+    match prog.codes.get(&key) {
+        Some(cached) => cached.clone(),
+        None => {
+            let compiled = compile_body(name, body, prog);
+            let compiled = if opt >= 1 {
+                optimize(&compiled)
+            } else {
+                compiled
+            };
+            let rc = std::rc::Rc::new(compiled);
+            prog.codes.insert(key, rc.clone());
+            rc
+        }
+    }
 }
 
 /// Execute a compiled gene body against the shared interpreter.
@@ -935,6 +946,587 @@ fn exec_gene_code_inner(
                 let argvs: Vec<Value> = stack.drain(base..).collect();
                 let v = interp.named_call_tail_vm(&cur, name, argvs)?;
                 stack.push(v);
+            }
+        }
+    }
+}
+
+// ============================================================== W16 fibers
+// (docs/specs/ASYNC.md; frame contract in docs/vm-design.md §6). Execution
+// units are fiber frames on THIS loop, not OS threads: a fiber owns a HEAP
+// frame stack (VmFrame) so parking at a suspension point saves the whole
+// call chain, not just the top frame. Suspension points are explicit:
+// await-shaped builtins (`sleep`, `recv`, `select`) set Interp::fiber_pending
+// through the SAME shared code the tree-walk calls; the machine parks the
+// fiber at the next loop-head boundary and the scheduler (slice 2) decides
+// the deterministic FIFO wake. No preemption ever.
+
+/// Which kind of wake a suspended fiber sits on (the `fiber_state` tag of
+/// docs/vm-design.md §6).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WakeTag {
+    Sleep,
+    Chan,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FiberState {
+    Running,
+    SuspendedOn(WakeTag),
+    Done,
+}
+
+/// What a parked fiber waits for. Produced by an await-shaped builtin
+/// through `Interp::fiber_pending`; consumed by the scheduler, which owns
+/// the virtual clock and the FIFO wake order. The machine itself stays
+/// clock-free: it only reports.
+pub enum PendingWake {
+    /// virtual-millisecond duration; deadline = scheduler now + ms
+    Sleep(u64),
+    /// parked until one of these channels delivers; `select` re-polls the
+    /// full list on wake (declaration order decides, leftmost ready wins)
+    Chan {
+        chans: Vec<std::sync::Arc<crate::value::ChannelShared>>,
+        select: bool,
+    },
+}
+
+impl PendingWake {
+    pub fn tag(&self) -> WakeTag {
+        match self {
+            PendingWake::Sleep(_) => WakeTag::Sleep,
+            PendingWake::Chan { .. } => WakeTag::Chan,
+        }
+    }
+}
+
+/// One heap-allocated VM frame: the full per-call execution state the sync
+/// machine keeps in Rust locals (`exec_gene_code_inner`). Owning it in a
+/// struct is what makes parking mid-call-chain possible at all (vm-design
+/// §6: "frames move from the host stack to a heap-allocated frame stack").
+pub struct VmFrame {
+    pub code: std::rc::Rc<GeneCode>,
+    pub ip: usize,
+    pub stack: Vec<Value>,
+    pub scopes: Vec<Rc<Env>>,
+    pub cur: Rc<Env>,
+    /// traceback identity (the call_gene chain frame: name + call line)
+    pub gene: String,
+    pub entry_line: usize,
+    /// W01 return annotation, checked at pop exactly like call_gene_inner
+    pub ret_ann: Option<crate::ast::TypeAnn>,
+}
+
+/// A parked-or-running fiber: the frame stack plus the A2 frame reservation
+/// fields of docs/vm-design.md §6, now real.
+pub struct Fiber {
+    pub frames: Vec<VmFrame>,
+    /// Running | SuspendedOn(WakeReason) — parked at builtin calls only,
+    /// never mid-instruction.
+    pub fiber_state: FiberState,
+    /// timer-wheel slot in scheduler virtual ms (sleep); None otherwise
+    pub wake_deadline: Option<u64>,
+    /// W18 cooperative cancellation view for this fiber (the truth lives
+    /// in the task interp's cancel_chain, observed at ticks)
+    pub cancel_flag: bool,
+    /// the awaited value the scheduler delivers before resuming: the parked
+    /// call site is already behind ip, so the machine pushes this instead
+    /// of the placeholder the builtin returned
+    pub wake_result: Option<Value>,
+}
+
+/// The prepared frame a fiber call begins on. Produced by the ONE hook at
+/// the body-exec point of call_gene_inner — after RISC → toggle → GRN →
+/// methylation → riboswitch → promoter → RHO, param binding, uORF guards
+/// and call bookkeeping have all run in the SHARED code. The fiber machine
+/// cannot drift from the funnel because it never reimplements it.
+pub struct FiberFrame {
+    pub def_key: usize,
+    pub name: String,
+    pub def: std::sync::Arc<crate::ast::GeneDef>,
+    pub fenv: Rc<Env>,
+    pub entry_line: usize,
+}
+
+/// What one fiber_run turn produced: a finished value (base frame returned),
+/// or a park at a suspension point the scheduler must resolve.
+pub enum FiberOutcome {
+    /// the base frame returned
+    Done(Value),
+    /// the fiber parked at a suspension point; resume by setting
+    /// fiber.wake_result and calling fiber_run again
+    Suspended(PendingWake),
+}
+
+enum Step {
+    Continue,
+    Finished(Value),
+}
+
+fn fiber_return_stack(interp: &mut Interp, stack: Vec<Value>) {
+    // the same pool discipline as exec_gene_code
+    if stack.capacity() <= 64 {
+        interp.vm_stack_pool.push(stack);
+    }
+}
+
+/// Begin a fiber on a named call: ride the SAME funnel (named_call_tail_vm
+/// → call_named → call_value → call_gene → call_gene_inner) with the hook
+/// armed, so RISC redirects, wobble repairs and toggle vetoes behave
+/// exactly as the sync machine sees them. Returns Err when the call did not
+/// reach a gene body (builtin target, vetoed call, guard return).
+pub fn fiber_call_begin(
+    interp: &mut Interp,
+    env: &Rc<Env>,
+    name: &str,
+    argvs: Vec<Value>,
+) -> Result<Fiber, Stress> {
+    interp.fiber_hook = true;
+    let r = interp.named_call_tail_vm(env, name, argvs);
+    interp.fiber_hook = false;
+    r?;
+    match interp.fiber_hook_out.take() {
+        Some(ff) => {
+            let mut fiber = Fiber {
+                frames: Vec::new(),
+                fiber_state: FiberState::Running,
+                wake_deadline: None,
+                cancel_flag: false,
+                wake_result: None,
+            };
+            fiber_push_frame(interp, &mut fiber, ff)?;
+            Ok(fiber)
+        }
+        None => Err(Stress::new(
+            "unfolded",
+            format!("fiber target '{}' did not reach a gene body", name),
+        )),
+    }
+}
+
+/// Push the hooked frame. `call_gene` already checked the depth limit and
+/// bumped `depth` for this call — but its decrement bracketed only the
+/// sentinel path, so the frame re-bumps for its lifetime and pops it at
+/// Ret/unwind, keeping the counter symmetric with the sync machine.
+fn fiber_push_frame(interp: &mut Interp, fiber: &mut Fiber, ff: FiberFrame) -> Result<(), Stress> {
+    interp.depth += 1;
+    let code = gene_code_cached(interp, ff.def_key, &ff.name, &ff.def.body);
+    let mut stack = match interp.vm_stack_pool.pop() {
+        Some(s) => s,
+        None => Vec::with_capacity(16),
+    };
+    stack.clear();
+    fiber.frames.push(VmFrame {
+        code,
+        ip: 0,
+        stack,
+        scopes: Vec::new(),
+        cur: ff.fenv,
+        gene: ff.name,
+        entry_line: ff.entry_line,
+        ret_ann: ff.def.ret_ann.clone(),
+    });
+    Ok(())
+}
+
+/// Pop a frame with a return value: depth--, the W01 return annotation
+/// (the shared call_gene_inner tail), the value either becomes the fiber's
+/// result (base frame) or lands on the caller's stack. `explicit` mirrors
+/// call_gene_inner: a Ret carries a real value; fell-off-end, Brk and Cont
+/// at the gene boundary return null through the same annotation check.
+fn fiber_pop_frame(
+    interp: &mut Interp,
+    fiber: &mut Fiber,
+    v: Value,
+    explicit: bool,
+) -> Result<Step, Stress> {
+    let fr = match fiber.frames.pop() {
+        Some(f) => f,
+        None => return Ok(Step::Finished(v)),
+    };
+    interp.depth = interp.depth.saturating_sub(1);
+    let checked = interp.check_ret_ann("gene", &fr.gene, &fr.ret_ann, &v, explicit);
+    fiber_return_stack(interp, fr.stack);
+    let v = match checked {
+        Ok(v) => v,
+        Err(mut s) => {
+            // the W007 chain frame call_gene would have appended at this
+            // level, same shape, same 64 cap
+            if s.chain.len() < 64 {
+                s.chain.push((fr.gene, fr.entry_line));
+            }
+            return Err(s);
+        }
+    };
+    match fiber.frames.last_mut() {
+        None => Ok(Step::Finished(v)),
+        Some(parent) => {
+            parent.stack.push(v);
+            Ok(Step::Continue)
+        }
+    }
+}
+
+/// Unwind every frame on stress: depth-- per frame, the traceback chain
+/// appends innermost-first exactly as the Rust stack unwinding through
+/// call_gene wrappers does, stacks return to the pool.
+fn fiber_unwind(interp: &mut Interp, fiber: &mut Fiber, mut s: Stress) -> Stress {
+    while let Some(fr) = fiber.frames.pop() {
+        interp.depth = interp.depth.saturating_sub(1);
+        if s.chain.len() < 64 {
+            s.chain.push((fr.gene, fr.entry_line));
+        }
+        fiber_return_stack(interp, fr.stack);
+    }
+    fiber.fiber_state = FiberState::Done;
+    s
+}
+
+/// Run a fiber until it finishes, parks at a suspension point, or fails.
+/// Same dispatch arms as the sync machine (`exec_gene_code_inner`) — the
+/// differences are structural only: state lives in the heap frame stack,
+/// native gene calls push frames instead of Rust-recursing (the hook), and
+/// the loop head parks on `Interp::fiber_pending`.
+pub fn fiber_run(interp: &mut Interp, fiber: &mut Fiber) -> Result<FiberOutcome, Stress> {
+    fiber.fiber_state = FiberState::Running;
+    match fiber_run_inner(interp, fiber) {
+        Ok(out) => Ok(out),
+        Err(s) => Err(fiber_unwind(interp, fiber, s)),
+    }
+}
+
+fn fiber_run_inner(interp: &mut Interp, fiber: &mut Fiber) -> Result<FiberOutcome, Stress> {
+    // resume protocol: the scheduler delivered the awaited value before
+    // resuming; the parked call site is behind ip already, so the machine
+    // pushes it instead of the placeholder the builtin returned.
+    if let Some(v) = fiber.wake_result.take() {
+        match fiber.frames.last_mut() {
+            None => return Ok(FiberOutcome::Done(v)),
+            Some(fr) => fr.stack.push(v),
+        }
+    }
+    loop {
+        // loop-head park check: a suspension builtin set fiber_pending
+        // through the shared code; ip is already past the call, the
+        // builtin's placeholder is discarded, the real value arrives via
+        // wake_result on wake. Suspension never refunds fuel (the charges
+        // already ran inside the builtin) and never preempts (this is the
+        // only place a fiber yields besides Done/Stress).
+        if let Some(pw) = interp.fiber_pending.take() {
+            fiber.fiber_state = FiberState::SuspendedOn(pw.tag());
+            fiber.cancel_flag = interp
+                .cancel_chain
+                .iter()
+                .any(|f| f.load(std::sync::atomic::Ordering::Relaxed));
+            return Ok(FiberOutcome::Suspended(pw));
+        }
+        // fetch: fell off the end of the top frame = the gene boundary
+        // null return, exactly like the sync machine's Flow::Norm exit
+        let (cur_ip, line) = {
+            let fr = match fiber.frames.last_mut() {
+                Some(fr) => fr,
+                None => return Ok(FiberOutcome::Done(Value::Null)),
+            };
+            if fr.ip >= fr.code.code.len() {
+                match fiber_pop_frame(interp, fiber, Value::Null, false)? {
+                    Step::Continue => continue,
+                    Step::Finished(v) => {
+                        fiber.fiber_state = FiberState::Done;
+                        return Ok(FiberOutcome::Done(v));
+                    }
+                }
+            }
+            let ip = fr.ip;
+            fr.ip += 1;
+            (ip, fr.code.lines[ip])
+        };
+        if line > 0 {
+            interp.cur_line = line as usize;
+        }
+        interp.tick()?;
+        // arm the lane for this instruction: await-shaped builtins reached
+        // at a compiled call site may park. Bridges swap it out for false
+        // around their tree-walk calls (the honest fallback) and restore it.
+        interp.fiber_armed = true;
+        // destructure the frame into disjoint field borrows (same shape the
+        // sync machine keeps in locals); `code` stays immutably borrowed by
+        // `instr` while the arms mutate stack/scopes/cur
+        let fr = match fiber.frames.last_mut() {
+            Some(fr) => fr,
+            None => return Ok(FiberOutcome::Done(Value::Null)),
+        };
+        let VmFrame {
+            code,
+            ip,
+            stack,
+            scopes,
+            cur,
+            ..
+        } = fr;
+        let instr = match code.code.get(cur_ip) {
+            Some(i) => i,
+            None => continue, // unreachable (bounds checked above)
+        };
+        match instr {
+            Instr::Push(idx) => {
+                let v = const_value(&code.consts, *idx);
+                stack.push(v);
+            }
+            Instr::LoadName(idx) => {
+                let name = &code.names[*idx as usize];
+                match cur.get(name) {
+                    Some(v) => {
+                        crate::interp::charge_clone(&v)?;
+                        stack.push(v);
+                    }
+                    None => {
+                        interp.note(0, 4, format!("unbound '{}' read as null", name));
+                        stack.push(Value::Null);
+                    }
+                }
+            }
+            Instr::LoadNameQuiet(idx) => {
+                let name = &code.names[*idx as usize];
+                stack.push(cur.get(name).unwrap_or(Value::Null));
+            }
+            Instr::StoreName(idx) => {
+                let name = code.names[*idx as usize].clone();
+                let v = stack.pop().unwrap_or(Value::Null);
+                if cur.get(&name).is_some() {
+                    interp.note(0, 4, format!("rebinding '{}'", name));
+                }
+                cur.define(&name, v);
+            }
+            Instr::AssignName(idx) => {
+                let name = code.names[*idx as usize].clone();
+                let v = stack.pop().unwrap_or(Value::Null);
+                if cur.is_const(&name) {
+                    return Err(Stress::new(
+                        "frozen",
+                        format!("cannot reassign const '{}'", name),
+                    ));
+                }
+                if !cur.set(&name, v) {
+                    interp.note(0, 4, format!("'{}' was not declared; auto-declared", name));
+                }
+            }
+            Instr::Bin(op) => {
+                let r = stack.pop().unwrap_or(Value::Null);
+                let l = stack.pop().unwrap_or(Value::Null);
+                let v = interp.apply_binop(cur, *op, &l, &r)?;
+                stack.push(v);
+            }
+            Instr::BinImm(op, cidx) => {
+                // W11 superinstruction: identical to Bin with the rhs taken
+                // from the constant pool (the folded Push); same apply_binop,
+                // same order (lhs was evaluated first, by construction).
+                let r = const_value(&code.consts, *cidx);
+                let l = stack.pop().unwrap_or(Value::Null);
+                let v = interp.apply_binop(cur, *op, &l, &r)?;
+                stack.push(v);
+            }
+            Instr::LoadBinImm(nidx, op, cidx) => {
+                // W11: the EXACT LoadName read (clone-charge + unbound note)
+                // composed with the EXACT Bin arm.
+                let name = &code.names[*nidx as usize];
+                let l = match cur.get(name) {
+                    Some(v) => {
+                        crate::interp::charge_clone(&v)?;
+                        v
+                    }
+                    None => {
+                        interp.note(0, 4, format!("unbound '{}' read as null", name));
+                        Value::Null
+                    }
+                };
+                let r = const_value(&code.consts, *cidx);
+                let v = interp.apply_binop(cur, *op, &l, &r)?;
+                stack.push(v);
+            }
+            Instr::JmpIfF(t) => {
+                let v = stack.pop().unwrap_or(Value::Null);
+                if !v.truthy() {
+                    *ip = *t as usize;
+                }
+            }
+            Instr::Jmp(t) => *ip = *t as usize,
+            Instr::EvalExpr(idx) => {
+                // W16: bridges disarm the lane — a suspension builtin inside
+                // bridged tree-walk code degrades to the thread lane's
+                // blocking behavior (deterministic: blocking mid-turn cannot
+                // reorder a cooperative scheduler). Documented honesty, not
+                // a hidden limitation.
+                let armed = std::mem::replace(&mut interp.fiber_armed, false);
+                // clone the bridged node out of the arena (cheap: Arc'd
+                // children) so the mutable interpreter borrow is free
+                let e = interp
+                    .vm_program
+                    .as_ref()
+                    .and_then(|p| p.exprs.get(*idx as usize))
+                    .cloned();
+                let r = match e {
+                    Some(e) => interp.eval(cur, &e).map(|v| vec![v]),
+                    None => Ok(Vec::new()),
+                };
+                interp.fiber_armed = armed;
+                let mut vs = r?;
+                if let Some(v) = vs.pop() {
+                    stack.push(v);
+                } else {
+                    stack.push(Value::Null);
+                }
+            }
+            Instr::BridgeStmt(idx) => {
+                let armed = std::mem::replace(&mut interp.fiber_armed, false);
+                let s = interp
+                    .vm_program
+                    .as_ref()
+                    .and_then(|p| p.stmts.get(*idx as usize))
+                    .cloned();
+                let r = match s {
+                    Some(s) => interp.exec_stmt(cur, &s),
+                    None => Ok(Flow::Norm),
+                };
+                interp.fiber_armed = armed;
+                match r? {
+                    // the bridged statement's flow propagates exactly the
+                    // way exec_block would propagate it (Ret leaves the
+                    // gene; Brk/Cont reach the gene boundary, which pops
+                    // with the null return)
+                    Flow::Norm => {}
+                    Flow::Ret(v) => {
+                        // a return inside a nested frame pops THAT frame;
+                        // the fiber only ends when the base frame returns
+                        match fiber_pop_frame(interp, fiber, v, true)? {
+                            Step::Continue => {}
+                            Step::Finished(v) => {
+                                fiber.fiber_state = FiberState::Done;
+                                return Ok(FiberOutcome::Done(v));
+                            }
+                        }
+                    }
+                    Flow::Brk | Flow::Cont => {
+                        match fiber_pop_frame(interp, fiber, Value::Null, false)? {
+                            Step::Continue => {}
+                            Step::Finished(v) => {
+                                fiber.fiber_state = FiberState::Done;
+                                return Ok(FiberOutcome::Done(v));
+                            }
+                        }
+                    }
+                }
+            }
+            Instr::BridgeStmtInLoop(idx, cont_t, brk_t, unwinds) => {
+                let armed = std::mem::replace(&mut interp.fiber_armed, false);
+                let s = interp
+                    .vm_program
+                    .as_ref()
+                    .and_then(|p| p.stmts.get(*idx as usize))
+                    .cloned();
+                let r = match s {
+                    Some(s) => interp.exec_stmt(cur, &s),
+                    None => Ok(Flow::Norm),
+                };
+                interp.fiber_armed = armed;
+                match r? {
+                    Flow::Norm => {}
+                    // a return from inside a bridged statement IS the
+                    // gene's return (the tree-walk contract)
+                    Flow::Ret(v) => match fiber_pop_frame(interp, fiber, v, true)? {
+                        Step::Continue => {}
+                        Step::Finished(v) => {
+                            fiber.fiber_state = FiberState::Done;
+                            return Ok(FiberOutcome::Done(v));
+                        }
+                    },
+                    Flow::Brk => {
+                        for _ in 0..*unwinds {
+                            if let Some(p) = scopes.pop() {
+                                *cur = p;
+                            }
+                        }
+                        *ip = *brk_t as usize;
+                    }
+                    Flow::Cont => {
+                        for _ in 0..*unwinds {
+                            if let Some(p) = scopes.pop() {
+                                *cur = p;
+                            }
+                        }
+                        *ip = *cont_t as usize;
+                    }
+                }
+            }
+            Instr::Pop => {
+                stack.pop();
+            }
+            Instr::Nop => {
+                // executes as nothing; exists to carry a line stamp
+            }
+            Instr::Ret => {
+                let v = stack.pop().unwrap_or(Value::Null);
+                match fiber_pop_frame(interp, fiber, v, true)? {
+                    // a nested frame returned: the loop continues on the
+                    // caller frame (value already pushed to its stack)
+                    Step::Continue => {}
+                    Step::Finished(v) => {
+                        fiber.fiber_state = FiberState::Done;
+                        return Ok(FiberOutcome::Done(v));
+                    }
+                }
+            }
+            Instr::RetName(nidx) => {
+                // W11: the EXACT LoadName read composed with Ret.
+                let name = &code.names[*nidx as usize];
+                let v = match cur.get(name) {
+                    Some(v) => {
+                        crate::interp::charge_clone(&v)?;
+                        v
+                    }
+                    None => {
+                        interp.note(0, 4, format!("unbound '{}' read as null", name));
+                        Value::Null
+                    }
+                };
+                match fiber_pop_frame(interp, fiber, v, true)? {
+                    Step::Continue => {}
+                    Step::Finished(v) => {
+                        fiber.fiber_state = FiberState::Done;
+                        return Ok(FiberOutcome::Done(v));
+                    }
+                }
+            }
+            Instr::Brk(t) => *ip = *t as usize,
+            Instr::Cont(t) => *ip = *t as usize,
+            Instr::EnterScope => {
+                scopes.push(cur.clone());
+                *cur = Env::new(Some(cur.clone()));
+            }
+            Instr::ExitScope => {
+                if let Some(p) = scopes.pop() {
+                    *cur = p;
+                }
+            }
+            Instr::CallNamed(name_idx, argc) => {
+                // W16: the args drain exactly like the sync arm, then the
+                // SHARED funnel runs with the hook armed — whatever gene
+                // body it resolves to (direct, RISC-redirected, wobble-
+                // repaired) pushes a heap frame; builtins, vetoed calls and
+                // guard returns return values inline.
+                let name = code.names[*name_idx as usize].as_str();
+                let n = *argc as usize;
+                let base = stack.len() - n;
+                let argvs: Vec<Value> = stack.drain(base..).collect();
+                interp.fiber_hook = true;
+                let r = interp.named_call_tail_vm(cur, name, argvs);
+                interp.fiber_hook = false;
+                let v = r?;
+                match interp.fiber_hook_out.take() {
+                    Some(ff) => {
+                        fiber_push_frame(interp, fiber, ff)?;
+                    }
+                    None => stack.push(v),
+                }
             }
         }
     }
@@ -1548,6 +2140,292 @@ gene main() {
                 let m = line.split('|').nth(1).unwrap_or("").trim();
                 assert!(!m.is_empty(), "bare listing line: {line}");
             }
+        }
+    }
+}
+
+// ============================================================ W16 fiber tests
+
+#[cfg(test)]
+mod fiber_tests {
+    use super::*;
+    use crate::interp::Interp;
+    use crate::value::Value;
+
+    /// Parse a program, bind its top-level statements (genes land in the
+    /// global env), and hand back a vm-mode interp ready for both engines.
+    fn setup(src: &str) -> Interp {
+        let parsed = crate::parser::parse(src);
+        let mut interp = Interp::new();
+        interp.vm = true;
+        interp.vm_program = Some(VmProgram::default());
+        for s in &parsed.stmts {
+            let g = interp.global.clone();
+            let _ = interp.exec_stmt(&g, s);
+        }
+        interp
+    }
+
+    /// The sync baseline: the exact named_call_tail_vm funnel the VM's
+    /// CallNamed arm uses.
+    fn run_sync(interp: &mut Interp, name: &str, args: Vec<Value>) -> Result<Value, Stress> {
+        let g = interp.global.clone();
+        interp.named_call_tail_vm(&g, name, args)
+    }
+
+    /// The fiber engine: begin on the shared funnel, drive to completion.
+    /// Sleeps wake immediately (the test's virtual clock is infinitely fast;
+    /// slice 2's scheduler adds the deterministic ordering on top).
+    fn run_fiber(interp: &mut Interp, name: &str, args: Vec<Value>) -> Result<Value, Stress> {
+        let g = interp.global.clone();
+        let mut fiber = fiber_call_begin(interp, &g, name, args)?;
+        loop {
+            match fiber_run(interp, &mut fiber)? {
+                FiberOutcome::Done(v) => return Ok(v),
+                FiberOutcome::Suspended(pw) => match pw {
+                    PendingWake::Sleep(_) => fiber.wake_result = Some(Value::Null),
+                    PendingWake::Chan { .. } => {
+                        panic!("no scheduler in this test")
+                    }
+                },
+            }
+        }
+    }
+
+    /// Value/Stress are deliberately Debug-less; tests fail through here.
+    fn ok(r: Result<Value, Stress>, what: &str) -> Value {
+        match r {
+            Ok(v) => v,
+            Err(s) => panic!("{what}: {}: {}", s.kind, s.message),
+        }
+    }
+
+    #[test]
+    fn fiber_matches_sync_on_shapes() {
+        let cases: Vec<(&str, &str, Vec<Value>, Value)> = vec![
+            (
+                "arith + loop + compound assign",
+                "gene f(n) {\n let acc = 0\n for i in range(0, n) {\n  acc += i\n }\n return acc\n}\n",
+                vec![Value::Int(10)],
+                Value::Int(45),
+            ),
+            (
+                "recursion (native frames)",
+                "gene f(n) {\n if n < 2 {\n  return n\n }\n return f(n - 1) + f(n - 2)\n}\n",
+                vec![Value::Int(12)],
+                Value::Int(144),
+            ),
+            (
+                "scopes and shadowing",
+                "gene f() {\n let x = 1\n if true {\n  let x = 2\n  x += 10\n }\n return x\n}\n",
+                vec![],
+                Value::Int(1),
+            ),
+            (
+                "early return beats later code",
+                "gene f(n) {\n if n > 0 {\n  return 99\n }\n return -1\n}\n",
+                vec![Value::Int(5)],
+                Value::Int(99),
+            ),
+            (
+                "fell off the end = null",
+                "gene f() {\n let x = 5\n}\n",
+                vec![],
+                Value::Null,
+            ),
+            (
+                "break and continue",
+                "gene f() {\n let acc = 0\n for i in range(0, 10) {\n  if i == 3 {\n   continue\n  }\n  if i == 7 {\n   break\n  }\n  acc += i\n }\n return acc\n}\n",
+                vec![],
+                // 0+1+2 skipped? no: continue skips 3, break stops at 7 —
+                // the sum of 0,1,2,4,5,6
+                Value::Int(18),
+            ),
+            (
+                "return annotation honored",
+                "gene f(n) -> int {\n return n * 2\n}\n",
+                vec![Value::Int(21)],
+                Value::Int(42),
+            ),
+            (
+                "return annotation violated = same stress",
+                "gene f(n) -> str {\n return n * 2\n}\n",
+                vec![Value::Int(21)],
+                Value::Null, // value ignored; the stress kind is compared
+            ),
+        ];
+        for (label, src, args, want) in cases {
+            let is_stress_case = label.contains("violated");
+            let mut i1 = setup(src);
+            let s1 = run_sync(&mut i1, "f", args.clone());
+            let mut i2 = setup(src);
+            let f2 = run_fiber(&mut i2, "f", args.clone());
+            if is_stress_case {
+                let k1 = s1.err().map(|s| s.kind);
+                let k2 = f2.err().map(|s| s.kind);
+                assert_eq!(k1, k2, "{label}: stress kinds diverged");
+                assert_eq!(
+                    k2,
+                    Some("unfolded".to_string()),
+                    "{label}: expected the annotation stress"
+                );
+            } else {
+                assert_eq!(
+                    ok(s1, label).display(),
+                    want.display(),
+                    "{label}: sync baseline drifted"
+                );
+                assert_eq!(
+                    ok(f2, label).display(),
+                    want.display(),
+                    "{label}: fiber machine diverged"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn fiber_notes_match_sync_notes() {
+        // the unbound read note (level 4) is output: both engines must
+        // emit the identical note text for the identical program
+        let src = "gene f() {\n return nope\n}\n";
+        let mut i1 = setup(src);
+        let _ = run_sync(&mut i1, "f", vec![]);
+        let mut i2 = setup(src);
+        let _ = run_fiber(&mut i2, "f", vec![]);
+        let n1: Vec<String> = i1.notes.iter().map(|n| n.message.clone()).collect();
+        let n2: Vec<String> = i2.notes.iter().map(|n| n.message.clone()).collect();
+        assert_eq!(n1, n2, "note streams diverged");
+        assert!(n1.iter().any(|m| m.contains("unbound 'nope'")));
+    }
+
+    #[test]
+    fn fiber_stress_chain_matches_sync() {
+        let src = "gene a() {\n return b()\n}\ngene b() {\n raise boom \"kaboom\"\n}\n";
+        let mut i1 = setup(src);
+        let e1 = run_sync(&mut i1, "a", vec![]).err();
+        let mut i2 = setup(src);
+        let e2 = run_fiber(&mut i2, "a", vec![]).err();
+        let s1 = e1.expect("sync raised");
+        let s2 = e2.expect("fiber raised");
+        assert_eq!(s1.kind, s2.kind);
+        assert_eq!(s1.message, s2.message);
+        // the W007 traceback: innermost-first (b, then a), same lines
+        let f1: Vec<&str> = s1.chain.iter().map(|(n, _)| n.as_str()).collect();
+        let f2: Vec<&str> = s2.chain.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(f1, f2, "chain shape diverged");
+        assert_eq!(f2, vec!["b", "a"]);
+        let l1: Vec<usize> = s1.chain.iter().map(|(_, l)| *l).collect();
+        let l2: Vec<usize> = s2.chain.iter().map(|(_, l)| *l).collect();
+        assert_eq!(l1, l2, "chain lines diverged");
+    }
+
+    #[test]
+    fn fiber_depth_limit_matches_sync() {
+        let src = "gene f(n) {\n if n <= 0 {\n  return 0\n }\n return f(n - 1) + 1\n}\n";
+        let mut i1 = setup(src);
+        i1.depth_limit = 8;
+        let e1 = run_sync(&mut i1, "f", vec![Value::Int(50)]).err();
+        let mut i2 = setup(src);
+        i2.depth_limit = 8;
+        let e2 = run_fiber(&mut i2, "f", vec![Value::Int(50)]).err();
+        let s1 = e1.expect("sync hit the limit");
+        let s2 = e2.expect("fiber hit the limit");
+        assert_eq!(s1.kind, "overflow");
+        assert_eq!(s2.kind, "overflow");
+        assert_eq!(s1.message, s2.message);
+    }
+
+    #[test]
+    fn fiber_parks_on_sleep_with_identical_charges() {
+        let src = "gene s() {\n sleep(250)\n return 7\n}\n";
+        let mut interp = setup(src);
+        let g = interp.global.clone();
+        let mut fiber = ok_fiber(
+            fiber_call_begin(&mut interp, &g, "s", vec![]),
+            "fiber begins",
+        );
+        let out = ok_out(fiber_run(&mut interp, &mut fiber), "first turn");
+        match out {
+            FiberOutcome::Suspended(PendingWake::Sleep(ms)) => assert_eq!(ms, 250),
+            other => panic!("expected a sleep park, got {:?}", other_tag(&other)),
+        }
+        // the fuel contract: sleep charges ms*1000 steps, exactly the
+        // thread lane's charge (suspension never refunds fuel). The delta
+        // also counts the few one-step instruction ticks executed so far
+        // (Nop/CallNamed + the setup statements), everything above the
+        // 250_000 sleep charge is ticks.
+        let steps = interp.steps;
+        assert!(
+            (250_000..250_010).contains(&steps),
+            "sleep charge drifted: {}",
+            steps
+        );
+        // and no wall time passed: the park is a state write, not a block
+        // (asserted structurally: the fiber is suspended, not running)
+        assert_eq!(fiber.fiber_state, FiberState::SuspendedOn(WakeTag::Sleep));
+        // resume with the awaited value: the machine pushes it past the
+        // parked call site and finishes the gene
+        fiber.wake_result = Some(Value::Null);
+        let out = ok_out(fiber_run(&mut interp, &mut fiber), "final turn");
+        match out {
+            FiberOutcome::Done(v) => assert_eq!(v.display(), Value::Int(7).display()),
+            other => panic!("expected done, got {:?}", other_tag(&other)),
+        }
+        assert_eq!(fiber.fiber_state, FiberState::Done);
+    }
+
+    #[test]
+    fn fiber_sleep_charges_shared_fuel_pool() {
+        let src = "gene s() {\n sleep(100)\n return 1\n}\n";
+        let mut interp = setup(src);
+        let pool = std::sync::Arc::new(std::sync::atomic::AtomicI64::new(10_000_000));
+        interp.fuel_pool = Some(pool.clone());
+        let g = interp.global.clone();
+        let mut fiber = ok_fiber(
+            fiber_call_begin(&mut interp, &g, "s", vec![]),
+            "fiber begins",
+        );
+        let out = ok_out(fiber_run(&mut interp, &mut fiber), "first turn");
+        assert!(matches!(
+            out,
+            FiberOutcome::Suspended(PendingWake::Sleep(100))
+        ));
+        // loop-5: ONE pool per run — the fiber drained it ms*1000 like a
+        // worker thread would
+        let left = pool.load(std::sync::atomic::Ordering::Relaxed);
+        assert_eq!(left, 10_000_000 - 100_000);
+    }
+
+    #[test]
+    fn fiber_call_begin_refuses_non_gene_targets() {
+        // a builtin target executes through the funnel and never reaches a
+        // gene body: the fiber refuses (spawn validates genes first; this
+        // is the machine-level backstop)
+        let mut interp = setup("gene f() {\n return 1\n}\n");
+        let g = interp.global.clone();
+        let r = fiber_call_begin(&mut interp, &g, "floor", vec![Value::Int(1)]);
+        assert!(r.is_err());
+    }
+
+    fn ok_out(r: Result<FiberOutcome, Stress>, what: &str) -> FiberOutcome {
+        match r {
+            Ok(v) => v,
+            Err(s) => panic!("{what}: {}: {}", s.kind, s.message),
+        }
+    }
+
+    fn ok_fiber(r: Result<Fiber, Stress>, what: &str) -> Fiber {
+        match r {
+            Ok(v) => v,
+            Err(s) => panic!("{what}: {}: {}", s.kind, s.message),
+        }
+    }
+
+    fn other_tag(o: &FiberOutcome) -> &'static str {
+        match o {
+            FiberOutcome::Done(_) => "done",
+            FiberOutcome::Suspended(_) => "suspended",
         }
     }
 }

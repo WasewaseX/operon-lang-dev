@@ -701,6 +701,21 @@ pub struct Interp {
     /// W09 A2: the bytecode lane flag (set by --vm) + the shared arenas
     /// (bridged sub-ASTs and compiled bodies keyed by def pointer).
     pub vm: bool,
+    // ---- W16 fiber lane (docs/specs/ASYNC.md). All four default to the
+    // inert state: the sync tree-walk and the sync VM never touch them.
+    /// the fiber machine sets this while dispatching frame-level
+    /// instructions; bridges and call_gene_inner's guard/default windows
+    /// clear it so suspension only happens at compiled call sites
+    pub fiber_armed: bool,
+    /// set by an await-shaped builtin (`sleep`, `recv`, `select`) when the
+    /// lane is armed; the fiber machine parks on it at the loop head
+    pub fiber_pending: Option<crate::vm::PendingWake>,
+    /// armed around ONE named_call_tail_vm call by the fiber machine; the
+    /// body-exec point in call_gene_inner answers with fiber_hook_out
+    pub fiber_hook: bool,
+    /// the prepared frame the hook hands back (gates, params, guards and
+    /// bookkeeping already ran in the shared code above the hook)
+    pub fiber_hook_out: Option<crate::vm::FiberFrame>,
     pub vm_program: Option<crate::vm::VmProgram>,
     /// W09: scratch operand stacks pooled across machine frames. fib25's
     /// 243k calls allocated (and grew) a fresh operand Vec per call; the
@@ -822,6 +837,10 @@ impl Interp {
             cancel_suppressed: false,
             scope_stack: Vec::new(),
             vm: false,
+            fiber_armed: false,
+            fiber_pending: None,
+            fiber_hook: false,
+            fiber_hook_out: None,
             vm_program: None,
             vm_stack_pool: Vec::new(),
             vm_opt: 0,
@@ -4882,7 +4901,14 @@ impl Interp {
                 }
                 fenv.define(pname, a.clone());
             } else if let Some(d) = default {
+                // W16: disarm the fiber lane across the default expression
+                // (user code that may call sleep/recv — a suspension here
+                // has no frame to park: fall back to the blocking lane)
+                let saved_armed = std::mem::replace(&mut self.fiber_armed, false);
+                let saved_hook = std::mem::replace(&mut self.fiber_hook, false);
                 let dv = self.eval(&fenv, d).unwrap_or(Value::Null);
+                self.fiber_armed = saved_armed;
+                self.fiber_hook = saved_hook;
                 if let Some(ann) = def.param_anns.get(i).and_then(|a| a.as_ref()) {
                     if !ann_matches(&dv, ann) {
                         return Err(Stress::new(
@@ -4932,6 +4958,11 @@ impl Interp {
             .push((name.clone(), start.unwrap_or(0.0), 0.0));
         // uORF guard
         if let Some((cond, gbody)) = &def.guard {
+            // W16: the guard is user code BEFORE any fiber frame exists for
+            // this call — disarm the lane across cond + body (sleep/recv in
+            // a guard block the turn, they never park a phantom frame)
+            let saved_armed = std::mem::replace(&mut self.fiber_armed, false);
+            let saved_hook = std::mem::replace(&mut self.fiber_hook, false);
             let ok = self.eval(&fenv, cond).map(|v| v.truthy()).unwrap_or(false);
             if !ok {
                 self.note(dl, 4, format!("guard tripped calling {}", name));
@@ -4965,6 +4996,9 @@ impl Interp {
                         Value::Null
                     }
                 };
+                // W16: restore the lane after the guard resolves
+                self.fiber_armed = saved_armed;
+                self.fiber_hook = saved_hook;
                 // W01 (L2c): a guard-branch return is the gene's return,
                 // the annotation applies here too.
                 return self.check_ret_ann("gene", &name, &def.ret_ann, &gv, true);
@@ -4976,6 +5010,23 @@ impl Interp {
             // execution swaps to the stack machine. `name` was computed at
             // the funnel top — do NOT re-clone the def name per call.
             let key = std::sync::Arc::as_ptr(&def) as *const u8 as usize;
+            // W16: the fiber lane's ONE hook. The fiber machine rode the
+            // shared funnel down to here; every gate, param binding, guard
+            // and counter already ran. Instead of executing the body, hand
+            // the prepared frame back — the machine runs it as a heap frame
+            // it can park and resume. The sentinel null is discarded by the
+            // machine (it reads fiber_hook_out, not this value).
+            if self.fiber_hook {
+                self.fiber_hook = false;
+                self.fiber_hook_out = Some(crate::vm::FiberFrame {
+                    def_key: key,
+                    name: name.clone(),
+                    def: std::sync::Arc::clone(&def),
+                    fenv: std::rc::Rc::clone(&fenv),
+                    entry_line: self.cur_line,
+                });
+                return Ok(Value::Null);
+            }
             crate::vm::exec_gene_body(self, key, &name, &def.body, &fenv)
         } else {
             self.exec_block(&fenv, &def.body)
@@ -5045,7 +5096,7 @@ impl Interp {
     /// W01 (L2c): the shared soft return-annotation check. `explicit=false`
     /// means the gene fell off the end (implicit null), the message names
     /// it. Mirrored by oracle `_check_ret`.
-    fn check_ret_ann(
+    pub(crate) fn check_ret_ann(
         &self,
         what: &str,
         name: &str,
@@ -5347,7 +5398,13 @@ impl Interp {
                 }
                 fenv.define(pname, a.clone());
             } else if let Some(d) = default {
+                // W16: disarm across the default expression (same rule as
+                // the gene funnel: no frame exists to park)
+                let saved_armed = std::mem::replace(&mut self.fiber_armed, false);
+                let saved_hook = std::mem::replace(&mut self.fiber_hook, false);
                 let dv = self.eval(&fenv, d).unwrap_or(Value::Null);
+                self.fiber_armed = saved_armed;
+                self.fiber_hook = saved_hook;
                 fenv.define(pname, dv);
             } else {
                 self.note(
@@ -8573,6 +8630,15 @@ impl Interp {
                 }
                 if self.steps > self.step_budget {
                     return Err(Stress::new("overflow", "step budget exhausted (sleep)"));
+                }
+                // W16: fiber lane — the charges above are IDENTICAL to the
+                // thread lane; only the block becomes a yield. The fiber
+                // parks on the scheduler's timer wheel (virtual clock) and
+                // the placeholder null is discarded by the machine (the
+                // awaited value arrives through fiber.wake_result).
+                if self.fiber_armed {
+                    self.fiber_pending = Some(crate::vm::PendingWake::Sleep(ms));
+                    return Ok(Value::Null);
                 }
                 std::thread::sleep(std::time::Duration::from_millis(ms));
                 Ok(Value::Null)
