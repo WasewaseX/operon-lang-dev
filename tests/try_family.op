@@ -79,4 +79,92 @@ frame proof {
         legacy_idx_kind = e.kind
     }
     assert(legacy_idx_kind == "missing", "out-of-range read stays a missing stress")
+
+    # ---- WAVE 2 (v2.7.0): extraction, environment, parsing families.
+    # Same law: Result-returning additions, Err payloads are message Strs.
+    # ---- try_first / try_last
+    assert(try_first([10, 20]) == ok(10), "first hit is Ok")
+    assert(try_first("héllo") == ok("h"), "first is char-indexed")
+    assert(try_first([]) == err("first of an empty list"), "exact empty-list message")
+    assert(try_first("") == err("first of an empty string"), "exact empty-string message")
+    assert(try_first({a: 1}) == err("first of a map"), "non-sequence refused as Err, not a stress")
+    assert(try_first(null) == err("first of a null"), "null refused as Err")
+    assert(try_last([10, 20]) == ok(20), "last hit is Ok")
+    assert(try_last("héllo") == ok("o"), "last is char-indexed")
+    assert(try_last([]) == err("last of an empty list"), "exact empty-list message")
+    assert(try_last(42) == err("last of a int"), "non-sequence refused as Err")
+
+    # ---- try_char_at: char-indexed read as a Result (try_index shape)
+    let s2 = "héllo"
+    assert(try_char_at(s2, 1) == ok("é"), "char index is scalar-value based")
+    assert(try_char_at(s2, -1) == ok("o"), "negative index resolves from the end")
+    assert(try_char_at(s2, 5) == err("char_at index 5 out of range for string of length 5"), "exact range message")
+    assert(is_err(try_char_at("abc", 1.5)), "non-int index is Err, not a stress")
+
+    # ---- try_env: zero-grant contract (the Err/Ok granted lane lives in
+    # tests/granted/try_env_wave2.op, explicit cell, same discipline as
+    # std/env). Denial happens BEFORE the lookup — even a never-set name
+    # refuses with interference, the Err path is unreachable zero-grant.
+    let env_denied_kind = ""
+    stress {
+        try_env("PATH")
+        assert(false, "try_env must be denied by default")
+    } rescue (e) {
+        env_denied_kind = e.kind
+    }
+    assert(env_denied_kind == "interference", "capability denial stays a stress in the try_ variant")
+
+    # ---- try_json_parse: malformed JSON is an inspectable Err
+    # (object braces built via chr(123)/chr(125): a bare { in a string
+    # literal starts interpolation, SPEC)
+    let OB = chr(123)
+    let CB = chr(125)
+    assert(try_json_parse("  42  ") == ok(42), "valid scalar JSON is Ok")
+    assert(try_json_parse("[1, 2]") == ok([1, 2]), "valid array JSON is Ok")
+    assert(try_json_parse(OB + "\"a\": 1" + CB) == ok({a: 1}), "valid object JSON is Ok")
+    assert(try_json_parse(OB + "bad") == err("json_parse('" + OB + "bad') failed"), "exact raw-input message")
+    assert(is_err(try_json_parse("")), "empty input is Err")
+    assert(is_err(try_json_parse("[1,")), "truncated array is Err")
+
+    # ---- try_re_groups: no-match / malformed pattern are Errs
+    assert(try_re_groups("(a+)(b*)", "aabbb") == ok(["aa", "bbb"]), "groups are Ok on match")
+    assert(try_re_groups("(a+)(b*)", "ccc") == err("no match"), "exact no-match message")
+    assert(try_re_groups("(a)|(b)", "b") == ok([null, "b"]), "unmatched group stays null inside Ok")
+    assert(try_re_groups("[unclosed", "abc") == err("re_groups('[unclosed') failed"), "malformed pattern is Err, not a stress")
+    let re_ovf_left = ""
+    stress {
+        try_re_groups("(a+)(b*)", "ccc")
+    } rescue (e) {
+        re_ovf_left = "should not run"
+    }
+    assert(re_ovf_left == "", "no-match does NOT stress (the 2M-step ceiling is the only overflow path)")
+
+    # ---- the LEGACY wave-2 contracts did not move (2.x compat)
+    assert(first([]) == null, "first stays null-contract on empty")
+    assert(last("") == null, "last stays null-contract on empty")
+    assert(char_at("abc", 9) == null, "char_at stays null-contract on OOB")
+    let legacy_env_kind = ""
+    stress {
+        env("OPERON_UNSET_WAVE2_PROBE")
+        assert(false, "legacy env must be denied by default")
+    } rescue (e) {
+        legacy_env_kind = e.kind
+    }
+    assert(legacy_env_kind == "interference", "legacy env keeps the zero-grant refusal (granted null-contract pinned in tests/granted/try_env_wave2.op)")
+    let jp_kind = ""
+    stress {
+        json_parse(OB + "bad")
+    } rescue (e) {
+        jp_kind = e.kind
+    }
+    assert(jp_kind == "unfolded", "json_parse stays an unfolded stress on malformed input")
+    assert(re_groups("(a+)(b*)", "ccc") == null, "re_groups stays null-contract on no-match")
+
+    # ---- composition: wave 2 through ?! and unwrap_or
+    gene head_or_propagate(x) {
+        return try_first(x)?!
+    }
+    assert(head_or_propagate([7]) == 7, "?! unwraps Some-shaped Ok")
+    assert(unwrap_or(try_first([]), "dflt") == "dflt", "unwrap_or default on Err")
+    assert(unwrap_or(try_first([1]), "dflt") == 1, "unwrap_or payload passthrough")
 }

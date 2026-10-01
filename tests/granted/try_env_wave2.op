@@ -1,0 +1,46 @@
+# W06 stage 2 wave 2 — the GRANTED try_env lane (explicit operator cell,
+# same discipline as std/env: the zero-grant suite pins the interference
+# contract, this file pins the actual lookup outcomes). Grants cannot come
+# from auto-detected cells (TOCTOU guard), so this lane is wired into
+# scripts/test.sh with its own --cell invocation.
+#
+# Determinism: OPERON_TRY_WAVE2_UNSET is granted but never exported, so
+# the Err payload is byte-pinned; OPERON_TRY_WAVE2_SET is exported by the
+# test.sh lane invocation itself, so the Ok payload is byte-pinned too.
+# PATH is granted as a name (its value varies across machines, only
+# is_ok + non-emptiness are asserted).
+
+frame proof {
+    # granted + set: Ok carries the exported value
+    let got = try_env("OPERON_TRY_WAVE2_SET")
+    assert(is_ok(got), "granted set var is Ok")
+    assert(got == ok("w2ok"), "exact exported value")
+
+    # granted + unset: Err with the byte-pinned message
+    assert(try_env("OPERON_TRY_WAVE2_UNSET") == err("env 'OPERON_TRY_WAVE2_UNSET' is not set"), "exact unset message")
+
+    # granted + always-present: Ok, payload non-empty (value not pinned)
+    let p = try_env("PATH")
+    assert(is_ok(p), "PATH granted is Ok")
+    assert(unwrap(p) != "", "PATH payload non-empty")
+
+    # not granted: the zero-grant contract holds even in the granted lane
+    let denied_kind = ""
+    stress {
+        try_env("HOME")
+        assert(false, "HOME must stay denied (exact-name grants)")
+    } rescue (e) {
+        denied_kind = e.kind
+    }
+    assert(denied_kind == "interference", "exact-name grants deny other names")
+
+    # the LEGACY env null-contract did not move (2.x compat): granted + unset
+    assert(env("OPERON_TRY_WAVE2_UNSET") == null, "legacy env stays null on granted unset")
+
+    # composition: the Err path feeds ?! propagation in a gene
+    gene env_or_return(name) {
+        return try_env(name)?!
+    }
+    assert(env_or_return("OPERON_TRY_WAVE2_SET") == "w2ok", "?! unwraps the Ok")
+    assert(env_or_return("OPERON_TRY_WAVE2_UNSET") == err("env 'OPERON_TRY_WAVE2_UNSET' is not set"), "?! RETURNS the Err variant (never contained)")
+}
