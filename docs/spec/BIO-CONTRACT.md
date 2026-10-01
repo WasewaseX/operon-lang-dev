@@ -1,15 +1,10 @@
 # OPERON BIOLOGICAL MODELING CONTRACT
 
 W092 of the M100 program · v1.0.0 · 2026-09-26 · owner: sz (dev-3)
-<<<<<<< HEAD
-Companion to SPEC §11 (regulation layer), SPEC §11a (the biology-layer contract header, freeze, and boundary map, W091), and SPEC §16 (biology ↔ feature map).
-Audience rule D-008: CS engineers first, biology is an intuition aid, never a prerequisite.
-=======
 Companion to SPEC §11 (regulation layer, language contract) and to
 `docs/spec/MODELING-NOTES.md` — the modeling-track appendix (W091) that holds the term
 audits, the not-modeled lists, and the SPEC §16 biology ↔ feature map.
 Audience rule D-008: CS engineers first — biology is an intuition aid, never a prerequisite.
->>>>>>> origin/sz/w091-bio-split
 
 ---
 
