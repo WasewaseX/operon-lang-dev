@@ -2042,6 +2042,7 @@ fn spawn_fiber_task(
     // the fiber lane IS the VM lane: the task compiles into its own arena
     ti.vm = true;
     ti.vm_opt = interp.vm_opt;
+    ti.opt_passes = interp.opt_passes;
     ti.vm_program = Some(crate::vm::VmProgram::default());
     ti.sched_wake = wake_arc;
     let conv_args: Vec<Value> = send_args.iter().map(|a| arg_from_snap(a, &snap)).collect();
