@@ -299,6 +299,60 @@ Honest reading (the delta rows the W011 done-when asks for):
   instruction-count reduction + the toggle/bench/differential
   infrastructure, shipped honest.
 
+## W009-A — VM call-path investigation (2026-10-02, builder-A)
+
+First measured attribution of the fib25 call-heavy gap (W009-A child task,
+owner directive). Everything below is reproducible: `scripts/w009a_ablation_matrix.sh`
+drives a runtime-gated ablation harness (`src/w009a.rs`, inert without
+`OPERON_W009A_ABLATE`/`OPERON_W009A_COUNTS`); raw evidence in
+`docs/bench/2026-10-02-w009a-ablation.txt`, suite baseline in
+`docs/bench/2026-10-02-w009a-baseline.json`.
+
+**Sandbox baseline** (2-core Xeon VM, slower than the 10.0x recorded rows —
+machine variance, noted honestly; ratios are internally consistent within
+the run): fib25 144.5 ms vs native-py 13.1 ms = **11.0x** (242,785 calls,
+~595 ns/call vs CPython's ~54 ns). Call-heavy workloads cluster: recursion
+11.3x, seq 11.4x — while call-free loops sits at 6.0x. Per-call overhead is
+the structural cost, not body execution.
+
+**Counters** (`OPERON_W009A_COUNTS=1`, one fib25 run): 1,699,496 VM
+instructions (~7.0/call), 364,180 `Env::new` (~1.5/call — the if-block scope
+env counts too), 242,786 bookkeeping calls, 242,786 funnel name clones,
+242,782 mono-cache hits.
+
+**Ablation matrix** (`operon bench --iters 30`, in-process min, base 143.7 ms;
+each config verified to print exactly `fib(25) = 75025` before timing):
+
+| config | min ms | delta | share | verdict |
+|---|---:|---:|---:|---|
+| bk — skip call bookkeeping (call_counts + burst bins + clock) | 126.9 | −16.8 ms | 11.6% | measured cost |
+| gates — skip whole regulatory block (GRN/methyl/ribo/promoter/RHO/transcripts, incl. bookkeeping) | 119.5 | −24.1 ms | 16.8% | measured cost |
+| tb — lazy traceback frame (no happy-path String clone) | 136.3 | −7.4 ms | 5.2% | measured cost |
+| promo — promoter_veto checks `expr_stochastic` before cloning the name | 138.0 | −5.7 ms | 4.0% | measured cost |
+| tick — skip per-instruction fuel tick | 143.8 | +0.1 ms | ~0 | **refuted** (not a suspect) |
+| decay — skip m6a/grn decay tickers | 143.3 | −0.3 ms | ~0 | refuted |
+| pool — Env map/consts free-list recycling | 152.3 | +8.6 ms | −6.0% | **refuted** (TLS round-trip costs more than glibc small-alloc) |
+| SAFE = gates,tb,promo (semantics-preserving bundle) | 111.4 | −32.3 ms | **22.4%** | realistic fix ceiling |
+| ALL | 120.2 | −23.5 ms | 16.4% | pool drags the bundle (consistent) |
+
+**Lane/optimizer context** (end-to-end, min of 5): VM default 144.2 ms,
+`--opt 2` 143.2, `--opt-passes all` 143.2, `--no-vm` 145.3 — the optimizer
+passes do not move fib25, and the VM does not beat the tree-walk on
+call-heavy code. The bottleneck is the **shared call funnel + per-body name
+resolution**, not codegen, not dispatch, not fuel.
+
+**Interpretation** (carried into `docs/vm-design.md` §12): measured,
+fixable-shape costs account for ~22%; the remaining ~78% (≈460 ns/call on
+the SAFE floor of 111.4 ms) is structural — the ~8-deep Rust call chain,
+string-keyed SipHash env-chain resolution (~6+ hashes per body: 2 `fib`
+lookups × 2 frames + 2 `n` reads), scope-env machinery, args plumbing.
+Ranked fix candidates for a W009-B: (1) cached per-gene clean-regulation bit
+skipping veto gates + cheaper bookkeeping (~17% proven shape), (2) kill the
+happy-path String clones (~9% for 2 of 3 sites), (3) slot-indexed locals
+(the vm-design §3 defer — targets the dominant residual), (4) collapsed
+mono-hit call lane. Refuted by measurement: fuel-tick charging, decay
+tickers, naive Env pooling.
+
 ## Baseline tracking
 
 | version | commit | date | fib25 op/py | loops op/py | collections op/py | grn op/py |
