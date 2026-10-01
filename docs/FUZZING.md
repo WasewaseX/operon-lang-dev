@@ -19,6 +19,7 @@ scripts/fuzz/fuzz.py and in scripts/fuzz/TRIAGE.md.
 | scripts/fuzz/fuzz_exec.py (S7 s3) | grammar-aware + redteam-directed escape generation | run default-deny + fuel cap (E1/E1b/E2), rna --check / doc / graph / disasm / crispr (E3) | --seed S |
 | scripts/gen_corpus.py | grammar-aware corpus generator | compat matrix input | --seed S |
 | scripts/compat_matrix.sh | differential matrix | tree-walk / VM / VM-opt / debug / oracle | fixed corpus + seed |
+| scripts/fuzz/dedupe_regression.sh (F4/#48) | hermetic two-run replay (stub binary) | the cross-run crash-signature DB itself | fixed stub + seed 1 |
 
 ## Surface inventory (S7 stage 1)
 
@@ -85,6 +86,32 @@ Exit code 1 = findings exist. They are SAVED under fuzz_corpus/ with a
 MANIFEST.jsonl line each: triage them (scripts/fuzz/TRIAGE.md), do not
 gloat, and land the fix with a regression .op so the finding can never
 reoccur invisibly.
+
+## Cross-run signature dedupe (F4/#48, 2026-10-02)
+
+Every finding carries a stable SIGNATURE (`kind|surface|normalized detail|
+byte-class shape hash`) recorded in the committed DB
+`scripts/fuzz/crash_signatures.json` (deterministic bytes: sorted keys).
+
+- A crash whose signature is already triaged reports **KNOWN-DEDUPE**: not
+  re-saved, not re-counted as new — but the run still FAILS (a live crash
+  matching a triaged signature is a regression of a fixed bug or an unfixed
+  one; the CI fuzz job must catch either).
+- DB entries are KEEP-FOREVER sentinels; signatures survive platform signal
+  numbers, panic-message address noise, and byte-level input variation (the
+  shape hash uses byte classes, never raw bytes). Same input crashing on an
+  additional surface records that surface's signature too (absorbed
+  within-run), so no surface of a bug can resurface as "new" later.
+- The S7 stage-4 REMAIN ("cross-run crash-signature dedupe DB — fuzz.py
+  dedupes within a run only") is closed by this; the 5 epic points land with
+  the hermetic regression pin `scripts/fuzz/dedupe_regression.sh` (joins
+  scripts/test.sh). Full protocol: scripts/fuzz/TRIAGE.md.
+- The deeper layer W051's done-when names — in-process libFuzzer targets —
+  stays open as operon-lang-dev issue #49.
+- GENUINE REPAIR landed with this slice (found by the hermetic regression):
+  fuzz.py wrote its scratch input under `target/`, which only exists after a
+  cargo build — a fresh checkout crashed the fuzzer at the first write. It
+  now creates its scratch dir.
 
 ## Baseline (recorded)
 
