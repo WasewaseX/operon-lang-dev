@@ -250,7 +250,7 @@ operon crispr f.op  (--knockout gene | --matrix) [--json]
 operon bench f.op   [--iters n]
 operon disasm f.op                                # bytecode listing of compiled gene bodies
 operon-ls                                         # stdio LSP: diagnostics, hover, definition, symbols, completion, formatting (SPEC §15)
-operon version                                    # Operon 2.6.0-vm (rust-core, cpp-kernel), banner matches SPEC 2.6.0; -vm = the bytecode machine is the run default (W09 A6)
+operon version                                    # Operon 2.7.0-vm (rust-core, cpp-kernel), banner matches SPEC 2.7.0; -vm = the bytecode machine is the run default (W09 A6)
 ```
 
 ## Reliability — the compatibility contract
@@ -369,6 +369,7 @@ Every channel below carries an honest validation mark (the full ledger lives in 
 | Scoop (Windows) | `packaging/scoop/operon.json` | community draft |
 | AUR (release / git) | `packaging/aur/PKGBUILD` · `packaging/aur/PKGBUILD.git` | community drafts |
 | Nix | `packaging/nix/default.nix` | community draft |
+| hosted registry server (W19-r2) | `packaging/registry/app.py` · `packaging/registry/requirements.txt` · `packaging/registry/render.yaml` | community draft, self-hosted tier (REGISTRY.md) |
 | deb / rpm | `[package.metadata.deb]` / `[package.metadata.generate-rpm]` in Cargo.toml | community drafts |
 
 Every archive ships `operon`, `operon-ls`, and the self-hosted `std/` library. `validated` means a CI job or smoke script in this repo exercises the channel today; `community` means a maintainer must pin the checksum and verify at publish time, "should work" is not a state we write down.

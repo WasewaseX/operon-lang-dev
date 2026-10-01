@@ -43,6 +43,11 @@ echo "[2/3] Operon proof suite (Rust core)"
 # W18: cancellation inheritance — the child's observation lands in a file
 # under an explicit write grant (granted-lane pattern).
 ./bin/operon test tests/granted/cancel_inherit.op --cell tests/granted/cancel_inherit.cell
+# W06 wave 2: try_env's Err/Ok lookup outcomes need exact-name env grants
+# (zero-grant suite pins only the interference contract). The SET probe is
+# exported here so the Ok payload is byte-pinned; the UNSET probe is
+# granted but never exported, so the Err payload is byte-pinned.
+OPERON_TRY_WAVE2_SET=w2ok ./bin/operon test tests/granted/try_env_wave2.op --cell tests/granted/try_env_wave2.cell
 echo "[3/4] Differential harness (Rust core vs Python oracle)"
 python3 bootstrap/harness.py
 echo "[4.5/4] W101 diagnostic golden gate"

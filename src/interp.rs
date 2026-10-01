@@ -8707,6 +8707,207 @@ impl Interp {
                     None => err("try_pop: missing argument".to_string()),
                 }
             }
+            // ---- try_* wave 2 (W06 stage 2, v2.7.0): extraction, environment
+            // and parsing families. Same law as wave 1: Result-returning
+            // ADDITIONS, the legacy null/stress contracts stay pinned
+            // (SPEC §9 compat note). Err payloads are engine-neutral by
+            // construction — raw-input echoes or fixed strings, never the
+            // underlying engine's parse-error text (the two engines' JSON
+            // and regex libraries disagree on wording; payloads are
+            // stdout-visible so they must render byte-identically).
+            "try_first" => {
+                if args.len() != 1 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "try_first(v) needs exactly 1 argument",
+                    ));
+                }
+                let ok = |v: Value| Ok(Value::Variant(crate::value::VTag::OkV, Some(Box::new(v))));
+                let err = |msg: String| {
+                    Ok(Value::Variant(
+                        crate::value::VTag::ErrV,
+                        Some(Box::new(Value::Str(msg))),
+                    ))
+                };
+                match args.first() {
+                    Some(Value::List(l)) => match l.borrow().first() {
+                        Some(v) => ok(v.clone()),
+                        None => err("first of an empty list".to_string()),
+                    },
+                    Some(Value::Str(s)) => match s.chars().next() {
+                        Some(c) => ok(Value::Str(c.to_string())),
+                        None => err("first of an empty string".to_string()),
+                    },
+                    // the legacy note's wording minus the "; null" suffix;
+                    // coercion identical to first() (no type Stress here)
+                    Some(other) => err(format!("first of a {}", other.type_name())),
+                    None => err("first of a null".to_string()),
+                }
+            }
+            "try_last" => {
+                if args.len() != 1 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "try_last(v) needs exactly 1 argument",
+                    ));
+                }
+                let ok = |v: Value| Ok(Value::Variant(crate::value::VTag::OkV, Some(Box::new(v))));
+                let err = |msg: String| {
+                    Ok(Value::Variant(
+                        crate::value::VTag::ErrV,
+                        Some(Box::new(Value::Str(msg))),
+                    ))
+                };
+                match args.first() {
+                    Some(Value::List(l)) => match l.borrow().last() {
+                        Some(v) => ok(v.clone()),
+                        None => err("last of an empty list".to_string()),
+                    },
+                    Some(Value::Str(s)) => match s.chars().last() {
+                        Some(c) => ok(Value::Str(c.to_string())),
+                        None => err("last of an empty string".to_string()),
+                    },
+                    Some(other) => err(format!("last of a {}", other.type_name())),
+                    None => err("last of a null".to_string()),
+                }
+            }
+            "try_char_at" => {
+                if args.len() != 2 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "try_char_at(s, i) needs exactly 2 arguments",
+                    ));
+                }
+                let err = |msg: String| {
+                    Ok(Value::Variant(
+                        crate::value::VTag::ErrV,
+                        Some(Box::new(Value::Str(msg))),
+                    ))
+                };
+                // same coercion as char_at: any first arg renders to its
+                // printed form (char-indexed read, Unicode scalar values)
+                let s = args.first().map(|v| v.display()).unwrap_or_default();
+                match args.get(1) {
+                    Some(Value::Int(i)) => {
+                        let chars: Vec<char> = s.chars().collect();
+                        let j = if *i < 0 { chars.len() as i64 + i } else { *i };
+                        if j >= 0 && (j as usize) < chars.len() {
+                            Ok(Value::Variant(
+                                crate::value::VTag::OkV,
+                                Some(Box::new(Value::Str(chars[j as usize].to_string()))),
+                            ))
+                        } else {
+                            // the RAW index renders (try_index shape)
+                            err(format!(
+                                "char_at index {} out of range for string of length {}",
+                                i,
+                                chars.len()
+                            ))
+                        }
+                    }
+                    Some(other) => err(format!(
+                        "char_at needs an int index, got {}",
+                        other.type_name()
+                    )),
+                    None => err("char_at needs an int index".to_string()),
+                }
+            }
+            "try_env" => {
+                if args.len() != 1 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "try_env(name) needs exactly 1 argument",
+                    ));
+                }
+                let err = |msg: String| {
+                    Ok(Value::Variant(
+                        crate::value::VTag::ErrV,
+                        Some(Box::new(Value::Str(msg))),
+                    ))
+                };
+                let name = args.first().map(|v| v.display()).unwrap_or_default();
+                // capability denial STAYS interference Stress (containment
+                // is tier 3, never a value — only the miss becomes a Result)
+                self.caps.check(&self.caps.env, "env", &name)?;
+                match std::env::var(&name) {
+                    Ok(v) => Ok(Value::Variant(
+                        crate::value::VTag::OkV,
+                        Some(Box::new(Value::Str(v))),
+                    )),
+                    Err(_) => err(format!("env '{}' is not set", name)),
+                }
+            }
+            "try_json_parse" => {
+                if args.len() != 1 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "try_json_parse(s) needs exactly 1 argument",
+                    ));
+                }
+                let ok = |v: Value| Ok(Value::Variant(crate::value::VTag::OkV, Some(Box::new(v))));
+                let err = |msg: String| {
+                    Ok(Value::Variant(
+                        crate::value::VTag::ErrV,
+                        Some(Box::new(Value::Str(msg))),
+                    ))
+                };
+                let s = args.first().map(|v| v.display()).unwrap_or_default();
+                match json_parse(&s) {
+                    Ok(v) => ok(v),
+                    // the RAW input renders (try_num's rationale: the two
+                    // engines' JSON libraries disagree on error wording)
+                    Err(_) => err(format!("json_parse('{}') failed", s)),
+                }
+            }
+            "try_re_groups" => {
+                if args.len() != 2 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "try_re_groups(pat, s) needs exactly 2 arguments",
+                    ));
+                }
+                let ok = |v: Value| Ok(Value::Variant(crate::value::VTag::OkV, Some(Box::new(v))));
+                let err = |msg: String| {
+                    Ok(Value::Variant(
+                        crate::value::VTag::ErrV,
+                        Some(Box::new(Value::Str(msg))),
+                    ))
+                };
+                let pat = args.first().map(|v| v.display()).unwrap_or_default();
+                let s = args.get(1).map(|v| v.display()).unwrap_or_default();
+                // malformed pattern = inspectable Err; the 2M-step ReDoS
+                // ceiling STAYS overflow Stress (resource ceilings are tier 3)
+                let engine = match re_compile(&pat) {
+                    Ok(e) => e,
+                    Err(_) => return err(format!("re_groups('{}') failed", pat)),
+                };
+                let chars: Vec<char> = s.chars().collect();
+                match engine.search(&chars, 0) {
+                    None => err("no match".to_string()),
+                    Some((_, _, caps, ovf)) => {
+                        if ovf {
+                            return Err(Stress::new(
+                                "overflow",
+                                "regex backtracking exceeded 2M steps",
+                            ));
+                        }
+                        let groups: Vec<Value> = caps
+                            .iter()
+                            .map(|g| match g {
+                                Some((a, b)) => Value::Str(chars[*a..*b].iter().collect()),
+                                None => Value::Null,
+                            })
+                            .collect();
+                        ok(Value::List(Rc::new(RefCell::new(groups))))
+                    }
+                }
+            }
             // ------------------------------------------------ date / time (UTC civil calendar)
             "unix_time" => {
                 let now = std::time::SystemTime::now()
@@ -12085,6 +12286,13 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "try_index",
     "try_get",
     "try_pop",
+    // W06 stage 2 wave 2 (v2.7.0): extraction, environment, parsing families
+    "try_first",
+    "try_last",
+    "try_char_at",
+    "try_env",
+    "try_json_parse",
+    "try_re_groups",
     "call",
     // L1a: iteration + numeric builtins
     "enumerate",
