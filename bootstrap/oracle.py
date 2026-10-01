@@ -13,6 +13,18 @@ import sys, os, math, json as _json
 import weakref  # W013: weak handles, the mirror of the Rust WeakHandle
 import unicodedata  # W28 stage 2: THE reference implementation for NFC/NFD/category
 
+# F6/#50 (reliab lane, 2026-10-02): same class as the harness fix — on
+# Windows, a piped Python stdout is cp1252, and the oracle prints PROGRAM
+# OUTPUT (promote() payloads carry '✓' and friends). On the windows-release
+# compat leg the oracle died with UnicodeEncodeError mid-print (caps_policy.op
+# "env: denied ✓"), truncating its stdout and manufacturing a false DIVERGE
+# against the (correct) Rust side. Emit UTF-8 always; replace-on-error keeps
+# a bad byte comparable instead of fatal. Python 3.7+; guarded like the
+# harness side.
+for _s in (sys.stdout, sys.stderr):
+    if hasattr(_s, "reconfigure"):
+        _s.reconfigure(encoding="utf-8", errors="replace")
+
 # ----------------------------------------------------------------------------
 # notes / values
 
