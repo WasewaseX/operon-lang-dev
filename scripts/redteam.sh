@@ -8,6 +8,20 @@
 # payloads have containment expectations, not assertion expectations.
 set -u
 cd "$(dirname "$0")/.."
+
+# F6/#50 (reliab lane, 2026-10-02): honesty guard for the macos/windows legs.
+# The whole containment contract below is built on GNU timeout's rc semantics
+# (124 = timed out, 137 = SIGKILLed hang). macOS runners ship no GNU timeout
+# and Windows' native timeout.exe is a different tool entirely; with either
+# in PATH every payload would report rc=127/1 "ok" — a silently VACUATED
+# gate. A gate that cannot run must fail loudly, not pass vacuously.
+if ! timeout --version 2>/dev/null | grep -q GNU; then
+    echo "FATAL: redteam.sh requires GNU coreutils 'timeout' (-k + rc 124/137 semantics)" >&2
+    echo "       macos: brew install coreutils, then put \\$(brew --prefix coreutils)/libexec/gnubin on PATH" >&2
+    echo "       (the compat.yml macos job wires this automatically)" >&2
+    exit 4
+fi
+
 DIR="tests/redteam"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"; rm -f "$DIR/rt_evil_link" "$DIR/rt_wlink" "$DIR/rt_toctou_link" "$DIR/rt_fifo_fixture" "$DIR/rt_toctou_in"; rm -rf "$DIR/rt_evildir" /tmp/redteam-out-escape' EXIT
@@ -53,7 +67,10 @@ run_one() {
     # blocked until the process died on its own). rc 137 = SIGKILLed (hang).
     # W09: OPERON_EXTRA_ARGS (e.g. --vm) re-runs the same containment gate
     # against the bytecode engine; default empty = the tree-walk baseline.
-    timeout -k 5 15 ./bin/operon run ${OPERON_EXTRA_ARGS:-} "$f" "${grants[@]}" > "$TMP/out" 2> "$TMP/err"
+    # F6/#50: the grants[@]+ idiom — p15b/p15c grant NOTHING by design, and
+    # bash 3.2 (macos) treats an empty array expansion as an unbound variable
+    # under set -u ("grants[@]: unbound variable", macos compat leg).
+    timeout -k 5 15 ./bin/operon run ${OPERON_EXTRA_ARGS:-} "$f" ${grants[@]+"${grants[@]}"} > "$TMP/out" 2> "$TMP/err"
     local rc=$?
     if [ $rc -eq 124 ] || [ $rc -eq 137 ]; then
         echo "HANG  $f"; return 1

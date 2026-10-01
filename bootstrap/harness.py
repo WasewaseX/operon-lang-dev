@@ -17,9 +17,13 @@ import subprocess, sys, os, argparse
 # The evidence engine must always be able to speak its own corpus: force
 # UTF-8 with replace-on-error (never fatal). Python 3.7+; guarded so exotic
 # builds without reconfigure keep the old behavior instead of crashing here.
+# newline="\n" (iteration 2): Windows stdout also translates '\n' to
+# os.linesep for redirected output; the harness's own summaries are
+# console-only, but pin Unix endings anyway so any captured/teed byte
+# comparison involving this script's output stays OS-independent.
 for _s in (sys.stdout, sys.stderr):
     if hasattr(_s, "reconfigure"):
-        _s.reconfigure(encoding="utf-8", errors="replace")
+        _s.reconfigure(encoding="utf-8", errors="replace", newline="\n")
 
 # S3 exclusion policy (sz, 2026-09-24), builtins with NO exact-output golden,
 # by nature, each accounted for:
