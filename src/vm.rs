@@ -1579,12 +1579,12 @@ pub fn disassemble_program_json(prog: &crate::ast::Program) -> String {
         "{{\"format\":\"operon-oir\",\"version\":{},\"genes\":[",
         OIR_VERSION
     ));
-    let mut vmprog = VmProgram::default();
+    let vmprog = VmProgram::default();
     let mut first_gene = true;
     for s in &prog.stmts {
         if let Stmt::Gene(g) = s {
             let name = g.name.clone().unwrap_or_else(|| "<lambda>".into());
-            let code = compile_body(&name, &g.body, &mut vmprog);
+            let code = compile_body(&name, &g.body, &vmprog);
             if !first_gene {
                 out.push(',');
             }

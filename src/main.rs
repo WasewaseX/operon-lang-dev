@@ -780,18 +780,26 @@ fn real_main() {
             if trace_grn_path.is_some() {
                 l.interp.trace_grn = Some(Vec::new());
             }
-            if use_vm {
+            if use_vm && !debug_mode {
                 l.interp.vm = true;
                 l.interp.vm_opt = opt_level;
                 l.interp.vm_program = Some(operon::vm::VmProgram::default());
             }
+            // W08r hotfix: `debug` is an interpreter-side feature (the traps,
+            // frame inspection and `p EXPR` all live in interp.rs). Since the
+            // VM became the default lane, `operon debug` silently executed the
+            // program in the VM where none of those hooks exist — the session
+            // banner printed and the program ran to completion with no break
+            // ever firing (the same silent-surface-death class as the lost
+            // disasm arm). Debug mode now forces the tree-walking lane; the
+            // banner says which lane you are on.
             if debug_mode {
                 l.interp.debug_file = file.clone();
                 for b in &debug_breaks {
                     l.interp.debug_breaks.insert(*b);
                 }
                 eprintln!(
-                    "[debug] interactive session on {} (breaks at {:?}); c=continue s=step q=quit",
+                    "[debug] interactive session on {} (interp lane, breaks at {:?}); c=continue s=step q=quit",
                     file, debug_breaks
                 );
             }

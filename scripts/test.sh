@@ -36,6 +36,11 @@ echo "[3/4] Differential harness (Rust core vs Python oracle)"
 python3 bootstrap/harness.py
 echo "[4.5/4] W101 diagnostic golden gate"
 bash scripts/diag_golden.sh
+# W08r: the interactive debugger e2e — piped-session contract (break fires,
+# vars/p/s/c work, EOF resumes, piped stdin never wedges). Runs in the main
+# gate so the debug surface can never silently rot again (it once did: the
+# VM-default change killed every trap and no gate noticed).
+bash scripts/debug_e2e.sh
 echo "[4/4] Oracle proof suite (the same frames on the second implementation)"
 python3 bootstrap/oracle.py test tests/
 echo "ALL GREEN"
