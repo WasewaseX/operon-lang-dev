@@ -750,6 +750,11 @@ pub struct Interp {
     /// W08r stage 1: one-shot continue-to-line target (`until N`); cleared
     /// when it fires so a later breakpoint on the same line still stops.
     pub debug_until: Option<usize>,
+    /// W08r stage 2: machine protocol mode — the trap serves NDJSON
+    /// requests instead of the human REPL (program print output is captured
+    /// in stdout_sink and drained to stderr at every stop, keeping stdout
+    /// pure protocol).
+    pub debug_protocol: bool,
     pub debug_file: String,
     pub seq_tx: Option<mpsc::SyncSender<crate::value::SeqMsg>>,
     /// Process-wide step ceiling shared with every spawned worker: when
@@ -872,6 +877,7 @@ impl Interp {
             debug_step: false,
             debug_step_depth: None,
             debug_until: None,
+            debug_protocol: false,
             debug_file: String::new(),
             seq_tx: None,
             fuel_pool: None,
@@ -1189,25 +1195,44 @@ impl Interp {
                 Some(l) => self.debug_breaks.contains(&l),
                 None => false,
             };
+            let stmt_line = s.first_line();
+            // The cur_line fallback only applies to line-silent statements:
+            // cur_line is stamped by nested evaluation, so a statement that
+            // HAS its own line must never match a stale cur_line from inside
+            // a called body (bp 3 inside work would otherwise re-fire on
+            // main's line-8 call statement the moment work returns)
+            let cur_bp_hit = match stmt_line {
+                Some(_) => false,
+                None => self.debug_breaks.contains(&self.cur_line),
+            };
             let depth_ok = match self.debug_step_depth {
                 Some(d) => self.call_stack.len() <= d,
                 None => true,
             };
-            let stmt_line = s.first_line();
             let until_hit = match self.debug_until {
-                Some(u) => Some(u) == stmt_line || u == self.cur_line,
+                Some(u) => match stmt_line {
+                    Some(l) => u == l,
+                    None => u == self.cur_line,
+                },
                 None => false,
             };
-            if until_hit
-                || stmt_bp_hit
-                || self.debug_breaks.contains(&self.cur_line)
-                || (self.debug_step && depth_ok)
-            {
+            if until_hit || stmt_bp_hit || cur_bp_hit || (self.debug_step && depth_ok) {
+                let reason = if until_hit {
+                    "until"
+                } else if stmt_bp_hit || cur_bp_hit {
+                    "breakpoint"
+                } else {
+                    "step"
+                };
                 if until_hit {
                     self.debug_until = None;
                 }
                 self.debug_step_depth = None;
-                self.debug_repl(env, stmt_line);
+                if self.debug_protocol {
+                    self.debug_machine(env, stmt_line, reason);
+                } else {
+                    self.debug_repl(env, stmt_line);
+                }
             }
         }
         Ok(Flow::Norm)
@@ -1375,6 +1400,294 @@ impl Interp {
                     }
                 }
             }
+        }
+    }
+
+    // ------------------------------------------------- W08r stage 2: NDJSON
+    // The machine protocol: one JSON object per line on stdout (events and
+    // replies), one JSON request per line on stdin. Program print output is
+    // captured in stdout_sink and drained to stderr at every stop so stdout
+    // stays pure protocol. Requests:
+    //   {"id":N,"cmd":"continue"|"next"|"stepIn"|"stepOut"}
+    //   {"id":N,"cmd":"until","args":{"line":N}}
+    //   {"id":N,"cmd":"breakpoints","args":{"add":[..],"remove":[..]}}
+    //   {"id":N,"cmd":"stack"|"vars"|"status"}
+    //   {"id":N,"cmd":"eval","args":{"expr":".."}}
+    //   {"id":N,"cmd":"quit"}
+    // Replies: {"id":N,"ok":true,..} / {"id":N,"ok":false,"error":".."}.
+    // Events: {"event":"stopped","reason":"breakpoint"|"step"|"until",..}.
+    // EOF on stdin resumes to completion (piped sessions never wedge).
+    pub fn debug_machine(&mut self, env: &Rc<Env>, stmt_line: Option<usize>, reason: &str) {
+        use std::io::Write as _;
+        let shown = stmt_line.unwrap_or(self.cur_line);
+        let stop = format!(
+            "{{\"event\":\"stopped\",\"reason\":\"{}\",\"line\":{},\"depth\":{}}}",
+            reason,
+            shown,
+            self.call_stack.len()
+        );
+        let _ = writeln!(std::io::stdout(), "{}", stop);
+        let _ = std::io::stdout().flush();
+        loop {
+            self.debug_drain_print_sink();
+            let mut line = String::new();
+            if std::io::stdin().read_line(&mut line).unwrap_or(0) == 0 {
+                // EOF: resume to completion so piped sessions never wedge
+                self.debug_step = false;
+                self.debug_step_depth = None;
+                self.debug_until = None;
+                self.debug_breaks.clear();
+                return;
+            }
+            let t = line.trim();
+            if t.is_empty() {
+                continue;
+            }
+            let req = match json_parse(t) {
+                Ok(v) => v,
+                Err(e) => {
+                    let _ = writeln!(
+                        std::io::stdout(),
+                        "{{\"ok\":false,\"error\":{}}}",
+                        json_quote(&format!("bad request JSON: {}", e))
+                    );
+                    let _ = std::io::stdout().flush();
+                    continue;
+                }
+            };
+            let id = match Self::jfield_int(&req, "id") {
+                Some(i) => i,
+                None => {
+                    let _ = writeln!(
+                        std::io::stdout(),
+                        "{{\"ok\":false,\"error\":\"missing id\"}}"
+                    );
+                    let _ = std::io::stdout().flush();
+                    continue;
+                }
+            };
+            let cmd = Self::jfield_str(&req, "cmd").unwrap_or_default();
+            let args = Self::jfield(&req, "args");
+            match cmd.as_str() {
+                "continue" => {
+                    self.debug_step = false;
+                    self.debug_reply(id, "\"ok\":true");
+                    return;
+                }
+                "next" => {
+                    self.debug_step = true;
+                    self.debug_step_depth = Some(self.call_stack.len());
+                    self.debug_reply(id, "\"ok\":true");
+                    return;
+                }
+                "stepIn" => {
+                    self.debug_step = true;
+                    self.debug_step_depth = None;
+                    self.debug_reply(id, "\"ok\":true");
+                    return;
+                }
+                "stepOut" => {
+                    self.debug_step = true;
+                    self.debug_step_depth = Some(self.call_stack.len().saturating_sub(1));
+                    self.debug_reply(id, "\"ok\":true");
+                    return;
+                }
+                "until" => match args.as_ref().and_then(|a| Self::jfield_int(a, "line")) {
+                    Some(n) => {
+                        self.debug_until = Some(n as usize);
+                        self.debug_step = false;
+                        self.debug_reply(id, "\"ok\":true");
+                        return;
+                    }
+                    None => {
+                        self.debug_reply(id, "\"ok\":false,\"error\":\"until needs args.line\"")
+                    }
+                },
+                "breakpoints" => {
+                    if let Some(a) = &args {
+                        if let Some(Value::List(adds)) = Self::jfield(a, "add") {
+                            for v in adds.borrow().iter() {
+                                if let Value::Int(n) = v {
+                                    self.debug_breaks.insert(*n as usize);
+                                }
+                            }
+                        }
+                        if let Some(Value::List(rems)) = Self::jfield(a, "remove") {
+                            for v in rems.borrow().iter() {
+                                if let Value::Int(n) = v {
+                                    self.debug_breaks.remove(&(*n as usize));
+                                }
+                            }
+                        }
+                    }
+                    let mut bs: Vec<usize> = self.debug_breaks.iter().copied().collect();
+                    bs.sort_unstable();
+                    let list = bs
+                        .iter()
+                        .map(|b| b.to_string())
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    self.debug_reply(id, &format!("\"ok\":true,\"breakpoints\":[{}]", list));
+                }
+                "status" => {
+                    self.debug_reply(
+                        id,
+                        &format!(
+                            "\"ok\":true,\"line\":{},\"depth\":{}",
+                            shown,
+                            self.call_stack.len()
+                        ),
+                    );
+                }
+                "stack" => {
+                    // innermost first; only the innermost frame has a known
+                    // line (outer frames' call lines live in the stress
+                    // traceback machinery, not in call_stack tuples)
+                    let mut frames = Vec::new();
+                    let n = self.call_stack.len();
+                    for (i, (name, _, _)) in self.call_stack.iter().rev().enumerate() {
+                        if i == 0 {
+                            frames.push(format!(
+                                "{{\"name\":{},\"line\":{}}}",
+                                json_quote(name),
+                                shown
+                            ));
+                        } else {
+                            frames.push(format!("{{\"name\":{},\"line\":null}}", json_quote(name)));
+                        }
+                    }
+                    let _ = n;
+                    self.debug_reply(
+                        id,
+                        &format!("\"ok\":true,\"frames\":[{}]", frames.join(",")),
+                    );
+                }
+                "vars" => {
+                    let mut scopes = Vec::new();
+                    let mut cur = Some(env.clone());
+                    let mut depth = 0usize;
+                    while let Some(e) = cur {
+                        let vars = e.vars.borrow();
+                        let mut names: Vec<String> = vars.keys().cloned().collect();
+                        names.sort();
+                        let mut fields = Vec::new();
+                        for nm in names {
+                            let v = vars.get(&nm).cloned().unwrap_or(Value::Null);
+                            fields.push(format!(
+                                "{}:{}",
+                                json_quote(&nm),
+                                json_quote(&v.display())
+                            ));
+                        }
+                        drop(vars);
+                        scopes.push(format!(
+                            "{{\"scope\":{},\"vars\":{{{}}}}}",
+                            json_quote(&format!("frame {}", depth)),
+                            fields.join(",")
+                        ));
+                        depth += 1;
+                        if depth >= 8 {
+                            break;
+                        }
+                        cur = e.parent.clone();
+                    }
+                    self.debug_reply(
+                        id,
+                        &format!("\"ok\":true,\"scopes\":[{}]", scopes.join(",")),
+                    );
+                }
+                "eval" => {
+                    let expr = args
+                        .as_ref()
+                        .and_then(|a| Self::jfield_str(a, "expr"))
+                        .unwrap_or_default();
+                    if expr.is_empty() {
+                        self.debug_reply(id, "\"ok\":false,\"error\":\"eval needs args.expr\"");
+                        continue;
+                    }
+                    let parsed = crate::parser::parse(&format!("gene __dbg() {{ {} }}", expr));
+                    let mut out = "\"ok\":false,\"error\":\"cannot evaluate\"".to_string();
+                    if let Some(Stmt::Gene(g)) = parsed.stmts.first() {
+                        if let Some(Stmt::ExprStmt(e)) = g.body.first() {
+                            match self.eval(env, e) {
+                                Ok(v) => {
+                                    out = format!(
+                                        "\"ok\":true,\"value\":{}",
+                                        json_quote(&v.display())
+                                    )
+                                }
+                                Err(st) => {
+                                    out = format!(
+                                        "\"ok\":false,\"error\":{}",
+                                        json_quote(&format!("[{}] {}", st.kind, st.message))
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    self.debug_reply(id, &out);
+                }
+                "quit" => {
+                    self.debug_reply(id, "\"ok\":true");
+                    eprintln!("[debug] quit");
+                    // ast-grep-ignore: no-std-process-exit-in-core
+                    std::process::exit(0);
+                }
+                other => {
+                    self.debug_reply(
+                        id,
+                        &format!(
+                            "\"ok\":false,\"error\":{}",
+                            json_quote(&format!("unknown command '{}'", other))
+                        ),
+                    );
+                }
+            }
+        }
+    }
+
+    /// W08r stage 2: program print output captured in stdout_sink goes to
+    /// stderr (the debuggee's stdout is the protocol transport).
+    pub fn debug_drain_print_sink(&mut self) {
+        if let Some(sink) = &self.stdout_sink {
+            let lines = std::mem::take(&mut *sink.borrow_mut());
+            for l in lines {
+                eprintln!("[out] {}", l);
+            }
+        }
+    }
+
+    fn debug_reply(&self, id: i64, body: &str) {
+        use std::io::Write as _;
+        let _ = writeln!(std::io::stdout(), "{{\"id\":{}, {} }}", id, body);
+        let _ = std::io::stdout().flush();
+    }
+
+    fn jfield(req: &Value, key: &str) -> Option<Value> {
+        if let Value::Map(m) = req {
+            for (k, v) in m.borrow().items.iter() {
+                if let Value::Str(s) = k {
+                    if s == key {
+                        return Some(v.clone());
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    fn jfield_int(req: &Value, key: &str) -> Option<i64> {
+        match Self::jfield(req, key) {
+            Some(Value::Int(i)) => Some(i),
+            Some(Value::Float(f)) => Some(f as i64),
+            _ => None,
+        }
+    }
+
+    fn jfield_str(req: &Value, key: &str) -> Option<String> {
+        match Self::jfield(req, key) {
+            Some(Value::Str(s)) => Some(s),
+            _ => None,
         }
     }
 
