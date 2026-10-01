@@ -1,0 +1,4 @@
+# W16 redteam cell: the async payloads need the io.pool lane (fibers) and
+# run under a small operator-set --fuel so containment is observable fast.
+[io]
+pool = "fiber"

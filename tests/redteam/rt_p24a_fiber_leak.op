@@ -1,0 +1,27 @@
+# W16 redteam: the suspended-task leak storm. 5000 fibers park forever on
+# a never-fed channel — containment = the live-task cap (4096) ends the
+# storm with the catchable overflow stress, never an OOM, never a hang.
+# (p24a: leak by exhaustion of the registry; the fiber cap is the fence.)
+gene parker(ch) {
+    recv(ch)
+    return 1
+}
+gene go() {
+    let made = 0
+    let refused = 0
+    for i in range(5000) {
+        let ch = channel()
+        let t = 0
+        stress {
+            t = spawn(parker, [ch])
+        } rescue (e) {
+            t = -1
+        }
+        if t == -1 {
+            refused = refused + 1
+        } else {
+            made = made + 1
+        }
+    }
+    print("p24a-contained made=" + str(made) + " refused=" + str(refused))
+}
