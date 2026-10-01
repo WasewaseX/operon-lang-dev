@@ -49,6 +49,19 @@ pub struct GeneCode {
     pub names: Vec<String>,
     pub code: Vec<Instr>,
     pub lines: Vec<u32>,
+    /// W011 stage 3: the trivial-gene fast-dispatch bit. False at the two
+    /// construction sites (compile_body, optimize_with); computed for real
+    /// on the CACHED form (after optimize_with) in gene_code_cached.
+    /// true = the body is a shapes-only sequence (pure reads, const pushes,
+    /// arithmetic, returns — no stores, no scopes, no bridges, no calls,
+    /// no control flow), so executing it against the caller's parent env
+    /// instead of a freshly built frame env is observationally identical:
+    /// nothing in the whitelist writes a binding, and an empty frame env
+    /// is read-through for every shape it can contain (LoadName's unbound
+    /// note included). call_gene_inner pairs this bit with the def-level
+    /// predicate (zero params, no guard/annotations/marks). Purely a
+    /// dispatch decision: every gate, counter and note is unchanged.
+    pub trivial: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -667,6 +680,7 @@ pub fn compile_body(
         code: c.code,
         lines: c.lines,
         type_params: type_params.to_vec(),
+        trivial: false,
     }
 }
 
@@ -721,12 +735,15 @@ pub(crate) fn gene_code_cached(
     match prog.codes.get(&key) {
         Some(cached) => cached.clone(),
         None => {
-            let compiled = compile_body(name, body, prog, type_params);
-            let compiled = if opt_active {
-                optimize_with(&compiled, passes)
-            } else {
-                compiled
-            };
+            let mut compiled = compile_body(name, body, prog, type_params);
+            if opt_active {
+                compiled = optimize_with(&compiled, passes);
+            }
+            // W011 stage 3: the triviality bit is computed on the CACHED
+            // form (after optimization — folding can only shrink a
+            // shapes-only body into more whitelist shapes, never out of
+            // them: Jmp/bridges are never introduced by optimize_with).
+            compiled.trivial = shapes_only(&compiled);
             let rc = std::rc::Rc::new(compiled);
             prog.codes.insert(key, rc.clone());
             rc
@@ -735,7 +752,13 @@ pub(crate) fn gene_code_cached(
 }
 
 /// Execute a compiled gene body against the shared interpreter.
-fn exec_gene_code(interp: &mut Interp, code: &GeneCode, env: &Rc<Env>) -> Result<Flow, Stress> {
+/// pub(crate) for the W011 stage-3 trivial-gene fast dispatch in
+/// call_gene_inner (the fast path executes the cached body directly).
+pub(crate) fn exec_gene_code(
+    interp: &mut Interp,
+    code: &GeneCode,
+    env: &Rc<Env>,
+) -> Result<Flow, Stress> {
     // the operand stack comes from the per-interpreter pool: fib25 taught
     // this lesson (243k fresh Vecs per run), the pool hands each frame a
     // warm stack and takes it back on every exit path
@@ -2062,7 +2085,39 @@ pub fn optimize_with(code: &GeneCode, passes: PassSet) -> GeneCode {
         names: code.names,
         code: code.code,
         lines: code.lines,
+        trivial: false,
     }
+}
+
+/// W011 stage 3 item 1: the CODE half of the triviality predicate — the
+/// whole body is a shapes-only sequence. Whitelist = pure reads and const
+/// pushes feeding arithmetic, ending in a return: nothing here can write a
+/// binding (StoreName/AssignName absent), open a scope, bridge to the
+/// tree-walk, call anything, or branch — so the body's behavior depends on
+/// the env ONLY through reads, and reads pass through an empty frame
+/// identically (LoadName's own unbound note included; a read is resolved
+/// per execution, never cached — the shadowing-safety argument). The fused
+/// pure-read superinstructions (LoadBinImm, RetName) ride the same
+/// argument; Nop executes as nothing by contract; Pop only balances the
+/// machine's own stack. Jump shapes (Jmp/JmpIfF/Brk/Cont) are excluded:
+/// control flow cannot appear in a whitelist body anyway, and excluding it
+/// keeps the predicate obviously total.
+fn shapes_only(code: &GeneCode) -> bool {
+    code.code.iter().all(|i| {
+        matches!(
+            i,
+            Instr::Push(_)
+                | Instr::LoadName(_)
+                | Instr::LoadNameQuiet(_)
+                | Instr::Bin(_)
+                | Instr::BinImm(_, _)
+                | Instr::LoadBinImm(_, _, _)
+                | Instr::Ret
+                | Instr::RetName(_)
+                | Instr::Pop
+                | Instr::Nop
+        )
+    })
 }
 
 /// Remap jump targets after `count` instruction(s) at `at` were removed:
@@ -2601,6 +2656,45 @@ mod tests {
                 assert!((*t as usize) <= opt.code.len(), "DCE remap out of range");
             }
         }
+    }
+
+    /// W011 stage 3 item 1: the code half of the triviality predicate.
+    /// Pure read/arith/return bodies qualify; stores, calls, control flow,
+    /// bridges, scopes and composite literals never do.
+    #[test]
+    fn trivial_bit_shape_matrix() {
+        let (_, _, code) = compile_one("gene f() { return 6 * 7; }");
+        assert!(shapes_only(&code), "const arithmetic must be trivial");
+        let (_, _, code) = compile_one("gene f() { return g; }");
+        assert!(
+            shapes_only(&code),
+            "a global read (RetName) must be trivial"
+        );
+        let (_, _, code) = compile_one("gene f() { return 1 + x * 2; }");
+        assert!(
+            shapes_only(&code),
+            "fused pure-read arithmetic (LoadBinImm family) must be trivial"
+        );
+        let (_, _, code) = compile_one("gene f() { let a = 1; return a; }");
+        assert!(!shapes_only(&code), "StoreName (let) disqualifies");
+        let (_, _, code) = compile_one("gene f() { g = 1; return g; }");
+        assert!(!shapes_only(&code), "AssignName disqualifies");
+        let (_, _, code) = compile_one("gene f() { return h(); }");
+        assert!(!shapes_only(&code), "a call disqualifies");
+        let (_, _, code) = compile_one("gene f() { if x { return 1; } return 2; }");
+        assert!(!shapes_only(&code), "a branch (JmpIfF) disqualifies");
+        let (_, _, code) = compile_one("gene f() { while x { return 1; } }");
+        assert!(!shapes_only(&code), "a loop (Jmp/Brk/Cont) disqualifies");
+        let (_, _, code) = compile_one("gene f() { return [1, 2]; }");
+        assert!(
+            !shapes_only(&code),
+            "a composite literal bridges or builds: never trivial"
+        );
+        let (_, _, code) = compile_one("gene f() { return -x; }");
+        assert!(
+            !shapes_only(&code),
+            "unary is a checked runtime path: not in the whitelist"
+        );
     }
 }
 

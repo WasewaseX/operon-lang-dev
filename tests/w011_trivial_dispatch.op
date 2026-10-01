@@ -1,0 +1,34 @@
+# W011 stage 3 item 1 (vm-design §2c): trivial-gene fast dispatch.
+# The fast path executes a shapes-only body (pure reads, const pushes,
+# arithmetic, returns) against the parent env instead of a freshly built
+# frame, so every read must stay LIVE: a rebound global is observed per
+# call, an unbound read keeps its note, resolution happens per call. The
+# differential walker pins byte-identical output across tree-walk / VM /
+# --opt 1 / --opt 2, which is the whole point: the fast path changes the
+# dispatch, never the observable.
+g = 10
+gene f() { return g + 1 }
+promote(f())
+g = 20
+promote(f())
+h = 5
+gene k() { return h * h }
+promote(k())
+h = 7
+promote(k())
+gene empty0() { return null }
+promote(empty0())
+gene arith() { return 6 * 7 }
+promote(arith())
+gene mixed() { return 1 + g * 2 }
+promote(mixed())
+gene ghost() { return nosuchname }
+promote(ghost())
+# a gene WITH params never takes the fast path: the frame is load-bearing
+gene ident(x) { return x }
+promote(ident(9))
+# a gene with control flow / calls / stores never takes the fast path
+gene slowpoke() { let a = 1; return a + g; }
+promote(slowpoke())
+gene caller() { return f() }
+promote(caller())

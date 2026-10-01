@@ -5346,6 +5346,84 @@ impl Interp {
                 format!("methylated call: '{}' (chromatin repressed)", name),
             );
         }
+        // W011 stage 3 item 1: trivial-gene fast dispatch (runtime, not
+        // compile-time — vm-design §2c). A gene whose cached body is
+        // shapes-only AND whose def carries no params, no guard, no
+        // annotations, no defaults and no regulation marks cannot use ANY
+        // of the machinery below: the frame env it builds is empty (nothing
+        // to bind, no guard to run, no annotation to check), so executing
+        // the cached body against the parent env directly is observationally
+        // identical — reads pass through an empty frame, and writes/scopes/
+        // calls cannot exist in the whitelist. Everything with semantics
+        // already ran above: RISC, toggle, GRN, methylation, riboswitch,
+        // promoter, RHO gates, the operon transcript + queue bookkeeping,
+        // bump_call_bookkeeping, the methylate announcement; the extra-args
+        // note cannot fire (a zero-param def never emits it, and this path
+        // requires zero args). The fiber hook falls back to the slow path:
+        // a spawn needs a REAL prepared frame to park. Reads stay live per
+        // execution — only the code is cached, never a value — so the
+        // shadowing corpus (a global rebound between calls, a user gene
+        // shadowing a builtin) rides the same bytes as before.
+        if self.vm
+            && !self.fiber_hook
+            && args.is_empty()
+            && def.params.is_empty()
+            && def.guard.is_none()
+            && def.ret_ann.is_none()
+            && def.param_anns.iter().all(|a| a.is_none())
+            && !def.acetylate
+            && !def.methylate
+            && !def.m6a
+            && def.riboswitch.is_none()
+            && def.burst.is_none()
+            && def.copies == 1
+            && !def.seq
+        {
+            let key = std::sync::Arc::as_ptr(&def) as *const u8 as usize;
+            let code = crate::vm::gene_code_cached(self, key, &name, &def.body, &def.type_params);
+            if code.trivial {
+                let parent = match &closure {
+                    Some(e) => std::rc::Rc::clone(e),
+                    None => std::rc::Rc::clone(&self.global),
+                };
+                // inclusive/exclusive timing: identical bookkeeping to the
+                // slow path below (the push is unconditional, close_timing
+                // pops unconditionally and only records when profiling)
+                let start = if self.profiling {
+                    Some(crate::ffi::now_ns())
+                } else {
+                    None
+                };
+                self.call_stack
+                    .push((name.clone(), start.unwrap_or(0.0), 0.0));
+                let result = crate::vm::exec_gene_code(self, &code, &parent);
+                self.close_timing(&name);
+                // the shared tail (flow unwrap, propagation-as-return,
+                // return-annotation check) duplicated VERBATIM from the slow
+                // path below so the slow path stays byte-identical untouched;
+                // the parity corpus gates both copies. vm-design §2c.
+                let flowed = match result {
+                    Ok(f) => f,
+                    // W06 (D-014): a propagated variant IS the return value
+                    // ast-grep-ignore: no-unwrap-in-src
+                    Err(p) if p.prop.is_some() => Flow::Ret(p.prop.unwrap()),
+                    Err(e) => return Err(e),
+                };
+                return match flowed {
+                    Flow::Ret(v) => {
+                        self.check_ret_ann("gene", &name, &def.ret_ann, &v, true, &def.type_params)
+                    }
+                    _ => self.check_ret_ann(
+                        "gene",
+                        &name,
+                        &def.ret_ann,
+                        &Value::Null,
+                        false,
+                        &def.type_params,
+                    ),
+                };
+            }
+        }
         let fenv = match &closure {
             Some(e) => Env::new(Some(e.clone())),
             None => Env::new(Some(self.global.clone())),
