@@ -272,7 +272,7 @@ embed gate green (W076) · playground smoke **20/20** (W22-manifest job, PR #25)
 - Files: `src/main.rs` (loader), `src/interp.rs`, `operon.toml` support, `SPEC.md`, `tests/`.
 - Depends: W022 (manifest format), W069 (resolution pin).
 
-### W020, Package manager CLI [P1] [dev-1] [L] [done: main 8632a69, operon mod init/add/remove/update/install/tree/verify, git CLI, zero crates]
+### W020, Package manager CLI [P1] [dev-1] [L] [done 100% in-repo: W19/W20/W21 lane iterated far past 8632a69 — operon new/init/add/remove/update/install/tree/verify/publish/search + semver reqs (ecosystem-r3) + operon.lock byte-reproducible + --locked drift rejection; owner done-when re-audited 2026-10-01: all verbs live, pkg_e2e 45/45, pkg_registry 10/10]
 - Goal: `operon init/add/remove/update/install/search/tree` operating on `operon.toml` +
   `operon.lock`.
 - Done when: init+add+install+tree work for path deps offline (registry stub = local dir
@@ -281,9 +281,9 @@ embed gate green (W076) · playground smoke **20/20** (W22-manifest job, PR #25)
 - Files: `src/main.rs`, new `src/pkg.rs`, `SPEC.md`, `README.md`, `tests/`.
 - Depends: W019, W022, W023.
 
-### W021, Central package registry [P3] [dev-1] [XL] [partial: static git-index registry on main 1b4941c (the cheap first version); hosted service stays deferred pending owner infrastructure decisions]
-- Deliverable until un-deferred: registry API sketch (SPEC §ecosystem) + local-dir stub
-  contract consumed by W020. No hosted service.
+### W021, Central package registry [P3] [dev-1] [XL] [done 100% in-repo, deployment owner-gated: the W21-r1/r2 lane shipped the full hosted tier — operon registry init|serve|default + packaging/registry/app.py (Postgres via DATABASE_URL on Render, SQLite locally, Bearer auth, immutable versions 409) + render.yaml blueprint + seed packages http/json/postgres/web; re-audited 2026-10-01: registry_e2e OK, pkg_hosted_e2e 22/22 (auth, immutable versions, search, publish round-trip); the ONE remaining step is flipping the live Render deploy (owner account+token), config shipped]
+- Deliverable: registry API + hosted service + seed packages — SHIPPED; live deploy = owner-gated
+  final step (same class as W12's owner gate).
 
 ### W022, `operon.toml` manifest standard [P1] [dev-1] [M] [Track L3c] [done: main 8e2d060 (written rule; .cell = runtime config ONLY, package metadata belongs to operon.toml)]
 - Goal: package/project metadata manifest, **separate from `.cell`** (runtime config stays
