@@ -65,6 +65,13 @@ python3 scripts/debug_protocol_e2e.py
 # over Content-Length framing (lifecycle, stopped events, stackTrace/scopes/
 # variables/evaluate, stepping verbs, output events, exited/terminated).
 python3 scripts/dap_e2e.py
+# W060: the release smoke script joins the standing gate (the rot lesson —
+# debug_e2e once sat outside every gate and silently died). Dir-mode smoke
+# against the bin/ artifact this gate already uses: version, a real run, a
+# check pass, std/ presence. The release.yml wiring is the W060 done-when
+# (per-asset smoke on the exact uploaded bytes, failed smoke = failed
+# release); this stanza keeps the script itself honest between releases.
+bash scripts/release_smoke.sh bin
 echo "[4/4] Oracle proof suite (the same frames on the second implementation)"
 python3 bootstrap/oracle.py test tests/
 echo "ALL GREEN"

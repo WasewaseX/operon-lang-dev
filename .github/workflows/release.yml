@@ -88,6 +88,33 @@ jobs:
           "$h  $ST.zip" | Out-File -Encoding ascii "$ST.zip.sha256"
           "ASSET=$ST.zip" | Out-File -Encoding ascii -Append $env:GITHUB_ENV
 
+      # W060 (ROADMAP-100): failed smoke = failed release. The smoke runs on
+      # the EXACT bytes about to be uploaded: sha256 sidecar self-check, then
+      # release_smoke.sh in pkg mode (extract → version → run → check → std/
+      # inside the artifact — the repo checkout cannot mask a broken package).
+      - name: Release smoke (W060)
+        if: matrix.target != 'x86_64-apple-darwin'
+        shell: bash
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          if command -v sha256sum >/dev/null 2>&1; then
+            (cd "$(dirname "$ASSET")" && sha256sum -c "$(basename "$ASSET").sha256")
+          else
+            (cd "$(dirname "$ASSET")" && shasum -a 256 -c "$(basename "$ASSET").sha256")
+          fi
+          bash scripts/release_smoke.sh "$ASSET" "$V"
+
+      # W060 honest-skip clause: this target is CROSS-COMPILED on the arm64
+      # runner (see portability notes above); executing it needs Rosetta,
+      # which the runner image does not guarantee — so the smoke would fail
+      # on runner plumbing, not on the artifact. Every other target is
+      # built and smoked host-natively.
+      - name: Release smoke — honest skip (cross)
+        if: matrix.target == 'x86_64-apple-darwin'
+        shell: bash
+        run: |
+          echo "smoke: skipped (cross) — x86_64-apple-darwin is cross-compiled on the arm64 runner; executing it needs Rosetta, which the runner does not guarantee"
+
       - name: Attach to GitHub Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2 (SHA-pinned, D-6/sec-r5)
         with:
