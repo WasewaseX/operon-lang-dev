@@ -680,9 +680,13 @@ pub(crate) fn gene_code_cached(
     let opt = interp.vm_opt;
     // ast-grep-ignore: no-unwrap-in-src
     let prog = interp.vm_program.as_mut().unwrap();
+    // W016-v3 (adopted from builder-B's be991fc): a literal 1usize << 62
+    // is E0080 on 32-bit targets; the second-highest bit keeps the
+    // cache-key space split identically on every width (bit 62 on 64-bit,
+    // byte-identical behavior)
     let key = if opt >= 1 {
         // cache the optimized form under a shifted key
-        def_key.wrapping_add(1usize << 62)
+        def_key.wrapping_add(1usize << (usize::BITS - 2))
     } else {
         def_key
     };
