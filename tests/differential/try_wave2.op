@@ -1,0 +1,109 @@
+# W06 stage 2 wave 2 — try_first/try_last/try_char_at/try_env/try_json_parse/
+# try_re_groups (Result-returning variants of the failure-prone extraction,
+# environment and parsing builtins). Differential target: Rust core AND the
+# Python oracle must print byte-identical output. The legacy null/stress
+# contracts stay the 2.x default (SPEC §9 compat note); these are additions.
+# Err payloads are engine-neutral by construction (raw-input echoes or fixed
+# strings), stdout-visible and pinned here.
+
+# ---- try_first / try_last: extraction as a Result
+print(try_first([10, 20, 30]))
+print(try_first("hello"))
+print(try_first([]))
+print(try_first(""))
+print(try_first({a: 1}))
+print(try_first(null))
+print(try_first(42))
+print(try_last([10, 20, 30]))
+print(try_last("hello"))
+print(try_last([]))
+print(try_last(""))
+print(try_last({a: 1}))
+# unicode: first/last are char-indexed (scalar values)
+print(try_first("héllo"))
+print(try_last("héllo"))
+
+# ---- try_char_at: char-indexed read as a Result
+let s = "héllo"
+print(try_char_at(s, 0))
+print(try_char_at(s, 1))
+print(try_char_at(s, 4))
+print(try_char_at(s, 5))
+print(try_char_at(s, -1))
+print(try_char_at(s, -6))
+print(try_char_at("abc", 1.5))
+print(try_char_at("abc", true))
+
+# ---- try_env: unset environment is an Err, not a silent null
+print(try_env("OPERON_TRY_WAVE2_UNSET_VAR_XYZ"))
+print(try_env("PATH") == null)
+
+# ---- try_json_parse: malformed JSON is an inspectable Err
+# (object braces are built via chr(123)/chr(125): a bare { inside a string
+# literal starts interpolation, SPEC)
+let OB = chr(123)
+let CB = chr(125)
+print(try_json_parse(OB + "\"a\": 1" + CB))
+print(try_json_parse("[1, 2, 3]"))
+print(try_json_parse("  42  "))
+print(try_json_parse("true"))
+print(try_json_parse("\"str\""))
+print(try_json_parse(OB + "bad"))
+print(try_json_parse("[1,"))
+print(try_json_parse(""))
+print(try_json_parse(OB + "\"a\": " + CB))
+
+# ---- try_re_groups: no-match and malformed pattern are Errs
+print(try_re_groups("(a+)(b*)", "aabbb"))
+print(try_re_groups("(a+)(b*)", "ccc"))
+print(try_re_groups("a(b)c", "abc"))
+print(try_re_groups("a(b)c", "axc"))
+print(try_re_groups("a(b+)b", "abbb"))
+print(try_re_groups("[unclosed", "abc"))
+print(try_re_groups("(a)|(b)", "b"))
+
+# ---- the ok/err rule: wrong ARITY stays an unfolded stress
+stress {
+    print(try_first())
+} rescue (e) {
+    print("r1: {e.kind}")
+}
+stress {
+    print(try_last(1, 2))
+} rescue (e) {
+    print("r2: {e.kind}")
+}
+stress {
+    print(try_char_at("s"))
+} rescue (e) {
+    print("r3: {e.kind}")
+}
+stress {
+    print(try_env())
+} rescue (e) {
+    print("r4: {e.kind}")
+}
+stress {
+    print(try_json_parse())
+} rescue (e) {
+    print("r5: {e.kind}")
+}
+stress {
+    print(try_re_groups("a"))
+} rescue (e) {
+    print("r6: {e.kind}")
+}
+
+# ---- propagation composes: ?! inside a gene
+gene pick_first(x) {
+    return try_first(x)?!
+}
+print(pick_first([7, 8]))
+print(pick_first([]))
+
+# ---- unwrap_or interop: Err payloads feed the default path
+print(unwrap_or(try_first([]), "dflt"))
+print(unwrap_or(try_first([1]), "dflt"))
+print(unwrap_or(try_json_parse("{bad"), none()))
+print(is_err(try_env("OPERON_TRY_WAVE2_UNSET_VAR_XYZ")))
+print(is_ok(try_re_groups("(x)", "xxx")))
