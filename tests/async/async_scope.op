@@ -1,0 +1,43 @@
+# W16 async proofs: structured concurrency (W17) over fibers.
+# scope exit joins in spawn order on every flow path; cancel-on-error
+# (default on) stops live fibers BEFORE the reap, so a stress unwind never
+# leaks a parked fiber and never waits out its sleep.
+
+gene quick(n) { return n * 10 }
+
+gene parker(ms) {
+    sleep(ms)
+    return 1
+}
+
+frame proof {
+    # normal fall-through: the reap joins in spawn order
+    let got = 0
+    scope {
+        let a = spawn(quick, [1])
+        let b = spawn(quick, [2])
+        got = join(b)
+    }
+    assert(got == 20, "join inside a scope works")
+
+    # cancel-on-error: a stress unwind cancels the parked fiber first —
+    # the scope exits fast (never 60s) and the original stress propagates
+    let caught = ""
+    stress {
+        scope {
+            let p = spawn(parker, [60000])
+            raise "boom"
+        }
+    } rescue (e) {
+        caught = e.kind
+    }
+    assert(caught == "unfolded", "the original stress propagates after the reap")
+
+    # a fiber spawned outside any scope is not scope-tracked
+    let solo = spawn(parker, [60000])
+    print("solo state: " + task_state(solo))
+    assert(cancel(solo) == true, "the solo fiber is live")
+    assert(join(solo)["kind"] == "cancelled", "the solo fiber died cancelled")
+
+    print("async_scope complete")
+}

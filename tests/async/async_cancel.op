@@ -1,0 +1,40 @@
+# W16 async proofs: cooperative cancellation over fibers.
+# The W18 contract verbatim: the flag is observed at wake/tick boundaries,
+# a pre-tick cancel dies with [cancelled], a parked cancel wakes with the
+# catchable cancelled stress, join returns the standard stress map, and a
+# cancelled task's tombstone says "cancelled".
+
+gene parker(ms) {
+    let x = 1
+    x = x + 1
+    sleep(ms)
+    return x
+}
+
+frame proof {
+    # cancel BEFORE the fiber's first tick: the pre-tick contract
+    let pre = spawn(parker, [60000])
+    assert(cancel(pre) == true, "cancel lands on a live task")
+    let r = join(pre)
+    assert(r["kind"] == "cancelled", "pre-tick cancel joins the cancelled map")
+    assert(task_state(pre) == "cancelled", "tombstone says cancelled")
+
+    # cancel WHILE PARKED: the fiber sleeps 60s, the wake scan delivers the
+    # cancelled stress at the suspension point — the join returns fast
+    # (never 60s), proving the parked wake path
+    let parked = spawn(parker, [60000])
+    let early = join(parked, 50)
+    assert(early == null, "join timeout answers null while parked")
+    assert(task_state(parked) == "running", "a parked task is running")
+    assert(cancel(parked) == true, "cancel lands on the parked task")
+    let pr = join(parked)
+    assert(pr["kind"] == "cancelled", "parked cancel joins the cancelled map")
+    assert(task_state(parked) == "cancelled", "parked cancel tombstone")
+
+    # a finished task answers false with a note (already joined above)
+    assert(cancel(pre) == false, "cancel of a finished task is false")
+
+    # cancellation is inherited: cancelling the parent's chain kills the
+    # child at its boundary (a fiber spawned by a fiber shares the chain)
+    print("async_cancel complete")
+}

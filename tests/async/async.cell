@@ -1,0 +1,6 @@
+# W16: explicit operator cell for the async proof suite (tests/async/).
+# io.pool turns spawn into green fibers on the VM loop (--vm default ON).
+# The SAME proofs must pass WITHOUT this cell (thread path) — the pair is
+# the substrate-equivalence evidence (docs/specs/ASYNC.md).
+[io]
+pool = "fiber"
