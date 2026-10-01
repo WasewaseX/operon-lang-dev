@@ -7,6 +7,7 @@
 //! is ordinary Rust ownership now.)
 
 pub mod ast;
+pub mod dap;
 pub mod diag;
 pub mod ffi;
 pub mod genes;
@@ -21,6 +22,8 @@ pub mod pybridge;
 pub mod rna2;
 pub mod sched;
 pub mod tools;
+pub mod typeck;
+pub mod types;
 pub mod unicode_tables;
 pub mod value;
 pub mod vm;

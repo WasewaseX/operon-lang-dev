@@ -1193,6 +1193,22 @@ fn rewrite_ann(ann: &mut TypeAnn, cfg: &mut RewriteCfg) {
             }
         }
         TypeAnn::Optional(inner) => rewrite_ann(inner, cfg),
+        // W01-s2: an alias descends into its target (its NAME is the
+        // alias identity, never rewritten)
+        TypeAnn::Alias { target, .. } => rewrite_ann(target, cfg),
+        // TYPED-MODE: generic annotations rewrite their head name and
+        // descend into the type arguments (same rename law as Named)
+        TypeAnn::Generic(head, args) => {
+            if let Some((from, to)) = cfg.ann {
+                if head == from {
+                    *head = to.to_string();
+                    cfg.bump();
+                }
+            }
+            for a in args {
+                rewrite_ann(a, cfg);
+            }
+        }
     }
 }
 
@@ -1242,6 +1258,8 @@ fn rewrite_pat(p: &mut MatchPat, cfg: &mut RewriteCfg) {
 
 fn rewrite_expr(e: &mut Expr, cfg: &mut RewriteCfg) {
     match e {
+        // W08r: transparent position marker — rewrite through it
+        Expr::At(inner, _) => rewrite_expr(inner, cfg),
         Expr::Ident(s) => {
             if let Some((from, to)) = cfg.ident {
                 if s == from {
@@ -1286,7 +1304,7 @@ fn rewrite_expr(e: &mut Expr, cfg: &mut RewriteCfg) {
             rewrite_expr(b, cfg);
         }
         Expr::Member(a, _) | Expr::MemberSafe(a, _) => rewrite_expr(a, cfg),
-        Expr::Method(a, name, args) | Expr::MethodSafe(a, name, args) => {
+        Expr::Method(a, name, args, _) | Expr::MethodSafe(a, name, args, _) => {
             rewrite_expr(a, cfg);
             if let Some((from, to)) = cfg.method {
                 if name == from {
@@ -1346,6 +1364,8 @@ fn rewrite_expr(e: &mut Expr, cfg: &mut RewriteCfg) {
 
 fn rewrite_stmt(s: &mut Stmt, cfg: &mut RewriteCfg) {
     match s {
+        // W01-s2: alias declarations rewrite their target annotation
+        Stmt::TypeAlias(_, target, _) => rewrite_ann(target, cfg),
         Stmt::Let(_, e)
         | Stmt::LetConst(_, e)
         | Stmt::Assign(_, _, e)
@@ -1401,7 +1421,7 @@ fn rewrite_stmt(s: &mut Stmt, cfg: &mut RewriteCfg) {
             rewrite_expr(it, cfg);
             rewrite_stmts(body, cfg);
         }
-        Stmt::Match(subject, arms) => {
+        Stmt::Match(subject, arms, _) => {
             rewrite_expr(subject, cfg);
             for (pat, body) in arms {
                 rewrite_pat(pat, cfg);

@@ -1,0 +1,4 @@
+## TYPED-MODE negative corpus: NEVER run this file without --typed failing.
+## Kept for the gate test suite (tests/typecheck.rs drives the API directly).
+x = 10
+x.name()

@@ -160,7 +160,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
   `tests/redteam/`.
 - Partial today: `stress.line` render (dx-r5) is the seed. Keep behavior backward-compatible.
 
-### W008, Debugger (REPL v2 stepping + DAP later) [P2] [dev-1] [XL] [partial: phase 1 debug REPL on main 1fb9803; REMAIN: stepping breadth + DAP adapter so VSCode gets the same via operon-ls]
+### W008, Debugger (REPL v2 stepping + DAP later) [P2] [dev-1] [XL] [implemented: W08r 2026-10-01 — the debug surface was found SILENTLY DEAD (the VM-default change bypassed every interp-side trap; the banner printed, no break ever fired, and the e2e script sat outside every gate) and rebuilt in 4 stages: W08r hotfix forces the interp lane for debug + debug_e2e joins the main gate; stage 1 broader stepping semantics (step-into/over/out via depth-aware step requests, one-shot until N, live b N/b del N/b list) with the underlying statement-line fix (the AST had NO statement lines — the parser now wraps line-silent statements in a transparent Expr::At marker, Stmt::first_line() drives the trap, the VM line table gains real lines, and a stale-cur_line re-fire bug inside called bodies is pinned out); stage 2 the NDJSON machine protocol (--protocol=json: stopped events with reason/line/depth, stack/vars/eval/status/breakpoints/quit, print output rerouted to stderr, EOF-resumes-never-wedges) with a Python reference client; stage 3 the DAP adapter (src/dap.rs: Content-Length framing, initialize/launch/setBreakpoints/configurationDone lifecycle, stopped events, stackTrace/scopes/variables/evaluate, all stepping verbs, output events, exited/terminated) with a Python DAP client; stage 4 the VS Code extension (editors/vscode: operon debug type, launch schema, embedded adapter via operon dap) + docs/DEBUGGER.md guide + README section; gates: all three surfaces have standing e2e suites in scripts/test.sh, 306 cargo tests, differential 3463 match 0 diverge; REMAIN (honest): outer stack frames report name-only lines (call-site lines live in the stress traceback machinery), no setVariable/conditional breakpoints, stopOnEntry refused honestly]
 - Goal: breakpoints, step over/into/out, locals, watch, call-stack inspection in the REPL
   first (`:break`, `:step`, `:frame`, `:watch`); DAP adapter as a follow-up so VSCode gets
   the same via `operon-ls`.
@@ -191,7 +191,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
 - Files: `src/bytecode.rs`, `src/main.rs`, `SPEC.md`.
 - Depends: W009.
 
-### W011, Optimization pipeline [P2] [dev-1] [L] [partial ~60%: stage 1+2 landed (constant folding, jump threading, superinstructions, reachability DCE behind --opt 1 — DCE is IN, commit 340a29f, do not list as remaining); REMAIN: constant propagation, trivial-gene inlining, monomorphic specialization, builtin/global resolution caching, list-op fast paths, per-pass bench rows + toggle matrix]
+### W011, Optimization pipeline [P2] [dev-1] [L] [partial ~85%: stage 1+2 (folding, threading, superinstructions, DCE) + toggle matrix (--opt 2 / --opt-passes) + pass 4 constant propagation + builtin/global resolution caching (OnceLock hash lookups) + per-pass bench rows (scripts/bench_opt_passes.sh, BENCH.md W011 matrix) + list-op fast paths measured (dispatch is semantics-bound: mem_charge/cycle-note are the security floor); all byte-identical on the --opt 2 parity axis (3536 programs); REMAIN: trivial-gene inlining + monomorphic specialization — designed, evidence-bar'd, gated in docs/vm-design.md §2c]
 - Goal: constant folding, dead-code elimination, constant propagation, trivial-gene inlining,
   monomorphic call specialization, builtin/global resolution caching, list-op fast paths.
 - Done when: each optimization has a micro-benchmark delta (BENCH.md row) and a differential
@@ -231,7 +231,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
   SPEC §16 (concurrency) rewritten.
 - Files: `src/interp.rs`, `src/value.rs`, `bootstrap/oracle.py`, `SPEC.md`, `tests/`.
 
-### W016, Async model [P2] [dev-1] [XL] [implemented: sz lane 2026-10-01, 7dfcbc7..1c64802 — fibers over the VM loop (heap VmFrame stack per vm-design §6), FIFO deterministic scheduler with a virtual clock (src/sched.rs), .cell io.pool=fiber gate, sleep/recv/select suspension at compiled call sites with the documented bridged fallback, join/wait/scope/cancel lane-blind, fuel-as-liveness at the thread lane's exact rate; lane parity pinned by tests/async_parity.rs (8 two-lane programs byte-identical: stdout/notes/rc/lifecycle); ASYNC.md §9 is the shipped contract, CELL-SCHEMA 39 declarations; RECONCILED 2026-10-01: the sz-lane implementation is canonical — builder-B's W016-v3 core (src/asyncrt.rs fiber machine) is NOT merged (two parallel fiber machines would fight over spawn/suspend hooks); builder-B's TEST corpus IS adopted as cross-implementation regression coverage (tests/async/ 7 proofs green on BOTH lanes fiber+thread, timing/async_wake_order 3-repeat determinism, redteam rt_p24a fiber-leak storm / rt_p24b cancel-leak / rt_p24c park-drain all contained — redteam 109 contained 0 breached with the new probes); cells adapted to the canonical schema (pool = "fiber"), which also completes the test.sh async-pair references that had been dangling on the sz-lane main; PR #42 branch recorded as superseded-by-reconciliation; thread path is byte-for-byte unchanged on BOTH landings]
+### W016, Async model [P2] [dev-1] [XL] [implemented: sz lane 2026-10-01, 7dfcbc7..1c64802 — fibers over the VM loop (heap VmFrame stack per vm-design §6), FIFO deterministic scheduler with a virtual clock (src/sched.rs), .cell io.pool=fiber gate, sleep/recv/select suspension at compiled call sites with the documented bridged fallback, join/wait/scope/cancel lane-blind, fuel-as-liveness at the thread lane's exact rate; lane parity pinned by tests/async_parity.rs (8 two-lane programs byte-identical: stdout/notes/rc/lifecycle); ASYNC.md §9 is the shipped contract, CELL-SCHEMA 39 declarations; RECONCILED 2026-10-01: the sz-lane implementation is canonical — builder-B's W016-v3 core (src/asyncrt.rs fiber machine) is NOT merged (two parallel fiber machines would fight over spawn/suspend hooks); builder-B's TEST corpus IS adopted as cross-implementation regression coverage (tests/async/ 7 proofs green on BOTH lanes fiber+thread, timing/async_wake_order 3-repeat determinism, redteam rt_p24a fiber-leak storm / rt_p24b cancel-leak / rt_p24c park-drain all contained — redteam 109 contained 0 breached with the new probes); cells adapted to the canonical schema (pool = "fiber"), CI NOTE 2026-10-01: the thread-lane half of the pair burned the fuel pool on slow CI runners ([burned] on 6e7b7b7 — parked-worker wall-clock charging is runner-speed-dependent), so both walkers now skip tests/async (timing-lane precedent) and the corpus runs cell-gated in test.sh; lane parity stays pinned by tests/async_parity.rs; PR #42 branch recorded as superseded-by-reconciliation; thread path is byte-for-byte unchanged on BOTH landings]
 - Goal: `async gene fetch() { await .. }` green-thread executor for HTTP/file/sleep; OS
   threads remain for CPU work.
 - Done when: async HTTP + timers run N=1000 concurrent waits under thread counts ≈ cores;
@@ -262,7 +262,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
 - Files: `src/main.rs` (loader), `src/interp.rs`, `operon.toml` support, `SPEC.md`, `tests/`.
 - Depends: W022 (manifest format), W069 (resolution pin).
 
-### W020, Package manager CLI [P1] [dev-1] [L] [done: main 8632a69, operon mod init/add/remove/update/install/tree/verify, git CLI, zero crates]
+### W020, Package manager CLI [P1] [dev-1] [L] [done 100% in-repo: W19/W20/W21 lane iterated far past 8632a69 — operon new/init/add/remove/update/install/tree/verify/publish/search + semver reqs (ecosystem-r3) + operon.lock byte-reproducible + --locked drift rejection; owner done-when re-audited 2026-10-01: all verbs live, pkg_e2e 45/45, pkg_registry 10/10]
 - Goal: `operon init/add/remove/update/install/search/tree` operating on `operon.toml` +
   `operon.lock`.
 - Done when: init+add+install+tree work for path deps offline (registry stub = local dir
@@ -271,9 +271,9 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
 - Files: `src/main.rs`, new `src/pkg.rs`, `SPEC.md`, `README.md`, `tests/`.
 - Depends: W019, W022, W023.
 
-### W021, Central package registry [P3] [dev-1] [XL] [partial: static git-index registry on main 1b4941c (the cheap first version); hosted service stays deferred pending owner infrastructure decisions]
-- Deliverable until un-deferred: registry API sketch (SPEC §ecosystem) + local-dir stub
-  contract consumed by W020. No hosted service.
+### W021, Central package registry [P3] [dev-1] [XL] [done 100% in-repo, deployment owner-gated: the W21-r1/r2 lane shipped the full hosted tier — operon registry init|serve|default + packaging/registry/app.py (Postgres via DATABASE_URL on Render, SQLite locally, Bearer auth, immutable versions 409) + render.yaml blueprint + seed packages http/json/postgres/web; re-audited 2026-10-01: registry_e2e OK, pkg_hosted_e2e 22/22 (auth, immutable versions, search, publish round-trip); the ONE remaining step is flipping the live Render deploy (owner account+token), config shipped]
+- Deliverable: registry API + hosted service + seed packages — SHIPPED; live deploy = owner-gated
+  final step (same class as W12's owner gate).
 
 ### W022, `operon.toml` manifest standard [P1] [dev-1] [M] [Track L3c] [done: main 8e2d060 (written rule; .cell = runtime config ONLY, package metadata belongs to operon.toml)]
 - Goal: package/project metadata manifest, **separate from `.cell`** (runtime config stays
@@ -833,14 +833,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
   already (release targets), add explicit float-parity assertion program.
 - Files: `docs/spec/DETERMINISM.md`, `tests/differential/`.
 
-### W091, Bio semantics separation [P1] [dev-3] [M] [done: SPEC §11a (batch2): contract header (scope, W036 freeze citation, BIO-CONTRACT + DETERMINISM pointers, D-008 voice rule), the one-paragraph quotable boundary test (bio iff behavior cannot be predicted without §11), 23-row boundary map with anchors, 9 crossing sentences marked at §3/§10/§13/§14/§15; bounded-region option chosen over renumbering move, reasoning recorded; docs sync checker still exit 0; ENFORCEMENT (sz follow-up, PR sz/w091-enforcement): CONTRIBUTING 8b two-track review rule (mixed-track PRs label hunks, bio rewording cannot justify behavior change) + check_docs_sync.py guards (11a header with W091 tag, BIO-CONTRACT + DETERMINISM pointers in the 11a region, Crossing (11a) markers minimum 3, negative-tested both)]
-- Goal: SPEC currently interleaves language semantics with biological modeling semantics.
-  Split: language sections state syntax/evaluation ONLY; bio modeling moves to a dedicated
-  volume (docs/spec/BIO-MODEL.md) referenced from SPEC §11.
-- Done when: SPEC §11 is a pointer + core evaluation rules only; BIO-MODEL.md holds the
-  mechanism math; no information lost (diff-audit by sz); future bio changes cannot be
-  breaking language changes by construction.
-- Files: `SPEC.md`, `docs/spec/BIO-MODEL.md` (new).
+### W091 — Bio semantics separation [P1] [dev-3] [M] [done: sz/w091-bio-split — SPEC split into two tracks. §11 keeps the LANGUAGE contract (syntax, semantics, gates, clamps, knobs, entropy discipline, test pins); all biology rationale, term audits, and not-modeled lists moved verbatim to docs/spec/MODELING-NOTES.md (§2, keyed by [MN-*] markers — 29 markers over 20 mechanism keys); §16's biology ↔ feature map moved wholesale to MODELING-NOTES §3 with a numbered stub left in SPEC. The mechanism MATH stayed in SPEC deliberately: formulas are contract (testable, pinned by proofs). No information lost — extraction diff-audited by sz. Two-track review rule landed as CONTRIBUTING §8b (a bio-analogy change can no longer silently be a language change and vice versa; mixed-track PRs must label hunks; reviewers enforce at lane check). check_docs_sync.py now FAILS when SPEC stops linking the modeling track, when a [MN-*] marker has no matching appendix heading, and the old §16 table is a FORBIDDEN pattern in SPEC. File-name note: the board suggested docs/spec/BIO-MODEL.md; as-built uses MODELING-NOTES.md because BIO-CONTRACT.md (W092) already owns the modeling contract and a second "BIO-*" contract file would collide. Coverage scan §10–§19 recorded in MODELING-NOTES §1 (§10/§12–§15/§17–§19 are contract-only). Gates: 166/166 differential · 134f/109p/1479a proofs · 100/0 redteam · cookbook 19/19 · cargo 120 · clippy 0 · fmt clean · sec ALL GREEN · docs-sync + doc_api_check green]
 - Coordinate: W036 (syntax boundary, dev-2) + W092 (modeling contract, below) land as one
   coherent doc wave.
 

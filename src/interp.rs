@@ -733,11 +733,31 @@ pub struct Interp {
     pub vm_stack_pool: Vec<Vec<crate::value::Value>>,
     /// W11: the optimization level behind --opt (0 = off).
     pub vm_opt: u8,
+    /// W011 toggle matrix: an explicit --opt-passes set. None = derive
+    /// from vm_opt (1 = STAGE1, 2 = ALL); Some(set) is authoritative,
+    /// including PassSet::NONE (compile-only). Process-constant.
+    pub opt_passes: Option<crate::vm::PassSet>,
     /// W08 phase 1: interactive debug hooks (`operon debug`). Break lines
     /// are matched against the current source line after each statement;
     /// workers are separate Interps and never break.
     pub debug_breaks: HashSet<usize>,
     pub debug_step: bool,
+    /// W08r stage 1: depth-aware stepping. Some(d) = the step request only
+    /// traps when the call depth is back down to d (that is what `next`
+    /// step-over and `finish` step-out are); None = trap at any depth
+    /// (`s` step-into). Cleared at every stop.
+    pub debug_step_depth: Option<usize>,
+    /// W08r stage 1: one-shot continue-to-line target (`until N`); cleared
+    /// when it fires so a later breakpoint on the same line still stops.
+    pub debug_until: Option<usize>,
+    /// W08r stage 2: machine protocol mode — the trap serves NDJSON
+    /// requests instead of the human REPL (program print output is captured
+    /// in stdout_sink and drained to stderr at every stop, keeping stdout
+    /// pure protocol).
+    pub debug_protocol: bool,
+    /// W08r stage 3: DAP mode — the trap hands control to the adapter in
+    /// src/dap.rs (stopped event + request serving loop).
+    pub debug_dap: bool,
     pub debug_file: String,
     pub seq_tx: Option<mpsc::SyncSender<crate::value::SeqMsg>>,
     /// Process-wide step ceiling shared with every spawned worker: when
@@ -855,8 +875,13 @@ impl Interp {
             vm_program: None,
             vm_stack_pool: Vec::new(),
             vm_opt: 0,
+            opt_passes: None,
             debug_breaks: HashSet::new(),
             debug_step: false,
+            debug_step_depth: None,
+            debug_until: None,
+            debug_protocol: false,
+            debug_dap: false,
             debug_file: String::new(),
             seq_tx: None,
             fuel_pool: None,
@@ -1158,27 +1183,87 @@ impl Interp {
             // reflects the statement that just ran; a hit (or a step
             // request from the previous trap) opens the REPL. Only the
             // host interpreter has hooks set; workers never break.
-            if self.debug_step || self.debug_breaks.contains(&self.cur_line) {
-                self.debug_repl(env);
+            // W08r stage 1: the trap is depth-aware — a step request that
+            // carries a depth (next/finish) only fires when the call stack
+            // has unwound back to that depth, so stepping never descends
+            // into the bodies called from the stepped-over statement. The
+            // one-shot until target fires before breakpoints are consulted
+            // and clears itself so the same line still breaks later.
+            // Breakpoints match the statement's OWN line first (extracted
+            // from its line-bearing expression nodes): cur_line is stamped
+            // by nested evaluation, so after `let a = work(10)` it reports
+            // the LAST line inside work, not the call site — a break on the
+            // call line could never fire off cur_line alone. cur_line stays
+            // as the fallback for line-silent statements.
+            let stmt_bp_hit = match s.first_line() {
+                Some(l) => self.debug_breaks.contains(&l),
+                None => false,
+            };
+            let stmt_line = s.first_line();
+            // The cur_line fallback only applies to line-silent statements:
+            // cur_line is stamped by nested evaluation, so a statement that
+            // HAS its own line must never match a stale cur_line from inside
+            // a called body (bp 3 inside work would otherwise re-fire on
+            // main's line-8 call statement the moment work returns)
+            let cur_bp_hit = match stmt_line {
+                Some(_) => false,
+                None => self.debug_breaks.contains(&self.cur_line),
+            };
+            let depth_ok = match self.debug_step_depth {
+                Some(d) => self.call_stack.len() <= d,
+                None => true,
+            };
+            let until_hit = match self.debug_until {
+                Some(u) => match stmt_line {
+                    Some(l) => u == l,
+                    None => u == self.cur_line,
+                },
+                None => false,
+            };
+            if until_hit || stmt_bp_hit || cur_bp_hit || (self.debug_step && depth_ok) {
+                let reason = if until_hit {
+                    "until"
+                } else if stmt_bp_hit || cur_bp_hit {
+                    "breakpoint"
+                } else {
+                    "step"
+                };
+                if until_hit {
+                    self.debug_until = None;
+                }
+                self.debug_step_depth = None;
+                if self.debug_dap {
+                    crate::dap::serve_at_trap(self, env, stmt_line, reason);
+                } else if self.debug_protocol {
+                    self.debug_machine(env, stmt_line, reason);
+                } else {
+                    self.debug_repl(env, stmt_line);
+                }
             }
         }
         Ok(Flow::Norm)
     }
 
     /// W08 phase 1: the on-break REPL. Reads stdin; EOF resumes (piped
-    /// sessions terminate cleanly instead of wedging). Commands: c/continue
-    /// (resume), s/step (break after the next statement), p EXPR (evaluate
-    /// in the current frame), vars (dump the frame chain), bt (call chain),
+    /// sessions terminate cleanly instead of wedging). W08r stage 1
+    /// commands: c/continue (resume), s/step (step-into: break after the
+    /// next statement at any depth), n/next (step-over), fin/finish
+    /// (step-out), until N (continue-to-line, one-shot), b N / b del N /
+    /// b list (live breakpoint management), p EXPR (evaluate in the
+    /// current frame), vars (dump the frame chain), bt (call chain),
     /// q (leave the debugger with exit code 0).
-    fn debug_repl(&mut self, env: &Rc<Env>) {
+    fn debug_repl(&mut self, env: &Rc<Env>, stmt_line: Option<usize>) {
         use std::io::Write as _;
+        let shown = stmt_line.unwrap_or(self.cur_line);
         loop {
-            print!("(dbg) ");
+            print!("(dbg) line {} > ", shown);
             let _ = std::io::stdout().flush();
             let mut line = String::new();
             if std::io::stdin().read_line(&mut line).unwrap_or(0) == 0 {
                 // EOF: resume to completion so piped sessions never wedge
                 self.debug_step = false;
+                self.debug_step_depth = None;
+                self.debug_until = None;
                 self.debug_breaks.clear();
                 return;
             }
@@ -1190,7 +1275,64 @@ impl Interp {
                 }
                 "s" | "step" => {
                     self.debug_step = true;
+                    self.debug_step_depth = None;
                     return;
+                }
+                "n" | "next" => {
+                    // step-over: resume, but only trap once the call stack
+                    // is back at (or above) the depth the request was made at
+                    self.debug_step = true;
+                    self.debug_step_depth = Some(self.call_stack.len());
+                    return;
+                }
+                "fin" | "finish" => {
+                    // step-out: trap when the current frame has returned
+                    self.debug_step = true;
+                    self.debug_step_depth = Some(self.call_stack.len().saturating_sub(1));
+                    return;
+                }
+                other if other.starts_with("until ") => match other[6..].trim().parse::<usize>() {
+                    Ok(n) => {
+                        self.debug_until = Some(n);
+                        self.debug_step = false;
+                        return;
+                    }
+                    Err(_) => eprintln!("(dbg) until needs a line number"),
+                },
+                other if other.starts_with("b ") || other == "b" => {
+                    let rest = other[1..].trim();
+                    if rest == "list" {
+                        let mut bs: Vec<usize> = self.debug_breaks.iter().copied().collect();
+                        bs.sort_unstable();
+                        if bs.is_empty() {
+                            println!("  (no breakpoints)");
+                        } else {
+                            for b in bs {
+                                println!("  line {}", b);
+                            }
+                        }
+                    } else if let Some(del) = rest.strip_prefix("del ") {
+                        match del.trim().parse::<usize>() {
+                            Ok(n) => {
+                                if self.debug_breaks.remove(&n) {
+                                    println!("  deleted line {}", n);
+                                } else {
+                                    // informational response, not an error: it
+                                    // must reach stdout for protocol clients
+                                    println!("(dbg) no breakpoint at line {}", n);
+                                }
+                            }
+                            Err(_) => eprintln!("(dbg) b del needs a line number"),
+                        }
+                    } else {
+                        match rest.parse::<usize>() {
+                            Ok(n) => {
+                                self.debug_breaks.insert(n);
+                                println!("  breakpoint at line {}", n);
+                            }
+                            Err(_) => eprintln!("(dbg) b needs: b N | b del N | b list"),
+                        }
+                    }
                 }
                 "q" | "quit" => {
                     eprintln!("[debug] quit");
@@ -1258,10 +1400,325 @@ impl Interp {
                             None => eprintln!("(dbg) cannot evaluate '{}'", src),
                         }
                     } else {
-                        eprintln!("(dbg) commands: c | s | q | bt | vars | p EXPR");
+                        eprintln!(
+                            "(dbg) commands: c | s | n | fin | until N | b N | b del N | b list | bt | vars | p EXPR | q"
+                        );
                     }
                 }
             }
+        }
+    }
+
+    // ------------------------------------------------- W08r stage 2: NDJSON
+    // The machine protocol: one JSON object per line on stdout (events and
+    // replies), one JSON request per line on stdin. Program print output is
+    // captured in stdout_sink and drained to stderr at every stop so stdout
+    // stays pure protocol. Requests:
+    //   {"id":N,"cmd":"continue"|"next"|"stepIn"|"stepOut"}
+    //   {"id":N,"cmd":"until","args":{"line":N}}
+    //   {"id":N,"cmd":"breakpoints","args":{"add":[..],"remove":[..]}}
+    //   {"id":N,"cmd":"stack"|"vars"|"status"}
+    //   {"id":N,"cmd":"eval","args":{"expr":".."}}
+    //   {"id":N,"cmd":"quit"}
+    // Replies: {"id":N,"ok":true,..} / {"id":N,"ok":false,"error":".."}.
+    // Events: {"event":"stopped","reason":"breakpoint"|"step"|"until",..}.
+    // EOF on stdin resumes to completion (piped sessions never wedge).
+    pub fn debug_machine(&mut self, env: &Rc<Env>, stmt_line: Option<usize>, reason: &str) {
+        use std::io::Write as _;
+        let shown = stmt_line.unwrap_or(self.cur_line);
+        let stop = format!(
+            "{{\"event\":\"stopped\",\"reason\":\"{}\",\"line\":{},\"depth\":{}}}",
+            reason,
+            shown,
+            self.call_stack.len()
+        );
+        let _ = writeln!(std::io::stdout(), "{}", stop);
+        let _ = std::io::stdout().flush();
+        loop {
+            self.debug_drain_print_sink();
+            let mut line = String::new();
+            if std::io::stdin().read_line(&mut line).unwrap_or(0) == 0 {
+                // EOF: resume to completion so piped sessions never wedge
+                self.debug_step = false;
+                self.debug_step_depth = None;
+                self.debug_until = None;
+                self.debug_breaks.clear();
+                return;
+            }
+            let t = line.trim();
+            if t.is_empty() {
+                continue;
+            }
+            let req = match json_parse(t) {
+                Ok(v) => v,
+                Err(e) => {
+                    let _ = writeln!(
+                        std::io::stdout(),
+                        "{{\"ok\":false,\"error\":{}}}",
+                        json_quote(&format!("bad request JSON: {}", e))
+                    );
+                    let _ = std::io::stdout().flush();
+                    continue;
+                }
+            };
+            let id = match Self::jfield_int(&req, "id") {
+                Some(i) => i,
+                None => {
+                    let _ = writeln!(
+                        std::io::stdout(),
+                        "{{\"ok\":false,\"error\":\"missing id\"}}"
+                    );
+                    let _ = std::io::stdout().flush();
+                    continue;
+                }
+            };
+            let cmd = Self::jfield_str(&req, "cmd").unwrap_or_default();
+            let args = Self::jfield(&req, "args");
+            match cmd.as_str() {
+                "continue" => {
+                    self.debug_step = false;
+                    self.debug_reply(id, "\"ok\":true");
+                    return;
+                }
+                "next" => {
+                    self.debug_step = true;
+                    self.debug_step_depth = Some(self.call_stack.len());
+                    self.debug_reply(id, "\"ok\":true");
+                    return;
+                }
+                "stepIn" => {
+                    self.debug_step = true;
+                    self.debug_step_depth = None;
+                    self.debug_reply(id, "\"ok\":true");
+                    return;
+                }
+                "stepOut" => {
+                    self.debug_step = true;
+                    self.debug_step_depth = Some(self.call_stack.len().saturating_sub(1));
+                    self.debug_reply(id, "\"ok\":true");
+                    return;
+                }
+                "until" => match args.as_ref().and_then(|a| Self::jfield_int(a, "line")) {
+                    Some(n) => {
+                        self.debug_until = Some(n as usize);
+                        self.debug_step = false;
+                        self.debug_reply(id, "\"ok\":true");
+                        return;
+                    }
+                    None => {
+                        self.debug_reply(id, "\"ok\":false,\"error\":\"until needs args.line\"")
+                    }
+                },
+                "breakpoints" => {
+                    if let Some(a) = &args {
+                        if let Some(Value::List(adds)) = Self::jfield(a, "add") {
+                            for v in adds.borrow().iter() {
+                                if let Value::Int(n) = v {
+                                    self.debug_breaks.insert(*n as usize);
+                                }
+                            }
+                        }
+                        if let Some(Value::List(rems)) = Self::jfield(a, "remove") {
+                            for v in rems.borrow().iter() {
+                                if let Value::Int(n) = v {
+                                    self.debug_breaks.remove(&(*n as usize));
+                                }
+                            }
+                        }
+                    }
+                    let mut bs: Vec<usize> = self.debug_breaks.iter().copied().collect();
+                    bs.sort_unstable();
+                    let list = bs
+                        .iter()
+                        .map(|b| b.to_string())
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    self.debug_reply(id, &format!("\"ok\":true,\"breakpoints\":[{}]", list));
+                }
+                "status" => {
+                    self.debug_reply(
+                        id,
+                        &format!(
+                            "\"ok\":true,\"line\":{},\"depth\":{}",
+                            shown,
+                            self.call_stack.len()
+                        ),
+                    );
+                }
+                "stack" => {
+                    // innermost first; only the innermost frame has a known
+                    // line (outer frames' call lines live in the stress
+                    // traceback machinery, not in call_stack tuples)
+                    let mut frames = Vec::new();
+                    let n = self.call_stack.len();
+                    for (i, (name, _, _)) in self.call_stack.iter().rev().enumerate() {
+                        if i == 0 {
+                            frames.push(format!(
+                                "{{\"name\":{},\"line\":{}}}",
+                                json_quote(name),
+                                shown
+                            ));
+                        } else {
+                            frames.push(format!("{{\"name\":{},\"line\":null}}", json_quote(name)));
+                        }
+                    }
+                    let _ = n;
+                    self.debug_reply(
+                        id,
+                        &format!("\"ok\":true,\"frames\":[{}]", frames.join(",")),
+                    );
+                }
+                "vars" => {
+                    let mut scopes = Vec::new();
+                    let mut cur = Some(env.clone());
+                    let mut depth = 0usize;
+                    while let Some(e) = cur {
+                        let vars = e.vars.borrow();
+                        let mut names: Vec<String> = vars.keys().cloned().collect();
+                        names.sort();
+                        let mut fields = Vec::new();
+                        for nm in names {
+                            let v = vars.get(&nm).cloned().unwrap_or(Value::Null);
+                            fields.push(format!(
+                                "{}:{}",
+                                json_quote(&nm),
+                                json_quote(&v.display())
+                            ));
+                        }
+                        drop(vars);
+                        scopes.push(format!(
+                            "{{\"scope\":{},\"vars\":{{{}}}}}",
+                            json_quote(&format!("frame {}", depth)),
+                            fields.join(",")
+                        ));
+                        depth += 1;
+                        if depth >= 8 {
+                            break;
+                        }
+                        cur = e.parent.clone();
+                    }
+                    self.debug_reply(
+                        id,
+                        &format!("\"ok\":true,\"scopes\":[{}]", scopes.join(",")),
+                    );
+                }
+                "eval" => {
+                    let expr = args
+                        .as_ref()
+                        .and_then(|a| Self::jfield_str(a, "expr"))
+                        .unwrap_or_default();
+                    if expr.is_empty() {
+                        self.debug_reply(id, "\"ok\":false,\"error\":\"eval needs args.expr\"");
+                        continue;
+                    }
+                    let parsed = crate::parser::parse(&format!("gene __dbg() {{ {} }}", expr));
+                    let mut out = "\"ok\":false,\"error\":\"cannot evaluate\"".to_string();
+                    if let Some(Stmt::Gene(g)) = parsed.stmts.first() {
+                        if let Some(Stmt::ExprStmt(e)) = g.body.first() {
+                            match self.eval(env, e) {
+                                Ok(v) => {
+                                    out = format!(
+                                        "\"ok\":true,\"value\":{}",
+                                        json_quote(&v.display())
+                                    )
+                                }
+                                Err(st) => {
+                                    out = format!(
+                                        "\"ok\":false,\"error\":{}",
+                                        json_quote(&format!("[{}] {}", st.kind, st.message))
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    self.debug_reply(id, &out);
+                }
+                "quit" => {
+                    self.debug_reply(id, "\"ok\":true");
+                    eprintln!("[debug] quit");
+                    // ast-grep-ignore: no-std-process-exit-in-core
+                    std::process::exit(0);
+                }
+                other => {
+                    self.debug_reply(
+                        id,
+                        &format!(
+                            "\"ok\":false,\"error\":{}",
+                            json_quote(&format!("unknown command '{}'", other))
+                        ),
+                    );
+                }
+            }
+        }
+    }
+
+    /// W08r stage 2: program print output captured in stdout_sink goes to
+    /// stderr (the debuggee's stdout is the protocol transport).
+    pub fn debug_drain_print_sink(&mut self) {
+        if let Some(sink) = &self.stdout_sink {
+            let lines = std::mem::take(&mut *sink.borrow_mut());
+            for l in lines {
+                eprintln!("[out] {}", l);
+            }
+        }
+    }
+
+    fn debug_reply(&self, id: i64, body: &str) {
+        use std::io::Write as _;
+        let _ = writeln!(std::io::stdout(), "{{\"id\":{}, {} }}", id, body);
+        let _ = std::io::stdout().flush();
+    }
+
+    fn jfield(req: &Value, key: &str) -> Option<Value> {
+        if let Value::Map(m) = req {
+            for (k, v) in m.borrow().items.iter() {
+                if let Value::Str(s) = k {
+                    if s == key {
+                        return Some(v.clone());
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// W08r stage 3: public field access for the DAP adapter (src/dap.rs).
+    pub fn jfield_pub(req: &Value, key: &str) -> Option<Value> {
+        Self::jfield(req, key)
+    }
+
+    /// W08r stage 2/3: evaluate an expression in the current frame for the
+    /// debugger surfaces (REPL `p`, NDJSON eval, DAP evaluate). Returns the
+    /// value's display rendering (the language's canonical text form).
+    pub(crate) fn debug_eval_display(
+        &mut self,
+        env: &Rc<Env>,
+        src: &str,
+    ) -> Result<String, String> {
+        let parsed = crate::parser::parse(&format!("gene __dbg() {{ {} }}", src));
+        if let Some(Stmt::Gene(g)) = parsed.stmts.first() {
+            if let Some(Stmt::ExprStmt(e)) = g.body.first() {
+                return match self.eval(env, e) {
+                    Ok(v) => Ok(v.display()),
+                    Err(st) => Err(format!("[{}] {}", st.kind, st.message)),
+                };
+            }
+        }
+        Err("cannot evaluate".to_string())
+    }
+
+    fn jfield_int(req: &Value, key: &str) -> Option<i64> {
+        match Self::jfield(req, key) {
+            Some(Value::Int(i)) => Some(i),
+            Some(Value::Float(f)) => Some(f as i64),
+            _ => None,
+        }
+    }
+
+    fn jfield_str(req: &Value, key: &str) -> Option<String> {
+        match Self::jfield(req, key) {
+            Some(Value::Str(s)) => Some(s),
+            _ => None,
         }
     }
 
@@ -1275,6 +1732,10 @@ impl Interp {
             self.tick()?;
         }
         match stmt {
+            // W01-s2: a type-alias declaration is parse-time metadata; the
+            // runtime is inert (annotations referencing it already resolved
+            // to TypeAnn::Alias in the parser).
+            Stmt::TypeAlias(..) => Ok(Flow::Norm),
             Stmt::Block(body) => {
                 let child = Env::new(Some(env.clone()));
                 self.exec_block(&child, body)
@@ -1699,7 +2160,7 @@ impl Interp {
                 self.eval(env, e)?;
                 Ok(Flow::Norm)
             }
-            Stmt::Match(subject, cases) => {
+            Stmt::Match(subject, cases, _match_line) => {
                 let sv = self.eval(env, subject)?;
                 for (pat, body) in cases {
                     // One fresh child scope per arm, pattern captures live
@@ -2724,6 +3185,8 @@ impl Interp {
         match e {
             Expr::Null => Ok(Value::Null),
             Expr::Bool(b) => Ok(Value::Bool(*b)),
+            // W08r: the parser's transparent position marker — pure passthrough
+            Expr::At(inner, _) => self.eval(env, inner),
             Expr::Int(i) => Ok(Value::Int(*i)),
             Expr::Float(f) => Ok(Value::Float(*f)),
             Expr::Str(s) => Ok(Value::Str(s.clone())),
@@ -2942,7 +3405,7 @@ impl Interp {
                 }
                 self.member_value(tv, key)
             }
-            Expr::Method(t, name, args) => {
+            Expr::Method(t, name, args, _method_line) => {
                 let tv = self.eval(env, t)?;
                 let mut argvs = Vec::with_capacity(args.len());
                 for a in args {
@@ -2950,7 +3413,7 @@ impl Interp {
                 }
                 self.call_method(env, tv, name, argvs)
             }
-            Expr::MethodSafe(t, name, args) => {
+            Expr::MethodSafe(t, name, args, _method_line) => {
                 // L1a: `a?.k(args)`, same contract as `?.` members.
                 let tv = self.eval(env, t)?;
                 if matches!(tv, Value::Null) {
@@ -3734,7 +4197,7 @@ impl Interp {
             }
         }
         // canonical builtin synonyms (print/echo/say/show → promote)
-        if let Some((_, canon)) = BUILTIN_SYNONYMS.iter().find(|(s, _)| *s == name) {
+        if let Some(&canon) = builtin_synonym_map().get(name) {
             return self.call_builtin(env, canon, args);
         }
         // user gene
@@ -3742,7 +4205,7 @@ impl Interp {
             return self.call_value(env, &v, args);
         }
         // builtin
-        if BUILTIN_NAMES.contains(&name) {
+        if builtin_name_set().contains(name) {
             return self.call_builtin(env, name, args);
         }
         // wobble: nearest callable
@@ -4897,7 +5360,7 @@ impl Interp {
                 // mismatch = catchable unfolded Stress naming the param,
                 // the gene, the expected and the actual type.
                 if let Some(ann) = def.param_anns.get(i).and_then(|a| a.as_ref()) {
-                    if !ann_matches(a, ann) {
+                    if !ann_is_typaram(ann, &def.type_params) && !ann_matches(a, ann) {
                         return Err(Stress::new(
                             "unfolded",
                             format!(
@@ -4921,7 +5384,7 @@ impl Interp {
                 self.fiber_armed = saved_armed;
                 self.fiber_hook = saved_hook;
                 if let Some(ann) = def.param_anns.get(i).and_then(|a| a.as_ref()) {
-                    if !ann_matches(&dv, ann) {
+                    if !ann_is_typaram(ann, &def.type_params) && !ann_matches(&dv, ann) {
                         return Err(Stress::new(
                             "unfolded",
                             format!(
@@ -5012,7 +5475,14 @@ impl Interp {
                 self.fiber_hook = saved_hook;
                 // W01 (L2c): a guard-branch return is the gene's return,
                 // the annotation applies here too.
-                return self.check_ret_ann("gene", &name, &def.ret_ann, &gv, true);
+                return self.check_ret_ann(
+                    "gene",
+                    &name,
+                    &def.ret_ann,
+                    &gv,
+                    true,
+                    &def.type_params,
+                );
             }
         }
         let result = if self.vm {
@@ -5038,7 +5508,7 @@ impl Interp {
                 });
                 return Ok(Value::Null);
             }
-            crate::vm::exec_gene_body(self, key, &name, &def.body, &fenv)
+            crate::vm::exec_gene_body(self, key, &name, &def.body, &def.type_params, &fenv)
         } else {
             self.exec_block(&fenv, &def.body)
         };
@@ -5057,12 +5527,19 @@ impl Interp {
                 // the gene actually returns (including a `?!`-propagated
                 // variant). Mismatch = catchable unfolded Stress; the W007
                 // chain still applies on the error path.
-                self.check_ret_ann("gene", &name, &def.ret_ann, &v, true)
+                self.check_ret_ann("gene", &name, &def.ret_ann, &v, true, &def.type_params)
             }
             _ => {
                 // no explicit return → null; a non-optional return
                 // annotation is violated by an implicit null too
-                self.check_ret_ann("gene", &name, &def.ret_ann, &Value::Null, false)
+                self.check_ret_ann(
+                    "gene",
+                    &name,
+                    &def.ret_ann,
+                    &Value::Null,
+                    false,
+                    &def.type_params,
+                )
             }
         }
     }
@@ -5114,10 +5591,11 @@ impl Interp {
         ann: &Option<TypeAnn>,
         v: &Value,
         explicit: bool,
+        type_params: &[(String, Option<String>)],
     ) -> Result<Value, Stress> {
         if let Some(ann) = ann {
             if explicit {
-                if !ann_matches(v, ann) {
+                if !ann_is_typaram(ann, type_params) && !ann_matches(v, ann) {
                     return Err(Stress::new(
                         "unfolded",
                         format!(
@@ -5394,7 +5872,7 @@ impl Interp {
             if let Some(a) = args.get(i) {
                 // W01 (L2c): method param annotations, same soft contract.
                 if let Some(ann) = def.param_anns.get(i).and_then(|a| a.as_ref()) {
-                    if !ann_matches(a, ann) {
+                    if !ann_is_typaram(ann, &def.type_params) && !ann_matches(a, ann) {
                         return Err(Stress::new(
                             "unfolded",
                             format!(
@@ -5468,7 +5946,7 @@ impl Interp {
         let result = if self.vm {
             // W09 A2: the compiled-body path (see the call_gene_inner site)
             let key = std::sync::Arc::as_ptr(&def) as *const u8 as usize;
-            crate::vm::exec_gene_body(self, key, &name, &def.body, &fenv)
+            crate::vm::exec_gene_body(self, key, &name, &def.body, &def.type_params, &fenv)
         } else {
             self.exec_block(&fenv, &def.body)
         };
@@ -5485,9 +5963,16 @@ impl Interp {
             Flow::Ret(v) => {
                 // W01 (L2c): phenotype methods enforce return annotations
                 // under the same soft contract as genes (SPEC §7c).
-                self.check_ret_ann("method", &name, &def.ret_ann, &v, true)
+                self.check_ret_ann("method", &name, &def.ret_ann, &v, true, &def.type_params)
             }
-            _ => self.check_ret_ann("method", &name, &def.ret_ann, &Value::Null, false),
+            _ => self.check_ret_ann(
+                "method",
+                &name,
+                &def.ret_ann,
+                &Value::Null,
+                false,
+                &def.type_params,
+            ),
         }
     }
 
@@ -9824,9 +10309,12 @@ impl Interp {
                 };
                 match &target {
                     Value::Str(name) => {
-                        if BUILTIN_SYNONYMS.iter().any(|(s, _)| s == name)
-                            || BUILTIN_NAMES.contains(&name.as_str())
+                        if builtin_synonym_map().contains_key(name.as_str())
+                            || builtin_name_set().contains(name.as_str())
                         {
+                            // a synonym target is canonicalized by
+                            // call_builtin's own synonym handling upstream;
+                            // keep the raw name here (pre-existing order)
                             return self.call_builtin(env, name, call_args);
                         }
                         let v = env.get(name).unwrap_or(Value::Null);
@@ -11552,6 +12040,26 @@ pub const BUILTIN_SYNONYMS: &[(&str, &str)] = &[
     ("show", "promote"),
 ];
 
+/// W011 builtin/global resolution caching: every call walked these tables
+/// LINEARLY (a ~90-entry strcmp scan for membership, a 4-entry scan for
+/// synonym canonicalization) before any builtin body could run. Both
+/// tables are static, so the lookups precompute into hash structures
+/// exactly once (std::sync::OnceLock — zero external crates). Semantics
+/// are identical: same keys, same canonical targets, no duplicate keys
+/// in the source tables (pinned by the resolution_cache tests).
+pub(crate) fn builtin_name_set() -> &'static std::collections::HashSet<&'static str> {
+    static SET: std::sync::OnceLock<std::collections::HashSet<&'static str>> =
+        std::sync::OnceLock::new();
+    SET.get_or_init(|| BUILTIN_NAMES.iter().copied().collect())
+}
+
+pub(crate) fn builtin_synonym_map() -> &'static std::collections::HashMap<&'static str, &'static str>
+{
+    static MAP: std::sync::OnceLock<std::collections::HashMap<&'static str, &'static str>> =
+        std::sync::OnceLock::new();
+    MAP.get_or_init(|| BUILTIN_SYNONYMS.iter().copied().collect())
+}
+
 pub const BUILTIN_NAMES: &[&str] = &[
     "promote",
     "expr_on",
@@ -11902,24 +12410,83 @@ pub fn repressilator_gate_level(n: usize, tick: u64, node_index: usize) -> f64 {
 }
 
 /// W01 (L2c): soft annotation matching. A value matches a type annotation by
-/// `Value::type_name()`, with two documented relaxations: `any` accepts
-/// everything, and `float` accepts int (safe numeric widening, `int`
-/// refuses float: no silent narrowing). Unions match any alternative;
+/// `Value::type_name()`, with three documented relaxations: `any` accepts
+/// everything, `float` accepts int (safe numeric widening, `int` refuses
+/// float: no silent narrowing), and TYPED-MODE capitalization is normalized
+/// (`Int`≡`int`, `Str`≡`str`, ... — the user-facing canonical spellings).
+/// Generic annotations (`list[int]`, TYPED-MODE) match on their HEAD like
+/// the bare name: element types are the static checker's business, the
+/// runtime soft contract stays shallow. Unions match any alternative;
 /// optionals additionally accept null. Mirrored by oracle.ann_matches.
 pub fn ann_matches(v: &Value, ann: &TypeAnn) -> bool {
     match ann {
         TypeAnn::Named(name) => {
-            if name == "any" {
+            if ann_name_norm(name) == "any" {
                 return true;
             }
-            if v.type_name() == name.as_str() {
+            if v.type_name() == ann_name_norm(name) {
                 return true;
             }
             // numeric widening: int is acceptable where float is declared
-            name == "float" && matches!(v, Value::Int(_))
+            ann_name_norm(name) == "float" && matches!(v, Value::Int(_))
         }
         TypeAnn::Union(alts) => alts.iter().any(|a| ann_matches(v, a)),
-        TypeAnn::Optional(inner) => matches!(v, Value::Null) || ann_matches(v, inner),
+        // TYPED-MODE: an optional accepts null, any value matching its
+        // inner type (the W01 law), AND the Option family (W06): None
+        // outright, Some(payload) when the payload matches.
+        TypeAnn::Optional(inner) => match v {
+            Value::Null => true,
+            Value::Variant(t, Some(p)) if *t == crate::value::VTag::SomeV => ann_matches(p, inner),
+            Value::Variant(t, _) if *t == crate::value::VTag::NoneV => true,
+            other => ann_matches(other, inner),
+        },
+        // W01-s2: an alias matches as its parse-time-resolved target
+        // (runtime annotations stay the compatibility fallback; the alias
+        // is sugar for the target annotation, never a new runtime type).
+        TypeAnn::Alias { target, .. } => ann_matches(v, target),
+        // generic head matching: list[int] enforces "is a list", map[k, v]
+        // "is a map", option[t] additionally accepts null (mirrors Optional),
+        // result[t, e] matches the variant family. Element types are ignored
+        // here (shallow runtime contract; the static checker owns depth).
+        TypeAnn::Generic(name, _args) => {
+            let head = ann_name_norm(name);
+            match head.as_str() {
+                "any" => true,
+                "list" => matches!(v, Value::List(_)),
+                "map" => matches!(v, Value::Map(_)),
+                "option" => {
+                    matches!(v, Value::Null)
+                        || matches!(v, Value::Variant(t, _) if t.family() == "option")
+                }
+                "result" => matches!(v, Value::Variant(t, _) if t.family() == "result"),
+                // unknown generic head: fall back to the bare-name rule so a
+                // typo'd annotation never silently accepts everything
+                _ => v.type_name() == head || (head == "float" && matches!(v, Value::Int(_))),
+            }
+        }
+    }
+}
+
+/// TYPED-MODE: case-normalized annotation name (`Int`→`int`, `Str`→`str`).
+/// Mirrored by oracle.ann_name_norm.
+pub fn ann_name_norm(name: &str) -> String {
+    name.to_ascii_lowercase()
+}
+
+/// TYPED-MODE: does this annotation name (only) a declared generic type
+/// parameter? Type parameters are ERASED at runtime: the soft contract is
+/// a no-op for them (any value satisfies `T`), while the static checker
+/// owns the real constraint. Mirrored by oracle.ann_is_typaram.
+pub fn ann_is_typaram(ann: &TypeAnn, type_params: &[(String, Option<String>)]) -> bool {
+    match ann {
+        TypeAnn::Named(n) => type_params.iter().any(|(p, _)| p == n),
+        TypeAnn::Union(alts) => alts.iter().all(|a| ann_is_typaram(a, type_params)),
+        TypeAnn::Optional(inner) => ann_is_typaram(inner, type_params),
+        // generic heads: list[T] etc. enforce their shallow runtime shape,
+        // only a BARE parameter name is erased
+        TypeAnn::Generic(_, _) => false,
+        // W01-s2: an alias resolves to its target, which is concrete
+        TypeAnn::Alias { .. } => false,
     }
 }
 
