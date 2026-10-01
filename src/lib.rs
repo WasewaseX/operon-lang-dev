@@ -21,6 +21,8 @@ pub mod pybridge;
 pub mod rna2;
 pub mod sched;
 pub mod tools;
+pub mod typeck;
+pub mod types;
 pub mod unicode_tables;
 pub mod value;
 pub mod vm;

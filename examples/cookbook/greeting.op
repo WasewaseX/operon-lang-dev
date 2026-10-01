@@ -1,0 +1,38 @@
+# cookbook/greeting — CLI arguments with std/args
+#
+# The "hello world" of real CLIs: positional args, flags, and defaults.
+# `gene` ≈ a named function; everything here is plain string work.
+#
+# Run:  operon run examples/cookbook/greeting.op
+#
+# --- expected output ---
+# Hello, Ada!
+# SHOUTING FOR ADA!
+# ----------------------
+
+use std/args as ar
+
+gene greet(name, punct) {
+    return "Hello, " + name + punct
+}
+
+gene shout(text) {
+    return text.upper() + "!"
+}
+
+main {
+    # In a real CLI you would use the argv() builtin directly. The cookbook
+    # uses a fixed vector so the expected output below stays deterministic:
+    #   let argvv = argv()
+    let argvv = ["greet.op", "Ada", "--shout", "--punct=!"]
+    let who = ar.args_positional(argvv)
+    let name = "world"
+    if len(who) > 0 {
+        name = who[0]
+    }
+    let punct = ar.args_value(argvv, "punct", "!")
+    promote(greet(name, punct))
+    if ar.args_flag(argvv, "shout") {
+        promote(shout("SHOUTING FOR " + name.upper()))
+    }
+}
