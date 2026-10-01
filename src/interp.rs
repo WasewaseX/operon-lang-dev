@@ -733,6 +733,10 @@ pub struct Interp {
     pub vm_stack_pool: Vec<Vec<crate::value::Value>>,
     /// W11: the optimization level behind --opt (0 = off).
     pub vm_opt: u8,
+    /// W011 toggle matrix: an explicit --opt-passes set. None = derive
+    /// from vm_opt (1 = STAGE1, 2 = ALL); Some(set) is authoritative,
+    /// including PassSet::NONE (compile-only). Process-constant.
+    pub opt_passes: Option<crate::vm::PassSet>,
     /// W08 phase 1: interactive debug hooks (`operon debug`). Break lines
     /// are matched against the current source line after each statement;
     /// workers are separate Interps and never break.
@@ -855,6 +859,7 @@ impl Interp {
             vm_program: None,
             vm_stack_pool: Vec::new(),
             vm_opt: 0,
+            opt_passes: None,
             debug_breaks: HashSet::new(),
             debug_step: false,
             debug_file: String::new(),

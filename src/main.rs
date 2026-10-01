@@ -150,8 +150,10 @@ fn real_main() {
     #[allow(unused_assignments)]
     let mut debug_mode = false;
     let mut debug_breaks: Vec<usize> = Vec::new();
-    // W11: the optimization level (0 = off)
+    // W11: the optimization level (0 = off); --opt-passes overrides with
+    // an explicit per-pass set (the W011 toggle matrix)
     let mut opt_level: u8 = 0;
+    let mut opt_passes: Option<operon::vm::PassSet> = None;
     let mut matrix = false;
     // dx-r6: true after the `--` separator, remaining args are program argv
     let mut passthrough = false;
@@ -373,6 +375,15 @@ fn real_main() {
                 opt_level = n
                     .parse()
                     .unwrap_or_else(|_| die("--opt needs a level (0..=2)"));
+            }
+            // W011 toggle matrix: run EXACTLY these passes, e.g.
+            // --opt-passes fold,dce (valid: fold, thread, dce, none, all)
+            "--opt-passes" => {
+                i += 1;
+                let spec = rest.get(i).cloned().unwrap_or_else(|| {
+                    die("--opt-passes needs a list (fold,thread,dce | none | all)")
+                });
+                opt_passes = Some(operon::vm::PassSet::parse(&spec).unwrap_or_else(|e| die(&e)));
             }
             // W08 phase 1: a line breakpoint for `operon debug`
             "--break" => {
@@ -783,6 +794,7 @@ fn real_main() {
             if use_vm && !debug_mode {
                 l.interp.vm = true;
                 l.interp.vm_opt = opt_level;
+                l.interp.opt_passes = opt_passes;
                 l.interp.vm_program = Some(operon::vm::VmProgram::default());
             }
             // W08r hotfix: `debug` is an interpreter-side feature (the traps,
@@ -2762,6 +2774,8 @@ usage:
   operon crispr f.op --knockout gene [--json]
   operon bench f.op [--iters n]
   operon run f.op --vm            A2/A3: bytecode VM on gene bodies
+  operon run f.op --opt 1         W11: fold/thread/DCE passes (2 = full, 0 = off)
+  operon run f.op --opt-passes fold,dce   W011: run exactly these passes
   operon version",
         env!("CARGO_PKG_VERSION")
     );

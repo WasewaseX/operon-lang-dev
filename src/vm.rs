@@ -678,13 +678,23 @@ pub(crate) fn gene_code_cached(
     body: &[Stmt],
 ) -> std::rc::Rc<GeneCode> {
     let opt = interp.vm_opt;
+    // W011 toggle matrix: an explicit --opt-passes set wins over the level
+    // (a Some set is authoritative, including NONE = compile-only); the
+    // level otherwise picks the preset (1 = STAGE1, 2 = ALL).
+    let passes = interp.opt_passes.unwrap_or(if opt >= 2 {
+        PassSet::ALL
+    } else {
+        PassSet::STAGE1
+    });
+    let opt_active = opt >= 1 || interp.opt_passes.is_some();
     // ast-grep-ignore: no-unwrap-in-src
     let prog = interp.vm_program.as_mut().unwrap();
     // W016-v3 (adopted from builder-B's be991fc): a literal 1usize << 62
     // is E0080 on 32-bit targets; the second-highest bit keeps the
     // cache-key space split identically on every width (bit 62 on 64-bit,
-    // byte-identical behavior)
-    let key = if opt >= 1 {
+    // byte-identical behavior). The pass set is process-constant (flags
+    // are parsed once), so ONE shifted space is enough.
+    let key = if opt_active {
         // cache the optimized form under a shifted key
         def_key.wrapping_add(1usize << (usize::BITS - 2))
     } else {
@@ -694,8 +704,8 @@ pub(crate) fn gene_code_cached(
         Some(cached) => cached.clone(),
         None => {
             let compiled = compile_body(name, body, prog);
-            let compiled = if opt >= 1 {
-                optimize(&compiled)
+            let compiled = if opt_active {
+                optimize_with(&compiled, passes)
             } else {
                 compiled
             };
@@ -1691,6 +1701,74 @@ fn render_const(code: &GeneCode, idx: u32) -> String {
     }
 }
 
+/// W11: the per-pass toggle matrix. `--opt 1` = STAGE1 (the three
+/// delivered passes), `--opt 2` = ALL (the same set until later passes
+/// land), `--opt-passes a,b,c` = an explicit set parsed by `PassSet::parse`.
+/// The pipeline ORDER is the contract (fold -> thread -> dce): disabling a
+/// pass only removes its rewrite, never reorders another one.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct PassSet {
+    /// pass 1: constant folding (Push/Push/Bin and Push/BinImm shapes)
+    pub fold: bool,
+    /// pass 2: jump threading + dead unconditional-jump removal
+    pub thread: bool,
+    /// pass 3: reachability DCE from ip 0
+    pub dce: bool,
+}
+
+impl PassSet {
+    pub const NONE: PassSet = PassSet {
+        fold: false,
+        thread: false,
+        dce: false,
+    };
+    /// `--opt 1`: the delivered stage-1+2 pipeline.
+    pub const STAGE1: PassSet = PassSet {
+        fold: true,
+        thread: true,
+        dce: true,
+    };
+    /// `--opt 2`: every pass the pipeline ships today (grows with W011).
+    pub const ALL: PassSet = PassSet {
+        fold: true,
+        thread: true,
+        dce: true,
+    };
+
+    /// Parse a `--opt-passes` spec: a comma-separated list of pass names,
+    /// or `none` / `all`. Unknown names are an error (rc 2 in main) — a
+    /// typo must never silently enable fewer passes than the user asked
+    /// for (the honesty rule: flags do what they say).
+    pub fn parse(spec: &str) -> Result<PassSet, String> {
+        let spec = spec.trim();
+        if spec == "none" {
+            return Ok(PassSet::NONE);
+        }
+        if spec == "all" {
+            return Ok(PassSet::ALL);
+        }
+        let mut set = PassSet::NONE;
+        for name in spec.split(',') {
+            match name.trim() {
+                "fold" => set.fold = true,
+                "thread" => set.thread = true,
+                "dce" => set.dce = true,
+                other => {
+                    return Err(format!(
+                        "unknown optimization pass '{}' (valid: {})",
+                        other,
+                        PassSet::NAMES.join(", ")
+                    ))
+                }
+            }
+        }
+        Ok(set)
+    }
+
+    /// The canonical name list (tests + usage text pin this).
+    pub const NAMES: &'static [&'static str] = &["fold", "thread", "dce"];
+}
+
 /// W11 stage 1+2: the optimization pipeline. Draw-free, provably
 /// behavior-preserving passes over the OIR1:
 ///   1. constant folding: Push a, Push b, Bin -> Push (folded). Only pure
@@ -1706,88 +1784,99 @@ fn render_const(code: &GeneCode, idx: u32) -> String {
 ///      instructions, and the folder must not reorder or remove draws
 ///      (the entropy discipline, vm-design.md invariant 2).
 pub fn optimize(code: &GeneCode) -> GeneCode {
+    optimize_with(code, PassSet::ALL)
+}
+
+/// Run a SELECTED subset of the passes (W011 toggle matrix). Order stays
+/// fold -> thread -> dce regardless of the subset: the passes are
+/// individually disableable, never reordered.
+pub fn optimize_with(code: &GeneCode, passes: PassSet) -> GeneCode {
     let mut consts = code.consts.clone();
     let mut code = code.clone();
 
     // pass 1: constant folding (fixpoint, bounded). Both Bin shapes fold:
     // the Push/Push/Bin triple and the W11 fused Push/BinImm pair (the
     // folded form of a literal rhs).
-    for _round in 0..8 {
-        let mut folded = false;
-        let mut i = 0;
-        while i + 2 < code.code.len() {
-            if let (Instr::Push(a), Instr::Push(b), Instr::Bin(op)) =
-                (&code.code[i], &code.code[i + 1], &code.code[i + 2])
-            {
-                if let Some(newc) = fold_consts(&mut consts, *a, *b, *op) {
-                    code.code[i] = Instr::Push(newc);
-                    code.code.remove(i + 2);
-                    code.code.remove(i + 1);
-                    code.lines.remove(i + 2);
-                    code.lines.remove(i + 1);
-                    remap_after_removal(&mut code, i + 1, 2);
-                    folded = true;
-                    continue; // try to fold the result into its neighbor
+    if passes.fold {
+        for _round in 0..8 {
+            let mut folded = false;
+            let mut i = 0;
+            while i + 2 < code.code.len() {
+                if let (Instr::Push(a), Instr::Push(b), Instr::Bin(op)) =
+                    (&code.code[i], &code.code[i + 1], &code.code[i + 2])
+                {
+                    if let Some(newc) = fold_consts(&mut consts, *a, *b, *op) {
+                        code.code[i] = Instr::Push(newc);
+                        code.code.remove(i + 2);
+                        code.code.remove(i + 1);
+                        code.lines.remove(i + 2);
+                        code.lines.remove(i + 1);
+                        remap_after_removal(&mut code, i + 1, 2);
+                        folded = true;
+                        continue; // try to fold the result into its neighbor
+                    }
                 }
+                i += 1;
             }
-            i += 1;
-        }
-        let mut i = 0;
-        while i + 1 < code.code.len() {
-            if let (Instr::Push(a), Instr::BinImm(op, b)) = (&code.code[i], &code.code[i + 1]) {
-                if let Some(newc) = fold_consts(&mut consts, *a, *b, *op) {
-                    code.code[i] = Instr::Push(newc);
-                    code.code.remove(i + 1);
-                    code.lines.remove(i + 1);
-                    remap_after_removal(&mut code, i + 1, 1);
-                    folded = true;
-                    continue;
+            let mut i = 0;
+            while i + 1 < code.code.len() {
+                if let (Instr::Push(a), Instr::BinImm(op, b)) = (&code.code[i], &code.code[i + 1]) {
+                    if let Some(newc) = fold_consts(&mut consts, *a, *b, *op) {
+                        code.code[i] = Instr::Push(newc);
+                        code.code.remove(i + 1);
+                        code.lines.remove(i + 1);
+                        remap_after_removal(&mut code, i + 1, 1);
+                        folded = true;
+                        continue;
+                    }
                 }
+                i += 1;
             }
-            i += 1;
-        }
-        if !folded {
-            break;
+            if !folded {
+                break;
+            }
         }
     }
 
     // pass 2: jump threading + dead unconditional-jump removal
-    for _round in 0..8 {
-        let mut changed = false;
-        for i in 0..code.code.len() {
-            if let Instr::Jmp(t) = code.code[i] {
-                let mut target = t as usize;
-                let mut hops = 0;
-                while hops < 16 {
-                    match code.code.get(target) {
-                        Some(Instr::Jmp(t2)) => {
-                            target = *t2 as usize;
-                            hops += 1;
+    if passes.thread {
+        for _round in 0..8 {
+            let mut changed = false;
+            for i in 0..code.code.len() {
+                if let Instr::Jmp(t) = code.code[i] {
+                    let mut target = t as usize;
+                    let mut hops = 0;
+                    while hops < 16 {
+                        match code.code.get(target) {
+                            Some(Instr::Jmp(t2)) => {
+                                target = *t2 as usize;
+                                hops += 1;
+                            }
+                            _ => break,
                         }
-                        _ => break,
+                    }
+                    if target != t as usize {
+                        code.code[i] = Instr::Jmp(target as u32);
+                        changed = true;
                     }
                 }
-                if target != t as usize {
-                    code.code[i] = Instr::Jmp(target as u32);
-                    changed = true;
-                }
             }
-        }
-        let mut i = 0;
-        while i < code.code.len() {
-            if let Instr::Jmp(t) = code.code[i] {
-                if t as usize == i + 1 {
-                    code.code.remove(i);
-                    code.lines.remove(i);
-                    remap_after_removal(&mut code, i, 1);
-                    changed = true;
-                    continue;
+            let mut i = 0;
+            while i < code.code.len() {
+                if let Instr::Jmp(t) = code.code[i] {
+                    if t as usize == i + 1 {
+                        code.code.remove(i);
+                        code.lines.remove(i);
+                        remap_after_removal(&mut code, i, 1);
+                        changed = true;
+                        continue;
+                    }
                 }
+                i += 1;
             }
-            i += 1;
-        }
-        if !changed {
-            break;
+            if !changed {
+                break;
+            }
         }
     }
 
@@ -1795,53 +1884,55 @@ pub fn optimize(code: &GeneCode) -> GeneCode {
     // every jump target; keep the marked instructions in order and remap
     // every target through the old->new table. A target may legally be
     // code.len() ("fall off the end"), so the table has n+1 slots.
-    {
-        let n = code.code.len();
-        let mut mask = vec![false; n];
-        let mut work = vec![0usize];
-        while let Some(ip) = work.pop() {
-            if ip >= n || mask[ip] {
-                continue;
-            }
-            mask[ip] = true;
-            match &code.code[ip] {
-                Instr::Jmp(t) | Instr::Brk(t) | Instr::Cont(t) => work.push(*t as usize),
-                Instr::JmpIfF(t) => {
-                    work.push(*t as usize);
-                    work.push(ip + 1);
-                }
-                Instr::Ret | Instr::RetName(_) => {}
-                _ => work.push(ip + 1),
-            }
-        }
-        if mask.iter().any(|m| !*m) {
-            let mut map = vec![0u32; n + 1];
-            let mut next = 0u32;
-            for i in 0..n {
-                if mask[i] {
-                    map[i] = next;
-                    next += 1;
-                }
-            }
-            map[n] = next; // the fall-off-the-end target
-            let mut new_code = Vec::with_capacity(next as usize);
-            let mut new_lines = Vec::with_capacity(next as usize);
-            for (i, keep) in mask.iter().enumerate() {
-                if !keep {
+    if passes.dce {
+        {
+            let n = code.code.len();
+            let mut mask = vec![false; n];
+            let mut work = vec![0usize];
+            while let Some(ip) = work.pop() {
+                if ip >= n || mask[ip] {
                     continue;
                 }
-                let mut instr = code.code[i].clone();
-                match &mut instr {
-                    Instr::Jmp(t) | Instr::JmpIfF(t) | Instr::Brk(t) | Instr::Cont(t) => {
-                        *t = map[*t as usize];
+                mask[ip] = true;
+                match &code.code[ip] {
+                    Instr::Jmp(t) | Instr::Brk(t) | Instr::Cont(t) => work.push(*t as usize),
+                    Instr::JmpIfF(t) => {
+                        work.push(*t as usize);
+                        work.push(ip + 1);
                     }
-                    _ => {}
+                    Instr::Ret | Instr::RetName(_) => {}
+                    _ => work.push(ip + 1),
                 }
-                new_code.push(instr);
-                new_lines.push(code.lines[i]);
             }
-            code.code = new_code;
-            code.lines = new_lines;
+            if mask.iter().any(|m| !*m) {
+                let mut map = vec![0u32; n + 1];
+                let mut next = 0u32;
+                for i in 0..n {
+                    if mask[i] {
+                        map[i] = next;
+                        next += 1;
+                    }
+                }
+                map[n] = next; // the fall-off-the-end target
+                let mut new_code = Vec::with_capacity(next as usize);
+                let mut new_lines = Vec::with_capacity(next as usize);
+                for (i, keep) in mask.iter().enumerate() {
+                    if !keep {
+                        continue;
+                    }
+                    let mut instr = code.code[i].clone();
+                    match &mut instr {
+                        Instr::Jmp(t) | Instr::JmpIfF(t) | Instr::Brk(t) | Instr::Cont(t) => {
+                            *t = map[*t as usize];
+                        }
+                        _ => {}
+                    }
+                    new_code.push(instr);
+                    new_lines.push(code.lines[i]);
+                }
+                code.code = new_code;
+                code.lines = new_lines;
+            }
         }
     }
 
@@ -1945,6 +2036,104 @@ fn fold_consts(consts: &mut Vec<Const>, a: u32, b: u32, op: BinOp) -> Option<u32
 mod tests {
     use super::*;
     use crate::ast::Stmt;
+
+    /// Compile one gene's body from a source snippet (test helper).
+    fn compile_one(src: &str) -> (Vec<Stmt>, VmProgram, GeneCode) {
+        let parsed = crate::parser::parse(src);
+        let mut body: Vec<Stmt> = Vec::new();
+        for s in &parsed.stmts {
+            if let Stmt::Gene(g) = s {
+                body = g.body.clone();
+            }
+        }
+        let mut prog = VmProgram::default();
+        let code = compile_body("f", &body, &mut prog);
+        (body, prog, code)
+    }
+
+    /// W011 toggle matrix: the parser accepts the documented names and
+    /// rejects typos (a typo must never silently enable fewer passes).
+    #[test]
+    fn pass_set_parse_matrix() {
+        assert_eq!(PassSet::parse("all"), Ok(PassSet::ALL));
+        assert_eq!(PassSet::parse("none"), Ok(PassSet::NONE));
+        assert_eq!(
+            PassSet::parse("fold"),
+            Ok(PassSet {
+                fold: true,
+                thread: false,
+                dce: false
+            })
+        );
+        assert_eq!(
+            PassSet::parse("fold, dce"),
+            Ok(PassSet {
+                fold: true,
+                thread: false,
+                dce: true
+            })
+        );
+        assert!(PassSet::parse("fodl").is_err());
+        assert!(PassSet::parse("").is_err());
+        assert!(PassSet::parse("fold,prop").is_err()); // prop not in stage 1
+    }
+
+    /// W011: with folding disabled the same program keeps its arithmetic.
+    #[test]
+    fn fold_toggle_leaves_arithmetic_alone() {
+        let (_body, _prog, raw) = compile_one("gene f() {\n    return 6 * 7\n}\n");
+        // `6 * 7` compiles to Push, BinImm (the compiler fuses the literal
+        // rhs BEFORE any optimizer pass) — the folder is what turns that
+        // pair into a single Push.
+        let is_arith = |i: &Instr| matches!(i, Instr::Bin(_) | Instr::BinImm(_, _));
+        assert!(raw.code.iter().any(is_arith), "raw body has the arithmetic");
+        let nofold = optimize_with(
+            &raw,
+            PassSet {
+                fold: false,
+                thread: true,
+                dce: true,
+            },
+        );
+        assert!(
+            nofold.code.iter().any(is_arith),
+            "fold=false must keep the arithmetic"
+        );
+        let all = optimize_with(&raw, PassSet::ALL);
+        assert!(
+            !all.code.iter().any(is_arith),
+            "fold=true must fold it away"
+        );
+    }
+
+    /// W011: with threading disabled a Jmp-to-Jmp chain stays; with DCE
+    /// disabled dead code after a Ret stays.
+    #[test]
+    fn thread_and_dce_toggles_are_honest() {
+        // if false { return 1 } else { return 2 }: a Jmp chain + a dead island
+        let src = "gene f() {\n    if true {\n        return 1\n    } else {\n        return 2\n    }\n}\n";
+        let (_body, _prog, raw) = compile_one(src);
+        let raw_has_dead = raw.code.len();
+        assert!(
+            raw_has_dead > 2,
+            "the if/else compiles to more than Push/Ret"
+        );
+        // thread=false, dce=false: nothing may shrink
+        let untouched = optimize_with(&raw, PassSet::NONE);
+        assert_eq!(untouched.code.len(), raw.code.len());
+        // dce=false but thread=true: dead code still present after threading
+        let no_dce = optimize_with(
+            &raw,
+            PassSet {
+                fold: true,
+                thread: true,
+                dce: false,
+            },
+        );
+        let with_dce = optimize_with(&raw, PassSet::STAGE1);
+        assert!(no_dce.code.len() >= with_dce.code.len());
+        assert!(with_dce.code.len() <= no_dce.code.len());
+    }
 
     /// W11 stage 1: the folding pass removes constant arithmetic without
     /// changing the program's observable encoding of jumps.
