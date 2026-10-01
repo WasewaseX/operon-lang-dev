@@ -20,7 +20,10 @@
 #   never synthesize error text, they only move existing values.
 # - Gene names in this module deliberately never shadow a builtin (the W003
 #   'get' lesson: a module gene named like a builtin shadows it for the
-#   whole module body).
+#   whole module body). One STDLIB-INTERNAL overlap is known and deliberate:
+#   `map` here is the Result combinator, while std/typed.op's `map` is the
+#   typed-collection wrapper — when both modules are in play, qualify the
+#   call site (`r.map(res, f)` / `t.map(xs, f)`); the tests import with `as`.
 
 gene map(r, f) {
     # ok(v) -> ok(f(v)); err(e) -> err(e) untouched
