@@ -1,0 +1,70 @@
+# ============================================================
+# JSON safety net , cookbook #20
+# you already know: JSON.parse + try/catch, or serde with a Result
+# teaches: expected failures as VALUES — try_json_parse returns
+#          Ok(value) / Err(reason), so a malformed document is just
+#          another branch, and try_get/unwrap_or keep the fallbacks
+#          readable (no null-and-hope)
+# run: operon run examples/cookbook/json_safety_net.op
+# expected output: examples/cookbook/expected/json_safety_net.out
+# verified by scripts/cookbook.sh on the Rust core AND the Python oracle
+# ============================================================
+# A tiny ingest pipeline: a feed of JSON documents, some malformed.
+# The gate keeps only records that parse AND carry the fields it needs;
+# everything else is counted by reason. Note: object braces in STRING
+# literals are built with chr(123)/chr(125) — a bare '{' inside a string
+# starts an interpolation (SPEC).
+#
+# the feed: two good records, one missing a field, one plain garbage
+let feed = [
+    chr(123) + "\"id\": \"a1\", \"qty\": 4, \"tag\": \"steel\"" + chr(125),
+    chr(123) + "\"id\": \"b2\", \"qty\": \"9\", \"tag\": \"nylon\"" + chr(125),
+    chr(123) + "\"id\": \"c3\", \"tag\": \"rope\"" + chr(125),
+    "not json at all"
+]
+gene gate(doc) {
+    # parse first: a malformed document is an Err, not a crash
+    let parsed = try_json_parse(doc)
+    if (is_err(parsed)) {
+        return err("unparseable")
+    }
+    let rec = unwrap(parsed)
+    # field access through try_get: a missing key is an Err value
+    let qty = try_get(rec, "qty")
+    if (is_err(qty)) {
+        return err("missing qty")
+    }
+    # qty must be an int — "9" (a string) refuses as a type Err
+    let n = try_num(unwrap(qty))
+    if (is_err(n)) {
+        return err("qty not a number")
+    }
+    return ok({id: unwrap_or(try_get(rec, "id"), "?"), qty: unwrap(n)})
+}
+let kept = []
+let reasons = {}
+for doc in feed {
+    let verdict = gate(doc)
+    if (is_ok(verdict)) {
+        push(kept, unwrap(verdict))
+    } else {
+        # count rejections by their fixed reason — the Err payload is
+        # read through `match`, the sanctioned accessor (SPEC §9)
+        match verdict {
+            case Err(why) {
+                let seen = try_get(reasons, why)
+                reasons[why] = unwrap_or(seen, 0) + 1
+            }
+            case Ok(v) {
+                print("unreachable: " + str(v))
+            }
+        }
+    }
+}
+print("kept " + str(len(kept)) + " of " + str(len(feed)))
+for rec in kept {
+    print("  id=" + rec["id"] + " qty=" + str(rec["qty"]))
+}
+for why in keys(reasons) {
+    print("  rejected [" + why + "] x" + str(reasons[why]))
+}
