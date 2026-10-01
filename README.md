@@ -73,6 +73,14 @@ prerequisite. **[TUTORIAL.md](TUTORIAL.md)** takes you from `hello.op` to proof 
 splice variants, regulation-as-feature-flags and the REPL, with every example verified
 against the toolchain. Then try `operon repl`, `:help` is your friend.
 
+Want types? Operon runs **dynamic** (scripting, REPL) and adds an opt-in
+**typed mode**: `gene add(a: Int, b: Int) -> Int`, generics (`gene first<T>
+(items: list[T]) -> T?`), trait contracts, Option/Result with `?!`, and
+match-exhaustiveness — all checked at compile time (`operon run --typed`,
+`operon check --typed`) while the dynamic side stays byte-identical. The
+flagship catch: `x = 10; x.name()` is rejected before the program starts.
+See [docs/design/TYPED-MODE.md](docs/design/TYPED-MODE.md) and SPEC §16a.
+
 ---
 
 ## Cookbook, small real programs to steal from
@@ -127,6 +135,17 @@ wobble ladder, machine-applicable fixes, and `--json-errors` for tools.
 The guide is [docs/errors.md](docs/errors.md); the byte-exact fixtures are
 part of the standard gate suite.
 
+## Debugging
+
+`operon debug` is a statement-level interactive debugger: line breakpoints,
+step-into/over/out, one-shot run-to-line, live breakpoint management, frame
+variables and expression evaluation — plus a machine surface for tools:
+`--protocol=json` (NDJSON on stdio) and `operon dap` (the Debug Adapter
+Protocol adapter, so VS Code and every other DAP client debug Operon
+natively; the extension lives in `editors/vscode/`). The guide is
+[docs/DEBUGGER.md](docs/DEBUGGER.md); all three surfaces have standing
+e2e gates.
+
 ## Fuzzing
 
 The Total Grammar promise ("every input must not crash") is held against
@@ -176,7 +195,7 @@ warning  app.op: 7: call to deprecated gene 'old_double' (since 2.4), use twice(
 
 ## The gene-expression regulation layer
 
-Real mechanisms, real semantics, the professor-level feature set (fidelity is per-row; SPEC §16 carries the term audits):
+Real mechanisms, real semantics — the professor-level feature set (fidelity is per-row; docs/spec/BIO-CONTRACT.md grades every mechanism, docs/spec/MODELING-NOTES.md carries the term audits, docs/GENE-EXPRESSION-PARITY.md is the end-to-end comparison against real molecular biology):
 
 | mechanism | feature |
 |---|---|

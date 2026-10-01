@@ -23,6 +23,13 @@ pub enum Expr {
     Int(i64),
     Float(f64),
     Str(String),
+    /// W08r: a transparent position marker. The parser wraps the RHS of a
+    /// line-silent statement (pure literals/idents: nothing inside carries a
+    /// source line) with `At(inner, line)` so the debugger can attribute the
+    /// statement to its source line. Evaluation, compilation, lint and
+    /// typecheck all pass straight through to `inner`; only the debug
+    /// extractor (expr_first_line) and the VM compiler's line table read it.
+    At(Box<Expr>, usize),
     /// W029: bytes literal b"...", the raw bytes after escape processing;
     /// no interpolation ever.
     Bytes(Vec<u8>),
@@ -42,9 +49,11 @@ pub enum Expr {
     /// L1a: `a?.k`, Null receiver yields Null (silent); otherwise identical
     /// to Member.
     MemberSafe(Box<Expr>, String),
-    Method(Box<Expr>, String, Vec<Expr>),
+    /// TYPED-MODE: source line of the method call, static member errors
+    /// (`int has no method 'name'`) locate themselves like Call/Index do.
+    Method(Box<Expr>, String, Vec<Expr>, usize),
     /// L1a: `a?.k(args)`, Null-safe method call (same contract).
-    MethodSafe(Box<Expr>, String, Vec<Expr>),
+    MethodSafe(Box<Expr>, String, Vec<Expr>, usize),
     Lambda(Arc<GeneDef>),
     Collect {
         var: String,
@@ -139,6 +148,11 @@ pub struct GeneDef {
     /// and tooling surface only (lint `deprecated-use` findings, doc/fmt
     /// round-trip); the interpreter never reads it, runtime is untouched.
     pub deprecated: Option<Deprecation>,
+    /// TYPED-MODE: declared generic type parameters, `gene first<T>(...)`.
+    /// (name, optional bound) — the bound is a trait/constraint name. Pure
+    /// metadata for the static checker and fmt/doc round-trip; the dynamic
+    /// evaluator never reads it.
+    pub type_params: Vec<(String, Option<String>)>,
 }
 
 /// W64: the structured payload of a deprecation mark.
@@ -162,6 +176,22 @@ pub enum TypeAnn {
     Named(String),
     Union(Vec<TypeAnn>),
     Optional(Box<TypeAnn>),
+    /// TYPED-MODE: generic annotation, `list[int]`, `map[str, int]`,
+    /// `result[int, str]`, `option[t]`. The name is the head; the args are
+    /// the bracketed parameters. Runtime soft matching treats a generic
+    /// annotation's HEAD like the bare name (list[int] enforces "is a
+    /// list") — element types are the static checker's business.
+    Generic(String, Vec<TypeAnn>),
+    /// W01-s2 type aliases: an annotation naming a declared alias
+    /// (`type Metrics = map[str, float]`, then `m: Metrics`). The parser
+    /// resolves the name at parse time; matching is the TARGET's law
+    /// (runtime + checker both recurse into `target`). No forward
+    /// references: an annotation naming an alias BEFORE its declaration
+    /// stays a plain `Named` and the typo-armor rule applies.
+    Alias {
+        name: String,
+        target: Box<TypeAnn>,
+    },
 }
 
 impl TypeAnn {
@@ -176,6 +206,15 @@ impl TypeAnn {
                 .collect::<Vec<_>>()
                 .join(" | "),
             TypeAnn::Optional(inner) => format!("{}?", inner.render()),
+            TypeAnn::Generic(name, args) => format!(
+                "{}[{}]",
+                name,
+                args.iter()
+                    .map(|a| a.render())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            TypeAnn::Alias { name, .. } => name.clone(),
         }
     }
 }
@@ -398,6 +437,12 @@ pub enum Stmt {
     /// checked when the statement binds (mismatch = catchable `unfolded`
     /// Stress, SPEC §7a); the binding itself is an ordinary `let`.
     LetAnn(String, TypeAnn, Expr),
+    /// W01-s2: `type Name = ann`, a type alias. Parse-time metadata: the
+    /// parser resolves later annotations naming `Name` into
+    /// `TypeAnn::Alias`, and the statement itself is inert at runtime
+    /// (the tree-walk no-ops it; the VM bridges it there). The line
+    /// stamps the duplicate-alias note and fmt output.
+    TypeAlias(String, TypeAnn, usize),
     Assign(String, Option<BinOp>, Expr), // name (op=)? expr
     IndexAssign(Expr, Expr, Option<BinOp>, Expr), // target[i] (op=)? expr
     MemberAssign(Expr, String, Option<BinOp>, Expr), // target.k (op=)? expr
@@ -422,7 +467,9 @@ pub enum Stmt {
     Break,
     Continue,
     ExprStmt(Expr),
-    Match(Expr, Vec<(MatchPat, Vec<Stmt>)>),
+    /// TYPED-MODE: the match statement carries its source line so static
+    /// exhaustiveness findings (T05) locate themselves.
+    Match(Expr, Vec<(MatchPat, Vec<Stmt>)>, usize),
     Use(String, Option<String>),        // path, alias
     Raise(Option<String>, Expr, usize), // kind, message, statement line (W007)
     Stress {
@@ -511,4 +558,68 @@ pub struct Program {
     /// module exports ONLY these names (migration-safe: a strict module
     /// with zero pub marks keeps default-open, with a note).
     pub pub_exports: Vec<String>,
+}
+
+// ---------------------------------------------------- W08r statement lines
+
+/// W08r stage 1: the first line-bearing source position reachable in an
+/// expression. The AST carries lines only on the locating nodes (calls,
+/// binaries, indexes, methods, propagate — dx-r2/r4), so a statement whose
+/// expressions are all literals/idents reports None; the debugger then
+/// falls back to cur_line. This is the extraction the VM compiler's
+/// line_of stub wants too (a documented gap, not a divergence: both lanes
+/// see the same None).
+pub fn expr_first_line(e: &Expr) -> Option<usize> {
+    match e {
+        // W08r: the parser's position marker IS the line for line-silent
+        // statement expressions
+        Expr::At(_, l) => Some(*l),
+        Expr::Call(_, _, l) => Some(*l),
+        Expr::Binary(_, _, _, l) => Some(*l),
+        Expr::Index(_, _, l) => Some(*l),
+        Expr::Method(_, _, _, l) => Some(*l),
+        Expr::MethodSafe(_, _, _, l) => Some(*l),
+        Expr::Propagate(_, l) => Some(*l),
+        Expr::Unary(_, b) => expr_first_line(b),
+        Expr::Member(b, _) | Expr::MemberSafe(b, _) => expr_first_line(b),
+        Expr::Ternary(c, _, _) => expr_first_line(c),
+        Expr::List(v) => v.iter().find_map(expr_first_line),
+        Expr::Map(pairs) => pairs
+            .iter()
+            .find_map(|(k, v)| expr_first_line(k).or_else(|| expr_first_line(v))),
+        _ => None,
+    }
+}
+
+impl Stmt {
+    /// W08r stage 1: best-effort source line of this statement (the first
+    /// line-bearing node in its expressions/heads). None = the statement
+    /// is line-silent (pure literals/idents); the debug trap then falls
+    /// back to the interpreter's cur_line.
+    pub fn first_line(&self) -> Option<usize> {
+        match self {
+            Stmt::Let(_, e)
+            | Stmt::LetConst(_, e)
+            | Stmt::LetAnn(_, _, e)
+            | Stmt::LetPat(_, e)
+            | Stmt::Assign(_, _, e)
+            | Stmt::ExprStmt(e)
+            | Stmt::For(_, e, _)
+            | Stmt::ForPat(_, e, _)
+            | Stmt::While(e, _) => expr_first_line(e),
+            Stmt::IndexAssign(t, i, _, e) => expr_first_line(t)
+                .or_else(|| expr_first_line(i))
+                .or_else(|| expr_first_line(e)),
+            Stmt::MemberAssign(t, _, _, e) => expr_first_line(t).or_else(|| expr_first_line(e)),
+            Stmt::MultiAssign(targets, values, _) => targets
+                .iter()
+                .chain(values.iter())
+                .find_map(expr_first_line),
+            Stmt::If(arms, _) => arms.first().and_then(|(c, _)| expr_first_line(c)),
+            Stmt::Match(_e, _, l) => Some(*l),
+            Stmt::Raise(_, _, l) => Some(*l),
+            Stmt::TypeAlias(_, _, l) => Some(*l),
+            _ => None,
+        }
+    }
 }

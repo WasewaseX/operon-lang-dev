@@ -29,6 +29,17 @@ echo "[2/3] Operon proof suite (Rust core)"
 # oracle cannot observe mid-flight ordering), so tests/timing/ is a
 # Rust-only lane with its own explicit cell; both test walkers skip it.
 ./bin/operon test tests/timing/ --cell tests/timing/timing.cell
+# W08r: the async corpus runs on the fiber lane (io.pool cell): the virtual
+# clock makes fuel deterministic. The thread lane charges parked workers per
+# REAL millisecond — on slow CI runners that burned the pool on identical
+# files that pass locally (the [burned] failures on 6e7b7b7) — so both test
+# walkers skip tests/async (the timing-lane precedent) and the corpus is
+# exercised here, cell-gated; substrate equivalence stays pinned by
+# tests/async_parity.rs (8 two-lane programs byte-identical) and the
+# FIFO-wake determinism repeat.
+./bin/operon test tests/async/ --cell tests/async/async.cell
+./bin/operon test tests/async/timing/async_sleeps.op --cell tests/async/async.cell
+./bin/operon test tests/async/timing/async_wake_order.op --cell tests/async/async.cell --repeat 3
 # W18: cancellation inheritance — the child's observation lands in a file
 # under an explicit write grant (granted-lane pattern).
 ./bin/operon test tests/granted/cancel_inherit.op --cell tests/granted/cancel_inherit.cell
@@ -46,6 +57,14 @@ bash scripts/diag_golden.sh
 # gate so the debug surface can never silently rot again (it once did: the
 # VM-default change killed every trap and no gate noticed).
 bash scripts/debug_e2e.sh
+# W08r stage 2: the machine protocol e2e — a Python client drives
+# `debug --protocol=json` (NDJSON purity, stop reasons, stack/vars/eval,
+# all stepping verbs, runtime breakpoint management, print rerouting).
+python3 scripts/debug_protocol_e2e.py
+# W08r stage 3: the DAP adapter e2e — a Python DAP client drives `operon dap`
+# over Content-Length framing (lifecycle, stopped events, stackTrace/scopes/
+# variables/evaluate, stepping verbs, output events, exited/terminated).
+python3 scripts/dap_e2e.py
 echo "[4/4] Oracle proof suite (the same frames on the second implementation)"
 python3 bootstrap/oracle.py test tests/
 echo "ALL GREEN"
