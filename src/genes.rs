@@ -2143,7 +2143,7 @@ fn def_has_lambda(def: &GeneDef) -> bool {
             Expr::Lambda(_) => true,
             Expr::Unary(_, a) | Expr::Member(a, _) => expr_has(a),
             Expr::Binary(_, a, b, _) | Expr::Index(a, b, _) => expr_has(a) || expr_has(b),
-            Expr::Call(a, args, _) | Expr::Method(a, _, args) => {
+            Expr::Call(a, args, _) | Expr::Method(a, _, args, _) => {
                 expr_has(a) || args.iter().any(expr_has)
             }
             Expr::List(xs) => xs.iter().any(expr_has),
@@ -2178,7 +2178,7 @@ fn def_has_lambda(def: &GeneDef) -> bool {
             Stmt::While(c, b) => expr_has(c) || stmts_have(b),
             Stmt::Loop(b) => stmts_have(b),
             Stmt::For(_, it, b) => expr_has(it) || stmts_have(b),
-            Stmt::Match(sub, cases) => {
+            Stmt::Match(sub, cases, _) => {
                 expr_has(sub)
                     || cases.iter().any(|(p, b)| {
                         let pe = match p {

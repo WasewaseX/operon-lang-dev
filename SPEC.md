@@ -116,6 +116,9 @@ match expr { case p { } ... }       # patterns (W02 match-v2, see §5a). First
                                     # match wins; a shape that cannot match
                                     # falls through, matching never rejects a
                                     # run (Total Grammar, §4)
+gene add(a: Int, b: Int) -> Int     # TYPED-MODE annotations, generics
+                                    # (list[T]), bounds (T: numeric), traits
+                                    # as types; opt-in static gate, §16a
 use path (as name)?                 # file import → binds module Map (see §8)
 raise expr                          # raise Stress{kind:"unfolded", message: str(e)}
 raise kind , expr                   # kind ∈ unfolded missing overflow burned
@@ -1026,6 +1029,58 @@ Crossing (§11a): the bio-layer flags and verbs in the block above (`--variant`,
 - `--fuel N` caps the interpreter's step budget (default 200,000,000); exhaustion raises catchable Stress `overflow`.
 - `--strict` → exit code 3 if any rung ≥ 3 note occurred (`wobble.strict = true` in `.cell` does the same per run).
 - Stdout discipline: `promote` prints program output; notes/reports go to **stderr** (so `operon run f.op > out.txt` is clean). `--json` on check/test/crispr emits machine-readable JSON to stdout.
+
+## 16a. Typed mode, the static type system (TYPED-MODE)
+
+Operon gains a **compile-time type checker** as an opt-in gate; the dynamic
+side is untouched (REPL and scripting keep byte-identical semantics, this
+section adds a pass, never a runtime).
+
+```text
+gene add(a: Int, b: Int) -> Int { return a + b }   # annotated signature
+gene first<T>(items: list[T]) -> T? { ... }        # generics, bracketed args
+gene m<N: numeric>(a: N, b: N) -> N { ... }        # bounds: numeric,
+                                                   # comparable, trait names
+let n: int = 3          let xs: list[str] = [...]   let r: result[int, str] = ok(1)
+let o: int? = none()    # Optional accepts null, the bare type, none(),
+                        # and some(payload-matching) (W01 law + W06 family)
+```
+
+- **Check it:** `operon run --typed f.op` (compile gate; type errors abort
+  BEFORE execution, exit 3) · `operon check --typed f.op` (T-series findings
+  in the check stream, diag + `--json`). `--strict` refuses type warnings.
+- **The flagship catch:** `x = 10` then `x.name()` is a compile-time error
+  (T02 `unknown-member`, exact line), not a runtime null-with-a-note.
+- **Inference:** unannotated code infers (flow-joined, branch unions); the
+  binary lattice mirrors `apply_binop` exactly (`/`→Float, `//`→Int, int**int
+  →Int, `+` Str/Str→Str). `Any` is the escape hatch: dynamic code inside a
+  typed file checks clean, nothing false-positives.
+- **Findings:** T01 type-mismatch · T02 unknown-member · T03
+  arg-type-mismatch · T04 unknown-type · T05 non-exhaustive-match · T06
+  propagate-non-variant · T07 trait-method-missing · T08 bound-violation ·
+  T09 assign-type-change (warning) · T10 return-missing (warning).
+  T06/T09/T10 are warnings; the rest are errors. Codes ride the W041 scheme.
+- **Exhaustiveness:** a match over Option/Result/Bool/union scrutinees must
+  cover every case; `case _` and bind arms cover all; guarded arms cover
+  nothing (the condition may be false).
+- **Traits:** `implements` contracts are enforced statically (missing
+  required method = T07 at the phenotype definition); trait names work as
+  annotation types.
+- **Erasure:** type parameters (`T`) are erased at runtime — the W01 soft
+  contract is a no-op for a bare parameter name; real constraints live in
+  the static checker. Capitalized annotations (`Int`, `Str`) are aliases of
+  the lowercase primitives in BOTH cores.
+- **Type aliases (W01-s2):** `type Metrics = map[str, float]` declares an
+  alias; annotations naming it resolve at PARSE time to the target, so the
+  runtime soft contract is the TARGET's law (the alias statement itself is
+  inert at runtime, the VM bridges it to the tree-walk which no-ops it).
+  Declare before use: an annotation naming an alias BEFORE its declaration
+  stays a plain Named and the typo-armor rule applies. Duplicate alias: a
+  rung-2 note, first declaration wins. A gene's type parameters shadow
+  aliases in annotation position. Mirrored op-for-op by the oracle.
+- **As-built + non-goals:** `docs/design/TYPED-MODE.md`. Tests:
+  `tests/typecheck.rs` (41 cases), `examples/typed/` (good-path corpus +
+  `bad_*` negatives pinned by the gate).
 
 ## 16. Biology ↔ feature map (for docs; no scientist names)
 
