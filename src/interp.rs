@@ -755,6 +755,9 @@ pub struct Interp {
     /// in stdout_sink and drained to stderr at every stop, keeping stdout
     /// pure protocol).
     pub debug_protocol: bool,
+    /// W08r stage 3: DAP mode — the trap hands control to the adapter in
+    /// src/dap.rs (stopped event + request serving loop).
+    pub debug_dap: bool,
     pub debug_file: String,
     pub seq_tx: Option<mpsc::SyncSender<crate::value::SeqMsg>>,
     /// Process-wide step ceiling shared with every spawned worker: when
@@ -878,6 +881,7 @@ impl Interp {
             debug_step_depth: None,
             debug_until: None,
             debug_protocol: false,
+            debug_dap: false,
             debug_file: String::new(),
             seq_tx: None,
             fuel_pool: None,
@@ -1228,7 +1232,9 @@ impl Interp {
                     self.debug_until = None;
                 }
                 self.debug_step_depth = None;
-                if self.debug_protocol {
+                if self.debug_dap {
+                    crate::dap::serve_at_trap(self, env, stmt_line, reason);
+                } else if self.debug_protocol {
                     self.debug_machine(env, stmt_line, reason);
                 } else {
                     self.debug_repl(env, stmt_line);
@@ -1674,6 +1680,31 @@ impl Interp {
             }
         }
         None
+    }
+
+    /// W08r stage 3: public field access for the DAP adapter (src/dap.rs).
+    pub fn jfield_pub(req: &Value, key: &str) -> Option<Value> {
+        Self::jfield(req, key)
+    }
+
+    /// W08r stage 2/3: evaluate an expression in the current frame for the
+    /// debugger surfaces (REPL `p`, NDJSON eval, DAP evaluate). Returns the
+    /// value's display rendering (the language's canonical text form).
+    pub(crate) fn debug_eval_display(
+        &mut self,
+        env: &Rc<Env>,
+        src: &str,
+    ) -> Result<String, String> {
+        let parsed = crate::parser::parse(&format!("gene __dbg() {{ {} }}", src));
+        if let Some(Stmt::Gene(g)) = parsed.stmts.first() {
+            if let Some(Stmt::ExprStmt(e)) = g.body.first() {
+                return match self.eval(env, e) {
+                    Ok(v) => Ok(v.display()),
+                    Err(st) => Err(format!("[{}] {}", st.kind, st.message)),
+                };
+            }
+        }
+        Err("cannot evaluate".to_string())
     }
 
     fn jfield_int(req: &Value, key: &str) -> Option<i64> {
