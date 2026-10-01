@@ -616,7 +616,7 @@ impl Stmt {
                 .chain(values.iter())
                 .find_map(expr_first_line),
             Stmt::If(arms, _) => arms.first().and_then(|(c, _)| expr_first_line(c)),
-            Stmt::Match(e, _, l) => Some(*l),
+            Stmt::Match(_e, _, l) => Some(*l),
             Stmt::Raise(_, _, l) => Some(*l),
             Stmt::TypeAlias(_, _, l) => Some(*l),
             _ => None,

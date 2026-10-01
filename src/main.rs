@@ -150,6 +150,8 @@ fn real_main() {
     #[allow(unused_assignments)]
     let mut debug_mode = false;
     let mut debug_breaks: Vec<usize> = Vec::new();
+    // W08r stage 2: `debug --protocol=json` — the NDJSON machine protocol
+    let mut debug_protocol_mode = false;
     // W11: the optimization level (0 = off); --opt-passes overrides with
     // an explicit per-pass set (the W011 toggle matrix)
     let mut opt_level: u8 = 0;
@@ -401,6 +403,23 @@ fn real_main() {
                     .parse()
                     .unwrap_or_else(|_| die("--break needs a line number"));
                 debug_breaks.push(n);
+            }
+            // W08r stage 2: machine protocol mode — `--protocol=json` serves
+            // the debugger state as NDJSON on stdout (the human REPL stays
+            // the default; program print output moves to stderr)
+            other if other == "--protocol" || other.starts_with("--protocol=") => {
+                let p = if other.starts_with("--protocol=") {
+                    other.trim_start_matches("--protocol=").to_string()
+                } else {
+                    i += 1;
+                    rest.get(i)
+                        .cloned()
+                        .unwrap_or_else(|| die("--protocol needs a kind (json)"))
+                };
+                if p != "json" {
+                    die("--protocol: unknown kind (only json is supported)");
+                }
+                debug_protocol_mode = true;
             }
             "--filter" => {
                 i += 1;
@@ -853,6 +872,15 @@ fn real_main() {
                 for b in &debug_breaks {
                     l.interp.debug_breaks.insert(*b);
                 }
+                if debug_protocol_mode {
+                    // W08r stage 2: stdout is the protocol transport — the
+                    // debuggee's print output is captured and drained to
+                    // stderr at every stop instead of polluting the stream
+                    l.interp.debug_protocol = true;
+                    l.interp.stdout_sink =
+                        Some(std::rc::Rc::new(std::cell::RefCell::new(Vec::new())));
+                    eprintln!("[debug] protocol mode: NDJSON on stdout, program output on stderr");
+                }
                 eprintln!(
                     "[debug] interactive session on {} (interp lane, breaks at {:?}); c=continue s=step q=quit",
                     file, debug_breaks
@@ -903,6 +931,9 @@ fn real_main() {
                         }
                         write_grn_trace(&l.interp, &trace_grn_path);
                         tools::flush_notes(&l, opts.quiet);
+                        if debug_protocol_mode {
+                            l.interp.debug_drain_print_sink();
+                        }
                         // ast-grep-ignore: no-std-process-exit-in-core
                         std::process::exit(1);
                     }
@@ -963,6 +994,9 @@ fn real_main() {
                         // drain before the exit.
                         write_grn_trace(&l.interp, &trace_grn_path);
                         tools::flush_notes(&l, opts.quiet);
+                        if debug_protocol_mode {
+                            l.interp.debug_drain_print_sink();
+                        }
                         // ast-grep-ignore: no-std-process-exit-in-core
                         std::process::exit(1);
                     }
@@ -970,6 +1004,9 @@ fn real_main() {
             }
             write_grn_trace(&l.interp, &trace_grn_path);
             tools::flush_notes(&l, opts.quiet);
+            if debug_protocol_mode {
+                l.interp.debug_drain_print_sink();
+            }
             let strict_cell = l
                 .interp
                 .cell

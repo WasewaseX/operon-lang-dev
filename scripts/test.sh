@@ -41,6 +41,10 @@ bash scripts/diag_golden.sh
 # gate so the debug surface can never silently rot again (it once did: the
 # VM-default change killed every trap and no gate noticed).
 bash scripts/debug_e2e.sh
+# W08r stage 2: the machine protocol e2e — a Python client drives
+# `debug --protocol=json` (NDJSON purity, stop reasons, stack/vars/eval,
+# all stepping verbs, runtime breakpoint management, print rerouting).
+python3 scripts/debug_protocol_e2e.py
 echo "[4/4] Oracle proof suite (the same frames on the second implementation)"
 python3 bootstrap/oracle.py test tests/
 echo "ALL GREEN"
