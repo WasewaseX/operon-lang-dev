@@ -132,6 +132,8 @@ def main():
     frames = r["body"]["stackFrames"]
     assert frames[0]["name"] == "work" and frames[0]["line"] == 3, frames
     assert frames[1]["name"] == "main", frames
+    # W008-P1: main is currently stopped at line 8 (its work() call site)
+    assert frames[1]["line"] == 8, frames
     # --- scopes + variables surface the innermost frame state
     r = c.request("scopes", {"frameId": 0})
     scopes = r["body"]["scopes"]

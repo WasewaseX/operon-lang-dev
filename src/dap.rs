@@ -17,9 +17,11 @@
 //! frames only.
 //!
 //! v1 scope notes (honest): stackTrace reports accurate lines for the
-//! innermost frame (outer frames carry their name but line 1 — call-site
-//! lines live in the stress traceback machinery, not in call_stack yet);
-//! variables are rendered strings (no child references, no setVariable).
+//! innermost frame, and since W008-P1 outer frames carry their captured
+//! call-site lines too (the debug_frames mirror in interp.rs — the same
+//! pairs the W007 traceback chain records); a chain that predates the
+//! arming (session attached mid-flight) still degrades to line 1.
+//! Variables are rendered strings (no child references, no setVariable).
 
 use crate::interp::Env;
 use crate::interp::{json_quote, Interp};
@@ -272,14 +274,39 @@ pub fn configure(interp: &mut Interp) {
 /// request arrives.
 pub fn serve_at_trap(interp: &mut Interp, env: &Rc<Env>, stmt_line: Option<usize>, reason: &str) {
     let shown = stmt_line.unwrap_or(interp.cur_line);
-    // snapshot the call stack for stackTrace/scopes/variables
-    let frames: Vec<(String, usize)> = interp
-        .call_stack
-        .iter()
-        .rev()
-        .enumerate()
-        .map(|(i, (name, _, _))| (name.clone(), if i == 0 { shown } else { 1 }))
-        .collect();
+    // snapshot the call stack for stackTrace/scopes/variables. W008-P1:
+    // outer frames report the line they are CURRENTLY stopped at — the
+    // call-site line captured when the frame inside them was entered (the
+    // debug_frames mirror, the same pairs the W007 traceback chain
+    // records); line 1 stays the fallback for a chain that predates the
+    // arming (a session attached mid-flight).
+    let frames: Vec<(String, usize)> = {
+        let df_len = interp.debug_frames.len();
+        let cs_len = interp.call_stack.len();
+        interp
+            .call_stack
+            .iter()
+            .rev()
+            .enumerate()
+            .map(|(i, (name, _, _))| {
+                // W008-P1 semantics: an outer frame's line is the line it is
+                // CURRENTLY stopped at — the call-site line captured when the
+                // frame inside it (i-1) was entered: df[cs_len - i].
+                let line = if i == 0 {
+                    shown
+                } else if cs_len == df_len {
+                    interp
+                        .debug_frames
+                        .get(cs_len - i)
+                        .map(|(_, l)| *l)
+                        .unwrap_or(1)
+                } else {
+                    1
+                };
+                (name.clone(), line)
+            })
+            .collect()
+    };
     with_state(|st| {
         st.frames = frames;
         st.stop_line = shown;

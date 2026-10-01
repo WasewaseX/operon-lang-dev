@@ -120,7 +120,10 @@ def main():
     assert stop["reason"] == "breakpoint" and stop["line"] == 3, stop
     r = s2.request(nid(), "stack")
     assert r["frames"][0]["name"] == "work", r
+    assert r["frames"][0]["line"] == 3, r          # the shown line at the stop
     assert r["frames"][1]["name"] == "main", r
+    # W008-P1: main is currently stopped at line 8 (its work() call site)
+    assert r["frames"][1]["line"] == 8, r
     r = s2.request(nid(), "eval", {"expr": "x"})
     assert r["ok"] and r["value"] == "20", r
     # --- until: one-shot run to line 9 in main
@@ -157,6 +160,40 @@ def main():
     for l in out_frames:
         json.loads(l)  # every stdout line must be valid JSON
     assert "[out] 21" in s4.stderr, s4.stderr
+
+    # --- W008-P1: outer frames carry their CAPTURED call-site lines
+    # (debug_frames mirror) — a 3-level chain proves the middle frame's
+    # line is the call site of the frame ABOVE it, and the host-entry
+    # frame (main) honestly has none.
+    path3 = os.path.join(sb, "dbg3.op")
+    with open(path3, "w") as f:
+        f.write("""gene deep(n) {
+    let t = n + 1
+    return t
+}
+gene work(n) {
+    let x = deep(n)
+    return x
+}
+main {
+    let a = work(10)
+    print(a)
+}
+""")
+    s5 = Session(path3, [2])   # break at line 2 (a let — traps), INSIDE deep
+    stop = s5.wait_stopped()
+    assert stop["reason"] == "breakpoint" and stop["line"] == 2, stop
+    r = s5.request(nid(), "stack")
+    f = r["frames"]
+    assert f[0]["name"] == "deep" and f[0]["line"] == 2, r
+    # W008-P1: work is currently stopped at line 6 (its deep() call site)
+    assert f[1]["name"] == "work" and f[1]["line"] == 6, r
+    # main is currently stopped at line 10 (its work() call site)
+    assert f[2]["name"] == "main" and f[2]["line"] == 10, r
+    r = s5.request(nid(), "continue")
+    s5.close()
+    assert s5.p.returncode == 0, s5.p.returncode
+    os.remove(path3)
 
     os.remove(path)
     os.remove(path2)
