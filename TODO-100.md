@@ -201,7 +201,7 @@ embed gate green (W076) · playground smoke **20/20** (W22-manifest job, PR #25)
 - Files: `src/bytecode.rs`, `src/main.rs`, `SPEC.md`.
 - Depends: W009.
 
-### W011, Optimization pipeline [P2] [dev-1] [L] [partial ~70%: stage 1+2 landed (constant folding, jump threading, superinstructions, reachability DCE behind --opt 1 — DCE is IN, commit 340a29f) + toggle matrix (--opt 2 / --opt-passes) + pass 4 constant propagation, all full-corpus byte-identical on the --opt 2 parity axis; REMAIN: trivial-gene inlining, monomorphic specialization, builtin/global resolution caching, list-op fast paths, per-pass bench rows]
+### W011, Optimization pipeline [P2] [dev-1] [L] [partial ~85%: stage 1+2 (folding, threading, superinstructions, DCE) + toggle matrix (--opt 2 / --opt-passes) + pass 4 constant propagation + builtin/global resolution caching (OnceLock hash lookups) + per-pass bench rows (scripts/bench_opt_passes.sh, BENCH.md W011 matrix) + list-op fast paths measured (dispatch is semantics-bound: mem_charge/cycle-note are the security floor); all byte-identical on the --opt 2 parity axis (3536 programs); REMAIN: trivial-gene inlining + monomorphic specialization — designed, evidence-bar'd, gated in docs/vm-design.md §2c]
 - Goal: constant folding, dead-code elimination, constant propagation, trivial-gene inlining,
   monomorphic call specialization, builtin/global resolution caching, list-op fast paths.
 - Done when: each optimization has a micro-benchmark delta (BENCH.md row) and a differential
