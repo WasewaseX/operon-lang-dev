@@ -519,6 +519,50 @@ fn real_main() {
         "repl" => {
             repl();
         }
+        // W08r stage 3: the Debug Adapter Protocol adapter. `operon dap f.op`
+        // speaks DAP on stdio (Content-Length framing) so editors debug
+        // Operon programs natively — see src/dap.rs and editors/vscode/.
+        "dap" => {
+            let file = match positional.first() {
+                Some(f) => f.clone(),
+                None => die("dap needs a file"),
+            };
+            opts.args = positional[1..].to_vec();
+            let mut l = match tools::load_file(&file, &opts) {
+                Ok(l) => l,
+                Err(e) => die(&e),
+            };
+            if let Some(f) = fuel {
+                l.interp.step_budget = f;
+            }
+            let total = fuel.unwrap_or(500_000_000);
+            l.interp.fuel_pool = Some(std::sync::Arc::new(std::sync::atomic::AtomicI64::new(
+                total as i64,
+            )));
+            l.interp.debug_file = file.clone();
+            l.interp.debug_dap = true;
+            // the debuggee's print output is captured and forwarded as DAP
+            // output events; the adapter's stdout is the protocol transport
+            l.interp.stdout_sink = Some(std::rc::Rc::new(std::cell::RefCell::new(Vec::new())));
+            // pre-run configuration: initialize/launch/setBreakpoints/
+            // configurationDone (breakpoints land in the interp's set)
+            operon::dap::configure(&mut l.interp);
+            let result = tools::run_entry(&mut l, &opts);
+            // final output events, then the lifecycle close
+            operon::dap::drain_sink_to_events(&mut l.interp);
+            operon::dap::session_end(0);
+            match result {
+                Ok(_) => {
+                    // ast-grep-ignore: no-std-process-exit-in-core
+                    std::process::exit(0);
+                }
+                Err(s) => {
+                    eprintln!("[dap] program raised [{}] {}", s.kind, s.message);
+                    // ast-grep-ignore: no-std-process-exit-in-core
+                    std::process::exit(1);
+                }
+            }
+        }
         // W39 (ROADMAP-100): AST dump, the Total Grammar structural window.
         // Purely structural: repair notes are W38 `explain`'s surface and are
         // never printed here, default or otherwise.
@@ -2862,6 +2906,8 @@ usage:
                   # c | s(tep-into) | n(ext, step-over) | fin(ish, step-out) |
                   # until N | b N | b del N | b list | bt | vars | p EXPR | q
                   # (--protocol=json serves the same state over NDJSON)
+  operon dap f.op   # W08r stage 3: the Debug Adapter Protocol adapter on stdio
+                  # (Content-Length framing; drives editors/ide debug clients)
   operon new NAME [--lib] [--here]   scaffold a project (operon.toml + src + a green smoke test)
   operon add NAME[@REQ] [--registry FILE]   pull a dependency from the registry
                   # REQ (item 4, ai/ecosystem-r3): ^1.2 ~1.2 >=1 <2 =X.Y.Z 1.x *

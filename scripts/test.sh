@@ -45,6 +45,10 @@ bash scripts/debug_e2e.sh
 # `debug --protocol=json` (NDJSON purity, stop reasons, stack/vars/eval,
 # all stepping verbs, runtime breakpoint management, print rerouting).
 python3 scripts/debug_protocol_e2e.py
+# W08r stage 3: the DAP adapter e2e — a Python DAP client drives `operon dap`
+# over Content-Length framing (lifecycle, stopped events, stackTrace/scopes/
+# variables/evaluate, stepping verbs, output events, exited/terminated).
+python3 scripts/dap_e2e.py
 echo "[4/4] Oracle proof suite (the same frames on the second implementation)"
 python3 bootstrap/oracle.py test tests/
 echo "ALL GREEN"
