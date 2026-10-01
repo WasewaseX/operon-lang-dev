@@ -17,6 +17,14 @@ seven drift-checked fields (version, keyword/std/redteam/proof/test_op
 counts) are pure file walks and are IDENTICAL in both modes; the skipped
 fields are informational only (check_docs_sync does not drift-check them,
 the harness itself is run separately by scripts/test.sh on every gate).
+
+F3/#47 (reliab lane, 2026-10-02): the fast switch is also an explicit
+parameter — compute(fast=True/False) — so a caller can state its needs
+directly instead of mutating the environment. check_docs_sync calls
+compute(fast=True): its drift-checked fields are all pure file walks, so
+paying the two informational subprocess recounts inside the gate made the
+standing gate unrunnable (>10 min, exit 124 — issue #47). The default
+compute() keeps the legacy behavior: the environment decides.
 """
 import json, os, re, sys
 
@@ -165,7 +173,18 @@ def harness_counts():
     except Exception:
         return None
 
-def compute():
+def compute(fast=None):
+    """Recompute the generated statistics.
+
+    fast=None (default): legacy behavior — the environment decides
+    (GEN_DOC_STATS_FAST=1 skips the two informational subprocess recounts).
+    fast=True: explicit fast path — the two informational recounts (a full
+    proof-suite run via the binary, the ~10 min differential harness) are
+    reported as skipped. The seven drift-checked fields are pure file walks
+    and identical in every mode, so check_docs_sync (which never reads the
+    informational fields) pins this explicitly; see issue #47.
+    fast=False: always pay the recounts (generator/CI full form).
+    """
     kw = keywords()
     mods = std_modules()
     spec = spec_version_lines()
@@ -174,7 +193,10 @@ def compute():
     # proof suite — both are run separately by scripts/test.sh on every
     # gate, so fast mode reports them as skipped instead. The seven
     # drift-checked fields never take this path.
-    fast = os.environ.get("GEN_DOC_STATS_FAST") == "1"
+    # F3/#47: an explicit fast=True/False argument wins over the environment
+    # (check_docs_sync must be fast even with the variable unset or 0).
+    if fast is None:
+        fast = os.environ.get("GEN_DOC_STATS_FAST") == "1"
     return {
         "version": cargo_version(),
         "spec": spec,
