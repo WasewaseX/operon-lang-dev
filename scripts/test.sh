@@ -65,6 +65,12 @@ python3 scripts/debug_protocol_e2e.py
 # over Content-Length framing (lifecycle, stopped events, stackTrace/scopes/
 # variables/evaluate, stepping verbs, output events, exited/terminated).
 python3 scripts/dap_e2e.py
+# W001 stage 2: the static checker e2e — the typeck module (T01..T10) landed
+# via the ai/type-system merge with NO gate (the debug_e2e rot class). This
+# pins the flagship catch, alias resolution, Total-Graceful unknown names,
+# the prime directive (plain check/run untouched by typed findings), and
+# the stage-1 runtime soft contract as the compatibility fallback.
+bash scripts/typeck_e2e.sh
 # W060: the release smoke script joins the standing gate (the rot lesson —
 # debug_e2e once sat outside every gate and silently died). Dir-mode smoke
 # against the bin/ artifact this gate already uses: version, a real run, a
