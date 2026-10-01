@@ -716,6 +716,13 @@ pub struct Interp {
     /// the prepared frame the hook hands back (gates, params, guards and
     /// bookkeeping already ran in the shared code above the hook)
     pub fiber_hook_out: Option<crate::vm::FiberFrame>,
+    /// W16: the fiber scheduler on the HOST interp (None = fiber lane off;
+    /// every host drain point is a no-op without it)
+    pub sched: Option<crate::sched::AsyncSched>,
+    /// W16: shared wake queue — sends/closes land here for the scheduler;
+    /// the host interp AND every task interp (fiber or thread worker) that
+    /// might touch a channel while fibers are parked holds a clone
+    pub sched_wake: Option<Arc<std::sync::Mutex<Vec<crate::sched::WakeReq>>>>,
     pub vm_program: Option<crate::vm::VmProgram>,
     /// W09: scratch operand stacks pooled across machine frames. fib25's
     /// 243k calls allocated (and grew) a fresh operand Vec per call; the
@@ -841,6 +848,8 @@ impl Interp {
             fiber_pending: None,
             fiber_hook: false,
             fiber_hook_out: None,
+            sched: None,
+            sched_wake: None,
             vm_program: None,
             vm_stack_pool: Vec::new(),
             vm_opt: 0,
@@ -5557,6 +5566,13 @@ impl Interp {
         st.queue.push_back(crate::genes::to_send(&payload));
         drop(st);
         ch.wake.notify_one();
+        // W16: a fiber may be parked on this channel — the request lands in
+        // the shared queue and the scheduler wakes the first-parked waiter
+        // FIFO at its next drain boundary. No scheduler = no cost.
+        if let Some(w) = &self.sched_wake {
+            let mut q = w.lock().unwrap_or_else(|e| e.into_inner());
+            q.push(crate::sched::WakeReq::Sent(ch));
+        }
         Ok(Value::Null)
     }
 
@@ -5573,6 +5589,23 @@ impl Interp {
             }
             // closed AND empty is the only null recv can produce
             if st.closed {
+                return Ok(Value::Null);
+            }
+            // W16: fiber lane — one slice charge (the exact shape of the
+            // thread lane's first blocking_wake; also raises `cancelled`
+            // if the flag is already set), then PARK. The scheduler owns
+            // further virtual slices and the FIFO wake; the awaited value
+            // arrives through fiber.wake_result.
+            if self.fiber_armed {
+                drop(st);
+                // immediate cancel observation only — the virtual slices
+                // are the scheduler's (it charges parked fibers at the
+                // thread lane's exact rate as the clock advances)
+                self.cancel_check()?;
+                self.fiber_pending = Some(crate::vm::PendingWake::Chan {
+                    chans: vec![ch],
+                    select: false,
+                });
                 return Ok(Value::Null);
             }
             // blocked: wake-iteration fuel + cancel, the sleep shape
@@ -5603,13 +5636,18 @@ impl Interp {
         // wake every waiter: blocked recvs observe closed+empty (null),
         // blocked selects re-poll and can answer -1
         ch.wake.notify_all();
+        // W16: parked fibers observe the close through the same queue
+        if let Some(w) = &self.sched_wake {
+            let mut q = w.lock().unwrap_or_else(|e| e.into_inner());
+            q.push(crate::sched::WakeReq::Closed(ch));
+        }
         Ok(Value::Null)
     }
 
     /// One wake iteration of a blocking channel operation: charge the slice
     /// as fuel (shared pool + step budget, the exact sleep shape), then
     /// observe the cancel chain so cancel() unblocks a parked cell.
-    fn blocking_wake(&mut self, slice_ms: u64) -> Result<(), Stress> {
+    pub(crate) fn blocking_wake(&mut self, slice_ms: u64) -> Result<(), Stress> {
         let charge = slice_ms.saturating_mul(1000);
         self.steps = self.steps.saturating_add(charge);
         if let Some(pool) = &self.fuel_pool {
@@ -5632,6 +5670,19 @@ impl Interp {
                 if f.load(std::sync::atomic::Ordering::Relaxed) {
                     return Err(Stress::new("cancelled", "task cancelled"));
                 }
+            }
+        }
+        Ok(())
+    }
+
+    /// W16: the cancel observation WITHOUT the slice charge — the fiber
+    /// lane's virtual slices are owned by the scheduler (it charges parked
+    /// fibers per virtual ms at exactly the thread lane's rate); a park
+    /// only needs to know if the flag is already set.
+    pub(crate) fn cancel_check(&self) -> Result<(), Stress> {
+        for f in &self.cancel_chain {
+            if f.load(std::sync::atomic::Ordering::Relaxed) {
+                return Err(Stress::new("cancelled", "task cancelled"));
             }
         }
         Ok(())
@@ -5685,6 +5736,18 @@ impl Interp {
                 return Ok(Value::Int(i as i64));
             }
             if !any_open {
+                return Ok(Value::Int(-1));
+            }
+            // W16: fiber lane — one slice charge then park on ALL the
+            // channels; on wake the scheduler re-polls in declaration
+            // order (leftmost ready wins, the same contract) and delivers
+            // the index as the awaited value.
+            if self.fiber_armed {
+                self.cancel_check()?;
+                self.fiber_pending = Some(crate::vm::PendingWake::Chan {
+                    chans,
+                    select: true,
+                });
                 return Ok(Value::Int(-1));
             }
             self.blocking_wake(Self::SELECT_SLICE_MS)?;
