@@ -1,0 +1,105 @@
+{
+  "name": "operon-debug",
+  "displayName": "Operon Debugger",
+  "description": "Debug Adapter Protocol support for the Operon language: breakpoints, stepping, frame inspection and expression evaluation via `operon dap`.",
+  "version": "2.6.0",
+  "publisher": "operon-lang",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Debuggers",
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onDebug",
+    "onLanguage:operon"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "operon",
+        "aliases": [
+          "Operon",
+          "operon"
+        ],
+        "extensions": [
+          ".op",
+          ".cell"
+        ]
+      }
+    ],
+    "breakpoints": [
+      {
+        "language": "operon"
+      }
+    ],
+    "debuggers": [
+      {
+        "type": "operon",
+        "label": "Operon Debug",
+        "program": "./extension.js",
+        "runtime": "node",
+        "configurationAttributes": {
+          "launch": {
+            "required": [
+              "program"
+            ],
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "Absolute path to the .op file to debug.",
+                "default": "${file}"
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "description": "Stop at the first statement of the entry gene.",
+                "default": false
+              },
+              "operonPath": {
+                "type": "string",
+                "description": "Path to the operon binary (defaults to 'operon' on PATH).",
+                "default": "operon"
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Program arguments (argv[1:]).",
+                "default": []
+              },
+              "cell": {
+                "type": "string",
+                "description": "Optional operator cell file granting capabilities.",
+                "default": ""
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "operon",
+            "request": "launch",
+            "name": "Debug Operon file",
+            "program": "${file}"
+          }
+        ],
+        "configurationSnippets": [
+          {
+            "label": "Operon: Debug current file",
+            "description": "Debug the currently open Operon file.",
+            "body": {
+              "type": "operon",
+              "request": "launch",
+              "name": "Debug current file",
+              "program": "^\"\\${file}\""
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
