@@ -5,6 +5,7 @@
   "build",
   "check",
   "crispr",
+  "disasm",
   "doc",
   "explain",
   "fix",
@@ -20,12 +21,7 @@
   "version",
   "watch"
  ],
- "harness": {
-  "diverge": 0,
-  "granted_cells": 11,
-  "match": 1436,
-  "skipped": 0
- },
+ "harness": null,
  "keyword_analogy_pending": [],
  "keyword_count": 60,
  "keywords": [
@@ -108,17 +104,17 @@
   "textDocument/semanticTokens",
   "textDocument/signatureHelp"
  ],
- "proof_files": 146,
+ "proof_files": 156,
  "proof_totals": {
-  "asserts": 2095,
-  "files": 1399,
-  "proofs": 134,
-  "source": "bin/operon"
+  "asserts": null,
+  "files": null,
+  "proofs": null,
+  "source": "fast-mode skip"
  },
- "redteam_files": 103,
+ "redteam_files": 106,
  "spec": {
   "h1": "# Operon, Language Specification",
-  "status": "v2.6.0"
+  "status": "v2.7.0"
  },
  "std_function_count": 328,
  "std_module_count": 30,
@@ -244,6 +240,6 @@
    "module": "url"
   }
  ],
- "test_op_files": 1517,
- "version": "2.6.0"
+ "test_op_files": 3536,
+ "version": "2.7.0"
 }

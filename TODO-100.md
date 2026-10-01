@@ -136,7 +136,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
   `bootstrap/oracle.py`, `SPEC.md`, `README.md`.
 - Depends: none. Coordinate with W064 (deprecation machinery, dev-2).
 
-### W006, First-class Option / Result [P0] [dev-1] [L] [partial: stage 1 D-014 on main c6ad132 (variant values, ?! propagation, 10 builtins, SPEC §9 hierarchy, oracle byte-identical, rt_p16a) + null-payload/non-finite-JSON parity fix 14bda8a; REMAIN: stage 2 std null-to-Result migration behind a compat note]
+### W006, First-class Option / Result [P0] [dev-1] [L] [partial: stage 1 D-014 on main c6ad132 (variant values, ?! propagation, 10 builtins, SPEC §9 hierarchy, oracle byte-identical, rt_p16a) + null-payload/non-finite-JSON parity fix 14bda8a; stage 2 wave 1 v2.6.0 (try_num/try_index/try_get/try_pop) + wave 2 v2.7.0 on builder/result-migration PR #43 (try_first/try_last/try_char_at/try_env/try_json_parse/try_re_groups, engine-neutral Err-payload law, granted try_env lane); REMAIN: further families (IO read_file stress-class, sqrt domain) behind per-function compat notes]
 - Goal: `Option<T>` / `Result<T, E>` as built-in variant values with `unwrap/unwrap_or/
   is_ok/is_err/?`-style propagation operator; Stress becomes purely the runtime containment
   mechanism (its current dual role as everyday error value ends).

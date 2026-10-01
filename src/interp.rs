@@ -8230,11 +8230,7 @@ impl Interp {
                 match args.get(1) {
                     Some(Value::Int(i)) => {
                         let chars: Vec<char> = s.chars().collect();
-                        let j = if *i < 0 {
-                            chars.len() as i64 + i
-                        } else {
-                            *i
-                        };
+                        let j = if *i < 0 { chars.len() as i64 + i } else { *i };
                         if j >= 0 && (j as usize) < chars.len() {
                             Ok(Value::Variant(
                                 crate::value::VTag::OkV,
