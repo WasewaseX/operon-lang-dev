@@ -76,9 +76,13 @@ not share entries. Evidence: unit tests pin the folded shape of
 `return 6 * 7` and the exact DCE drops (`dce_drops_only_unreachable_code`);
 the corpus parity gate `scripts/vm_parity.sh` runs every tests/**.op and
 apps/**.op byte-identical across --no-vm, default VM, and --opt 1.
-REMAIN on the W11 board entry: constant propagation, trivial-gene inlining,
-monomorphic call specialization, builtin/global resolution caching, list-op
-fast paths, per-pass bench rows + the toggle matrix.
+REMAIN on the W11 board entry: trivial-gene inlining, monomorphic call
+specialization, builtin/global resolution caching, list-op fast paths,
+per-pass bench rows. LANDED since: the toggle matrix (--opt-passes
+fold,thread,dce,prop | none | all, --opt 2 = full) and pass 4 constant
+propagation (1:1 LoadName -> Push rewrites inside straight-line runs;
+every jump target, scope edge, bridge and call resets the facts — full
+corpus byte-identical on the --opt 2 parity axis).
 
 ## 2a. A2 delivered: the bridge architecture (2026-09-27, main)
 
