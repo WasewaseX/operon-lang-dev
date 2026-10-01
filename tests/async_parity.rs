@@ -44,7 +44,7 @@ fn run_lane(src: &str, cell_value: &str, fuel: Option<i64>) -> Run {
         let _ = interp.exec_stmt(&g, s);
     }
     let g: Rc<Env> = interp.global.clone();
-    let main_result = interp.named_call_tail_vm(&g, "main", vec![]);
+    let main_result = interp.named_call_tail_vm(&g, "main", vec![], None);
     let main_err = match main_result {
         Ok(_) => None,
         Err(s) => Some((s.kind, s.message)),

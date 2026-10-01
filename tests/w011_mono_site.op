@@ -1,0 +1,27 @@
+# W011 stage-3 item 2 (vm-design §2c): monomorphic call-site cache — the
+# anti-stale set. Cached resolutions are GLOBAL-level only and invalidated
+# by ANY binding write (the generation bump lives inside Env's three
+# mutators). These pins cover the hazard classes: a rebound global gene
+# value (invalidation on set), a gene VALUE passed per call (frame-level
+# resolution is NEVER cached — params cannot poison the cache), and a
+# redefined gene (define bumps). Byte-identical across tree-walk / VM /
+# --opt 1 / --opt 2 is the contract.
+gene a() { return "A" }
+gene b() { return "B" }
+# hazard 1: a global rebound between calls — the site must re-resolve
+pick = a
+promote(pick())
+pick = b
+promote(pick())
+# hazard 2: gene values passed per call — frame-level origins never cache
+gene callit(gfn) { return gfn() }
+promote(callit(a))
+promote(callit(b))
+# hazard 3: redefinition — define bumps the generation
+gene evolving() { return 1 }
+promote(evolving())
+gene evolving() { return 2 }
+promote(evolving())
+# the plain global-gene recursion shape (the workload the cache exists for)
+gene flip(n) { if n < 1 { return "done" } return flip(n - 1) }
+promote(flip(3))
