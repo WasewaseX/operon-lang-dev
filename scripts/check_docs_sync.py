@@ -13,6 +13,14 @@ and fails on:
   7. README/STDLIB.md stdlib inventory missing a real std module (W57)
   7b. keyword without a D-008 analogy, or docs/KEYWORDS.md drift (W55)
 Run:  python3 scripts/check_docs_sync.py   (from repo root; exit 1 on drift)
+
+F3/#47: the checker pins compute(fast=True). It drift-checks ONLY the pure
+file-walk fields below; the two informational recounts compute() can also
+pay for (a full proof-suite run, the ~10 min differential harness) are
+never read here and are exercised separately by scripts/test.sh and CI on
+every change. With the recounts inline, this standing gate cost >10 min
+(two 530s timeouts, exit 124, on 2026-10-02) — a gate that cannot run in
+a gate window is a stale gate.
 """
 import json, os, re, sys
 
@@ -69,7 +77,15 @@ def files_for(spec):
 
 def main():
     fails = []
-    truth = compute()
+    # F3/#47: fast=True is load-bearing. Everything this gate reads below is
+    # a pure file walk (version, spec lines, keywords, std inventory,
+    # redteam/proof/test-op counts); the informational proof_totals and
+    # harness recounts are NEVER consumed here — the proof suite and the
+    # differential harness run as their own gates in scripts/test.sh and
+    # CI on every change. compute() without the flag re-ran both inside
+    # this gate (>10 min since the session-26 corpus growth, exit 124),
+    # leaving the standing gate one-foot-in-the-grave (issue #47).
+    truth = compute(fast=True)
 
     # 1. committed stats.json must match recomputed truth
     sp = os.path.join(ROOT, "docs", "stats.json")

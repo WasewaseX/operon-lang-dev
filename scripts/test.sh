@@ -78,6 +78,13 @@ bash scripts/typeck_e2e.sh
 # (per-asset smoke on the exact uploaded bytes, failed smoke = failed
 # release); this stanza keeps the script itself honest between releases.
 bash scripts/release_smoke.sh bin
+# F3/#47: the docs-sync gate joins the standing battery — with a pinned
+# window. The checker once re-ran a full proof suite plus the ~10 min
+# differential harness inside itself for two INFORMATIONAL recounts it
+# never reads (the drift-checked fields are pure file walks), which made
+# the gate unrunnable in any window (>530s, exit 124 — issue #47). The
+# regression pins the window AND the teeth (a wrong doc number still fails).
+bash scripts/docs_sync_regression.sh
 echo "[4/4] Oracle proof suite (the same frames on the second implementation)"
 python3 bootstrap/oracle.py test tests/
 echo "ALL GREEN"
