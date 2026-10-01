@@ -184,7 +184,11 @@ warning  app.op: 7: call to deprecated gene 'old_double' (since 2.4), use twice(
 
 ## The gene-expression regulation layer
 
+<<<<<<< HEAD
 Real mechanisms, real semantics, the professor-level feature set (fidelity is per-row; SPEC §16 carries the term audits):
+=======
+Real mechanisms, real semantics — the professor-level feature set (fidelity is per-row; docs/spec/BIO-CONTRACT.md grades every mechanism, docs/spec/MODELING-NOTES.md carries the term audits):
+>>>>>>> origin/sz/w091-bio-split
 
 | mechanism | feature |
 |---|---|
