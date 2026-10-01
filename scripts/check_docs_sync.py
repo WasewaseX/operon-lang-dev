@@ -25,6 +25,9 @@ HTML_DIR = "docs"
 
 FORBIDDEN = [
     # (pattern, why, files)
+    (r"\| Mechanism \(real molecular biology\) \| Operon feature \|", "W091: the biology ↔ feature map lives in docs/spec/MODELING-NOTES.md (modeling track), not SPEC",
+     ["SPEC.md"]),
+    # (pattern, why, files)
     (r"C runtime", "W56: the C runtime kernel was ported to Rust (A15); only the C++ codon kernel exists",
      ["README.md", "TUTORIAL.md", "CONTRIBUTING.md", "*.html"]),
     (r"No crates, no network", "W58: overclaim, Cargo.toml build-depends on cc; network is reachable via py()/run()",
@@ -120,6 +123,16 @@ def main():
         fails.append(f"W091: SPEC has {crossings} 'Crossing (§11a)' marker(s), "
                      f"minimum 3 (the live count this guard was born with; "
                      f"additions are fine, silent regressions are not)")
+    # W091: the SPEC <-> modeling-track split is load-bearing.
+    if "docs/spec/MODELING-NOTES.md" not in spec_txt:
+        fails.append("W091: SPEC.md no longer links the modeling track "
+                     "(docs/spec/MODELING-NOTES.md) — the §11 pointer and §16 stub must survive")
+    for marker in set(re.findall(r"\[MN-[A-Za-z@_-]+\]", spec_txt)):
+        key = marker[1:-1]
+        if f"### {key}" not in open(os.path.join(ROOT, "docs", "spec", "MODELING-NOTES.md"),
+                                    encoding="utf-8").read():
+            fails.append(f"W091: SPEC marker {marker} has no matching '### {key}' heading "
+                         "in docs/spec/MODELING-NOTES.md")
 
     # 4/5/6. forbidden hand-typed/stale patterns
     for pat, why, scope in FORBIDDEN:
