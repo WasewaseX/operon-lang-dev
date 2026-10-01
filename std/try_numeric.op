@@ -1,0 +1,62 @@
+# std/try_numeric — W006-A wave-3 numeric-domain Result migration, stdlib side.
+#
+# The wave-3 candidates in the numeric family are the builtins whose ONLY
+# expected failure is a fixed-text domain/overflow Stress:
+#   sqrt(x)   -> [unfolded] "sqrt of negative number"
+#   floor(x)  -> [overflow]  "float too large for floor/ceil to int"
+#   ceil(x)   -> [overflow]  "float too large for floor/ceil to int"
+# (audit: bootstrap builtin dispatch, docs/specs/RESULT-WAVE3.md §2.)
+#
+# This module delivers their try_* contracts WITHOUT a core-runtime change:
+# each wrapper validates the argument shape FIRST (so a type-abuse call
+# becomes an engine-neutral Err naming the type — the same contract wave 2
+# shipped for try_char_at), then runs the builtin inside stress/rescue and
+# converts ONLY the documented domain stress into a fixed-text Err payload.
+#
+# The engine-neutral payload law (SPEC §9, wave 2) holds: every Err payload
+# here is a raw-input echo (type names) or a fixed string — never an
+# engine's internal error text.
+#
+# DELIBERATELY NOT HERE (reported as Builder-A core dependencies, §4 of the
+# wave-3 doc): the IO family (interference containment must never be
+# rescuable from stdlib) and try_abs (i64::MIN is unreachable from source:
+# the literal overflows the parser and every arithmetic path to it
+# overflows first — the overflow stress is exceptional, keep it).
+# When Builder A lands native arms, they MUST be byte-identical to these
+# wrappers (the differential pins already enforce it).
+
+gene try_sqrt(x) {
+    # the square root, or Err("sqrt of negative number")
+    if type(x) != "int" && type(x) != "float" {
+        return err("try_sqrt expects a number, got " + type(x))
+    }
+    stress {
+        return ok(sqrt(x))
+    } rescue (e) {
+        return err("sqrt of negative number")
+    }
+}
+
+gene try_floor(x) {
+    # the floor as an int, or Err("float too large for floor/ceil to int")
+    if type(x) != "int" && type(x) != "float" {
+        return err("try_floor expects a number, got " + type(x))
+    }
+    stress {
+        return ok(floor(x))
+    } rescue (e) {
+        return err("float too large for floor/ceil to int")
+    }
+}
+
+gene try_ceil(x) {
+    # the ceiling as an int, or Err("float too large for floor/ceil to int")
+    if type(x) != "int" && type(x) != "float" {
+        return err("try_ceil expects a number, got " + type(x))
+    }
+    stress {
+        return ok(ceil(x))
+    } rescue (e) {
+        return err("float too large for floor/ceil to int")
+    }
+}
