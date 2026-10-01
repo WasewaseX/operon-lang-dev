@@ -9,6 +9,14 @@ Emits docs/stats.json + docs/STATS.md. Humans never hand-type these numbers:
 Run:  python3 scripts/gen_doc_stats.py            (from repo root)
 Exit: 0 on success. Deterministic output (sorted keys, no timestamps beyond
 the source commit the repo provides via OPERON_STATS_COMMIT or 'unknown').
+
+GEN_DOC_STATS_FAST=1 skips the two subprocess-heavy recounts (the full
+differential harness, ~10 min, and the proof-suite run) — the W006 wave-2
+session added this so a regeneration fits inside one working step. The
+seven drift-checked fields (version, keyword/std/redteam/proof/test_op
+counts) are pure file walks and are IDENTICAL in both modes; the skipped
+fields are informational only (check_docs_sync does not drift-check them,
+the harness itself is run separately by scripts/test.sh on every gate).
 """
 import json, os, re, sys
 
@@ -161,6 +169,12 @@ def compute():
     kw = keywords()
     mods = std_modules()
     spec = spec_version_lines()
+    # GEN_DOC_STATS_FAST=1 (W006 wave 2): the harness recount re-runs the
+    # full differential battery (~10 min) and the proof recount the whole
+    # proof suite — both are run separately by scripts/test.sh on every
+    # gate, so fast mode reports them as skipped instead. The seven
+    # drift-checked fields never take this path.
+    fast = os.environ.get("GEN_DOC_STATS_FAST") == "1"
     return {
         "version": cargo_version(),
         "spec": spec,
@@ -173,8 +187,10 @@ def compute():
         "redteam_files": redteam_files(),
         "proof_files": proof_files(),
         "test_op_files": test_op_files(),
-        "proof_totals": proof_totals_from_binary(),
-        "harness": harness_counts(),
+        "proof_totals": ({"files": None, "proofs": None, "asserts": None,
+                          "source": "fast-mode skip"} if fast
+                         else proof_totals_from_binary()),
+        "harness": (None if fast else harness_counts()),
         "cli_subcommands": cli_subcommands(),
         "lsp_methods": lsp_methods(),
     }
@@ -199,6 +215,9 @@ def render(s):
     if pt["proofs"] is not None:
         L.append(f"- **Proof run** ({pt['source']}): {pt['files']} files, "
                  f"{pt['proofs']} proofs, {pt['asserts']} asserts")
+    elif pt.get("source") == "fast-mode skip":
+        L.append("- **Proof run / harness recount**: skipped (GEN_DOC_STATS_FAST=1), "
+                 "run by scripts/test.sh on every gate")
     else:
         L.append("- **Proof run**: binary not built, run scripts/build.sh then regenerate")
     h = s.get("harness")

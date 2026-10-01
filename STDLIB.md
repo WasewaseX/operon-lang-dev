@@ -63,6 +63,8 @@ distinct even with equal payloads:
 | `unwrap_or(v, default)` | safe extraction, never stresses; None/Err/plain all yield `default` |
 | `unwrap(v)` | unsafe extraction, Some/Ok payload; otherwise Stress kind `unwrap` (the exceptional tier; rescue-catchable) |
 | `e?!` (postfix) | propagation, Some/Ok unwrap to the payload; None/Err return FROM the enclosing gene with that variant; plain values pass through; never contained by rescue (SPEC §9) |
+| `try_num` / `try_index` / `try_get` / `try_pop` | W06 stage 2 (v2.6.0): Result variants of the failure-prone core builtins (SPEC §9) |
+| `try_first` / `try_last` / `try_char_at` / `try_env` / `try_json_parse` / `try_re_groups` | W06 stage 2 wave 2 (v2.7.0): extraction, environment, parsing families as Results; `Err` payloads are engine-neutral raw-input echoes or fixed strings (SPEC §9 compat note); capability denials and the ReDoS ceiling stay Stresses |
 
 JSON view: `{"ok":1}` / `{"err":"x"}` / `{"some":1}` / `null` for None.
 
