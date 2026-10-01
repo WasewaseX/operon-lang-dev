@@ -33,4 +33,8 @@ python3 bootstrap/oracle.py test tests/
 # remove/update over the dir + HTTP registries, sha256 pinning, immutability.
 echo "[5/5] Package system e2e (tests/package/pkg_e2e.sh)"
 bash tests/package/pkg_e2e.sh bin/operon
+# W011: the optimizer must preserve semantics on the whole corpus at every
+# configuration (6 configs × full corpus, byte-identical vs tree-walk).
+echo "[6/6] Optimizer parity matrix (scripts/opt_parity.sh)"
+bash scripts/opt_parity.sh
 echo "ALL GREEN"

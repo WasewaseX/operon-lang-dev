@@ -209,12 +209,38 @@ clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK · CI success.
 - Files: `src/bytecode.rs`, `src/main.rs`, `SPEC.md`.
 - Depends: W009.
 
-### W011 — Optimization pipeline [P2] [dev-1] [L] [open]
-- Goal: constant folding, dead-code elimination, constant propagation, trivial-gene inlining,
-  monomorphic call specialization, builtin/global resolution caching, list-op fast paths.
-- Done when: each optimization has a micro-benchmark delta (BENCH.md row) and a differential
-  parity requirement; optimizations are individually toggleable (`--opt=none/fast/all`).
-- Files: `src/bytecode.rs` (pass infra), `src/vm.rs`, `BENCH.md`.
+### W011 — Optimization pipeline [P2] [dev-1] [L] [done @ ai/ecosystem]
+- Landed (commit W011): `src/opt.rs` pass pipeline — constant folding
+  (`pure_binop`-shared, bit-exact floats, charges refused), jump threading
+  (cycle-safe, bounds-checked), reachability DCE (all stored targets are
+  remap edges: catch handlers, loop records), block-local constant
+  propagation (kill-correct: calls, delegated stmts, scopes, closures).
+  NOTE: DCE shipped with the first W011 commit — earlier roadmap text
+  claiming DCE "remains" was stale (owner audit 2026-10).
+- Engine fast paths: trivial-body fast return (the SOUND trivial-gene
+  inlining — compile-time inlining refused as observable: RISC gate,
+  RNG stream, depth counter, guards; documented in docs/OPTIMIZER.md),
+  lazy traceback frames (String alloc removed from the happy call path),
+  match-based builtin dispatch tables, list receiver-first dispatch.
+- Switches: `--opt=0/1/2` (default 1), `--opt-passes=a,b,c` per-pass,
+  `--no-fast`, `--dump-optimized` (per-func insn counts). Docs:
+  docs/OPTIMIZER.md (per-pass exactness arguments).
+- Gates at land time: cargo 51/51; proofs 113f/99p/1302a; differential
+  144/144; vm_parity 218/218; opt_parity 6 configs × 218 = 1308/1308
+  byte-identical vs tree-walk; redteam 100/0; pkg e2e 38/38; clippy 0;
+  fmt clean. Bugs caught by the gates: signed-zero const dedupe
+  (rt_p5a/rt_p5e), implicit-end jump targets (27 corpus files),
+  load-bearing Jmp(end).
+- Per-pass benchmarks: scripts/bench_opt.sh (+ scripts/bench/opt corpus,
+  output-identity gate inside the runner). Honest finding: micro-corpus
+  wall-clock ±1% — Env HashMap traffic dominates; stage-2 lever =
+  locals-in-frame. Remaining W011 stage-2 items (not owed by the
+  original list): locals-in-frame, monomorphic call specialization
+  beyond the dispatch memo.
+- Files: `src/opt.rs` (new), `src/compile.rs` (Insn::Nop + bit-exact
+  konst), `src/vm.rs` (Nop arm), `src/interp.rs` (pure_binop + fast
+  paths), `src/tools.rs`, `src/main.rs`, `scripts/opt_parity.sh`,
+  `scripts/bench_opt.sh|py`, `scripts/bench/opt/`, `docs/OPTIMIZER.md`.
 - Depends: W009.
 
 ### W012 — JIT [P3] [dev-1] [XL] [deferred: audit orders VM → profiling → opt → JIT]

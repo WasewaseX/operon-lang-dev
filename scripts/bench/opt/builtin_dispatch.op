@@ -1,0 +1,11 @@
+# W011 bench: builtin resolution path (match-based dispatch tables)
+gene check() {
+    let acc = 0
+    let words = []
+    for i in range(0, 30000) {
+        push(words, str(i % 1000))
+        acc = acc + len(words) % 97
+    }
+    return str(acc) + ":" + str(len(words))
+}
+print(check())

@@ -459,6 +459,12 @@ pub struct Interp {
     /// Arc identity pointer. None = VM off; workers get fresh Interps with
     /// None (sequences stay on the tree-walk — docs/VM.md §6).
     pub vm_funcs: Option<std::collections::HashMap<usize, std::rc::Rc<crate::compile::FuncCode>>>,
+    /// W011 (fast_engine): trivial-body fast return in exec_gene_body —
+    /// a `return <literal>;` body returns the literal without frame
+    /// construction or VM dispatch. All gates/checks live above the hook
+    /// and are unaffected. Both engines take the same decision (pure AST
+    /// test), so byte-parity holds by construction.
+    pub fast_trivial: bool,
     /// reg-bio-3 (A1/A7): polycistronic transcription units — the namesake
     /// construct. One promoter drives N cistrons on ONE transcript; member
     /// order is load-bearing (RBS gradient + polarity exposure).
@@ -628,6 +634,7 @@ impl Interp {
             stdout_sink: None,
             silences: Vec::new(),
             vm_funcs: None,
+            fast_trivial: true,
             operons: Vec::new(),
             risc_escaped: std::collections::HashSet::new(),
             m6a_levels: HashMap::new(),
@@ -2551,291 +2558,66 @@ impl Interp {
         r: &Value,
     ) -> Result<Value, Stress> {
         use BinOp::*;
-        match op {
-            // L1a: `??` short-circuits in eval() before apply_binop; this arm
-            // exists for totality (value-level coalescing, both sides ready).
-            Nullish => Ok(if matches!(l, Value::Null) {
-                r.clone()
-            } else {
-                l.clone()
-            }),
-            Add => match (l, r) {
-                (Value::Int(a), Value::Int(b)) => a
-                    .checked_add(*b)
-                    .map(Value::Int)
-                    .ok_or_else(|| Stress::new("overflow", "int overflow in '+'")),
-                (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a + b)),
-                (Value::Int(a), Value::Float(b)) => Ok(Value::Float(*a as f64 + b)),
-                (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a + *b as f64)),
-                (Value::Str(a), Value::Str(b)) => {
-                    // per-op ceiling + aggregate allocation ceiling
-                    if a.len().saturating_add(b.len()) > 512 * 1024 * 1024 {
-                        return Err(Stress::new(
-                            "overflow",
-                            "string concat exceeds the 512 MiB ceiling",
-                        ));
-                    }
-                    mem_charge(a.len() as u64 + b.len() as u64)?;
-                    Ok(Value::Str(format!("{}{}", a, b)))
-                }
-                (Value::List(a), Value::List(b)) => {
-                    if a.borrow().len().saturating_add(b.borrow().len()) > 64 * 1024 * 1024 {
-                        return Err(Stress::new(
-                            "overflow",
-                            "list concat exceeds the 64M-element ceiling",
-                        ));
-                    }
-                    // sec-r5 (F-9): the clone below deep-copies every element
-                    // (Value::Str elements are real memcpys) — charge the
-                    // string bytes + the Vec allocation itself.
-                    let mut bytes: u64 = 0;
-                    for e in a.borrow().iter().chain(b.borrow().iter()) {
-                        if let Value::Str(s) = e {
-                            bytes += s.len() as u64;
-                        }
-                    }
-                    mem_charge(bytes)?;
-                    let mut v = a.borrow().clone();
-                    v.extend(b.borrow().iter().cloned());
-                    Ok(Value::List(Rc::new(RefCell::new(v))))
-                }
-                _ => Err(Stress::at(
-                    self.cur_line,
-                    "unfolded",
-                    format!("cannot add {} and {}", l.type_name(), r.type_name()),
-                )),
-            },
-            Sub => self.arith(
-                l,
-                r,
-                "+-",
-                |a, b| a.checked_sub(*b).map(Value::Int),
-                |a, b| a - b,
-            ),
-            Mul => {
-                // string repetition (Python parity): "ab" * 3 / 3 * "ab"
-                if let (Value::Str(s), Value::Int(n)) = (l, r) {
-                    return self.str_repeat(s, *n);
-                }
-                if let (Value::Int(n), Value::Str(s)) = (l, r) {
-                    return self.str_repeat(s, *n);
-                }
-                self.arith(
-                    l,
-                    r,
-                    "*",
-                    |a, b| a.checked_mul(*b).map(Value::Int),
-                    |a, b| a * b,
-                )
-            }
-            Pow => {
-                // 2**10 → int (checked); anything else promotes to float
-                match (l, r) {
-                    (Value::Int(a), Value::Int(b)) if *b >= 0 && *b <= u32::MAX as i64 => a
-                        .checked_pow(*b as u32)
-                        .map(Value::Int)
-                        .ok_or_else(|| Stress::new("overflow", "int overflow in '**'")),
-                    _ => {
-                        let (a, b) = self.as_floats(l, r)?;
-                        let out = a.powf(b);
-                        if out.is_infinite() && a.is_finite() && b.is_finite() && b > 0.0 {
-                            return Err(Stress::new(
-                                "overflow",
-                                "float '**' overflowed to infinity",
-                            ));
-                        }
-                        Ok(Value::Float(out))
-                    }
-                }
-            }
-            BitAnd | BitOr | BitXor => {
-                let (a, b) = self.as_ints(l, r)?;
-                Ok(Value::Int(match op {
-                    BinOp::BitAnd => a & b,
-                    BinOp::BitOr => a | b,
-                    _ => a ^ b,
-                }))
-            }
-            Shl | Shr => {
-                let (a, b) = self.as_ints(l, r)?;
-                if !(0..=63).contains(&b) {
+        // W011: runtime-state combos first — these charge (mem_charge) or
+        // repeat strings; they need `self` and are excluded from the pure
+        // subset the constant folder evaluates.
+        match (op, l, r) {
+            (Add, Value::Str(a), Value::Str(b)) => {
+                // per-op ceiling + aggregate allocation ceiling
+                if a.len().saturating_add(b.len()) > 512 * 1024 * 1024 {
                     return Err(Stress::new(
                         "overflow",
-                        format!("shift amount {} out of range", b),
+                        "string concat exceeds the 512 MiB ceiling",
                     ));
                 }
-                Ok(Value::Int(if op == BinOp::Shl {
-                    a.checked_shl(b as u32).unwrap_or(0)
-                } else {
-                    a >> b // arithmetic (sign-extending), like Python
-                }))
+                mem_charge(a.len() as u64 + b.len() as u64)?;
+                return Ok(Value::Str(format!("{}{}", a, b)));
             }
-            Div => {
-                let (a, b) = self.as_floats(l, r)?;
-                if b == 0.0 {
-                    return Err(Stress::new("unfolded", "division by zero"));
-                }
-                Ok(Value::Float(a / b))
-            }
-            FloorDiv => {
-                // floor division (Python-parity), ALWAYS int, overflow-contained
-                if let (Value::Int(a), Value::Int(b)) = (l, r) {
-                    if *b == 0 {
-                        return Err(Stress::new("unfolded", "division by zero in '//'"));
-                    }
-                    if *a == i64::MIN && *b == -1 {
-                        return Err(Stress::new("overflow", "int overflow in '//'"));
-                    }
-                    let mut q = a / b;
-                    if (*a < 0) != (*b < 0) && q * b != *a {
-                        q -= 1; // Rust / truncates toward zero; floor rounds down
-                    }
-                    return Ok(Value::Int(q));
-                }
-                let (a, b) = self.as_floats(l, r)?;
-                if b == 0.0 {
-                    return Err(Stress::new("unfolded", "division by zero in '//'"));
-                }
-                let q = (a / b).floor();
-                if !q.is_finite() || q >= 9.223372036854776e18 || q <= -9.223372036854776e18 {
-                    return Err(Stress::new("overflow", "int overflow in '//'"));
-                }
-                Ok(Value::Int(q as i64))
-            }
-            Mod => {
-                // int % int stays int (Python floored semantics); sign follows
-                // divisor: r = a - b * floor(a / b) — 7 % -3 == -2, -7 % -3 == -1
-                if let (Value::Int(a), Value::Int(b)) = (l, r) {
-                    if *b == 0 {
-                        return Err(Stress::new("unfolded", "modulo by zero"));
-                    }
-                    if *a == i64::MIN && *b == -1 {
-                        return Err(Stress::new("overflow", "int overflow in '%'"));
-                    }
-                    let mut q = a / b; // Rust / truncates toward zero
-                    if (*a < 0) != (*b < 0) && q * b != *a {
-                        q -= 1; // floor rounds down
-                    }
-                    let rb = q
-                        .checked_mul(*b)
-                        .ok_or_else(|| Stress::new("overflow", "int overflow in '%'"))?;
-                    let m = (*a)
-                        .checked_sub(rb)
-                        .ok_or_else(|| Stress::new("overflow", "int overflow in '%'"))?;
-                    return Ok(Value::Int(m));
-                }
-                let (a, b) = self.as_floats(l, r)?;
-                if b == 0.0 {
-                    return Err(Stress::new("unfolded", "modulo by zero"));
-                }
-                Ok(Value::Float(a.rem_euclid(b.abs()) * b.signum()))
-            }
-            Eq => Ok(Value::Bool(l.deep_eq(r))),
-            Neq => Ok(Value::Bool(!l.deep_eq(r))),
-            Lt | Le | Gt | Ge => {
-                // IEEE/Python parity: any comparison with NaN is false
-                // (Eq/Neq already behave correctly via deep_eq)
-                let nan_involved = matches!(l, Value::Float(f) if f.is_nan())
-                    || matches!(r, Value::Float(f) if f.is_nan());
-                if nan_involved {
-                    return Ok(Value::Bool(false));
-                }
-                let ord = self.compare(l, r)?;
-                Ok(Value::Bool(match op {
-                    Lt => ord == std::cmp::Ordering::Less,
-                    Le => ord != std::cmp::Ordering::Greater,
-                    Gt => ord == std::cmp::Ordering::Greater,
-                    Ge => ord != std::cmp::Ordering::Less,
-                    _ => unreachable!(),
-                }))
-            }
-            In => Ok(Value::Bool(match (l, r) {
-                (needle, Value::List(list)) => list.borrow().iter().any(|v| v.deep_eq(needle)),
-                (Value::Str(n), Value::Str(h)) => h.contains(n.as_str()),
-                (needle, Value::Map(m)) => m.borrow().iter().any(|(k, _)| k.deep_eq(needle)),
-                _ => {
+            (Add, Value::List(a), Value::List(b)) => {
+                if a.borrow().len().saturating_add(b.borrow().len()) > 64 * 1024 * 1024 {
                     return Err(Stress::new(
-                        "unfolded",
-                        format!(
-                            "'in' not defined for {} in {}",
-                            r.type_name(),
-                            l.type_name()
-                        ),
-                    ))
+                        "overflow",
+                        "list concat exceeds the 64M-element ceiling",
+                    ));
                 }
-            })),
-            And | Or => unreachable!("short-circuited earlier"),
-        }
-    }
-
-    fn arith(
-        &mut self,
-        l: &Value,
-        r: &Value,
-        opname: &str,
-        fi: fn(&i64, &i64) -> Option<Value>,
-        ff: fn(f64, f64) -> f64,
-    ) -> Result<Value, Stress> {
-        match (l, r) {
-            (Value::Int(a), Value::Int(b)) => fi(a, b)
-                .ok_or_else(|| Stress::new("overflow", format!("int overflow in '{}'", opname))),
-            (Value::Float(a), Value::Float(b)) => Ok(Value::Float(ff(*a, *b))),
-            (Value::Int(a), Value::Float(b)) => Ok(Value::Float(ff(*a as f64, *b))),
-            (Value::Float(a), Value::Int(b)) => Ok(Value::Float(ff(*a, *b as f64))),
-            _ => Err(Stress::at(
-                self.cur_line,
-                "unfolded",
-                format!(
-                    "cannot apply '{}' to {} and {}",
-                    opname,
-                    l.type_name(),
-                    r.type_name()
-                ),
-            )),
-        }
-    }
-
-    fn as_ints(&self, l: &Value, r: &Value) -> Result<(i64, i64), Stress> {
-        let conv = |v: &Value| -> Result<i64, Stress> {
-            match v {
-                Value::Int(i) => Ok(*i),
-                Value::Bool(b) => Ok(*b as i64),
-                other => Err(Stress::new(
-                    "unfolded",
-                    format!("bitwise op needs ints, found {}", other.type_name()),
-                )),
+                // sec-r5 (F-9): the clone below deep-copies every element
+                // (Value::Str elements are real memcpys) — charge the
+                // string bytes + the Vec allocation itself.
+                let mut bytes: u64 = 0;
+                for e in a.borrow().iter().chain(b.borrow().iter()) {
+                    if let Value::Str(s) = e {
+                        bytes += s.len() as u64;
+                    }
+                }
+                mem_charge(bytes)?;
+                let mut v = a.borrow().clone();
+                v.extend(b.borrow().iter().cloned());
+                return Ok(Value::List(Rc::new(RefCell::new(v))));
             }
-        };
-        Ok((conv(l)?, conv(r)?))
+            (Mul, Value::Str(s), Value::Int(n)) | (Mul, Value::Int(n), Value::Str(s)) => {
+                return self.str_repeat(s, *n);
+            }
+            _ => {}
+        }
+        // W011: everything else is pure — ONE funnel for the tree-walk,
+        // the VM, and the constant folder (agreement by construction).
+        match pure_binop(op, l, r, self.cur_line) {
+            Some(res) => res,
+            None => unreachable!("charging combos handled above"),
+        }
     }
+
+    // W011: the arith/as_ints helpers moved to the free functions p_arith /
+    // p_as_ints below pure_binop (one funnel for runtime + folder — the old
+    // per-method copies are gone). as_floats/compare keep their methods
+    // because builtins call them directly.
 
     fn as_floats(&self, l: &Value, r: &Value) -> Result<(f64, f64), Stress> {
-        match (l, r) {
-            (Value::Int(a), Value::Int(b)) => Ok((*a as f64, *b as f64)),
-            (Value::Float(a), Value::Float(b)) => Ok((*a, *b)),
-            (Value::Int(a), Value::Float(b)) => Ok((*a as f64, *b)),
-            (Value::Float(a), Value::Int(b)) => Ok((*a, *b as f64)),
-            _ => Err(Stress::at(
-                self.cur_line,
-                "unfolded",
-                format!(
-                    "numeric op needs numbers, found {} and {}",
-                    l.type_name(),
-                    r.type_name()
-                ),
-            )),
-        }
+        p_as_floats(l, r, self.cur_line)
     }
 
     fn compare(&self, l: &Value, r: &Value) -> Result<std::cmp::Ordering, Stress> {
-        match (l, r) {
-            (Value::Int(a), Value::Int(b)) => Ok(a.cmp(b)),
-            (Value::Str(a), Value::Str(b)) => Ok(a.cmp(b)),
-            _ => {
-                let (a, b) = self.as_floats(l, r)?;
-                Ok(a.partial_cmp(&b).unwrap_or(std::cmp::Ordering::Equal))
-            }
-        }
+        p_compare(l, r)
     }
 
     // ------------------------------------------------------- calls
@@ -3011,7 +2793,8 @@ impl Interp {
             }
         }
         // canonical builtin synonyms (print/echo/say/show → promote)
-        if let Some((_, canon)) = BUILTIN_SYNONYMS.iter().find(|(s, _)| *s == name) {
+        // W011 (fast_engine): match-based dispatch replaces the linear scan
+        if let Some(canon) = canon_synonym(name) {
             return self.call_builtin(env, canon, args);
         }
         // user gene
@@ -3019,7 +2802,7 @@ impl Interp {
             return self.call_value(env, &v, args);
         }
         // builtin
-        if BUILTIN_NAMES.contains(&name) {
+        if is_builtin_name(name) {
             return self.call_builtin(env, name, args);
         }
         // wobble: nearest callable
@@ -3077,6 +2860,22 @@ impl Interp {
     /// caller (eval calls, builtins, methods, entry resolution) inherits
     /// the choice without a second implementation of any semantics.
     fn exec_gene_body(&mut self, def: &Arc<GeneDef>, fenv: &Rc<Env>) -> Result<Flow, Stress> {
+        // W011 (fast_engine): trivial-body fast return — the SOUND form of
+        // "trivial-gene inlining". The body `return <literal>;` evaluates
+        // to the same Flow::Ret that vm_exec or exec_block would produce,
+        // without building the frame or dispatching. Every RISC gate,
+        // toggle/methylation/promoter gate, call counter, arity check,
+        // param binding/annotation/default, guard, depth counter, and
+        // profiler span lives ABOVE this hook (in call_gene /
+        // call_gene_inner / call_method_gene_inner) and runs unchanged;
+        // return annotations live BELOW it (check_ret_ann consumes the
+        // Flow::Ret either way). The trigger is a pure AST test, so both
+        // engines fast-path the same defs — parity by construction.
+        if self.fast_trivial {
+            if let Some(v) = trivial_const_body(def) {
+                return Ok(Flow::Ret(v));
+            }
+        }
         let code = self
             .vm_funcs
             .as_ref()
@@ -3108,10 +2907,13 @@ impl Interp {
         // only changes again when new expressions execute, which cannot
         // happen during unwinding). Appended to a stress ONLY on the error
         // path, so the happy path pays one comparison, not an allocation.
-        let frame = (
-            def.name.clone().unwrap_or_else(|| "<lambda>".into()),
-            self.cur_line,
-        );
+        // W011 (fast_engine): the LINE is captured here (a usize copy, no
+        // allocation) and the String name is built only in the Err arm —
+        // the old code cloned the name String on every happy-path call.
+        // The def Arc is kept alive with a refcount bump (cheaper than the
+        // String clone it replaces).
+        let entry_line = self.cur_line;
+        let def_err = std::sync::Arc::clone(&def);
         let result = self.call_gene_inner(def, closure, args);
         self.depth -= 1;
         match result {
@@ -3123,7 +2925,10 @@ impl Interp {
                 // innermost frame appends first; bounded at 64 (note-cap
                 // discipline — an unbounded chain is an uncontained one)
                 if s.chain.len() < 64 {
-                    s.chain.push(frame);
+                    s.chain.push((
+                        def_err.name.clone().unwrap_or_else(|| "<lambda>".into()),
+                        entry_line,
+                    ));
                 }
                 Err(s)
             }
@@ -7785,9 +7590,7 @@ impl Interp {
                 };
                 match &target {
                     Value::Str(name) => {
-                        if BUILTIN_SYNONYMS.iter().any(|(s, _)| s == name)
-                            || BUILTIN_NAMES.contains(&name.as_str())
-                        {
+                        if canon_synonym(name).is_some() || is_builtin_name(name) {
                             return self.call_builtin(env, name, call_args);
                         }
                         let v = env.get(name).unwrap_or(Value::Null);
@@ -9589,6 +9392,484 @@ pub fn mem_charge(bytes: u64) -> Result<(), Stress> {
         ));
     }
     Ok(())
+}
+
+// ------------------------------------------------------------- W011 pure ops
+
+/// W011 (fast_engine): trivial-body detector — `body == [Return(literal)]`
+/// (or `return;`). Refuses sequences, guarded genes, and everything else;
+/// used by exec_gene_body to return the literal without frame construction.
+/// Pure AST test → both engines decide identically → byte-parity holds.
+pub(crate) fn trivial_const_body(def: &GeneDef) -> Option<Value> {
+    if def.guard.is_some() || def.seq {
+        return None;
+    }
+    match def.body.as_slice() {
+        [Stmt::Return(Some(e))] => match e {
+            Expr::Null => Some(Value::Null),
+            Expr::Bool(b) => Some(Value::Bool(*b)),
+            Expr::Int(i) => Some(Value::Int(*i)),
+            Expr::Float(f) => Some(Value::Float(*f)),
+            Expr::Str(s) => Some(Value::Str(s.clone())),
+            _ => None,
+        },
+        [Stmt::Return(None)] => Some(Value::Null),
+        _ => None,
+    }
+}
+
+/// W011 (fast_engine): match-based dispatch for the builtin synonym table
+/// (print/echo/say/show → promote). Replaces a linear scan on the hot call
+/// path; `canon_synonym_agrees_with_tables` (tests) pins agreement with
+/// BUILTIN_SYNONYMS, which stays the source of truth.
+pub(crate) fn canon_synonym(name: &str) -> Option<&'static str> {
+    match name {
+        "print" | "echo" | "say" | "show" => Some("promote"),
+        _ => None,
+    }
+}
+
+/// W011 (fast_engine): match-based membership for BUILTIN_NAMES. Same
+/// contract as canon_synonym — the slice stays authoritative; the test
+/// suite pins agreement. A long flat match compiles to a length+prefix
+/// dispatch, far cheaper than the old linear scan per call.
+pub(crate) fn is_builtin_name(name: &str) -> bool {
+    matches!(
+        name,
+        "promote"
+            | "expr_on"
+            | "expr_off"
+            | "decay_clock"
+            | "ligand_set"
+            | "ligand"
+            | "secrete"
+            | "quorum"
+            | "quench"
+            | "quorum_state"
+            | "splice_shift"
+            | "promoter_telemetry"
+            | "burst_set"
+            | "len"
+            | "push"
+            | "pop"
+            | "insert"
+            | "remove"
+            | "keys"
+            | "values"
+            | "has"
+            | "del"
+            | "range"
+            | "str"
+            | "num"
+            | "type"
+            | "abs"
+            | "min"
+            | "max"
+            | "sum"
+            | "clock"
+            | "exit"
+            | "assert"
+            | "codon"
+            | "distance"
+            | "similar"
+            | "transcribe"
+            | "reverse_complement"
+            | "gc_content"
+            | "translate"
+            | "find_orf"
+            | "memory"
+            | "methyl"
+            | "methylate"
+            | "demethylate"
+            | "m6a_write"
+            | "m6a_erase"
+            | "passage"
+            | "grn_set"
+            | "grn_get"
+            | "fingerprint"
+            | "toggle_on"
+            | "toggle_state"
+            | "repressi_next"
+            | "repressi_state"
+            | "repressi_start"
+            | "grn_fire"
+            | "grn_state"
+            | "spawn"
+            | "join"
+            | "floor"
+            | "ceil"
+            | "sqrt"
+            | "pow"
+            | "random"
+            | "randomize"
+            | "chr"
+            | "ord"
+            | "now"
+            | "sleep"
+            | "argv"
+            | "read_file"
+            | "write_file"
+            | "append_file"
+            | "exists"
+            | "file_size"
+            | "read_dir"
+            | "fs_delete"
+            | "fs_rename"
+            | "fs_mkdir"
+            | "re_replace"
+            | "items"
+            | "run"
+            | "py"
+            | "http_get"
+            | "serve"
+            | "recv_request"
+            | "send_response"
+            | "json_parse"
+            | "json_str"
+            | "env"
+            | "re_match"
+            | "re_find"
+            | "re_groups"
+            | "unix_time"
+            | "date_parts"
+            | "date_fmt"
+            // W06 (D-014): first-class Option/Result
+            | "some"
+            | "none"
+            | "ok"
+            | "err"
+            | "is_some"
+            | "is_none"
+            | "is_ok"
+            | "is_err"
+            | "unwrap"
+            | "unwrap_or"
+            | "call"
+            // L1a: iteration + numeric builtins
+            | "enumerate"
+            | "zip"
+            | "sorted"
+            | "reversed"
+            | "any"
+            | "all"
+            | "first"
+            | "last"
+            | "take"
+            | "drop"
+            | "unique"
+            | "flatten"
+            | "chunk"
+            | "round"
+            | "clamp"
+            | "divmod"
+    )
+}
+
+/// W011: the PURE subset of `apply_binop` — no `mem_charge`, no string
+/// repetition, no interpreter state beyond the `cur_line` used in error
+/// construction. This is ONE funnel shared by the tree-walk, the VM, and
+/// the W011 constant folder (src/opt.rs), so folding cannot drift from
+/// runtime semantics: agreement by construction.
+///
+/// Returns:
+///   * `Some(Ok(v))`  — the op evaluates to v with no side effects → safe
+///     to fold.
+///   * `Some(Err(e))` — the op raises exactly e at runtime (kind, message,
+///     line) → the folder must NOT fold; the runtime raises identically.
+///   * `None`         — the op needs runtime state (mem_charge ceilings /
+///     str_repeat allocation) → the folder must NOT fold; apply_binop
+///     handles these combos before delegating here.
+pub(crate) fn pure_binop(
+    op: BinOp,
+    l: &Value,
+    r: &Value,
+    cur_line: usize,
+) -> Option<Result<Value, Stress>> {
+    use BinOp::*;
+    Some(match op {
+        // L1a: `??` short-circuits in eval() before apply_binop; this arm
+        // exists for totality (value-level coalescing, both sides ready).
+        Nullish => Ok(if matches!(l, Value::Null) {
+            r.clone()
+        } else {
+            l.clone()
+        }),
+        Add => match (l, r) {
+            (Value::Int(a), Value::Int(b)) => a
+                .checked_add(*b)
+                .map(Value::Int)
+                .ok_or_else(|| Stress::new("overflow", "int overflow in '+'")),
+            (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a + b)),
+            (Value::Int(a), Value::Float(b)) => Ok(Value::Float(*a as f64 + b)),
+            (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a + *b as f64)),
+            // charging combos: apply_binop handles them before calling here;
+            // the folder refuses them (None)
+            (Value::Str(_), Value::Str(_)) | (Value::List(_), Value::List(_)) => return None,
+            _ => Err(Stress::at(
+                cur_line,
+                "unfolded",
+                format!("cannot add {} and {}", l.type_name(), r.type_name()),
+            )),
+        },
+        Sub => p_arith(
+            l,
+            r,
+            "+-",
+            |a, b| a.checked_sub(*b).map(Value::Int),
+            |a, b| a - b,
+            cur_line,
+        ),
+        Mul => {
+            // string repetition (Python parity) — runtime state (allocation
+            // ceilings): never folds
+            if matches!(
+                (l, r),
+                (Value::Str(_), Value::Int(_)) | (Value::Int(_), Value::Str(_))
+            ) {
+                return None;
+            }
+            p_arith(
+                l,
+                r,
+                "*",
+                |a, b| a.checked_mul(*b).map(Value::Int),
+                |a, b| a * b,
+                cur_line,
+            )
+        }
+        Pow => {
+            // 2**10 → int (checked); anything else promotes to float
+            match (l, r) {
+                (Value::Int(a), Value::Int(b)) if *b >= 0 && *b <= u32::MAX as i64 => a
+                    .checked_pow(*b as u32)
+                    .map(Value::Int)
+                    .ok_or_else(|| Stress::new("overflow", "int overflow in '**'")),
+                _ => {
+                    let (a, b) = match p_as_floats(l, r, cur_line) {
+                        Ok(x) => x,
+                        Err(e) => return Some(Err(e)),
+                    };
+                    let out = a.powf(b);
+                    if out.is_infinite() && a.is_finite() && b.is_finite() && b > 0.0 {
+                        return Some(Err(Stress::new(
+                            "overflow",
+                            "float '**' overflowed to infinity",
+                        )));
+                    }
+                    Ok(Value::Float(out))
+                }
+            }
+        }
+        BitAnd | BitOr | BitXor => {
+            let (a, b) = match p_as_ints(l, r) {
+                Ok(x) => x,
+                Err(e) => return Some(Err(e)),
+            };
+            Ok(Value::Int(match op {
+                BinOp::BitAnd => a & b,
+                BinOp::BitOr => a | b,
+                _ => a ^ b,
+            }))
+        }
+        Shl | Shr => {
+            let (a, b) = match p_as_ints(l, r) {
+                Ok(x) => x,
+                Err(e) => return Some(Err(e)),
+            };
+            if !(0..=63).contains(&b) {
+                return Some(Err(Stress::new(
+                    "overflow",
+                    format!("shift amount {} out of range", b),
+                )));
+            }
+            Ok(Value::Int(if op == BinOp::Shl {
+                a.checked_shl(b as u32).unwrap_or(0)
+            } else {
+                a >> b // arithmetic (sign-extending), like Python
+            }))
+        }
+        Div => {
+            let (a, b) = match p_as_floats(l, r, cur_line) {
+                Ok(x) => x,
+                Err(e) => return Some(Err(e)),
+            };
+            if b == 0.0 {
+                return Some(Err(Stress::new("unfolded", "division by zero")));
+            }
+            Ok(Value::Float(a / b))
+        }
+        FloorDiv => {
+            // floor division (Python-parity), ALWAYS int, overflow-contained
+            if let (Value::Int(a), Value::Int(b)) = (l, r) {
+                if *b == 0 {
+                    return Some(Err(Stress::new("unfolded", "division by zero in '//'")));
+                }
+                if *a == i64::MIN && *b == -1 {
+                    return Some(Err(Stress::new("overflow", "int overflow in '//'")));
+                }
+                let mut q = a / b;
+                if (*a < 0) != (*b < 0) && q * b != *a {
+                    q -= 1; // Rust / truncates toward zero; floor rounds down
+                }
+                return Some(Ok(Value::Int(q)));
+            }
+            let (a, b) = match p_as_floats(l, r, cur_line) {
+                Ok(x) => x,
+                Err(e) => return Some(Err(e)),
+            };
+            if b == 0.0 {
+                return Some(Err(Stress::new("unfolded", "division by zero in '//'")));
+            }
+            let q = (a / b).floor();
+            if !q.is_finite() || q >= 9.223372036854776e18 || q <= -9.223372036854776e18 {
+                return Some(Err(Stress::new("overflow", "int overflow in '//'")));
+            }
+            Ok(Value::Int(q as i64))
+        }
+        Mod => {
+            // int % int stays int (Python floored semantics); sign follows
+            // divisor: r = a - b * floor(a / b) — 7 % -3 == -2, -7 % -3 == -1
+            if let (Value::Int(a), Value::Int(b)) = (l, r) {
+                if *b == 0 {
+                    return Some(Err(Stress::new("unfolded", "modulo by zero")));
+                }
+                if *a == i64::MIN && *b == -1 {
+                    return Some(Err(Stress::new("overflow", "int overflow in '%'")));
+                }
+                let mut q = a / b; // Rust / truncates toward zero
+                if (*a < 0) != (*b < 0) && q * b != *a {
+                    q -= 1; // floor rounds down
+                }
+                let rb = match q.checked_mul(*b) {
+                    Some(x) => x,
+                    None => return Some(Err(Stress::new("overflow", "int overflow in '%'"))),
+                };
+                let m = match (*a).checked_sub(rb) {
+                    Some(x) => x,
+                    None => return Some(Err(Stress::new("overflow", "int overflow in '%'"))),
+                };
+                return Some(Ok(Value::Int(m)));
+            }
+            let (a, b) = match p_as_floats(l, r, cur_line) {
+                Ok(x) => x,
+                Err(e) => return Some(Err(e)),
+            };
+            if b == 0.0 {
+                return Some(Err(Stress::new("unfolded", "modulo by zero")));
+            }
+            Ok(Value::Float(a.rem_euclid(b.abs()) * b.signum()))
+        }
+        Eq => Ok(Value::Bool(l.deep_eq(r))),
+        Neq => Ok(Value::Bool(!l.deep_eq(r))),
+        Lt | Le | Gt | Ge => {
+            // IEEE/Python parity: any comparison with NaN is false
+            // (Eq/Neq already behave correctly via deep_eq)
+            let nan_involved = matches!(l, Value::Float(f) if f.is_nan())
+                || matches!(r, Value::Float(f) if f.is_nan());
+            if nan_involved {
+                return Some(Ok(Value::Bool(false)));
+            }
+            let ord = match p_compare(l, r) {
+                Ok(x) => x,
+                Err(e) => return Some(Err(e)),
+            };
+            Ok(Value::Bool(match op {
+                Lt => ord == std::cmp::Ordering::Less,
+                Le => ord != std::cmp::Ordering::Greater,
+                Gt => ord == std::cmp::Ordering::Greater,
+                Ge => ord != std::cmp::Ordering::Less,
+                _ => unreachable!(),
+            }))
+        }
+        In => Ok(Value::Bool(match (l, r) {
+            (needle, Value::List(list)) => list.borrow().iter().any(|v| v.deep_eq(needle)),
+            (Value::Str(n), Value::Str(h)) => h.contains(n.as_str()),
+            (needle, Value::Map(m)) => m.borrow().iter().any(|(k, _)| k.deep_eq(needle)),
+            _ => {
+                return Some(Err(Stress::new(
+                    "unfolded",
+                    format!(
+                        "'in' not defined for {} in {}",
+                        r.type_name(),
+                        l.type_name()
+                    ),
+                )))
+            }
+        })),
+        And | Or => unreachable!("short-circuited earlier"),
+    })
+}
+
+/// Free-function arith (the Interp method delegates here with cur_line).
+fn p_arith(
+    l: &Value,
+    r: &Value,
+    opname: &str,
+    fi: fn(&i64, &i64) -> Option<Value>,
+    ff: fn(f64, f64) -> f64,
+    cur_line: usize,
+) -> Result<Value, Stress> {
+    match (l, r) {
+        (Value::Int(a), Value::Int(b)) => {
+            fi(a, b).ok_or_else(|| Stress::new("overflow", format!("int overflow in '{}'", opname)))
+        }
+        (Value::Float(a), Value::Float(b)) => Ok(Value::Float(ff(*a, *b))),
+        (Value::Int(a), Value::Float(b)) => Ok(Value::Float(ff(*a as f64, *b))),
+        (Value::Float(a), Value::Int(b)) => Ok(Value::Float(ff(*a, *b as f64))),
+        _ => Err(Stress::at(
+            cur_line,
+            "unfolded",
+            format!(
+                "cannot apply '{}' to {} and {}",
+                opname,
+                l.type_name(),
+                r.type_name()
+            ),
+        )),
+    }
+}
+
+fn p_as_ints(l: &Value, r: &Value) -> Result<(i64, i64), Stress> {
+    let conv = |v: &Value| -> Result<i64, Stress> {
+        match v {
+            Value::Int(i) => Ok(*i),
+            Value::Bool(b) => Ok(*b as i64),
+            other => Err(Stress::new(
+                "unfolded",
+                format!("bitwise op needs ints, found {}", other.type_name()),
+            )),
+        }
+    };
+    Ok((conv(l)?, conv(r)?))
+}
+
+fn p_as_floats(l: &Value, r: &Value, cur_line: usize) -> Result<(f64, f64), Stress> {
+    match (l, r) {
+        (Value::Int(a), Value::Int(b)) => Ok((*a as f64, *b as f64)),
+        (Value::Float(a), Value::Float(b)) => Ok((*a, *b)),
+        (Value::Int(a), Value::Float(b)) => Ok((*a as f64, *b)),
+        (Value::Float(a), Value::Int(b)) => Ok((*a, *b as f64)),
+        _ => Err(Stress::at(
+            cur_line,
+            "unfolded",
+            format!(
+                "numeric op needs numbers, found {} and {}",
+                l.type_name(),
+                r.type_name()
+            ),
+        )),
+    }
+}
+
+fn p_compare(l: &Value, r: &Value) -> Result<std::cmp::Ordering, Stress> {
+    match (l, r) {
+        (Value::Int(a), Value::Int(b)) => Ok(a.cmp(b)),
+        (Value::Str(a), Value::Str(b)) => Ok(a.cmp(b)),
+        _ => {
+            let (a, b) = p_as_floats(l, r, 0)?;
+            Ok(a.partial_cmp(&b).unwrap_or(std::cmp::Ordering::Equal))
+        }
+    }
 }
 
 /// sec-r5 (F-9): Value::Str clones are deep copies — every read/push of a

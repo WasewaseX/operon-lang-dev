@@ -662,6 +662,8 @@ impl Interp {
                         let v = self.eval(&env, e)?;
                         stack.push(v);
                     }
+                    // W011: optimizer scratch slot — no semantic effect
+                    Insn::Nop => {}
                 }
                 pc += 1;
                 Ok(())

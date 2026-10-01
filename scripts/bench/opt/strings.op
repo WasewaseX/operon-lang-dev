@@ -1,0 +1,9 @@
+# W011 bench: string build paths (charging concat)
+gene check() {
+    let out = ""
+    for i in range(0, 20000) {
+        out = out + str(i % 89) + ","
+    }
+    return str(len(out))
+}
+print(check())

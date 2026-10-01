@@ -1,0 +1,12 @@
+# W011 bench: gene call path (trivial-body fast return, lazy traceback frames)
+gene five() {
+    return 5
+}
+gene check() {
+    let s = 0
+    for i in range(0, 200000) {
+        s = s + five()
+    }
+    return str(s)
+}
+print(check())
