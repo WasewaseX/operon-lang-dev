@@ -191,7 +191,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
 - Files: `src/bytecode.rs`, `src/main.rs`, `SPEC.md`.
 - Depends: W009.
 
-### W011, Optimization pipeline [P2] [dev-1] [L] [partial: stage 1 on main 61249a8 (constant folding + jump threading behind --opt 1); REMAIN: DCE, trivial-gene inlining, monomorphic specialization, per-pass bench rows + toggle matrix]
+### W011, Optimization pipeline [P2] [dev-1] [L] [partial ~60%: stage 1+2 landed (constant folding, jump threading, superinstructions, reachability DCE behind --opt 1 — DCE is IN, commit 340a29f, do not list as remaining); REMAIN: constant propagation, trivial-gene inlining, monomorphic specialization, builtin/global resolution caching, list-op fast paths, per-pass bench rows + toggle matrix]
 - Goal: constant folding, dead-code elimination, constant propagation, trivial-gene inlining,
   monomorphic call specialization, builtin/global resolution caching, list-op fast paths.
 - Done when: each optimization has a micro-benchmark delta (BENCH.md row) and a differential

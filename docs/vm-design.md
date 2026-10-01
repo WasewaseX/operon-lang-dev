@@ -2,9 +2,10 @@
 
 Status: **A1-A6: A1 adopted; A2 bridge architecture landed (2026-09-27); A3/A4
 full-corpus parity campaign green (219/219, redteam 106/0 both engines); W11
-stage-1 superinstructions landed; A5 perf pass reached cross-engine parity
-(0.88x -> 0.99x on fib25, see BENCH.md) with the >=3x stretch target still
-open under W11; A6 DEFAULT FLIP landed (v2.6.0, `--interp` escape hatch)**
+stage-1 superinstructions AND stage-2 reachability DCE landed; A5 perf pass
+reached cross-engine parity (0.88x -> 0.99x on fib25, see BENCH.md) with the
+>=3x stretch target still open under W11; A6 DEFAULT FLIP landed (v2.6.0,
+`--interp` escape hatch)**
 · Owner: dev-1 (builder-A) · Track: A1-A6 (W09)
 Target reader: a CS engineer implementing or reviewing the A-track (D-008: zero biology assumed).
 This document is the contract the A2–A6 phases implement against. It decides the value
@@ -58,20 +59,26 @@ which puts function-call-heavy code at parity with CPython or better.
    milestone and the banner gained the `-vm` suffix (`Operon 2.6.0-vm (rust-core, cpp-kernel)`);
    `--interp` is the escape hatch named by §9 (pre-flip the flag was `--vm`, still accepted).
 
-## 2b. W11 stage 1 delivered: the optimization pipeline (2026-09-27, main)
+## 2b. W11 stage 1+2 delivered: the optimization pipeline (2026-09-27, main; stage 2 same series, commit 340a29f)
 
-`--opt 1` runs two draw-free passes over each compiled body before execution
-(`optimize` in src/vm.rs): constant folding (Push/Push/Bin triples over pure
-Int/Float/Bool arithmetic, i64 CHECKED so anything that would stress at
-runtime stays runtime, and jump threading (Jmp chains resolved, a Jmp to the
-next instruction removed). The passes never touch Bridge/EvalExpr
-instructions: folding cannot reorder or remove a draw (invariant 2). Jump
-removal remaps every Jmp/JmpIfF/Brk/Cont target. Cache note: an optimized
-body caches under a shifted key so --opt 0 and --opt 1 do not share entries.
-Evidence: a unit test pins the folded shape of `return 6 * 7`; the corpus
-spot-check runs --vm --opt 1 byte-identical against the oracle on targets
-covering bigint, bytes, unicode and the cookbook. Later stages (dead-block
-elimination, inlining, specialization) stay open on the W11 board entry.
+`--opt 1` runs THREE draw-free passes over each compiled body before execution
+(`optimize` in src/vm.rs): constant folding (Push/Push/Bin triples and the
+Push/BinImm fused pair over pure Int/Float/Bool arithmetic, i64 CHECKED so
+anything that would stress at runtime stays runtime), jump threading (Jmp
+chains resolved, a Jmp to the next instruction removed), and reachability
+DCE (instructions unreachable from ip 0 — dead code after a Ret, abandoned
+jump islands — are dropped, with every Jmp/JmpIfF/Brk/Cont target remapped
+through the old->new table; unreachable code can never execute, so no tick,
+note, draw or output can change). The passes never touch Bridge/EvalExpr
+instructions: folding cannot reorder or remove a draw (invariant 2). Cache
+note: an optimized body caches under a shifted key so --opt 0 and --opt 1 do
+not share entries. Evidence: unit tests pin the folded shape of
+`return 6 * 7` and the exact DCE drops (`dce_drops_only_unreachable_code`);
+the corpus parity gate `scripts/vm_parity.sh` runs every tests/**.op and
+apps/**.op byte-identical across --no-vm, default VM, and --opt 1.
+REMAIN on the W11 board entry: constant propagation, trivial-gene inlining,
+monomorphic call specialization, builtin/global resolution caching, list-op
+fast paths, per-pass bench rows + the toggle matrix.
 
 ## 2a. A2 delivered: the bridge architecture (2026-09-27, main)
 
