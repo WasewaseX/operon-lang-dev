@@ -78,6 +78,11 @@ bash scripts/typeck_e2e.sh
 # (per-asset smoke on the exact uploaded bytes, failed smoke = failed
 # release); this stanza keeps the script itself honest between releases.
 bash scripts/release_smoke.sh bin
+# F4/#48 (reliab lane, 2026-10-02): the cross-run crash-signature dedupe DB
+# joins the standing gate (the rot lesson — the S7 stage-4 REMAIN sat tracked
+# but unpinned). Hermetic: a stub exit-101 binary, two deterministic runs;
+# run 2 must be all KNOWN-DEDUPE with zero new saves and nothing re-manifested.
+bash scripts/fuzz/dedupe_regression.sh
 echo "[4/4] Oracle proof suite (the same frames on the second implementation)"
 python3 bootstrap/oracle.py test tests/
 echo "ALL GREEN"
