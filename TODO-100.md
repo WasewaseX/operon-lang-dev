@@ -63,22 +63,12 @@ Rules:
 
 Effort: S ≤ half session · M = 1–2 sessions · L = multi-session · XL = release-scale.
 
-<<<<<<< HEAD
 ## CURRENT GATE NUMBERS (2026-09-28, main @ f0527e5, re-measured on a fresh build)
 
 differential **190/190 MATCH** (10 granted cells) + vm lane **184/184** · proofs
 **154 files / 117 proofs / 1,675 assertions, 117 passed 0 failed** · redteam
 **104 contained / 0 breached** · cargo test green · clippy 0 · fmt clean · docs
 sync green · CodeQL **0 findings** (f0527e5) · CI success.
-=======
-## CURRENT GATE NUMBERS (2026-09-27, main @ 09e81ba + W091 branch — re-measured by sz on the branch head)
-
-differential **166/166 MATCH** · proofs **134 files / 109 proofs green (1479 asserts, 0 failed)** ·
-redteam **100 payloads / 0 breaches** · cargo test green (120 tests) ·
-clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK (incl. rename asserts) · sec_regression ALL GREEN ·
-doc_api_check green (W091 branch fixed the pre-existing docs/api drift — stdlib wave modules deque/heap/path/time now rendered) ·
-embed gate green (W076) · playground smoke **20/20** (W22-manifest job, PR #25) · perf gate calibrated (file_io 100% noise threshold, PR #27).
->>>>>>> origin/sz/w091-bio-split
 
 > These numbers are re-measured every loop; when they change, update this header in the
 > same commit that lands work. If this header is stale, the per-level evidence links win.
@@ -843,18 +833,7 @@ embed gate green (W076) · playground smoke **20/20** (W22-manifest job, PR #25)
   already (release targets), add explicit float-parity assertion program.
 - Files: `docs/spec/DETERMINISM.md`, `tests/differential/`.
 
-<<<<<<< HEAD
-### W091, Bio semantics separation [P1] [dev-3] [M] [done: SPEC §11a (batch2): contract header (scope, W036 freeze citation, BIO-CONTRACT + DETERMINISM pointers, D-008 voice rule), the one-paragraph quotable boundary test (bio iff behavior cannot be predicted without §11), 23-row boundary map with anchors, 9 crossing sentences marked at §3/§10/§13/§14/§15; bounded-region option chosen over renumbering move, reasoning recorded; docs sync checker still exit 0; ENFORCEMENT (sz follow-up, PR sz/w091-enforcement): CONTRIBUTING 8b two-track review rule (mixed-track PRs label hunks, bio rewording cannot justify behavior change) + check_docs_sync.py guards (11a header with W091 tag, BIO-CONTRACT + DETERMINISM pointers in the 11a region, Crossing (11a) markers minimum 3, negative-tested both)]
-- Goal: SPEC currently interleaves language semantics with biological modeling semantics.
-  Split: language sections state syntax/evaluation ONLY; bio modeling moves to a dedicated
-  volume (docs/spec/BIO-MODEL.md) referenced from SPEC §11.
-- Done when: SPEC §11 is a pointer + core evaluation rules only; BIO-MODEL.md holds the
-  mechanism math; no information lost (diff-audit by sz); future bio changes cannot be
-  breaking language changes by construction.
-- Files: `SPEC.md`, `docs/spec/BIO-MODEL.md` (new).
-=======
 ### W091 — Bio semantics separation [P1] [dev-3] [M] [done: sz/w091-bio-split — SPEC split into two tracks. §11 keeps the LANGUAGE contract (syntax, semantics, gates, clamps, knobs, entropy discipline, test pins); all biology rationale, term audits, and not-modeled lists moved verbatim to docs/spec/MODELING-NOTES.md (§2, keyed by [MN-*] markers — 29 markers over 20 mechanism keys); §16's biology ↔ feature map moved wholesale to MODELING-NOTES §3 with a numbered stub left in SPEC. The mechanism MATH stayed in SPEC deliberately: formulas are contract (testable, pinned by proofs). No information lost — extraction diff-audited by sz. Two-track review rule landed as CONTRIBUTING §8b (a bio-analogy change can no longer silently be a language change and vice versa; mixed-track PRs must label hunks; reviewers enforce at lane check). check_docs_sync.py now FAILS when SPEC stops linking the modeling track, when a [MN-*] marker has no matching appendix heading, and the old §16 table is a FORBIDDEN pattern in SPEC. File-name note: the board suggested docs/spec/BIO-MODEL.md; as-built uses MODELING-NOTES.md because BIO-CONTRACT.md (W092) already owns the modeling contract and a second "BIO-*" contract file would collide. Coverage scan §10–§19 recorded in MODELING-NOTES §1 (§10/§12–§15/§17–§19 are contract-only). Gates: 166/166 differential · 134f/109p/1479a proofs · 100/0 redteam · cookbook 19/19 · cargo 120 · clippy 0 · fmt clean · sec ALL GREEN · docs-sync + doc_api_check green]
->>>>>>> origin/sz/w091-bio-split
 - Coordinate: W036 (syntax boundary, dev-2) + W092 (modeling contract, below) land as one
   coherent doc wave.
 
