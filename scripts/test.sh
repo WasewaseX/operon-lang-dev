@@ -78,6 +78,51 @@ bash scripts/typeck_e2e.sh
 # (per-asset smoke on the exact uploaded bytes, failed smoke = failed
 # release); this stanza keeps the script itself honest between releases.
 bash scripts/release_smoke.sh bin
+# W096-A (reliab lane, 2026-10-02): the differential harness is
+# cwd-contractual — the oracle resolves `use std/x` via CWD-relative
+# candidates, so an out-of-tree cwd used to silently flood the lane with
+# false DIVERGEs (oracle prints null for every std-using program; the
+# session-30 "/tmp" note and the W096-A 33-false-divergence audit are this
+# class). harness.py now refuses (exit 2) unless cwd == repo root. This
+# stanza pins the end-to-end refusal (out-of-tree run must fail rc=2 with
+# the message) and the guard function's both sides directly (the real
+# in-tree happy path is the [3/4] harness step above, every run).
+W096_SCRATCH="$(mktemp -d)"
+W096_REPO="$(pwd)"
+mkdir -p "$W096_SCRATCH/std" "$W096_SCRATCH/tests"
+if (cd "$W096_SCRATCH" && python3 "$W096_REPO/bootstrap/harness.py" >"$W096_SCRATCH/out1.txt" 2>&1); then
+  echo "HARNESS GUARD FAIL: out-of-tree harness run exited 0 (silent false-diverge mode is back)"
+  rm -rf "$W096_SCRATCH"; exit 1
+fi
+grep -q "must run from the repo root" "$W096_SCRATCH/out1.txt" || {
+  echo "HARNESS GUARD FAIL: out-of-tree run failed but the refusal message is missing"
+  cat "$W096_SCRATCH/out1.txt"; rm -rf "$W096_SCRATCH"; exit 1
+}
+# Positive side, at the guard-function level (a synthetic-tree end-to-end
+# run is impossible: the granted-targets loop is unconditional and
+# repo-relative, so an empty tree fails it by design). The real in-tree
+# happy path is exercised end-to-end by the [3/4] harness step above on
+# every run of this suite.
+if (cd "$W096_SCRATCH" && python3 -c "
+import sys
+sys.path.insert(0, '$W096_REPO/bootstrap')
+from harness import ensure_in_tree
+sys.exit(0 if ensure_in_tree('$W096_SCRATCH') else 1)
+"); then :; else
+  echo "HARNESS GUARD FAIL: in-tree cwd must pass ensure_in_tree"
+  rm -rf "$W096_SCRATCH"; exit 1
+fi
+if (cd "$W096_SCRATCH" && python3 -c "
+import sys
+sys.path.insert(0, '$W096_REPO/bootstrap')
+from harness import ensure_in_tree
+sys.exit(1 if ensure_in_tree('$W096_REPO') else 0)
+"); then :; else
+  echo "HARNESS GUARD FAIL: out-of-tree cwd must fail ensure_in_tree"
+  rm -rf "$W096_SCRATCH"; exit 1
+fi
+rm -rf "$W096_SCRATCH"
+echo "ok   harness cwd-guard (out-of-tree refused rc=2 + message; guard function accepts in-tree, refuses out-of-tree)"
 echo "[4/4] Oracle proof suite (the same frames on the second implementation)"
 python3 bootstrap/oracle.py test tests/
 echo "ALL GREEN"
