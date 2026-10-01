@@ -33,20 +33,38 @@ Findings are saved to fuzz_corpus/<kind>_<seed>_<exec>.op (truncation-sweep
 minimized when possible) with one JSON line each in fuzz_corpus/MANIFEST.jsonl:
 input, seed file, mutation chain, argv, exit code, stderr head.
 
+Cross-run dedupe (F4/#48, W096-A follow-up, 2026-10-02): every finding gets a
+stable SIGNATURE — kind + surface + normalized crash detail + a byte-class
+shape hash of the input (never the raw bytes: mutated inputs differ every
+run). Signatures live in scripts/fuzz/crash_signatures.json (committed,
+deterministic bytes). A crash whose signature is already triaged is reported
+as KNOWN-DEDUPE: not re-saved, not re-counted as a new finding — but the run
+still FAILS, because a live crash matching a triaged signature is a regression
+of a fixed bug or an unfixed one, and the CI fuzz job must catch either.
+
+Modes:
+  default        mutate the repo corpus (tests + redteam + examples + std)
+  --seed-dir D   use exactly the .op files under D as seeds (directed runs,
+                 and what the dedupe regression uses for hermetic replay)
+  --replay D     no mutation: run the 5 surfaces over each .op in D as-is
+
 Run:  python3 scripts/fuzz/fuzz.py [--time-budget 120] [--execs N] [--seed S]
-Exit: 0 no findings, 1 findings (they are SAVED — triage them, do not gloat).
+Exit: 0 no findings and no known re-hits, 1 findings or known re-hits (they
+      are SAVED/triaged — do not gloat), 2 setup error.
 """
 import argparse
 import hashlib
 import json
 import os
 import random
+import re
 import subprocess
 import sys
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DEFAULT_CORPUS_DIR = os.path.join(ROOT, "fuzz_corpus")
+DEFAULT_SIGNATURES = os.path.join(ROOT, "scripts", "fuzz", "crash_signatures.json")
 TMP = os.path.join(ROOT, "target", "fuzz.tmp.op")
 MAX_MUTATED_BYTES = 512 * 1024  # beyond this only flip/truncate: keep timeouts honest
 PANIC_TEXTS = ("panicked at", "stack overflow", "fatal runtime error", "[fatal]")
@@ -199,6 +217,98 @@ def minimize(binpath, payload, argv, timeout, rounds=12):
     return cur
 
 
+# ------------------------------------------------------------ signatures (F4/#48)
+
+def byte_shape(data):
+    """Stable structural hash of an input: class run-length encoding, hashed.
+
+    Deliberately NOT the raw-bytes hash (that is the within-run dedupe): two
+    different mutations that crash the same site usually share the byte-CLASS
+    skeleton (letters/digits/space/punct/high/control). Capped at 64 KiB so
+    shape hashing stays O(constant) on oversized inputs.
+    """
+    classes = []
+    for b in data[:65536]:
+        if 65 <= b <= 90 or 97 <= b <= 122:
+            c = 0
+        elif 48 <= b <= 57:
+            c = 1
+        elif b in (32, 9, 10, 13):
+            c = 2
+        elif b >= 128:
+            c = 4
+        elif b < 32:
+            c = 5
+        else:
+            c = 3
+        classes.append(c)
+    rle, prev, run = [], None, 0
+    for c in classes:
+        if c == prev:
+            run += 1
+        else:
+            if prev is not None:
+                rle.append(f"{prev}x{run}")
+            prev, run = c, 1
+    if prev is not None:
+        rle.append(f"{prev}x{run}")
+    return hashlib.sha256("|".join(rle).encode()).hexdigest()[:16]
+
+
+def normalize_detail(kind, detail):
+    """Crash detail reduced to its stable class.
+
+    Signal numbers vary by platform (SIGSEGV is 11 on linux, 10/11 on macos);
+    panic message tails carry addresses and line numbers. The signature must
+    survive both.
+    """
+    if kind == "hang":
+        return "timeout"
+    if detail.startswith("signal "):
+        return "signal"
+    if detail.startswith("exit "):
+        try:
+            return f"exit {int(detail.split()[1])}"
+        except (IndexError, ValueError):
+            return "exit other"
+    if detail.startswith("panic text ") and "'" in detail:
+        t = detail.split("'", 1)[1].rstrip("'")
+        t = re.sub(r"0x[0-9a-fA-F]+", "0xADDR", t)
+        t = re.sub(r"\d+", "N", t)
+        return t[:120]
+    return detail[:120]
+
+
+def signature_for(kind, detail, surface, data):
+    """kind|surface|normalized-detail|byte-shape — stable across runs."""
+    return f"{kind}|{surface}|{normalize_detail(kind, detail)}|{byte_shape(data)}"
+
+
+def load_signatures(path):
+    """Load the DB. Missing file = empty DB (first run on a fresh checkout).
+    Corrupt file = FATAL: a silently-empty gate state would re-report known
+    crashers as new (the vacuous-pin lesson applies to dedupe state too)."""
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, encoding="utf-8") as fh:
+            db = json.load(fh)
+        if db.get("schema") != 1 or not isinstance(db.get("signatures"), dict):
+            raise ValueError("schema mismatch")
+        return db["signatures"]
+    except (OSError, ValueError, json.JSONDecodeError) as e:
+        print(f"FATAL: crash-signature DB at {path} is corrupt: {e}", file=sys.stderr)
+        sys.exit(2)
+
+
+def save_signatures(path, signatures):
+    """Deterministic bytes: sorted keys, fixed indent, trailing newline."""
+    doc = {"schema": 1, "signatures": {k: signatures[k] for k in sorted(signatures)}}
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(doc, fh, sort_keys=True, indent=1)
+        fh.write("\n")
+
+
 # ------------------------------------------------------------ main
 
 def main():
@@ -215,6 +325,19 @@ def main():
     ap.add_argument("--max-findings", type=int, default=20)
     ap.add_argument("--bin", default=None)
     ap.add_argument("--no-minimize", action="store_true")
+    # F4/#48 (W096-A follow-up): cross-run crash-signature dedupe DB.
+    ap.add_argument("--signatures", default=DEFAULT_SIGNATURES,
+                    help="crash-signature DB path (cross-run dedupe; "
+                         "default scripts/fuzz/crash_signatures.json)")
+    ap.add_argument("--no-dedupe", action="store_true",
+                    help="legacy behavior: no signature DB load/save")
+    ap.add_argument("--seed-dir", default=None,
+                    help="use exactly the .op files under this dir as seeds "
+                         "(directed runs + the dedupe regression) instead of "
+                         "the repo corpus")
+    ap.add_argument("--replay", default=None,
+                    help="replay mode: run the 5 surfaces over each .op in "
+                         "DIR as-is (no mutation), signature-deduped")
     args = ap.parse_args()
 
     binpath = find_binary(args.bin)
@@ -222,103 +345,202 @@ def main():
         print("no operon binary found — cargo build first", file=sys.stderr)
         return 2
 
-    seeds, skipped = build_corpus(args.max_file_bytes)
+    sigdb = {} if args.no_dedupe else load_signatures(args.signatures)
+    db_changed = False
+
+    if args.replay:
+        if not os.path.isdir(args.replay):
+            print(f"replay dir not found: {args.replay}", file=sys.stderr)
+            return 2
+        seeds = [os.path.join(args.replay, n) for n in sorted(os.listdir(args.replay))
+                 if n.endswith(".op")]
+        skipped = 0
+    elif args.seed_dir:
+        if not os.path.isdir(args.seed_dir):
+            print(f"seed dir not found: {args.seed_dir}", file=sys.stderr)
+            return 2
+        seeds = [os.path.join(args.seed_dir, n) for n in sorted(os.listdir(args.seed_dir))
+                 if n.endswith(".op")]
+        skipped = 0
+    else:
+        seeds, skipped = build_corpus(args.max_file_bytes)
     if not seeds:
         print("empty corpus", file=sys.stderr)
         return 2
     os.makedirs(args.corpus_dir, exist_ok=True)
+    # GENUINE REPAIR (found by the F4/#48 hermetic regression, 2026-10-02):
+    # TMP lives under target/, which only exists after a cargo build. A fresh
+    # checkout / worktree running fuzz before build crashed with FileNotFoundError
+    # at the first write. The fuzzer must not depend on build artifacts existing.
+    os.makedirs(os.path.dirname(TMP), exist_ok=True)
     manifest = os.path.join(args.corpus_dir, "MANIFEST.jsonl")
 
     print(f"fuzz — seed {args.seed}, budget {args.time_budget:.0f}s, "
           f"per-input timeout {args.per_input_timeout:.0f}s")
     print(f"  binary: {binpath}")
-    print(f"  corpus: {len(seeds)} file(s) "
-          f"(tests + tests/redteam + examples/** + std; {skipped} skipped > "
-          f"{args.max_file_bytes // 1024} KiB)")
+    if args.replay:
+        print(f"  replay: {len(seeds)} file(s) from {args.replay} (no mutation)")
+    else:
+        n_src = f", seed-dir {args.seed_dir}" if args.seed_dir else ""
+        print(f"  corpus: {len(seeds)} file(s){n_src} "
+              f"({skipped} skipped > {args.max_file_bytes // 1024} KiB)")
     print(f"  targets: check / ast --json / fmt / explain [--json] (parse-only; contained rc "
           f"1-3 is the EXPECTED redteam outcome, never a finding)")
+    if not args.no_dedupe:
+        print(f"  signatures: {os.path.relpath(args.signatures, ROOT)} "
+              f"({len(sigdb)} triaged; re-hits = KNOWN-DEDUPE and still fail the run)")
+
+    SURFACES = (["check"], ["ast", "--json"], ["fmt"], ["explain"],
+                ["explain", "--json"])
 
     rnd = random.Random(args.seed)
     deadline = time.time() + args.time_budget
-    stats = {"clean": 0, "contained": 0, "crash": 0, "hang": 0}
+    stats = {"clean": 0, "contained": 0, "crash": 0, "hang": 0, "known": 0}
     seen_hashes = set()
     unique_findings = 0
+    known_hits = 0
     execs = 0
 
-    while execs < args.execs and time.time() < deadline \
-            and unique_findings < args.max_findings:
-        src = rnd.choice(seeds)
-        try:
-            with open(src, "rb") as fh:
-                data = fh.read()
-        except OSError:
-            continue
-        mut, chain = mutate(data, rnd)
-        with open(TMP, "wb") as fh:
-            fh.write(mut)
-        # S7 slice 1: `explain` joins the target row (it was excluded as a
-        # batch-2 WIP lane; the surface is stable now and its --json shape is
-        # contract-pinned). Parse-only by construction: explain never runs
-        # the program, so redteam seeds stay contained here too.
-        for argv in (["check", TMP], ["ast", TMP, "--json"], ["fmt", TMP],
-                     ["explain", TMP], ["explain", TMP, "--json"]):
-            rc, out, err = probe([binpath] + argv, args.per_input_timeout)
-            kind, detail = classify(rc, err)
-            stats[kind] += 1
-            execs += 1
-            if kind in ("crash", "hang"):
-                h = hashlib.sha256(mut).hexdigest()
-                if h in seen_hashes:
-                    continue  # same input already saved this run
-                seen_hashes.add(h)
-                unique_findings += 1
-                saved = mut
-                min_note = "not minimized"
-                if not args.no_minimize:
-                    saved = minimize(binpath, mut, [argv[0]] + argv[1:],
-                                     args.per_input_timeout)
-                    min_note = f"minimized {len(mut)} -> {len(saved)} bytes"
-                name = f"{kind}_{args.seed}_{execs}.op"
-                path = os.path.join(args.corpus_dir, name)
-                with open(path, "wb") as fh:
-                    fh.write(saved)
-                with open(manifest, "a", encoding="utf-8") as fh:
-                    fh.write(json.dumps({
-                        "kind": kind,
-                        "input": os.path.relpath(path, ROOT),
-                        "bytes": len(saved),
-                        "seed": args.seed,
-                        "exec": execs,
-                        "seed_file": os.path.relpath(src, ROOT),
-                        "mutation_chain": chain,
-                        "argv": argv,
-                        "exit_code": rc if isinstance(rc, int) else "TIMEOUT",
-                        "stderr_head": err.decode("utf-8", errors="replace")[:500],
-                        "minimized": min_note,
-                    }) + "\n")
-                print(f"  FINDING #{unique_findings} [{kind}] {detail} | "
-                      f"{os.path.relpath(src, ROOT)} | {' '.join(argv[1:])} | "
-                      f"chain: {' > '.join(chain)} | saved {name} ({min_note})")
-                if unique_findings >= args.max_findings:
-                    break
-        if execs % 100 < 3:
-            print(f"    ... {execs} execs, {time.time() - (deadline - args.time_budget):.0f}s, "
-                  f"clean={stats['clean']} contained={stats['contained']} "
-                  f"crash={stats['crash']} hang={stats['hang']}")
+    def handle_finding(kind, detail, argv, src_label, chain, raw_bytes, rc, err):
+        """Signature-dedupe, then save. Returns True if the finding budget
+        should be checked (new finding), False for a known re-hit."""
+        nonlocal unique_findings, known_hits, db_changed
+        sig = signature_for(kind, detail, argv[0], raw_bytes)
+        if sig in sigdb:
+            stats["known"] += 1
+            known_hits += 1
+            print(f"  KNOWN-DEDUPE [{kind}] {detail} | {src_label} | "
+                  f"{' '.join(argv)} | matches triaged signature (not re-saved)")
+            return False
+        h = hashlib.sha256(raw_bytes).hexdigest()
+        if h in seen_hashes:
+            # Same input, already saved this run — but possibly through a
+            # DIFFERENT surface (check/ast/fmt/explain). The within-run
+            # manifest stays one-line-per-input, yet the surface signature
+            # must still reach the DB, or the next run re-reports this exact
+            # crash as NEW on that surface (found by the F4/#48 regression:
+            # run 1 recorded only check-sigs, run 2 re-found ast --json).
+            if not args.no_dedupe:
+                sig2 = signature_for(kind, detail, argv[0], raw_bytes)
+                if sig2 not in sigdb:
+                    sigdb[sig2] = {
+                        "first_seen": time.strftime("%Y-%m-%d"),
+                        "note": f"same input as exec {execs}, additional surface "
+                                f"{argv[0]} (absorbed within-run, not re-saved)",
+                    }
+                    db_changed = True
+            return False
+        seen_hashes.add(h)
+        unique_findings += 1
+        saved = raw_bytes
+        min_note = "not minimized"
+        if not args.no_minimize:
+            saved = minimize(binpath, raw_bytes, argv, args.per_input_timeout)
+            min_note = f"minimized {len(raw_bytes)} -> {len(saved)} bytes"
+        name = f"{kind}_{args.seed}_{execs}.op"
+        path = os.path.join(args.corpus_dir, name)
+        with open(path, "wb") as fh:
+            fh.write(saved)
+        with open(manifest, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps({
+                "kind": kind,
+                "input": os.path.relpath(path, ROOT),
+                "bytes": len(saved),
+                "seed": args.seed,
+                "exec": execs,
+                "seed_file": src_label,
+                "mutation_chain": chain,
+                "argv": argv,
+                "exit_code": rc if isinstance(rc, int) else "TIMEOUT",
+                "stderr_head": err.decode("utf-8", errors="replace")[:500],
+                "minimized": min_note,
+                "signature": sig,
+            }) + "\n")
+        if not args.no_dedupe:
+            sigdb[sig] = {
+                "first_seen": time.strftime("%Y-%m-%d"),
+                "note": f"seed {args.seed} exec {execs} via {argv[0]}",
+            }
+            db_changed = True
+        print(f"  FINDING #{unique_findings} [{kind}] {detail} | "
+              f"{src_label} | {' '.join(argv[1:])} | "
+              f"chain: {' > '.join(chain)} | saved {name} ({min_note})")
+        return True
+
+    def run_surface(argv, src_label, chain, raw_bytes):
+        nonlocal execs
+        rc, out, err = probe([binpath] + argv, args.per_input_timeout)
+        kind, detail = classify(rc, err)
+        stats[kind] += 1
+        execs += 1
+        if kind in ("crash", "hang"):
+            return handle_finding(kind, detail, argv, src_label, chain, raw_bytes, rc, err)
+        return False
+
+    if args.replay:
+        for src in seeds:
+            if unique_findings >= args.max_findings:
+                break
+            try:
+                with open(src, "rb") as fh:
+                    raw = fh.read()
+            except OSError:
+                continue
+            label = os.path.relpath(src, ROOT)
+            for s in SURFACES:
+                if run_surface([s[0], src] + s[1:], label, ["replay"], raw):
+                    if unique_findings >= args.max_findings:
+                        break
+    else:
+        while execs < args.execs and time.time() < deadline \
+                and unique_findings < args.max_findings:
+            src = rnd.choice(seeds)
+            try:
+                with open(src, "rb") as fh:
+                    data = fh.read()
+            except OSError:
+                continue
+            mut, chain = mutate(data, rnd)
+            with open(TMP, "wb") as fh:
+                fh.write(mut)
+            # S7 slice 1: `explain` joins the target row (it was excluded as a
+            # batch-2 WIP lane; the surface is stable now and its --json shape is
+            # contract-pinned). Parse-only by construction: explain never runs
+            # the program, so redteam seeds stay contained here too.
+            for s in SURFACES:
+                if run_surface([s[0], TMP] + s[1:],
+                               os.path.relpath(src, ROOT), chain, mut):
+                    if unique_findings >= args.max_findings:
+                        break
+            if execs % 100 < 3:
+                print(f"    ... {execs} execs, {time.time() - (deadline - args.time_budget):.0f}s, "
+                      f"clean={stats['clean']} contained={stats['contained']} "
+                      f"crash={stats['crash']} hang={stats['hang']} known={stats['known']}")
 
     if os.path.exists(TMP):
         os.remove(TMP)
 
+    if db_changed:
+        save_signatures(args.signatures, sigdb)
+        print(f"  signature DB updated: {len(sigdb)} triaged signature(s) -> "
+              f"{os.path.relpath(args.signatures, ROOT)}")
+
     elapsed = args.time_budget - (deadline - time.time())
     print(f"\nfuzz done: {execs} exec(s) in {elapsed:.0f}s, seed {args.seed}")
     print(f"  clean={stats['clean']}  contained={stats['contained']}  "
-          f"crash={stats['crash']}  hang={stats['hang']}")
+          f"crash={stats['crash']}  hang={stats['hang']}  known={stats['known']}")
     if unique_findings:
-        print(f"  unique findings saved: {unique_findings} "
+        print(f"  NEW findings saved: {unique_findings} "
               f"({os.path.relpath(args.corpus_dir, ROOT)}/, manifest: "
               f"{os.path.relpath(manifest, ROOT)})")
         print("  findings are BUGS to triage (see scripts/fuzz/TRIAGE.md), "
               "not a score.")
+    if known_hits:
+        print(f"  KNOWN-DEDUPE re-hits: {known_hits} — live crashes matching "
+              f"triaged signatures: a regression of a fixed bug or an unfixed "
+              f"one. Triage, do not gloat.")
+        return 1
+    if unique_findings:
         return 1
     print("  no findings — manifest stays unwritten (nothing to triage)")
     return 0

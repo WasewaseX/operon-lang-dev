@@ -26,8 +26,35 @@ fuzz_corpus/
   MANIFEST.jsonl             one JSON line per unique finding:
                              kind, input, bytes, seed, exec, seed_file,
                              mutation_chain, argv, exit_code, stderr_head,
-                             minimized
+                             minimized, signature
+scripts/fuzz/crash_signatures.json   the cross-run signature DB (F4/#48)
 ```
+
+## The signature DB (F4/#48): cross-run dedupe
+
+Every finding is reduced to a stable SIGNATURE — `kind|surface|normalized
+detail|byte-class shape hash` — recorded in `scripts/fuzz/crash_signatures.json`
+(committed; deterministic bytes: sorted keys, fixed indent). Semantics:
+
+- **NEW finding** (signature not in the DB): saved to the corpus + manifest,
+  signature appended to the DB, exit 1. Triage it like any finding.
+- **KNOWN-DEDUPE** (signature already in the DB): reported, NOT re-saved, NOT
+  re-counted as a new finding — but the run STILL exits 1. A live crash
+  matching a triaged signature is a regression of a fixed bug or an unfixed
+  one; the CI fuzz job must fail either way.
+- DB entries are KEEP-FOREVER regression sentinels: once a crasher is fixed
+  and payload-pinned, its signature stays. Deleting a signature re-opens the
+  class to silent re-introduction.
+- `--no-dedupe` restores the legacy single-run behavior; a corrupt DB is a
+  FATAL (exit 2), never silently ignored (the vacuous-pin lesson applies to
+  gate state too).
+- Regression pin: `scripts/fuzz/dedupe_regression.sh` (hermetic stub-binary
+  two-run replay; joins scripts/test.sh).
+
+Signal numbers are normalized away (SIGSEGV is 11 on linux, 10/11 on macos),
+panic tails are address/number-scrubbed, and the shape hash uses byte classes,
+never raw bytes — a re-hit must be recognized even when the mutated input
+differs.
 
 ## How to reproduce a finding
 
