@@ -21,9 +21,15 @@ import unicodedata  # W28 stage 2: THE reference implementation for NFC/NFD/cate
 # against the (correct) Rust side. Emit UTF-8 always; replace-on-error keeps
 # a bad byte comparable instead of fatal. Python 3.7+; guarded like the
 # harness side.
+# Iteration 2 (same day, CI run of the first fix): with encoding fixed the
+# windows compat matrix went 0/3504 identical — sys.stdout on Windows ALSO
+# translates '\n' to os.linesep ('\r\n') for redirected output (newline=None
+# default), while the Rust core writes raw '\n'; compat_matrix.sh cmp's raw
+# bytes. newline="\n" pins Unix endings so the oracle's bytes are engine-
+# comparable on every OS.
 for _s in (sys.stdout, sys.stderr):
     if hasattr(_s, "reconfigure"):
-        _s.reconfigure(encoding="utf-8", errors="replace")
+        _s.reconfigure(encoding="utf-8", errors="replace", newline="\n")
 
 # ----------------------------------------------------------------------------
 # notes / values

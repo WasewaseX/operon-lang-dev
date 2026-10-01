@@ -45,6 +45,18 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      # F6/#50 (reliab lane, 2026-10-02): the redteam step's containment
+      # contract is built on GNU timeout (rc 124/137 + -k). macOS ships no
+      # GNU timeout; without this the redteam gate would either die on the
+      # grants[] unbound-variable bug (bash 3.2, fixed in-script) or — worse
+      # — silently vacate with rc=127 "ok" per payload. coreutils + gnubin
+      # on PATH keeps the gate honest (redteam.sh also guards this loudly).
+      - name: Install GNU coreutils (macos, redteam needs GNU timeout)
+        if: runner.os == 'macOS'
+        run: |
+          brew install coreutils
+          echo "$(brew --prefix coreutils)/libexec/gnubin" >> $GITHUB_PATH
+
       - name: Install cross toolchain (32-bit / aarch64 Linux)
         if: matrix.target == 'i686-unknown-linux-gnu'
         run: sudo apt-get update && sudo apt-get install -y gcc-multilib g++-multilib
