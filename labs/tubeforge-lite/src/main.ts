@@ -1,7 +1,7 @@
 // TubeForge Lite — entrypoint.
 //
 //   tubeforge-lite                      → server + UI (auto-opens browser)
-//   tubeforge-lite serve [--port N] [--no-open] [--data DIR]
+//   tubeforge-lite serve [--port N] [--no-open] [--data DIR] [--policy FILE.op]
 //   tubeforge-lite <url> [urls…] [opts] → headless CLI download
 //   tubeforge-lite doctor               → tool health report
 //   tubeforge-lite version
@@ -54,11 +54,14 @@ async function main(): Promise<number> {
   if (cmd === "doctor") {
     const { healthReport } = await import("../shared/health.ts");
     const { aria2BundleInfo } = await import("./aria2.ts");
+    const { policyStatus } = await import("./policy.ts");
     const rep = await healthReport(`deno ${Deno.version.deno} (TubeForge Lite)`);
-    console.log(JSON.stringify({ ...rep, aria2Bundle: aria2BundleInfo(), aria2Extract: aria, dataDir }, null, 2));
+    console.log(JSON.stringify({ ...rep, aria2Bundle: aria2BundleInfo(), policy: policyStatus(), aria2Extract: aria, dataDir }, null, 2));
     return 0;
   }
   if (cmd === "serve" || cmd === "ui") {
+    const pol = flagValue(args, "--policy");
+    if (pol) proc.env.TUBEFORGE_POLICY = pol;
     const { serve } = await import("./server.ts");
     serve({
       port: Number(flagValue(args, "--port") ?? proc.env.TUBEFORGE_PORT ?? 8484) || 8484,

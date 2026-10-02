@@ -1,0 +1,14 @@
+# TubeForge policy — audio-only with a hard size cap.
+# Video is refused, playlists are fine, nothing over 120 MiB transfers.
+# The gene below is real computation: caps stay readable, units stay honest.
+
+gene mib(n) { return n * 1048576 }
+cap = mib(120)
+
+promote("name = audio-only")
+promote("version = 1")
+promote("allow_video = 0")
+promote("allow_audio = 1")
+promote("allow_playlist = 1")
+promote("max_bytes =", cap)
+promote("reason_video = video downloads are disabled by policy audio-only.op (audio only)")
