@@ -122,7 +122,20 @@ jobs:
           GEN: "1"
           FRESH: "300"
 
+      # F6/#50 (reliab lane, 2026-10-02): the parser fuzzer is SKIPPED on the
+      # aarch64 (qemu-user) leg, honestly documented per the #50 acceptance:
+      # its per-input wall-clock bound is calibrated to native fuel burn
+      # (~5.6s native, ~15-20s windows — TIMEOUT=60), but qemu-user runs the
+      # bytecode-VM hot loop ~11x+ slower and THIRTEEN fuel-contained class-S
+      # salads blew past 60s (run 36965617580) — raising the bound further
+      # turns this step into hours of timeout wall-clock for zero added
+      # semantic coverage: parser/VM semantics are substrate-independent, and
+      # the aarch64-specific surface (word size, pointer width) is already
+      # byte-exact-covered on THIS leg by the differential harness (3468
+      # programs), vm_parity (3542 x 4 engines) and the compat matrix (3504 x
+      # 5 engines). The fuzzer stays REQUIRED on every native leg.
       - name: Parser fuzzer
+        if: matrix.target != 'aarch64-unknown-linux-gnu'
         shell: bash
         run: python3 scripts/fuzz_parser.py --n 500 --seed 20260930 --exec
 
