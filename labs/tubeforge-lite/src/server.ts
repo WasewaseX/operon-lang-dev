@@ -18,6 +18,7 @@ import { Readable } from "node:stream";
 import { createReadStream } from "node:fs";
 import proc from "node:process";
 import { aria2BundleInfo } from "./aria2.ts";
+import { gateEnqueue, installPolicySizeGate, loadPolicy, policyStatus } from "./policy.ts";
 
 const MIME: Record<string, string> = {
   html: "text/html; charset=utf-8",
@@ -65,12 +66,16 @@ async function api(req: Request, pathname: string): Promise<Response> {
       for (const u of rawEntries.slice(0, 500)) if (isSafeUrl(u)) urls.push(u);
     }
     if (urls.length === 0) urls.push(opts.url);
+    // Operon policy lane: preventive gate (kind/playlist/domain + rewrites).
+    const gate = gateEnqueue(opts, urls);
+    if (!gate.ok) return json({ ok: false, error: gate.error, policy: policyStatus() }, 403);
+    const gated = gate.opts;
     const jobs = urls.map((u) =>
       enqueue({
-        ...opts,
+        ...gated,
         url: u,
-        title: urls.length > 1 ? undefined : opts.title,
-        thumbnail: urls.length > 1 ? undefined : opts.thumbnail,
+        title: urls.length > 1 ? undefined : gated.title,
+        thumbnail: urls.length > 1 ? undefined : gated.thumbnail,
       }),
     );
     return json({ ok: true, count: jobs.length, jobs });
@@ -144,6 +149,7 @@ async function api(req: Request, pathname: string): Promise<Response> {
       ...(await healthReport(`deno ${Deno.version.deno} (TubeForge Lite)`)),
       app: "tubeforge-lite",
       aria2Bundle: aria2BundleInfo(),
+      policy: policyStatus(),
       dataDir: proc.env.TUBEFORGE_DATA ?? "",
     });
   }
@@ -187,6 +193,10 @@ async function api(req: Request, pathname: string): Promise<Response> {
 // ---------------------------------------------------------------------------
 
 export function serve(opts: { port: number; open: boolean }): void {
+  // Operon policy lane: warm the cache once at boot and arm the reactive
+  // size gate (both are no-ops while TUBEFORGE_POLICY is unset).
+  const pol = loadPolicy();
+  installPolicySizeGate();
   Deno.serve({ port: opts.port }, async (req: Request) => {
     const url = new URL(req.url);
     try {
@@ -202,8 +212,14 @@ export function serve(opts: { port: number; open: boolean }): void {
 
   const url = `http://localhost:${opts.port}`;
   const b = aria2BundleInfo();
+  const polLine = pol.kind === "ok"
+    ? `${pol.rules.name} (operon ${pol.operonVersion ?? "?"}, ${pol.rules.file})`
+    : pol.kind === "error"
+      ? `FAIL-CLOSED — ${pol.file} refused to load`
+      : "off (set TUBEFORGE_POLICY or --policy to enable)";
   console.log(`\n  TubeForge Lite — one file, everything inside`);
   console.log(`  yt-dlp + ffmpeg: from PATH (or Settings) · aria2c: ${b.bundled ? `bundled v${b.version} (self-extracting)` : "from PATH"}`);
+  console.log(`  policy: ${polLine}`);
   console.log(`  → ${url}\n`);
   if (opts.open) openBrowser(url);
 }

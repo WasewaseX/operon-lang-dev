@@ -15,6 +15,19 @@ const MAX_PERSISTED = 300;
 
 type Listener = (snap: QueuedSnapshot) => void;
 
+// --- policy size gate (additive; no-op until a host installs one) -----------
+export interface PolicySizeInfo {
+  totalBytes: number;
+}
+export type PolicySizeGate = (info: PolicySizeInfo) => string | null;
+let policySizeGate: PolicySizeGate | null = null;
+/** Hosts (TubeForge Lite policy lane) install a gate to abort oversized
+ *  transfers; the returned string becomes the job's error message. */
+export function setPolicySizeGate(fn: PolicySizeGate | null): void {
+  policySizeGate = fn;
+}
+// --------------------------------------------------------------------------
+
 interface RuntimeJob extends Job {
   child?: import("./platform.ts").ChildProcess;
   canceled?: boolean;
@@ -283,6 +296,19 @@ async function startJob(job: RuntimeJob): Promise<void> {
       if (!line) continue;
       const prog = parseProgressLine(line);
       if (prog) {
+        if (prog.totalBytes > 0 && policySizeGate) {
+          const denied = policySizeGate({ totalBytes: prog.totalBytes });
+          if (denied) {
+            job.canceled = true;
+            if (job.child) {
+              killTree(job.child);
+              job.child = undefined;
+            }
+            pushLog(job, `[policy] ${denied}`);
+            setStatus(job, "error", { error: denied });
+            return;
+          }
+        }
         job.progress = {
           percent: prog.percent,
           speed: prog.speed,

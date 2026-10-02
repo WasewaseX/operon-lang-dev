@@ -9,6 +9,7 @@ import { loadSettings, saveSettings } from "../shared/settings.ts";
 import { enqueue, snapshot, cancelJob } from "../shared/engine.ts";
 import { parseJobOptions, isSafeUrl } from "../shared/validate.ts";
 import { expandHome } from "../shared/platform.ts";
+import { gateEnqueue, installPolicySizeGate, loadPolicy } from "./policy.ts";
 import type { Job, JobOptions } from "../shared/types.ts";
 
 interface CliOpts {
@@ -80,9 +81,15 @@ Usage: tubeforge-lite <url> [urls…] [options]
   --no-aria2 / --aria2-conn N     aria2 control
   --concurrency N                 parallel downloads (1..4)
   --cookies FILE                  cookies.txt for age-gated content
-  --quiet                         progress only`);
+  --quiet                         progress only
+  (policy: TUBEFORGE_POLICY + TF_OPERON env apply here too)`);
     return 2;
   }
+
+  // Operon policy lane: arm the reactive size gate + warm the policy cache
+  // (both no-ops while TUBEFORGE_POLICY is unset).
+  installPolicySizeGate();
+  loadPolicy();
 
   const s = loadSettings();
   if (o.concurrency) s.concurrentDownloads = Math.min(4, Math.max(1, o.concurrency));
@@ -108,7 +115,12 @@ Usage: tubeforge-lite <url> [urls…] [options]
       console.error(`  ✗ ${url}: ${(parsed as { error: string }).error}`);
       continue;
     }
-    const job = enqueue((parsed as { opts: JobOptions }).opts);
+    const gate = gateEnqueue((parsed as { opts: JobOptions }).opts, [url]);
+    if (!gate.ok) {
+      console.error(`  ✗ ${url}: ${gate.error}`);
+      continue;
+    }
+    const job = enqueue(gate.opts);
     jobs.push({ ...job });
     if (!o.quiet) console.log(`  + queued [${jobs.length}/${urls.length}] ${url}`);
   }
