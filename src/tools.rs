@@ -26,6 +26,12 @@ pub struct Opts {
     /// dx-r1 (audit W5): time top-level statements during load, without
     /// this, `operon profile` reported 0.0 µs for any script without main().
     pub profile: bool,
+    /// W097-A: per-call span capture (Chrome-trace feed). Set by the CLI's
+    /// `--chrome <file>` flag; consumed by `operon profile`. Must live on
+    /// Opts (not just the interp) because load_file constructs the interp
+    /// BEFORE the profile() wrapper can flag it — top-level gene calls
+    /// executed during load must be in the timeline too (the dx-r1 lesson).
+    pub spans: bool,
     /// dx-r3 (re-audit / A14): when set, program stdout (promote) is
     /// captured here from the moment the interp exists, the test runner
     /// uses it so top-level output can't leak into the report either.
@@ -47,6 +53,9 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
 
     let mut interp = Interp::new();
     interp.profiling = opts.profile;
+    // W097-A: span capture rides the same pre-load wiring as profiling —
+    // load-time calls land in the timeline, not just run_entry() calls.
+    interp.spans = opts.spans;
     // dx-r3: capture program stdout from load time (test runner)
     interp.stdout_sink = opts.stdout_sink.clone();
     // A13 (dx-r2): diagnostics render file:line
@@ -954,6 +963,61 @@ pub fn profile(file: &str, opts: &Opts) -> Loaded {
     l.interp.profiling = true;
     let _ = run_entry(&mut l, &opts);
     l
+}
+
+// ------------------------------------------------------------ chrome trace
+/// W097-A: write the captured call spans as a Chrome Trace Format JSON
+/// file (about://tracing / ui.perfetto.dev render `ph="X"` events
+/// directly; W096's done-when names both). Returns (written, dropped)
+/// for the operator notice.
+///
+/// Shape contract (pinned by tests/profile_spans.rs):
+/// - `traceEvents`: two `ph="M"` metadata events (process/thread names),
+///   then one `ph="X"` complete event per captured gene call, in
+///   completion order: `{name, cat:"gene", ph:"X", pid:1, tid:1,
+///   ts:<µs f64>, dur:<µs f64 inclusive>, args:{depth:<ancestors>}}`.
+/// - `ts`/`dur` are microseconds on the same monotonic clock the
+///   aggregate profiler uses (close_timing), so trace intervals and the
+///   `--json` self-time table reconcile.
+/// - ONE process, ONE thread: the interpreter is a single logical
+///   timeline (fibers ride a deterministic virtual clock on that same
+///   thread; attributing spans to fiber ids would claim a
+///   thread-parallelism the scheduler does not have — W098's
+///   WORKER-TELEMETRY.md owns worker attribution when it lands).
+/// - `otherData`: self-describing metadata (format tag, version, source
+///   file, unit, clock, total/dropped/cap) — the W096 law that a trace
+///   must never be silent about its own limits.
+pub fn write_chrome_trace(l: &Loaded, file: &str, path: &str) -> (usize, u64) {
+    let mut events: Vec<String> = Vec::with_capacity(l.interp.span_log.len() + 2);
+    events.push(
+        "{\"name\":\"process_name\",\"ph\":\"M\",\"pid\":1,\"tid\":1,\"args\":{\"name\":\"operon\"}}"
+            .to_string(),
+    );
+    events.push(
+        "{\"name\":\"thread_name\",\"ph\":\"M\",\"pid\":1,\"tid\":1,\"args\":{\"name\":\"fibers (virtual clock)\"}}"
+            .to_string(),
+    );
+    for s in &l.interp.span_log {
+        events.push(format!(
+            "{{\"name\":\"{}\",\"cat\":\"gene\",\"ph\":\"X\",\"pid\":1,\"tid\":1,\"ts\":{:.3},\"dur\":{:.3},\"args\":{{\"depth\":{}}}}}",
+            json_escape(&s.name),
+            s.start_us,
+            s.dur_us,
+            s.depth
+        ));
+    }
+    let out = format!(
+        "{{\"traceEvents\":[{}],\"displayTimeUnit\":\"us\",\"otherData\":{{\"format\":\"operon-chrome-trace\",\"version\":\"{}\",\"file\":\"{}\",\"unit\":\"microseconds\",\"clock\":\"monotonic\",\"total_spans\":{},\"dropped_spans\":{},\"span_cap\":{}}}}}",
+        events.join(","),
+        env!("CARGO_PKG_VERSION"),
+        json_escape(file),
+        l.interp.span_log.len(),
+        l.interp.spans_dropped,
+        crate::interp::SPAN_CAP,
+    );
+    std::fs::write(path, out)
+        .unwrap_or_else(|e| crate::die(&format!("cannot write '{}': {}", path, e)));
+    (l.interp.span_log.len(), l.interp.spans_dropped)
 }
 
 // ------------------------------------------------------------ crispr
