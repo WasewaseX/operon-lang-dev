@@ -367,7 +367,7 @@ Every channel below carries an honest validation mark (the full ledger lives in 
 | from source | `./scripts/build.sh` or `cargo install --path .` | **validated**, the CI cargo gate builds this exact path |
 | cargo-binstall | `cargo binstall operon` (metadata in Cargo.toml) | community, template contract pinned by the standing gate (docs/PACKAGING.md) |
 | Homebrew formula | `packaging/homebrew/operon.rb` | community draft, builds the version tarball from source |
-| source release archive | `scripts/release.sh` → `dist/operon-<v>.tar.gz` + `SHA256SUMS` (+ `--verify`) | validated locally, CI wiring pending |
+| source release archive | `scripts/release.sh` → `dist/operon-<v>.tar.gz` + `SHA256SUMS` (+ `--verify`) | validated; binary releases also ship a whole-release `SHA256SUMS` (workflow-enforced, `install.sh --verify` consumes it) |
 | Scoop (Windows) | `packaging/scoop/operon.json` | community draft |
 | AUR (release / git) | `packaging/aur/PKGBUILD` · `packaging/aur/PKGBUILD.git` | community drafts |
 | Nix | `packaging/nix/default.nix` | community draft |
