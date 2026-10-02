@@ -11,15 +11,22 @@
 //!
 //! Supported lifecycle: initialize → (initialized event) → launch →
 //! setBreakpoints → configurationDone → run → stopped events →
-//! stackTrace/scopes/variables/evaluate → continue/next/stepIn/stepOut →
-//! terminated/exited. Program print output is delivered as DAP output
-//! events (category "stdout") — the adapter's stdout carries protocol
-//! frames only.
+//! stackTrace/scopes/variables/evaluate/setVariable →
+//! continue/next/stepIn/stepOut → terminated/exited. Program print output
+//! is delivered as DAP output events (category "stdout") — the adapter's
+//! stdout carries protocol frames only.
 //!
-//! v1 scope notes (honest): stackTrace reports accurate lines for the
-//! innermost frame (outer frames carry their name but line 1 — call-site
-//! lines live in the stress traceback machinery, not in call_stack yet);
-//! variables are rendered strings (no child references, no setVariable).
+//! W008 polish: stopOnEntry launch argument (one-shot stopped event with
+//! reason "entry" at the program's first statement); per-breakpoint
+//! `condition` fields (conditional breakpoints, evaluated in the stopped
+//! frame); setVariable (assignment with the language's own reach — rebinds
+//! where the name lives on the frame chain, consts stay frozen); stackTrace
+//! reports real CALL-SITE lines for outer frames (stamped into call_stack
+//! at push time), not placeholder line 1.
+//!
+//! Remaining honest limits: variables are rendered strings (no child
+//! references — setVariable targets top-level frame bindings); no
+//! logPoints/hitConditions.
 
 use crate::interp::Env;
 use crate::interp::{json_quote, Interp};
@@ -36,6 +43,9 @@ struct DapState {
     seq: i64,
     next_var_ref: i64,
     var_tables: HashMap<i64, Vec<(String, String)>>,
+    /// W008 polish: the live env each rendered scope came from, so
+    /// setVariable can rebind the real frame state (cleared at every stop).
+    scope_envs: HashMap<i64, Rc<Env>>,
     /// (name, line) innermost-first snapshot of the call stack at the stop
     frames: Vec<(String, usize)>,
     stop_line: usize,
@@ -53,6 +63,7 @@ thread_local! {
         seq: 0,
         next_var_ref: 1000,
         var_tables: HashMap::new(),
+        scope_envs: HashMap::new(),
         frames: Vec::new(),
         stop_line: 0,
     });
@@ -174,6 +185,24 @@ fn req_str(args: &Option<crate::value::Value>, key: &str) -> Option<String> {
     }
 }
 
+fn req_bool(args: &Option<crate::value::Value>, key: &str) -> Option<bool> {
+    match args {
+        Some(crate::value::Value::Map(m)) => {
+            for (k, v) in m.borrow().items.iter() {
+                if let crate::value::Value::Str(s) = k {
+                    if s == key {
+                        if let crate::value::Value::Bool(b) = v {
+                            return Some(*b);
+                        }
+                    }
+                }
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
 // ------------------------------------------------------------- lifecycle
 
 /// The pre-run configuration phase: serve initialize/launch/setBreakpoints/
@@ -197,17 +226,22 @@ pub fn configure(interp: &mut Interp) {
                     Some(
                         "{\"capabilities\":{\"supportsConfigurationDoneRequest\":true,\
                          \"supportsEvaluateForHovers\":true,\"supportsTerminateRequest\":true,\
-                         \"supportsSetVariable\":false,\"supportsConditionalBreakpoints\":false}}"
+                         \"supportsSetVariable\":true,\"supportsConditionalBreakpoints\":true}}"
                             .to_string(),
                     ),
                 );
                 send_event("initialized", None);
             }
             "launch" => {
+                // W008 polish: stopOnEntry arms a one-shot entry stop at the
+                // program's first statement (reason "entry")
+                if req_bool(&args, "stopOnEntry").unwrap_or(false) {
+                    interp.debug_stop_entry = true;
+                }
                 send_response(seq, true, "launch", None);
             }
             "setBreakpoints" => {
-                let mut lines: Vec<usize> = Vec::new();
+                let mut bps: Vec<(usize, Option<String>)> = Vec::new();
                 if let Some(crate::value::Value::Map(m)) = &args {
                     for (k, v) in m.borrow().items.iter() {
                         if let crate::value::Value::Str(s) = k {
@@ -215,14 +249,24 @@ pub fn configure(interp: &mut Interp) {
                                 if let crate::value::Value::List(list) = v {
                                     for bp in list.borrow().iter() {
                                         if let crate::value::Value::Map(bm) = bp {
+                                            let mut ln: Option<usize> = None;
+                                            let mut cond: Option<String> = None;
                                             for (bk, bv) in bm.borrow().items.iter() {
                                                 if let crate::value::Value::Str(bks) = bk {
-                                                    if bks == "line" {
-                                                        if let crate::value::Value::Int(n) = bv {
-                                                            lines.push(*n as usize);
+                                                    match (bks.as_str(), bv) {
+                                                        ("line", crate::value::Value::Int(n)) => {
+                                                            ln = Some(*n as usize)
                                                         }
+                                                        (
+                                                            "condition",
+                                                            crate::value::Value::Str(c),
+                                                        ) => cond = Some(c.clone()),
+                                                        _ => {}
                                                     }
                                                 }
+                                            }
+                                            if let Some(n) = ln {
+                                                bps.push((n, cond));
                                             }
                                         }
                                     }
@@ -231,10 +275,17 @@ pub fn configure(interp: &mut Interp) {
                         }
                     }
                 }
-                interp.debug_breaks = lines.iter().copied().collect();
-                let rows: Vec<String> = lines
+                interp.debug_breaks = bps.iter().map(|(l, c)| (*l, c.clone())).collect();
+                let rows: Vec<String> = bps
                     .iter()
-                    .map(|l| format!("{{\"verified\":true,\"line\":{}}}", l))
+                    .map(|(l, c)| match c {
+                        Some(c) => format!(
+                            "{{\"verified\":true,\"line\":{},\"condition\":{}}}",
+                            l,
+                            json_quote(c)
+                        ),
+                        None => format!("{{\"verified\":true,\"line\":{}}}", l),
+                    })
                     .collect();
                 send_response(
                     seq,
@@ -272,18 +323,30 @@ pub fn configure(interp: &mut Interp) {
 /// request arrives.
 pub fn serve_at_trap(interp: &mut Interp, env: &Rc<Env>, stmt_line: Option<usize>, reason: &str) {
     let shown = stmt_line.unwrap_or(interp.cur_line);
-    // snapshot the call stack for stackTrace/scopes/variables
+    // snapshot the call stack for stackTrace/scopes/variables. W008 polish:
+    // every frame gets a real line — the innermost frame is at the stop
+    // line; an outer frame is parked at the call site that invoked the
+    // frame one level deeper (the deeper frame's stamped call-site line).
+    let n = interp.call_stack.len();
     let frames: Vec<(String, usize)> = interp
         .call_stack
         .iter()
         .rev()
         .enumerate()
-        .map(|(i, (name, _, _))| (name.clone(), if i == 0 { shown } else { 1 }))
+        .map(|(i, (name, _, _, _))| {
+            let line = if i == 0 {
+                shown
+            } else {
+                interp.call_stack[n - i].3
+            };
+            (name.clone(), line)
+        })
         .collect();
     with_state(|st| {
         st.frames = frames;
         st.stop_line = shown;
         st.var_tables.clear();
+        st.scope_envs.clear();
     });
     send_event(
         "stopped",
@@ -380,6 +443,9 @@ pub fn serve_at_trap(interp: &mut Interp, env: &Rc<Env>, stmt_line: Option<usize
                         st.next_var_ref += 1;
                         let r = st.next_var_ref;
                         st.var_tables.insert(r, vars);
+                        // W008 polish: remember the live env so setVariable
+                        // rebinds the real frame state
+                        st.scope_envs.insert(r, env.clone());
                         rows.push(format!(
                             "{{\"name\":{},\"variablesReference\":{},\"expensive\":false}}",
                             json_quote(&format!("Locals — {}", name)),
@@ -438,6 +504,50 @@ pub fn serve_at_trap(interp: &mut Interp, env: &Rc<Env>, stmt_line: Option<usize
                         false,
                         "evaluate",
                         Some(format!("{{\"error\":{}}}", json_quote(&e))),
+                    ),
+                }
+            }
+            "setVariable" => {
+                // W008 polish: assignment with the language's own reach —
+                // the name rebinds where it is found on the frame chain;
+                // consts are refused (frozen) and unknown names are refused
+                // (no silent creation). The rendered table is refreshed so a
+                // following `variables` shows the new value.
+                let r = req_int(&args, "variablesReference").unwrap_or(0);
+                let name = req_str(&args, "name").unwrap_or_default();
+                let value = req_str(&args, "value").unwrap_or_default();
+                let env_for_scope = with_state(|st| st.scope_envs.get(&r).cloned());
+                match env_for_scope {
+                    Some(scope_env) => match interp.debug_assign(&scope_env, &name, &value) {
+                        Ok(d) => {
+                            with_state(|st| {
+                                if let Some(rows) = st.var_tables.get_mut(&r) {
+                                    for row in rows.iter_mut() {
+                                        if row.0 == name {
+                                            row.1 = d.clone();
+                                        }
+                                    }
+                                }
+                            });
+                            send_response(
+                                seq,
+                                true,
+                                "setVariable",
+                                Some(format!("{{\"value\":{}}}", json_quote(&d))),
+                            );
+                        }
+                        Err(e) => send_response(
+                            seq,
+                            false,
+                            "setVariable",
+                            Some(format!("{{\"error\":{}}}", json_quote(&e))),
+                        ),
+                    },
+                    None => send_response(
+                        seq,
+                        false,
+                        "setVariable",
+                        Some("{\"error\":\"unknown variablesReference\"}".to_string()),
                     ),
                 }
             }

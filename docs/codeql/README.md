@@ -49,3 +49,10 @@ any complete run — the evaluation is deterministic over the same db). The
 PR adds no new dependencies (serde-free policy preserved; the test-side
 JSON parser is in-test), so this run also covers the main Rust tree at
 44c822d + the W097-A delta.
+- 2026-10-02 — `2026-10-02-w010a-disasm.sarif` — **0 findings** (45 Rust files
+extracted, 30 rules, security-and-quality suite, CLI 2.27.1). Builder-D session
+snapshot run on the W010-A head f19a86f (PR #53): the disasm line-annotation,
+all_mnemonics() table and stability-suite growth touch no execution path; the
+run re-establishes the 0-finding baseline for the debugger/tooling lane before
+the W008 polish task starts from this head.
+
