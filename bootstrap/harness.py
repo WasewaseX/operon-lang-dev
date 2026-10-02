@@ -57,6 +57,9 @@ GRANTED_CELL_TARGETS = [
     # W006-B: wave-3 IO try_ family — the granted ok/missing payload pins
     # run 3-lane (rust VM, tree-walk, oracle) under the same operator cell
     ("tests/granted/try_io_wave3.op", "tests/granted/try_io_wave3.cell"),
+    # S3: file-bytes write-family ok side (audit_builtins coverage gaps) —
+    # real granted IO, self-cleaning pin, same operator-cell discipline
+    ("tests/granted/file_bytes_gaps.op", "tests/granted/file_bytes_gaps.cell"),
     # W24: strict visibility, the fixture module exports ONLY pub-marked
     # names; both engines must agree on what is exported and how private
     # reads contain (soft tier).
