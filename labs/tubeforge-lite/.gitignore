@@ -1,0 +1,4 @@
+dist/
+vendor/
+src/aria2-bundle.ts
+scripts/mocks/__pycache__/

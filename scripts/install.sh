@@ -27,6 +27,17 @@ REPO="WasewaseX/operon-lang-dev"
 VER="${OPERON_VERSION:-latest}"
 DEST="${OPERON_INSTALL_DIR:-$HOME/.local/bin}"
 
+# S5 (release hardening): hermetic mode — OPERON_INSTALL_ASSET_DIR points at
+# a directory laid out like a release (the .tar.gz assets, their .sha256
+# sidecars, an optional SHA256SUMS manifest). When set, NOTHING touches the
+# network: the asset, sidecar and manifest are read from the directory and
+# every verification law below is unchanged (the per-asset sidecar stays
+# mandatory and fail-closed; SHA256SUMS is cross-checked when present;
+# --verify still fails closed without it). This is the test surface that
+# scripts/install_e2e.sh exercises on every gate, and an air-gapped install
+# path for machines that pre-stage release artifacts.
+SRC_DIR="${OPERON_INSTALL_ASSET_DIR:-}"
+
 os=$(uname -s); arch=$(uname -m)
 case "$os" in
   Linux) os_part="unknown-linux-gnu" ;;
@@ -40,19 +51,30 @@ case "$arch" in
 esac
 TARGET="${arch_part}-${os_part}"
 
-if [ "$VER" = "latest" ]; then
+if [ -n "$SRC_DIR" ]; then
+  [ -d "$SRC_DIR" ] || { echo "error: OPERON_INSTALL_ASSET_DIR is not a directory: $SRC_DIR" >&2; exit 1; }
+  if [ "$VER" = "latest" ]; then
+    echo "error: OPERON_INSTALL_ASSET_DIR needs an explicit OPERON_VERSION (offline mode cannot resolve 'latest')" >&2
+    exit 1
+  fi
+elif [ "$VER" = "latest" ]; then
   # follow the releases/latest redirect; no API token, no rate-limit JSON needed
   VER=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest" | sed 's#.*/tag/##')
   [ -n "$VER" ] || { echo "error: could not determine latest release" >&2; exit 1; }
 fi
 
 ASSET="operon-${VER#v}-${TARGET}.tar.gz"
-URL="https://github.com/$REPO/releases/download/${VER}/${ASSET}"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
-echo "==> downloading $ASSET"
-curl -fsSL "$URL" -o "$TMP/$ASSET" || { echo "error: download failed ($URL)" >&2; exit 1; }
+if [ -n "$SRC_DIR" ]; then
+  [ -f "$SRC_DIR/$ASSET" ] || { echo "error: $ASSET not found in $SRC_DIR" >&2; exit 1; }
+  cp "$SRC_DIR/$ASSET" "$TMP/$ASSET"
+else
+  URL="https://github.com/$REPO/releases/download/${VER}/${ASSET}"
+  echo "==> downloading $ASSET"
+  curl -fsSL "$URL" -o "$TMP/$ASSET" || { echo "error: download failed ($URL)" >&2; exit 1; }
+fi
 
 # sec-r1 (audit SC-1): verification must FAIL CLOSED — the old version
 # silently skipped verification on macOS (no sha256sum) or when the .sha256
@@ -63,21 +85,37 @@ if ! command -v ${SHASUM%% *} >/dev/null 2>&1; then
   echo "error: no checksum tool found; refusing to install unverified" >&2
   exit 1
 fi
-if ! curl -fsSL "$URL.sha256" -o "$TMP/$ASSET.sha256"; then
-  echo "error: checksum file unavailable ($URL.sha256); refusing to install unverified" >&2
-  exit 1
+if [ -n "$SRC_DIR" ]; then
+  [ -f "$SRC_DIR/$ASSET.sha256" ] || { echo "error: checksum file unavailable ($ASSET.sha256); refusing to install unverified" >&2; exit 1; }
+  cp "$SRC_DIR/$ASSET.sha256" "$TMP/$ASSET.sha256"
+else
+  if ! curl -fsSL "$URL.sha256" -o "$TMP/$ASSET.sha256"; then
+    echo "error: checksum file unavailable ($URL.sha256); refusing to install unverified" >&2
+    exit 1
+  fi
 fi
 (cd "$TMP" && $SHASUM -c "$ASSET.sha256" >/dev/null) && echo "==> checksum ok" \
   || { echo "error: checksum mismatch; refusing to install" >&2; exit 1; }
 
-# B1-U3 (supply chain): SHA256SUMS manifest cross-check. Maintainers publish
-# a SHA256SUMS file (see scripts/release.sh, packaging/README.md) next to the
-# release assets; CI asset hashes are appended so one manifest covers the
-# whole release. When the manifest exists, the downloaded asset is also
+# B1-U3 (supply chain): SHA256SUMS manifest cross-check. The release
+# workflow's sha256sums job publishes a SHA256SUMS file next to the release
+# assets (every binary asset, hashed from the exact published bytes after
+# its sidecar re-verifies); scripts/release.sh emits the source-archive
+# manifest. When the manifest exists, the downloaded asset is also
 # verified against it before anything is installed. --verify makes the
 # manifest mandatory and fail-closed.
 SUMS_URL="https://github.com/$REPO/releases/download/${VER}/SHA256SUMS"
-if curl -fsSL "$SUMS_URL" -o "$TMP/SHA256SUMS" 2>/dev/null; then
+SUMS_GOT=0
+if [ -n "$SRC_DIR" ]; then
+  # offline mode: the manifest, when published, sits next to the assets
+  if [ -f "$SRC_DIR/SHA256SUMS" ]; then
+    cp "$SRC_DIR/SHA256SUMS" "$TMP/SHA256SUMS"
+    SUMS_GOT=1
+  fi
+elif curl -fsSL "$SUMS_URL" -o "$TMP/SHA256SUMS" 2>/dev/null; then
+  SUMS_GOT=1
+fi
+if [ "$SUMS_GOT" = "1" ]; then
   WANT=$(tr -s ' \t' ' ' < "$TMP/SHA256SUMS" | while IFS=' ' read -r h n; do
     [ "$n" = "$ASSET" ] && printf '%s\n' "$h"
   done | head -n1)

@@ -1,0 +1,33 @@
+# S3 (audit_builtins): the capability-gated builtins the corpus never
+# called — UNGRANTED interference-at-the-gate surfaces (the W006-B
+# technique: the gate fires before any body runs, engine-neutral payloads,
+# corpus-wide shape pinned by caps_policy.op). The OK-side real-IO
+# coverage for the file family lives in the granted lane
+# (tests/granted/file_bytes_gaps.*); serve's real bind and exit's real
+# process exit are Rust-runner-only surfaces by nature.
+stress {
+    append_file("some/missing/dir/file.txt", "x")
+} rescue (e) {
+    print("[" + e.kind + "] " + e.message)
+}
+stress {
+    read_file_bytes("some/missing/dir/file.bin")
+} rescue (e) {
+    print("[" + e.kind + "] " + e.message)
+}
+stress {
+    write_file_bytes("some/missing/dir/file.bin", bytes_from_str("x"))
+} rescue (e) {
+    print("[" + e.kind + "] " + e.message)
+}
+stress {
+    http_get("http://example.invalid/")
+} rescue (e) {
+    print("[" + e.kind + "] " + e.message)
+}
+stress {
+    serve(8080)
+} rescue (e) {
+    print("[" + e.kind + "] " + e.message)
+}
+promote("builtin-caps-gaps: ok")

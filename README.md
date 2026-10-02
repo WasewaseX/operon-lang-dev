@@ -365,13 +365,13 @@ Every channel below carries an honest validation mark (the full ledger lives in 
 | GitHub release (linux x64+arm64, macos x64+arm64, windows) | download `operon-<v>-<target>.tar.gz` / `.zip` + verify the companion `.sha256` | **validated**, per-artifact release smoke in CI |
 | install script | `curl -fsSL https://raw.githubusercontent.com/WasewaseX/operon-lang-dev/main/scripts/install.sh \| sh` | community (runs on your machine) |
 | from source | `./scripts/build.sh` or `cargo install --path .` | **validated**, the CI cargo gate builds this exact path |
-| cargo-binstall / winget | metadata + drafts | staged, land with the B5 stack merge (docs/PACKAGING.md) |
+| cargo-binstall | `cargo binstall operon` (metadata in Cargo.toml) | community, template contract pinned by the standing gate (docs/PACKAGING.md) |
 | Homebrew formula | `packaging/homebrew/operon.rb` | community draft, builds the version tarball from source |
-| source release archive | `scripts/release.sh` → `dist/operon-<v>.tar.gz` + `SHA256SUMS` (+ `--verify`) | validated locally, CI wiring pending |
+| source release archive | `scripts/release.sh` → `dist/operon-<v>.tar.gz` + `SHA256SUMS` (+ `--verify`) | validated; binary releases also ship a whole-release `SHA256SUMS` (workflow-enforced, `install.sh --verify` consumes it) |
 | Scoop (Windows) | `packaging/scoop/operon.json` | community draft |
 | AUR (release / git) | `packaging/aur/PKGBUILD` · `packaging/aur/PKGBUILD.git` | community drafts |
 | Nix | `packaging/nix/default.nix` | community draft |
-| hosted registry server (W19-r2) | `packaging/registry/app.py` · `packaging/registry/requirements.txt` · `packaging/registry/render.yaml` | community draft, self-hosted tier (REGISTRY.md) |
+| hosted registry server (W19-r2) | `packaging/registry/app.py` · `packaging/registry/requirements.txt` · `packaging/registry/render.yaml` | community draft, self-hosted tier (docs/specs/REGISTRY.md); HTTP + WSGI surfaces pinned by the standing gate |
 | deb / rpm | `[package.metadata.deb]` / `[package.metadata.generate-rpm]` in Cargo.toml | community drafts |
 
 Every archive ships `operon`, `operon-ls`, and the self-hosted `std/` library. `validated` means a CI job or smoke script in this repo exercises the channel today; `community` means a maintainer must pin the checksum and verify at publish time, "should work" is not a state we write down.

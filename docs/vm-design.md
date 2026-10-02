@@ -370,3 +370,54 @@ Evidence and scope:
   call-counter entry clones -> get_mut fast path). The ≥3x stretch stays
   OPEN under W11/A5 (slot locals, VM-native call lane); parity is the
   shipped floor, not the ceiling.
+
+## 12. W009-A delivered: the call-funnel measurement (2026-10-02, builder-A)
+
+The A5/§2c campaign left three named suspects for the fib25 call-heavy gap
+(fresh Env per call, per-param clone, per-instruction fuel tick — §1, §11).
+W009-A replaced suspicion with measurement: a runtime-gated ablation harness
+(`src/w009a.rs`, default-inert, evidence-only) neutralizes each mechanism
+independently and the fib25 gate re-times it. Full method + raw numbers:
+BENCH.md "W009-A" section; evidence `docs/bench/2026-10-02-w009a-{ablation.txt,baseline.json}`.
+
+What the measurement established on the call-heavy workload:
+
+1. **The bottleneck is the shared call funnel, not the bytecode machine.**
+   VM 144.2 ms vs tree-walk 145.3 ms on fib25; `--opt 2` / `--opt-passes
+   all` change nothing (143.2). Codegen quality and dispatch-loop speed are
+   NOT the differentiator — both lanes converge on `call_gene_inner`, and
+   that shared path is where the ~595 ns/call (11x CPython) lives.
+2. **Measured, fixable-shape costs ≈ 22% of fib25**: regulatory gate checks
+   + operon transcript scan + call bookkeeping (16.8% — three to four
+   SipHash'd map operations per call across call_counts/gene_buckets/cell
+   lookups), the traceback frame String clone (5.2%, built on every
+   happy-path call despite the comment's "no allocation" intent), and the
+   promoter_veto name clone that runs before its `expr_stochastic`
+   early-return (4.0%). The SAFE bundle (all three, semantics-preserving
+   shapes) reaches 111.4 ms = −22.4%.
+3. **Refuted by measurement**: the per-instruction fuel tick (~0.1% — the
+   65,536-batch fuel-pool design is already cheap enough), the m6a/grn decay
+   tickers (±0 on gate-less programs), and NAIVE Env pooling (+6% — a TLS
+   free-list round-trip costs more than glibc's small-alloc fast path; if
+   frame allocation is ever worth attacking it must be by not allocating:
+   slot locals, not recycling).
+4. **The dominant residual (~78%) is structural**: after the SAFE floor the
+   per-call cost is the ~8-deep Rust call chain (named_call_tail_vm →
+   named_call_tail → call_named → call_value → call_gene → call_gene_inner
+   → exec_gene_code), string-keyed env-chain resolution inside the body
+   (~6+ SipHashes per call: two `fib` lookups each walking frame→global,
+   plus `n` reads), scope-env creation (~1.5 `Env::new` per call), and args
+   Vec plumbing. This is the §3 "slot variables" defer — now with a number
+   attached to it.
+
+Ranked W009-B candidates (owner's call; none scheduled by this task):
+(a) per-gene cached clean-regulation bit → skip the veto funnel and cheapen
+bookkeeping when a gene carries no regulation and no .cell knobs (~17%
+proven shape); (b) eliminate the happy-path String clones (~9%); (c) slot-
+indexed locals for plain frames (targets the structural residual; largest
+expected value, largest design lift); (d) a collapsed mono-cache-hit call
+lane that skips the redundant gates between call_named and call_gene_inner.
+Explicitly NOT worth it per measurement: fuel-tick tuning, decay-ticker
+short-circuits (already ~0), map recycling. No performance claim in this
+document is unreproducible — every row re-derives from the committed
+harness + matrix script on the recorded sandbox.

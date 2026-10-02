@@ -181,9 +181,16 @@ def main():
                 rel = os.path.relpath(os.path.join(base, f), ROOT).replace(os.sep, "/")
                 if rel != "packaging/genomelab.spec" and rel != "packaging/build_exe.bat":
                     channel_files.append(rel)
+    packaging_md = open(os.path.join(ROOT, "docs", "PACKAGING.md"), encoding="utf-8").read()
     for rel in channel_files:
         if rel not in readme:
             fails.append(f"W61: packaging channel '{rel}' missing from README install matrix")
+        # W061-A: the README calls docs/PACKAGING.md "the full ledger", so every
+        # channel the matrix names must also have a ledger row — the hosted
+        # registry drifted exactly this way (README row existed, ledger row
+        # did not, and the guard could not see it).
+        if rel not in packaging_md:
+            fails.append(f"W61: packaging channel '{rel}' missing from docs/PACKAGING.md ledger")
     for rel in ["packaging/scoop/operon.json", "packaging/aur/PKGBUILD",
                 "packaging/aur/PKGBUILD.git", "packaging/nix/default.nix"]:
         if rel in readme and not os.path.exists(os.path.join(ROOT, rel)):
@@ -192,6 +199,45 @@ def main():
         fails.append("W61: README links docs/PACKAGING.md but the ledger is missing")
     if not os.path.exists(os.path.join(ROOT, "docs", "PACKAGING.md")):
         fails.append("W61: docs/PACKAGING.md channel ledger missing")
+
+    # 8b. W061-A: the version literals in the community-draft manifests must
+    # match the Cargo version. Two releases (2.6.0, 2.7.0) shipped while every
+    # manifest still pinned 2.2.0 — the publish checklist called this checker
+    # "the natural next step"; here it is.
+    mver = re.search(r'^version = "([^"]+)"', open(os.path.join(ROOT, "Cargo.toml"),
+                                                    encoding="utf-8").read(), re.M)
+    if not mver:
+        fails.append("W61: cannot read the version from Cargo.toml [package]")
+    else:
+        ver = mver.group(1)
+        scoop = open(os.path.join(ROOT, "packaging", "scoop", "operon.json"),
+                     encoding="utf-8").read()
+        if f'"version": "{ver}"' not in scoop:
+            fails.append(f"W61: packaging/scoop/operon.json 'version' != {ver} "
+                         "(bump the manifest in the same commit as the release)")
+        if f"/v{ver}/operon-{ver}-" not in scoop:
+            fails.append(f"W61: packaging/scoop/operon.json asset URL does not pin {ver} "
+                         "(url + extract_dir carry the version too)")
+        if f'"extract_dir": "operon-{ver}"' not in scoop:
+            fails.append(f"W61: packaging/scoop/operon.json extract_dir != operon-{ver}")
+        pkgbuild = open(os.path.join(ROOT, "packaging", "aur", "PKGBUILD"),
+                        encoding="utf-8").read()
+        if not re.search(rf"^pkgver={re.escape(ver)}$", pkgbuild, re.M):
+            fails.append(f"W61: packaging/aur/PKGBUILD pkgver != {ver}")
+        pkgbuild_git = open(os.path.join(ROOT, "packaging", "aur", "PKGBUILD.git"),
+                            encoding="utf-8").read()
+        # the -git draft's pkgver is a git-describe placeholder regenerated at
+        # publish time; only the base version prefix is pinned here
+        if not re.search(rf"^pkgver={re.escape(ver)}\.r", pkgbuild_git, re.M):
+            fails.append(f"W61: packaging/aur/PKGBUILD.git pkgver base != {ver}")
+        homebrew = open(os.path.join(ROOT, "packaging", "homebrew", "operon.rb"),
+                        encoding="utf-8").read()
+        if f"/archive/refs/tags/v{ver}.tar.gz" not in homebrew:
+            fails.append(f"W61: packaging/homebrew/operon.rb url does not pin v{ver}")
+        nix = open(os.path.join(ROOT, "packaging", "nix", "default.nix"),
+                   encoding="utf-8").read()
+        if f'version = "{ver}"' not in nix:
+            fails.append(f"W61: packaging/nix/default.nix version != {ver}")
 
     if fails:
         print("DOCS OUT OF SYNC, fix the source, never hand-patch generated files:")
