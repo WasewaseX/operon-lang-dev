@@ -126,7 +126,9 @@ instrument, 2026-10-02): **242,786 spans** (fib 242,785 = C(25) exactly +
 main 1), depth histogram peaking at 18 (52,666 calls at depth 18), the
 textbook recursion profile — 2^k calls at depth k+1 until the quadratic
 crossover. `main`'s inclusive duration is the whole program's call-tree
-time.
+time here; programs that call genes from top-level statements produce
+multiple depth-0 roots (one per top-level call), all still in the
+timeline (dx-r1 rule above).
 
 **Instrument overhead, measured (median of 5 whole-process runs, same
 session, same binary):**
@@ -183,9 +185,11 @@ for i in 1 2 3 4 5; do ./bin/operon bench examples/fib.op --iters 5; done   # ru
 ./bin/operon profile examples/fib.op --chrome /tmp/fib25.json
 # ui.perfetto.dev ← /tmp/fib25.json        (attribution + shape)
 ./bin/operon profile examples/fib.op --json > /tmp/agg.json
-# cross-check: sum(gene.calls) == otherData.total_spans (minus metadata events)
+# cross-check: sum(gene.calls) == otherData.total_spans
 ```
 
 Cross-check law: the aggregate view and the span view must agree on call
-COUNTS (they share `close_timing`). If they ever disagree, the
-instrument is broken — stop and report, do not average it away.
+COUNTS — `sum(gene.calls)` over `--json` equals `otherData.total_spans`
+(the span count excludes the two metadata events by construction). They
+share `close_timing`; if they ever disagree, the instrument is broken —
+stop and report, do not average it away.
