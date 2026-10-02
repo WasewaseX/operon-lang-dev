@@ -27,6 +27,7 @@ pub mod types;
 pub mod unicode_tables;
 pub mod value;
 pub mod vm;
+pub mod w009a;
 
 /// Fatal CLI error: print to stderr and exit with status 2.
 /// Lives here (not in the binary) because tool-layer entry points rely on it.
