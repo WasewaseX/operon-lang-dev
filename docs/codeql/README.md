@@ -56,3 +56,9 @@ all_mnemonics() table and stability-suite growth touch no execution path; the
 run re-establishes the 0-finding baseline for the debugger/tooling lane before
 the W008 polish task starts from this head.
 
+
+## Ritual retired (owner directive, 2026-10-02)
+
+The per-session local CodeQL CLI run is RETIRED by owner directive ("CodeQL doesnt help our project a lot — there are better CI tools and critiques"). The evidence trail above is the rationale: every run after the 2026-09-27 `_closure` fix returned 0 findings — the single finding in the tool's lifetime was a cosmetic `rust/unused-variable`, a class clippy already flags on every gate — at ~15-20 minutes of session cost per run (CLI download + database create + suite analyze).
+
+The standing security/quality lenses remain ast-grep + bandit + semgrep (static-analysis.yml, every PR, zero marginal session cost). A re-aim proposal — cargo-deny (RustSec advisories + licenses/bans/sources) plus a standing per-session critique budget (self-review of the session diff + one cross-lane audit) — is filed as queue item S7; the owner ratifies the tool set and any CI wiring. Do NOT re-introduce the local CLI run without an owner directive.
