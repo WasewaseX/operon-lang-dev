@@ -1,0 +1,17 @@
+# Q1 keyword audit lib: the `tad` keyword (module-boundary insulation).
+# Members of a tad block bind into the ENCLOSING environment (TAD insulation
+# controls EXPORTS, not lexical scope — interp.rs Stmt::Tad runs the body in
+# the enclosing env); `anchor export` INSIDE a tad feeds the module export
+# table exactly like a top-level anchor (genes.rs anchor_exports + tad_exports
+# merged; oracle mirror at the module-loader export rule). So this lib's
+# export table is {helper} — the anchor-export-wins rule makes lib_main
+# unexported, which is what the consumer pins.
+tad pocket {
+    gene helper() {
+        return "helper-ran"
+    }
+    anchor export helper
+}
+gene lib_main() {
+    return "lib-main-unexported"
+}
