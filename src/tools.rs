@@ -2555,9 +2555,27 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
         }
         Expr::Binary(op, a, b, _) => {
             let p = prec_of(*op);
-            // left-assoc: left child may reuse p, right child must be tighter
-            let left = fmt_prec(a, p);
-            let right = fmt_prec(b, p + 1);
+            // BinOp::Pow is NOT left-assoc in the grammar: parse_pow takes
+            // its LEFT operand from parse_postfix (purer than unary) and its
+            // RIGHT operand re-enters parse_unary (which is what makes it
+            // right-associative). Rendering the left operand at the generic
+            // left-assoc rule reparsed-broke two AST shapes into DIFFERENT
+            // meanings: Pow(Neg(a), b) printed as `-a ** b` reparses as
+            // Neg(Pow(a, b)) — `(-8) ** 0.5` (nan) silently became
+            // `-8 ** 0.5` (-2.83…) — and Pow(Pow(a, b), c) printed as
+            // `a ** b ** c` reparses as Pow(a, Pow(b, c)). fix_corpus law 1
+            // caught both on tests/differential/numeric_abuse.op (the first
+            // corpus program with a pow-over-neg spelling; W006-D). Pow's
+            // left operand therefore renders at 11 (postfix-or-purer: bare
+            // exactly when the grammar accepts it there); the right operand
+            // keeps the generic tighter rule (parse_unary accepts Neg/Not).
+            let (lp, rp) = if matches!(op, BinOp::Pow) {
+                (11, p + 1)
+            } else {
+                (p, p + 1)
+            };
+            let left = fmt_prec(a, lp);
+            let right = fmt_prec(b, rp);
             format!("{} {} {}", left, fmt_op(*op), right)
         }
         Expr::Call(f, args, _) => format!(
