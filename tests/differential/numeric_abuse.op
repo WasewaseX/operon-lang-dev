@@ -1,0 +1,42 @@
+# W006-D (F1 + F1b/S4-5 + F1c): numeric abuse parity, byte-identical 3-lane.
+# The oracle used to crash RAW on sqrt(<non-number>) (ValueError, rc=1),
+# leak a python COMPLEX through the `**` operator for negative-base
+# fractional exponents (rendered <?> where Rust returns nan), and crash on
+# 0 ** negative (ZeroDivisionError, rc=1) where Rust returns inf. All three
+# engines now agree byte-for-byte on every surface below (the guards mirror
+# Rust's shared numeric checker wording and f64::powf C99 semantics).
+# Complements tests/differential/math_domain.op (S4-8, PR #64): that pin
+# owns the sqrt/pow DOMAIN surface, this one owns the TYPE-ABUSE and
+# operator-leak surface.
+# ---- sqrt type abuse (F1): shared-checker wording, phantom int second operand
+stress { print(sqrt("x")) } rescue (e) { print("[" + e.kind + "] " + e.message) }
+stress { print(sqrt(null)) } rescue (e) { print("[" + e.kind + "] " + e.message) }
+stress { print(sqrt([1, 2])) } rescue (e) { print("[" + e.kind + "] " + e.message) }
+stress { print(sqrt(true)) } rescue (e) { print("[" + e.kind + "] " + e.message) }
+stress { print(sqrt("2.5")) } rescue (e) { print("[" + e.kind + "] " + e.message) }
+print(sqrt())
+print(sqrt(2.25))
+# ---- sqrt domain (kept here so this file is self-contained on main)
+stress { print(sqrt(-1)) } rescue (e) { print("[" + e.kind + "] " + e.message) }
+# ---- `**` operator: the f64::powf mirror (F1b/S4-5 + F1c)
+print(2 ** -0.5)
+print((-8) ** 0.5)
+print((-8) ** (1/3))
+print(0 ** -1)
+print(0 ** -0.5)
+print((-8) ** 2)
+print(2 ** 63.0)
+stress { print(2 ** 63) } rescue (e) { print("[" + e.kind + "] " + e.message) }
+stress { print(2 ** 10000) } rescue (e) { print("[" + e.kind + "] " + e.message) }
+stress { print(2.0 ** 10000.0) } rescue (e) { print("[" + e.kind + "] " + e.message) }
+stress { print((-8.0) ** 200.0) } rescue (e) { print("[" + e.kind + "] " + e.message) }
+stress { print(1.5 ** 10000.0) } rescue (e) { print("[" + e.kind + "] " + e.message) }
+# ---- pow builtin: raw powf (NO overflow stress), arity fallback, type wording
+print(pow(-8, 0.5))
+print(pow(0, -1))
+print(pow(2, 10))
+print(pow(2))
+print(pow())
+stress { print(pow("x", 2)) } rescue (e) { print("[" + e.kind + "] " + e.message) }
+stress { print(pow(2, "x")) } rescue (e) { print("[" + e.kind + "] " + e.message) }
+stress { print(pow(true, 2)) } rescue (e) { print("[" + e.kind + "] " + e.message) }
