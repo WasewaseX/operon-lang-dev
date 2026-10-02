@@ -595,11 +595,14 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
   smoked); failed smoke = failed release.
 - Files: `.github/workflows/release.yml`.
 
-### W061, Distribution channels [P2] [dev-2] [M] [partial: B5 landed binstall + brew draft + winget/scoop notes]
-- Remaining: actual Homebrew tap formula PR (owner publishes), winget manifest submission,
-  one Linux channel (deb or AUR) as proof, Nix flake optional.
+### W061, Distribution channels [P2] [dev-2] [M] [partial: W061-A 2026-10-02 (builder-F, PR #62) — binstall metadata RESTORED (the B5 merge had dropped it; template contract pinned by the new scripts/pkg_meta_check.py standing gate), hosted-registry search law fixed (last-line-wins, was returning the oldest version) + WSGI surface pinned, pkg_hosted_e2e wired into test.sh, manifests truthed 2.2.0→2.7.0 + version-literal guard in check_docs_sync, README↔ledger drift repaired]
+- Remaining (owner-only per the 2026-10-02 triage): actual Homebrew tap formula PR, winget manifest submission,
+  one Linux channel (deb or AUR) as proof, Nix flake optional, one live `cargo binstall operon`
+  verification against a real release.
 - Done when: 2+ channels work end-to-end from public artifacts; README install table
-  updated with verified commands.
+  updated with verified commands. (The in-repo validation lift is DONE: every channel
+  file is guarded, the manifests cannot drift behind the Cargo version, and the hosted
+  tier's HTTP+WSGI surfaces are standing-gated; what remains needs publish credentials.)
 - Files: `packaging/`, `README.md`.
 
 ### W062, LSP version compatibility policy [P3] [dev-2] [S] [done: docs/specs/LSP-VERSIONING.md gains the skew/minimum-handshake/client-detection section (batch1, c85a65f): same-crate binary targets, operonLsp.version + serverInfo.version detection policy, written handshake sequence, client rules for higher/lower versions]
