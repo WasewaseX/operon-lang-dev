@@ -1616,8 +1616,11 @@ fn fiber_run_inner(interp: &mut Interp, fiber: &mut Fiber) -> Result<FiberOutcom
     }
 }
 
-/// `operon ir`: compile every top-level gene and render the OIR1 listing
-/// (`op idx | mnemonic | operands | line`). W10 stage 1.
+/// `operon ir` / `operon disasm`: compile every top-level gene and render
+/// the OIR1 listing (`idx | mnemonic | operands | line`). The line column
+/// is the instruction's source-line stamp from the `lines` table (0 = the
+/// insn carries no stamp, rendered as `-`). W10 stage 1; W010-A completed
+/// the annotation (the documented format contract now holds literally).
 pub fn disassemble_program(prog: &crate::ast::Program) -> String {
     let mut out = String::new();
     out.push_str(&format!("OIR{} disassembly\n", OIR_VERSION));
@@ -1628,11 +1631,17 @@ pub fn disassemble_program(prog: &crate::ast::Program) -> String {
             let code = compile_body(&name, &g.body, &mut vmprog, &g.type_params);
             out.push_str(&format!("\ngene {} ({} instr(s))\n", name, code.code.len()));
             for (i, instr) in code.code.iter().enumerate() {
+                let line = code.lines.get(i).copied().unwrap_or(0);
                 out.push_str(&format!(
-                    "  {:04} | {} | {}\n",
+                    "  {:04} | {} | {} | {}\n",
                     i,
                     mnemonic(instr),
-                    render(instr, &code)
+                    render(instr, &code),
+                    if line == 0 {
+                        "-".to_string()
+                    } else {
+                        line.to_string()
+                    }
                 ));
             }
             if code.code.is_empty() {
@@ -1670,11 +1679,13 @@ pub fn disassemble_program_json(prog: &crate::ast::Program) -> String {
                     out.push(',');
                 }
                 first_insn = false;
+                let line = code.lines.get(i).copied().unwrap_or(0);
                 out.push_str(&format!(
-                    "{{\"i\":{},\"op\":\"{}\",\"text\":\"{}\"}}",
+                    "{{\"i\":{},\"op\":\"{}\",\"text\":\"{}\",\"line\":{}}}",
                     i,
                     esc(mnemonic(instr)),
-                    esc(&render(instr, &code))
+                    esc(&render(instr, &code)),
+                    line
                 ));
             }
             out.push_str("]}");
@@ -1709,6 +1720,39 @@ fn mnemonic(i: &Instr) -> &'static str {
         Instr::ExitScope => "ExitScope",
         Instr::CallNamed(_, _) => "CallNamed",
     }
+}
+
+/// W010-A: the canonical mnemonic table, in `Instr` declaration order.
+/// The SPEC §15 opcode table and the stability tests both read this list,
+/// so an opcode can no longer exist in the machine without a documented
+/// row, and a doc row can no longer name an opcode the machine dropped
+/// (the mnemonic() match is exhaustive, so a new variant cannot even
+/// compile without landing here first).
+pub fn all_mnemonics() -> &'static [&'static str] {
+    &[
+        "Push",
+        "LoadName",
+        "LoadNameQuiet",
+        "StoreName",
+        "AssignName",
+        "Bin",
+        "BinImm",
+        "LoadBinImm",
+        "JmpIfF",
+        "Jmp",
+        "EvalExpr",
+        "BridgeStmt",
+        "BridgeStmtInLoop",
+        "Pop",
+        "Ret",
+        "RetName",
+        "Brk",
+        "Cont",
+        "EnterScope",
+        "ExitScope",
+        "CallNamed",
+        "Nop",
+    ]
 }
 
 fn render(i: &Instr, code: &GeneCode) -> String {
@@ -2714,9 +2758,9 @@ mod stability_tests {
     use crate::parser::parse;
 
     /// W10 done-when: the annotated dump is STABLE across runs. The same
-    /// source compiles to the same listing, every time, opt on or off, and
-    /// the listing carries every opcode mnemonic the machine knows (the
-    /// SPEC 8 VM table and this test move together).
+    /// source compiles to the same listing, every time, and the listing
+    /// carries every opcode mnemonic the machine knows (the SPEC §15 VM
+    /// table and this test move together).
     #[test]
     fn dump_is_deterministic_and_complete() {
         let src = "\
@@ -2765,6 +2809,172 @@ gene main() {
                 assert!(!m.is_empty(), "bare listing line: {line}");
             }
         }
+    }
+
+    /// W010-A: the mnemonic table is pinned op-for-op — each variant maps
+    /// to exactly the `all_mnemonics()` entry at its position, so a
+    /// renamed, added or dropped opcode must update the table (and SPEC)
+    /// to pass. The mnemonic() match is exhaustive, so a new variant also
+    /// breaks compilation until it lands here.
+    #[test]
+    fn mnemonic_table_is_pinned() {
+        let table: &[(&Instr, &str)] = &[
+            (&Instr::Push(0), "Push"),
+            (&Instr::LoadName(0), "LoadName"),
+            (&Instr::LoadNameQuiet(0), "LoadNameQuiet"),
+            (&Instr::StoreName(0), "StoreName"),
+            (&Instr::AssignName(0), "AssignName"),
+            (&Instr::Bin(BinOp::Add), "Bin"),
+            (&Instr::BinImm(BinOp::Add, 0), "BinImm"),
+            (&Instr::LoadBinImm(0, BinOp::Add, 0), "LoadBinImm"),
+            (&Instr::JmpIfF(0), "JmpIfF"),
+            (&Instr::Jmp(0), "Jmp"),
+            (&Instr::EvalExpr(0), "EvalExpr"),
+            (&Instr::BridgeStmt(0), "BridgeStmt"),
+            (&Instr::BridgeStmtInLoop(0, 0, 0, 0), "BridgeStmtInLoop"),
+            (&Instr::Pop, "Pop"),
+            (&Instr::Ret, "Ret"),
+            (&Instr::RetName(0), "RetName"),
+            (&Instr::Brk(0), "Brk"),
+            (&Instr::Cont(0), "Cont"),
+            (&Instr::EnterScope, "EnterScope"),
+            (&Instr::ExitScope, "ExitScope"),
+            (&Instr::CallNamed(0, 0), "CallNamed"),
+            (&Instr::Nop, "Nop"),
+        ];
+        assert_eq!(
+            table.len(),
+            all_mnemonics().len(),
+            "a variant is missing from the pinned mapping"
+        );
+        for (i, (insn, name)) in table.iter().enumerate() {
+            assert_eq!(mnemonic(insn), *name, "mapping drift at position {i}");
+            assert_eq!(
+                all_mnemonics()[i],
+                *name,
+                "table order drift at position {i}"
+            );
+        }
+        let mut uniq = all_mnemonics().to_vec();
+        uniq.sort_unstable();
+        uniq.dedup();
+        assert_eq!(
+            uniq.len(),
+            all_mnemonics().len(),
+            "duplicate mnemonic in the table"
+        );
+    }
+
+    /// W010-A: the JSON dump is the same compile pass — stable across
+    /// runs, self-describing, and carrying the line annotation. Pairs
+    /// with `graph --json`; fuzz smoke-runs it (no panic/hang) and the
+    /// shape is pinned here so consumers can rely on it.
+    #[test]
+    fn json_dump_is_deterministic_and_annotated() {
+        let src = "gene f(n) {\n    let x = n + 1\n    return x * 2\n}\n";
+        let j1 = disassemble_program_json(&parse(src));
+        let j2 = disassemble_program_json(&parse(src));
+        assert_eq!(j1, j2, "same source, same JSON, always");
+        assert!(
+            j1.starts_with("{\"format\":\"operon-oir\",\"version\":1,\"genes\":["),
+            "JSON shape drifted: {j1}"
+        );
+        assert!(j1.contains("\"line\":2"), "line annotation missing: {j1}");
+        assert!(j1.ends_with("]}"), "JSON document unterminated: {j1}");
+    }
+
+    /// W010-A done-when: every opcode is documented in the SPEC §15 table,
+    /// and every documented opcode is real — the table and the machine's
+    /// mnemonic table cannot drift apart. include_str! reads the same
+    /// SPEC.md CI ships, so the check runs on the exact tree under test.
+    #[test]
+    fn spec_opcode_table_reconciles_with_the_machine() {
+        let spec = include_str!("../SPEC.md");
+        let header = "| opcode | operands | meaning |";
+        let start = spec
+            .find(header)
+            .expect("SPEC §15 opcode table header moved — reconcile the disassembler docs");
+        let region = &spec[start..];
+        let mut rows: Vec<String> = Vec::new();
+        for line in region.lines().skip(2) {
+            let t = line.trim();
+            if !t.starts_with('|') {
+                break;
+            }
+            let first = t
+                .split('|')
+                .nth(1)
+                .unwrap_or("")
+                .trim()
+                .trim_matches('`')
+                .to_string();
+            assert!(
+                !first.is_empty(),
+                "SPEC opcode row without an opcode: {line}"
+            );
+            rows.push(first);
+        }
+        assert!(
+            rows.len() >= 20,
+            "SPEC opcode table implausibly short ({} rows) — the table itself drifted",
+            rows.len()
+        );
+        for m in all_mnemonics() {
+            assert!(
+                rows.iter().any(|r| r == m),
+                "opcode '{m}' executes in the machine but is not documented in SPEC §15"
+            );
+        }
+        for r in &rows {
+            assert!(
+                all_mnemonics().contains(&r.as_str()),
+                "SPEC §15 documents opcode '{r}' which the machine does not have"
+            );
+        }
+        assert_eq!(
+            rows.len(),
+            all_mnemonics().len(),
+            "SPEC §15 row count != machine opcode count — one row per opcode, exactly"
+        );
+    }
+
+    /// W010-A: the listing is the documented four-column contract
+    /// (idx | mnemonic | operands | line) — column 2 is always a known
+    /// mnemonic, column 4 is a line number or '-', and the annotation is
+    /// LIVE: a multi-line program really carries source lines (the
+    /// vacuous-pin lesson — assert the stamp exists, not just the shape).
+    #[test]
+    fn listing_is_four_column_annotated() {
+        let src = "gene f(n) {\n    let x = n + 1\n    return x * 2\n}\n";
+        let d = disassemble_program(&parse(src));
+        let mut stamps = 0;
+        for line in d.lines() {
+            if !line.contains('|') {
+                continue;
+            }
+            let cols: Vec<&str> = line.split('|').map(|c| c.trim()).collect();
+            assert_eq!(cols.len(), 4, "listing is not four columns: {line}");
+            assert!(
+                all_mnemonics().contains(&cols[1]),
+                "column 2 is not a known mnemonic: {line}"
+            );
+            assert!(
+                cols[0].chars().all(|c| c.is_ascii_digit()),
+                "column 1 is not an instruction index: {line}"
+            );
+            if cols[3] == "-" {
+                continue;
+            }
+            assert!(
+                cols[3].chars().all(|c| c.is_ascii_digit()) && cols[3] != "0",
+                "column 4 is neither '-' nor a real line number: {line}"
+            );
+            stamps += 1;
+        }
+        assert!(
+            stamps > 0,
+            "no line stamps in a multi-line listing — the annotation is vacuous"
+        );
     }
 }
 
