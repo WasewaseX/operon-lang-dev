@@ -821,7 +821,8 @@ fn real_main() {
         }
         // W09 A2 / W10 stage 1: the OIR1 listing is real. Every top-level
         // gene compiles (unsupported constructs bridge at runtime, they do
-        // not block compilation).
+        // not block compilation). W010-A: ir and disasm are the same tool
+        // now — both accept --json (the disasm arm below is the alias).
         "ir" => {
             let file = match positional.first() {
                 Some(f) => f.clone(),
@@ -830,7 +831,11 @@ fn real_main() {
             let src = std::fs::read_to_string(&file)
                 .unwrap_or_else(|e| die(&format!("cannot read '{}': {}", file, e)));
             let prog = parser::parse(&src);
-            print!("{}", operon::vm::disassemble_program(&prog));
+            if json {
+                println!("{}", operon::vm::disassemble_program_json(&prog));
+            } else {
+                print!("{}", operon::vm::disassemble_program(&prog));
+            }
         }
         "run" | "debug" => {
             debug_mode = cmd == "debug";
@@ -914,7 +919,10 @@ fn real_main() {
             if debug_mode {
                 l.interp.debug_file = file.clone();
                 for b in &debug_breaks {
-                    l.interp.debug_breaks.insert(*b);
+                    // CLI --break stays numeric-only: conditions arrive
+                    // through the live surfaces (REPL `b N if COND`, NDJSON
+                    // breakpoints, DAP setBreakpoints)
+                    l.interp.debug_breaks.insert(*b, None);
                 }
                 if debug_protocol_mode {
                     // W08r stage 2: stdout is the protocol transport — the
@@ -2933,7 +2941,7 @@ usage:
   operon doc f.op|dir [...] [-o outdir] [--json]
   operon watch f.op [args...]
   operon profile f.op
-  operon disasm f.op [--json]     W10: bytecode listing of compiled genes
+  operon ir|disasm f.op [--json]  W10: annotated OIR1 listing of compiled genes
   operon crispr f.op --knockout gene [--json]
   operon bench f.op [--iters n]
   operon run f.op --vm            A2/A3: bytecode VM on gene bodies
