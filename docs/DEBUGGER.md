@@ -5,9 +5,11 @@ the interpreter lane (the VM lane is the performance lane; the debugger
 forces the tree-walker) and stops AFTER each statement completes, reporting
 the statement's own source line.
 
-Status: **implemented** (W08r, 2026-10-01). Phases: the human REPL, the
-NDJSON machine protocol, the Debug Adapter Protocol adapter, and the VS Code
-extension.
+Status: **implemented** (W08r, 2026-10-01; W008 polish, 2026-10-02). Phases: the
+human REPL, the NDJSON machine protocol, the Debug Adapter Protocol adapter,
+and the VS Code extension. W008 polish added conditional breakpoints,
+`stopOnEntry`, variable assignment (`set`/`setVariable`), and real call-site
+lines for outer stack frames — on all three surfaces at once.
 
 ## The REPL (human surface)
 
@@ -32,11 +34,13 @@ Commands:
 | `fin` / `finish` | step-OUT: run until the current frame returns |
 | `until N` | one-shot continue-to-line: stop when line N's statement completes |
 | `b N` | add a breakpoint at line N (fires immediately, even mid-session) |
+| `b N if COND` | add a CONDITIONAL breakpoint: fires only when COND evaluates truthy in the current frame (a condition that cannot parse or raises never fires — no surprise stops) |
 | `b del N` | delete the breakpoint at line N |
-| `b list` | list active breakpoints |
-| `bt` | the call chain, innermost last |
+| `b list` | list active breakpoints (conditions rendered) |
+| `set NAME EXPR` | rebind NAME in the current frame (same reach as assignment; `const` names are refused — frozen is frozen — and unknown names are refused, never silently created) |
+| `bt` | the call chain with each frame's current line: the innermost frame is at the stop line, an outer frame is parked at the call site of the frame one level deeper |
 | `vars` | dump the frame chain's variables (innermost first, 8 frames) |
-| `p EXPR` | evaluate EXPR in the current frame |
+| `p EXPR` | evaluate EXPR in the current frame (bare literals included — `p 99` works via the let-wrapper fallback) |
 | `q` / `quit` | end the session, exit code 0 |
 
 EOF on stdin resumes to completion: piped sessions never wedge. This is a
@@ -58,7 +62,7 @@ line-delimited JSON protocol — one JSON object per line on stdout, one
 request per line on stdin. Program `print` output is captured and drained to
 **stderr** (`[out] ...` lines) so stdout stays pure protocol.
 
-Events (stdout): `{"event":"stopped","reason":"breakpoint"|"step"|"until","line":N,"depth":D}`
+Events (stdout): `{"event":"stopped","reason":"breakpoint"|"step"|"until"|"entry","line":N,"depth":D}`
 
 Requests (stdin), replies `{"id":N,"ok":true,...}` / `{"id":N,"ok":false,"error":"..."}`:
 
@@ -67,11 +71,13 @@ Requests (stdin), replies `{"id":N,"ok":true,...}` / `{"id":N,"ok":false,"error"
 {"id":2,"cmd":"next"} {"id":2,"cmd":"stepIn"} {"id":2,"cmd":"stepOut"}
 {"id":3,"cmd":"until","args":{"line":9}}
 {"id":4,"cmd":"breakpoints","args":{"add":[9],"remove":[3]}}
-{"id":5,"cmd":"stack"}      # frames, innermost first
-{"id":6,"cmd":"vars"}       # scopes with rendered variable maps
-{"id":7,"cmd":"eval","args":{"expr":"z * 100"}}
-{"id":8,"cmd":"status"}     # line + depth
-{"id":9,"cmd":"quit"}
+{"id":4,"cmd":"breakpoints","args":{"add":[{"line":4,"condition":"y > 100"}],"remove":[]}}
+{"id":5,"cmd":"set","args":{"name":"x","expr":"777"}}   # live rebind, assignment reach
+{"id":6,"cmd":"stack"}      # frames with real lines, innermost first
+{"id":7,"cmd":"vars"}       # scopes with rendered variable maps
+{"id":8,"cmd":"eval","args":{"expr":"z * 100"}}
+{"id":9,"cmd":"status"}     # line + depth
+{"id":10,"cmd":"quit"}
 ```
 
 `scripts/debug_protocol_e2e.py` is a complete reference client.
@@ -84,12 +90,19 @@ Neovim, emacs and JetBrains debug clients speak natively:
 
 - lifecycle: `initialize` → `initialized` event → `launch` →
   `setBreakpoints` → `configurationDone` → run → `stopped` events →
-  `stackTrace`/`scopes`/`variables`/`evaluate` → `terminated`/`exited`
+  `stackTrace`/`scopes`/`variables`/`evaluate`/`setVariable` →
+  `terminated`/`exited`
 - stepping verbs: `continue`, `next` (step-over), `stepIn`, `stepOut` —
   mapped onto the same depth-aware machinery as the REPL
 - program output arrives as `output` events (category `stdout`); the
   adapter's stdout is protocol-only
 - `evaluate` runs in the stopped frame, same semantics as the REPL's `p`
+- W008 polish: the launch arguments accept `stopOnEntry` (one-shot stopped
+  event, reason `entry`, at the program's first statement); `setBreakpoints`
+  accepts per-breakpoint `condition` fields (evaluated in the stopped frame
+  like the REPL's `b N if COND`); `setVariable` rebinds live frame state
+  with the language's own assignment reach (consts stay frozen); `stackTrace`
+  reports real call-site lines for outer frames
 
 `scripts/dap_e2e.py` is a complete reference client.
 
@@ -120,6 +133,15 @@ programs that read/write files.
 
 | gate | what it pins |
 |---|---|
-| `scripts/debug_e2e.sh` | the REPL contract (breaks fire, vars/p/s/c, next/finish/until, bp management, EOF resumes) |
-| `scripts/debug_protocol_e2e.py` | the NDJSON contract (purity, stop reasons, all verbs, print rerouting) |
-| `scripts/dap_e2e.py` | the DAP contract (lifecycle, stopped events, stacks/scopes/vars/eval, output events) |
+| `scripts/debug_e2e.sh` | the REPL contract (breaks fire, vars/p/s/c, next/finish/until, bp management, conditional bps, set, bt lines, EOF resumes) |
+| `scripts/debug_protocol_e2e.py` | the NDJSON contract (purity, stop reasons, all verbs, conditional bps, set, stack lines, print rerouting) |
+| `scripts/dap_e2e.py` | the DAP contract (lifecycle, capabilities, stopOnEntry, conditional bps, setVariable, stacks/scopes/vars/eval, output events) |
+
+## Honest remaining limits
+
+- variables are rendered strings (no child/struct expansion references)
+- `setVariable`/`set` target named frame bindings (no element assignment
+  inside lists/maps)
+- no logPoints or hitConditions
+- the CLI `--break` flag stays numeric-only; conditions arrive through the
+  live surfaces (REPL/NDJSON/DAP)
