@@ -43,13 +43,20 @@ if [ "$DEBUG_BIN" == "1" ]; then
   cargo build >/dev/null 2>&1 || { echo "debug build FAILED"; exit 1; }
 fi
 
-mapfile -t FILES < <(find tests/compat tests/compat_fresh -name '*.op' 2>/dev/null | sort)
+# ---- corpus inventory ------------------------------------------------------
+# F6/#50 (reliab lane, 2026-10-02): mapfile is bash 4+; macos-latest ships
+# /bin/bash 3.2 where the whole compat leg died on it ("mapfile: command not
+# found" -> "FILES: unbound variable"). Portable read loop instead; the
+# ${ARR[@]+...} idiom keeps EMPTY arrays legal under set -u on bash 3.2
+# (pre-4.4 treats an empty array as unbound).
+FILES=()
+while IFS= read -r _f; do FILES+=("$_f"); done < <(find tests/compat tests/compat_fresh -name '*.op' 2>/dev/null | sort)
 if [ "$MODE" == "fast" ]; then
   n=${#FILES[@]}
   step=$(( n / 120 )); [ "$step" -lt 1 ] && step=1
   sampled=()
   for ((i=0; i<n; i+=step)); do sampled+=("${FILES[i]}"); done
-  FILES=("${sampled[@]}")
+  FILES=("${sampled[@]+${sampled[@]}}")
 fi
 echo "programs under test: ${#FILES[@]}"
 
@@ -57,7 +64,7 @@ pass=0; fail=0; failed_files=()
 tmpa=$(mktemp); tmpb=$(mktemp); tmpc=$(mktemp); tmpd=$(mktemp); tmpe=$(mktemp)
 trap 'rm -f "$tmpa" "$tmpb" "$tmpc" "$tmpd" "$tmpe"' EXIT
 
-for f in "${FILES[@]}"; do
+for f in ${FILES[@]+"${FILES[@]}"}; do
   ./bin/operon run --no-vm "$f" >"$tmpa" 2>"$tmpa.err"; arc=$?
   ./bin/operon run "$f" >"$tmpb" 2>"$tmpb.err"; brc=$?
   ./bin/operon run --opt 1 "$f" >"$tmpc" 2>"$tmpc.err"; crc=$?
@@ -85,17 +92,25 @@ for f in "${FILES[@]}"; do
     pass=$((pass+1))
   else
     fail=$((fail+1)); failed_files+=("$f")
-    if [ "${VERBOSE:-0}" == "1" ] && [ "$fail" -le 5 ]; then
+    # F6/#50 (iteration 3): ALWAYS diagnose the first divergence — a byte
+    # gate that only prints counts costs a full CI cycle per question
+    # (this exact loop happened twice on the windows leg this session).
+    if [ "${VERBOSE:-0}" == "1" ] || [ "$fail" -eq 1 ]; then
       echo "DIVERGE: $f (rc $arc/$brc/$crc/$drc/$erc)"
-      diff "$tmpa" "$tmpc" | head -4
-      diff "$tmpa" "$tmpe" | head -4
+      cmp -s "$tmpa" "$tmpb" || echo "  stdout differs: tree-walk vs vm"
+      cmp -s "$tmpa" "$tmpc" || echo "  stdout differs: tree-walk vs opt1"
+      if [ "$DEBUG_BIN" == "1" ] && ! cmp -s "$tmpa" "$tmpd"; then
+        echo "  stdout differs: tree-walk vs debug"
+      fi
+      cmp -s "$tmpa" "$tmpe" || { echo "  stdout differs: tree-walk vs oracle:"; diff "$tmpa" "$tmpe" | head -4; }
+      cmp -s "$tmpa.err" "$tmpe.err" || { echo "  stderr differs: tree-walk vs oracle:"; diff "$tmpa.err" "$tmpe.err" | head -4; }
     fi
   fi
 done
 
 echo "compat matrix: $pass identical, $fail divergent (${#FILES[@]} programs x $([ "$DEBUG_BIN" == "1" ] && echo 5 || echo 4) engines)"
 if [ "$fail" -gt 0 ]; then
-  printf '  divergent: %s\n' "${failed_files[@]}"
+  printf '  divergent: %s\n' ${failed_files[@]+"${failed_files[@]}"}
   exit 1
 fi
 echo "COMPAT MATRIX GREEN"
