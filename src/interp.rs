@@ -4,7 +4,7 @@
 use crate::ast::*;
 use crate::value::{key_scalar, SeqState, Stress, Value};
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::{mpsc, Arc, Mutex};
@@ -547,6 +547,28 @@ pub struct OperonUnit {
     pub transcripts: u64,
 }
 
+/// W097-A: one completed gene-call span (per-call timeline record). The
+/// profiler aggregates self/inclusive time per gene (call_time*, aggregate
+/// only); spans add the MISSING per-call timeline W096's Chrome-trace export
+/// needs. `depth` = number of ancestor frames live at call time (the
+/// outermost gene call is depth 0), so a consumer can reconstruct nesting
+/// without scanning intervals (and Chrome X-events nest by ts/dur anyway —
+/// depth is a cross-check + flamegraph input).
+#[derive(Clone, Debug)]
+pub struct CallSpan {
+    pub name: String,
+    /// start time in microseconds (the same monotonic clock close_timing uses).
+    pub start_us: f64,
+    /// inclusive duration in microseconds (children included, like call_time).
+    pub dur_us: f64,
+    pub depth: u32,
+}
+
+/// Span-log cap. A runaway program must not OOM the profiler: past this,
+/// spans are DROPPED and counted (spans_dropped surfaces in the trace's
+/// otherData — an honest limit, never a silent truncation).
+pub const SPAN_CAP: usize = 1_000_000;
+
 pub struct Interp {
     pub notes: Vec<Note>,
     /// sec-r3: notes suppressed past the cap (surfaced once).
@@ -700,12 +722,25 @@ pub struct Interp {
     pub call_counts: HashMap<String, u64>,
     pub call_time: HashMap<String, f64>, // µs inclusive (profiling)
     pub call_time_self: HashMap<String, f64>, // µs exclusive (children subtracted)
-    pub call_stack: Vec<(String, f64, f64)>, // (name, start_ns, child_acc µs)
+    // (name, start_ns, child_acc µs, call-site line — W008 polish: the
+    // caller's line at push time, so debuggers can show real outer frames)
+    pub call_stack: Vec<(String, f64, f64, usize)>,
     pub call_clock: u64,
     pub gene_buckets: HashMap<String, HashMap<u64, u64>>, // burst-index bins (20 calls/bin)
     pub modules: HashMap<String, Value>,                  // path -> module map
     pub loading: Vec<String>,
     pub profiling: bool,
+    /// W097-A (builder-E, profiling lane): per-call span capture for the
+    /// Chrome-trace surface (`operon profile --chrome`, W096's blocked
+    /// REMAIN). Opt-in only; OFF by default so the differential contract is
+    /// untouched. When off the cost is one bool check inside the already
+    /// `profiling`-gated close_timing block — zero when profiling is off.
+    pub spans: bool,
+    /// Completed call spans in completion (chronological-by-end) order.
+    /// Capped at SPAN_CAP; further spans are counted in spans_dropped
+    /// instead of recorded (honest limit — the operator sees the drop).
+    pub span_log: Vec<CallSpan>,
+    pub spans_dropped: u64,
     pub proof_mode: bool,
     pub global: Rc<Env>,
     pub steps: u64,
@@ -803,7 +838,12 @@ pub struct Interp {
     /// W08 phase 1: interactive debug hooks (`operon debug`). Break lines
     /// are matched against the current source line after each statement;
     /// workers are separate Interps and never break.
-    pub debug_breaks: HashSet<usize>,
+    /// W008 polish: the value is the breakpoint's optional CONDITION source
+    /// (`b 5 if x > 3`): None = unconditional, Some(src) = fires only when
+    /// the condition evaluates truthy in the current frame (parse or eval
+    /// failure counts as NOT firing — a broken condition never becomes a
+    /// surprise stop).
+    pub debug_breaks: HashMap<usize, Option<String>>,
     pub debug_step: bool,
     /// W08r stage 1: depth-aware stepping. Some(d) = the step request only
     /// traps when the call depth is back down to d (that is what `next`
@@ -821,6 +861,10 @@ pub struct Interp {
     /// W08r stage 3: DAP mode — the trap hands control to the adapter in
     /// src/dap.rs (stopped event + request serving loop).
     pub debug_dap: bool,
+    /// W008 polish: one-shot stop at the program's first statement, requested
+    /// via the DAP launch argument stopOnEntry. Consumed by the first trap
+    /// with reason "entry".
+    pub debug_stop_entry: bool,
     pub debug_file: String,
     pub seq_tx: Option<mpsc::SyncSender<crate::value::SeqMsg>>,
     /// Process-wide step ceiling shared with every spawned worker: when
@@ -896,6 +940,9 @@ impl Interp {
             modules: HashMap::new(),
             loading: Vec::new(),
             profiling: false,
+            spans: false,
+            span_log: Vec::new(),
+            spans_dropped: 0,
             proof_mode: false,
             global: Env::new(None),
             steps: 0,
@@ -940,12 +987,13 @@ impl Interp {
             vm_opt: 0,
             opt_passes: None,
             mono_cache: HashMap::new(),
-            debug_breaks: HashSet::new(),
+            debug_breaks: HashMap::new(),
             debug_step: false,
             debug_step_depth: None,
             debug_until: None,
             debug_protocol: false,
             debug_dap: false,
+            debug_stop_entry: false,
             debug_file: String::new(),
             seq_tx: None,
             fuel_pool: None,
@@ -1259,8 +1307,12 @@ impl Interp {
             // the LAST line inside work, not the call site — a break on the
             // call line could never fire off cur_line alone. cur_line stays
             // as the fallback for line-silent statements.
+            // W008 polish: conditional breakpoints — a bp with a condition
+            // only fires when the condition evaluates truthy in the current
+            // frame (see bp_fires); the entry stop (stopOnEntry) is a
+            // one-shot that wins over everything at the first statement.
             let stmt_bp_hit = match s.first_line() {
-                Some(l) => self.debug_breaks.contains(&l),
+                Some(l) => self.bp_fires(env, l),
                 None => false,
             };
             let stmt_line = s.first_line();
@@ -1271,7 +1323,7 @@ impl Interp {
             // main's line-8 call statement the moment work returns)
             let cur_bp_hit = match stmt_line {
                 Some(_) => false,
-                None => self.debug_breaks.contains(&self.cur_line),
+                None => self.bp_fires(env, self.cur_line),
             };
             let depth_ok = match self.debug_step_depth {
                 Some(d) => self.call_stack.len() <= d,
@@ -1284,8 +1336,15 @@ impl Interp {
                 },
                 None => false,
             };
-            if until_hit || stmt_bp_hit || cur_bp_hit || (self.debug_step && depth_ok) {
-                let reason = if until_hit {
+            let entry_hit = self.debug_stop_entry;
+            if entry_hit {
+                self.debug_stop_entry = false;
+            }
+            if entry_hit || until_hit || stmt_bp_hit || cur_bp_hit || (self.debug_step && depth_ok)
+            {
+                let reason = if entry_hit {
+                    "entry"
+                } else if until_hit {
                     "until"
                 } else if stmt_bp_hit || cur_bp_hit {
                     "breakpoint"
@@ -1306,6 +1365,21 @@ impl Interp {
             }
         }
         Ok(Flow::Norm)
+    }
+
+    /// W008 polish: does the breakpoint on `line` actually fire? An
+    /// unconditional bp fires; a conditional bp evaluates its condition
+    /// source in the current frame and fires only on a truthy result.
+    /// A condition that cannot be parsed or raises counts as NOT firing —
+    /// a debugger must never turn a broken condition into a surprise stop
+    /// (the failure is observable through eval in the same stop state).
+    fn bp_fires(&mut self, env: &Rc<Env>, line: usize) -> bool {
+        let cond = match self.debug_breaks.get(&line) {
+            Some(None) => return true,
+            Some(Some(c)) => c.clone(),
+            None => return false,
+        };
+        matches!(self.debug_eval_value(env, &cond), Ok(v) if v.truthy())
     }
 
     /// W08 phase 1: the on-break REPL. Reads stdin; EOF resumes (piped
@@ -1366,19 +1440,23 @@ impl Interp {
                 other if other.starts_with("b ") || other == "b" => {
                     let rest = other[1..].trim();
                     if rest == "list" {
-                        let mut bs: Vec<usize> = self.debug_breaks.iter().copied().collect();
-                        bs.sort_unstable();
+                        let mut bs: Vec<(usize, &Option<String>)> =
+                            self.debug_breaks.iter().map(|(k, v)| (*k, v)).collect();
+                        bs.sort_by_key(|(k, _)| *k);
                         if bs.is_empty() {
                             println!("  (no breakpoints)");
                         } else {
-                            for b in bs {
-                                println!("  line {}", b);
+                            for (b, cond) in bs {
+                                match cond {
+                                    Some(c) => println!("  line {} if {}", b, c),
+                                    None => println!("  line {}", b),
+                                }
                             }
                         }
                     } else if let Some(del) = rest.strip_prefix("del ") {
                         match del.trim().parse::<usize>() {
                             Ok(n) => {
-                                if self.debug_breaks.remove(&n) {
+                                if self.debug_breaks.remove(&n).is_some() {
                                     println!("  deleted line {}", n);
                                 } else {
                                     // informational response, not an error: it
@@ -1389,12 +1467,28 @@ impl Interp {
                             Err(_) => eprintln!("(dbg) b del needs a line number"),
                         }
                     } else {
-                        match rest.parse::<usize>() {
-                            Ok(n) => {
-                                self.debug_breaks.insert(n);
-                                println!("  breakpoint at line {}", n);
-                            }
-                            Err(_) => eprintln!("(dbg) b needs: b N | b del N | b list"),
+                        // W008 polish: `b N if COND` lands a conditional
+                        // breakpoint; a plain `b N` replaces any condition
+                        match rest.split_once(" if ") {
+                            Some((num, cond)) => match num.trim().parse::<usize>() {
+                                Ok(n) if !cond.trim().is_empty() => {
+                                    let c = cond.trim().to_string();
+                                    self.debug_breaks.insert(n, Some(c.clone()));
+                                    println!("  breakpoint at line {} if {}", n, c);
+                                }
+                                _ => {
+                                    eprintln!("(dbg) b needs: b N | b N if COND | b del N | b list")
+                                }
+                            },
+                            None => match rest.parse::<usize>() {
+                                Ok(n) => {
+                                    self.debug_breaks.insert(n, None);
+                                    println!("  breakpoint at line {}", n);
+                                }
+                                Err(_) => {
+                                    eprintln!("(dbg) b needs: b N | b N if COND | b del N | b list")
+                                }
+                            },
                         }
                     }
                 }
@@ -1404,8 +1498,17 @@ impl Interp {
                     std::process::exit(0);
                 }
                 "bt" => {
-                    for (name, _, _) in self.call_stack.iter().rev() {
-                        println!("  at {}", name);
+                    // each frame's CURRENT line: the innermost frame is at
+                    // the stop line; an outer frame is parked at the call
+                    // site that invoked the frame one level deeper (that is
+                    // exactly the deeper frame's stamped call-site line)
+                    let n = self.call_stack.len();
+                    for (i, (name, _, _, _)) in self.call_stack.iter().rev().enumerate() {
+                        if i == 0 {
+                            println!("  at {} line {}", name, shown);
+                        } else {
+                            println!("  at {} line {}", name, self.call_stack[n - i].3);
+                        }
                     }
                 }
                 "vars" => {
@@ -1439,6 +1542,22 @@ impl Interp {
                         cur = e.parent.clone();
                     }
                 }
+                other if other.starts_with("set ") => {
+                    // W008 polish: debugger-side assignment, same reach as a
+                    // plain assignment (rebinds where the name is found on
+                    // the frame chain; consts stay frozen; unknown names are
+                    // refused rather than silently created)
+                    let rest = other[4..].trim();
+                    match rest.split_once(' ') {
+                        Some((name, expr)) if !name.is_empty() && !expr.trim().is_empty() => {
+                            match self.debug_assign(env, name, expr.trim()) {
+                                Ok(d) => println!("  {} = {}", name, d),
+                                Err(e) => eprintln!("(dbg) {}", e),
+                            }
+                        }
+                        _ => eprintln!("(dbg) set needs: set NAME EXPR"),
+                    }
+                }
                 other => {
                     if let Some(expr_src) = other.strip_prefix("p ") {
                         let src = expr_src.trim();
@@ -1465,7 +1584,7 @@ impl Interp {
                         }
                     } else {
                         eprintln!(
-                            "(dbg) commands: c | s | n | fin | until N | b N | b del N | b list | bt | vars | p EXPR | q"
+                            "(dbg) commands: c | s | n | fin | until N | b N | b N if COND | b del N | b list | set NAME EXPR | bt | vars | p EXPR | q"
                         );
                     }
                 }
@@ -1480,12 +1599,13 @@ impl Interp {
     // stays pure protocol. Requests:
     //   {"id":N,"cmd":"continue"|"next"|"stepIn"|"stepOut"}
     //   {"id":N,"cmd":"until","args":{"line":N}}
-    //   {"id":N,"cmd":"breakpoints","args":{"add":[..],"remove":[..]}}
+    //   {"id":N,"cmd":"breakpoints","args":{"add":[3 or {"line":5,"condition":"x > 1"},..],"remove":[..]}}
+    //   {"id":N,"cmd":"set","args":{"name":"x","expr":"5"}}
     //   {"id":N,"cmd":"stack"|"vars"|"status"}
     //   {"id":N,"cmd":"eval","args":{"expr":".."}}
     //   {"id":N,"cmd":"quit"}
     // Replies: {"id":N,"ok":true,..} / {"id":N,"ok":false,"error":".."}.
-    // Events: {"event":"stopped","reason":"breakpoint"|"step"|"until",..}.
+    // Events: {"event":"stopped","reason":"breakpoint"|"step"|"until"|"entry",..}.
     // EOF on stdin resumes to completion (piped sessions never wedge).
     pub fn debug_machine(&mut self, env: &Rc<Env>, stmt_line: Option<usize>, reason: &str) {
         use std::io::Write as _;
@@ -1577,8 +1697,31 @@ impl Interp {
                     if let Some(a) = &args {
                         if let Some(Value::List(adds)) = Self::jfield(a, "add") {
                             for v in adds.borrow().iter() {
-                                if let Value::Int(n) = v {
-                                    self.debug_breaks.insert(*n as usize);
+                                match v {
+                                    // plain int = unconditional (W08r stage 2 form)
+                                    Value::Int(n) => {
+                                        self.debug_breaks.insert(*n as usize, None);
+                                    }
+                                    // W008 polish: {"line":N,"condition":".."}
+                                    Value::Map(m) => {
+                                        let mut ln: Option<i64> = None;
+                                        let mut cond: Option<String> = None;
+                                        for (k, vv) in m.borrow().items.iter() {
+                                            if let Value::Str(ks) = k {
+                                                match (ks.as_str(), vv) {
+                                                    ("line", Value::Int(n)) => ln = Some(*n),
+                                                    ("condition", Value::Str(s)) => {
+                                                        cond = Some(s.clone())
+                                                    }
+                                                    _ => {}
+                                                }
+                                            }
+                                        }
+                                        if let Some(n) = ln {
+                                            self.debug_breaks.insert(n as usize, cond);
+                                        }
+                                    }
+                                    _ => {}
                                 }
                             }
                         }
@@ -1590,14 +1733,47 @@ impl Interp {
                             }
                         }
                     }
-                    let mut bs: Vec<usize> = self.debug_breaks.iter().copied().collect();
-                    bs.sort_unstable();
+                    let mut bs: Vec<(&usize, &Option<String>)> = self.debug_breaks.iter().collect();
+                    bs.sort_by_key(|(k, _)| **k);
                     let list = bs
                         .iter()
-                        .map(|b| b.to_string())
+                        .map(|(b, cond)| match cond {
+                            Some(c) => {
+                                format!("{{\"line\":{},\"condition\":{}}}", b, json_quote(c))
+                            }
+                            None => format!("{{\"line\":{},\"condition\":null}}", b),
+                        })
                         .collect::<Vec<_>>()
                         .join(",");
                     self.debug_reply(id, &format!("\"ok\":true,\"breakpoints\":[{}]", list));
+                }
+                "set" => {
+                    // W008 polish: debugger-side assignment over the protocol
+                    let name = args
+                        .as_ref()
+                        .and_then(|a| Self::jfield_str(a, "name"))
+                        .unwrap_or_default();
+                    let expr = args
+                        .as_ref()
+                        .and_then(|a| Self::jfield_str(a, "expr"))
+                        .unwrap_or_default();
+                    if name.is_empty() || expr.is_empty() {
+                        self.debug_reply(
+                            id,
+                            "\"ok\":false,\"error\":\"set needs args.name and args.expr\"",
+                        );
+                    } else {
+                        match self.debug_assign(env, &name, &expr) {
+                            Ok(d) => self.debug_reply(
+                                id,
+                                &format!("\"ok\":true,\"value\":{}", json_quote(&d)),
+                            ),
+                            Err(e) => self.debug_reply(
+                                id,
+                                &format!("\"ok\":false,\"error\":{}", json_quote(&e)),
+                            ),
+                        }
+                    }
                 }
                 "status" => {
                     self.debug_reply(
@@ -1610,12 +1786,13 @@ impl Interp {
                     );
                 }
                 "stack" => {
-                    // innermost first; only the innermost frame has a known
-                    // line (outer frames' call lines live in the stress
-                    // traceback machinery, not in call_stack tuples)
+                    // innermost first. W008 polish: outer frames now carry
+                    // their real CALL-SITE line (stamped into call_stack at
+                    // push time), not null — a debugger can show the whole
+                    // chain with lines.
                     let mut frames = Vec::new();
                     let n = self.call_stack.len();
-                    for (i, (name, _, _)) in self.call_stack.iter().rev().enumerate() {
+                    for (i, (name, _, _, _)) in self.call_stack.iter().rev().enumerate() {
                         if i == 0 {
                             frames.push(format!(
                                 "{{\"name\":{},\"line\":{}}}",
@@ -1623,10 +1800,15 @@ impl Interp {
                                 shown
                             ));
                         } else {
-                            frames.push(format!("{{\"name\":{},\"line\":null}}", json_quote(name)));
+                            // outer frame's current line = the call site of
+                            // the frame one level deeper (see bt)
+                            frames.push(format!(
+                                "{{\"name\":{},\"line\":{}}}",
+                                json_quote(name),
+                                self.call_stack[n - i].3
+                            ));
                         }
                     }
-                    let _ = n;
                     self.debug_reply(
                         id,
                         &format!("\"ok\":true,\"frames\":[{}]", frames.join(",")),
@@ -1759,16 +1941,70 @@ impl Interp {
         env: &Rc<Env>,
         src: &str,
     ) -> Result<String, String> {
+        self.debug_eval_value(env, src).map(|v| v.display())
+    }
+
+    /// W008 polish: evaluate an expression in the stopped frame and return
+    /// the VALUE (debug_eval_display renders it; bp conditions and the
+    /// set-variable paths need the value itself).
+    pub(crate) fn debug_eval_value(&mut self, env: &Rc<Env>, src: &str) -> Result<Value, String> {
+        // Primary path: wrap the source as an expression statement.
         let parsed = crate::parser::parse(&format!("gene __dbg() {{ {} }}", src));
         if let Some(Stmt::Gene(g)) = parsed.stmts.first() {
             if let Some(Stmt::ExprStmt(e)) = g.body.first() {
-                return match self.eval(env, e) {
-                    Ok(v) => Ok(v.display()),
-                    Err(st) => Err(format!("[{}] {}", st.kind, st.message)),
-                };
+                return self
+                    .eval(env, e)
+                    .map_err(|st| format!("[{}] {}", st.kind, st.message));
+            }
+        }
+        // Fallback path (W008 polish): Operon's grammar has no bare-literal
+        // statements ("unexpected token 'number 99' at statement position"),
+        // so `p 99` and setVariable values like "99" could never evaluate.
+        // Wrap as a let initializer instead — `let __r = (99)` is valid
+        // grammar for everything expression-shaped, literals included.
+        let wrapped = crate::parser::parse(&format!("gene __dbg() {{ let __r = ({}) }}", src));
+        if let Some(Stmt::Gene(g)) = wrapped.stmts.first() {
+            if let Some(Stmt::Let(_, e)) = g.body.first() {
+                return self
+                    .eval(env, e)
+                    .map_err(|st| format!("[{}] {}", st.kind, st.message));
             }
         }
         Err("cannot evaluate".to_string())
+    }
+
+    /// W008 polish: debugger-side assignment (DAP setVariable, NDJSON set,
+    /// REPL `set NAME EXPR`). Same reach as a plain assignment: the name is
+    /// rebound where it is found on the env chain. A name bound with `const`
+    /// is refused (frozen is frozen — the debugger is not a const loophole)
+    /// and an unknown name is refused too (a debugger should not silently
+    /// create bindings the program never declared).
+    pub(crate) fn debug_assign(
+        &mut self,
+        env: &Rc<Env>,
+        name: &str,
+        src: &str,
+    ) -> Result<String, String> {
+        let mut found = false;
+        let mut node = Some(env.clone());
+        while let Some(e) = node {
+            if e.consts.borrow().contains(name) {
+                return Err(format!("cannot set {}: bound with const (frozen)", name));
+            }
+            if e.vars.borrow().contains_key(name) {
+                found = true;
+            }
+            node = e.parent.clone();
+        }
+        if !found {
+            return Err(format!(
+                "cannot set {}: no such binding in the frame chain",
+                name
+            ));
+        }
+        let v = self.debug_eval_value(env, src)?;
+        env.set(name, v.clone());
+        Ok(v.display())
     }
 
     fn jfield_int(req: &Value, key: &str) -> Option<i64> {
@@ -5502,7 +5738,7 @@ impl Interp {
                     None
                 };
                 self.call_stack
-                    .push((name.clone(), start.unwrap_or(0.0), 0.0));
+                    .push((name.clone(), start.unwrap_or(0.0), 0.0, self.cur_line));
                 let result = crate::vm::exec_gene_code(self, &code, &parent);
                 self.close_timing(&name);
                 // the shared tail (flow unwrap, propagation-as-return,
@@ -5614,7 +5850,7 @@ impl Interp {
             None
         };
         self.call_stack
-            .push((name.clone(), start.unwrap_or(0.0), 0.0));
+            .push((name.clone(), start.unwrap_or(0.0), 0.0, self.cur_line));
         // uORF guard
         if let Some((cond, gbody)) = &def.guard {
             // W16: the guard is user code BEFORE any fiber frame exists for
@@ -5815,12 +6051,15 @@ impl Interp {
         self.call_time_self.clear();
         self.call_stack.clear();
         self.call_clock = 0;
+        // W097-A: a re-run starts its timeline from zero too.
+        self.span_log.clear();
+        self.spans_dropped = 0;
     }
 
     /// Close the timing frame for a gene call: accumulate exclusive (self)
     /// time and hand the inclusive time to the parent's child budget.
     fn close_timing(&mut self, name: &str) {
-        if let Some((n, t0, child_acc)) = self.call_stack.pop() {
+        if let Some((n, t0, child_acc, _site)) = self.call_stack.pop() {
             if self.profiling {
                 let incl = (crate::ffi::now_ns() - t0) / 1000.0;
                 let self_us = (incl - child_acc).max(0.0);
@@ -5828,6 +6067,23 @@ impl Interp {
                 *self.call_time_self.entry(n.clone()).or_insert(0.0) += self_us;
                 if let Some(parent) = self.call_stack.last_mut() {
                     parent.2 += incl; // my inclusive time is my parent's child time
+                }
+                // W097-A: per-call span capture (opt-in, Chrome-trace feed).
+                // Inside the profiling block so the capture costs one bool
+                // check when profiling runs without spans, and nothing at
+                // all when profiling is off. depth = ancestors still on the
+                // stack after this frame popped.
+                if self.spans {
+                    if self.span_log.len() < SPAN_CAP {
+                        self.span_log.push(CallSpan {
+                            name: n.clone(),
+                            start_us: t0 / 1000.0,
+                            dur_us: incl,
+                            depth: self.call_stack.len() as u32,
+                        });
+                    } else {
+                        self.spans_dropped += 1;
+                    }
                 }
             }
             let _ = (n, child_acc);
@@ -6098,7 +6354,7 @@ impl Interp {
             None
         };
         self.call_stack
-            .push((name.clone(), start.unwrap_or(0.0), 0.0));
+            .push((name.clone(), start.unwrap_or(0.0), 0.0, self.cur_line));
         if let Some((cond, gbody)) = &def.guard {
             let ok = self.eval(&fenv, cond).map(|v| v.truthy()).unwrap_or(false);
             if !ok {
