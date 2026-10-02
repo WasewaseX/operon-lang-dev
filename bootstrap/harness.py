@@ -18,7 +18,10 @@ import subprocess, sys, os, argparse
 #   repressi_start    , wall-clock thread ticker; manual rings (deterministic)
 #                        are covered via repressi_next/repressi_state
 # Every other builtin in src/interp.rs call_builtin has >= 1 differential
-# golden or a shape contract under tests/differential/.
+# golden or a shape contract under tests/differential/ — a claim that used to
+# live only in this comment. bootstrap/audit_builtins.py (S3) now ENFORCES it;
+# the machine-checkable form of the exclusion policy is S3_EXCLUDED_BUILTINS
+# below, which the audit imports (single source of truth; prose stays prose).
 def run(cmd, timeout=120):
     # W59: decode both cores as UTF-8 explicitly. With bare text=True the
     # decoding uses the platform locale (cp1252 on Windows runners), which
@@ -28,6 +31,25 @@ def run(cmd, timeout=120):
     p = subprocess.run(cmd, capture_output=True, text=True,
                        encoding="utf-8", errors="replace", timeout=timeout)
     return p.stdout, p.returncode, p.stderr
+
+# S3 (2026-10-02): the exclusion policy above, codified. The audit
+# (bootstrap/audit_builtins.py) imports THIS table — adding a builtin here is
+# a policy act with a named reason, never a silent way to pass the coverage
+# gate. The audit cross-checks the table against the live registries: a name
+# that stops being a builtin fails the audit (stale policy), and an excluded
+# builtin must never silently grow a golden-equivalent either.
+S3_EXCLUDED_BUILTINS = {
+    "exit": "control-flow terminator; its exit-code contract is the harness "
+            "itself (rust_code == py_code on every program)",
+    "serve": "network server trio; timing-dependent, containment covered by "
+             "the redteam suite instead",
+    "recv_request": "network server trio; timing-dependent, containment "
+                    "covered by the redteam suite instead",
+    "send_response": "network server trio; timing-dependent, containment "
+                     "covered by the redteam suite instead",
+    "repressi_start": "wall-clock thread ticker; manual rings (deterministic) "
+                      "are covered via repressi_next/repressi_state",
+}
 
 def collect_op(root):
     out = []
@@ -48,6 +70,20 @@ def collect_op(root):
 
 # loop-10 (F-7/F-8): granted-with-cell differential targets, the opt-in
 # Rho/queue proofs run under an explicit operator cell on BOTH cores.
+# S3 (2026-10-02): the differential corpus selection as a reusable function,
+# so audit_builtins.py scans EXACTLY the programs the harness runs — imported,
+# never forked (the F1 false-DIVERGE lesson). Order matters: collect_op sorts
+# per directory and the directories append in CORPUS_DIRS order; keep it.
+CORPUS_DIRS = ("tests", "examples", "apps")
+
+def corpus(root):
+    targets = []
+    for d in CORPUS_DIRS:
+        full = os.path.join(root, d)
+        if os.path.isdir(full):
+            targets += collect_op(full)
+    return targets
+
 GRANTED_CELL_TARGETS = [
     ("tests/granted/rho_termination.op", "tests/granted/rho_termination.cell"),
     ("tests/granted/rho_readthrough.op", "tests/granted/rho_readthrough.cell"),
@@ -69,11 +105,7 @@ def main():
     binpath = os.path.abspath(args.bin)
     oracle = os.path.join(root, "bootstrap", "oracle.py")
 
-    targets = []
-    for d in ("tests", "examples", "apps"):
-        full = os.path.join(root, d)
-        if os.path.isdir(full):
-            targets += collect_op(full)
+    targets = corpus(root)
 
     passed, failed, skipped = 0, 0, 0
     print(f"differential harness, {len(targets)} program(s) × 2 implementations\n")
