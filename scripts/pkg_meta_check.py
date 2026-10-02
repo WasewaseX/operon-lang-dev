@@ -355,6 +355,17 @@ def check_release_manifest():
           "sha256sums job is skipped on dry-run (nothing is uploaded to manifest)")
     check(text.count("| tr '/' '-')") >= 2,
           "dispatch-ref slash sanitization present (unix pkg + manifest job)")
+    # live-rehearsal catch (run 36992837397): the smoke expected the branch
+    # ref as the binary version — no dispatch-built binary can ever carry a
+    # branch name. The expectation must be tag-derived on tags, Cargo.toml-
+    # derived everywhere else.
+    smoke = text.split("Release smoke (W060)", 1)[1].split("- name:", 1)[0]
+    check('refs/tags/*' in smoke and 'GITHUB_REF_NAME#v' in smoke,
+          "smoke expectation is tag-derived on a tag push (release-version contract)")
+    check("Cargo.toml" in smoke and "refs/tags/*" in smoke,
+          "smoke expectation falls back to Cargo.toml on non-tag refs (dry-run rehearsal)")
+    check("[ -n \"$V\" ]" in smoke,
+          "smoke refuses to run without a derivable expected version")
 
 
 def main():

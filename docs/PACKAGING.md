@@ -86,6 +86,15 @@ to any release and skips the manifest job. Dispatch refs are sanitised
 (`/` → `-` in the version slot; tags unaffected). One rehearsal per pipeline
 change is the honest cadence; the runs are free of repo side effects.
 
+The smoke's *expected version* is ref-aware, per the first live rehearsal's
+catch (run 36992837397): on a tag push the expectation is the tag minus `v`
+(the release-version contract); on any non-tag ref the expectation falls
+back to the built tree's `Cargo.toml` version — a branch name is not a
+version a dispatch-built binary could ever carry, and the first rehearsal
+failed all four smoked targets on exactly that mismatch before the fix.
+The wiring is pinned by `scripts/pkg_meta_check.py`; a rehearsal that
+cannot derive an expectation refuses to run.
+
 ## Installer gate (S5)
 
 `scripts/install.sh` had zero gate coverage — its fail-closed verification
