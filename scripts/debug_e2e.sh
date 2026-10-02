@@ -67,4 +67,42 @@ echo "$OUT9" | grep -q "deleted line 9" || { echo "FAIL: b del 9 not confirmed";
 echo "$OUT9" | grep -q "deleted line 7" || { echo "FAIL: b del 7 not confirmed"; exit 1; }
 echo "$OUT9" | grep -q "(no breakpoints)" || { echo "FAIL: b list not empty after del all"; exit 1; }
 
+# --- W008 polish: conditional breakpoints fire only when truthy
+OUT10=$(printf 'b 3 if n > 5\nc\nc\n' | "$OP" debug "$SB/dbg.op" --break 7 2>/dev/null)
+echo "$OUT10" | grep -q "breakpoint at line 3 if n > 5" || { echo "FAIL: conditional bp not added"; exit 1; }
+echo "$OUT10" | grep -q "(dbg) line 3" || { echo "FAIL: conditional bp (true cond) did not fire"; exit 1; }
+OUT11=$(printf 'b 3 if n > 50\nc\n' | "$OP" debug "$SB/dbg.op" --break 7 2>/dev/null)
+if echo "$OUT11" | grep -q "(dbg) line 3"; then echo "FAIL: conditional bp (false cond) fired"; exit 1; fi
+echo "$OUT11" | grep -q "21" || { echo "FAIL: conditional-false session did not finish"; exit 1; }
+# a condition that cannot evaluate counts as NOT firing (never a surprise stop)
+OUT12=$(printf 'b 3 if definitely_not_a_binding > 1\nc\n' | "$OP" debug "$SB/dbg.op" --break 7 2>/dev/null)
+if echo "$OUT12" | grep -q "(dbg) line 3"; then echo "FAIL: broken condition fired"; exit 1; fi
+echo "$OUT12" | grep -q "21" || { echo "FAIL: broken-condition session did not finish"; exit 1; }
+# b list renders the condition
+OUT13=$(printf 'b 3 if n > 5\nb list\nq\n' | "$OP" debug "$SB/dbg.op" --break 7 2>/dev/null || true)
+echo "$OUT13" | grep -q "line 3 if n > 5" || { echo "FAIL: b list lost the condition"; exit 1; }
+
+# --- W008 polish: set rebinds a live variable (same reach as assignment)
+OUT14=$(printf 'set x 99\np x\nc\n' | "$OP" debug "$SB/dbg.op" --break 2 2>/dev/null)
+echo "$OUT14" | grep -q "x = 99" || { echo "FAIL: set did not report the new value"; exit 1; }
+echo "$OUT14" | grep -q "99" || { echo "FAIL: p after set does not show the new value"; exit 1; }
+echo "$OUT14" | grep -q "line 2 > 100" || { echo "FAIL: the program did not run with the set value (y = 99+1 should print 100)"; exit 1; }
+# set on a const is refused (frozen is frozen); set of an unknown name is refused
+cat > "$SB/dbgc.op" <<'DBGEOF2'
+main {
+    const k = 5
+    let v = k + 1
+    print(v)
+}
+DBGEOF2
+# the refusal messages are errors: they live on stderr
+OUT15=$(printf 'set k 9\nset nosuch 1\nq\n' | "$OP" debug "$SB/dbgc.op" --break 3 2>&1 || true)
+echo "$OUT15" | grep -q "frozen" || { echo "FAIL: set on const not refused"; exit 1; }
+echo "$OUT15" | grep -q "no such binding" || { echo "FAIL: set of unknown name not refused"; exit 1; }
+
+# --- W008 polish: bt shows call-site lines
+OUT16=$(printf 'bt\nc\n' | "$OP" debug "$SB/dbg.op" --break 2 2>/dev/null)
+echo "$OUT16" | grep -q "at work line 2" || { echo "FAIL: bt missing the inner frame stop line"; exit 1; }
+echo "$OUT16" | grep -q "at main line 8" || { echo "FAIL: bt missing the outer frame call-site line"; exit 1; }
+
 echo "DEBUG E2E OK"

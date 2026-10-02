@@ -919,7 +919,10 @@ fn real_main() {
             if debug_mode {
                 l.interp.debug_file = file.clone();
                 for b in &debug_breaks {
-                    l.interp.debug_breaks.insert(*b);
+                    // CLI --break stays numeric-only: conditions arrive
+                    // through the live surfaces (REPL `b N if COND`, NDJSON
+                    // breakpoints, DAP setBreakpoints)
+                    l.interp.debug_breaks.insert(*b, None);
                 }
                 if debug_protocol_mode {
                     // W08r stage 2: stdout is the protocol transport — the
