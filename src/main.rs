@@ -45,6 +45,8 @@ fn reset_sigpipe_to_default() {}
 
 fn main() {
     reset_sigpipe_to_default();
+    operon::w009a::init_from_env();
+    let _w009a_guard = operon::w009a::Guard;
     // The evaluator recurses through exec_block → eval → call_gene; deep
     // Operon recursion needs a real stack. The toolchain therefore runs on a
     // dedicated worker with a 512 MiB stack, and the interpreter's own depth
