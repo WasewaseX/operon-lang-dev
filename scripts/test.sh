@@ -89,6 +89,14 @@ python3 scripts/pkg_meta_check.py
 # add → verify → run over the full hosted tier. Needs curl + git + the
 # binary this gate already built.
 bash scripts/pkg_hosted_e2e.sh
+# S6 (2026-10-02): the docs/ HTML site joins the standing gate — version
+# strings locked to Cargo.toml, the grammar page's keyword set checked against
+# the GENERATED docs/KEYWORDS.md truth, every registry builtin documented,
+# and a stale-claim denylist (the fossils this task removed: ./build/operon,
+# SPEC v2.1 banners, the 200M fuel default, "OS thread tasks" spawn wording,
+# hand-typed suite counts). Static, seconds; markup cannot hide a claim
+# (tags are stripped before matching).
+python3 scripts/check_doc_versions.py
 echo "[4/4] Oracle proof suite (the same frames on the second implementation)"
 python3 bootstrap/oracle.py test tests/
 echo "ALL GREEN"
