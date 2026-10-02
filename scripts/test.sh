@@ -78,6 +78,17 @@ bash scripts/typeck_e2e.sh
 # (per-asset smoke on the exact uploaded bytes, failed smoke = failed
 # release); this stanza keeps the script itself honest between releases.
 bash scripts/release_smoke.sh bin
+# W061-A: the distribution/ecosystem gate — the cargo-binstall template
+# contract (asset naming vs release.yml), the hosted registry's WSGI surface
+# (the gunicorn path Render runs; pkg_hosted_e2e covers the stdlib-server
+# path below), the search latest-per-name law, and the render.yaml wiring.
+# The W61 version-literal companion lives in check_docs_sync.py.
+python3 scripts/pkg_meta_check.py
+# W19-r2: the HOSTED registry e2e sat outside every gate since it landed
+# (the debug_e2e rot class) — real service + real CLI, publish → search →
+# add → verify → run over the full hosted tier. Needs curl + git + the
+# binary this gate already built.
+bash scripts/pkg_hosted_e2e.sh
 echo "[4/4] Oracle proof suite (the same frames on the second implementation)"
 python3 bootstrap/oracle.py test tests/
 echo "ALL GREEN"
