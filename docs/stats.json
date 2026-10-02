@@ -105,7 +105,7 @@
   "textDocument/semanticTokens",
   "textDocument/signatureHelp"
  ],
- "proof_files": 161,
+ "proof_files": 162,
  "proof_totals": {
   "asserts": null,
   "files": null,
@@ -245,6 +245,6 @@
    "module": "url"
   }
  ],
- "test_op_files": 3544,
+ "test_op_files": 3545,
  "version": "2.7.0"
 }
