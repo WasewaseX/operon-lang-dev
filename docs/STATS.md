@@ -6,10 +6,10 @@ README/SPEC/BENCH are forbidden, link here instead.
 
 - **Version**: 2.7.0  · SPEC Status: v2.7.0
 - **Keywords (parser reserved set)**: 60, table in [KEYWORDS.md](KEYWORDS.md)
-- **Std modules**: 31 (args, bigint, binary, bio, collections, csv, deque, env, fmt, fs, graph, hashing, heap, iter, json, logging, math, motifs, path, process, random, seq, serialize, set, strings, terminal, testing, time, typed, unicode, url)
-- **Std functions (.op-level `gene` defs)**: 328
+- **Std modules**: 33 (args, bigint, binary, bio, collections, csv, deque, env, fmt, fs, graph, hashing, heap, iter, json, logging, math, motifs, path, process, random, result, seq, serialize, set, strings, terminal, testing, time, try_numeric, typed, unicode, url)
+- **Std functions (.op-level `gene` defs)**: 339
 - **Red-team payload files**: 106
-- **Proof files**: 163 (of 3551 test .op files)
+- **Proof files**: 165 (of 3555 test .op files)
 - **Proof run / harness recount**: skipped (GEN_DOC_STATS_FAST=1), run by scripts/test.sh on every gate
 - **CLI subcommands**: ast, bench, build, check, crispr, dap, disasm, doc, explain, fix, fmt, graph, ir, keywords, lint, profile, repl, rna, test, version, watch
 - **LSP methods**: initialize, shutdown, textDocument/completion, textDocument/definition, textDocument/didChange, textDocument/didClose, textDocument/didOpen, textDocument/documentSymbol, textDocument/formatting, textDocument/hover, textDocument/prepareRename, textDocument/publishDiagnostics, textDocument/references, textDocument/rename, textDocument/semanticTokens, textDocument/signatureHelp
@@ -39,6 +39,7 @@ README/SPEC/BENCH are forbidden, link here instead.
 | std/path | 9 |
 | std/process | 8 |
 | std/random | 6 |
+| std/result | 8 |
 | std/seq | 0 |
 | std/serialize | 10 |
 | std/set | 11 |
@@ -46,6 +47,7 @@ README/SPEC/BENCH are forbidden, link here instead.
 | std/terminal | 16 |
 | std/testing | 6 |
 | std/time | 13 |
+| std/try_numeric | 3 |
 | std/typed | 0 |
 | std/unicode | 8 |
 | std/url | 10 |

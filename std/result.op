@@ -1,0 +1,122 @@
+# std/result — W006-A combinators over the first-class Result values.
+#
+# The core owns the Result vocabulary (SPEC §9): ok/err constructors,
+# is_ok/is_err predicates, unwrap/unwrap_or extractors, and the try_* family
+# (waves 1-2, v2.6.0/v2.7.0). This module adds the COMBINATOR tier in pure
+# Operon over those primitives — no core-runtime change is involved, so it
+# rides the existing ok/err contracts and the W002 match-payload patterns
+# as-is (payload extraction goes through `match`, the sanctioned accessor:
+# unwrap(Err) stresses by contract and unwrap_or(Err, d) returns the
+# DEFAULT, so neither can read an arbitrary payload).
+#
+# Contract notes:
+# - A handler gene (the f in map/map_err/and_then/or_else/unwrap_or_else)
+#   receives the inner value (or inner error payload) and its return is used
+#   as-is: map/map_err wrap it back into ok/err; and_then/or_else return it
+#   unchanged (they are Result-shaped by contract, not policed at runtime —
+#   the static checker is the type lane's business, and Result annotation
+#   sugar is recorded as an open degrade in docs/specs/RESULT-WAVE3.md).
+# - Err payloads are engine-neutral by construction here: the combinators
+#   never synthesize error text, they only move existing values.
+# - Gene names in this module deliberately never shadow a builtin (the W003
+#   'get' lesson: a module gene named like a builtin shadows it for the
+#   whole module body). One STDLIB-INTERNAL overlap is known and deliberate:
+#   `map` here is the Result combinator, while std/typed.op's `map` is the
+#   typed-collection wrapper — when both modules are in play, qualify the
+#   call site (`r.map(res, f)` / `t.map(xs, f)`); the tests import with `as`.
+
+gene map(r, f) {
+    # ok(v) -> ok(f(v)); err(e) -> err(e) untouched
+    match r {
+        case Ok(v) {
+            return ok(f(v))
+        }
+        case Err(e) {
+            return err(e)
+        }
+    }
+}
+
+gene map_err(r, f) {
+    # err(e) -> err(f(e)); ok(v) -> ok(v) untouched
+    match r {
+        case Ok(v) {
+            return ok(v)
+        }
+        case Err(e) {
+            return err(f(e))
+        }
+    }
+}
+
+gene and_then(r, f) {
+    # ok(v) -> f(v) (Result-shaped by contract); err(e) -> err(e)
+    match r {
+        case Ok(v) {
+            return f(v)
+        }
+        case Err(e) {
+            return err(e)
+        }
+    }
+}
+
+gene or_else(r, f) {
+    # err(e) -> f(e) (Result-shaped by contract); ok(v) -> ok(v)
+    match r {
+        case Ok(v) {
+            return ok(v)
+        }
+        case Err(e) {
+            return f(e)
+        }
+    }
+}
+
+gene unwrap_or_else(r, f) {
+    # ok(v) -> v; err(e) -> f(e)
+    match r {
+        case Ok(v) {
+            return v
+        }
+        case Err(e) {
+            return f(e)
+        }
+    }
+}
+
+gene is_ok_and(r, pred) {
+    # true iff r is ok AND pred(v) holds; err is false, never a Stress
+    match r {
+        case Ok(v) {
+            return pred(v)
+        }
+        case Err(e) {
+            return false
+        }
+    }
+}
+
+gene is_err_and(r, pred) {
+    # true iff r is err AND pred(e) holds; ok is false, never a Stress
+    match r {
+        case Ok(v) {
+            return false
+        }
+        case Err(e) {
+            return pred(e)
+        }
+    }
+}
+
+gene ok_to_some(r) {
+    # Option interop: ok(v) -> some(v); err(e) -> none
+    match r {
+        case Ok(v) {
+            return some(v)
+        }
+        case Err(e) {
+            return none()
+        }
+    }
+}
