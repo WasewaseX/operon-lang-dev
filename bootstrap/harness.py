@@ -54,6 +54,9 @@ GRANTED_CELL_TARGETS = [
     ("tests/granted/rho_prob.op", "tests/granted/rho_prob.cell"),
     ("tests/granted/rho_queue_shield.op", "tests/granted/rho_queue_shield.cell"),
     ("tests/granted/rho_worker.op", "tests/granted/rho_worker.cell"),
+    # W006-B: wave-3 IO try_ family — the granted ok/missing payload pins
+    # run 3-lane (rust VM, tree-walk, oracle) under the same operator cell
+    ("tests/granted/try_io_wave3.op", "tests/granted/try_io_wave3.cell"),
     # W24: strict visibility, the fixture module exports ONLY pub-marked
     # names; both engines must agree on what is exported and how private
     # reads contain (soft tier).
