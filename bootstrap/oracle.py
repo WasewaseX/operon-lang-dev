@@ -472,6 +472,21 @@ def v_repr(v, _seen=None, _depth=0):
         return "<weak>"
     return "<?>" 
 
+def io_err(e):
+    """Mirror the rust io::Error Display: '<strerror> (os error <N>)'.
+
+    python's OSError str is '[Errno N] strerror: filename' — different
+    bytes from the rust surface. The S3 granted lane (file_bytes_gaps)
+    prints these messages, and the legacy file family's missing text was
+    never corpus-covered before, so the drift was invisible (the try_
+    twins mask it behind fixed payloads; the legacy arms embed the raw
+    io::Error). The path itself is NOT part of io::Error Display — the
+    rust arms format it separately before {e}."""
+    strerror = e.strerror if e.strerror is not None else str(e)
+    errno = e.errno if e.errno is not None else 0
+    return f"{strerror} (os error {errno})"
+
+
 def v_display(v):
     if isinstance(v, str):
         return v
@@ -3359,7 +3374,7 @@ class Interp:
         self.burst_overrides = {}
         self.grn_binds = []
         self.seq_buffer = None
-        self.caps = {"enabled": True, "read": [], "write": [], "run": [], "net": [], "env": [], "py": []}
+        self.caps = {"enabled": True, "read": [], "write": [], "run": [], "net": [], "env": [], "py": [], "exit": False}
         self.cell_entry = None
         self.proof_mode = False
 
@@ -6078,6 +6093,15 @@ class Interp:
             import time
             return time.monotonic()
         if name == "exit":
+            # sec-r2 (audit C-11) mirror: process exit is a capability,
+            # default-deny. S3 found the old unconditional sys.exit()
+            # diverging from the rust refusal surface (rust: catchable
+            # interference + the runner survives; oracle: process died).
+            # allow-all (enabled False) implies exit, as Caps::allow_all does.
+            c = self.caps
+            if c["enabled"] and not c.get("exit"):
+                self.note(4, "exit denied: capability 'exit' not granted (grant with --allow-exit or .cell allow.exit = true)")
+                raise Stress("interference", "exit denied, capability 'exit' not granted (grant with --allow-exit or .cell allow.exit = true)")
             sys.exit(int(args[0]) if args else 0)
         if name == "assert":
             ok = truthy(args[0]) if args else False
@@ -7481,7 +7505,7 @@ class Interp:
                 with open(path, "r", encoding="utf-8", errors="strict") as f:
                     return f.read()
             except OSError as e:
-                raise Stress("missing", f"read_file '{path}': {e}")
+                raise Stress("missing", f"read_file '{path}': {io_err(e)}")
         if name == "write_file":
             path = v_display(args[0]) if args else ""
             body = v_display(args[1]) if len(args) > 1 else ""
@@ -7491,7 +7515,7 @@ class Interp:
                     f.write(body)
                 return True
             except OSError as e:
-                raise Stress("missing", f"write_file '{path}': {e}")
+                raise Stress("missing", f"write_file '{path}': {io_err(e)}")
         if name == "append_file":
             path = v_display(args[0]) if args else ""
             body = v_display(args[1]) if len(args) > 1 else ""
@@ -7501,7 +7525,7 @@ class Interp:
                     f.write(body)
                 return True
             except OSError as e:
-                raise Stress("missing", f"append_file '{path}': {e}")
+                raise Stress("missing", f"append_file '{path}': {io_err(e)}")
         # ---- W029: bytes file I/O (same capability gates as the text forms)
         if name == "read_file_bytes":
             path = v_display(args[0]) if args else ""
@@ -7510,7 +7534,7 @@ class Interp:
                 with open(path, "rb") as f:
                     return f.read()
             except OSError as e:
-                raise Stress("missing", f"read_file_bytes '{path}': {e}")
+                raise Stress("missing", f"read_file_bytes '{path}': {io_err(e)}")
         if name == "write_file_bytes":
             path = v_display(args[0]) if args else ""
             body = args[1] if len(args) > 1 else b""
@@ -7524,7 +7548,7 @@ class Interp:
                     f.write(body)
                 return True
             except OSError as e:
-                raise Stress("missing", f"write_file_bytes '{path}': {e}")
+                raise Stress("missing", f"write_file_bytes '{path}': {io_err(e)}")
         if name == "exists":
             path = v_display(args[0]) if args else ""
             self.cap_check("read", "read", path)
@@ -7542,7 +7566,7 @@ class Interp:
             try:
                 return sorted(os.listdir(path))
             except OSError as e:
-                raise Stress("missing", f"read_dir '{path}': {e}")
+                raise Stress("missing", f"read_dir '{path}': {io_err(e)}")
         # ---- dx-r6: fs mutate ops (mirror of the Rust capability discipline)
         if name == "fs_delete":
             path = v_display(args[0]) if args else ""
@@ -7556,7 +7580,7 @@ class Interp:
                     os.remove(path)
                 return True
             except OSError as e:
-                raise Stress("missing", f"fs_delete '{path}': {e}")
+                raise Stress("missing", f"fs_delete '{path}': {io_err(e)}")
         if name == "fs_rename":
             src = v_display(args[0]) if args else ""
             dst = v_display(args[1]) if len(args) > 1 else ""
@@ -7566,7 +7590,7 @@ class Interp:
                 os.rename(src, dst)
                 return True
             except OSError as e:
-                raise Stress("missing", f"fs_rename '{src}' -> '{dst}': {e}")
+                raise Stress("missing", f"fs_rename '{src}' -> '{dst}': {io_err(e)}")
         if name == "fs_mkdir":
             path = v_display(args[0]) if args else ""
             self.cap_check("write", "write", path)
@@ -7574,7 +7598,7 @@ class Interp:
                 os.makedirs(path, exist_ok=True)
                 return True
             except OSError as e:
-                raise Stress("missing", f"fs_mkdir '{path}': {e}")
+                raise Stress("missing", f"fs_mkdir '{path}': {io_err(e)}")
         # ---- process / net (capability-gated)
         if name == "run":
             prog = v_display(args[0]) if args else ""
@@ -7585,7 +7609,7 @@ class Interp:
                 cp = _sp.run([prog] + pargs, capture_output=True, text=True)
                 return {"code": cp.returncode, "stdout": cp.stdout, "stderr": cp.stderr, "ok": cp.returncode == 0}
             except OSError as e:
-                raise Stress("missing", f"run '{prog}': {e}")
+                raise Stress("missing", f"run '{prog}': {io_err(e)}")
         if name == "http_get":
             host = v_display(args[0]) if args else ""
             port = int(args[1]) if len(args) > 1 and isinstance(args[1], int) else 80
@@ -7605,15 +7629,32 @@ class Interp:
                 pos = buf.find(b"\r\n\r\n")
                 return buf[pos + 4:].decode("utf-8", "replace") if pos >= 0 else buf.decode("utf-8", "replace")
             except OSError as e:
-                raise Stress("missing", f"http_get '{host}:{port}': {e}")
+                raise Stress("missing", f"http_get '{host}:{port}': {io_err(e)}")
         if name in ("serve", "recv_request", "send_response"):
-            # the sequential oracle does not host a server; these are only
-            # reachable in the Rust core (differential corpus avoids them)
+            # the sequential oracle does not host a server. serve stays the
+            # honest stub (a real bind is Rust-runner-only surface, the same
+            # class as repressi_start's wall-clock thread). recv_request's
+            # empty-queue null IS the faithful rust surface. send_response is
+            # mirrored FAITHFULLY (S3: the coverage audit caught the old
+            # null-stub diverging on both reachable surfaces).
             if name == "serve":
                 port = int(args[0]) if args and isinstance(args[0], int) else 8080
                 self.cap_check("net", "net", f"127.0.0.1:{port}")
-            self.note(4, f"{name} is not available in the sequential oracle; null")
-            return None
+                self.note(4, f"{name} is not available in the sequential oracle; null")
+                return None
+            if name == "recv_request":
+                self.note(4, f"{name} is not available in the sequential oracle; null")
+                return None
+            # send_response mirror (rust interp.rs arm): header-safety check
+            # FIRST, then the conn dispatch — with no server, the only
+            # reachable outcome is 'server not running'.
+            conn = args[0] if args and isinstance(args[0], int) else 0
+            status = v_display(args[1]) if len(args) > 1 else "200"
+            ctype = v_display(args[2]) if len(args) > 2 else "text/html"
+            body = v_display(args[3]) if len(args) > 3 else ""
+            if any(ord(c) < 0x20 or c == "\x7f" for c in status + ctype):
+                raise Stress("interference", "send_response: status/content-type contain control characters (header injection refused)")
+            raise Stress("missing", "send_response: server not running")
         # ---- json
         if name == "json_parse":
             s = v_display(args[0]) if args else "null"
@@ -8286,6 +8327,15 @@ def load_file(path, cell=None, variant=None, rna=None, args=None, caps=None):
     for k, v in list(it.cell.items()):
         if k.startswith("allow."):
             rest = k[len("allow."):]
+            if rest == "exit":
+                # sec-r2 (audit C-11): exit is a BOOLEAN capability
+                # (rust tools.rs: exit_allowed = (v == "true")), not a
+                # comma-separated grant list like the other six.
+                if not cell_explicit:
+                    it.note(1, f"cell key '{k}={v}' ignored: auto-detected operon.cell cannot grant capabilities (pass --cell explicitly)")
+                    continue
+                it.caps["exit"] = v == "true"
+                continue
             if rest in ("read", "write", "run", "net", "env", "py"):
                 if not cell_explicit:
                     it.note(1, f"cell key '{k}={v}' ignored: auto-detected operon.cell cannot grant capabilities (pass --cell explicitly)")
@@ -8455,10 +8505,15 @@ def main():
         elif a in ("--allow-read", "--allow-write", "--allow-run", "--allow-net", "--allow-env", "--allow-py"):
             i += 1
             cap = a.replace("--allow-", "")
-            it_caps = opts.setdefault("caps", {"enabled": True, "read": [], "write": [], "run": [], "net": [], "env": [], "py": []})
+            it_caps = opts.setdefault("caps", {"enabled": True, "read": [], "write": [], "run": [], "net": [], "env": [], "py": [], "exit": False})
             it_caps[cap].append(rest[i])
+        elif a == "--allow-exit":
+            # sec-r2 (audit C-11): exit() is a capability, default-deny
+            # (S3: the coverage audit caught the missing flag mirror)
+            it_caps = opts.setdefault("caps", {"enabled": True, "read": [], "write": [], "run": [], "net": [], "env": [], "py": [], "exit": False})
+            it_caps["exit"] = True
         elif a == "--allow-all":
-            opts["caps"] = {"enabled": False, "read": [], "write": [], "run": [], "net": [], "env": [], "py": []}
+            opts["caps"] = {"enabled": False, "read": [], "write": [], "run": [], "net": [], "env": [], "py": [], "exit": False}
         else:
             pos.append(a)
         i += 1
