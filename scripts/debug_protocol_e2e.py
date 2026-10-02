@@ -7,6 +7,9 @@ drives `operon debug --protocol=json` end to end. Contract under test:
   - continue/next/stepIn/stepOut/until/breakpoints/quit all respond and resume
   - program print output lands on stderr (stdout stays pure protocol)
   - EOF on stdin resumes to completion (piped sessions never wedge)
+  W008 polish: conditional breakpoints (false/broken conditions never
+  stop), the set request (live rebind), and stack frames carrying real
+  call-site lines for outer frames.
 """
 import json
 import subprocess
@@ -113,7 +116,16 @@ def main():
     stop = s2.wait_stopped()
     assert stop["line"] == 7, stop
     r = s2.request(nid(), "breakpoints", {"add": [3], "remove": []})
-    assert r["ok"] and r["breakpoints"] == [3, 7], r
+    assert r["ok"], r
+    # W008 polish: the reply is a list of objects with the (optional)
+    # condition echoed back
+    assert [b["line"] for b in r["breakpoints"]] == [3, 7], r
+    assert all(b["condition"] is None for b in r["breakpoints"]), r
+    # W008 polish: a CONDITIONAL breakpoint — false condition never fires
+    r = s2.request(nid(), "breakpoints",
+                   {"add": [{"line": 4, "condition": "y > 100"}], "remove": []})
+    assert r["ok"], r
+    assert {"line": 4, "condition": "y > 100"} in r["breakpoints"], r
     r = s2.request(nid(), "continue")
     stop = s2.wait_stopped()
     # break at 3 fires inside work (stepped INTO via the call at line 8)
@@ -121,8 +133,18 @@ def main():
     r = s2.request(nid(), "stack")
     assert r["frames"][0]["name"] == "work", r
     assert r["frames"][1]["name"] == "main", r
+    # W008 polish: the outer frame reports its real call-site line (8),
+    # not null — main is parked at the statement that called work
+    assert r["frames"][1]["line"] == 8, r
     r = s2.request(nid(), "eval", {"expr": "x"})
     assert r["ok"] and r["value"] == "20", r
+    # W008 polish: the set request rebinds live frame state
+    r = s2.request(nid(), "set", {"name": "x", "expr": "777"})
+    assert r["ok"] and r["value"] == "777", r
+    r = s2.request(nid(), "eval", {"expr": "x"})
+    assert r["ok"] and r["value"] == "777", r
+    r = s2.request(nid(), "set", {"name": "nosuch", "expr": "1"})
+    assert not r["ok"] and "no such binding" in r["error"], r
     # --- until: one-shot run to line 9 in main
     r = s2.request(nid(), "until", {"line": 9})
     assert r["ok"], r
@@ -135,6 +157,30 @@ def main():
     r = s2.request(nid(), "quit")
     assert r["ok"], r
     s2.close()
+
+    # --- W008 polish: a conditional breakpoint whose condition is false
+    # never stops (run: bp at 4 with y > 100 is never true inside work)
+    s5 = Session(path, [8])
+    stop = s5.wait_stopped()
+    assert stop["line"] == 8, stop
+    r = s5.request(nid(), "breakpoints",
+                   {"add": [{"line": 4, "condition": "y > 100"}], "remove": [8]})
+    assert r["ok"] and [b["line"] for b in r["breakpoints"]] == [4], r
+    r = s5.request(nid(), "continue")
+    assert r["ok"], r
+    s5.close()
+    assert s5.p.returncode == 0, s5.p.returncode
+    # a BROKEN condition also never stops (no surprise stops from bad conds)
+    s6 = Session(path, [8])
+    stop = s6.wait_stopped()
+    assert stop["line"] == 8, stop
+    r = s6.request(nid(), "breakpoints",
+                   {"add": [{"line": 4, "condition": "not_a_binding > 1"}], "remove": [8]})
+    assert r["ok"], r
+    r = s6.request(nid(), "continue")
+    assert r["ok"], r
+    s6.close()
+    assert s6.p.returncode == 0, s6.p.returncode
 
     # --- print output rerouting: stdout pure, stderr carries [out]
     prog2 = "main {\n    let v = 5 + 5\n    print(v)\n    print(v + 1)\n}\n"

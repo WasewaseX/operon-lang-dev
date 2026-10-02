@@ -109,6 +109,10 @@ def main():
     r = c.request("initialize", {"adapterID": "operon"})
     assert r["success"], r
     assert "capabilities" in r["body"], r
+    # W008 polish: the adapter advertises conditional breakpoints + setVariable
+    caps = r["body"]["capabilities"]
+    assert caps.get("supportsConditionalBreakpoints") is True, caps
+    assert caps.get("supportsSetVariable") is True, caps
     ev = c.wait_event("initialized")
     assert ev["event"] == "initialized", ev
 
@@ -132,6 +136,9 @@ def main():
     frames = r["body"]["stackFrames"]
     assert frames[0]["name"] == "work" and frames[0]["line"] == 3, frames
     assert frames[1]["name"] == "main", frames
+    # W008 polish: the outer frame's line is the REAL call site (8), not
+    # the placeholder 1
+    assert frames[1]["line"] == 8, frames
     # --- scopes + variables surface the innermost frame state
     r = c.request("scopes", {"frameId": 0})
     scopes = r["body"]["scopes"]
@@ -188,7 +195,76 @@ def main():
     c.p.wait(timeout=10)
     assert c.p.returncode == 0, c.p.returncode
 
-    print("DAP E2E OK")
+    # --- W008 polish session: stopOnEntry + conditional breakpoints + setVariable
+    c2 = DapClient(path)
+    r = c2.request("initialize", {"adapterID": "operon"})
+    assert r["success"], r
+    c2.request("launch", {"program": path, "stopOnEntry": True})
+    c2.request("configurationDone")
+    ev = c2.wait_event("stopped")
+    assert ev["body"]["reason"] == "entry", ev
+    r = c2.request("stackTrace", {"threadId": 1})
+    f0 = r["body"]["stackFrames"][0]
+    assert f0["name"] == "main" and f0["line"] == 7, (f0, "entry stop should land on main's first statement")
+    # setVariable on the entry frame's binding
+    r = c2.request("scopes", {"frameId": 0})
+    ref = r["body"]["scopes"][0]["variablesReference"]
+    r = c2.request("variables", {"variablesReference": ref})
+    assert any(v["name"] == "z" for v in r["body"]["variables"]), r
+    r = c2.request("setVariable", {"variablesReference": ref, "name": "z", "value": "777"})
+    assert r["success"] and r["body"]["value"] == "777", r
+    r = c2.request("variables", {"variablesReference": ref})
+    vals = {v["name"]: v["value"] for v in r["body"]["variables"]}
+    assert vals.get("z") == "777", vals
+    r = c2.request("evaluate", {"expression": "z", "frameId": 0})
+    assert r["success"] and r["body"]["result"] == "777", r
+    # setVariable refuses consts and unknown names
+    r = c2.request("scopes", {"frameId": 0})
+    ref = r["body"]["scopes"][0]["variablesReference"]
+    # let z is not const; use a non-existent name for the refusal
+    r = c2.request("setVariable", {"variablesReference": ref, "name": "not_there", "value": "1"})
+    assert not r["success"] and "no such binding" in r["body"].get("error", ""), r
+    # continue to completion
+    c2.request("continue")
+    m = c2.read_msg()
+    while not (m.get("type") == "event" and m.get("event") == "exited"):
+        m = c2.read_msg()
+    m = c2.read_msg()
+    assert m.get("event") == "terminated", m
+    c2.p.wait(timeout=10)
+
+    # --- W008 polish: conditional breakpoints over DAP — the false
+    # condition at 3 never stops; the session runs to the bp at 8
+    c3 = DapClient(path)
+    c3.request("initialize", {"adapterID": "operon"})
+    c3.request("launch", {"program": path})
+    r = c3.request("setBreakpoints", {
+        "source": {"path": path},
+        "breakpoints": [{"line": 3, "condition": "n > 100"}, {"line": 8}],
+    })
+    assert r["success"], r
+    rows = r["body"]["breakpoints"]
+    assert any(b.get("condition") == "n > 100" for b in rows), rows
+    c3.request("configurationDone")
+    ev = c3.wait_event("stopped")
+    assert ev["body"]["reason"] == "breakpoint", ev
+    r = c3.request("stackTrace", {"threadId": 1})
+    f0 = r["body"]["stackFrames"][0]
+    assert f0["name"] == "main" and f0["line"] == 8, (f0, "conditional bp (false) must be skipped")
+    # a broken condition is also skipped (never a surprise stop)
+    c3.request("setBreakpoints", {
+        "source": {"path": path},
+        "breakpoints": [{"line": 3, "condition": "not_a_binding > 1"}],
+    })
+    c3.request("continue")
+    # no bp at 3 fires; program completes
+    m = c3.read_msg()
+    while not (m.get("type") == "event" and m.get("event") == "exited"):
+        m = c3.read_msg()
+    assert m["body"]["exitCode"] == 0, m
+    c3.p.wait(timeout=10)
+
+    print("DAP E2E OK (W008 polish: entry/conditional/setVariable/outer-lines)")
 
 
 if __name__ == "__main__":
