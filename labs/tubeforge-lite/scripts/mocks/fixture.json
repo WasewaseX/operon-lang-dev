@@ -1,0 +1,26 @@
+{
+  "_type": "video",
+  "id": "mock001",
+  "title": "Mock Video",
+  "uploader": "Mock Channel",
+  "duration": 42,
+  "view_count": 12345,
+  "upload_date": "20260101",
+  "thumbnail": "https://example.com/mock.jpg",
+  "webpage_url": "https://example.com/watch?v=mock001",
+  "extractor_key": "Mock",
+  "formats": [
+    { "format_id": "137", "ext": "mp4", "resolution": "1080p", "height": 1080, "fps": 30, "vcodec": "avc1.640028", "acodec": "none", "filesize": 8123456, "tbr": 4000 },
+    { "format_id": "136", "ext": "mp4", "resolution": "720p", "height": 720, "fps": 30, "vcodec": "avc1.640020", "acodec": "none", "filesize": 4123456, "tbr": 2500 },
+    { "format_id": "135", "ext": "mp4", "resolution": "480p", "height": 480, "fps": 30, "vcodec": "avc1.64001f", "acodec": "none", "filesize": 2123456, "tbr": 1200 },
+    { "format_id": "22", "ext": "mp4", "resolution": "720p", "height": 720, "fps": 30, "vcodec": "avc1.64001f", "acodec": "mp4a.40.2", "filesize": 4500000, "tbr": 2000 },
+    { "format_id": "140", "ext": "m4a", "resolution": "audio only", "abr": 128, "vcodec": "none", "acodec": "mp4a.40.2", "filesize": 723456, "tbr": 128, "format_note": "medium" }
+  ],
+  "subtitles": {
+    "en": [{ "url": "https://example.com/en.vtt", "ext": "vtt" }],
+    "de": [{ "url": "https://example.com/de.vtt", "ext": "vtt" }]
+  },
+  "automatic_captions": {
+    "en": [{ "url": "https://example.com/en.auto.vtt", "ext": "vtt" }]
+  }
+}
