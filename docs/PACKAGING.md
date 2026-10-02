@@ -75,6 +75,17 @@ strict mode) — with GitHub's auto-generated notes appended
 `scripts/pkg_meta_check.py`; edit it when the verification story changes,
 not per release.
 
+## Pipeline rehearsal (#51, S5)
+
+The smoke gate's first live run must not be a real release (v2.7.0 shipped
+unsmoked — the W060 wiring had zero executions against uploaded bytes).
+`release.yml` therefore takes a `workflow_dispatch` input, `dry_run`:
+it builds and smokes every matrix target exactly like a tag push — per-asset
+smoke rows in the run log are the acceptance evidence — but attaches nothing
+to any release and skips the manifest job. Dispatch refs are sanitised
+(`/` → `-` in the version slot; tags unaffected). One rehearsal per pipeline
+change is the honest cadence; the runs are free of repo side effects.
+
 ## Installer gate (S5)
 
 `scripts/install.sh` had zero gate coverage — its fail-closed verification

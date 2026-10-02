@@ -344,6 +344,17 @@ def check_release_manifest():
     tpl = read(".github", "release-notes-template.md")
     check("SHA256SUMS" in tpl and "install.sh" in tpl,
           "release-notes template documents verification (SHA256SUMS + install.sh)")
+    # issue #51: dry-run rehearsal plumbing — the smoke wiring's first live
+    # runs should be dispatchable WITHOUT cutting a release or touching the
+    # releases page
+    check("dry_run:" in text, "workflow_dispatch dry_run input declared (issue #51)")
+    check(re.search(r"if: \$\{\{ inputs\.dry_run != true \}\}\s*\n\s*uses: softprops/action-gh-release", text) is not None,
+          "attach step is skipped on dry-run (a rehearsal attaches nothing)")
+    job2 = text.split("sha256sums:", 1)[1]
+    check("inputs.dry_run != true" in job2.split("steps:", 1)[0],
+          "sha256sums job is skipped on dry-run (nothing is uploaded to manifest)")
+    check(text.count("| tr '/' '-')") >= 2,
+          "dispatch-ref slash sanitization present (unix pkg + manifest job)")
 
 
 def main():
