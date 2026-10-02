@@ -366,6 +366,14 @@ def check_release_manifest():
           "smoke expectation falls back to Cargo.toml on non-tag refs (dry-run rehearsal)")
     check("[ -n \"$V\" ]" in smoke,
           "smoke refuses to run without a derivable expected version")
+    # second live-rehearsal catch (run 37045410736, windows leg): the
+    # sidecar producer wrote CRLF (Out-File), and sha256sum -c reads the
+    # trailing CR into the filename -> "No such file or directory". The
+    # producer must write LF; every consumer CR-normalizes before -c.
+    check("[System.IO.File]::WriteAllText" in text and 'WriteAllText("$ST.zip.sha256"' in text,
+          "windows sidecar producer writes LF (no Out-File on the .sha256)")
+    check(text.count("tr -d '\\r'") >= 2,
+          "smoke + manifest job CR-normalize sidecars before sha256sum -c")
 
 
 def main():
