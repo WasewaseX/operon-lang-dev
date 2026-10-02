@@ -16,6 +16,11 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Pipeline rehearsal (issue #51): build + smoke every target, attach NOTHING to any release — the acceptance is the per-asset smoke rows in the run log"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -51,7 +56,10 @@ jobs:
         if: matrix.pkg == 'tar'
         shell: bash
         run: |
-          V="${GITHUB_REF_NAME#v}"
+          # issue #51 dry-run class: dispatch refs can carry slashes (feature/
+          # branches) — '/' inside an asset name breaks tar and the sidecar
+          # naming. Tags are unaffected (vX.Y.Z has no slash).
+          V="$(printf '%s' "${GITHUB_REF_NAME#v}" | tr '/' '-')"
           ST="operon-${V}-${{ matrix.target }}"
           mkdir -p "$ST"
           cp "target/${{ matrix.target }}/release/operon" "$ST/"
@@ -74,7 +82,7 @@ jobs:
         if: matrix.pkg == 'zip'
         shell: pwsh
         run: |
-          $V = "${env:GITHUB_REF_NAME}" -replace '^v',''
+          $V = ("${env:GITHUB_REF_NAME}" -replace '^v','') -replace '/','-'
           $ST = "operon-$V-${{ matrix.target }}"
           New-Item -ItemType Directory -Force -Path $ST | Out-Null
           Copy-Item "target/${{ matrix.target }}/release/operon.exe" $ST/
@@ -116,6 +124,7 @@ jobs:
           echo "smoke: skipped (cross) — x86_64-apple-darwin is cross-compiled on the arm64 runner; executing it needs Rosetta, which the runner does not guarantee"
 
       - name: Attach to GitHub Release
+        if: ${{ inputs.dry_run != true }}
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2 (SHA-pinned, D-6/sec-r5)
         with:
           # S5: verification preamble (how to check the asset) + auto notes
@@ -137,6 +146,8 @@ jobs:
   # name every asset after GITHUB_REF_NAME minus the leading v.
   sha256sums:
     needs: build
+    # dry-run rehearsals attach nothing, so there is no release to manifest
+    if: ${{ inputs.dry_run != true }}
     runs-on: ubuntu-latest
     steps:
       - name: Publish whole-release SHA256SUMS
@@ -144,7 +155,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          V="${GITHUB_REF_NAME#v}"
+          V="$(printf '%s' "${GITHUB_REF_NAME#v}" | tr '/' '-')"
           # keep this list in lockstep with the build matrix above —
           # scripts/pkg_meta_check.py (S5 stanza) pins the lockstep
           EXPECTED="operon-${V}-x86_64-unknown-linux-gnu.tar.gz operon-${V}-aarch64-unknown-linux-gnu.tar.gz operon-${V}-aarch64-apple-darwin.tar.gz operon-${V}-x86_64-apple-darwin.tar.gz operon-${V}-x86_64-pc-windows-msvc.zip"
