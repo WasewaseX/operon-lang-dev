@@ -22,16 +22,16 @@ The mandate: *"Rust, then C, then Python, then Operon, then C++, then HTML, then
 - Python as bootstrap (not implementation) is the right reduction from v1's 100%-Python mistake.
 - One point withheld: **Operon below Python is a snapshot, not a destiny.** Mainstream languages converge on self-hosting (Rust in Rust, Go in Go, TypeScript in TypeScript). Operon's share must grow release over release, the stdlib is already pure `.op`.
 
-### Measured composition (main @ a976b91, `bash scripts/stack_report.sh`)
+### Measured composition (main @ 430717e, `bash scripts/stack_report.sh`)
 
 | rank | language | lines | share | role |
 |---|---|---|---|---|
-| 1 | **Rust** | 31,194 | ~45% | lexer, Total Grammar parser, evaluator, capability sandbox, symbol table, HTTP/JSON, toolchain CLI, REPL, `operon-ls` LSP seed (`src/`) |
-| 2 | **Operon** | 25,367 | ~37% | **self-hosted stdlib (30 modules, generated inventory in [docs/STATS.md](docs/STATS.md)), proof tests, red-team suite, differential corpus, GenomeLab** (`std/ tests/ examples/ apps/`) |
-| 3 | **Python** | 7,642 | ~11% | bootstrap: reference oracle + differential harness (`bootstrap/`), test infrastructure only, nothing shipped depends on it |
-| 4 | **JavaScript** | 2,022 | ~3% | browser playground subset interpreter (`web/playground/app.js`) |
-| 5 | **HTML** | 1,346 | ~2% | documentation site (`docs/`) |
-| 6 | **Shell** | 954 | ~1% | build/test/bench/stack/install scripts (`scripts/`) |
+| 1 | **Operon** | 425,341 | ~85% | **self-hosted stdlib (31 modules, generated inventory in [docs/STATS.md](docs/STATS.md)), proof tests, red-team suite, differential corpus, GenomeLab + the ytdl app** (`std/ tests/ examples/ apps/`) |
+| 2 | **Rust** | 57,225 | ~11% | lexer, Total Grammar parser, evaluator, capability sandbox, symbol table, HTTP/JSON, toolchain CLI, REPL, `operon-ls` LSP seed (`src/`) |
+| 3 | **Python** | 9,456 | ~2% | bootstrap: reference oracle + differential harness (`bootstrap/`), test infrastructure only, nothing shipped depends on it |
+| 4 | **Shell** | 2,611 | ~0.5% | build/test/bench/stack/install scripts (`scripts/`) |
+| 5 | **JavaScript** | 2,062 | ~0.4% | browser playground subset interpreter (`web/playground/app.js`) |
+| 6 | **HTML** | 1,347 | ~0.3% | documentation site (`docs/`) |
 | 7 | **CSS** | 311 | <1% | docs + playground styling |
 | 8 | **C++** | 148 | <1% | algorithm kernel: bit-parallel edit distance, codon-usage scoring (`runtime/codon_kernel.cpp` + its smoke driver) |
 | 9 | **TypeScript** | 23 | <1% | playground type surface (`app.d.ts`) |
@@ -85,7 +85,7 @@ See [docs/design/TYPED-MODE.md](docs/design/TYPED-MODE.md) and SPEC §16a.
 
 ## Cookbook, small real programs to steal from
 
-`examples/cookbook/` holds 22 runnable programs (18 everyday recipes + 4 gotcha tours),
+`examples/cookbook/` holds 24 runnable programs (20 everyday recipes + 4 gotcha tours),
 each ≤80 lines with a header that says what it teaches, plus the [packages chapter](examples/cookbook/packages.sh),
 a shell transcript that walks the package CLI end to end. Every output is deterministic
 and **verified by `bash scripts/cookbook.sh` on the Rust core AND the Python oracle**
@@ -94,6 +94,8 @@ package manager). An example that rots or diverges fails CI instead of lying to 
 
 | program | you already know it as | teaches |
 |---|---|---|
+| [greeting](examples/cookbook/greeting.op) | argparse "hello world" | positional args, flags, defaults via `std/args` |
+| [wordcount](examples/cookbook/wordcount.op) | `wc -w` + `Counter` top-3 | `std/strings` + `std/iter`, `sort_by_key`, `fold` |
 | [word_freq](examples/cookbook/word_freq.op) | `Counter(text.split()).most_common(3)` | maps as counters, `sort_by_key`, pad_left |
 | [csv_report](examples/cookbook/csv_report.op) | csv module + groupby + tabulate | quote-aware parsing, `num()` for fields, fmt_table |
 | [json_transform](examples/cookbook/json_transform.op) | `json.loads` + dict surgery | dot-path get, merge/pick/omit, flatten, brace-free JSON |
@@ -414,8 +416,8 @@ bootstrap/   Python oracle + differential harness (the verification layer)
 std/         self-hosted Operon standard library (.op)
 tools/       (reserved for .op tooling as self-hosting grows)
 tests/       proof-frame test suite (.op) + codon kernel smoke test
-apps/        GenomeLab demo (pure .op)
-examples/    tour programs (.op)
+apps/        GenomeLab demo + ytdl, a downloader app in pure .op (language-comparison builds: apps/ytdl-compare, docs/APP-COMPARISON.md)
+examples/    tour programs + cookbook recipes + embed/typed examples (.op)
 docs/        documentation site (HTML/CSS)
 web/         browser playground (JS + TS declarations)
 scripts/     build.sh · test.sh · bench.sh · stack_report.sh
