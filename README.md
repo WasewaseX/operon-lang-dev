@@ -245,7 +245,7 @@ operon check f.op    [--nmd | --nmd=purge] [--json]   # 100-point grade + letter
 operon test [dirs]                                # proof-frame runner (files/proofs/assertions: docs/STATS.md)
 operon fmt f.op     [--write]                     # precedence-correct canonical formatter
 operon build f.op   [--variant v] [-o out.op]     # bake splices, strip proofs
-operon profile f.op                               # per-gene calls, exclusive self-µs, flags, maturation, enhance candidates
+operon profile f.op [--chrome trace.json]         # per-gene calls, exclusive self-µs, flags, maturation, enhance candidates; --chrome writes a Chrome-trace .json of per-call spans (docs/PROFILING.md)
 operon crispr f.op  (--knockout gene | --matrix) [--json]
 operon bench f.op   [--iters n]
 operon disasm f.op                                # bytecode listing of compiled gene bodies
