@@ -1,0 +1,38 @@
+# S3 (audit_builtins): REAL granted coverage for the bytes/file-write
+# family — the ok side the ungranted differential pin cannot reach.
+# Cell grants resolved-prefix read+write over the dedicated fixture dir
+# (try_io_wave3 precedent). Proof-frame form so the §12 proof-integrity
+# rules count the asserts (a top-level-assert pin is vacuous under test).
+# Self-cleaning: the pin deletes its own artifact so re-runs are
+# idempotent (write_file_bytes does NOT truncate — rust opens with
+# truncate(false) and appends at the handle position).
+frame proof {
+    let dir = "tests/granted/fx_bytes_dir"
+    let fx = dir + "/a.bin"
+    if !exists(dir) {
+        assert(fs_mkdir(dir) == true, "fixture dir created inside the grant")
+    }
+    if exists(fx) {
+        assert(fs_delete(fx) == true, "stale artifact cleared")
+    }
+    assert(write_file_bytes(fx, bytes_from_str("AB")) == true, "bytes written")
+    assert(file_size(fx) == 2, "size after write is the byte count")
+    assert(str_from_bytes(read_file_bytes(fx)) == "AB", "bytes round trip")
+    assert(append_file(fx, "C") == true, "text append")
+    assert(str_from_bytes(read_file_bytes(fx)) == "ABC", "append visible through the bytes read")
+    assert(write_file_bytes(fx, "raw str body") == true, "str body accepted (rust arm mirrors)")
+    assert(str_from_bytes(read_file_bytes(fx)) == "raw str body", "str body landed as bytes")
+    assert(bytes_to_list(bytes_from_str("AB"))[0] == 65, "bytes are bytes (W029 law)")
+    # missing side: granted path, nonexistent entry — parent-chain rule
+    # passes caps, stat fails, the LEGACY missing payload embeds the raw
+    # io::Error text (mirrored io_err() in the oracle; the try_ twins mask
+    # it, the legacy arms do not)
+    stress {
+        read_file_bytes(dir + "/never.there")
+        assert(false, "legacy read_file_bytes must still raise on missing")
+    } rescue (e) {
+        assert(e.kind == "missing", "legacy missing kind intact")
+        assert(e.message == "read_file_bytes '" + dir + "/never.there': No such file or directory (os error 2)", "io::Error text mirrored byte-exactly")
+    }
+    fs_delete(fx)
+}

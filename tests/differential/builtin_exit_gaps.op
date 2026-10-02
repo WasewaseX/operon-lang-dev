@@ -1,0 +1,15 @@
+# S3 (audit_builtins): exit()'s ungranted refusal surface — a differential
+# golden. rust (sec-r2, audit C-11): process exit is a capability,
+# default-deny; the refusal is a catchable interference stress and the
+# runner SURVIVES. The oracle's old unconditional sys.exit() diverged here
+# (process died, rc mismatch) — the faithful mirror now refuses the same
+# way. The GRANTED exit (rc = N, the ok side) is Rust-runner-only surface
+# under --allow-exit / .cell allow.exit = true: a real process exit cannot
+# be a byte-comparison target in the sequential lane, the refusal is.
+print("reached")
+stress {
+    exit(3)
+} rescue (e) {
+    print("[" + e.kind + "] " + e.message)
+}
+print("runner survived the refusal")
