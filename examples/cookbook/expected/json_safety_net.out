@@ -1,0 +1,5 @@
+kept 2 of 4
+  id=a1 qty=4
+  id=b2 qty=9
+  rejected [missing qty] x1
+  rejected [unparseable] x1
