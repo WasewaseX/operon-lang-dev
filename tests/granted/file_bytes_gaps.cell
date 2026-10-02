@@ -1,0 +1,8 @@
+# explicit operator cell for the S3 file-bytes granted lane.
+# Resolved-prefix read+write grants over the dedicated fixture dir. The
+# pin is self-cleaning (deletes its own artifact), so the write grant is
+# exercised on every run without leaving tree noise. No run/net/env
+# grants: the lane touches only the file family.
+[allow]
+read = "tests/granted/fx_bytes_dir"
+write = "tests/granted/fx_bytes_dir"

@@ -588,18 +588,25 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
 - Done when: flag removed, Windows failures block merges, note in COMMS.
 - Files: `.github/workflows/ci.yml`.
 
-### W060, Per-target release smoke [P2] [dev-2] [M] [open]
+### W060, Per-target release smoke [P2] [dev-2] [M] [done 2026-10-03 (builder-F, PR #75): the done-when is met and has been stress-tested live — release.yml runs the W060 smoke on EVERY produced asset (4 targets smoked host-native on the exact packaged bytes: sha256 sidecar self-check + pkg-mode extract/run/check/std+operon-ls+README+LICENSE+TUTORIAL contract; x86_64-apple-darwin carries the documented honest skip — cross-compiled on the arm64 runner, Rosetta not guaranteed); failed smoke = failed release proven twice by live dry-run rehearsals (run 36992837397: all 4 smoked targets failed the run on the dispatch-ref version expectation; run 37045410736: windows leg failed the run on the CRLF sidecar), both root-caused and fixed (ref-aware expectation + LF sidecar producer + CR-normalized consumers), acceptance run 37046206558 GREEN (4 PASS + 1 honest skip + sha256sums job dry-guard skipped); wiring pinned by scripts/pkg_meta_check.py 73 checks]
 - Goal: post-build smoke per release target where practical: linux x64/arm64 run hello.op
   in QEMU/container; macos runner smoke; windows smoke via the existing windows job artifact.
 - Done when: release.yml runs smoke per produced asset (or documents why a target cannot be
   smoked); failed smoke = failed release.
 - Files: `.github/workflows/release.yml`.
+- Note (2026-10-03): the two live-rehearsal catches were exactly the class this row was
+  written to catch — the gate had never executed against uploaded bytes until S5's
+  rehearsal mechanism (PR #72, merged 74bb44d) made dry-run dispatches part of the
+  pipeline contract (docs/PACKAGING.md "Pipeline rehearsal").
 
-### W061, Distribution channels [P2] [dev-2] [M] [partial: B5 landed binstall + brew draft + winget/scoop notes]
-- Remaining: actual Homebrew tap formula PR (owner publishes), winget manifest submission,
-  one Linux channel (deb or AUR) as proof, Nix flake optional.
+### W061, Distribution channels [P2] [dev-2] [M] [partial: W061-A 2026-10-02 (builder-F, PR #62) — binstall metadata RESTORED (the B5 merge had dropped it; template contract pinned by the new scripts/pkg_meta_check.py standing gate), hosted-registry search law fixed (last-line-wins, was returning the oldest version) + WSGI surface pinned, pkg_hosted_e2e wired into test.sh, manifests truthed 2.2.0→2.7.0 + version-literal guard in check_docs_sync, README↔ledger drift repaired]
+- Remaining (owner-only per the 2026-10-02 triage): actual Homebrew tap formula PR, winget manifest submission,
+  one Linux channel (deb or AUR) as proof, Nix flake optional, one live `cargo binstall operon`
+  verification against a real release.
 - Done when: 2+ channels work end-to-end from public artifacts; README install table
-  updated with verified commands.
+  updated with verified commands. (The in-repo validation lift is DONE: every channel
+  file is guarded, the manifests cannot drift behind the Cargo version, and the hosted
+  tier's HTTP+WSGI surfaces are standing-gated; what remains needs publish credentials.)
 - Files: `packaging/`, `README.md`.
 
 ### W062, LSP version compatibility policy [P3] [dev-2] [S] [done: docs/specs/LSP-VERSIONING.md gains the skew/minimum-handshake/client-detection section (batch1, c85a65f): same-crate binary targets, operonLsp.version + serverInfo.version detection policy, written handshake sequence, client rules for higher/lower versions]
