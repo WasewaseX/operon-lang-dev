@@ -1,0 +1,79 @@
+# differential: S3 builtin coverage — object_from_map, the DIRECT contract
+#
+# std/serialize's roundtrip exercises this builtin transitively (its
+# __from_wire calls it), but no corpus program called the builtin itself —
+# a coverage gap the S3 audit surfaced. This golden pins the RAW builtin
+# contract, not the std front door: the "#phenotype" tag must name a class
+# declared in THIS program, remaining entries become fields in wire order,
+# rebuild is DATA restore (init does NOT run, field defaults do NOT apply,
+# absent fields read null + note per SPEC §7a), methods dispatch on the
+# rebuilt instance, unknown class names and non-map input raise the
+# catchable `unfolded` stress (std/serialize shapes that into err() at the
+# API line — D-014 — the raw line stresses).
+phenotype Pt {
+    let x = 0
+    let y = 0
+    gene area() {
+        return self.x * self.y
+    }
+}
+
+phenotype Ctr {
+    let n = 0
+    gene init(k) {
+        self.n = k
+    }
+}
+
+frame proof {
+    # ---- rebuild: real instance, fields in wire order, methods alive ----
+    let wire = { "#phenotype": "Pt", "x": 3, "y": 4 }
+    let p = object_from_map(wire)
+    assert(type(p) == "Pt", "rebuild restores the declared class")
+    assert(p.x == 3 and p.y == 4, "wire entries become fields")
+    assert(p.area() == 12, "methods dispatch on the rebuilt instance")
+    assert(object_fields(p) == {"x": 3, "y": 4},
+        "field map follows wire order, tag consumed")
+
+    # ---- tag position is irrelevant: the map is scanned for the tag ----
+    let tail = object_from_map({ "x": 1, "y": 2, "#phenotype": "Pt" })
+    assert(type(tail) == "Pt" and tail.x == 1 and tail.y == 2,
+        "tag found wherever it sits in the wire map")
+
+    # ---- data restore, not construction: defaults never apply ----
+    let thin = object_from_map({ "#phenotype": "Pt", "x": 1 })
+    assert(thin.x == 1, "present field restores as DATA")
+    assert(thin.y == null, "absent field reads null, default never applies")
+
+    # ---- init does NOT run: the wire is the truth ----
+    let c = object_from_map({ "#phenotype": "Ctr", "n": 7 })
+    assert(type(c) == "Ctr", "init-bearing class rebuilds by tag")
+    assert(c.n == 7, "init-written value rides as DATA, init stayed dead")
+
+    # ---- unknown class: catchable unfolded stress at the raw line ----
+    stress {
+        object_from_map({ "#phenotype": "Ghost", "x": 1 })
+        assert(false, "unknown class must stress at the raw builtin")
+    } rescue (e) {
+        assert(e.kind == "unfolded", "unknown class kind: " + e.kind)
+    }
+
+    # ---- non-map input: unfolded, no silent null ----
+    stress {
+        object_from_map(42)
+        assert(false, "non-map input must stress")
+    } rescue (e) {
+        assert(e.kind == "unfolded", "non-map kind: " + e.kind)
+    }
+
+    # ---- missing tag: unfolded, same contract as an unknown name ----
+    stress {
+        object_from_map({ "x": 1 })
+        assert(false, "tagless map must stress")
+    } rescue (e) {
+        assert(e.kind == "unfolded", "tagless kind: " + e.kind)
+    }
+}
+main {
+    promote("object-from-map: ok")
+}
