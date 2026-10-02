@@ -517,7 +517,72 @@ scope {
 }
 ```
 
-## 12. Where to go next
+## 12. Errors as values: Result, try_*, and ?!
+
+Operon has two failure channels, and keeping them apart is the whole skill.
+A **Stress** is the exception channel: `raise` throws it, `stress/rescue`
+catches it, and it is for exceptional situations (a capability denial, a
+step-budget burn). A **Result** is the value channel: an expected failure is
+just an `err(...)` you can inspect, store, and pass around (SPEC §9).
+
+The `try_*` builtins return Results for the failures you should expect:
+
+```operon
+gene main() {
+    let r = try_num("42")
+    print(is_ok(r), unwrap_or(r, 0))        # true 42
+
+    let bad = try_num("not a number")
+    print(is_err(bad), unwrap_or(bad, 0))   # true 0
+}
+```
+
+Read the payload with `match` (the sanctioned accessor — `unwrap` on an err
+stresses by contract, `unwrap_or` on an err returns your default):
+
+```operon
+match try_json_parse("[1, 2, 3]") {
+    case Ok(v) { print("parsed:", v) }
+    case Err(e) { print("nope:", e) }
+}
+# parsed: [1, 2, 3]
+
+match try_first([]) {
+    case Ok(v) { print(v) }
+    case Err(e) { print("empty:", e) }
+}
+# empty: first of an empty list
+```
+
+Inside a gene, `?!` propagates an err to the caller the way `raise` would
+propagate a stress — write the happy path, let the error flow:
+
+```operon
+gene parse_port(s) {
+    let n = try_num(s)?!
+    return ok(n)
+}
+print(parse_port("8080"))   # Ok(8080)
+print(parse_port("http"))   # Err("num('http') failed")
+```
+
+The same builtin can stay a Stress when that is its contract — `sqrt(-1.0)`
+throws a catchable `unfolded` stress, and the legacy form keeps working:
+
+```operon
+stress {
+    print(sqrt(-1.0))
+} rescue (e) {
+    print("stress:", e.kind, e.message)
+}
+# stress: unfolded sqrt of negative number
+```
+
+Rule of thumb: expected-and-handle → `try_*` + match; exceptional-and-
+contain → `stress/rescue`. The err payload is always an engine-neutral
+string, so what you pin in a proof frame is what every run prints.
+
+## 13. Where to go next
 
 - **Read the standard library**: `std/*.op`, all Operon, meant to be read.
 - **Read the proof suite**: `tests/`, 50 files, every language behavior asserted.
