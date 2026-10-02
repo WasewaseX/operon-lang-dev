@@ -120,9 +120,13 @@ fn real_main() {
         quiet: false,
         caps: interp::Caps::default(),
         profile: false,
+        spans: false,
         stdout_sink: None,
     };
     let mut json = false;
+    // W097-A: `--chrome <file>` — write the profiled run's per-call spans
+    // as a Chrome Trace Format JSON file (about://tracing / Perfetto).
+    let mut chrome: Option<String> = None;
     let mut strict = false;
     // W23: --locked, fail on operon.toml <-> operon.lock drift (CI pin)
     let mut locked = false;
@@ -330,6 +334,22 @@ fn real_main() {
             }
             "--ires" => opts.use_ires = true,
             "--json" => json = true,
+            // W097-A: Chrome Trace Format export for `operon profile`
+            // (closes W096's blocked REMAIN — per-call spans). Needs a
+            // file path; implies span capture for the profiled run.
+            "--chrome" => {
+                i += 1;
+                match rest.get(i).map(|s| s.as_str()) {
+                    Some(p) if !p.is_empty() => {
+                        chrome = Some(p.to_string());
+                        // span capture implied: the trace needs the timeline,
+                        // and it must be armed BEFORE load (dx-r1: top-level
+                        // calls execute during load_file)
+                        opts.spans = true;
+                    }
+                    _ => die("--chrome needs a file path argument (e.g. --chrome trace.json)"),
+                }
+            }
             "--strict" => strict = true,
             "--typed" => typed = true,
             "--locked" => locked = true,
@@ -1849,6 +1869,24 @@ fn real_main() {
                 None => die("profile needs a file"),
             };
             let l = tools::profile(&file, &opts);
+            // W097-A: Chrome-trace export. Written BEFORE any stdout output;
+            // the operator notice rides stderr when --json keeps stdout
+            // machine-pure, stdout otherwise (human-readable mode).
+            if let Some(path) = &chrome {
+                let (total, dropped) = tools::write_chrome_trace(&l, &file, path);
+                let notice = format!(
+                    "chrome trace: {} ({} span(s), {} dropped past the {} cap)",
+                    path,
+                    total,
+                    dropped,
+                    interp::SPAN_CAP
+                );
+                if json {
+                    eprintln!("{}", notice);
+                } else {
+                    println!("{}", notice);
+                }
+            }
             let mut rows: Vec<(String, u64, f64)> = l
                 .interp
                 .call_counts
@@ -2285,6 +2323,7 @@ fn repl() {
             quiet: true,
             caps: interp::Caps::default(),
             profile: false,
+            spans: false,
             stdout_sink: None,
         },
     ) {
@@ -2379,6 +2418,7 @@ fn repl() {
                                 quiet: true,
                                 caps: interp::Caps::default(),
                                 profile: false,
+                                spans: false,
                                 stdout_sink: None,
                             };
                             let rep = tools::run_tests(&[arg.to_string()], &opts, false);
@@ -2503,6 +2543,7 @@ fn repl() {
                                 quiet: true,
                                 caps: interp::Caps::default(),
                                 profile: false,
+                                spans: false,
                                 stdout_sink: None,
                             },
                         ) {
@@ -2940,7 +2981,9 @@ usage:
   operon run f.op --trace-grn trace.jsonl   # W095: JSONL GRN tick-stream
   operon doc f.op|dir [...] [-o outdir] [--json]
   operon watch f.op [args...]
-  operon profile f.op
+  operon profile f.op [--chrome trace.json]
+                  # --chrome (W096/W097-A): write per-call spans as a Chrome Trace
+                  # Format .json (about://tracing / ui.perfetto.dev render it);
   operon ir|disasm f.op [--json]  W10: annotated OIR1 listing of compiled genes
   operon crispr f.op --knockout gene [--json]
   operon bench f.op [--iters n]
