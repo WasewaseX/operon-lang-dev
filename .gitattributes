@@ -21,3 +21,16 @@
 # payload IS the test. Mark the directory -text so normalization can never
 # "fix" an attack into a non-attack.
 tests/redteam/** -text
+
+# GitHub Languages bar: github/linguist does not know the `.op` extension
+# yet (linguist/operon.yml is the prepared upstream contribution, not
+# merged), so every Operon source used to render as unrecognized and the
+# language statistics showed NO Operon at all despite 3600+ `.op` files.
+# linguist-language= is the documented override for exactly this state.
+*.op linguist-language=Operon
+
+# Machine-generated artifacts are data, not authorship — keep them out of
+# the language bar (22 CodeQL SARIF reports would otherwise count as JSON;
+# the fuzz crash corpus is machine-written crash reproduction input).
+docs/codeql/*.sarif linguist-generated
+fuzz_corpus/** linguist-generated

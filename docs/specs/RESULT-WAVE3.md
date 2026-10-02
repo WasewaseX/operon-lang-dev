@@ -30,7 +30,7 @@ stay stresses (a malformed call is not an expected failure).
 `std/try_numeric.op` delivers `try_sqrt` / `try_floor` / `try_ceil` without
 a core change (validate-arg-then-rescue; Err payloads are fixed strings, so
 the engine-neutral payload law holds by construction). Pins:
-`tests/std_try_numeric.op` (24 asserts, both engines) +
+`tests/std_try_numeric.op` (30 asserts, both engines) +
 `tests/differential/try_numeric_std.op` (byte-identical 3-lane).
 Legacy stresses stay pinned UNCHANGED in the same proof frame.
 
