@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# deterministic yt-dlp mock — no network, byte-identical behavior on every run.
+# URL contract:
+#   mock://<name>          -> "downloads" <name>.mp4 into the -P dir
+#   mock://fail            -> exit 1 every time (format unavailable)
+#   mock://stall           -> attempt 1 leaves <name>.mp4.part + exit 0
+#                             (simulates the run() 5-min kill); a later
+#                             attempt (resume round) completes it.
+#   --audio-format X       -> writes <name>.X instead (audio extract path)
+#   -J URL                 -> prints the fixture metadata JSON
+set -u
+MOCK_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+if [ "${1:-}" = "--version" ]; then
+  echo "2026.08.19-mock"
+  exit 0
+fi
+
+if [ "${1:-}" = "-J" ]; then
+  url="${2:-}"
+  case "$url" in
+    *fail*)
+      echo "ERROR: [mock] requested format is not available" >&2
+      exit 1
+      ;;
+    *)
+      cat "$MOCK_DIR/fixtures/video1.json"
+      ;;
+  esac
+  exit 0
+fi
+
+# download mode: parse flags (values consumed), first bare arg = URL
+DIR="downloads"
+URL=""
+AF=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -P) DIR="$2"; shift 2; continue ;;
+    -o|-f|--audio-quality) shift 2; continue ;;
+    -x) shift; continue ;;
+    --audio-format) AF="$2"; shift 2; continue ;;
+    --downloader|--downloader-args|--retries|--fragment-retries|--sub-langs) shift 2; continue ;;
+    --no-playlist|--continue|--no-overwrites|--write-subs|--convert-subs) shift; continue ;;
+    -*) shift; continue ;;
+    *) URL="$1"; shift; continue ;;   # last bare arg wins (yt-dlp: one URL)
+  esac
+done
+
+vid="$(basename "$URL")"          # mock://video1 -> video1
+mkdir -p "$DIR"
+EXT="mp4"
+if [ -n "$AF" ]; then EXT="$AF"; fi
+OUTFILE="$DIR/$vid.$EXT"
+
+echo "[download] Destination: $OUTFILE"
+echo "[download]  33.3% of 12.00MiB at 2.00MiB/s ETA 00:04" >&2
+echo "[download] 100% of 12.00MiB in 00:06" >&2
+
+if [ "$vid" = "fail" ]; then
+  echo "ERROR: [mock] unable to download video (fail url)" >&2
+  exit 1
+fi
+
+if [ "$vid" = "stall" ]; then
+  if [ -f "$DIR/.stall_done" ]; then
+    rm -f "$DIR/.stall_done" "$OUTFILE.part"
+    printf 'complete-video-bytes' > "$OUTFILE"
+    exit 0
+  fi
+  printf 'partial-bytes' > "$OUTFILE.part"
+  touch "$DIR/.stall_done"
+  echo "ERROR: [mock] interrupted mid-transfer (stall simulation)" >&2
+  exit 0
+fi
+
+printf 'dummy-video-bytes' > "$OUTFILE"
+if [ -n "$AF" ]; then
+  echo "[ExtractAudio] Destination: $OUTFILE"
+fi
+exit 0

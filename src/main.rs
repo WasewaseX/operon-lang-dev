@@ -195,6 +195,17 @@ fn real_main() {
     let mut i = 0;
     while i < rest.len() {
         let a = rest[i].clone();
+        // dx-r6 STRICT (ytdl-app audit): once `--` is seen, EVERY remaining
+        // arg belongs to the program verbatim — including names the host
+        // also defines (--out, --json, --cell, ...). The arms below used to
+        // keep matching after the separator, so `operon run app.op -- get
+        // URL --out D` silently lost `--out D` to the host's build flag. A
+        // second `--` is a literal program argument (POSIX).
+        if passthrough {
+            positional.push(a);
+            i += 1;
+            continue;
+        }
         match a.as_str() {
             "--entry" => {
                 i += 1;

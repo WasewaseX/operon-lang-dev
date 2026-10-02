@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# deterministic aria2c mock
+if [ "${1:-}" = "--version" ]; then
+  echo "aria2 1.37.0-mock"
+  exit 0
+fi
+exit 0

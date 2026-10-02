@@ -1,0 +1,19 @@
+{
+  "id": "m0ck0001",
+  "title": "Mock Video One",
+  "uploader": "Operon Labs",
+  "duration": 5021,
+  "view_count": 1234567,
+  "formats": [
+    { "format_id": "140", "ext": "m4a", "vcodec": "none", "acodec": "mp4a.40.2", "tbr": 129.5, "filesize": 8234567, "format_note": "medium" },
+    { "format_id": "251", "ext": "webm", "vcodec": "none", "acodec": "opus", "tbr": 160.1, "filesize": 10123456, "format_note": "medium" },
+    { "format_id": "160", "ext": "mp4", "height": 144, "width": 256, "vcodec": "avc1.4d400c", "acodec": "none", "tbr": 95.2, "filesize": 6000000 },
+    { "format_id": "133", "ext": "mp4", "height": 240, "width": 426, "vcodec": "avc1.4d400c", "acodec": "none", "tbr": 210.4, "filesize": 13000000 },
+    { "format_id": "134", "ext": "mp4", "height": 360, "width": 640, "vcodec": "avc1.4d401e", "acodec": "none", "tbr": 620.7, "filesize": 38000000 },
+    { "format_id": "135", "ext": "mp4", "height": 480, "width": 854, "vcodec": "avc1.4d401f", "acodec": "none", "tbr": 1011.3, "filesize": 62000000 },
+    { "format_id": "136", "ext": "mp4", "height": 720, "width": 1280, "fps": 30, "vcodec": "avc1.4d4020", "acodec": "none", "tbr": 2212.9, "filesize": 135000000 },
+    { "format_id": "137", "ext": "mp4", "height": 1080, "width": 1920, "fps": 30, "vcodec": "avc1.640028", "acodec": "none", "tbr": 4513.6, "filesize": 276000000 },
+    { "format_id": "271", "ext": "webm", "height": 1440, "width": 2560, "fps": 30, "vcodec": "vp9", "acodec": "none", "tbr": 12044.2, "filesize_approx": 738000000, "format_note": "1440p60-2" },
+    { "format_id": "313", "ext": "webm", "height": 2160, "width": 3840, "fps": 30, "vcodec": "vp9", "acodec": "none", "tbr": 24112.8, "filesize_approx": 1479000000, "format_note": "2160p-4k" }
+  ]
+}
