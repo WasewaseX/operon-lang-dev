@@ -9338,6 +9338,153 @@ impl Interp {
                     }
                 }
             }
+            // ------------------------------------------------ W006-B: wave-3 IO try_ family (RESULT-WAVE3 §2c)
+            // Native core arms: the legacy IO builtins fail with
+            // missing-class stresses whose payloads embed OS error text
+            // (engine-specific by nature), and a stdlib rescue wrapper
+            // cannot deliver the engine-neutral payload law without
+            // swallowing capability denials (the same rescue that catches
+            // `missing` catches `interference`). Each try_ twin RE-DISPATCHES
+            // the legacy arm — behavior identical by construction, no fuel
+            // or arity pre-charge at the dispatch head to double-count — and
+            // maps ONLY `missing` to an inspectable Err carrying the fixed
+            // engine-neutral payload. `interference` (containment),
+            // `overflow` (resource ceilings are tier 3) and arity `unfolded`
+            // stresses stay stresses: a malformed call is not an expected
+            // failure (§2a).
+            "try_read_file" => {
+                if args.len() != 1 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "try_read_file(path) needs exactly 1 argument",
+                    ));
+                }
+                let path = args.first().map(|v| v.display()).unwrap_or_default();
+                match self.call_builtin(env, "read_file", args) {
+                    Ok(v) => Ok(Value::Variant(crate::value::VTag::OkV, Some(Box::new(v)))),
+                    Err(s) if s.kind == "missing" => Ok(Value::Variant(
+                        crate::value::VTag::ErrV,
+                        Some(Box::new(Value::Str(format!("read_file '{}' failed", path)))),
+                    )),
+                    Err(s) => Err(s),
+                }
+            }
+            "try_read_file_bytes" => {
+                if args.len() != 1 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "try_read_file_bytes(path) needs exactly 1 argument",
+                    ));
+                }
+                let path = args.first().map(|v| v.display()).unwrap_or_default();
+                match self.call_builtin(env, "read_file_bytes", args) {
+                    Ok(v) => Ok(Value::Variant(crate::value::VTag::OkV, Some(Box::new(v)))),
+                    Err(s) if s.kind == "missing" => Ok(Value::Variant(
+                        crate::value::VTag::ErrV,
+                        Some(Box::new(Value::Str(format!(
+                            "read_file_bytes '{}' failed",
+                            path
+                        )))),
+                    )),
+                    Err(s) => Err(s),
+                }
+            }
+            "try_read_dir" => {
+                if args.len() != 1 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "try_read_dir(path) needs exactly 1 argument",
+                    ));
+                }
+                let path = args.first().map(|v| v.display()).unwrap_or_default();
+                match self.call_builtin(env, "read_dir", args) {
+                    Ok(v) => Ok(Value::Variant(crate::value::VTag::OkV, Some(Box::new(v)))),
+                    Err(s) if s.kind == "missing" => Ok(Value::Variant(
+                        crate::value::VTag::ErrV,
+                        Some(Box::new(Value::Str(format!("read_dir '{}' failed", path)))),
+                    )),
+                    Err(s) => Err(s),
+                }
+            }
+            "try_run" => {
+                if args.len() != 1 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "try_run(prog) needs exactly 1 argument",
+                    ));
+                }
+                let prog = args.first().map(|v| v.display()).unwrap_or_default();
+                match self.call_builtin(env, "run", args) {
+                    Ok(v) => Ok(Value::Variant(crate::value::VTag::OkV, Some(Box::new(v)))),
+                    Err(s) if s.kind == "missing" => Ok(Value::Variant(
+                        crate::value::VTag::ErrV,
+                        Some(Box::new(Value::Str(format!("run '{}' failed", prog)))),
+                    )),
+                    Err(s) => Err(s),
+                }
+            }
+            "try_http_get" => {
+                if args.len() != 3 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "try_http_get(host, port, path) needs exactly 3 arguments",
+                    ));
+                }
+                match self.call_builtin(env, "http_get", args) {
+                    Ok(v) => Ok(Value::Variant(crate::value::VTag::OkV, Some(Box::new(v)))),
+                    // the fixed payload carries NO target echo: §2c specifies
+                    // exactly "http_get failed" (the target is deterministic,
+                    // but the contract fixed the shape — keep it)
+                    Err(s) if s.kind == "missing" => Ok(Value::Variant(
+                        crate::value::VTag::ErrV,
+                        Some(Box::new(Value::Str("http_get failed".to_string()))),
+                    )),
+                    Err(s) => Err(s),
+                }
+            }
+            "try_str_from_bytes" => {
+                if args.len() != 1 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "try_str_from_bytes(b) needs exactly 1 argument",
+                    ));
+                }
+                // pure function, no capability gate — the full Ok/Err shape
+                // is differentially pinnable WITHOUT a granted lane. Type
+                // abuse follows the wave-2 family precedent (try_index):
+                // inspectable Err, not a stress. The byte index N is the
+                // offset of the first invalid byte (Rust valid_up_to ==
+                // Python UnicodeDecodeError.start), deterministic both engines.
+                let errv = |msg: String| {
+                    Ok(Value::Variant(
+                        crate::value::VTag::ErrV,
+                        Some(Box::new(Value::Str(msg))),
+                    ))
+                };
+                match args.first() {
+                    Some(Value::Bytes(b)) => match std::str::from_utf8(b) {
+                        Ok(s) => Ok(Value::Variant(
+                            crate::value::VTag::OkV,
+                            Some(Box::new(Value::Str(s.to_string()))),
+                        )),
+                        Err(e) => errv(format!(
+                            "str_from_bytes: invalid UTF-8 at byte {}",
+                            e.valid_up_to()
+                        )),
+                    },
+                    Some(other) => errv(format!(
+                        "try_str_from_bytes needs bytes, got {}",
+                        other.type_name()
+                    )),
+                    None => errv("try_str_from_bytes needs bytes, got null".to_string()),
+                }
+            }
             // ------------------------------------------------ date / time (UTC civil calendar)
             "unix_time" => {
                 let now = std::time::SystemTime::now()
@@ -12723,6 +12870,13 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "try_env",
     "try_json_parse",
     "try_re_groups",
+    // W006-B: wave-3 IO try_ family (RESULT-WAVE3 §2c, native core arms)
+    "try_read_file",
+    "try_read_file_bytes",
+    "try_read_dir",
+    "try_run",
+    "try_http_get",
+    "try_str_from_bytes",
     "call",
     // L1a: iteration + numeric builtins
     "enumerate",

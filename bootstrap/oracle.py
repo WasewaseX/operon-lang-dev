@@ -3242,6 +3242,7 @@ grapheme_len fold_case char_at char_slice
 norm_nfc norm_nfd casefold char_category weak strengthen
 some none ok err is_some is_none is_ok is_err unwrap unwrap_or try_num try_index try_get try_pop
 try_first try_last try_char_at try_env try_json_parse try_re_groups
+try_read_file try_read_file_bytes try_read_dir try_run try_http_get try_str_from_bytes
 enumerate zip sorted reversed any all first last take drop unique flatten chunk round clamp divmod
 channel send recv close select
 is_object object_fields object_from_map""".split())
@@ -7176,6 +7177,75 @@ class Interp:
                 return Variant("Ok", [g for g in m.groups()])
             except RecursionError:
                 raise Stress("overflow", "regex backtracking exceeded 2M steps")
+        # ---- W006-B: wave-3 IO try_ family (RESULT-WAVE3 §2c) — mirrors the
+        # Rust arms: re-dispatch the legacy arm (behavior identical by
+        # construction), map ONLY missing to the fixed engine-neutral payload;
+        # interference (containment), overflow and arity unfolded stresses
+        # stay stresses: a malformed call is not an expected failure (§2a).
+        if name == "try_read_file":
+            if len(args) != 1:
+                raise Stress("unfolded", "try_read_file(path) needs exactly 1 argument")
+            path = v_display(args[0]) if args else ""
+            try:
+                return Variant("Ok", self.builtin(env, "read_file", args))
+            except Stress as e:
+                if e.kind == "missing":
+                    return Variant("Err", f"read_file '{path}' failed")
+                raise
+        if name == "try_read_file_bytes":
+            if len(args) != 1:
+                raise Stress("unfolded", "try_read_file_bytes(path) needs exactly 1 argument")
+            path = v_display(args[0]) if args else ""
+            try:
+                return Variant("Ok", self.builtin(env, "read_file_bytes", args))
+            except Stress as e:
+                if e.kind == "missing":
+                    return Variant("Err", f"read_file_bytes '{path}' failed")
+                raise
+        if name == "try_read_dir":
+            if len(args) != 1:
+                raise Stress("unfolded", "try_read_dir(path) needs exactly 1 argument")
+            path = v_display(args[0]) if args else ""
+            try:
+                return Variant("Ok", self.builtin(env, "read_dir", args))
+            except Stress as e:
+                if e.kind == "missing":
+                    return Variant("Err", f"read_dir '{path}' failed")
+                raise
+        if name == "try_run":
+            if len(args) != 1:
+                raise Stress("unfolded", "try_run(prog) needs exactly 1 argument")
+            prog = v_display(args[0]) if args else ""
+            try:
+                return Variant("Ok", self.builtin(env, "run", args))
+            except Stress as e:
+                if e.kind == "missing":
+                    return Variant("Err", f"run '{prog}' failed")
+                raise
+        if name == "try_http_get":
+            if len(args) != 3:
+                raise Stress("unfolded", "try_http_get(host, port, path) needs exactly 3 arguments")
+            try:
+                return Variant("Ok", self.builtin(env, "http_get", args))
+            except Stress as e:
+                # fixed payload, NO target echo (contract §2c fixes the shape)
+                if e.kind == "missing":
+                    return Variant("Err", "http_get failed")
+                raise
+        if name == "try_str_from_bytes":
+            if len(args) != 1:
+                raise Stress("unfolded", "try_str_from_bytes(b) needs exactly 1 argument")
+            b = args[0]
+            if not isinstance(b, (bytes, bytearray)):
+                # type abuse follows the wave-2 family precedent (try_index):
+                # inspectable Err, not a stress. Byte index N = offset of the
+                # first invalid byte (UnicodeDecodeError.start == Rust
+                # valid_up_to), deterministic both engines.
+                return Variant("Err", f"try_str_from_bytes needs bytes, got {type_name(b)}")
+            try:
+                return Variant("Ok", b.decode("utf-8"))
+            except UnicodeDecodeError as e:
+                return Variant("Err", f"str_from_bytes: invalid UTF-8 at byte {e.start}")
         if name == "random":
             x = self.rng
             x ^= (x >> 12) & 0xFFFFFFFFFFFFFFFF
