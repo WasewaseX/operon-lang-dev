@@ -989,12 +989,14 @@ pub fn profile(file: &str, opts: &Opts) -> Loaded {
 ///   must never be silent about its own limits.
 pub fn write_chrome_trace(l: &Loaded, file: &str, path: &str) -> (usize, u64) {
     let mut events: Vec<String> = Vec::with_capacity(l.interp.span_log.len() + 2);
-    events.push(format!(
-        "{{\"name\":\"process_name\",\"ph\":\"M\",\"pid\":1,\"tid\":1,\"args\":{{\"name\":\"operon\"}}}}"
-    ));
-    events.push(format!(
-        "{{\"name\":\"thread_name\",\"ph\":\"M\",\"pid\":1,\"tid\":1,\"args\":{{\"name\":\"fibers (virtual clock)\"}}}}"
-    ));
+    events.push(
+        "{\"name\":\"process_name\",\"ph\":\"M\",\"pid\":1,\"tid\":1,\"args\":{\"name\":\"operon\"}}"
+            .to_string(),
+    );
+    events.push(
+        "{\"name\":\"thread_name\",\"ph\":\"M\",\"pid\":1,\"tid\":1,\"args\":{\"name\":\"fibers (virtual clock)\"}}"
+            .to_string(),
+    );
     for s in &l.interp.span_log {
         events.push(format!(
             "{{\"name\":\"{}\",\"cat\":\"gene\",\"ph\":\"X\",\"pid\":1,\"tid\":1,\"ts\":{:.3},\"dur\":{:.3},\"args\":{{\"depth\":{}}}}}",
