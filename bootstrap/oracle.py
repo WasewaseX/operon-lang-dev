@@ -4501,6 +4501,30 @@ class Interp:
             return i
         raise Stress("missing", f"index must be int, found {type_name(v)}")
 
+    def _f64_powf(self, a, b):
+        # S4-5/F1b+F1c: Rust f64::powf mirror for the three spots where
+        # python deviates from C99 pow: (1) a zero base (incl. -0.0) with a
+        # negative exponent raises ZeroDivisionError — C99 gives ±inf, the
+        # sign by parity of the exponent for a -0.0 base; (2) a negative
+        # FINITE base with a non-integer exponent returns a python COMPLEX
+        # (leaked into the renderer as <?>) — C99 gives NaN; (3) overflow
+        # raises OverflowError — C99 gives ±inf (sign by parity for a
+        # negative base). inf/nan bases and exponents already follow C99 in
+        # python natively, so they fall through untouched.
+        import math as _m
+        if a == 0.0 and b < 0.0:
+            if _m.copysign(1.0, a) < 0.0 and float(b).is_integer() and int(b) % 2 == 1:
+                return float("-inf")
+            return float("inf")
+        if _m.isfinite(a) and a < 0.0 and _m.isfinite(b) and not float(b).is_integer():
+            return float("nan")
+        try:
+            return a ** b
+        except OverflowError:
+            if a < 0.0 and float(b).is_integer() and int(b) % 2 == 1:
+                return float("-inf")
+            return float("inf")
+
     def binop(self, op, l, r):
         if op == "+":
             if isinstance(l, bool) or isinstance(r, bool):
@@ -4620,10 +4644,18 @@ class Interp:
                     raise Stress("overflow", "int overflow in '**'")
                 return val
             if isinstance(l, (int, float)) and isinstance(r, (int, float)) and not isinstance(l, bool) and not isinstance(r, bool):
-                try:
-                    return float(l) ** float(r)
-                except OverflowError:
+                # S4-5/F1b+F1c: mirror Rust f64::powf — python raises
+                # ZeroDivisionError for 0 ** negative (rust: inf), returns a
+                # COMPLEX for a negative finite base with a fractional
+                # exponent (rendered <?> where rust returns nan), and raises
+                # OverflowError where rust returns ±inf. The rust float path
+                # ALSO stresses when the RESULT is infinite with finite
+                # operands and a positive exponent — mirrored below.
+                out = self._f64_powf(float(l), float(r))
+                import math as _m
+                if (out == float("inf") or out == float("-inf")) and _m.isfinite(float(l)) and _m.isfinite(float(r)) and float(r) > 0.0:
                     raise Stress("overflow", "float '**' overflowed to infinity")
+                return out
             raise Stress("unfolded", f"cannot apply '**' to {type_name(l)} and {type_name(r)}")
         if op in ("&", "|", "^", "<<", ">>"):
             def as_i(x):
@@ -6049,6 +6081,10 @@ class Interp:
             sys.exit(int(args[0]) if args else 0)
         if name == "assert":
             ok = truthy(args[0]) if args else False
+            # S4-6b: count every EXECUTED assert (pass or burn), mirroring
+            # interp.rs's asserts_run += 1 before the burn check — the
+            # proof-integrity vacuous-proof rule reads this counter.
+            self.asserts_run += 1
             if not ok:
                 msg = v_display(args[1]) if len(args) > 1 else "assertion failed"
                 raise Stress("burned", msg)
@@ -6869,14 +6905,37 @@ class Interp:
                 return int(_m.ceil(v))
             return v if isinstance(v, int) else 0
         if name == "sqrt":
-            v = float(args[0]) if args else 0.0
+            # F1 (S4-5): type-abuse parity — the Rust core routes sqrt
+            # through the shared numeric checker: a non-numeric argument
+            # (bools and numeric STRINGS included) is a contained unfolded
+            # stress naming the type pair ("... found <t> and int" — the int
+            # is sqrt's phantom second operand in the shared checker). Bare
+            # float() swallowed "2.5"/bools silently and crashed raw on "x"
+            # (rc=1 ValueError). Zero args stays 0.0 (rust: no arity stress
+            # on sqrt()).
+            v0 = args[0] if args else 0.0
+            if isinstance(v0, bool) or not isinstance(v0, (int, float)):
+                raise Stress("unfolded", f"numeric op needs numbers, found {type_name(v0)} and int")
+            v = float(v0)
             if v < 0:
                 raise Stress("unfolded", "sqrt of negative number")
             return v ** 0.5
         if name == "pow":
-            a = float(args[0]) if len(args) > 0 else 0.0
-            b = float(args[1]) if len(args) > 1 else 0.0
-            return a ** b
+            # mirror the Rust builtin exactly: arity < 2 → note + the
+            # (0.0, 0.0) fallback → 1.0 (rust DISCARDS provided args in the
+            # fallback — pow(2) is 1.0, not 2.0); type abuse → the shared
+            # checker wording IN OPERAND ORDER ("found int and str" for
+            # pow(2, "x")); semantics = raw f64 powf (NO overflow stress —
+            # the builtin returns inf), so 0**neg = inf and negative-base
+            # fractional = nan via the mirror (S4-5/F1b class: python
+            # raised raw errors / leaked a complex here).
+            if len(args) < 2:
+                self.note(4, "pow(x, y) needs two numbers; 0")
+                return 1.0
+            a0, b0 = args[0], args[1]
+            if isinstance(a0, bool) or not isinstance(a0, (int, float)) or isinstance(b0, bool) or not isinstance(b0, (int, float)):
+                raise Stress("unfolded", f"numeric op needs numbers, found {type_name(a0)} and {type_name(b0)}")
+            return self._f64_powf(float(a0), float(b0))
         if name in ("re_match", "re_find", "re_groups"):
             import re as _re
             pat = args[0] if args else ""
@@ -8477,10 +8536,21 @@ def main():
             files_t += 1
             proofs += len(proofs_l)
             it.proof_mode = True
-            for pf in proofs_l:
+            for pi, pf in enumerate(proofs_l):
+                # S4-6b (§12): the proof-integrity rules, mirrored from the
+                # canonical rust runner (tools.rs test cmd): a proof that
+                # completes with ZERO executed asserts is VACUOUS (fails,
+                # never passes silently), and a frame-level return/break/
+                # continue abandons the frame (fails, "exited early") — a
+                # loop-INTERNAL break is normal completion (the loop
+                # consumes the flow; BreakLoop never reaches here then).
+                asserts_before = it.asserts_run
                 try:
                     it.exec_block(it.new_scope(it.globals), pf)
-                    passed += 1
+                except (Return, BreakLoop, ContinueLoop):
+                    failed += 1
+                    failures.append(f"{f} proof #{pi+1}: exited early (return/break inside proof)")
+                    continue
                 except Stress as st:
                     failed += 1
                     # W06 (D-014) mirror: propagation abandoning a proof frame
@@ -8492,6 +8562,12 @@ def main():
                 except Exception as ex:
                     failed += 1
                     failures.append(f"{f}: [oracle-error] {type(ex).__name__}: {ex}")
+                else:
+                    if it.asserts_run == asserts_before:
+                        failed += 1
+                        failures.append(f"{f} proof #{pi+1}: no assertion exercised (vacuous proof)")
+                    else:
+                        passed += 1
         print(f"operon test, {files_t} file(s), {proofs} proof(s): {passed} passed, {failed} failed")
         for f in failures:
             print(f"  FAIL {f}", file=sys.stderr)
