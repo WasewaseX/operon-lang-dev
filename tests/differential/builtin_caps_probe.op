@@ -34,6 +34,86 @@ frame proof {
     } rescue (e) {
         assert(e.kind == "interference", "relative file_size deny kind")
     }
+
+    # ---- S3 (2026-10-02): the five gated builtins that had NO differential
+    # golden at all. Same deny-by-default rescue contract, absolute and
+    # relative paths alike; the refusal fires at the capability gate BEFORE
+    # any path resolution or socket dial, so the golden is deterministic
+    # everywhere (no /tmp writes, no network, nothing to scrub).
+
+    # read_dir: read gate (directory listing is read-class I/O)
+    stress {
+        read_dir("/etc")
+        assert(false, "read_dir must be denied by default")
+    } rescue (e) {
+        assert(e.kind == "interference", "read_dir deny kind")
+    }
+    stress {
+        read_dir(".")
+        assert(false, "relative read_dir must be denied")
+    } rescue (e) {
+        assert(e.kind == "interference", "relative read_dir deny kind")
+    }
+
+    # read_file_bytes: read gate (the bytes twin of read_file)
+    stress {
+        read_file_bytes("/etc/passwd")
+        assert(false, "read_file_bytes must be denied by default")
+    } rescue (e) {
+        assert(e.kind == "interference", "read_file_bytes deny kind")
+    }
+    stress {
+        read_file_bytes("Cargo.toml")
+        assert(false, "relative read_file_bytes must be denied")
+    } rescue (e) {
+        assert(e.kind == "interference", "relative read_file_bytes deny kind")
+    }
+
+    # write_file_bytes: write gate (the bytes twin of write_file, which is
+    # pinned to the same contract by tests/security_caps.op)
+    stress {
+        write_file_bytes("/tmp/operon-deny-test.bin", bytes_from_str("x"))
+        assert(false, "write_file_bytes must be denied by default")
+    } rescue (e) {
+        assert(e.kind == "interference", "write_file_bytes deny kind")
+    }
+    stress {
+        write_file_bytes("probe_relative.bin", bytes_from_str("x"))
+        assert(false, "relative write_file_bytes must be denied")
+    } rescue (e) {
+        assert(e.kind == "interference", "relative write_file_bytes deny kind")
+    }
+
+    # append_file: write gate (append is write-class, hardlink refusals on
+    # the granted path are a redteam concern, not a differential one)
+    stress {
+        append_file("/tmp/operon-deny-test.log", "x")
+        assert(false, "append_file must be denied by default")
+    } rescue (e) {
+        assert(e.kind == "interference", "append_file deny kind")
+    }
+    stress {
+        append_file("probe_relative.log", "x")
+        assert(false, "relative append_file must be denied")
+    } rescue (e) {
+        assert(e.kind == "interference", "relative append_file deny kind")
+    }
+
+    # http_get: net gate — refused before any dial, so the golden never
+    # touches a network. Both arity shapes pin the same gate (the check
+    # precedes argument shaping beyond the host string).
+    stress {
+        http_get("127.0.0.1", 1, "/")
+        assert(false, "http_get must be denied by default")
+    } rescue (e) {
+        assert(e.kind == "interference", "http_get deny kind")
+    }
+    stress {
+        http_get("127.0.0.1")
+        assert(false, "default-port http_get must be denied too")
+    } rescue (e) {
+        assert(e.kind == "interference", "default-port http_get deny kind")
+    }
 }
 main {
     promote("caps-probe: ok")
