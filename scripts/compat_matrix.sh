@@ -92,10 +92,18 @@ for f in ${FILES[@]+"${FILES[@]}"}; do
     pass=$((pass+1))
   else
     fail=$((fail+1)); failed_files+=("$f")
-    if [ "${VERBOSE:-0}" == "1" ] && [ "$fail" -le 5 ]; then
+    # F6/#50 (iteration 3): ALWAYS diagnose the first divergence — a byte
+    # gate that only prints counts costs a full CI cycle per question
+    # (this exact loop happened twice on the windows leg this session).
+    if [ "${VERBOSE:-0}" == "1" ] || [ "$fail" -eq 1 ]; then
       echo "DIVERGE: $f (rc $arc/$brc/$crc/$drc/$erc)"
-      diff "$tmpa" "$tmpc" | head -4
-      diff "$tmpa" "$tmpe" | head -4
+      cmp -s "$tmpa" "$tmpb" || echo "  stdout differs: tree-walk vs vm"
+      cmp -s "$tmpa" "$tmpc" || echo "  stdout differs: tree-walk vs opt1"
+      if [ "$DEBUG_BIN" == "1" ] && ! cmp -s "$tmpa" "$tmpd"; then
+        echo "  stdout differs: tree-walk vs debug"
+      fi
+      cmp -s "$tmpa" "$tmpe" || { echo "  stdout differs: tree-walk vs oracle:"; diff "$tmpa" "$tmpe" | head -4; }
+      cmp -s "$tmpa.err" "$tmpe.err" || { echo "  stderr differs: tree-walk vs oracle:"; diff "$tmpa.err" "$tmpe.err" | head -4; }
     fi
   fi
 done
