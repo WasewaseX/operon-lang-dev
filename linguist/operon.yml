@@ -1,6 +1,9 @@
 # Ready-to-upstream github/linguist contribution for the Operon language.
-# Until merged upstream, GitHub renders Operon (.op) in the default gray;
-# this file is the prepared PR payload requesting the pink identity.
+# Since 2026-10-02 the repo's .gitattributes maps `*.op linguist-language=
+# Operon`, so the GitHub Languages bar already lists Operon (default gray).
+# THIS file is still the prepared upstream PR payload — merging it into
+# github/linguist is what upgrades the bar entry from gray to the pink
+# identity (#E4409A) and classifies `.op` for every other GitHub repo too.
 ---
 name: Operon
 type: programming
