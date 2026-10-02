@@ -169,7 +169,14 @@ class Store:
         cur.execute(
             "SELECT line FROM index_lines WHERE LOWER(line) LIKE "
             + self.param
-            + " ORDER BY name, version, seq",
+            # NDJSON law (docs/specs/REGISTRY.md §2): the LAST line per name
+            # wins — seq DESC per name keeps the latest-published line, which
+            # is what both this service and the file registry's resolver mean
+            # by "latest line per name". (The previous name, version, seq
+            # order with first-seen dedupe returned the OLDEST version: the
+            # hosted tier disagreed with the file tier. Found by the W061-A
+            # audit, fixed + pinned by scripts/pkg_meta_check.py.)
+            + " ORDER BY name ASC, seq DESC",
             (like,),
         )
         seen, out = set(), []
