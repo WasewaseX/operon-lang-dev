@@ -17,7 +17,7 @@ $ cat operon.toml
 [package]
 name = "myapp"
 version = "0.1.0"
-operon-version = "2.6.0"
+operon-version = "2.7.0"
 
 [deps]
 
@@ -47,12 +47,14 @@ name = "http"
 git = "registry:http"
 rev = "content-d2d51013b893606a"
 checksum = "sha256:d2d51013b893606a37d0c952fb2e223e1868d73ec634df094304878bf5a32873"
+version = "0.1.0"
 
 [[dep]]
 name = "web"
 git = "registry:web"
 rev = "content-2183858c7e531e39"
 checksum = "sha256:2183858c7e531e3989fea43802e1b3d97f224a637a5c99a769581f357352290c"
+version = "0.1.0"
 
 
 $ cat src/app.op
