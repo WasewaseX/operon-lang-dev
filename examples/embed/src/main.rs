@@ -45,6 +45,7 @@ fn main() {
         quiet: true,
         caps: Caps::default(),
         profile: false,
+        spans: false,
         stdout_sink: Some(sink.clone()),
     };
     let path = demo.to_str().unwrap_or("demo.op").to_string();
