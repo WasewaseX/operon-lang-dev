@@ -118,6 +118,48 @@ jobs:
       - name: Attach to GitHub Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2 (SHA-pinned, D-6/sec-r5)
         with:
+          # S5: verification preamble (how to check the asset) + auto notes
+          # (generate_release_notes appends the commit log under it)
+          body_path: .github/release-notes-template.md
+          generate_release_notes: true
           files: |
             ${{ env.ASSET }}
             ${{ env.ASSET }}.sha256
+
+  # S5 (release hardening): publish ONE whole-release SHA256SUMS manifest next
+  # to the assets — the exact contract scripts/install.sh --verify was written
+  # against (B1-U3). Until now only per-asset .sha256 sidecars existed, so the
+  # fail-closed installer mode could never succeed against a real release (the
+  # manifest simply was not there). The manifest hashes the EXACT PUBLISHED
+  # bytes (downloaded back from the release, never the runner's local copies),
+  # and every sidecar is re-verified first so a corrupted upload can never
+  # enter the manifest. Assumes a tag ref: the packaging steps above already
+  # name every asset after GITHUB_REF_NAME minus the leading v.
+  sha256sums:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish whole-release SHA256SUMS
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          V="${GITHUB_REF_NAME#v}"
+          # keep this list in lockstep with the build matrix above —
+          # scripts/pkg_meta_check.py (S5 stanza) pins the lockstep
+          EXPECTED="operon-${V}-x86_64-unknown-linux-gnu.tar.gz operon-${V}-aarch64-unknown-linux-gnu.tar.gz operon-${V}-aarch64-apple-darwin.tar.gz operon-${V}-x86_64-apple-darwin.tar.gz operon-${V}-x86_64-pc-windows-msvc.zip"
+          mkdir dist && cd dist
+          for a in $EXPECTED; do
+            gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern "$a" --clobber
+          done
+          N=$(ls -1 | wc -l)
+          EXPECT_N=$(printf '%s\n' $EXPECTED | wc -l)
+          [ "$N" = "$EXPECT_N" ] || { echo "release manifest: expected $EXPECT_N binary assets, found $N — a partial release must not get a manifest"; exit 1; }
+          for a in $EXPECTED; do
+            gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern "$a.sha256" --clobber
+            sha256sum -c "$a.sha256"
+          done
+          LC_ALL=C sha256sum $(for a in $EXPECTED; do printf '%s\n' "$a"; done | LC_ALL=C sort) > SHA256SUMS
+          cat SHA256SUMS
+          gh release upload "$GITHUB_REF_NAME" SHA256SUMS --clobber
+          echo "SHA256SUMS published: $EXPECT_N assets covered — install.sh --verify is now enforceable against this release"

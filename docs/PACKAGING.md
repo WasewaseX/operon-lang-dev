@@ -22,6 +22,8 @@ in between, "should work" is not a state we write down.
 | rpm | `[package.metadata.generate-rpm]` in Cargo.toml | community | `cargo generate-rpm` in a clean env; same upgrade path |
 | Homebrew | `packaging/homebrew/operon.rb` | community | maintainer pins the tag tarball's `.sha256` into the formula, then owner-publishes the tap |
 | source release archive | `scripts/release.sh` → `dist/operon-<v>.tar.gz` + `SHA256SUMS` | validated locally | deterministic `git archive` re-tar (pinned mtime/uid/gid), `--verify` fail-closed; run it before tagging so SHA256SUMS is fresh |
+| whole-release `SHA256SUMS` (binary assets) | `.github/workflows/release.yml` `sha256sums` job | validated | hashes the exact published bytes after sidecar re-verification; partial releases refused; pinned to the build matrix by `scripts/pkg_meta_check.py`; consumed by `install.sh --verify` |
+| installer (curl \| sh) | `scripts/install.sh` + `scripts/install_e2e.sh` | validated | fail-closed verification (sidecar mandatory, manifest cross-checked, `--verify` strict); hermetic offline mode (`OPERON_INSTALL_ASSET_DIR`) exercised by `install_e2e.sh` in the standing gate |
 | hosted registry server (W19-r2) | `packaging/registry/app.py` · `packaging/registry/requirements.txt` · `packaging/registry/render.yaml` | community | self-hosted tier (docs/specs/REGISTRY.md); the HTTP + WSGI surfaces and the render.yaml wiring are pinned by `scripts/pkg_meta_check.py` + `scripts/pkg_hosted_e2e.sh` in the standing gate; an actual deployment (Render or your own host) is a maintainer action |
 | winget | submission note | staged | winget needs a signed/published stable URL; submission is owner-gated (the 2026-10-02 owner triage) |
 
@@ -54,8 +56,36 @@ a `SHA256SUMS` manifest, and re-tars with pinned metadata (mtime epoch 0,
 uid/gid 0) when GNU tar is available, so two runs of the same commit produce
 byte-identical archives. `--verify` checks an existing archive fail-closed;
 `--dry-run` prints the plan. The manifest is what `install.sh --verify`
-consumes: CI (or the maintainer) appends the per-asset hashes of the
-binary archives to the same `SHA256SUMS` before attaching it to a release.
+consumes. S5 (2026-10-02) closed the gap the old wording papered over: the
+release workflow now has a `sha256sums` job that publishes a whole-release
+`SHA256SUMS` (every binary asset, hashed from the exact published bytes
+downloaded back from the release, each sidecar re-verified first, a partial
+asset set refused), so strict mode is enforceable against real releases —
+previously only the per-asset `.sha256` sidecars existed and `--verify`
+could only ever fail closed. `scripts/pkg_meta_check.py` pins the job to
+the build matrix: a target added to the matrix without a matching manifest
+entry fails the standing gate, not a live release.
+
+## Release notes template (S5)
+
+Every release body starts from `.github/release-notes-template.md` — the
+verification preamble (per-asset check, whole-release check, installer
+strict mode) — with GitHub's auto-generated notes appended
+(`generate_release_notes: true`). The template is pinned by
+`scripts/pkg_meta_check.py`; edit it when the verification story changes,
+not per release.
+
+## Installer gate (S5)
+
+`scripts/install.sh` had zero gate coverage — its fail-closed verification
+law (sec-r1 / B1-U3) was only ever exercised by production traffic.
+`OPERON_INSTALL_ASSET_DIR` gives it a hermetic offline mode (a directory
+laid out like a release: assets, sidecars, optional manifest; every
+verification law unchanged), and `scripts/install_e2e.sh` exercises the
+full contract on every gate: happy path (sidecar + manifest cross-check,
+binary + `operon-ls` + `std/` installed), tampered sidecar refusal,
+`--verify` without a manifest, `--verify` with the asset unlisted, and the
+offline mode's refusal to resolve `latest` without a network.
 
 ## Publish checklist (owner/maintainer, per release)
 

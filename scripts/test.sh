@@ -95,6 +95,11 @@ python3 scripts/pkg_meta_check.py
 # add → verify → run over the full hosted tier. Needs curl + git + the
 # binary this gate already built.
 bash scripts/pkg_hosted_e2e.sh
+# S5: the installer had ZERO gate coverage — its fail-closed verification
+# law (sec-r1/B1-U3) was only ever exercised by production traffic. Hermetic
+# e2e against a synthetic release dir: happy path + tampered sidecar +
+# --verify missing-manifest + --verify unlisted-asset refusals.
+bash scripts/install_e2e.sh
 echo "[4/4] Oracle proof suite (the same frames on the second implementation)"
 python3 bootstrap/oracle.py test tests/
 echo "ALL GREEN"

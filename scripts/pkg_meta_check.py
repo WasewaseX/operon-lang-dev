@@ -299,6 +299,53 @@ def check_render_yaml():
           "requirements.txt pins gunicorn + psycopg2-binary")
 
 
+def check_release_manifest():
+    """S5: the whole-release SHA256SUMS contract.
+
+    install.sh --verify (B1-U3) is fail-closed against the manifest — but the
+    release workflow never published one, so strict mode could only ever
+    refuse. The sha256sums job (added with this gate) closes that; this pin
+    keeps the job and the build matrix in lockstep: a matrix target added
+    without a matching manifest entry must fail here, not on a live release.
+    Also pins the installer's fail-closed surface and the release-notes
+    template wiring (verification preamble on every release).
+    """
+    text = read(".github", "workflows", "release.yml")
+    check("sha256sums:" in text, "release.yml has a sha256sums job")
+    job = text.split("sha256sums:", 1)[1] if "sha256sums:" in text else ""
+    check("needs: build" in job, "sha256sums job waits for the build job")
+    targets = re.findall(r"target: ([a-z0-9_\-]+)", text)
+    check(len(targets) >= 5, f"build matrix parsed ({len(targets)} targets)", "regex found none of the matrix targets")
+    for t in targets:
+        ext = ".zip" if "windows" in t else ".tar.gz"
+        check(f"operon-${{V}}-{t}{ext}" in job,
+              f"manifest covers matrix target {t}{ext}",
+              f"the sha256sums EXPECTED list must name operon-${{V}}-{t}{ext}")
+    check("sha256sum -c" in job, "sha256sums job re-verifies each sidecar before hashing")
+    check("must not get a manifest" in job, "sha256sums job refuses a partial release")
+    check("gh release upload" in job and "SHA256SUMS" in job,
+          "sha256sums job uploads the whole-release SHA256SUMS")
+    # the job must hash the published bytes back, never runner-local copies
+    check("gh release download" in job, "sha256sums job hashes the exact published bytes")
+    # installer side of the contract
+    inst = read("scripts", "install.sh")
+    check("SUMS_URL=" in inst, "install.sh consults the SHA256SUMS manifest")
+    check("no SHA256SUMS manifest published" in inst,
+          "install.sh --verify fails closed without the manifest (B1-U3)")
+    check("not listed in the SHA256SUMS manifest" in inst,
+          "install.sh --verify fails closed on an unlisted asset")
+    check("OPERON_INSTALL_ASSET_DIR" in inst,
+          "install.sh exposes the hermetic offline mode install_e2e.sh exercises")
+    # release notes template wiring
+    check("body_path: .github/release-notes-template.md" in text,
+          "release attach step wires the release-notes template")
+    check(os.path.isfile(os.path.join(ROOT, ".github", "release-notes-template.md")),
+          "release-notes template exists")
+    tpl = read(".github", "release-notes-template.md")
+    check("SHA256SUMS" in tpl and "install.sh" in tpl,
+          "release-notes template documents verification (SHA256SUMS + install.sh)")
+
+
 def main():
     with tempfile.TemporaryDirectory(prefix="operon-pkgmeta-") as tmp:
         os.environ["OPERON_REGISTRY_DB"] = os.path.join(tmp, "reg.db")
@@ -306,6 +353,7 @@ def main():
         check_binstall()
         check_wsgi(mod, tmp)
         check_render_yaml()
+        check_release_manifest()
     if FAILS:
         print(f"pkg_meta_check: {len(FAILS)} FAILED / {PASS} ok")
         return 1
