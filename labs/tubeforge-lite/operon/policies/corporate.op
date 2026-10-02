@@ -1,0 +1,20 @@
+# TubeForge policy — kiosk / corporate profile.
+# Whitelisted domains only, single videos (no playlist batches), 720p
+# ceiling, 500 MiB per-item cap. Demonstrates allow_domains, max_quality
+# and computed caps in one place.
+
+gene ceiling() { return 720 }
+gene cap_mib(n) { return n * 1048576 }
+limit = cap_mib(500)
+h = ceiling()
+
+promote("name = corporate")
+promote("version = 1")
+promote("allow_video = 1")
+promote("allow_audio = 1")
+promote("allow_playlist = 0")
+promote("max_bytes =", limit)
+promote("max_quality =", h)
+promote("allow_domains = example.com, youtube.com, youtu.be")
+promote("reason_playlist = kiosk policy: single videos only, no playlist batches")
+promote("reason_domain = kiosk policy: only whitelisted domains may be downloaded")

@@ -16,6 +16,11 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Pipeline rehearsal (issue #51): build + smoke every target, attach NOTHING to any release — the acceptance is the per-asset smoke rows in the run log"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -51,7 +56,10 @@ jobs:
         if: matrix.pkg == 'tar'
         shell: bash
         run: |
-          V="${GITHUB_REF_NAME#v}"
+          # issue #51 dry-run class: dispatch refs can carry slashes (feature/
+          # branches) — '/' inside an asset name breaks tar and the sidecar
+          # naming. Tags are unaffected (vX.Y.Z has no slash).
+          V="$(printf '%s' "${GITHUB_REF_NAME#v}" | tr '/' '-')"
           ST="operon-${V}-${{ matrix.target }}"
           mkdir -p "$ST"
           cp "target/${{ matrix.target }}/release/operon" "$ST/"
@@ -74,7 +82,7 @@ jobs:
         if: matrix.pkg == 'zip'
         shell: pwsh
         run: |
-          $V = "${env:GITHUB_REF_NAME}" -replace '^v',''
+          $V = ("${env:GITHUB_REF_NAME}" -replace '^v','') -replace '/','-'
           $ST = "operon-$V-${{ matrix.target }}"
           New-Item -ItemType Directory -Force -Path $ST | Out-Null
           Copy-Item "target/${{ matrix.target }}/release/operon.exe" $ST/
@@ -85,7 +93,13 @@ jobs:
           Copy-Item -Recurse std, examples $ST/
           Compress-Archive -Path $ST -DestinationPath "$ST.zip"
           $h = (Get-FileHash "$ST.zip" -Algorithm SHA256).Hash.ToLower()
-          "$h  $ST.zip" | Out-File -Encoding ascii "$ST.zip.sha256"
+          # Sidecar MUST be LF-terminated: Out-File writes CRLF on Windows,
+          # and every consumer (smoke step, SHA256SUMS manifest job, user
+          # verification per the release notes) runs `sha256sum -c`, which
+          # reads the trailing CR into the FILENAME and fails with
+          # "No such file or directory" — caught by the second live
+          # rehearsal (run 37045410736, windows leg).
+          [System.IO.File]::WriteAllText("$ST.zip.sha256", "$h  $ST.zip`n")
           "ASSET=$ST.zip" | Out-File -Encoding ascii -Append $env:GITHUB_ENV
 
       # W060 (ROADMAP-100): failed smoke = failed release. The smoke runs on
@@ -96,11 +110,29 @@ jobs:
         if: matrix.target != 'x86_64-apple-darwin'
         shell: bash
         run: |
-          V="${GITHUB_REF_NAME#v}"
+          # Smoke expectation = a version the binary can honestly report.
+          # Tag push: the tag minus 'v' (the release-version contract). Any
+          # non-tag ref (dispatch rehearsal): a branch name is NOT a version
+          # the binary could ever carry — derive the expectation from the
+          # built tree's Cargo.toml instead. The first live dry-run (run
+          # 36992837397) failed exactly here: it expected the branch ref
+          # while the binary reported 'Operon 2.7.0-vm (...)'.
+          case "$GITHUB_REF" in
+            refs/tags/*) V="${GITHUB_REF_NAME#v}" ;;
+            *) V="$(awk '/^\[package\]/{f=1;next} f && /^version/{sub(/^version[[:space:]]*=[[:space:]]*"/,""); sub(/".*/,""); print; exit}' Cargo.toml)" ;;
+          esac
+          [ -n "$V" ] || { echo "smoke: could not derive the expected version"; exit 2; }
+          # CR-normalize the sidecar before -c: the hash line must be read
+          # against the exact asset bytes, not fail on a CRLF envelope
+          # (windows producer wrote CRLF before the run-37045410736 fix).
+          # The HASH bytes are still the exact published ones — this
+          # normalizes the line ENDING of the sidecar only, never the hash.
+          S="$(basename "$ASSET").sha256"
+          tr -d '\r' < "$(dirname "$ASSET")/$S" > "$(dirname "$ASSET")/$S.lf"
           if command -v sha256sum >/dev/null 2>&1; then
-            (cd "$(dirname "$ASSET")" && sha256sum -c "$(basename "$ASSET").sha256")
+            (cd "$(dirname "$ASSET")" && sha256sum -c "$S.lf" && rm -f "$S.lf")
           else
-            (cd "$(dirname "$ASSET")" && shasum -a 256 -c "$(basename "$ASSET").sha256")
+            (cd "$(dirname "$ASSET")" && shasum -a 256 -c "$S.lf" && rm -f "$S.lf")
           fi
           bash scripts/release_smoke.sh "$ASSET" "$V"
 
@@ -116,8 +148,56 @@ jobs:
           echo "smoke: skipped (cross) — x86_64-apple-darwin is cross-compiled on the arm64 runner; executing it needs Rosetta, which the runner does not guarantee"
 
       - name: Attach to GitHub Release
+        if: ${{ inputs.dry_run != true }}
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2 (SHA-pinned, D-6/sec-r5)
         with:
+          # S5: verification preamble (how to check the asset) + auto notes
+          # (generate_release_notes appends the commit log under it)
+          body_path: .github/release-notes-template.md
+          generate_release_notes: true
           files: |
             ${{ env.ASSET }}
             ${{ env.ASSET }}.sha256
+
+  # S5 (release hardening): publish ONE whole-release SHA256SUMS manifest next
+  # to the assets — the exact contract scripts/install.sh --verify was written
+  # against (B1-U3). Until now only per-asset .sha256 sidecars existed, so the
+  # fail-closed installer mode could never succeed against a real release (the
+  # manifest simply was not there). The manifest hashes the EXACT PUBLISHED
+  # bytes (downloaded back from the release, never the runner's local copies),
+  # and every sidecar is re-verified first so a corrupted upload can never
+  # enter the manifest. Assumes a tag ref: the packaging steps above already
+  # name every asset after GITHUB_REF_NAME minus the leading v.
+  sha256sums:
+    needs: build
+    # dry-run rehearsals attach nothing, so there is no release to manifest
+    if: ${{ inputs.dry_run != true }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish whole-release SHA256SUMS
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          V="$(printf '%s' "${GITHUB_REF_NAME#v}" | tr '/' '-')"
+          # keep this list in lockstep with the build matrix above —
+          # scripts/pkg_meta_check.py (S5 stanza) pins the lockstep
+          EXPECTED="operon-${V}-x86_64-unknown-linux-gnu.tar.gz operon-${V}-aarch64-unknown-linux-gnu.tar.gz operon-${V}-aarch64-apple-darwin.tar.gz operon-${V}-x86_64-apple-darwin.tar.gz operon-${V}-x86_64-pc-windows-msvc.zip"
+          mkdir dist && cd dist
+          for a in $EXPECTED; do
+            gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern "$a" --clobber
+          done
+          N=$(ls -1 | wc -l)
+          EXPECT_N=$(printf '%s\n' $EXPECTED | wc -l)
+          [ "$N" = "$EXPECT_N" ] || { echo "release manifest: expected $EXPECT_N binary assets, found $N — a partial release must not get a manifest"; exit 1; }
+          for a in $EXPECTED; do
+            gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern "$a.sha256" --clobber
+            # CR-normalize before -c (windows sidecars carried CRLF before
+            # the run-37045410736 producer fix; older releases may still)
+            tr -d '\r' < "$a.sha256" > "$a.sha256.lf"
+            sha256sum -c "$a.sha256.lf" && rm -f "$a.sha256.lf"
+          done
+          LC_ALL=C sha256sum $(for a in $EXPECTED; do printf '%s\n' "$a"; done | LC_ALL=C sort) > SHA256SUMS
+          cat SHA256SUMS
+          gh release upload "$GITHUB_REF_NAME" SHA256SUMS --clobber
+          echo "SHA256SUMS published: $EXPECT_N assets covered — install.sh --verify is now enforceable against this release"

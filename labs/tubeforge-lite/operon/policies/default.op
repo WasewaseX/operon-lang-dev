@@ -1,0 +1,30 @@
+# TubeForge policy — default: allow everything.
+#
+# CONTRACT (enforced by src/policy.ts)
+# A policy is an ordinary Operon script. It executes inside Operon's
+# deny-by-default sandbox: no filesystem, no network, no processes, no
+# capabilities. The ONLY output the adapter reads is promote("key = value")
+# lines; any other promoted text is ignored, so you can debug freely.
+# Missing keys keep their defaults (everything allowed, no caps).
+#
+# keys
+#   name, version            labels shown in /api/tf/health
+#   allow_video              0 | 1   deny video jobs
+#   allow_audio              0 | 1   deny audio jobs
+#   allow_playlist           0 | 1   deny playlist / multi-URL batches
+#   max_bytes                abort a transfer once its total size exceeds N
+#   max_quality              downgrade video requests above N px (0 = no cap)
+#   force_kind               "audio" rewrites video requests to audio
+#   deny_domains             comma list of denied domain substrings
+#   allow_domains            comma list; if set, ONLY these domains pass
+#   reason_video / reason_audio / reason_playlist / reason_domain / reason_size
+#                            custom human-readable denial messages
+#
+# fail-closed: if the script fails to parse or exits non-zero, ALL downloads
+# are refused until the policy is fixed. Deny-by-default, end to end.
+
+promote("name = default")
+promote("version = 1")
+promote("allow_video = 1")
+promote("allow_audio = 1")
+promote("allow_playlist = 1")
