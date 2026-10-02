@@ -95,6 +95,14 @@ failed all four smoked targets on exactly that mismatch before the fix.
 The wiring is pinned by `scripts/pkg_meta_check.py`; a rehearsal that
 cannot derive an expectation refuses to run.
 
+The second rehearsal (run 37045410736) caught the windows sidecar producer
+writing CRLF (`Out-File`), which makes every `sha256sum -c` consumer read
+the trailing CR into the filename and fail — a latent bug the first real
+tag release would have hit at the manifest job. The producer now writes LF
+(`[System.IO.File]::WriteAllText`), and both in-workflow consumers (smoke
+step, SHA256SUMS job) CR-normalize each sidecar before `-c`; the hash
+bytes verified are still the exact published ones.
+
 ## Installer gate (S5)
 
 `scripts/install.sh` had zero gate coverage — its fail-closed verification
