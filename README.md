@@ -85,7 +85,7 @@ See [docs/design/TYPED-MODE.md](docs/design/TYPED-MODE.md) and SPEC §16a.
 
 ## Cookbook, small real programs to steal from
 
-`examples/cookbook/` holds 19 runnable programs (15 everyday recipes + 4 gotcha tours),
+`examples/cookbook/` holds 22 runnable programs (18 everyday recipes + 4 gotcha tours),
 each ≤80 lines with a header that says what it teaches, plus the [packages chapter](examples/cookbook/packages.sh),
 a shell transcript that walks the package CLI end to end. Every output is deterministic
 and **verified by `bash scripts/cookbook.sh` on the Rust core AND the Python oracle**
@@ -113,6 +113,9 @@ package manager). An example that rots or diverges fails CI instead of lying to 
 | [gotcha_builtins_not_values](examples/cookbook/gotcha_builtins_not_values.op) | `print` is a value in Python | builtins read as null; wrap them in a gene |
 | [gotcha_division](examples/cookbook/gotcha_division.op) | Python `/` vs `//` vs `%` | floored modulo, cyclic indexing, money math |
 | [option_pipeline](examples/cookbook/option_pipeline.op) | Rust's `Option`/`Result` + `?` | expected failures as values, `?!` propagation, `unwrap_or` defaults |
+| [json_safety_net](examples/cookbook/json_safety_net.op) | `json.loads` inside try/except per record | `try_json_parse`, `try_get` field gates, rejections counted by reason |
+| [log_sieve](examples/cookbook/log_sieve.op) | `re.match` groups + guarded slicing | `try_re_groups` captures, `try_char_at` positional reads, fixed range Errs |
+| [edge_stack](examples/cookbook/edge_stack.op) | `stack.pop()` with bounds checks | the edge `try_*` family driving one machine; failures as loop-branch values |
 
 The packages chapter is a transcript, not a `.op` program: [examples/cookbook/packages.sh](examples/cookbook/packages.sh)
 executes the whole workflow for real (`operon new` → `add` → `tree` → `run` → `test` → `verify`)
