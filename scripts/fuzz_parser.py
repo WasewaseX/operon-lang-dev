@@ -31,9 +31,16 @@ import sys
 import tempfile
 
 BIN = "./bin/operon"
-TIMEOUT = 15  # seconds per input: must sit ABOVE the 20M-step fuel bound
-                   # (~5s) so a fuel-contained runaway counts as contained;
-                   # only genuinely unbounded behavior trips this
+# F6/#50 (reliab lane, 2026-10-02): wall-clock bound per input. The fuel
+# bound (20M steps) burns ~5.6s on a native linux core, but the compat
+# matrix legs are not native-fast: the Windows runner measured the same
+# fuel-bound salads at ~15-20s (i=245 flaked the 15s bound between two
+# identical runs), and the aarch64 leg under qemu-user timed out SIX of
+# them at 15s. The bound must sit ABOVE the slowest substrate's fuel burn
+# or fuel-contained inputs read as hangs. 60s = ~3x the qemu burn with a
+# genuine unbounded hang still tripping C2 (just slower). Overridable for
+# exotic substrates without code edits.
+TIMEOUT = int(os.environ.get("FUZZ_PARSER_TIMEOUT", "60"))
 
 BAD_RCS = {101, 134, 139, 136, 138}  # panic / abort / segv / fpe family
 
