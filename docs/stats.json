@@ -105,7 +105,7 @@
   "textDocument/semanticTokens",
   "textDocument/signatureHelp"
  ],
- "proof_files": 163,
+ "proof_files": 165,
  "proof_totals": {
   "asserts": null,
   "files": null,
@@ -117,8 +117,8 @@
   "h1": "# Operon, Language Specification",
   "status": "v2.7.0"
  },
- "std_function_count": 328,
- "std_module_count": 31,
+ "std_function_count": 339,
+ "std_module_count": 33,
  "std_modules": [
   {
    "functions": 8,
@@ -205,6 +205,10 @@
    "module": "random"
   },
   {
+   "functions": 8,
+   "module": "result"
+  },
+  {
    "functions": 0,
    "module": "seq"
   },
@@ -233,6 +237,10 @@
    "module": "time"
   },
   {
+   "functions": 3,
+   "module": "try_numeric"
+  },
+  {
    "functions": 0,
    "module": "typed"
   },
@@ -245,6 +253,6 @@
    "module": "url"
   }
  ],
- "test_op_files": 3551,
+ "test_op_files": 3555,
  "version": "2.7.0"
 }

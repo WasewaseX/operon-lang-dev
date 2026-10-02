@@ -1,0 +1,103 @@
+# std/try_numeric, W006-A proof: the wave-3 numeric try_* contracts,
+# stdlib-side. Domain failures become fixed-text Err payloads; type abuse
+# becomes an engine-neutral Err naming the type (the wave-2 try_* contract);
+# the success paths return the exact builtin values.
+use std/try_numeric as tn;
+
+frame proof {
+    # --- try_sqrt: success keeps the builtin's exact value
+    assert(tn.try_sqrt(9.0) == ok(3.0))
+    assert(tn.try_sqrt(2.25) == ok(1.5))
+    assert(tn.try_sqrt(0.0) == ok(0.0))
+    # the domain failure: fixed text, engine-neutral (payload read via the
+    # sanctioned match accessor — unwrap_or on Err returns the DEFAULT)
+    let n = tn.try_sqrt(-1.0)
+    assert(is_err(n), "negative is Err")
+    match n {
+        case Err(msg) {
+            assert(msg == "sqrt of negative number", "exact domain payload")
+        }
+        case Ok(v) {
+            assert(false, "negative sqrt must be Err")
+        }
+    }
+    # int input flows through the same numeric core
+    assert(tn.try_sqrt(4) == ok(2.0))
+    # type abuse: Err naming the type, never a Stress
+    let t = tn.try_sqrt("x")
+    assert(is_err(t))
+    match t {
+        case Err(msg) {
+            assert(msg == "try_sqrt expects a number, got str", "type-abuse Err names the type")
+        }
+        case Ok(v) {
+            assert(false, "str input must be Err")
+        }
+    }
+
+    # --- try_floor: exact int results on the ok side
+    assert(tn.try_floor(2.7) == ok(2))
+    assert(tn.try_floor(-2.1) == ok(-3))
+    assert(tn.try_floor(3) == ok(3))
+    # the overflow failure: fixed text
+    let big = tn.try_floor(1.0e300)
+    assert(is_err(big), "overflow is Err")
+    match big {
+        case Err(msg) {
+            assert(msg == "float too large for floor/ceil to int", "exact overflow payload")
+        }
+        case Ok(v) {
+            assert(false, "overflow must be Err")
+        }
+    }
+    let t2 = tn.try_floor([1])
+    assert(is_err(t2))
+    match t2 {
+        case Err(msg) {
+            assert(msg == "try_floor expects a number, got list")
+        }
+        case Ok(v) {
+            assert(false, "list input must be Err")
+        }
+    }
+
+    # --- try_ceil: exact int results on the ok side
+    assert(tn.try_ceil(2.1) == ok(3))
+    assert(tn.try_ceil(-2.7) == ok(-2))
+    let big2 = tn.try_ceil(-1.0e300)
+    assert(is_err(big2), "negative overflow is Err")
+    match big2 {
+        case Err(msg) {
+            assert(msg == "float too large for floor/ceil to int")
+        }
+        case Ok(v) {
+            assert(false, "overflow must be Err")
+        }
+    }
+    let t3 = tn.try_ceil(true)
+    assert(is_err(t3))
+    match t3 {
+        case Err(msg) {
+            assert(msg == "try_ceil expects a number, got bool")
+        }
+        case Ok(v) {
+            assert(false, "bool input must be Err")
+        }
+    }
+
+    # --- the legacy stresses are UNCHANGED (additions, not replacements)
+    let contained = 0
+    stress {
+        sqrt(-1.0)
+    } rescue (e) {
+        assert(e.message == "sqrt of negative number", "legacy sqrt stress intact")
+        contained = contained + 1
+    }
+    stress {
+        floor(1.0e300)
+    } rescue (e) {
+        assert(e.kind == "overflow", "legacy floor stress kind intact")
+        contained = contained + 1
+    }
+    assert(contained == 2, "both legacy stresses still fire")
+}

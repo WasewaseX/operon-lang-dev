@@ -1,0 +1,49 @@
+# try_numeric differential pin: std/try_numeric.op (W006-A wave-3 numeric
+# family, stdlib-side) — byte-identical on both engines AND the oracle.
+# Acceptance paths print the exact builtin values; failure paths print the
+# FIXED Err payloads (engine-neutral payload law, SPEC §9). The legacy
+# stresses are also printed through rescue so the stress texts stay pinned
+# cross-engine. Contract: docs/specs/RESULT-WAVE3.md.
+use std/try_numeric as tn
+
+print("== sqrt ==")
+print(tn.try_sqrt(9.0))
+print(tn.try_sqrt(2.25))
+print(tn.try_sqrt(4))
+print(tn.try_sqrt(0.0))
+print(tn.try_sqrt(-1.0))
+print(tn.try_sqrt(-0.25))
+print(tn.try_sqrt("x"))
+print(tn.try_sqrt([1]))
+
+print("== floor ==")
+print(tn.try_floor(2.7))
+print(tn.try_floor(-2.1))
+print(tn.try_floor(3))
+print(tn.try_floor(1.0e300))
+print(tn.try_floor(-1.0e300))
+print(tn.try_floor("s"))
+print(tn.try_floor(null))
+
+print("== ceil ==")
+print(tn.try_ceil(2.1))
+print(tn.try_ceil(-2.7))
+print(tn.try_ceil(-1.0e300))
+print(tn.try_ceil(true))
+
+print("== legacy stresses unchanged ==")
+stress {
+    print(sqrt(-1.0))
+} rescue (e) {
+    print("stress " + e.kind + ": " + e.message)
+}
+stress {
+    print(floor(1.0e300))
+} rescue (e) {
+    print("stress " + e.kind + ": " + e.message)
+}
+stress {
+    print(ceil(-1.0e300))
+} rescue (e) {
+    print("stress " + e.kind + ": " + e.message)
+}
