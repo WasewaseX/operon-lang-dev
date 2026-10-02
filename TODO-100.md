@@ -866,7 +866,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
 - Delivered: the time-series half of W094's JSON, a runtime tick-stream (frames) a
   visualizer replays or consumes live. GenomeLab timeline integration is a UI wave on top.
 
-### W096, Profiler output formats [P2] [dev-3] [S] [implemented 2026-10-02 on PR operon-lang-dev#61 (W097-A, builder-E profiling lane): per-call span capture + `--chrome` Chrome-trace export + structural golden tests + SPEC/README/BENCH/docs/PROFILING.md recipes; done-when met pending merge — the "blocked on per-call spans (dev-1 lane)" dependency is closed]
+### W096, Profiler output formats [P2] [dev-3] [S] [done 2026-10-02: PR operon-lang-dev#61 MERGED main @ 3197113 (W097-A, builder-E profiling lane) — `--json` (PR #18) + `--chrome` Chrome-trace export over per-call spans captured in close_timing, self-describing otherData with honest drop accounting, 7 structural golden tests, SPEC §11/CLI + README/BENCH/docs/PROFILING.md recipes; flamegraph TEXT format remains the only optional REMAIN (explicitly optional in this row's goal)]
 - Goal: `operon profile --json` (self-describing: units, version, run metadata) +
   Chrome-trace format (`.json` events) so about://tracing / perfetto render it; flamegraph
   text format optional.
@@ -925,7 +925,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
 | W3 | W074 + W073 + W072 + W084 | dev-3 | **done (PRs #18, #20, W074/W073 landed post-W007-merge)** |
 | W3 | W041 + W042 + W037 | dev-2 | queued |
 | W3 | W001/W002 (Track L2c/L2b) | dev-1 | queued |
-| W4 | W082 + W083 + W096 + W099 | dev-3 | W082 + W083 + W099 done (PRs #18, #20); W096 partial (--json landed; Chrome-trace awaits dev-1 per-call spans) |
+| W4 | W082 + W083 + W096 + W099 | dev-3 | all four done — W096 closed 2026-10-02 by PR #61 (per-call spans + Chrome-trace; the dev-1 per-call-span dependency no longer exists) |
 | W4 | W009 VM design → compiler | dev-1 | gated on W007/W006 |
 | W4b | W094 graph export | dev-3 | done (PR #18) |
 | W5+ | remaining P2/P3 per suggested orders | all | rolling |
