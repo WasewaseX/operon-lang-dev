@@ -104,7 +104,18 @@ jobs:
         if: matrix.target != 'x86_64-apple-darwin'
         shell: bash
         run: |
-          V="${GITHUB_REF_NAME#v}"
+          # Smoke expectation = a version the binary can honestly report.
+          # Tag push: the tag minus 'v' (the release-version contract). Any
+          # non-tag ref (dispatch rehearsal): a branch name is NOT a version
+          # the binary could ever carry — derive the expectation from the
+          # built tree's Cargo.toml instead. The first live dry-run (run
+          # 36992837397) failed exactly here: it expected the branch ref
+          # while the binary reported 'Operon 2.7.0-vm (...)'.
+          case "$GITHUB_REF" in
+            refs/tags/*) V="${GITHUB_REF_NAME#v}" ;;
+            *) V="$(awk '/^\[package\]/{f=1;next} f && /^version/{sub(/^version[[:space:]]*=[[:space:]]*"/,""); sub(/".*/,""); print; exit}' Cargo.toml)" ;;
+          esac
+          [ -n "$V" ] || { echo "smoke: could not derive the expected version"; exit 2; }
           if command -v sha256sum >/dev/null 2>&1; then
             (cd "$(dirname "$ASSET")" && sha256sum -c "$(basename "$ASSET").sha256")
           else
