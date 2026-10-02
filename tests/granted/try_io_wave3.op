@@ -1,0 +1,51 @@
+# W006-B (RESULT-WAVE3 §2c) — the GRANTED wave-3 IO try_ lane (explicit
+# operator cell, try_env_wave2 precedent: the zero-grant suite
+# tests/differential/try_io.op pins the interference/arity contract, this
+# file pins the actual Ok and Err outcomes). Grants cannot come from
+# auto-detected cells (TOCTOU guard), so this lane is wired into
+# scripts/test.sh with its own --cell invocation and into harness.py's
+# granted-with-cell differential targets (3-lane byte parity).
+#
+# Payload discipline (§2c): the fixed Err payloads echo the path AS PASSED
+# (the raw argument's display form, never a resolved absolute path), and
+# try_http_get carries NO target echo. The fixture is single-line ASCII+
+# CJK so the byte-count pin (len(bytes) == BYTE count, W029 law) is exact.
+frame proof {
+    # ---- ok side: text read, byte read + round-trip, dir listing
+    let t = try_read_file("tests/granted/try_io_dir/fixture.txt")
+    assert(t == ok("operon try_io fixture 中文 ok"), "read_file ok payload byte-pinned")
+    let b = try_read_file_bytes("tests/granted/try_io_dir/fixture.txt")
+    assert(is_ok(b), "read_file_bytes ok on granted path")
+    assert(len(unwrap(b)) == 31, "bytes payload is the exact BYTE count (2 CJK chars = 6 bytes)")
+    assert(try_str_from_bytes(unwrap(b)) == ok("operon try_io fixture 中文 ok"), "bytes round-trip through the capless twin")
+    let d = try_read_dir("tests/granted/try_io_dir")
+    assert(d == ok(["fixture.txt", "second.txt"]), "read_dir ok payload is the sorted listing")
+    # ---- missing side: granted path, nonexistent entries — the fixed
+    # payloads with the raw path echo (engine-neutral: no OS error text)
+    assert(try_read_file("tests/granted/try_io_dir/nope.txt") == err("read_file 'tests/granted/try_io_dir/nope.txt' failed"), "read_file missing payload pinned")
+    assert(try_read_file_bytes("tests/granted/try_io_dir/nope.txt") == err("read_file_bytes 'tests/granted/try_io_dir/nope.txt' failed"), "read_file_bytes missing payload pinned")
+    assert(try_read_dir("tests/granted/try_io_dir/nope_dir") == err("read_dir 'tests/granted/try_io_dir/nope_dir' failed"), "read_dir missing payload pinned")
+    # ---- run: ok side (exit 0, empty streams) + missing side (spawn failure)
+    let r = try_run("true")
+    assert(is_ok(r), "try_run ok on granted command")
+    assert(unwrap(r).code == 0, "run map exit code 0")
+    assert(unwrap(r).ok == true, "run map ok flag true")
+    assert(try_run("definitely-not-a-real-cmd-w006b") == err("run 'definitely-not-a-real-cmd-w006b' failed"), "run missing payload pinned")
+    # ---- net: closed loopback port — refused connect is a missing stress
+    # under the hood, so the twin turns it into the fixed Err payload
+    assert(try_http_get("127.0.0.1", 1, "/") == err("http_get failed"), "http_get refused payload pinned (no target echo)")
+    # ---- composition: the Err path feeds ?! propagation in a gene
+    gene read_or_err(p) {
+        return try_read_file(p)?!
+    }
+    assert(read_or_err("tests/granted/try_io_dir/fixture.txt") == "operon try_io fixture 中文 ok", "?! unwraps the Ok")
+    assert(read_or_err("tests/granted/try_io_dir/nope.txt") == err("read_file 'tests/granted/try_io_dir/nope.txt' failed"), "?! RETURNS the Err variant (never contained)")
+    # ---- the LEGACY builtins keep their stress contract unchanged even in
+    # the granted lane: read_file on a missing path still raises missing
+    stress {
+        read_file("tests/granted/try_io_dir/nope.txt")
+        assert(false, "legacy read_file must still raise on missing")
+    } rescue (e) {
+        assert(e.kind == "missing", "legacy missing kind intact")
+    }
+}

@@ -48,6 +48,12 @@ echo "[2/3] Operon proof suite (Rust core)"
 # exported here so the Ok payload is byte-pinned; the UNSET probe is
 # granted but never exported, so the Err payload is byte-pinned.
 OPERON_TRY_WAVE2_SET=w2ok ./bin/operon test tests/granted/try_env_wave2.op --cell tests/granted/try_env_wave2.cell
+# W006-B: wave-3 IO try_ granted lane — resolved-prefix read grant over the
+# fixture dir (ok payloads + missing payloads with raw path echo), run grant
+# for true, net grant for the closed-loopback missing probe. The zero-grant
+# suite (tests/differential/try_io.op) pins interference + arity + the
+# capless str_from_bytes shape.
+./bin/operon test tests/granted/try_io_wave3.op --cell tests/granted/try_io_wave3.cell
 echo "[3/4] Differential harness (Rust core vs Python oracle)"
 python3 bootstrap/harness.py
 echo "[4.5/4] W101 diagnostic golden gate"
