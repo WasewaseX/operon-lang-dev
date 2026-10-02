@@ -46,12 +46,17 @@ for f in $(find tests apps -name '*.op' 2>/dev/null | sort); do
     pass=$((pass+1))
   else
     fail=$((fail+1)); failed_files+=("$f")
-    if [ "${VERBOSE:-0}" == "1" ]; then
-      echo "PARITY FAIL: $f (rc $a_rc vs $b_rc vs $c_rc vs $d_rc)"
-      diff <(printf '%s' "$a_out") <(printf '%s' "$b_out") | head -10
-      diff <(printf '%s' "$b_out") <(printf '%s' "$c_out") | head -10
-      diff <(printf '%s' "$b_out") <(printf '%s' "$d_out") | head -10
-      diff <(printf '%s' "$a_err") <(printf '%s' "$d_err") | head -10
+    # F6/#50 (iteration 3): ALWAYS diagnose the first divergence (stream +
+    # rc + diff head) — the aarch64 scope.op qemu divergence cost a full
+    # CI cycle blind; a parity gate must say WHICH stream disagreed.
+    if [ "${VERBOSE:-0}" == "1" ] || [ "$fail" -eq 1 ]; then
+      echo "PARITY FAIL: $f (rc $a_rc/$b_rc/$c_rc/$d_rc)"
+      [ "$a_out" == "$b_out" ] || { echo "  stdout tree-walk vs vm:"; diff <(printf '%s' "$a_out") <(printf '%s' "$b_out") | head -6; }
+      [ "$a_out" == "$c_out" ] || { echo "  stdout tree-walk vs opt1:"; diff <(printf '%s' "$a_out") <(printf '%s' "$c_out") | head -6; }
+      [ "$a_out" == "$d_out" ] || { echo "  stdout tree-walk vs opt2:"; diff <(printf '%s' "$a_out") <(printf '%s' "$d_out") | head -6; }
+      [ "$a_err" == "$b_err" ] || { echo "  stderr tree-walk vs vm:"; diff <(printf '%s' "$a_err") <(printf '%s' "$b_err") | head -6; }
+      [ "$a_err" == "$c_err" ] || { echo "  stderr tree-walk vs opt1:"; diff <(printf '%s' "$a_err") <(printf '%s' "$c_err") | head -6; }
+      [ "$a_err" == "$d_err" ] || { echo "  stderr tree-walk vs opt2:"; diff <(printf '%s' "$a_err") <(printf '%s' "$d_err") | head -6; }
     fi
   fi
 done
