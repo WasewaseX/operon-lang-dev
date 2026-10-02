@@ -1,0 +1,14 @@
+# explicit operator cell for the W006-B wave-3 IO try_ granted lane.
+# Resolved-prefix read grant over the dedicated fixture dir (covers the ok
+# side reads AND the missing-side probes: a nonexistent entry inside the
+# grant passes caps via the parent-chain rule, reaching stat -> missing).
+# run grant is the raw-string exact match the W18 precedent uses; the net
+# grant is the closed loopback port — connection refused is the
+# deterministic missing surface, no live server needed.
+[allow]
+read = "tests/granted/try_io_dir"
+# the run grant covers BOTH ok-side (true) and the missing-side probe: a
+# granted-but-nonexistent command passes the caps gate (raw-string match)
+# and fails at SPAWN, which is the missing surface the twin maps to Err
+run = "true, definitely-not-a-real-cmd-w006b"
+net = "127.0.0.1:1"

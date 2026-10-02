@@ -1,0 +1,58 @@
+# S3 (audit_builtins): differential goldens for registry builtins the
+# corpus had never called. Printed values and stress kinds/messages are
+# the pinned surface; note(4) surfaces are wobble-absorbed by the harness.
+# The wall-clock happy paths (repressi_start with a live ring, serve
+# binding a socket) stay out ON PURPOSE: a golden must be
+# byte-deterministic, not merely green today — those are the
+# async/timing lane's contract (env-sensitive, gated separately).
+
+# ---- values (insertion-ordered map store; same law items() pins) ----
+let m = {"a": 1, "b": 2, "c": 3}
+let vs = values(m)
+assert(type(vs) == "list", "values returns a list")
+assert(vs[0] == 1 and vs[1] == 2 and vs[2] == 3, "insertion order kept")
+assert(len(values({})) == 0, "empty map has no values")
+
+# ---- object_from_map (wire restore; tag names a DECLARED class) ----
+phenotype Pt {
+    let x = 0
+    let y = 0
+}
+let wire = {"#phenotype": "Pt", "x": 3, "y": 4}
+let o = object_from_map(wire)
+assert(o.x == 3 and o.y == 4, "fields restored from the wire")
+stress {
+    object_from_map({"#phenotype": "NeverDeclared", "x": 1})
+} rescue (e) {
+    print("[" + e.kind + "] " + e.message)
+}
+
+# ---- call (dynamic dispatch: named genes, gene values, builtins) ----
+gene add2(a, b) {
+    return a + b
+}
+assert(call("add2", [2, 3]) == 5, "call by name")
+let g = add2
+assert(call(g, [10, 20]) == 30, "call by gene value")
+assert(call("abs", [-7]) == 7, "call dispatches builtins too")
+
+# ---- repressi_start (deterministic refusal surfaces only) ----
+assert(repressi_start(500) == false, "no ring declared: refused")
+repressilator a -> b -> c
+assert(repressi_start(0) == false, "zero period: refused")
+
+# ---- recv_request (sequential surface: empty queue is null) ----
+assert(recv_request() == null, "no server, no request: null")
+
+# ---- send_response (faithful mirror; no server in the sequential lane) ----
+stress {
+    send_response(1, "200", "text/plain", "hi")
+} rescue (e) {
+    print("[" + e.kind + "] " + e.message)
+}
+stress {
+    send_response(1, "200\r\nX-Evil: 1", "text/plain", "hi")
+} rescue (e) {
+    print("[" + e.kind + "] " + e.message)
+}
+promote("builtin-core-gaps: ok")

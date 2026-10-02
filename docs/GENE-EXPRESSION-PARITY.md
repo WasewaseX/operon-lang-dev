@@ -418,3 +418,38 @@ their independent re-derivation (e.g., V2's alpha-surface value is re-folded in 
 compared bit-for-bit). Cross-checks: `docs/spec/BIO-CONTRACT.md` for the canonical grades,
 `docs/spec/MODELING-NOTES.md` for the term audits and the §3 map this document narrates, and
 `docs/spec/VALIDATION.md` for the numerical pins and their tolerances.
+
+---
+
+## 11. Necessity assessment — what to do about §8 (v1.1.0 addendum)
+
+Question on the table: *the language lacks the §8 items relative to IRL gene expression — are any
+of them necessary to add?* Verdict of this audit (2026-10-02, dev-1): **no §8 item is necessary at
+the language level, and none is added in this batch.** The reasoning is the same contract that
+governs the rest of the repo:
+
+- **The control plane is already complete and literature-pinned.** Everything the operon metaphor
+  is *about* — induction and repression with the right polarity (row 19), the polycistronic
+  namesake structure (row 11), attenuation/Rho/polarity (rows 12–14), dosage, occupancy, decoy
+  sequestration, epigenetic maintenance — is modeled with REAL primary grades and pinned numbers.
+  A programming language needs the *control plane* to be faithful; it does not need helicase
+  kinetics to be a good language.
+- **The §8 gaps are metaphysics of the substrate, not semantics of the control plane.** Molecular
+  kinetics, metabolism, chromatin as a polymer, evolution, cell-cycle mechanics, spatial geometry,
+  and post-translational regulation would make Operon a *simulator*. BIO-CONTRACT §4's syntax-freeze
+  rule requires a written justification per new biology; "it would be cool" is not a justification,
+  and this audit finds no correctness hole that any §8 item would close.
+- **Per the owner's standing discipline** (queued TODO list; gated batches; every change through the
+  differential framework), new biology enters only as an owner-approved batch with a contract row,
+  an oracle mirror, and validation pins. The candidates below are recorded so that decision is
+  cheap to make later, in priority order:
+
+| Candidate | Why it might be worth it | Sketch | Size |
+|---|---|---|---|
+| Post-translational switching (phosphorylation-like) | fast, reversible TF state changes are a real control idiom GRN edges cannot express (they mutate levels directly) | `@phospho(state)` per gene, edge weights multiplied by state; seeded decay | M |
+| Intrinsic-noise decomposition | telegraph promoter exists; separating intrinsic burst variance from extrinsic per-worker streams would complete the noise story | joint decomposition knob on `@burst` + variance report | S |
+| Gillespie trajectory mode (opt-in, non-default) | continuous-time sampling for stochastic programs; replayability kept via seeding | `--gillespie` runtime flag, byte-identical under fixed seed | L |
+| Growth/resource allocation | links expression to a growth rate; would touch the two-tier reduction floor | declared ABSTRACTION layer above `passage` | L (contract row + loop review) |
+
+Everything else in §8 stays exactly where it is: documented, honest, out of scope. This addendum
+changes no mechanisms, no syntax, and no grades — it records the decision and the menu.
