@@ -30,8 +30,20 @@ strip = true
 
 # W61 (ROADMAP-100): distribution metadata — community drafts, inert to
 # cargo build. CI-validated when a packaging job lands (see docs/PACKAGING.md).
-# The [package.metadata.binstall] table lands with the B5 stack merge and
-# lives beside these; the tables are independent by design.
+# The tables are independent by design.
+# cargo-binstall (W061-A): the B5 stack merged 2026-09-27 WITHOUT this table
+# reaching main (its Cargo.toml delta stayed on the stack tip) — the channel
+# had silently died. Restored here; the template contract (asset naming,
+# inner dir, binaries) is pinned by scripts/pkg_meta_check.py in the
+# standing gate, so it can never drift behind release.yml unnoticed.
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/operon-{ version }-{ target }{ archive-suffix }"
+pkg-fmt = "tgz"
+bin-dir = "operon-{ version }-{ target }/{ bin }{ binary-ext }"
+
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-fmt = "zip"
+
 [package.metadata.deb]
 maintainer = "Operon maintainers <https://github.com/WasewaseX/operon-lang-dev>"
 copyright = "WasewaseX"

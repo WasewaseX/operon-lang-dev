@@ -46,12 +46,38 @@ fn def_gen_bump() {
 
 impl Env {
     pub fn new(parent: Option<Rc<Env>>) -> Rc<Env> {
+        if crate::w009a::COUNTS_ON.load(std::sync::atomic::Ordering::Relaxed) {
+            crate::w009a::C_ENVNEW.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+        if crate::w009a::A_POOL.load(std::sync::atomic::Ordering::Relaxed) {
+            let (vars, consts) = crate::w009a::env_parts();
+            return Rc::new(Env {
+                vars: RefCell::new(vars),
+                parent,
+                consts: RefCell::new(consts),
+            });
+        }
         Rc::new(Env {
             vars: RefCell::new(HashMap::new()),
             parent,
             consts: RefCell::new(std::collections::HashSet::new()),
         })
     }
+}
+
+impl Drop for Env {
+    fn drop(&mut self) {
+        if crate::w009a::A_POOL.load(std::sync::atomic::Ordering::Relaxed) {
+            let vars = self.vars.take();
+            let consts = self.consts.take();
+            if vars.capacity() > 0 || consts.capacity() > 0 {
+                crate::w009a::recycle(vars, consts);
+            }
+        }
+    }
+}
+
+impl Env {
     /// W05: a const binding, records the name so later assignment stresses.
     pub fn define_const(&self, name: &str, val: Value) {
         def_gen_bump();
@@ -4521,7 +4547,12 @@ impl Interp {
         if let Some(key) = site {
             let gen = def_gen();
             let hit = match self.mono_cache.get(&key) {
-                Some((g, cached)) if *g == gen => Some(cached.clone()),
+                Some((g, cached)) if *g == gen => {
+                    if crate::w009a::COUNTS_ON.load(std::sync::atomic::Ordering::Relaxed) {
+                        crate::w009a::C_MONO.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    }
+                    Some(cached.clone())
+                }
                 _ => None,
             };
             match hit {
@@ -4622,10 +4653,17 @@ impl Interp {
         // only changes again when new expressions execute, which cannot
         // happen during unwinding). Appended to a stress ONLY on the error
         // path, so the happy path pays one comparison, not an allocation.
-        let frame = (
-            def.name.clone().unwrap_or_else(|| "<lambda>".into()),
-            self.cur_line,
-        );
+        let frame = if crate::w009a::A_TB.load(std::sync::atomic::Ordering::Relaxed) {
+            if crate::w009a::COUNTS_ON.load(std::sync::atomic::Ordering::Relaxed) {
+                crate::w009a::C_TB.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
+            (String::new(), self.cur_line)
+        } else {
+            (
+                def.name.clone().unwrap_or_else(|| "<lambda>".into()),
+                self.cur_line,
+            )
+        };
         let result = self.call_gene_inner(def, closure, args);
         self.depth -= 1;
         match result {
@@ -5437,8 +5475,20 @@ impl Interp {
     }
 
     fn promoter_veto(&mut self, def: &GeneDef) -> bool {
-        let name = def.name.clone().unwrap_or_default();
-        if !self.expr_stochastic {
+        let name = if crate::w009a::A_PROMO.load(std::sync::atomic::Ordering::Relaxed) {
+            if !self.expr_stochastic {
+                return false;
+            }
+            if crate::w009a::COUNTS_ON.load(std::sync::atomic::Ordering::Relaxed) {
+                crate::w009a::C_PROMO.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
+            def.name.clone().unwrap_or_default()
+        } else {
+            def.name.clone().unwrap_or_default()
+        };
+        if !crate::w009a::A_PROMO.load(std::sync::atomic::Ordering::Relaxed)
+            && !self.expr_stochastic
+        {
             return false;
         }
         // loop-9 (F-2): per-gene PROMOTER IDENTITY, the mark's own rates
@@ -5484,229 +5534,238 @@ impl Interp {
         args: Vec<Value>,
     ) -> Result<Value, Stress> {
         let name = def.name.clone().unwrap_or_else(|| "<lambda>".into());
+        if crate::w009a::COUNTS_ON.load(std::sync::atomic::Ordering::Relaxed) {
+            crate::w009a::C_NAMES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
         // A13 (dx-r2): gate notes point at the gene's definition line
         let dl = def.line;
-        // GRN gate first: a suppressed call is not expression, it must not
-        // reach the call counters, the burst bins, or the gene body.
-        if let Some(reason) = self.grn_veto(&name) {
-            self.note(
-                dl,
-                4,
-                format!("grn gate: '{}' call suppressed ({})", name, reason),
-            );
-            return Ok(Value::Null);
-        }
-        // T2b methylation gate: level >= threshold blocks transcription;
-        // @acetylate genes are exempt (open chromatin wins, D-005).
-        if !def.acetylate {
-            let lvl = *self.methyl_levels.get(&name).unwrap_or(&0);
-            if lvl >= self.methyl_threshold {
+        if crate::w009a::A_GATES.load(std::sync::atomic::Ordering::Relaxed) {
+            // W009-A ABLATION (measurement only): the whole regulatory block
+            // below — GRN, methylation, riboswitch, promoter, RHO, operon
+            // transcripts, bookkeeping, methyl announcement — is skipped.
+        } else {
+            // GRN gate first: a suppressed call is not expression, it must not
+            // reach the call counters, the burst bins, or the gene body.
+            if let Some(reason) = self.grn_veto(&name) {
                 self.note(
                     dl,
                     4,
-                    format!(
-                        "methylation silences: '{}' (level {} >= threshold {}), call returns null",
-                        name, lvl, self.methyl_threshold
-                    ),
+                    format!("grn gate: '{}' call suppressed ({})", name, reason),
                 );
                 return Ok(Value::Null);
             }
-        }
-        // loop-9 (F-5): CIS riboswitch, after chromatin, before the
-        // promoter. The pinned order extends to
-        // RISC → toggle → GRN → methylation → riboswitch → promoter.
-        if self.riboswitch_veto(&def) {
-            return Ok(Value::Null);
-        }
-        // reg-bio (F-1): telegraph promoter layer, the pinned gate order
-        // ends here: RISC → toggle → GRN → methylation → riboswitch → promoter.
-        if self.promoter_veto(&def) {
-            self.note(
-                dl,
-                4,
-                format!("promoter inactive: '{}' burst-off, call returns null", name),
-            );
-            return Ok(Value::Null);
-        }
-        // loop-10 (F-7): Rho-dependent termination, opt-in (.cell
-        // `rho.termination = true`). The pinned gate order extends to
-        // RISC → toggle → GRN → methylation → riboswitch → promoter → RHO.
-        // The scan models Rho catching up on the NAKED upstream RNA of THIS
-        // transcript: an upstream cistron whose translation fails
-        // (methylation-past-threshold, or a RISC capture that fires on this
-        // attempt) exposes rut sites; Rho loads and chases; the rest of the
-        // transcript for THIS call is lost with probability 1 − (1−catch)^d
-        //, per-cistron catch compounding over the naked runway d (GROWS
-        // with distance: the further the reader, the more catch-up time,
-        // the R10 W1 fix; repeated multiply, no powf). Ribosome occupancy
-        // shields (F-8): a queue depth at or
-        // above rho.queue_floor occludes the rut sites. Insert point: after
-        // the promoter gate, BEFORE transcript/counter bookkeeping, a
-        // terminated call is not expression (no counters, no transcript,
-        // no queue). Entropy: flag OFF = zero draws, bit-identical; flag ON
-        // draws only where 0 < p_g < 1 (member order) and where 0 < q < 1
-        // (one catch-up draw), the C9 p∈{0,1} no-draw discipline.
-        let (rho_on, rho_catch, rho_floor, rho_cap, _rho_drain) = self.rho_knobs();
-        if rho_on {
-            if let Some(rui) = self
-                .operons
-                .iter()
-                .position(|u| u.members.iter().any(|(m, _)| *m == name))
-            {
-                // ast-grep-ignore: no-unwrap-in-src
-                let pos = self.operons[rui]
-                    .members
-                    .iter()
-                    .position(|(m, _)| *m == name)
-                    .unwrap();
-                let mut terminated: Option<String> = None;
-                for i in 0..pos {
-                    let (g, _) = self.operons[rui].members[i].clone();
-                    let p_g = if *self.methyl_levels.get(&g).unwrap_or(&0) >= self.methyl_threshold
-                    {
-                        1.0f64
-                    } else {
-                        let mut surv = 1.0f64;
-                        let mut has_silence = false;
-                        for (sf, st, s, sites) in self.silences.iter() {
-                            if *sf == g && st.is_none() {
-                                has_silence = true;
-                                let base = 1.0 - *s;
-                                let mut k = 0;
-                                while k < *sites {
-                                    surv *= base;
-                                    k += 1;
-                                }
-                            }
-                        }
-                        if has_silence {
-                            1.0 - surv
-                        } else {
-                            0.0
-                        }
-                    };
-                    if p_g == 0.0 {
-                        continue; // p=0 fast path: no draw
-                    }
-                    let mut x = self.rng;
-                    if 0.0 < p_g && p_g < 1.0 {
-                        x ^= x >> 12;
-                        x ^= x << 25;
-                        x ^= x >> 27;
-                        self.rng = x;
-                    }
-                    let naked_g = if p_g == 1.0 {
-                        true
-                    } else {
-                        let u = ((x >> 11) as f64) / 9_007_199_254_740_992.0;
-                        u < p_g
-                    };
-                    let shielded = *self.ribo_queue.get(&g).unwrap_or(&0.0) >= rho_floor;
-                    if naked_g && !shielded {
-                        // q = 1 − (1−catch)^d, per-cistron catch probability
-                        // compounding over the naked runway d = pos - i. The
-                        // R10 biology jury (W1) inverted the first cut
-                        // (catch^d): the FURTHER downstream the reader is
-                        // from the failure, the MORE time Rho has had to
-                        // catch up, so the termination probability must GROW
-                        // with distance. Identical to catch^d at d = 1 and at
-                        // catch ∈ {0,1}, the deterministic pins stand.
-                        let per = 1.0 - rho_catch;
-                        let mut surv = 1.0f64;
-                        let mut k = 0;
-                        while k < pos - i {
-                            surv *= per;
-                            k += 1;
-                        }
-                        let q = 1.0 - surv;
-                        if q == 0.0 {
-                            break; // Rho never catches up
-                        }
-                        let mut x2 = self.rng;
-                        if 0.0 < q && q < 1.0 {
-                            x2 ^= x2 >> 12;
-                            x2 ^= x2 << 25;
-                            x2 ^= x2 >> 27;
-                            self.rng = x2;
-                        }
-                        let caught = if q == 1.0 {
-                            true
-                        } else {
-                            let u2 = ((x2 >> 11) as f64) / 9_007_199_254_740_992.0;
-                            u2 < q
-                        };
-                        if caught {
-                            terminated = Some(g);
-                        }
-                        break; // the first naked member decides: no further scan
-                    }
-                }
-                if let Some(g) = terminated {
+            // T2b methylation gate: level >= threshold blocks transcription;
+            // @acetylate genes are exempt (open chromatin wins, D-005).
+            if !def.acetylate {
+                let lvl = *self.methyl_levels.get(&name).unwrap_or(&0);
+                if lvl >= self.methyl_threshold {
                     self.note(
                         dl,
                         4,
                         format!(
-                            "rho terminated: transcript lost at '{}', call returns null",
-                            g
-                        ),
+                        "methylation silences: '{}' (level {} >= threshold {}), call returns null",
+                        name, lvl, self.methyl_threshold
+                    ),
                     );
                     return Ok(Value::Null);
                 }
             }
-        }
-        // reg-bio-3 (A1/A7): the call passed every gate, one transcript of
-        // the unit is made (a suppressed call is NOT expression and counts
-        // nothing; a successful cistron call is one polycistronic transcript).
-        if let Some(ui) = self
-            .operons
-            .iter()
-            .position(|u| u.members.iter().any(|(m, _)| *m == name))
-        {
-            self.operons[ui].transcripts += 1;
-            // loop-10 (F-8): ribosome queue register, on every successful
-            // cistron call, EVERY member's queue grows by its rbs (the
-            // Shine–Dalgarno initiation propensity), capped at
-            // ribosome.queue_cap. Exists ONLY under rho.termination,
-            // inert bookkeeping otherwise (no legacy surface at all).
+            // loop-9 (F-5): CIS riboswitch, after chromatin, before the
+            // promoter. The pinned order extends to
+            // RISC → toggle → GRN → methylation → riboswitch → promoter.
+            if self.riboswitch_veto(&def) {
+                return Ok(Value::Null);
+            }
+            // reg-bio (F-1): telegraph promoter layer, the pinned gate order
+            // ends here: RISC → toggle → GRN → methylation → riboswitch → promoter.
+            if self.promoter_veto(&def) {
+                self.note(
+                    dl,
+                    4,
+                    format!("promoter inactive: '{}' burst-off, call returns null", name),
+                );
+                return Ok(Value::Null);
+            }
+            // loop-10 (F-7): Rho-dependent termination, opt-in (.cell
+            // `rho.termination = true`). The pinned gate order extends to
+            // RISC → toggle → GRN → methylation → riboswitch → promoter → RHO.
+            // The scan models Rho catching up on the NAKED upstream RNA of THIS
+            // transcript: an upstream cistron whose translation fails
+            // (methylation-past-threshold, or a RISC capture that fires on this
+            // attempt) exposes rut sites; Rho loads and chases; the rest of the
+            // transcript for THIS call is lost with probability 1 − (1−catch)^d
+            //, per-cistron catch compounding over the naked runway d (GROWS
+            // with distance: the further the reader, the more catch-up time,
+            // the R10 W1 fix; repeated multiply, no powf). Ribosome occupancy
+            // shields (F-8): a queue depth at or
+            // above rho.queue_floor occludes the rut sites. Insert point: after
+            // the promoter gate, BEFORE transcript/counter bookkeeping, a
+            // terminated call is not expression (no counters, no transcript,
+            // no queue). Entropy: flag OFF = zero draws, bit-identical; flag ON
+            // draws only where 0 < p_g < 1 (member order) and where 0 < q < 1
+            // (one catch-up draw), the C9 p∈{0,1} no-draw discipline.
+            let (rho_on, rho_catch, rho_floor, rho_cap, _rho_drain) = self.rho_knobs();
             if rho_on {
-                for mi in 0..self.operons[ui].members.len() {
-                    let (m, rbs_m) = self.operons[ui].members[mi].clone();
-                    let q = self.ribo_queue.entry(m).or_insert(0.0);
-                    let nv = *q + rbs_m;
-                    *q = if nv > rho_cap { rho_cap } else { nv };
+                if let Some(rui) = self
+                    .operons
+                    .iter()
+                    .position(|u| u.members.iter().any(|(m, _)| *m == name))
+                {
+                    // ast-grep-ignore: no-unwrap-in-src
+                    let pos = self.operons[rui]
+                        .members
+                        .iter()
+                        .position(|(m, _)| *m == name)
+                        .unwrap();
+                    let mut terminated: Option<String> = None;
+                    for i in 0..pos {
+                        let (g, _) = self.operons[rui].members[i].clone();
+                        let p_g =
+                            if *self.methyl_levels.get(&g).unwrap_or(&0) >= self.methyl_threshold {
+                                1.0f64
+                            } else {
+                                let mut surv = 1.0f64;
+                                let mut has_silence = false;
+                                for (sf, st, s, sites) in self.silences.iter() {
+                                    if *sf == g && st.is_none() {
+                                        has_silence = true;
+                                        let base = 1.0 - *s;
+                                        let mut k = 0;
+                                        while k < *sites {
+                                            surv *= base;
+                                            k += 1;
+                                        }
+                                    }
+                                }
+                                if has_silence {
+                                    1.0 - surv
+                                } else {
+                                    0.0
+                                }
+                            };
+                        if p_g == 0.0 {
+                            continue; // p=0 fast path: no draw
+                        }
+                        let mut x = self.rng;
+                        if 0.0 < p_g && p_g < 1.0 {
+                            x ^= x >> 12;
+                            x ^= x << 25;
+                            x ^= x >> 27;
+                            self.rng = x;
+                        }
+                        let naked_g = if p_g == 1.0 {
+                            true
+                        } else {
+                            let u = ((x >> 11) as f64) / 9_007_199_254_740_992.0;
+                            u < p_g
+                        };
+                        let shielded = *self.ribo_queue.get(&g).unwrap_or(&0.0) >= rho_floor;
+                        if naked_g && !shielded {
+                            // q = 1 − (1−catch)^d, per-cistron catch probability
+                            // compounding over the naked runway d = pos - i. The
+                            // R10 biology jury (W1) inverted the first cut
+                            // (catch^d): the FURTHER downstream the reader is
+                            // from the failure, the MORE time Rho has had to
+                            // catch up, so the termination probability must GROW
+                            // with distance. Identical to catch^d at d = 1 and at
+                            // catch ∈ {0,1}, the deterministic pins stand.
+                            let per = 1.0 - rho_catch;
+                            let mut surv = 1.0f64;
+                            let mut k = 0;
+                            while k < pos - i {
+                                surv *= per;
+                                k += 1;
+                            }
+                            let q = 1.0 - surv;
+                            if q == 0.0 {
+                                break; // Rho never catches up
+                            }
+                            let mut x2 = self.rng;
+                            if 0.0 < q && q < 1.0 {
+                                x2 ^= x2 >> 12;
+                                x2 ^= x2 << 25;
+                                x2 ^= x2 >> 27;
+                                self.rng = x2;
+                            }
+                            let caught = if q == 1.0 {
+                                true
+                            } else {
+                                let u2 = ((x2 >> 11) as f64) / 9_007_199_254_740_992.0;
+                                u2 < q
+                            };
+                            if caught {
+                                terminated = Some(g);
+                            }
+                            break; // the first naked member decides: no further scan
+                        }
+                    }
+                    if let Some(g) = terminated {
+                        self.note(
+                            dl,
+                            4,
+                            format!(
+                                "rho terminated: transcript lost at '{}', call returns null",
+                                g
+                            ),
+                        );
+                        return Ok(Value::Null);
+                    }
                 }
             }
-        }
-        // per-call bookkeeping (counters, clock, decay ticks, burst bins)
-        self.bump_call_bookkeeping(&name);
-        // @methylate: transcriptionally repressed genes announce their first
-        // call (suppressed by .cell `methylate.quiet = true`)
-        if def.methylate && !self.methyl_quiet && !self.methyl_noted.contains(&name) {
-            self.methyl_noted.insert(name.clone());
-            self.note(
-                dl,
-                4,
-                format!("methylated call: '{}' (chromatin repressed)", name),
-            );
-        }
-        // W011 stage 3 item 1: trivial-gene fast dispatch (runtime, not
-        // compile-time — vm-design §2c). A gene whose cached body is
-        // shapes-only AND whose def carries no params, no guard, no
-        // annotations, no defaults and no regulation marks cannot use ANY
-        // of the machinery below: the frame env it builds is empty (nothing
-        // to bind, no guard to run, no annotation to check), so executing
-        // the cached body against the parent env directly is observationally
-        // identical — reads pass through an empty frame, and writes/scopes/
-        // calls cannot exist in the whitelist. Everything with semantics
-        // already ran above: RISC, toggle, GRN, methylation, riboswitch,
-        // promoter, RHO gates, the operon transcript + queue bookkeeping,
-        // bump_call_bookkeeping, the methylate announcement; the extra-args
-        // note cannot fire (a zero-param def never emits it, and this path
-        // requires zero args). The fiber hook falls back to the slow path:
-        // a spawn needs a REAL prepared frame to park. Reads stay live per
-        // execution — only the code is cached, never a value — so the
-        // shadowing corpus (a global rebound between calls, a user gene
-        // shadowing a builtin) rides the same bytes as before.
+            // reg-bio-3 (A1/A7): the call passed every gate, one transcript of
+            // the unit is made (a suppressed call is NOT expression and counts
+            // nothing; a successful cistron call is one polycistronic transcript).
+            if let Some(ui) = self
+                .operons
+                .iter()
+                .position(|u| u.members.iter().any(|(m, _)| *m == name))
+            {
+                self.operons[ui].transcripts += 1;
+                // loop-10 (F-8): ribosome queue register, on every successful
+                // cistron call, EVERY member's queue grows by its rbs (the
+                // Shine–Dalgarno initiation propensity), capped at
+                // ribosome.queue_cap. Exists ONLY under rho.termination,
+                // inert bookkeeping otherwise (no legacy surface at all).
+                if rho_on {
+                    for mi in 0..self.operons[ui].members.len() {
+                        let (m, rbs_m) = self.operons[ui].members[mi].clone();
+                        let q = self.ribo_queue.entry(m).or_insert(0.0);
+                        let nv = *q + rbs_m;
+                        *q = if nv > rho_cap { rho_cap } else { nv };
+                    }
+                }
+            }
+            // per-call bookkeeping (counters, clock, decay ticks, burst bins)
+            self.bump_call_bookkeeping(&name);
+            // @methylate: transcriptionally repressed genes announce their first
+            // call (suppressed by .cell `methylate.quiet = true`)
+            if def.methylate && !self.methyl_quiet && !self.methyl_noted.contains(&name) {
+                self.methyl_noted.insert(name.clone());
+                self.note(
+                    dl,
+                    4,
+                    format!("methylated call: '{}' (chromatin repressed)", name),
+                );
+            }
+        } // end A_GATES else
+          // W011 stage 3 item 1: trivial-gene fast dispatch (runtime, not
+          // compile-time — vm-design §2c). A gene whose cached body is
+          // shapes-only AND whose def carries no params, no guard, no
+          // annotations, no defaults and no regulation marks cannot use ANY
+          // of the machinery below: the frame env it builds is empty (nothing
+          // to bind, no guard to run, no annotation to check), so executing
+          // the cached body against the parent env directly is observationally
+          // identical — reads pass through an empty frame, and writes/scopes/
+          // calls cannot exist in the whitelist. Everything with semantics
+          // already ran above: RISC, toggle, GRN, methylation, riboswitch,
+          // promoter, RHO gates, the operon transcript + queue bookkeeping,
+          // bump_call_bookkeeping, the methylate announcement; the extra-args
+          // note cannot fire (a zero-param def never emits it, and this path
+          // requires zero args). The fiber hook falls back to the slow path:
+          // a spawn needs a REAL prepared frame to park. Reads stay live per
+          // execution — only the code is cached, never a value — so the
+          // shadowing corpus (a global rebound between calls, a user gene
+          // shadowing a builtin) rides the same bytes as before.
         if self.vm
             && !self.fiber_hook
             && args.is_empty()
@@ -5973,6 +6032,12 @@ impl Interp {
     /// counter maps clone it only on the first sight of a gene (get_mut
     /// fast path — the clone-per-call malloc is the fib25-class cost).
     fn bump_call_bookkeeping(&mut self, name: &str) {
+        if crate::w009a::COUNTS_ON.load(std::sync::atomic::Ordering::Relaxed) {
+            crate::w009a::C_BK.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+        if crate::w009a::A_BK.load(std::sync::atomic::Ordering::Relaxed) {
+            return;
+        }
         match self.call_counts.get_mut(name) {
             Some(c) => *c += 1,
             None => {
@@ -5984,8 +6049,10 @@ impl Interp {
         // integration tick here (unset key = no-op).
         // loop-9 (P0-4): the m6A lattice decays on its own cadence when no
         // GRN clock is configured (inert without `m6a.decay`, byte-identical).
-        self.m6a_decay_own();
-        self.grn_decay_tick();
+        if !crate::w009a::A_DECAY.load(std::sync::atomic::Ordering::Relaxed) {
+            self.m6a_decay_own();
+            self.grn_decay_tick();
+        }
         let bucket = self.call_clock / 20;
         match self.gene_buckets.get_mut(name) {
             Some(bins) => match bins.get_mut(&bucket) {
@@ -9269,6 +9336,153 @@ impl Interp {
                             .collect();
                         ok(Value::List(Rc::new(RefCell::new(groups))))
                     }
+                }
+            }
+            // ------------------------------------------------ W006-B: wave-3 IO try_ family (RESULT-WAVE3 §2c)
+            // Native core arms: the legacy IO builtins fail with
+            // missing-class stresses whose payloads embed OS error text
+            // (engine-specific by nature), and a stdlib rescue wrapper
+            // cannot deliver the engine-neutral payload law without
+            // swallowing capability denials (the same rescue that catches
+            // `missing` catches `interference`). Each try_ twin RE-DISPATCHES
+            // the legacy arm — behavior identical by construction, no fuel
+            // or arity pre-charge at the dispatch head to double-count — and
+            // maps ONLY `missing` to an inspectable Err carrying the fixed
+            // engine-neutral payload. `interference` (containment),
+            // `overflow` (resource ceilings are tier 3) and arity `unfolded`
+            // stresses stay stresses: a malformed call is not an expected
+            // failure (§2a).
+            "try_read_file" => {
+                if args.len() != 1 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "try_read_file(path) needs exactly 1 argument",
+                    ));
+                }
+                let path = args.first().map(|v| v.display()).unwrap_or_default();
+                match self.call_builtin(env, "read_file", args) {
+                    Ok(v) => Ok(Value::Variant(crate::value::VTag::OkV, Some(Box::new(v)))),
+                    Err(s) if s.kind == "missing" => Ok(Value::Variant(
+                        crate::value::VTag::ErrV,
+                        Some(Box::new(Value::Str(format!("read_file '{}' failed", path)))),
+                    )),
+                    Err(s) => Err(s),
+                }
+            }
+            "try_read_file_bytes" => {
+                if args.len() != 1 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "try_read_file_bytes(path) needs exactly 1 argument",
+                    ));
+                }
+                let path = args.first().map(|v| v.display()).unwrap_or_default();
+                match self.call_builtin(env, "read_file_bytes", args) {
+                    Ok(v) => Ok(Value::Variant(crate::value::VTag::OkV, Some(Box::new(v)))),
+                    Err(s) if s.kind == "missing" => Ok(Value::Variant(
+                        crate::value::VTag::ErrV,
+                        Some(Box::new(Value::Str(format!(
+                            "read_file_bytes '{}' failed",
+                            path
+                        )))),
+                    )),
+                    Err(s) => Err(s),
+                }
+            }
+            "try_read_dir" => {
+                if args.len() != 1 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "try_read_dir(path) needs exactly 1 argument",
+                    ));
+                }
+                let path = args.first().map(|v| v.display()).unwrap_or_default();
+                match self.call_builtin(env, "read_dir", args) {
+                    Ok(v) => Ok(Value::Variant(crate::value::VTag::OkV, Some(Box::new(v)))),
+                    Err(s) if s.kind == "missing" => Ok(Value::Variant(
+                        crate::value::VTag::ErrV,
+                        Some(Box::new(Value::Str(format!("read_dir '{}' failed", path)))),
+                    )),
+                    Err(s) => Err(s),
+                }
+            }
+            "try_run" => {
+                if args.len() != 1 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "try_run(prog) needs exactly 1 argument",
+                    ));
+                }
+                let prog = args.first().map(|v| v.display()).unwrap_or_default();
+                match self.call_builtin(env, "run", args) {
+                    Ok(v) => Ok(Value::Variant(crate::value::VTag::OkV, Some(Box::new(v)))),
+                    Err(s) if s.kind == "missing" => Ok(Value::Variant(
+                        crate::value::VTag::ErrV,
+                        Some(Box::new(Value::Str(format!("run '{}' failed", prog)))),
+                    )),
+                    Err(s) => Err(s),
+                }
+            }
+            "try_http_get" => {
+                if args.len() != 3 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "try_http_get(host, port, path) needs exactly 3 arguments",
+                    ));
+                }
+                match self.call_builtin(env, "http_get", args) {
+                    Ok(v) => Ok(Value::Variant(crate::value::VTag::OkV, Some(Box::new(v)))),
+                    // the fixed payload carries NO target echo: §2c specifies
+                    // exactly "http_get failed" (the target is deterministic,
+                    // but the contract fixed the shape — keep it)
+                    Err(s) if s.kind == "missing" => Ok(Value::Variant(
+                        crate::value::VTag::ErrV,
+                        Some(Box::new(Value::Str("http_get failed".to_string()))),
+                    )),
+                    Err(s) => Err(s),
+                }
+            }
+            "try_str_from_bytes" => {
+                if args.len() != 1 {
+                    return Err(Stress::at(
+                        self.cur_line,
+                        "unfolded",
+                        "try_str_from_bytes(b) needs exactly 1 argument",
+                    ));
+                }
+                // pure function, no capability gate — the full Ok/Err shape
+                // is differentially pinnable WITHOUT a granted lane. Type
+                // abuse follows the wave-2 family precedent (try_index):
+                // inspectable Err, not a stress. The byte index N is the
+                // offset of the first invalid byte (Rust valid_up_to ==
+                // Python UnicodeDecodeError.start), deterministic both engines.
+                let errv = |msg: String| {
+                    Ok(Value::Variant(
+                        crate::value::VTag::ErrV,
+                        Some(Box::new(Value::Str(msg))),
+                    ))
+                };
+                match args.first() {
+                    Some(Value::Bytes(b)) => match std::str::from_utf8(b) {
+                        Ok(s) => Ok(Value::Variant(
+                            crate::value::VTag::OkV,
+                            Some(Box::new(Value::Str(s.to_string()))),
+                        )),
+                        Err(e) => errv(format!(
+                            "str_from_bytes: invalid UTF-8 at byte {}",
+                            e.valid_up_to()
+                        )),
+                    },
+                    Some(other) => errv(format!(
+                        "try_str_from_bytes needs bytes, got {}",
+                        other.type_name()
+                    )),
+                    None => errv("try_str_from_bytes needs bytes, got null".to_string()),
                 }
             }
             // ------------------------------------------------ date / time (UTC civil calendar)
@@ -12656,6 +12870,13 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "try_env",
     "try_json_parse",
     "try_re_groups",
+    // W006-B: wave-3 IO try_ family (RESULT-WAVE3 §2c, native core arms)
+    "try_read_file",
+    "try_read_file_bytes",
+    "try_read_dir",
+    "try_run",
+    "try_http_get",
+    "try_str_from_bytes",
     "call",
     // L1a: iteration + numeric builtins
     "enumerate",

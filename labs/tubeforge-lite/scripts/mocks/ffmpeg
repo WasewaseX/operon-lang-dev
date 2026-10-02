@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Mock ffmpeg for TubeForge Lite e2e — only needs to answer --version; the mock
+# yt-dlp writes final files directly, so real merging is not exercised here.
+case "$1" in
+  --version|-version) echo "ffmpeg version 7.1-tfmock Copyright (c) 2000-2026 the FFmpeg developers"; exit 0;;
+esac
+exit 0

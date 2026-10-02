@@ -70,6 +70,19 @@ if [ -n "$EXPECT" ] && [ "$V" != "${V//"$EXPECT"/}" ]; then :; else
   [ -n "$EXPECT" ] && { echo "FAIL  version ($V != expected $EXPECT)"; FAIL=1; }
 fi
 step "version"    "$BIN" --version
+# S5: the language server ships in every asset since lsp-r1 — smoke it like
+# the compiler. pkg mode: it MUST be there (asset contract). dir mode: dev
+# trees may not have built it, presence check only.
+LSBIN="$(find "$DIR" -maxdepth 2 -type f \( -name operon-ls -o -name operon-ls.exe \) | head -1)"
+if [ -n "$LSBIN" ]; then
+  chmod +x "$LSBIN" 2>/dev/null || true
+  step "operon-ls --version" "$LSBIN" --version
+elif [ "$MODE" = pkg ]; then
+  echo "FAIL  operon-ls missing inside the artifact (lsp-r1: the editor story ships with the binary)"
+  FAIL=1
+else
+  echo "ok    operon-ls absent (dev tree without operon-ls build, tolerated in dir mode)"
+fi
 # pkg mode simulates the user's clean install: run from the extracted
 # artifact itself, against the examples/std that were actually shipped —
 # not the repo checkout (a repo checkout can mask a broken package).
@@ -86,6 +99,16 @@ if [ "$MODE" = pkg ]; then
     echo "FAIL  std/ missing inside the artifact (dx-r3: clean installs break without it)"
     FAIL=1
   fi
+  # S5: the packaging contract also ships README / LICENSE / TUTORIAL —
+  # they are what the release notes and the offline tutorial promise.
+  for f in README.md LICENSE TUTORIAL.md; do
+    if [ -f "$DIR/$f" ]; then
+      echo "ok    $f present (in artifact)"
+    else
+      echo "FAIL  $f missing inside the artifact (packaging contract)"
+      FAIL=1
+    fi
+  done
 else
   if [ -d "$(dirname "$BIN")/../std" ] || [ -d "$DIR/std" ] || [ -d "std" ]; then
     echo "ok    std/ present"
