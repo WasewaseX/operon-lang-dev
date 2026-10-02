@@ -39,3 +39,20 @@ Run (2026-10-01, main @ c4d258f, v2.7.0 merge): **0 findings** —
 security-and-quality suite, CLI 2.27.1). Fresh-sandbox re-install of the CLI
 from the official bundle; query pack codeql/rust-queries@0.1.43 downloaded on
 first resolve. Covers the W006 wave-2 Result builtins merged in PR #43.
+
+Run (2026-10-02, PR #61 head beba0ec, W097-A span capture + W096 chrome-trace): **0 findings** —
+`2026-10-02-w097a-span-capture.sarif` (46 Rust files extracted, 0 extraction
+errors, 84 artifacts analyzed, security-and-quality suite, CLI 2.27.1, query
+pack codeql/rust-queries@0.1.43). First analyze attempt exceeded one
+tool-call window and was re-run on the warm database (results identical to
+any complete run — the evaluation is deterministic over the same db). The
+PR adds no new dependencies (serde-free policy preserved; the test-side
+JSON parser is in-test), so this run also covers the main Rust tree at
+44c822d + the W097-A delta.
+- 2026-10-02 — `2026-10-02-w010a-disasm.sarif` — **0 findings** (45 Rust files
+extracted, 30 rules, security-and-quality suite, CLI 2.27.1). Builder-D session
+snapshot run on the W010-A head f19a86f (PR #53): the disasm line-annotation,
+all_mnemonics() table and stability-suite growth touch no execution path; the
+run re-establishes the 0-finding baseline for the debugger/tooling lane before
+the W008 polish task starts from this head.
+

@@ -884,6 +884,7 @@ programs bit-identical.
   - `generation`, the division counter (reg-bio-3, B2/B6): advanced by `passage(n)` only (spawn is a thread, not a division).
 - Method: the run's global call clock is sliced into windows of 20 gene calls; each gene's count per window is a sample. A gene fired in bursts has a high variance/mean ratio; a constitutively expressed one sits near 0. Only complete bins count (a trailing partial bin is dropped).
 - `operon profile f.op`, runs instrumented, prints table: gene, calls, **exclusive self-time µs** (children subtracted), flags (`enhanced active repressed`), then a `mature · nascent · maturation` summary and **enhance candidates**, hot genes (called ≥ 10% as often as the most-called gene) that carry no `enhance` annotation.
+- `operon profile f.op --chrome trace.json` (W096/W097-A) additionally captures **per-call spans** and writes them as a Chrome Trace Format `.json` that about://tracing and ui.perfetto.dev render directly: two `ph="M"` metadata events, then one `ph="X"` complete event per gene call — `{name, cat:"gene", pid:1, tid:1, ts, dur, args:{depth}}` — `ts`/`dur` in microseconds on the same monotonic clock as this table (so trace intervals and the self-time table reconcile), `depth` = number of live ancestor frames (outermost call = 0). ONE process, ONE thread: the interpreter is a single logical timeline (fibers ride the deterministic virtual clock on that same thread; worker attribution is W098's WORKER-TELEMETRY surface). `otherData` self-describes the trace: format tag `operon-chrome-trace`, version, source file, unit, clock, and the honest drop accounting — the span log is capped at 1,000,000 entries and past the cap spans are counted in `dropped_spans`, never silently truncated. Capture arms only under `--chrome` (before load, so top-level calls are in the timeline) and captures nothing otherwise — without the flag there is no capture branch taken at all in normal runs, and inside an aggregate-profiled run the span branch is one dead bool check per call; the aggregate `--json` schema is unchanged. With `--json` the operator notice rides stderr so the stream stays parseable.
 - The v2.0 telemetry keys `spliced` / `unspliced` / `velocity` (and the per-gene variance/mean noise key) are retired; `mature`/`nascent`/`maturation` carry the same biology honestly (maturation share, not velocity).
 - Crossing (§11a): the `bursts`, `transcripts`, and `generation` keys are bio-layer counters (mechanisms in §11); the call clock, the bins, `mature`/`nascent`/`maturation`, and the profile table are core telemetry that touches bio state only where the corresponding mechanism is in play.
 - The accounting gauges are a different lane: `memory()` (arena/intern/alloc counters plus the W013 live-cycle field) is process-cumulative for one binary invocation, not per-run call telemetry; the cycle field's contract lives in §19e.
@@ -893,7 +894,7 @@ programs bit-identical.
 - **`operon debug f.op --break N` (W08 phase 1)**: a statement-level trap in the tree-walk interpreter with a REPL on break: `c`/`continue` resumes, `s`/`step` breaks after the next statement, `p EXPR` evaluates in the current frame (same notes and stresses as a run), `vars` dumps the frame chain (values display-truncated), `bt` prints the call chain, `q` leaves with exit 0. EOF on stdin resumes to completion, so piped sessions are scriptable and never wedge. Workers are separate interpreters and never break. VM-offset breakpoints (DAP adapter, phase 2) are deferred to the A-track.
 
 
-- **`--vm` / `--interp` (W09 A2/A6)**: since v2.6.0 the bytecode machine is the DEFAULT engine for gene bodies (src/vm.rs; docs/vm-design.md §2a); `--vm` remains accepted for explicitness and `--interp` opts back to the tree-walking interpreter (the A6 escape hatch, docs/vm-design.md §9). Calls, the gate funnel, capabilities, notes and stress kinds are SHARED code, so output is byte-identical across engines by construction; the differential harness runs every corpus target on BOTH engines against the oracle (default lane + tree-walk lane, both must stay all-green). `operon ir f.op` prints the OIR1 listing, one line per instruction (`op idx | mnemonic | operands | line`), deterministic for the same source (a stability test compiles a mixed program twice and byte-compares the listing, W10). The opcode table, as executed by the machine and documented here:
+- **`--vm` / `--interp` (W09 A2/A6)**: since v2.6.0 the bytecode machine is the DEFAULT engine for gene bodies (src/vm.rs; docs/vm-design.md §2a); `--vm` remains accepted for explicitness and `--interp` opts back to the tree-walking interpreter (the A6 escape hatch, docs/vm-design.md §9). Calls, the gate funnel, capabilities, notes and stress kinds are SHARED code, so output is byte-identical across engines by construction; the differential harness runs every corpus target on BOTH engines against the oracle (default lane + tree-walk lane, both must stay all-green). `operon ir f.op` (alias `operon disasm f.op [--json]`) prints the OIR1 listing, one line per instruction (`idx | mnemonic | operands | line`, the line column is the instruction's source-line stamp, `-` when the insn carries none), deterministic for the same source (stability tests compile mixed programs twice and byte-compare both the text and the JSON listing, W10/W010-A; `--json` emits the same compile pass as a self-describing document with a per-instruction `line` field, pairing with `graph --json`). The opcode table, as executed by the machine and documented here — one row per opcode, exactly the machine's mnemonic table (the W010-A stability tests reconcile the two directions: every machine opcode has a row, every row names a real opcode, the counts are equal):
 
 | opcode | operands | meaning |
 |---|---|---|
@@ -903,16 +904,22 @@ programs bit-identical.
 | `StoreName` | name idx | `let` semantics: rebinding note + define |
 | `AssignName` | name idx | assignment semantics: const check, set, auto-declare note |
 | `Bin` | op | pop two, apply the shared `apply_binop` (exact kinds, messages, line stamps) |
+| `BinImm` | op, const idx | W11 superinstruction: pop lhs, push the constant rhs, apply the SAME `apply_binop` (fuses the measured Push+Bin pair; identical evaluation order and stress surface, one tick instead of two) |
+| `LoadBinImm` | name idx, op, const idx | W11 superinstruction: read a name (the EXACT LoadName arm: clone-charge plus the unbound note), then apply `apply_binop` against the constant (fuses the measured LoadName+Push+Bin triple: `n < 2`, `n - 1`) |
 | `JmpIfF` | target | pop one, jump when falsy (same truthy() order) |
 | `Jmp` | target | unconditional jump |
 | `EvalExpr` | expr idx | BRIDGE: evaluate the arena expression with the tree-walk, push the result |
 | `BridgeStmt` | stmt idx | BRIDGE: execute the arena statement with the tree-walk |
-| `BridgeStmtInLoop` | stmt, top, end | bridge inside a compiled loop; the bridged flow re-enters the loop |
+| `BridgeStmtInLoop` | stmt, cont, brk, unwinds | bridge inside a COMPILED loop: the bridged statement's flow must reach the right loop (cont/brk patched at loop end; unwinds = scopes opened since the loop top, restored before the jump lands) |
 | `Pop` | | discard one value (expression statements) |
 | `Ret` | | return the value on the stack |
-| `Brk`/`Cont` | target | break/continue out of the enclosing COMPILED loop (patched) |
-| `EnterScope`/`ExitScope` | | enter/leave a block scope (fresh child env) |
+| `RetName` | name idx | W11 superinstruction: read a name (the EXACT LoadName arm) and return it (fuses the measured LoadName+Ret pair: every `return <name>` tail) |
+| `Brk` | target | break out of the enclosing COMPILED loop (patched target) |
+| `Cont` | target | continue the enclosing COMPILED loop (patched target) |
+| `EnterScope` | | enter a block scope (fresh child env, tree-walk shape) |
+| `ExitScope` | | leave a block scope |
 | `CallNamed` | name idx, argc | native call (W09): pop argc args, run the SHARED named-call funnel (RISC gate included), push the result |
+| `Nop` | | a line stamp that executes as nothing (rt_p22a: the tree-walk stamps a call's line at arm entry, before its arguments evaluate, and never re-stamps — the per-insn line table needs a real, no-effect insn to do the same; costs one tick, invisible to output) |
 
 Bridging is the Total Grammar escape: a construct the compiler does not lower natively either evaluates via the tree-walk or degrades to a bridge, nothing is rejected at compile time. The native/bridge split is invisible to program output by construction (shared code paths), which is what the vm lane of the differential harness pins.
 
@@ -936,7 +943,11 @@ operon build f.op  --variant v -o out.op [--bundle] [--native]
                    # transformation, not a compiler); --bundle (W87, design:
                    # docs/design/BUNDLE.md) and --native (W85) refuse with that
                    # pointer instead of being silently ignored
-operon profile f.op
+operon profile f.op [--chrome trace.json]
+                   # --chrome (W096/W097-A): also capture per-call spans and write a
+                   # Chrome Trace Format .json (about://tracing / ui.perfetto.dev);
+                   # self-describing otherData, 1M-span cap with dropped_spans
+                   # accounting; --json stays byte-compatible (notice rides stderr)
 operon run f.op --trace-grn trace.jsonl
                    # W095 GRN tick-stream: every engine update point (grn_fire pulse /
                    # decay-clock tick) appends one JSONL frame to the file

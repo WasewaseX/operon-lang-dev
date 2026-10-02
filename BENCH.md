@@ -318,6 +318,10 @@ python3 bootstrap/oracle.py run scripts/bench/collections.op   # oracle-side
 python3 -m cProfile -s tottime bootstrap/oracle.py run scripts/bench/collections.op
 ```
 
+Profiling beyond the aggregate table (per-call spans, Chrome Trace Format,
+the W009-A counters, and the full reproducible measurement procedure):
+see **docs/PROFILING.md**.
+
 Fixture → correctness-proof mapping: `tests/bench/bench_correctness.op`.
 Questions / profile requests: `[builder-B -> sz]` thread in
 `project-vault/collab/COMMS.md`.

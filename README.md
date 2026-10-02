@@ -137,14 +137,16 @@ part of the standard gate suite.
 
 ## Debugging
 
-`operon debug` is a statement-level interactive debugger: line breakpoints,
-step-into/over/out, one-shot run-to-line, live breakpoint management, frame
-variables and expression evaluation — plus a machine surface for tools:
-`--protocol=json` (NDJSON on stdio) and `operon dap` (the Debug Adapter
-Protocol adapter, so VS Code and every other DAP client debug Operon
-natively; the extension lives in `editors/vscode/`). The guide is
-[docs/DEBUGGER.md](docs/DEBUGGER.md); all three surfaces have standing
-e2e gates.
+`operon debug` is a statement-level interactive debugger: line AND
+conditional breakpoints, step-into/over/out, one-shot run-to-line, live
+breakpoint management, variable assignment (`set`), frame variables and
+expression evaluation — plus a machine surface for tools: `--protocol=json`
+(NDJSON on stdio) and `operon dap` (the Debug Adapter Protocol adapter, so
+VS Code and every other DAP client debug Operon natively — with
+`stopOnEntry`, conditional breakpoints and `setVariable`; the extension
+lives in `editors/vscode/`). Stack frames report real call-site lines. The
+guide is [docs/DEBUGGER.md](docs/DEBUGGER.md); all three surfaces have
+standing e2e gates.
 
 ## Fuzzing
 
@@ -245,7 +247,7 @@ operon check f.op    [--nmd | --nmd=purge] [--json]   # 100-point grade + letter
 operon test [dirs]                                # proof-frame runner (files/proofs/assertions: docs/STATS.md)
 operon fmt f.op     [--write]                     # precedence-correct canonical formatter
 operon build f.op   [--variant v] [-o out.op]     # bake splices, strip proofs
-operon profile f.op                               # per-gene calls, exclusive self-µs, flags, maturation, enhance candidates
+operon profile f.op [--chrome trace.json]         # per-gene calls, exclusive self-µs, flags, maturation, enhance candidates; --chrome writes a Chrome-trace .json of per-call spans (docs/PROFILING.md)
 operon crispr f.op  (--knockout gene | --matrix) [--json]
 operon bench f.op   [--iters n]
 operon disasm f.op                                # bytecode listing of compiled gene bodies
