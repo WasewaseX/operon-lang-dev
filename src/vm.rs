@@ -796,7 +796,17 @@ fn exec_gene_code_inner(
             interp.cur_line = line as usize;
         }
         ip += 1;
-        interp.tick()?;
+        if crate::w009a::COUNTS_ON.load(std::sync::atomic::Ordering::Relaxed) {
+            crate::w009a::C_INSTRS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+        if crate::w009a::A_TICK.load(std::sync::atomic::Ordering::Relaxed) {
+            if crate::w009a::COUNTS_ON.load(std::sync::atomic::Ordering::Relaxed) {
+                crate::w009a::C_TICKS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
+            // W009-A ABLATION: fuel tick skipped (measurement only)
+        } else {
+            interp.tick()?;
+        }
         match instr {
             Instr::Push(idx) => {
                 let v = const_value(&code.consts, *idx);
