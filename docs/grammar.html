@@ -26,7 +26,7 @@
 
 <h1 style="font-size:2.4rem; margin:56px 0 8px; letter-spacing:-0.02em;">Grammar reference</h1>
 <p class="lede" style="max-width:680px;">The formal-ish contract, condensed from the
-SPEC (v2.1). Where this page and SPEC.md differ, SPEC.md wins — it is the single source implemented
+SPEC (v2.7.0). Where this page and SPEC.md differ, SPEC.md wins — it is the single source implemented
 identically by the Rust core, the Python oracle, and the JS playground.</p>
 
 <div class="toc">
@@ -60,15 +60,17 @@ identically by the Rust core, the Python oracle, and the JS playground.</p>
 </ul>
 
 <h2 id="keywords">2 · Keywords &amp; marks</h2>
-<p>Canonical keywords (51):</p>
+<p>Canonical keywords (60):</p>
 <figure class="code">
-  <figcaption><span>canonical keyword set</span><span class="tag">SPEC §3</span></figcaption>
+  <figcaption><span>canonical keyword set</span><span class="tag">SPEC §3 · generated truth: docs/KEYWORDS.md</span></figcaption>
   <pre><code>gene let if elif else while loop for in return break continue
 match case use tad anchor export import enhance silence stress
 rescue raise fate state regulate activates inhibits strength
 toggle repressilator period frame proof guard splice variant
 edit replace ires as collect enter
 phenotype sequence yield new threshold from self
+ligand cofactor inducer autoinducer bind decoy
+scope trait operon
 
 marks: <span class="m">@acetylate</span> <span class="m">@methylate</span> <span class="m">@m6a</span></code></pre>
 </figure>
@@ -257,52 +259,46 @@ records of <code>line, rung, message, repair</code>. Nothing is ever rejected.</
 
 <!-- 7 builtins --------------------------------------------------------- -->
 <h2 id="builtins">7 · Builtins</h2>
+<p>The registry has <b>163 builtins</b> (source of truth: <code>BUILTIN_NAMES</code> in
+<code>src/interp.rs</code>, mirrored name-for-name by the oracle). They are grouped here by
+family; <b>capability-gated</b> means default-deny under the SPEC §9b model — denied calls raise
+catchable Stress <code>interference</code> (grants via <code>--allow-*</code> or the
+<code>.cell</code> <code>allow.*</code> keys). Where a family has a twin pair, the
+<code>try_</code>/Result-shaped form maps ONLY the missing case to an <code>err</code> value and
+leaves interference/overflow as stresses (SPEC §10).</p>
 <div class="tablewrap">
   <table>
-    <thead><tr><th>Builtin</th><th>Signature / behavior</th></tr></thead>
+    <thead><tr><th>Family</th><th>Members</th><th>Notes</th></tr></thead>
     <tbody>
-      <tr><td><code>promote(*a)</code></td><td>Print args, space-joined, to stdout; returns null</td></tr>
-      <tr><td><code>len</code></td><td>Length of str / list / map</td></tr>
-      <tr><td><code>push(l, v)</code> · <code>pop(l)</code></td><td>List append / remove-and-return last</td></tr>
-      <tr><td><code>insert(l,i,v)</code> · <code>remove(l,i)</code></td><td>Positional list mutation</td></tr>
-      <tr><td><code>keys(m)</code> · <code>values(m)</code> · <code>has(m,k)</code> · <code>del(m,k)</code></td><td>Map views and mutation (insertion-ordered)</td></tr>
-      <tr><td><code>range(a, b?, step?)</code></td><td>Returns a List</td></tr>
-      <tr><td><code>str</code> · <code>num</code></td><td>Coercions; <code>num</code> fails → 0 + note</td></tr>
-      <tr><td><code>type</code></td><td><code>null bool int float str list map gene native sequence</code>, or the phenotype name for instances</td></tr>
-      <tr><td><code>abs min max sum</code></td><td>Numeric helpers</td></tr>
-      <tr><td><code>floor(x)</code> · <code>ceil(x)</code></td><td>Round down/up → Int</td></tr>
-      <tr><td><code>sqrt(x)</code> · <code>pow(b, e)</code></td><td>Root and power → Float</td></tr>
-      <tr><td><code>clock()</code> · <code>now()</code></td><td>Monotonic seconds, float</td></tr>
-      <tr><td><code>random()</code> · <code>random(n)</code> · <code>randomize(seed?)</code></td><td>Float in [0,1) · int in [0,n) · deterministic xorshift seed (identical in both implementations)</td></tr>
-      <tr><td><code>chr(i)</code> · <code>ord(c)</code></td><td>Code point ↔ 1-char string</td></tr>
-      <tr><td><code>argv()</code></td><td>List of the CLI arguments after the script path</td></tr>
-      <tr><td><code>sleep(ms)</code></td><td>Wall-clock pause; capped at 60,000 ms (sleep escapes the step budget)</td></tr>
-      <tr><td><code>call(name_or_gene, args_list)</code></td><td>Dynamic dispatch — builtins, named genes, or gene values</td></tr>
-      <tr><td><code>json_parse(s)</code> · <code>json_str(v)</code></td><td>JSON round-trip; nesting &gt; 512 raises Stress <code>unfolded</code></td></tr>
-      <tr><td><code>read_file(p)</code> · <code>write_file(p,s)</code> · <code>append_file(p,s)</code></td><td><b>Capability-gated</b> filesystem writes/reads (SPEC §9b)</td></tr>
-      <tr><td><code>exists(p)</code> · <code>read_dir(p)</code></td><td><b>Capability-gated</b> probe / directory listing (List of names)</td></tr>
-      <tr><td><code>run(prog, args?)</code></td><td><b>Capability-gated</b> subprocess → map <code>code stdout stderr ok</code></td></tr>
-      <tr><td><code>http_get(host, port?, path?)</code></td><td><b>Capability-gated</b> HTTP GET → response body</td></tr>
-      <tr><td><code>serve(port?)</code> · <code>recv_request()</code> · <code>send_response(conn, status?, ctype?, body?)</code></td><td><b>Capability-gated</b> HTTP server: listen, poll requests (<code>conn method path body</code> or null), reply</td></tr>
-      <tr><td><code>env(name)</code></td><td><b>Capability-gated</b> environment variable read</td></tr>
-      <tr><td><code>exit(n?)</code> · <code>assert(c, msg?)</code></td><td>Hard stop · raises Stress <code>burned</code> on failure</td></tr>
-      <tr><td><code>codon(s)</code></td><td>0–100 style score of an identifier (codon optimality)</td></tr>
-      <tr><td><code>distance(a,b)</code> · <code>similar(a,b,maxd?)</code></td><td>Edit distance (C++ bit-parallel kernel) · boolean threshold</td></tr>
-      <tr><td><code>transcribe(dna)</code> · <code>translate(rna)</code></td><td>Sequence tools; translate stops at stop codon</td></tr>
-      <tr><td><code>reverse_complement(dna)</code> · <code>gc_content(dna)</code> · <code>find_orf(dna)</code></td><td>Sequence tools (gc 0–100; ORF protein list)</td></tr>
-      <tr><td><code>memory()</code></td><td>Map <code>arena_bytes, interns, allocs</code> from the runtime core</td></tr>
-      <tr><td><code>fingerprint()</code></td><td>Run telemetry — <code>calls burst burst_by_gene mature nascent maturation</code> (§14 of SPEC; the old spliced/unspliced/velocity keys are retired)</td></tr>
-      <tr><td><code>spawn(f, args?)</code> · <code>join(id)</code></td><td>OS thread tasks; result returned, second join → null + note</td></tr>
-      <tr><td><code>toggle_on(name)</code> · <code>toggle_state()</code></td><td>Mutual-repression latch control</td></tr>
-      <tr><td><code>repressi_next()</code> · <code>repressi_state()</code> · <code>repressi_start(ms)</code></td><td>Repressilator ring advance / levels / timed OS-thread mode</td></tr>
-      <tr><td><code>grn_fire(name, decay?)</code> · <code>grn_state()</code> · <code>grn_set(n, v)</code> · <code>grn_get(n)</code></td><td>Regulatory-network ignition (optional per-pulse decay) / level map / single-node write (clamped 0..1) / read</td></tr>
-      <tr><td><code>methyl(key, default?)</code></td><td>Read the <code>.cell</code> methylation config</td></tr>
-      <tr><td><code>methylate(name)</code> · <code>demethylate(name)</code></td><td>Runtime methylation — graded +1 / saturating −1, gate at the next call (returns the level)</td></tr>
+      <tr><td>Output &amp; control</td><td><code>promote(*a)</code> · <code>assert(c, msg?)</code> · <code>exit(n?)</code></td><td>print space-joined to stdout (notes go to stderr) · failure raises <code>burned</code> · hard stop</td></tr>
+      <tr><td>Types &amp; objects</td><td><code>str</code> · <code>num</code> · <code>type</code> · <code>is_object</code> · <code>object_fields</code> · <code>object_from_map</code></td><td>coercions (<code>num</code> fails → 0 + note) · <code>type</code> names the phenotype for instances · wire rebuild is DATA restore: init never runs, absent fields read null + note, unknown class is catchable <code>unfolded</code></td></tr>
+      <tr><td>Option / Result</td><td><code>some</code> · <code>none</code> · <code>ok</code> · <code>err</code> · <code>is_some</code> · <code>is_none</code> · <code>is_ok</code> · <code>is_err</code> · <code>unwrap</code> · <code>unwrap_or</code></td><td>Result-shaped values — the API line for "never a silent null"</td></tr>
+      <tr><td><code>try_*</code> twins</td><td><code>try_num</code> · <code>try_index</code> · <code>try_get</code> · <code>try_pop</code> · <code>try_first</code> · <code>try_last</code> · <code>try_char_at</code> · <code>try_env</code> · <code>try_json_parse</code> · <code>try_re_groups</code> · <code>try_read_file</code> · <code>try_read_file_bytes</code> · <code>try_read_dir</code> · <code>try_run</code> · <code>try_http_get</code> · <code>try_str_from_bytes</code></td><td>map {ok, value, error, code}; only the missing case becomes <code>err</code></td></tr>
+      <tr><td>Collections</td><td><code>len</code> · <code>push</code> · <code>pop</code> · <code>insert</code> · <code>remove</code> · <code>keys</code> · <code>values</code> · <code>has</code> · <code>del</code> · <code>items</code> · <code>range</code> · <code>enumerate</code> · <code>zip</code> · <code>sorted</code> · <code>reversed</code> · <code>any</code> · <code>all</code> · <code>first</code> · <code>last</code> · <code>take</code> · <code>drop</code> · <code>unique</code> · <code>flatten</code> · <code>chunk</code></td><td>lists and maps are insertion-ordered; <code>range</code> returns a List</td></tr>
+      <tr><td>Strings &amp; unicode</td><td><code>char_at</code> · <code>char_slice</code> · <code>grapheme_len</code> · <code>fold_case</code> · <code>casefold</code> · <code>char_category</code> · <code>norm_nfc</code> · <code>norm_nfd</code> · <code>chr(i)</code> · <code>ord(c)</code></td><td>grapheme-aware, not byte-aware · code point ↔ 1-char string</td></tr>
+      <tr><td>Numbers</td><td><code>abs</code> · <code>min</code> · <code>max</code> · <code>sum</code> · <code>floor</code> · <code>ceil</code> · <code>sqrt</code> · <code>pow</code> · <code>round</code> · <code>clamp</code> · <code>divmod</code></td><td>IEEE floats; domain edges (e.g. sqrt of a negative) are pinned in the differential corpus</td></tr>
+      <tr><td>Time</td><td><code>clock()</code> · <code>now()</code> · <code>unix_time()</code> · <code>date_parts(t)</code> · <code>date_fmt(t, f)</code> · <code>sleep(ms)</code></td><td>monotonic + wall views · sleep capped at 60,000 ms (escapes the step budget)</td></tr>
+      <tr><td>Random</td><td><code>random()</code> · <code>random(n)</code> · <code>randomize(seed?)</code></td><td>deterministic xorshift, byte-identical in both implementations</td></tr>
+      <tr><td>Regex</td><td><code>re_match</code> · <code>re_find</code> · <code>re_groups</code> · <code>re_replace</code></td><td>bounded backtracking; matches the oracle's engine within the pinned surface</td></tr>
+      <tr><td>JSON</td><td><code>json_parse(s)</code> · <code>json_str(v)</code></td><td>nesting &gt; 512 raises Stress <code>unfolded</code>; std/serialize is the Result-shaped front door</td></tr>
+      <tr><td>Bytes</td><td><code>bytes_from_str</code> · <code>bytes_from_list</code> · <code>bytes_to_list</code> · <code>str_from_bytes</code> · <code>read_file_bytes</code> · <code>write_file_bytes</code></td><td><code>read/write_file_bytes</code> are <b>capability-gated</b>; <code>len(bytes)</code> is the byte count</td></tr>
+      <tr><td>Filesystem</td><td><code>read_file(p)</code> · <code>write_file(p,s)</code> · <code>append_file(p,s)</code> · <code>exists(p)</code> · <code>file_size(p)</code> · <code>read_dir(p)</code> · <code>fs_delete(p)</code> · <code>fs_rename(a,b)</code> · <code>fs_mkdir(p)</code></td><td><b>capability-gated</b> (read/write gates); symlink-resolved grants, traversal denied</td></tr>
+      <tr><td>Process &amp; environment</td><td><code>run(prog, args?)</code> · <code>env(name)</code> · <code>argv()</code> · <code>py(code, args?)</code></td><td><code>run</code>/<code>env</code> are <b>capability-gated</b>; <code>py</code> needs the <code>py</code> capability (Python bridge)</td></tr>
+      <tr><td>Network</td><td><code>http_get(host, port?, path?)</code> · <code>serve(port?)</code> · <code>recv_request()</code> · <code>send_response(conn, status?, ctype?, body?)</code></td><td><b>capability-gated</b> (net, per host:port); the server trio is timing-dependent — containment is redteam-covered, not differentially golden-ed</td></tr>
+      <tr><td>Dynamic dispatch</td><td><code>call(name_or_gene, args_list)</code></td><td>builtins, named genes, or gene values</td></tr>
+      <tr><td>Fibers &amp; tasks</td><td><code>spawn(f, args?)</code> · <code>join(id)</code> · <code>cancel(id)</code> · <code>cancelled(id)</code> · <code>task_state(id)</code> · <code>wait_all(ids)</code> · <code>wait_any(ids)</code></td><td>fibers over the VM loop (W016): deterministic FIFO scheduler on a virtual clock — spawn/join are NOT OS threads; the thread pool (<code>io.pool</code>) is the opt-in twin, pinned byte-identical</td></tr>
+      <tr><td>Channels</td><td><code>channel()</code> · <code>send(ch, v)</code> · <code>recv(ch)</code> · <code>close(ch)</code> · <code>select(chs)</code></td><td>same fiber scheduler; FIFO order is deterministic</td></tr>
+      <tr><td>Bio-sequence</td><td><code>codon(s)</code> · <code>distance(a,b)</code> · <code>similar(a,b,maxd?)</code> · <code>transcribe(dna)</code> · <code>translate(rna)</code> · <code>reverse_complement(dna)</code> · <code>gc_content(dna)</code> · <code>find_orf(dna)</code></td><td><code>distance</code> rides the C++ bit-parallel kernel; translate stops at the stop codon</td></tr>
+      <tr><td>Memory &amp; telemetry</td><td><code>memory()</code> · <code>fingerprint()</code> · <code>promoter_telemetry()</code> · <code>burst_set(gene, n)</code></td><td><code>memory()</code> is the symbol-table gauge (<code>arena_bytes, interns, allocs</code>, SPEC §10 honest limits) · <code>fingerprint()</code> = run telemetry (<code>calls burst burst_by_gene mature nascent maturation</code>)</td></tr>
+      <tr><td>Regulation</td><td><code>grn_fire(name, decay?)</code> · <code>grn_state()</code> · <code>grn_set(n, v)</code> · <code>grn_get(n)</code> · <code>decay_clock()</code> · <code>ligand(name)</code> · <code>ligand_set(name, v)</code> · <code>quorum()</code> · <code>quorum_state()</code> · <code>quench()</code> · <code>secrete(mol, amt)</code></td><td>regulatory-network ignition / level views (clamped 0..1) · ligand–receptor and quorum-sensing media</td></tr>
+      <tr><td>Methylation &amp; m6A</td><td><code>methyl(key, default?)</code> · <code>methylate(name)</code> · <code>demethylate(name)</code> · <code>m6a_write(gene)</code> · <code>m6a_erase(gene)</code> · <code>passage(n?)</code></td><td>graded runtime marks (+1 / saturating −1) · m6A priority for entry · passages age the cell</td></tr>
+      <tr><td>Toggle &amp; repressilator</td><td><code>toggle_on(name)</code> · <code>toggle_state()</code> · <code>repressi_next()</code> · <code>repressi_state()</code> · <code>repressi_start(ms)</code></td><td>mutual-repression latch · ring advance / levels / timed mode (the wall-clock ticker is excluded from differential goldens by policy; manual rings are deterministic)</td></tr>
+      <tr><td>Splice &amp; expressions</td><td><code>splice_shift(name)</code> · <code>expr_on(e)</code> · <code>expr_off(e)</code></td><td>runtime splice re-resolution · per-expression enable/disable</td></tr>
+      <tr><td>Weak references</td><td><code>weak(v)</code> · <code>strengthen(w)</code></td><td>non-owning handles; strengthen may return null after collection</td></tr>
     </tbody>
   </table>
 </div>
 
-<!-- 8 methods ---------------------------------------------------------- -->
 <h2 id="methods">8 · Methods</h2>
 <figure class="code">
   <figcaption><span>method tables</span><span class="tag">SPEC §10</span></figcaption>
@@ -323,22 +319,28 @@ records of <code>line, rung, message, repair</code>. Nothing is ever rejected.</
 <figure class="code">
   <figcaption><span>operon — Rust toolchain binary</span><span class="tag">SPEC §15</span></figcaption>
   <pre><code>operon run f.op    [--entry g] [--variant v] [--cell c] [--rna r] [--frame name] [--ires] [--strict] [--quiet] [--fuel N]
+                   [--no-vm] [--trace-grn trace.jsonl]
                    [--allow-read p] [--allow-write p] [--allow-run prog] [--allow-net host:port] [--allow-env var] [--allow-all]
 operon check f.op  [--nmd] [--nmd=purge] [--json]
-operon test [paths...]
+operon test [paths...] [--repeat n]
 operon fmt f.op    [--write]        <span class="c"># canonical formatter; wobble-corrected output parses clean</span>
 operon build f.op  --variant v -o out.op
-operon profile f.op
+operon profile f.op [--json] [--chrome trace.json]
 operon crispr f.op (--knockout gene | --matrix) [--json]   <span class="c"># knockout: body → return null; run proofs; survivors.</span>
                                     <span class="c"># matrix: knock out every top-level gene; viability table</span>
 operon bench f.op  [--iters n]
+operon debug f.op                   <span class="c"># REPL debugger (W008): breakpoints, stepping, frames, setVariable</span>
+operon doc f.op                     <span class="c"># doc-comment extraction (W73)</span>
 operon version</code></pre>
 </figure>
 <ul class="plain">
-  <li><code>operon test</code> defaults to <code>tests/</code> recursively; each file's proof frames run, failures are recorded, the suite continues; exit 1 on any failure. Report: files, proofs run, passed, failed, assertions exercised, wobble notes. A proof that returns early or exercises zero assertions <b>fails</b> (integrity, not politeness). Current suite: 22 files / 22 proofs / 262 assertions.</li>
+  <li><code>operon test</code> defaults to <code>tests/</code> recursively; each file's proof frames run, failures are recorded, the suite continues; exit 1 on any failure. Report: files, proofs run, passed, failed, assertions exercised, wobble notes. A proof that returns early or exercises zero assertions <b>fails</b> (integrity, not politeness). Current generated counts live in <a href="STATS.md">docs/STATS.md</a> — never hand-typed.</li>
+  <li><code>--no-vm</code> runs the tree-walk interpreter instead of the default bytecode VM — the differential harness pins both engines (plus the Python oracle) to byte-identical stdout and exit codes.</li>
+  <li><code>--trace-grn trace.jsonl</code> emits one JSONL frame per regulation update point (fire pulses / decay ticks, byte-sorted levels, deterministic, 200k-frame cap) — the W095 tick-stream a visualizer replays.</li>
   <li><code>--strict</code> → exit code 3 if any rung ≥ 3 note occurred (<code>wobble.strict = true</code> in <code>.cell</code> does the same per run).</li>
-  <li><code>--fuel N</code> caps the interpreter's step budget (default 200,000,000); exhaustion raises catchable Stress <code>overflow</code>.</li>
-  <li><b>Stdout discipline</b> — <code>promote</code> prints program output; notes/reports go to <em>stderr</em>, so <code>operon run f.op &gt; out.txt</code> is clean. <code>--json</code> on check/test/crispr emits machine-readable JSON to stdout (<code>check --json</code> includes <code>phantoms</code> and <code>nmd</code> arrays).</li>
+  <li><code>--fuel N</code> scales the step budget (the run-wide pool default is 500,000,000 — SPEC §17 amendment 4); exhaustion raises catchable Stress <code>overflow</code>.</li>
+  <li><code>operon profile --json</code> emits self-describing aggregate profile JSON; <code>--chrome trace.json</code> writes per-call spans in Chrome Trace Format (renders in about://tracing / ui.perfetto.dev) — see docs/PROFILING.md for the measurement discipline.</li>
+  <li><b>Stdout discipline</b> — <code>promote</code> prints program output; notes/reports go to <em>stderr</em>, so <code>operon run f.op &gt; out.txt</code> is clean. <code>--json</code> on check/test/crispr/profile emits machine-readable JSON to stdout (<code>check --json</code> includes <code>phantoms</code> and <code>nmd</code> arrays).</li>
   <li><b>Capability grants</b> — <code>--allow-read/--allow-write</code> take paths, <code>--allow-run</code> a program, <code>--allow-net</code> a <code>host:port</code>, <code>--allow-env</code> a variable name, <code>--allow-all</code> opens everything. Denied operations raise catchable Stress <code>interference</code> — see the security section of <a href="../SPEC.md">SPEC §9b</a> for the full model (default-deny, symlink-resolved grants, <code>.cell</code> <code>allow.*</code> keys only with explicit <code>--cell</code>).</li>
 </ul>
 
@@ -373,8 +375,8 @@ The <a href="../web/playground/index.html">playground</a> applies the same arith
   <div class="wrap foot-inner">
     <div>
       <a class="logo" href="index.html"><span class="logo-mark"></span>operon<b>.lang</b></a>
-      <p class="mono">Operon 2.2.0 · rust-core · cpp-kernel<br>
-      SPEC v2.1 · Total Grammar: nothing is rejected.</p>
+      <p class="mono">Operon 2.7.0 · rust-core · cpp-kernel<br>
+      SPEC v2.7.0 · Total Grammar: nothing is rejected.</p>
     </div>
     <div class="foot-links">
       <a href="index.html">Overview</a>
