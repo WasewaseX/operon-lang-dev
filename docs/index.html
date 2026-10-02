@@ -153,7 +153,7 @@
     <table>
       <thead><tr><th>Layer</th><th>Language</th><th>Role</th></tr></thead>
       <tbody>
-        <tr><td><code>src/</code> — core</td><td>Rust</td><td>Compiler, checker, VM — the primary implementation; the old C runtime was ported here (arenas, interning, reference-counted values)</td></tr>
+        <tr><td><code>src/</code> — core</td><td>Rust</td><td>Compiler, checker, VM — the primary implementation; arenas, interning, reference-counted values (in-core since A15)</td></tr>
         <tr><td><code>runtime/</code> — codon kernel</td><td>C++</td><td>Hot paths: bit-parallel edit-distance, telemetry counters</td></tr>
         <tr><td><code>bootstrap/oracle.py</code></td><td>Python</td><td>Reference oracle for differential testing + packaging</td></tr>
         <tr><td><code>std/</code></td><td>Operon</td><td>Self-hosted standard library, consumed via <code>use</code></td></tr>
