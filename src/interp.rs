@@ -547,6 +547,28 @@ pub struct OperonUnit {
     pub transcripts: u64,
 }
 
+/// W097-A: one completed gene-call span (per-call timeline record). The
+/// profiler aggregates self/inclusive time per gene (call_time*, aggregate
+/// only); spans add the MISSING per-call timeline W096's Chrome-trace export
+/// needs. `depth` = number of ancestor frames live at call time (the
+/// outermost gene call is depth 0), so a consumer can reconstruct nesting
+/// without scanning intervals (and Chrome X-events nest by ts/dur anyway —
+/// depth is a cross-check + flamegraph input).
+#[derive(Clone, Debug)]
+pub struct CallSpan {
+    pub name: String,
+    /// start time in microseconds (the same monotonic clock close_timing uses).
+    pub start_us: f64,
+    /// inclusive duration in microseconds (children included, like call_time).
+    pub dur_us: f64,
+    pub depth: u32,
+}
+
+/// Span-log cap. A runaway program must not OOM the profiler: past this,
+/// spans are DROPPED and counted (spans_dropped surfaces in the trace's
+/// otherData — an honest limit, never a silent truncation).
+pub const SPAN_CAP: usize = 1_000_000;
+
 pub struct Interp {
     pub notes: Vec<Note>,
     /// sec-r3: notes suppressed past the cap (surfaced once).
@@ -708,6 +730,17 @@ pub struct Interp {
     pub modules: HashMap<String, Value>,                  // path -> module map
     pub loading: Vec<String>,
     pub profiling: bool,
+    /// W097-A (builder-E, profiling lane): per-call span capture for the
+    /// Chrome-trace surface (`operon profile --chrome`, W096's blocked
+    /// REMAIN). Opt-in only; OFF by default so the differential contract is
+    /// untouched. When off the cost is one bool check inside the already
+    /// `profiling`-gated close_timing block — zero when profiling is off.
+    pub spans: bool,
+    /// Completed call spans in completion (chronological-by-end) order.
+    /// Capped at SPAN_CAP; further spans are counted in spans_dropped
+    /// instead of recorded (honest limit — the operator sees the drop).
+    pub span_log: Vec<CallSpan>,
+    pub spans_dropped: u64,
     pub proof_mode: bool,
     pub global: Rc<Env>,
     pub steps: u64,
@@ -907,6 +940,9 @@ impl Interp {
             modules: HashMap::new(),
             loading: Vec::new(),
             profiling: false,
+            spans: false,
+            span_log: Vec::new(),
+            spans_dropped: 0,
             proof_mode: false,
             global: Env::new(None),
             steps: 0,
@@ -6015,6 +6051,9 @@ impl Interp {
         self.call_time_self.clear();
         self.call_stack.clear();
         self.call_clock = 0;
+        // W097-A: a re-run starts its timeline from zero too.
+        self.span_log.clear();
+        self.spans_dropped = 0;
     }
 
     /// Close the timing frame for a gene call: accumulate exclusive (self)
@@ -6028,6 +6067,23 @@ impl Interp {
                 *self.call_time_self.entry(n.clone()).or_insert(0.0) += self_us;
                 if let Some(parent) = self.call_stack.last_mut() {
                     parent.2 += incl; // my inclusive time is my parent's child time
+                }
+                // W097-A: per-call span capture (opt-in, Chrome-trace feed).
+                // Inside the profiling block so the capture costs one bool
+                // check when profiling runs without spans, and nothing at
+                // all when profiling is off. depth = ancestors still on the
+                // stack after this frame popped.
+                if self.spans {
+                    if self.span_log.len() < SPAN_CAP {
+                        self.span_log.push(CallSpan {
+                            name: n.clone(),
+                            start_us: t0 / 1000.0,
+                            dur_us: incl,
+                            depth: self.call_stack.len() as u32,
+                        });
+                    } else {
+                        self.spans_dropped += 1;
+                    }
                 }
             }
             let _ = (n, child_acc);

@@ -866,7 +866,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
 - Delivered: the time-series half of W094's JSON, a runtime tick-stream (frames) a
   visualizer replays or consumes live. GenomeLab timeline integration is a UI wave on top.
 
-### W096, Profiler output formats [P2] [dev-3] [S] [partial: --json landed (PR #18); Chrome-trace blocked on per-call spans (dev-1 lane)]
+### W096, Profiler output formats [P2] [dev-3] [S] [implemented 2026-10-02 on PR operon-lang-dev#61 (W097-A, builder-E profiling lane): per-call span capture + `--chrome` Chrome-trace export + structural golden tests + SPEC/README/BENCH/docs/PROFILING.md recipes; done-when met pending merge — the "blocked on per-call spans (dev-1 lane)" dependency is closed]
 - Goal: `operon profile --json` (self-describing: units, version, run metadata) +
   Chrome-trace format (`.json` events) so about://tracing / perfetto render it; flamegraph
   text format optional.
