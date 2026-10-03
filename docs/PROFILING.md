@@ -109,7 +109,7 @@ table reconcile. `otherData` self-describes the file: format tag,
 version, source file, unit, clock, `total_spans`, `dropped_spans`,
 `span_cap`.
 
-Contract highlights (normative wording in SPEC §11 telemetry; shape
+Contract highlights (normative wording in SPEC §14 telemetry; shape
 pinned by `tests/profile_spans.rs`):
 
 - **Capture arms only under `--chrome`, before load** — top-level calls
