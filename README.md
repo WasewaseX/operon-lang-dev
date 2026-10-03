@@ -22,14 +22,14 @@ The mandate: *"Rust, then C, then Python, then Operon, then C++, then HTML, then
 - Python as bootstrap (not implementation) is the right reduction from v1's 100%-Python mistake.
 - One point withheld: **Operon below Python is a snapshot, not a destiny.** Mainstream languages converge on self-hosting (Rust in Rust, Go in Go, TypeScript in TypeScript). Operon's share must grow release over release, the stdlib is already pure `.op`.
 
-### Measured composition (main @ 429b20e, `bash scripts/stack_report.sh`)
+### Measured composition (main @ 7d6aada, `bash scripts/stack_report.sh`)
 
 | rank | language | lines | share | role |
 |---|---|---|---|---|
-| 1 | **Operon** | 425,960 | ~85% | **self-hosted stdlib (33 modules, generated inventory in [docs/STATS.md](docs/STATS.md)), proof tests, red-team suite, differential corpus, GenomeLab + the ytdl app (incl. the cross-language bench surface)** (`std/ tests/ examples/ apps/`) |
+| 1 | **Operon** | 426,312 | ~85% | **self-hosted stdlib (33 modules, generated inventory in [docs/STATS.md](docs/STATS.md)), proof tests, red-team suite, differential corpus, GenomeLab + the ytdl app (incl. the cross-language bench surface)** (`std/ tests/ examples/ apps/`) |
 | 2 | **Rust** | 57,225 | ~11% | lexer, Total Grammar parser, evaluator, capability sandbox, symbol table, HTTP/JSON, toolchain CLI, REPL, `operon-ls` LSP seed (`src/`) |
 | 3 | **Python** | 9,456 | ~2% | bootstrap: reference oracle + differential harness (`bootstrap/`), test infrastructure only, nothing shipped depends on it |
-| 4 | **Shell** | 2,611 | ~0.5% | build/test/bench/stack/install scripts (`scripts/`) |
+| 4 | **Shell** | 2,877 | ~0.6% | build/test/bench/stack/install scripts (`scripts/`) |
 | 5 | **JavaScript** | 2,062 | ~0.4% | browser playground subset interpreter (`web/playground/app.js`) |
 | 6 | **HTML** | 1,347 | ~0.3% | documentation site (`docs/`) |
 | 7 | **CSS** | 311 | <1% | docs + playground styling |
@@ -249,8 +249,23 @@ operon run f.op      [--entry g] [--variant v] [--cell c] [--rna r] [--frame n] 
                      [--vm | --vm-opt]             # bytecode VM / VM + semantics-preserving optimizer
                      [--allow-read p] [--allow-write p] [--allow-run prog] [--allow-net host:port] [--allow-env var] [--allow-all]
 operon check f.op    [--nmd | --nmd=purge] [--json]   # 100-point grade + letter; --json: phantoms/nmd arrays
+operon lint f.op [f2.op ...]
+                     [--strict] [--allow r1,r2] [--cell c] [--json]
+                     # W48 split: style/quality only — unused genes/imports/bindings, dead consts,
+                     # shadowed bindings, constant-condition, infinite-loop-suspect, unreachable code,
+                     # duplicate/unreachable match-arms; --strict: any finding = exit 3
 operon test [dirs]                                # proof-frame runner (files/proofs/assertions: docs/STATS.md)
 operon fmt f.op     [--write]                     # precedence-correct canonical formatter
+operon fix f.op     [--write] [--json]            # legacy-surface migrator (s:: → dot, synonym canonicalization), dry-run default
+operon ast f.op     [--json]                      # s-expression AST dump (the formatter's printer)
+operon keywords     [--json]                      # the reserved-word × behavior table (W55)
+operon doc f.op|dir [-o outdir] [--json]          # ## doc comments → markdown (W73/W74; docs/api/ is generated this way)
+operon graph f.op   [--json]                      # regulation network → graphviz dot (activates/inhibits edges, strength/threshold)
+operon rna f.op patch.rna
+                     [--write] [--check] [--json]
+                     # AST patch; --check validates only (would_apply, ambiguity, comment preflight — W68, writes nothing);
+                     # `syntax: v2` patches are node-addressed (W067)
+operon watch f.op   [args...]                     # re-run on every file change
 operon build f.op   [--variant v] [-o out.op]     # bake splices, strip proofs
 operon profile f.op [--chrome trace.json]         # per-gene calls, exclusive self-µs, flags, maturation, enhance candidates; --chrome writes a Chrome-trace .json of per-call spans (docs/PROFILING.md)
 operon crispr f.op  (--knockout gene | --matrix) [--json]
@@ -301,6 +316,8 @@ operon tree               # what is resolved, at which rev, from where
 operon verify             # every vendored tree matches its checksum
 operon remove web
 operon update             # re-resolve the whole closure
+operon install            # cold-start: fetch + materialize every pinned dep (operon.toml + operon.lock; seed-registry path re-materializes offline)
+operon mod …              # the same package verbs, explicit spelling (mod add/install/verify/tree/…)
 operon publish            # append your package to a registry index
 ```
 
