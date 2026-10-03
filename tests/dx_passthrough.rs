@@ -35,7 +35,15 @@ gene main() {
 
     // --out and --json are host-known names; after `--` they must survive.
     let out = Command::new(EXE)
-        .args(["run", script.to_str().unwrap(), "--", "get", "--out", "/tmp/x", "--json"])
+        .args([
+            "run",
+            script.to_str().unwrap(),
+            "--",
+            "get",
+            "--out",
+            "/tmp/x",
+            "--json",
+        ])
         .output()
         .expect("spawn operon");
     let s = String::from_utf8_lossy(&out.stdout);
