@@ -2,21 +2,21 @@
 model name	: Intel(R) Xeon(R) Processor
 2
 === matrix (operon bench --iters 30, min/avg ms, in-process) ===
-base  (scratch, flags off) | operon bench: scripts/bench/fib25.op × 30 iters, min 143.683 ms · avg 146.493 ms
-tick  (no fuel tick in dispatch) | operon bench: scripts/bench/fib25.op × 30 iters, min 143.825 ms · avg 145.205 ms
-tb    (lazy traceback frame) | operon bench: scripts/bench/fib25.op × 30 iters, min 136.263 ms · avg 137.559 ms
-promo (promoter clone after check) | operon bench: scripts/bench/fib25.op × 30 iters, min 138.001 ms · avg 139.919 ms
-decay (no m6a/grn decay tickers) | operon bench: scripts/bench/fib25.op × 30 iters, min 143.288 ms · avg 144.249 ms
-bk    (no call bookkeeping at all) | operon bench: scripts/bench/fib25.op × 30 iters, min 126.920 ms · avg 127.718 ms
-gates (whole regulatory block skipped) | operon bench: scripts/bench/fib25.op × 30 iters, min 119.549 ms · avg 120.666 ms
-pool  (Env map/consts free-list) | operon bench: scripts/bench/fib25.op × 30 iters, min 152.305 ms · avg 153.803 ms
-SAFE  (gates,tb,promo — fix-shaped) | operon bench: scripts/bench/fib25.op × 30 iters, min 111.423 ms · avg 112.810 ms
-ALL   (everything above) | operon bench: scripts/bench/fib25.op × 30 iters, min 120.174 ms · avg 121.231 ms
+base  (scratch, flags off) | operon bench: scripts/bench/fib25.op × 30 iters, min 113.081 ms · avg 114.357 ms
+tick  (no fuel tick in dispatch) | operon bench: scripts/bench/fib25.op × 30 iters, min 112.745 ms · avg 114.483 ms
+tb    (lazy traceback frame) | operon bench: scripts/bench/fib25.op × 30 iters, min 113.314 ms · avg 113.968 ms
+promo (promoter clone after check) | operon bench: scripts/bench/fib25.op × 30 iters, min 113.184 ms · avg 113.779 ms
+decay (no m6a/grn decay tickers) | operon bench: scripts/bench/fib25.op × 30 iters, min 112.856 ms · avg 115.079 ms
+bk    (no call bookkeeping at all) | operon bench: scripts/bench/fib25.op × 30 iters, min 98.424 ms · avg 99.319 ms
+gates (whole regulatory block skipped) | operon bench: scripts/bench/fib25.op × 30 iters, min 96.710 ms · avg 98.146 ms
+pool  (Env map/consts free-list) | operon bench: scripts/bench/fib25.op × 30 iters, min 120.485 ms · avg 121.878 ms
+SAFE  (gates,tb,promo — fix-shaped) | operon bench: scripts/bench/fib25.op × 30 iters, min 96.791 ms · avg 97.274 ms
+ALL   (everything above) | operon bench: scripts/bench/fib25.op × 30 iters, min 104.423 ms · avg 106.120 ms
 === optimizer irrelevance (end-to-end run, min of 5, incl startup) ===
-run default (opt 0):   144.2 ms
-run --opt 2        :   143.2 ms
-run --opt-passes all:  143.2 ms
-run --no-vm        :   145.3 ms
+run default (opt 0):   115.0 ms
+run --opt 2        :   114.8 ms
+run --opt-passes all:  116.1 ms
+run --no-vm        :   116.3 ms
 === counters (OPERON_W009A_COUNTS=1, flags off) ===
 w009a harness: ablate=[] counts=true
 w009a counters: instrs=1699496 ticks=0 env_new=364180 bookkeep=242786 name_clones=242786 tb_clones=0 promo_clones=0 mono_hits=242782
