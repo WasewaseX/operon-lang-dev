@@ -450,6 +450,66 @@ fusion with frame-slot locals (W011 stage-2 "locals-in-frame" from the
 W009-A follow-up); it needs its own gated session with the redteam
 probes re-run (gate funnels get duplicated).
 
+## W009-B — slot-indexed call bookkeeping (2026-10-03, builder-A)
+
+The W009-A ablation matrix re-derived on post-W011-r2 main (19cb1a8, same
+sandbox, `scripts/w009a_ablation_matrix.sh`; the refreshed evidence file is
+committed) showed W011-r2 had absorbed three of the five W009-A suspects:
+tb/promo ablations became no-ops (counters: `tb_clones=0 promo_clones=0`)
+and the gates block shrank from 16.8% to 14.5% (rho_knobs cached, methyl
+guard, Fx-hashed maps). The remaining measured block: **bookkeeping
+13.0%** (bk ablation 113.1 → 98.4 ms) + veto checks ~1.5%.
+
+**The change**: the per-name `call_counts` / `gene_buckets` HashMap pair is
+replaced by interned slot arrays (`bk_slots: Vec<BkSlot>` + a cold
+name→index table). The per-call hot path drops both string-keyed map probes
+for one relaxed load of a def-cached slot hint plus one short-string
+validation (defs are value-carried `Arc<GeneDef>`s that can outlive an
+interp, so the hint is name-validated on EVERY use — a stale or foreign
+hint re-resolves through the intern table and re-stores; it can never
+miscount). Burst bins become one ascending `(bucket, count)` pair-vector
+per slot; the clock is monotone per interp, so the tail update is exact.
+
+**Exactness contract** (this is bookkeeping, not just numbers):
+`fingerprint()` crosses the differential parity boundary — the ORACLE
+counts calls independently, so corpus MATCH proves the slots are exact,
+not merely self-consistent. Pinned-order trap found and fixed during this
+task: the counter bump happens BEFORE the decay tick because the GRN
+translation integration reads the counter delta at tick time (the first
+`y()` call must integrate yp = 0.3; a post-tick bump integrates 0 —
+caught by `tests/ffl_coherent_delay.op`, now commented in-place). New
+standing pin: `tests/differential/bk_slots_pin.op`. All readers adapted
+without output drift: fingerprint emission (sorted-name law D9), burst
+variance float sums (b-ascending), mature/nascent telemetry
+(`bk_count_for` never materializes zero-count slots), `reset_profile`,
+GRN edge resolution, profile text/JSON rows, wobble-suggestion counts.
+
+**Measured** (`scripts/bench_core.py`, interleaved A/B medians, base =
+19cb1a8 worktree binary; the runner hard-fails on any output mismatch):
+
+| fixture | base ms | new ms | speedup |
+|---|---:|---:|---:|
+| fib25 | 116.5 / 116.8 (2 runs) | 103.5 / 104.0 | **1.13x / 1.12x** |
+| fib27 | 303.2 | 267.0 | **1.14x** |
+| recursion | 223.0 | 203.9 | 1.09x |
+| grn | 35.4 | 33.6 | 1.05x |
+| loops (no-call control) | 66.5 | 66.8 | 0.99x — unchanged, as designed |
+
+Post-W011-r2 + W009-B cumulative from the W009-A baseline: fib25
+144.5 ms → ~104 ms ≈ **1.39x**. The veto-block clean-bit candidate
+(~1.5% post-W011-r2) stays boarded for W009-C: the epoch-invalidation
+surface spans every grn/methyl/riboswitch/promoter mutation site and the
+EV no longer justifies it; the structural residual (~78% of the original
+gap — funnel depth, env-chain resolution, arg plumbing) remains the
+locals-in-frame lever W011-r2 boarded.
+
+Gates at close: cargo 25 suites 0 failed (incl. proof suite 3423f/141p,
+3 grn-timing proofs re-green after the pinned-order fix), differential
+VM lane 3468/3468 + tree-walk 3468/3468 (0 diverge, chunked runners),
+redteam 109/0, diag golden ALL GREEN, debug/protocol/DAP e2es OK,
+async pair 8/8 + fiber corpus 7/7, docs-sync OK (stats regen incl. the
+new pin), fmt clean, clippy 0. CodeQL: pre-merge per session policy.
+
 ## Reproducing
 
 ```sh

@@ -421,3 +421,41 @@ Explicitly NOT worth it per measurement: fuel-tick tuning, decay-ticker
 short-circuits (already ~0), map recycling. No performance claim in this
 document is unreproducible — every row re-derives from the committed
 harness + matrix script on the recorded sandbox.
+
+## 13. W009-B delivered: slot-indexed call bookkeeping (2026-10-03, builder-A)
+
+Candidate (b) of §12's ranked list was absorbed by W011-r2 before this
+session started (lazy traceback frame, promoter early-out); the fresh
+ablation matrix on 19cb1a8 re-attributed the remaining gates block to
+bookkeeping (13.0%) + veto checks (~1.5%). W009-B implemented the
+bookkeeping half of candidate (a): the per-name counter/burst-bin HashMaps
+are now interned slot arrays with the slot hint cached on the GeneDef.
+
+Invariants this document records for the next person touching the funnel:
+
+1. **The hint is a hint.** GeneDefs are value-carried Arcs that outlive
+   interps (workers, repl, proof re-runs). `bk_slot_for` name-validates
+   the cached index on EVERY call and re-interns on mismatch — the cost
+   of never trusting the cache is one short-string compare; the cost of
+   trusting it blindly would be silent cross-interp miscounts.
+2. **Bump order is load-bearing.** count → clock → decay-tick, in that
+   order, because the translation integration reads the counter delta at
+   tick time (ffl_coherent_delay's first y() call integrates yp = 0.3;
+   a post-tick bump integrates 0 and three grn-timing proofs fail). The
+   old HashMap code had this order by accident of layout; the slot code
+   has it by comment.
+3. **Zero-count slots never exist.** `bk_count_for` is a pure read —
+   materializing slots for never-called names would drift the
+   mature/nascent telemetry that the oracle mirrors.
+4. **Bins are ascending pair-vectors**, exact under the monotone call
+   clock; the burst reader keeps the D9 float-sum order (b-ascending,
+   gene names sorted).
+
+Measured: fib25 1.12–1.13x, fib27 1.14x, recursion 1.09x, grn 1.05x,
+loops 0.99x (no-call control, unchanged) — interleaved A/B with
+byte-identical-output enforcement; full row set in BENCH.md §W009-B.
+Candidate (a)'s veto-block clean-bit (the remaining ~1.5%) is re-scoped
+to W009-C: the epoch-invalidation surface now spans every regulation
+mutation site for an EV below the risk bar. The structural residual
+(funnel depth, env-chain resolution, args plumbing) is unchanged —
+locals-in-frame remains the big lever.

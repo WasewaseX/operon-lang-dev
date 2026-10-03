@@ -1902,11 +1902,11 @@ fn real_main() {
             }
             let mut rows: Vec<(String, u64, f64)> = l
                 .interp
-                .call_counts
+                .bk_slots
                 .iter()
-                .map(|(k, c)| {
-                    let t = l.interp.call_time_self.get(k).cloned().unwrap_or(0.0);
-                    (k.clone(), *c, t)
+                .map(|s| {
+                    let t = l.interp.call_time_self.get(&s.name).cloned().unwrap_or(0.0);
+                    (s.name.clone(), s.count, t)
                 })
                 .collect();
             rows.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
@@ -1942,7 +1942,7 @@ fn real_main() {
                     .collect();
                 let total_us: f64 = rows.iter().map(|(_, _, t)| t).sum();
                 let total_defined = l.interp.defined_genes.len();
-                let mature = l.interp.call_counts.len().min(total_defined);
+                let mature = l.interp.bk_slots.len().min(total_defined);
                 println!(
                     "{{\"format\":\"operon-profile\",\"version\":\"{}\",\"file\":\"{}\",\"unit_self_time\":\"microseconds\",\"genes\":[{}],\"total_self_us\":{:.1},\"mature\":{},\"nascent\":{},\"maturation\":{:.2}}}",
                     env!("CARGO_PKG_VERSION"),
@@ -1985,7 +1985,7 @@ fn real_main() {
             }
             let fp = {
                 let total_defined = l.interp.defined_genes.len();
-                let mature = l.interp.call_counts.len().min(total_defined);
+                let mature = l.interp.bk_slots.len().min(total_defined);
                 let nascent = total_defined.saturating_sub(mature);
                 let maturation = if total_defined > 0 {
                     mature as f64 / total_defined as f64
@@ -1999,9 +1999,9 @@ fn real_main() {
                 fp.0, fp.1, fp.2
             );
             let mut suggestions: Vec<String> = Vec::new();
-            let max_calls = l.interp.call_counts.values().copied().max().unwrap_or(0);
+            let max_calls = l.interp.bk_slots.iter().map(|s| s.count).max().unwrap_or(0);
             for g in &l.interp.defined_genes {
-                let calls = l.interp.call_counts.get(g).copied().unwrap_or(0);
+                let calls = l.interp.bk_count_for(g);
                 // only genuinely hot genes (≥10% of the hottest) are candidates
                 if calls >= 1
                     && calls * 10 >= max_calls
