@@ -36,8 +36,18 @@ def run(cmd, timeout=120):
     # both hides real output behind decode failures and can crash the
     # harness itself on any non-ASCII byte. errors="replace" keeps a broken
     # byte comparable instead of fatal.
+    # compat-r2 follow-up (windows leg, run 37146021360): decoding was only
+    # half the fix — the ORACLE's own stdout still ENCODED through the
+    # platform locale, so its em-dash left the process as cp1252 0x97 and
+    # the harness (decoding UTF-8) saw a replacement char where the Rust
+    # core correctly emitted UTF-8: 9 phantom divergences, every one a
+    # non-ASCII golden. Force the oracle's side of the pipe to UTF-8 too.
+    env = dict(os.environ)
+    env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONUTF8"] = "1"
     p = subprocess.run(cmd, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=timeout)
+                       encoding="utf-8", errors="replace", timeout=timeout,
+                       env=env)
     return p.stdout, p.returncode, p.stderr
 
 def collect_op(root):
