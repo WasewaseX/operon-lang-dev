@@ -603,6 +603,24 @@ pub struct CallSpan {
 /// otherData — an honest limit, never a silent truncation).
 pub const SPAN_CAP: usize = 1_000_000;
 
+/// W009-B: one interned bookkeeping slot — the array replacement for the
+/// old per-name `call_counts` + `gene_buckets` HashMap pair.
+/// - `name`: the call name this slot accounts (unique per slot; the intern
+///   table `bk_index` maps name -> slot).
+/// - `count`: exact per-name call count (old call_counts[name]).
+/// - `bins`: the burst bins (20-call buckets), stored as (bucket, count)
+///   pairs in ASCENDING bucket order. `call_clock` is monotone per interp,
+///   so per-slot bucket keys only grow: the hot path updates the tail in
+///   place or appends. The old reader contract (`bins.get(&b)` for
+///   b in 0..complete_bins, iteration in sorted-name order) is preserved
+///   exactly — the pairs ARE the sorted key set.
+#[derive(Debug, Clone)]
+pub struct BkSlot {
+    pub name: String,
+    pub count: u64,
+    pub bins: Vec<(u64, u64)>,
+}
+
 pub struct Interp {
     pub notes: Vec<Note>,
     /// sec-r3: notes suppressed past the cap (surfaced once).
@@ -756,17 +774,28 @@ pub struct Interp {
     pub ires: Vec<String>,
     pub enhanced: Vec<String>,
     pub defined_genes: Vec<String>,
-    /// per-gene call counters (regulatory bookkeeping). W011-r2: Fx-hashed.
-    pub call_counts: HashMap<String, u64, crate::fxhash::FxBuild>,
+    /// per-gene call counters (regulatory bookkeeping). W009-B: slot-indexed
+    /// arrays — one Vec entry per DISTINCT called name (interned on first
+    /// call, slot number cached on the gene's def, name-validated on every
+    /// use), replacing the per-call string-keyed map probe. Values are
+    /// EXACTLY the ones the old HashMap<String, u64> surfaces produced:
+    /// fingerprint() / profile / GRN translation-integration / reset
+    /// semantics are byte-identical (burst_bins_pin.op and the differential
+    /// corpus pin this cross-engine).
+    pub bk_slots: Vec<BkSlot>,
+    /// name -> bk_slots index, maintained on intern; COLD readers only
+    /// (fingerprint emission, GRN edge resolution, profile reports). The
+    /// per-call hot path never touches this map.
+    pub bk_index: HashMap<String, usize, crate::fxhash::FxBuild>,
     pub call_time: HashMap<String, f64>, // µs inclusive (profiling)
     pub call_time_self: HashMap<String, f64>, // µs exclusive (children subtracted)
     // (name, start_ns, child_acc µs, call-site line — W008 polish: the
     // caller's line at push time, so debuggers can show real outer frames)
     pub call_stack: Vec<(String, f64, f64, usize)>,
     pub call_clock: u64,
-    /// burst-index bins (20 calls/bin). W011-r2: Fx-hashed.
-    pub gene_buckets:
-        HashMap<String, HashMap<u64, u64, crate::fxhash::FxBuild>, crate::fxhash::FxBuild>,
+    // (W009-B: the burst-index bins moved into BkSlot::bins — one sorted
+    // (bucket, count) tail per slot; the clock is monotone per interp so
+    // bucket keys only grow and the tail update is exact.)
     pub modules: HashMap<String, Value>, // path -> module map
     pub loading: Vec<String>,
     pub profiling: bool,
@@ -980,12 +1009,12 @@ impl Interp {
             ires: Vec::new(),
             enhanced: Vec::new(),
             defined_genes: Vec::new(),
-            call_counts: HashMap::with_hasher(crate::fxhash::FxBuild::default()),
+            bk_slots: Vec::new(),
+            bk_index: HashMap::with_hasher(crate::fxhash::FxBuild::default()),
             call_time: HashMap::new(),
             call_time_self: HashMap::new(),
             call_stack: Vec::new(),
             call_clock: 0,
-            gene_buckets: HashMap::with_hasher(crate::fxhash::FxBuild::default()),
             modules: HashMap::new(),
             loading: Vec::new(),
             profiling: false,
@@ -4926,7 +4955,7 @@ impl Interp {
         let edges = self.trans_edges.clone();
         for t in &edges {
             let key = format!("{}\u{0}{}", t.from, t.to);
-            let now = *self.call_counts.get(&t.from).unwrap_or(&0);
+            let now = self.bk_count_for(&t.from);
             let last = *self.trans_last.get(&key).unwrap_or(&0);
             self.trans_last.insert(key, now);
             let delta = now.saturating_sub(last);
@@ -5776,7 +5805,7 @@ impl Interp {
                 }
             }
             // per-call bookkeeping (counters, clock, decay ticks, burst bins)
-            self.bump_call_bookkeeping(name);
+            self.bump_call_bookkeeping(name, &def.bookkeeping_slot);
             // @methylate: transcriptionally repressed genes announce their first
             // call (suppressed by .cell `methylate.quiet = true`)
             if def.methylate && !self.methyl_quiet && !self.methyl_noted.contains(name) {
@@ -6076,21 +6105,71 @@ impl Interp {
     /// ticks between them (reg-bio-2 C2 + loop-9 P0-4), then the burst-index
     /// bin (reg-bio-2, 20 calls per bin, per gene — burstiness is measured
     /// on per-gene time bins, not across genes). `name` is borrowed; the
-    /// counter maps clone it only on the first sight of a gene (get_mut
-    /// fast path — the clone-per-call malloc is the fib25-class cost).
-    fn bump_call_bookkeeping(&mut self, name: &str) {
+    /// slot clones it only on the first sight of a gene (intern fast path —
+    /// the clone-per-call malloc was the fib25-class cost, the per-call map
+    /// probes were the rest; both are gone in W009-B).
+    /// W009-B: resolve (and intern on first sight) the bookkeeping slot for
+    /// a call name. The def-cached slot number is a HINT — validated against
+    /// the slot's name every time (defs can outlive an interp or be shared:
+    /// a stale/foreign hint re-resolves through the name table and re-stores,
+    /// never miscounts). Old cost: 1-2 string-keyed probes per call; new:
+    /// one relaxed load + one short-string compare on the hot path.
+    fn bk_slot_for(&mut self, name: &str, hint: Option<&crate::ast::SlotHint>) -> usize {
+        use std::sync::atomic::Ordering::Relaxed;
+        if let Some(a) = hint {
+            let s = a.0.load(Relaxed);
+            if s != 0 {
+                if let Some(slot) = self.bk_slots.get(s - 1) {
+                    if slot.name == name {
+                        return s - 1;
+                    }
+                }
+            }
+        }
+        let idx = match self.bk_index.get(name) {
+            Some(&i) => i,
+            None => {
+                let i = self.bk_slots.len();
+                self.bk_slots.push(BkSlot {
+                    name: name.to_string(),
+                    count: 0,
+                    bins: Vec::new(),
+                });
+                self.bk_index.insert(name.to_string(), i);
+                i
+            }
+        };
+        if let Some(a) = hint {
+            a.0.store(idx + 1, Relaxed);
+        }
+        idx
+    }
+
+    /// W009-B: pure READ of a name's call count — never interns (the old
+    /// `call_counts.get(name).unwrap_or(&0)` reader contract; a lookup for a
+    /// never-called gene must not materialize a zero-count slot, or the
+    /// mature/nascent telemetry would drift).
+    pub fn bk_count_for(&self, name: &str) -> u64 {
+        match self.bk_index.get(name) {
+            Some(&i) => self.bk_slots[i].count,
+            None => 0,
+        }
+    }
+
+    fn bump_call_bookkeeping(&mut self, name: &str, def_hint: &crate::ast::SlotHint) {
         if crate::w009a::COUNTS_ON.load(std::sync::atomic::Ordering::Relaxed) {
             crate::w009a::C_BK.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
         if crate::w009a::A_BK.load(std::sync::atomic::Ordering::Relaxed) {
             return;
         }
-        match self.call_counts.get_mut(name) {
-            Some(c) => *c += 1,
-            None => {
-                self.call_counts.insert(name.to_string(), 1);
-            }
-        }
+        let idx = self.bk_slot_for(name, Some(def_hint));
+        // PINNED ORDER (reg-bio-2): the count bumps BEFORE the clock and the
+        // decay tick — the translation integration reads the counter delta at
+        // tick time, so a gene's own call must be visible to its own tick
+        // (ffl_coherent_delay: the first y() call must integrate yp = 0.3, a
+        // post-tick bump would integrate 0). Byte-order is load-bearing here.
+        self.bk_slots[idx].count += 1;
         self.call_clock += 1;
         // reg-bio-2 (C2): the decay clock, time-driven decay + translation
         // integration tick here (unset key = no-op).
@@ -6101,19 +6180,15 @@ impl Interp {
             self.grn_decay_tick();
         }
         let bucket = self.call_clock / 20;
-        match self.gene_buckets.get_mut(name) {
-            Some(bins) => match bins.get_mut(&bucket) {
-                Some(c) => *c += 1,
-                None => {
-                    bins.insert(bucket, 1);
-                }
-            },
-            None => {
-                let mut bins: HashMap<u64, u64, crate::fxhash::FxBuild> =
-                    HashMap::with_hasher(crate::fxhash::FxBuild::default());
-                bins.insert(bucket, 1);
-                self.gene_buckets.insert(name.to_string(), bins);
+        let slot = &mut self.bk_slots[idx];
+        // Monotone clock => per-slot bucket keys only grow: update the tail
+        // in place, or append the next bucket. Exact equivalent of the old
+        // nested-map `bins.get_mut(&bucket) or_insert` under ascending keys.
+        match slot.bins.last_mut() {
+            Some((b, c)) if *b == bucket => {
+                *c += 1;
             }
+            _ => slot.bins.push((bucket, 1)),
         }
     }
 
@@ -6161,7 +6236,10 @@ impl Interp {
     /// dx-r1 (audit W5): clear all profiler accounting so a second execution
     /// (profile re-run) starts from zero without inheriting load-time counts.
     pub fn reset_profile(&mut self) {
-        self.call_counts.clear();
+        // W009-B: the slot arrays reset together; stale def-cached slot hints
+        // are name-validated on next use and re-intern (never miscount).
+        self.bk_slots.clear();
+        self.bk_index.clear();
         self.call_time.clear();
         self.call_time_self.clear();
         self.call_stack.clear();
@@ -6427,7 +6505,7 @@ impl Interp {
             return Ok(Value::Null);
         }
         // per-call bookkeeping (counters, clock, decay ticks, burst bins)
-        self.bump_call_bookkeeping(&name);
+        self.bump_call_bookkeeping(&name, &def.bookkeeping_slot);
         if def.methylate && !self.methyl_quiet && !self.methyl_noted.contains(&name) {
             self.methyl_noted.insert(name.clone());
             self.note(
@@ -8217,9 +8295,9 @@ impl Interp {
                 // cross the differential parity boundary. Gene names are
                 // ASCII, so byte-order sort matches the oracle's sorted().
                 let mut call_pairs: Vec<(String, u64)> = self
-                    .call_counts
+                    .bk_slots
                     .iter()
-                    .map(|(k, v)| (k.clone(), *v))
+                    .map(|s| (s.name.clone(), s.count))
                     .collect();
                 call_pairs.sort_by(|a, b| a.0.cmp(&b.0));
                 let counts: Vec<(Value, Value)> = call_pairs
@@ -8239,25 +8317,37 @@ impl Interp {
                 // associative, so HashMap order made the aggregate differ in
                 // the last ulp across processes. The per-gene list is sorted
                 // below anyway; the accumulator must match that order.
-                let mut bucket_keys: Vec<&String> = self.gene_buckets.keys().collect();
-                bucket_keys.sort();
-                for g in bucket_keys {
-                    let bins = &self.gene_buckets[g];
+                // W009-B: slots with at least one bin == the old map's key set
+                // (a slot only exists after a real call); same sorted-name order.
+                let mut slot_refs: Vec<&BkSlot> = self
+                    .bk_slots
+                    .iter()
+                    .filter(|s| !s.bins.is_empty())
+                    .collect();
+                slot_refs.sort_by(|a, b| a.name.cmp(&b.name));
+                for s in slot_refs {
+                    let g = &s.name;
+                    let bins = &s.bins;
+                    // ascending pairs; b-ascending lookups stay exact
+                    let bin_at = |b: u64| -> u64 {
+                        match bins.binary_search_by_key(&b, |&(bb, _)| bb) {
+                            Ok(i) => bins[i].1,
+                            Err(_) => 0,
+                        }
+                    };
                     if complete_bins == 0 {
                         burst_by_gene.push((Value::Str(g.clone()), Value::Float(0.0)));
                         continue;
                     }
                     let n = complete_bins as f64;
-                    let total: u64 = (0..complete_bins)
-                        .map(|b| *bins.get(&b).unwrap_or(&0))
-                        .sum();
+                    let total: u64 = (0..complete_bins).map(bin_at).sum();
                     let mean = total as f64 / n;
                     // reg-bio-2 (D9): never powi, explicit multiply (the
                     // powi algorithm is platform-chosen; the oracle mirrors
                     // this op-for-op as d*d).
                     let var = (0..complete_bins)
                         .map(|b| {
-                            let c = *bins.get(&b).unwrap_or(&0) as f64;
+                            let c = bin_at(b) as f64;
                             let d = c - mean;
                             d * d
                         })
@@ -8294,7 +8384,7 @@ impl Interp {
                 // transcript maturation: mature = genes translated at least
                 // once; nascent = defined but never called
                 let total_defined = self.defined_genes.len();
-                let mature = self.call_counts.len().min(total_defined);
+                let mature = self.bk_slots.len().min(total_defined);
                 let nascent = total_defined.saturating_sub(mature);
                 let maturation = if total_defined > 0 {
                     mature as f64 / total_defined as f64

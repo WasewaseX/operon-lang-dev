@@ -1019,6 +1019,9 @@ impl Parser {
                                             param_anns: vec![],
                                             ret_ann: None,
                                             type_params: vec![],
+                                            bookkeeping_slot: crate::ast::SlotHint(
+                                                std::sync::atomic::AtomicUsize::new(0),
+                                            ),
                                         })),
                                     });
                                 } else {
@@ -3326,6 +3329,7 @@ impl Parser {
                 riboswitch,
                 burst,
                 deprecated,
+                bookkeeping_slot: crate::ast::SlotHint(std::sync::atomic::AtomicUsize::new(0)),
             };
             return Stmt::Gene(std::sync::Arc::new(def));
         }
@@ -3351,6 +3355,7 @@ impl Parser {
             riboswitch,
             burst,
             deprecated,
+            bookkeeping_slot: crate::ast::SlotHint(std::sync::atomic::AtomicUsize::new(0)),
         };
         Stmt::Gene(std::sync::Arc::new(def))
     }

@@ -153,6 +153,32 @@ pub struct GeneDef {
     /// metadata for the static checker and fmt/doc round-trip; the dynamic
     /// evaluator never reads it.
     pub type_params: Vec<(String, Option<String>)>,
+    /// W009-B: lazily-interned bookkeeping slot (call-count/burst-bin array
+    /// index), cached on the def so the per-call hot path is one relaxed
+    /// load instead of a string-keyed map probe. 0 = not yet interned; the
+    /// stored value is slot_index + 1. The cache is a HINT only: the interp
+    /// validates it against the slot's name on every use (defs can be
+    /// shared across interp instances — a stale or foreign slot number
+    /// falls back to the name-keyed intern table, never miscounts). The
+    /// bookkeeping arrays are name-keyed semantics preserved exactly;
+    /// `fingerprint()` / profile / GRN translation-integration all read the
+    /// same values the old HashMap<String, u64> surfaces produced.
+    pub bookkeeping_slot: SlotHint,
+}
+
+/// W009-B: cloneable atomic usize hint (AtomicUsize itself is not Clone;
+/// GeneDef derives Clone, and a clone carrying the parent's cached hint is
+/// still safe — the interp name-validates every use). Same Send+Sync
+/// posture as the plain AtomicUsize field would have had.
+#[derive(Debug, Default)]
+pub struct SlotHint(pub std::sync::atomic::AtomicUsize);
+
+impl Clone for SlotHint {
+    fn clone(&self) -> Self {
+        SlotHint(std::sync::atomic::AtomicUsize::new(
+            self.0.load(std::sync::atomic::Ordering::Relaxed),
+        ))
+    }
 }
 
 /// W64: the structured payload of a deprecation mark.

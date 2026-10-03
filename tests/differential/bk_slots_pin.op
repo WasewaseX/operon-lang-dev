@@ -1,0 +1,23 @@
+# W009-B bookkeeping-slot exactness pin (builder-A, 2026-10-03): the per-call
+# counters/burst bins moved from per-name HashMaps to interned slot arrays
+# (def-cached index hint, name-validated). Every read surface -- fingerprint
+# counts, burst math over complete bins, mature/nascent telemetry -- must be
+# byte-identical to the map era. This file crosses the parity boundary: the
+# ORACLE counts calls independently, so MATCH here proves the slot accounting
+# is exact, not merely self-consistent. hot(16) = 2584 calls spread over
+# multiple 20-call buckets exercises the bin tail; cold/other pin the
+# single-call and distinct-slot paths.
+gene hot(n) {
+  if n <= 1 { return 1 }
+  return hot(n - 1) + hot(n - 2)
+}
+gene cold() { return 7 }
+gene other(x) { return x * 2 }
+gene main() {
+  let a = hot(16)
+  let b = cold()
+  let c = other(b)
+  promote(a)
+  promote(c)
+  promote(fingerprint())
+}
