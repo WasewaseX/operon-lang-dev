@@ -219,7 +219,9 @@ function fmtRow(f: Fmt): string {
   );
 }
 
-function infoLines(meta: Meta): string[] {
+function tableRows(meta: Meta): string[] {
+  // pure decision pipeline: sort + row-build, NO engine probes — the
+  // workload the deep benchmark times in every language build
   const out: string[] = [];
   out.push(`title: ${mget(meta, "title")}`);
   out.push(
@@ -235,6 +237,36 @@ function infoLines(meta: Meta): string[] {
   });
   for (const f of fs) out.push(fmtRow(f));
   return out;
+}
+
+function infoLines(meta: Meta): string[] {
+  const out = tableRows(meta);
+  const tools = detectToolsSync();
+  if (tools.aria2) {
+    out.push(`accel: aria2c ${tools.aria2} (multi-connection enabled)`);
+  } else {
+    out.push("accel: aria2c not found — single-connection downloads");
+  }
+  return out;
+}
+
+function detectToolsSync() {
+  // shell-out probe kept synchronous so table paths stay simple
+  const line = (prog: string, flag: string): string => {
+    try {
+      const cmd = new Deno.Command(prog, { args: [flag], stdout: "piped", stderr: "piped" });
+      const { code, stdout } = cmd.outputSync();
+      if (code === 0) return new TextDecoder().decode(stdout).trim().split("\n")[0];
+    } catch (_e) {
+      /* not granted / not installed */
+    }
+    return "";
+  };
+  return {
+    ytdlp: line("yt-dlp", "--version"),
+    ffmpeg: line("ffmpeg", "-version"),
+    aria2: line("aria2c", "--version"),
+  };
 }
 
 // ---------------------------------------------------------- download
@@ -465,6 +497,147 @@ async function cmdSelfcheck(rest: string[]): Promise<never> {
   Deno.exit(0);
 }
 
+// ---------------------------------------------------------- deep bench
+// Uniform workloads for the cross-language deep benchmark
+// (docs/BENCHMARK-DEEP.md, harness: scripts/bench_deep.py). Each prints
+// ONE "bench-* cs=..." line; cs must be byte-identical in every build.
+
+function benchArg(rest: string[], name: string, def: string): string {
+  const f = `--${name}`;
+  for (let i = 0; i < rest.length; i++) {
+    if (rest[i] === f && i + 1 < rest.length) return rest[i + 1];
+    if (rest[i].startsWith(f + "=")) return rest[i].slice(f.length + 1);
+  }
+  return def;
+}
+
+function progressLine(i: number): string {
+  const pp = String((i * 7) % 100).padStart(2, "0");
+  const ss = String((i * 3) % 60).padStart(2, "0");
+  return `[download]  ${pp}% of 12.00MiB at 2.00MiB/s ETA 00:${ss}`;
+}
+
+function cmdBenchStartup(): never {
+  console.log("ytdl-bench ready");
+  Deno.exit(0);
+}
+
+function cmdBenchJson(rest: string[]): never {
+  if (!rest.length) die("error: bench-json needs a fixture path");
+  const n = parseInt(benchArg(rest, "n", "100"));
+  const text = Deno.readTextFileSync(rest[0]);
+  const meta = JSON.parse(text) as Meta;
+  let nf = 0;
+  let title = "";
+  for (let i = 0; i < n; i++) {
+    const m = JSON.parse(text) as Meta;
+    nf = (m.formats ?? []).length;
+    title = mget(m, "title");
+  }
+  if (n > 0 && nf !== (meta.formats ?? []).length) {
+    console.log("bench-json MISMATCH");
+    Deno.exit(1);
+  }
+  console.log(`bench-json cs=${title}:${nf}:${n}`);
+  Deno.exit(0);
+}
+
+function cmdBenchTable(rest: string[]): never {
+  if (!rest.length) die("error: bench-table needs a fixture path");
+  const rounds = parseInt(benchArg(rest, "rounds", "20"));
+  const meta = JSON.parse(Deno.readTextFileSync(rest[0])) as Meta;
+  let first = "";
+  let last = "";
+  let nrows = 0;
+  for (let i = 0; i < rounds; i++) {
+    const rows = tableRows(meta);
+    first = rows[0];
+    last = rows[rows.length - 1];
+    nrows = rows.length;
+  }
+  console.log(`bench-table cs=${nrows}|${first}|${last}`);
+  Deno.exit(0);
+}
+
+function cmdBenchLines(rest: string[]): never {
+  const k = parseInt(benchArg(rest, "k", "20000"));
+  let eta = 0;
+  const samples: string[] = [];
+  const step = Math.max(1, Math.floor(k / 40));
+  for (let i = 0; i < k; i++) {
+    const ln = progressLine(i);
+    if (ln.includes("ETA")) eta += 1;
+    if (i % step === 0) samples.push(ln.slice(12, 14));
+  }
+  console.log(`bench-lines cs=${eta},${samples.join(",")}`);
+  Deno.exit(0);
+}
+
+function cmdBenchSpawn(rest: string[]): never {
+  const n = parseInt(benchArg(rest, "n", "30"));
+  let ok = 0;
+  for (let i = 0; i < n; i++) {
+    try {
+      const cmd = new Deno.Command("mockspawn", { args: ["--version"], stdout: "piped", stderr: "piped" });
+      const { code } = cmd.outputSync();
+      if (code === 0) ok += 1;
+    } catch (_e) {
+      /* missing engine — counted as failure below */
+    }
+  }
+  console.log(`bench-spawn cs=${ok}/${n}`);
+  Deno.exit(ok === n ? 0 : 1);
+}
+
+function benchQueueWorker(chunk: number[]): number {
+  let ok = 0;
+  for (const _u of chunk) {
+    try {
+      const cmd = new Deno.Command("mocksleep", { args: ["80"], stdout: "piped", stderr: "piped" });
+      const { code } = cmd.outputSync();
+      if (code === 0) ok += 1;
+    } catch (_e) {
+      /* missing engine — counted as failure below */
+    }
+  }
+  return ok;
+}
+
+async function cmdBenchQueue(rest: string[]): Promise<never> {
+  const k = Math.max(1, parseInt(benchArg(rest, "k", "16")));
+  const c = Math.min(Math.max(1, parseInt(benchArg(rest, "c", "8"))), k);
+  const chunks: number[][] = Array.from({ length: c }, () => []);
+  for (let i = 0; i < k; i++) chunks[i % c].push(i);
+  let ok = 0;
+  if (c === 1) {
+    ok = benchQueueWorker(chunks[0]);
+  } else {
+    // run chunks concurrently: workers are synchronous sleeps, so the
+    // honest way to overlap them here is worker threads — but to keep the
+    // comparison shape identical to the queue path (event-loop tasks), we
+    // spawn Deno.Command with async output and await all
+    const ps = chunks.map((chunk) =>
+      (async () => {
+        let o = 0;
+        for (const _u of chunk) {
+          try {
+            const cmd = new Deno.Command("mocksleep", { args: ["80"], stdout: "piped", stderr: "piped" });
+            const { code } = await cmd.output();
+            if (code === 0) o += 1;
+          } catch (_e) {
+            /* missing engine */
+          }
+        }
+        return o;
+      })(),
+    );
+    const oks = await Promise.all(ps);
+    ok = oks.reduce((a, b) => a + b, 0);
+  }
+  console.log(`bench-queue cs=ok${ok},k${k},c${c}`);
+  Deno.exit(ok === k ? 0 : 1);
+}
+
 function usage(): never {
   console.log("ytdl — YouTube downloader, Deno comparison build");
   console.log("");
@@ -473,6 +646,9 @@ function usage(): never {
   console.log("options: --out DIR --quality N --format EXPR --audio KIND --subs");
   console.log("         --sub-langs LANGS --template T --jobs N --no-aria2");
   console.log("         --playlist --max-attempts N");
+  console.log("bench (cross-language deep benchmark, docs/BENCHMARK-DEEP.md):");
+  console.log("  bench-startup | bench-json F --n N | bench-table F --rounds R");
+  console.log("  bench-lines --k K | bench-spawn --n N | bench-queue --k K --c C");
   Deno.exit(2);
 }
 
@@ -494,6 +670,18 @@ if (["help", "--help", "-h"].includes(sub)) {
   await cmdQueue(rest);
 } else if (sub === "selfcheck") {
   await cmdSelfcheck(rest);
+} else if (sub === "bench-startup") {
+  cmdBenchStartup();
+} else if (sub === "bench-json") {
+  cmdBenchJson(rest);
+} else if (sub === "bench-table") {
+  cmdBenchTable(rest);
+} else if (sub === "bench-lines") {
+  cmdBenchLines(rest);
+} else if (sub === "bench-spawn") {
+  cmdBenchSpawn(rest);
+} else if (sub === "bench-queue") {
+  await cmdBenchQueue(rest);
 } else {
   console.log(`error: unknown subcommand ${sub}`);
   usage();

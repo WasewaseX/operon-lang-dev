@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# deterministic mockspawn — deep-benchmark spawn workload engine.
+# Prints one line, exits 0. Exists so every language implementation
+# measures the SAME child-process cost (a tiny bash script on PATH).
+echo "mockspawn 1.0"
+exit 0

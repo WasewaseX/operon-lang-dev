@@ -189,7 +189,9 @@ def fmt_row(f):
             f"{clip(vc + '/' + ac, 19):<19}  {mget(f, 'format_note')}")
 
 
-def info_lines(meta):
+def table_rows(meta):
+    """Pure decision pipeline: sort + row-build, NO engine probes — the
+    workload the deep benchmark times in every language build."""
     out = []
     out.append(f"title: {mget(meta, 'title')}")
     out.append(f"by: {mget(meta, 'uploader')}  |  duration: "
@@ -199,6 +201,11 @@ def info_lines(meta):
     out.append("id        ext   res         fps      size  vcodec/acodec        note")
     for f in sorted(meta.get("formats", []), key=lambda x: (-h_of(x), -t_of(x))):
         out.append(fmt_row(f))
+    return out
+
+
+def info_lines(meta):
+    out = table_rows(meta)
     tools = detect_tools()
     if tools["aria2"]:
         out.append(f"accel: aria2c {tools['aria2']} (multi-connection enabled)")
@@ -433,6 +440,127 @@ def cmd_selfcheck(rest):
     sys.exit(0)
 
 
+# ---------------------------------------------------------- deep bench
+# Uniform workloads for the cross-language deep benchmark
+# (docs/BENCHMARK-DEEP.md, harness: scripts/bench_deep.py). Each prints
+# ONE "bench-* cs=..." line; cs must be byte-identical in every build.
+
+def bench_arg(rest, name, default):
+    f = f"--{name}"
+    for i, a in enumerate(rest):
+        if a == f and i + 1 < len(rest):
+            return rest[i + 1]
+        if a.startswith(f + "="):
+            return a[len(f) + 1:]
+    return default
+
+
+def progress_line(i):
+    pp = str((i * 7) % 100).zfill(2)
+    ss = str((i * 3) % 60).zfill(2)
+    return f"[download]  {pp}% of 12.00MiB at 2.00MiB/s ETA 00:{ss}"
+
+
+def cmd_bench_startup():
+    print("ytdl-bench ready")
+    sys.exit(0)
+
+
+def cmd_bench_json(rest):
+    if not rest:
+        die("error: bench-json needs a fixture path")
+    n = int(bench_arg(rest, "n", 100))
+    with open(rest[0], "r", encoding="utf-8") as fh:
+        text = fh.read()
+    meta = json.loads(text)
+    nf = 0
+    title = ""
+    for _ in range(n):
+        m = json.loads(text)
+        nf = len(m["formats"])
+        title = mget(m, "title")
+    if n > 0 and nf != len(meta["formats"]):
+        print("bench-json MISMATCH")
+        sys.exit(1)
+    print(f"bench-json cs={title}:{nf}:{n}")
+    sys.exit(0)
+
+
+def cmd_bench_table(rest):
+    if not rest:
+        die("error: bench-table needs a fixture path")
+    rounds = int(bench_arg(rest, "rounds", 20))
+    with open(rest[0], "r", encoding="utf-8") as fh:
+        meta = json.loads(fh.read())
+    first = last = ""
+    nrows = 0
+    for _ in range(rounds):
+        rows = table_rows(meta)
+        first, last = rows[0], rows[-1]
+        nrows = len(rows)
+    print(f"bench-table cs={nrows}|{first}|{last}")
+    sys.exit(0)
+
+
+def cmd_bench_lines(rest):
+    k = int(bench_arg(rest, "k", 20000))
+    eta = 0
+    samples = []
+    step = max(1, k // 40)
+    for i in range(k):
+        ln = progress_line(i)
+        if "ETA" in ln:
+            eta += 1
+        if i % step == 0:
+            samples.append(ln[12:14])
+    print(f"bench-lines cs={eta},{','.join(samples)}")
+    sys.exit(0)
+
+
+def cmd_bench_spawn(rest):
+    n = int(bench_arg(rest, "n", 30))
+    ok = 0
+    for _ in range(n):
+        try:
+            r = run_prog("mockspawn", ["--version"], timeout=30)
+            if r["code"] == 0:
+                ok += 1
+        except RuntimeError:
+            pass
+    print(f"bench-spawn cs={ok}/{n}")
+    sys.exit(0 if ok == n else 1)
+
+
+def bench_queue_worker(chunk):
+    ok = 0
+    for _u in chunk:
+        try:
+            r = run_prog("mocksleep", ["80"], timeout=30)
+            if r["code"] == 0:
+                ok += 1
+        except RuntimeError:
+            pass
+    return ok
+
+
+def cmd_bench_queue(rest):
+    k = max(1, int(bench_arg(rest, "k", 16)))
+    c = max(1, int(bench_arg(rest, "c", 8)))
+    c = min(c, k)
+    chunks = [[] for _ in range(c)]
+    for idx in range(k):
+        chunks[idx % c].append(idx)
+    if c == 1:
+        ok = bench_queue_worker(chunks[0])
+    else:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=c) as ex:
+            oks = list(ex.map(bench_queue_worker, chunks))
+        ok = sum(oks)
+    print(f"bench-queue cs=ok{ok},k{k},c{c}")
+    sys.exit(0 if ok == k else 1)
+
+
 def usage():
     print("ytdl — YouTube downloader, Python comparison build")
     print("")
@@ -441,6 +569,9 @@ def usage():
     print("options: --out DIR --quality N --format EXPR --audio KIND --subs")
     print("         --sub-langs LANGS --template T --jobs N --no-aria2")
     print("         --playlist --max-attempts N")
+    print("bench (cross-language deep benchmark, docs/BENCHMARK-DEEP.md):")
+    print("  bench-startup | bench-json F --n N | bench-table F --rounds R")
+    print("  bench-lines --k K | bench-spawn --n N | bench-queue --k K --c C")
 
 
 def main():
@@ -462,6 +593,18 @@ def main():
         cmd_queue(rest)
     elif sub == "selfcheck":
         cmd_selfcheck(rest)
+    elif sub == "bench-startup":
+        cmd_bench_startup()
+    elif sub == "bench-json":
+        cmd_bench_json(rest)
+    elif sub == "bench-table":
+        cmd_bench_table(rest)
+    elif sub == "bench-lines":
+        cmd_bench_lines(rest)
+    elif sub == "bench-spawn":
+        cmd_bench_spawn(rest)
+    elif sub == "bench-queue":
+        cmd_bench_queue(rest)
     else:
         print(f"error: unknown subcommand {sub}")
         usage()

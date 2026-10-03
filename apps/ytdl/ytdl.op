@@ -319,7 +319,9 @@ gene fmt_row(f) {
     return "{id}  {ext}  {res}  {fps_p}  {size}  {codecs}  {note}"
 }
 
-gene info_lines(meta) {
+gene table_rows(meta) {
+    # pure decision pipeline: sort + row-build, NO engine probes — this is
+    # the workload the deep benchmark times in every language build
     let out = []
     let t = mget(meta, "title")
     out.push("title: {t}")
@@ -339,6 +341,11 @@ gene info_lines(meta) {
             out.push(fmt_row(f))
         }
     }
+    return out
+}
+
+gene info_lines(meta) {
+    let out = table_rows(meta)
     let tools = detect_tools()
     if tools.aria2 != "" {
         out.push("accel: aria2c {tools.aria2} (multi-connection enabled)")
@@ -565,6 +572,165 @@ gene cmd_queue(rest) {
     exit(0)
 }
 
+# ---------------------------------------------------------- deep bench
+# Uniform workloads for the cross-language deep benchmark
+# (docs/BENCHMARK-DEEP.md, harness: scripts/bench_deep.py). Every
+# workload prints ONE "bench-* cs=..." line; the cs string must be
+# byte-identical in every language build that implements the workload —
+# that is the differential pin for the benchmark itself.
+
+gene progress_line(i) {
+    let pp = pad2((i * 7) % 100)
+    let ss = pad2((i * 3) % 60)
+    return "[download]  {pp}% of 12.00MiB at 2.00MiB/s ETA 00:{ss}"
+}
+
+gene cmd_bench_startup() {
+    promote("ytdl-bench ready")
+    exit(0)
+}
+
+gene cmd_bench_json(rest) {
+    let pos = ar.args_positional(rest)
+    if len(pos) == 0 {
+        promote("error: bench-json needs a fixture path")
+        exit(2)
+    }
+    let n = floor(ar.args_number(rest, "n", 100) + 0.0)
+    let text = read_file(pos[0])
+    let meta = json_parse(text)
+    let nf = 0
+    let title = ""
+    for i in range(0, n) {
+        let m = json_parse(text)
+        nf = len(m.formats)
+        title = mget(m, "title")
+    }
+    if n > 0 {
+        if nf != len(meta.formats) {
+            promote("bench-json MISMATCH")
+            exit(1)
+        }
+    }
+    promote("bench-json cs={title}:{nf}:{n}")
+    exit(0)
+}
+
+gene cmd_bench_table(rest) {
+    let pos = ar.args_positional(rest)
+    if len(pos) == 0 {
+        promote("error: bench-table needs a fixture path")
+        exit(2)
+    }
+    let r = floor(ar.args_number(rest, "rounds", 20) + 0.0)
+    let meta = json_parse(read_file(pos[0]))
+    let first = ""
+    let last = ""
+    let nrows = 0
+    for i in range(0, r) {
+        let rows = table_rows(meta)
+        first = rows[0]
+        last = rows[len(rows) - 1]
+        nrows = len(rows)
+    }
+    promote("bench-table cs={nrows}|{first}|{last}")
+    exit(0)
+}
+
+gene cmd_bench_lines(rest) {
+    let k = floor(ar.args_number(rest, "k", 20000) + 0.0)
+    let eta = 0
+    let samples = []
+    let step = k // 40
+    if step < 1 {
+        step = 1
+    }
+    for i in range(0, k) {
+        let ln = progress_line(i)
+        if ln.contains("ETA") {
+            eta += 1
+        }
+        if (i % step) == 0 {
+            # percent field sits at a fixed offset (2 digits, col 12)
+            samples.push(ln.slice(12, 14))
+        }
+    }
+    let sj = ",".join(samples)
+    promote("bench-lines cs={eta},{sj}")
+    exit(0)
+}
+
+gene cmd_bench_spawn(rest) {
+    let n = floor(ar.args_number(rest, "n", 30) + 0.0)
+    let ok = 0
+    for i in range(0, n) {
+        stress {
+            let r = run("mockspawn", ["--version"])
+            if r.code == 0 {
+                ok += 1
+            }
+        } rescue (e) {
+            # denied or missing engine — counted as failure below
+        }
+    }
+    promote("bench-spawn cs={ok}/{n}")
+    if ok != n {
+        exit(1)
+    }
+    exit(0)
+}
+
+gene bench_queue_worker(chunk) {
+    let ok = 0
+    for u in chunk {
+        stress {
+            let r = run("mocksleep", ["80"])
+            if r.code == 0 {
+                ok += 1
+            }
+        } rescue (e) {
+            # denied or missing engine — counted as failure below
+        }
+    }
+    return ok
+}
+
+gene cmd_bench_queue(rest) {
+    let k = floor(ar.args_number(rest, "k", 16) + 0.0)
+    let c = floor(ar.args_number(rest, "c", 8) + 0.0)
+    if k < 1 {
+        k = 1
+    }
+    if c < 1 {
+        c = 1
+    }
+    if c > k {
+        c = k
+    }
+    let chunks = []
+    for i in range(0, c) {
+        chunks.push([])
+    }
+    let idx = 0
+    for i in range(0, k) {
+        chunks[idx % c].push(i)
+        idx += 1
+    }
+    let ids = []
+    for ch in chunks {
+        ids.push(spawn(bench_queue_worker, [ch]))
+    }
+    let ok = 0
+    for t in ids {
+        ok += join(t)
+    }
+    promote("bench-queue cs=ok{ok},k{k},c{c}")
+    if ok != k {
+        exit(1)
+    }
+    exit(0)
+}
+
 # ---------------------------------------------------------- commands
 
 gene cmd_get(rest) {
@@ -673,6 +839,9 @@ gene usage() {
     promote("  --no-aria2         disable aria2c acceleration")
     promote("  --playlist         allow playlists (default off)")
     promote("  --max-attempts N   checkpoint-resume rounds (default 4)")
+    promote("bench (cross-language deep benchmark, docs/BENCHMARK-DEEP.md):")
+    promote("  bench-startup | bench-json F --n N | bench-table F --rounds R")
+    promote("  bench-lines --k K | bench-spawn --n N | bench-queue --k K --c C")
     promote("engines: yt-dlp + ffmpeg from PATH (aria2c optional). Grants are")
     promote("default-deny: the launcher allows exactly yt-dlp/ffmpeg/aria2c and")
     promote("the output directory — nothing else.")
@@ -739,6 +908,24 @@ gene main() {
     }
     if sub == "selfcheck" {
         cmd_selfcheck(rest)
+    }
+    if sub == "bench-startup" {
+        cmd_bench_startup()
+    }
+    if sub == "bench-json" {
+        cmd_bench_json(rest)
+    }
+    if sub == "bench-table" {
+        cmd_bench_table(rest)
+    }
+    if sub == "bench-lines" {
+        cmd_bench_lines(rest)
+    }
+    if sub == "bench-spawn" {
+        cmd_bench_spawn(rest)
+    }
+    if sub == "bench-queue" {
+        cmd_bench_queue(rest)
     }
     promote("error: unknown subcommand {sub}")
     usage()
