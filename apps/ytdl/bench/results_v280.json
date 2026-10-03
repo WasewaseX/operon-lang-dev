@@ -1,0 +1,385 @@
+{
+ "meta": {
+  "cpu": "Intel(R) Xeon(R) Processor",
+  "cores": 2,
+  "mem_kb": 4138564,
+  "kernel": "5.10.134-013.15.kangaroo.al8.x86_64",
+  "os": "linux",
+  "versions": {
+   "operon": "Operon 2.7.0-vm (rust-core, cpp-kernel)",
+   "python": "Python 3.12.14",
+   "deno": "?",
+   "bash": "GNU bash, version 5.2.37(1)-release (x86_64-pc-linux-gnu)"
+  },
+  "fixture": "apps/ytdl/test/mock/fixtures/meta_big.json",
+  "date": "2026-10-03 18:30 UTC"
+ },
+ "workloads": {
+  "startup": {
+   "operon": {
+    "status": "ok",
+    "median_ms": 28.2,
+    "min_ms": 27.13,
+    "max_ms": 29.13,
+    "runs": 15,
+    "rss_kb": 12760
+   },
+   "python": {
+    "status": "ok",
+    "median_ms": 54.22,
+    "min_ms": 53.04,
+    "max_ms": 57.33,
+    "runs": 15,
+    "rss_kb": 15092
+   },
+   "bash": {
+    "status": "ok",
+    "median_ms": 25.38,
+    "min_ms": 25.1,
+    "max_ms": 25.86,
+    "runs": 15,
+    "rss_kb": 12812
+   }
+  },
+  "json": {
+   "operon": {
+    "status": "ok",
+    "median_ms": 35.84,
+    "min_ms": 35.63,
+    "max_ms": 36.31,
+    "runs": 7,
+    "cs": "Operon Deep Benchmark Fixture \u2014 48 formats:48:200",
+    "cs_stable": true
+   },
+   "python": {
+    "status": "ok",
+    "median_ms": 40.36,
+    "min_ms": 40.07,
+    "max_ms": 40.68,
+    "runs": 7,
+    "cs": "Operon Deep Benchmark Fixture \u2014 48 formats:48:200",
+    "cs_stable": true
+   },
+   "bash": {
+    "status": "refused"
+   }
+  },
+  "table": {
+   "operon": {
+    "status": "ok",
+    "median_ms": 138.51,
+    "min_ms": 137.59,
+    "max_ms": 141.39,
+    "runs": 7,
+    "cs": "52|title: Operon Deep Benchmark Fixture \u2014 48 formats|504        mp4   audio                     ?  -/opus               storyboard",
+    "cs_stable": true
+   },
+   "python": {
+    "status": "ok",
+    "median_ms": 34.43,
+    "min_ms": 33.41,
+    "max_ms": 35.56,
+    "runs": 7,
+    "cs": "52|title: Operon Deep Benchmark Fixture \u2014 48 formats|504        mp4   audio                     ?  -/opus               storyboard",
+    "cs_stable": true
+   },
+   "bash": {
+    "status": "refused"
+   }
+  },
+  "lines": {
+   "operon": {
+    "status": "ok",
+    "median_ms": 75.06,
+    "min_ms": 70.24,
+    "max_ms": 77.55,
+    "runs": 7,
+    "cs": "20000,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00",
+    "cs_stable": true
+   },
+   "python": {
+    "status": "ok",
+    "median_ms": 39.99,
+    "min_ms": 39.51,
+    "max_ms": 40.25,
+    "runs": 7,
+    "cs": "20000,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00",
+    "cs_stable": true
+   },
+   "bash": {
+    "status": "ok",
+    "median_ms": 243.99,
+    "min_ms": 240.83,
+    "max_ms": 247.25,
+    "runs": 7,
+    "cs": "20000,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00",
+    "cs_stable": true
+   }
+  },
+  "spawn": {
+   "operon": {
+    "status": "ok",
+    "median_ms": 169.25,
+    "min_ms": 167.3,
+    "max_ms": 170.28,
+    "runs": 7,
+    "cs": "30/30",
+    "cs_stable": true
+   },
+   "python": {
+    "status": "ok",
+    "median_ms": 71.89,
+    "min_ms": 70.2,
+    "max_ms": 77.01,
+    "runs": 7,
+    "cs": "30/30",
+    "cs_stable": true
+   },
+   "bash": {
+    "status": "ok",
+    "median_ms": 44.3,
+    "min_ms": 43.11,
+    "max_ms": 46.56,
+    "runs": 7,
+    "cs": "30/30",
+    "cs_stable": true
+   }
+  },
+  "queue1": {
+   "operon": {
+    "status": "ok",
+    "median_ms": 1391.53,
+    "min_ms": 1390.61,
+    "max_ms": 1393.21,
+    "runs": 5,
+    "cs": "ok16,k16,c1",
+    "cs_stable": true
+   },
+   "python": {
+    "status": "ok",
+    "median_ms": 1370.54,
+    "min_ms": 1369.44,
+    "max_ms": 1373.11,
+    "runs": 5,
+    "cs": "ok16,k16,c1",
+    "cs_stable": true
+   },
+   "bash": {
+    "status": "ok",
+    "median_ms": 1338.65,
+    "min_ms": 1336.07,
+    "max_ms": 1340.45,
+    "runs": 5,
+    "cs": "ok16,k16,c1",
+    "cs_stable": true
+   }
+  },
+  "queue8": {
+   "operon": {
+    "status": "ok",
+    "median_ms": 218.21,
+    "min_ms": 216.29,
+    "max_ms": 219.76,
+    "runs": 5,
+    "cs": "ok16,k16,c8",
+    "cs_stable": true,
+    "rss_kb": 12832
+   },
+   "python": {
+    "status": "ok",
+    "median_ms": 252.47,
+    "min_ms": 250.34,
+    "max_ms": 264.04,
+    "runs": 5,
+    "cs": "ok16,k16,c8",
+    "cs_stable": true,
+    "rss_kb": 17948
+   },
+   "bash": {
+    "status": "ok",
+    "median_ms": 1363.83,
+    "min_ms": 1360.9,
+    "max_ms": 1378.84,
+    "runs": 5,
+    "cs": "ok16,k16,c1",
+    "cs_stable": true,
+    "rss_kb": 12712
+   }
+  },
+  "json2k": {
+   "operon": {
+    "status": "ok",
+    "median_ms": 350.87,
+    "min_ms": 347.63,
+    "max_ms": 435.13,
+    "runs": 5,
+    "cs": "Operon Deep Benchmark Fixture \u2014 48 formats:48:2000",
+    "cs_stable": true,
+    "rss_kb": 12752
+   },
+   "python": {
+    "status": "ok",
+    "median_ms": 167.19,
+    "min_ms": 165.21,
+    "max_ms": 168.91,
+    "runs": 5,
+    "cs": "Operon Deep Benchmark Fixture \u2014 48 formats:48:2000",
+    "cs_stable": true,
+    "rss_kb": 15184
+   },
+   "bash": {
+    "status": "refused"
+   }
+  },
+  "table300": {
+   "operon": {
+    "status": "ok",
+    "median_ms": 1363.99,
+    "min_ms": 1358.91,
+    "max_ms": 1387.31,
+    "runs": 5,
+    "cs": "52|title: Operon Deep Benchmark Fixture \u2014 48 formats|504        mp4   audio                     ?  -/opus               storyboard",
+    "cs_stable": true
+   },
+   "python": {
+    "status": "ok",
+    "median_ms": 76.21,
+    "min_ms": 75.78,
+    "max_ms": 78.02,
+    "runs": 5,
+    "cs": "52|title: Operon Deep Benchmark Fixture \u2014 48 formats|504        mp4   audio                     ?  -/opus               storyboard",
+    "cs_stable": true
+   },
+   "bash": {
+    "status": "refused"
+   }
+  },
+  "lines200k": {
+   "operon": {
+    "status": "ok",
+    "median_ms": 666.37,
+    "min_ms": 659.03,
+    "max_ms": 697.36,
+    "runs": 5,
+    "cs": "200000,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00",
+    "cs_stable": true
+   },
+   "python": {
+    "status": "ok",
+    "median_ms": 121.99,
+    "min_ms": 121.38,
+    "max_ms": 123.52,
+    "runs": 5,
+    "cs": "200000,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00",
+    "cs_stable": true
+   },
+   "bash": {
+    "status": "ok",
+    "median_ms": 2390.7,
+    "min_ms": 2386.87,
+    "max_ms": 2414.37,
+    "runs": 5,
+    "cs": "200000,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00",
+    "cs_stable": true
+   }
+  },
+  "spawn200": {
+   "operon": {
+    "status": "ok",
+    "median_ms": 1109.18,
+    "min_ms": 1100.11,
+    "max_ms": 1112.9,
+    "runs": 5,
+    "cs": "200/200",
+    "cs_stable": true
+   },
+   "python": {
+    "status": "ok",
+    "median_ms": 283.25,
+    "min_ms": 279.49,
+    "max_ms": 304.33,
+    "runs": 5,
+    "cs": "200/200",
+    "cs_stable": true
+   },
+   "bash": {
+    "status": "ok",
+    "median_ms": 268.04,
+    "min_ms": 262.69,
+    "max_ms": 270.0,
+    "runs": 5,
+    "cs": "200/200",
+    "cs_stable": true
+   }
+  }
+ },
+ "rss": {},
+ "static": {
+  "operon": {
+   "runtime_bytes": 3818272,
+   "source_bytes": 24396,
+   "loc": 825,
+   "runtime_plus_source": 3842668
+  },
+  "python": {
+   "runtime_bytes": 30913848,
+   "source_bytes": 18112,
+   "loc": 495,
+   "runtime_plus_source": 30931960
+  },
+  "bash": {
+   "runtime_bytes": 1298416,
+   "source_bytes": 7776,
+   "loc": 185,
+   "runtime_plus_source": 1306192
+  }
+ },
+ "cs_differential": {
+  "json": {
+   "operon": "Operon Deep Benchmark Fixture \u2014 48 formats:48:200",
+   "python": "Operon Deep Benchmark Fixture \u2014 48 formats:48:200"
+  },
+  "table": {
+   "operon": "52|title: Operon Deep Benchmark Fixture \u2014 48 formats|504        mp4   audio                     ?  -/opus               storyboard",
+   "python": "52|title: Operon Deep Benchmark Fixture \u2014 48 formats|504        mp4   audio                     ?  -/opus               storyboard"
+  },
+  "lines": {
+   "operon": "20000,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00",
+   "python": "20000,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00",
+   "bash": "20000,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00"
+  },
+  "spawn": {
+   "operon": "30/30",
+   "python": "30/30",
+   "bash": "30/30"
+  },
+  "queue1": {
+   "operon": "ok16,k16,c1",
+   "python": "ok16,k16,c1",
+   "bash": "ok16,k16,c1"
+  },
+  "queue8": {
+   "operon": "ok16,k16,c8",
+   "python": "ok16,k16,c8",
+   "bash": "ok16,k16,c1"
+  },
+  "json2k": {
+   "operon": "Operon Deep Benchmark Fixture \u2014 48 formats:48:2000",
+   "python": "Operon Deep Benchmark Fixture \u2014 48 formats:48:2000"
+  },
+  "table300": {
+   "operon": "52|title: Operon Deep Benchmark Fixture \u2014 48 formats|504        mp4   audio                     ?  -/opus               storyboard",
+   "python": "52|title: Operon Deep Benchmark Fixture \u2014 48 formats|504        mp4   audio                     ?  -/opus               storyboard"
+  },
+  "lines200k": {
+   "operon": "200000,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00",
+   "python": "200000,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00",
+   "bash": "200000,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00"
+  },
+  "spawn200": {
+   "operon": "200/200",
+   "python": "200/200",
+   "bash": "200/200"
+  }
+ }
+}

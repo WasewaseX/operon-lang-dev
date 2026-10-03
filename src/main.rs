@@ -124,6 +124,7 @@ fn real_main() {
         profile: false,
         spans: false,
         stdout_sink: None,
+        use_vm: true,
     };
     let mut json = false;
     // W097-A: `--chrome <file>` — write the profiled run's per-call spans
@@ -399,11 +400,13 @@ fn real_main() {
             // A6: it is the DEFAULT, the flag remains for explicitness
             "--vm" => {
                 use_vm = true;
+                opts.use_vm = true;
             }
             // W09 A6: opt back to the tree-walking interpreter (--interp is
             // the design-contract name, docs/vm-design.md §9; --no-vm alias)
             "--interp" | "--no-vm" => {
                 use_vm = false;
+                opts.use_vm = false;
             }
             // W11: the optimization pipeline level
             "--opt" => {
@@ -2338,6 +2341,7 @@ fn repl() {
             profile: false,
             spans: false,
             stdout_sink: None,
+            use_vm: true,
         },
     ) {
         Ok(l) => l,
@@ -2433,6 +2437,7 @@ fn repl() {
                                 profile: false,
                                 spans: false,
                                 stdout_sink: None,
+                                use_vm: true,
                             };
                             let rep = tools::run_tests(&[arg.to_string()], &opts, false);
                             println!(
@@ -2558,6 +2563,7 @@ fn repl() {
                                 profile: false,
                                 spans: false,
                                 stdout_sink: None,
+                                use_vm: true,
                             },
                         ) {
                             Ok(nl) => nl,

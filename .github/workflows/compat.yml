@@ -28,13 +28,20 @@ jobs:
           - os: ubuntu-latest
             profile: debug
           # word-size axis: 32-bit x86 (Linux), where usize/pointer-size
-          # and long-double behaviors would surface
+          # and long-double behaviors would surface. The i686 binary runs
+          # natively on the x86_64 host, so no emulation is needed.
           - os: ubuntu-latest
             profile: release
             target: i686-unknown-linux-gnu
-          - os: ubuntu-latest
+          # arch axis: aarch64. compat-r2 (2026-10-03): this leg used to
+          # CROSS-compile on the x86_64 runner and execute under qemu-user
+          # binfmt — that never actually ran (3484/3484 programs diverged
+          # with rust=255, '<missing>' output on every target; binfmt was
+          # not registering on the runner). The leg now runs on the native
+          # arm runner, the same one release.yml builds its aarch64 target
+          # on — real bytes, real execution, no emulation dependency.
+          - os: ubuntu-24.04-arm
             profile: release
-            target: aarch64-unknown-linux-gnu
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -45,23 +52,17 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install cross toolchain (32-bit / aarch64 Linux)
+      - name: Install cross toolchain (32-bit Linux)
         if: matrix.target == 'i686-unknown-linux-gnu'
         run: sudo apt-get update && sudo apt-get install -y gcc-multilib g++-multilib
-      - name: Install cross toolchain (aarch64)
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu qemu-user-static
-          echo 'CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc' >> $GITHUB_ENV
 
       # r7 fix (sz, red-main hotfix): CARGO_BUILD_TARGET was exported EMPTY on
       # every non-cross leg, which cargo rejects — the whole matrix has been
       # red since introduction. The build now passes --target only when set,
       # and ALWAYS exposes the produced binary at bin/operon (the one path
-      # harness.py, vm_parity.sh, compat_matrix.sh and fuzz_parser.py exec);
-      # cross-built aarch64 binaries execute transparently under
-      # qemu-user-static binfmt.
+      # harness.py, vm_parity.sh, compat_matrix.sh and fuzz_parser.py exec).
+      # compat-r2: the aarch64 caveat below is RETIRED — that leg is native
+      # arm now (see the matrix note); no cross toolchain, no qemu.
       - name: Build
         shell: bash
         env:

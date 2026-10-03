@@ -2,7 +2,7 @@
 # W61 COMMUNITY DRAFT — git-variant AUR package. Not CI-validated; builds
 # from the source tree, so requires rustc (>=1.70), gcc, g++.
 pkgname=operon-lang-git
-pkgver=2.7.0.r<commit-count-placeholder> # AUR convention: regenerate with git describe; the maintainer pins it at publish
+pkgver=2.8.0.r<commit-count-placeholder> # AUR convention: regenerate with git describe; the maintainer pins it at publish
 pkgrel=1
 pkgdesc="The gene-expression language — Total Grammar toolchain (Rust core, C++ algorithm kernel), built from source"
 arch=('x86_64' 'aarch64')
