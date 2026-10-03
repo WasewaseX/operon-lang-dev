@@ -1,0 +1,36 @@
+#!/usr/bin/env python3
+# Deterministic ffprobe shim — offline metadata benchmarking.
+import json
+import os
+import sys
+import time
+
+D = float(os.environ.get("SHIM_DELAY_PROBE", "0.01"))
+
+def main():
+    argv = sys.argv[1:]
+    if argv and argv[0] == "-version":
+        print("ffprobe version 7.1.5-shim")
+        return 0
+    if "-show_format" in argv:
+        time.sleep(D)
+        path = argv[-1]
+        try:
+            size = os.path.getsize(path)
+        except OSError:
+            size = 1048576
+        json.dump({
+            "format": {
+                "filename": path,
+                "duration": "213.400000",
+                "size": str(size),
+                "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            }
+        }, sys.stdout)
+        sys.stdout.write("\n")
+        return 0
+    sys.stderr.write("ERROR: [shim] unsupported ffprobe invocation\n")
+    return 1
+
+if __name__ == "__main__":
+    sys.exit(main())

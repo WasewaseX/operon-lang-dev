@@ -1,0 +1,352 @@
+# ============================================================
+# ytdl.op — lightweight video-download orchestrator, gene edition
+# app logic: 100% Operon. External engines from PATH: yt-dlp (fetch),
+# ffmpeg (media), ffprobe (metadata). aria2c probed but optional.
+# Same CLI contract as the python/, rust/, node/ ports in this folder.
+#
+# run via the launcher (grants + fuel + cell timeout in one place):
+#   apps/ytdl/ytdl doctor
+#   apps/ytdl/ytdl info <url>
+#   apps/ytdl/ytdl get <url> [--format F] [--out D] [--audio] [--subs L] [--resume]
+#   apps/ytdl/ytdl meta <file>
+#   apps/ytdl/ytdl queue <jobs.txt> [--workers N]
+# bench hooks: startup | spawnbench <n> | cpu <n>
+# ============================================================
+
+# ---------- shared helpers ----------
+
+gene clip(s, n) {
+    # honest stderr excerpting
+    let t = str(s).trim()
+    if len(t) > n {
+        return t.slice(0, n)
+    }
+    return t
+}
+
+gene secs(t0) {
+    # wall seconds since t0, millis precision (now() is float seconds)
+    return round((now() - t0) * 1000) / 1000
+}
+
+gene probe(tool, flag) {
+    # run() returns {code, stdout, stderr, ok}; a MISSING binary is not
+    # ok=false — it raises a catchable `missing` stress (default-deny world),
+    # so probe must rescue it. Different from any free-for-all runtime.
+    stress {
+        let r = run(tool, [flag])
+        if r["ok"] {
+            return str(r["stdout"]).trim()
+        }
+        return ""
+    } rescue (e) {
+        return ""
+    }
+}
+
+# ---------- doctor: PATH instrumentation ----------
+
+gene doctor() {
+    # ffmpeg family wants `-version`; yt-dlp/aria2c want `--version`
+    let tools = [["yt-dlp", "--version"], ["ffmpeg", "-version"], ["ffprobe", "-version"], ["aria2c", "--version"]]
+    let found = 0
+    for t in tools {
+        let v = probe(t[0], t[1])
+        if v != "" {
+            found += 1
+            promote("tool={t[0]} version={clip(v, 60)}")
+        } else {
+            promote("tool={t[0]} MISSING")
+        }
+    }
+    promote("doctor: ok {found}/{len(tools)}")
+    if found < 3 {
+        exit(1)
+    }
+}
+
+# ---------- info: format enumeration over `yt-dlp -J` ----------
+
+gene info(url) {
+    let t0 = now()
+    let r = run("yt-dlp", ["-J", "--no-warnings", url])
+    if !r["ok"] {
+        promote("info: FAIL code={r["code"]} err={clip(r["stderr"], 160)}")
+        exit(1)
+    }
+    let j = json_parse(r["stdout"])
+    let formats = j["formats"]
+    let best = ""
+    for f in formats {
+        if has(f, "format_id") {
+            best = str(f["format_id"])
+        }
+    }
+    promote("title={j["title"]}")
+    promote("formats={len(formats)}")
+    promote("best={best}")
+    promote("info: ok secs={secs(t0)}")
+}
+
+# ---------- get: one download job (video | audio | subs) ----------
+
+gene build_args(url, mode, fmt, out, resume) {
+    let args = []
+    if resume {
+        push(args, "-c")
+    }
+    push(args, "--no-warnings")
+    if mode == "audio" {
+        push(args, "-x")
+        push(args, "--audio-format")
+        push(args, "mp3")
+    } else {
+        if mode == "subs" {
+            push(args, "--write-subs")
+            push(args, "--skip-download")
+            push(args, "--sub-langs")
+            push(args, "en")
+        } else {
+            push(args, "-f")
+            push(args, fmt)
+        }
+    }
+    push(args, "-o")
+    push(args, out + "/%(title)s.%(ext)s")
+    push(args, url)
+    return args
+}
+
+gene do_job(idx, url, mode, fmt, out, resume) {
+    # returns [ok01, report_line] — one line per job, queue contract
+    let t0 = now()
+    promote("[get] start url={url} mode={mode} fmt={fmt}")
+    let r = run("yt-dlp", build_args(url, mode, fmt, out, resume))
+    let wall = secs(t0)
+    if !r["ok"] {
+        return [0, "job {idx}: {mode} {url} -> FAIL(code={r["code"]}) secs={wall}"]
+    }
+    return [1, "job {idx}: {mode} {url} -> ok secs={wall}"]
+}
+
+gene get(url, fmt, out, mode, resume) {
+    let res = do_job(0, url, mode, fmt, out, resume)
+    if res[0] == 0 {
+        exit(1)
+    }
+    promote("get: ok")
+}
+
+# ---------- meta: ffprobe ----------
+
+gene meta(file) {
+    let r = run("ffprobe", ["-v", "quiet", "-print_format", "json", "-show_format", file])
+    if !r["ok"] {
+        promote("meta: FAIL code={r["code"]} err={clip(r["stderr"], 160)}")
+        exit(1)
+    }
+    let j = json_parse(r["stdout"])
+    let f = j["format"]
+    promote("duration={f["duration"]} size={f["size"]}")
+    promote("meta: ok")
+}
+
+# ---------- queue: concurrent map-reduce over job chunks ----------
+
+gene worker(chunk) {
+    # one OS cell per chunk; each cell runs its children itself
+    let oks = 0
+    let lines = []
+    let got = 0
+    for job in chunk {
+        let res = do_job(job[0], job[1], job[2], "best", "downloads", false)
+        got += res[0]
+        push(lines, res[1])
+    }
+    return [got, lines]
+}
+
+gene queue(jobsfile, workers) {
+    let t0 = now()
+    let text = read_file(jobsfile)
+    let rows = str(text).trim().split("\n")
+    let jobs = []
+    let i = 0
+    for row in rows {
+        let parts = row.trim().split(" ")
+        if len(parts) >= 2 {
+            push(jobs, [i, parts[0], parts[1]])
+            i += 1
+        }
+    }
+    let total = len(jobs)
+    if total == 0 {
+        promote("queue: no jobs")
+        exit(2)
+    }
+    let w = workers
+    if w > total {
+        w = total
+    }
+    # partition into w contiguous chunks (map-reduce shape; no shared mutation)
+    # // is integer division (a plain / yields floats — index poison)
+    let per = (total + w - 1) // w
+    let ids = []
+    let c = 0
+    while c < w {
+        let chunk = []
+        let k = c * per
+        while k < (c + 1) * per and k < total {
+            push(chunk, jobs[k])
+            k += 1
+        }
+        if len(chunk) > 0 {
+            push(ids, spawn(worker, [chunk]))
+        }
+        c += 1
+    }
+    let oks = 0
+    for id in ids {
+        let part = join(id, -1)
+        oks += part[0]
+        for line in part[1] {
+            promote(line)
+        }
+    }
+    let wall = secs(t0)
+    promote("queue: {oks}/{total} ok in {wall}s (workers={w})")
+    if oks < total {
+        exit(1)
+    }
+}
+
+# ---------- bench hooks (same contract in every port) ----------
+
+gene bench_startup() {
+    promote("startup: ok")
+}
+
+gene bench_spawnbench(n) {
+    let t0 = now()
+    let i = 0
+    while i < n {
+        let r = run("yt-dlp", ["--version"])
+        if !r["ok"] {
+            promote("spawnbench: FAIL at {i}")
+            exit(1)
+        }
+        i += 1
+    }
+    promote("spawnbench: ok n={n} secs={secs(t0)}")
+}
+
+gene fib(n) {
+    if n < 2 {
+        return n
+    }
+    return fib(n - 1) + fib(n - 2)
+}
+
+gene bench_cpu(n) {
+    let t0 = now()
+    let v = fib(n)
+    promote("cpu: ok fib({n})={v} secs={secs(t0)}")
+}
+
+# ---------- dispatch ----------
+
+gene flag_of(a, name, dflt) {
+    let i = 0
+    for x in a {
+        if x == name and i + 1 < len(a) {
+            return a[i + 1]
+        }
+        i += 1
+    }
+    return dflt
+}
+
+gene has_flag(a, name) {
+    for x in a {
+        if x == name {
+            return true
+        }
+    }
+    return false
+}
+
+gene main() {
+    let a = argv()
+    if len(a) < 1 {
+        promote("usage: ytdl doctor | info <url> | get <url> [options] | meta <file> | queue <jobs> [--workers N] | startup | spawnbench N | cpu N")
+        exit(2)
+    }
+    let cmd = a[0]
+    if cmd == "doctor" {
+        doctor()
+    } else {
+        if cmd == "info" {
+            if len(a) < 2 {
+                promote("usage: ytdl info <url>")
+                exit(2)
+            }
+            info(a[1])
+        } else {
+            if cmd == "get" {
+                if len(a) < 2 {
+                    promote("usage: ytdl get <url> [--format F] [--out D] [--audio] [--subs L] [--resume]")
+                    exit(2)
+                }
+                let mode = "video"
+                if has_flag(a, "--audio") {
+                    mode = "audio"
+                }
+                if has_flag(a, "--subs") {
+                    mode = "subs"
+                }
+                let fmt = flag_of(a, "--format", "bv*+ba/b")
+                let out = flag_of(a, "--out", "downloads")
+                get(a[1], fmt, out, mode, has_flag(a, "--resume"))
+            } else {
+                if cmd == "meta" {
+                    if len(a) < 2 {
+                        promote("usage: ytdl meta <file>")
+                        exit(2)
+                    }
+                    meta(a[1])
+                } else {
+                    if cmd == "queue" {
+                        if len(a) < 2 {
+                            promote("usage: ytdl queue <jobs.txt> [--workers N]")
+                            exit(2)
+                        }
+                        queue(a[1], num(flag_of(a, "--workers", "4")))
+                    } else {
+                        if cmd == "startup" {
+                            bench_startup()
+                        } else {
+                            if cmd == "spawnbench" {
+                                if len(a) < 2 {
+                                    promote("usage: ytdl spawnbench <n>")
+                                    exit(2)
+                                }
+                                bench_spawnbench(num(a[1]))
+                            } else {
+                                if cmd == "cpu" {
+                                    if len(a) < 2 {
+                                        promote("usage: ytdl cpu <n>")
+                                        exit(2)
+                                    }
+                                    bench_cpu(num(a[1]))
+                                } else {
+                                    promote("ytdl: unknown command '{cmd}'")
+                                    exit(2)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
