@@ -9,6 +9,14 @@ from PATH, `aria2c` when present — so every difference below is the
 This experiment exists to test Operon the honest way: by shipping a real
 application and letting a real workload expose real gaps.
 
+> **Measured follow-up:** the same four builds now carry a uniform
+> `bench-*` workload surface and have been benchmarked across 10+
+> aspects (startup, JSON parse, decision pipeline, string processing,
+> spawn overhead, queue concurrency scaling, peak RSS, footprint, LOC,
+> differential checksums). Numbers, analysis and verdict:
+> **`docs/BENCHMARK-DEEP.md`** (harness: `scripts/bench_deep.py`,
+> raw data: `apps/ytdl/bench/results.json`).
+
 ## What the app does (identical surface in every build)
 
 - `doctor` — probe PATH engines, report versions, verdict

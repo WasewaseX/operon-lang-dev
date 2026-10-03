@@ -1,0 +1,44 @@
+[startup ] operon  median=27.18 ms rss=12868KB
+[startup ] python  median=61.65 ms rss=15168KB
+[startup ] deno    median=36.52 ms rss=29476KB
+[startup ] bash    median=26.77 ms rss=12860KB
+[json    ] operon  median=34.82 ms
+[json    ] python  median=41.88 ms
+[json    ] deno    median=19.36 ms
+[json    ] bash    median=? ms
+[table   ] operon  median=163.77 ms
+[table   ] python  median=36.66 ms
+[table   ] deno    median=30.63 ms
+[table   ] bash    median=? ms
+[lines   ] operon  median=84.27 ms
+[lines   ] python  median=37.71 ms
+[lines   ] deno    median=18.44 ms
+[lines   ] bash    median=244.01 ms
+[spawn   ] operon  median=166.77 ms
+[spawn   ] python  median=67.81 ms
+[spawn   ] deno    median=57.72 ms
+[spawn   ] bash    median=40.96 ms
+[queue1  ] operon  median=1389.78 ms
+[queue1  ] python  median=1369.96 ms
+[queue1  ] deno    median=1349.9 ms
+[queue1  ] bash    median=1336.14 ms
+[queue8  ] operon  median=219.2 ms rss=12864KB
+[queue8  ] python  median=249.42 ms rss=17596KB
+[queue8  ] deno    median=223.5 ms rss=37748KB
+[queue8  ] bash    median=1362.56 ms rss=12860KB
+[json2k  ] operon  median=342.04 ms rss=12784KB
+[json2k  ] python  median=166.97 ms rss=15236KB
+[json2k  ] deno    median=98.29 ms rss=37028KB
+[json2k  ] bash    median=? ms
+[table300] operon  median=1602.75 ms
+[table300] python  median=91.08 ms
+[table300] deno    median=44.05 ms
+[table300] bash    median=? ms
+[lines200k] operon  median=789.72 ms
+[lines200k] python  median=121.38 ms
+[lines200k] deno    median=34.73 ms
+[lines200k] bash    median=2422.24 ms
+[spawn200] operon  median=1095.73 ms
+[spawn200] python  median=277.68 ms
+[spawn200] deno    median=277.91 ms
+[spawn200] bash    median=246.7 ms

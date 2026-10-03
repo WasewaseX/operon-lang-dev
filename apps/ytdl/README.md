@@ -66,3 +66,16 @@ The battery covers: doctor/info/get/get-audio, the stall-resume path, the
 failure path, concurrent queues (including failing items), usage errors,
 and the byte-identical decision-matrix differential against the Python
 build (`apps/ytdl-compare/python/ytdl.py`).
+
+## Benchmarks
+
+Every build (this app + the three comparison builds) exposes a uniform
+`bench-*` workload surface used by the deep cross-language benchmark:
+
+```sh
+python3 scripts/bench_deep.py        # medians, RSS, checksums -> apps/ytdl/bench/
+```
+
+Workloads: `bench-startup`, `bench-json F --n N`, `bench-table F --rounds R`,
+`bench-lines --k K`, `bench-spawn --n N`, `bench-queue --k K --c C`.
+Results and analysis: `docs/BENCHMARK-DEEP.md`.

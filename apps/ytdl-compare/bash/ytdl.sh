@@ -149,6 +149,59 @@ usage() {
   exit 2
 }
 
+# ---- deep bench (docs/BENCHMARK-DEEP.md): shell-native subset only ----
+# bench-json / bench-table are REFUSED: no JSON parser in bash. That is a
+# benchmark finding, not an oversight (see APP-COMPARISON.md).
+
+bench_refuse() {
+  echo "$1: not implementable in pure bash (no JSON parser)"
+  exit 2
+}
+
+cmd_bench_startup() {
+  echo "ytdl-bench ready"
+  exit 0
+}
+
+cmd_bench_spawn() {
+  local n="${1:-30}" ok=0 i
+  for ((i = 0; i < n; i++)); do
+    if mockspawn --version >/dev/null 2>&1; then ok=$((ok + 1)); fi
+  done
+  echo "bench-spawn cs=$ok/$n"
+  [ "$ok" = "$n" ] && exit 0
+  exit 1
+}
+
+cmd_bench_lines() {
+  local k="${1:-20000}" eta=0 step i pp ss ln samples=""
+  step=$((k / 40)); [ "$step" -lt 1 ] && step=1
+  for ((i = 0; i < k; i++)); do
+    printf -v pp '%02d' $(((i * 7) % 100))
+    printf -v ss '%02d' $(((i * 3) % 60))
+    ln="[download]  ${pp}% of 12.00MiB at 2.00MiB/s ETA 00:${ss}"
+    case "$ln" in *ETA*) eta=$((eta + 1)) ;; esac
+    if [ $((i % step)) -eq 0 ]; then
+      samples="${samples:+$samples,}${ln:12:2}"
+    fi
+  done
+  echo "bench-lines cs=$eta,$samples"
+  exit 0
+}
+
+cmd_bench_queue() {
+  local k="${1:-16}"
+  # bash build: no safe concurrency for this shape — runs SEQUENTIAL
+  # (C forced to 1); the harness reports the speedup as 1.0x honestly.
+  local ok=0 i
+  for ((i = 0; i < k; i++)); do
+    if mocksleep 80 >/dev/null 2>&1; then ok=$((ok + 1)); fi
+  done
+  echo "bench-queue cs=ok$ok,k$k,c1"
+  [ "$ok" = "$k" ] && exit 0
+  exit 1
+}
+
 OUT="downloads" QUALITY="best" AUDIO="" FMT=""
 
 [ $# -eq 0 ] && usage
@@ -159,5 +212,11 @@ case "$1" in
   get) shift; cmd_get "$@" ;;
   queue) shift; cmd_queue "$@" ;;
   selfcheck) die "selfcheck: not implementable in pure bash (no JSON parser)" 2 ;;
+  bench-startup) shift; cmd_bench_startup "$@" ;;
+  bench-json) shift; bench_refuse bench-json ;;
+  bench-table) shift; bench_refuse bench-table ;;
+  bench-lines) shift; cmd_bench_lines "$@" ;;
+  bench-spawn) shift; cmd_bench_spawn "$@" ;;
+  bench-queue) shift; cmd_bench_queue "$@" ;;
   *) echo "error: unknown subcommand $1"; usage ;;
 esac
