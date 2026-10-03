@@ -448,7 +448,8 @@ gene main() {
 }
 ```
 
-Bundled modules: `strings`, `collections`, `iter`, `math`, `seq`, `bio` (sequence utilities,
+Bundled modules: `strings`, `collections`, `iter`, `math`, `seq`, `result` (the §12
+combinator tier), `bio` (sequence utilities,
 also useful as plain string/list exercises), `env` + `process` (capability-gated reads of
 environment variables and subprocesses; a denied grant answers your fallback instead of
 crashing). Native kernels back the heavy parts:
@@ -582,11 +583,75 @@ Rule of thumb: expected-and-handle → `try_*` + match; exceptional-and-
 contain → `stress/rescue`. The err payload is always an engine-neutral
 string, so what you pin in a proof frame is what every run prints.
 
+### The combinator tier: `std/result`
+
+Raw Results read well one at a time; pipelines read better with vocabulary.
+The `std/result` module adds the combinator tier — the same shapes you know
+from Rust's `Result`, written in pure Operon over the `ok`/`err` primitives,
+so there is no new engine semantics to trust:
+
+```operon
+use std/result as r
+
+gene main() {
+    print(r.map(try_num("42"), gene (x) { return x * 2 }))
+    # Ok(84)
+    print(r.map_err(try_num("nope"), gene (e) { return "bad input" }))
+    # Err("bad input")
+}
+```
+
+`map` transforms the ok side and lets an err pass untouched; `map_err` is
+its mirror. Chain steps with `and_then` (the handler returns a Result) and
+recover with `or_else`; `unwrap_or_else` computes a default from the payload
+so a pipeline never has to stop:
+
+```operon
+use std/result as r
+
+gene positive(n) {
+    if n > 0 {
+        return ok(n)
+    }
+    return err("not positive")
+}
+
+gene main() {
+    let chain = r.and_then(try_num("10"), positive)
+    print(chain)                                                   # Ok(10)
+    print(r.or_else(chain, gene (e) { return ok(-1) }))            # Ok(10)
+    print(r.unwrap_or_else(try_num("zz"), gene (e) { return 0 }))  # 0
+}
+```
+
+For quick questions the predicates `is_ok_and` / `is_err_and` never stress —
+they answer `false` on the wrong side instead — and `ok_to_some` converts to
+the Option world when a caller expects `some`/`none`:
+
+```operon
+use std/result as r
+
+gene main() {
+    print(r.is_ok_and(try_num("5"), gene (x) { return x > 3 }))     # true
+    print(r.is_err_and(try_num("zz"),
+        gene (e) { return e == "num('zz') failed" }))               # true
+    print(r.ok_to_some(try_num("7")))                               # Some(7)
+}
+```
+
+One naming note: this module's `map` is the *Result* combinator, while
+`std/typed`'s `map` is the typed-collection wrapper. Importing both is fine
+— qualify the call site (`r.map(res, f)` vs `t.map(xs, f)`) or alias one of
+the imports; the tests themselves use `use std/result as res` for exactly
+this reason. A full runnable walk-through of the tier — a batch of raw
+records parsed, validated, and reported without raising a single stress —
+lives in [examples/result_pipeline.op](examples/result_pipeline.op).
+
 ## 13. Where to go next
 
 - **Read the standard library**: `std/*.op`, all Operon, meant to be read.
 - **Read the proof suite**: `tests/`, 50 files, every language behavior asserted.
-- **Run the app**: `apps/genomelab/genomelab.op`, a small DNA-toolbox CLI built entirely in Operon.
+- **Run the apps**: `apps/genomelab/genomelab.op`, a small DNA-toolbox CLI built entirely in Operon, and `apps/ytdl/`, a real-world downloader whose deep cross-language benchmark is told in [docs/BENCHMARK-DEEP.md](docs/BENCHMARK-DEEP.md).
 - **Try the package workflow**: `operon new` + `operon add`, walked command by command in the cookbook's [packages chapter](examples/cookbook/packages.sh).
 - **The spec**: `SPEC.md`, the full contract, organized by feature.
 - **The roadmap**: where the language goes next (a bytecode VM for speed, more self-hosting).
