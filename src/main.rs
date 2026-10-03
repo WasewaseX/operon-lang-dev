@@ -2525,7 +2525,7 @@ fn repl() {
                             .borrow()
                             .keys()
                             .filter(|k| !k.starts_with("__"))
-                            .cloned()
+                            .map(|k| k.to_string())
                             .collect();
                         if keys.is_empty() {
                             println!("  (no top-level variables yet)");

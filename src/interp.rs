@@ -10,6 +10,10 @@ use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::{mpsc, Arc, Mutex};
 
 pub struct Env {
+    /// W011-r2: Fx-hashed (see src/fxhash.rs — internal-only hasher swap,
+    /// iteration order was already process-random under RandomState) with
+    /// INTERNED Rc<str> keys (writes stop mallocing a fresh String per
+    /// binding; reads hash the &str directly via Borrow<str>).
     pub vars: RefCell<HashMap<String, Value>>,
     pub parent: Option<Rc<Env>>,
     /// W05: names bound with `const` in THIS scope. Assignment to a const
@@ -79,6 +83,10 @@ impl Drop for Env {
 
 impl Env {
     /// W05: a const binding, records the name so later assignment stresses.
+    /// W011-r2 note: define/set/define_const keep owned String keys — the
+    /// TLS interner measured SLOWER than the malloc on loop-shaped writes
+    /// (loops.op 0.85x when interned); only the call path (define_param)
+    /// interns, where the same name repeats every call of a hot gene.
     pub fn define_const(&self, name: &str, val: Value) {
         def_gen_bump();
         self.vars.borrow_mut().insert(name.to_string(), val);
@@ -169,7 +177,7 @@ impl Env {
         self.vars
             .borrow()
             .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
+            .map(|(k, v)| (k.to_string(), v.clone()))
             .collect()
     }
 }
@@ -707,6 +715,9 @@ pub struct Interp {
     /// fold the parent's termination math exactly, they do not inherit
     /// raw .cell).
     pub rho_pins: Option<(bool, f64, f64, f64, f64)>,
+    /// W011-r2: lazily-derived rho knobs from the frozen .cell map (first
+    /// rho_knobs() call caches; the cell map is never mutated at runtime).
+    pub rho_cache: Option<(bool, f64, f64, f64, f64)>,
     /// loop-10 (F-8): per-cistron ribosome queue-depth register. Populated
     /// ONLY when rho.termination is on (inert bookkeeping otherwise, no
     /// back-compat surface at all). Rides RegulationSnap.
@@ -745,15 +756,18 @@ pub struct Interp {
     pub ires: Vec<String>,
     pub enhanced: Vec<String>,
     pub defined_genes: Vec<String>,
-    pub call_counts: HashMap<String, u64>,
+    /// per-gene call counters (regulatory bookkeeping). W011-r2: Fx-hashed.
+    pub call_counts: HashMap<String, u64, crate::fxhash::FxBuild>,
     pub call_time: HashMap<String, f64>, // µs inclusive (profiling)
     pub call_time_self: HashMap<String, f64>, // µs exclusive (children subtracted)
     // (name, start_ns, child_acc µs, call-site line — W008 polish: the
     // caller's line at push time, so debuggers can show real outer frames)
     pub call_stack: Vec<(String, f64, f64, usize)>,
     pub call_clock: u64,
-    pub gene_buckets: HashMap<String, HashMap<u64, u64>>, // burst-index bins (20 calls/bin)
-    pub modules: HashMap<String, Value>,                  // path -> module map
+    /// burst-index bins (20 calls/bin). W011-r2: Fx-hashed.
+    pub gene_buckets:
+        HashMap<String, HashMap<u64, u64, crate::fxhash::FxBuild>, crate::fxhash::FxBuild>,
+    pub modules: HashMap<String, Value>, // path -> module map
     pub loading: Vec<String>,
     pub profiling: bool,
     /// W097-A (builder-E, profiling lane): per-call span capture for the
@@ -778,7 +792,8 @@ pub struct Interp {
     pub methyl_noted: std::collections::HashSet<String>,
     /// T2b graded methylation: per-gene silencing level (@methylate defs +1,
     /// @acetylate defs −1). Calls are blocked at `methyl_threshold` (default 3).
-    pub methyl_levels: HashMap<String, u32>,
+    /// W011-r2: Fx-hashed (internal-only hasher swap, see src/fxhash.rs).
+    pub methyl_levels: HashMap<String, u32, crate::fxhash::FxBuild>,
     pub methyl_threshold: u32,
     pub asserts_run: u64,
     pub rng: u64,
@@ -814,6 +829,11 @@ pub struct Interp {
     /// handler must be able to act on a caught cancellation), while the
     /// explicit `cancelled()` poll keeps reading the real chain. The step
     /// budget and fuel pool still apply, so a handler cannot spin forever.
+    /// W011-r2: precomputed liveness for the tick's cancel observation
+    /// (cancel_chain is assigned wholesale at three sites, never pushed/popped
+    /// after; cancel_suppressed stays a live check — it toggles around rescue
+    /// handler bodies at runtime).
+    pub cancel_live: bool,
     pub cancel_suppressed: bool,
     /// W17: one task-id registry per active `scope` block (innermost
     /// last). spawn() registers into the top; scope exit reaps the ids.
@@ -856,7 +876,9 @@ pub struct Interp {
     /// the definition generation at resolution time. Per-interpreter by
     /// construction: workers build fresh interps and copy only inherited
     /// knobs, never this map — a spawned cell always re-resolves.
-    pub mono_cache: HashMap<(usize, u32), (u64, Option<Value>)>,
+    /// W011 stage-3 item 2 site cache — W011-r2: Fx-hashed (tuple of ints;
+    /// SipHash cost was pure per-call overhead on the mono-cache hit path).
+    pub mono_cache: HashMap<(usize, u32), (u64, Option<Value>), crate::fxhash::FxBuild>,
     /// W011 toggle matrix: an explicit --opt-passes set. None = derive
     /// from vm_opt (1 = STAGE1, 2 = ALL); Some(set) is authoritative,
     /// including PassSet::NONE (compile-only). Process-constant.
@@ -940,6 +962,7 @@ impl Interp {
             medium: None,
             m6a_reader_pins: None,
             rho_pins: None,
+            rho_cache: None,
             ribo_queue: HashMap::new(),
             promoter_tel: HashMap::new(),
             burst_overrides: HashMap::new(),
@@ -957,12 +980,12 @@ impl Interp {
             ires: Vec::new(),
             enhanced: Vec::new(),
             defined_genes: Vec::new(),
-            call_counts: HashMap::new(),
+            call_counts: HashMap::with_hasher(crate::fxhash::FxBuild::default()),
             call_time: HashMap::new(),
             call_time_self: HashMap::new(),
             call_stack: Vec::new(),
             call_clock: 0,
-            gene_buckets: HashMap::new(),
+            gene_buckets: HashMap::with_hasher(crate::fxhash::FxBuild::default()),
             modules: HashMap::new(),
             loading: Vec::new(),
             profiling: false,
@@ -981,7 +1004,7 @@ impl Interp {
             frozen: std::collections::HashSet::new(),
             frozen_keep: Vec::new(),
             traits: HashMap::new(),
-            methyl_levels: HashMap::new(),
+            methyl_levels: HashMap::with_hasher(crate::fxhash::FxBuild::default()),
             methyl_threshold: 3,
             asserts_run: 0,
             rng: 0x9E3779B97F4A7C15,
@@ -998,6 +1021,7 @@ impl Interp {
             tasks: HashMap::new(),
             next_task_id: 1,
             cancel_chain: Vec::new(),
+            cancel_live: false,
             task_tombstones: HashMap::new(),
             cancel_suppressed: false,
             scope_stack: Vec::new(),
@@ -1012,7 +1036,7 @@ impl Interp {
             vm_stack_pool: Vec::new(),
             vm_opt: 0,
             opt_passes: None,
-            mono_cache: HashMap::new(),
+            mono_cache: HashMap::with_hasher(crate::fxhash::FxBuild::default()),
             debug_breaks: HashMap::new(),
             debug_step: false,
             debug_step_depth: None,
@@ -1107,7 +1131,12 @@ impl Interp {
         // W18: cooperative cancellation is checked at fuel tick boundaries.
         // A worker observes its own flag plus every ancestor flag; the host
         // chain is empty and pays one branch for the empty check.
-        if check_cancel && !self.cancel_suppressed && !self.cancel_chain.is_empty() {
+        // W011-r2: the liveness test is PRECOMPUTED (cancel_chain is assigned
+        // wholesale at exactly three sites — sched.rs task creation and the
+        // two worker lanes in genes.rs — never pushed/popped after), so the
+        // per-tick cost is two bool loads (no Vec-len deref); cancel_live is
+        // refreshed at the assignment sites.
+        if check_cancel && self.cancel_live && !self.cancel_suppressed {
             for f in &self.cancel_chain {
                 if f.load(std::sync::atomic::Ordering::Relaxed) {
                     return Err(Stress::new("cancelled", "task cancelled"));
@@ -1542,10 +1571,10 @@ impl Interp {
                     let mut depth = 0usize;
                     while let Some(e) = cur {
                         let vars = e.vars.borrow();
-                        let mut names: Vec<String> = vars.keys().cloned().collect();
+                        let mut names: Vec<String> = vars.keys().map(|k| k.to_string()).collect();
                         names.sort();
                         for n in names {
-                            let v = vars.get(&n).cloned().unwrap_or(Value::Null);
+                            let v = vars.get(n.as_str()).cloned().unwrap_or(Value::Null);
                             let text = v.display();
                             let text = if text.len() > 120 {
                                 format!(
@@ -1846,11 +1875,11 @@ impl Interp {
                     let mut depth = 0usize;
                     while let Some(e) = cur {
                         let vars = e.vars.borrow();
-                        let mut names: Vec<String> = vars.keys().cloned().collect();
+                        let mut names: Vec<String> = vars.keys().map(|k| k.to_string()).collect();
                         names.sort();
                         let mut fields = Vec::new();
                         for nm in names {
-                            let v = vars.get(&nm).cloned().unwrap_or(Value::Null);
+                            let v = vars.get(nm.as_str()).cloned().unwrap_or(Value::Null);
                             fields.push(format!(
                                 "{}:{}",
                                 json_quote(&nm),
@@ -2779,7 +2808,7 @@ impl Interp {
                 }
                 self.operons.retain(|u| u.name != *name);
                 let mut unit = OperonUnit {
-                    name: name.clone(),
+                    name: name.to_string(),
                     members: Vec::new(),
                     transcripts: 0,
                 };
@@ -2973,7 +3002,7 @@ impl Interp {
                     .borrow()
                     .iter()
                     .filter(|(k, _)| !k.starts_with('#'))
-                    .map(|(k, v)| (Value::Str(k.clone()), v.clone()))
+                    .map(|(k, v)| (Value::Str(k.to_string()), v.clone()))
                     .collect();
                 exports.sort_by(|a, b| match (&a.0, &b.0) {
                     (Value::Str(x), Value::Str(y)) => x.cmp(y),
@@ -4651,20 +4680,16 @@ impl Interp {
         // W007: the traceback frame for THIS gene, (name, call-site line as
         // of entry; cur_line is the call expression that brought us here and
         // only changes again when new expressions execute, which cannot
-        // happen during unwinding). Appended to a stress ONLY on the error
-        // path, so the happy path pays one comparison, not an allocation.
-        let frame = if crate::w009a::A_TB.load(std::sync::atomic::Ordering::Relaxed) {
-            if crate::w009a::COUNTS_ON.load(std::sync::atomic::Ordering::Relaxed) {
-                crate::w009a::C_TB.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            }
-            (String::new(), self.cur_line)
-        } else {
-            (
-                def.name.clone().unwrap_or_else(|| "<lambda>".into()),
-                self.cur_line,
-            )
-        };
-        let result = self.call_gene_inner(def, closure, args);
+        // happen during unwinding). W011-r2: the frame is now MATERIALIZED
+        // LAZILY — the happy path used to clone the gene's name on every
+        // call purely to carry it to an error path that (for honest
+        // workloads) never runs; fib(27) pays ~33ns/call for a string it
+        // never renders. The name is cloned ONLY when a chain frame is
+        // actually appended: `def` is still owned here (call_gene_inner
+        // borrows it now), and entry_line captures cur_line at entry, so
+        // the pushed frame is byte-identical to the old eager one.
+        let entry_line = self.cur_line;
+        let result = self.call_gene_inner(&def, closure, args);
         self.depth -= 1;
         match result {
             Ok(v) => Ok(v),
@@ -4675,7 +4700,10 @@ impl Interp {
                 // innermost frame appends first; bounded at 64 (note-cap
                 // discipline, an unbounded chain is an uncontained one)
                 if s.chain.len() < 64 {
-                    s.chain.push(frame);
+                    s.chain.push((
+                        def.name.clone().unwrap_or_else(|| "<lambda>".into()),
+                        entry_line,
+                    ));
                 }
                 Err(s)
             }
@@ -4835,8 +4863,16 @@ impl Interp {
     /// rest parse-or-default); worker: the pinned snapshot tuple.
     /// Default-off: absent rho.termination = false, legacy runs draw
     /// nothing and stay bit-identical (telegraph-promoter precedent).
-    fn rho_knobs(&self) -> (bool, f64, f64, f64, f64) {
+    /// W011-r2: the knobs derive ONLY from the frozen .cell map (never
+    /// mutated after construction — audited: no insert/remove/reassign) or
+    /// the rho_pins override, so the parse is cached on first use instead
+    /// of re-parsing four strings from the cell map on EVERY call (the
+    /// fib25/27 profile showed rho_knobs as the single largest gate cost).
+    fn rho_knobs(&mut self) -> (bool, f64, f64, f64, f64) {
         if let Some(k) = self.rho_pins {
+            return k;
+        }
+        if let Some(k) = self.rho_cache {
             return k;
         }
         let catch = self
@@ -4851,7 +4887,7 @@ impl Interp {
                 .and_then(|v| v.parse::<f64>().ok())
                 .unwrap_or(dflt)
         };
-        (
+        let k = (
             self.cell
                 .get("rho.termination")
                 .map(|v| v == "true")
@@ -4860,7 +4896,9 @@ impl Interp {
             fk("rho.queue_floor", 0.5),
             fk("ribosome.queue_cap", 1.0),
             fk("ribosome.drain", 0.5),
-        )
+        );
+        self.rho_cache = Some(k);
+        k
     }
 
     /// reg-bio-2 (C1): integrate the translation layer, one Euler step per
@@ -5475,22 +5513,14 @@ impl Interp {
     }
 
     fn promoter_veto(&mut self, def: &GeneDef) -> bool {
-        let name = if crate::w009a::A_PROMO.load(std::sync::atomic::Ordering::Relaxed) {
-            if !self.expr_stochastic {
-                return false;
-            }
-            if crate::w009a::COUNTS_ON.load(std::sync::atomic::Ordering::Relaxed) {
-                crate::w009a::C_PROMO.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            }
-            def.name.clone().unwrap_or_default()
-        } else {
-            def.name.clone().unwrap_or_default()
-        };
-        if !crate::w009a::A_PROMO.load(std::sync::atomic::Ordering::Relaxed)
-            && !self.expr_stochastic
-        {
+        // W011-r2: the early-out moved ABOVE the name clone. Both the
+        // legacy and ablation paths returned false on !expr_stochastic;
+        // the eager `def.name.clone()` before that check was a per-call
+        // malloc paid by every honest (non-bursting) workload for nothing.
+        if !self.expr_stochastic {
             return false;
         }
+        let name = def.name.clone().unwrap_or_default();
         // loop-9 (F-2): per-gene PROMOTER IDENTITY, the mark's own rates
         // override the global telegraph parameters for this gene only.
         // loop-9 (R9 jury): runtime modulation, a regulator CAN retune a
@@ -5529,11 +5559,16 @@ impl Interp {
 
     fn call_gene_inner(
         &mut self,
-        def: Arc<GeneDef>,
+        // W011-r2: a BORROW — the eager `def.name.clone()` per call (a
+        // malloc + memcpy on the fib25/27 hot path) becomes an as_deref
+        // borrow; every consumer below takes &str already. `def` stays
+        // owned by call_gene, which is what makes the lazy traceback
+        // frame possible (the error path can still clone the name).
+        def: &std::sync::Arc<GeneDef>,
         closure: Option<Rc<Env>>,
         args: Vec<Value>,
     ) -> Result<Value, Stress> {
-        let name = def.name.clone().unwrap_or_else(|| "<lambda>".into());
+        let name: &str = def.name.as_deref().unwrap_or("<lambda>");
         if crate::w009a::COUNTS_ON.load(std::sync::atomic::Ordering::Relaxed) {
             crate::w009a::C_NAMES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
@@ -5546,7 +5581,7 @@ impl Interp {
         } else {
             // GRN gate first: a suppressed call is not expression, it must not
             // reach the call counters, the burst bins, or the gene body.
-            if let Some(reason) = self.grn_veto(&name) {
+            if let Some(reason) = self.grn_veto(name) {
                 self.note(
                     dl,
                     4,
@@ -5556,8 +5591,13 @@ impl Interp {
             }
             // T2b methylation gate: level >= threshold blocks transcription;
             // @acetylate genes are exempt (open chromatin wins, D-005).
-            if !def.acetylate {
-                let lvl = *self.methyl_levels.get(&name).unwrap_or(&0);
+            // W011-r2: empty-map fast guard. An empty level table yields lvl=0,
+            // which vetoes only when threshold == 0 — so with a positive
+            // threshold the hash lookup is provably inert and is skipped
+            // (methyl_threshold is config: any later write re-enables the
+            // check because the guard reads the CURRENT values each call).
+            if !def.acetylate && !(self.methyl_levels.is_empty() && self.methyl_threshold > 0) {
+                let lvl = *self.methyl_levels.get(name).unwrap_or(&0);
                 if lvl >= self.methyl_threshold {
                     self.note(
                         dl,
@@ -5573,12 +5613,12 @@ impl Interp {
             // loop-9 (F-5): CIS riboswitch, after chromatin, before the
             // promoter. The pinned order extends to
             // RISC → toggle → GRN → methylation → riboswitch → promoter.
-            if self.riboswitch_veto(&def) {
+            if self.riboswitch_veto(def) {
                 return Ok(Value::Null);
             }
             // reg-bio (F-1): telegraph promoter layer, the pinned gate order
             // ends here: RISC → toggle → GRN → methylation → riboswitch → promoter.
-            if self.promoter_veto(&def) {
+            if self.promoter_veto(def) {
                 self.note(
                     dl,
                     4,
@@ -5736,11 +5776,11 @@ impl Interp {
                 }
             }
             // per-call bookkeeping (counters, clock, decay ticks, burst bins)
-            self.bump_call_bookkeeping(&name);
+            self.bump_call_bookkeeping(name);
             // @methylate: transcriptionally repressed genes announce their first
             // call (suppressed by .cell `methylate.quiet = true`)
-            if def.methylate && !self.methyl_quiet && !self.methyl_noted.contains(&name) {
-                self.methyl_noted.insert(name.clone());
+            if def.methylate && !self.methyl_quiet && !self.methyl_noted.contains(name) {
+                self.methyl_noted.insert(name.to_string());
                 self.note(
                     dl,
                     4,
@@ -5781,8 +5821,8 @@ impl Interp {
             && def.copies == 1
             && !def.seq
         {
-            let key = std::sync::Arc::as_ptr(&def) as *const u8 as usize;
-            let code = crate::vm::gene_code_cached(self, key, &name, &def.body, &def.type_params);
+            let key = std::sync::Arc::as_ptr(def) as *const u8 as usize;
+            let code = crate::vm::gene_code_cached(self, key, name, &def.body, &def.type_params);
             if code.trivial {
                 let parent = match &closure {
                     Some(e) => std::rc::Rc::clone(e),
@@ -5796,10 +5836,16 @@ impl Interp {
                 } else {
                     None
                 };
-                self.call_stack
-                    .push((name.clone(), start.unwrap_or(0.0), 0.0, self.cur_line));
+                if self.frame_trace_live() {
+                    self.call_stack.push((
+                        name.to_string(),
+                        start.unwrap_or(0.0),
+                        0.0,
+                        self.cur_line,
+                    ));
+                }
                 let result = crate::vm::exec_gene_code(self, &code, &parent);
-                self.close_timing(&name);
+                self.close_timing(name);
                 // the shared tail (flow unwrap, propagation-as-return,
                 // return-annotation check) duplicated VERBATIM from the slow
                 // path below so the slow path stays byte-identical untouched;
@@ -5813,11 +5859,11 @@ impl Interp {
                 };
                 return match flowed {
                     Flow::Ret(v) => {
-                        self.check_ret_ann("gene", &name, &def.ret_ann, &v, true, &def.type_params)
+                        self.check_ret_ann("gene", name, &def.ret_ann, &v, true, &def.type_params)
                     }
                     _ => self.check_ret_ann(
                         "gene",
-                        &name,
+                        name,
                         &def.ret_ann,
                         &Value::Null,
                         false,
@@ -5908,8 +5954,16 @@ impl Interp {
         } else {
             None
         };
-        self.call_stack
-            .push((name.clone(), start.unwrap_or(0.0), 0.0, self.cur_line));
+        // W011-r2: the frame push serves profiling + the debugger only (its
+        // ONLY readers). With neither live, the push was a String malloc +
+        // Vec push per call for data nothing would ever read; close_timing's
+        // pop is conditional, so gating the push keeps the pairing exact.
+        // Debug attach happens before the run in every supported flow, so
+        // no mid-flight reader can observe a missing frame.
+        if self.frame_trace_live() {
+            self.call_stack
+                .push((name.to_string(), start.unwrap_or(0.0), 0.0, self.cur_line));
+        }
         // uORF guard
         if let Some((cond, gbody)) = &def.guard {
             // W16: the guard is user code BEFORE any fiber frame exists for
@@ -5938,7 +5992,7 @@ impl Interp {
                         Err(e) => return Err(e),
                     }
                 }
-                self.close_timing(&name);
+                self.close_timing(name);
                 let gv = match flowed {
                     Flow::Ret(v) => v,
                     _ => {
@@ -5955,14 +6009,7 @@ impl Interp {
                 self.fiber_hook = saved_hook;
                 // W01 (L2c): a guard-branch return is the gene's return,
                 // the annotation applies here too.
-                return self.check_ret_ann(
-                    "gene",
-                    &name,
-                    &def.ret_ann,
-                    &gv,
-                    true,
-                    &def.type_params,
-                );
+                return self.check_ret_ann("gene", name, &def.ret_ann, &gv, true, &def.type_params);
             }
         }
         let result = if self.vm {
@@ -5970,7 +6017,7 @@ impl Interp {
             // and guards ran above in the SHARED code; only the body
             // execution swaps to the stack machine. `name` was computed at
             // the funnel top — do NOT re-clone the def name per call.
-            let key = std::sync::Arc::as_ptr(&def) as *const u8 as usize;
+            let key = std::sync::Arc::as_ptr(def) as *const u8 as usize;
             // W16: the fiber lane's ONE hook. The fiber machine rode the
             // shared funnel down to here; every gate, param binding, guard
             // and counter already ran. Instead of executing the body, hand
@@ -5981,18 +6028,18 @@ impl Interp {
                 self.fiber_hook = false;
                 self.fiber_hook_out = Some(crate::vm::FiberFrame {
                     def_key: key,
-                    name: name.clone(),
-                    def: std::sync::Arc::clone(&def),
+                    name: name.to_string(),
+                    def: std::sync::Arc::clone(def),
                     fenv: std::rc::Rc::clone(&fenv),
                     entry_line: self.cur_line,
                 });
                 return Ok(Value::Null);
             }
-            crate::vm::exec_gene_body(self, key, &name, &def.body, &def.type_params, &fenv)
+            crate::vm::exec_gene_body(self, key, name, &def.body, &def.type_params, &fenv)
         } else {
             self.exec_block(&fenv, &def.body)
         };
-        self.close_timing(&name);
+        self.close_timing(name);
         // W06 (D-014): a propagated variant IS the gene's return value, the
         // signal unwinds here and becomes Flow::Ret (never a failure).
         let flowed = match result {
@@ -6007,14 +6054,14 @@ impl Interp {
                 // the gene actually returns (including a `?!`-propagated
                 // variant). Mismatch = catchable unfolded Stress; the W007
                 // chain still applies on the error path.
-                self.check_ret_ann("gene", &name, &def.ret_ann, &v, true, &def.type_params)
+                self.check_ret_ann("gene", name, &def.ret_ann, &v, true, &def.type_params)
             }
             _ => {
                 // no explicit return → null; a non-optional return
                 // annotation is violated by an implicit null too
                 self.check_ret_ann(
                     "gene",
-                    &name,
+                    name,
                     &def.ret_ann,
                     &Value::Null,
                     false,
@@ -6062,7 +6109,8 @@ impl Interp {
                 }
             },
             None => {
-                let mut bins = HashMap::new();
+                let mut bins: HashMap<u64, u64, crate::fxhash::FxBuild> =
+                    HashMap::with_hasher(crate::fxhash::FxBuild::default());
                 bins.insert(bucket, 1);
                 self.gene_buckets.insert(name.to_string(), bins);
             }
@@ -6125,6 +6173,23 @@ impl Interp {
 
     /// Close the timing frame for a gene call: accumulate exclusive (self)
     /// time and hand the inclusive time to the parent's child budget.
+    /// W011-r2: is anything that READS the per-call frame stack alive?
+    /// The push exists for profiling timing and the debugger's depth/
+    /// backtrace surfaces only; every other path never reads it. The
+    /// debugger always attaches before the run (breaks are pre-set; the
+    /// protocol and DAP clients launch the process), so a run that starts
+    /// with none of these live can never observe the missing frames.
+    fn frame_trace_live(&self) -> bool {
+        self.profiling
+            || self.debug_stop_entry
+            || self.debug_dap
+            || self.debug_protocol
+            || !self.debug_breaks.is_empty()
+            || self.debug_step
+            || self.debug_step_depth.is_some()
+            || self.debug_until.is_some()
+    }
+
     fn close_timing(&mut self, name: &str) {
         if let Some((n, t0, child_acc, _site)) = self.call_stack.pop() {
             if self.profiling {
@@ -6420,8 +6485,12 @@ impl Interp {
         } else {
             None
         };
-        self.call_stack
-            .push((name.clone(), start.unwrap_or(0.0), 0.0, self.cur_line));
+        // W011-r2: same frame-push gating as the gene funnel (shared readers
+        // only: profiling + debugger).
+        if self.frame_trace_live() {
+            self.call_stack
+                .push((name.to_string(), start.unwrap_or(0.0), 0.0, self.cur_line));
+        }
         if let Some((cond, gbody)) = &def.guard {
             let ok = self.eval(&fenv, cond).map(|v| v.truthy()).unwrap_or(false);
             if !ok {
@@ -12702,17 +12771,28 @@ pub const BUILTIN_SYNONYMS: &[(&str, &str)] = &[
 /// exactly once (std::sync::OnceLock — zero external crates). Semantics
 /// are identical: same keys, same canonical targets, no duplicate keys
 /// in the source tables (pinned by the resolution_cache tests).
-pub(crate) fn builtin_name_set() -> &'static std::collections::HashSet<&'static str> {
-    static SET: std::sync::OnceLock<std::collections::HashSet<&'static str>> =
-        std::sync::OnceLock::new();
-    SET.get_or_init(|| BUILTIN_NAMES.iter().copied().collect())
+pub(crate) fn builtin_name_set(
+) -> &'static std::collections::HashSet<&'static str, crate::fxhash::FxBuild> {
+    static SET: std::sync::OnceLock<
+        std::collections::HashSet<&'static str, crate::fxhash::FxBuild>,
+    > = std::sync::OnceLock::new();
+    SET.get_or_init(|| {
+        let mut s = std::collections::HashSet::with_hasher(crate::fxhash::FxBuild::default());
+        s.extend(BUILTIN_NAMES.iter().copied());
+        s
+    })
 }
 
-pub(crate) fn builtin_synonym_map() -> &'static std::collections::HashMap<&'static str, &'static str>
-{
-    static MAP: std::sync::OnceLock<std::collections::HashMap<&'static str, &'static str>> =
-        std::sync::OnceLock::new();
-    MAP.get_or_init(|| BUILTIN_SYNONYMS.iter().copied().collect())
+pub(crate) fn builtin_synonym_map(
+) -> &'static std::collections::HashMap<&'static str, &'static str, crate::fxhash::FxBuild> {
+    static MAP: std::sync::OnceLock<
+        std::collections::HashMap<&'static str, &'static str, crate::fxhash::FxBuild>,
+    > = std::sync::OnceLock::new();
+    MAP.get_or_init(|| {
+        let mut m = std::collections::HashMap::with_hasher(crate::fxhash::FxBuild::default());
+        m.extend(BUILTIN_SYNONYMS.iter().copied());
+        m
+    })
 }
 
 pub const BUILTIN_NAMES: &[&str] = &[

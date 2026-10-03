@@ -15,7 +15,7 @@
 //! Counters (OPERON_W009A_COUNTS=1) print to stderr when finish() runs.
 
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::Relaxed};
 
 pub static A_TICK: AtomicBool = AtomicBool::new(false);
@@ -37,12 +37,16 @@ pub static C_PROMO: AtomicU64 = AtomicU64::new(0);
 pub static C_MONO: AtomicU64 = AtomicU64::new(0);
 
 thread_local! {
-    static POOL_VARS: RefCell<Vec<HashMap<String, crate::value::Value>>> =
+    static POOL_VARS: RefCell<Vec<HashMap<String, crate::value::Value>>,
+    > = const { RefCell::new(Vec::new()) };
+    static POOL_CONSTS: RefCell<Vec<std::collections::HashSet<String>>> =
         const { RefCell::new(Vec::new()) };
-    static POOL_CONSTS: RefCell<Vec<HashSet<String>>> = const { RefCell::new(Vec::new()) };
 }
 
-pub fn env_parts() -> (HashMap<String, crate::value::Value>, HashSet<String>) {
+pub fn env_parts() -> (
+    HashMap<String, crate::value::Value>,
+    std::collections::HashSet<String>,
+) {
     let vars = POOL_VARS.with(|p| p.borrow_mut().pop()).unwrap_or_default();
     let consts = POOL_CONSTS
         .with(|p| p.borrow_mut().pop())
@@ -50,7 +54,10 @@ pub fn env_parts() -> (HashMap<String, crate::value::Value>, HashSet<String>) {
     (vars, consts)
 }
 
-pub fn recycle(mut vars: HashMap<String, crate::value::Value>, mut consts: HashSet<String>) {
+pub fn recycle(
+    mut vars: HashMap<String, crate::value::Value>,
+    mut consts: std::collections::HashSet<String>,
+) {
     // clear PRESERVES capacity — the pooling win — while dropping the dead
     // frame's bindings; without this, block-scope envs pop stale maps and
     // satisfy name reads locally instead of walking the parent chain

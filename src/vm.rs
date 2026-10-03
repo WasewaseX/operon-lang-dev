@@ -783,6 +783,12 @@ fn exec_gene_code_inner(
     let mut scopes: Vec<Rc<Env>> = Vec::new();
     let mut cur = env.clone();
     let mut ip: usize = 0;
+    // W011-r2: the ablation/counters flags are process-constant (set once by
+    // init_from_env before any machine runs; no writer exists) — loading
+    // them once here instead of twice per instruction removes two atomic
+    // loads from every dispatch (fib27: ~11 insns/call x ~7M calls).
+    let counts_on = crate::w009a::COUNTS_ON.load(std::sync::atomic::Ordering::Relaxed);
+    let a_tick = crate::w009a::A_TICK.load(std::sync::atomic::Ordering::Relaxed);
     loop {
         // dispatch borrows the instruction (no per-instruction clone; the
         // machine must beat the tree-walk it replaced, the fib25 gate
@@ -796,11 +802,11 @@ fn exec_gene_code_inner(
             interp.cur_line = line as usize;
         }
         ip += 1;
-        if crate::w009a::COUNTS_ON.load(std::sync::atomic::Ordering::Relaxed) {
+        if counts_on {
             crate::w009a::C_INSTRS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
-        if crate::w009a::A_TICK.load(std::sync::atomic::Ordering::Relaxed) {
-            if crate::w009a::COUNTS_ON.load(std::sync::atomic::Ordering::Relaxed) {
+        if a_tick {
+            if counts_on {
                 crate::w009a::C_TICKS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             }
             // W009-A ABLATION: fuel tick skipped (measurement only)

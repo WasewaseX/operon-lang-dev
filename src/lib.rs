@@ -10,6 +10,7 @@ pub mod ast;
 pub mod dap;
 pub mod diag;
 pub mod ffi;
+pub mod fxhash;
 pub mod genes;
 pub mod graph;
 pub mod interp;
