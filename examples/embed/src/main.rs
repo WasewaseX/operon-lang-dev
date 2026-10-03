@@ -47,6 +47,7 @@ fn main() {
         profile: false,
         spans: false,
         stdout_sink: Some(sink.clone()),
+        use_vm: true,
     };
     let path = demo.to_str().unwrap_or("demo.op").to_string();
     let mut loaded = match tools::load_file(&path, &opts) {
