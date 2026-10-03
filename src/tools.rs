@@ -36,6 +36,14 @@ pub struct Opts {
     /// captured here from the moment the interp exists, the test runner
     /// uses it so top-level output can't leak into the report either.
     pub stdout_sink: Option<std::rc::Rc<std::cell::RefCell<Vec<String>>>>,
+    /// compat-r2 (2026-10-03): the W09-A6 VM-default flip landed on the
+    /// run/load path (main.rs) but never reached the test runner — proof
+    /// frames tree-walked forever while every spawn silently degraded to
+    /// the OS-thread lane (the async timing corpus then overflowed the
+    /// 256-thread cap it was written to prove unreachable). Carries the
+    /// CLI's --vm/--no-vm decision; the test runner applies the same flip
+    /// the run path applies. Default true (the VM is the default lane).
+    pub use_vm: bool,
 }
 
 pub struct Loaded {
@@ -1165,6 +1173,21 @@ pub fn run_tests(paths: &[String], opts: &Opts, json: bool) -> TestReport {
                 continue;
             }
         };
+        // compat-r2 (2026-10-03): VM-default parity with the run path. The
+        // W09-A6 flip (2.6.0) set vm=true for `run` but the test runner kept
+        // tree-walking with vm=false — so every `spawn` inside a proof frame
+        // degraded to the OS-thread lane (fiber_lane requires interp.vm).
+        // The async timing corpus (tests/async/timing/) is written to prove
+        // the thread cap is UNREACHABLE on the fiber lane; on the thread lane
+        // it overflows at 256 live workers — a latent 2.6.0 regression the
+        // walkers never saw (they skip tests/async; only test.sh's explicit
+        // stanzas run it). The flip mirrors main.rs exactly: vm on, program
+        // slot reserved (gene bodies compile lazily into it); vm_opt stays
+        // the Interp default (0 = unoptimized, the reference lane).
+        if file_opts.use_vm {
+            l.interp.vm = true;
+            l.interp.vm_program = Some(crate::vm::VmProgram::default());
+        }
         rep.files += 1;
         rep.notes += l.interp.notes.len();
         let genv = l.interp.global.clone();

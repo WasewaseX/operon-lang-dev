@@ -272,7 +272,7 @@ operon crispr f.op  (--knockout gene | --matrix) [--json]
 operon bench f.op   [--iters n]
 operon disasm f.op                                # bytecode listing of compiled gene bodies
 operon-ls                                         # stdio LSP: diagnostics, hover, definition, symbols, completion, formatting (SPEC §15)
-operon version                                    # Operon 2.7.0-vm (rust-core, cpp-kernel), banner matches SPEC 2.7.0; -vm = the bytecode machine is the run default (W09 A6)
+operon version                                    # Operon 2.8.0-vm (rust-core, cpp-kernel), banner matches SPEC 2.7.0; -vm = the bytecode machine is the run default (W09 A6)
 ```
 
 ## Reliability — the compatibility contract

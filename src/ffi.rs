@@ -91,8 +91,13 @@ pub fn symbols() -> Vec<String> {
 }
 
 /// Reset the table (run-scoped semantics preserved from the C kernel's
-/// rt_reset; used by tests to prove reset leaves a clean table).
-#[cfg(test)]
+/// rt_reset). compat-r2 (2026-10-03): no longer #[cfg(test)] — the
+/// intern-table contract tests live in tests/intern_table.rs, their OWN
+/// cargo test binary (cargo runs test binaries serially, so that process
+/// has the table to itself; inside it, the tests serialize on their own
+/// mutex). The lexer interns from other tests' threads inside the lib
+/// test binary, so absolute assertions can never live there.
+#[doc(hidden)]
 pub fn reset_for_tests() {
     let mut t = table().lock().unwrap_or_else(|e| e.into_inner());
     *t = InternTable::default();
@@ -174,56 +179,16 @@ pub fn codon_score(s: &str) -> i32 {
 mod tests {
     use super::*;
 
-    // The intern table is process-global and thread-safe (Mutex), but cargo
-    // runs tests on PARALLEL threads, so any test asserting global counts
-    // (intern_count / table_bytes / table_allocs / symbols) can be polluted
-    // by a sibling interning concurrently. macOS arm64 scheduling exposed
-    // this live: table_bytes() saw 4114 = 12 + sibling's "x"x4096 + 6-byte
-    // "基因" (CI-native aarch64-apple-darwin release job, 2026-09-29).
-    // All table-touching tests serialize on this mutex; zero new deps.
-    // House style (v2.4.0): no poisoning unwrap.
-    static TABLE_TEST_LOCK: Mutex<()> = Mutex::new(());
-
-    #[test]
-    fn intern_ids_are_stable_and_equal_bytes_get_equal_ids() {
-        let _guard = TABLE_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        reset_for_tests();
-        let a = intern("promoter");
-        let b = intern("promoter");
-        let c = intern("terminator");
-        assert_eq!(a, b);
-        assert_ne!(a, c);
-        assert_ne!(a, 0, "id 0 is reserved/invalid");
-        assert_eq!(intern_count(), 2);
-        // id determinism within a process: re-interning anything returns
-        // the same id it had before
-        assert_eq!(intern("promoter"), a);
-    }
-
-    #[test]
-    fn intern_table_tracks_bytes_allocs_and_symbols() {
-        let _guard = TABLE_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        reset_for_tests();
-        intern("abcd"); // 4 bytes, 1 alloc
-        intern("abcdefgh"); // 8 bytes, 1 alloc
-        assert_eq!(table_bytes(), 12);
-        assert_eq!(table_allocs(), 2);
-        let syms = symbols();
-        assert_eq!(syms, vec!["abcd".to_string(), "abcdefgh".to_string()]);
-    }
-
-    #[test]
-    fn intern_handles_empty_and_unicode_and_long() {
-        let _guard = TABLE_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        reset_for_tests();
-        assert_eq!(intern(""), 1); // empty string is internable
-        let u1 = intern("基因");
-        let u2 = intern("基因");
-        assert_eq!(u1, u2);
-        let big = "x".repeat(4096);
-        assert_eq!(intern(&big), intern(&big));
-        assert_eq!(intern_count(), 3);
-    }
+    // compat-r2 (2026-10-03): the intern-table contract tests MOVED to
+    // tests/intern_table.rs — a dedicated cargo test binary. History: the
+    // table is process-global and the lexer interns into it from every
+    // parse; TABLE_TEST_LOCK only ever serialized the ffi tests against
+    // EACH OTHER, never against the lexer. The macOS arm64 scheduling
+    // flare (2026-09-29, table_bytes saw 4114) and the linux CI flare
+    // (bytes=16) are the same residual race. cargo executes test binaries
+    // one at a time, so the dedicated binary is the only place absolute
+    // assertions can hold exactly. The clock/kernel tests below stay —
+    // they assert nothing about the table.
 
     #[test]
     fn clock_is_monotonic() {

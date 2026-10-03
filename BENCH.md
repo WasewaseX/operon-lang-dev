@@ -450,6 +450,30 @@ fusion with frame-slot locals (W011 stage-2 "locals-in-frame" from the
 W009-A follow-up); it needs its own gated session with the redteam
 probes re-run (gate funnels get duplicated).
 
+## v2.8.0 release verification (measured 2026-10-03, builder-A)
+
+The owner's standing rule — "check benchmarks every time, and check with the
+yt downloader app" — run once more on the exact release tree (post compat-r2:
+ffi test move, test-runner VM-default flip, harness UTF-8 stdout; none touch
+the run-path hot loops, and the numbers say so):
+
+- Language suite (`scripts/bench_compare.py`, median of 5): **fib25 116 ms**
+  (242,785 calls; 170 ms at the 2.7.0-era baseline, the W011-r2 win held),
+  loops 68 ms, collections 51.9 ms, recursion 222 ms, grn 35.6 ms — every
+  workload within noise of the W011-r2 measurements, op/py gap on fib25
+  down to 9.0x (was ~16x when the fib-27 investigation opened).
+- Deep cross-language bench (`scripts/bench_deep.py`, 11 workloads):
+  all medians within ±3% of the 13:40 UTC re-run; **every workload's
+  checksum IDENTICAL** across operon/python/bash. Full table:
+  `apps/ytdl/bench/report_v280.md` (+ machine-readable `results_v280.json`).
+- App battery: `apps/ytdl/test/run_tests.sh` **35/35** (operon e2e over
+  deterministic mocks + cross-language decision differential byte-identical).
+
+INFRA: the deep bench's spawn/queue workloads ERROR for every language if
+`mockspawn`/`mocksleep` lack their exec bit — the index said 100644 and every
+sandbox clone lost the locally-chmod'd bit (the 534cba6 lesson, reapplied via
+`git update-index --chmod=+x`; this time recorded in-index so it sticks).
+
 ## Reproducing
 
 ```sh
