@@ -17,7 +17,7 @@
 //! in globals for the whole run, so pointer identity is stable for the
 //! cache's lifetime).
 
-use crate::ast::{BinOp, Expr, Stmt};
+use crate::ast::{BinOp, Expr, MatchPat, Pat, Stmt};
 use crate::interp::{Env, Flow, Interp};
 use crate::value::{Stress, Value};
 use std::collections::HashMap;
@@ -62,6 +62,28 @@ pub struct GeneCode {
     /// predicate (zero params, no guard/annotations/marks). Purely a
     /// dispatch decision: every gate, counter and note is unchanged.
     pub trivial: bool,
+    /// W011 stage-2 (frame-slot locals): the compile-time qualification.
+    /// `slot_ok` = the FINAL cached IR contains no bridge instruction
+    /// (EvalExpr / BridgeStmt / BridgeStmtInLoop). Bridged nodes evaluate
+    /// the original AST through the env chain, which cannot see values
+    /// that live only in frame slots, so any bridge disqualifies the
+    /// whole frame. Computed in gene_code_cached on the post-optimize
+    /// form; optimize_with carries the input's analysis verbatim.
+    pub slot_ok: bool,
+    /// Every name bound by a let-family statement anywhere in the body
+    /// (any nesting depth), plus for/match/pattern binders. A param whose
+    /// name appears here is shadowed or re-bound by scope rules and must
+    /// keep the env path; all other params are slot candidates. Filled by
+    /// compile_body's AST walk (conservative: marks names whose binding
+    /// forms would bridge too — over-marking is free, under-marking is a
+    /// bug, so the walker marks every binder it recognizes).
+    pub shadowed: std::collections::HashSet<String>,
+    /// Lazily computed (name_idx, slot) pairs for the ELIGIBLE params of
+    /// the gene this code object was cached for. Initialized once by
+    /// frame_slot_map with that gene's param list — the code-cache key is
+    /// the def's Arc pointer, so one code object always sees one param
+    /// list (the same discipline the code cache itself relies on).
+    pub param_slots: std::sync::OnceLock<std::rc::Rc<Vec<(u32, u32)>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -681,6 +703,124 @@ pub fn compile_body(
         lines: c.lines,
         type_params: type_params.to_vec(),
         trivial: false,
+        slot_ok: false,
+        shadowed: collect_let_bound_names(body),
+        param_slots: std::sync::OnceLock::new(),
+    }
+}
+
+/// W011 stage-2 analysis half: every name bound by a let-family statement
+/// anywhere in the body, plus for/match/pattern binders. Deliberately
+/// conservative in both directions that matter:
+/// - over-marking is FREE (the name just keeps the env path),
+/// - under-marking is a bug (a slot name shadowed by a nested binding
+///   would diverge), so the walker marks every binder it recognizes —
+///   including binders whose statements currently bridge (those frames
+///   are bridge-disqualified anyway; this walker is the safety net if
+///   the compiler ever learns to compile them natively).
+fn collect_let_bound_names(body: &[Stmt]) -> std::collections::HashSet<String> {
+    let mut out = std::collections::HashSet::new();
+    walk_binders(body, &mut out);
+    out
+}
+
+fn walk_binders(body: &[Stmt], out: &mut std::collections::HashSet<String>) {
+    for s in body {
+        match s {
+            Stmt::Let(n, _) | Stmt::LetConst(n, _) | Stmt::LetAnn(n, _, _) | Stmt::For(n, _, _) => {
+                out.insert(n.clone());
+            }
+            Stmt::LetPat(p, _) => pat_binders(p, out),
+            Stmt::ForPat(p, _, b) => {
+                pat_binders(p, out);
+                walk_binders(b, out);
+            }
+            Stmt::Match(_, arms, _) => {
+                for (pat, arm_body) in arms {
+                    matchpat_binders(pat, out);
+                    walk_binders(arm_body, out);
+                }
+            }
+            Stmt::If(branches, els) => {
+                for (_, b) in branches {
+                    walk_binders(b, out);
+                }
+                if let Some(eb) = els {
+                    walk_binders(eb, out);
+                }
+            }
+            Stmt::While(_, b) | Stmt::Loop(b) | Stmt::Block(b) | Stmt::Scope(b) => {
+                walk_binders(b, out)
+            }
+            Stmt::Stress {
+                kind: _,
+                body: b,
+                rescue,
+            } => {
+                walk_binders(b, out);
+                if let Some((_, rb)) = rescue {
+                    walk_binders(rb, out);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn pat_binders(p: &Pat, out: &mut std::collections::HashSet<String>) {
+    match p {
+        Pat::Bind(n) => {
+            out.insert(n.clone());
+        }
+        Pat::List { elems, rest } => {
+            for e in elems {
+                pat_binders(e, out);
+            }
+            if let Some(r) = rest {
+                out.insert(r.clone());
+            }
+        }
+        Pat::Map { keys } => {
+            for k in keys {
+                out.insert(k.clone());
+            }
+        }
+    }
+}
+
+fn matchpat_binders(p: &MatchPat, out: &mut std::collections::HashSet<String>) {
+    match p {
+        MatchPat::Bind(n) => {
+            out.insert(n.clone());
+        }
+        MatchPat::ListPat { elems, rest } => {
+            for e in elems {
+                matchpat_binders(e, out);
+            }
+            if let Some(r) = rest {
+                out.insert(r.clone());
+            }
+        }
+        MatchPat::MapPat { keys } => {
+            for (k, sub) in keys {
+                match sub {
+                    // bare `{a, ...}` binds the key name; an explicit
+                    // sub-pattern decides its own binders
+                    None => {
+                        out.insert(k.clone());
+                    }
+                    Some(sp) => matchpat_binders(sp, out),
+                }
+            }
+        }
+        MatchPat::Variant(_, Some(sub)) => matchpat_binders(sub, out),
+        MatchPat::Or(pats) => {
+            for e in pats {
+                matchpat_binders(e, out);
+            }
+        }
+        MatchPat::Guard(p, _) => matchpat_binders(p, out),
+        _ => {}
     }
 }
 
@@ -744,6 +884,19 @@ pub(crate) fn gene_code_cached(
             // shapes-only body into more whitelist shapes, never out of
             // them: Jmp/bridges are never introduced by optimize_with).
             compiled.trivial = shapes_only(&compiled);
+            // W011 stage-2: slot qualification on the FINAL cached IR.
+            // Bridged nodes evaluate the original AST through the env
+            // chain (which cannot see slot-only values), so any bridge
+            // instruction disqualifies the whole frame. optimize_with
+            // never introduces bridges, but running the scan HERE (on the
+            // exact bytes that will execute) is the honest placement —
+            // the analysis can never drift from the executed form.
+            compiled.slot_ok = !compiled.code.iter().any(|i| {
+                matches!(
+                    i,
+                    Instr::EvalExpr(_) | Instr::BridgeStmt(_) | Instr::BridgeStmtInLoop(..)
+                )
+            });
             let rc = std::rc::Rc::new(compiled);
             prog.codes.insert(key, rc.clone());
             rc
@@ -754,6 +907,90 @@ pub(crate) fn gene_code_cached(
 /// Execute a compiled gene body against the shared interpreter.
 /// pub(crate) for the W011 stage-3 trivial-gene fast dispatch in
 /// call_gene_inner (the fast path executes the cached body directly).
+/// W011 stage-2 kill switch (A/B measurement + emergency off). The slot
+/// path is default-ON; `OPERON_VM_SLOTS=0` (or `off`) restores the pure
+/// env-chain frame exactly. Read once per process (LazyLock) — the flag
+/// is process-constant like every other W009-A/W011 toggle.
+static VM_SLOTS_OFF: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| {
+    std::env::var("OPERON_VM_SLOTS")
+        .map(|v| v == "0" || v.eq_ignore_ascii_case("off"))
+        .unwrap_or(false)
+});
+
+pub fn vm_slots_off() -> bool {
+    *VM_SLOTS_OFF
+}
+
+/// W011 engagement counter (OPERON_W009A_COUNTS=1 dumps it): slot frames
+/// entered. The ablation/verification harness pairs this with fib-class
+/// runs to prove the path actually engages (an optimization that never
+/// runs optimizes nothing).
+pub static SLOT_FRAMES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Frame-slot locals for one call frame (W011 stage-2). `vals` are the
+/// param slots (slot 0..K in param order); `map` carries (name_idx,
+/// slot) pairs for every ELIGIBLE param, computed once per code object.
+pub(crate) struct FrameSlots {
+    pub vals: Vec<Value>,
+    pub map: std::rc::Rc<Vec<(u32, u32)>>,
+}
+
+/// The slot layout for a gene's params: eligible params (no default, not
+/// shadowed by any body binder, present in the names table) get slots in
+/// param order. None when the code object is bridge-disqualified or no
+/// param qualifies. The OnceLock caches the (name_idx, slot) pairs on the
+/// code object — the cache key is the def's Arc pointer, so one code
+/// object always sees one param list.
+pub(crate) fn frame_slot_map(
+    code: &GeneCode,
+    params: &[(String, Option<crate::ast::Expr>)],
+) -> Option<std::rc::Rc<Vec<(u32, u32)>>> {
+    if !code.slot_ok {
+        return None;
+    }
+    let map = code
+        .param_slots
+        .get_or_init(|| {
+            let mut pairs: Vec<(u32, u32)> = Vec::new();
+            let mut slot = 0u32;
+            for (pname, default) in params {
+                if default.is_some() || pname.is_empty() || pname == "?" {
+                    continue;
+                }
+                if code.shadowed.contains(pname) {
+                    continue;
+                }
+                if let Some(nidx) = code.names.iter().position(|n| n == pname) {
+                    pairs.push((nidx as u32, slot));
+                    slot += 1;
+                }
+            }
+            std::rc::Rc::new(pairs)
+        })
+        .clone();
+    if map.is_empty() {
+        None
+    } else {
+        Some(map)
+    }
+}
+
+/// Slot read for a name index (None = no slot frame or name not slotted).
+#[inline]
+fn slot_read(sf: Option<&FrameSlots>, idx: u32) -> Option<Value> {
+    let fs = sf?;
+    let s = fs.map.iter().find(|(ni, _)| *ni == idx)?.1 as usize;
+    Some(fs.vals[s].clone())
+}
+
+/// Slot write target (None = no slot frame or name not slotted).
+#[inline]
+fn slot_write(sf: Option<&mut FrameSlots>, idx: u32) -> Option<&mut Value> {
+    let fs = sf?;
+    let s = fs.map.iter().find(|(ni, _)| *ni == idx)?.1 as usize;
+    fs.vals.get_mut(s)
+}
+
 pub(crate) fn exec_gene_code(
     interp: &mut Interp,
     code: &GeneCode,
@@ -767,7 +1004,29 @@ pub(crate) fn exec_gene_code(
         None => Vec::with_capacity(16),
     };
     stack.clear();
-    let out = exec_gene_code_inner(interp, code, env, &mut stack);
+    let out = exec_gene_code_inner(interp, code, env, &mut stack, None);
+    if stack.capacity() <= 64 {
+        interp.vm_stack_pool.push(stack);
+    }
+    out
+}
+
+/// W011 stage-2: the slotted entry. `slots` are the frame's param slots,
+/// `map` the (name_idx, slot) table — reads and writes of slotted names
+/// hit the Vec instead of the env chain; everything else rides `env`
+/// exactly as before.
+pub(crate) fn exec_gene_code_slotted(
+    interp: &mut Interp,
+    code: &GeneCode,
+    env: &Rc<Env>,
+    fs: FrameSlots,
+) -> Result<Flow, Stress> {
+    let mut stack: Vec<Value> = match interp.vm_stack_pool.pop() {
+        Some(s) => s,
+        None => Vec::with_capacity(16),
+    };
+    stack.clear();
+    let out = exec_gene_code_inner(interp, code, env, &mut stack, Some(fs));
     if stack.capacity() <= 64 {
         interp.vm_stack_pool.push(stack);
     }
@@ -779,6 +1038,7 @@ fn exec_gene_code_inner(
     code: &GeneCode,
     env: &Rc<Env>,
     stack: &mut Vec<Value>,
+    mut slot_frame: Option<FrameSlots>,
 ) -> Result<Flow, Stress> {
     let mut scopes: Vec<Rc<Env>> = Vec::new();
     let mut cur = env.clone();
@@ -819,21 +1079,35 @@ fn exec_gene_code_inner(
                 stack.push(v);
             }
             Instr::LoadName(idx) => {
-                let name = &code.names[*idx as usize];
-                match cur.get(name) {
-                    Some(v) => {
-                        crate::interp::charge_clone(&v)?;
-                        stack.push(v);
-                    }
-                    None => {
-                        interp.note(0, 4, format!("unbound '{}' read as null", name));
-                        stack.push(Value::Null);
+                // W011 stage-2: a slot hit replaces the env-chain walk for
+                // an eligible param. Same value, same clone charge — only
+                // WHERE the value is read from changes; the unbound-note
+                // path is unreachable for a slot (slots are bound at
+                // frame entry by construction).
+                if let Some(v) = slot_read(slot_frame.as_ref(), *idx) {
+                    crate::interp::charge_clone(&v)?;
+                    stack.push(v);
+                } else {
+                    let name = &code.names[*idx as usize];
+                    match cur.get(name) {
+                        Some(v) => {
+                            crate::interp::charge_clone(&v)?;
+                            stack.push(v);
+                        }
+                        None => {
+                            interp.note(0, 4, format!("unbound '{}' read as null", name));
+                            stack.push(Value::Null);
+                        }
                     }
                 }
             }
             Instr::LoadNameQuiet(idx) => {
-                let name = &code.names[*idx as usize];
-                stack.push(cur.get(name).unwrap_or(Value::Null));
+                if let Some(v) = slot_read(slot_frame.as_ref(), *idx) {
+                    stack.push(v);
+                } else {
+                    let name = &code.names[*idx as usize];
+                    stack.push(cur.get(name).unwrap_or(Value::Null));
+                }
             }
             Instr::StoreName(idx) => {
                 let name = code.names[*idx as usize].clone();
@@ -841,6 +1115,11 @@ fn exec_gene_code_inner(
                 if cur.get(&name).is_some() {
                     interp.note(0, 4, format!("rebinding '{}'", name));
                 }
+                // NOTE: StoreName is deliberately NOT slot-routed. A slot
+                // name is by definition never let-bound in its own body
+                // (the binder walk marks every let name as shadowed), so
+                // a StoreName can never target a slot — the env path here
+                // is the only path.
                 cur.define(&name, v);
             }
             Instr::AssignName(idx) => {
@@ -852,8 +1131,33 @@ fn exec_gene_code_inner(
                         format!("cannot reassign const '{}'", name),
                     ));
                 }
-                if !cur.set(&name, v) {
-                    interp.note(0, 4, format!("'{}' was not declared; auto-declared", name));
+                // W011 stage-2: a slot write replaces the chain-walking
+                // set() for an eligible param. set() would find the frame
+                // binding first and rebind it in place, returning true
+                // (no note) — the slot write is exactly that rebinding.
+                // The const check above runs UNCHANGED first: an outer
+                // const of the same name stresses identically (pinned
+                // behavior, corpus-covered).
+                match slot_write(slot_frame.as_mut(), *idx) {
+                    Some(dst) => {
+                        // WRITE-THROUGH: the env copy is re-bound too,
+                        // keeping the funnel's env view (callee resolution,
+                        // RISC/toggle immunity checks) authoritative.
+                        // set() finds the frame binding (innermost) and
+                        // rebinds it: true, no note — byte-equal to the
+                        // env path, DEF_GEN bump included.
+                        *dst = v.clone();
+                        let _ = cur.set(&name, v);
+                    }
+                    None => {
+                        if !cur.set(&name, v) {
+                            interp.note(
+                                0,
+                                4,
+                                format!("'{}' was not declared; auto-declared", name),
+                            );
+                        }
+                    }
                 }
             }
             Instr::Bin(op) => {
@@ -875,16 +1179,25 @@ fn exec_gene_code_inner(
                 // W11: the EXACT LoadName read (clone-charge + unbound
                 // note) composed with the EXACT Bin arm. Nothing else may
                 // differ: the unbound note text and the charge are output
-                // and fuel contract respectively.
-                let name = &code.names[*nidx as usize];
-                let l = match cur.get(name) {
+                // and fuel contract respectively. W011 stage-2: the slot
+                // hit rides the same charge discipline.
+                let l = match slot_read(slot_frame.as_ref(), *nidx) {
                     Some(v) => {
                         crate::interp::charge_clone(&v)?;
                         v
                     }
                     None => {
-                        interp.note(0, 4, format!("unbound '{}' read as null", name));
-                        Value::Null
+                        let name = &code.names[*nidx as usize];
+                        match cur.get(name) {
+                            Some(v) => {
+                                crate::interp::charge_clone(&v)?;
+                                v
+                            }
+                            None => {
+                                interp.note(0, 4, format!("unbound '{}' read as null", name));
+                                Value::Null
+                            }
+                        }
                     }
                 };
                 let r = const_value(&code.consts, *cidx);
@@ -979,15 +1292,25 @@ fn exec_gene_code_inner(
             }
             Instr::RetName(nidx) => {
                 // W11: the EXACT LoadName read composed with Ret.
-                let name = &code.names[*nidx as usize];
-                let v = match cur.get(name) {
+                // W011 stage-2: the slot hit rides first — same value,
+                // same clone charge, unbound note unreachable for a slot.
+                let v = match slot_read(slot_frame.as_ref(), *nidx) {
                     Some(v) => {
                         crate::interp::charge_clone(&v)?;
                         v
                     }
                     None => {
-                        interp.note(0, 4, format!("unbound '{}' read as null", name));
-                        Value::Null
+                        let name = &code.names[*nidx as usize];
+                        match cur.get(name) {
+                            Some(v) => {
+                                crate::interp::charge_clone(&v)?;
+                                v
+                            }
+                            None => {
+                                interp.note(0, 4, format!("unbound '{}' read as null", name));
+                                Value::Null
+                            }
+                        }
                     }
                 };
                 return Ok(Flow::Ret(v));
@@ -2156,6 +2479,9 @@ pub fn optimize_with(code: &GeneCode, passes: PassSet) -> GeneCode {
         code: code.code,
         lines: code.lines,
         trivial: false,
+        slot_ok: false,
+        shadowed: code.shadowed,
+        param_slots: std::sync::OnceLock::new(),
     }
 }
 

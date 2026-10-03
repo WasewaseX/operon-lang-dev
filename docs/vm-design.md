@@ -421,3 +421,35 @@ Explicitly NOT worth it per measurement: fuel-tick tuning, decay-ticker
 short-circuits (already ~0), map recycling. No performance claim in this
 document is unreproducible — every row re-derives from the committed
 harness + matrix script on the recorded sandbox.
+
+## 13. W011 stage-2 delivered: frame-slot locals, write-through (2026-10-04, builder-A)
+
+The §3 "slot variables" defer landed in its safe first shape (BENCH.md
+"W011 stage-2" section carries the full method + numbers):
+
+- **What shipped**: param slots for the sync VM lane, qualified by (a) the
+  compiler's binder walk (every let/for/match binder marks its name —
+  over-marking free, under-marking impossible-by-construction of the
+  walker), (b) a bridge scan on the FINAL cached IR (bridged nodes read
+  the env chain), (c) default-free params only, (d) no guard, (e) the
+  fiber hook unarmed (parked frames stay self-contained). Reads
+  (LoadName/LoadNameQuiet/LoadBinImm/RetName) and writes (AssignName) hit
+  the slot Vec; the frame env copy is kept authoritative (write-through)
+  so the funnel's callee resolution, the RISC/toggle immunity checks and
+  the mono-cache origin discipline ride unchanged. `OPERON_VM_SLOTS=0`
+  disables; `slot_frames` counter proves engagement.
+- **The write-through lesson**: the first cut bound params ONLY into
+  slots (fenv left empty). The smoke program `twice(f, v) { f(f(v)) }`
+  immediately phantom-nulled — the callee name is a param the funnel
+  resolves through the env chain. Write-through (env copy + slot read
+  cache) restored byte-parity at the cost of keeping the frame-env
+  allocation; that allocation (~100 ns/call) is now the ONLY remaining
+  piece of the §3 residual, and it is exactly what stage-3 (frame reuse
+  or full slot routing with immunity-read redesign) must attack.
+- **Measured**: fib27 1.02x, fib25 1.03x, recursion 1.03x interleaved
+  (same-binary A/B via OPERON_VM_SLOTS); op/py 8.9x on fib25 — the best
+  recorded. Everything else within noise. All parity gates green
+  (vm_parity 3555/0 on four lanes, differential 3484/3484 VM-vs-oracle,
+  redteam 109/0, cargo_proof 3422f/141p, ytdl 35/35).
+- **New pin**: tests/vm_slots.rs — the five qualification-shape programs
+  run on both lanes with byte-equal stdout/rc assertions.
