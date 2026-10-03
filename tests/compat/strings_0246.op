@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=246 tag=s246
+
+print("s246-m0:", "2zrayludqCz".upper(), "2zrayludqCz".slice(3), "2zrayludqCz".len())
+
+print("s246-m1:", "iym6qh8q8d".upper(), "iym6qh8q8d".slice(1), "iym6qh8q8d".len())
+
+print("s246-m2:", "83nybp3".upper(), "83nybp3".slice(3), "83nybp3".len())
+
+print("s246-m3:", "ohfroc3v".upper(), "ohfroc3v".slice(2), "ohfroc3v".len())
+
+print("s246-m4:", "1ainzgBw4nxvrl".upper(), "1ainzgBw4nxvrl".slice(3), "1ainzgBw4nxvrl".len())
+
+print("s246-i0:", "5ed-{30}-9kgn")
+
+let s246_v0 = 30
+
+print("s246-v0:", "n={s246_v0}" + "!" * 2)
+
+print("s246-i1:", "c7C-{91}-B30c")
+
+let s246_v1 = 91
+
+print("s246-v1:", "n={s246_v1}" + "!" * 1)
+
+print("s246-i2:", "8nA-{66}-o_jn")
+
+let s246_v2 = 66
+
+print("s246-v2:", "n={s246_v2}" + "!" * 1)
+
+print("s246-r0:", "CCwuc9c7".replace("C", "tp"), "CCwuc9c7".contains("Cw"))
+
+print("s246-r1:", "342pA3fc".replace("3", "xw"), "342pA3fc".contains("42"))
+
+print("s246-r2:", "ezi_ineo".replace("e", "v8"), "ezi_ineo".contains("zi"))
+
+print("s246-j0:", ["l3p", "Bvm", "k4c"].join("-"))
+
+print("s246-j1:", ["B1f", "C1d", "tkj", "xf6", "bCx"].join("-"))
+
+print("s246-a0:", "kppzeC_".at(0), "kppzeC_".trim() == "kppzeC_")
+
+print("s246-a1:", "6B39rng".at(2), "6B39rng".trim() == "6B39rng")

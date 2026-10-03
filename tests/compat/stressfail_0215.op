@@ -1,0 +1,184 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=215 tag=s215
+
+stress {
+
+    print("s215-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s215-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s215-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s215-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s215-mz:", 64 % 0)
+
+} rescue (e) {
+
+    print("s215-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s215-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s215-of1:", "caught", e.kind, e.message)
+
+}
+
+gene s215_r0() {
+
+    raise "s215-k11nke"
+
+}
+
+stress {
+
+    s215_r0()
+
+    print("s215-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s215-r0:", e.kind, e.message)
+
+}
+
+gene s215_r1() {
+
+    raise "s215-7etbog"
+
+}
+
+stress {
+
+    s215_r1()
+
+    print("s215-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s215-r1:", e.kind, e.message)
+
+}
+
+let s215_xs0 = [36, 2, 8]
+
+stress {
+
+    print("s215-x0:", s215_xs0[5])
+
+} rescue (e) {
+
+    print("s215-x0:", "caught", e.kind)
+
+}
+
+let s215_xs1 = [37, 28, 9]
+
+stress {
+
+    print("s215-x1:", s215_xs1[5])
+
+} rescue (e) {
+
+    print("s215-x1:", "caught", e.kind)
+
+}
+
+let s215_xs2 = [11, 46, 14, 21]
+
+stress {
+
+    print("s215-x2:", s215_xs2[8])
+
+} rescue (e) {
+
+    print("s215-x2:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s215-0"
+
+    } rescue (e) {
+
+        print("s215-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s215-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s215-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s215-1"
+
+    } rescue (e) {
+
+        print("s215-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s215-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s215-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s215-d1-top:", outer.message)
+
+}

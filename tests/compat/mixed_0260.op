@@ -1,0 +1,214 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=260 tag=m260
+
+gene m260_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m260-b0:", m260_b0({exon: 81, marker: 89, ligase: 64})?!)
+
+gene m260_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m260-b1:", m260_b1({plasmid: 13, cell: 47, marker: 90})?!)
+
+gene m260_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m260-b2:", m260_b2({plasmid: 94, gene: 55, marker: 1})?!)
+
+gene m260_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m260_f0([57, 16, 37, 18]) {
+
+    case Ok(list) {
+
+        print("m260-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m260-f0:", "e:", m)
+
+    }
+
+}
+
+gene m260_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m260_f1([35, 30, 33, 56, 57, 33, 6]) {
+
+    case Ok(list) {
+
+        print("m260-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m260-f1:", "e:", m)
+
+    }
+
+}
+
+let m260_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m260-cc0:", m260_cl0(13)(10), m260_cl0(10)(13))
+
+let m260_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m260-cc1:", m260_cl1(13)(6), m260_cl1(6)(13))
+
+let m260_data0 = some([some("marker"), none(), some(3)])
+
+match m260_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m260-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m260-x0:", "shape-miss")
+
+    }
+
+}
+
+let m260_data1 = some([some("plasmid"), none(), some(6)])
+
+match m260_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m260-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m260-x1:", "shape-miss")
+
+    }
+
+}

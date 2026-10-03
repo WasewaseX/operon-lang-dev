@@ -1,0 +1,100 @@
+# compat corpus — generated, do not edit by hand
+# bucket=optres seed=20261030 idx=260 tag=o260
+
+gene o260_f0(n) {
+
+    if n > 9025 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o260_u0(n) {
+
+    let v = o260_f0(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o260-p0:", o260_u0(-9710), o260_u0(9036))
+
+gene o260_f1(n) {
+
+    if n > 7319 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o260_u1(n) {
+
+    let v = o260_f1(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o260-p1:", o260_u1(-7435), o260_u1(7333))
+
+gene o260_f2(n) {
+
+    if n > 6586 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o260_u2(n) {
+
+    let v = o260_f2(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o260-p2:", o260_u2(-3178), o260_u2(6588))
+
+print("o260-o0:", is_ok(ok(-7325)), is_none(none()), is_err(err("-7325")), is_some(some(-7325)))
+
+print("o260-u0:", unwrap_or(none(), -7325), unwrap_or(err("x"), -7326), unwrap_or(ok(-7325), 0))
+
+print("o260-o1:", is_ok(ok(5045)), is_none(none()), is_err(err("5045")), is_some(some(5045)))
+
+print("o260-u1:", unwrap_or(none(), 5045), unwrap_or(err("x"), 5044), unwrap_or(ok(5045), 0))
+
+print("o260-o2:", is_ok(ok(-3803)), is_none(none()), is_err(err("-3803")), is_some(some(-3803)))
+
+print("o260-u2:", unwrap_or(none(), -3803), unwrap_or(err("x"), -3804), unwrap_or(ok(-3803), 0))
+
+print("o260-o3:", is_ok(ok(-3911)), is_none(none()), is_err(err("-3911")), is_some(some(-3911)))
+
+print("o260-u3:", unwrap_or(none(), -3911), unwrap_or(err("x"), -3912), unwrap_or(ok(-3911), 0))
+
+print("o260-e0:", ok(541) == ok(541), some(541) == ok(541), none() == none(), err(1) == err(2))
+
+print("o260-j0:", json_str(ok(541)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o260-e1:", ok(4871) == ok(4871), some(4871) == ok(4871), none() == none(), err(1) == err(2))
+
+print("o260-j1:", json_str(ok(4871)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o260-n0:", some(some(18))?!?!, unwrap(ok(58)) + unwrap(some(40)))
+
+print("o260-s0:", "v=" + str(ok(18)?!), some("40k")?! + "!")
+
+print("o260-n1:", some(some(38))?!?!, unwrap(ok(89)) + unwrap(some(51)))
+
+print("o260-s1:", "v=" + str(ok(38)?!), some("51k")?! + "!")

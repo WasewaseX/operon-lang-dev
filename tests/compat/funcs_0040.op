@@ -1,0 +1,188 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20260930 idx=40 tag=f040
+
+gene f040_g0(p, q = 57, r = 21) {
+
+    return p * 99 + q - r
+
+}
+
+print("f040-d0:", f040_g0(-9), f040_g0(-9, 17), f040_g0(-9, 57, 21))
+
+gene f040_g1(p, q = 20, r = 40) {
+
+    return p * 26 + q - r
+
+}
+
+print("f040-d1:", f040_g1(45), f040_g1(45, 84), f040_g1(45, 20, 40))
+
+gene f040_g2(p, q = 44, r = 91) {
+
+    return p * 56 + q - r
+
+}
+
+print("f040-d2:", f040_g2(33), f040_g2(33, 36), f040_g2(33, 44, 91))
+
+gene f040_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f040_fib0(n - 1) + f040_fib0(n - 2)
+
+}
+
+print("f040-fib0:", f040_fib0(10))
+
+gene f040_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f040_fib1(n - 1) + f040_fib1(n - 2)
+
+}
+
+print("f040-fib1:", f040_fib1(11))
+
+gene f040_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f040_gcd0(b, a % b)
+
+}
+
+print("f040-gcd0:", f040_gcd0(903, 191))
+
+gene f040_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f040_gcd1(b, a % b)
+
+}
+
+print("f040-gcd1:", f040_gcd1(742, 840))
+
+gene f040_gcd2(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f040_gcd2(b, a % b)
+
+}
+
+print("f040-gcd2:", f040_gcd2(131, 468))
+
+gene f040_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f040_c0 = f040_mk0(29)
+
+f040_c0(9)
+
+print("f040-cl0:", f040_c0(8))
+
+gene f040_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f040_c1 = f040_mk1(10)
+
+f040_c1(6)
+
+print("f040-cl1:", f040_c1(8))
+
+gene f040_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f040-hof0:", f040_tw0(gene (z) => z * 2 + 1, 28))
+
+gene f040_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f040-hof1:", f040_tw1(gene (z) => z * 2 + 1, 23))
+
+gene f040_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f040-dg0:", f040_sd0(733479))
+
+gene f040_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f040-dg1:", f040_sd1(470652))

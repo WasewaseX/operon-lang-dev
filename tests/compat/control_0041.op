@@ -1,0 +1,144 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20260930 idx=41 tag=c041
+
+let c041_b0 = "start"
+
+if 99 > 80 { c041_b0 = "hi" } elif 99 > 40 { c041_b0 = "mid" } else { c041_b0 = "lo" }
+
+print("c041-i0:", c041_b0, 99)
+
+let c041_b1 = "start"
+
+if -11 > 80 { c041_b1 = "hi" } elif -11 > 40 { c041_b1 = "mid" } else { c041_b1 = "lo" }
+
+print("c041-i1:", c041_b1, -11)
+
+let c041_b2 = "start"
+
+if 42 > 80 { c041_b2 = "hi" } elif 42 > 40 { c041_b2 = "mid" } else { c041_b2 = "lo" }
+
+print("c041-i2:", c041_b2, 42)
+
+let c041_b3 = "start"
+
+if 57 > 80 { c041_b3 = "hi" } elif 57 > 40 { c041_b3 = "mid" } else { c041_b3 = "lo" }
+
+print("c041-i3:", c041_b3, 57)
+
+let c041_a0 = 0
+
+let c041_n0 = 0
+
+while c041_n0 < 6 {
+
+    c041_n0 += 1
+
+    if c041_n0 % 2 == 0 { continue }
+
+    if c041_n0 > 13 { break }
+
+    c041_a0 += c041_n0
+
+}
+
+print("c041-w0:", c041_a0, c041_n0)
+
+let c041_a1 = 0
+
+let c041_n1 = 0
+
+while c041_n1 < 18 {
+
+    c041_n1 += 3
+
+    if c041_n1 % 3 == 0 { continue }
+
+    if c041_n1 > 27 { break }
+
+    c041_a1 += c041_n1
+
+}
+
+print("c041-w1:", c041_a1, c041_n1)
+
+let c041_a2 = 0
+
+let c041_n2 = 0
+
+while c041_n2 < 8 {
+
+    c041_n2 += 4
+
+    if c041_n2 % 3 == 0 { continue }
+
+    if c041_n2 > 14 { break }
+
+    c041_a2 += c041_n2
+
+}
+
+print("c041-w2:", c041_a2, c041_n2)
+
+let c041_c0 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 4] {
+
+        c041_c0 += a * b
+
+    }
+
+}
+
+print("c041-l0:", c041_c0)
+
+let c041_c1 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 2] {
+
+        c041_c1 += a * b
+
+    }
+
+}
+
+print("c041-l1:", c041_c1)
+
+let c041_acc0 = ""
+
+loop {
+
+    c041_acc0 += "x"
+
+    if c041_acc0.len() >= 5 { break }
+
+}
+
+print("c041-o0:", c041_acc0)
+
+let c041_acc1 = ""
+
+loop {
+
+    c041_acc1 += "x"
+
+    if c041_acc1.len() >= 5 { break }
+
+}
+
+print("c041-o1:", c041_acc1)
+
+let c041_acc2 = ""
+
+loop {
+
+    c041_acc2 += "x"
+
+    if c041_acc2.len() >= 7 { break }
+
+}
+
+print("c041-o2:", c041_acc2)

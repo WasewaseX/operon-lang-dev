@@ -1,0 +1,172 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20260930 idx=40 tag=s040
+
+stress {
+
+    print("s040-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s040-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s040-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s040-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s040-mz:", 36 % 0)
+
+} rescue (e) {
+
+    print("s040-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s040-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s040-of1:", "caught", e.kind, e.message)
+
+}
+
+gene s040_r0() {
+
+    raise "s040-1qqhqC"
+
+}
+
+stress {
+
+    s040_r0()
+
+    print("s040-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s040-r0:", e.kind, e.message)
+
+}
+
+gene s040_r1() {
+
+    raise "s040-tdqzCv"
+
+}
+
+stress {
+
+    s040_r1()
+
+    print("s040-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s040-r1:", e.kind, e.message)
+
+}
+
+let s040_xs0 = [26, 23, 4]
+
+stress {
+
+    print("s040-x0:", s040_xs0[4])
+
+} rescue (e) {
+
+    print("s040-x0:", "caught", e.kind)
+
+}
+
+let s040_xs1 = [42, 8, 28, 9]
+
+stress {
+
+    print("s040-x1:", s040_xs1[5])
+
+} rescue (e) {
+
+    print("s040-x1:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s040-0"
+
+    } rescue (e) {
+
+        print("s040-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s040-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s040-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s040-1"
+
+    } rescue (e) {
+
+        print("s040-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s040-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s040-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s040-d1-top:", outer.message)
+
+}

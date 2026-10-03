@@ -1,0 +1,244 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=181 tag=m181
+
+let m181_s0 = some(6)
+
+match m181_s0 {
+
+    case Some(x) if x > 6 {
+
+        print("m181-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m181-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m181-m0:", "none")
+
+    }
+
+}
+
+let m181_s1 = some(5)
+
+match m181_s1 {
+
+    case Some(x) if x > 5 {
+
+        print("m181-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m181-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m181-m1:", "none")
+
+    }
+
+}
+
+let m181_s2 = some(1)
+
+match m181_s2 {
+
+    case Some(x) if x > 1 {
+
+        print("m181-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m181-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m181-m2:", "none")
+
+    }
+
+}
+
+let m181_ls0 = [27, 32, 24]
+
+match m181_ls0 {
+
+    case [27, *rest] {
+
+        print("m181-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m181-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m181-l0:", "other")
+
+    }
+
+}
+
+let m181_ls1 = [32, 43, 46]
+
+match m181_ls1 {
+
+    case [32, *rest] {
+
+        print("m181-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m181-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m181-l1:", "other")
+
+    }
+
+}
+
+let m181_mp0 = {marker: 9811, splicer: 4857}
+
+match m181_mp0 {
+
+    case {marker: p, splicer: q} {
+
+        print("m181-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m181-mp0:", "miss")
+
+    }
+
+}
+
+let m181_mp1 = {gene: 4182, vector: 8714}
+
+match m181_mp1 {
+
+    case {gene: p, vector: q} {
+
+        print("m181-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m181-mp1:", "miss")
+
+    }
+
+}
+
+let m181_r0 = ok(3)
+
+match m181_r0 {
+
+    case Ok(n) | Err(3) {
+
+        print("m181-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m181-r0:", "zero")
+
+    }
+
+}
+
+let m181_r1 = ok(5)
+
+match m181_r1 {
+
+    case Ok(n) | Err(5) {
+
+        print("m181-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m181-r1:", "zero")
+
+    }
+
+}
+
+let m181_r2 = ok(1)
+
+match m181_r2 {
+
+    case Ok(n) | Err(1) {
+
+        print("m181-r2:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m181-r2:", "zero")
+
+    }
+
+}
+
+match "splicer" {
+
+    case "splicer" {
+
+        print("m181-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m181-w0:", "alt")
+
+    }
+
+}
+
+match "marker" {
+
+    case "marker" {
+
+        print("m181-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m181-w1:", "alt")
+
+    }
+
+}

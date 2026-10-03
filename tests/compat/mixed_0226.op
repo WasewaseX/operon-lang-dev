@@ -1,0 +1,254 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=226 tag=m226
+
+gene m226_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m226-b0:", m226_b0({codon: 51, gene: 23, marker: 24})?!)
+
+gene m226_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m226-b1:", m226_b1({enzyme: 53, marker: 13, ligase: 69})?!)
+
+gene m226_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m226-b2:", m226_b2({exon: 61, enzyme: 53, marker: 17})?!)
+
+gene m226_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m226_f0([12, 6, 35, 56, 20]) {
+
+    case Ok(list) {
+
+        print("m226-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m226-f0:", "e:", m)
+
+    }
+
+}
+
+gene m226_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m226_f1([33, 41, 15, 41, 50, 49]) {
+
+    case Ok(list) {
+
+        print("m226-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m226-f1:", "e:", m)
+
+    }
+
+}
+
+gene m226_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m226_f2([32, 35, 23, 46, 4, 47]) {
+
+    case Ok(list) {
+
+        print("m226-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m226-f2:", "e:", m)
+
+    }
+
+}
+
+let m226_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m226-cc0:", m226_cl0(15)(2), m226_cl0(2)(15))
+
+let m226_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m226-cc1:", m226_cl1(2)(18), m226_cl1(18)(2))
+
+let m226_data0 = some([some("plasmid"), none(), some(6)])
+
+match m226_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m226-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m226-x0:", "shape-miss")
+
+    }
+
+}
+
+let m226_data1 = some([some("ribose"), none(), some(3)])
+
+match m226_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m226-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m226-x1:", "shape-miss")
+
+    }
+
+}

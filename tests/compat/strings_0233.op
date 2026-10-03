@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=233 tag=s233
+
+print("s233-m0:", "10fiifC3kuz".upper(), "10fiifC3kuz".slice(2), "10fiifC3kuz".len())
+
+print("s233-m1:", "ytBvu4".upper(), "ytBvu4".slice(1), "ytBvu4".len())
+
+print("s233-m2:", "504qzpd7".upper(), "504qzpd7".slice(3), "504qzpd7".len())
+
+print("s233-m3:", "ask_lln".upper(), "ask_lln".slice(2), "ask_lln".len())
+
+print("s233-i0:", "3ui-{96}-rd71")
+
+let s233_v0 = 96
+
+print("s233-v0:", "n={s233_v0}" + "!" * 3)
+
+print("s233-i1:", "ah5-{61}-79lA")
+
+let s233_v1 = 61
+
+print("s233-v1:", "n={s233_v1}" + "!" * 1)
+
+print("s233-i2:", "4s5-{22}-2zda")
+
+let s233_v2 = 22
+
+print("s233-v2:", "n={s233_v2}" + "!" * 3)
+
+print("s233-r0:", "54955qaz".replace("5", "48"), "54955qaz".contains("49"))
+
+print("s233-r1:", "61gkej15".replace("6", "rz"), "61gkej15".contains("1g"))
+
+print("s233-j0:", ["6qn", "aBo", "mwi", "ch5", "ojm"].join("-"))
+
+print("s233-j1:", ["f36", "0xy", "sog", "egf", "zfC"].join("-"))
+
+print("s233-j2:", ["1rw", "gy8", "Au7"].join("-"))
+
+print("s233-a0:", "ue86fry".at(5), "ue86fry".trim() == "ue86fry")
+
+print("s233-a1:", "z1zgnej".at(0), "z1zgnej".trim() == "z1zgnej")

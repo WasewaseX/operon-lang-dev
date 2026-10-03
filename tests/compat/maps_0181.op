@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=181 tag=m181
+
+let m181_m0 = {vector: 13, splicer: 32, codon: 93, enzyme: -37}
+
+print("m181-m0:", m181_m0["vector"], len(m181_m0), m181_m0.has("vector"))
+
+let m181_m1 = {plasmid: 85, helix: 18, ribose: 22, splicer: 95}
+
+print("m181-m1:", m181_m1["plasmid"], len(m181_m1), m181_m1.has("plasmid"))
+
+let m181_m2 = {helix: 15, plasmid: 93, gene: 89}
+
+print("m181-m2:", m181_m2["helix"], len(m181_m2), m181_m2.has("helix"))
+
+let m181_k0 = {splicer: 33, cell: 43, ribose: 13}
+
+let m181_ks0 = m181_k0.keys()
+
+let m181_sm0 = 0
+
+for k in m181_k0 { m181_sm0 += m181_k0[k] }
+
+print("m181-k0:", m181_sm0, m181_k0.keys().sort(), m181_k0.values().len())
+
+let m181_k1 = {ribose: 47, plasmid: 1, gene: 30}
+
+let m181_ks1 = m181_k1.keys()
+
+let m181_sm1 = 0
+
+for k in m181_k1 { m181_sm1 += m181_k1[k] }
+
+print("m181-k1:", m181_sm1, m181_k1.keys().sort(), m181_k1.values().len())
+
+let m181_w0 = {outer: {ribose: 9, marker: 2, tag: "ok"}}}
+
+print("m181-w0:", m181_w0["outer"]["marker"], m181_w0["outer"]["tag"])
+
+let m181_w1 = {outer: {helix: 6, plasmid: 6, tag: "ok"}}}
+
+print("m181-w1:", m181_w1["outer"]["plasmid"], m181_w1["outer"]["tag"])

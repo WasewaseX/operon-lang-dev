@@ -1,0 +1,48 @@
+# std/result, W006-A proof: the combinator tier over the core Result
+# vocabulary (SPEC §9). Pure-Operon module — no core-runtime change; every
+# assert here exercises the exact values a caller observes, including that
+# err payloads pass through UNCHANGED (engine-neutral by construction).
+use std/result as res;
+
+frame proof {
+    # --- map: transforms the ok side only
+    assert(res.map(ok(2), gene (x) { return x * 10 }) == ok(20))
+    let e0 = err("boom")
+    assert(res.map(e0, gene (x) { return x * 10 }) == err("boom"), "map leaves err untouched")
+
+    # --- map_err: transforms the err side only
+    assert(res.map_err(err(404), gene (e) { return "code " + str(e) }) == err("code 404"))
+    assert(res.map_err(ok(7), gene (e) { return "code " + str(e) }) == ok(7))
+
+    # --- and_then: chains Result-shaped handlers, err passes through
+    assert(res.and_then(ok(5), gene (x) { return ok(x + 1) }) == ok(6))
+    assert(res.and_then(ok(5), gene (x) { return err("odd path") }) == err("odd path"))
+    assert(res.and_then(err("no"), gene (x) { return ok(99) }) == err("no"), "and_then skips err")
+
+    # --- or_else: recovers the err side, ok passes through
+    assert(res.or_else(err("down"), gene (e) { return ok("fallback") }) == ok("fallback"))
+    assert(res.or_else(ok(1), gene (e) { return ok("fallback") }) == ok(1))
+
+    # --- unwrap_or_else: err side computed lazily from the payload
+    assert(res.unwrap_or_else(ok(3), gene (e) { return 0 }) == 3)
+    assert(res.unwrap_or_else(err("why"), gene (e) { return len(e) }) == 3)
+
+    # --- is_ok_and / is_err_and: predicates never stress
+    assert(res.is_ok_and(ok(4), gene (x) { return x > 2 }))
+    assert(!res.is_ok_and(ok(1), gene (x) { return x > 2 }))
+    assert(!res.is_ok_and(err("x"), gene (x) { return true }), "err is false, no stress")
+    assert(res.is_err_and(err("late"), gene (e) { return e == "late" }))
+    assert(!res.is_err_and(ok(9), gene (e) { return true }), "ok is false, no stress")
+
+    # --- ok_to_some: the Option interop edge
+    assert(res.ok_to_some(ok("v")) == some("v"))
+    assert(res.ok_to_some(err("e")) == none())
+
+    # --- payload pass-through: the exact inner value survives two hops
+    let deep = res.map_err(res.map(ok(1), gene (x) { return x + 1 }), gene (e) { return e })
+    assert(deep == ok(2))
+}
+
+gene unused_helper() {
+    return 0
+}

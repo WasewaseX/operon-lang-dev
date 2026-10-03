@@ -1,0 +1,182 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=259 tag=c259
+
+let c259_b0 = "start"
+
+if 18 > 80 { c259_b0 = "hi" } elif 18 > 40 { c259_b0 = "mid" } else { c259_b0 = "lo" }
+
+print("c259-i0:", c259_b0, 18)
+
+let c259_b1 = "start"
+
+if 0 > 80 { c259_b1 = "hi" } elif 0 > 40 { c259_b1 = "mid" } else { c259_b1 = "lo" }
+
+print("c259-i1:", c259_b1, 0)
+
+let c259_b2 = "start"
+
+if 30 > 80 { c259_b2 = "hi" } elif 30 > 40 { c259_b2 = "mid" } else { c259_b2 = "lo" }
+
+print("c259-i2:", c259_b2, 30)
+
+let c259_b3 = "start"
+
+if 78 > 80 { c259_b3 = "hi" } elif 78 > 40 { c259_b3 = "mid" } else { c259_b3 = "lo" }
+
+print("c259-i3:", c259_b3, 78)
+
+let c259_b4 = "start"
+
+if -1 > 80 { c259_b4 = "hi" } elif -1 > 40 { c259_b4 = "mid" } else { c259_b4 = "lo" }
+
+print("c259-i4:", c259_b4, -1)
+
+let c259_a0 = 0
+
+let c259_n0 = 0
+
+while c259_n0 < 19 {
+
+    c259_n0 += 2
+
+    if c259_n0 % 3 == 0 { continue }
+
+    if c259_n0 > 26 { break }
+
+    c259_a0 += c259_n0
+
+}
+
+print("c259-w0:", c259_a0, c259_n0)
+
+let c259_a1 = 0
+
+let c259_n1 = 0
+
+while c259_n1 < 5 {
+
+    c259_n1 += 4
+
+    if c259_n1 % 3 == 0 { continue }
+
+    if c259_n1 > 11 { break }
+
+    c259_a1 += c259_n1
+
+}
+
+print("c259-w1:", c259_a1, c259_n1)
+
+let c259_a2 = 0
+
+let c259_n2 = 0
+
+while c259_n2 < 18 {
+
+    c259_n2 += 3
+
+    if c259_n2 % 2 == 0 { continue }
+
+    if c259_n2 > 26 { break }
+
+    c259_a2 += c259_n2
+
+}
+
+print("c259-w2:", c259_a2, c259_n2)
+
+let c259_a3 = 0
+
+let c259_n3 = 0
+
+while c259_n3 < 14 {
+
+    c259_n3 += 3
+
+    if c259_n3 % 2 == 0 { continue }
+
+    if c259_n3 > 21 { break }
+
+    c259_a3 += c259_n3
+
+}
+
+print("c259-w3:", c259_a3, c259_n3)
+
+let c259_c0 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 4] {
+
+        c259_c0 += a * b
+
+    }
+
+}
+
+print("c259-l0:", c259_c0)
+
+let c259_c1 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 3] {
+
+        c259_c1 += a * b
+
+    }
+
+}
+
+print("c259-l1:", c259_c1)
+
+let c259_c2 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 2] {
+
+        c259_c2 += a * b
+
+    }
+
+}
+
+print("c259-l2:", c259_c2)
+
+let c259_acc0 = ""
+
+loop {
+
+    c259_acc0 += "x"
+
+    if c259_acc0.len() >= 6 { break }
+
+}
+
+print("c259-o0:", c259_acc0)
+
+let c259_acc1 = ""
+
+loop {
+
+    c259_acc1 += "x"
+
+    if c259_acc1.len() >= 6 { break }
+
+}
+
+print("c259-o1:", c259_acc1)
+
+let c259_acc2 = ""
+
+loop {
+
+    c259_acc2 += "x"
+
+    if c259_acc2.len() >= 4 { break }
+
+}
+
+print("c259-o2:", c259_acc2)

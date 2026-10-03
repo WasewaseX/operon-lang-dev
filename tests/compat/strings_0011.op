@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=11 tag=s011
+
+print("s011-m0:", "mq6fxrb".upper(), "mq6fxrb".slice(3), "mq6fxrb".len())
+
+print("s011-m1:", "q07infjcAgek".upper(), "q07infjcAgek".slice(2), "q07infjcAgek".len())
+
+print("s011-m2:", "yoavdu88y8".upper(), "yoavdu88y8".slice(4), "yoavdu88y8".len())
+
+print("s011-m3:", "rmsrd00t".upper(), "rmsrd00t".slice(1), "rmsrd00t".len())
+
+print("s011-i0:", "5aC-{28}-6udp")
+
+let s011_v0 = 28
+
+print("s011-v0:", "n={s011_v0}" + "!" * 3)
+
+print("s011-i1:", "y2w-{38}-aju3")
+
+let s011_v1 = 38
+
+print("s011-v1:", "n={s011_v1}" + "!" * 3)
+
+print("s011-i2:", "qfu-{20}-cnhg")
+
+let s011_v2 = 20
+
+print("s011-v2:", "n={s011_v2}" + "!" * 2)
+
+print("s011-r0:", "Bjn13x2x".replace("B", "t2"), "Bjn13x2x".contains("jn"))
+
+print("s011-r1:", "fnyBa0yc".replace("f", "d_"), "fnyBa0yc".contains("ny"))
+
+print("s011-j0:", ["xqo", "ujm", "1z_", "u88"].join("-"))
+
+print("s011-j1:", ["jl4", "jke", "7ao", "j__", "uwf"].join("-"))
+
+print("s011-a0:", "83_hxCm".at(4), "83_hxCm".trim() == "83_hxCm")
+
+print("s011-a1:", "q4h5xm3".at(6), "q4h5xm3".trim() == "q4h5xm3")
+
+print("s011-a2:", "fdzg2ia".at(5), "fdzg2ia".trim() == "fdzg2ia")

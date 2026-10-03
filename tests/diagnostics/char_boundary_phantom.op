@@ -1,0 +1,4 @@
+# fuzz-r3 regression (fuzz_corpus/crash_20260930_1606.op, delta-minimized):
+# check phantom-label scan used to panic (rc 101) slicing mid-multibyte
+# char in Span::of_token_word; it must render the located warning instead.
+字d(

@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=126 tag=c126
+
+print("c126-c0:", 9829 < 5136)
+
+print("c126-c1:", -1768 < 4961)
+
+print("c126-c2:", 5922 <= -2109)
+
+print("c126-c3:", 4353 != -4182)
+
+print("c126-c4:", -6778 >= 2915)
+
+print("c126-b0:", 18 < 26 && 26 < 45, 18 > 26 || 18 > 45)
+
+print("c126-b1:", 2 < 11 && 11 < 8, 2 > 11 || 2 > 8)
+
+print("c126-b2:", 16 < 38 && 38 < 35, 16 > 38 || 16 > 35)
+
+print("c126-b3:", 21 < 21 && 21 < 0, 21 > 21 || 21 > 0)
+
+print("c126-t0:", -2477 > -1342 ? "gt" : "le")
+
+print("c126-t1:", -5094 > 1634 ? "gt" : "le")
+
+print("c126-t2:", 7322 > 5687 ? "gt" : "le")
+
+print("c126-t3:", -8993 > -4518 ? "gt" : "le")
+
+let c126_n0 = null
+
+print("c126-n0:", c126_n0 ?? -9110, c126_n0 == null)
+
+let c126_n1 = null
+
+print("c126-n1:", c126_n1 ?? 3441, c126_n1 == null)
+
+print("c126-s0:", "br8s" in "96Be8ybr8s", "br8s" == "br8s")
+
+print("c126-s1:", "m9hv" in "a7fr2wm9hv", "m9hv" == "m9hv")

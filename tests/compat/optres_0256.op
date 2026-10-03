@@ -1,0 +1,122 @@
+# compat corpus — generated, do not edit by hand
+# bucket=optres seed=20261030 idx=256 tag=o256
+
+gene o256_f0(n) {
+
+    if n > 509 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o256_u0(n) {
+
+    let v = o256_f0(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o256-p0:", o256_u0(-7915), o256_u0(526))
+
+gene o256_f1(n) {
+
+    if n > -2692 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o256_u1(n) {
+
+    let v = o256_f1(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o256-p1:", o256_u1(-3520), o256_u1(-2685))
+
+gene o256_f2(n) {
+
+    if n > -7846 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o256_u2(n) {
+
+    let v = o256_f2(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o256-p2:", o256_u2(-3523), o256_u2(-7831))
+
+gene o256_f3(n) {
+
+    if n > -559 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o256_u3(n) {
+
+    let v = o256_f3(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o256-p3:", o256_u3(9398), o256_u3(-540))
+
+print("o256-o0:", is_ok(ok(-6058)), is_none(none()), is_err(err("-6058")), is_some(some(-6058)))
+
+print("o256-u0:", unwrap_or(none(), -6058), unwrap_or(err("x"), -6059), unwrap_or(ok(-6058), 0))
+
+print("o256-o1:", is_ok(ok(6187)), is_none(none()), is_err(err("6187")), is_some(some(6187)))
+
+print("o256-u1:", unwrap_or(none(), 6187), unwrap_or(err("x"), 6186), unwrap_or(ok(6187), 0))
+
+print("o256-o2:", is_ok(ok(5952)), is_none(none()), is_err(err("5952")), is_some(some(5952)))
+
+print("o256-u2:", unwrap_or(none(), 5952), unwrap_or(err("x"), 5951), unwrap_or(ok(5952), 0))
+
+print("o256-o3:", is_ok(ok(5797)), is_none(none()), is_err(err("5797")), is_some(some(5797)))
+
+print("o256-u3:", unwrap_or(none(), 5797), unwrap_or(err("x"), 5796), unwrap_or(ok(5797), 0))
+
+print("o256-e0:", ok(1555) == ok(1555), some(1555) == ok(1555), none() == none(), err(1) == err(2))
+
+print("o256-j0:", json_str(ok(1555)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o256-e1:", ok(-6404) == ok(-6404), some(-6404) == ok(-6404), none() == none(), err(1) == err(2))
+
+print("o256-j1:", json_str(ok(-6404)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o256-n0:", some(some(30))?!?!, unwrap(ok(51)) + unwrap(some(21)))
+
+print("o256-s0:", "v=" + str(ok(30)?!), some("21k")?! + "!")
+
+print("o256-n1:", some(some(8))?!?!, unwrap(ok(13)) + unwrap(some(5)))
+
+print("o256-s1:", "v=" + str(ok(8)?!), some("5k")?! + "!")

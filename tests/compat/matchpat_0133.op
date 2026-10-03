@@ -1,0 +1,340 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=133 tag=m133
+
+let m133_s0 = some(5)
+
+match m133_s0 {
+
+    case Some(x) if x > 5 {
+
+        print("m133-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m133-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m133-m0:", "none")
+
+    }
+
+}
+
+let m133_s1 = some(6)
+
+match m133_s1 {
+
+    case Some(x) if x > 6 {
+
+        print("m133-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m133-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m133-m1:", "none")
+
+    }
+
+}
+
+let m133_s2 = some(3)
+
+match m133_s2 {
+
+    case Some(x) if x > 3 {
+
+        print("m133-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m133-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m133-m2:", "none")
+
+    }
+
+}
+
+let m133_s3 = some(2)
+
+match m133_s3 {
+
+    case Some(x) if x > 2 {
+
+        print("m133-m3:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m133-m3:", "small", x)
+
+    }
+
+    case None {
+
+        print("m133-m3:", "none")
+
+    }
+
+}
+
+let m133_s4 = some(4)
+
+match m133_s4 {
+
+    case Some(x) if x > 4 {
+
+        print("m133-m4:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m133-m4:", "small", x)
+
+    }
+
+    case None {
+
+        print("m133-m4:", "none")
+
+    }
+
+}
+
+let m133_ls0 = [1, 41, 32]
+
+match m133_ls0 {
+
+    case [1, *rest] {
+
+        print("m133-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m133-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m133-l0:", "other")
+
+    }
+
+}
+
+let m133_ls1 = [38, 6, 19]
+
+match m133_ls1 {
+
+    case [38, *rest] {
+
+        print("m133-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m133-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m133-l1:", "other")
+
+    }
+
+}
+
+let m133_ls2 = [42, 15, 36]
+
+match m133_ls2 {
+
+    case [42, *rest] {
+
+        print("m133-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m133-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m133-l2:", "other")
+
+    }
+
+}
+
+let m133_ls3 = [24, 45, 7]
+
+match m133_ls3 {
+
+    case [24, *rest] {
+
+        print("m133-l3:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m133-l3:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m133-l3:", "other")
+
+    }
+
+}
+
+let m133_mp0 = {ligase: -2919, exon: -2402}
+
+match m133_mp0 {
+
+    case {ligase: p, exon: q} {
+
+        print("m133-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m133-mp0:", "miss")
+
+    }
+
+}
+
+let m133_mp1 = {marker: 5588, codon: 7739}
+
+match m133_mp1 {
+
+    case {marker: p, codon: q} {
+
+        print("m133-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m133-mp1:", "miss")
+
+    }
+
+}
+
+let m133_r0 = ok(1)
+
+match m133_r0 {
+
+    case Ok(n) | Err(1) {
+
+        print("m133-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m133-r0:", "zero")
+
+    }
+
+}
+
+let m133_r1 = ok(4)
+
+match m133_r1 {
+
+    case Ok(n) | Err(4) {
+
+        print("m133-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m133-r1:", "zero")
+
+    }
+
+}
+
+let m133_r2 = ok(5)
+
+match m133_r2 {
+
+    case Ok(n) | Err(5) {
+
+        print("m133-r2:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m133-r2:", "zero")
+
+    }
+
+}
+
+match "vector" {
+
+    case "vector" {
+
+        print("m133-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m133-w0:", "alt")
+
+    }
+
+}
+
+match "cell" {
+
+    case "cell" {
+
+        print("m133-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m133-w1:", "alt")
+
+    }
+
+}

@@ -1,0 +1,934 @@
+# ============================================================
+# ytdl.op — a YouTube downloader orchestrator, written in Operon
+# ============================================================
+# Lightweight edition: the engines come from your PATH (yt-dlp and
+# ffmpeg required, aria2c optional), the Operon runtime is the only
+# thing this app ships — the release binary is ~2.5 MB.
+#
+# The app is a pure orchestrator: it never opens a network socket
+# itself. yt-dlp resolves formats, ffmpeg converts audio/subs, aria2c
+# (when present) parallelizes the transfer. Operon adds the parts that
+# yt-dlp does not give you: a typed option layer, format-table logic,
+# a concurrent queue, a checkpoint-resume loop around the 5-minute
+# run() wall-clock ceiling, and a default-deny capability sandbox —
+# this program can only touch the directories and programs the
+# launcher explicitly grants.
+#
+# subcommands: doctor | info URL | get URL | queue FILE | selfcheck F
+# run it through the launcher (ytdl.sh / ytdl.bat) so the capability
+# grants are set up for you.
+# ============================================================
+
+use std/args as ar
+use std/strings as st
+
+# ---------------------------------------------------------- formatting
+
+gene pad2(n) {
+    if n < 10 {
+        return "0{n}"
+    }
+    return "{n}"
+}
+
+gene fmt_bytes(n) {
+    if n == null {
+        return "?"
+    }
+    let f = n + 0.0
+    if f >= 1073741824.0 {
+        let g = f / 1073741824.0
+        return "{g:.2} GB"
+    } elif f >= 1048576.0 {
+        let g = f / 1048576.0
+        return "{g:.1} MB"
+    } elif f >= 1024.0 {
+        let g = f / 1024.0
+        return "{g:.1} KB"
+    }
+    return "{n} B"
+}
+
+gene fmt_dur(s) {
+    if s == null {
+        return "?"
+    }
+    let t = floor(s + 0.0)
+    let h = t // 3600
+    let m = (t % 3600) // 60
+    let sec = t % 60
+    if h > 0 {
+        return "{h}:{pad2(m)}:{pad2(sec)}"
+    }
+    return "{m}:{pad2(sec)}"
+}
+
+gene comma(n) {
+    if n == null {
+        return "?"
+    }
+    let t = floor(n + 0.0)
+    let parts = []
+    while t >= 1000 {
+        let g = t % 1000
+        let gs = "{g}"
+        if g < 10 {
+            gs = "00{g}"
+        } elif g < 100 {
+            gs = "0{g}"
+        }
+        parts.push(gs)
+        t = t // 1000
+    }
+    parts.push("{t}")
+    return ",".join(reversed(parts))
+}
+
+gene clip(s, w) {
+    if len(s) > w {
+        return "{s.slice(0, w - 2)}.."
+    }
+    return s
+}
+
+gene b2s(b) {
+    if b {
+        return "ok"
+    }
+    return "FAIL"
+}
+
+gene one_of(s, xs) {
+    for x in xs {
+        if s == x {
+            return true
+        }
+    }
+    return false
+}
+
+# json maps: read a key that may be absent or null, as a display string
+gene mget(m, k) {
+    if has(m, k) {
+        let v = m[k]
+        if v != null {
+            return "{v}"
+        }
+    }
+    return ""
+}
+
+# json maps: read a key that may be absent, as a raw value (null if missing)
+gene jget(m, k) {
+    if has(m, k) {
+        return m[k]
+    }
+    return null
+}
+
+gene tail_lines(s, n) {
+    let ls = s.trim().split("\n")
+    let total = len(ls)
+    if total <= n {
+        return s.trim()
+    }
+    return "\n".join(ls.slice(total - n))
+}
+
+# ---------------------------------------------------------- engines
+
+gene tool_line(prog, flag) {
+    stress {
+        let r = run(prog, [flag])
+        if r.code == 0 {
+            let ls = r.stdout.trim().split("\n")
+            return ls[0]
+        }
+        return ""
+    } rescue (e) {
+        return ""
+    }
+}
+
+gene detect_tools() {
+    return {
+        ytdlp: tool_line("yt-dlp", "--version"),
+        ffmpeg: tool_line("ffmpeg", "-version"),
+        aria2: tool_line("aria2c", "--version")
+    }
+}
+
+# ---------------------------------------------------------- selection logic
+# (this is the layer that must behave IDENTICALLY in the python and deno
+#  comparison builds — the selfcheck matrix pins it byte-for-byte)
+
+gene known_tier(q) {
+    return one_of(q, ["2160", "1440", "1080", "720", "480", "360", "240", "144"])
+}
+
+gene quality_expr(q) {
+    if q == "best" {
+        return "bestvideo*+bestaudio/best"
+    }
+    return "bestvideo[height<={q}]+bestaudio/best[height<={q}]/best"
+}
+
+gene audio_ok(kind) {
+    return one_of(kind, ["mp3", "m4a", "opus", "flac", "wav"])
+}
+
+gene selection_args(o) {
+    if o.fmt != "" {
+        return ["-f", o.fmt]
+    }
+    if o.audio != "" {
+        return ["-f", "bestaudio/best", "-x", "--audio-format", o.audio, "--audio-quality", "0"]
+    }
+    return ["-f", quality_expr(o.quality)]
+}
+
+gene build_get_args(url, o) {
+    let a = []
+    if !o.playlist {
+        a.push("--no-playlist")
+    }
+    a.push("--continue")
+    a.push("--retries")
+    a.push("3")
+    a.push("--fragment-retries")
+    a.push("3")
+    a.push("--no-overwrites")
+    if o.aria2 {
+        if o.aria2_ok {
+            a.push("--downloader")
+            a.push("aria2c")
+            a.push("--downloader-args")
+            a.push("aria2c:-x16 -s16 -k1M --file-allocation=none")
+        }
+    }
+    if o.subs {
+        a.push("--write-subs")
+        a.push("--sub-langs")
+        a.push(o.sub_langs)
+        a.push("--convert-subs")
+        a.push("srt")
+    }
+    a.push("-P")
+    a.push(o.out)
+    a.push("-o")
+    a.push(o.template)
+    for x in selection_args(o) {
+        a.push(x)
+    }
+    a.push(url)
+    return a
+}
+
+# ---------------------------------------------------------- format table
+
+gene h_of(f) {
+    if has(f, "height") {
+        if f.height != null {
+            return f.height + 0
+        }
+    }
+    return 0
+}
+
+gene t_of(f) {
+    if has(f, "tbr") {
+        if f.tbr != null {
+            return f.tbr + 0
+        }
+    }
+    return 0
+}
+
+gene fmt_before(a, b) {
+    if h_of(a) > h_of(b) {
+        return true
+    }
+    if h_of(a) < h_of(b) {
+        return false
+    }
+    return t_of(a) > t_of(b)
+}
+
+gene res_of(f) {
+    let h = h_of(f)
+    if h <= 0 {
+        if mget(f, "vcodec") == "none" {
+            return "audio"
+        }
+        return "?"
+    }
+    let w = 0
+    if has(f, "width") {
+        if f.width != null {
+            w = f.width
+        }
+    }
+    if w > 0 {
+        return "{w}x{h}"
+    }
+    return "?x{h}"
+}
+
+gene size_of(f) {
+    if has(f, "filesize") {
+        if f.filesize != null {
+            return fmt_bytes(f.filesize)
+        }
+    }
+    if has(f, "filesize_approx") {
+        if f.filesize_approx != null {
+            return "~{fmt_bytes(f.filesize_approx)}"
+        }
+    }
+    return "?"
+}
+
+gene fmt_row(f) {
+    let id = st.pad_right(clip(mget(f, "format_id"), 9), 9, " ")
+    let ext = st.pad_right(clip(mget(f, "ext"), 4), 4, " ")
+    let res = st.pad_right(clip(res_of(f), 10), 10, " ")
+    let fps = ""
+    if has(f, "fps") {
+        if f.fps != null {
+            fps = "{floor(f.fps + 0.0)}"
+        }
+    }
+    let fps_p = st.pad_left(clip(fps, 4), 4, " ")
+    let size = st.pad_left(clip(size_of(f), 9), 9, " ")
+    let vc = mget(f, "vcodec")
+    if vc == "none" {
+        vc = "-"
+    }
+    if vc == "" {
+        vc = "?"
+    }
+    let ac = mget(f, "acodec")
+    if ac == "none" {
+        ac = "-"
+    }
+    if ac == "" {
+        ac = "?"
+    }
+    let codecs = st.pad_right(clip("{vc}/{ac}", 19), 19, " ")
+    let note = mget(f, "format_note")
+    return "{id}  {ext}  {res}  {fps_p}  {size}  {codecs}  {note}"
+}
+
+gene table_rows(meta) {
+    # pure decision pipeline: sort + row-build, NO engine probes — this is
+    # the workload the deep benchmark times in every language build
+    let out = []
+    let t = mget(meta, "title")
+    out.push("title: {t}")
+    let uploader = mget(meta, "uploader")
+    let dur = fmt_dur(jget(meta, "duration"))
+    let views = comma(jget(meta, "view_count"))
+    out.push("by: {uploader}  |  duration: {dur}  |  views: {views}")
+    let n = 0
+    if has(meta, "formats") {
+        n = len(meta.formats)
+    }
+    out.push("formats: {n}  (res = WxH, size from yt-dlp, ~ = approximate)")
+    out.push("id        ext   res         fps      size  vcodec/acodec        note")
+    if has(meta, "formats") {
+        let fs = sorted(meta.formats, fmt_before)
+        for f in fs {
+            out.push(fmt_row(f))
+        }
+    }
+    return out
+}
+
+gene info_lines(meta) {
+    let out = table_rows(meta)
+    let tools = detect_tools()
+    if tools.aria2 != "" {
+        out.push("accel: aria2c {tools.aria2} (multi-connection enabled)")
+    } else {
+        out.push("accel: aria2c not found — single-connection downloads")
+    }
+    return out
+}
+
+gene cmd_info(rest) {
+    let pos = ar.args_positional(rest)
+    if len(pos) == 0 {
+        promote("error: info needs a URL")
+        exit(2)
+    }
+    let url = pos[0]
+    let r = {code: 1, stdout: "", stderr: ""}
+    stress {
+        r = run("yt-dlp", ["-J", "--no-playlist", url])
+    } rescue (e) {
+        promote("yt-dlp denied — the launcher must grant --allow-run yt-dlp ({e.message})")
+        exit(1)
+    }
+    if r.code != 0 {
+        promote("yt-dlp failed (code {r.code}):")
+        promote(tail_lines(r.stderr, 3))
+        exit(1)
+    }
+    let meta = json_parse(r.stdout)
+    for ln in info_lines(meta) {
+        promote(ln)
+    }
+    exit(0)
+}
+
+# ---------------------------------------------------------- download
+
+gene fs_mkdir_quiet(dir) {
+    stress {
+        fs_mkdir(dir)
+    } rescue (e) {
+        # already exists is fine
+    }
+}
+
+gene has_any_suffix(s, sufs) {
+    for sfx in sufs {
+        if s.ends(sfx) {
+            return true
+        }
+    }
+    return false
+}
+
+gene has_partial(dir) {
+    stress {
+        let names = read_dir(dir)
+        for nm in names {
+            if has_any_suffix(nm, [".part", ".ytdl", ".aria2", ".tmp"]) {
+                return true
+            }
+        }
+        return false
+    } rescue (e) {
+        return false
+    }
+}
+
+gene dest_lines(stdout, stderr) {
+    let found = []
+    for src in [stdout, stderr] {
+        for ln in src.split("\n") {
+            let l = ln.trim()
+            if l.contains("Destination:") {
+                found.push(l)
+            } elif l.contains("has already been downloaded") {
+                found.push(l)
+            } elif l.contains("[Merger]") {
+                found.push(l)
+            } elif l.contains("Download complete:") {
+                found.push(l)
+            } elif l.contains("ExtractAudio") {
+                found.push(l)
+            }
+        }
+    }
+    return found
+}
+
+# checkpoint-resume loop: every run() call has a 5-minute wall-clock
+# ceiling (interpreter guard), so a long download may come back killed
+# mid-transfer (it surfaces as code 0 with a .part file left behind).
+# The loop notices the partial file and re-invokes yt-dlp, whose
+# --continue resumes the byte range. max_attempts bounds the rounds.
+gene download(url, o) {
+    let attempts = 0
+    let last = {code: -1, stdout: "", stderr: ""}
+    loop {
+        attempts += 1
+        last = run("yt-dlp", build_get_args(url, o))
+        if last.code == 0 {
+            if !has_partial(o.out) {
+                break
+            }
+        }
+        if attempts >= o.max_attempts {
+            break
+        }
+    }
+    let ok = last.code == 0
+    if ok {
+        if has_partial(o.out) {
+            ok = false
+        }
+    }
+    return {ok: ok, attempts: attempts, r: last}
+}
+
+gene report(d) {
+    let r = d.r
+    for ln in dest_lines(r.stdout, r.stderr) {
+        promote("  {ln}")
+    }
+    promote("  attempts: {d.attempts}  result: {b2s(d.ok)}")
+    if !d.ok {
+        if r.code != 0 {
+            promote("  yt-dlp exited {r.code}:")
+        } else {
+            promote("  incomplete after {d.attempts} rounds:")
+        }
+        promote("{tail_lines(r.stderr, 4)}")
+    }
+}
+
+# ---------------------------------------------------------- queue
+
+gene queue_worker(urls, o) {
+    let rows = []
+    for u in urls {
+        let line = u.trim()
+        if line == "" {
+            continue
+        }
+        if line.starts("#") {
+            continue
+        }
+        let d = download(line, o)
+        rows.push("{b2s(d.ok)}\t{d.attempts}\t{line}")
+    }
+    return rows
+}
+
+gene cmd_queue(rest) {
+    let pos = ar.args_positional(rest)
+    if len(pos) == 0 {
+        promote("error: queue needs a file (one URL per line, # comments)")
+        exit(2)
+    }
+    let file = pos[0]
+    let o = get_opts(rest.slice(1))
+    let text = ""
+    stress {
+        text = read_file(file)
+    } rescue (e) {
+        promote("error: cannot read queue file {file} ({e.message})")
+        exit(2)
+    }
+    let urls = []
+    for ln in text.split("\n") {
+        let t = ln.trim()
+        if t == "" {
+            continue
+        }
+        if t.starts("#") {
+            continue
+        }
+        urls.push(t)
+    }
+    let jobs = o.jobs
+    if jobs < 1 {
+        jobs = 1
+    }
+    if jobs > len(urls) {
+        jobs = len(urls)
+    }
+    let rows = []
+    if jobs == 1 {
+        rows = queue_worker(urls, o)
+    } else {
+        # spawn snapshot membrane: pre-partition deterministically, one
+        # fiber per chunk, results joined in chunk order (stable output)
+        let chunks = []
+        for i in range(0, jobs) {
+            chunks.push([])
+        }
+        let idx = 0
+        for u in urls {
+            chunks[idx % jobs].push(u)
+            idx += 1
+        }
+        let ids = []
+        for c in chunks {
+            if len(c) > 0 {
+                ids.push(spawn(queue_worker, [c, o]))
+            }
+        }
+        for t in ids {
+            for r in join(t) {
+                rows.push(r)
+            }
+        }
+    }
+    let failures = 0
+    for r in rows {
+        promote(r)
+        if !r.starts("ok\t") {
+            failures += 1
+        }
+    }
+    promote("queue: {len(rows)} items, {failures} failed (workers: {jobs})")
+    if failures > 0 {
+        exit(1)
+    }
+    exit(0)
+}
+
+# ---------------------------------------------------------- deep bench
+# Uniform workloads for the cross-language deep benchmark
+# (docs/BENCHMARK-DEEP.md, harness: scripts/bench_deep.py). Every
+# workload prints ONE "bench-* cs=..." line; the cs string must be
+# byte-identical in every language build that implements the workload —
+# that is the differential pin for the benchmark itself.
+
+gene progress_line(i) {
+    let pp = pad2((i * 7) % 100)
+    let ss = pad2((i * 3) % 60)
+    return "[download]  {pp}% of 12.00MiB at 2.00MiB/s ETA 00:{ss}"
+}
+
+gene cmd_bench_startup() {
+    promote("ytdl-bench ready")
+    exit(0)
+}
+
+gene cmd_bench_json(rest) {
+    let pos = ar.args_positional(rest)
+    if len(pos) == 0 {
+        promote("error: bench-json needs a fixture path")
+        exit(2)
+    }
+    let n = floor(ar.args_number(rest, "n", 100) + 0.0)
+    let text = read_file(pos[0])
+    let meta = json_parse(text)
+    let nf = 0
+    let title = ""
+    for i in range(0, n) {
+        let m = json_parse(text)
+        nf = len(m.formats)
+        title = mget(m, "title")
+    }
+    if n > 0 {
+        if nf != len(meta.formats) {
+            promote("bench-json MISMATCH")
+            exit(1)
+        }
+    }
+    promote("bench-json cs={title}:{nf}:{n}")
+    exit(0)
+}
+
+gene cmd_bench_table(rest) {
+    let pos = ar.args_positional(rest)
+    if len(pos) == 0 {
+        promote("error: bench-table needs a fixture path")
+        exit(2)
+    }
+    let r = floor(ar.args_number(rest, "rounds", 20) + 0.0)
+    let meta = json_parse(read_file(pos[0]))
+    let first = ""
+    let last = ""
+    let nrows = 0
+    for i in range(0, r) {
+        let rows = table_rows(meta)
+        first = rows[0]
+        last = rows[len(rows) - 1]
+        nrows = len(rows)
+    }
+    promote("bench-table cs={nrows}|{first}|{last}")
+    exit(0)
+}
+
+gene cmd_bench_lines(rest) {
+    let k = floor(ar.args_number(rest, "k", 20000) + 0.0)
+    let eta = 0
+    let samples = []
+    let step = k // 40
+    if step < 1 {
+        step = 1
+    }
+    for i in range(0, k) {
+        let ln = progress_line(i)
+        if ln.contains("ETA") {
+            eta += 1
+        }
+        if (i % step) == 0 {
+            # percent field sits at a fixed offset (2 digits, col 12)
+            samples.push(ln.slice(12, 14))
+        }
+    }
+    let sj = ",".join(samples)
+    promote("bench-lines cs={eta},{sj}")
+    exit(0)
+}
+
+gene cmd_bench_spawn(rest) {
+    let n = floor(ar.args_number(rest, "n", 30) + 0.0)
+    let ok = 0
+    for i in range(0, n) {
+        stress {
+            let r = run("mockspawn", ["--version"])
+            if r.code == 0 {
+                ok += 1
+            }
+        } rescue (e) {
+            # denied or missing engine — counted as failure below
+        }
+    }
+    promote("bench-spawn cs={ok}/{n}")
+    if ok != n {
+        exit(1)
+    }
+    exit(0)
+}
+
+gene bench_queue_worker(chunk) {
+    let ok = 0
+    for u in chunk {
+        stress {
+            let r = run("mocksleep", ["80"])
+            if r.code == 0 {
+                ok += 1
+            }
+        } rescue (e) {
+            # denied or missing engine — counted as failure below
+        }
+    }
+    return ok
+}
+
+gene cmd_bench_queue(rest) {
+    let k = floor(ar.args_number(rest, "k", 16) + 0.0)
+    let c = floor(ar.args_number(rest, "c", 8) + 0.0)
+    if k < 1 {
+        k = 1
+    }
+    if c < 1 {
+        c = 1
+    }
+    if c > k {
+        c = k
+    }
+    let chunks = []
+    for i in range(0, c) {
+        chunks.push([])
+    }
+    let idx = 0
+    for i in range(0, k) {
+        chunks[idx % c].push(i)
+        idx += 1
+    }
+    let ids = []
+    for ch in chunks {
+        ids.push(spawn(bench_queue_worker, [ch]))
+    }
+    let ok = 0
+    for t in ids {
+        ok += join(t)
+    }
+    promote("bench-queue cs=ok{ok},k{k},c{c}")
+    if ok != k {
+        exit(1)
+    }
+    exit(0)
+}
+
+# ---------------------------------------------------------- commands
+
+gene cmd_get(rest) {
+    let o = get_opts(rest)
+    if o.url == "" {
+        promote("error: get needs a URL")
+        exit(2)
+    }
+    promote("ytdl[operon]: get {o.url}")
+    let sel = selection_args(o)
+    let sel_s = " ".join(sel)
+    promote("  out={o.out}  selector: {sel_s}")
+    fs_mkdir_quiet(o.out)
+    let d = download(o.url, o)
+    report(d)
+    if !d.ok {
+        exit(1)
+    }
+    exit(0)
+}
+
+gene cmd_doctor() {
+    let t = detect_tools()
+    promote("ytdl doctor — probing PATH engines")
+    let ytdlp_ok = false
+    let ffmpeg_ok = false
+    if t.ytdlp != "" {
+        ytdlp_ok = true
+        promote("  yt-dlp   {t.ytdlp}  [required: present]")
+    } else {
+        promote("  yt-dlp   MISSING  [required: pip install yt-dlp or brew install yt-dlp]")
+    }
+    if t.ffmpeg != "" {
+        ffmpeg_ok = true
+        promote("  ffmpeg   {t.ffmpeg}  [required: present]")
+    } else {
+        promote("  ffmpeg   MISSING  [required: apt/brew install ffmpeg]")
+    }
+    if t.aria2 != "" {
+        promote("  aria2c   {t.aria2}  [optional: multi-connection downloads]")
+    } else {
+        promote("  aria2c   not found  [optional: apt/brew install aria2 for 16-connection accel]")
+    }
+    if ytdlp_ok {
+        if ffmpeg_ok {
+            promote("verdict: READY — operon runtime + PATH engines")
+            exit(0)
+        }
+    }
+    promote("verdict: NOT READY — missing required engine(s)")
+    exit(1)
+}
+
+# differential pin: byte-identical decision matrix across implementations
+gene cmd_selfcheck(rest) {
+    let pos = ar.args_positional(rest)
+    if len(pos) == 0 {
+        promote("error: selfcheck needs a fixture .json path")
+        exit(2)
+    }
+    let meta = json_parse(read_file(pos[0]))
+    for q in ["best", "2160", "1440", "1080", "720", "480", "360", "240", "144"] {
+        let o = {quality: q, audio: "", fmt: "", out: "OUT", template: "TPL", playlist: false,
+                 subs: false, sub_langs: "en", jobs: 1, aria2: false, aria2_ok: false,
+                 max_attempts: 2, url: "U"}
+        let sel = " ".join(selection_args(o))
+        promote("q={q} a=- :: {sel}")
+    }
+    for kind in ["mp3", "m4a", "opus", "flac", "wav"] {
+        let o = {quality: "best", audio: kind, fmt: "", out: "OUT", template: "TPL", playlist: false,
+                 subs: false, sub_langs: "en", jobs: 1, aria2: false, aria2_ok: false,
+                 max_attempts: 2, url: "U"}
+        let sel = " ".join(selection_args(o))
+        promote("q=- a={kind} :: {sel}")
+    }
+    let fs = sorted(meta.formats, fmt_before)
+    let ids = []
+    for f in fs {
+        ids.push(mget(f, "format_id"))
+    }
+    let ids_s = ",".join(ids)
+    promote("sort-check: {ids_s}")
+    let h = info_lines(meta)
+    promote("hdr-check: {h[0]}")
+    promote("hdr-check: {h[1]}")
+    exit(0)
+}
+
+gene usage() {
+    promote("ytdl — YouTube downloader, Operon lightweight edition (~2.5 MB runtime)")
+    promote("")
+    promote("usage:")
+    promote("  ytdl doctor                     probe PATH engines")
+    promote("  ytdl info URL                   list formats")
+    promote("  ytdl get URL [options]          download one video")
+    promote("  ytdl queue FILE [options]       download a list, N concurrent workers")
+    promote("options:")
+    promote("  --out DIR          destination directory (default downloads)")
+    promote("  --quality N        max height: 2160 1440 1080 720 480 360 240 144 (default best)")
+    promote("  --format EXPR      raw yt-dlp format selector (wins over --quality)")
+    promote("  --audio KIND       audio-only: mp3 m4a opus flac wav")
+    promote("  --subs             write + convert subtitles to srt")
+    promote("  --sub-langs LANGS  subtitle languages (default en)")
+    promote("  --template T       filename template (yt-dlp -o)")
+    promote("  --jobs N           queue workers (default 2)")
+    promote("  --no-aria2         disable aria2c acceleration")
+    promote("  --playlist         allow playlists (default off)")
+    promote("  --max-attempts N   checkpoint-resume rounds (default 4)")
+    promote("bench (cross-language deep benchmark, docs/BENCHMARK-DEEP.md):")
+    promote("  bench-startup | bench-json F --n N | bench-table F --rounds R")
+    promote("  bench-lines --k K | bench-spawn --n N | bench-queue --k K --c C")
+    promote("engines: yt-dlp + ffmpeg from PATH (aria2c optional). Grants are")
+    promote("default-deny: the launcher allows exactly yt-dlp/ffmpeg/aria2c and")
+    promote("the output directory — nothing else.")
+}
+
+gene get_opts(rest) {
+    let pos = ar.args_positional(rest)
+    let o = {}
+    if len(pos) > 0 {
+        o["url"] = pos[0]
+    } else {
+        o["url"] = ""
+    }
+    o["out"] = ar.args_value(rest, "out", "downloads")
+    o["quality"] = ar.args_value(rest, "quality", "best")
+    o["audio"] = ar.args_value(rest, "audio", "")
+    o["fmt"] = ar.args_value(rest, "format", "")
+    o["subs"] = ar.args_has(rest, "subs")
+    o["sub_langs"] = ar.args_value(rest, "sub-langs", "en")
+    o["jobs"] = floor(ar.args_number(rest, "jobs", 2) + 0.0)
+    o["aria2"] = !ar.args_flag(rest, "no-aria2")
+    o["playlist"] = ar.args_flag(rest, "playlist")
+    o["template"] = ar.args_value(rest, "template", "%(title)s [%(id)s].%(ext)s")
+    o["max_attempts"] = floor(ar.args_number(rest, "max-attempts", 4) + 0.0)
+    o["aria2_ok"] = tool_line("aria2c", "--version") != ""
+    if o.audio != "" {
+        if !audio_ok(o.audio) {
+            promote("error: --audio must be one of mp3 m4a opus flac wav (got {o.audio})")
+            exit(2)
+        }
+    }
+    if o.quality != "best" {
+        if !known_tier(o.quality) {
+            promote("error: --quality must be a height tier (got {o.quality}); use --format for raw selectors")
+            exit(2)
+        }
+    }
+    return o
+}
+
+gene main() {
+    let a = argv()
+    if len(a) == 0 {
+        usage()
+        exit(2)
+    }
+    let sub = a[0]
+    let rest = a.slice(1)
+    if one_of(sub, ["help", "--help", "-h"]) {
+        usage()
+        exit(0)
+    }
+    if sub == "doctor" {
+        cmd_doctor()
+    }
+    if sub == "info" {
+        cmd_info(rest)
+    }
+    if sub == "get" {
+        cmd_get(rest)
+    }
+    if sub == "queue" {
+        cmd_queue(rest)
+    }
+    if sub == "selfcheck" {
+        cmd_selfcheck(rest)
+    }
+    if sub == "bench-startup" {
+        cmd_bench_startup()
+    }
+    if sub == "bench-json" {
+        cmd_bench_json(rest)
+    }
+    if sub == "bench-table" {
+        cmd_bench_table(rest)
+    }
+    if sub == "bench-lines" {
+        cmd_bench_lines(rest)
+    }
+    if sub == "bench-spawn" {
+        cmd_bench_spawn(rest)
+    }
+    if sub == "bench-queue" {
+        cmd_bench_queue(rest)
+    }
+    promote("error: unknown subcommand {sub}")
+    usage()
+    exit(2)
+}
+

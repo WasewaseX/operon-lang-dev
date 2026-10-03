@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=205 tag=c205
+
+print("c205-c0:", -764 == -7951)
+
+print("c205-c1:", 7611 > -620)
+
+print("c205-c2:", -3091 == 9297)
+
+print("c205-c3:", -8492 >= 6834)
+
+print("c205-c4:", 9357 == -8596)
+
+print("c205-b0:", 15 < 6 && 6 < 7, 15 > 6 || 15 > 7)
+
+print("c205-b1:", 6 < 26 && 26 < 4, 6 > 26 || 6 > 4)
+
+print("c205-b2:", 29 < 18 && 18 < 6, 29 > 18 || 29 > 6)
+
+print("c205-t0:", -752 > -8963 ? "gt" : "le")
+
+print("c205-t1:", -3371 > 8161 ? "gt" : "le")
+
+print("c205-t2:", -2350 > 8211 ? "gt" : "le")
+
+print("c205-t3:", -9956 > 4498 ? "gt" : "le")
+
+let c205_n0 = null
+
+print("c205-n0:", c205_n0 ?? -8512, c205_n0 == null)
+
+let c205_n1 = null
+
+print("c205-n1:", c205_n1 ?? -6712, c205_n1 == null)
+
+let c205_n2 = null
+
+print("c205-n2:", c205_n2 ?? -6379, c205_n2 == null)
+
+print("c205-s0:", "oano" in "lC3gd1oano", "oano" == "oano")
+
+print("c205-s1:", "__a8" in "a0qnwp__a8", "__a8" == "__a8")

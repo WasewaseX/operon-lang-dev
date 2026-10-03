@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=5 tag=s005
+
+print("s005-m0:", "Ate45n0mC8pag".upper(), "Ate45n0mC8pag".slice(2), "Ate45n0mC8pag".len())
+
+print("s005-m1:", "6noAv1fy_9".upper(), "6noAv1fy_9".slice(4), "6noAv1fy_9".len())
+
+print("s005-m2:", "wmryxho".upper(), "wmryxho".slice(3), "wmryxho".len())
+
+print("s005-m3:", "uwvA7xm7".upper(), "uwvA7xm7".slice(2), "uwvA7xm7".len())
+
+print("s005-i0:", "3Al-{68}-z_A5")
+
+let s005_v0 = 68
+
+print("s005-v0:", "n={s005_v0}" + "!" * 3)
+
+print("s005-i1:", "rsA-{3}-9zjo")
+
+let s005_v1 = 3
+
+print("s005-v1:", "n={s005_v1}" + "!" * 3)
+
+print("s005-i2:", "7m_-{29}-jqfn")
+
+let s005_v2 = 29
+
+print("s005-v2:", "n={s005_v2}" + "!" * 1)
+
+print("s005-r0:", "1toCcpxu".replace("1", "Au"), "1toCcpxu".contains("to"))
+
+print("s005-r1:", "4afcnj7C".replace("4", "gm"), "4afcnj7C".contains("af"))
+
+print("s005-r2:", "BwAAqcfx".replace("B", "2C"), "BwAAqcfx".contains("wA"))
+
+print("s005-r3:", "jvjzAAqC".replace("j", "0x"), "jvjzAAqC".contains("vj"))
+
+print("s005-j0:", ["1fh", "4mr", "hox", "6vB"].join("-"))
+
+print("s005-j1:", ["i_7", "v7b", "4jh", "fo8", "moi"].join("-"))
+
+print("s005-j2:", ["3sg", "_92", "C1y", "8_1", "rmy"].join("-"))
+
+print("s005-a0:", "72l1grt".at(0), "72l1grt".trim() == "72l1grt")
+
+print("s005-a1:", "lCCocvy".at(5), "lCCocvy".trim() == "lCCocvy")

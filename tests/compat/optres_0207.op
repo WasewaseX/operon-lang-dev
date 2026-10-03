@@ -1,0 +1,144 @@
+# compat corpus — generated, do not edit by hand
+# bucket=optres seed=20261030 idx=207 tag=o207
+
+gene o207_f0(n) {
+
+    if n > -9502 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o207_u0(n) {
+
+    let v = o207_f0(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o207-p0:", o207_u0(9420), o207_u0(-9488))
+
+gene o207_f1(n) {
+
+    if n > 4053 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o207_u1(n) {
+
+    let v = o207_f1(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o207-p1:", o207_u1(-3), o207_u1(4062))
+
+gene o207_f2(n) {
+
+    if n > -8647 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o207_u2(n) {
+
+    let v = o207_f2(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o207-p2:", o207_u2(-7671), o207_u2(-8629))
+
+gene o207_f3(n) {
+
+    if n > -2815 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o207_u3(n) {
+
+    let v = o207_f3(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o207-p3:", o207_u3(262), o207_u3(-2813))
+
+gene o207_f4(n) {
+
+    if n > 4626 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o207_u4(n) {
+
+    let v = o207_f4(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o207-p4:", o207_u4(218), o207_u4(4642))
+
+print("o207-o0:", is_ok(ok(6469)), is_none(none()), is_err(err("6469")), is_some(some(6469)))
+
+print("o207-u0:", unwrap_or(none(), 6469), unwrap_or(err("x"), 6468), unwrap_or(ok(6469), 0))
+
+print("o207-o1:", is_ok(ok(-7623)), is_none(none()), is_err(err("-7623")), is_some(some(-7623)))
+
+print("o207-u1:", unwrap_or(none(), -7623), unwrap_or(err("x"), -7624), unwrap_or(ok(-7623), 0))
+
+print("o207-o2:", is_ok(ok(-9132)), is_none(none()), is_err(err("-9132")), is_some(some(-9132)))
+
+print("o207-u2:", unwrap_or(none(), -9132), unwrap_or(err("x"), -9133), unwrap_or(ok(-9132), 0))
+
+print("o207-o3:", is_ok(ok(-6439)), is_none(none()), is_err(err("-6439")), is_some(some(-6439)))
+
+print("o207-u3:", unwrap_or(none(), -6439), unwrap_or(err("x"), -6440), unwrap_or(ok(-6439), 0))
+
+print("o207-e0:", ok(-8822) == ok(-8822), some(-8822) == ok(-8822), none() == none(), err(1) == err(2))
+
+print("o207-j0:", json_str(ok(-8822)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o207-e1:", ok(-2509) == ok(-2509), some(-2509) == ok(-2509), none() == none(), err(1) == err(2))
+
+print("o207-j1:", json_str(ok(-2509)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o207-n0:", some(some(31))?!?!, unwrap(ok(37)) + unwrap(some(6)))
+
+print("o207-s0:", "v=" + str(ok(31)?!), some("6k")?! + "!")
+
+print("o207-n1:", some(some(32))?!?!, unwrap(ok(107)) + unwrap(some(75)))
+
+print("o207-s1:", "v=" + str(ok(32)?!), some("75k")?! + "!")

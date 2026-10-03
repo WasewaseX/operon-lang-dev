@@ -1,0 +1,52 @@
+# W05 differential pin - const/frozen byte-parity.
+# Exercises every frozen message path in one deterministic program: the
+# harness requires byte-identical stdout on the Rust core and the oracle.
+gene main() {
+    const K = 5
+    const L = [1, 2]
+    const M = {"a": 1}
+    const deep = {"in": [1, {"x": 1}]}
+
+    # deterministic sequence of attempts; every stress is contained and the
+    # kind+message are printed so any wording drift diverges loudly
+    let attempts = [
+        "reassign", "push", "index_list", "pop", "insert", "remove",
+        "map_index", "map_member", "map_del", "map_method_del",
+        "deep_list", "deep_map", "alias", "free_ok"
+    ]
+    let i = 0
+    while i < len(attempts) {
+        let a = attempts[i]
+        stress {
+            if a == "reassign" { K = 6 } 
+            if a == "push" { push(L, 3) }
+            if a == "index_list" { L[0] = 9 }
+            if a == "pop" { pop(L) }
+            if a == "insert" { insert(L, 1, 7) }
+            if a == "remove" { remove(L, 0) }
+            if a == "map_index" { M["b"] = 2 }
+            if a == "map_member" { M.a = 5 }
+            if a == "map_del" { del(M, "a") }
+            if a == "map_method_del" { M.del("a") }
+            if a == "deep_list" { deep["in"][0] = 0 }
+            if a == "deep_map" { deep["in"][1]["x"] = 0 }
+            if a == "alias" {
+                let al = L
+                push(al, 4)
+            }
+            if a == "free_ok" {
+                let f = [1]
+                push(f, 2)
+                print("free_ok: " + display(f))
+            }
+            print(a + ": no-stress")
+        } rescue (s) {
+            print(a + ": [" + s.kind + "] " + s.message)
+        }
+        i = i + 1
+    }
+    print("L=" + display(L))
+    print("M=" + display(M))
+    print("deep=" + display(deep))
+    print("K=" + display(K))
+}

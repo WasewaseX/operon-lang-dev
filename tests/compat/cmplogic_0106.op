@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=106 tag=c106
+
+print("c106-c0:", -7193 > 7265)
+
+print("c106-c1:", 4416 < 3250)
+
+print("c106-c2:", 2778 == -197)
+
+print("c106-c3:", 3925 > -2021)
+
+print("c106-c4:", 9250 <= -5471)
+
+print("c106-c5:", -2868 <= 9577)
+
+print("c106-c6:", 4871 != 4125)
+
+print("c106-b0:", 19 < 41 && 41 < 1, 19 > 41 || 19 > 1)
+
+print("c106-b1:", 13 < 4 && 4 < 4, 13 > 4 || 13 > 4)
+
+print("c106-b2:", 31 < 11 && 11 < 26, 31 > 11 || 31 > 26)
+
+print("c106-t0:", -5085 > 2957 ? "gt" : "le")
+
+print("c106-t1:", 9345 > -7219 ? "gt" : "le")
+
+print("c106-t2:", 4247 > 7753 ? "gt" : "le")
+
+print("c106-t3:", -3822 > -9990 ? "gt" : "le")
+
+let c106_n0 = null
+
+print("c106-n0:", c106_n0 ?? 3754, c106_n0 == null)
+
+let c106_n1 = null
+
+print("c106-n1:", c106_n1 ?? 8661, c106_n1 == null)
+
+let c106_n2 = null
+
+print("c106-n2:", c106_n2 ?? -3444, c106_n2 == null)
+
+print("c106-s0:", "2jga" in "mxc_qg2jga", "2jga" == "2jga")
+
+print("c106-s1:", "gl6t" in "hmtw6ugl6t", "gl6t" == "gl6t")

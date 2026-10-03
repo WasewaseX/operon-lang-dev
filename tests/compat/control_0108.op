@@ -1,0 +1,144 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=108 tag=c108
+
+let c108_b0 = "start"
+
+if 72 > 80 { c108_b0 = "hi" } elif 72 > 40 { c108_b0 = "mid" } else { c108_b0 = "lo" }
+
+print("c108-i0:", c108_b0, 72)
+
+let c108_b1 = "start"
+
+if 6 > 80 { c108_b1 = "hi" } elif 6 > 40 { c108_b1 = "mid" } else { c108_b1 = "lo" }
+
+print("c108-i1:", c108_b1, 6)
+
+let c108_b2 = "start"
+
+if 98 > 80 { c108_b2 = "hi" } elif 98 > 40 { c108_b2 = "mid" } else { c108_b2 = "lo" }
+
+print("c108-i2:", c108_b2, 98)
+
+let c108_b3 = "start"
+
+if 109 > 80 { c108_b3 = "hi" } elif 109 > 40 { c108_b3 = "mid" } else { c108_b3 = "lo" }
+
+print("c108-i3:", c108_b3, 109)
+
+let c108_a0 = 0
+
+let c108_n0 = 0
+
+while c108_n0 < 14 {
+
+    c108_n0 += 4
+
+    if c108_n0 % 3 == 0 { continue }
+
+    if c108_n0 > 16 { break }
+
+    c108_a0 += c108_n0
+
+}
+
+print("c108-w0:", c108_a0, c108_n0)
+
+let c108_a1 = 0
+
+let c108_n1 = 0
+
+while c108_n1 < 15 {
+
+    c108_n1 += 4
+
+    if c108_n1 % 3 == 0 { continue }
+
+    if c108_n1 > 17 { break }
+
+    c108_a1 += c108_n1
+
+}
+
+print("c108-w1:", c108_a1, c108_n1)
+
+let c108_a2 = 0
+
+let c108_n2 = 0
+
+while c108_n2 < 12 {
+
+    c108_n2 += 1
+
+    if c108_n2 % 2 == 0 { continue }
+
+    if c108_n2 > 14 { break }
+
+    c108_a2 += c108_n2
+
+}
+
+print("c108-w2:", c108_a2, c108_n2)
+
+let c108_c0 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 3] {
+
+        c108_c0 += a * b
+
+    }
+
+}
+
+print("c108-l0:", c108_c0)
+
+let c108_c1 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 4] {
+
+        c108_c1 += a * b
+
+    }
+
+}
+
+print("c108-l1:", c108_c1)
+
+let c108_acc0 = ""
+
+loop {
+
+    c108_acc0 += "x"
+
+    if c108_acc0.len() >= 5 { break }
+
+}
+
+print("c108-o0:", c108_acc0)
+
+let c108_acc1 = ""
+
+loop {
+
+    c108_acc1 += "x"
+
+    if c108_acc1.len() >= 5 { break }
+
+}
+
+print("c108-o1:", c108_acc1)
+
+let c108_acc2 = ""
+
+loop {
+
+    c108_acc2 += "x"
+
+    if c108_acc2.len() >= 3 { break }
+
+}
+
+print("c108-o2:", c108_acc2)

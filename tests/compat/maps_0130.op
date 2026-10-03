@@ -1,0 +1,60 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=130 tag=m130
+
+let m130_m0 = {helix: 48, marker: -81, ligase: -79, cell: 78}
+
+print("m130-m0:", m130_m0["helix"], len(m130_m0), m130_m0.has("helix"))
+
+let m130_m1 = {vector: -24, cell: -23, enzyme: 29, codon: -81, ribose: 59}
+
+print("m130-m1:", m130_m1["vector"], len(m130_m1), m130_m1.has("vector"))
+
+let m130_m2 = {ribose: 46, codon: -99, enzyme: 60, splicer: 90, marker: -52}
+
+print("m130-m2:", m130_m2["ribose"], len(m130_m2), m130_m2.has("ribose"))
+
+let m130_m3 = {marker: 93, helix: -14, cell: 61, ribose: 24}
+
+print("m130-m3:", m130_m3["marker"], len(m130_m3), m130_m3.has("marker"))
+
+let m130_m4 = {codon: 58, splicer: -71, ligase: -18, gene: -92}
+
+print("m130-m4:", m130_m4["codon"], len(m130_m4), m130_m4.has("codon"))
+
+let m130_k0 = {splicer: 20, codon: 15, ribose: 30}
+
+let m130_ks0 = m130_k0.keys()
+
+let m130_sm0 = 0
+
+for k in m130_k0 { m130_sm0 += m130_k0[k] }
+
+print("m130-k0:", m130_sm0, m130_k0.keys().sort(), m130_k0.values().len())
+
+let m130_k1 = {ribose: 32, plasmid: 50, enzyme: 8}
+
+let m130_ks1 = m130_k1.keys()
+
+let m130_sm1 = 0
+
+for k in m130_k1 { m130_sm1 += m130_k1[k] }
+
+print("m130-k1:", m130_sm1, m130_k1.keys().sort(), m130_k1.values().len())
+
+let m130_k2 = {marker: 13, gene: 5, plasmid: 32}
+
+let m130_ks2 = m130_k2.keys()
+
+let m130_sm2 = 0
+
+for k in m130_k2 { m130_sm2 += m130_k2[k] }
+
+print("m130-k2:", m130_sm2, m130_k2.keys().sort(), m130_k2.values().len())
+
+let m130_w0 = {outer: {cell: 3, exon: 8, tag: "ok"}}}
+
+print("m130-w0:", m130_w0["outer"]["exon"], m130_w0["outer"]["tag"])
+
+let m130_w1 = {outer: {codon: 6, helix: 6, tag: "ok"}}}
+
+print("m130-w1:", m130_w1["outer"]["helix"], m130_w1["outer"]["tag"])

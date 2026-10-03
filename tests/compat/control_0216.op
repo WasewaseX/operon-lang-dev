@@ -1,0 +1,150 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=216 tag=c216
+
+let c216_b0 = "start"
+
+if 55 > 80 { c216_b0 = "hi" } elif 55 > 40 { c216_b0 = "mid" } else { c216_b0 = "lo" }
+
+print("c216-i0:", c216_b0, 55)
+
+let c216_b1 = "start"
+
+if -16 > 80 { c216_b1 = "hi" } elif -16 > 40 { c216_b1 = "mid" } else { c216_b1 = "lo" }
+
+print("c216-i1:", c216_b1, -16)
+
+let c216_b2 = "start"
+
+if 82 > 80 { c216_b2 = "hi" } elif 82 > 40 { c216_b2 = "mid" } else { c216_b2 = "lo" }
+
+print("c216-i2:", c216_b2, 82)
+
+let c216_b3 = "start"
+
+if 93 > 80 { c216_b3 = "hi" } elif 93 > 40 { c216_b3 = "mid" } else { c216_b3 = "lo" }
+
+print("c216-i3:", c216_b3, 93)
+
+let c216_b4 = "start"
+
+if -9 > 80 { c216_b4 = "hi" } elif -9 > 40 { c216_b4 = "mid" } else { c216_b4 = "lo" }
+
+print("c216-i4:", c216_b4, -9)
+
+let c216_a0 = 0
+
+let c216_n0 = 0
+
+while c216_n0 < 6 {
+
+    c216_n0 += 4
+
+    if c216_n0 % 3 == 0 { continue }
+
+    if c216_n0 > 13 { break }
+
+    c216_a0 += c216_n0
+
+}
+
+print("c216-w0:", c216_a0, c216_n0)
+
+let c216_a1 = 0
+
+let c216_n1 = 0
+
+while c216_n1 < 9 {
+
+    c216_n1 += 2
+
+    if c216_n1 % 3 == 0 { continue }
+
+    if c216_n1 > 18 { break }
+
+    c216_a1 += c216_n1
+
+}
+
+print("c216-w1:", c216_a1, c216_n1)
+
+let c216_a2 = 0
+
+let c216_n2 = 0
+
+while c216_n2 < 11 {
+
+    c216_n2 += 2
+
+    if c216_n2 % 2 == 0 { continue }
+
+    if c216_n2 > 19 { break }
+
+    c216_a2 += c216_n2
+
+}
+
+print("c216-w2:", c216_a2, c216_n2)
+
+let c216_c0 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 3] {
+
+        c216_c0 += a * b
+
+    }
+
+}
+
+print("c216-l0:", c216_c0)
+
+let c216_c1 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 4] {
+
+        c216_c1 += a * b
+
+    }
+
+}
+
+print("c216-l1:", c216_c1)
+
+let c216_acc0 = ""
+
+loop {
+
+    c216_acc0 += "x"
+
+    if c216_acc0.len() >= 5 { break }
+
+}
+
+print("c216-o0:", c216_acc0)
+
+let c216_acc1 = ""
+
+loop {
+
+    c216_acc1 += "x"
+
+    if c216_acc1.len() >= 4 { break }
+
+}
+
+print("c216-o1:", c216_acc1)
+
+let c216_acc2 = ""
+
+loop {
+
+    c216_acc2 += "x"
+
+    if c216_acc2.len() >= 4 { break }
+
+}
+
+print("c216-o2:", c216_acc2)

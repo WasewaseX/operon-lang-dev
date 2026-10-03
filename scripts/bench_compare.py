@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""bench_compare.py — Operon benchmark suite (B1, builder-B).
+"""bench_compare.py, Operon benchmark suite (B1, builder-B).
 
 Three runners on identical algorithms:
-  operon    — the Rust core (bin/operon run <fixture>)
-  oracle    — bootstrap/oracle.py, the CPython tree-walking semantic mirror
-  native-py — the same algorithm hand-written in pure CPython (the v3.0
+  operon   , the Rust core (bin/operon run <fixture>)
+  oracle   , bootstrap/oracle.py, the CPython tree-walking semantic mirror
+  native-py, the same algorithm hand-written in pure CPython (the v3.0
               "CPython-level speed" target bar)
 
 Modes:
-  default     — the six named workloads in scripts/bench/*.op
-  --micro     — per-construct micro fixtures in scripts/bench/micro/*.op
-  --json PATH — additionally write machine-readable results
-  --iters N   — timing iterations (default 5; oracle uses max(3, N//2))
-  --quick     — fewer iterations, smaller fixture list
+  default    , the six named workloads in scripts/bench/*.op
+  --micro    , per-construct micro fixtures in scripts/bench/micro/*.op
+  --json PATH, additionally write machine-readable results
+  --iters N  , timing iterations (default 5; oracle uses max(3, N//2))
+  --quick    , fewer iterations, smaller fixture list
 
 Honesty notes:
   * timings are end-to-end process times (interpreter startup included);
@@ -37,7 +37,7 @@ OPERON = os.path.join(ROOT, "bin", "operon")
 ORACLE = os.path.join(ROOT, "bootstrap", "oracle.py")
 
 # --------------------------------------------------------------------------
-# native CPython mirrors — identical algorithms, one Python statement at a
+# native CPython mirrors, identical algorithms, one Python statement at a
 # time. Keep these in lockstep with scripts/bench/*.op and micro/*.op.
 # --------------------------------------------------------------------------
 
@@ -83,7 +83,7 @@ def native_recursion():
 
 def native_grn():
     # mirror of grn.op: per-call gate check (level >= threshold, one gene
-    # enhanced by 0.25), then arithmetic body. Happy path — all calls pass.
+    # enhanced by 0.25), then arithmetic body. Happy path, all calls pass.
     level = {"driver": 0.0}
 
     def worker_a(n):
@@ -107,13 +107,96 @@ def native_grn():
         acc = acc + worker_a(i) + worker_b(i) + reporter(i)
     return acc
 
+# W083: real-program workloads. native_* mirrors are ALGORITHM parity
+# except where noted (modules = import machinery shape-compare).
+def native_json():
+    doc = {}
+    for i in range(120):
+        doc["row" + str(i)] = {
+            "id": i, "name": "item-" + str(i), "tags": ["a", "b", "c"],
+            "score": i * 1.5, "active": i % 2 == 0,
+        }
+    acc = 0
+    for i in range(200):
+        s = json.dumps(doc)
+        back = json.loads(s)
+        acc += back["row" + str(i % 120)]["id"]
+        acc += len(back["row" + str((i + 7) % 120)]["tags"])
+    return acc
+
+def native_regex():
+    import re as _re
+    pats = [r"a+b", r"[0-9]{2,4}-[a-z]+", r"x.*y", r"(ab|cd)+e", r"f[aoi]o"]
+    strs = ["aaab", "1234-abc", "xxxyyy", "abcde", "faoo", "aab", "99-x", "xabcy", "cde", "foi"]
+    hits = 0
+    for _ in range(600):
+        for p in pats:
+            for s in strs:
+                if _re.fullmatch(p, s):
+                    hits += 1
+                if _re.search(p, s):
+                    hits += 1
+    return hits
+
+def native_seq():
+    seed = 42
+    genome = []
+    alpha = "ACGT"
+    for _ in range(6000):
+        seed = (seed * 1103515245 + 12345) % 2147483648
+        genome.append(alpha[seed % 4])
+    g = "".join(genome)
+    gc = sum(1 for ch in g if ch in "GC")
+    kmers = sum(1 for i in range(len(g) - 3) if g[i:i + 3] == "ACG")
+    motifs = sum(1 for i in range(len(g) - 2) if g[i:i + 2] == "GT")
+    return gc + kmers + motifs
+
+def native_large_map():
+    m = {}
+    for i in range(6000):
+        m["key-" + str(i)] = i * 3
+    acc = 0
+    for i in range(6000):
+        acc += m["key-" + str(i)]
+    return acc
+
+def native_file_io():
+    payload = "0123456789abcdef" * 16
+    ok = 0
+    for i in range(300):
+        with open("/tmp/operon_bench_io_native.txt", "w") as f:
+            f.write(payload + str(i))
+        with open("/tmp/operon_bench_io_native.txt") as f:
+            back = f.read()
+        if len(back) == len(payload) + len(str(i)):
+            ok += 1
+    return ok
+
+def native_modules():
+    # shape-compare only: CPython's cached import machinery, six modules
+    for name in ("json", "math", "os", "re", "time", "types"):
+        if name in sys.modules:
+            del sys.modules[name]
+        __import__(name)
+    acc = 0
+    for i in range(20000):
+        acc += 6
+    return acc
+
 SUITES = [
-    ("fib25",        "scripts/bench/fib25.op",        native_fib,        242785),
-    ("loops",        "scripts/bench/loops.op",        native_loops,      200000),
-    ("strings",      "scripts/bench/strings.op",      native_strings,      4000),
-    ("collections",  "scripts/bench/collections.op",  native_collections, None),
-    ("recursion",    "scripts/bench/recursion.op",    native_recursion,  369511),
-    ("grn",          "scripts/bench/grn.op",          native_grn,         60000),
+    ("fib25",        "scripts/bench/fib25.op",        native_fib,        242785, None),
+    ("loops",        "scripts/bench/loops.op",        native_loops,      200000, None),
+    ("strings",      "scripts/bench/strings.op",      native_strings,      4000, None),
+    ("collections",  "scripts/bench/collections.op",  native_collections, None, None),
+    ("recursion",    "scripts/bench/recursion.op",    native_recursion,  369511, None),
+    ("grn",          "scripts/bench/grn.op",          native_grn,         60000, None),
+    # W083 real-program workloads
+    ("json",         "scripts/bench/json_roundtrip.op", native_json,      10900, None),
+    ("regex",        "scripts/bench/regex_corpus.op",   native_regex,    10800, None),
+    ("seq",          "scripts/bench/seq_motifs.op",     native_seq,       5998, None),
+    ("large_map",    "scripts/bench/large_map.op",      native_large_map, None, None),
+    ("file_io",      "scripts/bench/file_io.op",        native_file_io,    300, ("--allow-write", "/tmp", "--allow-read", "/tmp")),
+    ("modules",      "scripts/bench/modules.op",        native_modules,   None, None),
 ]
 
 # micro fixtures: (name, ops_per_iteration, native mirror)
@@ -204,11 +287,13 @@ def time_cmd(cmd, cwd, iters, warmup=1):
         ts.append(time.perf_counter() - t0)
     return min(ts), statistics.median(ts)
 
-def run_operon(path, iters):
-    return time_cmd([OPERON, "run", path], ROOT, iters)
+def run_operon(path, iters, extra=None):
+    cmd = [OPERON, "run", path] + list(extra or [])
+    return time_cmd(cmd, ROOT, iters)
 
-def run_oracle(path, iters):
-    return time_cmd([sys.executable, ORACLE, "run", path], ROOT, iters)
+def run_oracle(path, iters, extra=None):
+    cmd = [sys.executable, ORACLE, "run", path] + list(extra or [])
+    return time_cmd(cmd, ROOT, iters)
 
 def cpu_model():
     try:
@@ -243,14 +328,14 @@ def report_suites(results, iters):
            ("op/py", 8), ("op/oracle", 10), ("calls", 10)]
     print(fmt_row(hdr))
     print("  ".join("-" * w for _, w in hdr))
-    for name, _path, _nat, calls in SUITES:
+    for name, _path, _nat, calls, _extra in SUITES:
         r = results[name]
         op, orc, nat = r["operon"]["min"] * 1000, r["oracle"]["min"] * 1000, r["native"]["min"] * 1000
         cells = [(name, 12), (f"{op:.1f}", 10), (f"{orc:.1f}", 11), (f"{nat:.1f}", 11),
                  (f"{op/nat:.1f}x", 8), (f"{orc/op:.1f}x", 10),
                  (str(calls) if calls else "-", 10)]
         print(fmt_row(cells))
-    print("(times in ms, end-to-end incl. startup; op/py = operon vs native CPython — the v3.0 gap)")
+    print("(times in ms, end-to-end incl. startup; op/py = operon vs native CPython, the v3.0 gap)")
 
 def report_micros(results, iters):
     hdr = [("micro", 12), ("operon", 10), ("oracle", 11), ("native-py", 11),
@@ -281,13 +366,13 @@ def main():
     suites, micros = {}, {}
 
     if not args.micro:
-        for name, path, native, _calls in SUITES:
+        for name, path, native, _calls, extra in SUITES:
             full = os.path.join(ROOT, path)
             if not os.path.exists(full):
                 print(f"skip {name}: {path} missing", file=sys.stderr)
                 continue
-            omin, omed = run_operon(path, iters)
-            rmin, rmed = run_oracle(path, oiters)
+            omin, omed = run_operon(path, iters, extra)
+            rmin, rmed = run_oracle(path, oiters, extra)
             nmin, nmed = time_fn(native, iters)
             suites[name] = {
                 "operon": {"min": omin, "median": omed, "iters": iters},

@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=169 tag=s169
+
+print("s169-m0:", "3w79B8".upper(), "3w79B8".slice(2), "3w79B8".len())
+
+print("s169-m1:", "Btbgxbg".upper(), "Btbgxbg".slice(1), "Btbgxbg".len())
+
+print("s169-m2:", "nmlwpsxbbh".upper(), "nmlwpsxbbh".slice(2), "nmlwpsxbbh".len())
+
+print("s169-m3:", "2pkkBgq_jd8mz".upper(), "2pkkBgq_jd8mz".slice(3), "2pkkBgq_jd8mz".len())
+
+print("s169-m4:", "w48fhokog86".upper(), "w48fhokog86".slice(4), "w48fhokog86".len())
+
+print("s169-i0:", "v9v-{44}-4msi")
+
+let s169_v0 = 44
+
+print("s169-v0:", "n={s169_v0}" + "!" * 3)
+
+print("s169-i1:", "si8-{48}-4jkx")
+
+let s169_v1 = 48
+
+print("s169-v1:", "n={s169_v1}" + "!" * 2)
+
+print("s169-i2:", "6yd-{66}-yqsc")
+
+let s169_v2 = 66
+
+print("s169-v2:", "n={s169_v2}" + "!" * 1)
+
+print("s169-i3:", "hyl-{74}-fx2h")
+
+let s169_v3 = 74
+
+print("s169-v3:", "n={s169_v3}" + "!" * 1)
+
+print("s169-r0:", "kc7c1rAy".replace("k", "qn"), "kc7c1rAy".contains("c7"))
+
+print("s169-r1:", "o9bgw3By".replace("o", "fd"), "o9bgw3By".contains("9b"))
+
+print("s169-r2:", "lanlyrq8".replace("l", "s4"), "lanlyrq8".contains("an"))
+
+print("s169-r3:", "bob64n4d".replace("b", "bg"), "bob64n4d".contains("ob"))
+
+print("s169-j0:", ["3yq", "urc", "6ao"].join("-"))
+
+print("s169-j1:", ["B45", "nsy", "xvw", "f66", "qq3"].join("-"))
+
+print("s169-j2:", ["Avi", "9rm", "g2r", "mnm"].join("-"))
+
+print("s169-a0:", "ccahkel".at(3), "ccahkel".trim() == "ccahkel")
+
+print("s169-a1:", "h0nzol9".at(6), "h0nzol9".trim() == "h0nzol9")
+
+print("s169-a2:", "5rqvvu1".at(4), "5rqvvu1".trim() == "5rqvvu1")

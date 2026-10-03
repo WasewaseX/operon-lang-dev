@@ -1,0 +1,190 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=204 tag=m204
+
+gene m204_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m204-b0:", m204_b0({marker: 59, plasmid: 23, vector: 75})?!)
+
+gene m204_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m204-b1:", m204_b1({splicer: 85, ligase: 92, helix: 40})?!)
+
+gene m204_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m204_f0([49, 38, 12, 6, 16, 9, 11]) {
+
+    case Ok(list) {
+
+        print("m204-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m204-f0:", "e:", m)
+
+    }
+
+}
+
+gene m204_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m204_f1([56, 43, 10, 20, 46, 46, 45]) {
+
+    case Ok(list) {
+
+        print("m204-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m204-f1:", "e:", m)
+
+    }
+
+}
+
+let m204_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m204-cc0:", m204_cl0(18)(2), m204_cl0(2)(18))
+
+let m204_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m204-cc1:", m204_cl1(14)(9), m204_cl1(9)(14))
+
+let m204_data0 = some([some("ligase"), none(), some(9)])
+
+match m204_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m204-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m204-x0:", "shape-miss")
+
+    }
+
+}
+
+let m204_data1 = some([some("enzyme"), none(), some(7)])
+
+match m204_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m204-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m204-x1:", "shape-miss")
+
+    }
+
+}

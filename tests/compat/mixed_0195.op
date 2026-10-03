@@ -1,0 +1,230 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=195 tag=m195
+
+gene m195_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m195-b0:", m195_b0({marker: 64, enzyme: 13, vector: 38})?!)
+
+gene m195_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m195-b1:", m195_b1({codon: 82, helix: 84, exon: 54})?!)
+
+gene m195_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m195_f0([20, 38, 3, 47, 47, 49, 22]) {
+
+    case Ok(list) {
+
+        print("m195-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m195-f0:", "e:", m)
+
+    }
+
+}
+
+gene m195_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m195_f1([45, 50, 23, 51, 15]) {
+
+    case Ok(list) {
+
+        print("m195-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m195-f1:", "e:", m)
+
+    }
+
+}
+
+gene m195_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m195_f2([9, 53, 39, 1, 28, 30]) {
+
+    case Ok(list) {
+
+        print("m195-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m195-f2:", "e:", m)
+
+    }
+
+}
+
+let m195_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m195-cc0:", m195_cl0(20)(10), m195_cl0(10)(20))
+
+let m195_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m195-cc1:", m195_cl1(5)(4), m195_cl1(4)(5))
+
+let m195_data0 = some([some("enzyme"), none(), some(6)])
+
+match m195_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m195-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m195-x0:", "shape-miss")
+
+    }
+
+}
+
+let m195_data1 = some([some("cell"), none(), some(6)])
+
+match m195_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m195-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m195-x1:", "shape-miss")
+
+    }
+
+}

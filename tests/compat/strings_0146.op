@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=146 tag=s146
+
+print("s146-m0:", "yu86mBjk".upper(), "yu86mBjk".slice(2), "yu86mBjk".len())
+
+print("s146-m1:", "o78ql10_".upper(), "o78ql10_".slice(2), "o78ql10_".len())
+
+print("s146-m2:", "zfjdbnrrw3bmvz".upper(), "zfjdbnrrw3bmvz".slice(1), "zfjdbnrrw3bmvz".len())
+
+print("s146-m3:", "l04be01A7w_".upper(), "l04be01A7w_".slice(1), "l04be01A7w_".len())
+
+print("s146-m4:", "ccem1hg".upper(), "ccem1hg".slice(1), "ccem1hg".len())
+
+print("s146-i0:", "7oj-{78}-ggf5")
+
+let s146_v0 = 78
+
+print("s146-v0:", "n={s146_v0}" + "!" * 3)
+
+print("s146-i1:", "6m1-{73}-38mq")
+
+let s146_v1 = 73
+
+print("s146-v1:", "n={s146_v1}" + "!" * 2)
+
+print("s146-i2:", "444-{27}-p6ix")
+
+let s146_v2 = 27
+
+print("s146-v2:", "n={s146_v2}" + "!" * 2)
+
+print("s146-i3:", "mu6-{79}-c7s5")
+
+let s146_v3 = 79
+
+print("s146-v3:", "n={s146_v3}" + "!" * 3)
+
+print("s146-r0:", "_0_pdC65".replace("_", "Cq"), "_0_pdC65".contains("0_"))
+
+print("s146-r1:", "4pmBgp2v".replace("4", "Bf"), "4pmBgp2v".contains("pm"))
+
+print("s146-j0:", ["6cz", "gj9", "9lw"].join("-"))
+
+print("s146-j1:", ["u7u", "izx", "_ol", "ygm"].join("-"))
+
+print("s146-a0:", "42fBs9d".at(3), "42fBs9d".trim() == "42fBs9d")
+
+print("s146-a1:", "_cq6qgr".at(2), "_cq6qgr".trim() == "_cq6qgr")

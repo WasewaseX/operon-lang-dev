@@ -1,0 +1,152 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=232 tag=c232
+
+let c232_b0 = "start"
+
+if 80 > 80 { c232_b0 = "hi" } elif 80 > 40 { c232_b0 = "mid" } else { c232_b0 = "lo" }
+
+print("c232-i0:", c232_b0, 80)
+
+let c232_b1 = "start"
+
+if 100 > 80 { c232_b1 = "hi" } elif 100 > 40 { c232_b1 = "mid" } else { c232_b1 = "lo" }
+
+print("c232-i1:", c232_b1, 100)
+
+let c232_b2 = "start"
+
+if 38 > 80 { c232_b2 = "hi" } elif 38 > 40 { c232_b2 = "mid" } else { c232_b2 = "lo" }
+
+print("c232-i2:", c232_b2, 38)
+
+let c232_b3 = "start"
+
+if 81 > 80 { c232_b3 = "hi" } elif 81 > 40 { c232_b3 = "mid" } else { c232_b3 = "lo" }
+
+print("c232-i3:", c232_b3, 81)
+
+let c232_b4 = "start"
+
+if 88 > 80 { c232_b4 = "hi" } elif 88 > 40 { c232_b4 = "mid" } else { c232_b4 = "lo" }
+
+print("c232-i4:", c232_b4, 88)
+
+let c232_a0 = 0
+
+let c232_n0 = 0
+
+while c232_n0 < 17 {
+
+    c232_n0 += 4
+
+    if c232_n0 % 2 == 0 { continue }
+
+    if c232_n0 > 24 { break }
+
+    c232_a0 += c232_n0
+
+}
+
+print("c232-w0:", c232_a0, c232_n0)
+
+let c232_a1 = 0
+
+let c232_n1 = 0
+
+while c232_n1 < 7 {
+
+    c232_n1 += 2
+
+    if c232_n1 % 3 == 0 { continue }
+
+    if c232_n1 > 10 { break }
+
+    c232_a1 += c232_n1
+
+}
+
+print("c232-w1:", c232_a1, c232_n1)
+
+let c232_a2 = 0
+
+let c232_n2 = 0
+
+while c232_n2 < 18 {
+
+    c232_n2 += 1
+
+    if c232_n2 % 3 == 0 { continue }
+
+    if c232_n2 > 22 { break }
+
+    c232_a2 += c232_n2
+
+}
+
+print("c232-w2:", c232_a2, c232_n2)
+
+let c232_c0 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 4] {
+
+        c232_c0 += a * b
+
+    }
+
+}
+
+print("c232-l0:", c232_c0)
+
+let c232_c1 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 4] {
+
+        c232_c1 += a * b
+
+    }
+
+}
+
+print("c232-l1:", c232_c1)
+
+let c232_c2 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 2] {
+
+        c232_c2 += a * b
+
+    }
+
+}
+
+print("c232-l2:", c232_c2)
+
+let c232_acc0 = ""
+
+loop {
+
+    c232_acc0 += "x"
+
+    if c232_acc0.len() >= 6 { break }
+
+}
+
+print("c232-o0:", c232_acc0)
+
+let c232_acc1 = ""
+
+loop {
+
+    c232_acc1 += "x"
+
+    if c232_acc1.len() >= 5 { break }
+
+}
+
+print("c232-o1:", c232_acc1)

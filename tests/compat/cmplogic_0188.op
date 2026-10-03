@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=188 tag=c188
+
+print("c188-c0:", 4520 != 9513)
+
+print("c188-c1:", -1413 < 2348)
+
+print("c188-c2:", -1600 < -216)
+
+print("c188-c3:", 8851 <= 915)
+
+print("c188-c4:", 3136 <= -3030)
+
+print("c188-c5:", 9124 < 8860)
+
+print("c188-c6:", -8434 >= 7736)
+
+print("c188-b0:", 10 < 5 && 5 < 24, 10 > 5 || 10 > 24)
+
+print("c188-b1:", 43 < 46 && 46 < 16, 43 > 46 || 43 > 16)
+
+print("c188-b2:", 49 < 20 && 20 < 26, 49 > 20 || 49 > 26)
+
+print("c188-b3:", 38 < 25 && 25 < 34, 38 > 25 || 38 > 34)
+
+print("c188-t0:", -756 > -9135 ? "gt" : "le")
+
+print("c188-t1:", 6368 > -1599 ? "gt" : "le")
+
+let c188_n0 = null
+
+print("c188-n0:", c188_n0 ?? 5541, c188_n0 == null)
+
+let c188_n1 = null
+
+print("c188-n1:", c188_n1 ?? -3543, c188_n1 == null)
+
+let c188_n2 = null
+
+print("c188-n2:", c188_n2 ?? 3678, c188_n2 == null)
+
+print("c188-s0:", "j40h" in "_jom7cj40h", "j40h" == "j40h")
+
+print("c188-s1:", "74fB" in "a2df0074fB", "74fB" == "74fB")

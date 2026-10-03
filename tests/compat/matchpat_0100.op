@@ -1,0 +1,250 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=100 tag=m100
+
+let m100_s0 = some(4)
+
+match m100_s0 {
+
+    case Some(x) if x > 4 {
+
+        print("m100-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m100-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m100-m0:", "none")
+
+    }
+
+}
+
+let m100_s1 = some(7)
+
+match m100_s1 {
+
+    case Some(x) if x > 7 {
+
+        print("m100-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m100-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m100-m1:", "none")
+
+    }
+
+}
+
+let m100_s2 = some(1)
+
+match m100_s2 {
+
+    case Some(x) if x > 1 {
+
+        print("m100-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m100-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m100-m2:", "none")
+
+    }
+
+}
+
+let m100_ls0 = [40, 25, 29]
+
+match m100_ls0 {
+
+    case [40, *rest] {
+
+        print("m100-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m100-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m100-l0:", "other")
+
+    }
+
+}
+
+let m100_ls1 = [31, 33, 46]
+
+match m100_ls1 {
+
+    case [31, *rest] {
+
+        print("m100-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m100-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m100-l1:", "other")
+
+    }
+
+}
+
+let m100_ls2 = [17, 27, 32]
+
+match m100_ls2 {
+
+    case [17, *rest] {
+
+        print("m100-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m100-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m100-l2:", "other")
+
+    }
+
+}
+
+let m100_mp0 = {marker: 3509, splicer: -6653}
+
+match m100_mp0 {
+
+    case {marker: p, splicer: q} {
+
+        print("m100-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m100-mp0:", "miss")
+
+    }
+
+}
+
+let m100_mp1 = {enzyme: -9965, plasmid: 633}
+
+match m100_mp1 {
+
+    case {enzyme: p, plasmid: q} {
+
+        print("m100-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m100-mp1:", "miss")
+
+    }
+
+}
+
+let m100_r0 = ok(4)
+
+match m100_r0 {
+
+    case Ok(n) | Err(4) {
+
+        print("m100-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m100-r0:", "zero")
+
+    }
+
+}
+
+let m100_r1 = ok(2)
+
+match m100_r1 {
+
+    case Ok(n) | Err(2) {
+
+        print("m100-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m100-r1:", "zero")
+
+    }
+
+}
+
+match "splicer" {
+
+    case "splicer" {
+
+        print("m100-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m100-w0:", "alt")
+
+    }
+
+}
+
+match "vector" {
+
+    case "vector" {
+
+        print("m100-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m100-w1:", "alt")
+
+    }
+
+}

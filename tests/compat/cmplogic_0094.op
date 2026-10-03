@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=94 tag=c094
+
+print("c094-c0:", 5106 < -6902)
+
+print("c094-c1:", 8208 <= -7064)
+
+print("c094-c2:", 8850 < 9173)
+
+print("c094-c3:", 3993 != -1639)
+
+print("c094-c4:", -4403 <= -5255)
+
+print("c094-c5:", -2583 >= -449)
+
+print("c094-c6:", 2085 != 3457)
+
+print("c094-b0:", 27 < 41 && 41 < 44, 27 > 41 || 27 > 44)
+
+print("c094-b1:", 32 < 15 && 15 < 28, 32 > 15 || 32 > 28)
+
+print("c094-t0:", 2959 > -8884 ? "gt" : "le")
+
+print("c094-t1:", 6672 > -9835 ? "gt" : "le")
+
+print("c094-t2:", 9980 > -6896 ? "gt" : "le")
+
+let c094_n0 = null
+
+print("c094-n0:", c094_n0 ?? -351, c094_n0 == null)
+
+let c094_n1 = null
+
+print("c094-n1:", c094_n1 ?? 9763, c094_n1 == null)
+
+let c094_n2 = null
+
+print("c094-n2:", c094_n2 ?? 5731, c094_n2 == null)
+
+print("c094-s0:", "9uag" in "q2f01A9uag", "9uag" == "9uag")
+
+print("c094-s1:", "67yt" in "0e5nlh67yt", "67yt" == "67yt")

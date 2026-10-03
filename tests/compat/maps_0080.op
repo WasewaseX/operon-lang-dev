@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20260930 idx=80 tag=m080
+
+let m080_m0 = {enzyme: -85, ligase: 29, plasmid: -45, gene: 44}
+
+print("m080-m0:", m080_m0["enzyme"], len(m080_m0), m080_m0.has("enzyme"))
+
+let m080_m1 = {plasmid: -14, vector: -97, marker: 85}
+
+print("m080-m1:", m080_m1["plasmid"], len(m080_m1), m080_m1.has("plasmid"))
+
+let m080_m2 = {helix: 76, plasmid: -14, marker: 73, codon: -17}
+
+print("m080-m2:", m080_m2["helix"], len(m080_m2), m080_m2.has("helix"))
+
+let m080_k0 = {exon: 31, gene: 40, splicer: 6}
+
+let m080_ks0 = m080_k0.keys()
+
+let m080_sm0 = 0
+
+for k in m080_k0 { m080_sm0 += m080_k0[k] }
+
+print("m080-k0:", m080_sm0, m080_k0.keys().sort(), m080_k0.values().len())
+
+let m080_k1 = {codon: 3, vector: 11, helix: 7}
+
+let m080_ks1 = m080_k1.keys()
+
+let m080_sm1 = 0
+
+for k in m080_k1 { m080_sm1 += m080_k1[k] }
+
+print("m080-k1:", m080_sm1, m080_k1.keys().sort(), m080_k1.values().len())
+
+let m080_w0 = {outer: {ribose: 9, codon: 2, tag: "ok"}}}
+
+print("m080-w0:", m080_w0["outer"]["codon"], m080_w0["outer"]["tag"])
+
+let m080_w1 = {outer: {marker: 4, cell: 5, tag: "ok"}}}
+
+print("m080-w1:", m080_w1["outer"]["cell"], m080_w1["outer"]["tag"])

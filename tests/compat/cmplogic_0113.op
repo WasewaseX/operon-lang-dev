@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=113 tag=c113
+
+print("c113-c0:", 6103 == 7221)
+
+print("c113-c1:", -7365 > -319)
+
+print("c113-c2:", -9345 >= -4485)
+
+print("c113-c3:", -6656 != -9614)
+
+print("c113-c4:", -6649 <= 383)
+
+print("c113-c5:", -1509 == 686)
+
+print("c113-c6:", -6604 < -8290)
+
+print("c113-b0:", 40 < 6 && 6 < 30, 40 > 6 || 40 > 30)
+
+print("c113-b1:", 6 < 41 && 41 < 8, 6 > 41 || 6 > 8)
+
+print("c113-b2:", 38 < 28 && 28 < 7, 38 > 28 || 38 > 7)
+
+print("c113-b3:", 11 < 16 && 16 < 9, 11 > 16 || 11 > 9)
+
+print("c113-t0:", -5132 > -1513 ? "gt" : "le")
+
+print("c113-t1:", 6702 > 7652 ? "gt" : "le")
+
+print("c113-t2:", -2999 > 5565 ? "gt" : "le")
+
+print("c113-t3:", 4199 > -7169 ? "gt" : "le")
+
+let c113_n0 = null
+
+print("c113-n0:", c113_n0 ?? -5317, c113_n0 == null)
+
+let c113_n1 = null
+
+print("c113-n1:", c113_n1 ?? 4078, c113_n1 == null)
+
+print("c113-s0:", "7sCf" in "gwasz57sCf", "7sCf" == "7sCf")
+
+print("c113-s1:", "2zn6" in "qg4swk2zn6", "2zn6" == "2zn6")

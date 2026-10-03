@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=107 tag=c107
+
+print("c107-c0:", -3123 < -3976)
+
+print("c107-c1:", 9436 < 8701)
+
+print("c107-c2:", -3581 >= -7317)
+
+print("c107-c3:", -4837 > -3775)
+
+print("c107-c4:", -5577 == -7471)
+
+print("c107-c5:", -9624 < 6930)
+
+print("c107-c6:", -3410 >= 7428)
+
+print("c107-b0:", 41 < 21 && 21 < 39, 41 > 21 || 41 > 39)
+
+print("c107-b1:", 10 < 7 && 7 < 14, 10 > 7 || 10 > 14)
+
+print("c107-b2:", 29 < 19 && 19 < 30, 29 > 19 || 29 > 30)
+
+print("c107-t0:", -8658 > 6833 ? "gt" : "le")
+
+print("c107-t1:", 4044 > 2296 ? "gt" : "le")
+
+print("c107-t2:", -1009 > 2713 ? "gt" : "le")
+
+print("c107-t3:", -9722 > 4660 ? "gt" : "le")
+
+let c107_n0 = null
+
+print("c107-n0:", c107_n0 ?? -7384, c107_n0 == null)
+
+let c107_n1 = null
+
+print("c107-n1:", c107_n1 ?? 3576, c107_n1 == null)
+
+let c107_n2 = null
+
+print("c107-n2:", c107_n2 ?? 935, c107_n2 == null)
+
+print("c107-s0:", "tx1h" in "jklw_utx1h", "tx1h" == "tx1h")
+
+print("c107-s1:", "0633" in "xzzjba0633", "0633" == "0633")

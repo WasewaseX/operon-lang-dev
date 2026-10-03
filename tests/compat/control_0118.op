@@ -1,0 +1,146 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=118 tag=c118
+
+let c118_b0 = "start"
+
+if 12 > 80 { c118_b0 = "hi" } elif 12 > 40 { c118_b0 = "mid" } else { c118_b0 = "lo" }
+
+print("c118-i0:", c118_b0, 12)
+
+let c118_b1 = "start"
+
+if -10 > 80 { c118_b1 = "hi" } elif -10 > 40 { c118_b1 = "mid" } else { c118_b1 = "lo" }
+
+print("c118-i1:", c118_b1, -10)
+
+let c118_b2 = "start"
+
+if 116 > 80 { c118_b2 = "hi" } elif 116 > 40 { c118_b2 = "mid" } else { c118_b2 = "lo" }
+
+print("c118-i2:", c118_b2, 116)
+
+let c118_b3 = "start"
+
+if 81 > 80 { c118_b3 = "hi" } elif 81 > 40 { c118_b3 = "mid" } else { c118_b3 = "lo" }
+
+print("c118-i3:", c118_b3, 81)
+
+let c118_a0 = 0
+
+let c118_n0 = 0
+
+while c118_n0 < 20 {
+
+    c118_n0 += 4
+
+    if c118_n0 % 2 == 0 { continue }
+
+    if c118_n0 > 28 { break }
+
+    c118_a0 += c118_n0
+
+}
+
+print("c118-w0:", c118_a0, c118_n0)
+
+let c118_a1 = 0
+
+let c118_n1 = 0
+
+while c118_n1 < 19 {
+
+    c118_n1 += 1
+
+    if c118_n1 % 3 == 0 { continue }
+
+    if c118_n1 > 24 { break }
+
+    c118_a1 += c118_n1
+
+}
+
+print("c118-w1:", c118_a1, c118_n1)
+
+let c118_a2 = 0
+
+let c118_n2 = 0
+
+while c118_n2 < 13 {
+
+    c118_n2 += 2
+
+    if c118_n2 % 3 == 0 { continue }
+
+    if c118_n2 > 15 { break }
+
+    c118_a2 += c118_n2
+
+}
+
+print("c118-w2:", c118_a2, c118_n2)
+
+let c118_c0 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 3] {
+
+        c118_c0 += a * b
+
+    }
+
+}
+
+print("c118-l0:", c118_c0)
+
+let c118_c1 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 4] {
+
+        c118_c1 += a * b
+
+    }
+
+}
+
+print("c118-l1:", c118_c1)
+
+let c118_c2 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 3] {
+
+        c118_c2 += a * b
+
+    }
+
+}
+
+print("c118-l2:", c118_c2)
+
+let c118_acc0 = ""
+
+loop {
+
+    c118_acc0 += "x"
+
+    if c118_acc0.len() >= 7 { break }
+
+}
+
+print("c118-o0:", c118_acc0)
+
+let c118_acc1 = ""
+
+loop {
+
+    c118_acc1 += "x"
+
+    if c118_acc1.len() >= 4 { break }
+
+}
+
+print("c118-o1:", c118_acc1)

@@ -1,0 +1,194 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=230 tag=f230
+
+gene f230_g0(p, q = 57, r = 6) {
+
+    return p * 88 + q - r
+
+}
+
+print("f230-d0:", f230_g0(-23), f230_g0(-23, 14), f230_g0(-23, 57, 6))
+
+gene f230_g1(p, q = 17, r = 40) {
+
+    return p * 84 + q - r
+
+}
+
+print("f230-d1:", f230_g1(-50), f230_g1(-50, 44), f230_g1(-50, 17, 40))
+
+gene f230_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f230_fib0(n - 1) + f230_fib0(n - 2)
+
+}
+
+print("f230-fib0:", f230_fib0(13))
+
+gene f230_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f230_fib1(n - 1) + f230_fib1(n - 2)
+
+}
+
+print("f230-fib1:", f230_fib1(13))
+
+gene f230_fib2(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f230_fib2(n - 1) + f230_fib2(n - 2)
+
+}
+
+print("f230-fib2:", f230_fib2(13))
+
+gene f230_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f230_gcd0(b, a % b)
+
+}
+
+print("f230-gcd0:", f230_gcd0(780, 758))
+
+gene f230_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f230_gcd1(b, a % b)
+
+}
+
+print("f230-gcd1:", f230_gcd1(419, 368))
+
+gene f230_gcd2(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f230_gcd2(b, a % b)
+
+}
+
+print("f230-gcd2:", f230_gcd2(525, 748))
+
+gene f230_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f230_c0 = f230_mk0(14)
+
+f230_c0(7)
+
+print("f230-cl0:", f230_c0(6))
+
+gene f230_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f230_c1 = f230_mk1(32)
+
+f230_c1(5)
+
+print("f230-cl1:", f230_c1(4))
+
+gene f230_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f230-hof0:", f230_tw0(gene (z) => z * 2 + 1, 7))
+
+gene f230_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f230-hof1:", f230_tw1(gene (z) => z * 2 + 1, 23))
+
+gene f230_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f230-dg0:", f230_sd0(701063))
+
+gene f230_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f230-dg1:", f230_sd1(75776))

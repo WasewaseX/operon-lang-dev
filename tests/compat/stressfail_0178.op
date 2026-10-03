@@ -1,0 +1,258 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=178 tag=s178
+
+stress {
+
+    print("s178-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s178-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s178-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s178-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s178-mz:", 5 % 0)
+
+} rescue (e) {
+
+    print("s178-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s178-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s178-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s178-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s178-of2:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s178-m1:", 9223372036854775807 % -1)
+
+} rescue (e) {
+
+    print("s178-m1:", "caught", e.kind, e.message)
+
+}
+
+gene s178_r0() {
+
+    raise "s178-6m6g0B"
+
+}
+
+stress {
+
+    s178_r0()
+
+    print("s178-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s178-r0:", e.kind, e.message)
+
+}
+
+gene s178_r1() {
+
+    raise "s178-tnhq85"
+
+}
+
+stress {
+
+    s178_r1()
+
+    print("s178-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s178-r1:", e.kind, e.message)
+
+}
+
+gene s178_r2() {
+
+    raise "s178-hon9c1"
+
+}
+
+stress {
+
+    s178_r2()
+
+    print("s178-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s178-r2:", e.kind, e.message)
+
+}
+
+gene s178_r3() {
+
+    raise "s178-m3gt3y"
+
+}
+
+stress {
+
+    s178_r3()
+
+    print("s178-r3:", "unreachable")
+
+} rescue (e) {
+
+    print("s178-r3:", e.kind, e.message)
+
+}
+
+let s178_xs0 = [50, 36, 9, 30]
+
+stress {
+
+    print("s178-x0:", s178_xs0[5])
+
+} rescue (e) {
+
+    print("s178-x0:", "caught", e.kind)
+
+}
+
+let s178_xs1 = [40, 35, 36]
+
+stress {
+
+    print("s178-x1:", s178_xs1[5])
+
+} rescue (e) {
+
+    print("s178-x1:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s178-0"
+
+    } rescue (e) {
+
+        print("s178-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s178-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s178-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s178-d0-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s178-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s178-1"
+
+    } rescue (e) {
+
+        print("s178-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s178-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s178-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s178-d1-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s178-d1-top:", outer.message)
+
+}

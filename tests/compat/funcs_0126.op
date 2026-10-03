@@ -1,0 +1,188 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=126 tag=f126
+
+gene f126_g0(p, q = 26, r = 15) {
+
+    return p * 49 + q - r
+
+}
+
+print("f126-d0:", f126_g0(38), f126_g0(38, 61), f126_g0(38, 26, 15))
+
+gene f126_g1(p, q = 53, r = 2) {
+
+    return p * 2 + q - r
+
+}
+
+print("f126-d1:", f126_g1(26), f126_g1(26, 35), f126_g1(26, 53, 2))
+
+gene f126_g2(p, q = 72, r = 40) {
+
+    return p * 34 + q - r
+
+}
+
+print("f126-d2:", f126_g2(44), f126_g2(44, 81), f126_g2(44, 72, 40))
+
+gene f126_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f126_fib0(n - 1) + f126_fib0(n - 2)
+
+}
+
+print("f126-fib0:", f126_fib0(9))
+
+gene f126_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f126_fib1(n - 1) + f126_fib1(n - 2)
+
+}
+
+print("f126-fib1:", f126_fib1(7))
+
+gene f126_fib2(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f126_fib2(n - 1) + f126_fib2(n - 2)
+
+}
+
+print("f126-fib2:", f126_fib2(7))
+
+gene f126_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f126_gcd0(b, a % b)
+
+}
+
+print("f126-gcd0:", f126_gcd0(705, 633))
+
+gene f126_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f126_gcd1(b, a % b)
+
+}
+
+print("f126-gcd1:", f126_gcd1(23, 552))
+
+gene f126_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f126_c0 = f126_mk0(24)
+
+f126_c0(7)
+
+print("f126-cl0:", f126_c0(6))
+
+gene f126_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f126_c1 = f126_mk1(34)
+
+f126_c1(9)
+
+print("f126-cl1:", f126_c1(7))
+
+gene f126_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f126-hof0:", f126_tw0(gene (z) => z * 2 + 1, 7))
+
+gene f126_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f126-hof1:", f126_tw1(gene (z) => z * 2 + 1, 6))
+
+gene f126_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f126-dg0:", f126_sd0(657993))
+
+gene f126_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f126-dg1:", f126_sd1(244410))

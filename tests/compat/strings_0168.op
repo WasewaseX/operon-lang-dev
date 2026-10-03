@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=168 tag=s168
+
+print("s168-m0:", "qum3ABC9e1yt".upper(), "qum3ABC9e1yt".slice(3), "qum3ABC9e1yt".len())
+
+print("s168-m1:", "26pdr459omew_w".upper(), "26pdr459omew_w".slice(2), "26pdr459omew_w".len())
+
+print("s168-m2:", "e4kz7k5vj3_f".upper(), "e4kz7k5vj3_f".slice(1), "e4kz7k5vj3_f".len())
+
+print("s168-m3:", "C4gB3w6".upper(), "C4gB3w6".slice(1), "C4gB3w6".len())
+
+print("s168-i0:", "hhv-{95}-wrid")
+
+let s168_v0 = 95
+
+print("s168-v0:", "n={s168_v0}" + "!" * 1)
+
+print("s168-i1:", "680-{50}-w8uh")
+
+let s168_v1 = 50
+
+print("s168-v1:", "n={s168_v1}" + "!" * 2)
+
+print("s168-i2:", "ign-{35}-ety2")
+
+let s168_v2 = 35
+
+print("s168-v2:", "n={s168_v2}" + "!" * 1)
+
+print("s168-i3:", "d7r-{20}-brli")
+
+let s168_v3 = 20
+
+print("s168-v3:", "n={s168_v3}" + "!" * 2)
+
+print("s168-r0:", "b8zvv86A".replace("b", "5b"), "b8zvv86A".contains("8z"))
+
+print("s168-r1:", "btAk6xy7".replace("b", "ui"), "btAk6xy7".contains("tA"))
+
+print("s168-j0:", ["qig", "xCb", "t3o", "Btk"].join("-"))
+
+print("s168-j1:", ["r0m", "6f_", "nrr", "ncq"].join("-"))
+
+print("s168-a0:", "jqcyiaq".at(6), "jqcyiaq".trim() == "jqcyiaq")
+
+print("s168-a1:", "9_nibeo".at(6), "9_nibeo".trim() == "9_nibeo")
+
+print("s168-a2:", "Blejpmy".at(4), "Blejpmy".trim() == "Blejpmy")

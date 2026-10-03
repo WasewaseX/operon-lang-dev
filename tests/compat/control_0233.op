@@ -1,0 +1,164 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=233 tag=c233
+
+let c233_b0 = "start"
+
+if 32 > 80 { c233_b0 = "hi" } elif 32 > 40 { c233_b0 = "mid" } else { c233_b0 = "lo" }
+
+print("c233-i0:", c233_b0, 32)
+
+let c233_b1 = "start"
+
+if 53 > 80 { c233_b1 = "hi" } elif 53 > 40 { c233_b1 = "mid" } else { c233_b1 = "lo" }
+
+print("c233-i1:", c233_b1, 53)
+
+let c233_b2 = "start"
+
+if 4 > 80 { c233_b2 = "hi" } elif 4 > 40 { c233_b2 = "mid" } else { c233_b2 = "lo" }
+
+print("c233-i2:", c233_b2, 4)
+
+let c233_b3 = "start"
+
+if 13 > 80 { c233_b3 = "hi" } elif 13 > 40 { c233_b3 = "mid" } else { c233_b3 = "lo" }
+
+print("c233-i3:", c233_b3, 13)
+
+let c233_a0 = 0
+
+let c233_n0 = 0
+
+while c233_n0 < 11 {
+
+    c233_n0 += 4
+
+    if c233_n0 % 3 == 0 { continue }
+
+    if c233_n0 > 16 { break }
+
+    c233_a0 += c233_n0
+
+}
+
+print("c233-w0:", c233_a0, c233_n0)
+
+let c233_a1 = 0
+
+let c233_n1 = 0
+
+while c233_n1 < 12 {
+
+    c233_n1 += 3
+
+    if c233_n1 % 3 == 0 { continue }
+
+    if c233_n1 > 17 { break }
+
+    c233_a1 += c233_n1
+
+}
+
+print("c233-w1:", c233_a1, c233_n1)
+
+let c233_a2 = 0
+
+let c233_n2 = 0
+
+while c233_n2 < 18 {
+
+    c233_n2 += 2
+
+    if c233_n2 % 2 == 0 { continue }
+
+    if c233_n2 > 23 { break }
+
+    c233_a2 += c233_n2
+
+}
+
+print("c233-w2:", c233_a2, c233_n2)
+
+let c233_a3 = 0
+
+let c233_n3 = 0
+
+while c233_n3 < 17 {
+
+    c233_n3 += 1
+
+    if c233_n3 % 2 == 0 { continue }
+
+    if c233_n3 > 20 { break }
+
+    c233_a3 += c233_n3
+
+}
+
+print("c233-w3:", c233_a3, c233_n3)
+
+let c233_c0 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 4] {
+
+        c233_c0 += a * b
+
+    }
+
+}
+
+print("c233-l0:", c233_c0)
+
+let c233_c1 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 3] {
+
+        c233_c1 += a * b
+
+    }
+
+}
+
+print("c233-l1:", c233_c1)
+
+let c233_c2 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 4] {
+
+        c233_c2 += a * b
+
+    }
+
+}
+
+print("c233-l2:", c233_c2)
+
+let c233_acc0 = ""
+
+loop {
+
+    c233_acc0 += "x"
+
+    if c233_acc0.len() >= 6 { break }
+
+}
+
+print("c233-o0:", c233_acc0)
+
+let c233_acc1 = ""
+
+loop {
+
+    c233_acc1 += "x"
+
+    if c233_acc1.len() >= 5 { break }
+
+}
+
+print("c233-o1:", c233_acc1)

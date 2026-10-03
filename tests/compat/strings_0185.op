@@ -1,0 +1,54 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=185 tag=s185
+
+print("s185-m0:", "a91vdfACtqrt1".upper(), "a91vdfACtqrt1".slice(2), "a91vdfACtqrt1".len())
+
+print("s185-m1:", "75j0k50m3akn2w".upper(), "75j0k50m3akn2w".slice(1), "75j0k50m3akn2w".len())
+
+print("s185-m2:", "idmc5eAlr8i3v".upper(), "idmc5eAlr8i3v".slice(1), "idmc5eAlr8i3v".len())
+
+print("s185-m3:", "Bndftvl5lz2d8m".upper(), "Bndftvl5lz2d8m".slice(4), "Bndftvl5lz2d8m".len())
+
+print("s185-m4:", "_q6h8nk".upper(), "_q6h8nk".slice(3), "_q6h8nk".len())
+
+print("s185-m5:", "cdtilwx".upper(), "cdtilwx".slice(3), "cdtilwx".len())
+
+print("s185-i0:", "muw-{19}-bz_c")
+
+let s185_v0 = 19
+
+print("s185-v0:", "n={s185_v0}" + "!" * 2)
+
+print("s185-i1:", "4Bh-{36}-78kd")
+
+let s185_v1 = 36
+
+print("s185-v1:", "n={s185_v1}" + "!" * 1)
+
+print("s185-i2:", "k_s-{6}-jyge")
+
+let s185_v2 = 6
+
+print("s185-v2:", "n={s185_v2}" + "!" * 1)
+
+print("s185-i3:", "9CB-{95}-0cm8")
+
+let s185_v3 = 95
+
+print("s185-v3:", "n={s185_v3}" + "!" * 1)
+
+print("s185-r0:", "cczrCjxn".replace("c", "9g"), "cczrCjxn".contains("cz"))
+
+print("s185-r1:", "bCBzcsvv".replace("b", "v4"), "bCBzcsvv".contains("CB"))
+
+print("s185-r2:", "fpb41sv1".replace("f", "xa"), "fpb41sv1".contains("pb"))
+
+print("s185-r3:", "vsdqrapd".replace("v", "pf"), "vsdqrapd".contains("sd"))
+
+print("s185-j0:", ["iwz", "qsC", "nq0"].join("-"))
+
+print("s185-j1:", ["8kA", "ra3", "q_1", "nl3"].join("-"))
+
+print("s185-a0:", "roBhahu".at(1), "roBhahu".trim() == "roBhahu")
+
+print("s185-a1:", "oxfl7jv".at(3), "oxfl7jv".trim() == "oxfl7jv")

@@ -1,0 +1,62 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=184 tag=s184
+
+print("s184-m0:", "tn8msd3k1emm".upper(), "tn8msd3k1emm".slice(1), "tn8msd3k1emm".len())
+
+print("s184-m1:", "2dn5dm".upper(), "2dn5dm".slice(3), "2dn5dm".len())
+
+print("s184-m2:", "qkdxl_Cmi".upper(), "qkdxl_Cmi".slice(3), "qkdxl_Cmi".len())
+
+print("s184-m3:", "bu9hfCCo19".upper(), "bu9hfCCo19".slice(2), "bu9hfCCo19".len())
+
+print("s184-m4:", "wfc23uy1".upper(), "wfc23uy1".slice(2), "wfc23uy1".len())
+
+print("s184-m5:", "03sok1b56".upper(), "03sok1b56".slice(4), "03sok1b56".len())
+
+print("s184-i0:", "0ae-{91}-uCBk")
+
+let s184_v0 = 91
+
+print("s184-v0:", "n={s184_v0}" + "!" * 2)
+
+print("s184-i1:", "sr2-{8}-ynd8")
+
+let s184_v1 = 8
+
+print("s184-v1:", "n={s184_v1}" + "!" * 1)
+
+print("s184-i2:", "Cxv-{59}-5ewy")
+
+let s184_v2 = 59
+
+print("s184-v2:", "n={s184_v2}" + "!" * 3)
+
+print("s184-i3:", "wwb-{71}-5dha")
+
+let s184_v3 = 71
+
+print("s184-v3:", "n={s184_v3}" + "!" * 3)
+
+print("s184-i4:", "t6n-{24}-sory")
+
+let s184_v4 = 24
+
+print("s184-v4:", "n={s184_v4}" + "!" * 1)
+
+print("s184-r0:", "m72f81hl".replace("m", "1b"), "m72f81hl".contains("72"))
+
+print("s184-r1:", "kwsvsk77".replace("k", "vA"), "kwsvsk77".contains("ws"))
+
+print("s184-r2:", "rB9uBvrl".replace("r", "vq"), "rB9uBvrl".contains("B9"))
+
+print("s184-r3:", "s8uda9CC".replace("s", "4d"), "s8uda9CC".contains("8u"))
+
+print("s184-j0:", ["yac", "l8n", "y_C"].join("-"))
+
+print("s184-j1:", ["z6d", "ban", "lla"].join("-"))
+
+print("s184-a0:", "3lkn1u1".at(6), "3lkn1u1".trim() == "3lkn1u1")
+
+print("s184-a1:", "dAfzCbA".at(6), "dAfzCbA".trim() == "dAfzCbA")
+
+print("s184-a2:", "tgiCxjC".at(0), "tgiCxjC".trim() == "tgiCxjC")

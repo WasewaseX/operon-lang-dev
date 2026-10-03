@@ -1,0 +1,190 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=187 tag=m187
+
+gene m187_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m187-b0:", m187_b0({cell: 17, gene: 45, ligase: 54})?!)
+
+gene m187_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m187-b1:", m187_b1({marker: 8, exon: 55, enzyme: 40})?!)
+
+gene m187_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m187_f0([26, 1, 39, 34, 25]) {
+
+    case Ok(list) {
+
+        print("m187-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m187-f0:", "e:", m)
+
+    }
+
+}
+
+gene m187_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m187_f1([35, 54, 10, 42, 8, 14, 42, 48]) {
+
+    case Ok(list) {
+
+        print("m187-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m187-f1:", "e:", m)
+
+    }
+
+}
+
+let m187_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m187-cc0:", m187_cl0(20)(5), m187_cl0(5)(20))
+
+let m187_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m187-cc1:", m187_cl1(11)(10), m187_cl1(10)(11))
+
+let m187_data0 = some([some("codon"), none(), some(8)])
+
+match m187_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m187-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m187-x0:", "shape-miss")
+
+    }
+
+}
+
+let m187_data1 = some([some("exon"), none(), some(8)])
+
+match m187_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m187-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m187-x1:", "shape-miss")
+
+    }
+
+}

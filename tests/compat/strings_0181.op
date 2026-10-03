@@ -1,0 +1,58 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=181 tag=s181
+
+print("s181-m0:", "AgC35um0kc83".upper(), "AgC35um0kc83".slice(3), "AgC35um0kc83".len())
+
+print("s181-m1:", "5s68f9".upper(), "5s68f9".slice(4), "5s68f9".len())
+
+print("s181-m2:", "B435iC4dxbjb6".upper(), "B435iC4dxbjb6".slice(3), "B435iC4dxbjb6".len())
+
+print("s181-m3:", "te7zqk".upper(), "te7zqk".slice(3), "te7zqk".len())
+
+print("s181-m4:", "i9npA8osmk".upper(), "i9npA8osmk".slice(2), "i9npA8osmk".len())
+
+print("s181-m5:", "Bv611t_de6_".upper(), "Bv611t_de6_".slice(1), "Bv611t_de6_".len())
+
+print("s181-i0:", "57A-{63}-9547")
+
+let s181_v0 = 63
+
+print("s181-v0:", "n={s181_v0}" + "!" * 3)
+
+print("s181-i1:", "p27-{74}-6xym")
+
+let s181_v1 = 74
+
+print("s181-v1:", "n={s181_v1}" + "!" * 3)
+
+print("s181-i2:", "16i-{34}-BCtC")
+
+let s181_v2 = 34
+
+print("s181-v2:", "n={s181_v2}" + "!" * 1)
+
+print("s181-i3:", "yue-{14}-aBls")
+
+let s181_v3 = 14
+
+print("s181-v3:", "n={s181_v3}" + "!" * 2)
+
+print("s181-r0:", "bBnmy99_".replace("b", "tm"), "bBnmy99_".contains("Bn"))
+
+print("s181-r1:", "fqc2xqwy".replace("f", "6B"), "fqc2xqwy".contains("qc"))
+
+print("s181-r2:", "vs7w61nn".replace("v", "0i"), "vs7w61nn".contains("s7"))
+
+print("s181-r3:", "qx4AdpCl".replace("q", "fk"), "qx4AdpCl".contains("x4"))
+
+print("s181-j0:", ["t4b", "l_A", "0t1", "spz", "_hp"].join("-"))
+
+print("s181-j1:", ["7dg", "p1n", "755", "img", "Buf"].join("-"))
+
+print("s181-j2:", ["Bu6", "330", "a_t", "3a2"].join("-"))
+
+print("s181-a0:", "CfxeC12".at(6), "CfxeC12".trim() == "CfxeC12")
+
+print("s181-a1:", "wnev3kB".at(6), "wnev3kB".trim() == "wnev3kB")
+
+print("s181-a2:", "rlbavkB".at(6), "rlbavkB".trim() == "rlbavkB")

@@ -1,0 +1,254 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=234 tag=m234
+
+gene m234_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m234-b0:", m234_b0({ribose: 66, enzyme: 5, splicer: 59})?!)
+
+gene m234_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m234-b1:", m234_b1({helix: 55, marker: 11, cell: 49})?!)
+
+gene m234_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m234-b2:", m234_b2({ribose: 69, vector: 25, helix: 69})?!)
+
+gene m234_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m234_f0([55, 48, 53, 19, 7, 46, 27]) {
+
+    case Ok(list) {
+
+        print("m234-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m234-f0:", "e:", m)
+
+    }
+
+}
+
+gene m234_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m234_f1([13, 24, 8, 28, 4, 4, 19, 48]) {
+
+    case Ok(list) {
+
+        print("m234-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m234-f1:", "e:", m)
+
+    }
+
+}
+
+gene m234_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m234_f2([28, 53, 9, 60, 50, 48, 12]) {
+
+    case Ok(list) {
+
+        print("m234-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m234-f2:", "e:", m)
+
+    }
+
+}
+
+let m234_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m234-cc0:", m234_cl0(6)(8), m234_cl0(8)(6))
+
+let m234_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m234-cc1:", m234_cl1(7)(3), m234_cl1(3)(7))
+
+let m234_data0 = some([some("codon"), none(), some(5)])
+
+match m234_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m234-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m234-x0:", "shape-miss")
+
+    }
+
+}
+
+let m234_data1 = some([some("splicer"), none(), some(7)])
+
+match m234_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m234-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m234-x1:", "shape-miss")
+
+    }
+
+}

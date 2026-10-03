@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=147 tag=c147
+
+print("c147-c0:", 7377 <= 511)
+
+print("c147-c1:", 1210 != -4505)
+
+print("c147-c2:", 5628 < 7627)
+
+print("c147-c3:", 2788 <= 8399)
+
+print("c147-c4:", 6462 == -9773)
+
+print("c147-c5:", -6958 > 7498)
+
+print("c147-b0:", 49 < 40 && 40 < 15, 49 > 40 || 49 > 15)
+
+print("c147-b1:", 12 < 35 && 35 < 15, 12 > 35 || 12 > 15)
+
+print("c147-b2:", 31 < 25 && 25 < 27, 31 > 25 || 31 > 27)
+
+print("c147-t0:", 1205 > -4500 ? "gt" : "le")
+
+print("c147-t1:", 2419 > -3302 ? "gt" : "le")
+
+print("c147-t2:", 9451 > -5927 ? "gt" : "le")
+
+print("c147-t3:", 1349 > -7366 ? "gt" : "le")
+
+let c147_n0 = null
+
+print("c147-n0:", c147_n0 ?? -7426, c147_n0 == null)
+
+let c147_n1 = null
+
+print("c147-n1:", c147_n1 ?? 389, c147_n1 == null)
+
+let c147_n2 = null
+
+print("c147-n2:", c147_n2 ?? -9360, c147_n2 == null)
+
+print("c147-s0:", "2oq9" in "doftrx2oq9", "2oq9" == "2oq9")
+
+print("c147-s1:", "s970" in "1ktmpjs970", "s970" == "s970")

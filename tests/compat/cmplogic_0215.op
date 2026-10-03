@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=215 tag=c215
+
+print("c215-c0:", -8956 == -6997)
+
+print("c215-c1:", -1809 == 7361)
+
+print("c215-c2:", -32 >= 5488)
+
+print("c215-c3:", 4403 > -8709)
+
+print("c215-c4:", 410 < -8814)
+
+print("c215-c5:", -9776 < -1753)
+
+print("c215-c6:", -8512 == 2703)
+
+print("c215-b0:", 19 < 20 && 20 < 18, 19 > 20 || 19 > 18)
+
+print("c215-b1:", 22 < 21 && 21 < 2, 22 > 21 || 22 > 2)
+
+print("c215-b2:", 1 < 36 && 36 < 48, 1 > 36 || 1 > 48)
+
+print("c215-b3:", 40 < 32 && 32 < 4, 40 > 32 || 40 > 4)
+
+print("c215-t0:", -9464 > 2388 ? "gt" : "le")
+
+print("c215-t1:", -220 > -5402 ? "gt" : "le")
+
+print("c215-t2:", -9677 > 3158 ? "gt" : "le")
+
+let c215_n0 = null
+
+print("c215-n0:", c215_n0 ?? -317, c215_n0 == null)
+
+let c215_n1 = null
+
+print("c215-n1:", c215_n1 ?? -5115, c215_n1 == null)
+
+let c215_n2 = null
+
+print("c215-n2:", c215_n2 ?? 7130, c215_n2 == null)
+
+print("c215-s0:", "Avgd" in "y5C9gdAvgd", "Avgd" == "Avgd")
+
+print("c215-s1:", "s9ro" in "fv6m_hs9ro", "s9ro" == "s9ro")

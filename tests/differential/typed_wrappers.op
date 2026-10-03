@@ -1,0 +1,54 @@
+# typed_wrappers differential pin: W003 stage-2 typed wrappers (std/typed.op),
+# byte-identical on both engines. Acceptance paths print real outputs through
+# every wrapper, including the SAME definition instantiated at two element
+# types (one implementation serves every type — the W03 gate). Refusal paths
+# print the caught Stress MESSAGE so the two engines must agree on the
+# annotation wording too (the shallow is-a-list / is-a-map boundary, not the
+# element types). Contract: docs/specs/GENERICS.md stage 2; the stress value
+# is a map and its fields are `.kind` / `.message` (SPEC §stress).
+use std/typed as t
+
+print("== accept ==")
+print(t.map([1, 2, 3], gene (x) { return x * 10 }))
+print(t.map(["a", "b"], gene (s) { return len(s) }))
+print(t.filter([5, 1, 8, 2], gene (x) { return x > 2 }))
+print(t.filter(["ee", "b", "cccc"], gene (s) { return len(s) > 1 }))
+print(t.fold([1, 2, 3], 0, gene (acc, x) { return acc + x }))
+print(t.fold(["a", "b"], "<", gene (acc, s) { return acc + s }))
+print(t.first([7, 8]))
+print(t.first([]))
+print(t.zip([1, 2, 3], ["a", "b"]))
+print(t.lookup({"k": 1}, "k"))
+print(t.lookup({}, "nope"))
+print(t.sort_by_key(["bb", "a", "ccc"], gene (s) { return len(s) }))
+
+print("== refuse ==")
+gene probe(f) {
+    stress {
+        f()
+        return "no-stress"
+    } rescue (e) {
+        return "stress:" + e.message
+    }
+}
+print(probe(gene() { return t.map("nope", gene (x) { return x }) }))
+print(probe(gene() { return t.map([1], 5) }))
+print(probe(gene() { return t.filter(null, gene (x) { return true }) }))
+print(probe(gene() { return t.fold(3, 0, gene (a, x) { return a }) }))
+print(probe(gene() { return t.first("str") }))
+print(probe(gene() { return t.zip([1], "b") }))
+print(probe(gene() { return t.lookup([1, 2], "k") }))
+print(probe(gene() { return t.sort_by_key({}, gene (x) { return x }) }))
+print("== containment ==")
+# the wrappers can never reject a program: every refusal above is data the
+# caller catches, and a bare type parameter accepts anything (erasure)
+gene id<T>(x: T) -> T {
+    return x
+}
+print(id([1, "x", null]))
+# a module value rides through T too; print(type(...)) because the module
+# map's PRINTING order is engine-internal (definition vs declaration), the
+# TYPE is the contract here
+print(type(id(t)))
+print(id(b"erased"))
+print("done")

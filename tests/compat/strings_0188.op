@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=188 tag=s188
+
+print("s188-m0:", "hlgb2iCvuhi".upper(), "hlgb2iCvuhi".slice(4), "hlgb2iCvuhi".len())
+
+print("s188-m1:", "l7smk_gkdbzh".upper(), "l7smk_gkdbzh".slice(1), "l7smk_gkdbzh".len())
+
+print("s188-m2:", "087ucw6wk0".upper(), "087ucw6wk0".slice(2), "087ucw6wk0".len())
+
+print("s188-m3:", "beBqpm".upper(), "beBqpm".slice(3), "beBqpm".len())
+
+print("s188-i0:", "AB2-{20}-avsx")
+
+let s188_v0 = 20
+
+print("s188-v0:", "n={s188_v0}" + "!" * 3)
+
+print("s188-i1:", "ap1-{55}-oaei")
+
+let s188_v1 = 55
+
+print("s188-v1:", "n={s188_v1}" + "!" * 1)
+
+print("s188-i2:", "kud-{75}-8kim")
+
+let s188_v2 = 75
+
+print("s188-v2:", "n={s188_v2}" + "!" * 1)
+
+print("s188-r0:", "tngc_6hm".replace("t", "5o"), "tngc_6hm".contains("ng"))
+
+print("s188-r1:", "vnAvACnw".replace("v", "qm"), "vnAvACnw".contains("nA"))
+
+print("s188-j0:", ["6n2", "vpk", "Ci1", "l3x", "568"].join("-"))
+
+print("s188-j1:", ["uyf", "k7f", "0je", "06_", "Cio"].join("-"))
+
+print("s188-a0:", "iBnkm5C".at(5), "iBnkm5C".trim() == "iBnkm5C")
+
+print("s188-a1:", "k8j3ccx".at(0), "k8j3ccx".trim() == "k8j3ccx")

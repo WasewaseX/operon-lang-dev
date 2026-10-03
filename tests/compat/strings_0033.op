@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=33 tag=s033
+
+print("s033-m0:", "onbsd9".upper(), "onbsd9".slice(1), "onbsd9".len())
+
+print("s033-m1:", "Cd4hie_fme1".upper(), "Cd4hie_fme1".slice(2), "Cd4hie_fme1".len())
+
+print("s033-m2:", "4Cyhbs6m".upper(), "4Cyhbs6m".slice(1), "4Cyhbs6m".len())
+
+print("s033-m3:", "801qs9zCv".upper(), "801qs9zCv".slice(1), "801qs9zCv".len())
+
+print("s033-i0:", "osj-{9}-yj8o")
+
+let s033_v0 = 9
+
+print("s033-v0:", "n={s033_v0}" + "!" * 3)
+
+print("s033-i1:", "fy9-{15}-ppu0")
+
+let s033_v1 = 15
+
+print("s033-v1:", "n={s033_v1}" + "!" * 1)
+
+print("s033-i2:", "p0w-{3}-g4dz")
+
+let s033_v2 = 3
+
+print("s033-v2:", "n={s033_v2}" + "!" * 1)
+
+print("s033-i3:", "Atc-{18}-gmqj")
+
+let s033_v3 = 18
+
+print("s033-v3:", "n={s033_v3}" + "!" * 1)
+
+print("s033-r0:", "fw0oeoc7".replace("f", "7n"), "fw0oeoc7".contains("w0"))
+
+print("s033-r1:", "ChwAbgvB".replace("C", "h4"), "ChwAbgvB".contains("hw"))
+
+print("s033-r2:", "k59A06cm".replace("k", "j2"), "k59A06cm".contains("59"))
+
+print("s033-r3:", "ojyl6986".replace("o", "0e"), "ojyl6986".contains("jy"))
+
+print("s033-j0:", ["o47", "rvb", "nbo", "v48", "jAx"].join("-"))
+
+print("s033-j1:", ["sbd", "sx4", "fjk", "Asz"].join("-"))
+
+print("s033-a0:", "7whe_64".at(5), "7whe_64".trim() == "7whe_64")
+
+print("s033-a1:", "4okodo9".at(1), "4okodo9".trim() == "4okodo9")
+
+print("s033-a2:", "y6bjAfs".at(1), "y6bjAfs".trim() == "y6bjAfs")

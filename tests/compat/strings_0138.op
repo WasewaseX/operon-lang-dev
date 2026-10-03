@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=138 tag=s138
+
+print("s138-m0:", "krgBb_d44".upper(), "krgBb_d44".slice(1), "krgBb_d44".len())
+
+print("s138-m1:", "yt7B2C06Aye8".upper(), "yt7B2C06Aye8".slice(4), "yt7B2C06Aye8".len())
+
+print("s138-m2:", "zxnw_B0".upper(), "zxnw_B0".slice(4), "zxnw_B0".len())
+
+print("s138-m3:", "p0gnr4rnn".upper(), "p0gnr4rnn".slice(1), "p0gnr4rnn".len())
+
+print("s138-m4:", "2nwmswwy".upper(), "2nwmswwy".slice(1), "2nwmswwy".len())
+
+print("s138-m5:", "4Cu03dc6cg1sv".upper(), "4Cu03dc6cg1sv".slice(4), "4Cu03dc6cg1sv".len())
+
+print("s138-i0:", "vy1-{54}-k50s")
+
+let s138_v0 = 54
+
+print("s138-v0:", "n={s138_v0}" + "!" * 3)
+
+print("s138-i1:", "q4u-{54}-kCe9")
+
+let s138_v1 = 54
+
+print("s138-v1:", "n={s138_v1}" + "!" * 2)
+
+print("s138-i2:", "_z4-{84}-qB_g")
+
+let s138_v2 = 84
+
+print("s138-v2:", "n={s138_v2}" + "!" * 1)
+
+print("s138-r0:", "z1ym4b4b".replace("z", "8e"), "z1ym4b4b".contains("1y"))
+
+print("s138-r1:", "9l6BqlBf".replace("9", "nc"), "9l6BqlBf".contains("l6"))
+
+print("s138-r2:", "dzf_tuyy".replace("d", "9l"), "dzf_tuyy".contains("zf"))
+
+print("s138-j0:", ["w9x", "BCA", "wzx", "_p8", "4_y"].join("-"))
+
+print("s138-j1:", ["rt_", "ew5", "3vg", "jB7"].join("-"))
+
+print("s138-j2:", ["kpf", "A9t", "k23", "8w7", "e32"].join("-"))
+
+print("s138-a0:", "5jbxa_s".at(2), "5jbxa_s".trim() == "5jbxa_s")
+
+print("s138-a1:", "zgmw8pd".at(5), "zgmw8pd".trim() == "zgmw8pd")

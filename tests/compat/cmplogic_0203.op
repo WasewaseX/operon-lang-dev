@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=203 tag=c203
+
+print("c203-c0:", -7475 >= 9111)
+
+print("c203-c1:", -6435 != -5656)
+
+print("c203-c2:", 7347 != 2890)
+
+print("c203-c3:", -2830 == -77)
+
+print("c203-c4:", 5791 >= 1694)
+
+print("c203-c5:", 3172 >= 600)
+
+print("c203-b0:", 44 < 23 && 23 < 50, 44 > 23 || 44 > 50)
+
+print("c203-b1:", 30 < 48 && 48 < 34, 30 > 48 || 30 > 34)
+
+print("c203-b2:", 13 < 17 && 17 < 38, 13 > 17 || 13 > 38)
+
+print("c203-t0:", -6836 > -1342 ? "gt" : "le")
+
+print("c203-t1:", 7336 > -9122 ? "gt" : "le")
+
+let c203_n0 = null
+
+print("c203-n0:", c203_n0 ?? -7995, c203_n0 == null)
+
+let c203_n1 = null
+
+print("c203-n1:", c203_n1 ?? 1705, c203_n1 == null)
+
+let c203_n2 = null
+
+print("c203-n2:", c203_n2 ?? 7978, c203_n2 == null)
+
+print("c203-s0:", "vCk1" in "3CAn21vCk1", "vCk1" == "vCk1")
+
+print("c203-s1:", "8ryx" in "_4r4so8ryx", "8ryx" == "8ryx")

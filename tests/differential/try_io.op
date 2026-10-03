@@ -1,0 +1,52 @@
+# W006-B (RESULT-WAVE3 §2c): wave-3 IO try_ family, ZERO-GRANT differential
+# pin. Deny-by-default is the security invariant (D-005), so with no grants
+# every capability-gated twin pins the rescue contract: interference stays a
+# catchable stress (never an Err variant). Also pinned here without any
+# grant: arity malformed calls (unfolded stress, §2a), the capless
+# try_str_from_bytes Ok/Err shape (pure function) with its deterministic
+# byte index N, and the wave-2 family type-abuse precedent (inspectable Err).
+# The GRANTED surfaces (ok payloads + missing payloads with path echo) are
+# pinned by tests/granted/try_io_wave3.op + .cell.
+let b_ascii = bytes_from_str("hello")
+print(try_str_from_bytes(b_ascii))
+let b_utf8 = bytes_from_str("héllo wörld")
+print(try_str_from_bytes(b_utf8))
+let b_emoji = bytes_from_str("ok 🧬")
+print(try_str_from_bytes(b_emoji))
+let b_empty = bytes_from_list([])
+print(try_str_from_bytes(b_empty))
+# invalid UTF-8: the Err payload names the FIRST bad byte, deterministic
+# both engines (Rust valid_up_to == Python UnicodeDecodeError.start)
+print(try_str_from_bytes(bytes_from_list([104, 105, 255])))
+print(try_str_from_bytes(bytes_from_list([97, 98, 195])))
+print(try_str_from_bytes(bytes_from_list([192, 175])))
+print(try_str_from_bytes(bytes_from_list([128])))
+print(try_str_from_bytes(bytes_from_list([104, 105, 255, 200, 130])))
+# type abuse: family precedent (try_index) — inspectable Err, not a stress
+print(try_str_from_bytes(42))
+print(try_str_from_bytes("s"))
+# arity malformed calls stay unfolded stresses (§2a)
+stress { try_str_from_bytes() } rescue (e) { print("arity: " + e.kind) }
+stress { try_str_from_bytes(bytes_from_str("a"), bytes_from_str("b")) } rescue (e) { print("arity: " + e.kind) }
+stress { try_read_file() } rescue (e) { print("arity: " + e.kind) }
+stress { try_read_file("a", "b") } rescue (e) { print("arity: " + e.kind) }
+stress { try_read_file_bytes() } rescue (e) { print("arity: " + e.kind) }
+stress { try_read_dir() } rescue (e) { print("arity: " + e.kind) }
+stress { try_run() } rescue (e) { print("arity: " + e.kind) }
+stress { try_run("true", ["x"]) } rescue (e) { print("arity: " + e.kind) }
+stress { try_http_get("h", 80) } rescue (e) { print("arity: " + e.kind) }
+stress { try_http_get("h", 80, "/", "extra") } rescue (e) { print("arity: " + e.kind) }
+# capability denial stays a catchable interference stress on every
+# capability-gated twin (deny-by-default, absolute and relative paths)
+stress { try_read_file("/etc/hostname") } rescue (e) { print("rescued: " + e.kind) }
+stress { try_read_file("no-such-rel-path.txt") } rescue (e) { print("rescued: " + e.kind) }
+stress { try_read_file_bytes("/etc/hostname") } rescue (e) { print("rescued: " + e.kind) }
+stress { try_read_dir("/tmp") } rescue (e) { print("rescued: " + e.kind) }
+stress { try_run("true") } rescue (e) { print("rescued: " + e.kind) }
+stress { try_http_get("127.0.0.1", 1, "/") } rescue (e) { print("rescued: " + e.kind) }
+# non-string paths coerce through display() exactly like the legacy arms
+stress { try_read_file(42) } rescue (e) { print("coerced: " + e.kind) }
+# the LEGACY builtins keep their stress contract unchanged (2.x compat)
+stress { read_file("/etc/hostname") } rescue (e) { print("legacy: " + e.kind) }
+stress { read_dir("/tmp") } rescue (e) { print("legacy: " + e.kind) }
+stress { run("true") } rescue (e) { print("legacy: " + e.kind) }

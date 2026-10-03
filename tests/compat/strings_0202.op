@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=202 tag=s202
+
+print("s202-m0:", "e0lczfi".upper(), "e0lczfi".slice(3), "e0lczfi".len())
+
+print("s202-m1:", "na769nvbmq459".upper(), "na769nvbmq459".slice(4), "na769nvbmq459".len())
+
+print("s202-m2:", "hwcBomqg".upper(), "hwcBomqg".slice(4), "hwcBomqg".len())
+
+print("s202-m3:", "p4jaol3cuv".upper(), "p4jaol3cuv".slice(2), "p4jaol3cuv".len())
+
+print("s202-i0:", "mCi-{82}-57q9")
+
+let s202_v0 = 82
+
+print("s202-v0:", "n={s202_v0}" + "!" * 2)
+
+print("s202-i1:", "6k9-{70}-yj2t")
+
+let s202_v1 = 70
+
+print("s202-v1:", "n={s202_v1}" + "!" * 1)
+
+print("s202-i2:", "_gv-{82}-g9ye")
+
+let s202_v2 = 82
+
+print("s202-v2:", "n={s202_v2}" + "!" * 3)
+
+print("s202-i3:", "B5g-{83}-57Bv")
+
+let s202_v3 = 83
+
+print("s202-v3:", "n={s202_v3}" + "!" * 1)
+
+print("s202-r0:", "iw7CCCub".replace("i", "eu"), "iw7CCCub".contains("w7"))
+
+print("s202-r1:", "jagi6r3v".replace("j", "rq"), "jagi6r3v".contains("ag"))
+
+print("s202-j0:", ["nh3", "e7_", "ukr", "khw"].join("-"))
+
+print("s202-j1:", ["pz6", "tvz", "zxa", "glA", "t9l"].join("-"))
+
+print("s202-a0:", "zuysslo".at(3), "zuysslo".trim() == "zuysslo")
+
+print("s202-a1:", "mk4pCar".at(0), "mk4pCar".trim() == "mk4pCar")
+
+print("s202-a2:", "wuAg04y".at(3), "wuAg04y".trim() == "wuAg04y")

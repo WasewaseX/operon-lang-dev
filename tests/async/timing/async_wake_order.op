@@ -1,0 +1,33 @@
+# W16 timing lane (Rust-only): deterministic wake ordering.
+# 12 same-duration sleeps park together; the wake scan processes them in
+# registration order (FIFO tie-break), one completion per pump step, so
+# wait_any over the still-outstanding pool answers the ids in spawn order
+# on EVERY run (the thread path cannot make this promise: completion order
+# there is wall-clock scheduler luck).
+gene waker(i) {
+    sleep(15)
+    return i
+}
+
+frame proof {
+    let ids = []
+    for i in range(12) {
+        push(ids, spawn(waker, [i]))
+    }
+    let pool = ids
+    for k in range(12) {
+        let wid = wait_any(pool)
+        assert(wid == pool[0], "wake " + str(k) + " is FIFO (registration order)")
+        join(wid)
+        let rest = []
+        for x in pool {
+            if x != wid {
+                push(rest, x)
+            }
+        }
+        pool = rest
+    }
+}
+main {
+    promote("async-wake-order-timing: ok (FIFO wake order, deterministic)")
+}

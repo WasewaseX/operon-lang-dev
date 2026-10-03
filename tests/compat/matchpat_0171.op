@@ -1,0 +1,286 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=171 tag=m171
+
+let m171_s0 = some(1)
+
+match m171_s0 {
+
+    case Some(x) if x > 1 {
+
+        print("m171-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m171-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m171-m0:", "none")
+
+    }
+
+}
+
+let m171_s1 = some(4)
+
+match m171_s1 {
+
+    case Some(x) if x > 4 {
+
+        print("m171-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m171-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m171-m1:", "none")
+
+    }
+
+}
+
+let m171_s2 = some(5)
+
+match m171_s2 {
+
+    case Some(x) if x > 5 {
+
+        print("m171-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m171-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m171-m2:", "none")
+
+    }
+
+}
+
+let m171_ls0 = [5, 4, 15]
+
+match m171_ls0 {
+
+    case [5, *rest] {
+
+        print("m171-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m171-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m171-l0:", "other")
+
+    }
+
+}
+
+let m171_ls1 = [7, 32, 1]
+
+match m171_ls1 {
+
+    case [7, *rest] {
+
+        print("m171-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m171-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m171-l1:", "other")
+
+    }
+
+}
+
+let m171_ls2 = [9, 5, 25]
+
+match m171_ls2 {
+
+    case [9, *rest] {
+
+        print("m171-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m171-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m171-l2:", "other")
+
+    }
+
+}
+
+let m171_mp0 = {splicer: 7131, ligase: -7276}
+
+match m171_mp0 {
+
+    case {splicer: p, ligase: q} {
+
+        print("m171-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m171-mp0:", "miss")
+
+    }
+
+}
+
+let m171_mp1 = {gene: -3042, enzyme: 2121}
+
+match m171_mp1 {
+
+    case {gene: p, enzyme: q} {
+
+        print("m171-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m171-mp1:", "miss")
+
+    }
+
+}
+
+let m171_mp2 = {exon: -3235, cell: -5198}
+
+match m171_mp2 {
+
+    case {exon: p, cell: q} {
+
+        print("m171-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m171-mp2:", "miss")
+
+    }
+
+}
+
+let m171_r0 = ok(1)
+
+match m171_r0 {
+
+    case Ok(n) | Err(1) {
+
+        print("m171-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m171-r0:", "zero")
+
+    }
+
+}
+
+let m171_r1 = ok(3)
+
+match m171_r1 {
+
+    case Ok(n) | Err(3) {
+
+        print("m171-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m171-r1:", "zero")
+
+    }
+
+}
+
+let m171_r2 = ok(2)
+
+match m171_r2 {
+
+    case Ok(n) | Err(2) {
+
+        print("m171-r2:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m171-r2:", "zero")
+
+    }
+
+}
+
+match "codon" {
+
+    case "codon" {
+
+        print("m171-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m171-w0:", "alt")
+
+    }
+
+}
+
+match "splicer" {
+
+    case "splicer" {
+
+        print("m171-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m171-w1:", "alt")
+
+    }
+
+}

@@ -1,0 +1,250 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20260930 idx=39 tag=m039
+
+let m039_s0 = some(8)
+
+match m039_s0 {
+
+    case Some(x) if x > 8 {
+
+        print("m039-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m039-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m039-m0:", "none")
+
+    }
+
+}
+
+let m039_s1 = some(2)
+
+match m039_s1 {
+
+    case Some(x) if x > 2 {
+
+        print("m039-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m039-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m039-m1:", "none")
+
+    }
+
+}
+
+let m039_s2 = some(6)
+
+match m039_s2 {
+
+    case Some(x) if x > 6 {
+
+        print("m039-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m039-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m039-m2:", "none")
+
+    }
+
+}
+
+let m039_ls0 = [2, 49, 11]
+
+match m039_ls0 {
+
+    case [2, *rest] {
+
+        print("m039-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m039-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m039-l0:", "other")
+
+    }
+
+}
+
+let m039_ls1 = [45, 43, 38]
+
+match m039_ls1 {
+
+    case [45, *rest] {
+
+        print("m039-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m039-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m039-l1:", "other")
+
+    }
+
+}
+
+let m039_ls2 = [33, 25, 44]
+
+match m039_ls2 {
+
+    case [33, *rest] {
+
+        print("m039-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m039-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m039-l2:", "other")
+
+    }
+
+}
+
+let m039_mp0 = {gene: 7478, vector: 424}
+
+match m039_mp0 {
+
+    case {gene: p, vector: q} {
+
+        print("m039-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m039-mp0:", "miss")
+
+    }
+
+}
+
+let m039_mp1 = {codon: 8791, plasmid: 7529}
+
+match m039_mp1 {
+
+    case {codon: p, plasmid: q} {
+
+        print("m039-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m039-mp1:", "miss")
+
+    }
+
+}
+
+let m039_r0 = ok(1)
+
+match m039_r0 {
+
+    case Ok(n) | Err(1) {
+
+        print("m039-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m039-r0:", "zero")
+
+    }
+
+}
+
+let m039_r1 = ok(5)
+
+match m039_r1 {
+
+    case Ok(n) | Err(5) {
+
+        print("m039-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m039-r1:", "zero")
+
+    }
+
+}
+
+match "ribose" {
+
+    case "ribose" {
+
+        print("m039-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m039-w0:", "alt")
+
+    }
+
+}
+
+match "plasmid" {
+
+    case "plasmid" {
+
+        print("m039-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m039-w1:", "alt")
+
+    }
+
+}

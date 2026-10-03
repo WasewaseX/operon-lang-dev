@@ -1,4 +1,4 @@
-# differential: sequence generators — for, .next(), .collect()
+# differential: sequence generators, for, .next(), .collect()
 sequence countdown(n) {
     while n > 0 {
         yield n

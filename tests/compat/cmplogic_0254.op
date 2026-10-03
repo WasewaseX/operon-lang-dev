@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=254 tag=c254
+
+print("c254-c0:", 8083 <= -8165)
+
+print("c254-c1:", -7666 == -446)
+
+print("c254-c2:", 6441 < 4104)
+
+print("c254-c3:", 3196 <= 1915)
+
+print("c254-b0:", 26 < 44 && 44 < 4, 26 > 44 || 26 > 4)
+
+print("c254-b1:", 5 < 1 && 1 < 43, 5 > 1 || 5 > 43)
+
+print("c254-b2:", 14 < 21 && 21 < 45, 14 > 21 || 14 > 45)
+
+print("c254-b3:", 40 < 3 && 3 < 37, 40 > 3 || 40 > 37)
+
+print("c254-t0:", 5682 > 2932 ? "gt" : "le")
+
+print("c254-t1:", -9413 > -4298 ? "gt" : "le")
+
+print("c254-t2:", 3834 > -6803 ? "gt" : "le")
+
+let c254_n0 = null
+
+print("c254-n0:", c254_n0 ?? -9075, c254_n0 == null)
+
+let c254_n1 = null
+
+print("c254-n1:", c254_n1 ?? -783, c254_n1 == null)
+
+let c254_n2 = null
+
+print("c254-n2:", c254_n2 ?? -8750, c254_n2 == null)
+
+print("c254-s0:", "jw90" in "qg21jrjw90", "jw90" == "jw90")
+
+print("c254-s1:", "9w5C" in "vfhrna9w5C", "9w5C" == "9w5C")

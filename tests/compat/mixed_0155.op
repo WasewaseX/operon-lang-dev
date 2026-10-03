@@ -1,0 +1,190 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=155 tag=m155
+
+gene m155_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m155-b0:", m155_b0({marker: 50, ribose: 58, codon: 86})?!)
+
+gene m155_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m155-b1:", m155_b1({cell: 38, exon: 82, vector: 28})?!)
+
+gene m155_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m155_f0([37, 50, 58, 59, 23, 14, 2]) {
+
+    case Ok(list) {
+
+        print("m155-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m155-f0:", "e:", m)
+
+    }
+
+}
+
+gene m155_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m155_f1([28, 43, 38, 12, 39]) {
+
+    case Ok(list) {
+
+        print("m155-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m155-f1:", "e:", m)
+
+    }
+
+}
+
+let m155_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m155-cc0:", m155_cl0(13)(9), m155_cl0(9)(13))
+
+let m155_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m155-cc1:", m155_cl1(16)(18), m155_cl1(18)(16))
+
+let m155_data0 = some([some("ribose"), none(), some(4)])
+
+match m155_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m155-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m155-x0:", "shape-miss")
+
+    }
+
+}
+
+let m155_data1 = some([some("cell"), none(), some(6)])
+
+match m155_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m155-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m155-x1:", "shape-miss")
+
+    }
+
+}

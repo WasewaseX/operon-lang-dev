@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=255 tag=s255
+
+print("s255-m0:", "ozs609q88qiv".upper(), "ozs609q88qiv".slice(2), "ozs609q88qiv".len())
+
+print("s255-m1:", "4d6a2hg".upper(), "4d6a2hg".slice(2), "4d6a2hg".len())
+
+print("s255-m2:", "cqvcn8zpm".upper(), "cqvcn8zpm".slice(1), "cqvcn8zpm".len())
+
+print("s255-m3:", "1gsurygan663l".upper(), "1gsurygan663l".slice(3), "1gsurygan663l".len())
+
+print("s255-m4:", "ql23r5r".upper(), "ql23r5r".slice(4), "ql23r5r".len())
+
+print("s255-i0:", "8Ak-{16}-soyf")
+
+let s255_v0 = 16
+
+print("s255-v0:", "n={s255_v0}" + "!" * 3)
+
+print("s255-i1:", "B1h-{97}-2gad")
+
+let s255_v1 = 97
+
+print("s255-v1:", "n={s255_v1}" + "!" * 1)
+
+print("s255-i2:", "5ic-{96}-sbh2")
+
+let s255_v2 = 96
+
+print("s255-v2:", "n={s255_v2}" + "!" * 1)
+
+print("s255-i3:", "A_h-{4}-i6gs")
+
+let s255_v3 = 4
+
+print("s255-v3:", "n={s255_v3}" + "!" * 1)
+
+print("s255-r0:", "_2ae1a7_".replace("_", "A5"), "_2ae1a7_".contains("2a"))
+
+print("s255-r1:", "a91Aiu44".replace("a", "sm"), "a91Aiu44".contains("91"))
+
+print("s255-r2:", "6ptsq_81".replace("6", "fh"), "6ptsq_81".contains("pt"))
+
+print("s255-r3:", "za612iBm".replace("z", "rp"), "za612iBm".contains("a6"))
+
+print("s255-j0:", ["prf", "5ns", "fh5", "xgx"].join("-"))
+
+print("s255-j1:", ["6kt", "ihi", "t7f", "z9m"].join("-"))
+
+print("s255-j2:", ["02y", "C4j", "1lv"].join("-"))
+
+print("s255-a0:", "xColzam".at(5), "xColzam".trim() == "xColzam")
+
+print("s255-a1:", "2CtacCy".at(2), "2CtacCy".trim() == "2CtacCy")
+
+print("s255-a2:", "opklxbh".at(0), "opklxbh".trim() == "opklxbh")

@@ -1,0 +1,190 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=131 tag=m131
+
+gene m131_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m131-b0:", m131_b0({gene: 58, cell: 16, ligase: 23})?!)
+
+gene m131_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m131-b1:", m131_b1({vector: 37, ligase: 25, codon: 24})?!)
+
+gene m131_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m131_f0([5, 45, 56, 4, 22]) {
+
+    case Ok(list) {
+
+        print("m131-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m131-f0:", "e:", m)
+
+    }
+
+}
+
+gene m131_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m131_f1([57, 46, 60, 33, 35, 54]) {
+
+    case Ok(list) {
+
+        print("m131-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m131-f1:", "e:", m)
+
+    }
+
+}
+
+let m131_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m131-cc0:", m131_cl0(10)(9), m131_cl0(9)(10))
+
+let m131_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m131-cc1:", m131_cl1(5)(7), m131_cl1(7)(5))
+
+let m131_data0 = some([some("cell"), none(), some(7)])
+
+match m131_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m131-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m131-x0:", "shape-miss")
+
+    }
+
+}
+
+let m131_data1 = some([some("marker"), none(), some(5)])
+
+match m131_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m131-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m131-x1:", "shape-miss")
+
+    }
+
+}

@@ -1,0 +1,7 @@
+gene main() {
+  greet("a", "b", "c")
+}
+
+gene greet(name) {
+  print(name)
+}

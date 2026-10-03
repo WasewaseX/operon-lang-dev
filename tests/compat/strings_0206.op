@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=206 tag=s206
+
+print("s206-m0:", "okk15s_x".upper(), "okk15s_x".slice(4), "okk15s_x".len())
+
+print("s206-m1:", "4waofn3C_".upper(), "4waofn3C_".slice(4), "4waofn3C_".len())
+
+print("s206-m2:", "jdc30m562b2p".upper(), "jdc30m562b2p".slice(3), "jdc30m562b2p".len())
+
+print("s206-m3:", "az4jrloc_31".upper(), "az4jrloc_31".slice(2), "az4jrloc_31".len())
+
+print("s206-i0:", "5gs-{82}-iuml")
+
+let s206_v0 = 82
+
+print("s206-v0:", "n={s206_v0}" + "!" * 1)
+
+print("s206-i1:", "B_9-{52}-u72o")
+
+let s206_v1 = 52
+
+print("s206-v1:", "n={s206_v1}" + "!" * 3)
+
+print("s206-i2:", "xpB-{16}-0wyg")
+
+let s206_v2 = 16
+
+print("s206-v2:", "n={s206_v2}" + "!" * 3)
+
+print("s206-i3:", "5q7-{45}-k5p4")
+
+let s206_v3 = 45
+
+print("s206-v3:", "n={s206_v3}" + "!" * 1)
+
+print("s206-i4:", "2r6-{92}-pie6")
+
+let s206_v4 = 92
+
+print("s206-v4:", "n={s206_v4}" + "!" * 2)
+
+print("s206-r0:", "kf0o9Cfz".replace("k", "y4"), "kf0o9Cfz".contains("f0"))
+
+print("s206-r1:", "9cqolak3".replace("9", "uu"), "9cqolak3".contains("cq"))
+
+print("s206-r2:", "Ccfb52q_".replace("C", "Co"), "Ccfb52q_".contains("cf"))
+
+print("s206-j0:", ["x1B", "Cbu", "jd9", "ehh", "fek"].join("-"))
+
+print("s206-j1:", ["rBh", "g32", "bk9", "t9l"].join("-"))
+
+print("s206-a0:", "A6_v8d_".at(0), "A6_v8d_".trim() == "A6_v8d_")
+
+print("s206-a1:", "elwxmh9".at(3), "elwxmh9".trim() == "elwxmh9")
+
+print("s206-a2:", "azv1m1z".at(1), "azv1m1z".trim() == "azv1m1z")

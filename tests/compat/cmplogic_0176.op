@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=176 tag=c176
+
+print("c176-c0:", -7090 != -3758)
+
+print("c176-c1:", 8922 >= -5222)
+
+print("c176-c2:", -6445 <= 4533)
+
+print("c176-c3:", 9395 < 2591)
+
+print("c176-c4:", -5285 > -2474)
+
+print("c176-c5:", 3588 > 7784)
+
+print("c176-c6:", 6954 >= 4209)
+
+print("c176-b0:", 26 < 0 && 0 < 30, 26 > 0 || 26 > 30)
+
+print("c176-b1:", 43 < 34 && 34 < 42, 43 > 34 || 43 > 42)
+
+print("c176-b2:", 21 < 31 && 31 < 1, 21 > 31 || 21 > 1)
+
+print("c176-t0:", 5945 > -2106 ? "gt" : "le")
+
+print("c176-t1:", -4222 > 5638 ? "gt" : "le")
+
+print("c176-t2:", 8508 > -9712 ? "gt" : "le")
+
+print("c176-t3:", 2967 > 6899 ? "gt" : "le")
+
+let c176_n0 = null
+
+print("c176-n0:", c176_n0 ?? 2969, c176_n0 == null)
+
+let c176_n1 = null
+
+print("c176-n1:", c176_n1 ?? -6049, c176_n1 == null)
+
+let c176_n2 = null
+
+print("c176-n2:", c176_n2 ?? 9977, c176_n2 == null)
+
+print("c176-s0:", "824t" in "u4ac28824t", "824t" == "824t")
+
+print("c176-s1:", "5qaq" in "_wotfq5qaq", "5qaq" == "5qaq")

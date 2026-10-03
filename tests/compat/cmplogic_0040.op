@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=40 tag=c040
+
+print("c040-c0:", 6011 == -9460)
+
+print("c040-c1:", -9771 <= -4410)
+
+print("c040-c2:", 8630 > 4816)
+
+print("c040-c3:", 7512 <= 1174)
+
+print("c040-c4:", -3291 == -3693)
+
+print("c040-c5:", 7635 < 7595)
+
+print("c040-b0:", 27 < 25 && 25 < 14, 27 > 25 || 27 > 14)
+
+print("c040-b1:", 22 < 36 && 36 < 45, 22 > 36 || 22 > 45)
+
+print("c040-t0:", -9360 > 3369 ? "gt" : "le")
+
+print("c040-t1:", -2892 > -8819 ? "gt" : "le")
+
+print("c040-t2:", -4458 > 6408 ? "gt" : "le")
+
+let c040_n0 = null
+
+print("c040-n0:", c040_n0 ?? 7696, c040_n0 == null)
+
+let c040_n1 = null
+
+print("c040-n1:", c040_n1 ?? -9731, c040_n1 == null)
+
+let c040_n2 = null
+
+print("c040-n2:", c040_n2 ?? 2582, c040_n2 == null)
+
+print("c040-s0:", "6_m8" in "6vvoe56_m8", "6_m8" == "6_m8")
+
+print("c040-s1:", "m3ee" in "4bj6wwm3ee", "m3ee" == "m3ee")

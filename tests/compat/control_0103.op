@@ -1,0 +1,152 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=103 tag=c103
+
+let c103_b0 = "start"
+
+if 99 > 80 { c103_b0 = "hi" } elif 99 > 40 { c103_b0 = "mid" } else { c103_b0 = "lo" }
+
+print("c103-i0:", c103_b0, 99)
+
+let c103_b1 = "start"
+
+if 100 > 80 { c103_b1 = "hi" } elif 100 > 40 { c103_b1 = "mid" } else { c103_b1 = "lo" }
+
+print("c103-i1:", c103_b1, 100)
+
+let c103_b2 = "start"
+
+if 73 > 80 { c103_b2 = "hi" } elif 73 > 40 { c103_b2 = "mid" } else { c103_b2 = "lo" }
+
+print("c103-i2:", c103_b2, 73)
+
+let c103_a0 = 0
+
+let c103_n0 = 0
+
+while c103_n0 < 20 {
+
+    c103_n0 += 2
+
+    if c103_n0 % 3 == 0 { continue }
+
+    if c103_n0 > 28 { break }
+
+    c103_a0 += c103_n0
+
+}
+
+print("c103-w0:", c103_a0, c103_n0)
+
+let c103_a1 = 0
+
+let c103_n1 = 0
+
+while c103_n1 < 7 {
+
+    c103_n1 += 4
+
+    if c103_n1 % 3 == 0 { continue }
+
+    if c103_n1 > 11 { break }
+
+    c103_a1 += c103_n1
+
+}
+
+print("c103-w1:", c103_a1, c103_n1)
+
+let c103_a2 = 0
+
+let c103_n2 = 0
+
+while c103_n2 < 20 {
+
+    c103_n2 += 4
+
+    if c103_n2 % 3 == 0 { continue }
+
+    if c103_n2 > 29 { break }
+
+    c103_a2 += c103_n2
+
+}
+
+print("c103-w2:", c103_a2, c103_n2)
+
+let c103_c0 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 2] {
+
+        c103_c0 += a * b
+
+    }
+
+}
+
+print("c103-l0:", c103_c0)
+
+let c103_c1 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 3] {
+
+        c103_c1 += a * b
+
+    }
+
+}
+
+print("c103-l1:", c103_c1)
+
+let c103_c2 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 3] {
+
+        c103_c2 += a * b
+
+    }
+
+}
+
+print("c103-l2:", c103_c2)
+
+let c103_acc0 = ""
+
+loop {
+
+    c103_acc0 += "x"
+
+    if c103_acc0.len() >= 5 { break }
+
+}
+
+print("c103-o0:", c103_acc0)
+
+let c103_acc1 = ""
+
+loop {
+
+    c103_acc1 += "x"
+
+    if c103_acc1.len() >= 6 { break }
+
+}
+
+print("c103-o1:", c103_acc1)
+
+let c103_acc2 = ""
+
+loop {
+
+    c103_acc2 += "x"
+
+    if c103_acc2.len() >= 7 { break }
+
+}
+
+print("c103-o2:", c103_acc2)

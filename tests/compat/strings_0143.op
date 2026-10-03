@@ -1,0 +1,54 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=143 tag=s143
+
+print("s143-m0:", "ef1BBae60oy".upper(), "ef1BBae60oy".slice(4), "ef1BBae60oy".len())
+
+print("s143-m1:", "2h4l3hh2B9".upper(), "2h4l3hh2B9".slice(1), "2h4l3hh2B9".len())
+
+print("s143-m2:", "3lAaAf79wge".upper(), "3lAaAf79wge".slice(4), "3lAaAf79wge".len())
+
+print("s143-m3:", "w46epf8n_ng2".upper(), "w46epf8n_ng2".slice(4), "w46epf8n_ng2".len())
+
+print("s143-m4:", "ac20frzjx07j".upper(), "ac20frzjx07j".slice(3), "ac20frzjx07j".len())
+
+print("s143-m5:", "wx09jCv".upper(), "wx09jCv".slice(3), "wx09jCv".len())
+
+print("s143-i0:", "0o9-{92}-1jjs")
+
+let s143_v0 = 92
+
+print("s143-v0:", "n={s143_v0}" + "!" * 2)
+
+print("s143-i1:", "309-{53}-2hv0")
+
+let s143_v1 = 53
+
+print("s143-v1:", "n={s143_v1}" + "!" * 3)
+
+print("s143-i2:", "9az-{58}-_90c")
+
+let s143_v2 = 58
+
+print("s143-v2:", "n={s143_v2}" + "!" * 2)
+
+print("s143-i3:", "b7p-{45}-kqt2")
+
+let s143_v3 = 45
+
+print("s143-v3:", "n={s143_v3}" + "!" * 1)
+
+print("s143-r0:", "5ztekn06".replace("5", "gc"), "5ztekn06".contains("zt"))
+
+print("s143-r1:", "u29cm06d".replace("u", "em"), "u29cm06d".contains("29"))
+
+print("s143-j0:", ["dnn", "9vf", "mcy"].join("-"))
+
+print("s143-j1:", ["lxa", "lsq", "nq5", "_8p"].join("-"))
+
+print("s143-j2:", ["5_0", "msd", "q9u", "t60", "2yx"].join("-"))
+
+print("s143-a0:", "249bz5n".at(5), "249bz5n".trim() == "249bz5n")
+
+print("s143-a1:", "97bB4gj".at(6), "97bB4gj".trim() == "97bB4gj")
+
+print("s143-a2:", "agnfclr".at(3), "agnfclr".trim() == "agnfclr")

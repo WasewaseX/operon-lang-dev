@@ -1,0 +1,54 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=208 tag=s208
+
+print("s208-m0:", "3plzt4k9u".upper(), "3plzt4k9u".slice(1), "3plzt4k9u".len())
+
+print("s208-m1:", "zBam_8Cg2".upper(), "zBam_8Cg2".slice(2), "zBam_8Cg2".len())
+
+print("s208-m2:", "ixbpa6mscqCx".upper(), "ixbpa6mscqCx".slice(3), "ixbpa6mscqCx".len())
+
+print("s208-m3:", "ud4nAu6".upper(), "ud4nAu6".slice(2), "ud4nAu6".len())
+
+print("s208-i0:", "3yC-{78}-A68w")
+
+let s208_v0 = 78
+
+print("s208-v0:", "n={s208_v0}" + "!" * 2)
+
+print("s208-i1:", "irx-{33}-iud_")
+
+let s208_v1 = 33
+
+print("s208-v1:", "n={s208_v1}" + "!" * 3)
+
+print("s208-i2:", "mkB-{52}-55z7")
+
+let s208_v2 = 52
+
+print("s208-v2:", "n={s208_v2}" + "!" * 1)
+
+print("s208-i3:", "ph3-{20}-4Alu")
+
+let s208_v3 = 20
+
+print("s208-v3:", "n={s208_v3}" + "!" * 3)
+
+print("s208-i4:", "29r-{46}-88b_")
+
+let s208_v4 = 46
+
+print("s208-v4:", "n={s208_v4}" + "!" * 2)
+
+print("s208-r0:", "kpeoieip".replace("k", "4l"), "kpeoieip".contains("pe"))
+
+print("s208-r1:", "fii85hcB".replace("f", "ct"), "fii85hcB".contains("ii"))
+
+print("s208-j0:", ["xgs", "6fq", "03z", "kqe"].join("-"))
+
+print("s208-j1:", ["r10", "n9h", "qsm", "7g7", "q85"].join("-"))
+
+print("s208-a0:", "32mqChn".at(3), "32mqChn".trim() == "32mqChn")
+
+print("s208-a1:", "7vzad2j".at(0), "7vzad2j".trim() == "7vzad2j")
+
+print("s208-a2:", "9dcvej5".at(3), "9dcvej5".trim() == "9dcvej5")

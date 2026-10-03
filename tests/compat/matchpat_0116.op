@@ -1,0 +1,334 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=116 tag=m116
+
+let m116_s0 = some(4)
+
+match m116_s0 {
+
+    case Some(x) if x > 4 {
+
+        print("m116-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m116-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m116-m0:", "none")
+
+    }
+
+}
+
+let m116_s1 = some(6)
+
+match m116_s1 {
+
+    case Some(x) if x > 6 {
+
+        print("m116-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m116-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m116-m1:", "none")
+
+    }
+
+}
+
+let m116_s2 = some(4)
+
+match m116_s2 {
+
+    case Some(x) if x > 4 {
+
+        print("m116-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m116-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m116-m2:", "none")
+
+    }
+
+}
+
+let m116_s3 = some(7)
+
+match m116_s3 {
+
+    case Some(x) if x > 7 {
+
+        print("m116-m3:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m116-m3:", "small", x)
+
+    }
+
+    case None {
+
+        print("m116-m3:", "none")
+
+    }
+
+}
+
+let m116_s4 = some(3)
+
+match m116_s4 {
+
+    case Some(x) if x > 3 {
+
+        print("m116-m4:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m116-m4:", "small", x)
+
+    }
+
+    case None {
+
+        print("m116-m4:", "none")
+
+    }
+
+}
+
+let m116_ls0 = [13, 49, 15]
+
+match m116_ls0 {
+
+    case [13, *rest] {
+
+        print("m116-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m116-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m116-l0:", "other")
+
+    }
+
+}
+
+let m116_ls1 = [1, 35, 16]
+
+match m116_ls1 {
+
+    case [1, *rest] {
+
+        print("m116-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m116-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m116-l1:", "other")
+
+    }
+
+}
+
+let m116_ls2 = [28, 13, 49]
+
+match m116_ls2 {
+
+    case [28, *rest] {
+
+        print("m116-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m116-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m116-l2:", "other")
+
+    }
+
+}
+
+let m116_mp0 = {splicer: -9278, enzyme: -9030}
+
+match m116_mp0 {
+
+    case {splicer: p, enzyme: q} {
+
+        print("m116-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m116-mp0:", "miss")
+
+    }
+
+}
+
+let m116_mp1 = {gene: -1270, exon: 191}
+
+match m116_mp1 {
+
+    case {gene: p, exon: q} {
+
+        print("m116-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m116-mp1:", "miss")
+
+    }
+
+}
+
+let m116_mp2 = {ligase: -9437, helix: 9185}
+
+match m116_mp2 {
+
+    case {ligase: p, helix: q} {
+
+        print("m116-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m116-mp2:", "miss")
+
+    }
+
+}
+
+let m116_r0 = ok(1)
+
+match m116_r0 {
+
+    case Ok(n) | Err(1) {
+
+        print("m116-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m116-r0:", "zero")
+
+    }
+
+}
+
+let m116_r1 = ok(4)
+
+match m116_r1 {
+
+    case Ok(n) | Err(4) {
+
+        print("m116-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m116-r1:", "zero")
+
+    }
+
+}
+
+let m116_r2 = ok(4)
+
+match m116_r2 {
+
+    case Ok(n) | Err(4) {
+
+        print("m116-r2:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m116-r2:", "zero")
+
+    }
+
+}
+
+match "enzyme" {
+
+    case "enzyme" {
+
+        print("m116-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m116-w0:", "alt")
+
+    }
+
+}
+
+match "codon" {
+
+    case "codon" {
+
+        print("m116-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m116-w1:", "alt")
+
+    }
+
+}

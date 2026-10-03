@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=214 tag=s214
+
+print("s214-m0:", "l5obuasq".upper(), "l5obuasq".slice(4), "l5obuasq".len())
+
+print("s214-m1:", "nyio5dj9676c".upper(), "nyio5dj9676c".slice(1), "nyio5dj9676c".len())
+
+print("s214-m2:", "jnwmetsa1rf1".upper(), "jnwmetsa1rf1".slice(4), "jnwmetsa1rf1".len())
+
+print("s214-m3:", "B5kw8tAmBe".upper(), "B5kw8tAmBe".slice(4), "B5kw8tAmBe".len())
+
+print("s214-i0:", "m3q-{33}-t4bl")
+
+let s214_v0 = 33
+
+print("s214-v0:", "n={s214_v0}" + "!" * 3)
+
+print("s214-i1:", "C9z-{87}-j7cq")
+
+let s214_v1 = 87
+
+print("s214-v1:", "n={s214_v1}" + "!" * 3)
+
+print("s214-i2:", "9v5-{67}-bwjc")
+
+let s214_v2 = 67
+
+print("s214-v2:", "n={s214_v2}" + "!" * 3)
+
+print("s214-i3:", "sdy-{4}-eaca")
+
+let s214_v3 = 4
+
+print("s214-v3:", "n={s214_v3}" + "!" * 2)
+
+print("s214-i4:", "4bb-{75}-rsph")
+
+let s214_v4 = 75
+
+print("s214-v4:", "n={s214_v4}" + "!" * 2)
+
+print("s214-r0:", "k_1o2wnq".replace("k", "pn"), "k_1o2wnq".contains("_1"))
+
+print("s214-r1:", "wtkB3nmA".replace("w", "p0"), "wtkB3nmA".contains("tk"))
+
+print("s214-r2:", "maA8mt7w".replace("m", "A5"), "maA8mt7w".contains("aA"))
+
+print("s214-r3:", "46gA4d54".replace("4", "a6"), "46gA4d54".contains("6g"))
+
+print("s214-j0:", ["qfa", "zx_", "ql7", "g4r", "eBA"].join("-"))
+
+print("s214-j1:", ["boc", "vdy", "aBt", "iu6"].join("-"))
+
+print("s214-a0:", "glCg_76".at(2), "glCg_76".trim() == "glCg_76")
+
+print("s214-a1:", "h28r1yj".at(6), "h28r1yj".trim() == "h28r1yj")

@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=128 tag=m128
+
+let m128_m0 = {marker: -42, cell: -95, gene: -61, codon: -76, enzyme: 56}
+
+print("m128-m0:", m128_m0["marker"], len(m128_m0), m128_m0.has("marker"))
+
+let m128_m1 = {ligase: 69, gene: -1, plasmid: -12, helix: -90, enzyme: -77}
+
+print("m128-m1:", m128_m1["ligase"], len(m128_m1), m128_m1.has("ligase"))
+
+let m128_m2 = {vector: -53, marker: -89, exon: 92, enzyme: 28}
+
+print("m128-m2:", m128_m2["vector"], len(m128_m2), m128_m2.has("vector"))
+
+let m128_k0 = {ligase: 16, marker: 22, enzyme: 17}
+
+let m128_ks0 = m128_k0.keys()
+
+let m128_sm0 = 0
+
+for k in m128_k0 { m128_sm0 += m128_k0[k] }
+
+print("m128-k0:", m128_sm0, m128_k0.keys().sort(), m128_k0.values().len())
+
+let m128_k1 = {splicer: 33, gene: 24, marker: 13}
+
+let m128_ks1 = m128_k1.keys()
+
+let m128_sm1 = 0
+
+for k in m128_k1 { m128_sm1 += m128_k1[k] }
+
+print("m128-k1:", m128_sm1, m128_k1.keys().sort(), m128_k1.values().len())
+
+let m128_k2 = {helix: 23, splicer: 23, marker: 2}
+
+let m128_ks2 = m128_k2.keys()
+
+let m128_sm2 = 0
+
+for k in m128_k2 { m128_sm2 += m128_k2[k] }
+
+print("m128-k2:", m128_sm2, m128_k2.keys().sort(), m128_k2.values().len())
+
+let m128_w0 = {outer: {cell: 4, marker: 1, tag: "ok"}}}
+
+print("m128-w0:", m128_w0["outer"]["marker"], m128_w0["outer"]["tag"])
+
+let m128_w1 = {outer: {vector: 1, marker: 9, tag: "ok"}}}
+
+print("m128-w1:", m128_w1["outer"]["marker"], m128_w1["outer"]["tag"])

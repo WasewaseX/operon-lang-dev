@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=230 tag=m230
+
+let m230_m0 = {enzyme: 77, ribose: -61, splicer: -22, exon: 48, helix: 65}
+
+print("m230-m0:", m230_m0["enzyme"], len(m230_m0), m230_m0.has("enzyme"))
+
+let m230_m1 = {codon: -38, plasmid: -92, vector: 39, ribose: -44, exon: -1}
+
+print("m230-m1:", m230_m1["codon"], len(m230_m1), m230_m1.has("codon"))
+
+let m230_m2 = {vector: 61, marker: 18, cell: -42}
+
+print("m230-m2:", m230_m2["vector"], len(m230_m2), m230_m2.has("vector"))
+
+let m230_k0 = {ribose: 42, marker: 22, exon: 50}
+
+let m230_ks0 = m230_k0.keys()
+
+let m230_sm0 = 0
+
+for k in m230_k0 { m230_sm0 += m230_k0[k] }
+
+print("m230-k0:", m230_sm0, m230_k0.keys().sort(), m230_k0.values().len())
+
+let m230_k1 = {marker: 39, gene: 28, vector: 14}
+
+let m230_ks1 = m230_k1.keys()
+
+let m230_sm1 = 0
+
+for k in m230_k1 { m230_sm1 += m230_k1[k] }
+
+print("m230-k1:", m230_sm1, m230_k1.keys().sort(), m230_k1.values().len())
+
+let m230_k2 = {splicer: 38, codon: 7, exon: 17}
+
+let m230_ks2 = m230_k2.keys()
+
+let m230_sm2 = 0
+
+for k in m230_k2 { m230_sm2 += m230_k2[k] }
+
+print("m230-k2:", m230_sm2, m230_k2.keys().sort(), m230_k2.values().len())
+
+let m230_w0 = {outer: {helix: 2, exon: 4, tag: "ok"}}}
+
+print("m230-w0:", m230_w0["outer"]["exon"], m230_w0["outer"]["tag"])
+
+let m230_w1 = {outer: {gene: 6, splicer: 8, tag: "ok"}}}
+
+print("m230-w1:", m230_w1["outer"]["splicer"], m230_w1["outer"]["tag"])

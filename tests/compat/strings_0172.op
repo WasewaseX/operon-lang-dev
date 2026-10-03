@@ -1,0 +1,58 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=172 tag=s172
+
+print("s172-m0:", "pBf8xdm7".upper(), "pBf8xdm7".slice(3), "pBf8xdm7".len())
+
+print("s172-m1:", "oCobtfh3".upper(), "oCobtfh3".slice(4), "oCobtfh3".len())
+
+print("s172-m2:", "alfp20p".upper(), "alfp20p".slice(1), "alfp20p".len())
+
+print("s172-m3:", "g_x1zACgmwwA".upper(), "g_x1zACgmwwA".slice(1), "g_x1zACgmwwA".len())
+
+print("s172-m4:", "a9ey3yur".upper(), "a9ey3yur".slice(4), "a9ey3yur".len())
+
+print("s172-i0:", "lls-{80}-ae2l")
+
+let s172_v0 = 80
+
+print("s172-v0:", "n={s172_v0}" + "!" * 2)
+
+print("s172-i1:", "5hg-{10}-8tol")
+
+let s172_v1 = 10
+
+print("s172-v1:", "n={s172_v1}" + "!" * 2)
+
+print("s172-i2:", "q1b-{78}-5f_o")
+
+let s172_v2 = 78
+
+print("s172-v2:", "n={s172_v2}" + "!" * 2)
+
+print("s172-i3:", "jAk-{58}-98rB")
+
+let s172_v3 = 58
+
+print("s172-v3:", "n={s172_v3}" + "!" * 3)
+
+print("s172-i4:", "yA5-{5}-_l6q")
+
+let s172_v4 = 5
+
+print("s172-v4:", "n={s172_v4}" + "!" * 2)
+
+print("s172-r0:", "3arwCoo5".replace("3", "rb"), "3arwCoo5".contains("ar"))
+
+print("s172-r1:", "gvlb_8m6".replace("g", "3_"), "gvlb_8m6".contains("vl"))
+
+print("s172-r2:", "12ueyey6".replace("1", "cu"), "12ueyey6".contains("2u"))
+
+print("s172-j0:", ["k5u", "6lr", "lCl", "gqq", "9ck"].join("-"))
+
+print("s172-j1:", ["yq1", "lg_", "1rx", "ses", "c0o"].join("-"))
+
+print("s172-j2:", ["A5v", "vm9", "Cri", "vAy"].join("-"))
+
+print("s172-a0:", "9sa8yCj".at(5), "9sa8yCj".trim() == "9sa8yCj")
+
+print("s172-a1:", "jnC4d12".at(4), "jnC4d12".trim() == "jnC4d12")

@@ -1,0 +1,144 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=127 tag=c127
+
+let c127_b0 = "start"
+
+if 99 > 80 { c127_b0 = "hi" } elif 99 > 40 { c127_b0 = "mid" } else { c127_b0 = "lo" }
+
+print("c127-i0:", c127_b0, 99)
+
+let c127_b1 = "start"
+
+if 63 > 80 { c127_b1 = "hi" } elif 63 > 40 { c127_b1 = "mid" } else { c127_b1 = "lo" }
+
+print("c127-i1:", c127_b1, 63)
+
+let c127_b2 = "start"
+
+if 6 > 80 { c127_b2 = "hi" } elif 6 > 40 { c127_b2 = "mid" } else { c127_b2 = "lo" }
+
+print("c127-i2:", c127_b2, 6)
+
+let c127_b3 = "start"
+
+if 58 > 80 { c127_b3 = "hi" } elif 58 > 40 { c127_b3 = "mid" } else { c127_b3 = "lo" }
+
+print("c127-i3:", c127_b3, 58)
+
+let c127_a0 = 0
+
+let c127_n0 = 0
+
+while c127_n0 < 10 {
+
+    c127_n0 += 2
+
+    if c127_n0 % 2 == 0 { continue }
+
+    if c127_n0 > 13 { break }
+
+    c127_a0 += c127_n0
+
+}
+
+print("c127-w0:", c127_a0, c127_n0)
+
+let c127_a1 = 0
+
+let c127_n1 = 0
+
+while c127_n1 < 14 {
+
+    c127_n1 += 4
+
+    if c127_n1 % 2 == 0 { continue }
+
+    if c127_n1 > 20 { break }
+
+    c127_a1 += c127_n1
+
+}
+
+print("c127-w1:", c127_a1, c127_n1)
+
+let c127_a2 = 0
+
+let c127_n2 = 0
+
+while c127_n2 < 12 {
+
+    c127_n2 += 3
+
+    if c127_n2 % 2 == 0 { continue }
+
+    if c127_n2 > 17 { break }
+
+    c127_a2 += c127_n2
+
+}
+
+print("c127-w2:", c127_a2, c127_n2)
+
+let c127_c0 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 2] {
+
+        c127_c0 += a * b
+
+    }
+
+}
+
+print("c127-l0:", c127_c0)
+
+let c127_c1 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 4] {
+
+        c127_c1 += a * b
+
+    }
+
+}
+
+print("c127-l1:", c127_c1)
+
+let c127_acc0 = ""
+
+loop {
+
+    c127_acc0 += "x"
+
+    if c127_acc0.len() >= 6 { break }
+
+}
+
+print("c127-o0:", c127_acc0)
+
+let c127_acc1 = ""
+
+loop {
+
+    c127_acc1 += "x"
+
+    if c127_acc1.len() >= 5 { break }
+
+}
+
+print("c127-o1:", c127_acc1)
+
+let c127_acc2 = ""
+
+loop {
+
+    c127_acc2 += "x"
+
+    if c127_acc2.len() >= 3 { break }
+
+}
+
+print("c127-o2:", c127_acc2)

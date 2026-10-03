@@ -1,0 +1,36 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=224 tag=c224
+
+print("c224-c0:", -6947 != 9174)
+
+print("c224-c1:", 5443 < -3528)
+
+print("c224-c2:", 2034 < 958)
+
+print("c224-c3:", -2358 == -2782)
+
+print("c224-c4:", 9311 >= -9846)
+
+print("c224-c5:", 4736 < -8013)
+
+print("c224-c6:", -8837 != -8462)
+
+print("c224-b0:", 42 < 9 && 9 < 38, 42 > 9 || 42 > 38)
+
+print("c224-b1:", 42 < 6 && 6 < 19, 42 > 6 || 42 > 19)
+
+print("c224-t0:", -8247 > 1355 ? "gt" : "le")
+
+print("c224-t1:", -6312 > -1636 ? "gt" : "le")
+
+let c224_n0 = null
+
+print("c224-n0:", c224_n0 ?? 2866, c224_n0 == null)
+
+let c224_n1 = null
+
+print("c224-n1:", c224_n1 ?? -8815, c224_n1 == null)
+
+print("c224-s0:", "gdpx" in "Agnt_zgdpx", "gdpx" == "gdpx")
+
+print("c224-s1:", "w1fc" in "vipmuhw1fc", "w1fc" == "w1fc")

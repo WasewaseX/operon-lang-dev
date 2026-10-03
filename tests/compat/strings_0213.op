@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=213 tag=s213
+
+print("s213-m0:", "dnszp7o5".upper(), "dnszp7o5".slice(2), "dnszp7o5".len())
+
+print("s213-m1:", "rvayyd".upper(), "rvayyd".slice(4), "rvayyd".len())
+
+print("s213-m2:", "CA9m1_46yufzpj".upper(), "CA9m1_46yufzpj".slice(1), "CA9m1_46yufzpj".len())
+
+print("s213-m3:", "Bk0uwA1s26ic09".upper(), "Bk0uwA1s26ic09".slice(2), "Bk0uwA1s26ic09".len())
+
+print("s213-i0:", "npn-{35}-jxr9")
+
+let s213_v0 = 35
+
+print("s213-v0:", "n={s213_v0}" + "!" * 1)
+
+print("s213-i1:", "ebl-{70}-u33B")
+
+let s213_v1 = 70
+
+print("s213-v1:", "n={s213_v1}" + "!" * 3)
+
+print("s213-i2:", "_fp-{97}-rh9g")
+
+let s213_v2 = 97
+
+print("s213-v2:", "n={s213_v2}" + "!" * 1)
+
+print("s213-r0:", "829o1n13".replace("8", "73"), "829o1n13".contains("29"))
+
+print("s213-r1:", "yfgkoijC".replace("y", "sy"), "yfgkoijC".contains("fg"))
+
+print("s213-r2:", "2kfim0j9".replace("2", "qu"), "2kfim0j9".contains("kf"))
+
+print("s213-j0:", ["jy9", "bui", "s27", "bi5"].join("-"))
+
+print("s213-j1:", ["n3e", "wjh", "znf"].join("-"))
+
+print("s213-a0:", "1d5lcBr".at(6), "1d5lcBr".trim() == "1d5lcBr")
+
+print("s213-a1:", "BCfn234".at(5), "BCfn234".trim() == "BCfn234")

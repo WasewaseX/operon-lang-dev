@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=186 tag=s186
+
+print("s186-m0:", "adbecc3B".upper(), "adbecc3B".slice(3), "adbecc3B".len())
+
+print("s186-m1:", "hoBm0iedlm8".upper(), "hoBm0iedlm8".slice(4), "hoBm0iedlm8".len())
+
+print("s186-m2:", "9pykbtwqe".upper(), "9pykbtwqe".slice(3), "9pykbtwqe".len())
+
+print("s186-m3:", "fy61eb".upper(), "fy61eb".slice(2), "fy61eb".len())
+
+print("s186-i0:", "6rl-{73}-dqw9")
+
+let s186_v0 = 73
+
+print("s186-v0:", "n={s186_v0}" + "!" * 3)
+
+print("s186-i1:", "bq0-{95}-Cfdx")
+
+let s186_v1 = 95
+
+print("s186-v1:", "n={s186_v1}" + "!" * 2)
+
+print("s186-i2:", "vgu-{63}-sA3p")
+
+let s186_v2 = 63
+
+print("s186-v2:", "n={s186_v2}" + "!" * 1)
+
+print("s186-r0:", "0rwCbrnn".replace("0", "At"), "0rwCbrnn".contains("rw"))
+
+print("s186-r1:", "fzczwucn".replace("f", "ci"), "fzczwucn".contains("zc"))
+
+print("s186-r2:", "qa5pbbc5".replace("q", "8C"), "qa5pbbc5".contains("a5"))
+
+print("s186-r3:", "g8mic3bz".replace("g", "2_"), "g8mic3bz".contains("8m"))
+
+print("s186-j0:", ["Csb", "du4", "_bw"].join("-"))
+
+print("s186-j1:", ["53k", "6xr", "zBv", "iqw"].join("-"))
+
+print("s186-j2:", ["6u3", "Ash", "1xp", "u6h", "7dm"].join("-"))
+
+print("s186-a0:", "fAgt2hy".at(5), "fAgt2hy".trim() == "fAgt2hy")
+
+print("s186-a1:", "6bujma5".at(5), "6bujma5".trim() == "6bujma5")
+
+print("s186-a2:", "r_c4vma".at(1), "r_c4vma".trim() == "r_c4vma")

@@ -1,0 +1,34 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=49 tag=c049
+
+print("c049-c0:", -5936 <= -1012)
+
+print("c049-c1:", 965 <= -516)
+
+print("c049-c2:", -7297 > -952)
+
+print("c049-c3:", 8612 != 3885)
+
+print("c049-b0:", 48 < 44 && 44 < 48, 48 > 44 || 48 > 48)
+
+print("c049-b1:", 16 < 25 && 25 < 34, 16 > 25 || 16 > 34)
+
+print("c049-b2:", 32 < 1 && 1 < 38, 32 > 1 || 32 > 38)
+
+print("c049-t0:", -6163 > -6133 ? "gt" : "le")
+
+print("c049-t1:", -6934 > -3540 ? "gt" : "le")
+
+print("c049-t2:", -5470 > -9637 ? "gt" : "le")
+
+let c049_n0 = null
+
+print("c049-n0:", c049_n0 ?? 6660, c049_n0 == null)
+
+let c049_n1 = null
+
+print("c049-n1:", c049_n1 ?? -8471, c049_n1 == null)
+
+print("c049-s0:", "p1hB" in "g98luup1hB", "p1hB" == "p1hB")
+
+print("c049-s1:", "0e4s" in "me2bmr0e4s", "0e4s" == "0e4s")

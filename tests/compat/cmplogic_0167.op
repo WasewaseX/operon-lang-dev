@@ -1,0 +1,36 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=167 tag=c167
+
+print("c167-c0:", 6714 <= -6827)
+
+print("c167-c1:", -9756 != 8431)
+
+print("c167-c2:", -8025 >= -3895)
+
+print("c167-c3:", 2453 > -647)
+
+print("c167-c4:", -2197 <= -1234)
+
+print("c167-b0:", 20 < 5 && 5 < 45, 20 > 5 || 20 > 45)
+
+print("c167-b1:", 37 < 36 && 36 < 27, 37 > 36 || 37 > 27)
+
+print("c167-t0:", 2413 > -5250 ? "gt" : "le")
+
+print("c167-t1:", 7493 > -1167 ? "gt" : "le")
+
+print("c167-t2:", -2049 > 8365 ? "gt" : "le")
+
+print("c167-t3:", 2601 > -4127 ? "gt" : "le")
+
+let c167_n0 = null
+
+print("c167-n0:", c167_n0 ?? 5382, c167_n0 == null)
+
+let c167_n1 = null
+
+print("c167-n1:", c167_n1 ?? -7151, c167_n1 == null)
+
+print("c167-s0:", "qk24" in "86m41lqk24", "qk24" == "qk24")
+
+print("c167-s1:", "ossh" in "rgb03tossh", "ossh" == "ossh")

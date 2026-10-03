@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=145 tag=s145
+
+print("s145-m0:", "ixgij4vxz1ql".upper(), "ixgij4vxz1ql".slice(1), "ixgij4vxz1ql".len())
+
+print("s145-m1:", "jC3c10Av".upper(), "jC3c10Av".slice(3), "jC3c10Av".len())
+
+print("s145-m2:", "wC2CBk2An".upper(), "wC2CBk2An".slice(1), "wC2CBk2An".len())
+
+print("s145-m3:", "nBaC9r7".upper(), "nBaC9r7".slice(2), "nBaC9r7".len())
+
+print("s145-m4:", "0dt6q9qC".upper(), "0dt6q9qC".slice(3), "0dt6q9qC".len())
+
+print("s145-i0:", "A61-{17}-zb2i")
+
+let s145_v0 = 17
+
+print("s145-v0:", "n={s145_v0}" + "!" * 1)
+
+print("s145-i1:", "4Aa-{84}-mnuj")
+
+let s145_v1 = 84
+
+print("s145-v1:", "n={s145_v1}" + "!" * 1)
+
+print("s145-i2:", "7e2-{29}-gh9q")
+
+let s145_v2 = 29
+
+print("s145-v2:", "n={s145_v2}" + "!" * 1)
+
+print("s145-r0:", "4nazuxBg".replace("4", "2v"), "4nazuxBg".contains("na"))
+
+print("s145-r1:", "dBnh4grt".replace("d", "ya"), "dBnh4grt".contains("Bn"))
+
+print("s145-r2:", "crx7x4h9".replace("c", "mm"), "crx7x4h9".contains("rx"))
+
+print("s145-j0:", ["93v", "ex0", "xBt", "tq3", "9sx"].join("-"))
+
+print("s145-j1:", ["Bqm", "bBp", "q58"].join("-"))
+
+print("s145-j2:", ["nio", "jrs", "ggi", "dx1", "t_u"].join("-"))
+
+print("s145-a0:", "5Ctcehz".at(4), "5Ctcehz".trim() == "5Ctcehz")
+
+print("s145-a1:", "ojup0vh".at(1), "ojup0vh".trim() == "ojup0vh")

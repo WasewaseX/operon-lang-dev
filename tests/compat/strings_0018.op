@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=18 tag=s018
+
+print("s018-m0:", "pa_x8kABz".upper(), "pa_x8kABz".slice(1), "pa_x8kABz".len())
+
+print("s018-m1:", "kpodt50Ber".upper(), "kpodt50Ber".slice(3), "kpodt50Ber".len())
+
+print("s018-m2:", "AfCtxovA4kyr".upper(), "AfCtxovA4kyr".slice(4), "AfCtxovA4kyr".len())
+
+print("s018-m3:", "ucvivxaa_v".upper(), "ucvivxaa_v".slice(4), "ucvivxaa_v".len())
+
+print("s018-m4:", "v58vB5v".upper(), "v58vB5v".slice(2), "v58vB5v".len())
+
+print("s018-m5:", "yjcdno5".upper(), "yjcdno5".slice(4), "yjcdno5".len())
+
+print("s018-i0:", "rt9-{67}-vCvh")
+
+let s018_v0 = 67
+
+print("s018-v0:", "n={s018_v0}" + "!" * 2)
+
+print("s018-i1:", "sgl-{85}-nf8x")
+
+let s018_v1 = 85
+
+print("s018-v1:", "n={s018_v1}" + "!" * 2)
+
+print("s018-i2:", "rge-{85}-7qt5")
+
+let s018_v2 = 85
+
+print("s018-v2:", "n={s018_v2}" + "!" * 1)
+
+print("s018-r0:", "rjpaCcuz".replace("r", "we"), "rjpaCcuz".contains("jp"))
+
+print("s018-r1:", "nawke95v".replace("n", "pc"), "nawke95v".contains("aw"))
+
+print("s018-j0:", ["qAo", "itp", "wpr", "9b6"].join("-"))
+
+print("s018-j1:", ["fk1", "v71", "1uo", "w_p", "q81"].join("-"))
+
+print("s018-a0:", "pqxnq5A".at(5), "pqxnq5A".trim() == "pqxnq5A")
+
+print("s018-a1:", "tnahilk".at(1), "tnahilk".trim() == "tnahilk")
+
+print("s018-a2:", "2mi09As".at(0), "2mi09As".trim() == "2mi09As")

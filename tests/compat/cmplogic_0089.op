@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=89 tag=c089
+
+print("c089-c0:", 5597 == 2320)
+
+print("c089-c1:", 7284 >= -2510)
+
+print("c089-c2:", -6287 < 8255)
+
+print("c089-c3:", -7914 < 5480)
+
+print("c089-c4:", -9977 != 5738)
+
+print("c089-c5:", 6635 <= -538)
+
+print("c089-c6:", 4640 < 2454)
+
+print("c089-b0:", 26 < 5 && 5 < 33, 26 > 5 || 26 > 33)
+
+print("c089-b1:", 20 < 43 && 43 < 28, 20 > 43 || 20 > 28)
+
+print("c089-b2:", 16 < 15 && 15 < 30, 16 > 15 || 16 > 30)
+
+print("c089-b3:", 50 < 18 && 18 < 29, 50 > 18 || 50 > 29)
+
+print("c089-t0:", -4415 > -5655 ? "gt" : "le")
+
+print("c089-t1:", 5921 > -6685 ? "gt" : "le")
+
+print("c089-t2:", -3802 > -5311 ? "gt" : "le")
+
+let c089_n0 = null
+
+print("c089-n0:", c089_n0 ?? 1002, c089_n0 == null)
+
+let c089_n1 = null
+
+print("c089-n1:", c089_n1 ?? -4221, c089_n1 == null)
+
+print("c089-s0:", "v5jr" in "C9zdphv5jr", "v5jr" == "v5jr")
+
+print("c089-s1:", "ekq4" in "s4C_mtekq4", "ekq4" == "ekq4")

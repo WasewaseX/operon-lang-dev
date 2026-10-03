@@ -1,0 +1,11 @@
+id: no-std-process-exit-in-core
+message: std::process::exit bypasses the capability gate — exits must go through the runtime policy layer
+severity: error
+language: Rust
+rule:
+  any:
+    - pattern: std::process::exit($C)
+    - pattern: process::exit($C)
+paths:
+  include:
+    - src

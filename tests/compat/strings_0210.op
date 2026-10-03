@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=210 tag=s210
+
+print("s210-m0:", "1aazl_w".upper(), "1aazl_w".slice(4), "1aazl_w".len())
+
+print("s210-m1:", "2bebslwrn".upper(), "2bebslwrn".slice(2), "2bebslwrn".len())
+
+print("s210-m2:", "Buwsb9".upper(), "Buwsb9".slice(4), "Buwsb9".len())
+
+print("s210-m3:", "68en0tf_o_e2d".upper(), "68en0tf_o_e2d".slice(2), "68en0tf_o_e2d".len())
+
+print("s210-i0:", "lda-{8}-Atir")
+
+let s210_v0 = 8
+
+print("s210-v0:", "n={s210_v0}" + "!" * 1)
+
+print("s210-i1:", "31B-{1}-7hm1")
+
+let s210_v1 = 1
+
+print("s210-v1:", "n={s210_v1}" + "!" * 3)
+
+print("s210-i2:", "6wx-{46}-a8rh")
+
+let s210_v2 = 46
+
+print("s210-v2:", "n={s210_v2}" + "!" * 3)
+
+print("s210-i3:", "ws4-{42}-58_t")
+
+let s210_v3 = 42
+
+print("s210-v3:", "n={s210_v3}" + "!" * 1)
+
+print("s210-r0:", "k6ratyf7".replace("k", "fs"), "k6ratyf7".contains("6r"))
+
+print("s210-r1:", "kapueime".replace("k", "vw"), "kapueime".contains("ap"))
+
+print("s210-j0:", ["b2t", "cht", "xA8", "24q", "ilv"].join("-"))
+
+print("s210-j1:", ["q9y", "0Cw", "izb", "e8p"].join("-"))
+
+print("s210-a0:", "uob4xsy".at(3), "uob4xsy".trim() == "uob4xsy")
+
+print("s210-a1:", "ykl132C".at(0), "ykl132C".trim() == "ykl132C")
+
+print("s210-a2:", "vud_Ci2".at(2), "vud_Ci2".trim() == "vud_Ci2")

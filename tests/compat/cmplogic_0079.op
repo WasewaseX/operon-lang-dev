@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=79 tag=c079
+
+print("c079-c0:", -9854 <= -1348)
+
+print("c079-c1:", -5228 <= 3465)
+
+print("c079-c2:", -2359 <= -4922)
+
+print("c079-c3:", 4714 >= 8652)
+
+print("c079-c4:", 4637 >= 3126)
+
+print("c079-c5:", -9198 > -4446)
+
+print("c079-b0:", 50 < 14 && 14 < 11, 50 > 14 || 50 > 11)
+
+print("c079-b1:", 43 < 27 && 27 < 7, 43 > 27 || 43 > 7)
+
+print("c079-b2:", 14 < 42 && 42 < 37, 14 > 42 || 14 > 37)
+
+print("c079-t0:", -5198 > -1113 ? "gt" : "le")
+
+print("c079-t1:", 799 > -2675 ? "gt" : "le")
+
+print("c079-t2:", -7701 > 6575 ? "gt" : "le")
+
+print("c079-t3:", -9251 > -5354 ? "gt" : "le")
+
+let c079_n0 = null
+
+print("c079-n0:", c079_n0 ?? 544, c079_n0 == null)
+
+let c079_n1 = null
+
+print("c079-n1:", c079_n1 ?? -125, c079_n1 == null)
+
+print("c079-s0:", "h_B8" in "CypC_gh_B8", "h_B8" == "h_B8")
+
+print("c079-s1:", "1Bm0" in "xysctw1Bm0", "1Bm0" == "1Bm0")

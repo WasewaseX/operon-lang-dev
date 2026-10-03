@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=229 tag=c229
+
+print("c229-c0:", 4969 >= -3151)
+
+print("c229-c1:", -6731 != -3644)
+
+print("c229-c2:", -7893 != -530)
+
+print("c229-c3:", 503 == -5392)
+
+print("c229-c4:", 5991 != -421)
+
+print("c229-c5:", 5921 != -4387)
+
+print("c229-c6:", -4282 <= 2303)
+
+print("c229-b0:", 28 < 27 && 27 < 0, 28 > 27 || 28 > 0)
+
+print("c229-b1:", 11 < 8 && 8 < 33, 11 > 8 || 11 > 33)
+
+print("c229-b2:", 7 < 38 && 38 < 0, 7 > 38 || 7 > 0)
+
+print("c229-b3:", 33 < 12 && 12 < 14, 33 > 12 || 33 > 14)
+
+print("c229-t0:", -8912 > 5840 ? "gt" : "le")
+
+print("c229-t1:", 3405 > -8925 ? "gt" : "le")
+
+print("c229-t2:", 236 > 7771 ? "gt" : "le")
+
+print("c229-t3:", -5338 > 7786 ? "gt" : "le")
+
+let c229_n0 = null
+
+print("c229-n0:", c229_n0 ?? -7682, c229_n0 == null)
+
+let c229_n1 = null
+
+print("c229-n1:", c229_n1 ?? 6552, c229_n1 == null)
+
+let c229_n2 = null
+
+print("c229-n2:", c229_n2 ?? -5057, c229_n2 == null)
+
+print("c229-s0:", "nhks" in "9acnr7nhks", "nhks" == "nhks")
+
+print("c229-s1:", "oiiA" in "lA0n8yoiiA", "oiiA" == "oiiA")

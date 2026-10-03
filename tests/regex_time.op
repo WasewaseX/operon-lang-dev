@@ -1,4 +1,4 @@
-# regex engine + civil-calendar builtins — differential + containment proofs
+# regex engine + civil-calendar builtins, differential + containment proofs
 # NOTE: braces in regex quantifiers must be escaped (\{ \}) because {..} in
 # double-quoted strings is interpolation; escaped braces pass through raw.
 frame proof {

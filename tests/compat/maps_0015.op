@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20260930 idx=15 tag=m015
+
+let m015_m0 = {enzyme: 75, splicer: 94, cell: -13, vector: 42, gene: 51}
+
+print("m015-m0:", m015_m0["enzyme"], len(m015_m0), m015_m0.has("enzyme"))
+
+let m015_m1 = {gene: 19, codon: -70, splicer: -12, cell: -23}
+
+print("m015-m1:", m015_m1["gene"], len(m015_m1), m015_m1.has("gene"))
+
+let m015_m2 = {codon: -12, gene: 28, enzyme: -51}
+
+print("m015-m2:", m015_m2["codon"], len(m015_m2), m015_m2.has("codon"))
+
+let m015_m3 = {plasmid: 36, vector: 25, ribose: 72, cell: 5}
+
+print("m015-m3:", m015_m3["plasmid"], len(m015_m3), m015_m3.has("plasmid"))
+
+let m015_k0 = {marker: 9, ribose: 13, splicer: 38}
+
+let m015_ks0 = m015_k0.keys()
+
+let m015_sm0 = 0
+
+for k in m015_k0 { m015_sm0 += m015_k0[k] }
+
+print("m015-k0:", m015_sm0, m015_k0.keys().sort(), m015_k0.values().len())
+
+let m015_k1 = {plasmid: 28, enzyme: 1, helix: 6}
+
+let m015_ks1 = m015_k1.keys()
+
+let m015_sm1 = 0
+
+for k in m015_k1 { m015_sm1 += m015_k1[k] }
+
+print("m015-k1:", m015_sm1, m015_k1.keys().sort(), m015_k1.values().len())
+
+let m015_w0 = {outer: {exon: 4, cell: 5, tag: "ok"}}}
+
+print("m015-w0:", m015_w0["outer"]["cell"], m015_w0["outer"]["tag"])
+
+let m015_w1 = {outer: {plasmid: 8, cell: 8, tag: "ok"}}}
+
+print("m015-w1:", m015_w1["outer"]["cell"], m015_w1["outer"]["tag"])

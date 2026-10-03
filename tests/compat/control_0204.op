@@ -1,0 +1,164 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=204 tag=c204
+
+let c204_b0 = "start"
+
+if -7 > 80 { c204_b0 = "hi" } elif -7 > 40 { c204_b0 = "mid" } else { c204_b0 = "lo" }
+
+print("c204-i0:", c204_b0, -7)
+
+let c204_b1 = "start"
+
+if 79 > 80 { c204_b1 = "hi" } elif 79 > 40 { c204_b1 = "mid" } else { c204_b1 = "lo" }
+
+print("c204-i1:", c204_b1, 79)
+
+let c204_b2 = "start"
+
+if 96 > 80 { c204_b2 = "hi" } elif 96 > 40 { c204_b2 = "mid" } else { c204_b2 = "lo" }
+
+print("c204-i2:", c204_b2, 96)
+
+let c204_b3 = "start"
+
+if 90 > 80 { c204_b3 = "hi" } elif 90 > 40 { c204_b3 = "mid" } else { c204_b3 = "lo" }
+
+print("c204-i3:", c204_b3, 90)
+
+let c204_a0 = 0
+
+let c204_n0 = 0
+
+while c204_n0 < 5 {
+
+    c204_n0 += 3
+
+    if c204_n0 % 3 == 0 { continue }
+
+    if c204_n0 > 10 { break }
+
+    c204_a0 += c204_n0
+
+}
+
+print("c204-w0:", c204_a0, c204_n0)
+
+let c204_a1 = 0
+
+let c204_n1 = 0
+
+while c204_n1 < 9 {
+
+    c204_n1 += 4
+
+    if c204_n1 % 2 == 0 { continue }
+
+    if c204_n1 > 18 { break }
+
+    c204_a1 += c204_n1
+
+}
+
+print("c204-w1:", c204_a1, c204_n1)
+
+let c204_a2 = 0
+
+let c204_n2 = 0
+
+while c204_n2 < 15 {
+
+    c204_n2 += 4
+
+    if c204_n2 % 3 == 0 { continue }
+
+    if c204_n2 > 18 { break }
+
+    c204_a2 += c204_n2
+
+}
+
+print("c204-w2:", c204_a2, c204_n2)
+
+let c204_a3 = 0
+
+let c204_n3 = 0
+
+while c204_n3 < 7 {
+
+    c204_n3 += 3
+
+    if c204_n3 % 3 == 0 { continue }
+
+    if c204_n3 > 12 { break }
+
+    c204_a3 += c204_n3
+
+}
+
+print("c204-w3:", c204_a3, c204_n3)
+
+let c204_c0 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 2] {
+
+        c204_c0 += a * b
+
+    }
+
+}
+
+print("c204-l0:", c204_c0)
+
+let c204_c1 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 4] {
+
+        c204_c1 += a * b
+
+    }
+
+}
+
+print("c204-l1:", c204_c1)
+
+let c204_c2 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 2] {
+
+        c204_c2 += a * b
+
+    }
+
+}
+
+print("c204-l2:", c204_c2)
+
+let c204_acc0 = ""
+
+loop {
+
+    c204_acc0 += "x"
+
+    if c204_acc0.len() >= 5 { break }
+
+}
+
+print("c204-o0:", c204_acc0)
+
+let c204_acc1 = ""
+
+loop {
+
+    c204_acc1 += "x"
+
+    if c204_acc1.len() >= 6 { break }
+
+}
+
+print("c204-o1:", c204_acc1)

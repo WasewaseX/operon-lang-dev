@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=238 tag=s238
+
+print("s238-m0:", "wt9A51a3a".upper(), "wt9A51a3a".slice(3), "wt9A51a3a".len())
+
+print("s238-m1:", "6nktkzl".upper(), "6nktkzl".slice(2), "6nktkzl".len())
+
+print("s238-m2:", "leesztas_Al".upper(), "leesztas_Al".slice(4), "leesztas_Al".len())
+
+print("s238-m3:", "6c_6ko65st".upper(), "6c_6ko65st".slice(3), "6c_6ko65st".len())
+
+print("s238-i0:", "yxC-{36}-9v6p")
+
+let s238_v0 = 36
+
+print("s238-v0:", "n={s238_v0}" + "!" * 1)
+
+print("s238-i1:", "Ce5-{24}-vbrr")
+
+let s238_v1 = 24
+
+print("s238-v1:", "n={s238_v1}" + "!" * 1)
+
+print("s238-i2:", "0rm-{30}-1AeA")
+
+let s238_v2 = 30
+
+print("s238-v2:", "n={s238_v2}" + "!" * 3)
+
+print("s238-i3:", "yq_-{67}-w8ox")
+
+let s238_v3 = 67
+
+print("s238-v3:", "n={s238_v3}" + "!" * 2)
+
+print("s238-r0:", "_p2_y72r".replace("_", "wj"), "_p2_y72r".contains("p2"))
+
+print("s238-r1:", "C79a8geg".replace("C", "za"), "C79a8geg".contains("79"))
+
+print("s238-r2:", "2n2zuAs4".replace("2", "1o"), "2n2zuAs4".contains("n2"))
+
+print("s238-r3:", "8yww02xr".replace("8", "un"), "8yww02xr".contains("yw"))
+
+print("s238-j0:", ["09C", "750", "tyn", "n0j", "0c9"].join("-"))
+
+print("s238-j1:", ["sqa", "Aea", "xlq"].join("-"))
+
+print("s238-a0:", "Ch4mtjz".at(3), "Ch4mtjz".trim() == "Ch4mtjz")
+
+print("s238-a1:", "8_ry9se".at(6), "8_ry9se".trim() == "8_ry9se")
+
+print("s238-a2:", "is1bwg7".at(1), "is1bwg7".trim() == "is1bwg7")

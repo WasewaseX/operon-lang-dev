@@ -1,0 +1,24 @@
+# W16 async proofs: the capability sandbox is unchanged by async.
+# A fiber has EXACTLY the spawning cell's grants (worker-cell rule); the
+# proof suite runs zero-grant, so every effect inside a fiber is denied
+# with the same catchable interference stress as a thread worker.
+
+gene sneaky() {
+    return read_file("/etc/passwd")
+}
+
+frame proof {
+    let t = spawn(sneaky, [])
+    let r = join(t)
+    assert(r["kind"] == "interference", "capability denial inside a fiber")
+    assert(task_state(t) == "done", "a contained denial is a done task")
+
+    # run is denied the same way
+    gene runner() {
+        return run("echo", ["hi"])
+    }
+    let t2 = spawn(runner, [])
+    assert(join(t2)["kind"] == "interference", "run denial inside a fiber")
+
+    print("async_caps complete")
+}

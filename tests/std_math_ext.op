@@ -1,4 +1,4 @@
-# differential: std/math extensions — round/gcd/lcm/factorial/isqrt/divmod/wrap
+# differential: std/math extensions, round/gcd/lcm/factorial/isqrt/divmod/wrap
 use std/math as m
 
 frame proof {

@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20260930 idx=70 tag=m070
+
+let m070_m0 = {helix: -56, ligase: -34, vector: 15}
+
+print("m070-m0:", m070_m0["helix"], len(m070_m0), m070_m0.has("helix"))
+
+let m070_m1 = {ribose: -23, splicer: 30, cell: -95}
+
+print("m070-m1:", m070_m1["ribose"], len(m070_m1), m070_m1.has("ribose"))
+
+let m070_m2 = {ligase: 53, gene: 5, codon: -90, marker: 8, vector: -12}
+
+print("m070-m2:", m070_m2["ligase"], len(m070_m2), m070_m2.has("ligase"))
+
+let m070_k0 = {ribose: 20, gene: 20, exon: 22}
+
+let m070_ks0 = m070_k0.keys()
+
+let m070_sm0 = 0
+
+for k in m070_k0 { m070_sm0 += m070_k0[k] }
+
+print("m070-k0:", m070_sm0, m070_k0.keys().sort(), m070_k0.values().len())
+
+let m070_k1 = {helix: 21, ligase: 13, vector: 28}
+
+let m070_ks1 = m070_k1.keys()
+
+let m070_sm1 = 0
+
+for k in m070_k1 { m070_sm1 += m070_k1[k] }
+
+print("m070-k1:", m070_sm1, m070_k1.keys().sort(), m070_k1.values().len())
+
+let m070_k2 = {marker: 16, exon: 29, plasmid: 41}
+
+let m070_ks2 = m070_k2.keys()
+
+let m070_sm2 = 0
+
+for k in m070_k2 { m070_sm2 += m070_k2[k] }
+
+print("m070-k2:", m070_sm2, m070_k2.keys().sort(), m070_k2.values().len())
+
+let m070_w0 = {outer: {plasmid: 4, marker: 7, tag: "ok"}}}
+
+print("m070-w0:", m070_w0["outer"]["marker"], m070_w0["outer"]["tag"])
+
+let m070_w1 = {outer: {vector: 1, cell: 4, tag: "ok"}}}
+
+print("m070-w1:", m070_w1["outer"]["cell"], m070_w1["outer"]["tag"])

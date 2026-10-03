@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=164 tag=s164
+
+print("s164-m0:", "eptxn9f6Anh".upper(), "eptxn9f6Anh".slice(4), "eptxn9f6Anh".len())
+
+print("s164-m1:", "etmsBeCAt".upper(), "etmsBeCAt".slice(3), "etmsBeCAt".len())
+
+print("s164-m2:", "vkoCs3kuio0v7".upper(), "vkoCs3kuio0v7".slice(2), "vkoCs3kuio0v7".len())
+
+print("s164-m3:", "50a_b56_x57".upper(), "50a_b56_x57".slice(4), "50a_b56_x57".len())
+
+print("s164-m4:", "52qeC5or".upper(), "52qeC5or".slice(3), "52qeC5or".len())
+
+print("s164-m5:", "m8oBgbme8i1kAA".upper(), "m8oBgbme8i1kAA".slice(3), "m8oBgbme8i1kAA".len())
+
+print("s164-i0:", "suz-{74}-Br5y")
+
+let s164_v0 = 74
+
+print("s164-v0:", "n={s164_v0}" + "!" * 3)
+
+print("s164-i1:", "ymq-{21}-57q0")
+
+let s164_v1 = 21
+
+print("s164-v1:", "n={s164_v1}" + "!" * 3)
+
+print("s164-i2:", "08j-{64}-B7ye")
+
+let s164_v2 = 64
+
+print("s164-v2:", "n={s164_v2}" + "!" * 2)
+
+print("s164-r0:", "hd86eymd".replace("h", "w1"), "hd86eymd".contains("d8"))
+
+print("s164-r1:", "1AcrAxbt".replace("1", "fC"), "1AcrAxbt".contains("Ac"))
+
+print("s164-r2:", "k40feevp".replace("k", "xA"), "k40feevp".contains("40"))
+
+print("s164-j0:", ["n6o", "_i5", "suf", "8wi", "rhs"].join("-"))
+
+print("s164-j1:", ["j6c", "28A", "dgj"].join("-"))
+
+print("s164-a0:", "vrzyu91".at(4), "vrzyu91".trim() == "vrzyu91")
+
+print("s164-a1:", "Cq4sB0t".at(4), "Cq4sB0t".trim() == "Cq4sB0t")
+
+print("s164-a2:", "kjho4A6".at(5), "kjho4A6".trim() == "kjho4A6")

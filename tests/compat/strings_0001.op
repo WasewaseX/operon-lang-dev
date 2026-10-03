@@ -1,0 +1,50 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=1 tag=s001
+
+print("s001-m0:", "eonpyun9".upper(), "eonpyun9".slice(3), "eonpyun9".len())
+
+print("s001-m1:", "p1mBnCdbi2j".upper(), "p1mBnCdbi2j".slice(4), "p1mBnCdbi2j".len())
+
+print("s001-m2:", "zo73m7nxe".upper(), "zo73m7nxe".slice(1), "zo73m7nxe".len())
+
+print("s001-m3:", "7B9igm17yz".upper(), "7B9igm17yz".slice(2), "7B9igm17yz".len())
+
+print("s001-m4:", "2A4BAihc".upper(), "2A4BAihc".slice(4), "2A4BAihc".len())
+
+print("s001-m5:", "6wa9clf6ioB".upper(), "6wa9clf6ioB".slice(2), "6wa9clf6ioB".len())
+
+print("s001-i0:", "whe-{62}-bjvn")
+
+let s001_v0 = 62
+
+print("s001-v0:", "n={s001_v0}" + "!" * 3)
+
+print("s001-i1:", "5uw-{66}-0bl4")
+
+let s001_v1 = 66
+
+print("s001-v1:", "n={s001_v1}" + "!" * 3)
+
+print("s001-i2:", "ssb-{83}-raBi")
+
+let s001_v2 = 83
+
+print("s001-v2:", "n={s001_v2}" + "!" * 2)
+
+print("s001-r0:", "hyggnmaC".replace("h", "Aj"), "hyggnmaC".contains("yg"))
+
+print("s001-r1:", "lqcxugjv".replace("l", "nq"), "lqcxugjv".contains("qc"))
+
+print("s001-r2:", "l_B6hi7n".replace("l", "dw"), "l_B6hi7n".contains("_B"))
+
+print("s001-r3:", "xBda5vqA".replace("x", "gs"), "xBda5vqA".contains("Bd"))
+
+print("s001-j0:", ["1Bn", "jBc", "osd"].join("-"))
+
+print("s001-j1:", ["02t", "ozl", "8op"].join("-"))
+
+print("s001-a0:", "zez_b2q".at(1), "zez_b2q".trim() == "zez_b2q")
+
+print("s001-a1:", "vu9bmg3".at(0), "vu9bmg3".trim() == "vu9bmg3")
+
+print("s001-a2:", "h1hB6ae".at(4), "h1hB6ae".trim() == "h1hB6ae")

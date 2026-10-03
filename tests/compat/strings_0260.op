@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=260 tag=s260
+
+print("s260-m0:", "s3B9Amix".upper(), "s3B9Amix".slice(1), "s3B9Amix".len())
+
+print("s260-m1:", "B3A_kmB".upper(), "B3A_kmB".slice(2), "B3A_kmB".len())
+
+print("s260-m2:", "b2rpas8t4gk0".upper(), "b2rpas8t4gk0".slice(3), "b2rpas8t4gk0".len())
+
+print("s260-m3:", "r7p7480_e2a".upper(), "r7p7480_e2a".slice(4), "r7p7480_e2a".len())
+
+print("s260-m4:", "lpm21mnnqk".upper(), "lpm21mnnqk".slice(2), "lpm21mnnqk".len())
+
+print("s260-m5:", "8f2eb99uBl45d".upper(), "8f2eb99uBl45d".slice(4), "8f2eb99uBl45d".len())
+
+print("s260-i0:", "zC2-{11}-aA6g")
+
+let s260_v0 = 11
+
+print("s260-v0:", "n={s260_v0}" + "!" * 3)
+
+print("s260-i1:", "zdp-{13}-aycw")
+
+let s260_v1 = 13
+
+print("s260-v1:", "n={s260_v1}" + "!" * 1)
+
+print("s260-i2:", "ix9-{80}-s9CC")
+
+let s260_v2 = 80
+
+print("s260-v2:", "n={s260_v2}" + "!" * 1)
+
+print("s260-r0:", "4gBqo12b".replace("4", "sl"), "4gBqo12b".contains("gB"))
+
+print("s260-r1:", "7krn_5i1".replace("7", "d3"), "7krn_5i1".contains("kr"))
+
+print("s260-j0:", ["jd1", "x4e", "1nA", "7t5", "06o"].join("-"))
+
+print("s260-j1:", ["9g1", "ocz", "ic7"].join("-"))
+
+print("s260-j2:", ["jlm", "io0", "5ew", "khz"].join("-"))
+
+print("s260-a0:", "rC8pau6".at(0), "rC8pau6".trim() == "rC8pau6")
+
+print("s260-a1:", "bqulgkp".at(5), "bqulgkp".trim() == "bqulgkp")

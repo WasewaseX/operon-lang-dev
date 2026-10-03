@@ -1,0 +1,118 @@
+# compat corpus — generated, do not edit by hand
+# bucket=optres seed=20261030 idx=176 tag=o176
+
+gene o176_f0(n) {
+
+    if n > 8748 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o176_u0(n) {
+
+    let v = o176_f0(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o176-p0:", o176_u0(-2265), o176_u0(8755))
+
+gene o176_f1(n) {
+
+    if n > -8092 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o176_u1(n) {
+
+    let v = o176_f1(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o176-p1:", o176_u1(-4425), o176_u1(-8072))
+
+gene o176_f2(n) {
+
+    if n > 544 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o176_u2(n) {
+
+    let v = o176_f2(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o176-p2:", o176_u2(4421), o176_u2(559))
+
+gene o176_f3(n) {
+
+    if n > -4535 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o176_u3(n) {
+
+    let v = o176_f3(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o176-p3:", o176_u3(-8766), o176_u3(-4522))
+
+print("o176-o0:", is_ok(ok(3598)), is_none(none()), is_err(err("3598")), is_some(some(3598)))
+
+print("o176-u0:", unwrap_or(none(), 3598), unwrap_or(err("x"), 3597), unwrap_or(ok(3598), 0))
+
+print("o176-o1:", is_ok(ok(6572)), is_none(none()), is_err(err("6572")), is_some(some(6572)))
+
+print("o176-u1:", unwrap_or(none(), 6572), unwrap_or(err("x"), 6571), unwrap_or(ok(6572), 0))
+
+print("o176-o2:", is_ok(ok(-744)), is_none(none()), is_err(err("-744")), is_some(some(-744)))
+
+print("o176-u2:", unwrap_or(none(), -744), unwrap_or(err("x"), -745), unwrap_or(ok(-744), 0))
+
+print("o176-e0:", ok(3145) == ok(3145), some(3145) == ok(3145), none() == none(), err(1) == err(2))
+
+print("o176-j0:", json_str(ok(3145)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o176-e1:", ok(967) == ok(967), some(967) == ok(967), none() == none(), err(1) == err(2))
+
+print("o176-j1:", json_str(ok(967)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o176-n0:", some(some(15))?!?!, unwrap(ok(107)) + unwrap(some(92)))
+
+print("o176-s0:", "v=" + str(ok(15)?!), some("92k")?! + "!")
+
+print("o176-n1:", some(some(54))?!?!, unwrap(ok(152)) + unwrap(some(98)))
+
+print("o176-s1:", "v=" + str(ok(54)?!), some("98k")?! + "!")

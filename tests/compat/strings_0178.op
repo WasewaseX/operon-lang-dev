@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=178 tag=s178
+
+print("s178-m0:", "osgC9qsBrjznp".upper(), "osgC9qsBrjznp".slice(3), "osgC9qsBrjznp".len())
+
+print("s178-m1:", "pCmjabo".upper(), "pCmjabo".slice(3), "pCmjabo".len())
+
+print("s178-m2:", "xhda8ylb1Ak".upper(), "xhda8ylb1Ak".slice(3), "xhda8ylb1Ak".len())
+
+print("s178-m3:", "q7lc8r2b8fl0ks".upper(), "q7lc8r2b8fl0ks".slice(2), "q7lc8r2b8fl0ks".len())
+
+print("s178-m4:", "gBrqc8dkgt20".upper(), "gBrqc8dkgt20".slice(1), "gBrqc8dkgt20".len())
+
+print("s178-i0:", "CoC-{69}-jAdl")
+
+let s178_v0 = 69
+
+print("s178-v0:", "n={s178_v0}" + "!" * 3)
+
+print("s178-i1:", "zg3-{11}-qs2C")
+
+let s178_v1 = 11
+
+print("s178-v1:", "n={s178_v1}" + "!" * 1)
+
+print("s178-i2:", "zgf-{39}-avii")
+
+let s178_v2 = 39
+
+print("s178-v2:", "n={s178_v2}" + "!" * 3)
+
+print("s178-r0:", "6q5kt8yi".replace("6", "al"), "6q5kt8yi".contains("q5"))
+
+print("s178-r1:", "a_B3h_yj".replace("a", "_p"), "a_B3h_yj".contains("_B"))
+
+print("s178-j0:", ["lAz", "llp", "Ame", "nyq"].join("-"))
+
+print("s178-j1:", ["vl6", "CkB", "vci"].join("-"))
+
+print("s178-j2:", ["fpn", "ffd", "rAC"].join("-"))
+
+print("s178-a0:", "5cgiz55".at(2), "5cgiz55".trim() == "5cgiz55")
+
+print("s178-a1:", "_rkckAb".at(1), "_rkckAb".trim() == "_rkckAb")

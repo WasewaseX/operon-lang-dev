@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=91 tag=c091
+
+print("c091-c0:", -1475 >= -2720)
+
+print("c091-c1:", -1807 == 5899)
+
+print("c091-c2:", 3308 == 5298)
+
+print("c091-c3:", 5699 != 7979)
+
+print("c091-c4:", -4035 > -3627)
+
+print("c091-c5:", 1620 < 4216)
+
+print("c091-b0:", 47 < 23 && 23 < 38, 47 > 23 || 47 > 38)
+
+print("c091-b1:", 35 < 5 && 5 < 11, 35 > 5 || 35 > 11)
+
+print("c091-b2:", 18 < 29 && 29 < 4, 18 > 29 || 18 > 4)
+
+print("c091-b3:", 9 < 31 && 31 < 26, 9 > 31 || 9 > 26)
+
+print("c091-t0:", -3154 > -3003 ? "gt" : "le")
+
+print("c091-t1:", -9126 > -3205 ? "gt" : "le")
+
+print("c091-t2:", -9865 > 5923 ? "gt" : "le")
+
+let c091_n0 = null
+
+print("c091-n0:", c091_n0 ?? -1455, c091_n0 == null)
+
+let c091_n1 = null
+
+print("c091-n1:", c091_n1 ?? -5885, c091_n1 == null)
+
+print("c091-s0:", "llq9" in "jp5chwllq9", "llq9" == "llq9")
+
+print("c091-s1:", "v02v" in "0eekiav02v", "v02v" == "v02v")

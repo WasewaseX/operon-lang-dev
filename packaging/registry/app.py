@@ -1,34 +1,44 @@
 #!/usr/bin/env python3
-"""Operon Registry API — the hosted package registry (ai/ecosystem lane).
+"""Operon Registry API — the hosted tier (ai/ecosystem-r2, W19 items 5/7/10).
 
-A deliberately simple service, exactly the shape the project sketched:
+The deliberately simple service the project sketched:
 
-    Operon CLI  ->  Registry API (this file)  ->  PostgreSQL  ->  metadata
-                                                              ->  artifacts
+    Operon CLI  ->  Registry API (this file)  ->  PostgreSQL
+                                              ->  package metadata
+                                              ->  Git/source artifacts
 
-Endpoints (same surface the Rust client in src/pkg.rs speaks):
-    GET  /healthz                              liveness
-    GET  /api/search?q=<query>                 search name/description
-    GET  /api/packages/<name>                  index JSON (identical shape to
-                                               a file registry's index/<name>.json)
-    GET  /api/packages/<n>/<v>/download        package envelope (application/json)
-    POST /api/publish                          upload an envelope (Bearer token)
+It speaks the SAME wire contract the CLI already uses (docs/specs/
+REGISTRY.md): the index is NDJSON — one JSON object per line, LAST line
+per name wins — so the stock client works against this service unchanged:
 
-Storage: PostgreSQL via DATABASE_URL (Render default) or SQLite when unset
-(local dev + CI). Envelopes are small JSON documents; they are stored whole
-and served byte-identical, which is what sha256 pinning in operon.lock needs.
+    OPERON_REGISTRY=https://your-app.onrender.com/index.jsonl operon add http
 
-Auth: publish requires a Bearer token listed in the OPERON_TOKENS env var
-(comma-separated). Downloads/search/healthz are open. Tokens unset = publish
-disabled (403) — a registry you cannot accidentally leave wide open.
+Endpoints
+    GET  /healthz                 liveness
+    GET  /index.jsonl             the full index, NDJSON (name,version order)
+    GET  /api/search?q=<query>    JSON array of latest-per-name matches
+    POST /api/publish             append one index line (Bearer token)
+
+Publish rules (same class as the file registry):
+  * the body is ONE index line: flat JSON strings — name, version, git,
+    rev, sha256, description (dir is a LOCAL-registry feature and is
+    rejected here, mirroring the client's deny-by-default rule)
+  * (name, version) pairs are immutable: a republish is 409, fix forward
+  * publishing requires a Bearer token listed in OPERON_TOKENS (comma-
+    separated); tokens unset = publish disabled (403) — a registry you
+    cannot accidentally leave wide open
+
+Storage: PostgreSQL via DATABASE_URL (Render default) or SQLite when
+unset (local dev + CI). Lines are stored whole and served byte-exact,
+which is what the sha256 pinning in operon.lock needs.
 
 Run locally:   python3 app.py                       (SQLite, port 8080)
-Run on Render: DATABASE_URL + OPERON_TOKENS env; render.yaml is beside this
-               file. gunicorn app:server binds 0.0.0.0:$PORT.
+Run on Render: DATABASE_URL + OPERON_TOKENS env; render.yaml sits beside
+               this file; gunicorn binds the WSGI `app` on 0.0.0.0:$PORT.
+Self-host https: OPERON_TLS_CERT + OPERON_TLS_KEY env (Render terminates
+TLS at the edge, so this is only for fronting the service yourself).
 """
 
-import base64
-import hashlib
 import json
 import os
 import re
@@ -36,9 +46,9 @@ import sqlite3
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = int(os.environ.get("PORT", "8080"))
-NAME_RE = re.compile(r"^[a-z][a-z0-9_-]{1,63}$")
-VER_RE = re.compile(r"^\d+\.\d+\.\d+$")
-MAX_BODY = 8 * 1024 * 1024  # 8 MiB envelope cap
+NAME_RE = re.compile(r"^[a-z_][a-z0-9_-]{0,63}$")
+MAX_BODY = 64 * 1024  # one index line is a few hundred bytes; 64 KiB is generous
+LINE_FIELDS = ("name", "version", "git", "rev", "sha256", "description")
 
 
 def _db_url():
@@ -48,345 +58,215 @@ def _db_url():
     return url
 
 
+def _tokens():
+    raw = os.environ.get("OPERON_TOKENS", "")
+    return {t.strip() for t in raw.split(",") if t.strip()}
+
+
+def _validate_line(body):
+    """Returns (line_dict, err). Same rules docs/specs/REGISTRY.md §2 states."""
+    try:
+        obj = json.loads(body.decode("utf-8"))
+    except Exception as e:  # noqa: BLE001 — surface a readable error
+        return None, f"body is not valid JSON: {e}"
+    if not isinstance(obj, dict):
+        return None, "index line must be a flat JSON object"
+    for k in obj:
+        if k not in LINE_FIELDS + ("dir",):
+            return None, f"unknown key '{k}' (allowed: {', '.join(LINE_FIELDS + ('dir',))})"
+        if not isinstance(obj[k], str):
+            return None, f"key '{k}' must be a string (index lines are flat strings)"
+    name = obj.get("name", "")
+    if not NAME_RE.match(name):
+        return None, f"invalid package name '{name}'"
+    if not obj.get("version", "").strip():
+        return None, "index line needs a version"
+    if obj.get("dir"):
+        # Mirror the client's deny-by-default: a remote registry must not
+        # direct machines to copy local directories (docs/specs §6).
+        return None, "remote registries publish git URLs only ('dir' is a local-registry feature)"
+    if not obj.get("git", "").strip():
+        return None, "index line needs a git URL"
+    if not obj.get("rev", "").strip():
+        return None, "index line needs a rev (git rev-parse HEAD at publish time)"
+    sha = obj.get("sha256", "")
+    if sha and not re.match(r"^[0-9a-f]{64}$", sha):
+        return None, "sha256 must be 64 lowercase hex chars (checkout_checksum)"
+    return obj, None
+
+
 # ---------------------------------------------------------------------------
 # storage adapter: Postgres (psycopg2) when DATABASE_URL is set, else SQLite
 # ---------------------------------------------------------------------------
 
 class Store:
-    """Two backends, one interface. Envelope bytes round-trip exactly."""
+    """Two backends, one interface. Index lines round-trip byte-exactly."""
 
     def __init__(self):
         self.url = _db_url()
         if self.url:
-            import psycopg2
-            import psycopg2.extras
-            self.pg = psycopg2
-            self.extras = psycopg2.extras
+            import psycopg2  # hosted dependency (requirements.txt)
+
             self.conn = psycopg2.connect(self.url)
-            self.conn.autocommit = True
-            with self.conn.cursor() as c:
-                c.execute(
-                    """CREATE TABLE IF NOT EXISTS packages (
-                        name TEXT PRIMARY KEY,
-                        description TEXT NOT NULL DEFAULT '',
-                        created_at TIMESTAMPTZ NOT NULL DEFAULT now())"""
-                )
-                c.execute(
-                    """CREATE TABLE IF NOT EXISTS versions (
-                        package TEXT NOT NULL REFERENCES packages(name),
-                        version TEXT NOT NULL,
-                        yanked BOOLEAN NOT NULL DEFAULT FALSE,
-                        sha256 TEXT NOT NULL,
-                        deps JSONB NOT NULL DEFAULT '{}',
-                        description TEXT NOT NULL DEFAULT '',
-                        artifact BYTEA NOT NULL,
-                        size INTEGER NOT NULL,
-                        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                        PRIMARY KEY (package, version))"""
-                )
+            self.param = "%s"
+            self._init_pg()
         else:
-            self.sqlite = sqlite3.connect(
-                os.environ.get("OPERON_REGISTRY_DB", "registry.db"),
-                check_same_thread=False,
-            )
-            self.sqlite.execute(
-                """CREATE TABLE IF NOT EXISTS packages (
-                    name TEXT PRIMARY KEY,
-                    description TEXT NOT NULL DEFAULT '',
-                    created_at TEXT NOT NULL DEFAULT (datetime('now')))"""
-            )
-            self.sqlite.execute(
-                """CREATE TABLE IF NOT EXISTS versions (
-                    package TEXT NOT NULL REFERENCES packages(name),
-                    version TEXT NOT NULL,
-                    yanked INTEGER NOT NULL DEFAULT 0,
-                    sha256 TEXT NOT NULL,
-                    deps TEXT NOT NULL DEFAULT '{}',
-                    description TEXT NOT NULL DEFAULT '',
-                    artifact BLOB NOT NULL,
-                    size INTEGER NOT NULL,
-                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                    PRIMARY KEY (package, version))"""
-            )
-            self.sqlite.commit()
+            path = os.environ.get("OPERON_REGISTRY_DB", "registry.db")
+            self.conn = sqlite3.connect(path, check_same_thread=False)
+            self.param = "?"
+            self._init_sqlite()
 
-    # -- writes ------------------------------------------------------------
-    def publish(self, name, version, description, deps, artifact):
-        sha = hashlib.sha256(artifact).hexdigest()
-        size = len(artifact)
-        if self.url:
-            with self.conn.cursor() as c:
-                c.execute(
-                    "INSERT INTO packages (name, description) VALUES (%s, %s) "
-                    "ON CONFLICT (name) DO UPDATE SET description = CASE "
-                    "WHEN packages.description = '' THEN EXCLUDED.description "
-                    "ELSE packages.description END",
-                    (name, description),
-                )
-                c.execute(
-                    "INSERT INTO versions (package, version, sha256, deps, description, artifact, size) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                    (name, version, sha, json.dumps(deps), description,
-                     psycopg2.Binary(artifact), size),
-                )
-        else:
-            cur = self.sqlite.cursor()
-            cur.execute(
-                "INSERT OR IGNORE INTO packages (name, description) VALUES (?, ?)",
-                (name, description),
-            )
-            cur.execute("SELECT description FROM packages WHERE name = ?", (name,))
-            if cur.fetchone()[0] == "" and description:
-                cur.execute(
-                    "UPDATE packages SET description = ? WHERE name = ?",
-                    (description, name),
-                )
-            cur.execute(
-                "INSERT OR REPLACE INTO versions (package, version, sha256, deps, description, artifact, size) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (name, version, sha, json.dumps(deps), description,
-                 sqlite3.Binary(artifact), size),
-            )
-            self.sqlite.commit()
-        return sha, size
-
-    # -- reads -------------------------------------------------------------
-    def package_index(self, name):
-        if self.url:
-            with self.conn.cursor() as c:
-                c.execute("SELECT description FROM packages WHERE name = %s", (name,))
-                row = c.fetchone()
-                if not row:
-                    return None
-                desc = row[0]
-                c.execute(
-                    "SELECT version, yanked, sha256, deps, description FROM versions "
-                    "WHERE package = %s ORDER BY version",
-                    (name,),
-                )
-                rows = c.fetchall()
-        else:
-            cur = self.sqlite.cursor()
-            cur.execute("SELECT description FROM packages WHERE name = ?", (name,))
-            row = cur.fetchone()
-            if not row:
-                return None
-            desc = row[0]
-            cur.execute(
-                "SELECT version, yanked, sha256, deps, description FROM versions "
-                "WHERE package = ? ORDER BY version",
-                (name,),
-            )
-            rows = cur.fetchall()
-        versions = []
-        for version, yanked, sha, deps, vdesc in rows:
-            if isinstance(deps, str):
-                deps = json.loads(deps or "{}")
-            versions.append(
-                {
-                    "version": version,
-                    "yanked": bool(yanked),
-                    "sha256": sha,
-                    "deps": deps,
-                    "description": vdesc or "",
-                }
-            )
-        return {"name": name, "description": desc or "", "versions": versions}
-
-    def artifact(self, name, version):
-        if self.url:
-            with self.conn.cursor() as c:
-                c.execute(
-                    "SELECT artifact FROM versions WHERE package = %s AND version = %s",
-                    (name, version),
-                )
-                row = c.fetchone()
-                return bytes(row[0]) if row else None
-        cur = self.sqlite.cursor()
-        cur.execute(
-            "SELECT artifact FROM versions WHERE package = ? AND version = ?",
-            (name, version),
+    def _init_sqlite(self):
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS index_lines ("
+            " name TEXT NOT NULL, version TEXT NOT NULL,"
+            " line TEXT NOT NULL, seq INTEGER PRIMARY KEY AUTOINCREMENT)"
         )
-        row = cur.fetchone()
-        return bytes(row[0]) if row else None
+        self.conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS nv ON index_lines (name, version)"
+        )
+        self.conn.commit()
+
+    def _init_pg(self):
+        cur = self.conn.cursor()
+        cur.execute(
+            "CREATE TABLE IF NOT EXISTS index_lines ("
+            " name TEXT NOT NULL, version TEXT NOT NULL,"
+            " line TEXT NOT NULL, seq BIGSERIAL PRIMARY KEY)"
+        )
+        cur.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS nv ON index_lines (name, version)"
+        )
+        self.conn.commit()
+
+    def publish(self, line_obj, line_text):
+        """Append one line. Returns (status, payload)."""
+        name, version = line_obj["name"], line_obj["version"]
+        cur = self.conn.cursor()
+        try:
+            cur.execute(
+                "INSERT INTO index_lines (name, version, line) VALUES (%s, %s, %s)"
+                % (self.param, self.param, self.param),
+                (name, version, line_text),
+            )
+            self.conn.commit()
+            return 201, {"published": f"{name} {version}"}
+        except Exception:
+            self.conn.rollback()
+            return 409, {
+                "error": f"{name} {version} already exists — (name, version) is "
+                "immutable; bump the version (docs/specs/REGISTRY.md §2)"
+            }
+
+    def index_lines(self):
+        cur = self.conn.cursor()
+        cur.execute("SELECT line FROM index_lines ORDER BY name, version, seq")
+        return [r[0] for r in cur.fetchall()]
 
     def search(self, query):
+        cur = self.conn.cursor()
         like = f"%{query.lower()}%"
-        if self.url:
-            with self.conn.cursor() as c:
-                c.execute(
-                    """SELECT p.name, p.description FROM packages p
-                       WHERE LOWER(p.name) LIKE %s OR LOWER(p.description) LIKE %s
-                       ORDER BY p.name""",
-                    (like, like),
-                )
-                names = c.fetchall()
-        else:
-            cur = self.sqlite.cursor()
-            cur.execute(
-                """SELECT p.name, p.description FROM packages p
-                   WHERE LOWER(p.name) LIKE ? OR LOWER(p.description) LIKE ?
-                   ORDER BY p.name""",
-                (like, like),
-            )
-            names = cur.fetchall()
-        rows = []
-        for name, desc in names:
-            idx = self.package_index(name)
-            if not idx:
+        cur.execute(
+            "SELECT line FROM index_lines WHERE LOWER(line) LIKE "
+            + self.param
+            # NDJSON law (docs/specs/REGISTRY.md §2): the LAST line per name
+            # wins — seq DESC per name keeps the latest-published line, which
+            # is what both this service and the file registry's resolver mean
+            # by "latest line per name". (The previous name, version, seq
+            # order with first-seen dedupe returned the OLDEST version: the
+            # hosted tier disagreed with the file tier. Found by the W061-A
+            # audit, fixed + pinned by scripts/pkg_meta_check.py.)
+            + " ORDER BY name ASC, seq DESC",
+            (like,),
+        )
+        seen, out = set(), []
+        for (line,) in cur.fetchall():
+            obj = json.loads(line)
+            if obj["name"] in seen:
                 continue
-            live = [v["version"] for v in idx["versions"] if not v["yanked"]]
-            rows.append({"name": name, "latest": max_ver(live), "description": desc})
-        return rows
+            seen.add(obj["name"])
+            out.append(obj)
+        return out
 
 
-def max_ver(vs):
-    def key(v):
-        try:
-            return tuple(int(x) for x in v.split("."))
-        except Exception:
-            return (0, 0, 0)
-    return max(vs, key=key) if vs else ""
-
-
-STORE = None
+_STORE = None
 
 
 def store():
-    global STORE
-    if STORE is None:
-        STORE = Store()
-    return STORE
+    global _STORE
+    if _STORE is None:
+        _STORE = Store()
+    return _STORE
 
 
-def tokens():
-    raw = os.environ.get("OPERON_TOKENS", "").strip()
-    return {t.strip() for t in raw.split(",") if t.strip()} if raw else set()
-
-
-def envelope_validate(body_bytes):
-    """Validate the envelope the same way the client will on download."""
-    try:
-        env = json.loads(body_bytes.decode("utf-8"))
-    except Exception as e:
-        return None, f"invalid JSON: {e}"
-    if env.get("envelope") != 1:
-        return None, "unsupported envelope version"
-    name = env.get("name", "")
-    version = env.get("version", "")
-    if not NAME_RE.match(name):
-        return None, f"invalid package name '{name}'"
-    if not VER_RE.match(version):
-        return None, f"invalid version '{version}'"
-    files = env.get("files", [])
-    if not isinstance(files, list) or not files:
-        return None, "envelope has no files"
-    for f in files:
-        p = f.get("path", "")
-        if p.startswith("/") or "\\" in p or ".." in p.split("/"):
-            return None, f"unsafe file path '{p}'"
-        if not (p.endswith(".op") or p.endswith(".toml") or p.endswith(".md")):
-            return None, f"file '{p}' is not .op/.toml/.md"
-        try:
-            base64.b64decode(f.get("b64", ""), validate=True)
-        except Exception:
-            return None, f"file '{p}' is not valid base64"
-    deps = env.get("deps", {})
-    if not isinstance(deps, dict):
-        return None, "deps must be an object"
-    return env, None
-
+# ---------------------------------------------------------------------------
+# HTTP surface — the same rules for stdlib serving and gunicorn/WSGI
+# ---------------------------------------------------------------------------
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "operon-registry/1.0"
+    server_version = "operon-registry/2"
 
     def log_message(self, fmt, *args):  # quieter logs on Render
-        if os.environ.get("OPERON_REGISTRY_LOG"):
-            super().log_message(fmt, *args)
+        pass
 
-    def _send(self, code, body, ctype="application/json"):
-        self.send_response(code)
+    def _send(self, status, data, ctype="application/json; charset=utf-8"):
+        body = data if isinstance(data, bytes) else json.dumps(data).encode()
+        self.send_response(status)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(body)
 
-    def _json(self, code, obj):
-        self._send(code, json.dumps(obj).encode("utf-8") + b"\n")
-
-    # -- GET ----------------------------------------------------------------
     def do_GET(self):
-        from urllib.parse import urlsplit, parse_qs, unquote
-        split = urlsplit(self.path)
-        path = split.path.rstrip("/")
+        path = self.path.split("?")[0].rstrip("/") or "/"
         if path == "/healthz":
-            return self._json(200, {"ok": True, "service": "operon-registry"})
+            return self._send(200, {"ok": True, "service": "operon-registry"})
+        if path == "/index.jsonl":
+            lines = store().index_lines()
+            payload = ("\n".join(lines) + ("\n" if lines else "")).encode()
+            return self._send(200, payload, "text/plain; charset=utf-8")
         if path == "/api/search":
-            q = parse_qs(split.query).get("q", [""])[0]
-            q = unquote(q)
-            return self._json(200, {"results": store().search(q)})
-        parts = [p for p in path.split("/") if p]
-        # /api/packages/<name>
-        if len(parts) == 3 and parts[0] == "api" and parts[1] == "packages":
-            name = parts[2]
-            if not NAME_RE.match(name):
-                return self._json(404, {"error": "not found"})
-            idx = store().package_index(name)
-            if idx is None:
-                return self._json(404, {"error": f"package '{name}' not found"})
-            return self._json(200, idx)
-        # /api/packages/<name>/<version>/download
-        if (
-            len(parts) == 5
-            and parts[0] == "api"
-            and parts[1] == "packages"
-            and parts[4] == "download"
-        ):
-            data = store().artifact(parts[2], parts[3])
-            if data is None:
-                return self._json(404, {"error": "artifact not found"})
-            return self._send(200, data)
-        return self._json(404, {"error": "not found"})
+            q = ""
+            if "?" in self.path:
+                from urllib.parse import parse_qs, unquote
 
-    # -- POST /api/publish ----------------------------------------------------
+                qs = parse_qs(self.path.split("?", 1)[1])
+                q = unquote(qs.get("q", [""])[0])
+            return self._send(200, store().search(q))
+        return self._send(404, {"error": "not found"})
+
     def do_POST(self):
         path = self.path.split("?")[0].rstrip("/")
         if path != "/api/publish":
-            return self._json(404, {"error": "not found"})
+            return self._send(404, {"error": "not found"})
         auth = self.headers.get("Authorization", "")
         token = auth[7:] if auth.startswith("Bearer ") else ""
-        if token not in tokens():
-            return self._json(403, {"error": "publish requires a valid OPERON_TOKENS token"})
+        toks = _tokens()
+        if not toks:
+            return self._send(
+                403, {"error": "publish is disabled (no OPERON_TOKENS configured)"}
+            )
+        if token not in toks:
+            return self._send(403, {"error": "publish requires a valid OPERON_TOKENS token"})
         try:
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
-            return self._json(400, {"error": "bad Content-Length"})
+            return self._send(400, {"error": "bad Content-Length"})
         if length <= 0 or length > MAX_BODY:
-            return self._json(413, {"error": f"body must be 1..{MAX_BODY} bytes"})
-        body = self.rfile.read(length)
-        env, err = envelope_validate(body)
-        if err:
-            return self._json(400, {"error": err})
-        name, version = env["name"], env["version"]
-        if store().artifact(name, version) is not None:
-            return self._json(
-                409,
-                {"error": f"{name} {version} already exists — versions are immutable; bump the version"},
+            return self._send(
+                413, {"error": f"body must be 1..{MAX_BODY} bytes (one index line)"}
             )
-        sha, size = store().publish(
-            name, version, env.get("description", ""), env.get("deps", {}), body
-        )
-        return self._json(
-            201, {"published": f"{name} {version}", "sha256": sha, "size": size}
-        )
+        body = self.rfile.read(length)
+        obj, err = _validate_line(body)
+        if err:
+            return self._send(400, {"error": err})
+        line_text = body.decode("utf-8").strip()
+        status, payload = store().publish(obj, line_text)
+        return self._send(status, payload)
 
 
 def main():
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
-    # Self-hosted https in one env pair (Render terminates TLS at the edge,
-    # so this is only needed when you front the service yourself):
-    #   OPERON_TLS_CERT=cert.pem OPERON_TLS_KEY=key.pem python3 app.py
     cert = os.environ.get("OPERON_TLS_CERT", "").strip()
     key = os.environ.get("OPERON_TLS_KEY", "").strip()
     scheme = "http"
@@ -406,63 +286,55 @@ def main():
 
 
 def app(environ, start_response):  # WSGI entry for gunicorn on Render
-    Handler_class = Handler
+    from urllib.parse import parse_qs, unquote
 
-    class Mini:
-        pass
-
-    # Bridge WSGI -> the same handler logic without a socket: implement the
-    # five routes directly against the store.
-    from urllib.parse import urlsplit, parse_qs, unquote
-    path = urlsplit(environ.get("PATH_INFO", "/")).path.rstrip("/")
-    method = environ.get("REQUEST_METHOD", "GET")
-    body = b""
-    if method == "POST":
+    path = (environ.get("PATH_INFO", "/")).rstrip("/") or "/"
+    if environ.get("REQUEST_METHOD", "GET") == "GET":
+        if path == "/healthz":
+            body = json.dumps({"ok": True, "service": "operon-registry"}).encode()
+            start_response("200 OK", [("Content-Type", "application/json")])
+            return [body]
+        if path == "/index.jsonl":
+            lines = store().index_lines()
+            body = ("\n".join(lines) + ("\n" if lines else "")).encode()
+            start_response("200 OK", [("Content-Type", "text/plain; charset=utf-8")])
+            return [body]
+        if path == "/api/search":
+            qs = parse_qs(environ.get("QUERY_STRING", ""))
+            q = unquote(qs.get("q", [""])[0])
+            body = json.dumps(store().search(q)).encode()
+            start_response("200 OK", [("Content-Type", "application/json")])
+            return [body]
+    if environ.get("REQUEST_METHOD", "GET") == "POST" and path == "/api/publish":
+        auth = environ.get("HTTP_AUTHORIZATION", "")
+        token = auth[7:] if auth.startswith("Bearer ") else ""
+        toks = _tokens()
+        if not toks:
+            start_response("403 Forbidden", [("Content-Type", "application/json")])
+            return [json.dumps({"error": "publish is disabled (no OPERON_TOKENS)"}).encode()]
+        if token not in toks:
+            start_response("403 Forbidden", [("Content-Type", "application/json")])
+            return [json.dumps({"error": "publish requires a valid OPERON_TOKENS token"}).encode()]
         try:
             length = int(environ.get("CONTENT_LENGTH", "0"))
         except ValueError:
             length = 0
-        body = environ["wsgi.input"].read(length) if 0 < length <= MAX_BODY else b""
-
-    def respond(code, obj, ctype="application/json"):
-        payload = obj if isinstance(obj, bytes) else json.dumps(obj).encode("utf-8") + b"\n"
-        start_response(f"{code} OK", [("Content-Type", ctype), ("Content-Length", str(len(payload)))])
-        return [payload]
-
-    if path == "/healthz" and method == "GET":
-        return respond(200, {"ok": True, "service": "operon-registry"})
-    if path == "/api/search" and method == "GET":
-        q = parse_qs(urlsplit(environ.get("PATH_INFO", "") + "?" + environ.get("QUERY_STRING", "")).query).get("q", [""])[0]
-        return respond(200, {"results": store().search(unquote(q))})
-    parts = [p for p in path.split("/") if p]
-    if method == "GET" and len(parts) == 3 and parts[0] == "api" and parts[1] == "packages":
-        if not NAME_RE.match(parts[2]):
-            return respond(404, {"error": "not found"})
-        idx = store().package_index(parts[2])
-        return respond(200, idx) if idx else respond(404, {"error": "package not found"})
-    if (
-        method == "GET"
-        and len(parts) == 5
-        and parts[4] == "download"
-    ):
-        data = store().artifact(parts[2], parts[3])
-        return respond(200, data) if data else respond(404, {"error": "artifact not found"})
-    if path == "/api/publish" and method == "POST":
-        auth = environ.get("HTTP_AUTHORIZATION", "")
-        token = auth[7:] if auth.startswith("Bearer ") else ""
-        if token not in tokens():
-            return respond(403, {"error": "publish requires a valid OPERON_TOKENS token"})
-        env, err = envelope_validate(body)
+        if length <= 0 or length > MAX_BODY:
+            start_response("413 Payload Too Large", [("Content-Type", "application/json")])
+            return [json.dumps({"error": "body must be one index line"}).encode()]
+        body_bytes = environ["wsgi.input"].read(length)
+        obj, err = _validate_line(body_bytes)
         if err:
-            return respond(400, {"error": err})
-        if store().artifact(env["name"], env["version"]) is not None:
-            return respond(409, {"error": "version exists — versions are immutable"})
-        sha, size = store().publish(
-            env["name"], env["version"], env.get("description", ""),
-            env.get("deps", {}), body,
+            start_response("400 Bad Request", [("Content-Type", "application/json")])
+            return [json.dumps({"error": err}).encode()]
+        status, payload = store().publish(obj, body_bytes.decode("utf-8").strip())
+        start_response(
+            f"{status} {'Created' if status == 201 else 'Conflict'}",
+            [("Content-Type", "application/json")],
         )
-        return respond(201, {"published": f"{env['name']} {env['version']}", "sha256": sha, "size": size})
-    return respond(404, {"error": "not found"})
+        return [json.dumps(payload).encode()]
+    start_response("404 Not Found", [("Content-Type", "application/json")])
+    return [json.dumps({"error": "not found"}).encode()]
 
 
 if __name__ == "__main__":

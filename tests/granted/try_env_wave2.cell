@@ -1,0 +1,4 @@
+# explicit operator cell for the W06 wave-2 try_env granted lane.
+# Exact-name grants only: the two probe names plus PATH (value not pinned).
+[allow]
+env = "OPERON_TRY_WAVE2_SET, OPERON_TRY_WAVE2_UNSET, PATH"

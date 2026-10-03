@@ -1,0 +1,144 @@
+# compat corpus — generated, do not edit by hand
+# bucket=optres seed=20261030 idx=144 tag=o144
+
+gene o144_f0(n) {
+
+    if n > 8263 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o144_u0(n) {
+
+    let v = o144_f0(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o144-p0:", o144_u0(1603), o144_u0(8270))
+
+gene o144_f1(n) {
+
+    if n > 5872 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o144_u1(n) {
+
+    let v = o144_f1(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o144-p1:", o144_u1(-2004), o144_u1(5874))
+
+gene o144_f2(n) {
+
+    if n > -8581 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o144_u2(n) {
+
+    let v = o144_f2(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o144-p2:", o144_u2(8556), o144_u2(-8568))
+
+gene o144_f3(n) {
+
+    if n > -8314 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o144_u3(n) {
+
+    let v = o144_f3(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o144-p3:", o144_u3(6818), o144_u3(-8296))
+
+gene o144_f4(n) {
+
+    if n > 4272 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o144_u4(n) {
+
+    let v = o144_f4(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o144-p4:", o144_u4(-6498), o144_u4(4290))
+
+print("o144-o0:", is_ok(ok(-5801)), is_none(none()), is_err(err("-5801")), is_some(some(-5801)))
+
+print("o144-u0:", unwrap_or(none(), -5801), unwrap_or(err("x"), -5802), unwrap_or(ok(-5801), 0))
+
+print("o144-o1:", is_ok(ok(1621)), is_none(none()), is_err(err("1621")), is_some(some(1621)))
+
+print("o144-u1:", unwrap_or(none(), 1621), unwrap_or(err("x"), 1620), unwrap_or(ok(1621), 0))
+
+print("o144-o2:", is_ok(ok(2532)), is_none(none()), is_err(err("2532")), is_some(some(2532)))
+
+print("o144-u2:", unwrap_or(none(), 2532), unwrap_or(err("x"), 2531), unwrap_or(ok(2532), 0))
+
+print("o144-o3:", is_ok(ok(-7486)), is_none(none()), is_err(err("-7486")), is_some(some(-7486)))
+
+print("o144-u3:", unwrap_or(none(), -7486), unwrap_or(err("x"), -7487), unwrap_or(ok(-7486), 0))
+
+print("o144-e0:", ok(7884) == ok(7884), some(7884) == ok(7884), none() == none(), err(1) == err(2))
+
+print("o144-j0:", json_str(ok(7884)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o144-e1:", ok(-8085) == ok(-8085), some(-8085) == ok(-8085), none() == none(), err(1) == err(2))
+
+print("o144-j1:", json_str(ok(-8085)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o144-n0:", some(some(10))?!?!, unwrap(ok(93)) + unwrap(some(83)))
+
+print("o144-s0:", "v=" + str(ok(10)?!), some("83k")?! + "!")
+
+print("o144-n1:", some(some(3))?!?!, unwrap(ok(66)) + unwrap(some(63)))
+
+print("o144-s1:", "v=" + str(ok(3)?!), some("63k")?! + "!")

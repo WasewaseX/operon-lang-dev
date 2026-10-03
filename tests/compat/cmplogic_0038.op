@@ -1,0 +1,38 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=38 tag=c038
+
+print("c038-c0:", 5834 < -950)
+
+print("c038-c1:", -2612 >= -1876)
+
+print("c038-c2:", -9740 < -1482)
+
+print("c038-c3:", 3852 >= -3271)
+
+print("c038-c4:", 9089 < 2349)
+
+print("c038-b0:", 5 < 28 && 28 < 32, 5 > 28 || 5 > 32)
+
+print("c038-b1:", 45 < 35 && 35 < 33, 45 > 35 || 45 > 33)
+
+print("c038-b2:", 24 < 35 && 35 < 16, 24 > 35 || 24 > 16)
+
+print("c038-t0:", 4984 > -9541 ? "gt" : "le")
+
+print("c038-t1:", 3104 > 2414 ? "gt" : "le")
+
+print("c038-t2:", 677 > 2919 ? "gt" : "le")
+
+print("c038-t3:", 9161 > 4466 ? "gt" : "le")
+
+let c038_n0 = null
+
+print("c038-n0:", c038_n0 ?? 214, c038_n0 == null)
+
+let c038_n1 = null
+
+print("c038-n1:", c038_n1 ?? -6698, c038_n1 == null)
+
+print("c038-s0:", "pdk1" in "055Bmopdk1", "pdk1" == "pdk1")
+
+print("c038-s1:", "A3lr" in "yivyy3A3lr", "A3lr" == "A3lr")

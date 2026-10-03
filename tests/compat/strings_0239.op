@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=239 tag=s239
+
+print("s239-m0:", "i1yq0f8jmc_c".upper(), "i1yq0f8jmc_c".slice(4), "i1yq0f8jmc_c".len())
+
+print("s239-m1:", "B96eba".upper(), "B96eba".slice(2), "B96eba".len())
+
+print("s239-m2:", "2wgzu3d".upper(), "2wgzu3d".slice(3), "2wgzu3d".len())
+
+print("s239-m3:", "8wgwjBj2y00cq".upper(), "8wgwjBj2y00cq".slice(2), "8wgwjBj2y00cq".len())
+
+print("s239-m4:", "jdB8qwayC0e".upper(), "jdB8qwayC0e".slice(4), "jdB8qwayC0e".len())
+
+print("s239-m5:", "o6s29w".upper(), "o6s29w".slice(4), "o6s29w".len())
+
+print("s239-i0:", "y_m-{92}-w8km")
+
+let s239_v0 = 92
+
+print("s239-v0:", "n={s239_v0}" + "!" * 1)
+
+print("s239-i1:", "o7m-{90}-1Cev")
+
+let s239_v1 = 90
+
+print("s239-v1:", "n={s239_v1}" + "!" * 1)
+
+print("s239-i2:", "z5m-{26}-ptqc")
+
+let s239_v2 = 26
+
+print("s239-v2:", "n={s239_v2}" + "!" * 2)
+
+print("s239-i3:", "mqd-{57}-xojv")
+
+let s239_v3 = 57
+
+print("s239-v3:", "n={s239_v3}" + "!" * 2)
+
+print("s239-r0:", "gBy58Ali".replace("g", "f8"), "gBy58Ali".contains("By"))
+
+print("s239-r1:", "qf5bmlum".replace("q", "hp"), "qf5bmlum".contains("f5"))
+
+print("s239-j0:", ["6Au", "seb", "BsA"].join("-"))
+
+print("s239-j1:", ["b9x", "A5_", "zmj", "hhi"].join("-"))
+
+print("s239-a0:", "nk2Akph".at(3), "nk2Akph".trim() == "nk2Akph")
+
+print("s239-a1:", "6cijd3s".at(3), "6cijd3s".trim() == "6cijd3s")
+
+print("s239-a2:", "svsux2w".at(4), "svsux2w".trim() == "svsux2w")

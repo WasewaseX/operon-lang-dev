@@ -1,0 +1,162 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=235 tag=c235
+
+let c235_b0 = "start"
+
+if 37 > 80 { c235_b0 = "hi" } elif 37 > 40 { c235_b0 = "mid" } else { c235_b0 = "lo" }
+
+print("c235-i0:", c235_b0, 37)
+
+let c235_b1 = "start"
+
+if 82 > 80 { c235_b1 = "hi" } elif 82 > 40 { c235_b1 = "mid" } else { c235_b1 = "lo" }
+
+print("c235-i1:", c235_b1, 82)
+
+let c235_b2 = "start"
+
+if 118 > 80 { c235_b2 = "hi" } elif 118 > 40 { c235_b2 = "mid" } else { c235_b2 = "lo" }
+
+print("c235-i2:", c235_b2, 118)
+
+let c235_b3 = "start"
+
+if 43 > 80 { c235_b3 = "hi" } elif 43 > 40 { c235_b3 = "mid" } else { c235_b3 = "lo" }
+
+print("c235-i3:", c235_b3, 43)
+
+let c235_a0 = 0
+
+let c235_n0 = 0
+
+while c235_n0 < 17 {
+
+    c235_n0 += 1
+
+    if c235_n0 % 3 == 0 { continue }
+
+    if c235_n0 > 26 { break }
+
+    c235_a0 += c235_n0
+
+}
+
+print("c235-w0:", c235_a0, c235_n0)
+
+let c235_a1 = 0
+
+let c235_n1 = 0
+
+while c235_n1 < 19 {
+
+    c235_n1 += 3
+
+    if c235_n1 % 2 == 0 { continue }
+
+    if c235_n1 > 23 { break }
+
+    c235_a1 += c235_n1
+
+}
+
+print("c235-w1:", c235_a1, c235_n1)
+
+let c235_a2 = 0
+
+let c235_n2 = 0
+
+while c235_n2 < 14 {
+
+    c235_n2 += 2
+
+    if c235_n2 % 2 == 0 { continue }
+
+    if c235_n2 > 23 { break }
+
+    c235_a2 += c235_n2
+
+}
+
+print("c235-w2:", c235_a2, c235_n2)
+
+let c235_a3 = 0
+
+let c235_n3 = 0
+
+while c235_n3 < 7 {
+
+    c235_n3 += 2
+
+    if c235_n3 % 3 == 0 { continue }
+
+    if c235_n3 > 12 { break }
+
+    c235_a3 += c235_n3
+
+}
+
+print("c235-w3:", c235_a3, c235_n3)
+
+let c235_c0 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 4] {
+
+        c235_c0 += a * b
+
+    }
+
+}
+
+print("c235-l0:", c235_c0)
+
+let c235_c1 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 4] {
+
+        c235_c1 += a * b
+
+    }
+
+}
+
+print("c235-l1:", c235_c1)
+
+let c235_acc0 = ""
+
+loop {
+
+    c235_acc0 += "x"
+
+    if c235_acc0.len() >= 7 { break }
+
+}
+
+print("c235-o0:", c235_acc0)
+
+let c235_acc1 = ""
+
+loop {
+
+    c235_acc1 += "x"
+
+    if c235_acc1.len() >= 3 { break }
+
+}
+
+print("c235-o1:", c235_acc1)
+
+let c235_acc2 = ""
+
+loop {
+
+    c235_acc2 += "x"
+
+    if c235_acc2.len() >= 7 { break }
+
+}
+
+print("c235-o2:", c235_acc2)

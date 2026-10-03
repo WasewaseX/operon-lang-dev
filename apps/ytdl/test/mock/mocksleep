@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# deterministic mocksleep — deep-benchmark queue workload engine.
+# Sleeps $1 milliseconds (default 80), exits 0. The awk fork is part of
+# the measured child cost and is identical for every implementation.
+ms="${1:-80}"
+sleep "$(awk -v m="$ms" 'BEGIN { printf "%.3f", m / 1000 }')"
+exit 0

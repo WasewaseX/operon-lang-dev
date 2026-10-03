@@ -1,0 +1,108 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=220 tag=c220
+
+let c220_b0 = "start"
+
+if 18 > 80 { c220_b0 = "hi" } elif 18 > 40 { c220_b0 = "mid" } else { c220_b0 = "lo" }
+
+print("c220-i0:", c220_b0, 18)
+
+let c220_b1 = "start"
+
+if 105 > 80 { c220_b1 = "hi" } elif 105 > 40 { c220_b1 = "mid" } else { c220_b1 = "lo" }
+
+print("c220-i1:", c220_b1, 105)
+
+let c220_b2 = "start"
+
+if 46 > 80 { c220_b2 = "hi" } elif 46 > 40 { c220_b2 = "mid" } else { c220_b2 = "lo" }
+
+print("c220-i2:", c220_b2, 46)
+
+let c220_a0 = 0
+
+let c220_n0 = 0
+
+while c220_n0 < 13 {
+
+    c220_n0 += 2
+
+    if c220_n0 % 2 == 0 { continue }
+
+    if c220_n0 > 16 { break }
+
+    c220_a0 += c220_n0
+
+}
+
+print("c220-w0:", c220_a0, c220_n0)
+
+let c220_a1 = 0
+
+let c220_n1 = 0
+
+while c220_n1 < 10 {
+
+    c220_n1 += 4
+
+    if c220_n1 % 3 == 0 { continue }
+
+    if c220_n1 > 13 { break }
+
+    c220_a1 += c220_n1
+
+}
+
+print("c220-w1:", c220_a1, c220_n1)
+
+let c220_c0 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 4] {
+
+        c220_c0 += a * b
+
+    }
+
+}
+
+print("c220-l0:", c220_c0)
+
+let c220_c1 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 2] {
+
+        c220_c1 += a * b
+
+    }
+
+}
+
+print("c220-l1:", c220_c1)
+
+let c220_acc0 = ""
+
+loop {
+
+    c220_acc0 += "x"
+
+    if c220_acc0.len() >= 6 { break }
+
+}
+
+print("c220-o0:", c220_acc0)
+
+let c220_acc1 = ""
+
+loop {
+
+    c220_acc1 += "x"
+
+    if c220_acc1.len() >= 4 { break }
+
+}
+
+print("c220-o1:", c220_acc1)

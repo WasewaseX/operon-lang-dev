@@ -1,0 +1,188 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=176 tag=f176
+
+gene f176_g0(p, q = 51, r = 46) {
+
+    return p * 98 + q - r
+
+}
+
+print("f176-d0:", f176_g0(-18), f176_g0(-18, 26), f176_g0(-18, 51, 46))
+
+gene f176_g1(p, q = 10, r = 31) {
+
+    return p * 52 + q - r
+
+}
+
+print("f176-d1:", f176_g1(39), f176_g1(39, 4), f176_g1(39, 10, 31))
+
+gene f176_g2(p, q = 51, r = 71) {
+
+    return p * 29 + q - r
+
+}
+
+print("f176-d2:", f176_g2(-21), f176_g2(-21, 73), f176_g2(-21, 51, 71))
+
+gene f176_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f176_fib0(n - 1) + f176_fib0(n - 2)
+
+}
+
+print("f176-fib0:", f176_fib0(13))
+
+gene f176_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f176_fib1(n - 1) + f176_fib1(n - 2)
+
+}
+
+print("f176-fib1:", f176_fib1(8))
+
+gene f176_fib2(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f176_fib2(n - 1) + f176_fib2(n - 2)
+
+}
+
+print("f176-fib2:", f176_fib2(9))
+
+gene f176_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f176_gcd0(b, a % b)
+
+}
+
+print("f176-gcd0:", f176_gcd0(877, 647))
+
+gene f176_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f176_gcd1(b, a % b)
+
+}
+
+print("f176-gcd1:", f176_gcd1(299, 967))
+
+gene f176_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f176_c0 = f176_mk0(24)
+
+f176_c0(8)
+
+print("f176-cl0:", f176_c0(1))
+
+gene f176_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f176_c1 = f176_mk1(20)
+
+f176_c1(9)
+
+print("f176-cl1:", f176_c1(7))
+
+gene f176_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f176-hof0:", f176_tw0(gene (z) => z * 2 + 1, 17))
+
+gene f176_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f176-hof1:", f176_tw1(gene (z) => z * 2 + 1, 20))
+
+gene f176_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f176-dg0:", f176_sd0(277348))
+
+gene f176_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f176-dg1:", f176_sd1(564755))

@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=161 tag=s161
+
+print("s161-m0:", "lvso9nC_fjg8".upper(), "lvso9nC_fjg8".slice(4), "lvso9nC_fjg8".len())
+
+print("s161-m1:", "st4z730a0v".upper(), "st4z730a0v".slice(2), "st4z730a0v".len())
+
+print("s161-m2:", "3921y65".upper(), "3921y65".slice(2), "3921y65".len())
+
+print("s161-m3:", "Axfqcz_58vt9b".upper(), "Axfqcz_58vt9b".slice(3), "Axfqcz_58vt9b".len())
+
+print("s161-m4:", "qgo1moty".upper(), "qgo1moty".slice(4), "qgo1moty".len())
+
+print("s161-i0:", "A_l-{29}-mkAz")
+
+let s161_v0 = 29
+
+print("s161-v0:", "n={s161_v0}" + "!" * 3)
+
+print("s161-i1:", "fB5-{78}-_mqm")
+
+let s161_v1 = 78
+
+print("s161-v1:", "n={s161_v1}" + "!" * 3)
+
+print("s161-i2:", "8yc-{45}-xktx")
+
+let s161_v2 = 45
+
+print("s161-v2:", "n={s161_v2}" + "!" * 1)
+
+print("s161-i3:", "v9p-{96}-f466")
+
+let s161_v3 = 96
+
+print("s161-v3:", "n={s161_v3}" + "!" * 3)
+
+print("s161-r0:", "_4j322B8".replace("_", "th"), "_4j322B8".contains("4j"))
+
+print("s161-r1:", "yajmr6yA".replace("y", "A4"), "yajmr6yA".contains("aj"))
+
+print("s161-r2:", "eAghtrlx".replace("e", "sp"), "eAghtrlx".contains("Ag"))
+
+print("s161-j0:", ["wc9", "4f1", "_hp", "xwa"].join("-"))
+
+print("s161-j1:", ["p98", "ry3", "09m"].join("-"))
+
+print("s161-a0:", "zntuCg3".at(5), "zntuCg3".trim() == "zntuCg3")
+
+print("s161-a1:", "x4bbgAo".at(4), "x4bbgAo".trim() == "x4bbgAo")
+
+print("s161-a2:", "29ixkhC".at(6), "29ixkhC".trim() == "29ixkhC")

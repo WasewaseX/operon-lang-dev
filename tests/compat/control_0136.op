@@ -1,0 +1,158 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=136 tag=c136
+
+let c136_b0 = "start"
+
+if -5 > 80 { c136_b0 = "hi" } elif -5 > 40 { c136_b0 = "mid" } else { c136_b0 = "lo" }
+
+print("c136-i0:", c136_b0, -5)
+
+let c136_b1 = "start"
+
+if 38 > 80 { c136_b1 = "hi" } elif 38 > 40 { c136_b1 = "mid" } else { c136_b1 = "lo" }
+
+print("c136-i1:", c136_b1, 38)
+
+let c136_b2 = "start"
+
+if 94 > 80 { c136_b2 = "hi" } elif 94 > 40 { c136_b2 = "mid" } else { c136_b2 = "lo" }
+
+print("c136-i2:", c136_b2, 94)
+
+let c136_b3 = "start"
+
+if 11 > 80 { c136_b3 = "hi" } elif 11 > 40 { c136_b3 = "mid" } else { c136_b3 = "lo" }
+
+print("c136-i3:", c136_b3, 11)
+
+let c136_a0 = 0
+
+let c136_n0 = 0
+
+while c136_n0 < 11 {
+
+    c136_n0 += 2
+
+    if c136_n0 % 2 == 0 { continue }
+
+    if c136_n0 > 18 { break }
+
+    c136_a0 += c136_n0
+
+}
+
+print("c136-w0:", c136_a0, c136_n0)
+
+let c136_a1 = 0
+
+let c136_n1 = 0
+
+while c136_n1 < 11 {
+
+    c136_n1 += 2
+
+    if c136_n1 % 3 == 0 { continue }
+
+    if c136_n1 > 14 { break }
+
+    c136_a1 += c136_n1
+
+}
+
+print("c136-w1:", c136_a1, c136_n1)
+
+let c136_a2 = 0
+
+let c136_n2 = 0
+
+while c136_n2 < 17 {
+
+    c136_n2 += 3
+
+    if c136_n2 % 3 == 0 { continue }
+
+    if c136_n2 > 21 { break }
+
+    c136_a2 += c136_n2
+
+}
+
+print("c136-w2:", c136_a2, c136_n2)
+
+let c136_c0 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 2] {
+
+        c136_c0 += a * b
+
+    }
+
+}
+
+print("c136-l0:", c136_c0)
+
+let c136_c1 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 4] {
+
+        c136_c1 += a * b
+
+    }
+
+}
+
+print("c136-l1:", c136_c1)
+
+let c136_c2 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 3] {
+
+        c136_c2 += a * b
+
+    }
+
+}
+
+print("c136-l2:", c136_c2)
+
+let c136_acc0 = ""
+
+loop {
+
+    c136_acc0 += "x"
+
+    if c136_acc0.len() >= 4 { break }
+
+}
+
+print("c136-o0:", c136_acc0)
+
+let c136_acc1 = ""
+
+loop {
+
+    c136_acc1 += "x"
+
+    if c136_acc1.len() >= 6 { break }
+
+}
+
+print("c136-o1:", c136_acc1)
+
+let c136_acc2 = ""
+
+loop {
+
+    c136_acc2 += "x"
+
+    if c136_acc2.len() >= 6 { break }
+
+}
+
+print("c136-o2:", c136_acc2)

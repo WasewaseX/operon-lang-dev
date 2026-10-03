@@ -1,0 +1,190 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=138 tag=m138
+
+gene m138_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m138-b0:", m138_b0({enzyme: 19, helix: 76, plasmid: 78})?!)
+
+gene m138_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m138-b1:", m138_b1({marker: 4, splicer: 29, ligase: 96})?!)
+
+gene m138_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m138_f0([2, 4, 44, 10, 5, 30, 32, 55]) {
+
+    case Ok(list) {
+
+        print("m138-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m138-f0:", "e:", m)
+
+    }
+
+}
+
+gene m138_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m138_f1([46, 11, 14, 18, 4, 7]) {
+
+    case Ok(list) {
+
+        print("m138-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m138-f1:", "e:", m)
+
+    }
+
+}
+
+let m138_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m138-cc0:", m138_cl0(15)(15), m138_cl0(15)(15))
+
+let m138_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m138-cc1:", m138_cl1(12)(12), m138_cl1(12)(12))
+
+let m138_data0 = some([some("cell"), none(), some(3)])
+
+match m138_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m138-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m138-x0:", "shape-miss")
+
+    }
+
+}
+
+let m138_data1 = some([some("gene"), none(), some(8)])
+
+match m138_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m138-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m138-x1:", "shape-miss")
+
+    }
+
+}

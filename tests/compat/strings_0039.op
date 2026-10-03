@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=39 tag=s039
+
+print("s039-m0:", "08khtClsrj2lgw".upper(), "08khtClsrj2lgw".slice(2), "08khtClsrj2lgw".len())
+
+print("s039-m1:", "xnmmA3lg".upper(), "xnmmA3lg".slice(1), "xnmmA3lg".len())
+
+print("s039-m2:", "i80z5_tAkb".upper(), "i80z5_tAkb".slice(3), "i80z5_tAkb".len())
+
+print("s039-m3:", "gwqw6A".upper(), "gwqw6A".slice(4), "gwqw6A".len())
+
+print("s039-m4:", "xzfy0rru".upper(), "xzfy0rru".slice(3), "xzfy0rru".len())
+
+print("s039-i0:", "ug3-{82}-t_p5")
+
+let s039_v0 = 82
+
+print("s039-v0:", "n={s039_v0}" + "!" * 3)
+
+print("s039-i1:", "6yz-{69}-eyv7")
+
+let s039_v1 = 69
+
+print("s039-v1:", "n={s039_v1}" + "!" * 1)
+
+print("s039-i2:", "Cep-{80}-Bh02")
+
+let s039_v2 = 80
+
+print("s039-v2:", "n={s039_v2}" + "!" * 1)
+
+print("s039-r0:", "q_q8zz_h".replace("q", "zr"), "q_q8zz_h".contains("_q"))
+
+print("s039-r1:", "56496n8a".replace("5", "4j"), "56496n8a".contains("64"))
+
+print("s039-j0:", ["cuu", "zz_", "asz"].join("-"))
+
+print("s039-j1:", ["mee", "tb7", "5kC", "x58", "hc0"].join("-"))
+
+print("s039-j2:", ["cgd", "asy", "47p", "6hz", "8qb"].join("-"))
+
+print("s039-a0:", "7vo2p4B".at(2), "7vo2p4B".trim() == "7vo2p4B")
+
+print("s039-a1:", "11sl34d".at(3), "11sl34d".trim() == "11sl34d")

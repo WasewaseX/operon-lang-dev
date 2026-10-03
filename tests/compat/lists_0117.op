@@ -1,0 +1,64 @@
+# compat corpus — generated, do not edit by hand
+# bucket=lists seed=20261030 idx=117 tag=l117
+
+let l117_l0 = [-8, 32, -13, 4, -13]
+
+print("l117-l0:", l117_l0[2], l117_l0[-1], l117_l0.len())
+
+let l117_l1 = [36, -30, 4, -48, 13, -8, -6]
+
+print("l117-l1:", l117_l1[0], l117_l1[-1], l117_l1.len())
+
+let l117_l2 = [-35, 34, 34, 28, 14, -25]
+
+print("l117-l2:", l117_l2[1], l117_l2[-1], l117_l2.len())
+
+let l117_l3 = [-19, -19, 50, -20, 40]
+
+print("l117-l3:", l117_l3[0], l117_l3[-1], l117_l3.len())
+
+let l117_s0 = [14, -90, 92, 7, -18]
+
+print("l117-s0:", l117_s0.slice(1, 3), l117_s0.slice(-3))
+
+let l117_s1 = [-12, -10, -98, 5, 41, 83]
+
+print("l117-s1:", l117_s1.slice(3, 4), l117_s1.slice(-1))
+
+let l117_s2 = [9, 62, -72, 57, -27, 58, 81]
+
+print("l117-s2:", l117_s2.slice(5, 6), l117_s2.slice(-2))
+
+let l117_r0 = [170, 110, 735, 741, 535, 384, 95]
+
+print("l117-r0:", l117_r0.sort(), l117_r0.reverse(), l117_r0.contains(384))
+
+let l117_r1 = [674, 199, 775, 975]
+
+print("l117-r1:", l117_r1.sort(), l117_r1.reverse(), l117_r1.contains(199))
+
+let l117_t0 = 0
+
+for v in [32, 7, 23, 11] { l117_t0 += v }
+
+print("l117-t0:", l117_t0)
+
+let l117_t1 = 0
+
+for v in [11, 5, 35, 1, 17] { l117_t1 += v }
+
+print("l117-t1:", l117_t1)
+
+let l117_t2 = 0
+
+for v in [37, 34, 16] { l117_t2 += v }
+
+print("l117-t2:", l117_t2)
+
+let l117_n0 = [[4, 8, 9], [4, 8, 9], 77]
+
+print("l117-n0:", l117_n0[0][2], l117_n0[2])
+
+let l117_n1 = [[5, 4, 8], [5, 4, 8], 77]
+
+print("l117-n1:", l117_n1[0][0], l117_n1[2])

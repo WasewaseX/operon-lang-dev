@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=201 tag=s201
+
+print("s201-m0:", "cxAqw9hz".upper(), "cxAqw9hz".slice(3), "cxAqw9hz".len())
+
+print("s201-m1:", "s7u00pC5bqreh".upper(), "s7u00pC5bqreh".slice(3), "s7u00pC5bqreh".len())
+
+print("s201-m2:", "kgBamcj".upper(), "kgBamcj".slice(3), "kgBamcj".len())
+
+print("s201-m3:", "Bv40kvrrsu".upper(), "Bv40kvrrsu".slice(3), "Bv40kvrrsu".len())
+
+print("s201-i0:", "400-{17}-8osk")
+
+let s201_v0 = 17
+
+print("s201-v0:", "n={s201_v0}" + "!" * 1)
+
+print("s201-i1:", "5dv-{38}-Cffb")
+
+let s201_v1 = 38
+
+print("s201-v1:", "n={s201_v1}" + "!" * 1)
+
+print("s201-i2:", "cr4-{70}-q_xC")
+
+let s201_v2 = 70
+
+print("s201-v2:", "n={s201_v2}" + "!" * 1)
+
+print("s201-i3:", "036-{80}-j5wh")
+
+let s201_v3 = 80
+
+print("s201-v3:", "n={s201_v3}" + "!" * 3)
+
+print("s201-i4:", "hop-{48}-5g6_")
+
+let s201_v4 = 48
+
+print("s201-v4:", "n={s201_v4}" + "!" * 1)
+
+print("s201-r0:", "3fqd5_qa".replace("3", "rl"), "3fqd5_qa".contains("fq"))
+
+print("s201-r1:", "pqgq1nz9".replace("p", "w5"), "pqgq1nz9".contains("qg"))
+
+print("s201-j0:", ["g6j", "gtA", "jzm", "_Bb", "yfl"].join("-"))
+
+print("s201-j1:", ["At0", "7mv", "8mc", "_8t", "4kv"].join("-"))
+
+print("s201-a0:", "8Bzzzrd".at(4), "8Bzzzrd".trim() == "8Bzzzrd")
+
+print("s201-a1:", "jc1qpww".at(2), "jc1qpww".trim() == "jc1qpww")

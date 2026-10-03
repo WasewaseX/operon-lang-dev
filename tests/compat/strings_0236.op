@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=236 tag=s236
+
+print("s236-m0:", "75qu5atkCmv5".upper(), "75qu5atkCmv5".slice(3), "75qu5atkCmv5".len())
+
+print("s236-m1:", "wjcn4166".upper(), "wjcn4166".slice(4), "wjcn4166".len())
+
+print("s236-m2:", "7h8s3p04_".upper(), "7h8s3p04_".slice(3), "7h8s3p04_".len())
+
+print("s236-m3:", "bjju5jme6".upper(), "bjju5jme6".slice(1), "bjju5jme6".len())
+
+print("s236-i0:", "84z-{39}-fsgA")
+
+let s236_v0 = 39
+
+print("s236-v0:", "n={s236_v0}" + "!" * 2)
+
+print("s236-i1:", "e6i-{1}-pos3")
+
+let s236_v1 = 1
+
+print("s236-v1:", "n={s236_v1}" + "!" * 3)
+
+print("s236-i2:", "0uB-{27}-BAlt")
+
+let s236_v2 = 27
+
+print("s236-v2:", "n={s236_v2}" + "!" * 2)
+
+print("s236-r0:", "337fmfv3".replace("3", "gk"), "337fmfv3".contains("37"))
+
+print("s236-r1:", "bnefppdd".replace("b", "5g"), "bnefppdd".contains("ne"))
+
+print("s236-r2:", "rq_deo0x".replace("r", "1b"), "rq_deo0x".contains("q_"))
+
+print("s236-r3:", "5sB6cCy6".replace("5", "6i"), "5sB6cCy6".contains("sB"))
+
+print("s236-j0:", ["ro1", "lqn", "uu9"].join("-"))
+
+print("s236-j1:", ["nmB", "xh4", "t2B", "uBe"].join("-"))
+
+print("s236-j2:", ["1ho", "z8t", "g7_", "sxy"].join("-"))
+
+print("s236-a0:", "nhp15_d".at(5), "nhp15_d".trim() == "nhp15_d")
+
+print("s236-a1:", "v4gn0po".at(3), "v4gn0po".trim() == "v4gn0po")

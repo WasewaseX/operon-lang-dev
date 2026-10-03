@@ -1,4 +1,4 @@
-# rt_p16a — W06 (D-014): Option/Result adversarial probes. Every probe must
+# rt_p16a, W06 (D-014): Option/Result adversarial probes. Every probe must
 # stay CONTAINED: bounded notes, no leaked "propagate" kind as a failure, no
 # panic, no unbounded output. Run with --entry go.
 gene deep_variant(n, acc) {
@@ -18,7 +18,7 @@ gene probe() {
 }
 gene go() {
     # 1. FORGERY: the raise grammar whitelists kinds (unfolded|missing|
-    #    overflow|burned) — a "propagate" kind can never be raised at all,
+    #    overflow|burned), a "propagate" kind can never be raised at all,
     #    and the prop payload has no user path. A nearby forged kind stays
     #    an ordinary contained stress.
     let forged = ""
@@ -28,13 +28,13 @@ gene go() {
         forged = e.kind
     }
     print("forged-kind: " + forged)
-    # 2. NESTED VARIANTS: 5000-deep Some chain through repr and json —
+    # 2. NESTED VARIANTS: 5000-deep Some chain through repr and json,
     #    depth caps must degrade, never recurse to SIGSEGV.
     let deep = deep_variant(5000, ok(1))
     let r = str(deep)
     print("repr-bounded: " + str(len(r) < 400000))
     print("json-bounded: " + str(len(json_str(deep)) < 400000))
-    # 3. UNWRAP CHAIN: unwrap stress carries the W007 chain — capped at 64.
+    # 3. UNWRAP CHAIN: unwrap stress carries the W007 chain, capped at 64.
     let chain_frames = 0
     stress {
         dig(200)
@@ -42,7 +42,7 @@ gene go() {
         chain_frames = len(e.chain)
     }
     print("chain-capped: " + str(chain_frames <= 64))
-    # 4. PLAIN-VALUE PROPAGATION IN A LOOP: silent identity — no note flood.
+    # 4. PLAIN-VALUE PROPAGATION IN A LOOP: silent identity, no note flood.
     let acc = 0
     let i = 0
     while i < 1000 {
@@ -51,7 +51,7 @@ gene go() {
     }
     print("loop-identity: " + str(acc == 499500))
     # 5. PROPAGATION inside a rescue body: the signal returns from THIS
-    #    gene (go) — never contained as a failure by the rescue.
+    #    gene (go), never contained as a failure by the rescue.
     let v = probe()?!
     print("prop-returns: " + str(v == 9))
     return "done"

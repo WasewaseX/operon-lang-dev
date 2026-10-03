@@ -1,0 +1,187 @@
+# pkg web — the routing layer (pure Operon, depends on pkg http).
+#
+# A minimal, deterministic web toolkit on top of pkg http: a router with
+# :param and *splat patterns, path-segment decoding, form-body parsing,
+# cookie-aware request envelopes, and response helpers that emit the
+# http package's raw response strings. The handler list is DATA: genes
+# are first-class values in Operon, so a route table is a list of
+# {method, segments, handler} maps and web_match returns the winner plus
+# its captured params — dispatch is a plain function call away.
+#
+# Determinism contract: route registration order is match order
+# (first match wins, like the language's own match statement); a path
+# that matches nothing returns null, never a stress (Total Grammar).
+
+use http
+
+# ------------------------------------------------------------------ router
+
+## An empty router. Build one, then web_route_add into it.
+gene web_router_new() {
+    return {routes: []}
+}
+
+## Register a handler for `method` (uppercase; "*" matches any method)
+## and `pattern`. Pattern shapes:
+##   /users            three fixed segments: "", "users"
+##   /users/:id        ":id" captures one segment into params["id"]
+##   /files/*splat     "*splat" captures every remaining segment (list)
+## Registration order IS match order: first add wins.
+gene web_route_add(r, method, pattern, handler) {
+    r["routes"].push({method: method, segments: web_split_path(pattern), handler: handler})
+    return r
+}
+
+## Split "/a/b" into ["", "a", "b"] — the leading empty segment anchors
+## the root, so patterns always start with a fixed empty match.
+gene web_split_path(p) {
+    let parts = []
+    for seg in p.split("/") {
+        parts.push(web_seg_decode(seg))
+    }
+    return parts
+}
+
+## Percent-decode one path segment (plus is NOT space in paths).
+gene web_seg_decode(seg) {
+    return http.http_percent_decode(seg, false)
+}
+
+## Match `method` + `path` against the route table. Returns
+## {handler: <gene>, params: {..}, splat: [..]} for the first matching
+## route, or null when nothing matches (the caller renders the 404).
+gene web_match(r, method, path) {
+    let parts = web_split_path(path)
+    for route in r["routes"] {
+        if route["method"] != "*" and route["method"] != method {
+            continue
+        }
+        let hit = web_match_segments(route["segments"], parts)
+        if hit != null {
+            return {handler: route["handler"], params: hit["params"], splat: hit["splat"]}
+        }
+    }
+    return null
+}
+
+gene web_match_segments(pattern, parts) {
+    let params = {}
+    let splat = []
+    let pi = 0
+    let si = 0
+    while si < len(pattern) {
+        let seg = pattern[si]
+        if seg.slice(0, 1) == "*" {
+            while pi < len(parts) {
+                splat.push(parts[pi])
+                pi = pi + 1
+            }
+            return {params: params, splat: splat}
+        }
+        if pi >= len(parts) {
+            return null
+        }
+        if len(seg) > 1 and seg.slice(0, 1) == ":" {
+            params[seg.slice(1, len(seg))] = parts[pi]
+        } else {
+            if seg != parts[pi] {
+                return null
+            }
+        }
+        si = si + 1
+        pi = pi + 1
+    }
+    # pattern exhausted: the path must be too (no trailing match)
+    if pi != len(parts) {
+        return null
+    }
+    return {params: params, splat: splat}
+}
+
+# ------------------------------------------------------------------ forms
+
+## Parse an application/x-www-form-urlencoded body into a flat map
+## (same lenient rules as the query string: last occurrence wins).
+gene web_form_parse(body) {
+    return http.http_query_parse(body)
+}
+
+# --------------------------------------------------------------- envelopes
+
+## Build the request envelope a handler receives: path params, query
+## map, form map, cookies — everything decoded once, up front.
+gene web_request(method, path, query_string, body, cookie_header) {
+    return {
+        method: method,
+        path: path,
+        params: {},
+        splat: [],
+        query: http.http_query_parse(query_string),
+        form: web_form_parse(body),
+        cookies: http.http_cookie_parse(cookie_header)
+    }
+}
+
+## Attach matched params to an envelope (web_match fills params/splat).
+gene web_request_bind(envelope, hit) {
+    envelope["params"] = hit["params"]
+    envelope["splat"] = hit["splat"]
+    return envelope
+}
+
+# --------------------------------------------------------------- responses
+
+## 200 JSON response for `data` (raw json text built by the caller or
+## pkg json; keep this package dependency-free of json for tiny apps).
+gene web_json(data_json) {
+    return http.http_response_json(200, data_json)
+}
+
+## 200 text response.
+gene web_text(body) {
+    return http.http_response_build(200, {"Content-Type": "text/plain; charset=utf-8"}, body)
+}
+
+## 302 redirect (301 when permanent).
+gene web_redirect(location, permanent) {
+    return http.http_response_redirect(location, permanent)
+}
+
+## A response carrying one Set-Cookie header alongside a body.
+gene web_with_cookie(response_parts, cookie_header) {
+    return http.http_response_build(response_parts["status"], response_parts["headers"], response_parts["body"])
+}
+
+## Content-Type by file extension, the table small apps actually serve.
+gene web_mime(name) {
+    let m = {
+        html: "text/html; charset=utf-8",
+        css: "text/css; charset=utf-8",
+        js: "text/javascript; charset=utf-8",
+        json: "application/json",
+        png: "image/png",
+        jpg: "image/jpeg",
+        jpeg: "image/jpeg",
+        gif: "image/gif",
+        svg: "image/svg+xml",
+        ico: "image/x-icon",
+        txt: "text/plain; charset=utf-8",
+        woff: "font/woff",
+        woff2: "font/woff2"
+    }
+    let ext = name
+    let dot = http.http_rindex_of(name, ".")
+    if dot >= 0 {
+        ext = name.slice(dot + 1, len(name)).lower()
+    }
+    let out = ""
+    for k in keys(m) {
+        if k == ext {
+            out = m[k]
+        }
+    }
+    if out == "" {
+        return "application/octet-stream"
+    }
+    return out
+}

@@ -1,0 +1,254 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=181 tag=m181
+
+gene m181_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m181-b0:", m181_b0({exon: 34, plasmid: 16, vector: 42})?!)
+
+gene m181_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m181-b1:", m181_b1({marker: 77, vector: 72, codon: 10})?!)
+
+gene m181_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m181-b2:", m181_b2({marker: 95, enzyme: 24, codon: 10})?!)
+
+gene m181_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m181_f0([57, 15, 30, 31, 44, 48, 32]) {
+
+    case Ok(list) {
+
+        print("m181-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m181-f0:", "e:", m)
+
+    }
+
+}
+
+gene m181_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m181_f1([1, 4, 13, 2]) {
+
+    case Ok(list) {
+
+        print("m181-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m181-f1:", "e:", m)
+
+    }
+
+}
+
+gene m181_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m181_f2([41, 29, 47, 46, 46]) {
+
+    case Ok(list) {
+
+        print("m181-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m181-f2:", "e:", m)
+
+    }
+
+}
+
+let m181_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m181-cc0:", m181_cl0(12)(17), m181_cl0(17)(12))
+
+let m181_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m181-cc1:", m181_cl1(4)(4), m181_cl1(4)(4))
+
+let m181_data0 = some([some("enzyme"), none(), some(8)])
+
+match m181_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m181-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m181-x0:", "shape-miss")
+
+    }
+
+}
+
+let m181_data1 = some([some("cell"), none(), some(3)])
+
+match m181_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m181-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m181-x1:", "shape-miss")
+
+    }
+
+}

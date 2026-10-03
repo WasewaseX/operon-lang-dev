@@ -1,0 +1,50 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=202 tag=m202
+
+let m202_m0 = {plasmid: 84, marker: 33, gene: -40, enzyme: 73}
+
+print("m202-m0:", m202_m0["plasmid"], len(m202_m0), m202_m0.has("plasmid"))
+
+let m202_m1 = {exon: -68, ligase: -14, splicer: -56, enzyme: 10}
+
+print("m202-m1:", m202_m1["exon"], len(m202_m1), m202_m1.has("exon"))
+
+let m202_m2 = {helix: -53, cell: 16, vector: 23, enzyme: -35}
+
+print("m202-m2:", m202_m2["helix"], len(m202_m2), m202_m2.has("helix"))
+
+let m202_m3 = {splicer: -15, cell: -29, exon: 48}
+
+print("m202-m3:", m202_m3["splicer"], len(m202_m3), m202_m3.has("splicer"))
+
+let m202_m4 = {helix: 96, vector: -13, marker: 48, ribose: 55, ligase: -26}
+
+print("m202-m4:", m202_m4["helix"], len(m202_m4), m202_m4.has("helix"))
+
+let m202_k0 = {ribose: 22, helix: 44, enzyme: 10}
+
+let m202_ks0 = m202_k0.keys()
+
+let m202_sm0 = 0
+
+for k in m202_k0 { m202_sm0 += m202_k0[k] }
+
+print("m202-k0:", m202_sm0, m202_k0.keys().sort(), m202_k0.values().len())
+
+let m202_k1 = {gene: 35, splicer: 23, ligase: 20}
+
+let m202_ks1 = m202_k1.keys()
+
+let m202_sm1 = 0
+
+for k in m202_k1 { m202_sm1 += m202_k1[k] }
+
+print("m202-k1:", m202_sm1, m202_k1.keys().sort(), m202_k1.values().len())
+
+let m202_w0 = {outer: {gene: 6, enzyme: 3, tag: "ok"}}}
+
+print("m202-w0:", m202_w0["outer"]["enzyme"], m202_w0["outer"]["tag"])
+
+let m202_w1 = {outer: {marker: 7, cell: 7, tag: "ok"}}}
+
+print("m202-w1:", m202_w1["outer"]["cell"], m202_w1["outer"]["tag"])

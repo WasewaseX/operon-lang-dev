@@ -1,0 +1,190 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=250 tag=m250
+
+gene m250_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m250-b0:", m250_b0({plasmid: 98, exon: 94, vector: 92})?!)
+
+gene m250_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m250-b1:", m250_b1({helix: 38, vector: 85, ligase: 60})?!)
+
+gene m250_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m250_f0([36, 37, 37, 32, 46, 25]) {
+
+    case Ok(list) {
+
+        print("m250-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m250-f0:", "e:", m)
+
+    }
+
+}
+
+gene m250_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m250_f1([3, 39, 10, 29, 4, 3, 22]) {
+
+    case Ok(list) {
+
+        print("m250-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m250-f1:", "e:", m)
+
+    }
+
+}
+
+let m250_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m250-cc0:", m250_cl0(2)(7), m250_cl0(7)(2))
+
+let m250_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m250-cc1:", m250_cl1(16)(5), m250_cl1(5)(16))
+
+let m250_data0 = some([some("gene"), none(), some(2)])
+
+match m250_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m250-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m250-x0:", "shape-miss")
+
+    }
+
+}
+
+let m250_data1 = some([some("exon"), none(), some(2)])
+
+match m250_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m250-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m250-x1:", "shape-miss")
+
+    }
+
+}

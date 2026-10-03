@@ -1,0 +1,62 @@
+# compat corpus — generated, do not edit by hand
+# bucket=lists seed=20261030 idx=246 tag=l246
+
+let l246_l0 = [43, -6, 37, 44, 26]
+
+print("l246-l0:", l246_l0[2], l246_l0[-1], l246_l0.len())
+
+let l246_l1 = [6, -34, -9, 21, 37, -24]
+
+print("l246-l1:", l246_l1[5], l246_l1[-1], l246_l1.len())
+
+let l246_l2 = [-3, 15, 29, -33]
+
+print("l246-l2:", l246_l2[1], l246_l2[-1], l246_l2.len())
+
+let l246_l3 = [10, 24, 37, -4, -16, 34]
+
+print("l246-l3:", l246_l3[5], l246_l3[-1], l246_l3.len())
+
+let l246_s0 = [98, -89, 28, -25, -7]
+
+print("l246-s0:", l246_s0.slice(3, 4), l246_s0.slice(-3))
+
+let l246_s1 = [-67, 7, -60, -57, -65, -58, -11]
+
+print("l246-s1:", l246_s1.slice(4, 5), l246_s1.slice(-2))
+
+let l246_s2 = [80, 14, -42, 67, 67, 10, -13, 77, -98]
+
+print("l246-s2:", l246_s2.slice(2, 6), l246_s2.slice(-3))
+
+let l246_r0 = [424, 533, 505, 17, 424, 914, 391]
+
+print("l246-r0:", l246_r0.sort(), l246_r0.reverse(), l246_r0.contains(424))
+
+let l246_r1 = [275, 575, 456, 717, 773]
+
+print("l246-r1:", l246_r1.sort(), l246_r1.reverse(), l246_r1.contains(717))
+
+let l246_r2 = [982, 266, 517, 277, 205]
+
+print("l246-r2:", l246_r2.sort(), l246_r2.reverse(), l246_r2.contains(982))
+
+let l246_t0 = 0
+
+for v in [1, 18, 14] { l246_t0 += v }
+
+print("l246-t0:", l246_t0)
+
+let l246_t1 = 0
+
+for v in [10, 3, 22, 27, 20] { l246_t1 += v }
+
+print("l246-t1:", l246_t1)
+
+let l246_n0 = [[9, 8, 5], [9, 8, 5], 77]
+
+print("l246-n0:", l246_n0[0][0], l246_n0[2])
+
+let l246_n1 = [[7, 2, 8], [7, 2, 8], 77]
+
+print("l246-n1:", l246_n1[0][1], l246_n1[2])

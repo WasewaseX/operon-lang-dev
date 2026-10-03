@@ -1,0 +1,172 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20260930 idx=81 tag=s081
+
+stress {
+
+    print("s081-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s081-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s081-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s081-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s081-mz:", 36 % 0)
+
+} rescue (e) {
+
+    print("s081-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s081-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s081-of1:", "caught", e.kind, e.message)
+
+}
+
+gene s081_r0() {
+
+    raise "s081-r0Btae"
+
+}
+
+stress {
+
+    s081_r0()
+
+    print("s081-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s081-r0:", e.kind, e.message)
+
+}
+
+gene s081_r1() {
+
+    raise "s081-ek3iyu"
+
+}
+
+stress {
+
+    s081_r1()
+
+    print("s081-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s081-r1:", e.kind, e.message)
+
+}
+
+let s081_xs0 = [21, 22]
+
+stress {
+
+    print("s081-x0:", s081_xs0[7])
+
+} rescue (e) {
+
+    print("s081-x0:", "caught", e.kind)
+
+}
+
+let s081_xs1 = [39, 36, 29]
+
+stress {
+
+    print("s081-x1:", s081_xs1[6])
+
+} rescue (e) {
+
+    print("s081-x1:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s081-0"
+
+    } rescue (e) {
+
+        print("s081-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s081-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s081-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s081-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s081-1"
+
+    } rescue (e) {
+
+        print("s081-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s081-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s081-d1-top:", outer.message)
+
+}

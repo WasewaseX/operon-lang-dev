@@ -1,0 +1,158 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20260930 idx=80 tag=c080
+
+let c080_b0 = "start"
+
+if 66 > 80 { c080_b0 = "hi" } elif 66 > 40 { c080_b0 = "mid" } else { c080_b0 = "lo" }
+
+print("c080-i0:", c080_b0, 66)
+
+let c080_b1 = "start"
+
+if 51 > 80 { c080_b1 = "hi" } elif 51 > 40 { c080_b1 = "mid" } else { c080_b1 = "lo" }
+
+print("c080-i1:", c080_b1, 51)
+
+let c080_b2 = "start"
+
+if 114 > 80 { c080_b2 = "hi" } elif 114 > 40 { c080_b2 = "mid" } else { c080_b2 = "lo" }
+
+print("c080-i2:", c080_b2, 114)
+
+let c080_a0 = 0
+
+let c080_n0 = 0
+
+while c080_n0 < 8 {
+
+    c080_n0 += 1
+
+    if c080_n0 % 3 == 0 { continue }
+
+    if c080_n0 > 13 { break }
+
+    c080_a0 += c080_n0
+
+}
+
+print("c080-w0:", c080_a0, c080_n0)
+
+let c080_a1 = 0
+
+let c080_n1 = 0
+
+while c080_n1 < 20 {
+
+    c080_n1 += 2
+
+    if c080_n1 % 2 == 0 { continue }
+
+    if c080_n1 > 26 { break }
+
+    c080_a1 += c080_n1
+
+}
+
+print("c080-w1:", c080_a1, c080_n1)
+
+let c080_a2 = 0
+
+let c080_n2 = 0
+
+while c080_n2 < 7 {
+
+    c080_n2 += 3
+
+    if c080_n2 % 3 == 0 { continue }
+
+    if c080_n2 > 12 { break }
+
+    c080_a2 += c080_n2
+
+}
+
+print("c080-w2:", c080_a2, c080_n2)
+
+let c080_a3 = 0
+
+let c080_n3 = 0
+
+while c080_n3 < 14 {
+
+    c080_n3 += 2
+
+    if c080_n3 % 2 == 0 { continue }
+
+    if c080_n3 > 23 { break }
+
+    c080_a3 += c080_n3
+
+}
+
+print("c080-w3:", c080_a3, c080_n3)
+
+let c080_c0 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 3] {
+
+        c080_c0 += a * b
+
+    }
+
+}
+
+print("c080-l0:", c080_c0)
+
+let c080_c1 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 2] {
+
+        c080_c1 += a * b
+
+    }
+
+}
+
+print("c080-l1:", c080_c1)
+
+let c080_c2 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 4] {
+
+        c080_c2 += a * b
+
+    }
+
+}
+
+print("c080-l2:", c080_c2)
+
+let c080_acc0 = ""
+
+loop {
+
+    c080_acc0 += "x"
+
+    if c080_acc0.len() >= 3 { break }
+
+}
+
+print("c080-o0:", c080_acc0)
+
+let c080_acc1 = ""
+
+loop {
+
+    c080_acc1 += "x"
+
+    if c080_acc1.len() >= 7 { break }
+
+}
+
+print("c080-o1:", c080_acc1)

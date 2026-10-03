@@ -1,0 +1,40 @@
+# W093 validation probe, V1 (Hill dose-response, EC50 identity).
+# Companion measurement program for bootstrap/validation_registry.json and
+# bootstrap/validation_report.py. It asserts NOTHING; it prints
+# "RESULT name=value" lines the report parses. The enforcing test remains
+# tests/sci_ec50_hill.op; this probe re-derives the same five canonical
+# points so the report can record observed vs expected machine-readably.
+# Surface notes carried over from the enforcing test: the network is
+# STATEFUL (levels latch by max across fires), so each dose point resets
+# the target to 0.0 first and the walk ascends.
+regulate {
+    reg activates target strength 1.0 threshold 0.3
+}
+gene sig() { return "driver" }
+gene reg() { return "reg" }
+gene target() { return "t-OUT" }
+grn_set("target", 0.0)
+grn_set("reg", 0.1)
+grn_fire("sig")
+let p10 = grn_state()
+promote("RESULT v1_t3={p10.target}")
+grn_set("target", 0.0)
+grn_set("reg", 0.15)
+grn_fire("sig")
+let p20 = grn_state()
+promote("RESULT v1_t2={p20.target}")
+grn_set("target", 0.0)
+grn_set("reg", 0.3)
+grn_fire("sig")
+let p50 = grn_state()
+promote("RESULT v1_t1={p50.target}")
+grn_set("target", 0.0)
+grn_set("reg", 0.6)
+grn_fire("sig")
+let p80 = grn_state()
+promote("RESULT v1_2t={p80.target}")
+grn_set("target", 0.0)
+grn_set("reg", 0.9)
+grn_fire("sig")
+let p90 = grn_state()
+promote("RESULT v1_3t={p90.target}")

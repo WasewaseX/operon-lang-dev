@@ -1,0 +1,22 @@
+# bench: lists — the W011 list-op fast-path workload (builder-A, dev-1)
+# Exercises the builtin dispatch path the optimizer's resolution caching
+# targets: push/len/pop on a list inside a native while loop. Every list
+# operation rides the CallNamed -> call_named -> call_builtin resolution
+# chain (toggle gate -> synonyms -> env shadow check -> builtin match),
+# which is the exact path the W011 resolution cache optimizes. The loop
+# tail stays native (no bridged `for`), so the measured cost IS the
+# dispatch chain, not bridge overhead. Correctness twin lives in
+# tests/bench/bench_correctness.op.
+main {
+    let xs = []
+    let i = 0
+    while i < 500000 {
+        push(xs, i % 97)
+        let n = len(xs)
+        if n >= 64 {
+            pop(xs)
+        }
+        i = i + 1
+    }
+    promote("count = {len(xs)}")
+}

@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=124 tag=s124
+
+print("s124-m0:", "382B6vrwwcA".upper(), "382B6vrwwcA".slice(2), "382B6vrwwcA".len())
+
+print("s124-m1:", "Bu8115bAyejp".upper(), "Bu8115bAyejp".slice(4), "Bu8115bAyejp".len())
+
+print("s124-m2:", "c9tlc4v9xf3_i".upper(), "c9tlc4v9xf3_i".slice(4), "c9tlc4v9xf3_i".len())
+
+print("s124-m3:", "0_r7_g".upper(), "0_r7_g".slice(4), "0_r7_g".len())
+
+print("s124-m4:", "ygxABnl".upper(), "ygxABnl".slice(2), "ygxABnl".len())
+
+print("s124-m5:", "6y8btqvB1v0B2v".upper(), "6y8btqvB1v0B2v".slice(3), "6y8btqvB1v0B2v".len())
+
+print("s124-i0:", "jzf-{22}-_34l")
+
+let s124_v0 = 22
+
+print("s124-v0:", "n={s124_v0}" + "!" * 1)
+
+print("s124-i1:", "4gf-{95}-tBkg")
+
+let s124_v1 = 95
+
+print("s124-v1:", "n={s124_v1}" + "!" * 1)
+
+print("s124-i2:", "0k7-{64}-vlg0")
+
+let s124_v2 = 64
+
+print("s124-v2:", "n={s124_v2}" + "!" * 1)
+
+print("s124-r0:", "8ctaAu8C".replace("8", "z1"), "8ctaAu8C".contains("ct"))
+
+print("s124-r1:", "nmB05gCC".replace("n", "nA"), "nmB05gCC".contains("mB"))
+
+print("s124-j0:", ["rog", "8gw", "owa"].join("-"))
+
+print("s124-j1:", ["m0d", "43r", "wnz", "a8p"].join("-"))
+
+print("s124-a0:", "dci3q_j".at(5), "dci3q_j".trim() == "dci3q_j")
+
+print("s124-a1:", "vonb2gp".at(4), "vonb2gp".trim() == "vonb2gp")
+
+print("s124-a2:", "1uunCkB".at(3), "1uunCkB".trim() == "1uunCkB")

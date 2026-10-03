@@ -1,0 +1,274 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=120 tag=m120
+
+let m120_s0 = some(4)
+
+match m120_s0 {
+
+    case Some(x) if x > 4 {
+
+        print("m120-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m120-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m120-m0:", "none")
+
+    }
+
+}
+
+let m120_s1 = some(6)
+
+match m120_s1 {
+
+    case Some(x) if x > 6 {
+
+        print("m120-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m120-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m120-m1:", "none")
+
+    }
+
+}
+
+let m120_s2 = some(8)
+
+match m120_s2 {
+
+    case Some(x) if x > 8 {
+
+        print("m120-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m120-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m120-m2:", "none")
+
+    }
+
+}
+
+let m120_ls0 = [17, 18, 26]
+
+match m120_ls0 {
+
+    case [17, *rest] {
+
+        print("m120-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m120-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m120-l0:", "other")
+
+    }
+
+}
+
+let m120_ls1 = [8, 45, 26]
+
+match m120_ls1 {
+
+    case [8, *rest] {
+
+        print("m120-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m120-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m120-l1:", "other")
+
+    }
+
+}
+
+let m120_ls2 = [17, 31, 38]
+
+match m120_ls2 {
+
+    case [17, *rest] {
+
+        print("m120-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m120-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m120-l2:", "other")
+
+    }
+
+}
+
+let m120_ls3 = [48, 20, 48]
+
+match m120_ls3 {
+
+    case [48, *rest] {
+
+        print("m120-l3:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m120-l3:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m120-l3:", "other")
+
+    }
+
+}
+
+let m120_mp0 = {splicer: -1644, ligase: 4847}
+
+match m120_mp0 {
+
+    case {splicer: p, ligase: q} {
+
+        print("m120-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m120-mp0:", "miss")
+
+    }
+
+}
+
+let m120_mp1 = {vector: 3455, helix: -5682}
+
+match m120_mp1 {
+
+    case {vector: p, helix: q} {
+
+        print("m120-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m120-mp1:", "miss")
+
+    }
+
+}
+
+let m120_r0 = ok(2)
+
+match m120_r0 {
+
+    case Ok(n) | Err(2) {
+
+        print("m120-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m120-r0:", "zero")
+
+    }
+
+}
+
+let m120_r1 = ok(5)
+
+match m120_r1 {
+
+    case Ok(n) | Err(5) {
+
+        print("m120-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m120-r1:", "zero")
+
+    }
+
+}
+
+match "gene" {
+
+    case "gene" {
+
+        print("m120-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m120-w0:", "alt")
+
+    }
+
+}
+
+match "splicer" {
+
+    case "splicer" {
+
+        print("m120-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m120-w1:", "alt")
+
+    }
+
+}

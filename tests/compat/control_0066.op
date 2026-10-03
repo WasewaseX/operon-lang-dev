@@ -1,0 +1,164 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20260930 idx=66 tag=c066
+
+let c066_b0 = "start"
+
+if 54 > 80 { c066_b0 = "hi" } elif 54 > 40 { c066_b0 = "mid" } else { c066_b0 = "lo" }
+
+print("c066-i0:", c066_b0, 54)
+
+let c066_b1 = "start"
+
+if 25 > 80 { c066_b1 = "hi" } elif 25 > 40 { c066_b1 = "mid" } else { c066_b1 = "lo" }
+
+print("c066-i1:", c066_b1, 25)
+
+let c066_b2 = "start"
+
+if 92 > 80 { c066_b2 = "hi" } elif 92 > 40 { c066_b2 = "mid" } else { c066_b2 = "lo" }
+
+print("c066-i2:", c066_b2, 92)
+
+let c066_b3 = "start"
+
+if 111 > 80 { c066_b3 = "hi" } elif 111 > 40 { c066_b3 = "mid" } else { c066_b3 = "lo" }
+
+print("c066-i3:", c066_b3, 111)
+
+let c066_b4 = "start"
+
+if 87 > 80 { c066_b4 = "hi" } elif 87 > 40 { c066_b4 = "mid" } else { c066_b4 = "lo" }
+
+print("c066-i4:", c066_b4, 87)
+
+let c066_a0 = 0
+
+let c066_n0 = 0
+
+while c066_n0 < 20 {
+
+    c066_n0 += 2
+
+    if c066_n0 % 2 == 0 { continue }
+
+    if c066_n0 > 25 { break }
+
+    c066_a0 += c066_n0
+
+}
+
+print("c066-w0:", c066_a0, c066_n0)
+
+let c066_a1 = 0
+
+let c066_n1 = 0
+
+while c066_n1 < 14 {
+
+    c066_n1 += 2
+
+    if c066_n1 % 3 == 0 { continue }
+
+    if c066_n1 > 20 { break }
+
+    c066_a1 += c066_n1
+
+}
+
+print("c066-w1:", c066_a1, c066_n1)
+
+let c066_a2 = 0
+
+let c066_n2 = 0
+
+while c066_n2 < 6 {
+
+    c066_n2 += 1
+
+    if c066_n2 % 2 == 0 { continue }
+
+    if c066_n2 > 12 { break }
+
+    c066_a2 += c066_n2
+
+}
+
+print("c066-w2:", c066_a2, c066_n2)
+
+let c066_c0 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 4] {
+
+        c066_c0 += a * b
+
+    }
+
+}
+
+print("c066-l0:", c066_c0)
+
+let c066_c1 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 2] {
+
+        c066_c1 += a * b
+
+    }
+
+}
+
+print("c066-l1:", c066_c1)
+
+let c066_c2 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 3] {
+
+        c066_c2 += a * b
+
+    }
+
+}
+
+print("c066-l2:", c066_c2)
+
+let c066_acc0 = ""
+
+loop {
+
+    c066_acc0 += "x"
+
+    if c066_acc0.len() >= 5 { break }
+
+}
+
+print("c066-o0:", c066_acc0)
+
+let c066_acc1 = ""
+
+loop {
+
+    c066_acc1 += "x"
+
+    if c066_acc1.len() >= 4 { break }
+
+}
+
+print("c066-o1:", c066_acc1)
+
+let c066_acc2 = ""
+
+loop {
+
+    c066_acc2 += "x"
+
+    if c066_acc2.len() >= 5 { break }
+
+}
+
+print("c066-o2:", c066_acc2)

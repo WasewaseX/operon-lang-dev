@@ -1,0 +1,60 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20260930 idx=18 tag=m018
+
+let m018_m0 = {cell: 99, splicer: -29, enzyme: -22, ribose: 80, codon: 56}
+
+print("m018-m0:", m018_m0["cell"], len(m018_m0), m018_m0.has("cell"))
+
+let m018_m1 = {helix: 0, enzyme: 16, exon: 39, plasmid: 53}
+
+print("m018-m1:", m018_m1["helix"], len(m018_m1), m018_m1.has("helix"))
+
+let m018_m2 = {ribose: -36, cell: 0, gene: -78, helix: 57}
+
+print("m018-m2:", m018_m2["ribose"], len(m018_m2), m018_m2.has("ribose"))
+
+let m018_m3 = {gene: 56, exon: 8, vector: -23, splicer: 75, marker: -77}
+
+print("m018-m3:", m018_m3["gene"], len(m018_m3), m018_m3.has("gene"))
+
+let m018_m4 = {gene: -99, exon: -13, codon: 44, helix: 29, enzyme: 74}
+
+print("m018-m4:", m018_m4["gene"], len(m018_m4), m018_m4.has("gene"))
+
+let m018_k0 = {enzyme: 25, splicer: 8, exon: 47}
+
+let m018_ks0 = m018_k0.keys()
+
+let m018_sm0 = 0
+
+for k in m018_k0 { m018_sm0 += m018_k0[k] }
+
+print("m018-k0:", m018_sm0, m018_k0.keys().sort(), m018_k0.values().len())
+
+let m018_k1 = {splicer: 41, enzyme: 49, ribose: 25}
+
+let m018_ks1 = m018_k1.keys()
+
+let m018_sm1 = 0
+
+for k in m018_k1 { m018_sm1 += m018_k1[k] }
+
+print("m018-k1:", m018_sm1, m018_k1.keys().sort(), m018_k1.values().len())
+
+let m018_k2 = {cell: 33, exon: 37, ligase: 36}
+
+let m018_ks2 = m018_k2.keys()
+
+let m018_sm2 = 0
+
+for k in m018_k2 { m018_sm2 += m018_k2[k] }
+
+print("m018-k2:", m018_sm2, m018_k2.keys().sort(), m018_k2.values().len())
+
+let m018_w0 = {outer: {splicer: 1, enzyme: 4, tag: "ok"}}}
+
+print("m018-w0:", m018_w0["outer"]["enzyme"], m018_w0["outer"]["tag"])
+
+let m018_w1 = {outer: {codon: 9, ribose: 2, tag: "ok"}}}
+
+print("m018-w1:", m018_w1["outer"]["ribose"], m018_w1["outer"]["tag"])

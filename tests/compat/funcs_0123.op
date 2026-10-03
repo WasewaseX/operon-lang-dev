@@ -1,0 +1,202 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=123 tag=f123
+
+gene f123_g0(p, q = 81, r = 97) {
+
+    return p * 9 + q - r
+
+}
+
+print("f123-d0:", f123_g0(-28), f123_g0(-28, 92), f123_g0(-28, 81, 97))
+
+gene f123_g1(p, q = 75, r = 19) {
+
+    return p * 23 + q - r
+
+}
+
+print("f123-d1:", f123_g1(37), f123_g1(37, 17), f123_g1(37, 75, 19))
+
+gene f123_g2(p, q = 45, r = 10) {
+
+    return p * 39 + q - r
+
+}
+
+print("f123-d2:", f123_g2(41), f123_g2(41, 95), f123_g2(41, 45, 10))
+
+gene f123_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f123_fib0(n - 1) + f123_fib0(n - 2)
+
+}
+
+print("f123-fib0:", f123_fib0(7))
+
+gene f123_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f123_fib1(n - 1) + f123_fib1(n - 2)
+
+}
+
+print("f123-fib1:", f123_fib1(11))
+
+gene f123_fib2(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f123_fib2(n - 1) + f123_fib2(n - 2)
+
+}
+
+print("f123-fib2:", f123_fib2(7))
+
+gene f123_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f123_gcd0(b, a % b)
+
+}
+
+print("f123-gcd0:", f123_gcd0(154, 213))
+
+gene f123_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f123_gcd1(b, a % b)
+
+}
+
+print("f123-gcd1:", f123_gcd1(92, 52))
+
+gene f123_gcd2(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f123_gcd2(b, a % b)
+
+}
+
+print("f123-gcd2:", f123_gcd2(431, 73))
+
+gene f123_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f123_c0 = f123_mk0(26)
+
+f123_c0(7)
+
+print("f123-cl0:", f123_c0(1))
+
+gene f123_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f123_c1 = f123_mk1(36)
+
+f123_c1(2)
+
+print("f123-cl1:", f123_c1(7))
+
+gene f123_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f123-hof0:", f123_tw0(gene (z) => z * 2 + 1, 24))
+
+gene f123_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f123-hof1:", f123_tw1(gene (z) => z * 2 + 1, 23))
+
+gene f123_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f123-dg0:", f123_sd0(545866))
+
+gene f123_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f123-dg1:", f123_sd1(267848))

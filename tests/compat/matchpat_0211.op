@@ -1,0 +1,268 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=211 tag=m211
+
+let m211_s0 = some(5)
+
+match m211_s0 {
+
+    case Some(x) if x > 5 {
+
+        print("m211-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m211-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m211-m0:", "none")
+
+    }
+
+}
+
+let m211_s1 = some(8)
+
+match m211_s1 {
+
+    case Some(x) if x > 8 {
+
+        print("m211-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m211-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m211-m1:", "none")
+
+    }
+
+}
+
+let m211_s2 = some(8)
+
+match m211_s2 {
+
+    case Some(x) if x > 8 {
+
+        print("m211-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m211-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m211-m2:", "none")
+
+    }
+
+}
+
+let m211_ls0 = [15, 13, 42]
+
+match m211_ls0 {
+
+    case [15, *rest] {
+
+        print("m211-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m211-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m211-l0:", "other")
+
+    }
+
+}
+
+let m211_ls1 = [25, 1, 35]
+
+match m211_ls1 {
+
+    case [25, *rest] {
+
+        print("m211-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m211-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m211-l1:", "other")
+
+    }
+
+}
+
+let m211_ls2 = [2, 20, 42]
+
+match m211_ls2 {
+
+    case [2, *rest] {
+
+        print("m211-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m211-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m211-l2:", "other")
+
+    }
+
+}
+
+let m211_mp0 = {exon: -4836, cell: -9563}
+
+match m211_mp0 {
+
+    case {exon: p, cell: q} {
+
+        print("m211-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m211-mp0:", "miss")
+
+    }
+
+}
+
+let m211_mp1 = {splicer: 4934, helix: 3904}
+
+match m211_mp1 {
+
+    case {splicer: p, helix: q} {
+
+        print("m211-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m211-mp1:", "miss")
+
+    }
+
+}
+
+let m211_r0 = ok(4)
+
+match m211_r0 {
+
+    case Ok(n) | Err(4) {
+
+        print("m211-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m211-r0:", "zero")
+
+    }
+
+}
+
+let m211_r1 = ok(5)
+
+match m211_r1 {
+
+    case Ok(n) | Err(5) {
+
+        print("m211-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m211-r1:", "zero")
+
+    }
+
+}
+
+let m211_r2 = ok(5)
+
+match m211_r2 {
+
+    case Ok(n) | Err(5) {
+
+        print("m211-r2:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m211-r2:", "zero")
+
+    }
+
+}
+
+match "splicer" {
+
+    case "splicer" {
+
+        print("m211-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m211-w0:", "alt")
+
+    }
+
+}
+
+match "ligase" {
+
+    case "ligase" {
+
+        print("m211-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m211-w1:", "alt")
+
+    }
+
+}

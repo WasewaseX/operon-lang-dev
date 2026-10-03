@@ -1,0 +1,38 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=202 tag=c202
+
+print("c202-c0:", 6227 > 6413)
+
+print("c202-c1:", -5009 < 5289)
+
+print("c202-c2:", 2964 > -2209)
+
+print("c202-c3:", 9534 == -6823)
+
+print("c202-b0:", 30 < 47 && 47 < 17, 30 > 47 || 30 > 17)
+
+print("c202-b1:", 4 < 24 && 24 < 20, 4 > 24 || 4 > 20)
+
+print("c202-b2:", 18 < 9 && 9 < 41, 18 > 9 || 18 > 41)
+
+print("c202-b3:", 1 < 34 && 34 < 40, 1 > 34 || 1 > 40)
+
+print("c202-t0:", 4859 > 5928 ? "gt" : "le")
+
+print("c202-t1:", -2528 > 5934 ? "gt" : "le")
+
+let c202_n0 = null
+
+print("c202-n0:", c202_n0 ?? 7938, c202_n0 == null)
+
+let c202_n1 = null
+
+print("c202-n1:", c202_n1 ?? 737, c202_n1 == null)
+
+let c202_n2 = null
+
+print("c202-n2:", c202_n2 ?? 1745, c202_n2 == null)
+
+print("c202-s0:", "hhak" in "2nkj7ehhak", "hhak" == "hhak")
+
+print("c202-s1:", "_1uq" in "jde9be_1uq", "_1uq" == "_1uq")

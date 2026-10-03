@@ -1,0 +1,60 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=168 tag=m168
+
+let m168_m0 = {ribose: -20, enzyme: 60, helix: 87, gene: -61, splicer: -37}
+
+print("m168-m0:", m168_m0["ribose"], len(m168_m0), m168_m0.has("ribose"))
+
+let m168_m1 = {marker: 52, codon: 44, vector: 26, exon: -61, ligase: 83}
+
+print("m168-m1:", m168_m1["marker"], len(m168_m1), m168_m1.has("marker"))
+
+let m168_m2 = {splicer: -65, codon: 81, exon: 7, helix: 34, vector: 89}
+
+print("m168-m2:", m168_m2["splicer"], len(m168_m2), m168_m2.has("splicer"))
+
+let m168_m3 = {enzyme: 86, exon: 91, ligase: 25, marker: -50, splicer: 22}
+
+print("m168-m3:", m168_m3["enzyme"], len(m168_m3), m168_m3.has("enzyme"))
+
+let m168_m4 = {marker: 6, vector: 33, gene: -8}
+
+print("m168-m4:", m168_m4["marker"], len(m168_m4), m168_m4.has("marker"))
+
+let m168_k0 = {plasmid: 39, splicer: 49, enzyme: 42}
+
+let m168_ks0 = m168_k0.keys()
+
+let m168_sm0 = 0
+
+for k in m168_k0 { m168_sm0 += m168_k0[k] }
+
+print("m168-k0:", m168_sm0, m168_k0.keys().sort(), m168_k0.values().len())
+
+let m168_k1 = {exon: 1, marker: 39, ligase: 3}
+
+let m168_ks1 = m168_k1.keys()
+
+let m168_sm1 = 0
+
+for k in m168_k1 { m168_sm1 += m168_k1[k] }
+
+print("m168-k1:", m168_sm1, m168_k1.keys().sort(), m168_k1.values().len())
+
+let m168_k2 = {cell: 44, gene: 29, ligase: 42}
+
+let m168_ks2 = m168_k2.keys()
+
+let m168_sm2 = 0
+
+for k in m168_k2 { m168_sm2 += m168_k2[k] }
+
+print("m168-k2:", m168_sm2, m168_k2.keys().sort(), m168_k2.values().len())
+
+let m168_w0 = {outer: {codon: 9, ribose: 5, tag: "ok"}}}
+
+print("m168-w0:", m168_w0["outer"]["ribose"], m168_w0["outer"]["tag"])
+
+let m168_w1 = {outer: {marker: 4, vector: 3, tag: "ok"}}}
+
+print("m168-w1:", m168_w1["outer"]["vector"], m168_w1["outer"]["tag"])

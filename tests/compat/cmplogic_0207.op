@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=207 tag=c207
+
+print("c207-c0:", -8354 != -8336)
+
+print("c207-c1:", 5726 >= -1227)
+
+print("c207-c2:", 7364 <= 8203)
+
+print("c207-c3:", -8803 <= -3494)
+
+print("c207-c4:", -239 >= -7028)
+
+print("c207-c5:", -2962 >= -4845)
+
+print("c207-c6:", 1558 < 9341)
+
+print("c207-b0:", 35 < 31 && 31 < 0, 35 > 31 || 35 > 0)
+
+print("c207-b1:", 15 < 15 && 15 < 6, 15 > 15 || 15 > 6)
+
+print("c207-t0:", 1222 > 2438 ? "gt" : "le")
+
+print("c207-t1:", 9705 > 6363 ? "gt" : "le")
+
+print("c207-t2:", -1709 > 3397 ? "gt" : "le")
+
+let c207_n0 = null
+
+print("c207-n0:", c207_n0 ?? 7041, c207_n0 == null)
+
+let c207_n1 = null
+
+print("c207-n1:", c207_n1 ?? -4478, c207_n1 == null)
+
+let c207_n2 = null
+
+print("c207-n2:", c207_n2 ?? -1917, c207_n2 == null)
+
+print("c207-s0:", "CBAx" in "CC_voyCBAx", "CBAx" == "CBAx")
+
+print("c207-s1:", "r6c9" in "rAkqb2r6c9", "r6c9" == "r6c9")

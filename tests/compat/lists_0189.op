@@ -1,0 +1,76 @@
+# compat corpus — generated, do not edit by hand
+# bucket=lists seed=20261030 idx=189 tag=l189
+
+let l189_l0 = [34, -19, 36, -37, 14]
+
+print("l189-l0:", l189_l0[2], l189_l0[-1], l189_l0.len())
+
+let l189_l1 = [31, -29, -13, 4, -49, 40]
+
+print("l189-l1:", l189_l1[5], l189_l1[-1], l189_l1.len())
+
+let l189_l2 = [-28, -26, 6, -1]
+
+print("l189-l2:", l189_l2[1], l189_l2[-1], l189_l2.len())
+
+let l189_l3 = [27, 29, 8, 46, -17, -50]
+
+print("l189-l3:", l189_l3[0], l189_l3[-1], l189_l3.len())
+
+let l189_s0 = [43, -78, 76, -18, 25, -12, -67, -1]
+
+print("l189-s0:", l189_s0.slice(1, 7), l189_s0.slice(-1))
+
+let l189_s1 = [-93, 76, -33, 11, -79, -85]
+
+print("l189-s1:", l189_s1.slice(2, 5), l189_s1.slice(-3))
+
+let l189_s2 = [40, 32, 66, 89, 22, 3, 41, 64, -3]
+
+print("l189-s2:", l189_s2.slice(7, 8), l189_s2.slice(-2))
+
+let l189_s3 = [-80, 91, -46, 35, -97, 30]
+
+print("l189-s3:", l189_s3.slice(1, 4), l189_s3.slice(-1))
+
+let l189_r0 = [458, 464, 885, 949, 516]
+
+print("l189-r0:", l189_r0.sort(), l189_r0.reverse(), l189_r0.contains(949))
+
+let l189_r1 = [505, 250, 284, 579]
+
+print("l189-r1:", l189_r1.sort(), l189_r1.reverse(), l189_r1.contains(505))
+
+let l189_r2 = [887, 348, 541, 146, 221, 66, 6]
+
+print("l189-r2:", l189_r2.sort(), l189_r2.reverse(), l189_r2.contains(887))
+
+let l189_r3 = [599, 579, 393, 263, 251]
+
+print("l189-r3:", l189_r3.sort(), l189_r3.reverse(), l189_r3.contains(579))
+
+let l189_t0 = 0
+
+for v in [26, 22, 12, 6, 8] { l189_t0 += v }
+
+print("l189-t0:", l189_t0)
+
+let l189_t1 = 0
+
+for v in [11, 14, 37, 19] { l189_t1 += v }
+
+print("l189-t1:", l189_t1)
+
+let l189_t2 = 0
+
+for v in [5, 9, 18, 18] { l189_t2 += v }
+
+print("l189-t2:", l189_t2)
+
+let l189_n0 = [[9, 3, 9], [9, 3, 9], 77]
+
+print("l189-n0:", l189_n0[0][2], l189_n0[2])
+
+let l189_n1 = [[7, 5, 9], [7, 5, 9], 77]
+
+print("l189-n1:", l189_n1[0][1], l189_n1[2])

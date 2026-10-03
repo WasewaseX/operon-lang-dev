@@ -1,0 +1,32 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=135 tag=c135
+
+print("c135-c0:", 4281 <= -5359)
+
+print("c135-c1:", -6716 < -7455)
+
+print("c135-c2:", -5725 < -1501)
+
+print("c135-c3:", -8467 <= -3781)
+
+print("c135-b0:", 37 < 30 && 30 < 12, 37 > 30 || 37 > 12)
+
+print("c135-b1:", 0 < 6 && 6 < 44, 0 > 6 || 0 > 44)
+
+print("c135-t0:", 8583 > 8128 ? "gt" : "le")
+
+print("c135-t1:", 7944 > -8309 ? "gt" : "le")
+
+print("c135-t2:", -5633 > -8064 ? "gt" : "le")
+
+let c135_n0 = null
+
+print("c135-n0:", c135_n0 ?? 7992, c135_n0 == null)
+
+let c135_n1 = null
+
+print("c135-n1:", c135_n1 ?? -2663, c135_n1 == null)
+
+print("c135-s0:", "m9bo" in "n05uuqm9bo", "m9bo" == "m9bo")
+
+print("c135-s1:", "e_Cs" in "z8_efee_Cs", "e_Cs" == "e_Cs")

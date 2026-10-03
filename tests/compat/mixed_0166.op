@@ -1,0 +1,230 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=166 tag=m166
+
+gene m166_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m166-b0:", m166_b0({splicer: 76, enzyme: 91, vector: 1})?!)
+
+gene m166_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m166-b1:", m166_b1({vector: 63, cell: 99, codon: 6})?!)
+
+gene m166_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m166_f0([38, 40, 3, 2, 40]) {
+
+    case Ok(list) {
+
+        print("m166-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m166-f0:", "e:", m)
+
+    }
+
+}
+
+gene m166_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m166_f1([24, 30, 34, 44, 45, 17, 17, 48]) {
+
+    case Ok(list) {
+
+        print("m166-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m166-f1:", "e:", m)
+
+    }
+
+}
+
+gene m166_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m166_f2([55, 47, 8, 15, 6, 51, 51]) {
+
+    case Ok(list) {
+
+        print("m166-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m166-f2:", "e:", m)
+
+    }
+
+}
+
+let m166_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m166-cc0:", m166_cl0(18)(15), m166_cl0(15)(18))
+
+let m166_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m166-cc1:", m166_cl1(14)(7), m166_cl1(7)(14))
+
+let m166_data0 = some([some("cell"), none(), some(6)])
+
+match m166_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m166-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m166-x0:", "shape-miss")
+
+    }
+
+}
+
+let m166_data1 = some([some("exon"), none(), some(5)])
+
+match m166_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m166-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m166-x1:", "shape-miss")
+
+    }
+
+}

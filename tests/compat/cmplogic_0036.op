@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=36 tag=c036
+
+print("c036-c0:", -49 != 6886)
+
+print("c036-c1:", 6054 < -6561)
+
+print("c036-c2:", -1334 == -3708)
+
+print("c036-c3:", 7828 > -2214)
+
+print("c036-c4:", -5645 != -8446)
+
+print("c036-c5:", 6211 <= -131)
+
+print("c036-c6:", -1649 < -8584)
+
+print("c036-b0:", 33 < 11 && 11 < 0, 33 > 11 || 33 > 0)
+
+print("c036-b1:", 16 < 44 && 44 < 1, 16 > 44 || 16 > 1)
+
+print("c036-b2:", 15 < 33 && 33 < 40, 15 > 33 || 15 > 40)
+
+print("c036-b3:", 17 < 47 && 47 < 41, 17 > 47 || 17 > 41)
+
+print("c036-t0:", -8017 > -6257 ? "gt" : "le")
+
+print("c036-t1:", -5002 > -887 ? "gt" : "le")
+
+print("c036-t2:", -2922 > -7633 ? "gt" : "le")
+
+let c036_n0 = null
+
+print("c036-n0:", c036_n0 ?? -4016, c036_n0 == null)
+
+let c036_n1 = null
+
+print("c036-n1:", c036_n1 ?? 7582, c036_n1 == null)
+
+print("c036-s0:", "vCh4" in "gngnskvCh4", "vCh4" == "vCh4")
+
+print("c036-s1:", "zvcv" in "ft36buzvcv", "zvcv" == "zvcv")

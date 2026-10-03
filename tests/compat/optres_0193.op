@@ -1,0 +1,122 @@
+# compat corpus — generated, do not edit by hand
+# bucket=optres seed=20261030 idx=193 tag=o193
+
+gene o193_f0(n) {
+
+    if n > 6532 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o193_u0(n) {
+
+    let v = o193_f0(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o193-p0:", o193_u0(-57), o193_u0(6534))
+
+gene o193_f1(n) {
+
+    if n > -8749 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o193_u1(n) {
+
+    let v = o193_f1(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o193-p1:", o193_u1(3930), o193_u1(-8742))
+
+gene o193_f2(n) {
+
+    if n > -2567 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o193_u2(n) {
+
+    let v = o193_f2(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o193-p2:", o193_u2(2884), o193_u2(-2551))
+
+gene o193_f3(n) {
+
+    if n > -9841 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o193_u3(n) {
+
+    let v = o193_f3(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o193-p3:", o193_u3(9669), o193_u3(-9822))
+
+print("o193-o0:", is_ok(ok(-1722)), is_none(none()), is_err(err("-1722")), is_some(some(-1722)))
+
+print("o193-u0:", unwrap_or(none(), -1722), unwrap_or(err("x"), -1723), unwrap_or(ok(-1722), 0))
+
+print("o193-o1:", is_ok(ok(4158)), is_none(none()), is_err(err("4158")), is_some(some(4158)))
+
+print("o193-u1:", unwrap_or(none(), 4158), unwrap_or(err("x"), 4157), unwrap_or(ok(4158), 0))
+
+print("o193-o2:", is_ok(ok(-5638)), is_none(none()), is_err(err("-5638")), is_some(some(-5638)))
+
+print("o193-u2:", unwrap_or(none(), -5638), unwrap_or(err("x"), -5639), unwrap_or(ok(-5638), 0))
+
+print("o193-o3:", is_ok(ok(-4328)), is_none(none()), is_err(err("-4328")), is_some(some(-4328)))
+
+print("o193-u3:", unwrap_or(none(), -4328), unwrap_or(err("x"), -4329), unwrap_or(ok(-4328), 0))
+
+print("o193-e0:", ok(8755) == ok(8755), some(8755) == ok(8755), none() == none(), err(1) == err(2))
+
+print("o193-j0:", json_str(ok(8755)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o193-e1:", ok(-3737) == ok(-3737), some(-3737) == ok(-3737), none() == none(), err(1) == err(2))
+
+print("o193-j1:", json_str(ok(-3737)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o193-n0:", some(some(39))?!?!, unwrap(ok(117)) + unwrap(some(78)))
+
+print("o193-s0:", "v=" + str(ok(39)?!), some("78k")?! + "!")
+
+print("o193-n1:", some(some(56))?!?!, unwrap(ok(151)) + unwrap(some(95)))
+
+print("o193-s1:", "v=" + str(ok(56)?!), some("95k")?! + "!")

@@ -1,0 +1,214 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20260930 idx=24 tag=m024
+
+gene m024_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m024-b0:", m024_b0({cell: 85, ribose: 8, splicer: 90})?!)
+
+gene m024_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m024-b1:", m024_b1({exon: 68, vector: 14, splicer: 10})?!)
+
+gene m024_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m024-b2:", m024_b2({helix: 25, codon: 6, cell: 3})?!)
+
+gene m024_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m024_f0([39, 55, 40, 3, 29, 44]) {
+
+    case Ok(list) {
+
+        print("m024-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m024-f0:", "e:", m)
+
+    }
+
+}
+
+gene m024_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m024_f1([25, 9, 50, 54, 50]) {
+
+    case Ok(list) {
+
+        print("m024-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m024-f1:", "e:", m)
+
+    }
+
+}
+
+let m024_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m024-cc0:", m024_cl0(3)(6), m024_cl0(6)(3))
+
+let m024_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m024-cc1:", m024_cl1(15)(14), m024_cl1(14)(15))
+
+let m024_data0 = some([some("ribose"), none(), some(9)])
+
+match m024_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m024-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m024-x0:", "shape-miss")
+
+    }
+
+}
+
+let m024_data1 = some([some("cell"), none(), some(2)])
+
+match m024_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m024-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m024-x1:", "shape-miss")
+
+    }
+
+}

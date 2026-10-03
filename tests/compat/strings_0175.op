@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=175 tag=s175
+
+print("s175-m0:", "Brnc51".upper(), "Brnc51".slice(4), "Brnc51".len())
+
+print("s175-m1:", "gvwgcn3rfo4dk".upper(), "gvwgcn3rfo4dk".slice(1), "gvwgcn3rfo4dk".len())
+
+print("s175-m2:", "_x9uA539fnljh9".upper(), "_x9uA539fnljh9".slice(1), "_x9uA539fnljh9".len())
+
+print("s175-m3:", "l_9wfeqr".upper(), "l_9wfeqr".slice(4), "l_9wfeqr".len())
+
+print("s175-m4:", "egAi2zBqlc".upper(), "egAi2zBqlc".slice(1), "egAi2zBqlc".len())
+
+print("s175-i0:", "u_5-{78}-zAo_")
+
+let s175_v0 = 78
+
+print("s175-v0:", "n={s175_v0}" + "!" * 1)
+
+print("s175-i1:", "xtn-{94}-8C_f")
+
+let s175_v1 = 94
+
+print("s175-v1:", "n={s175_v1}" + "!" * 3)
+
+print("s175-i2:", "lbA-{22}-ihB5")
+
+let s175_v2 = 22
+
+print("s175-v2:", "n={s175_v2}" + "!" * 1)
+
+print("s175-r0:", "gCcoCi36".replace("g", "dv"), "gCcoCi36".contains("Cc"))
+
+print("s175-r1:", "3g8e0mxt".replace("3", "aB"), "3g8e0mxt".contains("g8"))
+
+print("s175-r2:", "dpsst_b3".replace("d", "y2"), "dpsst_b3".contains("ps"))
+
+print("s175-r3:", "bsz6remr".replace("b", "7j"), "bsz6remr".contains("sz"))
+
+print("s175-j0:", ["Bj1", "h0u", "0k1", "9yx"].join("-"))
+
+print("s175-j1:", ["5yo", "9f4", "ssa", "6C9", "qCz"].join("-"))
+
+print("s175-j2:", ["ywt", "83h", "qbm"].join("-"))
+
+print("s175-a0:", "6mn8kzh".at(0), "6mn8kzh".trim() == "6mn8kzh")
+
+print("s175-a1:", "evz0l_o".at(6), "evz0l_o".trim() == "evz0l_o")

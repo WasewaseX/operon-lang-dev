@@ -1,0 +1,174 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20260930 idx=19 tag=f019
+
+gene f019_g0(p, q = 53, r = 27) {
+
+    return p * 60 + q - r
+
+}
+
+print("f019-d0:", f019_g0(16), f019_g0(16, 28), f019_g0(16, 53, 27))
+
+gene f019_g1(p, q = 49, r = 20) {
+
+    return p * 91 + q - r
+
+}
+
+print("f019-d1:", f019_g1(-10), f019_g1(-10, 40), f019_g1(-10, 49, 20))
+
+gene f019_g2(p, q = 11, r = 83) {
+
+    return p * 13 + q - r
+
+}
+
+print("f019-d2:", f019_g2(25), f019_g2(25, 67), f019_g2(25, 11, 83))
+
+gene f019_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f019_fib0(n - 1) + f019_fib0(n - 2)
+
+}
+
+print("f019-fib0:", f019_fib0(12))
+
+gene f019_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f019_fib1(n - 1) + f019_fib1(n - 2)
+
+}
+
+print("f019-fib1:", f019_fib1(10))
+
+gene f019_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f019_gcd0(b, a % b)
+
+}
+
+print("f019-gcd0:", f019_gcd0(845, 601))
+
+gene f019_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f019_gcd1(b, a % b)
+
+}
+
+print("f019-gcd1:", f019_gcd1(445, 828))
+
+gene f019_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f019_c0 = f019_mk0(5)
+
+f019_c0(3)
+
+print("f019-cl0:", f019_c0(4))
+
+gene f019_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f019_c1 = f019_mk1(22)
+
+f019_c1(7)
+
+print("f019-cl1:", f019_c1(2))
+
+gene f019_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f019-hof0:", f019_tw0(gene (z) => z * 2 + 1, 18))
+
+gene f019_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f019-hof1:", f019_tw1(gene (z) => z * 2 + 1, 20))
+
+gene f019_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f019-dg0:", f019_sd0(313335))
+
+gene f019_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f019-dg1:", f019_sd1(43389))

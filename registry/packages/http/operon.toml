@@ -1,0 +1,12 @@
+# http — the HTTP envelope toolkit (pure Operon).
+# Everything before the socket: request/response envelopes, headers,
+# query strings, cookies, URL joins, basic auth. Sandbox-safe: no
+# network, no filesystem, no host access — deterministic and offline.
+
+[package]
+name = "http"
+version = "0.1.0"
+operon-version = "2.2"
+description = "HTTP envelope toolkit: request/response, headers, query, cookies, URL join"
+
+[deps]

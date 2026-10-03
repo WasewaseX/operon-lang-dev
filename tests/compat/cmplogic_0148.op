@@ -1,0 +1,38 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=148 tag=c148
+
+print("c148-c0:", 8872 > 9757)
+
+print("c148-c1:", -8017 >= 5268)
+
+print("c148-c2:", 4807 < -700)
+
+print("c148-c3:", 136 > -7960)
+
+print("c148-c4:", -4919 > -2821)
+
+print("c148-b0:", 19 < 47 && 47 < 32, 19 > 47 || 19 > 32)
+
+print("c148-b1:", 29 < 19 && 19 < 6, 29 > 19 || 29 > 6)
+
+print("c148-b2:", 49 < 47 && 47 < 29, 49 > 47 || 49 > 29)
+
+print("c148-b3:", 47 < 33 && 33 < 22, 47 > 33 || 47 > 22)
+
+print("c148-t0:", 9700 > 7271 ? "gt" : "le")
+
+print("c148-t1:", 1300 > -1477 ? "gt" : "le")
+
+print("c148-t2:", -1311 > 485 ? "gt" : "le")
+
+let c148_n0 = null
+
+print("c148-n0:", c148_n0 ?? -1515, c148_n0 == null)
+
+let c148_n1 = null
+
+print("c148-n1:", c148_n1 ?? -9080, c148_n1 == null)
+
+print("c148-s0:", "gebn" in "xk8fs9gebn", "gebn" == "gebn")
+
+print("c148-s1:", "iu3w" in "kByj9jiu3w", "iu3w" == "iu3w")

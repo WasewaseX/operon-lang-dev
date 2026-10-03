@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=141 tag=c141
+
+print("c141-c0:", -839 != 8171)
+
+print("c141-c1:", 1502 == -1182)
+
+print("c141-c2:", -4292 < 938)
+
+print("c141-c3:", -7913 >= -7197)
+
+print("c141-c4:", 1881 < -1366)
+
+print("c141-c5:", -9484 < 967)
+
+print("c141-c6:", -8156 > 5050)
+
+print("c141-b0:", 32 < 48 && 48 < 8, 32 > 48 || 32 > 8)
+
+print("c141-b1:", 11 < 5 && 5 < 15, 11 > 5 || 11 > 15)
+
+print("c141-t0:", -206 > 8080 ? "gt" : "le")
+
+print("c141-t1:", 3977 > -6950 ? "gt" : "le")
+
+print("c141-t2:", -9108 > -1237 ? "gt" : "le")
+
+print("c141-t3:", 3181 > -8467 ? "gt" : "le")
+
+let c141_n0 = null
+
+print("c141-n0:", c141_n0 ?? 9950, c141_n0 == null)
+
+let c141_n1 = null
+
+print("c141-n1:", c141_n1 ?? 3953, c141_n1 == null)
+
+let c141_n2 = null
+
+print("c141-n2:", c141_n2 ?? 2560, c141_n2 == null)
+
+print("c141-s0:", "nyAl" in "5c8_AenyAl", "nyAl" == "nyAl")
+
+print("c141-s1:", "C2o4" in "0__7nlC2o4", "C2o4" == "C2o4")

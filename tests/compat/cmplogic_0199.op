@@ -1,0 +1,36 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=199 tag=c199
+
+print("c199-c0:", -1766 != 2259)
+
+print("c199-c1:", 4684 >= 6477)
+
+print("c199-c2:", 2929 != 7287)
+
+print("c199-c3:", -4169 > -4320)
+
+print("c199-c4:", 9321 != -2823)
+
+print("c199-b0:", 2 < 16 && 16 < 36, 2 > 16 || 2 > 36)
+
+print("c199-b1:", 6 < 15 && 15 < 0, 6 > 15 || 6 > 0)
+
+print("c199-t0:", 7942 > 4547 ? "gt" : "le")
+
+print("c199-t1:", 3461 > 8549 ? "gt" : "le")
+
+let c199_n0 = null
+
+print("c199-n0:", c199_n0 ?? 4097, c199_n0 == null)
+
+let c199_n1 = null
+
+print("c199-n1:", c199_n1 ?? -8045, c199_n1 == null)
+
+let c199_n2 = null
+
+print("c199-n2:", c199_n2 ?? -3258, c199_n2 == null)
+
+print("c199-s0:", "BkgA" in "wu_axwBkgA", "BkgA" == "BkgA")
+
+print("c199-s1:", "g63v" in "shcpl8g63v", "g63v" == "g63v")

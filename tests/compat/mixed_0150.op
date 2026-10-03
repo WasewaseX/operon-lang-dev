@@ -1,0 +1,230 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=150 tag=m150
+
+gene m150_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m150-b0:", m150_b0({plasmid: 50, ligase: 88, marker: 66})?!)
+
+gene m150_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m150-b1:", m150_b1({cell: 31, plasmid: 44, marker: 6})?!)
+
+gene m150_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m150_f0([58, 55, 46, 31, 28, 25, 27, 18]) {
+
+    case Ok(list) {
+
+        print("m150-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m150-f0:", "e:", m)
+
+    }
+
+}
+
+gene m150_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m150_f1([58, 7, 30, 33, 24, 12, 39]) {
+
+    case Ok(list) {
+
+        print("m150-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m150-f1:", "e:", m)
+
+    }
+
+}
+
+gene m150_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m150_f2([59, 36, 26, 49, 51, 28, 42]) {
+
+    case Ok(list) {
+
+        print("m150-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m150-f2:", "e:", m)
+
+    }
+
+}
+
+let m150_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m150-cc0:", m150_cl0(12)(4), m150_cl0(4)(12))
+
+let m150_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m150-cc1:", m150_cl1(7)(11), m150_cl1(11)(7))
+
+let m150_data0 = some([some("helix"), none(), some(4)])
+
+match m150_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m150-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m150-x0:", "shape-miss")
+
+    }
+
+}
+
+let m150_data1 = some([some("vector"), none(), some(9)])
+
+match m150_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m150-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m150-x1:", "shape-miss")
+
+    }
+
+}

@@ -1,0 +1,174 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=219 tag=f219
+
+gene f219_g0(p, q = 25, r = 33) {
+
+    return p * 8 + q - r
+
+}
+
+print("f219-d0:", f219_g0(18), f219_g0(18, 53), f219_g0(18, 25, 33))
+
+gene f219_g1(p, q = 23, r = 80) {
+
+    return p * 84 + q - r
+
+}
+
+print("f219-d1:", f219_g1(-29), f219_g1(-29, 26), f219_g1(-29, 23, 80))
+
+gene f219_g2(p, q = 89, r = 77) {
+
+    return p * 53 + q - r
+
+}
+
+print("f219-d2:", f219_g2(-35), f219_g2(-35, 18), f219_g2(-35, 89, 77))
+
+gene f219_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f219_fib0(n - 1) + f219_fib0(n - 2)
+
+}
+
+print("f219-fib0:", f219_fib0(12))
+
+gene f219_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f219_fib1(n - 1) + f219_fib1(n - 2)
+
+}
+
+print("f219-fib1:", f219_fib1(9))
+
+gene f219_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f219_gcd0(b, a % b)
+
+}
+
+print("f219-gcd0:", f219_gcd0(998, 792))
+
+gene f219_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f219_gcd1(b, a % b)
+
+}
+
+print("f219-gcd1:", f219_gcd1(41, 745))
+
+gene f219_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f219_c0 = f219_mk0(32)
+
+f219_c0(5)
+
+print("f219-cl0:", f219_c0(3))
+
+gene f219_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f219_c1 = f219_mk1(6)
+
+f219_c1(5)
+
+print("f219-cl1:", f219_c1(8))
+
+gene f219_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f219-hof0:", f219_tw0(gene (z) => z * 2 + 1, 17))
+
+gene f219_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f219-hof1:", f219_tw1(gene (z) => z * 2 + 1, 17))
+
+gene f219_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f219-dg0:", f219_sd0(798775))
+
+gene f219_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f219-dg1:", f219_sd1(673056))

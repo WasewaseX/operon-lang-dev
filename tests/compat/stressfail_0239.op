@@ -1,0 +1,232 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=239 tag=s239
+
+stress {
+
+    print("s239-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s239-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s239-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s239-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s239-mz:", 80 % 0)
+
+} rescue (e) {
+
+    print("s239-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s239-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s239-of1:", "caught", e.kind, e.message)
+
+}
+
+gene s239_r0() {
+
+    raise "s239-e_oweu"
+
+}
+
+stress {
+
+    s239_r0()
+
+    print("s239-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s239-r0:", e.kind, e.message)
+
+}
+
+gene s239_r1() {
+
+    raise "s239-s9cyrx"
+
+}
+
+stress {
+
+    s239_r1()
+
+    print("s239-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s239-r1:", e.kind, e.message)
+
+}
+
+gene s239_r2() {
+
+    raise "s239-8wbBiC"
+
+}
+
+stress {
+
+    s239_r2()
+
+    print("s239-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s239-r2:", e.kind, e.message)
+
+}
+
+let s239_xs0 = [24, 4]
+
+stress {
+
+    print("s239-x0:", s239_xs0[4])
+
+} rescue (e) {
+
+    print("s239-x0:", "caught", e.kind)
+
+}
+
+let s239_xs1 = [40, 20, 18]
+
+stress {
+
+    print("s239-x1:", s239_xs1[6])
+
+} rescue (e) {
+
+    print("s239-x1:", "caught", e.kind)
+
+}
+
+let s239_xs2 = [14, 4, 26]
+
+stress {
+
+    print("s239-x2:", s239_xs2[4])
+
+} rescue (e) {
+
+    print("s239-x2:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s239-0"
+
+    } rescue (e) {
+
+        print("s239-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s239-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s239-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s239-d0-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s239-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s239-1"
+
+    } rescue (e) {
+
+        print("s239-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s239-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s239-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s239-d1-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s239-d1-top:", outer.message)
+
+}

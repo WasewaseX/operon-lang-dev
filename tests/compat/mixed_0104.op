@@ -1,0 +1,230 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=104 tag=m104
+
+gene m104_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m104-b0:", m104_b0({plasmid: 42, helix: 20, codon: 33})?!)
+
+gene m104_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m104-b1:", m104_b1({ligase: 12, enzyme: 92, cell: 32})?!)
+
+gene m104_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m104_f0([45, 48, 6, 2, 33, 57, 8]) {
+
+    case Ok(list) {
+
+        print("m104-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m104-f0:", "e:", m)
+
+    }
+
+}
+
+gene m104_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m104_f1([17, 36, 46, 60, 55, 42]) {
+
+    case Ok(list) {
+
+        print("m104-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m104-f1:", "e:", m)
+
+    }
+
+}
+
+gene m104_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m104_f2([15, 20, 24, 14, 51, 31, 13]) {
+
+    case Ok(list) {
+
+        print("m104-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m104-f2:", "e:", m)
+
+    }
+
+}
+
+let m104_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m104-cc0:", m104_cl0(3)(20), m104_cl0(20)(3))
+
+let m104_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m104-cc1:", m104_cl1(18)(14), m104_cl1(14)(18))
+
+let m104_data0 = some([some("enzyme"), none(), some(7)])
+
+match m104_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m104-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m104-x0:", "shape-miss")
+
+    }
+
+}
+
+let m104_data1 = some([some("codon"), none(), some(7)])
+
+match m104_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m104-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m104-x1:", "shape-miss")
+
+    }
+
+}

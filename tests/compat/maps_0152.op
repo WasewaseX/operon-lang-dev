@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=152 tag=m152
+
+let m152_m0 = {cell: -51, codon: -69, ligase: -50}
+
+print("m152-m0:", m152_m0["cell"], len(m152_m0), m152_m0.has("cell"))
+
+let m152_m1 = {gene: -30, codon: -75, enzyme: 58}
+
+print("m152-m1:", m152_m1["gene"], len(m152_m1), m152_m1.has("gene"))
+
+let m152_m2 = {codon: -59, vector: 36, splicer: 94}
+
+print("m152-m2:", m152_m2["codon"], len(m152_m2), m152_m2.has("codon"))
+
+let m152_m3 = {helix: -31, plasmid: 30, exon: -82, enzyme: 61}
+
+print("m152-m3:", m152_m3["helix"], len(m152_m3), m152_m3.has("helix"))
+
+let m152_k0 = {ligase: 7, cell: 28, ribose: 3}
+
+let m152_ks0 = m152_k0.keys()
+
+let m152_sm0 = 0
+
+for k in m152_k0 { m152_sm0 += m152_k0[k] }
+
+print("m152-k0:", m152_sm0, m152_k0.keys().sort(), m152_k0.values().len())
+
+let m152_k1 = {cell: 3, splicer: 1, codon: 39}
+
+let m152_ks1 = m152_k1.keys()
+
+let m152_sm1 = 0
+
+for k in m152_k1 { m152_sm1 += m152_k1[k] }
+
+print("m152-k1:", m152_sm1, m152_k1.keys().sort(), m152_k1.values().len())
+
+let m152_w0 = {outer: {splicer: 2, codon: 5, tag: "ok"}}}
+
+print("m152-w0:", m152_w0["outer"]["codon"], m152_w0["outer"]["tag"])
+
+let m152_w1 = {outer: {cell: 7, codon: 4, tag: "ok"}}}
+
+print("m152-w1:", m152_w1["outer"]["codon"], m152_w1["outer"]["tag"])

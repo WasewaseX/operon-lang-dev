@@ -1,0 +1,38 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=133 tag=c133
+
+print("c133-c0:", -3366 == 9138)
+
+print("c133-c1:", -3958 == -6577)
+
+print("c133-c2:", -1257 < -5083)
+
+print("c133-c3:", -9497 > 3575)
+
+print("c133-b0:", 36 < 50 && 50 < 41, 36 > 50 || 36 > 41)
+
+print("c133-b1:", 36 < 35 && 35 < 45, 36 > 35 || 36 > 45)
+
+print("c133-b2:", 8 < 35 && 35 < 27, 8 > 35 || 8 > 27)
+
+print("c133-t0:", 7992 > 5591 ? "gt" : "le")
+
+print("c133-t1:", 2876 > -2401 ? "gt" : "le")
+
+print("c133-t2:", 1195 > 3471 ? "gt" : "le")
+
+let c133_n0 = null
+
+print("c133-n0:", c133_n0 ?? -6043, c133_n0 == null)
+
+let c133_n1 = null
+
+print("c133-n1:", c133_n1 ?? -3759, c133_n1 == null)
+
+let c133_n2 = null
+
+print("c133-n2:", c133_n2 ?? -1673, c133_n2 == null)
+
+print("c133-s0:", "aBnc" in "jo949paBnc", "aBnc" == "aBnc")
+
+print("c133-s1:", "y8j1" in "vmx120y8j1", "y8j1" == "y8j1")

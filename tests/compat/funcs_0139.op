@@ -1,0 +1,188 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=139 tag=f139
+
+gene f139_g0(p, q = 90, r = 43) {
+
+    return p * 37 + q - r
+
+}
+
+print("f139-d0:", f139_g0(28), f139_g0(28, 60), f139_g0(28, 90, 43))
+
+gene f139_g1(p, q = 40, r = 90) {
+
+    return p * 38 + q - r
+
+}
+
+print("f139-d1:", f139_g1(24), f139_g1(24, 42), f139_g1(24, 40, 90))
+
+gene f139_g2(p, q = 70, r = 26) {
+
+    return p * 67 + q - r
+
+}
+
+print("f139-d2:", f139_g2(32), f139_g2(32, 42), f139_g2(32, 70, 26))
+
+gene f139_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f139_fib0(n - 1) + f139_fib0(n - 2)
+
+}
+
+print("f139-fib0:", f139_fib0(9))
+
+gene f139_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f139_fib1(n - 1) + f139_fib1(n - 2)
+
+}
+
+print("f139-fib1:", f139_fib1(12))
+
+gene f139_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f139_gcd0(b, a % b)
+
+}
+
+print("f139-gcd0:", f139_gcd0(624, 297))
+
+gene f139_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f139_gcd1(b, a % b)
+
+}
+
+print("f139-gcd1:", f139_gcd1(456, 274))
+
+gene f139_gcd2(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f139_gcd2(b, a % b)
+
+}
+
+print("f139-gcd2:", f139_gcd2(619, 504))
+
+gene f139_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f139_c0 = f139_mk0(5)
+
+f139_c0(4)
+
+print("f139-cl0:", f139_c0(4))
+
+gene f139_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f139_c1 = f139_mk1(37)
+
+f139_c1(7)
+
+print("f139-cl1:", f139_c1(7))
+
+gene f139_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f139-hof0:", f139_tw0(gene (z) => z * 2 + 1, 17))
+
+gene f139_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f139-hof1:", f139_tw1(gene (z) => z * 2 + 1, 22))
+
+gene f139_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f139-dg0:", f139_sd0(783323))
+
+gene f139_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f139-dg1:", f139_sd1(557642))

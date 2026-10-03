@@ -1,0 +1,230 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=140 tag=m140
+
+gene m140_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m140-b0:", m140_b0({ligase: 74, ribose: 29, helix: 35})?!)
+
+gene m140_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m140-b1:", m140_b1({ribose: 69, cell: 24, codon: 68})?!)
+
+gene m140_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m140_f0([5, 21, 37, 14, 2]) {
+
+    case Ok(list) {
+
+        print("m140-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m140-f0:", "e:", m)
+
+    }
+
+}
+
+gene m140_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m140_f1([55, 37, 23, 5, 34, 22, 15]) {
+
+    case Ok(list) {
+
+        print("m140-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m140-f1:", "e:", m)
+
+    }
+
+}
+
+gene m140_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m140_f2([51, 51, 56, 31, 52, 41, 31, 19]) {
+
+    case Ok(list) {
+
+        print("m140-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m140-f2:", "e:", m)
+
+    }
+
+}
+
+let m140_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m140-cc0:", m140_cl0(11)(14), m140_cl0(14)(11))
+
+let m140_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m140-cc1:", m140_cl1(17)(1), m140_cl1(1)(17))
+
+let m140_data0 = some([some("codon"), none(), some(6)])
+
+match m140_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m140-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m140-x0:", "shape-miss")
+
+    }
+
+}
+
+let m140_data1 = some([some("codon"), none(), some(2)])
+
+match m140_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m140-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m140-x1:", "shape-miss")
+
+    }
+
+}

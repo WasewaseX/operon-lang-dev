@@ -1,0 +1,230 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=180 tag=m180
+
+gene m180_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m180-b0:", m180_b0({exon: 82, cell: 91, gene: 17})?!)
+
+gene m180_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m180-b1:", m180_b1({enzyme: 88, marker: 24, cell: 82})?!)
+
+gene m180_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m180_f0([2, 5, 26, 30, 22]) {
+
+    case Ok(list) {
+
+        print("m180-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m180-f0:", "e:", m)
+
+    }
+
+}
+
+gene m180_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m180_f1([34, 41, 27, 18, 55, 54, 47, 4]) {
+
+    case Ok(list) {
+
+        print("m180-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m180-f1:", "e:", m)
+
+    }
+
+}
+
+gene m180_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m180_f2([14, 58, 40, 1]) {
+
+    case Ok(list) {
+
+        print("m180-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m180-f2:", "e:", m)
+
+    }
+
+}
+
+let m180_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m180-cc0:", m180_cl0(18)(14), m180_cl0(14)(18))
+
+let m180_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m180-cc1:", m180_cl1(3)(9), m180_cl1(9)(3))
+
+let m180_data0 = some([some("ribose"), none(), some(6)])
+
+match m180_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m180-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m180-x0:", "shape-miss")
+
+    }
+
+}
+
+let m180_data1 = some([some("splicer"), none(), some(7)])
+
+match m180_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m180-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m180-x1:", "shape-miss")
+
+    }
+
+}

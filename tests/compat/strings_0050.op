@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=50 tag=s050
+
+print("s050-m0:", "axfa9Bfe4p8".upper(), "axfa9Bfe4p8".slice(1), "axfa9Bfe4p8".len())
+
+print("s050-m1:", "ydm0rc4x9kj0r".upper(), "ydm0rc4x9kj0r".slice(1), "ydm0rc4x9kj0r".len())
+
+print("s050-m2:", "uyxc_7lkm6l".upper(), "uyxc_7lkm6l".slice(1), "uyxc_7lkm6l".len())
+
+print("s050-m3:", "5BCjktq9h_l".upper(), "5BCjktq9h_l".slice(2), "5BCjktq9h_l".len())
+
+print("s050-m4:", "n7j4xa".upper(), "n7j4xa".slice(1), "n7j4xa".len())
+
+print("s050-m5:", "71uAB5prhqc4".upper(), "71uAB5prhqc4".slice(2), "71uAB5prhqc4".len())
+
+print("s050-i0:", "avt-{12}-Bbf7")
+
+let s050_v0 = 12
+
+print("s050-v0:", "n={s050_v0}" + "!" * 3)
+
+print("s050-i1:", "2nr-{80}-qBz5")
+
+let s050_v1 = 80
+
+print("s050-v1:", "n={s050_v1}" + "!" * 1)
+
+print("s050-i2:", "iAk-{46}-pdlg")
+
+let s050_v2 = 46
+
+print("s050-v2:", "n={s050_v2}" + "!" * 1)
+
+print("s050-i3:", "8tg-{1}-b6ct")
+
+let s050_v3 = 1
+
+print("s050-v3:", "n={s050_v3}" + "!" * 3)
+
+print("s050-r0:", "egkfu0q3".replace("e", "tz"), "egkfu0q3".contains("gk"))
+
+print("s050-r1:", "dxfv8ybk".replace("d", "io"), "dxfv8ybk".contains("xf"))
+
+print("s050-j0:", ["hoo", "bp4", "1xB", "wbu"].join("-"))
+
+print("s050-j1:", ["b3_", "c67", "grc", "i86", "qkl"].join("-"))
+
+print("s050-a0:", "n62gh0f".at(3), "n62gh0f".trim() == "n62gh0f")
+
+print("s050-a1:", "lz_840p".at(0), "lz_840p".trim() == "lz_840p")
+
+print("s050-a2:", "xsldov2".at(1), "xsldov2".trim() == "xsldov2")

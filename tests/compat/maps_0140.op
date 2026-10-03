@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=140 tag=m140
+
+let m140_m0 = {plasmid: -83, ribose: 86, ligase: 40}
+
+print("m140-m0:", m140_m0["plasmid"], len(m140_m0), m140_m0.has("plasmid"))
+
+let m140_m1 = {exon: -10, cell: 42, helix: -33}
+
+print("m140-m1:", m140_m1["exon"], len(m140_m1), m140_m1.has("exon"))
+
+let m140_m2 = {ligase: -93, exon: 14, marker: 32}
+
+print("m140-m2:", m140_m2["ligase"], len(m140_m2), m140_m2.has("ligase"))
+
+let m140_k0 = {exon: 45, ligase: 33, vector: 15}
+
+let m140_ks0 = m140_k0.keys()
+
+let m140_sm0 = 0
+
+for k in m140_k0 { m140_sm0 += m140_k0[k] }
+
+print("m140-k0:", m140_sm0, m140_k0.keys().sort(), m140_k0.values().len())
+
+let m140_k1 = {vector: 26, ribose: 32, codon: 36}
+
+let m140_ks1 = m140_k1.keys()
+
+let m140_sm1 = 0
+
+for k in m140_k1 { m140_sm1 += m140_k1[k] }
+
+print("m140-k1:", m140_sm1, m140_k1.keys().sort(), m140_k1.values().len())
+
+let m140_w0 = {outer: {exon: 7, enzyme: 5, tag: "ok"}}}
+
+print("m140-w0:", m140_w0["outer"]["enzyme"], m140_w0["outer"]["tag"])
+
+let m140_w1 = {outer: {marker: 2, ligase: 4, tag: "ok"}}}
+
+print("m140-w1:", m140_w1["outer"]["ligase"], m140_w1["outer"]["tag"])

@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=226 tag=s226
+
+print("s226-m0:", "7qb_0o1z5too3".upper(), "7qb_0o1z5too3".slice(1), "7qb_0o1z5too3".len())
+
+print("s226-m1:", "0hx88z3l0bfB_h".upper(), "0hx88z3l0bfB_h".slice(1), "0hx88z3l0bfB_h".len())
+
+print("s226-m2:", "g1ex9v_vnqda".upper(), "g1ex9v_vnqda".slice(4), "g1ex9v_vnqda".len())
+
+print("s226-m3:", "84z90yv2".upper(), "84z90yv2".slice(2), "84z90yv2".len())
+
+print("s226-i0:", "cdy-{56}-xvC3")
+
+let s226_v0 = 56
+
+print("s226-v0:", "n={s226_v0}" + "!" * 2)
+
+print("s226-i1:", "ab9-{23}-89xB")
+
+let s226_v1 = 23
+
+print("s226-v1:", "n={s226_v1}" + "!" * 3)
+
+print("s226-i2:", "kyp-{0}-u_te")
+
+let s226_v2 = 0
+
+print("s226-v2:", "n={s226_v2}" + "!" * 2)
+
+print("s226-i3:", "j8q-{11}-24hg")
+
+let s226_v3 = 11
+
+print("s226-v3:", "n={s226_v3}" + "!" * 3)
+
+print("s226-r0:", "lu7miml3".replace("l", "gz"), "lu7miml3".contains("u7"))
+
+print("s226-r1:", "aqopt_oA".replace("a", "_i"), "aqopt_oA".contains("qo"))
+
+print("s226-j0:", ["eul", "zmv", "81z"].join("-"))
+
+print("s226-j1:", ["3y3", "yix", "7By"].join("-"))
+
+print("s226-a0:", "kukywxC".at(1), "kukywxC".trim() == "kukywxC")
+
+print("s226-a1:", "9ony0sb".at(2), "9ony0sb".trim() == "9ony0sb")

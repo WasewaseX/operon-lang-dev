@@ -1,0 +1,146 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20260930 idx=83 tag=c083
+
+let c083_b0 = "start"
+
+if 33 > 80 { c083_b0 = "hi" } elif 33 > 40 { c083_b0 = "mid" } else { c083_b0 = "lo" }
+
+print("c083-i0:", c083_b0, 33)
+
+let c083_b1 = "start"
+
+if 53 > 80 { c083_b1 = "hi" } elif 53 > 40 { c083_b1 = "mid" } else { c083_b1 = "lo" }
+
+print("c083-i1:", c083_b1, 53)
+
+let c083_b2 = "start"
+
+if -19 > 80 { c083_b2 = "hi" } elif -19 > 40 { c083_b2 = "mid" } else { c083_b2 = "lo" }
+
+print("c083-i2:", c083_b2, -19)
+
+let c083_b3 = "start"
+
+if -15 > 80 { c083_b3 = "hi" } elif -15 > 40 { c083_b3 = "mid" } else { c083_b3 = "lo" }
+
+print("c083-i3:", c083_b3, -15)
+
+let c083_b4 = "start"
+
+if 99 > 80 { c083_b4 = "hi" } elif 99 > 40 { c083_b4 = "mid" } else { c083_b4 = "lo" }
+
+print("c083-i4:", c083_b4, 99)
+
+let c083_a0 = 0
+
+let c083_n0 = 0
+
+while c083_n0 < 12 {
+
+    c083_n0 += 4
+
+    if c083_n0 % 2 == 0 { continue }
+
+    if c083_n0 > 20 { break }
+
+    c083_a0 += c083_n0
+
+}
+
+print("c083-w0:", c083_a0, c083_n0)
+
+let c083_a1 = 0
+
+let c083_n1 = 0
+
+while c083_n1 < 10 {
+
+    c083_n1 += 4
+
+    if c083_n1 % 2 == 0 { continue }
+
+    if c083_n1 > 13 { break }
+
+    c083_a1 += c083_n1
+
+}
+
+print("c083-w1:", c083_a1, c083_n1)
+
+let c083_c0 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 4] {
+
+        c083_c0 += a * b
+
+    }
+
+}
+
+print("c083-l0:", c083_c0)
+
+let c083_c1 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 4] {
+
+        c083_c1 += a * b
+
+    }
+
+}
+
+print("c083-l1:", c083_c1)
+
+let c083_c2 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 4] {
+
+        c083_c2 += a * b
+
+    }
+
+}
+
+print("c083-l2:", c083_c2)
+
+let c083_acc0 = ""
+
+loop {
+
+    c083_acc0 += "x"
+
+    if c083_acc0.len() >= 3 { break }
+
+}
+
+print("c083-o0:", c083_acc0)
+
+let c083_acc1 = ""
+
+loop {
+
+    c083_acc1 += "x"
+
+    if c083_acc1.len() >= 5 { break }
+
+}
+
+print("c083-o1:", c083_acc1)
+
+let c083_acc2 = ""
+
+loop {
+
+    c083_acc2 += "x"
+
+    if c083_acc2.len() >= 3 { break }
+
+}
+
+print("c083-o2:", c083_acc2)

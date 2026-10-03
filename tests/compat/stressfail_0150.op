@@ -1,0 +1,200 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=150 tag=s150
+
+stress {
+
+    print("s150-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s150-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s150-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s150-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s150-mz:", 63 % 0)
+
+} rescue (e) {
+
+    print("s150-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s150-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s150-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s150-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s150-of2:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s150-m1:", 9223372036854775807 % -1)
+
+} rescue (e) {
+
+    print("s150-m1:", "caught", e.kind, e.message)
+
+}
+
+gene s150_r0() {
+
+    raise "s150-6qA_A7"
+
+}
+
+stress {
+
+    s150_r0()
+
+    print("s150-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s150-r0:", e.kind, e.message)
+
+}
+
+gene s150_r1() {
+
+    raise "s150-opp6di"
+
+}
+
+stress {
+
+    s150_r1()
+
+    print("s150-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s150-r1:", e.kind, e.message)
+
+}
+
+gene s150_r2() {
+
+    raise "s150-ey5mua"
+
+}
+
+stress {
+
+    s150_r2()
+
+    print("s150-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s150-r2:", e.kind, e.message)
+
+}
+
+let s150_xs0 = [45, 4, 38, 12]
+
+stress {
+
+    print("s150-x0:", s150_xs0[5])
+
+} rescue (e) {
+
+    print("s150-x0:", "caught", e.kind)
+
+}
+
+let s150_xs1 = [42, 48]
+
+stress {
+
+    print("s150-x1:", s150_xs1[4])
+
+} rescue (e) {
+
+    print("s150-x1:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s150-0"
+
+    } rescue (e) {
+
+        print("s150-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s150-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s150-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s150-1"
+
+    } rescue (e) {
+
+        print("s150-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s150-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s150-d1-top:", outer.message)
+
+}

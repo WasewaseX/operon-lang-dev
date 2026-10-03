@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=230 tag=s230
+
+print("s230-m0:", "17_CBr".upper(), "17_CBr".slice(4), "17_CBr".len())
+
+print("s230-m1:", "_7bC6kzk7".upper(), "_7bC6kzk7".slice(1), "_7bC6kzk7".len())
+
+print("s230-m2:", "fiqgi2bp".upper(), "fiqgi2bp".slice(1), "fiqgi2bp".len())
+
+print("s230-m3:", "1033bekl6wA2".upper(), "1033bekl6wA2".slice(2), "1033bekl6wA2".len())
+
+print("s230-m4:", "m7_0g4qk6".upper(), "m7_0g4qk6".slice(4), "m7_0g4qk6".len())
+
+print("s230-i0:", "qt2-{30}-en67")
+
+let s230_v0 = 30
+
+print("s230-v0:", "n={s230_v0}" + "!" * 1)
+
+print("s230-i1:", "hcr-{43}-ob7h")
+
+let s230_v1 = 43
+
+print("s230-v1:", "n={s230_v1}" + "!" * 3)
+
+print("s230-i2:", "mqe-{66}-k7ic")
+
+let s230_v2 = 66
+
+print("s230-v2:", "n={s230_v2}" + "!" * 1)
+
+print("s230-r0:", "yAzbjiad".replace("y", "qt"), "yAzbjiad".contains("Az"))
+
+print("s230-r1:", "4kxcxsjg".replace("4", "wu"), "4kxcxsjg".contains("kx"))
+
+print("s230-r2:", "vapxfosc".replace("v", "h7"), "vapxfosc".contains("ap"))
+
+print("s230-r3:", "p4yCz_kf".replace("p", "1p"), "p4yCz_kf".contains("4y"))
+
+print("s230-j0:", ["oc5", "Cun", "41z", "aq3"].join("-"))
+
+print("s230-j1:", ["1fi", "dgi", "2ng", "e53"].join("-"))
+
+print("s230-a0:", "7fB4vbr".at(3), "7fB4vbr".trim() == "7fB4vbr")
+
+print("s230-a1:", "57u42ms".at(4), "57u42ms".trim() == "57u42ms")
+
+print("s230-a2:", "3k_yCb8".at(2), "3k_yCb8".trim() == "3k_yCb8")

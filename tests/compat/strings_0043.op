@@ -1,0 +1,50 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=43 tag=s043
+
+print("s043-m0:", "wcg97joCdBkg".upper(), "wcg97joCdBkg".slice(1), "wcg97joCdBkg".len())
+
+print("s043-m1:", "upj892h".upper(), "upj892h".slice(2), "upj892h".len())
+
+print("s043-m2:", "m2l0yBp8wA".upper(), "m2l0yBp8wA".slice(4), "m2l0yBp8wA".len())
+
+print("s043-m3:", "Bw_97z4j".upper(), "Bw_97z4j".slice(3), "Bw_97z4j".len())
+
+print("s043-m4:", "C1rdrclf_q".upper(), "C1rdrclf_q".slice(3), "C1rdrclf_q".len())
+
+print("s043-i0:", "lri-{26}-Csd1")
+
+let s043_v0 = 26
+
+print("s043-v0:", "n={s043_v0}" + "!" * 3)
+
+print("s043-i1:", "a8w-{49}-puAx")
+
+let s043_v1 = 49
+
+print("s043-v1:", "n={s043_v1}" + "!" * 3)
+
+print("s043-i2:", "C7x-{74}-my__")
+
+let s043_v2 = 74
+
+print("s043-v2:", "n={s043_v2}" + "!" * 3)
+
+print("s043-i3:", "b0B-{85}-3qei")
+
+let s043_v3 = 85
+
+print("s043-v3:", "n={s043_v3}" + "!" * 1)
+
+print("s043-r0:", "x9f4nn3g".replace("x", "wr"), "x9f4nn3g".contains("9f"))
+
+print("s043-r1:", "e84cz9vB".replace("e", "15"), "e84cz9vB".contains("84"))
+
+print("s043-j0:", ["2hx", "c3t", "0sw", "pBj", "zj0"].join("-"))
+
+print("s043-j1:", ["pdy", "bg7", "A81", "exb", "bib"].join("-"))
+
+print("s043-j2:", ["hee", "7n6", "t6d"].join("-"))
+
+print("s043-a0:", "jgg8m17".at(6), "jgg8m17".trim() == "jgg8m17")
+
+print("s043-a1:", "2xw_vge".at(6), "2xw_vge".trim() == "2xw_vge")

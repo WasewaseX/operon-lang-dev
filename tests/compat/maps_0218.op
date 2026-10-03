@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=218 tag=m218
+
+let m218_m0 = {vector: -34, plasmid: 85, enzyme: -59, exon: 32}
+
+print("m218-m0:", m218_m0["vector"], len(m218_m0), m218_m0.has("vector"))
+
+let m218_m1 = {ligase: -63, cell: -57, enzyme: 0}
+
+print("m218-m1:", m218_m1["ligase"], len(m218_m1), m218_m1.has("ligase"))
+
+let m218_m2 = {exon: -65, gene: -21, ribose: 42, plasmid: -91}
+
+print("m218-m2:", m218_m2["exon"], len(m218_m2), m218_m2.has("exon"))
+
+let m218_m3 = {vector: -37, plasmid: -5, enzyme: -29}
+
+print("m218-m3:", m218_m3["vector"], len(m218_m3), m218_m3.has("vector"))
+
+let m218_k0 = {enzyme: 16, splicer: 21, exon: 49}
+
+let m218_ks0 = m218_k0.keys()
+
+let m218_sm0 = 0
+
+for k in m218_k0 { m218_sm0 += m218_k0[k] }
+
+print("m218-k0:", m218_sm0, m218_k0.keys().sort(), m218_k0.values().len())
+
+let m218_k1 = {marker: 8, ribose: 26, splicer: 46}
+
+let m218_ks1 = m218_k1.keys()
+
+let m218_sm1 = 0
+
+for k in m218_k1 { m218_sm1 += m218_k1[k] }
+
+print("m218-k1:", m218_sm1, m218_k1.keys().sort(), m218_k1.values().len())
+
+let m218_w0 = {outer: {marker: 5, vector: 6, tag: "ok"}}}
+
+print("m218-w0:", m218_w0["outer"]["vector"], m218_w0["outer"]["tag"])
+
+let m218_w1 = {outer: {ribose: 4, gene: 9, tag: "ok"}}}
+
+print("m218-w1:", m218_w1["outer"]["gene"], m218_w1["outer"]["tag"])

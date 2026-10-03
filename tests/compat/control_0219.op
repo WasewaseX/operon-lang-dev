@@ -1,0 +1,150 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=219 tag=c219
+
+let c219_b0 = "start"
+
+if 90 > 80 { c219_b0 = "hi" } elif 90 > 40 { c219_b0 = "mid" } else { c219_b0 = "lo" }
+
+print("c219-i0:", c219_b0, 90)
+
+let c219_b1 = "start"
+
+if 88 > 80 { c219_b1 = "hi" } elif 88 > 40 { c219_b1 = "mid" } else { c219_b1 = "lo" }
+
+print("c219-i1:", c219_b1, 88)
+
+let c219_b2 = "start"
+
+if 76 > 80 { c219_b2 = "hi" } elif 76 > 40 { c219_b2 = "mid" } else { c219_b2 = "lo" }
+
+print("c219-i2:", c219_b2, 76)
+
+let c219_b3 = "start"
+
+if 103 > 80 { c219_b3 = "hi" } elif 103 > 40 { c219_b3 = "mid" } else { c219_b3 = "lo" }
+
+print("c219-i3:", c219_b3, 103)
+
+let c219_b4 = "start"
+
+if -13 > 80 { c219_b4 = "hi" } elif -13 > 40 { c219_b4 = "mid" } else { c219_b4 = "lo" }
+
+print("c219-i4:", c219_b4, -13)
+
+let c219_a0 = 0
+
+let c219_n0 = 0
+
+while c219_n0 < 14 {
+
+    c219_n0 += 4
+
+    if c219_n0 % 3 == 0 { continue }
+
+    if c219_n0 > 18 { break }
+
+    c219_a0 += c219_n0
+
+}
+
+print("c219-w0:", c219_a0, c219_n0)
+
+let c219_a1 = 0
+
+let c219_n1 = 0
+
+while c219_n1 < 18 {
+
+    c219_n1 += 3
+
+    if c219_n1 % 2 == 0 { continue }
+
+    if c219_n1 > 21 { break }
+
+    c219_a1 += c219_n1
+
+}
+
+print("c219-w1:", c219_a1, c219_n1)
+
+let c219_a2 = 0
+
+let c219_n2 = 0
+
+while c219_n2 < 9 {
+
+    c219_n2 += 3
+
+    if c219_n2 % 3 == 0 { continue }
+
+    if c219_n2 > 18 { break }
+
+    c219_a2 += c219_n2
+
+}
+
+print("c219-w2:", c219_a2, c219_n2)
+
+let c219_c0 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 4] {
+
+        c219_c0 += a * b
+
+    }
+
+}
+
+print("c219-l0:", c219_c0)
+
+let c219_c1 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 4] {
+
+        c219_c1 += a * b
+
+    }
+
+}
+
+print("c219-l1:", c219_c1)
+
+let c219_acc0 = ""
+
+loop {
+
+    c219_acc0 += "x"
+
+    if c219_acc0.len() >= 6 { break }
+
+}
+
+print("c219-o0:", c219_acc0)
+
+let c219_acc1 = ""
+
+loop {
+
+    c219_acc1 += "x"
+
+    if c219_acc1.len() >= 5 { break }
+
+}
+
+print("c219-o1:", c219_acc1)
+
+let c219_acc2 = ""
+
+loop {
+
+    c219_acc2 += "x"
+
+    if c219_acc2.len() >= 4 { break }
+
+}
+
+print("c219-o2:", c219_acc2)

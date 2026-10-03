@@ -7,6 +7,12 @@
 # example can never rot silently and can never silently diverge between
 # the two cores. Exit 1 on any mismatch or failure.
 #
+# Exception: the packages chapter (#20) is a shell transcript
+# (examples/cookbook/packages.sh) that drives the package CLI against a
+# throwaway sandbox; it verifies on the Rust core only (the oracle is a
+# language interpreter, not a package manager) and is skipped entirely
+# under --core python.
+#
 # Usage:
 #   bash scripts/cookbook.sh                 # verify on both cores
 #   bash scripts/cookbook.sh --core rust     # Rust core only
@@ -85,6 +91,31 @@ for prog in examples/cookbook/*.op; do
         fail=$((fail + 1))
     fi
 done
+
+# ---- chapter #20: packages (shell transcript, Rust core only)
+name=packages
+prog=examples/cookbook/packages.sh
+expected="examples/cookbook/expected/${name}.out"
+ok=1
+if [ "$CORE" = "rust" ] || [ "$CORE" = "both" ]; then
+    if [ "$UPDATE" = "1" ]; then
+        bash "$prog" > "$expected"
+    fi
+    pkg_out="$(bash "$prog" 2>/dev/null || true)"
+    if [ ! -f "$expected" ]; then
+        echo "MISSING  $name (no expected output at $expected)"
+        ok=0
+    elif [ "$pkg_out" != "$(cat "$expected")" ]; then
+        echo "FAIL     $name (rust core output != expected)"
+        ok=0
+    fi
+    if [ "$ok" = "1" ]; then
+        echo "PASS     $name"
+        pass=$((pass + 1))
+    else
+        fail=$((fail + 1))
+    fi
+fi
 
 echo ""
 echo "cookbook: $pass passed, $fail failed"

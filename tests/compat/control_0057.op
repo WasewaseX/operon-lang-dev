@@ -1,0 +1,152 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20260930 idx=57 tag=c057
+
+let c057_b0 = "start"
+
+if 4 > 80 { c057_b0 = "hi" } elif 4 > 40 { c057_b0 = "mid" } else { c057_b0 = "lo" }
+
+print("c057-i0:", c057_b0, 4)
+
+let c057_b1 = "start"
+
+if 120 > 80 { c057_b1 = "hi" } elif 120 > 40 { c057_b1 = "mid" } else { c057_b1 = "lo" }
+
+print("c057-i1:", c057_b1, 120)
+
+let c057_b2 = "start"
+
+if 26 > 80 { c057_b2 = "hi" } elif 26 > 40 { c057_b2 = "mid" } else { c057_b2 = "lo" }
+
+print("c057-i2:", c057_b2, 26)
+
+let c057_a0 = 0
+
+let c057_n0 = 0
+
+while c057_n0 < 11 {
+
+    c057_n0 += 3
+
+    if c057_n0 % 3 == 0 { continue }
+
+    if c057_n0 > 20 { break }
+
+    c057_a0 += c057_n0
+
+}
+
+print("c057-w0:", c057_a0, c057_n0)
+
+let c057_a1 = 0
+
+let c057_n1 = 0
+
+while c057_n1 < 18 {
+
+    c057_n1 += 1
+
+    if c057_n1 % 2 == 0 { continue }
+
+    if c057_n1 > 27 { break }
+
+    c057_a1 += c057_n1
+
+}
+
+print("c057-w1:", c057_a1, c057_n1)
+
+let c057_a2 = 0
+
+let c057_n2 = 0
+
+while c057_n2 < 10 {
+
+    c057_n2 += 1
+
+    if c057_n2 % 3 == 0 { continue }
+
+    if c057_n2 > 18 { break }
+
+    c057_a2 += c057_n2
+
+}
+
+print("c057-w2:", c057_a2, c057_n2)
+
+let c057_c0 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 4] {
+
+        c057_c0 += a * b
+
+    }
+
+}
+
+print("c057-l0:", c057_c0)
+
+let c057_c1 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 2] {
+
+        c057_c1 += a * b
+
+    }
+
+}
+
+print("c057-l1:", c057_c1)
+
+let c057_c2 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 3] {
+
+        c057_c2 += a * b
+
+    }
+
+}
+
+print("c057-l2:", c057_c2)
+
+let c057_acc0 = ""
+
+loop {
+
+    c057_acc0 += "x"
+
+    if c057_acc0.len() >= 6 { break }
+
+}
+
+print("c057-o0:", c057_acc0)
+
+let c057_acc1 = ""
+
+loop {
+
+    c057_acc1 += "x"
+
+    if c057_acc1.len() >= 7 { break }
+
+}
+
+print("c057-o1:", c057_acc1)
+
+let c057_acc2 = ""
+
+loop {
+
+    c057_acc2 += "x"
+
+    if c057_acc2.len() >= 7 { break }
+
+}
+
+print("c057-o2:", c057_acc2)

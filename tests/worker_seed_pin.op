@@ -1,7 +1,7 @@
 # reg-bio-3: worker RNG derivation contract (sz adversarial ask). A worker's
 # stream is derived from its task id (decorrelation), but randomize(seed)
 # inside a worker pins that worker's stream to the SAME sequence the host
-# would produce for the same seed — determinism across cells, not per-cell
+# would produce for the same seed, determinism across cells, not per-cell
 # chaos. Two workers with equal seeds agree; each also agrees with the host.
 gene seeder() {
     randomize(99)

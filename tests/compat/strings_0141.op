@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=141 tag=s141
+
+print("s141-m0:", "9y2k1n_v".upper(), "9y2k1n_v".slice(3), "9y2k1n_v".len())
+
+print("s141-m1:", "7dhz0ghb3".upper(), "7dhz0ghb3".slice(2), "7dhz0ghb3".len())
+
+print("s141-m2:", "owk2px8i1pr".upper(), "owk2px8i1pr".slice(3), "owk2px8i1pr".len())
+
+print("s141-m3:", "Blz_d80btdabul".upper(), "Blz_d80btdabul".slice(3), "Blz_d80btdabul".len())
+
+print("s141-m4:", "8r_4egmprB".upper(), "8r_4egmprB".slice(3), "8r_4egmprB".len())
+
+print("s141-m5:", "gx9ubtm221zkgo".upper(), "gx9ubtm221zkgo".slice(3), "gx9ubtm221zkgo".len())
+
+print("s141-i0:", "594-{42}-gr2w")
+
+let s141_v0 = 42
+
+print("s141-v0:", "n={s141_v0}" + "!" * 1)
+
+print("s141-i1:", "fff-{68}-9bew")
+
+let s141_v1 = 68
+
+print("s141-v1:", "n={s141_v1}" + "!" * 2)
+
+print("s141-i2:", "eCf-{11}-Bj_b")
+
+let s141_v2 = 11
+
+print("s141-v2:", "n={s141_v2}" + "!" * 3)
+
+print("s141-r0:", "ne4xt1Av".replace("n", "dq"), "ne4xt1Av".contains("e4"))
+
+print("s141-r1:", "3oflrqnk".replace("3", "iu"), "3oflrqnk".contains("of"))
+
+print("s141-j0:", ["54i", "zfr", "9u7", "6r0"].join("-"))
+
+print("s141-j1:", ["nCx", "4c7", "ms_"].join("-"))
+
+print("s141-j2:", ["8vv", "sri", "qbh", "hnt"].join("-"))
+
+print("s141-a0:", "ruh47ji".at(6), "ruh47ji".trim() == "ruh47ji")
+
+print("s141-a1:", "31v9hz0".at(1), "31v9hz0".trim() == "31v9hz0")

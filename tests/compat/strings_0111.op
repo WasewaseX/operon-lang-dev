@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=111 tag=s111
+
+print("s111-m0:", "gbpdrzo9iydwjw".upper(), "gbpdrzo9iydwjw".slice(2), "gbpdrzo9iydwjw".len())
+
+print("s111-m1:", "ytjxn35d9".upper(), "ytjxn35d9".slice(3), "ytjxn35d9".len())
+
+print("s111-m2:", "k15rtA".upper(), "k15rtA".slice(4), "k15rtA".len())
+
+print("s111-m3:", "j0zg__wb".upper(), "j0zg__wb".slice(2), "j0zg__wb".len())
+
+print("s111-i0:", "ic8-{33}-ef5w")
+
+let s111_v0 = 33
+
+print("s111-v0:", "n={s111_v0}" + "!" * 2)
+
+print("s111-i1:", "18m-{95}-7rv6")
+
+let s111_v1 = 95
+
+print("s111-v1:", "n={s111_v1}" + "!" * 3)
+
+print("s111-i2:", "Bmp-{14}-hbAn")
+
+let s111_v2 = 14
+
+print("s111-v2:", "n={s111_v2}" + "!" * 3)
+
+print("s111-i3:", "xs_-{17}-2Ar3")
+
+let s111_v3 = 17
+
+print("s111-v3:", "n={s111_v3}" + "!" * 3)
+
+print("s111-i4:", "o_b-{3}-16c7")
+
+let s111_v4 = 3
+
+print("s111-v4:", "n={s111_v4}" + "!" * 1)
+
+print("s111-r0:", "0sp3sfxs".replace("0", "nA"), "0sp3sfxs".contains("sp"))
+
+print("s111-r1:", "2a3gyCee".replace("2", "36"), "2a3gyCee".contains("a3"))
+
+print("s111-r2:", "xjtBbepA".replace("x", "4j"), "xjtBbepA".contains("jt"))
+
+print("s111-r3:", "uAhkr04r".replace("u", "k7"), "uAhkr04r".contains("Ah"))
+
+print("s111-j0:", ["tpB", "avr", "0cv", "agl", "l70"].join("-"))
+
+print("s111-j1:", ["13A", "tdy", "jzd"].join("-"))
+
+print("s111-a0:", "2afu4fC".at(2), "2afu4fC".trim() == "2afu4fC")
+
+print("s111-a1:", "2me5u6f".at(4), "2me5u6f".trim() == "2me5u6f")

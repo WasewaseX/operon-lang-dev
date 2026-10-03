@@ -1,0 +1,212 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=214 tag=s214
+
+stress {
+
+    print("s214-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s214-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s214-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s214-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s214-mz:", 63 % 0)
+
+} rescue (e) {
+
+    print("s214-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s214-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s214-of1:", "caught", e.kind, e.message)
+
+}
+
+gene s214_r0() {
+
+    raise "s214-lb9o54"
+
+}
+
+stress {
+
+    s214_r0()
+
+    print("s214-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s214-r0:", e.kind, e.message)
+
+}
+
+gene s214_r1() {
+
+    raise "s214-rdgAqf"
+
+}
+
+stress {
+
+    s214_r1()
+
+    print("s214-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s214-r1:", e.kind, e.message)
+
+}
+
+gene s214_r2() {
+
+    raise "s214-lah_xs"
+
+}
+
+stress {
+
+    s214_r2()
+
+    print("s214-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s214-r2:", e.kind, e.message)
+
+}
+
+let s214_xs0 = [20, 11, 15]
+
+stress {
+
+    print("s214-x0:", s214_xs0[5])
+
+} rescue (e) {
+
+    print("s214-x0:", "caught", e.kind)
+
+}
+
+let s214_xs1 = [6, 7, 44, 5]
+
+stress {
+
+    print("s214-x1:", s214_xs1[6])
+
+} rescue (e) {
+
+    print("s214-x1:", "caught", e.kind)
+
+}
+
+let s214_xs2 = [13, 50]
+
+stress {
+
+    print("s214-x2:", s214_xs2[6])
+
+} rescue (e) {
+
+    print("s214-x2:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s214-0"
+
+    } rescue (e) {
+
+        print("s214-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s214-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s214-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s214-1"
+
+    } rescue (e) {
+
+        print("s214-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s214-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s214-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s214-d1-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s214-d1-top:", outer.message)
+
+}

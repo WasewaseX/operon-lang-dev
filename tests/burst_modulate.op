@@ -1,5 +1,5 @@
-# loop-9 (R9 jury fix): runtime promoter-rate modulation — burst_set.
-# Real biology: regulators do not just gate transcripts — they change the
+# loop-9 (R9 jury fix): runtime promoter-rate modulation, burst_set.
+# Real biology: regulators do not just gate transcripts, they change the
 # PROMOTER'S SWITCHING RATES (activators raise kon, repressors raise koff);
 # the noise layer is part of regulation, not a spectator. burst_set(g, kon,
 # koff) retunes ONE gene's telegraph rates at runtime; burst_set(g) clears
@@ -7,7 +7,7 @@
 # Deterministic: no draws, rides the snapshot (workers freeze at spawn).
 # All calls use FLOAT args so the rung-1 note formats identically on both
 # cores (format_float vs repr).
-# Fails-pre: burst_set was a phantom call — the modulated assert burns on
+# Fails-pre: burst_set was a phantom call, the modulated assert burns on
 # the pre-R9 core.
 gene noisey() { return "n" }
 gene steady() { return "s" }
@@ -16,7 +16,7 @@ gene marked() { return "m" }
 frame proof {
     randomize(42)
     expr_on(0.3, 0.1)
-    # baseline: both genes run at the GLOBAL rates — identical behavior
+    # baseline: both genes run at the GLOBAL rates, identical behavior
     let i = 0
     while i < 20 { noisey() ; i = i + 1 }
     let j = 0
@@ -30,7 +30,7 @@ frame proof {
     while k < 20 { noisey() ; k = k + 1 }
     let c = promoter_telemetry("noisey")
     # attempts accumulate (telemetry is cumulative); compare the LATE window:
-    # steady stays at the global rates, noisey is now sticky — under the SAME
+    # steady stays at the global rates, noisey is now sticky, under the SAME
     # clock the modulated promoter must be ON more often in its late window
     assert(c.attempts == 40, "attempts accumulate: 20 + 20")
     let late_n = (c.on_total - a.on_total)
@@ -45,7 +45,7 @@ frame proof {
     while m < 20 { noisey() ; m = m + 1 }
     let d = promoter_telemetry("noisey")
     assert(d.attempts == 60, "cleared override: attempts still accumulate")
-    # precedence: a @burst mark BEATS the override — a marked gene given a
+    # precedence: a @burst mark BEATS the override, a marked gene given a
     # contrary override still runs its MARK's rates (asserted behaviorally:
     # the marked gene stays strongly ON even though the override says
     # mostly-OFF; the override would flip it to ~0.1 if it won)

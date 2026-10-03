@@ -1,0 +1,214 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=136 tag=m136
+
+gene m136_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m136-b0:", m136_b0({plasmid: 35, cell: 93, exon: 92})?!)
+
+gene m136_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m136-b1:", m136_b1({ligase: 20, splicer: 2, enzyme: 21})?!)
+
+gene m136_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m136-b2:", m136_b2({cell: 26, splicer: 2, marker: 86})?!)
+
+gene m136_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m136_f0([8, 16, 29, 53, 6, 17, 11]) {
+
+    case Ok(list) {
+
+        print("m136-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m136-f0:", "e:", m)
+
+    }
+
+}
+
+gene m136_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m136_f1([47, 21, 17, 35, 25]) {
+
+    case Ok(list) {
+
+        print("m136-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m136-f1:", "e:", m)
+
+    }
+
+}
+
+let m136_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m136-cc0:", m136_cl0(6)(14), m136_cl0(14)(6))
+
+let m136_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m136-cc1:", m136_cl1(1)(9), m136_cl1(9)(1))
+
+let m136_data0 = some([some("splicer"), none(), some(9)])
+
+match m136_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m136-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m136-x0:", "shape-miss")
+
+    }
+
+}
+
+let m136_data1 = some([some("helix"), none(), some(5)])
+
+match m136_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m136-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m136-x1:", "shape-miss")
+
+    }
+
+}

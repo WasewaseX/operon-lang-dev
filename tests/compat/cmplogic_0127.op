@@ -1,0 +1,38 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=127 tag=c127
+
+print("c127-c0:", -28 <= 6459)
+
+print("c127-c1:", -3603 <= 8644)
+
+print("c127-c2:", 3590 != -5294)
+
+print("c127-c3:", -9635 >= 4726)
+
+print("c127-c4:", 6762 < 3848)
+
+print("c127-b0:", 36 < 44 && 44 < 13, 36 > 44 || 36 > 13)
+
+print("c127-b1:", 3 < 28 && 28 < 7, 3 > 28 || 3 > 7)
+
+print("c127-t0:", 6902 > 6033 ? "gt" : "le")
+
+print("c127-t1:", 7469 > 5426 ? "gt" : "le")
+
+print("c127-t2:", 2601 > 6518 ? "gt" : "le")
+
+let c127_n0 = null
+
+print("c127-n0:", c127_n0 ?? -4737, c127_n0 == null)
+
+let c127_n1 = null
+
+print("c127-n1:", c127_n1 ?? -2996, c127_n1 == null)
+
+let c127_n2 = null
+
+print("c127-n2:", c127_n2 ?? -1026, c127_n2 == null)
+
+print("c127-s0:", "4piu" in "jw0gld4piu", "4piu" == "4piu")
+
+print("c127-s1:", "iCaa" in "B2p0aaiCaa", "iCaa" == "iCaa")

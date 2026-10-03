@@ -1,0 +1,174 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=137 tag=f137
+
+gene f137_g0(p, q = 85, r = 37) {
+
+    return p * 40 + q - r
+
+}
+
+print("f137-d0:", f137_g0(11), f137_g0(11, 1), f137_g0(11, 85, 37))
+
+gene f137_g1(p, q = 30, r = 52) {
+
+    return p * 36 + q - r
+
+}
+
+print("f137-d1:", f137_g1(-2), f137_g1(-2, 9), f137_g1(-2, 30, 52))
+
+gene f137_g2(p, q = 30, r = 36) {
+
+    return p * 88 + q - r
+
+}
+
+print("f137-d2:", f137_g2(13), f137_g2(13, 36), f137_g2(13, 30, 36))
+
+gene f137_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f137_fib0(n - 1) + f137_fib0(n - 2)
+
+}
+
+print("f137-fib0:", f137_fib0(7))
+
+gene f137_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f137_fib1(n - 1) + f137_fib1(n - 2)
+
+}
+
+print("f137-fib1:", f137_fib1(11))
+
+gene f137_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f137_gcd0(b, a % b)
+
+}
+
+print("f137-gcd0:", f137_gcd0(354, 638))
+
+gene f137_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f137_gcd1(b, a % b)
+
+}
+
+print("f137-gcd1:", f137_gcd1(925, 120))
+
+gene f137_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f137_c0 = f137_mk0(11)
+
+f137_c0(1)
+
+print("f137-cl0:", f137_c0(5))
+
+gene f137_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f137_c1 = f137_mk1(2)
+
+f137_c1(1)
+
+print("f137-cl1:", f137_c1(5))
+
+gene f137_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f137-hof0:", f137_tw0(gene (z) => z * 2 + 1, 25))
+
+gene f137_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f137-hof1:", f137_tw1(gene (z) => z * 2 + 1, 27))
+
+gene f137_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f137-dg0:", f137_sd0(44689))
+
+gene f137_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f137-dg1:", f137_sd1(413034))

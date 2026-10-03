@@ -1,0 +1,58 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=125 tag=s125
+
+print("s125-m0:", "cn5umpr".upper(), "cn5umpr".slice(4), "cn5umpr".len())
+
+print("s125-m1:", "hzivdmwBrh".upper(), "hzivdmwBrh".slice(3), "hzivdmwBrh".len())
+
+print("s125-m2:", "7rno9k6dieo85u".upper(), "7rno9k6dieo85u".slice(2), "7rno9k6dieo85u".len())
+
+print("s125-m3:", "rAa3xmmj3ghr0".upper(), "rAa3xmmj3ghr0".slice(2), "rAa3xmmj3ghr0".len())
+
+print("s125-m4:", "rq3ntyjjB_5B".upper(), "rq3ntyjjB_5B".slice(3), "rq3ntyjjB_5B".len())
+
+print("s125-i0:", "yit-{7}-0ulu")
+
+let s125_v0 = 7
+
+print("s125-v0:", "n={s125_v0}" + "!" * 2)
+
+print("s125-i1:", "vkv-{42}-5vif")
+
+let s125_v1 = 42
+
+print("s125-v1:", "n={s125_v1}" + "!" * 3)
+
+print("s125-i2:", "_17-{44}-l1yd")
+
+let s125_v2 = 44
+
+print("s125-v2:", "n={s125_v2}" + "!" * 1)
+
+print("s125-i3:", "0Bu-{57}-a1kr")
+
+let s125_v3 = 57
+
+print("s125-v3:", "n={s125_v3}" + "!" * 3)
+
+print("s125-i4:", "gd5-{92}-4njA")
+
+let s125_v4 = 92
+
+print("s125-v4:", "n={s125_v4}" + "!" * 2)
+
+print("s125-r0:", "lgB33u8e".replace("l", "am"), "lgB33u8e".contains("gB"))
+
+print("s125-r1:", "Czua81hl".replace("C", "9c"), "Czua81hl".contains("zu"))
+
+print("s125-r2:", "B6p0660y".replace("B", "ym"), "B6p0660y".contains("6p"))
+
+print("s125-r3:", "qwAsd3w2".replace("q", "5y"), "qwAsd3w2".contains("wA"))
+
+print("s125-j0:", ["yld", "zqm", "c2f", "u7A", "pgq"].join("-"))
+
+print("s125-j1:", ["b7s", "7o6", "8b8", "c_4"].join("-"))
+
+print("s125-a0:", "heddin4".at(4), "heddin4".trim() == "heddin4")
+
+print("s125-a1:", "uzrwuol".at(4), "uzrwuol".trim() == "uzrwuol")

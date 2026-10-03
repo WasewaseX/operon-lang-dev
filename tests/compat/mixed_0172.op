@@ -1,0 +1,230 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=172 tag=m172
+
+gene m172_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m172-b0:", m172_b0({cell: 23, exon: 51, ligase: 9})?!)
+
+gene m172_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m172-b1:", m172_b1({ligase: 11, ribose: 51, marker: 55})?!)
+
+gene m172_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m172_f0([47, 13, 33, 2, 28, 21]) {
+
+    case Ok(list) {
+
+        print("m172-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m172-f0:", "e:", m)
+
+    }
+
+}
+
+gene m172_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m172_f1([57, 54, 1, 14, 1]) {
+
+    case Ok(list) {
+
+        print("m172-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m172-f1:", "e:", m)
+
+    }
+
+}
+
+gene m172_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m172_f2([52, 20, 25, 35, 33, 37]) {
+
+    case Ok(list) {
+
+        print("m172-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m172-f2:", "e:", m)
+
+    }
+
+}
+
+let m172_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m172-cc0:", m172_cl0(10)(14), m172_cl0(14)(10))
+
+let m172_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m172-cc1:", m172_cl1(15)(6), m172_cl1(6)(15))
+
+let m172_data0 = some([some("splicer"), none(), some(8)])
+
+match m172_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m172-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m172-x0:", "shape-miss")
+
+    }
+
+}
+
+let m172_data1 = some([some("gene"), none(), some(6)])
+
+match m172_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m172-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m172-x1:", "shape-miss")
+
+    }
+
+}

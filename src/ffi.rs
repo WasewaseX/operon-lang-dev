@@ -1,16 +1,16 @@
-//! ffi.rs — native substrate of the Operon toolchain (sec-r2, audit A15).
+//! ffi.rs, native substrate of the Operon toolchain (sec-r2, audit A15).
 //!
 //! History: interning/arena/clock lived in a C kernel (runtime/operon_rt.c).
 //! Audit wave 1 proved that kernel's raw pointers were the single largest
-//! memory-safety surface of the whole project — two ASan-confirmed UAF/SEGV
-//! classes (C-5/C-6) traced to it — AND that the lexer discards every intern
+//! memory-safety surface of the whole project, two ASan-confirmed UAF/SEGV
+//! classes (C-5/C-6) traced to it, AND that the lexer discards every intern
 //! result (write-only). The evidence-based verdict (MASTER-PLAN A15) was to
 //! port the table into Rust and delete the C kernel outright: the entire UAF
 //! class is now structurally impossible, and the Win32/POSIX shim layer went
 //! with it.
 //!
 //! What remains native and load-bearing:
-//!   * codon_kernel.cpp — bit-parallel Myers edit distance + codon scoring.
+//!   * codon_kernel.cpp, bit-parallel Myers edit distance + codon scoring.
 //!     Pure computation, no allocation, no pointers retained, guarded by
 //!     DP_CELL_BUDGET before every hop. This kernel EARNED its place.
 //!
@@ -44,7 +44,7 @@ fn table() -> &'static Mutex<InternTable> {
 }
 
 /// Intern a string, returning its stable id. Equal bytes => equal id.
-/// Memory safety: no raw pointers, no arena, no manual reclaim — the table
+/// Memory safety: no raw pointers, no arena, no manual reclaim, the table
 /// is ordinary Rust ownership, so use-after-free cannot occur by construction.
 pub fn intern(s: &str) -> u32 {
     let mut t = table().lock().unwrap_or_else(|e| e.into_inner());
@@ -120,7 +120,7 @@ extern "C" {
 }
 
 /// DP cell budget for the C++ edit-distance kernel (sec-r1, audit C-1/C-8).
-/// An FFI call is fuel-blind — no step/fuel accounting can interrupt it — so
+/// An FFI call is fuel-blind, no step/fuel accounting can interrupt it, so
 /// the O(la*lb) budget must be enforced BEFORE the hop. One guard here
 /// protects `distance()`, `similar()`, the wobble-repair paths, and the
 /// parser's suggestion engine, which all funnel through this function.
@@ -128,7 +128,7 @@ pub const DP_CELL_BUDGET: usize = 10_000_000;
 
 /// Returned instead of a distance when the input pair exceeds the budget.
 /// No real distance can be i32::MAX, and every comparison site treats a
-/// bigger distance as a worse match — so over-budget pairs simply never
+/// bigger distance as a worse match, so over-budget pairs simply never
 /// win a "nearest" contest.
 pub const DP_BUDGET_SENTINEL: i32 = i32::MAX;
 
@@ -146,6 +146,12 @@ pub fn edit_distance(a: &str, b: &str) -> i32 {
     {
         return DP_BUDGET_SENTINEL;
     }
+    // SAFETY: rt_edit_distance reads exactly a.len()/b.len() bytes from each
+    // pointer for the duration of the call only; both pointers come from live
+    // `&str` borrows held across the call, so they are valid and aligned.
+    // Cell-count budget (DP_CELL_BUDGET) and per-operand caps (FFI_OPERAND_CAP)
+    // are enforced above, so the kernel cannot over-read or overflow its
+    // bit-parallel DP buffers.
     unsafe {
         rt_edit_distance(
             a.as_ptr() as *const c_char,
@@ -153,20 +159,34 @@ pub fn edit_distance(a: &str, b: &str) -> i32 {
             b.as_ptr() as *const c_char,
             b.len(),
         )
-    }
+    } // ast-grep-ignore: no-unsafe-block-in-src
 }
 
 /// Codon-usage style score 0..100 (C++ kernel).
 pub fn codon_score(s: &str) -> i32 {
-    unsafe { rt_codon_score(s.as_ptr() as *const c_char, s.len()) }
+    // SAFETY: rt_codon_score reads exactly s.len() bytes from the pointer for
+    // the duration of the call only; the pointer comes from a live `&str`
+    // borrow held across the call, and the kernel performs no writes.
+    unsafe { rt_codon_score(s.as_ptr() as *const c_char, s.len()) } // ast-grep-ignore: no-unsafe-block-in-src
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    // The intern table is process-global and thread-safe (Mutex), but cargo
+    // runs tests on PARALLEL threads, so any test asserting global counts
+    // (intern_count / table_bytes / table_allocs / symbols) can be polluted
+    // by a sibling interning concurrently. macOS arm64 scheduling exposed
+    // this live: table_bytes() saw 4114 = 12 + sibling's "x"x4096 + 6-byte
+    // "基因" (CI-native aarch64-apple-darwin release job, 2026-09-29).
+    // All table-touching tests serialize on this mutex; zero new deps.
+    // House style (v2.4.0): no poisoning unwrap.
+    static TABLE_TEST_LOCK: Mutex<()> = Mutex::new(());
+
     #[test]
     fn intern_ids_are_stable_and_equal_bytes_get_equal_ids() {
+        let _guard = TABLE_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         reset_for_tests();
         let a = intern("promoter");
         let b = intern("promoter");
@@ -182,6 +202,7 @@ mod tests {
 
     #[test]
     fn intern_table_tracks_bytes_allocs_and_symbols() {
+        let _guard = TABLE_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         reset_for_tests();
         intern("abcd"); // 4 bytes, 1 alloc
         intern("abcdefgh"); // 8 bytes, 1 alloc
@@ -193,6 +214,7 @@ mod tests {
 
     #[test]
     fn intern_handles_empty_and_unicode_and_long() {
+        let _guard = TABLE_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         reset_for_tests();
         assert_eq!(intern(""), 1); // empty string is internable
         let u1 = intern("基因");

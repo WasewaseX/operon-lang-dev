@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=31 tag=s031
+
+print("s031-m0:", "CxBwani3".upper(), "CxBwani3".slice(4), "CxBwani3".len())
+
+print("s031-m1:", "qgBjrbm".upper(), "qgBjrbm".slice(3), "qgBjrbm".len())
+
+print("s031-m2:", "sre5uCA8".upper(), "sre5uCA8".slice(2), "sre5uCA8".len())
+
+print("s031-m3:", "k10cb9x79uy6lA".upper(), "k10cb9x79uy6lA".slice(2), "k10cb9x79uy6lA".len())
+
+print("s031-i0:", "t_v-{30}-h3Bf")
+
+let s031_v0 = 30
+
+print("s031-v0:", "n={s031_v0}" + "!" * 2)
+
+print("s031-i1:", "9Bo-{17}-fbku")
+
+let s031_v1 = 17
+
+print("s031-v1:", "n={s031_v1}" + "!" * 3)
+
+print("s031-i2:", "gas-{26}-158o")
+
+let s031_v2 = 26
+
+print("s031-v2:", "n={s031_v2}" + "!" * 2)
+
+print("s031-r0:", "wvzzg_va".replace("w", "0j"), "wvzzg_va".contains("vz"))
+
+print("s031-r1:", "an05p0mt".replace("a", "xk"), "an05p0mt".contains("n0"))
+
+print("s031-r2:", "wiaC8dk8".replace("w", "4x"), "wiaC8dk8".contains("ia"))
+
+print("s031-j0:", ["Car", "iAk", "kse", "596"].join("-"))
+
+print("s031-j1:", ["hck", "yyh", "mjg"].join("-"))
+
+print("s031-a0:", "v5lgfhz".at(1), "v5lgfhz".trim() == "v5lgfhz")
+
+print("s031-a1:", "n5iigm5".at(0), "n5iigm5".trim() == "n5iigm5")

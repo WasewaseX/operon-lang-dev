@@ -1,4 +1,4 @@
-# std/strings — self-hosted string utilities.
+# std/strings, self-hosted string utilities.
 
 gene words(s) {
     return for w in s.trim().split(" ") if w != "" collect w
@@ -19,7 +19,7 @@ gene pad_left(s, width, fill) {
     if need <= 0 {
         return s
     }
-    # dx-r5 (audit P0-2): the concat loop was O(n^2) — width 100k exhausted
+    # dx-r5 (audit P0-2): the concat loop was O(n^2), width 100k exhausted
     # the 2 GiB run ceiling. The repeat operator allocates once (mem-charged).
     let reps = (need + len(fill) - 1) // len(fill)
     return (fill * reps).slice(0, need) + s

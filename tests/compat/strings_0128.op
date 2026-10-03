@@ -1,0 +1,58 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=128 tag=s128
+
+print("s128-m0:", "b53_f4fyurdavr".upper(), "b53_f4fyurdavr".slice(1), "b53_f4fyurdavr".len())
+
+print("s128-m1:", "sBBlbyexx_".upper(), "sBBlbyexx_".slice(1), "sBBlbyexx_".len())
+
+print("s128-m2:", "r3mv3p9tb".upper(), "r3mv3p9tb".slice(4), "r3mv3p9tb".len())
+
+print("s128-m3:", "Bxox4a".upper(), "Bxox4a".slice(1), "Bxox4a".len())
+
+print("s128-m4:", "3aAwoktbe6".upper(), "3aAwoktbe6".slice(2), "3aAwoktbe6".len())
+
+print("s128-i0:", "hmh-{31}-y0h5")
+
+let s128_v0 = 31
+
+print("s128-v0:", "n={s128_v0}" + "!" * 2)
+
+print("s128-i1:", "A39-{48}-gg8a")
+
+let s128_v1 = 48
+
+print("s128-v1:", "n={s128_v1}" + "!" * 1)
+
+print("s128-i2:", "j0h-{25}-o7jr")
+
+let s128_v2 = 25
+
+print("s128-v2:", "n={s128_v2}" + "!" * 3)
+
+print("s128-i3:", "b9x-{49}-u5ue")
+
+let s128_v3 = 49
+
+print("s128-v3:", "n={s128_v3}" + "!" * 1)
+
+print("s128-i4:", "nkd-{78}-zyc6")
+
+let s128_v4 = 78
+
+print("s128-v4:", "n={s128_v4}" + "!" * 2)
+
+print("s128-r0:", "3msaCel8".replace("3", "gr"), "3msaCel8".contains("ms"))
+
+print("s128-r1:", "uel4lpej".replace("u", "b7"), "uel4lpej".contains("el"))
+
+print("s128-r2:", "1su6flrq".replace("1", "xu"), "1su6flrq".contains("su"))
+
+print("s128-j0:", ["p65", "wi7", "Cq1", "pxp", "Cyt"].join("-"))
+
+print("s128-j1:", ["chu", "wor", "5Ce"].join("-"))
+
+print("s128-a0:", "9ubr6l1".at(2), "9ubr6l1".trim() == "9ubr6l1")
+
+print("s128-a1:", "2_BweB5".at(2), "2_BweB5".trim() == "2_BweB5")
+
+print("s128-a2:", "p1pAxAb".at(2), "p1pAxAb".trim() == "p1pAxAb")

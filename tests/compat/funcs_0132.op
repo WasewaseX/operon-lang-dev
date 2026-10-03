@@ -1,0 +1,174 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=132 tag=f132
+
+gene f132_g0(p, q = 95, r = 93) {
+
+    return p * 60 + q - r
+
+}
+
+print("f132-d0:", f132_g0(-44), f132_g0(-44, 64), f132_g0(-44, 95, 93))
+
+gene f132_g1(p, q = 68, r = 11) {
+
+    return p * 40 + q - r
+
+}
+
+print("f132-d1:", f132_g1(-22), f132_g1(-22, 73), f132_g1(-22, 68, 11))
+
+gene f132_g2(p, q = 6, r = 81) {
+
+    return p * 45 + q - r
+
+}
+
+print("f132-d2:", f132_g2(-21), f132_g2(-21, 36), f132_g2(-21, 6, 81))
+
+gene f132_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f132_fib0(n - 1) + f132_fib0(n - 2)
+
+}
+
+print("f132-fib0:", f132_fib0(7))
+
+gene f132_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f132_fib1(n - 1) + f132_fib1(n - 2)
+
+}
+
+print("f132-fib1:", f132_fib1(8))
+
+gene f132_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f132_gcd0(b, a % b)
+
+}
+
+print("f132-gcd0:", f132_gcd0(455, 59))
+
+gene f132_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f132_gcd1(b, a % b)
+
+}
+
+print("f132-gcd1:", f132_gcd1(659, 701))
+
+gene f132_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f132_c0 = f132_mk0(6)
+
+f132_c0(4)
+
+print("f132-cl0:", f132_c0(4))
+
+gene f132_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f132_c1 = f132_mk1(23)
+
+f132_c1(9)
+
+print("f132-cl1:", f132_c1(7))
+
+gene f132_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f132-hof0:", f132_tw0(gene (z) => z * 2 + 1, 29))
+
+gene f132_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f132-hof1:", f132_tw1(gene (z) => z * 2 + 1, 30))
+
+gene f132_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f132-dg0:", f132_sd0(567802))
+
+gene f132_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f132-dg1:", f132_sd1(321267))

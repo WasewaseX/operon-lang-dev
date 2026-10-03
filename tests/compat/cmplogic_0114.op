@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=114 tag=c114
+
+print("c114-c0:", -5279 < 1608)
+
+print("c114-c1:", -1373 > 1309)
+
+print("c114-c2:", -5729 > 9898)
+
+print("c114-c3:", 8919 != -7131)
+
+print("c114-c4:", 9518 == -2396)
+
+print("c114-c5:", -1185 == 2165)
+
+print("c114-c6:", -72 >= 8110)
+
+print("c114-b0:", 7 < 44 && 44 < 37, 7 > 44 || 7 > 37)
+
+print("c114-b1:", 37 < 6 && 6 < 35, 37 > 6 || 37 > 35)
+
+print("c114-b2:", 41 < 35 && 35 < 8, 41 > 35 || 41 > 8)
+
+print("c114-t0:", -1403 > -3151 ? "gt" : "le")
+
+print("c114-t1:", 3069 > -3298 ? "gt" : "le")
+
+print("c114-t2:", -8332 > -4970 ? "gt" : "le")
+
+print("c114-t3:", -3811 > 6108 ? "gt" : "le")
+
+let c114_n0 = null
+
+print("c114-n0:", c114_n0 ?? 2362, c114_n0 == null)
+
+let c114_n1 = null
+
+print("c114-n1:", c114_n1 ?? 4595, c114_n1 == null)
+
+let c114_n2 = null
+
+print("c114-n2:", c114_n2 ?? 5634, c114_n2 == null)
+
+print("c114-s0:", "_i5y" in "_6nys4_i5y", "_i5y" == "_i5y")
+
+print("c114-s1:", "0vdb" in "4509ft0vdb", "0vdb" == "0vdb")

@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=256 tag=c256
+
+print("c256-c0:", 7219 != 1893)
+
+print("c256-c1:", -6819 >= -5372)
+
+print("c256-c2:", -4361 != -9164)
+
+print("c256-c3:", 1913 > 4753)
+
+print("c256-c4:", -1098 >= 2285)
+
+print("c256-c5:", -6903 >= -9634)
+
+print("c256-b0:", 28 < 22 && 22 < 13, 28 > 22 || 28 > 13)
+
+print("c256-b1:", 42 < 23 && 23 < 28, 42 > 23 || 42 > 28)
+
+print("c256-b2:", 43 < 21 && 21 < 39, 43 > 21 || 43 > 39)
+
+print("c256-t0:", -7274 > 873 ? "gt" : "le")
+
+print("c256-t1:", -2905 > 9995 ? "gt" : "le")
+
+print("c256-t2:", -7701 > 1188 ? "gt" : "le")
+
+print("c256-t3:", -3553 > -4707 ? "gt" : "le")
+
+let c256_n0 = null
+
+print("c256-n0:", c256_n0 ?? -199, c256_n0 == null)
+
+let c256_n1 = null
+
+print("c256-n1:", c256_n1 ?? -2485, c256_n1 == null)
+
+let c256_n2 = null
+
+print("c256-n2:", c256_n2 ?? 7926, c256_n2 == null)
+
+print("c256-s0:", "y3am" in "lpB0ycy3am", "y3am" == "y3am")
+
+print("c256-s1:", "bCsp" in "eyjyAlbCsp", "bCsp" == "bCsp")

@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=154 tag=s154
+
+print("s154-m0:", "uwbB1vuc".upper(), "uwbB1vuc".slice(1), "uwbB1vuc".len())
+
+print("s154-m1:", "1j0jass20za9".upper(), "1j0jass20za9".slice(2), "1j0jass20za9".len())
+
+print("s154-m2:", "7zxo8na2".upper(), "7zxo8na2".slice(3), "7zxo8na2".len())
+
+print("s154-m3:", "ss9preaa".upper(), "ss9preaa".slice(1), "ss9preaa".len())
+
+print("s154-i0:", "t7g-{44}-edf9")
+
+let s154_v0 = 44
+
+print("s154-v0:", "n={s154_v0}" + "!" * 3)
+
+print("s154-i1:", "ic2-{97}-qCfm")
+
+let s154_v1 = 97
+
+print("s154-v1:", "n={s154_v1}" + "!" * 2)
+
+print("s154-i2:", "rek-{50}-mCAr")
+
+let s154_v2 = 50
+
+print("s154-v2:", "n={s154_v2}" + "!" * 2)
+
+print("s154-r0:", "abxsojbb".replace("a", "_w"), "abxsojbb".contains("bx"))
+
+print("s154-r1:", "ptmg4z6u".replace("p", "xe"), "ptmg4z6u".contains("tm"))
+
+print("s154-j0:", ["aku", "djy", "19u", "3Cj", "Bwj"].join("-"))
+
+print("s154-j1:", ["m9n", "sz7", "ire", "ijx"].join("-"))
+
+print("s154-j2:", ["016", "6ez", "dzz", "mf_"].join("-"))
+
+print("s154-a0:", "qlq1iap".at(6), "qlq1iap".trim() == "qlq1iap")
+
+print("s154-a1:", "3voCnp6".at(6), "3voCnp6".trim() == "3voCnp6")
+
+print("s154-a2:", "ao5btly".at(3), "ao5btly".trim() == "ao5btly")

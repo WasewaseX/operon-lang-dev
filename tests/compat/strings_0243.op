@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=243 tag=s243
+
+print("s243-m0:", "c9albCatwxg".upper(), "c9albCatwxg".slice(3), "c9albCatwxg".len())
+
+print("s243-m1:", "8jhj7pv".upper(), "8jhj7pv".slice(3), "8jhj7pv".len())
+
+print("s243-m2:", "8BfC238lh4Au".upper(), "8BfC238lh4Au".slice(2), "8BfC238lh4Au".len())
+
+print("s243-m3:", "pn_pAyh2xqh1wi".upper(), "pn_pAyh2xqh1wi".slice(2), "pn_pAyh2xqh1wi".len())
+
+print("s243-m4:", "kdube6389".upper(), "kdube6389".slice(2), "kdube6389".len())
+
+print("s243-m5:", "gplw3kjqC7i6gm".upper(), "gplw3kjqC7i6gm".slice(2), "gplw3kjqC7i6gm".len())
+
+print("s243-i0:", "a5b-{58}-en47")
+
+let s243_v0 = 58
+
+print("s243-v0:", "n={s243_v0}" + "!" * 2)
+
+print("s243-i1:", "6Cs-{82}-vy3u")
+
+let s243_v1 = 82
+
+print("s243-v1:", "n={s243_v1}" + "!" * 2)
+
+print("s243-i2:", "1wn-{23}-ko8b")
+
+let s243_v2 = 23
+
+print("s243-v2:", "n={s243_v2}" + "!" * 2)
+
+print("s243-r0:", "iAt4telt".replace("i", "dl"), "iAt4telt".contains("At"))
+
+print("s243-r1:", "9vvg2hb4".replace("9", "0b"), "9vvg2hb4".contains("vv"))
+
+print("s243-r2:", "uw62jCyv".replace("u", "v9"), "uw62jCyv".contains("w6"))
+
+print("s243-r3:", "bk8talln".replace("b", "ll"), "bk8talln".contains("k8"))
+
+print("s243-j0:", ["1p9", "grn", "j7C", "yzp"].join("-"))
+
+print("s243-j1:", ["1oB", "cbf", "9i7", "zCv", "Bnu"].join("-"))
+
+print("s243-a0:", "qnu8wqy".at(3), "qnu8wqy".trim() == "qnu8wqy")
+
+print("s243-a1:", "t_szeof".at(2), "t_szeof".trim() == "t_szeof")

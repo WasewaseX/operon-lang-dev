@@ -1,0 +1,12 @@
+# postgres — the PostgreSQL text-layer toolkit (pure Operon).
+# DSN parse/build, identifier + literal quoting, LIKE escaping, numbered
+# placeholder filling, array literals, LIMIT/OFFSET coercion. Sandbox-safe:
+# no sockets, no I/O — every string that reaches a server is testable here.
+
+[package]
+name = "postgres"
+version = "0.1.0"
+operon-version = "2.2"
+description = "PostgreSQL text layer: DSN parse/build, quoting, placeholders, arrays, LIMIT guard"
+
+[deps]

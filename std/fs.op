@@ -1,13 +1,13 @@
-# std/fs — SAFE wrappers over the capability-gated file builtins.
+# std/fs, SAFE wrappers over the capability-gated file builtins.
 #
 # Capability model stays default-deny and untouched: these wrappers carry no
-# grants of their own. What they add is graceful degradation — on a missing
+# grants of their own. What they add is graceful degradation, on a missing
 # file OR a denied capability they return your fallback (or null / false)
 # instead of throwing. If you need to TELL those two cases apart, call the
 # raw builtins (read_file / write_file) under `stress / rescue` yourself.
 #
 # Every wrapper: zero throw, honest return. "Safe" means "never crashes the
-# program", not "silently grants access" — denial still denies.
+# program", not "silently grants access", denial still denies.
 
 gene fs_read_or(path, fallback) {
     # whole file as text, or fallback on missing/denied/empty-null

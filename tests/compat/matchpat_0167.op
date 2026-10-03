@@ -1,0 +1,316 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=167 tag=m167
+
+let m167_s0 = some(8)
+
+match m167_s0 {
+
+    case Some(x) if x > 8 {
+
+        print("m167-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m167-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m167-m0:", "none")
+
+    }
+
+}
+
+let m167_s1 = some(2)
+
+match m167_s1 {
+
+    case Some(x) if x > 2 {
+
+        print("m167-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m167-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m167-m1:", "none")
+
+    }
+
+}
+
+let m167_s2 = some(1)
+
+match m167_s2 {
+
+    case Some(x) if x > 1 {
+
+        print("m167-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m167-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m167-m2:", "none")
+
+    }
+
+}
+
+let m167_s3 = some(3)
+
+match m167_s3 {
+
+    case Some(x) if x > 3 {
+
+        print("m167-m3:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m167-m3:", "small", x)
+
+    }
+
+    case None {
+
+        print("m167-m3:", "none")
+
+    }
+
+}
+
+let m167_ls0 = [4, 13, 38]
+
+match m167_ls0 {
+
+    case [4, *rest] {
+
+        print("m167-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m167-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m167-l0:", "other")
+
+    }
+
+}
+
+let m167_ls1 = [42, 32, 42]
+
+match m167_ls1 {
+
+    case [42, *rest] {
+
+        print("m167-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m167-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m167-l1:", "other")
+
+    }
+
+}
+
+let m167_ls2 = [9, 41, 32]
+
+match m167_ls2 {
+
+    case [9, *rest] {
+
+        print("m167-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m167-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m167-l2:", "other")
+
+    }
+
+}
+
+let m167_ls3 = [8, 22, 13]
+
+match m167_ls3 {
+
+    case [8, *rest] {
+
+        print("m167-l3:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m167-l3:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m167-l3:", "other")
+
+    }
+
+}
+
+let m167_mp0 = {ligase: -426, ribose: 9464}
+
+match m167_mp0 {
+
+    case {ligase: p, ribose: q} {
+
+        print("m167-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m167-mp0:", "miss")
+
+    }
+
+}
+
+let m167_mp1 = {plasmid: 871, ligase: 7791}
+
+match m167_mp1 {
+
+    case {plasmid: p, ligase: q} {
+
+        print("m167-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m167-mp1:", "miss")
+
+    }
+
+}
+
+let m167_mp2 = {enzyme: 7634, ribose: -7401}
+
+match m167_mp2 {
+
+    case {enzyme: p, ribose: q} {
+
+        print("m167-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m167-mp2:", "miss")
+
+    }
+
+}
+
+let m167_r0 = ok(1)
+
+match m167_r0 {
+
+    case Ok(n) | Err(1) {
+
+        print("m167-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m167-r0:", "zero")
+
+    }
+
+}
+
+let m167_r1 = ok(2)
+
+match m167_r1 {
+
+    case Ok(n) | Err(2) {
+
+        print("m167-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m167-r1:", "zero")
+
+    }
+
+}
+
+match "helix" {
+
+    case "helix" {
+
+        print("m167-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m167-w0:", "alt")
+
+    }
+
+}
+
+match "vector" {
+
+    case "vector" {
+
+        print("m167-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m167-w1:", "alt")
+
+    }
+
+}

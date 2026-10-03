@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=151 tag=s151
+
+print("s151-m0:", "rl69ou3vb".upper(), "rl69ou3vb".slice(2), "rl69ou3vb".len())
+
+print("s151-m1:", "0prA_9l05fk".upper(), "0prA_9l05fk".slice(3), "0prA_9l05fk".len())
+
+print("s151-m2:", "3gcuyoejhldsd".upper(), "3gcuyoejhldsd".slice(4), "3gcuyoejhldsd".len())
+
+print("s151-m3:", "CbnBdvcA8a".upper(), "CbnBdvcA8a".slice(1), "CbnBdvcA8a".len())
+
+print("s151-i0:", "kg_-{37}-qlAt")
+
+let s151_v0 = 37
+
+print("s151-v0:", "n={s151_v0}" + "!" * 3)
+
+print("s151-i1:", "2t6-{95}-cjem")
+
+let s151_v1 = 95
+
+print("s151-v1:", "n={s151_v1}" + "!" * 2)
+
+print("s151-i2:", "jwq-{31}-22k1")
+
+let s151_v2 = 31
+
+print("s151-v2:", "n={s151_v2}" + "!" * 1)
+
+print("s151-r0:", "l81cpjsi".replace("l", "77"), "l81cpjsi".contains("81"))
+
+print("s151-r1:", "glyuetax".replace("g", "pq"), "glyuetax".contains("ly"))
+
+print("s151-r2:", "719_qBdw".replace("7", "em"), "719_qBdw".contains("19"))
+
+print("s151-j0:", ["gzi", "hja", "y3y", "fmp"].join("-"))
+
+print("s151-j1:", ["9mz", "rrg", "afs", "qge"].join("-"))
+
+print("s151-j2:", ["7jm", "B75", "Bp7", "7A5", "lqx"].join("-"))
+
+print("s151-a0:", "ifaefhp".at(5), "ifaefhp".trim() == "ifaefhp")
+
+print("s151-a1:", "73__9tn".at(4), "73__9tn".trim() == "73__9tn")
+
+print("s151-a2:", "cAwsf6b".at(1), "cAwsf6b".trim() == "cAwsf6b")

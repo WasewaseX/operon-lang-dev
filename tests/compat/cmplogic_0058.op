@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=58 tag=c058
+
+print("c058-c0:", -2100 <= -411)
+
+print("c058-c1:", -9827 > -9945)
+
+print("c058-c2:", -7035 <= -4891)
+
+print("c058-c3:", -7254 < -8309)
+
+print("c058-c4:", -8830 < -8214)
+
+print("c058-c5:", 8880 < -6964)
+
+print("c058-b0:", 27 < 0 && 0 < 26, 27 > 0 || 27 > 26)
+
+print("c058-b1:", 16 < 45 && 45 < 29, 16 > 45 || 16 > 29)
+
+print("c058-t0:", -577 > 1319 ? "gt" : "le")
+
+print("c058-t1:", 5524 > 5299 ? "gt" : "le")
+
+print("c058-t2:", -6602 > 275 ? "gt" : "le")
+
+let c058_n0 = null
+
+print("c058-n0:", c058_n0 ?? 5188, c058_n0 == null)
+
+let c058_n1 = null
+
+print("c058-n1:", c058_n1 ?? -2013, c058_n1 == null)
+
+let c058_n2 = null
+
+print("c058-n2:", c058_n2 ?? 1776, c058_n2 == null)
+
+print("c058-s0:", "qgk5" in "1p_cfjqgk5", "qgk5" == "qgk5")
+
+print("c058-s1:", "7swA" in "304rs87swA", "7swA" == "7swA")

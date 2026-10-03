@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=190 tag=c190
+
+print("c190-c0:", 7387 >= 5381)
+
+print("c190-c1:", -6638 > -2730)
+
+print("c190-c2:", -241 != 750)
+
+print("c190-c3:", -3993 <= -4138)
+
+print("c190-c4:", -8768 != -4085)
+
+print("c190-c5:", 2218 <= -4363)
+
+print("c190-b0:", 35 < 34 && 34 < 29, 35 > 34 || 35 > 29)
+
+print("c190-b1:", 45 < 40 && 40 < 29, 45 > 40 || 45 > 29)
+
+print("c190-b2:", 37 < 5 && 5 < 27, 37 > 5 || 37 > 27)
+
+print("c190-b3:", 11 < 50 && 50 < 50, 11 > 50 || 11 > 50)
+
+print("c190-t0:", -9684 > -1392 ? "gt" : "le")
+
+print("c190-t1:", 9381 > -4367 ? "gt" : "le")
+
+print("c190-t2:", -4053 > 6892 ? "gt" : "le")
+
+print("c190-t3:", 6357 > 4064 ? "gt" : "le")
+
+let c190_n0 = null
+
+print("c190-n0:", c190_n0 ?? 4826, c190_n0 == null)
+
+let c190_n1 = null
+
+print("c190-n1:", c190_n1 ?? 8665, c190_n1 == null)
+
+let c190_n2 = null
+
+print("c190-n2:", c190_n2 ?? 6771, c190_n2 == null)
+
+print("c190-s0:", "plcf" in "3f1dg8plcf", "plcf" == "plcf")
+
+print("c190-s1:", "2ivz" in "8iwCqx2ivz", "2ivz" == "2ivz")

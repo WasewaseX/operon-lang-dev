@@ -1,0 +1,80 @@
+# compat corpus — generated, do not edit by hand
+# bucket=lists seed=20261030 idx=210 tag=l210
+
+let l210_l0 = [33, 32, 42, -49, 18, -13]
+
+print("l210-l0:", l210_l0[1], l210_l0[-1], l210_l0.len())
+
+let l210_l1 = [42, -44, 19, -41, -16]
+
+print("l210-l1:", l210_l1[3], l210_l1[-1], l210_l1.len())
+
+let l210_l2 = [-27, 7, 48, -43, -3, 33, 1]
+
+print("l210-l2:", l210_l2[0], l210_l2[-1], l210_l2.len())
+
+let l210_l3 = [49, 31, -11, 4, 0, 4, -4]
+
+print("l210-l3:", l210_l3[3], l210_l3[-1], l210_l3.len())
+
+let l210_s0 = [71, -68, 46, -46, -60, -61]
+
+print("l210-s0:", l210_s0.slice(2, 4), l210_s0.slice(-2))
+
+let l210_s1 = [-44, 92, -19, 63, 56, 19, -33, 45]
+
+print("l210-s1:", l210_s1.slice(1, 6), l210_s1.slice(-2))
+
+let l210_s2 = [4, -22, -57, 35, -28, -91]
+
+print("l210-s2:", l210_s2.slice(4, 5), l210_s2.slice(-3))
+
+let l210_s3 = [52, 63, 96, -10, 43, -37]
+
+print("l210-s3:", l210_s3.slice(2, 3), l210_s3.slice(-1))
+
+let l210_s4 = [95, 99, 91, 99, -80, 68, 27]
+
+print("l210-s4:", l210_s4.slice(1, 6), l210_s4.slice(-2))
+
+let l210_r0 = [63, 812, 361, 294, 770, 480]
+
+print("l210-r0:", l210_r0.sort(), l210_r0.reverse(), l210_r0.contains(770))
+
+let l210_r1 = [814, 672, 883, 328, 62, 96]
+
+print("l210-r1:", l210_r1.sort(), l210_r1.reverse(), l210_r1.contains(883))
+
+let l210_r2 = [403, 536, 490, 426, 933, 720, 443]
+
+print("l210-r2:", l210_r2.sort(), l210_r2.reverse(), l210_r2.contains(720))
+
+let l210_r3 = [77, 66, 128, 860, 297, 697]
+
+print("l210-r3:", l210_r3.sort(), l210_r3.reverse(), l210_r3.contains(297))
+
+let l210_t0 = 0
+
+for v in [39, 12, 11, 4, 30] { l210_t0 += v }
+
+print("l210-t0:", l210_t0)
+
+let l210_t1 = 0
+
+for v in [40, 19, 15] { l210_t1 += v }
+
+print("l210-t1:", l210_t1)
+
+let l210_t2 = 0
+
+for v in [25, 7, 3] { l210_t2 += v }
+
+print("l210-t2:", l210_t2)
+
+let l210_n0 = [[1, 8, 9], [1, 8, 9], 77]
+
+print("l210-n0:", l210_n0[0][1], l210_n0[2])
+
+let l210_n1 = [[3, 7, 7], [3, 7, 7], 77]
+
+print("l210-n1:", l210_n1[0][0], l210_n1[2])

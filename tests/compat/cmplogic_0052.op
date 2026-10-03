@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=52 tag=c052
+
+print("c052-c0:", -9826 >= 8813)
+
+print("c052-c1:", 5456 == 2548)
+
+print("c052-c2:", 7856 > -2099)
+
+print("c052-c3:", 106 != 6424)
+
+print("c052-c4:", 8220 < -9004)
+
+print("c052-c5:", 5006 <= 8038)
+
+print("c052-b0:", 22 < 5 && 5 < 43, 22 > 5 || 22 > 43)
+
+print("c052-b1:", 49 < 43 && 43 < 30, 49 > 43 || 49 > 30)
+
+print("c052-b2:", 2 < 11 && 11 < 9, 2 > 11 || 2 > 9)
+
+print("c052-t0:", 2609 > 4694 ? "gt" : "le")
+
+print("c052-t1:", -1029 > 4910 ? "gt" : "le")
+
+print("c052-t2:", -998 > 6403 ? "gt" : "le")
+
+print("c052-t3:", -736 > -957 ? "gt" : "le")
+
+let c052_n0 = null
+
+print("c052-n0:", c052_n0 ?? -5349, c052_n0 == null)
+
+let c052_n1 = null
+
+print("c052-n1:", c052_n1 ?? 4853, c052_n1 == null)
+
+let c052_n2 = null
+
+print("c052-n2:", c052_n2 ?? 965, c052_n2 == null)
+
+print("c052-s0:", "rxy8" in "7njtmnrxy8", "rxy8" == "rxy8")
+
+print("c052-s1:", "nclw" in "saCp4unclw", "nclw" == "nclw")

@@ -1,21 +1,21 @@
-# reg-bio (F-1) — the telegraph promoter layer: stochastic expression
+# reg-bio (F-1), the telegraph promoter layer: stochastic expression
 #
 # Real gene expression is intrinsically stochastic: promoters switch between
 # active/inactive states (the two-state telegraph model) and transcription
 # happens in BURSTS. With expr_on(kon, koff) each call attempt draws once on
 # the shared mirrored xorshift64* stream: an active promoter switches off
 # with probability koff, an inactive one switches on with probability kon.
-# The state persists across calls — that persistence IS the burst.
+# The state persists across calls, that persistence IS the burst.
 #
 # With the layer off (every existing program) nothing changes: expr_off
 # below proves the deterministic contract survives a round trip.
-# (naming note: `on`/`off` are keyword synonyms for true/false — the local
+# (naming note: `on`/`off` are keyword synonyms for true/false, the local
 # counters are `expressed`/`silent`.)
 gene pulse() { return "tx" }
 frame proof {
     # deterministic contract: layer off by default
     assert(pulse() == "tx", "promoter layer off: every call expresses")
-    # turn the layer on with a fixed seed — reproducible bursting
+    # turn the layer on with a fixed seed, reproducible bursting
     randomize(42)
     expr_on(0.3, 0.1)
     let expressed = 0
@@ -37,11 +37,11 @@ frame proof {
     assert(total == 40, "every call attempt is accounted for")
     # telemetry: the burst-off calls are recorded, and they interlock with
     # the observed count (a suppressed call is not expression). The warm-up
-    # call before expr_on also counted — hence the +1.
+    # call before expr_on also counted, hence the +1.
     let f = fingerprint()
     assert(f.bursts.pulse == silent, "telemetry interlocks with observed suppression")
     assert(f.calls.pulse == expressed + 1, "suppressed calls never reach the call counters")
-    # the layer turns off again — the deterministic contract returns
+    # the layer turns off again, the deterministic contract returns
     expr_off()
     assert(pulse() == "tx", "expr_off restores the deterministic contract")
 }

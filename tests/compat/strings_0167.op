@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=167 tag=s167
+
+print("s167-m0:", "3h14211joBbt3f".upper(), "3h14211joBbt3f".slice(2), "3h14211joBbt3f".len())
+
+print("s167-m1:", "skutchpwzAfv_t".upper(), "skutchpwzAfv_t".slice(2), "skutchpwzAfv_t".len())
+
+print("s167-m2:", "j97nskam4nBti".upper(), "j97nskam4nBti".slice(2), "j97nskam4nBti".len())
+
+print("s167-m3:", "sm_Bsn10z".upper(), "sm_Bsn10z".slice(4), "sm_Bsn10z".len())
+
+print("s167-i0:", "sA7-{18}-88Bm")
+
+let s167_v0 = 18
+
+print("s167-v0:", "n={s167_v0}" + "!" * 1)
+
+print("s167-i1:", "Blv-{26}-6b5B")
+
+let s167_v1 = 26
+
+print("s167-v1:", "n={s167_v1}" + "!" * 1)
+
+print("s167-i2:", "yzj-{78}-oun3")
+
+let s167_v2 = 78
+
+print("s167-v2:", "n={s167_v2}" + "!" * 1)
+
+print("s167-i3:", "jcz-{2}-frg2")
+
+let s167_v3 = 2
+
+print("s167-v3:", "n={s167_v3}" + "!" * 1)
+
+print("s167-i4:", "qzr-{7}-jrvv")
+
+let s167_v4 = 7
+
+print("s167-v4:", "n={s167_v4}" + "!" * 1)
+
+print("s167-r0:", "dejld92g".replace("d", "gk"), "dejld92g".contains("ej"))
+
+print("s167-r1:", "piqeAmio".replace("p", "tg"), "piqeAmio".contains("iq"))
+
+print("s167-r2:", "rs2lcmq0".replace("r", "fj"), "rs2lcmq0".contains("s2"))
+
+print("s167-j0:", ["qz1", "2o6", "qgq", "cB6", "fgn"].join("-"))
+
+print("s167-j1:", ["8z9", "2xg", "8u4", "o0j", "omg"].join("-"))
+
+print("s167-j2:", ["4e9", "4my", "g8i", "ptu"].join("-"))
+
+print("s167-a0:", "utCrimB".at(4), "utCrimB".trim() == "utCrimB")
+
+print("s167-a1:", "nn1310o".at(3), "nn1310o".trim() == "nn1310o")

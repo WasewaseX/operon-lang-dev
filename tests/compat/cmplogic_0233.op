@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=233 tag=c233
+
+print("c233-c0:", -5451 == -4126)
+
+print("c233-c1:", 6691 < 5274)
+
+print("c233-c2:", -4533 > 853)
+
+print("c233-c3:", -6995 <= 9826)
+
+print("c233-c4:", -6491 > -355)
+
+print("c233-c5:", -2065 <= -2300)
+
+print("c233-b0:", 30 < 33 && 33 < 49, 30 > 33 || 30 > 49)
+
+print("c233-b1:", 18 < 0 && 0 < 11, 18 > 0 || 18 > 11)
+
+print("c233-b2:", 23 < 8 && 8 < 8, 23 > 8 || 23 > 8)
+
+print("c233-b3:", 12 < 43 && 43 < 5, 12 > 43 || 12 > 5)
+
+print("c233-t0:", -4095 > 5021 ? "gt" : "le")
+
+print("c233-t1:", 1914 > 9771 ? "gt" : "le")
+
+print("c233-t2:", 6951 > 1368 ? "gt" : "le")
+
+print("c233-t3:", 1510 > 1342 ? "gt" : "le")
+
+let c233_n0 = null
+
+print("c233-n0:", c233_n0 ?? 7814, c233_n0 == null)
+
+let c233_n1 = null
+
+print("c233-n1:", c233_n1 ?? -1809, c233_n1 == null)
+
+print("c233-s0:", "l6oj" in "nkpk5al6oj", "l6oj" == "l6oj")
+
+print("c233-s1:", "iv6n" in "3bekz1iv6n", "iv6n" == "iv6n")

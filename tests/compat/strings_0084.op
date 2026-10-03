@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=84 tag=s084
+
+print("s084-m0:", "zrqyrd2oeg4gl".upper(), "zrqyrd2oeg4gl".slice(2), "zrqyrd2oeg4gl".len())
+
+print("s084-m1:", "c4lsn_".upper(), "c4lsn_".slice(1), "c4lsn_".len())
+
+print("s084-m2:", "pnagABcto93Ccl".upper(), "pnagABcto93Ccl".slice(3), "pnagABcto93Ccl".len())
+
+print("s084-m3:", "30ai2rczB0of".upper(), "30ai2rczB0of".slice(3), "30ai2rczB0of".len())
+
+print("s084-m4:", "m1iAfc5A48".upper(), "m1iAfc5A48".slice(4), "m1iAfc5A48".len())
+
+print("s084-i0:", "u19-{71}-gCw0")
+
+let s084_v0 = 71
+
+print("s084-v0:", "n={s084_v0}" + "!" * 2)
+
+print("s084-i1:", "irt-{76}-heiB")
+
+let s084_v1 = 76
+
+print("s084-v1:", "n={s084_v1}" + "!" * 2)
+
+print("s084-i2:", "iv_-{88}-1d9o")
+
+let s084_v2 = 88
+
+print("s084-v2:", "n={s084_v2}" + "!" * 2)
+
+print("s084-r0:", "14s6f26e".replace("1", "A3"), "14s6f26e".contains("4s"))
+
+print("s084-r1:", "ia_b9C24".replace("i", "7o"), "ia_b9C24".contains("a_"))
+
+print("s084-r2:", "s3hvdp0e".replace("s", "if"), "s3hvdp0e".contains("3h"))
+
+print("s084-r3:", "BhBuatxk".replace("B", "gk"), "BhBuatxk".contains("hB"))
+
+print("s084-j0:", ["agg", "jeC", "cq8", "Cua", "1ld"].join("-"))
+
+print("s084-j1:", ["wva", "5hh", "2zi"].join("-"))
+
+print("s084-a0:", "weAp0ce".at(6), "weAp0ce".trim() == "weAp0ce")
+
+print("s084-a1:", "omC9g1i".at(3), "omC9g1i".trim() == "omC9g1i")
+
+print("s084-a2:", "fw9zl64".at(5), "fw9zl64".trim() == "fw9zl64")

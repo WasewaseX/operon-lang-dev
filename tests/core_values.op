@@ -1,4 +1,4 @@
-# Core values, arithmetic, strings — proofs run by `operon test`
+# Core values, arithmetic, strings, proofs run by `operon test`
 frame proof {
     assert(1 + 2 == 3, "int add")
     assert(7 // 2 == 3, "floor div")

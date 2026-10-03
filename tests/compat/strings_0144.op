@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=144 tag=s144
+
+print("s144-m0:", "u5vbwvCy5g2i".upper(), "u5vbwvCy5g2i".slice(3), "u5vbwvCy5g2i".len())
+
+print("s144-m1:", "By0posrAgqfzjA".upper(), "By0posrAgqfzjA".slice(3), "By0posrAgqfzjA".len())
+
+print("s144-m2:", "ogq9jb1zn56uw".upper(), "ogq9jb1zn56uw".slice(1), "ogq9jb1zn56uw".len())
+
+print("s144-m3:", "l7elpel".upper(), "l7elpel".slice(3), "l7elpel".len())
+
+print("s144-i0:", "Bau-{88}-ky4A")
+
+let s144_v0 = 88
+
+print("s144-v0:", "n={s144_v0}" + "!" * 2)
+
+print("s144-i1:", "4jl-{95}-eAaj")
+
+let s144_v1 = 95
+
+print("s144-v1:", "n={s144_v1}" + "!" * 1)
+
+print("s144-i2:", "vCn-{35}-xgny")
+
+let s144_v2 = 35
+
+print("s144-v2:", "n={s144_v2}" + "!" * 1)
+
+print("s144-r0:", "1xAf8wuC".replace("1", "1n"), "1xAf8wuC".contains("xA"))
+
+print("s144-r1:", "tumlpcaw".replace("t", "ke"), "tumlpcaw".contains("um"))
+
+print("s144-r2:", "fCj0pcAh".replace("f", "9_"), "fCj0pcAh".contains("Cj"))
+
+print("s144-j0:", ["f67", "rli", "p46"].join("-"))
+
+print("s144-j1:", ["uwB", "s_r", "hpj", "Cgi"].join("-"))
+
+print("s144-j2:", ["8nb", "hC0", "9rd", "ehz", "c0v"].join("-"))
+
+print("s144-a0:", "2zt5civ".at(5), "2zt5civ".trim() == "2zt5civ")
+
+print("s144-a1:", "cqcieix".at(6), "cqcieix".trim() == "cqcieix")
+
+print("s144-a2:", "qzCf7vb".at(3), "qzCf7vb".trim() == "qzCf7vb")

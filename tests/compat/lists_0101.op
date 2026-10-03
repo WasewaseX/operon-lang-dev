@@ -1,0 +1,76 @@
+# compat corpus — generated, do not edit by hand
+# bucket=lists seed=20261030 idx=101 tag=l101
+
+let l101_l0 = [-22, -14, 7, 7, 7, 2, -48, 46]
+
+print("l101-l0:", l101_l0[3], l101_l0[-1], l101_l0.len())
+
+let l101_l1 = [21, 0, -22, -26, 46, 25]
+
+print("l101-l1:", l101_l1[3], l101_l1[-1], l101_l1.len())
+
+let l101_l2 = [10, 47, -16, -25]
+
+print("l101-l2:", l101_l2[2], l101_l2[-1], l101_l2.len())
+
+let l101_l3 = [19, -50, -36, 5, 35, 5, 11, -32]
+
+print("l101-l3:", l101_l3[5], l101_l3[-1], l101_l3.len())
+
+let l101_l4 = [0, 3, -39, 49, 35, -26, 27, -13]
+
+print("l101-l4:", l101_l4[1], l101_l4[-1], l101_l4.len())
+
+let l101_s0 = [70, 46, -19, -69, -84]
+
+print("l101-s0:", l101_s0.slice(1, 4), l101_s0.slice(-3))
+
+let l101_s1 = [-7, -54, 93, -84, -7, -65, -30, 27]
+
+print("l101-s1:", l101_s1.slice(3, 6), l101_s1.slice(-2))
+
+let l101_s2 = [-77, 75, 73, -19, -2]
+
+print("l101-s2:", l101_s2.slice(1, 2), l101_s2.slice(-2))
+
+let l101_r0 = [536, 252, 567, 674, 584, 89, 795]
+
+print("l101-r0:", l101_r0.sort(), l101_r0.reverse(), l101_r0.contains(584))
+
+let l101_r1 = [611, 249, 882, 792]
+
+print("l101-r1:", l101_r1.sort(), l101_r1.reverse(), l101_r1.contains(611))
+
+let l101_r2 = [794, 40, 219, 350]
+
+print("l101-r2:", l101_r2.sort(), l101_r2.reverse(), l101_r2.contains(794))
+
+let l101_r3 = [435, 10, 722, 843]
+
+print("l101-r3:", l101_r3.sort(), l101_r3.reverse(), l101_r3.contains(722))
+
+let l101_t0 = 0
+
+for v in [4, 25, 8, 13] { l101_t0 += v }
+
+print("l101-t0:", l101_t0)
+
+let l101_t1 = 0
+
+for v in [26, 14, 30, 5, 1, 19] { l101_t1 += v }
+
+print("l101-t1:", l101_t1)
+
+let l101_t2 = 0
+
+for v in [3, 40, 17, 28, 36] { l101_t2 += v }
+
+print("l101-t2:", l101_t2)
+
+let l101_n0 = [[8, 2, 2], [8, 2, 2], 77]
+
+print("l101-n0:", l101_n0[0][0], l101_n0[2])
+
+let l101_n1 = [[2, 6, 7], [2, 6, 7], 77]
+
+print("l101-n1:", l101_n1[0][2], l101_n1[2])

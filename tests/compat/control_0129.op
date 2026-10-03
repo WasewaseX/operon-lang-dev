@@ -1,0 +1,170 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=129 tag=c129
+
+let c129_b0 = "start"
+
+if 62 > 80 { c129_b0 = "hi" } elif 62 > 40 { c129_b0 = "mid" } else { c129_b0 = "lo" }
+
+print("c129-i0:", c129_b0, 62)
+
+let c129_b1 = "start"
+
+if 88 > 80 { c129_b1 = "hi" } elif 88 > 40 { c129_b1 = "mid" } else { c129_b1 = "lo" }
+
+print("c129-i1:", c129_b1, 88)
+
+let c129_b2 = "start"
+
+if 108 > 80 { c129_b2 = "hi" } elif 108 > 40 { c129_b2 = "mid" } else { c129_b2 = "lo" }
+
+print("c129-i2:", c129_b2, 108)
+
+let c129_b3 = "start"
+
+if 1 > 80 { c129_b3 = "hi" } elif 1 > 40 { c129_b3 = "mid" } else { c129_b3 = "lo" }
+
+print("c129-i3:", c129_b3, 1)
+
+let c129_b4 = "start"
+
+if 33 > 80 { c129_b4 = "hi" } elif 33 > 40 { c129_b4 = "mid" } else { c129_b4 = "lo" }
+
+print("c129-i4:", c129_b4, 33)
+
+let c129_a0 = 0
+
+let c129_n0 = 0
+
+while c129_n0 < 12 {
+
+    c129_n0 += 3
+
+    if c129_n0 % 3 == 0 { continue }
+
+    if c129_n0 > 15 { break }
+
+    c129_a0 += c129_n0
+
+}
+
+print("c129-w0:", c129_a0, c129_n0)
+
+let c129_a1 = 0
+
+let c129_n1 = 0
+
+while c129_n1 < 15 {
+
+    c129_n1 += 2
+
+    if c129_n1 % 2 == 0 { continue }
+
+    if c129_n1 > 23 { break }
+
+    c129_a1 += c129_n1
+
+}
+
+print("c129-w1:", c129_a1, c129_n1)
+
+let c129_a2 = 0
+
+let c129_n2 = 0
+
+while c129_n2 < 19 {
+
+    c129_n2 += 4
+
+    if c129_n2 % 2 == 0 { continue }
+
+    if c129_n2 > 23 { break }
+
+    c129_a2 += c129_n2
+
+}
+
+print("c129-w2:", c129_a2, c129_n2)
+
+let c129_a3 = 0
+
+let c129_n3 = 0
+
+while c129_n3 < 11 {
+
+    c129_n3 += 3
+
+    if c129_n3 % 2 == 0 { continue }
+
+    if c129_n3 > 15 { break }
+
+    c129_a3 += c129_n3
+
+}
+
+print("c129-w3:", c129_a3, c129_n3)
+
+let c129_c0 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 3] {
+
+        c129_c0 += a * b
+
+    }
+
+}
+
+print("c129-l0:", c129_c0)
+
+let c129_c1 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 4] {
+
+        c129_c1 += a * b
+
+    }
+
+}
+
+print("c129-l1:", c129_c1)
+
+let c129_c2 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 3] {
+
+        c129_c2 += a * b
+
+    }
+
+}
+
+print("c129-l2:", c129_c2)
+
+let c129_acc0 = ""
+
+loop {
+
+    c129_acc0 += "x"
+
+    if c129_acc0.len() >= 6 { break }
+
+}
+
+print("c129-o0:", c129_acc0)
+
+let c129_acc1 = ""
+
+loop {
+
+    c129_acc1 += "x"
+
+    if c129_acc1.len() >= 4 { break }
+
+}
+
+print("c129-o1:", c129_acc1)

@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=234 tag=m234
+
+let m234_m0 = {exon: 66, codon: -91, enzyme: -60, marker: 45, cell: -72}
+
+print("m234-m0:", m234_m0["exon"], len(m234_m0), m234_m0.has("exon"))
+
+let m234_m1 = {enzyme: -99, codon: 2, vector: 3, ligase: -58}
+
+print("m234-m1:", m234_m1["enzyme"], len(m234_m1), m234_m1.has("enzyme"))
+
+let m234_m2 = {codon: -86, plasmid: -66, marker: -15, gene: -26, ribose: 0}
+
+print("m234-m2:", m234_m2["codon"], len(m234_m2), m234_m2.has("codon"))
+
+let m234_k0 = {helix: 2, ribose: 34, vector: 12}
+
+let m234_ks0 = m234_k0.keys()
+
+let m234_sm0 = 0
+
+for k in m234_k0 { m234_sm0 += m234_k0[k] }
+
+print("m234-k0:", m234_sm0, m234_k0.keys().sort(), m234_k0.values().len())
+
+let m234_k1 = {helix: 21, vector: 5, enzyme: 42}
+
+let m234_ks1 = m234_k1.keys()
+
+let m234_sm1 = 0
+
+for k in m234_k1 { m234_sm1 += m234_k1[k] }
+
+print("m234-k1:", m234_sm1, m234_k1.keys().sort(), m234_k1.values().len())
+
+let m234_k2 = {helix: 8, enzyme: 20, gene: 7}
+
+let m234_ks2 = m234_k2.keys()
+
+let m234_sm2 = 0
+
+for k in m234_k2 { m234_sm2 += m234_k2[k] }
+
+print("m234-k2:", m234_sm2, m234_k2.keys().sort(), m234_k2.values().len())
+
+let m234_w0 = {outer: {exon: 7, helix: 7, tag: "ok"}}}
+
+print("m234-w0:", m234_w0["outer"]["helix"], m234_w0["outer"]["tag"])
+
+let m234_w1 = {outer: {enzyme: 7, cell: 1, tag: "ok"}}}
+
+print("m234-w1:", m234_w1["outer"]["cell"], m234_w1["outer"]["tag"])

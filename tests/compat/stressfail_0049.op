@@ -1,0 +1,258 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20260930 idx=49 tag=s049
+
+stress {
+
+    print("s049-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s049-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s049-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s049-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s049-mz:", 79 % 0)
+
+} rescue (e) {
+
+    print("s049-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s049-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s049-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s049-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s049-of2:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s049-m1:", 9223372036854775807 % -1)
+
+} rescue (e) {
+
+    print("s049-m1:", "caught", e.kind, e.message)
+
+}
+
+gene s049_r0() {
+
+    raise "s049-_23yBn"
+
+}
+
+stress {
+
+    s049_r0()
+
+    print("s049-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s049-r0:", e.kind, e.message)
+
+}
+
+gene s049_r1() {
+
+    raise "s049-5q4Apj"
+
+}
+
+stress {
+
+    s049_r1()
+
+    print("s049-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s049-r1:", e.kind, e.message)
+
+}
+
+gene s049_r2() {
+
+    raise "s049-4_rd98"
+
+}
+
+stress {
+
+    s049_r2()
+
+    print("s049-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s049-r2:", e.kind, e.message)
+
+}
+
+gene s049_r3() {
+
+    raise "s049-j_9bmu"
+
+}
+
+stress {
+
+    s049_r3()
+
+    print("s049-r3:", "unreachable")
+
+} rescue (e) {
+
+    print("s049-r3:", e.kind, e.message)
+
+}
+
+let s049_xs0 = [18, 2]
+
+stress {
+
+    print("s049-x0:", s049_xs0[5])
+
+} rescue (e) {
+
+    print("s049-x0:", "caught", e.kind)
+
+}
+
+let s049_xs1 = [4, 4, 37, 49]
+
+stress {
+
+    print("s049-x1:", s049_xs1[5])
+
+} rescue (e) {
+
+    print("s049-x1:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s049-0"
+
+    } rescue (e) {
+
+        print("s049-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s049-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s049-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s049-d0-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s049-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s049-1"
+
+    } rescue (e) {
+
+        print("s049-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s049-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s049-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s049-d1-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s049-d1-top:", outer.message)
+
+}

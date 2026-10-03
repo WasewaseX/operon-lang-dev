@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=110 tag=c110
+
+print("c110-c0:", 6365 < -5799)
+
+print("c110-c1:", 8292 < -376)
+
+print("c110-c2:", -5212 >= -2477)
+
+print("c110-c3:", 4487 > -626)
+
+print("c110-c4:", 1938 <= 4487)
+
+print("c110-c5:", -8178 != -9204)
+
+print("c110-c6:", -1962 > -7065)
+
+print("c110-b0:", 49 < 25 && 25 < 37, 49 > 25 || 49 > 37)
+
+print("c110-b1:", 21 < 28 && 28 < 17, 21 > 28 || 21 > 17)
+
+print("c110-b2:", 17 < 23 && 23 < 28, 17 > 23 || 17 > 28)
+
+print("c110-b3:", 4 < 49 && 49 < 17, 4 > 49 || 4 > 17)
+
+print("c110-t0:", -6833 > -5746 ? "gt" : "le")
+
+print("c110-t1:", 9343 > -2907 ? "gt" : "le")
+
+print("c110-t2:", 670 > 1584 ? "gt" : "le")
+
+print("c110-t3:", 1476 > -3316 ? "gt" : "le")
+
+let c110_n0 = null
+
+print("c110-n0:", c110_n0 ?? 603, c110_n0 == null)
+
+let c110_n1 = null
+
+print("c110-n1:", c110_n1 ?? -9864, c110_n1 == null)
+
+let c110_n2 = null
+
+print("c110-n2:", c110_n2 ?? 3448, c110_n2 == null)
+
+print("c110-s0:", "0ugi" in "_0kj1l0ugi", "0ugi" == "0ugi")
+
+print("c110-s1:", "BB52" in "05vbxsBB52", "BB52" == "BB52")

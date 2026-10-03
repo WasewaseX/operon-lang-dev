@@ -1,0 +1,180 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=178 tag=f178
+
+gene f178_g0(p, q = 26, r = 68) {
+
+    return p * 93 + q - r
+
+}
+
+print("f178-d0:", f178_g0(28), f178_g0(28, 80), f178_g0(28, 26, 68))
+
+gene f178_g1(p, q = 98, r = 30) {
+
+    return p * 39 + q - r
+
+}
+
+print("f178-d1:", f178_g1(-3), f178_g1(-3, 10), f178_g1(-3, 98, 30))
+
+gene f178_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f178_fib0(n - 1) + f178_fib0(n - 2)
+
+}
+
+print("f178-fib0:", f178_fib0(8))
+
+gene f178_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f178_fib1(n - 1) + f178_fib1(n - 2)
+
+}
+
+print("f178-fib1:", f178_fib1(10))
+
+gene f178_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f178_gcd0(b, a % b)
+
+}
+
+print("f178-gcd0:", f178_gcd0(627, 134))
+
+gene f178_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f178_gcd1(b, a % b)
+
+}
+
+print("f178-gcd1:", f178_gcd1(249, 35))
+
+gene f178_gcd2(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f178_gcd2(b, a % b)
+
+}
+
+print("f178-gcd2:", f178_gcd2(569, 191))
+
+gene f178_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f178_c0 = f178_mk0(6)
+
+f178_c0(3)
+
+print("f178-cl0:", f178_c0(5))
+
+gene f178_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f178_c1 = f178_mk1(30)
+
+f178_c1(3)
+
+print("f178-cl1:", f178_c1(6))
+
+gene f178_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f178-hof0:", f178_tw0(gene (z) => z * 2 + 1, 23))
+
+gene f178_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f178-hof1:", f178_tw1(gene (z) => z * 2 + 1, 28))
+
+gene f178_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f178-dg0:", f178_sd0(246188))
+
+gene f178_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f178-dg1:", f178_sd1(556534))

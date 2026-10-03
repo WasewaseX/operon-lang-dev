@@ -1,0 +1,254 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20260930 idx=38 tag=m038
+
+gene m038_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m038-b0:", m038_b0({ligase: 46, marker: 66, exon: 22})?!)
+
+gene m038_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m038-b1:", m038_b1({ligase: 86, splicer: 90, vector: 23})?!)
+
+gene m038_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m038-b2:", m038_b2({codon: 26, marker: 79, plasmid: 30})?!)
+
+gene m038_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m038_f0([6, 38, 37, 45, 25, 36, 13]) {
+
+    case Ok(list) {
+
+        print("m038-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m038-f0:", "e:", m)
+
+    }
+
+}
+
+gene m038_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m038_f1([30, 44, 48, 43, 3]) {
+
+    case Ok(list) {
+
+        print("m038-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m038-f1:", "e:", m)
+
+    }
+
+}
+
+gene m038_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m038_f2([45, 51, 60, 46, 42, 25, 26, 53]) {
+
+    case Ok(list) {
+
+        print("m038-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m038-f2:", "e:", m)
+
+    }
+
+}
+
+let m038_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m038-cc0:", m038_cl0(6)(8), m038_cl0(8)(6))
+
+let m038_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m038-cc1:", m038_cl1(1)(4), m038_cl1(4)(1))
+
+let m038_data0 = some([some("plasmid"), none(), some(1)])
+
+match m038_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m038-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m038-x0:", "shape-miss")
+
+    }
+
+}
+
+let m038_data1 = some([some("codon"), none(), some(6)])
+
+match m038_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m038-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m038-x1:", "shape-miss")
+
+    }
+
+}

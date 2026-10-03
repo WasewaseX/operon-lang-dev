@@ -1,9 +1,9 @@
 # ============================================================
-# GOTCHA: synonym words are not variable names  — cookbook #16
+# GOTCHA: synonym words are not variable names , cookbook #16
 # you already know: some languages reserve weird identifiers too
 # teaches: words like off/on/yes/no/next/iter/each/type are aliases
 #          or keywords. The Total Grammar "repairs" `let off = 1`
-#          into `let false = 1` (with a note) instead of failing —
+#          into `let false = 1` (with a note) instead of failing,
 #          so pick names that cannot collide: is_off, kinds, idx.
 # run: operon run examples/cookbook/gotcha_synonyms.op
 # expected output: examples/cookbook/expected/gotcha_synonyms.out

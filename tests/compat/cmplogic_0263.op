@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=263 tag=c263
+
+print("c263-c0:", 7102 != -1046)
+
+print("c263-c1:", 2860 > -82)
+
+print("c263-c2:", 355 != 5347)
+
+print("c263-c3:", -9897 != 5445)
+
+print("c263-c4:", 6867 != 4413)
+
+print("c263-c5:", 7720 <= 9161)
+
+print("c263-b0:", 27 < 41 && 41 < 16, 27 > 41 || 27 > 16)
+
+print("c263-b1:", 38 < 29 && 29 < 33, 38 > 29 || 38 > 33)
+
+print("c263-b2:", 21 < 15 && 15 < 16, 21 > 15 || 21 > 16)
+
+print("c263-b3:", 18 < 7 && 7 < 31, 18 > 7 || 18 > 31)
+
+print("c263-t0:", -2851 > 5704 ? "gt" : "le")
+
+print("c263-t1:", -2106 > -1924 ? "gt" : "le")
+
+print("c263-t2:", -4122 > 7205 ? "gt" : "le")
+
+print("c263-t3:", -6398 > -6714 ? "gt" : "le")
+
+let c263_n0 = null
+
+print("c263-n0:", c263_n0 ?? 8507, c263_n0 == null)
+
+let c263_n1 = null
+
+print("c263-n1:", c263_n1 ?? -2913, c263_n1 == null)
+
+let c263_n2 = null
+
+print("c263-n2:", c263_n2 ?? 7380, c263_n2 == null)
+
+print("c263-s0:", "oexk" in "da_1pcoexk", "oexk" == "oexk")
+
+print("c263-s1:", "c1gr" in "3cf5qdc1gr", "c1gr" == "c1gr")

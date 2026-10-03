@@ -1,0 +1,114 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=104 tag=c104
+
+let c104_b0 = "start"
+
+if 3 > 80 { c104_b0 = "hi" } elif 3 > 40 { c104_b0 = "mid" } else { c104_b0 = "lo" }
+
+print("c104-i0:", c104_b0, 3)
+
+let c104_b1 = "start"
+
+if -12 > 80 { c104_b1 = "hi" } elif -12 > 40 { c104_b1 = "mid" } else { c104_b1 = "lo" }
+
+print("c104-i1:", c104_b1, -12)
+
+let c104_b2 = "start"
+
+if 90 > 80 { c104_b2 = "hi" } elif 90 > 40 { c104_b2 = "mid" } else { c104_b2 = "lo" }
+
+print("c104-i2:", c104_b2, 90)
+
+let c104_b3 = "start"
+
+if 84 > 80 { c104_b3 = "hi" } elif 84 > 40 { c104_b3 = "mid" } else { c104_b3 = "lo" }
+
+print("c104-i3:", c104_b3, 84)
+
+let c104_a0 = 0
+
+let c104_n0 = 0
+
+while c104_n0 < 6 {
+
+    c104_n0 += 3
+
+    if c104_n0 % 3 == 0 { continue }
+
+    if c104_n0 > 12 { break }
+
+    c104_a0 += c104_n0
+
+}
+
+print("c104-w0:", c104_a0, c104_n0)
+
+let c104_a1 = 0
+
+let c104_n1 = 0
+
+while c104_n1 < 19 {
+
+    c104_n1 += 3
+
+    if c104_n1 % 2 == 0 { continue }
+
+    if c104_n1 > 22 { break }
+
+    c104_a1 += c104_n1
+
+}
+
+print("c104-w1:", c104_a1, c104_n1)
+
+let c104_c0 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 2] {
+
+        c104_c0 += a * b
+
+    }
+
+}
+
+print("c104-l0:", c104_c0)
+
+let c104_c1 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 4] {
+
+        c104_c1 += a * b
+
+    }
+
+}
+
+print("c104-l1:", c104_c1)
+
+let c104_acc0 = ""
+
+loop {
+
+    c104_acc0 += "x"
+
+    if c104_acc0.len() >= 7 { break }
+
+}
+
+print("c104-o0:", c104_acc0)
+
+let c104_acc1 = ""
+
+loop {
+
+    c104_acc1 += "x"
+
+    if c104_acc1.len() >= 6 { break }
+
+}
+
+print("c104-o1:", c104_acc1)

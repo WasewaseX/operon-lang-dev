@@ -1,0 +1,54 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=227 tag=s227
+
+print("s227-m0:", "hx2iv0qCb".upper(), "hx2iv0qCb".slice(4), "hx2iv0qCb".len())
+
+print("s227-m1:", "2dp333uzvC2i".upper(), "2dp333uzvC2i".slice(4), "2dp333uzvC2i".len())
+
+print("s227-m2:", "3x2fc10tlc6".upper(), "3x2fc10tlc6".slice(3), "3x2fc10tlc6".len())
+
+print("s227-m3:", "a8ndoz_".upper(), "a8ndoz_".slice(4), "a8ndoz_".len())
+
+print("s227-i0:", "4sr-{98}-oloe")
+
+let s227_v0 = 98
+
+print("s227-v0:", "n={s227_v0}" + "!" * 1)
+
+print("s227-i1:", "x2z-{20}-g4ct")
+
+let s227_v1 = 20
+
+print("s227-v1:", "n={s227_v1}" + "!" * 2)
+
+print("s227-i2:", "sr6-{37}-s73e")
+
+let s227_v2 = 37
+
+print("s227-v2:", "n={s227_v2}" + "!" * 2)
+
+print("s227-i3:", "50e-{67}-2u1u")
+
+let s227_v3 = 67
+
+print("s227-v3:", "n={s227_v3}" + "!" * 1)
+
+print("s227-i4:", "j9z-{68}-3ddA")
+
+let s227_v4 = 68
+
+print("s227-v4:", "n={s227_v4}" + "!" * 3)
+
+print("s227-r0:", "cojlhbp5".replace("c", "jB"), "cojlhbp5".contains("oj"))
+
+print("s227-r1:", "m1lta3ns".replace("m", "my"), "m1lta3ns".contains("1l"))
+
+print("s227-r2:", "u5ktocei".replace("u", "38"), "u5ktocei".contains("5k"))
+
+print("s227-j0:", ["7si", "q6a", "mkA", "C99", "kuo"].join("-"))
+
+print("s227-j1:", ["920", "aC4", "y9r", "le4", "7ph"].join("-"))
+
+print("s227-a0:", "gfimz2t".at(3), "gfimz2t".trim() == "gfimz2t")
+
+print("s227-a1:", "itci3Cg".at(3), "itci3Cg".trim() == "itci3Cg")

@@ -1,0 +1,74 @@
+# type_generics.op, W01-s2 (static type system stage 2): generic genes and
+# parameterized runtime contracts.
+# `gene id<T>(x: T) -> T` declares a type parameter; a bare param named by
+# the parameter is ERASED at runtime (any value satisfies `T` — the static
+# checker owns the real constraint, TYPED-MODE.md). Parameterized
+# annotations (`list[int]`, `map[str, float]`) enforce their SHALLOW runtime
+# shape at the boundary (is-a-list / is-a-map), element types are the
+# checker's business. Never a parse rejection; Total Grammar (SPEC §7a).
+frame proof {
+    # ---- generic identity: one definition, any payload type
+    gene id<T>(x: T) -> T {
+        return x
+    }
+    assert(id(7) == 7, "generic gene passes an int through")
+    assert(id("hi") == "hi", "generic gene passes a str through")
+    assert(id([1, 2]) == [1, 2], "generic gene passes a list through")
+
+    # ---- bounds are declared in signature position (T: numeric) and are
+    # the static checker's business; the runtime contract stays erased
+    gene biggest<T: numeric>(a: T, b: T) -> T {
+        if a > b {
+            return a
+        }
+        return b
+    }
+    assert(biggest(3, 9) == 9, "bounded generic works on ints")
+    assert(biggest(1.5, 0.5) == 1.5, "bounded generic works on floats")
+
+    # ---- list[int] enforces the shallow shape: a list passes, a non-list
+    # stresses (catchable, soft)
+    gene count(xs: list[int]) -> int {
+        return len(xs)
+    }
+    assert(count([10, 20, 30]) == 3, "list[int] accepts a list")
+    let contained = 0
+    stress {
+        count("not a list")
+    } rescue (e) {
+        contained = 1
+    }
+    assert(contained == 1, "list[int] refuses a str: unfolded stress")
+
+    # ---- map[str, int] shallow shape at the boundary
+    gene keys(m: map[str, int]) -> int {
+        return len(m)
+    }
+    assert(keys({"a": 1, "b": 2}) == 2, "map[str, int] accepts a map")
+    let mcontained = 0
+    stress {
+        keys([1, 2])
+    } rescue (e) {
+        mcontained = 1
+    }
+    assert(mcontained == 1, "map[str, int] refuses a list: unfolded stress")
+
+    # ---- type parameters erase: T accepts anything at runtime, the
+    # checker owns depth (a bare list[T] param would match any list)
+    gene first<T>(xs: list[T]) -> T? {
+        return xs.get(0)
+    }
+    assert(first([10, 20]) == 10, "list[T] accepts a well-typed list")
+    assert(first([]) == null, "empty list satisfies list[T] vacuously")
+    assert(first(["a", "b"]) == "a", "the same generic body serves str too")
+
+    # ---- generics compose with Option/Result returns (W06 families)
+    gene try_parse(n: int) -> result[int, str] {
+        if n >= 0 {
+            return ok(n)
+        }
+        return err("negative")
+    }
+    assert(try_parse(5) == ok(5), "generic-free result return, ok path")
+    assert(try_parse(-1) == err("negative"), "result return, err path")
+}

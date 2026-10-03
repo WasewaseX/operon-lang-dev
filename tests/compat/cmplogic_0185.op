@@ -1,0 +1,34 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=185 tag=c185
+
+print("c185-c0:", 268 <= -2223)
+
+print("c185-c1:", 8297 >= -8101)
+
+print("c185-c2:", -8902 <= 5209)
+
+print("c185-c3:", 7573 >= -4847)
+
+print("c185-c4:", 3934 > -118)
+
+print("c185-c5:", -5870 > -3462)
+
+print("c185-b0:", 11 < 19 && 19 < 15, 11 > 19 || 11 > 15)
+
+print("c185-b1:", 22 < 50 && 50 < 6, 22 > 50 || 22 > 6)
+
+print("c185-t0:", -6870 > 5260 ? "gt" : "le")
+
+print("c185-t1:", -6591 > 554 ? "gt" : "le")
+
+let c185_n0 = null
+
+print("c185-n0:", c185_n0 ?? 9407, c185_n0 == null)
+
+let c185_n1 = null
+
+print("c185-n1:", c185_n1 ?? 7457, c185_n1 == null)
+
+print("c185-s0:", "tzg1" in "1ry3tqtzg1", "tzg1" == "tzg1")
+
+print("c185-s1:", "cBkb" in "coksybcBkb", "cBkb" == "cBkb")

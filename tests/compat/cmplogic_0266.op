@@ -1,0 +1,36 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=266 tag=c266
+
+print("c266-c0:", -2148 < 7432)
+
+print("c266-c1:", 2331 == -6124)
+
+print("c266-c2:", 4957 != 3570)
+
+print("c266-c3:", -1461 > 4311)
+
+print("c266-b0:", 27 < 15 && 15 < 24, 27 > 15 || 27 > 24)
+
+print("c266-b1:", 45 < 40 && 40 < 35, 45 > 40 || 45 > 35)
+
+print("c266-t0:", 3910 > -9304 ? "gt" : "le")
+
+print("c266-t1:", 975 > 7373 ? "gt" : "le")
+
+print("c266-t2:", 113 > -5976 ? "gt" : "le")
+
+let c266_n0 = null
+
+print("c266-n0:", c266_n0 ?? -936, c266_n0 == null)
+
+let c266_n1 = null
+
+print("c266-n1:", c266_n1 ?? 2073, c266_n1 == null)
+
+let c266_n2 = null
+
+print("c266-n2:", c266_n2 ?? -7143, c266_n2 == null)
+
+print("c266-s0:", "44r6" in "61bltl44r6", "44r6" == "44r6")
+
+print("c266-s1:", "_Bt_" in "xnn_rc_Bt_", "_Bt_" == "_Bt_")

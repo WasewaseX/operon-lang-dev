@@ -1,11 +1,36 @@
-# GitHub Linguist mapping — Operon's stack bar
-*.op    linguist-language=Operon
-*.cell  linguist-language=Operon
-*.rna   linguist-language=Operon
+# W59 (ROADMAP-100): Windows-CI truthing — line endings are part of the
+# language contract, not a checkout detail.
+#
+# Evidence: on windows-latest runners, git's default autocrlf converted LF to
+# CRLF in the working tree, and `tests/string_literals.op` proof #1
+# ("triple keeps quotes and newlines") burned because a triple-quoted
+# string's verbatim content gained \r characters the SPEC says are not there.
+# The differential harness compares bytes, the frozen expected/*.out files
+# are byte-exact, and the oracle reads source — all three assume LF.
+#
+# Policy: the repository is LF everywhere, on every platform. Windows
+# editors and Rust/Python toolchains all handle LF fine; CRLF creeping into
+# working trees is what breaks things.
+* text=auto eol=lf
 
-# generated artifacts, not source
-build/**    linguist-generated
-bin/**      linguist-generated
-dist/**     linguist-generated
-target/**   linguist-generated
-web/playground/app.js linguist-generated=false
+# Frozen differential outputs must stay byte-identical everywhere.
+*.out text eol=lf
+
+# Red-team payloads are adversarial BYTES — rt_p7c (BOM+CRLF) and rt_p7i
+# (CRLF) exist to prove the lexer tolerates hostile line endings; the
+# payload IS the test. Mark the directory -text so normalization can never
+# "fix" an attack into a non-attack.
+tests/redteam/** -text
+
+# GitHub Languages bar: github/linguist does not know the `.op` extension
+# yet (linguist/operon.yml is the prepared upstream contribution, not
+# merged), so every Operon source used to render as unrecognized and the
+# language statistics showed NO Operon at all despite 3600+ `.op` files.
+# linguist-language= is the documented override for exactly this state.
+*.op linguist-language=Operon
+
+# Machine-generated artifacts are data, not authorship — keep them out of
+# the language bar (22 CodeQL SARIF reports would otherwise count as JSON;
+# the fuzz crash corpus is machine-written crash reproduction input).
+docs/codeql/*.sarif linguist-generated
+fuzz_corpus/** linguist-generated

@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=66 tag=s066
+
+print("s066-m0:", "k1y462fi2ff".upper(), "k1y462fi2ff".slice(3), "k1y462fi2ff".len())
+
+print("s066-m1:", "nretsipfh5iqj5".upper(), "nretsipfh5iqj5".slice(2), "nretsipfh5iqj5".len())
+
+print("s066-m2:", "hk695cwiz_r".upper(), "hk695cwiz_r".slice(1), "hk695cwiz_r".len())
+
+print("s066-m3:", "4_7wu21743".upper(), "4_7wu21743".slice(1), "4_7wu21743".len())
+
+print("s066-m4:", "Allgrg74to".upper(), "Allgrg74to".slice(1), "Allgrg74to".len())
+
+print("s066-i0:", "zA9-{47}-uhk6")
+
+let s066_v0 = 47
+
+print("s066-v0:", "n={s066_v0}" + "!" * 1)
+
+print("s066-i1:", "ftq-{92}-9g7r")
+
+let s066_v1 = 92
+
+print("s066-v1:", "n={s066_v1}" + "!" * 2)
+
+print("s066-i2:", "cud-{87}-n67m")
+
+let s066_v2 = 87
+
+print("s066-v2:", "n={s066_v2}" + "!" * 3)
+
+print("s066-r0:", "f779nqs0".replace("f", "jA"), "f779nqs0".contains("77"))
+
+print("s066-r1:", "7hfb_bu8".replace("7", "hg"), "7hfb_bu8".contains("hf"))
+
+print("s066-r2:", "5zuAhs61".replace("5", "5k"), "5zuAhs61".contains("zu"))
+
+print("s066-r3:", "wstqez77".replace("w", "69"), "wstqez77".contains("st"))
+
+print("s066-j0:", ["gs3", "ifg", "ryq"].join("-"))
+
+print("s066-j1:", ["9ar", "sob", "f6n", "yB6"].join("-"))
+
+print("s066-a0:", "_sssbCv".at(5), "_sssbCv".trim() == "_sssbCv")
+
+print("s066-a1:", "y3bAgs4".at(6), "y3bAgs4".trim() == "y3bAgs4")
+
+print("s066-a2:", "u_bk6pp".at(2), "u_bk6pp".trim() == "u_bk6pp")

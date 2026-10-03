@@ -1,0 +1,168 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=165 tag=c165
+
+let c165_b0 = "start"
+
+if 87 > 80 { c165_b0 = "hi" } elif 87 > 40 { c165_b0 = "mid" } else { c165_b0 = "lo" }
+
+print("c165-i0:", c165_b0, 87)
+
+let c165_b1 = "start"
+
+if 11 > 80 { c165_b1 = "hi" } elif 11 > 40 { c165_b1 = "mid" } else { c165_b1 = "lo" }
+
+print("c165-i1:", c165_b1, 11)
+
+let c165_b2 = "start"
+
+if 21 > 80 { c165_b2 = "hi" } elif 21 > 40 { c165_b2 = "mid" } else { c165_b2 = "lo" }
+
+print("c165-i2:", c165_b2, 21)
+
+let c165_b3 = "start"
+
+if 41 > 80 { c165_b3 = "hi" } elif 41 > 40 { c165_b3 = "mid" } else { c165_b3 = "lo" }
+
+print("c165-i3:", c165_b3, 41)
+
+let c165_b4 = "start"
+
+if 97 > 80 { c165_b4 = "hi" } elif 97 > 40 { c165_b4 = "mid" } else { c165_b4 = "lo" }
+
+print("c165-i4:", c165_b4, 97)
+
+let c165_a0 = 0
+
+let c165_n0 = 0
+
+while c165_n0 < 14 {
+
+    c165_n0 += 3
+
+    if c165_n0 % 3 == 0 { continue }
+
+    if c165_n0 > 21 { break }
+
+    c165_a0 += c165_n0
+
+}
+
+print("c165-w0:", c165_a0, c165_n0)
+
+let c165_a1 = 0
+
+let c165_n1 = 0
+
+while c165_n1 < 14 {
+
+    c165_n1 += 3
+
+    if c165_n1 % 2 == 0 { continue }
+
+    if c165_n1 > 19 { break }
+
+    c165_a1 += c165_n1
+
+}
+
+print("c165-w1:", c165_a1, c165_n1)
+
+let c165_a2 = 0
+
+let c165_n2 = 0
+
+while c165_n2 < 18 {
+
+    c165_n2 += 1
+
+    if c165_n2 % 3 == 0 { continue }
+
+    if c165_n2 > 27 { break }
+
+    c165_a2 += c165_n2
+
+}
+
+print("c165-w2:", c165_a2, c165_n2)
+
+let c165_a3 = 0
+
+let c165_n3 = 0
+
+while c165_n3 < 20 {
+
+    c165_n3 += 4
+
+    if c165_n3 % 3 == 0 { continue }
+
+    if c165_n3 > 24 { break }
+
+    c165_a3 += c165_n3
+
+}
+
+print("c165-w3:", c165_a3, c165_n3)
+
+let c165_c0 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 2] {
+
+        c165_c0 += a * b
+
+    }
+
+}
+
+print("c165-l0:", c165_c0)
+
+let c165_c1 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 3] {
+
+        c165_c1 += a * b
+
+    }
+
+}
+
+print("c165-l1:", c165_c1)
+
+let c165_acc0 = ""
+
+loop {
+
+    c165_acc0 += "x"
+
+    if c165_acc0.len() >= 3 { break }
+
+}
+
+print("c165-o0:", c165_acc0)
+
+let c165_acc1 = ""
+
+loop {
+
+    c165_acc1 += "x"
+
+    if c165_acc1.len() >= 6 { break }
+
+}
+
+print("c165-o1:", c165_acc1)
+
+let c165_acc2 = ""
+
+loop {
+
+    c165_acc2 += "x"
+
+    if c165_acc2.len() >= 6 { break }
+
+}
+
+print("c165-o2:", c165_acc2)

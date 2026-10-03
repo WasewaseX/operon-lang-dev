@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=99 tag=s099
+
+print("s099-m0:", "jvdgphp".upper(), "jvdgphp".slice(4), "jvdgphp".len())
+
+print("s099-m1:", "7w4lCmzqC_".upper(), "7w4lCmzqC_".slice(4), "7w4lCmzqC_".len())
+
+print("s099-m2:", "v8jamwix0A5".upper(), "v8jamwix0A5".slice(2), "v8jamwix0A5".len())
+
+print("s099-m3:", "oskzj6cty9w".upper(), "oskzj6cty9w".slice(3), "oskzj6cty9w".len())
+
+print("s099-i0:", "Ax9-{0}-A1t7")
+
+let s099_v0 = 0
+
+print("s099-v0:", "n={s099_v0}" + "!" * 1)
+
+print("s099-i1:", "wex-{16}-s8o_")
+
+let s099_v1 = 16
+
+print("s099-v1:", "n={s099_v1}" + "!" * 3)
+
+print("s099-i2:", "gxf-{11}-o24i")
+
+let s099_v2 = 11
+
+print("s099-v2:", "n={s099_v2}" + "!" * 1)
+
+print("s099-i3:", "p_o-{31}-r65h")
+
+let s099_v3 = 31
+
+print("s099-v3:", "n={s099_v3}" + "!" * 2)
+
+print("s099-i4:", "tuB-{64}-a5zu")
+
+let s099_v4 = 64
+
+print("s099-v4:", "n={s099_v4}" + "!" * 1)
+
+print("s099-r0:", "5ht3zw4f".replace("5", "Be"), "5ht3zw4f".contains("ht"))
+
+print("s099-r1:", "bdCsgm8i".replace("b", "n3"), "bdCsgm8i".contains("dC"))
+
+print("s099-j0:", ["4Bl", "eth", "yd1"].join("-"))
+
+print("s099-j1:", ["Ato", "b43", "4pw"].join("-"))
+
+print("s099-a0:", "yo8e0zf".at(0), "yo8e0zf".trim() == "yo8e0zf")
+
+print("s099-a1:", "5ynzpl3".at(2), "5ynzpl3".trim() == "5ynzpl3")

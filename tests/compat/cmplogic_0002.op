@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=2 tag=c002
+
+print("c002-c0:", -7386 == 1535)
+
+print("c002-c1:", -3316 > -2198)
+
+print("c002-c2:", -7139 <= 5440)
+
+print("c002-c3:", -1198 > -2765)
+
+print("c002-c4:", 5604 > -8468)
+
+print("c002-c5:", -5084 < 4170)
+
+print("c002-c6:", 6270 < 4871)
+
+print("c002-b0:", 35 < 39 && 39 < 37, 35 > 39 || 35 > 37)
+
+print("c002-b1:", 25 < 48 && 48 < 34, 25 > 48 || 25 > 34)
+
+print("c002-b2:", 21 < 16 && 16 < 46, 21 > 16 || 21 > 46)
+
+print("c002-b3:", 1 < 39 && 39 < 34, 1 > 39 || 1 > 34)
+
+print("c002-t0:", -2962 > 9760 ? "gt" : "le")
+
+print("c002-t1:", -6457 > 6780 ? "gt" : "le")
+
+print("c002-t2:", -6378 > -6841 ? "gt" : "le")
+
+let c002_n0 = null
+
+print("c002-n0:", c002_n0 ?? -1066, c002_n0 == null)
+
+let c002_n1 = null
+
+print("c002-n1:", c002_n1 ?? 5976, c002_n1 == null)
+
+print("c002-s0:", "2jf7" in "xhdwC_2jf7", "2jf7" == "2jf7")
+
+print("c002-s1:", "1wcn" in "aqomfy1wcn", "1wcn" == "1wcn")

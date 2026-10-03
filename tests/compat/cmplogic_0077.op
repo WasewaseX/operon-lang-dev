@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=77 tag=c077
+
+print("c077-c0:", -3769 != -2796)
+
+print("c077-c1:", -1794 > -1947)
+
+print("c077-c2:", 225 > 9353)
+
+print("c077-c3:", 7904 >= 3527)
+
+print("c077-c4:", -6194 <= -1325)
+
+print("c077-c5:", 6018 == 1468)
+
+print("c077-b0:", 31 < 1 && 1 < 44, 31 > 1 || 31 > 44)
+
+print("c077-b1:", 47 < 38 && 38 < 16, 47 > 38 || 47 > 16)
+
+print("c077-b2:", 47 < 1 && 1 < 23, 47 > 1 || 47 > 23)
+
+print("c077-t0:", 5696 > 6094 ? "gt" : "le")
+
+print("c077-t1:", -9527 > -6091 ? "gt" : "le")
+
+print("c077-t2:", 5246 > 1449 ? "gt" : "le")
+
+print("c077-t3:", 1082 > -715 ? "gt" : "le")
+
+let c077_n0 = null
+
+print("c077-n0:", c077_n0 ?? -6921, c077_n0 == null)
+
+let c077_n1 = null
+
+print("c077-n1:", c077_n1 ?? 1190, c077_n1 == null)
+
+let c077_n2 = null
+
+print("c077-n2:", c077_n2 ?? -467, c077_n2 == null)
+
+print("c077-s0:", "7u2u" in "kh7kAw7u2u", "7u2u" == "7u2u")
+
+print("c077-s1:", "94dm" in "iB1b_q94dm", "94dm" == "94dm")

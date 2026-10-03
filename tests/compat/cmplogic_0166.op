@@ -1,0 +1,36 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=166 tag=c166
+
+print("c166-c0:", 8275 <= 7900)
+
+print("c166-c1:", 6422 <= -8945)
+
+print("c166-c2:", 9890 == -1695)
+
+print("c166-c3:", -4893 > -5230)
+
+print("c166-b0:", 9 < 38 && 38 < 45, 9 > 38 || 9 > 45)
+
+print("c166-b1:", 47 < 8 && 8 < 30, 47 > 8 || 47 > 30)
+
+print("c166-b2:", 32 < 46 && 46 < 13, 32 > 46 || 32 > 13)
+
+print("c166-t0:", -7999 > -8946 ? "gt" : "le")
+
+print("c166-t1:", 9367 > -5782 ? "gt" : "le")
+
+print("c166-t2:", -9598 > -1209 ? "gt" : "le")
+
+print("c166-t3:", -9054 > 2160 ? "gt" : "le")
+
+let c166_n0 = null
+
+print("c166-n0:", c166_n0 ?? -2005, c166_n0 == null)
+
+let c166_n1 = null
+
+print("c166-n1:", c166_n1 ?? 435, c166_n1 == null)
+
+print("c166-s0:", "fpsg" in "jdnrm9fpsg", "fpsg" == "fpsg")
+
+print("c166-s1:", "9eyb" in "tAv6ds9eyb", "9eyb" == "9eyb")

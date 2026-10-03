@@ -1,0 +1,228 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20260930 idx=69 tag=s069
+
+stress {
+
+    print("s069-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s069-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s069-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s069-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s069-mz:", 49 % 0)
+
+} rescue (e) {
+
+    print("s069-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s069-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s069-of1:", "caught", e.kind, e.message)
+
+}
+
+gene s069_r0() {
+
+    raise "s069-eAAcyy"
+
+}
+
+stress {
+
+    s069_r0()
+
+    print("s069-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s069-r0:", e.kind, e.message)
+
+}
+
+gene s069_r1() {
+
+    raise "s069-3xvAqu"
+
+}
+
+stress {
+
+    s069_r1()
+
+    print("s069-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s069-r1:", e.kind, e.message)
+
+}
+
+gene s069_r2() {
+
+    raise "s069-zzmnnB"
+
+}
+
+stress {
+
+    s069_r2()
+
+    print("s069-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s069-r2:", e.kind, e.message)
+
+}
+
+gene s069_r3() {
+
+    raise "s069-4tpqk4"
+
+}
+
+stress {
+
+    s069_r3()
+
+    print("s069-r3:", "unreachable")
+
+} rescue (e) {
+
+    print("s069-r3:", e.kind, e.message)
+
+}
+
+let s069_xs0 = [29, 5, 29, 20]
+
+stress {
+
+    print("s069-x0:", s069_xs0[5])
+
+} rescue (e) {
+
+    print("s069-x0:", "caught", e.kind)
+
+}
+
+let s069_xs1 = [42, 31, 14, 36]
+
+stress {
+
+    print("s069-x1:", s069_xs1[8])
+
+} rescue (e) {
+
+    print("s069-x1:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s069-0"
+
+    } rescue (e) {
+
+        print("s069-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s069-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s069-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s069-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s069-1"
+
+    } rescue (e) {
+
+        print("s069-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s069-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s069-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s069-d1-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s069-d1-top:", outer.message)
+
+}

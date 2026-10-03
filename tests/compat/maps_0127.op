@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=127 tag=m127
+
+let m127_m0 = {ligase: 31, helix: -42, plasmid: -74, cell: -80, vector: 46}
+
+print("m127-m0:", m127_m0["ligase"], len(m127_m0), m127_m0.has("ligase"))
+
+let m127_m1 = {exon: 42, gene: 55, enzyme: 47, codon: 34}
+
+print("m127-m1:", m127_m1["exon"], len(m127_m1), m127_m1.has("exon"))
+
+let m127_m2 = {ribose: 95, cell: -73, helix: 81}
+
+print("m127-m2:", m127_m2["ribose"], len(m127_m2), m127_m2.has("ribose"))
+
+let m127_k0 = {helix: 31, gene: 42, cell: 39}
+
+let m127_ks0 = m127_k0.keys()
+
+let m127_sm0 = 0
+
+for k in m127_k0 { m127_sm0 += m127_k0[k] }
+
+print("m127-k0:", m127_sm0, m127_k0.keys().sort(), m127_k0.values().len())
+
+let m127_k1 = {exon: 46, gene: 19, ribose: 42}
+
+let m127_ks1 = m127_k1.keys()
+
+let m127_sm1 = 0
+
+for k in m127_k1 { m127_sm1 += m127_k1[k] }
+
+print("m127-k1:", m127_sm1, m127_k1.keys().sort(), m127_k1.values().len())
+
+let m127_w0 = {outer: {helix: 2, vector: 2, tag: "ok"}}}
+
+print("m127-w0:", m127_w0["outer"]["vector"], m127_w0["outer"]["tag"])
+
+let m127_w1 = {outer: {helix: 4, plasmid: 1, tag: "ok"}}}
+
+print("m127-w1:", m127_w1["outer"]["plasmid"], m127_w1["outer"]["tag"])

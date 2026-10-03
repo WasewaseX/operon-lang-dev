@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=204 tag=s204
+
+print("s204-m0:", "1fdzCcb_tnoCm".upper(), "1fdzCcb_tnoCm".slice(2), "1fdzCcb_tnoCm".len())
+
+print("s204-m1:", "jap_z0fx".upper(), "jap_z0fx".slice(1), "jap_z0fx".len())
+
+print("s204-m2:", "xhe4zztkz".upper(), "xhe4zztkz".slice(2), "xhe4zztkz".len())
+
+print("s204-m3:", "A99oaCqd".upper(), "A99oaCqd".slice(3), "A99oaCqd".len())
+
+print("s204-m4:", "l_jtn85jl1dh".upper(), "l_jtn85jl1dh".slice(3), "l_jtn85jl1dh".len())
+
+print("s204-m5:", "iygxft".upper(), "iygxft".slice(3), "iygxft".len())
+
+print("s204-i0:", "w27-{90}-2gz3")
+
+let s204_v0 = 90
+
+print("s204-v0:", "n={s204_v0}" + "!" * 1)
+
+print("s204-i1:", "ogt-{72}-fBq_")
+
+let s204_v1 = 72
+
+print("s204-v1:", "n={s204_v1}" + "!" * 2)
+
+print("s204-i2:", "xr_-{68}-9iry")
+
+let s204_v2 = 68
+
+print("s204-v2:", "n={s204_v2}" + "!" * 3)
+
+print("s204-r0:", "k19fibBb".replace("k", "yp"), "k19fibBb".contains("19"))
+
+print("s204-r1:", "7fhzuB9b".replace("7", "aa"), "7fhzuB9b".contains("fh"))
+
+print("s204-r2:", "vegp6l5y".replace("v", "ow"), "vegp6l5y".contains("eg"))
+
+print("s204-j0:", ["qbs", "_vz", "6Az", "Aca", "nAB"].join("-"))
+
+print("s204-j1:", ["vee", "yat", "i3z", "erz", "9y1"].join("-"))
+
+print("s204-a0:", "uCqbhru".at(4), "uCqbhru".trim() == "uCqbhru")
+
+print("s204-a1:", "Bu_18i7".at(0), "Bu_18i7".trim() == "Bu_18i7")

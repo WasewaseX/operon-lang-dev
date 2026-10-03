@@ -1,0 +1,188 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=255 tag=f255
+
+gene f255_g0(p, q = 82, r = 86) {
+
+    return p * 43 + q - r
+
+}
+
+print("f255-d0:", f255_g0(20), f255_g0(20, 59), f255_g0(20, 82, 86))
+
+gene f255_g1(p, q = 85, r = 36) {
+
+    return p * 12 + q - r
+
+}
+
+print("f255-d1:", f255_g1(21), f255_g1(21, 68), f255_g1(21, 85, 36))
+
+gene f255_g2(p, q = 63, r = 3) {
+
+    return p * 11 + q - r
+
+}
+
+print("f255-d2:", f255_g2(-21), f255_g2(-21, 24), f255_g2(-21, 63, 3))
+
+gene f255_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f255_fib0(n - 1) + f255_fib0(n - 2)
+
+}
+
+print("f255-fib0:", f255_fib0(12))
+
+gene f255_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f255_fib1(n - 1) + f255_fib1(n - 2)
+
+}
+
+print("f255-fib1:", f255_fib1(7))
+
+gene f255_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f255_gcd0(b, a % b)
+
+}
+
+print("f255-gcd0:", f255_gcd0(188, 296))
+
+gene f255_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f255_gcd1(b, a % b)
+
+}
+
+print("f255-gcd1:", f255_gcd1(420, 381))
+
+gene f255_gcd2(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f255_gcd2(b, a % b)
+
+}
+
+print("f255-gcd2:", f255_gcd2(799, 23))
+
+gene f255_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f255_c0 = f255_mk0(30)
+
+f255_c0(2)
+
+print("f255-cl0:", f255_c0(7))
+
+gene f255_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f255_c1 = f255_mk1(35)
+
+f255_c1(6)
+
+print("f255-cl1:", f255_c1(4))
+
+gene f255_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f255-hof0:", f255_tw0(gene (z) => z * 2 + 1, 26))
+
+gene f255_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f255-hof1:", f255_tw1(gene (z) => z * 2 + 1, 30))
+
+gene f255_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f255-dg0:", f255_sd0(715844))
+
+gene f255_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f255-dg1:", f255_sd1(384430))

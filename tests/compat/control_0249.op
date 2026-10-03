@@ -1,0 +1,156 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=249 tag=c249
+
+let c249_b0 = "start"
+
+if 62 > 80 { c249_b0 = "hi" } elif 62 > 40 { c249_b0 = "mid" } else { c249_b0 = "lo" }
+
+print("c249-i0:", c249_b0, 62)
+
+let c249_b1 = "start"
+
+if 14 > 80 { c249_b1 = "hi" } elif 14 > 40 { c249_b1 = "mid" } else { c249_b1 = "lo" }
+
+print("c249-i1:", c249_b1, 14)
+
+let c249_b2 = "start"
+
+if 114 > 80 { c249_b2 = "hi" } elif 114 > 40 { c249_b2 = "mid" } else { c249_b2 = "lo" }
+
+print("c249-i2:", c249_b2, 114)
+
+let c249_a0 = 0
+
+let c249_n0 = 0
+
+while c249_n0 < 5 {
+
+    c249_n0 += 3
+
+    if c249_n0 % 3 == 0 { continue }
+
+    if c249_n0 > 13 { break }
+
+    c249_a0 += c249_n0
+
+}
+
+print("c249-w0:", c249_a0, c249_n0)
+
+let c249_a1 = 0
+
+let c249_n1 = 0
+
+while c249_n1 < 9 {
+
+    c249_n1 += 1
+
+    if c249_n1 % 3 == 0 { continue }
+
+    if c249_n1 > 16 { break }
+
+    c249_a1 += c249_n1
+
+}
+
+print("c249-w1:", c249_a1, c249_n1)
+
+let c249_a2 = 0
+
+let c249_n2 = 0
+
+while c249_n2 < 17 {
+
+    c249_n2 += 3
+
+    if c249_n2 % 3 == 0 { continue }
+
+    if c249_n2 > 21 { break }
+
+    c249_a2 += c249_n2
+
+}
+
+print("c249-w2:", c249_a2, c249_n2)
+
+let c249_a3 = 0
+
+let c249_n3 = 0
+
+while c249_n3 < 6 {
+
+    c249_n3 += 2
+
+    if c249_n3 % 2 == 0 { continue }
+
+    if c249_n3 > 13 { break }
+
+    c249_a3 += c249_n3
+
+}
+
+print("c249-w3:", c249_a3, c249_n3)
+
+let c249_c0 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 3] {
+
+        c249_c0 += a * b
+
+    }
+
+}
+
+print("c249-l0:", c249_c0)
+
+let c249_c1 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 2] {
+
+        c249_c1 += a * b
+
+    }
+
+}
+
+print("c249-l1:", c249_c1)
+
+let c249_acc0 = ""
+
+loop {
+
+    c249_acc0 += "x"
+
+    if c249_acc0.len() >= 4 { break }
+
+}
+
+print("c249-o0:", c249_acc0)
+
+let c249_acc1 = ""
+
+loop {
+
+    c249_acc1 += "x"
+
+    if c249_acc1.len() >= 7 { break }
+
+}
+
+print("c249-o1:", c249_acc1)
+
+let c249_acc2 = ""
+
+loop {
+
+    c249_acc2 += "x"
+
+    if c249_acc2.len() >= 5 { break }
+
+}
+
+print("c249-o2:", c249_acc2)

@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=165 tag=c165
+
+print("c165-c0:", 2956 < -2067)
+
+print("c165-c1:", 377 < 9735)
+
+print("c165-c2:", -4396 < -9950)
+
+print("c165-c3:", -2016 <= 6874)
+
+print("c165-c4:", -689 == -3392)
+
+print("c165-c5:", -2360 == -3672)
+
+print("c165-b0:", 11 < 23 && 23 < 50, 11 > 23 || 11 > 50)
+
+print("c165-b1:", 16 < 14 && 14 < 13, 16 > 14 || 16 > 13)
+
+print("c165-b2:", 0 < 42 && 42 < 5, 0 > 42 || 0 > 5)
+
+print("c165-t0:", 1652 > -6147 ? "gt" : "le")
+
+print("c165-t1:", 8618 > 4057 ? "gt" : "le")
+
+print("c165-t2:", 5877 > -7227 ? "gt" : "le")
+
+print("c165-t3:", -277 > 7805 ? "gt" : "le")
+
+let c165_n0 = null
+
+print("c165-n0:", c165_n0 ?? 8714, c165_n0 == null)
+
+let c165_n1 = null
+
+print("c165-n1:", c165_n1 ?? -1983, c165_n1 == null)
+
+let c165_n2 = null
+
+print("c165-n2:", c165_n2 ?? -3730, c165_n2 == null)
+
+print("c165-s0:", "mogv" in "eq1Ar1mogv", "mogv" == "mogv")
+
+print("c165-s1:", "_59h" in "y5tyw4_59h", "_59h" == "_59h")

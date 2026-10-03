@@ -1,0 +1,13 @@
+depth=1
+depth=2
+depth=1
+total=42
+depth=1
+depth=2
+ERR push needs a number
+depth=1
+total=84
+depth=1
+ERR unknown op 'divide'
+ERR blank line
+final depth=1 first=84

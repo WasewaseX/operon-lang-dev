@@ -1,0 +1,10 @@
+warning:
+warning[W01]: phantom call 'maiin' is called but not defined in this file (some similar names: 'main', 'min')
+  --> tests/diagnostics/phantom_suggest.op:2
+   |
+2 |   maiin()
+   |   ^^^^^
+   |
+   = rule: phantom-call
+help: machine-applicable fix: replace 'maiin' with 'main'
+summary: 0 error(s), 1 warning(s), 0 style, 0 repair note(s)

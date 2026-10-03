@@ -1,0 +1,36 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=178 tag=c178
+
+print("c178-c0:", -3685 == -5211)
+
+print("c178-c1:", 2228 < 2554)
+
+print("c178-c2:", -8365 < 1801)
+
+print("c178-c3:", 5479 <= -3479)
+
+print("c178-c4:", -7396 < -5300)
+
+print("c178-c5:", 1888 > 4218)
+
+print("c178-b0:", 15 < 6 && 6 < 22, 15 > 6 || 15 > 22)
+
+print("c178-b1:", 24 < 41 && 41 < 41, 24 > 41 || 24 > 41)
+
+print("c178-b2:", 50 < 41 && 41 < 1, 50 > 41 || 50 > 1)
+
+print("c178-t0:", 9522 > 7404 ? "gt" : "le")
+
+print("c178-t1:", -8051 > -8496 ? "gt" : "le")
+
+let c178_n0 = null
+
+print("c178-n0:", c178_n0 ?? 1103, c178_n0 == null)
+
+let c178_n1 = null
+
+print("c178-n1:", c178_n1 ?? -5458, c178_n1 == null)
+
+print("c178-s0:", "5v3v" in "wdr3mj5v3v", "5v3v" == "5v3v")
+
+print("c178-s1:", "uldd" in "fn6eo2uldd", "uldd" == "uldd")

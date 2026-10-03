@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=110 tag=m110
+
+let m110_m0 = {plasmid: 39, exon: -85, ligase: 59, vector: -91, cell: 23}
+
+print("m110-m0:", m110_m0["plasmid"], len(m110_m0), m110_m0.has("plasmid"))
+
+let m110_m1 = {helix: -96, plasmid: 29, enzyme: 97, codon: -31}
+
+print("m110-m1:", m110_m1["helix"], len(m110_m1), m110_m1.has("helix"))
+
+let m110_m2 = {exon: -25, splicer: -94, codon: 34, enzyme: -83}
+
+print("m110-m2:", m110_m2["exon"], len(m110_m2), m110_m2.has("exon"))
+
+let m110_m3 = {enzyme: -87, exon: 52, gene: 9, plasmid: 64}
+
+print("m110-m3:", m110_m3["enzyme"], len(m110_m3), m110_m3.has("enzyme"))
+
+let m110_k0 = {enzyme: 33, vector: 17, splicer: 48}
+
+let m110_ks0 = m110_k0.keys()
+
+let m110_sm0 = 0
+
+for k in m110_k0 { m110_sm0 += m110_k0[k] }
+
+print("m110-k0:", m110_sm0, m110_k0.keys().sort(), m110_k0.values().len())
+
+let m110_k1 = {gene: 23, ligase: 9, marker: 33}
+
+let m110_ks1 = m110_k1.keys()
+
+let m110_sm1 = 0
+
+for k in m110_k1 { m110_sm1 += m110_k1[k] }
+
+print("m110-k1:", m110_sm1, m110_k1.keys().sort(), m110_k1.values().len())
+
+let m110_k2 = {helix: 49, marker: 10, plasmid: 48}
+
+let m110_ks2 = m110_k2.keys()
+
+let m110_sm2 = 0
+
+for k in m110_k2 { m110_sm2 += m110_k2[k] }
+
+print("m110-k2:", m110_sm2, m110_k2.keys().sort(), m110_k2.values().len())
+
+let m110_w0 = {outer: {gene: 7, splicer: 1, tag: "ok"}}}
+
+print("m110-w0:", m110_w0["outer"]["splicer"], m110_w0["outer"]["tag"])
+
+let m110_w1 = {outer: {ribose: 7, helix: 8, tag: "ok"}}}
+
+print("m110-w1:", m110_w1["outer"]["helix"], m110_w1["outer"]["tag"])

@@ -1,0 +1,210 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=203 tag=s203
+
+stress {
+
+    print("s203-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s203-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s203-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s203-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s203-mz:", 65 % 0)
+
+} rescue (e) {
+
+    print("s203-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s203-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s203-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s203-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s203-of2:", "caught", e.kind, e.message)
+
+}
+
+gene s203_r0() {
+
+    raise "s203-l7jzki"
+
+}
+
+stress {
+
+    s203_r0()
+
+    print("s203-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s203-r0:", e.kind, e.message)
+
+}
+
+gene s203_r1() {
+
+    raise "s203-97f13C"
+
+}
+
+stress {
+
+    s203_r1()
+
+    print("s203-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s203-r1:", e.kind, e.message)
+
+}
+
+gene s203_r2() {
+
+    raise "s203-u_vueb"
+
+}
+
+stress {
+
+    s203_r2()
+
+    print("s203-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s203-r2:", e.kind, e.message)
+
+}
+
+let s203_xs0 = [44, 16, 16, 42]
+
+stress {
+
+    print("s203-x0:", s203_xs0[8])
+
+} rescue (e) {
+
+    print("s203-x0:", "caught", e.kind)
+
+}
+
+let s203_xs1 = [35, 23]
+
+stress {
+
+    print("s203-x1:", s203_xs1[6])
+
+} rescue (e) {
+
+    print("s203-x1:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s203-0"
+
+    } rescue (e) {
+
+        print("s203-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s203-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s203-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s203-1"
+
+    } rescue (e) {
+
+        print("s203-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s203-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s203-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s203-d1-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s203-d1-top:", outer.message)
+
+}

@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=258 tag=s258
+
+print("s258-m0:", "urtqb6xhfoopl4".upper(), "urtqb6xhfoopl4".slice(2), "urtqb6xhfoopl4".len())
+
+print("s258-m1:", "7ctamnf8C5dx".upper(), "7ctamnf8C5dx".slice(2), "7ctamnf8C5dx".len())
+
+print("s258-m2:", "fowvxvl9ybhwuw".upper(), "fowvxvl9ybhwuw".slice(3), "fowvxvl9ybhwuw".len())
+
+print("s258-m3:", "11gh8tf3Aso".upper(), "11gh8tf3Aso".slice(1), "11gh8tf3Aso".len())
+
+print("s258-i0:", "jca-{6}-i2_r")
+
+let s258_v0 = 6
+
+print("s258-v0:", "n={s258_v0}" + "!" * 1)
+
+print("s258-i1:", "0hx-{56}-xCwp")
+
+let s258_v1 = 56
+
+print("s258-v1:", "n={s258_v1}" + "!" * 3)
+
+print("s258-i2:", "66w-{86}-0kgz")
+
+let s258_v2 = 86
+
+print("s258-v2:", "n={s258_v2}" + "!" * 2)
+
+print("s258-r0:", "a4auwro0".replace("a", "9g"), "a4auwro0".contains("4a"))
+
+print("s258-r1:", "p0sAoi_r".replace("p", "ib"), "p0sAoi_r".contains("0s"))
+
+print("s258-r2:", "p8kxwzCl".replace("p", "sm"), "p8kxwzCl".contains("8k"))
+
+print("s258-j0:", ["3ks", "d3C", "uif", "3AB"].join("-"))
+
+print("s258-j1:", ["5nj", "k9i", "4at"].join("-"))
+
+print("s258-j2:", ["ihy", "959", "8lo"].join("-"))
+
+print("s258-a0:", "snjyoBA".at(3), "snjyoBA".trim() == "snjyoBA")
+
+print("s258-a1:", "qpk77cy".at(6), "qpk77cy".trim() == "qpk77cy")
+
+print("s258-a2:", "qrssaws".at(3), "qrssaws".trim() == "qrssaws")

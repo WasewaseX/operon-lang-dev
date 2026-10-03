@@ -1,0 +1,244 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=143 tag=m143
+
+let m143_s0 = some(2)
+
+match m143_s0 {
+
+    case Some(x) if x > 2 {
+
+        print("m143-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m143-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m143-m0:", "none")
+
+    }
+
+}
+
+let m143_s1 = some(4)
+
+match m143_s1 {
+
+    case Some(x) if x > 4 {
+
+        print("m143-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m143-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m143-m1:", "none")
+
+    }
+
+}
+
+let m143_s2 = some(2)
+
+match m143_s2 {
+
+    case Some(x) if x > 2 {
+
+        print("m143-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m143-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m143-m2:", "none")
+
+    }
+
+}
+
+let m143_ls0 = [47, 29, 30]
+
+match m143_ls0 {
+
+    case [47, *rest] {
+
+        print("m143-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m143-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m143-l0:", "other")
+
+    }
+
+}
+
+let m143_ls1 = [50, 20, 46]
+
+match m143_ls1 {
+
+    case [50, *rest] {
+
+        print("m143-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m143-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m143-l1:", "other")
+
+    }
+
+}
+
+let m143_mp0 = {helix: -1467, ligase: -64}
+
+match m143_mp0 {
+
+    case {helix: p, ligase: q} {
+
+        print("m143-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m143-mp0:", "miss")
+
+    }
+
+}
+
+let m143_mp1 = {gene: -2612, marker: 6454}
+
+match m143_mp1 {
+
+    case {gene: p, marker: q} {
+
+        print("m143-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m143-mp1:", "miss")
+
+    }
+
+}
+
+let m143_mp2 = {enzyme: -7227, ligase: -2370}
+
+match m143_mp2 {
+
+    case {enzyme: p, ligase: q} {
+
+        print("m143-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m143-mp2:", "miss")
+
+    }
+
+}
+
+let m143_r0 = ok(4)
+
+match m143_r0 {
+
+    case Ok(n) | Err(4) {
+
+        print("m143-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m143-r0:", "zero")
+
+    }
+
+}
+
+let m143_r1 = ok(1)
+
+match m143_r1 {
+
+    case Ok(n) | Err(1) {
+
+        print("m143-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m143-r1:", "zero")
+
+    }
+
+}
+
+match "codon" {
+
+    case "codon" {
+
+        print("m143-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m143-w0:", "alt")
+
+    }
+
+}
+
+match "helix" {
+
+    case "helix" {
+
+        print("m143-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m143-w1:", "alt")
+
+    }
+
+}

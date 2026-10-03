@@ -1,0 +1,32 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=20 tag=c020
+
+print("c020-c0:", 1829 >= 7409)
+
+print("c020-c1:", 6948 != 8273)
+
+print("c020-c2:", 3786 >= -7702)
+
+print("c020-c3:", 6752 != 5112)
+
+print("c020-b0:", 3 < 23 && 23 < 16, 3 > 23 || 3 > 16)
+
+print("c020-b1:", 21 < 44 && 44 < 25, 21 > 44 || 21 > 25)
+
+print("c020-b2:", 7 < 32 && 32 < 26, 7 > 32 || 7 > 26)
+
+print("c020-t0:", 1841 > -7359 ? "gt" : "le")
+
+print("c020-t1:", -1135 > -446 ? "gt" : "le")
+
+let c020_n0 = null
+
+print("c020-n0:", c020_n0 ?? -8784, c020_n0 == null)
+
+let c020_n1 = null
+
+print("c020-n1:", c020_n1 ?? 1174, c020_n1 == null)
+
+print("c020-s0:", "nla7" in "h62n4bnla7", "nla7" == "nla7")
+
+print("c020-s1:", "nsnp" in "9Aax_nnsnp", "nsnp" == "nsnp")

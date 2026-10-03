@@ -1,0 +1,240 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=123 tag=s123
+
+stress {
+
+    print("s123-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s123-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s123-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s123-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s123-mz:", 2 % 0)
+
+} rescue (e) {
+
+    print("s123-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s123-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s123-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s123-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s123-of2:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s123-m1:", 9223372036854775807 % -1)
+
+} rescue (e) {
+
+    print("s123-m1:", "caught", e.kind, e.message)
+
+}
+
+gene s123_r0() {
+
+    raise "s123-9_h__h"
+
+}
+
+stress {
+
+    s123_r0()
+
+    print("s123-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s123-r0:", e.kind, e.message)
+
+}
+
+gene s123_r1() {
+
+    raise "s123-29r01k"
+
+}
+
+stress {
+
+    s123_r1()
+
+    print("s123-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s123-r1:", e.kind, e.message)
+
+}
+
+gene s123_r2() {
+
+    raise "s123-849amh"
+
+}
+
+stress {
+
+    s123_r2()
+
+    print("s123-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s123-r2:", e.kind, e.message)
+
+}
+
+gene s123_r3() {
+
+    raise "s123-ry_B1d"
+
+}
+
+stress {
+
+    s123_r3()
+
+    print("s123-r3:", "unreachable")
+
+} rescue (e) {
+
+    print("s123-r3:", e.kind, e.message)
+
+}
+
+let s123_xs0 = [19, 1, 22]
+
+stress {
+
+    print("s123-x0:", s123_xs0[8])
+
+} rescue (e) {
+
+    print("s123-x0:", "caught", e.kind)
+
+}
+
+let s123_xs1 = [44, 11, 12]
+
+stress {
+
+    print("s123-x1:", s123_xs1[5])
+
+} rescue (e) {
+
+    print("s123-x1:", "caught", e.kind)
+
+}
+
+let s123_xs2 = [35, 7, 26, 30]
+
+stress {
+
+    print("s123-x2:", s123_xs2[6])
+
+} rescue (e) {
+
+    print("s123-x2:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s123-0"
+
+    } rescue (e) {
+
+        print("s123-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s123-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s123-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s123-1"
+
+    } rescue (e) {
+
+        print("s123-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s123-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s123-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s123-d1-top:", outer.message)
+
+}

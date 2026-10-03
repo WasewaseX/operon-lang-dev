@@ -1,0 +1,170 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20260930 idx=4 tag=c004
+
+let c004_b0 = "start"
+
+if 106 > 80 { c004_b0 = "hi" } elif 106 > 40 { c004_b0 = "mid" } else { c004_b0 = "lo" }
+
+print("c004-i0:", c004_b0, 106)
+
+let c004_b1 = "start"
+
+if 92 > 80 { c004_b1 = "hi" } elif 92 > 40 { c004_b1 = "mid" } else { c004_b1 = "lo" }
+
+print("c004-i1:", c004_b1, 92)
+
+let c004_b2 = "start"
+
+if 56 > 80 { c004_b2 = "hi" } elif 56 > 40 { c004_b2 = "mid" } else { c004_b2 = "lo" }
+
+print("c004-i2:", c004_b2, 56)
+
+let c004_b3 = "start"
+
+if 54 > 80 { c004_b3 = "hi" } elif 54 > 40 { c004_b3 = "mid" } else { c004_b3 = "lo" }
+
+print("c004-i3:", c004_b3, 54)
+
+let c004_b4 = "start"
+
+if 117 > 80 { c004_b4 = "hi" } elif 117 > 40 { c004_b4 = "mid" } else { c004_b4 = "lo" }
+
+print("c004-i4:", c004_b4, 117)
+
+let c004_a0 = 0
+
+let c004_n0 = 0
+
+while c004_n0 < 20 {
+
+    c004_n0 += 1
+
+    if c004_n0 % 2 == 0 { continue }
+
+    if c004_n0 > 23 { break }
+
+    c004_a0 += c004_n0
+
+}
+
+print("c004-w0:", c004_a0, c004_n0)
+
+let c004_a1 = 0
+
+let c004_n1 = 0
+
+while c004_n1 < 7 {
+
+    c004_n1 += 1
+
+    if c004_n1 % 3 == 0 { continue }
+
+    if c004_n1 > 14 { break }
+
+    c004_a1 += c004_n1
+
+}
+
+print("c004-w1:", c004_a1, c004_n1)
+
+let c004_a2 = 0
+
+let c004_n2 = 0
+
+while c004_n2 < 5 {
+
+    c004_n2 += 4
+
+    if c004_n2 % 2 == 0 { continue }
+
+    if c004_n2 > 14 { break }
+
+    c004_a2 += c004_n2
+
+}
+
+print("c004-w2:", c004_a2, c004_n2)
+
+let c004_a3 = 0
+
+let c004_n3 = 0
+
+while c004_n3 < 14 {
+
+    c004_n3 += 1
+
+    if c004_n3 % 3 == 0 { continue }
+
+    if c004_n3 > 16 { break }
+
+    c004_a3 += c004_n3
+
+}
+
+print("c004-w3:", c004_a3, c004_n3)
+
+let c004_c0 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 3] {
+
+        c004_c0 += a * b
+
+    }
+
+}
+
+print("c004-l0:", c004_c0)
+
+let c004_c1 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 2] {
+
+        c004_c1 += a * b
+
+    }
+
+}
+
+print("c004-l1:", c004_c1)
+
+let c004_c2 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 2] {
+
+        c004_c2 += a * b
+
+    }
+
+}
+
+print("c004-l2:", c004_c2)
+
+let c004_acc0 = ""
+
+loop {
+
+    c004_acc0 += "x"
+
+    if c004_acc0.len() >= 3 { break }
+
+}
+
+print("c004-o0:", c004_acc0)
+
+let c004_acc1 = ""
+
+loop {
+
+    c004_acc1 += "x"
+
+    if c004_acc1.len() >= 4 { break }
+
+}
+
+print("c004-o1:", c004_acc1)

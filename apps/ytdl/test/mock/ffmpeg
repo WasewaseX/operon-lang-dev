@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# deterministic ffmpeg mock
+if [ "${1:-}" = "-version" ]; then
+  echo "ffmpeg version 4.4.2-mock"
+  exit 0
+fi
+# touch the output file (last non-flag argument) if any
+LAST=""
+PREV=""
+for a in "$@"; do
+  case "$PREV" in
+    -i|-vn|-acodec|-b|-y) ;;
+    -*) ;;
+    *) LAST="$a" ;;
+  esac
+  PREV="$a"
+done
+if [ -n "$LAST" ]; then
+  printf 'converted' > "$LAST" 2>/dev/null || true
+fi
+exit 0

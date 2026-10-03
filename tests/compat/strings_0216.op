@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=216 tag=s216
+
+print("s216-m0:", "m3wBru1j".upper(), "m3wBru1j".slice(2), "m3wBru1j".len())
+
+print("s216-m1:", "uruBii0mnjkn1x".upper(), "uruBii0mnjkn1x".slice(2), "uruBii0mnjkn1x".len())
+
+print("s216-m2:", "xs8r2zA3sm_n".upper(), "xs8r2zA3sm_n".slice(3), "xs8r2zA3sm_n".len())
+
+print("s216-m3:", "vr2sk2".upper(), "vr2sk2".slice(4), "vr2sk2".len())
+
+print("s216-m4:", "83wvr2A".upper(), "83wvr2A".slice(3), "83wvr2A".len())
+
+print("s216-m5:", "6gwAheiunc123v".upper(), "6gwAheiunc123v".slice(1), "6gwAheiunc123v".len())
+
+print("s216-i0:", "cvu-{98}-91bs")
+
+let s216_v0 = 98
+
+print("s216-v0:", "n={s216_v0}" + "!" * 1)
+
+print("s216-i1:", "zyn-{99}-557g")
+
+let s216_v1 = 99
+
+print("s216-v1:", "n={s216_v1}" + "!" * 1)
+
+print("s216-i2:", "bs3-{6}-4kjd")
+
+let s216_v2 = 6
+
+print("s216-v2:", "n={s216_v2}" + "!" * 1)
+
+print("s216-r0:", "s6ixcr5q".replace("s", "da"), "s6ixcr5q".contains("6i"))
+
+print("s216-r1:", "qz33mhux".replace("q", "be"), "qz33mhux".contains("z3"))
+
+print("s216-r2:", "jnm77vw2".replace("j", "n_"), "jnm77vw2".contains("nm"))
+
+print("s216-r3:", "71lCe6gp".replace("7", "Cg"), "71lCe6gp".contains("1l"))
+
+print("s216-j0:", ["mx3", "bio", "rwv", "syj"].join("-"))
+
+print("s216-j1:", ["wm8", "v3v", "96o"].join("-"))
+
+print("s216-a0:", "1jtizev".at(1), "1jtizev".trim() == "1jtizev")
+
+print("s216-a1:", "q79le6w".at(3), "q79le6w".trim() == "q79le6w")

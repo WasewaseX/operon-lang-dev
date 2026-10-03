@@ -1,0 +1,38 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=153 tag=c153
+
+print("c153-c0:", 9070 != 1151)
+
+print("c153-c1:", -6458 < -6531)
+
+print("c153-c2:", -8102 <= 3481)
+
+print("c153-c3:", -5016 >= 6931)
+
+print("c153-b0:", 23 < 22 && 22 < 23, 23 > 22 || 23 > 23)
+
+print("c153-b1:", 33 < 28 && 28 < 25, 33 > 28 || 33 > 25)
+
+print("c153-t0:", 8970 > 7686 ? "gt" : "le")
+
+print("c153-t1:", -1655 > -4537 ? "gt" : "le")
+
+print("c153-t2:", 8799 > -497 ? "gt" : "le")
+
+print("c153-t3:", 2842 > 5722 ? "gt" : "le")
+
+let c153_n0 = null
+
+print("c153-n0:", c153_n0 ?? 7172, c153_n0 == null)
+
+let c153_n1 = null
+
+print("c153-n1:", c153_n1 ?? 5360, c153_n1 == null)
+
+let c153_n2 = null
+
+print("c153-n2:", c153_n2 ?? 5443, c153_n2 == null)
+
+print("c153-s0:", "13zh" in "aoB79h13zh", "13zh" == "13zh")
+
+print("c153-s1:", "9lcq" in "eC2rkA9lcq", "9lcq" == "9lcq")

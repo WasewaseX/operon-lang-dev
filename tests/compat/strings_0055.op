@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=55 tag=s055
+
+print("s055-m0:", "ywpi_jkh1d".upper(), "ywpi_jkh1d".slice(1), "ywpi_jkh1d".len())
+
+print("s055-m1:", "zixAqxl90b".upper(), "zixAqxl90b".slice(2), "zixAqxl90b".len())
+
+print("s055-m2:", "n2v0z4A6l0mqy".upper(), "n2v0z4A6l0mqy".slice(1), "n2v0z4A6l0mqy".len())
+
+print("s055-m3:", "bqBf9n00".upper(), "bqBf9n00".slice(3), "bqBf9n00".len())
+
+print("s055-i0:", "_qa-{78}-7_1h")
+
+let s055_v0 = 78
+
+print("s055-v0:", "n={s055_v0}" + "!" * 1)
+
+print("s055-i1:", "v_t-{38}-mpi1")
+
+let s055_v1 = 38
+
+print("s055-v1:", "n={s055_v1}" + "!" * 3)
+
+print("s055-i2:", "6Aj-{14}-uwnr")
+
+let s055_v2 = 14
+
+print("s055-v2:", "n={s055_v2}" + "!" * 2)
+
+print("s055-i3:", "Cy9-{44}-Crmp")
+
+let s055_v3 = 44
+
+print("s055-v3:", "n={s055_v3}" + "!" * 3)
+
+print("s055-i4:", "r6m-{65}-y1dt")
+
+let s055_v4 = 65
+
+print("s055-v4:", "n={s055_v4}" + "!" * 3)
+
+print("s055-r0:", "nfi51ACe".replace("n", "je"), "nfi51ACe".contains("fi"))
+
+print("s055-r1:", "m6adzlwe".replace("m", "7y"), "m6adzlwe".contains("6a"))
+
+print("s055-j0:", ["Cp1", "3z9", "x4e", "civ"].join("-"))
+
+print("s055-j1:", ["BoC", "725", "t80", "3i9", "rp3"].join("-"))
+
+print("s055-a0:", "4laj_gl".at(3), "4laj_gl".trim() == "4laj_gl")
+
+print("s055-a1:", "9z8k7tb".at(4), "9z8k7tb".trim() == "9z8k7tb")

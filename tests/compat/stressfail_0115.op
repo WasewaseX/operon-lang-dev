@@ -1,0 +1,224 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=115 tag=s115
+
+stress {
+
+    print("s115-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s115-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s115-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s115-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s115-mz:", 55 % 0)
+
+} rescue (e) {
+
+    print("s115-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s115-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s115-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s115-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s115-of2:", "caught", e.kind, e.message)
+
+}
+
+gene s115_r0() {
+
+    raise "s115-8al6gw"
+
+}
+
+stress {
+
+    s115_r0()
+
+    print("s115-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s115-r0:", e.kind, e.message)
+
+}
+
+gene s115_r1() {
+
+    raise "s115-65xeq9"
+
+}
+
+stress {
+
+    s115_r1()
+
+    print("s115-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s115-r1:", e.kind, e.message)
+
+}
+
+let s115_xs0 = [20, 48]
+
+stress {
+
+    print("s115-x0:", s115_xs0[4])
+
+} rescue (e) {
+
+    print("s115-x0:", "caught", e.kind)
+
+}
+
+let s115_xs1 = [23, 26, 27, 46]
+
+stress {
+
+    print("s115-x1:", s115_xs1[5])
+
+} rescue (e) {
+
+    print("s115-x1:", "caught", e.kind)
+
+}
+
+let s115_xs2 = [18, 45]
+
+stress {
+
+    print("s115-x2:", s115_xs2[5])
+
+} rescue (e) {
+
+    print("s115-x2:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s115-0"
+
+    } rescue (e) {
+
+        print("s115-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s115-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s115-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s115-d0-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s115-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s115-1"
+
+    } rescue (e) {
+
+        print("s115-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s115-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s115-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s115-d1-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s115-d1-top:", outer.message)
+
+}

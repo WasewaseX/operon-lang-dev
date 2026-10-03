@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=223 tag=s223
+
+print("s223-m0:", "A4in1wcg1y".upper(), "A4in1wcg1y".slice(3), "A4in1wcg1y".len())
+
+print("s223-m1:", "w94fnmdfr".upper(), "w94fnmdfr".slice(2), "w94fnmdfr".len())
+
+print("s223-m2:", "1iuxp7lAor6".upper(), "1iuxp7lAor6".slice(3), "1iuxp7lAor6".len())
+
+print("s223-m3:", "klrbri".upper(), "klrbri".slice(4), "klrbri".len())
+
+print("s223-m4:", "_uqvk6v6ck".upper(), "_uqvk6v6ck".slice(1), "_uqvk6v6ck".len())
+
+print("s223-m5:", "vsedBd".upper(), "vsedBd".slice(1), "vsedBd".len())
+
+print("s223-i0:", "7mx-{32}-y3ri")
+
+let s223_v0 = 32
+
+print("s223-v0:", "n={s223_v0}" + "!" * 1)
+
+print("s223-i1:", "6io-{73}-66yl")
+
+let s223_v1 = 73
+
+print("s223-v1:", "n={s223_v1}" + "!" * 2)
+
+print("s223-i2:", "ydx-{96}-f7kb")
+
+let s223_v2 = 96
+
+print("s223-v2:", "n={s223_v2}" + "!" * 2)
+
+print("s223-i3:", "C0w-{49}-Ceuz")
+
+let s223_v3 = 49
+
+print("s223-v3:", "n={s223_v3}" + "!" * 1)
+
+print("s223-r0:", "2sepAgyf".replace("2", "Bf"), "2sepAgyf".contains("se"))
+
+print("s223-r1:", "_mjs3rbu".replace("_", "3x"), "_mjs3rbu".contains("mj"))
+
+print("s223-r2:", "tf8fblr_".replace("t", "sC"), "tf8fblr_".contains("f8"))
+
+print("s223-j0:", ["vy3", "hBe", "ftw", "gw9"].join("-"))
+
+print("s223-j1:", ["krr", "_k_", "gvp", "ex3", "d5n"].join("-"))
+
+print("s223-a0:", "ok5wfft".at(6), "ok5wfft".trim() == "ok5wfft")
+
+print("s223-a1:", "w6bew9B".at(6), "w6bew9B".trim() == "w6bew9B")

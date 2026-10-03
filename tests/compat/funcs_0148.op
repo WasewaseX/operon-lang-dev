@@ -1,0 +1,202 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=148 tag=f148
+
+gene f148_g0(p, q = 21, r = 90) {
+
+    return p * 28 + q - r
+
+}
+
+print("f148-d0:", f148_g0(-40), f148_g0(-40, 37), f148_g0(-40, 21, 90))
+
+gene f148_g1(p, q = 40, r = 38) {
+
+    return p * 72 + q - r
+
+}
+
+print("f148-d1:", f148_g1(-7), f148_g1(-7, 52), f148_g1(-7, 40, 38))
+
+gene f148_g2(p, q = 13, r = 40) {
+
+    return p * 24 + q - r
+
+}
+
+print("f148-d2:", f148_g2(45), f148_g2(45, 81), f148_g2(45, 13, 40))
+
+gene f148_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f148_fib0(n - 1) + f148_fib0(n - 2)
+
+}
+
+print("f148-fib0:", f148_fib0(8))
+
+gene f148_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f148_fib1(n - 1) + f148_fib1(n - 2)
+
+}
+
+print("f148-fib1:", f148_fib1(11))
+
+gene f148_fib2(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f148_fib2(n - 1) + f148_fib2(n - 2)
+
+}
+
+print("f148-fib2:", f148_fib2(13))
+
+gene f148_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f148_gcd0(b, a % b)
+
+}
+
+print("f148-gcd0:", f148_gcd0(222, 885))
+
+gene f148_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f148_gcd1(b, a % b)
+
+}
+
+print("f148-gcd1:", f148_gcd1(818, 391))
+
+gene f148_gcd2(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f148_gcd2(b, a % b)
+
+}
+
+print("f148-gcd2:", f148_gcd2(805, 295))
+
+gene f148_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f148_c0 = f148_mk0(14)
+
+f148_c0(7)
+
+print("f148-cl0:", f148_c0(4))
+
+gene f148_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f148_c1 = f148_mk1(35)
+
+f148_c1(3)
+
+print("f148-cl1:", f148_c1(2))
+
+gene f148_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f148-hof0:", f148_tw0(gene (z) => z * 2 + 1, 3))
+
+gene f148_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f148-hof1:", f148_tw1(gene (z) => z * 2 + 1, 25))
+
+gene f148_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f148-dg0:", f148_sd0(686180))
+
+gene f148_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f148-dg1:", f148_sd1(234326))

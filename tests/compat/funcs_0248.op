@@ -1,0 +1,188 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=248 tag=f248
+
+gene f248_g0(p, q = 2, r = 29) {
+
+    return p * 35 + q - r
+
+}
+
+print("f248-d0:", f248_g0(-28), f248_g0(-28, 68), f248_g0(-28, 2, 29))
+
+gene f248_g1(p, q = 79, r = 33) {
+
+    return p * 98 + q - r
+
+}
+
+print("f248-d1:", f248_g1(-41), f248_g1(-41, 23), f248_g1(-41, 79, 33))
+
+gene f248_g2(p, q = 70, r = 74) {
+
+    return p * 99 + q - r
+
+}
+
+print("f248-d2:", f248_g2(-18), f248_g2(-18, 47), f248_g2(-18, 70, 74))
+
+gene f248_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f248_fib0(n - 1) + f248_fib0(n - 2)
+
+}
+
+print("f248-fib0:", f248_fib0(12))
+
+gene f248_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f248_fib1(n - 1) + f248_fib1(n - 2)
+
+}
+
+print("f248-fib1:", f248_fib1(10))
+
+gene f248_fib2(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f248_fib2(n - 1) + f248_fib2(n - 2)
+
+}
+
+print("f248-fib2:", f248_fib2(9))
+
+gene f248_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f248_gcd0(b, a % b)
+
+}
+
+print("f248-gcd0:", f248_gcd0(359, 769))
+
+gene f248_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f248_gcd1(b, a % b)
+
+}
+
+print("f248-gcd1:", f248_gcd1(187, 28))
+
+gene f248_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f248_c0 = f248_mk0(26)
+
+f248_c0(6)
+
+print("f248-cl0:", f248_c0(3))
+
+gene f248_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f248_c1 = f248_mk1(35)
+
+f248_c1(3)
+
+print("f248-cl1:", f248_c1(9))
+
+gene f248_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f248-hof0:", f248_tw0(gene (z) => z * 2 + 1, 20))
+
+gene f248_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f248-hof1:", f248_tw1(gene (z) => z * 2 + 1, 23))
+
+gene f248_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f248-dg0:", f248_sd0(677597))
+
+gene f248_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f248-dg1:", f248_sd1(453444))

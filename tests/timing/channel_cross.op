@@ -1,0 +1,37 @@
+# W015 timing lane (Rust-only): the LIVE cross-thread window. The host sends
+# AFTER the worker is parked in recv, and join still yields the computed
+# value. Real OS threads make this ordering real; the sequential oracle runs
+# worker bodies eagerly at spawn and cannot observe mid-flight ordering, so
+# this shape lives in tests/timing/ (both walkers skip the lane; W18
+# pattern). The buffered form of the same rule stays in tests/channels.op.
+gene parked_doubler(ch) {
+    let v = recv(ch)
+    return v * 2
+}
+gene parked(ch) {
+    let v = recv(ch)
+    return v
+}
+
+frame proof {
+    let t = channel()
+    let worker = spawn(parked_doubler, [t])
+    send(t, 21)
+    let joined = join(worker)
+    assert(joined == 42, "worker parked in recv sees a host send (join gave " + str(joined) + ")")
+}
+
+frame proof {
+    let q = channel()
+    let sleeper = spawn(parked, [q])
+    for i in range(100_000) {
+        let _ = i
+    }
+    let _ = cancel(sleeper)
+    let r = join(sleeper, 10_000)
+    assert(type(r) == "map" and r.kind == "cancelled", "cancel unblocks a parked recv")
+    assert(task_state(sleeper) == "cancelled", "the cancelled cell reports its phase")
+    send(q, "after cancel")
+    close(q)
+    assert(recv(q) == "after cancel", "the buffer survives the cancelled consumer")
+}

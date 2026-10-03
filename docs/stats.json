@@ -1,132 +1,258 @@
 {
-  "generated_utc": "2026-09-26 14:44:36Z",
-  "version": "2.2.0",
-  "proofs": {
-    "files": 112,
-    "proofs": 98,
-    "passed": 98,
-    "failed": 0,
-    "asserts": 1298
+ "cli_subcommands": [
+  "ast",
+  "bench",
+  "build",
+  "check",
+  "crispr",
+  "dap",
+  "disasm",
+  "doc",
+  "explain",
+  "fix",
+  "fmt",
+  "graph",
+  "ir",
+  "keywords",
+  "lint",
+  "profile",
+  "repl",
+  "rna",
+  "test",
+  "version",
+  "watch"
+ ],
+ "harness": null,
+ "keyword_analogy_pending": [],
+ "keyword_count": 60,
+ "keywords": [
+  "activates",
+  "anchor",
+  "as",
+  "autoinducer",
+  "bind",
+  "break",
+  "case",
+  "cofactor",
+  "collect",
+  "continue",
+  "decoy",
+  "edit",
+  "elif",
+  "else",
+  "enhance",
+  "enter",
+  "export",
+  "fate",
+  "for",
+  "frame",
+  "from",
+  "gene",
+  "guard",
+  "if",
+  "import",
+  "in",
+  "inducer",
+  "inhibits",
+  "ires",
+  "let",
+  "ligand",
+  "loop",
+  "match",
+  "new",
+  "operon",
+  "period",
+  "phenotype",
+  "proof",
+  "raise",
+  "regulate",
+  "replace",
+  "repressilator",
+  "rescue",
+  "return",
+  "scope",
+  "self",
+  "sequence",
+  "silence",
+  "splice",
+  "state",
+  "strength",
+  "stress",
+  "tad",
+  "threshold",
+  "toggle",
+  "trait",
+  "use",
+  "variant",
+  "while",
+  "yield"
+ ],
+ "lsp_methods": [
+  "initialize",
+  "shutdown",
+  "textDocument/completion",
+  "textDocument/definition",
+  "textDocument/didChange",
+  "textDocument/didClose",
+  "textDocument/didOpen",
+  "textDocument/documentSymbol",
+  "textDocument/formatting",
+  "textDocument/hover",
+  "textDocument/prepareRename",
+  "textDocument/publishDiagnostics",
+  "textDocument/references",
+  "textDocument/rename",
+  "textDocument/semanticTokens",
+  "textDocument/signatureHelp"
+ ],
+ "proof_files": 165,
+ "proof_totals": {
+  "asserts": null,
+  "files": null,
+  "proofs": null,
+  "source": "fast-mode skip"
+ },
+ "redteam_files": 106,
+ "spec": {
+  "h1": "# Operon, Language Specification",
+  "status": "v2.7.0"
+ },
+ "std_function_count": 339,
+ "std_module_count": 33,
+ "std_modules": [
+  {
+   "functions": 8,
+   "module": "args"
   },
-  "apps": {
-    "files": 1,
-    "proofs": 1,
-    "passed": 1,
-    "failed": 0,
-    "asserts": 7
+  {
+   "functions": 20,
+   "module": "bigint"
   },
-  "granted": {
-    "files": 7
+  {
+   "functions": 17,
+   "module": "binary"
   },
-  "differential": {
-    "match": 143,
-    "diverge": 0,
-    "skipped": 0,
-    "granted_targets": 5
+  {
+   "functions": 4,
+   "module": "bio"
   },
-  "redteam": {
-    "files": 97,
-    "contained": 100,
-    "breached": 0
+  {
+   "functions": 6,
+   "module": "collections"
   },
-  "std": {
-    "modules": 15,
-    "module_list": [
-      "args",
-      "bio",
-      "collections",
-      "csv",
-      "fmt",
-      "fs",
-      "iter",
-      "json",
-      "math",
-      "motifs",
-      "random",
-      "seq",
-      "set",
-      "strings",
-      "testing"
-    ],
-    "genes": 149
+  {
+   "functions": 7,
+   "module": "csv"
   },
-  "keywords": {
-    "count": 58,
-    "list": [
-      "gene",
-      "let",
-      "if",
-      "elif",
-      "else",
-      "while",
-      "loop",
-      "for",
-      "in",
-      "return",
-      "break",
-      "continue",
-      "match",
-      "case",
-      "use",
-      "tad",
-      "anchor",
-      "export",
-      "import",
-      "enhance",
-      "silence",
-      "stress",
-      "rescue",
-      "raise",
-      "fate",
-      "state",
-      "regulate",
-      "activates",
-      "inhibits",
-      "strength",
-      "toggle",
-      "repressilator",
-      "period",
-      "frame",
-      "proof",
-      "guard",
-      "splice",
-      "variant",
-      "edit",
-      "replace",
-      "ires",
-      "as",
-      "collect",
-      "enter",
-      "phenotype",
-      "sequence",
-      "yield",
-      "new",
-      "threshold",
-      "from",
-      "self",
-      "decoy",
-      "ligand",
-      "autoinducer",
-      "bind",
-      "inducer",
-      "cofactor",
-      "operon"
-    ]
+  {
+   "functions": 12,
+   "module": "deque"
   },
-  "lsp": {
-    "methods": [
-      "exit",
-      "initialize",
-      "shutdown",
-      "textDocument/completion",
-      "textDocument/definition",
-      "textDocument/didChange",
-      "textDocument/didClose",
-      "textDocument/didOpen",
-      "textDocument/documentSymbol",
-      "textDocument/formatting",
-      "textDocument/hover",
-      "textDocument/publishDiagnostics"
-    ]
+  {
+   "functions": 6,
+   "module": "env"
+  },
+  {
+   "functions": 8,
+   "module": "fmt"
+  },
+  {
+   "functions": 12,
+   "module": "fs"
+  },
+  {
+   "functions": 23,
+   "module": "graph"
+  },
+  {
+   "functions": 11,
+   "module": "hashing"
+  },
+  {
+   "functions": 10,
+   "module": "heap"
+  },
+  {
+   "functions": 23,
+   "module": "iter"
+  },
+  {
+   "functions": 11,
+   "module": "json"
+  },
+  {
+   "functions": 6,
+   "module": "logging"
+  },
+  {
+   "functions": 18,
+   "module": "math"
+  },
+  {
+   "functions": 12,
+   "module": "motifs"
+  },
+  {
+   "functions": 9,
+   "module": "path"
+  },
+  {
+   "functions": 8,
+   "module": "process"
+  },
+  {
+   "functions": 6,
+   "module": "random"
+  },
+  {
+   "functions": 8,
+   "module": "result"
+  },
+  {
+   "functions": 0,
+   "module": "seq"
+  },
+  {
+   "functions": 10,
+   "module": "serialize"
+  },
+  {
+   "functions": 11,
+   "module": "set"
+  },
+  {
+   "functions": 17,
+   "module": "strings"
+  },
+  {
+   "functions": 16,
+   "module": "terminal"
+  },
+  {
+   "functions": 6,
+   "module": "testing"
+  },
+  {
+   "functions": 13,
+   "module": "time"
+  },
+  {
+   "functions": 3,
+   "module": "try_numeric"
+  },
+  {
+   "functions": 0,
+   "module": "typed"
+  },
+  {
+   "functions": 8,
+   "module": "unicode"
+  },
+  {
+   "functions": 10,
+   "module": "url"
   }
+ ],
+ "test_op_files": 3555,
+ "version": "2.7.0"
 }

@@ -1,0 +1,150 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=190 tag=c190
+
+let c190_b0 = "start"
+
+if 48 > 80 { c190_b0 = "hi" } elif 48 > 40 { c190_b0 = "mid" } else { c190_b0 = "lo" }
+
+print("c190-i0:", c190_b0, 48)
+
+let c190_b1 = "start"
+
+if 56 > 80 { c190_b1 = "hi" } elif 56 > 40 { c190_b1 = "mid" } else { c190_b1 = "lo" }
+
+print("c190-i1:", c190_b1, 56)
+
+let c190_b2 = "start"
+
+if 63 > 80 { c190_b2 = "hi" } elif 63 > 40 { c190_b2 = "mid" } else { c190_b2 = "lo" }
+
+print("c190-i2:", c190_b2, 63)
+
+let c190_b3 = "start"
+
+if 71 > 80 { c190_b3 = "hi" } elif 71 > 40 { c190_b3 = "mid" } else { c190_b3 = "lo" }
+
+print("c190-i3:", c190_b3, 71)
+
+let c190_b4 = "start"
+
+if 27 > 80 { c190_b4 = "hi" } elif 27 > 40 { c190_b4 = "mid" } else { c190_b4 = "lo" }
+
+print("c190-i4:", c190_b4, 27)
+
+let c190_a0 = 0
+
+let c190_n0 = 0
+
+while c190_n0 < 19 {
+
+    c190_n0 += 3
+
+    if c190_n0 % 2 == 0 { continue }
+
+    if c190_n0 > 23 { break }
+
+    c190_a0 += c190_n0
+
+}
+
+print("c190-w0:", c190_a0, c190_n0)
+
+let c190_a1 = 0
+
+let c190_n1 = 0
+
+while c190_n1 < 15 {
+
+    c190_n1 += 2
+
+    if c190_n1 % 2 == 0 { continue }
+
+    if c190_n1 > 23 { break }
+
+    c190_a1 += c190_n1
+
+}
+
+print("c190-w1:", c190_a1, c190_n1)
+
+let c190_a2 = 0
+
+let c190_n2 = 0
+
+while c190_n2 < 10 {
+
+    c190_n2 += 3
+
+    if c190_n2 % 2 == 0 { continue }
+
+    if c190_n2 > 18 { break }
+
+    c190_a2 += c190_n2
+
+}
+
+print("c190-w2:", c190_a2, c190_n2)
+
+let c190_c0 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 3] {
+
+        c190_c0 += a * b
+
+    }
+
+}
+
+print("c190-l0:", c190_c0)
+
+let c190_c1 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 3] {
+
+        c190_c1 += a * b
+
+    }
+
+}
+
+print("c190-l1:", c190_c1)
+
+let c190_acc0 = ""
+
+loop {
+
+    c190_acc0 += "x"
+
+    if c190_acc0.len() >= 7 { break }
+
+}
+
+print("c190-o0:", c190_acc0)
+
+let c190_acc1 = ""
+
+loop {
+
+    c190_acc1 += "x"
+
+    if c190_acc1.len() >= 7 { break }
+
+}
+
+print("c190-o1:", c190_acc1)
+
+let c190_acc2 = ""
+
+loop {
+
+    c190_acc2 += "x"
+
+    if c190_acc2.len() >= 7 { break }
+
+}
+
+print("c190-o2:", c190_acc2)
