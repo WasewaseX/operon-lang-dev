@@ -242,6 +242,10 @@ clippy 0 · fmt clean · cookbook **19/19** · LSP smoke OK · CI success.
   paths), `src/tools.rs`, `src/main.rs`, `scripts/opt_parity.sh`,
   `scripts/bench_opt.sh|py`, `scripts/bench/opt/`, `docs/OPTIMIZER.md`.
 - Depends: W009.
+- 2026-10-03 (W-BENCH): app-level baseline added — apps/ytdl/bench M8
+  (fib(27) in-host) measures the interpreter end-to-end on a real app;
+  a parallel builder's earlier "W011 lost" note was WRONG (stale local
+  clone — W011 was on origin/ai/ecosystem all along).
 
 ### W012 — JIT [P3] [dev-1] [XL] [deferred: audit orders VM → profiling → opt → JIT]
 - Deliverable until un-deferred: one design paragraph in SPEC §VM (Cranelift vs hand-rolled

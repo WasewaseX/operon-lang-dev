@@ -1,0 +1,10 @@
+# operator cell for the ytdl downloader app (apps/ytdl/operon/)
+# Explicit --cell only — auto-detected cells cannot grant by design.
+# run.* grants name the exact external engines the app may spawn;
+# run.timeout_ms covers slow real downloads (5 min ceiling per child).
+[allow]
+run = yt-dlp, ffmpeg, ffprobe, aria2c
+exit = true
+
+[run]
+timeout_ms = 300000

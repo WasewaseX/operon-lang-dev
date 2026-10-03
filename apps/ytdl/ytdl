@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# ytdl — launcher for the Operon downloader app.
+# Centralizes the sandbox grants (default-deny needs explicit allowances),
+# the fuel budget (child wall time is fuel in Operon: real downloads burn it),
+# and the operator cell (run grants + per-child timeout).
+set -euo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# ensure the PATH tools exist, but never shadow an operator-provided shim
+# PATH (bench.sh deliberately puts deterministic shims first)
+command -v yt-dlp >/dev/null 2>&1 || export PATH="$HOME/.local/bin:$PATH"
+# resolve the VM binary: PATH first, then the repo's cargo target
+if command -v operon >/dev/null 2>&1 && [ -f "$(command -v operon)" ]; then
+  OP="$(command -v operon)"
+elif [ -x "$DIR/../../target/release/operon" ]; then
+  OP="$DIR/../../target/release/operon"
+else
+  echo "ytdl: operon VM binary not found (build the repo: cargo build --release)" >&2
+  exit 3
+fi
+exec "$OP" run "$DIR/operon/ytdl.op" \
+  --cell "$DIR/operon/ytdl.cell" \
+  --allow-read "$DIR" \
+  --allow-exit \
+  --fuel 2000000000 \
+  -- "$@"

@@ -1,0 +1,15 @@
+[package]
+name = "ytdl-rs"
+version = "1.0.0"
+edition = "2021"
+
+# zero external dependencies — std only (part of the comparison story:
+# the same app in serde_json would shrink by the mini-JSON parser)
+
+[[bin]]
+name = "ytdl-rs"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
