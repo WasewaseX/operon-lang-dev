@@ -424,11 +424,12 @@ pub fn serve_at_trap(interp: &mut Interp, env: &Rc<Env>, stmt_line: Option<usize
                         let mut depth = 0usize;
                         while let Some(e) = cur {
                             let vars_borrow = e.vars.borrow();
-                            let mut names: Vec<String> = vars_borrow.keys().cloned().collect();
+                            let mut names: Vec<String> =
+                                vars_borrow.keys().map(|k| k.to_string()).collect();
                             names.sort();
                             for nm in names {
                                 let v = vars_borrow
-                                    .get(&nm)
+                                    .get(nm.as_str())
                                     .cloned()
                                     .unwrap_or(crate::value::Value::Null);
                                 vars.push((nm, v.display()));

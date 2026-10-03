@@ -378,6 +378,78 @@ on every host incl. bash).
 
 (Add a row per release; ratios from the default `--iters 5` run.)
 
+## W011-r2 — the call-funnel round (2026-10-03)
+
+Owner directive: "optimize the language to make it faster, check benchmarks
+every time, verify with the ytdl app." Method: the W009-A ablation harness
+first (apportion, then cut), an **interleaved A/B runner**
+(`scripts/bench_core.py` — baseline and patched binaries alternate run-by-run
+so box contention hits both sides; this box showed ±30% swings between
+minutes, which would have made sequential measurement lie both ways), and
+the full parity battery after every round.
+
+Changes landed (all output-identical, gated per round):
+
+1. **FxHasher** (`src/fxhash.rs`, zero crates) on the INTERNAL maps the
+   call funnel touches per call: `builtin_synonym_map` (SipHash→~3ns),
+   `mono_cache`, `call_counts`, `gene_buckets` (+ nested bin map),
+   `methyl_levels`. **Deliberately NOT on `Env`**: a measured experiment
+   showed Fx on env maps REGRESSED loops.op to 0.90x — deterministic
+   hashing gives short hot names ("acc"/"i") systematic probe collisions,
+   while RandomState's per-process seed spreads them; env maps stay on the
+   default hasher (loops 1.00x, fib keeps its win).
+2. **rho_knobs cached**: the RHO gate re-parsed four `.cell` strings
+   (hash + `parse::<f64>`) on EVERY call; the cell map is never mutated
+   after construction (audited), so the derived tuple is cached on first
+   use. Was the single largest gate cost.
+3. **promoter_veto reorder**: the `!expr_stochastic` early-out moved ABOVE
+   the eager `def.name.clone()` — every non-bursting call paid a malloc for
+   a name the gate never read.
+4. **Lazy traceback frame** (W007 frame): `call_gene` cloned the gene name
+   per call purely to carry it to an error path that honest workloads never
+   hit; the clone now happens only when a chain frame is actually appended
+   (`call_gene_inner` borrows the def, which also kills the funnel's own
+   per-call name clone).
+5. **Methylation empty-map guard**: with no level table and a positive
+   threshold, the per-call hash lookup is provably inert and is skipped
+   (threshold<=0 re-enables it — the guard reads current values).
+6. **VM dispatch loop**: process-constant ablation flags hoisted out of the
+   loop (two atomic loads per instruction removed); `tick()`'s cancel
+   observation precomputes chain liveness (`cancel_live`, refreshed at the
+   three wholesale assignment sites; `cancel_suppressed` stays live).
+7. **Frame-push gating**: the per-call `call_stack` push (String malloc +
+   Vec push) is skipped unless profiling or a debugger surface is live
+   (`frame_trace_live`; the push's only readers; close_timing's pop is
+   conditional, so the pairing is exact; DAP stopOnEntry/protocol modes arm
+   it — caught by the DAP e2e gate during bring-up, which is why the
+   debugger e2e gates run in the main battery).
+
+Measured (interleaved A/B, medians, same box minutes apart):
+
+| fixture | baseline | W011-r2 | speedup |
+|---|---:|---:|---:|
+| fib27 | 375.4 ms | 299.4 ms | **1.25x** |
+| fib25 | 145.0 ms | 115.7 ms | **1.25x** |
+| recursion | 269.4 ms | 220.8 ms | **1.22x** |
+| grn | 43.1 ms | 35.0 ms | **1.23x** |
+| loops | 66.7 ms | 67.5 ms | 0.99x |
+| collections | 51.5 ms | 50.9 ms | 1.01x |
+| strings | 27.1 ms | 27.8 ms | 0.97x |
+
+fib27 op/py moved 9.2x → **7.3x** (CPython 41.2 ms on the same window).
+App-level (ytdl deep suite, checksums 10/10 IDENTICAL): table -13.7%,
+lines -17.8%, table300 -15.7%, lines200k -16.5%; spawn/queue unchanged
+(child-process-bound, as designed). Gates at close: cargo 319, vm_parity
+3555/0, differential 3484/0, compat matrix 3204x5 identical, redteam
+109/0, debug+protocol+DAP e2e green, clippy 0, fmt clean.
+
+**Next lever (boarded, not started):** the residual ~460ns/call is the
+funnel walk itself (10 nested Rust frames per call) + per-call frame env
+alloc + operand-stack arg collect — the classic fix is VM-to-VM call
+fusion with frame-slot locals (W011 stage-2 "locals-in-frame" from the
+W009-A follow-up); it needs its own gated session with the redteam
+probes re-run (gate funnels get duplicated).
+
 ## Reproducing
 
 ```sh

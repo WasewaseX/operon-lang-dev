@@ -749,7 +749,7 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
         }
         for (k, v) in menv.vars.borrow().iter() {
             if !k.starts_with('#') {
-                exports.push((Value::Str(k.clone()), v.clone()));
+                exports.push((Value::Str(k.to_string()), v.clone()));
             }
         }
         exports.sort_by(|a, b| match (&a.0, &b.0) {
@@ -1347,12 +1347,12 @@ pub fn snapshot_globals(interp: &Interp) -> Vec<(String, SnapVal)> {
     let mut out: Vec<(String, SnapVal)> = Vec::new();
     for (name, v) in interp.global.vars.borrow().iter() {
         match v {
-            Value::Gene(d, _) => out.push((name.clone(), SnapVal::Gene(d.clone()))),
+            Value::Gene(d, _) => out.push((name.to_string(), SnapVal::Gene(d.clone()))),
             // W015: a global channel crosses as a live handle (same buffer)
-            Value::Channel(a) => out.push((name.clone(), SnapVal::Channel(a.clone()))),
+            Value::Channel(a) => out.push((name.to_string(), SnapVal::Channel(a.clone()))),
             other => {
                 let sv = to_send(other);
-                out.push((name.clone(), SnapVal::Data(sv)));
+                out.push((name.to_string(), SnapVal::Data(sv)));
             }
         }
     }
@@ -1690,10 +1690,10 @@ pub fn snapshot_with_closure(interp: &Interp, closure: Option<&Rc<Env>>) -> Vec<
         }
         for (name, v) in env.vars.borrow().iter() {
             match v {
-                Value::Gene(d, _) => out.push((name.clone(), SnapVal::Gene(d.clone()))),
+                Value::Gene(d, _) => out.push((name.to_string(), SnapVal::Gene(d.clone()))),
                 // W015: closure-captured channels cross live too (same buffer)
-                Value::Channel(a) => out.push((name.clone(), SnapVal::Channel(a.clone()))),
-                other => out.push((name.clone(), SnapVal::Data(to_send(other)))),
+                Value::Channel(a) => out.push((name.to_string(), SnapVal::Channel(a.clone()))),
+                other => out.push((name.to_string(), SnapVal::Data(to_send(other)))),
             }
         }
         node = env.parent.clone();
@@ -1925,6 +1925,7 @@ pub fn spawn_task(interp: &mut Interp, callee: Value, args: Vec<Value>) -> Resul
     let (tx, rx) = mpsc::channel::<(SendValue, Vec<Note>)>();
     spawn_worker(move || {
         let mut ti = Interp::new();
+        ti.cancel_live = !worker_chain.is_empty();
         ti.cancel_chain = worker_chain;
         ti.fuel_pool = host_fuel;
         // loop-9 (C8): live shared medium
@@ -2030,6 +2031,7 @@ fn spawn_fiber_task(
     }
     let wake_arc = interp.sched_wake.clone();
     let mut ti = Interp::new();
+    ti.cancel_live = !worker_chain.is_empty();
     ti.cancel_chain = worker_chain;
     ti.fuel_pool = host_fuel;
     ti.medium = host_medium;

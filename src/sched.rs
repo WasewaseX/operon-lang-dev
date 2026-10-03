@@ -443,6 +443,7 @@ mod tests {
         // the worker discipline: the task interp's chain ends with its OWN
         // flag so ticks and cancel observations see the shared truth
         interp.cancel_chain = vec![cancel.clone()];
+        interp.cancel_live = true;
         FiberTask {
             id,
             name: name.to_string(),
