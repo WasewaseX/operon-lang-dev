@@ -84,6 +84,13 @@ call counts, regulation flags (`enhanced active repressed`), the
 `--json` schema is self-describing and byte-stable (pinned by tests);
 `--chrome` does not change it (§4).
 
+**Stream shape:** the JSON document is the FINAL stdout line, printed
+after the program's own output (rule 2 makes that output part of the
+run — `fib.op` prints `fib(25) = 75025` first). A plain
+`--json > f.json` redirect therefore does NOT parse as JSON. Extract it
+safely with `| tail -n 1 > f.json`. Program stdout stays byte-identical
+to the unprofiled lane; the JSON line is appended, nothing else moves.
+
 ## 4. Per-call spans → Chrome Trace (`--chrome`, W096/W097-A)
 
 ```sh
@@ -184,7 +191,8 @@ bash scripts/build.sh && ./bin/operon --version          # rule 1
 for i in 1 2 3 4 5; do ./bin/operon bench examples/fib.op --iters 5; done   # rule 3
 ./bin/operon profile examples/fib.op --chrome /tmp/fib25.json
 # ui.perfetto.dev ← /tmp/fib25.json        (attribution + shape)
-./bin/operon profile examples/fib.op --json > /tmp/agg.json
+./bin/operon profile examples/fib.op --json | tail -n 1 > /tmp/agg.json
+# (JSON rides the FINAL stdout line, after the program's own output — §3)
 # cross-check: sum(gene.calls) == otherData.total_spans
 ```
 
