@@ -1,0 +1,34 @@
+# Errors as values, end to end: a batch of raw records enters the value
+# channel through try_*, every failure is routed by the std/result combinator
+# tier, and the report prints without a single stress being raised. This is
+# the whole discipline of TUTORIAL §12 in one runnable file.
+use std/result as r
+
+gene to_score(raw) {
+    let n = try_num(raw)?!
+    if n >= 0 && n <= 100 {
+        return ok(n)
+    }
+    return err("score out of range: {n}")
+}
+
+gene main() {
+    let raws = ["91", "47", "", "88", "133", "59", "abc"]
+    let scores = []
+    let rejected = 0
+    for raw in raws {
+        let res = to_score(raw)
+        if is_err(res) {
+            rejected = rejected + 1
+        }
+        # the pipeline never stops: an invalid record grades as 0
+        scores = push(scores, r.unwrap_or_else(res, gene (e) { return 0 }))
+    }
+    print("scores: {scores}")
+    print("rejected: {rejected} of {len(raws)}")
+    print("best parse ok over 90: {r.is_ok_and(to_score("91"), gene (x) { return x > 90 })}")
+    print("range error is contained: {r.is_err_and(to_score("133"), gene (e) { return len(e) > 0 })}")
+    # the Option interop edge: hand an ok to a some/none-expecting caller
+    print("first as option: {r.ok_to_some(to_score("59"))}")
+    print("bad as option: {r.ok_to_some(to_score("abc"))}")
+}
