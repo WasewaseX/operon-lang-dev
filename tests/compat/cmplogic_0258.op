@@ -1,0 +1,36 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=258 tag=c258
+
+print("c258-c0:", -4532 <= 4066)
+
+print("c258-c1:", -9392 <= 1407)
+
+print("c258-c2:", 2084 != -406)
+
+print("c258-c3:", -7529 >= -4302)
+
+print("c258-b0:", 22 < 43 && 43 < 33, 22 > 43 || 22 > 33)
+
+print("c258-b1:", 2 < 6 && 6 < 39, 2 > 6 || 2 > 39)
+
+print("c258-b2:", 42 < 38 && 38 < 11, 42 > 38 || 42 > 11)
+
+print("c258-t0:", 9255 > -1699 ? "gt" : "le")
+
+print("c258-t1:", 6642 > 1476 ? "gt" : "le")
+
+let c258_n0 = null
+
+print("c258-n0:", c258_n0 ?? 1003, c258_n0 == null)
+
+let c258_n1 = null
+
+print("c258-n1:", c258_n1 ?? 3409, c258_n1 == null)
+
+let c258_n2 = null
+
+print("c258-n2:", c258_n2 ?? 1856, c258_n2 == null)
+
+print("c258-s0:", "fjpr" in "vefdAjfjpr", "fjpr" == "fjpr")
+
+print("c258-s1:", "3p64" in "zeqyrj3p64", "3p64" == "3p64")

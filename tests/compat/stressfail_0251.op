@@ -1,0 +1,222 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=251 tag=s251
+
+stress {
+
+    print("s251-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s251-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s251-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s251-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s251-mz:", 5 % 0)
+
+} rescue (e) {
+
+    print("s251-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s251-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s251-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s251-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s251-of2:", "caught", e.kind, e.message)
+
+}
+
+gene s251_r0() {
+
+    raise "s251-00kt08"
+
+}
+
+stress {
+
+    s251_r0()
+
+    print("s251-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s251-r0:", e.kind, e.message)
+
+}
+
+gene s251_r1() {
+
+    raise "s251-afwiAd"
+
+}
+
+stress {
+
+    s251_r1()
+
+    print("s251-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s251-r1:", e.kind, e.message)
+
+}
+
+gene s251_r2() {
+
+    raise "s251-eo_ait"
+
+}
+
+stress {
+
+    s251_r2()
+
+    print("s251-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s251-r2:", e.kind, e.message)
+
+}
+
+let s251_xs0 = [40, 2]
+
+stress {
+
+    print("s251-x0:", s251_xs0[4])
+
+} rescue (e) {
+
+    print("s251-x0:", "caught", e.kind)
+
+}
+
+let s251_xs1 = [36, 33, 49]
+
+stress {
+
+    print("s251-x1:", s251_xs1[5])
+
+} rescue (e) {
+
+    print("s251-x1:", "caught", e.kind)
+
+}
+
+let s251_xs2 = [12, 48, 23]
+
+stress {
+
+    print("s251-x2:", s251_xs2[6])
+
+} rescue (e) {
+
+    print("s251-x2:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s251-0"
+
+    } rescue (e) {
+
+        print("s251-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s251-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s251-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s251-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s251-1"
+
+    } rescue (e) {
+
+        print("s251-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s251-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s251-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s251-d1-top:", outer.message)
+
+}

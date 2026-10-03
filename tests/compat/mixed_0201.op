@@ -1,0 +1,214 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=201 tag=m201
+
+gene m201_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m201-b0:", m201_b0({ribose: 84, enzyme: 57, ligase: 6})?!)
+
+gene m201_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m201-b1:", m201_b1({gene: 94, splicer: 43, ribose: 88})?!)
+
+gene m201_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m201-b2:", m201_b2({gene: 11, exon: 21, plasmid: 38})?!)
+
+gene m201_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m201_f0([52, 21, 44, 57, 15]) {
+
+    case Ok(list) {
+
+        print("m201-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m201-f0:", "e:", m)
+
+    }
+
+}
+
+gene m201_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m201_f1([4, 9, 40, 12, 37, 39]) {
+
+    case Ok(list) {
+
+        print("m201-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m201-f1:", "e:", m)
+
+    }
+
+}
+
+let m201_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m201-cc0:", m201_cl0(2)(13), m201_cl0(13)(2))
+
+let m201_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m201-cc1:", m201_cl1(12)(2), m201_cl1(2)(12))
+
+let m201_data0 = some([some("plasmid"), none(), some(6)])
+
+match m201_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m201-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m201-x0:", "shape-miss")
+
+    }
+
+}
+
+let m201_data1 = some([some("cell"), none(), some(5)])
+
+match m201_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m201-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m201-x1:", "shape-miss")
+
+    }
+
+}

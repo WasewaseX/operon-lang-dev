@@ -1,6 +1,6 @@
-# reg-r3 (re-audit) — sequences honor ALL creation gates
+# reg-r3 (re-audit), sequences honor ALL creation gates
 # A sequence is a transcript too: GRN veto, methylation, and the toggle
-# gate all apply at creation (reg-r1 gated only the toggle — a silenced
+# gate all apply at creation (reg-r1 gated only the toggle, a silenced
 # sequence still transcribed). Threshold default 3.
 sequence loud() {
     yield "SEQ-YIELD"

@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=238 tag=c238
+
+print("c238-c0:", -4518 <= -6879)
+
+print("c238-c1:", -5587 < 5380)
+
+print("c238-c2:", 9800 > 2634)
+
+print("c238-c3:", -9535 != 2026)
+
+print("c238-c4:", -509 <= 3983)
+
+print("c238-c5:", -3017 != -9860)
+
+print("c238-c6:", 8780 < -2251)
+
+print("c238-b0:", 7 < 29 && 29 < 24, 7 > 29 || 7 > 24)
+
+print("c238-b1:", 28 < 21 && 21 < 43, 28 > 21 || 28 > 43)
+
+print("c238-b2:", 27 < 40 && 40 < 9, 27 > 40 || 27 > 9)
+
+print("c238-b3:", 20 < 17 && 17 < 6, 20 > 17 || 20 > 6)
+
+print("c238-t0:", -4899 > -7345 ? "gt" : "le")
+
+print("c238-t1:", 2078 > -1265 ? "gt" : "le")
+
+let c238_n0 = null
+
+print("c238-n0:", c238_n0 ?? -5758, c238_n0 == null)
+
+let c238_n1 = null
+
+print("c238-n1:", c238_n1 ?? 812, c238_n1 == null)
+
+let c238_n2 = null
+
+print("c238-n2:", c238_n2 ?? 9811, c238_n2 == null)
+
+print("c238-s0:", "jm_e" in "sqy8iwjm_e", "jm_e" == "jm_e")
+
+print("c238-s1:", "1wb4" in "Cbopws1wb4", "1wb4" == "1wb4")

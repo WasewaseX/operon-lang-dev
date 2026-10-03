@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=183 tag=c183
+
+print("c183-c0:", -7156 >= -4375)
+
+print("c183-c1:", 17 > 6065)
+
+print("c183-c2:", 9883 <= 6793)
+
+print("c183-c3:", -7693 <= 414)
+
+print("c183-c4:", 4012 >= -1480)
+
+print("c183-b0:", 10 < 40 && 40 < 4, 10 > 40 || 10 > 4)
+
+print("c183-b1:", 25 < 4 && 4 < 22, 25 > 4 || 25 > 22)
+
+print("c183-b2:", 44 < 40 && 40 < 24, 44 > 40 || 44 > 24)
+
+print("c183-b3:", 33 < 10 && 10 < 47, 33 > 10 || 33 > 47)
+
+print("c183-t0:", 7082 > 3969 ? "gt" : "le")
+
+print("c183-t1:", 660 > -6573 ? "gt" : "le")
+
+print("c183-t2:", 474 > 8370 ? "gt" : "le")
+
+print("c183-t3:", -1196 > -4868 ? "gt" : "le")
+
+let c183_n0 = null
+
+print("c183-n0:", c183_n0 ?? 1632, c183_n0 == null)
+
+let c183_n1 = null
+
+print("c183-n1:", c183_n1 ?? -1270, c183_n1 == null)
+
+print("c183-s0:", "gor9" in "xg8ht2gor9", "gor9" == "gor9")
+
+print("c183-s1:", "euoc" in "d_ud0feuoc", "euoc" == "euoc")

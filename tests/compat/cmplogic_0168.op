@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=168 tag=c168
+
+print("c168-c0:", -4839 <= 5794)
+
+print("c168-c1:", -3257 < 1857)
+
+print("c168-c2:", 1050 == -1331)
+
+print("c168-c3:", -602 == 5700)
+
+print("c168-c4:", -5384 <= 9633)
+
+print("c168-c5:", -2144 != 6361)
+
+print("c168-b0:", 12 < 28 && 28 < 46, 12 > 28 || 12 > 46)
+
+print("c168-b1:", 27 < 29 && 29 < 0, 27 > 29 || 27 > 0)
+
+print("c168-b2:", 30 < 42 && 42 < 39, 30 > 42 || 30 > 39)
+
+print("c168-t0:", -2321 > 2601 ? "gt" : "le")
+
+print("c168-t1:", 5 > -2890 ? "gt" : "le")
+
+print("c168-t2:", -716 > -5974 ? "gt" : "le")
+
+print("c168-t3:", 2106 > -7770 ? "gt" : "le")
+
+let c168_n0 = null
+
+print("c168-n0:", c168_n0 ?? 2060, c168_n0 == null)
+
+let c168_n1 = null
+
+print("c168-n1:", c168_n1 ?? -1511, c168_n1 == null)
+
+print("c168-s0:", "lh05" in "5txnirlh05", "lh05" == "lh05")
+
+print("c168-s1:", "Cxlm" in "aA7r8yCxlm", "Cxlm" == "Cxlm")

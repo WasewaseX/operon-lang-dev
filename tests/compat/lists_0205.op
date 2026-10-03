@@ -1,0 +1,76 @@
+# compat corpus — generated, do not edit by hand
+# bucket=lists seed=20261030 idx=205 tag=l205
+
+let l205_l0 = [-17, 20, -17, 14, 0]
+
+print("l205-l0:", l205_l0[4], l205_l0[-1], l205_l0.len())
+
+let l205_l1 = [0, -25, 17, -14]
+
+print("l205-l1:", l205_l1[0], l205_l1[-1], l205_l1.len())
+
+let l205_l2 = [46, -29, 21, -26]
+
+print("l205-l2:", l205_l2[2], l205_l2[-1], l205_l2.len())
+
+let l205_l3 = [-14, -15, 11, 45]
+
+print("l205-l3:", l205_l3[0], l205_l3[-1], l205_l3.len())
+
+let l205_s0 = [-77, 88, 8, 75, -43, -82]
+
+print("l205-s0:", l205_s0.slice(2, 4), l205_s0.slice(-2))
+
+let l205_s1 = [98, 15, -57, 14, -81]
+
+print("l205-s1:", l205_s1.slice(2, 3), l205_s1.slice(-3))
+
+let l205_s2 = [7, 5, 6, -83, 65, -32, 85, -69]
+
+print("l205-s2:", l205_s2.slice(2, 4), l205_s2.slice(-1))
+
+let l205_s3 = [63, -53, -74, -23, -70, 3, 87, -88]
+
+print("l205-s3:", l205_s3.slice(4, 5), l205_s3.slice(-3))
+
+let l205_r0 = [648, 549, 321, 643, 397, 49, 466]
+
+print("l205-r0:", l205_r0.sort(), l205_r0.reverse(), l205_r0.contains(321))
+
+let l205_r1 = [692, 383, 605, 247, 831, 389]
+
+print("l205-r1:", l205_r1.sort(), l205_r1.reverse(), l205_r1.contains(247))
+
+let l205_r2 = [600, 416, 125, 357, 495]
+
+print("l205-r2:", l205_r2.sort(), l205_r2.reverse(), l205_r2.contains(600))
+
+let l205_r3 = [247, 964, 225, 511, 843, 671, 623]
+
+print("l205-r3:", l205_r3.sort(), l205_r3.reverse(), l205_r3.contains(623))
+
+let l205_t0 = 0
+
+for v in [26, 32, 28, 9, 8, 38] { l205_t0 += v }
+
+print("l205-t0:", l205_t0)
+
+let l205_t1 = 0
+
+for v in [14, 9, 4, 21] { l205_t1 += v }
+
+print("l205-t1:", l205_t1)
+
+let l205_t2 = 0
+
+for v in [10, 5, 4] { l205_t2 += v }
+
+print("l205-t2:", l205_t2)
+
+let l205_n0 = [[6, 7, 2], [6, 7, 2], 77]
+
+print("l205-n0:", l205_n0[0][2], l205_n0[2])
+
+let l205_n1 = [[3, 5, 4], [3, 5, 4], 77]
+
+print("l205-n1:", l205_n1[0][0], l205_n1[2])

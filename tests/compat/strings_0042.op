@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=42 tag=s042
+
+print("s042-m0:", "zf19iyy".upper(), "zf19iyy".slice(4), "zf19iyy".len())
+
+print("s042-m1:", "w9lhnqzo_5xj".upper(), "w9lhnqzo_5xj".slice(2), "w9lhnqzo_5xj".len())
+
+print("s042-m2:", "87vwapsl".upper(), "87vwapsl".slice(4), "87vwapsl".len())
+
+print("s042-m3:", "68xnv3xcahC".upper(), "68xnv3xcahC".slice(2), "68xnv3xcahC".len())
+
+print("s042-m4:", "wlA01AvAgssf".upper(), "wlA01AvAgssf".slice(3), "wlA01AvAgssf".len())
+
+print("s042-i0:", "7w2-{38}-0quh")
+
+let s042_v0 = 38
+
+print("s042-v0:", "n={s042_v0}" + "!" * 2)
+
+print("s042-i1:", "2lc-{70}-cz3C")
+
+let s042_v1 = 70
+
+print("s042-v1:", "n={s042_v1}" + "!" * 3)
+
+print("s042-i2:", "io1-{81}-Cn04")
+
+let s042_v2 = 81
+
+print("s042-v2:", "n={s042_v2}" + "!" * 1)
+
+print("s042-r0:", "c5h_gt7u".replace("c", "or"), "c5h_gt7u".contains("5h"))
+
+print("s042-r1:", "C2qd327l".replace("C", "C_"), "C2qd327l".contains("2q"))
+
+print("s042-r2:", "oorgaizq".replace("o", "vf"), "oorgaizq".contains("or"))
+
+print("s042-r3:", "ax7jzAu7".replace("a", "99"), "ax7jzAu7".contains("x7"))
+
+print("s042-j0:", ["xkz", "ttz", "uBp", "go3"].join("-"))
+
+print("s042-j1:", ["fA_", "ym0", "zgp"].join("-"))
+
+print("s042-a0:", "1u2oxd4".at(2), "1u2oxd4".trim() == "1u2oxd4")
+
+print("s042-a1:", "tkCoqee".at(0), "tkCoqee".trim() == "tkCoqee")
+
+print("s042-a2:", "4ls2bzr".at(2), "4ls2bzr".trim() == "4ls2bzr")

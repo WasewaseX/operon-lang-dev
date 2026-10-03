@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=94 tag=s094
+
+print("s094-m0:", "i_yg67wvbdqh".upper(), "i_yg67wvbdqh".slice(3), "i_yg67wvbdqh".len())
+
+print("s094-m1:", "h88t9z0st".upper(), "h88t9z0st".slice(3), "h88t9z0st".len())
+
+print("s094-m2:", "b2w2mcC".upper(), "b2w2mcC".slice(3), "b2w2mcC".len())
+
+print("s094-m3:", "5p8bdwdB4Br1".upper(), "5p8bdwdB4Br1".slice(2), "5p8bdwdB4Br1".len())
+
+print("s094-m4:", "dec2w2kffod".upper(), "dec2w2kffod".slice(2), "dec2w2kffod".len())
+
+print("s094-i0:", "xi4-{36}-0rco")
+
+let s094_v0 = 36
+
+print("s094-v0:", "n={s094_v0}" + "!" * 3)
+
+print("s094-i1:", "302-{29}-5a_n")
+
+let s094_v1 = 29
+
+print("s094-v1:", "n={s094_v1}" + "!" * 1)
+
+print("s094-i2:", "7v_-{24}-9chw")
+
+let s094_v2 = 24
+
+print("s094-v2:", "n={s094_v2}" + "!" * 1)
+
+print("s094-r0:", "3ut5_kdd".replace("3", "0x"), "3ut5_kdd".contains("ut"))
+
+print("s094-r1:", "azzdkjcB".replace("a", "mh"), "azzdkjcB".contains("zz"))
+
+print("s094-j0:", ["k_n", "6d0", "0m9", "oBz"].join("-"))
+
+print("s094-j1:", ["eCb", "hh4", "3n2", "mny", "hj5"].join("-"))
+
+print("s094-j2:", ["hqB", "6cp", "8l_"].join("-"))
+
+print("s094-a0:", "AwB9llA".at(2), "AwB9llA".trim() == "AwB9llA")
+
+print("s094-a1:", "_kgt5xs".at(6), "_kgt5xs".trim() == "_kgt5xs")
+
+print("s094-a2:", "b4dwrA3".at(3), "b4dwrA3".trim() == "b4dwrA3")

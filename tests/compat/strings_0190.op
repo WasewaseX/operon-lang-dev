@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=190 tag=s190
+
+print("s190-m0:", "qcxCdup388m".upper(), "qcxCdup388m".slice(4), "qcxCdup388m".len())
+
+print("s190-m1:", "epyjkyh".upper(), "epyjkyh".slice(4), "epyjkyh".len())
+
+print("s190-m2:", "x91ayu1".upper(), "x91ayu1".slice(3), "x91ayu1".len())
+
+print("s190-m3:", "hA3x7siB".upper(), "hA3x7siB".slice(3), "hA3x7siB".len())
+
+print("s190-m4:", "y3m2sC".upper(), "y3m2sC".slice(1), "y3m2sC".len())
+
+print("s190-i0:", "ueq-{60}-nu1m")
+
+let s190_v0 = 60
+
+print("s190-v0:", "n={s190_v0}" + "!" * 1)
+
+print("s190-i1:", "6w7-{83}-k6vt")
+
+let s190_v1 = 83
+
+print("s190-v1:", "n={s190_v1}" + "!" * 2)
+
+print("s190-i2:", "yji-{90}-p5mo")
+
+let s190_v2 = 90
+
+print("s190-v2:", "n={s190_v2}" + "!" * 2)
+
+print("s190-r0:", "rBgv61s5".replace("r", "bj"), "rBgv61s5".contains("Bg"))
+
+print("s190-r1:", "9pz0d3As".replace("9", "1j"), "9pz0d3As".contains("pz"))
+
+print("s190-r2:", "wrlxp4bC".replace("w", "_C"), "wrlxp4bC".contains("rl"))
+
+print("s190-r3:", "7q5z7wzf".replace("7", "ol"), "7q5z7wzf".contains("q5"))
+
+print("s190-j0:", ["rAb", "20l", "sCi", "9Ch"].join("-"))
+
+print("s190-j1:", ["0mr", "l__", "b_0"].join("-"))
+
+print("s190-j2:", ["tj7", "fhn", "Cv5", "qic"].join("-"))
+
+print("s190-a0:", "bbuj3a1".at(5), "bbuj3a1".trim() == "bbuj3a1")
+
+print("s190-a1:", "Bxlpyc5".at(3), "Bxlpyc5".trim() == "Bxlpyc5")

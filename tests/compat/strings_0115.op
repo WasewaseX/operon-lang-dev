@@ -1,0 +1,54 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=115 tag=s115
+
+print("s115-m0:", "rxAxzg7anxx".upper(), "rxAxzg7anxx".slice(1), "rxAxzg7anxx".len())
+
+print("s115-m1:", "wboB96".upper(), "wboB96".slice(2), "wboB96".len())
+
+print("s115-m2:", "0_rBoo3heh".upper(), "0_rBoo3heh".slice(4), "0_rBoo3heh".len())
+
+print("s115-m3:", "x1sdk41vwvf".upper(), "x1sdk41vwvf".slice(4), "x1sdk41vwvf".len())
+
+print("s115-m4:", "gxe_2bzudCnCum".upper(), "gxe_2bzudCnCum".slice(4), "gxe_2bzudCnCum".len())
+
+print("s115-i0:", "i4l-{76}-62lr")
+
+let s115_v0 = 76
+
+print("s115-v0:", "n={s115_v0}" + "!" * 1)
+
+print("s115-i1:", "vh_-{27}-cawe")
+
+let s115_v1 = 27
+
+print("s115-v1:", "n={s115_v1}" + "!" * 2)
+
+print("s115-i2:", "191-{61}-q7jA")
+
+let s115_v2 = 61
+
+print("s115-v2:", "n={s115_v2}" + "!" * 2)
+
+print("s115-i3:", "sqe-{85}-3hc_")
+
+let s115_v3 = 85
+
+print("s115-v3:", "n={s115_v3}" + "!" * 1)
+
+print("s115-r0:", "08c5n6sc".replace("0", "4u"), "08c5n6sc".contains("8c"))
+
+print("s115-r1:", "kgwkw8h4".replace("k", "8C"), "kgwkw8h4".contains("gw"))
+
+print("s115-r2:", "vlzwAh5g".replace("v", "9z"), "vlzwAh5g".contains("lz"))
+
+print("s115-r3:", "BusB18x1".replace("B", "vo"), "BusB18x1".contains("us"))
+
+print("s115-j0:", ["oBs", "26r", "xva", "uw3"].join("-"))
+
+print("s115-j1:", ["oey", "1Ct", "3ej"].join("-"))
+
+print("s115-j2:", ["an3", "r0f", "x36", "3ve"].join("-"))
+
+print("s115-a0:", "rd6zyse".at(0), "rd6zyse".trim() == "rd6zyse")
+
+print("s115-a1:", "1Abp8o7".at(2), "1Abp8o7".trim() == "1Abp8o7")

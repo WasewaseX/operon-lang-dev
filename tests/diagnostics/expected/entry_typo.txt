@@ -1,0 +1,2 @@
+error[E1002]: entry gene 'maiin' is not defined in this program
+help: did you mean 'main'?

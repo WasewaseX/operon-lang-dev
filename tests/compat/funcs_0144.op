@@ -1,0 +1,166 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=144 tag=f144
+
+gene f144_g0(p, q = 28, r = 81) {
+
+    return p * 21 + q - r
+
+}
+
+print("f144-d0:", f144_g0(12), f144_g0(12, 69), f144_g0(12, 28, 81))
+
+gene f144_g1(p, q = 14, r = 45) {
+
+    return p * 44 + q - r
+
+}
+
+print("f144-d1:", f144_g1(-48), f144_g1(-48, 78), f144_g1(-48, 14, 45))
+
+gene f144_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f144_fib0(n - 1) + f144_fib0(n - 2)
+
+}
+
+print("f144-fib0:", f144_fib0(11))
+
+gene f144_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f144_fib1(n - 1) + f144_fib1(n - 2)
+
+}
+
+print("f144-fib1:", f144_fib1(13))
+
+gene f144_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f144_gcd0(b, a % b)
+
+}
+
+print("f144-gcd0:", f144_gcd0(560, 267))
+
+gene f144_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f144_gcd1(b, a % b)
+
+}
+
+print("f144-gcd1:", f144_gcd1(159, 310))
+
+gene f144_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f144_c0 = f144_mk0(4)
+
+f144_c0(8)
+
+print("f144-cl0:", f144_c0(2))
+
+gene f144_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f144_c1 = f144_mk1(1)
+
+f144_c1(1)
+
+print("f144-cl1:", f144_c1(4))
+
+gene f144_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f144-hof0:", f144_tw0(gene (z) => z * 2 + 1, 22))
+
+gene f144_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f144-hof1:", f144_tw1(gene (z) => z * 2 + 1, 8))
+
+gene f144_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f144-dg0:", f144_sd0(794300))
+
+gene f144_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f144-dg1:", f144_sd1(971073))

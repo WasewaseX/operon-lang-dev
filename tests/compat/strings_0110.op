@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=110 tag=s110
+
+print("s110-m0:", "_Bg212k".upper(), "_Bg212k".slice(3), "_Bg212k".len())
+
+print("s110-m1:", "13oxo0".upper(), "13oxo0".slice(4), "13oxo0".len())
+
+print("s110-m2:", "hvf9r39mA9oahx".upper(), "hvf9r39mA9oahx".slice(1), "hvf9r39mA9oahx".len())
+
+print("s110-m3:", "anh4kBBBy".upper(), "anh4kBBBy".slice(2), "anh4kBBBy".len())
+
+print("s110-m4:", "pBu8kb9qqhthaj".upper(), "pBu8kb9qqhthaj".slice(3), "pBu8kb9qqhthaj".len())
+
+print("s110-m5:", "824xp9eeo".upper(), "824xp9eeo".slice(4), "824xp9eeo".len())
+
+print("s110-i0:", "4l0-{24}-w0yh")
+
+let s110_v0 = 24
+
+print("s110-v0:", "n={s110_v0}" + "!" * 3)
+
+print("s110-i1:", "z4z-{9}-wtcr")
+
+let s110_v1 = 9
+
+print("s110-v1:", "n={s110_v1}" + "!" * 3)
+
+print("s110-i2:", "vch-{83}-gblr")
+
+let s110_v2 = 83
+
+print("s110-v2:", "n={s110_v2}" + "!" * 2)
+
+print("s110-r0:", "4t463eA6".replace("4", "ml"), "4t463eA6".contains("t4"))
+
+print("s110-r1:", "xklqdrxi".replace("x", "_m"), "xklqdrxi".contains("kl"))
+
+print("s110-r2:", "81irvx3q".replace("8", "go"), "81irvx3q".contains("1i"))
+
+print("s110-j0:", ["cee", "pug", "f2z", "kCj"].join("-"))
+
+print("s110-j1:", ["16m", "etz", "_6A", "Bnz"].join("-"))
+
+print("s110-a0:", "BlqBrvl".at(0), "BlqBrvl".trim() == "BlqBrvl")
+
+print("s110-a1:", "nq7vi24".at(4), "nq7vi24".trim() == "nq7vi24")

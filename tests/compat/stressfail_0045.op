@@ -1,0 +1,218 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20260930 idx=45 tag=s045
+
+stress {
+
+    print("s045-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s045-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s045-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s045-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s045-mz:", 35 % 0)
+
+} rescue (e) {
+
+    print("s045-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s045-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s045-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s045-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s045-of2:", "caught", e.kind, e.message)
+
+}
+
+gene s045_r0() {
+
+    raise "s045-ra2A3k"
+
+}
+
+stress {
+
+    s045_r0()
+
+    print("s045-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s045-r0:", e.kind, e.message)
+
+}
+
+gene s045_r1() {
+
+    raise "s045-w5f7js"
+
+}
+
+stress {
+
+    s045_r1()
+
+    print("s045-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s045-r1:", e.kind, e.message)
+
+}
+
+gene s045_r2() {
+
+    raise "s045-36k1wg"
+
+}
+
+stress {
+
+    s045_r2()
+
+    print("s045-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s045-r2:", e.kind, e.message)
+
+}
+
+gene s045_r3() {
+
+    raise "s045-C2d4yo"
+
+}
+
+stress {
+
+    s045_r3()
+
+    print("s045-r3:", "unreachable")
+
+} rescue (e) {
+
+    print("s045-r3:", e.kind, e.message)
+
+}
+
+let s045_xs0 = [7, 20]
+
+stress {
+
+    print("s045-x0:", s045_xs0[5])
+
+} rescue (e) {
+
+    print("s045-x0:", "caught", e.kind)
+
+}
+
+let s045_xs1 = [28, 38]
+
+stress {
+
+    print("s045-x1:", s045_xs1[3])
+
+} rescue (e) {
+
+    print("s045-x1:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s045-0"
+
+    } rescue (e) {
+
+        print("s045-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s045-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s045-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s045-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s045-1"
+
+    } rescue (e) {
+
+        print("s045-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s045-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s045-d1-top:", outer.message)
+
+}

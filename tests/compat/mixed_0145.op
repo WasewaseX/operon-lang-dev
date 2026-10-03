@@ -1,0 +1,254 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=145 tag=m145
+
+gene m145_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m145-b0:", m145_b0({splicer: 71, plasmid: 37, vector: 33})?!)
+
+gene m145_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m145-b1:", m145_b1({ligase: 41, ribose: 64, enzyme: 61})?!)
+
+gene m145_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m145-b2:", m145_b2({ribose: 42, enzyme: 18, exon: 46})?!)
+
+gene m145_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m145_f0([26, 34, 48, 54]) {
+
+    case Ok(list) {
+
+        print("m145-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m145-f0:", "e:", m)
+
+    }
+
+}
+
+gene m145_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m145_f1([15, 45, 52, 4, 35, 29, 11]) {
+
+    case Ok(list) {
+
+        print("m145-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m145-f1:", "e:", m)
+
+    }
+
+}
+
+gene m145_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m145_f2([54, 16, 21, 12, 24, 25, 40]) {
+
+    case Ok(list) {
+
+        print("m145-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m145-f2:", "e:", m)
+
+    }
+
+}
+
+let m145_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m145-cc0:", m145_cl0(16)(3), m145_cl0(3)(16))
+
+let m145_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m145-cc1:", m145_cl1(9)(15), m145_cl1(15)(9))
+
+let m145_data0 = some([some("exon"), none(), some(1)])
+
+match m145_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m145-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m145-x0:", "shape-miss")
+
+    }
+
+}
+
+let m145_data1 = some([some("ligase"), none(), some(6)])
+
+match m145_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m145-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m145-x1:", "shape-miss")
+
+    }
+
+}

@@ -1,0 +1,60 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=133 tag=m133
+
+let m133_m0 = {helix: -61, codon: 41, marker: 32}
+
+print("m133-m0:", m133_m0["helix"], len(m133_m0), m133_m0.has("helix"))
+
+let m133_m1 = {exon: -42, splicer: 43, ribose: 6}
+
+print("m133-m1:", m133_m1["exon"], len(m133_m1), m133_m1.has("exon"))
+
+let m133_m2 = {ligase: 21, ribose: 27, codon: 16}
+
+print("m133-m2:", m133_m2["ligase"], len(m133_m2), m133_m2.has("ligase"))
+
+let m133_m3 = {splicer: 83, exon: 84, marker: 5, vector: 46}
+
+print("m133-m3:", m133_m3["splicer"], len(m133_m3), m133_m3.has("splicer"))
+
+let m133_m4 = {marker: 9, cell: 69, vector: 21, helix: 73, ribose: -15}
+
+print("m133-m4:", m133_m4["marker"], len(m133_m4), m133_m4.has("marker"))
+
+let m133_k0 = {splicer: 29, ribose: 35, exon: 30}
+
+let m133_ks0 = m133_k0.keys()
+
+let m133_sm0 = 0
+
+for k in m133_k0 { m133_sm0 += m133_k0[k] }
+
+print("m133-k0:", m133_sm0, m133_k0.keys().sort(), m133_k0.values().len())
+
+let m133_k1 = {splicer: 36, helix: 3, plasmid: 13}
+
+let m133_ks1 = m133_k1.keys()
+
+let m133_sm1 = 0
+
+for k in m133_k1 { m133_sm1 += m133_k1[k] }
+
+print("m133-k1:", m133_sm1, m133_k1.keys().sort(), m133_k1.values().len())
+
+let m133_k2 = {plasmid: 18, vector: 1, enzyme: 4}
+
+let m133_ks2 = m133_k2.keys()
+
+let m133_sm2 = 0
+
+for k in m133_k2 { m133_sm2 += m133_k2[k] }
+
+print("m133-k2:", m133_sm2, m133_k2.keys().sort(), m133_k2.values().len())
+
+let m133_w0 = {outer: {cell: 7, gene: 4, tag: "ok"}}}
+
+print("m133-w0:", m133_w0["outer"]["gene"], m133_w0["outer"]["tag"])
+
+let m133_w1 = {outer: {plasmid: 1, gene: 7, tag: "ok"}}}
+
+print("m133-w1:", m133_w1["outer"]["gene"], m133_w1["outer"]["tag"])

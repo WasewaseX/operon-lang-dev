@@ -1,0 +1,254 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=108 tag=m108
+
+gene m108_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m108-b0:", m108_b0({plasmid: 14, ligase: 16, exon: 5})?!)
+
+gene m108_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m108-b1:", m108_b1({helix: 44, exon: 61, ligase: 56})?!)
+
+gene m108_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m108-b2:", m108_b2({enzyme: 52, splicer: 52, marker: 40})?!)
+
+gene m108_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m108_f0([34, 56, 56, 11, 21, 46, 20, 24]) {
+
+    case Ok(list) {
+
+        print("m108-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m108-f0:", "e:", m)
+
+    }
+
+}
+
+gene m108_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m108_f1([3, 56, 32, 43, 28, 32]) {
+
+    case Ok(list) {
+
+        print("m108-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m108-f1:", "e:", m)
+
+    }
+
+}
+
+gene m108_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m108_f2([48, 22, 52, 57]) {
+
+    case Ok(list) {
+
+        print("m108-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m108-f2:", "e:", m)
+
+    }
+
+}
+
+let m108_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m108-cc0:", m108_cl0(6)(17), m108_cl0(17)(6))
+
+let m108_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m108-cc1:", m108_cl1(13)(18), m108_cl1(18)(13))
+
+let m108_data0 = some([some("marker"), none(), some(7)])
+
+match m108_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m108-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m108-x0:", "shape-miss")
+
+    }
+
+}
+
+let m108_data1 = some([some("ribose"), none(), some(7)])
+
+match m108_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m108-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m108-x1:", "shape-miss")
+
+    }
+
+}

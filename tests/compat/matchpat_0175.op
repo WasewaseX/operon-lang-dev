@@ -1,0 +1,286 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=175 tag=m175
+
+let m175_s0 = some(4)
+
+match m175_s0 {
+
+    case Some(x) if x > 4 {
+
+        print("m175-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m175-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m175-m0:", "none")
+
+    }
+
+}
+
+let m175_s1 = some(8)
+
+match m175_s1 {
+
+    case Some(x) if x > 8 {
+
+        print("m175-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m175-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m175-m1:", "none")
+
+    }
+
+}
+
+let m175_s2 = some(3)
+
+match m175_s2 {
+
+    case Some(x) if x > 3 {
+
+        print("m175-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m175-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m175-m2:", "none")
+
+    }
+
+}
+
+let m175_ls0 = [20, 24, 6]
+
+match m175_ls0 {
+
+    case [20, *rest] {
+
+        print("m175-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m175-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m175-l0:", "other")
+
+    }
+
+}
+
+let m175_ls1 = [28, 40, 5]
+
+match m175_ls1 {
+
+    case [28, *rest] {
+
+        print("m175-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m175-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m175-l1:", "other")
+
+    }
+
+}
+
+let m175_ls2 = [5, 39, 37]
+
+match m175_ls2 {
+
+    case [5, *rest] {
+
+        print("m175-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m175-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m175-l2:", "other")
+
+    }
+
+}
+
+let m175_mp0 = {splicer: -8484, ribose: -8292}
+
+match m175_mp0 {
+
+    case {splicer: p, ribose: q} {
+
+        print("m175-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m175-mp0:", "miss")
+
+    }
+
+}
+
+let m175_mp1 = {plasmid: -7341, marker: -6360}
+
+match m175_mp1 {
+
+    case {plasmid: p, marker: q} {
+
+        print("m175-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m175-mp1:", "miss")
+
+    }
+
+}
+
+let m175_mp2 = {ligase: 2990, marker: -7438}
+
+match m175_mp2 {
+
+    case {ligase: p, marker: q} {
+
+        print("m175-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m175-mp2:", "miss")
+
+    }
+
+}
+
+let m175_r0 = ok(3)
+
+match m175_r0 {
+
+    case Ok(n) | Err(3) {
+
+        print("m175-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m175-r0:", "zero")
+
+    }
+
+}
+
+let m175_r1 = ok(1)
+
+match m175_r1 {
+
+    case Ok(n) | Err(1) {
+
+        print("m175-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m175-r1:", "zero")
+
+    }
+
+}
+
+let m175_r2 = ok(5)
+
+match m175_r2 {
+
+    case Ok(n) | Err(5) {
+
+        print("m175-r2:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m175-r2:", "zero")
+
+    }
+
+}
+
+match "vector" {
+
+    case "vector" {
+
+        print("m175-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m175-w0:", "alt")
+
+    }
+
+}
+
+match "exon" {
+
+    case "exon" {
+
+        print("m175-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m175-w1:", "alt")
+
+    }
+
+}

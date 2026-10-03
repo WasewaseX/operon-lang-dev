@@ -1,0 +1,71 @@
+# web package test — runs VENDORED (after `operon add web`): the router
+# imports pkg http, so this file needs the lockfile's vendored http.
+use web
+use http
+
+frame proof {
+    # router: fixed segments, first-match-wins
+    gene hello() {
+        return "hello"
+    }
+    gene user_page() {
+        return "user"
+    }
+    gene catch_all() {
+        return "any"
+    }
+    let r = web.web_router_new()
+    web.web_route_add(r, "GET", "/hello", hello)
+    web.web_route_add(r, "GET", "/users/:id", user_page)
+    web.web_route_add(r, "GET", "*", catch_all)
+
+    let m1 = web.web_match(r, "GET", "/hello")
+    assert(m1 != null and m1.handler() == "hello", "fixed route dispatches")
+
+    let m2 = web.web_match(r, "GET", "/users/42")
+    assert(m2 != null and m2.params["id"] == "42", ":id captured")
+
+    let m3 = web.web_match(r, "GET", "/whatever/deep/path")
+    assert(m3 != null and m3.handler() == "any", "splat fallback matches")
+    assert(web.web_match(r, "POST", "/hello") == null, "method mismatch is null")
+    assert(web.web_match(r, "GET", "/missing") != null, "catch-all takes the rest")
+    let m4 = web.web_match(r, "GET", "/users")
+    assert(m4 != null and m4.handler() == "any", "partial prefix falls to splat")
+
+    # splat captures the remaining segments
+    let r2 = web.web_router_new()
+    web.web_route_add(r2, "GET", "/files/*rest", hello)
+    let m5 = web.web_match(r2, "GET", "/files/a/b/c")
+    assert(m5 != null and m5.splat == ["a", "b", "c"], "splat segments")
+
+    # path segment decoding
+    assert(web.web_seg_decode("my%20work") == "my work", "segment decode")
+    let r3 = web.web_router_new()
+    web.web_route_add(r3, "GET", "/docs/:name", hello)
+    let m6 = web.web_match(r3, "GET", "/docs/my%20work")
+    assert(m6 != null and m6.params["name"] == "my work", "param decoded")
+
+    # exact-boundary: /users/42/extra does not match /users/:id
+    let r4 = web.web_router_new()
+    web.web_route_add(r4, "GET", "/users/:id", user_page)
+    assert(web.web_match(r4, "GET", "/users/42/extra") == null, "no trailing match")
+
+    # forms + query + cookies through pkg http
+    let form = web.web_form_parse("a=1&b=two+words")
+    assert(form["a"] == "1" and form["b"] == "two words", "form parse")
+
+    let env = web.web_request("GET", "/x", "?q=zig%20zag", "f=1", "sid=s3; theme=dark")
+    assert(env.query["q"] == "zig zag", "query decoded")
+    assert(env.form["f"] == "1", "form decoded")
+    assert(env.cookies["theme"] == "dark", "cookies parsed")
+
+    # responses via http
+    assert(http.http_starts(web.web_text("ok"), "HTTP/1.1 200 OK"), "text 200")
+    assert(http.http_index_of(web.web_json("{}"), "application/json") >= 0, "json 200")
+    assert(http.http_index_of(web.web_redirect("/n", true), "301") >= 0, "redirect")
+
+    # mime table
+    assert(web.web_mime("index.html") == "text/html; charset=utf-8", "html mime")
+    assert(web.web_mime("a.PNG") == "image/png", "case-insensitive ext")
+    assert(web.web_mime("blob.bin") == "application/octet-stream", "unknown ext")
+}

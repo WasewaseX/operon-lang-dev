@@ -1,0 +1,230 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20260930 idx=50 tag=m050
+
+gene m050_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m050-b0:", m050_b0({gene: 81, cell: 2, vector: 10})?!)
+
+gene m050_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m050-b1:", m050_b1({exon: 1, codon: 20, helix: 59})?!)
+
+gene m050_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m050_f0([35, 35, 53, 5]) {
+
+    case Ok(list) {
+
+        print("m050-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m050-f0:", "e:", m)
+
+    }
+
+}
+
+gene m050_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m050_f1([18, 50, 55, 17, 48, 43]) {
+
+    case Ok(list) {
+
+        print("m050-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m050-f1:", "e:", m)
+
+    }
+
+}
+
+gene m050_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m050_f2([58, 50, 1, 31, 6]) {
+
+    case Ok(list) {
+
+        print("m050-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m050-f2:", "e:", m)
+
+    }
+
+}
+
+let m050_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m050-cc0:", m050_cl0(19)(9), m050_cl0(9)(19))
+
+let m050_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m050-cc1:", m050_cl1(11)(18), m050_cl1(18)(11))
+
+let m050_data0 = some([some("ligase"), none(), some(8)])
+
+match m050_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m050-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m050-x0:", "shape-miss")
+
+    }
+
+}
+
+let m050_data1 = some([some("vector"), none(), some(9)])
+
+match m050_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m050-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m050-x1:", "shape-miss")
+
+    }
+
+}

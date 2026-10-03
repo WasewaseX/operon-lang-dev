@@ -1,0 +1,38 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=29 tag=c029
+
+print("c029-c0:", 7841 > -4305)
+
+print("c029-c1:", -8364 <= -255)
+
+print("c029-c2:", -8811 < -7932)
+
+print("c029-c3:", 9138 < -3521)
+
+print("c029-c4:", 4917 < -6508)
+
+print("c029-b0:", 43 < 22 && 22 < 19, 43 > 22 || 43 > 19)
+
+print("c029-b1:", 9 < 28 && 28 < 25, 9 > 28 || 9 > 25)
+
+print("c029-b2:", 11 < 15 && 15 < 19, 11 > 15 || 11 > 19)
+
+print("c029-t0:", 1808 > -5418 ? "gt" : "le")
+
+print("c029-t1:", -3090 > -5545 ? "gt" : "le")
+
+print("c029-t2:", 4605 > -2693 ? "gt" : "le")
+
+print("c029-t3:", -9146 > 387 ? "gt" : "le")
+
+let c029_n0 = null
+
+print("c029-n0:", c029_n0 ?? -6546, c029_n0 == null)
+
+let c029_n1 = null
+
+print("c029-n1:", c029_n1 ?? 1227, c029_n1 == null)
+
+print("c029-s0:", "zxqg" in "98kh17zxqg", "zxqg" == "zxqg")
+
+print("c029-s1:", "dt02" in "beam2fdt02", "dt02" == "dt02")

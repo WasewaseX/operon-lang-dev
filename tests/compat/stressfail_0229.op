@@ -1,0 +1,204 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=229 tag=s229
+
+stress {
+
+    print("s229-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s229-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s229-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s229-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s229-mz:", 24 % 0)
+
+} rescue (e) {
+
+    print("s229-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s229-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s229-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s229-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s229-of2:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s229-m1:", 9223372036854775807 % -1)
+
+} rescue (e) {
+
+    print("s229-m1:", "caught", e.kind, e.message)
+
+}
+
+gene s229_r0() {
+
+    raise "s229-ur4icq"
+
+}
+
+stress {
+
+    s229_r0()
+
+    print("s229-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s229-r0:", e.kind, e.message)
+
+}
+
+gene s229_r1() {
+
+    raise "s229-t1_1c9"
+
+}
+
+stress {
+
+    s229_r1()
+
+    print("s229-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s229-r1:", e.kind, e.message)
+
+}
+
+let s229_xs0 = [14, 7]
+
+stress {
+
+    print("s229-x0:", s229_xs0[3])
+
+} rescue (e) {
+
+    print("s229-x0:", "caught", e.kind)
+
+}
+
+let s229_xs1 = [27, 16, 29]
+
+stress {
+
+    print("s229-x1:", s229_xs1[5])
+
+} rescue (e) {
+
+    print("s229-x1:", "caught", e.kind)
+
+}
+
+let s229_xs2 = [2, 34, 33]
+
+stress {
+
+    print("s229-x2:", s229_xs2[4])
+
+} rescue (e) {
+
+    print("s229-x2:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s229-0"
+
+    } rescue (e) {
+
+        print("s229-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s229-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s229-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s229-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s229-1"
+
+    } rescue (e) {
+
+        print("s229-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s229-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s229-d1-top:", outer.message)
+
+}

@@ -1,0 +1,222 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=132 tag=s132
+
+stress {
+
+    print("s132-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s132-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s132-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s132-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s132-mz:", 64 % 0)
+
+} rescue (e) {
+
+    print("s132-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s132-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s132-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s132-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s132-of2:", "caught", e.kind, e.message)
+
+}
+
+gene s132_r0() {
+
+    raise "s132-1lbfen"
+
+}
+
+stress {
+
+    s132_r0()
+
+    print("s132-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s132-r0:", e.kind, e.message)
+
+}
+
+gene s132_r1() {
+
+    raise "s132-ky_99_"
+
+}
+
+stress {
+
+    s132_r1()
+
+    print("s132-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s132-r1:", e.kind, e.message)
+
+}
+
+gene s132_r2() {
+
+    raise "s132-rce5w0"
+
+}
+
+stress {
+
+    s132_r2()
+
+    print("s132-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s132-r2:", e.kind, e.message)
+
+}
+
+let s132_xs0 = [36, 9, 9]
+
+stress {
+
+    print("s132-x0:", s132_xs0[5])
+
+} rescue (e) {
+
+    print("s132-x0:", "caught", e.kind)
+
+}
+
+let s132_xs1 = [33, 35, 44, 10]
+
+stress {
+
+    print("s132-x1:", s132_xs1[6])
+
+} rescue (e) {
+
+    print("s132-x1:", "caught", e.kind)
+
+}
+
+let s132_xs2 = [45, 26, 48, 8]
+
+stress {
+
+    print("s132-x2:", s132_xs2[9])
+
+} rescue (e) {
+
+    print("s132-x2:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s132-0"
+
+    } rescue (e) {
+
+        print("s132-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s132-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s132-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s132-d0-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s132-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s132-1"
+
+    } rescue (e) {
+
+        print("s132-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s132-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s132-d1-top:", outer.message)
+
+}

@@ -1,4 +1,4 @@
-# differential: std/args — CLI argument parsing helpers
+# differential: std/args, CLI argument parsing helpers
 use std/args as ar
 
 frame proof {

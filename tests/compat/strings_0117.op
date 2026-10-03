@@ -1,0 +1,60 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=117 tag=s117
+
+print("s117-m0:", "6u_9Bwbm4".upper(), "6u_9Bwbm4".slice(4), "6u_9Bwbm4".len())
+
+print("s117-m1:", "x7d_7060hi".upper(), "x7d_7060hi".slice(3), "x7d_7060hi".len())
+
+print("s117-m2:", "9Airew49k107zC".upper(), "9Airew49k107zC".slice(3), "9Airew49k107zC".len())
+
+print("s117-m3:", "etcddC4p".upper(), "etcddC4p".slice(2), "etcddC4p".len())
+
+print("s117-m4:", "qvjrb9e7h4j7".upper(), "qvjrb9e7h4j7".slice(1), "qvjrb9e7h4j7".len())
+
+print("s117-m5:", "8zxfr4lfjBtzqw".upper(), "8zxfr4lfjBtzqw".slice(4), "8zxfr4lfjBtzqw".len())
+
+print("s117-i0:", "hcq-{38}-uya1")
+
+let s117_v0 = 38
+
+print("s117-v0:", "n={s117_v0}" + "!" * 2)
+
+print("s117-i1:", "1Ar-{55}-82j7")
+
+let s117_v1 = 55
+
+print("s117-v1:", "n={s117_v1}" + "!" * 3)
+
+print("s117-i2:", "9Al-{40}-u8bC")
+
+let s117_v2 = 40
+
+print("s117-v2:", "n={s117_v2}" + "!" * 3)
+
+print("s117-i3:", "m1r-{81}-l2v1")
+
+let s117_v3 = 81
+
+print("s117-v3:", "n={s117_v3}" + "!" * 3)
+
+print("s117-i4:", "ajl-{10}-szo3")
+
+let s117_v4 = 10
+
+print("s117-v4:", "n={s117_v4}" + "!" * 3)
+
+print("s117-r0:", "2ssfm_fa".replace("2", "Bs"), "2ssfm_fa".contains("ss"))
+
+print("s117-r1:", "1bg59nm1".replace("1", "83"), "1bg59nm1".contains("bg"))
+
+print("s117-r2:", "6Bj46jjy".replace("6", "cp"), "6Bj46jjy".contains("Bj"))
+
+print("s117-j0:", ["_hc", "r5n", "7Cc"].join("-"))
+
+print("s117-j1:", ["2y9", "3cy", "xy_", "7cg", "lvw"].join("-"))
+
+print("s117-a0:", "79j6bmy".at(0), "79j6bmy".trim() == "79j6bmy")
+
+print("s117-a1:", "msye5ch".at(6), "msye5ch".trim() == "msye5ch")
+
+print("s117-a2:", "9hlofem".at(3), "9hlofem".trim() == "9hlofem")

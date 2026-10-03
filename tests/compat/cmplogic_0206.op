@@ -1,0 +1,36 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=206 tag=c206
+
+print("c206-c0:", 3066 < -3563)
+
+print("c206-c1:", -9446 >= -1374)
+
+print("c206-c2:", -4655 < -6859)
+
+print("c206-c3:", -3374 >= 5117)
+
+print("c206-c4:", 9451 >= -1004)
+
+print("c206-c5:", -8127 < 8653)
+
+print("c206-c6:", -5920 >= 4382)
+
+print("c206-b0:", 43 < 33 && 33 < 23, 43 > 33 || 43 > 23)
+
+print("c206-b1:", 6 < 33 && 33 < 40, 6 > 33 || 6 > 40)
+
+print("c206-t0:", -9939 > -9021 ? "gt" : "le")
+
+print("c206-t1:", -1660 > -869 ? "gt" : "le")
+
+let c206_n0 = null
+
+print("c206-n0:", c206_n0 ?? 9123, c206_n0 == null)
+
+let c206_n1 = null
+
+print("c206-n1:", c206_n1 ?? -394, c206_n1 == null)
+
+print("c206-s0:", "xbp7" in "n8Cfnzxbp7", "xbp7" == "xbp7")
+
+print("c206-s1:", "0a_p" in "q_h80C0a_p", "0a_p" == "0a_p")

@@ -1,0 +1,188 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=210 tag=f210
+
+gene f210_g0(p, q = 13, r = 39) {
+
+    return p * 52 + q - r
+
+}
+
+print("f210-d0:", f210_g0(14), f210_g0(14, 29), f210_g0(14, 13, 39))
+
+gene f210_g1(p, q = 40, r = 13) {
+
+    return p * 55 + q - r
+
+}
+
+print("f210-d1:", f210_g1(9), f210_g1(9, 45), f210_g1(9, 40, 13))
+
+gene f210_g2(p, q = 46, r = 65) {
+
+    return p * 65 + q - r
+
+}
+
+print("f210-d2:", f210_g2(-36), f210_g2(-36, 58), f210_g2(-36, 46, 65))
+
+gene f210_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f210_fib0(n - 1) + f210_fib0(n - 2)
+
+}
+
+print("f210-fib0:", f210_fib0(12))
+
+gene f210_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f210_fib1(n - 1) + f210_fib1(n - 2)
+
+}
+
+print("f210-fib1:", f210_fib1(8))
+
+gene f210_fib2(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f210_fib2(n - 1) + f210_fib2(n - 2)
+
+}
+
+print("f210-fib2:", f210_fib2(12))
+
+gene f210_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f210_gcd0(b, a % b)
+
+}
+
+print("f210-gcd0:", f210_gcd0(35, 933))
+
+gene f210_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f210_gcd1(b, a % b)
+
+}
+
+print("f210-gcd1:", f210_gcd1(89, 463))
+
+gene f210_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f210_c0 = f210_mk0(6)
+
+f210_c0(5)
+
+print("f210-cl0:", f210_c0(6))
+
+gene f210_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f210_c1 = f210_mk1(38)
+
+f210_c1(4)
+
+print("f210-cl1:", f210_c1(1))
+
+gene f210_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f210-hof0:", f210_tw0(gene (z) => z * 2 + 1, 30))
+
+gene f210_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f210-hof1:", f210_tw1(gene (z) => z * 2 + 1, 14))
+
+gene f210_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f210-dg0:", f210_sd0(518832))
+
+gene f210_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f210-dg1:", f210_sd1(936222))

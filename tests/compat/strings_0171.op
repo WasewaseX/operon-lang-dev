@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=171 tag=s171
+
+print("s171-m0:", "oa7ltvuny".upper(), "oa7ltvuny".slice(4), "oa7ltvuny".len())
+
+print("s171-m1:", "r2f3vg44".upper(), "r2f3vg44".slice(1), "r2f3vg44".len())
+
+print("s171-m2:", "evCv_3p".upper(), "evCv_3p".slice(4), "evCv_3p".len())
+
+print("s171-m3:", "ow2en3".upper(), "ow2en3".slice(1), "ow2en3".len())
+
+print("s171-m4:", "9lrCk4gcxbC7y".upper(), "9lrCk4gcxbC7y".slice(2), "9lrCk4gcxbC7y".len())
+
+print("s171-i0:", "dkp-{62}-7m_g")
+
+let s171_v0 = 62
+
+print("s171-v0:", "n={s171_v0}" + "!" * 3)
+
+print("s171-i1:", "fyy-{14}-8_0y")
+
+let s171_v1 = 14
+
+print("s171-v1:", "n={s171_v1}" + "!" * 1)
+
+print("s171-i2:", "pzo-{38}-6vh3")
+
+let s171_v2 = 38
+
+print("s171-v2:", "n={s171_v2}" + "!" * 2)
+
+print("s171-i3:", "p1s-{80}-d7zt")
+
+let s171_v3 = 80
+
+print("s171-v3:", "n={s171_v3}" + "!" * 1)
+
+print("s171-r0:", "14bgvd_u".replace("1", "1_"), "14bgvd_u".contains("4b"))
+
+print("s171-r1:", "jnxfwnbo".replace("j", "7p"), "jnxfwnbo".contains("nx"))
+
+print("s171-r2:", "keA1vef1".replace("k", "78"), "keA1vef1".contains("eA"))
+
+print("s171-r3:", "vqv9qh07".replace("v", "sq"), "vqv9qh07".contains("qv"))
+
+print("s171-j0:", ["o1s", "is7", "0A0"].join("-"))
+
+print("s171-j1:", ["we8", "u3B", "3x4"].join("-"))
+
+print("s171-j2:", ["s54", "af2", "4pd", "wp1", "lig"].join("-"))
+
+print("s171-a0:", "0dupsf3".at(0), "0dupsf3".trim() == "0dupsf3")
+
+print("s171-a1:", "v37jn6a".at(0), "v37jn6a".trim() == "v37jn6a")
+
+print("s171-a2:", "bbu6usg".at(5), "bbu6usg".trim() == "bbu6usg")

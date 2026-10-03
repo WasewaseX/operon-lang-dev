@@ -1,0 +1,230 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=252 tag=m252
+
+gene m252_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m252-b0:", m252_b0({marker: 41, vector: 82, enzyme: 33})?!)
+
+gene m252_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m252-b1:", m252_b1({ligase: 53, plasmid: 25, enzyme: 42})?!)
+
+gene m252_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m252_f0([27, 23, 29, 46, 21, 13, 34, 56]) {
+
+    case Ok(list) {
+
+        print("m252-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m252-f0:", "e:", m)
+
+    }
+
+}
+
+gene m252_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m252_f1([19, 18, 55, 7, 22, 22, 11, 20]) {
+
+    case Ok(list) {
+
+        print("m252-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m252-f1:", "e:", m)
+
+    }
+
+}
+
+gene m252_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m252_f2([32, 26, 60, 20]) {
+
+    case Ok(list) {
+
+        print("m252-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m252-f2:", "e:", m)
+
+    }
+
+}
+
+let m252_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m252-cc0:", m252_cl0(16)(15), m252_cl0(15)(16))
+
+let m252_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m252-cc1:", m252_cl1(4)(20), m252_cl1(20)(4))
+
+let m252_data0 = some([some("ligase"), none(), some(7)])
+
+match m252_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m252-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m252-x0:", "shape-miss")
+
+    }
+
+}
+
+let m252_data1 = some([some("ribose"), none(), some(7)])
+
+match m252_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m252-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m252-x1:", "shape-miss")
+
+    }
+
+}

@@ -1,226 +1,130 @@
-# Operon Packaging & the Registry
+# PACKAGING.md, distribution channels, honest validation ledger (W61)
 
-Operon ships first-class package management (W19, track L3c, the
-`ai/ecosystem` lane). This document is the contract: what the CLI does, what
-the files look like, how the registry behaves, and what is honest about the
-current limits. Everything described here is covered by tests:
-unit tests in `src/pkg.rs`, and the end-to-end gate
-`tests/package/pkg_e2e.sh` (38 checks) wired into `scripts/test.sh`.
+Normative for `packaging/`. The rule this file enforces: **every channel
+carries a validation mark, and the marks are honest.** A channel is either
+`validated` (a CI job or a smoke script on this repo exercises it) or
+`community` (a draft a human must finish and verify at publish time). Nothing
+in between, "should work" is not a state we write down.
 
-## The two-minute tour
+## Channel ledger
 
-```console
-$ operon new myapp            # scaffold from a template (bin | lib)
-$ cd myapp
-$ operon add http             # resolve, write operon.lock, install
-  + http 1.0.0 installed
-$ operon run                  # runs the operon.toml entry
-$ operon test                 # runs tests/ (proof frames)
-$ operon search json          # name/description/keyword search
-$ operon publish              # ship your project to the registry
-$ operon update               # re-resolve within requirements
-$ operon remove http          # drop a dependency, prune
-```
+| channel | artifact / file | mark | what validated / what the human must do |
+|---|---|---|---|
+| GitHub release archives | `operon-<v>-<target>.tar.gz` / `.zip` + companion `.sha256` (5 targets) | **validated** | `scripts/release_smoke.sh` runs per-artifact smoke in CI; download → verify sha256 → run |
+| install script | `scripts/install.sh` | community | curl-to-sh runs on YOUR machine (sandbox CI cannot grant network); review before piping |
+| from source | `cargo install --path .` / `./scripts/build.sh` | **validated** | the CI cargo gate builds this exact path on every push |
+| cargo-binstall | `[package.metadata.binstall]` in Cargo.toml | community | the template contract (asset naming, inner dir, binaries) is pinned by `scripts/pkg_meta_check.py` in the standing gate, so it cannot drift behind release.yml; a maintainer still runs `cargo binstall operon` once against a real release before calling it validated |
+| Scoop (Windows) | `packaging/scoop/operon.json` | community | maintainer pins `hash` from the companion `.sha256`, then publishes a bucket |
+| AUR (release) | `packaging/aur/PKGBUILD` | community | maintainer replaces `REPLACE_WITH_COMPANION_SHA256`, runs `makepkg -si`, publishes |
+| AUR (git) | `packaging/aur/PKGBUILD.git` | community | same; `pkgver()` is generated at build time |
+| Nix | `packaging/nix/default.nix` | community | maintainer replaces `lib.fakeSha256`, extends the arch map as targets ship |
+| deb | `[package.metadata.deb]` in Cargo.toml | community | `cargo deb` in a clean env; CI packaging job = the validation upgrade path |
+| rpm | `[package.metadata.generate-rpm]` in Cargo.toml | community | `cargo generate-rpm` in a clean env; same upgrade path |
+| Homebrew | `packaging/homebrew/operon.rb` | community | maintainer pins the tag tarball's `.sha256` into the formula, then owner-publishes the tap |
+| source release archive | `scripts/release.sh` → `dist/operon-<v>.tar.gz` + `SHA256SUMS` | validated locally | deterministic `git archive` re-tar (pinned mtime/uid/gid), `--verify` fail-closed; run it before tagging so SHA256SUMS is fresh |
+| whole-release `SHA256SUMS` (binary assets) | `.github/workflows/release.yml` `sha256sums` job | validated | hashes the exact published bytes after sidecar re-verification; partial releases refused; pinned to the build matrix by `scripts/pkg_meta_check.py`; consumed by `install.sh --verify` |
+| installer (curl \| sh) | `scripts/install.sh` + `scripts/install_e2e.sh` | validated | fail-closed verification (sidecar mandatory, manifest cross-checked, `--verify` strict); hermetic offline mode (`OPERON_INSTALL_ASSET_DIR`) exercised by `install_e2e.sh` in the standing gate |
+| hosted registry server (W19-r2) | `packaging/registry/app.py` · `packaging/registry/requirements.txt` · `packaging/registry/render.yaml` | community | self-hosted tier (docs/specs/REGISTRY.md); the HTTP + WSGI surfaces and the render.yaml wiring are pinned by `scripts/pkg_meta_check.py` + `scripts/pkg_hosted_e2e.sh` in the standing gate; an actual deployment (Render or your own host) is a maintainer action |
+| winget | submission note | staged | winget needs a signed/published stable URL; submission is owner-gated (the 2026-10-02 owner triage) |
 
-## Files in a project
+Marks are re-checked by `scripts/check_docs_sync.py` (W61 guard): every
+`packaging/` path the README install matrix names must exist, and every
+channel file under `packaging/` must be represented in the matrix, the two
+documents cannot drift apart.
 
-```
-myapp/
-  operon.toml        # the manifest — the ONLY place project metadata lives
-  operon.lock        # generated: the pinned dependency graph; commit it
-  src/main.op        # the entry (default; entry = "src/main.op")
-  tests/             # proof frames, run by `operon test`
-  operon_modules/    # installed packages (generated; gitignore it)
-```
+## The B5 stack note (what actually happened)
 
-### operon.toml
+The B-track stack (`b2/b1-bench-suite` → `b2/b5-packaging`, PRs #12–#14)
+merged through its own stack tip; PR #14 shows merged on GitHub, but its
+`Cargo.toml` delta (the `[package.metadata.binstall]` table) **never reached
+`main`** — the table lived on the stack tip only, and the branch is gone from
+the remote. Every doc that said the table "lands with the B5 stack merge" was
+waiting for a merge that had already happened without it: the cargo-binstall
+channel had silently died (found by the W061-A audit, 2026-10-02). The table
+is restored directly on `main` now, with its template contract pinned by
+`scripts/pkg_meta_check.py` so it can never silently drift behind release.yml
+again. The old hazard that kept the stack unmerged (its README diff was based
+on an older tree and would have regressed the W53–W58 canonical statistics)
+never applied to the metadata table itself — the table is inert to the build.
 
-```toml
-[package]
-name = "myapp"                    # ^[a-z][a-z0-9_-]{1,63}$
-version = "0.1.0"                 # strict X.Y.Z (pre-release tags: not yet)
-operon-version = ">= 2.2"         # optional; checked semantics are W66
-authors = ["You <you@example.dev>"]
-license = "MIT"
-description = "What this does"
-keywords = ["bio", "seq"]
-entry = "src/main.op"             # default
+## Source release flow (scripts/release.sh)
 
-[dependencies]
-http = "^1.0"                     # see requirements below
-```
+`scripts/release.sh` packs HEAD with `git archive` (tracked files only, so
+`target/`, `bin/`, `build/` and `dist/` itself cannot leak) into
+`dist/operon-<version>.tar.gz`, writes the archive's `.sha256` companion and
+a `SHA256SUMS` manifest, and re-tars with pinned metadata (mtime epoch 0,
+uid/gid 0) when GNU tar is available, so two runs of the same commit produce
+byte-identical archives. `--verify` checks an existing archive fail-closed;
+`--dry-run` prints the plan. The manifest is what `install.sh --verify`
+consumes. S5 (2026-10-02) closed the gap the old wording papered over: the
+release workflow now has a `sha256sums` job that publishes a whole-release
+`SHA256SUMS` (every binary asset, hashed from the exact published bytes
+downloaded back from the release, each sidecar re-verified first, a partial
+asset set refused), so strict mode is enforceable against real releases —
+previously only the per-asset `.sha256` sidecars existed and `--verify`
+could only ever fail closed. `scripts/pkg_meta_check.py` pins the job to
+the build matrix: a target added to the matrix without a matching manifest
+entry fails the standing gate, not a live release.
 
-The hard boundary from SPEC §config (W22) holds: `.cell` files configure a
-RUN, `operon.toml` describes a PROJECT. The two never merge.
+## Release notes template (S5)
 
-### operon.lock
+Every release body starts from `.github/release-notes-template.md` — the
+verification preamble (per-asset check, whole-release check, installer
+strict mode) — with GitHub's auto-generated notes appended
+(`generate_release_notes: true`). The template is pinned by
+`scripts/pkg_meta_check.py`; edit it when the verification story changes,
+not per release.
 
-```toml
-# operon.lock — generated by operon. Do not edit.
-lock-format = 1
+## Pipeline rehearsal (#51, S5)
 
-[[package]]
-name = "web"
-version = "1.0.0"
-sha256 = "…"                      # pin of the exact artifact bytes
-deps = ["http 1.0.0"]             # exact resolved pins
-```
+The smoke gate's first live run must not be a real release (v2.7.0 shipped
+unsmoked — the W060 wiring had zero executions against uploaded bytes).
+`release.yml` therefore takes a `workflow_dispatch` input, `dry_run`:
+it builds and smokes every matrix target exactly like a tag push — per-asset
+smoke rows in the run log are the acceptance evidence — but attaches nothing
+to any release and skips the manifest job. Dispatch refs are sanitised
+(`/` → `-` in the version slot; tags unaffected). One rehearsal per pipeline
+change is the honest cadence; the runs are free of repo side effects.
 
-Reproducibility contract, enforced by tests:
+The smoke's *expected version* is ref-aware, per the first live rehearsal's
+catch (run 36992837397): on a tag push the expectation is the tag minus `v`
+(the release-version contract); on any non-tag ref the expectation falls
+back to the built tree's `Cargo.toml` version — a branch name is not a
+version a dispatch-built binary could ever carry, and the first rehearsal
+failed all four smoked targets on exactly that mismatch before the fix.
+The wiring is pinned by `scripts/pkg_meta_check.py`; a rehearsal that
+cannot derive an expectation refuses to run.
 
-* Resolution is a pure function of (requirements, registry content). Same
-  inputs, byte-identical lock output — the resolver picks the highest
-  non-yanked version satisfying each requirement, sorted by name, tie-break
-  strict semver order.
-* A lock that still satisfies the manifest is FROZEN: `operon add` of an
-  already-satisfied dependency never bumps anything; `operon update` is the
-  only command that re-resolves.
-* Installs are lockfile-first: every artifact is downloaded, its sha256 is
-  verified against the lock, and a mismatch refuses to install (pinned in
-  the e2e suite by corrupting an artifact and expecting failure).
-* `operon run` in a project auto-installs the lock graph if module
-  directories are missing, so a fresh clone runs without a manual step.
+The second rehearsal (run 37045410736) caught the windows sidecar producer
+writing CRLF (`Out-File`), which makes every `sha256sum -c` consumer read
+the trailing CR into the filename and fail — a latent bug the first real
+tag release would have hit at the manifest job. The producer now writes LF
+(`[System.IO.File]::WriteAllText`), and both in-workflow consumers (smoke
+step, SHA256SUMS job) CR-normalize each sidecar before `-c`; the hash
+bytes verified are still the exact published ones.
 
-## Version requirements
+## Installer gate (S5)
 
-| req        | meaning                                  |
-|------------|------------------------------------------|
-| `1.2.3`    | exactly 1.2.3 (a full pin means what it says) |
-| `1.2`      | caret (operon default shorthand): [1.2.0, 2.0.0) |
-| `^1.2.3`   | [1.2.3, 2.0.0); `^0.2.3` = [0.2.3, 0.3.0); `^0.0.3` = exactly 0.0.3 |
-| `~1.2.3`   | [1.2.3, 1.3.0)                           |
-| `~1`       | 1.x                                      |
-| `>=1.0 <2.0` | AND of comparators (space or comma separated) |
-| `1.x`, `1.2.*`, `*` | wildcards                       |
+`scripts/install.sh` had zero gate coverage — its fail-closed verification
+law (sec-r1 / B1-U3) was only ever exercised by production traffic.
+`OPERON_INSTALL_ASSET_DIR` gives it a hermetic offline mode (a directory
+laid out like a release: assets, sidecars, optional manifest; every
+verification law unchanged), and `scripts/install_e2e.sh` exercises the
+full contract on every gate: happy path (sidecar + manifest cross-check,
+binary + `operon-ls` + `std/` installed), tampered sidecar refusal,
+`--verify` without a manifest, `--verify` with the asset unlisted, and the
+offline mode's refusal to resolve `latest` without a network.
 
-`operon add http` with no requirement uses caret-of-latest.
+## Publish checklist (owner/maintainer, per release)
 
-## The registry
-
-Same protocol, two transports:
-
-* **Directory registry** — `OPERON_REGISTRY=/path/to/dir` (default
-  `./registry`):
-
-  ```
-  <root>/index/<name>.json            # metadata + version list
-  <root>/artifacts/<name>/<ver>.opkg  # package envelopes
-  ```
-
-* **HTTP registry** — `OPERON_REGISTRY=http://host:port`. Endpoints:
-
-  ```
-  GET  /healthz
-  GET  /api/search?q=<query>
-  GET  /api/packages/<name>
-  GET  /api/packages/<name>/<version>/download
-  POST /api/publish                   # Bearer token; body = envelope
-  ```
-
-The reference server is `packaging/registry/app.py`: a single-file service
-(stdlib only locally; PostgreSQL via `DATABASE_URL` on Render,
-SQLite otherwise). Publish requires a token in the `OPERON_TOKENS` env var;
-tokens unset = publish disabled. Versions are immutable — republishing the
-same name+version is a 409, by design (yank comes later; overwrite is how
-supply-chain bugs happen). Deploy: `packaging/registry/render.yaml` (Render
-blueprint: web service + free Postgres, `DATABASE_URL` wired).
-
-### The artifact (envelope) format
-
-A package is one JSON document (`.opkg`): manifest text + base64 files,
-sorted by path, deterministic bytes. Files are path-sanitized on both write
-and read (no `..`, no absolute, no backslashes). On install, the package's
-entry file lands at `operon_modules/<name>/<entry-basename>` with sibling
-sources beside it — so `use <name>` and `use <name>/<sub>` resolve through
-the import candidates in `genes.rs` (mirrored in `bootstrap/oracle.py`),
-inside the project tree, with no new capability grants. The sandbox stays
-deny-by-default; packages NEVER bypass it.
-
-### Import shadowing, stated honestly
-
-`use json` resolves `std/json.op` FIRST: the standard library is the trusted
-substrate and wins the bare name. Packages extend the surface through
-submodules — `operon add json` then `use json/extra`. The installed
-`json.op` (the package entry) exists for layout completeness and tooling.
-
-## The official seed packages
-
-Source of truth: `packaging/packages/`. Seed a local registry with
-`python3 scripts/pkg_seed_registry.py [dir]` (default `./registry`).
-
-| package    | entry        | what it gives you |
-|------------|--------------|-------------------|
-| `http`     | `http.op`    | `get`/`get_port`/`get_json`, RFC 3986 `escape`, `query`, `with_query`, `download_to_file` — over the core `http_get` builtin, still `--allow-net` gated |
-| `json`     | `extra.op`   | `get_path`/`get_path_or`/`has_path` (catchable [missing]), deep `merge`, byte-stable `pretty` — the extension layer over std/json |
-| `postgres` | `postgres.op`| parameterized `query`/`query_one`/`execute`/`migrate` through the `py()` bridge; Python side ships in the package (`py/operon_pg.py`), needs `pip install psycopg2-binary` |
-| `web`      | `web.op`     | `escape_html`, response maps, exact-match `route`, `page` shell, safe-default cookies (deps: `http ^1.0`) |
-
-## Publishing over https
-
-The default build stays zero-external-crates and speaks `http://` and local
-directory registries. For https — which is what the hosted registry on
-Render serves at the edge — compile the opt-in TLS variant (pure-Rust
-rustls, one flag, nothing else pulled into the default build):
-
-```console
-$ cargo build --release --features tls
-```
-
-That build dials `https://` registries directly; publish, search, add,
-update and run all work over https exactly as over http (same request and
-response bytes, only the pipe differs):
-
-```console
-$ OPERON_REGISTRY=https://operon-registry.onrender.com \
-  OPERON_TOKEN=... operon publish
-```
-
-**Self-hosted registries with an internal CA.** If your registry runs a
-certificate your OS trust store does not know (a company CA, a self-signed
-lab CA), point `OPERON_CA_FILE` at the CA's PEM bundle. The client then
-builds the chain to that anchor and still refuses anything unverifiable —
-an untrusted certificate is an error, never a warning:
-
-```console
-$ OPERON_REGISTRY=https://registry.internal.example OPERON_CA_FILE=ca.pem operon add http
-```
-
-The registry service itself can serve TLS directly for self-hosting
-(Render terminates TLS for you, so this is only needed when you front the
-service yourself): set `OPERON_TLS_CERT` and `OPERON_TLS_KEY` in the
-environment and `python3 app.py` speaks https.
-
-The full https lifecycle is gated by `scripts/pkg_tls_e2e.sh`: it builds
-the `tls` variant, generates a CA-signed server certificate in the
-internal-CA shape, boots the real registry over TLS and drives
-publish → search → add → run → lock-reproducibility through it, plus the
-negative checks (no CA file → untrusted rejection; no token → 403;
-republish → 409 immutable). Without the `tls` feature the client refuses
-https loudly and names the exact rebuild command — silent downgrades are
-not a thing here.
-
-## Where the tests live
-
-* `src/pkg.rs` bottom: semver/TOML/sha256-known-vectors/base64/envelope/
-  lockfile/deterministic-resolution unit tests (cargo test).
-* `tests/package/pkg_e2e.sh`: 38 end-to-end checks over both transports,
-  wired as step [5/5] of `scripts/test.sh`.
-* `scripts/pkg_tls_e2e.sh`: 21 https end-to-end checks (TLS build, internal-
-  CA handshake, publish/search/add/run/lock over https, untrusted-CA and
-  no-token rejections, default-build refusal message, real-internet
-  roundtrip).
-* `operon_modules/demo_pkg/` + `tests/differential/package_resolve.op`:
-  the installed-layout import path is pinned byte-identically on both
-  cores (Rust + oracle) in the differential harness (144/144).
-
-## Known limits (honest list)
-
-* https needs the `tls` feature build (see above); the default binary
-  refuses it with the exact rebuild command rather than a raw connection
-  error. No git/source-artifact transport yet — the registry envelope is
-  the only source shape.
-* Pre-release versions are rejected loudly, not sorted subtly.
-* `operon publish` rewrites `operon.toml` from the parsed manifest (comments
-  and unknown keys in `[dependencies]` are normalized away).
-* The hosted registry is a simple service by design; search is
-  name/description substring matching, not ranking.
+1. Pin every `REPLACE_WITH_COMPANION_SHA256` / `fakeSha256` / empty `hash`
+   from the release's `.sha256` companions.
+2. Bump the version literals in `packaging/scoop/operon.json`,
+   `packaging/aur/PKGBUILD*`, `packaging/homebrew/operon.rb` and
+   `packaging/nix/default.nix`. The checker now enforces this (W061-A):
+   the W61 guard in `scripts/check_docs_sync.py` fails when any manifest's
+   version literal drifts behind the Cargo version — two releases (2.6.0,
+   2.7.0) shipped with the drafts still pinned to 2.2.0 before it existed.
+3. `makepkg -si` (AUR) / `nix-build` (Nix) / `cargo deb` / `cargo generate-rpm`
+   locally; move a channel to `validated` ONLY when a CI job reproduces it.
+4. Update this ledger in the same commit as any publish.

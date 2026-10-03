@@ -1,0 +1,158 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=111 tag=c111
+
+let c111_b0 = "start"
+
+if -10 > 80 { c111_b0 = "hi" } elif -10 > 40 { c111_b0 = "mid" } else { c111_b0 = "lo" }
+
+print("c111-i0:", c111_b0, -10)
+
+let c111_b1 = "start"
+
+if 5 > 80 { c111_b1 = "hi" } elif 5 > 40 { c111_b1 = "mid" } else { c111_b1 = "lo" }
+
+print("c111-i1:", c111_b1, 5)
+
+let c111_b2 = "start"
+
+if 55 > 80 { c111_b2 = "hi" } elif 55 > 40 { c111_b2 = "mid" } else { c111_b2 = "lo" }
+
+print("c111-i2:", c111_b2, 55)
+
+let c111_a0 = 0
+
+let c111_n0 = 0
+
+while c111_n0 < 7 {
+
+    c111_n0 += 4
+
+    if c111_n0 % 2 == 0 { continue }
+
+    if c111_n0 > 14 { break }
+
+    c111_a0 += c111_n0
+
+}
+
+print("c111-w0:", c111_a0, c111_n0)
+
+let c111_a1 = 0
+
+let c111_n1 = 0
+
+while c111_n1 < 8 {
+
+    c111_n1 += 2
+
+    if c111_n1 % 3 == 0 { continue }
+
+    if c111_n1 > 16 { break }
+
+    c111_a1 += c111_n1
+
+}
+
+print("c111-w1:", c111_a1, c111_n1)
+
+let c111_a2 = 0
+
+let c111_n2 = 0
+
+while c111_n2 < 8 {
+
+    c111_n2 += 4
+
+    if c111_n2 % 3 == 0 { continue }
+
+    if c111_n2 > 12 { break }
+
+    c111_a2 += c111_n2
+
+}
+
+print("c111-w2:", c111_a2, c111_n2)
+
+let c111_a3 = 0
+
+let c111_n3 = 0
+
+while c111_n3 < 15 {
+
+    c111_n3 += 3
+
+    if c111_n3 % 3 == 0 { continue }
+
+    if c111_n3 > 24 { break }
+
+    c111_a3 += c111_n3
+
+}
+
+print("c111-w3:", c111_a3, c111_n3)
+
+let c111_c0 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 4] {
+
+        c111_c0 += a * b
+
+    }
+
+}
+
+print("c111-l0:", c111_c0)
+
+let c111_c1 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 2] {
+
+        c111_c1 += a * b
+
+    }
+
+}
+
+print("c111-l1:", c111_c1)
+
+let c111_c2 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 3] {
+
+        c111_c2 += a * b
+
+    }
+
+}
+
+print("c111-l2:", c111_c2)
+
+let c111_acc0 = ""
+
+loop {
+
+    c111_acc0 += "x"
+
+    if c111_acc0.len() >= 5 { break }
+
+}
+
+print("c111-o0:", c111_acc0)
+
+let c111_acc1 = ""
+
+loop {
+
+    c111_acc1 += "x"
+
+    if c111_acc1.len() >= 6 { break }
+
+}
+
+print("c111-o1:", c111_acc1)

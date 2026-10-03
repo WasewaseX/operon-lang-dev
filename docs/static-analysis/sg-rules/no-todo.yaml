@@ -1,0 +1,10 @@
+id: no-todo-in-src
+message: TODO/FIXME/HACK marker left in shipped core — resolve or move to the roadmap (TODO-100 board references excluded)
+severity: info
+language: Rust
+rule:
+  kind: line_comment
+  regex: "(TODO|FIXME|HACK)([^-A-Za-z0-9_]|$)"
+paths:
+  include:
+    - src

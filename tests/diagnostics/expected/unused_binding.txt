@@ -1,0 +1,8 @@
+warning[W07]: binding 'dead' is never read in this file (dead store); '_'-prefix or '// allow: unused-binding' silences
+
+  --> tests/diagnostics/unused_binding.op:1
+   |
+1 | gene main() {
+   |
+   = rule: unused-binding
+lint: 1 finding(s)

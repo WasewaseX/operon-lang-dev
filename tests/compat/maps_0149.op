@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=149 tag=m149
+
+let m149_m0 = {gene: 52, plasmid: -82, marker: 10, codon: -90, vector: 43}
+
+print("m149-m0:", m149_m0["gene"], len(m149_m0), m149_m0.has("gene"))
+
+let m149_m1 = {vector: 13, plasmid: 66, enzyme: 36}
+
+print("m149-m1:", m149_m1["vector"], len(m149_m1), m149_m1.has("vector"))
+
+let m149_m2 = {ribose: -22, vector: -8, gene: -40, marker: 91}
+
+print("m149-m2:", m149_m2["ribose"], len(m149_m2), m149_m2.has("ribose"))
+
+let m149_m3 = {gene: -83, helix: 9, vector: -44}
+
+print("m149-m3:", m149_m3["gene"], len(m149_m3), m149_m3.has("gene"))
+
+let m149_k0 = {ribose: 14, enzyme: 47, cell: 16}
+
+let m149_ks0 = m149_k0.keys()
+
+let m149_sm0 = 0
+
+for k in m149_k0 { m149_sm0 += m149_k0[k] }
+
+print("m149-k0:", m149_sm0, m149_k0.keys().sort(), m149_k0.values().len())
+
+let m149_k1 = {marker: 33, vector: 37, helix: 13}
+
+let m149_ks1 = m149_k1.keys()
+
+let m149_sm1 = 0
+
+for k in m149_k1 { m149_sm1 += m149_k1[k] }
+
+print("m149-k1:", m149_sm1, m149_k1.keys().sort(), m149_k1.values().len())
+
+let m149_k2 = {helix: 21, exon: 16, ligase: 42}
+
+let m149_ks2 = m149_k2.keys()
+
+let m149_sm2 = 0
+
+for k in m149_k2 { m149_sm2 += m149_k2[k] }
+
+print("m149-k2:", m149_sm2, m149_k2.keys().sort(), m149_k2.values().len())
+
+let m149_w0 = {outer: {gene: 9, splicer: 8, tag: "ok"}}}
+
+print("m149-w0:", m149_w0["outer"]["splicer"], m149_w0["outer"]["tag"])
+
+let m149_w1 = {outer: {ribose: 3, exon: 1, tag: "ok"}}}
+
+print("m149-w1:", m149_w1["outer"]["exon"], m149_w1["outer"]["tag"])

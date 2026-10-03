@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=170 tag=m170
+
+let m170_m0 = {exon: 67, ribose: 34, helix: 21, codon: -12}
+
+print("m170-m0:", m170_m0["exon"], len(m170_m0), m170_m0.has("exon"))
+
+let m170_m1 = {vector: 64, codon: -29, ligase: 89}
+
+print("m170-m1:", m170_m1["vector"], len(m170_m1), m170_m1.has("vector"))
+
+let m170_m2 = {plasmid: -68, gene: -52, ligase: -87, splicer: 69, cell: -87}
+
+print("m170-m2:", m170_m2["plasmid"], len(m170_m2), m170_m2.has("plasmid"))
+
+let m170_k0 = {marker: 24, codon: 31, enzyme: 32}
+
+let m170_ks0 = m170_k0.keys()
+
+let m170_sm0 = 0
+
+for k in m170_k0 { m170_sm0 += m170_k0[k] }
+
+print("m170-k0:", m170_sm0, m170_k0.keys().sort(), m170_k0.values().len())
+
+let m170_k1 = {splicer: 42, plasmid: 24, vector: 40}
+
+let m170_ks1 = m170_k1.keys()
+
+let m170_sm1 = 0
+
+for k in m170_k1 { m170_sm1 += m170_k1[k] }
+
+print("m170-k1:", m170_sm1, m170_k1.keys().sort(), m170_k1.values().len())
+
+let m170_k2 = {cell: 21, splicer: 20, exon: 13}
+
+let m170_ks2 = m170_k2.keys()
+
+let m170_sm2 = 0
+
+for k in m170_k2 { m170_sm2 += m170_k2[k] }
+
+print("m170-k2:", m170_sm2, m170_k2.keys().sort(), m170_k2.values().len())
+
+let m170_w0 = {outer: {marker: 7, vector: 5, tag: "ok"}}}
+
+print("m170-w0:", m170_w0["outer"]["vector"], m170_w0["outer"]["tag"])
+
+let m170_w1 = {outer: {helix: 9, splicer: 8, tag: "ok"}}}
+
+print("m170-w1:", m170_w1["outer"]["splicer"], m170_w1["outer"]["tag"])

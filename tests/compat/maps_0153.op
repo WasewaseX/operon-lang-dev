@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=153 tag=m153
+
+let m153_m0 = {marker: 31, codon: -12, ribose: 75}
+
+print("m153-m0:", m153_m0["marker"], len(m153_m0), m153_m0.has("marker"))
+
+let m153_m1 = {ligase: -33, helix: -57, exon: 14, codon: 74, marker: 14}
+
+print("m153-m1:", m153_m1["ligase"], len(m153_m1), m153_m1.has("ligase"))
+
+let m153_m2 = {enzyme: -93, marker: 73, helix: -48, ligase: 84}
+
+print("m153-m2:", m153_m2["enzyme"], len(m153_m2), m153_m2.has("enzyme"))
+
+let m153_k0 = {ribose: 14, plasmid: 17, vector: 9}
+
+let m153_ks0 = m153_k0.keys()
+
+let m153_sm0 = 0
+
+for k in m153_k0 { m153_sm0 += m153_k0[k] }
+
+print("m153-k0:", m153_sm0, m153_k0.keys().sort(), m153_k0.values().len())
+
+let m153_k1 = {exon: 21, gene: 37, helix: 12}
+
+let m153_ks1 = m153_k1.keys()
+
+let m153_sm1 = 0
+
+for k in m153_k1 { m153_sm1 += m153_k1[k] }
+
+print("m153-k1:", m153_sm1, m153_k1.keys().sort(), m153_k1.values().len())
+
+let m153_w0 = {outer: {cell: 1, plasmid: 6, tag: "ok"}}}
+
+print("m153-w0:", m153_w0["outer"]["plasmid"], m153_w0["outer"]["tag"])
+
+let m153_w1 = {outer: {codon: 7, plasmid: 4, tag: "ok"}}}
+
+print("m153-w1:", m153_w1["outer"]["plasmid"], m153_w1["outer"]["tag"])

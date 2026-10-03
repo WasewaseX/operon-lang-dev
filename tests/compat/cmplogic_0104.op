@@ -1,0 +1,36 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=104 tag=c104
+
+print("c104-c0:", 9116 > -8923)
+
+print("c104-c1:", -3413 >= 3301)
+
+print("c104-c2:", -4574 <= -4630)
+
+print("c104-c3:", 8637 <= -8345)
+
+print("c104-c4:", 7791 >= 914)
+
+print("c104-b0:", 36 < 43 && 43 < 36, 36 > 43 || 36 > 36)
+
+print("c104-b1:", 9 < 31 && 31 < 44, 9 > 31 || 9 > 44)
+
+print("c104-t0:", -1643 > 9165 ? "gt" : "le")
+
+print("c104-t1:", -2203 > -7059 ? "gt" : "le")
+
+print("c104-t2:", -6913 > -1777 ? "gt" : "le")
+
+print("c104-t3:", 5328 > -1146 ? "gt" : "le")
+
+let c104_n0 = null
+
+print("c104-n0:", c104_n0 ?? 5301, c104_n0 == null)
+
+let c104_n1 = null
+
+print("c104-n1:", c104_n1 ?? 6250, c104_n1 == null)
+
+print("c104-s0:", "hex9" in "hn3npAhex9", "hex9" == "hex9")
+
+print("c104-s1:", "nu09" in "mcabj6nu09", "nu09" == "nu09")

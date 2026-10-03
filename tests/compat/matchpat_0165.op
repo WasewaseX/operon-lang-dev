@@ -1,0 +1,226 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=165 tag=m165
+
+let m165_s0 = some(3)
+
+match m165_s0 {
+
+    case Some(x) if x > 3 {
+
+        print("m165-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m165-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m165-m0:", "none")
+
+    }
+
+}
+
+let m165_s1 = some(7)
+
+match m165_s1 {
+
+    case Some(x) if x > 7 {
+
+        print("m165-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m165-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m165-m1:", "none")
+
+    }
+
+}
+
+let m165_s2 = some(7)
+
+match m165_s2 {
+
+    case Some(x) if x > 7 {
+
+        print("m165-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m165-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m165-m2:", "none")
+
+    }
+
+}
+
+let m165_ls0 = [44, 29, 5]
+
+match m165_ls0 {
+
+    case [44, *rest] {
+
+        print("m165-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m165-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m165-l0:", "other")
+
+    }
+
+}
+
+let m165_ls1 = [43, 13, 17]
+
+match m165_ls1 {
+
+    case [43, *rest] {
+
+        print("m165-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m165-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m165-l1:", "other")
+
+    }
+
+}
+
+let m165_mp0 = {marker: 4012, ribose: 6834}
+
+match m165_mp0 {
+
+    case {marker: p, ribose: q} {
+
+        print("m165-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m165-mp0:", "miss")
+
+    }
+
+}
+
+let m165_mp1 = {ribose: -1009, splicer: 1590}
+
+match m165_mp1 {
+
+    case {ribose: p, splicer: q} {
+
+        print("m165-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m165-mp1:", "miss")
+
+    }
+
+}
+
+let m165_r0 = ok(1)
+
+match m165_r0 {
+
+    case Ok(n) | Err(1) {
+
+        print("m165-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m165-r0:", "zero")
+
+    }
+
+}
+
+let m165_r1 = ok(5)
+
+match m165_r1 {
+
+    case Ok(n) | Err(5) {
+
+        print("m165-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m165-r1:", "zero")
+
+    }
+
+}
+
+match "exon" {
+
+    case "exon" {
+
+        print("m165-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m165-w0:", "alt")
+
+    }
+
+}
+
+match "cell" {
+
+    case "cell" {
+
+        print("m165-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m165-w1:", "alt")
+
+    }
+
+}

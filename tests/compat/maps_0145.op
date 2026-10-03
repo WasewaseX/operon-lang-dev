@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=145 tag=m145
+
+let m145_m0 = {ribose: -81, plasmid: 74, marker: 38, enzyme: 48}
+
+print("m145-m0:", m145_m0["ribose"], len(m145_m0), m145_m0.has("ribose"))
+
+let m145_m1 = {helix: 66, gene: -52, plasmid: 89, exon: 37, codon: -85}
+
+print("m145-m1:", m145_m1["helix"], len(m145_m1), m145_m1.has("helix"))
+
+let m145_m2 = {ribose: 26, cell: -10, marker: 84, ligase: 64, enzyme: -57}
+
+print("m145-m2:", m145_m2["ribose"], len(m145_m2), m145_m2.has("ribose"))
+
+let m145_k0 = {plasmid: 25, helix: 33, gene: 21}
+
+let m145_ks0 = m145_k0.keys()
+
+let m145_sm0 = 0
+
+for k in m145_k0 { m145_sm0 += m145_k0[k] }
+
+print("m145-k0:", m145_sm0, m145_k0.keys().sort(), m145_k0.values().len())
+
+let m145_k1 = {enzyme: 45, codon: 45, ligase: 47}
+
+let m145_ks1 = m145_k1.keys()
+
+let m145_sm1 = 0
+
+for k in m145_k1 { m145_sm1 += m145_k1[k] }
+
+print("m145-k1:", m145_sm1, m145_k1.keys().sort(), m145_k1.values().len())
+
+let m145_k2 = {cell: 29, ribose: 16, ligase: 18}
+
+let m145_ks2 = m145_k2.keys()
+
+let m145_sm2 = 0
+
+for k in m145_k2 { m145_sm2 += m145_k2[k] }
+
+print("m145-k2:", m145_sm2, m145_k2.keys().sort(), m145_k2.values().len())
+
+let m145_w0 = {outer: {helix: 8, gene: 8, tag: "ok"}}}
+
+print("m145-w0:", m145_w0["outer"]["gene"], m145_w0["outer"]["tag"])
+
+let m145_w1 = {outer: {plasmid: 8, cell: 1, tag: "ok"}}}
+
+print("m145-w1:", m145_w1["outer"]["cell"], m145_w1["outer"]["tag"])

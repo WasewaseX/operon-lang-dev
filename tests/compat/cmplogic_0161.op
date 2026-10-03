@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=161 tag=c161
+
+print("c161-c0:", -8791 > 6574)
+
+print("c161-c1:", 6711 >= -4903)
+
+print("c161-c2:", 3536 > 3226)
+
+print("c161-c3:", -3790 <= -9424)
+
+print("c161-c4:", 8803 >= -8440)
+
+print("c161-b0:", 40 < 0 && 0 < 10, 40 > 0 || 40 > 10)
+
+print("c161-b1:", 35 < 4 && 4 < 10, 35 > 4 || 35 > 10)
+
+print("c161-b2:", 41 < 7 && 7 < 25, 41 > 7 || 41 > 25)
+
+print("c161-b3:", 2 < 47 && 47 < 34, 2 > 47 || 2 > 34)
+
+print("c161-t0:", -7621 > -659 ? "gt" : "le")
+
+print("c161-t1:", -6437 > 5778 ? "gt" : "le")
+
+let c161_n0 = null
+
+print("c161-n0:", c161_n0 ?? -8224, c161_n0 == null)
+
+let c161_n1 = null
+
+print("c161-n1:", c161_n1 ?? 9705, c161_n1 == null)
+
+let c161_n2 = null
+
+print("c161-n2:", c161_n2 ?? -7871, c161_n2 == null)
+
+print("c161-s0:", "5elm" in "v10qfp5elm", "5elm" == "5elm")
+
+print("c161-s1:", "6zBe" in "8m_Cv46zBe", "6zBe" == "6zBe")

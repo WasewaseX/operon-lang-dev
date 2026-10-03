@@ -1,0 +1,188 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=129 tag=f129
+
+gene f129_g0(p, q = 65, r = 75) {
+
+    return p * 42 + q - r
+
+}
+
+print("f129-d0:", f129_g0(1), f129_g0(1, 14), f129_g0(1, 65, 75))
+
+gene f129_g1(p, q = 88, r = 54) {
+
+    return p * 98 + q - r
+
+}
+
+print("f129-d1:", f129_g1(0), f129_g1(0, 30), f129_g1(0, 88, 54))
+
+gene f129_g2(p, q = 11, r = 9) {
+
+    return p * 12 + q - r
+
+}
+
+print("f129-d2:", f129_g2(28), f129_g2(28, 87), f129_g2(28, 11, 9))
+
+gene f129_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f129_fib0(n - 1) + f129_fib0(n - 2)
+
+}
+
+print("f129-fib0:", f129_fib0(8))
+
+gene f129_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f129_fib1(n - 1) + f129_fib1(n - 2)
+
+}
+
+print("f129-fib1:", f129_fib1(9))
+
+gene f129_fib2(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f129_fib2(n - 1) + f129_fib2(n - 2)
+
+}
+
+print("f129-fib2:", f129_fib2(10))
+
+gene f129_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f129_gcd0(b, a % b)
+
+}
+
+print("f129-gcd0:", f129_gcd0(973, 596))
+
+gene f129_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f129_gcd1(b, a % b)
+
+}
+
+print("f129-gcd1:", f129_gcd1(193, 662))
+
+gene f129_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f129_c0 = f129_mk0(7)
+
+f129_c0(9)
+
+print("f129-cl0:", f129_c0(5))
+
+gene f129_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f129_c1 = f129_mk1(2)
+
+f129_c1(1)
+
+print("f129-cl1:", f129_c1(5))
+
+gene f129_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f129-hof0:", f129_tw0(gene (z) => z * 2 + 1, 5))
+
+gene f129_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f129-hof1:", f129_tw1(gene (z) => z * 2 + 1, 18))
+
+gene f129_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f129-dg0:", f129_sd0(979756))
+
+gene f129_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f129-dg1:", f129_sd1(231706))

@@ -1,0 +1,36 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=173 tag=c173
+
+print("c173-c0:", -6654 > -6405)
+
+print("c173-c1:", -2422 >= 3019)
+
+print("c173-c2:", 7844 <= 4974)
+
+print("c173-c3:", -1303 >= 3835)
+
+print("c173-b0:", 42 < 16 && 16 < 37, 42 > 16 || 42 > 37)
+
+print("c173-b1:", 11 < 29 && 29 < 45, 11 > 29 || 11 > 45)
+
+print("c173-b2:", 6 < 36 && 36 < 21, 6 > 36 || 6 > 21)
+
+print("c173-t0:", 8056 > -7115 ? "gt" : "le")
+
+print("c173-t1:", -4826 > -1502 ? "gt" : "le")
+
+print("c173-t2:", 7793 > -9345 ? "gt" : "le")
+
+print("c173-t3:", -1620 > 6022 ? "gt" : "le")
+
+let c173_n0 = null
+
+print("c173-n0:", c173_n0 ?? -6317, c173_n0 == null)
+
+let c173_n1 = null
+
+print("c173-n1:", c173_n1 ?? 3966, c173_n1 == null)
+
+print("c173-s0:", "puAb" in "tAz3ynpuAb", "puAb" == "puAb")
+
+print("c173-s1:", "3swj" in "BAjrxC3swj", "3swj" == "3swj")

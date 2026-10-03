@@ -1,0 +1,270 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=259 tag=s259
+
+stress {
+
+    print("s259-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s259-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s259-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s259-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s259-mz:", 25 % 0)
+
+} rescue (e) {
+
+    print("s259-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s259-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s259-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s259-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s259-of2:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s259-m1:", 9223372036854775807 % -1)
+
+} rescue (e) {
+
+    print("s259-m1:", "caught", e.kind, e.message)
+
+}
+
+gene s259_r0() {
+
+    raise "s259-gprr9d"
+
+}
+
+stress {
+
+    s259_r0()
+
+    print("s259-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s259-r0:", e.kind, e.message)
+
+}
+
+gene s259_r1() {
+
+    raise "s259-A3tv3i"
+
+}
+
+stress {
+
+    s259_r1()
+
+    print("s259-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s259-r1:", e.kind, e.message)
+
+}
+
+gene s259_r2() {
+
+    raise "s259-crdwe_"
+
+}
+
+stress {
+
+    s259_r2()
+
+    print("s259-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s259-r2:", e.kind, e.message)
+
+}
+
+gene s259_r3() {
+
+    raise "s259-5zkfCs"
+
+}
+
+stress {
+
+    s259_r3()
+
+    print("s259-r3:", "unreachable")
+
+} rescue (e) {
+
+    print("s259-r3:", e.kind, e.message)
+
+}
+
+let s259_xs0 = [21, 11]
+
+stress {
+
+    print("s259-x0:", s259_xs0[3])
+
+} rescue (e) {
+
+    print("s259-x0:", "caught", e.kind)
+
+}
+
+let s259_xs1 = [38, 49]
+
+stress {
+
+    print("s259-x1:", s259_xs1[4])
+
+} rescue (e) {
+
+    print("s259-x1:", "caught", e.kind)
+
+}
+
+let s259_xs2 = [1, 47]
+
+stress {
+
+    print("s259-x2:", s259_xs2[3])
+
+} rescue (e) {
+
+    print("s259-x2:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s259-0"
+
+    } rescue (e) {
+
+        print("s259-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s259-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s259-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s259-d0-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s259-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s259-1"
+
+    } rescue (e) {
+
+        print("s259-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s259-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s259-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s259-d1-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s259-d1-top:", outer.message)
+
+}

@@ -1,0 +1,100 @@
+# json package test — runs in-tree and vendored.
+use json
+use std/serialize as ser
+
+frame proof {
+    # canonical serialization: key order independent, sorted, minimal
+    let a = json.json_canonical({b: 1, a: [true, null, "x"]})
+    let b = json.json_canonical({a: [true, null, "x"], b: 1})
+    assert(a == b, "canonical is insertion-order independent")
+    assert(a == "\{\"a\":[true,null,\"x\"],\"b\":1\}", "canonical exact bytes")
+    assert(json.json_canonical("he said \"hi\"\n") == "\"he said \\\"hi\\\"\\n\"", "string escaping")
+    assert(json.json_canonical(42) == "42", "number passthrough")
+    assert(json.json_canonical(null) == "null", "null")
+
+    # pointers: get
+    let doc = {user: {name: "ada", tags: ["x", "y"]}, n: 3}
+    assert(json.json_pointer_get(doc, "") == doc, "empty pointer is the doc")
+    assert(json.json_pointer_get(doc, "/user/name") == "ada", "map descent")
+    assert(json.json_pointer_get(doc, "/user/tags/1") == "y", "list index")
+    assert(json.json_pointer_get(doc, "/user/nope") == null, "missing key is null")
+    assert(json.json_pointer_get(doc, "/user/tags/9") == null, "out of range is null")
+    assert(json.json_pointer_get(doc, "/n/deep") == null, "through scalar is null")
+    assert(json.json_pointer_get(doc, "/~0~1") == null, "escape decode runs")
+
+    # pointers: set (immutable)
+    let d2 = json.json_pointer_set(doc, "/user/name", "grace")
+    assert(json.json_pointer_get(d2, "/user/name") == "grace", "set applied")
+    assert(json.json_pointer_get(d2, "/user/tags/0") == "x", "set preserved siblings")
+    assert(json.json_pointer_get(doc, "/user/name") == "ada", "original untouched")
+    let d3 = json.json_pointer_set(doc, "/new/deep", 7)
+    assert(json.json_pointer_get(d3, "/new/deep") == 7, "intermediates created")
+    let d4 = json.json_pointer_set(doc, "/user/tags/2", "z")
+    assert(json.json_pointer_get(d4, "/user/tags/2") == "z", "list append via set")
+    assert(json.json_pointer_get(d4, "/user/tags/1") == "y", "list tail preserved")
+
+    # schema-lite
+    let schema = {type: "object", required: ["name"], fields: {name: {type: "string"}, age: {type: "number"}}}
+    assert(json.json_schema_check({name: "ada", age: 30}, schema) == [], "valid doc")
+    let e1 = json.json_schema_check({age: 30}, schema)
+    assert(len(e1) == 1 and e1[0] == "$.name required, missing", "required violation")
+    let e2 = json.json_schema_check({name: 9}, schema)
+    assert(len(e2) == 1 and json.json_index_of(e2[0], ".name is string, want string") < 0, "no false positive on present field")
+    let e3 = json.json_schema_check({name: "x", age: "old"}, schema)
+    assert(len(e3) == 1 and e3[0] == "$.age is string, want number", "field type violation")
+    let arr_schema = {type: "array", items: {type: "number"}}
+    assert(json.json_schema_check([1, 2, 3], arr_schema) == [], "array ok")
+    let e4 = json.json_schema_check([1, "x", 3], arr_schema)
+    assert(len(e4) == 1 and e4[0] == "$[1] is string, want number", "item violation path")
+
+    # JSON Lines
+    let lines = json.json_lines_encode([{z: 1, a: 2}, [1, 2], "s"])
+    assert(lines == "\{\"a\":2,\"z\":1\}\n[1,2]\n\"s\"", "canonical lines")
+    let back = json.json_lines_decode(lines + "\n\n{bad")
+    assert(len(back) == 4, "blank line skipped, malformed positional")
+    assert(back[0] == {z: 1, a: 2} and back[1] == [1, 2] and back[2] == "s", "values roundtrip")
+    assert(back[3] == null, "malformed line is null")
+
+    # diff
+    let rows = json.json_diff({a: 1, b: [1, 2], c: "x"}, {a: 2, b: [1, 2, 3], d: 9})
+    let found_c = false
+    let found_a = false
+    let found_d = false
+    let found_b = false
+    for r in rows {
+        if r.path == "$.a" and r.kind == "changed" {
+            found_a = true
+        }
+        if r.path == "$.c" and r.kind == "removed" {
+            found_c = true
+        }
+        if r.path == "$.d" and r.kind == "added" {
+            found_d = true
+        }
+        if r.path == "$.b[2]" and r.kind == "added" {
+            found_b = true
+        }
+    }
+    assert(found_a and found_c and found_d and found_b, "diff kinds + paths")
+    assert(json.json_diff(1, 1) == [], "equal scalars")
+    assert(json.json_diff(1, "1")[0].kind == "changed", "type change")
+
+    # decode reuse: same parser as std/serialize
+    let r = ser.from_json("{\"k\": [1, 2]}")
+    match r {
+        case Ok(v) {
+            assert(v["k"] == [1, 2], "from_json ok payload")
+        }
+        case Err(e) {
+            assert(false, "from_json should succeed")
+        }
+    }
+    match ser.from_json("{bad") {
+        case Ok(v) {
+            assert(false, "bad json should not parse")
+        }
+        case Err(e) {
+            assert(type(e) == "string", "err payload is the message string")
+        }
+    }
+}

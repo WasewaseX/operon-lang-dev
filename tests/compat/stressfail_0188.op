@@ -1,0 +1,212 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=188 tag=s188
+
+stress {
+
+    print("s188-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s188-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s188-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s188-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s188-mz:", 45 % 0)
+
+} rescue (e) {
+
+    print("s188-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s188-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s188-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s188-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s188-of2:", "caught", e.kind, e.message)
+
+}
+
+gene s188_r0() {
+
+    raise "s188-6h0kpm"
+
+}
+
+stress {
+
+    s188_r0()
+
+    print("s188-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s188-r0:", e.kind, e.message)
+
+}
+
+gene s188_r1() {
+
+    raise "s188-p1aw40"
+
+}
+
+stress {
+
+    s188_r1()
+
+    print("s188-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s188-r1:", e.kind, e.message)
+
+}
+
+gene s188_r2() {
+
+    raise "s188-9dgre5"
+
+}
+
+stress {
+
+    s188_r2()
+
+    print("s188-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s188-r2:", e.kind, e.message)
+
+}
+
+let s188_xs0 = [38, 40]
+
+stress {
+
+    print("s188-x0:", s188_xs0[5])
+
+} rescue (e) {
+
+    print("s188-x0:", "caught", e.kind)
+
+}
+
+let s188_xs1 = [2, 20, 26]
+
+stress {
+
+    print("s188-x1:", s188_xs1[6])
+
+} rescue (e) {
+
+    print("s188-x1:", "caught", e.kind)
+
+}
+
+let s188_xs2 = [25, 34, 19, 28]
+
+stress {
+
+    print("s188-x2:", s188_xs2[8])
+
+} rescue (e) {
+
+    print("s188-x2:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s188-0"
+
+    } rescue (e) {
+
+        print("s188-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s188-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s188-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s188-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s188-1"
+
+    } rescue (e) {
+
+        print("s188-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s188-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s188-d1-top:", outer.message)
+
+}

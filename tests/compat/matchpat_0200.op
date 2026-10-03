@@ -1,0 +1,310 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=200 tag=m200
+
+let m200_s0 = some(9)
+
+match m200_s0 {
+
+    case Some(x) if x > 9 {
+
+        print("m200-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m200-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m200-m0:", "none")
+
+    }
+
+}
+
+let m200_s1 = some(2)
+
+match m200_s1 {
+
+    case Some(x) if x > 2 {
+
+        print("m200-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m200-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m200-m1:", "none")
+
+    }
+
+}
+
+let m200_s2 = some(8)
+
+match m200_s2 {
+
+    case Some(x) if x > 8 {
+
+        print("m200-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m200-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m200-m2:", "none")
+
+    }
+
+}
+
+let m200_s3 = some(3)
+
+match m200_s3 {
+
+    case Some(x) if x > 3 {
+
+        print("m200-m3:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m200-m3:", "small", x)
+
+    }
+
+    case None {
+
+        print("m200-m3:", "none")
+
+    }
+
+}
+
+let m200_s4 = some(3)
+
+match m200_s4 {
+
+    case Some(x) if x > 3 {
+
+        print("m200-m4:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m200-m4:", "small", x)
+
+    }
+
+    case None {
+
+        print("m200-m4:", "none")
+
+    }
+
+}
+
+let m200_ls0 = [6, 10, 26]
+
+match m200_ls0 {
+
+    case [6, *rest] {
+
+        print("m200-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m200-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m200-l0:", "other")
+
+    }
+
+}
+
+let m200_ls1 = [38, 49, 19]
+
+match m200_ls1 {
+
+    case [38, *rest] {
+
+        print("m200-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m200-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m200-l1:", "other")
+
+    }
+
+}
+
+let m200_mp0 = {ligase: -8729, plasmid: 8837}
+
+match m200_mp0 {
+
+    case {ligase: p, plasmid: q} {
+
+        print("m200-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m200-mp0:", "miss")
+
+    }
+
+}
+
+let m200_mp1 = {codon: -8220, plasmid: -8082}
+
+match m200_mp1 {
+
+    case {codon: p, plasmid: q} {
+
+        print("m200-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m200-mp1:", "miss")
+
+    }
+
+}
+
+let m200_mp2 = {codon: -1355, vector: 1345}
+
+match m200_mp2 {
+
+    case {codon: p, vector: q} {
+
+        print("m200-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m200-mp2:", "miss")
+
+    }
+
+}
+
+let m200_r0 = ok(4)
+
+match m200_r0 {
+
+    case Ok(n) | Err(4) {
+
+        print("m200-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m200-r0:", "zero")
+
+    }
+
+}
+
+let m200_r1 = ok(2)
+
+match m200_r1 {
+
+    case Ok(n) | Err(2) {
+
+        print("m200-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m200-r1:", "zero")
+
+    }
+
+}
+
+let m200_r2 = ok(5)
+
+match m200_r2 {
+
+    case Ok(n) | Err(5) {
+
+        print("m200-r2:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m200-r2:", "zero")
+
+    }
+
+}
+
+match "marker" {
+
+    case "marker" {
+
+        print("m200-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m200-w0:", "alt")
+
+    }
+
+}
+
+match "gene" {
+
+    case "gene" {
+
+        print("m200-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m200-w1:", "alt")
+
+    }
+
+}

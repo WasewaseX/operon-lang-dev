@@ -1,436 +1,122 @@
-//! pkg.rs — Operon package management core (W19/W022, track L3c, ai/ecosystem).
+//! pkg.rs, the package system (W19/W20/W23, ROADMAP-100).
 //!
-//! First-class package management with zero external crates, in the same
-//! spirit as the rest of the core: everything the CLI needs to make
-//! `operon new / add / remove / update / publish / search` real:
+//! Scope-honest design, zero new dependencies:
+//! - `operon mod init`    → writes `operon.toml` ([package] name/version)
+//! - `operon mod add URL` → clones the dep (git CLI, shallow), pins the rev,
+//!   vendors it under `~/.operon/deps/<name>-<rev>`
+//! - `operon mod remove`  → drops the dep from manifest + lockfile
+//! - `operon mod update`  → re-resolves every dep (rev if pinned, else HEAD)
+//! - `operon mod install` → materializes every lockfile entry into the cache
+//!   (offline whenever the cache is warm)
+//! - `operon mod tree`    → prints the resolved dependency tree
+//! - `operon.lock` (W23)  → resolved revs + content checksums; `--locked`
+//!   fails on manifest↔lock drift
 //!
-//!   * a strict TOML subset reader for `operon.toml` manifests
-//!   * semantic-version requirements (^, ~, comparators, wildcards, AND lists)
-//!   * a deterministic resolver (highest match, tie-broken, sorted output)
-//!   * `operon.lock` — byte-reproducible resolution, lockfile-first installs
-//!   * registry transports: local directory registries and plain HTTP/1.1
-//!   * package envelopes (JSON + base64 files, sha256-pinned) for publish/install
+//! The manifest is a DELIBERATE MINIMAL TOML SUBSET (the W22 rule: `.cell`
+//! is runtime configuration and `operon.toml` is package metadata, the two
+//! never merge). Deterministic resolution: deps are walked in sorted name
+//! order, revs are pinned, and the checksum is a content digest of the
+//! checkout (sha256 over a sorted (path, file-hash) manifest) so the same
+//! rev always yields the same lockfile line on every machine.
 //!
-//! Registry transports: `file://`-style local paths and `http://` in the
-//! default zero-external-crates build. Compiled with `--features tls`
-//! (opt-in, pure-Rust rustls) the same client dials `https://` registries
-//! — Render serves https at the edge — and `OPERON_CA_FILE` accepts a PEM
-//! bundle for self-hosted registries running an internal CA.
-//!
-//! Every routine here is unit-tested at the bottom of this file; end-to-end
-//! CLI behavior is tested by tests/package/pkg_e2e.sh.
+//! The checksum is implemented in-house (standard FIPS 180-4 constants, no
+//! crates) because the tree carries zero runtime dependencies by policy.
 
 use std::collections::BTreeMap;
-use std::net::ToSocketAddrs;
 use std::path::{Path, PathBuf};
 
-// ---------------------------------------------------------------------------
-// minimal TOML (the subset a manifest actually uses)
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------- sha256
 
-/// A TOML value, restricted to what manifests need.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Toml {
-    Str(String),
-    Int(i64),
-    Float(f64),
-    Bool(bool),
-    Array(Vec<Toml>),
-    Table(BTreeMap<String, Toml>),
+/// Standard SHA-256 (FIPS 180-4). Used ONLY as a content fingerprint for
+/// lockfile pinning, not a security primitive (the capability sandbox is).
+pub fn sha256_hex(data: &[u8]) -> String {
+    const K: [u32; 64] = [
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
+        0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
+        0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
+        0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
+        0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
+        0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
+        0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
+        0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
+        0xc67178f2,
+    ];
+    let mut h: [u32; 8] = [
+        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
+        0x5be0cd19,
+    ];
+    let bitlen = (data.len() as u64).wrapping_mul(8);
+    let mut msg = data.to_vec();
+    msg.push(0x80);
+    while msg.len() % 64 != 56 {
+        msg.push(0);
+    }
+    msg.extend_from_slice(&bitlen.to_be_bytes());
+    for chunk in msg.chunks(64) {
+        let mut w = [0u32; 64];
+        for (i, word) in chunk.chunks(4).enumerate() {
+            w[i] = u32::from_be_bytes([word[0], word[1], word[2], word[3]]);
+        }
+        for i in 16..64 {
+            let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);
+            let s1 = w[i - 2].rotate_right(17) ^ w[i - 2].rotate_right(19) ^ (w[i - 2] >> 10);
+            w[i] = w[i - 16]
+                .wrapping_add(s0)
+                .wrapping_add(w[i - 7])
+                .wrapping_add(s1);
+        }
+        let (mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut hh) =
+            (h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7]);
+        for i in 0..64 {
+            let s1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
+            let ch = (e & f) ^ ((!e) & g);
+            let t1 = hh
+                .wrapping_add(s1)
+                .wrapping_add(ch)
+                .wrapping_add(K[i])
+                .wrapping_add(w[i]);
+            let s0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
+            let maj = (a & b) ^ (a & c) ^ (b & c);
+            let t2 = s0.wrapping_add(maj);
+            hh = g;
+            g = f;
+            f = e;
+            e = d.wrapping_add(t1);
+            d = c;
+            c = b;
+            b = a;
+            a = t1.wrapping_add(t2);
+        }
+        h[0] = h[0].wrapping_add(a);
+        h[1] = h[1].wrapping_add(b);
+        h[2] = h[2].wrapping_add(c);
+        h[3] = h[3].wrapping_add(d);
+        h[4] = h[4].wrapping_add(e);
+        h[5] = h[5].wrapping_add(f);
+        h[6] = h[6].wrapping_add(g);
+        h[7] = h[7].wrapping_add(hh);
+    }
+    h.iter().map(|x| format!("{:08x}", x)).collect()
 }
 
-impl Toml {
-    pub fn get(&self, key: &str) -> Option<&Toml> {
-        match self {
-            Toml::Table(m) => m.get(key),
-            _ => None,
-        }
-    }
-    pub fn as_str(&self) -> Option<&str> {
-        match self {
-            Toml::Str(s) => Some(s),
-            _ => None,
-        }
-    }
-    pub fn as_table(&self) -> Option<&BTreeMap<String, Toml>> {
-        match self {
-            Toml::Table(m) => Some(m),
-            _ => None,
-        }
-    }
-    pub fn as_array(&self) -> Option<&Vec<Toml>> {
-        match self {
-            Toml::Array(a) => Some(a),
-            _ => None,
-        }
-    }
-    /// Human-facing type name for error messages.
-    fn type_name(&self) -> &'static str {
-        match self {
-            Toml::Str(_) => "string",
-            Toml::Int(_) => "integer",
-            Toml::Float(_) => "float",
-            Toml::Bool(_) => "boolean",
-            Toml::Array(_) => "array",
-            Toml::Table(_) => "table",
-        }
+fn sha256_file(p: &Path) -> String {
+    match std::fs::read(p) {
+        Ok(bytes) => sha256_hex(&bytes),
+        Err(_) => String::new(),
     }
 }
 
-/// Parse a manifest-shaped TOML document. Returns (root table, error).
-///
-/// Supports: comments, bare/quoted keys, dotted keys, `[table]` headers,
-/// strings (basic + literal), integers, floats, booleans, arrays, inline
-/// tables. Rejects what it does not understand LOUDLY — a manifest parser
-/// that silently skips lines produces projects that lie about their deps.
-pub fn toml_parse(src: &str) -> Result<Toml, String> {
-    let mut root: BTreeMap<String, Toml> = BTreeMap::new();
-    // path of the table we are currently filling; empty = root
-    let mut cur: Vec<String> = Vec::new();
-    let lines: Vec<&str> = src.lines().collect();
-    let mut li = 0usize;
-    while li < lines.len() {
-        let raw = lines[li];
-        li += 1;
-        let line = strip_comment(raw).trim().to_string();
-        if line.is_empty() {
-            continue;
-        }
-        if let Some(rest) = line.strip_prefix('[') {
-            // table header
-            let hdr = rest
-                .strip_suffix(']')
-                .ok_or_else(|| err_at(li, "unterminated table header"))?;
-            if hdr.starts_with('[') {
-                return Err(err_at(
-                    li,
-                    "array-of-table headers are not used by operon manifests",
-                ));
-            }
-            cur = parse_key_path(hdr, li)?;
-            insert_nested(&mut root, &cur, Toml::Table(BTreeMap::new()), li, true)?;
-            continue;
-        }
-        // key = value (value may span lines inside brackets)
-        let eq = find_top_level_eq(&line).ok_or_else(|| err_at(li, "expected `key = value`"))?;
-        let key_part = line[..eq].trim().to_string();
-        let mut val_part = line[eq + 1..].trim().to_string();
-        // multi-line arrays: keep consuming until brackets balance
-        while bracket_balance(&val_part) > 0 && li < lines.len() {
-            let next = strip_comment(lines[li]);
-            li += 1;
-            val_part.push(' ');
-            val_part.push_str(next.trim());
-        }
-        let key_path = parse_key_path(&key_part, li)?;
-        let mut full = cur.clone();
-        full.extend(key_path);
-        let val = parse_value(&val_part, li)?;
-        insert_nested(&mut root, &full, val, li, false)?;
-    }
-    Ok(Toml::Table(root))
-}
-
-fn err_at(line: usize, msg: &str) -> String {
-    format!("operon.toml line {}: {}", line, msg)
-}
-
-fn strip_comment(s: &str) -> &str {
-    // no multi-line strings in the manifest subset: a # outside quotes ends
-    // the line. Scan byte-wise respecting quotes.
-    let mut in_basic = false;
-    let mut in_literal = false;
-    let bytes: Vec<char> = s.chars().collect();
-    let mut escaped = false;
-    for (i, c) in bytes.iter().enumerate() {
-        if escaped {
-            escaped = false;
-            continue;
-        }
-        match c {
-            '\\' if in_basic => escaped = true,
-            '"' if !in_literal => in_basic = !in_basic,
-            '\'' if !in_basic => in_literal = !in_literal,
-            '#' if !in_basic && !in_literal => {
-                return &s[..s.char_indices().nth(i).map(|(b, _)| b).unwrap_or(s.len())]
-            }
-            _ => {}
-        }
-    }
-    s
-}
-
-fn find_top_level_eq(s: &str) -> Option<usize> {
-    let mut in_basic = false;
-    let mut in_literal = false;
-    let mut escaped = false;
-    for (i, c) in s.char_indices() {
-        if escaped {
-            escaped = false;
-            continue;
-        }
-        match c {
-            '\\' if in_basic => escaped = true,
-            '"' if !in_literal => in_basic = !in_basic,
-            '\'' if !in_basic => in_literal = !in_literal,
-            '=' if !in_basic && !in_literal => return Some(i),
-            _ => {}
-        }
-    }
-    None
-}
-
-fn bracket_balance(s: &str) -> i32 {
-    let mut bal = 0i32;
-    let mut in_basic = false;
-    let mut in_literal = false;
-    let mut escaped = false;
-    for c in s.chars() {
-        if escaped {
-            escaped = false;
-            continue;
-        }
-        match c {
-            '\\' if in_basic => escaped = true,
-            '"' if !in_literal => in_basic = !in_basic,
-            '\'' if !in_basic => in_literal = !in_literal,
-            '[' if !in_basic && !in_literal => bal += 1,
-            ']' if !in_basic && !in_literal => bal -= 1,
-            _ => {}
-        }
-    }
-    bal
-}
-
-fn parse_key_path(s: &str, line: usize) -> Result<Vec<String>, String> {
-    let mut out = Vec::new();
-    for part in s.split('.') {
-        let p = part.trim();
-        if p.is_empty() {
-            return Err(err_at(line, "empty key segment"));
-        }
-        if (p.starts_with('"') && p.ends_with('"') && p.len() >= 2)
-            || (p.starts_with('\'') && p.ends_with('\'') && p.len() >= 2)
-        {
-            out.push(p[1..p.len() - 1].to_string());
-        } else {
-            if !p
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-            {
-                return Err(err_at(line, &format!("invalid key character in '{}'", p)));
-            }
-            out.push(p.to_string());
-        }
-    }
-    Ok(out)
-}
-
-fn insert_nested(
-    root: &mut BTreeMap<String, Toml>,
-    path: &[String],
-    val: Toml,
-    line: usize,
-    is_header: bool,
-) -> Result<(), String> {
-    let mut cur = root;
-    for (i, seg) in path.iter().enumerate() {
-        let last = i == path.len() - 1;
-        if last {
-            if is_header {
-                // re-opening a header: ensure the table slot exists, never
-                // clobber whatever table structure is already there
-                cur.entry(seg.clone())
-                    .or_insert_with(|| Toml::Table(BTreeMap::new()));
-                return Ok(());
-            }
-            // plain assignment into a table slot that already holds a
-            // non-table is a duplicate-key error
-            cur.insert(seg.clone(), val);
-            return Ok(());
-        }
-        let entry = cur
-            .entry(seg.clone())
-            .or_insert_with(|| Toml::Table(BTreeMap::new()));
-        match entry {
-            Toml::Table(m) => cur = m,
-            _ => return Err(err_at(line, "key redefines a non-table value")),
-        }
-    }
-    Ok(())
-}
-
-fn parse_value(s: &str, line: usize) -> Result<Toml, String> {
-    let s = s.trim();
-    if s.is_empty() {
-        return Err(err_at(line, "missing value"));
-    }
-    if s.starts_with('"') {
-        return parse_basic_string(s, line);
-    }
-    if s.starts_with('\'') {
-        return parse_literal_string(s, line);
-    }
-    if s.starts_with('[') {
-        return parse_array(s, line);
-    }
-    if s.starts_with('{') {
-        return parse_inline_table(s, line);
-    }
-    if s == "true" {
-        return Ok(Toml::Bool(true));
-    }
-    if s == "false" {
-        return Ok(Toml::Bool(false));
-    }
-    // number?
-    if let Ok(i) = s.replace('_', "").parse::<i64>() {
-        return Ok(Toml::Int(i));
-    }
-    if let Ok(f) = s.replace('_', "").parse::<f64>() {
-        if s.chars().any(|c| c == '.' || c == 'e' || c == 'E') {
-            return Ok(Toml::Float(f));
-        }
-    }
-    Err(err_at(line, &format!("unsupported value '{}'", s)))
-}
-
-fn parse_basic_string(s: &str, line: usize) -> Result<Toml, String> {
-    let mut out = String::new();
-    let mut chars = s.chars();
-    chars.next(); // opening quote
-    let mut escaped = false;
-    while let Some(c) = chars.next() {
-        if escaped {
-            match c {
-                'n' => out.push('\n'),
-                't' => out.push('\t'),
-                'r' => out.push('\r'),
-                '"' => out.push('"'),
-                '\\' => out.push('\\'),
-                _ => return Err(err_at(line, &format!("unsupported escape '\\{}'", c))),
-            }
-            escaped = false;
-            continue;
-        }
-        match c {
-            '\\' => escaped = true,
-            '"' => {
-                let rest: String = chars.collect();
-                if !rest.trim().is_empty() {
-                    return Err(err_at(line, "trailing characters after string"));
-                }
-                return Ok(Toml::Str(out));
-            }
-            _ => out.push(c),
-        }
-    }
-    Err(err_at(line, "unterminated string"))
-}
-
-fn parse_literal_string(s: &str, line: usize) -> Result<Toml, String> {
-    let inner = &s[1..];
-    let end = inner
-        .find('\'')
-        .ok_or_else(|| err_at(line, "unterminated literal string"))?;
-    if !inner[end + 1..].trim().is_empty() {
-        return Err(err_at(line, "trailing characters after string"));
-    }
-    Ok(Toml::Str(inner[..end].to_string()))
-}
-
-fn parse_array(s: &str, line: usize) -> Result<Toml, String> {
-    let inner = s
-        .strip_prefix('[')
-        .and_then(|x| x.strip_suffix(']'))
-        .ok_or_else(|| err_at(line, "unterminated array"))?;
-    let mut out = Vec::new();
-    for piece in split_top_level(inner, ',') {
-        let p = piece.trim();
-        if p.is_empty() {
-            continue;
-        }
-        out.push(parse_value(p, line)?);
-    }
-    Ok(Toml::Array(out))
-}
-
-fn parse_inline_table(s: &str, line: usize) -> Result<Toml, String> {
-    let inner = s
-        .strip_prefix('{')
-        .and_then(|x| x.strip_suffix('}'))
-        .ok_or_else(|| err_at(line, "unterminated inline table"))?;
-    let mut out = BTreeMap::new();
-    for piece in split_top_level(inner, ',') {
-        let p = piece.trim();
-        if p.is_empty() {
-            continue;
-        }
-        let eq = find_top_level_eq(p)
-            .ok_or_else(|| err_at(line, "inline table entry needs `key = value`"))?;
-        let key = parse_key_path(p[..eq].trim(), line)?;
-        if key.len() != 1 {
-            return Err(err_at(
-                line,
-                "dotted keys inside inline tables are not supported",
-            ));
-        }
-        out.insert(key[0].clone(), parse_value(p[eq + 1..].trim(), line)?);
-    }
-    Ok(Toml::Table(out))
-}
-
-fn split_top_level(s: &str, sep: char) -> Vec<String> {
-    let mut out = Vec::new();
-    let mut depth = 0i32;
-    let mut in_basic = false;
-    let mut in_literal = false;
-    let mut escaped = false;
-    let mut cur = String::new();
-    for c in s.chars() {
-        if escaped {
-            escaped = false;
-            cur.push(c);
-            continue;
-        }
-        match c {
-            '\\' if in_basic => {
-                escaped = true;
-                cur.push(c);
-            }
-            '"' if !in_literal => {
-                in_basic = !in_basic;
-                cur.push(c);
-            }
-            '\'' if !in_basic => {
-                in_literal = !in_literal;
-                cur.push(c);
-            }
-            '[' | '{' if !in_basic && !in_literal => {
-                depth += 1;
-                cur.push(c);
-            }
-            ']' | '}' if !in_basic && !in_literal => {
-                depth -= 1;
-                cur.push(c);
-            }
-            c if c == sep && depth == 0 && !in_basic && !in_literal => {
-                out.push(cur.clone());
-                cur.clear();
-            }
-            _ => cur.push(c),
-        }
-    }
-    out.push(cur);
-    out
-}
-
-// ---------------------------------------------------------------------------
-// semantic versions + requirements
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------- semver
+// ai/ecosystem-r3 (W19 item 4 of the owner's lane order): semantic version
+// requirements over the NDJSON registry. Index entries already carry
+// "version" strings; this module gives them meaning: `operon add http@^0.1`
+// picks the HIGHEST index line whose version satisfies the requirement,
+// the manifest records the requirement, and operon.lock pins the exact
+// resolved version so --locked can prove the pin still satisfies it.
 
 /// A strict X.Y.Z semantic version (pre-release tags are rejected loudly —
-/// reproducibility first; they arrive with lockfile v2).
+/// reproducibility first).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SemVer {
     pub major: u64,
@@ -578,7 +264,7 @@ impl Req {
         self.cmps.iter().all(|c| cmp_matches(c, v))
     }
 
-    /// Does this requirement still accept the pinned version? (lockfile check)
+    /// The requirement exactly as the developer wrote it (manifest emission).
     pub fn raw_str(&self) -> &str {
         &self.raw
     }
@@ -588,7 +274,7 @@ fn parse_cmp(tok: &str) -> Result<Cmp, String> {
     if tok == "*" || tok == "x" || tok == "X" {
         return Ok(Cmp::Any);
     }
-    let (op, rest) = if let Some(r) = tok.strip_prefix("^") {
+    let (op, rest) = if let Some(r) = tok.strip_prefix('^') {
         ("^", r)
     } else if let Some(r) = tok.strip_prefix("~=") {
         ("~", r)
@@ -700,961 +386,413 @@ fn cmp_matches(c: &Cmp, v: &SemVer) -> bool {
     }
 }
 
-// ---------------------------------------------------------------------------
-// sha256 (FIPS 180-4, ~60 lines) — content pinning for every package artifact
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------- manifest
 
-pub fn sha256_hex(data: &[u8]) -> String {
-    // FIPS 180-4, 32-bit words. (The first draft mixed in 64-bit words —
-    // the known-answer tests below caught it immediately, which is exactly
-    // why they exist.)
-    const K: [u32; 64] = [
-        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
-        0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
-        0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
-        0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
-        0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
-        0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
-        0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
-        0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
-        0xc67178f2,
-    ];
-    let mut h: [u32; 8] = [
-        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
-        0x5be0cd19,
-    ];
-    let bitlen = (data.len() as u64).wrapping_mul(8);
-    let mut msg = data.to_vec();
-    msg.push(0x80);
-    while msg.len() % 64 != 56 {
-        msg.push(0);
+#[derive(Debug, Clone)]
+pub struct DepSpec {
+    pub git: String,
+    pub rev: Option<String>,
+    /// ai/ecosystem-r3 (item 4): semantic version requirement. Some only for
+    /// registry-sourced deps added as `NAME@REQ` (or hand-written with a
+    /// `version = "REQ"` field); git-URL deps have no version concept and
+    /// stay None.
+    pub version: Option<Req>,
+}
+
+#[derive(Debug, Default)]
+pub struct Manifest {
+    pub name: String,
+    pub version: String,
+    pub operon_version: String,
+    /// W21-r1: default registry source for this project (a registry file
+    /// path or an http(s):// index URL). Empty = the chain resolves it:
+    /// OPERON_REGISTRY env, then this field, then the bundled seed index.
+    pub registry: String,
+    /// One-line human description (publish uses it; parse-only otherwise).
+    pub description: String,
+    /// insertion-ordered; resolution sorts by name for determinism
+    pub deps: Vec<(String, DepSpec)>,
+}
+
+impl Manifest {
+    pub fn find_dep(&self, name: &str) -> Option<&DepSpec> {
+        self.deps.iter().find(|(n, _)| n == name).map(|(_, d)| d)
     }
-    msg.extend_from_slice(&bitlen.to_be_bytes());
-    for chunk in msg.chunks(64) {
-        let mut w = [0u32; 64];
-        for i in 0..16 {
-            w[i] = u32::from_be_bytes([
-                chunk[i * 4],
-                chunk[i * 4 + 1],
-                chunk[i * 4 + 2],
-                chunk[i * 4 + 3],
-            ]);
+
+    /// W20-r1: true when the manifest declares any dependency at all.
+    pub fn has_deps(&self) -> bool {
+        !self.deps.is_empty()
+    }
+}
+
+/// Minimal TOML subset parser for `operon.toml`. Accepts exactly the shape
+/// `operon mod init` writes plus the `[deps]` table:
+/// ```toml
+/// [package]
+/// name = "my-app"
+/// version = "0.1.0"
+/// operon-version = "2.2"
+///
+/// [deps]
+/// my-lib = { git = "https://…", rev = "abc123" }
+/// other  = { git = "file:///…" }
+/// ```
+/// Anything outside this subset is reported as an error line (never
+/// silently ignored, a manifest that lies would corrupt the lockfile).
+pub fn parse_manifest(src: &str) -> Result<Manifest, String> {
+    let mut m = Manifest::default();
+    let mut section = String::new();
+    for (idx, raw) in src.lines().enumerate() {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
         }
-        for i in 16..64 {
-            let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);
-            let s1 = w[i - 2].rotate_right(17) ^ w[i - 2].rotate_right(19) ^ (w[i - 2] >> 10);
-            w[i] = w[i - 16]
-                .wrapping_add(s0)
-                .wrapping_add(w[i - 7])
-                .wrapping_add(s1);
+        if line.starts_with('[') && line.ends_with(']') {
+            section = line[1..line.len() - 1].trim().to_string();
+            continue;
         }
-        let mut st = h;
-        for i in 0..64 {
-            let s1 = st[4].rotate_right(6) ^ st[4].rotate_right(11) ^ st[4].rotate_right(25);
-            let ch = (st[4] & st[5]) ^ ((!st[4]) & st[6]);
-            let t1 = st[7]
-                .wrapping_add(s1)
-                .wrapping_add(ch)
-                .wrapping_add(K[i])
-                .wrapping_add(w[i]);
-            let s0 = st[0].rotate_right(2) ^ st[0].rotate_right(13) ^ st[0].rotate_right(22);
-            let maj = (st[0] & st[1]) ^ (st[0] & st[2]) ^ (st[1] & st[2]);
-            let t2 = s0.wrapping_add(maj);
-            st[7] = st[6];
-            st[6] = st[5];
-            st[5] = st[4];
-            st[4] = st[3].wrapping_add(t1);
-            st[3] = st[2];
-            st[2] = st[1];
-            st[1] = st[0];
-            st[0] = t1.wrapping_add(t2);
-        }
-        for i in 0..8 {
-            h[i] = h[i].wrapping_add(st[i]);
+        let (key, val) = split_kv(line, idx)?;
+        match (section.as_str(), key.as_str()) {
+            ("package", "name") => m.name = unquote(&val)?,
+            ("package", "version") => m.version = unquote(&val)?,
+            ("package", "operon-version") => m.operon_version = unquote(&val)?,
+            ("registry", "path") => m.registry = unquote(&val)?,
+            ("package", "description") => m.description = unquote(&val)?,
+            ("deps", dep) => {
+                let dep = dep.to_string();
+                let git = extract_field(&val, "git", idx)?;
+                let rev = extract_field(&val, "rev", idx).ok();
+                // item 4: an optional semantic-version requirement. A field
+                // that does not PARSE is a hard error (a registry that lies
+                // must never resolve installs against the wrong code).
+                let version = match extract_field(&val, "version", idx) {
+                    Ok(s) => Some(Req::parse(&s).map_err(|e| {
+                        format!("operon.toml line {}: dep '{}': {}", idx + 1, dep, e)
+                    })?),
+                    Err(_) => None,
+                };
+                m.deps.push((dep, DepSpec { git, rev, version }));
+            }
+            ("", k) => {
+                return Err(format!(
+                    "operon.toml line {}: '{}' outside a [package]/[deps] table",
+                    idx + 1,
+                    k
+                ))
+            }
+            _ => {
+                return Err(format!(
+                    "operon.toml line {}: unknown key '{}' in [{}]",
+                    idx + 1,
+                    key,
+                    section
+                ))
+            }
         }
     }
-    let mut out = String::with_capacity(64);
-    for word in h {
-        out.push_str(&format!("{:08x}", word));
+    if m.name.is_empty() {
+        return Err("operon.toml: [package] name is missing".to_string());
+    }
+    Ok(m)
+}
+
+fn split_kv(line: &str, idx: usize) -> Result<(String, String), String> {
+    let pos = line
+        .find('=')
+        .ok_or_else(|| format!("operon.toml line {}: expected 'key = value'", idx + 1))?;
+    Ok((
+        line[..pos].trim().trim_matches('"').to_string(),
+        line[pos + 1..].trim().to_string(),
+    ))
+}
+
+fn unquote(s: &str) -> Result<String, String> {
+    let t = s.trim();
+    if t.starts_with('"') && t.ends_with('"') && t.len() >= 2 {
+        Ok(t[1..t.len() - 1].to_string())
+    } else {
+        Err(format!("expected a quoted string, got '{}'", t))
+    }
+}
+
+fn extract_field(val: &str, field: &str, idx: usize) -> Result<String, String> {
+    let needle = format!("{} =", field);
+    let alt = format!("{}=", field);
+    let start = val
+        .find(&needle)
+        .or_else(|| val.find(&alt))
+        .ok_or_else(|| {
+            format!(
+                "operon.toml line {}: dep field '{}' missing",
+                idx + 1,
+                field
+            )
+        })?;
+    let rest = &val[start..];
+    // ast-grep-ignore: no-unwrap-in-src
+    let eq = rest.find('=').unwrap();
+    let after = rest[eq + 1..].trim();
+    let quote = after.find('"').ok_or_else(|| {
+        format!(
+            "operon.toml line {}: '{}' needs a quoted value",
+            idx + 1,
+            field
+        )
+    })?;
+    let rest2 = &after[quote + 1..];
+    let end = rest2
+        .find('"')
+        .ok_or_else(|| format!("operon.toml line {}: unterminated string", idx + 1))?;
+    Ok(rest2[..end].to_string())
+}
+
+pub fn emit_manifest(m: &Manifest) -> String {
+    let mut out = String::new();
+    out.push_str("[package]\n");
+    out.push_str(&format!("name = \"{}\"\n", m.name));
+    out.push_str(&format!("version = \"{}\"\n", m.version));
+    if !m.operon_version.is_empty() {
+        out.push_str(&format!("operon-version = \"{}\"\n", m.operon_version));
+    }
+    out.push('\n');
+    if !m.description.is_empty() {
+        out.push_str(&format!("description = \"{}\"\n", m.description));
+    }
+    if !m.registry.is_empty() {
+        out.push_str("[registry]\n");
+        out.push_str(&format!("path = \"{}\"\n\n", m.registry));
+    }
+    if !m.deps.is_empty() {
+        out.push_str("[deps]\n");
+        let mut sorted = m.deps.clone();
+        sorted.sort_by(|a, b| a.0.cmp(&b.0));
+        for (name, d) in &sorted {
+            match (&d.version, &d.rev) {
+                (Some(req), Some(r)) => out.push_str(&format!(
+                    "{} = {{ git = \"{}\", rev = \"{}\", version = \"{}\" }}\n",
+                    name,
+                    d.git,
+                    r,
+                    req.raw_str()
+                )),
+                (Some(req), None) => out.push_str(&format!(
+                    "{} = {{ git = \"{}\", version = \"{}\" }}\n",
+                    name,
+                    d.git,
+                    req.raw_str()
+                )),
+                (None, Some(r)) => out.push_str(&format!(
+                    "{} = {{ git = \"{}\", rev = \"{}\" }}\n",
+                    name, d.git, r
+                )),
+                (None, None) => out.push_str(&format!("{} = {{ git = \"{}\" }}\n", name, d.git)),
+            }
+        }
     }
     out
 }
 
-// ---------------------------------------------------------------------------
-// base64 (standard alphabet, padded) — envelope file payloads
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------- lockfile
 
-pub fn b64_encode(data: &[u8]) -> String {
-    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
-    for chunk in data.chunks(3) {
-        let b = [
-            chunk[0],
-            chunk.get(1).copied().unwrap_or(0),
-            chunk.get(2).copied().unwrap_or(0),
-        ];
-        let n = ((b[0] as u32) << 16) | ((b[1] as u32) << 8) | b[2] as u32;
-        out.push(T[(n >> 18) as usize & 63] as char);
-        out.push(T[(n >> 12) as usize & 63] as char);
-        out.push(if chunk.len() > 1 {
-            T[(n >> 6) as usize & 63] as char
-        } else {
-            '='
-        });
-        out.push(if chunk.len() > 2 {
-            T[n as usize & 63] as char
-        } else {
-            '='
-        });
+#[derive(Debug, Clone)]
+pub struct LockEntry {
+    pub name: String,
+    pub git: String,
+    pub rev: String,
+    /// content digest of the vendored checkout (sha256 of the file manifest)
+    pub checksum: String,
+    /// ai/ecosystem-r3 (item 4): the exact resolved X.Y.Z (empty for
+    /// git-URL deps and for locks written before version pinning).
+    pub version: String,
+    /// the requirement the dep was added with (empty = none); --locked
+    /// re-checks the pinned version against it on every CI run.
+    pub req: String,
+}
+
+/// The lockfile is a deterministic, human-readable table (sorted by name).
+pub fn emit_lock(entries: &BTreeMap<String, LockEntry>) -> String {
+    let mut out = String::new();
+    out.push_str("# operon.lock, resolved dependencies (W23).\n");
+    out.push_str(
+        "# Generated by `operon mod add/update/install`. Checked in; --locked fails on drift.\n",
+    );
+    for e in entries.values() {
+        out.push_str(&format!(
+            "[[dep]]\nname = \"{}\"\ngit = \"{}\"\nrev = \"{}\"\nchecksum = \"sha256:{}\"\n",
+            e.name, e.git, e.rev, e.checksum
+        ));
+        if !e.version.is_empty() {
+            out.push_str(&format!("version = \"{}\"\n", e.version));
+        }
+        if !e.req.is_empty() {
+            out.push_str(&format!("req = \"{}\"\n", e.req));
+        }
+        out.push('\n');
     }
     out
 }
 
-pub fn b64_decode(s: &str) -> Result<Vec<u8>, String> {
-    fn val(c: u8) -> Result<u32, String> {
-        match c {
-            b'A'..=b'Z' => Ok((c - b'A') as u32),
-            b'a'..=b'z' => Ok((c - b'a' + 26) as u32),
-            b'0'..=b'9' => Ok((c - b'0' + 52) as u32),
-            b'+' => Ok(62),
-            b'/' => Ok(63),
-            _ => Err(format!("invalid base64 byte 0x{:02x}", c)),
+pub fn parse_lock(src: &str) -> Result<BTreeMap<String, LockEntry>, String> {
+    let mut out = BTreeMap::new();
+    let mut cur: Option<LockEntry> = None;
+    for raw in src.lines() {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if line == "[[dep]]" {
+            if let Some(e) = cur.take() {
+                out.insert(e.name.clone(), e);
+            }
+            cur = Some(LockEntry {
+                name: String::new(),
+                git: String::new(),
+                rev: String::new(),
+                checksum: String::new(),
+                version: String::new(),
+                req: String::new(),
+            });
+            continue;
+        }
+        let e = match cur.as_mut() {
+            Some(e) => e,
+            None => continue,
+        };
+        let (k, v) = split_kv(line, 0)?;
+        let v = unquote(&v)?;
+        match k.as_str() {
+            "name" => e.name = v,
+            "git" => e.git = v,
+            "rev" => e.rev = v,
+            "checksum" => e.checksum = v.trim_start_matches("sha256:").to_string(),
+            "version" => e.version = v,
+            "req" => e.req = v,
+            _ => return Err(format!("operon.lock: unknown key '{}'", k)),
         }
     }
-    let bytes: Vec<u8> = s.bytes().filter(|b| !b.is_ascii_whitespace()).collect();
-    let trimmed: &[u8] = {
-        let mut t = bytes.as_slice();
-        while t.last() == Some(&b'=') {
-            t = &t[..t.len() - 1];
-        }
-        t
-    };
-    let mut out = Vec::with_capacity(trimmed.len() * 3 / 4);
-    for chunk in trimmed.chunks(4) {
-        if chunk.len() == 1 {
-            return Err("truncated base64".into());
-        }
-        let mut n: u32 = 0;
-        for (i, c) in chunk.iter().enumerate() {
-            n |= val(*c)? << (18 - 6 * i);
-        }
-        out.push((n >> 16) as u8);
-        if chunk.len() > 2 {
-            out.push((n >> 8) as u8);
-        }
-        if chunk.len() > 3 {
-            out.push(n as u8);
-        }
+    if let Some(e) = cur.take() {
+        out.insert(e.name.clone(), e);
     }
     Ok(out)
 }
 
-// ---------------------------------------------------------------------------
-// manifest (operon.toml)
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------- checkout
+
+pub fn deps_cache_dir() -> Option<PathBuf> {
+    if let Ok(d) = std::env::var("OPERON_DEPS") {
+        if !d.is_empty() {
+            return Some(PathBuf::from(d));
+        }
+    }
+    std::env::var("HOME")
+        .ok()
+        .map(|h| PathBuf::from(h).join(".operon").join("deps"))
+}
+
+pub fn cache_dir_for(name: &str, rev: &str) -> Option<PathBuf> {
+    deps_cache_dir().map(|d| d.join(format!("{}-{}", name, &rev[..rev.len().min(12)])))
+}
+
+/// Content digest of a vendored checkout: sha256 over the sorted
+/// `(relative path, file digest)` pairs, `.git` excluded (the rev pins the
+/// tree; the digest pins the BYTES so a corrupted cache is detectable).
+pub fn checkout_checksum(dir: &Path) -> String {
+    let mut rows: Vec<String> = Vec::new();
+    walk_files(dir, dir, &mut rows);
+    rows.sort();
+    rows.dedup();
+    sha256_hex(rows.join("\n").as_bytes())
+}
+
+fn walk_files(root: &Path, dir: &Path, rows: &mut Vec<String>) {
+    if let Ok(rd) = std::fs::read_dir(dir) {
+        for e in rd.flatten() {
+            let p = e.path();
+            let name = e.file_name().to_string_lossy().to_string();
+            if name == ".git" || name.starts_with('#') {
+                continue;
+            }
+            if p.is_dir() {
+                walk_files(root, &p, rows);
+            } else {
+                let rel = p
+                    .strip_prefix(root)
+                    .unwrap_or(&p)
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                rows.push(format!("{}:{}", rel, sha256_file(&p)));
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------- registry
+// W21: the cheap first registry is a static git-index file: JSON LINES,
+// one flat object per line, append-only by convention (a later line for
+// the same name supersedes an earlier one). No server, no crates: the
+// file is shareable through git, which is the whole hosting model at
+// this stage. `operon mod add NAME --registry FILE` resolves NAME through
+// the index and then uses the ordinary git machinery; `operon mod publish`
+// appends the caller's own package as one line.
 
 #[derive(Debug, Clone)]
-pub struct Manifest {
+pub struct RegistryEntry {
     pub name: String,
-    pub version: SemVer,
-    pub operon_req: Option<Req>,
-    pub description: String,
-    pub authors: Vec<String>,
-    pub license: String,
-    pub repository: String,
-    pub keywords: Vec<String>,
-    pub entry: String,
-    pub deps: BTreeMap<String, Req>,
-}
-
-pub const DEFAULT_ENTRY: &str = "src/main.op";
-
-pub fn valid_name(name: &str) -> bool {
-    let n = name.as_bytes();
-    n.len() >= 2
-        && n.len() <= 64
-        && n[0].is_ascii_lowercase()
-        && n.iter()
-            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'_' || *c == b'-')
-}
-
-impl Manifest {
-    pub fn parse(src: &str) -> Result<Manifest, String> {
-        let root = toml_parse(src)?;
-        let pkg = root
-            .get("package")
-            .ok_or("operon.toml: missing [package] table")?;
-        let name = pkg
-            .get("name")
-            .and_then(|v| v.as_str())
-            .ok_or("operon.toml: [package] name must be a string")?
-            .to_string();
-        if !valid_name(&name) {
-            return Err(format!(
-                "operon.toml: package name '{}' is invalid (lowercase letters, digits, '-', '_', 2..64 chars, starts with a letter)",
-                name
-            ));
-        }
-        let vstr = pkg
-            .get("version")
-            .and_then(|v| v.as_str())
-            .ok_or("operon.toml: [package] version must be a string")?;
-        let version = SemVer::parse(vstr).map_err(|e| format!("operon.toml: {}", e))?;
-        let operon_req = match pkg.get("operon-version") {
-            Some(Toml::Str(s)) => Some(Req::parse(s)?),
-            None => None,
-            Some(other) => {
-                return Err(format!(
-                    "operon.toml: operon-version must be a string, got {}",
-                    other.type_name()
-                ))
-            }
-        };
-        let entry = match pkg.get("entry") {
-            Some(Toml::Str(s)) => s.clone(),
-            None => DEFAULT_ENTRY.to_string(),
-            Some(other) => {
-                return Err(format!(
-                    "operon.toml: entry must be a string, got {}",
-                    other.type_name()
-                ))
-            }
-        };
-        let str_or_default = |k: &str| -> String {
-            pkg.get(k)
-                .and_then(|v| v.as_str())
-                .unwrap_or_default()
-                .to_string()
-        };
-        let authors = match pkg.get("authors") {
-            Some(Toml::Array(a)) => a
-                .iter()
-                .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                .collect(),
-            _ => Vec::new(),
-        };
-        let keywords = match pkg.get("keywords") {
-            Some(Toml::Array(a)) => a
-                .iter()
-                .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                .collect(),
-            _ => Vec::new(),
-        };
-        let mut deps = BTreeMap::new();
-        if let Some(table) = root.get("dependencies").and_then(|v| v.as_table()) {
-            for (k, v) in table {
-                let req = match v {
-                    Toml::Str(s) => Req::parse(s)?,
-                    other => {
-                        return Err(format!(
-                            "operon.toml: dependency '{}' must be a requirement string, got {}",
-                            k,
-                            other.type_name()
-                        ))
-                    }
-                };
-                if !valid_name(k) {
-                    return Err(format!("operon.toml: dependency name '{}' is invalid", k));
-                }
-                deps.insert(k.clone(), req);
-            }
-        }
-        Ok(Manifest {
-            name,
-            version,
-            operon_req,
-            description: str_or_default("description"),
-            authors,
-            license: str_or_default("license"),
-            repository: str_or_default("repository"),
-            keywords,
-            entry,
-            deps,
-        })
-    }
-
-    pub fn load_dir(dir: &Path) -> Result<Manifest, String> {
-        let path = dir.join("operon.toml");
-        let src = std::fs::read_to_string(&path)
-            .map_err(|_| format!("no operon.toml in {}", dir.display()))?;
-        Manifest::parse(&src)
-    }
-
-    pub fn to_toml(&self) -> String {
-        let mut out = String::new();
-        out.push_str("[package]\n");
-        out.push_str(&format!("name = \"{}\"\n", self.name));
-        out.push_str(&format!("version = \"{}\"\n", self.version));
-        if let Some(r) = &self.operon_req {
-            out.push_str(&format!("operon-version = \"{}\"\n", r.raw_str()));
-        }
-        if !self.description.is_empty() {
-            out.push_str(&format!(
-                "description = \"{}\"\n",
-                escape_toml(&self.description)
-            ));
-        }
-        if !self.authors.is_empty() {
-            let a: Vec<String> = self
-                .authors
-                .iter()
-                .map(|s| format!("\"{}\"", escape_toml(s)))
-                .collect();
-            out.push_str(&format!("authors = [{}]\n", a.join(", ")));
-        }
-        if !self.license.is_empty() {
-            out.push_str(&format!("license = \"{}\"\n", escape_toml(&self.license)));
-        }
-        if !self.repository.is_empty() {
-            out.push_str(&format!(
-                "repository = \"{}\"\n",
-                escape_toml(&self.repository)
-            ));
-        }
-        if !self.keywords.is_empty() {
-            let a: Vec<String> = self
-                .keywords
-                .iter()
-                .map(|s| format!("\"{}\"", escape_toml(s)))
-                .collect();
-            out.push_str(&format!("keywords = [{}]\n", a.join(", ")));
-        }
-        if self.entry != DEFAULT_ENTRY {
-            out.push_str(&format!("entry = \"{}\"\n", escape_toml(&self.entry)));
-        }
-        if !self.deps.is_empty() {
-            out.push_str("\n[dependencies]\n");
-            for (k, r) in &self.deps {
-                out.push_str(&format!("{} = \"{}\"\n", k, escape_toml(r.raw_str())));
-            }
-        }
-        out
-    }
-}
-
-fn escape_toml(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('"', "\\\"")
-}
-
-// ---------------------------------------------------------------------------
-// registry index + versions
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone)]
-pub struct IndexVersion {
-    pub version: SemVer,
-    pub yanked: bool,
-    pub deps: BTreeMap<String, Req>,
+    pub version: String,
+    pub git: String,
+    pub rev: String,
     pub sha256: String,
     pub description: String,
+    /// W21-r1: a directory source (the seed registry and local dev
+    /// registries publish "dir" lines; the package tree is copied into
+    /// the vendored cache instead of a git clone). Empty = git-sourced.
+    pub dir: String,
 }
 
-#[derive(Debug, Clone)]
-pub struct PackageIndex {
-    pub name: String,
-    pub description: String,
-    pub versions: Vec<IndexVersion>,
-}
-
-impl PackageIndex {
-    /// Highest non-yanked version satisfying the requirement. Deterministic:
-    /// strict semver order; equal versions impossible per index (deduped on
-    /// read).
-    pub fn pick(&self, req: &Req) -> Option<&IndexVersion> {
-        self.versions
-            .iter()
-            .filter(|iv| !iv.yanked && req.matches(&iv.version))
-            .max_by(|a, b| a.version.cmp(&b.version))
-    }
-}
-
-/// Registry error surfaced to the CLI verbatim.
-#[derive(Debug)]
-pub struct PkgError(pub String);
-
-impl std::fmt::Display for PkgError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-/// https gate (ai/ecosystem item 10): builds without the `tls` feature
-/// refuse https registry URLs with an actionable message; builds compiled
-/// with `--features tls` dial them (rustls).
-fn https_unsupported(base: &str, op: &str) -> Result<(), String> {
-    #[cfg(not(feature = "tls"))]
-    {
-        if base.starts_with("https://") {
-            return Err(format!(
-                "registry '{}' uses https, which this build cannot {} (compiled without TLS). Rebuild with `cargo build --features tls`, or use the local registry (OPERON_REGISTRY=<dir>) / an http mirror. See docs/PACKAGING.md.",
-                base, op
-            ));
-        }
-    }
-    #[cfg(feature = "tls")]
-    {
-        let _ = (base, op);
-    }
-    Ok(())
-}
-
-/// A registry the CLI can talk to: a local directory (the dev/test shape)
-/// or an http(s):// endpoint (the hosted shape, same URL surface).
-#[derive(Debug, Clone)]
-pub enum Registry {
-    Dir(PathBuf),
-    Http(String),
-}
-
-impl Registry {
-    pub fn from_env_or_default() -> Registry {
-        match std::env::var("OPERON_REGISTRY") {
-            Ok(s) if !s.trim().is_empty() => Registry::parse_url(s.trim()),
-            _ => Registry::Dir(PathBuf::from("registry")),
-        }
-    }
-    pub fn parse_url(s: &str) -> Registry {
-        if let Some(p) = s.strip_prefix("file://") {
-            Registry::Dir(PathBuf::from(p))
-        } else if s.starts_with("http://") {
-            Registry::Http(s.trim_end_matches('/').to_string())
-        } else if s.starts_with("https://") {
-            // the per-operation https_unsupported gate surfaces an honest
-            // error on no-tls builds instead of a connection error downstream
-            Registry::Http(s.trim_end_matches('/').to_string())
-        } else {
-            Registry::Dir(PathBuf::from(s))
-        }
-    }
-
-    fn dir_index_path(&self, name: &str) -> Option<PathBuf> {
-        match self {
-            Registry::Dir(root) => Some(root.join("index").join(format!("{}.json", name))),
-            _ => None,
-        }
-    }
-
-    pub fn fetch_index(&self, name: &str) -> Result<PackageIndex, String> {
-        match self {
-            Registry::Dir(root) => {
-                let path = self
-                    .dir_index_path(name)
-                    .ok_or_else(|| "internal: dir registry".to_string())?;
-                let body = std::fs::read_to_string(&path).map_err(|_| {
-                    format!(
-                        "package '{}' not found in registry {}",
-                        name,
-                        root.display()
-                    )
-                })?;
-                parse_index_json(&body)
-            }
-            Registry::Http(base) => {
-                https_unsupported(base, "dial")?;
-                let url = format!("{}/api/packages/{}", base, name);
-                let (status, body) = http_request("GET", &url, &[], None)?;
-                if status == 404 {
-                    return Err(format!("package '{}' not found in registry {}", name, base));
-                }
-                if status != 200 {
-                    return Err(format!("registry returned HTTP {} for '{}'", status, name));
-                }
-                parse_index_json(&body)
-            }
-        }
-    }
-
-    pub fn fetch_artifact(&self, name: &str, ver: &str) -> Result<Vec<u8>, String> {
-        match self {
-            Registry::Dir(root) => {
-                let path = root
-                    .join("artifacts")
-                    .join(name)
-                    .join(format!("{}.opkg", ver));
-                std::fs::read(&path)
-                    .map_err(|e| format!("artifact {}/{} unreadable: {}", name, ver, e))
-            }
-            Registry::Http(base) => {
-                https_unsupported(base, "download from")?;
-                let url = format!("{}/api/packages/{}/{}/download", base, name, ver);
-                let (status, body) = http_request("GET", &url, &[], None)?;
-                if status != 200 {
-                    return Err(format!(
-                        "registry returned HTTP {} for artifact {}/{}",
-                        status, name, ver
-                    ));
-                }
-                Ok(body.into_bytes())
-            }
-        }
-    }
-
-    pub fn search(&self, query: &str) -> Result<Vec<(String, String, String)>, String> {
-        // (name, latest, description) triples, name-ascending
-        match self {
-            Registry::Dir(root) => {
-                let mut out = Vec::new();
-                let idx_dir = root.join("index");
-                let entries = std::fs::read_dir(&idx_dir)
-                    .map_err(|e| format!("registry dir {} unreadable: {}", idx_dir.display(), e))?;
-                let mut files: Vec<PathBuf> = entries
-                    .filter_map(|e| e.ok())
-                    .map(|e| e.path())
-                    .filter(|p| p.extension().map(|x| x == "json").unwrap_or(false))
-                    .collect();
-                files.sort();
-                for f in files {
-                    if let Ok(body) = std::fs::read_to_string(&f) {
-                        if let Ok(idx) = parse_index_json(&body) {
-                            if search_match(query, &idx) {
-                                let latest = idx
-                                    .versions
-                                    .iter()
-                                    .filter(|v| !v.yanked)
-                                    .map(|v| v.version.to_string())
-                                    .max_by(|a, b| {
-                                        SemVer::parse(a).ok().cmp(&SemVer::parse(b).ok())
-                                    })
-                                    .unwrap_or_default();
-                                out.push((idx.name, latest, idx.description));
-                            }
-                        }
-                    }
-                }
-                Ok(out)
-            }
-            Registry::Http(base) => {
-                https_unsupported(base, "search")?;
-                let q = if query.is_empty() {
-                    String::new()
-                } else {
-                    format!("?q={}", urlencode(query))
-                };
-                let url = format!("{}/api/search{}", base, q);
-                let (status, body) = http_request("GET", &url, &[], None)?;
-                if status != 200 {
-                    return Err(format!("registry returned HTTP {} for search", status));
-                }
-                parse_search_json(&body)
-            }
-        }
-    }
-
-    pub fn publish(&self, envelope: &[u8], token: &str) -> Result<String, String> {
-        match self {
-            Registry::Dir(root) => {
-                let env = parse_envelope(envelope)?;
-                let name = env.name.clone();
-                let ver = env.version.to_string();
-                let idx_dir = root.join("index");
-                let art_dir = root.join("artifacts").join(&name);
-                std::fs::create_dir_all(&idx_dir).map_err(|e| e.to_string())?;
-                std::fs::create_dir_all(&art_dir).map_err(|e| e.to_string())?;
-                // refuse to overwrite an existing version: published is
-                // immutable (yank comes later; overwrite is how supply-chain
-                // bugs happen)
-                let art_path = art_dir.join(format!("{}.opkg", ver));
-                if art_path.exists() {
-                    return Err(format!(
-                        "{} {} already exists in this registry — versions are immutable; bump the version to publish again",
-                        name, ver
-                    ));
-                }
-                std::fs::write(&art_path, envelope)
-                    .map_err(|e| format!("artifact write failed: {}", e))?;
-                // merge index
-                let idx_path = idx_dir.join(format!("{}.json", name));
-                let mut idx = match std::fs::read_to_string(&idx_path) {
-                    Ok(body) => parse_index_json(&body)?,
-                    Err(_) => PackageIndex {
-                        name: name.clone(),
-                        description: env.description.clone(),
-                        versions: Vec::new(),
-                    },
-                };
-                if idx.description.is_empty() {
-                    idx.description = env.description.clone();
-                }
-                idx.versions.retain(|v| v.version != env.version);
-                idx.versions.push(IndexVersion {
-                    version: env.version.clone(),
-                    yanked: false,
-                    deps: env.deps.clone(),
-                    sha256: sha256_hex(envelope),
-                    description: env.description.clone(),
-                });
-                idx.versions.sort_by(|a, b| a.version.cmp(&b.version));
-                std::fs::write(&idx_path, index_to_json(&idx))
-                    .map_err(|e| format!("index write failed: {}", e))?;
-                Ok(format!("published {} {} to {}", name, ver, root.display()))
-            }
-            Registry::Http(base) => {
-                https_unsupported(base, "publish to")?;
-                let url = format!("{}/api/publish", base);
-                let hdrs = vec![
-                    ("Content-Type".to_string(), "application/json".to_string()),
-                    ("Authorization".to_string(), format!("Bearer {}", token)),
-                ];
-                let (status, body) = http_request("POST", &url, &hdrs, Some(envelope))?;
-                if status == 401 || status == 403 {
-                    return Err("publish rejected: bad or missing token (set OPERON_TOKEN)".into());
-                }
-                if status != 200 && status != 201 {
-                    let snippet: String = body.chars().take(200).collect();
-                    return Err(format!("publish failed: HTTP {} {}", status, snippet));
-                }
-                Ok(body)
-            }
-        }
-    }
-}
-
-fn search_match(query: &str, idx: &PackageIndex) -> bool {
-    if query.is_empty() {
-        return true;
-    }
-    let q = query.to_lowercase();
-    idx.name.to_lowercase().contains(&q)
-        || idx.description.to_lowercase().contains(&q)
-        || idx
-            .versions
-            .iter()
-            .any(|v| v.deps.keys().any(|d| d.to_lowercase().contains(&q)))
-}
-
-fn urlencode(s: &str) -> String {
-    let mut out = String::new();
-    for b in s.bytes() {
-        match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                out.push(b as char)
-            }
-            _ => out.push_str(&format!("%{:02X}", b)),
-        }
-    }
-    out
-}
-
-/// Minimal HTTP/1.1 client over std::net — enough for the registry surface.
-/// Returns (status, body). 10s connect/30s read timeouts; no redirects
-/// followed (registries answer 200 directly; a 3xx surfaces as an error the
-/// user sees). https URLs dial through rustls on `--features tls` builds
-/// and refuse with an actionable error otherwise.
-pub fn http_request(
-    method: &str,
-    url: &str,
-    headers: &[(String, String)],
-    body: Option<&[u8]>,
-) -> Result<(u16, String), String> {
-    if let Some(rest) = url.strip_prefix("https://") {
-        #[cfg(not(feature = "tls"))]
-        {
-            let _ = rest;
-            return Err(format!(
-                "https is not supported by this build (compiled without TLS): '{}'. Rebuild with `cargo build --features tls`.",
-                url
-            ));
-        }
-        #[cfg(feature = "tls")]
-        {
-            return https_request(method, rest, headers, body);
-        }
-    }
-    let rest = url
-        .strip_prefix("http://")
-        .ok_or_else(|| format!("unsupported URL '{}' (http/https only)", url))?;
-    let (hostport, path) = split_hostpath(rest);
-    let mut stream = tcp_connect(&hostport)?;
-    write_request(&mut stream, method, &hostport, &path, headers, body)?;
-    let buf = read_all_stream(&mut stream)?;
-    parse_http_response(buf)
-}
-
-/// host[:port] + path from the text after a scheme prefix.
-fn split_hostpath(rest: &str) -> (String, String) {
-    match rest.find('/') {
-        Some(i) => (rest[..i].to_string(), rest[i..].to_string()),
-        None => (rest.to_string(), "/".to_string()),
-    }
-}
-
-fn tcp_connect(hostport: &str) -> Result<std::net::TcpStream, String> {
-    let addrs = hostport
-        .to_socket_addrs()
-        .map_err(|e| format!("cannot resolve '{}': {}", hostport, e))?
-        .collect::<Vec<_>>();
-    let addr = addrs.first().copied().ok_or("host resolved to nothing")?;
-    let stream = std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(10))
-        .map_err(|e| format!("connect to {} failed: {}", hostport, e))?;
-    stream
-        .set_read_timeout(Some(std::time::Duration::from_secs(30)))
-        .ok();
-    stream
-        .set_write_timeout(Some(std::time::Duration::from_secs(30)))
-        .ok();
-    Ok(stream)
-}
-
-fn write_request<T: std::io::Read + std::io::Write>(
-    stream: &mut T,
-    method: &str,
-    hostport: &str,
-    path: &str,
-    headers: &[(String, String)],
-    body: Option<&[u8]>,
-) -> Result<(), String> {
-    let mut req = format!(
-        "{} {} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nUser-Agent: operon-pkg/1\r\n",
-        method, path, hostport
-    );
-    for (k, v) in headers {
-        req.push_str(&format!("{}: {}\r\n", k, v));
-    }
-    if let Some(b) = body {
-        req.push_str(&format!("Content-Length: {}\r\n", b.len()));
-    }
-    req.push_str("\r\n");
-    stream
-        .write_all(req.as_bytes())
-        .map_err(|e| e.to_string())?;
-    if let Some(b) = body {
-        stream.write_all(b).map_err(|e| e.to_string())?;
-    }
-    stream.flush().map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-fn read_all_stream<T: std::io::Read>(stream: &mut T) -> Result<Vec<u8>, String> {
-    let mut buf = Vec::new();
-    stream.read_to_end(&mut buf).map_err(|e| e.to_string())?;
-    Ok(buf)
-}
-
-fn parse_http_response(buf: Vec<u8>) -> Result<(u16, String), String> {
-    let sep = b"\r\n\r\n";
-    let split = buf
-        .windows(sep.len())
-        .position(|w| w == sep)
-        .ok_or("malformed HTTP response (no header/body separator)")?;
-    let head = String::from_utf8_lossy(&buf[..split]).to_string();
-    let body_bytes = &buf[split + 4..];
-    // chunked transfer decoding (registries commonly stream)
-    let chunked = head
-        .to_ascii_lowercase()
-        .contains("transfer-encoding: chunked");
-    let body_final: Vec<u8> = if chunked {
-        decode_chunked(body_bytes)
-    } else {
-        body_bytes.to_vec()
-    };
-    let status: u16 = head
-        .lines()
-        .next()
-        .and_then(|l| l.split_whitespace().nth(1))
-        .and_then(|s| s.parse().ok())
-        .ok_or("malformed HTTP status line")?;
-    Ok((status, String::from_utf8_lossy(&body_final).to_string()))
-}
-
-/// https transport (cargo feature `tls`): a rustls client over the webpki
-/// root store, plus `OPERON_CA_FILE` (PEM) for self-hosted registries
-/// running an internal CA. The request and response bytes are exactly the
-/// plain-http ones — only the pipe differs.
-#[cfg(feature = "tls")]
-fn https_request(
-    method: &str,
-    hostpath: &str,
-    headers: &[(String, String)],
-    body: Option<&[u8]>,
-) -> Result<(u16, String), String> {
-    use std::sync::Arc;
-    let (hostport, path) = split_hostpath(hostpath);
-    let dial = if hostport.contains(':') {
-        hostport.clone()
-    } else {
-        format!("{}:443", hostport)
-    };
-    let host = match hostport.rsplit_once(':') {
-        Some((h, p)) if p.parse::<u16>().is_ok() => h.to_string(),
-        _ => hostport.clone(),
-    };
-    let mut tcp = tcp_connect(&dial)?;
-
-    let mut roots = rustls::RootCertStore::empty();
-    roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-    // self-hosted registries often run an internal CA: OPERON_CA_FILE (PEM)
-    if let Ok(ca) = std::env::var("OPERON_CA_FILE") {
-        if !ca.trim().is_empty() {
-            use rustls_pki_types::pem::PemObject;
-            let iter = rustls_pki_types::CertificateDer::pem_file_iter(&ca)
-                .map_err(|e| format!("cannot read OPERON_CA_FILE '{}': {}", ca, e))?;
-            let mut n = 0usize;
-            for cert in iter {
-                let cert = cert.map_err(|e| format!("bad PEM in '{}': {}", ca, e))?;
-                roots
-                    .add(cert)
-                    .map_err(|e| format!("bad CA certificate in '{}': {}", ca, e))?;
-                n += 1;
-            }
-            if n == 0 {
-                return Err(format!("OPERON_CA_FILE '{}' contains no certificates", ca));
-            }
-        }
-    }
-
-    let sni = rustls_pki_types::ServerName::try_from(host.clone())
-        .map_err(|e| format!("bad registry hostname '{}': {}", host, e))?;
-    let config = rustls::ClientConfig::builder()
-        .with_root_certificates(roots)
-        .with_no_client_auth();
-    let mut conn = rustls::ClientConnection::new(Arc::new(config), sni)
-        .map_err(|e| format!("TLS setup failed: {}", e))?;
-    let mut tls = rustls::Stream::new(&mut conn, &mut tcp);
-    write_request(&mut tls, method, &hostport, &path, headers, body)?;
-    // read_to_end guarantees bytes read before an error stay in `buf`.
-    // Many TLS terminators (Python ssl, some proxies) close the socket
-    // without sending TLS close_notify; rustls surfaces that as
-    // UnexpectedEof. With Connection: close framing, EOF is the legitimate
-    // end of the body — exactly what the plain-http path relies on — so
-    // keep what was received instead of failing the whole response.
-    use std::io::Read;
-    let mut buf = Vec::new();
-    match tls.read_to_end(&mut buf) {
-        Ok(_) => {}
-        Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {}
-        Err(e) => return Err(e.to_string()),
-    }
-    parse_http_response(buf)
-}
-
-fn decode_chunked(mut data: &[u8]) -> Vec<u8> {
-    let mut out = Vec::new();
-    while let Some(nl) = data.windows(2).position(|w| w == b"\r\n") {
-        let size_str = String::from_utf8_lossy(&data[..nl]);
-        let size = match usize::from_str_radix(size_str.trim().split(';').next().unwrap_or("0"), 16)
-        {
-            Ok(s) => s,
-            Err(_) => break,
-        };
-        if size == 0 {
-            break;
-        }
-        let start = nl + 2;
-        if data.len() < start + size {
-            break;
-        }
-        out.extend_from_slice(&data[start..start + size]);
-        data = &data[(start + size + 2).min(data.len())..];
-    }
-    out
-}
-// ---------------------------------------------------------------------------
-// package envelope (the artifact format)
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone)]
-pub struct Envelope {
-    pub name: String,
-    pub version: SemVer,
-    pub description: String,
-    pub deps: BTreeMap<String, Req>,
-    /// (path, bytes) — paths are sanitized: forward slashes, no `..`, no
-    /// absolute, must land inside the package root. Sorted by path on write.
-    pub files: Vec<(String, Vec<u8>)>,
-    pub manifest_src: String,
-}
-
-pub fn sanitize_rel_path(p: &str) -> Result<String, String> {
-    if p.is_empty() {
-        return Err("empty file path".into());
-    }
-    if p.starts_with('/') || p.starts_with('\\') || p.contains(':') || p.contains('\\') {
-        return Err(format!("unsafe package path '{}'", p));
-    }
-    let mut depth = 0i32;
-    for seg in p.split('/') {
-        if seg.is_empty() || seg == "." {
+/// Pull one `"key": "value"` string pair out of a flat JSON object line.
+/// Values must be JSON strings (no nesting, no numbers: every registry
+/// field is a string). Returns None when the key is absent.
+fn json_line_get(line: &str, key: &str) -> Option<String> {
+    let pat = format!("\"{}\"", key);
+    let mut rest = line;
+    loop {
+        let i = rest.find(&pat)?;
+        let after = &rest[i + pat.len()..];
+        let after = after.trim_start();
+        if !after.starts_with(':') {
+            rest = after;
             continue;
         }
-        if seg == ".." {
-            depth -= 1;
-            if depth < 0 {
-                return Err(format!("unsafe package path '{}'", p));
-            }
-            continue;
+        let after = after[1..].trim_start();
+        if !after.starts_with('"') {
+            return None;
         }
-        depth += 1;
-    }
-    if depth == 0 {
-        return Err(format!("unsafe package path '{}'", p));
-    }
-    Ok(p.split('/')
-        .filter(|s| !s.is_empty() && *s != ".")
-        .collect::<Vec<_>>()
-        .join("/"))
-}
-
-impl Envelope {
-    pub fn encode(&self) -> Vec<u8> {
-        // deterministic JSON: keys in fixed order, files sorted by path.
-        // Only the file payload strings go through base64; everything else
-        // is plain JSON with minimal escaping.
-        let mut files: Vec<&(String, Vec<u8>)> = self.files.iter().collect();
-        files.sort_by(|a, b| a.0.cmp(&b.0));
         let mut out = String::new();
-        out.push_str("{\"envelope\":1");
-        out.push_str(&format!(",\"name\":\"{}\"", json_str(&self.name)));
-        out.push_str(&format!(
-            ",\"version\":\"{}\"",
-            json_str(&self.version.to_string())
-        ));
-        out.push_str(&format!(
-            ",\"description\":\"{}\"",
-            json_str(&self.description)
-        ));
-        if !self.deps.is_empty() {
-            let mut ds = String::new();
-            for (k, r) in &self.deps {
-                if !ds.is_empty() {
-                    ds.push(',');
-                }
-                ds.push_str(&format!(
-                    "\"{}\":\"{}\"",
-                    json_str(k),
-                    json_str(r.raw_str())
-                ));
+        let mut chars = after[1..].chars();
+        while let Some(c) = chars.next() {
+            match c {
+                '"' => return Some(out),
+                '\\' => match chars.next() {
+                    Some('n') => out.push('\n'),
+                    Some('t') => out.push('\t'),
+                    Some('r') => out.push('\r'),
+                    Some('"') => out.push('"'),
+                    Some('\\') => out.push('\\'),
+                    Some(other) => {
+                        out.push('\\');
+                        out.push(other);
+                    }
+                    None => return None,
+                },
+                other => out.push(other),
             }
-            out.push_str(&format!(",\"deps\":{{{}}}", ds));
         }
-        out.push_str(&format!(
-            ",\"manifest\":\"{}\"",
-            json_str(&self.manifest_src)
-        ));
-        out.push_str(",\"files\":[");
-        let mut first = true;
-        for (path, bytes) in files {
-            if !first {
-                out.push(',');
-            }
-            first = false;
-            out.push_str(&format!(
-                "{{\"path\":\"{}\",\"b64\":\"{}\"}}",
-                json_str(path),
-                b64_encode(bytes)
-            ));
-        }
-        out.push_str("]}\n");
-        out.into_bytes()
-    }
-
-    pub fn decode(data: &[u8]) -> Result<Envelope, String> {
-        parse_envelope(data)
+        return None;
     }
 }
 
-fn json_str(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 2);
+fn json_escape(s: &str) -> String {
+    let mut out = String::new();
     for c in s.chars() {
         match c {
             '"' => out.push_str("\\\""),
@@ -1662,942 +800,1730 @@ fn json_str(s: &str) -> String {
             '\n' => out.push_str("\\n"),
             '\r' => out.push_str("\\r"),
             '\t' => out.push_str("\\t"),
-            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
-            c => out.push(c),
+            other => out.push(other),
         }
     }
     out
 }
 
-// --- tiny JSON reader for envelopes + index documents (read-only subset) ---
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Json {
-    Null,
-    Bool(bool),
-    Num(f64),
-    Str(String),
-    Arr(Vec<Json>),
-    Obj(Vec<(String, Json)>),
-}
-
-impl Json {
-    pub fn get(&self, k: &str) -> Option<&Json> {
-        match self {
-            Json::Obj(m) => m.iter().find(|(kk, _)| kk == k).map(|(_, v)| v),
-            _ => None,
-        }
-    }
-    pub fn as_str(&self) -> Option<&str> {
-        match self {
-            Json::Str(s) => Some(s),
-            _ => None,
-        }
-    }
-    pub fn as_arr(&self) -> Option<&Vec<Json>> {
-        match self {
-            Json::Arr(a) => Some(a),
-            _ => None,
-        }
-    }
-    pub fn as_bool(&self) -> Option<bool> {
-        match self {
-            Json::Bool(b) => Some(*b),
-            _ => None,
-        }
-    }
-}
-
-pub fn json_parse(src: &str) -> Result<Json, String> {
-    let b: Vec<char> = src.chars().collect();
-    let mut i = 0usize;
-    let v = json_value(&b, &mut i)?;
-    json_ws(&b, &mut i);
-    if i != b.len() {
-        return Err(format!("trailing JSON data at char {}", i));
-    }
-    Ok(v)
-}
-
-fn json_ws(b: &[char], i: &mut usize) {
-    while *i < b.len() && b[*i].is_whitespace() {
-        *i += 1;
-    }
-}
-
-fn json_value(b: &[char], i: &mut usize) -> Result<Json, String> {
-    json_ws(b, i);
-    if *i >= b.len() {
-        return Err("unexpected end of JSON".into());
-    }
-    match b[*i] {
-        '{' => {
-            *i += 1;
-            let mut out = Vec::new();
-            json_ws(b, i);
-            if *i < b.len() && b[*i] == '}' {
-                *i += 1;
-                return Ok(Json::Obj(out));
-            }
-            loop {
-                json_ws(b, i);
-                let key = match json_value(b, i)? {
-                    Json::Str(s) => s,
-                    _ => return Err("object key must be a string".into()),
-                };
-                json_ws(b, i);
-                if *i >= b.len() || b[*i] != ':' {
-                    return Err("expected ':' in object".into());
-                }
-                *i += 1;
-                let val = json_value(b, i)?;
-                out.push((key, val));
-                json_ws(b, i);
-                match b.get(*i) {
-                    Some(',') => *i += 1,
-                    Some('}') => {
-                        *i += 1;
-                        return Ok(Json::Obj(out));
-                    }
-                    _ => return Err("expected ',' or '}' in object".into()),
-                }
-            }
-        }
-        '[' => {
-            *i += 1;
-            let mut out = Vec::new();
-            json_ws(b, i);
-            if *i < b.len() && b[*i] == ']' {
-                *i += 1;
-                return Ok(Json::Arr(out));
-            }
-            loop {
-                out.push(json_value(b, i)?);
-                json_ws(b, i);
-                match b.get(*i) {
-                    Some(',') => *i += 1,
-                    Some(']') => {
-                        *i += 1;
-                        return Ok(Json::Arr(out));
-                    }
-                    _ => return Err("expected ',' or ']' in array".into()),
-                }
-            }
-        }
-        '"' => {
-            *i += 1;
-            let mut out = String::new();
-            while *i < b.len() {
-                match b[*i] {
-                    '"' => {
-                        *i += 1;
-                        return Ok(Json::Str(out));
-                    }
-                    '\\' => {
-                        *i += 1;
-                        match b.get(*i) {
-                            Some('n') => out.push('\n'),
-                            Some('t') => out.push('\t'),
-                            Some('r') => out.push('\r'),
-                            Some('"') => out.push('"'),
-                            Some('\\') => out.push('\\'),
-                            Some('/') => out.push('/'),
-                            Some('u') => {
-                                let hex: String = b
-                                    .get(*i + 1..*i + 5)
-                                    .ok_or("bad \\u escape")?
-                                    .iter()
-                                    .collect();
-                                let n =
-                                    u32::from_str_radix(&hex, 16).map_err(|_| "bad \\u escape")?;
-                                if let Some(c) = char::from_u32(n) {
-                                    out.push(c);
-                                }
-                                *i += 4;
-                            }
-                            _ => return Err("bad escape in JSON string".into()),
-                        }
-                        *i += 1;
-                    }
-                    c => {
-                        out.push(c);
-                        *i += 1;
-                    }
-                }
-            }
-            Err("unterminated JSON string".into())
-        }
-        't' => {
-            if b.get(*i..*i + 4) == Some(&['t', 'r', 'u', 'e'][..]) {
-                *i += 4;
-                Ok(Json::Bool(true))
-            } else {
-                Err("bad JSON literal".into())
-            }
-        }
-        'f' => {
-            if b.get(*i..*i + 5) == Some(&['f', 'a', 'l', 's', 'e'][..]) {
-                *i += 5;
-                Ok(Json::Bool(false))
-            } else {
-                Err("bad JSON literal".into())
-            }
-        }
-        'n' => {
-            if b.get(*i..*i + 4) == Some(&['n', 'u', 'l', 'l'][..]) {
-                *i += 4;
-                Ok(Json::Null)
-            } else {
-                Err("bad JSON literal".into())
-            }
-        }
-        _ => {
-            let start = *i;
-            while *i < b.len()
-                && (b[*i].is_ascii_digit()
-                    || b[*i] == '-'
-                    || b[*i] == '+'
-                    || b[*i] == '.'
-                    || b[*i] == 'e'
-                    || b[*i] == 'E')
-            {
-                *i += 1;
-            }
-            let s: String = b[start..*i].iter().collect();
-            s.parse::<f64>()
-                .map(Json::Num)
-                .map_err(|_| format!("bad JSON number '{}'", s))
-        }
-    }
-}
-
-fn parse_index_json(body: &str) -> Result<PackageIndex, String> {
-    let j = json_parse(body)?;
-    let name = j
-        .get("name")
-        .and_then(|v| v.as_str())
-        .ok_or("index JSON missing 'name'")?
-        .to_string();
-    let description = j
-        .get("description")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    let mut versions = Vec::new();
-    if let Some(arr) = j.get("versions").and_then(|v| v.as_arr()) {
-        for v in arr {
-            let vstr = v
-                .get("version")
-                .and_then(|x| x.as_str())
-                .ok_or("index version missing 'version'")?;
-            let ver = SemVer::parse(vstr).map_err(|e| format!("index for '{}': {}", name, e))?;
-            let mut deps = BTreeMap::new();
-            if let Some(Json::Obj(m)) = v.get("deps") {
-                for (k, r) in m {
-                    if let Some(rs) = r.as_str() {
-                        deps.insert(k.clone(), Req::parse(rs)?);
-                    }
-                }
-            }
-            versions.push(IndexVersion {
-                version: ver,
-                yanked: v.get("yanked").and_then(|x| x.as_bool()).unwrap_or(false),
-                deps,
-                sha256: v
-                    .get("sha256")
-                    .and_then(|x| x.as_str())
-                    .unwrap_or("")
-                    .to_string(),
-                description: v
-                    .get("description")
-                    .and_then(|x| x.as_str())
-                    .unwrap_or("")
-                    .to_string(),
-            });
-        }
-    }
-    versions.sort_by(|a, b| a.version.cmp(&b.version));
-    Ok(PackageIndex {
-        name,
-        description,
-        versions,
-    })
-}
-
-fn index_to_json(idx: &PackageIndex) -> String {
-    let mut out = String::new();
-    out.push_str(&format!("{{\"name\":\"{}\"", json_str(&idx.name)));
-    out.push_str(&format!(
-        ",\"description\":\"{}\"",
-        json_str(&idx.description)
-    ));
-    out.push_str(",\"versions\":[");
-    let mut first = true;
-    for v in &idx.versions {
-        if !first {
-            out.push(',');
-        }
-        first = false;
-        out.push_str(&format!(
-            "{{\"version\":\"{}\"",
-            json_str(&v.version.to_string())
-        ));
-        out.push_str(&format!(",\"yanked\":{}", v.yanked));
-        out.push_str(&format!(",\"sha256\":\"{}\"", json_str(&v.sha256)));
-        if !v.deps.is_empty() {
-            let ds: Vec<String> = v
-                .deps
-                .iter()
-                .map(|(k, r)| format!("\"{}\":\"{}\"", json_str(k), json_str(r.raw_str())))
-                .collect();
-            out.push_str(&format!(",\"deps\":{{{}}}", ds.join(",")));
-        }
-        out.push('}');
-    }
-    out.push_str("]}\n");
-    out
-}
-
-fn parse_search_json(body: &str) -> Result<Vec<(String, String, String)>, String> {
-    let j = json_parse(body)?;
-    let arr = j
-        .get("results")
-        .and_then(|v| v.as_arr())
-        .ok_or("search JSON missing 'results'")?;
+/// Parse a registry index. Line-precise rejections (a registry that lies
+/// would resolve installs against the wrong code, so malformed lines are
+/// hard errors, never skipped).
+pub fn parse_registry(src: &str) -> Result<Vec<RegistryEntry>, String> {
     let mut out = Vec::new();
-    for r in arr {
-        let name = r
-            .get("name")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-        let latest = r
-            .get("latest")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-        let desc = r
-            .get("description")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-        out.push((name, latest, desc));
+    for (i, raw) in src.lines().enumerate() {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let bad = |why: &str| format!("registry line {}: {}", i + 1, why);
+        if !line.starts_with('{') || !line.ends_with('}') {
+            return Err(bad("expected a flat JSON object"));
+        }
+        let name = json_line_get(line, "name").ok_or_else(|| bad("missing \"name\""))?;
+        if name.is_empty() {
+            return Err(bad("empty \"name\""));
+        }
+        let git = json_line_get(line, "git").ok_or_else(|| bad("missing \"git\""))?;
+        let rev = json_line_get(line, "rev").ok_or_else(|| bad("missing \"rev\""))?;
+        let version = json_line_get(line, "version").unwrap_or_default();
+        let sha256 = json_line_get(line, "sha256").unwrap_or_default();
+        let description = json_line_get(line, "description").unwrap_or_default();
+        let dir = json_line_get(line, "dir").unwrap_or_default();
+        out.push(RegistryEntry {
+            name,
+            version,
+            git,
+            rev,
+            sha256,
+            description,
+            dir,
+        });
     }
     Ok(out)
 }
 
-fn parse_envelope(data: &[u8]) -> Result<Envelope, String> {
-    let s = std::str::from_utf8(data).map_err(|_| "envelope is not UTF-8")?;
-    let j = json_parse(s)?;
-    if j.get("envelope")
-        .map(|v| *v != Json::Num(1.0))
-        .unwrap_or(true)
-    {
-        return Err("unsupported package envelope (want envelope:1)".into());
-    }
-    let name = j
-        .get("name")
-        .and_then(|v| v.as_str())
-        .ok_or("envelope missing 'name'")?
-        .to_string();
-    let version = SemVer::parse(
-        j.get("version")
-            .and_then(|v| v.as_str())
-            .ok_or("envelope missing 'version'")?,
-    )?;
-    let description = j
-        .get("description")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    let mut deps = BTreeMap::new();
-    if let Some(Json::Obj(m)) = j.get("deps") {
-        for (k, r) in m {
-            if let Some(rs) = r.as_str() {
-                deps.insert(k.clone(), Req::parse(rs)?);
-            }
-        }
-    }
-    let manifest_src = j
-        .get("manifest")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    let mut files = Vec::new();
-    for f in j
-        .get("files")
-        .and_then(|v| v.as_arr())
-        .ok_or("envelope missing 'files'")?
-    {
-        let path = f
-            .get("path")
-            .and_then(|v| v.as_str())
-            .ok_or("envelope file missing 'path'")?;
-        let safe = sanitize_rel_path(path)?;
-        let b64 = f
-            .get("b64")
-            .and_then(|v| v.as_str())
-            .ok_or("envelope file missing 'b64'")?;
-        files.push((safe, b64_decode(b64)?));
-    }
-    Ok(Envelope {
-        name,
-        version,
-        description,
-        deps,
-        files,
-        manifest_src,
-    })
-}
-
-// ---------------------------------------------------------------------------
-// lockfile (operon.lock) — byte-reproducible resolution
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct LockEntry {
-    pub name: String,
-    pub version: SemVer,
-    pub sha256: String,
-    /// resolved dependency pins "name version" (sorted)
-    pub deps: Vec<String>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct Lockfile {
-    pub packages: Vec<LockEntry>,
-}
-
-pub const LOCK_HEADER: &str = "# operon.lock — generated by operon. Do not edit.\n# Commit this file: it pins the exact dependency graph for reproducible installs.\n";
-
-impl Lockfile {
-    pub fn to_bytes(&self) -> Vec<u8> {
-        let mut out = String::new();
-        out.push_str(LOCK_HEADER);
-        out.push_str("lock-format = 1\n\n");
-        for p in &self.packages {
-            out.push_str("[[package]]\n");
-            out.push_str(&format!("name = \"{}\"\n", p.name));
-            out.push_str(&format!("version = \"{}\"\n", p.version));
-            out.push_str(&format!("sha256 = \"{}\"\n", p.sha256));
-            let deps: Vec<String> = p
-                .deps
-                .iter()
-                .map(|d| format!("\"{}\"", escape_toml(d)))
-                .collect();
-            out.push_str(&format!("deps = [{}]\n\n", deps.join(", ")));
-        }
-        out.into_bytes()
-    }
-
-    pub fn parse(src: &str) -> Result<Lockfile, String> {
-        // NOTE: deliberately NOT parsed with toml_parse — the strict subset
-        // parser rejects [[array-of-table]] headers. The lockfile is a fixed
-        // generated shape, so a line-scanner is exact and forgiving of nothing.
-        let mut out = Lockfile::default();
-        let mut saw_format = false;
-        let mut cur: Option<LockEntry> = None;
-        for raw in src.lines() {
-            let line = strip_comment(raw).trim().to_string();
-            if line == "[[package]]" {
-                if let Some(p) = cur.take() {
-                    out.packages.push(p);
-                }
-                cur = Some(LockEntry {
-                    name: String::new(),
-                    version: SemVer {
-                        major: 0,
-                        minor: 0,
-                        patch: 0,
-                    },
-                    sha256: String::new(),
-                    deps: Vec::new(),
-                });
-                continue;
-            }
-            if cur.is_none() {
-                if line.starts_with("lock-format") {
-                    if !line.contains("1") {
-                        return Err(
-                            "operon.lock: unsupported lock-format (regenerate with `operon update`)".into(),
-                        );
-                    }
-                    saw_format = true;
-                }
-                continue;
-            }
-            let eq = match find_top_level_eq(&line) {
-                Some(i) => i,
-                None => continue,
-            };
-            let key = line[..eq].trim().to_string();
-            let val = parse_value(line[eq + 1..].trim(), 0)?;
-            let p = cur.as_mut().unwrap();
-            match (key.as_str(), val) {
-                ("name", Toml::Str(s)) => p.name = s,
-                ("version", Toml::Str(s)) => p.version = SemVer::parse(&s)?,
-                ("sha256", Toml::Str(s)) => p.sha256 = s,
-                ("deps", Toml::Array(a)) => {
-                    p.deps = a
-                        .iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                        .collect();
-                }
-                _ => {}
-            }
-        }
-        if let Some(p) = cur.take() {
-            out.packages.push(p);
-        }
-        if !saw_format {
-            return Err(
-                "operon.lock: missing lock-format = 1 (regenerate with `operon update`)".into(),
-            );
-        }
-        Ok(out)
-    }
-
-    pub fn load(dir: &Path) -> Option<Lockfile> {
-        let src = std::fs::read_to_string(dir.join("operon.lock")).ok()?;
-        Lockfile::parse(&src).ok()
-    }
-
-    pub fn find(&self, name: &str) -> Option<&LockEntry> {
-        self.packages.iter().find(|p| p.name == name)
-    }
-}
-
-/// Does the existing lock still satisfy the manifest's requirements?
-/// True only when every manifest dep is present at a version its req accepts
-/// AND every lock package's own dep pins are all inside the lock (closed).
-pub fn lock_satisfies(manifest: &Manifest, lock: &Lockfile) -> bool {
-    for (name, req) in &manifest.deps {
-        match lock.find(name) {
-            Some(p) if req.matches(&p.version) => {}
-            _ => return false,
-        }
-    }
-    // closure: every lock package's deps resolve inside the lock
-    for p in &lock.packages {
-        for d in &p.deps {
-            let mut parts = d.splitn(2, ' ');
-            let dname = parts.next().unwrap_or("");
-            let dver = parts.next().unwrap_or("");
-            match lock.find(dname) {
-                Some(dp) if dp.version.to_string() == dver => {}
-                _ => return false,
-            }
-        }
-    }
-    true
-}
-
-/// Deterministic full resolution: DFS over manifest deps, always picking the
-/// highest non-yanked version that satisfies the requirement. Output sorted
-/// by name. Cycle detection via the active path. The result is a function of
-/// (requirements, registry content) alone — same inputs, same lock bytes.
-pub fn resolve(manifest: &Manifest, reg: &Registry) -> Result<Lockfile, String> {
-    let mut chosen: BTreeMap<String, LockEntry> = BTreeMap::new();
-    let mut path: Vec<String> = Vec::new();
-    let mut reqs_stack: Vec<(String, Req)> = manifest
-        .deps
-        .iter()
-        .map(|(k, v)| (k.clone(), v.clone()))
-        .collect();
-    // deterministic frontier: sort by name each round
-    while let Some((name, req)) = pop_lowest(&mut reqs_stack) {
-        if let Some(existing) = chosen.get(&name) {
-            if req.matches(&existing.version) {
-                continue;
-            }
-            return Err(format!(
-                "dependency conflict on '{}': already picked {} which does not satisfy '{}'",
-                name,
-                existing.version,
-                req.raw_str()
-            ));
-        }
-        if path.contains(&name) {
-            return Err(format!("dependency cycle involving '{}'", name));
-        }
-        let idx = reg.fetch_index(&name)?;
-        let picked = idx
-            .pick(&req)
-            .ok_or_else(|| {
-                format!(
-                    "no version of '{}' satisfies '{}' (available: {})",
-                    name,
-                    req.raw_str(),
-                    idx.versions
-                        .iter()
-                        .map(|v| v.version.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            })?
-            .clone();
-        path.push(name.clone());
-        for (dname, dreq) in &picked.deps {
-            // deps of the picked version enter the frontier unless already
-            // satisfied by a chosen version
-            let satisfied = chosen
-                .get(dname)
-                .map(|c| dreq.matches(&c.version))
-                .unwrap_or(false)
-                || reqs_stack
-                    .iter()
-                    .any(|(n, r)| n == dname && r.raw_str() == dreq.raw_str());
-            if !satisfied {
-                reqs_stack.push((dname.clone(), dreq.clone()));
-            }
-        }
-        chosen.insert(
-            name.clone(),
-            LockEntry {
-                name,
-                version: picked.version,
-                sha256: picked.sha256.clone(),
-                // exact dep pins are filled in the second pass below
-                deps: Vec::new(),
-            },
-        );
-        path.pop();
-    }
-    // second pass: fill exact dep pins now that all versions are chosen
-    let mut packages = Vec::new();
-    let names: Vec<String> = chosen.keys().cloned().collect();
-    for name in names {
-        let mut entry = match chosen.remove(&name) {
-            Some(e) => e,
-            None => continue,
-        };
-        let idx = reg.fetch_index(&entry.name)?;
-        if let Some(iv) = idx.versions.iter().find(|v| v.version == entry.version) {
-            entry.deps = iv
-                .deps
-                .keys()
-                .map(|dn| {
-                    let ver = chosen
-                        .get(dn)
-                        .map(|c| c.version.to_string())
-                        .unwrap_or_else(|| "?".into());
-                    format!("{} {}", dn, ver)
-                })
-                .collect();
-            entry.deps.sort();
-        }
-        packages.push(entry);
-    }
-    packages.sort_by(|a, b| a.name.cmp(&b.name));
-    Ok(Lockfile { packages })
-}
-
-fn pop_lowest(v: &mut Vec<(String, Req)>) -> Option<(String, Req)> {
-    if v.is_empty() {
-        return None;
-    }
-    let mut best = 0usize;
-    for i in 1..v.len() {
-        if v[i].0 < v[best].0 {
-            best = i;
-        }
-    }
-    Some(v.remove(best))
-}
-
-// ---------------------------------------------------------------------------
-// install / remove / publish-from-project
-// ---------------------------------------------------------------------------
-
-pub const MODULES_DIR: &str = "operon_modules";
-
-/// Install the exact lockfile graph into `root/operon_modules/`, verifying
-/// sha256 of every artifact. Lockfile-first: the registry must serve the
-/// pinned content or the install fails loudly.
-pub fn install_from_lock(
-    root: &Path,
-    lock: &Lockfile,
-    reg: &Registry,
-) -> Result<Vec<String>, String> {
-    let mut installed = Vec::new();
-    for p in &lock.packages {
-        let data = reg.fetch_artifact(&p.name, &p.version.to_string())?;
-        if !p.sha256.is_empty() {
-            let got = sha256_hex(&data);
-            if got != p.sha256 {
-                return Err(format!(
-                    "artifact {}/{} failed sha256 verification (locked {}, got {}) — refusing to install",
-                    p.name,
-                    p.version,
-                    p.sha256,
-                    got
-                ));
-            }
-        }
-        let env = Envelope::decode(&data)?;
-        if env.name != p.name || env.version != p.version {
-            return Err(format!(
-                "registry artifact is {}/{} but the lock pins {}/{}",
-                env.name, env.version, p.name, p.version
-            ));
-        }
-        let dest_root = root.join(MODULES_DIR).join(&p.name);
-        // clean reinstall for byte-stability
-        if dest_root.exists() {
-            std::fs::remove_dir_all(&dest_root)
-                .map_err(|e| format!("cannot refresh {}: {}", dest_root.display(), e))?;
-        }
-        std::fs::create_dir_all(&dest_root).map_err(|e| e.to_string())?;
-        // Import-layout contract: the package ENTRY file lands at
-        // operon_modules/<name>/<entry-basename> and its sibling sources sit
-        // beside it, so `use <name>` and `use <name>/<submodule>` resolve via
-        // the package candidates in genes.rs without a shim. Files outside
-        // the entry directory (docs, tests, the manifest) are not installed.
-        let pm = Manifest::parse(&env.manifest_src).ok();
-        let entry = pm
-            .map(|m| m.entry)
-            .unwrap_or_else(|| format!("{}.op", env.name));
-        let entry_dir = entry
-            .rsplit_once('/')
-            .map(|(d, _)| format!("{}/", d))
-            .unwrap_or_default();
-        let mut wrote_any = false;
-        for (path, bytes) in &env.files {
-            if !path.ends_with(".op") {
-                continue;
-            }
-            let rel = if !entry_dir.is_empty() {
-                match path.strip_prefix(&entry_dir) {
-                    Some(r) if !r.is_empty() => r.to_string(),
-                    _ => continue,
-                }
-            } else {
-                path.clone()
-            };
-            let dest = dest_root.join(&rel);
-            if let Some(parent) = dest.parent() {
-                std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-            }
-            std::fs::write(&dest, bytes)
-                .map_err(|e| format!("write {} failed: {}", dest.display(), e))?;
-            wrote_any = true;
-        }
-        if !wrote_any {
-            return Err(format!(
-                "package {}/{} contains no importable .op sources under its entry directory",
-                env.name, env.version
-            ));
-        }
-        installed.push(format!("{} {}", p.name, p.version));
-    }
-    installed.sort();
-    Ok(installed)
-}
-
-/// Remove a package's module directory (leftover hygiene for `operon remove`).
-pub fn remove_installed(root: &Path, name: &str) -> Result<(), String> {
-    let dir = root.join(MODULES_DIR).join(name);
-    if dir.exists() {
-        std::fs::remove_dir_all(&dir)
-            .map_err(|e| format!("cannot remove {}: {}", dir.display(), e))?;
-    }
-    Ok(())
-}
-
-/// Collect the project's publishable files (manifest + entry tree + docs).
-/// Rules: the manifest, README.md/LICENSE at the root, and every `.op` file
-/// under the entry's directory tree. Never: operon_modules/, target/, .git/,
-/// operon.lock (the consumer resolves their own graph).
-pub fn collect_package_files(
-    dir: &Path,
-    manifest: &Manifest,
-) -> Result<Vec<(String, Vec<u8>)>, String> {
-    let mut out: Vec<(String, Vec<u8>)> = Vec::new();
-    out.push((
-        "operon.toml".to_string(),
-        std::fs::read(dir.join("operon.toml")).map_err(|e| e.to_string())?,
-    ));
-    for doc in ["README.md", "LICENSE"] {
-        if let Ok(b) = std::fs::read(dir.join(doc)) {
-            out.push((doc.to_string(), b));
-        }
-    }
-    let entry_abs = dir.join(&manifest.entry);
-    let src_root = entry_abs
-        .parent()
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| dir.to_path_buf());
-    let mut stack = vec![src_root.clone()];
-    let mut seen = 0usize;
-    while let Some(d) = stack.pop() {
-        let entries = match std::fs::read_dir(&d) {
-            Ok(e) => e,
-            Err(_) => continue,
-        };
-        for e in entries.filter_map(|e| e.ok()) {
-            let p = e.path();
-            if p.is_dir() {
-                let name = p
-                    .file_name()
-                    .map(|s| s.to_string_lossy().to_string())
-                    .unwrap_or_default();
-                if name == MODULES_DIR || name == "target" || name == ".git" {
-                    continue;
-                }
-                stack.push(p);
-            } else if p.extension().map(|x| x == "op").unwrap_or(false) {
-                let rel = p
-                    .strip_prefix(dir)
-                    .map(|r| r.to_string_lossy().replace('\\', "/"))
-                    .unwrap_or_default();
-                let bytes = std::fs::read(&p).map_err(|e| e.to_string())?;
-                out.push((rel, bytes));
-                seen += 1;
-                if seen > 512 {
-                    return Err("package has more than 512 source files — refusing".into());
-                }
-            }
-        }
-    }
-    if !out.iter().any(|(p, _)| *p == manifest.entry) {
-        return Err(format!(
-            "entry '{}' not found under {}",
-            manifest.entry,
-            dir.display()
-        ));
-    }
-    Ok(out)
-}
-
-/// Build the publish envelope for a project directory.
-pub fn build_envelope(dir: &Path, manifest: &Manifest) -> Result<(Envelope, Vec<u8>), String> {
-    let files = collect_package_files(dir, manifest)?;
-    let env = Envelope {
-        name: manifest.name.clone(),
-        version: manifest.version.clone(),
-        description: manifest.description.clone(),
-        deps: manifest.deps.clone(),
-        manifest_src: manifest.to_toml(),
-        files,
-    };
-    let bytes = env.encode();
-    Ok((env, bytes))
-}
-
-// ---------------------------------------------------------------------------
-// project scaffolding templates (operon new)
-// ---------------------------------------------------------------------------
-
-pub const TEMPLATE_BIN: &str = "bin";
-pub const TEMPLATE_LIB: &str = "lib";
-
-pub fn template_files(template: &str, name: &str) -> Result<Vec<(String, String)>, String> {
-    match template {
-        TEMPLATE_BIN => Ok(vec![
-            (
-                "operon.toml".to_string(),
-                format!(
-                    "[package]\nname = \"{}\"\nversion = \"0.1.0\"\noperon-version = \">= 2.2\"\nauthors = []\nlicense = \"\"\ndescription = \"A new Operon project\"\nentry = \"src/main.op\"\n\n[dependencies]\n",
-                    name
-                ),
-            ),
-            (
-                "src/main.op".to_string(),
-                "#!/usr/bin/env operon\n# entry point - run with `operon run` from the project root\n\ngene main {\n    print(\"hello, Operon\\n\");\n    print(\"argv: \" + str(args()) + \"\\n\");\n    return 0;\n}\n".to_string(),
-            ),
-            (
-                "tests/main_test.op".to_string(),
-                "frame proof {\n    # project tests — run with `operon test`\n    assert(1 + 1 == 2, \"arithmetic holds\");\n}\n".to_string(),
-            ),
-            (
-                ".gitignore".to_string(),
-                "operon_modules/\ntarget/\n*.built.op\n".to_string(),
-            ),
-        ]),
-        TEMPLATE_LIB => Ok(vec![
-            (
-                "operon.toml".to_string(),
-                format!(
-                    "[package]\nname = \"{}\"\nversion = \"0.1.0\"\noperon-version = \">= 2.2\"\nauthors = []\nlicense = \"\"\ndescription = \"An Operon library\"\nentry = \"lib/{}.op\"\n\n[dependencies]\n",
-                    name, name
-                ),
-            ),
-            (
-                format!("lib/{}.op", name),
-                format!(
-                    "# {} - an Operon library\n\ngene hello(name) {{\n    return \"hello, \" + name;\n}}\n",
-                    name
-                ),
-            ),
-            (
-                "tests/lib_test.op".to_string(),
-                // `use lib/demo` resolves from the project cwd (SPEC §8
-                // relative-first order) so the template test runs green on a
-                // fresh checkout, before any registry round-trip
-                format!(
-                    "use lib/{}\n\nframe proof {{\n    assert({}.hello(\"world\") == \"hello, world\", \"hello\");\n}}\n",
-                    name, name
-                ),
-            ),
-            (
-                ".gitignore".to_string(),
-                "operon_modules/\ntarget/\n*.built.op\n".to_string(),
-            ),
-        ]),
-        other => Err(format!(
-            "unknown template '{}' (available: bin, lib)",
-            other
+/// Lookup over already-read registry text (URL registries are fetched
+/// once per command, then parsed here). Same last-match-wins rule.
+fn registry_lookup_text(text: &str, name: &str, src_label: &str) -> RegistryEntry {
+    let entries = parse_registry(text).unwrap_or_else(|e| die_pkg(&e));
+    let hits: Vec<&RegistryEntry> = entries.iter().filter(|e| e.name == name).collect();
+    match hits.last() {
+        Some(e) => (*e).clone(),
+        None => die_pkg(&format!(
+            "'{}' not in registry '{}' (searched with `operon add {}`)",
+            name, src_label, name
         )),
     }
 }
 
-/// Scaffold a new project; refuses to clobber a non-empty directory.
-pub fn scaffold(dir: &Path, template: &str, name: &str) -> Result<Vec<String>, String> {
-    if !valid_name(name) {
+/// ai/ecosystem-r3 (item 4): requirement-aware lookup over already-read
+/// registry text. Among the lines for `name` whose version parses AND
+/// satisfies `req`, the HIGHEST version wins (ties keep the later line —
+/// the last-match-wins convention, now version-aware). Entries without a
+/// parseable version never satisfy a requirement. No match = a hard error
+/// listing what IS available (a silent wrong-version install is the one
+/// thing this must never do).
+fn registry_lookup_req(text: &str, name: &str, req: &Req, src_label: &str) -> RegistryEntry {
+    let entries = parse_registry(text).unwrap_or_else(|e| die_pkg(&e));
+    let mut best: Option<(&RegistryEntry, SemVer)> = None;
+    for e in entries.iter().filter(|e| e.name == name) {
+        let v = match SemVer::parse(&e.version) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        if !req.matches(&v) {
+            continue;
+        }
+        let better = match &best {
+            None => true,
+            Some((_, bv)) => v > *bv,
+        };
+        if better {
+            best = Some((e, v));
+        }
+    }
+    match best {
+        Some((e, _)) => e.clone(),
+        None => {
+            let mut vers: Vec<String> = entries
+                .iter()
+                .filter(|e| e.name == name)
+                .map(|e| {
+                    if e.version.is_empty() {
+                        "(no version)".to_string()
+                    } else {
+                        e.version.clone()
+                    }
+                })
+                .collect();
+            vers.sort();
+            vers.dedup();
+            die_pkg(&format!(
+                "registry '{}': no version of '{}' satisfies '{}' (available: {})",
+                src_label,
+                name,
+                req.raw_str(),
+                if vers.is_empty() {
+                    "none".to_string()
+                } else {
+                    vers.join(", ")
+                }
+            ));
+        }
+    }
+}
+
+/// Shallow-clone `url` at `rev` (or HEAD when None) into `dest`; returns the
+/// resolved full rev. Uses the git CLI (no crates, by policy).
+pub fn git_checkout(url: &str, rev: Option<&str>, dest: &Path) -> Result<String, String> {
+    let _ = std::fs::remove_dir_all(dest);
+    let out = std::process::Command::new("git")
+        .args(["clone", "--quiet", url, &dest.to_string_lossy()])
+        .output()
+        .map_err(|e| format!("git clone failed: {} (is git installed?)", e))?;
+    if !out.status.success() {
         return Err(format!(
-            "project name '{}' is invalid (lowercase letters, digits, '-', '_', 2..64 chars, starts with a letter)",
+            "git clone failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    let rev_arg: [&str; 2] = ["checkout", rev.unwrap_or("HEAD")];
+    let out = std::process::Command::new("git")
+        .args(["-C", &dest.to_string_lossy()])
+        .args(rev_arg)
+        .output()
+        .map_err(|e| format!("git checkout failed: {}", e))?;
+    if !out.status.success() {
+        return Err(format!(
+            "git checkout '{}-' failed: {}",
+            rev.unwrap_or("HEAD"),
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    let out = std::process::Command::new("git")
+        .args(["-C", &dest.to_string_lossy(), "rev-parse", "HEAD"])
+        .output()
+        .map_err(|e| format!("git rev-parse failed: {}", e))?;
+    if !out.status.success() {
+        return Err("git rev-parse HEAD failed".to_string());
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// Read the dep's OWN manifest from its checkout (for transitive closure).
+pub fn manifest_in(dir: &Path) -> Option<Manifest> {
+    let text = std::fs::read_to_string(dir.join("operon.toml")).ok()?;
+    parse_manifest(&text).ok()
+}
+
+// ------------------------------------------------------------ CLI surface
+
+/// Populate the interpreter's lock_dirs from the nearest operon.lock
+/// (program dir first, then CWD). Missing lockfile = no roots (the
+/// standard resolution chain is untouched).
+pub fn apply_lock(interp: &mut crate::interp::Interp) {
+    let mut roots: Vec<PathBuf> = Vec::new();
+    if let Some(b) = &interp.base_dir {
+        roots.push(PathBuf::from(b).join("operon.lock"));
+    }
+    roots.push(PathBuf::from("operon.lock"));
+    for lock_path in roots {
+        if let Ok(text) = std::fs::read_to_string(&lock_path) {
+            match parse_lock(&text) {
+                Ok(entries) => {
+                    for (name, e) in entries {
+                        if let Some(dir) = cache_dir_for(&name, &e.rev) {
+                            interp
+                                .lock_dirs
+                                .push((name, dir.to_string_lossy().to_string()));
+                        }
+                    }
+                    return; // nearest lockfile wins
+                }
+                Err(m) => {
+                    interp.note(
+                        0,
+                        4,
+                        format!(
+                            "operon.lock at '{}' unreadable ({}); vendored deps ignored",
+                            lock_path.to_string_lossy(),
+                            m
+                        ),
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn die_pkg(msg: &str) -> ! {
+    eprintln!("operon mod: {}", msg);
+    // ast-grep-ignore: no-std-process-exit-in-core
+    std::process::exit(2);
+}
+
+fn read_manifest() -> Manifest {
+    let src = match std::fs::read_to_string("operon.toml") {
+        Ok(s) => s,
+        Err(_) => die_pkg(
+            "no operon.toml here, run `operon mod init` first (package metadata lives in operon.toml, never in .cell)",
+        ),
+    };
+    match parse_manifest(&src) {
+        Ok(m) => m,
+        Err(e) => die_pkg(&e),
+    }
+}
+
+fn write_manifest(m: &Manifest) {
+    std::fs::write("operon.toml", emit_manifest(m)).expect("write operon.toml");
+}
+
+fn read_or_new_lock() -> BTreeMap<String, LockEntry> {
+    match std::fs::read_to_string("operon.lock") {
+        Ok(text) => parse_lock(&text).unwrap_or_default(),
+        Err(_) => BTreeMap::new(),
+    }
+}
+
+/// Resolve `name` at `spec` into the vendored cache; returns the LockEntry.
+/// Deterministic: same rev + same bytes → same cache dir + same checksum.
+/// Two source classes: `git URL` (clone, shallow, rev-pinned) and
+/// `registry:NAME` (the W21-r1 registry chain; dir-sourced seed packages
+/// copy into the cache, git-sourced entries clone exactly as before).
+fn resolve_dep(name: &str, spec: &DepSpec, reg: Option<&str>) -> LockEntry {
+    if let Some(reg_name) = spec.git.strip_prefix("registry:") {
+        return resolve_registry_dep(name, reg_name, spec, reg);
+    }
+    let tmp = deps_cache_dir()
+        .unwrap_or_else(|| die_pkg("cannot locate the deps cache (set HOME or OPERON_DEPS)"))
+        .join("tmp-checkout");
+    let rev = match git_checkout(&spec.git, spec.rev.as_deref(), &tmp) {
+        Ok(r) => r,
+        Err(e) => die_pkg(&format!("resolving '{}': {}", name, e)),
+    };
+    let checksum = checkout_checksum(&tmp);
+    let dest = cache_dir_for(name, &rev).unwrap_or_else(|| die_pkg("cannot locate the deps cache"));
+    let _ = std::fs::remove_dir_all(&dest);
+    if let Some(parent) = dest.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+    std::fs::rename(&tmp, &dest).unwrap_or_else(|e| die_pkg(&format!("cache move failed: {}", e)));
+    LockEntry {
+        name: name.to_string(),
+        git: spec.git.clone(),
+        rev,
+        checksum,
+        version: String::new(),
+        req: String::new(),
+    }
+}
+
+/// Resolve a dep through the registry chain. When the dep carries a pinned
+/// rev (every lockfile-driven path), the registry MUST still carry that
+/// rev — a registry that moved on is a hard error, never a silent
+/// re-resolve (W23: the lockfile is the reproducibility contract, not a
+/// suggestion).
+fn resolve_registry_dep(
+    name: &str,
+    reg_name: &str,
+    spec: &DepSpec,
+    reg: Option<&str>,
+) -> LockEntry {
+    let pinned = spec.rev.as_deref();
+    // The verb's explicit --registry flag wins over the chain; without it
+    // the chain applies (env > manifest pin > bundled seed). Threading the
+    // override through here (not just the name lookup in `add`) is what
+    // makes `add NAME --registry F` actually VENDOR from F.
+    let src = registry_source(reg);
+    let text = registry_read(&src);
+    let entries = parse_registry(&text).unwrap_or_else(|e| die_pkg(&e));
+    let hits: Vec<&RegistryEntry> = entries.iter().filter(|e| e.name == reg_name).collect();
+    if hits.is_empty() {
+        die_pkg(&format!(
+            "'{}' not in registry '{}' (operon add {} would fail the same way)",
+            reg_name, src, reg_name
+        ));
+    }
+    let entry = match (&spec.version, pinned) {
+        // item 4: the requirement decides WHICH line the dep refers to.
+        // The honest multi-version index can carry several lines over one
+        // content rev (same tree, different version metadata), so a pinned
+        // rev alone cannot disambiguate — the requirement re-picks, and the
+        // pin is then verified against the pick (drift = hard error).
+        (Some(req), p) => {
+            let pick = registry_lookup_req(&text, reg_name, req, &src);
+            if let Some(p) = p {
+                if !(pick.rev == p || pick.rev.starts_with(p)) {
+                    die_pkg(&format!(
+                        "registry '{}' now resolves '{}' (requirement '{}') to rev {} but the project pins {} — re-add the dep (remove + `operon add {}@{}`) to move the pin",
+                        src,
+                        reg_name,
+                        req.raw_str(),
+                        &pick.rev[..pick.rev.len().min(12)],
+                        &p[..p.len().min(12)],
+                        reg_name,
+                        req.raw_str()
+                    ));
+                }
+            }
+            pick
+        }
+        (None, Some(p)) => hits
+            .iter()
+            .rev()
+            .find(|e| e.rev == p || e.rev.starts_with(p))
+            .map(|e| (*e).clone())
+            .unwrap_or_else(|| {
+                die_pkg(&format!(
+                    "registry '{}' no longer carries '{}' at rev {} (it moved on; run `operon update` to re-resolve, or restore the registry line)",
+                    src, reg_name, p
+                ))
+            }),
+        (None, None) => hits.last().map(|e| (*e).clone()).unwrap(),
+    };
+    // SECURITY (deny-by-default): a dir-sourced entry is a LOCAL-registry
+    // feature. Honoring a remote index's `dir` field would let a remote
+    // registry direct this machine to copy arbitrary local directories
+    // into the dep cache — a remote-controlled file copy. Remote
+    // registries publish git URLs, period.
+    if !entry.dir.is_empty() && (src.starts_with("http://") || src.starts_with("https://")) {
+        die_pkg(&format!(
+            "registry '{}' is remote but its entry for '{}' is dir-sourced; remote registries publish git URLs only (dir sources are a local-registry feature)",
+            src, reg_name
+        ));
+    }
+    let mut out = if entry.dir.is_empty() {
+        resolve_dep(
+            name,
+            &DepSpec {
+                git: entry.git.clone(),
+                rev: Some(entry.rev.clone()),
+                version: None,
+            },
+            None,
+        )
+    } else {
+        let d = std::path::PathBuf::from(&entry.dir);
+        if !d.is_dir() {
+            die_pkg(&format!(
+                "registry entry '{}' points at directory '{}' which is missing (re-materialize the registry or fix the index line)",
+                reg_name,
+                d.display()
+            ));
+        }
+        resolve_dir_dep(name, &d)
+    };
+    if !entry.sha256.is_empty() && out.checksum != entry.sha256 {
+        die_pkg(&format!(
+            "checksum mismatch for '{}' (registry published {}, vendored {}): the index and the package tree disagree, refusing to lock",
+            name, entry.sha256, out.checksum
+        ));
+    }
+    // the lock records WHERE the dep came from (registry:NAME), keeping
+    // the lockfile byte-stable across machines; rev+checksum pin the bytes,
+    // and item 4 records the resolved version + the requirement it answered
+    out.git = format!("registry:{}", reg_name);
+    out.version = entry.version.clone();
+    out.req = spec
+        .version
+        .as_ref()
+        .map(|r| r.raw_str().to_string())
+        .unwrap_or_default();
+    out
+}
+
+/// Resolve a directory-sourced package (seed registry, local dev
+/// registries): copy the tree into the vendored cache. The rev IS the
+/// content: `content-` + first 16 hex of the checksum, so the same bytes
+/// always land in the same cache dir on every machine. The copy is
+/// verified by re-checksumming the destination.
+fn resolve_dir_dep(name: &str, dir: &Path) -> LockEntry {
+    let checksum = checkout_checksum(dir);
+    let rev = format!("content-{}", &checksum[..checksum.len().min(16)]);
+    let dest = cache_dir_for(name, &rev).unwrap_or_else(|| die_pkg("cannot locate the deps cache"));
+    let _ = std::fs::remove_dir_all(&dest);
+    if let Some(parent) = dest.parent() {
+        std::fs::create_dir_all(parent)
+            .unwrap_or_else(|e| die_pkg(&format!("cache mkdir failed: {}", e)));
+    }
+    copy_tree(dir, &dest).unwrap_or_else(|e| die_pkg(&format!("cache copy failed: {}", e)));
+    let got = checkout_checksum(&dest);
+    if got != checksum {
+        die_pkg(&format!(
+            "vendored copy of '{}' does not match its source ({} != {}): refusing to lock",
+            name, got, checksum
+        ));
+    }
+    LockEntry {
+        name: name.to_string(),
+        git: format!("registry:{}", name),
+        rev,
+        checksum: got,
+        version: String::new(),
+        req: String::new(),
+    }
+}
+
+/// Recursively copy a package tree (files + dirs, `.git` skipped). Used
+/// by the dir-source resolution path; byte-exact by construction (the
+/// caller re-checksums the destination).
+fn copy_tree(src: &Path, dst: &Path) -> Result<(), String> {
+    if src.is_dir() {
+        std::fs::create_dir_all(dst).map_err(|e| format!("mkdir {}: {}", dst.display(), e))?;
+        let entries =
+            std::fs::read_dir(src).map_err(|e| format!("readdir {}: {}", src.display(), e))?;
+        for entry in entries {
+            let entry = entry.map_err(|e| format!("dir entry: {}", e))?;
+            let name = entry.file_name();
+            let name = name.to_string_lossy().to_string();
+            if name == ".git" || name == ".gitignore" {
+                continue;
+            }
+            let s = src.join(&name);
+            let d = dst.join(&name);
+            if s.is_dir() {
+                copy_tree(&s, &d)?;
+            } else {
+                std::fs::copy(&s, &d).map_err(|e| format!("copy {}: {}", s.display(), e))?;
+            }
+        }
+        Ok(())
+    } else {
+        std::fs::copy(src, dst)
+            .map(|_| ())
+            .map_err(|e| format!("copy {}: {}", src.display(), e))
+    }
+}
+
+/// Walk the dependency closure: the manifest's deps plus every dep's own
+/// operon.toml deps, transitively, cycle-safe, SORTED name order so the
+/// lockfile is byte-identical on every machine.
+fn resolve_closure(m: &Manifest, reg: Option<&str>) -> BTreeMap<String, LockEntry> {
+    let mut out: BTreeMap<String, LockEntry> = BTreeMap::new();
+    let mut queue: Vec<(String, DepSpec)> = m.deps.clone();
+    queue.sort_by(|a, b| a.0.cmp(&b.0));
+    let mut seen: Vec<String> = Vec::new();
+    while let Some((name, spec)) = queue.pop() {
+        if seen.contains(&name) {
+            continue;
+        }
+        seen.push(name.clone());
+        let entry = resolve_dep(&name, &spec, reg);
+        if let Some(dir) = cache_dir_for(&name, &entry.rev) {
+            if let Some(sub) = manifest_in(&dir) {
+                let mut subdeps = sub.deps;
+                subdeps.sort_by(|a, b| a.0.cmp(&b.0));
+                queue.extend(subdeps);
+            }
+        }
+        out.insert(name, entry);
+    }
+    out
+}
+
+fn check_locked(m: &Manifest) {
+    // W23 --locked: manifest ↔ lockfile drift is a hard failure (CI pins it).
+    // The lockfile legitimately contains TRANSITIVE deps (a dep's own
+    // operon.toml [deps]), those are checked against the vendored
+    // manifests, not the app manifest, so the stale rule never false-positives.
+    let lock_text = match std::fs::read_to_string("operon.lock") {
+        Ok(t) => t,
+        Err(_) => die_pkg("--locked: operon.lock missing (run `operon mod install` first)"),
+    };
+    let lock = parse_lock(&lock_text).unwrap_or_else(|e| die_pkg(&e));
+    for (name, spec) in &m.deps {
+        match lock.get(name) {
+            None => die_pkg(&format!(
+                "--locked: dep '{}' missing from operon.lock",
+                name
+            )),
+            Some(e) => {
+                if e.git != spec.git {
+                    die_pkg(&format!(
+                        "--locked: dep '{}' git drift (lock: {})",
+                        name, e.git
+                    ));
+                }
+                if let Some(r) = &spec.rev {
+                    if !e.rev.starts_with(r) {
+                        die_pkg(&format!(
+                            "--locked: dep '{}' rev drift (lock: {})",
+                            name, e.rev
+                        ));
+                    }
+                }
+                // ai/ecosystem-r3 (item 4): a recorded requirement must still
+                // accept the pinned version — the lock is a contract, and the
+                // requirement is part of it.
+                if let Some(req) = &spec.version {
+                    if e.version.is_empty() {
+                        die_pkg(&format!(
+                            "--locked: dep '{}' has a version requirement but its lock entry predates version pinning (re-run `operon update`)",
+                            name
+                        ));
+                    }
+                    match SemVer::parse(&e.version) {
+                        Ok(v) if req.matches(&v) => {}
+                        Ok(v) => die_pkg(&format!(
+                            "--locked: dep '{}' locked at {} which does not satisfy '{}'",
+                            name,
+                            v,
+                            req.raw_str()
+                        )),
+                        Err(_) => die_pkg(&format!(
+                            "--locked: dep '{}' lock version '{}' is not a valid X.Y.Z version",
+                            name, e.version
+                        )),
+                    }
+                }
+            }
+        }
+    }
+    // transitive names: every vendored manifest's own [deps] justifies lock
+    // entries (alpha's manifest lists beta, so beta is legal in the lock).
+    // Collect from ALL vendored manifests, direct deps included, not just
+    // the non-direct entries.
+    let mut transitive: Vec<String> = Vec::new();
+    for (name, e) in &lock {
+        if let Some(dir) = cache_dir_for(name, &e.rev) {
+            if let Some(sub) = manifest_in(&dir) {
+                for (sn, _sd) in &sub.deps {
+                    transitive.push(sn.clone());
+                }
+            }
+        }
+    }
+    for name in lock.keys() {
+        if m.deps.iter().any(|(n, _)| n == name) {
+            continue;
+        }
+        if !transitive.contains(name) {
+            die_pkg(&format!("--locked: lockfile has stale dep '{}'", name));
+        }
+    }
+}
+
+/// The `operon mod <subcommand>` group (W19/W20).
+pub fn mod_command(rest: &[String]) -> ! {
+    let sub = match rest.first() {
+        Some(s) => s.as_str(),
+        None => die_pkg(
+            "mod needs a subcommand: init | add | remove | update | install | tree | verify | search",
+        ),
+    };
+    match sub {
+        "init" => {
+            let name = rest.get(1).cloned().unwrap_or_else(|| {
+                std::env::current_dir()
+                    .ok()
+                    .and_then(|d| d.file_name().map(|s| s.to_string_lossy().to_string()))
+                    .unwrap_or_else(|| "my-package".to_string())
+            });
+            if std::path::Path::new("operon.toml").exists() {
+                die_pkg("operon.toml already exists");
+            }
+            let m = Manifest {
+                name: name.clone(),
+                version: "0.1.0".to_string(),
+                operon_version: env!("CARGO_PKG_VERSION").to_string(),
+                registry: String::new(),
+                description: String::new(),
+                deps: Vec::new(),
+            };
+            write_manifest(&m);
+            println!("initialized package '{}' (operon.toml)", name);
+        }
+        "add" => {
+            let mut m = read_manifest();
+            let target = rest
+                .get(1)
+                .cloned()
+                .unwrap_or_else(|| die_pkg("add needs a git URL or a registry name"));
+            // ai/ecosystem-r3 (item 4): `add NAME@REQ` — the requirement
+            // selects the highest registry version satisfying it. The split
+            // applies ONLY when the part before '@' is a legal package name,
+            // so git URLs carrying '@' (user@host) stay URLs.
+            let (pkg_target, req_txt) = match target.split_once('@') {
+                Some((b, r))
+                    if valid_pkg_name(b)
+                        && !b.contains('/')
+                        && !b.contains(':')
+                        && !b.contains('.') =>
+                {
+                    (b.to_string(), Some(r.to_string()))
+                }
+                _ => (target.clone(), None),
+            };
+            let req = req_txt.as_deref().map(|r| {
+                Req::parse(r)
+                    .unwrap_or_else(|e| die_pkg(&format!("version requirement '{}': {}", r, e)))
+            });
+            // W21: `add NAME --registry FILE` resolves NAME through the
+            // static git index first; everything else behaves like before.
+            let mut reg_path: Option<String> = None;
+            {
+                let mut i = 2;
+                while i < rest.len() {
+                    if rest[i] == "--registry" {
+                        reg_path = Some(rest.get(i + 1).cloned().unwrap_or_else(|| {
+                            die_pkg("--registry needs a file path")
+                        }));
+                    }
+                    i += 1;
+                }
+            }
+            let url;
+            let mut name;
+            let mut rev: Option<String> = None;
+            // true only when the dep actually came through the registry
+            // chain by NAME; the reproducibility pin below must not fire
+            // for plain git-URL adds. Declared out here: the pin runs after
+            // the flag loop, outside the resolve block.
+            let mut via_registry = false;
+            {
+                // W21-r1: `add NAME` resolves through the registry chain
+                // (explicit --registry, OPERON_REGISTRY, the manifest's
+                // [registry] path, then the bundled seed index). A bare
+                // git URL is still accepted: anything that is not a
+                // legal package name is treated as a URL.
+                let looks_like_name = valid_pkg_name(&pkg_target)
+                    && !pkg_target.contains('/')
+                    && !pkg_target.contains(':')
+                    && !pkg_target.contains('.');
+                // via_registry is set to true exactly when the dep came
+                // through the registry chain by NAME (the branch below);
+                // git-URL adds and no-match falls leave it false.
+                if looks_like_name || reg_path.is_some() {
+                    if looks_like_name {
+                        via_registry = true;
+                    }
+                    let src = registry_source(reg_path.as_deref());
+                    let text = registry_read(&src);
+                    // item 4: a requirement picks the highest satisfying
+                    // version; no requirement keeps the last-wins rule
+                    let entry = match &req {
+                        Some(r) => registry_lookup_req(&text, &pkg_target, r, &src),
+                        None => registry_lookup_text(&text, &pkg_target, &src),
+                    };
+                    name = entry.name.clone();
+                    url = format!("registry:{}", entry.name);
+                    rev = Some(entry.rev.clone());
+                    let source_note = if entry.dir.is_empty() {
+                        "git"
+                    } else {
+                        "dir"
+                    };
+                    println!(
+                        "resolved '{}' {} via registry {} ({} source, checksum {})",
+                        name,
+                        entry.version,
+                        src,
+                        source_note,
+                        &entry.sha256[..entry.sha256.len().min(12)]
+                    );
+                } else {
+                    // name: derived from the URL's basename, or --as NAME
+                    name = target
+                        .trim_end_matches('/')
+                        .rsplit('/')
+                        .next()
+                        .unwrap_or("dep")
+                        .trim_end_matches(".git")
+                        .to_string();
+                    url = target.clone();
+                }
+            }
+            let mut i = 2;
+            while i < rest.len() {
+                match rest[i].as_str() {
+                    "--registry" => {
+                        i += 1; // consumed above
+                    }
+                    "--as" => {
+                        i += 1;
+                        name = rest
+                            .get(i)
+                            .cloned()
+                            .unwrap_or_else(|| die_pkg("--as needs a name"));
+                    }
+                    "--rev" => {
+                        i += 1;
+                        rev = Some(
+                            rest.get(i)
+                                .cloned()
+                                .unwrap_or_else(|| die_pkg("--rev needs a revision")),
+                        );
+                    }
+                    other => die_pkg(&format!("unknown flag '{}'", other)),
+                }
+                i += 1;
+            }
+            if m.deps.iter().any(|(n, _)| n == &name) {
+                die_pkg(&format!(
+                    "dep '{}' already present (remove it first, or add again with @req to move the requirement)",
+                    name
+                ));
+            }
+            m.deps.push((name.clone(), DepSpec { git: url, rev, version: req }));
+            // Reproducibility contract: a dep resolved by NAME through an
+            // explicit --registry can only EVER re-resolve through that
+            // registry (operon install / update / CI re-resolve). When the
+            // project has no [registry] pin yet, record it; a conflicting
+            // pin is a hard error, never a silent re-target.
+            if via_registry {
+                if let Some(rp) = &reg_path {
+                    if m.registry.is_empty() {
+                        m.registry = rp.clone();
+                        println!("registry pinned in operon.toml: {}", rp);
+                    } else if m.registry != *rp {
+                        die_pkg(&format!(
+                            "project pins registry '{}' in operon.toml but --registry '{}' was passed; reconcile the two (one project, one registry)",
+                            m.registry, rp
+                        ));
+                    }
+                }
+            }
+            let lock = resolve_closure(&m, reg_path.as_deref());
+            write_manifest(&m);
+            std::fs::write("operon.lock", emit_lock(&lock)).expect("write operon.lock");
+            println!("added '{}' ({} dep(s) locked)", name, lock.len());
+        }
+        "remove" => {
+            let mut m = read_manifest();
+            let name = rest
+                .get(1)
+                .cloned()
+                .unwrap_or_else(|| die_pkg("remove needs a package name"));
+            let before = m.deps.len();
+            m.deps.retain(|(n, _)| n != &name);
+            if m.deps.len() == before {
+                die_pkg(&format!("dep '{}' not in operon.toml", name));
+            }
+            write_manifest(&m);
+            let lock = read_or_new_lock();
+            let mut lock = lock;
+            lock.remove(&name);
+            std::fs::write("operon.lock", emit_lock(&lock)).expect("write operon.lock");
+            println!("removed '{}'", name);
+        }
+        "update" => {
+            let m = read_manifest();
+            let mut reg_path: Option<String> = None;
+            {
+                let mut i = 1;
+                while i < rest.len() {
+                    if rest[i] == "--registry" {
+                        reg_path = Some(
+                            rest.get(i + 1)
+                                .cloned()
+                                .unwrap_or_else(|| die_pkg("--registry needs a file path")),
+                        );
+                    }
+                    i += 1;
+                }
+            }
+            let lock = resolve_closure(&m, reg_path.as_deref());
+            std::fs::write("operon.lock", emit_lock(&lock)).expect("write operon.lock");
+            println!("re-resolved {} dep(s)", lock.len());
+        }
+        "install" => {
+            let m = read_manifest();
+            let existing = read_or_new_lock();
+            let mut reg_path: Option<String> = None;
+            {
+                let mut i = 1;
+                while i < rest.len() {
+                    if rest[i] == "--registry" {
+                        reg_path = Some(
+                            rest.get(i + 1)
+                                .cloned()
+                                .unwrap_or_else(|| die_pkg("--registry needs a file path")),
+                        );
+                    }
+                    i += 1;
+                }
+            }
+            // Install from the lock when it agrees with the manifest (the
+            // offline path); resolve anything missing, then re-emit.
+            let mut lock = existing;
+            for (name, spec) in &m.deps {
+                if !lock.contains_key(name) {
+                    let e = resolve_dep(name, spec, reg_path.as_deref());
+                    lock.insert(name.clone(), e);
+                }
+            }
+            // materialize every entry into the cache (no-op when warm)
+            let missing: Vec<(String, DepSpec)> = lock
+                .iter()
+                .filter(|(name, e)| {
+                    !cache_dir_for(name, &e.rev)
+                        .map(|d| d.is_dir())
+                        .unwrap_or(false)
+                })
+                .map(|(name, e)| {
+                    (
+                        name.clone(),
+                        DepSpec {
+                            git: e.git.clone(),
+                            rev: Some(e.rev.clone()),
+                            version: None,
+                        },
+                    )
+                })
+                .collect();
+            for (name, spec) in missing {
+                let fresh = resolve_dep(&name, &spec, reg_path.as_deref());
+                lock.insert(name, fresh);
+            }
+            std::fs::write("operon.lock", emit_lock(&lock)).expect("write operon.lock");
+            println!("installed {} dep(s)", lock.len());
+        }
+        "publish" => {
+            // W21: append this package to a static registry file as one
+            // JSON line. Requires: a git repo (for the HEAD rev), a git
+            // URL (--url or the 'origin' remote), and a WRITABLE registry
+            // target (--registry FILE, OPERON_REGISTRY, or the manifest's
+            // [registry] path — the bundled seed index is not publishable,
+            // it is rebuilt from embedded bytes on toolchain upgrade, and
+            // a remote index URL has no append semantics over HTTP).
+            let m = read_manifest();
+            let mut reg_path: Option<String> = None;
+            {
+                let mut i = 1;
+                while i < rest.len() {
+                    if rest[i] == "--registry" {
+                        reg_path = Some(
+                            rest.get(i + 1)
+                                .cloned()
+                                .unwrap_or_else(|| die_pkg("--registry needs a file path")),
+                        );
+                    }
+                    i += 1;
+                }
+            }
+            let reg_path = match reg_path {
+                Some(r) => r,
+                None => {
+                    let env_reg =
+                        std::env::var("OPERON_REGISTRY").ok().filter(|s| !s.trim().is_empty());
+                    let man_reg = manifest_in(Path::new("."))
+                        .map(|mm| mm.registry)
+                        .filter(|s| !s.is_empty());
+                    match env_reg.or(man_reg) {
+                        Some(s) => s,
+                        None => die_pkg(
+                            "publish needs --registry FILE, OPERON_REGISTRY, or [registry] path in operon.toml (the bundled seed index is not publishable)",
+                        ),
+                    }
+                }
+            };
+            if reg_path.starts_with("http://") || reg_path.starts_with("https://") {
+                die_pkg(
+                    "publish cannot append to a remote index URL — point --registry at a writable checkout of the registry file (git is the transport)",
+                );
+            }
+            let mut url: Option<String> = None;
+            let mut desc = String::new();
+            let mut i = 1;
+            while i < rest.len() {
+                match rest[i].as_str() {
+                    "--registry" => {
+                        i += 1;
+                    }
+                    "--url" => {
+                        i += 1;
+                        url = Some(
+                            rest.get(i)
+                                .cloned()
+                                .unwrap_or_else(|| die_pkg("--url needs a git URL")),
+                        );
+                    }
+                    "--desc" => {
+                        i += 1;
+                        desc = rest
+                            .get(i)
+                            .cloned()
+                            .unwrap_or_else(|| die_pkg("--desc needs text"));
+                    }
+                    other => die_pkg(&format!("unknown flag '{}'", other)),
+                }
+                i += 1;
+            }
+            if url.is_none() {
+                let out = std::process::Command::new("git")
+                    .args(["remote", "get-url", "origin"])
+                    .output();
+                if let Ok(o) = out {
+                    if o.status.success() {
+                        url = Some(String::from_utf8_lossy(&o.stdout).trim().to_string());
+                    }
+                }
+            }
+            let url = match url {
+                Some(u) => u,
+                None => die_pkg("publish needs --url or a git 'origin' remote"),
+            };
+            let out = std::process::Command::new("git")
+                .args(["rev-parse", "HEAD"])
+                .output();
+            let rev = match out {
+                Ok(o) if o.status.success() => {
+                    String::from_utf8_lossy(&o.stdout).trim().to_string()
+                }
+                _ => die_pkg("publish needs a git repo with at least one commit"),
+            };
+            let checksum = checkout_checksum(std::path::Path::new("."));
+            let line = format!(
+                "{{\"name\": \"{}\", \"version\": \"{}\", \"git\": \"{}\", \"rev\": \"{}\", \"sha256\": \"{}\", \"description\": \"{}\"}}",
+                json_escape(&m.name),
+                json_escape(&m.version),
+                json_escape(&url),
+                json_escape(&rev),
+                json_escape(&checksum),
+                json_escape(&desc)
+            );
+            // idempotence: the same (name, version, rev) is not appended twice
+            if let Ok(existing) = std::fs::read_to_string(&reg_path) {
+                if let Ok(entries) = parse_registry(&existing) {
+                    if entries
+                        .iter()
+                        .any(|e| e.name == m.name && e.version == m.version && e.rev == rev)
+                    {
+                        println!(
+                            "{} {} already in registry at {}",
+                            m.name, m.version, &rev[..rev.len().min(7)]
+                        );
+                        // ast-grep-ignore: no-std-process-exit-in-core
+                        std::process::exit(0);
+                    }
+                }
+            }
+            use std::io::Write;
+            let mut f = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&reg_path)
+                .unwrap_or_else(|e| die_pkg(&format!("cannot open registry '{}': {}", reg_path, e)));
+            writeln!(f, "{}", line)
+                .unwrap_or_else(|e| die_pkg(&format!("cannot write registry: {}", e)));
+            println!(
+                "published {} {} ({} rev {})",
+                m.name,
+                m.version,
+                url,
+                &rev[..rev.len().min(7)]
+            );
+        }
+        "tree" => {
+            let m = read_manifest();
+            let lock = read_or_new_lock();
+            println!("{} {}", m.name, m.version);
+            print_tree(&m, &lock, 1, &mut Vec::new());
+        }
+        "verify" => {
+            // W23 honesty probe: every lock entry's vendored bytes must match
+            // its checksum (detects a corrupted/partial cache).
+            let lock = read_or_new_lock();
+            let mut bad = 0usize;
+            for (name, e) in &lock {
+                match cache_dir_for(name, &e.rev) {
+                    Some(d) if d.is_dir() => {
+                        let got = checkout_checksum(&d);
+                        if got != e.checksum {
+                            println!("MISMATCH {} ({} != {})", name, got, e.checksum);
+                            bad += 1;
+                        } else {
+                            println!("ok {}", name);
+                        }
+                    }
+                    _ => {
+                        println!("MISSING {} (not installed)", name);
+                        bad += 1;
+                    }
+                }
+            }
+            if bad > 0 {
+                // ast-grep-ignore: no-std-process-exit-in-core
+                std::process::exit(1);
+            }
+        }
+        "search" => {
+            // ai/ecosystem-r2 (W19 item 3, owner's lane order): search the
+            // registry chain exactly the way `add` resolves it — same
+            // source resolution (flag > env > manifest > bundled seed),
+            // same fetch (file or curl for http(s)), same line parser.
+            // A query is a case-insensitive substring over name and
+            // description; empty query lists the registry. The LAST line
+            // per name wins, matching what the resolver would install.
+            let mut query = String::new();
+            let mut reg_path: Option<String> = None;
+            {
+                let mut i = 1;
+                while i < rest.len() {
+                    match rest[i].as_str() {
+                        "--registry" => {
+                            reg_path = Some(
+                                rest.get(i + 1).cloned().unwrap_or_else(|| {
+                                    die_pkg("--registry needs a file path or URL")
+                                }),
+                            );
+                            i += 2;
+                        }
+                        other => {
+                            if other.starts_with('-') {
+                                die_pkg(&format!("search: unknown flag '{}'", other));
+                            }
+                            if !query.is_empty() {
+                                die_pkg("search takes one query (name or description substring)");
+                            }
+                            query = other.to_string();
+                            i += 1;
+                        }
+                    }
+                }
+            }
+            let src = registry_source(reg_path.as_deref());
+            let text = registry_read(&src);
+            let entries = parse_registry(&text).unwrap_or_else(|e| die_pkg(&e));
+            let mut latest: std::collections::BTreeMap<String, &RegistryEntry> =
+                std::collections::BTreeMap::new();
+            for e in &entries {
+                latest.insert(e.name.clone(), e);
+            }
+            let q = query.to_lowercase();
+            let hits: Vec<&RegistryEntry> = latest
+                .into_values()
+                .filter(|e| {
+                    q.is_empty()
+                        || e.name.to_lowercase().contains(&q)
+                        || e.description.to_lowercase().contains(&q)
+                })
+                .collect();
+            if hits.is_empty() {
+                println!("no packages matching '{}' in {}", query, src);
+            } else {
+                for e in hits {
+                    println!("{} {}  {}", e.name, e.version, e.description);
+                }
+            }
+        }
+        other => die_pkg(&format!(
+            "unknown subcommand '{}' (init | add | remove | update | install | tree | verify | publish | search)",
+            other
+        )),
+    }
+    // ast-grep-ignore: no-std-process-exit-in-core
+    std::process::exit(0);
+}
+
+fn print_tree(
+    m: &Manifest,
+    lock: &BTreeMap<String, LockEntry>,
+    depth: usize,
+    seen: &mut Vec<String>,
+) {
+    let mut names: Vec<&String> = m.deps.iter().map(|(n, _)| n).collect();
+    names.sort();
+    names.dedup();
+    for n in names {
+        let pad = "  ".repeat(depth);
+        match lock.get(n) {
+            Some(e) => {
+                if seen.contains(n) {
+                    println!("{}{} {} (…)", pad, n, &e.rev[..e.rev.len().min(7)]);
+                    continue;
+                }
+                println!("{}{} {} {}", pad, n, &e.rev[..e.rev.len().min(7)], e.git);
+                seen.push(n.clone());
+                if let Some(dir) = cache_dir_for(n, &e.rev) {
+                    if let Some(sub) = manifest_in(&dir) {
+                        print_tree(&sub, lock, depth + 1, seen);
+                    }
+                }
+            }
+            None => println!("{}{} (unresolved, run operon mod install)", pad, n),
+        }
+    }
+}
+
+/// W23 `--locked`: verify the current operon.toml against operon.lock and
+/// die on drift (missing dep, changed URL, stale lock line). A pinned CI
+/// run refuses to execute against an unpinned dependency set.
+pub fn check_locked_manifest() {
+    let m = read_manifest();
+    check_locked(&m);
+}
+
+// ------------------------------------------------------- W21-r1: the chain
+
+/// The seed package table: embedded at compile time, materialized under
+/// the registry home on first use. Embedded strings mean `operon add
+/// http` works offline on a fresh machine with zero network — the
+/// mainstream first-run experience, byte-identical everywhere.
+struct SeedPkg {
+    name: &'static str,
+    version: &'static str,
+    description: &'static str,
+    files: &'static [(&'static str, &'static str)],
+}
+
+const SEED_PACKAGES: &[SeedPkg] = &[
+    SeedPkg {
+        name: "http",
+        version: "0.1.0",
+        description: "HTTP envelope toolkit: request/response, headers, query, cookies, URL join",
+        files: &[
+            (
+                "operon.toml",
+                include_str!("../registry/packages/http/operon.toml"),
+            ),
+            ("http.op", include_str!("../registry/packages/http/http.op")),
+            (
+                "test_http.op",
+                include_str!("../registry/packages/http/test_http.op"),
+            ),
+        ],
+    },
+    SeedPkg {
+        name: "json",
+        version: "0.1.0",
+        description:
+            "JSON toolkit: canonical form, RFC 6901 pointers, schema-lite, JSON Lines, diff",
+        files: &[
+            (
+                "operon.toml",
+                include_str!("../registry/packages/json/operon.toml"),
+            ),
+            ("json.op", include_str!("../registry/packages/json/json.op")),
+            (
+                "test_json.op",
+                include_str!("../registry/packages/json/test_json.op"),
+            ),
+        ],
+    },
+    SeedPkg {
+        name: "postgres",
+        version: "0.1.0",
+        description:
+            "PostgreSQL text layer: DSN parse/build, quoting, placeholders, arrays, LIMIT guard",
+        files: &[
+            (
+                "operon.toml",
+                include_str!("../registry/packages/postgres/operon.toml"),
+            ),
+            (
+                "postgres.op",
+                include_str!("../registry/packages/postgres/postgres.op"),
+            ),
+            (
+                "test_postgres.op",
+                include_str!("../registry/packages/postgres/test_postgres.op"),
+            ),
+        ],
+    },
+    SeedPkg {
+        name: "web",
+        version: "0.1.0",
+        description: "Routing layer: :param/*splat router, request envelopes, forms, responses",
+        files: &[
+            (
+                "operon.toml",
+                include_str!("../registry/packages/web/operon.toml"),
+            ),
+            ("web.op", include_str!("../registry/packages/web/web.op")),
+            (
+                "test_web.op",
+                include_str!("../registry/packages/web/test_web.op"),
+            ),
+        ],
+    },
+];
+
+/// Digest over the whole embedded seed table (names + every file's
+/// bytes, in table order). The registry marker stores this: when the
+/// toolchain's seed changes, the digest changes, the fast path misses,
+/// and the registry rebuilds from the new embedded bytes.
+fn seed_digest() -> String {
+    let mut buf: Vec<u8> = Vec::new();
+    for pkg in SEED_PACKAGES {
+        buf.extend_from_slice(pkg.name.as_bytes());
+        buf.extend_from_slice(pkg.version.as_bytes());
+        buf.extend_from_slice(pkg.description.as_bytes());
+        for (n, b) in pkg.files {
+            buf.extend_from_slice(n.as_bytes());
+            buf.extend_from_slice(b.as_bytes());
+        }
+    }
+    sha256_hex(&buf)
+}
+
+/// The registry home: `OPERON_REGISTRY_HOME` or `~/.operon/registry`.
+pub fn registry_home() -> Option<PathBuf> {
+    if let Ok(d) = std::env::var("OPERON_REGISTRY_HOME") {
+        if !d.is_empty() {
+            return Some(PathBuf::from(d));
+        }
+    }
+    std::env::var("HOME")
+        .ok()
+        .map(|h| PathBuf::from(h).join(".operon").join("registry"))
+}
+
+/// Materialize the bundled seed registry (idempotent, self-verifying).
+/// Returns the index path. The packages/ tree is rebuilt whenever the
+/// marker does not match the current binary's seed content, so `operon
+/// add http` after an upgrade serves the NEW http, never a stale copy.
+fn materialize_seed() -> String {
+    let home = registry_home().unwrap_or_else(|| {
+        die_pkg("cannot locate the registry home (set HOME or OPERON_REGISTRY_HOME)")
+    });
+    let index = home.join("index.jsonl");
+    let marker = home.join("seed.sha256");
+    // fast path: already materialized AND the marker matches THIS binary's
+    // embedded seed content (a toolchain upgrade rebuilds; stale packages
+    // are never served after an upgrade)
+    if index.is_file() && marker.is_file() {
+        if let Ok(want) = std::fs::read_to_string(&marker) {
+            if want.trim() == seed_digest() {
+                let mut fresh = true;
+                for pkg in SEED_PACKAGES {
+                    let dir = home.join("packages").join(pkg.name);
+                    if !dir.is_dir() || checkout_checksum(&dir).is_empty() {
+                        fresh = false;
+                        break;
+                    }
+                }
+                if fresh {
+                    return index.to_string_lossy().to_string();
+                }
+            }
+        }
+    }
+    // rebuild: packages from embedded bytes, index from the written bytes
+    std::fs::create_dir_all(home.join("packages"))
+        .unwrap_or_else(|e| die_pkg(&format!("registry mkdir failed: {}", e)));
+    let mut lines = vec![
+        "# operon seed registry (W21-r1).".to_string(),
+        "# Materialized from the toolchain's embedded packages on first use;".to_string(),
+        "# every line pins rev + sha256 and a dir source under packages/.".to_string(),
+        "# Append your own lines (or point OPERON_REGISTRY at your own index)".to_string(),
+        "# to grow beyond the seed. LAST matching line for a name wins.".to_string(),
+    ];
+    for pkg in SEED_PACKAGES {
+        let dir = home.join("packages").join(pkg.name);
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir)
+            .unwrap_or_else(|e| die_pkg(&format!("package mkdir failed: {}", e)));
+        for (name, body) in pkg.files {
+            std::fs::write(dir.join(name), body)
+                .unwrap_or_else(|e| die_pkg(&format!("seed write {} failed: {}", name, e)));
+        }
+        let sha = checkout_checksum(&dir);
+        lines.push(format!(
+            "{{\"name\": \"{}\", \"version\": \"{}\", \"git\": \"seed:{}\", \"rev\": \"content-{}\", \"sha256\": \"{}\", \"dir\": \"{}\", \"description\": \"{}\"}}",
+            pkg.name,
+            pkg.version,
+            pkg.name,
+            &sha[..sha.len().min(16)],
+            sha,
+            json_escape(&dir.to_string_lossy()),
+            json_escape(pkg.description),
+        ));
+    }
+    let body = lines.join("\n") + "\n";
+    std::fs::write(&index, &body)
+        .unwrap_or_else(|e| die_pkg(&format!("index write failed: {}", e)));
+    // the marker records the digest of the embedded seed content: the
+    // next binary with different seed bytes rebuilds the registry
+    let _ = std::fs::write(&marker, seed_digest());
+    index.to_string_lossy().to_string()
+}
+
+/// The registry resolution chain (W21-r1). Order: explicit --registry,
+/// OPERON_REGISTRY env, the project manifest's [registry] path, and
+/// finally the bundled seed index (materialized on first use). The first
+/// source that is SET wins — a project can pin its own registry even
+/// when the env var is exported, by... no: env beats manifest (an
+/// explicit machine-level override should win over a checked-in file),
+/// explicit beats both.
+fn registry_source(explicit: Option<&str>) -> String {
+    if let Some(e) = explicit {
+        if !e.is_empty() {
+            return e.to_string();
+        }
+    }
+    if let Ok(v) = std::env::var("OPERON_REGISTRY") {
+        if !v.trim().is_empty() {
+            return v.trim().to_string();
+        }
+    }
+    if let Some(m) = manifest_in(Path::new(".")) {
+        if !m.registry.is_empty() {
+            return m.registry;
+        }
+    }
+    materialize_seed()
+}
+
+/// Read a registry source: a local file path, or an http(s):// index
+/// fetched with curl (the same trust class as the git CLI this toolchain
+/// already shells out to; see docs/specs/REGISTRY.md §5 for the threat
+/// note, §9 for the hosted tier).
+fn registry_read(src: &str) -> String {
+    if src.starts_with("http://") || src.starts_with("https://") {
+        let mut cmd = std::process::Command::new("curl");
+        cmd.args(["-sSL", "--max-time", "30", src]);
+        // ai/ecosystem-r3 (item 10 hardening): private-CA registries. curl
+        // verifies certificates by default and fails closed; this knob only
+        // ADDS a trusted root for self-hosted registries, it never weakens
+        // verification (no -k anywhere, by policy).
+        if let Ok(ca) = std::env::var("OPERON_CA_BUNDLE") {
+            let ca = ca.trim().to_string();
+            if !ca.is_empty() {
+                cmd.arg("--cacert").arg(&ca);
+            }
+        }
+        let out = cmd.output();
+        return match out {
+            Ok(o) if o.status.success() => {
+                let body = String::from_utf8_lossy(&o.stdout).to_string();
+                if body.trim().is_empty() {
+                    die_pkg(&format!(
+                        "registry '{}': fetched an empty index (wrong URL? server down?)",
+                        src
+                    ));
+                }
+                body
+            }
+            Ok(o) => die_pkg(&format!(
+                "registry '{}': curl exited {} ({} bytes)",
+                src,
+                o.status,
+                o.stdout.len()
+            )),
+            Err(e) => die_pkg(&format!(
+                "registry '{}': curl unavailable ({}) — install curl or use a file registry",
+                src, e
+            )),
+        };
+    }
+    std::fs::read_to_string(src)
+        .unwrap_or_else(|e| die_pkg(&format!("cannot read registry '{}': {}", src, e)))
+}
+
+/// True when `name` is a legal package name (lowercase ident-ish: the
+/// same character class operon.toml's name field accepts).
+fn valid_pkg_name(name: &str) -> bool {
+    if name.is_empty() || name.len() > 64 {
+        return false;
+    }
+    let mut chars = name.chars();
+    if let Some(first) = chars.next() {
+        if !(first.is_ascii_lowercase() || first == '_') {
+            return false;
+        }
+    }
+    chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-')
+}
+
+// ------------------------------------------------------ W20-r1: operon new
+
+/// `operon new NAME [--lib] [--here]` — scaffold a project.
+///   default : operon.toml + src/main.op + tests/smoke.op (runs green)
+///   --lib   : operon.toml + src/NAME.op with a self-test proof frame
+///   --here  : scaffold into the current directory instead of NAME/
+pub fn new_command(rest: &[String]) -> ! {
+    let mut name: Option<String> = None;
+    let mut lib = false;
+    let mut here = false;
+    let mut i = 0;
+    while i < rest.len() {
+        match rest[i].as_str() {
+            "--lib" => lib = true,
+            "--here" => here = true,
+            other => {
+                if other.starts_with('-') {
+                    die_pkg(&format!(
+                        "unknown flag '{}' (new takes NAME, --lib, --here)",
+                        other
+                    ));
+                }
+                if name.is_some() {
+                    die_pkg("new takes exactly one NAME");
+                }
+                name = Some(other.to_string());
+            }
+        }
+        i += 1;
+    }
+    let name = match name {
+        Some(n) => n,
+        None => die_pkg("new needs a project name: operon new myapp"),
+    };
+    if !valid_pkg_name(&name) {
+        die_pkg(&format!(
+            "'{}' is not a valid package name (lowercase letters, digits, '-' and '_' only)",
             name
         ));
     }
-    if dir.exists() {
-        let empty = std::fs::read_dir(dir)
-            .map(|mut d| d.next().is_none())
-            .unwrap_or(false);
-        if !empty {
-            return Err(format!(
-                "directory '{}' already exists and is not empty",
-                dir.display()
-            ));
-        }
+    let root = if here {
+        PathBuf::from(".")
     } else {
-        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+        PathBuf::from(&name)
+    };
+    if !here && root.exists() {
+        die_pkg(&format!("'{}' already exists", name));
     }
-    let mut created = Vec::new();
-    for (path, content) in template_files(template, name)? {
-        let dest = dir.join(&path);
-        if let Some(parent) = dest.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    if root.join("operon.toml").exists() {
+        die_pkg("there is already an operon.toml here");
+    }
+    std::fs::create_dir_all(root.join("src"))
+        .unwrap_or_else(|e| die_pkg(&format!("mkdir failed: {}", e)));
+    if !lib {
+        std::fs::create_dir_all(root.join("tests"))
+            .unwrap_or_else(|e| die_pkg(&format!("mkdir failed: {}", e)));
+    }
+    let version = env!("CARGO_PKG_VERSION").to_string();
+    let mut toml = String::new();
+    toml.push_str(&format!(
+        "# {} — created by `operon new`\n\n[package]\nname = \"{}\"\nversion = \"0.1.0\"\noperon-version = \"{}\"\n\n[deps]\n",
+        name, name, version
+    ));
+    std::fs::write(root.join("operon.toml"), toml)
+        .unwrap_or_else(|e| die_pkg(&format!("write operon.toml failed: {}", e)));
+    let gene_prefix = name.replace('-', "_");
+    if lib {
+        let lib_src = format!(
+            "# {name} — library scaffolded by `operon new --lib`.\n# Consumers import it with `use {name}` (after this package is a dependency).\n\ngene {gp}_double(n) {{\n    return n * 2\n}}\n\nframe proof {{\n    assert({gp}_double(21) == 42, \"double\")\n    assert({gp}_double(0) == 0, \"zero\")\n}}\n",
+            name = name,
+            gp = gene_prefix
+        );
+        std::fs::write(root.join("src").join(format!("{}.op", name)), lib_src)
+            .unwrap_or_else(|e| die_pkg(&format!("write src failed: {}", e)));
+        println!("created {} (library)", name);
+    } else {
+        let main_src = format!(
+            "# {name} — scaffolded by `operon new`.\n# Run it:            operon run src/main.op\n# Run the tests:     operon test\n# Add a dependency:  operon add http        (then `use http` in your code)\n\ngene greet(who) {{\n    return \"hello, {r}\"\n}}\n\ngene main() {{\n    promote(greet(\"operon\"))\n}}\n",
+            name = name,
+            r = "{who}"
+        );
+        std::fs::write(root.join("src").join("main.op"), main_src)
+            .unwrap_or_else(|e| die_pkg(&format!("write src failed: {}", e)));
+        let smoke = "# smoke test — `operon test` runs every proof frame it finds.\nuse src/main\n\nframe proof {\n    assert(greet(\"operon\") == \"hello, operon\", \"greet\")\n    assert(greet(\"\") == \"hello, \", \"empty name is total\")\n}\n"
+            .to_string();
+        std::fs::write(root.join("tests").join("smoke.op"), smoke)
+            .unwrap_or_else(|e| die_pkg(&format!("write tests failed: {}", e)));
+        println!("created {} (application)", name);
+    }
+    println!("\nnext steps:");
+    if !here {
+        println!("  cd {}", name);
+    }
+    println!("  operon run src/main.op     # (applications)");
+    println!("  operon test                # run the smoke test");
+    println!("  operon add <package>       # pull a dependency from the registry");
+    // ast-grep-ignore: no-std-process-exit-in-core
+    std::process::exit(0);
+}
+
+// ------------------------------------------------- W21-r1: registry server
+
+/// `operon registry init DIR` — create an empty local registry: an index
+/// (JSON lines, comment-headed) plus a packages/ tree to publish into.
+fn registry_init(dir: &str) -> ! {
+    let root = PathBuf::from(dir);
+    if root.join("index.jsonl").exists() {
+        die_pkg(&format!("'{}' already has an index.jsonl", dir));
+    }
+    std::fs::create_dir_all(root.join("packages"))
+        .unwrap_or_else(|e| die_pkg(&format!("mkdir failed: {}", e)));
+    let index = "# my operon registry.\n# One JSON object per line:\n# {\"name\": \"beta\", \"version\": \"0.1.0\", \"git\": \"https://...\", \"rev\": \"...\", \"sha256\": \"...\", \"description\": \"...\"}\n# Dir-sourced packages add \"dir\": \"/abs/path/to/package-tree\" instead of a clone.\n# LAST matching line for a name wins (append-only by convention).\n";
+    std::fs::write(root.join("index.jsonl"), index)
+        .unwrap_or_else(|e| die_pkg(&format!("write index failed: {}", e)));
+    let readme = format!(
+        "# operon registry\n\nServe it:      operon registry serve {} --port 7331\nClients add:   OPERON_REGISTRY=http://127.0.0.1:7331/index.jsonl\n               operon add <package>\nPublish into it: operon publish --registry {}/index.jsonl\n",
+        dir, dir
+    );
+    std::fs::write(root.join("README.md"), readme)
+        .unwrap_or_else(|e| die_pkg(&format!("write README failed: {}", e)));
+    println!("created registry at {} (index.jsonl + packages/)", dir);
+    // ast-grep-ignore: no-std-process-exit-in-core
+    std::process::exit(0);
+}
+
+/// `operon registry serve DIR [--port N] [--host H]` — a read-only HTTP
+/// server over the registry directory. Serves exactly three route
+/// classes, nothing else, no listing, no dotfiles, no path traversal:
+///   GET /health        → "ok"
+///   GET /index.jsonl   → the index file
+///   GET /pkg/NAME/FILE → a file under DIR/packages/NAME/ (validated)
+/// deny-by-default is the whole security model: every request that is
+/// not one of these shapes gets a 404 before any path is opened.
+fn registry_serve(rest: &[String]) -> ! {
+    let mut dir = ".".to_string();
+    let mut port: u16 = 7331;
+    let mut host = "127.0.0.1".to_string();
+    let mut i = 0;
+    while i < rest.len() {
+        match rest[i].as_str() {
+            "--port" => {
+                i += 1;
+                port = rest
+                    .get(i)
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or_else(|| die_pkg("--port needs a number"));
+            }
+            "--host" => {
+                i += 1;
+                host = rest
+                    .get(i)
+                    .cloned()
+                    .unwrap_or_else(|| die_pkg("--host needs an address"));
+            }
+            other => {
+                if other.starts_with('-') {
+                    die_pkg(&format!("unknown flag '{}'", other));
+                }
+                dir = other.to_string();
+            }
         }
-        std::fs::write(&dest, content).map_err(|e| e.to_string())?;
-        created.push(path);
+        i += 1;
     }
-    Ok(created)
+    let root = std::fs::canonicalize(PathBuf::from(&dir))
+        .unwrap_or_else(|e| die_pkg(&format!("cannot serve '{}': {}", dir, e)));
+    if !root.join("index.jsonl").is_file() {
+        die_pkg(&format!(
+            "'{}' has no index.jsonl (run `operon registry init {}` first)",
+            dir, dir
+        ));
+    }
+    let listener = std::net::TcpListener::bind((host.as_str(), port))
+        .unwrap_or_else(|e| die_pkg(&format!("cannot bind {}:{}: {}", host, port, e)));
+    println!("operon registry serving {}", root.display());
+    println!("  index:   http://{}:{}/index.jsonl", host, port);
+    println!("  health:  http://{}:{}/health", host, port);
+    println!(
+        "  clients: OPERON_REGISTRY=http://{}:{}/index.jsonl operon add <package>",
+        host, port
+    );
+    let root = std::sync::Arc::new(root);
+    for stream in listener.incoming() {
+        match stream {
+            Ok(s) => {
+                let root = std::sync::Arc::clone(&root);
+                std::thread::spawn(move || {
+                    serve_one(s, &root);
+                });
+            }
+            Err(_) => continue,
+        }
+    }
+    // ast-grep-ignore: no-std-process-exit-in-core
+    std::process::exit(0);
+}
+
+use std::io::{Read as IoRead, Write as IoWrite};
+
+/// One served connection. Bounded request head (16 KB), one response,
+/// close. Every file read goes through `serve_safe_path`.
+fn serve_one(mut stream: std::net::TcpStream, root: &Path) {
+    let mut buf: Vec<u8> = Vec::with_capacity(1024);
+    let mut chunk = [0u8; 1024];
+    loop {
+        match stream.read(&mut chunk) {
+            Ok(0) => break,
+            Ok(n) => {
+                buf.extend_from_slice(&chunk[..n]);
+                if buf.windows(4).any(|w| w == b"\r\n\r\n") || buf.len() > 16 * 1024 {
+                    break;
+                }
+            }
+            Err(_) => return,
+        }
+    }
+    let head = String::from_utf8_lossy(&buf);
+    let mut parts = head.split_whitespace();
+    let method = parts.next().unwrap_or("");
+    let path = parts.next().unwrap_or("");
+    let (status, ctype, body) = if method != "GET" {
+        (
+            "405 Method Not Allowed",
+            "text/plain",
+            b"method not allowed\n".to_vec(),
+        )
+    } else {
+        match route_registry(path, root) {
+            Some((ctype, body)) => ("200 OK", ctype, body),
+            None => ("404 Not Found", "text/plain", b"not found\n".to_vec()),
+        }
+    };
+    let resp = format!(
+        "HTTP/1.1 {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        status,
+        ctype,
+        body.len()
+    );
+    let _ = stream.write_all(resp.as_bytes());
+    let _ = stream.write_all(&body);
+    let _ = stream.flush();
+}
+
+/// Route a validated GET. Returns (content-type, body) or None.
+fn route_registry(path: &str, root: &Path) -> Option<(&'static str, Vec<u8>)> {
+    if path == "/health" {
+        return Some(("text/plain", b"ok\n".to_vec()));
+    }
+    if path == "/index.jsonl" {
+        let body = std::fs::read(root.join("index.jsonl")).ok()?;
+        return Some(("application/x-ndjson", body));
+    }
+    if let Some(rest) = path.strip_prefix("/pkg/") {
+        // /pkg/NAME/FILE… — every segment validated BEFORE any path is
+        // built: a traversal attempt never becomes a path, it becomes a 404.
+        let segs: Vec<&str> = rest.split('/').collect();
+        if segs.len() < 2 {
+            return None;
+        }
+        let name = segs[0];
+        if !valid_pkg_name(name) {
+            return None;
+        }
+        let mut target = root.join("packages").join(name);
+        for seg in &segs[1..] {
+            if seg.is_empty()
+                || *seg == "."
+                || *seg == ".."
+                || seg.contains('\\')
+                || seg.contains('%')
+            {
+                return None;
+            }
+            if seg.starts_with('.') {
+                return None; // no dotfiles, no dot-directories
+            }
+            target = target.join(seg);
+        }
+        let body = std::fs::read(&target).ok()?;
+        let ctype = if target.to_string_lossy().ends_with(".op")
+            || target.to_string_lossy().ends_with(".toml")
+        {
+            "text/plain; charset=utf-8"
+        } else {
+            "application/octet-stream"
+        };
+        return Some((ctype, body));
+    }
+    None
+}
+
+/// `operon registry init|serve|default` — the registry tooling group.
+pub fn registry_command(rest: &[String]) -> ! {
+    match rest.first().map(|s| s.as_str()) {
+        Some("init") => {
+            let dir = rest
+                .get(1)
+                .cloned()
+                .unwrap_or_else(|| die_pkg("registry init needs a directory"));
+            registry_init(&dir);
+        }
+        Some("serve") => registry_serve(&rest[1..]),
+        Some("default") => {
+            // DX probe: print the resolved chain without touching anything
+            let explicit = std::env::var("OPERON_REGISTRY")
+                .ok()
+                .filter(|s| !s.trim().is_empty());
+            match explicit {
+                Some(e) => {
+                    println!("OPERON_REGISTRY: {}", e);
+                }
+                None => {
+                    if let Some(m) = manifest_in(Path::new(".")) {
+                        if !m.registry.is_empty() {
+                            println!("operon.toml [registry]: {}", m.registry);
+                            // ast-grep-ignore: no-std-process-exit-in-core
+                            std::process::exit(0);
+                        }
+                    }
+                    println!("default: the bundled seed registry (materialized on first add)");
+                    if let Some(h) = registry_home() {
+                        println!("home:    {}", h.join("index.jsonl").display());
+                    }
+                    println!("seed packages:");
+                    for pkg in SEED_PACKAGES {
+                        println!("  {:<10} {} — {}", pkg.name, pkg.version, pkg.description);
+                    }
+                }
+            }
+            // ast-grep-ignore: no-std-process-exit-in-core
+            std::process::exit(0);
+        }
+        other => {
+            let _ = other;
+            die_pkg("registry needs a subcommand: init | serve | default");
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
-// unit tests — the package core proves itself before any CLI wiring
+// unit tests (ai/ecosystem-r3, item 4): the requirement engine proves itself
+// before any CLI wiring — a wrong-version install is the failure this must
+// never have.
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // --- semver ---
+    fn v(s: &str) -> SemVer {
+        SemVer::parse(s).unwrap()
+    }
+
     #[test]
     fn semver_parse_and_order() {
-        let v = SemVer::parse("1.2.3").unwrap();
         assert_eq!(
-            v,
+            v("1.2.3"),
             SemVer {
                 major: 1,
                 minor: 2,
@@ -2606,327 +2532,132 @@ mod tests {
         );
         assert!(SemVer::parse("1.2").is_err());
         assert!(SemVer::parse("1.2.3.4").is_err());
-        assert!(SemVer::parse("01.2.3").is_ok()); // leading zeros tolerated, digits only
-        assert!(SemVer::parse("1.2.3-rc1").is_err()); // pre-release rejected loudly
-        assert!(SemVer::parse("abc").is_err());
         assert!(SemVer::parse("1.2.x").is_err());
         assert!(SemVer::parse("").is_err());
-        let a = SemVer::parse("2.0.0").unwrap();
-        let b = SemVer::parse("10.0.0").unwrap();
-        assert!(a < b);
+        assert!(SemVer::parse("01.2.3").is_ok()); // digits only, tolerated
+        assert!(SemVer::parse("1.2.3-rc1").is_err()); // pre-release rejected loudly
+        assert!(v("2.0.0") < v("10.0.0"));
+        assert!(v("1.2.3") < v("1.10.0")); // numeric, not lexicographic
     }
 
     #[test]
     fn req_caret() {
         let r = Req::parse("^1.2.3").unwrap();
-        assert!(r.matches(&SemVer::parse("1.2.3").unwrap()));
-        assert!(r.matches(&SemVer::parse("1.9.0").unwrap()));
-        assert!(!r.matches(&SemVer::parse("2.0.0").unwrap()));
-        assert!(!r.matches(&SemVer::parse("1.2.2").unwrap()));
+        assert!(r.matches(&v("1.2.3")));
+        assert!(r.matches(&v("1.9.0")));
+        assert!(!r.matches(&v("2.0.0")));
+        assert!(!r.matches(&v("1.2.2")));
         // ^0.2.3 stays inside 0.2.x
         let r0 = Req::parse("^0.2.3").unwrap();
-        assert!(r0.matches(&SemVer::parse("0.2.9").unwrap()));
-        assert!(!r0.matches(&SemVer::parse("0.3.0").unwrap()));
-        // ^0.0.3 stays inside 0.0.x
+        assert!(r0.matches(&v("0.2.9")));
+        assert!(!r0.matches(&v("0.3.0")));
+        // ^0.0.3 freezes the patch
         let r00 = Req::parse("^0.0.3").unwrap();
-        assert!(r00.matches(&SemVer::parse("0.0.3").unwrap()));
-        assert!(!r00.matches(&SemVer::parse("0.0.4").unwrap()));
+        assert!(r00.matches(&v("0.0.3")));
+        assert!(!r00.matches(&v("0.0.4")));
     }
 
     #[test]
-    fn req_tilde_and_wildcards() {
-        let t = Req::parse("~1.2.3").unwrap();
-        assert!(t.matches(&SemVer::parse("1.2.9").unwrap()));
-        assert!(!t.matches(&SemVer::parse("1.3.0").unwrap()));
-        let t1 = Req::parse("~1").unwrap();
-        assert!(t1.matches(&SemVer::parse("1.9.9").unwrap()));
-        assert!(!t1.matches(&SemVer::parse("2.0.0").unwrap()));
-        let w = Req::parse("1.x").unwrap();
-        assert!(w.matches(&SemVer::parse("1.5.0").unwrap()));
-        assert!(!w.matches(&SemVer::parse("2.0.0").unwrap()));
-        let w2 = Req::parse("1.2.*").unwrap();
-        assert!(w2.matches(&SemVer::parse("1.2.7").unwrap()));
-        assert!(!w2.matches(&SemVer::parse("1.3.0").unwrap()));
-        let any = Req::parse("*").unwrap();
-        assert!(any.matches(&SemVer::parse("0.0.1").unwrap()));
+    fn req_comparators_wildcards_and() {
+        assert!(Req::parse(">=1.0").unwrap().matches(&v("1.0.0")));
+        assert!(!Req::parse(">1.0").unwrap().matches(&v("1.0.0")));
+        assert!(Req::parse("<2.0").unwrap().matches(&v("1.9.9")));
+        assert!(Req::parse("=1.2.3").unwrap().matches(&v("1.2.3")));
+        assert!(!Req::parse("=1.2.3").unwrap().matches(&v("1.2.4")));
+        // a full pin means what it says; a bare X.Y is caret
+        assert!(Req::parse("1.2.3").unwrap().matches(&v("1.2.3")));
+        assert!(!Req::parse("1.2.3").unwrap().matches(&v("1.3.0")));
+        // bare "1.2" is caret shorthand: [1.2.0, 2.0.0)
+        assert!(Req::parse("1.2").unwrap().matches(&v("1.2.9")));
+        assert!(Req::parse("1.2").unwrap().matches(&v("1.3.0")));
+        assert!(!Req::parse("1.2").unwrap().matches(&v("2.0.0")));
+        // "1.2.x"/"1.2.*" pins the minor line, unlike bare caret shorthand
+        assert!(Req::parse("1.2.*").unwrap().matches(&v("1.2.7")));
+        assert!(!Req::parse("1.2.*").unwrap().matches(&v("1.3.0")));
+        assert!(Req::parse("1.x").unwrap().matches(&v("1.9.9")));
+        assert!(!Req::parse("1.x").unwrap().matches(&v("2.0.0")));
+        assert!(Req::parse("1.2.*").unwrap().matches(&v("1.2.7")));
+        assert!(Req::parse("*").unwrap().matches(&v("9.9.9")));
+        // AND-lists, spaces or commas; `>= 2.2` is ONE comparator
+        let both = Req::parse(">=1.0 <2.0").unwrap();
+        assert!(both.matches(&v("1.5.0")));
+        assert!(!both.matches(&v("2.0.0")));
+        let both2 = Req::parse(">=1.0, <2.0").unwrap();
+        assert!(both2.matches(&v("1.5.0")));
+        let spaced = Req::parse(">= 1.0, < 2.0").unwrap();
+        assert!(spaced.matches(&v("1.9.0")));
+        // tilde
+        assert!(Req::parse("~1.2.3").unwrap().matches(&v("1.2.9")));
+        assert!(!Req::parse("~1.2.3").unwrap().matches(&v("1.3.0")));
+        assert!(Req::parse("~1").unwrap().matches(&v("1.9.0")));
+        assert!(!Req::parse("~1").unwrap().matches(&v("2.0.0")));
+        // malformed requirements fail loudly
+        assert!(Req::parse("^").is_err());
+        assert!(Req::parse(">=").is_err());
+        assert!(Req::parse("abc").is_err());
     }
 
     #[test]
-    fn req_comparators_and_and_lists() {
-        let g = Req::parse(">=1.0 <2.0").unwrap();
-        assert!(g.matches(&SemVer::parse("1.5.0").unwrap()));
-        assert!(!g.matches(&SemVer::parse("2.0.0").unwrap()));
-        assert!(!g.matches(&SemVer::parse("0.9.0").unwrap()));
-        let e = Req::parse("=1.2.3").unwrap();
-        assert!(e.matches(&SemVer::parse("1.2.3").unwrap()));
-        assert!(!e.matches(&SemVer::parse("1.2.4").unwrap()));
-        // bare full version = exact pin
-        let bare = Req::parse("1.2.3").unwrap();
-        assert!(bare.matches(&SemVer::parse("1.2.3").unwrap()));
-        assert!(!bare.matches(&SemVer::parse("1.2.4").unwrap()));
-        // bare partial = caret (operon default)
-        let bare2 = Req::parse("1.2").unwrap();
-        assert!(bare2.matches(&SemVer::parse("1.9.0").unwrap()));
-        assert!(!bare2.matches(&SemVer::parse("2.0.0").unwrap()));
-    }
-
-    // --- toml ---
-    #[test]
-    fn toml_manifest_roundtrip() {
-        let src = "# comment\n[package]\nname = \"my-app\"\nversion = \"0.1.0\" # trailing\noperon-version = \">= 2.2\"\nauthors = [\"A <a@x>\", \"B\"]\nlicense = \"MIT\"\ndescription = \"does things\"\nkeywords = [\"bio\", \"seq\"]\n\n[dependencies]\nhttp = \"^1.0\"\njson = \"1.2\"\n";
-        let m = Manifest::parse(src).unwrap();
-        assert_eq!(m.name, "my-app");
-        assert_eq!(m.version.to_string(), "0.1.0");
-        assert_eq!(m.deps.len(), 2);
-        assert!(m.deps["http"].matches(&SemVer::parse("1.4.0").unwrap()));
-        assert_eq!(m.authors.len(), 2);
-        assert_eq!(m.keywords, vec!["bio".to_string(), "seq".to_string()]);
-        assert_eq!(m.entry, DEFAULT_ENTRY);
-        let out = m.to_toml();
-        let m2 = Manifest::parse(&out).unwrap();
-        assert_eq!(m.name, m2.name);
-        assert_eq!(m.deps["json"].raw_str(), m2.deps["json"].raw_str());
+    fn req_aware_lookup_picks_highest_satisfying() {
+        // multi-version index: LAST line for a name would win the old rule;
+        // with a requirement, the HIGHEST satisfying version must win.
+        let text = "\n\
+            {\"name\": \"beta\", \"version\": \"0.1.0\", \"git\": \"https://x/b\", \"rev\": \"r1\", \"sha256\": \"s1\", \"description\": \"\"}\n\
+            {\"name\": \"beta\", \"version\": \"0.1.5\", \"git\": \"https://x/b\", \"rev\": \"r2\", \"sha256\": \"s2\", \"description\": \"\"}\n\
+            {\"name\": \"beta\", \"version\": \"0.2.0\", \"git\": \"https://x/b\", \"rev\": \"r3\", \"sha256\": \"s3\", \"description\": \"\"}\n\
+            {\"name\": \"beta\", \"version\": \"1.0.0\", \"git\": \"https://x/b\", \"rev\": \"r4\", \"sha256\": \"s4\", \"description\": \"\"}\n";
+        let e = registry_lookup_req(text, "beta", &Req::parse("^0.1").unwrap(), "test");
+        assert_eq!(e.version, "0.1.5"); // 0.2.0 and 1.0.0 are outside ^0.1
+        let e2 = registry_lookup_req(text, "beta", &Req::parse("<1.0").unwrap(), "test");
+        assert_eq!(e2.version, "0.2.0");
+        let e3 = registry_lookup_req(text, "beta", &Req::parse("*").unwrap(), "test");
+        assert_eq!(e3.version, "1.0.0");
+        // unsatisfiable = the honest error listing availability (die_pkg exits,
+        // so probe through a child process in the e2e; here just the parser side)
+        assert!(Req::parse("^9.0").is_ok()); // parse fine; the LOOKUP reports no match
     }
 
     #[test]
-    fn toml_rejects_garbage() {
-        assert!(Manifest::parse("[package]\nname = \"X\"\nversion = \"1.0.0\"\n").is_err());
-        assert!(Manifest::parse("[package]\nname = \"ok\"\nversion = \"nope\"\n").is_err());
-        assert!(Manifest::parse("name = \"ok\"\nversion = \"1.0.0\"\n").is_err());
-        assert!(
-            Manifest::parse("[package]\nname = \"ok\"\nversion = \"1.0.0\"\nentry = 3\n").is_err()
+    fn lock_roundtrip_with_version_fields() {
+        let mut entries = BTreeMap::new();
+        entries.insert(
+            "http".to_string(),
+            LockEntry {
+                name: "http".to_string(),
+                git: "registry:http".to_string(),
+                rev: "content-abcdef".to_string(),
+                checksum: "cafe1234".to_string(),
+                version: "0.1.0".to_string(),
+                req: "^0.1".to_string(),
+            },
         );
-        assert!(Manifest::parse(
-            "[package]\nname = \"ok\"\nversion = \"1.0.0\"\n\n[dependencies]\nhttp = 7\n"
-        )
-        .is_err());
-    }
-
-    // --- sha256 / base64 ---
-    #[test]
-    fn sha256_known_vectors() {
-        assert_eq!(
-            sha256_hex(b""),
-            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        );
-        assert_eq!(
-            sha256_hex(b"abc"),
-            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
-        );
-        assert_eq!(
-            sha256_hex(b"The quick brown fox jumps over the lazy dog"),
-            "d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592"
-        );
+        let text = emit_lock(&entries);
+        assert!(text.contains("version = \"0.1.0\""));
+        assert!(text.contains("req = \"^0.1\""));
+        let parsed = parse_lock(&text).unwrap();
+        assert_eq!(parsed["http"].version, "0.1.0");
+        assert_eq!(parsed["http"].req, "^0.1");
+        // byte-identical re-emission (the reproducibility contract)
+        assert_eq!(emit_lock(&parsed), text);
+        // an OLD lock (no version/req lines) still parses, fields empty
+        let old = "# operon.lock, resolved dependencies (W23).\n[[dep]]\nname = \"x\"\ngit = \"registry:x\"\nrev = \"r\"\nchecksum = \"sha256:c\"\n\n";
+        let p2 = parse_lock(old).unwrap();
+        assert!(p2["x"].version.is_empty());
+        assert!(p2["x"].req.is_empty());
     }
 
     #[test]
-    fn b64_roundtrip() {
-        for case in [&b""[..], b"f", b"fo", b"foo", b"foob", b"fooba", b"foobar"] {
-            assert_eq!(b64_decode(&b64_encode(case)).unwrap(), case.to_vec());
-        }
-        // RFC 4648 vector
-        assert_eq!(b64_encode(b"foobar"), "Zm9vYmFy");
-    }
-
-    // --- envelope ---
-    #[test]
-    fn envelope_roundtrip_and_path_safety() {
-        let env = Envelope {
-            name: "demo".into(),
-            version: SemVer::parse("1.0.0").unwrap(),
-            description: "test pkg".into(),
-            deps: BTreeMap::new(),
-            manifest_src: "[package]\nname = \"demo\"\n".into(),
-            files: vec![
-                ("demo.op".into(), b"gene hi { }".to_vec()),
-                ("sub/util.op".into(), b"gene u { }".to_vec()),
-            ],
-        };
-        let bytes = env.encode();
-        let dec = Envelope::decode(&bytes).unwrap();
-        assert_eq!(dec.name, "demo");
-        assert_eq!(dec.files.len(), 2);
-        assert_eq!(dec.files[0].0, "demo.op");
-        assert_eq!(dec.files[0].1, b"gene hi { }".to_vec());
-        // deterministic bytes: encode twice, identical
-        assert_eq!(bytes, env.encode());
-        assert!(sanitize_rel_path("../evil.op").is_err());
-        assert!(sanitize_rel_path("/abs.op").is_err());
-        assert!(sanitize_rel_path("a/../../b.op").is_err());
-        assert!(sanitize_rel_path("a/../b.op").is_ok());
-        assert!(sanitize_rel_path("back\\slash.op").is_err());
-    }
-
-    // --- lockfile ---
-    #[test]
-    fn lock_roundtrip_and_satisfaction() {
-        let lock = Lockfile {
-            packages: vec![
-                LockEntry {
-                    name: "http".into(),
-                    version: SemVer::parse("1.2.0").unwrap(),
-                    sha256: "aa".into(),
-                    deps: vec!["json 1.0.0".into()],
-                },
-                LockEntry {
-                    name: "json".into(),
-                    version: SemVer::parse("1.0.0").unwrap(),
-                    sha256: "bb".into(),
-                    deps: vec![],
-                },
-            ],
-        };
-        let bytes = lock.to_bytes();
-        let text = String::from_utf8(bytes.clone()).unwrap();
-        assert_eq!(
-            text.lines().next().unwrap(),
-            "# operon.lock — generated by operon. Do not edit."
-        );
-        let parsed = Lockfile::parse(&text).unwrap();
-        assert_eq!(parsed, lock);
-        // byte-reproducible
-        assert_eq!(parsed.to_bytes(), bytes);
-
-        let manifest = Manifest::parse(
-            "[package]\nname = \"app\"\nversion = \"0.1.0\"\n\n[dependencies]\nhttp = \"^1.0\"\n",
-        )
-        .unwrap();
-        assert!(lock_satisfies(&manifest, &parsed));
-        // a manifest wanting ^2 breaks the lock
-        let manifest2 = Manifest::parse(
-            "[package]\nname = \"app\"\nversion = \"0.1.0\"\n\n[dependencies]\nhttp = \"^2.0\"\n",
-        )
-        .unwrap();
-        assert!(!lock_satisfies(&manifest2, &parsed));
-        // broken closure (json missing) fails
-        let broken = Lockfile {
-            packages: vec![lock.packages[0].clone()],
-        };
-        assert!(!lock_satisfies(&manifest, &broken));
-    }
-
-    // --- resolver against an in-memory dir registry ---
-    fn write_file(p: &Path, content: &str) {
-        if let Some(parent) = p.parent() {
-            std::fs::create_dir_all(parent).unwrap();
-        }
-        std::fs::write(p, content).unwrap();
-    }
-
-    #[test]
-    fn resolve_deterministic_with_transitive_deps() {
-        let tmp = std::env::temp_dir().join(format!("operon-pkg-test-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
-        let reg = Registry::Dir(tmp.clone());
-        // one index per package with ALL its versions (a real registry index
-        // is cumulative; overwriting per version would hide versions)
-        let mut index_versions: BTreeMap<String, Vec<String>> = BTreeMap::new();
-        let mut mk = |name: &str, ver: &str, desc: &str, deps: &str| {
-            let m = format!("[package]\nname = \"{}\"\nversion = \"{}\"\ndescription = \"{}\"\nentry = \"{}.op\"\n\n[dependencies]\n{}", name, ver, desc, name, deps);
-            let env = Envelope {
-                name: name.into(),
-                version: SemVer::parse(ver).unwrap(),
-                description: desc.into(),
-                deps: {
-                    let mut d = BTreeMap::new();
-                    for line in deps.lines() {
-                        let line = line.trim();
-                        if line.is_empty() {
-                            continue;
-                        }
-                        let mut it = line.splitn(2, " = \"");
-                        let k = it.next().unwrap().to_string();
-                        let v = it.next().unwrap().trim_end_matches('"').to_string();
-                        d.insert(k, Req::parse(&v).unwrap());
-                    }
-                    d
-                },
-                manifest_src: m.clone(),
-                files: vec![(
-                    format!("{}.op", name),
-                    format!("// {} {}", name, ver).into_bytes(),
-                )],
-            };
-            let bytes = env.encode();
-            let sha = sha256_hex(&bytes);
-            write_file(
-                &tmp.join("artifacts")
-                    .join(name)
-                    .join(format!("{}.opkg", ver)),
-                std::str::from_utf8(&bytes).unwrap(),
-            );
-            let deps_json = {
-                let ds: Vec<String> = env
-                    .deps
-                    .iter()
-                    .map(|(k, r)| format!("\"{}\":\"{}\"", k, r.raw_str()))
-                    .collect();
-                ds.join(",")
-            };
-            index_versions
-                .entry(name.to_string())
-                .or_default()
-                .push(format!(
-                    "{{\"version\":\"{}\",\"yanked\":false,\"sha256\":\"{}\",\"deps\":{{{}}}}}",
-                    ver, sha, deps_json
-                ));
-        };
-        mk("json", "1.0.0", "json tools", "");
-        mk("json", "1.1.0", "json tools", "");
-        mk("json", "2.0.0", "json tools", "");
-        mk("http", "1.0.0", "http client", "json = \"^1.0\"");
-        mk("http", "1.2.0", "http client", "json = \"^1.1\"");
-        for (name, versions) in &index_versions {
-            let idx = format!(
-                "{{\"name\":\"{}\",\"description\":\"{}\",\"versions\":[{}]}}\n",
-                name,
-                name,
-                versions.join(",")
-            );
-            write_file(&tmp.join("index").join(format!("{}.json", name)), &idx);
-        }
-
-        let manifest = Manifest::parse(
-            "[package]\nname = \"app\"\nversion = \"0.1.0\"\n\n[dependencies]\nhttp = \"^1.0\"\n",
-        )
-        .unwrap();
-        let lock1 = resolve(&manifest, &reg).unwrap();
-        let lock2 = resolve(&manifest, &reg).unwrap();
-        // byte-reproducible resolution
-        assert_eq!(lock1.to_bytes(), lock2.to_bytes());
-        // picked highest matching transitively
-        assert_eq!(lock1.find("http").unwrap().version.to_string(), "1.2.0");
-        assert_eq!(lock1.find("json").unwrap().version.to_string(), "1.1.0");
-        // sorted + exact pins recorded
-        assert_eq!(lock1.packages[0].name, "http");
-        assert_eq!(lock1.packages[0].deps, vec!["json 1.1.0".to_string()]);
-
-        // unsatisfiable requirement fails with the inventory in the message
-        let bad = Manifest::parse(
-            "[package]\nname = \"app\"\nversion = \"0.1.0\"\n\n[dependencies]\nhttp = \"^9.0\"\n",
-        )
-        .unwrap();
-        let err = resolve(&bad, &reg).unwrap_err();
-        assert!(
-            err.contains("no version of 'http' satisfies"),
-            "got: {}",
-            err
-        );
-        // yanked versions are invisible
-        let _ = std::fs::remove_dir_all(&tmp);
-    }
-
-    #[test]
-    fn names_and_templates() {
-        assert!(valid_name("http"));
-        assert!(valid_name("my-app"));
-        assert!(!valid_name("2x"));
-        assert!(!valid_name("X"));
-        assert!(!valid_name("has space"));
-        assert!(!valid_name("h"));
-        let files = template_files(TEMPLATE_BIN, "demo").unwrap();
-        assert!(files.iter().any(|(p, _)| *p == "operon.toml"));
-        assert!(files.iter().any(|(p, _)| *p == "src/main.op"));
-        assert!(template_files("nope", "demo").is_err());
+    fn manifest_version_field_roundtrip() {
+        let src = "[package]\nname = \"app\"\nversion = \"0.1.0\"\n\n[deps]\nhttp = { git = \"registry:http\", version = \"^0.1\" }\nweb = { git = \"registry:web\" }\n";
+        let m = parse_manifest(src).unwrap();
+        assert_eq!(m.deps[0].0, "http");
+        assert_eq!(m.deps[0].1.version.as_ref().unwrap().raw_str(), "^0.1");
+        assert!(m.deps[1].1.version.is_none());
+        let out = emit_manifest(&m);
+        let m2 = parse_manifest(&out).unwrap();
+        assert_eq!(m2.deps[0].1.version.as_ref().unwrap().raw_str(), "^0.1");
+        // a malformed requirement is a hard parse error, never silent
+        let bad = "[package]\nname = \"app\"\nversion = \"0.1.0\"\n\n[deps]\nhttp = { git = \"registry:http\", version = \"^abc\" }\n";
+        assert!(parse_manifest(bad).is_err());
     }
 }

@@ -1,0 +1,50 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=229 tag=m229
+
+let m229_m0 = {marker: 90, vector: -2, splicer: 63, plasmid: 99}
+
+print("m229-m0:", m229_m0["marker"], len(m229_m0), m229_m0.has("marker"))
+
+let m229_m1 = {ligase: 27, codon: -61, vector: -51, splicer: 74, helix: 44}
+
+print("m229-m1:", m229_m1["ligase"], len(m229_m1), m229_m1.has("ligase"))
+
+let m229_m2 = {exon: 38, helix: 91, plasmid: -88, ribose: -15, gene: 55}
+
+print("m229-m2:", m229_m2["exon"], len(m229_m2), m229_m2.has("exon"))
+
+let m229_m3 = {exon: 72, gene: -19, vector: 35}
+
+print("m229-m3:", m229_m3["exon"], len(m229_m3), m229_m3.has("exon"))
+
+let m229_m4 = {splicer: 1, codon: 80, enzyme: -10}
+
+print("m229-m4:", m229_m4["splicer"], len(m229_m4), m229_m4.has("splicer"))
+
+let m229_k0 = {cell: 36, marker: 39, helix: 6}
+
+let m229_ks0 = m229_k0.keys()
+
+let m229_sm0 = 0
+
+for k in m229_k0 { m229_sm0 += m229_k0[k] }
+
+print("m229-k0:", m229_sm0, m229_k0.keys().sort(), m229_k0.values().len())
+
+let m229_k1 = {plasmid: 3, ligase: 25, cell: 25}
+
+let m229_ks1 = m229_k1.keys()
+
+let m229_sm1 = 0
+
+for k in m229_k1 { m229_sm1 += m229_k1[k] }
+
+print("m229-k1:", m229_sm1, m229_k1.keys().sort(), m229_k1.values().len())
+
+let m229_w0 = {outer: {vector: 6, helix: 6, tag: "ok"}}}
+
+print("m229-w0:", m229_w0["outer"]["helix"], m229_w0["outer"]["tag"])
+
+let m229_w1 = {outer: {ribose: 5, plasmid: 3, tag: "ok"}}}
+
+print("m229-w1:", m229_w1["outer"]["plasmid"], m229_w1["outer"]["tag"])

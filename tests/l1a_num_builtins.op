@@ -1,6 +1,6 @@
-# L1a: numeric builtins — round / clamp / divmod
+# L1a: numeric builtins, round / clamp / divmod
 # contract: round(x) -> Int, round(x, d) -> Float, half-away-from-zero at the
-# d-th decimal (same f64 formula in both implementations — bit-identical);
+# d-th decimal (same f64 formula in both implementations, bit-identical);
 # clamp keeps the clamped bound's value; divmod reuses // and % exactly
 # (floored, sign follows divisor).
 frame proof {

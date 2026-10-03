@@ -1,7 +1,7 @@
 # loop-9 (C8): reading the medium while a secreting worker is UNJOINED is
 # OUTSIDE the deterministic contract (SPEC §13, join-before-read). This
 # payload documents that class: the run must TERMINATE BOUNDED (worker
-# timeout ceiling + fuel), never hang — but the read VALUE is explicitly
+# timeout ceiling + fuel), never hang, but the read VALUE is explicitly
 # not pinned. The oracle's sequential interleaving is one legal outcome of
 # many; differential coverage stops at the join boundary by design.
 gene secretor() {
@@ -10,7 +10,7 @@ gene secretor() {
 }
 gene main() {
     let id = spawn(secretor, []);
-    # unjoined read — legal to RUN, outside the determinism contract
+    # unjoined read, legal to RUN, outside the determinism contract
     let peek = quorum("ahl");
     print("unjoined peek: {peek}");
     # the bounded join still converges the medium for the host

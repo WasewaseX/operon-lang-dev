@@ -1,0 +1,230 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=248 tag=m248
+
+gene m248_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m248-b0:", m248_b0({helix: 92, gene: 27, exon: 30})?!)
+
+gene m248_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m248-b1:", m248_b1({cell: 44, codon: 99, marker: 48})?!)
+
+gene m248_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m248_f0([7, 12, 6, 35, 24]) {
+
+    case Ok(list) {
+
+        print("m248-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m248-f0:", "e:", m)
+
+    }
+
+}
+
+gene m248_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m248_f1([12, 28, 10, 30, 23, 34, 4]) {
+
+    case Ok(list) {
+
+        print("m248-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m248-f1:", "e:", m)
+
+    }
+
+}
+
+gene m248_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m248_f2([54, 49, 10, 32]) {
+
+    case Ok(list) {
+
+        print("m248-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m248-f2:", "e:", m)
+
+    }
+
+}
+
+let m248_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m248-cc0:", m248_cl0(4)(6), m248_cl0(6)(4))
+
+let m248_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m248-cc1:", m248_cl1(5)(15), m248_cl1(15)(5))
+
+let m248_data0 = some([some("gene"), none(), some(8)])
+
+match m248_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m248-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m248-x0:", "shape-miss")
+
+    }
+
+}
+
+let m248_data1 = some([some("gene"), none(), some(2)])
+
+match m248_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m248-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m248-x1:", "shape-miss")
+
+    }
+
+}

@@ -1,0 +1,214 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20260930 idx=44 tag=m044
+
+gene m044_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m044-b0:", m044_b0({vector: 77, ribose: 58, helix: 90})?!)
+
+gene m044_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m044-b1:", m044_b1({cell: 36, ligase: 8, plasmid: 50})?!)
+
+gene m044_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m044-b2:", m044_b2({splicer: 74, gene: 41, vector: 58})?!)
+
+gene m044_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m044_f0([38, 29, 3, 49, 57, 53]) {
+
+    case Ok(list) {
+
+        print("m044-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m044-f0:", "e:", m)
+
+    }
+
+}
+
+gene m044_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m044_f1([36, 54, 7, 30, 37, 44, 40, 31]) {
+
+    case Ok(list) {
+
+        print("m044-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m044-f1:", "e:", m)
+
+    }
+
+}
+
+let m044_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m044-cc0:", m044_cl0(9)(20), m044_cl0(20)(9))
+
+let m044_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m044-cc1:", m044_cl1(19)(11), m044_cl1(11)(19))
+
+let m044_data0 = some([some("ligase"), none(), some(5)])
+
+match m044_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m044-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m044-x0:", "shape-miss")
+
+    }
+
+}
+
+let m044_data1 = some([some("gene"), none(), some(8)])
+
+match m044_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m044-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m044-x1:", "shape-miss")
+
+    }
+
+}

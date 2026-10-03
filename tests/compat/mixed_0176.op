@@ -1,0 +1,190 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=176 tag=m176
+
+gene m176_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m176-b0:", m176_b0({helix: 27, enzyme: 2, splicer: 45})?!)
+
+gene m176_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m176-b1:", m176_b1({splicer: 21, cell: 19, gene: 77})?!)
+
+gene m176_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m176_f0([55, 30, 41, 36, 14, 35, 26, 26]) {
+
+    case Ok(list) {
+
+        print("m176-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m176-f0:", "e:", m)
+
+    }
+
+}
+
+gene m176_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m176_f1([4, 35, 59, 44, 19, 3]) {
+
+    case Ok(list) {
+
+        print("m176-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m176-f1:", "e:", m)
+
+    }
+
+}
+
+let m176_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m176-cc0:", m176_cl0(19)(7), m176_cl0(7)(19))
+
+let m176_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m176-cc1:", m176_cl1(5)(5), m176_cl1(5)(5))
+
+let m176_data0 = some([some("splicer"), none(), some(3)])
+
+match m176_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m176-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m176-x0:", "shape-miss")
+
+    }
+
+}
+
+let m176_data1 = some([some("marker"), none(), some(6)])
+
+match m176_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m176-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m176-x1:", "shape-miss")
+
+    }
+
+}

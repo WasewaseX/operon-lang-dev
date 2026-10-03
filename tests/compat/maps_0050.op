@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20260930 idx=50 tag=m050
+
+let m050_m0 = {ligase: -54, cell: -60, exon: -61, helix: -13}
+
+print("m050-m0:", m050_m0["ligase"], len(m050_m0), m050_m0.has("ligase"))
+
+let m050_m1 = {cell: 44, plasmid: 19, helix: -91}
+
+print("m050-m1:", m050_m1["cell"], len(m050_m1), m050_m1.has("cell"))
+
+let m050_m2 = {plasmid: -79, ribose: 53, marker: 1}
+
+print("m050-m2:", m050_m2["plasmid"], len(m050_m2), m050_m2.has("plasmid"))
+
+let m050_k0 = {vector: 21, gene: 10, helix: 49}
+
+let m050_ks0 = m050_k0.keys()
+
+let m050_sm0 = 0
+
+for k in m050_k0 { m050_sm0 += m050_k0[k] }
+
+print("m050-k0:", m050_sm0, m050_k0.keys().sort(), m050_k0.values().len())
+
+let m050_k1 = {cell: 25, splicer: 43, codon: 37}
+
+let m050_ks1 = m050_k1.keys()
+
+let m050_sm1 = 0
+
+for k in m050_k1 { m050_sm1 += m050_k1[k] }
+
+print("m050-k1:", m050_sm1, m050_k1.keys().sort(), m050_k1.values().len())
+
+let m050_w0 = {outer: {helix: 1, enzyme: 7, tag: "ok"}}}
+
+print("m050-w0:", m050_w0["outer"]["enzyme"], m050_w0["outer"]["tag"])
+
+let m050_w1 = {outer: {marker: 3, codon: 6, tag: "ok"}}}
+
+print("m050-w1:", m050_w1["outer"]["codon"], m050_w1["outer"]["tag"])

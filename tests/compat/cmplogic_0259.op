@@ -1,0 +1,36 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=259 tag=c259
+
+print("c259-c0:", -6541 > -4782)
+
+print("c259-c1:", -9332 >= 2966)
+
+print("c259-c2:", -1626 <= 8045)
+
+print("c259-c3:", 9897 >= -3823)
+
+print("c259-c4:", 9972 <= 988)
+
+print("c259-b0:", 17 < 47 && 47 < 17, 17 > 47 || 17 > 17)
+
+print("c259-b1:", 10 < 49 && 49 < 1, 10 > 49 || 10 > 1)
+
+print("c259-t0:", 3674 > 1865 ? "gt" : "le")
+
+print("c259-t1:", -6692 > 5630 ? "gt" : "le")
+
+print("c259-t2:", 3879 > 2388 ? "gt" : "le")
+
+print("c259-t3:", 5873 > -2024 ? "gt" : "le")
+
+let c259_n0 = null
+
+print("c259-n0:", c259_n0 ?? -3239, c259_n0 == null)
+
+let c259_n1 = null
+
+print("c259-n1:", c259_n1 ?? 2604, c259_n1 == null)
+
+print("c259-s0:", "8ot_" in "adrig88ot_", "8ot_" == "8ot_")
+
+print("c259-s1:", "8cCm" in "_fo4248cCm", "8cCm" == "8cCm")

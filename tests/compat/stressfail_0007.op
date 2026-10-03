@@ -1,0 +1,248 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20260930 idx=7 tag=s007
+
+stress {
+
+    print("s007-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s007-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s007-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s007-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s007-mz:", 70 % 0)
+
+} rescue (e) {
+
+    print("s007-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s007-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s007-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s007-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s007-of2:", "caught", e.kind, e.message)
+
+}
+
+gene s007_r0() {
+
+    raise "s007-de7glA"
+
+}
+
+stress {
+
+    s007_r0()
+
+    print("s007-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s007-r0:", e.kind, e.message)
+
+}
+
+gene s007_r1() {
+
+    raise "s007-cw2nf4"
+
+}
+
+stress {
+
+    s007_r1()
+
+    print("s007-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s007-r1:", e.kind, e.message)
+
+}
+
+gene s007_r2() {
+
+    raise "s007-8eCghy"
+
+}
+
+stress {
+
+    s007_r2()
+
+    print("s007-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s007-r2:", e.kind, e.message)
+
+}
+
+gene s007_r3() {
+
+    raise "s007-wzpdk5"
+
+}
+
+stress {
+
+    s007_r3()
+
+    print("s007-r3:", "unreachable")
+
+} rescue (e) {
+
+    print("s007-r3:", e.kind, e.message)
+
+}
+
+let s007_xs0 = [18, 42, 41, 5]
+
+stress {
+
+    print("s007-x0:", s007_xs0[5])
+
+} rescue (e) {
+
+    print("s007-x0:", "caught", e.kind)
+
+}
+
+let s007_xs1 = [18, 3]
+
+stress {
+
+    print("s007-x1:", s007_xs1[4])
+
+} rescue (e) {
+
+    print("s007-x1:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s007-0"
+
+    } rescue (e) {
+
+        print("s007-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s007-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s007-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s007-d0-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s007-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s007-1"
+
+    } rescue (e) {
+
+        print("s007-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s007-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s007-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s007-d1-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s007-d1-top:", outer.message)
+
+}

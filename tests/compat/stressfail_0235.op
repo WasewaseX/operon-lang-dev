@@ -1,0 +1,222 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=235 tag=s235
+
+stress {
+
+    print("s235-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s235-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s235-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s235-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s235-mz:", 74 % 0)
+
+} rescue (e) {
+
+    print("s235-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s235-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s235-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s235-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s235-of2:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s235-m1:", 9223372036854775807 % -1)
+
+} rescue (e) {
+
+    print("s235-m1:", "caught", e.kind, e.message)
+
+}
+
+gene s235_r0() {
+
+    raise "s235-Artsgq"
+
+}
+
+stress {
+
+    s235_r0()
+
+    print("s235-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s235-r0:", e.kind, e.message)
+
+}
+
+gene s235_r1() {
+
+    raise "s235-jsgAwm"
+
+}
+
+stress {
+
+    s235_r1()
+
+    print("s235-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s235-r1:", e.kind, e.message)
+
+}
+
+gene s235_r2() {
+
+    raise "s235-onAy4_"
+
+}
+
+stress {
+
+    s235_r2()
+
+    print("s235-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s235-r2:", e.kind, e.message)
+
+}
+
+let s235_xs0 = [44, 31]
+
+stress {
+
+    print("s235-x0:", s235_xs0[5])
+
+} rescue (e) {
+
+    print("s235-x0:", "caught", e.kind)
+
+}
+
+let s235_xs1 = [47, 18, 30]
+
+stress {
+
+    print("s235-x1:", s235_xs1[5])
+
+} rescue (e) {
+
+    print("s235-x1:", "caught", e.kind)
+
+}
+
+let s235_xs2 = [27, 23]
+
+stress {
+
+    print("s235-x2:", s235_xs2[6])
+
+} rescue (e) {
+
+    print("s235-x2:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s235-0"
+
+    } rescue (e) {
+
+        print("s235-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s235-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s235-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s235-1"
+
+    } rescue (e) {
+
+        print("s235-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s235-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s235-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s235-d1-top:", outer.message)
+
+}

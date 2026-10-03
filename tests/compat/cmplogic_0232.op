@@ -1,0 +1,38 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=232 tag=c232
+
+print("c232-c0:", 3652 < 6976)
+
+print("c232-c1:", 8354 <= -9438)
+
+print("c232-c2:", 5201 > -4570)
+
+print("c232-c3:", -6703 <= 852)
+
+print("c232-c4:", -607 == 4712)
+
+print("c232-b0:", 12 < 41 && 41 < 21, 12 > 41 || 12 > 21)
+
+print("c232-b1:", 31 < 20 && 20 < 10, 31 > 20 || 31 > 10)
+
+print("c232-t0:", 4676 > -4716 ? "gt" : "le")
+
+print("c232-t1:", -5100 > 6520 ? "gt" : "le")
+
+print("c232-t2:", -6831 > 3981 ? "gt" : "le")
+
+let c232_n0 = null
+
+print("c232-n0:", c232_n0 ?? -5479, c232_n0 == null)
+
+let c232_n1 = null
+
+print("c232-n1:", c232_n1 ?? 3869, c232_n1 == null)
+
+let c232_n2 = null
+
+print("c232-n2:", c232_n2 ?? -1890, c232_n2 == null)
+
+print("c232-s0:", "xa4t" in "4d1kq2xa4t", "xa4t" == "xa4t")
+
+print("c232-s1:", "_mwn" in "3hCstu_mwn", "_mwn" == "_mwn")

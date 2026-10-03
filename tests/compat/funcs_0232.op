@@ -1,0 +1,188 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=232 tag=f232
+
+gene f232_g0(p, q = 30, r = 95) {
+
+    return p * 41 + q - r
+
+}
+
+print("f232-d0:", f232_g0(-17), f232_g0(-17, 56), f232_g0(-17, 30, 95))
+
+gene f232_g1(p, q = 56, r = 62) {
+
+    return p * 31 + q - r
+
+}
+
+print("f232-d1:", f232_g1(38), f232_g1(38, 75), f232_g1(38, 56, 62))
+
+gene f232_g2(p, q = 12, r = 66) {
+
+    return p * 1 + q - r
+
+}
+
+print("f232-d2:", f232_g2(16), f232_g2(16, 72), f232_g2(16, 12, 66))
+
+gene f232_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f232_fib0(n - 1) + f232_fib0(n - 2)
+
+}
+
+print("f232-fib0:", f232_fib0(11))
+
+gene f232_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f232_fib1(n - 1) + f232_fib1(n - 2)
+
+}
+
+print("f232-fib1:", f232_fib1(11))
+
+gene f232_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f232_gcd0(b, a % b)
+
+}
+
+print("f232-gcd0:", f232_gcd0(863, 944))
+
+gene f232_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f232_gcd1(b, a % b)
+
+}
+
+print("f232-gcd1:", f232_gcd1(558, 572))
+
+gene f232_gcd2(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f232_gcd2(b, a % b)
+
+}
+
+print("f232-gcd2:", f232_gcd2(592, 357))
+
+gene f232_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f232_c0 = f232_mk0(5)
+
+f232_c0(6)
+
+print("f232-cl0:", f232_c0(9))
+
+gene f232_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f232_c1 = f232_mk1(37)
+
+f232_c1(1)
+
+print("f232-cl1:", f232_c1(1))
+
+gene f232_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f232-hof0:", f232_tw0(gene (z) => z * 2 + 1, 1))
+
+gene f232_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f232-hof1:", f232_tw1(gene (z) => z * 2 + 1, 16))
+
+gene f232_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f232-dg0:", f232_sd0(815868))
+
+gene f232_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f232-dg1:", f232_sd1(852042))

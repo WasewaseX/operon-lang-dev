@@ -1,0 +1,222 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=210 tag=s210
+
+stress {
+
+    print("s210-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s210-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s210-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s210-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s210-mz:", 89 % 0)
+
+} rescue (e) {
+
+    print("s210-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s210-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s210-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s210-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s210-of2:", "caught", e.kind, e.message)
+
+}
+
+gene s210_r0() {
+
+    raise "s210-21b3n7"
+
+}
+
+stress {
+
+    s210_r0()
+
+    print("s210-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s210-r0:", e.kind, e.message)
+
+}
+
+gene s210_r1() {
+
+    raise "s210-zqA1p4"
+
+}
+
+stress {
+
+    s210_r1()
+
+    print("s210-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s210-r1:", e.kind, e.message)
+
+}
+
+gene s210_r2() {
+
+    raise "s210-fnb1pr"
+
+}
+
+stress {
+
+    s210_r2()
+
+    print("s210-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s210-r2:", e.kind, e.message)
+
+}
+
+let s210_xs0 = [15, 19, 35, 12]
+
+stress {
+
+    print("s210-x0:", s210_xs0[5])
+
+} rescue (e) {
+
+    print("s210-x0:", "caught", e.kind)
+
+}
+
+let s210_xs1 = [43, 9, 28]
+
+stress {
+
+    print("s210-x1:", s210_xs1[5])
+
+} rescue (e) {
+
+    print("s210-x1:", "caught", e.kind)
+
+}
+
+let s210_xs2 = [46, 20, 12]
+
+stress {
+
+    print("s210-x2:", s210_xs2[5])
+
+} rescue (e) {
+
+    print("s210-x2:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s210-0"
+
+    } rescue (e) {
+
+        print("s210-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s210-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s210-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s210-d0-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s210-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s210-1"
+
+    } rescue (e) {
+
+        print("s210-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s210-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s210-d1-top:", outer.message)
+
+}

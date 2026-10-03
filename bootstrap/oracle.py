@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""oracle.py — Operon reference implementation (bootstrap layer).
+"""oracle.py, Operon reference implementation (bootstrap layer).
 
 Role in the stack: the semantic oracle used by the differential test harness
 to cross-check the Rust core, plus the packaging path. It implements the same
@@ -10,22 +10,78 @@ Deliberately sequential: spawn() runs tasks inline (deterministic), which is
 equivalent for the differential corpus.
 """
 import sys, os, math, json as _json
+import weakref  # W013: weak handles, the mirror of the Rust WeakHandle
+import unicodedata  # W28 stage 2: THE reference implementation for NFC/NFD/category
 
 # ----------------------------------------------------------------------------
 # notes / values
 
 class Note:
-    __slots__ = ("rung", "message")
-    def __init__(self, rung, message):
-        self.rung, self.message = rung, message
+    __slots__ = ("rung", "line", "message")
+    def __init__(self, rung, message, line=0):
+        # compat matrix fix: the Rust core stores the origin line on every
+        # note (ast.rs Note{line, rung, message}) and tools::flush_notes
+        # renders `[tag] file:line: msg`. The oracle now mirrors both.
+        self.rung, self.line, self.message = rung, line, message
+
+# W101 slice 7 mirror of diag.rs::note_code (SPEC 9a.1): the derived E2xxx
+# code rides the tag in flush output (`[fallback E2012] ...`). Ordered
+# substring families, specific first, generic last; new families APPEND and
+# codes never renumber. A message matching nothing renders uncoded, exactly
+# like the Rust side. corpus-r3: this mirror was missing after 14888da and
+# every parse-repair note diverged from the engines in the compat matrix.
+def note_code(message):
+    if "note cap" in message:
+        return "E2000"
+    if "single-quoted string repaired" in message:
+        return "E2001"
+    if "single-quoted bytes literal repaired" in message:
+        return "E2002"
+    if "malformed \\x escape" in message:
+        return "E2003"
+    if "non-ASCII char in bytes literal" in message:
+        return "E2004"
+    if "unclosed bytes literal" in message:
+        return "E2005"
+    if "unclosed multiline string" in message or "unclosed raw string" in message:
+        return "E2006"
+    if "stray '@' skipped" in message:
+        return "E2007"
+    if "out of range treated as 0" in message:
+        return "E2008"
+    if "malformed number" in message:
+        return "E2009"
+    if message.startswith("synonym "):
+        return "E2010"
+    if message.startswith("wobble: "):
+        return "E2011"
+    if "unmatched '}' skipped" in message:
+        return "E2012"
+    if "auto-closed" in message:
+        return "E2013"
+    if "unknown mark '@" in message:
+        return "E2018"
+    if "binds null" in message:
+        return "E2015"
+    if "needs " in message or "missing 'in'" in message:
+        return "E2016"
+    if "treated as" in message:
+        return "E2017"
+    if "null substituted" in message:
+        return "E2019"
+    if "skipped" in message:
+        return "E2014"
+    if message.startswith("phantom call to "):
+        return "E2030"
+    return ""
 
 class Stress(Exception):
     def __init__(self, kind, message):
         self.kind, self.message = kind, message
-        # W007 mirror: gene call chain captured during unwinding — innermost
+        # W007 mirror: gene call chain captured during unwinding, innermost
         # frame first, (gene, call-site line); capture cap 64 matches Rust.
         self.chain = []
-        # W06 (D-014) mirror: propagation marker — Some payload means this is
+        # W06 (D-014) mirror: propagation marker, Some payload means this is
         # NOT a failure but a `?!` signal unwinding to the gene boundary.
         # No user path constructs a Stress with a payload (raise/stress go
         # through the kind/message constructor), so rescue can never catch
@@ -34,14 +90,14 @@ class Stress(Exception):
     def as_map(self):
         # W07 mirror: rescue binding carries the chain, same field order as
         # the Rust stress_map (kind, message, chain). Stress.line stays a
-        # Rust-side stderr-rendering field (dx-r3) — not mirrored here.
+        # Rust-side stderr-rendering field (dx-r3), not mirrored here.
         return {"kind": self.kind, "message": self.message,
                 "chain": [{"gene": n, "line": l} for (n, l) in self.chain]}
 
 class Variant:
     """W06 (D-014) mirror: first-class Option/Result variant value.
     tag is one of {Some, None, Ok, Err}; payload is None for None and a
-    value otherwise. Families are distinct: Some(x) != Ok(x) — the tag IS
+    value otherwise. Families are distinct: Some(x) != Ok(x), the tag IS
     the contract."""
     __slots__ = ("tag", "payload")
     def __init__(self, tag, payload):
@@ -50,8 +106,8 @@ class Variant:
         return v_repr(self)
 
 class Gene:
-    __slots__ = ("name", "params", "guard", "body", "acetylate", "methylate", "m6a", "copies", "seq", "riboswitch", "burst", "closure", "param_anns", "ret_ann")
-    def __init__(self, name, params, guard, body, ac=False, me=False, m6=False, copies=1, seq=False, riboswitch=None, burst=None, param_anns=None, ret_ann=None):
+    __slots__ = ("name", "params", "guard", "body", "acetylate", "methylate", "m6a", "copies", "seq", "riboswitch", "burst", "closure", "param_anns", "ret_ann", "type_params")
+    def __init__(self, name, params, guard, body, ac=False, me=False, m6=False, copies=1, seq=False, riboswitch=None, burst=None, param_anns=None, ret_ann=None, type_params=None):
         self.name, self.params, self.guard, self.body = name, params, guard, body
         self.acetylate, self.methylate, self.m6a, self.copies, self.seq = ac, me, m6, copies, seq
         # loop-9 (F-5): cis riboswitch (ligand, bound_means_on, threshold)
@@ -61,12 +117,14 @@ class Gene:
         # W01 (L2c): soft type annotations (mirror of GeneDef.param_anns/ret_ann)
         self.param_anns = param_anns if param_anns is not None else []
         self.ret_ann = ret_ann
+        # TYPED-MODE: declared generic type parameters (mirror of GeneDef.type_params)
+        self.type_params = type_params if type_params is not None else []
         self.closure = None
 
 ENHANCE_DELTA = 0.25  # T2e: super-enhancer activation boost (GRN threshold reduction)
 M64 = 0xFFFFFFFFFFFFFFFF
 
-# reg-bio (F-5): default ring kinetics — the historical constants.
+# reg-bio (F-5): default ring kinetics, the historical constants.
 DEFAULT_REPRESSI = {"alpha": 10.0, "gamma": 1.0, "hill": 4, "basal": 0.0, "noise": 0.0,
                     "seed": 0x9E3779B97F4A7C15}
 
@@ -79,7 +137,7 @@ def repressilator_levels(n, tick, params=None):
     Node j's repressor is node (j+n−1) mod n. With default params (noise off)
     this is bit-identical to the historical form. The optional noise kick is
     drawn per (tick, substep, node) from a stream derived from the ABSOLUTE
-    position — the same derivation as the Rust core, so fold-from-init and
+    position, the same derivation as the Rust core, so fold-from-init and
     incremental-cache paths agree bit-for-bit in BOTH implementations.
     """
     if n == 0:
@@ -100,7 +158,7 @@ def repressilator_levels(n, tick, params=None):
             snap = lv[:]
             for j in range(n):
                 rep = snap[(j + n - 1) % n]
-                # rep^hill via repeated multiplication — op-identical to Rust
+                # rep^hill via repeated multiplication, op-identical to Rust
                 # (default h=4 == the historical rep*rep*rep*rep exactly)
                 rh = 1.0
                 for _k in range(HILL):
@@ -113,23 +171,156 @@ def repressilator_levels(n, tick, params=None):
                     nx ^= (nx >> 27) & M64
                     nx &= M64
                     u = ((nx >> 11) & ((1 << 53) - 1)) / 9007199254740992.0
-                    # reg-bio-2 (D6): multiplicative, dt-aware noise — op-for-op
+                    # reg-bio-2 (D6): multiplicative, dt-aware noise, op-for-op
                     # mirror of the Rust core. The constant is the literal double
-                    # nearest 1/√20 on BOTH sides (no math.sqrt call — the value
+                    # nearest 1/√20 on BOTH sides (no math.sqrt call, the value
                     # is fixed text, so IEEE parity is trivial).
                     v = v * (1.0 + NOISE * 0.22360679774997896 * (2.0 * u - 1.0))
                 lv[j] = v if v > 0.0 else 0.0
     return lv
 
+def grapheme_count(s):
+    """W28 (SPEC 3): grapheme-cluster count over a DOCUMENTED SUBSET of the
+    extended-grapheme rules (mirror of the Rust core's grapheme_count):
+    base + combining marks (U+0300-036F, U+1AB0-1AFF, U+1DC0-1DFF,
+    U+20D0-20FF, U+FE20-FE2F), ZWJ (U+200D) glues prev+next, regional-
+    indicator pairs (flags) are one cluster each."""
+    chars = list(s)
+    combining = lambda cp: (0x0300 <= cp <= 0x036F or 0x1AB0 <= cp <= 0x1AFF or
+                            0x1DC0 <= cp <= 0x1DFF or 0x20D0 <= cp <= 0x20FF or
+                            0xFE20 <= cp <= 0xFE2F)
+    ri = lambda cp: 0x1F1E6 <= cp <= 0x1F1FF
+    n = len(chars)
+    clusters = 0
+    i = 0
+    while i < n:
+        clusters += 1
+        cp = ord(chars[i])
+        if ri(cp):
+            if i + 1 < n and ri(ord(chars[i + 1])):
+                i += 2
+            else:
+                i += 1
+            continue
+        j = i + 1
+        zwj_forward = cp == 0x200D
+        while j < n:
+            c2 = ord(chars[j])
+            if combining(c2):
+                j += 1
+            elif c2 == 0x200D:
+                j += 1
+                zwj_forward = True
+            elif zwj_forward:
+                j += 1
+                zwj_forward = False
+            else:
+                break
+        i = j
+    return clusters
+
+
 class Pheno:
-    __slots__ = ("name", "parent", "fields", "methods")
-    def __init__(self, name, parent, fields, methods):
+    __slots__ = ("name", "parent", "fields", "methods", "implements")
+    def __init__(self, name, parent, fields, methods, implements=None):
         self.name, self.parent, self.fields, self.methods = name, parent, fields, methods
+        # W04: implemented traits, in declaration order (SPEC 8b)
+        self.implements = implements or []
+
+class TraitM:
+    """W04: one trait method contract. required=True means the implementing
+    phenotype must provide it; default is the full GeneDef body otherwise."""
+    __slots__ = ("name", "required", "default")
+    def __init__(self, name, required, default):
+        self.name, self.required, self.default = name, required, default
+
+class Trait:
+    __slots__ = ("name", "methods")
+    def __init__(self, name, methods):
+        self.name, self.methods = name, methods
 
 class ObjInst:
     __slots__ = ("defn", "fields")
     def __init__(self, defn, fields):
         self.defn, self.fields = defn, fields
+
+class Channel:
+    """W015 mirror: unbounded FIFO channel, created empty. The sequential
+    oracle never blocks (the differential corpus writes buffered sends
+    before recvs/selects), so the buffer is a plain list of WIRE-form
+    payloads: the Rust queue stores SendValue, and channel_wire below is
+    its sequential mirror, applied at send time on both cores so the
+    membrane contract is one rule on the same-thread buffered path too."""
+    __slots__ = ("buf", "closed")
+    def __init__(self):
+        self.buf = []
+        self.closed = False
+
+class WeakRef:
+    """W013 (D-013) mirror: opaque weak handle (the weak() builtin). Holds a
+    weakref to the target's backing store, it does NOT keep the value alive;
+    strengthen() returns null once the last strong reference is gone (the
+    Rust core frees at strong-count zero, no GC). Phenotype handles carry
+    the shared per-class definition so strengthen can rebuild the SAME
+    instance (same fields dict) while the instance is alive; holding the
+    definition never keeps an instance alive. addr is the target address at
+    handle creation, the identity rule for deep_eq (same as the Rust
+    same_target: same backing-store allocation)."""
+    __slots__ = ("kind", "addr", "defn")
+    def __init__(self, kind, addr, defn=None):
+        # no Python weakref here: plain list/dict are not weakref-able, and
+        # the oracle models the RULES deterministically instead. The target
+        # is registered strongly on the interpreter (self.weak_targets); the
+        # ALIVE question is answered by an env-chain identity scan at
+        # strengthen() time (a binding somewhere on the live scope chain
+        # holds the target = a strong reference exists). Same-thread,
+        # sequential: matches the Rust Rc semantics on every pin-able shape.
+        self.kind, self.addr, self.defn = kind, addr, defn
+
+def channel_wire(v, _d=0):
+    """W015 mirror of the Rust channel wire serialization (genes.to_send_d):
+    map keys stringify through display, nested behavior handles (genes,
+    sequences, channels) degrade to null, nested phenotype instances become
+    maps carrying the hidden #phenotype key, variants ride with their
+    payload. Top-level handles never reach this function (send refuses them
+    with a catchable `membrane` stress first)."""
+    if _d > 100_000:
+        return None
+    if v is None or isinstance(v, (bool, int, float, str, bytes)):
+        return v
+    if isinstance(v, list):
+        return [channel_wire(x, _d + 1) for x in v]
+    if isinstance(v, dict):
+        return {(k if isinstance(k, str) else v_display(k)): channel_wire(x, _d + 1)
+                for k, x in v.items()}
+    if isinstance(v, Variant):
+        return Variant(v.tag, None if v.payload is None else channel_wire(v.payload, _d + 1))
+    if isinstance(v, ObjInst):
+        out = {"#phenotype": v.defn.name}
+        for k, x in v.fields.items():
+            out[k] = channel_wire(x, _d + 1)
+        return out
+    # Gene / SeqObj / Channel handles degrade to null, like the spawn wire
+    return None
+
+def channel_degrade_result(v, _d=0):
+    """W015 mirror of the Rust join-result path (genes.to_send_d): a channel
+    handle degrades to null, deeply inside containers, and a propagated
+    variant keeps its tag while its payload degrades. The wider result-path
+    wire gaps (map-key stringification, phenotype-to-map) predate W015 and
+    are corpus-avoided; this mirrors only the channel rule."""
+    if isinstance(v, Channel):
+        return None
+    if _d > 100_000:
+        return v
+    if isinstance(v, list):
+        return [channel_degrade_result(x, _d + 1) for x in v]
+    if isinstance(v, dict):
+        return {k: channel_degrade_result(x, _d + 1) for k, x in v.items()}
+    if isinstance(v, Variant):
+        return Variant(v.tag, None if v.payload is None
+                       else channel_degrade_result(v.payload, _d + 1))
+    return v
 
 class SeqObj:
     """Sequential-oracle sequence: values are produced by running the body to
@@ -166,7 +357,7 @@ class SeqObj:
                     pass
                 except Stress as st:
                     # W06 (D-014) mirror: propagation inside a sequence ends
-                    # the stream — sequences are streams, not answers, so the
+                    # the stream, sequences are streams, not answers, so the
                     # variant has no return path; the stream ends cleanly
                     # (never leaked as a kind). Matches genes.rs run_seq_body.
                     if st.prop is not None:
@@ -206,11 +397,25 @@ def fmt_float(f):
 def escape_str(s):
     return s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\t", "\\t")
 
+def escape_bytes(b):
+    # W029 mirror of the Rust escape_bytes, printable ASCII raw, the C
+    # escape set short-form, everything else \xNN two-hex-digit lowercase.
+    out = ""
+    for byte in b:
+        if byte == 0x0a: out += "\\n"
+        elif byte == 0x09: out += "\\t"
+        elif byte == 0x0d: out += "\\r"
+        elif byte == 0x22: out += '\\"'
+        elif byte == 0x5c: out += "\\\\"
+        elif 0x20 <= byte <= 0x7e: out += chr(byte)
+        else: out += "\\x%02x" % byte
+    return out
+
 def is_identlike(s):
     return bool(s) and (s[0].isalpha() or s[0] == "_") and all(c.isalnum() or c == "_" for c in s)
 
 def v_repr(v, _seen=None, _depth=0):
-    # reg-r4 (re-audit B-3): cycle-safe — a container containing itself
+    # reg-r4 (re-audit B-3): cycle-safe, a container containing itself
     # renders the [...] / {...} marker at depth > 256 or on a re-entry
     # (mirror of the Rust core; the old version recursed forever)
     if _seen is None:
@@ -223,6 +428,7 @@ def v_repr(v, _seen=None, _depth=0):
     if isinstance(v, int): return str(v)
     if isinstance(v, float): return fmt_float(v)
     if isinstance(v, str): return f'"{escape_str(v)}"'
+    if isinstance(v, bytes): return f'b"{escape_bytes(v)}"'
     if isinstance(v, list):
         marker = id(v)
         if marker in _seen:
@@ -249,14 +455,37 @@ def v_repr(v, _seen=None, _depth=0):
     if isinstance(v, Variant):
         if v.tag == "None":
             return "None"
-        if v.payload is None:
-            return v.tag
+        # W06 parity fix: a null payload is a REAL payload, ok(null) renders
+        # Ok(null) like the Rust core (Some(Null)); the old payload-is-None
+        # guard rendered the bare tag and hid the value
         return f"{v.tag}({v_repr(v.payload, _seen, _depth + 1)})"
     if isinstance(v, SeqObj):
         return f"<sequence {v.gene.name}>" if v.gene.name else "<sequence lambda>"
     if isinstance(v, ObjInst):
         return f"<phenotype {v.defn.name}>"
+    # W015 mirror: address-free anonymous repr (see the Rust Channel arm)
+    if isinstance(v, Channel):
+        return "<channel>"
+    # W013 mirror: address-free for the same reason; the target's identity
+    # is observable only through strengthen(), never through repr.
+    if isinstance(v, WeakRef):
+        return "<weak>"
     return "<?>" 
+
+def io_err(e):
+    """Mirror the rust io::Error Display: '<strerror> (os error <N>)'.
+
+    python's OSError str is '[Errno N] strerror: filename' — different
+    bytes from the rust surface. The S3 granted lane (file_bytes_gaps)
+    prints these messages, and the legacy file family's missing text was
+    never corpus-covered before, so the drift was invisible (the try_
+    twins mask it behind fixed payloads; the legacy arms embed the raw
+    io::Error). The path itself is NOT part of io::Error Display — the
+    rust arms format it separately before {e}."""
+    strerror = e.strerror if e.strerror is not None else str(e)
+    errno = e.errno if e.errno is not None else 0
+    return f"{strerror} (os error {errno})"
+
 
 def v_display(v):
     if isinstance(v, str):
@@ -268,20 +497,28 @@ def truthy(v):
     if v is True: return True
     if isinstance(v, (int, float)): return v != 0
     if isinstance(v, str): return len(v) > 0
+    if isinstance(v, bytes): return len(v) > 0
     if isinstance(v, list): return len(v) > 0
     if isinstance(v, dict): return len(v) > 0
     # W06 mirror: a carried success is truthy; a carried failure is falsy
     if isinstance(v, Variant): return v.tag in ("Some", "Ok")
     return True
 
-# W01 (L2c) — soft annotation matching (mirror of interp.rs ann_matches).
+# W01 (L2c), soft annotation matching (mirror of interp.rs ann_matches).
 # A value matches by type_name(); `any` accepts everything; `float` accepts
-# int (safe numeric widening — `int` refuses float: no silent narrowing);
-# unions match any alternative; optionals additionally accept null.
+# int (safe numeric widening, `int` refuses float: no silent narrowing);
+# TYPED-MODE: capitalization is normalized (`Int`≡`int`, mirrored as
+# ann_name_norm) and generic annotations match on their HEAD like the bare
+# name (`list[int]` enforces "is a list") — element types stay static-checker
+# business. Unions match any alternative; optionals additionally accept null.
+def ann_name_norm(name):
+    # TYPED-MODE mirror of interp.rs ann_name_norm.
+    return name.lower()
+
 def ann_matches(v, ann):
     k = ann[0]
     if k == "named":
-        name = ann[1]
+        name = ann_name_norm(ann[1])
         if name == "any":
             return True
         if type_name(v) == name:
@@ -290,11 +527,52 @@ def ann_matches(v, ann):
     if k == "union":
         return any(ann_matches(v, a) for a in ann[1])
     if k == "opt":
-        return v is None or ann_matches(v, ann[1])
+        # TYPED-MODE: optionals accept null, any value matching the inner
+        # type (the W01 law), AND the Option family (W06): None outright,
+        # Some(payload) when the payload matches.
+        if v is None:
+            return True
+        if isinstance(v, Variant):
+            if v.tag == "None":
+                return True
+            if v.tag == "Some":
+                return ann_matches(v.payload, ann[1])
+        return ann_matches(v, ann[1])
+    if k == "alias":
+        # W01-s2: an alias matches as its parse-time-resolved target
+        # (mirror of interp.rs TypeAnn::Alias law).
+        return ann_matches(v, ann[2])
+    if k == "generic":
+        head = ann_name_norm(ann[1])
+        if head == "any":
+            return True
+        if head == "list":
+            return isinstance(v, list)
+        if head == "map":
+            return isinstance(v, dict)
+        if head == "option":
+            return v is None or (isinstance(v, Variant) and v.tag in ("Some", "None"))
+        if head == "result":
+            return isinstance(v, Variant) and v.tag in ("Ok", "Err")
+        # unknown generic head: bare-name fallback (typo never accepts all)
+        return type_name(v) == head or (head == "float" and isinstance(v, int) and not isinstance(v, bool))
+    return False
+
+def ann_is_typaram(ann, type_params):
+    # TYPED-MODE mirror of interp.rs ann_is_typaram: type parameters are
+    # erased at runtime; the soft contract is a no-op for a bare param name.
+    k = ann[0]
+    if k == "named":
+        return any(p == ann[1] for (p, _b) in type_params)
+    if k == "union":
+        return all(ann_is_typaram(a, type_params) for a in ann[1])
+    if k == "opt":
+        return ann_is_typaram(ann[1], type_params)
+    # W01-s2: an alias resolves to its concrete target
     return False
 
 def ann_render(ann):
-    # Canonical rendering — must match TypeAnn::render op-for-op.
+    # Canonical rendering, must match TypeAnn::render op-for-op.
     k = ann[0]
     if k == "named":
         return ann[1]
@@ -302,6 +580,10 @@ def ann_render(ann):
         return " | ".join(ann_render(a) for a in ann[1])
     if k == "opt":
         return ann_render(ann[1]) + "?"
+    if k == "generic":
+        return ann[1] + "[" + ", ".join(ann_render(a) for a in ann[2]) + "]"
+    if k == "alias":
+        return ann[1]
     return "any"
 
 def type_name(v):
@@ -310,22 +592,30 @@ def type_name(v):
     if isinstance(v, int): return "int"
     if isinstance(v, float): return "float"
     if isinstance(v, str): return "str"
+    if isinstance(v, bytes): return "bytes"
     if isinstance(v, list): return "list"
     if isinstance(v, dict): return "map"
     if isinstance(v, Gene): return "gene"
     if isinstance(v, SeqObj): return "sequence"
     if isinstance(v, ObjInst): return "phenotype"
     if isinstance(v, Variant): return "option" if v.tag in ("Some", "None") else "result"
+    if isinstance(v, Channel): return "channel"
+    # W013 mirror: the handle type is its own name, the TARGET's type is not
+    # leaked (the handle may outlive the target).
+    if isinstance(v, WeakRef): return "weak"
     return "native"
 
 def deep_eq(a, b, _pairs=None):
-    # reg-r4: cycle-safe — a pair of containers already being compared is
+    # reg-r4: cycle-safe, a pair of containers already being compared is
     # treated as equal (mirror of the Rust deep_eq's seen-pair set); the
     # old version recursed forever on `cyc == cyc`
     if isinstance(a, bool) or isinstance(b, bool):
         return a is b
     if isinstance(a, (int, float)) and isinstance(b, (int, float)):
         return a == b
+    # W029 mirror: bytes equal iff same byte content
+    if isinstance(a, bytes) or isinstance(b, bytes):
+        return isinstance(a, bytes) and isinstance(b, bytes) and a == b
     # W06 (D-014) mirror: variants equal iff same tag + payload deep_eq;
     # families distinct (Some(x) != Ok(x)); None == None.
     if isinstance(a, Variant) or isinstance(b, Variant):
@@ -338,6 +628,36 @@ def deep_eq(a, b, _pairs=None):
         if a.payload is None or b.payload is None:
             return False
         return deep_eq(a.payload, b.payload, _pairs)
+    # builder-B parity finding (W34 stage 2, PR #28 pin): instances are DATA,
+    # not handles, equal iff same class name AND deep-equal field values.
+    # Mirror of the Rust Value::Obj arm (the old fall-through made every pair
+    # of distinct instances False regardless of state).
+    if isinstance(a, ObjInst) or isinstance(b, ObjInst):
+        if not (isinstance(a, ObjInst) and isinstance(b, ObjInst)):
+            return False
+        if a.defn.name != b.defn.name:
+            return False
+        fa, fb = a.fields, b.fields
+        if fa is fb:
+            return True  # a structure equals itself
+        if _pairs is None:
+            _pairs = set()
+        key = (id(fa), id(fb))
+        if key in _pairs:
+            return True  # already comparing this pair (cycle)
+        _pairs.add(key)
+        try:
+            if len(fa) != len(fb):
+                return False
+            return all(any(deep_eq(k, k2, _pairs) and deep_eq(v, v2, _pairs)
+                           for k2, v2 in fb.items()) for k, v in fa.items())
+        finally:
+            _pairs.discard(key)
+    # W013 mirror: weak handles are identity-based like channels (same
+    # backing-store address), a handle never equals the target it references.
+    if isinstance(a, WeakRef) or isinstance(b, WeakRef):
+        return (isinstance(a, WeakRef) and isinstance(b, WeakRef)
+                and a.kind == b.kind and a.addr == b.addr)
     if type(a) is not type(b) and not (a is None and b is None):
         if isinstance(a, (int, float)) and isinstance(b, (int, float)):
             return a == b
@@ -383,7 +703,7 @@ def lex(src):
             while i < n and src[i] != "\n":
                 i += 1
             continue
-        # W030 mirror: raw strings r"..." — no escapes, no interpolation
+        # W030 mirror: raw strings r"...", no escapes, no interpolation
         if c == "r" and i + 1 < n and src[i+1] == '"':
             i += 2
             raw, closed = "", False
@@ -394,10 +714,53 @@ def lex(src):
                     line += 1
                 raw += src[i]; i += 1
             if not closed:
-                notes.append(Note(4, "unclosed raw string consumed to end of input"))
+                notes.append(Note(4, "unclosed raw string consumed to end of input", line))
             toks.append(("STR", raw, line))
             continue
-        # W030 mirror: multiline triple-quoted strings """...""" — escapes and
+        # W029 mirror: bytes literals b"..." / b'...', same escape set as the
+        # Rust lexer (\n \t \r \\ \" \' \0 \xNN; unknown escapes verbatim; no
+        # interpolation); non-ASCII encodes as UTF-8 with a note.
+        if (c == "b" or c == "B") and i + 1 < n and src[i+1] in ('"', "'"):
+            quote = src[i+1]
+            if quote == "'":
+                notes.append(Note(4, "single-quoted bytes literal repaired to double quotes"))
+            i += 2
+            out = bytearray()
+            closed = False
+            while i < n:
+                if src[i] == quote:
+                    i += 1; closed = True; break
+                if src[i] == "\\" and i + 1 < n:
+                    e = src[i + 1]
+                    if e == "n": out.append(10)
+                    elif e == "t": out.append(9)
+                    elif e == "r": out.append(13)
+                    elif e == "0": out.append(0)
+                    elif e == "\\": out.append(92)
+                    elif e == '"': out.append(34)
+                    elif e == "'": out.append(39)
+                    elif e == "x":
+                        if i + 3 < n and all(ch in "0123456789abcdefABCDEF" for ch in src[i+2:i+4]):
+                            out.append(int(src[i+2:i+4], 16))
+                            i += 4; continue
+                        notes.append(Note(4, "malformed \\x escape in bytes literal kept verbatim"))
+                        out.append(92); out.append(120)
+                    else:
+                        out.append(92); out.extend(e.encode("utf-8"))
+                    i += 2; continue
+                if src[i] == "\n":
+                    line += 1
+                if ord(src[i]) > 127:
+                    notes.append(Note(4, "non-ASCII char in bytes literal encoded as UTF-8"))
+                    out.extend(src[i].encode("utf-8"))
+                else:
+                    out.append(ord(src[i]))
+                i += 1
+            if not closed:
+                notes.append(Note(4, "unclosed bytes literal consumed to end of input"))
+            toks.append(("BYTES", bytes(out), line))
+            continue
+        # W030 mirror: multiline triple-quoted strings """...""", escapes and
         # interpolation processed, content verbatim
         if c == '"' and i + 2 < n and src[i+1] == '"' and src[i+2] == '"':
             i += 3
@@ -417,7 +780,7 @@ def lex(src):
                     depth -= 1
                 raw += src[i]; i += 1
             if not closed:
-                notes.append(Note(4, "unclosed multiline string consumed to end of input"))
+                notes.append(Note(4, "unclosed multiline string consumed to end of input", line))
             toks.append(("INTERP" if interp else "STR", raw, line))
             continue
         if c == '"':
@@ -439,11 +802,11 @@ def lex(src):
                     depth -= 1
                 raw += ch; i2 += 1
             if not closed:
-                notes.append(Note(4, "unclosed string consumed to end of line"))
+                notes.append(Note(4, "unclosed string consumed to end of line", line))
             toks.append(("INTERP" if interp else "STR", raw, line))
             i = i2; continue
         if c == "'":
-            notes.append(Note(4, "single-quoted string repaired to double quotes"))
+            notes.append(Note(4, "single-quoted string repaired to double quotes", line))
             raw, i2, closed = "", i + 1, False
             while i2 < n:
                 ch = src[i2]
@@ -457,7 +820,7 @@ def lex(src):
                     line += 1
                 raw += ch; i2 += 1
             if not closed:
-                notes.append(Note(4, "unclosed string consumed to end of line"))
+                notes.append(Note(4, "unclosed string consumed to end of line", line))
             toks.append(("STR", raw, line))
             i = i2; continue
         if c == "@":
@@ -467,7 +830,7 @@ def lex(src):
             if j > i + 1:
                 toks.append(("MARK", src[i + 1:j], line))
             else:
-                notes.append(Note(4, "stray '@' skipped"))
+                notes.append(Note(4, "stray '@' skipped", line))
             i = j; continue
         if c.isdigit():
             # W031 mirror: radix prefixes 0x/0b/0o (case-insensitive) with `_`
@@ -485,7 +848,7 @@ def lex(src):
                     toks.append(("INT", val, line))
                     # i64 parity: out-of-range treated as 0 with the same note
                     if not (-2**63 <= val <= 2**63 - 1):
-                        notes.append(Note(4, f"integer '{raw}' out of range treated as 0"))
+                        notes.append(Note(4, f"integer '{raw}' out of range treated as 0", line))
                         toks[-1] = ("INT", 0, line)
                     i = j; continue
             j = i
@@ -511,7 +874,7 @@ def lex(src):
             try:
                 toks.append(("FLOAT", float(cleaned), line) if isf else (("INT", int(cleaned), line)))
             except ValueError:
-                notes.append(Note(4, f"malformed number '{text}' treated as 0"))
+                notes.append(Note(4, f"malformed number '{text}' treated as 0", line))
                 toks.append(("INT", 0, line))
             else:
                 # parity with the Rust lexer: an integer literal beyond i64
@@ -519,7 +882,7 @@ def lex(src):
                 # Rust core parses i64; a Python bignum would otherwise see
                 # a value the compiled engine never did)
                 if not isf and not (-2**63 <= int(cleaned) <= 2**63 - 1):
-                    notes.append(Note(4, f"integer '{text}' out of range treated as 0"))
+                    notes.append(Note(4, f"integer '{text}' out of range treated as 0", line))
                     toks[-1] = ("INT", 0, line)
             i = j; continue
         if c.isalpha() or c == "_":
@@ -541,26 +904,26 @@ def lex(src):
                 matched = True
                 break
         if not matched:
-            notes.append(Note(4, f"unexpected character '{c}' skipped"))
+            notes.append(Note(4, f"unexpected character '{c}' skipped", line))
             i += 1
     toks.append(("EOF", None, line))
     return toks, notes
 
 # ----------------------------------------------------------------------------
-# parser — Total Grammar ladder
+# parser, Total Grammar ladder
 
-KEYWORDS = set("""gene let if elif else while loop for in return break continue match case use
+KEYWORDS = set("""gene let if elif else while loop scope for in return break continue match case use
 tad anchor export import enhance silence stress rescue raise fate state regulate activates
 inhibits strength toggle repressilator period frame proof guard splice variant edit replace
 ires as collect enter phenotype sequence yield new threshold from self operon""".split())
 
-ARMS = set("""gene let if elif else while loop for return break continue match use tad anchor
+ARMS = set("""gene let if elif else while loop scope for return break continue match use tad anchor
 enhance silence stress raise fate regulate toggle repressilator frame splice edit ires
 phenotype sequence yield operon""".split())
 
 SYNONYMS = {
     "fn": "gene", "func": "gene", "fun": "gene", "def": "gene", "sub": "gene",
-    "lambda": "gene", "proc": "gene", "var": "let", "val": "let", "const": "let",
+    "lambda": "gene", "proc": "gene", "var": "let", "val": "let",
     "foreach": "for", "each": "for", "import": "use", "include": "use",
     "require": "use", "ret": "return", "stop": "break", "next": "continue",
     "skip": "continue", "elseif": "elif",
@@ -569,10 +932,12 @@ SYNONYMS = {
 }
 VALUE_SYNONYMS = {"yes": True, "on": True, "no": False, "off": False,
                   "nil": None, "nothing": None}
-# W06 (D-014) mirror: 'none' RETIRED from VALUE_SYNONYMS — it is now the
+# W06 (D-014) mirror: 'none' RETIRED from VALUE_SYNONYMS, it is now the
 # Option constructor none(); bare 'none' degrades to an unbound ident
 # (phantom note), never a silent null. Matches src/parser.rs.
-MARKS = {"acetylate", "methylate", "m6a", "copies", "riboswitch", "burst"}
+# W64: metadata-only deprecation mark, known so the wobble repair
+# never mangles it; the payload parse is lenient, runtime never reads it
+MARKS = {"acetylate", "methylate", "m6a", "copies", "riboswitch", "burst", "deprecated"}
 
 def edit_distance(a, b):
     if a == b:
@@ -601,6 +966,13 @@ def wobble_keyword(word):
 class P:
     def __init__(self, toks, notes):
         self.toks, self.pos, self.notes = toks, 0, notes
+        # W24: contextual `pub` marker names (top level only)
+        self.pub_names = []
+        # W01-s2 type aliases (mirror of parser.rs type_aliases +
+        # type_param_stack): declared `type Name = ann` pairs in declaration
+        # order + enclosing gene type parameters (shadow aliases).
+        self.type_aliases = []
+        self.type_param_stack = []
 
     def peek(self):
         return self.toks[self.pos]
@@ -612,7 +984,7 @@ class P:
         return t
 
     def note(self, line, rung, msg):
-        self.notes.append(Note(rung, msg))
+        self.notes.append(Note(rung, msg, line))
 
     def eat_nl(self):
         while self.peek()[0] in ("NL", "SYM") and (self.peek()[0] == "NL" or self.peek()[1] == ";"):
@@ -648,6 +1020,28 @@ class P:
                 self.note(self.peek()[2], 4, "unmatched '}' skipped")
                 self.next(); continue
             before = self.pos
+            # W24 mirror: contextual `pub` marker, `pub gene` / `pub let` /
+            # `pub const` / `pub phenotype` at TOP LEVEL records the name for
+            # strict-mode export filtering. `pub` is NOT a keyword: an
+            # ordinary identifier named `pub` is untouched (Total Grammar).
+            t = self.peek()
+            if t[0] == "IDENT" and t[1] == "pub":
+                nt = self.toks[self.pos + 1] if self.pos + 1 < len(self.toks) else ("EOF", None, 0)
+                if nt[0] == "IDENT" and nt[1] in ("gene", "let", "const", "phenotype"):
+                    self.next()
+                    s = self.stmt()
+                    if s is not None:
+                        name = None
+                        if s[0] == "gene" and s[1].name:
+                            name = s[1].name
+                        elif s[0] in ("let", "const"):
+                            name = s[1]
+                        elif s[0] == "pheno":
+                            name = s[1].name
+                        if name:
+                            self.pub_names.append(name)
+                        out.append(s)
+                    continue
             s = self.stmt()
             if s is not None:
                 out.append(s)
@@ -657,6 +1051,51 @@ class P:
         return out
 
     # statements
+    def _trait_method_has_body(self):
+        # W04: from the current 'gene' token, scan ahead past the matching
+        # parameter parens; a '{' after the close paren means a default body.
+        i = self.pos + 1
+        n = len(self.toks)
+        depth = 0
+        seen_paren = False
+        while i < n:
+            t = self.toks[i]
+            if t[0] == "SYM" and t[1] == "(":
+                depth += 1
+                seen_paren = True
+            elif t[0] == "SYM" and t[1] == ")":
+                depth -= 1
+                if seen_paren and depth <= 0:
+                    nx = self.toks[i + 1] if i + 1 < n else ("EOF", None, 0)
+                    return nx[0] == "SYM" and nx[1] == "{"
+            elif not seen_paren and t[0] == "SYM" and t[1] == "{":
+                return True
+            i += 1
+        return False
+
+    def _trait_params(self):
+        # W04: consume `(a, b, ...)`, plain names (a signature, not a body).
+        if not (self.peek()[0] == "SYM" and self.peek()[1] == "("):
+            return []
+        self.next()
+        names = []
+        while True:
+            t = self.peek()
+            if t[0] == "SYM" and t[1] == ")":
+                self.next()
+                break
+            if t[0] == "IDENT":
+                self.next()
+                names.append(t[1])
+                if t[1] == "Eq" or (self.peek()[0] == "SYM" and self.peek()[1] == "="):
+                    self.next()
+                    self.expr()
+            elif t[0] == "EOF":
+                break
+            else:
+                self.next()
+        return names
+
     def stmt(self):
         t = self.peek()
         if t[0] == "MARK":
@@ -692,7 +1131,7 @@ class P:
                     copies = min(max(tt[1], 1), 64)
                 else:
                     self.note(tt[2], 4, "@copies needs an integer 1..=64; default 1")
-            # loop-9 (F-5): @riboswitch ligand off|on threshold t — a cis
+            # loop-9 (F-5): @riboswitch ligand off|on threshold t, a cis
             # aptamer on this gene's own transcript (mirror of the Rust drain)
             riboswitch = None
             if "riboswitch" in marks:
@@ -721,7 +1160,7 @@ class P:
                         else:
                             self.note(vt[2], 4, "riboswitch threshold needs a number 0..=1; default 0.5")
                     riboswitch = (lig, on, threshold)
-            # loop-9 (F-2): @burst kon koff — per-gene promoter identity
+            # loop-9 (F-2): @burst kon koff, per-gene promoter identity
             burst = None
             if "burst" in marks:
                 vals = [0.3, 0.1]
@@ -737,12 +1176,70 @@ class P:
                 if got < 2:
                     self.note(t[2], 4, "@burst needs kon and koff (0..=1); defaults 0.3/0.1")
                 burst = (vals[0], vals[1])
+            # W64: @deprecated("migration text", since="2.4") payload, metadata
+            # only (mirror of the Rust mark arm): parse leniently, attach to
+            # the gene tuple, never evaluate. Malformed shapes degrade to a
+            # rung-4 note, the mark is dropped, the gene keeps parsing.
+            deprecated = None
+            if "deprecated" in marks:
+                tt = self.peek()
+                if tt == ("SYM", "(", tt[2]) or (tt[0] == "SYM" and tt[1] == "("):
+                    self.next()
+                    msg = ""
+                    vt = self.peek()
+                    if vt[0] == "STR":
+                        self.next()
+                        msg = vt[1]
+                    else:
+                        self.note(vt[2], 4, f"@deprecated needs a string message; mark skipped")
+                    since = None
+                    nt = self.peek()
+                    if nt[0] == "SYM" and nt[1] == ",":
+                        self.next()
+                        st = self.peek()
+                        if st[0] == "IDENT" and st[1] == "since":
+                            self.next()
+                            if self.peek()[0] == "SYM" and self.peek()[1] == "=":
+                                self.next()
+                            vt2 = self.peek()
+                            if vt2[0] == "STR":
+                                self.next()
+                                since = vt2[1]
+                        elif st[0] == "STR":
+                            self.next()
+                            since = st[1]
+                        else:
+                            self.note(st[2], 4, "@deprecated since needs a string; ignored")
+                    et = self.peek()
+                    if et[0] == "SYM" and et[1] == ")":
+                        self.next()
+                    else:
+                        depth = 0
+                        while True:
+                            et = self.peek()
+                            if et[0] == "SYM" and et[1] == "(":
+                                depth += 1
+                            elif et[0] == "SYM" and et[1] == ")":
+                                self.next()
+                                if depth == 0:
+                                    break
+                                depth -= 1
+                                continue
+                            elif et[0] in ("NL", "EOF"):
+                                break
+                            self.next()
+                            continue
+                        self.note(t[2], 4, "@deprecated payload auto-closed")
+                    if msg:
+                        deprecated = (msg, since)
+                else:
+                    self.note(t[2], 4, "@deprecated needs a migration string; mark skipped")
             self.eat_nl()
             if not self.expect_kw("gene"):
                 self.note(t[2], 4, "mark must precede 'gene'; skipped line")
                 self.skip_line()
                 return None
-            return self.gene_def(marks, copies, riboswitch, burst)
+            return self.gene_def(marks, copies, riboswitch, burst, deprecated)
         if t[0] == "SYM" and t[1] == "{":
             self.note(t[2], 4, "bare block treated as scoped statements")
             return ("block", self.block())
@@ -764,21 +1261,104 @@ class P:
         t1 = self.toks[self.pos + 1] if self.pos + 1 < len(self.toks) else ("EOF", None, 0)
         expr_head = (t1[0] == "SYM" and t1[1] in ("=", "(", "[", ".", "+=", "-=", "*=", "/=", "%="))
         word = w
+        # W01-s2: `type Name = ...` is the type-alias form; the repair to
+        # 'phenotype' happens silently (the alias arm intercepts first).
+        t2 = self.toks[self.pos + 2] if self.pos + 2 < len(self.toks) else ("EOF", None, 0)
+        alias_head = (w == "type" and t1[0] == "IDENT"
+                      and t2[0] == "SYM" and t2[1] == "=")
         if w not in KEYWORDS and not expr_head:
             syn = SYNONYMS.get(w)
             if syn and syn in ARMS:
-                self.note(self.peek()[2], 2, f"synonym '{w}' repaired to '{syn}'")
+                if not alias_head:
+                    self.note(self.peek()[2], 2, f"synonym '{w}' repaired to '{syn}'")
                 word = syn
             else:
                 wk = wobble_keyword(w)
                 if wk and wk in ARMS:
                     self.note(self.peek()[2], 3, f"wobble: '{w}' repaired to keyword '{wk}'")
                     word = wk
+        if word == "trait":
+            # W04 (SPEC 8b): `trait Name { gene m(); gene n() { ... } }`,
+            # mirror of the Rust parser. A method with a body is a DEFAULT
+            # (parsed by the normal gene parser); one without is REQUIRED.
+            self.next()
+            tname = self.ident()
+            methods = []
+            if self.peek() == ("SYM", "{", self.peek()[2]):
+                self.next()
+                while True:
+                    self.eat_nl()
+                    t = self.peek()
+                    if t[0] == "SYM" and t[1] == "}":
+                        self.next(); break
+                    if t[0] == "EOF":
+                        self.note(t[2], 4, "trait body auto-closed")
+                        break
+                    if t[0] == "IDENT" and (t[1] == "gene" or SYNONYMS.get(t[1]) == "gene"):
+                        if self._trait_method_has_body():
+                            self.next()  # consume 'gene', gene_def parses from the name
+                            g = self.gene_def([])
+                            if g[0] == "gene":
+                                methods.append(TraitM(g[1].name or "?", False, g[1]))
+                            else:
+                                self.note(t[2], 4, "trait method default body lost; treated as required")
+                                methods.append(TraitM("?", True, None))
+                        else:
+                            self.next()
+                            mname = self.ident()
+                            self._trait_params()
+                            self.end_stmt()
+                            methods.append(TraitM(mname, True, None))
+                        continue
+                    self.note(t[2], 4, "unexpected token in trait body; skipped")
+                    self.next()
+            else:
+                self.note(self.peek()[2], 4, "trait without body declares no methods")
+            return ("trait", Trait(tname, methods))
         if word == "gene":
             self.next()
             return self.gene_def([])
+        if word == "const":
+            # W05: `const NAME = expr`, immutable binding with deep-freeze
+            # semantics (mirror of the Rust parser; SPEC §7d).
+            self.next()
+            t = self.peek()
+            if t[0] == "SYM" and t[1] in ("[", "{"):
+                line = self.peek()[2]
+                pat = self.destructure_pat()
+                self.note(line, 4, "const destructuring not supported; bound as mutable let")
+                if self.peek() == ("SYM", "=", self.peek()[2]):
+                    self.next()
+                    e = self.expr()
+                    self.end_stmt()
+                    return ("letpat", pat, e)
+                self.note(self.peek()[2], 4, "destructured 'let' without value binds nulls")
+                self.end_stmt()
+                return ("letpat", pat, ("null",))
+            name = self.ident()
+            t2 = self.peek()
+            if t2[0] == "SYM" and t2[1] == ":":
+                line = t2[2]
+                self.next()
+                self.type_ann()
+                self.note(line, 4, "const type annotation is not checked in v1; dropped")
+            if self.peek() == ("SYM", "=", self.peek()[2]):
+                self.next()
+                e = self.expr()
+                self.end_stmt()
+                return ("const", name, e)
+            self.note(self.peek()[2], 4, "const without '=' binds null")
+            self.end_stmt()
+            return ("const", name, ("null",))
         if word == "let":
             self.next()
+            # W05: contextual `mut` annotation, documentation-only in v2.x;
+            # consumed silently when followed by the real name.
+            t = self.peek()
+            if t[0] == "IDENT" and t[1] == "mut":
+                nxt = self.toks[self.pos + 1] if self.pos + 1 < len(self.toks) else None
+                if nxt is not None and nxt[0] == "IDENT":
+                    self.next()
             t = self.peek()
             # L1a: destructuring definitions
             if t[0] == "SYM" and t[1] in ("[", "{"):
@@ -809,7 +1389,7 @@ class P:
                 self.note(self.peek()[2], 4, "multi 'let' without value binds nulls")
                 self.end_stmt()
                 return ("multi", [("ident", n) for n in names], [("null",)] * len(names), True)
-            # W01 (L2c): soft type annotation — `let n: int = 3`
+            # W01 (L2c): soft type annotation, `let n: int = 3`
             t2 = self.peek()
             if t2[0] == "SYM" and t2[1] == ":":
                 self.next()
@@ -852,6 +1432,10 @@ class P:
         if word == "loop":
             self.next()
             return ("loop", self.block())
+        if word == "scope":
+            # W17: structured-concurrency block
+            self.next()
+            return ("scope", self.block())
         if word == "for":
             self.next()
             t = self.peek()
@@ -919,6 +1503,28 @@ class P:
             self.next()
             name = self.ident()
             return ("tad", name, self.block())
+        if word == "module":
+            # W025 stage 2: nested sub-module declaration, CONTEXTUAL like the
+            # Rust core: only `module NAME {` (newlines tolerated between the
+            # words) is the declaration; every other use of the word `module`
+            # stays an ordinary identifier (it is not in KEYWORDS).
+            n_toks = len(self.toks)
+            j = self.pos + 1
+            while j < n_toks and (self.toks[j][0] == "NL" or self.toks[j][:2] == ("SYM", ";")):
+                j += 1
+            is_decl = j < n_toks and self.toks[j][0] == "IDENT"
+            if is_decl:
+                j += 1
+                while j < n_toks and (self.toks[j][0] == "NL" or self.toks[j][:2] == ("SYM", ";")):
+                    j += 1
+                is_decl = j < n_toks and self.toks[j][:2] == ("SYM", "{")
+            if not is_decl:
+                return self.assign_or_expr(w)
+            self.next()
+            name = self.ident()
+            while self.peek()[0] == "NL":
+                self.next()
+            return ("module", name, self.block())
         if word == "anchor":
             self.next()
             is_export = self.expect_kw("export")
@@ -939,7 +1545,7 @@ class P:
             self.end_stmt()
             return ("enhance", [n for n in names if n])
         if word == "silence":
-            # reg-bio-3 (C9): stoichiometric RISC — strength/sites
+            # reg-bio-3 (C9): stoichiometric RISC, strength/sites
             self.next()
             frm = self.ident()
             to = None
@@ -1082,7 +1688,7 @@ class P:
                         trans.append((frm, to, rate, pdecay))
                         self.end_stmt()
                         continue
-                    # reg-bio-2 (A4): `bind tf inducer lg k v;` — `bind` is a
+                    # reg-bio-2 (A4): `bind tf inducer lg k v;`, `bind` is a
                     # HEAD keyword here (no edge source); head already consumed.
                     if frm == "bind":
                         tf = self.ident()
@@ -1189,13 +1795,13 @@ class P:
                     self.end_stmt()
             return ("regulate", edges, trans, binds)
         if word == "ligand":
-            # reg-bio-2 (A4): `ligand iptg;` — a small-molecule pool
+            # reg-bio-2 (A4): `ligand iptg;`, a small-molecule pool
             self.next()
             name = self.ident()
             self.end_stmt()
             return ("ligand", name)
         if word == "autoinducer":
-            # loop-9 (C8): `autoinducer ahl;` — register a quorum-sensing
+            # loop-9 (C8): `autoinducer ahl;`, register a quorum-sensing
             # signal species into the shared medium (parse mirror)
             self.next()
             name = self.ident()
@@ -1225,7 +1831,7 @@ class P:
             self.end_stmt()
             return ("decoy", d, tf, cap)
         if word == "operon":
-            # reg-bio-3 (A1/A7): polycistronic transcription unit —
+            # reg-bio-3 (A1/A7): polycistronic transcription unit,
             # `operon lac { lacZ rbs 1.0; lacY rbs 0.6; lacA; }` (mirror)
             self.next()
             name = self.ident()
@@ -1282,7 +1888,7 @@ class P:
                 if t[0] in ("INT", "FLOAT"):
                     period = float(t[1])
                     self.next()
-            # reg-bio (F-5): inline kinetics — mirror of the Rust parser.
+            # reg-bio (F-5): inline kinetics, mirror of the Rust parser.
             # Canonical order: alpha, gamma, hill, basal, noise, seed.
             ov = {"alpha": None, "gamma": None, "hill": None, "basal": None,
                   "noise": None, "seed": None}
@@ -1465,11 +2071,43 @@ class P:
             return ("ires", name)
         if word == "phenotype":
             self.next()
+            # W01-s2 type aliases: `type Name = ann` (mirror of parser.rs).
+            t = self.peek()
+            t2 = self.toks[self.pos + 1] if self.pos + 1 < len(self.toks) else ("EOF", None, 0)
+            if t[0] == "IDENT" and t2[0] == "SYM" and t2[1] == "=":
+                alias_line = t[2]
+                name = self.ident()
+                self.next()  # '='
+                target = self.type_ann()
+                self.end_stmt()
+                dup = None
+                for (n, t0) in self.type_aliases:
+                    if n == name:
+                        dup = t0
+                        break
+                if dup is not None:
+                    self.note(alias_line, 2, f"duplicate type alias '{name}'; first declaration ({ann_render(dup)}) wins")
+                else:
+                    self.type_aliases.append((name, target))
+                return ("typealias", name, target, alias_line)
             name = self.ident()
             parent = None
             if self.at_ident("from"):
                 self.next()
                 parent = self.ident()
+            # W04: optional `implements A, B, C` (contextual word)
+            implements = []
+            if self.at_ident("implements"):
+                self.next()
+                while True:
+                    t = self.peek()
+                    if t[0] == "IDENT":
+                        self.next()
+                        implements.append(t[1])
+                    if self.peek() == ("SYM", ",", self.peek()[2]):
+                        self.next()
+                        continue
+                    break
             fields, methods = [], []
             if self.peek() == ("SYM", "{", self.peek()[2]):
                 self.next()
@@ -1514,7 +2152,7 @@ class P:
                     self.next()
                     if self.pos == before:
                         break
-            return ("pheno", Pheno(name, parent, fields, methods))
+            return ("pheno", Pheno(name, parent, fields, methods, implements))
         if word == "sequence":
             self.next()
             g = self.gene_def([])
@@ -1530,7 +2168,7 @@ class P:
             self.end_stmt()
             return ("yield", e)
         # bare-name definition: `main { ... }` / `route(req) { ... }` are
-        # gene definitions — lookahead: NAME '{' or NAME '(' ... ')' '{'
+        # gene definitions, lookahead: NAME '{' or NAME '(' ... ')' '{'
         t1 = self.toks[self.pos + 1] if self.pos + 1 < len(self.toks) else ("EOF", None, 0)
         is_def = False
         if word not in KEYWORDS:
@@ -1595,6 +2233,7 @@ class P:
 
     def use_path(self):
         # segments joined by separators; boundary words ('as') never glue in
+        # W25 mirror: `::` is the Rust-style separator, sugar for '/'
         parts = []
         while True:
             t = self.peek()
@@ -1603,14 +2242,25 @@ class P:
                     break
                 parts.append(t[1]); self.next()
                 nt = self.peek()
-                if not (nt[0] == "SYM" and nt[1] in ("/", ".", "-")):
+                if not (nt[0] == "SYM" and nt[1] in ("/", ".", "-", ":")):
                     break
             elif t[0] == "SYM" and t[1] in ("/", ".", "-"):
                 parts.append(t[1]); self.next()
+            elif t[0] == "SYM" and t[1] == ":":
+                nt = self.toks[self.pos + 1] if self.pos + 1 < len(self.toks) else ("EOF", None, 0)
+                if nt[0] == "SYM" and nt[1] == ":":
+                    parts.append("/"); self.next(); self.next()
+                else:
+                    break
+            elif t[0] == "SYM" and t[1] == "*":
+                # W025 stage 2: wildcard tail, `use a::b::*` carries as
+                # "a/b/*"; the interpreter strips the `/*` and flat-binds the
+                # target table's exports.
+                parts.append("*"); self.next(); break
             elif t[0] == "STR":
                 parts.append(t[1]); self.next()
                 nt = self.peek()
-                if not (nt[0] == "SYM" and nt[1] in ("/", ".", "-")):
+                if not (nt[0] == "SYM" and nt[1] in ("/", ".", "-", ":")):
                     break
             else:
                 break
@@ -1634,7 +2284,7 @@ class P:
         # expression statement (possibly index/member assignment)
         e = self.expr()
         t = self.peek()
-        # L1a: multiple assignment / swap — a, b = b, a
+        # L1a: multiple assignment / swap, a, b = b, a
         if t[0] == "SYM" and t[1] == "," and e[0] in ("ident", "index", "member"):
             save = self.pos
             targets = [e]
@@ -1688,7 +2338,7 @@ class P:
         self.end_stmt()
         return ("expr", e)
 
-    def gene_def(self, marks, copies=1, riboswitch=None, burst=None):
+    def gene_def(self, marks, copies=1, riboswitch=None, burst=None, deprecated=None):
         ac = "acetylate" in marks
         me = "methylate" in marks
         m6 = "m6a" in marks
@@ -1699,6 +2349,45 @@ class P:
         if t[0] == "IDENT" and t[1] != "guard":
             name = t[1]
             self.next()
+        # TYPED-MODE: declared generic type parameters, `gene first<T>(...)`
+        # (mirror of parser.rs: `<` in signature position, ident list with
+        # optional `: bound`).
+        type_params = []
+        t = self.peek()
+        if t[0] == "SYM" and t[1] == "<" and name is not None:
+            self.next()
+            while True:
+                self.eat_nl()
+                t = self.peek()
+                if t[0] == "SYM" and t[1] == ">":
+                    self.next()
+                    break
+                if t[0] == "EOF":
+                    self.note(t[2], 4, "type-parameter list auto-closed")
+                    break
+                if t[0] == "IDENT":
+                    self.next()
+                    bound = None
+                    t2 = self.peek()
+                    if t2[0] == "SYM" and t2[1] == ":":
+                        self.next()
+                        t3 = self.peek()
+                        if t3[0] == "IDENT":
+                            self.next()
+                            bound = t3[1]
+                        else:
+                            self.note(t3[2], 4, "type bound is not a name; dropped")
+                    type_params.append((t[1], bound))
+                    self.eat_nl()
+                    if self.peek()[0] == "SYM" and self.peek()[1] == ",":
+                        self.next()
+                else:
+                    self.note(t[2], 4, f"'{t[1]}' is not a type parameter name; list auto-closed")
+                    break
+        # W01-s2: type parameter names shadow aliases inside the body's
+        # annotations (mirror of parser.rs type_param_stack push/pop).
+        for (p, _b) in type_params:
+            self.type_param_stack.append(p)
         params = []
         param_anns = []
         if self.peek() == ("SYM", "(", self.peek()[2]):
@@ -1713,7 +2402,7 @@ class P:
                     break
                 before = self.pos
                 pname = self.ident()
-                # W01 (L2c): parameter annotation — `gene f(x: int) { }`
+                # W01 (L2c): parameter annotation, `gene f(x: int) { }`
                 ann = None
                 if self.peek() == ("SYM", ":", self.peek()[2]):
                     self.next()
@@ -1729,7 +2418,7 @@ class P:
                 if self.pos == before:
                     self.note(t[2], 4, "unclosed parameter list; auto-closed")
                     break
-        # W01 (L2c): return annotation — `gene f(x) -> int { }`
+        # W01 (L2c): return annotation, `gene f(x) -> int { }`
         ret_ann = None
         if self.peek() == ("SYM", "->", self.peek()[2]):
             self.next()
@@ -1754,9 +2443,13 @@ class P:
             self.next()
             e = self.expr()
             self.end_stmt()
-            return ("gene", Gene(name, params, guard, [("return", e)], ac, me, m6, copies, seq=False, riboswitch=riboswitch, burst=burst, param_anns=param_anns, ret_ann=ret_ann))
+            for _p in type_params:
+                self.type_param_stack.pop()
+            return ("gene", Gene(name, params, guard, [("return", e)], ac, me, m6, copies, seq=False, riboswitch=riboswitch, burst=burst, param_anns=param_anns, ret_ann=ret_ann, type_params=type_params))
         body = self.block()
-        return ("gene", Gene(name, params, guard, body, ac, me, m6, copies, seq=False, riboswitch=riboswitch, burst=burst, param_anns=param_anns, ret_ann=ret_ann))
+        for _p in type_params:
+            self.type_param_stack.pop()
+        return ("gene", Gene(name, params, guard, body, ac, me, m6, copies, seq=False, riboswitch=riboswitch, burst=burst, param_anns=param_anns, ret_ann=ret_ann, type_params=type_params))
 
     def block(self):
         if not (self.peek() == ("SYM", "{", self.peek()[2])):
@@ -1864,7 +2557,7 @@ class P:
                 return left
 
     def nullish_expr(self):
-        # L1a: a ?? b — sits between or and and (mirrors src/parser.rs)
+        # L1a: a ?? b, sits between or and and (mirrors src/parser.rs)
         left = self.and_expr()
         while True:
             t = self.peek()
@@ -2034,7 +2727,7 @@ class P:
                     self.note(t2[2], 4, "'.' followed by non-name; member skipped")
                     break
             elif t == ("SYM", "?!", t[2]):
-                # W06 (D-014): `e?!` — Option/Result propagation, a postfix
+                # W06 (D-014): `e?!`, Option/Result propagation, a postfix
                 # operator (binds tighter than every binary op, repeats:
                 # Some(Some(3))?!?! unwraps twice). Mirrors src/parser.rs
                 # Tok::QuestionBang postfix arm.
@@ -2066,6 +2759,35 @@ class P:
                     self.note(t2[2], 4, "'?.' followed by non-name; chain resolves to null")
                     e = ("member?", e, "")
                     break
+            elif t[0] == "SYM" and t[1] == ":" and self.pos + 1 < len(self.toks) and self.toks[self.pos + 1][:2] == ("SYM", ":"):
+                # W025 stage 2: `e::name` is the namespace spelling of
+                # `e.name` (stage 1 made `::` a use-path separator; stage 2
+                # lets qualified reads and calls ride the same spelling
+                # through nested tables). Exactly sugar for the Dot arm
+                # above, the AST is identical.
+                self.next(); self.next()
+                t2 = self.peek()
+                if t2[0] == "IDENT":
+                    self.next()
+                    if self.peek() == ("SYM", "(", t2[2]):
+                        self.next()
+                        args = []
+                        while True:
+                            self.eat_nl()
+                            t3 = self.peek()
+                            if t3 == ("SYM", ")", t3[2]):
+                                self.next(); break
+                            if t3[0] == "EOF":
+                                break
+                            args.append(self.expr())
+                            if self.peek() == ("SYM", ",", t3[2]):
+                                self.next()
+                        e = ("method", e, t2[1], args)
+                    else:
+                        e = ("member", e, t2[1])
+                else:
+                    self.note(t2[2], 4, "'::' followed by non-name; member skipped")
+                    break
             else:
                 return e
 
@@ -2077,6 +2799,10 @@ class P:
         if kind == "FLOAT":
             return ("lit", val)
         if kind == "STR":
+            return ("lit", val)
+        if kind == "BYTES":
+            # W029 mirror: bytes literals are ordinary literal nodes carrying
+            # a Python bytes value (native, so == / hashing / dict keys work)
             return ("lit", val)
         if kind == "INTERP":
             return self.build_interp(val, line)
@@ -2117,6 +2843,10 @@ class P:
                     self.next()
                     key = ("lit", t2[1])
                 elif t2[0] == "STR":
+                    self.next()
+                    key = ("lit", t2[1])
+                elif t2[0] == "BYTES":
+                    # W029 mirror: bytes are legal map keys (scalar class)
                     self.next()
                     key = ("lit", t2[1])
                 elif t2[0] == "INT":
@@ -2222,7 +2952,7 @@ class P:
             parts.append(("lit", "".join(lit)))
         return ("interp", parts)
 
-    # W01 (L2c): type-annotation grammar — `name`, `name?` (optional),
+    # W01 (L2c): type-annotation grammar, `name`, `name?` (optional),
     # `a | b` (union). Malformed annotation degrades to any (Total Grammar).
     def type_ann(self):
         first = self.type_ann_atom()
@@ -2240,21 +2970,50 @@ class P:
         t = self.peek()
         if t[0] == "IDENT":
             self.next()
+            # TYPED-MODE: generic annotation, `list[int]`, `map[str, int]`
+            # (mirror of parser.rs type-args in annotation position).
             t2 = self.peek()
+            if t2[0] == "SYM" and t2[1] == "[":
+                self.next()
+                args = []
+                while True:
+                    self.eat_nl()
+                    t3 = self.peek()
+                    if t3[0] == "SYM" and t3[1] == "]":
+                        self.next()
+                        break
+                    if t3[0] == "EOF":
+                        self.note(t3[2], 4, "type-argument list auto-closed")
+                        break
+                    args.append(self.type_ann())
+                    self.eat_nl()
+                    if self.peek()[0] == "SYM" and self.peek()[1] == ",":
+                        self.next()
+                return ("generic", t[1], args)
             if t2[0] == "SYM" and t2[1] == "?":
                 self.next()
-                return ("opt", ("named", t[1]))
-            return ("named", t[1])
+                return ("opt", self.type_ann_atom_resolved(t[1]))
+            return self.type_ann_atom_resolved(t[1])
         self.note(t[2], 4, f"'{t[1]}' is not a type name; annotation treated as any")
         self.next()
         return ("named", "any")
+
+    def type_ann_atom_resolved(self, w):
+        # W01-s2 (mirror of parser.rs): a declared alias resolves at parse
+        # time; an enclosing gene's type parameter never does.
+        if any(p == w for p in self.type_param_stack):
+            return ("named", w)
+        for (n, target) in self.type_aliases:
+            if n == w:
+                return ("alias", n, target)
+        return ("named", w)
 
     def pattern(self):
         # W02 (match-v2) mirror of parser.rs parse_pattern: atom | or-chain |
         # guard, with the legacy literal comma-run kept verbatim. Total
         # Grammar: a malformed pattern degrades to wildcard/bind + note.
         first = self.pattern_atom()
-        # Legacy literal comma-run — only for a leading literal; a
+        # Legacy literal comma-run, only for a leading literal; a
         # non-literal in the run discards the collected literals (legacy
         # edge behavior preserved op-for-op with the Rust core).
         if first[0] == "lit":
@@ -2280,7 +3039,7 @@ class P:
                     else:
                         return self.pattern_atom()
                 return lits[0] if len(lits) == 1 else ("multi", lits)
-        # Or-pattern chain: `p1 | p2 | ...` — newlines allowed before any
+        # Or-pattern chain: `p1 | p2 | ...`, newlines allowed before any
         # alternative (multi-line chains), mirror of parser.rs.
         while self.peek()[0] == "NL":
             self.next()
@@ -2300,7 +3059,7 @@ class P:
             pat = ("or", alts)
         else:
             pat = first
-        # Guarded arm: `pat if cond` — applies to the WHOLE or-chain.
+        # Guarded arm: `pat if cond`, applies to the WHOLE or-chain.
         if self.at_ident("if"):
             self.next()
             cond = self.expr()
@@ -2319,7 +3078,7 @@ class P:
         if t[0] == "STR":
             # W02 parity fix: '-' before a string pattern is ignored with a
             # note (was: oracle said "dangling '-'" and went wildcard while
-            # the Rust core kept the literal — latent corner divergence,
+            # the Rust core kept the literal, latent corner divergence,
             # closed by mirroring the Rust behavior).
             if neg:
                 self.note(t[2], 4, "'-' before a string pattern ignored")
@@ -2399,7 +3158,7 @@ class P:
                     t3 = self.peek()
                     if t3[0] == "SYM" and t3[1] == ")":
                         self.next()
-                        self.note(line, 4, "empty variant payload pattern — treated as tag-only")
+                        self.note(line, 4, "empty variant payload pattern, treated as tag-only")
                     else:
                         payload = self.pattern_atom()
                         t3 = self.peek()
@@ -2423,7 +3182,7 @@ class P:
                 # Unknown capitalized tag: soft fallback to a binding. A
                 # parenthesized payload is consumed and ignored so the token
                 # stream stays aligned (mirror of parser.rs).
-                self.note(t[2], 4, f"unknown variant tag '{t[1]}' — pattern treated as a binding")
+                self.note(t[2], 4, f"unknown variant tag '{t[1]}', pattern treated as a binding")
                 self.next()
                 t2 = self.peek()
                 if t2[0] == "SYM" and t2[1] == "(":
@@ -2449,15 +3208,37 @@ class P:
             self.note(t[2], 4, "dangling '-' in pattern treated as wildcard")
             self.next()
             return ("wild",)
-        self.note(t[2], 4, "pattern treated as wildcard")
+        self.note(t[2], 4, f"pattern '{describe_tok(t)}' treated as wildcard")
         self.next()
         return ("wild",)
+
+def describe_tok(t):
+    """Mirror of src/lexer.rs Tok::describe (dx-r1) for the token shapes
+    that can reach the pattern-wildcard arm."""
+    kind, val = t[0], t[1]
+    if kind == "IDENT":
+        return f"identifier '{val}'"
+    if kind == "INT":
+        return f"number {val}"
+    if kind == "FLOAT":
+        return f"number {val}"
+    if kind == "STR":
+        return f'string "{val}"'
+    if kind == "INTERP":
+        return f'interpolated string "{val}"'
+    if kind == "EOF":
+        return "end of input"
+    if kind == "NL":
+        return "end of line"
+    return f"'{val}'"
+
 
 def parse(src):
     toks, notes = lex(src)
     p = P(toks, notes)
     stmts = p.program()
-    return stmts, p.notes
+    # W24: pub-marked top-level names ride out for strict-mode export filter
+    return stmts, p.notes, p.pub_names
 
 # ----------------------------------------------------------------------------
 # evaluator
@@ -2467,11 +3248,19 @@ abs min max sum clock exit assert codon distance similar transcribe reverse_comp
 gc_content translate find_orf memory methyl methylate demethylate m6a_write m6a_erase passage grn_set grn_get fingerprint toggle_on toggle_state repressi_next
 repressi_state repressi_start grn_fire grn_state spawn join floor ceil sqrt pow random
 randomize chr ord now sleep argv read_file write_file append_file exists file_size read_dir run
+cancel task_state cancelled wait_all wait_any
 fs_delete fs_rename fs_mkdir re_replace
+bytes_from_str str_from_bytes bytes_from_list bytes_to_list read_file_bytes write_file_bytes
 http_get serve recv_request send_response json_parse json_str env call items py
 re_match re_find re_groups unix_time date_parts date_fmt
-some none ok err is_some is_none is_ok is_err unwrap unwrap_or
-enumerate zip sorted reversed any all first last take drop unique flatten chunk round clamp divmod""".split())
+grapheme_len fold_case char_at char_slice
+norm_nfc norm_nfd casefold char_category weak strengthen
+some none ok err is_some is_none is_ok is_err unwrap unwrap_or try_num try_index try_get try_pop
+try_first try_last try_char_at try_env try_json_parse try_re_groups
+try_read_file try_read_file_bytes try_read_dir try_run try_http_get try_str_from_bytes
+enumerate zip sorted reversed any all first last take drop unique flatten chunk round clamp divmod
+channel send recv close select
+is_object object_fields object_from_map""".split())
 
 BUILTIN_SYNONYMS = {"print": "promote", "echo": "promote", "say": "promote", "show": "promote"}
 
@@ -2479,11 +3268,35 @@ class Interp:
     def __init__(self, cell=None, cli_args=None):
         self.notes = []
         self.cell = cell or {}
+        # W05: frozen-container registry (id() of lists/dicts bound via const).
+        # Frozen-ness does NOT cross the spawn boundary: the reachable ids are
+        # parked for the duration of an inline spawn body (mirror of the Rust
+        # per-worker fresh containers, SPEC §7d).
+        # W05 hardening (rt_p18a): frozen_keep HOLDS the registered containers
+        # so their id()s can never be recycled by a fresh allocation while the
+        # interpreter lives (CPython id-reuse would falsely freeze an innocent
+        # new list after a gene-local const is collected).
+        self.frozen_ids = set()
+        self.frozen_keep = []
+        # W013 (D-013) mirror: live DETECTED-cycle registry. Entries are
+        # (weakref, addr) pairs; a registration is added when an insertion
+        # closes a cycle (see _cycle_note_list/_cycle_note_map below) and
+        # dies when the container is reclaimed (weakref dead) or the cycle
+        # edge was broken by mutation (the lazy re-verify in _live_cycles).
+        # Weakrefs only: accounting never extends a value's lifetime.
+        self.cycle_regs = []
+        self.weak_targets = {}  # W013: addr -> (kind, strong target, defn)
+        # W069: importing-entry directory, candidate root #1 for `use`
+        # (SPEC §8 resolution table). None until load_file sets it.
+        self.base_dir = None
+        # W19/W23 mirror: vendored dependency roots from operon.lock
+        # (package name -> cache dir), consulted as resolution root 7.
+        self.lock_dirs = []
         self.silences = []
         # reg-bio-3: operons / stoichiometric-RISC bookkeeping / m6A levels /
         # generation counter / gene dosage registry (mirror of the Rust core)
         self.operons = []
-        # loop-10 (F-7/F-8): Rho/queue state — rho_pins is the worker-side
+        # loop-10 (F-7/F-8): Rho/queue state, rho_pins is the worker-side
         # resolved knob tuple (None on the host: .cell resolved per use,
         # mirror of the Rust rho_knobs); ribo_queue is the per-cistron
         # queue register (rho.termination-gated bookkeeping).
@@ -2495,6 +3308,8 @@ class Interp:
         self.copies = {}
         self.fates = {}
         self.phenos = {}
+        # W04: trait registry (name -> Trait); last declaration wins
+        self.traits = {}
         self.grn_edges = []
         self.grn_levels = {}
         self.toggles = []
@@ -2515,7 +3330,7 @@ class Interp:
         self.depth = 0
         self.depth_limit = 10_000
         # W07 mirror: line of the call/binop/index expression currently
-        # executing (A13/dx-r4 parity) — feeds traceback chain frames.
+        # executing (A13/dx-r4 parity), feeds traceback chain frames.
         self.cur_line = 0
         self.methyl_quiet = False
         self.methyl_noted = set()
@@ -2559,7 +3374,7 @@ class Interp:
         self.burst_overrides = {}
         self.grn_binds = []
         self.seq_buffer = None
-        self.caps = {"enabled": True, "read": [], "write": [], "run": [], "net": [], "env": [], "py": []}
+        self.caps = {"enabled": True, "read": [], "write": [], "run": [], "net": [], "env": [], "py": [], "exit": False}
         self.cell_entry = None
         self.proof_mode = False
 
@@ -2616,7 +3431,7 @@ class Interp:
         else:
             ok = what in c[cap]
         if not ok:
-            raise Stress("interference", f"{kind} denied — no capability grant covers '{what}' (grant with --allow-{kind} or --allow-all)")
+            raise Stress("interference", f"{kind} denied, no capability grant covers '{what}' (grant with --allow-{kind} or --allow-all)")
 
     def new_scope(self, parent):
         return {"__parent__": parent}
@@ -2645,7 +3460,90 @@ class Interp:
         target[name] = val
         return True
 
-    def note(self, rung, msg):
+    # ---- W05: const bindings + deep-freeze registry (mirror of interp.rs) ----
+
+    def is_const(self, env, name):
+        node = env
+        while node is not None:
+            if ("__const__", name) in node:
+                return True
+            node = node.get("__parent__")
+        return False
+
+    def deep_freeze(self, v):
+        seen = set()
+        self._freeze_walk(v, seen)
+
+    def _freeze_walk(self, v, seen):
+        # W05 hardening (rt_p18a): ITERATIVE worklist (depth-safe on deep
+        # literals) + keep-alive registration (address/id-reuse armor),
+        # mirroring the Rust frozen_keep registry.
+        work = [v]
+        while work:
+            cur = work.pop()
+            if isinstance(cur, list):
+                p = id(cur)
+                if p in seen:
+                    continue
+                seen.add(p)
+                self.frozen_ids.add(p)
+                self.frozen_keep.append(cur)
+                work.extend(cur)
+            elif isinstance(cur, dict):
+                p = id(cur)
+                if p in seen:
+                    continue
+                seen.add(p)
+                self.frozen_ids.add(p)
+                self.frozen_keep.append(cur)
+                for k, val in cur.items():
+                    work.append(k)
+                    work.append(val)
+
+    def is_frozen(self, v):
+        return isinstance(v, (list, dict)) and id(v) in self.frozen_ids
+
+    @staticmethod
+    def _frozen_stress(what):
+        return Stress("frozen", f"cannot modify frozen {what}")
+
+    def _park_frozen_reachable(self, roots):
+        """Spawn boundary: the Rust worker receives serialized COPIES of the
+        arguments, so no container reachable from an argument is frozen inside
+        the worker. The sequential oracle runs the body inline against the
+        SAME objects, park the reachable ids for the body, restore after."""
+        parked = set()
+        seen = set()
+
+        def walk(v):
+            if isinstance(v, list):
+                if id(v) in seen:
+                    return
+                seen.add(id(v))
+                if id(v) in self.frozen_ids:
+                    parked.add(id(v))
+                    self.frozen_ids.discard(id(v))
+                for item in v:
+                    walk(item)
+            elif isinstance(v, dict):
+                if id(v) in seen:
+                    return
+                seen.add(id(v))
+                if id(v) in self.frozen_ids:
+                    parked.add(id(v))
+                    self.frozen_ids.discard(id(v))
+                for k, val in v.items():
+                    walk(k)
+                    walk(val)
+
+        for r in roots:
+            walk(r)
+        return parked
+
+    def _restore_frozen(self, parked):
+        self.frozen_ids |= parked
+
+    def note(self, rung, msg, line=0):
         # loop-9 (C8): worker-note prefix parity — the Rust join path tags
         # every spawned worker note with "[task <name>] " (genes.rs); the
         # sequential oracle applies the same prefix while the spawn body
@@ -2653,7 +3551,9 @@ class Interp:
         prefix = getattr(self, "task_note_prefix", None)
         if prefix:
             msg = f"{prefix} {msg}"
-        self.notes.append(Note(rung, msg))
+        # compat matrix fix: notes carry the origin line (ast.rs parity);
+        # load_file threads the parser note's line through here
+        self.notes.append(Note(rung, msg, line))
 
     def tick(self):
         self.steps += 1
@@ -2662,7 +3562,7 @@ class Interp:
 
     # ---- statements
     def bind_pattern(self, env, pat, v):
-        # L1a: destructuring binder — soft-miss semantics (Total Grammar)
+        # L1a: destructuring binder, soft-miss semantics (Total Grammar)
         k = pat[0]
         if k == "pbind":
             name = pat[1]
@@ -2752,7 +3652,7 @@ class Interp:
             return None
 
     def match_pat(self, env, bindings, sv, pat):
-        """W02 (match-v2) recursive pattern matcher — op-for-op mirror of
+        """W02 (match-v2) recursive pattern matcher, op-for-op mirror of
         interp.rs match_pat. Total Grammar: a pattern never hard-fails; a
         non-matching shape simply misses; only `?!` propagation escapes."""
         k = pat[0]
@@ -2769,7 +3669,7 @@ class Interp:
         if k == "null":
             return deep_eq(sv, None)
         if k == "multi":
-            # legacy literal comma-run — any literal hits (first wins)
+            # legacy literal comma-run, any literal hits (first wins)
             gev = self.new_scope(env)
             gev.update(bindings)
             for lt in pat[1]:
@@ -2844,15 +3744,28 @@ class Interp:
     def exec_stmt(self, env, s):
         self.tick()
         k = s[0]
+        if k == "typealias":
+            # W01-s2: a type-alias declaration is parse-time metadata; the
+            # runtime is inert (mirror of interp.rs Stmt::TypeAlias law).
+            return
         if k == "block":
             self.exec_block(self.new_scope(env), s[1])
+        elif k == "const":
+            # W05: immutable binding, deep-freeze + const name marker.
+            _, name, ex = s
+            v = self.eval(env, ex)
+            if name in env:
+                self.note(4, f"rebinding '{name}'")
+            self.deep_freeze(v)
+            env[name] = v
+            env[("__const__", name)] = True
         elif k == "let":
             v = self.eval(env, s[2])
             if s[1] in env:
                 self.note(4, f"rebinding '{s[1]}'")
             env[s[1]] = v
         elif k == "letann":
-            # W01 (L2c): annotated definition — mismatch = catchable unfolded
+            # W01 (L2c): annotated definition, mismatch = catchable unfolded
             # Stress; the binding does NOT happen (mirror of interp.rs).
             _, name, ann, ex = s
             v = self.eval(env, ex)
@@ -2890,6 +3803,9 @@ class Interp:
                 items = list(itv)
             elif isinstance(itv, str):
                 items = list(itv)
+            elif isinstance(itv, bytes):
+                # W029 mirror: iterating bytes yields ints 0..=255
+                items = list(itv)
             elif isinstance(itv, dict):
                 items = list(itv.keys())
             else:
@@ -2908,8 +3824,13 @@ class Interp:
                 except Return as r:
                     raise r
         elif k == "multi":
-            # L1a: multiple assignment / swap — all values evaluated first
+            # L1a: multiple assignment / swap, all values evaluated first
             _, targets, values, define = s
+            if not define:
+                # W05: rebinding a const name stresses before any write
+                for t in targets:
+                    if t[0] == "ident" and self.is_const(env, t[1]):
+                        raise Stress("frozen", f"cannot reassign const '{t[1]}'")
             vals = [self.eval(env, v) for v in values]
             if len(vals) < len(targets):
                 self.note(4, "multi-assign: fewer values than targets; the rest bind null")
@@ -2937,6 +3858,8 @@ class Interp:
                         tv = self.eval(env, t[1])
                         iv = self.eval(env, t[2])
                         if isinstance(tv, list):
+                            if self.is_frozen(tv):
+                                raise self._frozen_stress("list")
                             try:
                                 idx = self.as_index(iv, len(tv))
                             except Stress:
@@ -2947,6 +3870,8 @@ class Interp:
                                 tv.append(val)
                                 self.note(4, "index out of range; value appended")
                         elif isinstance(tv, dict):
+                            if self.is_frozen(tv):
+                                raise self._frozen_stress("map")
                             key = iv if isinstance(iv, (str, int, float, bool)) else v_display(iv)
                             tv[key] = val
                         else:
@@ -2956,6 +3881,8 @@ class Interp:
                         if isinstance(tv, ObjInst):
                             tv.fields[t[2]] = val
                         elif isinstance(tv, dict):
+                            if self.is_frozen(tv):
+                                raise self._frozen_stress("map")
                             tv[t[2]] = val
                         else:
                             self.note(4, "member assignment on non-map ignored")
@@ -2964,6 +3891,8 @@ class Interp:
         elif k == "assign":
             _, name, op, ve = s
             v = self.eval(env, ve)
+            if self.is_const(env, name):
+                raise Stress("frozen", f"cannot reassign const '{name}'")
             target = self.find_env(env, name)
             if op is None:
                 if target is None:
@@ -2981,24 +3910,40 @@ class Interp:
             iv = self.eval(env, ie)
             v = self.eval(env, ve)
             if isinstance(tv, list):
+                if self.is_frozen(tv):
+                    raise self._frozen_stress("list")
                 try:
                     idx = self.as_index(iv, len(tv))
                 except Stress:
                     idx = None
                 cur = tv[idx] if (idx is not None and idx < len(tv)) else None
                 nv = self.binop(op, cur, v) if op else v
+                self._cycle_note_insert(tv, nv)  # W013: before the edge lands
                 if idx is not None and idx < len(tv):
                     tv[idx] = nv
                 else:
                     tv.append(nv)
                     self.note(4, "index out of range; value appended")
             elif isinstance(tv, dict):
+                if self.is_frozen(tv):
+                    raise self._frozen_stress("map")
                 cur = None
                 for kk, vv in tv.items():
                     if deep_eq(kk, iv):
                         cur = vv; break
                 nv = self.binop(op, cur, v) if op else v
-                key = iv if isinstance(iv, (str, int, float, bool)) else v_display(iv)
+                # pheno_equality pin: instance keys store AS INSTANCES (the
+                # Rust core keys maps by the actual value; v_display here
+                # stringified them into "<phenotype P>", found by the
+                # builder-B parity-finding resolution differential).
+                # ObjInst is hashable (id-based), so dict storage works.
+                # Container keys (list/map) still fall back to display text,
+                # pre-existing divergence, no corpus exposure, filed for a
+                # future session.
+                # W029 mirror: bytes are scalar keys (native hashable, exact).
+                key = iv if isinstance(iv, (str, int, float, bool, bytes)) else (
+                    iv if isinstance(iv, ObjInst) else v_display(iv))
+                self._cycle_note_insert(tv, nv)  # W013: value edge (keys not walked)
                 tv[key] = nv
             else:
                 self.note(4, "index assignment on non-container ignored")
@@ -3008,10 +3953,16 @@ class Interp:
             v = self.eval(env, ve)
             if isinstance(tv, ObjInst):
                 cur = tv.fields.get(key)
-                tv.fields[key] = self.binop(op, cur, v) if op else v
+                nv = self.binop(op, cur, v) if op else v
+                self._cycle_note_insert(tv.fields, nv)  # W013: before the edge lands
+                tv.fields[key] = nv
             elif isinstance(tv, dict):
+                if self.is_frozen(tv):
+                    raise self._frozen_stress("map")
                 cur = tv.get(key)
-                tv[key] = self.binop(op, cur, v) if op else v
+                nv = self.binop(op, cur, v) if op else v
+                self._cycle_note_insert(tv, nv)  # W013: before the edge lands
+                tv[key] = nv
             else:
                 self.note(4, "member assignment on non-map ignored")
         elif k == "if":
@@ -3046,6 +3997,35 @@ class Interp:
                     continue
                 except Return as r:
                     raise r
+        elif k == "scope":
+            # W17: tasks spawned inside register on this scope and are
+            # reaped at block exit on every flow path. cancel-on-error
+            # (default on) asks the children to stop before reaping when
+            # the block unwinds by stress; the stress still propagates.
+            _, body = s
+            if not hasattr(self, "scope_stack"):
+                self.scope_stack = []
+            self.scope_stack.append([])
+            err = None
+            try:
+                self.exec_block(self.new_scope(env), body)
+            except BreakLoop as b:
+                err = b
+            except ContinueLoop as c:
+                err = c
+            except Return as r:
+                err = r
+            except Stress as st:
+                err = st
+            ids = self.scope_stack.pop()
+            cancel_on_err = self.cell.get("scope.cancel_on_error") != "off"
+            if isinstance(err, Stress) and cancel_on_err:
+                for i in ids:
+                    self.builtin(env, "cancel", [i])
+            for i in ids:
+                self.builtin(env, "join", [i])
+            if err is not None:
+                raise err
         elif k == "for":
             _, name, it, body = s
             itv = self.eval(env, it)
@@ -3070,6 +4050,9 @@ class Interp:
             if isinstance(itv, list):
                 items = list(itv)
             elif isinstance(itv, str):
+                items = list(itv)
+            elif isinstance(itv, bytes):
+                # W029 mirror: iterating bytes yields ints 0..=255
                 items = list(itv)
             elif isinstance(itv, dict):
                 items = list(itv.keys())
@@ -3108,13 +4091,61 @@ class Interp:
                     self.exec_block(child, body)
                     return
         elif k == "use":
-            modv = self.load_module(s[1])
-            name = s[2] or os.path.basename(s[1].replace("\\", "/")).split(".")[0].split("/")[-1]
-            env[name] = modv
-            # flat-bind ALL exports beside the alias map (genes AND data)
+            # W025 stage 2: a trailing `/*` marks the WILDCARD form, flat-bind
+            # the target table's exports without binding the module map itself
+            # (an explicit `as` alias still binds it). Resolution stays
+            # FILE-FIRST: the full path is tried as a file, then each shorter
+            # prefix is loaded as a file and the remaining segments descend
+            # the exported nested-module tables, longest prefix first (mirror
+            # of interp.rs Stmt::Use + descend_tables, SPEC §8).
+            path = s[1]
+            wildcard = path.endswith("/*")
+            base = path[:-2] if wildcard else path
+            modv = self.load_module(base)
+            if modv is None:
+                segs = base.split("/")
+                for kk in range(len(segs) - 1, 0, -1):
+                    rootv = self.load_module("/".join(segs[:kk]))
+                    if rootv is None:
+                        continue
+                    table = rootv
+                    hit = True
+                    for seg in segs[kk:]:
+                        nxt = table.get(seg) if isinstance(table, dict) else None
+                        if nxt is None:
+                            self.note(4, f"use '{path}': segment '{seg}' is not a nested module table; import binds nothing")
+                            hit = False
+                            break
+                        table = nxt
+                    if hit:
+                        modv = table
+                        break
+            name = s[2] or os.path.basename(base.replace("\\", "/")).split(".")[0].split("/")[-1]
+            if not wildcard or s[2]:
+                env[name] = modv if modv is not None else {}
+            # flat-bind ALL exports beside the alias map (genes AND data);
+            # for the wildcard form this flat bind IS the whole import
             if isinstance(modv, dict):
                 for kname, v in modv.items():
                     env[kname] = v
+        elif k == "module":
+            # W025 stage 2: nested sub-module table (mirror of interp.rs
+            # Stmt::Module). The body runs ONCE here in a fresh child scope;
+            # stress propagates to the enclosing containment exactly like a
+            # module-file top-level statement, flow signals end only their
+            # own statement. The child scope's own names become the export
+            # table, sorted like the file-module loader sorts them, so both
+            # engines print and flat-bind identically. Last declaration wins.
+            _, mname, mbody = s
+            child = self.new_scope(env)
+            for st in mbody:
+                try:
+                    self.exec_stmt(child, st)
+                except (Return, BreakLoop, ContinueLoop):
+                    pass
+            exports = {kk: vv for kk, vv in child.items()
+                       if isinstance(kk, str) and kk != "__parent__" and not kk.startswith("#")}
+            env[mname] = {kk: exports[kk] for kk in sorted(exports)}
         elif k == "raise":
             msg = self.eval(env, s[2])
             raise Stress(s[1] or "unfolded", v_display(msg))
@@ -3123,7 +4154,7 @@ class Interp:
             try:
                 self.exec_block(env, body)
             except Stress as st:
-                # W06 (D-014) mirror: propagation is a RETURN, not a failure —
+                # W06 (D-014) mirror: propagation is a RETURN, not a failure,
                 # it crosses stress/rescue boundaries on its way to the gene
                 # boundary. Pre-arms BEFORE kind matching so rescue (including
                 # `rescue any`) can never contain or spoof it.
@@ -3167,6 +4198,12 @@ class Interp:
         elif k == "pheno":
             p = s[1]
             self.phenos[p.name] = p
+        elif k == "trait":
+            # W04: registry, last declaration wins (redefinition noted)
+            t = s[1]
+            if t.name in self.traits:
+                self.note(4, f"redefining trait '{t.name}'")
+            self.traits[t.name] = t
         elif k == "yield":
             v = self.eval(env, s[1]) if s[1] is not None else None
             if self.seq_buffer is not None:
@@ -3316,7 +4353,9 @@ class Interp:
             m = {}
             for ke, ve in e[1]:
                 kv = self.eval(env, ke)
-                key = kv if isinstance(kv, (str, int, float, bool)) else v_display(kv)
+                # W029 mirror: bytes are scalar keys (Rust key_scalar includes
+                # Bytes), never stringified
+                key = kv if isinstance(kv, (str, int, float, bool, bytes)) else v_display(kv)
                 m[key] = self.eval(env, ve)
             return m
         if k == "ident":
@@ -3344,14 +4383,18 @@ class Interp:
             _, cond, a, b = e
             return self.eval(env, a) if truthy(self.eval(env, cond)) else self.eval(env, b)
         if k == "prop":
-            # W06 (D-014) mirror: `e?!` — Some/Ok unwrap to the payload;
+            # W06 (D-014) mirror: `e?!`, Some/Ok unwrap to the payload;
             # None/Err unwind to the nearest enclosing gene boundary (the
             # gene RETURNS the variant). Plain values pass through untouched
             # (silent identity, the same contract as `?.` on non-null).
             _, sub, line = e
             v = self.eval(env, sub)
             if isinstance(v, Variant):
-                if v.tag in ("Some", "Ok") and v.payload is not None:
+                if v.tag in ("Some", "Ok"):
+                    # null payload is a REAL payload: ok(null) stores Some(Null)
+                    # on the Rust side, so `?!` unwraps to null (W06 parity fix,
+                    # found by the std_serialize proof, the old `payload is
+                    # not None` guard wrongly unwound on Ok(null)/Some(null))
                     return v.payload
                 sig = Stress("propagate", "")
                 sig.prop = v
@@ -3376,7 +4419,7 @@ class Interp:
                 lv = self.eval(env, e[2])
                 return lv if truthy(lv) else self.eval(env, e[3])
             if op == "nullish":
-                # L1a: coalesce Null only — falsy non-null passes through
+                # L1a: coalesce Null only, falsy non-null passes through
                 lv = self.eval(env, e[2])
                 return self.eval(env, e[3]) if lv is None else lv
             lv = self.eval(env, e[2])
@@ -3409,12 +4452,18 @@ class Interp:
                 if idx < len(tv):
                     return tv[idx]
                 raise Stress("missing", "char index out of range")
+            # W029 mirror: bytes[i] -> int (Python parity)
+            if isinstance(tv, bytes):
+                idx = self.as_index(iv, len(tv))
+                if idx < len(tv):
+                    return tv[idx]
+                raise Stress("missing", "byte index out of range")
             raise Stress("unfolded", f"cannot index {type_name(tv)}")
         if k == "member":
             tv = self.eval(env, e[1])
             return self.member_value(tv, e[2])
         if k == "member?":
-            # L1a: optional chaining — Null receiver is Null, silently
+            # L1a: optional chaining, Null receiver is Null, silently
             tv = self.eval(env, e[1])
             if tv is None:
                 return None
@@ -3467,6 +4516,30 @@ class Interp:
             return i
         raise Stress("missing", f"index must be int, found {type_name(v)}")
 
+    def _f64_powf(self, a, b):
+        # S4-5/F1b+F1c: Rust f64::powf mirror for the three spots where
+        # python deviates from C99 pow: (1) a zero base (incl. -0.0) with a
+        # negative exponent raises ZeroDivisionError — C99 gives ±inf, the
+        # sign by parity of the exponent for a -0.0 base; (2) a negative
+        # FINITE base with a non-integer exponent returns a python COMPLEX
+        # (leaked into the renderer as <?>) — C99 gives NaN; (3) overflow
+        # raises OverflowError — C99 gives ±inf (sign by parity for a
+        # negative base). inf/nan bases and exponents already follow C99 in
+        # python natively, so they fall through untouched.
+        import math as _m
+        if a == 0.0 and b < 0.0:
+            if _m.copysign(1.0, a) < 0.0 and float(b).is_integer() and int(b) % 2 == 1:
+                return float("-inf")
+            return float("inf")
+        if _m.isfinite(a) and a < 0.0 and _m.isfinite(b) and not float(b).is_integer():
+            return float("nan")
+        try:
+            return a ** b
+        except OverflowError:
+            if a < 0.0 and float(b).is_integer() and int(b) % 2 == 1:
+                return float("-inf")
+            return float("inf")
+
     def binop(self, op, l, r):
         if op == "+":
             if isinstance(l, bool) or isinstance(r, bool):
@@ -3476,10 +4549,15 @@ class Interp:
                     raise Stress("overflow", "int overflow in '+'")
                 return l + r
             if isinstance(l, str) and isinstance(r, str):
-                # reg-r4: concat ceiling parity with the Rust core — "exactly
+                # reg-r4: concat ceiling parity with the Rust core, "exactly
                 # at the 512 MiB line" + concat must raise, not allocate 1 GiB
                 if len(l) + len(r) > 512 * 1024 * 1024:
                     raise Stress("overflow", "string concat exceeds the 512 MiB ceiling")
+                return l + r
+            if isinstance(l, bytes) and isinstance(r, bytes):
+                # W029 mirror: bytes concat, same ceiling family as strings
+                if len(l) + len(r) > 512 * 1024 * 1024:
+                    raise Stress("overflow", "bytes concat exceeds the 512 MiB ceiling")
                 return l + r
             if isinstance(l, list) and isinstance(r, list):
                 if len(l) + len(r) > 64 * 1024 * 1024:
@@ -3487,20 +4565,38 @@ class Interp:
                 return l + r
             raise Stress("unfolded", f"cannot add {type_name(l)} and {type_name(r)}")
         if op in ("-", "*", "/", "//", "%"):
-            # string repetition (Python parity): "ab" * 3 / 3 * "ab"
-            if op == "*" and isinstance(l, str) and not isinstance(r, str):
+            # string repetition (Python parity): "ab" * 3 / 3 * "ab";
+            # the count must be a true int (Rust matches Value::Int only, so
+            # null/float/bool counts fall through to the generic arith error;
+            # found by the W050 property harness, strings lane case 19)
+            if op == "*" and isinstance(l, str) and isinstance(r, int) and not isinstance(r, bool):
                 n = int(r)
                 if n < 0:
                     raise Stress("unfolded", "repeat count must be non-negative")
                 if n * len(l) > 512 * 1024 * 1024:
                     raise Stress("overflow", "repeat exceeds the 512 MiB string ceiling")
                 return l * n
-            if op == "*" and isinstance(r, str) and not isinstance(l, str):
+            # W029 mirror: bytes repetition (Python parity), same ceiling
+            if op == "*" and isinstance(l, bytes) and isinstance(r, int) and not isinstance(r, bool):
+                n = int(r)
+                if n < 0:
+                    raise Stress("unfolded", "repeat count must be non-negative")
+                if n * len(l) > 512 * 1024 * 1024:
+                    raise Stress("overflow", "repeat exceeds the 512 MiB bytes ceiling")
+                return l * n
+            if op == "*" and isinstance(r, str) and isinstance(l, int) and not isinstance(l, bool):
                 n = int(l)
                 if n < 0:
                     raise Stress("unfolded", "repeat count must be non-negative")
                 if n * len(r) > 512 * 1024 * 1024:
                     raise Stress("overflow", "repeat exceeds the 512 MiB string ceiling")
+                return r * n
+            if op == "*" and isinstance(r, bytes) and isinstance(l, int) and not isinstance(l, bool):
+                n = int(l)
+                if n < 0:
+                    raise Stress("unfolded", "repeat count must be non-negative")
+                if n * len(r) > 512 * 1024 * 1024:
+                    raise Stress("overflow", "repeat exceeds the 512 MiB bytes ceiling")
                 return r * n
             if isinstance(l, (int, float)) and isinstance(r, (int, float)) and not isinstance(l, bool) and not isinstance(r, bool):
                 I64MIN, I64MAX = -(2**63), 2**63 - 1
@@ -3528,8 +4624,31 @@ class Interp:
                     return q
                 if r == 0:
                     raise Stress("unfolded", "modulo by zero")
-                # SPEC: sign follows divisor (= Python % semantics)
-                return l % r
+                if l == -(2**63) and r == -1:
+                    # i64 corner: the quotient 2**63 does not fit, so the
+                    # Rust core raises before ever materializing the
+                    # remainder, the oracle must mirror that (W32 corpus).
+                    raise Stress("overflow", "int overflow in '%'")
+                # Mirror the Rust floor-remainder ALGORITHM, not just the
+                # result: Rust computes q (trunc divide, floored), then
+                # q*b and a-q*b through CHECKED i64 ops, so an intermediate
+                # that leaves i64 raises overflow even when the final
+                # remainder would fit. Python bignums never overflow, so
+                # without this mirror the oracle silently returns where the
+                # core raises (found by the W050 property harness, arith
+                # lane cases 76/88: i64::MIN % (2**63 - 1)).
+                q = abs(l) // abs(r)
+                if (l < 0) != (r < 0):
+                    q = -q
+                if (l < 0) != (r < 0) and q * r != l:
+                    q -= 1  # floor rounds down
+                rb = q * r
+                if not (-(2**63) <= rb <= 2**63 - 1):
+                    raise Stress("overflow", "int overflow in '%'")
+                m = l - rb
+                if not (-(2**63) <= m <= 2**63 - 1):
+                    raise Stress("overflow", "int overflow in '%'")
+                return m
             raise Stress("unfolded", f"cannot apply '{op}' to {type_name(l)} and {type_name(r)}")
         if op == "**":
             if isinstance(l, int) and isinstance(r, int) and not isinstance(l, bool) and not isinstance(r, bool) and r >= 0:
@@ -3540,10 +4659,18 @@ class Interp:
                     raise Stress("overflow", "int overflow in '**'")
                 return val
             if isinstance(l, (int, float)) and isinstance(r, (int, float)) and not isinstance(l, bool) and not isinstance(r, bool):
-                try:
-                    return float(l) ** float(r)
-                except OverflowError:
+                # S4-5/F1b+F1c: mirror Rust f64::powf — python raises
+                # ZeroDivisionError for 0 ** negative (rust: inf), returns a
+                # COMPLEX for a negative finite base with a fractional
+                # exponent (rendered <?> where rust returns nan), and raises
+                # OverflowError where rust returns ±inf. The rust float path
+                # ALSO stresses when the RESULT is infinite with finite
+                # operands and a positive exponent — mirrored below.
+                out = self._f64_powf(float(l), float(r))
+                import math as _m
+                if (out == float("inf") or out == float("-inf")) and _m.isfinite(float(l)) and _m.isfinite(float(r)) and float(r) > 0.0:
                     raise Stress("overflow", "float '**' overflowed to infinity")
+                return out
             raise Stress("unfolded", f"cannot apply '**' to {type_name(l)} and {type_name(r)}")
         if op in ("&", "|", "^", "<<", ">>"):
             def as_i(x):
@@ -3596,7 +4723,7 @@ class Interp:
         if isinstance(callee, Gene):
             if not callee.seq:
                 # reg-r4 (re-audit B-5): value-bound (higher-order) gene calls
-                # pass the toggle gate too — "the pair gates calls" is
+                # pass the toggle gate too, "the pair gates calls" is
                 # unqualified; the seq branch already gated, genes did not
                 gname = callee.name or "<lambda>"
                 for a, b, a_on in self.toggles:
@@ -3609,8 +4736,8 @@ class Interp:
                             return None
                         break
             if callee.seq:
-                # reg-r3 (re-audit): sequences honor ALL creation gates —
-                # GRN veto, methylation, toggle — in call_gene_inner order
+                # reg-r3 (re-audit): sequences honor ALL creation gates,
+                # GRN veto, methylation, toggle, in call_gene_inner order
                 # (mirror of the Rust branch; reg-r1 gated only the toggle)
                 seq_name = callee.name or "<seq>"
                 dl = getattr(callee, "line", 0)
@@ -3621,9 +4748,9 @@ class Interp:
                 if not callee.acetylate:
                     lvl = self.methyl_levels.get(seq_name, 0)
                     if lvl >= self.methyl_threshold:
-                        self.note(4, f"methylation silences: sequence '{seq_name}' (level {lvl} >= threshold {self.methyl_threshold}) — call returns null")
+                        self.note(4, f"methylation silences: sequence '{seq_name}' (level {lvl} >= threshold {self.methyl_threshold}), call returns null")
                         return None
-                # reg-r4 (re-audit B-1): the toggle gate was missing here —
+                # reg-r4 (re-audit B-1): the toggle gate was missing here,
                 # a toggle-repressed sequence created via a value binding
                 # transcribed in the oracle while the Rust core refused it
                 for a, b, a_on in self.toggles:
@@ -3635,11 +4762,11 @@ class Interp:
                             self.note(4, f"toggle repressed: sequence '{seq_name}' is the inactive allele ('{winner}' is on)")
                             return None
                         break
-                # reg-bio (F-1): promoter gate last — the pinned funnel order
+                # reg-bio (F-1): promoter gate last, the pinned funnel order
                 # ends here (bursting is the promoter's own stochastic
-                # dynamics; no @acetylate exemption — open chromatin bursts too)
+                # dynamics; no @acetylate exemption, open chromatin bursts too)
                 if self._promoter_veto(seq_name, callee.burst):
-                    self.note(4, f"promoter inactive: sequence '{seq_name}' burst-off — call returns null")
+                    self.note(4, f"promoter inactive: sequence '{seq_name}' burst-off, call returns null")
                     return None
                 return SeqObj(self, callee, args)
             return self.call_gene(callee, args)
@@ -3649,11 +4776,11 @@ class Interp:
     def call_named(self, env, name, args):
         if name in BUILTIN_SYNONYMS:
             return self.builtin(env, BUILTIN_SYNONYMS[name], args)
-        # reg-r4 (re-audit B-4): gate ORDER is pinned SPEC-wide — RISC at the
+        # reg-r4 (re-audit B-4): gate ORDER is pinned SPEC-wide, RISC at the
         # call site first, then the toggle gate (mirror of the Rust core:
         # silencing wins over repression because it rewrites the callee).
         # RISC silencing: redirect calls (acetylated genes are immune).
-        # reg-bio-3 (C9): stoichiometric capture — every entry for the
+        # reg-bio-3 (C9): stoichiometric capture, every entry for the
         # target is one binding site; per-call capture p = 1 - Π(1-s)^sites.
         # strength 1.0 / one site = legacy binary redirect (no draw).
         entries = [e for e in self.silences if e[0] == name]
@@ -3685,7 +4812,7 @@ class Interp:
                         self.note(4, f"RISC: call to '{name}' silenced → '{to}'")
                         tgt = self.lookup(env, to)
                         return self.call_value(env, tgt, args)
-                    # reg-bio (F-4): pure degradation — no replacement executes
+                    # reg-bio (F-4): pure degradation, no replacement executes
                     self.note(4, f"RISC: call to '{name}' degraded (no replacement)")
                     return None
         # toggle gate: the repressed allele refuses calls
@@ -3737,14 +4864,14 @@ class Interp:
         if self.depth > self.depth_limit:
             self.depth -= 1
             raise Stress("overflow", f"recursion depth limit ({self.depth_limit}) exceeded")
-        # W007 mirror: the traceback frame for THIS gene — captured at entry
+        # W007 mirror: the traceback frame for THIS gene, captured at entry
         # (cur_line is the call site); appended only on the error path.
         frame = (name, self.cur_line)
         try:
             result = self.call_gene_inner(g, args)
             return result
         except Stress as st:
-            # W06 (D-014) mirror: propagation is a return, not a failure — no
+            # W06 (D-014) mirror: propagation is a return, not a failure, no
             # chain frame. A returned variant is not an error in flight.
             if st.prop is not None:
                 raise
@@ -3759,7 +4886,7 @@ class Interp:
         polycistronic unit is a transcription attempt of the WHOLE unit:
         edges targeting the unit veto every member first (induction acts
         on the unit's promoter), then the cistron's own edges apply.
-        The unit pass short-circuits — its message wins. (mirror)"""
+        The unit pass short-circuits, its message wins. (mirror)"""
         if not self.grn_edges:
             return None
         ui = self._operon_of(name)
@@ -3779,7 +4906,7 @@ class Interp:
         return None
 
     def _gate_veto_for(self, name):
-        """GRN cis-gate for ONE target (T2a / SPEC §11) — mirror of the
+        """GRN cis-gate for ONE target (T2a / SPEC §11), mirror of the
         Rust core (the pinned body, target as a parameter).
 
         Activating edge with explicit threshold t vetoes while
@@ -3792,9 +4919,9 @@ class Interp:
             return None
         boosted = name in self.enhanced
         veto = None
-        # reg-bio (F-3): AND/OR cis-regulatory logic — first-wins message
+        # reg-bio (F-3): AND/OR cis-regulatory logic, first-wins message
         # order preserved exactly (mirror of the Rust grn_veto). The gate
-        # opens iff (every AND member passes) OR (any OR member passes) —
+        # opens iff (every AND member passes) OR (any OR member passes),
         # an `any` edge is an ALTERNATIVE activator that alone suffices.
         and_fail = None
         and_present = False
@@ -3806,7 +4933,7 @@ class Interp:
             if to != name:
                 continue
             # reg-bio-2 (B7): sum edges are pooled members, evaluated by the
-            # group pass below — never as individual AND members (mirror).
+            # group pass below, never as individual AND members (mirror).
             if is_sum:
                 continue
             # reg-bio-2 (C11 + A4): regulation reads the DNA-available
@@ -3832,7 +4959,7 @@ class Interp:
                     and_present = True
                     if lvl < t and and_fail is None:
                         and_fail = f"regulator '{frm}' level {lvl!r} < threshold {t!r}"
-        # reg-bio-2 (B7): pooled (`sum`) edges — group pass (mirror of the
+        # reg-bio-2 (B7): pooled (`sum`) edges, group pass (mirror of the
         # Rust grn_veto). Groups keyed by (target, threshold, hill) pool
         # weighted inputs P = min(1, Σ s·lvl); each group acts as ONE
         # conjunctive member passing iff P >= t (with the enhance boost).
@@ -3866,11 +4993,11 @@ class Interp:
         return veto
 
     def _grn_level(self, frm):
-        """A11 (reg-r2): mirror of the Rust grn_veto level resolution —
+        """A11 (reg-r2): mirror of the Rust grn_veto level resolution,
         explicit grn levels first, then the repressilator ring overlay
         (normalized raw/α, clamped 0..1) so the emergent oscillator
         genuinely drives downstream genes.
-        reg-bio-2 (C11): the read returns the FREE fraction — decoy sites
+        reg-bio-2 (C11): the read returns the FREE fraction, decoy sites
         sequester their regulator (competitive titration, mirror of the
         Rust regulated_level)."""
         if frm in self.grn_levels:
@@ -3881,18 +5008,18 @@ class Interp:
             lvl = min(lvls[idx] / self.repressi_params["alpha"], 1.0)
         elif frm in self.ligands:
             # reg-bio-2 (A4/C7): a ligand edge source reads its metabolite
-            # pool — a riboswitch-style, protein-free gate (mirror).
+            # pool, a riboswitch-style, protein-free gate (mirror).
             lvl = self._ligand_level(frm)
         elif frm in self.signals:
             # loop-9 (C8): a signal species reads the shared medium (the
-            # LuxR-AHL population gate — mirror of Rust signal_level).
+            # LuxR-AHL population gate, mirror of Rust signal_level).
             lvl = self._signal_level(frm)
         else:
             lvl = 0.0
         return lvl
 
     def _signal_register(self, name):
-        """loop-9 (C8): mirror of Rust signal_register — idempotent, cap 64."""
+        """loop-9 (C8): mirror of Rust signal_register, idempotent, cap 64."""
         if name in self.signals:
             return True
         if len(self.signals) >= 64:
@@ -3902,12 +5029,12 @@ class Interp:
         return True
 
     def _signal_level(self, name):
-        """loop-9 (C8): mirror of Rust signal_level — molecules / 1e9, ONE
+        """loop-9 (C8): mirror of Rust signal_level, molecules / 1e9, ONE
         division (counts capped at 1e9 < 2**53, so the double is identical)."""
         return self.medium.get(name, 0) / 1e9
 
     def _ligand_level(self, name):
-        """reg-bio-2 (A4): mirror of the Rust ligand_level — the runtime pool
+        """reg-bio-2 (A4): mirror of the Rust ligand_level, the runtime pool
         (`ligand_set`) wins; the `.cell [ligand.<name>]` bath is the default."""
         if name in self.ligand_pools:
             return self.ligand_pools[name]
@@ -3920,7 +5047,7 @@ class Interp:
             return 0.0
 
     def _regulated_level(self, raw, frm):
-        """reg-bio-2 (C11 + A4): mirror of the Rust regulated_level — the
+        """reg-bio-2 (C11 + A4): mirror of the Rust regulated_level, the
         DNA-available fraction: (1) decoy titration (subtractive), then
         (2) allosteric modulation (inducers: Π(1 − occ), cofactors: Π occ,
         occ = L/(k+L))."""
@@ -3937,7 +5064,7 @@ class Interp:
                 occ = (lig / (k + lig)) if k > 0.0 else 1.0
                 factor *= (1.0 - occ) if inducer else occ
         out = l * factor
-        # reg-bio-3 (C10): gene dosage — @copies amplifies the CONCENTRATION
+        # reg-bio-3 (C10): gene dosage, @copies amplifies the CONCENTRATION
         # the gene feeds its edges, saturating on the 0..1 lattice (mirror)
         c = self.copies.get(frm)
         if c is not None and c > 1:
@@ -3945,11 +5072,11 @@ class Interp:
         return out if out <= 1.0 else 1.0
 
     def _rho_knobs(self):
-        """loop-10 (F-7/F-8): mirror of the Rust rho_knobs — (armed, catch,
+        """loop-10 (F-7/F-8): mirror of the Rust rho_knobs, (armed, catch,
         queue_floor, queue_cap, drain). Host: .cell parsed per use (garbage
         falls back identically: catch clamps 0..1, the rest parse-or-default);
         worker: the pinned snapshot tuple. Default-off: absent
-        rho.termination = false — legacy runs draw nothing, bit-identical."""
+        rho.termination = false, legacy runs draw nothing, bit-identical."""
         if self.rho_pins is not None:
             return self.rho_pins
         armed = self.cell.get("rho.termination") == "true"
@@ -3969,12 +5096,12 @@ class Interp:
         return (armed, catch, _g("rho.queue_floor", 0.5), _g("ribosome.queue_cap", 1.0), _g("ribosome.drain", 0.5))
 
     def _trans_integrate(self):
-        """reg-bio-2 (C1): mirror of the Rust trans_integrate — one Euler
+        """reg-bio-2 (C1): mirror of the Rust trans_integrate, one Euler
         step per translates edge: p += rate·Δcalls − decay·p (clamped 0..1)
         where Δcalls is the source's call-count delta since the last
         integration (checkpoints start at 0)."""
         # loop-10 (F-8 + R10 kinetics jury L1): ribosome queue drain (mirror)
-        # — at ENTRY (before the empty-check: "every integration point") and
+        #, at ENTRY (before the empty-check: "every integration point") and
         # before the edge loop (pinned order; both entry points reach
         # _trans_integrate). Exists only under rho.termination; max(0.0) is
         # mirror-safe.
@@ -3993,7 +5120,7 @@ class Interp:
             if delta < 0:
                 delta = 0
             dec = pdecay if pdecay is not None else 0.0
-            # loop-9 (F-6): m6A reader fate (mirror) — engage only at mark
+            # loop-9 (F-6): m6A reader fate (mirror), engage only at mark
             # density >= min_level (default 2); the {0,1} legacy lattice is
             # bit-identical. Knobs: .cell m6a.reader.decay (0.25) /
             # m6a.reader.translation (0.10) / m6a.reader.min_level (2).
@@ -4019,7 +5146,7 @@ class Interp:
             r = rate if rate is not None else 1.0
             # reg-bio-3 (A1/A7): per-cistron rbs efficiency + transcriptional
             # polarity (upstream blocking reduces downstream yield) (mirror)
-            # loop-9 (P0-1): per-call-WEIGHTED polarity (mirror) — each
+            # loop-9 (P0-1): per-call-WEIGHTED polarity (mirror), each
             # upstream member contributes its expected factor: methylation
             # past threshold => pol; a target-less RISC silence with capture
             # p = 1 − Π(1−s_i)^sites_i => surv + (1−surv)·pol with
@@ -4032,7 +5159,7 @@ class Interp:
                 pos = next(i for i, (m, _r) in enumerate(u["members"]) if m == frm)
                 r *= u["members"][pos][1]
                 # loop-10 (W2, R10 biology jury): under Rho ON the polarity
-                # factor is IDENTITY — D2 resolves the upstream failure per
+                # factor is IDENTITY, D2 resolves the upstream failure per
                 # call, so a surviving transcript translates at full rate
                 # (D1's expected-value derate would double-count the same
                 # loss). Rho OFF keeps the exact legacy fold (bit-identical).
@@ -4064,7 +5191,7 @@ class Interp:
                                 factor = 1.0
                         f2 *= factor
                     r *= f2
-            # loop-9 (F-6): YTHDF2 decay routing — the LAST production
+            # loop-9 (F-6): YTHDF2 decay routing, the LAST production
             # multiply (normative order: rate x rbs x polarity x (1-yd2))
             if reader:
                 r *= 1.0 - yd2
@@ -4077,7 +5204,7 @@ class Interp:
             self.grn_levels[to] = p
 
     def _grn_decay_tick(self):
-        """reg-bio-2 (C2): mirror of the Rust grn_decay_tick — the
+        """reg-bio-2 (C2): mirror of the Rust grn_decay_tick, the
         decay_clock builtin overrides the .cell keys (`grn.decay_calls`/
         `grn.decay`); one decay step every N calls, then translation
         integrates. Unset = no-op (byte-identical event-driven contract)."""
@@ -4111,7 +5238,7 @@ class Interp:
                 self.grn_levels[k2] *= retention
                 if self.grn_levels[k2] < 2.220446049250313e-16:
                     self.grn_levels[k2] = 0.0
-        # reg-bio-3 (B3): m6A decay — `.cell m6a.decay f` erases site
+        # reg-bio-3 (B3): m6A decay, `.cell m6a.decay f` erases site
         # density as time passes (half-down rounding on the 0..=3 lattice;
         # a diluted mark never reads as MORE marked). Unset = byte-identical.
         mdecay = self.cell.get("m6a.decay")
@@ -4128,12 +5255,12 @@ class Interp:
         self._trans_integrate()
 
     def _promoter_veto(self, name, burst=None):
-        """reg-bio (F-1): telegraph promoter draw — mirror of the Rust
+        """reg-bio (F-1): telegraph promoter draw, mirror of the Rust
         promoter_veto. One draw per call attempt on the SHARED xorshift64*
         stream (the `random()` state machine): active → off with p=koff,
         inactive → on with p=kon. State persists across calls (the burst).
         loop-9 (F-2): a per-gene @burst mark overrides (kon, koff) for THIS
-        gene only — promoter identity. loop-9 (F-3): attempt telemetry."""
+        gene only, promoter identity. loop-9 (F-3): attempt telemetry."""
         if not self.expr_stochastic:
             return False
         if burst is None:
@@ -4161,20 +5288,20 @@ class Interp:
 
     def call_gene_inner(self, g, args):
         name = g.name or "<lambda>"
-        # GRN gate first: a suppressed call is not expression — it must not
+        # GRN gate first: a suppressed call is not expression, it must not
         # reach the call counters, the burst bins, or the gene body.
         veto = self.grn_veto(name)
         if veto is not None:
             self.note(4, f"grn gate: '{name}' call suppressed ({veto})")
             return None
         # T2b methylation gate: level >= threshold blocks transcription;
-        # @acetylate genes are exempt (open chromatin wins — D-005).
+        # @acetylate genes are exempt (open chromatin wins, D-005).
         if not g.acetylate:
             lvl = self.methyl_levels.get(name, 0)
             if lvl >= self.methyl_threshold:
-                self.note(4, f"methylation silences: '{name}' (level {lvl} >= threshold {self.methyl_threshold}) — call returns null")
+                self.note(4, f"methylation silences: '{name}' (level {lvl} >= threshold {self.methyl_threshold}), call returns null")
                 return None
-        # loop-9 (F-5): CIS riboswitch — after chromatin, before the
+        # loop-9 (F-5): CIS riboswitch, after chromatin, before the
         # promoter. The pinned order extends to
         # RISC → toggle → GRN → methylation → riboswitch → promoter.
         if g.riboswitch is not None:
@@ -4186,18 +5313,18 @@ class Interp:
                 why = "unbound: RBS sequestered" if on else "bound: terminator hairpin folded"
                 self.note(4, f"riboswitch '{lig}' {why}: '{name}' call suppressed")
                 return None
-        # reg-bio (F-1): telegraph promoter layer — the pinned gate order
+        # reg-bio (F-1): telegraph promoter layer, the pinned gate order
         # ends here: RISC → toggle → GRN → methylation → riboswitch → promoter.
         if self._promoter_veto(name, g.burst):
-            self.note(4, f"promoter inactive: '{name}' burst-off — call returns null")
+            self.note(4, f"promoter inactive: '{name}' burst-off, call returns null")
             return None
-        # loop-10 (F-7): Rho-dependent termination (mirror) — opt-in (.cell
+        # loop-10 (F-7): Rho-dependent termination (mirror), opt-in (.cell
         # rho.termination = true). Pinned gate order ends: ... promoter → RHO.
         # Naked upstream RNA scan in member order: p_g = 1 (methylated) or
         # 1 − surv(g) (target-less RISC silence) or 0; draws only where
         # 0 < p_g < 1 (member order) then one catch-up draw where 0 < q < 1;
         # catch probability compounding over the naked runway (no pow; the
-        # R10 W1 fix — pressure GROWS with distance); F-8 shield: queue
+        # R10 W1 fix, pressure GROWS with distance); F-8 shield: queue
         # >= rho.queue_floor occludes the rut sites. A terminated call is
         # not expression: returns null before counters/transcript/queue.
         rho_on, rho_catch, rho_floor, rho_cap, _drain = self._rho_knobs()
@@ -4236,9 +5363,9 @@ class Interp:
                         naked_g = u < p_g
                     shielded = self.ribo_queue.get(g2, 0.0) >= rho_floor
                     if naked_g and not shielded:
-                        # q = 1 - (1-catch)^d — per-cistron catch compounding
+                        # q = 1 - (1-catch)^d, per-cistron catch compounding
                         # over the naked runway (mirror of the Rust W1 fix:
-                        # catch^d had the distance profile inverted — the
+                        # catch^d had the distance profile inverted, the
                         # FURTHER downstream the reader, the MORE time Rho
                         # has had to catch up)
                         per = 1.0 - rho_catch
@@ -4264,14 +5391,14 @@ class Interp:
                             terminated = g2
                         break
                 if terminated is not None:
-                    self.note(4, f"rho terminated: transcript lost at '{terminated}' — call returns null")
+                    self.note(4, f"rho terminated: transcript lost at '{terminated}', call returns null")
                     return None
-        # reg-bio-3 (A1/A7): the call passed every gate — one transcript of
+        # reg-bio-3 (A1/A7): the call passed every gate, one transcript of
         # the unit is made (a suppressed call is NOT expression) (mirror)
         ui = self._operon_of(name)
         if ui is not None:
             self.operons[ui]["transcripts"] += 1
-            # loop-10 (F-8): ribosome queue register (mirror) — every
+            # loop-10 (F-8): ribosome queue register (mirror), every
             # member's queue grows by its rbs, capped at ribosome.queue_cap;
             # rho.termination-gated (inert bookkeeping otherwise).
             if rho_on:
@@ -4295,13 +5422,13 @@ class Interp:
             if i < len(args):
                 # W01 (L2c): soft param annotation at the funnel (mirror).
                 anns = g.param_anns
-                if i < len(anns) and anns[i] is not None and not ann_matches(args[i], anns[i]):
+                if i < len(anns) and anns[i] is not None and not ann_is_typaram(anns[i], g.type_params) and not ann_matches(args[i], anns[i]):
                     raise Stress("unfolded", f"argument '{pname}' for gene '{name}' expects {ann_render(anns[i])}, got {type_name(args[i])}")
                 fenv[pname] = args[i]
             elif dflt is not None:
                 dv = self.eval(fenv, dflt)
                 anns = g.param_anns
-                if i < len(anns) and anns[i] is not None and not ann_matches(dv, anns[i]):
+                if i < len(anns) and anns[i] is not None and not ann_is_typaram(anns[i], g.type_params) and not ann_matches(dv, anns[i]):
                     raise Stress("unfolded", f"default of '{pname}' for gene '{name}' expects {ann_render(anns[i])}, got {type_name(dv)}")
                 fenv[pname] = dv
             else:
@@ -4339,21 +5466,21 @@ class Interp:
             return self._check_ret(name, g, r.value, True)
         except Stress as st:
             # W06 (D-014) mirror: a propagated variant IS the gene's return
-            # value — the signal unwinds here and becomes the result.
+            # value, the signal unwinds here and becomes the result.
             if st.prop is not None:
                 return self._check_ret(name, g, st.prop, True)
             raise
 
     def _check_ret(self, name, g, v, explicit):
-        """W01 (L2c): soft return annotation — checked on the value the gene
+        """W01 (L2c): soft return annotation, checked on the value the gene
         actually returns (including a `?!`-propagated variant)."""
         if g.ret_ann is None:
             return v
         if explicit:
-            if not ann_matches(v, g.ret_ann):
+            if not ann_is_typaram(g.ret_ann, g.type_params) and not ann_matches(v, g.ret_ann):
                 raise Stress("unfolded", f"return of gene '{name}' expects {ann_render(g.ret_ann)}, got {type_name(v)}")
         else:
-            if not ann_matches(None, g.ret_ann):
+            if not ann_is_typaram(g.ret_ann, g.type_params) and not ann_matches(None, g.ret_ann):
                 raise Stress("unfolded", f"return of gene '{name}' expects {ann_render(g.ret_ann)}, got null (no return statement ran)")
         return v
 
@@ -4369,11 +5496,11 @@ class Interp:
             if not g.acetylate:
                 lvl = self.methyl_levels.get(name, 0)
                 if lvl >= self.methyl_threshold:
-                    self.note(4, f"methylation silences: '{name}' (level {lvl} >= threshold {self.methyl_threshold}) — call returns null")
+                    self.note(4, f"methylation silences: '{name}' (level {lvl} >= threshold {self.methyl_threshold}), call returns null")
                     return None
             # reg-bio (F-1): promoter gate (funnel order preserved)
             if self._promoter_veto(name):
-                self.note(4, f"promoter inactive: '{name}' burst-off — call returns null")
+                self.note(4, f"promoter inactive: '{name}' burst-off, call returns null")
                 return None
             self.call_counts[name] = self.call_counts.get(name, 0) + 1
             self.call_clock += 1
@@ -4391,9 +5518,9 @@ class Interp:
                 if pname in ("?", "", "self"):
                     continue
                 if i < len(args):
-                    # W01 (L2c): method param annotations — same soft contract.
+                    # W01 (L2c): method param annotations, same soft contract.
                     anns = g.param_anns
-                    if i < len(anns) and anns[i] is not None and not ann_matches(args[i], anns[i]):
+                    if i < len(anns) and anns[i] is not None and not ann_is_typaram(anns[i], g.type_params) and not ann_matches(args[i], anns[i]):
                         raise Stress("unfolded", f"argument '{pname}' for method '{name}' expects {ann_render(anns[i])}, got {type_name(args[i])}")
                     fenv[pname] = args[i]
                 elif dflt is not None:
@@ -4434,14 +5561,14 @@ class Interp:
             self.depth -= 1
 
     def _check_ret_method(self, name, g, v, explicit):
-        """W01 (L2c): method return annotation — same soft contract."""
+        """W01 (L2c): method return annotation, same soft contract."""
         if g.ret_ann is None:
             return v
         if explicit:
-            if not ann_matches(v, g.ret_ann):
+            if not ann_is_typaram(g.ret_ann, g.type_params) and not ann_matches(v, g.ret_ann):
                 raise Stress("unfolded", f"return of method '{name}' expects {ann_render(g.ret_ann)}, got {type_name(v)}")
         else:
-            if not ann_matches(None, g.ret_ann):
+            if not ann_is_typaram(g.ret_ann, g.type_params) and not ann_matches(None, g.ret_ann):
                 raise Stress("unfolded", f"return of method '{name}' expects {ann_render(g.ret_ann)}, got null (no return statement ran)")
         return v
 
@@ -4471,6 +5598,16 @@ class Interp:
                 for g in dd.methods:
                     if g.name == name:
                         return self.call_method_gene(g, recv, args)
+            # W04: trait default methods, implemented traits in declaration
+            # order; virtual (self.x() inside dispatches through the lineage
+            # first) because the fallback resolution is the same walk.
+            for tname in recv.defn.implements:
+                t = self.traits.get(tname)
+                if t is None:
+                    continue
+                for m in t.methods:
+                    if m.name == name and m.default is not None:
+                        return self.call_method_gene(m.default, recv, args)
             if name in recv.fields:
                 return self.call_value(env, recv.fields[name], args)
             self.note(4, f"phenotype {recv.defn.name} has no method '{name}'; null")
@@ -4492,6 +5629,16 @@ class Interp:
                 target = v_display(args[0]) if args else ""
                 states, _ = self.fates.get(fate_name, ([], None))
                 return any(f == cur and target in tg for f, tg in states)
+        # W029 mirror: the bytes method surface, slice (Python-style,
+        # clamped) and len. Bytes are immutable: no mutators by design.
+        if isinstance(recv, bytes):
+            if name == "slice":
+                a = int(args[0]) if len(args) > 0 else 0
+                b = int(args[1]) if len(args) > 1 else len(recv)
+                return recv[a:b]
+            if name == "len": return len(recv)
+            self.note(4, f"unknown bytes method '{name}'; null")
+            return None
         if isinstance(recv, str):
             if name == "at":
                 # L1a: safe char access with an optional default
@@ -4567,8 +5714,15 @@ class Interp:
                 sep = v_display(args[0]) if args else ""
                 return sep.join(v_display(x) for x in recv)
             if name == "len": return len(recv)
-            if name == "push": recv.append(args[0]); return recv
-            if name == "pop": return recv.pop() if recv else None
+            if name == "push":
+                if self.is_frozen(recv):
+                    raise self._frozen_stress("list")
+                self._cycle_note_insert(recv, args[0])  # W013: before the edge lands
+                recv.append(args[0]); return recv
+            if name == "pop":
+                if self.is_frozen(recv):
+                    raise self._frozen_stress("list")
+                return recv.pop() if recv else None
             if name == "get":
                 # L1a: safe index read with an optional default
                 i = args[0] if args else None
@@ -4604,6 +5758,8 @@ class Interp:
                 return None
             if name == "has": return any(deep_eq(k, args[0]) for k in recv.keys())
             if name == "del":
+                if self.is_frozen(recv):
+                    raise self._frozen_stress("map")
                 for k in list(recv.keys()):
                     if deep_eq(k, args[0]):
                         del recv[k]
@@ -4614,6 +5770,171 @@ class Interp:
         self.note(4, f"{type_name(recv)} has no method '{name}'; null")
         return None
 
+    # ---- W013 (D-013): live detected-cycle accounting -------------------
+    # Mirror of the Rust cycle registry (src/value.rs). The engine detects
+    # a cycle at container insertion time: inserting v into container C
+    # where C is reachable from v proves C is reachable from itself, so C
+    # registers once. memory().cycles re-verifies lazily: a registration
+    # dies when the container is reclaimed (weakref dead) or the cycle was
+    # broken by mutation (no longer reachable from itself). Walk scope:
+    # list items, map VALUES, phenotype field values, variant payloads;
+    # map keys are not walked (the oracle stores container keys display-
+    # stringified, a pre-existing divergence the corpus avoids) and gene/
+    # env capture cycles are not container edges, they are not counted.
+
+    # Deterministic walk budget (rt_p22a armor), the mirror of Rust
+    # WALK_BUDGET: native graph walks are not fuel-accounted, so every
+    # cycle walk carries a hard visit cap. Both cores visit in the same
+    # order and cut at the same node; the cap never binds on sane graphs.
+    WALK_BUDGET = 100_000
+
+    def _weak_binding_alive(self, env, addr):
+        # is the weak target still strongly referenced by ANY name binding on
+        # the live scope chain? (containers that merely hold the value are a
+        # Rust-lane shape the differential corpus deliberately avoids)
+        node = env
+        while node is not None:
+            for val in node.values():
+                if isinstance(val, ObjInst):
+                    if id(val.fields) == addr:
+                        return True
+                elif id(val) == addr:
+                    return True
+            node = node["__parent__"]
+        return False
+
+    def _cycle_prune(self):
+        # strong-ref registrations persist by design (no GC, D-013): a
+        # detected cycle stays in the gauge for the rest of the run
+        pass
+
+    def _cycle_walk_reaches(self, root, v):
+        # does the walk from v reach the container at address root?
+        # (the seed is v itself: if v IS the target, inserting it closes a
+        # self-reference, push(a, a)). Returns True (reached), False
+        # (completed, not reached) or None (budget exhausted, inconclusive).
+        budget = [self.WALK_BUDGET]
+        return self._cycle_walk_reaches_root(root, set(), [v], budget)
+
+    def _cycle_register(self, target):
+        # register the target container (list / dict / instance fields dict)
+        # once per address and once per subgraph: if any container reachable
+        # from the target is already registered, the cycle group was already
+        # counted through that member.
+        if isinstance(target, ObjInst):
+            target = target.fields
+        addr = id(target)
+        self._cycle_prune()
+        registered = {a for (_w, a) in self.cycle_regs}
+        if addr in registered:
+            return
+        stack, seen = [], set()
+        stack.extend(target.values() if isinstance(target, dict) else target)
+        # budgeted dedupe walk: an inconclusive dedupe registers anyway,
+        # the detection at the insertion already proved a cycle at the
+        # target (mirror of the Rust dedupe budget)
+        budget = [self.WALK_BUDGET]
+        while stack:
+            cur = stack.pop()
+            if budget[0] == 0:
+                break  # inconclusive: register the proven cycle
+            budget[0] -= 1
+            if isinstance(cur, list):
+                a = id(cur)
+                if a in registered: return  # a member of this subgraph is registered
+                if a in seen: continue
+                seen.add(a)
+                stack.extend(cur)
+            elif isinstance(cur, dict):
+                a = id(cur)
+                if a in registered: return
+                if a in seen: continue
+                seen.add(a)
+                stack.extend(cur.values())
+            elif isinstance(cur, ObjInst):
+                a = id(cur.fields)
+                if a in registered: return
+                if a in seen: continue
+                seen.add(a)
+                stack.extend(cur.fields.values())
+            elif isinstance(cur, Variant):
+                if cur.payload is not None:
+                    stack.append(cur.payload)
+        # no GC: cycles persist once detected, mirror the Rust gauge;
+        # strong refs keep the registration honest (a plain list/dict is
+        # not weakref-able, and persistence is the modeled semantics)
+        self.cycle_regs.append((target, addr))
+
+    def _cycle_note_insert(self, target, v):
+        # insertion-time detection, called BEFORE the edge lands; an
+        # inconclusive detection walk (budget exhausted) does not register:
+        # best-effort detection, the conservative direction for the GAUGE
+        # is persistence of what is already registered
+        if isinstance(target, ObjInst):
+            target = target.fields
+        if isinstance(v, (list, dict, ObjInst, Variant)) and \
+                self._cycle_walk_reaches(id(target), v) is True:
+            self._cycle_register(target)
+
+    def _live_cycles(self):
+        self._cycle_prune()
+        n, keep = 0, []
+        # ONE budget shared by every verification in this call: the whole
+        # re-verify pass is bounded no matter how many cycles are registered
+        budget = [self.WALK_BUDGET]
+        for t, a in self.cycle_regs:
+            if t is None:
+                continue
+            # re-verify: still reachable from itself (walk the CHILDREN,
+            # the container itself is the pre-seen root, never the seed)
+            seen, stack = {a}, []
+            if isinstance(t, dict):
+                stack.extend(t.values())
+            else:
+                stack.extend(t)
+            verdict = self._cycle_walk_reaches_root(a, seen, stack, budget)
+            # True: proven alive. False: proven reclaimed or broken, drop
+            # the entry. None: budget exhausted, the entry stays counted
+            # (death must be PROVEN, persistence is D-013).
+            still = verdict is not False
+            if still:
+                n += 1
+                keep.append((t, a))
+        self.cycle_regs = keep
+        return n
+
+    def _cycle_walk_reaches_root(self, root, seen, stack, budget):
+        # budget is a one-element list shared by the callers; returns
+        # True (reached), False (completed, not reached) or None
+        # (budget exhausted mid-walk, inconclusive)
+        while stack:
+            cur = stack.pop()
+            if budget[0] == 0:
+                return None
+            budget[0] -= 1
+            if isinstance(cur, list):
+                a = id(cur)
+                if a == root: return True
+                if a in seen: continue
+                seen.add(a)
+                stack.extend(cur)
+            elif isinstance(cur, dict):
+                a = id(cur)
+                if a == root: return True
+                if a in seen: continue
+                seen.add(a)
+                stack.extend(cur.values())
+            elif isinstance(cur, ObjInst):
+                a = id(cur.fields)
+                if a == root: return True
+                if a in seen: continue
+                seen.add(a)
+                stack.extend(cur.fields.values())
+            elif isinstance(cur, Variant):
+                if cur.payload is not None:
+                    stack.append(cur.payload)
+        return False
+
     # ---- builtins
     def builtin(self, env, name, args):
         if name == "promote":
@@ -4621,18 +5942,75 @@ class Interp:
             return None
         if name == "len":
             v = args[0] if args else None
-            if isinstance(v, (str, list, dict)):
+            if isinstance(v, (str, bytes, list, dict)):
                 return len(v)
             self.note(4, "len() of non-container is 0")
             return 0
+        # ---- W029: bytes conversions (UTF-8-only, explicit encoding)
+        if name == "bytes_from_str":
+            s = args[0] if args and isinstance(args[0], str) else None
+            if s is None:
+                raise Stress("unfolded", f"bytes_from_str needs a str, got {type_name(args[0] if args else None)}")
+            if len(args) > 1:
+                enc = v_display(args[1]).lower().replace("-", "")
+                if enc != "utf8":
+                    raise Stress("unfolded", f"unsupported encoding '{v_display(args[1])}' (bytes are UTF-8 only)")
+            return s.encode("utf-8")
+        if name == "str_from_bytes":
+            b = args[0] if args and isinstance(args[0], bytes) else None
+            if b is None and args and not isinstance(args[0], bytes):
+                raise Stress("unfolded", f"str_from_bytes needs bytes, got {type_name(args[0])}")
+            if len(args) > 1:
+                enc = v_display(args[1]).lower().replace("-", "")
+                if enc != "utf8":
+                    raise Stress("unfolded", f"unsupported encoding '{v_display(args[1])}' (bytes are UTF-8 only)")
+            if b is None:
+                return ""
+            try:
+                return b.decode("utf-8")
+            except UnicodeDecodeError as e:
+                # soft tier: null + note naming the offending byte position
+                self.note(4, f"str_from_bytes: invalid UTF-8 at byte {e.start}; null")
+                return None
+        if name == "bytes_from_list":
+            if not args or args[0] is None:
+                return b""
+            l = args[0]
+            if not isinstance(l, list):
+                raise Stress("unfolded", f"bytes_from_list needs a list, got {type_name(l)}")
+            out = bytearray()
+            for v in l:
+                if isinstance(v, bool) or not isinstance(v, int):
+                    raise Stress("unfolded", f"bytes_from_list needs ints, got {type_name(v)}")
+                if not (0 <= v <= 255):
+                    raise Stress("unfolded", f"byte value {v} out of range 0..255")
+                out.append(v)
+            return bytes(out)
+        if name == "bytes_to_list":
+            b = args[0] if args else None
+            if b is None:
+                return []
+            if not isinstance(b, bytes):
+                raise Stress("unfolded", f"bytes_to_list needs bytes, got {type_name(b)}")
+            return list(b)
         if name == "push":
+            if self.is_frozen(args[0]):
+                raise self._frozen_stress("list")
+            self._cycle_note_insert(args[0], args[1])  # W013: before the edge lands
             args[0].append(args[1]); return args[0]
         if name == "pop":
+            if self.is_frozen(args[0]):
+                raise self._frozen_stress("list")
             return args[0].pop() if args[0] else None
         if name == "insert":
+            if self.is_frozen(args[0]):
+                raise self._frozen_stress("list")
             idx = self.as_index(args[1], len(args[0]))
+            self._cycle_note_insert(args[0], args[2])  # W013: before the edge lands
             args[0].insert(min(idx, len(args[0])), args[2]); return args[0]
         if name == "remove":
+            if self.is_frozen(args[0]):
+                raise self._frozen_stress("list")
             idx = self.as_index(args[1], len(args[0]))
             if idx < len(args[0]):
                 return args[0].pop(idx)
@@ -4645,6 +6023,8 @@ class Interp:
             return isinstance(args[0], dict) and any(deep_eq(k, args[1]) for k in args[0].keys())
         if name == "del":
             if isinstance(args[0], dict):
+                if self.is_frozen(args[0]):
+                    raise self._frozen_stress("map")
                 for k in list(args[0].keys()):
                     if deep_eq(k, args[1]):
                         del args[0][k]
@@ -4713,9 +6093,22 @@ class Interp:
             import time
             return time.monotonic()
         if name == "exit":
+            # sec-r2 (audit C-11) mirror: process exit is a capability,
+            # default-deny. S3 found the old unconditional sys.exit()
+            # diverging from the rust refusal surface (rust: catchable
+            # interference + the runner survives; oracle: process died).
+            # allow-all (enabled False) implies exit, as Caps::allow_all does.
+            c = self.caps
+            if c["enabled"] and not c.get("exit"):
+                self.note(4, "exit denied: capability 'exit' not granted (grant with --allow-exit or .cell allow.exit = true)")
+                raise Stress("interference", "exit denied, capability 'exit' not granted (grant with --allow-exit or .cell allow.exit = true)")
             sys.exit(int(args[0]) if args else 0)
         if name == "assert":
             ok = truthy(args[0]) if args else False
+            # S4-6b: count every EXECUTED assert (pass or burn), mirroring
+            # interp.rs's asserts_run += 1 before the burn check — the
+            # proof-integrity vacuous-proof rule reads this counter.
+            self.asserts_run += 1
             if not ok:
                 msg = v_display(args[1]) if len(args) > 1 else "assertion failed"
                 raise Stress("burned", msg)
@@ -4833,8 +6226,52 @@ class Interp:
                 i += 1
             return out
         if name == "memory":
-            import resource
-            return {"arena_bytes": 0, "interns": 0, "allocs": 0}
+            # W59 windows truth (2026-09-29): a dead `import resource` sat
+            # here - unix-only module, zero usages - and every memory()
+            # call died with ModuleNotFoundError on Windows (first divergence
+            # in tests/differential/weak_refs.op, the CI-native windows job).
+            # The import is gone; the dict below never referenced it.
+            # W013 (D-013): the cycles field mirrors the Rust live detected-
+            # cycle gauge (insertion registers, reclamation prunes); the
+            # other three keys are Rust symbol-table gauges the sequential
+            # oracle does not have (zeros, the pre-existing shape contract).
+            return {"arena_bytes": 0, "interns": 0, "allocs": 0,
+                    "cycles": self._live_cycles()}
+        if name == "weak":
+            # W013: supported targets are the container values (list, map,
+            # phenotype instance); everything else is refused (SPEC §19f).
+            # No-argument call mirrors the Rust None-arm message exactly.
+            if not args:
+                raise Stress("unfolded", "weak(v) needs a list, map, or phenotype")
+            v = args[0]
+            if isinstance(v, list):
+                self.weak_targets[id(v)] = ("list", v, None)
+                return WeakRef("list", id(v))
+            if isinstance(v, dict):
+                self.weak_targets[id(v)] = ("map", v, None)
+                return WeakRef("map", id(v))
+            if isinstance(v, ObjInst):
+                self.weak_targets[id(v.fields)] = ("phenotype", v.fields, v.defn)
+                return WeakRef("phenotype", id(v.fields), v.defn)
+            raise Stress("unfolded",
+                         f"weak() needs a list, map, or phenotype, found {type_name(v)}")
+        if name == "strengthen":
+            if not args:
+                # no-argument call mirrors the Rust None-arm message exactly
+                raise Stress("unfolded", "strengthen(w) needs a weak handle")
+            w = args[0]
+            if not isinstance(w, WeakRef):
+                raise Stress("unfolded",
+                             f"strengthen(w) needs a weak handle, found {type_name(w)}")
+            entry = self.weak_targets.get(w.addr)
+            if entry is None or not self._weak_binding_alive(env, w.addr):
+                # no GC: the last strong ref freed the target immediately;
+                # the soft note is Rust-lane, the oracle just returns null
+                return None
+            t = entry[1]
+            if w.kind == "phenotype":
+                return ObjInst(w.defn, t)
+            return t
         if name == "methyl":
             k = v_display(args[0]) if args else ""
             d = args[1] if len(args) > 1 else None
@@ -4851,7 +6288,7 @@ class Interp:
                 except ValueError:
                     return v
         if name == "splice_shift":
-            # loop-9 (F-4): mirror of the Rust builtin — rebinds the splice
+            # loop-9 (F-4): mirror of the Rust builtin, rebinds the splice
             # root to the named variant exactly like the splice statement.
             root = v_display(args[0]) if args else ""
             variant = v_display(args[1]) if len(args) > 1 else ""
@@ -4889,10 +6326,10 @@ class Interp:
             self.m6a_levels[k] = lvl
             marked = lvl >= 1
             if not self.methyl_quiet:
-                self.note(2, f"m6A {verb}: '{k}' (level {lvl}) — redefinition {'resisted' if marked else 'no longer resisted'}")
+                self.note(2, f"m6A {verb}: '{k}' (level {lvl}), redefinition {'resisted' if marked else 'no longer resisted'}")
             return lvl
         if name == "passage":
-            # reg-bio-3 (B2/B6): cell divisions — marks dilute unless
+            # reg-bio-3 (B2/B6): cell divisions, marks dilute unless
             # maintained (mirror of the Rust passage builtin)
             n = args[0] if args and isinstance(args[0], int) and not isinstance(args[0], bool) else 1
             n = max(n, 0)
@@ -4911,7 +6348,7 @@ class Interp:
                 for k2 in list(self.methyl_levels):
                     x = self.methyl_levels[k2] * fv - 0.5
                     self.methyl_levels[k2] = max(0, int(_math.ceil(x)))
-            # loop-9 (C8): the signal medium dilutes with the culture —
+            # loop-9 (C8): the signal medium dilutes with the culture,
             # floor(m * d) per division, d = .cell quorum.dilution (default
             # 0.5, binary-exact halving). Empty medium = no-op (mirror).
             qd = self.cell.get("quorum.dilution")
@@ -4926,16 +6363,16 @@ class Interp:
                     self.medium[k2] = int(_math.floor(self.medium[k2] * qdv))
             self.generation += n
             if not self.methyl_quiet:
-                self.note(1, f"passage: {n} divisions (maintenance {fv!r}) — generation {self.generation}")
+                self.note(1, f"passage: {n} divisions (maintenance {fv!r}), generation {self.generation}")
             return self.generation
         if name == "methylate":
-            # A12 (reg-r2): mirror of the Rust runtime API — same graded
+            # A12 (reg-r2): mirror of the Rust runtime API, same graded
             # semantics as the @methylate attribute (D-005): level += 1.
             k = v_display(args[0]) if args else ""
             self.methyl_levels[k] = self.methyl_levels.get(k, 0) + 1
             return self.methyl_levels[k]
         if name == "demethylate":
-            # A12: the @acetylate direction — saturating relaxation.
+            # A12: the @acetylate direction, saturating relaxation.
             k = v_display(args[0]) if args else ""
             self.methyl_levels[k] = max(0, self.methyl_levels.get(k, 0) - 1)
             return self.methyl_levels[k]
@@ -4953,7 +6390,7 @@ class Interp:
             k = v_display(args[0]) if args else ""
             return self.grn_levels.get(k, 0.0)
         if name == "fingerprint":
-            # loop-9 (P0-3): parity fix — the Rust core measures COMPLETE
+            # loop-9 (P0-3): parity fix, the Rust core measures COMPLETE
             # 20-call bins only (`call_clock / 20`); this mirror's former
             # `+ 1` included the trailing partial bin, so the same 41-call
             # history scored 2.439 on Rust and 0.053 here. Mirror the
@@ -4962,7 +6399,7 @@ class Interp:
             complete_bins = self.call_clock // 20
             burst_by = {}
             burst_total, burst_n = 0.0, 0
-            # reg-bio-2 (D9): iterate buckets in SORTED key order — the Rust
+            # reg-bio-2 (D9): iterate buckets in SORTED key order, the Rust
             # core accumulates burst_total in sorted order (float addition is
             # not associative; order must match for the last-ulp parity).
             for gname in sorted(self.gene_buckets):
@@ -4973,7 +6410,7 @@ class Interp:
                 n = float(complete_bins)
                 total = sum(bins.get(b, 0) for b in range(complete_bins))
                 mean = total / n
-                # reg-bio-2 (D9): d*d (explicit multiply), never ** — op-for-op
+                # reg-bio-2 (D9): d*d (explicit multiply), never **, op-for-op
                 # with the Rust core's un-multiplied square.
                 var = 0.0
                 for b in range(complete_bins):
@@ -5033,7 +6470,7 @@ class Interp:
             self.note(1, f"repressilator oscillating every {ms} ms (sequential oracle: manual ring only)")
             return True
         if name == "repressi_state":
-            # A11 (reg-r2) — mirror of the Rust core: the ring integrates
+            # A11 (reg-r2), mirror of the Rust core: the ring integrates
             # the discrete Elowitz–Leibler repressilator. State is a pure
             # function of the tick count; arithmetic order matches Rust
             # op-for-op (bit-identical IEEE-754).
@@ -5044,7 +6481,7 @@ class Interp:
             return {nm: lvls[j] for j, nm in enumerate(self.repressi_ring)}
         if name == "grn_fire":
             seed = v_display(args[0]) if args else ""
-            # A10 (reg-r2): decay mirror — decay comes from the pulse itself
+            # A10 (reg-r2): decay mirror, decay comes from the pulse itself
             # (grn_fire(seed, f)) or falls back to .cell `[grn] decay`;
             # unset/0 skips the loop (byte-identical to pre-A10).
             raw_decay = args[1] if len(args) > 1 else None
@@ -5067,9 +6504,9 @@ class Interp:
             # reg-bio-2 (C1): the translation layer integrates at every
             # engine update point (mirror of the Rust grn_fire).
             self._trans_integrate()
-            # STATEFUL network: levels persist across fires (a latch by default — decay makes the dilution explicit)
+            # STATEFUL network: levels persist across fires (a latch by default, decay makes the dilution explicit)
             # loop-9 (P0-2): ligand/signal-backed endpoints stay OUT of
-            # grn_levels (they resolve through their own pools — seeding
+            # grn_levels (they resolve through their own pools, seeding
             # them at 0.0 would shadow those reads forever) (mirror).
             for frm, to, st, inh, thr, hill, is_any, occupy, is_sum, attenuating in self.grn_edges:
                 if frm not in self.ligands and frm not in self.signals:
@@ -5077,16 +6514,16 @@ class Interp:
                 if to not in self.ligands and to not in self.signals:
                     self.grn_levels.setdefault(to, 0.0)
             # loop-9 (C8): firing a signal species directly would shadow the
-            # medium read — the Rust core refuses with a note (mirror).
+            # medium read, the Rust core refuses with a note (mirror).
             if seed in self.signals:
-                self.note(4, f"'{seed}' is a signal species: its level lives in the shared medium — use secrete()")
+                self.note(4, f"'{seed}' is a signal species: its level lives in the shared medium, use secrete()")
             else:
                 self.grn_levels[seed] = min(self.grn_levels.get(seed, 0.0) + 1.0, 1.0)
             # reg-r3 (re-audit): TWO-PHASE fire, mirroring the Rust core and
-            # the SPEC exactly — phase 1 propagates ACTIVATION in waves with
+            # the SPEC exactly, phase 1 propagates ACTIVATION in waves with
             # inhibitors excluded; phase 2 applies each inhibitor ONCE,
             # post-activation. (The old mirror subtracted inside the wave
-            # loop — up to 10 times — diverging from the SPEC's "applied
+            # loop, up to 10 times, diverging from the SPEC's "applied
             # exactly once per fire"; a pre-charged inhibited target shows
             # it: Rust yields 0.1, the old mirror yielded 0.0.)
             for wave in range(1, 11):
@@ -5104,7 +6541,7 @@ class Interp:
                     parent = self._regulated_level(parent, frm)
                     if thr is not None and thr > 0.0:
                         # reg-bio (F-2): per-edge Hill exponent (mirror of
-                        # the Rust repeated multiplication — never **)
+                        # the Rust repeated multiplication, never **)
                         n_h = hill if hill is not None else 2
                         ph = 1.0
                         th2 = 1.0
@@ -5114,7 +6551,7 @@ class Interp:
                         influence = st * (ph / (ph + th2))
                     else:
                         # op-identical to the Rust repeated multiplication
-                        # (never ** — pow vs mul rounding must not diverge)
+                        # (never **, pow vs mul rounding must not diverge)
                         s = st
                         for _ in range(wave - 1):
                             s *= st
@@ -5125,7 +6562,7 @@ class Interp:
                     if abs(nxt - cur) > 1e-12:
                         self.grn_levels[to] = nxt
                         changed = True
-                # reg-bio-2 (B7): pooled (`sum`) edges — group pass per wave,
+                # reg-bio-2 (B7): pooled (`sum`) edges, group pass per wave,
                 # BEFORE the convergence check (mirror of the Rust core).
                 groups = []
                 for frm, to, st, inh, thr, hill, is_any, occupy, is_sum, attenuating in self.grn_edges:
@@ -5158,7 +6595,7 @@ class Interp:
                 if not changed:
                     break
             # phase 2: inhibition subtracts once, from the source's
-            # post-activation level (sources read the PRE-phase-2 snapshot —
+            # post-activation level (sources read the PRE-phase-2 snapshot,
             # parity with the Rust `activated` map, so a node that is both a
             # target and a later source keeps its post-activation level)
             post = dict(self.grn_levels)
@@ -5182,7 +6619,7 @@ class Interp:
                 else:
                     influence = parent * st
                 cur = self.grn_levels.get(to, 0.0)
-                # reg-bio-2 (D2b): occupancy repression — multiplicative
+                # reg-bio-2 (D2b): occupancy repression, multiplicative
                 # survival (mirror of the Rust core); legacy subtracts once.
                 if occupy:
                     self.grn_levels[to] = cur * (1.0 - min(influence, 1.0))
@@ -5190,7 +6627,7 @@ class Interp:
                     self.grn_levels[to] = max(0.0, cur - influence)
             return dict(sorted(self.grn_levels.items()))
         if name == "grn_state":
-            # reg-bio-2 (D9): sorted key order — Rust HashMap order varies per
+            # reg-bio-2 (D9): sorted key order, Rust HashMap order varies per
             # process; both implementations now emit byte-order sorted maps.
             return dict(sorted(self.grn_levels.items()))
         if name == "items":
@@ -5202,8 +6639,18 @@ class Interp:
             callee = args[0] if args else None
             targs = args[1] if len(args) > 1 and isinstance(args[1], list) else []
             if isinstance(callee, Gene):
+                # W013 spawn membrane mirror: a top-level weak handle is
+                # REFUSED with the same catchable `membrane` stress as the
+                # Rust pre-flight (a weak handle's target identity cannot
+                # cross a cell boundary; nested handles keep the degrade-
+                # to-null wire rule)
+                for _a in targs:
+                    if isinstance(_a, WeakRef):
+                        raise Stress(
+                            "membrane",
+                            "spawn() refuses a weak payload; weak handles cannot cross the snapshot membrane")
                 # reg-r4: SendValue depth ceiling mirror (Rust SEND_DEPTH_CAP
-                # = 100_000) — deep spawn payloads raise a catchable
+                # = 100_000), deep spawn payloads raise a catchable
                 # `overflow` stress exactly like the Rust serialization path
                 for _a in targs:
                     _stack = [(_a, 1)]
@@ -5216,10 +6663,10 @@ class Interp:
                         elif isinstance(_item, dict):
                             _stack.extend((x, _d + 1) for x in _item.values())
                 # reg-r4 (re-audit B-2): route through call_named like the
-                # Rust worker does — a direct call_gene bypasses the
+                # Rust worker does, a direct call_gene bypasses the
                 # toggle/RISC/GRN/methyl gates ("a repressed allele stays
                 # repressed in worker cells", reg-r1's own contract)
-                # reg-bio-2 (C3): worker RNG decorrelation mirror — the Rust
+                # reg-bio-2 (C3): worker RNG decorrelation mirror, the Rust
                 # worker derives its stream from the task id; the sequential
                 # oracle runs the body inline but saves / derives / restores
                 # the host stream, so stochastic worker bodies draw from the
@@ -5230,11 +6677,11 @@ class Interp:
                 self.rng = _derived
                 spawn_name = callee.name
                 # loop-9 (C8): the Rust worker tags its notes "[task <name>]"
-                # — mirror the prefix while the body runs inline
+                #, mirror the prefix while the body runs inline
                 _saved_prefix = getattr(self, "task_note_prefix", None)
                 self.task_note_prefix = f"[task {spawn_name or '<lambda>'}]"
                 # loop-9: worker-cell isolation (mirror of the snapshot
-                # semantics) — the Rust worker gets a COPY of regulation
+                # semantics), the Rust worker gets a COPY of regulation
                 # state and FRESH expression counters; mutations inside the
                 # cell never propagate to the host. The sequential oracle
                 # must save/restore everything the snapshot carries.
@@ -5284,14 +6731,23 @@ class Interp:
                 self.call_counts = {}
                 self.call_clock = 0
                 self.gene_buckets = {}
+                # W05 spawn boundary: the Rust worker receives serialized
+                # COPIES of the arguments (nothing reachable from them is
+                # frozen inside the worker). Park the reachable frozen ids
+                # for the inline body, restore after, byte-parity with the
+                # per-interpreter registry semantics.
+                _parked_frozen = self._park_frozen_reachable(targs)
                 try:
-                    if spawn_name:
-                        result = self.call_named(env, spawn_name, targs)
-                    else:
-                        result = self.call_value(env, callee, targs)
+                    try:
+                        if spawn_name:
+                            result = self.call_named(env, spawn_name, targs)
+                        else:
+                            result = self.call_value(env, callee, targs)
+                    finally:
+                        self._restore_frozen(_parked_frozen)
                 except Stress as st:
                     # W06 (D-014) mirror: a propagated variant IS the worker
-                    # gene's return value — converted at the boundary.
+                    # gene's return value, converted at the boundary.
                     if st.prop is not None:
                         result = st.prop
                     else:
@@ -5301,9 +6757,25 @@ class Interp:
                         setattr(self, k2, v2)
                     self.rng = _saved_rng
                     self.task_note_prefix = _saved_prefix
+                # W015 mirror: the result crosses the join membrane, a
+                # channel handle degrades to null exactly like the Rust
+                # to_send path (deeply inside containers and variant
+                # payloads, both the return and the propagated paths)
+                result = channel_degrade_result(result)
                 self.next_id = _task_id
                 self.tasks = getattr(self, "tasks", {})
                 self.tasks[self.next_id] = result
+                # W18: the sequential engine ran the body inline, so the
+                # task is born finished; the phase tombstone mirrors the
+                # Rust registry's post-join answer
+                _tombs = getattr(self, "task_tombstones", {})
+                _tombs[self.next_id] = "done"
+                self.task_tombstones = _tombs
+                # W17: register on the innermost scope block, mirroring the
+                # Rust spawn's scope registration
+                _scopes = getattr(self, "scope_stack", None)
+                if _scopes:
+                    _scopes[-1].append(self.next_id)
                 return self.next_id
             self.note(4, "spawn() needs a gene; null task")
             return None
@@ -5314,6 +6786,131 @@ class Interp:
                 return tasks.pop(tid)
             self.note(4, f"task {tid} already joined or unknown")
             return None
+        # W18: cooperative task cancellation. The sequential engine runs
+        # worker bodies inline at spawn time, so by the time a cancel can
+        # name a task that task has already finished; the flag surface
+        # still exists and answers with the same notes as the concurrent
+        # engine's late-cancel path. Timing shapes are Rust-lane evidence
+        # (tests/timing/, excluded from both walkers).
+        if name == "cancel":
+            tid = args[0] if args else None
+            if not isinstance(tid, int) or tid <= 0:
+                self.note(4, "cancel() needs a task id")
+                return False
+            tasks = getattr(self, "tasks", {})
+            tombs = getattr(self, "task_tombstones", {})
+            if tid in tasks or tid in tombs:
+                self.note(4, f"task {tid} already finished")
+                return False
+            self.note(4, f"task {tid} unknown or already joined")
+            return False
+        if name == "task_state":
+            tid = args[0] if args else None
+            if tid == 0:
+                return "done"
+            if not isinstance(tid, int) or tid < 0:
+                self.note(4, "task_state() needs a task id")
+                return None
+            tasks = getattr(self, "tasks", {})
+            tombs = getattr(self, "task_tombstones", {})
+            if tid in tasks or tid in tombs:
+                return "done"
+            self.note(4, f"task {tid} unknown or already joined")
+            return None
+        if name == "cancelled":
+            return False
+        # W15: task-group surface. The sequential engine's children are all
+        # born finished, so wait_any answers the first LISTED id (completion
+        # ordering is Rust-lane evidence in tests/timing/) and wait_all pops
+        # every id in input order, position-aligned with the input.
+        if name == "wait_all":
+            ids = args[0] if args else []
+            if not isinstance(ids, list):
+                self.note(4, "wait_all() needs a list of task ids")
+                return []
+            tasks = getattr(self, "tasks", {})
+            out = []
+            for tid in ids:
+                if isinstance(tid, int) and tid in tasks:
+                    out.append(tasks.pop(tid))
+                else:
+                    self.note(4, f"task {tid} already joined or unknown")
+                    out.append(None)
+            return out
+        if name == "wait_any":
+            ids = args[0] if args else []
+            if not isinstance(ids, list) or not ids:
+                self.note(4, "wait_any() needs a list of task ids")
+                return None
+            tasks = getattr(self, "tasks", {})
+            tombs = getattr(self, "task_tombstones", {})
+            for tid in ids:
+                if (isinstance(tid, int) and tid in tasks) or tid in tombs:
+                    return tid
+            self.note(4, "wait_any timeout (30000 ms); no task finished")
+            return None
+        # ---- W015: channels + select (builtins only, W036 grammar freeze).
+        # The sequential oracle mirrors the concurrent engine op-for-op on
+        # the buffered path; a program that would block raises the
+        # oracle-only `blocked` stress (the Rust core blocks under fuel),
+        # which the differential corpus never triggers by construction.
+        if name == "channel":
+            return Channel()
+        if name == "send":
+            ch = args[0] if args else None
+            if not isinstance(ch, Channel) or len(args) < 2:
+                raise Stress("unfolded", "send(ch, v) needs a channel and a value")
+            v = args[1]
+            # membrane first, then the depth pre-flight, then closed (the
+            # Rust order: a handle payload is refused even on a closed chan)
+            if isinstance(v, (Gene, SeqObj, ObjInst, Channel, WeakRef)):
+                raise Stress("membrane",
+                             f"send() refuses a {type_name(v)} payload; channels carry data, not handles")
+            _stack = [(v, 0)]
+            while _stack:
+                _item, _d = _stack.pop()
+                if _d > 100_000:
+                    raise Stress("overflow", "send payload nesting too deep")
+                if isinstance(_item, list):
+                    _stack.extend((x, _d + 1) for x in _item)
+                elif isinstance(_item, dict):
+                    _stack.extend((x, _d + 1) for x in _item.values())
+            if ch.closed:
+                raise Stress("closed_channel", "send on a closed channel")
+            ch.buf.append(channel_wire(v))
+            return None
+        if name == "recv":
+            ch = args[0] if args else None
+            if not isinstance(ch, Channel):
+                raise Stress("unfolded", "recv(ch) needs a channel")
+            if ch.buf:
+                return ch.buf.pop(0)
+            if ch.closed:
+                return None  # closed AND empty is the only null recv produces
+            raise Stress("blocked", "oracle cannot block on recv; buffered sends must precede recv")
+        if name == "close":
+            ch = args[0] if args else None
+            if not isinstance(ch, Channel):
+                raise Stress("unfolded", "close(ch) needs a channel")
+            if ch.closed:
+                self.note(4, "close of an already-closed channel")
+                return None
+            ch.closed = True
+            return None
+        if name == "select":
+            for c in args:
+                if not isinstance(c, Channel):
+                    raise Stress("unfolded", f"select() needs channels, got a {type_name(c)}")
+            if not args:
+                self.note(4, "select() with no channels; -1")
+                return -1
+            # strict declaration order: the leftmost ready channel wins
+            for i, c in enumerate(args):
+                if c.buf:
+                    return i
+            if all(c.closed for c in args):
+                return -1
+            raise Stress("blocked", "oracle cannot block on select; buffered sends must precede select")
         # ---- math
         if name == "floor":
             v = args[0] if args else 0
@@ -5332,14 +6929,37 @@ class Interp:
                 return int(_m.ceil(v))
             return v if isinstance(v, int) else 0
         if name == "sqrt":
-            v = float(args[0]) if args else 0.0
+            # F1 (S4-5): type-abuse parity — the Rust core routes sqrt
+            # through the shared numeric checker: a non-numeric argument
+            # (bools and numeric STRINGS included) is a contained unfolded
+            # stress naming the type pair ("... found <t> and int" — the int
+            # is sqrt's phantom second operand in the shared checker). Bare
+            # float() swallowed "2.5"/bools silently and crashed raw on "x"
+            # (rc=1 ValueError). Zero args stays 0.0 (rust: no arity stress
+            # on sqrt()).
+            v0 = args[0] if args else 0.0
+            if isinstance(v0, bool) or not isinstance(v0, (int, float)):
+                raise Stress("unfolded", f"numeric op needs numbers, found {type_name(v0)} and int")
+            v = float(v0)
             if v < 0:
                 raise Stress("unfolded", "sqrt of negative number")
             return v ** 0.5
         if name == "pow":
-            a = float(args[0]) if len(args) > 0 else 0.0
-            b = float(args[1]) if len(args) > 1 else 0.0
-            return a ** b
+            # mirror the Rust builtin exactly: arity < 2 → note + the
+            # (0.0, 0.0) fallback → 1.0 (rust DISCARDS provided args in the
+            # fallback — pow(2) is 1.0, not 2.0); type abuse → the shared
+            # checker wording IN OPERAND ORDER ("found int and str" for
+            # pow(2, "x")); semantics = raw f64 powf (NO overflow stress —
+            # the builtin returns inf), so 0**neg = inf and negative-base
+            # fractional = nan via the mirror (S4-5/F1b class: python
+            # raised raw errors / leaked a complex here).
+            if len(args) < 2:
+                self.note(4, "pow(x, y) needs two numbers; 0")
+                return 1.0
+            a0, b0 = args[0], args[1]
+            if isinstance(a0, bool) or not isinstance(a0, (int, float)) or isinstance(b0, bool) or not isinstance(b0, (int, float)):
+                raise Stress("unfolded", f"numeric op needs numbers, found {type_name(a0)} and {type_name(b0)}")
+            return self._f64_powf(float(a0), float(b0))
         if name in ("re_match", "re_find", "re_groups"):
             import re as _re
             pat = args[0] if args else ""
@@ -5376,7 +6996,7 @@ class Interp:
             except _re.error as e:
                 raise Stress("unfolded", f"regex: {e}")
             # literal replacement: a callable repl treats the text as data
-            # (no \1 backref interpretation — mirrors the Rust implementation)
+            # (no \1 backref interpretation, mirrors the Rust implementation)
             return rx.sub(lambda _m: repl, subj)
         if name == "unix_time":
             import time as _t
@@ -5407,6 +7027,64 @@ class Interp:
                     out.append(fmt[i])
                     i += 1
             return "".join(out)
+        if name in ("grapheme_len", "fold_case", "char_at", "char_slice"):
+            # W28 (SPEC §3): Unicode depth, documented subsets, mirror of
+            # the Rust core (identical rule set and fold table).
+            s = v_display(args[0]) if args else ""
+            if name == "grapheme_len":
+                return grapheme_count(s)
+            if name == "fold_case":
+                out = []
+                for ch in s:
+                    cp = ord(ch)
+                    if 0x41 <= cp <= 0x5A or 0xC0 <= cp <= 0xD6 or 0xD8 <= cp <= 0xDE:
+                        cp += 32
+                    elif 0x100 <= cp <= 0x137 and cp % 2 == 0:
+                        cp += 1
+                    elif 0x391 <= cp <= 0x3A9 and cp != 0x3A2:
+                        cp += 32
+                    out.append(chr(cp))
+                return "".join(out)
+            chars = list(s)
+            n = len(chars)
+            if name == "char_at":
+                i = args[1] if len(args) > 1 else 0
+                if not isinstance(i, int):
+                    raise Stress("unfolded", "char_at(s, i) needs an int index")
+                j = n + i if i < 0 else i
+                if 0 <= j < n:
+                    return chars[j]
+                self.note(4, "char_at out of range; null")
+                return None
+            # char_slice
+            i = args[1] if len(args) > 1 else 0
+            j = args[2] if len(args) > 2 else 0
+            a = max(0, min(n, n + i if i < 0 else i))
+            b = max(0, min(n, n + j if j < 0 else j))
+            return "".join(chars[a:max(a, b)])
+        if name in ("norm_nfc", "norm_nfd", "casefold", "char_category"):
+            # W28 stage 2 (SPEC §3): normalization, full case folding,
+            # categories. The Rust core runs GENERATED tables (emitted from
+            # THIS stdlib module by scripts/gen_unicode_tables.py), here the
+            # stdlib is called directly, both cores agree by construction.
+            # Non-string argument = the standard `unfolded` type family,
+            # byte-matching the Rust core.
+            if not args or not isinstance(args[0], str):
+                raise Stress("unfolded", f"{name}(s) needs a string")
+            s = args[0]
+            if name == "norm_nfc":
+                return unicodedata.normalize("NFC", s)
+            if name == "norm_nfd":
+                return unicodedata.normalize("NFD", s)
+            if name == "casefold":
+                return s.casefold()
+            # char_category: ONE pinned shape, string in, the two-letter
+            # general category of its FIRST CHAR out; empty string is the
+            # soft tier (null + note), mirroring char_at's out-of-range tier.
+            if not s:
+                self.note(4, "char_category of empty string; null")
+                return None
+            return unicodedata.category(s[0])
         # ------------------------------------------------ Option / Result (W06, D-014)
         # Constructors + predicates + extraction. Error messages byte-match
         # the Rust core (Stress::at texts); families are distinct.
@@ -5438,7 +7116,9 @@ class Interp:
             if len(args) != 2:
                 raise Stress("unfolded", "unwrap_or(v, default) needs exactly 2 arguments")
             v = args[0]
-            if isinstance(v, Variant) and v.tag in ("Some", "Ok") and v.payload is not None:
+            # W06 parity fix: a null payload is a real payload, unwrap_or on
+            # Ok(null)/Some(null) returns null, not the default (Rust parity)
+            if isinstance(v, Variant) and v.tag in ("Some", "Ok"):
                 return v.payload
             return args[1]
         if name == "unwrap":
@@ -5446,10 +7126,209 @@ class Interp:
                 raise Stress("unfolded", "unwrap(v) needs exactly 1 argument")
             v = args[0]
             if isinstance(v, Variant):
-                if v.tag in ("Some", "Ok") and v.payload is not None:
+                if v.tag in ("Some", "Ok"):
+                    # W06 parity fix: unwrap(Ok(null)) returns null, the Rust
+                    # core stores ok(null) as Some(Null) and unwraps to it;
+                    # the old payload-is-None guard raised here instead
                     return v.payload
                 raise Stress("unwrap", f"unwrap on {v.tag}")
             raise Stress("unwrap", f"unwrap on a plain {type_name(v)} value")
+        # ---- try_* family (W06 stage 2): Result-returning variants of the
+        # failure-prone core builtins; err payload = message Str. The
+        # messages must match the Rust core byte-for-byte (stdout-visible).
+        if name == "try_num":
+            if len(args) != 1:
+                raise Stress("unfolded", "try_num(s) needs exactly 1 argument")
+            v = args[0]
+            if isinstance(v, bool):
+                return Variant("Err", "num() failed: cannot parse bool as a number")
+            if isinstance(v, (int, float)):
+                return Variant("Ok", v)
+            if isinstance(v, str):
+                t = v.strip()
+                try:
+                    return Variant("Ok", int(t))
+                except ValueError:
+                    try:
+                        return Variant("Ok", float(t))
+                    except ValueError:
+                        return Variant("Err", f"num('{v}') failed")
+            return Variant("Err", f"num() failed: cannot parse {type_name(v)} as a number")
+        if name == "try_index":
+            if len(args) != 2:
+                raise Stress("unfolded", "try_index(l, i) needs exactly 2 arguments")
+            l, i = args[0], args[1]
+            if not isinstance(l, list):
+                return Variant("Err", f"try_index needs a list, got {type_name(l)}")
+            if not isinstance(i, int) or isinstance(i, bool):
+                return Variant("Err", f"index needs an int, got {type_name(i)}")
+            if i < 0 or i >= len(l):
+                return Variant("Err", f"index {i} out of range for list of length {len(l)}")
+            return Variant("Ok", l[i])
+        if name == "try_get":
+            if len(args) != 2:
+                raise Stress("unfolded", "try_get(m, k) needs exactly 2 arguments")
+            m, k = args[0], args[1]
+            if not isinstance(m, dict):
+                return Variant("Err", f"try_get needs a map, got {type_name(m)}")
+            for mk, mv in m.items():
+                if deep_eq(mk, k):
+                    return Variant("Ok", mv)
+            return Variant("Err", f"no key '{v_display(k)}'")
+        if name == "try_pop":
+            if len(args) != 1:
+                raise Stress("unfolded", "try_pop(l) needs exactly 1 argument")
+            l = args[0]
+            if not isinstance(l, list):
+                return Variant("Err", f"try_pop needs a list, got {type_name(l)}")
+            if not l:
+                return Variant("Err", "pop from an empty list")
+            return Variant("Ok", l.pop())
+        # ---- try_* wave 2 (W06 stage 2, v2.7.0): extraction, environment
+        # and parsing families. Same law as wave 1: Result-returning
+        # ADDITIONS, legacy null/stress contracts stay pinned. Err payloads
+        # are engine-neutral by construction — raw-input echoes or fixed
+        # strings, never the underlying engine's parse-error text.
+        if name == "try_first":
+            if len(args) != 1:
+                raise Stress("unfolded", "try_first(v) needs exactly 1 argument")
+            v = args[0]
+            if isinstance(v, list):
+                if not v:
+                    return Variant("Err", "first of an empty list")
+                return Variant("Ok", v[0])
+            if isinstance(v, str):
+                if not v:
+                    return Variant("Err", "first of an empty string")
+                return Variant("Ok", v[0])
+            return Variant("Err", f"first of a {type_name(v)}")
+        if name == "try_last":
+            if len(args) != 1:
+                raise Stress("unfolded", "try_last(v) needs exactly 1 argument")
+            v = args[0]
+            if isinstance(v, list):
+                if not v:
+                    return Variant("Err", "last of an empty list")
+                return Variant("Ok", v[-1])
+            if isinstance(v, str):
+                if not v:
+                    return Variant("Err", "last of an empty string")
+                return Variant("Ok", v[-1])
+            return Variant("Err", f"last of a {type_name(v)}")
+        if name == "try_char_at":
+            if len(args) != 2:
+                raise Stress("unfolded", "try_char_at(s, i) needs exactly 2 arguments")
+            s = v_display(args[0])
+            i = args[1]
+            if not isinstance(i, int) or isinstance(i, bool):
+                return Variant("Err", f"char_at needs an int index, got {type_name(i)}")
+            chars = list(s)
+            j = len(chars) + i if i < 0 else i
+            if 0 <= j < len(chars):
+                return Variant("Ok", chars[j])
+            return Variant("Err", f"char_at index {i} out of range for string of length {len(chars)}")
+        if name == "try_env":
+            if len(args) != 1:
+                raise Stress("unfolded", "try_env(name) needs exactly 1 argument")
+            nm = v_display(args[0])
+            self.cap_check("env", "env", nm)
+            if nm in os.environ:
+                return Variant("Ok", os.environ[nm])
+            return Variant("Err", f"env '{nm}' is not set")
+        if name == "try_json_parse":
+            if len(args) != 1:
+                raise Stress("unfolded", "try_json_parse(s) needs exactly 1 argument")
+            s = v_display(args[0])
+            try:
+                return Variant("Ok", _json.loads(s, object_pairs_hook=lambda pairs: dict(pairs)))
+            except ValueError:
+                return Variant("Err", f"json_parse('{s}') failed")
+        if name == "try_re_groups":
+            if len(args) != 2:
+                raise Stress("unfolded", "try_re_groups(pat, s) needs exactly 2 arguments")
+            import re as _re
+            pat = v_display(args[0])
+            subj = v_display(args[1])
+            try:
+                rx = _re.compile(pat)
+            except _re.error:
+                return Variant("Err", f"re_groups('{pat}') failed")
+            try:
+                m = rx.search(subj, 0)
+                if m is None:
+                    return Variant("Err", "no match")
+                return Variant("Ok", [g for g in m.groups()])
+            except RecursionError:
+                raise Stress("overflow", "regex backtracking exceeded 2M steps")
+        # ---- W006-B: wave-3 IO try_ family (RESULT-WAVE3 §2c) — mirrors the
+        # Rust arms: re-dispatch the legacy arm (behavior identical by
+        # construction), map ONLY missing to the fixed engine-neutral payload;
+        # interference (containment), overflow and arity unfolded stresses
+        # stay stresses: a malformed call is not an expected failure (§2a).
+        if name == "try_read_file":
+            if len(args) != 1:
+                raise Stress("unfolded", "try_read_file(path) needs exactly 1 argument")
+            path = v_display(args[0]) if args else ""
+            try:
+                return Variant("Ok", self.builtin(env, "read_file", args))
+            except Stress as e:
+                if e.kind == "missing":
+                    return Variant("Err", f"read_file '{path}' failed")
+                raise
+        if name == "try_read_file_bytes":
+            if len(args) != 1:
+                raise Stress("unfolded", "try_read_file_bytes(path) needs exactly 1 argument")
+            path = v_display(args[0]) if args else ""
+            try:
+                return Variant("Ok", self.builtin(env, "read_file_bytes", args))
+            except Stress as e:
+                if e.kind == "missing":
+                    return Variant("Err", f"read_file_bytes '{path}' failed")
+                raise
+        if name == "try_read_dir":
+            if len(args) != 1:
+                raise Stress("unfolded", "try_read_dir(path) needs exactly 1 argument")
+            path = v_display(args[0]) if args else ""
+            try:
+                return Variant("Ok", self.builtin(env, "read_dir", args))
+            except Stress as e:
+                if e.kind == "missing":
+                    return Variant("Err", f"read_dir '{path}' failed")
+                raise
+        if name == "try_run":
+            if len(args) != 1:
+                raise Stress("unfolded", "try_run(prog) needs exactly 1 argument")
+            prog = v_display(args[0]) if args else ""
+            try:
+                return Variant("Ok", self.builtin(env, "run", args))
+            except Stress as e:
+                if e.kind == "missing":
+                    return Variant("Err", f"run '{prog}' failed")
+                raise
+        if name == "try_http_get":
+            if len(args) != 3:
+                raise Stress("unfolded", "try_http_get(host, port, path) needs exactly 3 arguments")
+            try:
+                return Variant("Ok", self.builtin(env, "http_get", args))
+            except Stress as e:
+                # fixed payload, NO target echo (contract §2c fixes the shape)
+                if e.kind == "missing":
+                    return Variant("Err", "http_get failed")
+                raise
+        if name == "try_str_from_bytes":
+            if len(args) != 1:
+                raise Stress("unfolded", "try_str_from_bytes(b) needs exactly 1 argument")
+            b = args[0]
+            if not isinstance(b, (bytes, bytearray)):
+                # type abuse follows the wave-2 family precedent (try_index):
+                # inspectable Err, not a stress. Byte index N = offset of the
+                # first invalid byte (UnicodeDecodeError.start == Rust
+                # valid_up_to), deterministic both engines.
+                return Variant("Err", f"try_str_from_bytes needs bytes, got {type_name(b)}")
+            try:
+                return Variant("Ok", b.decode("utf-8"))
+            except UnicodeDecodeError as e:
+                return Variant("Err", f"str_from_bytes: invalid UTF-8 at byte {e.start}")
         if name == "random":
             x = self.rng
             x ^= (x >> 12) & 0xFFFFFFFFFFFFFFFF
@@ -5490,7 +7369,7 @@ class Interp:
                 self.note(1, f"burst override cleared: '{nm}'")
             return None
         if name == "expr_on":
-            # reg-bio (F-1): mirror of the Rust builtin — in-source switch for
+            # reg-bio (F-1): mirror of the Rust builtin, in-source switch for
             # the telegraph promoter layer (kon/koff clamped 0..1)
             kon = 0.3
             koff = 0.1
@@ -5507,7 +7386,7 @@ class Interp:
             self.expr_stochastic = False
             return False
         if name == "decay_clock":
-            # reg-bio-2 (C2): mirror of the Rust builtin — in-source switch
+            # reg-bio-2 (C2): mirror of the Rust builtin, in-source switch
             # for the decay clock (interval n, optional fraction f)
             n = None
             if args and isinstance(args[0], (int, float)) and not isinstance(args[0], bool) and args[0] > 0:
@@ -5537,7 +7416,7 @@ class Interp:
             nm = v_display(args[0]) if args else ""
             return self._ligand_level(nm)
         if name == "secrete":
-            # loop-9 (C8): mirror of the Rust secrete — Int exact, Float
+            # loop-9 (C8): mirror of the Rust secrete, Int exact, Float
             # floors (never rounds), negative clamps to 0 with a note,
             # non-finite clamps to 0, saturating add capped at 1e9.
             nm = v_display(args[0]) if args else ""
@@ -5569,7 +7448,7 @@ class Interp:
             self.note(1, f"secrete '{nm}': +{committed} molecules (level {fmt_float(committed / 1e9)})")
             return committed
         if name == "quorum":
-            # loop-9 (C8): mirror — one arg -> level; two args -> level >= t.
+            # loop-9 (C8): mirror, one arg -> level; two args -> level >= t.
             nm = v_display(args[0]) if args else ""
             lvl = self._signal_level(nm)
             if len(args) > 1:
@@ -5583,7 +7462,7 @@ class Interp:
                 return lvl >= t
             return lvl
         if name == "quench":
-            # loop-9 (C8): mirror — m <- floor(m * (1-f)); no arg destroys all.
+            # loop-9 (C8): mirror, m <- floor(m * (1-f)); no arg destroys all.
             nm = v_display(args[0]) if args else ""
             f = 1.0
             if len(args) > 1:
@@ -5601,7 +7480,7 @@ class Interp:
             self.note(1, f"quench '{nm}': -{removed} molecules")
             return removed
         if name == "quorum_state":
-            # loop-9 (C8): mirror — sorted-key species -> molecule counts.
+            # loop-9 (C8): mirror, sorted-key species -> molecule counts.
             return {k: self.medium[k] for k in sorted(self.medium)}
         if name == "chr":
             i = args[0] if args and isinstance(args[0], int) else 0
@@ -5626,7 +7505,7 @@ class Interp:
                 with open(path, "r", encoding="utf-8", errors="strict") as f:
                     return f.read()
             except OSError as e:
-                raise Stress("missing", f"read_file '{path}': {e}")
+                raise Stress("missing", f"read_file '{path}': {io_err(e)}")
         if name == "write_file":
             path = v_display(args[0]) if args else ""
             body = v_display(args[1]) if len(args) > 1 else ""
@@ -5636,7 +7515,7 @@ class Interp:
                     f.write(body)
                 return True
             except OSError as e:
-                raise Stress("missing", f"write_file '{path}': {e}")
+                raise Stress("missing", f"write_file '{path}': {io_err(e)}")
         if name == "append_file":
             path = v_display(args[0]) if args else ""
             body = v_display(args[1]) if len(args) > 1 else ""
@@ -5646,7 +7525,30 @@ class Interp:
                     f.write(body)
                 return True
             except OSError as e:
-                raise Stress("missing", f"append_file '{path}': {e}")
+                raise Stress("missing", f"append_file '{path}': {io_err(e)}")
+        # ---- W029: bytes file I/O (same capability gates as the text forms)
+        if name == "read_file_bytes":
+            path = v_display(args[0]) if args else ""
+            self.cap_check("read", "read", path)
+            try:
+                with open(path, "rb") as f:
+                    return f.read()
+            except OSError as e:
+                raise Stress("missing", f"read_file_bytes '{path}': {io_err(e)}")
+        if name == "write_file_bytes":
+            path = v_display(args[0]) if args else ""
+            body = args[1] if len(args) > 1 else b""
+            if isinstance(body, str):
+                body = body.encode("utf-8")
+            elif not isinstance(body, bytes):
+                raise Stress("unfolded", f"write_file_bytes needs bytes (or str), got {type_name(body)}")
+            self.cap_check("write", "write", path)
+            try:
+                with open(path, "wb") as f:
+                    f.write(body)
+                return True
+            except OSError as e:
+                raise Stress("missing", f"write_file_bytes '{path}': {io_err(e)}")
         if name == "exists":
             path = v_display(args[0]) if args else ""
             self.cap_check("read", "read", path)
@@ -5664,13 +7566,13 @@ class Interp:
             try:
                 return sorted(os.listdir(path))
             except OSError as e:
-                raise Stress("missing", f"read_dir '{path}': {e}")
+                raise Stress("missing", f"read_dir '{path}': {io_err(e)}")
         # ---- dx-r6: fs mutate ops (mirror of the Rust capability discipline)
         if name == "fs_delete":
             path = v_display(args[0]) if args else ""
             self.cap_check("write", "write", path)
             if os.path.islink(path):
-                raise Stress("interference", f"fs_delete '{path}': refused — path is a symlink")
+                raise Stress("interference", f"fs_delete '{path}': refused, path is a symlink")
             try:
                 if os.path.isdir(path):
                     os.rmdir(path)  # empty dirs only: no recursive bombs
@@ -5678,7 +7580,7 @@ class Interp:
                     os.remove(path)
                 return True
             except OSError as e:
-                raise Stress("missing", f"fs_delete '{path}': {e}")
+                raise Stress("missing", f"fs_delete '{path}': {io_err(e)}")
         if name == "fs_rename":
             src = v_display(args[0]) if args else ""
             dst = v_display(args[1]) if len(args) > 1 else ""
@@ -5688,7 +7590,7 @@ class Interp:
                 os.rename(src, dst)
                 return True
             except OSError as e:
-                raise Stress("missing", f"fs_rename '{src}' -> '{dst}': {e}")
+                raise Stress("missing", f"fs_rename '{src}' -> '{dst}': {io_err(e)}")
         if name == "fs_mkdir":
             path = v_display(args[0]) if args else ""
             self.cap_check("write", "write", path)
@@ -5696,7 +7598,7 @@ class Interp:
                 os.makedirs(path, exist_ok=True)
                 return True
             except OSError as e:
-                raise Stress("missing", f"fs_mkdir '{path}': {e}")
+                raise Stress("missing", f"fs_mkdir '{path}': {io_err(e)}")
         # ---- process / net (capability-gated)
         if name == "run":
             prog = v_display(args[0]) if args else ""
@@ -5707,7 +7609,7 @@ class Interp:
                 cp = _sp.run([prog] + pargs, capture_output=True, text=True)
                 return {"code": cp.returncode, "stdout": cp.stdout, "stderr": cp.stderr, "ok": cp.returncode == 0}
             except OSError as e:
-                raise Stress("missing", f"run '{prog}': {e}")
+                raise Stress("missing", f"run '{prog}': {io_err(e)}")
         if name == "http_get":
             host = v_display(args[0]) if args else ""
             port = int(args[1]) if len(args) > 1 and isinstance(args[1], int) else 80
@@ -5727,15 +7629,32 @@ class Interp:
                 pos = buf.find(b"\r\n\r\n")
                 return buf[pos + 4:].decode("utf-8", "replace") if pos >= 0 else buf.decode("utf-8", "replace")
             except OSError as e:
-                raise Stress("missing", f"http_get '{host}:{port}': {e}")
+                raise Stress("missing", f"http_get '{host}:{port}': {io_err(e)}")
         if name in ("serve", "recv_request", "send_response"):
-            # the sequential oracle does not host a server; these are only
-            # reachable in the Rust core (differential corpus avoids them)
+            # the sequential oracle does not host a server. serve stays the
+            # honest stub (a real bind is Rust-runner-only surface, the same
+            # class as repressi_start's wall-clock thread). recv_request's
+            # empty-queue null IS the faithful rust surface. send_response is
+            # mirrored FAITHFULLY (S3: the coverage audit caught the old
+            # null-stub diverging on both reachable surfaces).
             if name == "serve":
                 port = int(args[0]) if args and isinstance(args[0], int) else 8080
                 self.cap_check("net", "net", f"127.0.0.1:{port}")
-            self.note(4, f"{name} is not available in the sequential oracle; null")
-            return None
+                self.note(4, f"{name} is not available in the sequential oracle; null")
+                return None
+            if name == "recv_request":
+                self.note(4, f"{name} is not available in the sequential oracle; null")
+                return None
+            # send_response mirror (rust interp.rs arm): header-safety check
+            # FIRST, then the conn dispatch — with no server, the only
+            # reachable outcome is 'server not running'.
+            conn = args[0] if args and isinstance(args[0], int) else 0
+            status = v_display(args[1]) if len(args) > 1 else "200"
+            ctype = v_display(args[2]) if len(args) > 2 else "text/html"
+            body = v_display(args[3]) if len(args) > 3 else ""
+            if any(ord(c) < 0x20 or c == "\x7f" for c in status + ctype):
+                raise Stress("interference", "send_response: status/content-type contain control characters (header injection refused)")
+            raise Stress("missing", "send_response: server not running")
         # ---- json
         if name == "json_parse":
             s = v_display(args[0]) if args else "null"
@@ -5746,6 +7665,32 @@ class Interp:
         if name == "json_str":
             v = args[0] if args else None
             return self._json_str(v)
+        # ---- W34 stage 2: phenotype serialization primitives (mirror of the
+        # Rust arms: silent predicate + shallow field-map copy + wire-map
+        # rebuild; the wire shape is the spawn boundary's field map + hidden
+        # "#phenotype" key)
+        if name == "is_object":
+            return isinstance(args[0], ObjInst) if args else False
+        if name == "object_fields":
+            v = args[0] if args else None
+            if isinstance(v, ObjInst):
+                return dict(v.fields)
+            self.note(4, f"object_fields({type_name(v)}) on a non-phenotype value; null")
+            return None
+        if name == "object_from_map":
+            m = args[0] if args else None
+            if not isinstance(m, dict):
+                raise Stress("unfolded", f"object_from_map expects a map; got {type_name(m)}")
+            tag = m.get("#phenotype")
+            if tag is None:
+                raise Stress("unfolded", 'object_from_map: map has no "#phenotype" identity key')
+            decl = self.phenos.get(str(tag))
+            if decl is None:
+                raise Stress(
+                    "unfolded",
+                    f"object_from_map: phenotype '{tag}' not declared in this program",
+                )
+            return ObjInst(decl, {k: v for k, v in m.items() if k != "#phenotype"})
         # ---- env (capability-gated)
         if name == "env":
             nm = v_display(args[0]) if args else ""
@@ -5754,7 +7699,7 @@ class Interp:
         # ---- py (substrate-r1): the Python ecosystem bridge. The oracle
         # runs in-process (it IS python); the ok/value/error/code contract
         # matches the Rust bridge. Timeout/env-scrub containment is not
-        # mirrored here — the granted suite that exercises those paths is
+        # mirrored here, the granted suite that exercises those paths is
         # Rust-runner-only, and the differential corpus avoids py effects.
         if name == "py":
             module = v_display(args[0]) if args else ""
@@ -5820,7 +7765,7 @@ class Interp:
                         else:
                             break
             else:
-                # identical key to the .sort() method — one ordering contract
+                # identical key to the .sort() method, one ordering contract
                 out.sort(key=lambda x: (
                     (0, float(x), "") if isinstance(x, (int, float)) and not isinstance(x, bool)
                     else ((0, float(int(x)), "") if isinstance(x, bool)
@@ -5991,7 +7936,7 @@ class Interp:
 
     @staticmethod
     def _json_str(v, _seen=None, _depth=0):
-        # reg-r4: cycle-safe — repeated branch serializes as null, depth
+        # reg-r4: cycle-safe, repeated branch serializes as null, depth
         # cap 512 (mirror of the Rust json_stringify_g)
         if _seen is None:
             _seen = set()
@@ -6001,8 +7946,19 @@ class Interp:
         if v is True: return "true"
         if v is False: return "false"
         if isinstance(v, int): return str(v)
-        if isinstance(v, float): return fmt_float(v)
+        if isinstance(v, float):
+            # RFC 8259 honesty (SPEC §10): JSON has no NaN/Inf, non-finite
+            # floats serialize as null, exactly like the Rust json_stringify_g
+            # (display/print keep the nan/inf spelling via fmt_float; the WIRE
+            # never carries them. Found by the std_serialize proof.)
+            if v != v or v == float("inf") or v == float("-inf"):
+                return "null"
+            return fmt_float(v)
         if isinstance(v, str): return _json.dumps(v)
+        # W029 mirror: JSON has no bytes type, the lossless view is the int
+        # list (the Rust json_stringify_g Bytes arm).
+        if isinstance(v, bytes):
+            return "[" + ",".join(str(x) for x in v) + "]"
         if isinstance(v, (list, dict)):
             marker = id(v)
             if marker in _seen:
@@ -6017,11 +7973,13 @@ class Interp:
                     for k, val in v.items()) + "}"
             _seen.discard(marker)
             return out
-        # W06 (D-014) mirror: variants serialize as single-key objects —
+        # W06 (D-014) mirror: variants serialize as single-key objects,
         # {"some": v} / {"ok": v} / {"err": v}; None serializes as null.
         # Matches the Rust json_stringify_g Variant arms byte-for-byte.
+        # W06 parity fix: a null payload is a real payload, ok(null)
+        # serializes {"ok":null} on the Rust core; only tag None is bare null.
         if isinstance(v, Variant):
-            if v.tag == "None" or v.payload is None:
+            if v.tag == "None":
                 return "null"
             key = {"Some": "some", "Ok": "ok", "Err": "err"}.get(v.tag, "none")
             return "{" + _json.dumps(key) + ":" + Interp._json_str(v.payload, _seen, _depth + 1) + "}"
@@ -6040,6 +7998,19 @@ class Interp:
             for fname, fexpr in dd.fields:
                 fields[fname] = self.eval(self.globals, fexpr)
         obj = ObjInst(p, fields)
+        # W04: trait contract check, required methods must be provided by
+        # the lineage; a break is a NOTE (Total Grammar), never fatal.
+        for tname in p.implements:
+            t = self.traits.get(tname)
+            if t is None:
+                self.note(4, f"trait '{tname}' not declared; contract on '{p.name}' ignored")
+                continue
+            for req in t.methods:
+                if not req.required:
+                    continue
+                provided = any(g.name == req.name for dd in chain for g in dd.methods)
+                if not provided:
+                    self.note(4, f"phenotype '{p.name}' implements '{tname}' but does not provide '{req.name}()'")
         for dd in reversed(chain):
             for g in dd.methods:
                 if g.name == "init":
@@ -6057,26 +8028,34 @@ class Interp:
         if path in self.loading:
             return {}
         p = path if path.endswith(".op") else path + ".op"
+        # W069: resolution chain mirrors genes.rs resolve_path, the
+        # importing file's directory first, then CWD, then std/, then
+        # $OPERON_STD. (Exe-relative roots are runtime-only: the oracle
+        # never ships beside a std/ tree; see SPEC §8 table.)
         cands = [p, os.path.join("std", p)]
+        if self.base_dir:
+            cands.insert(0, os.path.join(self.base_dir, p))
         std_dir = os.environ.get("OPERON_STD")
         if std_dir:
             cands.append(os.path.join(std_dir, p))
-        # ai/ecosystem: registry-installed packages — mirrors the package
-        # candidates genes.rs resolve_path appends LAST (success-only paths;
-        # failure messages untouched). Layout contract: pkg.rs install puts
-        # the entry at operon_modules/<pkg>/<entry-basename> with siblings
-        # beside it, so `use http` hits operon_modules/http/http.op and
-        # `use http/client` hits operon_modules/http/client.op.
-        cands.append(os.path.join("operon_modules", p))
-        bare = path[:-3] if path.endswith(".op") else path
-        if "/" not in bare:
-            cands.append(os.path.join("operon_modules", bare, p))
-        resolved = next((c for c in cands if os.path.isfile(c)), None)
+        # W19/W23 mirror: root 7, vendored deps from the lockfile (the
+        # leading path segment maps to the pinned checkout dir)
+        for dep_name, dep_dir in self.lock_dirs:
+            seg = dep_name + "/"
+            if p == dep_name + ".op":
+                cands.append(os.path.join(dep_dir, p))
+            elif p.startswith(seg):
+                cands.append(os.path.join(dep_dir, p[len(seg):]))
+        resolved = next((c for c in cands if os.path.exists(c)), None)
         if resolved is None:
-            return {}
-        src = open(resolved).read()
+            # W025 stage 2: None = not found, distinct from an existing but
+            # empty module ({}), so the nested-table descent can try the
+            # next file prefix. The use arm binds {} for a total failure,
+            # exactly as before.
+            return None
+        src = open(resolved, encoding="utf-8", errors="replace").read()  # W59: explicit UTF-8 (Windows locale default is cp1252)
         self.loading.append(path)
-        stmts, notes = parse(src)
+        stmts, notes, pubs = parse(src)
         for nt in notes:
             self.note(nt.rung, f"[{path}] {nt.message}")
         menv = self.new_scope(self.globals)
@@ -6084,7 +8063,7 @@ class Interp:
             try:
                 self.exec_stmt(menv, st)
             except Stress as e:
-                # W06 (D-014) mirror: propagation with no enclosing gene —
+                # W06 (D-014) mirror: propagation with no enclosing gene,
                 # the variant value passes through (noted, never rejected).
                 if e.prop is not None:
                     self.note(4, f"propagation reached top level: {v_repr(e.prop)} passes through")
@@ -6093,9 +8072,13 @@ class Interp:
             except (Return, BreakLoop, ContinueLoop):
                 pass
         self.loading.pop()
-        # export rule: anchor export wins, else top-level genes/lets
+        # export rule: anchor export wins, else top-level genes/lets.
+        # W24 mirror: under .cell modules.visibility = strict, a module with
+        # pub marks exports ONLY those names (anchors win when present); a
+        # strict module with zero pub marks keeps default-open + a note.
         has_anchor = any(s[0] == "anchor_export" for s in stmts) or \
             any(s[0] == "tad" and any(x[0] == "anchor_export" for x in s[2]) for s in stmts)
+        strict = str(self.cell.get("modules.visibility", "")).lower() == "strict"
         exports = {}
         if has_anchor:
             names = []
@@ -6110,9 +8093,22 @@ class Interp:
                 v = self.lookup(menv, nm)
                 if v is not None or nm in menv:
                     exports[nm] = v
+        elif strict and pubs:
+            for nm in pubs:
+                v = self.lookup(menv, nm)
+                if v is not None or nm in menv:
+                    exports[nm] = v
+            hidden = sum(1 for kk in menv if isinstance(kk, str) and not kk.startswith("#")) - len(exports)
+            if hidden > 0:
+                self.note(4, f"strict visibility: {hidden} private name(s) hidden in '{path}' (mark with pub or anchor export)")
         else:
+            if strict:
+                self.note(4, f"strict visibility: '{path}' has no pub marks, default-open retained (add pub or anchor export)")
             for kk, vv in menv.items():
-                if kk != "__parent__" and not kk.startswith("#"):
+                # W24 fix (latent): tuple keys are internal const markers,
+                # they are never exports (a module with `const` used to crash
+                # this loop; found by the visibility differential fixture).
+                if isinstance(kk, str) and kk != "__parent__" and not kk.startswith("#"):
                     exports[kk] = vv
         self.modules[path] = exports
         return exports
@@ -6253,7 +8249,7 @@ def parse_cell(src):
 
 def apply_rna(src, patch_src, stem):
     applied = []
-    stmts, _ = parse(patch_src)
+    stmts, _, _ = parse(patch_src)
     text = src
     for s in stmts:
         if s[0] == "edit":
@@ -6279,29 +8275,67 @@ def apply_rna(src, patch_src, stem):
     return text, applied
 
 def load_file(path, cell=None, variant=None, rna=None, args=None, caps=None):
-    src = open(path).read()
+    src = open(path, encoding="utf-8", errors="replace").read()  # W59: explicit UTF-8
     stem = os.path.basename(path).rsplit(".", 1)[0]
     it = Interp(cell=cell or {}, cli_args=args or [])
+    # W069: entry file's directory = resolution root #1 (matches Rust
+    # tools.rs interp.base_dir = entry-file dir).
+    d = os.path.dirname(os.path.abspath(path))
+    if d and d != os.path.abspath("."):
+        it.base_dir = d
+    # W19/W23 mirror: vendored dependency roots from the nearest
+    # operon.lock (program dir, then CWD), resolution root 7.
+    for lp in (os.path.join(d, "operon.lock"), "operon.lock"):
+        try:
+            with open(lp, encoding="utf-8") as f:
+                lock_text = f.read()
+            # tiny parse: name/rev pairs in [[dep]] blocks
+            name = rev = None
+            for raw in lock_text.splitlines():
+                line = raw.strip()
+                if line == "[[dep]]":
+                    name = rev = None
+                elif line.startswith("name") and "=" in line:
+                    name = line.split("=", 1)[1].strip().strip('"')
+                elif line.startswith("rev") and "=" in line:
+                    rev = line.split("=", 1)[1].strip().strip('"')
+                if name and rev:
+                    dd = os.environ.get("OPERON_DEPS") or os.path.join(
+                        os.path.expanduser("~"), ".operon", "deps")
+                    it.lock_dirs.append((name, os.path.join(dd, "%s-%s" % (name, rev[:12]))))
+                    name = rev = None
+            break
+        except OSError:
+            continue
     if caps is not None:
         it.caps = caps
     if variant:
         it.cell["cli.variant"] = variant
     if rna:
-        patch = open(rna).read()
+        patch = open(rna, encoding="utf-8", errors="replace").read()  # W59: explicit UTF-8
         src2, applied = apply_rna(src, patch, stem)
         for a in applied:
             it.note(1, f"rna edit applied: {a}")
         src = src2
-    stmts, notes = parse(src)
+    stmts, notes, _ = parse(src)
     for nt in notes:
-        it.note(nt.rung, nt.message)
+        it.note(nt.rung, nt.message, getattr(nt, "line", 0))
     it.ires = [s[1] for s in stmts if s[0] == "ires"]
-    # capability grants from .cell allow.* keys — only an EXPLICITLY passed
+    # capability grants from .cell allow.* keys, only an EXPLICITLY passed
     # --cell may grant; auto-detected operon.cell keys are ignored with a note
     cell_explicit = cell is not None and isinstance(cell, dict)
     for k, v in list(it.cell.items()):
         if k.startswith("allow."):
             rest = k[len("allow."):]
+            if rest == "exit":
+                # sec-r2 (audit C-11): exit is a BOOLEAN capability
+                # (rust tools.rs: exit_allowed = (v == "true")), not a
+                # comma-separated grant list like the other six.
+                if not cell_explicit:
+                    it.note(1, f"cell key '{k}={v}' ignored: auto-detected operon.cell cannot grant capabilities (pass --cell explicitly)")
+                    continue
+                it.caps["exit"] = v == "true"
+                continue
             if rest in ("read", "write", "run", "net", "env", "py"):
                 if not cell_explicit:
                     it.note(1, f"cell key '{k}={v}' ignored: auto-detected operon.cell cannot grant capabilities (pass --cell explicitly)")
@@ -6355,7 +8389,7 @@ def load_file(path, cell=None, variant=None, rna=None, args=None, caps=None):
             it.rng = 0x9E3779B97F4A7C15 if _s == 0 else (_s & M64)
         except ValueError:
             it.note(4, f"cell key 'expression.seed = {_esd}' ignored: needs an integer")
-    # reg-bio (F-5): repressilator kinetics — plasmid engineering surface
+    # reg-bio (F-5): repressilator kinetics, plasmid engineering surface
     for _ck, _lo, _hi in (("repressi.alpha", None, None), ("repressi.gamma", None, None),
                           ("repressi.basal", None, None), ("repressi.noise", None, None)):
         _cv = it.cell.get(_ck)
@@ -6471,19 +8505,24 @@ def main():
         elif a in ("--allow-read", "--allow-write", "--allow-run", "--allow-net", "--allow-env", "--allow-py"):
             i += 1
             cap = a.replace("--allow-", "")
-            it_caps = opts.setdefault("caps", {"enabled": True, "read": [], "write": [], "run": [], "net": [], "env": [], "py": []})
+            it_caps = opts.setdefault("caps", {"enabled": True, "read": [], "write": [], "run": [], "net": [], "env": [], "py": [], "exit": False})
             it_caps[cap].append(rest[i])
+        elif a == "--allow-exit":
+            # sec-r2 (audit C-11): exit() is a capability, default-deny
+            # (S3: the coverage audit caught the missing flag mirror)
+            it_caps = opts.setdefault("caps", {"enabled": True, "read": [], "write": [], "run": [], "net": [], "env": [], "py": [], "exit": False})
+            it_caps["exit"] = True
         elif a == "--allow-all":
-            opts["caps"] = {"enabled": False, "read": [], "write": [], "run": [], "net": [], "env": [], "py": []}
+            opts["caps"] = {"enabled": False, "read": [], "write": [], "run": [], "net": [], "env": [], "py": [], "exit": False}
         else:
             pos.append(a)
         i += 1
     # loop-10: load the --cell FILE into the dict the interpreter expects
-    # (the flag previously leaked the path string into Interp(cell=...) —
+    # (the flag previously leaked the path string into Interp(cell=...),
     # AttributeError on .items(); the Rust CLI parses the file, so did we)
     cell_dict = None
     if opts["cell"]:
-        with open(opts["cell"]) as _cf:
+        with open(opts["cell"], encoding="utf-8", errors="replace") as _cf:  # W59: explicit UTF-8
             cell_dict = parse_cell(_cf.read())
     if cmd == "version":
         print("Operon 2.0.0 (python-oracle)")
@@ -6491,7 +8530,16 @@ def main():
         it = run(pos[0], cell_dict, opts["variant"], opts["rna"], opts["entry"], opts["frame"], pos[1:], caps=opts.get("caps"))
         for nt in it.notes:
             tag = {1: "info", 2: "synonym", 3: "wobble"}.get(nt.rung, "fallback")
-            print(f"[{tag}] {nt.message}", file=sys.stderr)
+            # W101 slice 7 mirror: derived E2xxx code rides the tag when the
+            # message maps to a catalog family, exactly like flush_notes.
+            code = note_code(nt.message)
+            tag_s = f"{tag} {code}" if code else tag
+            # A13/dx-r2 mirror: notes carry real locations (compat matrix
+            # fix) — `[tag] file:line: msg` exactly like tools::flush_notes
+            if getattr(nt, "line", 0) > 0:
+                print(f"[{tag_s}] {pos[0]}:{nt.line}: {nt.message}", file=sys.stderr)
+            else:
+                print(f"[{tag_s}] {nt.message}", file=sys.stderr)
     elif cmd == "test":
         paths = pos or ["tests"]
         files = []
@@ -6499,7 +8547,7 @@ def main():
             if os.path.isdir(p):
                 for root, _, fns in os.walk(p):
                     # reg-r4: adversarial red-team payloads are containment
-                    # expectations, not proof frames — the Rust runner skips
+                    # expectations, not proof frames, the Rust runner skips
                     # this directory too (parity; the walk used to crash on
                     # one of the payloads)
                     if "redteam" in root.replace(os.sep, "/"):
@@ -6507,6 +8555,18 @@ def main():
                     # substrate-r1: capability-granted proofs run only under
                     # an explicit operator cell (Rust runner skips them too)
                     if "granted" in root.replace(os.sep, "/"):
+                        continue
+                    # W18: cancellation timing proofs need real OS threads;
+                    # the sequential engine cannot observe mid-flight
+                    # cancellation, so this lane is Rust-only (the Rust
+                    # walker skips it too)
+                    if "timing" in root.replace(os.sep, "/"):
+                        continue
+                    # W08r: the async corpus is cell-gated (io.pool =
+                    # "fiber"); the thread lane's wall-clock fuel charging
+                    # is runner-speed-dependent (the Rust walker skips it
+                    # too)
+                    if "async" in root.replace(os.sep, "/"):
                         continue
                     for fn in sorted(fns):
                         if fn.endswith(".op"):
@@ -6531,10 +8591,21 @@ def main():
             files_t += 1
             proofs += len(proofs_l)
             it.proof_mode = True
-            for pf in proofs_l:
+            for pi, pf in enumerate(proofs_l):
+                # S4-6b (§12): the proof-integrity rules, mirrored from the
+                # canonical rust runner (tools.rs test cmd): a proof that
+                # completes with ZERO executed asserts is VACUOUS (fails,
+                # never passes silently), and a frame-level return/break/
+                # continue abandons the frame (fails, "exited early") — a
+                # loop-INTERNAL break is normal completion (the loop
+                # consumes the flow; BreakLoop never reaches here then).
+                asserts_before = it.asserts_run
                 try:
                     it.exec_block(it.new_scope(it.globals), pf)
-                    passed += 1
+                except (Return, BreakLoop, ContinueLoop):
+                    failed += 1
+                    failures.append(f"{f} proof #{pi+1}: exited early (return/break inside proof)")
+                    continue
                 except Stress as st:
                     failed += 1
                     # W06 (D-014) mirror: propagation abandoning a proof frame
@@ -6546,17 +8617,23 @@ def main():
                 except Exception as ex:
                     failed += 1
                     failures.append(f"{f}: [oracle-error] {type(ex).__name__}: {ex}")
-        print(f"operon test — {files_t} file(s), {proofs} proof(s): {passed} passed, {failed} failed")
+                else:
+                    if it.asserts_run == asserts_before:
+                        failed += 1
+                        failures.append(f"{f} proof #{pi+1}: no assertion exercised (vacuous proof)")
+                    else:
+                        passed += 1
+        print(f"operon test, {files_t} file(s), {proofs} proof(s): {passed} passed, {failed} failed")
         for f in failures:
             print(f"  FAIL {f}", file=sys.stderr)
         if failed:
             sys.exit(1)
     elif cmd == "check":
-        src = open(pos[0]).read()
-        stmts, notes = parse(src)
+        src = open(pos[0], encoding="utf-8", errors="replace").read()  # W59: explicit UTF-8
+        stmts, notes, _ = parse(src)
         score = 100 - sum(1 if n.rung == 2 else (2 if n.rung == 3 else (3 if n.rung == 4 else 0)) for n in notes)
         letter = "A" if score >= 90 else "B" if score >= 80 else "C" if score >= 70 else "D" if score >= 60 else "F"
-        print(f"operon check: {pos[0]} — score {max(score, 50)}/100 (grade {letter})")
+        print(f"operon check: {pos[0]}, score {max(score, 50)}/100 (grade {letter})")
     else:
         print("oracle supports: run | test | check | version", file=sys.stderr)
         sys.exit(2)
@@ -6566,9 +8643,44 @@ if __name__ == "__main__":
     # raised recursion limit, mirroring the Rust core's 512 MiB worker + 10k
     # Operon-frame depth limit. Runaway recursion surfaces as RecursionError,
     # never a native crash.
+    #
+    # W59 (Windows truthing), two fixes to the runner itself:
+    #
+    # 1. Honest exit codes. The worker-thread form used to swallow every
+    #    failure: an exception inside main() printed a traceback and the
+    #    process still exited 0, and main()'s own sys.exit() only ended the
+    #    thread. A dead oracle therefore looked SUCCESSFUL to any caller
+    #    that checks exit codes, the differential harness compares them.
+    #    The worker now records the outcome and the main thread re-raises it
+    #    as the process exit code.
+    #
+    # 2. Portable stack size. 1 << 29 sits exactly at Windows' 512 MiB
+    #    threading.stack_size() ceiling; treat the request as best-effort
+    #    with a fallback ladder instead of a hard startup dependency.
     sys.setrecursionlimit(150_000)
     import threading as _th
-    _t = _th.Thread(target=main, name="oracle-worker")
-    _th.stack_size(1 << 29)
+
+    for _sz in (1 << 29, 1 << 28, 1 << 26):
+        try:
+            _th.stack_size(_sz)
+            break
+        except (ValueError, RuntimeError, OverflowError):
+            continue
+
+    _rc = {"code": 0}
+
+    def _worker():
+        try:
+            main()
+        except SystemExit as _e:
+            _rc["code"] = _e.code if isinstance(_e.code, int) else (0 if _e.code is None else 1)
+        except BaseException:
+            import traceback
+            traceback.print_exc()
+            _rc["code"] = 1
+
+    _t = _th.Thread(target=_worker, name="oracle-worker")
     _t.start()
     _t.join()
+    if _rc["code"]:
+        sys.exit(_rc["code"])

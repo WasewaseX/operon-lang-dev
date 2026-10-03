@@ -1,6 +1,6 @@
 # substrate-r1: timeout kill is bounded. time is granted via the operator
 # cell (py_grant.cell, py.timeout_ms = 300); the child sleeps for an hour
-# and MUST be killed at ~300 ms — never 3600 s (the redteam judge treats
+# and MUST be killed at ~300 ms, never 3600 s (the redteam judge treats
 # rc 124/137 as HANG, and so would a user).
 gene main() {
     let t0 = unix_time()

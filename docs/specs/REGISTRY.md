@@ -1,0 +1,226 @@
+# REGISTRY.md, the W21 static git-index registry (cheap first version)
+
+Status: **adopted** · Owner: dev-1 (builder-A) · Supersedes: nothing
+Audience: package authors and operators (D-008: zero biology assumed).
+
+## 1. What this is
+
+A registry is a FILE, not a service. One JSON object per line (JSON lines), flat
+string fields only, append-only by convention. The file is meant to live in a git
+repo, so publishing is a commit and mirroring is a clone. No server, no crates, no
+network protocol: everything the toolchain needs is `git` plus this file.
+
+The expensive version (hosted index, moderation, per-name reservation) stays open
+on the W21 board entry until the owner makes infrastructure decisions. This format
+is deliberately the cheapest thing that makes `add by name` honest and verifiable.
+
+## 2. Line format
+
+```
+{"name": "beta", "version": "0.1.0", "git": "https://host/user/beta", "rev": "a1b2c3…", "sha256": "d4e5…", "description": "a leaf library"}
+```
+
+| field | required | meaning |
+|---|---|---|
+| `name` | yes | the dependency name used by `operon mod add NAME` |
+| `version` | no | the package's manifest version at publish time |
+| `git` | yes | the clone URL handed to `git clone` |
+| `rev` | yes | the pinned full git rev (never a moving ref) |
+| `sha256` | no | content checksum of the published tree (same routine the lockfile uses) |
+| `description` | no | one line, human-readable |
+
+Rules:
+
+- One object per line; `#`-prefixed lines and blank lines are comments.
+- Malformed lines are HARD ERRORS at resolve time with the line number. A registry
+  that lies would resolve installs against the wrong code, so nothing is skipped.
+- The LAST matching line for a name wins. Republishing appends; nothing is mutated.
+- Every entry pins a rev. A registry line that points at a moving ref is invalid
+  by definition (the parser cannot check intent, the convention is the contract).
+
+## 3. Commands
+
+```
+operon mod publish --registry FILE [--url GIT] [--desc TEXT]   # append THIS package
+operon mod add NAME --registry FILE [--rev OVERRIDE] [--as N]  # resolve + install
+operon mod search [QUERY] [--registry FILE]                    # search the chain
+```
+
+- `publish` reads the local `operon.toml` (name, version), takes `git rev-parse HEAD`
+  as the rev, and checksums the working tree with the same routine the lockfile uses
+  (`path:sha256` rows, sorted). The git URL comes from `--url` or the `origin` remote.
+  Publishing the same (name, version, rev) twice is idempotent (no duplicate line).
+- `add NAME --registry FILE` resolves NAME to `{git, rev}` and then runs the ordinary
+  install path: full transitive closure, `operon.lock` pinning, checksum verification,
+  `--locked` drift detection. An explicit `--rev` overrides the registry's pin.
+- `search [QUERY]` reads the registry through the same source the resolver would use
+  (§5 chain: flag > env > manifest > bundled seed) and prints `name version  description`
+  for the latest line per name whose name or description matches QUERY
+  (case-insensitive substring). An empty query lists the registry. A miss prints
+  `no packages matching '…'` and exits 0 — a miss is an answer, not an error.
+- Note: an early draft of this section said `$OPERON_REGISTRY` is not consulted;
+  that stopped being true in W21-r1 — the env override is source 2 of the chain
+  below, and the e2e gates exercise it (`pkg_hosted_e2e.sh`, `pkg_e2e.sh`).
+
+## 4. Threat notes
+
+- The `sha256` on a registry line is advisory (the lockfile checksum is the enforced
+  one). After `add`, compare `operon mod verify` output against the registry line.
+- Publishing checksums the WORKING TREE, not the committed tree. Dirty trees publish
+  checksums that a fresh clone will not reproduce. Check `git status` before publish
+  (the e2e does; tooling enforcement is future work).
+- Moderation, name reservation, and revocation are exactly the things a static file
+  cannot do. Treat registry contents like any other third-party input: review diffs.
+
+## 5. Evidence
+
+`scripts/registry_e2e.sh` proves the loop end to end: publish two fixture packages
+into one index, resolve a consumer's dependency by NAME through the index, install
+offline from the lockfile, verify checksums, and re-publish idempotently.
+
+## 5. The resolution chain (W21-r1)
+
+`operon add NAME` resolves NAME through the first SET source in this chain:
+
+| order | source | set by |
+|---|---|---|
+| 1 | explicit flag | `--registry FILE` |
+| 2 | machine override | `OPERON_REGISTRY` env (file path or http(s):// index URL) |
+| 3 | project pin | `[registry] path = "..."` in operon.toml |
+| 4 | bundled seed | materialized on first use under `~/.operon/registry/` |
+
+The seed ships INSIDE the binary (embedded package trees: http, json,
+postgres, web). First `add` materializes `~/.operon/registry/{index.jsonl,
+packages/}` and every later add re-verifies content checksums. A marker
+file (`seed.sha256`) records the digest of the embedded seed; a toolchain
+upgrade with different seed content rebuilds the registry rather than
+serving stale packages. `operon registry default` prints the resolved
+source without touching anything.
+
+## 6. Registry entries gain `dir`
+
+A line may carry `"dir": "/abs/path/to/package-tree"` instead of pointing
+a `git` URL at a clone. Dir-sourced entries are resolved by COPYING the
+tree into the vendored cache; the rev IS the content (`content-` + 16 hex
+of the same checksum routine the lockfile uses), so the same bytes land
+in the same cache dir on every machine and the lockfile stays byte-stable.
+
+**Security rule (deny-by-default):** `dir` is a LOCAL-registry feature.
+A registry served over http(s):// that publishes a `dir` entry is REFUSED
+at resolve time — honoring it would let a remote registry direct this
+machine to copy arbitrary local directories into the dep cache. Remote
+registries publish git URLs; period.
+
+## 7. Hosting a registry
+
+The cheapest real deployment is a checkout plus any static file server:
+
+```
+operon registry init /srv/operon-registry      # index.jsonl + packages/
+# append entries (operon publish --registry …/index.jsonl, or edit)
+operon registry serve /srv/operon-registry --port 7331
+# clients:
+OPERON_REGISTRY=http://your.host:7331/index.jsonl operon add beta
+```
+
+`operon registry serve` is deliberately minimal and read-only: it serves
+`/health`, `/index.jsonl`, and `/pkg/NAME/FILE` (validated segments, no
+dotfiles, no traversal, 405 for anything but GET) and nothing else. It is
+the dev/preview server; for a public deployment put a real reverse proxy
+in front and keep the registry directory read-only to the server process.
+
+## 8. Client fetch over HTTP(S)
+
+An `http(s)://` registry source is fetched with `curl -sSL --max-time 30`
+(the same trust class the toolchain already accepts for `git`; no HTTP
+stack, no crates, by policy). A fetched index is parsed by exactly the
+same rules as a local file — malformed lines are hard errors with line
+numbers. Publishing to a remote index URL is refused: appending is a
+filesystem/git operation, point `--registry` at a writable checkout and
+push.
+
+Certificate handling is curl's default: verified, fail-closed. For a
+self-hosted registry signed by a private root, `OPERON_CA_BUNDLE` points
+at a PEM CA bundle passed to curl as `--cacert`. The knob only ADDS a
+trusted root; there is no `-k`, no insecure fallback, no plaintext
+downgrade anywhere in the client.
+
+## 8a. Semantic version requirements (item 4, ai/ecosystem-r3)
+
+Index lines carry `version`; requirements give them meaning:
+
+```console
+$ operon add http@^0.1          # highest version in [0.1.0, 0.2.0)
+$ operon add web@">=0.1 <9.0"   # AND-list (quote it — the shell eats >)
+$ operon add json@0.1.0         # a full X.Y.Z pin means what it says
+```
+
+| req | meaning |
+|-----|---------|
+| `X.Y.Z` | exactly that version |
+| `X.Y` | caret shorthand: `[X.Y.0, (X+1).0.0)` |
+| `^X.Y.Z` | caret: leftmost non-zero component is the stability promise (`^0.2.3` = `[0.2.3, 0.3.0)`, `^0.0.3` = exactly `0.0.3`) |
+| `~X.Y.Z` | `[X.Y.Z, X.(Y+1).0)`; `~X` = `X.x` |
+| `>=` `>` `<=` `<` `=` | comparators; space/comma = AND |
+| `1.x`, `1.2.*`, `*` | wildcards |
+
+Resolution contract, deterministic and tested:
+
+* Among the index lines for a name, the HIGHEST version satisfying the
+  requirement wins (ties keep the later line — the last-match-wins
+  convention, now version-aware). Lines without a parseable version never
+  satisfy a requirement.
+* No satisfying line is a hard error that lists the available versions —
+  a silent wrong-version install is the one thing this must never do.
+* The requirement is recorded in `operon.toml` (`version = "REQ"` inside
+  the dep table); the exact resolved version + requirement are recorded in
+  `operon.lock` (`version =`, `req =`). Old locks without those lines
+  still parse.
+* `--locked` re-proves the contract on every CI run: a locked version that
+  no longer satisfies its recorded requirement is drift = hard failure.
+* A dep added without `@REQ` keeps the plain last-wins rule — zero
+  behavior change for existing projects.
+
+## 9. The hosted tier (W19 items 5/7/10, ai/ecosystem-r2)
+
+A static file (or §7's dev server) cannot accept publishes, answer
+searches, or track metadata. The hosted tier is the deliberately small
+dynamic service that completes the sketch the project always aimed at:
+
+```
+Operon CLI  ->  Registry API (packaging/registry/app.py)
+                    ->  PostgreSQL (Render) / SQLite (local)
+                    ->  package metadata (the same NDJSON index lines)
+                    ->  Git/source artifacts (cloned by the client)
+```
+
+It speaks the SAME wire contract as §2 — `/index.jsonl` is the index,
+byte-exact — so the stock client consumes it with zero compiler changes:
+
+```
+OPERON_REGISTRY=https://<service>.onrender.com/index.jsonl operon add http
+OPERON_REGISTRY=https://<service>.onrender.com/index.jsonl operon search http
+```
+
+Publishing posts one index line with a Bearer token (the CLI's remote
+append refusal stands — POST is the hosted append, done by CI/tooling;
+a CLI flag is future work):
+
+```
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  --data-binary @line.json https://<service>.onrender.com/api/publish
+```
+
+Rules the API enforces (mirroring the client, not inventing new ones):
+
+- `(name, version)` is immutable — a republish is 409; fix forward.
+- `dir` lines are rejected — remote registries publish git URLs only (§6).
+- tokens unset = publish disabled (403) — a registry you cannot
+  accidentally leave wide open.
+- lines are stored whole and served byte-exact (the sha256 contract).
+
+Deployment: `packaging/registry/render.yaml` is a Render blueprint (web
+service + free PostgreSQL, DATABASE_URL wired, OPERON_TOKENS set in the
+dashboard). `scripts/pkg_hosted_e2e.sh` boots the service locally and
+proves the full loop — publish → POST → search → add → verify → run —
+with the stock CLI and no compiler changes.

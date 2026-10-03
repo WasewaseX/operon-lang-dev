@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=179 tag=s179
+
+print("s179-m0:", "zyiBzf9r".upper(), "zyiBzf9r".slice(2), "zyiBzf9r".len())
+
+print("s179-m1:", "a2pujf09u".upper(), "a2pujf09u".slice(1), "a2pujf09u".len())
+
+print("s179-m2:", "1og6aCw".upper(), "1og6aCw".slice(4), "1og6aCw".len())
+
+print("s179-m3:", "C0kqbBA3902hk".upper(), "C0kqbBA3902hk".slice(4), "C0kqbBA3902hk".len())
+
+print("s179-i0:", "vaj-{91}-xqqr")
+
+let s179_v0 = 91
+
+print("s179-v0:", "n={s179_v0}" + "!" * 1)
+
+print("s179-i1:", "o3s-{87}-4e2g")
+
+let s179_v1 = 87
+
+print("s179-v1:", "n={s179_v1}" + "!" * 2)
+
+print("s179-i2:", "cgg-{1}-gc_o")
+
+let s179_v2 = 1
+
+print("s179-v2:", "n={s179_v2}" + "!" * 1)
+
+print("s179-r0:", "18Cdm7zc".replace("1", "my"), "18Cdm7zc".contains("8C"))
+
+print("s179-r1:", "k0d1zvjp".replace("k", "4l"), "k0d1zvjp".contains("0d"))
+
+print("s179-r2:", "2alkvtx2".replace("2", "5A"), "2alkvtx2".contains("al"))
+
+print("s179-r3:", "8dsvidfy".replace("8", "3C"), "8dsvidfy".contains("ds"))
+
+print("s179-j0:", ["6h4", "3oB", "0ph", "7xl"].join("-"))
+
+print("s179-j1:", ["xc3", "4yd", "yic", "74r", "i_3"].join("-"))
+
+print("s179-j2:", ["6_f", "i1s", "51t", "ac8", "6f4"].join("-"))
+
+print("s179-a0:", "cnhx6md".at(4), "cnhx6md".trim() == "cnhx6md")
+
+print("s179-a1:", "gb1lpv6".at(2), "gb1lpv6".trim() == "gb1lpv6")

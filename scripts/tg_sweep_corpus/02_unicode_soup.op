@@ -1,0 +1,14 @@
+// tg_sweep corpus 02: unicode soup in strings and identifiers — hangul
+// jamo, combining marks, emoji ZWJ sequences, RTL marks, zero-width chars.
+// Bytes are data; nothing here may crash the lexer, the parser or the VM.
+main {
+    stress {
+        let soup = "ᄀᄁᄂ 모음 ㅢ e\u0301\u0302\u0303 \U0001F468\u200D\U0001F469\u200D\U0001F466 ‏‎​ ᄀ"
+        let 모음 = "한글 식별자"
+        let tag = "妊娠🧬🧪🎓🧑‍🔬 operon"
+        len(soup)
+        len(모음)
+        len(tag)
+    } rescue (e) {
+    }
+}

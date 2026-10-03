@@ -1,0 +1,146 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20260930 idx=28 tag=c028
+
+let c028_b0 = "start"
+
+if 56 > 80 { c028_b0 = "hi" } elif 56 > 40 { c028_b0 = "mid" } else { c028_b0 = "lo" }
+
+print("c028-i0:", c028_b0, 56)
+
+let c028_b1 = "start"
+
+if 113 > 80 { c028_b1 = "hi" } elif 113 > 40 { c028_b1 = "mid" } else { c028_b1 = "lo" }
+
+print("c028-i1:", c028_b1, 113)
+
+let c028_b2 = "start"
+
+if 86 > 80 { c028_b2 = "hi" } elif 86 > 40 { c028_b2 = "mid" } else { c028_b2 = "lo" }
+
+print("c028-i2:", c028_b2, 86)
+
+let c028_b3 = "start"
+
+if 49 > 80 { c028_b3 = "hi" } elif 49 > 40 { c028_b3 = "mid" } else { c028_b3 = "lo" }
+
+print("c028-i3:", c028_b3, 49)
+
+let c028_b4 = "start"
+
+if 99 > 80 { c028_b4 = "hi" } elif 99 > 40 { c028_b4 = "mid" } else { c028_b4 = "lo" }
+
+print("c028-i4:", c028_b4, 99)
+
+let c028_a0 = 0
+
+let c028_n0 = 0
+
+while c028_n0 < 5 {
+
+    c028_n0 += 3
+
+    if c028_n0 % 3 == 0 { continue }
+
+    if c028_n0 > 14 { break }
+
+    c028_a0 += c028_n0
+
+}
+
+print("c028-w0:", c028_a0, c028_n0)
+
+let c028_a1 = 0
+
+let c028_n1 = 0
+
+while c028_n1 < 11 {
+
+    c028_n1 += 4
+
+    if c028_n1 % 3 == 0 { continue }
+
+    if c028_n1 > 17 { break }
+
+    c028_a1 += c028_n1
+
+}
+
+print("c028-w1:", c028_a1, c028_n1)
+
+let c028_c0 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 3] {
+
+        c028_c0 += a * b
+
+    }
+
+}
+
+print("c028-l0:", c028_c0)
+
+let c028_c1 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 4] {
+
+        c028_c1 += a * b
+
+    }
+
+}
+
+print("c028-l1:", c028_c1)
+
+let c028_c2 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 3] {
+
+        c028_c2 += a * b
+
+    }
+
+}
+
+print("c028-l2:", c028_c2)
+
+let c028_acc0 = ""
+
+loop {
+
+    c028_acc0 += "x"
+
+    if c028_acc0.len() >= 7 { break }
+
+}
+
+print("c028-o0:", c028_acc0)
+
+let c028_acc1 = ""
+
+loop {
+
+    c028_acc1 += "x"
+
+    if c028_acc1.len() >= 7 { break }
+
+}
+
+print("c028-o1:", c028_acc1)
+
+let c028_acc2 = ""
+
+loop {
+
+    c028_acc2 += "x"
+
+    if c028_acc2.len() >= 6 { break }
+
+}
+
+print("c028-o2:", c028_acc2)

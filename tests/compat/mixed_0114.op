@@ -1,0 +1,230 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=114 tag=m114
+
+gene m114_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m114-b0:", m114_b0({exon: 19, helix: 80, gene: 52})?!)
+
+gene m114_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m114-b1:", m114_b1({enzyme: 18, vector: 48, exon: 15})?!)
+
+gene m114_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m114_f0([57, 54, 9, 5, 43, 2, 6]) {
+
+    case Ok(list) {
+
+        print("m114-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m114-f0:", "e:", m)
+
+    }
+
+}
+
+gene m114_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m114_f1([40, 55, 31, 22, 16, 60, 43, 36]) {
+
+    case Ok(list) {
+
+        print("m114-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m114-f1:", "e:", m)
+
+    }
+
+}
+
+gene m114_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m114_f2([14, 35, 14, 22, 15, 2, 42]) {
+
+    case Ok(list) {
+
+        print("m114-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m114-f2:", "e:", m)
+
+    }
+
+}
+
+let m114_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m114-cc0:", m114_cl0(17)(18), m114_cl0(18)(17))
+
+let m114_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m114-cc1:", m114_cl1(10)(19), m114_cl1(19)(10))
+
+let m114_data0 = some([some("marker"), none(), some(1)])
+
+match m114_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m114-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m114-x0:", "shape-miss")
+
+    }
+
+}
+
+let m114_data1 = some([some("cell"), none(), some(7)])
+
+match m114_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m114-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m114-x1:", "shape-miss")
+
+    }
+
+}

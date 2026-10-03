@@ -1,0 +1,50 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=125 tag=m125
+
+let m125_m0 = {ribose: -53, exon: 70, codon: -54, plasmid: 66}
+
+print("m125-m0:", m125_m0["ribose"], len(m125_m0), m125_m0.has("ribose"))
+
+let m125_m1 = {enzyme: 18, splicer: -10, helix: 95, codon: -95}
+
+print("m125-m1:", m125_m1["enzyme"], len(m125_m1), m125_m1.has("enzyme"))
+
+let m125_m2 = {helix: -75, vector: 71, marker: -98}
+
+print("m125-m2:", m125_m2["helix"], len(m125_m2), m125_m2.has("helix"))
+
+let m125_m3 = {plasmid: -49, codon: -66, gene: 23}
+
+print("m125-m3:", m125_m3["plasmid"], len(m125_m3), m125_m3.has("plasmid"))
+
+let m125_m4 = {marker: 98, cell: 90, plasmid: -36}
+
+print("m125-m4:", m125_m4["marker"], len(m125_m4), m125_m4.has("marker"))
+
+let m125_k0 = {vector: 32, ribose: 33, ligase: 45}
+
+let m125_ks0 = m125_k0.keys()
+
+let m125_sm0 = 0
+
+for k in m125_k0 { m125_sm0 += m125_k0[k] }
+
+print("m125-k0:", m125_sm0, m125_k0.keys().sort(), m125_k0.values().len())
+
+let m125_k1 = {ligase: 16, ribose: 33, enzyme: 27}
+
+let m125_ks1 = m125_k1.keys()
+
+let m125_sm1 = 0
+
+for k in m125_k1 { m125_sm1 += m125_k1[k] }
+
+print("m125-k1:", m125_sm1, m125_k1.keys().sort(), m125_k1.values().len())
+
+let m125_w0 = {outer: {gene: 8, plasmid: 7, tag: "ok"}}}
+
+print("m125-w0:", m125_w0["outer"]["plasmid"], m125_w0["outer"]["tag"])
+
+let m125_w1 = {outer: {plasmid: 2, cell: 7, tag: "ok"}}}
+
+print("m125-w1:", m125_w1["outer"]["cell"], m125_w1["outer"]["tag"])

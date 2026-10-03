@@ -1,0 +1,16 @@
+[package]
+name = "operon-embed-example"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "M100 W076: CI-verified embedding example — an external-style consumer crate depending on operon via path."
+
+# Deliberately standalone (its own workspace + lockfile): this proves the
+# downstream-embedder shape — `operon` consumed as a path dependency the way
+# a third-party crate would consume a published one. If the public embedding
+# surface drifts from docs/EMBEDDING.md, this crate stops compiling and the
+# CI gate (scripts/embed_example_check.sh) fails.
+[workspace]
+
+[dependencies]
+operon = { path = "../.." }

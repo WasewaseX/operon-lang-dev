@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=132 tag=s132
+
+print("s132-m0:", "f_lq0__B54gpcn".upper(), "f_lq0__B54gpcn".slice(3), "f_lq0__B54gpcn".len())
+
+print("s132-m1:", "wwg80ek".upper(), "wwg80ek".slice(3), "wwg80ek".len())
+
+print("s132-m2:", "5m5_AtCtAs8p".upper(), "5m5_AtCtAs8p".slice(1), "5m5_AtCtAs8p".len())
+
+print("s132-m3:", "njCh_woBk".upper(), "njCh_woBk".slice(1), "njCh_woBk".len())
+
+print("s132-i0:", "iyf-{34}-jqt5")
+
+let s132_v0 = 34
+
+print("s132-v0:", "n={s132_v0}" + "!" * 1)
+
+print("s132-i1:", "cmu-{30}-6y2v")
+
+let s132_v1 = 30
+
+print("s132-v1:", "n={s132_v1}" + "!" * 2)
+
+print("s132-i2:", "nu9-{5}-t0ok")
+
+let s132_v2 = 5
+
+print("s132-v2:", "n={s132_v2}" + "!" * 1)
+
+print("s132-i3:", "iiu-{84}-as0i")
+
+let s132_v3 = 84
+
+print("s132-v3:", "n={s132_v3}" + "!" * 1)
+
+print("s132-i4:", "u8i-{39}-u0hi")
+
+let s132_v4 = 39
+
+print("s132-v4:", "n={s132_v4}" + "!" * 1)
+
+print("s132-r0:", "fwortura".replace("f", "5w"), "fwortura".contains("wo"))
+
+print("s132-r1:", "kA9yA3t_".replace("k", "Cb"), "kA9yA3t_".contains("A9"))
+
+print("s132-r2:", "rt9uoliw".replace("r", "t0"), "rt9uoliw".contains("t9"))
+
+print("s132-j0:", ["zvb", "oB5", "4w1"].join("-"))
+
+print("s132-j1:", ["0bk", "jsk", "Ch5", "B5A"].join("-"))
+
+print("s132-j2:", ["4bm", "vye", "8wl", "jti"].join("-"))
+
+print("s132-a0:", "6Afl8cC".at(6), "6Afl8cC".trim() == "6Afl8cC")
+
+print("s132-a1:", "xhpgkor".at(4), "xhpgkor".trim() == "xhpgkor")

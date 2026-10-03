@@ -1,7 +1,7 @@
-# substrate-r1: the Python ecosystem bridge — granted proof suite.
+# substrate-r1: the Python ecosystem bridge, granted proof suite.
 # Exercised ONLY via an explicit operator cell:
 #   ./bin/operon test tests/granted/ --cell tests/granted/pybridge.cell
-# The default proof runner (zero grants) skips this directory by design —
+# The default proof runner (zero grants) skips this directory by design,
 # these frames are meaningless without the operator's grants. Denials and
 # the module fence live in tests/security_caps.op and tests/redteam/.
 frame proof {
@@ -39,7 +39,7 @@ frame proof {
     assert(ok_call.ok)
     assert(abs(ok_call.value - 1024.0) < 1e-9)
 
-    # 6. numpy — the point of the whole bridge (skip when absent)
+    # 6. numpy, the point of the whole bridge (skip when absent)
     let np = py("numpy", "arange", [0, 5])
     if np.ok {
         assert(np.value == [0, 1, 2, 3, 4])
@@ -47,7 +47,7 @@ frame proof {
         assert(norm.ok)
         assert(abs(norm.value - 5.0) < 1e-9)
     } else {
-        print("numpy absent on this interpreter — ndarray asserts skipped")
+        print("numpy absent on this interpreter, ndarray asserts skipped")
     }
 }
 gene main() {

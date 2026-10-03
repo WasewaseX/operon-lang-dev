@@ -1,0 +1,230 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=141 tag=m141
+
+gene m141_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m141-b0:", m141_b0({marker: 6, enzyme: 13, exon: 93})?!)
+
+gene m141_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m141-b1:", m141_b1({helix: 1, gene: 45, splicer: 54})?!)
+
+gene m141_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m141_f0([20, 39, 12, 8, 21, 41]) {
+
+    case Ok(list) {
+
+        print("m141-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m141-f0:", "e:", m)
+
+    }
+
+}
+
+gene m141_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m141_f1([53, 19, 45, 14, 46]) {
+
+    case Ok(list) {
+
+        print("m141-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m141-f1:", "e:", m)
+
+    }
+
+}
+
+gene m141_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m141_f2([38, 42, 40, 17]) {
+
+    case Ok(list) {
+
+        print("m141-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m141-f2:", "e:", m)
+
+    }
+
+}
+
+let m141_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m141-cc0:", m141_cl0(3)(4), m141_cl0(4)(3))
+
+let m141_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m141-cc1:", m141_cl1(10)(18), m141_cl1(18)(10))
+
+let m141_data0 = some([some("cell"), none(), some(4)])
+
+match m141_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m141-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m141-x0:", "shape-miss")
+
+    }
+
+}
+
+let m141_data1 = some([some("plasmid"), none(), some(9)])
+
+match m141_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m141-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m141-x1:", "shape-miss")
+
+    }
+
+}

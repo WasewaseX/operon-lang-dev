@@ -1,0 +1,58 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=248 tag=s248
+
+print("s248-m0:", "dsxyiwmmo4atd3".upper(), "dsxyiwmmo4atd3".slice(1), "dsxyiwmmo4atd3".len())
+
+print("s248-m1:", "9fpt1x0louef".upper(), "9fpt1x0louef".slice(4), "9fpt1x0louef".len())
+
+print("s248-m2:", "rg0cl0bhja_v".upper(), "rg0cl0bhja_v".slice(3), "rg0cl0bhja_v".len())
+
+print("s248-m3:", "glebn2750".upper(), "glebn2750".slice(4), "glebn2750".len())
+
+print("s248-m4:", "94qzp3".upper(), "94qzp3".slice(3), "94qzp3".len())
+
+print("s248-i0:", "aB4-{39}-wn7t")
+
+let s248_v0 = 39
+
+print("s248-v0:", "n={s248_v0}" + "!" * 1)
+
+print("s248-i1:", "nwB-{5}-94oa")
+
+let s248_v1 = 5
+
+print("s248-v1:", "n={s248_v1}" + "!" * 2)
+
+print("s248-i2:", "qam-{78}-7Amo")
+
+let s248_v2 = 78
+
+print("s248-v2:", "n={s248_v2}" + "!" * 3)
+
+print("s248-i3:", "5gc-{94}-ibxh")
+
+let s248_v3 = 94
+
+print("s248-v3:", "n={s248_v3}" + "!" * 1)
+
+print("s248-i4:", "eAe-{57}-ss3p")
+
+let s248_v4 = 57
+
+print("s248-v4:", "n={s248_v4}" + "!" * 1)
+
+print("s248-r0:", "rupdogje".replace("r", "dA"), "rupdogje".contains("up"))
+
+print("s248-r1:", "e7lj98fe".replace("e", "75"), "e7lj98fe".contains("7l"))
+
+print("s248-r2:", "c4mtsjwc".replace("c", "ht"), "c4mtsjwc".contains("4m"))
+
+print("s248-j0:", ["ys3", "fB_", "87j", "A1n", "t08"].join("-"))
+
+print("s248-j1:", ["2cs", "6c7", "hue", "6Cu", "pl4"].join("-"))
+
+print("s248-j2:", ["cla", "8iw", "gfd", "wC8"].join("-"))
+
+print("s248-a0:", "ujuiCih".at(1), "ujuiCih".trim() == "ujuiCih")
+
+print("s248-a1:", "zqzb80B".at(1), "zqzb80B".trim() == "zqzb80B")

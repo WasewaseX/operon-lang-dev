@@ -1,4 +1,4 @@
-//! ast.rs — Operon AST. Uses Arc throughout so gene definitions can be
+//! ast.rs, Operon AST. Uses Arc throughout so gene definitions can be
 //! transferred into worker threads (spawn) without Rc's thread restrictions.
 
 use std::sync::Arc;
@@ -23,25 +23,37 @@ pub enum Expr {
     Int(i64),
     Float(f64),
     Str(String),
+    /// W08r: a transparent position marker. The parser wraps the RHS of a
+    /// line-silent statement (pure literals/idents: nothing inside carries a
+    /// source line) with `At(inner, line)` so the debugger can attribute the
+    /// statement to its source line. Evaluation, compilation, lint and
+    /// typecheck all pass straight through to `inner`; only the debug
+    /// extractor (expr_first_line) and the VM compiler's line table read it.
+    At(Box<Expr>, usize),
+    /// W029: bytes literal b"...", the raw bytes after escape processing;
+    /// no interpolation ever.
+    Bytes(Vec<u8>),
     Interp(Vec<InterpPart>),
     List(Vec<Expr>),
     Map(Vec<(Expr, Expr)>),
     Ident(String),
     Unary(UnOp, Box<Expr>),
-    /// dx-r4: source line of the operator — hard type errors locate themselves.
+    /// dx-r4: source line of the operator, hard type errors locate themselves.
     Binary(BinOp, Box<Expr>, Box<Expr>, usize),
-    /// A13 (dx-r2): source line of the call site — runtime builtin notes
+    /// A13 (dx-r2): source line of the call site, runtime builtin notes
     /// (denials, timeouts, gate changes) carry the caller's location.
     Call(Box<Expr>, Vec<Expr>, usize),
-    /// dx-r4: source line of the bracket — index errors locate themselves.
+    /// dx-r4: source line of the bracket, index errors locate themselves.
     Index(Box<Expr>, Box<Expr>, usize),
     Member(Box<Expr>, String),
-    /// L1a: `a?.k` — Null receiver yields Null (silent); otherwise identical
+    /// L1a: `a?.k`, Null receiver yields Null (silent); otherwise identical
     /// to Member.
     MemberSafe(Box<Expr>, String),
-    Method(Box<Expr>, String, Vec<Expr>),
-    /// L1a: `a?.k(args)` — Null-safe method call (same contract).
-    MethodSafe(Box<Expr>, String, Vec<Expr>),
+    /// TYPED-MODE: source line of the method call, static member errors
+    /// (`int has no method 'name'`) locate themselves like Call/Index do.
+    Method(Box<Expr>, String, Vec<Expr>, usize),
+    /// L1a: `a?.k(args)`, Null-safe method call (same contract).
+    MethodSafe(Box<Expr>, String, Vec<Expr>, usize),
     Lambda(Arc<GeneDef>),
     Collect {
         var: String,
@@ -52,7 +64,7 @@ pub enum Expr {
     FateNew(String),
     New(String, Vec<Expr>),                   // phenotype constructor
     Ternary(Box<Expr>, Box<Expr>, Box<Expr>), // cond ? a : b
-    /// W06 (D-014): `e?!` — Option/Result propagation. Some/Ok unwraps to the
+    /// W06 (D-014): `e?!`, Option/Result propagation. Some/Ok unwraps to the
     /// payload; None/Err unwinds to the nearest enclosing gene boundary and
     /// becomes that gene's return value. Line stamps the propagation signal.
     Propagate(Box<Expr>, usize),
@@ -88,7 +100,7 @@ pub enum BinOp {
     And,
     Or,
     In,
-    /// L1a: `a ?? b` — coalesces Null only (not falsy); right-assoc,
+    /// L1a: `a ?? b`, coalesces Null only (not falsy); right-assoc,
     /// short-circuit (b unevaluated when a is non-null).
     Nullish,
 }
@@ -96,42 +108,64 @@ pub enum BinOp {
 #[derive(Debug, Clone, Default)]
 pub struct GeneDef {
     pub name: Option<String>,
-    /// A13 (dx-r2): source line of the definition — runtime gate notes
+    /// A13 (dx-r2): source line of the definition, runtime gate notes
     /// (grn veto, methylation silencing, etc.) render real locations.
     pub line: usize,
+    /// W074: `##` doc-comment lines attached to this declaration (metadata
+    /// only, never evaluated, mirrored by fmt/hover/`operon doc`).
+    pub doc: Vec<String>,
     pub params: Vec<(String, Option<Expr>)>,
     pub guard: Option<(Expr, Vec<Stmt>)>,
     pub body: Vec<Stmt>,
     pub acetylate: bool,
     pub methylate: bool,
     pub m6a: bool,
-    /// reg-bio-3 (C10): gene dosage — `@copies n`. Copies amplify the
+    /// reg-bio-3 (C10): gene dosage, `@copies n`. Copies amplify the
     /// concentration the gene feeds its GRN edges (transcript amount),
     /// NOT the call's return value. Clamped 1..=64 at parse.
     pub copies: u32,
     pub seq: bool, // sequence (generator) definition
     /// loop-9 (F-5): a CIS riboswitch aptamer in this transcript's own 5'UTR
-    /// — `(ligand, bound_means_on, threshold)`. The metabolite pool is
+    ///, `(ligand, bound_means_on, threshold)`. The metabolite pool is
     /// cell-wide; the SENSOR is per-gene. `off` class (TPP/purine/SAM):
     /// bound -> terminator hairpin -> OFF. `on` class (adenine/glycine
     /// activators): bound -> RBS exposed -> ON.
     pub riboswitch: Option<(String, bool, f64)>,
-    /// loop-9 (F-2): per-gene PROMOTER IDENTITY — `@burst kon koff`. The
+    /// loop-9 (F-2): per-gene PROMOTER IDENTITY, `@burst kon koff`. The
     /// telegraph layer's rates for THIS gene (overrides the global
     /// expr_on/.cell rates). Burst size ~ k_tx/k_off, burst frequency ~
-    /// k_on: different promoters have different (kon, koff) — that is
+    /// k_on: different promoters have different (kon, koff), that is
     /// their identity. Rides the gene Arc, so workers inherit for free.
     pub burst: Option<(f64, f64)>,
-    /// W01 (L2c): soft type annotations — parallel to `params` (same
+    /// W01 (L2c): soft type annotations, parallel to `params` (same
     /// length; None where unannotated). Enforced at the call funnel as
     /// catchable `unfolded` Stress (SPEC §7a); never a parse rejection.
     pub param_anns: Vec<Option<TypeAnn>>,
-    /// W01: return annotation — `gene f() -> int { }`. Checked when the
+    /// W01: return annotation, `gene f() -> int { }`. Checked when the
     /// gene produces its return value (including a `?!`-propagated one).
     pub ret_ann: Option<TypeAnn>,
+    /// W64: `@deprecated("migration text", since="2.4")` metadata. Parse
+    /// and tooling surface only (lint `deprecated-use` findings, doc/fmt
+    /// round-trip); the interpreter never reads it, runtime is untouched.
+    pub deprecated: Option<Deprecation>,
+    /// TYPED-MODE: declared generic type parameters, `gene first<T>(...)`.
+    /// (name, optional bound) — the bound is a trait/constraint name. Pure
+    /// metadata for the static checker and fmt/doc round-trip; the dynamic
+    /// evaluator never reads it.
+    pub type_params: Vec<(String, Option<String>)>,
 }
 
-/// W01 (L2c): the annotation grammar — `int`, `float`, `str`, `bool`,
+/// W64: the structured payload of a deprecation mark.
+#[derive(Debug, Clone, Default)]
+pub struct Deprecation {
+    /// The migration text: what to use instead, why the mark exists.
+    pub message: String,
+    /// Optional calendar gate from the compatibility ladder (W63),
+    /// `since="2.4"`: the release that started the deprecation clock.
+    pub since: Option<String>,
+}
+
+/// W01 (L2c): the annotation grammar, `int`, `float`, `str`, `bool`,
 /// `list`, `map`, `gene`, `sequence`, `phenotype`, `any`, unions (`int |
 /// str`), optionals (`int?`). Matching is by `Value::type_name()` with
 /// documented numeric widening (`float` accepts int; `int` refuses float)
@@ -142,6 +176,22 @@ pub enum TypeAnn {
     Named(String),
     Union(Vec<TypeAnn>),
     Optional(Box<TypeAnn>),
+    /// TYPED-MODE: generic annotation, `list[int]`, `map[str, int]`,
+    /// `result[int, str]`, `option[t]`. The name is the head; the args are
+    /// the bracketed parameters. Runtime soft matching treats a generic
+    /// annotation's HEAD like the bare name (list[int] enforces "is a
+    /// list") — element types are the static checker's business.
+    Generic(String, Vec<TypeAnn>),
+    /// W01-s2 type aliases: an annotation naming a declared alias
+    /// (`type Metrics = map[str, float]`, then `m: Metrics`). The parser
+    /// resolves the name at parse time; matching is the TARGET's law
+    /// (runtime + checker both recurse into `target`). No forward
+    /// references: an annotation naming an alias BEFORE its declaration
+    /// stays a plain `Named` and the typo-armor rule applies.
+    Alias {
+        name: String,
+        target: Box<TypeAnn>,
+    },
 }
 
 impl TypeAnn {
@@ -156,6 +206,15 @@ impl TypeAnn {
                 .collect::<Vec<_>>()
                 .join(" | "),
             TypeAnn::Optional(inner) => format!("{}?", inner.render()),
+            TypeAnn::Generic(name, args) => format!(
+                "{}[{}]",
+                name,
+                args.iter()
+                    .map(|a| a.render())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            TypeAnn::Alias { name, .. } => name.clone(),
         }
     }
 }
@@ -165,9 +224,48 @@ pub struct PhenoDef {
     pub name: String,
     /// A13: source line of the definition (dx-r2 spans).
     pub line: usize,
+    /// W074: doc-comment lines (metadata only).
+    pub doc: Vec<String>,
     pub parent: Option<String>,
+    /// W04: implemented traits, in declaration order (`implements A, B`).
+    /// Method dispatch falls back to trait DEFAULT methods in this order
+    /// after the phenotype's own lineage misses.
+    pub implements: Vec<String>,
     pub fields: Vec<(String, Expr)>, // field name -> default expr
     pub methods: Vec<Arc<GeneDef>>,
+}
+
+/// W04 (SPEC §8b): a trait declaration, a named set of method contracts.
+/// A method without a body is REQUIRED (the implementing phenotype must
+/// provide it; construction notes a contract break, calls wobble); a
+/// method with a body is a DEFAULT (used when the phenotype lineage has
+/// no method of that name).
+#[derive(Debug, Clone)]
+pub struct TraitMethod {
+    pub name: String,
+    pub line: usize,
+    pub required: bool,
+    /// Full gene definition (params + body) parsed by the normal gene
+    /// parser, default methods are ordinary genes with a `self` binding.
+    pub default: Option<Arc<GeneDef>>,
+}
+#[derive(Clone)]
+pub struct TraitDef {
+    pub name: String,
+    pub line: usize,
+    pub doc: Vec<String>,
+    pub methods: Vec<TraitMethod>,
+}
+impl std::fmt::Debug for TraitDef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TraitDef")
+            .field("name", &self.name)
+            .field(
+                "methods",
+                &self.methods.iter().map(|m| &m.name).collect::<Vec<_>>(),
+            )
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -175,10 +273,12 @@ pub struct SpliceDef {
     pub root: String,
     /// A13: source line of the definition (dx-r2 spans).
     pub line: usize,
+    /// W074: doc-comment lines (metadata only).
+    pub doc: Vec<String>,
     pub variants: Vec<(String, Arc<GeneDef>)>, // (variant name, gene)
 }
 
-/// reg-bio (F-5): inline ring kinetics — `repressilator a -> b -> c alpha 20;`.
+/// reg-bio (F-5): inline ring kinetics, `repressilator a -> b -> c alpha 20;`.
 /// Each field layers onto the interpreter's current `RepressiParams` (last
 /// declaration wins per-field); None leaves the value untouched, so `.cell`
 /// configuration and inline overrides compose.
@@ -197,6 +297,8 @@ pub struct FateDef {
     pub name: String,
     /// A13: source line of the definition (dx-r2 spans).
     pub line: usize,
+    /// W074: doc-comment lines (metadata only).
+    pub doc: Vec<String>,
     pub states: Vec<(String, Vec<String>)>, // state -> allowed targets
     pub enter: Option<String>,
 }
@@ -213,35 +315,35 @@ pub struct RegEdge {
     /// edges carrying a threshold (dose-response shape).
     pub hill: Option<u32>,
     /// reg-bio (F-3): cis-regulatory OR membership. An `any` edge passes the
-    /// call gate when its own threshold passes — the gene fires if ALL
+    /// call gate when its own threshold passes, the gene fires if ALL
     /// non-any thresholded edges pass AND at least one `any` edge passes.
     /// Inhibiting edges ignore `any` (inhibitors already veto with OR
     /// semantics: any inhibitor above its threshold vetoes).
     pub any: bool,
     /// reg-bio-2 (D2b): occupancy repression. An inhibiting edge marked
-    /// `occupy` composes multiplicatively — child *= 1 − influence — the
+    /// `occupy` composes multiplicatively, child *= 1 − influence, the
     /// thermodynamic Kⁿ/(Kⁿ+Rⁿ) survival form where repression can never
     /// overshoot and full occupancy means full silencing. Legacy edges
     /// subtract once (bit-identical default).
     pub occupy: bool,
     /// reg-bio-2 (B7): synergistic pooling. `sum` activating (thresholded)
-    /// edges targeting the same gene pool their weighted inputs —
-    /// P = min(1, Σ strength·level) — and ONE Hill function of P drives
+    /// edges targeting the same gene pool their weighted inputs,
+    /// P = min(1, Σ strength·level), and ONE Hill function of P drives
     /// both the gate and the fire influence, so two sub-threshold inputs
     /// can fire together (enhanceosome synergy). Edge groups are keyed by
     /// (target, threshold, hill); edges without `sum` are untouched.
     pub sum: bool,
     /// reg-bio-2 (A5/C7): an `attenuates` edge vetoes like an inhibitor but
-    /// reports the RNA-level mechanism — transcription attenuation (leader
+    /// reports the RNA-level mechanism, transcription attenuation (leader
     /// peptide / terminator hairpin outcome), not TF occlusion.
     pub attenuates: bool,
 }
 
-/// reg-bio-2 (A4): an allosteric binding record — `bind tf inducer lig k v;`
+/// reg-bio-2 (A4): an allosteric binding record, `bind tf inducer lig k v;`
 /// or `bind tf cofactor lig k v;`. Ligand binding modulates the regulator's
 /// DNA-available fraction: an INDUCER reduces affinity (allolactose on LacI
-/// — binding relieves repression), a COFACTOR increases it (tryptophan on
-/// TrpR — binding enables repression). At every regulation read of `tf`:
+///, binding relieves repression), a COFACTOR increases it (tryptophan on
+/// TrpR, binding enables repression). At every regulation read of `tf`:
 ///   occ = L / (k + L)
 ///   free = level × Π(1 − occ) over inducers × Π occ over cofactors
 #[derive(Debug, Clone)]
@@ -260,7 +362,7 @@ pub struct BindDef {
 /// step of the classic two-tier ODE
 ///     p ← p + rate·Δcalls − decay·p      (clamped 0..1)
 /// where Δcalls is the source gene's call-count delta since the last
-/// integration — transcripts accumulate in the call counters, protein
+/// integration, transcripts accumulate in the call counters, protein
 /// accumulates here, lagging and smoothing the transcriptional bursts.
 /// Protein nodes live in `grn_levels`, so any GRN gate can read a protein
 /// as its regulator (two-tier regulation).
@@ -270,7 +372,7 @@ pub struct TransEdge {
     pub to: String,
     /// translation rate per transcript call (default 1.0)
     pub rate: Option<f64>,
-    /// protein decay fraction per integration (default 0.0 — stable product)
+    /// protein decay fraction per integration (default 0.0, stable product)
     pub decay: Option<f64>,
 }
 
@@ -280,28 +382,28 @@ pub enum MatchPat {
     Multi(Vec<Expr>), // comma-separated literals
     Bind(String),     // identifier binds value
     Wild,             // _
-    /// W02 (match-v2): variant constructor pattern — `Some(p)`, `None`,
+    /// W02 (match-v2): variant constructor pattern, `Some(p)`, `None`,
     /// `Ok(p)`, `Err(p)`. The payload is itself a pattern (nestable);
     /// `None` payload = tag-only form (matches the tag with any payload).
     /// Unknown capitalized tags fall back to Bind with a note (Total
     /// Grammar: never a rejection).
     Variant(String, Option<Box<MatchPat>>),
-    /// W02: list pattern — `[a, b, *rest]`. Element patterns nest; `*rest`
+    /// W02: list pattern, `[a, b, *rest]`. Element patterns nest; `*rest`
     /// binds the remaining tail as a List. Without `*rest` the length must
     /// match exactly.
     ListPat {
         elems: Vec<MatchPat>,
         rest: Option<String>,
     },
-    /// W02: map pattern — `{x, y: p}`. Each key must be present; an
+    /// W02: map pattern, `{x, y: p}`. Each key must be present; an
     /// optional sub-pattern is matched against the value.
     MapPat {
         keys: Vec<(String, Option<Box<MatchPat>>)>,
     },
-    /// W02: or-pattern — `p1 | p2 | ...`; alternatives tried in order,
+    /// W02: or-pattern, `p1 | p2 | ...`; alternatives tried in order,
     /// first match binds.
     Or(Vec<MatchPat>),
-    /// W02: guarded arm — `pat if cond`; the condition sees the pattern's
+    /// W02: guarded arm, `pat if cond`; the condition sees the pattern's
     /// bindings. Guard false (or contained) = arm misses, matching moves on.
     Guard(Box<MatchPat>, Expr),
 }
@@ -310,13 +412,13 @@ pub enum MatchPat {
 /// `List` destructures a List (elements are patterns; `*rest` captures the
 /// tail); `Map` destructures a Map (each name reads that key). Soft-miss
 /// semantics: wrong container type or missing element/key binds Null with a
-/// note — Total Grammar: a pattern never hard-fails a run.
+/// note, Total Grammar: a pattern never hard-fails a run.
 #[derive(Debug, Clone)]
 pub enum Pat {
     Bind(String),
     List {
         elems: Vec<Pat>,
-        rest: Option<String>, // *rest — tail after the fixed elements
+        rest: Option<String>, // *rest, tail after the fixed elements
     },
     Map {
         keys: Vec<String>,
@@ -326,31 +428,48 @@ pub enum Pat {
 #[derive(Debug, Clone)]
 pub enum Stmt {
     Let(String, Expr),
-    /// W01 (L2c): annotated definition — `let n: int = 3`. The annotation is
+    /// W05: `const NAME = expr`, an immutable binding. The bound value is
+    /// deep-frozen (lists/maps inside it can never be mutated, mutation
+    /// raises a catchable `frozen` Stress), and the NAME can never be
+    /// reassigned (rebinding defines anew; assignment is the `frozen` stress).
+    LetConst(String, Expr),
+    /// W01 (L2c): annotated definition, `let n: int = 3`. The annotation is
     /// checked when the statement binds (mismatch = catchable `unfolded`
     /// Stress, SPEC §7a); the binding itself is an ordinary `let`.
     LetAnn(String, TypeAnn, Expr),
+    /// W01-s2: `type Name = ann`, a type alias. Parse-time metadata: the
+    /// parser resolves later annotations naming `Name` into
+    /// `TypeAnn::Alias`, and the statement itself is inert at runtime
+    /// (the tree-walk no-ops it; the VM bridges it there). The line
+    /// stamps the duplicate-alias note and fmt output.
+    TypeAlias(String, TypeAnn, usize),
     Assign(String, Option<BinOp>, Expr), // name (op=)? expr
     IndexAssign(Expr, Expr, Option<BinOp>, Expr), // target[i] (op=)? expr
     MemberAssign(Expr, String, Option<BinOp>, Expr), // target.k (op=)? expr
-    /// L1a: destructuring definition — `let [a, b] = e`, `let {x, y} = e`,
+    /// L1a: destructuring definition, `let [a, b] = e`, `let {x, y} = e`,
     /// `let [a, *rest] = e` (patterns nest).
     LetPat(Pat, Expr),
-    /// L1a: destructuring for-loop — `for [k, v] in pairs { ... }`.
+    /// L1a: destructuring for-loop, `for [k, v] in pairs { ... }`.
     ForPat(Pat, Expr, Vec<Stmt>),
-    /// L1a: multiple assignment / swap — `a, b = b, a`; RHS evaluated fully
+    /// L1a: multiple assignment / swap, `a, b = b, a`; RHS evaluated fully
     /// (left to right) before any target is assigned. `let a, b = 1, 2` sets
     /// `define` (fresh bindings); the bare form assigns existing names.
     MultiAssign(Vec<Expr>, Vec<Expr>, bool),
     If(Vec<(Expr, Vec<Stmt>)>, Option<Vec<Stmt>>),
     While(Expr, Vec<Stmt>),
     Loop(Vec<Stmt>),
+    /// W17: structured-concurrency block. Tasks spawned inside register on
+    /// this scope and are joined at block exit, in spawn order, on every
+    /// flow path (normal, return/break/continue, or stress).
+    Scope(Vec<Stmt>),
     For(String, Expr, Vec<Stmt>),
     Return(Option<Expr>),
     Break,
     Continue,
     ExprStmt(Expr),
-    Match(Expr, Vec<(MatchPat, Vec<Stmt>)>),
+    /// TYPED-MODE: the match statement carries its source line so static
+    /// exhaustiveness findings (T05) locate themselves.
+    Match(Expr, Vec<(MatchPat, Vec<Stmt>)>, usize),
     Use(String, Option<String>),        // path, alias
     Raise(Option<String>, Expr, usize), // kind, message, statement line (W007)
     Stress {
@@ -360,13 +479,15 @@ pub enum Stmt {
     },
     Gene(Arc<GeneDef>),
     Splice(Arc<SpliceDef>),
-    /// reg-bio-3 (C9): stoichiometric RISC — `silence old -> new strength s
+    /// W04 (SPEC §8b): `trait Name { gene m(); gene n() { … } }`.
+    Trait(Arc<TraitDef>),
+    /// reg-bio-3 (C9): stoichiometric RISC, `silence old -> new strength s
     /// sites n;`. The strength is the per-site capture probability (clamped
     /// 0..=1, default 1.0); each statement is one binding site (sites n
     /// composes multiplicatively: survival = (1-s)^n). Omitted strength and
     /// sites reproduce the legacy binary redirect bit-identically.
     Silence(String, Option<String>, f64, u32),
-    /// reg-bio-3 (A1/A7): the polycistronic transcription unit — the
+    /// reg-bio-3 (A1/A7): the polycistronic transcription unit, the
     /// namesake construct. `operon lac { lacZ rbs 1.0; lacY rbs 0.6; }`:
     /// ONE promoter drives N cistrons on ONE transcript; a call to any
     /// cistron is a transcription attempt of the WHOLE unit, so edges
@@ -378,23 +499,23 @@ pub enum Stmt {
     Ires(String),
     Fate(Arc<FateDef>),
     Regulate(Vec<RegEdge>, Vec<TransEdge>, Vec<BindDef>),
-    /// reg-bio-2 (A4): a small-molecule ligand pool — `ligand iptg;`.
+    /// reg-bio-2 (A4): a small-molecule ligand pool, `ligand iptg;`.
     /// Ligands are metabolites, not genes: their levels are set via
     /// `ligand_set(name, v)` or the `.cell [ligand.<name>]` bath config,
     /// and they drive gates directly (a ligand named as an edge source is
     /// a riboswitch-style, protein-free gate).
     Ligand(String),
-    /// loop-9 (C8): a quorum-sensing signal species — `autoinducer ahl;`.
+    /// loop-9 (C8): a quorum-sensing signal species, `autoinducer ahl;`.
     /// The species registers into the process-global SHARED medium (the
     /// environment, not the cytoplasm): `secrete` charges it, `quorum`
     /// reads it, and a species named as an edge source is a LuxR·AHL-style
-    /// population gate — my secretion raises YOUR activation.
+    /// population gate, my secretion raises YOUR activation.
     Autoinducer(String),
     Toggle(String, String),
-    /// reg-bio-2 (C11): a decoy binding site — `decoy d for tf capacity c;`.
+    /// reg-bio-2 (C11): a decoy binding site, `decoy d for tf capacity c;`.
     /// The decoy node absorbs its regulator without producing output:
     /// every regulation read of `tf` sees the free fraction
-    /// max(0, level(tf) − c·level(d)) — competitive titration.
+    /// max(0, level(tf) − c·level(d)), competitive titration.
     Decoy(String, String, f64),
     Repressilator(Vec<String>, Option<f64>, RepressiOverrides),
     Frame {
@@ -406,6 +527,12 @@ pub enum Stmt {
     AnchorExport(Vec<String>),
     AnchorImport(Vec<String>),
     Tad(String, Vec<Stmt>),
+    /// W025 stage 2: nested sub-module declaration, `module seq { gene x() { … } }`
+    /// inside a module file (or any block). The body runs once in a fresh child
+    /// scope at declaration time; the child scope's names become the sub-module's
+    /// export table (a Map bound under `name`). Use paths stay file-first: a
+    /// `use` tries the flat file, then descends these nested tables (SPEC §8).
+    Module(String, Vec<Stmt>),
     Block(Vec<Stmt>),     // bare scoped block (Total Grammar repair product)
     Seq(Arc<GeneDef>),    // sequence definition (generator)
     Yield(Option<Expr>),  // yield inside a sequence body
@@ -416,6 +543,9 @@ pub enum Stmt {
 pub struct Program {
     pub stmts: Vec<Stmt>,
     pub notes: Vec<Note>,
+    /// W074: a `##` block at the very top of the file that does NOT hug a
+    /// declaration (blank-line separated) becomes the module doc.
+    pub module_doc: Vec<String>,
     /// proof frames gathered (file path -> is implicit)
     pub proofs: Vec<Vec<Stmt>>,
     pub named_frames: Vec<(String, Vec<Stmt>)>,
@@ -423,4 +553,73 @@ pub struct Program {
     pub tad_exports: Vec<(String, Vec<String>)>, // tad name -> exported names
     pub tad_members: Vec<(String, Vec<String>)>, // tad name -> all defined names
     pub ires: Vec<String>,
+    /// W24: top-level names marked with the contextual `pub` marker.
+    /// Inert by default; under `.cell modules.visibility = strict` the
+    /// module exports ONLY these names (migration-safe: a strict module
+    /// with zero pub marks keeps default-open, with a note).
+    pub pub_exports: Vec<String>,
+}
+
+// ---------------------------------------------------- W08r statement lines
+
+/// W08r stage 1: the first line-bearing source position reachable in an
+/// expression. The AST carries lines only on the locating nodes (calls,
+/// binaries, indexes, methods, propagate — dx-r2/r4), so a statement whose
+/// expressions are all literals/idents reports None; the debugger then
+/// falls back to cur_line. This is the extraction the VM compiler's
+/// line_of stub wants too (a documented gap, not a divergence: both lanes
+/// see the same None).
+pub fn expr_first_line(e: &Expr) -> Option<usize> {
+    match e {
+        // W08r: the parser's position marker IS the line for line-silent
+        // statement expressions
+        Expr::At(_, l) => Some(*l),
+        Expr::Call(_, _, l) => Some(*l),
+        Expr::Binary(_, _, _, l) => Some(*l),
+        Expr::Index(_, _, l) => Some(*l),
+        Expr::Method(_, _, _, l) => Some(*l),
+        Expr::MethodSafe(_, _, _, l) => Some(*l),
+        Expr::Propagate(_, l) => Some(*l),
+        Expr::Unary(_, b) => expr_first_line(b),
+        Expr::Member(b, _) | Expr::MemberSafe(b, _) => expr_first_line(b),
+        Expr::Ternary(c, _, _) => expr_first_line(c),
+        Expr::List(v) => v.iter().find_map(expr_first_line),
+        Expr::Map(pairs) => pairs
+            .iter()
+            .find_map(|(k, v)| expr_first_line(k).or_else(|| expr_first_line(v))),
+        _ => None,
+    }
+}
+
+impl Stmt {
+    /// W08r stage 1: best-effort source line of this statement (the first
+    /// line-bearing node in its expressions/heads). None = the statement
+    /// is line-silent (pure literals/idents); the debug trap then falls
+    /// back to the interpreter's cur_line.
+    pub fn first_line(&self) -> Option<usize> {
+        match self {
+            Stmt::Let(_, e)
+            | Stmt::LetConst(_, e)
+            | Stmt::LetAnn(_, _, e)
+            | Stmt::LetPat(_, e)
+            | Stmt::Assign(_, _, e)
+            | Stmt::ExprStmt(e)
+            | Stmt::For(_, e, _)
+            | Stmt::ForPat(_, e, _)
+            | Stmt::While(e, _) => expr_first_line(e),
+            Stmt::IndexAssign(t, i, _, e) => expr_first_line(t)
+                .or_else(|| expr_first_line(i))
+                .or_else(|| expr_first_line(e)),
+            Stmt::MemberAssign(t, _, _, e) => expr_first_line(t).or_else(|| expr_first_line(e)),
+            Stmt::MultiAssign(targets, values, _) => targets
+                .iter()
+                .chain(values.iter())
+                .find_map(expr_first_line),
+            Stmt::If(arms, _) => arms.first().and_then(|(c, _)| expr_first_line(c)),
+            Stmt::Match(_e, _, l) => Some(*l),
+            Stmt::Raise(_, _, l) => Some(*l),
+            Stmt::TypeAlias(_, _, l) => Some(*l),
+            _ => None,
+        }
+    }
 }

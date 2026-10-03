@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=133 tag=s133
+
+print("s133-m0:", "shuw1h2zw1".upper(), "shuw1h2zw1".slice(3), "shuw1h2zw1".len())
+
+print("s133-m1:", "a34mlq60bp9B".upper(), "a34mlq60bp9B".slice(4), "a34mlq60bp9B".len())
+
+print("s133-m2:", "qqhur3Cdj".upper(), "qqhur3Cdj".slice(2), "qqhur3Cdj".len())
+
+print("s133-m3:", "ifphhlwvlA40".upper(), "ifphhlwvlA40".slice(3), "ifphhlwvlA40".len())
+
+print("s133-i0:", "4An-{72}-a54q")
+
+let s133_v0 = 72
+
+print("s133-v0:", "n={s133_v0}" + "!" * 3)
+
+print("s133-i1:", "99y-{50}-awa0")
+
+let s133_v1 = 50
+
+print("s133-v1:", "n={s133_v1}" + "!" * 1)
+
+print("s133-i2:", "i31-{10}-azpd")
+
+let s133_v2 = 10
+
+print("s133-v2:", "n={s133_v2}" + "!" * 1)
+
+print("s133-r0:", "m4yl8zCh".replace("m", "4c"), "m4yl8zCh".contains("4y"))
+
+print("s133-r1:", "ude5057g".replace("u", "g3"), "ude5057g".contains("de"))
+
+print("s133-r2:", "B83brstg".replace("B", "tg"), "B83brstg".contains("83"))
+
+print("s133-j0:", ["nBg", "dhC", "s23", "v2h", "0rC"].join("-"))
+
+print("s133-j1:", ["tzz", "Cva", "6ql", "9w3"].join("-"))
+
+print("s133-a0:", "x3dyk6B".at(0), "x3dyk6B".trim() == "x3dyk6B")
+
+print("s133-a1:", "zb9vttB".at(0), "zb9vttB".trim() == "zb9vttB")
+
+print("s133-a2:", "ywicx3f".at(6), "ywicx3f".trim() == "ywicx3f")

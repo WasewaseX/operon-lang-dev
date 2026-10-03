@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=240 tag=s240
+
+print("s240-m0:", "hndxC4".upper(), "hndxC4".slice(2), "hndxC4".len())
+
+print("s240-m1:", "j66w93x".upper(), "j66w93x".slice(4), "j66w93x".len())
+
+print("s240-m2:", "zt1mj8".upper(), "zt1mj8".slice(1), "zt1mj8".len())
+
+print("s240-m3:", "6_6ytddwum2m".upper(), "6_6ytddwum2m".slice(4), "6_6ytddwum2m".len())
+
+print("s240-m4:", "sdmdtcoktikc".upper(), "sdmdtcoktikc".slice(4), "sdmdtcoktikc".len())
+
+print("s240-i0:", "yc_-{74}-j9f_")
+
+let s240_v0 = 74
+
+print("s240-v0:", "n={s240_v0}" + "!" * 3)
+
+print("s240-i1:", "pek-{71}-9cBt")
+
+let s240_v1 = 71
+
+print("s240-v1:", "n={s240_v1}" + "!" * 3)
+
+print("s240-i2:", "aAC-{54}-bp5u")
+
+let s240_v2 = 54
+
+print("s240-v2:", "n={s240_v2}" + "!" * 3)
+
+print("s240-r0:", "tr6o9mnz".replace("t", "30"), "tr6o9mnz".contains("r6"))
+
+print("s240-r1:", "1wd2oeC1".replace("1", "bn"), "1wd2oeC1".contains("wd"))
+
+print("s240-r2:", "ieAdqcc5".replace("i", "i6"), "ieAdqcc5".contains("eA"))
+
+print("s240-r3:", "A9Bcvbg4".replace("A", "dq"), "A9Bcvbg4".contains("9B"))
+
+print("s240-j0:", ["Bww", "B7v", "5i4"].join("-"))
+
+print("s240-j1:", ["d7w", "bwm", "bee", "8e2", "2wh"].join("-"))
+
+print("s240-a0:", "dkz9fc_".at(6), "dkz9fc_".trim() == "dkz9fc_")
+
+print("s240-a1:", "6mpyBtq".at(0), "6mpyBtq".trim() == "6mpyBtq")

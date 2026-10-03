@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=113 tag=s113
+
+print("s113-m0:", "cuhAxly_w".upper(), "cuhAxly_w".slice(1), "cuhAxly_w".len())
+
+print("s113-m1:", "fCy4sApf8Bi7".upper(), "fCy4sApf8Bi7".slice(3), "fCy4sApf8Bi7".len())
+
+print("s113-m2:", "vdk3BAntbz".upper(), "vdk3BAntbz".slice(3), "vdk3BAntbz".len())
+
+print("s113-m3:", "o6b3zg".upper(), "o6b3zg".slice(4), "o6b3zg".len())
+
+print("s113-m4:", "jcc8_rz_".upper(), "jcc8_rz_".slice(4), "jcc8_rz_".len())
+
+print("s113-i0:", "lv2-{78}-Bkw4")
+
+let s113_v0 = 78
+
+print("s113-v0:", "n={s113_v0}" + "!" * 3)
+
+print("s113-i1:", "zlh-{33}-pbA1")
+
+let s113_v1 = 33
+
+print("s113-v1:", "n={s113_v1}" + "!" * 1)
+
+print("s113-i2:", "p5m-{63}-f40q")
+
+let s113_v2 = 63
+
+print("s113-v2:", "n={s113_v2}" + "!" * 3)
+
+print("s113-r0:", "yul7ytoe".replace("y", "du"), "yul7ytoe".contains("ul"))
+
+print("s113-r1:", "xB_ke2s3".replace("x", "jB"), "xB_ke2s3".contains("B_"))
+
+print("s113-j0:", ["av4", "z7q", "gn4"].join("-"))
+
+print("s113-j1:", ["Bk6", "y92", "zA1", "yyh"].join("-"))
+
+print("s113-a0:", "o3sxbse".at(3), "o3sxbse".trim() == "o3sxbse")
+
+print("s113-a1:", "1cwApzu".at(6), "1cwApzu".trim() == "1cwApzu")

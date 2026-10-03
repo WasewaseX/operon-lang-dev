@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=215 tag=m215
+
+let m215_m0 = {marker: 94, splicer: -81, ribose: -19, plasmid: -44}
+
+print("m215-m0:", m215_m0["marker"], len(m215_m0), m215_m0.has("marker"))
+
+let m215_m1 = {ligase: 23, helix: -83, ribose: 20}
+
+print("m215-m1:", m215_m1["ligase"], len(m215_m1), m215_m1.has("ligase"))
+
+let m215_m2 = {exon: -77, vector: 90, enzyme: -77, plasmid: -83}
+
+print("m215-m2:", m215_m2["exon"], len(m215_m2), m215_m2.has("exon"))
+
+let m215_k0 = {ligase: 39, ribose: 39, codon: 39}
+
+let m215_ks0 = m215_k0.keys()
+
+let m215_sm0 = 0
+
+for k in m215_k0 { m215_sm0 += m215_k0[k] }
+
+print("m215-k0:", m215_sm0, m215_k0.keys().sort(), m215_k0.values().len())
+
+let m215_k1 = {plasmid: 21, ribose: 46, vector: 12}
+
+let m215_ks1 = m215_k1.keys()
+
+let m215_sm1 = 0
+
+for k in m215_k1 { m215_sm1 += m215_k1[k] }
+
+print("m215-k1:", m215_sm1, m215_k1.keys().sort(), m215_k1.values().len())
+
+let m215_w0 = {outer: {vector: 8, splicer: 5, tag: "ok"}}}
+
+print("m215-w0:", m215_w0["outer"]["splicer"], m215_w0["outer"]["tag"])
+
+let m215_w1 = {outer: {cell: 2, vector: 6, tag: "ok"}}}
+
+print("m215-w1:", m215_w1["outer"]["vector"], m215_w1["outer"]["tag"])

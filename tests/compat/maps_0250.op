@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=250 tag=m250
+
+let m250_m0 = {exon: 97, helix: -58, enzyme: 90, splicer: -53, ligase: -22}
+
+print("m250-m0:", m250_m0["exon"], len(m250_m0), m250_m0.has("exon"))
+
+let m250_m1 = {marker: 81, codon: 57, ribose: 96, splicer: -19, cell: -88}
+
+print("m250-m1:", m250_m1["marker"], len(m250_m1), m250_m1.has("marker"))
+
+let m250_m2 = {vector: -44, gene: 0, ligase: -67}
+
+print("m250-m2:", m250_m2["vector"], len(m250_m2), m250_m2.has("vector"))
+
+let m250_m3 = {gene: -91, plasmid: 71, exon: 30, enzyme: -64}
+
+print("m250-m3:", m250_m3["gene"], len(m250_m3), m250_m3.has("gene"))
+
+let m250_k0 = {codon: 1, vector: 29, exon: 49}
+
+let m250_ks0 = m250_k0.keys()
+
+let m250_sm0 = 0
+
+for k in m250_k0 { m250_sm0 += m250_k0[k] }
+
+print("m250-k0:", m250_sm0, m250_k0.keys().sort(), m250_k0.values().len())
+
+let m250_k1 = {marker: 16, codon: 6, exon: 19}
+
+let m250_ks1 = m250_k1.keys()
+
+let m250_sm1 = 0
+
+for k in m250_k1 { m250_sm1 += m250_k1[k] }
+
+print("m250-k1:", m250_sm1, m250_k1.keys().sort(), m250_k1.values().len())
+
+let m250_w0 = {outer: {exon: 4, splicer: 5, tag: "ok"}}}
+
+print("m250-w0:", m250_w0["outer"]["splicer"], m250_w0["outer"]["tag"])
+
+let m250_w1 = {outer: {plasmid: 9, ribose: 4, tag: "ok"}}}
+
+print("m250-w1:", m250_w1["outer"]["ribose"], m250_w1["outer"]["tag"])

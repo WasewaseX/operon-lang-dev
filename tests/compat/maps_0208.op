@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=208 tag=m208
+
+let m208_m0 = {gene: -27, cell: -59, enzyme: -41, vector: 93, helix: 63}
+
+print("m208-m0:", m208_m0["gene"], len(m208_m0), m208_m0.has("gene"))
+
+let m208_m1 = {ribose: 19, gene: -45, enzyme: -47}
+
+print("m208-m1:", m208_m1["ribose"], len(m208_m1), m208_m1.has("ribose"))
+
+let m208_m2 = {plasmid: 96, cell: 51, helix: -66, enzyme: 78}
+
+print("m208-m2:", m208_m2["plasmid"], len(m208_m2), m208_m2.has("plasmid"))
+
+let m208_m3 = {gene: 49, ribose: -54, cell: 11, exon: -99, helix: 97}
+
+print("m208-m3:", m208_m3["gene"], len(m208_m3), m208_m3.has("gene"))
+
+let m208_k0 = {marker: 19, codon: 7, enzyme: 37}
+
+let m208_ks0 = m208_k0.keys()
+
+let m208_sm0 = 0
+
+for k in m208_k0 { m208_sm0 += m208_k0[k] }
+
+print("m208-k0:", m208_sm0, m208_k0.keys().sort(), m208_k0.values().len())
+
+let m208_k1 = {splicer: 16, marker: 48, enzyme: 36}
+
+let m208_ks1 = m208_k1.keys()
+
+let m208_sm1 = 0
+
+for k in m208_k1 { m208_sm1 += m208_k1[k] }
+
+print("m208-k1:", m208_sm1, m208_k1.keys().sort(), m208_k1.values().len())
+
+let m208_k2 = {ligase: 50, ribose: 35, helix: 13}
+
+let m208_ks2 = m208_k2.keys()
+
+let m208_sm2 = 0
+
+for k in m208_k2 { m208_sm2 += m208_k2[k] }
+
+print("m208-k2:", m208_sm2, m208_k2.keys().sort(), m208_k2.values().len())
+
+let m208_w0 = {outer: {exon: 6, marker: 9, tag: "ok"}}}
+
+print("m208-w0:", m208_w0["outer"]["marker"], m208_w0["outer"]["tag"])
+
+let m208_w1 = {outer: {vector: 1, splicer: 5, tag: "ok"}}}
+
+print("m208-w1:", m208_w1["outer"]["splicer"], m208_w1["outer"]["tag"])

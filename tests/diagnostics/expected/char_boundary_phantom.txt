@@ -1,0 +1,11 @@
+warning:
+warning[W01]: phantom call 'd' is called but not defined in this file
+  --> tests/diagnostics/char_boundary_phantom.op:4
+   |
+4 | 字d(
+   |   ^
+   |
+   = rule: phantom-call
+repair:
+  tests/diagnostics/char_boundary_phantom.op: 2 note(s), 0 wobble(s), 2 fallback(s); run `operon explain tests/diagnostics/char_boundary_phantom.op` for the play-by-play
+summary: 0 error(s), 1 warning(s), 0 style, 2 repair note(s)

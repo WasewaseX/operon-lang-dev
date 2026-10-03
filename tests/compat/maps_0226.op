@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=226 tag=m226
+
+let m226_m0 = {ligase: 27, vector: -46, ribose: -22, splicer: -81}
+
+print("m226-m0:", m226_m0["ligase"], len(m226_m0), m226_m0.has("ligase"))
+
+let m226_m1 = {ligase: 13, gene: -81, helix: -61, vector: 13}
+
+print("m226-m1:", m226_m1["ligase"], len(m226_m1), m226_m1.has("ligase"))
+
+let m226_m2 = {ribose: 14, marker: -48, vector: -71, helix: -85, cell: 71}
+
+print("m226-m2:", m226_m2["ribose"], len(m226_m2), m226_m2.has("ribose"))
+
+let m226_m3 = {marker: 20, splicer: 13, plasmid: -5}
+
+print("m226-m3:", m226_m3["marker"], len(m226_m3), m226_m3.has("marker"))
+
+let m226_k0 = {gene: 37, enzyme: 28, marker: 7}
+
+let m226_ks0 = m226_k0.keys()
+
+let m226_sm0 = 0
+
+for k in m226_k0 { m226_sm0 += m226_k0[k] }
+
+print("m226-k0:", m226_sm0, m226_k0.keys().sort(), m226_k0.values().len())
+
+let m226_k1 = {enzyme: 26, ligase: 15, codon: 32}
+
+let m226_ks1 = m226_k1.keys()
+
+let m226_sm1 = 0
+
+for k in m226_k1 { m226_sm1 += m226_k1[k] }
+
+print("m226-k1:", m226_sm1, m226_k1.keys().sort(), m226_k1.values().len())
+
+let m226_w0 = {outer: {exon: 2, ribose: 1, tag: "ok"}}}
+
+print("m226-w0:", m226_w0["outer"]["ribose"], m226_w0["outer"]["tag"])
+
+let m226_w1 = {outer: {cell: 6, codon: 8, tag: "ok"}}}
+
+print("m226-w1:", m226_w1["outer"]["codon"], m226_w1["outer"]["tag"])

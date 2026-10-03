@@ -1,0 +1,8 @@
+{
+  "nodeModulesDir": "none",
+  "compilerOptions": {
+    "strict": false,
+    "noImplicitAny": false
+  },
+  "fmt": { "lineWidth": 110 }
+}

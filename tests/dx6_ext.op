@@ -1,6 +1,6 @@
-# dx-r6: loop-5 audit additions — fs mutate ops (denial contract under
+# dx-r6: loop-5 audit additions, fs mutate ops (denial contract under
 # default-deny; success paths are grant-gated and exercised manually/by the
-# redteam suite) + re_replace (full behavioral coverage — no caps needed).
+# redteam suite) + re_replace (full behavioral coverage, no caps needed).
 frame proof {
     # re_replace: literal replacement via the bounded backtracking engine
     assert(re_replace("o", "foo", "0") == "f00")

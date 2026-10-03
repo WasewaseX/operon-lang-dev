@@ -1,0 +1,202 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20260930 idx=38 tag=f038
+
+gene f038_g0(p, q = 66, r = 59) {
+
+    return p * 17 + q - r
+
+}
+
+print("f038-d0:", f038_g0(2), f038_g0(2, 68), f038_g0(2, 66, 59))
+
+gene f038_g1(p, q = 87, r = 26) {
+
+    return p * 54 + q - r
+
+}
+
+print("f038-d1:", f038_g1(14), f038_g1(14, 75), f038_g1(14, 87, 26))
+
+gene f038_g2(p, q = 97, r = 68) {
+
+    return p * 26 + q - r
+
+}
+
+print("f038-d2:", f038_g2(-21), f038_g2(-21, 35), f038_g2(-21, 97, 68))
+
+gene f038_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f038_fib0(n - 1) + f038_fib0(n - 2)
+
+}
+
+print("f038-fib0:", f038_fib0(9))
+
+gene f038_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f038_fib1(n - 1) + f038_fib1(n - 2)
+
+}
+
+print("f038-fib1:", f038_fib1(13))
+
+gene f038_fib2(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f038_fib2(n - 1) + f038_fib2(n - 2)
+
+}
+
+print("f038-fib2:", f038_fib2(9))
+
+gene f038_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f038_gcd0(b, a % b)
+
+}
+
+print("f038-gcd0:", f038_gcd0(533, 358))
+
+gene f038_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f038_gcd1(b, a % b)
+
+}
+
+print("f038-gcd1:", f038_gcd1(438, 852))
+
+gene f038_gcd2(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f038_gcd2(b, a % b)
+
+}
+
+print("f038-gcd2:", f038_gcd2(392, 887))
+
+gene f038_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f038_c0 = f038_mk0(12)
+
+f038_c0(6)
+
+print("f038-cl0:", f038_c0(3))
+
+gene f038_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f038_c1 = f038_mk1(12)
+
+f038_c1(2)
+
+print("f038-cl1:", f038_c1(1))
+
+gene f038_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f038-hof0:", f038_tw0(gene (z) => z * 2 + 1, 13))
+
+gene f038_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f038-hof1:", f038_tw1(gene (z) => z * 2 + 1, 30))
+
+gene f038_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f038-dg0:", f038_sd0(719085))
+
+gene f038_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f038-dg1:", f038_sd1(810634))

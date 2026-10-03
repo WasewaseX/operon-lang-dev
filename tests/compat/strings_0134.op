@@ -1,0 +1,60 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=134 tag=s134
+
+print("s134-m0:", "0xh1rnps".upper(), "0xh1rnps".slice(4), "0xh1rnps".len())
+
+print("s134-m1:", "u_tCA7vA0ffu".upper(), "u_tCA7vA0ffu".slice(2), "u_tCA7vA0ffu".len())
+
+print("s134-m2:", "jsn09t6gqk".upper(), "jsn09t6gqk".slice(3), "jsn09t6gqk".len())
+
+print("s134-m3:", "klA8w8ol4oosh".upper(), "klA8w8ol4oosh".slice(1), "klA8w8ol4oosh".len())
+
+print("s134-m4:", "0_kip_oAp".upper(), "0_kip_oAp".slice(2), "0_kip_oAp".len())
+
+print("s134-m5:", "f42C8_Cv".upper(), "f42C8_Cv".slice(3), "f42C8_Cv".len())
+
+print("s134-i0:", "t1i-{77}-vBfk")
+
+let s134_v0 = 77
+
+print("s134-v0:", "n={s134_v0}" + "!" * 3)
+
+print("s134-i1:", "C_l-{91}-ygaA")
+
+let s134_v1 = 91
+
+print("s134-v1:", "n={s134_v1}" + "!" * 2)
+
+print("s134-i2:", "nfg-{90}-fBkh")
+
+let s134_v2 = 90
+
+print("s134-v2:", "n={s134_v2}" + "!" * 1)
+
+print("s134-i3:", "f6t-{81}-81bb")
+
+let s134_v3 = 81
+
+print("s134-v3:", "n={s134_v3}" + "!" * 1)
+
+print("s134-i4:", "bea-{61}-z266")
+
+let s134_v4 = 61
+
+print("s134-v4:", "n={s134_v4}" + "!" * 2)
+
+print("s134-r0:", "fhq0_83o".replace("f", "mb"), "fhq0_83o".contains("hq"))
+
+print("s134-r1:", "v8AbyA8j".replace("v", "lC"), "v8AbyA8j".contains("8A"))
+
+print("s134-j0:", ["1rf", "C2d", "uxu", "bni"].join("-"))
+
+print("s134-j1:", ["vwC", "7lc", "vn5", "rji", "w_i"].join("-"))
+
+print("s134-j2:", ["v8r", "xxf", "5hu", "Bgg", "68f"].join("-"))
+
+print("s134-a0:", "uAomr3b".at(0), "uAomr3b".trim() == "uAomr3b")
+
+print("s134-a1:", "sl6t4vB".at(1), "sl6t4vB".trim() == "sl6t4vB")
+
+print("s134-a2:", "Bmeekba".at(5), "Bmeekba".trim() == "Bmeekba")

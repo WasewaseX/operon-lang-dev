@@ -1,0 +1,214 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=109 tag=m109
+
+gene m109_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m109-b0:", m109_b0({exon: 18, helix: 49, ribose: 15})?!)
+
+gene m109_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m109-b1:", m109_b1({ribose: 77, enzyme: 25, helix: 67})?!)
+
+gene m109_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m109-b2:", m109_b2({exon: 34, ligase: 87, plasmid: 35})?!)
+
+gene m109_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m109_f0([34, 54, 50, 52, 29, 29, 27, 19]) {
+
+    case Ok(list) {
+
+        print("m109-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m109-f0:", "e:", m)
+
+    }
+
+}
+
+gene m109_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m109_f1([57, 42, 22, 5, 55]) {
+
+    case Ok(list) {
+
+        print("m109-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m109-f1:", "e:", m)
+
+    }
+
+}
+
+let m109_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m109-cc0:", m109_cl0(17)(4), m109_cl0(4)(17))
+
+let m109_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m109-cc1:", m109_cl1(11)(6), m109_cl1(6)(11))
+
+let m109_data0 = some([some("splicer"), none(), some(1)])
+
+match m109_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m109-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m109-x0:", "shape-miss")
+
+    }
+
+}
+
+let m109_data1 = some([some("gene"), none(), some(8)])
+
+match m109_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m109-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m109-x1:", "shape-miss")
+
+    }
+
+}

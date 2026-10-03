@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=161 tag=m161
+
+let m161_m0 = {enzyme: 81, gene: -58, codon: 97}
+
+print("m161-m0:", m161_m0["enzyme"], len(m161_m0), m161_m0.has("enzyme"))
+
+let m161_m1 = {plasmid: -96, marker: -11, ribose: -96, enzyme: -61, ligase: -97}
+
+print("m161-m1:", m161_m1["plasmid"], len(m161_m1), m161_m1.has("plasmid"))
+
+let m161_m2 = {helix: -39, codon: -71, cell: 88, ribose: 12, exon: 80}
+
+print("m161-m2:", m161_m2["helix"], len(m161_m2), m161_m2.has("helix"))
+
+let m161_m3 = {vector: 46, helix: 53, ribose: 65}
+
+print("m161-m3:", m161_m3["vector"], len(m161_m3), m161_m3.has("vector"))
+
+let m161_k0 = {vector: 46, cell: 22, codon: 37}
+
+let m161_ks0 = m161_k0.keys()
+
+let m161_sm0 = 0
+
+for k in m161_k0 { m161_sm0 += m161_k0[k] }
+
+print("m161-k0:", m161_sm0, m161_k0.keys().sort(), m161_k0.values().len())
+
+let m161_k1 = {cell: 41, splicer: 7, ligase: 20}
+
+let m161_ks1 = m161_k1.keys()
+
+let m161_sm1 = 0
+
+for k in m161_k1 { m161_sm1 += m161_k1[k] }
+
+print("m161-k1:", m161_sm1, m161_k1.keys().sort(), m161_k1.values().len())
+
+let m161_w0 = {outer: {ligase: 2, plasmid: 2, tag: "ok"}}}
+
+print("m161-w0:", m161_w0["outer"]["plasmid"], m161_w0["outer"]["tag"])
+
+let m161_w1 = {outer: {helix: 7, codon: 4, tag: "ok"}}}
+
+print("m161-w1:", m161_w1["outer"]["codon"], m161_w1["outer"]["tag"])

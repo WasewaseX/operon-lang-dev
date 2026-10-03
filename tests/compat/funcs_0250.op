@@ -1,0 +1,202 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=250 tag=f250
+
+gene f250_g0(p, q = 65, r = 37) {
+
+    return p * 8 + q - r
+
+}
+
+print("f250-d0:", f250_g0(-37), f250_g0(-37, 19), f250_g0(-37, 65, 37))
+
+gene f250_g1(p, q = 92, r = 96) {
+
+    return p * 90 + q - r
+
+}
+
+print("f250-d1:", f250_g1(-38), f250_g1(-38, 55), f250_g1(-38, 92, 96))
+
+gene f250_g2(p, q = 68, r = 69) {
+
+    return p * 54 + q - r
+
+}
+
+print("f250-d2:", f250_g2(23), f250_g2(23, 88), f250_g2(23, 68, 69))
+
+gene f250_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f250_fib0(n - 1) + f250_fib0(n - 2)
+
+}
+
+print("f250-fib0:", f250_fib0(13))
+
+gene f250_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f250_fib1(n - 1) + f250_fib1(n - 2)
+
+}
+
+print("f250-fib1:", f250_fib1(7))
+
+gene f250_fib2(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f250_fib2(n - 1) + f250_fib2(n - 2)
+
+}
+
+print("f250-fib2:", f250_fib2(12))
+
+gene f250_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f250_gcd0(b, a % b)
+
+}
+
+print("f250-gcd0:", f250_gcd0(508, 414))
+
+gene f250_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f250_gcd1(b, a % b)
+
+}
+
+print("f250-gcd1:", f250_gcd1(397, 817))
+
+gene f250_gcd2(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f250_gcd2(b, a % b)
+
+}
+
+print("f250-gcd2:", f250_gcd2(775, 81))
+
+gene f250_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f250_c0 = f250_mk0(7)
+
+f250_c0(1)
+
+print("f250-cl0:", f250_c0(7))
+
+gene f250_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f250_c1 = f250_mk1(37)
+
+f250_c1(2)
+
+print("f250-cl1:", f250_c1(6))
+
+gene f250_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f250-hof0:", f250_tw0(gene (z) => z * 2 + 1, 27))
+
+gene f250_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f250-hof1:", f250_tw1(gene (z) => z * 2 + 1, 9))
+
+gene f250_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f250-dg0:", f250_sd0(637408))
+
+gene f250_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f250-dg1:", f250_sd1(586700))

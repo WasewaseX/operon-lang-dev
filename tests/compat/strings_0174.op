@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=174 tag=s174
+
+print("s174-m0:", "7ch0ih3".upper(), "7ch0ih3".slice(4), "7ch0ih3".len())
+
+print("s174-m1:", "71zcpwsvwunbb6".upper(), "71zcpwsvwunbb6".slice(2), "71zcpwsvwunbb6".len())
+
+print("s174-m2:", "ipa7vm586C".upper(), "ipa7vm586C".slice(3), "ipa7vm586C".len())
+
+print("s174-m3:", "rdcAgd1e1e".upper(), "rdcAgd1e1e".slice(1), "rdcAgd1e1e".len())
+
+print("s174-m4:", "gymnj4".upper(), "gymnj4".slice(2), "gymnj4".len())
+
+print("s174-i0:", "mok-{40}-v4C7")
+
+let s174_v0 = 40
+
+print("s174-v0:", "n={s174_v0}" + "!" * 2)
+
+print("s174-i1:", "9kr-{43}-6wpc")
+
+let s174_v1 = 43
+
+print("s174-v1:", "n={s174_v1}" + "!" * 3)
+
+print("s174-i2:", "rp9-{68}-tqb9")
+
+let s174_v2 = 68
+
+print("s174-v2:", "n={s174_v2}" + "!" * 2)
+
+print("s174-i3:", "qdy-{2}-rooz")
+
+let s174_v3 = 2
+
+print("s174-v3:", "n={s174_v3}" + "!" * 3)
+
+print("s174-i4:", "ve3-{42}-l65z")
+
+let s174_v4 = 42
+
+print("s174-v4:", "n={s174_v4}" + "!" * 2)
+
+print("s174-r0:", "lkBwwz91".replace("l", "eb"), "lkBwwz91".contains("kB"))
+
+print("s174-r1:", "odxaCrk7".replace("o", "8n"), "odxaCrk7".contains("dx"))
+
+print("s174-j0:", ["21y", "z4r", "fa4"].join("-"))
+
+print("s174-j1:", ["_sh", "r1m", "sbv"].join("-"))
+
+print("s174-a0:", "0sasBrk".at(2), "0sasBrk".trim() == "0sasBrk")
+
+print("s174-a1:", "pl8rmnq".at(5), "pl8rmnq".trim() == "pl8rmnq")
+
+print("s174-a2:", "0363l20".at(3), "0363l20".trim() == "0363l20")

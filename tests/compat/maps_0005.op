@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20260930 idx=5 tag=m005
+
+let m005_m0 = {vector: -92, marker: 31, enzyme: 84, ribose: 22, gene: 83}
+
+print("m005-m0:", m005_m0["vector"], len(m005_m0), m005_m0.has("vector"))
+
+let m005_m1 = {cell: -62, ribose: 4, helix: 1}
+
+print("m005-m1:", m005_m1["cell"], len(m005_m1), m005_m1.has("cell"))
+
+let m005_m2 = {codon: 97, exon: -52, splicer: -62}
+
+print("m005-m2:", m005_m2["codon"], len(m005_m2), m005_m2.has("codon"))
+
+let m005_m3 = {enzyme: -27, ribose: -31, helix: 23, marker: 90, ligase: -15}
+
+print("m005-m3:", m005_m3["enzyme"], len(m005_m3), m005_m3.has("enzyme"))
+
+let m005_k0 = {cell: 44, gene: 32, plasmid: 24}
+
+let m005_ks0 = m005_k0.keys()
+
+let m005_sm0 = 0
+
+for k in m005_k0 { m005_sm0 += m005_k0[k] }
+
+print("m005-k0:", m005_sm0, m005_k0.keys().sort(), m005_k0.values().len())
+
+let m005_k1 = {exon: 22, plasmid: 2, cell: 34}
+
+let m005_ks1 = m005_k1.keys()
+
+let m005_sm1 = 0
+
+for k in m005_k1 { m005_sm1 += m005_k1[k] }
+
+print("m005-k1:", m005_sm1, m005_k1.keys().sort(), m005_k1.values().len())
+
+let m005_w0 = {outer: {plasmid: 7, enzyme: 7, tag: "ok"}}}
+
+print("m005-w0:", m005_w0["outer"]["enzyme"], m005_w0["outer"]["tag"])
+
+let m005_w1 = {outer: {enzyme: 7, marker: 8, tag: "ok"}}}
+
+print("m005-w1:", m005_w1["outer"]["marker"], m005_w1["outer"]["tag"])

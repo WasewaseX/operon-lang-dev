@@ -1,0 +1,190 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=128 tag=s128
+
+stress {
+
+    print("s128-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s128-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s128-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s128-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s128-mz:", 94 % 0)
+
+} rescue (e) {
+
+    print("s128-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s128-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s128-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s128-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s128-of2:", "caught", e.kind, e.message)
+
+}
+
+gene s128_r0() {
+
+    raise "s128-Bjkqgc"
+
+}
+
+stress {
+
+    s128_r0()
+
+    print("s128-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s128-r0:", e.kind, e.message)
+
+}
+
+gene s128_r1() {
+
+    raise "s128-mo1B78"
+
+}
+
+stress {
+
+    s128_r1()
+
+    print("s128-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s128-r1:", e.kind, e.message)
+
+}
+
+gene s128_r2() {
+
+    raise "s128-Bdoczv"
+
+}
+
+stress {
+
+    s128_r2()
+
+    print("s128-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s128-r2:", e.kind, e.message)
+
+}
+
+let s128_xs0 = [16, 23, 38]
+
+stress {
+
+    print("s128-x0:", s128_xs0[6])
+
+} rescue (e) {
+
+    print("s128-x0:", "caught", e.kind)
+
+}
+
+let s128_xs1 = [7, 47]
+
+stress {
+
+    print("s128-x1:", s128_xs1[6])
+
+} rescue (e) {
+
+    print("s128-x1:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s128-0"
+
+    } rescue (e) {
+
+        print("s128-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s128-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s128-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s128-1"
+
+    } rescue (e) {
+
+        print("s128-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s128-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s128-d1-top:", outer.message)
+
+}

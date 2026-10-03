@@ -1,0 +1,292 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=110 tag=m110
+
+let m110_s0 = some(9)
+
+match m110_s0 {
+
+    case Some(x) if x > 9 {
+
+        print("m110-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m110-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m110-m0:", "none")
+
+    }
+
+}
+
+let m110_s1 = some(7)
+
+match m110_s1 {
+
+    case Some(x) if x > 7 {
+
+        print("m110-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m110-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m110-m1:", "none")
+
+    }
+
+}
+
+let m110_s2 = some(1)
+
+match m110_s2 {
+
+    case Some(x) if x > 1 {
+
+        print("m110-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m110-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m110-m2:", "none")
+
+    }
+
+}
+
+let m110_s3 = some(3)
+
+match m110_s3 {
+
+    case Some(x) if x > 3 {
+
+        print("m110-m3:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m110-m3:", "small", x)
+
+    }
+
+    case None {
+
+        print("m110-m3:", "none")
+
+    }
+
+}
+
+let m110_s4 = some(9)
+
+match m110_s4 {
+
+    case Some(x) if x > 9 {
+
+        print("m110-m4:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m110-m4:", "small", x)
+
+    }
+
+    case None {
+
+        print("m110-m4:", "none")
+
+    }
+
+}
+
+let m110_ls0 = [29, 19, 46]
+
+match m110_ls0 {
+
+    case [29, *rest] {
+
+        print("m110-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m110-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m110-l0:", "other")
+
+    }
+
+}
+
+let m110_ls1 = [12, 47, 30]
+
+match m110_ls1 {
+
+    case [12, *rest] {
+
+        print("m110-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m110-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m110-l1:", "other")
+
+    }
+
+}
+
+let m110_mp0 = {enzyme: -5371, gene: 8345}
+
+match m110_mp0 {
+
+    case {enzyme: p, gene: q} {
+
+        print("m110-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m110-mp0:", "miss")
+
+    }
+
+}
+
+let m110_mp1 = {vector: -9151, marker: 1155}
+
+match m110_mp1 {
+
+    case {vector: p, marker: q} {
+
+        print("m110-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m110-mp1:", "miss")
+
+    }
+
+}
+
+let m110_r0 = ok(1)
+
+match m110_r0 {
+
+    case Ok(n) | Err(1) {
+
+        print("m110-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m110-r0:", "zero")
+
+    }
+
+}
+
+let m110_r1 = ok(3)
+
+match m110_r1 {
+
+    case Ok(n) | Err(3) {
+
+        print("m110-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m110-r1:", "zero")
+
+    }
+
+}
+
+let m110_r2 = ok(4)
+
+match m110_r2 {
+
+    case Ok(n) | Err(4) {
+
+        print("m110-r2:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m110-r2:", "zero")
+
+    }
+
+}
+
+match "helix" {
+
+    case "helix" {
+
+        print("m110-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m110-w0:", "alt")
+
+    }
+
+}
+
+match "splicer" {
+
+    case "splicer" {
+
+        print("m110-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m110-w1:", "alt")
+
+    }
+
+}

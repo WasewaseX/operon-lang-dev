@@ -1,0 +1,166 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=234 tag=f234
+
+gene f234_g0(p, q = 7, r = 9) {
+
+    return p * 77 + q - r
+
+}
+
+print("f234-d0:", f234_g0(21), f234_g0(21, 74), f234_g0(21, 7, 9))
+
+gene f234_g1(p, q = 10, r = 97) {
+
+    return p * 47 + q - r
+
+}
+
+print("f234-d1:", f234_g1(5), f234_g1(5, 59), f234_g1(5, 10, 97))
+
+gene f234_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f234_fib0(n - 1) + f234_fib0(n - 2)
+
+}
+
+print("f234-fib0:", f234_fib0(8))
+
+gene f234_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f234_fib1(n - 1) + f234_fib1(n - 2)
+
+}
+
+print("f234-fib1:", f234_fib1(11))
+
+gene f234_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f234_gcd0(b, a % b)
+
+}
+
+print("f234-gcd0:", f234_gcd0(729, 719))
+
+gene f234_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f234_gcd1(b, a % b)
+
+}
+
+print("f234-gcd1:", f234_gcd1(528, 259))
+
+gene f234_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f234_c0 = f234_mk0(1)
+
+f234_c0(1)
+
+print("f234-cl0:", f234_c0(5))
+
+gene f234_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f234_c1 = f234_mk1(33)
+
+f234_c1(7)
+
+print("f234-cl1:", f234_c1(8))
+
+gene f234_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f234-hof0:", f234_tw0(gene (z) => z * 2 + 1, 20))
+
+gene f234_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f234-hof1:", f234_tw1(gene (z) => z * 2 + 1, 3))
+
+gene f234_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f234-dg0:", f234_sd0(637512))
+
+gene f234_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f234-dg1:", f234_sd1(349067))

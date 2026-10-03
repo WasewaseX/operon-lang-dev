@@ -1,0 +1,60 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=196 tag=s196
+
+print("s196-m0:", "eyv9fe".upper(), "eyv9fe".slice(4), "eyv9fe".len())
+
+print("s196-m1:", "gkbCxh2zocu".upper(), "gkbCxh2zocu".slice(1), "gkbCxh2zocu".len())
+
+print("s196-m2:", "tB_yBrBB19".upper(), "tB_yBrBB19".slice(2), "tB_yBrBB19".len())
+
+print("s196-m3:", "0uwqm6mch2B".upper(), "0uwqm6mch2B".slice(3), "0uwqm6mch2B".len())
+
+print("s196-m4:", "9j7sty".upper(), "9j7sty".slice(3), "9j7sty".len())
+
+print("s196-i0:", "ott-{4}-illC")
+
+let s196_v0 = 4
+
+print("s196-v0:", "n={s196_v0}" + "!" * 2)
+
+print("s196-i1:", "e7s-{64}-ttcj")
+
+let s196_v1 = 64
+
+print("s196-v1:", "n={s196_v1}" + "!" * 3)
+
+print("s196-i2:", "xgo-{51}-55Cc")
+
+let s196_v2 = 51
+
+print("s196-v2:", "n={s196_v2}" + "!" * 2)
+
+print("s196-i3:", "hjA-{9}-uvw9")
+
+let s196_v3 = 9
+
+print("s196-v3:", "n={s196_v3}" + "!" * 1)
+
+print("s196-i4:", "wvv-{55}-5wwb")
+
+let s196_v4 = 55
+
+print("s196-v4:", "n={s196_v4}" + "!" * 3)
+
+print("s196-r0:", "r7Aabzbw".replace("r", "ky"), "r7Aabzbw".contains("7A"))
+
+print("s196-r1:", "qyru0C78".replace("q", "1o"), "qyru0C78".contains("yr"))
+
+print("s196-r2:", "xi5ngau5".replace("x", "c5"), "xi5ngau5".contains("i5"))
+
+print("s196-r3:", "1iejahyg".replace("1", "s5"), "1iejahyg".contains("ie"))
+
+print("s196-j0:", ["l6_", "t9b", "c2A", "pAa", "7Bp"].join("-"))
+
+print("s196-j1:", ["d85", "Cq1", "fkk", "3yz"].join("-"))
+
+print("s196-a0:", "523ddit".at(0), "523ddit".trim() == "523ddit")
+
+print("s196-a1:", "68dub6s".at(3), "68dub6s".trim() == "68dub6s")
+
+print("s196-a2:", "tx_pm6l".at(5), "tx_pm6l".trim() == "tx_pm6l")

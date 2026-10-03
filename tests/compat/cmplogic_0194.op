@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=194 tag=c194
+
+print("c194-c0:", 391 <= 5833)
+
+print("c194-c1:", 3912 > 7452)
+
+print("c194-c2:", -5782 <= -9643)
+
+print("c194-c3:", 8049 == 8250)
+
+print("c194-c4:", -9224 == 3909)
+
+print("c194-c5:", -8492 >= 9718)
+
+print("c194-c6:", -5051 >= 6361)
+
+print("c194-b0:", 8 < 26 && 26 < 16, 8 > 26 || 8 > 16)
+
+print("c194-b1:", 39 < 18 && 18 < 21, 39 > 18 || 39 > 21)
+
+print("c194-b2:", 34 < 6 && 6 < 28, 34 > 6 || 34 > 28)
+
+print("c194-b3:", 36 < 41 && 41 < 22, 36 > 41 || 36 > 22)
+
+print("c194-t0:", 6387 > 1354 ? "gt" : "le")
+
+print("c194-t1:", -5192 > -5424 ? "gt" : "le")
+
+print("c194-t2:", -4997 > -6148 ? "gt" : "le")
+
+let c194_n0 = null
+
+print("c194-n0:", c194_n0 ?? -5163, c194_n0 == null)
+
+let c194_n1 = null
+
+print("c194-n1:", c194_n1 ?? 899, c194_n1 == null)
+
+let c194_n2 = null
+
+print("c194-n2:", c194_n2 ?? 1592, c194_n2 == null)
+
+print("c194-s0:", "6toi" in "rltqb96toi", "6toi" == "6toi")
+
+print("c194-s1:", "xy3B" in "8cr4kBxy3B", "xy3B" == "xy3B")

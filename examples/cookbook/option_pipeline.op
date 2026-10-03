@@ -1,5 +1,5 @@
 # ============================================================
-# Option pipeline  — cookbook #19
+# Option pipeline , cookbook #19
 # you already know: Result/Option error handling from Rust/Swift
 # teaches: expected failures as VALUES (not exceptions): constructors,
 #          ?! propagation up a call chain, unwrap_or defaults, and the
@@ -24,7 +24,7 @@ gene get_pref(user, key) {
     return some(prefs[key])
 }
 # ?! propagates the failure up: find_user's Err IS theme_of's return value,
-# and get_pref's none() unwinds too — no if-chains anywhere.
+# and get_pref's none() unwinds too, no if-chains anywhere.
 gene theme_of(db, name) {
     let user = find_user(db, name)?!
     let theme = get_pref(user, "theme")?!

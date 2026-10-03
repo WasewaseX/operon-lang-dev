@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=106 tag=m106
+
+let m106_m0 = {ribose: 94, enzyme: 98, exon: 49}
+
+print("m106-m0:", m106_m0["ribose"], len(m106_m0), m106_m0.has("ribose"))
+
+let m106_m1 = {ligase: 39, marker: 54, plasmid: -50}
+
+print("m106-m1:", m106_m1["ligase"], len(m106_m1), m106_m1.has("ligase"))
+
+let m106_m2 = {vector: 6, ribose: 37, splicer: -87}
+
+print("m106-m2:", m106_m2["vector"], len(m106_m2), m106_m2.has("vector"))
+
+let m106_m3 = {ribose: 41, vector: 96, plasmid: 47}
+
+print("m106-m3:", m106_m3["ribose"], len(m106_m3), m106_m3.has("ribose"))
+
+let m106_k0 = {ribose: 38, marker: 49, plasmid: 49}
+
+let m106_ks0 = m106_k0.keys()
+
+let m106_sm0 = 0
+
+for k in m106_k0 { m106_sm0 += m106_k0[k] }
+
+print("m106-k0:", m106_sm0, m106_k0.keys().sort(), m106_k0.values().len())
+
+let m106_k1 = {gene: 4, exon: 18, plasmid: 6}
+
+let m106_ks1 = m106_k1.keys()
+
+let m106_sm1 = 0
+
+for k in m106_k1 { m106_sm1 += m106_k1[k] }
+
+print("m106-k1:", m106_sm1, m106_k1.keys().sort(), m106_k1.values().len())
+
+let m106_k2 = {exon: 3, marker: 32, vector: 7}
+
+let m106_ks2 = m106_k2.keys()
+
+let m106_sm2 = 0
+
+for k in m106_k2 { m106_sm2 += m106_k2[k] }
+
+print("m106-k2:", m106_sm2, m106_k2.keys().sort(), m106_k2.values().len())
+
+let m106_w0 = {outer: {cell: 9, gene: 1, tag: "ok"}}}
+
+print("m106-w0:", m106_w0["outer"]["gene"], m106_w0["outer"]["tag"])
+
+let m106_w1 = {outer: {cell: 7, ribose: 4, tag: "ok"}}}
+
+print("m106-w1:", m106_w1["outer"]["ribose"], m106_w1["outer"]["tag"])

@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=116 tag=c116
+
+print("c116-c0:", 6267 == 6306)
+
+print("c116-c1:", 5145 <= 7727)
+
+print("c116-c2:", 1170 > 8333)
+
+print("c116-c3:", -1633 > -6676)
+
+print("c116-c4:", 2109 == -1595)
+
+print("c116-c5:", 7978 == 7173)
+
+print("c116-b0:", 18 < 48 && 48 < 12, 18 > 48 || 18 > 12)
+
+print("c116-b1:", 43 < 8 && 8 < 13, 43 > 8 || 43 > 13)
+
+print("c116-b2:", 36 < 38 && 38 < 18, 36 > 38 || 36 > 18)
+
+print("c116-t0:", 4643 > 4188 ? "gt" : "le")
+
+print("c116-t1:", -8177 > 7476 ? "gt" : "le")
+
+print("c116-t2:", -2851 > 8479 ? "gt" : "le")
+
+let c116_n0 = null
+
+print("c116-n0:", c116_n0 ?? -1082, c116_n0 == null)
+
+let c116_n1 = null
+
+print("c116-n1:", c116_n1 ?? 8953, c116_n1 == null)
+
+let c116_n2 = null
+
+print("c116-n2:", c116_n2 ?? 8539, c116_n2 == null)
+
+print("c116-s0:", "kkaf" in "gzjxgzkkaf", "kkaf" == "kkaf")
+
+print("c116-s1:", "nCAb" in "yhu41mnCAb", "nCAb" == "nCAb")

@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=174 tag=c174
+
+print("c174-c0:", -6450 > -6793)
+
+print("c174-c1:", -3692 == 7875)
+
+print("c174-c2:", -7962 >= 6691)
+
+print("c174-c3:", 2525 != -1438)
+
+print("c174-c4:", 4089 < 6622)
+
+print("c174-c5:", -802 <= 1560)
+
+print("c174-b0:", 44 < 29 && 29 < 35, 44 > 29 || 44 > 35)
+
+print("c174-b1:", 38 < 20 && 20 < 36, 38 > 20 || 38 > 36)
+
+print("c174-b2:", 10 < 22 && 22 < 45, 10 > 22 || 10 > 45)
+
+print("c174-b3:", 34 < 48 && 48 < 8, 34 > 48 || 34 > 8)
+
+print("c174-t0:", 9296 > -1465 ? "gt" : "le")
+
+print("c174-t1:", -5265 > -2161 ? "gt" : "le")
+
+print("c174-t2:", 6450 > 3924 ? "gt" : "le")
+
+let c174_n0 = null
+
+print("c174-n0:", c174_n0 ?? -6878, c174_n0 == null)
+
+let c174_n1 = null
+
+print("c174-n1:", c174_n1 ?? -9779, c174_n1 == null)
+
+print("c174-s0:", "cptz" in "1ywnw8cptz", "cptz" == "cptz")
+
+print("c174-s1:", "v2bt" in "BgBb8dv2bt", "v2bt" == "v2bt")

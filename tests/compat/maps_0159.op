@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=159 tag=m159
+
+let m159_m0 = {helix: -84, gene: 37, splicer: -89}
+
+print("m159-m0:", m159_m0["helix"], len(m159_m0), m159_m0.has("helix"))
+
+let m159_m1 = {vector: 86, ligase: -27, codon: -28, helix: -49, gene: 9}
+
+print("m159-m1:", m159_m1["vector"], len(m159_m1), m159_m1.has("vector"))
+
+let m159_m2 = {vector: -18, helix: 72, plasmid: -75, gene: -59}
+
+print("m159-m2:", m159_m2["vector"], len(m159_m2), m159_m2.has("vector"))
+
+let m159_m3 = {vector: -21, cell: 43, codon: -36, enzyme: -92}
+
+print("m159-m3:", m159_m3["vector"], len(m159_m3), m159_m3.has("vector"))
+
+let m159_k0 = {splicer: 6, cell: 38, ribose: 1}
+
+let m159_ks0 = m159_k0.keys()
+
+let m159_sm0 = 0
+
+for k in m159_k0 { m159_sm0 += m159_k0[k] }
+
+print("m159-k0:", m159_sm0, m159_k0.keys().sort(), m159_k0.values().len())
+
+let m159_k1 = {gene: 9, helix: 49, exon: 46}
+
+let m159_ks1 = m159_k1.keys()
+
+let m159_sm1 = 0
+
+for k in m159_k1 { m159_sm1 += m159_k1[k] }
+
+print("m159-k1:", m159_sm1, m159_k1.keys().sort(), m159_k1.values().len())
+
+let m159_w0 = {outer: {enzyme: 5, exon: 1, tag: "ok"}}}
+
+print("m159-w0:", m159_w0["outer"]["exon"], m159_w0["outer"]["tag"])
+
+let m159_w1 = {outer: {gene: 4, vector: 5, tag: "ok"}}}
+
+print("m159-w1:", m159_w1["outer"]["vector"], m159_w1["outer"]["tag"])

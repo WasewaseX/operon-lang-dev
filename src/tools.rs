@@ -1,4 +1,4 @@
-//! tools.rs — toolchain subcommands: run entry resolution, check/NMD grading,
+//! tools.rs, toolchain subcommands: run entry resolution, check/NMD grading,
 //! formatter, profile, crispr knockout screens, bench, test runner, build.
 
 use crate::ast::*;
@@ -23,26 +23,19 @@ pub struct Opts {
     pub args: Vec<String>,
     pub quiet: bool,
     pub caps: crate::interp::Caps,
-    /// dx-r1 (audit W5): time top-level statements during load — without
+    /// dx-r1 (audit W5): time top-level statements during load, without
     /// this, `operon profile` reported 0.0 µs for any script without main().
     pub profile: bool,
+    /// W097-A: per-call span capture (Chrome-trace feed). Set by the CLI's
+    /// `--chrome <file>` flag; consumed by `operon profile`. Must live on
+    /// Opts (not just the interp) because load_file constructs the interp
+    /// BEFORE the profile() wrapper can flag it — top-level gene calls
+    /// executed during load must be in the timeline too (the dx-r1 lesson).
+    pub spans: bool,
     /// dx-r3 (re-audit / A14): when set, program stdout (promote) is
-    /// captured here from the moment the interp exists — the test runner
+    /// captured here from the moment the interp exists, the test runner
     /// uses it so top-level output can't leak into the report either.
     pub stdout_sink: Option<std::rc::Rc<std::cell::RefCell<Vec<String>>>>,
-    /// W09 (A2/A3): compile gene bodies to bytecode and execute them on
-    /// the stack-machine VM (docs/VM.md). Output must stay byte-identical.
-    pub vm: bool,
-    /// W011: optimizer switches (docs/OPTIMIZER.md). `opt` is the level
-    /// (0 = none, 1 = fold+thread+dce, 2 = +constant propagation);
-    /// `opt_passes` pins an explicit pass set; `fast` toggles the engine
-    /// fast paths (trivial-body return, lazy traceback frames, builtin
-    /// dispatch tables). All are byte-identical by construction — the
-    /// parity gates re-run the whole corpus through every combination.
-    pub opt: u8,
-    pub opt_passes: Option<String>,
-    pub fast: bool,
-    pub dump_opt: bool,
 }
 
 pub struct Loaded {
@@ -60,6 +53,9 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
 
     let mut interp = Interp::new();
     interp.profiling = opts.profile;
+    // W097-A: span capture rides the same pre-load wiring as profiling —
+    // load-time calls land in the timeline, not just run_entry() calls.
+    interp.spans = opts.spans;
     // dx-r3: capture program stdout from load time (test runner)
     interp.stdout_sink = opts.stdout_sink.clone();
     // A13 (dx-r2): diagnostics render file:line
@@ -68,10 +64,15 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
     interp.base_dir = std::path::Path::new(file)
         .parent()
         .map(|p| p.to_string_lossy().to_string());
+    // W19/W23: vendored dependency roots, when an operon.lock sits beside
+    // the program (or in the CWD), its resolved packages join the module
+    // resolution chain as root 7 (SPEC §8 table), so `use my-lib/…` runs
+    // offline from the vendored cache.
+    crate::pkg::apply_lock(&mut interp);
 
     // methylation layer: CLI --cell, else operon.cell auto-detect.
     // SECURITY POLICY: an auto-detected cell config may configure entry/
-    // variant/quiet keys, but its allow.* keys are IGNORED — capability
+    // variant/quiet keys, but its allow.* keys are IGNORED, capability
     // grants must come from the operator (CLI --allow-* / explicit --cell),
     // never silently from a file that happens to sit in the project.
     let cell_path = opts.cell.clone().or_else(|| {
@@ -133,7 +134,7 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
             }
             let added = match rest {
                 // cell values may carry a comma-separated grant list
-                // ("py = math, json") — CLI flags stay one-per-flag
+                // ("py = math, json"), CLI flags stay one-per-flag
                 "read" | "write" | "run" | "net" | "env" | "py" => {
                     let mut res = Ok(());
                     for g in v.split(',') {
@@ -203,7 +204,7 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
             ),
         }
     }
-    // reg-bio (F-1): the telegraph promoter layer — opt-in stochastic
+    // reg-bio (F-1): the telegraph promoter layer, opt-in stochastic
     // expression. kon/koff are switch probabilities per call attempt.
     if interp
         .cell
@@ -240,7 +241,7 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
         }
     }
     // expression.seed reseeds the SHARED mirrored xorshift64* stream the
-    // promoter draws ride — reproducible bursting across runs/implementations
+    // promoter draws ride, reproducible bursting across runs/implementations
     if let Some(v) = interp.cell.get("expression.seed") {
         match v.trim().parse::<i64>() {
             Ok(s) => interp.rng = if s == 0 { 0x9E3779B97F4A7C15 } else { s as u64 },
@@ -254,7 +255,7 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
             ),
         }
     }
-    // reg-bio (F-5): repressilator kinetics — plasmid engineering surface.
+    // reg-bio (F-5): repressilator kinetics, plasmid engineering surface.
     // Defaults are the historical constants; unset keys change nothing.
     if let Some(v) = interp.cell.get("repressi.alpha") {
         match v.trim().parse::<f64>() {
@@ -339,7 +340,7 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
     let genv = interp.global.clone();
     for stmt in &prog.stmts {
         if let Err(s) = interp.exec_stmt(&genv, stmt) {
-            // W06 (D-014): propagation with no enclosing gene — the variant
+            // W06 (D-014): propagation with no enclosing gene, the variant
             // value passes through (Total Grammar: noted, never rejected).
             // Never leaked as kind "propagate": the payload marker converts.
             if let Some(v) = s.prop {
@@ -368,210 +369,6 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
     }
 
     Ok(Loaded { interp, prog })
-}
-
-/// W09: compile the program for `--vm` mode. Gene bodies become FuncCodes
-/// keyed by their Arc identity; workers and sequences keep the tree-walk.
-/// Compilation is total (delegation leaves), so this never fails — the
-/// coverage list is informational only and must never touch program output.
-pub fn vm_compile(l: &mut Loaded) {
-    let cfg = crate::opt::OptConfig::default();
-    vm_compile_opts(l, &cfg);
-}
-
-/// W011: VM compilation with the semantics-preserving optimization
-/// pipeline applied (docs/OPTIMIZER.md). Returns the per-function
-/// --dump-optimized report (empty unless cfg.dump).
-pub fn vm_compile_opts(l: &mut Loaded, cfg: &crate::opt::OptConfig) -> String {
-    let mut unit = crate::compile::compile_program(&l.prog);
-    let stats = crate::opt::optimize_unit(&mut unit, cfg);
-    l.interp.fast_trivial = cfg.fast_engine;
-    let mut m = std::collections::HashMap::new();
-    for (key, code) in unit.funcs {
-        m.insert(key, code);
-    }
-    l.interp.vm_funcs = Some(m);
-    if cfg.dump {
-        stats.render()
-    } else {
-        String::new()
-    }
-}
-
-/// W011: build the OptConfig from parsed CLI options.
-pub fn opt_config_from(opts: &Opts) -> Result<crate::opt::OptConfig, String> {
-    let mut cfg = crate::opt::OptConfig::from_cli(opts.opt, opts.opt_passes.as_deref(), opts.fast)?;
-    cfg.dump = opts.dump_opt;
-    Ok(cfg)
-}
-
-/// W10: bytecode disassembler — text listing (or JSON) of every compiled
-/// gene body. Feeds the W08 debugger (bytecode-offset breakpoints) and the
-/// W40 IR dump. Parse-only (no execution): the listing must never run the
-/// program it describes.
-pub fn disasm_file(file: &str, json_mode: bool) -> Result<String, String> {
-    let src =
-        std::fs::read_to_string(file).map_err(|e| format!("cannot read '{}': {}", file, e))?;
-    let prog = crate::parser::parse(&src);
-    let unit = crate::compile::compile_program(&prog);
-    let mut out = String::new();
-    if json_mode {
-        out.push_str("{\"funcs\":[");
-    }
-    let mut first = true;
-    for (_key, code) in &unit.funcs {
-        if json_mode {
-            if !first {
-                out.push(',');
-            }
-            first = false;
-            out.push_str(&format!("{{\"name\":{},\"insns\":[", jstr(&code.name)));
-            let mut f2 = true;
-            for (i, insn) in code.insns.iter().enumerate() {
-                if !f2 {
-                    out.push(',');
-                }
-                f2 = false;
-                out.push_str(&format!(
-                    "{{\"i\":{},\"op\":{}\"}}",
-                    i,
-                    jstr(&insn_name(insn))
-                ));
-            }
-            out.push_str("]}");
-        } else {
-            out.push_str(&format!("fn {} ({} insns):\n", code.name, code.insns.len()));
-            for (i, insn) in code.insns.iter().enumerate() {
-                out.push_str(&format!("  {:04} {}\n", i, insn_text(insn)));
-            }
-            out.push('\n');
-        }
-    }
-    if json_mode {
-        out.push_str("]}");
-    }
-    Ok(out)
-}
-
-fn jstr(s: &str) -> String {
-    format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
-}
-
-fn insn_name(i: &crate::compile::Insn) -> String {
-    use crate::compile::Insn::*;
-    match i {
-        Const(_) => "Const".into(),
-        Pop => "Pop".into(),
-        Dup => "Dup".into(),
-        Load(_) => "Load".into(),
-        LoadPlain(_) => "LoadPlain".into(),
-        Define(_) => "Define".into(),
-        DefineAnn(..) => "DefineAnn".into(),
-        Store(_) => "Store".into(),
-        StoreOp(..) => "StoreOp".into(),
-        Line(_) => "Line".into(),
-        Bin(_) => "Bin".into(),
-        AndJmp(_) => "AndJmp".into(),
-        OrJmp(_) => "OrJmp".into(),
-        NullishJmp(_) => "NullishJmp".into(),
-        Un(_) => "Un".into(),
-        Index => "Index".into(),
-        Member(_) => "Member".into(),
-        MemberSafe(_) => "MemberSafe".into(),
-        Method(..) => "Method".into(),
-        MethodSafe(..) => "MethodSafe".into(),
-        MakeList(_) => "MakeList".into(),
-        MakeMap(_) => "MakeMap".into(),
-        Jmp(_) => "Jmp".into(),
-        JmpIfFalse(_) => "JmpIfFalse".into(),
-        Tick => "Tick".into(),
-        PushScope => "PushScope".into(),
-        PopScope => "PopScope".into(),
-        Ret => "Ret".into(),
-        RetNull => "RetNull".into(),
-        CallStart(..) => "CallStart".into(),
-        IfDegraded(..) => "IfDegraded".into(),
-        CallFinish(..) => "CallFinish".into(),
-        CallValue(_) => "CallValue".into(),
-        IterMake => "IterMake".into(),
-        IterNext(_) => "IterNext".into(),
-        IterBindName(_) => "IterBindName".into(),
-        IterEnd => "IterEnd".into(),
-        LoopEnter(..) => "LoopEnter".into(),
-        LoopPop => "LoopPop".into(),
-        CatchEnter(..) => "CatchEnter".into(),
-        CatchLeave => "CatchLeave".into(),
-        CatchTrim(_) => "CatchTrim".into(),
-        RescueTicks => "RescueTicks".into(),
-        RescueBind(_) => "RescueBind".into(),
-        RaiseStmt(..) => "RaiseStmt".into(),
-        Stmt(_) => "Stmt".into(),
-        Expr(_) => "Expr".into(),
-        Nop => "Nop".into(),
-    }
-}
-
-fn insn_text(i: &crate::compile::Insn) -> String {
-    use crate::compile::Insn::*;
-    match i {
-        Const(k) => format!("Const #{k}"),
-        Pop => "Pop".into(),
-        Dup => "Dup".into(),
-        Load(k) => format!("Load {k}"),
-        LoadPlain(k) => format!("LoadPlain {k}"),
-        Define(k) => format!("Define {k}"),
-        DefineAnn(k, _) => format!("DefineAnn {k}"),
-        Store(k) => format!("Store {k}"),
-        StoreOp(k, op) => format!("StoreOp {k} {:?}", op),
-        Line(l) => format!("Line {l}"),
-        Bin(op) => format!("Bin {:?}", op),
-        AndJmp(t) => format!("AndJmp {t}"),
-        OrJmp(t) => format!("OrJmp {t}"),
-        NullishJmp(t) => format!("NullishJmp {t}"),
-        Un(op) => format!("Un {:?}", op),
-        Index => "Index".into(),
-        Member(k) => format!("Member {k}"),
-        MemberSafe(k) => format!("MemberSafe {k}"),
-        Method(k, n) => format!("Method {k} argc={n}"),
-        MethodSafe(k, n) => format!("MethodSafe {k} argc={n}"),
-        MakeList(n) => format!("MakeList {n}"),
-        MakeMap(n) => format!("MakeMap {n}"),
-        Jmp(t) => format!("Jmp {t}"),
-        JmpIfFalse(t) => format!("JmpIfFalse {t}"),
-        Tick => "Tick".into(),
-        PushScope => "PushScope".into(),
-        PopScope => "PopScope".into(),
-        Ret => "Ret".into(),
-        RetNull => "RetNull".into(),
-        CallStart(k, l) => format!("CallStart {k} line={l}"),
-        IfDegraded(n, t) => format!("IfDegraded argc={n} -> {t}"),
-        CallFinish(n, k) => format!("CallFinish argc={n} name={k}"),
-        CallValue(n) => format!("CallValue argc={n}"),
-        IterMake => "IterMake".into(),
-        IterNext(t) => format!("IterNext -> {t}"),
-        IterBindName(k) => format!("IterBindName {k}"),
-        IterEnd => "IterEnd".into(),
-        LoopEnter(top, end) => format!("LoopEnter top={top} end={end}"),
-        LoopPop => "LoopPop".into(),
-        CatchEnter(k, end, h) => format!(
-            "CatchEnter kind={} end={end} handler={h}",
-            k.map(|x| x.to_string()).unwrap_or_else(|| "*".into())
-        ),
-        CatchLeave => "CatchLeave".into(),
-        CatchTrim(n) => format!("CatchTrim {n}"),
-        RescueTicks => "RescueTicks".into(),
-        RescueBind(k) => format!(
-            "RescueBind {}",
-            k.map(|x| x.to_string()).unwrap_or_else(|| "-".into())
-        ),
-        RaiseStmt(k, l) => format!(
-            "RaiseStmt kind={} line={l}",
-            k.map(|x| x.to_string()).unwrap_or_else(|| "*".into())
-        ),
-        Stmt(_) => "Stmt <delegated>".into(),
-        Expr(_) => "Expr <delegated>".into(),
-        Nop => "Nop".into(),
-    }
 }
 
 pub fn resolve_entry(l: &mut Loaded, opts: &Opts) -> Option<String> {
@@ -626,7 +423,7 @@ pub fn run_entry(l: &mut Loaded, opts: &Opts) -> Result<Value, Stress> {
                 }
             };
             let invoked = match target {
-                Value::Null => l.interp.call_named(&genv, &entry, vec![argv]),
+                Value::Null => l.interp.call_named(&genv, &entry, vec![argv], None),
                 v => {
                     let has_params = match &v {
                         Value::Gene(d, _) => !d.params.is_empty(),
@@ -645,7 +442,7 @@ pub fn run_entry(l: &mut Loaded, opts: &Opts) -> Result<Value, Stress> {
                     // W007: the entry gene is invoked by the RUNTIME (no call
                     // expression), so its call_gene frame carries a stale
                     // top-level line. The entry invocation is the OUTERMOST
-                    // gene frame — rewrite its line to 0 (renders as a bare
+                    // gene frame, rewrite its line to 0 (renders as a bare
                     // `at entry`) instead of appending a duplicate. Deep
                     // chains capped at 64 keep their innermost frames only.
                     if s.chain.is_empty() {
@@ -666,6 +463,18 @@ pub fn run_entry(l: &mut Loaded, opts: &Opts) -> Result<Value, Stress> {
 }
 
 // ------------------------------------------------------------ check
+/// W101 slice 6: a phantom call with its evidence. `line` is the call site
+/// when the AST carries it (Expr::Call stamps its line), else 0 — an unknown
+/// location stays 0, never guessed. `suggestions` is the did-you-mean
+/// shortlist against defined genes + module exports + builtins; `fix` is the
+/// machine-applicable edit when the name token is locatable on its line.
+pub struct PhantomCall {
+    pub name: String,
+    pub line: usize,
+    pub suggestions: Vec<String>,
+    pub fix: Option<crate::diag::SuggestedFix>,
+}
+
 pub struct CheckReport {
     pub score: i64,
     pub letter: char,
@@ -673,7 +482,7 @@ pub struct CheckReport {
     pub wobbles: usize,
     pub fallbacks: usize,
     pub nmd: Vec<(String, String)>, // kind, message
-    pub phantoms: Vec<String>,
+    pub phantoms: Vec<PhantomCall>,
     pub parsed: bool,
 }
 
@@ -722,14 +531,20 @@ pub fn check(file: &str, opts: &Opts, nmd: bool, purge: bool) -> CheckReport {
     rep
 }
 
-/// lsp-r1 (P0): where a `use`d module's source might live — the same
+/// lsp-r1 (P0): where a `use`d module's source might live, the same
 /// candidate list the runtime's gene loader resolves (document-relative,
 /// CWD-relative, std/, exe-relative std/). The LSP launches from arbitrary
 /// working directories (editors pick the CWD), so without the exe-relative
 /// candidate `use math` + `mean(...)` produced FALSE "phantom call"
-/// diagnostics — the demo-works/real-code-breaks failure mode, reproduced
+/// diagnostics, the demo-works/real-code-breaks failure mode, reproduced
 /// live by the loop-5-b audit.
 pub fn module_candidates(path: &str, base_dir: Option<&str>) -> Vec<std::path::PathBuf> {
+    // W025 stage 2: a wildcard `use a/b/*` carries the `*` in the path
+    // string; the check side reads module SOURCE for gene names, so strip
+    // the wildcard tail and read the base path (the runtime descends nested
+    // tables for the same import, here the flat file's names are the honest
+    // superset the checker can see without running the program).
+    let path = path.strip_suffix("/*").unwrap_or(path);
     let p = format!("{}.op", path.trim_end_matches(".op"));
     let mut out = Vec::new();
     if let Some(base) = base_dir {
@@ -744,7 +559,7 @@ pub fn module_candidates(path: &str, base_dir: Option<&str>) -> Vec<std::path::P
     }
     // dev-checkout candidate: the cargo manifest dir (compiled in). A source
     // checkout runs operon-ls from target/release/, where exe-relative std/
-    // does not exist — the stdlib sits at the manifest root. Installed
+    // does not exist, the stdlib sits at the manifest root. Installed
     // binaries are covered by the exe-relative candidate above.
     out.push(
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -754,7 +569,7 @@ pub fn module_candidates(path: &str, base_dir: Option<&str>) -> Vec<std::path::P
     out
 }
 
-/// In-memory core of `check` — the file-based `check()` delegates here, and
+/// In-memory core of `check`, the file-based `check()` delegates here, and
 /// non-CLI tools (operon-ls) call it directly on editor buffers. Returns the
 /// report AND the parsed program (the LSP hover table comes from it).
 /// `base_dir` (when known, e.g. the LSP document's directory) is searched
@@ -777,9 +592,10 @@ pub fn check_source(src: &str, nmd: bool, base_dir: Option<&str>) -> (CheckRepor
     rep.notes = prog.notes.len();
     rep.score -= (rung2 as i64) + (rep.wobbles as i64) * 2 + (rep.fallbacks as i64) * 3;
 
-    // all called names (for phantoms AND the NMD untranslated detector)
+    // all called names + call-site lines (for phantoms, their did-you-mean
+    // suggestions, AND the NMD untranslated detector)
     let mut defined: HashSet<String> = HashSet::new();
-    let mut called: Vec<String> = Vec::new();
+    let mut called: Vec<(String, usize)> = Vec::new();
     collect_calls(&prog, &mut defined, &mut called);
     // genes exported by `use`d modules count as defined (they are callable)
     let mut module_genes: HashSet<String> = HashSet::new();
@@ -810,12 +626,42 @@ pub fn check_source(src: &str, nmd: bool, base_dir: Option<&str>) -> (CheckRepor
             }
         }
     }
-    for c in &called {
+    for (c, line) in &called {
         if !defined.contains(c)
             && !module_genes.contains(c)
             && !crate::interp::BUILTIN_NAMES.contains(&c.as_str())
+            // builtin synonyms (print/echo/say/show for promote) are real
+            // builtins on the wire; without this check `print` read as a
+            // phantom (surfaced by the batch-2 check probes)
+            && !crate::interp::BUILTIN_SYNONYMS.iter().any(|(s, _)| s == c)
         {
-            rep.phantoms.push(c.clone());
+            // W101 slice 6: did-you-mean against every name this file can
+            // legitimately call, plus the machine-applicable fix when the
+            // token is locatable on the call line.
+            let mut cands: Vec<&str> = defined.iter().map(|s| s.as_str()).collect();
+            cands.extend(module_genes.iter().map(|s| s.as_str()));
+            cands.extend(crate::interp::BUILTIN_NAMES.iter().copied());
+            let suggestions = crate::diag::did_you_mean(c, &cands);
+            let fix = if *line > 0 {
+                let line_text = src.lines().nth(line - 1).unwrap_or("");
+                crate::diag::Span::of_token_word(*line, line_text, c).and_then(|sp| {
+                    suggestions.first().map(|s| crate::diag::SuggestedFix {
+                        line: sp.line,
+                        column: sp.col,
+                        length: sp.len,
+                        replacement: s.clone(),
+                        note: format!("replace '{}' with '{}'", c, s),
+                    })
+                })
+            } else {
+                None
+            };
+            rep.phantoms.push(PhantomCall {
+                name: c.clone(),
+                line: *line,
+                suggestions,
+                fix,
+            });
         }
     }
     rep.score -= (rep.phantoms.len() as i64) * 2;
@@ -877,7 +723,7 @@ pub fn check_source(src: &str, nmd: bool, base_dir: Option<&str>) -> (CheckRepor
     }
     let mut bonus = 0i64;
     for name in &enhanced {
-        if defined.contains(name) && called.contains(name) {
+        if defined.contains(name) && called.iter().any(|(n, _)| n == name) {
             let cs = crate::ffi::codon_score(name) as i64;
             bonus += (cs - 50) / 20; // 50-100 → 0..2 per hot gene
         }
@@ -885,7 +731,7 @@ pub fn check_source(src: &str, nmd: bool, base_dir: Option<&str>) -> (CheckRepor
     rep.score += bonus.min(6);
 
     if nmd {
-        let calledv: Vec<String> = called.clone();
+        let calledv: Vec<String> = called.iter().map(|(n, _)| n.clone()).collect();
         let findings = genes::nmd_sweep(&prog, &calledv, &enhanced);
         for f in &findings {
             rep.nmd.push((f.kind.to_string(), f.message.clone()));
@@ -916,6 +762,7 @@ fn purge_stmt(s: &mut Stmt) {
         }
         Stmt::While(_, b)
         | Stmt::Loop(b)
+        | Stmt::Scope(b)
         | Stmt::For(_, _, b)
         | Stmt::ForPat(_, _, b)
         | Stmt::Block(b)
@@ -933,27 +780,28 @@ fn purge_stmt(s: &mut Stmt) {
     }
 }
 
-fn collect_calls(prog: &Program, defined: &mut HashSet<String>, called: &mut Vec<String>) {
-    fn walk_expr(e: &Expr, called: &mut Vec<String>) {
+fn collect_calls(prog: &Program, defined: &mut HashSet<String>, called: &mut Vec<(String, usize)>) {
+    fn walk_expr(e: &Expr, called: &mut Vec<(String, usize)>) {
         match e {
-            Expr::Call(f, args, _) => {
+            Expr::Call(f, args, line) => {
                 if let Expr::Ident(n) = &**f {
-                    // record EVERY named call — the NMD untranslated detector
-                    // needs the full transcription record, not just phantoms
-                    called.push(n.clone());
+                    // record EVERY named call with its line, the NMD
+                    // untranslated detector needs the full transcription
+                    // record, not just phantoms
+                    called.push((n.clone(), *line));
                 }
                 walk_expr(f, called);
                 for a in args {
                     walk_expr(a, called);
                 }
             }
-            Expr::Method(r, _, args) => {
+            Expr::Method(r, _, args, _) => {
                 walk_expr(r, called);
                 for a in args {
                     walk_expr(a, called);
                 }
             }
-            Expr::MethodSafe(r, _, args) => {
+            Expr::MethodSafe(r, _, args, _) => {
                 walk_expr(r, called);
                 for a in args {
                     walk_expr(a, called);
@@ -986,12 +834,16 @@ fn collect_calls(prog: &Program, defined: &mut HashSet<String>, called: &mut Vec
             _ => {}
         }
     }
-    fn walk_stmts(stmts: &[Stmt], defined: &mut HashSet<String>, called: &mut Vec<String>) {
+    fn walk_stmts(
+        stmts: &[Stmt],
+        defined: &mut HashSet<String>,
+        called: &mut Vec<(String, usize)>,
+    ) {
         for s in stmts {
             walk_stmt(s, defined, called);
         }
     }
-    fn walk_stmt(s: &Stmt, defined: &mut HashSet<String>, called: &mut Vec<String>) {
+    fn walk_stmt(s: &Stmt, defined: &mut HashSet<String>, called: &mut Vec<(String, usize)>) {
         match s {
             Stmt::Gene(g) => {
                 if let Some(n) = &g.name {
@@ -1034,11 +886,12 @@ fn collect_calls(prog: &Program, defined: &mut HashSet<String>, called: &mut Vec
                 walk_stmts(b, defined, called);
             }
             Stmt::Loop(b) => walk_stmts(b, defined, called),
+            Stmt::Scope(b) => walk_stmts(b, defined, called),
             Stmt::For(_, it, b) => {
                 walk_expr(it, called);
                 walk_stmts(b, defined, called);
             }
-            Stmt::Match(sub, cases) => {
+            Stmt::Match(sub, cases, _) => {
                 walk_expr(sub, called);
                 for (p, b) in cases {
                     match p {
@@ -1097,7 +950,7 @@ pub fn grade_letter(score: i64) -> char {
 
 // ------------------------------------------------------------ profile
 pub fn profile(file: &str, opts: &Opts) -> Loaded {
-    // dx-r1 (audit W5): profiling must be ON before load — top-level
+    // dx-r1 (audit W5): profiling must be ON before load, top-level
     // statements execute during load, and a script without a main() gene
     // (the common shape) previously reported 0.0 µs for everything. No
     // re-run: re-executing would double the program's side effects.
@@ -1110,6 +963,61 @@ pub fn profile(file: &str, opts: &Opts) -> Loaded {
     l.interp.profiling = true;
     let _ = run_entry(&mut l, &opts);
     l
+}
+
+// ------------------------------------------------------------ chrome trace
+/// W097-A: write the captured call spans as a Chrome Trace Format JSON
+/// file (about://tracing / ui.perfetto.dev render `ph="X"` events
+/// directly; W096's done-when names both). Returns (written, dropped)
+/// for the operator notice.
+///
+/// Shape contract (pinned by tests/profile_spans.rs):
+/// - `traceEvents`: two `ph="M"` metadata events (process/thread names),
+///   then one `ph="X"` complete event per captured gene call, in
+///   completion order: `{name, cat:"gene", ph:"X", pid:1, tid:1,
+///   ts:<µs f64>, dur:<µs f64 inclusive>, args:{depth:<ancestors>}}`.
+/// - `ts`/`dur` are microseconds on the same monotonic clock the
+///   aggregate profiler uses (close_timing), so trace intervals and the
+///   `--json` self-time table reconcile.
+/// - ONE process, ONE thread: the interpreter is a single logical
+///   timeline (fibers ride a deterministic virtual clock on that same
+///   thread; attributing spans to fiber ids would claim a
+///   thread-parallelism the scheduler does not have — W098's
+///   WORKER-TELEMETRY.md owns worker attribution when it lands).
+/// - `otherData`: self-describing metadata (format tag, version, source
+///   file, unit, clock, total/dropped/cap) — the W096 law that a trace
+///   must never be silent about its own limits.
+pub fn write_chrome_trace(l: &Loaded, file: &str, path: &str) -> (usize, u64) {
+    let mut events: Vec<String> = Vec::with_capacity(l.interp.span_log.len() + 2);
+    events.push(
+        "{\"name\":\"process_name\",\"ph\":\"M\",\"pid\":1,\"tid\":1,\"args\":{\"name\":\"operon\"}}"
+            .to_string(),
+    );
+    events.push(
+        "{\"name\":\"thread_name\",\"ph\":\"M\",\"pid\":1,\"tid\":1,\"args\":{\"name\":\"fibers (virtual clock)\"}}"
+            .to_string(),
+    );
+    for s in &l.interp.span_log {
+        events.push(format!(
+            "{{\"name\":\"{}\",\"cat\":\"gene\",\"ph\":\"X\",\"pid\":1,\"tid\":1,\"ts\":{:.3},\"dur\":{:.3},\"args\":{{\"depth\":{}}}}}",
+            json_escape(&s.name),
+            s.start_us,
+            s.dur_us,
+            s.depth
+        ));
+    }
+    let out = format!(
+        "{{\"traceEvents\":[{}],\"displayTimeUnit\":\"us\",\"otherData\":{{\"format\":\"operon-chrome-trace\",\"version\":\"{}\",\"file\":\"{}\",\"unit\":\"microseconds\",\"clock\":\"monotonic\",\"total_spans\":{},\"dropped_spans\":{},\"span_cap\":{}}}}}",
+        events.join(","),
+        env!("CARGO_PKG_VERSION"),
+        json_escape(file),
+        l.interp.span_log.len(),
+        l.interp.spans_dropped,
+        crate::interp::SPAN_CAP,
+    );
+    std::fs::write(path, out)
+        .unwrap_or_else(|e| crate::die(&format!("cannot write '{}': {}", path, e)));
+    (l.interp.span_log.len(), l.interp.spans_dropped)
 }
 
 // ------------------------------------------------------------ crispr
@@ -1164,7 +1072,7 @@ pub fn crispr(file: &str, opts: &Opts, knockout: &str) -> CrisprReport {
             }
             Ok(_) => rep.failures.push(format!("proof #{}: exited early", i + 1)),
             // W06 (D-014): propagation abandoning a proof frame is a failure
-            // (the frame did not complete) — rendered with the variant repr,
+            // (the frame did not complete), rendered with the variant repr,
             // never a leaked "propagate" kind.
             Err(s) if s.prop.is_some() => rep.failures.push(format!(
                 "proof #{} failed: propagation left the proof frame ({})",
@@ -1267,7 +1175,7 @@ pub fn run_tests(paths: &[String], opts: &Opts, json: bool) -> TestReport {
             rep.proofs += 1;
             let asserts_before = l.interp.asserts_run;
             match l.interp.exec_block(&genv, proof) {
-                // a proof frame must run to completion — early return/break is
+                // a proof frame must run to completion, early return/break is
                 // an integrity failure, not a pass (proofs are guard slides)
                 Ok(Flow::Norm) => {
                     if l.interp.asserts_run == asserts_before {
@@ -1292,7 +1200,7 @@ pub fn run_tests(paths: &[String], opts: &Opts, json: bool) -> TestReport {
                     ));
                 }
                 // W06 (D-014): propagation abandoning a proof frame is a
-                // failure (the frame did not complete) — never a leaked kind.
+                // failure (the frame did not complete), never a leaked kind.
                 Err(s) if s.prop.is_some() => {
                     rep.failed += 1;
                     file_failed = true;
@@ -1329,7 +1237,7 @@ pub fn run_tests(paths: &[String], opts: &Opts, json: bool) -> TestReport {
     }
     if !json {
         println!(
-            "operon test — {} file(s), {} proof(s): {} passed, {} failed ({} assertion(s) exercised)",
+            "operon test, {} file(s), {} proof(s): {} passed, {} failed ({} assertion(s) exercised)",
             rep.files, rep.proofs, rep.passed, rep.failed, total_asserts
         );
         for f in &rep.failures {
@@ -1342,6 +1250,46 @@ pub fn run_tests(paths: &[String], opts: &Opts, json: bool) -> TestReport {
     rep
 }
 
+/// W49 (ROADMAP-100): expand test paths into a sorted explicit file list,
+/// lets the CLI implement `--list` and `--filter` without re-running the
+/// discovery logic differently from the real runner.
+pub fn collect_test_files(paths: &[String]) -> Vec<String> {
+    let mut files: Vec<String> = Vec::new();
+    for p in paths {
+        let path = Path::new(p);
+        if path.is_dir() {
+            collect_op_files(path, &mut files);
+        } else {
+            files.push(p.clone());
+        }
+    }
+    files.sort();
+    files.dedup();
+    files
+}
+
+/// W49: the `--filter` selection rule, discovery plus a substring match on
+/// the file path. Proof frames are anonymous in the grammar (`frame proof {`
+/// carries no name), so the file is the selectable test unit; `--list`
+/// shows exactly what was selected. `filter = None` is byte-identical to
+/// bare discovery, the historical no-flags behavior.
+pub fn select_test_files(paths: &[String], filter: Option<&str>) -> Vec<String> {
+    let mut files = collect_test_files(paths);
+    if let Some(f) = filter {
+        files.retain(|p| p.contains(f));
+    }
+    files
+}
+
+/// W49: how many proof frames does this file declare? (cheap text scan used
+/// by `operon test --list`; the runner remains the authority for pass/fail).
+pub fn count_proof_frames(path: &str) -> usize {
+    match std::fs::read_to_string(path) {
+        Ok(s) => s.matches("frame proof").count(),
+        Err(_) => 0,
+    }
+}
+
 fn collect_op_files(dir: &Path, out: &mut Vec<String>) {
     if let Ok(rd) = std::fs::read_dir(dir) {
         let mut entries: Vec<_> = rd.filter_map(|e| e.ok()).collect();
@@ -1350,16 +1298,34 @@ fn collect_op_files(dir: &Path, out: &mut Vec<String>) {
             let p = e.path();
             if p.is_dir() {
                 // the red-team suite is adversarial by design (hangs, bombs,
-                // escapes) — it is exercised by scripts/redteam.sh with
+                // escapes), it is exercised by scripts/redteam.sh with
                 // containment expectations, never by the proof runner
                 if p.file_name().map(|n| n == "redteam").unwrap_or(false) {
                     continue;
                 }
                 // substrate-r1: tests/granted/ holds capability-granted
-                // proofs — meaningless (would all deny) under the default
+                // proofs, meaningless (would all deny) under the default
                 // runner's zero-grant sandbox. Exercised explicitly by
                 // scripts/test.sh with an operator cell file.
                 if p.file_name().map(|n| n == "granted").unwrap_or(false) {
+                    continue;
+                }
+                // W18: cancellation timing proofs need real OS threads and
+                // mid-flight cancel ordering the sequential oracle cannot
+                // observe. Exercised explicitly (Rust side) by
+                // scripts/test.sh; the oracle walker skips it too.
+                if p.file_name().map(|n| n == "timing").unwrap_or(false) {
+                    continue;
+                }
+                // W08r: the async corpus is cell-gated (io.pool = "fiber",
+                // the deterministic virtual clock). Without the cell the
+                // thread lane charges parked workers per real millisecond,
+                // so fuel burn depends on the RUNNER'S SPEED — CI's slow
+                // shared runners burned the pool on identical files that
+                // pass locally. Exercised explicitly by scripts/test.sh
+                // with tests/async/async.cell; lane parity is pinned by
+                // tests/async_parity.rs (byte-identical two-lane programs).
+                if p.file_name().map(|n| n == "async").unwrap_or(false) {
                     continue;
                 }
                 collect_op_files(&p, out);
@@ -1371,16 +1337,419 @@ fn collect_op_files(dir: &Path, out: &mut Vec<String>) {
 }
 
 // ------------------------------------------------------------ formatter
+
+/// W47 (ROADMAP-100): formatter configuration.
+///
+/// `indent`, spaces per nesting level. The default is 2 because that is the
+/// de-facto house style of every checked-in .op file (std/, tests/, examples/);
+/// a formatter whose default reformats the whole corpus is a broken default.
+///
+/// `quotes`, how plain string literals re-emit. `Double` is the canonical
+/// form (SPEC §3). `Single` re-emits `'…'` only when it is byte-lossless
+/// (content has no `'`, no backslash, no brace, no newline/tab, i.e. both
+/// spellings denote the same value with zero escaping); anything else falls
+/// back to double. Quote-style `preserve` is impossible BY DESIGN: the AST
+/// stores the string's VALUE, not which quote character the source used, so
+/// there is nothing to preserve.
+///
+/// Scope notes (honesty): keyword canonicalization is inherent to fmt, the
+/// parser repairs synonym spellings into the canonical AST, and fmt prints
+/// the AST, so `--canonical` would be a no-op flag and is deliberately not
+/// shipped. Soft `--width` wrapping is deferred (W47-v2): it changes token
+/// layout and must not ship before the byte-stability law is proven over it.
+///
+/// Threading: fmt is a single-threaded-per-call operation (CLI exits after;
+/// the LSP serves requests sequentially). The active config is a thread-local
+/// installed by `format_program_with` and restored by a Drop guard, which
+/// keeps every `fmt_*` signature unchanged (rustfmt makes the same trade).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum QuoteMode {
+    Double,
+    Single,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct FmtConfig {
+    pub indent: usize,
+    pub quotes: QuoteMode,
+    /// W47-v2: soft line-width limit (`None` = off, the historical behavior,
+    /// and what LSP formatting uses so editors keep their own wrap policy).
+    /// When set, a post-print pass breaks lines longer than `width` at
+    /// parser-proven-safe comma points only (see `wrap_width`).
+    pub width: Option<usize>,
+}
+
+impl Default for FmtConfig {
+    fn default() -> Self {
+        FmtConfig {
+            indent: 2,
+            quotes: QuoteMode::Double,
+            width: None,
+        }
+    }
+}
+
+thread_local! {
+    static FMT_CTX: std::cell::RefCell<FmtConfig> = std::cell::RefCell::new(FmtConfig::default());
+}
+
+/// Restores the default formatter config on scope exit, even on panic.
+struct FmtGuard;
+impl Drop for FmtGuard {
+    fn drop(&mut self) {
+        FMT_CTX.with(|c| *c.borrow_mut() = FmtConfig::default());
+    }
+}
+
 pub fn format_program(prog: &Program) -> String {
+    format_program_with(prog, &FmtConfig::default())
+}
+
+pub fn format_program_with(prog: &Program, cfg: &FmtConfig) -> String {
+    FMT_CTX.with(|c| *c.borrow_mut() = *cfg);
+    let _guard = FmtGuard;
     let mut out = String::new();
+    // W074: module doc prints at the top, followed by a blank line.
+    for l in &prog.module_doc {
+        out.push_str("## ");
+        out.push_str(l);
+        out.push('\n');
+    }
+    if !prog.module_doc.is_empty() {
+        out.push('\n');
+    }
     for s in &prog.stmts {
         fmt_stmt(s, 0, &mut out);
+    }
+    // W47-v2: the width pass runs AFTER the canonical render, so it is a pure
+    // function of (canonical text, width, indent). Idempotence survives by
+    // construction: fmt re-parses the wrapped text to the SAME AST, re-renders
+    // the SAME canonical text, and re-wraps it identically.
+    match cfg.width {
+        Some(w) if w >= 1 => wrap_width(&out, w, cfg.indent),
+        _ => out,
+    }
+}
+
+fn active_indent() -> usize {
+    FMT_CTX.with(|c| c.borrow().indent)
+}
+
+fn active_quotes() -> QuoteMode {
+    FMT_CTX.with(|c| c.borrow().quotes)
+}
+
+fn indent(n: usize) -> String {
+    " ".repeat(n * active_indent())
+}
+
+/// W47: re-emit a plain string literal under the active quote mode.
+/// `Single` is taken only when BOTH spellings denote the identical value
+/// with no escaping at all; the lexer repairs `'` to `"` with a note, so
+/// the single-quoted output is legal (if slightly noisy) on re-parse.
+fn str_lit(s: &str) -> String {
+    match active_quotes() {
+        QuoteMode::Double => format!(
+            "\"{}\"",
+            s.replace('\\', "\\\\")
+                .replace('"', "\\\"")
+                .replace('\n', "\\n")
+                .replace('\t', "\\t")
+                .replace('{', "\\{")
+                .replace('}', "\\}")
+        ),
+        QuoteMode::Single
+            if !s.contains('\'')
+                && !s.contains('\\')
+                && !s.contains('{')
+                && !s.contains('}')
+                && !s.contains('\n')
+                && !s.contains('\t') =>
+        {
+            format!("'{}'", s)
+        }
+        QuoteMode::Single => format!(
+            "\"{}\"",
+            s.replace('\\', "\\\\")
+                .replace('"', "\\\"")
+                .replace('\n', "\\n")
+                .replace('\t', "\\t")
+                .replace('{', "\\{")
+                .replace('}', "\\}")
+        ),
+    }
+}
+
+/// W47: parse a minimal zero-dependency formatter config (`.operon-fmt.toml`
+/// or the `[fmt]` section of `operon.toml`). Only `indent` (positive
+/// integer), `quotes` (`double`|`single`) and `width` (0..=10000, 0 = off)
+/// are meaningful; section headers and comments are ignored; unknown keys
+/// and out-of-range values are reported (not errors, Total Grammar spirit,
+/// forward-compatible) so the caller can surface them on stderr. Malformed
+/// input never panics: the offending key keeps its current (base) value.
+pub fn parse_fmt_config(src: &str) -> (FmtConfig, Vec<String>) {
+    parse_fmt_config_from(FmtConfig::default(), src)
+}
+
+/// W47: layered variant. Applies `src` keys ON TOP of `base`, so the CLI can
+/// stack defaults <- `operon.toml` [fmt] <- `.operon-fmt.toml` <- flags with
+/// one parser and one note format.
+pub fn parse_fmt_config_from(base: FmtConfig, src: &str) -> (FmtConfig, Vec<String>) {
+    let mut cfg = base;
+    let mut unknown: Vec<String> = Vec::new();
+    for raw in src.lines() {
+        let line = raw.split('#').next().unwrap_or("").trim();
+        if line.is_empty() || line.starts_with('[') {
+            continue;
+        }
+        let (k, v) = match line.split_once('=') {
+            Some((k, v)) => (k.trim(), v.trim().trim_matches('"').trim_matches('\'')),
+            None => continue,
+        };
+        match k {
+            "indent" => match v.parse::<usize>() {
+                Ok(n) if (1..=16).contains(&n) => cfg.indent = n,
+                _ => unknown.push(format!("indent = {v} (want 1..=16)")),
+            },
+            "quotes" => match v {
+                "double" => cfg.quotes = QuoteMode::Double,
+                "single" => cfg.quotes = QuoteMode::Single,
+                other => unknown.push(format!("quotes = {other} (want double|single)")),
+            },
+            // W47-v2: `width = 0` means explicitly off; absent means off.
+            "width" => match v.parse::<usize>() {
+                Ok(0) => cfg.width = None,
+                Ok(n) if n <= 10_000 => cfg.width = Some(n),
+                _ => unknown.push(format!("width = {v} (want 0..=10000, 0 = off)")),
+            },
+            other => unknown.push(other.to_string()),
+        }
+    }
+    (cfg, unknown)
+}
+
+/// W47: extract the body lines of one `[section]` from a minimal TOML
+/// document (the `operon.toml` project manifest, W19's hand-written dialect).
+/// pkg.rs's `parse_manifest` is deliberately NOT reused: it REJECTS unknown
+/// keys with a hard error, while fmt config must fall back to defaults with
+/// a note, never error. Returns the section body (header excluded, key lines
+/// verbatim so `parse_fmt_config_from` stays the single key parser) plus
+/// notes for malformed headers. A missing section returns an empty body and
+/// no notes, so absent config = today's exact output, byte-identical.
+pub fn extract_toml_section(src: &str, section: &str) -> (String, Vec<String>) {
+    let mut body = String::new();
+    let mut notes: Vec<String> = Vec::new();
+    let mut inside = false;
+    for raw in src.lines() {
+        let line = raw.trim();
+        if line.starts_with('[') {
+            // any header (well-formed or not) ends the current section
+            inside = false;
+            if line.ends_with(']') && line.len() >= 3 {
+                let name = line[1..line.len() - 1].trim();
+                inside = name == section;
+            } else {
+                notes.push(format!("malformed section header, ignored: {line}"));
+            }
+            continue;
+        }
+        if inside && !line.is_empty() {
+            body.push_str(line);
+            body.push('\n');
+        }
+    }
+    (body, notes)
+}
+
+// ---------------------------------------------------------------------------
+// W47-v2: the `--width` post-print line wrapper.
+//
+// DESIGN CONTRACT (why this is safe without touching the parser):
+//
+// The parser already tolerates newlines inside bracketed GROUPS wherever a
+// group's element loop calls `eat_newlines_inline()` at its top, call args
+// (bare calls, method calls, ?. calls), gene/sequence parameter lists (with
+// annotations and defaults), and list literals. A newline after a comma in
+// those positions is pure whitespace: the AST cannot change.
+//
+// The wrapper therefore breaks ONLY at commas whose enclosing bracket stack
+// consists entirely of `(` and `[`. Everything else is out of scope by law:
+//   - `{` groups are never broken (a text pass cannot tell a block brace
+//     from a map-literal brace; both are legal in fmt output);
+//   - string literals (including their interpolation regions) are opaque,
+//     a comma inside a string is never a break point;
+//   - openers never break (the first element stays on the opener line);
+//   - closers stay glued to the last element (no dedicated closer line).
+// When a line has no breakable comma it stays long, honestly, visibly.
+//
+// Determinism: wrap_width is a pure function of (text, width, indent_unit).
+// It runs AFTER the canonical render, so fmt∘fmt re-renders the same
+// canonical text and re-wraps it identically, the byte-stability law holds
+// by construction, and tests/fmt_width.rs proves it corpus-wide together
+// with the two stronger laws: AST identity and zero re-parse notes.
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy)]
+struct WidthBreak {
+    /// byte offset just AFTER the comma (where the line may split)
+    pos: usize,
+    /// number of enclosing brackets at the comma (>=1: never at depth 0)
+    depth: usize,
+}
+
+/// Scan one rendered line for parser-safe break points.
+/// `fmt` output is canonical: only double-quoted strings with `\` escapes,
+/// no comments, no tabs. Blocks/maps contribute `{`/`}` which poison the
+/// bracket stack.
+///
+/// Strings are modeled as a FRAME STACK, because interpolation carries REAL
+/// code, including nested strings, inside the quotes:
+/// `"{cv.csv_escape(tricky, ",")}"`. A naive in-string flag closes the
+/// string at the nested `"` and the comma inside `","` looks like code.
+/// Here a `"` in code PUSHES a Str frame; a `"` in a Str frame pops it; a
+/// `{` in a Str frame pushes a Code frame (the interpolation region); a `}`
+/// popping that frame returns to the enclosing string. A comma is a
+/// candidate only when NO Str frame is open (the frame stack is just the
+/// bottom Code frame), a newline anywhere inside a string would change the
+/// string's VALUE, so string regions are opaque end to end.
+fn scan_width_breaks(line: &str) -> Vec<WidthBreak> {
+    // Code(Some(base)) = an interpolation region inside a string; `base` is
+    // the bracket-stack depth at its opening `{`, so a `}` closing a MAP
+    // LITERAL inside the interpolation is distinguishable from the `}` that
+    // closes the interpolation itself. Code(None) = real line-level code.
+    #[derive(Clone, Copy, PartialEq)]
+    enum Frame {
+        Code(Option<usize>),
+        Str,
+        Esc, // inside a `\x` escape pair within a Str frame
+    }
+    let mut out = Vec::new();
+    let mut frames: Vec<Frame> = vec![Frame::Code(None)];
+    // bracket stack: true = break-friendly (`(`/`[`), false = poisoned (`{`)
+    let mut stack: Vec<bool> = Vec::new();
+    for (i, ch) in line.char_indices() {
+        let top = *frames.last().expect("frame stack never empty");
+        match top {
+            Frame::Esc => {
+                frames.pop(); // the escaped char itself is opaque
+            }
+            Frame::Str => match ch {
+                '\\' => frames.push(Frame::Esc),
+                '"' => {
+                    frames.pop(); // string ends
+                }
+                '{' => frames.push(Frame::Code(Some(stack.len()))), // interp opens
+                _ => {}                                             // string content: opaque
+            },
+            Frame::Code(base) => match ch {
+                '"' => frames.push(Frame::Str),
+                // '#'-comment runs to end of line: nothing after it is code,
+                // so no break may exist past it. A wrapped comment loses its
+                // '##' prefix on continuation and re-parses as CODE (the
+                // std/binary.op corpus failure: "..., say so with a value"
+                // became a say() call). Breaks found before the comment stay
+                // valid; saturate and stop.
+                '#' => break,
+                '(' | '[' => stack.push(true),
+                '{' => stack.push(false),
+                '}' => match base {
+                    // interp region closes only when its own `{`-depth is
+                    // back; deeper `}`s belong to code braces (maps, blocks)
+                    Some(b) if stack.len() == b => {
+                        frames.pop();
+                    }
+                    _ => {
+                        stack.pop(); // saturate on unbalanced lines: never panic
+                    }
+                },
+                ')' | ']' => {
+                    stack.pop();
+                }
+                // breakable ONLY at real code depth: inside a (/[
+                // group, never at depth 0, never inside ANY string
+                // frame (including interpolation code, where a newline
+                // would land in the string's VALUE).
+                ',' if base.is_none() && !stack.is_empty() && stack.iter().all(|&f| f) => {
+                    out.push(WidthBreak {
+                        pos: i + ch.len_utf8(),
+                        depth: stack.len(),
+                    });
+                }
+                _ => {}
+            },
+        }
     }
     out
 }
 
-fn indent(n: usize) -> String {
-    "  ".repeat(n)
+fn wrap_width(text: &str, width: usize, indent_unit: usize) -> String {
+    let mut out = String::with_capacity(text.len() + text.len() / 8);
+    // split_inclusive keeps every existing '\n' byte-exact (blank lines,
+    // the double blank between top-level definitions, nothing moves).
+    for line in text.split_inclusive('\n') {
+        let (content, nl) = match line.strip_suffix('\n') {
+            Some(c) => (c, "\n"),
+            None => (line, ""),
+        };
+        let segs = wrap_line(content, width, indent_unit);
+        for (k, seg) in segs.iter().enumerate() {
+            if k > 0 {
+                out.push('\n'); // between wrapped segments of one source line
+            }
+            out.push_str(seg);
+        }
+        out.push_str(nl); // the source line's newline rides its last segment
+    }
+    out
+}
+
+fn wrap_line(line: &str, width: usize, indent_unit: usize) -> Vec<String> {
+    if line.chars().count() <= width || indent_unit == 0 {
+        return vec![line.to_string()];
+    }
+    let breaks = scan_width_breaks(line);
+    if breaks.is_empty() {
+        return vec![line.to_string()];
+    }
+    let dmin = breaks.iter().map(|b| b.depth).min().unwrap_or(1);
+    let chosen: Vec<WidthBreak> = breaks.iter().filter(|b| b.depth == dmin).copied().collect();
+    let base = line.len() - line.trim_start_matches(' ').len();
+    let cont_indent = base + dmin * indent_unit;
+    let mut segments: Vec<String> = Vec::new();
+    let mut prev = 0usize;
+    for b in &chosen {
+        segments.push(line[prev..b.pos].to_string());
+        prev = b.pos;
+    }
+    segments.push(line[prev..].to_string()); // tail keeps the closer glued
+    let mut res: Vec<String> = Vec::with_capacity(segments.len());
+    for (k, seg) in segments.into_iter().enumerate() {
+        if k == 0 {
+            res.push(seg);
+        } else {
+            let body = seg.trim_start();
+            if body.is_empty() {
+                return vec![line.to_string()]; // degenerate: refuse to wrap
+            }
+            res.push(format!("{}{}", " ".repeat(cont_indent), body));
+        }
+    }
+    // recursion: continuation segments may still overflow via deeper groups.
+    // Each level strictly increases the break depth, so this terminates.
+    let mut final_res = Vec::with_capacity(res.len());
+    for seg in &res {
+        if seg.chars().count() > width {
+            let sub = wrap_line(seg, width, indent_unit);
+            if sub.len() == 1 {
+                final_res.push(seg.clone());
+            } else {
+                final_res.extend(sub);
+            }
+        } else {
+            final_res.push(seg.clone());
+        }
+    }
+    final_res
 }
 
 fn fmt_block(stmts: &[Stmt], ind: usize, out: &mut String) {
@@ -1393,6 +1762,21 @@ fn fmt_block(stmts: &[Stmt], ind: usize, out: &mut String) {
 }
 
 fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
+    // W074: doc comments print above their declaration (metadata roundtrip).
+    let doc: &[String] = match s {
+        Stmt::Gene(g) | Stmt::Seq(g) => &g.doc,
+        Stmt::Splice(sp) => &sp.doc,
+        Stmt::Pheno(p) => &p.doc,
+        Stmt::Trait(t) => &t.doc,
+        Stmt::Fate(f) => &f.doc,
+        _ => &[],
+    };
+    for l in doc {
+        out.push_str(&indent(ind));
+        out.push_str("## ");
+        out.push_str(l);
+        out.push('\n');
+    }
     out.push_str(&indent(ind));
     match s {
         Stmt::Seq(g) => {
@@ -1411,12 +1795,22 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
                 Some(par) => out.push_str(&format!("phenotype {} from {} ", p.name, par)),
                 None => out.push_str(&format!("phenotype {} ", p.name)),
             }
+            // W04: implements clause round-trips canonically
+            if !p.implements.is_empty() {
+                out.push_str(&format!("implements {} ", p.implements.join(", ")));
+            }
             out.push_str("{\n");
             for (fname, fexpr) in &p.fields {
                 out.push_str(&indent(ind + 1));
                 out.push_str(&format!("let {} = {}\n", fname, fmt_expr(fexpr)));
             }
             for g in &p.methods {
+                for l in &g.doc {
+                    out.push_str(&indent(ind + 1));
+                    out.push_str("## ");
+                    out.push_str(l);
+                    out.push('\n');
+                }
                 if g.acetylate {
                     out.push_str(&indent(ind + 1));
                     out.push_str("@acetylate ");
@@ -1441,12 +1835,44 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
             out.push_str(&indent(ind));
             out.push_str("}\n\n");
         }
+        // W04: trait declaration round-trip
+        Stmt::Trait(t) => {
+            out.push_str(&indent(ind));
+            out.push_str(&format!("trait {} {{\n", t.name));
+            for m in &t.methods {
+                out.push_str(&indent(ind + 1));
+                match &m.default {
+                    Some(g) => {
+                        out.push_str(&format!(
+                            "gene {}({}) ",
+                            g.name.clone().unwrap_or_default(),
+                            fmt_params(&g.params)
+                        ));
+                        fmt_block(&g.body, ind + 1, out);
+                        out.push('\n');
+                    }
+                    None => {
+                        out.push_str(&format!("gene {}();\n", m.name));
+                    }
+                }
+            }
+            out.push_str(&indent(ind));
+            out.push_str("}\n\n");
+        }
         Stmt::Let(n, e) => {
             out.push_str(&format!("let {} = {}\n", n, fmt_expr(e)));
+        }
+        // W05: const roundtrip (immutable binding, deep-freeze semantics)
+        Stmt::LetConst(n, e) => {
+            out.push_str(&format!("const {} = {}\n", n, fmt_expr(e)));
         }
         // W01 (L2c): annotated definition roundtrip
         Stmt::LetAnn(n, ann, e) => {
             out.push_str(&format!("let {}: {} = {}\n", n, ann.render(), fmt_expr(e)));
+        }
+        // W01-s2: type alias roundtrip (parse-time metadata, inert at runtime)
+        Stmt::TypeAlias(n, target, _) => {
+            out.push_str(&format!("type {} = {}\n", n, target.render()));
         }
         Stmt::LetPat(p, e) => {
             out.push_str(&format!(
@@ -1539,6 +1965,11 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
             fmt_block(b, ind, out);
             out.push('\n');
         }
+        Stmt::Scope(b) => {
+            out.push_str("scope ");
+            fmt_block(b, ind, out);
+            out.push('\n');
+        }
         Stmt::For(n, it, b) => {
             out.push_str(&format!("for {} in {} ", n, fmt_expr(it)));
             fmt_block(b, ind, out);
@@ -1549,7 +1980,7 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
         Stmt::Break => out.push_str("break\n"),
         Stmt::Continue => out.push_str("continue\n"),
         Stmt::ExprStmt(e) => out.push_str(&format!("{}\n", fmt_expr(e))),
-        Stmt::Match(sub, cases) => {
+        Stmt::Match(sub, cases, _) => {
             out.push_str(&format!("match {} ", fmt_expr(sub)));
             out.push_str("{\n");
             for (p, b) in cases {
@@ -1589,6 +2020,18 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
             }
         }
         Stmt::Gene(g) => {
+            // W64: deprecation marks round-trip canonically (metadata,
+            // never evaluated; SPEC §3 marks table)
+            if let Some(d) = &g.deprecated {
+                match &d.since {
+                    Some(s) => out.push_str(&format!(
+                        "@deprecated({}, since={}) ",
+                        str_lit(&d.message),
+                        str_lit(s)
+                    )),
+                    None => out.push_str(&format!("@deprecated({}) ", str_lit(&d.message))),
+                }
+            }
             if g.acetylate {
                 out.push_str("@acetylate ");
             }
@@ -1856,6 +2299,13 @@ fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
             fmt_block(body, ind, out);
             out.push_str("\n\n");
         }
+        Stmt::Module(n, body) => {
+            // W025 stage 2: nested sub-module declarations round-trip
+            // canonically beside tads.
+            out.push_str(&format!("module {} ", n));
+            fmt_block(body, ind, out);
+            out.push_str("\n\n");
+        }
         Stmt::Block(body) => {
             fmt_block(body, ind, out);
             out.push('\n');
@@ -1869,7 +2319,7 @@ fn fmt_pat(p: &MatchPat) -> String {
         MatchPat::Multi(ls) => ls.iter().map(fmt_expr).collect::<Vec<_>>().join(", "),
         MatchPat::Bind(n) => n.clone(),
         MatchPat::Wild => "_".into(),
-        // W02 (match-v2): roundtrip forms for the new patterns — fmt output
+        // W02 (match-v2): roundtrip forms for the new patterns, fmt output
         // re-parses to the same AST (checked by the fmt roundtrip gate).
         MatchPat::Variant(tag, None) => tag.clone(),
         MatchPat::Variant(tag, Some(p)) => format!("{}({})", tag, fmt_pat(p)),
@@ -1899,7 +2349,7 @@ fn fmt_params(ps: &[(String, Option<Expr>)]) -> String {
     fmt_params_ann(ps, &[])
 }
 
-/// W01 (L2c): params with annotations — roundtrip form `name: T = default`.
+/// W01 (L2c): params with annotations, roundtrip form `name: T = default`.
 /// `anns` may be shorter than `ps` (unannotated definitions).
 fn fmt_params_ann(ps: &[(String, Option<Expr>)], anns: &[Option<TypeAnn>]) -> String {
     ps.iter()
@@ -1993,30 +2443,57 @@ pub fn fmt_expr(e: &Expr) -> String {
     fmt_prec(e, 0)
 }
 
+/// A map key that parsed to Expr::Null (a non-name, non-string literal key
+/// like `2.5:`; the parser notes it and keeps Null) prints in its WIRE
+/// canonical form `"null"`, the string the runtime's key stringification
+/// produces. Printing the bare word would REPARSE as the string key "null"
+/// and make the canonical form unstable: fix_corpus law 1 caught exactly
+/// that on the W015 channels differential (float key round trip).
+fn fmt_map_key(k: &Expr) -> String {
+    if matches!(k, Expr::Null) {
+        str_lit("null") // quote-mode aware: single-quote configs stay stable
+    } else {
+        fmt_prec(k, 0)
+    }
+}
+
 fn fmt_prec(e: &Expr, parent: u8) -> String {
     let needs_paren = nest_prec(e) < parent;
     let body = match e {
+        // W08r: the position marker is metadata — fmt renders the wrapped
+        // expression only, so output is byte-identical to pre-marker source
+        Expr::At(inner, _) => fmt_prec(inner, parent),
         Expr::Null => "null".into(),
         Expr::Bool(true) => "true".into(),
         Expr::Bool(false) => "false".into(),
         Expr::Int(i) => i.to_string(),
         Expr::Float(f) => crate::value::format_float(*f),
-        Expr::Str(s) => format!(
-            "\"{}\"",
-            s.replace('\\', "\\\\")
-                .replace('"', "\\\"")
-                .replace('\n', "\\n")
-                .replace('\t', "\\t")
-                .replace('{', "\\{")
-                .replace('}', "\\}")
-        ),
+        Expr::Str(s) => str_lit(s), // W47: quote mode aware (single only when byte-lossless)
+        // W029: bytes literals round-trip byte-exactly, the same escape set
+        // the lexer parses (short forms + \xNN), re-emitted deterministically.
+        Expr::Bytes(b) => {
+            let mut out = String::from("b\"");
+            for &byte in b {
+                match byte {
+                    b'\n' => out.push_str("\\n"),
+                    b'\t' => out.push_str("\\t"),
+                    b'\r' => out.push_str("\\r"),
+                    b'"' => out.push_str("\\\""),
+                    b'\\' => out.push_str("\\\\"),
+                    0x20..=0x7e => out.push(byte as char),
+                    other => out.push_str(&format!("\\x{:02x}", other)),
+                }
+            }
+            out.push('"');
+            out
+        }
         Expr::Interp(parts) => {
             let mut out = String::from("\"");
             for p in parts {
                 match p {
                     InterpPart::Lit(s) => {
                         // literal segments may contain braces that came from
-                        // \\{ \\} escapes — re-escape them or fmt corrupts the file
+                        // \\{ \\} escapes, re-escape them or fmt corrupts the file
                         out.push_str(
                             &s.replace('\\', "\\\\")
                                 .replace('"', "\\\"")
@@ -2047,7 +2524,7 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
             "{{{}}}",
             pairs
                 .iter()
-                .map(|(k, v)| format!("{}: {}", fmt_prec(k, 0), fmt_prec(v, 0)))
+                .map(|(k, v)| format!("{}: {}", fmt_map_key(k), fmt_prec(v, 0)))
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
@@ -2078,9 +2555,27 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
         }
         Expr::Binary(op, a, b, _) => {
             let p = prec_of(*op);
-            // left-assoc: left child may reuse p, right child must be tighter
-            let left = fmt_prec(a, p);
-            let right = fmt_prec(b, p + 1);
+            // BinOp::Pow is NOT left-assoc in the grammar: parse_pow takes
+            // its LEFT operand from parse_postfix (purer than unary) and its
+            // RIGHT operand re-enters parse_unary (which is what makes it
+            // right-associative). Rendering the left operand at the generic
+            // left-assoc rule reparsed-broke two AST shapes into DIFFERENT
+            // meanings: Pow(Neg(a), b) printed as `-a ** b` reparses as
+            // Neg(Pow(a, b)) — `(-8) ** 0.5` (nan) silently became
+            // `-8 ** 0.5` (-2.83…) — and Pow(Pow(a, b), c) printed as
+            // `a ** b ** c` reparses as Pow(a, Pow(b, c)). fix_corpus law 1
+            // caught both on tests/differential/numeric_abuse.op (the first
+            // corpus program with a pow-over-neg spelling; W006-D). Pow's
+            // left operand therefore renders at 11 (postfix-or-purer: bare
+            // exactly when the grammar accepts it there); the right operand
+            // keeps the generic tighter rule (parse_unary accepts Neg/Not).
+            let (lp, rp) = if matches!(op, BinOp::Pow) {
+                (11, p + 1)
+            } else {
+                (p, p + 1)
+            };
+            let left = fmt_prec(a, lp);
+            let right = fmt_prec(b, rp);
             format!("{} {} {}", left, fmt_op(*op), right)
         }
         Expr::Call(f, args, _) => format!(
@@ -2094,7 +2589,7 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
         Expr::Index(t, i, _) => format!("{}[{}]", fmt_expr(t), fmt_expr(i)),
         Expr::Member(t, k) => format!("{}.{}", fmt_expr(t), k),
         Expr::MemberSafe(t, k) => format!("{}?.{}", fmt_expr(t), k),
-        Expr::MethodSafe(t, m, args) => format!(
+        Expr::MethodSafe(t, m, args, _) => format!(
             "{}?.{}({})",
             fmt_expr(t),
             m,
@@ -2103,7 +2598,7 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
-        Expr::Method(t, m, args) => format!(
+        Expr::Method(t, m, args, _) => format!(
             "{}.{}({})",
             fmt_expr(t),
             m,
@@ -2137,12 +2632,12 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
             )
         }
         Expr::Ternary(c, a, b) => {
-            // cond slot: a nested ternary MUST be parenthesized — `a ? 0 : 2
+            // cond slot: a nested ternary MUST be parenthesized, `a ? 0 : 2
             // ? 3 : 4` re-parses as `a ? 0 : (2 ? 3 : 4)` and silently changes
             // meaning (wave-3 Critic-Q semantics bug)
             format!("{} ? {} : {}", fmt_prec(c, 2), fmt_expr(a), fmt_expr(b))
         }
-        // W06 (D-014): postfix `?!` binds tighter than every binary/ternary —
+        // W06 (D-014): postfix `?!` binds tighter than every binary/ternary,
         // the operand renders at max precedence and needs no parentheses.
         Expr::Propagate(e, _) => format!("{}?!", fmt_prec(e, 12)),
         Expr::New(n, args) => format!(
@@ -2166,6 +2661,640 @@ fn fmt_body_inline(body: &[Stmt]) -> String {
         fmt_expr(e)
     } else {
         "null".into()
+    }
+}
+
+// ------------------------------------------------------------ ast dump
+// W039 (ROADMAP-100): `operon ast`, the Total Grammar structural window.
+//
+// The dump is a hand-written compact walker, NOT the derived Debug: it must
+// be deterministic, stable across rustc versions, and purely structural.
+// Repair notes are W38 `explain`'s surface and never appear here; the dump
+// works on ANY parse (Total Grammar: every file parses, possibly with
+// repairs). One internal tree feeds two renderers, the indented text tree
+// and the --json form, so the two views cannot drift apart.
+
+/// One node of the dump tree. Leaf items carry scalar payloads, node items
+/// carry subtrees. Builders keep leaves before child nodes so the text
+/// renderer can inline the leaves on the opener line.
+enum DumpNode {
+    /// string payload, rendered quoted + escaped in both renderers
+    Str(String),
+    /// bare token (kind labels, numbers, operators), unquoted in the text tree
+    Tok(String),
+    /// a labelled subtree
+    Node(String, Vec<DumpNode>),
+}
+
+fn ds(s: &str) -> DumpNode {
+    DumpNode::Str(s.to_string())
+}
+
+fn dt<D: std::fmt::Display>(t: D) -> DumpNode {
+    DumpNode::Tok(t.to_string())
+}
+
+/// f64 payload: Debug (not Display) so 1.0 never renders as "1" and floats
+/// stay distinguishable from ints in the dump.
+fn df(f: f64) -> DumpNode {
+    DumpNode::Tok(format!("{f:?}"))
+}
+
+fn dn(kind: &str, items: Vec<DumpNode>) -> DumpNode {
+    DumpNode::Node(kind.to_string(), items)
+}
+
+fn d_doc(doc: &[String]) -> Option<DumpNode> {
+    if doc.is_empty() {
+        None
+    } else {
+        Some(dn("Doc", doc.iter().map(|s| ds(s)).collect()))
+    }
+}
+
+fn dunop(op: &UnOp) -> &'static str {
+    match op {
+        UnOp::Neg => "-",
+        UnOp::Not => "not",
+        UnOp::BitNot => "~",
+    }
+}
+
+/// compound assignment spelling (`+=`), source syntax, not bare operator
+fn dassign_op(op: &BinOp) -> String {
+    format!("{}=", fmt_op(*op))
+}
+
+fn d_args(args: &[Expr]) -> DumpNode {
+    dn("Args", args.iter().map(d_expr).collect())
+}
+
+fn d_body(stmts: &[Stmt]) -> DumpNode {
+    dn("Body", stmts.iter().map(d_stmt).collect())
+}
+
+fn d_ann(a: &TypeAnn) -> DumpNode {
+    match a {
+        TypeAnn::Named(n) => dn("Ann", vec![ds(n)]),
+        TypeAnn::Union(alts) => dn("AnnUnion", alts.iter().map(d_ann).collect()),
+        TypeAnn::Optional(inner) => dn("AnnOptional", vec![d_ann(inner)]),
+        TypeAnn::Alias { name, target } => dn("AnnAlias", vec![ds(name), d_ann(target)]),
+        TypeAnn::Generic(name, args) => dn(
+            "AnnGeneric",
+            std::iter::once(ds(name))
+                .chain(args.iter().map(d_ann))
+                .collect(),
+        ),
+    }
+}
+
+/// bytes payload as lowercase hex (b"\xff\x00" dumps as "ff00")
+fn d_hex(bs: &[u8]) -> String {
+    let mut out = String::with_capacity(bs.len() * 2);
+    for b in bs {
+        out.push_str(&format!("{b:02x}"));
+    }
+    out
+}
+
+fn d_expr(e: &Expr) -> DumpNode {
+    match e {
+        // W08r: dump stays byte-identical with pre-marker output — the
+        // marker is transparent metadata, not program structure
+        Expr::At(inner, _) => d_expr(inner),
+        Expr::Null => dn("Null", vec![]),
+        Expr::Bool(b) => dn("Bool", vec![dt(*b)]),
+        Expr::Int(n) => dn("Int", vec![dt(n)]),
+        Expr::Float(f) => dn("Float", vec![df(*f)]),
+        Expr::Str(s) => dn("Str", vec![ds(s)]),
+        Expr::Bytes(bs) => dn("Bytes", vec![ds(&d_hex(bs))]),
+        Expr::Interp(parts) => dn(
+            "Interp",
+            parts
+                .iter()
+                .map(|p| match p {
+                    InterpPart::Lit(s) => dn("Lit", vec![ds(s)]),
+                    InterpPart::Expr(x) => dn("Expr", vec![d_expr(x)]),
+                })
+                .collect(),
+        ),
+        Expr::List(items) => dn("List", items.iter().map(d_expr).collect()),
+        Expr::Map(pairs) => dn(
+            "Map",
+            pairs
+                .iter()
+                .map(|(k, v)| dn("Pair", vec![d_expr(k), d_expr(v)]))
+                .collect(),
+        ),
+        Expr::Ident(s) => dn("Ident", vec![ds(s)]),
+        Expr::Unary(op, x) => dn("Unary", vec![dt(dunop(op)), d_expr(x)]),
+        // dx-r4/A13 source-line stamps are metadata, not structure: omitted
+        Expr::Binary(op, l, r, _) => dn("Binary", vec![dt(fmt_op(*op)), d_expr(l), d_expr(r)]),
+        Expr::Call(f, args, _) => dn("Call", vec![d_expr(f), d_args(args)]),
+        Expr::Index(obj, idx, _) => dn("Index", vec![d_expr(obj), d_expr(idx)]),
+        Expr::Member(obj, name) => dn("Member", vec![d_expr(obj), ds(name)]),
+        Expr::MemberSafe(obj, name) => dn("MemberSafe", vec![d_expr(obj), ds(name)]),
+        Expr::Method(obj, name, args, _) => dn("Method", vec![d_expr(obj), ds(name), d_args(args)]),
+        Expr::MethodSafe(obj, name, args, _) => {
+            dn("MethodSafe", vec![d_expr(obj), ds(name), d_args(args)])
+        }
+        Expr::Lambda(g) => d_gene("Lambda", g),
+        Expr::Collect {
+            var,
+            iter,
+            filter,
+            body,
+        } => {
+            let mut items = vec![ds(var), d_expr(iter)];
+            if let Some(f) = filter {
+                items.push(dn("When", vec![d_expr(f)]));
+            }
+            items.push(dn("Do", vec![d_expr(body)]));
+            dn("Collect", items)
+        }
+        Expr::FateNew(s) => dn("FateNew", vec![ds(s)]),
+        Expr::New(name, args) => dn("New", vec![ds(name), d_args(args)]),
+        Expr::Ternary(c, a, b) => dn("Ternary", vec![d_expr(c), d_expr(a), d_expr(b)]),
+        Expr::Propagate(x, _) => dn("Propagate", vec![d_expr(x)]),
+    }
+}
+
+fn d_pat(p: &MatchPat) -> DumpNode {
+    match p {
+        MatchPat::Lit(e) => dn("Lit", vec![d_expr(e)]),
+        MatchPat::Multi(vs) => dn("Multi", vs.iter().map(d_expr).collect()),
+        MatchPat::Bind(s) => dn("Bind", vec![ds(s)]),
+        MatchPat::Wild => dn("Wild", vec![]),
+        MatchPat::Variant(name, sub) => {
+            let mut items = vec![ds(name)];
+            if let Some(sp) = sub {
+                items.push(d_pat(sp));
+            }
+            dn("Variant", items)
+        }
+        MatchPat::ListPat { elems, rest } => {
+            let mut items: Vec<DumpNode> = elems.iter().map(d_pat).collect();
+            if let Some(r) = rest {
+                items.push(dn("Rest", vec![ds(r)]));
+            }
+            dn("ListPat", items)
+        }
+        MatchPat::MapPat { keys } => dn(
+            "MapPat",
+            keys.iter()
+                .map(|(k, sub)| {
+                    let mut ki = vec![ds(k)];
+                    if let Some(sp) = sub {
+                        ki.push(d_pat(sp));
+                    }
+                    dn("Key", ki)
+                })
+                .collect(),
+        ),
+        MatchPat::Or(alts) => dn("Or", alts.iter().map(d_pat).collect()),
+        MatchPat::Guard(p, cond) => dn("Guard", vec![d_pat(p), d_expr(cond)]),
+    }
+}
+
+fn d_destructure(p: &Pat) -> DumpNode {
+    match p {
+        Pat::Bind(s) => dn("Bind", vec![ds(s)]),
+        Pat::List { elems, rest } => {
+            let mut items: Vec<DumpNode> = elems.iter().map(d_destructure).collect();
+            if let Some(r) = rest {
+                items.push(dn("Rest", vec![ds(r)]));
+            }
+            dn("PatList", items)
+        }
+        Pat::Map { keys } => dn("PatMap", keys.iter().map(|k| ds(k)).collect()),
+    }
+}
+
+/// gene/sequence/lambda/method definition; `kind` names the call site
+fn d_gene(kind: &str, g: &GeneDef) -> DumpNode {
+    let mut items: Vec<DumpNode> = Vec::new();
+    if let Some(n) = &g.name {
+        items.push(ds(n));
+    }
+    if let Some(d) = d_doc(&g.doc) {
+        items.push(d);
+    }
+    let mut params: Vec<DumpNode> = Vec::new();
+    for (i, (name, default)) in g.params.iter().enumerate() {
+        let mut pi = vec![ds(name)];
+        if let Some(Some(a)) = g.param_anns.get(i) {
+            pi.push(d_ann(a));
+        }
+        if let Some(d) = default {
+            pi.push(dn("Default", vec![d_expr(d)]));
+        }
+        params.push(dn("Param", pi));
+    }
+    items.push(dn("Params", params));
+    let mut marks: Vec<DumpNode> = Vec::new();
+    if g.acetylate {
+        marks.push(dt("acetylate"));
+    }
+    if g.methylate {
+        marks.push(dt("methylate"));
+    }
+    if g.m6a {
+        marks.push(dt("m6a"));
+    }
+    if g.copies != 1 {
+        marks.push(dt(format!("copies={}", g.copies)));
+    }
+    if !marks.is_empty() {
+        items.push(dn("Marks", marks));
+    }
+    if let Some((lig, on, thr)) = &g.riboswitch {
+        items.push(dn("Riboswitch", vec![ds(lig), dt(*on), df(*thr)]));
+    }
+    if let Some((kon, koff)) = &g.burst {
+        items.push(dn("Burst", vec![df(*kon), df(*koff)]));
+    }
+    if let Some((cond, gb)) = &g.guard {
+        items.push(dn("Guard", vec![d_expr(cond), d_body(gb)]));
+    }
+    if let Some(a) = &g.ret_ann {
+        items.push(dn("Ret", vec![d_ann(a)]));
+    }
+    items.push(d_body(&g.body));
+    dn(kind, items)
+}
+
+fn d_pheno(p: &PhenoDef) -> DumpNode {
+    let mut items: Vec<DumpNode> = vec![ds(&p.name)];
+    if let Some(d) = d_doc(&p.doc) {
+        items.push(d);
+    }
+    if let Some(parent) = &p.parent {
+        items.push(dn("From", vec![ds(parent)]));
+    }
+    if !p.implements.is_empty() {
+        items.push(dn(
+            "Implements",
+            p.implements.iter().map(|i| ds(i)).collect(),
+        ));
+    }
+    for (name, default) in &p.fields {
+        items.push(dn("Field", vec![ds(name), d_expr(default)]));
+    }
+    for m in &p.methods {
+        items.push(d_gene("Method", m));
+    }
+    dn("Pheno", items)
+}
+
+fn d_edge(e: &RegEdge) -> DumpNode {
+    let mut items = vec![ds(&e.from), ds(&e.to), df(e.strength)];
+    if e.inhibit {
+        items.push(dt("inhibit"));
+    }
+    if let Some(t) = e.threshold {
+        items.push(dt("threshold"));
+        items.push(df(t));
+    }
+    if let Some(h) = e.hill {
+        items.push(dt("hill"));
+        items.push(dt(h));
+    }
+    if e.any {
+        items.push(dt("any"));
+    }
+    if e.occupy {
+        items.push(dt("occupy"));
+    }
+    if e.sum {
+        items.push(dt("sum"));
+    }
+    if e.attenuates {
+        items.push(dt("attenuates"));
+    }
+    dn("Edge", items)
+}
+
+fn d_overrides(ov: &RepressiOverrides) -> DumpNode {
+    let mut items: Vec<DumpNode> = Vec::new();
+    if let Some(v) = ov.alpha {
+        items.push(dn("Alpha", vec![df(v)]));
+    }
+    if let Some(v) = ov.gamma {
+        items.push(dn("Gamma", vec![df(v)]));
+    }
+    if let Some(v) = ov.hill {
+        items.push(dn("Hill", vec![dt(v)]));
+    }
+    if let Some(v) = ov.basal {
+        items.push(dn("Basal", vec![df(v)]));
+    }
+    if let Some(v) = ov.noise {
+        items.push(dn("Noise", vec![df(v)]));
+    }
+    if let Some(v) = ov.seed {
+        items.push(dn("Seed", vec![dt(v)]));
+    }
+    dn("Overrides", items)
+}
+
+fn d_stmt(s: &Stmt) -> DumpNode {
+    match s {
+        Stmt::Let(name, e) => dn("Let", vec![ds(name), d_expr(e)]),
+        Stmt::LetConst(name, e) => dn("LetConst", vec![ds(name), d_expr(e)]),
+        Stmt::LetAnn(name, ann, e) => dn("LetAnn", vec![ds(name), d_ann(ann), d_expr(e)]),
+        Stmt::TypeAlias(name, target, _) => dn("TypeAlias", vec![ds(name), d_ann(target)]),
+        Stmt::Assign(name, op, e) => {
+            let mut items = vec![ds(name)];
+            if let Some(op) = op {
+                items.push(dt(dassign_op(op)));
+            }
+            items.push(d_expr(e));
+            dn("Assign", items)
+        }
+        Stmt::IndexAssign(t, i, op, e) => {
+            let mut items = vec![d_expr(t), d_expr(i)];
+            if let Some(op) = op {
+                items.push(dt(dassign_op(op)));
+            }
+            items.push(d_expr(e));
+            dn("IndexAssign", items)
+        }
+        Stmt::MemberAssign(t, name, op, e) => {
+            let mut items = vec![d_expr(t), ds(name)];
+            if let Some(op) = op {
+                items.push(dt(dassign_op(op)));
+            }
+            items.push(d_expr(e));
+            dn("MemberAssign", items)
+        }
+        Stmt::LetPat(pat, e) => dn("LetPat", vec![d_destructure(pat), d_expr(e)]),
+        Stmt::ForPat(pat, iter, body) => dn(
+            "ForPat",
+            vec![d_destructure(pat), d_expr(iter), d_body(body)],
+        ),
+        Stmt::MultiAssign(targets, values, define) => {
+            let mut items = vec![dt(if *define { "define" } else { "assign" })];
+            items.extend(targets.iter().map(d_expr));
+            items.push(dn("Values", values.iter().map(d_expr).collect()));
+            dn("MultiAssign", items)
+        }
+        Stmt::If(arms, els) => {
+            let mut items: Vec<DumpNode> = arms
+                .iter()
+                .map(|(c, b)| dn("Arm", vec![d_expr(c), d_body(b)]))
+                .collect();
+            if let Some(b) = els {
+                items.push(dn("Else", vec![d_body(b)]));
+            }
+            dn("If", items)
+        }
+        Stmt::While(c, b) => dn("While", vec![d_expr(c), d_body(b)]),
+        Stmt::Loop(b) => dn("Loop", vec![d_body(b)]),
+        Stmt::Scope(b) => dn("Scope", vec![d_body(b)]),
+        Stmt::For(v, i, b) => dn("For", vec![ds(v), d_expr(i), d_body(b)]),
+        Stmt::Return(e) => dn("Return", e.iter().map(d_expr).collect()),
+        Stmt::Break => dn("Break", vec![]),
+        Stmt::Continue => dn("Continue", vec![]),
+        Stmt::ExprStmt(e) => dn("ExprStmt", vec![d_expr(e)]),
+        Stmt::Match(e, arms, _) => {
+            let mut items = vec![d_expr(e)];
+            items.extend(
+                arms.iter()
+                    .map(|(p, b)| dn("Arm", vec![d_pat(p), d_body(b)])),
+            );
+            dn("Match", items)
+        }
+        Stmt::Use(path, alias) => {
+            let mut items = vec![ds(path)];
+            if let Some(a) = alias {
+                items.push(ds(a));
+            }
+            dn("Use", items)
+        }
+        // W007 statement line is metadata, not structure: omitted
+        Stmt::Raise(kind, msg, _) => {
+            let mut items: Vec<DumpNode> = kind.iter().map(|k| ds(k)).collect();
+            items.push(d_expr(msg));
+            dn("Raise", items)
+        }
+        Stmt::Stress { kind, body, rescue } => {
+            let mut items: Vec<DumpNode> = kind.iter().map(|k| ds(k)).collect();
+            items.push(d_body(body));
+            if let Some((k, rb)) = rescue {
+                let mut ritems: Vec<DumpNode> = k.iter().map(|k| ds(k)).collect();
+                ritems.push(d_body(rb));
+                items.push(dn("Rescue", ritems));
+            }
+            dn("Stress", items)
+        }
+        Stmt::Gene(g) => d_gene("Gene", g),
+        Stmt::Splice(sp) => dn(
+            "Splice",
+            vec![ds(&sp.root)]
+                .into_iter()
+                .chain(
+                    sp.variants
+                        .iter()
+                        .map(|(n, g)| dn("Variant", vec![ds(n), d_gene("Gene", g)])),
+                )
+                .collect(),
+        ),
+        Stmt::Trait(t) => dn(
+            "Trait",
+            vec![ds(&t.name)]
+                .into_iter()
+                .chain(d_doc(&t.doc))
+                .chain(t.methods.iter().map(|m| {
+                    let mut mi = vec![ds(&m.name)];
+                    if m.required {
+                        mi.push(dt("required"));
+                    }
+                    if let Some(g) = &m.default {
+                        mi.push(d_gene("Default", g));
+                    }
+                    dn("Method", mi)
+                }))
+                .collect(),
+        ),
+        Stmt::Silence(old, new, strength, sites) => {
+            let mut items = vec![ds(old)];
+            if let Some(n) = new {
+                items.push(ds(n));
+            }
+            items.push(df(*strength));
+            items.push(dt(sites));
+            dn("Silence", items)
+        }
+        Stmt::Operon(name, members) => dn(
+            "Operon",
+            vec![ds(name)]
+                .into_iter()
+                .chain(
+                    members
+                        .iter()
+                        .map(|(n, rbs)| dn("Cistron", vec![ds(n), df(*rbs)])),
+                )
+                .collect(),
+        ),
+        Stmt::Enhance(names) => dn("Enhance", names.iter().map(|n| ds(n)).collect()),
+        Stmt::Ires(n) => dn("Ires", vec![ds(n)]),
+        Stmt::Fate(f) => {
+            let mut items = vec![ds(&f.name)];
+            if let Some(e) = &f.enter {
+                items.push(ds(e));
+            }
+            items.extend(
+                f.states
+                    .iter()
+                    .map(|(s, tg)| dn("State", vec![ds(s), ds(&tg.join("|"))])),
+            );
+            dn("Fate", items)
+        }
+        Stmt::Regulate(edges, trans, binds) => {
+            let mut items: Vec<DumpNode> = edges.iter().map(d_edge).collect();
+            items.extend(trans.iter().map(|t| {
+                let mut ti = vec![ds(&t.from), ds(&t.to)];
+                if let Some(r) = t.rate {
+                    ti.push(dt("rate"));
+                    ti.push(df(r));
+                }
+                if let Some(d) = t.decay {
+                    ti.push(dt("decay"));
+                    ti.push(df(d));
+                }
+                dn("Trans", ti)
+            }));
+            items.extend(binds.iter().map(|b| {
+                dn(
+                    "Bind",
+                    vec![
+                        ds(&b.tf),
+                        ds(&b.ligand),
+                        dt(if b.inducer { "inducer" } else { "cofactor" }),
+                        df(b.k),
+                    ],
+                )
+            }));
+            dn("Regulate", items)
+        }
+        Stmt::Ligand(n) => dn("Ligand", vec![ds(n)]),
+        Stmt::Autoinducer(n) => dn("Autoinducer", vec![ds(n)]),
+        Stmt::Toggle(a, b) => dn("Toggle", vec![ds(a), ds(b)]),
+        Stmt::Decoy(d, tf, c) => dn("Decoy", vec![ds(d), ds(tf), df(*c)]),
+        Stmt::Repressilator(ring, period, ov) => {
+            let mut items: Vec<DumpNode> = ring.iter().map(|r| ds(r)).collect();
+            if let Some(p) = period {
+                items.push(dt("period"));
+                items.push(df(*p));
+            }
+            items.push(d_overrides(ov));
+            dn("Repressilator", items)
+        }
+        Stmt::Frame {
+            name,
+            is_proof,
+            body,
+        } => {
+            let kind = if *is_proof { "Proof" } else { "Frame" };
+            dn(kind, vec![ds(name), d_body(body)])
+        }
+        Stmt::Edit(target, reps) => dn(
+            "Edit",
+            vec![ds(target)]
+                .into_iter()
+                .chain(reps.iter().map(|(f, t)| dn("Rep", vec![ds(f), ds(t)])))
+                .collect(),
+        ),
+        Stmt::AnchorExport(names) => dn("AnchorExport", names.iter().map(|n| ds(n)).collect()),
+        Stmt::AnchorImport(names) => dn("AnchorImport", names.iter().map(|n| ds(n)).collect()),
+        Stmt::Tad(name, body) => dn("Tad", vec![ds(name), d_body(body)]),
+        // W025 stage 2: nested sub-module tables dump beside tads
+        Stmt::Module(name, body) => dn("Module", vec![ds(name), d_body(body)]),
+        Stmt::Block(body) => dn("Block", vec![d_body(body)]),
+        Stmt::Seq(g) => d_gene("Seq", g),
+        Stmt::Yield(e) => dn("Yield", e.iter().map(d_expr).collect()),
+        Stmt::Pheno(p) => d_pheno(p),
+    }
+}
+
+fn d_program(prog: &Program) -> DumpNode {
+    dn("Program", prog.stmts.iter().map(d_stmt).collect())
+}
+
+/// W039: the `operon ast` text form. A deterministic, purely structural
+/// tree: one `(Kind ...)` node per AST node, string leaves quoted and
+/// escaped, child nodes indented two spaces per level. `pretty = false`
+/// renders the same tree on one line; that is the deep-nesting fallback,
+/// the pretty form is quadratic in source nesting depth (indent x depth).
+pub fn ast_dump(prog: &Program, pretty: bool) -> String {
+    sexpr(&d_program(prog), 0, pretty)
+}
+
+fn sexpr(n: &DumpNode, ind: usize, pretty: bool) -> String {
+    match n {
+        DumpNode::Str(s) => format!("\"{}\"", json_escape(s)),
+        DumpNode::Tok(t) => t.clone(),
+        DumpNode::Node(kind, items) => {
+            let kids: Vec<&DumpNode> = items
+                .iter()
+                .filter(|i| matches!(i, DumpNode::Node(..)))
+                .collect();
+            let mut out = String::new();
+            out.push('(');
+            out.push_str(kind);
+            if kids.is_empty() || !pretty {
+                for i in items {
+                    out.push(' ');
+                    out.push_str(&sexpr(i, ind, pretty));
+                }
+                out.push(')');
+            } else {
+                // leaves stay on the opener line, child nodes hang below
+                for i in items {
+                    if matches!(i, DumpNode::Node(..)) {
+                        continue;
+                    }
+                    out.push(' ');
+                    out.push_str(&sexpr(i, ind, pretty));
+                }
+                for k in kids {
+                    out.push('\n');
+                    out.push_str(&"  ".repeat(ind + 1));
+                    out.push_str(&sexpr(k, ind + 1, pretty));
+                }
+                out.push('\n');
+                out.push_str(&"  ".repeat(ind));
+                out.push(')');
+            }
+            out
+        }
+    }
+}
+
+/// W039: the same dump tree as JSON (what `operon ast --json` embeds in its
+/// report object). One `["Kind", ...]` array per node, payloads and labels
+/// as JSON strings, child nodes as nested arrays, so the --json form is the
+/// text form's exact structure by construction.
+pub fn ast_dump_json(prog: &Program) -> String {
+    djson(&d_program(prog))
+}
+
+fn djson(n: &DumpNode) -> String {
+    match n {
+        DumpNode::Str(s) => format!("\"{}\"", json_escape(s)),
+        DumpNode::Tok(t) => format!("\"{}\"", json_escape(t)),
+        DumpNode::Node(kind, items) => {
+            let mut out = String::new();
+            out.push_str("[\"");
+            out.push_str(&json_escape(kind));
+            out.push('"');
+            for i in items {
+                out.push(',');
+                out.push_str(&djson(i));
+            }
+            out.push(']');
+            out
+        }
     }
 }
 
@@ -2199,11 +3328,415 @@ pub fn flush_notes(l: &Loaded, quiet: bool) {
             3 => "wobble",
             _ => "fallback",
         };
+        // W101 slice 7: the derived E2xxx code rides the tag when the note's
+        // message maps to a catalog family (docs/diagnostics-inventory.md);
+        // uncoded notes render exactly as before.
+        let code = crate::diag::note_code(&n.message);
+        let tag_s = if code.is_empty() {
+            tag.to_string()
+        } else {
+            format!("{} {}", tag, code)
+        };
         // A13 (dx-r2): real locations when the note carries a line
         if n.line > 0 {
-            let _ = writeln!(w, "[{}] {}:{}: {}", tag, l.interp.file, n.line, n.message);
+            let _ = writeln!(w, "[{}] {}:{}: {}", tag_s, l.interp.file, n.line, n.message);
         } else {
-            let _ = writeln!(w, "[{}] {}", tag, n.message);
+            let _ = writeln!(w, "[{}] {}", tag_s, n.message);
         }
     }
+}
+
+// ---------------------------------------------------------------- fix (W65)
+
+/// W65 (ROADMAP-100): what one `operon fix` pass changed.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FixReport {
+    /// synonym/wobble canonicalizations the parser+fmt pass surfaced
+    /// (rung-2 and rung-3 repair notes on the migrated source).
+    pub canonicalized: usize,
+    /// `const` → `let` keyword migrations applied at the source level.
+    /// RETIRED (W05 hotfix): `const` is a live immutable binding, so the
+    /// rewrite would change program meaning. Field kept for --json shape
+    /// stability; always 0.
+    pub const_to_let: usize,
+    /// `expr::field` → `expr.field` migrations applied at the source level
+    /// (dx-r3: old tutorials taught the unsupported `::` spelling).
+    pub s_dot: usize,
+}
+
+/// W65: the `operon fix` core, parse → migrate → canonicalize.
+///
+/// Pipeline: (1) source-level legacy-token migrations, string/comment-aware;
+/// (2) parse with Total Grammar repairs; (3) emit the canonical formatter
+/// output. The result re-parses without rung-2+ notes on canonically valid
+/// input, and the canonical MEANING of the program never changes: fix is a
+/// surface-syntax migrator, not a rewriter.
+pub fn fix_source(src: &str) -> (String, FixReport) {
+    let (migrated, const_n, sdot_n) = migrate_source(src);
+    let prog = parser::parse(&migrated);
+    let canonicalized = prog.notes.iter().filter(|n| n.rung >= 2).count();
+    let out = format_program(&prog);
+    (
+        out,
+        FixReport {
+            canonicalized,
+            const_to_let: const_n,
+            s_dot: sdot_n,
+        },
+    )
+}
+
+/// W65: the source-level migration pass. Walks the whole source char-wise
+/// (not line-wise) so triple-quoted, raw, and escaped strings stay intact;
+/// edits only CODE regions: comments and every string form are copied
+/// verbatim. `use` lines are copied verbatim too: since W025 the `::`
+/// separator in a use path is CURRENT sugar (exact spelling of `/`), not the
+/// legacy call syntax the `expr::field` migration exists to retire, so
+/// rewriting it would churn the canonical form for nothing (fix_corpus
+/// law 1 caught this on tests/differential/namespaces.op). Returns
+/// (new_source, const_count, s_dot_count).
+fn migrate_source(src: &str) -> (String, usize, usize) {
+    let chars: Vec<char> = src.chars().collect();
+    let n = chars.len();
+    let mut out = String::with_capacity(src.len() + 16);
+    let mut i = 0usize;
+    let const_n = 0usize; // retired migration (W05 hotfix), kept for report shape, always 0
+    let mut sdot_n = 0usize;
+    // only whitespace since the last newline: a word here is a statement
+    // keyword, which is how use lines are recognized
+    let mut at_stmt_start = true;
+
+    while i < n {
+        let c = chars[i];
+        // W25 follow-up (2026-09-27): `::` is LIVE exact sugar in use paths
+        // (use std::bio — dev1's W25). A use line is copied VERBATIM: the
+        // separators are free spelling variants there (W25 contract), so the
+        // dx-r3 expr::field → expr.field repair below must never touch them
+        // (fix_corpus law 1: fix never changes canonical meaning — the
+        // formatter preserves the spelling the author chose). Expression
+        // context keeps the dx-r3 repair (law 3 pins it).
+        if c == 'u'
+            && (i == 0 || out.ends_with('\n'))
+            && i + 3 < n
+            && chars[i + 1] == 's'
+            && chars[i + 2] == 'e'
+            && (chars[i + 3] == ' ' || chars[i + 3] == '\t')
+        {
+            while i < n && chars[i] != '\n' {
+                out.push(chars[i]);
+                i += 1;
+            }
+            continue;
+        }
+        // comments: verbatim to end of line (the newline itself re-enters code)
+        if c == '#' {
+            while i < n && chars[i] != '\n' {
+                out.push(chars[i]);
+                i += 1;
+            }
+            continue;
+        }
+        // raw strings r"...": the r must be a standalone token (start or
+        // preceded by a non-id char) and followed directly by a quote
+        if c == 'r'
+            && i + 1 < n
+            && chars[i + 1] == '"'
+            && (i == 0 || !(chars[i - 1].is_ascii_alphanumeric() || chars[i - 1] == '_'))
+        {
+            out.push(c);
+            out.push('"');
+            i += 2;
+            while i < n && chars[i] != '"' {
+                if chars[i] == '\n' {
+                    out.push('\n');
+                } else {
+                    out.push(chars[i]);
+                }
+                i += 1;
+            }
+            if i < n {
+                out.push('"');
+                i += 1;
+            }
+            continue;
+        }
+        // triple-quoted strings """...""": verbatim, may span lines
+        if c == '"' && i + 2 < n && chars[i + 1] == '"' && chars[i + 2] == '"' {
+            out.push_str("\"\"\"");
+            i += 3;
+            while i < n {
+                if chars[i] == '"' && i + 2 < n && chars[i + 1] == '"' && chars[i + 2] == '"' {
+                    out.push_str("\"\"\"");
+                    i += 3;
+                    break;
+                }
+                out.push(chars[i]);
+                i += 1;
+            }
+            continue;
+        }
+        // plain strings: verbatim, backslash escapes respected
+        if c == '"' {
+            out.push(c);
+            i += 1;
+            while i < n {
+                if chars[i] == '\\' && i + 1 < n {
+                    out.push(chars[i]);
+                    out.push(chars[i + 1]);
+                    i += 2;
+                    continue;
+                }
+                if chars[i] == '"' {
+                    out.push('"');
+                    i += 1;
+                    break;
+                }
+                out.push(chars[i]);
+                i += 1;
+            }
+            continue;
+        }
+        // identifiers: the only code region fix rewrites
+        if c.is_ascii_alphabetic() || c == '_' {
+            let start = i;
+            while i < n && (chars[i].is_ascii_alphanumeric() || chars[i] == '_') {
+                i += 1;
+            }
+            let word: String = chars[start..i].iter().collect();
+            out.push_str(&word);
+            // a `use` line is path syntax, never a method call: copy the
+            // whole line verbatim so use-path separators stay as written
+            if at_stmt_start && word == "use" {
+                while i < n && chars[i] != '\n' {
+                    out.push(chars[i]);
+                    i += 1;
+                }
+                continue;
+            }
+            at_stmt_start = false;
+            // migration 2: expr::field → expr.field (dx-r3 legacy spelling)
+            if i + 1 < n && chars[i] == ':' && chars[i + 1] == ':' {
+                let followed_by_id =
+                    i + 2 < n && (chars[i + 2].is_ascii_alphanumeric() || chars[i + 2] == '_');
+                if followed_by_id {
+                    out.push('.');
+                    i += 2;
+                    sdot_n += 1;
+                }
+            }
+            continue;
+        }
+        if c == '\n' {
+            at_stmt_start = true;
+        } else if c != ' ' && c != '\t' && c != '\r' {
+            at_stmt_start = false;
+        }
+        out.push(c);
+        i += 1;
+    }
+    (out, const_n, sdot_n)
+}
+// ------------------------------------------------------------ docgen (W073)
+/// W073: `operon doc`, markdown API reference rendered from the AST.
+/// Parse-only (like check/fmt): no run, no capabilities beyond reading the
+/// input file. Docs come from W074 `##` comments; signatures reuse the
+/// formatter's parameter renderer so doc output can never drift from fmt.
+fn doc_gene_signature(kind: &str, g: &GeneDef) -> String {
+    let name = g.name.clone().unwrap_or_default();
+    let mut s = format!(
+        "{} {}({})",
+        kind,
+        name,
+        fmt_params_ann(&g.params, &g.param_anns)
+    );
+    if let Some(r) = &g.ret_ann {
+        s.push_str(" -> ");
+        s.push_str(&r.render());
+    }
+    let mut marks: Vec<&str> = Vec::new();
+    if g.acetylate {
+        marks.push("@acetylate");
+    }
+    if g.methylate {
+        marks.push("@methylate");
+    }
+    if g.m6a {
+        marks.push("@m6a");
+    }
+    if g.copies > 1 {
+        marks.push("@copies");
+    }
+    if g.riboswitch.is_some() {
+        marks.push("@riboswitch");
+    }
+    if g.burst.is_some() {
+        marks.push("@burst");
+    }
+    if !marks.is_empty() {
+        s.push(' ');
+        s.push_str(&marks.join(" "));
+    }
+    s
+}
+
+fn doc_md_lines(doc: &[String], out: &mut String) {
+    if doc.is_empty() {
+        return;
+    }
+    for l in doc {
+        out.push_str(l);
+        out.push('\n');
+    }
+    out.push('\n');
+}
+
+/// Render one file's API as markdown. `path` is shown in the header only.
+pub fn doc_markdown(path: &str, prog: &Program) -> String {
+    let stem = std::path::Path::new(path)
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| path.to_string());
+    let mut out = String::new();
+    out.push_str(&format!("# {}\n\n", stem));
+    doc_md_lines(&prog.module_doc, &mut out);
+    out.push_str(&format!(
+        "> Generated by `operon doc {}`, parse-only API surface (signatures, marks, `##` docs). \
+Behavioral docs live in SPEC.md; network/regulation graphs: `operon graph`.\n\n",
+        path
+    ));
+
+    for s in &prog.stmts {
+        match s {
+            Stmt::Gene(g) | Stmt::Seq(g) => {
+                if g.name.is_none() {
+                    continue;
+                }
+                let kind = if matches!(s, Stmt::Seq(_)) {
+                    "sequence"
+                } else {
+                    "gene"
+                };
+                out.push_str(&format!("## `{}`\n\n", doc_gene_signature(kind, g)));
+                doc_md_lines(&g.doc, &mut out);
+            }
+            Stmt::Splice(sp) => {
+                out.push_str(&format!("## `splice {}`\n\n", sp.root));
+                doc_md_lines(&sp.doc, &mut out);
+                for (vname, vgene) in &sp.variants {
+                    out.push_str(&format!(
+                        "- variant `{}`, `{}`\n",
+                        vname,
+                        doc_gene_signature("gene", vgene)
+                    ));
+                }
+                out.push('\n');
+            }
+            Stmt::Pheno(p) => {
+                match &p.parent {
+                    Some(par) => {
+                        out.push_str(&format!("## `phenotype {} from {}`\n\n", p.name, par))
+                    }
+                    None => out.push_str(&format!("## `phenotype {}`\n\n", p.name)),
+                }
+                doc_md_lines(&p.doc, &mut out);
+                for (fname, fexpr) in &p.fields {
+                    out.push_str(&format!("- field `let {} = {}`\n", fname, fmt_expr(fexpr)));
+                }
+                for m in &p.methods {
+                    out.push_str(&format!("- method `{}`\n", doc_gene_signature("gene", m)));
+                }
+                out.push('\n');
+            }
+            Stmt::Fate(f) => {
+                out.push_str(&format!("## `fate {}`\n\n", f.name));
+                doc_md_lines(&f.doc, &mut out);
+                for (state, targets) in &f.states {
+                    out.push_str(&format!(
+                        "- state `{}` → {}\n",
+                        state,
+                        if targets.is_empty() {
+                            "terminal".to_string()
+                        } else {
+                            targets.join(", ")
+                        }
+                    ));
+                }
+                if let Some(e) = &f.enter {
+                    out.push_str(&format!("- enters at `{}`\n", e));
+                }
+                out.push('\n');
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Render one file's API as the playground-facing JSON document.
+pub fn doc_json(path: &str, prog: &Program) -> String {
+    fn jstr(s: &str) -> String {
+        format!("\"{}\"", json_escape(s))
+    }
+    fn jarr(items: &[String]) -> String {
+        format!(
+            "[{}]",
+            items.iter().map(|i| jstr(i)).collect::<Vec<_>>().join(",")
+        )
+    }
+    fn gene_marks(g: &GeneDef) -> Vec<String> {
+        let mut marks: Vec<String> = Vec::new();
+        if g.acetylate {
+            marks.push("@acetylate".into());
+        }
+        if g.methylate {
+            marks.push("@methylate".into());
+        }
+        if g.m6a {
+            marks.push("@m6a".into());
+        }
+        if g.copies > 1 {
+            marks.push("@copies".into());
+        }
+        if g.riboswitch.is_some() {
+            marks.push("@riboswitch".into());
+        }
+        if g.burst.is_some() {
+            marks.push("@burst".into());
+        }
+        marks
+    }
+    let stem = std::path::Path::new(path)
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| path.to_string());
+    let mut out = String::new();
+    out.push_str("{\"module\":");
+    out.push_str(&jstr(&stem));
+    out.push_str(",\"doc\":");
+    out.push_str(&jarr(&prog.module_doc));
+    out.push_str(",\"genes\":[");
+    let mut items: Vec<String> = Vec::new();
+    for s in &prog.stmts {
+        if let Stmt::Gene(g) | Stmt::Seq(g) = s {
+            if g.name.is_none() {
+                continue;
+            }
+            let kind = if matches!(s, Stmt::Seq(_)) {
+                "sequence"
+            } else {
+                "gene"
+            };
+            items.push(format!(
+                "{{\"name\":{},\"signature\":{},\"kind\":{},\"doc\":{},\"marks\":{}}}",
+                jstr(g.name.as_deref().unwrap_or("")),
+                jstr(&doc_gene_signature(kind, g)),
+                jstr(kind),
+                jarr(&g.doc),
+                jarr(&gene_marks(g))
+            ));
+        }
+    }
+    out.push_str(&items.join(","));
+    out.push_str("]}");
+    out
 }

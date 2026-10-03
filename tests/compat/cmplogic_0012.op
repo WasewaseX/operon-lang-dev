@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=12 tag=c012
+
+print("c012-c0:", 2863 == -8921)
+
+print("c012-c1:", 4270 <= -9663)
+
+print("c012-c2:", 9614 <= 66)
+
+print("c012-c3:", -1770 == -2141)
+
+print("c012-c4:", 6668 >= -6954)
+
+print("c012-b0:", 40 < 24 && 24 < 25, 40 > 24 || 40 > 25)
+
+print("c012-b1:", 18 < 37 && 37 < 27, 18 > 37 || 18 > 27)
+
+print("c012-b2:", 36 < 14 && 14 < 36, 36 > 14 || 36 > 36)
+
+print("c012-b3:", 35 < 4 && 4 < 34, 35 > 4 || 35 > 34)
+
+print("c012-t0:", -679 > -5215 ? "gt" : "le")
+
+print("c012-t1:", 837 > -5037 ? "gt" : "le")
+
+print("c012-t2:", 9495 > -5483 ? "gt" : "le")
+
+print("c012-t3:", -5088 > -5977 ? "gt" : "le")
+
+let c012_n0 = null
+
+print("c012-n0:", c012_n0 ?? 9188, c012_n0 == null)
+
+let c012_n1 = null
+
+print("c012-n1:", c012_n1 ?? 7143, c012_n1 == null)
+
+let c012_n2 = null
+
+print("c012-n2:", c012_n2 ?? 3013, c012_n2 == null)
+
+print("c012-s0:", "cBsv" in "tsovCccBsv", "cBsv" == "cBsv")
+
+print("c012-s1:", "a99b" in "_17ojna99b", "a99b" == "a99b")

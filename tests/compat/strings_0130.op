@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=130 tag=s130
+
+print("s130-m0:", "vmf3bbavr7tp".upper(), "vmf3bbavr7tp".slice(1), "vmf3bbavr7tp".len())
+
+print("s130-m1:", "8_vjmv2va".upper(), "8_vjmv2va".slice(2), "8_vjmv2va".len())
+
+print("s130-m2:", "z957e9kAa".upper(), "z957e9kAa".slice(4), "z957e9kAa".len())
+
+print("s130-m3:", "vlx4eou2cAC".upper(), "vlx4eou2cAC".slice(3), "vlx4eou2cAC".len())
+
+print("s130-m4:", "nqh6swto8".upper(), "nqh6swto8".slice(4), "nqh6swto8".len())
+
+print("s130-i0:", "y6d-{61}-it8o")
+
+let s130_v0 = 61
+
+print("s130-v0:", "n={s130_v0}" + "!" * 2)
+
+print("s130-i1:", "_2t-{6}-lzvr")
+
+let s130_v1 = 6
+
+print("s130-v1:", "n={s130_v1}" + "!" * 3)
+
+print("s130-i2:", "A58-{23}-we37")
+
+let s130_v2 = 23
+
+print("s130-v2:", "n={s130_v2}" + "!" * 3)
+
+print("s130-r0:", "k479qadr".replace("k", "mz"), "k479qadr".contains("47"))
+
+print("s130-r1:", "trbBcAzv".replace("t", "xe"), "trbBcAzv".contains("rb"))
+
+print("s130-r2:", "4421Cp3o".replace("4", "1b"), "4421Cp3o".contains("42"))
+
+print("s130-j0:", ["nv8", "sdC", "dca"].join("-"))
+
+print("s130-j1:", ["2ck", "9_q", "itv", "yo6", "9zA"].join("-"))
+
+print("s130-a0:", "1B_0A03".at(2), "1B_0A03".trim() == "1B_0A03")
+
+print("s130-a1:", "oBcycf4".at(3), "oBcycf4".trim() == "oBcycf4")

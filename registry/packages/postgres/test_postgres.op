@@ -1,0 +1,64 @@
+# postgres package test — runs in-tree and vendored.
+use postgres
+
+frame proof {
+    # DSN parse
+    let d = postgres.pg_dsn_parse("postgresql://bob:hunter2@db.example.com:5433/prod?sslmode=require&connect_timeout=5")
+    assert(d["user"] == "bob", "user")
+    assert(d["password"] == "hunter2", "password")
+    assert(d["host"] == "db.example.com", "host")
+    assert(d["port"] == 5433, "port")
+    assert(d["database"] == "prod", "database")
+    assert(d["params"]["sslmode"] == "require", "params parsed")
+    assert(d["params"]["connect_timeout"] == "5", "second param")
+
+    let minimal = postgres.pg_dsn_parse("localhost")
+    assert(minimal["host"] == "localhost" and minimal["port"] == 5432, "bare host + default port")
+
+    let v6 = postgres.pg_dsn_parse("postgresql://u@[::1]:5434/d")
+    assert(v6["host"] == "::1" and v6["port"] == 5434, "IPv6 literal host")
+
+    let noport = postgres.pg_dsn_parse("postgresql://u@h/mydb")
+    assert(noport["host"] == "h" and noport["port"] == 5432 and noport["database"] == "mydb", "no port")
+
+    # DSN build: canonical, sorted params, default port omitted
+    let built = postgres.pg_dsn_build({user: "bob", password: "", host: "h.io", port: 5432, database: "db", params: {z: "1", a: "2"}})
+    assert(built == "postgresql://bob@h.io/db?a=2&z=1", "canonical build")
+    assert(postgres.pg_dsn_build({user: "", password: "", host: "h", port: 5432, database: "", params: {}}) == "postgresql://h", "minimal build")
+
+    # quoting
+    assert(postgres.pg_quote_ident("user table") == "\"user table\"", "ident quoted")
+    assert(postgres.pg_quote_ident("we\"ird") == "\"we\"\"ird\"", "ident inner quotes doubled")
+    assert(postgres.pg_quote_literal("it's") == "'it''s'", "literal inner quote doubled")
+    assert(postgres.pg_quote_literal(null) == "NULL", "null literal")
+    assert(postgres.pg_quote_literal(true) == "TRUE" and postgres.pg_quote_literal(false) == "FALSE", "bool literals")
+    assert(postgres.pg_quote_literal(42) == "42" and postgres.pg_quote_literal(1.5) == "1.5", "numeric passthrough")
+    assert(postgres.pg_quote_like("50%_off\\") == "50\\%\\_off\\\\", "LIKE escaping")
+
+    # placeholders
+    let sql = "SELECT * FROM users WHERE name = $1 AND age > $2 LIMIT $3"
+    let filled = postgres.pg_placeholders(sql, ["ada", 30, 10])
+    assert(postgres.pg_index_of(filled, "'ada'") >= 0, "string param quoted")
+    assert(postgres.pg_index_of(filled, "30") >= 0 and postgres.pg_index_of(filled, "LIMIT 10") >= 0, "numeric params raw")
+    assert(postgres.pg_placeholder_count(sql) == 3, "count")
+    assert(postgres.pg_placeholder_count("no params") == 0, "count zero")
+    let unfilled = postgres.pg_placeholders("SELECT $1, $9", ["x"])
+    assert(postgres.pg_index_of(unfilled, "$9") >= 0, "missing param left visible")
+    assert(postgres.pg_index_of(unfilled, "'x'") >= 0, "present param filled")
+    let money = postgres.pg_placeholders("price = $1", ["it's 5$"])
+    assert(postgres.pg_index_of(money, "'it''s 5$'") >= 0, "dollar inside value is safe")
+
+    # arrays
+    assert(postgres.pg_array_encode([1, 2, 3], "int") == "ARRAY[1, 2, 3]::int[]", "int array")
+    assert(postgres.pg_array_encode(["a", "b'c"], "text") == "ARRAY['a', 'b''c']::text[]", "text array")
+    assert(postgres.pg_array_encode([], "int") == "ARRAY[]::int[]", "empty array")
+
+    # LIMIT guard
+    assert(postgres.pg_limit_safe(25, 50) == 25, "int passes")
+    assert(postgres.pg_limit_safe(-3, 50) == 0, "negative clamps")
+    assert(postgres.pg_limit_safe("15", 50) == 15, "numeric string parses")
+    assert(postgres.pg_limit_safe("DROP TABLE x", 50) == 50, "hostile string falls back")
+    assert(postgres.pg_limit_safe("1.5", 50) == 50, "non-int string falls back")
+    assert(postgres.pg_limit_safe(2.9, 50) == 2, "float floors")
+    assert(postgres.pg_limit_safe(null, 50) == 50, "null falls back")
+}

@@ -1,0 +1,50 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=156 tag=s156
+
+print("s156-m0:", "fBi9nf4s".upper(), "fBi9nf4s".slice(3), "fBi9nf4s".len())
+
+print("s156-m1:", "ko6qwp3s".upper(), "ko6qwp3s".slice(4), "ko6qwp3s".len())
+
+print("s156-m2:", "tAnisAz".upper(), "tAnisAz".slice(2), "tAnisAz".len())
+
+print("s156-m3:", "nu7_Abko7Ayqb0".upper(), "nu7_Abko7Ayqb0".slice(3), "nu7_Abko7Ayqb0".len())
+
+print("s156-m4:", "6epw6tBBj9q".upper(), "6epw6tBBj9q".slice(1), "6epw6tBBj9q".len())
+
+print("s156-i0:", "CAv-{9}-Acr7")
+
+let s156_v0 = 9
+
+print("s156-v0:", "n={s156_v0}" + "!" * 2)
+
+print("s156-i1:", "qn7-{24}-l5q3")
+
+let s156_v1 = 24
+
+print("s156-v1:", "n={s156_v1}" + "!" * 3)
+
+print("s156-i2:", "ji4-{33}-6k3q")
+
+let s156_v2 = 33
+
+print("s156-v2:", "n={s156_v2}" + "!" * 2)
+
+print("s156-i3:", "rzn-{52}-abwz")
+
+let s156_v3 = 52
+
+print("s156-v3:", "n={s156_v3}" + "!" * 3)
+
+print("s156-r0:", "2lzBgx8e".replace("2", "54"), "2lzBgx8e".contains("lz"))
+
+print("s156-r1:", "kwib77Bq".replace("k", "B6"), "kwib77Bq".contains("wi"))
+
+print("s156-j0:", ["rc2", "Bd6", "ip5"].join("-"))
+
+print("s156-j1:", ["uff", "Bfs", "C2y", "4qd", "c27"].join("-"))
+
+print("s156-j2:", ["n58", "py3", "vph", "1i7", "9yf"].join("-"))
+
+print("s156-a0:", "zwqjlkm".at(5), "zwqjlkm".trim() == "zwqjlkm")
+
+print("s156-a1:", "56vbo_a".at(2), "56vbo_a".trim() == "56vbo_a")

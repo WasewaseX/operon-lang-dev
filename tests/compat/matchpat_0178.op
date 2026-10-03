@@ -1,0 +1,286 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=178 tag=m178
+
+let m178_s0 = some(8)
+
+match m178_s0 {
+
+    case Some(x) if x > 8 {
+
+        print("m178-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m178-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m178-m0:", "none")
+
+    }
+
+}
+
+let m178_s1 = some(4)
+
+match m178_s1 {
+
+    case Some(x) if x > 4 {
+
+        print("m178-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m178-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m178-m1:", "none")
+
+    }
+
+}
+
+let m178_s2 = some(9)
+
+match m178_s2 {
+
+    case Some(x) if x > 9 {
+
+        print("m178-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m178-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m178-m2:", "none")
+
+    }
+
+}
+
+let m178_ls0 = [28, 47, 43]
+
+match m178_ls0 {
+
+    case [28, *rest] {
+
+        print("m178-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m178-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m178-l0:", "other")
+
+    }
+
+}
+
+let m178_ls1 = [41, 8, 1]
+
+match m178_ls1 {
+
+    case [41, *rest] {
+
+        print("m178-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m178-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m178-l1:", "other")
+
+    }
+
+}
+
+let m178_ls2 = [14, 10, 37]
+
+match m178_ls2 {
+
+    case [14, *rest] {
+
+        print("m178-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m178-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m178-l2:", "other")
+
+    }
+
+}
+
+let m178_mp0 = {helix: 9877, gene: -7588}
+
+match m178_mp0 {
+
+    case {helix: p, gene: q} {
+
+        print("m178-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m178-mp0:", "miss")
+
+    }
+
+}
+
+let m178_mp1 = {vector: -9198, gene: 6224}
+
+match m178_mp1 {
+
+    case {vector: p, gene: q} {
+
+        print("m178-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m178-mp1:", "miss")
+
+    }
+
+}
+
+let m178_mp2 = {exon: -1744, splicer: 8734}
+
+match m178_mp2 {
+
+    case {exon: p, splicer: q} {
+
+        print("m178-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m178-mp2:", "miss")
+
+    }
+
+}
+
+let m178_r0 = ok(1)
+
+match m178_r0 {
+
+    case Ok(n) | Err(1) {
+
+        print("m178-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m178-r0:", "zero")
+
+    }
+
+}
+
+let m178_r1 = ok(1)
+
+match m178_r1 {
+
+    case Ok(n) | Err(1) {
+
+        print("m178-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m178-r1:", "zero")
+
+    }
+
+}
+
+let m178_r2 = ok(3)
+
+match m178_r2 {
+
+    case Ok(n) | Err(3) {
+
+        print("m178-r2:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m178-r2:", "zero")
+
+    }
+
+}
+
+match "codon" {
+
+    case "codon" {
+
+        print("m178-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m178-w0:", "alt")
+
+    }
+
+}
+
+match "plasmid" {
+
+    case "plasmid" {
+
+        print("m178-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m178-w1:", "alt")
+
+    }
+
+}

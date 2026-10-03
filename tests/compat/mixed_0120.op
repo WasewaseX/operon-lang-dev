@@ -1,0 +1,190 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=120 tag=m120
+
+gene m120_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m120-b0:", m120_b0({cell: 4, codon: 83, plasmid: 28})?!)
+
+gene m120_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m120-b1:", m120_b1({gene: 94, cell: 17, codon: 97})?!)
+
+gene m120_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m120_f0([52, 17, 35, 49]) {
+
+    case Ok(list) {
+
+        print("m120-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m120-f0:", "e:", m)
+
+    }
+
+}
+
+gene m120_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m120_f1([52, 37, 60, 40, 39, 8]) {
+
+    case Ok(list) {
+
+        print("m120-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m120-f1:", "e:", m)
+
+    }
+
+}
+
+let m120_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m120-cc0:", m120_cl0(7)(2), m120_cl0(2)(7))
+
+let m120_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m120-cc1:", m120_cl1(15)(15), m120_cl1(15)(15))
+
+let m120_data0 = some([some("helix"), none(), some(7)])
+
+match m120_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m120-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m120-x0:", "shape-miss")
+
+    }
+
+}
+
+let m120_data1 = some([some("exon"), none(), some(3)])
+
+match m120_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m120-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m120-x1:", "shape-miss")
+
+    }
+
+}

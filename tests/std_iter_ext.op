@@ -1,4 +1,4 @@
-# differential: std/iter extensions — everyday adapters (map/filter/fold/...)
+# differential: std/iter extensions, everyday adapters (map/filter/fold/...)
 use std/iter as it
 
 frame proof {

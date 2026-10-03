@@ -1,0 +1,66 @@
+# compat corpus — generated, do not edit by hand
+# bucket=lists seed=20261030 idx=153 tag=l153
+
+let l153_l0 = [-1, -34, 40, -2, 7, -38]
+
+print("l153-l0:", l153_l0[4], l153_l0[-1], l153_l0.len())
+
+let l153_l1 = [-38, 50, -10, -15, 14]
+
+print("l153-l1:", l153_l1[4], l153_l1[-1], l153_l1.len())
+
+let l153_l2 = [-49, 12, 6, 7, 14, 49, 32]
+
+print("l153-l2:", l153_l2[5], l153_l2[-1], l153_l2.len())
+
+let l153_l3 = [8, 39, 32, 5, 39]
+
+print("l153-l3:", l153_l3[1], l153_l3[-1], l153_l3.len())
+
+let l153_s0 = [56, 38, 9, -6, -77]
+
+print("l153-s0:", l153_s0.slice(2, 4), l153_s0.slice(-2))
+
+let l153_s1 = [31, 8, 26, -55, -73]
+
+print("l153-s1:", l153_s1.slice(2, 3), l153_s1.slice(-1))
+
+let l153_s2 = [93, -20, 44, -49, -92]
+
+print("l153-s2:", l153_s2.slice(3, 4), l153_s2.slice(-3))
+
+let l153_s3 = [-67, 82, -3, 70, -80, -28]
+
+print("l153-s3:", l153_s3.slice(2, 5), l153_s3.slice(-3))
+
+let l153_s4 = [-12, 9, -15, -65, -71, -79, 25, -46]
+
+print("l153-s4:", l153_s4.slice(4, 5), l153_s4.slice(-3))
+
+let l153_r0 = [528, 747, 884, 837, 153, 611, 827]
+
+print("l153-r0:", l153_r0.sort(), l153_r0.reverse(), l153_r0.contains(884))
+
+let l153_r1 = [780, 461, 718, 51]
+
+print("l153-r1:", l153_r1.sort(), l153_r1.reverse(), l153_r1.contains(718))
+
+let l153_t0 = 0
+
+for v in [17, 9, 22] { l153_t0 += v }
+
+print("l153-t0:", l153_t0)
+
+let l153_t1 = 0
+
+for v in [22, 7, 1, 10, 16] { l153_t1 += v }
+
+print("l153-t1:", l153_t1)
+
+let l153_n0 = [[3, 9, 9], [3, 9, 9], 77]
+
+print("l153-n0:", l153_n0[0][1], l153_n0[2])
+
+let l153_n1 = [[7, 9, 6], [7, 9, 6], 77]
+
+print("l153-n1:", l153_n1[0][1], l153_n1[2])

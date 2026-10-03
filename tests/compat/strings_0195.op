@@ -1,0 +1,60 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=195 tag=s195
+
+print("s195-m0:", "_sapixqakgia".upper(), "_sapixqakgia".slice(3), "_sapixqakgia".len())
+
+print("s195-m1:", "uChA2kb7c9".upper(), "uChA2kb7c9".slice(3), "uChA2kb7c9".len())
+
+print("s195-m2:", "o5p2mxwvzB".upper(), "o5p2mxwvzB".slice(2), "o5p2mxwvzB".len())
+
+print("s195-m3:", "bzo4razhjkd".upper(), "bzo4razhjkd".slice(1), "bzo4razhjkd".len())
+
+print("s195-m4:", "y0cte5_ws".upper(), "y0cte5_ws".slice(2), "y0cte5_ws".len())
+
+print("s195-i0:", "53u-{39}-wipk")
+
+let s195_v0 = 39
+
+print("s195-v0:", "n={s195_v0}" + "!" * 3)
+
+print("s195-i1:", "6zo-{52}-r_x6")
+
+let s195_v1 = 52
+
+print("s195-v1:", "n={s195_v1}" + "!" * 3)
+
+print("s195-i2:", "h17-{84}-3tv5")
+
+let s195_v2 = 84
+
+print("s195-v2:", "n={s195_v2}" + "!" * 3)
+
+print("s195-i3:", "aB4-{59}-y20u")
+
+let s195_v3 = 59
+
+print("s195-v3:", "n={s195_v3}" + "!" * 1)
+
+print("s195-i4:", "ypl-{51}-q1e0")
+
+let s195_v4 = 51
+
+print("s195-v4:", "n={s195_v4}" + "!" * 3)
+
+print("s195-r0:", "vewu6tiA".replace("v", "5C"), "vewu6tiA".contains("ew"))
+
+print("s195-r1:", "m5zbxviB".replace("m", "34"), "m5zbxviB".contains("5z"))
+
+print("s195-r2:", "Bqxfc0xu".replace("B", "Be"), "Bqxfc0xu".contains("qx"))
+
+print("s195-j0:", ["193", "h8c", "um0"].join("-"))
+
+print("s195-j1:", ["2sc", "xmC", "z5_"].join("-"))
+
+print("s195-j2:", ["o_B", "73y", "2sc", "z1s"].join("-"))
+
+print("s195-a0:", "f9szqmn".at(5), "f9szqmn".trim() == "f9szqmn")
+
+print("s195-a1:", "6lgt_31".at(3), "6lgt_31".trim() == "6lgt_31")
+
+print("s195-a2:", "Bb7r2fj".at(5), "Bb7r2fj".trim() == "Bb7r2fj")

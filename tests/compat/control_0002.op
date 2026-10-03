@@ -1,0 +1,138 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20260930 idx=2 tag=c002
+
+let c002_b0 = "start"
+
+if 98 > 80 { c002_b0 = "hi" } elif 98 > 40 { c002_b0 = "mid" } else { c002_b0 = "lo" }
+
+print("c002-i0:", c002_b0, 98)
+
+let c002_b1 = "start"
+
+if 66 > 80 { c002_b1 = "hi" } elif 66 > 40 { c002_b1 = "mid" } else { c002_b1 = "lo" }
+
+print("c002-i1:", c002_b1, 66)
+
+let c002_b2 = "start"
+
+if 65 > 80 { c002_b2 = "hi" } elif 65 > 40 { c002_b2 = "mid" } else { c002_b2 = "lo" }
+
+print("c002-i2:", c002_b2, 65)
+
+let c002_b3 = "start"
+
+if 74 > 80 { c002_b3 = "hi" } elif 74 > 40 { c002_b3 = "mid" } else { c002_b3 = "lo" }
+
+print("c002-i3:", c002_b3, 74)
+
+let c002_b4 = "start"
+
+if 110 > 80 { c002_b4 = "hi" } elif 110 > 40 { c002_b4 = "mid" } else { c002_b4 = "lo" }
+
+print("c002-i4:", c002_b4, 110)
+
+let c002_a0 = 0
+
+let c002_n0 = 0
+
+while c002_n0 < 20 {
+
+    c002_n0 += 1
+
+    if c002_n0 % 3 == 0 { continue }
+
+    if c002_n0 > 24 { break }
+
+    c002_a0 += c002_n0
+
+}
+
+print("c002-w0:", c002_a0, c002_n0)
+
+let c002_a1 = 0
+
+let c002_n1 = 0
+
+while c002_n1 < 13 {
+
+    c002_n1 += 1
+
+    if c002_n1 % 2 == 0 { continue }
+
+    if c002_n1 > 22 { break }
+
+    c002_a1 += c002_n1
+
+}
+
+print("c002-w1:", c002_a1, c002_n1)
+
+let c002_a2 = 0
+
+let c002_n2 = 0
+
+while c002_n2 < 15 {
+
+    c002_n2 += 4
+
+    if c002_n2 % 2 == 0 { continue }
+
+    if c002_n2 > 22 { break }
+
+    c002_a2 += c002_n2
+
+}
+
+print("c002-w2:", c002_a2, c002_n2)
+
+let c002_c0 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 4] {
+
+        c002_c0 += a * b
+
+    }
+
+}
+
+print("c002-l0:", c002_c0)
+
+let c002_c1 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 2] {
+
+        c002_c1 += a * b
+
+    }
+
+}
+
+print("c002-l1:", c002_c1)
+
+let c002_acc0 = ""
+
+loop {
+
+    c002_acc0 += "x"
+
+    if c002_acc0.len() >= 6 { break }
+
+}
+
+print("c002-o0:", c002_acc0)
+
+let c002_acc1 = ""
+
+loop {
+
+    c002_acc1 += "x"
+
+    if c002_acc1.len() >= 6 { break }
+
+}
+
+print("c002-o1:", c002_acc1)

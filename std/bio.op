@@ -1,4 +1,4 @@
-# std/bio — sequence utilities layered on the native kernels.
+# std/bio, sequence utilities layered on the native kernels.
 
 gene codon_usage(seq) {
     # count 3-letter windows

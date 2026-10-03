@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20260930 idx=30 tag=m030
+
+let m030_m0 = {helix: 81, cell: -89, ligase: -88, splicer: 62, ribose: -73}
+
+print("m030-m0:", m030_m0["helix"], len(m030_m0), m030_m0.has("helix"))
+
+let m030_m1 = {cell: 96, helix: -56, vector: -46, codon: 64, ribose: -27}
+
+print("m030-m1:", m030_m1["cell"], len(m030_m1), m030_m1.has("cell"))
+
+let m030_m2 = {codon: 83, plasmid: -78, vector: -59, marker: 52}
+
+print("m030-m2:", m030_m2["codon"], len(m030_m2), m030_m2.has("codon"))
+
+let m030_k0 = {marker: 50, gene: 14, ribose: 7}
+
+let m030_ks0 = m030_k0.keys()
+
+let m030_sm0 = 0
+
+for k in m030_k0 { m030_sm0 += m030_k0[k] }
+
+print("m030-k0:", m030_sm0, m030_k0.keys().sort(), m030_k0.values().len())
+
+let m030_k1 = {enzyme: 19, marker: 33, gene: 44}
+
+let m030_ks1 = m030_k1.keys()
+
+let m030_sm1 = 0
+
+for k in m030_k1 { m030_sm1 += m030_k1[k] }
+
+print("m030-k1:", m030_sm1, m030_k1.keys().sort(), m030_k1.values().len())
+
+let m030_k2 = {exon: 13, codon: 13, splicer: 37}
+
+let m030_ks2 = m030_k2.keys()
+
+let m030_sm2 = 0
+
+for k in m030_k2 { m030_sm2 += m030_k2[k] }
+
+print("m030-k2:", m030_sm2, m030_k2.keys().sort(), m030_k2.values().len())
+
+let m030_w0 = {outer: {vector: 8, plasmid: 6, tag: "ok"}}}
+
+print("m030-w0:", m030_w0["outer"]["plasmid"], m030_w0["outer"]["tag"])
+
+let m030_w1 = {outer: {ribose: 4, codon: 4, tag: "ok"}}}
+
+print("m030-w1:", m030_w1["outer"]["codon"], m030_w1["outer"]["tag"])

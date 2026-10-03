@@ -1,0 +1,210 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=183 tag=s183
+
+stress {
+
+    print("s183-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s183-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s183-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s183-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s183-mz:", 6 % 0)
+
+} rescue (e) {
+
+    print("s183-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s183-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s183-of1:", "caught", e.kind, e.message)
+
+}
+
+gene s183_r0() {
+
+    raise "s183-zkwihh"
+
+}
+
+stress {
+
+    s183_r0()
+
+    print("s183-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s183-r0:", e.kind, e.message)
+
+}
+
+gene s183_r1() {
+
+    raise "s183-je67y3"
+
+}
+
+stress {
+
+    s183_r1()
+
+    print("s183-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s183-r1:", e.kind, e.message)
+
+}
+
+gene s183_r2() {
+
+    raise "s183-5bhdby"
+
+}
+
+stress {
+
+    s183_r2()
+
+    print("s183-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s183-r2:", e.kind, e.message)
+
+}
+
+let s183_xs0 = [29, 9, 39, 48]
+
+stress {
+
+    print("s183-x0:", s183_xs0[5])
+
+} rescue (e) {
+
+    print("s183-x0:", "caught", e.kind)
+
+}
+
+let s183_xs1 = [15, 29, 43, 32]
+
+stress {
+
+    print("s183-x1:", s183_xs1[5])
+
+} rescue (e) {
+
+    print("s183-x1:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s183-0"
+
+    } rescue (e) {
+
+        print("s183-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s183-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s183-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s183-d0-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s183-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s183-1"
+
+    } rescue (e) {
+
+        print("s183-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s183-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s183-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s183-d1-top:", outer.message)
+
+}

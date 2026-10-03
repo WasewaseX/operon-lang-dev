@@ -1,0 +1,220 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=199 tag=s199
+
+stress {
+
+    print("s199-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s199-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s199-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s199-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s199-mz:", 67 % 0)
+
+} rescue (e) {
+
+    print("s199-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s199-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s199-of1:", "caught", e.kind, e.message)
+
+}
+
+gene s199_r0() {
+
+    raise "s199-B9n3fi"
+
+}
+
+stress {
+
+    s199_r0()
+
+    print("s199-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s199-r0:", e.kind, e.message)
+
+}
+
+gene s199_r1() {
+
+    raise "s199-0g5pfz"
+
+}
+
+stress {
+
+    s199_r1()
+
+    print("s199-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s199-r1:", e.kind, e.message)
+
+}
+
+gene s199_r2() {
+
+    raise "s199-_2faC3"
+
+}
+
+stress {
+
+    s199_r2()
+
+    print("s199-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s199-r2:", e.kind, e.message)
+
+}
+
+gene s199_r3() {
+
+    raise "s199-yykAyi"
+
+}
+
+stress {
+
+    s199_r3()
+
+    print("s199-r3:", "unreachable")
+
+} rescue (e) {
+
+    print("s199-r3:", e.kind, e.message)
+
+}
+
+let s199_xs0 = [25, 2, 42, 26]
+
+stress {
+
+    print("s199-x0:", s199_xs0[6])
+
+} rescue (e) {
+
+    print("s199-x0:", "caught", e.kind)
+
+}
+
+let s199_xs1 = [13, 15, 1, 37]
+
+stress {
+
+    print("s199-x1:", s199_xs1[5])
+
+} rescue (e) {
+
+    print("s199-x1:", "caught", e.kind)
+
+}
+
+let s199_xs2 = [30, 25]
+
+stress {
+
+    print("s199-x2:", s199_xs2[5])
+
+} rescue (e) {
+
+    print("s199-x2:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s199-0"
+
+    } rescue (e) {
+
+        print("s199-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s199-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s199-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s199-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s199-1"
+
+    } rescue (e) {
+
+        print("s199-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s199-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s199-d1-top:", outer.message)
+
+}

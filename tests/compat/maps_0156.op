@@ -1,0 +1,60 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=156 tag=m156
+
+let m156_m0 = {exon: -17, splicer: 27, enzyme: 43}
+
+print("m156-m0:", m156_m0["exon"], len(m156_m0), m156_m0.has("exon"))
+
+let m156_m1 = {gene: -92, vector: -12, exon: -68, marker: 90, ligase: 68}
+
+print("m156-m1:", m156_m1["gene"], len(m156_m1), m156_m1.has("gene"))
+
+let m156_m2 = {exon: 95, codon: 40, helix: 17, ribose: -20, ligase: -73}
+
+print("m156-m2:", m156_m2["exon"], len(m156_m2), m156_m2.has("exon"))
+
+let m156_m3 = {marker: -30, codon: 3, plasmid: 97, cell: -25}
+
+print("m156-m3:", m156_m3["marker"], len(m156_m3), m156_m3.has("marker"))
+
+let m156_m4 = {vector: -68, enzyme: 40, cell: -86, marker: -3, gene: 69}
+
+print("m156-m4:", m156_m4["vector"], len(m156_m4), m156_m4.has("vector"))
+
+let m156_k0 = {ribose: 14, vector: 40, cell: 28}
+
+let m156_ks0 = m156_k0.keys()
+
+let m156_sm0 = 0
+
+for k in m156_k0 { m156_sm0 += m156_k0[k] }
+
+print("m156-k0:", m156_sm0, m156_k0.keys().sort(), m156_k0.values().len())
+
+let m156_k1 = {exon: 49, ligase: 34, ribose: 16}
+
+let m156_ks1 = m156_k1.keys()
+
+let m156_sm1 = 0
+
+for k in m156_k1 { m156_sm1 += m156_k1[k] }
+
+print("m156-k1:", m156_sm1, m156_k1.keys().sort(), m156_k1.values().len())
+
+let m156_k2 = {splicer: 7, vector: 41, ribose: 20}
+
+let m156_ks2 = m156_k2.keys()
+
+let m156_sm2 = 0
+
+for k in m156_k2 { m156_sm2 += m156_k2[k] }
+
+print("m156-k2:", m156_sm2, m156_k2.keys().sort(), m156_k2.values().len())
+
+let m156_w0 = {outer: {codon: 3, ligase: 4, tag: "ok"}}}
+
+print("m156-w0:", m156_w0["outer"]["ligase"], m156_w0["outer"]["tag"])
+
+let m156_w1 = {outer: {exon: 8, plasmid: 9, tag: "ok"}}}
+
+print("m156-w1:", m156_w1["outer"]["plasmid"], m156_w1["outer"]["tag"])

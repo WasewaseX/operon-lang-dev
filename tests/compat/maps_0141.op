@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=141 tag=m141
+
+let m141_m0 = {ribose: -11, codon: -60, ligase: -47}
+
+print("m141-m0:", m141_m0["ribose"], len(m141_m0), m141_m0.has("ribose"))
+
+let m141_m1 = {helix: -27, gene: 75, ligase: 37, splicer: 43, vector: 37}
+
+print("m141-m1:", m141_m1["helix"], len(m141_m1), m141_m1.has("helix"))
+
+let m141_m2 = {plasmid: -69, gene: -76, exon: 44}
+
+print("m141-m2:", m141_m2["plasmid"], len(m141_m2), m141_m2.has("plasmid"))
+
+let m141_k0 = {gene: 44, cell: 20, helix: 22}
+
+let m141_ks0 = m141_k0.keys()
+
+let m141_sm0 = 0
+
+for k in m141_k0 { m141_sm0 += m141_k0[k] }
+
+print("m141-k0:", m141_sm0, m141_k0.keys().sort(), m141_k0.values().len())
+
+let m141_k1 = {codon: 11, exon: 4, marker: 21}
+
+let m141_ks1 = m141_k1.keys()
+
+let m141_sm1 = 0
+
+for k in m141_k1 { m141_sm1 += m141_k1[k] }
+
+print("m141-k1:", m141_sm1, m141_k1.keys().sort(), m141_k1.values().len())
+
+let m141_k2 = {marker: 10, ligase: 46, helix: 18}
+
+let m141_ks2 = m141_k2.keys()
+
+let m141_sm2 = 0
+
+for k in m141_k2 { m141_sm2 += m141_k2[k] }
+
+print("m141-k2:", m141_sm2, m141_k2.keys().sort(), m141_k2.values().len())
+
+let m141_w0 = {outer: {splicer: 5, helix: 9, tag: "ok"}}}
+
+print("m141-w0:", m141_w0["outer"]["helix"], m141_w0["outer"]["tag"])
+
+let m141_w1 = {outer: {ligase: 3, codon: 7, tag: "ok"}}}
+
+print("m141-w1:", m141_w1["outer"]["codon"], m141_w1["outer"]["tag"])

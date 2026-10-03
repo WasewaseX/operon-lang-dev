@@ -1,0 +1,36 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=63 tag=c063
+
+print("c063-c0:", -6893 >= 377)
+
+print("c063-c1:", 8570 >= 9538)
+
+print("c063-c2:", -3658 > -4721)
+
+print("c063-c3:", 1729 != 1063)
+
+print("c063-b0:", 15 < 5 && 5 < 50, 15 > 5 || 15 > 50)
+
+print("c063-b1:", 35 < 39 && 39 < 22, 35 > 39 || 35 > 22)
+
+print("c063-t0:", 7924 > 3649 ? "gt" : "le")
+
+print("c063-t1:", 7522 > 5682 ? "gt" : "le")
+
+print("c063-t2:", -5759 > 6397 ? "gt" : "le")
+
+let c063_n0 = null
+
+print("c063-n0:", c063_n0 ?? 2715, c063_n0 == null)
+
+let c063_n1 = null
+
+print("c063-n1:", c063_n1 ?? 4211, c063_n1 == null)
+
+let c063_n2 = null
+
+print("c063-n2:", c063_n2 ?? 7632, c063_n2 == null)
+
+print("c063-s0:", "75ul" in "edrdcu75ul", "75ul" == "75ul")
+
+print("c063-s1:", "_7wi" in "qcx5ws_7wi", "_7wi" == "_7wi")

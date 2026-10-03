@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=51 tag=c051
+
+print("c051-c0:", 7354 < -4693)
+
+print("c051-c1:", 7790 >= -4996)
+
+print("c051-c2:", -496 < -9074)
+
+print("c051-c3:", -8014 >= -7744)
+
+print("c051-c4:", 7724 >= 8527)
+
+print("c051-c5:", -543 >= -2330)
+
+print("c051-b0:", 18 < 34 && 34 < 14, 18 > 34 || 18 > 14)
+
+print("c051-b1:", 12 < 34 && 34 < 42, 12 > 34 || 12 > 42)
+
+print("c051-b2:", 4 < 27 && 27 < 33, 4 > 27 || 4 > 33)
+
+print("c051-b3:", 49 < 42 && 42 < 7, 49 > 42 || 49 > 7)
+
+print("c051-t0:", 1869 > -4566 ? "gt" : "le")
+
+print("c051-t1:", -4536 > 1317 ? "gt" : "le")
+
+print("c051-t2:", 9390 > -4377 ? "gt" : "le")
+
+let c051_n0 = null
+
+print("c051-n0:", c051_n0 ?? -372, c051_n0 == null)
+
+let c051_n1 = null
+
+print("c051-n1:", c051_n1 ?? -5767, c051_n1 == null)
+
+let c051_n2 = null
+
+print("c051-n2:", c051_n2 ?? -5986, c051_n2 == null)
+
+print("c051-s0:", "6itA" in "pv6sxv6itA", "6itA" == "6itA")
+
+print("c051-s1:", "zB7y" in "tbkfnpzB7y", "zB7y" == "zB7y")

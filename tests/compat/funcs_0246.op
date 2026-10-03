@@ -1,0 +1,188 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=246 tag=f246
+
+gene f246_g0(p, q = 3, r = 45) {
+
+    return p * 7 + q - r
+
+}
+
+print("f246-d0:", f246_g0(2), f246_g0(2, 73), f246_g0(2, 3, 45))
+
+gene f246_g1(p, q = 70, r = 47) {
+
+    return p * 70 + q - r
+
+}
+
+print("f246-d1:", f246_g1(-33), f246_g1(-33, 68), f246_g1(-33, 70, 47))
+
+gene f246_g2(p, q = 77, r = 53) {
+
+    return p * 17 + q - r
+
+}
+
+print("f246-d2:", f246_g2(22), f246_g2(22, 50), f246_g2(22, 77, 53))
+
+gene f246_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f246_fib0(n - 1) + f246_fib0(n - 2)
+
+}
+
+print("f246-fib0:", f246_fib0(9))
+
+gene f246_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f246_fib1(n - 1) + f246_fib1(n - 2)
+
+}
+
+print("f246-fib1:", f246_fib1(11))
+
+gene f246_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f246_gcd0(b, a % b)
+
+}
+
+print("f246-gcd0:", f246_gcd0(707, 206))
+
+gene f246_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f246_gcd1(b, a % b)
+
+}
+
+print("f246-gcd1:", f246_gcd1(388, 136))
+
+gene f246_gcd2(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f246_gcd2(b, a % b)
+
+}
+
+print("f246-gcd2:", f246_gcd2(501, 819))
+
+gene f246_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f246_c0 = f246_mk0(10)
+
+f246_c0(2)
+
+print("f246-cl0:", f246_c0(5))
+
+gene f246_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f246_c1 = f246_mk1(23)
+
+f246_c1(8)
+
+print("f246-cl1:", f246_c1(5))
+
+gene f246_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f246-hof0:", f246_tw0(gene (z) => z * 2 + 1, 25))
+
+gene f246_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f246-hof1:", f246_tw1(gene (z) => z * 2 + 1, 21))
+
+gene f246_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f246-dg0:", f246_sd0(471953))
+
+gene f246_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f246-dg1:", f246_sd1(274022))

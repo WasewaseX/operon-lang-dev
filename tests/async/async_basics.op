@@ -1,0 +1,40 @@
+# W16 async proofs: spawn/join/sleep/state over the fiber substrate.
+# Runs identically with and without async.cell (fiber vs thread path):
+# the observable contract is substrate-independent by test.
+
+gene double(n) { return n * 2 }
+
+frame proof {
+    # roundtrip: spawn -> join returns the gene's value
+    let t = spawn(double, [21])
+    assert(join(t) == 42, "join returns the gene value")
+
+    # a second join of the same id: null + note (the tombstone contract)
+    let again = join(t)
+    assert(again == null, "second join is null")
+
+    # task_state answers after join (the tombstone keeps answering)
+    assert(task_state(t) == "done", "tombstone state is done")
+
+    # sleep(0) completes immediately
+    let z = spawn(double, [1])
+    assert(join(z) == 2, "join after zero-sleep body")
+
+    # inline-closure task id 0 semantics are unchanged
+    assert(join(0) == null, "join(0) is null")
+
+    # cancel of an unknown id is contained (soft tier)
+    assert(cancel(9999) == false, "cancel of unknown id is false")
+    assert(cancel(0) == false, "cancel(0) is contained false")
+
+    # spawn of a non-gene: null task + note, no crash
+    assert(spawn(42, []) == -1, "spawn(non-gene) is a null task")
+
+    # the value membrane: results cross by serialization (map key stringify)
+    gene mkmap() { return { 1: "one" } }
+    let m = spawn(mkmap, [])
+    let got = join(m)
+    assert(got["1"] == "one", "int keys stringify across the membrane")
+
+    print("async_basics complete")
+}

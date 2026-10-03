@@ -1,0 +1,144 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=131 tag=c131
+
+let c131_b0 = "start"
+
+if 68 > 80 { c131_b0 = "hi" } elif 68 > 40 { c131_b0 = "mid" } else { c131_b0 = "lo" }
+
+print("c131-i0:", c131_b0, 68)
+
+let c131_b1 = "start"
+
+if 82 > 80 { c131_b1 = "hi" } elif 82 > 40 { c131_b1 = "mid" } else { c131_b1 = "lo" }
+
+print("c131-i1:", c131_b1, 82)
+
+let c131_b2 = "start"
+
+if 86 > 80 { c131_b2 = "hi" } elif 86 > 40 { c131_b2 = "mid" } else { c131_b2 = "lo" }
+
+print("c131-i2:", c131_b2, 86)
+
+let c131_b3 = "start"
+
+if 26 > 80 { c131_b3 = "hi" } elif 26 > 40 { c131_b3 = "mid" } else { c131_b3 = "lo" }
+
+print("c131-i3:", c131_b3, 26)
+
+let c131_a0 = 0
+
+let c131_n0 = 0
+
+while c131_n0 < 19 {
+
+    c131_n0 += 4
+
+    if c131_n0 % 2 == 0 { continue }
+
+    if c131_n0 > 22 { break }
+
+    c131_a0 += c131_n0
+
+}
+
+print("c131-w0:", c131_a0, c131_n0)
+
+let c131_a1 = 0
+
+let c131_n1 = 0
+
+while c131_n1 < 7 {
+
+    c131_n1 += 2
+
+    if c131_n1 % 3 == 0 { continue }
+
+    if c131_n1 > 12 { break }
+
+    c131_a1 += c131_n1
+
+}
+
+print("c131-w1:", c131_a1, c131_n1)
+
+let c131_a2 = 0
+
+let c131_n2 = 0
+
+while c131_n2 < 5 {
+
+    c131_n2 += 1
+
+    if c131_n2 % 3 == 0 { continue }
+
+    if c131_n2 > 9 { break }
+
+    c131_a2 += c131_n2
+
+}
+
+print("c131-w2:", c131_a2, c131_n2)
+
+let c131_c0 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 3] {
+
+        c131_c0 += a * b
+
+    }
+
+}
+
+print("c131-l0:", c131_c0)
+
+let c131_c1 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 4] {
+
+        c131_c1 += a * b
+
+    }
+
+}
+
+print("c131-l1:", c131_c1)
+
+let c131_acc0 = ""
+
+loop {
+
+    c131_acc0 += "x"
+
+    if c131_acc0.len() >= 6 { break }
+
+}
+
+print("c131-o0:", c131_acc0)
+
+let c131_acc1 = ""
+
+loop {
+
+    c131_acc1 += "x"
+
+    if c131_acc1.len() >= 3 { break }
+
+}
+
+print("c131-o1:", c131_acc1)
+
+let c131_acc2 = ""
+
+loop {
+
+    c131_acc2 += "x"
+
+    if c131_acc2.len() >= 6 { break }
+
+}
+
+print("c131-o2:", c131_acc2)

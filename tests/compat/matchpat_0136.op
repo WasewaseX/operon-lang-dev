@@ -1,0 +1,286 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=136 tag=m136
+
+let m136_s0 = some(3)
+
+match m136_s0 {
+
+    case Some(x) if x > 3 {
+
+        print("m136-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m136-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m136-m0:", "none")
+
+    }
+
+}
+
+let m136_s1 = some(9)
+
+match m136_s1 {
+
+    case Some(x) if x > 9 {
+
+        print("m136-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m136-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m136-m1:", "none")
+
+    }
+
+}
+
+let m136_s2 = some(9)
+
+match m136_s2 {
+
+    case Some(x) if x > 9 {
+
+        print("m136-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m136-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m136-m2:", "none")
+
+    }
+
+}
+
+let m136_ls0 = [22, 12, 1]
+
+match m136_ls0 {
+
+    case [22, *rest] {
+
+        print("m136-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m136-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m136-l0:", "other")
+
+    }
+
+}
+
+let m136_ls1 = [5, 25, 21]
+
+match m136_ls1 {
+
+    case [5, *rest] {
+
+        print("m136-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m136-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m136-l1:", "other")
+
+    }
+
+}
+
+let m136_ls2 = [3, 15, 36]
+
+match m136_ls2 {
+
+    case [3, *rest] {
+
+        print("m136-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m136-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m136-l2:", "other")
+
+    }
+
+}
+
+let m136_mp0 = {ligase: 5022, helix: -9722}
+
+match m136_mp0 {
+
+    case {ligase: p, helix: q} {
+
+        print("m136-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m136-mp0:", "miss")
+
+    }
+
+}
+
+let m136_mp1 = {plasmid: -3197, gene: -9936}
+
+match m136_mp1 {
+
+    case {plasmid: p, gene: q} {
+
+        print("m136-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m136-mp1:", "miss")
+
+    }
+
+}
+
+let m136_mp2 = {exon: -5977, codon: 5846}
+
+match m136_mp2 {
+
+    case {exon: p, codon: q} {
+
+        print("m136-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m136-mp2:", "miss")
+
+    }
+
+}
+
+let m136_r0 = ok(5)
+
+match m136_r0 {
+
+    case Ok(n) | Err(5) {
+
+        print("m136-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m136-r0:", "zero")
+
+    }
+
+}
+
+let m136_r1 = ok(3)
+
+match m136_r1 {
+
+    case Ok(n) | Err(3) {
+
+        print("m136-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m136-r1:", "zero")
+
+    }
+
+}
+
+let m136_r2 = ok(1)
+
+match m136_r2 {
+
+    case Ok(n) | Err(1) {
+
+        print("m136-r2:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m136-r2:", "zero")
+
+    }
+
+}
+
+match "helix" {
+
+    case "helix" {
+
+        print("m136-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m136-w0:", "alt")
+
+    }
+
+}
+
+match "splicer" {
+
+    case "splicer" {
+
+        print("m136-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m136-w1:", "alt")
+
+    }
+
+}

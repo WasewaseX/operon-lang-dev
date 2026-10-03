@@ -1,0 +1,48 @@
+# result_std differential pin: std/result.op (W006-A combinator tier) —
+# byte-identical on both engines AND the oracle. Acceptance paths print the
+# exact Result values flowing through every combinator; handler returns are
+# ordinary values so both engines must agree on shape AND ordering.
+# Contract: docs/specs/RESULT-WAVE3.md; SPEC §9.
+use std/result as res
+
+print("== map ==")
+print(res.map(ok(2), gene (x) { return x * 10 }))
+print(res.map(err("boom"), gene (x) { return x * 10 }))
+print(res.map(ok("a"), gene (s) { return s + "!" }))
+
+print("== map_err ==")
+print(res.map_err(err(404), gene (e) { return "code " + str(e) }))
+print(res.map_err(ok(7), gene (e) { return "code " + str(e) }))
+
+print("== and_then ==")
+print(res.and_then(ok(5), gene (x) { return ok(x + 1) }))
+print(res.and_then(ok(5), gene (x) { return err("odd path") }))
+print(res.and_then(err("no"), gene (x) { return ok(99) }))
+
+print("== or_else ==")
+print(res.or_else(err("down"), gene (e) { return ok("fallback") }))
+print(res.or_else(err("down"), gene (e) { return err(e + "!") }))
+print(res.or_else(ok(1), gene (e) { return ok("fallback") }))
+
+print("== unwrap_or_else ==")
+print(res.unwrap_or_else(ok(3), gene (e) { return 0 }))
+print(res.unwrap_or_else(err("why"), gene (e) { return len(e) }))
+
+print("== predicates ==")
+print(res.is_ok_and(ok(4), gene (x) { return x > 2 }))
+print(res.is_ok_and(ok(1), gene (x) { return x > 2 }))
+print(res.is_ok_and(err("x"), gene (x) { return true }))
+print(res.is_err_and(err("late"), gene (e) { return e == "late" }))
+print(res.is_err_and(ok(9), gene (e) { return true }))
+
+print("== option interop ==")
+print(res.ok_to_some(ok("v")))
+print(res.ok_to_some(err("e")))
+
+print("== chaining ==")
+let step = res.and_then(res.map(ok(10), gene (x) { return x * 2 }), gene (x) {
+    if x > 15 { return ok(x) }
+    return err("too small: " + str(x))
+})
+print(step)
+print(res.unwrap_or_else(res.map_err(step, gene (e) { return err(e + "!!") }), gene (e) { return -1 }))

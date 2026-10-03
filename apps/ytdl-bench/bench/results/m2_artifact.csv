@@ -1,0 +1,6 @@
+metric,lang,artifact,bytes
+artifact,operon,VM-binary-operon,3773328
+artifact,operon,app-script-ytdl.op,9902
+artifact,python,app-script-ytdl.py,6717
+artifact,rust,standalone-binary,568384
+artifact,node,app-script-ytdl.mjs,7001

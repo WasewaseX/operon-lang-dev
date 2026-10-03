@@ -1,0 +1,210 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20260930 idx=99 tag=s099
+
+stress {
+
+    print("s099-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s099-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s099-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s099-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s099-mz:", 47 % 0)
+
+} rescue (e) {
+
+    print("s099-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s099-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s099-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s099-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s099-of2:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s099-m1:", 9223372036854775807 % -1)
+
+} rescue (e) {
+
+    print("s099-m1:", "caught", e.kind, e.message)
+
+}
+
+gene s099_r0() {
+
+    raise "s099-A4u74a"
+
+}
+
+stress {
+
+    s099_r0()
+
+    print("s099-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s099-r0:", e.kind, e.message)
+
+}
+
+gene s099_r1() {
+
+    raise "s099-rwB5AB"
+
+}
+
+stress {
+
+    s099_r1()
+
+    print("s099-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s099-r1:", e.kind, e.message)
+
+}
+
+gene s099_r2() {
+
+    raise "s099-op8gt5"
+
+}
+
+stress {
+
+    s099_r2()
+
+    print("s099-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s099-r2:", e.kind, e.message)
+
+}
+
+let s099_xs0 = [46, 31, 46]
+
+stress {
+
+    print("s099-x0:", s099_xs0[4])
+
+} rescue (e) {
+
+    print("s099-x0:", "caught", e.kind)
+
+}
+
+let s099_xs1 = [11, 48, 44]
+
+stress {
+
+    print("s099-x1:", s099_xs1[5])
+
+} rescue (e) {
+
+    print("s099-x1:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s099-0"
+
+    } rescue (e) {
+
+        print("s099-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s099-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s099-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s099-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s099-1"
+
+    } rescue (e) {
+
+        print("s099-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s099-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s099-d1-top:", outer.message)
+
+}

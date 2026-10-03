@@ -1,0 +1,60 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=3 tag=s003
+
+print("s003-m0:", "n7rgz_B3nC9hbq".upper(), "n7rgz_B3nC9hbq".slice(4), "n7rgz_B3nC9hbq".len())
+
+print("s003-m1:", "j60c8hxlp".upper(), "j60c8hxlp".slice(3), "j60c8hxlp".len())
+
+print("s003-m2:", "i8bl9j".upper(), "i8bl9j".slice(4), "i8bl9j".len())
+
+print("s003-m3:", "36j8ssonx9mr".upper(), "36j8ssonx9mr".slice(1), "36j8ssonx9mr".len())
+
+print("s003-m4:", "mroe1ip2y2c_j".upper(), "mroe1ip2y2c_j".slice(2), "mroe1ip2y2c_j".len())
+
+print("s003-i0:", "ylC-{24}-_oz8")
+
+let s003_v0 = 24
+
+print("s003-v0:", "n={s003_v0}" + "!" * 1)
+
+print("s003-i1:", "ugp-{6}-5i88")
+
+let s003_v1 = 6
+
+print("s003-v1:", "n={s003_v1}" + "!" * 1)
+
+print("s003-i2:", "mpo-{44}-hAd1")
+
+let s003_v2 = 44
+
+print("s003-v2:", "n={s003_v2}" + "!" * 2)
+
+print("s003-i3:", "vcn-{85}-j22w")
+
+let s003_v3 = 85
+
+print("s003-v3:", "n={s003_v3}" + "!" * 3)
+
+print("s003-i4:", "yBp-{53}-pv_u")
+
+let s003_v4 = 53
+
+print("s003-v4:", "n={s003_v4}" + "!" * 1)
+
+print("s003-r0:", "1iufjvyk".replace("1", "8z"), "1iufjvyk".contains("iu"))
+
+print("s003-r1:", "7702g727".replace("7", "xA"), "7702g727".contains("70"))
+
+print("s003-r2:", "v0vzxqvA".replace("v", "yp"), "v0vzxqvA".contains("0v"))
+
+print("s003-j0:", ["mws", "3g5", "gj3", "5Ah"].join("-"))
+
+print("s003-j1:", ["lg1", "bpB", "6n4"].join("-"))
+
+print("s003-j2:", ["ljj", "8fs", "lpy", "ayg", "Cth"].join("-"))
+
+print("s003-a0:", "ng_bn7x".at(3), "ng_bn7x".trim() == "ng_bn7x")
+
+print("s003-a1:", "cecf39C".at(2), "cecf39C".trim() == "cecf39C")
+
+print("s003-a2:", "rawliu1".at(5), "rawliu1".trim() == "rawliu1")

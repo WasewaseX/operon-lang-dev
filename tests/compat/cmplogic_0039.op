@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=39 tag=c039
+
+print("c039-c0:", -8993 == -3825)
+
+print("c039-c1:", -3119 < -5966)
+
+print("c039-c2:", -2056 < -4821)
+
+print("c039-c3:", 4551 < -6849)
+
+print("c039-c4:", 9683 < 1574)
+
+print("c039-c5:", -5848 != -398)
+
+print("c039-b0:", 47 < 0 && 0 < 48, 47 > 0 || 47 > 48)
+
+print("c039-b1:", 15 < 27 && 27 < 37, 15 > 27 || 15 > 37)
+
+print("c039-t0:", -5053 > 4619 ? "gt" : "le")
+
+print("c039-t1:", 6758 > 2709 ? "gt" : "le")
+
+print("c039-t2:", -6661 > 1742 ? "gt" : "le")
+
+let c039_n0 = null
+
+print("c039-n0:", c039_n0 ?? -5780, c039_n0 == null)
+
+let c039_n1 = null
+
+print("c039-n1:", c039_n1 ?? -2837, c039_n1 == null)
+
+let c039_n2 = null
+
+print("c039-n2:", c039_n2 ?? -4481, c039_n2 == null)
+
+print("c039-s0:", "m0e5" in "mpxuCom0e5", "m0e5" == "m0e5")
+
+print("c039-s1:", "1wn1" in "moi8ak1wn1", "1wn1" == "1wn1")

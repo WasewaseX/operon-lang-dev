@@ -1,0 +1,150 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=156 tag=c156
+
+let c156_b0 = "start"
+
+if 54 > 80 { c156_b0 = "hi" } elif 54 > 40 { c156_b0 = "mid" } else { c156_b0 = "lo" }
+
+print("c156-i0:", c156_b0, 54)
+
+let c156_b1 = "start"
+
+if 53 > 80 { c156_b1 = "hi" } elif 53 > 40 { c156_b1 = "mid" } else { c156_b1 = "lo" }
+
+print("c156-i1:", c156_b1, 53)
+
+let c156_b2 = "start"
+
+if -16 > 80 { c156_b2 = "hi" } elif -16 > 40 { c156_b2 = "mid" } else { c156_b2 = "lo" }
+
+print("c156-i2:", c156_b2, -16)
+
+let c156_b3 = "start"
+
+if -4 > 80 { c156_b3 = "hi" } elif -4 > 40 { c156_b3 = "mid" } else { c156_b3 = "lo" }
+
+print("c156-i3:", c156_b3, -4)
+
+let c156_b4 = "start"
+
+if 47 > 80 { c156_b4 = "hi" } elif 47 > 40 { c156_b4 = "mid" } else { c156_b4 = "lo" }
+
+print("c156-i4:", c156_b4, 47)
+
+let c156_a0 = 0
+
+let c156_n0 = 0
+
+while c156_n0 < 16 {
+
+    c156_n0 += 1
+
+    if c156_n0 % 2 == 0 { continue }
+
+    if c156_n0 > 18 { break }
+
+    c156_a0 += c156_n0
+
+}
+
+print("c156-w0:", c156_a0, c156_n0)
+
+let c156_a1 = 0
+
+let c156_n1 = 0
+
+while c156_n1 < 9 {
+
+    c156_n1 += 4
+
+    if c156_n1 % 3 == 0 { continue }
+
+    if c156_n1 > 11 { break }
+
+    c156_a1 += c156_n1
+
+}
+
+print("c156-w1:", c156_a1, c156_n1)
+
+let c156_a2 = 0
+
+let c156_n2 = 0
+
+while c156_n2 < 20 {
+
+    c156_n2 += 3
+
+    if c156_n2 % 3 == 0 { continue }
+
+    if c156_n2 > 24 { break }
+
+    c156_a2 += c156_n2
+
+}
+
+print("c156-w2:", c156_a2, c156_n2)
+
+let c156_c0 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 3] {
+
+        c156_c0 += a * b
+
+    }
+
+}
+
+print("c156-l0:", c156_c0)
+
+let c156_c1 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 2] {
+
+        c156_c1 += a * b
+
+    }
+
+}
+
+print("c156-l1:", c156_c1)
+
+let c156_acc0 = ""
+
+loop {
+
+    c156_acc0 += "x"
+
+    if c156_acc0.len() >= 7 { break }
+
+}
+
+print("c156-o0:", c156_acc0)
+
+let c156_acc1 = ""
+
+loop {
+
+    c156_acc1 += "x"
+
+    if c156_acc1.len() >= 3 { break }
+
+}
+
+print("c156-o1:", c156_acc1)
+
+let c156_acc2 = ""
+
+loop {
+
+    c156_acc2 += "x"
+
+    if c156_acc2.len() >= 3 { break }
+
+}
+
+print("c156-o2:", c156_acc2)

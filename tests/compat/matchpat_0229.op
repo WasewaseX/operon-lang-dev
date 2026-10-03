@@ -1,0 +1,358 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=229 tag=m229
+
+let m229_s0 = some(9)
+
+match m229_s0 {
+
+    case Some(x) if x > 9 {
+
+        print("m229-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m229-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m229-m0:", "none")
+
+    }
+
+}
+
+let m229_s1 = some(7)
+
+match m229_s1 {
+
+    case Some(x) if x > 7 {
+
+        print("m229-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m229-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m229-m1:", "none")
+
+    }
+
+}
+
+let m229_s2 = some(2)
+
+match m229_s2 {
+
+    case Some(x) if x > 2 {
+
+        print("m229-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m229-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m229-m2:", "none")
+
+    }
+
+}
+
+let m229_s3 = some(7)
+
+match m229_s3 {
+
+    case Some(x) if x > 7 {
+
+        print("m229-m3:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m229-m3:", "small", x)
+
+    }
+
+    case None {
+
+        print("m229-m3:", "none")
+
+    }
+
+}
+
+let m229_s4 = some(3)
+
+match m229_s4 {
+
+    case Some(x) if x > 3 {
+
+        print("m229-m4:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m229-m4:", "small", x)
+
+    }
+
+    case None {
+
+        print("m229-m4:", "none")
+
+    }
+
+}
+
+let m229_ls0 = [44, 16, 37]
+
+match m229_ls0 {
+
+    case [44, *rest] {
+
+        print("m229-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m229-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m229-l0:", "other")
+
+    }
+
+}
+
+let m229_ls1 = [36, 4, 12]
+
+match m229_ls1 {
+
+    case [36, *rest] {
+
+        print("m229-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m229-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m229-l1:", "other")
+
+    }
+
+}
+
+let m229_ls2 = [5, 32, 8]
+
+match m229_ls2 {
+
+    case [5, *rest] {
+
+        print("m229-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m229-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m229-l2:", "other")
+
+    }
+
+}
+
+let m229_ls3 = [45, 10, 29]
+
+match m229_ls3 {
+
+    case [45, *rest] {
+
+        print("m229-l3:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m229-l3:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m229-l3:", "other")
+
+    }
+
+}
+
+let m229_mp0 = {marker: -3179, codon: 431}
+
+match m229_mp0 {
+
+    case {marker: p, codon: q} {
+
+        print("m229-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m229-mp0:", "miss")
+
+    }
+
+}
+
+let m229_mp1 = {ribose: 5567, ligase: 9442}
+
+match m229_mp1 {
+
+    case {ribose: p, ligase: q} {
+
+        print("m229-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m229-mp1:", "miss")
+
+    }
+
+}
+
+let m229_mp2 = {exon: -7234, vector: 4986}
+
+match m229_mp2 {
+
+    case {exon: p, vector: q} {
+
+        print("m229-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m229-mp2:", "miss")
+
+    }
+
+}
+
+let m229_r0 = ok(1)
+
+match m229_r0 {
+
+    case Ok(n) | Err(1) {
+
+        print("m229-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m229-r0:", "zero")
+
+    }
+
+}
+
+let m229_r1 = ok(4)
+
+match m229_r1 {
+
+    case Ok(n) | Err(4) {
+
+        print("m229-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m229-r1:", "zero")
+
+    }
+
+}
+
+let m229_r2 = ok(4)
+
+match m229_r2 {
+
+    case Ok(n) | Err(4) {
+
+        print("m229-r2:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m229-r2:", "zero")
+
+    }
+
+}
+
+match "vector" {
+
+    case "vector" {
+
+        print("m229-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m229-w0:", "alt")
+
+    }
+
+}
+
+match "ribose" {
+
+    case "ribose" {
+
+        print("m229-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m229-w1:", "alt")
+
+    }
+
+}

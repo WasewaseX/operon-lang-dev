@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=220 tag=c220
+
+print("c220-c0:", 6865 >= -170)
+
+print("c220-c1:", 3947 <= 8399)
+
+print("c220-c2:", -7106 < 7916)
+
+print("c220-c3:", -6212 <= 349)
+
+print("c220-c4:", -1902 == 4112)
+
+print("c220-c5:", -9197 >= -5364)
+
+print("c220-c6:", -465 > -615)
+
+print("c220-b0:", 44 < 22 && 22 < 3, 44 > 22 || 44 > 3)
+
+print("c220-b1:", 1 < 32 && 32 < 27, 1 > 32 || 1 > 27)
+
+print("c220-t0:", -134 > 9623 ? "gt" : "le")
+
+print("c220-t1:", -2487 > -4946 ? "gt" : "le")
+
+print("c220-t2:", -3103 > 2081 ? "gt" : "le")
+
+print("c220-t3:", -636 > 5029 ? "gt" : "le")
+
+let c220_n0 = null
+
+print("c220-n0:", c220_n0 ?? -5626, c220_n0 == null)
+
+let c220_n1 = null
+
+print("c220-n1:", c220_n1 ?? 1705, c220_n1 == null)
+
+let c220_n2 = null
+
+print("c220-n2:", c220_n2 ?? -9830, c220_n2 == null)
+
+print("c220-s0:", "yis_" in "yr5s0vyis_", "yis_" == "yis_")
+
+print("c220-s1:", "4tf0" in "7c7ohu4tf0", "4tf0" == "4tf0")

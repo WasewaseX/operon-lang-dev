@@ -1,0 +1,12 @@
+# json — the JSON toolkit (pure Operon).
+# Canonical serialization (sorted keys), RFC 6901 pointers (get + immutable
+# set), schema-lite validation, JSON Lines, structural diff. Sandbox-safe:
+# no I/O, deterministic, offline.
+
+[package]
+name = "json"
+version = "0.1.0"
+operon-version = "2.2"
+description = "JSON toolkit: canonical form, RFC 6901 pointers, schema-lite, JSON Lines, diff"
+
+[deps]

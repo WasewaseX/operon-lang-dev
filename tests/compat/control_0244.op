@@ -1,0 +1,176 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=244 tag=c244
+
+let c244_b0 = "start"
+
+if 71 > 80 { c244_b0 = "hi" } elif 71 > 40 { c244_b0 = "mid" } else { c244_b0 = "lo" }
+
+print("c244-i0:", c244_b0, 71)
+
+let c244_b1 = "start"
+
+if 71 > 80 { c244_b1 = "hi" } elif 71 > 40 { c244_b1 = "mid" } else { c244_b1 = "lo" }
+
+print("c244-i1:", c244_b1, 71)
+
+let c244_b2 = "start"
+
+if 29 > 80 { c244_b2 = "hi" } elif 29 > 40 { c244_b2 = "mid" } else { c244_b2 = "lo" }
+
+print("c244-i2:", c244_b2, 29)
+
+let c244_b3 = "start"
+
+if 42 > 80 { c244_b3 = "hi" } elif 42 > 40 { c244_b3 = "mid" } else { c244_b3 = "lo" }
+
+print("c244-i3:", c244_b3, 42)
+
+let c244_a0 = 0
+
+let c244_n0 = 0
+
+while c244_n0 < 20 {
+
+    c244_n0 += 2
+
+    if c244_n0 % 3 == 0 { continue }
+
+    if c244_n0 > 29 { break }
+
+    c244_a0 += c244_n0
+
+}
+
+print("c244-w0:", c244_a0, c244_n0)
+
+let c244_a1 = 0
+
+let c244_n1 = 0
+
+while c244_n1 < 12 {
+
+    c244_n1 += 4
+
+    if c244_n1 % 2 == 0 { continue }
+
+    if c244_n1 > 20 { break }
+
+    c244_a1 += c244_n1
+
+}
+
+print("c244-w1:", c244_a1, c244_n1)
+
+let c244_a2 = 0
+
+let c244_n2 = 0
+
+while c244_n2 < 14 {
+
+    c244_n2 += 3
+
+    if c244_n2 % 3 == 0 { continue }
+
+    if c244_n2 > 18 { break }
+
+    c244_a2 += c244_n2
+
+}
+
+print("c244-w2:", c244_a2, c244_n2)
+
+let c244_a3 = 0
+
+let c244_n3 = 0
+
+while c244_n3 < 10 {
+
+    c244_n3 += 2
+
+    if c244_n3 % 3 == 0 { continue }
+
+    if c244_n3 > 16 { break }
+
+    c244_a3 += c244_n3
+
+}
+
+print("c244-w3:", c244_a3, c244_n3)
+
+let c244_c0 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 4] {
+
+        c244_c0 += a * b
+
+    }
+
+}
+
+print("c244-l0:", c244_c0)
+
+let c244_c1 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 4] {
+
+        c244_c1 += a * b
+
+    }
+
+}
+
+print("c244-l1:", c244_c1)
+
+let c244_c2 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 4] {
+
+        c244_c2 += a * b
+
+    }
+
+}
+
+print("c244-l2:", c244_c2)
+
+let c244_acc0 = ""
+
+loop {
+
+    c244_acc0 += "x"
+
+    if c244_acc0.len() >= 7 { break }
+
+}
+
+print("c244-o0:", c244_acc0)
+
+let c244_acc1 = ""
+
+loop {
+
+    c244_acc1 += "x"
+
+    if c244_acc1.len() >= 3 { break }
+
+}
+
+print("c244-o1:", c244_acc1)
+
+let c244_acc2 = ""
+
+loop {
+
+    c244_acc2 += "x"
+
+    if c244_acc2.len() >= 7 { break }
+
+}
+
+print("c244-o2:", c244_acc2)

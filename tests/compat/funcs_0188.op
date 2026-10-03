@@ -1,0 +1,166 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=188 tag=f188
+
+gene f188_g0(p, q = 81, r = 85) {
+
+    return p * 29 + q - r
+
+}
+
+print("f188-d0:", f188_g0(-1), f188_g0(-1, 48), f188_g0(-1, 81, 85))
+
+gene f188_g1(p, q = 14, r = 34) {
+
+    return p * 14 + q - r
+
+}
+
+print("f188-d1:", f188_g1(8), f188_g1(8, 8), f188_g1(8, 14, 34))
+
+gene f188_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f188_fib0(n - 1) + f188_fib0(n - 2)
+
+}
+
+print("f188-fib0:", f188_fib0(12))
+
+gene f188_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f188_fib1(n - 1) + f188_fib1(n - 2)
+
+}
+
+print("f188-fib1:", f188_fib1(7))
+
+gene f188_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f188_gcd0(b, a % b)
+
+}
+
+print("f188-gcd0:", f188_gcd0(608, 851))
+
+gene f188_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f188_gcd1(b, a % b)
+
+}
+
+print("f188-gcd1:", f188_gcd1(566, 243))
+
+gene f188_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f188_c0 = f188_mk0(28)
+
+f188_c0(2)
+
+print("f188-cl0:", f188_c0(4))
+
+gene f188_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f188_c1 = f188_mk1(36)
+
+f188_c1(9)
+
+print("f188-cl1:", f188_c1(9))
+
+gene f188_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f188-hof0:", f188_tw0(gene (z) => z * 2 + 1, 25))
+
+gene f188_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f188-hof1:", f188_tw1(gene (z) => z * 2 + 1, 20))
+
+gene f188_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f188-dg0:", f188_sd0(11952))
+
+gene f188_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f188-dg1:", f188_sd1(213762))

@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=120 tag=m120
+
+let m120_m0 = {vector: -20, splicer: -82, gene: 63, ligase: 62}
+
+print("m120-m0:", m120_m0["vector"], len(m120_m0), m120_m0.has("vector"))
+
+let m120_m1 = {ribose: 48, plasmid: -60, codon: 99, ligase: 86, helix: -11}
+
+print("m120-m1:", m120_m1["ribose"], len(m120_m1), m120_m1.has("ribose"))
+
+let m120_m2 = {ligase: -51, codon: -74, vector: -14, exon: -96}
+
+print("m120-m2:", m120_m2["ligase"], len(m120_m2), m120_m2.has("ligase"))
+
+let m120_m3 = {marker: -32, enzyme: -77, exon: -53, gene: -52, splicer: 42}
+
+print("m120-m3:", m120_m3["marker"], len(m120_m3), m120_m3.has("marker"))
+
+let m120_k0 = {plasmid: 9, ligase: 8, enzyme: 1}
+
+let m120_ks0 = m120_k0.keys()
+
+let m120_sm0 = 0
+
+for k in m120_k0 { m120_sm0 += m120_k0[k] }
+
+print("m120-k0:", m120_sm0, m120_k0.keys().sort(), m120_k0.values().len())
+
+let m120_k1 = {codon: 25, cell: 27, exon: 44}
+
+let m120_ks1 = m120_k1.keys()
+
+let m120_sm1 = 0
+
+for k in m120_k1 { m120_sm1 += m120_k1[k] }
+
+print("m120-k1:", m120_sm1, m120_k1.keys().sort(), m120_k1.values().len())
+
+let m120_k2 = {ligase: 19, plasmid: 41, gene: 26}
+
+let m120_ks2 = m120_k2.keys()
+
+let m120_sm2 = 0
+
+for k in m120_k2 { m120_sm2 += m120_k2[k] }
+
+print("m120-k2:", m120_sm2, m120_k2.keys().sort(), m120_k2.values().len())
+
+let m120_w0 = {outer: {cell: 3, vector: 9, tag: "ok"}}}
+
+print("m120-w0:", m120_w0["outer"]["vector"], m120_w0["outer"]["tag"])
+
+let m120_w1 = {outer: {vector: 9, plasmid: 1, tag: "ok"}}}
+
+print("m120-w1:", m120_w1["outer"]["plasmid"], m120_w1["outer"]["tag"])

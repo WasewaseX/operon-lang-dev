@@ -1,0 +1,144 @@
+# compat corpus — generated, do not edit by hand
+# bucket=optres seed=20261030 idx=212 tag=o212
+
+gene o212_f0(n) {
+
+    if n > -2959 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o212_u0(n) {
+
+    let v = o212_f0(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o212-p0:", o212_u0(-1692), o212_u0(-2944))
+
+gene o212_f1(n) {
+
+    if n > 1156 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o212_u1(n) {
+
+    let v = o212_f1(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o212-p1:", o212_u1(8686), o212_u1(1175))
+
+gene o212_f2(n) {
+
+    if n > -468 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o212_u2(n) {
+
+    let v = o212_f2(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o212-p2:", o212_u2(-1857), o212_u2(-456))
+
+gene o212_f3(n) {
+
+    if n > 203 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o212_u3(n) {
+
+    let v = o212_f3(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o212-p3:", o212_u3(5723), o212_u3(217))
+
+gene o212_f4(n) {
+
+    if n > 3257 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o212_u4(n) {
+
+    let v = o212_f4(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o212-p4:", o212_u4(1370), o212_u4(3264))
+
+print("o212-o0:", is_ok(ok(1784)), is_none(none()), is_err(err("1784")), is_some(some(1784)))
+
+print("o212-u0:", unwrap_or(none(), 1784), unwrap_or(err("x"), 1783), unwrap_or(ok(1784), 0))
+
+print("o212-o1:", is_ok(ok(3083)), is_none(none()), is_err(err("3083")), is_some(some(3083)))
+
+print("o212-u1:", unwrap_or(none(), 3083), unwrap_or(err("x"), 3082), unwrap_or(ok(3083), 0))
+
+print("o212-o2:", is_ok(ok(5912)), is_none(none()), is_err(err("5912")), is_some(some(5912)))
+
+print("o212-u2:", unwrap_or(none(), 5912), unwrap_or(err("x"), 5911), unwrap_or(ok(5912), 0))
+
+print("o212-o3:", is_ok(ok(-741)), is_none(none()), is_err(err("-741")), is_some(some(-741)))
+
+print("o212-u3:", unwrap_or(none(), -741), unwrap_or(err("x"), -742), unwrap_or(ok(-741), 0))
+
+print("o212-e0:", ok(5502) == ok(5502), some(5502) == ok(5502), none() == none(), err(1) == err(2))
+
+print("o212-j0:", json_str(ok(5502)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o212-e1:", ok(-3823) == ok(-3823), some(-3823) == ok(-3823), none() == none(), err(1) == err(2))
+
+print("o212-j1:", json_str(ok(-3823)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o212-n0:", some(some(86))?!?!, unwrap(ok(147)) + unwrap(some(61)))
+
+print("o212-s0:", "v=" + str(ok(86)?!), some("61k")?! + "!")
+
+print("o212-n1:", some(some(18))?!?!, unwrap(ok(117)) + unwrap(some(99)))
+
+print("o212-s1:", "v=" + str(ok(18)?!), some("99k")?! + "!")

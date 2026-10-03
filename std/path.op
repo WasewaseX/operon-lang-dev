@@ -1,0 +1,125 @@
+# std/path, pure lexical path shaping. NO filesystem access: every
+# function is string arithmetic, needs no capability, and never touches
+# the disk (fs reads/writes stay in std/fs under the capability gates).
+#
+# Contract: POSIX-style separators (`/`), the language's own file APIs
+# are POSIX-shaped on every platform, so one separator form is the truth.
+# `path_norm` is purely lexical: it collapses `.` and `..` and duplicate
+# slashes WITHOUT resolving symlinks (a `..` that climbs past the root of
+# an absolute path is ignored; on a relative path it is kept).
+#
+# Pins: tests/std_path.op + tests/differential/path.op (byte-identical).
+
+gene __rfind(s, needle) {
+    # index of the LAST occurrence of needle in s; null when absent
+    let i = len(s) - len(needle)
+    while i >= 0 {
+        if s.slice(i, i + len(needle)) == needle {
+            return i
+        }
+        i = i - 1
+    }
+    return null
+}
+
+gene __trim_trailing(p, sep) {
+    let t = p
+    while len(t) > 0 && t.ends(sep) {
+        t = t.slice(0, len(t) - 1)
+    }
+    return t
+}
+
+gene path_base(p) {
+    # final component: "a/b/c.txt" -> "c.txt"; "a/b/" -> "b"; "" -> ""
+    let trimmed = __trim_trailing(p, "/")
+    if trimmed == "" {
+        return ""
+    }
+    let idx = __rfind(trimmed, "/")
+    if idx == null {
+        return trimmed
+    }
+    return trimmed.slice(idx + 1, len(trimmed))
+}
+
+gene path_dir(p) {
+    # everything before the final component (no trailing slash):
+    # "a/b/c.txt" -> "a/b"; "c.txt" -> "."; "a/b/" -> "a"; "/x" -> "/"
+    let trimmed = __trim_trailing(p, "/")
+    let idx = __rfind(trimmed, "/")
+    if idx == null {
+        return "."
+    }
+    if idx == 0 {
+        return "/"
+    }
+    return trimmed.slice(0, idx)
+}
+
+gene path_ext(p) {
+    # extension WITHOUT the dot, from the final component only;
+    # dotfiles (".hidden") have no extension; "" when none
+    let base = path_base(p)
+    let idx = __rfind(base, ".")
+    if idx == null || idx == 0 {
+        return ""
+    }
+    return base.slice(idx + 1, len(base))
+}
+
+gene path_is_abs(p) {
+    return p.starts("/")
+}
+
+gene path_join(parts) {
+    # join a list of components with "/", empty parts dropped
+    let segs = []
+    for part in parts {
+        if part != "" {
+            push(segs, part)
+        }
+    }
+    return segs.join("/")
+}
+
+gene path_norm(p) {
+    # lexical normalization: collapse "//", drop "." segments, apply ".."
+    let abs = path_is_abs(p)
+    let segs = []
+    for seg in p.split("/") {
+        if seg == "" || seg == "." {
+            continue
+        }
+        if seg == ".." {
+            if len(segs) > 0 && segs[len(segs) - 1] != ".." {
+                pop(segs)
+            } else {
+                if !abs {
+                    push(segs, "..")
+                }
+            }
+            # at an absolute root, ".." is ignored (climbing past / stays at /)
+            continue
+        }
+        push(segs, seg)
+    }
+    let joined = segs.join("/")
+    if abs {
+        return "/" + joined
+    }
+    if joined == "" {
+        return "."
+    }
+    return joined
+}
+
+gene path_split_ext(p) {
+    # [stem, ext] of the final component ("a/b.tar.gz" -> ["b.tar", "gz"])
+    let base = path_base(p)
+    let idx = __rfind(base, ".")
+    if idx == null || idx == 0 {
+        return [base, ""]
+    }
+    return [base.slice(0, idx), base.slice(idx + 1, len(base))]
+}

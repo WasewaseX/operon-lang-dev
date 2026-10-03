@@ -1,0 +1,32 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=264 tag=c264
+
+print("c264-c0:", 4214 == 2616)
+
+print("c264-c1:", -150 > -7217)
+
+print("c264-c2:", 1037 == 1323)
+
+print("c264-c3:", 5157 > -9607)
+
+print("c264-b0:", 0 < 5 && 5 < 29, 0 > 5 || 0 > 29)
+
+print("c264-b1:", 49 < 13 && 13 < 19, 49 > 13 || 49 > 19)
+
+print("c264-t0:", -2131 > 4622 ? "gt" : "le")
+
+print("c264-t1:", 4296 > -4844 ? "gt" : "le")
+
+print("c264-t2:", -7696 > -6557 ? "gt" : "le")
+
+let c264_n0 = null
+
+print("c264-n0:", c264_n0 ?? -5804, c264_n0 == null)
+
+let c264_n1 = null
+
+print("c264-n1:", c264_n1 ?? 9222, c264_n1 == null)
+
+print("c264-s0:", "4vB_" in "pBjbeA4vB_", "4vB_" == "4vB_")
+
+print("c264-s1:", "0cpl" in "4poa4A0cpl", "0cpl" == "0cpl")

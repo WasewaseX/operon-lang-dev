@@ -1,0 +1,63 @@
+# std/typed, W003 stage-2 proof: generic typed wrappers over the
+# callable-generic std core. The <T, U> signatures are the stage-2 contract
+# (docs/specs/GENERICS.md): bare type parameters erase at runtime, the
+# parameterized container annotations (list[T], map[K, V]) enforce the
+# shallow is-a shape as a catchable unfolded Stress, element types stay the
+# checker's business. One wrapper per core gene, zero per-type duplication.
+use std/typed;
+
+frame proof {
+    # --- map: one definition, two element types (the W03 gate)
+    assert(typed.map([1, 2, 3], gene (x) { return x * 10 }) == [10, 20, 30])
+    assert(typed.map(["a", "b"], gene (s) { return len(s) }) == [1, 1])
+
+    # --- filter: order preserved, same definition across types
+    assert(typed.filter([5, 1, 8, 2], gene (x) { return x > 2 }) == [5, 8])
+    assert(typed.filter(["ee", "b", "cccc"], gene (s) { return len(s) > 1 }) == ["ee", "cccc"])
+
+    # --- fold: accumulator type independent of element type
+    assert(typed.fold([1, 2, 3], 0, gene (acc, x) { return acc + x }) == 6)
+    assert(typed.fold(["a", "b"], "<", gene (acc, s) { return acc + s }) == "<ab")
+
+    # --- first: element or null on empty
+    assert(typed.first([7, 8]) == 7)
+    assert(typed.first([]) == null)
+    assert(typed.first(["x"]) == "x")
+
+    # --- zip: pairs to the shorter input
+    assert(typed.zip([1, 2, 3], ["a", "b"]) == [[1, "a"], [2, "b"]])
+    assert(typed.zip([], [1]) == [])
+
+    # --- lookup: value or null on a missing key (soft indexing law)
+    assert(typed.lookup({"k": 1}, "k") == 1)
+    assert(typed.lookup({}, "nope") == null)
+
+    # --- sort_by_key: stable key ordering
+    assert(typed.sort_by_key(["bb", "a", "ccc"], gene (s) { return len(s) }) == ["a", "bb", "ccc"])
+
+    # --- the shallow boundary refuses container kinds, catchable, naming
+    # the annotation; element types are never refused at runtime
+    let contained = 0
+    stress {
+        typed.map("nope", gene (x) { return x })
+    } rescue (e) {
+        assert(e.kind == "unfolded", "container-kind refusal is a stress")
+        assert(e.message == "argument 'xs' for gene 'map' expects list[T], got str", "refusal names the annotation")
+        contained = contained + 1
+    }
+    let contained2 = 0
+    stress {
+        typed.lookup([1, 2], "k")
+    } rescue (e) {
+        assert(e.message == "argument 'm' for gene 'lookup' expects map[K, V], got list", "map boundary names map[K, V]")
+        contained2 = contained2 + 1
+    }
+    assert(contained == 1 && contained2 == 1, "both boundaries fired exactly once")
+
+    # --- erasure: a bare type parameter accepts anything, never rejects
+    assert(typed_type_erase([1, "x", null]) == [1, "x", null])
+}
+
+gene typed_type_erase<T>(x: T) -> T {
+    return x
+}

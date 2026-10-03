@@ -1,0 +1,2 @@
+[fallback E2008] tests/diagnostics/repair_notes.op:2: integer '922337203685477580799999' out of range treated as 0
+[fallback E2019] tests/diagnostics/repair_notes.op:2: unexpected token 'end of line' in expression; null substituted

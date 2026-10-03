@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=162 tag=c162
+
+print("c162-c0:", 9653 != -8446)
+
+print("c162-c1:", -8100 >= -6073)
+
+print("c162-c2:", -6840 == -9395)
+
+print("c162-c3:", -1087 <= -7958)
+
+print("c162-c4:", -5432 != 381)
+
+print("c162-c5:", -6847 >= 8814)
+
+print("c162-b0:", 46 < 40 && 40 < 12, 46 > 40 || 46 > 12)
+
+print("c162-b1:", 20 < 14 && 14 < 10, 20 > 14 || 20 > 10)
+
+print("c162-t0:", -7666 > -9189 ? "gt" : "le")
+
+print("c162-t1:", 5345 > -4591 ? "gt" : "le")
+
+print("c162-t2:", -6602 > -9357 ? "gt" : "le")
+
+print("c162-t3:", 2442 > 2102 ? "gt" : "le")
+
+let c162_n0 = null
+
+print("c162-n0:", c162_n0 ?? 9501, c162_n0 == null)
+
+let c162_n1 = null
+
+print("c162-n1:", c162_n1 ?? -9858, c162_n1 == null)
+
+let c162_n2 = null
+
+print("c162-n2:", c162_n2 ?? 5610, c162_n2 == null)
+
+print("c162-s0:", "aqph" in "y_9yl3aqph", "aqph" == "aqph")
+
+print("c162-s1:", "q9pi" in "0d965Cq9pi", "q9pi" == "q9pi")

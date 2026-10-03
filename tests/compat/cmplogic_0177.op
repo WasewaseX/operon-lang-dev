@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=177 tag=c177
+
+print("c177-c0:", -6165 >= 2248)
+
+print("c177-c1:", -4993 < 1642)
+
+print("c177-c2:", -3439 > 763)
+
+print("c177-c3:", 195 < -473)
+
+print("c177-c4:", 6742 <= 3143)
+
+print("c177-b0:", 50 < 48 && 48 < 14, 50 > 48 || 50 > 14)
+
+print("c177-b1:", 16 < 26 && 26 < 14, 16 > 26 || 16 > 14)
+
+print("c177-b2:", 24 < 50 && 50 < 24, 24 > 50 || 24 > 24)
+
+print("c177-t0:", 3730 > -909 ? "gt" : "le")
+
+print("c177-t1:", 8725 > -4219 ? "gt" : "le")
+
+print("c177-t2:", 5691 > -9338 ? "gt" : "le")
+
+let c177_n0 = null
+
+print("c177-n0:", c177_n0 ?? 1566, c177_n0 == null)
+
+let c177_n1 = null
+
+print("c177-n1:", c177_n1 ?? 6661, c177_n1 == null)
+
+let c177_n2 = null
+
+print("c177-n2:", c177_n2 ?? 1063, c177_n2 == null)
+
+print("c177-s0:", "g7c5" in "w0rz95g7c5", "g7c5" == "g7c5")
+
+print("c177-s1:", "Aaqx" in "kC9mg2Aaqx", "Aaqx" == "Aaqx")

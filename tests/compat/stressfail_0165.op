@@ -1,0 +1,204 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=165 tag=s165
+
+stress {
+
+    print("s165-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s165-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s165-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s165-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s165-mz:", 36 % 0)
+
+} rescue (e) {
+
+    print("s165-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s165-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s165-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s165-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s165-of2:", "caught", e.kind, e.message)
+
+}
+
+gene s165_r0() {
+
+    raise "s165-pAouab"
+
+}
+
+stress {
+
+    s165_r0()
+
+    print("s165-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s165-r0:", e.kind, e.message)
+
+}
+
+gene s165_r1() {
+
+    raise "s165-9qk0di"
+
+}
+
+stress {
+
+    s165_r1()
+
+    print("s165-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s165-r1:", e.kind, e.message)
+
+}
+
+let s165_xs0 = [21, 33, 10, 48]
+
+stress {
+
+    print("s165-x0:", s165_xs0[9])
+
+} rescue (e) {
+
+    print("s165-x0:", "caught", e.kind)
+
+}
+
+let s165_xs1 = [24, 6, 44, 8]
+
+stress {
+
+    print("s165-x1:", s165_xs1[8])
+
+} rescue (e) {
+
+    print("s165-x1:", "caught", e.kind)
+
+}
+
+let s165_xs2 = [34, 18, 16, 10]
+
+stress {
+
+    print("s165-x2:", s165_xs2[6])
+
+} rescue (e) {
+
+    print("s165-x2:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s165-0"
+
+    } rescue (e) {
+
+        print("s165-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s165-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s165-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s165-1"
+
+    } rescue (e) {
+
+        print("s165-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s165-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s165-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s165-d1-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s165-d1-top:", outer.message)
+
+}

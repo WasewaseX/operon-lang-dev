@@ -1,0 +1,298 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=195 tag=m195
+
+let m195_s0 = some(1)
+
+match m195_s0 {
+
+    case Some(x) if x > 1 {
+
+        print("m195-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m195-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m195-m0:", "none")
+
+    }
+
+}
+
+let m195_s1 = some(5)
+
+match m195_s1 {
+
+    case Some(x) if x > 5 {
+
+        print("m195-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m195-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m195-m1:", "none")
+
+    }
+
+}
+
+let m195_s2 = some(4)
+
+match m195_s2 {
+
+    case Some(x) if x > 4 {
+
+        print("m195-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m195-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m195-m2:", "none")
+
+    }
+
+}
+
+let m195_s3 = some(7)
+
+match m195_s3 {
+
+    case Some(x) if x > 7 {
+
+        print("m195-m3:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m195-m3:", "small", x)
+
+    }
+
+    case None {
+
+        print("m195-m3:", "none")
+
+    }
+
+}
+
+let m195_s4 = some(5)
+
+match m195_s4 {
+
+    case Some(x) if x > 5 {
+
+        print("m195-m4:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m195-m4:", "small", x)
+
+    }
+
+    case None {
+
+        print("m195-m4:", "none")
+
+    }
+
+}
+
+let m195_ls0 = [43, 13, 8]
+
+match m195_ls0 {
+
+    case [43, *rest] {
+
+        print("m195-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m195-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m195-l0:", "other")
+
+    }
+
+}
+
+let m195_ls1 = [21, 34, 38]
+
+match m195_ls1 {
+
+    case [21, *rest] {
+
+        print("m195-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m195-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m195-l1:", "other")
+
+    }
+
+}
+
+let m195_ls2 = [2, 45, 8]
+
+match m195_ls2 {
+
+    case [2, *rest] {
+
+        print("m195-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m195-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m195-l2:", "other")
+
+    }
+
+}
+
+let m195_mp0 = {vector: 1368, splicer: 7306}
+
+match m195_mp0 {
+
+    case {vector: p, splicer: q} {
+
+        print("m195-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m195-mp0:", "miss")
+
+    }
+
+}
+
+let m195_mp1 = {vector: 5061, plasmid: 3191}
+
+match m195_mp1 {
+
+    case {vector: p, plasmid: q} {
+
+        print("m195-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m195-mp1:", "miss")
+
+    }
+
+}
+
+let m195_r0 = ok(5)
+
+match m195_r0 {
+
+    case Ok(n) | Err(5) {
+
+        print("m195-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m195-r0:", "zero")
+
+    }
+
+}
+
+let m195_r1 = ok(1)
+
+match m195_r1 {
+
+    case Ok(n) | Err(1) {
+
+        print("m195-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m195-r1:", "zero")
+
+    }
+
+}
+
+match "codon" {
+
+    case "codon" {
+
+        print("m195-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m195-w0:", "alt")
+
+    }
+
+}
+
+match "vector" {
+
+    case "vector" {
+
+        print("m195-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m195-w1:", "alt")
+
+    }
+
+}

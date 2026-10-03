@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=214 tag=c214
+
+print("c214-c0:", -6973 != -6556)
+
+print("c214-c1:", 9402 < 1881)
+
+print("c214-c2:", 2410 != 1413)
+
+print("c214-c3:", -8871 == -3650)
+
+print("c214-c4:", -8112 == -771)
+
+print("c214-c5:", -9710 >= -323)
+
+print("c214-c6:", -436 == -4161)
+
+print("c214-b0:", 46 < 39 && 39 < 46, 46 > 39 || 46 > 46)
+
+print("c214-b1:", 15 < 20 && 20 < 27, 15 > 20 || 15 > 27)
+
+print("c214-b2:", 4 < 34 && 34 < 17, 4 > 34 || 4 > 17)
+
+print("c214-t0:", 7464 > 8507 ? "gt" : "le")
+
+print("c214-t1:", 9709 > -1000 ? "gt" : "le")
+
+let c214_n0 = null
+
+print("c214-n0:", c214_n0 ?? 6244, c214_n0 == null)
+
+let c214_n1 = null
+
+print("c214-n1:", c214_n1 ?? -6313, c214_n1 == null)
+
+let c214_n2 = null
+
+print("c214-n2:", c214_n2 ?? -3276, c214_n2 == null)
+
+print("c214-s0:", "mbfl" in "t3sCsvmbfl", "mbfl" == "mbfl")
+
+print("c214-s1:", "C9hA" in "_erzChC9hA", "C9hA" == "C9hA")

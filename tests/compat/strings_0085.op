@@ -1,0 +1,54 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=85 tag=s085
+
+print("s085-m0:", "eBkvv1o1tjgfj".upper(), "eBkvv1o1tjgfj".slice(2), "eBkvv1o1tjgfj".len())
+
+print("s085-m1:", "nsdepfnxa1".upper(), "nsdepfnxa1".slice(2), "nsdepfnxa1".len())
+
+print("s085-m2:", "2a4y3flchny".upper(), "2a4y3flchny".slice(1), "2a4y3flchny".len())
+
+print("s085-m3:", "o5hq10".upper(), "o5hq10".slice(2), "o5hq10".len())
+
+print("s085-i0:", "c8B-{58}-8acA")
+
+let s085_v0 = 58
+
+print("s085-v0:", "n={s085_v0}" + "!" * 3)
+
+print("s085-i1:", "2Ah-{79}-ii0m")
+
+let s085_v1 = 79
+
+print("s085-v1:", "n={s085_v1}" + "!" * 2)
+
+print("s085-i2:", "gfa-{77}-dajh")
+
+let s085_v2 = 77
+
+print("s085-v2:", "n={s085_v2}" + "!" * 2)
+
+print("s085-i3:", "v9s-{86}-xChz")
+
+let s085_v3 = 86
+
+print("s085-v3:", "n={s085_v3}" + "!" * 1)
+
+print("s085-r0:", "nzyr1Cx7".replace("n", "rl"), "nzyr1Cx7".contains("zy"))
+
+print("s085-r1:", "e_Cjl8k3".replace("e", "0u"), "e_Cjl8k3".contains("_C"))
+
+print("s085-r2:", "64ry5dB6".replace("6", "on"), "64ry5dB6".contains("4r"))
+
+print("s085-r3:", "1_77nbng".replace("1", "mh"), "1_77nbng".contains("_7"))
+
+print("s085-j0:", ["xdA", "rCv", "6cv", "u39", "ezr"].join("-"))
+
+print("s085-j1:", ["ltd", "qd3", "y5a", "erk", "ofy"].join("-"))
+
+print("s085-j2:", ["gbx", "bcb", "er8"].join("-"))
+
+print("s085-a0:", "twd7kbi".at(0), "twd7kbi".trim() == "twd7kbi")
+
+print("s085-a1:", "kj5q_vo".at(0), "kj5q_vo".trim() == "kj5q_vo")
+
+print("s085-a2:", "4n43idp".at(1), "4n43idp".trim() == "4n43idp")

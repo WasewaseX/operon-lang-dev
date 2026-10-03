@@ -1,0 +1,48 @@
+# W15: task groups (proof frames)
+# wait_all joins a list of task ids in input order and returns the results
+# position-aligned; wait_any surfaces a finished id. Ordering-free shapes
+# only here; completion-order timing is Rust-lane evidence (tests/timing/).
+gene square(n) { return n * n }
+gene boom() {
+    raise burned, "child failure"
+}
+
+frame proof {
+    # join-all: results come back in INPUT order regardless of timing
+    let ids = []
+    for i in range(5) {
+        let t = spawn(square, [i])
+        push(ids, t)
+    }
+    let results = wait_all(ids)
+    assert(len(results) == 5, "wait_all returns one result per id")
+    assert(results[0] == 0 and results[1] == 1 and results[2] == 4, "first results position-aligned")
+    assert(results[3] == 9 and results[4] == 16, "last results position-aligned")
+
+    # a failing child contributes its stress map, still position-aligned
+    let mixed = []
+    let a = spawn(square, [6])
+    let b = spawn(boom, [])
+    let c = spawn(square, [7])
+    push(mixed, a)
+    push(mixed, b)
+    push(mixed, c)
+    let res = wait_all(mixed)
+    assert(res[0] == 36, "healthy first slot")
+    assert(res[1]["kind"] == "burned", "failing slot carries the stress map")
+    assert(res[2] == 49, "healthy last slot")
+
+    # wait_any on a single task answers that task
+    let solo = spawn(square, [11])
+    assert(wait_any([solo]) == solo, "wait_any with one id answers it")
+
+    # tombstoned ids still answer wait_any
+    let _ = join(solo)
+    assert(wait_any([solo]) == solo, "wait_any reads tombstones")
+
+    # bad input is contained at the soft tier
+    assert(len(wait_all([])) == 0, "wait_all of nothing is empty")
+}
+main {
+    promote("task-groups: ok")
+}

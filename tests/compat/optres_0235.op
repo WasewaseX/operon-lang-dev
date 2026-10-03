@@ -1,0 +1,144 @@
+# compat corpus — generated, do not edit by hand
+# bucket=optres seed=20261030 idx=235 tag=o235
+
+gene o235_f0(n) {
+
+    if n > 939 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o235_u0(n) {
+
+    let v = o235_f0(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o235-p0:", o235_u0(3864), o235_u0(945))
+
+gene o235_f1(n) {
+
+    if n > 3806 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o235_u1(n) {
+
+    let v = o235_f1(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o235-p1:", o235_u1(-1571), o235_u1(3824))
+
+gene o235_f2(n) {
+
+    if n > 4932 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o235_u2(n) {
+
+    let v = o235_f2(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o235-p2:", o235_u2(5408), o235_u2(4947))
+
+gene o235_f3(n) {
+
+    if n > -7523 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o235_u3(n) {
+
+    let v = o235_f3(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o235-p3:", o235_u3(-2812), o235_u3(-7505))
+
+gene o235_f4(n) {
+
+    if n > -8332 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o235_u4(n) {
+
+    let v = o235_f4(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o235-p4:", o235_u4(-2309), o235_u4(-8323))
+
+print("o235-o0:", is_ok(ok(6531)), is_none(none()), is_err(err("6531")), is_some(some(6531)))
+
+print("o235-u0:", unwrap_or(none(), 6531), unwrap_or(err("x"), 6530), unwrap_or(ok(6531), 0))
+
+print("o235-o1:", is_ok(ok(-5)), is_none(none()), is_err(err("-5")), is_some(some(-5)))
+
+print("o235-u1:", unwrap_or(none(), -5), unwrap_or(err("x"), -6), unwrap_or(ok(-5), 0))
+
+print("o235-o2:", is_ok(ok(8523)), is_none(none()), is_err(err("8523")), is_some(some(8523)))
+
+print("o235-u2:", unwrap_or(none(), 8523), unwrap_or(err("x"), 8522), unwrap_or(ok(8523), 0))
+
+print("o235-o3:", is_ok(ok(-2383)), is_none(none()), is_err(err("-2383")), is_some(some(-2383)))
+
+print("o235-u3:", unwrap_or(none(), -2383), unwrap_or(err("x"), -2384), unwrap_or(ok(-2383), 0))
+
+print("o235-e0:", ok(-4423) == ok(-4423), some(-4423) == ok(-4423), none() == none(), err(1) == err(2))
+
+print("o235-j0:", json_str(ok(-4423)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o235-e1:", ok(8961) == ok(8961), some(8961) == ok(8961), none() == none(), err(1) == err(2))
+
+print("o235-j1:", json_str(ok(8961)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o235-n0:", some(some(96))?!?!, unwrap(ok(180)) + unwrap(some(84)))
+
+print("o235-s0:", "v=" + str(ok(96)?!), some("84k")?! + "!")
+
+print("o235-n1:", some(some(18))?!?!, unwrap(ok(67)) + unwrap(some(49)))
+
+print("o235-s1:", "v=" + str(ok(18)?!), some("49k")?! + "!")

@@ -1,0 +1,292 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=123 tag=m123
+
+let m123_s0 = some(6)
+
+match m123_s0 {
+
+    case Some(x) if x > 6 {
+
+        print("m123-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m123-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m123-m0:", "none")
+
+    }
+
+}
+
+let m123_s1 = some(3)
+
+match m123_s1 {
+
+    case Some(x) if x > 3 {
+
+        print("m123-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m123-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m123-m1:", "none")
+
+    }
+
+}
+
+let m123_s2 = some(8)
+
+match m123_s2 {
+
+    case Some(x) if x > 8 {
+
+        print("m123-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m123-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m123-m2:", "none")
+
+    }
+
+}
+
+let m123_s3 = some(4)
+
+match m123_s3 {
+
+    case Some(x) if x > 4 {
+
+        print("m123-m3:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m123-m3:", "small", x)
+
+    }
+
+    case None {
+
+        print("m123-m3:", "none")
+
+    }
+
+}
+
+let m123_s4 = some(4)
+
+match m123_s4 {
+
+    case Some(x) if x > 4 {
+
+        print("m123-m4:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m123-m4:", "small", x)
+
+    }
+
+    case None {
+
+        print("m123-m4:", "none")
+
+    }
+
+}
+
+let m123_ls0 = [1, 3, 37]
+
+match m123_ls0 {
+
+    case [1, *rest] {
+
+        print("m123-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m123-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m123-l0:", "other")
+
+    }
+
+}
+
+let m123_ls1 = [38, 22, 13]
+
+match m123_ls1 {
+
+    case [38, *rest] {
+
+        print("m123-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m123-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m123-l1:", "other")
+
+    }
+
+}
+
+let m123_mp0 = {vector: -6834, plasmid: -2666}
+
+match m123_mp0 {
+
+    case {vector: p, plasmid: q} {
+
+        print("m123-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m123-mp0:", "miss")
+
+    }
+
+}
+
+let m123_mp1 = {enzyme: 9914, exon: 5170}
+
+match m123_mp1 {
+
+    case {enzyme: p, exon: q} {
+
+        print("m123-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m123-mp1:", "miss")
+
+    }
+
+}
+
+let m123_r0 = ok(1)
+
+match m123_r0 {
+
+    case Ok(n) | Err(1) {
+
+        print("m123-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m123-r0:", "zero")
+
+    }
+
+}
+
+let m123_r1 = ok(4)
+
+match m123_r1 {
+
+    case Ok(n) | Err(4) {
+
+        print("m123-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m123-r1:", "zero")
+
+    }
+
+}
+
+let m123_r2 = ok(5)
+
+match m123_r2 {
+
+    case Ok(n) | Err(5) {
+
+        print("m123-r2:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m123-r2:", "zero")
+
+    }
+
+}
+
+match "ribose" {
+
+    case "ribose" {
+
+        print("m123-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m123-w0:", "alt")
+
+    }
+
+}
+
+match "cell" {
+
+    case "cell" {
+
+        print("m123-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m123-w1:", "alt")
+
+    }
+
+}

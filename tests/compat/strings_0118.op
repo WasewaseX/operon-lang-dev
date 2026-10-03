@@ -1,0 +1,60 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=118 tag=s118
+
+print("s118-m0:", "aA_pyhCwy6".upper(), "aA_pyhCwy6".slice(2), "aA_pyhCwy6".len())
+
+print("s118-m1:", "6qa3_8xtrAhufi".upper(), "6qa3_8xtrAhufi".slice(2), "6qa3_8xtrAhufi".len())
+
+print("s118-m2:", "5ls73a6qx3ofhd".upper(), "5ls73a6qx3ofhd".slice(3), "5ls73a6qx3ofhd".len())
+
+print("s118-m3:", "fxujBBs2".upper(), "fxujBBs2".slice(4), "fxujBBs2".len())
+
+print("s118-m4:", "o2adxgr_cm36v".upper(), "o2adxgr_cm36v".slice(2), "o2adxgr_cm36v".len())
+
+print("s118-m5:", "mh3crpCarxw3h".upper(), "mh3crpCarxw3h".slice(3), "mh3crpCarxw3h".len())
+
+print("s118-i0:", "prw-{43}-qo9b")
+
+let s118_v0 = 43
+
+print("s118-v0:", "n={s118_v0}" + "!" * 3)
+
+print("s118-i1:", "bvz-{30}-B82j")
+
+let s118_v1 = 30
+
+print("s118-v1:", "n={s118_v1}" + "!" * 1)
+
+print("s118-i2:", "Cxq-{60}-gfx3")
+
+let s118_v2 = 60
+
+print("s118-v2:", "n={s118_v2}" + "!" * 1)
+
+print("s118-i3:", "vCB-{53}-qg6y")
+
+let s118_v3 = 53
+
+print("s118-v3:", "n={s118_v3}" + "!" * 3)
+
+print("s118-i4:", "v90-{70}-6_jp")
+
+let s118_v4 = 70
+
+print("s118-v4:", "n={s118_v4}" + "!" * 3)
+
+print("s118-r0:", "Amwdxcqo".replace("A", "Ao"), "Amwdxcqo".contains("mw"))
+
+print("s118-r1:", "npwu3rBv".replace("n", "rf"), "npwu3rBv".contains("pw"))
+
+print("s118-r2:", "00_9u_e8".replace("0", "ec"), "00_9u_e8".contains("0_"))
+
+print("s118-r3:", "p0gie1je".replace("p", "42"), "p0gie1je".contains("0g"))
+
+print("s118-j0:", ["4h0", "4ud", "bde", "sd0"].join("-"))
+
+print("s118-j1:", ["_no", "zy9", "pCo"].join("-"))
+
+print("s118-a0:", "03cxu6t".at(1), "03cxu6t".trim() == "03cxu6t")
+
+print("s118-a1:", "32k6k3u".at(2), "32k6k3u".trim() == "32k6k3u")

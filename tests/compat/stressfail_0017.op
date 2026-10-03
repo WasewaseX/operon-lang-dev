@@ -1,0 +1,238 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20260930 idx=17 tag=s017
+
+stress {
+
+    print("s017-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s017-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s017-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s017-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s017-mz:", 87 % 0)
+
+} rescue (e) {
+
+    print("s017-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s017-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s017-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s017-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s017-of2:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s017-m1:", 9223372036854775807 % -1)
+
+} rescue (e) {
+
+    print("s017-m1:", "caught", e.kind, e.message)
+
+}
+
+gene s017_r0() {
+
+    raise "s017-mrA4jg"
+
+}
+
+stress {
+
+    s017_r0()
+
+    print("s017-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s017-r0:", e.kind, e.message)
+
+}
+
+gene s017_r1() {
+
+    raise "s017-_9xc_B"
+
+}
+
+stress {
+
+    s017_r1()
+
+    print("s017-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s017-r1:", e.kind, e.message)
+
+}
+
+gene s017_r2() {
+
+    raise "s017-9tarmd"
+
+}
+
+stress {
+
+    s017_r2()
+
+    print("s017-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s017-r2:", e.kind, e.message)
+
+}
+
+gene s017_r3() {
+
+    raise "s017-9s8qj7"
+
+}
+
+stress {
+
+    s017_r3()
+
+    print("s017-r3:", "unreachable")
+
+} rescue (e) {
+
+    print("s017-r3:", e.kind, e.message)
+
+}
+
+let s017_xs0 = [19, 27, 2]
+
+stress {
+
+    print("s017-x0:", s017_xs0[6])
+
+} rescue (e) {
+
+    print("s017-x0:", "caught", e.kind)
+
+}
+
+let s017_xs1 = [28, 5, 39]
+
+stress {
+
+    print("s017-x1:", s017_xs1[5])
+
+} rescue (e) {
+
+    print("s017-x1:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s017-0"
+
+    } rescue (e) {
+
+        print("s017-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s017-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s017-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s017-1"
+
+    } rescue (e) {
+
+        print("s017-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s017-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s017-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s017-d1-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s017-d1-top:", outer.message)
+
+}

@@ -1,0 +1,188 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=221 tag=f221
+
+gene f221_g0(p, q = 52, r = 85) {
+
+    return p * 34 + q - r
+
+}
+
+print("f221-d0:", f221_g0(10), f221_g0(10, 57), f221_g0(10, 52, 85))
+
+gene f221_g1(p, q = 91, r = 28) {
+
+    return p * 28 + q - r
+
+}
+
+print("f221-d1:", f221_g1(41), f221_g1(41, 13), f221_g1(41, 91, 28))
+
+gene f221_g2(p, q = 8, r = 35) {
+
+    return p * 45 + q - r
+
+}
+
+print("f221-d2:", f221_g2(36), f221_g2(36, 12), f221_g2(36, 8, 35))
+
+gene f221_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f221_fib0(n - 1) + f221_fib0(n - 2)
+
+}
+
+print("f221-fib0:", f221_fib0(11))
+
+gene f221_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f221_fib1(n - 1) + f221_fib1(n - 2)
+
+}
+
+print("f221-fib1:", f221_fib1(7))
+
+gene f221_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f221_gcd0(b, a % b)
+
+}
+
+print("f221-gcd0:", f221_gcd0(627, 637))
+
+gene f221_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f221_gcd1(b, a % b)
+
+}
+
+print("f221-gcd1:", f221_gcd1(942, 175))
+
+gene f221_gcd2(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f221_gcd2(b, a % b)
+
+}
+
+print("f221-gcd2:", f221_gcd2(222, 183))
+
+gene f221_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f221_c0 = f221_mk0(7)
+
+f221_c0(9)
+
+print("f221-cl0:", f221_c0(7))
+
+gene f221_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f221_c1 = f221_mk1(37)
+
+f221_c1(8)
+
+print("f221-cl1:", f221_c1(2))
+
+gene f221_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f221-hof0:", f221_tw0(gene (z) => z * 2 + 1, 5))
+
+gene f221_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f221-hof1:", f221_tw1(gene (z) => z * 2 + 1, 21))
+
+gene f221_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f221-dg0:", f221_sd0(851323))
+
+gene f221_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f221-dg1:", f221_sd1(619391))

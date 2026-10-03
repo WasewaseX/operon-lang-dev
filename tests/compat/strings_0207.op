@@ -1,0 +1,50 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=207 tag=s207
+
+print("s207-m0:", "voj9bsc".upper(), "voj9bsc".slice(3), "voj9bsc".len())
+
+print("s207-m1:", "yahiuCa6in".upper(), "yahiuCa6in".slice(1), "yahiuCa6in".len())
+
+print("s207-m2:", "8cq7sn89".upper(), "8cq7sn89".slice(3), "8cq7sn89".len())
+
+print("s207-m3:", "bg61xat6_".upper(), "bg61xat6_".slice(2), "bg61xat6_".len())
+
+print("s207-m4:", "607ozAlvB9".upper(), "607ozAlvB9".slice(1), "607ozAlvB9".len())
+
+print("s207-m5:", "goi_x30AA9elir".upper(), "goi_x30AA9elir".slice(2), "goi_x30AA9elir".len())
+
+print("s207-i0:", "lt_-{25}-91fh")
+
+let s207_v0 = 25
+
+print("s207-v0:", "n={s207_v0}" + "!" * 1)
+
+print("s207-i1:", "lld-{57}-tz4o")
+
+let s207_v1 = 57
+
+print("s207-v1:", "n={s207_v1}" + "!" * 3)
+
+print("s207-i2:", "9vx-{44}-r_n9")
+
+let s207_v2 = 44
+
+print("s207-v2:", "n={s207_v2}" + "!" * 3)
+
+print("s207-r0:", "mhlB7exd".replace("m", "3p"), "mhlB7exd".contains("hl"))
+
+print("s207-r1:", "c10y6AlC".replace("c", "eB"), "c10y6AlC".contains("10"))
+
+print("s207-r2:", "jri9obd6".replace("j", "hg"), "jri9obd6".contains("ri"))
+
+print("s207-r3:", "aqjpgurz".replace("a", "yA"), "aqjpgurz".contains("qj"))
+
+print("s207-j0:", ["C9d", "2bg", "aCu", "e4e", "mli"].join("-"))
+
+print("s207-j1:", ["Amg", "zCa", "qhx", "kyu", "tCg"].join("-"))
+
+print("s207-j2:", ["mvv", "my_", "u9g", "2sr"].join("-"))
+
+print("s207-a0:", "u5fng54".at(6), "u5fng54".trim() == "u5fng54")
+
+print("s207-a1:", "uq4i05n".at(6), "uq4i05n".trim() == "uq4i05n")

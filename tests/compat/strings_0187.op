@@ -1,0 +1,54 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=187 tag=s187
+
+print("s187-m0:", "hkgucnu24wd_2".upper(), "hkgucnu24wd_2".slice(1), "hkgucnu24wd_2".len())
+
+print("s187-m1:", "fbkfgc".upper(), "fbkfgc".slice(3), "fbkfgc".len())
+
+print("s187-m2:", "Awlac7h9fmhnes".upper(), "Awlac7h9fmhnes".slice(1), "Awlac7h9fmhnes".len())
+
+print("s187-m3:", "gye7mbui8C".upper(), "gye7mbui8C".slice(2), "gye7mbui8C".len())
+
+print("s187-i0:", "68b-{32}-Bwfv")
+
+let s187_v0 = 32
+
+print("s187-v0:", "n={s187_v0}" + "!" * 3)
+
+print("s187-i1:", "_rh-{33}-gA1_")
+
+let s187_v1 = 33
+
+print("s187-v1:", "n={s187_v1}" + "!" * 3)
+
+print("s187-i2:", "n2e-{15}-_3ot")
+
+let s187_v2 = 15
+
+print("s187-v2:", "n={s187_v2}" + "!" * 1)
+
+print("s187-i3:", "7da-{99}-alg6")
+
+let s187_v3 = 99
+
+print("s187-v3:", "n={s187_v3}" + "!" * 2)
+
+print("s187-i4:", "ywq-{47}-o8_y")
+
+let s187_v4 = 47
+
+print("s187-v4:", "n={s187_v4}" + "!" * 1)
+
+print("s187-r0:", "6mnw_kwv".replace("6", "lb"), "6mnw_kwv".contains("mn"))
+
+print("s187-r1:", "58s65k5u".replace("5", "u9"), "58s65k5u".contains("8s"))
+
+print("s187-j0:", ["209", "A79", "rhe", "yqv", "kCr"].join("-"))
+
+print("s187-j1:", ["yk1", "jud", "n5c", "7j9"].join("-"))
+
+print("s187-a0:", "exxhvhh".at(3), "exxhvhh".trim() == "exxhvhh")
+
+print("s187-a1:", "v8yCbso".at(5), "v8yCbso".trim() == "v8yCbso")
+
+print("s187-a2:", "7Bcbn0m".at(1), "7Bcbn0m".trim() == "7Bcbn0m")

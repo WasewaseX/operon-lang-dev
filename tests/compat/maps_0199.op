@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=199 tag=m199
+
+let m199_m0 = {cell: -90, helix: -39, splicer: 46, enzyme: -57, ligase: -5}
+
+print("m199-m0:", m199_m0["cell"], len(m199_m0), m199_m0.has("cell"))
+
+let m199_m1 = {vector: 67, ribose: -69, gene: -99}
+
+print("m199-m1:", m199_m1["vector"], len(m199_m1), m199_m1.has("vector"))
+
+let m199_m2 = {splicer: 65, cell: -85, plasmid: 54, helix: 99}
+
+print("m199-m2:", m199_m2["splicer"], len(m199_m2), m199_m2.has("splicer"))
+
+let m199_k0 = {gene: 43, ribose: 18, codon: 5}
+
+let m199_ks0 = m199_k0.keys()
+
+let m199_sm0 = 0
+
+for k in m199_k0 { m199_sm0 += m199_k0[k] }
+
+print("m199-k0:", m199_sm0, m199_k0.keys().sort(), m199_k0.values().len())
+
+let m199_k1 = {helix: 44, enzyme: 10, ribose: 27}
+
+let m199_ks1 = m199_k1.keys()
+
+let m199_sm1 = 0
+
+for k in m199_k1 { m199_sm1 += m199_k1[k] }
+
+print("m199-k1:", m199_sm1, m199_k1.keys().sort(), m199_k1.values().len())
+
+let m199_w0 = {outer: {exon: 9, marker: 9, tag: "ok"}}}
+
+print("m199-w0:", m199_w0["outer"]["marker"], m199_w0["outer"]["tag"])
+
+let m199_w1 = {outer: {helix: 6, splicer: 3, tag: "ok"}}}
+
+print("m199-w1:", m199_w1["outer"]["splicer"], m199_w1["outer"]["tag"])

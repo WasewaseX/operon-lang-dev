@@ -1,0 +1,69 @@
+# ============================================================
+# Log sieve , cookbook #21
+# you already know: regex capture groups + guarded string slicing
+# teaches: try_re_groups — captures arrive as an Ok(list), a non-match
+#          is the fixed Err "no match" — and try_char_at for positional
+#          reads that refuse out-of-range as a value instead of a stress
+# run: operon run examples/cookbook/log_sieve.op
+# expected output: examples/cookbook/expected/log_sieve.out
+# verified by scripts/cookbook.sh on the Rust core AND the Python oracle
+# ============================================================
+# Sieve a batch of pipeline log lines: pull out the level, the stage and
+# the duration, and total the durations of the slow stages. Unmatched
+# lines are counted, never crashed on.
+#
+#   line shape: "stage=BUILD level=WARN msg=elapsed=42ms"
+#
+let lines = [
+    "stage=BUILD level=INFO msg=elapsed=12ms",
+    "stage=TEST level=WARN msg=elapsed=95ms",
+    "stage=DEPLOY level=INFO msg=elapsed=7ms",
+    "stage=free text nobody can parse",
+    "stage=LINT level=INFO msg=elapsed=3ms"
+]
+# two capture groups: the stage token and the integer before "ms"
+let pattern = "stage=([A-Z]+) .*elapsed=([0-9]+)ms"
+let slow_total = 0
+let slow_count = 0
+let unmatched = 0
+for line in lines {
+    let m = try_re_groups(pattern, line)
+    if (is_err(m)) {
+        unmatched = unmatched + 1
+    } else {
+        match m {
+            case Ok(groups) {
+                # groups[0] = stage, groups[1] = duration digits
+                let stage = groups[0]
+                let ms = try_num(groups[1])
+                # every parsed line has digits here, so assert the Ok path
+                let dur = unwrap_or(ms, 0)
+                if (dur > 50) {
+                    slow_total = slow_total + dur
+                    slow_count = slow_count + 1
+                    print("SLOW " + stage + " " + str(dur) + "ms")
+                }
+            }
+            case Err(e) {
+                # unreachable: is_err was checked above; shown for the shape
+                print("impossible: " + e)
+            }
+        }
+    }
+}
+print("unmatched " + str(unmatched))
+print("slow " + str(slow_count) + " totalling " + str(slow_total) + "ms")
+# try_char_at: peek the level column of the second line without slicing
+# by hand; index -1 reads from the end, out-of-range is a fixed Err
+let second = lines[1]
+print("col0=" + unwrap_or(try_char_at(second, 0), "?"))
+print("last=" + unwrap_or(try_char_at(second, -1), "?"))
+let past = try_char_at(second, 500)
+match past {
+    case Err(msg) {
+        print("range=" + msg)
+    }
+    case Ok(c) {
+        print("range=" + c)
+    }
+}

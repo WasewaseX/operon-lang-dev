@@ -1,0 +1,32 @@
+coldstart	operon	0.0051 0.0050 0.0001
+coldstart	python	0.0441 0.0425 0.0008
+coldstart	rust	0.0015 0.0014 0.0001
+coldstart	node	0.0299 0.0277 0.0010
+spawn100	operon	3.583
+spawn100	python	3.094
+spawn100	rust	3.089
+spawn100	node	3.239
+queue32_w1	operon	7.6149 7.5729 0.0297
+queue32_w1	python	7.5473 7.5368 0.0074
+queue32_w1	rust	7.4993 7.4814 0.0182
+queue32_w1	node	7.5560 7.5496 0.0075
+queue32_w4	operon	1.9847 1.9509 0.0239
+queue32_w4	python	2.0231 2.0076 0.0161
+queue32_w4	rust	1.9600 1.9492 0.0087
+queue32_w4	node	1.9870 1.9768 0.0130
+queue32_w8	operon	1.1520 1.1356 0.0139
+queue32_w8	python	1.1869 1.1726 0.0124
+queue32_w8	rust	1.1262 1.1168 0.0067
+queue32_w8	node	1.1238 1.1131 0.0080
+rss_kb_w8	operon	4880
+rss_kb_w8	python	15772
+rss_kb_w8	rust	1616
+rss_kb_w8	node	54816
+failqueue	operon	0.0414	rc=1
+failqueue	python	0.0746	rc=1
+failqueue	rust	0.0331	rc=1
+failqueue	node	0.0694	rc=1
+fib27	operon	0.441
+fib27	python	0.027
+fib27	rust	0.000
+fib27	node	0.002

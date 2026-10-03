@@ -1,0 +1,144 @@
+# compat corpus — generated, do not edit by hand
+# bucket=optres seed=20261030 idx=179 tag=o179
+
+gene o179_f0(n) {
+
+    if n > -5194 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o179_u0(n) {
+
+    let v = o179_f0(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o179-p0:", o179_u0(-2323), o179_u0(-5177))
+
+gene o179_f1(n) {
+
+    if n > -7658 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o179_u1(n) {
+
+    let v = o179_f1(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o179-p1:", o179_u1(5502), o179_u1(-7657))
+
+gene o179_f2(n) {
+
+    if n > 523 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o179_u2(n) {
+
+    let v = o179_f2(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o179-p2:", o179_u2(-5946), o179_u2(527))
+
+gene o179_f3(n) {
+
+    if n > -688 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o179_u3(n) {
+
+    let v = o179_f3(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o179-p3:", o179_u3(1628), o179_u3(-668))
+
+gene o179_f4(n) {
+
+    if n > 2745 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o179_u4(n) {
+
+    let v = o179_f4(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o179-p4:", o179_u4(-3850), o179_u4(2760))
+
+print("o179-o0:", is_ok(ok(9933)), is_none(none()), is_err(err("9933")), is_some(some(9933)))
+
+print("o179-u0:", unwrap_or(none(), 9933), unwrap_or(err("x"), 9932), unwrap_or(ok(9933), 0))
+
+print("o179-o1:", is_ok(ok(-6510)), is_none(none()), is_err(err("-6510")), is_some(some(-6510)))
+
+print("o179-u1:", unwrap_or(none(), -6510), unwrap_or(err("x"), -6511), unwrap_or(ok(-6510), 0))
+
+print("o179-o2:", is_ok(ok(-4538)), is_none(none()), is_err(err("-4538")), is_some(some(-4538)))
+
+print("o179-u2:", unwrap_or(none(), -4538), unwrap_or(err("x"), -4539), unwrap_or(ok(-4538), 0))
+
+print("o179-o3:", is_ok(ok(9354)), is_none(none()), is_err(err("9354")), is_some(some(9354)))
+
+print("o179-u3:", unwrap_or(none(), 9354), unwrap_or(err("x"), 9353), unwrap_or(ok(9354), 0))
+
+print("o179-e0:", ok(-3354) == ok(-3354), some(-3354) == ok(-3354), none() == none(), err(1) == err(2))
+
+print("o179-j0:", json_str(ok(-3354)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o179-e1:", ok(-6214) == ok(-6214), some(-6214) == ok(-6214), none() == none(), err(1) == err(2))
+
+print("o179-j1:", json_str(ok(-6214)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o179-n0:", some(some(67))?!?!, unwrap(ok(83)) + unwrap(some(16)))
+
+print("o179-s0:", "v=" + str(ok(67)?!), some("16k")?! + "!")
+
+print("o179-n1:", some(some(49))?!?!, unwrap(ok(57)) + unwrap(some(8)))
+
+print("o179-s1:", "v=" + str(ok(49)?!), some("8k")?! + "!")

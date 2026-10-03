@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=163 tag=s163
+
+print("s163-m0:", "2Bqktzvc".upper(), "2Bqktzvc".slice(1), "2Bqktzvc".len())
+
+print("s163-m1:", "m_iyB4h365".upper(), "m_iyB4h365".slice(2), "m_iyB4h365".len())
+
+print("s163-m2:", "9lqlm0d5nr".upper(), "9lqlm0d5nr".slice(2), "9lqlm0d5nr".len())
+
+print("s163-m3:", "vksa1mb9rtg35o".upper(), "vksa1mb9rtg35o".slice(3), "vksa1mb9rtg35o".len())
+
+print("s163-m4:", "jdsk6eApeqAg9z".upper(), "jdsk6eApeqAg9z".slice(3), "jdsk6eApeqAg9z".len())
+
+print("s163-i0:", "pz8-{49}-gBc3")
+
+let s163_v0 = 49
+
+print("s163-v0:", "n={s163_v0}" + "!" * 2)
+
+print("s163-i1:", "n8d-{59}-52i7")
+
+let s163_v1 = 59
+
+print("s163-v1:", "n={s163_v1}" + "!" * 2)
+
+print("s163-i2:", "4k_-{25}-C7A4")
+
+let s163_v2 = 25
+
+print("s163-v2:", "n={s163_v2}" + "!" * 1)
+
+print("s163-r0:", "2ty03sn8".replace("2", "_o"), "2ty03sn8".contains("ty"))
+
+print("s163-r1:", "nrBe8diy".replace("n", "ne"), "nrBe8diy".contains("rB"))
+
+print("s163-r2:", "BAqzxAc9".replace("B", "jq"), "BAqzxAc9".contains("Aq"))
+
+print("s163-j0:", ["b4b", "3qw", "6x9", "02A", "_pp"].join("-"))
+
+print("s163-j1:", ["ekx", "bas", "_c1", "hi_"].join("-"))
+
+print("s163-a0:", "l8pfn_n".at(2), "l8pfn_n".trim() == "l8pfn_n")
+
+print("s163-a1:", "lo2hikk".at(6), "lo2hikk".trim() == "lo2hikk")
+
+print("s163-a2:", "0wjqxma".at(2), "0wjqxma".trim() == "0wjqxma")

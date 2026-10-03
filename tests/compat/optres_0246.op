@@ -1,0 +1,140 @@
+# compat corpus — generated, do not edit by hand
+# bucket=optres seed=20261030 idx=246 tag=o246
+
+gene o246_f0(n) {
+
+    if n > -5402 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o246_u0(n) {
+
+    let v = o246_f0(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o246-p0:", o246_u0(-5074), o246_u0(-5387))
+
+gene o246_f1(n) {
+
+    if n > 8550 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o246_u1(n) {
+
+    let v = o246_f1(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o246-p1:", o246_u1(7703), o246_u1(8568))
+
+gene o246_f2(n) {
+
+    if n > 6526 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o246_u2(n) {
+
+    let v = o246_f2(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o246-p2:", o246_u2(1543), o246_u2(6545))
+
+gene o246_f3(n) {
+
+    if n > 564 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o246_u3(n) {
+
+    let v = o246_f3(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o246-p3:", o246_u3(-2518), o246_u3(582))
+
+gene o246_f4(n) {
+
+    if n > 8976 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o246_u4(n) {
+
+    let v = o246_f4(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o246-p4:", o246_u4(-7142), o246_u4(8980))
+
+print("o246-o0:", is_ok(ok(1944)), is_none(none()), is_err(err("1944")), is_some(some(1944)))
+
+print("o246-u0:", unwrap_or(none(), 1944), unwrap_or(err("x"), 1943), unwrap_or(ok(1944), 0))
+
+print("o246-o1:", is_ok(ok(5993)), is_none(none()), is_err(err("5993")), is_some(some(5993)))
+
+print("o246-u1:", unwrap_or(none(), 5993), unwrap_or(err("x"), 5992), unwrap_or(ok(5993), 0))
+
+print("o246-o2:", is_ok(ok(9625)), is_none(none()), is_err(err("9625")), is_some(some(9625)))
+
+print("o246-u2:", unwrap_or(none(), 9625), unwrap_or(err("x"), 9624), unwrap_or(ok(9625), 0))
+
+print("o246-e0:", ok(3738) == ok(3738), some(3738) == ok(3738), none() == none(), err(1) == err(2))
+
+print("o246-j0:", json_str(ok(3738)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o246-e1:", ok(1276) == ok(1276), some(1276) == ok(1276), none() == none(), err(1) == err(2))
+
+print("o246-j1:", json_str(ok(1276)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o246-n0:", some(some(42))?!?!, unwrap(ok(104)) + unwrap(some(62)))
+
+print("o246-s0:", "v=" + str(ok(42)?!), some("62k")?! + "!")
+
+print("o246-n1:", some(some(56))?!?!, unwrap(ok(141)) + unwrap(some(85)))
+
+print("o246-s1:", "v=" + str(ok(56)?!), some("85k")?! + "!")

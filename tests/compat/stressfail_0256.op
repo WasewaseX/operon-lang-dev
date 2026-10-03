@@ -1,0 +1,200 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=256 tag=s256
+
+stress {
+
+    print("s256-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s256-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s256-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s256-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s256-mz:", 70 % 0)
+
+} rescue (e) {
+
+    print("s256-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s256-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s256-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s256-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s256-of2:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s256-m1:", 9223372036854775807 % -1)
+
+} rescue (e) {
+
+    print("s256-m1:", "caught", e.kind, e.message)
+
+}
+
+gene s256_r0() {
+
+    raise "s256-9pk_yC"
+
+}
+
+stress {
+
+    s256_r0()
+
+    print("s256-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s256-r0:", e.kind, e.message)
+
+}
+
+gene s256_r1() {
+
+    raise "s256-b84p89"
+
+}
+
+stress {
+
+    s256_r1()
+
+    print("s256-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s256-r1:", e.kind, e.message)
+
+}
+
+gene s256_r2() {
+
+    raise "s256-8jz7uf"
+
+}
+
+stress {
+
+    s256_r2()
+
+    print("s256-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s256-r2:", e.kind, e.message)
+
+}
+
+let s256_xs0 = [19, 40]
+
+stress {
+
+    print("s256-x0:", s256_xs0[4])
+
+} rescue (e) {
+
+    print("s256-x0:", "caught", e.kind)
+
+}
+
+let s256_xs1 = [46, 11, 9]
+
+stress {
+
+    print("s256-x1:", s256_xs1[4])
+
+} rescue (e) {
+
+    print("s256-x1:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s256-0"
+
+    } rescue (e) {
+
+        print("s256-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s256-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s256-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s256-1"
+
+    } rescue (e) {
+
+        print("s256-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s256-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s256-d1-top:", outer.message)
+
+}

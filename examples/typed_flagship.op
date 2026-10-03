@@ -1,0 +1,5 @@
+gene add(a: Int, b: Int) -> Int {
+    return a + b
+}
+x = 10
+x.name()

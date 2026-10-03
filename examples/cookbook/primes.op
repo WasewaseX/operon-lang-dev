@@ -1,5 +1,5 @@
 # ============================================================
-# Primes & Goldbach  — cookbook #12
+# Primes & Goldbach , cookbook #12
 # you already know: a sieve + a nested search for pairs
 # teaches: boolean-list sieves, break/continue-free control flow,
 #          early return from a scan gene

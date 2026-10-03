@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=87 tag=c087
+
+print("c087-c0:", 7692 <= -8966)
+
+print("c087-c1:", -2027 != 3040)
+
+print("c087-c2:", 9846 < 4708)
+
+print("c087-c3:", 6811 >= 7259)
+
+print("c087-c4:", 5319 > 3800)
+
+print("c087-c5:", -5184 <= -7480)
+
+print("c087-b0:", 16 < 28 && 28 < 30, 16 > 28 || 16 > 30)
+
+print("c087-b1:", 24 < 11 && 11 < 48, 24 > 11 || 24 > 48)
+
+print("c087-b2:", 20 < 10 && 10 < 43, 20 > 10 || 20 > 43)
+
+print("c087-b3:", 4 < 39 && 39 < 47, 4 > 39 || 4 > 47)
+
+print("c087-t0:", -189 > -9779 ? "gt" : "le")
+
+print("c087-t1:", 6597 > 9789 ? "gt" : "le")
+
+print("c087-t2:", 8211 > 7304 ? "gt" : "le")
+
+let c087_n0 = null
+
+print("c087-n0:", c087_n0 ?? -6905, c087_n0 == null)
+
+let c087_n1 = null
+
+print("c087-n1:", c087_n1 ?? 8788, c087_n1 == null)
+
+let c087_n2 = null
+
+print("c087-n2:", c087_n2 ?? -9587, c087_n2 == null)
+
+print("c087-s0:", "0rro" in "8591zq0rro", "0rro" == "0rro")
+
+print("c087-s1:", "6yj4" in "kegckg6yj4", "6yj4" == "6yj4")

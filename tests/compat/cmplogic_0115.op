@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=115 tag=c115
+
+print("c115-c0:", -4287 < -1555)
+
+print("c115-c1:", 3422 != -6478)
+
+print("c115-c2:", -8940 != 4990)
+
+print("c115-c3:", -8988 < -8728)
+
+print("c115-c4:", -4988 >= -9977)
+
+print("c115-c5:", -2783 != -6128)
+
+print("c115-c6:", 9339 >= -7143)
+
+print("c115-b0:", 34 < 22 && 22 < 3, 34 > 22 || 34 > 3)
+
+print("c115-b1:", 10 < 33 && 33 < 24, 10 > 33 || 10 > 24)
+
+print("c115-b2:", 38 < 48 && 48 < 20, 38 > 48 || 38 > 20)
+
+print("c115-b3:", 17 < 19 && 19 < 29, 17 > 19 || 17 > 29)
+
+print("c115-t0:", -1689 > 5651 ? "gt" : "le")
+
+print("c115-t1:", -2695 > 189 ? "gt" : "le")
+
+let c115_n0 = null
+
+print("c115-n0:", c115_n0 ?? 7855, c115_n0 == null)
+
+let c115_n1 = null
+
+print("c115-n1:", c115_n1 ?? 7653, c115_n1 == null)
+
+print("c115-s0:", "7bge" in "6b9c227bge", "7bge" == "7bge")
+
+print("c115-s1:", "eowB" in "ehoyoueowB", "eowB" == "eowB")

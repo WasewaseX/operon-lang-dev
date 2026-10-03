@@ -1,0 +1,184 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=117 tag=s117
+
+stress {
+
+    print("s117-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s117-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s117-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s117-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s117-mz:", 18 % 0)
+
+} rescue (e) {
+
+    print("s117-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s117-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s117-of1:", "caught", e.kind, e.message)
+
+}
+
+gene s117_r0() {
+
+    raise "s117-xbzebf"
+
+}
+
+stress {
+
+    s117_r0()
+
+    print("s117-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s117-r0:", e.kind, e.message)
+
+}
+
+gene s117_r1() {
+
+    raise "s117-y7Byle"
+
+}
+
+stress {
+
+    s117_r1()
+
+    print("s117-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s117-r1:", e.kind, e.message)
+
+}
+
+let s117_xs0 = [6, 25]
+
+stress {
+
+    print("s117-x0:", s117_xs0[4])
+
+} rescue (e) {
+
+    print("s117-x0:", "caught", e.kind)
+
+}
+
+let s117_xs1 = [43, 5, 16, 14]
+
+stress {
+
+    print("s117-x1:", s117_xs1[6])
+
+} rescue (e) {
+
+    print("s117-x1:", "caught", e.kind)
+
+}
+
+let s117_xs2 = [23, 13, 7, 18]
+
+stress {
+
+    print("s117-x2:", s117_xs2[7])
+
+} rescue (e) {
+
+    print("s117-x2:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s117-0"
+
+    } rescue (e) {
+
+        print("s117-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s117-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s117-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s117-1"
+
+    } rescue (e) {
+
+        print("s117-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s117-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s117-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s117-d1-top:", outer.message)
+
+}

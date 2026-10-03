@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=14 tag=s014
+
+print("s014-m0:", "rom_4aavlAC".upper(), "rom_4aavlAC".slice(4), "rom_4aavlAC".len())
+
+print("s014-m1:", "i79oAsao4C".upper(), "i79oAsao4C".slice(4), "i79oAsao4C".len())
+
+print("s014-m2:", "z37izc".upper(), "z37izc".slice(1), "z37izc".len())
+
+print("s014-m3:", "ky4h6lyed2z8Cc".upper(), "ky4h6lyed2z8Cc".slice(1), "ky4h6lyed2z8Cc".len())
+
+print("s014-i0:", "7mm-{41}-h68r")
+
+let s014_v0 = 41
+
+print("s014-v0:", "n={s014_v0}" + "!" * 2)
+
+print("s014-i1:", "lne-{96}-ivoh")
+
+let s014_v1 = 96
+
+print("s014-v1:", "n={s014_v1}" + "!" * 1)
+
+print("s014-i2:", "Az3-{60}-b9l7")
+
+let s014_v2 = 60
+
+print("s014-v2:", "n={s014_v2}" + "!" * 2)
+
+print("s014-r0:", "5bvsmn8b".replace("5", "v5"), "5bvsmn8b".contains("bv"))
+
+print("s014-r1:", "nuebx8l0".replace("n", "tA"), "nuebx8l0".contains("ue"))
+
+print("s014-r2:", "93Bqmb4z".replace("9", "hn"), "93Bqmb4z".contains("3B"))
+
+print("s014-j0:", ["6f7", "v6C", "pqm"].join("-"))
+
+print("s014-j1:", ["2u0", "q_m", "q7f"].join("-"))
+
+print("s014-a0:", "tt2y7th".at(5), "tt2y7th".trim() == "tt2y7th")
+
+print("s014-a1:", "lek0wk6".at(3), "lek0wk6".trim() == "lek0wk6")

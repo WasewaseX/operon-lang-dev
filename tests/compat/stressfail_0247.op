@@ -1,0 +1,248 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=247 tag=s247
+
+stress {
+
+    print("s247-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s247-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s247-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s247-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s247-mz:", 35 % 0)
+
+} rescue (e) {
+
+    print("s247-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s247-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s247-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s247-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s247-of2:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s247-m1:", 9223372036854775807 % -1)
+
+} rescue (e) {
+
+    print("s247-m1:", "caught", e.kind, e.message)
+
+}
+
+gene s247_r0() {
+
+    raise "s247-Adff1n"
+
+}
+
+stress {
+
+    s247_r0()
+
+    print("s247-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s247-r0:", e.kind, e.message)
+
+}
+
+gene s247_r1() {
+
+    raise "s247-AwmB9g"
+
+}
+
+stress {
+
+    s247_r1()
+
+    print("s247-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s247-r1:", e.kind, e.message)
+
+}
+
+gene s247_r2() {
+
+    raise "s247-bf8p0j"
+
+}
+
+stress {
+
+    s247_r2()
+
+    print("s247-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s247-r2:", e.kind, e.message)
+
+}
+
+gene s247_r3() {
+
+    raise "s247-pfjucn"
+
+}
+
+stress {
+
+    s247_r3()
+
+    print("s247-r3:", "unreachable")
+
+} rescue (e) {
+
+    print("s247-r3:", e.kind, e.message)
+
+}
+
+let s247_xs0 = [37, 32, 33, 13]
+
+stress {
+
+    print("s247-x0:", s247_xs0[8])
+
+} rescue (e) {
+
+    print("s247-x0:", "caught", e.kind)
+
+}
+
+let s247_xs1 = [25, 9, 13, 39]
+
+stress {
+
+    print("s247-x1:", s247_xs1[8])
+
+} rescue (e) {
+
+    print("s247-x1:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s247-0"
+
+    } rescue (e) {
+
+        print("s247-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s247-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s247-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s247-d0-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s247-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s247-1"
+
+    } rescue (e) {
+
+        print("s247-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s247-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s247-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s247-d1-top:", outer.message)
+
+}

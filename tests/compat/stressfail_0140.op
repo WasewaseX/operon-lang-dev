@@ -1,0 +1,220 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=140 tag=s140
+
+stress {
+
+    print("s140-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s140-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s140-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s140-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s140-mz:", 58 % 0)
+
+} rescue (e) {
+
+    print("s140-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s140-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s140-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s140-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s140-of2:", "caught", e.kind, e.message)
+
+}
+
+gene s140_r0() {
+
+    raise "s140-ina1Aa"
+
+}
+
+stress {
+
+    s140_r0()
+
+    print("s140-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s140-r0:", e.kind, e.message)
+
+}
+
+gene s140_r1() {
+
+    raise "s140-vxs2qw"
+
+}
+
+stress {
+
+    s140_r1()
+
+    print("s140-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s140-r1:", e.kind, e.message)
+
+}
+
+gene s140_r2() {
+
+    raise "s140-_by_eo"
+
+}
+
+stress {
+
+    s140_r2()
+
+    print("s140-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s140-r2:", e.kind, e.message)
+
+}
+
+let s140_xs0 = [20, 37]
+
+stress {
+
+    print("s140-x0:", s140_xs0[7])
+
+} rescue (e) {
+
+    print("s140-x0:", "caught", e.kind)
+
+}
+
+let s140_xs1 = [1, 18, 3, 28]
+
+stress {
+
+    print("s140-x1:", s140_xs1[7])
+
+} rescue (e) {
+
+    print("s140-x1:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s140-0"
+
+    } rescue (e) {
+
+        print("s140-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s140-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s140-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s140-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s140-1"
+
+    } rescue (e) {
+
+        print("s140-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s140-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s140-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s140-d1-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s140-d1-top:", outer.message)
+
+}

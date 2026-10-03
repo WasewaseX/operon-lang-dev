@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  schedule:
+    # S7 stage 5: nightly full regression + deep fuzz sweeps. Off the hour
+    # to dodge runner congestion. The fuzz-nightly job gates on this event.
+    - cron: "17 3 * * *"
 
 jobs:
   linux:
@@ -23,6 +27,8 @@ jobs:
         run: cargo clippy --all-targets
       - name: Formatting (cargo fmt --check)
         run: cargo fmt --check
+      - name: Embedding example gate (W076 — external path-dep crate)
+        run: bash scripts/embed_example_check.sh
       - name: Toolchain build via scripts/build.sh (bin/operon compat path)
         run: bash scripts/build.sh
       - name: C++ kernel smoke (ASan + UBSan)
@@ -46,10 +52,48 @@ jobs:
         run: bash scripts/stack_report.sh
 
   windows:
+    name: windows (required — W59)
     runs-on: windows-latest
-    continue-on-error: true
+    # W59 (ROADMAP-100): the audit called out "Windows CI should not be
+    # non-blocking forever" — platform regressions accumulated silently under
+    # continue-on-error. As of this commit a Windows failure BLOCKS the PR.
+    # (Bench stays intentionally non-blocking; that is a trend point, not a
+    # gate.) If the windows runner flakes, fix forward — no silent passes.
+    #
+    # W59 windows-truthing context: flipping this job to blocking surfaced
+    # TWO pre-existing Windows failures that continue-on-error had masked:
+    #   (a) tests/string_literals.op proof burned on CRLF — git's default
+    #       autocrlf converted LF to CRLF at checkout, corrupting the
+    #       verbatim content of a triple-quoted string. Fixed by the
+    #       repo-level .gitattributes (LF everywhere, every platform).
+    #   (b) the Python oracle exited 1 with no stdout for EVERY program on
+    #       the runner — every differential case read as `oracle: <missing>`
+    #       and the wall of DIVERGEs hid the real crash. The harness now
+    #       decodes subprocess output as UTF-8 and prints the oracle's
+    #       first stderr lines when its side fails, and oracle.py reads
+    #       every source file as UTF-8 with honest worker-thread exit-code
+    #       propagation. PYTHONUTF8=1 makes the runner's Python default to
+    #       UTF-8 mode as belt-and-braces for anything the explicit fixes
+    #       don't cover.
+    env:
+      PYTHONUTF8: "1"
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v4.2.2 (SHA-pinned, sec-r1)
+      # W59 one-shot oracle probe: if the differential harness ever reports
+      # all-diverge again, this prints the oracle's actual startup behavior
+      # (rc/stdout/stderr) directly in the job log — no more guessing from
+      # an anonymous DIVERGE wall. Kept non-blocking; it is a stethoscope,
+      # not a gate.
+      - name: Oracle startup probe (diagnostic, non-blocking)
+        continue-on-error: true
+        shell: bash
+        run: |
+          python3 bootstrap/oracle.py version
+          echo "probe: version rc=$?"
+          python3 bootstrap/oracle.py run tests/differential/arith_pinned.op > /tmp/probe.out 2> /tmp/probe.err
+          echo "probe: run rc=$?"
+          echo "probe stdout (first 5 lines):"; head -5 /tmp/probe.out
+          echo "probe stderr (first 10 lines):"; head -10 /tmp/probe.err
       - name: Install Rust (stable + clippy)
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable (SHA-pinned, D-6/sec-r5)
         with:
@@ -93,3 +137,100 @@ jobs:
         run: mkdir -p bin && cp target/release/operon bin/operon
       - name: Benchmark suite (quick pass; methodology in BENCH.md)
         run: bash scripts/bench.sh --quick
+
+  fuzz:
+    name: fuzz (FAST pre-merge — a finding FAILS the run)
+    runs-on: ubuntu-latest
+    # S7 stage 5: the standing fuzz lane in CI. Every fuzzer is
+    # deterministic-seed and time-boxed; exit 1 = findings exist = a BUG
+    # (Total Grammar: every input must end contained-or-clean, never
+    # panic/hang/breach). Triaged per scripts/fuzz/TRIAGE.md — the corpus
+    # is dumped into the log on failure, a fix lands with a regression .op.
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v4.2.2 (SHA-pinned, sec-r1)
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable (SHA-pinned, D-6/sec-r5)
+      - name: Cargo build (release; C/C++ kernels via build.rs)
+        run: cargo build --release
+      - name: Expose bin/operon (harness compat path)
+        run: mkdir -p bin && cp target/release/operon bin/operon
+      - name: Mutation fuzz (check/ast/fmt/explain) — seed 20261001
+        run: python3 scripts/fuzz/fuzz.py --time-budget 120 --execs 300 --seed 20261001
+      - name: Differential fuzz at scale (D1-D5, R1) — seed 20261001
+        run: python3 scripts/fuzz/fuzz_diff.py --n 600 --seed 20261001 --time-budget 240
+      - name: Exec-surface fuzz (E1/E1b/E2/E3) — seed 20261001
+        run: python3 scripts/fuzz/fuzz_exec.py --n 600 --seed 20261001 --time-budget 240
+      - name: Findings dump (runs only when a fuzzer found something)
+        if: failure()
+        run: |
+          echo "::error::a fuzzer found something — findings are BUGS (scripts/fuzz/TRIAGE.md)"
+          if [ -f fuzz_corpus/MANIFEST.jsonl ]; then
+            cat fuzz_corpus/MANIFEST.jsonl
+            for f in fuzz_corpus/*.op; do
+              echo "--- $f ---"; cat "$f"
+            done
+          fi
+
+  fuzz-nightly:
+    name: fuzz nightly (full deep sweeps)
+    runs-on: ubuntu-latest
+    # Full-time-budget versions of the same lanes on a schedule (and
+    # workflow_dispatch for manual deep runs). The nightly seed derives
+    # from the run date — new input space every day, recorded in the log,
+    # reproducible from it. A finding FAILS the nightly the same way.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v4.2.2 (SHA-pinned, sec-r1)
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable (SHA-pinned, D-6/sec-r5)
+      - name: Cargo build (release)
+        run: cargo build --release
+      - name: Expose bin/operon (harness compat path)
+        run: mkdir -p bin && cp target/release/operon bin/operon
+      - name: Nightly seed (date-derived, recorded here)
+        run: |
+          echo "NIGHTLY_SEED=$(date +%Y%m%d)" >> "$GITHUB_ENV"
+          echo "nightly fuzz seed: $(date +%Y%m%d)"
+      - name: Mutation fuzz deep sweep (3000 execs)
+        run: python3 scripts/fuzz/fuzz.py --time-budget 600 --execs 3000 --seed "$NIGHTLY_SEED"
+      - name: Parser grammar fuzz deep sweep (1000 inputs, exec mode)
+        run: python3 scripts/fuzz_parser.py --n 1000 --seed "$NIGHTLY_SEED" --exec
+      - name: Differential fuzz deep sweep (2400 programs x 5 surfaces)
+        run: python3 scripts/fuzz/fuzz_diff.py --n 2400 --seed "$NIGHTLY_SEED" --time-budget 900
+      - name: Exec-surface deep sweep (9000 programs, E1/E1b/E2/E3)
+        run: python3 scripts/fuzz/fuzz_exec.py --n 9000 --seed "$NIGHTLY_SEED" --time-budget 1200
+      - name: Findings dump (runs only when a fuzzer found something)
+        if: failure()
+        run: |
+          echo "::error::nightly fuzzer found something — findings are BUGS (scripts/fuzz/TRIAGE.md)"
+          if [ -f fuzz_corpus/MANIFEST.jsonl ]; then
+            cat fuzz_corpus/MANIFEST.jsonl
+            for f in fuzz_corpus/*.op; do
+              echo "--- $f ---"; cat "$f"
+            done
+          fi
+
+  manifest:
+    name: manifest (non-blocking drift check)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    # B4 cross-lane ask (builder-B, COMMS): the playground dropdown manifest
+    # (web/playground/examples.data.js) is GENERATED from examples/cookbook/
+    # + Cargo.toml by scripts/gen_playground_examples.py. If someone adds or
+    # edits a cookbook program without regenerating, the committed manifest
+    # silently drifts from the real examples. This job regenerates and fails
+    # on any diff, so drift surfaces here instead of at demo time.
+    # Non-blocking by design (same shape as bench): a red here means "regen
+    # the manifest", not "the language is broken".
+    # Cookbook programs themselves need no separate verifier step — the
+    # differential harness collects examples/ as permanent targets.
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v4.2.2 (SHA-pinned, sec-r1)
+      - name: Regenerate playground manifest from examples/ + Cargo.toml
+        run: python3 scripts/gen_playground_examples.py
+      - name: Fail on drift (run the generator and commit the result to fix)
+        run: |
+          if ! git diff --exit-code web/playground/examples.data.js; then
+            echo "::error::examples.data.js is stale — run 'python3 scripts/gen_playground_examples.py' and commit the regenerated manifest"
+            exit 1
+          fi

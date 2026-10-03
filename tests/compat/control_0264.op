@@ -1,0 +1,132 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=264 tag=c264
+
+let c264_b0 = "start"
+
+if -12 > 80 { c264_b0 = "hi" } elif -12 > 40 { c264_b0 = "mid" } else { c264_b0 = "lo" }
+
+print("c264-i0:", c264_b0, -12)
+
+let c264_b1 = "start"
+
+if 108 > 80 { c264_b1 = "hi" } elif 108 > 40 { c264_b1 = "mid" } else { c264_b1 = "lo" }
+
+print("c264-i1:", c264_b1, 108)
+
+let c264_b2 = "start"
+
+if -9 > 80 { c264_b2 = "hi" } elif -9 > 40 { c264_b2 = "mid" } else { c264_b2 = "lo" }
+
+print("c264-i2:", c264_b2, -9)
+
+let c264_b3 = "start"
+
+if 106 > 80 { c264_b3 = "hi" } elif 106 > 40 { c264_b3 = "mid" } else { c264_b3 = "lo" }
+
+print("c264-i3:", c264_b3, 106)
+
+let c264_a0 = 0
+
+let c264_n0 = 0
+
+while c264_n0 < 9 {
+
+    c264_n0 += 3
+
+    if c264_n0 % 2 == 0 { continue }
+
+    if c264_n0 > 17 { break }
+
+    c264_a0 += c264_n0
+
+}
+
+print("c264-w0:", c264_a0, c264_n0)
+
+let c264_a1 = 0
+
+let c264_n1 = 0
+
+while c264_n1 < 10 {
+
+    c264_n1 += 2
+
+    if c264_n1 % 2 == 0 { continue }
+
+    if c264_n1 > 16 { break }
+
+    c264_a1 += c264_n1
+
+}
+
+print("c264-w1:", c264_a1, c264_n1)
+
+let c264_a2 = 0
+
+let c264_n2 = 0
+
+while c264_n2 < 14 {
+
+    c264_n2 += 4
+
+    if c264_n2 % 3 == 0 { continue }
+
+    if c264_n2 > 20 { break }
+
+    c264_a2 += c264_n2
+
+}
+
+print("c264-w2:", c264_a2, c264_n2)
+
+let c264_c0 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 2] {
+
+        c264_c0 += a * b
+
+    }
+
+}
+
+print("c264-l0:", c264_c0)
+
+let c264_c1 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 4] {
+
+        c264_c1 += a * b
+
+    }
+
+}
+
+print("c264-l1:", c264_c1)
+
+let c264_acc0 = ""
+
+loop {
+
+    c264_acc0 += "x"
+
+    if c264_acc0.len() >= 4 { break }
+
+}
+
+print("c264-o0:", c264_acc0)
+
+let c264_acc1 = ""
+
+loop {
+
+    c264_acc1 += "x"
+
+    if c264_acc1.len() >= 3 { break }
+
+}
+
+print("c264-o1:", c264_acc1)

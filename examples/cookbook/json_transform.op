@@ -1,9 +1,9 @@
 # ============================================================
-# JSON transform  — cookbook #03
+# JSON transform , cookbook #03
 # you already know: json.loads + dict navigation + dict | overrides
 # teaches: std/json dot-path navigation, merge/pick/omit, flatten,
 #          and the chr(123)/chr(125) idiom for literal braces
-#          (a bare { in a string starts interpolation — gotcha!)
+#          (a bare { in a string starts interpolation, gotcha!)
 # run: operon run examples/cookbook/json_transform.op
 # expected output: examples/cookbook/expected/json_transform.out
 # verified by scripts/cookbook.sh on the Rust core AND the Python oracle

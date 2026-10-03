@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=219 tag=m219
+
+let m219_m0 = {ligase: 93, plasmid: 76, helix: 55}
+
+print("m219-m0:", m219_m0["ligase"], len(m219_m0), m219_m0.has("ligase"))
+
+let m219_m1 = {gene: 55, enzyme: 47, helix: -41, splicer: 77, ligase: -83}
+
+print("m219-m1:", m219_m1["gene"], len(m219_m1), m219_m1.has("gene"))
+
+let m219_m2 = {gene: 28, ligase: -23, splicer: 10}
+
+print("m219-m2:", m219_m2["gene"], len(m219_m2), m219_m2.has("gene"))
+
+let m219_k0 = {cell: 15, enzyme: 15, gene: 7}
+
+let m219_ks0 = m219_k0.keys()
+
+let m219_sm0 = 0
+
+for k in m219_k0 { m219_sm0 += m219_k0[k] }
+
+print("m219-k0:", m219_sm0, m219_k0.keys().sort(), m219_k0.values().len())
+
+let m219_k1 = {cell: 37, ligase: 25, enzyme: 32}
+
+let m219_ks1 = m219_k1.keys()
+
+let m219_sm1 = 0
+
+for k in m219_k1 { m219_sm1 += m219_k1[k] }
+
+print("m219-k1:", m219_sm1, m219_k1.keys().sort(), m219_k1.values().len())
+
+let m219_k2 = {splicer: 26, enzyme: 17, cell: 20}
+
+let m219_ks2 = m219_k2.keys()
+
+let m219_sm2 = 0
+
+for k in m219_k2 { m219_sm2 += m219_k2[k] }
+
+print("m219-k2:", m219_sm2, m219_k2.keys().sort(), m219_k2.values().len())
+
+let m219_w0 = {outer: {plasmid: 1, helix: 3, tag: "ok"}}}
+
+print("m219-w0:", m219_w0["outer"]["helix"], m219_w0["outer"]["tag"])
+
+let m219_w1 = {outer: {vector: 5, gene: 8, tag: "ok"}}}
+
+print("m219-w1:", m219_w1["outer"]["gene"], m219_w1["outer"]["tag"])

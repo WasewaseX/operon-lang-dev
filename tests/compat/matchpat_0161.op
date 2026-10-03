@@ -1,0 +1,268 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=161 tag=m161
+
+let m161_s0 = some(5)
+
+match m161_s0 {
+
+    case Some(x) if x > 5 {
+
+        print("m161-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m161-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m161-m0:", "none")
+
+    }
+
+}
+
+let m161_s1 = some(4)
+
+match m161_s1 {
+
+    case Some(x) if x > 4 {
+
+        print("m161-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m161-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m161-m1:", "none")
+
+    }
+
+}
+
+let m161_s2 = some(6)
+
+match m161_s2 {
+
+    case Some(x) if x > 6 {
+
+        print("m161-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m161-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m161-m2:", "none")
+
+    }
+
+}
+
+let m161_ls0 = [18, 37, 36]
+
+match m161_ls0 {
+
+    case [18, *rest] {
+
+        print("m161-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m161-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m161-l0:", "other")
+
+    }
+
+}
+
+let m161_ls1 = [22, 40, 20]
+
+match m161_ls1 {
+
+    case [22, *rest] {
+
+        print("m161-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m161-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m161-l1:", "other")
+
+    }
+
+}
+
+let m161_ls2 = [4, 41, 26]
+
+match m161_ls2 {
+
+    case [4, *rest] {
+
+        print("m161-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m161-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m161-l2:", "other")
+
+    }
+
+}
+
+let m161_mp0 = {gene: 8219, splicer: 8279}
+
+match m161_mp0 {
+
+    case {gene: p, splicer: q} {
+
+        print("m161-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m161-mp0:", "miss")
+
+    }
+
+}
+
+let m161_mp1 = {splicer: 2778, plasmid: -1368}
+
+match m161_mp1 {
+
+    case {splicer: p, plasmid: q} {
+
+        print("m161-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m161-mp1:", "miss")
+
+    }
+
+}
+
+let m161_mp2 = {ribose: 869, helix: 9786}
+
+match m161_mp2 {
+
+    case {ribose: p, helix: q} {
+
+        print("m161-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m161-mp2:", "miss")
+
+    }
+
+}
+
+let m161_r0 = ok(2)
+
+match m161_r0 {
+
+    case Ok(n) | Err(2) {
+
+        print("m161-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m161-r0:", "zero")
+
+    }
+
+}
+
+let m161_r1 = ok(1)
+
+match m161_r1 {
+
+    case Ok(n) | Err(1) {
+
+        print("m161-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m161-r1:", "zero")
+
+    }
+
+}
+
+match "ribose" {
+
+    case "ribose" {
+
+        print("m161-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m161-w0:", "alt")
+
+    }
+
+}
+
+match "cell" {
+
+    case "cell" {
+
+        print("m161-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m161-w1:", "alt")
+
+    }
+
+}

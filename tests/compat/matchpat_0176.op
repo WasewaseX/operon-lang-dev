@@ -1,0 +1,250 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=176 tag=m176
+
+let m176_s0 = some(1)
+
+match m176_s0 {
+
+    case Some(x) if x > 1 {
+
+        print("m176-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m176-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m176-m0:", "none")
+
+    }
+
+}
+
+let m176_s1 = some(9)
+
+match m176_s1 {
+
+    case Some(x) if x > 9 {
+
+        print("m176-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m176-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m176-m1:", "none")
+
+    }
+
+}
+
+let m176_s2 = some(7)
+
+match m176_s2 {
+
+    case Some(x) if x > 7 {
+
+        print("m176-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m176-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m176-m2:", "none")
+
+    }
+
+}
+
+let m176_ls0 = [2, 46, 43]
+
+match m176_ls0 {
+
+    case [2, *rest] {
+
+        print("m176-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m176-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m176-l0:", "other")
+
+    }
+
+}
+
+let m176_ls1 = [35, 37, 39]
+
+match m176_ls1 {
+
+    case [35, *rest] {
+
+        print("m176-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m176-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m176-l1:", "other")
+
+    }
+
+}
+
+let m176_ls2 = [12, 2, 36]
+
+match m176_ls2 {
+
+    case [12, *rest] {
+
+        print("m176-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m176-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m176-l2:", "other")
+
+    }
+
+}
+
+let m176_mp0 = {gene: -6313, ribose: 9942}
+
+match m176_mp0 {
+
+    case {gene: p, ribose: q} {
+
+        print("m176-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m176-mp0:", "miss")
+
+    }
+
+}
+
+let m176_mp1 = {enzyme: 9827, splicer: 3722}
+
+match m176_mp1 {
+
+    case {enzyme: p, splicer: q} {
+
+        print("m176-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m176-mp1:", "miss")
+
+    }
+
+}
+
+let m176_r0 = ok(4)
+
+match m176_r0 {
+
+    case Ok(n) | Err(4) {
+
+        print("m176-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m176-r0:", "zero")
+
+    }
+
+}
+
+let m176_r1 = ok(2)
+
+match m176_r1 {
+
+    case Ok(n) | Err(2) {
+
+        print("m176-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m176-r1:", "zero")
+
+    }
+
+}
+
+match "helix" {
+
+    case "helix" {
+
+        print("m176-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m176-w0:", "alt")
+
+    }
+
+}
+
+match "splicer" {
+
+    case "splicer" {
+
+        print("m176-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m176-w1:", "alt")
+
+    }
+
+}

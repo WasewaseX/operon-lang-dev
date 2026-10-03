@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=56 tag=c056
+
+print("c056-c0:", 4668 < -3209)
+
+print("c056-c1:", 5008 < -57)
+
+print("c056-c2:", -7065 != 9438)
+
+print("c056-c3:", 391 <= -2141)
+
+print("c056-c4:", -5992 < -6418)
+
+print("c056-c5:", -6709 > 7294)
+
+print("c056-c6:", -5057 <= -9649)
+
+print("c056-b0:", 5 < 39 && 39 < 5, 5 > 39 || 5 > 5)
+
+print("c056-b1:", 47 < 44 && 44 < 34, 47 > 44 || 47 > 34)
+
+print("c056-b2:", 20 < 40 && 40 < 4, 20 > 40 || 20 > 4)
+
+print("c056-t0:", -8862 > 4310 ? "gt" : "le")
+
+print("c056-t1:", 1681 > 4256 ? "gt" : "le")
+
+print("c056-t2:", 6695 > 5020 ? "gt" : "le")
+
+let c056_n0 = null
+
+print("c056-n0:", c056_n0 ?? -9481, c056_n0 == null)
+
+let c056_n1 = null
+
+print("c056-n1:", c056_n1 ?? 2181, c056_n1 == null)
+
+let c056_n2 = null
+
+print("c056-n2:", c056_n2 ?? -8193, c056_n2 == null)
+
+print("c056-s0:", "A0bt" in "wBub8xA0bt", "A0bt" == "A0bt")
+
+print("c056-s1:", "fugc" in "wv6A1kfugc", "fugc" == "fugc")

@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=70 tag=c070
+
+print("c070-c0:", -6083 >= -7118)
+
+print("c070-c1:", 2855 <= -1451)
+
+print("c070-c2:", 6528 >= -2418)
+
+print("c070-c3:", 90 >= 7850)
+
+print("c070-c4:", -8529 <= -1125)
+
+print("c070-b0:", 23 < 27 && 27 < 22, 23 > 27 || 23 > 22)
+
+print("c070-b1:", 21 < 10 && 10 < 49, 21 > 10 || 21 > 49)
+
+print("c070-b2:", 18 < 23 && 23 < 41, 18 > 23 || 18 > 41)
+
+print("c070-t0:", 3116 > -9256 ? "gt" : "le")
+
+print("c070-t1:", 3648 > -2220 ? "gt" : "le")
+
+print("c070-t2:", -334 > 9154 ? "gt" : "le")
+
+let c070_n0 = null
+
+print("c070-n0:", c070_n0 ?? 1123, c070_n0 == null)
+
+let c070_n1 = null
+
+print("c070-n1:", c070_n1 ?? 9009, c070_n1 == null)
+
+let c070_n2 = null
+
+print("c070-n2:", c070_n2 ?? 6633, c070_n2 == null)
+
+print("c070-s0:", "1zip" in "phAk211zip", "1zip" == "1zip")
+
+print("c070-s1:", "zbmy" in "7m6k5Azbmy", "zbmy" == "zbmy")

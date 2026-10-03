@@ -1,0 +1,254 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20260930 idx=71 tag=m071
+
+gene m071_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m071-b0:", m071_b0({cell: 54, plasmid: 96, vector: 51})?!)
+
+gene m071_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m071-b1:", m071_b1({exon: 47, marker: 55, cell: 33})?!)
+
+gene m071_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m071-b2:", m071_b2({ligase: 20, marker: 55, splicer: 42})?!)
+
+gene m071_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m071_f0([56, 52, 45, 12]) {
+
+    case Ok(list) {
+
+        print("m071-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m071-f0:", "e:", m)
+
+    }
+
+}
+
+gene m071_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m071_f1([8, 17, 46, 54]) {
+
+    case Ok(list) {
+
+        print("m071-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m071-f1:", "e:", m)
+
+    }
+
+}
+
+gene m071_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m071_f2([60, 3, 3, 22, 10, 36, 13, 54]) {
+
+    case Ok(list) {
+
+        print("m071-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m071-f2:", "e:", m)
+
+    }
+
+}
+
+let m071_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m071-cc0:", m071_cl0(1)(9), m071_cl0(9)(1))
+
+let m071_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m071-cc1:", m071_cl1(16)(18), m071_cl1(18)(16))
+
+let m071_data0 = some([some("vector"), none(), some(1)])
+
+match m071_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m071-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m071-x0:", "shape-miss")
+
+    }
+
+}
+
+let m071_data1 = some([some("plasmid"), none(), some(5)])
+
+match m071_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m071-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m071-x1:", "shape-miss")
+
+    }
+
+}

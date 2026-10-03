@@ -1,0 +1,6 @@
+# ytdl.op runtime contract — the launcher passes --cell with this file.
+# run() wall-clock ceiling: 5 minutes per call (interpreter max). Long
+# downloads surface as code 0 + a .part file; the app's checkpoint-resume
+# loop re-invokes yt-dlp --continue until the .part is gone.
+run.timeout_ms = 300000
+allow.exit = true

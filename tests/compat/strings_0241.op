@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=241 tag=s241
+
+print("s241-m0:", "qhvAAyqr5f7C".upper(), "qhvAAyqr5f7C".slice(1), "qhvAAyqr5f7C".len())
+
+print("s241-m1:", "A18u3q0n".upper(), "A18u3q0n".slice(2), "A18u3q0n".len())
+
+print("s241-m2:", "tjlC1sCo4".upper(), "tjlC1sCo4".slice(2), "tjlC1sCo4".len())
+
+print("s241-m3:", "f_ehz4m2".upper(), "f_ehz4m2".slice(4), "f_ehz4m2".len())
+
+print("s241-m4:", "tno1pdfr35B3A".upper(), "tno1pdfr35B3A".slice(4), "tno1pdfr35B3A".len())
+
+print("s241-i0:", "_r0-{14}-ugBu")
+
+let s241_v0 = 14
+
+print("s241-v0:", "n={s241_v0}" + "!" * 3)
+
+print("s241-i1:", "d2g-{2}-ckt2")
+
+let s241_v1 = 2
+
+print("s241-v1:", "n={s241_v1}" + "!" * 1)
+
+print("s241-i2:", "pB8-{27}-z5_c")
+
+let s241_v2 = 27
+
+print("s241-v2:", "n={s241_v2}" + "!" * 1)
+
+print("s241-i3:", "3mg-{56}-cdgq")
+
+let s241_v3 = 56
+
+print("s241-v3:", "n={s241_v3}" + "!" * 3)
+
+print("s241-r0:", "ooBckili".replace("o", "df"), "ooBckili".contains("oB"))
+
+print("s241-r1:", "vu_gdxtg".replace("v", "an"), "vu_gdxtg".contains("u_"))
+
+print("s241-j0:", ["uu9", "cjc", "301", "2de", "tgp"].join("-"))
+
+print("s241-j1:", ["t8x", "381", "x9y", "7pv"].join("-"))
+
+print("s241-j2:", ["rCf", "yqp", "xAl", "Cn0", "dxq"].join("-"))
+
+print("s241-a0:", "0wodrlA".at(6), "0wodrlA".trim() == "0wodrlA")
+
+print("s241-a1:", "gh24w_4".at(6), "gh24w_4".trim() == "gh24w_4")
+
+print("s241-a2:", "C9k1pmk".at(6), "C9k1pmk".trim() == "C9k1pmk")

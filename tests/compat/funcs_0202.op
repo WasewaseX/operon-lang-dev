@@ -1,0 +1,202 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=202 tag=f202
+
+gene f202_g0(p, q = 31, r = 34) {
+
+    return p * 4 + q - r
+
+}
+
+print("f202-d0:", f202_g0(14), f202_g0(14, 77), f202_g0(14, 31, 34))
+
+gene f202_g1(p, q = 31, r = 66) {
+
+    return p * 98 + q - r
+
+}
+
+print("f202-d1:", f202_g1(-36), f202_g1(-36, 82), f202_g1(-36, 31, 66))
+
+gene f202_g2(p, q = 9, r = 67) {
+
+    return p * 8 + q - r
+
+}
+
+print("f202-d2:", f202_g2(14), f202_g2(14, 32), f202_g2(14, 9, 67))
+
+gene f202_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f202_fib0(n - 1) + f202_fib0(n - 2)
+
+}
+
+print("f202-fib0:", f202_fib0(8))
+
+gene f202_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f202_fib1(n - 1) + f202_fib1(n - 2)
+
+}
+
+print("f202-fib1:", f202_fib1(10))
+
+gene f202_fib2(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f202_fib2(n - 1) + f202_fib2(n - 2)
+
+}
+
+print("f202-fib2:", f202_fib2(13))
+
+gene f202_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f202_gcd0(b, a % b)
+
+}
+
+print("f202-gcd0:", f202_gcd0(60, 930))
+
+gene f202_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f202_gcd1(b, a % b)
+
+}
+
+print("f202-gcd1:", f202_gcd1(840, 530))
+
+gene f202_gcd2(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f202_gcd2(b, a % b)
+
+}
+
+print("f202-gcd2:", f202_gcd2(168, 520))
+
+gene f202_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f202_c0 = f202_mk0(31)
+
+f202_c0(9)
+
+print("f202-cl0:", f202_c0(3))
+
+gene f202_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f202_c1 = f202_mk1(0)
+
+f202_c1(6)
+
+print("f202-cl1:", f202_c1(7))
+
+gene f202_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f202-hof0:", f202_tw0(gene (z) => z * 2 + 1, 10))
+
+gene f202_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f202-hof1:", f202_tw1(gene (z) => z * 2 + 1, 5))
+
+gene f202_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f202-dg0:", f202_sd0(581520))
+
+gene f202_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f202-dg1:", f202_sd1(184782))

@@ -1,0 +1,60 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=112 tag=s112
+
+print("s112-m0:", "u8a7ok".upper(), "u8a7ok".slice(3), "u8a7ok".len())
+
+print("s112-m1:", "BeaBgug6".upper(), "BeaBgug6".slice(3), "BeaBgug6".len())
+
+print("s112-m2:", "tgg3otife5movm".upper(), "tgg3otife5movm".slice(2), "tgg3otife5movm".len())
+
+print("s112-m3:", "y3tfBp1a96lCtu".upper(), "y3tfBp1a96lCtu".slice(3), "y3tfBp1a96lCtu".len())
+
+print("s112-i0:", "550-{99}-0bvp")
+
+let s112_v0 = 99
+
+print("s112-v0:", "n={s112_v0}" + "!" * 3)
+
+print("s112-i1:", "75w-{10}-oomm")
+
+let s112_v1 = 10
+
+print("s112-v1:", "n={s112_v1}" + "!" * 3)
+
+print("s112-i2:", "nBl-{75}-offC")
+
+let s112_v2 = 75
+
+print("s112-v2:", "n={s112_v2}" + "!" * 3)
+
+print("s112-i3:", "CAA-{62}-gp9y")
+
+let s112_v3 = 62
+
+print("s112-v3:", "n={s112_v3}" + "!" * 2)
+
+print("s112-i4:", "o_3-{49}-0ipv")
+
+let s112_v4 = 49
+
+print("s112-v4:", "n={s112_v4}" + "!" * 1)
+
+print("s112-r0:", "aA1qrqC2".replace("a", "q9"), "aA1qrqC2".contains("A1"))
+
+print("s112-r1:", "udyd3qsh".replace("u", "1C"), "udyd3qsh".contains("dy"))
+
+print("s112-r2:", "eszn4xvm".replace("e", "rz"), "eszn4xvm".contains("sz"))
+
+print("s112-r3:", "xb8k0ljy".replace("x", "sb"), "xb8k0ljy".contains("b8"))
+
+print("s112-j0:", ["wjf", "8Bq", "_0s", "hch", "_mw"].join("-"))
+
+print("s112-j1:", ["1_r", "u7k", "e6j"].join("-"))
+
+print("s112-j2:", ["azb", "lth", "75n", "lr8"].join("-"))
+
+print("s112-a0:", "kBA4hfj".at(2), "kBA4hfj".trim() == "kBA4hfj")
+
+print("s112-a1:", "onfcimf".at(2), "onfcimf".trim() == "onfcimf")
+
+print("s112-a2:", "uy215wh".at(2), "uy215wh".trim() == "uy215wh")

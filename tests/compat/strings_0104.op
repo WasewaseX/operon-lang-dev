@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=104 tag=s104
+
+print("s104-m0:", "dsplcBnj4gb7uw".upper(), "dsplcBnj4gb7uw".slice(4), "dsplcBnj4gb7uw".len())
+
+print("s104-m1:", "rs1xt10lfr".upper(), "rs1xt10lfr".slice(1), "rs1xt10lfr".len())
+
+print("s104-m2:", "8f66arbx9bou8p".upper(), "8f66arbx9bou8p".slice(1), "8f66arbx9bou8p".len())
+
+print("s104-m3:", "ChicA19xwkC".upper(), "ChicA19xwkC".slice(2), "ChicA19xwkC".len())
+
+print("s104-m4:", "pe2cwAfjc".upper(), "pe2cwAfjc".slice(3), "pe2cwAfjc".len())
+
+print("s104-i0:", "i_5-{28}-st8l")
+
+let s104_v0 = 28
+
+print("s104-v0:", "n={s104_v0}" + "!" * 2)
+
+print("s104-i1:", "n1i-{21}-c29b")
+
+let s104_v1 = 21
+
+print("s104-v1:", "n={s104_v1}" + "!" * 3)
+
+print("s104-i2:", "Bjo-{9}-uotu")
+
+let s104_v2 = 9
+
+print("s104-v2:", "n={s104_v2}" + "!" * 2)
+
+print("s104-i3:", "2ec-{16}-ypuz")
+
+let s104_v3 = 16
+
+print("s104-v3:", "n={s104_v3}" + "!" * 1)
+
+print("s104-r0:", "kk9B9se4".replace("k", "x8"), "kk9B9se4".contains("k9"))
+
+print("s104-r1:", "anl5xibq".replace("a", "3C"), "anl5xibq".contains("nl"))
+
+print("s104-j0:", ["_iC", "vwA", "xsm", "wnd"].join("-"))
+
+print("s104-j1:", ["ab2", "faw", "wAB", "fqB"].join("-"))
+
+print("s104-a0:", "m6j4Ckw".at(5), "m6j4Ckw".trim() == "m6j4Ckw")
+
+print("s104-a1:", "zvmbA2h".at(2), "zvmbA2h".trim() == "zvmbA2h")

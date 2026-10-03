@@ -1,0 +1,120 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=168 tag=c168
+
+let c168_b0 = "start"
+
+if 52 > 80 { c168_b0 = "hi" } elif 52 > 40 { c168_b0 = "mid" } else { c168_b0 = "lo" }
+
+print("c168-i0:", c168_b0, 52)
+
+let c168_b1 = "start"
+
+if 91 > 80 { c168_b1 = "hi" } elif 91 > 40 { c168_b1 = "mid" } else { c168_b1 = "lo" }
+
+print("c168-i1:", c168_b1, 91)
+
+let c168_b2 = "start"
+
+if 89 > 80 { c168_b2 = "hi" } elif 89 > 40 { c168_b2 = "mid" } else { c168_b2 = "lo" }
+
+print("c168-i2:", c168_b2, 89)
+
+let c168_a0 = 0
+
+let c168_n0 = 0
+
+while c168_n0 < 10 {
+
+    c168_n0 += 1
+
+    if c168_n0 % 3 == 0 { continue }
+
+    if c168_n0 > 12 { break }
+
+    c168_a0 += c168_n0
+
+}
+
+print("c168-w0:", c168_a0, c168_n0)
+
+let c168_a1 = 0
+
+let c168_n1 = 0
+
+while c168_n1 < 6 {
+
+    c168_n1 += 3
+
+    if c168_n1 % 2 == 0 { continue }
+
+    if c168_n1 > 15 { break }
+
+    c168_a1 += c168_n1
+
+}
+
+print("c168-w1:", c168_a1, c168_n1)
+
+let c168_c0 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 3] {
+
+        c168_c0 += a * b
+
+    }
+
+}
+
+print("c168-l0:", c168_c0)
+
+let c168_c1 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 3] {
+
+        c168_c1 += a * b
+
+    }
+
+}
+
+print("c168-l1:", c168_c1)
+
+let c168_acc0 = ""
+
+loop {
+
+    c168_acc0 += "x"
+
+    if c168_acc0.len() >= 3 { break }
+
+}
+
+print("c168-o0:", c168_acc0)
+
+let c168_acc1 = ""
+
+loop {
+
+    c168_acc1 += "x"
+
+    if c168_acc1.len() >= 3 { break }
+
+}
+
+print("c168-o1:", c168_acc1)
+
+let c168_acc2 = ""
+
+loop {
+
+    c168_acc2 += "x"
+
+    if c168_acc2.len() >= 3 { break }
+
+}
+
+print("c168-o2:", c168_acc2)

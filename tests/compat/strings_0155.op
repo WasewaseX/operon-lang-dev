@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=155 tag=s155
+
+print("s155-m0:", "r67netp".upper(), "r67netp".slice(4), "r67netp".len())
+
+print("s155-m1:", "hlzohqseir7wy3".upper(), "hlzohqseir7wy3".slice(3), "hlzohqseir7wy3".len())
+
+print("s155-m2:", "wBlzykcdm".upper(), "wBlzykcdm".slice(2), "wBlzykcdm".len())
+
+print("s155-m3:", "2arsj7".upper(), "2arsj7".slice(3), "2arsj7".len())
+
+print("s155-i0:", "iko-{43}-k77r")
+
+let s155_v0 = 43
+
+print("s155-v0:", "n={s155_v0}" + "!" * 3)
+
+print("s155-i1:", "f60-{69}-4riC")
+
+let s155_v1 = 69
+
+print("s155-v1:", "n={s155_v1}" + "!" * 1)
+
+print("s155-i2:", "be9-{47}-fs6o")
+
+let s155_v2 = 47
+
+print("s155-v2:", "n={s155_v2}" + "!" * 2)
+
+print("s155-i3:", "izj-{53}-y4w8")
+
+let s155_v3 = 53
+
+print("s155-v3:", "n={s155_v3}" + "!" * 2)
+
+print("s155-r0:", "_jBc0yza".replace("_", "8o"), "_jBc0yza".contains("jB"))
+
+print("s155-r1:", "kr2f2bp2".replace("k", "xt"), "kr2f2bp2".contains("r2"))
+
+print("s155-r2:", "3tlyaurj".replace("3", "0o"), "3tlyaurj".contains("tl"))
+
+print("s155-j0:", ["y4m", "bvo", "o4r", "0og"].join("-"))
+
+print("s155-j1:", ["2n8", "nxe", "pq_", "Bmt", "tp_"].join("-"))
+
+print("s155-j2:", ["zqA", "kfC", "2vf", "kk0"].join("-"))
+
+print("s155-a0:", "q9l5_ab".at(2), "q9l5_ab".trim() == "q9l5_ab")
+
+print("s155-a1:", "v5jjztd".at(3), "v5jjztd".trim() == "v5jjztd")
+
+print("s155-a2:", "m4lihtz".at(0), "m4lihtz".trim() == "m4lihtz")

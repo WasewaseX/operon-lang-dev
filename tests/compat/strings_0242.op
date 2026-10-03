@@ -1,0 +1,50 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=242 tag=s242
+
+print("s242-m0:", "l32CmB".upper(), "l32CmB".slice(3), "l32CmB".len())
+
+print("s242-m1:", "jcAbvwj1ebmmz".upper(), "jcAbvwj1ebmmz".slice(4), "jcAbvwj1ebmmz".len())
+
+print("s242-m2:", "gxAip32o2cfy4o".upper(), "gxAip32o2cfy4o".slice(2), "gxAip32o2cfy4o".len())
+
+print("s242-m3:", "nhBo1ybx".upper(), "nhBo1ybx".slice(3), "nhBo1ybx".len())
+
+print("s242-m4:", "0kx5c8kdt".upper(), "0kx5c8kdt".slice(1), "0kx5c8kdt".len())
+
+print("s242-i0:", "Bkd-{60}-3ir1")
+
+let s242_v0 = 60
+
+print("s242-v0:", "n={s242_v0}" + "!" * 3)
+
+print("s242-i1:", "5lr-{97}-832u")
+
+let s242_v1 = 97
+
+print("s242-v1:", "n={s242_v1}" + "!" * 1)
+
+print("s242-i2:", "smh-{78}-qb9a")
+
+let s242_v2 = 78
+
+print("s242-v2:", "n={s242_v2}" + "!" * 3)
+
+print("s242-i3:", "v9s-{69}-ghyx")
+
+let s242_v3 = 69
+
+print("s242-v3:", "n={s242_v3}" + "!" * 3)
+
+print("s242-r0:", "73pwhf81".replace("7", "pu"), "73pwhf81".contains("3p"))
+
+print("s242-r1:", "ic33fp8s".replace("i", "kk"), "ic33fp8s".contains("c3"))
+
+print("s242-r2:", "dhyufdpz".replace("d", "6b"), "dhyufdpz".contains("hy"))
+
+print("s242-j0:", ["Ag1", "8a6", "r3m", "ad2", "ofz"].join("-"))
+
+print("s242-j1:", ["und", "n3a", "o_p"].join("-"))
+
+print("s242-a0:", "eflhbgy".at(2), "eflhbgy".trim() == "eflhbgy")
+
+print("s242-a1:", "8ptghks".at(5), "8ptghks".trim() == "8ptghks")

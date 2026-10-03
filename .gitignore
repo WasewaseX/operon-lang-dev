@@ -1,9 +1,9 @@
-/build/
-/bin/
-/target/
-/dist/
-__pycache__/
+__pycache__
 *.pyc
 *.built.op
 .DS_Store
-apps/ytdl/rust/target/
+apps/ytdl-bench/rust/target/
+compat_fresh/
+
+# W076: standalone embedding example (its own workspace/lockfile/target)
+examples/embed/target/

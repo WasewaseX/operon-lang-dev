@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=194 tag=s194
+
+print("s194-m0:", "3oe3ycjCmriv9".upper(), "3oe3ycjCmriv9".slice(3), "3oe3ycjCmriv9".len())
+
+print("s194-m1:", "lyw6qcj3".upper(), "lyw6qcj3".slice(3), "lyw6qcj3".len())
+
+print("s194-m2:", "dggsmt1d48ig".upper(), "dggsmt1d48ig".slice(3), "dggsmt1d48ig".len())
+
+print("s194-m3:", "04shA3".upper(), "04shA3".slice(2), "04shA3".len())
+
+print("s194-m4:", "fdCA06".upper(), "fdCA06".slice(2), "fdCA06".len())
+
+print("s194-m5:", "fcn7h8l6gmqjA5".upper(), "fcn7h8l6gmqjA5".slice(3), "fcn7h8l6gmqjA5".len())
+
+print("s194-i0:", "iuo-{31}-wo_i")
+
+let s194_v0 = 31
+
+print("s194-v0:", "n={s194_v0}" + "!" * 3)
+
+print("s194-i1:", "32c-{4}-obhf")
+
+let s194_v1 = 4
+
+print("s194-v1:", "n={s194_v1}" + "!" * 3)
+
+print("s194-i2:", "xde-{16}-l33h")
+
+let s194_v2 = 16
+
+print("s194-v2:", "n={s194_v2}" + "!" * 1)
+
+print("s194-r0:", "d137Bju2".replace("d", "C9"), "d137Bju2".contains("13"))
+
+print("s194-r1:", "_pt4de60".replace("_", "s0"), "_pt4de60".contains("pt"))
+
+print("s194-r2:", "mpdoB11A".replace("m", "i9"), "mpdoB11A".contains("pd"))
+
+print("s194-j0:", ["ym5", "t7i", "bnh", "2An"].join("-"))
+
+print("s194-j1:", ["h1r", "jp1", "exq"].join("-"))
+
+print("s194-j2:", ["75a", "lsh", "mjj", "46e"].join("-"))
+
+print("s194-a0:", "v96_icv".at(1), "v96_icv".trim() == "v96_icv")
+
+print("s194-a1:", "9_pB1jy".at(4), "9_pB1jy".trim() == "9_pB1jy")

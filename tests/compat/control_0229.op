@@ -1,0 +1,150 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=229 tag=c229
+
+let c229_b0 = "start"
+
+if 64 > 80 { c229_b0 = "hi" } elif 64 > 40 { c229_b0 = "mid" } else { c229_b0 = "lo" }
+
+print("c229-i0:", c229_b0, 64)
+
+let c229_b1 = "start"
+
+if -5 > 80 { c229_b1 = "hi" } elif -5 > 40 { c229_b1 = "mid" } else { c229_b1 = "lo" }
+
+print("c229-i1:", c229_b1, -5)
+
+let c229_b2 = "start"
+
+if 119 > 80 { c229_b2 = "hi" } elif 119 > 40 { c229_b2 = "mid" } else { c229_b2 = "lo" }
+
+print("c229-i2:", c229_b2, 119)
+
+let c229_b3 = "start"
+
+if 70 > 80 { c229_b3 = "hi" } elif 70 > 40 { c229_b3 = "mid" } else { c229_b3 = "lo" }
+
+print("c229-i3:", c229_b3, 70)
+
+let c229_a0 = 0
+
+let c229_n0 = 0
+
+while c229_n0 < 6 {
+
+    c229_n0 += 1
+
+    if c229_n0 % 3 == 0 { continue }
+
+    if c229_n0 > 14 { break }
+
+    c229_a0 += c229_n0
+
+}
+
+print("c229-w0:", c229_a0, c229_n0)
+
+let c229_a1 = 0
+
+let c229_n1 = 0
+
+while c229_n1 < 9 {
+
+    c229_n1 += 2
+
+    if c229_n1 % 3 == 0 { continue }
+
+    if c229_n1 > 13 { break }
+
+    c229_a1 += c229_n1
+
+}
+
+print("c229-w1:", c229_a1, c229_n1)
+
+let c229_a2 = 0
+
+let c229_n2 = 0
+
+while c229_n2 < 13 {
+
+    c229_n2 += 2
+
+    if c229_n2 % 3 == 0 { continue }
+
+    if c229_n2 > 19 { break }
+
+    c229_a2 += c229_n2
+
+}
+
+print("c229-w2:", c229_a2, c229_n2)
+
+let c229_a3 = 0
+
+let c229_n3 = 0
+
+while c229_n3 < 15 {
+
+    c229_n3 += 2
+
+    if c229_n3 % 2 == 0 { continue }
+
+    if c229_n3 > 20 { break }
+
+    c229_a3 += c229_n3
+
+}
+
+print("c229-w3:", c229_a3, c229_n3)
+
+let c229_c0 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 3] {
+
+        c229_c0 += a * b
+
+    }
+
+}
+
+print("c229-l0:", c229_c0)
+
+let c229_c1 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 4] {
+
+        c229_c1 += a * b
+
+    }
+
+}
+
+print("c229-l1:", c229_c1)
+
+let c229_acc0 = ""
+
+loop {
+
+    c229_acc0 += "x"
+
+    if c229_acc0.len() >= 3 { break }
+
+}
+
+print("c229-o0:", c229_acc0)
+
+let c229_acc1 = ""
+
+loop {
+
+    c229_acc1 += "x"
+
+    if c229_acc1.len() >= 4 { break }
+
+}
+
+print("c229-o1:", c229_acc1)

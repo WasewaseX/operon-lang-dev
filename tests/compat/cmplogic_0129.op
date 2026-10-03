@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=129 tag=c129
+
+print("c129-c0:", 5177 > 7686)
+
+print("c129-c1:", -9993 != -2705)
+
+print("c129-c2:", 1157 < 8330)
+
+print("c129-c3:", -4691 > 2810)
+
+print("c129-c4:", -9687 != -6951)
+
+print("c129-c5:", -9700 != 6299)
+
+print("c129-c6:", -9058 == -4481)
+
+print("c129-b0:", 0 < 0 && 0 < 39, 0 > 0 || 0 > 39)
+
+print("c129-b1:", 33 < 41 && 41 < 6, 33 > 41 || 33 > 6)
+
+print("c129-b2:", 33 < 30 && 30 < 28, 33 > 30 || 33 > 28)
+
+print("c129-t0:", 5057 > -572 ? "gt" : "le")
+
+print("c129-t1:", -4594 > -2015 ? "gt" : "le")
+
+print("c129-t2:", 89 > -5995 ? "gt" : "le")
+
+let c129_n0 = null
+
+print("c129-n0:", c129_n0 ?? 2611, c129_n0 == null)
+
+let c129_n1 = null
+
+print("c129-n1:", c129_n1 ?? -342, c129_n1 == null)
+
+print("c129-s0:", "7nn4" in "3apmsv7nn4", "7nn4" == "7nn4")
+
+print("c129-s1:", "29rk" in "i3b36s29rk", "29rk" == "29rk")

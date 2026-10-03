@@ -1,0 +1,230 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=121 tag=m121
+
+gene m121_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m121-b0:", m121_b0({helix: 83, ribose: 90, marker: 88})?!)
+
+gene m121_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m121-b1:", m121_b1({marker: 93, cell: 81, plasmid: 90})?!)
+
+gene m121_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m121_f0([11, 9, 35, 25, 37, 26]) {
+
+    case Ok(list) {
+
+        print("m121-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m121-f0:", "e:", m)
+
+    }
+
+}
+
+gene m121_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m121_f1([31, 47, 28, 9, 31, 13]) {
+
+    case Ok(list) {
+
+        print("m121-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m121-f1:", "e:", m)
+
+    }
+
+}
+
+gene m121_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m121_f2([50, 6, 56, 4, 40, 59]) {
+
+    case Ok(list) {
+
+        print("m121-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m121-f2:", "e:", m)
+
+    }
+
+}
+
+let m121_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m121-cc0:", m121_cl0(13)(20), m121_cl0(20)(13))
+
+let m121_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m121-cc1:", m121_cl1(19)(17), m121_cl1(17)(19))
+
+let m121_data0 = some([some("enzyme"), none(), some(6)])
+
+match m121_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m121-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m121-x0:", "shape-miss")
+
+    }
+
+}
+
+let m121_data1 = some([some("gene"), none(), some(4)])
+
+match m121_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m121-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m121-x1:", "shape-miss")
+
+    }
+
+}

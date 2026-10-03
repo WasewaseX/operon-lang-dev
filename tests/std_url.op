@@ -1,0 +1,42 @@
+# std/url: percent-encoding and URL shaping (pure, canonical, lenient decode).
+use std/url as u
+
+frame proof {
+    # encode: everything outside the unreserved set becomes %XX uppercase
+    assert(u.url_encode("a b/c~d_e.f-g") == "a%20b%2Fc~d_e.f-g")
+    assert(u.url_encode("") == "")
+    assert(u.url_encode("AZaz09") == "AZaz09")
+    assert(u.url_encode("&=") == "%26%3D")
+
+    # decode: %XX and '+' to space, malformed escapes kept verbatim
+    assert(u.url_decode("a%20b+c%2Fd") == "a b c/d")
+    assert(u.url_decode("no%zz escapes") == "no%zz escapes")
+    assert(u.url_decode("") == "")
+
+    # round-trip on a mixed payload
+    let payload = "q a/x~y=z&more"
+    assert(u.url_decode(u.url_encode(payload)) == payload)
+
+    # parse: scheme, host, port, path, query map with decoded values
+    let m = u.url_parse("https://example.org:8443/a/b?x=1&y=a%20b")
+    assert(m["scheme"] == "https" and m["host"] == "example.org")
+    assert(m["port"] == "8443" and m["path"] == "/a/b")
+    assert(m["query"]["x"] == "1" and m["query"]["y"] == "a b")
+
+    # parse: no scheme, no query, bare host forms
+    let bare = u.url_parse("/just/a/path")
+    assert(bare["scheme"] == "" and bare["path"] == "/just/a/path")
+    let hostonly = u.url_parse("ftp://files.example.org")
+    assert(hostonly["scheme"] == "ftp" and hostonly["host"] == "files.example.org")
+    assert(hostonly["port"] == "" and hostonly["path"] == "")
+
+    # query_encode: canonical sorted-key output, both sides encoded
+    assert(u.url_query_encode({z: "1 2", a: "&="}) == "a=%26%3D&z=1%202")
+    assert(u.url_query_encode({}) == "")
+
+    # a parsed query re-encodes to a canonical form
+    let back = u.url_query_encode(u.url_parse("https://h/p?b=2&a=1")["query"])
+    assert(back == "a=1&b=2")
+
+    promote("url: all asserts green")
+}

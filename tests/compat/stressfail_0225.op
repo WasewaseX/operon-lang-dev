@@ -1,0 +1,220 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=225 tag=s225
+
+stress {
+
+    print("s225-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s225-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s225-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s225-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s225-mz:", 5 % 0)
+
+} rescue (e) {
+
+    print("s225-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s225-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s225-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s225-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s225-of2:", "caught", e.kind, e.message)
+
+}
+
+gene s225_r0() {
+
+    raise "s225-cmisw4"
+
+}
+
+stress {
+
+    s225_r0()
+
+    print("s225-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s225-r0:", e.kind, e.message)
+
+}
+
+gene s225_r1() {
+
+    raise "s225-e2b2j3"
+
+}
+
+stress {
+
+    s225_r1()
+
+    print("s225-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s225-r1:", e.kind, e.message)
+
+}
+
+gene s225_r2() {
+
+    raise "s225-tl05kv"
+
+}
+
+stress {
+
+    s225_r2()
+
+    print("s225-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s225-r2:", e.kind, e.message)
+
+}
+
+let s225_xs0 = [2, 33]
+
+stress {
+
+    print("s225-x0:", s225_xs0[3])
+
+} rescue (e) {
+
+    print("s225-x0:", "caught", e.kind)
+
+}
+
+let s225_xs1 = [41, 5, 28, 40]
+
+stress {
+
+    print("s225-x1:", s225_xs1[7])
+
+} rescue (e) {
+
+    print("s225-x1:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s225-0"
+
+    } rescue (e) {
+
+        print("s225-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s225-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s225-d0-2:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s225-d0-3:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s225-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s225-1"
+
+    } rescue (e) {
+
+        print("s225-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s225-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s225-d1-2:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s225-d1-top:", outer.message)
+
+}

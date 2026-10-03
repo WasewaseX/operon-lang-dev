@@ -1,0 +1,166 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20260930 idx=42 tag=f042
+
+gene f042_g0(p, q = 21, r = 7) {
+
+    return p * 37 + q - r
+
+}
+
+print("f042-d0:", f042_g0(37), f042_g0(37, 14), f042_g0(37, 21, 7))
+
+gene f042_g1(p, q = 27, r = 65) {
+
+    return p * 55 + q - r
+
+}
+
+print("f042-d1:", f042_g1(-1), f042_g1(-1, 91), f042_g1(-1, 27, 65))
+
+gene f042_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f042_fib0(n - 1) + f042_fib0(n - 2)
+
+}
+
+print("f042-fib0:", f042_fib0(8))
+
+gene f042_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f042_fib1(n - 1) + f042_fib1(n - 2)
+
+}
+
+print("f042-fib1:", f042_fib1(7))
+
+gene f042_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f042_gcd0(b, a % b)
+
+}
+
+print("f042-gcd0:", f042_gcd0(458, 153))
+
+gene f042_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f042_gcd1(b, a % b)
+
+}
+
+print("f042-gcd1:", f042_gcd1(506, 660))
+
+gene f042_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f042_c0 = f042_mk0(35)
+
+f042_c0(5)
+
+print("f042-cl0:", f042_c0(4))
+
+gene f042_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f042_c1 = f042_mk1(6)
+
+f042_c1(6)
+
+print("f042-cl1:", f042_c1(2))
+
+gene f042_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f042-hof0:", f042_tw0(gene (z) => z * 2 + 1, 17))
+
+gene f042_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f042-hof1:", f042_tw1(gene (z) => z * 2 + 1, 2))
+
+gene f042_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f042-dg0:", f042_sd0(135915))
+
+gene f042_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f042-dg1:", f042_sd1(695235))

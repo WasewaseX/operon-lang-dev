@@ -1,0 +1,44 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=111 tag=c111
+
+print("c111-c0:", -6854 != 1499)
+
+print("c111-c1:", 442 != -5264)
+
+print("c111-c2:", 4781 < -2445)
+
+print("c111-c3:", 8031 >= -9560)
+
+print("c111-c4:", -6036 == -370)
+
+print("c111-c5:", -876 != -500)
+
+print("c111-c6:", 9822 <= -8137)
+
+print("c111-b0:", 20 < 35 && 35 < 9, 20 > 35 || 20 > 9)
+
+print("c111-b1:", 4 < 10 && 10 < 35, 4 > 10 || 4 > 35)
+
+print("c111-b2:", 11 < 23 && 23 < 39, 11 > 23 || 11 > 39)
+
+print("c111-b3:", 20 < 37 && 37 < 16, 20 > 37 || 20 > 16)
+
+print("c111-t0:", 1437 > -9533 ? "gt" : "le")
+
+print("c111-t1:", -6019 > 1209 ? "gt" : "le")
+
+print("c111-t2:", -7735 > -3743 ? "gt" : "le")
+
+print("c111-t3:", 137 > -176 ? "gt" : "le")
+
+let c111_n0 = null
+
+print("c111-n0:", c111_n0 ?? 9855, c111_n0 == null)
+
+let c111_n1 = null
+
+print("c111-n1:", c111_n1 ?? 127, c111_n1 == null)
+
+print("c111-s0:", "_iba" in "h755d7_iba", "_iba" == "_iba")
+
+print("c111-s1:", "gdxq" in "tA6zblgdxq", "gdxq" == "gdxq")

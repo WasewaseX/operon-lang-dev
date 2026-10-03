@@ -1,0 +1,298 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=226 tag=m226
+
+let m226_s0 = some(3)
+
+match m226_s0 {
+
+    case Some(x) if x > 3 {
+
+        print("m226-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m226-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m226-m0:", "none")
+
+    }
+
+}
+
+let m226_s1 = some(3)
+
+match m226_s1 {
+
+    case Some(x) if x > 3 {
+
+        print("m226-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m226-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m226-m1:", "none")
+
+    }
+
+}
+
+let m226_s2 = some(8)
+
+match m226_s2 {
+
+    case Some(x) if x > 8 {
+
+        print("m226-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m226-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m226-m2:", "none")
+
+    }
+
+}
+
+let m226_s3 = some(8)
+
+match m226_s3 {
+
+    case Some(x) if x > 8 {
+
+        print("m226-m3:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m226-m3:", "small", x)
+
+    }
+
+    case None {
+
+        print("m226-m3:", "none")
+
+    }
+
+}
+
+let m226_ls0 = [39, 23, 23]
+
+match m226_ls0 {
+
+    case [39, *rest] {
+
+        print("m226-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m226-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m226-l0:", "other")
+
+    }
+
+}
+
+let m226_ls1 = [26, 4, 27]
+
+match m226_ls1 {
+
+    case [26, *rest] {
+
+        print("m226-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m226-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m226-l1:", "other")
+
+    }
+
+}
+
+let m226_ls2 = [9, 47, 10]
+
+match m226_ls2 {
+
+    case [9, *rest] {
+
+        print("m226-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m226-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m226-l2:", "other")
+
+    }
+
+}
+
+let m226_ls3 = [26, 32, 1]
+
+match m226_ls3 {
+
+    case [26, *rest] {
+
+        print("m226-l3:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m226-l3:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m226-l3:", "other")
+
+    }
+
+}
+
+let m226_mp0 = {helix: -6180, codon: -7303}
+
+match m226_mp0 {
+
+    case {helix: p, codon: q} {
+
+        print("m226-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m226-mp0:", "miss")
+
+    }
+
+}
+
+let m226_mp1 = {plasmid: 8423, gene: -9768}
+
+match m226_mp1 {
+
+    case {plasmid: p, gene: q} {
+
+        print("m226-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m226-mp1:", "miss")
+
+    }
+
+}
+
+let m226_r0 = ok(3)
+
+match m226_r0 {
+
+    case Ok(n) | Err(3) {
+
+        print("m226-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m226-r0:", "zero")
+
+    }
+
+}
+
+let m226_r1 = ok(2)
+
+match m226_r1 {
+
+    case Ok(n) | Err(2) {
+
+        print("m226-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m226-r1:", "zero")
+
+    }
+
+}
+
+match "plasmid" {
+
+    case "plasmid" {
+
+        print("m226-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m226-w0:", "alt")
+
+    }
+
+}
+
+match "gene" {
+
+    case "gene" {
+
+        print("m226-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m226-w1:", "alt")
+
+    }
+
+}

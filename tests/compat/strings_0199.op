@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=199 tag=s199
+
+print("s199-m0:", "66o4yf6ba0".upper(), "66o4yf6ba0".slice(2), "66o4yf6ba0".len())
+
+print("s199-m1:", "xmxlge5C".upper(), "xmxlge5C".slice(3), "xmxlge5C".len())
+
+print("s199-m2:", "92udewsgx8".upper(), "92udewsgx8".slice(3), "92udewsgx8".len())
+
+print("s199-m3:", "hpbox6BBA".upper(), "hpbox6BBA".slice(2), "hpbox6BBA".len())
+
+print("s199-m4:", "Bjygmf77_evz2".upper(), "Bjygmf77_evz2".slice(2), "Bjygmf77_evz2".len())
+
+print("s199-m5:", "j_gC8d_i3".upper(), "j_gC8d_i3".slice(4), "j_gC8d_i3".len())
+
+print("s199-i0:", "5gt-{51}-dqs6")
+
+let s199_v0 = 51
+
+print("s199-v0:", "n={s199_v0}" + "!" * 2)
+
+print("s199-i1:", "rca-{91}-n5wp")
+
+let s199_v1 = 91
+
+print("s199-v1:", "n={s199_v1}" + "!" * 1)
+
+print("s199-i2:", "sqk-{4}-odb6")
+
+let s199_v2 = 4
+
+print("s199-v2:", "n={s199_v2}" + "!" * 3)
+
+print("s199-i3:", "Cvx-{20}-1rjw")
+
+let s199_v3 = 20
+
+print("s199-v3:", "n={s199_v3}" + "!" * 3)
+
+print("s199-r0:", "qu7hb9jh".replace("q", "i4"), "qu7hb9jh".contains("u7"))
+
+print("s199-r1:", "ln4C8vaq".replace("l", "0_"), "ln4C8vaq".contains("n4"))
+
+print("s199-r2:", "3q4wetB3".replace("3", "Bm"), "3q4wetB3".contains("q4"))
+
+print("s199-r3:", "i8mhnhl8".replace("i", "dB"), "i8mhnhl8".contains("8m"))
+
+print("s199-j0:", ["8zx", "did", "oni", "hfj", "962"].join("-"))
+
+print("s199-j1:", ["0m6", "dda", "f79", "0p5"].join("-"))
+
+print("s199-j2:", ["Cdx", "v8z", "91v", "33e"].join("-"))
+
+print("s199-a0:", "mjfqd3C".at(0), "mjfqd3C".trim() == "mjfqd3C")
+
+print("s199-a1:", "nyuA68t".at(0), "nyuA68t".trim() == "nyuA68t")

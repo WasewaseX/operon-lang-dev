@@ -1,0 +1,50 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=232 tag=m232
+
+let m232_m0 = {plasmid: 81, exon: -53, codon: 27, vector: 56, cell: -2}
+
+print("m232-m0:", m232_m0["plasmid"], len(m232_m0), m232_m0.has("plasmid"))
+
+let m232_m1 = {marker: 33, splicer: 34, codon: -83, ribose: -51, gene: -17}
+
+print("m232-m1:", m232_m1["marker"], len(m232_m1), m232_m1.has("marker"))
+
+let m232_m2 = {codon: 16, gene: 21, cell: 54, helix: -5}
+
+print("m232-m2:", m232_m2["codon"], len(m232_m2), m232_m2.has("codon"))
+
+let m232_m3 = {vector: -71, enzyme: 96, cell: 13, marker: -47, helix: -23}
+
+print("m232-m3:", m232_m3["vector"], len(m232_m3), m232_m3.has("vector"))
+
+let m232_m4 = {splicer: -34, plasmid: -74, helix: -81, vector: 23}
+
+print("m232-m4:", m232_m4["splicer"], len(m232_m4), m232_m4.has("splicer"))
+
+let m232_k0 = {cell: 39, ligase: 12, plasmid: 17}
+
+let m232_ks0 = m232_k0.keys()
+
+let m232_sm0 = 0
+
+for k in m232_k0 { m232_sm0 += m232_k0[k] }
+
+print("m232-k0:", m232_sm0, m232_k0.keys().sort(), m232_k0.values().len())
+
+let m232_k1 = {vector: 31, ligase: 39, helix: 34}
+
+let m232_ks1 = m232_k1.keys()
+
+let m232_sm1 = 0
+
+for k in m232_k1 { m232_sm1 += m232_k1[k] }
+
+print("m232-k1:", m232_sm1, m232_k1.keys().sort(), m232_k1.values().len())
+
+let m232_w0 = {outer: {gene: 4, plasmid: 4, tag: "ok"}}}
+
+print("m232-w0:", m232_w0["outer"]["plasmid"], m232_w0["outer"]["tag"])
+
+let m232_w1 = {outer: {marker: 9, splicer: 1, tag: "ok"}}}
+
+print("m232-w1:", m232_w1["outer"]["splicer"], m232_w1["outer"]["tag"])

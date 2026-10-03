@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=84 tag=c084
+
+print("c084-c0:", 4564 <= -2305)
+
+print("c084-c1:", -9181 == 3806)
+
+print("c084-c2:", 9289 >= -688)
+
+print("c084-c3:", 2473 > 6718)
+
+print("c084-c4:", 8814 != 6795)
+
+print("c084-c5:", -105 < 3819)
+
+print("c084-b0:", 23 < 45 && 45 < 19, 23 > 45 || 23 > 19)
+
+print("c084-b1:", 50 < 5 && 5 < 35, 50 > 5 || 50 > 35)
+
+print("c084-b2:", 25 < 36 && 36 < 9, 25 > 36 || 25 > 9)
+
+print("c084-b3:", 48 < 14 && 14 < 16, 48 > 14 || 48 > 16)
+
+print("c084-t0:", -3664 > 5359 ? "gt" : "le")
+
+print("c084-t1:", -7456 > -779 ? "gt" : "le")
+
+print("c084-t2:", 3074 > 5378 ? "gt" : "le")
+
+print("c084-t3:", -6424 > 1656 ? "gt" : "le")
+
+let c084_n0 = null
+
+print("c084-n0:", c084_n0 ?? 4998, c084_n0 == null)
+
+let c084_n1 = null
+
+print("c084-n1:", c084_n1 ?? -10000, c084_n1 == null)
+
+let c084_n2 = null
+
+print("c084-n2:", c084_n2 ?? -814, c084_n2 == null)
+
+print("c084-s0:", "gqkB" in "8b3ho4gqkB", "gqkB" == "gqkB")
+
+print("c084-s1:", "dpkp" in "iwbi4hdpkp", "dpkp" == "dpkp")

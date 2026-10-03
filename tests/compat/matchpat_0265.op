@@ -1,0 +1,292 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=265 tag=m265
+
+let m265_s0 = some(9)
+
+match m265_s0 {
+
+    case Some(x) if x > 9 {
+
+        print("m265-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m265-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m265-m0:", "none")
+
+    }
+
+}
+
+let m265_s1 = some(2)
+
+match m265_s1 {
+
+    case Some(x) if x > 2 {
+
+        print("m265-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m265-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m265-m1:", "none")
+
+    }
+
+}
+
+let m265_s2 = some(1)
+
+match m265_s2 {
+
+    case Some(x) if x > 1 {
+
+        print("m265-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m265-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m265-m2:", "none")
+
+    }
+
+}
+
+let m265_ls0 = [48, 38, 12]
+
+match m265_ls0 {
+
+    case [48, *rest] {
+
+        print("m265-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m265-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m265-l0:", "other")
+
+    }
+
+}
+
+let m265_ls1 = [43, 16, 31]
+
+match m265_ls1 {
+
+    case [43, *rest] {
+
+        print("m265-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m265-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m265-l1:", "other")
+
+    }
+
+}
+
+let m265_ls2 = [3, 38, 17]
+
+match m265_ls2 {
+
+    case [3, *rest] {
+
+        print("m265-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m265-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m265-l2:", "other")
+
+    }
+
+}
+
+let m265_ls3 = [30, 29, 48]
+
+match m265_ls3 {
+
+    case [30, *rest] {
+
+        print("m265-l3:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m265-l3:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m265-l3:", "other")
+
+    }
+
+}
+
+let m265_mp0 = {codon: -6853, enzyme: 458}
+
+match m265_mp0 {
+
+    case {codon: p, enzyme: q} {
+
+        print("m265-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m265-mp0:", "miss")
+
+    }
+
+}
+
+let m265_mp1 = {enzyme: 7208, codon: -4788}
+
+match m265_mp1 {
+
+    case {enzyme: p, codon: q} {
+
+        print("m265-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m265-mp1:", "miss")
+
+    }
+
+}
+
+let m265_mp2 = {vector: -2615, codon: -3621}
+
+match m265_mp2 {
+
+    case {vector: p, codon: q} {
+
+        print("m265-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m265-mp2:", "miss")
+
+    }
+
+}
+
+let m265_r0 = ok(5)
+
+match m265_r0 {
+
+    case Ok(n) | Err(5) {
+
+        print("m265-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m265-r0:", "zero")
+
+    }
+
+}
+
+let m265_r1 = ok(1)
+
+match m265_r1 {
+
+    case Ok(n) | Err(1) {
+
+        print("m265-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m265-r1:", "zero")
+
+    }
+
+}
+
+match "enzyme" {
+
+    case "enzyme" {
+
+        print("m265-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m265-w0:", "alt")
+
+    }
+
+}
+
+match "cell" {
+
+    case "cell" {
+
+        print("m265-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m265-w1:", "alt")
+
+    }
+
+}

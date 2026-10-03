@@ -1,0 +1,19 @@
+# W16 redteam: the cancellation leak storm. 300 fibers park on long sleeps;
+# every one is cancelled and joined — containment = every fiber dies with
+# the cancelled stress map, no fiber outlives its join, no thread leaks.
+gene parker(ms) {
+    sleep(ms)
+    return 1
+}
+gene go() {
+    let killed = 0
+    for i in range(300) {
+        let t = spawn(parker, [60000])
+        cancel(t)
+        let r = join(t)
+        if r["kind"] == "cancelled" {
+            killed = killed + 1
+        }
+    }
+    print("p24b-contained killed=" + str(killed))
+}

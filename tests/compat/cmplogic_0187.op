@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20261030 idx=187 tag=c187
+
+print("c187-c0:", -124 <= -8045)
+
+print("c187-c1:", -3838 >= -2116)
+
+print("c187-c2:", 1475 != 1530)
+
+print("c187-c3:", -7568 >= -1275)
+
+print("c187-c4:", -5537 >= 6474)
+
+print("c187-c5:", 7846 > -1716)
+
+print("c187-b0:", 9 < 44 && 44 < 9, 9 > 44 || 9 > 9)
+
+print("c187-b1:", 33 < 32 && 32 < 40, 33 > 32 || 33 > 40)
+
+print("c187-b2:", 21 < 27 && 27 < 27, 21 > 27 || 21 > 27)
+
+print("c187-t0:", 4686 > 4542 ? "gt" : "le")
+
+print("c187-t1:", 7584 > -381 ? "gt" : "le")
+
+let c187_n0 = null
+
+print("c187-n0:", c187_n0 ?? 8528, c187_n0 == null)
+
+let c187_n1 = null
+
+print("c187-n1:", c187_n1 ?? -6970, c187_n1 == null)
+
+let c187_n2 = null
+
+print("c187-n2:", c187_n2 ?? 2992, c187_n2 == null)
+
+print("c187-s0:", "Ak50" in "rdk8p0Ak50", "Ak50" == "Ak50")
+
+print("c187-s1:", "4u2B" in "lennk74u2B", "4u2B" == "4u2B")

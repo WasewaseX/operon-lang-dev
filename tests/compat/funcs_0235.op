@@ -1,0 +1,174 @@
+# compat corpus — generated, do not edit by hand
+# bucket=funcs seed=20261030 idx=235 tag=f235
+
+gene f235_g0(p, q = 10, r = 47) {
+
+    return p * 24 + q - r
+
+}
+
+print("f235-d0:", f235_g0(41), f235_g0(41, 53), f235_g0(41, 10, 47))
+
+gene f235_g1(p, q = 19, r = 85) {
+
+    return p * 75 + q - r
+
+}
+
+print("f235-d1:", f235_g1(4), f235_g1(4, 51), f235_g1(4, 19, 85))
+
+gene f235_g2(p, q = 47, r = 13) {
+
+    return p * 88 + q - r
+
+}
+
+print("f235-d2:", f235_g2(-36), f235_g2(-36, 9), f235_g2(-36, 47, 13))
+
+gene f235_fib0(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f235_fib0(n - 1) + f235_fib0(n - 2)
+
+}
+
+print("f235-fib0:", f235_fib0(7))
+
+gene f235_fib1(n) {
+
+    if n < 2 {
+
+        return n
+
+    }
+
+    return f235_fib1(n - 1) + f235_fib1(n - 2)
+
+}
+
+print("f235-fib1:", f235_fib1(11))
+
+gene f235_gcd0(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f235_gcd0(b, a % b)
+
+}
+
+print("f235-gcd0:", f235_gcd0(678, 486))
+
+gene f235_gcd1(a, b) {
+
+    if b == 0 {
+
+        return a
+
+    }
+
+    return f235_gcd1(b, a % b)
+
+}
+
+print("f235-gcd1:", f235_gcd1(902, 854))
+
+gene f235_mk0(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f235_c0 = f235_mk0(6)
+
+f235_c0(6)
+
+print("f235-cl0:", f235_c0(5))
+
+gene f235_mk1(start) {
+
+    let n = start
+
+    return gene (by) {
+
+        n += by
+
+        return n
+
+    }
+
+}
+
+let f235_c1 = f235_mk1(19)
+
+f235_c1(2)
+
+print("f235-cl1:", f235_c1(1))
+
+gene f235_tw0(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f235-hof0:", f235_tw0(gene (z) => z * 2 + 1, 24))
+
+gene f235_tw1(f, v) {
+
+    return f(f(v))
+
+}
+
+print("f235-hof1:", f235_tw1(gene (z) => z * 2 + 1, 8))
+
+gene f235_sd0(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f235-dg0:", f235_sd0(617659))
+
+gene f235_sd1(n) {
+
+    let s = 0
+
+    while n > 0 {
+
+        s += n % 10
+
+        n = n // 10
+
+    }
+
+    return s
+
+}
+
+print("f235-dg1:", f235_sd1(466823))

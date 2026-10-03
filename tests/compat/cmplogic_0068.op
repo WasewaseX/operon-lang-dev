@@ -1,0 +1,40 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=68 tag=c068
+
+print("c068-c0:", -5487 < 7596)
+
+print("c068-c1:", 8805 == -4871)
+
+print("c068-c2:", -6103 == 4451)
+
+print("c068-c3:", 3449 == 540)
+
+print("c068-c4:", 8667 > -669)
+
+print("c068-b0:", 45 < 34 && 34 < 38, 45 > 34 || 45 > 38)
+
+print("c068-b1:", 10 < 22 && 22 < 46, 10 > 22 || 10 > 46)
+
+print("c068-b2:", 15 < 29 && 29 < 48, 15 > 29 || 15 > 48)
+
+print("c068-b3:", 10 < 49 && 49 < 8, 10 > 49 || 10 > 8)
+
+print("c068-t0:", 9361 > -5922 ? "gt" : "le")
+
+print("c068-t1:", -8905 > -7252 ? "gt" : "le")
+
+let c068_n0 = null
+
+print("c068-n0:", c068_n0 ?? -8506, c068_n0 == null)
+
+let c068_n1 = null
+
+print("c068-n1:", c068_n1 ?? -4200, c068_n1 == null)
+
+let c068_n2 = null
+
+print("c068-n2:", c068_n2 ?? 1796, c068_n2 == null)
+
+print("c068-s0:", "qagd" in "zyfludqagd", "qagd" == "qagd")
+
+print("c068-s1:", "B5hm" in "0_57fmB5hm", "B5hm" == "B5hm")

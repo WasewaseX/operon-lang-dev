@@ -1,0 +1,56 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20261030 idx=105 tag=m105
+
+let m105_m0 = {gene: -45, codon: -20, cell: 44, ribose: 0}
+
+print("m105-m0:", m105_m0["gene"], len(m105_m0), m105_m0.has("gene"))
+
+let m105_m1 = {marker: -81, ribose: 27, exon: -30, cell: -68}
+
+print("m105-m1:", m105_m1["marker"], len(m105_m1), m105_m1.has("marker"))
+
+let m105_m2 = {plasmid: 52, marker: -23, exon: 99}
+
+print("m105-m2:", m105_m2["plasmid"], len(m105_m2), m105_m2.has("plasmid"))
+
+let m105_m3 = {plasmid: 40, enzyme: -39, splicer: 57, cell: 40, marker: 77}
+
+print("m105-m3:", m105_m3["plasmid"], len(m105_m3), m105_m3.has("plasmid"))
+
+let m105_k0 = {vector: 43, enzyme: 23, ribose: 35}
+
+let m105_ks0 = m105_k0.keys()
+
+let m105_sm0 = 0
+
+for k in m105_k0 { m105_sm0 += m105_k0[k] }
+
+print("m105-k0:", m105_sm0, m105_k0.keys().sort(), m105_k0.values().len())
+
+let m105_k1 = {vector: 4, plasmid: 14, cell: 10}
+
+let m105_ks1 = m105_k1.keys()
+
+let m105_sm1 = 0
+
+for k in m105_k1 { m105_sm1 += m105_k1[k] }
+
+print("m105-k1:", m105_sm1, m105_k1.keys().sort(), m105_k1.values().len())
+
+let m105_k2 = {splicer: 9, cell: 15, gene: 1}
+
+let m105_ks2 = m105_k2.keys()
+
+let m105_sm2 = 0
+
+for k in m105_k2 { m105_sm2 += m105_k2[k] }
+
+print("m105-k2:", m105_sm2, m105_k2.keys().sort(), m105_k2.values().len())
+
+let m105_w0 = {outer: {marker: 6, enzyme: 9, tag: "ok"}}}
+
+print("m105-w0:", m105_w0["outer"]["enzyme"], m105_w0["outer"]["tag"])
+
+let m105_w1 = {outer: {cell: 3, vector: 2, tag: "ok"}}}
+
+print("m105-w1:", m105_w1["outer"]["vector"], m105_w1["outer"]["tag"])

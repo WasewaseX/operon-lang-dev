@@ -1,0 +1,310 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=162 tag=m162
+
+let m162_s0 = some(6)
+
+match m162_s0 {
+
+    case Some(x) if x > 6 {
+
+        print("m162-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m162-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m162-m0:", "none")
+
+    }
+
+}
+
+let m162_s1 = some(6)
+
+match m162_s1 {
+
+    case Some(x) if x > 6 {
+
+        print("m162-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m162-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m162-m1:", "none")
+
+    }
+
+}
+
+let m162_s2 = some(5)
+
+match m162_s2 {
+
+    case Some(x) if x > 5 {
+
+        print("m162-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m162-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m162-m2:", "none")
+
+    }
+
+}
+
+let m162_s3 = some(4)
+
+match m162_s3 {
+
+    case Some(x) if x > 4 {
+
+        print("m162-m3:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m162-m3:", "small", x)
+
+    }
+
+    case None {
+
+        print("m162-m3:", "none")
+
+    }
+
+}
+
+let m162_s4 = some(8)
+
+match m162_s4 {
+
+    case Some(x) if x > 8 {
+
+        print("m162-m4:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m162-m4:", "small", x)
+
+    }
+
+    case None {
+
+        print("m162-m4:", "none")
+
+    }
+
+}
+
+let m162_ls0 = [7, 17, 33]
+
+match m162_ls0 {
+
+    case [7, *rest] {
+
+        print("m162-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m162-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m162-l0:", "other")
+
+    }
+
+}
+
+let m162_ls1 = [24, 1, 5]
+
+match m162_ls1 {
+
+    case [24, *rest] {
+
+        print("m162-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m162-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m162-l1:", "other")
+
+    }
+
+}
+
+let m162_mp0 = {exon: -6966, ribose: 5580}
+
+match m162_mp0 {
+
+    case {exon: p, ribose: q} {
+
+        print("m162-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m162-mp0:", "miss")
+
+    }
+
+}
+
+let m162_mp1 = {splicer: -2534, marker: 2970}
+
+match m162_mp1 {
+
+    case {splicer: p, marker: q} {
+
+        print("m162-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m162-mp1:", "miss")
+
+    }
+
+}
+
+let m162_mp2 = {enzyme: 2474, splicer: 5928}
+
+match m162_mp2 {
+
+    case {enzyme: p, splicer: q} {
+
+        print("m162-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m162-mp2:", "miss")
+
+    }
+
+}
+
+let m162_r0 = ok(1)
+
+match m162_r0 {
+
+    case Ok(n) | Err(1) {
+
+        print("m162-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m162-r0:", "zero")
+
+    }
+
+}
+
+let m162_r1 = ok(4)
+
+match m162_r1 {
+
+    case Ok(n) | Err(4) {
+
+        print("m162-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m162-r1:", "zero")
+
+    }
+
+}
+
+let m162_r2 = ok(1)
+
+match m162_r2 {
+
+    case Ok(n) | Err(1) {
+
+        print("m162-r2:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m162-r2:", "zero")
+
+    }
+
+}
+
+match "gene" {
+
+    case "gene" {
+
+        print("m162-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m162-w0:", "alt")
+
+    }
+
+}
+
+match "helix" {
+
+    case "helix" {
+
+        print("m162-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m162-w1:", "alt")
+
+    }
+
+}

@@ -1,0 +1,4 @@
+gene main() {
+  let dead = 1
+  print("ok")
+}

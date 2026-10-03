@@ -1,30 +1,53 @@
-# STATS — generated doc counts (W53)
+# Operon repo statistics, GENERATED, do not hand-edit
 
-Generated 2026-09-26 14:44:36Z by `scripts/gen_doc_stats.py`. **Do not hand-edit** —
-regenerate with `python3 scripts/gen_doc_stats.py` and commit together with any
-change that moves a count. `scripts/check_docs_sync.py` fails when README/SPEC
-quote a number that contradicts `docs/stats.json`.
+Source of truth: `scripts/gen_doc_stats.py` (run from repo root).
+Validated by `scripts/check_docs_sync.py`. Hand-typed numbers in
+README/SPEC/BENCH are forbidden, link here instead.
 
-| metric | value |
+- **Version**: 2.7.0  · SPEC Status: v2.7.0
+- **Keywords (parser reserved set)**: 60, table in [KEYWORDS.md](KEYWORDS.md)
+- **Std modules**: 33 (args, bigint, binary, bio, collections, csv, deque, env, fmt, fs, graph, hashing, heap, iter, json, logging, math, motifs, path, process, random, result, seq, serialize, set, strings, terminal, testing, time, try_numeric, typed, unicode, url)
+- **Std functions (.op-level `gene` defs)**: 339
+- **Red-team payload files**: 106
+- **Proof files**: 165 (of 3555 test .op files)
+- **Proof run / harness recount**: skipped (GEN_DOC_STATS_FAST=1), run by scripts/test.sh on every gate
+- **CLI subcommands**: ast, bench, build, check, crispr, dap, disasm, doc, explain, fix, fmt, graph, ir, keywords, lint, profile, repl, rna, test, version, watch
+- **LSP methods**: initialize, shutdown, textDocument/completion, textDocument/definition, textDocument/didChange, textDocument/didClose, textDocument/didOpen, textDocument/documentSymbol, textDocument/formatting, textDocument/hover, textDocument/prepareRename, textDocument/publishDiagnostics, textDocument/references, textDocument/rename, textDocument/semanticTokens, textDocument/signatureHelp
+
+## Std module inventory
+
+| module | .op-level functions |
 |---|---|
-| implementation version | 2.2.0 |
-| proof suite (tests/) | 112 files / 98 proofs / 1,298 assertions (98 passed, 0 failed) |
-| proof suite (apps/) | 1 files / 1 proofs / 7 assertions |
-| granted-lane proofs | 7 files under explicit operator cells |
-| differential harness | 143 match / 0 diverge (5 granted targets) |
-| red-team suite | 100 attacks contained, 0 breached (97 committed payloads + runtime fixtures) |
-| stdlib | 15 modules, 149 genes |
-| keywords | 58 |
-| LSP methods | 12 |
-
-## std modules
-
-`std/args`, `std/bio`, `std/collections`, `std/csv`, `std/fmt`, `std/fs`, `std/iter`, `std/json`, `std/math`, `std/motifs`, `std/random`, `std/seq`, `std/set`, `std/strings`, `std/testing`
-
-## keyword inventory
-
-`gene`, `let`, `if`, `elif`, `else`, `while`, `loop`, `for`, `in`, `return`, `break`, `continue`, `match`, `case`, `use`, `tad`, `anchor`, `export`, `import`, `enhance`, `silence`, `stress`, `rescue`, `raise`, `fate`, `state`, `regulate`, `activates`, `inhibits`, `strength`, `toggle`, `repressilator`, `period`, `frame`, `proof`, `guard`, `splice`, `variant`, `edit`, `replace`, `ires`, `as`, `collect`, `enter`, `phenotype`, `sequence`, `yield`, `new`, `threshold`, `from`, `self`, `decoy`, `ligand`, `autoinducer`, `bind`, `inducer`, `cofactor`, `operon`
-
-## LSP methods
-
-`exit`, `initialize`, `shutdown`, `textDocument/completion`, `textDocument/definition`, `textDocument/didChange`, `textDocument/didClose`, `textDocument/didOpen`, `textDocument/documentSymbol`, `textDocument/formatting`, `textDocument/hover`, `textDocument/publishDiagnostics`
+| std/args | 8 |
+| std/bigint | 20 |
+| std/binary | 17 |
+| std/bio | 4 |
+| std/collections | 6 |
+| std/csv | 7 |
+| std/deque | 12 |
+| std/env | 6 |
+| std/fmt | 8 |
+| std/fs | 12 |
+| std/graph | 23 |
+| std/hashing | 11 |
+| std/heap | 10 |
+| std/iter | 23 |
+| std/json | 11 |
+| std/logging | 6 |
+| std/math | 18 |
+| std/motifs | 12 |
+| std/path | 9 |
+| std/process | 8 |
+| std/random | 6 |
+| std/result | 8 |
+| std/seq | 0 |
+| std/serialize | 10 |
+| std/set | 11 |
+| std/strings | 17 |
+| std/terminal | 16 |
+| std/testing | 6 |
+| std/time | 13 |
+| std/try_numeric | 3 |
+| std/typed | 0 |
+| std/unicode | 8 |
+| std/url | 10 |

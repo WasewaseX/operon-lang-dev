@@ -1,0 +1,60 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=135 tag=s135
+
+print("s135-m0:", "yahbAc".upper(), "yahbAc".slice(2), "yahbAc".len())
+
+print("s135-m1:", "dmAxbww".upper(), "dmAxbww".slice(1), "dmAxbww".len())
+
+print("s135-m2:", "979wkAznlfedv".upper(), "979wkAznlfedv".slice(2), "979wkAznlfedv".len())
+
+print("s135-m3:", "rmexi9tA".upper(), "rmexi9tA".slice(1), "rmexi9tA".len())
+
+print("s135-m4:", "wbx_b0z".upper(), "wbx_b0z".slice(4), "wbx_b0z".len())
+
+print("s135-m5:", "wCC8By8l3w".upper(), "wCC8By8l3w".slice(3), "wCC8By8l3w".len())
+
+print("s135-i0:", "5B6-{5}-gvpC")
+
+let s135_v0 = 5
+
+print("s135-v0:", "n={s135_v0}" + "!" * 1)
+
+print("s135-i1:", "vyi-{90}-Att3")
+
+let s135_v1 = 90
+
+print("s135-v1:", "n={s135_v1}" + "!" * 2)
+
+print("s135-i2:", "_qA-{1}-0vlq")
+
+let s135_v2 = 1
+
+print("s135-v2:", "n={s135_v2}" + "!" * 2)
+
+print("s135-i3:", "wqf-{17}-6esB")
+
+let s135_v3 = 17
+
+print("s135-v3:", "n={s135_v3}" + "!" * 1)
+
+print("s135-i4:", "fkA-{21}-_ez8")
+
+let s135_v4 = 21
+
+print("s135-v4:", "n={s135_v4}" + "!" * 2)
+
+print("s135-r0:", "cunes_a9".replace("c", "de"), "cunes_a9".contains("un"))
+
+print("s135-r1:", "3t8blBb5".replace("3", "yf"), "3t8blBb5".contains("t8"))
+
+print("s135-j0:", ["mCv", "rcB", "A3r", "pb9", "hte"].join("-"))
+
+print("s135-j1:", ["zi4", "4xB", "p__"].join("-"))
+
+print("s135-j2:", ["rpx", "su2", "Ccc", "ety"].join("-"))
+
+print("s135-a0:", "gibqvig".at(1), "gibqvig".trim() == "gibqvig")
+
+print("s135-a1:", "tjbi96z".at(0), "tjbi96z".trim() == "tjbi96z")
+
+print("s135-a2:", "Bn26v95".at(5), "Bn26v95".trim() == "Bn26v95")

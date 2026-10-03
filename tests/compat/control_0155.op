@@ -1,0 +1,152 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=155 tag=c155
+
+let c155_b0 = "start"
+
+if 18 > 80 { c155_b0 = "hi" } elif 18 > 40 { c155_b0 = "mid" } else { c155_b0 = "lo" }
+
+print("c155-i0:", c155_b0, 18)
+
+let c155_b1 = "start"
+
+if -11 > 80 { c155_b1 = "hi" } elif -11 > 40 { c155_b1 = "mid" } else { c155_b1 = "lo" }
+
+print("c155-i1:", c155_b1, -11)
+
+let c155_b2 = "start"
+
+if 51 > 80 { c155_b2 = "hi" } elif 51 > 40 { c155_b2 = "mid" } else { c155_b2 = "lo" }
+
+print("c155-i2:", c155_b2, 51)
+
+let c155_a0 = 0
+
+let c155_n0 = 0
+
+while c155_n0 < 5 {
+
+    c155_n0 += 1
+
+    if c155_n0 % 3 == 0 { continue }
+
+    if c155_n0 > 12 { break }
+
+    c155_a0 += c155_n0
+
+}
+
+print("c155-w0:", c155_a0, c155_n0)
+
+let c155_a1 = 0
+
+let c155_n1 = 0
+
+while c155_n1 < 5 {
+
+    c155_n1 += 2
+
+    if c155_n1 % 3 == 0 { continue }
+
+    if c155_n1 > 9 { break }
+
+    c155_a1 += c155_n1
+
+}
+
+print("c155-w1:", c155_a1, c155_n1)
+
+let c155_a2 = 0
+
+let c155_n2 = 0
+
+while c155_n2 < 17 {
+
+    c155_n2 += 1
+
+    if c155_n2 % 3 == 0 { continue }
+
+    if c155_n2 > 23 { break }
+
+    c155_a2 += c155_n2
+
+}
+
+print("c155-w2:", c155_a2, c155_n2)
+
+let c155_c0 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 2] {
+
+        c155_c0 += a * b
+
+    }
+
+}
+
+print("c155-l0:", c155_c0)
+
+let c155_c1 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 2] {
+
+        c155_c1 += a * b
+
+    }
+
+}
+
+print("c155-l1:", c155_c1)
+
+let c155_c2 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 4] {
+
+        c155_c2 += a * b
+
+    }
+
+}
+
+print("c155-l2:", c155_c2)
+
+let c155_acc0 = ""
+
+loop {
+
+    c155_acc0 += "x"
+
+    if c155_acc0.len() >= 7 { break }
+
+}
+
+print("c155-o0:", c155_acc0)
+
+let c155_acc1 = ""
+
+loop {
+
+    c155_acc1 += "x"
+
+    if c155_acc1.len() >= 7 { break }
+
+}
+
+print("c155-o1:", c155_acc1)
+
+let c155_acc2 = ""
+
+loop {
+
+    c155_acc2 += "x"
+
+    if c155_acc2.len() >= 4 { break }
+
+}
+
+print("c155-o2:", c155_acc2)

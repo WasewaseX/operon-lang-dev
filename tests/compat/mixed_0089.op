@@ -1,0 +1,230 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20260930 idx=89 tag=m089
+
+gene m089_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m089-b0:", m089_b0({enzyme: 88, marker: 56, codon: 99})?!)
+
+gene m089_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m089-b1:", m089_b1({cell: 36, codon: 70, ribose: 30})?!)
+
+gene m089_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m089_f0([26, 12, 23, 54]) {
+
+    case Ok(list) {
+
+        print("m089-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m089-f0:", "e:", m)
+
+    }
+
+}
+
+gene m089_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m089_f1([31, 34, 12, 39, 46]) {
+
+    case Ok(list) {
+
+        print("m089-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m089-f1:", "e:", m)
+
+    }
+
+}
+
+gene m089_f2(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m089_f2([29, 6, 30, 39, 29, 26, 33, 12]) {
+
+    case Ok(list) {
+
+        print("m089-f2:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m089-f2:", "e:", m)
+
+    }
+
+}
+
+let m089_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m089-cc0:", m089_cl0(1)(11), m089_cl0(11)(1))
+
+let m089_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m089-cc1:", m089_cl1(11)(7), m089_cl1(7)(11))
+
+let m089_data0 = some([some("enzyme"), none(), some(4)])
+
+match m089_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m089-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m089-x0:", "shape-miss")
+
+    }
+
+}
+
+let m089_data1 = some([some("marker"), none(), some(2)])
+
+match m089_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m089-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m089-x1:", "shape-miss")
+
+    }
+
+}

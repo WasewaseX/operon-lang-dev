@@ -1,0 +1,190 @@
+# compat corpus — generated, do not edit by hand
+# bucket=stressfail seed=20261030 idx=234 tag=s234
+
+stress {
+
+    print("s234-dz:", 0 / 0)
+
+} rescue (e) {
+
+    print("s234-dz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s234-dzf:", 0.0 / 0.0)
+
+} rescue (e) {
+
+    print("s234-dzf:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s234-mz:", 36 % 0)
+
+} rescue (e) {
+
+    print("s234-mz:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s234-of1:", 9223372036854775807 + 1)
+
+} rescue (e) {
+
+    print("s234-of1:", "caught", e.kind, e.message)
+
+}
+
+stress {
+
+    print("s234-of2:", 9223372036854775807 * 2)
+
+} rescue (e) {
+
+    print("s234-of2:", "caught", e.kind, e.message)
+
+}
+
+gene s234_r0() {
+
+    raise "s234-5zv3ig"
+
+}
+
+stress {
+
+    s234_r0()
+
+    print("s234-r0:", "unreachable")
+
+} rescue (e) {
+
+    print("s234-r0:", e.kind, e.message)
+
+}
+
+gene s234_r1() {
+
+    raise "s234-9wCmbt"
+
+}
+
+stress {
+
+    s234_r1()
+
+    print("s234-r1:", "unreachable")
+
+} rescue (e) {
+
+    print("s234-r1:", e.kind, e.message)
+
+}
+
+gene s234_r2() {
+
+    raise "s234-8Co08w"
+
+}
+
+stress {
+
+    s234_r2()
+
+    print("s234-r2:", "unreachable")
+
+} rescue (e) {
+
+    print("s234-r2:", e.kind, e.message)
+
+}
+
+let s234_xs0 = [7, 4, 27, 43]
+
+stress {
+
+    print("s234-x0:", s234_xs0[7])
+
+} rescue (e) {
+
+    print("s234-x0:", "caught", e.kind)
+
+}
+
+let s234_xs1 = [37, 46]
+
+stress {
+
+    print("s234-x1:", s234_xs1[6])
+
+} rescue (e) {
+
+    print("s234-x1:", "caught", e.kind)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s234-0"
+
+    } rescue (e) {
+
+        print("s234-d0-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s234-d0-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s234-d0-top:", outer.message)
+
+}
+
+stress {
+
+    stress {
+
+    stress {
+
+        raise "deep-s234-1"
+
+    } rescue (e) {
+
+        print("s234-d1-0:", e.message)
+
+        raise e.message
+
+    }
+
+    } rescue (e) {
+
+        print("s234-d1-1:", e.message)
+
+        raise e.message
+
+    }
+
+} rescue (outer) {
+
+    print("s234-d1-top:", outer.message)
+
+}

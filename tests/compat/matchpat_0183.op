@@ -1,0 +1,286 @@
+# compat corpus — generated, do not edit by hand
+# bucket=matchpat seed=20261030 idx=183 tag=m183
+
+let m183_s0 = some(3)
+
+match m183_s0 {
+
+    case Some(x) if x > 3 {
+
+        print("m183-m0:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m183-m0:", "small", x)
+
+    }
+
+    case None {
+
+        print("m183-m0:", "none")
+
+    }
+
+}
+
+let m183_s1 = some(4)
+
+match m183_s1 {
+
+    case Some(x) if x > 4 {
+
+        print("m183-m1:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m183-m1:", "small", x)
+
+    }
+
+    case None {
+
+        print("m183-m1:", "none")
+
+    }
+
+}
+
+let m183_s2 = some(5)
+
+match m183_s2 {
+
+    case Some(x) if x > 5 {
+
+        print("m183-m2:", "big", x)
+
+    }
+
+    case Some(x) {
+
+        print("m183-m2:", "small", x)
+
+    }
+
+    case None {
+
+        print("m183-m2:", "none")
+
+    }
+
+}
+
+let m183_ls0 = [45, 36, 7]
+
+match m183_ls0 {
+
+    case [45, *rest] {
+
+        print("m183-l0:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m183-l0:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m183-l0:", "other")
+
+    }
+
+}
+
+let m183_ls1 = [32, 42, 41]
+
+match m183_ls1 {
+
+    case [32, *rest] {
+
+        print("m183-l1:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m183-l1:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m183-l1:", "other")
+
+    }
+
+}
+
+let m183_ls2 = [6, 46, 25]
+
+match m183_ls2 {
+
+    case [6, *rest] {
+
+        print("m183-l2:", "head", rest.len(), rest[-1])
+
+    }
+
+    case [x, y] {
+
+        print("m183-l2:", "pair", x, y)
+
+    }
+
+    case _ {
+
+        print("m183-l2:", "other")
+
+    }
+
+}
+
+let m183_mp0 = {exon: 2149, marker: -5344}
+
+match m183_mp0 {
+
+    case {exon: p, marker: q} {
+
+        print("m183-mp0:", p, q)
+
+    }
+
+    case _ {
+
+        print("m183-mp0:", "miss")
+
+    }
+
+}
+
+let m183_mp1 = {plasmid: 465, ribose: 4996}
+
+match m183_mp1 {
+
+    case {plasmid: p, ribose: q} {
+
+        print("m183-mp1:", p, q)
+
+    }
+
+    case _ {
+
+        print("m183-mp1:", "miss")
+
+    }
+
+}
+
+let m183_mp2 = {cell: -5270, enzyme: -9676}
+
+match m183_mp2 {
+
+    case {cell: p, enzyme: q} {
+
+        print("m183-mp2:", p, q)
+
+    }
+
+    case _ {
+
+        print("m183-mp2:", "miss")
+
+    }
+
+}
+
+let m183_r0 = ok(5)
+
+match m183_r0 {
+
+    case Ok(n) | Err(5) {
+
+        print("m183-r0:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m183-r0:", "zero")
+
+    }
+
+}
+
+let m183_r1 = ok(1)
+
+match m183_r1 {
+
+    case Ok(n) | Err(1) {
+
+        print("m183-r1:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m183-r1:", "zero")
+
+    }
+
+}
+
+let m183_r2 = ok(2)
+
+match m183_r2 {
+
+    case Ok(n) | Err(2) {
+
+        print("m183-r2:", "hit", n)
+
+    }
+
+    case Ok(0) {
+
+        print("m183-r2:", "zero")
+
+    }
+
+}
+
+match "plasmid" {
+
+    case "plasmid" {
+
+        print("m183-w0:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m183-w0:", "alt")
+
+    }
+
+}
+
+match "cell" {
+
+    case "cell" {
+
+        print("m183-w1:", "word")
+
+    }
+
+    case "zz" | "qq" {
+
+        print("m183-w1:", "alt")
+
+    }
+
+}

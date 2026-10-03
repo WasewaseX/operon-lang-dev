@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=222 tag=s222
+
+print("s222-m0:", "lAxm3qtB4u".upper(), "lAxm3qtB4u".slice(2), "lAxm3qtB4u".len())
+
+print("s222-m1:", "eaiAb35B240j".upper(), "eaiAb35B240j".slice(3), "eaiAb35B240j".len())
+
+print("s222-m2:", "vhaxr8ssC44C".upper(), "vhaxr8ssC44C".slice(2), "vhaxr8ssC44C".len())
+
+print("s222-m3:", "4x6_x1Cgubn".upper(), "4x6_x1Cgubn".slice(2), "4x6_x1Cgubn".len())
+
+print("s222-m4:", "07537AC".upper(), "07537AC".slice(4), "07537AC".len())
+
+print("s222-i0:", "A5z-{69}-c4dg")
+
+let s222_v0 = 69
+
+print("s222-v0:", "n={s222_v0}" + "!" * 3)
+
+print("s222-i1:", "dfu-{12}-q7yx")
+
+let s222_v1 = 12
+
+print("s222-v1:", "n={s222_v1}" + "!" * 2)
+
+print("s222-i2:", "jg0-{45}-q0h5")
+
+let s222_v2 = 45
+
+print("s222-v2:", "n={s222_v2}" + "!" * 1)
+
+print("s222-i3:", "_se-{24}-ho5i")
+
+let s222_v3 = 24
+
+print("s222-v3:", "n={s222_v3}" + "!" * 3)
+
+print("s222-r0:", "fn3m6non".replace("f", "ok"), "fn3m6non".contains("n3"))
+
+print("s222-r1:", "2BsA690s".replace("2", "8C"), "2BsA690s".contains("Bs"))
+
+print("s222-r2:", "02ctm1mg".replace("0", "60"), "02ctm1mg".contains("2c"))
+
+print("s222-r3:", "4e4gpivg".replace("4", "qr"), "4e4gpivg".contains("e4"))
+
+print("s222-j0:", ["B2q", "1Cr", "8xB", "ehf"].join("-"))
+
+print("s222-j1:", ["ibx", "yrw", "A_5"].join("-"))
+
+print("s222-a0:", "ep06v1v".at(1), "ep06v1v".trim() == "ep06v1v")
+
+print("s222-a1:", "xBn3ACw".at(4), "xBn3ACw".trim() == "xBn3ACw")

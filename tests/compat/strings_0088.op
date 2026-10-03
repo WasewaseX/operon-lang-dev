@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=88 tag=s088
+
+print("s088-m0:", "ffj2c2BaCth".upper(), "ffj2c2BaCth".slice(1), "ffj2c2BaCth".len())
+
+print("s088-m1:", "b5t2y8mi".upper(), "b5t2y8mi".slice(4), "b5t2y8mi".len())
+
+print("s088-m2:", "gtr_k0um3od".upper(), "gtr_k0um3od".slice(2), "gtr_k0um3od".len())
+
+print("s088-m3:", "wznAyok4_t".upper(), "wznAyok4_t".slice(1), "wznAyok4_t".len())
+
+print("s088-i0:", "eAp-{82}-Azah")
+
+let s088_v0 = 82
+
+print("s088-v0:", "n={s088_v0}" + "!" * 2)
+
+print("s088-i1:", "hbq-{88}-3vbd")
+
+let s088_v1 = 88
+
+print("s088-v1:", "n={s088_v1}" + "!" * 2)
+
+print("s088-i2:", "8rt-{57}-fpqh")
+
+let s088_v2 = 57
+
+print("s088-v2:", "n={s088_v2}" + "!" * 1)
+
+print("s088-r0:", "1yxi6_n9".replace("1", "ei"), "1yxi6_n9".contains("yx"))
+
+print("s088-r1:", "phaga1lg".replace("p", "kw"), "phaga1lg".contains("ha"))
+
+print("s088-r2:", "dvceucxo".replace("d", "kv"), "dvceucxo".contains("vc"))
+
+print("s088-j0:", ["bx6", "e_6", "uq_"].join("-"))
+
+print("s088-j1:", ["r9e", "1ck", "11e"].join("-"))
+
+print("s088-j2:", ["vmd", "7an", "3dA"].join("-"))
+
+print("s088-a0:", "zrcea_0".at(6), "zrcea_0".trim() == "zrcea_0")
+
+print("s088-a1:", "j6e98de".at(6), "j6e98de".trim() == "j6e98de")
+
+print("s088-a2:", "gybufC_".at(0), "gybufC_".trim() == "gybufC_")

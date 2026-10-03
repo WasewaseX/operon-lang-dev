@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=61 tag=s061
+
+print("s061-m0:", "oC_k16wxlz_C".upper(), "oC_k16wxlz_C".slice(4), "oC_k16wxlz_C".len())
+
+print("s061-m1:", "_nmlhyyfyq".upper(), "_nmlhyyfyq".slice(2), "_nmlhyyfyq".len())
+
+print("s061-m2:", "CCfbo1x713n2".upper(), "CCfbo1x713n2".slice(2), "CCfbo1x713n2".len())
+
+print("s061-m3:", "siqbdBt5d_4rk".upper(), "siqbdBt5d_4rk".slice(1), "siqbdBt5d_4rk".len())
+
+print("s061-i0:", "19y-{84}-C_tp")
+
+let s061_v0 = 84
+
+print("s061-v0:", "n={s061_v0}" + "!" * 1)
+
+print("s061-i1:", "rrh-{43}-AwBr")
+
+let s061_v1 = 43
+
+print("s061-v1:", "n={s061_v1}" + "!" * 2)
+
+print("s061-i2:", "w7c-{63}-vid8")
+
+let s061_v2 = 63
+
+print("s061-v2:", "n={s061_v2}" + "!" * 1)
+
+print("s061-i3:", "yAt-{75}-9fyn")
+
+let s061_v3 = 75
+
+print("s061-v3:", "n={s061_v3}" + "!" * 1)
+
+print("s061-r0:", "e70z2ve9".replace("e", "8f"), "e70z2ve9".contains("70"))
+
+print("s061-r1:", "cza09m1m".replace("c", "f6"), "cza09m1m".contains("za"))
+
+print("s061-r2:", "fBkuxnt8".replace("f", "d4"), "fBkuxnt8".contains("Bk"))
+
+print("s061-r3:", "yC9imnll".replace("y", "5s"), "yC9imnll".contains("C9"))
+
+print("s061-j0:", ["4tf", "bim", "ycd", "pB8"].join("-"))
+
+print("s061-j1:", ["pm5", "wB9", "lu7", "5CC", "nCr"].join("-"))
+
+print("s061-j2:", ["pl3", "_6h", "_pd"].join("-"))
+
+print("s061-a0:", "zsic3j_".at(4), "zsic3j_".trim() == "zsic3j_")
+
+print("s061-a1:", "r2hizpv".at(6), "r2hizpv".trim() == "r2hizpv")

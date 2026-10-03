@@ -1,0 +1,182 @@
+# compat corpus — generated, do not edit by hand
+# bucket=control seed=20261030 idx=222 tag=c222
+
+let c222_b0 = "start"
+
+if 5 > 80 { c222_b0 = "hi" } elif 5 > 40 { c222_b0 = "mid" } else { c222_b0 = "lo" }
+
+print("c222-i0:", c222_b0, 5)
+
+let c222_b1 = "start"
+
+if 105 > 80 { c222_b1 = "hi" } elif 105 > 40 { c222_b1 = "mid" } else { c222_b1 = "lo" }
+
+print("c222-i1:", c222_b1, 105)
+
+let c222_b2 = "start"
+
+if 47 > 80 { c222_b2 = "hi" } elif 47 > 40 { c222_b2 = "mid" } else { c222_b2 = "lo" }
+
+print("c222-i2:", c222_b2, 47)
+
+let c222_b3 = "start"
+
+if 87 > 80 { c222_b3 = "hi" } elif 87 > 40 { c222_b3 = "mid" } else { c222_b3 = "lo" }
+
+print("c222-i3:", c222_b3, 87)
+
+let c222_b4 = "start"
+
+if -1 > 80 { c222_b4 = "hi" } elif -1 > 40 { c222_b4 = "mid" } else { c222_b4 = "lo" }
+
+print("c222-i4:", c222_b4, -1)
+
+let c222_a0 = 0
+
+let c222_n0 = 0
+
+while c222_n0 < 13 {
+
+    c222_n0 += 4
+
+    if c222_n0 % 3 == 0 { continue }
+
+    if c222_n0 > 18 { break }
+
+    c222_a0 += c222_n0
+
+}
+
+print("c222-w0:", c222_a0, c222_n0)
+
+let c222_a1 = 0
+
+let c222_n1 = 0
+
+while c222_n1 < 6 {
+
+    c222_n1 += 4
+
+    if c222_n1 % 3 == 0 { continue }
+
+    if c222_n1 > 9 { break }
+
+    c222_a1 += c222_n1
+
+}
+
+print("c222-w1:", c222_a1, c222_n1)
+
+let c222_a2 = 0
+
+let c222_n2 = 0
+
+while c222_n2 < 8 {
+
+    c222_n2 += 1
+
+    if c222_n2 % 3 == 0 { continue }
+
+    if c222_n2 > 14 { break }
+
+    c222_a2 += c222_n2
+
+}
+
+print("c222-w2:", c222_a2, c222_n2)
+
+let c222_a3 = 0
+
+let c222_n3 = 0
+
+while c222_n3 < 18 {
+
+    c222_n3 += 2
+
+    if c222_n3 % 2 == 0 { continue }
+
+    if c222_n3 > 24 { break }
+
+    c222_a3 += c222_n3
+
+}
+
+print("c222-w3:", c222_a3, c222_n3)
+
+let c222_c0 = 0
+
+for a in [1, 2, 3] {
+
+    for b in [1, 2, 3] {
+
+        c222_c0 += a * b
+
+    }
+
+}
+
+print("c222-l0:", c222_c0)
+
+let c222_c1 = 0
+
+for a in [1, 2, 4] {
+
+    for b in [1, 2, 3] {
+
+        c222_c1 += a * b
+
+    }
+
+}
+
+print("c222-l1:", c222_c1)
+
+let c222_c2 = 0
+
+for a in [1, 2, 2] {
+
+    for b in [1, 2, 3] {
+
+        c222_c2 += a * b
+
+    }
+
+}
+
+print("c222-l2:", c222_c2)
+
+let c222_acc0 = ""
+
+loop {
+
+    c222_acc0 += "x"
+
+    if c222_acc0.len() >= 7 { break }
+
+}
+
+print("c222-o0:", c222_acc0)
+
+let c222_acc1 = ""
+
+loop {
+
+    c222_acc1 += "x"
+
+    if c222_acc1.len() >= 7 { break }
+
+}
+
+print("c222-o1:", c222_acc1)
+
+let c222_acc2 = ""
+
+loop {
+
+    c222_acc2 += "x"
+
+    if c222_acc2.len() >= 3 { break }
+
+}
+
+print("c222-o2:", c222_acc2)

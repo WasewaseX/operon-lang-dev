@@ -1,0 +1,140 @@
+# compat corpus — generated, do not edit by hand
+# bucket=optres seed=20261030 idx=206 tag=o206
+
+gene o206_f0(n) {
+
+    if n > 8356 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o206_u0(n) {
+
+    let v = o206_f0(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o206-p0:", o206_u0(-9869), o206_u0(8373))
+
+gene o206_f1(n) {
+
+    if n > 4266 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o206_u1(n) {
+
+    let v = o206_f1(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o206-p1:", o206_u1(8415), o206_u1(4273))
+
+gene o206_f2(n) {
+
+    if n > 2799 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o206_u2(n) {
+
+    let v = o206_f2(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o206-p2:", o206_u2(2096), o206_u2(2801))
+
+gene o206_f3(n) {
+
+    if n > 7943 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o206_u3(n) {
+
+    let v = o206_f3(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o206-p3:", o206_u3(-5588), o206_u3(7953))
+
+gene o206_f4(n) {
+
+    if n > 8758 {
+
+        return err("too big: " + str(n))
+
+    }
+
+    return ok(n * 2)
+
+}
+
+gene o206_u4(n) {
+
+    let v = o206_f4(n)?!
+
+    return ok(v + 1)
+
+}
+
+print("o206-p4:", o206_u4(-2495), o206_u4(8769))
+
+print("o206-o0:", is_ok(ok(6524)), is_none(none()), is_err(err("6524")), is_some(some(6524)))
+
+print("o206-u0:", unwrap_or(none(), 6524), unwrap_or(err("x"), 6523), unwrap_or(ok(6524), 0))
+
+print("o206-o1:", is_ok(ok(-9773)), is_none(none()), is_err(err("-9773")), is_some(some(-9773)))
+
+print("o206-u1:", unwrap_or(none(), -9773), unwrap_or(err("x"), -9774), unwrap_or(ok(-9773), 0))
+
+print("o206-o2:", is_ok(ok(4959)), is_none(none()), is_err(err("4959")), is_some(some(4959)))
+
+print("o206-u2:", unwrap_or(none(), 4959), unwrap_or(err("x"), 4958), unwrap_or(ok(4959), 0))
+
+print("o206-e0:", ok(2553) == ok(2553), some(2553) == ok(2553), none() == none(), err(1) == err(2))
+
+print("o206-j0:", json_str(ok(2553)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o206-e1:", ok(2347) == ok(2347), some(2347) == ok(2347), none() == none(), err(1) == err(2))
+
+print("o206-j1:", json_str(ok(2347)), json_str(err("bad")), json_str(some([1, 2])), json_str(none()))
+
+print("o206-n0:", some(some(4))?!?!, unwrap(ok(81)) + unwrap(some(77)))
+
+print("o206-s0:", "v=" + str(ok(4)?!), some("77k")?! + "!")
+
+print("o206-n1:", some(some(81))?!?!, unwrap(ok(179)) + unwrap(some(98)))
+
+print("o206-s1:", "v=" + str(ok(81)?!), some("98k")?! + "!")

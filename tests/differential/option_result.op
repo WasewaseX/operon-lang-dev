@@ -1,4 +1,4 @@
-# option_result — W06 (D-014) differential pin: first-class Option/Result
+# option_result, W06 (D-014) differential pin: first-class Option/Result
 # constructors, predicates, extraction, propagation, equality, repr, JSON.
 # Byte-identical on both engines.
 print(ok(42))

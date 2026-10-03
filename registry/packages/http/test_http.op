@@ -1,0 +1,74 @@
+# http package test — runs in-tree (`operon test registry/packages/http/test_http.op`)
+# and vendored (`operon test` inside a project that added http).
+use http
+
+frame proof {
+    # percent codec roundtrip
+    assert(http.http_percent_encode("a b/c~d") == "a%20b%2Fc~d", "encode unreserved kept")
+    assert(http.http_percent_decode("a%20b%2Fc", true) == "a b/c", "decode")
+    assert(http.http_percent_decode("a+b", true) == "a b", "plus as space")
+    assert(http.http_percent_decode("a+b", false) == "a+b", "plus kept in path form")
+    assert(http.http_percent_decode("%zz", true) == "%zz", "malformed kept raw")
+
+    # query canonicalization
+    assert(http.http_query_encode({b: "two", a: "1"}) == "a=1&b=two", "sorted keys")
+    let q = http.http_query_parse("?x=%2Fhome&y=two words&x=over")
+    assert(q["x"] == "over", "last occurrence wins")
+    assert(q["y"] == "two words", "decoded")
+
+    # headers
+    assert(http.http_header_canonical("content-type") == "Content-Type", "canonical")
+    assert(http.http_header_canonical("X-A-B") == "X-A-B", "already canonical")
+    let h = http.http_headers_parse(["host: example.com", "CONTENT-LENGTH:  5"])
+    assert(h["Host"] == "example.com", "header parsed")
+    assert(h["Content-Length"] == "5", "canonical key + trimmed value")
+    assert(http.http_header_get(h, "content-length") == "5", "case-insensitive get")
+    assert(http.http_header_get(h, "missing") == "", "miss is empty string")
+    let folded = http.http_headers_parse(["A: one", " two"])
+    assert(folded["A"] == "one two", "obs-fold continues the previous value")
+
+    # request parse
+    let raw = "GET /a/b?x=1&y=two HTTP/1.1\r\nHost: h.io\r\nAccept: */*\r\n\r\n"
+    let req = http.http_request_parse(raw.replace("\r\n", "\n"))
+    assert(req.method == "GET", "method")
+    assert(req.path == "/a/b", "path split from query")
+    assert(req.version == "HTTP/1.1", "version")
+    assert(req.query_map["y"] == "two", "query map decoded")
+    assert(req.headers["Host"] == "h.io", "request headers")
+
+    # response build
+    let resp = http.http_response_build(404, {"Content-Type": "text/plain"}, "nope")
+    assert(http.http_starts(resp, "HTTP/1.1 404 Not Found\r\n"), "status line")
+    assert(http.http_index_of(resp, "Content-Length: 4") >= 0, "auto length")
+    assert(http.http_ends(resp, "\r\n\r\nnope"), "terminator + body")
+    assert(http.http_index_of(http.http_response_json(200, "{}"), "application/json") >= 0, "json envelope")
+    assert(http.http_index_of(http.http_response_redirect("/next", false), "HTTP/1.1 302") >= 0, "redirect 302")
+    assert(http.http_index_of(http.http_response_redirect("/next", true), "HTTP/1.1 301") >= 0, "redirect 301")
+
+    # status classes
+    assert(http.http_status_is_success(200) and http.http_status_is_success(299), "2xx")
+    assert(http.http_status_is_client_error(404) and http.http_status_is_server_error(500), "4xx/5xx")
+    assert(not http.http_status_is_redirect(200), "200 is not redirect")
+    assert(http.http_status_reason(418) == "I'm a teapot", "teapot")
+    assert(http.http_status_reason(599) == "", "unknown reason is empty")
+
+    # cookies
+    let c = http.http_cookie_parse("a=1; b=two words; flag")
+    assert(c["a"] == "1" and c["b"] == "two words", "cookie parse")
+    assert(c["flag"] == "", "valueless cookie")
+    let sc = http.http_cookie_build("sid", "s3cret", {Path: "/", Secure: "", MaxAge: "3600"})
+    assert(sc == "sid=s3cret; Path=/; Secure; MaxAge=3600", "cookie build")
+
+    # url join
+    assert(http.http_url_join("https://h.io/api/v1", "/users") == "https://h.io/users", "absolute path")
+    assert(http.http_url_join("https://h.io/api/v1", "users") == "https://h.io/api/users", "same-dir relative")
+    assert(http.http_url_join("https://h.io/x", "https://other.io/y") == "https://other.io/y", "absolute wins")
+    assert(http.http_url_join("https://h.io/x", "//cdn.io/lib") == "https://cdn.io/lib", "scheme-relative")
+    assert(http.http_url_join("https://h.io/x", "") == "https://h.io/x", "empty is base")
+    assert(http.http_rindex_of("a/b/c", "/") == 3, "rindex finds last")
+    assert(http.http_rindex_of("abc", "z") == -1, "rindex miss")
+
+    # basic auth
+    assert(http.http_basic_auth("user", "pass") == "Basic dXNlcjpwYXNz", "base64 creds")
+    assert(http.http_basic_auth("u", "") == "Basic dTo=", "padding")
+}

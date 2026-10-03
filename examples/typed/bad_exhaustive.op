@@ -1,0 +1,7 @@
+## negative: Option match missing the None case
+gene f() -> int? {
+    return some(1)
+}
+match f() {
+    case Some(v) { print(v) }
+}

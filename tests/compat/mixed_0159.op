@@ -1,0 +1,214 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=159 tag=m159
+
+gene m159_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m159-b0:", m159_b0({ligase: 60, exon: 89, gene: 80})?!)
+
+gene m159_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m159-b1:", m159_b1({codon: 39, enzyme: 67, exon: 91})?!)
+
+gene m159_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m159-b2:", m159_b2({ribose: 41, cell: 11, exon: 89})?!)
+
+gene m159_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m159_f0([20, 51, 60, 1, 17, 51, 11]) {
+
+    case Ok(list) {
+
+        print("m159-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m159-f0:", "e:", m)
+
+    }
+
+}
+
+gene m159_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m159_f1([23, 39, 51, 18, 3]) {
+
+    case Ok(list) {
+
+        print("m159-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m159-f1:", "e:", m)
+
+    }
+
+}
+
+let m159_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m159-cc0:", m159_cl0(13)(11), m159_cl0(11)(13))
+
+let m159_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m159-cc1:", m159_cl1(16)(14), m159_cl1(14)(16))
+
+let m159_data0 = some([some("ligase"), none(), some(9)])
+
+match m159_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m159-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m159-x0:", "shape-miss")
+
+    }
+
+}
+
+let m159_data1 = some([some("codon"), none(), some(2)])
+
+match m159_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m159-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m159-x1:", "shape-miss")
+
+    }
+
+}

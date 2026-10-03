@@ -1,0 +1,52 @@
+# compat corpus — generated, do not edit by hand
+# bucket=maps seed=20260930 idx=56 tag=m056
+
+let m056_m0 = {ligase: 47, plasmid: -2, splicer: -3, helix: -36}
+
+print("m056-m0:", m056_m0["ligase"], len(m056_m0), m056_m0.has("ligase"))
+
+let m056_m1 = {plasmid: -75, helix: 19, exon: 49, gene: 6, splicer: -25}
+
+print("m056-m1:", m056_m1["plasmid"], len(m056_m1), m056_m1.has("plasmid"))
+
+let m056_m2 = {ribose: -71, marker: -37, ligase: 10}
+
+print("m056-m2:", m056_m2["ribose"], len(m056_m2), m056_m2.has("ribose"))
+
+let m056_k0 = {codon: 3, splicer: 7, enzyme: 5}
+
+let m056_ks0 = m056_k0.keys()
+
+let m056_sm0 = 0
+
+for k in m056_k0 { m056_sm0 += m056_k0[k] }
+
+print("m056-k0:", m056_sm0, m056_k0.keys().sort(), m056_k0.values().len())
+
+let m056_k1 = {cell: 7, vector: 8, enzyme: 26}
+
+let m056_ks1 = m056_k1.keys()
+
+let m056_sm1 = 0
+
+for k in m056_k1 { m056_sm1 += m056_k1[k] }
+
+print("m056-k1:", m056_sm1, m056_k1.keys().sort(), m056_k1.values().len())
+
+let m056_k2 = {marker: 3, enzyme: 15, cell: 40}
+
+let m056_ks2 = m056_k2.keys()
+
+let m056_sm2 = 0
+
+for k in m056_k2 { m056_sm2 += m056_k2[k] }
+
+print("m056-k2:", m056_sm2, m056_k2.keys().sort(), m056_k2.values().len())
+
+let m056_w0 = {outer: {helix: 2, splicer: 7, tag: "ok"}}}
+
+print("m056-w0:", m056_w0["outer"]["splicer"], m056_w0["outer"]["tag"])
+
+let m056_w1 = {outer: {plasmid: 3, helix: 9, tag: "ok"}}}
+
+print("m056-w1:", m056_w1["outer"]["helix"], m056_w1["outer"]["tag"])

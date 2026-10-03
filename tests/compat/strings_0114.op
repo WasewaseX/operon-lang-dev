@@ -1,0 +1,42 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=114 tag=s114
+
+print("s114-m0:", "BCml7w5j7".upper(), "BCml7w5j7".slice(3), "BCml7w5j7".len())
+
+print("s114-m1:", "wpiqi7j5h4vk5h".upper(), "wpiqi7j5h4vk5h".slice(2), "wpiqi7j5h4vk5h".len())
+
+print("s114-m2:", "Btr7yB764Cs4fB".upper(), "Btr7yB764Cs4fB".slice(1), "Btr7yB764Cs4fB".len())
+
+print("s114-m3:", "kof00_0k2j130d".upper(), "kof00_0k2j130d".slice(3), "kof00_0k2j130d".len())
+
+print("s114-m4:", "0wfgu8xg64l4c".upper(), "0wfgu8xg64l4c".slice(3), "0wfgu8xg64l4c".len())
+
+print("s114-i0:", "kjB-{88}-htk8")
+
+let s114_v0 = 88
+
+print("s114-v0:", "n={s114_v0}" + "!" * 3)
+
+print("s114-i1:", "irk-{39}-xjgC")
+
+let s114_v1 = 39
+
+print("s114-v1:", "n={s114_v1}" + "!" * 2)
+
+print("s114-i2:", "buj-{74}-h8Be")
+
+let s114_v2 = 74
+
+print("s114-v2:", "n={s114_v2}" + "!" * 2)
+
+print("s114-r0:", "zwA_Bptf".replace("z", "5r"), "zwA_Bptf".contains("wA"))
+
+print("s114-r1:", "2v9ppbjq".replace("2", "g3"), "2v9ppbjq".contains("v9"))
+
+print("s114-j0:", ["BBp", "t0j", "4n3", "hux"].join("-"))
+
+print("s114-j1:", ["3uv", "c9e", "d_z", "58y"].join("-"))
+
+print("s114-a0:", "0_myyit".at(0), "0_myyit".trim() == "0_myyit")
+
+print("s114-a1:", "fuAoey7".at(1), "fuAoey7".trim() == "fuAoey7")

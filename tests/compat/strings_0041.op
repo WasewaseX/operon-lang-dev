@@ -1,0 +1,54 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20260930 idx=41 tag=s041
+
+print("s041-m0:", "qftp0Bd23e".upper(), "qftp0Bd23e".slice(2), "qftp0Bd23e".len())
+
+print("s041-m1:", "0gpxbodsoy6b8n".upper(), "0gpxbodsoy6b8n".slice(4), "0gpxbodsoy6b8n".len())
+
+print("s041-m2:", "6lCse4ytn2u".upper(), "6lCse4ytn2u".slice(1), "6lCse4ytn2u".len())
+
+print("s041-m3:", "694glfnB".upper(), "694glfnB".slice(1), "694glfnB".len())
+
+print("s041-i0:", "5zn-{22}-vByd")
+
+let s041_v0 = 22
+
+print("s041-v0:", "n={s041_v0}" + "!" * 1)
+
+print("s041-i1:", "hda-{44}-ttcB")
+
+let s041_v1 = 44
+
+print("s041-v1:", "n={s041_v1}" + "!" * 3)
+
+print("s041-i2:", "2B3-{48}-iw8k")
+
+let s041_v2 = 48
+
+print("s041-v2:", "n={s041_v2}" + "!" * 2)
+
+print("s041-i3:", "62s-{27}-goiB")
+
+let s041_v3 = 27
+
+print("s041-v3:", "n={s041_v3}" + "!" * 3)
+
+print("s041-i4:", "dap-{82}-jbCc")
+
+let s041_v4 = 82
+
+print("s041-v4:", "n={s041_v4}" + "!" * 3)
+
+print("s041-r0:", "Asde5Bih".replace("A", "4v"), "Asde5Bih".contains("sd"))
+
+print("s041-r1:", "1l1jcCex".replace("1", "oC"), "1l1jcCex".contains("l1"))
+
+print("s041-j0:", ["6p3", "Bgm", "C7l", "vl5"].join("-"))
+
+print("s041-j1:", ["8bd", "6es", "Aue", "nvu", "t1_"].join("-"))
+
+print("s041-a0:", "43Bggx_".at(3), "43Bggx_".trim() == "43Bggx_")
+
+print("s041-a1:", "xi2Cmhz".at(4), "xi2Cmhz".trim() == "xi2Cmhz")
+
+print("s041-a2:", "0iB9erm".at(1), "0iB9erm".trim() == "0iB9erm")

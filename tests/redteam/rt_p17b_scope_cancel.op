@@ -1,0 +1,26 @@
+# rt_p17b: scope cancel storm. A scope block spawns compute-bound cells
+# and then the body raises; cancel-on-error must ask every child to stop,
+# the reap must drain them, and the original stress must still reach the
+# rescue. Containment: bounded runtime, no panic, no orphaned worker
+# leaks (the process exits when main returns).
+gene busy() {
+    let s = 0
+    for i in range(1_000_000) {
+        let s = s + i
+    }
+    return s
+}
+
+main {
+    stress {
+        scope {
+            for i in range(8) {
+                let _ = spawn(busy, [])
+            }
+            raise burned, "bail out"
+        }
+    } rescue (e) {
+        print("rescued: " + e.kind)
+    }
+    print("contained: scope storm survived")
+}

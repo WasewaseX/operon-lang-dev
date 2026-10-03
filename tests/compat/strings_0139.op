@@ -1,0 +1,48 @@
+# compat corpus — generated, do not edit by hand
+# bucket=strings seed=20261030 idx=139 tag=s139
+
+print("s139-m0:", "38xhfdhfybd".upper(), "38xhfdhfybd".slice(1), "38xhfdhfybd".len())
+
+print("s139-m1:", "8blg6qp".upper(), "8blg6qp".slice(1), "8blg6qp".len())
+
+print("s139-m2:", "_gdAsn".upper(), "_gdAsn".slice(3), "_gdAsn".len())
+
+print("s139-m3:", "89gmeb_m8ye".upper(), "89gmeb_m8ye".slice(4), "89gmeb_m8ye".len())
+
+print("s139-m4:", "0op286o1a4yt".upper(), "0op286o1a4yt".slice(2), "0op286o1a4yt".len())
+
+print("s139-m5:", "niiodB05bgo72".upper(), "niiodB05bgo72".slice(2), "niiodB05bgo72".len())
+
+print("s139-i0:", "stz-{33}-_u2n")
+
+let s139_v0 = 33
+
+print("s139-v0:", "n={s139_v0}" + "!" * 3)
+
+print("s139-i1:", "A09-{53}-1xx7")
+
+let s139_v1 = 53
+
+print("s139-v1:", "n={s139_v1}" + "!" * 2)
+
+print("s139-i2:", "cbt-{48}-t8mk")
+
+let s139_v2 = 48
+
+print("s139-v2:", "n={s139_v2}" + "!" * 1)
+
+print("s139-r0:", "CB6ku_2o".replace("C", "zh"), "CB6ku_2o".contains("B6"))
+
+print("s139-r1:", "C3fcsly2".replace("C", "33"), "C3fcsly2".contains("3f"))
+
+print("s139-r2:", "3iqe9hl1".replace("3", "6q"), "3iqe9hl1".contains("iq"))
+
+print("s139-j0:", ["opo", "5_d", "la5", "ow4"].join("-"))
+
+print("s139-j1:", ["ejz", "u2j", "ppm", "Czj"].join("-"))
+
+print("s139-j2:", ["5ik", "izb", "2mb", "xp6", "05w"].join("-"))
+
+print("s139-a0:", "c5g4577".at(5), "c5g4577".trim() == "c5g4577")
+
+print("s139-a1:", "uBw15ei".at(2), "uBw15ei".trim() == "uBw15ei")

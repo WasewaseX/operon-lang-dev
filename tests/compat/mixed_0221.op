@@ -1,0 +1,214 @@
+# compat corpus — generated, do not edit by hand
+# bucket=mixed seed=20261030 idx=221 tag=m221
+
+gene m221_b0(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m221-b0:", m221_b0({plasmid: 36, ribose: 49, enzyme: 85})?!)
+
+gene m221_b1(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m221-b1:", m221_b1({plasmid: 21, codon: 60, exon: 17})?!)
+
+gene m221_b2(m) {
+
+    let best = null
+
+    let bv = -1
+
+    for k in m {
+
+        if m[k] > bv {
+
+            bv = m[k]
+
+            best = k
+
+        }
+
+    }
+
+    return ok(best + "=" + str(bv))
+
+}
+
+print("m221-b2:", m221_b2({ligase: 79, codon: 86, helix: 1})?!)
+
+gene m221_f0(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m221_f0([18, 4, 17, 52, 2, 25, 13, 42]) {
+
+    case Ok(list) {
+
+        print("m221-f0:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m221-f0:", "e:", m)
+
+    }
+
+}
+
+gene m221_f1(xs) {
+
+    let evens = []
+
+    for v in xs {
+
+        if v % 2 == 0 {
+
+            evens.push(v * 10)
+
+        }
+
+    }
+
+    if evens.len() == 0 {
+
+        return err("no evens")
+
+    }
+
+    return ok(evens)
+
+}
+
+match m221_f1([42, 44, 52, 52, 36]) {
+
+    case Ok(list) {
+
+        print("m221-f1:", list.join("/"))
+
+    }
+
+    case Err(m) {
+
+        print("m221-f1:", "e:", m)
+
+    }
+
+}
+
+let m221_cl0 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m221-cc0:", m221_cl0(4)(6), m221_cl0(6)(4))
+
+let m221_cl1 = gene (x) {
+
+    return gene (y) {
+
+        return x * 100 + y
+
+    }
+
+}
+
+print("m221-cc1:", m221_cl1(7)(3), m221_cl1(3)(7))
+
+let m221_data0 = some([some("plasmid"), none(), some(7)])
+
+match m221_data0 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m221-x0:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m221-x0:", "shape-miss")
+
+    }
+
+}
+
+let m221_data1 = some([some("ligase"), none(), some(3)])
+
+match m221_data1 {
+
+    case Some([Some(s), none(), Some(n)]) {
+
+        print("m221-x1:", s, n, s.len())
+
+    }
+
+    case _ {
+
+        print("m221-x1:", "shape-miss")
+
+    }
+
+}

@@ -1,0 +1,46 @@
+# compat corpus — generated, do not edit by hand
+# bucket=cmplogic seed=20260930 idx=15 tag=c015
+
+print("c015-c0:", -2861 >= 6297)
+
+print("c015-c1:", 2800 < 1052)
+
+print("c015-c2:", -3594 <= -2990)
+
+print("c015-c3:", 1843 == 1446)
+
+print("c015-c4:", -2310 <= -1662)
+
+print("c015-c5:", -6918 != -9278)
+
+print("c015-c6:", -2518 != 1397)
+
+print("c015-b0:", 27 < 28 && 28 < 6, 27 > 28 || 27 > 6)
+
+print("c015-b1:", 42 < 40 && 40 < 43, 42 > 40 || 42 > 43)
+
+print("c015-b2:", 42 < 20 && 20 < 11, 42 > 20 || 42 > 11)
+
+print("c015-t0:", 9244 > -5738 ? "gt" : "le")
+
+print("c015-t1:", 4660 > 2906 ? "gt" : "le")
+
+print("c015-t2:", 2316 > 2965 ? "gt" : "le")
+
+print("c015-t3:", -3240 > 5854 ? "gt" : "le")
+
+let c015_n0 = null
+
+print("c015-n0:", c015_n0 ?? -6409, c015_n0 == null)
+
+let c015_n1 = null
+
+print("c015-n1:", c015_n1 ?? 3969, c015_n1 == null)
+
+let c015_n2 = null
+
+print("c015-n2:", c015_n2 ?? -7539, c015_n2 == null)
+
+print("c015-s0:", "1589" in "96lbrt1589", "1589" == "1589")
+
+print("c015-s1:", "1xtq" in "70o4fo1xtq", "1xtq" == "1xtq")
