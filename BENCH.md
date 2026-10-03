@@ -491,3 +491,54 @@ see **docs/PROFILING.md**.
 Fixture → correctness-proof mapping: `tests/bench/bench_correctness.op`.
 Questions / profile requests: `[builder-B -> sz]` thread in
 `project-vault/collab/COMMS.md`.
+
+## W011 stage-2 — frame-slot locals, write-through (2026-10-04)
+
+The boarded stage-2 lever ("locals-in-frame", vm-design §3/§6, W009-A
+candidate (c)) lands in its safe first shape: **param slots for the sync VM
+lane**. The compiler's binder walk marks every let/for/match binder in a
+gene body; a param is slot-eligible when it is default-free, unshadowed by
+any of those binders, and the gene's cached IR contains no bridge
+instruction (bridged nodes evaluate the original AST through the env
+chain, which cannot see slot-only values). Eligible frames bind params
+into a slot Vec **write-through** (the env copy stays authoritative for
+the funnel: callee resolution by name, RISC/toggle immunity checks, the
+mono-cache origin discipline); reads (LoadName, LoadNameQuiet, LoadBinImm,
+RetName) and writes (AssignName) hit the Vec first, env unchanged below.
+Kill switch: `OPERON_VM_SLOTS=0`; engagement counter:
+`OPERON_W009A_COUNTS=1` prints `slot_frames`.
+
+**Correctness from the analysis, not luck**: every binder form the parser
+has is marked by the walker (over-marking is free, under-marking is a
+bug); `StoreName` is deliberately never slot-routed (a slot name is
+never let-bound by definition); the const-stress check runs before a
+routed write exactly as before; the fiber lane keeps complete env frames
+(parked frames must be self-contained). The first smoke run CAUGHT the
+design error of skipping write-through (`twice(f, v)` → `f(v)` resolved
+the callee through the env chain → phantom nulls) — the proof-frame
+corpus would have caught it too, the harness ran before the corpus did.
+
+- **Measured** (interleaved A/B, `scripts/bench_core.py` N=9, same binary
+  with `OPERON_VM_SLOTS=0` as baseline): fib27 **1.02x** (307.3→300.3 ms),
+  fib25 **1.03x** (119.2→116.1), recursion **1.03x** (226.7→219.9),
+  loops/collections/grn 1.00–1.01x (within noise). Full suite re-run:
+  fib25 113.7 ms, recursion 218.4 ms — best recorded numbers; op/py at
+  **8.9x** on fib25.
+- **Honest scope note**: the write-through design keeps the frame-env
+  allocation per call (~100 ns of the residual) because eliminating it
+  requires slot-routing the callee resolution AND the RISC/toggle
+  immunity env reads — measured shape ≈1–2% more, funnel-signature
+  change, deferred. The slot path removes the per-READ SipHash probes
+  (3–5 per fib call), which is the part the corpus would see.
+- **Deep cross-language bench** (`scripts/bench_deep.py`, 11 workloads,
+  `apps/ytdl/bench/results_w011s2.json`): every checksum IDENTICAL across
+  operon/python/bash; medians within the box's noise band of the v2.8.0
+  snapshot (sequential cross-session numbers on this box swing ±3–5%).
+- **App battery**: `apps/ytdl/test/run_tests.sh` **35/35** with slots live.
+- **New lane-parity tests**: `tests/vm_slots.rs` (recursion, nested-scope
+  reassign, shadowed-param fallback, higher-order param callee,
+  missing/extra-arg stress) — both lanes byte-equal.
+- **Gates at close**: cargo test green (123 lib + vm_slots 5/5 + all
+  integration sets) · vm_parity 3555 identical/0 divergent (4 lanes) ·
+  differential VM lane vs oracle 3484/3484 · redteam 109/0 · clippy 0 ·
+  fmt clean.

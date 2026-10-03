@@ -80,7 +80,7 @@ pub fn recycle(
 
 fn print_counters() {
     eprintln!(
-        "w009a counters: instrs={} ticks={} env_new={} bookkeep={} name_clones={} tb_clones={} promo_clones={} mono_hits={}",
+        "w009a counters: instrs={} ticks={} env_new={} bookkeep={} name_clones={} tb_clones={} promo_clones={} mono_hits={} slot_frames={}",
         C_INSTRS.load(Relaxed),
         C_TICKS.load(Relaxed),
         C_ENVNEW.load(Relaxed),
@@ -89,6 +89,7 @@ fn print_counters() {
         C_TB.load(Relaxed),
         C_PROMO.load(Relaxed),
         C_MONO.load(Relaxed),
+        crate::vm::SLOT_FRAMES.load(Relaxed),
     );
 }
 
