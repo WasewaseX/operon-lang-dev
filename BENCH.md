@@ -353,6 +353,22 @@ happy-path String clones (~9% for 2 of 3 sites), (3) slot-indexed locals
 mono-hit call lane. Refuted by measurement: fuel-tick charging, decay
 tickers, naive Env pooling.
 
+**fib27 cross-check (2026-10-03, dev-1/builder-A).** The ytdl-bench M8 row
+(fib27: operon 0.447 s vs CPython 0.027 s = 16.5x) prompted a per-call
+scaling check on the same 2.7.0-vm binary: fib25 = 170 ms / 242,785 calls
+= 700 ns/call; fib27 = 447 ms / 635,621 calls = 703 ns/call — the per-call
+floor is DEPTH-FLAT (no deep-recursion penalty; CPython is likewise flat at
+41–43 ns/call). The W009-A attribution carries over unchanged: fib27 is the
+~0.7 µs/call funnel floor times the call count, and the 11.0x-vs-16.5x
+spread between sessions is box-state variance in BOTH numerator and
+denominator (CPython 13.1 ms then vs 10.0 ms now; operon 144.5 ms then vs
+170 ms now), not a code change. Startup floors re-pinned the same day
+(scripts/bench_startup.sh, N=30): exec-only 1.5 ms, run-hello 1.9 ms; full
+352-line ytdl app via launcher 4 ms; the 934-line DEEP app direct
+invocation 3 ms — see the reconciliation note in docs/BENCHMARK-DEEP.md
+(the DEEP suite's recorded 27.2 ms startup row was box contention, ~+25 ms
+on every host incl. bash).
+
 ## Baseline tracking
 
 | version | commit | date | fib25 op/py | loops op/py | collections op/py | grn op/py |

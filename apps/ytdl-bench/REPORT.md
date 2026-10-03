@@ -139,13 +139,20 @@ difference the app exists to expose.
 | **Operon** | **0.443** | **~900x** |
 
 The honest weak spot: Operon's interpreter is ~16x slower than CPython on
-tight numeric recursion (fuel checks on every step, checked i64 arithmetic,
-`Rc<RefCell>` value model). The W011 optimizer is already landed and its own
-honest finding matches this benchmark's: micro-corpus deltas are ±1% because
-Env HashMap traffic dominates, not arithmetic — the next lever is
-locals-in-frame (W011 stage-2), then a bytecode/JIT tier (W012). It does not
-surface in M4/M5 because the app is orchestration-bound, but it sets the VM
-roadmap's priority order.
+tight numeric recursion. The W009-A ablation attribution (BENCH.md) pins
+the mechanism: a ~0.7 µs/call floor in the SHARED call funnel — per-call
+regulatory gate walks (16.8%), call bookkeeping (11.6%), traceback/name
+String clones (9.2%), and the structural residual of string-keyed
+env-chain resolution + per-call Env allocation (fuel ticks, decay
+tickers, and naive Env pooling were all REFUTED by ablation). Per-call
+cost is depth-flat (700 ns/call at fib25 == 703 ns/call at fib27), so
+fib27 is simply 635,621 calls x the floor. The W011 optimizer does not
+move this row (measured: passes shave single-digit % of a ~7-instruction
+body — the funnel dominates), so the fix ladder is W009-B (cached
+clean-regulation bit + happy-path clone removal, 22.4% measured SAFE
+ceiling), then slot-indexed locals, then the owner-gated W012 JIT tier.
+It does not surface in M4/M5 because the app is orchestration-bound, but
+it sets the VM roadmap's priority order.
 
 ### M1 — Lines of code
 

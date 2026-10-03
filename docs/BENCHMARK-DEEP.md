@@ -80,6 +80,20 @@ so the child floor is the same everywhere.
 | lines200k (k=200k) | 789.7 | 121.4 | **34.7** | 2422.2 |
 | spawn200 (n=200) | 1095.7 | 277.7 | 277.9 | **246.7** |
 
+**Startup reconciliation (2026-10-03, builder-A).** The startup row above
+was recorded on a contended box: every host carries a ~+25 ms uniform
+additive term. Evidence: the bash row says 26.8 ms, but `bash
+apps/ytdl-compare/bash/ytdl.sh bench-startup` re-measures at 2 ms median
+(`bash -c "exit 0"` floor: 1 ms), the operon row re-measures at 3 ms
+median (same command shape as `operon_base()`, same 2.7.0-vm binary, n=7),
+and python re-measures at 32 ms. Deployable startup story: bash ~2 ms,
+**Operon ~3 ms**, python ~32 ms — Operon is still ~10x faster than CPython
+and essentially tied with bash. The §4 per-unit rates that subtract this
+row inherit the error (a flat 25 ms over N units shrinks every small-N
+rate); re-run the suite on an idle box before quoting §4 precisely. The
+work-dominated rows (json2k, table300, lines200k, spawn200, queues) are
+unaffected in ordering — their per-unit work dwarfs 25 ms.
+
 ## 4. Net per-unit rates (startup-subtracted, medians)
 
 | aspect | Operon | Python | Deno (TS) | Bash | Operon vs fastest |
