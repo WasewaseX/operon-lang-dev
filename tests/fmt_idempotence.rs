@@ -177,6 +177,48 @@ fn fmt_indent_option_changes_nesting_only() {
 }
 
 #[test]
+fn fmt_multistmt_lambda_body_survives() {
+    // W47-v3 P0 fmt repair regression (2026-10-04): a braced multi-statement
+    // lambda used to render as `gene(..) => null` — the body's first
+    // statement was kept only if it was a return, and every statement after
+    // a first return was silently dropped. apps/loglens' sort comparator was
+    // destroyed live by `fmt --write`. The repair law: the braced form is
+    // the ONLY rendering for a body that is not exactly one `return e`.
+    let src = "gene main(){\n  let f = gene(a, b) {\n    if a < b {\n      return -1\n    }\n    return a - b\n  }\n  show(f(1, 2))\n}\n";
+    let once = format_program(&parser::parse(src));
+    assert!(!once.contains("=> null"), "body destroyed: {once:?}");
+    assert!(
+        once.contains("return -1"),
+        "if-branch return lost: {once:?}"
+    );
+    assert!(once.contains("return a - b"), "final return lost: {once:?}");
+    assert!(
+        once.contains("gene(a, b) {"),
+        "braced form expected: {once:?}"
+    );
+    // Law 1: idempotent on the repaired shape.
+    let twice = format_program(&parser::parse(&once));
+    assert_eq!(once, twice, "not idempotent: {once:?} vs {twice:?}");
+    // Law 2: clean re-parse.
+    let reparsed = parser::parse(&once);
+    let severe: Vec<String> = reparsed
+        .notes
+        .iter()
+        .filter(|n| n.rung >= 3)
+        .map(|n| n.message.clone())
+        .collect();
+    assert!(severe.is_empty(), "rung>=3 notes: {severe:?}");
+    // Zero drift: the single-`return` arrow form is untouched.
+    let arrow = format_program(&parser::parse(
+        "gene main(){\n  show([3, 1, 2].sort(gene(a, b) { return a < b }))\n}\n",
+    ));
+    assert!(
+        arrow.contains("gene(a, b) => a < b"),
+        "arrow form drifted: {arrow:?}"
+    );
+}
+
+#[test]
 fn fmt_config_parser_keys_bounds_and_unknowns() {
     let (cfg, unk) = operon::tools::parse_fmt_config(
         "# .operon-fmt.toml\nindent = 4\nquotes = 'single'\n[fmt]\n",

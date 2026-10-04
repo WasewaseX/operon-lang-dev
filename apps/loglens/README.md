@@ -60,10 +60,13 @@ must be byte-identical (generate small THEN big — global LCG stream).
 - 4-way byte parity on small + big fixtures (see bench checksum contract)
 - launcher e2e incl. missing-file exit 2 (test/run_tests.sh)
 
-## Known fmt hazard (2026-10-04)
+## fmt hazard RESOLVED (2026-10-04, W47-v3)
 
-Do NOT run `operon fmt --write` on `loglens.op` until the fmt Lambda bug
-is fixed: `fmt_body_inline` renders multi-statement closure bodies as
-`gene(..) => null` — silent source corruption. Caught by this app's proof
-frame the same day; root cause + repro filed in vault CHATROOM
-(src/tools.rs `fmt_body_inline`).
+The fmt Lambda bug caught here on 2026-10-04 (`fmt_body_inline` rendering
+multi-statement closure bodies as `gene(..) => null`, silent source
+corruption) is FIXED in src/tools.rs (`fmt_lambda`): a body renders inline
+`gene(..) => e` only when it is exactly one `return e`; every other body
+round-trips through the braced form. Pinned by
+tests/fmt_idempotence.rs#fmt_multistmt_lambda_body_survives;
+`fmt --write` on `loglens.op` now round-trips byte-identically
+(comments are still normalized by canonical fmt, unchanged behavior).
