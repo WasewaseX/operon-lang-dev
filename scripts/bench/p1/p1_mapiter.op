@@ -1,0 +1,10 @@
+# P1 probe: iterate a 4k-entry map 20 passes (items order = the contract).
+main {
+    let m = {}
+    for i in range(4000) { m[str(i)] = i }
+    let a = 0
+    for r in range(20) {
+        for it in m.items() { a = a + it[1] }
+    }
+    promote("a = {a}")
+}

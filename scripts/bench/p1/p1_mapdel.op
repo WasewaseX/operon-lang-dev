@@ -1,0 +1,7 @@
+# P1 probe: 2k deletes over a 4k-key map (del path: position + memo rebuild).
+main {
+    let m = {}
+    for i in range(4000) { m[str(i)] = i }
+    for i in range(2000) { m.del(str(i * 2)) }
+    promote("n = {len(m)}")
+}

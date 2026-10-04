@@ -1,0 +1,19 @@
+# P1 probe: the loglens count_map shape — 50k records x 3 fields
+# (~450k map method/index dispatches: has + get + set per field).
+# Evidence anchor: loglens ablation map-counting ~255 ms/50k (pre W-L1).
+main {
+    let hosts = {}
+    let urls = {}
+    let st = {}
+    let i = 0
+    while i < 50000 {
+        let h = "host" + str(i % 800)
+        let u = "/p/" + str(i % 2000)
+        let s = str(200 + (i % 8))
+        if hosts.has(h) { hosts[h] = hosts[h] + 1 } else { hosts[h] = 1 }
+        if urls.has(u) { urls[u] = urls[u] + 1 } else { urls[u] = 1 }
+        if st.has(s) { st[s] = st[s] + 1 } else { st[s] = 1 }
+        i = i + 1
+    }
+    promote("h = {len(hosts)} u = {len(urls)} s = {len(st)}")
+}

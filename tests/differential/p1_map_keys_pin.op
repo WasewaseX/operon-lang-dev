@@ -1,0 +1,100 @@
+# P1 pin: MapStore memo exactness across the exotic-key classes (2026-10-04).
+# Traps any regression of the miss-trust soundness argument (P1 rework,
+# src/value.rs): Int<->Float cross-equality, +/-0.0, Bool vs Int slots,
+# Null keys, content-hashed Bytes keys, upsert position preservation,
+# delete + shift, non-scalar keys, and iteration order (the contract).
+# Expected output is byte-pinned across all engines (differential lanes).
+
+main {
+    # 1. Int<->Float cross-equality: 2.0 must FIND the int-keyed slot and
+    #    UPDATE it in place (position preserved, no second key).
+    let m = {}
+    m[2] = "int"
+    m[2.0] = "via-float"
+    print("cross-update", m[2], m.has(2.0), len(m))
+
+    # 2. +0.0 and -0.0 are one key (f64 == semantics).
+    let z = {}
+    z[0.0] = "pos"
+    z[-0.0] = "neg"
+    print("zero", z[0.0], len(z))
+
+    # 3. Bool keys and Int keys work as memo classes. FINDINGS (filed
+    #    2026-10-04, P1 PR, both PRE-EXISTING oracle gaps — rust engine and
+    #    oracle disagree, oracle disagrees with ITSELF, zero prior corpus
+    #    exposure):
+    #    (a) true and 1 in the SAME map: rust keeps them distinct (deep_eq
+    #        has no Bool/Int cross arm, two slots); the oracle's WRITE path
+    #        collapses them (native Python dict: True == 1) while its own
+    #        read path uses deep_eq. oracle.py:~3946.
+    #    (b) null KEYS: rust stores the key as Null and finds it; the
+    #        oracle's write path keys by v_display(iv) (null is not in the
+    #        accepted scalar tuple), so the oracle can never find a null
+    #        key again through its own deep_eq read path.
+    #    Both fixes are bootstrap/oracle.py, OUTSIDE the P1 lock (compat
+    #    lane / owner); this pin covers only the oracle-agreeable form.
+    let b = {}
+    b[true] = "t"
+    print("bool-key", len(b), b[true], b.has(true))
+    let bi = {}
+    bi[1] = "one"
+    print("int-key", len(bi), bi[1], bi.has(1))
+
+    # 4. Null VALUES are ordinary values (null KEYS = finding (b) above).
+    let n = {"a": null}
+    print("null-val", n.has("a"), n["a"], n.has("b"))
+
+    # 5. Bytes keys: same length, different content = different keys.
+    let y = {}
+    y[b"aa"] = 1
+    y[b"bb"] = 2
+    print("bytes", y[b"aa"], y[b"bb"], len(y))
+
+    # 6. Negative and huge ints (bit-bijection hashing).
+    let g = {}
+    g[-1] = "neg"
+    g[9223372036854775807] = "max"
+    g[-9223372036854775807] = "near-min"
+    print("ints", g[-1], g[9223372036854775807], g.has(-9223372036854775807))
+
+    # 7. Miss-trust class: absent scalar lookups stay absent on every
+    #    class (no false positive from the memo, no scan leak).
+    let miss = {}
+    for i in range(100) { miss[str(i)] = i }
+    let ok = true
+    if miss.has("100") { ok = false }
+    if miss.has(100) { ok = false }
+    if miss.has(100.0) { ok = false }
+    if miss.has(true) { ok = false }
+    if miss.has(null) { ok = false }
+    if miss.has(bytes_from_str("zz")) { ok = false }
+    print("misses", ok, miss["99"])
+
+    # 8. Deletes: shift correctness + order preservation after removal.
+    let d = {}
+    for i in range(6) { d[str(i)] = i * 10 }
+    d.del("2")
+    d.del("0")
+    let keys = ""
+    for it in d.items() { keys = keys + it[0] + ";" }
+    print("after-del", keys, d.has("2"), d["5"])
+
+    # 9. Non-scalar (list) keys: KNOWN pre-existing oracle divergence
+    #    (oracle.py stores container keys as display text; its comment
+    #    already files this for a future session) — not pin-able until the
+    #    oracle fixes container-key storage. Rust-side truth: bounded-scan
+    #    path, distinct list keys, exact lookups (verified manually this
+    #    session: len 2, both lookups hit, both lanes byte-identical).
+
+    # 10. Float-keyed map keeps exact scans sound (numeric sentinel > 0).
+    let f = {}
+    f[1.5] = "x"
+    f[2.5] = "y"
+    f[2] = "z"
+    print("floatmap", f[1.5], f[2], f.has(2.5), len(f))
+
+    # 11. Rehash path: 1000 inserts keep order + values (grow + probe).
+    let r = {}
+    for i in range(1000) { r[str(i * 37)] = i }
+    print("rehash", r["0"], r["999"], r[str(37 * 500)], len(r))
+}
