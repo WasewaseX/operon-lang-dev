@@ -123,4 +123,59 @@ pub fn init_from_env() {
     if any || counts {
         eprintln!("w009a harness: ablate=[{}] counts={}", spec, counts);
     }
+    envbench();
+}
+
+/// W011-s3 measurement (evidence-only, W009-A instrument module): time the
+/// EXACT per-call frame-construction shape of the stage-2 slot path —
+/// `Env::new(parent)` + N `define_param` inserts + the slot Vec + drops —
+/// so the stage-3 elimination ceiling is a measured number, not an estimate.
+/// Inert unless OPERON_W009A_ENVBENCH=<iters> is set.
+pub fn envbench() {
+    let iters: u64 = match std::env::var("OPERON_W009A_ENVBENCH") {
+        Ok(s) => s.parse().unwrap_or(0),
+        Err(_) => 0,
+    };
+    if iters == 0 {
+        return;
+    }
+    // realistic parent: a global env with a handful of bindings (fib's
+    // global carries the gene binding + shadow names)
+    let parent = crate::interp::Env::new(None);
+    for i in 0..16 {
+        parent.define_param(&format!("g{}", i), crate::value::Value::Int(i as i64));
+    }
+    // warm the allocator + branch predictors (both shapes)
+    for _ in 0..10_000 {
+        frame_shape(&parent, 1);
+        frame_shape(&parent, 2);
+    }
+    let t0 = std::time::Instant::now();
+    for _ in 0..iters {
+        frame_shape(&parent, 1);
+    }
+    let d1 = t0.elapsed().as_nanos() / iters as u128;
+    let t0 = std::time::Instant::now();
+    for _ in 0..iters {
+        frame_shape(&parent, 2);
+    }
+    let d2 = t0.elapsed().as_nanos() / iters as u128;
+    eprintln!("w009a envbench: 1-param frame {d1} ns/op, 2-param frame {d2} ns/op (iters={iters})");
+}
+
+/// The exact stage-2 per-call frame shape for a params-long frame: fresh
+/// Env (write-through copy), param inserts, slot Vec, then both dropped
+/// (the real path drops the frame env at call end; the slot Vec drops with
+/// the frame).
+#[inline(never)]
+fn frame_shape(parent: &std::rc::Rc<crate::interp::Env>, params: usize) {
+    let fenv = crate::interp::Env::new(Some(parent.clone()));
+    let mut slots = vec![crate::value::Value::Null; params];
+    for (i, s) in slots.iter_mut().enumerate() {
+        let v = crate::value::Value::Int(i as i64);
+        *s = v.clone();
+        fenv.define_param("n", v);
+    }
+    drop(slots);
+    drop(fenv);
 }
