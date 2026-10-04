@@ -10,15 +10,25 @@ pub type ListRef = Rc<RefCell<Vec<Value>>>;
 
 /// dx-r3 (re-audit perf #7): maps keep their insertion-ordered Vec (repr,
 /// keys(), iteration order are part of the language contract) but gain a
-/// hash memo over (type tag, display) -> position, so the hot lookups,
+/// hash memo over (type tag, key hash) -> position, so the hot lookups,
 /// `m[k]`, `has`, `del`, member access, `map_insert`, are O(1) instead of
 /// a linear deep_eq scan (the collections bench ran 40–55x CPython).
 /// The memo is a PREFILTER: candidate positions are always verified with
-/// deep_eq, so exotic equalities stay exact.
+/// deep_eq, and a scalar miss falls back to the exact full scan, so
+/// exotic equalities stay exact.
+///
+/// perf (loglens ablation 2026-10-04): the memo was keyed by
+/// (tag, canonical STRING), which forced a String allocation per lookup
+/// (`s.clone()` for every Str key — the counting loop `m.has(v)` +
+/// `m[v]` + `m[v] = m[v]+1` cloned 3 strings per record). The memo is now
+/// keyed by (tag, 64-bit hash of the canonical form), computed IN PLACE
+/// with no allocation on the Str/Int hot paths. Collisions are harmless:
+/// a hit that fails deep_eq falls back to the same exact scan the miss
+/// path always used. Scalar-key behavior is bit-for-bit identical.
 #[derive(Default)]
 pub struct MapStore {
     pub items: Vec<(Value, Value)>,
-    memo: std::collections::HashMap<(u8, String), usize>,
+    memo: std::collections::HashMap<(u8, u64), usize>,
 }
 
 /// sec-r5 (F-12): non-scalar keys (lists/maps) miss the hash memo and fall
@@ -28,21 +38,37 @@ pub struct MapStore {
 /// absent (SPEC §9b). Scalar keys keep exact semantics via the memo.
 const NON_SCALAR_SCAN_CAP: usize = 512;
 
-fn key_tag(v: &Value) -> (u8, String) {
+fn hash_bytes(tag: u8, b: &[u8]) -> (u8, u64) {
+    // DefaultHasher::new() is deterministic within a process; the memo is
+    // pure accelerator state and never feeds observable order (items order
+    // is the contract), so determinism is unaffected.
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    std::hash::Hash::hash(&b, &mut h);
+    (tag, std::hash::Hasher::finish(&h))
+}
+
+fn key_tag(v: &Value) -> (u8, u64) {
     match v {
-        Value::Null => (0, String::new()),
-        Value::Bool(b) => (1, b.to_string()),
-        Value::Int(i) => (2, i.to_string()),
-        Value::Float(f) => (3, f.to_string()),
-        Value::Str(s) => (4, s.clone()),
+        Value::Null => (0, 0),
+        Value::Bool(b) => (1, *b as u64),
+        // `as` wrapping is a bijection i64 -> u64, so equal ints collide
+        // only with themselves; distinct values always differ.
+        Value::Int(i) => (2, *i as u64),
+        Value::Float(f) => {
+            // canonical repr, hashed in place; f.to_string() may allocate
+            // but float keys are not the hot path (loglens evidence)
+            let s = f.to_string();
+            hash_bytes(3, s.as_bytes())
+        }
+        Value::Str(s) => hash_bytes(4, s.as_bytes()),
         // W029: bytes keys hit the memo via a length-tagged prefilter, the
         // memo is only a PREFILTER (candidates are deep_eq-verified and a
         // miss falls back to the exact full scan), so same-length collisions
         // stay exact, just O(n) instead of O(1).
-        Value::Bytes(b) => (5, format!("b{}", b.len())),
+        Value::Bytes(b) => (5, b.len() as u64),
         // non-scalar keys are legal but rare, they simply miss the memo
         // and fall back to the linear scan
-        _ => (255, String::new()),
+        _ => (255, 0),
     }
 }
 

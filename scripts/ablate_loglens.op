@@ -1,0 +1,198 @@
+# ablate.op — stage-by-stage attribution for the loglens parse pipeline.
+# Stage from argv[0]; each stage is a superset of the previous one, so
+# wall-clock deltas attribute cost to the added stage's operations.
+# Externally timed (bench/ablate.sh); every stage prints a work-dependent
+# value so nothing can be optimized away.
+
+use std/args as ar
+use std/fs as fs
+
+gene is_digits(s) {
+  if len(s) == 0 {
+    return false
+  }
+  let i = 0
+  while i < len(s) {
+    let ch = char_at(s, i)
+    if ch < "0" or ch > "9" {
+      return false
+    }
+    i = i + 1
+  }
+  return true
+}
+
+gene split_log_lines(text) {
+  let parts = text.split("\n")
+  let n = len(parts)
+  if n > 0 {
+    if parts[n - 1] == "" {
+      n = n - 1
+    }
+  }
+  let out = []
+  let i = 0
+  while i < n {
+    push(out, parts[i])
+    i = i + 1
+  }
+  return out
+}
+
+gene parse_line(line) {
+  let pieces = line.split("\"")
+  if len(pieces) != 3 {
+    return null
+  }
+  let hp = pieces[0].split(" ")
+  if len(hp) < 1 {
+    return null
+  }
+  let host = hp[0]
+  if host == "" {
+    return null
+  }
+  let req = pieces[1].split(" ")
+  if len(req) != 3 {
+    return null
+  }
+  let rest = pieces[2].split(" ")
+  if len(rest) != 3 {
+    return null
+  }
+  if rest[0] != "" {
+    return null
+  }
+  if not is_digits(rest[1]) {
+    return null
+  }
+  if not is_digits(rest[2]) {
+    return null
+  }
+  return [host, req[1], rest[1], num(rest[2])]
+}
+
+gene parse_records(text) {
+  let lines = split_log_lines(text)
+  let out = []
+  for line in lines {
+    let rec = parse_line(line)
+    if rec != null {
+      push(out, rec)
+    }
+  }
+  return out
+}
+
+gene count_map(values) {
+  let m = {}
+  for v in values {
+    if m.has(v) {
+      m[v] = m[v] + 1
+    } else {
+      m[v] = 1
+    }
+  }
+  return m
+}
+
+gene record_field(recs, idx) {
+  let out = []
+  for r in recs {
+    if idx < len(r) {
+      push(out, r[idx])
+    } else {
+      push(out, "")
+    }
+  }
+  return out
+}
+
+gene work(stage, text) {
+  if stage == "read" {
+    return len(text)
+  }
+  if stage == "lines" {
+    return len(split_log_lines(text))
+  }
+  let lines = split_log_lines(text)
+  if stage == "quote" {
+    let acc = 0
+    for line in lines {
+      let pieces = line.split("\"")
+      if len(pieces) == 3 {
+        acc = acc + 1
+      }
+    }
+    return acc
+  }
+  if stage == "reqrest" {
+    let acc = 0
+    for line in lines {
+      let pieces = line.split("\"")
+      if len(pieces) == 3 {
+        let req = pieces[1].split(" ")
+        let rest = pieces[2].split(" ")
+        if len(req) == 3 and len(rest) == 3 {
+          acc = acc + 1
+        }
+      }
+    }
+    return acc
+  }
+  if stage == "digits" {
+    let acc = 0
+    for line in lines {
+      let pieces = line.split("\"")
+      if len(pieces) == 3 {
+        let req = pieces[1].split(" ")
+        let rest = pieces[2].split(" ")
+        if len(req) == 3 and len(rest) == 3 {
+          if is_digits(rest[1]) and is_digits(rest[2]) {
+            acc = acc + 1
+          }
+        }
+      }
+    }
+    return acc
+  }
+  if stage == "records" {
+    let out = []
+    for line in lines {
+      let rec = parse_line(line)
+      if rec != null {
+        push(out, rec)
+      }
+    }
+    return len(out)
+  }
+  if stage == "counts" {
+    let recs = parse_records(text)
+    let hosts = count_map(record_field(recs, 0))
+    let urls = count_map(record_field(recs, 1))
+    let status = count_map(record_field(recs, 2))
+    return len(hosts.keys()) + len(urls.keys()) + len(status.keys())
+  }
+  if stage == "sorts" {
+    let recs = parse_records(text)
+    let status = count_map(record_field(recs, 2))
+    let items = status.items()
+    items = items.sort(gene(a, b) {
+      return num(a[0]) < num(b[0])
+    })
+    let urls = count_map(record_field(recs, 1))
+    let ui = urls.items()
+    ui = ui.sort(gene(a, b) {
+      if a[1] != b[1] {
+        return a[1] > b[1]
+      }
+      return a[0] < b[0]
+    })
+    return len(items) + len(ui)
+  }
+  return -1
+}
+
+let pos = ar.args_positional(argv())
+let text = fs.fs_read_or("apps/loglens/test/data/big.log", "")
+print("{work(pos[0], text)}")
