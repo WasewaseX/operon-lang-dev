@@ -7127,6 +7127,11 @@ impl Interp {
                 Ok(Value::Null)
             }
             "len" => Ok(Value::Int(match args.first() {
+                // perf (loglens ablation): ASCII fast path — chars().count()
+                // == byte length exactly when the string is all-ASCII, so
+                // the char-unit contract is unchanged, the O(n) count goes
+                // away for the common case.
+                Some(Value::Str(s)) if s.is_ascii() => s.len() as i64,
                 Some(Value::Str(s)) => s.chars().count() as i64,
                 // W029: len(bytes) is the BYTE count (a bytes object has no
                 // chars, Python parity)
@@ -9930,13 +9935,36 @@ impl Interp {
                     Some(Value::Int(i)) => *i,
                     _ => return Err(Stress::new("unfolded", "char_at(s, i) needs an int index")),
                 };
-                let chars: Vec<char> = s.chars().collect();
-                let j = if i < 0 { chars.len() as i64 + i } else { i };
-                if j >= 0 && (j as usize) < chars.len() {
-                    Ok(Value::Str(chars[j as usize].to_string()))
+                // perf (loglens ablation 2026-10-04): the old path collected
+                // the whole string into a Vec<char> PER CALL — for the
+                // char-loop idiom (is_digits) that is an allocation per
+                // character. ASCII strings index bytes directly (chars ==
+                // bytes, so the char unit and the negative-index arithmetic
+                // are unchanged); the general path iterates without
+                // collecting. Both produce the identical char.
+                if s.is_ascii() {
+                    let j = if i < 0 { s.len() as i64 + i } else { i };
+                    if j >= 0 && (j as usize) < s.len() {
+                        Ok(Value::Str((s.as_bytes()[j as usize] as char).to_string()))
+                    } else {
+                        self.note(self.cur_line, 4, "char_at out of range; null");
+                        Ok(Value::Null)
+                    }
                 } else {
-                    self.note(self.cur_line, 4, "char_at out of range; null");
-                    Ok(Value::Null)
+                    let n = s.chars().count() as i64;
+                    let j = if i < 0 { n + i } else { i };
+                    if j >= 0 && (j as usize) < n as usize {
+                        match s.chars().nth(j as usize) {
+                            Some(c) => Ok(Value::Str(c.to_string())),
+                            None => {
+                                self.note(self.cur_line, 4, "char_at out of range; null");
+                                Ok(Value::Null)
+                            }
+                        }
+                    } else {
+                        self.note(self.cur_line, 4, "char_at out of range; null");
+                        Ok(Value::Null)
+                    }
                 }
             }
             "char_slice" => {
@@ -11436,12 +11464,24 @@ impl Interp {
                 "upper" => Ok(Value::Str(s.to_uppercase())),
                 "at" => {
                     // L1a: safe char access with an optional default.
-                    let chars: Vec<char> = s.chars().collect();
+                    // perf (loglens ablation 2026-10-04): no per-call
+                    // Vec<char> collect — ASCII fast path (chars == bytes),
+                    // general path iterates. Identical char unit + result.
+                    let n = if s.is_ascii() {
+                        s.len() as i64
+                    } else {
+                        s.chars().count() as i64
+                    };
                     match args.first() {
                         Some(Value::Int(i)) => {
-                            let j = if *i < 0 { chars.len() as i64 + *i } else { *i };
-                            if j >= 0 && (j as usize) < chars.len() {
-                                Ok(Value::Str(chars[j as usize].to_string()))
+                            let j = if *i < 0 { n + *i } else { *i };
+                            if j >= 0 && (j as usize) < n as usize {
+                                let c = if s.is_ascii() {
+                                    (s.as_bytes()[j as usize] as char).to_string()
+                                } else {
+                                    s.chars().nth(j as usize).unwrap().to_string()
+                                };
+                                Ok(Value::Str(c))
                             } else {
                                 match args.get(1) {
                                     Some(d) => Ok(d.clone()),
@@ -11564,7 +11604,14 @@ impl Interp {
                         s.chars().skip(a).take(b.saturating_sub(a)).collect(),
                     ))
                 }
-                "len" => Ok(Value::Int(s.chars().count() as i64)),
+                "len" => {
+                    // perf: ASCII fast path (see the len() builtin note)
+                    if s.is_ascii() {
+                        Ok(Value::Int(s.len() as i64))
+                    } else {
+                        Ok(Value::Int(s.chars().count() as i64))
+                    }
+                }
                 _ => {
                     self.note(0, 4, format!("unknown str method '{}'; null", name));
                     Ok(Value::Null)

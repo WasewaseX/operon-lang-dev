@@ -1,0 +1,90 @@
+use std/args as ar
+use std/fs as fs
+
+gene digits_v1(s) {
+  if len(s) == 0 { return false }
+  let i = 0
+  while i < len(s) {
+    let ch = char_at(s, i)
+    if ch < "0" or ch > "9" { return false }
+    i = i + 1
+  }
+  return true
+}
+
+gene digits_v2(s) {
+  # hoisted len, no per-iteration len() call
+  let n = len(s)
+  if n == 0 { return false }
+  let i = 0
+  while i < n {
+    let ch = char_at(s, i)
+    if ch < "0" or ch > "9" { return false }
+    i = i + 1
+  }
+  return true
+}
+
+gene digits_call_only(s) {
+  # call + loop-skeleton overhead only (no char_at, no compares)
+  let n = len(s)
+  if n == 0 { return false }
+  let i = 0
+  while i < n {
+    i = i + 1
+  }
+  return true
+}
+
+gene split_line_lines(text) {
+  let parts = text.split("\n")
+  let n = len(parts)
+  if n > 0 {
+    if parts[n - 1] == "" { n = n - 1 }
+  }
+  let out = []
+  let i = 0
+  while i < n {
+    push(out, parts[i])
+    i = i + 1
+  }
+  return out
+}
+
+gene statuses(text) {
+  # extract the status field of each line (quote-split + rest split)
+  let lines = split_line_lines(text)
+  let out = []
+  for line in lines {
+    let pieces = line.split("\"")
+    if len(pieces) == 3 {
+      let rest = pieces[2].split(" ")
+      if len(rest) == 3 {
+        push(out, rest[1])
+      }
+    }
+  }
+  return out
+}
+
+let pos = ar.args_positional(argv())
+let text = fs.fs_read_or("apps/loglens/test/data/big.log", "")
+let stage = pos[0]
+if stage == "extract" {
+  print(len(statuses(text)))
+} elif stage == "v1" {
+  let ss = statuses(text)
+  let acc = 0
+  for s in ss { if digits_v1(s) { acc = acc + 1 } }
+  print(acc)
+} elif stage == "v2" {
+  let ss = statuses(text)
+  let acc = 0
+  for s in ss { if digits_v2(s) { acc = acc + 1 } }
+  print(acc)
+} elif stage == "call" {
+  let ss = statuses(text)
+  let acc = 0
+  for s in ss { if digits_call_only(s) { acc = acc + 1 } }
+  print(acc)
+}
