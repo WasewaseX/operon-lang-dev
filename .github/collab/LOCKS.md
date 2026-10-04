@@ -60,19 +60,19 @@ reported but not churned.
 |---|---|---|---|---|---|---|
 | L-001 | builder-A | P1-batch | src/value.rs, src/vm.rs | ACTIVE | 2026-10-04 (chatroom 14:58/16:05 posts) | — |
 | L-002 | builder-A | P4-safe | src/interp.rs | ACTIVE | 2026-10-04 (chatroom 14:58 post, amendment-bounded) | — |
-| L-003 | builder-A | P5-P6-survey | docs/bench/ | ACTIVE | 2026-10-04 (chatroom 15:40 post, measure-only) | — |
 | L-004 | builder-B | W006-C2 | examples/result_pipeline.op | ACTIVE | 2026-10-04 (PR #78 VERIFY) | — |
 | L-005 | builder-B | Q1 | docs/KEYWORDS.md, docs/STATS.md | ACTIVE | 2026-10-04 (PR #70 VERIFY) | — |
 | L-006 | builder-B | S4 | docs/SPEC.md, docs/SPEC_AUDIT.md | ACTIVE | 2026-10-04 (PR #64 VERIFY) | — |
 | L-007 | builder-F | W061-D | scripts/check_composition_pin.py, README.md | ACTIVE | 2026-10-04 (standing checker duty) | — |
 | L-008 | builder-F | W061-J | scripts/install.sh, scripts/release_smoke.sh, .github/workflows/release.yml | ACTIVE | 2026-10-04 (release lane) | — |
-| L-009 | builder-F | R0.10 | collab/** (vault), .github/collab/**, scripts/collision_guard.py, .github/workflows/collision-guard.yml | ACTIVE | 2026-10-05 (this ledger) | — |
 
 Notes:
 - **Not locked (claims invited, not yet ACKed in the room):** P2/P3
-  (profiling lane, builder-E invited 2026-10-04 14:58), compat-matrix/
-  environment-pair repair (builder-C, motion open since week 5), S7 security
-  re-aim (owner ratification), W006-E (owner ratification).
+  (profiling lane, builder-E invited 2026-10-04 14:58 — P2 executed via G9
+  announcement and merged as PR #96; P3 claim announced 2026-10-04 16:45),
+  S7 security re-aim (owner ratification), W006-E (owner ratification).
+  Compat-matrix/environment-pair: REASSIGNED to builder-F 2026-10-04
+  (digest-4, C veto-at-review) — claimed and executed same day as PR #94.
 - The perf lanes interleave on src/interp.rs and src/vm.rs frequently; the
   P1/P4 locks above cover the ACTIVE claim windows only — landed work
   releases locks the same day (see Released table). Keep claims narrow.
@@ -83,3 +83,5 @@ Notes:
 |---|---|---|---|---|---|
 | L-010 | builder-A | fmt-P0 (W47-v3) | src/tools.rs | 2026-10-04 | 2026-10-04 (main d5483a6) |
 | L-011 | builder-A | W011-s3 salvage (PR #90) | tests/differential/bk_slots_pin.op | 2026-10-04 | 2026-10-04 (merged, arbitration digest-3) |
+| L-003 | builder-A | P5-P6-survey | docs/bench/ | 2026-10-04 (chatroom 15:40 post, measure-only) | 2026-10-05 (survey merged as PR #92 @ 52830cd — fix phases re-claim per survey-then-fix) |
+| L-009 | builder-F | R0.10 | collab/** (vault), .github/collab/**, scripts/collision_guard.py, .github/workflows/collision-guard.yml | 2026-10-05 (this ledger) | 2026-10-05 (CI half merged as PR #93 @ c1e5039 — keeper sync continues under WORKER-BEHAVIOR rule 7) |
