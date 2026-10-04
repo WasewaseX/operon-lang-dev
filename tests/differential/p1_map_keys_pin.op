@@ -98,3 +98,30 @@ main {
     for i in range(1000) { r[str(i * 37)] = i }
     print("rehash", r["0"], r["999"], r[str(37 * 500)], len(r))
 }
+
+    # 12. DRIFT SHAPE (P1 review, 2026-10-05): a numeric key arrives via
+    #     SUBSCRIPT-UPSERT into a map whose memo table was already sized by
+    #     non-numeric keys — insert() takes the put branch, not the rebuild
+    #     branch. The numeric-key counter MUST be maintained there too:
+    #     miss-trust's Int<->Float sentinel (num_numeric > 0) is load-bearing
+    #     for exactly these lookups (deep_eq crosses Int/Float; 0.0 == -0.0).
+    #     Every case below starts from a NON-empty, non-numeric map.
+    let d1 = {"a": 1}
+    d1[2] = "x"
+    print("drift-a", d1.has(2.0), d1.get(2.0, "MISS"), d1.has(2), len(d1))
+    let d2 = {"a": 1}
+    d2[2.0] = "flt"
+    print("drift-b", d2.has(2), d2.has(2.0), len(d2))
+    let d3 = {"a": 1}
+    d3[0.0] = "pos"
+    print("drift-c", d3.has(-0.0), d3[0.0], len(d3))
+    let d4 = {"a": 1}
+    d4[2] = "x"
+    let dr = d4.del(2)
+    print("drift-del", len(d4), d4["a"], d4.has(2.0))
+    # drift through the countmap shape: str keys first, numeric later
+    let d5 = {}
+    for k in ["p", "q", "r"] { d5[k] = 1 }
+    d5[7] = "seven"
+    print("drift-e", d5.has(7.0), d5[7.0], d5.has(7), len(d5))
+}
