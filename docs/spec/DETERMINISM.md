@@ -24,7 +24,7 @@ corpus files), and (b) users know what they may build on top of a seeded run.
 
 | Source | Policy | Evidence |
 |--------|--------|----------|
-| Wall-clock time | **Never pinned in corpus output.** `clock()`/`now()` are **monotonic** (SPEC §22); `unix_time`/`date_parts`/`date_fmt` are wall-clock, corpus files assert **shape only** (type, field count, format skeleton), never absolute values. | `tests/differential/builtin_time_shape.op`, SPEC §22 |
+| Wall-clock time | **Never pinned in corpus output.** `clock()`/`now()` are **monotonic** (SPEC §10); `unix_time`/`date_parts`/`date_fmt` are wall-clock, corpus files assert **shape only** (type, field count, format skeleton), never absolute values. | `tests/differential/builtin_time_shape.op`, SPEC §10 |
 | RNG stream | Fully deterministic, see §4. | `tests/worker_seed_pin.op`, `tests/std_random.op` |
 | Thread scheduling | Spawn/join **values** are deterministic; worker RNG seeds are **pinned per worker** (pin preference incl. worker-in-worker, loop-10 R10-c F-1m) so stream identity does not depend on scheduling. Print-ordering across workers is not promised. | `tests/worker_seed_pin.op`, loop-10 wave R |
 | Map iteration order | **Insertion-ordered** map value type, iteration is deterministic and stable. | SPEC §5 (value model) |
