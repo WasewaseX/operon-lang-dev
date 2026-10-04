@@ -5586,6 +5586,79 @@ impl Interp {
         false
     }
 
+    /// W011 stage-2: resolve the value to bind for param `i` — the supplied
+    /// argument (with the W01 soft annotation check), or the default
+    /// expression (fiber lane disarmed across it), or the missing-argument
+    /// note + null. Extracted VERBATIM from the env-frame binding loop so
+    /// the env path and the slot path share one source of truth for notes,
+    /// annotation messages and fiber-lane disarming; the two loops differ
+    /// only in where the resolved value is written.
+    fn resolve_param(
+        &mut self,
+        def: &std::sync::Arc<GeneDef>,
+        fenv: &Rc<Env>,
+        args: &[Value],
+        i: usize,
+        dl: usize,
+        name: &str,
+    ) -> Result<Value, Stress> {
+        let (pname, default) = &def.params[i];
+        if let Some(a) = args.get(i) {
+            // W01 (L2c): soft param annotation, checked at the funnel,
+            // mismatch = catchable unfolded Stress naming the param,
+            // the gene, the expected and the actual type.
+            if let Some(ann) = def.param_anns.get(i).and_then(|a| a.as_ref()) {
+                if !ann_is_typaram(ann, &def.type_params) && !ann_matches(a, ann) {
+                    return Err(Stress::new(
+                        "unfolded",
+                        format!(
+                            "argument '{}' for gene '{}' expects {}, got {}",
+                            pname,
+                            name,
+                            ann.render(),
+                            a.type_name()
+                        ),
+                    ));
+                }
+            }
+            return Ok(a.clone());
+        }
+        if let Some(d) = default {
+            // W16: disarm the fiber lane across the default expression
+            // (user code that may call sleep/recv — a suspension here
+            // has no frame to park: fall back to the blocking lane)
+            let saved_armed = std::mem::replace(&mut self.fiber_armed, false);
+            let saved_hook = std::mem::replace(&mut self.fiber_hook, false);
+            let dv = self.eval(fenv, d).unwrap_or(Value::Null);
+            self.fiber_armed = saved_armed;
+            self.fiber_hook = saved_hook;
+            if let Some(ann) = def.param_anns.get(i).and_then(|a| a.as_ref()) {
+                if !ann_is_typaram(ann, &def.type_params) && !ann_matches(&dv, ann) {
+                    return Err(Stress::new(
+                        "unfolded",
+                        format!(
+                            "default of '{}' for gene '{}' expects {}, got {}",
+                            pname,
+                            name,
+                            ann.render(),
+                            dv.type_name()
+                        ),
+                    ));
+                }
+            }
+            return Ok(dv);
+        }
+        self.note(
+            dl,
+            4,
+            format!(
+                "missing argument '{}' in call to {}; bound null",
+                pname, name
+            ),
+        );
+        Ok(Value::Null)
+    }
+
     fn call_gene_inner(
         &mut self,
         // W011-r2: a BORROW — the eager `def.name.clone()` per call (a
@@ -5901,69 +5974,134 @@ impl Interp {
                 };
             }
         }
+        // W011 stage-2: frame-slot locals for the sync VM lane. Eligible
+        // genes bind their params into a slot Vec instead of the frame env;
+        // eligible = every param default-free and not shadowed by any body
+        // binder, the code object bridge-free (slot_ok), no guard, and the
+        // fiber hook unarmed (the fiber lane keeps complete env frames —
+        // it parks them; a parked frame's env must be self-contained).
+        // The tree-walk lane is untouched. OPERON_VM_SLOTS=0 disables.
+        if self.vm
+            && !self.fiber_hook
+            && !def.params.is_empty()
+            && def.guard.is_none()
+            && def.params.iter().all(|(_, d)| d.is_none())
+            && !crate::vm::vm_slots_off()
+        {
+            let key = std::sync::Arc::as_ptr(def) as *const u8 as usize;
+            let code = crate::vm::gene_code_cached(self, key, name, &def.body, &def.type_params);
+            if let Some(map) = crate::vm::frame_slot_map(&code, &def.params) {
+                if crate::w009a::COUNTS_ON.load(std::sync::atomic::Ordering::Relaxed) {
+                    crate::vm::SLOT_FRAMES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                }
+                let fenv = match &closure {
+                    Some(e) => Env::new(Some(e.clone())),
+                    None => Env::new(Some(self.global.clone())),
+                };
+                let nslots = map
+                    .iter()
+                    .map(|(_, s)| *s)
+                    .max()
+                    .map_or(0, |s| s as usize + 1);
+                let mut slots = vec![Value::Null; nslots];
+                for (i, (pname, _)) in def.params.iter().enumerate() {
+                    if pname.is_empty() || pname == "?" {
+                        continue;
+                    }
+                    let v = self.resolve_param(def, &fenv, &args, i, dl, name)?;
+                    match map
+                        .iter()
+                        .find(|(ni, _)| code.names[*ni as usize] == *pname)
+                    {
+                        Some((_, s)) => {
+                            // WRITE-THROUGH: the env copy stays authoritative
+                            // for the funnel (callee resolution by name, the
+                            // RISC/toggle immunity env.get(name) checks, the
+                            // mono-cache origin check) while the slot serves
+                            // the hot reads. define_param is DEF_GEN-exempt
+                            // exactly as on the env path.
+                            slots[*s as usize] = v.clone();
+                            fenv.define_param(pname, v);
+                        }
+                        // an unmapped param (never referenced in the body,
+                        // or shadowed) keeps the env path — mixed frames
+                        None => fenv.define_param(pname, v),
+                    }
+                }
+                if args.len() > def.params.len() && !def.params.is_empty() {
+                    self.note(
+                        dl,
+                        4,
+                        format!(
+                            "{} extra argument(s) in call to {} ignored",
+                            args.len() - def.params.len(),
+                            name
+                        ),
+                    );
+                }
+                // inclusive/exclusive timing: identical bookkeeping to the
+                // slow path below (the push is unconditional, close_timing
+                // pops unconditionally and only records when profiling)
+                let start = if self.profiling {
+                    Some(crate::ffi::now_ns())
+                } else {
+                    None
+                };
+                if self.frame_trace_live() {
+                    self.call_stack.push((
+                        name.to_string(),
+                        start.unwrap_or(0.0),
+                        0.0,
+                        self.cur_line,
+                    ));
+                }
+                // guard: unreachable here (def.guard.is_none() gates this
+                // branch); the fiber hook is unarmed by the gate above.
+                let result = crate::vm::exec_gene_code_slotted(
+                    self,
+                    &code,
+                    &fenv,
+                    crate::vm::FrameSlots { vals: slots, map },
+                );
+                self.close_timing(name);
+                // the shared tail (flow unwrap, propagation-as-return,
+                // return-annotation check) duplicated VERBATIM from the
+                // slow path below so the slow path stays byte-identical
+                // untouched; the parity corpus gates both copies (the
+                // same discipline as the trivial-gene path above).
+                let flowed = match result {
+                    Ok(f) => f,
+                    // W06 (D-014): a propagated variant IS the return value
+                    // ast-grep-ignore: no-unwrap-in-src
+                    Err(p) if p.prop.is_some() => Flow::Ret(p.prop.unwrap()),
+                    Err(e) => return Err(e),
+                };
+                return match flowed {
+                    Flow::Ret(v) => {
+                        self.check_ret_ann("gene", name, &def.ret_ann, &v, true, &def.type_params)
+                    }
+                    _ => self.check_ret_ann(
+                        "gene",
+                        name,
+                        &def.ret_ann,
+                        &Value::Null,
+                        false,
+                        &def.type_params,
+                    ),
+                };
+            }
+        }
         let fenv = match &closure {
             Some(e) => Env::new(Some(e.clone())),
             None => Env::new(Some(self.global.clone())),
         };
         // bind params
-        for (i, (pname, default)) in def.params.iter().enumerate() {
+        for (i, (pname, _default)) in def.params.iter().enumerate() {
             if pname.is_empty() || pname == "?" {
                 continue;
             }
-            if let Some(a) = args.get(i) {
-                // W01 (L2c): soft param annotation, checked at the funnel,
-                // mismatch = catchable unfolded Stress naming the param,
-                // the gene, the expected and the actual type.
-                if let Some(ann) = def.param_anns.get(i).and_then(|a| a.as_ref()) {
-                    if !ann_is_typaram(ann, &def.type_params) && !ann_matches(a, ann) {
-                        return Err(Stress::new(
-                            "unfolded",
-                            format!(
-                                "argument '{}' for gene '{}' expects {}, got {}",
-                                pname,
-                                name,
-                                ann.render(),
-                                a.type_name()
-                            ),
-                        ));
-                    }
-                }
-                fenv.define_param(pname, a.clone());
-            } else if let Some(d) = default {
-                // W16: disarm the fiber lane across the default expression
-                // (user code that may call sleep/recv — a suspension here
-                // has no frame to park: fall back to the blocking lane)
-                let saved_armed = std::mem::replace(&mut self.fiber_armed, false);
-                let saved_hook = std::mem::replace(&mut self.fiber_hook, false);
-                let dv = self.eval(&fenv, d).unwrap_or(Value::Null);
-                self.fiber_armed = saved_armed;
-                self.fiber_hook = saved_hook;
-                if let Some(ann) = def.param_anns.get(i).and_then(|a| a.as_ref()) {
-                    if !ann_is_typaram(ann, &def.type_params) && !ann_matches(&dv, ann) {
-                        return Err(Stress::new(
-                            "unfolded",
-                            format!(
-                                "default of '{}' for gene '{}' expects {}, got {}",
-                                pname,
-                                name,
-                                ann.render(),
-                                dv.type_name()
-                            ),
-                        ));
-                    }
-                }
-                fenv.define_param(pname, dv);
-            } else {
-                self.note(
-                    dl,
-                    4,
-                    format!(
-                        "missing argument '{}' in call to {}; bound null",
-                        pname, name
-                    ),
-                );
-                fenv.define_param(pname, Value::Null);
-            }
+            let v = self.resolve_param(def, &fenv, &args, i, dl, name)?;
+            fenv.define_param(pname, v);
         }
         if args.len() > def.params.len() && !def.params.is_empty() {
             self.note(

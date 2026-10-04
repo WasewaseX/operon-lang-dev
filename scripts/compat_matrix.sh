@@ -43,7 +43,12 @@ if [ "$DEBUG_BIN" == "1" ]; then
   cargo build >/dev/null 2>&1 || { echo "debug build FAILED"; exit 1; }
 fi
 
-mapfile -t FILES < <(find tests/compat tests/compat_fresh -name '*.op' 2>/dev/null | sort)
+# compat-r2 (macos leg, 2026-10-03): mapfile is a bash-4 builtin and the
+# macOS runner's /bin/bash is 3.2 — the whole leg died here with
+# "mapfile: command not found" then cascaded into unbound-variable errors.
+# A while-read loop fills the same array on every bash this matrix runs.
+FILES=()
+while IFS= read -r f; do FILES+=("$f"); done < <(find tests/compat tests/compat_fresh -name '*.op' 2>/dev/null | sort)
 if [ "$MODE" == "fast" ]; then
   n=${#FILES[@]}
   step=$(( n / 120 )); [ "$step" -lt 1 ] && step=1

@@ -9,6 +9,17 @@ Usage: python3 bootstrap/harness.py [--bin ../bin/operon]
 """
 import subprocess, sys, os, argparse
 
+# compat-r2 (windows leg, 2026-10-03): the harness's own stdout crashed on
+# Windows runners. The W59 fix decodes the two cores as UTF-8, but the
+# harness's own print() still encoded through the platform locale (cp1252),
+# so the first diagnostic line containing a non-cp1252 character (U+2713 in
+# caps_policy.op) raised UnicodeEncodeError and killed the leg mid-report,
+# masking every divergence behind it. Reconfigure once, at startup.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 # S3 exclusion policy (sz, 2026-09-24), builtins with NO exact-output golden,
 # by nature, each accounted for:
 #   exit              , control-flow terminator; its exit-code contract is the
@@ -25,8 +36,18 @@ def run(cmd, timeout=120):
     # both hides real output behind decode failures and can crash the
     # harness itself on any non-ASCII byte. errors="replace" keeps a broken
     # byte comparable instead of fatal.
+    # compat-r2 follow-up (windows leg, run 37146021360): decoding was only
+    # half the fix — the ORACLE's own stdout still ENCODED through the
+    # platform locale, so its em-dash left the process as cp1252 0x97 and
+    # the harness (decoding UTF-8) saw a replacement char where the Rust
+    # core correctly emitted UTF-8: 9 phantom divergences, every one a
+    # non-ASCII golden. Force the oracle's side of the pipe to UTF-8 too.
+    env = dict(os.environ)
+    env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONUTF8"] = "1"
     p = subprocess.run(cmd, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=timeout)
+                       encoding="utf-8", errors="replace", timeout=timeout,
+                       env=env)
     return p.stdout, p.returncode, p.stderr
 
 def collect_op(root):
@@ -70,6 +91,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--bin", default=os.path.join(os.path.dirname(__file__), "..", "bin", "operon"))
     ap.add_argument("--root", default=os.path.join(os.path.dirname(__file__), ".."))
+    # compat-r2: run one lane alone (main = VM vs oracle, novm = tree-walk vs
+    # oracle). Default "both" is unchanged — the full differential contract.
+    ap.add_argument("--lane", choices=["both", "main", "novm"], default="both")
     args = ap.parse_args()
     root = os.path.abspath(args.root)
     binpath = os.path.abspath(args.bin)
@@ -83,77 +107,78 @@ def main():
 
     passed, failed, skipped = 0, 0, 0
     print(f"differential harness, {len(targets)} program(s) × 2 implementations\n")
-    for t in targets:
-        rel = os.path.relpath(t, root)
-        rust_out, rust_code, _ = run([binpath, "run", t])
-        try:
-            py_out, py_code, py_err = run([sys.executable, oracle, "run", t])
-        except subprocess.TimeoutExpired:
-            print(f"  TIMEOUT  {rel} (oracle)")
-            failed += 1
-            continue
-        if rust_out == py_out and rust_code == py_code:
-            print(f"  MATCH    {rel}")
-            passed += 1
-        else:
-            print(f"  DIVERGE  {rel}")
-            ro = rust_out.strip().splitlines()
-            po = py_out.strip().splitlines()
-            for i in range(max(len(ro), len(po))):
-                r = ro[i] if i < len(ro) else "<missing>"
-                p_ = po[i] if i < len(po) else "<missing>"
-                if r != p_:
-                    print(f"    rust  : {r}")
-                    print(f"    oracle: {p_}")
-            if rust_code != py_code:
-                print(f"    exit codes: rust={rust_code} oracle={py_code}")
-            # W59 diagnostics: an oracle that dies before producing output
-            # used to surface as a wall of anonymous DIVERGEs (the oracle's
-            # stderr was discarded). If the oracle side failed or went
-            # quiet, show the first lines of its stderr, the crash is
-            # there, not in the semantics.
-            # W59 windows truth (2026-09-29): the old condition also
-            # required EMPTY oracle stdout, so a crash AFTER partial output
-            # (weak_refs.op: 5 lines, then a dead unix-only import died
-            # inside memory()) hid the traceback and stayed anonymous.
-            # Surface stderr on ANY oracle failure, not just silent ones.
-            if py_code != 0 and py_err.strip():
-                for line in py_err.strip().splitlines()[:6]:
-                    print(f"    oracle stderr: {line}")
-            failed += 1
-    # loop-10 (F-7/F-8): granted-with-cell targets, both implementations
-    # under the SAME explicit --cell; stdout must match byte-for-byte like
-    # every other target. This pins the Rho layer's ENTROPY-STREAM parity
-    # (the opt-in draws are the riskiest divergence surface, trap #4 of
-    # the reg-bio-4 kinetics design).
-    for rel_op, rel_cell in GRANTED_CELL_TARGETS:
-        gop = os.path.join(root, rel_op)
-        gcell = os.path.join(root, rel_cell)
-        if not (os.path.isfile(gop) and os.path.isfile(gcell)):
-            print(f"  FAIL     {rel_op} (missing op or cell, granted targets are checked in, a missing one is a broken tree)")
-            failed += 1
-            continue
-        rust_out, rust_code, _ = run([binpath, "run", gop, "--cell", gcell])
-        try:
-            py_out, py_code, py_err = run([sys.executable, oracle, "run", gop, "--cell", gcell])
-        except subprocess.TimeoutExpired:
-            print(f"  TIMEOUT  {rel_op} (oracle)")
-            failed += 1
-            continue
-        if rust_out == py_out and rust_code == py_code:
-            print(f"  MATCH    {rel_op} (granted)")
-            passed += 1
-        else:
-            print(f"  DIVERGE  {rel_op} (granted)")
-            # W59 windows truth (2026-09-29): the old condition also
-            # required EMPTY oracle stdout, so a crash AFTER partial output
-            # (weak_refs.op: 5 lines, then a dead unix-only import died
-            # inside memory()) hid the traceback and stayed anonymous.
-            # Surface stderr on ANY oracle failure, not just silent ones.
-            if py_code != 0 and py_err.strip():
-                for line in py_err.strip().splitlines()[:6]:
-                    print(f"    oracle stderr: {line}")
-            failed += 1
+    if args.lane in ("both", "main"):
+        for t in targets:
+            rel = os.path.relpath(t, root)
+            rust_out, rust_code, _ = run([binpath, "run", t])
+            try:
+                py_out, py_code, py_err = run([sys.executable, oracle, "run", t])
+            except subprocess.TimeoutExpired:
+                print(f"  TIMEOUT  {rel} (oracle)")
+                failed += 1
+                continue
+            if rust_out == py_out and rust_code == py_code:
+                print(f"  MATCH    {rel}")
+                passed += 1
+            else:
+                print(f"  DIVERGE  {rel}")
+                ro = rust_out.strip().splitlines()
+                po = py_out.strip().splitlines()
+                for i in range(max(len(ro), len(po))):
+                    r = ro[i] if i < len(ro) else "<missing>"
+                    p_ = po[i] if i < len(po) else "<missing>"
+                    if r != p_:
+                        print(f"    rust  : {r}")
+                        print(f"    oracle: {p_}")
+                if rust_code != py_code:
+                    print(f"    exit codes: rust={rust_code} oracle={py_code}")
+                # W59 diagnostics: an oracle that dies before producing output
+                # used to surface as a wall of anonymous DIVERGEs (the oracle's
+                # stderr was discarded). If the oracle side failed or went
+                # quiet, show the first lines of its stderr, the crash is
+                # there, not in the semantics.
+                # W59 windows truth (2026-09-29): the old condition also
+                # required EMPTY oracle stdout, so a crash AFTER partial output
+                # (weak_refs.op: 5 lines, then a dead unix-only import died
+                # inside memory()) hid the traceback and stayed anonymous.
+                # Surface stderr on ANY oracle failure, not just silent ones.
+                if py_code != 0 and py_err.strip():
+                    for line in py_err.strip().splitlines()[:6]:
+                        print(f"    oracle stderr: {line}")
+                failed += 1
+        # loop-10 (F-7/F-8): granted-with-cell targets, both implementations
+        # under the SAME explicit --cell; stdout must match byte-for-byte like
+        # every other target. This pins the Rho layer's ENTROPY-STREAM parity
+        # (the opt-in draws are the riskiest divergence surface, trap #4 of
+        # the reg-bio-4 kinetics design).
+        for rel_op, rel_cell in GRANTED_CELL_TARGETS:
+            gop = os.path.join(root, rel_op)
+            gcell = os.path.join(root, rel_cell)
+            if not (os.path.isfile(gop) and os.path.isfile(gcell)):
+                print(f"  FAIL     {rel_op} (missing op or cell, granted targets are checked in, a missing one is a broken tree)")
+                failed += 1
+                continue
+            rust_out, rust_code, _ = run([binpath, "run", gop, "--cell", gcell])
+            try:
+                py_out, py_code, py_err = run([sys.executable, oracle, "run", gop, "--cell", gcell])
+            except subprocess.TimeoutExpired:
+                print(f"  TIMEOUT  {rel_op} (oracle)")
+                failed += 1
+                continue
+            if rust_out == py_out and rust_code == py_code:
+                print(f"  MATCH    {rel_op} (granted)")
+                passed += 1
+            else:
+                print(f"  DIVERGE  {rel_op} (granted)")
+                # W59 windows truth (2026-09-29): the old condition also
+                # required EMPTY oracle stdout, so a crash AFTER partial output
+                # (weak_refs.op: 5 lines, then a dead unix-only import died
+                # inside memory()) hid the traceback and stayed anonymous.
+                # Surface stderr on ANY oracle failure, not just silent ones.
+                if py_code != 0 and py_err.strip():
+                    for line in py_err.strip().splitlines()[:6]:
+                        print(f"    oracle stderr: {line}")
+                failed += 1
     print(f"\nresult: {passed} match, {failed} diverge, {skipped} skipped")
     # W09 A6 (post-flip): the DEFAULT run IS the bytecode machine, and the
     # main lane above pins it against the oracle. This lane keeps the OTHER
@@ -164,30 +189,31 @@ def main():
     # not change.
     vm_pass, vm_fail = 0, 0
     print(f"\n--no-vm lane (tree-walk engine vs the same oracle output)")
-    for t in targets:
-        rel = os.path.relpath(t, root)
-        vm_out, vm_code, _ = run([binpath, "run", t, "--no-vm"])
-        try:
-            py_out, py_code, py_err = run([sys.executable, oracle, "run", t])
-        except subprocess.TimeoutExpired:
-            print(f"  TIMEOUT  {rel} (oracle, tree-walk lane)")
-            vm_fail += 1
-            continue
-        if vm_out == py_out and vm_code == py_code:
-            vm_pass += 1
-        else:
-            print(f"  VM-DIVERGE  {rel}")
-            vo = vm_out.strip().splitlines()
-            po = py_out.strip().splitlines()
-            for i in range(max(len(vo), len(po))):
-                v = vo[i] if i < len(vo) else "<missing>"
-                p_ = po[i] if i < len(po) else "<missing>"
-                if v != p_:
-                    print(f"    tree  : {v}")
-                    print(f"    oracle: {p_}")
-            if vm_code != py_code:
-                print(f"    exit codes: tree={vm_code} oracle={py_code}")
-            vm_fail += 1
+    if args.lane in ("both", "novm"):
+        for t in targets:
+            rel = os.path.relpath(t, root)
+            vm_out, vm_code, _ = run([binpath, "run", t, "--no-vm"])
+            try:
+                py_out, py_code, py_err = run([sys.executable, oracle, "run", t])
+            except subprocess.TimeoutExpired:
+                print(f"  TIMEOUT  {rel} (oracle, tree-walk lane)")
+                vm_fail += 1
+                continue
+            if vm_out == py_out and vm_code == py_code:
+                vm_pass += 1
+            else:
+                print(f"  VM-DIVERGE  {rel}")
+                vo = vm_out.strip().splitlines()
+                po = py_out.strip().splitlines()
+                for i in range(max(len(vo), len(po))):
+                    v = vo[i] if i < len(vo) else "<missing>"
+                    p_ = po[i] if i < len(po) else "<missing>"
+                    if v != p_:
+                        print(f"    tree  : {v}")
+                        print(f"    oracle: {p_}")
+                if vm_code != py_code:
+                    print(f"    exit codes: tree={vm_code} oracle={py_code}")
+                vm_fail += 1
     print(f"tree-walk lane result: {vm_pass} match, {vm_fail} diverge")
     sys.exit(1 if (failed or vm_fail) else 0)
 

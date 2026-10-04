@@ -44,6 +44,7 @@ let opts = Opts {
     caps: operon::interp::Caps::default(), // default-deny sandbox (CLI equivalent: no --allow flags)
     profile: false,       // true = time top-level statements during load
     stdout_sink: None,    // Some(Rc<RefCell<Vec<String>>>) to capture promote() output
+    use_vm: true,         // W09-A6 VM-default lane (same flip the CLI applies)
 };
 let mut loaded = match tools::load_file("app/main.op", &opts) {
     Ok(l) => l,
