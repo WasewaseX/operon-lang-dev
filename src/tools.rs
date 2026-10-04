@@ -343,6 +343,16 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
         }
     }
 
+    // W011-s3b: the bookkeeping consumer scan — one pass over the loaded
+    // AST (the entry gene's process); decides whether the per-call
+    // call_counts/gene_buckets maintenance can be gated off for programs
+    // with no reader. Analyze AFTER every opts/cell field write above (the
+    // gate reads self.profiling and the debug flags) and BEFORE the
+    // top-level statement loop. Kill switch: OPERON_VM_BKFAST=0. The
+    // scanner is an over-approximation; a false positive only keeps the
+    // pre-s3b behavior.
+    interp.analyze_bookkeeping_consumers(&prog);
+
     // execute top-level (gene defs bind, silences load, regulate registers…)
     // Top-Grammar containment: uncaught stress here is absorbed per statement.
     let genv = interp.global.clone();

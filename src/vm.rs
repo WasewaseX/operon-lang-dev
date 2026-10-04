@@ -921,6 +921,22 @@ pub fn vm_slots_off() -> bool {
     *VM_SLOTS_OFF
 }
 
+/// W011-s3b kill switch (A/B measurement + emergency off). The bookkeeping
+/// consumer gate is default-ON for consumer-free programs; `OPERON_VM_BKFAST=0`
+/// (or `off`) forces full call_counts/gene_buckets maintenance for every
+/// program, restoring the pre-s3b behavior exactly. Read once per process
+/// (LazyLock) — the flag is process-constant like every other W009-A/W011
+/// toggle.
+static VM_BKFAST_OFF: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| {
+    std::env::var("OPERON_VM_BKFAST")
+        .map(|v| v == "0" || v.eq_ignore_ascii_case("off"))
+        .unwrap_or(false)
+});
+
+pub fn vm_bkfast_off() -> bool {
+    *VM_BKFAST_OFF
+}
+
 /// W011 engagement counter (OPERON_W009A_COUNTS=1 dumps it): slot frames
 /// entered. The ablation/verification harness pairs this with fib-class
 /// runs to prove the path actually engages (an optimization that never

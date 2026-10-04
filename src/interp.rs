@@ -811,6 +811,29 @@ pub struct Interp {
     /// None = fall back to the `.cell` keys (`grn.decay_calls`/`grn.decay`).
     pub decay_clock_n: Option<u64>,
     pub decay_clock_f: Option<f64>,
+    /// W011-s3a: lazily-resolved decay-config facts for the per-call
+    /// bookkeeping guard. `cell` is immutable after load (the same audited
+    /// premise rho_cache rides), so these two cell-derived booleans never go
+    /// stale; `decay_clock_n` above is read LIVE every call because the
+    /// decay_clock builtin is a runtime switch (including its n=0 off
+    /// state). When all three say "no decay surface exists", the per-call
+    /// tickers are skipped entirely — the identical outcome the tickers'
+    /// own early returns produce today, minus three hash lookups and two
+    /// string parses per gene call (fib25: ~45 ns/call). Computed on first
+    /// bookkeeping call, which is always after the cell config is final
+    /// (load_file writes every cell key before any statement executes).
+    decay_cfg_checked: bool,
+    cell_has_grn_clock: bool,
+    cell_m6a_decay_on: bool,
+    /// W011-s3b: the bookkeeping consumer gate. TRUE only when the loaded
+    /// program provably has NO consumer of `call_counts`/`gene_buckets`
+    /// (fingerprint unreachable, no Regulate statement anywhere, not
+    /// profiling, no debug surface) — the per-call map maintenance is then
+    /// skipped and `call_clock` alone keeps advancing. DEFAULT FALSE (= the
+    /// full-maintenance behavior every non-analyzed path has always had);
+    /// only `analyze_bookkeeping_consumers` may set it, and only for the
+    /// loaded main-file AST. Kill switch: OPERON_VM_BKFAST=0.
+    bk_fast: bool,
     pub promoter_states: HashMap<String, bool>,
     pub burst_off: HashMap<String, u64>,
     /// reg-bio (F-5): repressilator kinetic parameters (defaults = legacy).
@@ -1014,6 +1037,10 @@ impl Interp {
             expr_koff: 0.1,
             decay_clock_n: None,
             decay_clock_f: None,
+            decay_cfg_checked: false,
+            cell_has_grn_clock: false,
+            cell_m6a_decay_on: false,
+            bk_fast: false,
             promoter_states: HashMap::new(),
             burst_off: HashMap::new(),
             repressi_params: RepressiParams::default(),
@@ -6209,6 +6236,75 @@ impl Interp {
         }
     }
 
+    /// W011-s3b: the bookkeeping consumer scan. Soundness contract: set
+    /// `bk_fast` ONLY when no code path of this program can ever read
+    /// `call_counts` or `gene_buckets`. The consumers, exhaustively:
+    ///   (1) the `fingerprint` builtin (counts + buckets + clock/20) —
+    ///       reachable through a source call OR through wobble repair of any
+    ///       name within edit distance 2 (the same crate::ffi::edit_distance
+    ///       and the same max=2 the funnel uses for 5+-char names);
+    ///   (2) trans_integrate's per-edge count reads — armed by ANY
+    ///       Stmt::Regulate execution (a statement, so it can sit inside a
+    ///       gene body and arm mid-run: the precondition must be static);
+    ///   (3) the `profile` command + main telemetry — exactly
+    ///       `self.profiling`;
+    ///   (4) debugger surfaces — `frame_trace_live()` (a protocol/DAP eval
+    ///       can call fingerprint on a program whose AST is clean; the
+    ///       same attach-before-run premise the frame-push gating rides).
+    /// Imported files (`use`) may carry consumers their host never sees, so
+    /// any import keeps full bookkeeping. The name filter over-approximates
+    /// (string literals count too; a false positive only forfeits the fast
+    /// path). Non-analyzed paths never call this, so `bk_fast` stays false
+    /// (= byte-identical to the pre-s3b contract everywhere else).
+    pub fn analyze_bookkeeping_consumers(&mut self, prog: &Program) {
+        self.bk_fast = false;
+        if crate::vm::vm_bkfast_off() || self.profiling || self.frame_trace_live() {
+            return;
+        }
+        let mut st = BkScan::default();
+        for s in &prog.stmts {
+            st.stmt(s);
+        }
+        // conservative completeness: the parser also gathers proof-frame and
+        // named-frame statement lists; scan them even where they duplicate
+        // the stmt walk (over-approximation is free, omission is not).
+        for p in &prog.proofs {
+            for s in p {
+                st.stmt(s);
+            }
+        }
+        for (_, p) in &prog.named_frames {
+            for s in p {
+                st.stmt(s);
+            }
+        }
+        if !st.has_regulate && !st.imports && !st.fp_reachable {
+            self.bk_fast = true;
+        }
+    }
+
+    /// W011-s3a: could any decay ticker have work this call? True whenever
+    /// the runtime clock is armed OR either .cell decay key is configured.
+    /// The two cell-derived facts resolve once (cell is immutable after
+    /// load — the audited premise rho_cache rides; the first bookkeeping
+    /// call happens after every cell write in load_file, so the cache is
+    /// born final). The tickers' own early returns still run unchanged on
+    /// the true path — this guard only removes the provably-inert calls.
+    fn decay_surface_possible(&mut self) -> bool {
+        if !self.decay_cfg_checked {
+            self.cell_has_grn_clock = self.cell.contains_key("grn.decay_calls");
+            self.cell_m6a_decay_on = self
+                .cell
+                .get("m6a.decay")
+                .and_then(|v| v.parse::<f64>().ok())
+                .map(|v| v.clamp(0.0, 1.0))
+                .map(|v| v > 0.0)
+                .unwrap_or(false);
+            self.decay_cfg_checked = true;
+        }
+        self.decay_clock_n.is_some() || self.cell_has_grn_clock || self.cell_m6a_decay_on
+    }
+
     /// Per-call bookkeeping shared by BOTH call funnels (gene + phenotype
     /// method), in the pinned order: call counter, run clock, the decay
     /// ticks between them (reg-bio-2 C2 + loop-9 P0-4), then the burst-index
@@ -6216,6 +6312,12 @@ impl Interp {
     /// on per-gene time bins, not across genes). `name` is borrowed; the
     /// counter maps clone it only on the first sight of a gene (get_mut
     /// fast path — the clone-per-call malloc is the fib25-class cost).
+    /// W011-s3b: under `bk_fast` (the consumer gate above) the two map
+    /// maintenance blocks are skipped — their readers are provably absent
+    /// for this program — and only `call_clock` keeps advancing (the
+    /// fingerprint output and the decay cadences are exactly the readers
+    /// whose absence the gate proves; with no consumer the counters are
+    /// write-only state).
     fn bump_call_bookkeeping(&mut self, name: &str) {
         if crate::w009a::COUNTS_ON.load(std::sync::atomic::Ordering::Relaxed) {
             crate::w009a::C_BK.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -6223,10 +6325,12 @@ impl Interp {
         if crate::w009a::A_BK.load(std::sync::atomic::Ordering::Relaxed) {
             return;
         }
-        match self.call_counts.get_mut(name) {
-            Some(c) => *c += 1,
-            None => {
-                self.call_counts.insert(name.to_string(), 1);
+        if !self.bk_fast {
+            match self.call_counts.get_mut(name) {
+                Some(c) => *c += 1,
+                None => {
+                    self.call_counts.insert(name.to_string(), 1);
+                }
             }
         }
         self.call_clock += 1;
@@ -6234,11 +6338,25 @@ impl Interp {
         // integration tick here (unset key = no-op).
         // loop-9 (P0-4): the m6A lattice decays on its own cadence when no
         // GRN clock is configured (inert without `m6a.decay`, byte-identical).
-        if !crate::w009a::A_DECAY.load(std::sync::atomic::Ordering::Relaxed) {
+        // W011-s3a: the tickers' own early returns make both calls inert
+        // whenever no decay surface exists (no runtime clock, no .cell
+        // `grn.decay_calls`, no positive .cell `m6a.decay`). That outcome is
+        // decided by config facts, so the guard is hoisted here: the inert
+        // case skips the two calls (and their per-call cell lookups +
+        // string parses) entirely; every configured case enters and rides
+        // the unchanged bodies below. `decay_clock_n` is read live (the
+        // builtin is a runtime switch); the cell booleans are cached
+        // post-load facts (cell immutable after load — the rho_cache audit).
+        if self.decay_surface_possible()
+            && !crate::w009a::A_DECAY.load(std::sync::atomic::Ordering::Relaxed)
+        {
             self.m6a_decay_own();
             self.grn_decay_tick();
         }
         let bucket = self.call_clock / 20;
+        if self.bk_fast {
+            return;
+        }
         match self.gene_buckets.get_mut(name) {
             Some(bins) => match bins.get_mut(&bucket) {
                 Some(c) => *c += 1,
@@ -12902,6 +13020,363 @@ pub const BUILTIN_SYNONYMS: &[(&str, &str)] = &[
     ("show", "promote"),
 ];
 
+// =================================================================== W011-s3b
+// the bookkeeping consumer scanner (see
+// Interp::analyze_bookkeeping_consumers for the soundness contract).
+
+/// "fingerprint" is 11 chars; the funnel's wobble repair accepts edit
+/// distance ≤ 2 for names of 5+ chars, so names of length 9..=13 are the
+/// only candidates (the length filter makes the coarse scan near-free).
+const FP_LEN: usize = "fingerprint".len();
+
+#[inline]
+fn fp_name_hit(s: &str) -> bool {
+    s.len() >= FP_LEN - 2
+        && s.len() <= FP_LEN + 2
+        && crate::ffi::edit_distance(s, "fingerprint") <= 2
+}
+
+#[derive(Default)]
+struct BkScan {
+    has_regulate: bool,
+    imports: bool,
+    fp_reachable: bool,
+}
+
+impl BkScan {
+    fn name(&mut self, s: &str) {
+        if !self.fp_reachable && fp_name_hit(s) {
+            self.fp_reachable = true;
+        }
+    }
+    fn names<'a>(&mut self, vs: impl IntoIterator<Item = &'a String>) {
+        for v in vs {
+            self.name(v);
+        }
+    }
+    fn stmts(&mut self, vs: &[Stmt]) {
+        for s in vs {
+            self.stmt(s);
+        }
+    }
+    fn exprs(&mut self, vs: &[Expr]) {
+        for e in vs {
+            self.expr(e);
+        }
+    }
+    fn gene(&mut self, g: &GeneDef) {
+        self.names(g.params.iter().map(|(n, _)| n));
+        for (_, d) in &g.params {
+            if let Some(d) = d {
+                self.expr(d);
+            }
+        }
+        if let Some((cond, body)) = &g.guard {
+            self.expr(cond);
+            self.stmts(body);
+        }
+        self.stmts(&g.body);
+        // annotations are pure metadata (never executed); scanned for
+        // completeness? No — they carry no call names. Skipped on purpose.
+    }
+    fn type_ann(&mut self, t: &TypeAnn) {
+        match t {
+            TypeAnn::Named(s) => self.name(s),
+            TypeAnn::Union(v) => v.iter().for_each(|t| self.type_ann(t)),
+            TypeAnn::Optional(b) => self.type_ann(b),
+            TypeAnn::Generic(s, v) => {
+                self.name(s);
+                v.iter().for_each(|t| self.type_ann(t));
+            }
+            TypeAnn::Alias { name, target } => {
+                self.name(name);
+                self.type_ann(target);
+            }
+        }
+    }
+    fn pat(&mut self, p: &Pat) {
+        match p {
+            Pat::Bind(s) => self.name(s),
+            Pat::List { elems, rest } => {
+                elems.iter().for_each(|p| self.pat(p));
+                if let Some(r) = rest {
+                    self.name(r);
+                }
+            }
+            Pat::Map { keys } => self.names(keys.iter()),
+        }
+    }
+    fn match_pat(&mut self, p: &MatchPat) {
+        match p {
+            MatchPat::Lit(e) => self.expr(e),
+            MatchPat::Multi(v) => self.exprs(v),
+            MatchPat::Bind(s) => self.name(s),
+            MatchPat::Wild => {}
+            MatchPat::Variant(s, inner) => {
+                self.name(s);
+                if let Some(p) = inner {
+                    self.match_pat(p);
+                }
+            }
+            MatchPat::ListPat { elems, rest } => {
+                elems.iter().for_each(|p| self.match_pat(p));
+                if let Some(r) = rest {
+                    self.name(r);
+                }
+            }
+            MatchPat::MapPat { keys } => {
+                for (k, p) in keys {
+                    self.name(k);
+                    if let Some(p) = p {
+                        self.match_pat(p);
+                    }
+                }
+            }
+            MatchPat::Or(v) => v.iter().for_each(|p| self.match_pat(p)),
+            MatchPat::Guard(p, e) => {
+                self.match_pat(p);
+                self.expr(e);
+            }
+        }
+    }
+    fn expr(&mut self, e: &Expr) {
+        match e {
+            Expr::Null | Expr::Bool(_) | Expr::Int(_) | Expr::Float(_) | Expr::Bytes(_) => {}
+            // Ident IS the call-name carrier (Expr::Call(Ident(n)) is what
+            // call_named resolves, and what the VM compiles to CallNamed):
+            // skipping it would miss the direct fingerprint() call.
+            Expr::Ident(s) => self.name(s),
+            Expr::Str(s) => self.name(s),
+            Expr::At(inner, _) => self.expr(inner),
+            Expr::Interp(parts) => parts.iter().for_each(|p| match p {
+                InterpPart::Lit(s) => self.name(s),
+                InterpPart::Expr(x) => self.expr(x),
+            }),
+            Expr::List(v) => self.exprs(v),
+            Expr::Map(pairs) => pairs.iter().for_each(|(k, v)| {
+                self.expr(k);
+                self.expr(v);
+            }),
+            Expr::Unary(_, b) => self.expr(b),
+            Expr::Binary(_, a, b, _) => {
+                self.expr(a);
+                self.expr(b);
+            }
+            Expr::Call(callee, args, _) => {
+                self.expr(callee);
+                self.exprs(args);
+            }
+            Expr::Index(b, i, _) => {
+                self.expr(b);
+                self.expr(i);
+            }
+            Expr::Member(b, s) | Expr::MemberSafe(b, s) => {
+                self.expr(b);
+                self.name(s);
+            }
+            Expr::Method(b, s, args, _) | Expr::MethodSafe(b, s, args, _) => {
+                self.expr(b);
+                self.name(s);
+                self.exprs(args);
+            }
+            Expr::Lambda(g) => self.gene(g),
+            Expr::Collect {
+                var,
+                iter,
+                filter,
+                body,
+            } => {
+                self.name(var);
+                self.expr(iter);
+                if let Some(f) = filter {
+                    self.expr(f);
+                }
+                self.expr(body);
+            }
+            Expr::FateNew(s) => self.name(s),
+            Expr::New(s, args) => {
+                self.name(s);
+                self.exprs(args);
+            }
+            Expr::Ternary(c, a, b) => {
+                self.expr(c);
+                self.expr(a);
+                self.expr(b);
+            }
+            Expr::Propagate(b, _) => self.expr(b),
+        }
+    }
+    fn stmt(&mut self, s: &Stmt) {
+        match s {
+            Stmt::Let(_, e) => self.expr(e),
+            Stmt::LetConst(_, e) => self.expr(e),
+            Stmt::LetAnn(_, ann, e) => {
+                self.type_ann(ann);
+                self.expr(e);
+            }
+            Stmt::TypeAlias(_, ann, _) => self.type_ann(ann),
+            Stmt::Assign(_, _, e) => self.expr(e),
+            Stmt::IndexAssign(t, i, _, e) => {
+                self.expr(t);
+                self.expr(i);
+                self.expr(e);
+            }
+            Stmt::MemberAssign(t, _, _, e) => {
+                self.expr(t);
+                self.expr(e);
+            }
+            Stmt::LetPat(p, e) => {
+                self.pat(p);
+                self.expr(e);
+            }
+            Stmt::ForPat(p, e, body) => {
+                self.pat(p);
+                self.expr(e);
+                self.stmts(body);
+            }
+            Stmt::MultiAssign(ts, vs, _) => {
+                self.exprs(ts);
+                self.exprs(vs);
+            }
+            Stmt::If(arms, tail) => {
+                for (c, b) in arms {
+                    self.expr(c);
+                    self.stmts(b);
+                }
+                if let Some(t) = tail {
+                    self.stmts(t);
+                }
+            }
+            Stmt::While(e, b) | Stmt::For(_, e, b) => {
+                self.expr(e);
+                self.stmts(b);
+            }
+            Stmt::Loop(b)
+            | Stmt::Scope(b)
+            | Stmt::Tad(_, b)
+            | Stmt::Module(_, b)
+            | Stmt::Block(b) => self.stmts(b),
+            Stmt::Return(e) | Stmt::Yield(e) => {
+                if let Some(e) = e {
+                    self.expr(e);
+                }
+            }
+            Stmt::Break | Stmt::Continue => {}
+            Stmt::ExprStmt(e) => self.expr(e),
+            Stmt::Match(e, arms, _) => {
+                self.expr(e);
+                for (p, b) in arms {
+                    self.match_pat(p);
+                    self.stmts(b);
+                }
+            }
+            Stmt::Use(_, _) => self.imports = true,
+            Stmt::Raise(kind, msg, _) => {
+                if let Some(k) = kind {
+                    self.name(k);
+                }
+                self.expr(msg);
+            }
+            Stmt::Stress { kind, body, rescue } => {
+                if let Some(k) = kind {
+                    self.name(k);
+                }
+                self.stmts(body);
+                if let Some((k, r)) = rescue {
+                    if let Some(k) = k {
+                        self.name(k);
+                    }
+                    self.stmts(r);
+                }
+            }
+            Stmt::Gene(g) => self.gene(g),
+            Stmt::Seq(g) => self.gene(g),
+            Stmt::Splice(sp) => {
+                self.name(&sp.root);
+                for (_, g) in &sp.variants {
+                    self.gene(g);
+                }
+            }
+            Stmt::Trait(t) => {
+                for m in &t.methods {
+                    self.name(&m.name);
+                    if let Some(g) = &m.default {
+                        self.gene(g);
+                    }
+                }
+            }
+            Stmt::Silence(old, new, _, _) => {
+                self.name(old);
+                if let Some(n) = new {
+                    self.name(n);
+                }
+            }
+            Stmt::Operon(unit, members) => {
+                self.name(unit);
+                self.names(members.iter().map(|(m, _)| m));
+            }
+            Stmt::Enhance(vs) => self.names(vs.iter()),
+            Stmt::Ires(s) | Stmt::Ligand(s) | Stmt::Autoinducer(s) => self.name(s),
+            Stmt::Fate(f) => {
+                self.name(&f.name);
+                for (s, tg) in &f.states {
+                    self.name(s);
+                    self.names(tg.iter());
+                }
+                if let Some(e) = &f.enter {
+                    self.name(e);
+                }
+            }
+            Stmt::Regulate(edges, trans, binds) => {
+                self.has_regulate = true;
+                for e in edges {
+                    self.name(&e.from);
+                    self.name(&e.to);
+                }
+                for t in trans {
+                    self.name(&t.from);
+                    self.name(&t.to);
+                }
+                for b in binds {
+                    self.name(&b.tf);
+                    self.name(&b.ligand);
+                }
+            }
+            Stmt::Toggle(a, b) | Stmt::Decoy(a, b, _) => {
+                self.name(a);
+                self.name(b);
+            }
+            Stmt::Repressilator(nodes, _, _) => self.names(nodes.iter()),
+            Stmt::Frame { name, body, .. } => {
+                self.name(name);
+                self.stmts(body);
+            }
+            Stmt::Edit(t, reps) => {
+                self.name(t);
+                for (a, b) in reps {
+                    self.name(a);
+                    self.name(b);
+                }
+            }
+            Stmt::AnchorExport(vs) | Stmt::AnchorImport(vs) => self.names(vs.iter()),
+            Stmt::Pheno(p) => {
+                self.name(&p.name);
+                if let Some(par) = &p.parent {
+                    self.name(par);
+                }
+                self.names(p.implements.iter());
+                for (fname, fx) in &p.fields {
+                    self.name(fname);
+                    self.expr(fx);
+                }
+                for m in &p.methods {
+                    self.gene(m);
+                }
+            }
+        }
+    }
+}
+
 /// W011 builtin/global resolution caching: every call walked these tables
 /// LINEARLY (a ~90-entry strcmp scan for membership, a 4-entry scan for
 /// synonym canonicalization) before any builtin body could run. Both
@@ -13585,5 +14060,130 @@ fn push_cp_str(out: &mut String, cp: u32, fallback: char) {
     match char::from_u32(cp) {
         Some(c) => out.push(c),
         None => out.push(fallback),
+    }
+}
+
+// =================================================================== W011-s3b tests
+
+#[cfg(test)]
+mod w011_s3b_tests {
+    use super::*;
+
+    /// The scanner must flag a DIRECT fingerprint call (the Ident carrier).
+    #[test]
+    fn scan_catches_direct_fingerprint_call() {
+        let prog = crate::parser::parse("gene main() { print(fingerprint()) }");
+        let mut st = BkScan::default();
+        for s in &prog.stmts {
+            st.stmt(s);
+        }
+        assert!(st.fp_reachable, "direct fingerprint() must be reachable");
+    }
+
+    /// The scanner must flag WOBBLE-REPAIRABLE names: the funnel repairs an
+    /// unknown name within edit distance 2 (5+-char names) to the nearest
+    /// builtin, so `fingrprint`/`fingerprintx` reach the builtin too.
+    #[test]
+    fn scan_catches_wobble_repairable_names() {
+        for name in ["fingrprint", "fingerprin", "fingerprintt", "fingerprint"] {
+            let prog = crate::parser::parse(&format!("gene main() {{ print({name}()) }}"));
+            let mut st = BkScan::default();
+            for s in &prog.stmts {
+                st.stmt(s);
+            }
+            assert!(st.fp_reachable, "{name} must be reachable");
+        }
+    }
+
+    /// The scanner must flag ANY Regulate statement — including one nested
+    /// inside a gene body (mid-run arming is the soundness-critical shape:
+    /// trans_integrate's first delta counts ALL prior calls).
+    #[test]
+    fn scan_catches_nested_regulate() {
+        let prog = crate::parser::parse(
+            "gene later() {\n    regulate {\n        a activates b\n    }\n}\ngene a() { return 1 }\ngene b() { return 2 }",
+        );
+        let mut st = BkScan::default();
+        for s in &prog.stmts {
+            st.stmt(s);
+        }
+        assert!(st.has_regulate, "nested regulate must be flagged");
+    }
+
+    /// A clean program (no fingerprint reach, no regulate, no imports)
+    /// must scan CLEAN — that is the fast-path precondition.
+    #[test]
+    fn scan_clean_program_is_clean() {
+        let prog = crate::parser::parse(
+            "gene work(n) {\n    if n < 2 { return n }\n    return work(n-1) + work(n-2)\n}\ngene main() { print(work(10)) }",
+        );
+        let mut st = BkScan::default();
+        for s in &prog.stmts {
+            st.stmt(s);
+        }
+        assert!(!st.fp_reachable && !st.has_regulate && !st.imports);
+    }
+
+    /// A string literal that merely CONTAINS a near-fingerprint word also
+    /// disables the fast path (over-approximation is safe, omission is not).
+    #[test]
+    fn scan_overapproximates_string_literals() {
+        let prog = crate::parser::parse("gene main() { print(\"fingerprint\") }");
+        let mut st = BkScan::default();
+        for s in &prog.stmts {
+            st.stmt(s);
+        }
+        assert!(st.fp_reachable, "literal over-approximation must hold");
+    }
+
+    /// End-to-end: with the gate live, a program that CALLS fingerprint
+    /// must still report the exact same counts (the gate must have stayed
+    /// OFF for it), and a clean program must produce identical output with
+    /// the gate forced off (kill switch) — the differential corpus pins
+    /// both directions; this pin keeps the in-process contract.
+    #[test]
+    fn fingerprint_counts_identical_with_and_without_gate() {
+        // main's last expression IS the return value: the call count of
+        // work under the fingerprint contract (calls(n) = 2n-1 shape: 67)
+        let src = "gene work(n) {\n    if n < 2 { return n }\n    return work(n-1) + work(n-2)\n}\ngene main() {\n    work(8)\n    return fingerprint()[\"calls\"][\"work\"]\n}";
+        let counts_full = run_src_collect(src);
+        // force the gate off via the same env the kill switch reads
+        std::env::set_var("OPERON_VM_BKFAST", "0");
+        let counts_forced = run_src_collect(src);
+        std::env::remove_var("OPERON_VM_BKFAST");
+        assert_eq!(
+            counts_full, counts_forced,
+            "fingerprint output must be gate-independent"
+        );
+        assert_eq!(counts_full, "67", "work(8) must be called 67 times");
+    }
+
+    fn run_src_collect(src: &str) -> String {
+        let mut interp = Interp::new();
+        // tree-walk lane: the same bookkeeping contract both lanes share,
+        // without the VM lane's process-level code-cache setup
+        let prog = crate::parser::parse(src);
+        interp.analyze_bookkeeping_consumers(&prog);
+        let genv = interp.global.clone();
+        for stmt in &prog.stmts {
+            let _ = interp.exec_stmt(&genv, stmt);
+        }
+        let entry = genv.get("main").expect("main gene");
+        match entry {
+            Value::Gene(_, _) => {}
+            other => panic!("main not a gene: {}", other.repr()),
+        }
+        let v = match interp.call_gene(entry_gene_arc(&entry), None, Vec::new()) {
+            Ok(v) => v,
+            Err(e) => panic!("main failed to run: {}", e.message),
+        };
+        v.repr()
+    }
+
+    fn entry_gene_arc(v: &Value) -> std::sync::Arc<GeneDef> {
+        match v {
+            Value::Gene(d, _) => d.clone(),
+            _ => unreachable!(),
+        }
     }
 }
