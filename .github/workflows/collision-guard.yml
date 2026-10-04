@@ -1,0 +1,35 @@
+# R0.10 collision guard (roadmap §24.4) — the ownership rule as an executable check.
+#
+# Canonical lock ledger: project-vault collab/LOCKS.md (builder-F keeps it).
+# CI-readable mirror:    .github/collab/LOCKS.md in this repo (synced by the keeper;
+#                        the guard reports the mirror's state so staleness is visible).
+#
+# Contract (§24.3): a PR body MUST carry
+#     Task-ID: <id from collab/TASKS.md or roadmap §34>
+#     Paths: <exclusive paths this task touches>
+# The guard REJECTS overlap with an ACTIVE lock of a different task, and
+# REJECTS unclaimed core paths. PRs created before COLLISION_GUARD_BORN are
+# grandfathered (WARN-only) so in-flight review-queue PRs are not churned.
+
+name: collision-guard
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v4.2.2 (SHA-pinned, sec-r1)
+        with:
+          persist-credentials: false
+      - name: R0.10 collision guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: python3 scripts/collision_guard.py
