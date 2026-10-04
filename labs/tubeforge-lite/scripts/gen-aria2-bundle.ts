@@ -19,7 +19,11 @@ function arg(name: string): string | undefined {
 
 function b64(buf: Buffer): string {
   let out = "";
-  const CH = 0x8000;
+  // Chunk length MUST be a multiple of 3: btoa pads its own output with '=',
+  // so a non-3-aligned chunk injects mid-stream padding and corrupts the
+  // concatenated base64 (manifested as "unexpected end of file" on gunzip at
+  // first-run self-extract). 3-aligned chunks pad only the FINAL chunk.
+  const CH = 3 * 0x2000;
   for (let i = 0; i < buf.length; i += CH) {
     out += btoa(String.fromCharCode(...buf.subarray(i, i + CH)));
   }

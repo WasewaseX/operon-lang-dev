@@ -4,7 +4,7 @@
 // (desktop single-binary server) — Deno 2 implements the node: specifiers.
 import { spawn, execFile, type ChildProcess } from "node:child_process";
 import { existsSync, mkdirSync, statSync, rmdirSync, readFileSync, writeFileSync, readdirSync, unlinkSync } from "node:fs";
-import { join, dirname, resolve, basename } from "node:path";
+import { join, dirname, resolve, basename, delimiter } from "node:path";
 import { homedir, tmpdir, platform, arch } from "node:os";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
@@ -42,8 +42,11 @@ export function resolveTool(name: string, override?: string): string | null {
     "/opt/homebrew/sbin",
   ];
   for (const dir of extraDirs) candidates.push(join(dir, name));
-  // plain PATH lookup last
-  candidates.push(name);
+  // real PATH walk last (the self-extracted aria2c lives in a dir we prepend
+  // to PATH at startup — a bare existsSync(name) can never see it)
+  for (const dir of (process.env.PATH ?? "").split(delimiter)) {
+    if (dir) candidates.push(join(dir, name));
+  }
   for (const c of candidates) {
     try {
       if (existsSync(c) && statSync(c).isFile()) {
