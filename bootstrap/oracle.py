@@ -13,6 +13,24 @@ import sys, os, math, json as _json
 import weakref  # W013: weak handles, the mirror of the Rust WeakHandle
 import unicodedata  # W28 stage 2: THE reference implementation for NFC/NFD/category
 
+# compat-r3 (environment-pair repair, F-assigned per digest-4, 2026-10-04;
+# C veto-at-review): normalize this process's stdout/stderr to UTF-8 with
+# LF-only newlines on EVERY platform. Windows runners run text mode in the
+# platform locale (cp1252): non-cp1252 output raised UnicodeEncodeError, and
+# text-mode writes translated \n to \r\n — the Rust core emits byte-exact
+# UTF-8/LF, so either mechanism alone makes every comparison against the
+# oracle diverge (the 100%-uniform phantom class: 0/3504 with zero real
+# semantic deltas). Same lesson as harness.py's W59/compat-r2 fixes, applied
+# at the oracle itself so EVERY invocation path inherits it (compat_matrix.sh,
+# ci.yml's differential step, test.sh, cookbook.sh, run_diff_shard.py,
+# bench_compare.py). No-op on Linux/macOS defaults.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace", newline="\n")
+        except (ValueError, OSError):
+            pass
+
 # ----------------------------------------------------------------------------
 # notes / values
 

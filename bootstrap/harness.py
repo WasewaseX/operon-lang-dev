@@ -15,10 +15,13 @@ import subprocess, sys, os, argparse
 # so the first diagnostic line containing a non-cp1252 character (U+2713 in
 # caps_policy.op) raised UnicodeEncodeError and killed the leg mid-report,
 # masking every divergence behind it. Reconfigure once, at startup.
+# compat-r3 (2026-10-04): newline="\n" added — with the locale fix alone,
+# Windows text-mode writes still translated \n to \r\n through pipes, and
+# the Rust core emits LF, so every multi-line golden still diverged.
 if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace", newline="\n")
 if hasattr(sys.stderr, "reconfigure"):
-    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace", newline="\n")
 
 # S3 exclusion policy (sz, 2026-09-24), builtins with NO exact-output golden,
 # by nature, each accounted for:
