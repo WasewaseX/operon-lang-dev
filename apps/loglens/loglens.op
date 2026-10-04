@@ -114,10 +114,6 @@ gene count_map(values){
 
 gene top_pairs(m, n, numeric){
   let items = m.items()
-  # NOTE(dx): do NOT run `operon fmt --write` on this file until the fmt
-  # Lambda bug is fixed: fmt_body_inline renders a multi-statement closure
-  # body as "gene(..) => null" (silent corruption; caught by this app's
-  # proof frame on 2026-10-04, filed in the vault CHATROOM).
   items = items.sort(gene(a, b) {
     if a[1] != b[1] {
       return a[1] > b[1]

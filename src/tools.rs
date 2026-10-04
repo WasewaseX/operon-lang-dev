@@ -6,7 +6,7 @@ use crate::genes;
 use crate::interp::{Flow, Interp};
 use crate::parser;
 use crate::value::{Stress, Value};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::io::Write as _;
 use std::path::Path;
@@ -1794,7 +1794,34 @@ fn fmt_block(stmts: &[Stmt], ind: usize, out: &mut String) {
     out.push('}');
 }
 
+thread_local! {
+    /// W47-v3: the statement indentation ACTIVE while expression rendering
+    /// (`fmt_expr`) runs inside `fmt_stmt`. Expression forms are single-line
+    /// — except braced lambda bodies, the one multi-line expression render —
+    /// so the lambda renderer reads the ambient depth to align its block
+    /// with the statement that contains it. Defaults to 0 outside any
+    /// statement extent (error notes, docgen, CLI one-liners): bodies then
+    /// render at a fixed 1-step indent, still deterministic and idempotent.
+    static AMBIENT_IND: Cell<usize> = const { Cell::new(0) };
+}
+
+fn with_ambient_ind<R>(ind: usize, f: impl FnOnce() -> R) -> R {
+    let prev = AMBIENT_IND.with(|c| c.replace(ind));
+    let out = f();
+    AMBIENT_IND.with(|c| c.replace(prev));
+    out
+}
+
+/// Ambient statement depth for expression rendering (see AMBIENT_IND).
+fn ambient_ind() -> usize {
+    AMBIENT_IND.with(|c| c.get())
+}
+
 fn fmt_stmt(s: &Stmt, ind: usize, out: &mut String) {
+    with_ambient_ind(ind, || fmt_stmt_inner(s, ind, out));
+}
+
+fn fmt_stmt_inner(s: &Stmt, ind: usize, out: &mut String) {
     // W074: doc comments print above their declaration (metadata roundtrip).
     let doc: &[String] = match s {
         Stmt::Gene(g) | Stmt::Seq(g) => &g.doc,
@@ -2640,11 +2667,7 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
-        Expr::Lambda(g) => format!(
-            "gene({}) => {}",
-            fmt_params(&g.params),
-            fmt_body_inline(&g.body)
-        ),
+        Expr::Lambda(g) => fmt_lambda(&g.params, &g.body),
         Expr::FateNew(n) => format!("{}()", n),
         Expr::Collect {
             var,
@@ -2689,12 +2712,31 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
     }
 }
 
-fn fmt_body_inline(body: &[Stmt]) -> String {
-    if let Some(Stmt::Return(Some(e))) = body.first() {
-        fmt_expr(e)
-    } else {
-        "null".into()
+// W47-v3 (P0 fmt repair, 2026-10-04): a lambda body renders inline
+// (`gene(..) => e`) ONLY when it is exactly one `return e` statement.
+// Every other body MUST round-trip through the braced form. The old
+// fmt_body_inline rendered anything else as `gene(..) => null`: bodies
+// whose first statement was not a return collapsed to null, and every
+// statement after a first return was silently dropped — caught live by
+// apps/loglens' sort comparator; pinned by
+// tests/fmt_idempotence.rs#fmt_multistmt_lambda_body_survives.
+// Empty bodies keep the historical `=> null` spelling (semantically
+// identical, zero drift for existing formatted output).
+fn fmt_lambda(params: &[(String, Option<Expr>)], body: &[Stmt]) -> String {
+    if let [Stmt::Return(Some(e))] = body {
+        return format!("gene({}) => {}", fmt_params(params), fmt_expr(e));
     }
+    if body.is_empty() {
+        return format!("gene({}) => null", fmt_params(params));
+    }
+    let ind = ambient_ind();
+    let mut out = format!("gene({}) {{\n", fmt_params(params));
+    for s in body {
+        fmt_stmt(s, ind + 1, &mut out);
+    }
+    out.push_str(&indent(ind));
+    out.push('}');
+    out
 }
 
 // ------------------------------------------------------------ ast dump
