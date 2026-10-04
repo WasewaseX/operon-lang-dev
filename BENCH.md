@@ -94,6 +94,13 @@ mem-charge, DP ceiling) cost nothing measurable on honest workloads.
 
 ## Results, micro (per construct, re-measured on `e757b4d`)
 
+> NOTE (2026-10-04, P5/P6 survey): the rows above predate the MapStore,
+> W011 call-path and W-L1 landings — fresh re-measurement shows m_mapget
+> −89%, m_call −15%, strings −5.5x vs these rows; the map/call rows are
+> stale and refresh with P1's landing. Fresh numbers + the P5/P6 survey
+> evidence (quadratic concat confirmed, eager `range()` materialization,
+> 32 B/elem boxed numerics): `docs/bench/2026-10-04-p5p6-survey.md`.
+
 | micro | operon (ms) | oracle (ms) | native-py (ms) | op/py | op ns/op | py ns/op |
 |---|---:|---:|---:|---:|---:|---:|
 | m_empty (startup) | 0.9 | 52.6 |, |, |, |, |
