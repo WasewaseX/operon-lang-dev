@@ -296,6 +296,17 @@ impl MapStore {
             if self.memo.tab.is_empty() || (pos + 1) * 2 > self.memo.tab.len() {
                 self.rebuild();
             } else {
+                // P1 review fix (2026-10-05): the put branch MUST maintain
+                // num_numeric — rehash() is the only other writer and it
+                // recounts from items. Without this, a map sized by
+                // non-numeric keys leaves the counter at 0 while numeric
+                // keys exist, the Int<->Float sentinel in position_h
+                // disables, and miss-trust falsely reports cross-class
+                // twins (2 vs 2.0, +/-0.0) as absent. del()'s decrement
+                // then underflows (debug panic / release wrap).
+                if cls == KC_INT || cls == KC_FLOAT {
+                    self.memo.num_numeric += 1;
+                }
                 self.memo.put(h, pos);
             }
         }
@@ -314,6 +325,11 @@ impl MapStore {
                     self.memo.tomb(h);
                     self.memo.shift_positions(i);
                     if cls == KC_INT || cls == KC_FLOAT {
+                        // P1 review tripwire: the counter is exact (every
+                        // numeric insert — put branch AND rehash — counts),
+                        // so a successful numeric-class removal always has
+                        // a counter to spend. 0 here = maintenance drift.
+                        debug_assert!(self.memo.num_numeric > 0);
                         self.memo.num_numeric -= 1;
                     }
                     if self.memo.tombs > self.memo.used {
