@@ -24,6 +24,19 @@ frame proof {
     assert(divmod(7, -2) == [-4, -1])
     assert(divmod(-7, -2) == [3, -1])
     assert(divmod(9, 3) == [3, 0])
+    # S4 audit pin (2026-10-02): the sqrt domain contract, SPEC §10 —
+    # negative arguments raise the catchable unfolded stress on both engines
+    # (implemented identically since landing, documented + pinned by the S4
+    # sweep; zero corpus coverage of the negative domain before this).
+    stress {
+        sqrt(-1)
+        assert(false, "sqrt(-1) must raise, not return")
+    } rescue (e) {
+        assert(e.kind == "unfolded", "sqrt(-1) stress kind")
+        assert(e.message == "sqrt of negative number", "sqrt(-1) message wording")
+    }
+    assert(sqrt(4) == 2.0)
+    assert(sqrt(0.25) == 0.5)
 }
 main {
     promote(round(2.5))
