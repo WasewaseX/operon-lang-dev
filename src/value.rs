@@ -10,25 +10,56 @@ pub type ListRef = Rc<RefCell<Vec<Value>>>;
 
 /// dx-r3 (re-audit perf #7): maps keep their insertion-ordered Vec (repr,
 /// keys(), iteration order are part of the language contract) but gain a
-/// hash memo over (type tag, key hash) -> position, so the hot lookups,
-/// `m[k]`, `has`, `del`, member access, `map_insert`, are O(1) instead of
-/// a linear deep_eq scan (the collections bench ran 40–55x CPython).
-/// The memo is a PREFILTER: candidate positions are always verified with
-/// deep_eq, and a scalar miss falls back to the exact full scan, so
-/// exotic equalities stay exact.
+/// hash memo, so the hot lookups, `m[k]`, `has`, `del`, member access,
+/// `map_insert`, are O(1) instead of a linear deep_eq scan. The memo is a
+/// PREFILTER: candidate positions are always verified with deep_eq, and
+/// every class the memo cannot PROVE is absent falls back to the exact
+/// full scan, so exotic equalities stay exact.
 ///
-/// perf (loglens ablation 2026-10-04): the memo was keyed by
-/// (tag, canonical STRING), which forced a String allocation per lookup
-/// (`s.clone()` for every Str key — the counting loop `m.has(v)` +
-/// `m[v]` + `m[v] = m[v]+1` cloned 3 strings per record). The memo is now
-/// keyed by (tag, 64-bit hash of the canonical form), computed IN PLACE
-/// with no allocation on the Str/Int hot paths. Collisions are harmless:
-/// a hit that fails deep_eq falls back to the same exact scan the miss
-/// path always used. Scalar-key behavior is bit-for-bit identical.
+/// P1 rework (2026-10-04, S34 "P1 Map representation: APPROVED"): the memo
+/// was a std HashMap<(u8, u64), usize> — two SipHashes per probe (one over
+/// the key's canonical bytes, one over the (u8, u64) tuple inside HashMap)
+/// and, the real kill, `position()` fell back to a FULL linear deep_eq scan
+/// on every memo miss: building N distinct keys was O(N^2) deep_eq scans,
+/// every absent-key lookup scanned the whole store, and each `del` rebuilt
+/// the whole memo (measured on c1e5039, docs/bench/2026-10-04-p1-map.md:
+/// 8k build 149 ms with t(2N)/t(N) = 4.19; 50k absent lookups 1084 ms;
+/// 2k batch dels 261 ms). Now:
+///
+/// 1. The memo is an open-addressed table keyed by the ALREADY-COMPUTED
+///    64-bit hash (one hash per lookup, no tuple re-hash, no std HashMap).
+///    Slots are (hash, position); probing compares stored hashes; growth
+///    rehashes from items (amortized O(1)); deletion tombstones (probe
+///    chains stay contiguous — miss-trust REQUIRES that probing only ever
+///    stops at a real SLOT_EMPTY, never at a hole inside a cluster).
+/// 2. The hash is dependency-free FNV-1a (str/bytes/canonical-float bytes)
+///    or a Fibonacci mix (int bits). The memo is pure accelerator state
+///    and never feeds observable order, so the hash choice is invisible
+///    (the same argument the SipHash design relied on).
+/// 3. MISS-TRUST, the O(1) absence proof: within a scalar equality class,
+///    deep_eq-equal values ALWAYS hash equal (Str: same bytes; Int: bit
+///    bijection through `as`; Bool/Null: constants; Bytes: same bytes),
+///    and every scalar item's hash is stored — so an empty probe PROVES
+///    the key is absent, no fallback scan. The soundness hole is exactly
+///    one class: Int<->Float (deep_eq(Int 2, Float 2.0) is TRUE, and
+///    0.0 == -0.0 under f64 ==) — repr hashing does not cross tags. The
+///    store counts its numeric (Int/Float) keys: with zero of them a
+///    numeric lookup is trivially absent; with any, numeric lookups take
+///    the exact full scan. A u64 collision between two different keys
+///    shares a slot: the deep_eq verify fails and the exact scan runs
+///    (2^-64, harmless).
+/// 4. `del` no longer rebuilds the memo: one O(capacity) walk decrements
+///    stored positions past the removed slot and tombstones the removed
+///    key's entry (batch del drops from quadratic to linear).
+///
+/// Exactness contract (unchanged): memo hits are deep_eq-verified; the
+/// full exact scan remains the fallback for every class the table cannot
+/// prove (non-scalar keys keep the sec-r5 bounded scan). Scalar-key
+/// behavior is bit-for-bit identical to the previous designs.
 #[derive(Default)]
 pub struct MapStore {
     pub items: Vec<(Value, Value)>,
-    memo: std::collections::HashMap<(u8, u64), usize>,
+    memo: Memo,
 }
 
 /// sec-r5 (F-12): non-scalar keys (lists/maps) miss the hash memo and fall
@@ -38,37 +69,161 @@ pub struct MapStore {
 /// absent (SPEC §9b). Scalar keys keep exact semantics via the memo.
 const NON_SCALAR_SCAN_CAP: usize = 512;
 
-fn hash_bytes(tag: u8, b: &[u8]) -> (u8, u64) {
-    // DefaultHasher::new() is deterministic within a process; the memo is
-    // pure accelerator state and never feeds observable order (items order
-    // is the contract), so determinism is unaffected.
-    let mut h = std::collections::hash_map::DefaultHasher::new();
-    std::hash::Hash::hash(&b, &mut h);
-    (tag, std::hash::Hasher::finish(&h))
+/// FNV-1a 64-bit, dependency-free. Used ONLY inside the map memo (pure
+/// accelerator state, deep_eq-verified, never observable).
+fn fnv1a(b: &[u8]) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for &x in b {
+        h ^= x as u64;
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    h
 }
 
-fn key_tag(v: &Value) -> (u8, u64) {
+/// Key classes: which deep_eq equality class the key belongs to. The only
+/// cross-CLASS equality deep_eq defines is Int<->Float (both directions).
+const KC_NULL: u8 = 0;
+const KC_BOOL: u8 = 1;
+const KC_INT: u8 = 2;
+const KC_FLOAT: u8 = 3;
+const KC_STR: u8 = 4;
+const KC_BYTES: u8 = 5;
+const KC_OTHER: u8 = 255;
+
+/// (class, 64-bit memo hash). Equal values within a class always hash
+/// equal — the property miss-trust is built on (see MapStore docs).
+fn key_class_hash(v: &Value) -> (u8, u64) {
     match v {
-        Value::Null => (0, 0),
-        Value::Bool(b) => (1, *b as u64),
-        // `as` wrapping is a bijection i64 -> u64, so equal ints collide
-        // only with themselves; distinct values always differ.
-        Value::Int(i) => (2, *i as u64),
+        Value::Null => (KC_NULL, 0x9e37_79b9_7f4a_7c15),
+        Value::Bool(b) => (KC_BOOL, 0xd1b5_4a32_d192_ed03 + *b as u64),
+        // `as` wrapping is a bijection i64 -> u64; the Fibonacci mix only
+        // spreads bits across table slots, it cannot merge distinct ints.
+        Value::Int(i) => (KC_INT, (*i as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15)),
         Value::Float(f) => {
-            // canonical repr, hashed in place; f.to_string() may allocate
-            // but float keys are not the hot path (loglens evidence)
-            let s = f.to_string();
-            hash_bytes(3, s.as_bytes())
+            // canonical repr; f.to_string() may allocate but float keys are
+            // not the hot path (loglens evidence)
+            (KC_FLOAT, fnv1a(f.to_string().as_bytes()))
         }
-        Value::Str(s) => hash_bytes(4, s.as_bytes()),
-        // W029: bytes keys hit the memo via a length-tagged prefilter, the
-        // memo is only a PREFILTER (candidates are deep_eq-verified and a
-        // miss falls back to the exact full scan), so same-length collisions
-        // stay exact, just O(n) instead of O(1).
-        Value::Bytes(b) => (5, b.len() as u64),
+        Value::Str(s) => (KC_STR, fnv1a(s.as_bytes())),
+        // W029: bytes keys hash by CONTENT now (the length-tagged prefilter
+        // predates the in-place hash); equal bytes hash equal, different
+        // same-length bytes collide -> deep_eq verify fails -> exact scan.
+        Value::Bytes(b) => (KC_BYTES, fnv1a(b)),
         // non-scalar keys are legal but rare, they simply miss the memo
-        // and fall back to the linear scan
-        _ => (255, 0),
+        // and fall back to the (bounded) linear scan
+        _ => (KC_OTHER, 0),
+    }
+}
+
+const SLOT_EMPTY: u32 = u32::MAX;
+const SLOT_TOMB: u32 = u32::MAX - 1;
+
+/// P1: open-addressed memo, slot = (hash, position), linear probing,
+/// load <= 1/2 (rehash beyond), tombstones on delete so probe chains stay
+/// contiguous.
+#[derive(Default)]
+struct Memo {
+    tab: Vec<(u64, u32)>,
+    mask: usize, // cap - 1; meaningless while tab is empty
+    used: usize, // live slots
+    tombs: usize,
+    num_numeric: usize, // Int/Float keyed items (the cross-equality class)
+}
+
+impl Memo {
+    fn get(&self, h: u64) -> Option<usize> {
+        if self.tab.is_empty() {
+            return None;
+        }
+        let mut i = (h as usize) & self.mask;
+        loop {
+            let (sh, sp) = self.tab[i];
+            if sp == SLOT_EMPTY {
+                return None;
+            }
+            // tombstones keep the probe alive but never match
+            if sp != SLOT_TOMB && sh == h {
+                return Some(sp as usize);
+            }
+            i = (i + 1) & self.mask;
+        }
+    }
+    /// Insert (or last-wins overwrite) for `h`. Never grows the table;
+    /// callers rehash when load would exceed 1/2.
+    fn put(&mut self, h: u64, pos: usize) {
+        if self.tab.is_empty() {
+            return; // defensive; insert()/rehash() always size the table first
+        }
+        let mut i = (h as usize) & self.mask;
+        let mut free: Option<usize> = None;
+        loop {
+            let (sh, sp) = self.tab[i];
+            if sp == SLOT_EMPTY {
+                // no same-hash entry in the cluster; take the first free slot
+                let dst = free.unwrap_or(i);
+                if self.tab[dst].1 == SLOT_TOMB {
+                    self.tombs -= 1;
+                } else {
+                    self.used += 1;
+                }
+                self.tab[dst] = (h, pos as u32);
+                return;
+            }
+            if sp != SLOT_TOMB && sh == h {
+                self.tab[i] = (h, pos as u32); // last write wins = deep_eq semantics
+                return;
+            }
+            if sp == SLOT_TOMB && free.is_none() {
+                free = Some(i);
+            }
+            i = (i + 1) & self.mask;
+        }
+    }
+    /// Tombstone the slot holding `h` (probe chain stays contiguous).
+    fn tomb(&mut self, h: u64) {
+        if self.tab.is_empty() {
+            return;
+        }
+        let mut i = (h as usize) & self.mask;
+        loop {
+            let (sh, sp) = self.tab[i];
+            if sp == SLOT_EMPTY {
+                return; // not present (defensive)
+            }
+            if sp != SLOT_TOMB && sh == h {
+                self.tab[i] = (0, SLOT_TOMB);
+                self.used -= 1;
+                self.tombs += 1;
+                return;
+            }
+            i = (i + 1) & self.mask;
+        }
+    }
+    /// Positions after a removed items slot shift by one.
+    fn shift_positions(&mut self, removed: usize) {
+        for s in self.tab.iter_mut() {
+            if s.1 < SLOT_TOMB && (s.1 as usize) > removed {
+                s.1 -= 1;
+            }
+        }
+    }
+    /// Full rehash from items (also recounts num_numeric).
+    fn rehash(&mut self, items: &[(Value, Value)]) {
+        let cap = (items.len() * 2).max(16).next_power_of_two();
+        self.tab = vec![(0u64, SLOT_EMPTY); cap];
+        self.mask = cap - 1;
+        self.used = 0;
+        self.tombs = 0;
+        self.num_numeric = 0;
+        for (i, (k, _)) in items.iter().enumerate() {
+            let (cls, h) = key_class_hash(k);
+            if cls != KC_OTHER {
+                if cls == KC_INT || cls == KC_FLOAT {
+                    self.num_numeric += 1;
+                }
+                self.put(h, i);
+            }
+        }
     }
 }
 
@@ -79,59 +234,92 @@ impl MapStore {
     pub fn from_vec(items: Vec<(Value, Value)>) -> Self {
         let mut s = MapStore {
             items,
-            memo: std::collections::HashMap::new(),
+            memo: Memo::default(),
         };
         s.rebuild();
         s
     }
     pub fn rebuild(&mut self) {
-        self.memo.clear();
-        for (i, (k, _)) in self.items.iter().enumerate() {
-            let tag = key_tag(k);
-            if tag.0 != 255 {
-                self.memo.insert(tag, i); // last write wins = deep_eq semantics
-            }
-        }
+        self.memo.rehash(&self.items);
     }
     /// Exact position of `key` (deep_eq verified), O(1) for scalar keys.
     pub fn position(&self, key: &Value) -> Option<usize> {
-        let tag = key_tag(key);
-        if tag.0 != 255 {
-            if let Some(&i) = self.memo.get(&tag) {
+        let (cls, h) = key_class_hash(key);
+        self.position_h(key, cls, h)
+    }
+    fn position_h(&self, key: &Value, cls: u8, h: u64) -> Option<usize> {
+        if cls == KC_OTHER {
+            // sec-r5 (F-12): non-scalar keys, bounded scan
+            return self
+                .items
+                .iter()
+                .take(NON_SCALAR_SCAN_CAP)
+                .position(|(k, _)| k.deep_eq(key));
+        }
+        if (cls == KC_INT || cls == KC_FLOAT) && self.memo.num_numeric > 0 {
+            // The Int<->Float cross-equality class (deep_eq(Int 2, Float
+            // 2.0) is true; 0.0 == -0.0): repr hashing does not cross tags,
+            // so only the exact scan is sound. Numeric-keyed maps are not
+            // the hot workload (loglens/csvstat evidence).
+            return self.items.iter().position(|(k, _)| k.deep_eq(key));
+        }
+        match self.memo.get(h) {
+            Some(i) => {
                 if let Some((k, _)) = self.items.get(i) {
                     if k.deep_eq(key) {
                         return Some(i);
                     }
                 }
+                // u64 collision class: the exact scan the old design always
+                // used on a failed verify
+                self.items.iter().position(|(k, _)| k.deep_eq(key))
             }
-            // scalar keys keep exact semantics: full scan on memo miss
-            return self.items.iter().position(|(k, _)| k.deep_eq(key));
+            // Miss-trust (see the MapStore docs): within a scalar class,
+            // equal values hash equal and every scalar hash is stored, so
+            // an empty probe PROVES absence. No fallback scan.
+            None => None,
         }
-        // sec-r5 (F-12): non-scalar keys, bounded scan (see NON_SCALAR_SCAN_CAP)
-        self.items
-            .iter()
-            .take(NON_SCALAR_SCAN_CAP)
-            .position(|(k, _)| k.deep_eq(key))
     }
     /// Upsert preserving insertion order (existing key keeps its position).
     pub fn insert(&mut self, key: Value, val: Value) {
-        if let Some(i) = self.position(&key) {
-            self.items[i].1 = val;
-            return;
+        let (cls, h) = key_class_hash(&key);
+        if cls != KC_OTHER {
+            if let Some(i) = self.position_h(&key, cls, h) {
+                self.items[i].1 = val;
+                return;
+            }
         }
-        let tag = key_tag(&key);
         self.items.push((key, val));
-        if tag.0 != 255 {
-            self.memo.insert(tag, self.items.len() - 1);
+        let pos = self.items.len() - 1;
+        if cls != KC_OTHER {
+            // keep load <= 1/2 (rehash also sizes the table on first insert)
+            if self.memo.tab.is_empty() || (pos + 1) * 2 > self.memo.tab.len() {
+                self.rebuild();
+            } else {
+                self.memo.put(h, pos);
+            }
         }
     }
     /// Delete by key; returns true when something was removed. Positions
-    /// after the removed slot shift, so the memo is rebuilt.
+    /// after the removed slot shift, so ONE O(capacity) memo walk
+    /// decrements stored positions and the removed key's slot is tombstoned
+    /// (P1: was a full O(N) rebuild per delete — batch deletes were
+    /// quadratic; rehash-on-threshold keeps tombstones bounded).
     pub fn del(&mut self, key: &Value) -> bool {
-        match self.position(key) {
+        let (cls, h) = key_class_hash(key);
+        match self.position_h(key, cls, h) {
             Some(i) => {
                 self.items.remove(i);
-                self.rebuild();
+                if cls != KC_OTHER {
+                    self.memo.tomb(h);
+                    self.memo.shift_positions(i);
+                    if cls == KC_INT || cls == KC_FLOAT {
+                        self.memo.num_numeric -= 1;
+                    }
+                    if self.memo.tombs > self.memo.used {
+                        self.rebuild();
+                    }
+                }
                 true
             }
             None => false,
@@ -152,7 +340,7 @@ impl MapStore {
     }
     pub fn clear(&mut self) {
         self.items.clear();
-        self.memo.clear();
+        self.memo = Memo::default();
     }
     pub fn extend<I: IntoIterator<Item = (Value, Value)>>(&mut self, iter: I) {
         for (k, v) in iter {

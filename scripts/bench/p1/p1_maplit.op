@@ -1,0 +1,10 @@
+# P1 probe: 9-field record literal x 20000 (loglens/csv record-building shape).
+# Exercises the MapStore::from_vec / map-literal build path.
+main {
+    let out = 0
+    for i in range(20000) {
+        let r = { "host": str(i), "url": "/a/b", "status": 200, "bytes": i * 7, "ref": "-", "ua": "UA", "ip": "1.2.3.4", "method": "GET", "proto": "HTTP/1.1" }
+        out = out + len(r)
+    }
+    promote("n = {out}")
+}
