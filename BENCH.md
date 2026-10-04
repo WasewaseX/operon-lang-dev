@@ -375,6 +375,7 @@ on every host incl. bash).
 |---|---|---|---:|---:|---:|---:|
 | v2.2.0 | 95ffef7 | 2026-09-24 | 10.0x | 5.5x | 60.0x | 3.8x |
 | v2.2.0+audit1 | e757b4d | 2026-09-24 | 10.0x | 5.6x | 61.8x | 3.9x |
+| 2.8.0+W011-s3 | 3fe8dff+s3 | 2026-10-04 | 7.8x | 6.0x | 9.6x | 4.3x |
 
 (Add a row per release; ratios from the default `--iters 5` run.)
 
@@ -542,3 +543,63 @@ corpus would have caught it too, the harness ran before the corpus did.
   integration sets) · vm_parity 3555 identical/0 divergent (4 lanes) ·
   differential VM lane vs oracle 3484/3484 · redteam 109/0 · clippy 0 ·
   fmt clean.
+
+## W011 stage-3 — the bookkeeping consumer gate (2026-10-04)
+
+The W009-A ablation said the remaining call-path shape was `bk` — the
+per-call `call_counts`/`gene_buckets` maintenance (13% on fib25, measured
+again this session: `bk` 100 ms vs base 115 ms; the decay tickers were
+re-confirmed refuted as a cost, −0.3 ms, and the frame-env residual stays
+the honest 1–2% the stage-2 note recorded). s3 lands the measured-first
+conclusion: **the counters are write-only state unless a reader exists**,
+so a program-global consumer scan decides whether the maintenance runs.
+
+- **s3a (decay inert gate):** `bump_call_bookkeeping` skips
+  `m6a_decay_own`/`grn_decay_tick` when no decay surface exists (runtime
+  `decay_clock` disarmed — read LIVE, it is a runtime switch — and no .cell
+  `grn.decay_calls` / positive `m6a.decay` — cached post-load facts, the
+  same audited cell-immutability premise `rho_cache` rides). Standalone
+  effect: sub-noise (the tickers were refuted as a cost), kept because it
+  removes the last per-call config re-reads for clean programs.
+- **s3b (consumer scan):** `analyze_bookkeeping_consumers` walks the loaded
+  AST once at load (exhaustive, compiler-enforced over Stmt/Expr/Pat — no
+  wildcard arms) and flags (1) any name within edit distance 2 of
+  `fingerprint` (the funnel's own wobble radius: direct calls AND
+  wobble-repairable typos reach the builtin; string literals
+  over-approximate on purpose), (2) any `Stmt::Regulate` anywhere (it arms
+  `trans_edges` mid-run, and trans_integrate's first delta counts ALL prior
+  calls — a runtime-state precondition is unsound by construction), (3) any
+  `use` import (a module file may carry consumers its host never sees),
+  (4) `profiling`/`frame_trace_live` (the profile command + DAP/protocol
+  eval can read counts on a source-clean program). Clean → `bk_fast`: only
+  `call_clock` keeps advancing. Non-analyzed paths (REPL, direct Interp
+  users) never see `bk_fast = true` — default false is the pre-s3b
+  contract. Kill switch: `OPERON_VM_BKFAST=0`.
+- **Measured** (interleaved A/B, `scripts/bench_core.py` N=9, same-box
+  minutes apart): fib25 **1.14x** (114.6→100.4 ms), recursion **1.11x**
+  (217.9→196.7), loops/collections/grn 1.00x. Full suite: fib25 **99.9 ms**
+  (op/py **7.8x**, best recorded; was 9.0x at session start, ~16x when the
+  fib-27 investigation opened), recursion 196.2 ms (8.3x). Micro: m_call
+  229→204 ns/call. Deep cross-language bench
+  (`apps/ytdl/bench/results_w011s3.json`): every checksum IDENTICAL across
+  operon/python/bash.
+- **Soundness probes** (byte-identical vs the baseline binary): a direct
+  `fingerprint()` call, a wobble-repairable `fingrprint()` call, and a
+  mid-run `regulate` arming with translate decay. Pinned as
+  `src/interp.rs::w011_s3b_tests` (6 tests: direct call, wobble names,
+  nested regulate, clean program, literal over-approximation, and the
+  gate-independent 67-call fingerprint count).
+- **Gates at close**: cargo test 330 green (324 + 6 new) · clippy 0 · fmt
+  clean · proof suite 3422 files / 141 proofs / 2244 asserts · timing
+  4f/5p, async 7f/7p + wake-order determinism 3 identical · granted lanes
+  green · vm_parity 3555 identical/0 divergent · differential VM lane vs
+  oracle 3476/3476 (compat 3204 + non-compat 272) · redteam 109/0 · ytdl
+  battery 35/35 (from the repo root — the battery's `use std/args`
+  resolves std/ via the CWD-relative candidate; running it from
+  `apps/ytdl/` fails module resolution for EVERY binary, a pre-existing
+  quirk, not a gate failure).
+- **Honest residual**: the remaining call-path cost is the structural
+  funnel floor (the ~10-deep Rust call chain, W12-JIT-class work) plus the
+  1–2% frame-env residual — both correctly out of s3's reach. The next
+  measurable call-path lever stays gated on the roadmap (P4) and its §34
+  verdict.
