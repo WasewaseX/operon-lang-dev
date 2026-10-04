@@ -370,10 +370,10 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
 
 ### W033, Date/time value types [P2] [dev-1] [M] [done: main 855cf04, L1d builtins + std/time.op duration/instant arithmetic + time_parse_iso (ISO-8601 UTC subset, Hinnant days_from_civil, offsets rejected, null on malformed), UTC-only contract documented, 52 proof asserts + differential byte-identical]
 - Already: `unix_time/date_parts/date_fmt` (builder-A, interp.rs), monotonic clock/now
-  pinned (SPEC §22).
+  pinned (SPEC §10).
 - Remaining: `Duration` arithmetic, timezone handling contract (UTC-only v1, documented),
   parse ISO-8601.
-- Done when: `std/time.op` extensions + proofs; SPEC §22 extended; differential time-shape
+- Done when: `std/time.op` extensions + proofs; SPEC §17 extended; differential time-shape
   corpus extended (never pin wall-clock absolute values, shape only).
 - Files: `std/` (new time module or extensions), `tests/`, `SPEC.md`.
 
@@ -837,7 +837,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
   test, F-1m pin preference); cross-platform stream identity promise or explicit
   non-promise.
 - Done when: DETERMINISM.md §randomness with the exact stream contract + evidence links
-  (tests/worker_seed_pin.op, std/random.op wrappers); SPEC §22 cross-link.
+  (tests/worker_seed_pin.op, std/random.op wrappers); SPEC §10 cross-link.
 - Files: `docs/spec/DETERMINISM.md`, `SPEC.md`.
 
 ### W090, Floating-point determinism [P2] [dev-3] [S] [done: PR #17, DETERMINISM.md §5]
