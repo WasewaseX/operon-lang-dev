@@ -1,0 +1,45 @@
+# bench: call_fib — the P4 call-overhead audit workload (builder-E)
+# Roadmap P4 charter (lane E, AMENDED 2026-10-04): "Profile: gene call frames,
+# environment lookup, argument binding, telemetry counters, fuel charging,
+# stack allocation/reuse, bridged calls. Target call-heavy workloads such as
+# fib25/fib30." This fixture is the charter's named target, parameterized by
+# CALL_FIB_N / CALL_FIB_MODE so the same-binary ablation ladder
+# (call_ablate.sh) can run every W009-A config on the identical workload in
+# its own process (the 200M run-wide step budget, SPEC §9b, forbids
+# multi-config legs in one run).
+#
+# mode=time  — time ONLY the fib(n) call with the in-process clock(); the
+#              ladder deltas are call-path work, not startup. In this mode the
+#              ONLY gene calls in the process are fib's, so the W009-A
+#              bookkeep counter must print exactly C(n) = the analytic call
+#              count (bump_call_bookkeeping runs once per gene call; main is a
+#              block, not a gene) — the cross-engine differential anchor.
+# mode=count — run ONLY calls_of(n), the same recurrence that counts fib's
+#              calls (C(n) = C(n-1) + C(n-2) + 1, C(0)=C(1)=1; C(25)=242,785,
+#              C(30)=2,745,165). Engine-independent by construction; the
+#              CPython / native-Rust mirrors (call_fib_py.py / call_fib_rs.rs)
+#              emit the same analytic shape.
+
+gene fib(n) {
+    if n < 2 { return n }
+    return fib(n - 1) + fib(n - 2)
+}
+
+gene calls_of(n) {
+    if n < 2 { return 1 }
+    return calls_of(n - 1) + calls_of(n - 2) + 1
+}
+
+main {
+    let n = num(env("CALL_FIB_N"))
+    let mode = env("CALL_FIB_MODE")
+    if mode == "count" {
+        promote("CALLFIB n={n} calls_analytic={calls_of(n)}")
+    } else {
+        let t0 = clock()
+        let r = fib(n)
+        let t1 = clock()
+        let ms = (t1 - t0) * 1000.0
+        promote("CALLFIB n={n} r={r} ms={ms}")
+    }
+}
