@@ -26,6 +26,19 @@ DEBUG_BIN="${DEBUG_BIN:-1}"
 
 echo "== compat matrix (mode=$MODE) =="
 
+# compat-r3 (environment-pair repair, F-assigned per digest-4, 2026-10-04;
+# C veto-at-review): three boundary fixes so the matrix measures ENGINES,
+# not the runner's locale. (1) Force the Python side to UTF-8/LF for every
+# oracle invocation here — mirrors harness.py's W59 env, and belt-and-
+# suspenders to the compat-r3 self-guard now living in oracle.py itself.
+export PYTHONUTF8=1
+export PYTHONIOENCODING=utf-8
+
+# Run fingerprint (the triage post's "log run IDs"): one line naming the
+# platform facts every comparison depends on, so a red leg is attributable
+# from its log alone.
+echo "run env: os=$(uname -s 2>/dev/null || echo windows) bash=$BASH_VERSION python=$(python3 -V 2>&1) gen=$GEN fresh=$FRESH seed=$SEED_FRESH mode=$MODE debug=$DEBUG_BIN"
+
 # ---- fresh randomized programs (regenerated every run, never committed) --
 if [ "$GEN" == "1" ]; then
   rm -rf tests/compat_fresh
@@ -33,6 +46,34 @@ if [ "$GEN" == "1" ]; then
     --out tests/compat_fresh >/dev/null
   echo "fresh programs: $FRESH (seed $SEED_FRESH)"
 fi
+
+# compat-r3: loud canary — one tiny program (multi-line, UTF-8: U+2713 and
+# an em-dash) through ALL engines BEFORE the corpus loop. If the canary
+# itself diverges, the comparison boundary is broken on this runner
+# (encoding/newline class) and every per-program "divergence" below would
+# be phantom noise from the runner, not the engines. Fail fast naming the
+# class instead of reporting 100% uniform divergence.
+CANARY_DIR=$(mktemp -d)
+CANARY="$CANARY_DIR/canary.op"
+cna="$CANARY_DIR/a.out"; cnb="$CANARY_DIR/b.out"; cne="$CANARY_DIR/e.out"
+printf 'print("canary: \xe2\x9c\x93 utf-8 \xe2\x80\x94 em-dash")\nprint("canary: line two")\n' > "$CANARY"
+./bin/operon run --no-vm "$CANARY" >"$cna" 2>"$CANARY_DIR/a.err"; carc=$?
+./bin/operon run "$CANARY" >"$cnb" 2>"$CANARY_DIR/b.err"; cbrc=$?
+python3 bootstrap/oracle.py run "$CANARY" >"$cne" 2>"$CANARY_DIR/e.err"; cerc=$?
+canary_ok=1
+cmp -s "$cna" "$cnb" || canary_ok=0
+cmp -s "$cna" "$cne" || canary_ok=0
+[ "$carc" == "$cbrc" ] && [ "$carc" == "$cerc" ] || canary_ok=0
+if [ "$canary_ok" != "1" ]; then
+  echo "CANARY DIVERGED — comparison boundary broken on this runner (encoding/newline class), not the engines."
+  echo "  rust(tree-walk) rc=$carc bytes:"; od -c "$cna" | head -3
+  echo "  rust(vm)        rc=$cbrc bytes:"; od -c "$cnb" | head -3
+  echo "  python(oracle)  rc=$cerc bytes:"; od -c "$cne" | head -3
+  echo "  oracle stderr:"; head -3 "$CANARY_DIR/e.err"
+  echo "  Aborting before the corpus loop: fix the boundary (PYTHONUTF8/PYTHONIOENCODING/newline normalization) and re-run."
+  exit 2
+fi
+echo "canary: byte-identical across 3 engines (UTF-8/LF boundary healthy)"
 
 # ---- debug build (A4) -----------------------------------------------------
 # Always build (incremental, a no-op when current): a STALE debug binary is
@@ -60,7 +101,7 @@ echo "programs under test: ${#FILES[@]}"
 
 pass=0; fail=0; failed_files=()
 tmpa=$(mktemp); tmpb=$(mktemp); tmpc=$(mktemp); tmpd=$(mktemp); tmpe=$(mktemp)
-trap 'rm -f "$tmpa" "$tmpb" "$tmpc" "$tmpd" "$tmpe"' EXIT
+trap 'rm -rf "$tmpa" "$tmpb" "$tmpc" "$tmpd" "$tmpe" "$tmpa.err" "$tmpb.err" "$tmpc.err" "$tmpd.err" "$tmpe.err" "$CANARY_DIR"' EXIT
 
 for f in "${FILES[@]}"; do
   ./bin/operon run --no-vm "$f" >"$tmpa" 2>"$tmpa.err"; arc=$?
