@@ -1,0 +1,501 @@
+# ============================================================
+# csvstat.op — a CSV analytics tool, written in Operon
+# ============================================================
+# Lane-A test app #3 (test apps / benchmarking / optimization lane).
+#
+# Purpose: a real-app regression and benchmark vehicle that exercises
+# the exact workloads where the cross-language deep bench shows Operon
+# is weakest relative to CPython — line/file processing, string
+# splitting, map aggregation, and table rendering — plus the startup
+# and JSON surfaces already ahead. Every output byte is contract-pinned
+# against the Python reference implementation (csvstat.py) so the app
+# doubles as a differential oracle at the application level: if a VM
+# optimization changes a single output byte, the bench catches it.
+#
+# subcommands:
+#   info  FILE        row/column census: kinds, null counts
+#   stats FILE        per-column numeric stats (int columns) or distinct
+#   top   FILE COL N  frequency table for one column (ties: count desc,
+#                     then value ascending)
+#   table FILE [N]    pretty-printed first N rows (default 10)
+#
+# Determinism contract (byte-identity across engines):
+#   - integers render via str(int) on both sides;
+#   - ratios render via render_ratio(), whose float op sequence
+#     (x = num/den; sc = 10^nd by repeated *10; r = floor(x*sc + 0.5);
+#     integer split) is mirrored EXACTLY by csvstat.py — both sides are
+#     IEEE-754 doubles on exact integer inputs, so r is bit-identical
+#     and every later step is integer arithmetic;
+#   - no interpolation format specs are used anywhere (the spec after
+#     ':' is currently inert in the runtime — filed as a finding;
+#     relying on it would be relying on a no-op).
+#
+# Run it through the launcher (csvstat.sh) so the sandbox grants are
+# set up for you, or from the repo root:
+#   operon run apps/csvstat/csvstat.op --allow-read <dir> -- stats FILE
+# ============================================================
+
+use std/args as ar
+use std/csv as c
+use std/fs as fs
+
+# ---------------------------------------------------------- rendering
+
+gene render_ratio(num, den, nd) {
+    # Fixed-decimal ratio renderer, non-negative integers only.
+    # THE FLOAT SEQUENCE HERE IS A CONTRACT: csvstat.py render_ratio()
+    # must stay op-for-op identical (see header). floor() returns an
+    # Int on both engines given bit-identical input, and everything
+    # after it is integer arithmetic — so the rendered bytes match.
+    let x = num / den
+    let sc = 1.0
+    let i = 0
+    while i < nd {
+        sc = sc * 10.0
+        i = i + 1
+    }
+    let r = floor(x * sc + 0.5)
+    let si = floor(sc)
+    let whole = r // si
+    let frac = r % si
+    if nd == 0 {
+        return str(whole)
+    }
+    let fd = str(frac)
+    while len(fd) < nd {
+        fd = "0" + fd
+    }
+    return str(whole) + "." + fd
+}
+
+gene is_digits(s) {
+    # strict integer-literal shape: optional '-', then 1+ ASCII digits
+    let t = s
+    if len(t) == 0 {
+        return false
+    }
+    if char_at(t, 0) == "-" {
+        t = t.slice(1, len(t))
+    }
+    if len(t) == 0 {
+        return false
+    }
+    let i = 0
+    while i < len(t) {
+        let ch = char_at(t, i)
+        if ch < "0" or ch > "9" {
+            return false
+        }
+        i = i + 1
+    }
+    return true
+}
+
+gene col_kind(values) {
+    # "int" when every non-empty value is an integer literal;
+    # otherwise "str". Empty strings are nulls, not kind inputs.
+    let seen = 0
+    for v in values {
+        if v != "" {
+            if not is_digits(v) {
+                return "str"
+            }
+            seen = seen + 1
+        }
+    }
+    if seen == 0 {
+        return "str"
+    }
+    return "int"
+}
+
+# ---------------------------------------------------------- frequency
+
+gene value_counts(values) {
+    # insertion-ordered value -> count map over non-empty values
+    let m = {}
+    for v in values {
+        if v != "" {
+            if m.has(v) {
+                m[v] = m[v] + 1
+            } else {
+                m[v] = 1
+            }
+        }
+    }
+    return m
+}
+
+gene top_pairs(values, n) {
+    # top n by (count desc, value asc); ties broken byte-wise
+    let m = value_counts(values)
+    let items = m.items()
+    # .sort() RETURNS the sorted list (not in-place) — assign it
+    items = items.sort(gene(a, b) {
+        if a[1] != b[1] {
+            return a[1] > b[1]
+        }
+        return a[0] < b[0]
+    })
+    let out = []
+    let i = 0
+    while i < len(items) and i < n {
+        push(out, items[i])
+        i = i + 1
+    }
+    return out
+}
+
+# ---------------------------------------------------------- column stats
+
+gene numeric_stats(values) {
+    # min/max/sum over non-empty integer values.
+    # min/max print the ORIGINAL string of the first extremal value.
+    let n = 0
+    let mn = 0
+    let mx = 0
+    let mn_s = ""
+    let mx_s = ""
+    let total = 0
+    let first = true
+    for v in values {
+        if v != "" {
+            let x = num(v)
+            if first {
+                mn = x
+                mx = x
+                mn_s = v
+                mx_s = v
+                first = false
+            } else {
+                if x < mn {
+                    mn = x
+                    mn_s = v
+                }
+                if x > mx {
+                    mx = x
+                    mx_s = v
+                }
+            }
+            total = total + x
+            n = n + 1
+        }
+    }
+    return [n, mn_s, mx_s, total]
+}
+
+gene null_count(values) {
+    let k = 0
+    for v in values {
+        if v == "" {
+            k = k + 1
+        }
+    }
+    return k
+}
+
+# ---------------------------------------------------------- table
+
+gene dashes(widths) {
+    let out = "+"
+    for w in widths {
+        out = out + "-".repeat(w + 2) + "+"
+    }
+    return out
+}
+
+gene table_row(cells, widths) {
+    let out = "|"
+    let i = 0
+    while i < len(cells) {
+        out = out + " " + cells[i] + " ".repeat(widths[i] - len(cells[i])) + " |"
+        i = i + 1
+    }
+    return out
+}
+
+gene render_table(head, rows) {
+    # column width = max(header, cells) over the SHOWN rows
+    let ncols = len(head)
+    let widths = []
+    for h in head {
+        push(widths, len(h))
+    }
+    for r in rows {
+        let i = 0
+        while i < ncols {
+            if len(r[i]) > widths[i] {
+                widths[i] = len(r[i])
+            }
+            i = i + 1
+        }
+    }
+    let out = []
+    push(out, dashes(widths))
+    push(out, table_row(head, widths))
+    push(out, dashes(widths))
+    for r in rows {
+        push(out, table_row(r, widths))
+    }
+    push(out, dashes(widths))
+    return out
+}
+
+# ---------------------------------------------------------- subcommands
+
+gene cmd_info(text, path) {
+    let rows = c.csv_parse(text, ",")
+    if len(rows) == 0 {
+        print("csvstat info {path}")
+        print("rows,0")
+        print("columns,0")
+        return
+    }
+    let head = rows[0]
+    let ncols = len(head)
+    let cols = []
+    let i = 0
+    while i < ncols {
+        let col = []
+        let j = 1
+        while j < len(rows) {
+            if i < len(rows[j]) {
+                push(col, rows[j][i])
+            } else {
+                push(col, "")
+            }
+            j = j + 1
+        }
+        push(cols, col)
+        i = i + 1
+    }
+    print("csvstat info {path}")
+    print("rows,{len(rows) - 1}")
+    print("columns,{ncols}")
+    print("column,kind,nulls")
+    i = 0
+    while i < ncols {
+        print("{head[i]},{col_kind(cols[i])},{null_count(cols[i])}")
+        i = i + 1
+    }
+}
+
+gene cmd_stats(text, path) {
+    let rows = c.csv_parse(text, ",")
+    if len(rows) == 0 {
+        print("csvstat stats {path}")
+        print("rows,0")
+        return
+    }
+    let head = rows[0]
+    let ncols = len(head)
+    print("csvstat stats {path}")
+    print("rows,{len(rows) - 1}")
+    print("column,count,nulls,min,max,sum,mean")
+    let i = 0
+    while i < ncols {
+        let col = []
+        let j = 1
+        while j < len(rows) {
+            if i < len(rows[j]) {
+                push(col, rows[j][i])
+            } else {
+                push(col, "")
+            }
+            j = j + 1
+        }
+        if col_kind(col) == "int" {
+            let st = numeric_stats(col)
+            let n = st[0]
+            let total = st[3]
+            print("{head[i]},{n},{null_count(col)},{st[1]},{st[2]},{total},{render_ratio(total, n, 2)}")
+        } else {
+            let m = value_counts(col)
+            print("{head[i]},{len(col) - null_count(col)},{null_count(col)},distinct={len(m.keys())}")
+        }
+        i = i + 1
+    }
+}
+
+gene cmd_top(text, path, col, n) {
+    let rows = c.csv_parse(text, ",")
+    if len(rows) == 0 {
+        print("csvstat top {path} {col} {n}")
+        print("rows,0")
+        return
+    }
+    let head = rows[0]
+    let idx = -1
+    let i = 0
+    while i < len(head) {
+        if head[i] == col {
+            idx = i
+        }
+        i = i + 1
+    }
+    if idx < 0 {
+        print("csvstat: no column named {col}")
+        return
+    }
+    let values = []
+    let j = 1
+    while j < len(rows) {
+        if idx < len(rows[j]) {
+            push(values, rows[j][idx])
+        } else {
+            push(values, "")
+        }
+        j = j + 1
+    }
+    let nrows = len(rows) - 1
+    print("csvstat top {path} {col} {n}")
+    print("rank,value,count,share")
+    let pairs = top_pairs(values, n)
+    let rank = 1
+    for p in pairs {
+        let share = render_ratio(p[1] * 100, nrows, 2)
+        print("{rank},{p[0]},{p[1]},{share}")
+        rank = rank + 1
+    }
+}
+
+gene cmd_table(text, path, n) {
+    let rows = c.csv_parse(text, ",")
+    print("csvstat table {path} {n}")
+    if len(rows) == 0 {
+        print("(empty)")
+        return
+    }
+    let head = rows[0]
+    let shown = []
+    let j = 1
+    while j < len(rows) and j <= n {
+        push(shown, rows[j])
+        j = j + 1
+    }
+    let lines = render_table(head, shown)
+    for l in lines {
+        print(l)
+    }
+}
+
+# ---------------------------------------------------------- main
+
+gene usage() {
+    print("usage: csvstat info FILE")
+    print("       csvstat stats FILE")
+    print("       csvstat top FILE COL N")
+    print("       csvstat table FILE [N]")
+}
+
+gene run_cli(pos) {
+    if len(pos) < 2 {
+        usage()
+        return
+    }
+    let cmd = pos[0]
+    let path = pos[1]
+    let text = fs.fs_read_or(path, null)
+    if text == null {
+        print("csvstat: cannot read {path}")
+        exit(2)
+    }
+    if cmd == "info" {
+        cmd_info(text, path)
+    } elif cmd == "stats" {
+        cmd_stats(text, path)
+    } elif cmd == "top" {
+        if len(pos) < 4 {
+            usage()
+            return
+        }
+        cmd_top(text, path, pos[2], num(pos[3]))
+    } elif cmd == "table" {
+        let n = 10
+        if len(pos) >= 3 {
+            n = num(pos[2])
+        }
+        cmd_table(text, path, n)
+    } else {
+        usage()
+    }
+}
+
+run_cli(ar.args_positional(argv()))
+
+# ============================================================
+# proof frame — runs under `operon test apps/` (the dx-r6 rule:
+# apps join the CI gate). Pure inline data; the sandboxed file
+# path is covered by test/run_tests.sh.
+# ============================================================
+
+frame proof {
+    # ---- render_ratio: the byte-identity contract with csvstat.py ----
+    # exact halves, repeats, carry, zero-pad, and the .5 tie direction
+    assert(render_ratio(5, 2, 2) == "2.50")
+    assert(render_ratio(1, 3, 2) == "0.33")
+    assert(render_ratio(2, 3, 2) == "0.67")
+    assert(render_ratio(1, 2, 0) == "1")
+    assert(render_ratio(3, 2, 0) == "2")        # 1.5 -> half away from zero
+    assert(render_ratio(1, 8, 3) == "0.125")    # exact binary
+    assert(render_ratio(1, 1000, 2) == "0.00")  # underflow to zero-pad
+    assert(render_ratio(999999, 1000, 2) == "1000.00")  # carry across the split
+    assert(render_ratio(205, 100, 2) == "2.05")
+    assert(render_ratio(207, 1000, 2) == "0.21")  # float*100 rounds up at floor
+    assert(render_ratio(41, 2, 1) == "20.5")
+
+    # ---- is_digits / col_kind: the strict integer-literal gate ----
+    assert(is_digits("42") == true)
+    assert(is_digits("-7") == true)
+    assert(is_digits("4.5") == false)
+    assert(is_digits("") == false)
+    assert(is_digits("-") == false)
+    assert(is_digits(" 7") == false)     # no trimming, verbatim contract
+    assert(is_digits("0x10") == false)
+    assert(col_kind(["1", "2", ""]) == "int")
+    assert(col_kind(["1", "x"]) == "str")
+    assert(col_kind(["", ""]) == "str")  # all-null column is not numeric
+
+    # ---- value_counts / top_pairs: counts, ties, deterministic order ----
+    let vs = ["b", "a", "b", "c", "a", "b"]
+    let m = value_counts(vs)
+    assert(m["b"] == 3)
+    assert(m["a"] == 2)
+    assert(m.has("c") == true)
+    let tp = top_pairs(vs, 2)
+    assert(len(tp) == 2)
+    assert(tp[0][0] == "b" and tp[0][1] == 3)
+    assert(tp[1][0] == "a")             # count tie 2-2: value asc, c loses
+    let tie = top_pairs(["x", "y", "x", "y"], 2)
+    assert(tie[0][0] == "x" and tie[1][0] == "y")
+
+    # ---- .sort() returns the sorted list (not in-place) — pinned ----
+    let sc = [3, 1, 2]
+    let srt = sc.sort(gene(a, b) { return a < b })
+    assert(srt[0] == 1 and srt[1] == 2 and srt[2] == 3)
+    assert(sc[0] == 3)                  # original untouched
+
+    # ---- numeric_stats: min/max keep the ORIGINAL string, first wins ----
+    let stt = numeric_stats(["7", "10", "007", "3"])
+    assert(stt[0] == 4)         # count
+    assert(stt[1] == "3")       # numeric min is 3; first extremal string
+    assert(stt[2] == "10")
+    assert(stt[3] == 27)        # 7+10+7+3
+
+    # ---- null_count ----
+    assert(null_count(["", "x", "", "y"]) == 2)
+    assert(null_count([]) == 0)
+
+    # ---- table rendering: widths, padding, borders ----
+    let lines = render_table(["id", "name"], [["1", "abe"], ["22", "z"]])
+    assert(len(lines) == 6)     # border, header, border, 2 rows, border
+    assert(lines[0] == "+----+------+")
+    assert(lines[1] == "| id | name |")
+    assert(lines[3] == "| 1  | abe  |")
+    assert(lines[4] == "| 22 | z    |")
+
+    # ---- csv keyed records (the stats path consumes csv_parse rows) ----
+    let recs = c.csv_records("a,b\n1,2\n3,4\n", ",")
+    assert(len(recs) == 2)
+    assert(recs[1]["a"] == "3")
+}

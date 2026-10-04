@@ -1,0 +1,148 @@
+{
+ "meta": {
+  "cpu": "x86_64",
+  "date": "2026-10-04 11:35 UTC",
+  "fixture_big": "/home/z/my-project/operon-lang-dev/apps/csvstat/test/data/big.csv",
+  "fixture_small": "/home/z/my-project/operon-lang-dev/apps/csvstat/test/data/small.csv",
+  "kernel": "5.10.134-013.15.kangaroo.al8.x86_64",
+  "os": "Linux",
+  "versions": {
+   "operon": "Operon 2.8.0-vm (rust-core, cpp-kernel)",
+   "python": "Python 3.12.14"
+  }
+ },
+ "workloads": {
+  "info_big": {
+   "cs_identical": true,
+   "operon": {
+    "cs": "caa81e86b80808dae66734ff2faf8a1210ca7332f0804c262b137b321a4548f3",
+    "cs_stable": true,
+    "max_ms": 161.67,
+    "median_ms": 158.03,
+    "min_ms": 157.5,
+    "runs": 7,
+    "status": "ok"
+   },
+   "python": {
+    "cs": "caa81e86b80808dae66734ff2faf8a1210ca7332f0804c262b137b321a4548f3",
+    "cs_stable": true,
+    "max_ms": 33.96,
+    "median_ms": 33.46,
+    "min_ms": 32.88,
+    "runs": 7,
+    "status": "ok"
+   },
+   "ratio_py_over_op": 0.21
+  },
+  "startup": {
+   "cs_identical": true,
+   "operon": {
+    "cs": "402fee98ccb504d27a6586fa9c04ad74a466fe6d643627995a012e76a46c578d",
+    "cs_stable": true,
+    "max_ms": 2.97,
+    "median_ms": 2.79,
+    "min_ms": 2.72,
+    "runs": 15,
+    "status": "ok"
+   },
+   "python": {
+    "cs": "402fee98ccb504d27a6586fa9c04ad74a466fe6d643627995a012e76a46c578d",
+    "cs_stable": true,
+    "max_ms": 20.95,
+    "median_ms": 20.36,
+    "min_ms": 19.42,
+    "runs": 15,
+    "status": "ok"
+   },
+   "ratio_py_over_op": 7.3
+  },
+  "stats_big": {
+   "cs_identical": true,
+   "operon": {
+    "cs": "285980840576a025dc0eeca690521fa355c666cdefe220fcf5e107762f2d727d",
+    "cs_stable": true,
+    "max_ms": 192.87,
+    "median_ms": 190.91,
+    "min_ms": 190.65,
+    "runs": 7,
+    "status": "ok"
+   },
+   "python": {
+    "cs": "285980840576a025dc0eeca690521fa355c666cdefe220fcf5e107762f2d727d",
+    "cs_stable": true,
+    "max_ms": 39.92,
+    "median_ms": 38.21,
+    "min_ms": 37.3,
+    "runs": 7,
+    "status": "ok"
+   },
+   "ratio_py_over_op": 0.2
+  },
+  "stats_small": {
+   "cs_identical": true,
+   "operon": {
+    "cs": "424d789716b5140df3fbc6327838dc8af4998ad5e042fbee20f70e59329a6650",
+    "cs_stable": true,
+    "max_ms": 6.13,
+    "median_ms": 4.45,
+    "min_ms": 4.39,
+    "runs": 15,
+    "status": "ok"
+   },
+   "python": {
+    "cs": "424d789716b5140df3fbc6327838dc8af4998ad5e042fbee20f70e59329a6650",
+    "cs_stable": true,
+    "max_ms": 20.63,
+    "median_ms": 20.2,
+    "min_ms": 19.77,
+    "runs": 15,
+    "status": "ok"
+   },
+   "ratio_py_over_op": 4.54
+  },
+  "table_big": {
+   "cs_identical": true,
+   "operon": {
+    "cs": "9b0534792ce2ce33590701bde2f2b1111e3d069a31f1e1e25cfdb5784a20bc10",
+    "cs_stable": true,
+    "max_ms": 43.04,
+    "median_ms": 42.24,
+    "min_ms": 41.9,
+    "runs": 7,
+    "status": "ok"
+   },
+   "python": {
+    "cs": "9b0534792ce2ce33590701bde2f2b1111e3d069a31f1e1e25cfdb5784a20bc10",
+    "cs_stable": true,
+    "max_ms": 25.15,
+    "median_ms": 24.94,
+    "min_ms": 24.53,
+    "runs": 7,
+    "status": "ok"
+   },
+   "ratio_py_over_op": 0.59
+  },
+  "top_big": {
+   "cs_identical": true,
+   "operon": {
+    "cs": "77b4078adc4882b2a9c8585336e4ddb4bb65642bc17fa4d3a9a7fa5e4a22f9a3",
+    "cs_stable": true,
+    "max_ms": 51.56,
+    "median_ms": 51.23,
+    "min_ms": 50.53,
+    "runs": 7,
+    "status": "ok"
+   },
+   "python": {
+    "cs": "77b4078adc4882b2a9c8585336e4ddb4bb65642bc17fa4d3a9a7fa5e4a22f9a3",
+    "cs_stable": true,
+    "max_ms": 31.18,
+    "median_ms": 26.42,
+    "min_ms": 24.84,
+    "runs": 7,
+    "status": "ok"
+   },
+   "ratio_py_over_op": 0.52
+  }
+ }
+}
