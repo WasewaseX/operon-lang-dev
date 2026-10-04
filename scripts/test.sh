@@ -77,6 +77,11 @@ python3 scripts/dap_e2e.py
 # the prime directive (plain check/run untouched by typed findings), and
 # the stage-1 runtime soft contract as the compatibility fallback.
 bash scripts/typeck_e2e.sh
+# S4 audit (2026-10-02): the §12 proof-runner integrity rules (vacuous proof,
+# exited early) were implemented in src/tools.rs but never negatively
+# exercised — the debug_e2e rot class. This gate pins the exact failure
+# messages plus the positive control, against the real binary.
+bash scripts/proof_rules_e2e.sh
 # W060: the release smoke script joins the standing gate (the rot lesson —
 # debug_e2e once sat outside every gate and silently died). Dir-mode smoke
 # against the bin/ artifact this gate already uses: version, a real run, a

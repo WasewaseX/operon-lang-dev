@@ -1,0 +1,28 @@
+# differential: math domain contract for sqrt (S4 audit pin, 2026-10-02).
+# sqrt(x) -> Float on x >= 0; a NEGATIVE argument raises the catchable
+# unfolded stress "sqrt of negative number" on BOTH engines (implemented
+# identically since landing, but undocumented and unpinned until the S4
+# sweep — zero corpus coverage of the negative domain before this file).
+# pow's negative-base fractional-exponent shape is deliberately NOT here
+# yet: the engines disagree today (Rust NaN value vs oracle unmodeled
+# complex, REVIEWS S4-5) — the file grows the pin when the core lane lands
+# the W006-D guard, never before (the corpus pins only agreements).
+stress {
+    promote("sqrt(-1) ->", sqrt(-1))
+} rescue (e) {
+    promote("sqrt(-1) stress", e.kind, e.message)
+}
+promote("sqrt(4)", sqrt(4))
+promote("sqrt(2)", sqrt(2))
+promote("sqrt(0)", sqrt(0))
+promote("sqrt(0.25)", sqrt(0.25))
+stress {
+    promote("sqrt(-0.001) ->", sqrt(-0.001))
+} rescue (e) {
+    promote("sqrt(-0.001) stress", e.kind)
+}
+stress {
+    promote("sqrt(-1e300) ->", sqrt(-1e300))
+} rescue (e) {
+    promote("sqrt(-1e300) stress", e.kind)
+}
