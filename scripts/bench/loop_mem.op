@@ -1,0 +1,88 @@
+# bench: loop_mem — the P3 loop-memory audit (builder-E)
+# Roadmap P3 charter (lane E, APPROVED 2026-10-04, measure-first): compare
+#   while i < N   vs   for i in range(N)
+# at 1M/2M/4M iterations, measure RSS for nested loops, and classify the
+# growth: live retention / eager collection materialization / scope
+# allocation / allocator high-water / something else — "do not call it a
+# leak until the scaling experiment supports that conclusion."
+#
+# Shapes (env LOOP_MEM_SHAPE, one process per leg — the 200M run-wide step
+# budget cannot fit the full matrix in one invocation):
+#   acc_list            while + push(xs, i)          -> live-retention leg
+#   transient_while     while, s = s + i             -> no-retention baseline
+#   transient_forrange  for i in range(N), s = s + i -> eager-materialization probe
+#   transient_while_let while + per-iter let t = i*2 -> scope-allocation probe
+#   nested              OUTER x N transient while    -> nested-loop RSS (charter)
+#
+# Instruments: in-process memory() deltas (allocs / arena_bytes) around the
+# loop, in-process clock() for time, and the driver's VmHWM polling of
+# /proc/<pid>/status (post-exec accounting — wait4 ru_maxrss carries the
+# spawner's fork floor, so the driver polls the child's VmHWM, which resets
+# on exec; the CPython and Rust mirrors self-report VmHWM at exit).
+# CPython + native-Rust mirrors: loop_mem_py.py / loop_mem_rs.rs (same
+# deterministic bodies, same per-shape checksums).
+main {
+    let shape = env("LOOP_MEM_SHAPE")
+    let n = num(env("LOOP_MEM_N"))
+    let outer = num(env("LOOP_MEM_OUTER"))
+    if outer < 1 {
+        outer = 1000
+    }
+    if n < 1 {
+        promote("error: set LOOP_MEM_N and LOOP_MEM_SHAPE")
+        return
+    }
+    let m0 = memory()
+    let t0 = clock()
+    let s = 0
+
+    if shape == "acc_list" {
+        let xs = []
+        let i = 0
+        while i < n {
+            push(xs, i)
+            i = i + 1
+        }
+        let k = 0
+        while k < len(xs) {
+            s = s + xs[k]
+            k = k + 1
+        }
+    }
+    if shape == "transient_while" {
+        let i = 0
+        while i < n {
+            s = s + i
+            i = i + 1
+        }
+    }
+    if shape == "transient_forrange" {
+        for i in range(n) {
+            s = s + i
+        }
+    }
+    if shape == "transient_while_let" {
+        let i = 0
+        while i < n {
+            let t = i * 2
+            s = s + t
+            i = i + 1
+        }
+    }
+    if shape == "nested" {
+        let o = 0
+        while o < outer {
+            let j = 0
+            while j < n {
+                s = s + j
+                j = j + 1
+            }
+            o = o + 1
+        }
+    }
+
+    let t1 = clock()
+    let m1 = memory()
+    let ms = (t1 - t0) * 1000.0
+    promote("LOOP engine=operon shape={shape} n={n} outer={outer} time_ms={ms} allocs0={m0["allocs"]} allocs1={m1["allocs"]} arena0={m0["arena_bytes"]} arena1={m1["arena_bytes"]} cksum={s}")
+}

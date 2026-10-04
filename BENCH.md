@@ -692,3 +692,86 @@ Rust 1k→2k ratio dips to 3.72 (cache effects at 4-byte elements). The
 and transfers via the verified differential law instead. Env knobs:
 `SORT_SCALE_N` / `SORT_SCALE_REPS` with `--allow-env`; the driver drops
 to 2 reps at 8k to stay inside the step budget.
+## P3 — loop-memory scaling audit (2026-10-04, builder-E)
+
+Roadmap P3 charter (lane E, §34 APPROVED measure-first): compare
+`while i < N` vs `for i in range(N)` at 1M/2M/4M, measure RSS for nested
+loops, and classify the growth — live retention / eager collection
+materialization / scope allocation / allocator high-water / something
+else — with the explicit guardrail "do not call it a leak until the
+scaling experiment supports that conclusion." Fixtures (lane-exclusive):
+`scripts/bench/loop_mem.op` + `loop_mem_py.py` (CPython mirror) +
+`loop_mem_rs.rs` (typed floor) + `loop_mem_driver.py`.
+
+**Design.** Five shapes × {1M, 2M, 4M} iterations, one process per leg
+(the 200M run-wide step budget again): `acc_list` (while + push — the
+live-retention leg), `transient_while` (no-retention baseline),
+`transient_forrange` (the eager-materialization probe),
+`transient_while_let` (per-iteration `let` — scope-allocation probe),
+`nested` (1000 × n/1000 transient while — the charter's nested ask).
+RSS instrument: each leg's peak VmHWM, self-reported by the CPython/Rust
+fixtures and driver-polled from `/proc/<pid>/status` for operon — post-exec
+accounting, because wait4 `ru_maxrss` carries the spawner's fork floor
+(~9.5 MB here) and masks every delta below it. Checksums are cross-engine
+identical per shape at every size (differential contract held throughout).
+
+**Peak RSS delta over each engine's own transient baseline (MB):**
+
+| shape             | n   | operon | CPython | Rust (typed) |
+|-------------------|-----|--------|---------|--------------|
+| acc_list          | 1M  | 33.0   | 39.8    | 8.8          |
+| acc_list          | 2M  | 63.6   | 78.9    | 16.8         |
+| acc_list          | 4M  | 127.1  | 159.4   | 32.3         |
+| transient_while   | 4M  | 0.05   | 0.2     | 0.0          |
+| transient_forrange| 1M  | 64.0   | 0.0     | 0.0          |
+| transient_forrange| 2M  | 126.0  | 0.0     | 0.0          |
+| transient_forrange| 4M  | 251.9  | 0.1     | 0.0          |
+| transient_while_let| 4M | 0.0    | 0.1     | 0.0          |
+| nested (1000×n/1k)| 4M  | 0.0    | 0.1     | 0.0          |
+
+**Charter classification (measured, not assumed):**
+- **Eager collection materialization — CONFIRMED, operon-only.**
+  `for i in range(N)` grows RSS linearly at **~66 B/elem** (64.0 → 126.0 →
+  251.9 MB) for a body that retains NOTHING, while CPython's and Rust's
+  ranges are FLAT across the same sizes (lazy). The ~2× gap vs the
+  retained-list cost (33 B/elem) is consistent with a `Vec<Value>`
+  materialization riding amortized-doubling high-water (old + new buffer
+  live at the copy). This is the memory-side counterpart of the P5/P6
+  survey's range() finding (interp.rs:7240, eager materialization, 11.4
+  ns/elem) — measured here independently from RSS at charter scale.
+  A lazy Range (the survey's smallest-delta candidate) would zero the
+  251.9 MB leg, not just shrink it.
+- **Live retention — CONFIRMED, linear, constant per-element cost.**
+  acc_list: 33.5 B/elem operon (boxed `Value` + Vec slot, matching the
+  survey's 32 B/elem boxed-numerics claim), **41.6 B/elem CPython**
+  (8 B slot + 28 B int object — CPython retains MORE than operon per
+  element), **8.4 B/elem Rust `Vec<u64>`** — the typed-array floor the
+  P6 design space targets, now measured from the memory side.
+- **Scope allocation — REFUTED as a growth source.** A per-iteration
+  `let` inside the loop (transient_while_let) is flat: 3.6 → 3.8 MB
+  across 4× the work.
+- **Allocator high-water / leak — REFUTED.** Every non-retaining shape is
+  flat (±0.05 MB over 4× iterations), nested loops included (charter's
+  nested ask: 1000 × 4000 flat). Nothing grows without corresponding live
+  data — the scaling experiment supports NO leak conclusion.
+- **Time-memory trade note:** the eager materialization is not free speed
+  either way — in-process time at 1M: operon forrange 292.9 ms vs while
+  414.8 ms (the materialized Vec iterates faster than the while
+  machinery); CPython shows the same direction (46.4 vs 66.1 ms) WITHOUT
+  paying memory for it. A lazy range must not regress the 1.42× time win
+  while removing the 251.9 MB.
+
+**Instrument honesty notes.** operon's `memory()` builtin (arena_bytes /
+allocs) does NOT move on any leg — the counters track a small-object
+arena path, not the VM's per-iteration global-allocator traffic, so VmHWM
+carries the verdict and memory() is reported as static (a real limitation
+of the in-process accounting surface for this class of work). The
+driver-poll interval is 4 ms; legs end in a flat checksum loop, so the
+last-sample-equals-peak assumption is safe at these shapes. Side
+observation for the DX queue: `read_file("/proc/self/status")` returns
+empty (procfs reports st_size=0; a stat-sized read gets nothing) — bit
+the instrumentation once this session.
+
+Fix directions are NOT claimed here (P6 is the survey's owner-gated lane):
+the evidence files are the lazy-Range candidate (eager materialization,
+66 B/elem) and the typed-array floor (8.4 vs 33.5 B/elem retention).
