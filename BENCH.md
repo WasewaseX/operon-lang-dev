@@ -92,7 +92,7 @@ mem-charge, DP ceiling) cost nothing measurable on honest workloads.
 `op/py` = operon vs native CPython, **the v3.0 gap to close**.
 `op/oracle` = how much faster the Rust core already is than its Python mirror.
 
-## Results, micro (per construct, re-measured on `e757b4d`)
+## Results, micro (per construct, re-measured on `e757b4d`; m_mapset/m_mapget refreshed on the P1 head, 2026-10-04 — other rows still carry e757b4d-era drift, see docs/bench/2026-10-04-p5p6-survey.md)
 
 > NOTE (2026-10-04, P5/P6 survey): the rows above predate the MapStore,
 > W011 call-path and W-L1 landings — fresh re-measurement shows m_mapget
@@ -111,19 +111,13 @@ mem-charge, DP ceiling) cost nothing measurable on honest workloads.
 | m_intadd | 86.0 | 945.6 | 13.6 | **6.3x** | 96 | 15 |
 | m_listpush | 16.3 | 226.9 | 2.3 | **7.1x** | 108 | 15 |
 | m_listidx | 38.0 | 579.7 | 7.7 | **5.0x** | 127 | 26 |
-| m_mapset | 445.0 | 31634.9 | 5.3 | **83.6x** | 5563 | 67 |
-| m_mapget | 583.2 | 40460.4 | 7.8 | **74.5x** | 3787 | 51 |
+| m_mapset | 16.2 | 31634.9 | 5.3 | **3.1x** | 405 | 67 |
+| m_mapget | 27.1 | 40460.4 | 7.8 | **3.5x** | 176 | 51 |
 | m_strcat | 10.0 | 96.2 | 0.7 | **14.7x** | 416 | 28 |
 
 ## Reading the numbers
 
-- **Maps are the emergency.** `m_mapset`/`m_mapget` run **70–80x** slower than
-  native CPython; the mixed `collections` workload is **60x**. Maps are stored
-  as association lists (`Vec<(Value, Value)>`) scanned linearly with
-  `deep_eq` per element, O(n) per insert/lookup, and keys are re-hashed
-  strings. The oracle agrees with this diagnosis the hard way: cProfile shows
-  **58,025,002 `deep_eq` calls (42 s of 84 s)** for the 20k-op collections
-  fixture. The fix is representational, not micro-tuning.
+- **Maps are fixed — the emergency is retired.** At `e757b4d` the association-list store scanned linearly with `deep_eq` per element: `m_mapset`/`m_mapget` ran **70–80x** slower than native CPython (the oracle's cProfile showed **58,025,002 `deep_eq` calls, 42 s of 84 s** on the collections fixture). dx-r3 added the hash memo prefilter, W-L1 removed the per-lookup String clone, and P1 (2026-10-04) rebuilt the memo as a single-hash open-addressed table with proven miss-trust (docs/bench/2026-10-04-p1-map.md): the build path dropped from O(N^2) deep_eq scans to O(N) (8k-key build 149→3.7 ms, t(2N)/t(N) 4.19→1.99), absent-key lookup from a full scan to O(1) (50k misses 1084→153 ms), batch del from quadratic rebuilds to linear (261→22 ms), and the standing micros now sit at **3.1–3.5x** native. The residual map gap is per-op interpreter dispatch + `str()` key materialization — P4 dispatch surface, not the store.
 - **Calls are the chronic gap.** Naive recursion (fib25, C(20,10)) lands at
   **~10x**; an empty-ish gene call costs ~214 ns/op vs CPython's 28 ns. The
   call path allocates: the callee's `name.clone()` is cloned up to three times

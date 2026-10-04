@@ -1,0 +1,8 @@
+# P1 probe: fresh build with __SIZE__ distinct string keys (scaling family).
+# t(2N)/t(N) ~ 2 => linear, ~ 4 => quadratic. Native mirror: none (probe).
+# Companion evidence: docs/bench/2026-10-04-p1-map.md (P1 batch).
+main {
+    let m = {}
+    for i in range(__SIZE__) { m[str(i)] = i }
+    promote("n = {len(m)}")
+}
