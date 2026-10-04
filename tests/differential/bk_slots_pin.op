@@ -1,0 +1,25 @@
+# Bookkeeping-telemetry exactness pin (builder-A, 2026-10-04; salvaged from
+# PR #83 per the coordinator collision arbitration, digest-3 2026-10-04).
+# The per-call call-count/burst-bin/mature-nascent accounting is exactness-
+# critical telemetry: this file crosses the parity boundary — the ORACLE
+# counts calls independently — so MATCH here proves the accounting is exact,
+# not merely self-consistent, on whichever implementation serves the path.
+# Under W011-s3's consumer gate (main 8d1c8f8) fingerprint() is a consumer,
+# so this program exercises the FULL legacy bookkeeping contract end to end:
+# hot(16) makes 3193 calls (2*hot(17)-1 by the recursion) spread over many
+# 20-call bucket tails; cold/other pin the single-call and distinct-gene
+# paths.
+gene hot(n) {
+  if n <= 1 { return 1 }
+  return hot(n - 1) + hot(n - 2)
+}
+gene cold() { return 7 }
+gene other(x) { return x * 2 }
+gene main() {
+  let a = hot(16)
+  let b = cold()
+  let c = other(b)
+  promote(a)
+  promote(c)
+  promote(fingerprint())
+}
