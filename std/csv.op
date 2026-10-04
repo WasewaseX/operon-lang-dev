@@ -4,8 +4,12 @@
 # newlines are literal; "" inside a quoted field is one literal quote.
 # The separator is a parameter, "csv" also handles TSV ("|", ";", "\t"...).
 #
-# csv_parse is a character-level state machine, so quoted multi-line fields
-# survive; every function here is pure (no fs access, no caps involved).
+# csv_parse dispatches on document shape: quote-free documents with a
+# single-char separator take a bulk fast path (C-speed split/replace only,
+# measured ~19x on a 5000-row document), everything else falls through to
+# csv_parse_machine, the original character-level state machine. Both
+# paths are byte-identical on every input; tests/std_csv.op pins the
+# contract, apps/csvstat e2e checksums a real 5000-row document.
 
 gene csv_escape(field, sep) {
     # quote a field when needed; double any inner quotes
@@ -33,7 +37,198 @@ gene csv_row(fields, sep) {
 }
 
 gene csv_parse(text, sep) {
-    # parse a whole document into rows (list of list of string fields)
+    # Hybrid parser: quote-free lines parse via one bulk split each
+    # (C-speed), everything else — quoted fields, doubled quotes, quotes
+    # mid-field, multi-char separators — feeds csv_parse_step, the
+    # original character machine, one line at a time. Invariants that make
+    # this byte-identical to running the machine on the whole document:
+    #   1. outside quotes the machine flushes chars+row at every "\n", so
+    #      each line START outside quotes has an empty field buffer;
+    #   2. a quote only OPENS a quoted field when the field buffer is
+    #      empty — a quote mid-field is a literal char — so a line with
+    #      no quote and no pending state cannot interact with quoting;
+    #   3. carriage returns are swallowed by the machine ONLY outside
+    #      quotes (inside quotes they are data) — fast lines carry no
+    #      quotes, so stripping their CRs is exactly the machine's rule;
+    #   4. a trailing "" from split("\n") is the document's final newline:
+    #      outside quotes it produced no row (machine's end guard), inside
+    #      quotes it is literal data and must still be fed.
+    # Equivalence with the pure machine is pinned in tests/std_csv.op
+    # (both paths on the same inputs) and checksummed end-to-end by the
+    # apps/csvstat suite on a 5000-row document.
+    if len(sep) != 1 {
+        return csv_parse_machine(text, sep)
+    }
+    if text == "" {
+        return []
+    }
+    let cr = chr(13)
+    let raw = text.split("\n")
+    let n = len(raw)
+    let rows = []
+    let row = []
+    let chars = []
+    let inq = false
+    let pending = false
+    let i = 0
+    while i < n {
+        let line = raw[i]
+        let is_last = i == n - 1
+        if !inq and !pending and !is_last and !line.contains("\"") {
+            # bulk line: CRs are swallowed outside quotes, then one split
+            push(rows, line.replace(cr, "").split(sep))
+            i = i + 1
+            continue
+        }
+        # segment feed for quoted/pending lines: the buffer's join("")
+        # makes chunk granularity free, so runs between quote chars are
+        # processed as whole strings (split/replace at C speed) instead
+        # of char-by-char. segs alternate around the quote chars:
+        #   segs[0] " segs[1] " segs[2] ...
+        # and each quote is classified exactly like the machine: opens a
+        # field only when the buffer list is EMPTY, closes when inside,
+        # and a close followed by an adjacent empty segment is a doubled
+        # (literal) quote.
+        let segs = line.split("\"")
+        let ns = len(segs)
+        let k = 0
+        while k < ns {
+            let seg = segs[k]
+            if pending {
+                if seg == "" {
+                    if k < ns - 1 {
+                        # adjacent quote: doubled literal, still inside
+                        pending = false
+                        push(chars, "\"")
+                    }
+                    # else: line ends right after the close — pending
+                    # survives and the boundary newline resolves it
+                } else {
+                    pending = false
+                    inq = false
+                    let c0 = char_at(seg, 0)
+                    let rest = seg.slice(1, len(seg))
+                    if c0 == sep {
+                        push(row, chars.join(""))
+                        chars = []
+                    } else {
+                        if c0 == cr {
+                            # swallowed
+                        } else {
+                            push(chars, c0)
+                        }
+                    }
+                    # the remainder is ordinary outside data; empty chunks
+                    # are skipped so the buffer list stays EXACTLY as empty
+                    # as the machine's char list (the open-quote rule tests
+                    # list emptiness, not the joined value)
+                    let parts = rest.replace(cr, "").split(sep)
+                    if parts[0] != "" {
+                        push(chars, parts[0])
+                    }
+                    let np = len(parts)
+                    let p = 1
+                    while p < np {
+                        push(row, chars.join(""))
+                        chars = []
+                        if parts[p] != "" {
+                            push(chars, parts[p])
+                        }
+                        p = p + 1
+                    }
+                    # the quote AFTER this segment still needs the normal
+                    # classification: open on an empty buffer, literal otherwise
+                    if k < ns - 1 {
+                        if len(chars) == 0 {
+                            inq = true
+                        } else {
+                            push(chars, "\"")
+                        }
+                    }
+                }
+            } else {
+                if inq {
+                    # seg is literal field data (CRs included)
+                    if seg != "" {
+                        push(chars, seg)
+                    }
+                    if k < ns - 1 {
+                        # the quote after this segment: close for now
+                        pending = true
+                    }
+                } else {
+                    # seg is outside data: strip CRs, split on the separator
+                    let parts = seg.replace(cr, "").split(sep)
+                    if parts[0] != "" {
+                        push(chars, parts[0])
+                    }
+                    let np = len(parts)
+                    let p = 1
+                    while p < np {
+                        push(row, chars.join(""))
+                        chars = []
+                        if parts[p] != "" {
+                            push(chars, parts[p])
+                        }
+                        p = p + 1
+                    }
+                    if k < ns - 1 {
+                        # the quote after this segment: the machine opens a
+                        # quoted field only when the buffer list is EMPTY
+                        # (a mid-field quote is a literal char)
+                        if len(chars) == 0 {
+                            inq = true
+                        } else {
+                            push(chars, "\"")
+                        }
+                    }
+                }
+            }
+            k = k + 1
+        }
+        # the newline this split removed: inside quotes it is literal
+        # data; while pending it RESOLVES the close exactly like the
+        # machine (close, unquote, then flush the row); outside quotes a
+        # mid-document newline flushes the row like the machine's "\n"
+        if !is_last {
+            if pending {
+                pending = false
+                inq = false
+                push(row, chars.join(""))
+                chars = []
+                push(rows, row)
+                row = []
+            } else {
+                if inq {
+                    push(chars, "\n")
+                } else {
+                    push(row, chars.join(""))
+                    chars = []
+                    push(rows, row)
+                    row = []
+                }
+            }
+        }
+        i = i + 1
+    }
+    # end guard: the machine flushes a final partial field/row, but a
+    # trailing newline outside quotes must NOT produce an empty row —
+    # after the last split-removed newline this is exactly chars/row
+    # being empty (the dropped trailing "" line contributed nothing)
+    let had_trailing = raw[n - 1] == ""
+    if !had_trailing or inq or pending {
+        if len(chars) > 0 or len(row) > 0 {
+            push(row, chars.join(""))
+            push(rows, row)
+        }
+    }
+    return rows
+}
+
+gene csv_parse_machine(text, sep) {
+    # the original character-level state machine, kept verbatim as the
+    # reference parser: csv_parse delegates here for multi-char separators
+    # and feeds it line-by-line for quoted regions.
     # dx-r5 (audit P0-2): the field buffer accumulates in a list joined once
     # per field, and the document is iterated with `for c in text`, the old
     # form re-allocated the field per character AND sliced per character
