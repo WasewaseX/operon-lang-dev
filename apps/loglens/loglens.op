@@ -1,0 +1,404 @@
+use std/args as ar
+use std/fs as fs
+gene render_ratio(num_v, den, nd){
+  let x = num_v / den
+  let sc = 1.0
+  let i = 0
+  while i < nd {
+    sc = sc * 10.0
+    i = i + 1
+  }
+  let r = floor(x * sc + 0.5)
+  let si = floor(sc)
+  let whole = r // si
+  let frac = r % si
+  if nd == 0 {
+    return str(whole)
+  }
+  let fd = str(frac)
+  while len(fd) < nd {
+    fd = "0" + fd
+  }
+  return str(whole) + "." + fd
+}
+
+gene is_digits(s){
+  if len(s) == 0 {
+    return false
+  }
+  let i = 0
+  while i < len(s) {
+    let ch = char_at(s, i)
+    if ch < "0" or ch > "9" {
+      return false
+    }
+    i = i + 1
+  }
+  return true
+}
+
+gene split_log_lines(text){
+  let parts = text.split("\n")
+  let n = len(parts)
+  if n > 0 {
+    if parts[n - 1] == "" {
+      n = n - 1
+    }
+  }
+  let out = []
+  let i = 0
+  while i < n {
+    push(out, parts[i])
+    i = i + 1
+  }
+  return out
+}
+
+gene parse_line(line){
+  let pieces = line.split("\"")
+  if len(pieces) != 3 {
+    return null
+  }
+  let hp = pieces[0].split(" ")
+  if len(hp) < 1 {
+    return null
+  }
+  let host = hp[0]
+  if host == "" {
+    return null
+  }
+  let req = pieces[1].split(" ")
+  if len(req) != 3 {
+    return null
+  }
+  let rest = pieces[2].split(" ")
+  if len(rest) != 3 {
+    return null
+  }
+  if rest[0] != "" {
+    return null
+  }
+  if not is_digits(rest[1]) {
+    return null
+  }
+  if not is_digits(rest[2]) {
+    return null
+  }
+  return [host, req[1], rest[1], num(rest[2])]
+}
+
+gene parse_records(text){
+  let lines = split_log_lines(text)
+  let out = []
+  for line in lines {
+    let rec = parse_line(line)
+    if rec != null {
+      push(out, rec)
+    }
+  }
+  return out
+}
+
+gene count_map(values){
+  let m = {}
+  for v in values {
+    if m.has(v) {
+      m[v] = m[v] + 1
+    }
+    else {
+      m[v] = 1
+    }
+  }
+  return m
+}
+
+gene top_pairs(m, n, numeric){
+  let items = m.items()
+  # NOTE(dx): do NOT run `operon fmt --write` on this file until the fmt
+  # Lambda bug is fixed: fmt_body_inline renders a multi-statement closure
+  # body as "gene(..) => null" (silent corruption; caught by this app's
+  # proof frame on 2026-10-04, filed in the vault CHATROOM).
+  items = items.sort(gene(a, b) {
+    if a[1] != b[1] {
+      return a[1] > b[1]
+    }
+    if numeric {
+      return num(a[0]) < num(b[0])
+    }
+    return a[0] < b[0]
+  })
+  let out = []
+  let i = 0
+  while i < len(items) and i < n {
+    push(out, items[i])
+    i = i + 1
+  }
+  return out
+}
+
+gene sum_bytes(recs){
+  let total = 0
+  for r in recs {
+    total = total + r[3]
+  }
+  return total
+}
+
+gene dashes(widths){
+  let out = "+"
+  for w in widths {
+    out = out + "-".repeat(w + 2) + "+"
+  }
+  return out
+}
+
+gene table_row(cells, widths){
+  let out = "|"
+  let i = 0
+  while i < len(cells) {
+    out = out + " " + cells[i] + " ".repeat(widths[i] - len(cells[i])) + " |"
+    i = i + 1
+  }
+  return out
+}
+
+gene render_table(head, rows){
+  let ncols = len(head)
+  let widths = []
+  for h in head {
+    push(widths, len(h))
+  }
+  for r in rows {
+    let i = 0
+    while i < ncols {
+      if len(r[i]) > widths[i] {
+        widths[i] = len(r[i])
+      }
+      i = i + 1
+    }
+  }
+  let out = []
+  push(out, dashes(widths))
+  push(out, table_row(head, widths))
+  push(out, dashes(widths))
+  for r in rows {
+    push(out, table_row(r, widths))
+  }
+  push(out, dashes(widths))
+  return out
+}
+
+gene cmd_stats(text, path){
+  let recs = parse_records(text)
+  let hosts = count_map(record_field(recs, 0))
+  let urls = count_map(record_field(recs, 1))
+  let status = count_map(record_field(recs, 2))
+  print("loglens stats {path}")
+  print("records,{len(recs)}")
+  print("hosts,{len(hosts.keys())}")
+  print("urls,{len(urls.keys())}")
+  print("bytes,{sum_bytes(recs)}")
+  print("status,count")
+  let items = status.items()
+  items = items.sort(gene(a, b) => num(a[0]) < num(b[0]))
+  for it in items {
+    print("{it[0]},{it[1]}")
+  }
+}
+
+gene record_field(recs, idx){
+  let out = []
+  for r in recs {
+    if idx < len(r) {
+      push(out, r[idx])
+    }
+    else {
+      push(out, "")
+    }
+  }
+  return out
+}
+
+gene cmd_top(text, path, field, n){
+  if field != "host" and field != "url" and field != "status" {
+    print("loglens: unknown field {field}")
+    exit(2)
+  }
+  let recs = parse_records(text)
+  let idx = 0
+  if field == "url" {
+    idx = 1
+  }
+  if field == "status" {
+    idx = 2
+  }
+  let m = count_map(record_field(recs, idx))
+  print("loglens top {path} {field} {n}")
+  print("rank,value,count,share")
+  let numeric = field == "status"
+  let pairs = top_pairs(m, n, numeric)
+  let rank = 1
+  for p in pairs {
+    let share = render_ratio(p[1] * 100, len(recs), 2)
+    print("{rank},{p[0]},{p[1]},{share}")
+    rank = rank + 1
+  }
+}
+
+gene cmd_errors(text, path, n){
+  let recs = parse_records(text)
+  let errs = []
+  for r in recs {
+    if num(r[2]) >= 400 {
+      push(errs, r)
+    }
+  }
+  let m = count_map(record_field(errs, 1))
+  print("loglens errors {path} {n}")
+  print("count,{len(errs)}")
+  print("bytes,{sum_bytes(errs)}")
+  print("rank,url,count,share")
+  let pairs = top_pairs(m, n, false)
+  let rank = 1
+  for p in pairs {
+    let share = render_ratio(p[1] * 100, len(errs), 2)
+    print("{rank},{p[0]},{p[1]},{share}")
+    rank = rank + 1
+  }
+}
+
+gene cmd_table(text, path, n){
+  let recs = parse_records(text)
+  print("loglens table {path} {n}")
+  let head = ["host", "url", "status", "bytes"]
+  let shown = []
+  let i = 0
+  while i < len(recs) and i < n {
+    push(shown, [recs[i][0], recs[i][1], recs[i][2], str(recs[i][3])])
+    i = i + 1
+  }
+  let lines = render_table(head, shown)
+  for l in lines {
+    print(l)
+  }
+}
+
+gene usage(){
+  print("usage: loglens stats FILE")
+  print("       loglens top FILE FIELD N")
+  print("       loglens errors FILE [N]")
+  print("       loglens table FILE [N]")
+}
+
+gene run_cli(pos){
+  if len(pos) < 2 {
+    usage()
+    return null
+  }
+  let cmd = pos[0]
+  let path = pos[1]
+  let text = fs.fs_read_or(path, null)
+  if text == null {
+    print("loglens: cannot read {path}")
+    exit(2)
+  }
+  if cmd == "stats" {
+    cmd_stats(text, path)
+  }
+  elif cmd == "top" {
+    if len(pos) < 4 {
+      usage()
+      return null
+    }
+    cmd_top(text, path, pos[2], num(pos[3]))
+  }
+  elif cmd == "errors" {
+    let n = 10
+    if len(pos) >= 3 {
+      n = num(pos[2])
+    }
+    cmd_errors(text, path, n)
+  }
+  elif cmd == "table" {
+    let n = 10
+    if len(pos) >= 3 {
+      n = num(pos[2])
+    }
+    cmd_table(text, path, n)
+  }
+  else {
+    usage()
+  }
+}
+
+run_cli(ar.args_positional(argv()))
+frame proof {
+  assert(render_ratio(5, 2, 2) == "2.50")
+  assert(render_ratio(1, 3, 2) == "0.33")
+  assert(render_ratio(2, 3, 2) == "0.67")
+  assert(render_ratio(1, 2, 0) == "1")
+  assert(render_ratio(3, 2, 0) == "2")
+  assert(render_ratio(1, 8, 3) == "0.125")
+  assert(render_ratio(1, 1000, 2) == "0.00")
+  assert(render_ratio(999999, 1000, 2) == "1000.00")
+  assert(render_ratio(71, 10, 2) == "7.10")
+  assert(render_ratio(71, 1000, 2) == "0.07")
+  assert(render_ratio(500, 71, 2) == "7.04")
+  assert(is_digits("200") == true)
+  assert(is_digits("0") == true)
+  assert(is_digits("") == false)
+  assert(is_digits("-7") == false)
+  assert(is_digits("4.5") == false)
+  assert(is_digits(" 7") == false)
+  let ok = parse_line("h1 - - [04/Oct/2026:10:15:02 +0000] \"GET /u HTTP/1.1\" 200 1536")
+  assert(ok != null)
+  assert(ok[0] == "h1" and ok[1] == "/u" and ok[2] == "200" and ok[3] == 1536)
+  assert(parse_line("no quotes here") == null)
+  assert(parse_line("a \"x\" b \"c\" d") == null)
+  assert(parse_line("h - - [d t] \"GET /u\" 200 5") == null)
+  assert(parse_line("h - - [d t] \"GET /u HTTP/1.1\" 4xx 5") == null)
+  assert(parse_line("h - - [d t] \"GET /u HTTP/1.1\" 200 -") == null)
+  let spaces = parse_line("h2 - - [04/Oct/2026:01:02:03 +0000] \"POST /a/b HTTP/1.0\" 404 0")
+  assert(spaces[3] == 0 and spaces[2] == "404")
+  assert(len(split_log_lines("a\nb\n")) == 2)
+  assert(len(split_log_lines("a\nb")) == 2)
+  assert(len(split_log_lines("")) == 0)
+  assert(len(split_log_lines("\n")) == 1)
+  assert(len(split_log_lines("a\n\nb\n")) == 3)
+  let recs = parse_records("h1 - - [d t] \"GET /a HTTP/1.1\" 200 10\nbad line\nh2 - - [d t] \"GET /b HTTP/1.1\" 500 20\n")
+  assert(len(recs) == 2)
+  assert(recs[0][0] == "h1" and recs[1][0] == "h2")
+  let vs = ["b", "a", "b", "c", "a", "b"]
+  let m = count_map(vs)
+  assert(m["b"] == 3)
+  assert(m["a"] == 2)
+  assert(m.has("c") == true)
+  let tp = top_pairs(m, 2, false)
+  assert(len(tp) == 2)
+  assert(tp[0][0] == "b" and tp[0][1] == 3)
+  assert(tp[1][0] == "a")
+  let sm = count_map(["404", "200", "404", "500", "200", "404"])
+  let stp = top_pairs(sm, 3, true)
+  assert(stp[0][0] == "404" and stp[0][1] == 3)
+  assert(stp[1][0] == "200" and stp[2][0] == "500")
+  let hm = count_map(["500", "200", "404"])
+  let hi = hm.items().sort(gene(a, b) => num(a[0]) < num(b[0]))
+  assert(hi[0][0] == "200" and hi[1][0] == "404" and hi[2][0] == "500")
+  assert(sum_bytes([[0, 0, "200", 10], [0, 0, "500", 32], [0, 0, "404", 0]]) == 42)
+  assert(sum_bytes([]) == 0)
+  let lines = render_table(["host", "url"], [["h1", "/a"], ["long-host", "/b/c"]])
+  assert(len(lines) == 6)
+  assert(lines[0] == "+-----------+------+")
+  assert(lines[1] == "| host      | url  |")
+  assert(lines[3] == "| h1        | /a   |")
+  assert(lines[4] == "| long-host | /b/c |")
+  let er = parse_records("h1 - - [d t] \"GET /a HTTP/1.1\" 200 10\nh2 - - [d t] \"GET /b HTTP/1.1\" 503 30\n")
+  let errs = []
+  for r in er {
+    if num(r[2]) >= 400 {
+      push(errs, r)
+    }
+  }
+  assert(len(errs) == 1 and errs[0][0] == "h2" and errs[0][3] == 30)
+}
+

@@ -1,0 +1,325 @@
+{
+ "meta": {
+  "cpu": "x86_64",
+  "date": "2026-10-04 13:03 UTC",
+  "engines": [
+   "operon",
+   "python",
+   "node",
+   "rust"
+  ],
+  "fixture_big": "/home/z/my-project/operon-lang-dev/apps/loglens/test/data/big.log",
+  "fixture_small": "/home/z/my-project/operon-lang-dev/apps/loglens/test/data/small.log",
+  "kernel": "5.10.134-013.15.kangaroo.al8.x86_64",
+  "os": "Linux",
+  "versions": {
+   "node": "v24.21.0",
+   "operon": "Operon 2.8.0-vm (rust-core, cpp-kernel)",
+   "python": "Python 3.12.14",
+   "rust": "rustc 1.99.0 (b940084d7 2026-09-28)"
+  }
+ },
+ "workloads": {
+  "errors_big": {
+   "cs_identical": true,
+   "node": {
+    "cs": "ce5752f6b6a4fd6be91e834f6445f23530db41268a7c4835a34661687e0060a8",
+    "cs_stable": true,
+    "max_ms": 122.81,
+    "median_ms": 120.58,
+    "min_ms": 110.96,
+    "runs": 7,
+    "status": "ok"
+   },
+   "operon": {
+    "cs": "ce5752f6b6a4fd6be91e834f6445f23530db41268a7c4835a34661687e0060a8",
+    "cs_stable": true,
+    "max_ms": 847.71,
+    "median_ms": 841.21,
+    "min_ms": 834.25,
+    "runs": 7,
+    "status": "ok"
+   },
+   "python": {
+    "cs": "ce5752f6b6a4fd6be91e834f6445f23530db41268a7c4835a34661687e0060a8",
+    "cs_stable": true,
+    "max_ms": 138.01,
+    "median_ms": 137.05,
+    "min_ms": 135.91,
+    "runs": 7,
+    "status": "ok"
+   },
+   "ratio_node_over_op": 0.14,
+   "ratio_operon_over_op": 1.0,
+   "ratio_python_over_op": 0.16,
+   "ratio_rust_over_op": 0.04,
+   "rust": {
+    "cs": "ce5752f6b6a4fd6be91e834f6445f23530db41268a7c4835a34661687e0060a8",
+    "cs_stable": true,
+    "max_ms": 37.65,
+    "median_ms": 34.19,
+    "min_ms": 33.56,
+    "runs": 7,
+    "status": "ok"
+   }
+  },
+  "startup": {
+   "cs_identical": true,
+   "node": {
+    "cs": "88b1781d94838f95bc514d62494b0e8ffdb260c6f210a84ccf86a4a6570dead2",
+    "cs_stable": true,
+    "max_ms": 29.76,
+    "median_ms": 26.71,
+    "min_ms": 24.49,
+    "runs": 15,
+    "status": "ok"
+   },
+   "operon": {
+    "cs": "88b1781d94838f95bc514d62494b0e8ffdb260c6f210a84ccf86a4a6570dead2",
+    "cs_stable": true,
+    "max_ms": 2.61,
+    "median_ms": 2.41,
+    "min_ms": 2.37,
+    "runs": 15,
+    "status": "ok"
+   },
+   "python": {
+    "cs": "88b1781d94838f95bc514d62494b0e8ffdb260c6f210a84ccf86a4a6570dead2",
+    "cs_stable": true,
+    "max_ms": 21.63,
+    "median_ms": 17.97,
+    "min_ms": 16.35,
+    "runs": 15,
+    "status": "ok"
+   },
+   "ratio_node_over_op": 11.08,
+   "ratio_operon_over_op": 1.0,
+   "ratio_python_over_op": 7.46,
+   "ratio_rust_over_op": 0.21,
+   "rust": {
+    "cs": "88b1781d94838f95bc514d62494b0e8ffdb260c6f210a84ccf86a4a6570dead2",
+    "cs_stable": true,
+    "max_ms": 0.7,
+    "median_ms": 0.5,
+    "min_ms": 0.47,
+    "runs": 15,
+    "status": "ok"
+   }
+  },
+  "stats_big": {
+   "cs_identical": true,
+   "node": {
+    "cs": "d253f55811a531e52c12d05e722e3d774c3f93a6dd20d6caef7211ec6da08532",
+    "cs_stable": true,
+    "max_ms": 131.97,
+    "median_ms": 120.41,
+    "min_ms": 116.86,
+    "runs": 7,
+    "status": "ok"
+   },
+   "operon": {
+    "cs": "d253f55811a531e52c12d05e722e3d774c3f93a6dd20d6caef7211ec6da08532",
+    "cs_stable": true,
+    "max_ms": 1027.1,
+    "median_ms": 1013.53,
+    "min_ms": 1011.8,
+    "runs": 7,
+    "status": "ok"
+   },
+   "python": {
+    "cs": "d253f55811a531e52c12d05e722e3d774c3f93a6dd20d6caef7211ec6da08532",
+    "cs_stable": true,
+    "max_ms": 158.26,
+    "median_ms": 152.21,
+    "min_ms": 150.63,
+    "runs": 7,
+    "status": "ok"
+   },
+   "ratio_node_over_op": 0.12,
+   "ratio_operon_over_op": 1.0,
+   "ratio_python_over_op": 0.15,
+   "ratio_rust_over_op": 0.04,
+   "rust": {
+    "cs": "d253f55811a531e52c12d05e722e3d774c3f93a6dd20d6caef7211ec6da08532",
+    "cs_stable": true,
+    "max_ms": 36.66,
+    "median_ms": 35.79,
+    "min_ms": 34.87,
+    "runs": 7,
+    "status": "ok"
+   }
+  },
+  "stats_small": {
+   "cs_identical": true,
+   "node": {
+    "cs": "64eab0d980c3c54ea458fcff41d50d1e8142c003dfb5b8ddac963d7710f54646",
+    "cs_stable": true,
+    "max_ms": 31.31,
+    "median_ms": 28.68,
+    "min_ms": 24.29,
+    "runs": 15,
+    "status": "ok"
+   },
+   "operon": {
+    "cs": "64eab0d980c3c54ea458fcff41d50d1e8142c003dfb5b8ddac963d7710f54646",
+    "cs_stable": true,
+    "max_ms": 5.82,
+    "median_ms": 5.63,
+    "min_ms": 5.5,
+    "runs": 15,
+    "status": "ok"
+   },
+   "python": {
+    "cs": "64eab0d980c3c54ea458fcff41d50d1e8142c003dfb5b8ddac963d7710f54646",
+    "cs_stable": true,
+    "max_ms": 19.4,
+    "median_ms": 18.21,
+    "min_ms": 17.79,
+    "runs": 15,
+    "status": "ok"
+   },
+   "ratio_node_over_op": 5.09,
+   "ratio_operon_over_op": 1.0,
+   "ratio_python_over_op": 3.23,
+   "ratio_rust_over_op": 0.13,
+   "rust": {
+    "cs": "64eab0d980c3c54ea458fcff41d50d1e8142c003dfb5b8ddac963d7710f54646",
+    "cs_stable": true,
+    "max_ms": 0.92,
+    "median_ms": 0.74,
+    "min_ms": 0.65,
+    "runs": 15,
+    "status": "ok"
+   }
+  },
+  "table_big": {
+   "cs_identical": true,
+   "node": {
+    "cs": "a7b935cc23e3102863710ac574d5979f74be5ce83dd8b143faabea070095c75f",
+    "cs_stable": true,
+    "max_ms": 109.23,
+    "median_ms": 103.13,
+    "min_ms": 97.98,
+    "runs": 7,
+    "status": "ok"
+   },
+   "operon": {
+    "cs": "a7b935cc23e3102863710ac574d5979f74be5ce83dd8b143faabea070095c75f",
+    "cs_stable": true,
+    "max_ms": 796.82,
+    "median_ms": 769.84,
+    "min_ms": 761.18,
+    "runs": 7,
+    "status": "ok"
+   },
+   "python": {
+    "cs": "a7b935cc23e3102863710ac574d5979f74be5ce83dd8b143faabea070095c75f",
+    "cs_stable": true,
+    "max_ms": 126.26,
+    "median_ms": 124.04,
+    "min_ms": 122.62,
+    "runs": 7,
+    "status": "ok"
+   },
+   "ratio_node_over_op": 0.13,
+   "ratio_operon_over_op": 1.0,
+   "ratio_python_over_op": 0.16,
+   "ratio_rust_over_op": 0.03,
+   "rust": {
+    "cs": "a7b935cc23e3102863710ac574d5979f74be5ce83dd8b143faabea070095c75f",
+    "cs_stable": true,
+    "max_ms": 27.64,
+    "median_ms": 25.84,
+    "min_ms": 25.56,
+    "runs": 7,
+    "status": "ok"
+   }
+  },
+  "top_status_big": {
+   "cs_identical": true,
+   "node": {
+    "cs": "b213d05f1af7cd6dca05cf1c1a6a64972316373486822c1924a48d1680b06e95",
+    "cs_stable": true,
+    "max_ms": 111.29,
+    "median_ms": 107.4,
+    "min_ms": 105.3,
+    "runs": 7,
+    "status": "ok"
+   },
+   "operon": {
+    "cs": "b213d05f1af7cd6dca05cf1c1a6a64972316373486822c1924a48d1680b06e95",
+    "cs_stable": true,
+    "max_ms": 845.66,
+    "median_ms": 830.08,
+    "min_ms": 824.68,
+    "runs": 7,
+    "status": "ok"
+   },
+   "python": {
+    "cs": "b213d05f1af7cd6dca05cf1c1a6a64972316373486822c1924a48d1680b06e95",
+    "cs_stable": true,
+    "max_ms": 155.56,
+    "median_ms": 131.36,
+    "min_ms": 130.07,
+    "runs": 7,
+    "status": "ok"
+   },
+   "ratio_node_over_op": 0.13,
+   "ratio_operon_over_op": 1.0,
+   "ratio_python_over_op": 0.16,
+   "ratio_rust_over_op": 0.03,
+   "rust": {
+    "cs": "b213d05f1af7cd6dca05cf1c1a6a64972316373486822c1924a48d1680b06e95",
+    "cs_stable": true,
+    "max_ms": 30.93,
+    "median_ms": 28.71,
+    "min_ms": 27.92,
+    "runs": 7,
+    "status": "ok"
+   }
+  },
+  "top_url_big": {
+   "cs_identical": true,
+   "node": {
+    "cs": "d7710657a8748ecd216ea692ba46bd635aba192c42bae24ca5545f9becaae058",
+    "cs_stable": true,
+    "max_ms": 113.78,
+    "median_ms": 111.69,
+    "min_ms": 102.46,
+    "runs": 7,
+    "status": "ok"
+   },
+   "operon": {
+    "cs": "d7710657a8748ecd216ea692ba46bd635aba192c42bae24ca5545f9becaae058",
+    "cs_stable": true,
+    "max_ms": 840.93,
+    "median_ms": 828.12,
+    "min_ms": 820.17,
+    "runs": 7,
+    "status": "ok"
+   },
+   "python": {
+    "cs": "d7710657a8748ecd216ea692ba46bd635aba192c42bae24ca5545f9becaae058",
+    "cs_stable": true,
+    "max_ms": 136.67,
+    "median_ms": 134.39,
+    "min_ms": 132.98,
+    "runs": 7,
+    "status": "ok"
+   },
+   "ratio_node_over_op": 0.13,
+   "ratio_operon_over_op": 1.0,
+   "ratio_python_over_op": 0.16,
+   "ratio_rust_over_op": 0.04,
+   "rust": {
+    "cs": "d7710657a8748ecd216ea692ba46bd635aba192c42bae24ca5545f9becaae058",
+    "cs_stable": true,
+    "max_ms": 32.18,
+    "median_ms": 30.83,
+    "min_ms": 30.68,
+    "runs": 7,
+    "status": "ok"
+   }
+  }
+ }
+}
