@@ -23,7 +23,7 @@ in between, "should work" is not a state we write down.
 | Homebrew | `packaging/homebrew/operon.rb` | community | maintainer pins the tag tarball's `.sha256` into the formula, then owner-publishes the tap |
 | source release archive | `scripts/release.sh` → `dist/operon-<v>.tar.gz` + `SHA256SUMS` | validated locally | deterministic `git archive` re-tar (pinned mtime/uid/gid), `--verify` fail-closed; run it before tagging so SHA256SUMS is fresh |
 | whole-release `SHA256SUMS` (binary assets) | `.github/workflows/release.yml` `sha256sums` job | validated | hashes the exact published bytes after sidecar re-verification; partial releases refused; pinned to the build matrix by `scripts/pkg_meta_check.py`; consumed by `install.sh --verify` |
-| installer (curl \| sh) | `scripts/install.sh` + `scripts/install_e2e.sh` | validated | fail-closed verification (sidecar mandatory, manifest cross-checked, `--verify` strict); hermetic offline mode (`OPERON_INSTALL_ASSET_DIR`) exercised by `install_e2e.sh` in the standing gate |
+| installer (curl \| sh) | `scripts/install.sh` + `scripts/install_e2e.sh` | validated | fail-closed verification (sidecar mandatory, manifest cross-checked, `--verify` strict); hermetic offline mode (`OPERON_INSTALL_ASSET_DIR`) exercised by `install_e2e.sh` in the standing gate AND by the `Hermetic installer gate (W061-J)` step in every `release.yml` build job — the exact packaged bytes are install-verified (sidecar fail-closed path, installed binary runs and reports the tree version) in every release run, dry-run rehearsals included |
 | hosted registry server (W19-r2) | `packaging/registry/app.py` · `packaging/registry/requirements.txt` · `packaging/registry/render.yaml` | community | self-hosted tier (docs/specs/REGISTRY.md); the HTTP + WSGI surfaces and the render.yaml wiring are pinned by `scripts/pkg_meta_check.py` + `scripts/pkg_hosted_e2e.sh` in the standing gate; an actual deployment (Render or your own host) is a maintainer action |
 | winget | submission note | staged | winget needs a signed/published stable URL; submission is owner-gated (the 2026-10-02 owner triage) |
 
@@ -92,6 +92,12 @@ catch (run 36992837397): on a tag push the expectation is the tag minus `v`
 back to the built tree's `Cargo.toml` version — a branch name is not a
 version a dispatch-built binary could ever carry, and the first rehearsal
 failed all four smoked targets on exactly that mismatch before the fix.
+The same ref-aware split drives the hermetic installer gate (W061-J): the
+version it LOOKS UP comes from the asset name (the filename contract
+`install.sh` resolves), while the run-check compares the installed binary
+against the `Cargo.toml` version — both derivations are exercised on every
+dispatch rehearsal, so the installer contract never first-runs on a real
+tag (the sha256sums-job lesson, run 37146021197).
 The wiring is pinned by `scripts/pkg_meta_check.py`; a rehearsal that
 cannot derive an expectation refuses to run.
 

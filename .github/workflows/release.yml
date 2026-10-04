@@ -147,6 +147,53 @@ jobs:
         run: |
           echo "smoke: skipped (cross) — x86_64-apple-darwin is cross-compiled on the arm64 runner; executing it needs Rosetta, which the runner does not guarantee"
 
+      # W061-J (hermetic e2e before tag): the installer must consume the EXACT
+      # bytes this run is about to publish — offline (OPERON_INSTALL_ASSET_DIR),
+      # through install.sh's real fail-closed path (sidecar -c before extract),
+      # and the installed binary must run and report the tree's version.
+      # Motivated by the TubeForge v1.0.0 lesson (two release-blocking bugs
+      # caught by the app's hermetic e2e, none by review) and by this repo's
+      # own history: the installer-facing contract class broke twice in live
+      # rehearsals (CRLF sidecar run 37045410736, ref-aware smoke expectation
+      # run 36992837397) — both found only AFTER packaging. Running this in
+      # EVERY build job — dry-run rehearsals included, per the sha256sums-job
+      # lesson (a gate that first runs on a real tag is not rehearsed) — turns
+      # the installer contract into a standing release gate instead of a
+      # session-side probe. The version looked up is derived from the ASSET
+      # NAME (the filename contract install.sh actually resolves), while the
+      # run-check compares the installed binary against the tree's Cargo.toml
+      # version — the same ref-aware derivation the W060 smoke uses. Windows
+      # is out of scope (install.sh is unix-only; the zip ships to the
+      # releases page), the cross target is excluded for the same
+      # Rosetta reason as the smoke above.
+      - name: Hermetic installer gate (W061-J)
+        if: matrix.pkg == 'tar' && matrix.target != 'x86_64-apple-darwin'
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="$(basename "$ASSET")"
+          AV="${BASE#operon-}"; AV="${AV%-${{ matrix.target }}.tar.gz}"
+          [ -n "$AV" ] || { echo "install-gate: could not derive the version from asset name '$BASE'"; exit 2; }
+          case "$GITHUB_REF" in
+            refs/tags/*) BV="${GITHUB_REF_NAME#v}" ;;
+            *) BV="$(awk '/^\[package\]/{f=1;next} f && /^version/{sub(/^version[[:space:]]*=[[:space:]]*"/,""); sub(/".*/,""); print; exit}' Cargo.toml)" ;;
+          esac
+          [ -n "$BV" ] || { echo "install-gate: could not derive the expected binary version"; exit 2; }
+          IDIR="$(mktemp -d)"
+          if OPERON_VERSION="v$AV" OPERON_INSTALL_ASSET_DIR="$(dirname "$ASSET")" \
+             OPERON_INSTALL_DIR="$IDIR" sh scripts/install.sh > /tmp/install-gate.log 2>&1; then
+            cat /tmp/install-gate.log
+          else
+            echo "install-gate: installer FAILED on the packaged asset ($BASE):"
+            cat /tmp/install-gate.log
+            rm -rf "$IDIR"
+            exit 1
+          fi
+          grep -q "checksum ok" /tmp/install-gate.log || { echo "install-gate: no 'checksum ok' in installer log"; rm -rf "$IDIR"; exit 1; }
+          "$IDIR/operon" --version | grep -q "Operon $BV" || { echo "install-gate: installed binary does not report 'Operon $BV'"; rm -rf "$IDIR"; exit 1; }
+          rm -rf "$IDIR"
+          echo "install-gate: PASS — packaged asset installs hermetically (sidecar fail-closed path), binary runs and reports Operon $BV"
+
       - name: Attach to GitHub Release
         if: ${{ inputs.dry_run != true }}
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2 (SHA-pinned, D-6/sec-r5)
