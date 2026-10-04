@@ -1,0 +1,88 @@
+# bench: call_args — the P4 argument-binding cost ladder (builder-E)
+# Roadmap P4 charter target: "argument binding". Arity scaling of the gene
+# call: f0/f1/f2/f4/f8 take 0/1/2/4/8 args, each body a single add-return.
+# Each leg times N_CALLS calls in a plain while loop (the loop is identical
+# across legs; the delta between legs isolates per-argument binding work in
+# resolve_param + the W011-s2 slot write-through).
+#
+# Two runs tell the binding story apart:
+#   default          — the W011-s2 frame-slot path (slot Vec + write-through
+#                      env define per param) when the gene is slot-eligible
+#   OPERON_VM_SLOTS=0— the env path (define_param per arg into the frame Env)
+# The driver (call_args.sh) runs both; the DIFFERENCE per arity is the slot
+# mechanism's net, the SLOPE across arities is the per-arg binding cost.
+#
+# Mirrors: call_args_py.py (CPython), call_args_rs.rs (native floor) — same
+# genes as plain functions, same loop, same clock shape. Output lines:
+#   ARGS arity=<k> calls=<N> ns_per_call=<ns>
+
+gene f0() { return 7 }
+gene f1(a) { return a }
+gene f2(a, b) { return a + b }
+gene f4(a, b, c, d) { return a + b + c + d }
+gene f8(a, b, c, d, e, f, g, h) { return a + b + c + d + e + f + g + h }
+
+gene leg0(n) {
+    let s = 0
+    let i = 0
+    while i < n { s = s + f0() ; i = i + 1 }
+    return s
+}
+gene leg1(n) {
+    let s = 0
+    let i = 0
+    while i < n { s = s + f1(i) ; i = i + 1 }
+    return s
+}
+gene leg2(n) {
+    let s = 0
+    let i = 0
+    while i < n { s = s + f2(i, i) ; i = i + 1 }
+    return s
+}
+gene leg4(n) {
+    let s = 0
+    let i = 0
+    while i < n { s = s + f4(i, i, i, i) ; i = i + 1 }
+    return s
+}
+gene leg8(n) {
+    let s = 0
+    let i = 0
+    while i < n { s = s + f8(i, i, i, i, i, i, i, i) ; i = i + 1 }
+    return s
+}
+
+main {
+    let n = num(env("CALL_ARGS_N"))
+    let reps = num(env("CALL_ARGS_REPS"))
+    # warm every gene once (code cache + mono-cache priming) outside timing
+    let w = f0() + f1(1) + f2(1, 2) + f4(1, 2, 3, 4) + f8(1, 2, 3, 4, 5, 6, 7, 8)
+    let r = 0
+    while r < reps {
+        let t0 = clock()
+        let s0 = leg0(n)
+        let t1 = clock()
+        let s1 = leg1(n)
+        let t2 = clock()
+        let s2 = leg2(n)
+        let t3 = clock()
+        let s4 = leg4(n)
+        let t4 = clock()
+        let s8 = leg8(n)
+        let t5 = clock()
+        let n0 = (t1 - t0) * 1e9 / n
+        let n1 = (t2 - t1) * 1e9 / n
+        let n2 = (t3 - t2) * 1e9 / n
+        let n4 = (t4 - t3) * 1e9 / n
+        let n8 = (t5 - t4) * 1e9 / n
+        if r == reps - 1 {
+            promote("ARGS arity=0 calls={n} ns_per_call={n0} ck={s0}")
+            promote("ARGS arity=1 calls={n} ns_per_call={n1} ck={s1}")
+            promote("ARGS arity=2 calls={n} ns_per_call={n2} ck={s2}")
+            promote("ARGS arity=4 calls={n} ns_per_call={n4} ck={s4}")
+            promote("ARGS arity=8 calls={n} ns_per_call={n8} ck={s8}")
+        }
+        r = r + 1
+    }
+}
