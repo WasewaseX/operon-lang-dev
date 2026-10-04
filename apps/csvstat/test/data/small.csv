@@ -1,0 +1,41 @@
+order_id,region,product,qty,unit_cents,note
+2028,north,beta,8,3782,ok
+2029,south,gamma,9,6411, expedited 
+2030,east,eta boost,8,3820,ok
+2031,west,alpha,7,2435,
+2032,north,epsilon,8,4239,ok
+2033,south,zeta,8,7965, expedited 
+2034,east,delta,5,7341,"say ""hi"""
+2035,west,"gpu, pro",3,4500,
+2036,north,beta,7,4145,ok
+2037,south,gamma,1,9383,recheck
+2038,east,eta boost,3,1452,"say ""hi"""
+2039,west,alpha,9,2086,ok
+2040,north,epsilon,7,5102,ok
+2041,south,zeta,6,6239,recheck
+2042,east,delta,4,2566,ok
+2043,west,"gpu, pro",5,4492, expedited 
+2044,north,beta,2,409,backorder
+2045,south,gamma,8,1564,ok
+2046,east,eta boost,1,9606,backorder
+2047,west,alpha,7,6546,ok
+2048,north,epsilon,4,3240,backorder
+2049,south,zeta,6,3828,ok
+2050,east,delta,5,9194,ok
+2051,west,"gpu, pro",2,9141,ok
+2052,north,beta,3,2367,ok
+2053,south,gamma,1,7650, expedited 
+2054,east,eta boost,3,9766,ok
+2055,west,alpha,4,9562,ok
+2056,north,epsilon,4,3663,"say ""hi"""
+2057,south,zeta,5,4578,
+2058,east,delta,9,3171,"say ""hi"""
+2059,west,"gpu, pro",6,6951,
+2060,north,beta,7,3761,ok
+2061,south,gamma,7,1393, expedited 
+2062,east,eta boost,7,2196,ok
+2063,west,alpha,1,1653,recheck
+2064,north,epsilon,7,4147,backorder
+2065,south,zeta,1,2476,ok
+2066,east,delta,2,8528,backorder
+2067,west,"gpu, pro",7,726,ok

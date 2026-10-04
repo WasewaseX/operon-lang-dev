@@ -1,0 +1,4 @@
+# csvstat.op runtime contract — the launcher passes --cell with this file.
+# Pure analytics: no run() ceiling needed, but exit() is allowed for the
+# CLI's explicit non-zero exits (reserved for future error paths).
+allow.exit = true
