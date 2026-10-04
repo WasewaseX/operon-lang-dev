@@ -1,0 +1,12 @@
+# P1 probe: 50k absent-key lookups on a 4k-key map (miss path: memo miss ->
+# what fallback runs?). Pairs with m_mapget (hit path).
+main {
+    let m = {}
+    for i in range(4000) { m[str(i)] = i }
+    let a = 0
+    for i in range(50000) {
+        let k = str(4000 + (i % 4000))
+        if m.has(k) { a = a + 1 } else { a = a - 1 }
+    }
+    promote("a = {a}")
+}
