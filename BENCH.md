@@ -610,3 +610,85 @@ so a program-global consumer scan decides whether the maintenance runs.
   1–2% frame-env residual — both correctly out of s3's reach. The next
   measurable call-path lever stays gated on the roadmap (P4) and its §34
   verdict.
+
+## P2 — sort2k complexity + callback-cost audit (2026-10-04, builder-E)
+
+The roadmap P2 charter (lane E, §34 APPROVED measure-first): determine
+whether the comparator-driven sort — `sorted(xs, cmp)` / `xs.sort(cmp)`,
+an insertion sort with a user-gene callback per comparison
+(`src/interp.rs`, the `.sort()` contract block) — is algorithmic
+(O(n log n)), quadratic, or dominated by language callback overhead.
+Fixtures (lane-exclusive paths): `scripts/bench/sort_scale.op` (operon),
+`sort_scale_py.py` (CPython mirrors), `sort_scale_rs.rs` (native Rust),
+`sort_scale.sh` (driver), `sort_scale_profcheck.op` (profiler cross-check).
+
+**Design.** LCG seed-42 data (`x = (x*1103515245+12345) mod 2^31`,
+`v = x mod 1e6`) — the identical stream in all three engines. Legs per
+n ∈ {1k, 2k, 4k, 8k}: insertion timed min-of-3; exact comparator-call
+count (in-language push-cell, `n ≤ 4000`); an in-engine algorithmic
+control (`std/heap` `heap_from` + `heap_sorted` with the SAME comparator
+gene — O(n log n) comparisons, identical per-callback machinery); CPython
+floors (`sorted` builtin = Timsort at C speed; `cmp_to_key` = Timsort +
+Python callback); native-Rust insertion with a closure comparator +
+`sort_unstable` floor. One operon process per size: the 200M run-wide
+step budget (SPEC §9b) cannot fit a multi-size study in one invocation —
+a 3-rep 8k leg alone is E1020 (`step budget exhausted`), itself a
+workload-shaping property worth knowing.
+
+**Comparator-call counts are EXACT and cross-engine identical** (same
+LCG → same permutation → same comparison sequence): 251,830 (1k) →
+1,011,638 (2k) → 4,048,443 (4k) → 15,997,582 (8k), verified equal on
+operon/CPython/Rust at every measured size (operon counted ≤ 4k; the 8k
+count transfers under the differential law). Growth ratio 4.02 / 4.00 /
+3.95 per doubling — quadratic, matching the insertion-sort expectation
+(n²/4; theory 250k vs measured 251,830 at 1k). The profiler independently
+reports `<lambda> 251830` calls at 1k — span count equals the in-language
+count exactly (two instruments, one number).
+
+**Wall time, min-of-3, ms** (main `d5483a6`, this box — the BENCH.md
+environment table above):
+
+| n   | operon insertion | CPython insertion | Rust insertion | operon heap (control) | CPython builtin | CPython cmp_to_key |
+|-----|-----------------|-------------------|----------------|----------------------|-----------------|--------------------|
+| 1k  | 95.0            | 47.4              | 0.116          | 68.2                 | 0.088           | 1.07               |
+| 2k  | 381.5           | 197.1             | 0.432          | 166.4                | 0.187           | 2.35               |
+| 4k  | 1531.6          | 800.3             | 1.693          | 439.0                | 0.418           | 5.55               |
+| 8k  | 6118.6          | 3175.1            | 6.568          | 1204.6               | 0.921           | 10.92              |
+
+Per-engine insertion growth per doubling: operon 4.02 / 4.01 / 3.99,
+CPython 4.16 / 4.06 / 3.97, Rust 3.72 / 3.92 / 3.88 — quadratic in all
+three; the ALGORITHM sets the growth everywhere.
+
+**Diagnosis (the charter question).** Both terms are real and separable:
+- **Algorithmic term (dominant):** ×4.0 time and comparison growth per
+  doubling in every engine. The in-engine control proves it without
+  leaving operon: the heap path with the same comparator gene (and ~4×
+  the per-comparison gene-call depth) is already 1.4× faster at 1k and
+  5.1× faster at 8k (68.2 vs 95.0; 1204.6 vs 6118.6) purely on n log n
+  vs n² comparisons (16,881 vs 251,830 at 1k; 2.23× growth per doubling).
+- **Callback term (constant):** per comparison at 8k: operon 382 ns,
+  CPython callback analog 198 ns, native Rust closure 0.41 ns — operon is
+  1.93× the pure-CPython analog and ~930× native on the matched
+  algorithm. For contrast, CPython's `cmp_to_key` (Timsort + Python
+  callback, 117 ns/callback) pays 93,049 callbacks at 8k — 172× fewer
+  than the insertion contract — and finishes in 10.9 ms.
+- **Verdict:** the comparator sort is quadratic BY ALGORITHM with the
+  per-comparison constant set by VM callback overhead. Neither factor
+  alone explains the gap to production floors (CPython builtin is
+  6641× faster at 8k: 0.921 ms vs 6118.6 ms); together they compound.
+- **Evidence-backed fix direction (owner-gated, not claimed here):** a
+  stability-preserving merge sort behind the same comparator contract
+  (`cmp(a,b)` true-when-before, ties keep original order — the differential
+  corpus pins stability-observable outputs, so the replacement must be
+  stable like insertion sort) cuts comparisons from n²/4 to ~n log n;
+  at the measured per-comparison cost that projects 8k to ~40–60 ms
+  (~100–150×), with the callback term as the follow-on lever (P4-class).
+
+**Honesty notes.** Min-of-3 in-process `clock()` deltas (sort isolated
+from generation and checksum); generation is O(n) and uncharged. The
+counted legs run untimed (the push-cell adds O(1) per comparison).
+Rust 1k→2k ratio dips to 3.72 (cache effects at 4-byte elements). The
+8k operon counted leg is omitted (16M-cell list vs the run-wide budget)
+and transfers via the verified differential law instead. Env knobs:
+`SORT_SCALE_N` / `SORT_SCALE_REPS` with `--allow-env`; the driver drops
+to 2 reps at 8k to stay inside the step budget.
