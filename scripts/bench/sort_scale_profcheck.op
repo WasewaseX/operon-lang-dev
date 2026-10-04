@@ -1,0 +1,35 @@
+# bench: sort_scale profiler cross-check — comparator span-count law (builder-E)
+# Runs the n=1000 counted leg only; under `operon profile` the comparator
+# gene's span count must equal the in-language `calls` count exactly
+# (same measurement from two independent instruments, T4-style cross-check).
+use std/heap;
+
+gene make_xs(n) {
+    let xs = []
+    let x = 42
+    let i = 0
+    while i < n {
+        x = (x * 1103515245 + 12345) % 2147483648
+        push(xs, x % 1000000)
+        i = i + 1
+    }
+    return xs
+}
+
+main {
+    let n = 1000
+    let xs = make_xs(n)
+    let calls = []
+    let cmp_cnt = gene(a, b) {
+        push(calls, 1)
+        return a < b
+    }
+    let out = sorted(xs, cmp_cnt)
+    let s = 0
+    let i = 0
+    while i < len(out) {
+        s = s + out[i]
+        i = i + 1
+    }
+    promote("PROFCHECK n={n} calls={len(calls)} cksum={s}")
+}

@@ -1,0 +1,135 @@
+# bench: sort_scale — the P2 sort-complexity + callback-cost audit (builder-E)
+# Roadmap P2 charter (lane E, APPROVED 2026-10-04): determine whether the
+# comparator-driven sort (`sorted(xs, cmp)` / `xs.sort(cmp)`, insertion sort
+# with a user-gene callback in src/interp.rs) is algorithmic (O(n^2)) or
+# callback-bound. Legs per n (one n per process — the 200M run-wide step
+# budget, SPEC §9b, cannot fit a multi-size study in one invocation):
+#   mode=insertion — timed REPS times (min reported), `sorted(xs, before)`
+#   mode=counted   — exact comparator-call count via push-cell (n <= 4000;
+#                    the 8k count comes from the cross-engine differential law:
+#                    same LCG seed -> same permutation -> same comparison
+#                    sequence, verified exactly at 1k/2k/4k against the
+#                    CPython and native-Rust mirrors)
+#   mode=heap      — in-engine algorithmic control: std/heap heap_from +
+#                    heap_sorted with the SAME comparator gene (O(n log n)
+#                    comparisons, identical per-callback cost), counted n <= 2000
+# Data: LCG seed-42 (x = (x*1103515245 + 12345) mod 2^31, v = x mod 1e6) —
+# identical stream in sort_scale_py.py and sort_scale_rs.rs.
+# CPython + native-Rust mirrors: sort_scale_py.py / sort_scale_rs.rs.
+# Driver: sort_scale.sh (loops sizes, sets SORT_SCALE_N / SORT_SCALE_REPS).
+use std/heap;
+
+gene before(a, b) {
+    return a < b
+}
+
+gene make_xs(n) {
+    let xs = []
+    let x = 42
+    let i = 0
+    while i < n {
+        x = (x * 1103515245 + 12345) % 2147483648
+        push(xs, x % 1000000)
+        i = i + 1
+    }
+    return xs
+}
+
+gene cksum(xs) {
+    let s = 0
+    let i = 0
+    while i < len(xs) {
+        s = s + xs[i]
+        i = i + 1
+    }
+    return s
+}
+
+gene timed_sorted(xs, reps) {
+    let best = -1.0
+    let r = 0
+    let out = []
+    while r < reps {
+        let t0 = clock()
+        let s = sorted(xs, before)
+        let t1 = clock()
+        let ms = (t1 - t0) * 1000.0
+        if best < 0.0 {
+            best = ms
+        }
+        if ms < best {
+            best = ms
+        }
+        out = s
+        r = r + 1
+    }
+    return [out, best]
+}
+
+gene timed_heap(xs, reps) {
+    let best = -1.0
+    let r = 0
+    let out = []
+    while r < reps {
+        let t0 = clock()
+        let h = heap.heap_from(xs, before)
+        let s = heap.heap_sorted(h, before)
+        let t1 = clock()
+        let ms = (t1 - t0) * 1000.0
+        if best < 0.0 {
+            best = ms
+        }
+        if ms < best {
+            best = ms
+        }
+        out = s
+        r = r + 1
+    }
+    return [out, best]
+}
+
+main {
+    let n = num(env("SORT_SCALE_N"))
+    let reps = num(env("SORT_SCALE_REPS"))
+    if reps < 1 {
+        reps = 3
+    }
+    if n < 1 {
+        promote("error: set SORT_SCALE_N (usage: SORT_SCALE_N=1000 operon run --allow-env SORT_SCALE_N scripts/bench/sort_scale.op)")
+        return
+    }
+    let xs = make_xs(n)
+
+    # insertion sort, timed
+    let pair = timed_sorted(xs, reps)
+    let out = pair[0]
+    let best = pair[1]
+    promote("SCALE engine=operon n={n} mode=insertion min_ms={best} cksum={cksum(out)}")
+
+    # comparator-call count (exact), n <= 4000 only
+    if n <= 4000 {
+        let calls = []
+        let cmp_cnt = gene(a, b) {
+            push(calls, 1)
+            return a < b
+        }
+        let out2 = sorted(xs, cmp_cnt)
+        promote("SCALE engine=operon n={n} mode=counted calls={len(calls)} cksum={cksum(out2)}")
+    }
+
+    # in-engine algorithmic control: std/heap with the same comparator
+    let pair3 = timed_heap(xs, reps)
+    let out3 = pair3[0]
+    let best3 = pair3[1]
+    promote("SCALE engine=operon n={n} mode=heap min_ms={best3} cksum={cksum(out3)}")
+    if n <= 2000 {
+        let calls3 = []
+        let cmp_cnt3 = gene(a, b) {
+            push(calls3, 1)
+            return a < b
+        }
+        let h3 = heap.heap_from(xs, cmp_cnt3)
+        let out4 = heap.heap_sorted(h3, cmp_cnt3)
+        promote("SCALE engine=operon n={n} mode=heap_counted calls={len(calls3)} cksum={cksum(out4)}")
+    }
+}
