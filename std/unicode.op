@@ -8,16 +8,17 @@
 # Pins: tests/unicode.op + tests/differential/unicode.op (byte-identical).
 
 gene upper(c) {
-    # one-char string -> uppercase form (fold-table inverse subset);
-    # non-alpha passes through unchanged
-    let lo = fold_case(c)
-    if lo == c {
-        return c
-    }
-    # the folded char differs: find the uppercase via table inversion for
-    # the documented ranges only (ASCII fast path)
+    # one-char string -> uppercase form over the documented fold subset
+    # (SPEC §3): the ASCII lower range, plus every lower range is_lower
+    # declares (Latin-1 224-246 / 248-254, Greek 945-961 / 963-969),
+    # inverted by the fixed -32 offset that pairs the blocks. Everything
+    # else passes through unchanged, so upper(fold_case(x)) == x for
+    # every letter the module itself calls alpha.
     let cp = ord(c)
     if cp >= 97 && cp <= 122 {
+        return chr(cp - 32)
+    }
+    if (cp >= 224 && cp <= 246) || (cp >= 248 && cp <= 254) || (cp >= 945 && cp <= 961) || (cp >= 963 && cp <= 969) {
         return chr(cp - 32)
     }
     return c

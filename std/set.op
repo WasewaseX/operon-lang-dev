@@ -4,17 +4,47 @@
 # function returns a NEW list and never mutates its arguments. set_from is
 # the canonicalizer (dedup keeping first-appearance order); the algebra
 # functions assume canonical sets (ordinary lists work, duplicated members
-# are carried as-is). Member tests use value equality (==, deep); dedup
-# keys on the type-tagged string form of a member, so string "1" and int 1
-# stay distinct members (one documented hairline: float 1.0 and int 1
-# dedup apart even though == says equal).
+# are carried as-is). Member tests use value equality (==, deep); dedup keys
+# on a STRUCTURAL canonical form so ==-equal members collapse: map members
+# key with their sub-keys sorted (map == is order-insensitive, so two
+# insertion orders of the same mapping are ONE member), list elements keep
+# their order (list == is order-sensitive), string leaves are
+# length-prefixed so they cannot collide across shapes. One documented
+# hairline stays: float 1.0 and int 1 dedup apart even though == says equal.
+
+gene __set_canon(x) {
+    # structural canonical form used as the dedup key. Length-prefixing the
+    # raw string leaves ("s<len>:<chars>") makes separator characters inside
+    # a string harmless; sorted map sub-keys make the form order-insensitive
+    # exactly where == is; list order is kept exactly where == demands it.
+    let t = type(x)
+    if t == "map" {
+        let ks = sorted(keys(x))
+        let parts = []
+        for k in ks {
+            push(parts, str(len(k)) + ":" + k + "=" + __set_canon(x[k]))
+        }
+        return "map{" + ",".join(parts) + "}"
+    }
+    if t == "list" {
+        let parts = []
+        for v in x {
+            push(parts, __set_canon(v))
+        }
+        return "list[" + ",".join(parts) + "]"
+    }
+    if t == "str" {
+        return "s" + str(len(x)) + ":" + x
+    }
+    return t + ":" + str(x)
+}
 
 gene set_from(xs) {
     # deduplicated copy of xs, first-appearance order preserved
     let seen = {}
     let out = []
     for x in xs {
-        let k = type(x) + ":" + str(x)
+        let k = __set_canon(x)
         if !has(seen, k) {
             seen[k] = true
             push(out, x)

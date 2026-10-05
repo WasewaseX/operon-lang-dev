@@ -1,0 +1,100 @@
+# S3-136H hardening pool pin (2026-10-06): regression gate for issue #136
+# rows fixed by builder-B (the S1 headlines — iter.unique, json_compact —
+# ride E-SWEEP-STD1 / PR #142; the std/math row rides the #133 claim).
+# Every row below was a silently-wrong or silently-lossy behavior verified
+# by INTEGRITY-SWEEP-3 and re-verified by builder-F (sessions 14/15); the
+# fixes pin the DOCUMENTED contracts, byte-identical across all engines.
+# Expected output is byte-pinned across all engines (differential lanes).
+use std/collections as col
+use std/strings as st
+use std/set as s
+use std/bigint as bi
+use std/binary as bn
+use std/unicode as un
+use std/hashing as hs
+use std/heap as hp
+use std/args as ar
+use std/serialize as sz
+use std/csv as cv
+
+gene __null_first(x, y) {
+    # test-only comparator: nulls sort before everything, ints after
+    if x == null {
+        return true
+    }
+    if y == null {
+        return false
+    }
+    return x < y
+}
+
+main {
+    # --- row 2: chunk size <= 0 chunks nothing (iter.chunk contract) ----
+    print("r2a", col.chunk([1, 2, 3], 0))
+    print("r2b", col.chunk([1, 2, 3], -4))
+    print("r2c", col.chunk([1, 2, 3], 2))
+
+    # --- row 3 (collections half): take is first-n, not python-slice ----
+    print("r3a", col.take([1, 2, 3], -1))
+    print("r3b", col.take([1, 2, 3], 0))
+
+    # --- row 1 (std half): centered pad keeps INTEGER widths ------------
+    # the bare `/` fed pad_left a Float width; oracle-correct 3+3 centering
+    print("r1a", st.pad("ab", 8, ".."))
+    print("r1b", st.pad("a", 3, "-"))
+
+    # --- row 16: words/title_case normalize every whitespace ------------
+    print("r16a", st.title_case("a\tb"))
+    print("r16b", st.words("x\ny\rz  w"))
+
+    # --- row 6: set_from canonicalizes maps order-insensitively ---------    # two ==-equal maps in different insertion orders are ONE member
+    print("r6a", s.set_from([{"a": 1, "b": 2}, {"b": 2, "a": 1}]))
+    print("r6b", s.set_from([{"a": {"x": 1, "y": 2}}, {"a": {"y": 2, "x": 1}}]))
+    print("r6c", s.set_from(["1", 1, "1"]))
+
+    # --- rows 7/8/9: bigint NEW-list results + the i64::MIN boundary ----
+    let m = bi.big_from_int(5)
+    let neg = bi.big_neg(m)
+    neg[1][0] = 9
+    print("r7a", bi.big_to_str(m))
+    print("r7b", bi.big_to_str(bi.big_abs(bi.big_from_str("-123"))))
+    print("r8a", bi.big_to_int(bi.big_from_str("-9223372036854775808")))
+    print("r8b", bi.big_to_int(bi.big_from_str("9223372036854775808")))
+    print("r9a", bi.big_to_str(bi.big_from_int(-9223372036854775807 - 1)))
+
+    # --- row 14: huge offsets answer null, never an offset overflow -----
+    print("r14a", bn.bin_read_u16le(bn.bin_u16le(4660), 9223372036854775807))
+    print("r14b", bn.bin_read_u32be(bn.bin_u32be(1), 9223372036854775806))
+    print("r14c", bn.bin_read_i64le(bn.bin_i64le(-5), 9223372036854775807))
+
+    # --- row 15: upper inverts the whole declared fold subset -----------
+    print("r15a", un.upper("é"))
+    print("r15b", un.upper("α"))
+    print("r15c", un.upper(fold_case("É")) == "É")
+    print("r15d", un.upper("Ω"))
+
+    # --- row 11: a foreign input answers null, not the empty hash -------
+    print("r11a", hs.hash_fnv1a32(123))
+    print("r11b", hs.hash_fnv1a32(""))
+    print("r11c", hs.sha256(123))
+
+    # --- row 19: a heap may legitimately contain null -------------------
+    print("r19a", hp.heap_sorted(hp.heap_from([null], gene (x, y) => false)))
+    print("r19b", hp.heap_sorted(hp.heap_from([2, null, 1], __null_first)))
+
+    # --- row 20: malformed numerics answer the DECLARED default ---------
+    print("r20a", ar.args_number(["--port", "abc"], "port", 8080))
+    print("r20b", ar.args_number(["--jobs", "4"], "jobs", 1))
+    print("r20c", ar.args_number(["--rate", "1.5e3"], "rate", 0))
+
+    # --- row 13: CR cells survive the csv round trip (#106 class) -------
+    print("r13a", sz.roundtrip([["a\rb"]], "csv"))
+
+    # --- row 18: unterminated quotes answer null; closers stay valid ----
+    print("r18a", cv.csv_count_fields("a,\"b", ","))
+    print("r18b", cv.csv_count_fields("a,\"b\"", ","))
+    print("r18c", cv.csv_parse("x,\"a\"", ","))
+    print("r18d", cv.csv_parse("a,\"b", ","))
+    print("r18e", cv.csv_parse("a,\"b\"\"", ","))
+    print("r18f", cv.csv_parse("h1,h2\n1,2\n", ","))
+}

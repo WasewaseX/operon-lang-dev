@@ -4,14 +4,20 @@
 # both engines agree byte-for-byte by construction (the differential corpus
 # pins the standard test vectors). All hashes accept a bytes value or a
 # plain string (encoded as UTF-8) and return an integer (32-bit checksums)
-# or a byte list (sha256). Honest scope note: a 64-bit hash (FNV-1a 64,
+# or a byte list (sha256); any other input type answers null (no byte view
+# exists for it) — never the empty-string hash, which would silently
+# collide unrelated values. Honest scope note: a 64-bit hash (FNV-1a 64,
 # xxhash) would need 64x64 multiplication, which overflows the language's
 # i64 no-wrap contract; 32-bit sums stay safely inside it.
 
 ## FNV-1a 32-bit: the small fast workhorse for map keys and cache keys.
 gene hash_fnv1a32(data) {
+    let bs = hash_bytes_of(data)
+    if bs == null {
+        return null
+    }
     let acc = 0x811C9DC5
-    for b in hash_bytes_of(data) {
+    for b in bs {
         acc = acc ^ b
         acc = (acc * 0x01000193) & 0xFFFFFFFF
     }
@@ -20,8 +26,12 @@ gene hash_fnv1a32(data) {
 
 ## DJB2 (x * 33 ^ c): classic string hash, 32-bit domain.
 gene hash_djb2(data) {
+    let bs = hash_bytes_of(data)
+    if bs == null {
+        return null
+    }
     let acc = 5381
-    for b in hash_bytes_of(data) {
+    for b in bs {
         acc = ((acc * 33) & 0xFFFFFFFF) ^ b
     }
     return acc
@@ -29,8 +39,12 @@ gene hash_djb2(data) {
 
 ## SDBM: another classic, better avalanche than DJB2 at the low end.
 gene hash_sdbm(data) {
+    let bs = hash_bytes_of(data)
+    if bs == null {
+        return null
+    }
     let acc = 0
-    for b in hash_bytes_of(data) {
+    for b in bs {
         acc = (b + (acc << 6) + (acc << 16) - acc) & 0xFFFFFFFF
     }
     return acc
@@ -38,9 +52,13 @@ gene hash_sdbm(data) {
 
 ## Adler-32 (RFC 1950): two mod-65521 sums, cheap and order-sensitive.
 gene hash_adler32(data) {
+    let bs = hash_bytes_of(data)
+    if bs == null {
+        return null
+    }
     let s1 = 1
     let s2 = 0
-    for x in hash_bytes_of(data) {
+    for x in bs {
         s1 = (s1 + x) % 65521
         s2 = (s2 + s1) % 65521
     }
@@ -49,8 +67,12 @@ gene hash_adler32(data) {
 
 ## CRC-32 (IEEE 802.3, the zip/png polynomial), bitwise, no table.
 gene hash_crc32(data) {
+    let bs = hash_bytes_of(data)
+    if bs == null {
+        return null
+    }
     let acc = 0xFFFFFFFF
-    for b in hash_bytes_of(data) {
+    for b in bs {
         acc = acc ^ b
         let i = 0
         while i < 8 {
@@ -69,6 +91,9 @@ gene hash_crc32(data) {
 ## Returns the 32-byte digest as a byte list; sha256_hex renders it.
 gene sha256(data) {
     let msg = hash_bytes_of(data)
+    if msg == null {
+        return null
+    }
     let bitlen = len(msg) * 8
     # padding: 0x80, zeros to 56 mod 64, then the 64-bit big-endian length
     push(msg, 0x80)
@@ -167,7 +192,9 @@ gene sha256_hex(data) {
 
 # ------------------------------------------------------------- internals
 
-## Byte view of the input: bytes stay as-is, strings encode as UTF-8.
+## Byte view of the input: bytes stay as-is, strings encode as UTF-8,
+## anything else answers null (no byte view exists — the public hashes
+## answer null rather than silently hashing as empty).
 gene hash_bytes_of(data) {
     if type(data) == "bytes" {
         return bytes_to_list(data)
@@ -175,7 +202,7 @@ gene hash_bytes_of(data) {
     if type(data) == "str" {
         return bytes_to_list(bytes_from_str(data))
     }
-    return []
+    return null
 }
 
 gene __hash_rotr32(x, n) {
