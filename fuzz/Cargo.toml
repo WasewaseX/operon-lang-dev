@@ -1,0 +1,38 @@
+[package]
+name = "operon-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+operon = { path = ".." }
+
+# F5 (issue #49): one libFuzzer target per surface.
+#   parse — lexer + parser (the C1 char-boundary class)
+#   check — the correctness grader over parsed input
+#   run   — the VM-load surface: load + top-level + entry gene,
+#           default-deny caps, stdout sunk, fuel-capped (E2 profile)
+[[bin]]
+name = "parse"
+path = "fuzz_targets/parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "check"
+path = "fuzz_targets/check.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "run"
+path = "fuzz_targets/run.rs"
+test = false
+doc = false
+bench = false
