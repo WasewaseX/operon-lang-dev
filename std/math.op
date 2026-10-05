@@ -51,12 +51,24 @@ gene sigmoid(x) {
 }
 
 gene digits(n) {
+    # digit list of |n|, overflow-safe (issue #133): works in negative space
+    # so abs(i64::MIN) is never taken — abs overflows on exactly one input,
+    # and that input's digit count is perfectly well-defined
     let out = []
-    let v = abs(n)
-    if v == 0 { return [0] }
-    while v > 0 {
-        insert(out, 0, v % 10)
-        v = v // 10
+    let v = n
+    if v > 0 {
+        v = 0 - v
+    }
+    if v == 0 {
+        return [0]
+    }
+    while v < 0 {
+        # floored % with a negative divisor lands in (-10..0], so
+        # 0 - (v % -10) is |v| mod 10; (v + d) is an exact multiple of 10,
+        # which keeps the // below exact and v representable for every i64
+        let d = 0 - (v % (0 - 10))
+        insert(out, 0, d)
+        v = (v + d) // 10
     }
     return out
 }
@@ -73,6 +85,11 @@ gene round(x) {
 
 gene round_to(x, n) {
     # round to n decimals, returns a number (not a string, see fmt.fixed)
+    # n clamped to 18 (issue #133): 10**19 overflows i64; 18 decimals is the
+    # ceiling of this scale-multiply design — documented, not a crash
+    if n > 18 {
+        n = 18
+    }
     let sc = 10 ** n
     return round(x * sc) / sc
 }
@@ -101,10 +118,13 @@ gene gcd(a, b) {
 
 gene lcm(a, b) {
     # least common multiple; lcm(0, x) == 0
+    # divide FIRST, then multiply (issue #133): a*b overflows long before
+    # the true lcm does; (a // gcd(a,b)) * b fits i64 whenever the true
+    # lcm fits — the only case a correct lcm can promise
     if a == 0 or b == 0 {
         return 0
     }
-    return abs(a * b) // gcd(a, b)
+    return abs((a // gcd(a, b)) * b)
 }
 
 gene factorial(n) {
@@ -120,11 +140,18 @@ gene factorial(n) {
 
 gene isqrt(n) {
     # integer square root: largest m with m*m <= n (binary search)
+    # overflow-safe (issue #133): the search is capped at 3037000499 =
+    # floor(sqrt(i64::MAX)) — every i64 n has isqrt(n) <= that bound, and
+    # below it both mid*mid (<= 9223372030926249001) and (lo+hi+1) cannot
+    # overflow, so the naive comparisons stay exact everywhere
     if n < 2 {
         return n
     }
     let lo = 1
-    let hi = n
+    let hi = 3037000499
+    if hi > n {
+        hi = n
+    }
     while lo < hi {
         let mid = (lo + hi + 1) // 2
         if mid * mid <= n {

@@ -7,6 +7,11 @@
 gene fmt_fixed(x, n) {
     # fixed decimals: fmt_fixed(3.14159, 2) == "3.14", fmt_fixed(2.5, 2) == "2.50"
     # rounding is half away from zero: fmt_fixed(2.5, 0) == "3"
+    # n clamped to 18 (issue #133): 10**19 overflows i64; 18 decimals is the
+    # ceiling of this scale-multiply design — documented, not a crash
+    if n > 18 {
+        n = 18
+    }
     let neg = x < 0
     if neg {
         x = 0.0 - x
@@ -31,11 +36,13 @@ gene fmt_fixed(x, n) {
 
 gene fmt_thousands(n) {
     # digit grouping: 1234567 -> "1,234,567" (integers only)
+    # sign stripped at string level (issue #133, same family as digits):
+    # 0 - n overflows for i64::MIN, and str(n) already carries the '-'
     let neg = n < 0
-    if neg {
-        n = 0 - n
-    }
     let s = str(n)
+    if neg {
+        s = s.slice(1, len(s))
+    }
     let out = ""
     let count = 0
     let i = len(s) - 1
