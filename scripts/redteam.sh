@@ -43,6 +43,19 @@ if [ -f target/release/operon ]; then
     fi
 fi
 
+# bash-3.2 + set -u: an empty array expansion ("${grants[@]}" with zero grants,
+# e.g. the *p15b*|*p15c* payload class) is diagnosed as "unbound variable" and
+# kills the whole suite (macos-latest 2026-10-04/05, runs 37222455480 and
+# 37224463187 — every macos leg on every PR red at line 56). The
+# ${arr[@]+"${arr[@]}"} guard below expands to NOTHING when empty and normally
+# otherwise, on every bash.
+# macOS runners also ship no GNU coreutils: without `timeout` every payload
+# exits 127 and the suite is VACUOUS while still printing "ok" rows (same
+# runs). The banner makes a vacuous green impossible to miss.
+if ! command -v timeout >/dev/null 2>&1; then
+    echo "WARNING: GNU coreutils 'timeout' NOT FOUND on PATH — every payload will rc=127 and this suite run is VACUOUS (install coreutils or map gtimeout; do not treat this as a real green)" >&2
+fi
+
 pass=0; fail=0; failed_files=()
 
 run_one() {
@@ -53,7 +66,7 @@ run_one() {
     # blocked until the process died on its own). rc 137 = SIGKILLed (hang).
     # W09: OPERON_EXTRA_ARGS (e.g. --vm) re-runs the same containment gate
     # against the bytecode engine; default empty = the tree-walk baseline.
-    timeout -k 5 15 ./bin/operon run ${OPERON_EXTRA_ARGS:-} "$f" "${grants[@]}" > "$TMP/out" 2> "$TMP/err"
+    timeout -k 5 15 ./bin/operon run ${OPERON_EXTRA_ARGS:-} "$f" ${grants[@]+"${grants[@]}"} > "$TMP/out" 2> "$TMP/err"
     local rc=$?
     if [ $rc -eq 124 ] || [ $rc -eq 137 ]; then
         echo "HANG  $f"; return 1

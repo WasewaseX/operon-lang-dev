@@ -31,9 +31,16 @@ import sys
 import tempfile
 
 BIN = "./bin/operon"
-TIMEOUT = 15  # seconds per input: must sit ABOVE the 20M-step fuel bound
-                   # (~5s) so a fuel-contained runaway counts as contained;
-                   # only genuinely unbounded behavior trips this
+# Seconds per input: must sit ABOVE the 20M-step fuel bound. Windows CI
+# runners execute the identical fuel-bound workloads ~2x slower (process
+# spawn + Defender overhead): with the seed-20260930/500-input stream, 2 of
+# 70 class-S inputs crossed the 15s cap there while Linux ran the SAME
+# inputs clean (branch run 37222540141 vs local repro, 2026-10-04) — so the
+# windows default is 30s and Linux stays the semantics referee at 15s.
+# Override on any host: FUZZ_TIMEOUT env var.
+TIMEOUT = int(os.environ.get("FUZZ_TIMEOUT", "30" if sys.platform == "win32" else "15"))
+# (the cap must sit above the fuel bound so a fuel-contained runaway counts
+# as contained; only genuinely unbounded behavior trips the timeout class)
 
 BAD_RCS = {101, 134, 139, 136, 138}  # panic / abort / segv / fpe family
 
