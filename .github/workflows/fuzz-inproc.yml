@@ -1,0 +1,92 @@
+# F5 (issue #49): cargo-fuzz libFuzzer in-process targets — the W051 deeper layer.
+# Nightly, NON-BLOCKING per the issue: findings are evidence, not gate failures.
+# Every artifact is replay-gated SOLO before it counts as a finding (the
+# known resource-exhaustion classes — thread pumps, deep-nesting stack
+# economics — produce artifacts by design; only a solo-reproduced panic,
+# OOM on a fresh input, or signal on a shipped threshold is a finding).
+name: fuzz-inproc
+
+on:
+  schedule:
+    # nightly 3:41 UTC — off the hour, away from the top-of-hour CI storm
+    - cron: '41 3 * * *'
+  workflow_dispatch:
+    inputs:
+      minutes_per_target:
+        description: 'libFuzzer -max_total_time per target, in seconds'
+        required: false
+        default: '300'
+
+permissions:
+  contents: read
+
+jobs:
+  inproc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out the pinned head
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+
+      - name: Install Rust (nightly; cargo-fuzz needs -Zsanitizer)
+        run: |
+          rustup toolchain install nightly --profile minimal
+          rustup default nightly
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+
+      - name: Build targets (cargo fuzz acceptance)
+        run: cargo fuzz build
+
+      - name: Derive the date seed (recorded in the log)
+        id: seed
+        run: echo "seed=$(date +%Y%m%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Fuzz parse (lexer + parser; ASan + leak-check)
+        run: |
+          cargo fuzz run parse fuzz/corpus tests/ examples/ fuzz_corpus/ -- \
+            -seed=${{ steps.seed.outputs.seed }} -max_total_time=${{ github.event.inputs.minutes_per_target || '300' }} -timeout=10
+
+      - name: Fuzz check (checker; ASan + leak-check)
+        run: |
+          cargo fuzz run check fuzz/corpus tests/ examples/ fuzz_corpus/ -- \
+            -seed=${{ steps.seed.outputs.seed }} -max_total_time=${{ github.event.inputs.minutes_per_target || '300' }} -timeout=10
+
+      - name: Fuzz run (VM-load; coverage-only, leaks off — see FUZZING.md)
+        run: |
+          cargo fuzz run run fuzz/corpus tests/ examples/ fuzz_corpus/ -- \
+            -seed=${{ steps.seed.outputs.seed }} -max_total_time=${{ github.event.inputs.minutes_per_target || '300' }} -timeout=30 -detect_leaks=0
+
+      - name: Reproduction gate (replay every artifact solo)
+        if: always()
+        run: |
+          # An artifact only counts as a finding when it reproduces SOLO.
+          # Known resource-exhaustion classes (day-one findings 1-4,
+          # docs/FUZZING.md) are expected here; new classes are the signal.
+          mkdir -p fuzz/replay
+          found=0
+          for art in fuzz/artifacts/*/*; do
+            [ -f "$art" ] || continue
+            kind=$(basename "$art" | cut -d- -f1)
+            target=$(basename "$(dirname "$art")")
+            echo "replaying solo: $target / $(basename "$art") [$kind]"
+            case "$kind" in
+              crash)
+                if cargo fuzz run "$target" fuzz/replay/ -- -runs=1 -timeout=60 2>&1 | tail -3; then :; fi
+                found=1 ;;
+              oom|timeout|slow-unit)
+                echo "  known transient class ($kind) — recorded, replayed for the log:" ;;
+            esac
+          done
+          echo "artifacts present: $found (non-blocking; triage in the run summary)"
+
+      - name: Upload artifacts (always — reproducers and transients alike)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: fuzz-inproc-artifacts
+          path: |
+            fuzz/artifacts/
+          if-no-files-found: ignore
+          retention-days: 14

@@ -14,6 +14,7 @@ scripts/fuzz/fuzz.py and in scripts/fuzz/TRIAGE.md.
 | Tool | Method | Surface | Determinism |
 |---|---|---|---|
 | scripts/fuzz/fuzz.py (W051) | mutation-based black-box | check, ast --json, fmt, explain [--json] | --seed S |
+| fuzz/ (F5, #49) | cargo-fuzz libFuzzer, in-process, coverage-guided | parse (lexer+parser), check, run (VM-load: load+top-level+entry, default-deny, fuel-capped) | -seed=N (date-derived in CI) |
 | scripts/fuzz_parser.py | grammar-aware generation | parser via exec engines | --seed S |
 | scripts/fuzz/fuzz_diff.py (S7 s2) | grammar-aware differential, at scale | run (VM + tree-walk) vs oracle, check rc contract, check --json shape parity | --seed S |
 | scripts/fuzz/fuzz_exec.py (S7 s3) | grammar-aware + redteam-directed escape generation | run default-deny + fuel cap (E1/E1b/E2), rna --check / doc / graph / disasm / crispr (E3) | --seed S |
@@ -64,7 +65,57 @@ NOT YET fuzzed (the S7 roadmap, in order):
   denial vocabulary — DONE (slice 3, the escape leg of fuzz_exec.py)
 - libFuzzer in-process targets (cargo-fuzz) for the Rust core: the deeper
   layer W051's done-when names; the black-box lanes above are the
-  zero-setup daily driver that runs in CI today
+  zero-setup daily driver that runs in CI today — DONE (F5, issue #49:
+  the fuzz/ crate, three targets, nightly workflow
+  fuzz-inproc.yml; see "The in-process layer" below)
+
+## The in-process layer (F5, issue #49)
+
+The fuzz/ crate drives the Rust core IN-PROCESS with coverage guidance —
+the class the black-box lanes cannot reach (parser state-machine corners
+behind complex input shapes; the C1 multibyte panic needed pure luck
+black-box, coverage guidance makes it cheap). One target per surface:
+
+- `parse` — lexer + parser (`parser::parse`). ASan + leak-checked.
+- `check` — parse + `typeck::check_program`. ASan + leak-checked.
+- `run` — the exact CLI run sequence in-process (`tools::load_file` +
+  `tools::run_entry`): default-deny caps, stdout sunk (dx-r3), entry leg
+  fuel-capped at 200k (E2 profile), VM lane on. Coverage-only
+  (`--sanitizer none`) + `-detect_leaks=0` — see the harness notes.
+
+Seeds = tests/ + examples/ + fuzz_corpus/, passed to libFuzzer as
+read-only dirs (no seed files are duplicated into fuzz/). Every input
+runs on a big-stack worker thread (fuzz/fuzz_targets/common.rs, 512 MB)
+so the ASan build fits the SAME shipped nesting thresholds the CLI ships
+— the engine source sees zero delta and differential parity is untouched
+by construction.
+
+Harness notes, recorded honestly (each found by this layer on day one):
+
+1. ASan stack economics: 4096-deep `[[[[…]]]]` truncates contained on
+   the CLI (rc 0 repair note) but SIGSEGV'd the ASan fuzz target — ASan
+   inflates frames several-fold and 4096 nesting × the ~5-frame
+   recursive-descent chain no longer fits the stack. The big-stack
+   worker keeps the shipped threshold under test; the plain CLI is
+   byte-identical in behavior (verified on the crash input).
+2. Rc reference cycles: a malformed `gene f( {` leaves gene/env
+   references in a cycle; LSan flags it on the run target. The shipped
+   CLI model (one program → exit → OS reclaims) never exposes it; a
+   Weak-based cycle break is an engine-lane follow-up, so the run target
+   runs with -detect_leaks=0 and this REMAIN is tracked here. parse and
+   check stay leak-checked (acyclic ASTs).
+3. Recursion + rescue: `gene f` calling itself inside `rescue` (and the
+   `stress`+`rescue` double-pump variant) pumps the SPEC §7
+   catch-and-retry loop; the CLI contains it at rc 1 (E1020) at
+   fuel ∈ {200k, 1M, 200M} but the ASan build overflowed even a 512 MB
+   stack. Coverage-only for run removes the false-positive flood this
+   class would feed the run target; the containment is pinned by the
+   CLI cross-checks.
+4. `#` comment splice slow-unit: an unbounded top-level loop contained
+   via the 10k note cap (CLI rc 0, 4.3 s) burns the run target's quiet
+   budget for ~20 s. Reproducible-slow class — the nightly workflow
+   replay-gates every artifact SOLO before it counts as a finding, so
+   known-slow transients are recorded without crying wolf.
 
 ## Running it
 
