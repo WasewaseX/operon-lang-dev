@@ -92,43 +92,52 @@ mem-charge, DP ceiling) cost nothing measurable on honest workloads.
 `op/py` = operon vs native CPython, **the v3.0 gap to close**.
 `op/oracle` = how much faster the Rust core already is than its Python mirror.
 
-## Results, micro (per construct, re-measured on `e757b4d`; m_mapset/m_mapget refreshed on the P1 head, 2026-10-04 — other rows still carry e757b4d-era drift, see docs/bench/2026-10-04-p5p6-survey.md)
+## Results, micro (per construct — full table re-measured on the P1 merge head `2bd29b0`, 2026-10-05, builder-E, canonical iters in foreground chunks; m_mapset/m_mapget re-confirmed on this head)
 
-> NOTE (2026-10-04, P5/P6 survey): the rows above predate the MapStore,
-> W011 call-path and W-L1 landings — fresh re-measurement shows m_mapget
-> −89%, m_call −15%, strings −5.5x vs these rows; the map/call rows are
-> stale and refresh with P1's landing. Fresh numbers + the P5/P6 survey
-> evidence (quadratic concat confirmed, eager `range()` materialization,
-> 32 B/elem boxed numerics): `docs/bench/2026-10-04-p5p6-survey.md`.
+> NOTE (2026-10-05, refresh): the P5/P6 survey's stale-row promise ("the map/call
+> rows are stale and refresh with P1's landing") is now settled — every row below
+> comes from ONE run on ONE head (`2bd29b0`), so within-run ratios are the
+> comparables. Cross-session absolute drift on this sandbox is real: the same
+> untouched fixtures (m_while, m_intadd) and even the oracle legs moved +8–17%
+> vs the 2026-10-04 recordings on a different box allocation — do NOT read
+> cross-session absolute deltas as regressions. Structural findings survive the
+> drift unchanged: map rows hold at **3.5–3.7x** (vs 70–80x pre-fix), and the
+> call row is consistent with the P4 profile below (m_call 202 ns/op here vs
+> fib25's 406 ns/call — the nop-call shape is shallower than deep recursion).
+> Survey evidence archive: `docs/bench/2026-10-04-p5p6-survey.md`.
 
 | micro | operon (ms) | oracle (ms) | native-py (ms) | op/py | op ns/op | py ns/op |
 |---|---:|---:|---:|---:|---:|---:|
-| m_empty (startup) | 0.9 | 52.6 |, |, |, |, |
-| m_call | 63.3 | 761.7 | 8.4 | **7.5x** | 211 | 28 |
-| m_forrange | 50.9 | 614.1 | 8.9 | **5.7x** | 85 | 15 |
-| m_while | 59.9 | 1315.0 | 11.9 | **5.0x** | 100 | 20 |
-| m_varread | 56.7 | 657.1 | 9.1 | **6.3x** | 94 | 15 |
-| m_intadd | 86.0 | 945.6 | 13.6 | **6.3x** | 96 | 15 |
-| m_listpush | 16.3 | 226.9 | 2.3 | **7.1x** | 108 | 15 |
-| m_listidx | 38.0 | 579.7 | 7.7 | **5.0x** | 127 | 26 |
-| m_mapset | 16.2 | 31634.9 | 5.3 | **3.1x** | 405 | 67 |
-| m_mapget | 27.1 | 40460.4 | 7.8 | **3.5x** | 176 | 51 |
-| m_strcat | 10.0 | 96.2 | 0.7 | **14.7x** | 416 | 28 |
+| m_empty (startup) | 1.0 | 90.6 | — | — | — | — |
+| m_call | 60.5 | 1035.3 | 8.7 | **7.0x** | 202 | 29 |
+| m_forrange | 57.3 | 738.3 | 7.9 | **7.3x** | 96 | 13 |
+| m_while | 66.0 | 1563.8 | 11.1 | **5.9x** | 110 | 19 |
+| m_varread | 61.3 | 787.3 | 8.0 | **7.7x** | 102 | 13 |
+| m_intadd | 93.3 | 1119.9 | 15.0 | **6.2x** | 104 | 17 |
+| m_listpush | 19.1 | 310.5 | 2.3 | **8.3x** | 127 | 15 |
+| m_listidx | 41.8 | 702.7 | 7.6 | **5.5x** | 139 | 25 |
+| m_mapset | 18.4 | 61915.0 | 5.3 | **3.5x** | 230 | 66 |
+| m_mapget | 29.1 | 82289.3 | 7.8 | **3.7x** | 189 | 51 |
+| m_strcat | 10.9 | 138.4 | 0.7 | **15.6x** | 454 | 29 |
 
 ## Reading the numbers
 
-- **Maps are fixed — the emergency is retired.** At `e757b4d` the association-list store scanned linearly with `deep_eq` per element: `m_mapset`/`m_mapget` ran **70–80x** slower than native CPython (the oracle's cProfile showed **58,025,002 `deep_eq` calls, 42 s of 84 s** on the collections fixture). dx-r3 added the hash memo prefilter, W-L1 removed the per-lookup String clone, and P1 (2026-10-04) rebuilt the memo as a single-hash open-addressed table with proven miss-trust (docs/bench/2026-10-04-p1-map.md): the build path dropped from O(N^2) deep_eq scans to O(N) (8k-key build 149→3.7 ms, t(2N)/t(N) 4.19→1.99), absent-key lookup from a full scan to O(1) (50k misses 1084→153 ms), batch del from quadratic rebuilds to linear (261→22 ms), and the standing micros now sit at **3.1–3.5x** native. The residual map gap is per-op interpreter dispatch + `str()` key materialization — P4 dispatch surface, not the store.
+- **Maps are fixed — the emergency is retired.** At `e757b4d` the association-list store scanned linearly with `deep_eq` per element: `m_mapset`/`m_mapget` ran **70–80x** slower than native CPython (the oracle's cProfile showed **58,025,002 `deep_eq` calls, 42 s of 84 s** on the collections fixture). dx-r3 added the hash memo prefilter, W-L1 removed the per-lookup String clone, and P1 (2026-10-04) rebuilt the memo as a single-hash open-addressed table with proven miss-trust (docs/bench/2026-10-04-p1-map.md): the build path dropped from O(N^2) deep_eq scans to O(N) (8k-key build 149→3.7 ms, t(2N)/t(N) 4.19→1.99), absent-key lookup from a full scan to O(1) (50k misses 1084→153 ms), batch del from quadratic rebuilds to linear (261→22 ms), and the standing micros now sit at **3.5–3.7x** native (re-confirmed on the merge head `2bd29b0`, 2026-10-05). The residual map gap is per-op interpreter dispatch + `str()` key materialization — P4 dispatch surface, not the store.
 - **Calls are the chronic gap.** Naive recursion (fib25, C(20,10)) lands at
-  **~10x**; an empty-ish gene call costs ~214 ns/op vs CPython's 28 ns. The
-  call path allocates: the callee's `name.clone()` is cloned up to three times
-  per call for the counters/burst bins before the body even starts.
+  **~9.5x**; an empty-ish gene call costs ~202 ns/op vs CPython's 29 (this
+  table, 2026-10-05). The call path's alloc/clone story is now fully
+  decomposed in the P4 section below: the W011 rounds killed the per-call
+  name clones (tb/promo counters read ZERO), the regulatory gates cost 7.5
+  ns/call, bookkeeping 1.6, the fuel tick 9.8 — and the remaining 388.5
+  ns/call floor is frame-Env + slot-Vec allocation (env_new = 1.5/call,
+  exact) plus 7 VM instruction dispatches.
 - **Plain loops are close-ish.** `for`/`while` arithmetic sits at 5–6x, the
   dominant cost is a fresh `Env` (a new `Rc` + `HashMap`) allocated **per loop
   iteration** to bind one variable, plus `tick()` bookkeeping per node.
 - **Strings leak allocations.** `s = s + "x"` reallocates a fresh `String` per
-  op (14.7x), and the `strings` fixture (template + replace + concat) hits
+  op (15.6x on the 2026-10-05 run), and the `strings` fixture (template + replace + concat) hits
   33.5x, but note its native-py time (0.8 ms) is at the startup-noise floor;
-  trust m_strcat's 412 ns/op instead.
+  trust m_strcat's ~454 ns/op instead.
 - **The v2.2 honesty machinery is cheap.** The GRN-gated workload is the
   *closest* to native (3.8x). `operon profile` on `grn.op` shows the three
   regulated genes at ~2.1 ms self each for 20k calls (~107 ns/call including
