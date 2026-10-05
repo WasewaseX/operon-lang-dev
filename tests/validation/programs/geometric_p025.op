@@ -1,0 +1,17 @@
+# V-R06-04 — geometric waiting time: 2000 waits to the first success of
+# random() < 0.25 (support 1,2,...). Prints TOTAL then M; z vs mean 1/p = 4
+# with variance (1-p)/(p^2 * m).
+randomize(SEED)
+let m = 2000
+let total = 0
+let t = 0
+while t < m {
+    let w = 1
+    while random() >= 0.25 {
+        w = w + 1
+    }
+    total = total + w
+    t = t + 1
+}
+print(total)
+print(m)
