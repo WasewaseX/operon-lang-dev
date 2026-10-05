@@ -1,0 +1,27 @@
+{
+  "engine_args": [],
+  "gates": {
+    "determinism_pin": true,
+    "z_alpha": 0.001
+  },
+  "id": "V-R06-05-markov2",
+  "program": "tests/validation/programs/markov2_p03_q05.op",
+  "reduce": {
+    "op": "ratio"
+  },
+  "reference": {
+    "kind": "markov2-stationary",
+    "params": {
+      "p01": 0.3,
+      "q10": 0.5
+    }
+  },
+  "schema": "r06-fixture-v1",
+  "seeds": [
+    11,
+    23,
+    37,
+    53,
+    97
+  ]
+}
