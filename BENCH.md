@@ -778,3 +778,135 @@ the instrumentation once this session.
 Fix directions are NOT claimed here (P6 is the survey's owner-gated lane):
 the evidence files are the lazy-Range candidate (eager materialization,
 66 B/elem) and the typed-array floor (8.4 vs 33.5 B/elem retention).
+
+## P4 — call-overhead profile: same-binary ablation ladder (2026-10-05, builder-E)
+
+**Charter (ROADMAP-BIO-COMPUTATIONAL §P4, §34-AMENDED):** "Profile: gene call
+frames, environment lookup, argument binding, telemetry counters, fuel
+charging, stack allocation/reuse, bridged calls. Target call-heavy workloads
+such as fib25/fib30." The amendment gates any deeper call-frame redesign
+(lazy-fenv-class) on **fresh same-binary interleaved evidence** — this section
+is that evidence. Every leg below runs the SAME release binary (2.8.0-vm @
+main `0f20cec`) over the IDENTICAL workload (`scripts/bench/call_fib.op`,
+`CALL_FIB_N` parameterized), interleaved round-robin, min-of-3, in-process
+clock — process-level configs differ only in `OPERON_W009A_ABLATE` /
+`OPERON_W009A_COUNTS` (the W009-A harness, read at process start, inert at
+one AtomicBool load per site otherwise).
+
+**Fixtures (lane-exclusive):** `scripts/bench/call_fib.{op,py}` + `call_fib_rs.rs`
+(the charter's named target, timed legs + analytic count legs);
+`call_ablate.sh` (the ladder driver + counters); `call_args.{op,py,rs}` +
+`call_args.sh` (arity ladder, slot vs env lanes); `call_bridged.{op,py}`
+(direct-builtin vs gene-wrapped vs pure-gene). Zero Rust delta.
+
+### The differential anchor: call counts and shape constants
+
+| quantity | fib25 | fib30 | law |
+|---|---:|---:|---|
+| gene calls C(n) | 242,785 | 2,692,537 | C(n)=2·F(n+1)−1, engine-independent (count legs byte-match in op/py/rs) |
+| `bookkeep` counter | 242,786 | 2,692,538 | exactly C(n)+1: main is invoked as a gene (entry) |
+| `slot_frames` | 242,785 | 2,692,537 | exactly C(n): every call rode the W011-s2 slot path |
+| VM instructions | 1,699,525 | 18,847,789 | **7.00 instrs/call** at both sizes |
+| `env_new` | 364,181 | 4,038,809 | **exactly 1.5 env allocs/call**: 1 frame env per call + 1 block env per leaf (the `n<2` branch body) + 2 run-wide (364181 = 242786 + 121393 + 2 ✓) |
+| `mono_hits` | 242,782 | 2,692,534 | C(n)−3: 3 misses to prime the mono-cache, then all hits |
+| `tb_clones` / `promo_clones` | 0 / 0 | 0 / 0 | the W011-r2 lazy-traceback + promo-early-return optimizations are LIVE — zero happy-path String clones remain |
+
+### Ladder — removable per-call work (min-of-3 ms, deltas in ns/call)
+
+| cfg | fib25 ms | fib30 ms | Δ vs base (ns/call, from n=30) |
+|---|---:|---:|---:|
+| base | 98.464 | 1093.148 | — (406.0 ns/call) |
+| `tick` (no per-instr step check) | 96.590 | 1066.879 | **−9.8** |
+| `gates` (no regulatory block) | 96.725 | 1073.026 | **−7.5** |
+| `bk` (no counters/buckets/clock) | 98.184 | 1088.732 | **−1.6** |
+| `decay` (no m6a/grn tickers) | 99.350 | 1090.287 | −1.1 (subset of bk) |
+| `tb` / `promo` (no clones) | 98.560 / 99.445 | 1092.402 / 1091.880 | ≈ 0 (already optimized away) |
+| `pool` (env recycling OFF) | 104.584 | 1162.063 | **+25.6** — the recycling's banked win |
+| `workless` (tick+gates+bk+decay+tb+promo) | 94.487 | 1045.981 | **floor = 388.5 ns/call** |
+| `all` (workless + pool off) | 100.840 | 1125.067 | mixed direction, sanity-consistent |
+
+**Verdict on the removable layer:** after W009-A→W011-r2→s2→s3, only
+**~17.5 ns of the 406 ns/call (4.3%)** is still removable via the ablation
+flags — fuel tick 9.8, regulatory gates 7.5, bookkeeping 1.6 (decay inside
+it 1.1), clones 0. The remaining **388.5 ns/call floor is the call machinery
+itself**: frame-Env allocation (1.5 envs/call measured above), the slot-Vec
+alloc, arg clone/define (`resolve_param`), and the 7 VM instruction
+dispatches. The same-binary evidence the amendment asked for, in one line:
+**the lazy-fenv-class question is now a question about the 388 ns floor, not
+about the gate/counter layers** — and the measured 1.5 envs/call is the
+biggest identifiable chunk inside it (the pool result — recycling the same
+structures is already worth 25.6 ns/call — bounds the alloc cost from below).
+
+### Cross-engine anchors (same box, same day)
+
+| engine | fib25 | fib30 | ns/call | op/py |
+|---|---:|---:|---:|---:|
+| operon 2.8.0-vm | 98.46 ms | 1093.15 ms | 405.5 / 406.0 (linear ✓) | — |
+| CPython 3.12 | 10.32 ms | 114.30 ms | **42.5 / 42.5** (exactly linear) | **9.5x / 9.6x** |
+| native Rust (`-O`, `#[inline(never)]`) | 0.172 ms | 1.897 ms | 0.71 / 0.70 | ~570x |
+
+CPython's per-call cost is *exactly* size-independent (42.5 both sizes) — a
+clean interleaved anchor. The operon/CPython gap has narrowed from the
+W009-A investigation's ~11x (595 vs 54) to **9.5x** via the W011 rounds, all
+of it now in the floor. Coherence check with P2: the sort comparator
+callback (382 ns/comparison) and the fib call (406 ns/call) are the same
+call-path constant measured through two different doors.
+
+### Argument binding: arity ladder (200k calls/leg, min-of-3)
+
+| arity | operon env-lane | operon slot-lane | CPython | rs floor |
+|---|---:|---:|---:|---:|
+| 0 | 544.5 | 547.5 | 87.2 | (folded) |
+| 1 | 691.5 | 703.6 | 104.6 | (folded) |
+| 2 | 825.5 | 831.2 | 123.3 | 0.56 |
+| 4 | 1135.8 | 1156.4 | 169.7 | 0.60 |
+| 8 | 1799.4 | 1872.0 | 261.0 | 1.02 |
+
+- **Per-arg marginal binding cost: ~166 ns/arg (slot) / ~157 ns/arg (env)**
+  vs CPython's **21.7 ns/arg** — **7.2-7.6× steeper per argument**. Arity-0
+  call: 545 vs 87 ns = 6.3×. Every extra parameter costs real time in
+  resolve_param + define/write-through + the extra slot.
+- **Slot-vs-env reversal (shape-dependent, both directions reported):** on
+  fib25 (deep recursion, 1 param) the slot path WINS by 10.3 ns/call (98.65
+  vs 101.15 min). On the 200k shallow-loop ladder the slot lane LOSES at
+  every arity ≥ 1 (e.g. 1872.0 vs 1799.4 at arity 8). The write-through
+  design (slot copy AND `define_param` per arg) pays a double-binding tax
+  that only pays off when param reads dominate (deep recursion), and loses
+  when calls dominate over reads (shallow bodies). Classification evidence
+  for the fix phase — not a fix claim.
+
+### Bridged calls: builtin vs gene hop (200k calls, min-of-3)
+
+| leg | operon ns/call | CPython ns/call | op/py |
+|---|---:|---:|---:|
+| direct builtin (`abs(-i)`) | 550.8 | 105.6 | 5.2x |
+| gene-wrapped builtin (`wrap(i)→abs`) | 804.4 | 119.7 | 6.7x |
+| pure gene (`idneg(i)→-i`) | 754.6 | 117.2 | 6.4x |
+
+- **One gene-call hop costs +253.6 ns** on top of the same builtin body
+  (804.4 − 550.8); CPython's def hop is +14.1 ns — an **18× steeper hop**.
+- **The bridge itself costs +49.8 ns** inside an otherwise identical gene
+  body (804.4 − 754.6): Value build + arg Vec + dispatch + Int unbox on the
+  way into the builtin.
+
+### Honesty notes
+
+- Machine noise ±1-2% run-to-run despite min-of-3 interleaving; single-flag
+  deltas < 2 ms on fib25 are inside the noise band (promo/decay/tb rows) and
+  the fib30 legs are the resolution anchor — every headline delta quoted
+  comes from n=30 where the same effect is 11× larger.
+- `ticks` counter reads 0 in the VM lane: it counts tree-walk eval ticks;
+  the VM lane charges steps in its dispatch check — which the `tick`
+  ablation still removes (−9.8 ns/call, real).
+- The rs arity-0/1 legs are constant-folded by LLVM (pure callees hoisted
+  out of the loop despite `inline(never)`); only the 2/4/8 rows are genuine
+  native floors.
+- The bridged probe uses Int-only bodies by design (no alloc noise); real
+  workloads with String/Vec args pay more.
+- Counters runs (`OPERON_W009A_COUNTS=1`) add per-call atomic fetch_adds;
+  they are reported separately and never mixed into timed rows.
+- Fix directions are NOT claimed here (L-002/`src/interp.rs` is builder-A's
+  ACTIVE P4-safe window): the evidence files are (1) the 1.5 envs/call +
+  388 ns floor for the lazy-fenv-class redesign (owner-gated per §34), (2)
+  the per-arg 157-166 ns and the slot write-through reversal for the binding
+  path, (3) the +49.8 ns bridge delta for builtin-call batching.
