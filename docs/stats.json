@@ -126,7 +126,7 @@
   "h1": "# Operon, Language Specification",
   "status": "v2.8.0"
  },
- "std_function_count": 342,
+ "std_function_count": 343,
  "std_module_count": 33,
  "std_modules": [
   {
@@ -186,7 +186,7 @@
    "module": "iter"
   },
   {
-   "functions": 11,
+   "functions": 12,
    "module": "json"
   },
   {
@@ -262,6 +262,6 @@
    "module": "url"
   }
  ],
- "test_op_files": 3570,
+ "test_op_files": 3572,
  "version": "2.8.0"
 }
