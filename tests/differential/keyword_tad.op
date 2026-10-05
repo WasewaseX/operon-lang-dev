@@ -1,0 +1,25 @@
+# Q1 keyword audit: the `tad` keyword, both halves of its actual behavior.
+# (1) cross-module: `anchor export` inside a tad block feeds the module's
+#     export table (tad_exports merged with anchor_exports), so `helper` is
+#     importable and `lib_main` is not (anchor-export-wins rule);
+# (2) in-file: tad members bind into the ENCLOSING environment — the
+#     insulation is about exports, never about lexical scope.
+# Byte-identical VM / tree-walk / oracle; the walker's assert counter is the
+# standing gate for the proof half.
+use keyword_tad_lib;
+
+tad local_tad {
+    let pocket_const = 41
+    gene pocket_gene() {
+        return "pocket-gene-ran"
+    }
+}
+frame proof {
+    assert(helper() == "helper-ran", "tad-anchored export callable cross-module")
+    assert(pocket_const == 41, "tad member binds into the enclosing environment")
+    assert(pocket_gene() == "pocket-gene-ran", "tad-defined gene callable in enclosing env")
+    # the insulation is export-side: with the anchor rule active on the lib,
+    # lib_main stays unexported and reads as the null-member law (null)
+    assert(lib_main() == null, "unanchored lib name not exported (anchor-export-wins)")
+    promote("tad audit ok")
+}
