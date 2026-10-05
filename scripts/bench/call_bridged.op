@@ -1,0 +1,61 @@
+# bench: call_bridged — the P4 bridged-call probe (builder-E)
+# Roadmap P4 charter target: "bridged calls" — the hop from interpreted code
+# into a builtin. Three legs, N calls each, identical while loops:
+#   direct  — s + abs(-i): the builtin hop only (Value build + arg Vec +
+#             dispatch + Int unbox)
+#   wrapped — s + wrap(i): the SAME builtin behind a one-arg user gene; the
+#             delta vs direct is exactly one gene-call hop (frame env, slot
+#             bind, bookkeeping, the bridge again inside)
+#   pure    — s + idneg(i): a user gene doing the same Int negation with NO
+#             bridge — the delta vs wrapped isolates the bridge itself inside
+#             an otherwise identical call shape
+# Mirrors: call_bridged_py.py (CPython abs is also a C builtin — the bridge
+# analogue), so op/py ratios compare like with like.
+# Output: BRIDGE leg=<name> calls=<N> ns_per_call=<ns> ck=<s>
+
+gene wrap(x) { return abs(x) }
+gene idneg(x) { return -x }
+
+gene leg_direct(n) {
+    let s = 0
+    let i = 0
+    while i < n { s = s + abs(-i) ; i = i + 1 }
+    return s
+}
+gene leg_wrapped(n) {
+    let s = 0
+    let i = 0
+    while i < n { s = s + wrap(i) ; i = i + 1 }
+    return s
+}
+gene leg_pure(n) {
+    let s = 0
+    let i = 0
+    while i < n { s = s + idneg(i) ; i = i + 1 }
+    return s
+}
+
+main {
+    let n = num(env("CALL_BRIDGE_N"))
+    let reps = num(env("CALL_BRIDGE_REPS"))
+    let w = abs(-1) + wrap(1) + idneg(1)   # warm caches outside timing
+    let r = 0
+    while r < reps {
+        let t0 = clock()
+        let sd = leg_direct(n)
+        let t1 = clock()
+        let sw = leg_wrapped(n)
+        let t2 = clock()
+        let sp = leg_pure(n)
+        let t3 = clock()
+        let nd = (t1 - t0) * 1e9 / n
+        let nw = (t2 - t1) * 1e9 / n
+        let np = (t3 - t2) * 1e9 / n
+        if r == reps - 1 {
+            promote("BRIDGE leg=direct calls={n} ns_per_call={nd} ck={sd}")
+            promote("BRIDGE leg=wrapped calls={n} ns_per_call={nw} ck={sw}")
+            promote("BRIDGE leg=pure calls={n} ns_per_call={np} ck={sp}")
+        }
+        r = r + 1
+    }
+}
