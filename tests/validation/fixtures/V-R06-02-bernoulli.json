@@ -1,0 +1,26 @@
+{
+  "engine_args": [],
+  "gates": {
+    "determinism_pin": true,
+    "z_alpha": 0.001
+  },
+  "id": "V-R06-02-bernoulli",
+  "program": "tests/validation/programs/bernoulli_p030.op",
+  "reduce": {
+    "op": "ratio"
+  },
+  "reference": {
+    "kind": "bernoulli-mean",
+    "params": {
+      "p": 0.3
+    }
+  },
+  "schema": "r06-fixture-v1",
+  "seeds": [
+    11,
+    23,
+    37,
+    53,
+    97
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "engine_args": [],
+  "gates": {
+    "determinism_pin": true,
+    "tv_eps": 0.02
+  },
+  "id": "V-R06-03-binomial",
+  "program": "tests/validation/programs/binomial_n20_p05.op",
+  "reduce": {
+    "op": "pmf"
+  },
+  "reference": {
+    "kind": "binomial-pmf",
+    "params": {
+      "p": 0.5,
+      "trials": 20
+    }
+  },
+  "schema": "r06-fixture-v1",
+  "seeds": [
+    11,
+    23,
+    37,
+    53,
+    97
+  ]
+}

@@ -1,0 +1,14 @@
+# V-R06-02 — bernoulli frequency: hits of random() < 0.3 over 10000 draws.
+# Prints HITS then N; z vs mean p=0.3, variance p(1-p)/n.
+randomize(SEED)
+let n = 10000
+let hits = 0
+let i = 0
+while i < n {
+    if random() < 0.3 {
+        hits = hits + 1
+    }
+    i = i + 1
+}
+print(hits)
+print(n)

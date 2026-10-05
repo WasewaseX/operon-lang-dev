@@ -1,0 +1,24 @@
+{
+  "engine_args": [],
+  "gates": {
+    "determinism_pin": true,
+    "z_alpha": 0.001
+  },
+  "id": "V-R06-01-uniform-mean",
+  "program": "tests/validation/programs/uniform_mean.op",
+  "reduce": {
+    "op": "ratio"
+  },
+  "reference": {
+    "kind": "uniform-mean",
+    "params": {}
+  },
+  "schema": "r06-fixture-v1",
+  "seeds": [
+    11,
+    23,
+    37,
+    53,
+    97
+  ]
+}

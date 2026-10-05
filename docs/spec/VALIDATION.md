@@ -323,3 +323,33 @@ pinned value follows the DETERMINISM S7 protocol (checkout the commit,
   differentially pinned (`bootstrap/harness.py` granted targets); the
   per-cistron catch curve against a published Rho-attenuation dose dataset
   is open.
+
+## R0.6 — analytic validation harness (distributional rows)
+
+The rows above pin point values and curves of specific models. The R0.6
+harness (`scripts/validation/harness.py`, roadmap §27 Agent C) is the
+MECHANISM under this registry for distributional claims: it runs seeded
+fixture programs and checks them against closed-form analytic references
+with pre-registered gates — a determinism byte-pin (same seed twice must be
+byte-identical stdout+rc, the W089/R0.5 mirrored-stream discipline), a
+statistical z-gate scored by the ANALYTIC variance at a fixture-declared
+alpha, and a total-variation support gate for exact-pmf references. Every
+gate parameter lives in the fixture file, never in the harness; a failing
+gate prints the decision arithmetic and the exact replay command. The
+negative control (a deliberately wrong reference, p=0.9 vs a p=0.3 program)
+fails all seeds at |z| ≈ 200 — the teeth are proven, not assumed.
+
+| # | Model (Operon surface) | Source model | Mapping | Tolerance | Enforcing test |
+|---|------------------------|--------------|---------|-----------|----------------|
+| R06-01 | uniform stream (`random()`, the mirrored xorshift64* core) | uniform(0,1): mean 1/2, variance 1/12 | 20000 draws/seed, 5 seeds; mean-of-draws vs the closed form | z, alpha=0.001 (two-sided, analytic var 1/(12n)) | `tests/validation/fixtures/V-R06-01-uniform-mean.json` |
+| R06-02 | bernoulli frequency (`random() < p` idiom) | bernoulli(p): mean p, variance p(1−p) | 10000 draws/seed, 5 seeds, p=0.3 | z, alpha=0.001 (analytic var p(1−p)/n) | `tests/validation/fixtures/V-R06-02-bernoulli.json` |
+| R06-03 | binomial shape (20 fair flips per experiment) | Binomial(20, 1/2) exact pmf (math.comb closed form) | 10000 experiments/seed, 5 seeds, cell counts k=0..20 | total variation ≤ 0.02 (z is ill-defined for a multinomial cell vector — TV-only by contract) | `tests/validation/fixtures/V-R06-03-binomial.json` |
+| R06-04 | geometric waiting time (draws until `random() < p`) | geometric(p), support {1,2,…}: mean 1/p, variance (1−p)/p² | 2000 waits/seed, 5 seeds, p=0.25 | z, alpha=0.001 (analytic var (1−p)/(p²m)) | `tests/validation/fixtures/V-R06-04-geometric.json` |
+| R06-05 | 2-state Markov stationary mass (`if state == 0 { if random() < p01 …` chain) | 2-state chain: π₁ = p01/(p01+q10); asymptotic variance carries the exact spectral factor (1+λ)/(1−λ), λ = 1−p01−q10 (honest about autocorrelation) | 50000 steps/seed, 5 seeds, p01=0.3 q10=0.5, π₁=0.375 | z, alpha=0.001 (analytic chain variance, spectral-corrected) | `tests/validation/fixtures/V-R06-05-markov2.json` |
+
+All five rows are green on the landing head (5 seeds × each gate); the
+committed `tests/validation/MANIFEST.sha256` byte-pins every fixture and
+program. Known fixture-language note: the identifier `on` silently evaluates
+to `true` in this engine build (R06-05 initially printed `true` from a
+counter named `on`) — reported, not worked around silently; the fixture
+renames the counter and the naming surprise is filed for the [core] lane.
