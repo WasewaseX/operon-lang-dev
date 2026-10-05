@@ -12,21 +12,43 @@
 //! flag is an operator diagnostic surface, so the pins are end-to-end.
 
 use std::process::Command;
+use std::sync::atomic::{AtomicU64, Ordering};
 
-fn run_trace(src: &str) -> (i32, String, String, String) {
-    // Per-CALL unique dir (nanos+pid): parallel tests in one binary shared a
-    // per-pid dir before, and a finishing test's remove_dir could delete
-    // another test's just-created EMPTY dir mid-flight (Windows CI failure,
-    // 2026-09-27; also a rare sandbox flake). Unique dirs make the race
-    // structurally impossible.
+// Issue #128: pid+subsec_nanos is NOT a unique per-call tag. Two run_trace
+// calls in the same test process (same pid) that read the clock inside the
+// same tick (coarse/virtualized runner clocks make this real — 3 of 4 CI
+// legs red on 2026-10-05, run 37273731438 job 111646071225: the contained-
+// failure child executed the OTHER test's source and exited 0 with "0.0"
+// on stdout, its own stderr naming t444440000_4964.op:8 = the GRN fixture's
+// decay_clock line) share the whole path: same dir, same .op, same .jsonl.
+// A process-wide monotonic counter makes the tag unique per call by
+// construction; pid keeps cross-process calls apart.
+static TRACE_SEQ: AtomicU64 = AtomicU64::new(0);
+
+fn unique_tag() -> String {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .subsec_nanos();
-    let dir = std::env::temp_dir().join(format!("operon_trace_{}_{}", std::process::id(), nanos));
+    let seq = TRACE_SEQ.fetch_add(1, Ordering::Relaxed);
+    format!("{}_{}", nanos, seq)
+}
+
+fn run_trace(src: &str) -> (i32, String, String, String) {
+    // Per-CALL unique dir (nanos+pid+seq): parallel tests in one binary shared a
+    // per-pid dir before, and a finishing test's remove_dir could delete
+    // another test's just-created EMPTY dir mid-flight (Windows CI failure,
+    // 2026-09-27; also a rare sandbox flake). Unique dirs make the race
+    // structurally impossible. The #128 seq suffix closes the residual
+    // same-tick nanos collision between two calls in one process.
+    let dir = std::env::temp_dir().join(format!(
+        "operon_trace_{}_{}",
+        std::process::id(),
+        unique_tag()
+    ));
     std::fs::create_dir_all(&dir).unwrap();
-    let f = dir.join(format!("t{}_{}.op", nanos, std::process::id()));
-    let tf = dir.join(format!("tr{}_{}.jsonl", nanos, std::process::id()));
+    let f = dir.join(format!("t{}_{}.op", unique_tag(), std::process::id()));
+    let tf = dir.join(format!("tr{}_{}.jsonl", unique_tag(), std::process::id()));
     std::fs::write(&f, src).unwrap();
     let out = Command::new(env!("CARGO_BIN_EXE_operon"))
         .arg("run")
@@ -132,11 +154,11 @@ fn level_map_is_sorted_and_valid_jsonl_shape() {
 fn tracing_off_is_a_no_op_and_run_output_unchanged() {
     // without the flag the same program runs identically (no trace side
     // effects) — the OFF path must stay byte-identical
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .subsec_nanos();
-    let dir = std::env::temp_dir().join(format!("operon_notrace_{}_{}", std::process::id(), nanos));
+    let dir = std::env::temp_dir().join(format!(
+        "operon_notrace_{}_{}",
+        std::process::id(),
+        unique_tag()
+    ));
     std::fs::create_dir_all(&dir).unwrap();
     let f = dir.join("plain.op");
     std::fs::write(&f, GRN_SRC).unwrap();

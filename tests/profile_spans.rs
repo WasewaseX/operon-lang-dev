@@ -20,6 +20,7 @@
 //! docgen.rs precedent).
 
 use std::process::Command;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 // ------------------------------------------------------------ mini JSON
 /// Dependency-free JSON parser (objects/arrays/strings/numbers/null/bools),
@@ -206,6 +207,10 @@ struct Fixture {
 
 impl Fixture {
     fn new(tag: &str) -> Self {
+        // Issue #128 class fix: seq suffix disambiguates same-tick nanos reads
+        // across calls in one process (see tests/grn_trace.rs).
+        static DIR_SEQ: AtomicU64 = AtomicU64::new(0);
+        let seq = DIR_SEQ.fetch_add(1, Ordering::Relaxed);
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -214,7 +219,7 @@ impl Fixture {
             "operon_w097a_{}_{}_{}",
             tag,
             std::process::id(),
-            nanos
+            format!("{}_{}", nanos, seq)
         ));
         std::fs::create_dir_all(&dir).unwrap();
         Fixture { dir }
