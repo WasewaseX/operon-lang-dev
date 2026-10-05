@@ -1,0 +1,17 @@
+# Q1 keyword audit: the `ires` keyword (secondary entry point registration).
+# A top-level `ires NAME;` registers NAME as a secondary entry; the
+# registration is INERT in a default run — main stays the entry — which is
+# exactly what this pin proves byte-identically on all three engines
+# (VM / tree-walk / oracle): if registration ever leaked into default entry
+# selection, this file's output would change.
+# The `operon run --ires` flag leg (first registered name becomes the entry,
+# note 'cap-independent entry via --ires') is honored by both Rust engines;
+# the oracle CLI currently accepts the flag but ignores it (Q1-1 finding,
+# vault REVIEWS.md) — a flag-leg pin joins when the oracle lane repairs it.
+ires secondary;
+gene secondary() {
+    promote("secondary-ran")
+}
+gene main() {
+    promote("main-ran")
+}

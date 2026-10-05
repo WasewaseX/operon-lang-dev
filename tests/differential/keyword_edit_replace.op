@@ -1,0 +1,18 @@
+# Q1 keyword audit: `edit` blocks are in-file METADATA, `replace` is their arm.
+# The interpreter no-ops in-file edit blocks BY DESIGN (interp.rs Stmt::Edit:
+# "in-file edit blocks are metadata — load-time .rna handles patches"; the
+# .rna machinery itself is pinned by the cargo suite, tests/rna_v2.rs). Both
+# engines parse `edit NAME { replace FROM -> TO }` clean and leave the target
+# untouched — this pin freezes that inertness byte-identically, so if the
+# in-file form ever gained runtime effect, this file's output changes and the
+# KEYWORDS.md audit row trips. (The target is a bare name: `edit m[1] { }`
+# does not parse, both engines agree.)
+let s = "hello world"
+edit s {
+    replace "o" -> "0"
+}
+promote("after-edit: {s}")
+frame proof {
+    assert(s == "hello world", "in-file edit is inert metadata (by design)")
+    promote("edit audit ok")
+}
