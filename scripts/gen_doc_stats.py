@@ -44,9 +44,9 @@ KEYWORD_ANALOGY = {
     "period": "oscillator timing", "frame": "proof/measurement window",
     "proof": "named assertion block (test)", "guard": "early-exit clause",
     "splice": "runtime variant swap for a gene", "variant": "named alternative implementation",
-    "edit": "in-place value edit", "replace": "swap an implementation",
+    "edit": "in-file edit block (load-time .rna metadata)", "replace": "edit-block value-swap arm",
     "ires": "secondary entry point", "as": "alias binding",
-    "collect": "comprehension body", "enter": "scope-entry hook",
+    "collect": "comprehension body", "enter": "fate's initial-state entry",
     "phenotype": "class (fields + methods)", "sequence": "generator function",
     "yield": "generator yield", "new": "constructor call", "threshold": "gate cutoff",
     "from": "inheritance (phenotype C from P)", "self": "method receiver",
@@ -75,6 +75,15 @@ def keywords():
     src = read("src/parser.rs")
     m = re.search(r'const KEYWORDS: &\[&str\] = &\[(.*?)\];', src, re.S)
     items = re.findall(r'"([^"]+)"', m.group(1)) if m else []
+    return sorted(set(items))
+
+def marks():
+    # Q1: the @mark class (parser.rs MARKS), comment-safe — quoted words
+    # inside // comments (e.g. the @deprecated payload example) are not
+    # marks, so strip comments before matching.
+    src = read("src/parser.rs")
+    m = re.search(r'const MARKS: &\[&str\] = &\[(.*?)\n\];', src, re.S)
+    items = re.findall(r'"([a-z0-9]+)"', re.sub(r'//[^\n]*', '', m.group(1))) if m else []
     return sorted(set(items))
 
 def std_modules():
@@ -181,6 +190,7 @@ def compute():
         "keywords": kw,
         "keyword_count": len(kw),
         "keyword_analogy_pending": [k for k in kw if k not in KEYWORD_ANALOGY],
+        "marks": marks(),
         "std_modules": mods,
         "std_module_count": len(mods),
         "std_function_count": sum(m["functions"] for m in mods),
@@ -255,8 +265,21 @@ def main():
              "expression positions but are not part of the reserved table (SPEC §3).\n")
     if pending:
         K.append(f"NOTE: {len(pending)} keyword(s) lack a D-008 analogy: {', '.join(pending)}.\n")
+    # Q1: the hand-maintained keyword audit below the Q1AUDIT marker survives
+    # regeneration verbatim — the table is evidence-linked (word x behavior x
+    # proving test) and therefore NOT generatable; the marker is the contract
+    # that keeps the generated half regenerable and the audit half durable.
+    audit = ""
+    kp = os.path.join(ROOT, "docs", "KEYWORDS.md")
+    if os.path.exists(kp):
+        existing = open(kp, encoding="utf-8").read()
+        i = existing.find("<!-- Q1AUDIT: hand-maintained below; the generator preserves this tail verbatim -->")
+        if i >= 0:
+            audit = existing[i:]
     with open(os.path.join(ROOT, "docs", "KEYWORDS.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(K))
+        if audit:
+            f.write("\n" + audit)
     print(f"stats: v{s['version']} kw={s['keyword_count']} std={s['std_module_count']} modules/"
           f"{s['std_function_count']} funcs redteam={s['redteam_files']} proofs={s['proof_files']}f "
           f"bin={s['proof_totals']['source']}")

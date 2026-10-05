@@ -156,6 +156,43 @@ def main():
         fails.append("W55: docs/KEYWORDS.md count line does not match the parser's "
                      "reserved set, regenerate (gen_doc_stats.py)")
 
+    # Q1 (W55b): the hand-maintained keyword audit (word x behavior x proving
+    # test) must cover EVERY reserved keyword, EVERY mark, and the six
+    # literal/logical words, each with a non-empty proving-test cell. The
+    # generator preserves the audit tail verbatim; this gate fails if a new
+    # keyword/mark lands without its audit row (kept green by S4 sweeps).
+    audit_words = {}
+    if os.path.exists(kp):
+        if "marks" not in truth:
+            fails.append("W55b: docs/stats.json lacks the marks field; "
+                         "regenerate (gen_doc_stats.py)")
+        kwtxt = open(kp, encoding="utf-8").read()
+        i = kwtxt.find("<!-- Q1AUDIT")
+        if i < 0:
+            fails.append("W55b: docs/KEYWORDS.md lost the Q1 audit section "
+                         "(the '<!-- Q1AUDIT' marker is gone); restore the tail")
+        else:
+            for line in kwtxt[i:].splitlines():
+                m = re.match(r"^\|\s*`([a-z0-9]+)`\s*\|\s*(\w+)\s*\|(.*)$", line)
+                if m:
+                    word, cls, rest = m.group(1), m.group(2), m.group(3)
+                    cells = [c.strip() for c in rest.split("|")]
+                    # cells: [behavior, proving test, trailing empty]
+                    test_cell = cells[1] if len(cells) > 1 else ""
+                    audit_words[word] = (cls, test_cell)
+            missing = [k for k in truth.get("keywords", []) if k not in audit_words]
+            missing += [k for k in truth.get("marks", []) if k not in audit_words]
+            missing += [k for k in ("true", "false", "null", "and", "or", "not")
+                        if k not in audit_words]
+            if missing:
+                fails.append("W55b: keyword audit missing rows for: "
+                             + ", ".join(sorted(set(missing))))
+            empty = sorted(w for w, (_, t) in audit_words.items()
+                           if not t or t in {"-", "TODO", "*(pending)*"})
+            if empty:
+                fails.append("W55b: keyword audit rows without a proving test: "
+                             + ", ".join(empty))
+
     # 7. README stdlib inventory completeness (W57)
     readme = open(os.path.join(ROOT, "README.md"), encoding="utf-8").read()
     for m in truth["std_modules"]:
