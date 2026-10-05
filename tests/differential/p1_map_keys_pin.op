@@ -97,6 +97,68 @@ main {
     let r = {}
     for i in range(1000) { r[str(i * 37)] = i }
     print("rehash", r["0"], r["999"], r[str(37 * 500)], len(r))
+
+    # 12. D1 DRIFT SHAPE (strict review 2026-10-05, now fixed): a numeric
+    #     key inserted by SUBSCRIPT into an already-sized non-numeric map
+    #     used to bypass the sentinel count (only the rehash branch
+    #     counted) -> the Int<->Float exact-scan path silently disarmed
+    #     and cross-class lookups reported FALSE ABSENCE. Every lookup
+    #     here diverged on PR #100 head 105fc27.
+    let d1 = {"a": 1}
+    d1[2] = "x"
+    print("drift-int", d1.has(2.0), d1.get(2.0, "MISS"))
+    let d1f = {"a": 1}
+    d1f[2.0] = "flt"
+    print("drift-float", d1f.has(2), d1f.get(2, "MISS"))
+    let d1z = {"a": 1}
+    d1z[0.0] = "pos"
+    print("drift-zero", d1z.has(-0.0), len(d1z))
+
+    # 13. D2 DEL PATH on the drift shape: the unconditional counter
+    #     decrement underflowed when the count had drifted (debug build
+    #     panicked at value.rs). The counter is exact now; the delete is
+    #     exact and the surviving map stays sound in BOTH directions.
+    let d2 = {"a": 1}
+    d2[2] = "x"
+    d2.del(2)
+    print("drift-del", d2.has("a"), d2.has(2.0), d2.has(2), len(d2))
+
+    # 14. D3/D3' CROSSFIRE (strict review 2026-10-05, now fixed): the
+    #     memo hashes Float(2.0) through its canonical string, so
+    #     fnv1a("2") == fnv1a(Float(2.0)) — a CRAFTABLE same-slot
+    #     collision between two live keys. The old put OVERWROTE the
+    #     owner's slot (stealing its memo entry) and the old del
+    #     tombstoned the first same-hash slot (killing the owner outright):
+    #     after del(2.0), has("2") was FALSE and s["2"] raised
+    #     error[E1002] key-not-found on a key that was demonstrably
+    #     present. Slot ownership (no-overwrite put + verified tomb)
+    #     closes it; order and the surviving keys stay exact.
+    let d3 = {"2": "s", "x": 1, "y": 2}
+    d3[2.0] = "f"
+    print("cross-stole", d3.has("2"), d3.has(2.0), len(d3))
+    d3.del(2.0)
+    print("cross-del", d3.has("2"), d3["2"], d3.has(2.0), len(d3))
+    let d3b = {"2": "s", "x": 1, "y": 2, "w": 3}
+    d3b[2.0] = "f"
+    d3b[2] = "i"
+    d3b.del(2.0)
+    d3b.del(2)
+    print("cross-two", d3b.has("2"), d3b["2"], d3b.has("x"), len(d3b))
+
+    # 15. Sentinel exactness survives deleting ALL numeric keys from a
+    #     mixed map (the counter returns to a TRUE zero, not a wrap).
+    let d4 = {"a": 1, "b": 2}
+    d4[5] = "five"
+    d4[6.0] = "six"
+    d4.del(5)
+    d4.del(6.0)
+    print("sentinel-reset", d4.has(5.0), d4.has(6), d4.has("a"), len(d4))
+    let d5 = {"k1": 1, "k2": 2}
+    d5[9] = "nine"
+    d5.del(9)
+    let dkeys = ""
+    for it in d5.items() { dkeys = dkeys + it[0] + ";" }
+    print("order-after", dkeys, d5["k2"])
 }
 
     # 12. DRIFT SHAPE (P1 review, 2026-10-05): a numeric key arrives via
@@ -106,22 +168,22 @@ main {
     #     miss-trust's Int<->Float sentinel (num_numeric > 0) is load-bearing
     #     for exactly these lookups (deep_eq crosses Int/Float; 0.0 == -0.0).
     #     Every case below starts from a NON-empty, non-numeric map.
-    let d1 = {"a": 1}
-    d1[2] = "x"
-    print("drift-a", d1.has(2.0), d1.get(2.0, "MISS"), d1.has(2), len(d1))
-    let d2 = {"a": 1}
-    d2[2.0] = "flt"
-    print("drift-b", d2.has(2), d2.has(2.0), len(d2))
-    let d3 = {"a": 1}
-    d3[0.0] = "pos"
-    print("drift-c", d3.has(-0.0), d3[0.0], len(d3))
-    let d4 = {"a": 1}
-    d4[2] = "x"
-    let dr = d4.del(2)
-    print("drift-del", len(d4), d4["a"], d4.has(2.0))
+    let w1 = {"a": 1}
+    w1[2] = "x"
+    print("drift-a", w1.has(2.0), w1.get(2.0, "MISS"), w1.has(2), len(w1))
+    let w2 = {"a": 1}
+    w2[2.0] = "flt"
+    print("drift-b", w2.has(2), w2.has(2.0), len(w2))
+    let w3 = {"a": 1}
+    w3[0.0] = "pos"
+    print("drift-c", w3.has(-0.0), w3[0.0], len(w3))
+    let w4 = {"a": 1}
+    w4[2] = "x"
+    let dr = w4.del(2)
+    print("drift-del", len(w4), w4["a"], w4.has(2.0))
     # drift through the countmap shape: str keys first, numeric later
-    let d5 = {}
-    for k in ["p", "q", "r"] { d5[k] = 1 }
-    d5[7] = "seven"
-    print("drift-e", d5.has(7.0), d5[7.0], d5.has(7), len(d5))
+    let w5 = {}
+    for k in ["p", "q", "r"] { w5[k] = 1 }
+    w5[7] = "seven"
+    print("drift-e", w5.has(7.0), w5[7.0], w5.has(7), len(w5))
 }
