@@ -47,10 +47,28 @@ pub type ListRef = Rc<RefCell<Vec<Value>>>;
 ///    numeric lookup is trivially absent; with any, numeric lookups take
 ///    the exact full scan. A u64 collision between two different keys
 ///    shares a slot: the deep_eq verify fails and the exact scan runs
-///    (2^-64, harmless).
+///    (2^-64, harmless). The counter is exact by construction: the rehash
+///    path recounts from items, the insert put-branch increments (D1 fix,
+///    strict review 2026-10-05 — without it a numeric key landing in a
+///    non-rebuilding put silently disarmed the sentinel and miss-trust
+///    reported cross-class absences), and every removal decrements under
+///    a debug_assert tripwire (D2 fix).
 /// 4. `del` no longer rebuilds the memo: one O(capacity) walk decrements
 ///    stored positions past the removed slot and tombstones the removed
 ///    key's entry (batch del drops from quadratic to linear).
+/// 5. Slot ownership (D3/D3' fixes, strict review 2026-10-05): a live
+///    slot is NEVER stolen and NEVER cross-tombstoned. put() skips live
+///    same-hash slots (both callers guarantee unique keys, so a live
+///    same-hash slot always belongs to a DIFFERENT key — the old
+///    overwrite handed the owner's memo entry to the newcomer, and once
+///    the newcomer's entry was tombstoned the owner's probe ran to
+///    EMPTY and miss-trust reported a false absence; craftable in pure
+///    Operon because fnv1a(Float(2.0).to_string()) == fnv1a("2")), and
+///    tombstoning happens only on the slot whose stored position
+///    deep_eq-verifies the key against the pre-removal items. Together
+///    with the within-class equal=>equal-hash law this restores the
+///    miss-trust proof unconditionally: a live scalar key always owns a
+///    live slot its own probe will reach before any SLOT_EMPTY.
 ///
 /// Exactness contract (unchanged): memo hits are deep_eq-verified; the
 /// full exact scan remains the fallback for every class the table cannot
@@ -148,8 +166,12 @@ impl Memo {
             i = (i + 1) & self.mask;
         }
     }
-    /// Insert (or last-wins overwrite) for `h`. Never grows the table;
-    /// callers rehash when load would exceed 1/2.
+    /// Insert for `h`. Never grows the table; callers rehash when load
+    /// would exceed 1/2. NEVER overwrites a live slot: both callers
+    /// (insert's new-key path, rehash over unique items) guarantee the
+    /// key is not present, so a live same-hash slot belongs to another
+    /// key and stealing it would break slot ownership (D3', see the
+    /// MapStore docs) — skip it and land on the first tomb/empty.
     fn put(&mut self, h: u64, pos: usize) {
         if self.tab.is_empty() {
             return; // defensive; insert()/rehash() always size the table first
@@ -157,9 +179,9 @@ impl Memo {
         let mut i = (h as usize) & self.mask;
         let mut free: Option<usize> = None;
         loop {
-            let (sh, sp) = self.tab[i];
+            let (_, sp) = self.tab[i];
             if sp == SLOT_EMPTY {
-                // no same-hash entry in the cluster; take the first free slot
+                // end of the probe: take the first free slot seen
                 let dst = free.unwrap_or(i);
                 if self.tab[dst].1 == SLOT_TOMB {
                     self.tombs -= 1;
@@ -169,18 +191,24 @@ impl Memo {
                 self.tab[dst] = (h, pos as u32);
                 return;
             }
-            if sp != SLOT_TOMB && sh == h {
-                self.tab[i] = (h, pos as u32); // last write wins = deep_eq semantics
-                return;
-            }
             if sp == SLOT_TOMB && free.is_none() {
                 free = Some(i);
             }
+            // live slots (any hash, including equal hashes) are skipped:
+            // load <= 1/2 guarantees an EMPTY exists, so this terminates
             i = (i + 1) & self.mask;
         }
     }
-    /// Tombstone the slot holding `h` (probe chain stays contiguous).
-    fn tomb(&mut self, h: u64) {
+    /// Tombstone the slot that verifiably holds `key`: the first live
+    /// same-hash slot whose stored position deep_eq-matches `key` in the
+    /// PRE-removal items. Hash-only tombstoning (the original P1 form)
+    /// could kill a same-hash NEIGHBOR's slot — u64 collisions, or the
+    /// craftable Str/Float shared-string-hash shape fnv1a("2") ==
+    /// fnv1a(Float(2.0).to_string()) — leaving the live owner unmemoized;
+    /// its probe then ran to EMPTY and miss-trust reported a false
+    /// absence (D3, strict review 2026-10-05). Probe chain stays
+    /// contiguous either way.
+    fn tomb_verified(&mut self, h: u64, key: &Value, items: &[(Value, Value)]) {
         if self.tab.is_empty() {
             return;
         }
@@ -188,13 +216,17 @@ impl Memo {
         loop {
             let (sh, sp) = self.tab[i];
             if sp == SLOT_EMPTY {
-                return; // not present (defensive)
+                return; // the key holds no memo slot (defensive)
             }
             if sp != SLOT_TOMB && sh == h {
-                self.tab[i] = (0, SLOT_TOMB);
-                self.used -= 1;
-                self.tombs += 1;
-                return;
+                if let Some((k, _)) = items.get(sp as usize) {
+                    if k.deep_eq(key) {
+                        self.tab[i] = (0, SLOT_TOMB);
+                        self.used -= 1;
+                        self.tombs += 1;
+                        return;
+                    }
+                }
             }
             i = (i + 1) & self.mask;
         }
@@ -296,14 +328,12 @@ impl MapStore {
             if self.memo.tab.is_empty() || (pos + 1) * 2 > self.memo.tab.len() {
                 self.rebuild();
             } else {
-                // P1 review fix (2026-10-05): the put branch MUST maintain
-                // num_numeric — rehash() is the only other writer and it
-                // recounts from items. Without this, a map sized by
-                // non-numeric keys leaves the counter at 0 while numeric
-                // keys exist, the Int<->Float sentinel in position_h
-                // disables, and miss-trust falsely reports cross-class
-                // twins (2 vs 2.0, +/-0.0) as absent. del()'s decrement
-                // then underflows (debug panic / release wrap).
+                // D1 (strict review 2026-10-05): this branch bypasses
+                // rehash's recount, so a numeric key landing here must
+                // keep the sentinel exact itself — otherwise the counter
+                // stays 0 while a numeric key exists and cross-class
+                // lookups (has(2.0) on an int key) silently lose their
+                // exact-scan path and miss-trust reports false absence.
                 if cls == KC_INT || cls == KC_FLOAT {
                     self.memo.num_numeric += 1;
                 }
@@ -320,17 +350,25 @@ impl MapStore {
         let (cls, h) = key_class_hash(key);
         match self.position_h(key, cls, h) {
             Some(i) => {
+                // D3: tomb the verified slot BEFORE the removal — the
+                // probe needs the pre-removal items to identify which
+                // same-hash slot is really this key's (a hash-only tomb
+                // could hit a colliding neighbor's slot).
+                if cls != KC_OTHER {
+                    self.memo.tomb_verified(h, key, &self.items);
+                }
                 self.items.remove(i);
                 if cls != KC_OTHER {
-                    self.memo.tomb(h);
                     self.memo.shift_positions(i);
                     if cls == KC_INT || cls == KC_FLOAT {
-                        // P1 review tripwire: the counter is exact (every
-                        // numeric insert — put branch AND rehash — counts),
-                        // so a successful numeric-class removal always has
-                        // a counter to spend. 0 here = maintenance drift.
-                        debug_assert!(self.memo.num_numeric > 0);
-                        self.memo.num_numeric -= 1;
+                        // D2 tripwire: exact since the D1 fix (put-branch
+                        // counts, rehash recounts) — a 0 here means the
+                        // counter lost an insert somewhere.
+                        debug_assert!(
+                            self.memo.num_numeric > 0,
+                            "num_numeric underflow: numeric key removed without a counted insert"
+                        );
+                        self.memo.num_numeric = self.memo.num_numeric.saturating_sub(1);
                     }
                     if self.memo.tombs > self.memo.used {
                         self.rebuild();
