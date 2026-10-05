@@ -55,7 +55,7 @@ identically by the Rust core, the Python oracle, and the JS playground.</p>
   <li><b>Identifiers</b> — <code>[A-Za-z_][A-Za-z0-9_]*</code>.</li>
   <li><b>Numbers</b> — <code>42</code> (int), <code>3.14</code> (float), <code>1e3</code> (float). Negative values come from unary minus.</li>
   <li><b>Newlines</b> terminate statements; <code>;</code> is allowed and ignored (also <code>;;</code>, stray). Blocks are <code>{ ... }</code>.</li>
-  <li><b>Marks</b> — <code>@acetylate</code> <code>@methylate</code> <code>@m6a</code>.</li>
+  <li><b>Marks</b> — <code>@acetylate</code> <code>@burst</code> <code>@copies</code> <code>@deprecated</code> <code>@m6a</code> <code>@methylate</code> <code>@riboswitch</code> (the full 7-mark set; metadata-only unless the rung reads it).</li>
   <li><b>Extensions</b> — <code>.op</code> source · <code>.cell</code> methylation config · <code>.rna</code> edit patches.</li>
 </ul>
 
@@ -72,7 +72,7 @@ phenotype sequence yield new threshold from self
 ligand cofactor inducer autoinducer bind decoy
 scope trait operon
 
-marks: <span class="m">@acetylate</span> <span class="m">@methylate</span> <span class="m">@m6a</span></code></pre>
+marks: <span class="m">@acetylate</span> <span class="m">@burst</span> <span class="m">@copies</span> <span class="m">@deprecated</span> <span class="m">@m6a</span> <span class="m">@methylate</span> <span class="m">@riboswitch</span></code></pre>
 </figure>
 <p>The literal words <code>true false null</code> and the logical words <code>and or not</code>
 are recognized in expression positions; they are not part of the reserved keyword table.</p>
