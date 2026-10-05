@@ -22,11 +22,11 @@ The mandate: *"Rust, then C, then Python, then Operon, then C++, then HTML, then
 - Python as bootstrap (not implementation) is the right reduction from v1's 100%-Python mistake.
 - One point withheld: **Operon below Python is a snapshot, not a destiny.** Mainstream languages converge on self-hosting (Rust in Rust, Go in Go, TypeScript in TypeScript). Operon's share must grow release over release, the stdlib is already pure `.op`.
 
-### Measured composition (main @ 28021ae, `bash scripts/stack_report.sh`)
+### Measured composition (main @ 9cccb2f, `bash scripts/stack_report.sh`)
 
 | rank | language | lines | share | role |
 |---|---|---|---|---|
-| 1 | **Operon** | 427,921 | ~85% | **self-hosted stdlib (33 modules, generated inventory in [docs/STATS.md](docs/STATS.md)), proof tests, red-team suite, differential corpus, GenomeLab + the ytdl app (incl. the cross-language bench surface)** (`std/ tests/ examples/ apps/`) |
+| 1 | **Operon** | 428,129 | ~85% | **self-hosted stdlib (33 modules, generated inventory in [docs/STATS.md](docs/STATS.md)), proof tests, red-team suite, differential corpus, GenomeLab + the ytdl app (incl. the cross-language bench surface)** (`std/ tests/ examples/ apps/`) |
 | 2 | **Rust** | 58,960 | ~12% | lexer, Total Grammar parser, evaluator, capability sandbox, symbol table, HTTP/JSON, toolchain CLI, REPL, `operon-ls` LSP seed (`src/`) |
 | 3 | **Python** | 9,503 | ~1.9% | bootstrap: reference oracle + differential harness (`bootstrap/`), test infrastructure only, nothing shipped depends on it |
 | 4 | **Shell** | 3,206 | ~0.6% | build/test/bench/stack/install scripts (`scripts/`) |
