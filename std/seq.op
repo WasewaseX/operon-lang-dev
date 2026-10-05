@@ -39,10 +39,21 @@ sequence concat_seq(src_a, args_a, src_b, args_b) {
 
 sequence fib_seq(limit = 1e15) {
     # bounded: yields every Fibonacci value <= limit (workers must terminate)
+    # overflow-safe (issue #133): the advance never computes a sum that
+    # leaves i64. When a+b would overflow, its true value exceeds i64::MAX
+    # and therefore any limit — the pending b (still <= limit, still
+    # unyielded) is flushed first so the drain ends complete, not crashed
     let a = 0
     let b = 1
     while a <= limit {
         yield a
+        if b > limit {
+            break
+        }
+        if a > 9223372036854775807 - b {
+            yield b
+            break
+        }
         let t = a + b
         a = b
         b = t
