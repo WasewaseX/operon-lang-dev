@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>TubeForge Lite</title><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Ctext y=%2713%27 font-size=%2713%27%3E%E2%96%BC%3C/text%3E%3C/svg%3E"/><style>
+:root { --bg:#0b0d12; --card:#12151d; --card2:#171b25; --bd:#242a3a; --tx:#e7ebf3; --mut:#8b93a7; --ac:#ef4444; --ok:#22c55e; --warn:#f59e0b; --err:#ef4444; }
+* { box-sizing:border-box; }
+html,body { margin:0; padding:0; background:var(--bg); color:var(--tx); font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+header { display:flex; align-items:center; gap:14px; padding:12px 18px; border-bottom:1px solid var(--bd); position:sticky; top:0; background:rgba(11,13,18,.92); backdrop-filter:blur(6px); z-index:5; }
+.brand { font-weight:700; font-size:16px; letter-spacing:.2px; }
+.brand span { color:var(--ac); font-weight:600; }
+.chips { display:flex; gap:6px; flex-wrap:wrap; }
+.chip { font-size:11px; padding:2px 8px; border:1px solid var(--bd); border-radius:99px; color:var(--mut); background:var(--card); }
+.chip.ok { color:var(--ok); border-color:color-mix(in srgb, var(--ok) 40%, transparent); }
+.chip.bad { color:var(--err); border-color:color-mix(in srgb, var(--err) 40%, transparent); }
+.spacer { flex:1; }
+main { max-width:960px; margin:18px auto 60px; padding:0 14px; display:flex; flex-direction:column; gap:14px; }
+.card { background:var(--card); border:1px solid var(--bd); border-radius:12px; padding:14px 16px; }
+.card h2 { font-size:14px; margin:0 0 10px; text-transform:uppercase; letter-spacing:.8px; color:var(--mut); }
+.row { display:flex; gap:8px; align-items:center; }
+.row.end { justify-content:flex-end; margin-top:12px; }
+.row.between { justify-content:space-between; }
+input,select { background:var(--card2); border:1px solid var(--bd); color:var(--tx); border-radius:8px; padding:8px 10px; font:inherit; outline:none; min-width:0; }
+input:focus,select:focus { border-color:var(--ac); }
+#url { flex:1; }
+.btn { border:1px solid var(--bd); background:var(--card2); color:var(--tx); border-radius:8px; padding:8px 14px; font:inherit; cursor:pointer; }
+.btn:hover { border-color:#39415a; }
+.btn.accent { background:var(--ac); border-color:var(--ac); color:#fff; font-weight:600; }
+.btn.ghost { background:transparent; }
+.btn.small { padding:3px 9px; font-size:12px; border-radius:6px; }
+.muted { color:var(--mut); font-size:12.5px; }
+.pad { padding:10px 2px; }
+.err { color:var(--err); font-size:13px; padding:6px 2px; white-space:pre-wrap; }
+.meta { display:flex; gap:12px; align-items:center; margin:12px 0 4px; }
+.thumb { width:120px; border-radius:8px; border:1px solid var(--bd); background:#000; }
+.title { font-weight:600; font-size:15px; }
+.entries { max-height:220px; overflow:auto; border:1px solid var(--bd); border-radius:8px; margin:10px 0; }
+.entry { display:flex; gap:8px; align-items:center; padding:6px 10px; border-bottom:1px solid var(--bd); cursor:pointer; }
+.entry:last-child { border-bottom:none; }
+.entry:hover { background:var(--card2); }
+.etitle { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.tabs { display:flex; gap:6px; margin:12px 0 0; }
+.tab { border:1px solid var(--bd); background:transparent; color:var(--mut); padding:6px 16px; border-radius:8px 8px 0 0; cursor:pointer; font:inherit; }
+.tab.on { color:var(--tx); background:var(--card2); border-color:var(--bd); }
+.opts { display:flex; flex-wrap:wrap; gap:10px 16px; padding:12px; border:1px solid var(--bd); border-radius:0 8px 8px 8px; background:var(--card2); }
+.opts label { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--mut); }
+.opts label.ck { flex-direction:row; align-items:center; color:var(--tx); font-size:13px; }
+.qlist { display:flex; flex-direction:column; gap:8px; }
+.job { border:1px solid var(--bd); border-radius:10px; padding:10px 12px; background:var(--card2); }
+.jtop { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.badge { font-size:10.5px; text-transform:uppercase; letter-spacing:.6px; padding:2px 8px; border-radius:99px; border:1px solid var(--bd); color:var(--mut); }
+.badge.d { color:#60a5fa; border-color:#60a5fa55; }
+.badge.p { color:var(--warn); border-color:#f59e0b55; }
+.badge.c { color:var(--ok); border-color:#22c55e55; }
+.badge.e { color:var(--err); border-color:#ef444455; }
+.jtitle { flex:1; min-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; }
+.jsp { color:var(--mut); font-size:12px; }
+.jbtns { display:flex; gap:4px; }
+.bar { height:7px; background:#0d1017; border-radius:99px; margin-top:8px; overflow:hidden; }
+.fill { height:100%; background:linear-gradient(90deg,#ef4444,#f97316); border-radius:99px; transition:width .25s; }
+.fill.err { background:var(--err); }
+.log { margin-top:8px; font:11.5px/1.5 ui-monospace,Menlo,Consolas,monospace; color:var(--mut); max-height:160px; overflow:auto; background:#0d1017; border-radius:8px; padding:8px 10px; }
+.jerr { margin-top:8px; color:var(--err); font-size:12.5px; }
+.flist { display:flex; flex-direction:column; gap:6px; }
+.file { display:flex; gap:10px; align-items:center; border:1px solid var(--bd); border-radius:8px; padding:7px 10px; background:var(--card2); }
+.file a { color:var(--tx); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-decoration:none; }
+.file a:hover { color:var(--ac); }
+.modal { position:fixed; inset:0; background:rgba(5,7,10,.7); display:flex; align-items:flex-start; justify-content:center; padding:40px 14px; z-index:20; }
+.mcard { background:var(--card); border:1px solid var(--bd); border-radius:14px; padding:18px; width:640px; max-width:100%; max-height:85vh; overflow:auto; }
+.mgrid { display:grid; grid-template-columns:1fr 1fr; gap:10px 14px; }
+.mgrid label { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--mut); }
+.mgrid .full { grid-column:1 / -1; }
+.mgrid label.ck { flex-direction:row; align-items:center; color:var(--tx); font-size:13px; }
+.mfoot { display:flex; justify-content:flex-end; gap:8px; margin-top:14px; }
+#toasts { position:fixed; right:16px; bottom:16px; display:flex; flex-direction:column; gap:8px; z-index:30; }
+.toast { background:var(--card2); border:1px solid var(--ok); color:var(--tx); border-radius:10px; padding:10px 14px; max-width:340px; box-shadow:0 6px 24px rgba(0,0,0,.4); }
+.toast.err { border-color:var(--err); }
+h2 { margin:0; }
+</style></head><body>
+<header>
+  <div class="brand">&#9660; TubeForge <span>Lite</span></div>
+  <div class="chips" id="chips"></div>
+  <div class="spacer"></div>
+  <button class="btn ghost small" id="btnSettings">Settings</button>
+</header>
+<main>
+  <section class="card">
+    <div class="row">
+      <input id="url" placeholder="Paste a video or playlist URL (YouTube, Vimeo, direct links, …)" spellcheck="false"/>
+      <button class="btn accent" id="btnAnalyze">Analyze</button>
+    </div>
+    <div class="err" id="probeErr"></div>
+    <div id="probe"></div>
+  </section>
+  <section class="card">
+    <div class="row between"><h2>Queue</h2><span class="muted" id="qcount"></span></div>
+    <div class="qlist" id="queue"><div class="muted pad">Loading…</div></div>
+  </section>
+  <section class="card">
+    <div class="row between"><h2>Files</h2><button class="btn ghost small" id="btnFiles">Refresh</button></div>
+    <div class="flist" id="files"><div class="muted pad">Loading…</div></div>
+  </section>
+</main>
+<div class="modal" id="modal" hidden>
+  <div class="mcard">
+    <h2 style="margin-bottom:12px">Settings</h2>
+    <div class="mgrid">
+      <label class="full">Download directory <input id="set-dl"/></label>
+      <label class="full">Filename template <input id="set-tpl"/></label>
+      <label>Parallel downloads (1-4) <input id="set-conc" type="number" min="1" max="4"/></label>
+      <label>aria2 connections (1-16) <input id="set-aria" type="number" min="1" max="16"/></label>
+      <label>Default quality <select id="set-quality"><option value="0">best</option><option>2160</option><option>1440</option><option>1080</option><option>720</option><option>480</option><option>360</option></select></label>
+      <label>Default container <select id="set-cont"><option>mp4</option><option>mkv</option><option>webm</option></select></label>
+      <label>Default audio format <select id="set-afmt"><option>mp3</option><option>m4a</option><option>opus</option><option>flac</option><option>wav</option></select></label>
+      <label>Subtitle languages <input id="set-subs" placeholder="en.*"/></label>
+      <label>yt-dlp path override <input id="set-tytdlp" placeholder="(from PATH)"/></label>
+      <label>ffmpeg path override <input id="set-tffmpeg" placeholder="(from PATH)"/></label>
+      <label>aria2c path override <input id="set-taria" placeholder="(bundled)"/></label>
+      <label>Cookies file (age-gated) <input id="set-cookies" placeholder="cookies.txt"/></label>
+      <label class="ck"><input type="checkbox" id="set-usearia"/> use aria2 downloader</label>
+      <label class="ck"><input type="checkbox" id="set-ethumb"/> embed thumbnail</label>
+      <label class="ck"><input type="checkbox" id="set-emeta"/> embed metadata</label>
+      <label class="ck"><input type="checkbox" id="set-esubs"/> embed subtitles</label>
+    </div>
+    <div class="mfoot">
+      <button class="btn ghost" id="btnCancelSet">Cancel</button>
+      <button class="btn accent" id="btnSaveSet">Save</button>
+    </div>
+  </div>
+</div>
+<div id="toasts"></div>
+<script>
+'use strict';
+var S = { health: null, settings: null, probe: null, tab: 'video', sel: [], queue: { jobs: [] }, poll: null };
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmtBytes(n){ if(!n) return '—'; var u=['B','KiB','MiB','GiB','TiB']; var i=0,v=n; while(v>=1024 && i<u.length-1){ v/=1024; i++; } return v.toFixed(v>=100||i===0?0:1)+' '+u[i]; }
+function fmtDur(s){ if(s===undefined||s===null) return '—'; var m=Math.floor(s/60), r=Math.round(s%60), h=Math.floor(m/60); if(h) return h+':'+String(m%60).padStart(2,'0')+':'+String(r).padStart(2,'0'); return m+':'+String(r).padStart(2,'0'); }
+function api(m,p,b){ return fetch(p, b!==undefined?{method:m,headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}:{method:m}).then(function(r){ return r.json().then(function(j){ if(!r.ok || (j && j.ok===false)) throw new Error((j && j.error) || ('HTTP '+r.status)); return j; }); }); }
+function toast(msg,isErr){ var d=document.createElement('div'); d.className='toast'+(isErr?' err':''); d.textContent=msg; $('toasts').appendChild(d); setTimeout(function(){ d.remove(); }, 4200); }
+function activeJs(j){ return j.status==='queued'||j.status==='downloading'||j.status==='processing'; }
+
+// ---- health chips -----------------------------------------------------------
+function renderHealth(){ var h=S.health; if(!h) return; var el=$('chips'); var html=(h.tools||[]).map(function(t){ var cls=t.ok?'chip ok':'chip bad'; var tip=esc((t.path||'missing')+(t.version?('\n'+t.version):'')); return '<span class="'+cls+'" title="'+tip+'">'+esc(t.name)+'</span>'; }).join('');
+  var b=h.aria2Bundle||{}; html+='<span class="chip" title="aria2c compiled into this executable (self-extracting)">aria2 '+(b.bundled?'bundled':'PATH')+'</span>';
+  el.innerHTML=html; }
+function loadHealth(){ api('GET','/api/tf/health').then(function(r){ S.health=r; renderHealth(); }).catch(function(){}); }
+
+// ---- settings ---------------------------------------------------------------
+function openSettings(){ var s=S.settings; if(!s) return; $('set-dl').value=s.downloadDir||''; $('set-tpl').value=s.filenameTemplate||''; $('set-conc').value=s.concurrentDownloads; $('set-aria').value=s.aria2Connections; $('set-usearia').checked=!!s.useAria2; $('set-quality').value=String(s.defaultQuality); $('set-cont').value=s.defaultContainer; $('set-afmt').value=s.defaultAudioFormat; $('set-subs').value=s.subLangs||''; $('set-ethumb').checked=!!s.embedThumbnail; $('set-emeta').checked=!!s.embedMetadata; $('set-esubs').checked=!!s.embedSubs; $('set-cookies').value=s.cookiesFile||''; $('set-tytdlp').value=(s.toolPaths&&s.toolPaths.ytdlp)||''; $('set-tffmpeg').value=(s.toolPaths&&s.toolPaths.ffmpeg)||''; $('set-taria').value=(s.toolPaths&&s.toolPaths.aria2c)||''; $('modal').hidden=false; }
+function saveSettings(){ var body={ downloadDir:$('set-dl').value.trim(), filenameTemplate:$('set-tpl').value.trim()||'%(title).100B [%(id)s].%(ext)s', concurrentDownloads:Number($('set-conc').value)||1, aria2Connections:Number($('set-aria').value)||8, useAria2:$('set-usearia').checked, defaultQuality:Number($('set-quality').value), defaultContainer:$('set-cont').value, defaultAudioFormat:$('set-afmt').value, subLangs:$('set-subs').value.trim()||'en.*', embedThumbnail:$('set-ethumb').checked, embedMetadata:$('set-emeta').checked, embedSubs:$('set-esubs').checked, cookiesFile:$('set-cookies').value.trim()||undefined, toolPaths:{ ytdlp:$('set-tytdlp').value.trim()||undefined, ffmpeg:$('set-tffmpeg').value.trim()||undefined, aria2c:$('set-taria').value.trim()||undefined } };
+  api('POST','/api/tf/settings',body).then(function(r){ S.settings=r.settings; $('modal').hidden=true; toast('Settings saved'); loadHealth(); }).catch(function(e){ toast(e.message,true); }); }
+
+// ---- probe ------------------------------------------------------------------
+function qOpts(){ var q=[0,2160,1440,1080,720,480,360]; var def=(S.settings&&S.settings.defaultQuality)||1080; return q.map(function(x){ return '<option value="'+x+'"'+(x===def?' selected':'')+'>'+(x===0?'best':x+'p')+'</option>'; }).join(''); }
+function connOpts(){ var c=[1,4,8,16]; var def=(S.settings&&S.settings.aria2Connections)||8; return c.map(function(x){ return '<option value="'+x+'"'+(x===def?' selected':'')+'>'+x+'</option>'; }).join(''); }
+function setTab(t){ S.tab=t; renderProbe(); }
+function selEntry(i,on){ S.sel[i]=on; }
+function selAll(on){ S.probe.entries.forEach(function(e,i){ S.sel[i]=on; }); renderProbe(); }
+
+function analyze(){ var url=$('url').value.trim(); if(!url) return; $('probeErr').textContent=''; $('probe').innerHTML='<div class="muted pad">Probing…</div>';
+  api('POST','/api/tf/probe',{url:url}).then(function(r){ S.probe=r.result; S.sel=[]; (r.result.entries||[]).forEach(function(){ S.sel.push(true); }); renderProbe(); }).catch(function(e){ S.probe=null; $('probe').innerHTML=''; $('probeErr').textContent=e.message; }); }
+
+function renderProbe(){ var p=S.probe; if(!p) return; var html='';
+  html+='<div class="meta">'+(p.thumbnail?'<img class="thumb" src="'+esc(p.thumbnail)+'" onerror="this.style.display=\'none\'"/>':'')+'<div><div class="title">'+esc(p.title)+'</div><div class="muted">'+esc(p.uploader||'')+(p.duration?' · '+fmtDur(p.duration):'')+(p.extractor?' · '+esc(p.extractor):'')+'</div></div></div>';
+  if(p.type==='playlist'){ html+='<div class="row between" style="margin-top:10px"><div class="muted">'+(p.playlistCount||p.entries.length)+' entries — untick what you do not want</div><div><button class="btn ghost small" onclick="selAll(true)">All</button> <button class="btn ghost small" onclick="selAll(false)">None</button></div></div>';
+    html+='<div class="entries">'; p.entries.forEach(function(e,i){ html+='<label class="entry"><input type="checkbox"'+(S.sel[i]?' checked':'')+' onchange="selEntry('+i+',this.checked)"/><span class="etitle">'+esc(e.title)+'</span>'+(e.duration?'<span class="muted">'+fmtDur(e.duration)+'</span>':'')+'</label>'; }); html+='</div>'; }
+  html+='<div class="tabs"><button class="tab'+(S.tab==='video'?' on':'')+'" onclick="setTab(\'video\')">Video</button><button class="tab'+(S.tab==='audio'?' on':'')+'" onclick="setTab(\'audio\')">Audio</button></div>';
+  html+='<div class="opts">';
+  if(S.tab==='video'){ html+='<label>Quality <select id="o-quality">'+qOpts()+'</select></label><label>Container <select id="o-cont"><option>mp4</option><option>mkv</option><option>webm</option></select></label>'; }
+  else { html+='<label>Audio format <select id="o-afmt"><option>mp3</option><option>m4a</option><option>opus</option><option>flac</option><option>wav</option></select></label><label>Bitrate <select id="o-aq"><option value="320">320k</option><option value="256">256k</option><option value="192">192k</option><option value="128">128k</option><option value="0">best</option></select></label>'; }
+  html+='<label>Subtitles <input id="o-subs" size="14" placeholder="en, de.*"/></label>'
+    +'<label class="ck"><input type="checkbox" id="o-ethumb" checked/> thumbnail</label>'
+    +'<label class="ck"><input type="checkbox" id="o-emeta" checked/> metadata</label>'
+    +'<label class="ck"><input type="checkbox" id="o-esubs"/> embed subs</label>'
+    +'<label>aria2 conns <select id="o-conn">'+connOpts()+'</select></label>';
+  html+='</div><div class="row end"><button class="btn accent" onclick="download()">Download'+(p.type==='playlist'?' selected':'')+'</button></div>';
+  $('probe').innerHTML=html; }
+
+function download(){ var p=S.probe; if(!p) return; var body={ url:p.webpageUrl||$('url').value.trim(), kind:S.tab, title:p.title, thumbnail:p.thumbnail };
+  if(S.tab==='video'){ body.quality=Number($('o-quality').value); body.container=$('o-cont').value; } else { body.audioFormat=$('o-afmt').value; body.audioQuality=$('o-aq').value; }
+  var subs=$('o-subs').value.trim(); if(subs){ body.subLangs=subs; body.embedSubs=$('o-esubs').checked; }
+  body.embedThumbnail=$('o-ethumb').checked; body.embedMetadata=$('o-emeta').checked; body.aria2Connections=Number($('o-conn').value)||8;
+  if(p.type==='playlist'){ var urls=p.entries.filter(function(e,i){ return S.sel[i] && e.url && /^https?:/.test(e.url); }).map(function(e){ return e.url; });
+    if(!urls.length){ toast('No downloadable entry URLs selected', true); return; } body.entryUrls=urls; }
+  api('POST','/api/tf/download',body).then(function(r){ toast('Queued '+r.count+' download'+(r.count>1?'s':'')); S.probe=null; $('probe').innerHTML=''; $('url').value=''; loadFiles(); }).catch(function(e){ toast(e.message,true); }); }
+
+// ---- queue ------------------------------------------------------------------
+var BADGE={queued:'q',downloading:'d',processing:'p',completed:'c',error:'e',canceled:'x'};
+function openSSE(){ try{ var es=new EventSource('/api/tf/events'); es.onmessage=function(ev){ try{ S.queue=JSON.parse(ev.data); renderQueue(); }catch(e){} }; }catch(e){ pollQ(); } }
+function pollQ(){ if(S.poll) return; S.poll=setInterval(function(){ api('GET','/api/tf/queue').then(function(r){ S.queue=r; renderQueue(); }).catch(function(){}); }, 1500); }
+function renderQueue(){ var jobs=(S.queue&&S.queue.jobs)||[]; $('qcount').textContent=jobs.length?(jobs.filter(activeJs).length+' active · '+jobs.length+' total'):'';
+  if(!jobs.length){ $('queue').innerHTML='<div class="muted pad">Nothing in the queue yet — analyze a URL above.</div>'; return; }
+  $('queue').innerHTML=jobs.map(card).join(''); }
+function card(j){ var o=j.opts||{}; var t=o.title||o.url||j.id; var b=BADGE[j.status]||'q'; var pct=Math.round(j.progress.percent||0); var bar=j.status==='completed'?100:pct;
+  var html='<div class="job"><div class="jtop"><span class="badge '+b+'">'+j.status+'</span><span class="jtitle" onclick="toggleLog(\''+j.id+'\')" title="click for engine log">'+esc(t)+'</span><span class="muted">'+fmtBytes(j.fileSize||j.progress.totalBytes)+'</span><span class="jsp">';
+  if(j.status==='downloading') html+=esc(j.progress.speed)+' · ETA '+esc(j.progress.eta);
+  html+='</span><span class="jbtns">';
+  if(activeJs(j)) html+='<button class="btn ghost small" onclick="cancelJob(\''+j.id+'\')">Cancel</button>';
+  if(j.status==='error'||j.status==='canceled') html+='<button class="btn ghost small" onclick="retryJob(\''+j.id+'\')">Retry</button>';
+  html+='<button class="btn ghost small" onclick="removeJob(\''+j.id+'\')">✕</button></span></div>';
+  html+='<div class="bar"><div class="fill'+(j.status==='error'?' err':'')+'" style="width:'+bar+'%"></div></div>';
+  html+='<div class="log" id="log-'+j.id+'" hidden>'+(j.logTail||[]).map(function(l){ return '<div>'+esc(l)+'</div>'; }).join('')+'</div>';
+  if(j.error) html+='<div class="jerr">'+esc(j.error)+'</div>';
+  html+='</div>'; return html; }
+function toggleLog(id){ var el=$('log-'+id); if(el) el.hidden=!el.hidden; }
+function cancelJob(id){ api('POST','/api/tf/cancel',{id:id}).catch(function(e){ toast(e.message,true); }); }
+function retryJob(id){ api('POST','/api/tf/retry',{id:id}).catch(function(e){ toast(e.message,true); }); }
+function removeJob(id){ api('POST','/api/tf/remove',{id:id}).catch(function(e){ toast(e.message,true); }); }
+
+// ---- files ------------------------------------------------------------------
+function loadFiles(){ api('GET','/api/tf/files').then(function(r){ var files=(r.files||[]).filter(function(f){ return !f.isDir; });
+  $('files').innerHTML=files.length?files.map(function(f){ return '<div class="file"><a href="/api/tf/files/raw?name='+encodeURIComponent(f.name)+'" download>'+esc(f.name)+'</a><span class="muted">'+fmtBytes(f.size)+' · '+new Date(f.modified).toLocaleString()+'</span><button class="btn ghost small" onclick="delFile(\''+encodeURIComponent(f.name)+'\')">delete</button></div>'; }).join(''):'<div class="muted pad">No files yet.</div>'; }).catch(function(e){ $('files').innerHTML='<div class="muted pad">'+esc(e.message)+'</div>'; }); }
+function delFile(enc){ api('POST','/api/tf/files',{action:'delete',name:decodeURIComponent(enc)}).then(loadFiles).catch(function(e){ toast(e.message,true); }); }
+
+// ---- boot -------------------------------------------------------------------
+$('btnAnalyze').addEventListener('click', analyze);
+$('url').addEventListener('keydown', function(e){ if(e.key==='Enter') analyze(); });
+$('btnSettings').addEventListener('click', openSettings);
+$('btnCancelSet').addEventListener('click', function(){ $('modal').hidden=true; });
+$('btnSaveSet').addEventListener('click', saveSettings);
+$('btnFiles').addEventListener('click', loadFiles);
+$('modal').addEventListener('click', function(e){ if(e.target===$('modal')) $('modal').hidden=true; });
+loadHealth(); loadFiles();
+api('GET','/api/tf/settings').then(function(r){ S.settings=r.settings; }).catch(function(){});
+openSSE();
+setInterval(loadHealth, 30000);
+</script></body></html>
