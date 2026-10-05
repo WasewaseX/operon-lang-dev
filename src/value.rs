@@ -769,17 +769,34 @@ impl Value {
     /// Deep equality (maps order-insensitive). Cycle-safe: identity is
     /// checked first (a structure equals itself), and a pair of containers
     /// already being compared short-circuits to true; depth-capped.
-    /// sec-r5 (F-10): the compared-pair set is NOT unwound on exit, for
-    /// trees this is invisible (pairs are unique anyway); for DAG-shaped
-    /// values it memoizes "this pair already verified equal", keeping the
+    /// sec-r5 (F-10): pairs that complete EQUAL stay in `seen`, for trees
+    /// this is invisible (pairs are unique anyway); for DAG-shaped values
+    /// it memoizes "this pair already verified equal", keeping the
     /// comparison linear instead of exponential (a 40-deep l=[l,l] twin
     /// chain was a live hang).
+    /// issue #102: pairs that complete UNEQUAL leave `seen` and move to
+    /// `failed`. Before the failed set, a pair poisoned by a failed
+    /// candidate attempt inside a map's any() loop made a later
+    /// re-encounter hit the "already comparing" branch and return true —
+    /// two maps sharing no genuinely equal keys could compare equal
+    /// (non-symmetrical, iteration-order dependent). Re-encounters of a
+    /// failed pair short-circuit false: deep_eq is deterministic within
+    /// one top-level comparison (no Operon code runs mid-compare), so the
+    /// recomputed verdict would be false anyway — and the short-circuit
+    /// keeps adversarial DAG shapes from re-exploring exponentially.
     pub fn deep_eq(&self, other: &Value) -> bool {
         let mut seen: HashSet<(usize, usize)> = HashSet::new();
-        self.deep_eq_g(other, &mut seen, 0)
+        let mut failed: HashSet<(usize, usize)> = HashSet::new();
+        self.deep_eq_g(other, &mut seen, &mut failed, 0)
     }
 
-    fn deep_eq_g(&self, other: &Value, seen: &mut HashSet<(usize, usize)>, depth: u32) -> bool {
+    fn deep_eq_g(
+        &self,
+        other: &Value,
+        seen: &mut HashSet<(usize, usize)>,
+        failed: &mut HashSet<(usize, usize)>,
+        depth: u32,
+    ) -> bool {
         // sec-r5: 100k native frames sat within ~2 MB of the 8 MB main stack
         // (one layout change from SIGSEGV); 16k keeps comfortable headroom.
         if depth > 16_000 {
@@ -790,8 +807,12 @@ impl Value {
             (Value::Bool(a), Value::Bool(b)) => a == b,
             (Value::Int(a), Value::Int(b)) => a == b,
             (Value::Float(a), Value::Float(b)) => a == b,
+            // issue #103: exact cross-class comparison — `as f64` rounds
+            // any |i| above 2^53, so 9007199254740993 == 9007199254740992.0
+            // wrongly held (and every nested container comparison rode this
+            // arm). The oracle (Python int==float) is exact.
             (Value::Int(a), Value::Float(b)) | (Value::Float(b), Value::Int(a)) => {
-                (*a as f64) == *b
+                int_float_exact_eq(*a, *b)
             }
             (Value::Str(a), Value::Str(b)) => a == b,
             (Value::Bytes(a), Value::Bytes(b)) => a == b,
@@ -803,8 +824,11 @@ impl Value {
                     Rc::as_ptr(a) as *const u8 as usize,
                     Rc::as_ptr(b) as *const u8 as usize,
                 );
+                if failed.contains(&pair) {
+                    return false; // issue #102: already completed unequal
+                }
                 if !seen.insert(pair) {
-                    return true; // already comparing this pair (cycle)
+                    return true; // in-progress ancestor (cycle) or verified equal
                 }
                 let la = a.borrow();
                 let lb = b.borrow();
@@ -812,8 +836,13 @@ impl Value {
                     && la
                         .iter()
                         .zip(lb.iter())
-                        .all(|(x, y)| x.deep_eq_g(y, seen, depth + 1));
-                // sec-r5 (F-10): pair stays in `seen`, DAG memoization
+                        .all(|(x, y)| x.deep_eq_g(y, seen, failed, depth + 1));
+                // sec-r5 (F-10): verified-equal pair stays in `seen`, DAG
+                // memoization; issue #102: failed pair unwinds into `failed`
+                if !ok {
+                    seen.remove(&pair);
+                    failed.insert(pair);
+                }
                 ok
             }
             (Value::Map(a), Value::Map(b)) => {
@@ -824,6 +853,9 @@ impl Value {
                     Rc::as_ptr(a) as *const u8 as usize,
                     Rc::as_ptr(b) as *const u8 as usize,
                 );
+                if failed.contains(&pair) {
+                    return false; // issue #102: already completed unequal
+                }
                 if !seen.insert(pair) {
                     return true;
                 }
@@ -832,10 +864,16 @@ impl Value {
                 let ok = ma.len() == mb.len()
                     && ma.iter().all(|(k, v)| {
                         mb.iter().any(|(k2, v2)| {
-                            k.deep_eq_g(k2, seen, depth + 1) && v.deep_eq_g(v2, seen, depth + 1)
+                            k.deep_eq_g(k2, seen, failed, depth + 1)
+                                && v.deep_eq_g(v2, seen, failed, depth + 1)
                         })
                     });
-                // sec-r5 (F-10): pair stays in `seen`, DAG memoization
+                // sec-r5 (F-10): verified-equal pair stays in `seen`, DAG
+                // memoization; issue #102: failed pair unwinds into `failed`
+                if !ok {
+                    seen.remove(&pair);
+                    failed.insert(pair);
+                }
                 ok
             }
             (Value::Gene(d1, _), Value::Gene(d2, _)) => Arc::ptr_eq(d1, d2),
@@ -863,18 +901,27 @@ impl Value {
                     Rc::as_ptr(ma) as *const u8 as usize,
                     Rc::as_ptr(mb) as *const u8 as usize,
                 );
+                if failed.contains(&pair) {
+                    return false; // issue #102: already completed unequal
+                }
                 if !seen.insert(pair) {
-                    return true; // already comparing this pair (cycle)
+                    return true; // in-progress ancestor (cycle) or verified equal
                 }
                 let fa = ma.borrow();
                 let fb = mb.borrow();
                 let ok = fa.len() == fb.len()
                     && fa.iter().all(|(k, v)| {
                         fb.iter().any(|(k2, v2)| {
-                            k.deep_eq_g(k2, seen, depth + 1) && v.deep_eq_g(v2, seen, depth + 1)
+                            k.deep_eq_g(k2, seen, failed, depth + 1)
+                                && v.deep_eq_g(v2, seen, failed, depth + 1)
                         })
                     });
-                // sec-r5 (F-10): pair stays in `seen`, DAG memoization
+                // sec-r5 (F-10): verified-equal pair stays in `seen`, DAG
+                // memoization; issue #102: failed pair unwinds into `failed`
+                if !ok {
+                    seen.remove(&pair);
+                    failed.insert(pair);
+                }
                 ok
             }
             // W06: variants are equal iff same tag and payloads are equal;
@@ -884,7 +931,7 @@ impl Value {
                 t1 == t2
                     && match (p1, p2) {
                         (None, None) => true,
-                        (Some(a), Some(b)) => a.deep_eq_g(b, seen, depth + 1),
+                        (Some(a), Some(b)) => a.deep_eq_g(b, seen, failed, depth + 1),
                         _ => false,
                     }
             }
@@ -894,6 +941,30 @@ impl Value {
             _ => false,
         }
     }
+}
+
+/// Exact i64-vs-f64 equality (issue #103). The old `(*a as f64) == *b`
+/// rounds any |i| above 2^53, so 9007199254740993 == 9007199254740992.0
+/// wrongly held. The oracle (Python int==float) is exact: equal iff the
+/// float is integral and the mathematical values match. Every integral
+/// f64 below 2^127 converts to i128 exactly; at or beyond that magnitude
+/// no f64 equals an i64, so the i128 round-trip is total and exact.
+/// Boundaries: -2^63 as f64 IS i64::MIN (true for i == i64::MIN); +2^63
+/// is one past i64::MAX (always false); NaN/inf never equal an integer.
+fn int_float_exact_eq(i: i64, f: f64) -> bool {
+    if !f.is_finite() {
+        return false;
+    }
+    let t = f.trunc();
+    if t != f {
+        return false;
+    }
+    // 2^127 as an f64 literal (exactly representable, power of two).
+    const TWO_POW_127: f64 = 1.7014118346046923e38;
+    if t.abs() >= TWO_POW_127 {
+        return false;
+    }
+    (t as i128) == (i as i128)
 }
 
 /// Python-compatible float repr: shortest round-trip digits; scientific
