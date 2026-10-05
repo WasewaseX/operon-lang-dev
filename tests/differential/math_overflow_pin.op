@@ -1,0 +1,62 @@
+# math overflow-class pin (2026-10-06): regression gate for issue #133.
+# The stdlib is written in Operon, and unchecked i64 arithmetic inside std
+# genes turned documented-valid inputs into hard, catchable stresses —
+# defeating each function's stated purpose. engine == oracle (the stdlib is
+# shared .op), so no differential lane could catch this class: the expected
+# values below are ground truth computed externally (Python), printed as
+# boolean assertions AND raw values so the byte-pin carries the truth.
+#
+# Fixed sites, one per family member:
+#   std/math.op  isqrt      — mid*mid and (lo+hi+1) overflowed for n >= ~6e9;
+#                             search now capped at floor(sqrt(i64::MAX))
+#   std/math.op  lcm        — abs(a*b)//gcd multiplied before dividing;
+#                             now divides first ((a//gcd)*b)
+#   std/math.op  digits     — abs(i64::MIN) overflowed; now works in
+#                             negative space (no abs anywhere)
+#   std/math.op  round_to   — 10**n overflowed for n >= 19; clamped to 18
+#   std/fmt.op   fmt_fixed  — same 10**n family; clamped to 18
+#   std/fmt.op   fmt_thousands — 0 - n overflowed for i64::MIN; sign now
+#                             stripped at string level
+#   std/seq.op   fib_seq    — t = a+b overflowed mid-drain for huge limits;
+#                             advance now guarded, pending b flushed
+use std/math as m
+use std/fmt as f
+use std/seq as q
+
+gene main() {
+    # --- isqrt: dies at n >= ~6e9 before the fix (mid*mid overflow) ------
+    print("isqrt_1e10", m.isqrt(10000000000) == 100000, m.isqrt(10000000000))
+    print("isqrt_i64max", m.isqrt(9223372036854775807) == 3037000499)
+    print("isqrt_cap_sq", m.isqrt(3037000499 * 3037000499) == 3037000499)
+    print("isqrt_small", m.isqrt(99) == 9, m.isqrt(100) == 10, m.isqrt(0), m.isqrt(1))
+
+    # --- lcm: multiplied before dividing before the fix (a*b overflow) ---
+    print("lcm_pow2", m.lcm(4294967296, 4294967296) == 4294967296)
+    print("lcm_mix", m.lcm(123456789, 987654321) == 13548070123626141)
+    print("lcm_zero", m.lcm(0, 7) == 0, m.lcm(7, 0) == 0)
+    print("lcm_coprime", m.lcm(35, 64) == 2240)
+
+    # --- digits: abs(i64::MIN) crashed before the fix --------------------
+    print("digits_min", m.digits(0 - 9223372036854775807 - 1) == [9, 2, 2, 3, 3, 7, 2, 0, 3, 6, 8, 5, 4, 7, 7, 5, 8, 0, 8])
+    print("digits_neg", m.digits(-907) == [9, 0, 7])
+    print("digits_pos", m.digits(5040) == [5, 0, 4, 0])
+    print("digits_zero", m.digits(0) == [0])
+
+    # --- round_to / fmt_fixed: 10**19 overflowed before the clamp --------
+    print("round_to_18", m.round_to(2.5, 18) == 2.5)
+    print("fmt_fixed_19", f.fmt_fixed(1.5, 19) == "1.500000000000000000")
+    print("fmt_fixed_2", f.fmt_fixed(3.14159, 2) == "3.14")
+
+    # --- fmt_thousands: 0 - i64::MIN overflowed before the fix -----------
+    print("thousands_min", f.fmt_thousands(0 - 9223372036854775807 - 1) == "-9,223,372,036,854,775,808")
+    print("thousands_pos", f.fmt_thousands(1234567) == "1,234,567")
+
+    # --- fib_seq: advance overflowed mid-drain before the guard ----------
+    # drain at limit = i64::MAX: every Fibonacci value that fits i64, in
+    # order, ending at F(92) = 7540113804746346429 (93 values, F0..F92)
+    let full = q.take_seq("fib_seq", [9223372036854775807], 200).collect()
+    print("fib_full_n", len(full) == 93, len(full))
+    print("fib_full_last", full[92] == 7540113804746346429, full[92])
+    print("fib_full_head", full[0] == 0, full[1] == 1, full[6] == 8)
+    print("fib_head7", q.take_seq("fib_seq", [], 7).collect() == [0, 1, 1, 2, 3, 5, 8])
+}
