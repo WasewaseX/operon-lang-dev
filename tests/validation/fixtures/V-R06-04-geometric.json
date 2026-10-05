@@ -1,0 +1,26 @@
+{
+  "engine_args": [],
+  "gates": {
+    "determinism_pin": true,
+    "z_alpha": 0.001
+  },
+  "id": "V-R06-04-geometric",
+  "program": "tests/validation/programs/geometric_p025.op",
+  "reduce": {
+    "op": "ratio"
+  },
+  "reference": {
+    "kind": "geometric-mean",
+    "params": {
+      "p": 0.25
+    }
+  },
+  "schema": "r06-fixture-v1",
+  "seeds": [
+    11,
+    23,
+    37,
+    53,
+    97
+  ]
+}

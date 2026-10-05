@@ -1,0 +1,14 @@
+# V-R06-01 — uniform stream mean/var: 20000 draws of the mirrored random()
+# stream (xorshift64*, R0.5 contract). Prints SUM then N; the harness
+# z-checks the mean against the closed form 1/2 with variance 1/(12n).
+# The SEED token is substituted by scripts/validation/harness.py per run.
+randomize(SEED)
+let n = 20000
+let sum = 0.0
+let i = 0
+while i < n {
+    sum = sum + random()
+    i = i + 1
+}
+print(sum)
+print(n)

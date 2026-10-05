@@ -1,0 +1,30 @@
+# V-R06-03 — binomial shape: 10000 experiments of 20 fair flips each; the
+# 21 cell counts (successes k=0..20) are printed one per line. The harness
+# total-variation-checks the empirical pmf against the exact
+# Binomial(20, 0.5) pmf (tv_eps in the fixture; z is ill-defined for a
+# multinomial cell vector, so this fixture is TV-only by contract).
+randomize(SEED)
+let experiments = 10000
+let counts = []
+let k = 0
+while k <= 20 {
+    push(counts, 0)
+    k = k + 1
+}
+let e = 0
+while e < experiments {
+    let succ = 0
+    let j = 0
+    while j < 20 {
+        if random() < 0.5 {
+            succ = succ + 1
+        }
+        j = j + 1
+    }
+    counts[succ] = counts[succ] + 1
+    e = e + 1
+}
+k = 0
+while k <= 20 {
+    print(counts[k])
+    k = k + 1
