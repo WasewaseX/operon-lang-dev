@@ -2566,13 +2566,36 @@ fn fold_consts(consts: &mut Vec<Const>, a: u32, b: u32, op: BinOp) -> Option<u32
                 if y == 0 {
                     return None; // the runtime stress IS the contract
                 }
-                Const::Int(x.checked_div(y)?)
+                // sweep-3 #129 (Z-129-FOLDSEM): `/` is true division,
+                // ALWAYS Float (SPEC). The runtime converts both operands
+                // to f64 and divides (interp apply_binop Div -> as_floats),
+                // so the folded constant must be Float too — Const::Int
+                // kept the truncated quotient and `9 / 2` executed as 4
+                // under --opt while every unfolded lane printed 4.5.
+                // `as f64` on both sides is bit-identical to as_floats.
+                Const::Float(x as f64 / y as f64)
             }
             Mod => {
                 if y == 0 {
+                    return None; // the runtime stress IS the contract
+                }
+                // sweep-3 #129 (Z-129-FOLDSEM): int % int is Python-parity
+                // FLOORED remainder, sign follows the divisor (interp
+                // apply_binop Mod: 7 % -3 == -2). checked_rem is Rust's
+                // TRUNCATED remainder (sign follows the dividend) and
+                // folded 7 % -3 to 1. Mirror the runtime formula exactly;
+                // checked ops refuse to fold where the runtime stresses
+                // (i64::MIN % -1 — overflow stress in apply_binop).
+                if x == i64::MIN && y == -1 {
                     return None;
                 }
-                Const::Int(x.checked_rem(y)?)
+                let mut q = x / y; // Rust / truncates toward zero
+                if (x < 0) != (y < 0) && q.checked_mul(y)? != x {
+                    q -= 1; // floor rounds down
+                }
+                let rb = q.checked_mul(y)?;
+                let m = x.checked_sub(rb)?;
+                Const::Int(m)
             }
             Eq => Const::Bool(x == y),
             Neq => Const::Bool(x != y),
