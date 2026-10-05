@@ -8,6 +8,8 @@
 
 ## `gene csv_parse(text, sep)`
 
+## `gene csv_parse_machine(text, sep)`
+
 ## `gene csv_parse_line(line, sep)`
 
 ## `gene csv_records(text, sep)`

@@ -14,6 +14,8 @@
 
 ## `gene args_get(argv, name)`
 
+## `gene __args_num_ok(s)`
+
 ## `gene args_number(argv, name, default)`
 
 ## `gene args_subcommand(argv)`

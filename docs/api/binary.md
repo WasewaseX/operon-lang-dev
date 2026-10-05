@@ -34,6 +34,9 @@ Signed 64-bit, little endian, two's complement, to 8 bytes.
 ## `gene bin_read_u16le(data, at)`
 
 Read u16 little/big endian at byte offset `at`; null on a short read.
+The bound test is written overflow-free (len - at instead of at + n):
+a huge `at` must answer null per the header contract, never raise the
+language's i64 no-wrap overflow on the offset arithmetic itself.
 
 ## `gene bin_read_u16be(data, at)`
 

@@ -182,7 +182,10 @@ gene to_csv_rows(rows, sep) {
         let parts = []
         for cell in row {
             let f = str(cell)
-            if f.contains(sep) or f.contains("\"") or f.contains("\n") {
+            # CR is quoted too (#106 class): the CSV reader swallows bare
+            # carriage returns as CRLF endings, so an unquoted CR inside a
+            # cell would be silently lost on the round trip
+            if f.contains(sep) or f.contains("\"") or f.contains("\n") or f.contains("\r") {
                 parts.push("\"" + f.replace("\"", "\"\"") + "\"")
             } else {
                 parts.push(f)

@@ -123,6 +123,13 @@ gene big_from_int(n) {
     if n == 0 {
         return big_zero()
     }
+    if n == -9223372036854775807 - 1 {
+        # i64::MIN: abs(n) would raise at the no-wrap boundary (and the
+        # module header promises no panic), so the magnitude 2^63 is
+        # written directly: 9223372036854775808 grouped from the RIGHT in
+        # base-10^4 is 922 | 3372 | 0368 | 5477 | 5808
+        return [-1, [5808, 5477, 368, 3372, 922]]
+    }
     let sign = 1
     if n < 0 { sign = -1 }
     let m = abs(n)
@@ -210,11 +217,15 @@ gene big_neg(x) {
     if big_is_zero(x) {
         return big_zero()
     }
-    return [0 - x[0], x[1]]
+    # the limbs list is COPIED: the module contract says every result is a
+    # NEW list, and assignment shares containers (SPEC S19) — a shared
+    # limbs list would let b = big_neg(a) mutate a through b[1]
+    return [0 - x[0], x[1].slice(0, len(x[1]))]
 }
 
 gene big_abs(x) {
-    return [1, x[1]]
+    # same NEW-list rule as big_neg: never share the input's limbs
+    return [1, x[1].slice(0, len(x[1]))]
 }
 
 gene big_cmp(a, b) {
@@ -318,12 +329,17 @@ gene big_to_int(x) {
     # exact i64 when it fits, null when it does not (never a clamp)
     let ls = x[1]
     # i64::MAX = 9223372036854775807 -> little-endian base-10^4 limbs
-    # (grouped from the RIGHT: 922 | 3372 | 368 | 5477 | 5807; the third
-    # group is "0368" -> 368. i64::MIN+1 == 2^63 differs ONLY in the low
-    # limb: 5808, the boundary case this guard exists for.)
+    # (grouped from the RIGHT: 922 | 3372 | 0368 | 5477 | 5807). The one
+    # magnitude ABOVE i64::MAX that still fits is i64::MIN's: 2^63 =
+    # 9223372036854775808 -> 922 | 3372 | 0368 | 5477 | 5808, negative
+    # sign only. Accumulating that magnitude directly would overflow, so
+    # it answers -(i64::MAX) - 1, accumulated on the i64::MAX limbs.
     let lim = [5807, 5477, 368, 3372, 922]
     let c = __cmp_mag(ls, lim)
     if c > 0 {
+        if x[0] < 0 && __cmp_mag(ls, [5808, 5477, 368, 3372, 922]) == 0 {
+            return 0 - big_to_int([1, lim]) - 1
+        }
         return null
     }
     let v = 0

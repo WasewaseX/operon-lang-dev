@@ -112,16 +112,19 @@ gene heap_peek(h) {
 }
 
 gene heap_sorted(h, cmp = null) {
-    # drain into ascending order (leaves the argument untouched)
+    # drain into ascending order (leaves the argument untouched). The
+    # drain is COUNT-based: a [null, []] pop is ambiguous (an empty heap
+    # AND a heap whose last element is a legitimate null both pop that
+    # shape), so the old pair[0] == null sentinel silently dropped a
+    # trailing null element — draining exactly len(h) times cannot.
     let out = []
     let cur = __hp_copy(h)
-    loop {
+    let remaining = len(cur)
+    while remaining > 0 {
         let pair = heap_pop(cur, cmp)
-        if pair[0] == null && len(pair[1]) == 0 {
-            break
-        }
         push(out, pair[0])
         cur = pair[1]
+        remaining = remaining - 1
     }
     return out
 }

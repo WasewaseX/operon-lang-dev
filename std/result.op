@@ -16,6 +16,12 @@
 #   unchanged (they are Result-shaped by contract, not policed at runtime —
 #   the static checker is the type lane's business, and Result annotation
 #   sugar is recorded as an open degrade in docs/specs/RESULT-WAVE3.md).
+# - Fall-through semantics (pinned): a non-Result input (anything that is
+#   neither Ok nor Err) matches the wildcard arm and answers null — the
+#   same value an implicit fall-off produced before, now EXPLICIT and
+#   machine-pinned instead of accidental. Combinators stay total on every
+#   input; when the raise grammar lands (W006-E class), a follow-up can
+#   upgrade the wildcard to a catchable Stress naming the input type.
 # - Err payloads are engine-neutral by construction here: the combinators
 #   never synthesize error text, they only move existing values.
 # - Gene names in this module deliberately never shadow a builtin (the W003
@@ -26,7 +32,7 @@
 #   call site (`r.map(res, f)` / `t.map(xs, f)`); the tests import with `as`.
 
 gene map(r, f) {
-    # ok(v) -> ok(f(v)); err(e) -> err(e) untouched
+    # ok(v) -> ok(f(v)); err(e) -> err(e) untouched; non-Result -> null
     match r {
         case Ok(v) {
             return ok(f(v))
@@ -34,11 +40,14 @@ gene map(r, f) {
         case Err(e) {
             return err(e)
         }
+        case _ {
+            return null
+        }
     }
 }
 
 gene map_err(r, f) {
-    # err(e) -> err(f(e)); ok(v) -> ok(v) untouched
+    # err(e) -> err(f(e)); ok(v) -> ok(v) untouched; non-Result -> null
     match r {
         case Ok(v) {
             return ok(v)
@@ -46,11 +55,15 @@ gene map_err(r, f) {
         case Err(e) {
             return err(f(e))
         }
+        case _ {
+            return null
+        }
     }
 }
 
 gene and_then(r, f) {
-    # ok(v) -> f(v) (Result-shaped by contract); err(e) -> err(e)
+    # ok(v) -> f(v) (Result-shaped by contract); err(e) -> err(e);
+    # non-Result -> null
     match r {
         case Ok(v) {
             return f(v)
@@ -58,11 +71,15 @@ gene and_then(r, f) {
         case Err(e) {
             return err(e)
         }
+        case _ {
+            return null
+        }
     }
 }
 
 gene or_else(r, f) {
-    # err(e) -> f(e) (Result-shaped by contract); ok(v) -> ok(v)
+    # err(e) -> f(e) (Result-shaped by contract); ok(v) -> ok(v);
+    # non-Result -> null
     match r {
         case Ok(v) {
             return ok(v)
@@ -70,11 +87,14 @@ gene or_else(r, f) {
         case Err(e) {
             return f(e)
         }
+        case _ {
+            return null
+        }
     }
 }
 
 gene unwrap_or_else(r, f) {
-    # ok(v) -> v; err(e) -> f(e)
+    # ok(v) -> v; err(e) -> f(e); non-Result -> null
     match r {
         case Ok(v) {
             return v
@@ -82,11 +102,15 @@ gene unwrap_or_else(r, f) {
         case Err(e) {
             return f(e)
         }
+        case _ {
+            return null
+        }
     }
 }
 
 gene is_ok_and(r, pred) {
-    # true iff r is ok AND pred(v) holds; err is false, never a Stress
+    # true iff r is ok AND pred(v) holds; err is false, never a Stress;
+    # non-Result -> null
     match r {
         case Ok(v) {
             return pred(v)
@@ -94,11 +118,15 @@ gene is_ok_and(r, pred) {
         case Err(e) {
             return false
         }
+        case _ {
+            return null
+        }
     }
 }
 
 gene is_err_and(r, pred) {
-    # true iff r is err AND pred(e) holds; ok is false, never a Stress
+    # true iff r is err AND pred(e) holds; ok is false, never a Stress;
+    # non-Result -> null
     match r {
         case Ok(v) {
             return false
@@ -106,17 +134,23 @@ gene is_err_and(r, pred) {
         case Err(e) {
             return pred(e)
         }
+        case _ {
+            return null
+        }
     }
 }
 
 gene ok_to_some(r) {
-    # Option interop: ok(v) -> some(v); err(e) -> none
+    # Option interop: ok(v) -> some(v); err(e) -> none; non-Result -> null
     match r {
         case Ok(v) {
             return some(v)
         }
         case Err(e) {
             return none()
+        }
+        case _ {
+            return null
         }
     }
 }

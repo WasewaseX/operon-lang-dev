@@ -67,9 +67,12 @@ gene bin_i64le(v) {
 }
 
 ## Read u16 little/big endian at byte offset `at`; null on a short read.
+## The bound test is written overflow-free (len - at instead of at + n):
+## a huge `at` must answer null per the header contract, never raise the
+## language's i64 no-wrap overflow on the offset arithmetic itself.
 gene bin_read_u16le(data, at) {
     let bs = bin_bytes_of(data)
-    if at < 0 or at + 2 > len(bs) {
+    if at < 0 or len(bs) - at < 2 {
         return null
     }
     return bs[at] + (bs[at + 1] << 8)
@@ -77,7 +80,7 @@ gene bin_read_u16le(data, at) {
 
 gene bin_read_u16be(data, at) {
     let bs = bin_bytes_of(data)
-    if at < 0 or at + 2 > len(bs) {
+    if at < 0 or len(bs) - at < 2 {
         return null
     }
     return (bs[at] << 8) + bs[at + 1]
@@ -86,7 +89,7 @@ gene bin_read_u16be(data, at) {
 ## Read u32 little/big endian at byte offset `at`; null on a short read.
 gene bin_read_u32le(data, at) {
     let bs = bin_bytes_of(data)
-    if at < 0 or at + 4 > len(bs) {
+    if at < 0 or len(bs) - at < 4 {
         return null
     }
     return bs[at] + (bs[at + 1] << 8) + (bs[at + 2] << 16) + (bs[at + 3] << 24)
@@ -94,7 +97,7 @@ gene bin_read_u32le(data, at) {
 
 gene bin_read_u32be(data, at) {
     let bs = bin_bytes_of(data)
-    if at < 0 or at + 4 > len(bs) {
+    if at < 0 or len(bs) - at < 4 {
         return null
     }
     return (bs[at] << 24) + (bs[at + 1] << 16) + (bs[at + 2] << 8) + bs[at + 3]
@@ -106,7 +109,7 @@ gene bin_read_u32be(data, at) {
 ## eighth contributes its low 7 bits and its top bit decides the sign.
 gene bin_read_i64le(data, at) {
     let bs = bin_bytes_of(data)
-    if at < 0 or at + 8 > len(bs) {
+    if at < 0 or len(bs) - at < 8 {
         return null
     }
     let v = 0

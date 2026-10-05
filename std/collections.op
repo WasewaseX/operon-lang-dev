@@ -9,6 +9,12 @@
 # std/heap.op; this module is the list-shaped data work (W026 stage 1).
 
 gene chunk(xs: list, size: int) -> list {
+    # size <= 0 chunks nothing (same contract as iter.chunk's n <= 0);
+    # the len(cur) == size test can never fire for a non-positive size,
+    # so without this guard the whole input came back as one chunk
+    if size <= 0 {
+        return []
+    }
     let out = []
     let cur = []
     for v in xs {
@@ -42,6 +48,12 @@ gene group_by(xs: list, keyf: gene) -> map {
 }
 
 gene take(xs: list, n: int) -> list {
+    # first-n contract: n <= 0 takes nothing. The bare slice would fall
+    # into negative-index slice semantics (take([1,2,3], -1) -> [1, 2]),
+    # which is a different contract than this gene documents.
+    if n <= 0 {
+        return []
+    }
     return xs.slice(0, n)
 }
 
