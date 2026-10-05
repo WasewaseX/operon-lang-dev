@@ -670,7 +670,7 @@ def scan_manifest(out):
     for name in sorted(os.listdir(out)):
         if not name.endswith(".op"):
             continue
-        with open(os.path.join(out, name)) as f:
+        with open(os.path.join(out, name), encoding="utf-8") as f:
             f.readline()  # "# compat corpus — generated, do not edit by hand"
             header = f.readline().strip()
         m = re.match(r"# bucket=(\S+) seed=(\d+) idx=(\d+) tag=(\S+)", header)
@@ -704,7 +704,7 @@ def main():
         seeds = sorted({f["seed"] for f in files})
         manifest = {"seed": seeds[0], "seeds": seeds, "count": len(files),
                     "buckets": BUCKETS, "files": files}
-        with open(os.path.join(args.out, "MANIFEST.json"), "w") as f:
+        with open(os.path.join(args.out, "MANIFEST.json"), "w", encoding="utf-8") as f:
             json.dump(manifest, f, indent=1)
         print(f"manifest: {len(files)} programs, seeds {seeds} -> "
               f"{os.path.join(args.out, 'MANIFEST.json')}")
@@ -725,12 +725,15 @@ def main():
         ]
         body = "\n\n".join(frags) + "\n"
         path = os.path.join(args.out, f"{bucket}_{idx:04d}.op")
-        with open(path, "w") as f:
+        # F6/#50: utf-8 + \n pinned — the locale default (cp1252 on
+        # Windows) once encoded the em-dash header as an invalid-UTF-8 byte
+        # and the Rust engine refused every fresh program on the windows leg.
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
             f.write("\n".join(header) + "\n" + body)
         files.append({"file": os.path.basename(path), "bucket": bucket,
                       "seed": args.seed, "idx": idx})
     if args.manifest:
-        with open(os.path.join(args.out, "MANIFEST.json"), "w") as f:
+        with open(os.path.join(args.out, "MANIFEST.json"), "w", encoding="utf-8") as f:
             json.dump({"seed": args.seed, "count": len(files),
                        "buckets": BUCKETS, "files": files}, f, indent=1)
     print(f"generated {len(files)} programs across {len(BUCKETS)} buckets "
