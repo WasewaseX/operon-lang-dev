@@ -101,10 +101,17 @@ gene gcd(a, b) {
 
 gene lcm(a, b) {
     # least common multiple; lcm(0, x) == 0
+    # Divide BEFORE multiplying: abs(a*b) overflowed i64 long before the lcm
+    # itself was large (sweep finding #133: lcm(2^32, 2^32) contained to a
+    # garbage fallback). gcd runs on absolutes (the old call passed raw signs
+    # through and could return a negative gcd, flipping the result's sign).
+    # A genuine RESULT overflow (coprime near-max operands) still stress-
+    # contains honestly — that is the engine's checked arithmetic, not a bug.
     if a == 0 or b == 0 {
         return 0
     }
-    return abs(a * b) // gcd(a, b)
+    let g = gcd(abs(a), abs(b))
+    return abs(a) // g * abs(b)
 }
 
 gene factorial(n) {
@@ -120,14 +127,19 @@ gene factorial(n) {
 
 gene isqrt(n) {
     # integer square root: largest m with m*m <= n (binary search)
+    # Division-based: `mid <= n // mid` is equivalent to mid*mid <= n for
+    # positive integers but never multiplies two large values (sweep finding
+    # #133: mid*mid overflow-contained on isqrt(10^10) and the fallback
+    # poisoned the result to 0). Midpoint is lo + half-the-gap, so the sum
+    # cannot overflow either.
     if n < 2 {
         return n
     }
     let lo = 1
     let hi = n
     while lo < hi {
-        let mid = (lo + hi + 1) // 2
-        if mid * mid <= n {
+        let mid = lo + (hi - lo + 1) // 2
+        if mid <= n // mid {
             lo = mid
         } else {
             hi = mid - 1

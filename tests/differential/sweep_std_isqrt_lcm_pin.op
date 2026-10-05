@@ -1,0 +1,22 @@
+# Sweep pin for finding #133 (digest-10 queue, builder-E E-SWEEP-STD2):
+# std/math.isqrt and std/math.lcm were overflow-blind — both multiplied
+# before reducing, so mid*mid (isqrt) and abs(a*b) (lcm) hit the i64 checked
+# overflow on large operands and the containment fallback POISONED the
+# result (isqrt(10^10) -> 0, lcm(2^32, 2^32) -> 12; VM==oracle,
+# differential-blind). Both genes are now division-based. Byte-identical on
+# VM / tree-walk / oracle required.
+use std/math as m
+print(m.isqrt(10000000000))
+print(m.isqrt(9999999999))
+print(m.isqrt(0))
+print(m.isqrt(1))
+print(m.isqrt(2))
+print(m.isqrt(4))
+print(m.isqrt(15))
+print(m.isqrt(16))
+print(m.lcm(4294967296, 4294967296))
+print(m.lcm(6, 4))
+print(m.lcm(0, 5))
+print(m.lcm(-6, 4))
+print(m.lcm(7, 13))
+print(m.lcm(4611686018427387904, 2))
