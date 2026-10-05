@@ -52,11 +52,19 @@ fi
 # macOS runners also ship no GNU coreutils: without `timeout` every payload
 # exits 127 and the suite is VACUOUS while still printing "ok" rows (same
 # runs). The banner makes a vacuous green impossible to miss.
+HAVE_TIMEOUT=1
 if ! command -v timeout >/dev/null 2>&1; then
+    HAVE_TIMEOUT=0
     echo "WARNING: GNU coreutils 'timeout' NOT FOUND on PATH — every payload will rc=127 and this suite run is VACUOUS (install coreutils or map gtimeout; do not treat this as a real green)" >&2
 fi
 
-pass=0; fail=0; failed_files=()
+# "Could not execute" is not "containment breached": without GNU timeout the
+# four containment probes below cannot run their payloads (every invocation
+# rc=127), which first surfaced as false BREACHes on macos-latest (run
+# 37273731438, job 111646071040, 2026-10-05) once the bash-3.2 fix let the
+# macos leg reach them. In that mode the probes SKIP loudly; with timeout on
+# PATH every probe is byte-identical to its pre-skip behavior.
+pass=0; fail=0; skip=0; failed_files=()
 
 run_one() {
     local f="$1"; shift
@@ -166,43 +174,58 @@ fi
 # sec-r2 (audit C-11): exit() is a capability, default-deny. The payload
 # calls exit(99) inside stress/rescue; if the process dies with 99 the
 # sandbox is breached — a contained run rescues, prints "survived", exits 0.
-timeout 5 ./bin/operon run "$DIR/rt_x_exit_denied.op" --allow-read "$DIR" --allow-write "$DIR" > "$TMP/out" 2> "$TMP/err"
-exit_rc=$?
-if [ $exit_rc -eq 99 ] || [ $exit_rc -eq 124 ] || ! grep -q "survived" "$TMP/out"; then
-    echo "BREACH exit-capability (rc=$exit_rc)"
-    fail=$((fail+1)); failed_files+=("exit-capability")
+if [ "$HAVE_TIMEOUT" -eq 0 ]; then
+    echo "SKIP  exit-capability (vacuous: no GNU timeout on PATH)"
+    skip=$((skip+1))
 else
-    echo "ok    exit-capability (rc=$exit_rc)"
-    pass=$((pass+1))
+    timeout 5 ./bin/operon run "$DIR/rt_x_exit_denied.op" --allow-read "$DIR" --allow-write "$DIR" > "$TMP/out" 2> "$TMP/err"
+    exit_rc=$?
+    if [ $exit_rc -eq 99 ] || [ $exit_rc -eq 124 ] || ! grep -q "survived" "$TMP/out"; then
+        echo "BREACH exit-capability (rc=$exit_rc)"
+        fail=$((fail+1)); failed_files+=("exit-capability")
+    else
+        echo "ok    exit-capability (rc=$exit_rc)"
+        pass=$((pass+1))
+    fi
 fi
 
 # sec-r2 (audit A14): run() children die at the wall-clock timeout. The
 # payload spawns `sleep 10` under run.timeout_ms=300; the interpreter must
 # return in well under 8s with ok=false — not hang (rc=124) and not wait.
-start=$SECONDS
-timeout 15 ./bin/operon run "$DIR/rt_x_run_timeout.op" --allow-run sleep --cell "$DIR/rt_x_timeout.cell" > "$TMP/out" 2> "$TMP/err"
-to_rc=$?
-elapsed=$((SECONDS - start))
-if [ $to_rc -eq 124 ] || [ $elapsed -ge 8 ] || ! grep -q "ok=false" "$TMP/out"; then
-    echo "BREACH run-timeout (rc=$to_rc, ${elapsed}s)"
-    fail=$((fail+1)); failed_files+=("run-timeout")
+if [ "$HAVE_TIMEOUT" -eq 0 ]; then
+    echo "SKIP  run-timeout (vacuous: no GNU timeout on PATH)"
+    skip=$((skip+1))
 else
-    echo "ok    run-timeout (rc=$to_rc, ${elapsed}s)"
-    pass=$((pass+1))
+    start=$SECONDS
+    timeout 15 ./bin/operon run "$DIR/rt_x_run_timeout.op" --allow-run sleep --cell "$DIR/rt_x_timeout.cell" > "$TMP/out" 2> "$TMP/err"
+    to_rc=$?
+    elapsed=$((SECONDS - start))
+    if [ $to_rc -eq 124 ] || [ $elapsed -ge 8 ] || ! grep -q "ok=false" "$TMP/out"; then
+        echo "BREACH run-timeout (rc=$to_rc, ${elapsed}s)"
+        fail=$((fail+1)); failed_files+=("run-timeout")
+    else
+        echo "ok    run-timeout (rc=$to_rc, ${elapsed}s)"
+        pass=$((pass+1))
+    fi
 fi
 
 # sec-r4 (audit F-6): run() child output is capped at 64 MiB per stream.
 # The payload's child emits ~80 MB; the interpreter must return a collected
 # prefix <= 67108864 chars with rc 0 -- not OOM, not the full 80000000.
-timeout 30 ./bin/operon run "$DIR/rt_p10e_run_output_cap.op" --allow-run sh > "$TMP/out" 2> "$TMP/err"
-cap_rc=$?
-cap_len=$(grep -oE "capped: [0-9]+" "$TMP/out" | grep -oE "[0-9]+" || echo 0)
-if [ $cap_rc -eq 124 ] || [ $cap_rc -eq 137 ] || [ "$cap_len" -gt 67125248 ] || [ "$cap_len" -eq 0 ]; then
-    echo "BREACH run-output-cap (rc=$cap_rc, len=$cap_len)"
-    fail=$((fail+1)); failed_files+=("run-output-cap")
+if [ "$HAVE_TIMEOUT" -eq 0 ]; then
+    echo "SKIP  run-output-cap (vacuous: no GNU timeout on PATH)"
+    skip=$((skip+1))
 else
-    echo "ok    run-output-cap (len=$cap_len)"
-    pass=$((pass+1))
+    timeout 30 ./bin/operon run "$DIR/rt_p10e_run_output_cap.op" --allow-run sh > "$TMP/out" 2> "$TMP/err"
+    cap_rc=$?
+    cap_len=$(grep -oE "capped: [0-9]+" "$TMP/out" | grep -oE "[0-9]+" || echo 0)
+    if [ $cap_rc -eq 124 ] || [ $cap_rc -eq 137 ] || [ "$cap_len" -gt 67125248 ] || [ "$cap_len" -eq 0 ]; then
+        echo "BREACH run-output-cap (rc=$cap_rc, len=$cap_len)"
+        fail=$((fail+1)); failed_files+=("run-output-cap")
+    else
+        echo "ok    run-output-cap (len=$cap_len)"
+        pass=$((pass+1))
+    fi
 fi
 
 # sec-r5 (F-8): TOCTOU symlink-swap orchestrator. A flipper process races
@@ -210,21 +233,26 @@ fi
 # the in-grant file and the outside canary. CONTAINMENT = the canary's
 # content is untouched after the race (post-open fd verification means
 # no byte ever lands outside the grant).
-( for i in $(seq 1 400); do
-    ln -sfn /tmp/redteam-out-escape/toctou_canary "$DIR/rt_toctou_link" 2>/dev/null
-    ln -sfn "$(pwd)/$DIR/rt_toctou_in" "$DIR/rt_toctou_link" 2>/dev/null
-  done ) &
-FLIPPER=$!
-timeout 30 ./bin/operon run "$DIR/rt_p11h_toctou.op" --allow-write "$DIR" --allow-read "$DIR" > "$TMP/out" 2> "$TMP/err"
-toctou_rc=$?
-wait $FLIPPER
-canary=$(cat /tmp/redteam-out-escape/toctou_canary 2>/dev/null || echo MISSING)
-if [ $toctou_rc -ge 130 ] || [ $toctou_rc -eq 124 ] || [ "$canary" != "canary-pristine" ] || ! grep -q "p11h-contained" "$TMP/out"; then
-    echo "BREACH toctou (rc=$toctou_rc, canary='$canary')"
-    fail=$((fail+1)); failed_files+=("toctou")
+if [ "$HAVE_TIMEOUT" -eq 0 ]; then
+    echo "SKIP  toctou (vacuous: no GNU timeout on PATH)"
+    skip=$((skip+1))
 else
-    echo "ok    toctou (canary pristine, $(grep -oE 'denied: [0-9]+' "$TMP/out" | head -1))"
-    pass=$((pass+1))
+    ( for i in $(seq 1 400); do
+        ln -sfn /tmp/redteam-out-escape/toctou_canary "$DIR/rt_toctou_link" 2>/dev/null
+        ln -sfn "$(pwd)/$DIR/rt_toctou_in" "$DIR/rt_toctou_link" 2>/dev/null
+      done ) &
+    FLIPPER=$!
+    timeout 30 ./bin/operon run "$DIR/rt_p11h_toctou.op" --allow-write "$DIR" --allow-read "$DIR" > "$TMP/out" 2> "$TMP/err"
+    toctou_rc=$?
+    wait $FLIPPER
+    canary=$(cat /tmp/redteam-out-escape/toctou_canary 2>/dev/null || echo MISSING)
+    if [ $toctou_rc -ge 130 ] || [ $toctou_rc -eq 124 ] || [ "$canary" != "canary-pristine" ] || ! grep -q "p11h-contained" "$TMP/out"; then
+        echo "BREACH toctou (rc=$toctou_rc, canary='$canary')"
+        fail=$((fail+1)); failed_files+=("toctou")
+    else
+        echo "ok    toctou (canary pristine, $(grep -oE 'denied: [0-9]+' "$TMP/out" | head -1))"
+        pass=$((pass+1))
+    fi
 fi
 
 if [ -n "$(ls -A /tmp/redteam-out-escape 2>/dev/null | grep -v toctou_canary)" ]; then
@@ -232,7 +260,11 @@ if [ -n "$(ls -A /tmp/redteam-out-escape 2>/dev/null | grep -v toctou_canary)" ]
     fail=$((fail+1))
 fi
 rm -f "$DIR/rt_evil_link" "$DIR/rt_wlink" "$DIR/rt_toctou_link" "$DIR/rt_fifo_fixture" "$DIR/rt_toctou_in"; rm -rf "$DIR/rt_evildir"
-echo "redteam: $pass contained, $fail breached"
+if [ "$skip" -gt 0 ]; then
+    echo "redteam: $pass contained, $fail breached, $skip skipped-vacuous"
+else
+    echo "redteam: $pass contained, $fail breached"
+fi
 if [ $fail -gt 0 ]; then
     printf '  %s\n' "${failed_files[@]}"
     exit 1
