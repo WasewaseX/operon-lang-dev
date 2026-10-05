@@ -63,11 +63,15 @@ gene flatten(xs) {
 }
 
 gene unique(xs) {
+    # dedup keys on VALUE IDENTITY (type-tagged), not the string rendering —
+    # str-keyed dedup collapsed distinct values sharing a rendering, e.g.
+    # unique(["1", 1]) silently returned ["1"] (sweep finding #136.1).
     let seen = {}
     let out = []
     for x in xs {
-        if !has(seen, str(x)) {
-            seen[str(x)] = true
+        let k = str(type(x)) + ":" + str(x)
+        if !has(seen, k) {
+            seen[k] = true
             push(out, x)
         }
     }
