@@ -1,0 +1,101 @@
+# deep_eq exactness pin (2026-10-05): regression gate for issues #102 + #103.
+# #103 — the Int<->Float arm compared via `as f64`, which rounds any |i|
+#   above 2^53: 9007199254740993 == 9007199254740992.0 wrongly held, and
+#   every nested container comparison rode the same arm. Fixed to an exact
+#   i128 comparison (int_float_exact_eq); the oracle (Python int==float)
+#   is exact, so -2^63 float == i64::MIN stays true while 2^53+1 vs its
+#   float-rounded image is false.
+# #102 — container pairs that completed UNEQUAL stayed in the seen-set; a
+#   later re-encounter hit the "already comparing" branch and returned
+#   true, so maps with container keys sharing no genuinely equal pair
+#   could compare equal (non-symmetrical, iteration-order dependent).
+#   Fixed: failed pairs unwind into a failed-set (re-encounters short-
+#   circuit false); verified-equal pairs still memoize (sec-r5 F-10 DAG
+#   termination — the self-similar twin below stays linear on the Rust
+#   side; depth is oracle-bounded because the reference implementation
+#   re-explores completed pairs).
+# Expected output is byte-pinned across all engines (differential lanes).
+main {
+    # --- 1. issue #103: exact Int<->Float equality -----------------------
+    print("x1", 9007199254740993 == 9007199254740992.0)
+    print("x2", 9007199254740992.0 == 9007199254740993)
+    print("x3", 9007199254740992 == 9007199254740992.0)
+    print("x4", 9007199254740993 == 9007199254740993.0)
+    print("x5", (-9223372036854775807 - 1) == -9.223372036854776e18)
+    print("x6", 9223372036854775807 == 9.223372036854776e18)
+    print("x7", [9007199254740993] == [9007199254740992.0])
+    print("x8", [[9007199254740993]] == [[9007199254740992.0]])
+
+    # --- 2. issue #102: seen-set poisoning ------------------------------
+    # K1 vs M1 is a GENUINE match (X~V via the shared P, Y~U via the shared
+    # Q) whose inner candidate X-vs-U honestly fails P-vs-Q and plants the
+    # (P,Q) pair; K2 vs M2 then re-encounters (P,Q) — before the fix the
+    # poisoned hit returned true and T1==T2/T2==T1 wrongly printed true.
+    let P = [1]
+    let Q = [2]
+    let X = [P]
+    let Y = [Q]
+    let U = [Q]
+    let V = [P]
+    let K1 = {}
+    K1[X] = 1
+    K1[Y] = 2
+    let M1 = {}
+    M1[U] = 2
+    M1[V] = 1
+    let K2 = [P, 9]
+    let M2 = [Q, 9]
+    print("p1", K1 == M1)
+    print("p2", K2 == M2)
+    let T1 = {}
+    T1[K1] = 1
+    T1[K2] = 5
+    let T2 = {}
+    T2[M1] = 1
+    T2[M2] = 5
+    print("p3", T1 == T2)
+    print("p4", T2 == T1)
+    # value-slot re-encounter shape: D1 vs C9 after the plant above
+    let D1 = {}
+    D1[P] = 9
+    let C9 = {}
+    C9[Q] = 9
+    print("p5", D1 == C9)
+
+    # --- 3. cycles + DAG termination -------------------------------------
+    let cyc = []
+    cyc.push(cyc)
+    let cyc2 = []
+    cyc2.push(cyc2)
+    print("c1", cyc == cyc)
+    print("c2", cyc == cyc2)
+    let dag = [1, 2, 3]
+    let big = [dag, dag]
+    let i = 0
+    while i < 16 {
+        big = [big, big]
+        i = i + 1
+    }
+    let dag2 = [1, 2, 3]
+    let big2 = [dag2, dag2]
+    let j = 0
+    while j < 16 {
+        big2 = [big2, big2]
+        j = j + 1
+    }
+    print("d1", big == big2)
+    print("d2", len(big) == len(big2))
+
+    # --- 4. cross-class map keys: lookup rides deep_eq, must stay exact --
+    let m = {}
+    m[9007199254740992] = 1
+    print("k1", m.has(9007199254740992.0))
+    let m2 = {}
+    m2[9007199254740992.0] = 1
+    print("k2", m2.has(9007199254740992))
+    print("k3", m == m2)
+    let m3 = {}
+    m3[9007199254740993] = 1
+    print("k4", m3.has(9007199254740992.0))
+    print("k5", m3 == m2)
+}
