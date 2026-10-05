@@ -60,8 +60,8 @@ reported but not churned.
 |---|---|---|---|---|---|---|
 | L-002 | builder-A | P4-safe | src/interp.rs | ACTIVE | 2026-10-04 (chatroom 14:58 post, amendment-bounded) | — |
 | L-004 | builder-B | W006-C2 | examples/result_pipeline.op | ACTIVE | 2026-10-04 (PR #78 VERIFY) | — |
-| L-005 | builder-B | Q1 | docs/KEYWORDS.md, docs/STATS.md | ACTIVE | 2026-10-04 (PR #70 VERIFY) | — |
-| L-006 | builder-B | S4 | docs/SPEC.md, docs/SPEC_AUDIT.md | ACTIVE | 2026-10-04 (PR #64 VERIFY) | — |
+| L-005 | builder-B | Q1 | docs/KEYWORDS.md, docs/STATS.md | 2026-10-04 (PR #70 VERIFY) | 2026-10-05 (Q1 landed as PR #70 @ ee54e19 — API-verified MERGED 2026-10-05T06:49:44Z; stats pair landed consistent 167/3562 per B's refresh-9 receipts; keeper release by builder-F — guard had flagged this stale row against PR #127's stats regen) |
+| L-006 | builder-B | S4 | docs/SPEC.md, docs/SPEC_AUDIT.md | 2026-10-04 (PR #64 VERIFY) | 2026-10-05 (S4 landed as PR #64 @ 6d21b5d — API-verified MERGED 2026-10-05T06:46:30Z; keeper release by builder-F) |
 | L-007 | builder-F | W061-D | scripts/check_composition_pin.py, README.md | ACTIVE | 2026-10-04 (standing checker duty) | — |
 | L-008 | builder-F | W061-J | scripts/install.sh, scripts/release_smoke.sh, .github/workflows/release.yml | ACTIVE | 2026-10-04 (release lane) | — |
 | L-012 | builder-F | F-CI-INFRA | scripts/redteam.sh, scripts/fuzz_parser.py | ACTIVE | 2026-10-05 (coordinator digest-6 assignments: redteam.sh bash-3.2 fix + windows fuzzer TIMEOUT calibration; C veto-at-review) | — |
@@ -85,4 +85,4 @@ Notes:
 | L-011 | builder-A | W011-s3 salvage (PR #90) | tests/differential/bk_slots_pin.op | 2026-10-04 | 2026-10-04 (merged, arbitration digest-3) |
 | L-003 | builder-A | P5-P6-survey | docs/bench/ | 2026-10-04 (chatroom 15:40 post, measure-only) | 2026-10-05 (survey merged as PR #92 @ 52830cd — fix phases re-claim per survey-then-fix) |
 | L-009 | builder-F | R0.10 | collab/** (vault), .github/collab/**, scripts/collision_guard.py, .github/workflows/collision-guard.yml | 2026-10-05 (this ledger) | 2026-10-05 (CI half merged as PR #93 @ c1e5039 — keeper sync continues under WORKER-BEHAVIOR rule 7) |
-| L-001 | builder-A | P1-batch | src/value.rs, src/vm.rs | 2026-10-04 (chatroom 14:58/16:05 posts) | 2026-10-05 (P1 fix cycle landed on main @ 2bd29b0 — owner-merged PR #100 06:29Z; F's independent probe battery green on the fix head) |
+| L-001 | builder-A | P1-batch | src/value.rs, src/vm.rs | 2026-10-04 (chatroom 14:58/16:05 posts) | 2026-10-05 (P1 fix cycle landed on main @ 2bd29b0 — bbf1c67 rework + 5fe1a11 D1 counter + 2bd29b0 slot ownership; owner-merged PR #100 06:29Z; F's independent probe battery green on the fix head pre-merge) |
