@@ -1,7 +1,11 @@
 # std/strings, self-hosted string utilities.
 
 gene words(s) {
-    return for w in s.trim().split(" ") if w != "" collect w
+    # split on any whitespace run (spaces, tabs, newlines, CR), dropping
+    # empties — words("a\tb") is ["a", "b"], so title_case's documented
+    # whitespace normalization is true for every whitespace, not just " "
+    let flat = s.replace("\t", " ").replace("\n", " ").replace("\r", " ")
+    return for w in flat.trim().split(" ") if w != "" collect w
 }
 
 gene capital(s) {
@@ -54,7 +58,12 @@ gene pad(s, width, fill) {
     if left <= 0 {
         return s
     }
-    let lpad = pad_left(s, width - (width - len(s)) / 2, fill)
+    # centered: floor-divide keeps the pad widths INTEGER. The bare `/`
+    # made true division hand pad_left a Float width, and the Float end
+    # fell through slice() un-rounded (the engines truncate silently —
+    # engine-side slice-Float strictness is tracked for the engine lane),
+    # so the right pad ran from an un-truncated left pad.
+    let lpad = pad_left(s, width - (width - len(s)) // 2, fill)
     return pad_right(lpad, width, fill)
 }
 

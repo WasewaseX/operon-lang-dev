@@ -33,7 +33,9 @@ SHA-256 as the lowercase hex string (the usual interchange form).
 
 ## `gene hash_bytes_of(data)`
 
-Byte view of the input: bytes stay as-is, strings encode as UTF-8.
+Byte view of the input: bytes stay as-is, strings encode as UTF-8,
+anything else answers null (no byte view exists — the public hashes
+answer null rather than silently hashing as empty).
 
 ## `gene __hash_rotr32(x, n)`
 

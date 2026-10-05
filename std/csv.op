@@ -12,9 +12,11 @@
 # contract, apps/csvstat e2e checksums a real 5000-row document.
 
 gene csv_escape(field, sep) {
-    # quote a field when needed; double any inner quotes
+    # quote a field when needed; double any inner quotes. CR quotes too
+    # (#106 class): the reader swallows bare carriage returns as CRLF
+    # endings, so an unquoted CR would not survive the round trip
     let f = str(field)
-    if f.contains(sep) or f.contains("\"") or f.contains("\n") {
+    if f.contains(sep) or f.contains("\"") or f.contains("\n") or f.contains("\r") {
         return "\"" + f.replace("\"", "\"\"") + "\""
     }
     return f
@@ -222,6 +224,15 @@ gene csv_parse(text, sep) {
             push(rows, row)
         }
     }
+    if inq and not pending {
+        # RFC-4180 flavor (S3-136H): a quoted field that never closed is
+        # malformed input. Ending ON a closer leaves pending=true (valid,
+        # the boundary logic above already resolved every other close);
+        # inq without a pending close means the quote opened and never
+        # shut. Null per the module's bad-input convention, never a
+        # silently truncated document.
+        return null
+    }
     return rows
 }
 
@@ -286,12 +297,28 @@ gene csv_parse_machine(text, sep) {
         push(row, chars.join(""))
         push(rows, row)
     }
+    if inq and not pending {
+        # RFC-4180 flavor: a quoted field that never closed is malformed
+        # input. pending is false here only when no closing quote is in
+        # flight; a document ending ON a closer ends with pending=true
+        # (the closer clears inq when the next char arrives, so ending on
+        # it is well-formed), and an escaped quote mid-field keeps inq
+        # true while pending is false — that one IS unterminated. The
+        # module's bad-input convention is null (bin_hex_decode,
+        # big_from_str answer null the same way) — never a silently
+        # truncated row that pretends the quote closed.
+        return null
+    }
     return rows
 }
 
 gene csv_parse_line(line, sep) {
-    # single-line convenience: first parsed row, or [] for empty input
+    # single-line convenience: first parsed row, or [] for empty input;
+    # null propagates when the line is malformed (unterminated quote)
     let rows = csv_parse(line, sep)
+    if rows == null {
+        return null
+    }
     if len(rows) == 0 {
         return []
     }
@@ -299,8 +326,12 @@ gene csv_parse_line(line, sep) {
 }
 
 gene csv_records(text, sep) {
-    # header row + data rows -> list of maps keyed by the header names
+    # header row + data rows -> list of maps keyed by the header names;
+    # null propagates when the text is malformed (unterminated quote)
     let rows = csv_parse(text, sep)
+    if rows == null {
+        return null
+    }
     if len(rows) < 2 {
         return []
     }
@@ -323,8 +354,12 @@ gene csv_records(text, sep) {
 }
 
 gene csv_column(text, sep, name) {
-    # all values of the named column (data rows only)
+    # all values of the named column (data rows only); null propagates
+    # when the text is malformed (unterminated quote)
     let rows = csv_parse(text, sep)
+    if rows == null {
+        return null
+    }
     if len(rows) < 2 {
         return []
     }
@@ -352,6 +387,11 @@ gene csv_column(text, sep, name) {
 }
 
 gene csv_count_fields(line, sep) {
-    # how many fields a single line would produce (quote-aware)
-    return len(csv_parse_line(line, sep))
+    # how many fields a single line would produce (quote-aware); null when
+    # the line is malformed (unterminated quote)
+    let row = csv_parse_line(line, sep)
+    if row == null {
+        return null
+    }
+    return len(row)
 }

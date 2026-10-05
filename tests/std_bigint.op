@@ -75,7 +75,12 @@ frame proof {
     assert(bigint.big_to_int(bigint.big_from_int(-9223372036854775807)) == -9223372036854775807, "-MAX round-trips")
     assert(bigint.big_to_int(bigint.big_from_str("9223372036854775807")) == 9223372036854775807, "MAX round-trips")
     assert(bigint.big_to_int(bigint.big_from_str("9223372036854775808")) == null, "2**63 is null (differs from MAX only in the low limb)")
-    assert(bigint.big_to_int(bigint.big_from_str("-9223372036854775808")) == null, "-2**63 is null")
+    # i64::MIN FITS (magnitude 2**63, negative sign only — S3-136H row 8;
+    # the old guard rejected it because it compared magnitude to i64::MAX).
+    # big_to_int answers a plain int, compared against MIN spelled the only
+    # legal way (the bare 2**63 literal is outside the i64 literal range —
+    # binary.op's lesson): 0 - i64::MAX - 1 stays in range at every step.
+    assert(bigint.big_to_int(bigint.big_from_str("-9223372036854775808")) == 0 - 9223372036854775807 - 1, "-2**63 round-trips (the one magnitude above MAX that fits)")
     assert(bigint.big_to_int(bigint.big_from_str("99999999999999999999999")) == null, "way out is null")
     assert(bigint.big_to_int(bigint.big_zero()) == 0, "zero to_int")
 
