@@ -1,0 +1,12 @@
+# Sweep pin for finding #136.1 (digest-10 queue, builder-E E-SWEEP-STD1):
+# std/iter.unique dedups on VALUE IDENTITY (type-tagged key), never on the
+# string rendering. The pre-fix behavior collapsed a string and its
+# stringly-twin into one survivor (unique(["1", 1]) -> ["1"], silent data
+# loss, VM==oracle i.e. differential-blind). Every line below must print
+# byte-identically on VM / tree-walk / oracle.
+use std/iter
+print(unique(["1", 1, 1, "1", [2], [2], true, 1]))
+print(unique([]))
+print(unique([5, 5.0, 5]))
+print(unique(["a", "a", "a"]))
+print(unique([[1, "1"], [1, 1]]))

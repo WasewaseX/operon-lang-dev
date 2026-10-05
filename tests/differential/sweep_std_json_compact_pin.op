@@ -1,0 +1,13 @@
+# Sweep pin for finding #136.2 (digest-10 queue, builder-E E-SWEEP-STD1):
+# std/json.json_compact implements its documented contract — drop null-valued
+# KEYS recursively (map entries; nested maps and lists compacted in place;
+# list null ELEMENTS are values, not key-values, and are kept). Pre-fix both
+# engines did a bare canonical round-trip and PRESERVED nulls
+# (json_compact(json_str({"a": null, "b": 1})) -> {"a":null,"b":1},
+# differential-blind). Byte-identical on VM / tree-walk / oracle required.
+use std/json
+print(json_compact(json_str({"a": null, "b": 1})))
+print(json_compact(json_str({"a": null, "b": {"c": null, "d": [null, 1, {"e": null, "f": 2}]}, "g": 3})))
+print(json_compact(json_str({"keep": {"x": 0, "y": false}, "z": null})))
+# (formatting-drop is the unchanged round-trip nature; {..} in string literals is interpolation, not literal braces)
+print(json_compact(json_str([1, null, 2])))
