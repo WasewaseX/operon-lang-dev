@@ -10,6 +10,21 @@
 
 use std::io::Write;
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+// Issue #128 class fix (see tests/grn_trace.rs): pid+subsec_nanos is not a
+// unique per-call tag — two calls in one process that read the clock in the
+// same tick share the whole path. The seq suffix makes it unique per call.
+static DIR_SEQ: AtomicU64 = AtomicU64::new(0);
+
+fn unique_tag() -> String {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .subsec_nanos();
+    let seq = DIR_SEQ.fetch_add(1, Ordering::Relaxed);
+    format!("{}_{}", nanos, seq)
+}
 
 fn run_op(src: &str) -> (i32, String, String) {
     // Per-CALL unique dir (see tests/grn_trace.rs run_trace note): a shared
@@ -18,20 +33,10 @@ fn run_op(src: &str) -> (i32, String, String) {
     let dir = std::env::temp_dir().join(format!(
         "operon_sec_{}_{}",
         std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .subsec_nanos()
+        unique_tag()
     ));
     std::fs::create_dir_all(&dir).unwrap();
-    let f = dir.join(format!(
-        "t{}_{}.op",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .subsec_nanos(),
-        std::process::id()
-    ));
+    let f = dir.join(format!("t{}_{}.op", unique_tag(), std::process::id()));
     std::fs::write(&f, src).unwrap();
     let out = Command::new(env!("CARGO_BIN_EXE_operon"))
         .arg("run")

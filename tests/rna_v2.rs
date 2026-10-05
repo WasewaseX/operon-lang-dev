@@ -14,6 +14,7 @@
 
 use operon::rna2::{apply_rna_v2, check_rna_v2, is_v2_patch, parse_v2_patch, plain_comment_lines};
 use std::process::Command;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 const SRC: &str = r#"gene alpha(x) {
   return x + 1
@@ -349,6 +350,10 @@ fn run_rna_cli(
 
 fn unique_dir(tag: &str) -> std::path::PathBuf {
     // per-CALL unique dir (the 2026-09-27 Windows-parallel lesson): nanos+pid
+    // Issue #128 class fix: seq suffix disambiguates same-tick nanos reads
+    // across calls in one process (see tests/grn_trace.rs).
+    static DIR_SEQ: AtomicU64 = AtomicU64::new(0);
+    let seq = DIR_SEQ.fetch_add(1, Ordering::Relaxed);
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -357,7 +362,7 @@ fn unique_dir(tag: &str) -> std::path::PathBuf {
         "operon_rna3_{}_{}_{}",
         tag,
         std::process::id(),
-        nanos
+        format!("{}_{}", nanos, seq)
     ));
     std::fs::create_dir_all(&dir).unwrap();
     dir
