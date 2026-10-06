@@ -61,16 +61,21 @@ class TfBridge(private val activity: Activity) {
             val reason = p.optString("reason_" + kind, "downloads of this kind are disabled by policy")
             return JSONObject().put("allow", false).put("reason", reason).toString()
         }
-        for (dom in p.optJSONArray("deny_domains") ?: JSONArray()) {
-            if (url.contains(dom.toString(), ignoreCase = true)) {
-                return JSONObject().put("allow", false)
-                    .put("reason", p.optString("reason_domain", "domain denied by policy")).toString()
+        val deny = p.optJSONArray("deny_domains")
+        if (deny != null) {
+            for (i in 0 until deny.length()) {
+                if (url.contains(deny.getString(i), ignoreCase = true)) {
+                    return JSONObject().put("allow", false)
+                        .put("reason", p.optString("reason_domain", "domain denied by policy")).toString()
+                }
             }
         }
         val allowList = p.optJSONArray("allow_domains")
         if (allowList != null && allowList.length() > 0) {
             var ok = false
-            for (dom in allowList) if (url.contains(dom.toString(), ignoreCase = true)) ok = true
+            for (i in 0 until allowList.length()) {
+                if (url.contains(allowList.getString(i), ignoreCase = true)) ok = true
+            }
             if (!ok) return JSONObject().put("allow", false)
                 .put("reason", p.optString("reason_domain", "domain not on the policy allowlist")).toString()
         }
