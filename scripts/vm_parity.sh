@@ -19,7 +19,7 @@ BIN="${BIN:-./bin/operon}"
 # dependent (containment itself is deterministic; verified x3 x3 engines
 # serially). Same documented class as rt_p4a/rt_p4b; rt_p20a joined after
 # a 5-run flake measurement (1/5 divergent note ordering, 5/5 contained).
-LOAD_SENSITIVE="tests/redteam/rt_p4a_threadbomb.op tests/redteam/rt_p4b_threadbomb_join.op tests/redteam/rt_p20a_cancel_storm.op"
+LOAD_SENSITIVE="tests/redteam/rt_p4a_threadbomb.op tests/redteam/rt_p4b_threadbomb_join.op tests/redteam/rt_p20a_cancel_storm.op tests/redteam/rt_p17b_scope_cancel.op"
 
 # F6/#50 (iteration 4, residual extraction from PR #56): the scope-reap
 # containment note RACES with cancel-vs-finish ordering — '[fallback] task N
@@ -32,20 +32,23 @@ LOAD_SENSITIVE="tests/redteam/rt_p4a_threadbomb.op tests/redteam/rt_p4b_threadbo
 # stdout and exit codes stay STRICTLY byte-compared, and any third note
 # variant still fails. The engine-lane determinism fix is tracked on #59.
 #
-# rt_p17b_scope_cancel (P2P3P5 wave, 2026-10-06): the same storm class, but
-# the racy note is a LOOP-EMITTED one — busy() rebinds 's' every iteration
-# and cancel can land at ANY loop position, so the count of "rebinding 's'"
-# notes is 0..N by timing, not by semantics (the P3 lazy range shifted the
-# race window and exposed the payload's latent flake in this sweep; 9/9
-# serial runs byte-identical, divergence only under load). RACY_NOTE files
-# drop those loop-emitted rebinding lines before the compare; every other
-# note, all stdout and all exit codes stay strictly byte-compared.
-RACY_NOTE="tests/differential/scope.op tests/redteam/rt_p17b_scope_cancel.op"
+# rt_p17b_scope_cancel (P2P3P5 wave, 2026-10-06): joins the storm class
+# above (rt_p4a/b, rt_p20a). The RACY_NOTE normalization first attempted
+# here did NOT survive CI (run 37451404462): this payload's stderr is
+# timing-dependent in COUNT and SPLIT, not just note text — its busy loop
+# rebinds a name every iteration (0..N "rebinding 's'" notes by when the
+# cancel lands; the P3 lazy range shifted the race window) and each of the
+# 8 tasks resolves as cancel-requested OR already-finished by race, so the
+# normalized line count itself varies. The variant set is not finite —
+# normalization cannot honestly pin it — so the payload rides
+# LOAD_SENSITIVE like its storm siblings: stdout is deterministic across
+# modes (9/9 serial runs byte-identical locally) and containment is
+# redteam.sh's contract, which passes (109/0).
+RACY_NOTE="tests/differential/scope.op"
 norm_notes() {
     printf '%s' "$1" \
       | sed -E 's/\[fallback\] task [0-9]+ already finished/[TASK-CONTAINED]/' \
-      | sed -E 's/\[fallback\] cancel requested for task [0-9]+/[TASK-CONTAINED]/' \
-      | grep -v "\[fallback\] \[task busy\] rebinding 's'" | grep -v "^\[fallback\] rebinding 's'" || true
+      | sed -E 's/\[fallback\] cancel requested for task [0-9]+/[TASK-CONTAINED]/'
 }
 pass=0; fail=0; lskip=0; failed_files=()
 for f in $(find tests apps -name '*.op' 2>/dev/null | sort); do
