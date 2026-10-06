@@ -1,0 +1,596 @@
+{
+  "schema": "operon-claim-registry/1",
+  "spec": "docs/spec/CLAIMS.md",
+  "law": "A claim without evidence is a wish; evidence without a claim is an undocumented constraint. Magnitudes live in bootstrap/validation_registry.json (W093 single source of truth); provenance and assumptions live here and are never duplicated.",
+  "validation_classes": {
+    "ANALYTIC": "closed-form/analytic reference executed by the R0.6 harness (scripts/validation/harness.py, fixture schema r06-fixture-v1)",
+    "ORACLE": "mirrored-expectation rows of bootstrap/validation_registry.json (python oracle, W093)",
+    "DIFFERENTIAL": "two-lane VM vs tree-walk byte parity over the shared corpus",
+    "BEHAVIORAL": "containment/pass assertions without a numeric expectation",
+    "BENCHMARK": "measured performance characteristic guarded by the regression gate"
+  },
+  "claims": [
+    {
+      "id": "C-V1",
+      "model": "Hill dose-response, thresholded activating edge (n=2): the EC50 identity and the five canonical curve points",
+      "model_kind": "biological",
+      "surface": [
+        "regulate",
+        "activates",
+        "strength",
+        "threshold"
+      ],
+      "bio_contract_labels": [
+        "REAL",
+        "APPROX"
+      ],
+      "primary_sources": [
+        "Alon, An Introduction to Systems Biology, ch. 2 (Hill-Langmuir input function; EC50 = half-max point)"
+      ],
+      "equations": [
+        "influence = strength * level^n / (level^n + threshold^n), n=2 default, so threshold t IS the EC50 (SPEC section 11 mapping)"
+      ],
+      "parameter_provenance": [
+        {
+          "param": "n (hill coefficient)",
+          "source": "SPEC section 11 default",
+          "kind": "spec-default"
+        },
+        {
+          "param": "threshold t, strength s canonical values",
+          "source": "bootstrap/validation_registry.json V1 quantities",
+          "kind": "registry-row"
+        }
+      ],
+      "assumptions": [
+        "deterministic engine: same binary + source + seed + flags + cell gives byte-identical stdout (docs/spec/DETERMINISM.md section 1)",
+        "op-order-exact evaluation, repeated multiplication never powi (W090 IEEE-754 parity contract); levels are normalized 0..1, not concentrations"
+      ],
+      "validation_class": "ORACLE",
+      "evidence": {
+        "validation_registry_ids": [
+          "V1"
+        ],
+        "enforcing_tests": [
+          "tests/sci_ec50_hill.op"
+        ],
+        "fixtures": [],
+        "programs": []
+      },
+      "status": "VALIDATED"
+    },
+    {
+      "id": "C-V2",
+      "model": "Repressilator ring period: three-repressor ring oscillator period pinned to 6 ticks under T2d discrete integration",
+      "model_kind": "biological",
+      "surface": [
+        "repressilator"
+      ],
+      "bio_contract_labels": [
+        "REAL",
+        "APPROX"
+      ],
+      "primary_sources": [
+        "Elowitz & Leibler (2000), Nature 403:335, synthetic three-repressor ring"
+      ],
+      "equations": [
+        "dA/dt = alpha/(1+R^4) - gamma*A (alpha=10, gamma=1, n=4), 20 Euler substeps x dt=0.05 per ring tick (1 tick = 1.0 dimensionless time)"
+      ],
+      "parameter_provenance": [
+        {
+          "param": "alpha, gamma, hill n",
+          "source": "Elowitz-Leibler 2000 published ring, parameterized per SPEC section 11",
+          "kind": "literature"
+        },
+        {
+          "param": "integration step (20 x dt=0.05)",
+          "source": "bootstrap/validation_registry.json V2 mapping",
+          "kind": "registry-row"
+        }
+      ],
+      "assumptions": [
+        "deterministic mode for byte-parity (stochastic mode uses seeded telegraph noise; the period claim is made in deterministic mode)",
+        "period pinned by peak-count-in-window (discrete, exact), amplitudes pinned stateless-fold-identical (W089) only",
+        "relaxation from initial condition is documented, not a published-number claim"
+      ],
+      "validation_class": "ORACLE",
+      "evidence": {
+        "validation_registry_ids": [
+          "V2"
+        ],
+        "enforcing_tests": [
+          "tests/sci_repressi_period.op"
+        ],
+        "fixtures": [],
+        "programs": []
+      },
+      "status": "VALIDATED"
+    },
+    {
+      "id": "C-V3",
+      "model": "Ring kinetics parameter overlay: last-declaration-wins per field (alpha, gamma, hill, basal, noise, seed)",
+      "model_kind": "biological",
+      "surface": [
+        "repressilator",
+        "alpha",
+        "gamma",
+        "hill",
+        "basal",
+        "noise",
+        "seed"
+      ],
+      "bio_contract_labels": [
+        "REAL",
+        "APPROX"
+      ],
+      "primary_sources": [
+        "Elowitz & Leibler (2000), Nature 403:335 (parameter space); SPEC section 11 repressilator row (overlay semantics)"
+      ],
+      "equations": [
+        "parameter overlay layers onto the shared engine state; last declaration wins per field (SPEC section 11)"
+      ],
+      "parameter_provenance": [
+        {
+          "param": "overlay semantics",
+          "source": "SPEC section 11 (repressilator row)",
+          "kind": "spec-default"
+        },
+        {
+          "param": "probe expectations",
+          "source": "bootstrap/validation_registry.json V3 quantities",
+          "kind": "registry-row"
+        }
+      ],
+      "assumptions": [
+        "deterministic engine (DETERMINISM.md section 1); differential tests pin the parameter plumbing to the oracle mirror"
+      ],
+      "validation_class": "ORACLE",
+      "evidence": {
+        "validation_registry_ids": [
+          "V3"
+        ],
+        "enforcing_tests": [
+          "tests/repressi_params.op",
+          "tests/repressi_alpha.op"
+        ],
+        "fixtures": [],
+        "programs": []
+      },
+      "status": "VALIDATED"
+    },
+    {
+      "id": "C-V4",
+      "model": "trp attenuation: ribosome-speed-coupled transcription attenuation as an RNA-level veto with dose threshold",
+      "model_kind": "biological",
+      "surface": [
+        "attenuates"
+      ],
+      "bio_contract_labels": [
+        "REAL",
+        "APPROX"
+      ],
+      "primary_sources": [
+        "prokaryotic transcription attenuation (trp operon; Yanofsky 1981)"
+      ],
+      "equations": [
+        "leader-peptide/terminator-hairpin outcome modeled as a veto with dose threshold; no anti-terminator structure modeling (BIO-CONTRACT APPROX note)"
+      ],
+      "parameter_provenance": [
+        {
+          "param": "veto threshold behavior",
+          "source": "SPEC attenuation row; behavioral outcome contract",
+          "kind": "spec-default"
+        }
+      ],
+      "assumptions": [
+        "two-state outcome approximation (no codon-level ribosome kinetics, per BIO-CONTRACT)",
+        "mechanism labeled APPROXIMATION-class in BIO-CONTRACT; claim inherits that honesty boundary"
+      ],
+      "validation_class": "BEHAVIORAL",
+      "evidence": {
+        "validation_registry_ids": [
+          "V4"
+        ],
+        "enforcing_tests": [
+          "tests/trp_attenuator.op"
+        ],
+        "fixtures": [],
+        "programs": []
+      },
+      "status": "VALIDATED"
+    },
+    {
+      "id": "C-V5",
+      "model": "Cis riboswitch: per-gene 5'UTR metabolite sensor over a cell-wide metabolite pool, bound-state polarity per ligand class",
+      "model_kind": "biological",
+      "surface": [
+        "riboswitch"
+      ],
+      "bio_contract_labels": [
+        "REAL",
+        "APPROX"
+      ],
+      "primary_sources": [
+        "cis-acting metabolite-binding aptamers: TPP/purine/SAM off class vs adenine/glycine on class (Serganov & Nudler 2013 review)"
+      ],
+      "equations": [
+        "@riboswitch(ligand, sense, threshold): bound-state polarity per class over the shared metabolite pool (SPEC riboswitch row)"
+      ],
+      "parameter_provenance": [
+        {
+          "param": "ligand classes and polarity",
+          "source": "Serganov & Nudler 2013 classification, mapped in SPEC",
+          "kind": "literature"
+        }
+      ],
+      "assumptions": [
+        "ligand-level switch approximation (not kinetic aptamer folding)",
+        "cis requirement enforced (the aptamer lives on the transcript it controls; loop-9 wave B4 fixed this honesty point)"
+      ],
+      "validation_class": "BEHAVIORAL",
+      "evidence": {
+        "validation_registry_ids": [
+          "V5"
+        ],
+        "enforcing_tests": [
+          "tests/riboswitch_cis.op"
+        ],
+        "fixtures": [],
+        "programs": []
+      },
+      "status": "VALIDATED"
+    },
+    {
+      "id": "C-V6",
+      "model": "Stoichiometric RISC silencing: guides are consumed (stoichiometric dose) on silence edges",
+      "model_kind": "biological",
+      "surface": [
+        "silence",
+        "strength"
+      ],
+      "bio_contract_labels": [
+        "REAL",
+        "APPROX"
+      ],
+      "primary_sources": [
+        "RNA interference / siRNA-guided degradation, stoichiometric consumption of guides (RNAi literature; BIO-CONTRACT RISC row)"
+      ],
+      "equations": [
+        "silence old -> new strength s sites n: silencing consumes guide capacity stoichiometrically (registry V6 dose mapping)"
+      ],
+      "parameter_provenance": [
+        {
+          "param": "dose-response quantities",
+          "source": "bootstrap/validation_registry.json V6 quantities",
+          "kind": "registry-row"
+        }
+      ],
+      "assumptions": [
+        "no off-target modeling (BIO-CONTRACT note)",
+        "stoichiometric consumption is the dose-carrying approximation; guide pool not otherwise modeled"
+      ],
+      "validation_class": "ORACLE",
+      "evidence": {
+        "validation_registry_ids": [
+          "V6"
+        ],
+        "enforcing_tests": [
+          "tests/silence_dose.op"
+        ],
+        "fixtures": [],
+        "programs": []
+      },
+      "status": "VALIDATED"
+    },
+    {
+      "id": "C-V7",
+      "model": "Occupancy repression: multiplicative thermodynamic occupancy on inhibiting edges",
+      "model_kind": "biological",
+      "surface": [
+        "occupy",
+        "inhibits"
+      ],
+      "bio_contract_labels": [],
+      "bio_contract_note": "No BIO-CONTRACT row yet for the occupy construct (only the RISC/marks rows exist); gap exposed here by rule 4 — row filing is the follow-up. Provenance and numerical evidence are complete in registry row V7.",
+      "primary_sources": [
+        "thermodynamic occupancy models of transcription-factor binding (occupancy = fraction of sites bound; classical statistical-mechanical treatment)"
+      ],
+      "equations": [
+        "repression factor as multiplicative occupancy on inhibiting edges (registry V7 mapping)"
+      ],
+      "parameter_provenance": [
+        {
+          "param": "occupancy quantities",
+          "source": "bootstrap/validation_registry.json V7 quantities",
+          "kind": "registry-row"
+        }
+      ],
+      "assumptions": [
+        "equilibrium occupancy approximation (no kinetic on/off rates)",
+        "multiplicative composition of independent inhibitor occupancies"
+      ],
+      "validation_class": "ORACLE",
+      "evidence": {
+        "validation_registry_ids": [
+          "V7"
+        ],
+        "enforcing_tests": [
+          "tests/grn_occupy.op"
+        ],
+        "fixtures": [],
+        "programs": []
+      },
+      "status": "VALIDATED"
+    },
+    {
+      "id": "C-V8",
+      "model": "Gene dosage: @copies n read-side dose amplification on GRN edges",
+      "model_kind": "biological",
+      "surface": [
+        "copies"
+      ],
+      "bio_contract_labels": [],
+      "bio_contract_note": "No BIO-CONTRACT row yet for @copies; gap exposed here by rule 4 — row filing is the follow-up. Provenance and numerical evidence are complete in registry row V8.",
+      "primary_sources": [
+        "gene dosage effects on expression level (copy-number dose response; molecular genetics literature)"
+      ],
+      "equations": [
+        "read-side amplification of regulated output proportional to copy number (registry V8 mapping)"
+      ],
+      "parameter_provenance": [
+        {
+          "param": "dose quantities",
+          "source": "bootstrap/validation_registry.json V8 quantities",
+          "kind": "registry-row"
+        }
+      ],
+      "assumptions": [
+        "linear read-side dose scaling (no saturation or titration modeling)",
+        "amplification applies at read-out, not at the regulatory input"
+      ],
+      "validation_class": "ORACLE",
+      "evidence": {
+        "validation_registry_ids": [
+          "V8"
+        ],
+        "enforcing_tests": [
+          "tests/copies_dose.op"
+        ],
+        "fixtures": [],
+        "programs": []
+      },
+      "status": "VALIDATED"
+    },
+    {
+      "id": "C-R06-UNIFORM",
+      "model": "Uniform sample mean converges to (a+b)/2 with the CLT z-gate and a byte-exact determinism pin",
+      "model_kind": "mathematical-reference",
+      "surface": [
+        "random"
+      ],
+      "primary_sources": [
+        "CLT for the sample mean of U(a,b); closed form E[U(a,b)] = (a+b)/2, Var = (b-a)^2/12 (probability literature)"
+      ],
+      "equations": [
+        "mean = (a+b)/2; variance of the mean of n samples = (b-a)^2/12/n; z = (observed - mean)/sqrt(var) gated at z_alpha = 0.001"
+      ],
+      "parameter_provenance": [
+        {
+          "param": "seeds (11,23,37,53,97)",
+          "source": "tests/validation/fixtures/V-R06-01-uniform-mean.json seeds",
+          "kind": "test-canonical"
+        },
+        {
+          "param": "z_alpha",
+          "source": "R0.6 fixture gates block",
+          "kind": "test-canonical"
+        }
+      ],
+      "assumptions": [
+        "seeded xorshift64* stream is deterministic and exactly reproducible (R0.5 premise)",
+        "sample-size/CLT regime of the fixture (n fixed by the fixture program)"
+      ],
+      "validation_class": "ANALYTIC",
+      "evidence": {
+        "validation_registry_ids": [],
+        "enforcing_tests": [],
+        "fixtures": [
+          "tests/validation/fixtures/V-R06-01-uniform-mean.json"
+        ],
+        "programs": [
+          "tests/validation/programs/uniform_mean.op"
+        ]
+      },
+      "status": "VALIDATED",
+      "bio_contract_labels": []
+    },
+    {
+      "id": "C-R06-BERNOULLI",
+      "model": "Bernoulli sample proportion converges to p with the CLT z-gate and determinism pin",
+      "model_kind": "mathematical-reference",
+      "surface": [
+        "random"
+      ],
+      "primary_sources": [
+        "CLT for Bernoulli proportions; E = p, Var = p(1-p) (probability literature)"
+      ],
+      "equations": [
+        "mean = p; variance of the mean of n samples = p(1-p)/n; z-gate at the fixture's z_alpha"
+      ],
+      "parameter_provenance": [
+        {
+          "param": "p, seeds, z_alpha",
+          "source": "tests/validation/fixtures/V-R06-02-bernoulli.json",
+          "kind": "test-canonical"
+        }
+      ],
+      "assumptions": [
+        "seeded xorshift64* stream deterministic (R0.5 premise)",
+        "Bernoulli mapping in the R0.6 harness reference implementation (kind: bernoulli)"
+      ],
+      "validation_class": "ANALYTIC",
+      "evidence": {
+        "validation_registry_ids": [],
+        "enforcing_tests": [],
+        "fixtures": [
+          "tests/validation/fixtures/V-R06-02-bernoulli.json"
+        ],
+        "programs": [
+          "tests/validation/programs/bernoulli_p030.op"
+        ]
+      },
+      "status": "VALIDATED",
+      "bio_contract_labels": []
+    },
+    {
+      "id": "C-R06-BINOMIAL",
+      "model": "Binomial pmf matches the closed form at the fixture's parameter point (total-variation gate over the support)",
+      "model_kind": "mathematical-reference",
+      "surface": [
+        "random"
+      ],
+      "primary_sources": [
+        "binomial distribution pmf C(n,k) p^k (1-p)^(n-k) (probability literature)"
+      ],
+      "equations": [
+        "pmf support compared by total-variation distance against the closed form, gate at the fixture's tv bound"
+      ],
+      "parameter_provenance": [
+        {
+          "param": "n, p, tv bound",
+          "source": "tests/validation/fixtures/V-R06-03-binomial.json",
+          "kind": "test-canonical"
+        }
+      ],
+      "assumptions": [
+        "seeded xorshift64* stream deterministic (R0.5 premise)",
+        "pmf support enumerated exactly over {0..n}"
+      ],
+      "validation_class": "ANALYTIC",
+      "evidence": {
+        "validation_registry_ids": [],
+        "enforcing_tests": [],
+        "fixtures": [
+          "tests/validation/fixtures/V-R06-03-binomial.json"
+        ],
+        "programs": [
+          "tests/validation/programs/binomial_n20_p05.op"
+        ]
+      },
+      "status": "VALIDATED",
+      "bio_contract_labels": []
+    },
+    {
+      "id": "C-R06-GEOMETRIC",
+      "model": "Geometric waiting-time distribution matches the closed form (exact bisection quantiles)",
+      "model_kind": "mathematical-reference",
+      "surface": [
+        "random"
+      ],
+      "primary_sources": [
+        "geometric distribution on {1,2,...}: P(X=k) = (1-p)^(k-1) p (probability literature)"
+      ],
+      "equations": [
+        "quantiles computed by exact bisection on the closed-form cdf; fixture compares observed quantiles"
+      ],
+      "parameter_provenance": [
+        {
+          "param": "p, quantile grid",
+          "source": "tests/validation/fixtures/V-R06-04-geometric.json",
+          "kind": "test-canonical"
+        }
+      ],
+      "assumptions": [
+        "seeded xorshift64* stream deterministic (R0.5 premise)",
+        "support convention {1,2,...} fixed by the R0.6 reference implementation"
+      ],
+      "validation_class": "ANALYTIC",
+      "evidence": {
+        "validation_registry_ids": [],
+        "enforcing_tests": [],
+        "fixtures": [
+          "tests/validation/fixtures/V-R06-04-geometric.json"
+        ],
+        "programs": [
+          "tests/validation/programs/geometric_p025.op"
+        ]
+      },
+      "status": "VALIDATED",
+      "bio_contract_labels": []
+    },
+    {
+      "id": "C-R06-MARKOV2",
+      "model": "Two-state Markov chain stationary distribution and spectral variance match the closed form",
+      "model_kind": "mathematical-reference",
+      "surface": [
+        "random"
+      ],
+      "primary_sources": [
+        "two-state Markov chain stationary distribution pi = (b/(a+b), a/(a+b)) with exact spectral variance (1+lam)/(1-lam) form (Markov chain literature)"
+      ],
+      "equations": [
+        "stationary distribution closed form + exact spectral variance (1+lam)/(1-lam) as derived in the R0.6 reference table"
+      ],
+      "parameter_provenance": [
+        {
+          "param": "transition probabilities a, b",
+          "source": "tests/validation/fixtures/V-R06-05-markov2.json",
+          "kind": "test-canonical"
+        }
+      ],
+      "assumptions": [
+        "seeded xorshift64* stream deterministic (R0.5 premise)",
+        "chain is ergodic at the fixture's parameters (a+b > 0)"
+      ],
+      "validation_class": "ANALYTIC",
+      "evidence": {
+        "validation_registry_ids": [],
+        "enforcing_tests": [],
+        "fixtures": [
+          "tests/validation/fixtures/V-R06-05-markov2.json"
+        ],
+        "programs": [
+          "tests/validation/programs/markov2_p03_q05.op"
+        ]
+      },
+      "status": "VALIDATED",
+      "bio_contract_labels": []
+    },
+    {
+      "id": "C-R05-RNG",
+      "model": "Deterministic RNG: std/random mirrors xorshift64* with an exactly pinned stream",
+      "model_kind": "mathematical-reference",
+      "surface": [
+        "random"
+      ],
+      "primary_sources": [
+        "Marsaglia, xorshift RNGs (Journal of Statistical Software 2003); xorshift64* variant with the multiplicative finalizer"
+      ],
+      "equations": [
+        "x ^= x >> 12; x ^= x << 25; x ^= x >> 27; stream value = x * 2685821657736338717 (the xorshift64* finalizer), as mirrored by std/random"
+      ],
+      "parameter_provenance": [
+        {
+          "param": "stream expectations",
+          "source": "tests/std_random.op pinned stream values (registry 'exact' comparison kind per W093)",
+          "kind": "test-canonical"
+        }
+      ],
+      "assumptions": [
+        "pure-integer stream: exact comparison is defensible (no floating-point slack), per the W093 registry 'exact' kind",
+        "single global stream instance per run under the deterministic-core premise"
+      ],
+      "validation_class": "ORACLE",
+      "evidence": {
+        "validation_registry_ids": [],
+        "enforcing_tests": [
+          "tests/std_random.op"
+        ],
+        "fixtures": [],
+        "programs": []
+      },
+      "status": "VALIDATED",
+      "bio_contract_labels": []
+    }
+  ]
+}

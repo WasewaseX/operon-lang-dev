@@ -108,6 +108,14 @@ bash scripts/pkg_hosted_e2e.sh
 # hand-typed suite counts). Static, seconds; markup cannot hide a claim
 # (tags are stripped before matching).
 python3 scripts/check_doc_versions.py
+# R0.7 (sci lane, 2026-10-06): the claim/evidence registry joins the standing
+# gate — every bootstrap/claim_registry.json claim must carry provenance,
+# assumptions, a validation class and on-disk evidence; every numerical entry
+# of bootstrap/validation_registry.json must be claimed exactly once (both
+# directions); bio-contract labels must exist in BIO-CONTRACT.md; fixtures
+# must be pinned in tests/validation/MANIFEST.sha256. Deny-by-default with a
+# negative selftest (--negative-selftest) proving the teeth. Static, seconds.
+python3 scripts/check_claims.py
 # S5: the installer had ZERO gate coverage — its fail-closed verification
 # law (sec-r1/B1-U3) was only ever exercised by production traffic. Hermetic
 # e2e against a synthetic release dir: happy path + tampered sidecar +
