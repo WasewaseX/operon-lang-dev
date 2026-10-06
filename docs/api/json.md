@@ -52,4 +52,12 @@ Accumulator behind json_flatten.
 ## `gene json_compact(v)`
 
 Drop null-valued keys recursively (clean payloads).
+Takes a JSON string; parses it, removes every map entry whose value is
+null, recurses into nested maps and lists (list null ELEMENTS are values,
+not key-values, and are kept), and re-serializes. Formatting is dropped
+by the round-trip. Before the sweep fix (#136.2) this gene only did the
+canonical round-trip and PRESERVED nulls, violating its own doc contract
+on both engines (differential-blind).
+
+## `gene json_compact_value(v)`
 

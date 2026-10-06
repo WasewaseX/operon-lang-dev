@@ -2,7 +2,18 @@
 # Written in Operon, for Operon: the library layer grows the language itself.
 
 gene take(seq, n) {
-    # pull up to n values from a sequence (or slice a list)
+    # pull up to n values from a sequence (or slice a list).
+    # First-n contract on BOTH paths (mirrors collections.take): n <= 0
+    # takes nothing — the bare slice would fall into negative-index
+    # semantics (take([1,2,3], -1) -> [1, 2]), a different contract.
+    # Protocol boundary (SPEC §3): next() answers "the next value, or
+    # null when exhausted", so a generator that YIELDS null is
+    # indistinguishable from exhaustion at this layer — the null-yield
+    # shape is out of the iterator protocol's vocabulary, not a silent
+    # truncation. A done-flag protocol would be an engine-lane change.
+    if n <= 0 {
+        return []
+    }
     if type(seq) == "list" {
         return seq.slice(0, n)
     }

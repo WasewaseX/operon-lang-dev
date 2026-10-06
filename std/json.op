@@ -134,10 +134,17 @@ gene json_flatten(v) {
 
 ## Accumulator behind json_flatten.
 gene json_flatten_into(v, prefix, out) {
+    # Deterministic flattening (S3-136T2): map sub-keys are traversed in
+    # SORTED order and every leaf write is FIRST-WINS (has() guard), so
+    # ==-equal maps flatten identically regardless of insertion order —
+    # the same order-insensitivity law as map == (and the set_from
+    # canonicalization). A dotted-key collision therefore has a rule:
+    # the first path in sorted traversal owns the key, never an
+    # accidental last-writer whose survivor depended on input order.
     if type(v) == "map" {
-        let ks = keys(v)
+        let ks = sorted(keys(v))
         if len(ks) == 0 {
-            if len(prefix) > 0 {
+            if len(prefix) > 0 and !has(out, prefix) {
                 out[prefix] = {}
             }
             return
@@ -153,7 +160,7 @@ gene json_flatten_into(v, prefix, out) {
     }
     if type(v) == "list" {
         if len(v) == 0 {
-            if len(prefix) > 0 {
+            if len(prefix) > 0 and !has(out, prefix) {
                 out[prefix] = []
             }
             return
@@ -169,7 +176,9 @@ gene json_flatten_into(v, prefix, out) {
         }
         return
     }
-    out[prefix] = v
+    if !has(out, prefix) {
+        out[prefix] = v
+    }
 }
 
 ## Drop null-valued keys recursively (clean payloads).
