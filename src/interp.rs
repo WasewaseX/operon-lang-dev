@@ -119,6 +119,22 @@ impl Env {
         }
         None
     }
+    /// P5: bound-check WITHOUT the clone `get` pays — the `s = s + x`
+    /// fast path peeks bound-ness before the rhs eval so an unbound name
+    /// keeps its exact general-path note ordering.
+    pub fn contains(&self, name: &str) -> bool {
+        if self.vars.borrow().contains_key(name) {
+            return true;
+        }
+        let mut node = self.parent.clone();
+        while let Some(env) = node {
+            if env.vars.borrow().contains_key(name) {
+                return true;
+            }
+            node = env.parent.clone();
+        }
+        false
+    }
     /// Assign: rebind where found, else define in this (current) scope.
     pub fn set(&self, name: &str, val: Value) -> bool {
         def_gen_bump();
@@ -2166,6 +2182,47 @@ impl Interp {
                 Ok(Flow::Norm)
             }
             Stmt::Assign(name, op, e) => {
+                // P5 builder fast path for `s = s + <pure rhs>`: the general
+                // path below reads the slot (inside the Binary eval) BEFORE
+                // the rhs evaluates, the fast path appends AFTER, so the
+                // shape is only taken when the rhs is statically
+                // side-effect-free (no calls — reads are fine) and the name
+                // is already bound (an unbound read notes, and that note
+                // must keep its position in the general path).
+                if op.is_none() {
+                    if let Expr::Binary(BinOp::Add, lhs, rhs, _) = e {
+                        if matches!(lhs.as_ref(), Expr::Ident(n) if n == name)
+                            && expr_is_pure(rhs)
+                            && env.contains(name)
+                        {
+                            let val = self.eval(env, rhs)?;
+                            if env.is_const(name) {
+                                return Err(Stress::new(
+                                    "frozen",
+                                    format!("cannot reassign const '{}'", name),
+                                ));
+                            }
+                            if Self::try_str_append(env, name, &val)? {
+                                return Ok(Flow::Norm);
+                            }
+                            // pure rhs: the slot state is exactly what the
+                            // general path's post-rhs read would see, so
+                            // reconstructing its result here is byte-equal
+                            // (no re-evaluation — notes and stresses keep
+                            // their exact positions)
+                            let cur = env.get(name).unwrap_or(Value::Null);
+                            let newv = self.apply_binop(env, BinOp::Add, &cur, &val)?;
+                            if !env.set(name, newv) {
+                                self.note(
+                                    0,
+                                    4,
+                                    format!("'{}' was not declared; auto-declared", name),
+                                );
+                            }
+                            return Ok(Flow::Norm);
+                        }
+                    }
+                }
                 let val = self.eval(env, e)?;
                 if env.is_const(name) {
                     return Err(Stress::new(
@@ -2176,6 +2233,21 @@ impl Interp {
                 match op {
                     None => {
                         if !env.set(name, val) {
+                            self.note(0, 4, format!("'{}' was not declared; auto-declared", name));
+                        }
+                    }
+                    Some(BinOp::Add) => {
+                        // P5 builder fast path for `s += x`: the general
+                        // arm reads the slot AFTER the rhs eval (the order
+                        // above), so an in-place append here is byte-equal
+                        // for EVERY rhs, side effects included; any shape
+                        // try_str_append refuses falls through untouched.
+                        if Self::try_str_append(env, name, &val)? {
+                            return Ok(Flow::Norm);
+                        }
+                        let cur = env.get(name).unwrap_or(Value::Null);
+                        let newv = self.apply_binop(env, BinOp::Add, &cur, &val)?;
+                        if !env.set(name, newv) {
                             self.note(0, 4, format!("'{}' was not declared; auto-declared", name));
                         }
                     }
@@ -2479,6 +2551,91 @@ impl Interp {
                 }
             }
             Stmt::For(name, iter, body) => {
+                // P3 (BENCH.md §P3): `for i in range(...)` used to
+                // materialize the full boxed Vec via the range() builtin and
+                // then clone it — 66 B/elem RSS, 251.9 MB peak at N=4M for a
+                // body that retains nothing. When the iterable IS a range
+                // call, iterate the bounds directly (O(1) memory) with the
+                // exact observable semantics of the builtin: same note on
+                // non-int args (stamped at the call line), same `unfolded`
+                // stress on step 0, same `overflow` stress above the
+                // 10M-element ceiling, same per-iteration tick and binding.
+                // Every other iterable takes the unchanged materializing
+                // path below (so len()/index/str() surfaces of a range are
+                // untouched).
+                if let Expr::Call(callee, args, call_line) = iter {
+                    if matches!(callee.as_ref(), Expr::Ident(n) if n == "range") {
+                        let ints: Vec<i64> = {
+                            let mut got = Vec::new();
+                            let mut all_int = true;
+                            for a in args.iter() {
+                                match self.eval(env, a)? {
+                                    Value::Int(x) => got.push(x),
+                                    _ => {
+                                        all_int = false;
+                                        break;
+                                    }
+                                }
+                            }
+                            if !all_int {
+                                self.note(
+                                    *call_line,
+                                    4,
+                                    "range() needs ints; returned []".to_string(),
+                                );
+                                return Ok(Flow::Norm);
+                            }
+                            got
+                        };
+                        let (a, b, step) = match ints.len() {
+                            1 => (0, ints[0], 1),
+                            2 => (ints[0], ints[1], 1),
+                            3 => (ints[0], ints[1], ints[2]),
+                            _ => {
+                                self.note(
+                                    *call_line,
+                                    4,
+                                    "range() needs ints; returned []".to_string(),
+                                );
+                                return Ok(Flow::Norm);
+                            }
+                        };
+                        if step == 0 {
+                            return Err(Stress::new("unfolded", "range step cannot be 0"));
+                        }
+                        // O(1) count, i128 so bound arithmetic cannot
+                        // overflow; the eager builtin raised its ceiling
+                        // stress mid-build, the count check raises the same
+                        // stress before the first iteration.
+                        let span = (b as i128) - (a as i128);
+                        let count: i128 = if (step > 0 && span > 0) || (step < 0 && span < 0) {
+                            let (num, den) =
+                                (span.unsigned_abs() as i128, step.unsigned_abs() as i128);
+                            num / den + i128::from(num % den != 0)
+                        } else {
+                            0
+                        };
+                        if count > 10_000_000 {
+                            return Err(Stress::new("overflow", "range too large"));
+                        }
+                        let mut i = a;
+                        while (step > 0 && i < b) || (step < 0 && i > b) {
+                            self.tick()?;
+                            let child = Env::new(Some(env.clone()));
+                            child.define(name, Value::Int(i));
+                            match self.exec_block(&child, body)? {
+                                Flow::Brk => break,
+                                Flow::Ret(v) => return Ok(Flow::Ret(v)),
+                                _ => {}
+                            }
+                            i = match i.checked_add(step) {
+                                Some(x) => x,
+                                None => break,
+                            };
+                        }
+                        return Ok(Flow::Norm);
+                    }
+                }
                 let itv = self.eval(env, iter)?;
                 if let Value::Seq(_def, st) = itv {
                     // lazy pull iteration over a sequence
@@ -3932,6 +4089,131 @@ impl Interp {
         }
     }
 
+    /// P2 (BENCH.md §P2): the comparator-driven sort was insertion sort —
+    /// n²/4 comparator calls BY ALGORITHM (2026-10-04 audit: 15,997,582
+    /// calls at n=8k, 6.1 s vs CPython's builtin 0.9 ms). This helper keeps
+    /// the exact per-element contract (`cmp(a, b)` truthy when a belongs
+    /// BEFORE b, SPEC §sorted-order) and the exact tie semantics of the
+    /// insertion walk: a tie (cmp false both ways) swaps, so tie groups end
+    /// up REVERSED relative to the input order. Bottom-up merge with the
+    /// rule "take right iff NOT cmp(left_head, right_head)" reproduces that
+    /// byte-for-byte (derived from the walk and pinned in
+    /// tests/differential/p2p3p5_opt_pins.op), while cutting comparisons
+    /// from n²/4 to ~n log n. Inputs of ≤ 32 elements keep the original
+    /// insertion walk VERBATIM, so every small pinned program (and any
+    /// comparator with side effects at corpus scale) keeps its exact
+    /// comparator call order.
+    fn comparator_sort(
+        &mut self,
+        env: &Rc<Env>,
+        v: &mut [Value],
+        cmp: &Value,
+    ) -> Result<(), Stress> {
+        let n = v.len();
+        if n < 2 {
+            return Ok(());
+        }
+        if n <= 32 {
+            // the original insertion walk, verbatim
+            for i in 1..n {
+                let mut j = i;
+                while j > 0 {
+                    let a = v[j - 1].clone();
+                    let b = v[j].clone();
+                    let before = self.call_value(env, cmp, vec![a, b])?.truthy();
+                    if !before {
+                        v.swap(j - 1, j);
+                        j -= 1;
+                    } else {
+                        break;
+                    }
+                }
+            }
+            return Ok(());
+        }
+        let mut buf: Vec<Value> = Vec::with_capacity(n);
+        let mut width = 1usize;
+        while width < n {
+            let mut i = 0usize;
+            while i < n {
+                let mid = (i + width).min(n);
+                let end = (i + 2 * width).min(n);
+                if mid == end {
+                    buf.extend_from_slice(&v[i..end]);
+                    i = end;
+                    continue;
+                }
+                let (mut a, mut b) = (i, mid);
+                buf.clear();
+                while a < mid && b < end {
+                    // the tie rule: take right unless the left head
+                    // explicitly belongs before it
+                    let before = self
+                        .call_value(env, cmp, vec![v[a].clone(), v[b].clone()])?
+                        .truthy();
+                    if before {
+                        buf.push(v[a].clone());
+                        a += 1;
+                    } else {
+                        buf.push(v[b].clone());
+                        b += 1;
+                    }
+                }
+                buf.extend_from_slice(&v[a..mid]);
+                buf.extend_from_slice(&v[b..end]);
+                v[i..end].clone_from_slice(&buf);
+                i = end;
+            }
+            width *= 2;
+        }
+        Ok(())
+    }
+
+    /// P5 (BENCH.md hot-path target 6): the accumulation shapes `s += x`
+    /// and `s = s + <pure x>` append IN PLACE to the bound `Value::Str`
+    /// slot (amortized O(|x|) per op) instead of clone + `format!` +
+    /// rebind (O(|s| + |x|) per op, quadratic total). The ceiling and the
+    /// mem charge are the EXACT ones the `Add` arm applies (same 512 MiB
+    /// threshold, same message, same per-op charge amounts), so allocation
+    /// accounting is unchanged; every non-Str shape (or unbound name)
+    /// returns false and the caller reproduces its untouched general path.
+    /// Soundness: `Value::Str` is an owned `String` — never `Rc`-shared —
+    /// so an in-place slot append is invisible to every other holder by
+    /// construction.
+    fn try_str_append(env: &Rc<Env>, name: &str, val: &Value) -> Result<bool, Stress> {
+        let suffix = match val {
+            Value::Str(s) => s.as_str(),
+            _ => return Ok(false),
+        };
+        let mut node = Some(env.clone());
+        while let Some(e) = node {
+            let hit = {
+                let vars = e.vars.borrow();
+                vars.contains_key(name)
+            };
+            if hit {
+                let mut vars = e.vars.borrow_mut();
+                if let Some(Value::Str(cur)) = vars.get_mut(name) {
+                    let new_len = cur.len().saturating_add(suffix.len());
+                    if new_len > 512 * 1024 * 1024 {
+                        return Err(Stress::new(
+                            "overflow",
+                            "string concat exceeds the 512 MiB ceiling",
+                        ));
+                    }
+                    mem_charge(cur.len() as u64 + suffix.len() as u64)?;
+                    cur.push_str(suffix);
+                    return Ok(true);
+                }
+                // bound but not a string: the general path reproduces the
+                // exact notes/stresses for this shape
+                return Ok(false);
+            }
+            node = e.parent.clone();
+        }
+        Ok(false)
+    }
+
     pub fn apply_binop(
         &mut self,
         _env: &Rc<Env>,
@@ -3965,7 +4247,12 @@ impl Interp {
                         ));
                     }
                     mem_charge(a.len() as u64 + b.len() as u64)?;
-                    Ok(Value::Str(format!("{}{}", a, b)))
+                    // P5: same result bytes, one exact-size allocation —
+                    // format! carried locale/format machinery per op
+                    let mut out = String::with_capacity(a.len() + b.len());
+                    out.push_str(a);
+                    out.push_str(b);
+                    Ok(Value::Str(out))
                 }
                 // W029: bytes + bytes -> bytes (same ceiling family as strings;
                 // bytes + str is a type error, never a silent coercion)
@@ -7546,22 +7833,10 @@ impl Interp {
                         Some(Value::Gene(_, _)) => {
                             // ast-grep-ignore: no-unwrap-in-src
                             let cmp = args.get(1).unwrap().clone();
-                            // insertion sort with user comparator, the exact
-                            // `.sort()` contract, non-mutating output
-                            for i in 1..v.len() {
-                                let mut j = i;
-                                while j > 0 {
-                                    let a = v[j - 1].clone();
-                                    let b = v[j].clone();
-                                    let before = self.call_value(env, &cmp, vec![a, b])?.truthy();
-                                    if !before {
-                                        v.swap(j - 1, j);
-                                        j -= 1;
-                                    } else {
-                                        break;
-                                    }
-                                }
-                            }
+                            // P2: shared comparator sort (insertion walk ≤ 32,
+                            // tie-exact merge above) — the exact `.sort()`
+                            // contract, non-mutating output. See comparator_sort.
+                            self.comparator_sort(env, &mut v, &cmp)?;
                         }
                         _ => {
                             let key = |v: &Value| -> (u8, f64, String) {
@@ -11662,22 +11937,9 @@ impl Interp {
                     let cmp = args.first().cloned().unwrap_or(Value::Null);
                     let mut v = l.borrow().clone();
                     if let Value::Gene(_, _) = &cmp {
-                        // insertion sort with user comparator: cmp(a, b) true
-                        // when a belongs BEFORE b (SPEC §sorted-order)
-                        for i in 1..v.len() {
-                            let mut j = i;
-                            while j > 0 {
-                                let a = v[j - 1].clone();
-                                let b = v[j].clone();
-                                let before = self.call_value(env, &cmp, vec![a, b])?.truthy();
-                                if !before {
-                                    v.swap(j - 1, j);
-                                    j -= 1;
-                                } else {
-                                    break;
-                                }
-                            }
-                        }
+                        // P2: shared comparator sort (insertion walk ≤ 32,
+                        // tie-exact merge above) — see comparator_sort
+                        self.comparator_sort(env, &mut v, &cmp)?;
                     } else {
                         // default: numbers and strings ascending, mixed-type
                         // ordering matches the oracle (numbers first, strings
@@ -13650,6 +13912,31 @@ pub const BUILTIN_NAMES: &[&str] = &[
 // runaway by contract).
 static ALLOC_BYTES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 pub const ALLOC_CEILING: u64 = 2 * 1024 * 1024 * 1024;
+
+/// P5 gate for the `s = s + <rhs>` builder fast path: statically
+/// side-effect-FREE expression forms only. Reads (idents, arithmetic over
+/// literals) cannot mutate the target slot between the general path's
+/// pre-rhs slot read and the fast path's post-rhs append; every call form
+/// (gene, builtin, method — plus anything opaque: index/member/interp/
+/// propagate) is refused so the general path keeps the exact observable
+/// order. Shared with the VM compiler (src/vm.rs) so both engines gate the
+/// identical shape set.
+pub fn expr_is_pure(e: &Expr) -> bool {
+    match e {
+        Expr::Null
+        | Expr::Bool(_)
+        | Expr::Int(_)
+        | Expr::Float(_)
+        | Expr::Str(_)
+        | Expr::Bytes(_)
+        | Expr::Ident(_) => true,
+        Expr::Binary(_, l, r, _) => expr_is_pure(l) && expr_is_pure(r),
+        Expr::Unary(_, x) => expr_is_pure(x),
+        Expr::Ternary(c, a, b) => expr_is_pure(c) && expr_is_pure(a) && expr_is_pure(b),
+        Expr::At(inner, _) => expr_is_pure(inner),
+        _ => false,
+    }
+}
 
 pub fn mem_charge(bytes: u64) -> Result<(), Stress> {
     let prev = ALLOC_BYTES.fetch_add(bytes, std::sync::atomic::Ordering::Relaxed);

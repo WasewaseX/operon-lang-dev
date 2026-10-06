@@ -903,6 +903,7 @@ programs bit-identical.
 | `LoadNameQuiet` | name idx | read without note or charge (compound-assign target read) |
 | `StoreName` | name idx | `let` semantics: rebinding note + define |
 | `AssignName` | name idx | assignment semantics: const check, set, auto-declare note |
+| `AppendName` | name idx, loud | P5 superinstruction: pop the rhs, append it IN PLACE to the named string slot (amortized O(rhs)) — the compiled form of `s += x` (loud=false) and `s = s + <pure rhs>` (loud=true). Falls back to the exact replaced sequence (LoadName(Quiet) + Bin(+) + AssignName) for every non-Str shape, unbound names, const targets and slot targets; ceiling and mem-charge stamps ride the Bin/Assign positions |
 | `Bin` | op | pop two, apply the shared `apply_binop` (exact kinds, messages, line stamps) |
 | `BinImm` | op, const idx | W11 superinstruction: pop lhs, push the constant rhs, apply the SAME `apply_binop` (fuses the measured Push+Bin pair; identical evaluation order and stress surface, one tick instead of two) |
 | `LoadBinImm` | name idx, op, const idx | W11 superinstruction: read a name (the EXACT LoadName arm: clone-charge plus the unbound note), then apply `apply_binop` against the constant (fuses the measured LoadName+Push+Bin triple: `n < 2`, `n - 1`) |
