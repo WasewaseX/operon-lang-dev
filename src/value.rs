@@ -279,6 +279,31 @@ impl MapStore {
         let (cls, h) = key_class_hash(key);
         self.position_h(key, cls, h)
     }
+    /// O(1) string-key lookup without constructing a `Value::Str` (the
+    /// `.`/`?.` member-read hot path — P4-safe). Same contract as
+    /// `position()` restricted to the KC_STR scalar class: the memo hit is
+    /// deep_eq-verified (string equality IS the Str/Str deep_eq), a failed
+    /// verify falls back to the exact scan, and miss-trust proves absence
+    /// (every live Str key's fnv1a hash is in the memo, equal strings hash
+    /// equal). Non-Str keys never deep_eq-equal a string, so the exact scan
+    /// may specialize to `Value::Str` entries.
+    pub fn position_str(&self, key: &str) -> Option<usize> {
+        let h = fnv1a(key.as_bytes());
+        match self.memo.get(h) {
+            Some(i) => match self.items.get(i) {
+                Some((Value::Str(s), _)) if s == key => Some(i),
+                // u64 collision class (incl. the craftable fnv1a("2") ==
+                // fnv1a(Float(2.0) repr) shape documented on tomb_verified):
+                // the exact scan the old design always used on a failed
+                // verify, specialized to the Str class.
+                _ => self
+                    .items
+                    .iter()
+                    .position(|(k, _)| matches!(k, Value::Str(s) if s == key)),
+            },
+            None => None,
+        }
+    }
     fn position_h(&self, key: &Value, cls: u8, h: u64) -> Option<usize> {
         if cls == KC_OTHER {
             // sec-r5 (F-12): non-scalar keys, bounded scan

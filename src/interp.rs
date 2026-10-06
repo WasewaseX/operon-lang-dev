@@ -3119,34 +3119,45 @@ impl Interp {
 
     /// L1a: shared member-read logic for `Expr::Member` and `Expr::MemberSafe`
     /// (the safe form null-checks the receiver before calling this).
+    ///
+    /// P4-safe: reads go through `MapStore::position_str` — the P1 hashed
+    /// memo (deep_eq-verified hit, miss-trust absence, exact-scan collision
+    /// fallback). This path was the last linear map scan in the read family:
+    /// every `.`/`?.` access walked the entries (the mapmiss residual the
+    /// P5/P6 survey attributed to the dispatch surface); the write path has
+    /// been memoized since dx-r3 and the Index path since P1.
     pub(crate) fn member_value(&mut self, tv: Value, key: &str) -> Result<Value, Stress> {
         match &tv {
-            Value::Map(m) => match m
-                .borrow()
-                .iter()
-                .find(|(k, _)| matches!(k, Value::Str(s) if s == key))
-            {
-                Some((_, v)) => Ok(v.clone()),
-                None => {
-                    self.note(0, 4, format!("member '{}' missing on map; null", key));
-                    Ok(Value::Null)
+            Value::Map(m) => {
+                let b = m.borrow();
+                match b
+                    .position_str(key)
+                    .and_then(|i| b.get(i).map(|e| e.1.clone()))
+                {
+                    Some(v) => Ok(v),
+                    None => {
+                        self.note(0, 4, format!("member '{}' missing on map; null", key));
+                        Ok(Value::Null)
+                    }
                 }
-            },
-            Value::Obj(d, m) => match m
-                .borrow()
-                .iter()
-                .find(|(k, _)| matches!(k, Value::Str(s) if s == key))
-            {
-                Some((_, v)) => Ok(v.clone()),
-                None => {
-                    self.note(
-                        0,
-                        4,
-                        format!("field '{}' missing on phenotype {}; null", key, d.name),
-                    );
-                    Ok(Value::Null)
+            }
+            Value::Obj(d, m) => {
+                let b = m.borrow();
+                match b
+                    .position_str(key)
+                    .and_then(|i| b.get(i).map(|e| e.1.clone()))
+                {
+                    Some(v) => Ok(v),
+                    None => {
+                        self.note(
+                            0,
+                            4,
+                            format!("field '{}' missing on phenotype {}; null", key, d.name),
+                        );
+                        Ok(Value::Null)
+                    }
                 }
-            },
+            }
             _ => {
                 self.note(
                     0,
