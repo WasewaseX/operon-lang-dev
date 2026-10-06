@@ -1,0 +1,97 @@
+# member-read pin (2026-10-06): P4-safe regression gate, builder-A (L-002).
+# The `.`/`?.` member-read surface (interp member_value) moved from a linear
+# entry scan to MapStore::position_str — the P1 hashed memo (deep_eq-verified
+# hit, miss-trust absence, exact-scan collision fallback). The write path has
+# been memoized since dx-r3 and the Index path since P1; this pin locks the
+# READ surface's behavior so the perf swap stays semantics-identical:
+#   map member hit / miss (null + note) · ?. on null (silent) · member on a
+#   non-container (null + note) · mixed-key map (int 2 and float 2.0 are ONE
+#   key by the Int<->Float cross-equality law — the insert overwrites; a str
+#   key stays distinct, and member reads only ever match Value::Str entries)
+#   · phenotype field hit / missing field (null + note) · member chains
+#   · tombstone interplay: delete then read (miss-trust must report null,
+#   not a stale slot) · re-insert after delete (upsert keeps the contract).
+# engine == oracle byte-for-byte (stdout; both engines note to stderr).
+gene build_map(n) {
+    let m = {}
+    for i in range(n) {
+        m["k" + str(i)] = i * i
+    }
+    return m
+}
+
+gene main() {
+    # --- map member: hit -------------------------------------------------
+    let m = build_map(64)
+    print("hit_first", m.k0, m.k0 == 0)
+    print("hit_mid", m.k31, m.k31 == 961)
+    print("hit_last", m.k63, m.k63 == 3969)
+
+    # --- map member: miss (null + note on stderr) ------------------------
+    print("miss", m.nope, m.nope == null)
+
+    # --- ?. on a null receiver is silent null ----------------------------
+    let absent = null
+    print("safe_null", absent?.k0)
+
+    # --- ?. on a real receiver behaves like . ----------------------------
+    print("safe_hit", m?.k10, m?.k10 == 100)
+    print("safe_miss", m?.nope)
+
+    # --- member on a non-container is null + note -------------------------
+    let n = 7
+    print("on_int", n.foo)
+
+    # --- mixed keys: int 2 and float 2.0 are ONE key (the Int<->Float
+    #     cross-equality law — the float insert overwrites the int entry);
+    #     the str key "v2" stays a distinct entry, and the member read
+    #     matches ONLY the Value::Str one -------------------------------
+    let mixed = {}
+    mixed[2] = "int-two"
+    mixed[2.0] = "float-two"
+    mixed.v2 = "str-two"
+    print("mixed_int", mixed[2])
+    print("mixed_float", mixed[2.0])
+    print("mixed_str_member", mixed.v2)
+    print("mixed_str_index", mixed["v2"])
+
+    # --- member chains ----------------------------------------------------
+    let outer = {}
+    outer.inner = {a: 1, b: 2}
+    print("chain", outer.inner.a, outer.inner.b, outer.inner.c)
+
+    # --- phenotype fields: hit, missing, method dispatch untouched --------
+    phenotype Rec {
+        let f1 = 11
+        let f2 = 22
+        gene twice(x) { return x * 2 }
+    }
+    let r = new Rec()
+    print("obj_hit", r.f1, r.f2)
+    print("obj_missing", r.f9)
+    print("obj_method", r.twice(5))
+
+    # --- tombstone interplay: delete then read (miss-trust), re-insert ----
+    let t = build_map(16)
+    del(t, "k7")
+    print("del_then_read", t.k7)
+    t.k7 = 777
+    print("reinsert", t.k7)
+    del(t, "k0")
+    print("del_first", t.k0)
+    print("del_survivor", t.k1, t.k1 == 1)
+
+    # --- falsy-valued members must not read as missing ---------------------
+    let z = {}
+    z.zero = 0
+    z.empty = ""
+    z.nothing = null
+    print("falsy_zero", z.zero == 0)
+    print("falsy_empty", z.empty == "")
+    print("falsy_null", z.nothing == null)
+
+    # --- big-map member read parity (hit late insertion order) ------------
+    let big = build_map(5000)
+    print("big_last", big.k4999, big.k4999 == 4999 * 4999)
+    print("big_miss", big.k5000)
+}
