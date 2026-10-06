@@ -12,7 +12,7 @@
     "architecture": {
         "64bit": {
             "url": "https://github.com/WasewaseX/operon-lang-dev/releases/download/v2.9.0/operon-2.9.0-x86_64-pc-windows-msvc.zip",
-            "hash": "1ffcaab37dd9ce8e85d18b05955e137f7516417e3a9d83f986d12ee3244efeba"
+            "hash": "dea0c5a4fa593114798124026c2283e480368515ac20ac7c98a1b7fcb864ca16"
         }
     },
     "extract_dir": "operon-2.9.0",
