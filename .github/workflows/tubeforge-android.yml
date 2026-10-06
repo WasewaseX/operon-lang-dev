@@ -52,7 +52,7 @@ jobs:
             echo "TF_KEYSTORE_PATH=/tmp/tubeforge.keystore" >> "$GITHUB_ENV"
             echo "TF_KEYSTORE_PASS=TFstore-2026-permanent" >> "$GITHUB_ENV"
             echo "TF_KEY_ALIAS=tubeforge" >> "$GITHUB_ENV"
-            echo "TF_KEY_PASS=TFkey-2026-permanent" >> "$GITHUB_ENV"
+            echo "TF_KEY_PASS=TFstore-2026-permanent" >> "$GITHUB_ENV"
           else
             echo "::warning::TF_KEYSTORE_B64 secret not set — APK will be unsigned"
           fi
