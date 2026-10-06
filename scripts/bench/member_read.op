@@ -1,0 +1,99 @@
+# bench: member_read — the P4-safe member-access cost ladder (builder-A)
+# The `.`/`?.` member-read surface (interp member_value) was the last linear
+# map scan in the read family: every access walked entries in insertion order
+# until the first Value::Str match. Legs (each times N reads in a plain while
+# loop; the loop is identical across legs, the KEY choice isolates the scan):
+#   late  — read the LAST-inserted key of a 6000-key map (linear worst case:
+#           full-depth scan per read) vs the hashed memo
+#   early — read the FIRST-inserted key (linear best case, position 0; the
+#           control that shows the hashed path's constant is competitive)
+#   miss  — read a missing key (linear = full scan + note; hashed = O(1)
+#           miss-trust) — the mapmiss residual the P5/P6 survey attributed
+#           to the dispatch surface
+#   obj8  — phenotype field read, last-declared of 8 fields
+#   obj1  — phenotype field read, first-declared (depth-1 control)
+# Output lines: MEMBER leg=<name> n=<N> ns_per_read=<ns> ck=<checksum>
+# The checksum proves both binaries do the same work.
+gene build_map(n) {
+    let m = {}
+    for i in range(n) {
+        m["k" + str(i)] = i * 3
+    }
+    return m
+}
+
+gene leg_late(m, n) {
+    let s = 0
+    let i = 0
+    while i < n { s = s + m.k5999 ; i = i + 1 }
+    return s
+}
+
+gene leg_early(m, n) {
+    let s = 0
+    let i = 0
+    while i < n { s = s + m.k0 ; i = i + 1 }
+    return s
+}
+
+gene leg_miss(m, n) {
+    let s = 0
+    let i = 0
+    while i < n { let x = m.zzz ; s = s + 1 ; i = i + 1 }
+    return s
+}
+
+gene leg_obj8(o, n) {
+    let s = 0
+    let i = 0
+    while i < n { s = s + o.f8 ; i = i + 1 }
+    return s
+}
+
+gene leg_obj1(o, n) {
+    let s = 0
+    let i = 0
+    while i < n { s = s + o.f1 ; i = i + 1 }
+    return s
+}
+
+phenotype Rec {
+    let f1 = 11
+    let f2 = 22
+    let f3 = 33
+    let f4 = 44
+    let f5 = 55
+    let f6 = 66
+    let f7 = 77
+    let f8 = 88
+}
+
+gene main() {
+    let m = build_map(6000)
+    let o = new Rec()
+    let n_slow = 2000
+    let n_fast = 200000
+    let reps = 3
+    let r = 0
+    while r < reps {
+        let t0 = clock()
+        let s1 = leg_late(m, n_slow)
+        let t1 = clock()
+        let s2 = leg_early(m, n_fast)
+        let t2 = clock()
+        let s3 = leg_miss(m, n_slow)
+        let t3 = clock()
+        let s4 = leg_obj8(o, n_fast)
+        let t4 = clock()
+        let s5 = leg_obj1(o, n_fast)
+        let t5 = clock()
+        if r == reps - 1 {
+            promote("MEMBER leg=late n={n_slow} ns_per_read={(t1 - t0) * 1e9 / n_slow} ck={s1}")
+            promote("MEMBER leg=early n={n_fast} ns_per_read={(t2 - t1) * 1e9 / n_fast} ck={s2}")
+            promote("MEMBER leg=miss n={n_slow} ns_per_read={(t3 - t2) * 1e9 / n_slow} ck={s3}")
+            promote("MEMBER leg=obj8 n={n_fast} ns_per_read={(t4 - t3) * 1e9 / n_fast} ck={s4}")
+            promote("MEMBER leg=obj1 n={n_fast} ns_per_read={(t5 - t4) * 1e9 / n_fast} ck={s5}")
+        }
+        r = r + 1
+    }
+}
