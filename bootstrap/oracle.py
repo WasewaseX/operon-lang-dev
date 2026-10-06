@@ -10,6 +10,7 @@ Deliberately sequential: spawn() runs tasks inline (deterministic), which is
 equivalent for the differential corpus.
 """
 import sys, os, math, json as _json
+import copy  # P6-wave fix: per-instance gene closure (mirror of Value::Gene(def, env))
 import weakref  # W013: weak handles, the mirror of the Rust WeakHandle
 import unicodedata  # W28 stage 2: THE reference implementation for NFC/NFD/category
 
@@ -4211,8 +4212,17 @@ class Interp:
                 return
             if g.name and g.name not in self.defined_genes:
                 self.defined_genes.append(g.name)
-            g.closure = env
-            env[g.name or "<lambda>"] = g
+            # P6-wave fix (loop-capture pin): the closure rides the VALUE,
+            # not the shared AST node — the Rust core pairs the def with the
+            # definition env at value creation (Value::Gene(def, env)), so
+            # two executions of the same syntactic gene inside a loop
+            # capture DIFFERENT iteration envs. Mutating g.closure made
+            # every instance share the last definition env (cap:2,2,2
+            # vs the core's 0,1,2). Shallow copy: body/params stay shared,
+            # closure becomes per-instance.
+            inst = copy.copy(g)
+            inst.closure = env
+            env[inst.name or "<lambda>"] = inst
         elif k == "pheno":
             p = s[1]
             self.phenos[p.name] = p
@@ -4499,8 +4509,11 @@ class Interp:
         if k == "lambda":
             g = e[1]
             g.name = g.name or "<lambda>"
-            g.closure = env
-            return g
+            # P6-wave fix: per-instance closure (see the gene-stmt arm).
+            inst = copy.copy(g)
+            inst.name = g.name
+            inst.closure = env
+            return inst
         if k == "collect":
             _, var, it, filt, body = e
             itv = self.eval(env, it)

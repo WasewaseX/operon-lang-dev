@@ -1105,6 +1105,13 @@ fn exec_gene_code_inner(
 ) -> Result<Flow, Stress> {
     let mut scopes: Vec<Rc<Env>> = Vec::new();
     let mut cur = env.clone();
+    // P6-wave: per-call scope-env cache. EnterScope normally mints a fresh
+    // child Env per block entry (per loop iteration for compiled loops);
+    // ExitScope stashes the child back when NOTHING captured it (sole
+    // reference) with its maps cleared (capacity preserved), and EnterScope
+    // pops it instead of allocating. A captured env fails the strong-count
+    // check and drops normally — byte-identical to the fresh-Env scheme.
+    let mut scope_cache: Vec<Rc<Env>> = Vec::new();
     let mut ip: usize = 0;
     // W011-r2: the ablation/counters flags are process-constant (set once by
     // init_from_env before any machine runs; no writer exists) — loading
@@ -1173,9 +1180,12 @@ fn exec_gene_code_inner(
                 }
             }
             Instr::StoreName(idx) => {
-                let name = code.names[*idx as usize].clone();
+                // P6-wave: the name is borrowed (the clone was a malloc per
+                // binding) and the presence check uses contains() (P5) —
+                // get() cloned the bound value just to test presence.
+                let name = code.names[*idx as usize].as_str();
                 let v = stack.pop().unwrap_or(Value::Null);
-                if cur.get(&name).is_some() {
+                if cur.contains(name) {
                     interp.note(0, 4, format!("rebinding '{}'", name));
                 }
                 // NOTE: StoreName is deliberately NOT slot-routed. A slot
@@ -1183,12 +1193,14 @@ fn exec_gene_code_inner(
                 // (the binder walk marks every let name as shadowed), so
                 // a StoreName can never target a slot — the env path here
                 // is the only path.
-                cur.define(&name, v);
+                cur.define(name, v);
             }
             Instr::AssignName(idx) => {
-                let name = code.names[*idx as usize].clone();
+                // P6-wave: the name is borrowed, not cloned (per-assignment
+                // malloc; m_intadd measures one AssignName per iteration).
+                let name = code.names[*idx as usize].as_str();
                 let v = stack.pop().unwrap_or(Value::Null);
-                if cur.is_const(&name) {
+                if cur.is_const(name) {
                     return Err(Stress::new(
                         "frozen",
                         format!("cannot reassign const '{}'", name),
@@ -1210,10 +1222,10 @@ fn exec_gene_code_inner(
                         // rebinds it: true, no note — byte-equal to the
                         // env path, DEF_GEN bump included.
                         *dst = v.clone();
-                        let _ = cur.set(&name, v);
+                        let _ = cur.set(name, v);
                     }
                     None => {
-                        if !cur.set(&name, v) {
+                        if !cur.set(name, v) {
                             interp.note(
                                 0,
                                 4,
@@ -1474,10 +1486,24 @@ fn exec_gene_code_inner(
             Instr::Cont(t) => ip = *t as usize,
             Instr::EnterScope => {
                 scopes.push(cur.clone());
-                cur = Env::new(Some(cur.clone()));
+                cur = match scope_cache.pop() {
+                    Some(c) => c,
+                    None => Env::new(Some(cur.clone())),
+                };
             }
             Instr::ExitScope => {
                 if let Some(p) = scopes.pop() {
+                    // P6-wave: stash the scope env for reuse when nothing
+                    // captured it — the clear is capacity-preserving, so a
+                    // loop body's next iteration reuses the same maps with
+                    // zero allocator traffic. A captured env fails the
+                    // strong-count check and drops normally, exactly the
+                    // fresh-Env lifetime its capturer expects.
+                    if scope_cache.len() < 8 && Rc::strong_count(&cur) == 1 {
+                        cur.vars.borrow_mut().clear();
+                        cur.consts.borrow_mut().clear();
+                        scope_cache.push(cur.clone());
+                    }
                     cur = p;
                 }
             }
@@ -1564,6 +1590,11 @@ pub struct VmFrame {
     pub stack: Vec<Value>,
     pub scopes: Vec<Rc<Env>>,
     pub cur: Rc<Env>,
+    /// P6-wave: per-frame scope-env cache (the fiber machine's mirror of
+    /// the sync machine's per-call local). EnterScope pops a cached env
+    /// (maps cleared, capacity preserved) instead of minting one; a captured
+    /// env fails the strong-count check at stash time and drops normally.
+    pub scope_cache: Vec<Rc<Env>>,
     /// traceback identity (the call_gene chain frame: name + call line)
     pub gene: String,
     pub entry_line: usize,
@@ -1688,6 +1719,7 @@ fn fiber_push_frame(interp: &mut Interp, fiber: &mut Fiber, ff: FiberFrame) -> R
         stack,
         scopes: Vec::new(),
         cur: ff.fenv,
+        scope_cache: Vec::new(),
         gene: ff.name,
         entry_line: ff.entry_line,
         ret_ann: ff.def.ret_ann.clone(),
@@ -1834,6 +1866,7 @@ fn fiber_run_inner(interp: &mut Interp, fiber: &mut Fiber) -> Result<FiberOutcom
             stack,
             scopes,
             cur,
+            scope_cache,
             ..
         } = fr;
         let instr = match code.code.get(cur_ip) {
@@ -1863,23 +1896,25 @@ fn fiber_run_inner(interp: &mut Interp, fiber: &mut Fiber) -> Result<FiberOutcom
                 stack.push(cur.get(name).unwrap_or(Value::Null));
             }
             Instr::StoreName(idx) => {
-                let name = code.names[*idx as usize].clone();
+                // P6-wave (fiber mirror): borrowed name + contains() check.
+                let name = code.names[*idx as usize].as_str();
                 let v = stack.pop().unwrap_or(Value::Null);
-                if cur.get(&name).is_some() {
+                if cur.contains(name) {
                     interp.note(0, 4, format!("rebinding '{}'", name));
                 }
-                cur.define(&name, v);
+                cur.define(name, v);
             }
             Instr::AssignName(idx) => {
-                let name = code.names[*idx as usize].clone();
+                // P6-wave (fiber mirror): borrowed name.
+                let name = code.names[*idx as usize].as_str();
                 let v = stack.pop().unwrap_or(Value::Null);
-                if cur.is_const(&name) {
+                if cur.is_const(name) {
                     return Err(Stress::new(
                         "frozen",
                         format!("cannot reassign const '{}'", name),
                     ));
                 }
-                if !cur.set(&name, v) {
+                if !cur.set(name, v) {
                     interp.note(0, 4, format!("'{}' was not declared; auto-declared", name));
                 }
             }
@@ -2143,10 +2178,23 @@ fn fiber_run_inner(interp: &mut Interp, fiber: &mut Fiber) -> Result<FiberOutcom
             Instr::Cont(t) => *ip = *t as usize,
             Instr::EnterScope => {
                 scopes.push(cur.clone());
-                *cur = Env::new(Some(cur.clone()));
+                let next = match scope_cache.pop() {
+                    Some(c) => c,
+                    None => Env::new(Some(cur.clone())),
+                };
+                *cur = next;
             }
             Instr::ExitScope => {
                 if let Some(p) = scopes.pop() {
+                    // P6-wave: stash for reuse when nothing captured this
+                    // scope env (sole reference, maps cleared capacity-
+                    // preserving); captured envs drop normally — the exact
+                    // fresh-Env lifetime its capturer expects.
+                    if scope_cache.len() < 8 && Rc::strong_count(cur) == 1 {
+                        cur.vars.borrow_mut().clear();
+                        cur.consts.borrow_mut().clear();
+                        scope_cache.push(cur.clone());
+                    }
                     *cur = p;
                 }
             }
