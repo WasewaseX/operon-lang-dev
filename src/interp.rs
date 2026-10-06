@@ -2573,7 +2573,12 @@ impl Interp {
                         ));
                     }
                     mem_charge(a.len() as u64 + b.len() as u64)?;
-                    Ok(Value::Str(format!("{}{}", a, b)))
+                    // perf-xlang-r1: exact-capacity concat (was format! —
+                    // Display machinery + realloc growth per op)
+                    let mut out = String::with_capacity(a.len() + b.len());
+                    out.push_str(a);
+                    out.push_str(b);
+                    Ok(Value::Str(out))
                 }
                 (Value::List(a), Value::List(b)) => {
                     if a.borrow().len().saturating_add(b.borrow().len()) > 64 * 1024 * 1024 {
@@ -4129,7 +4134,15 @@ impl Interp {
                 }
             }
         }
-        *self.call_counts.entry(name.clone()).or_insert(0) += 1;
+        // perf-xlang-r1: steady-state zero-alloc counters — get_mut on the
+        // borrowed name covers every repeat call; the clone only fires on
+        // the first call of a gene (was 2 String clones per call here).
+        match self.call_counts.get_mut(name.as_str()) {
+            Some(c) => *c += 1,
+            None => {
+                self.call_counts.insert(name.clone(), 1);
+            }
+        }
         // burst-index binning: 20 calls per bin, per gene (gene-expression
         // burstiness is measured on per-gene time bins, not across genes)
         self.call_clock += 1;
@@ -4140,12 +4153,14 @@ impl Interp {
         self.m6a_decay_own();
         self.grn_decay_tick();
         let bucket = self.call_clock / 20;
-        *self
-            .gene_buckets
-            .entry(name.clone())
-            .or_default()
-            .entry(bucket)
-            .or_insert(0) += 1;
+        match self.gene_buckets.get_mut(name.as_str()) {
+            Some(bins) => *bins.entry(bucket).or_insert(0) += 1,
+            None => {
+                let mut bins = HashMap::new();
+                bins.insert(bucket, 1u64);
+                self.gene_buckets.insert(name.clone(), bins);
+            }
+        }
         // @methylate: transcriptionally repressed genes announce their first
         // call (suppressed by .cell `methylate.quiet = true`)
         if def.methylate && !self.methyl_quiet && !self.methyl_noted.contains(&name) {
@@ -4533,7 +4548,14 @@ impl Interp {
             );
             return Ok(Value::Null);
         }
-        *self.call_counts.entry(name.clone()).or_insert(0) += 1;
+        // perf-xlang-r1: zero-alloc counters on the repeat-call path (mirror
+        // of the gene funnel change above).
+        match self.call_counts.get_mut(name.as_str()) {
+            Some(c) => *c += 1,
+            None => {
+                self.call_counts.insert(name.clone(), 1);
+            }
+        }
         self.call_clock += 1;
         // reg-bio-2 (C2): the decay clock ticks on the phenotype-method path
         // too (both expression surfaces share one timebase).
@@ -4541,12 +4563,14 @@ impl Interp {
         self.m6a_decay_own();
         self.grn_decay_tick();
         let bucket = self.call_clock / 20;
-        *self
-            .gene_buckets
-            .entry(name.clone())
-            .or_default()
-            .entry(bucket)
-            .or_insert(0) += 1;
+        match self.gene_buckets.get_mut(name.as_str()) {
+            Some(bins) => *bins.entry(bucket).or_insert(0) += 1,
+            None => {
+                let mut bins = HashMap::new();
+                bins.insert(bucket, 1u64);
+                self.gene_buckets.insert(name.clone(), bins);
+            }
+        }
         if def.methylate && !self.methyl_quiet && !self.methyl_noted.contains(&name) {
             self.methyl_noted.insert(name.clone());
             self.note(
