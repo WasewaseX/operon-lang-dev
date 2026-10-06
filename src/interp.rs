@@ -81,6 +81,37 @@ impl Drop for Env {
     }
 }
 
+/// P6-wave loop-env reuse: take a cached iteration child env back, or mint
+/// a fresh one. A fresh-per-iteration child Env is the loop contract of
+/// every loop lane; the ONLY observable way reuse could differ is a value
+/// created inside the body that outlives the iteration while holding the
+/// env (a gene/lambda closure). `Rc::strong_count == 1` proves no such
+/// holder exists — the caller's cache holds the only reference — so
+/// clearing and reusing is byte-identical to allocating a fresh Env: the
+/// next iteration sees an empty child scope (same reads walk to the parent,
+/// same unbound notes), and bindings do not leak out of the loop. If
+/// anything DID capture the env, the check fails and a fresh Env is minted;
+/// the captured env keeps exactly the values its iteration had — the same
+/// lifetime the fresh-Env scheme gives it. Caches are SITE-LOCAL (each loop
+/// site owns its cache slot for the whole loop execution), so the minted
+/// parent chain stays correct for every iteration and no re-anchor exists.
+pub(crate) fn loop_scope_env(cache: &mut Option<Rc<Env>>, parent: &Rc<Env>) -> Rc<Env> {
+    if let Some(c) = cache.take() {
+        // Exactly one holder (our cache slot): nothing captured this env in
+        // the iteration that produced it. Clear resets per-iteration state
+        // (bindings AND consts) while PRESERVING the HashMap capacity — the
+        // reuse win: no allocator traffic for the rest of the loop.
+        if Rc::strong_count(&c) == 1 {
+            c.vars.borrow_mut().clear();
+            c.consts.borrow_mut().clear();
+            return c;
+        }
+        // captured elsewhere: the taken cache env drops here; its captures
+        // keep it alive exactly as the fresh-Env scheme would
+    }
+    Env::new(Some(parent.clone()))
+}
+
 impl Env {
     /// W05: a const binding, records the name so later assignment stresses.
     /// W011-r2 note: define/set/define_const keep owned String keys — the
@@ -136,16 +167,22 @@ impl Env {
         false
     }
     /// Assign: rebind where found, else define in this (current) scope.
+    /// P6-wave: a single hash lookup per level (get_mut) instead of the
+    /// contains_key+insert pair — the overwrite path no longer mallocs a
+    /// throwaway key String (insert with an existing equal key keeps the
+    /// original key and drops the passed one). Identical results, identical
+    /// notes: found → rebind in place (true); missing → insert here (false,
+    /// the caller's auto-decl note).
     pub fn set(&self, name: &str, val: Value) -> bool {
         def_gen_bump();
-        if self.vars.borrow().contains_key(name) {
-            self.vars.borrow_mut().insert(name.to_string(), val);
+        if let Some(slot) = self.vars.borrow_mut().get_mut(name) {
+            *slot = val;
             return true;
         }
         let mut node = self.parent.clone();
         while let Some(env) = node {
-            if env.vars.borrow().contains_key(name) {
-                env.vars.borrow_mut().insert(name.to_string(), val);
+            if let Some(slot) = env.vars.borrow_mut().get_mut(name) {
+                *slot = val;
                 return true;
             }
             node = env.parent.clone();
@@ -2491,13 +2528,16 @@ impl Interp {
                 Ok(Flow::Norm)
             }
             Stmt::While(cond, body) => {
+                // P6-wave: site-local iteration-env reuse (see
+                // loop_scope_env — capture-proof via strong_count)
+                let mut scope_cache: Option<Rc<Env>> = None;
                 loop {
                     self.tick()?;
                     let c = self.eval(env, cond)?;
                     if !c.truthy() {
                         break;
                     }
-                    let child = Env::new(Some(env.clone()));
+                    let child = crate::interp::loop_scope_env(&mut scope_cache, env);
                     match self.exec_block(&child, body)? {
                         Flow::Brk => break,
                         Flow::Ret(v) => return Ok(Flow::Ret(v)),
@@ -2507,9 +2547,12 @@ impl Interp {
                 Ok(Flow::Norm)
             }
             Stmt::Loop(body) => {
+                // P6-wave: site-local iteration-env reuse (see
+                // loop_scope_env — capture-proof via strong_count)
+                let mut scope_cache: Option<Rc<Env>> = None;
                 loop {
                     self.tick()?;
-                    let child = Env::new(Some(env.clone()));
+                    let child = crate::interp::loop_scope_env(&mut scope_cache, env);
                     match self.exec_block(&child, body)? {
                         Flow::Brk => break,
                         Flow::Ret(v) => return Ok(Flow::Ret(v)),
@@ -2619,9 +2662,14 @@ impl Interp {
                             return Err(Stress::new("overflow", "range too large"));
                         }
                         let mut i = a;
+                        // P6-wave: one site-local cache slot for the whole
+                        // loop execution; loop_scope_env reuses the previous
+                        // iteration's child env when nothing captured it
+                        // (byte-identical semantics, no allocator traffic).
+                        let mut scope_cache: Option<Rc<Env>> = None;
                         while (step > 0 && i < b) || (step < 0 && i > b) {
                             self.tick()?;
-                            let child = Env::new(Some(env.clone()));
+                            let child = crate::interp::loop_scope_env(&mut scope_cache, env);
                             child.define(name, Value::Int(i));
                             match self.exec_block(&child, body)? {
                                 Flow::Brk => break,
@@ -2639,12 +2687,15 @@ impl Interp {
                 let itv = self.eval(env, iter)?;
                 if let Value::Seq(_def, st) = itv {
                     // lazy pull iteration over a sequence
+                    // P6-wave: site-local iteration-env reuse (see
+                    // loop_scope_env — capture-proof via strong_count)
+                    let mut scope_cache: Option<Rc<Env>> = None;
                     loop {
                         self.tick()?;
                         let v = self.seq_pull(&st)?;
                         match v {
                             Some(item) => {
-                                let child = Env::new(Some(env.clone()));
+                                let child = crate::interp::loop_scope_env(&mut scope_cache, env);
                                 child.define(name, item);
                                 match self.exec_block(&child, body)? {
                                     Flow::Brk => break,
@@ -2672,9 +2723,12 @@ impl Interp {
                         Vec::new()
                     }
                 };
+                // P6-wave: site-local iteration-env reuse (see
+                // loop_scope_env — capture-proof via strong_count)
+                let mut scope_cache: Option<Rc<Env>> = None;
                 for item in items {
                     self.tick()?;
-                    let child = Env::new(Some(env.clone()));
+                    let child = crate::interp::loop_scope_env(&mut scope_cache, env);
                     child.define(name, item);
                     match self.exec_block(&child, body)? {
                         Flow::Brk => break,
