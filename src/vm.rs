@@ -98,6 +98,15 @@ pub enum Instr {
     StoreName(u32),
     /// assignment semantics: const check, set, auto-declare note
     AssignName(u32),
+    /// P5 builder fast path: pop the rhs, then append it to the named
+    /// string slot IN PLACE (amortized O(|rhs|)) — the compiled form of
+    /// `s += x` (loud=false: the general sequence it replaces reads the
+    /// slot quietly) and `s = s + <pure rhs>` (loud=true: the replaced
+    /// sequence reads the slot with the full LoadName arm). Falls back to
+    /// the EXACT replaced instruction sequence (read + Bin(Add) +
+    /// AssignName) for every non-Str shape, unbound names, const targets
+    /// and slot targets, so observable behavior is byte-identical.
+    AppendName(u32, bool),
     /// shared apply_binop (exact kinds, messages, line stamps)
     Bin(BinOp),
     /// W11 superinstruction: pop lhs, push consts[idx] as rhs, apply the
@@ -446,9 +455,47 @@ impl<'a> Compiler<'a> {
                 Vec::new()
             }
             Stmt::Assign(name, None, e) => {
+                // P5: `s = s + <pure rhs>` compiles rhs + AppendName(loud).
+                // The general path reads the slot BEFORE the rhs evaluates,
+                // the fast path appends AFTER it, so the shape is only taken
+                // when the rhs is statically side-effect-free (same gate as
+                // the tree-walk, crate::interp::expr_is_pure) — anything
+                // else keeps the exact old sequence.
+                if let Expr::Binary(BinOp::Add, lhs, rhs, _) = e {
+                    if matches!(lhs.as_ref(), Expr::Ident(n) if n.as_str() == name.as_str())
+                        && crate::interp::expr_is_pure(rhs)
+                    {
+                        let nidx = intern_name(&mut self.names, name);
+                        self.expr_or_bridge(rhs, line);
+                        self.emit(Instr::AppendName(nidx, true), line);
+                        return Vec::new();
+                    }
+                }
                 self.expr_or_bridge(e, line);
                 let idx = intern_name(&mut self.names, name);
                 self.emit(Instr::AssignName(idx), line);
+                Vec::new()
+            }
+            Stmt::Assign(name, Some(BinOp::Add), e) => {
+                // P5: `s += x` compiles rhs + AppendName(quiet). The VM's
+                // general compound sequence reads the slot BEFORE the rhs
+                // (LoadNameQuiet first), the tree-walk reads it AFTER, and
+                // the fast path appends after — so this shape is gated on
+                // the same purity test, under which pre-rhs and post-rhs
+                // slot state are identical and both engines stay
+                // byte-exact against their own general paths.
+                if crate::interp::expr_is_pure(e) {
+                    let nidx = intern_name(&mut self.names, name);
+                    self.expr_or_bridge(e, line);
+                    self.emit(Instr::AppendName(nidx, false), line);
+                    return Vec::new();
+                }
+                // compound: quiet read, binop, write (tree-walk order)
+                let nidx = intern_name(&mut self.names, name);
+                self.emit(Instr::LoadNameQuiet(nidx), line);
+                self.expr_or_bridge(e, line);
+                self.emit(Instr::Bin(BinOp::Add), line);
+                self.emit(Instr::AssignName(nidx), line);
                 Vec::new()
             }
             Stmt::Assign(name, Some(op), e) => {
@@ -1176,6 +1223,98 @@ fn exec_gene_code_inner(
                     }
                 }
             }
+            Instr::AppendName(idx, loud) => {
+                // P5 builder fast path: pop the rhs, append to the named
+                // string slot in place. The fallback below reproduces the
+                // EXACT replaced sequence — LoadName(Quiet) + Bin(Add) +
+                // AssignName — for every shape the fast path refuses
+                // (non-Str operands, unbound names, const targets, slot
+                // targets), so observable behavior is byte-identical.
+                let name = code.names[*idx as usize].clone();
+                let r = stack.pop().unwrap_or(Value::Null);
+                let mut fast_done = false;
+                // slot targets keep the general path wholesale: the
+                // write-through re-binds the env copy anyway, so an
+                // in-place append has nothing to win there
+                if slot_read(slot_frame.as_ref(), *idx).is_none() {
+                    let mut node = Some(cur.clone());
+                    while let Some(env_node) = node {
+                        let hit = env_node.vars.borrow().contains_key(&name);
+                        if hit {
+                            if let Value::Str(suffix) = &r {
+                                let mut vars = env_node.vars.borrow_mut();
+                                if let Some(Value::Str(slot_s)) = vars.get_mut(&name) {
+                                    // Bin(Add) position: ceiling, then charge
+                                    let new_len = slot_s.len().saturating_add(suffix.len());
+                                    if new_len > 512 * 1024 * 1024 {
+                                        return Err(Stress::new(
+                                            "overflow",
+                                            "string concat exceeds the 512 MiB ceiling",
+                                        ));
+                                    }
+                                    crate::interp::mem_charge(
+                                        slot_s.len() as u64 + suffix.len() as u64,
+                                    )?;
+                                    // AssignName position: const check
+                                    if cur.is_const(&name) {
+                                        return Err(Stress::new(
+                                            "frozen",
+                                            format!("cannot reassign const '{}'", name),
+                                        ));
+                                    }
+                                    slot_s.push_str(suffix);
+                                    fast_done = true;
+                                }
+                            }
+                            break;
+                        }
+                        node = env_node.parent.clone();
+                    }
+                }
+                if !fast_done {
+                    // EXACT fallback — the read half (loud = the full
+                    // LoadName arm with clone charge + unbound note; quiet
+                    // = LoadNameQuiet), then Bin(Add), then AssignName
+                    // verbatim (slot write included).
+                    let l = if *loud {
+                        match slot_read(slot_frame.as_ref(), *idx).or_else(|| cur.get(&name)) {
+                            Some(v) => {
+                                crate::interp::charge_clone(&v)?;
+                                v
+                            }
+                            None => {
+                                interp.note(0, 4, format!("unbound '{}' read as null", name));
+                                Value::Null
+                            }
+                        }
+                    } else {
+                        slot_read(slot_frame.as_ref(), *idx)
+                            .unwrap_or_else(|| cur.get(&name).unwrap_or(Value::Null))
+                    };
+                    let v = interp.apply_binop(&cur, BinOp::Add, &l, &r)?;
+                    if cur.is_const(&name) {
+                        return Err(Stress::new(
+                            "frozen",
+                            format!("cannot reassign const '{}'", name),
+                        ));
+                    }
+                    match slot_write(slot_frame.as_mut(), *idx) {
+                        Some(dst) => {
+                            *dst = v.clone();
+                            let _ = cur.set(&name, v);
+                        }
+                        None => {
+                            if !cur.set(&name, v) {
+                                interp.note(
+                                    0,
+                                    4,
+                                    format!("'{}' was not declared; auto-declared", name),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
             Instr::Bin(op) => {
                 let r = stack.pop().unwrap_or(Value::Null);
                 let l = stack.pop().unwrap_or(Value::Null);
@@ -1744,6 +1883,76 @@ fn fiber_run_inner(interp: &mut Interp, fiber: &mut Fiber) -> Result<FiberOutcom
                     interp.note(0, 4, format!("'{}' was not declared; auto-declared", name));
                 }
             }
+            Instr::AppendName(idx, loud) => {
+                // P5 builder fast path — the fiber machine's mirror of the
+                // sync arm (no slot frames here: reads and writes go
+                // through the env chain directly). The fallback reproduces
+                // the EXACT replaced sequence — LoadName(Quiet) + Bin(Add)
+                // + AssignName, fiber-machine flavors — for every shape
+                // the fast path refuses.
+                let name = code.names[*idx as usize].clone();
+                let r = stack.pop().unwrap_or(Value::Null);
+                let mut fast_done = false;
+                let mut node = Some(cur.clone());
+                while let Some(env_node) = node {
+                    let hit = env_node.vars.borrow().contains_key(&name);
+                    if hit {
+                        if let Value::Str(suffix) = &r {
+                            let mut vars = env_node.vars.borrow_mut();
+                            if let Some(Value::Str(slot_s)) = vars.get_mut(&name) {
+                                // Bin(Add) position: ceiling, then charge
+                                let new_len = slot_s.len().saturating_add(suffix.len());
+                                if new_len > 512 * 1024 * 1024 {
+                                    return Err(Stress::new(
+                                        "overflow",
+                                        "string concat exceeds the 512 MiB ceiling",
+                                    ));
+                                }
+                                crate::interp::mem_charge(
+                                    slot_s.len() as u64 + suffix.len() as u64,
+                                )?;
+                                // AssignName position: const check
+                                if cur.is_const(&name) {
+                                    return Err(Stress::new(
+                                        "frozen",
+                                        format!("cannot reassign const '{}'", name),
+                                    ));
+                                }
+                                slot_s.push_str(suffix);
+                                fast_done = true;
+                            }
+                        }
+                        break;
+                    }
+                    node = env_node.parent.clone();
+                }
+                if !fast_done {
+                    let l = if *loud {
+                        match cur.get(&name) {
+                            Some(v) => {
+                                crate::interp::charge_clone(&v)?;
+                                v
+                            }
+                            None => {
+                                interp.note(0, 4, format!("unbound '{}' read as null", name));
+                                Value::Null
+                            }
+                        }
+                    } else {
+                        cur.get(&name).unwrap_or(Value::Null)
+                    };
+                    let v = interp.apply_binop(cur, BinOp::Add, &l, &r)?;
+                    if cur.is_const(&name) {
+                        return Err(Stress::new(
+                            "frozen",
+                            format!("cannot reassign const '{}'", name),
+                        ));
+                    }
+                    if !cur.set(&name, v) {
+                        interp.note(0, 4, format!("'{}' was not declared; auto-declared", name));
+                    }
+                }
+            }
             Instr::Bin(op) => {
                 let r = stack.pop().unwrap_or(Value::Null);
                 let l = stack.pop().unwrap_or(Value::Null);
@@ -2057,6 +2266,7 @@ fn mnemonic(i: &Instr) -> &'static str {
         Instr::LoadNameQuiet(_) => "LoadNameQuiet",
         Instr::StoreName(_) => "StoreName",
         Instr::AssignName(_) => "AssignName",
+        Instr::AppendName(..) => "AppendName",
         Instr::Bin(_) => "Bin",
         Instr::BinImm(..) => "BinImm",
         Instr::LoadBinImm(..) => "LoadBinImm",
@@ -2090,6 +2300,7 @@ pub fn all_mnemonics() -> &'static [&'static str] {
         "LoadNameQuiet",
         "StoreName",
         "AssignName",
+        "AppendName",
         "Bin",
         "BinImm",
         "LoadBinImm",
@@ -2127,6 +2338,11 @@ fn render(i: &Instr, code: &GeneCode) -> String {
             .get(*idx as usize)
             .cloned()
             .unwrap_or_else(|| format!("c{}", idx)),
+        Instr::AppendName(idx, loud) => format!(
+            "'{}'{}",
+            code.names.get(*idx as usize).cloned().unwrap_or_default(),
+            if *loud { " (loud)" } else { "" }
+        ),
         Instr::Bin(op) => format!("{:?}", op),
         Instr::BinImm(op, idx) => format!("{:?} {}", op, render_const(code, *idx)),
         Instr::LoadBinImm(nidx, op, idx) => format!(
@@ -2398,6 +2614,14 @@ pub fn optimize_with(code: &GeneCode, passes: PassSet) -> GeneCode {
                     last_push = None;
                 }
                 Instr::AssignName(nm) => {
+                    facts.remove(&nm);
+                    last_push = None;
+                }
+                Instr::AppendName(nm, _) => {
+                    // the fast path mutates the named slot in place (or
+                    // falls back to the read+binop+assign sequence it
+                    // replaces) — either way any folded constant for the
+                    // name is stale afterwards
                     facts.remove(&nm);
                     last_push = None;
                 }
@@ -3205,6 +3429,7 @@ gene main() {
             (&Instr::LoadNameQuiet(0), "LoadNameQuiet"),
             (&Instr::StoreName(0), "StoreName"),
             (&Instr::AssignName(0), "AssignName"),
+            (&Instr::AppendName(0, false), "AppendName"),
             (&Instr::Bin(BinOp::Add), "Bin"),
             (&Instr::BinImm(BinOp::Add, 0), "BinImm"),
             (&Instr::LoadBinImm(0, BinOp::Add, 0), "LoadBinImm"),
