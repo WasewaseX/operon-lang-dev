@@ -1,0 +1,205 @@
+# P2+P3+P5 differential pin: the optimization wave (2026-10-06, builder-A),
+# byte-identical on both engines. P2 — comparator sort replaced by a
+# tie-exact bottom-up merge above n=32 (the oracle keeps the insertion
+# walk, so this file IS the tie-rule proof); P3 — `for i in range(...)`
+# iterates bounds directly (O(1) memory) with the builtin's exact
+# observables; P5 — `s += x` / `s = s + <pure x>` append in place with the
+# Add arm's exact ceiling/charge surfaces.
+print("== P2: comparator sort, tie-heavy, n>32 (merge path) ==")
+gene cmp_len(a, b) { return len(a) < len(b) }
+gene cmp_val(a, b) { return a < b }
+gene make_ties(n) {
+    let xs = []
+    for i in range(n) {
+        push(xs, "v" + str(i % 7) + "_" + str(i))
+    }
+    return xs
+}
+let t50 = make_ties(50)
+print(sorted(t50, cmp_len).join("|"))
+print(sorted(t50, cmp_val).join("|"))
+let m100 = []
+for i in range(100) {
+    push(m100, (i * 37) % 100)
+}
+print(sorted(m100, cmp_val).join(","))
+print(sorted([], cmp_val).join(","))
+print(sorted([5], cmp_val).join(","))
+# method form, small (insertion path kept verbatim) and large (merge path)
+let small = [4, 2, 4, 1, 2]
+small.sort(cmp_val)
+print(small.join(","))
+let big = []
+for i in range(64) {
+    push(big, (i * 13) % 9)
+}
+big.sort(cmp_val)
+print(big.join(","))
+# comparator with side effects stays order-observable at small n
+let calls = 0
+gene cmp_count(a, b) {
+    calls = calls + 1
+    return a < b
+}
+let cs = []
+for i in range(20) {
+    push(cs, (i * 7) % 5)
+}
+print(sorted(cs, cmp_count).join(","))
+print("calls:" + str(calls))
+print("== P3: lazy for-range, exact builtin observables ==")
+let acc = 0
+for i in range(10) {
+    acc = acc + i
+}
+print("r1:" + str(acc))
+for i in range(2, 8) {
+    print("r2:" + str(i))
+}
+for i in range(10, 0, -3) {
+    print("r3:" + str(i))
+}
+for i in range(0, 0) {
+    print("r4-never")
+}
+for i in range(5, 5) {
+    print("r5-never")
+}
+for i in range(0, 10, 4) {
+    print("r6:" + str(i))
+}
+# break/continue ride the same flow machinery
+let seen = ""
+for i in range(20) {
+    if i == 3 {
+        continue
+    }
+    if i == 7 {
+        break
+    }
+    seen = seen + str(i) + ";"
+}
+print("r7:" + seen)
+# non-int args: the builtin's note + empty loop
+for i in range("x") {
+    print("r8-never")
+}
+for i in range(1, "y") {
+    print("r9-never")
+}
+# step 0: the builtin's unfolded stress, caught
+stress {
+    for i in range(0, 9, 0) {
+        print("r10-never")
+    }
+    print("r10-no-stress")
+} rescue (e) {
+    print("r10:[" + e.kind + "] " + e.message)
+}
+# ceiling: the builtin's overflow stress at 10M+, caught
+stress {
+    for i in range(10000000, 30000000) {
+        print("r11-never")
+    }
+    print("r11-no-stress")
+} rescue (e) {
+    print("r11:[" + e.kind + "] " + e.message)
+}
+stress {
+    for i in range(0, 30000000, 2) {
+        print("r12-never")
+    }
+    print("r12-no-stress")
+} rescue (e) {
+    print("r12:[" + e.kind + "] " + e.message)
+}
+# negative step over a wide span stays under the ceiling and runs
+let down = 0
+for i in range(30, -30, -7) {
+    down = down + 1
+}
+print("r13:" + str(down))
+# range results OUTSIDE for-loops still materialize via the builtin
+let rl = range(5)
+print("r14:" + str(len(rl)) + ":" + rl.join(","))
+print("r15:" + str(range(2, 11, 3)[1]))
+print("== P5: in-place string appends, exact observable surfaces ==")
+let s = ""
+for i in range(200) {
+    s = s + "x"
+}
+print("p1:" + str(len(s)))
+let s2 = ""
+for i in range(50) {
+    s2 += "ab" + str(i % 3)
+}
+print("p2:" + str(len(s2)) + ":" + s2)
+# impure rhs (gene call) on += — the tree-walk reads the slot after the rhs
+let log = ""
+gene bump() {
+    log = log + "B"
+    return "v"
+}
+let s3 = "S"
+s3 += bump()
+print("p3:" + s3 + ":" + log)
+# += on ints keeps the arithmetic path
+let n = 10
+n += 5
+print("p4:" + str(n))
+# += string + int: the Add arm refuses the mix — the exact containment,
+# caught (the fall-through general path owns this shape, unchanged)
+let s4 = "n="
+stress {
+    s4 += 7
+    print("p5-no-stress")
+} rescue (e) {
+    print("p5:[" + e.kind + "] " + e.message)
+}
+print("p5b:" + s4)
+# s = s + s (self read, pure) — append of the current bytes
+let s5 = "Q"
+s5 = s5 + s5
+print("p6:" + s5)
+# impure rhs on `s = s + ...` takes the general path exactly
+let s6 = "A"
+s6 = s6 + bump()
+print("p7:" + s6 + ":" + log)
+# const target: frozen stress, caught (both shapes)
+const c = "K"
+stress {
+    c += "z"
+    print("p8-no-stress")
+} rescue (e) {
+    print("p8:[" + e.kind + "] " + e.message)
+}
+stress {
+    c = c + "z"
+    print("p9-no-stress")
+} rescue (e) {
+    print("p9:[" + e.kind + "] " + e.message)
+}
+print("p8b:" + c)
+# unbound target on both shapes: the general paths' stresses, caught
+stress {
+    fresh1 += "z"
+    print("p10-no-stress")
+} rescue (e) {
+    print("p10:[" + e.kind + "] " + e.message)
+}
+stress {
+    fresh2 = fresh2 + "z"
+    print("p11-no-stress")
+} rescue (e) {
+    print("p11:[" + e.kind + "] " + e.message)
+}
+# append where the slot is in an outer scope (chain walk)
+let outer = "O"
+gene touch() {
+    outer += "!"
+    return 0
+}
+let _ = touch()
+print("p12:" + outer)
+# appended bytes are visible to every read surface
+print("p13:" + s + "|" + s5 + "|" + str(len(s)))

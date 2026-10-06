@@ -31,11 +31,21 @@ LOAD_SENSITIVE="tests/redteam/rt_p4a_threadbomb.op tests/redteam/rt_p4b_threadbo
 # normalize the two variants to one token BEFORE the stderr comparison while
 # stdout and exit codes stay STRICTLY byte-compared, and any third note
 # variant still fails. The engine-lane determinism fix is tracked on #59.
-RACY_NOTE="tests/differential/scope.op"
+#
+# rt_p17b_scope_cancel (P2P3P5 wave, 2026-10-06): the same storm class, but
+# the racy note is a LOOP-EMITTED one — busy() rebinds 's' every iteration
+# and cancel can land at ANY loop position, so the count of "rebinding 's'"
+# notes is 0..N by timing, not by semantics (the P3 lazy range shifted the
+# race window and exposed the payload's latent flake in this sweep; 9/9
+# serial runs byte-identical, divergence only under load). RACY_NOTE files
+# drop those loop-emitted rebinding lines before the compare; every other
+# note, all stdout and all exit codes stay strictly byte-compared.
+RACY_NOTE="tests/differential/scope.op tests/redteam/rt_p17b_scope_cancel.op"
 norm_notes() {
     printf '%s' "$1" \
       | sed -E 's/\[fallback\] task [0-9]+ already finished/[TASK-CONTAINED]/' \
-      | sed -E 's/\[fallback\] cancel requested for task [0-9]+/[TASK-CONTAINED]/'
+      | sed -E 's/\[fallback\] cancel requested for task [0-9]+/[TASK-CONTAINED]/' \
+      | grep -v "\[fallback\] \[task busy\] rebinding 's'" | grep -v "^\[fallback\] rebinding 's'" || true
 }
 pass=0; fail=0; lskip=0; failed_files=()
 for f in $(find tests apps -name '*.op' 2>/dev/null | sort); do

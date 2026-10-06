@@ -910,3 +910,96 @@ call-path constant measured through two different doors.
   388 ns floor for the lazy-fenv-class redesign (owner-gated per §34), (2)
   the per-arg 157-166 ns and the slot write-through reversal for the binding
   path, (3) the +49.8 ns bridge delta for builtin-call batching.
+
+## P2+P3+P5 — the fix wave (2026-10-06, builder-A)
+
+The three evidence-backed fix directions from the audits above landed as one
+wave (owner-authorized "start optimization"), zero contract drift — the
+differential corpus (3,615 programs × 2 lanes), vm parity (3,575 programs ×
+4 modes), the compat matrix (3,204 × 5 engines), proofs (143/143, 2,285
+asserts, both engines), redteam (109/0) and cargo tests (129/0) all green on
+the wave head. Pins: `tests/differential/p2p3p5_opt_pins.op` (byte-identical
+on both engines, including the tie-order proof below).
+
+### P2 — comparator sort: insertion → tie-exact merge
+
+`sorted(xs, cmp)` / `xs.sort(cmp)` now run a bottom-up merge sort above
+n = 32 (≤ 32 keeps the original insertion walk VERBATIM, so small pinned
+programs and side-effect-ordered comparators keep their exact call order).
+The merge's tie rule — take right iff NOT cmp(left, right) — reproduces the
+insertion walk's tie semantics byte-for-byte (a tie swaps in the walk, so
+tie groups end up reversed; the oracle still runs the insertion walk, so the
+differential IS the tie-rule proof, at n = 50/64/100 with 7-way tie groups).
+
+| n | old (insertion) | new (merge) | speedup | comparator calls old → new |
+|---|---:|---:|---:|---|
+| 1k | 95.0 ms | 3.57 ms | **26.6×** | 251,830 → 8,713 |
+| 2k | 381.5 ms | 7.87 ms | **48.5×** | 1,011,638 → 19,452 |
+| 4k | 1,531.6 ms | 17.4 ms | **87.8×** | 4,048,443 → 42,920 |
+| 8k | 6,118.6 ms | 38.2 ms | **160×** | 15,997,582 → ~88k (transfer law) |
+
+Growth per doubling is now 2.20× / 2.22× / 2.19× (O(n log n), was 4.0×);
+checksums are byte-identical to the audit's recorded values at every size.
+vs CPython: the comparator sort was 1.93× SLOWER than CPython's own
+insertion analog at 8k — it is now **83× faster** (38.2 ms vs 3,175 ms).
+The in-engine heap control (1,189 ms at 8k) is now 31× slower than the new
+path — it served its purpose as the algorithmic witness and retires.
+
+### P3 — `for i in range(...)`: eager materialization → lazy bounds
+
+When the iterable IS a range call, the loop iterates the bounds directly
+(O(1) memory) with the builtin's exact observables: same note on non-int
+args (E2016, stamped at the call line), same `unfolded` stress on step 0,
+same `overflow` stress above the 10M ceiling (O(1) count check, i128 math),
+same per-iteration tick and binding; every other surface (`len(range(..))`,
+indexing, passing to list-expecting builtins) still goes through the eager
+builtin unchanged.
+
+| leg (4M iterations) | old peak RSS | new peak RSS |
+|---|---:|---:|
+| transient for-range | **251.9 MB** over baseline | **~0 MB** (12.7 MB total, = the while baseline) |
+
+The 66 B/elem materialize-then-clone double copy is gone. Time: the m_forrange
+micro shows no regression (55.4 ms / 200k vs 57.3 recorded pre-wave; the
+known ±8–17% cross-session drift band applies); the materialized Vec's
+contiguous-iteration edge at multi-million scale narrows to ~±17% vs while
+(4M wall: 1,070 ms lazy vs 911 ms while on this box) — the trade is 252 MB
+for ≤ noise at corpus scale.
+
+### P5 — string accumulation: clone + format! + rebind → in-place append
+
+The accumulation shapes now append IN PLACE to the bound `Value::Str` slot
+(amortized O(|rhs|) per op): `s += x` unconditionally (the general path
+already read the slot after the rhs eval), and `s = s + <pure rhs>` behind a
+static side-effect-freedom gate (`expr_is_pure`: literals/idents/arithmetic
+only — no calls), with the exact Add-arm ceiling (512 MiB) and mem-charge
+amounts at the exact positions. The VM compiles both shapes to the new
+`AppendName` opcode (SPEC §15 row added; fallback reproduces the replaced
+LoadName(Quiet) + Bin + AssignName sequence for every non-Str shape, unbound
+names, const targets and slot targets — both machines). `Value::Str` is an
+owned `String` (never Rc-shared), so in-place mutation is invisible to every
+other holder by construction.
+
+| micro | old | new | |
+|---|---:|---:|---|
+| m_strcat (12k `s = s + "ab"`) | 10.9 ms / 454 ns-op | **2.69 ms / ~112 ns-op** | **4.05×** |
+| Str+Str Add (general path) | `format!` per op | exact-capacity single alloc | lower constant everywhere |
+
+The survey's 4–13× projection lands at 4.05× on the 12k fixture (the
+quadratic term is still modest there; the win grows with N).
+
+### Real bug found by the wave's pins (fixed)
+
+`tests/differential/p2p3p5_opt_pins.op` exposed a LATENT oracle divergence:
+the oracle's `range()` builtin crashed on any non-int argument (Python
+TypeError, rc=1) where the Rust engine notes + returns `[]` — the corpus
+never generated that shape. The oracle now mirrors the note + `[]` exactly.
+
+### Wave-era VM note
+
+rt_p17b_scope_cancel joined the vm_parity RACY_NOTE class: the payload's
+busy loop rebinds a name every iteration and cancel lands at a timing-
+dependent position, so the count of loop-emitted notes is 0..N (the P3 lazy
+range shifted the race window enough to expose the latent flake in the
+sweep; 9/9 serial runs byte-identical). stdout+rc stay strictly compared;
+only the loop-emitted note lines are dropped for that payload.

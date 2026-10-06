@@ -6048,6 +6048,14 @@ class Interp:
                         del args[0][k]
             return None
         if name == "range":
+            # P2P3P5 pin found the latent gap: the Rust engine notes and
+            # returns [] on any non-int arg; the oracle walked into Python
+            # TypeError instead (int < str). Mirror the note + [] exactly.
+            if not all(
+                isinstance(x, int) and not isinstance(x, bool) for x in args
+            ):
+                self.note(4, "range() needs ints; returned []")
+                return []
             if len(args) == 1:
                 a, b, st = 0, args[0], 1
             elif len(args) == 2:
