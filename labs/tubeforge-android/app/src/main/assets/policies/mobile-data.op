@@ -1,0 +1,17 @@
+# TubeForge policy — mobile-data: a phone-native budget.
+# Audio is free, video capped at 1080p-class quality, nothing over 80 MiB
+# moves on a cellular plan without you saying so. Computed, not hardcoded:
+# the cap is the product of two genes, in the sandbox, on your phone.
+
+gene mib(n) { return n * 1048576 }
+base_cap = mib(80)
+
+promote("name = mobile-data")
+promote("version = 1")
+promote("allow_video = 1")
+promote("allow_audio = 1")
+promote("allow_playlist = 0")
+promote("max_bytes =", base_cap)
+promote("max_quality = 1080")
+promote("reason_playlist = playlists are disabled on mobile-data policy (bulk transfers)")
+promote("reason_bytes = transfer exceeds the 80 MiB mobile-data cap")

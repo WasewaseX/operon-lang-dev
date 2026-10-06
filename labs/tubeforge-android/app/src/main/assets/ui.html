@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TubeForge Lite</title>
+<style>
+:root{--bg:#0d1117;--bg2:#161b22;--bd:#21262d;--fg:#e6edf3;--dim:#8b949e;--ac:#3fb950;--warn:#d29922;--err:#f85149}
+*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,sans-serif}
+body{background:var(--bg);color:var(--fg);padding:14px;max-width:640px;margin:0 auto;padding-bottom:90px}
+h1{font-size:18px;margin-bottom:2px}h1 span{color:var(--ac)}
+.sub{color:var(--dim);font-size:12px;margin-bottom:12px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.chip{background:var(--bg2);border:1px solid var(--bd);border-radius:20px;padding:4px 10px;font-size:11px;color:var(--dim)}
+.chip b{color:var(--ac);font-weight:600}
+input,select,button{background:var(--bg2);border:1px solid var(--bd);color:var(--fg);border-radius:8px;padding:10px;font-size:14px;width:100%}
+input:focus,select:focus{outline:1px solid var(--ac)}
+button{cursor:pointer;font-weight:600}
+button:active{filter:brightness(1.2)}
+.btn{background:#238636;border-color:#2ea043;color:#fff;margin-top:8px}
+.btn2{background:var(--bg2);color:var(--dim);border-color:var(--bd);margin-top:6px}
+.row{display:flex;gap:8px;margin-top:8px}.row>*{flex:1}
+.job{background:var(--bg2);border:1px solid var(--bd);border-radius:10px;padding:10px;margin-top:8px;font-size:13px}
+.job .t{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.job .s{color:var(--dim);font-size:11px;margin-top:3px;display:flex;justify-content:space-between}
+.bar{height:4px;background:var(--bd);border-radius:2px;margin-top:6px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ac);width:0%}
+.msg{margin-top:10px;padding:10px;border-radius:8px;font-size:13px;display:none}
+.msg.ok{display:block;background:#12261e;border:1px solid #1b4721;color:#7ee787}
+.msg.err{display:block;background:#2d1517;border:1px solid #5c2326;color:#ffa198}
+.policy{margin-top:14px;border:1px solid var(--bd);border-radius:10px;padding:10px;background:var(--bg2)}
+.policy pre{font-size:11px;color:var(--dim);margin-top:8px;white-space:pre-wrap;word-break:break-all}
+.pname{font-size:13px;font-weight:600;color:var(--ac)}
+.rules{font-size:12px;color:var(--dim);margin-top:6px;line-height:1.6}
+.rules b{color:var(--fg)}
+footer{position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:1px solid var(--bd);padding:8px 14px;font-size:11px;color:var(--dim);display:flex;justify-content:space-between}
+</style>
+</head>
+<body>
+<h1>Tube<span>Forge</span> Lite</h1>
+<div class="sub">Operon policy engine + platform downloader</div>
+<div class="chips">
+  <div class="chip">operon <b id="ver">…</b></div>
+  <div class="chip">sandbox <b>deny-by-default</b></div>
+  <div class="chip">policy <b id="pname">…</b></div>
+</div>
+
+<input id="url" placeholder="Media URL (https:// …)">
+<div class="row">
+  <select id="kind">
+    <option value="video">video</option>
+    <option value="audio">audio</option>
+    <option value="playlist">playlist</option>
+  </select>
+  <select id="pol">
+    <option value="default.op">default</option>
+    <option value="audio-only.op">audio-only</option>
+    <option value="corporate.op">corporate</option>
+    <option value="mobile-data.op">mobile-data</option>
+  </select>
+</div>
+<button class="btn" onclick="go()">Gate + download</button>
+<button class="btn2" onclick="refresh()">Refresh queue</button>
+<div id="msg" class="msg"></div>
+<div id="jobs"></div>
+
+<div class="policy">
+  <div class="pname" id="pname2">policy: …</div>
+  <div class="rules" id="rules">loading…</div>
+  <pre id="psrc"></pre>
+</div>
+
+<footer><span id="canary">…</span><span>yt-dlp/ffmpeg: desktop lane</span></footer>
+
+<script>
+const $ = id => document.getElementById(id);
+let policy = null;
+
+function msg(text, ok) {
+  const m = $("msg");
+  m.textContent = text;
+  m.className = "msg " + (ok ? "ok" : "err");
+}
+
+function human(n) {
+  if (!n || n < 0) return "?";
+  const u = ["B", "KB", "MB", "GB"];
+  let i = 0; let v = n;
+  while (v >= 1024 && i < 3) { v /= 1024; i++; }
+  return v.toFixed(v < 10 && i > 0 ? 1 : 0) + " " + u[i];
+}
+
+async function loadPolicy() {
+  const name = $("pol").value;
+  try {
+    const raw = Android.runPolicy(name);
+    const r = JSON.parse(raw);
+    if (!r.ok) {
+      msg("policy failed: " + (r.stress ? r.stress.kind + " — " + r.stress.message : "?"), false);
+      policy = null;
+      return;
+    }
+    // parse the promote() lines: "key = value"
+    policy = {};
+    for (const line of r.stdout) {
+      const i = line.indexOf(" = ");
+      if (i > 0) policy[line.slice(0, i)] = line.slice(i + 3);
+    }
+    $("pname").textContent = policy.name || name;
+    $("pname2").textContent = "policy: " + (policy.name || name) + " (" + r.elapsed_ms + " ms in operon)";
+    const keys = Object.keys(policy).filter(k => k !== "name");
+    $("rules").innerHTML = keys.map(k => k + " = <b>" + policy[k] + "</b>").join(" · ");
+    $("psrc").textContent = r.notes.length ? "notes: " + r.notes.join(" | ") : "";
+  } catch (e) {
+    msg("bridge error: " + e, false);
+  }
+}
+
+function go() {
+  const url = $("url").value.trim();
+  if (!/^https:\/\//.test(url)) { msg("https URLs only", false); return; }
+  if (!policy) { msg("no active policy", false); return; }
+  const kind = $("kind").value;
+  const g = JSON.parse(Android.gate(JSON.stringify(policy), url, kind, 0, 0));
+  if (!g.allow) { msg("denied by policy: " + g.reason, false); return; }
+  const name = decodeURIComponent(url.split("/").pop().split("?")[0]) || ("download-" + Date.now());
+  const res = JSON.parse(Android.startDownload(url, name));
+  if (res.allow) { msg("queued (id " + res.id + ")" + (g.maxBytes ? " — cap " + human(g.maxBytes) : ""), true); refresh(); }
+  else msg("enqueue failed: " + res.reason, false);
+}
+
+function refresh() {
+  try {
+    const jobs = JSON.parse(Android.listDownloads());
+    $("jobs").innerHTML = jobs.map(j => {
+      const pct = j.total > 0 ? Math.round(100 * j.bytes / j.total) : 0;
+      return '<div class="job"><div class="t">' + (j.title || j.id) + '</div>' +
+        '<div class="s"><span>' + j.status + '</span><span>' + human(j.bytes) + ' / ' + human(j.total) + '</span></div>' +
+        '<div class="bar"><i style="width:' + pct + '%"></i></div></div>';
+    }).join("") || '<div class="job"><div class="s">queue empty</div></div>';
+  } catch (e) { msg("queue error: " + e, false); }
+}
+
+$("ver").textContent = Android.coreVersion();
+$("canary").textContent = "ffi canary: " + Android.canary();
+loadPolicy();
+refresh();
+</script>
+</body>
+</html>

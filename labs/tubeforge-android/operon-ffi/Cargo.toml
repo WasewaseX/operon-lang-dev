@@ -1,0 +1,21 @@
+[package]
+name = "operon-ffi"
+version = "0.1.0"
+edition = "2021"
+description = "C-ABI bridge: TubeForge Android hosts the Operon core as liboperon.so"
+license = "MIT"
+
+[lib]
+name = "operon"
+crate-type = ["cdylib", "staticlib"]
+path = "src/lib.rs"
+
+[dependencies]
+operon = { path = "../../.." }
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
+panic = "abort"
+codegen-units = 1
