@@ -10,15 +10,75 @@ pub type ListRef = Rc<RefCell<Vec<Value>>>;
 
 /// dx-r3 (re-audit perf #7): maps keep their insertion-ordered Vec (repr,
 /// keys(), iteration order are part of the language contract) but gain a
-/// hash memo over (type tag, display) -> position, so the hot lookups —
-/// `m[k]`, `has`, `del`, member access, `map_insert` — are O(1) instead of
-/// a linear deep_eq scan (the collections bench ran 40–55x CPython).
-/// The memo is a PREFILTER: candidate positions are always verified with
-/// deep_eq, so exotic equalities stay exact.
+/// hash memo so the hot lookups — `m[k]`, `has`, `del`, member access,
+/// `map_insert` — are O(1) for scalar keys instead of a linear deep_eq
+/// scan (the collections bench ran 40–55x CPython).
+///
+/// perf-xlang-r1: the memo key is now an ALLOCATION-FREE canonical hash of
+/// the deep_eq-relevant content (the previous (tag, display-string) key
+/// heap-allocated a String on every map op and re-hashed it), and buckets
+/// hold candidate positions so u64 hash collisions stay exact. The memo is
+/// a PREFILTER: every candidate position is verified with deep_eq.
 #[derive(Default)]
 pub struct MapStore {
     pub items: Vec<(Value, Value)>,
-    memo: std::collections::HashMap<(u8, String), usize>,
+    /// canonical hash -> candidate positions (a Vec absorbs u64 hash
+    /// collisions; each candidate is deep_eq-verified before use)
+    memo: std::collections::HashMap<u64, Vec<usize>>,
+}
+
+/// perf-xlang-r1: canonical, allocation-free hash over the deep_eq-relevant
+/// content of a scalar key. Tag-prefixed so distinct classes never share a
+/// bucket input. ±0.0 fold onto one representation because deep_eq says
+/// they are equal; NaN keeps its exact bits (deep_eq(NaN, anything) is
+/// false, so NaN keys can never match and their bucketing is arbitrary).
+/// Deterministic within a process (DefaultHasher::new has fixed keys),
+/// which is all the memo needs — it is never persisted.
+fn canon_hash(v: &Value) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    match v {
+        Value::Null => 0u8.hash(&mut h),
+        Value::Bool(b) => {
+            1u8.hash(&mut h);
+            b.hash(&mut h);
+        }
+        Value::Int(i) => {
+            2u8.hash(&mut h);
+            i.hash(&mut h);
+        }
+        Value::Float(f) => {
+            3u8.hash(&mut h);
+            if *f == 0.0 {
+                0f64.to_bits().hash(&mut h);
+            } else {
+                f.to_bits().hash(&mut h);
+            }
+        }
+        Value::Str(s) => {
+            4u8.hash(&mut h);
+            s.hash(&mut h);
+        }
+        // non-scalar keys are legal but rare — they simply miss the memo
+        // and fall back to the bounded linear scan
+        _ => return 0,
+    }
+    h.finish()
+}
+
+/// memo bucket for `key`: candidates verified with deep_eq, newest first
+/// (last-wins matches the previous tag-memo and upsert semantics).
+fn memo_hit(memo: &std::collections::HashMap<u64, Vec<usize>>, h: u64, key: &Value,
+            items: &[(Value, Value)]) -> Option<usize> {
+    let cands = memo.get(&h)?;
+    for &i in cands.iter().rev() {
+        if let Some((k, _)) = items.get(i) {
+            if k.deep_eq(key) {
+                return Some(i);
+            }
+        }
+    }
+    None
 }
 
 /// sec-r5 (F-12): non-scalar keys (lists/maps) miss the hash memo and fall
@@ -27,19 +87,6 @@ pub struct MapStore {
 /// now capped: beyond this many entries a non-scalar key is treated as
 /// absent (SPEC §9b). Scalar keys keep exact semantics via the memo.
 const NON_SCALAR_SCAN_CAP: usize = 512;
-
-fn key_tag(v: &Value) -> (u8, String) {
-    match v {
-        Value::Null => (0, String::new()),
-        Value::Bool(b) => (1, b.to_string()),
-        Value::Int(i) => (2, i.to_string()),
-        Value::Float(f) => (3, f.to_string()),
-        Value::Str(s) => (4, s.clone()),
-        // non-scalar keys are legal but rare — they simply miss the memo
-        // and fall back to the linear scan
-        _ => (255, String::new()),
-    }
-}
 
 impl MapStore {
     pub fn new() -> Self {
@@ -56,31 +103,73 @@ impl MapStore {
     pub fn rebuild(&mut self) {
         self.memo.clear();
         for (i, (k, _)) in self.items.iter().enumerate() {
-            let tag = key_tag(k);
-            if tag.0 != 255 {
-                self.memo.insert(tag, i); // last write wins = deep_eq semantics
+            let h = canon_hash(k);
+            if key_is_scalar(k) {
+                self.memo.entry(h).or_default().push(i); // last wins
             }
         }
     }
     /// Exact position of `key` (deep_eq verified), O(1) for scalar keys.
+    ///
+    /// Absence proofs (no scan needed):
+    ///   * Null/Bool/Str — equal keys hash identically and deep_eq never
+    ///     crosses these classes into another one, so an exhausted
+    ///     candidate list proves the key is absent.
+    ///   * Int — plus a second probe of the canonical-float bucket of
+    ///     `a as f64`, since deep_eq(Int(a), Float(b)) is `a as f64 == b`
+    ///     and every equal Float key sits in that one bucket.
+    /// Float probes keep the full scan: several distinct ints can round to
+    /// the same float at |v| >= 2^53, so no bucket set is exhaustive.
+    /// Non-scalar keys keep the F-12 bounded scan.
     pub fn position(&self, key: &Value) -> Option<usize> {
-        let tag = key_tag(key);
-        if tag.0 != 255 {
-            if let Some(&i) = self.memo.get(&tag) {
-                if let Some((k, _)) = self.items.get(i) {
-                    if k.deep_eq(key) {
-                        return Some(i);
-                    }
+        match key {
+            Value::Null | Value::Bool(_) | Value::Int(_) | Value::Float(_)
+            | Value::Str(_) => {}
+            // sec-r5 (F-12): non-scalar keys — bounded scan (see NON_SCALAR_SCAN_CAP)
+            _ => {
+                return self
+                    .items
+                    .iter()
+                    .take(NON_SCALAR_SCAN_CAP)
+                    .position(|(k, _)| k.deep_eq(key));
+            }
+        }
+        if let Some(i) = memo_hit(&self.memo, canon_hash(key), key, &self.items) {
+            return Some(i);
+        }
+        match key {
+            // exhausted candidates prove absence for these classes
+            Value::Null | Value::Bool(_) | Value::Str(_) => None,
+            Value::Int(a) => {
+                let fb = Value::Float(*a as f64);
+                memo_hit(&self.memo, canon_hash(&fb), &fb, &self.items)
+            }
+            Value::Float(_) => self.items.iter().position(|(k, _)| k.deep_eq(key)),
+            // unreachable: the scalar gate above let only these through
+            _ => None,
+        }
+    }
+    /// perf-xlang-r1: O(1) exact position of a STRING key, borrowing the
+    /// probe (no Value::Str allocation, no String tag). A miss proves
+    /// absence: equal strings hash identically and deep_eq is type-strict
+    /// for Str (no other class can equal a string).
+    pub fn position_str(&self, key: &str) -> Option<usize> {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        4u8.hash(&mut h);
+        key.hash(&mut h);
+        let cands = match self.memo.get(&h.finish()) {
+            Some(c) => c,
+            None => return None,
+        };
+        for &i in cands.iter().rev() {
+            if let Some((Value::Str(s), _)) = self.items.get(i) {
+                if s == key {
+                    return Some(i);
                 }
             }
-            // scalar keys keep exact semantics: full scan on memo miss
-            return self.items.iter().position(|(k, _)| k.deep_eq(key));
         }
-        // sec-r5 (F-12): non-scalar keys — bounded scan (see NON_SCALAR_SCAN_CAP)
-        self.items
-            .iter()
-            .take(NON_SCALAR_SCAN_CAP)
-            .position(|(k, _)| k.deep_eq(key))
+        None
     }
     /// Upsert preserving insertion order (existing key keeps its position).
     pub fn insert(&mut self, key: Value, val: Value) {
@@ -88,10 +177,12 @@ impl MapStore {
             self.items[i].1 = val;
             return;
         }
-        let tag = key_tag(&key);
+        let scalar = key_is_scalar(&key);
+        let h = canon_hash(&key);
+        let pos = self.items.len();
         self.items.push((key, val));
-        if tag.0 != 255 {
-            self.memo.insert(tag, self.items.len() - 1);
+        if scalar {
+            self.memo.entry(h).or_default().push(pos);
         }
     }
     /// Delete by key; returns true when something was removed. Positions

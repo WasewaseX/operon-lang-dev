@@ -1028,12 +1028,15 @@ impl Interp {
                                 Value::Null
                             }
                         }
-                        (Value::Map(m), _) => m
-                            .borrow()
-                            .iter()
-                            .find(|(k, _)| k.deep_eq(&iv))
-                            .map(|(_, v)| v.clone())
-                            .unwrap_or(Value::Null),
+                        (Value::Map(m), _) => {
+                            // perf-xlang-r1: was a linear deep_eq find — the
+                            // memoized position is exact and O(1) for scalars
+                            let pos = m.borrow().position(&iv);
+                            match pos {
+                                Some(i) => m.borrow().get(i).unwrap().1.clone(),
+                                None => Value::Null,
+                            }
+                        }
                         _ => Value::Null,
                     };
                     val = self.apply_binop(env, *binop, &cur, &val)?;
@@ -1074,12 +1077,14 @@ impl Interp {
                 let mut val = self.eval(env, e)?;
                 if let Some(binop) = op {
                     let cur = match &tv {
-                        Value::Map(m) => m
-                            .borrow()
-                            .iter()
-                            .find(|(k, _)| matches!(k, Value::Str(s) if s == key))
-                            .map(|(_, v)| v.clone())
-                            .unwrap_or(Value::Null),
+                        Value::Map(m) => {
+                            // perf-xlang-r1: memoized str-key probe (was linear find)
+                            let pos = m.borrow().position_str(key);
+                            match pos {
+                                Some(i) => m.borrow().get(i).unwrap().1.clone(),
+                                None => Value::Null,
+                            }
+                        }
                         _ => Value::Null,
                     };
                     val = self.apply_binop(env, *binop, &cur, &val)?;
@@ -1750,23 +1755,15 @@ impl Interp {
     /// (the safe form null-checks the receiver before calling this).
     pub(crate) fn member_value(&mut self, tv: Value, key: &str) -> Result<Value, Stress> {
         match &tv {
-            Value::Map(m) => match m
-                .borrow()
-                .iter()
-                .find(|(k, _)| matches!(k, Value::Str(s) if s == key))
-            {
-                Some((_, v)) => Ok(v.clone()),
+            Value::Map(m) => match m.borrow().position_str(key) {
+                Some(i) => Ok(m.borrow().get(i).unwrap().1.clone()),
                 None => {
                     self.note(0, 4, format!("member '{}' missing on map; null", key));
                     Ok(Value::Null)
                 }
             },
-            Value::Obj(d, m) => match m
-                .borrow()
-                .iter()
-                .find(|(k, _)| matches!(k, Value::Str(s) if s == key))
-            {
-                Some((_, v)) => Ok(v.clone()),
+            Value::Obj(d, m) => match m.borrow().position_str(key) {
+                Some(i) => Ok(m.borrow().get(i).unwrap().1.clone()),
                 None => {
                     self.note(
                         0,
@@ -2752,7 +2749,7 @@ impl Interp {
             In => Ok(Value::Bool(match (l, r) {
                 (needle, Value::List(list)) => list.borrow().iter().any(|v| v.deep_eq(needle)),
                 (Value::Str(n), Value::Str(h)) => h.contains(n.as_str()),
-                (needle, Value::Map(m)) => m.borrow().iter().any(|(k, _)| k.deep_eq(needle)),
+                (needle, Value::Map(m)) => m.borrow().position(&needle).is_some(),
                 _ => {
                     return Err(Stress::new(
                         "unfolded",
