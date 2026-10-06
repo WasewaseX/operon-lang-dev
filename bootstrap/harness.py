@@ -90,6 +90,35 @@ GRANTED_CELL_TARGETS = [
     ("tests/granted/visibility_strict.op", "tests/granted/visibility_strict.cell"),
 ]
 
+# W096-A (reliab lane, 2026-10-02): this harness is CWD-contractual. The
+# oracle resolves `use std/x` through CWD-relative candidates (its module
+# search: the importing file's dir, then CWD, then std/), so running the
+# harness from OUTSIDE the repo tree makes the oracle side silently print
+# null for every std-using program and floods the lane with false
+# DIVERGEs. Both the session-30 "/tmp divergence" note and the builder-C
+# W096-A audit (33 false divergences on 2026-10-02, root-caused to a
+# non-repo cwd, zero real divergences in-tree) are this class. A
+# differential gate must not be able to lie silently: refuse loudly.
+def ensure_in_tree(root):
+    """Refuse to run unless cwd == root (the canonical invocation contract).
+
+    Returns True when in-tree. On violation prints a FATAL block naming the
+    cwd/root pair and the reason, and returns False; main() exits 2.
+    Kept a small pure function so scripts/test.sh can pin both sides
+    directly (a synthetic-tree end-to-end positive run is impossible: the
+    granted-targets loop is unconditional and repo-relative).
+    """
+    if os.path.realpath(os.getcwd()) != os.path.realpath(root):
+        print("FATAL: harness.py must run from the repo root "
+              f"(cwd={os.getcwd()} != --root={root}).")
+        print("  Why: the oracle resolves `use std/x` via CWD-relative candidates,")
+        print("  so an out-of-tree cwd silently diverges every std-using program")
+        print("  (false DIVERGE flood, the W096-A audit class).")
+        print("  Run: cd <repo-root> && python3 bootstrap/harness.py")
+        return False
+    return True
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--bin", default=os.path.join(os.path.dirname(__file__), "..", "bin", "operon"))
@@ -101,6 +130,9 @@ def main():
     root = os.path.abspath(args.root)
     binpath = os.path.abspath(args.bin)
     oracle = os.path.join(root, "bootstrap", "oracle.py")
+
+    if not ensure_in_tree(root):
+        sys.exit(2)
 
     targets = []
     for d in ("tests", "examples", "apps"):
