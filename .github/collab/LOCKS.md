@@ -3,55 +3,6 @@
 # file in the same session as any ledger change; chatroom posts record both SHAs).
 # Parsed by scripts/collision_guard.py (roadmap §24.4).
 
-**What this is:** the mechanical half of multi-agent collision prevention —
-the executable ledger behind the §24.3 claim protocol and the §24.4 CI guard
-(`operon-lang-dev/scripts/collision_guard.py` + `collision-guard.yml` workflow).
-
-**Keeper:** builder-F (roadmap §23, collab/** upkeep). Ledger changes land as
-vault commits; the keeper syncs the CI mirror `.github/collab/LOCKS.md` in
-operon-lang-dev in the same session and the chatroom post records both SHAs.
-
----
-
-## Task/claim format (the contract)
-
-**1. Before touching code (roadmap §24.3, condensed):**
-
-1. Read `collab/TASKS.md` (is the task READY/unclaimed?).
-2. Read this file — confirm no ACTIVE row owns an overlapping path.
-3. Create the branch, open a **draft PR immediately**.
-4. Put the claim in the PR body (format below) and record the lock here.
-
-**2. PR body contract** (parsed by the CI guard; keys are case-insensitive):
-
-```
-Task-ID: <task id from collab/TASKS.md or roadmap §34 — e.g. W061-L, P1-batch, R0.10>
-Paths: <comma-separated exclusive paths this task touches — files or dir/ prefixes>
-```
-
-- `Task-ID` is REQUIRED for any change under a core path (src/, std/, tests/,
-  examples/, apps/, bootstrap/, scripts/, docs/, packaging/, web/, labs/,
-  .github/, README.md, SPEC.md, and the other top-level docs/Cargo files —
-  the full list is `CORE_PATHS` in the guard script).
-- `Paths` is advisory-but-expected; it lets the guard warn at DRAFT time,
-  before any file changes, when a declared path already belongs to someone else.
-
-**3. Overlap rule:** the first canonical GitHub claim for a path set wins
-(§24.3). The guard rejects a changed file covered by an ACTIVE lock whose task
-differs from the PR's Task-ID. A conflicting worker stops before editing and
-chooses another READY task — or negotiates openly in the chatroom (the owner's
-standing note: cross-agent help is endorsed when claimed openly first).
-
-**4. Lock lifecycle:** ACTIVE → RELEASED. A lock releases when the task's PR
-merges, when the chatroom records a handoff/close, or by owner override.
-Released rows move to the Released table (audit trail, never deleted).
-The ledger is self-checked by the guard: two ACTIVE rows covering one path
-is a loud ledger defect that fails every PR until the keeper fixes it.
-
-**5. Grandfather clause:** PRs opened before the guard's landing date
-(2026-10-05) get WARN instead of FAIL, so the in-flight review queue is
-reported but not churned.
-
 ---
 
 ## Active locks
@@ -67,11 +18,12 @@ reported but not churned.
 | L-012 | builder-F | F-CI-INFRA | scripts/redteam.sh, scripts/fuzz_parser.py | RELEASED | 2026-10-05 (coordinator digest-6 assignments: redteam.sh bash-3.2 fix + windows fuzzer TIMEOUT calibration; C veto-at-review) | PR #109 / 5a08fe8 |
 | L-014 | builder-C | R0.6 | scripts/validation/**, tests/validation/**, docs/spec/VALIDATION.md | RELEASED | 2026-10-05 (issue #139 + chatroom post; Agent-C opener per roadmap §27); RELEASED 2026-10-05 at landing — PR #140 MERGED rebase 9cccb2f (API truth; coordinator-merged on 15-green + 1 documented skip, 15-file scope == declared Paths, teeth independently reproduced by F session-14, fresh-binary regen 3568) | PR #140 / 9cccb2f |
 | L-019 | Super Z | Z-129-FOLDSEM | src/vm.rs | RELEASED | 2026-10-05 (digest-11 claim under owner ALL-word; sweep-3 #129 fold semantics; PR #143). RENUMBERED twice by coordinator ruling R34-A final: L-015 lost to E-SWEEP-STD1 (092b595 18:32Z), L-017 lost to builder-B S3-136H (9abc50d 19:26Z) — L-019 first free | 2026-10-06 RELEASED at landing: PR #143 MERGED rebase 7c1b474 (API truth; F rule-8 independent repro CONFIRMED on record comment 6001934571; CI 14 green + documented nightly skip; scope 2 files == Paths) | PR #143 / 7c1b474 |
-| L-015 | builder-E | E-SWEEP-STD1 | std/iter.op, std/json.op, tests/differential/keyword_sweep_std_pin.op | ACTIVE | 2026-10-05 (chatroom post; digest-10 ALL-word queue items #136.1 unique + #136.2 json_compact, differential pins ride the fix) | — |
+| L-015 | builder-E | E-SWEEP-STD1 | std/iter.op, std/json.op, tests/differential/keyword_sweep_std_pin.op | RELEASED | 2026-10-05 (chatroom post; digest-10 ALL-word queue items #136.1 unique + #136.2 json_compact, differential pins ride the fix) | 2026-10-06 RELEASED at landing: PR #142 MERGED rebase 3cc1116 (API truth; F strict review: contracts 3-lane byte-identical, differential 3497/0 + 3489/0, cargo rc=0, CI 14 green + skip; base-refresh rebase after #141 landing to drop patch-identical segment) | PR #142 / 3cc1116 |
 | L-018 | builder-E | E-SWEEP-STD2 | std/math.op, tests/differential/ | RELEASED | 2026-10-05 (chatroom post; digest-10 ALL-word queue item #133 isqrt/lcm overflow, division-based rewrites, pin rides) | 2026-10-05 RELEASED-YIELDED post-ruling R34-A: F holds std/math.op first-canonical (L-016/F-SWEEP-MATH1, vault 888775b 19:01Z); E draft PR #145 closed unmerged 19:29Z, division-based fix + 3-lane pin preserved there for F reference |
 | L-013 | builder-F | F-128-TRACERACE | tests/grn_trace.rs, tests/sec_regression.rs, tests/profile_spans.rs, tests/rna_v2.rs | RELEASED | 2026-10-05 claim (digest-8 #128 race); RELEASED 2026-10-05 at landing — PR #135 MERGED rebase e220929 (API truth; owner-merged via coordinator, class closure verified W59-green + 4-file scope) | PR #135 / e220929 |
 | L-016 | builder-F | F-SWEEP-MATH1 | std/math.op, std/seq.op, std/fmt.op, tests/differential/math_overflow_pin.op | RELEASED | 2026-10-06 (chatroom post; digest-10 ALL-word queue item #133 — full S1+S2 family isqrt/lcm/digits/round_to/fmt_fixed/fmt_thousands/fib_seq, differential pin rides; PR #141) | 2026-10-06 RELEASED at landing: PR #141 MERGED rebase 90b8cc0 (API truth; guard-lesson absorbed: README rider dropped, Paths shrunk; head receipts: differential 3502/0, family probes 3-lane byte-identical, cargo 331/0, CI 14 green + skip) | PR #141 / 90b8cc0 |
 | L-017 | builder-B | S3-136H | std/strings.op, std/collections.op, std/set.op, std/bigint.op, std/hashing.op, std/serialize.op, std/binary.op, std/unicode.op, std/result.op, std/csv.op, std/heap.op, std/args.op, tests/differential/s3_136h_pool_pin.op, docs/STDLIB.md, docs/STATS.md, docs/stats.json | RELEASED | 2026-10-06 (draft PR #144 re-scoped; digest-10 ALL-word queue item #136 hardening pool minus E/F-owned files — S1 headlines yielded to E-SWEEP-STD1/L-015; rows 4/5/10/12 excluded as E/F-filed) | 2026-10-06 RELEASED at landing: PR #144 MERGED rebase 27a29a9 (API truth; owner merge-word; F strict review: 22-file scope == claim, pool pin 3-lane rc=0, differential 3501/0 + 3493/0, cargo 331, std_bigint MIN contract 3-lane; CI 14 green + 1 skip) | PR #144 / 27a29a9 |
+| L-021 | builder-B | S3-136T2 | std/iter.op, std/json.op, tests/differential/s3_136t2_pin.op, docs/STDLIB.md, docs/STATS.md, docs/stats.json, docs/api/iter.md, docs/api/json.md | ACTIVE | 2026-10-06 (draft PR #149 claim-before-edit; #136 rows 3-iter-half/4/5 released by E-SWEEP-STD1 landing; declared next-pull per d602e69) | — |
 | L-020 | builder-C | F5 (#49 cargo-fuzz in-process) | fuzz/, .github/workflows/fuzz-inproc.yml, docs/FUZZING.md | ACTIVE | 2026-10-06 (chatroom post; branch reliab/f5-cargo-fuzz-inproc pushed @ 38d219e, draft PR #147; guard green post body-claim patch; L-012 covers scripts/fuzz_parser.py only — no overlap) | #49 |
 
 Notes:
