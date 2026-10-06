@@ -119,7 +119,7 @@
   "asserts": null,
   "files": null,
   "proofs": null,
-  "source": "fast-mode skip"
+  "source": "binary-not-built"
  },
  "redteam_files": 106,
  "spec": {
@@ -262,6 +262,6 @@
    "module": "url"
   }
  ],
- "test_op_files": 3574,
+ "test_op_files": 3575,
  "version": "2.9.0"
 }
