@@ -175,12 +175,93 @@ ship early without waiting for the VM. Targets 4, 6, 8 are tree-walk
 mitigations worth doing only if the tree walker stays as the fallback core
 after v3.0 — which the differential harness needs it to.
 
+## Cross-language baseline (perf-xlang-r1, 2026-10-07)
+
+The B1 methodology extended to four runners: operon, **python** (native CPython,
+process-timed), **rust** (native rustc -O mirror, zero crates), **node**
+(Node.js v24.21.0 — the "random mainstream" pick). Same fixtures, same
+min-over-N process wall time. Every runner must print the identical canonical
+output — 17/17 four-way agreement each run (the suite is
+`scripts/bench_xlang/run_xlang.py`, mirrors in `scripts/bench_xlang/`).
+
+Host: same container class as the v2.2 rows; rustc 1.99.0; iters 5.
+Startup floors: operon **0.9 ms** · rust **0.5 ms** · python **15.4 ms** ·
+node **22.9 ms** — process rows under ~30 ms are floor-dominated; net-of-floor
+ratios are the honest cross-language read.
+
+Named workloads (min-of-5, ms):
+
+| workload | operon | python | rust | node | op/py | op/rs | op/js |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| fib25 | 139.1 | 29.3 | 0.7 | 26.7 | 4.7x | 197.7x | 5.2x |
+| loops | 60.8 | 26.9 | 0.7 | 26.4 | 2.3x | 86.0x | 2.3x |
+| strings | 24.2 | 17.1 | 0.7 | 25.5 | 1.4x | 34.0x | 1.0x |
+| collections | 31.0 | 20.7 | 2.2 | 28.3 | 1.5x | 13.9x | 1.1x |
+| recursion | 253.6 | 39.9 | 0.8 | 25.7 | 6.3x | 327.6x | 9.9x |
+| grn | 39.6 | 23.8 | 0.5 | 25.7 | 1.7x | 81.7x | 1.5x |
+
+Micro (min-of-5, ms):
+
+| micro | operon | python | rust | node | op/py | op/rs | op/js |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| m_call | 66.5 | 23.6 | 0.5 | 26.3 | 2.8x | 140.3x | 2.5x |
+| m_forrange | 51.2 | 23.4 | 0.5 | 24.1 | 2.2x | 110.7x | 2.1x |
+| m_while | 61.0 | 26.8 | 0.5 | 24.3 | 2.3x | 126.9x | 2.5x |
+| m_varread | 55.9 | 23.6 | 0.5 | 23.6 | 2.4x | 119.6x | 2.4x |
+| m_intadd | 82.3 | 27.8 | 0.5 | 25.3 | 3.0x | 177.4x | 3.2x |
+| m_listpush | 16.6 | 18.8 | 0.7 | 24.6 | 0.9x | 23.5x | 0.7x |
+| m_listidx | 37.2 | 23.3 | 0.5 | 23.7 | 1.6x | 71.3x | 1.6x |
+| m_mapset | 18.6 | 21.2 | 2.7 | 25.5 | 0.9x | 7.0x | 0.7x |
+| m_mapget | 28.4 | 23.3 | 3.2 | 26.3 | 1.2x | 8.9x | 1.1x |
+| m_strcat | 8.3 | 16.8 | 0.5 | 23.2 | 0.5x | 17.1x | 0.4x |
+
+### What perf-xlang-r1 changed (all gated: proofs/differential/redteam/pkg-e2e green before + after, A/B-verified)
+
+1. **MapStore memo v2** (`value.rs`): the (tag, display-String) memo became an
+   allocation-free canonical u64 hash with Vec collision buckets + sound
+   absence proofs (Null/Bool/Str probes need no scan; Int probes dual-probe
+   the canonical float bucket for deep_eq's int/float crossing; Float keeps
+   the full scan because ints ≥ 2^53 fold non-injectively). `m[k]+=` reads,
+   member access (map + phenotype), and `in`-on-maps now route through the
+   memo instead of linear deep_eq scans.
+   Effect: **m_mapset 51.2→18.6 ms (2.75x), m_mapget 61.1→28.4 ms (2.15x),
+   collections 47.2→31.0 ms (1.52x)**; the O(n²) distinct-key build tail
+   (scan-on-miss) is gone for Str/Int keys.
+2. **Zero-alloc call counters** (`interp.rs`): call_counts/gene_buckets via
+   `get_mut` on the borrowed name — repeat calls no longer clone the callee
+   name 2x per call. Effect: fib25 −4.4%, m_call −3.5%.
+3. **Exact-capacity Str+Str concat** (`interp.rs`): `with_capacity` +
+   `push_str` replaces `format!`. Effect: m_strcat 9.9→8.3 ms.
+
+Skipped as UNSOUND under the caution bar (recorded so nobody "fixes" them
+blindly): reusing the per-iteration loop Env (closures capture the per-
+iteration scope — reuse changes observable capture semantics) and
+index-live list iteration (bodies may mutate the list; snapshot semantics
+are the language contract).
+
+### Weakpoint register after perf-xlang-r1
+
+- **Closed (was emergency): maps.** 70–84x CPython → 0.9–1.2x process-level
+  (≈3–7x net-of-floor). The representation change BENCH.md called "the one
+  thing that can ship early" shipped as the memo v2, without changing the
+  insertion-ordered Vec contract.
+- **Open, chronic: the tree-walk constant.** Calls ~8.5x, plain loops ~5.5x,
+  int arithmetic ~7x, recursion ~10.5x vs net CPython; 14–330x vs native
+  Rust. Dominated by per-node eval dispatch + per-call/per-iteration Env
+  allocation — exactly the v3.0 Ribosome VM targets (stack frames, slots,
+  interned constants). Not addressable by cautious tree-walk patches.
+- **Open, niche: Float-keyed maps** keep the full-scan fallback (exactness
+  over speed; rare in practice).
+- **Startup remains a flagship:** 0.9 ms vs python 15.4 / node 22.9 — operon
+  wins process-level on small scripts against mainstream runtimes.
+
 ## Baseline tracking
 
 | version | commit | date | fib25 op/py | loops op/py | collections op/py | grn op/py |
 |---|---|---|---:|---:|---:|---:|
 | v2.2.0 | 95ffef7 | 2026-09-24 | 10.0x | 5.5x | 60.0x | 3.8x |
 | v2.2.0+audit1 | e757b4d | 2026-09-24 | 10.0x | 5.6x | 61.8x | 3.9x |
+| v2.2.0+perf-xlang-r1 | 6267c73 | 2026-10-07 | 4.7x | 2.3x | 1.5x | 1.7x |
 
 (Add a row per release; ratios from the default `--iters 5` run.)
 
