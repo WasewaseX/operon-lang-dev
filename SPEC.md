@@ -1,6 +1,6 @@
 # Operon, Language Specification
 
-**Status:** v2.8.0, post-2.4 language amendments are landing incrementally (the generated inventory in [docs/STATS.md](docs/STATS.md) is the countable truth; D-009: version strings move only with the milestone). Last tagged release: 2.7.0 (2.6.0 = the W09 A6 VM-default flip, untagged; 2.7.0 = the W06 stage-2 wave-2 Result migration, tagged when the S5 release pipeline landed; 2.8.0 = the compat-r2 reliability round, tagged). This document is the single contract implemented identically by:
+**Status:** v2.9.0, post-2.4 language amendments are landing incrementally (the generated inventory in [docs/STATS.md](docs/STATS.md) is the countable truth; D-009: version strings move only with the milestone). Last tagged release: 2.7.0 (2.6.0 = the W09 A6 VM-default flip, untagged; 2.7.0 = the W06 stage-2 wave-2 Result migration, tagged when the S5 release pipeline landed; 2.8.0 = the compat-r2 reliability round, tagged; 2.9.0 = the post-wave release round: #129 fold semantics + #133 overflow family + #136 hardening + unique/json_compact contracts on main). This document is the single contract implemented identically by:
 
 | Implementation | Language | Role |
 |---|---|---|
