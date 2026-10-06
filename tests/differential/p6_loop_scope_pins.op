@@ -1,0 +1,106 @@
+# P6-wave differential pin: loop scope-env reuse (2026-10-06, builder-A),
+# byte-identical on both engines. The Rust engines now REUSE a loop
+# iteration's child env across iterations when nothing captured it
+# (Rc::strong_count==1 proof) and fall back to a fresh env when something
+# did. The oracle has no reuse — it IS the fresh-env reference — so this
+# file pins the equivalence: every observable (captured state, per-iteration
+# reset, leak-out, const re-definition, break/continue) must match the
+# fresh-env semantics byte-for-byte.
+print("== P6: loop scope reuse, capture-proof pins ==")
+# 1a. a gene DEFINED INSIDE a loop body captures ITS OWN iteration env —
+#     the closure rides the value (Value::Gene(def, env)). This is the
+#     shape that forces the strong-count fallback in the reused-env lane:
+#     the first capture disqualifies that iteration's env from reuse, and
+#     each grab must keep reading its creation iteration's `captured`.
+#     (The oracle originally printed 2,2,2 here — its gene arm mutated the
+#     shared AST node's closure; fixed in this wave to copy per instance.)
+let fs = []
+for i in range(3) {
+    let captured = i
+    gene grab() {
+        return captured
+    }
+    push(fs, grab)
+}
+print("c1:" + str(fs[0]()) + "," + str(fs[1]()) + "," + str(fs[2]()))
+# 1b. closure state accumulates per instance (three independent counters).
+gene make_counter() {
+    let n = 0
+    return gene inc() {
+        n = n + 1
+        return n
+    }
+}
+let cs = []
+for i in range(3) {
+    push(cs, make_counter())
+}
+let k0 = cs[0]
+print("c1b:" + str(k0()) + str(k0()) + str(cs[1]()) + str(cs[2]()))
+# 2. a let inside the loop body is per-iteration: must NOT leak into the
+#    next iteration (the reused env is cleared) nor past the loop.
+let leak = 0
+for i in range(3) {
+    let tmp = 10
+    tmp = tmp + i
+    leak = leak + tmp
+}
+print("c2:" + str(leak))
+# 3. reads of an outer name from inside the body walk the parent chain the
+#    same way under reuse (the loop var is the only child binding).
+let total = 0
+for i in range(5) {
+    total = total + i
+}
+print("c3:" + str(total))
+# 4. while: same reuse path; the cond evaluates OUTSIDE the child scope,
+#    and body bindings stay per-iteration.
+let w = 0
+let k = 0
+while k < 4 {
+    let step = k * 2
+    w = w + step
+    k = k + 1
+}
+print("c4:" + str(w))
+# 5. const inside the body: each iteration re-defines it in a clean scope
+#    (reuse clears the consts set too — no frozen stress must appear).
+let cs = 0
+for i in range(3) {
+    const fresh = 5
+    cs = cs + fresh
+}
+print("c5:" + str(cs))
+# 6. break/continue with body bindings: reuse must not carry state across
+#    the continue boundary.
+let acc = 0
+for i in range(6) {
+    let tag = i % 2
+    if tag == 0 {
+        continue
+    }
+    acc = acc + tag
+    if acc > 3 {
+        break
+    }
+}
+print("c6:" + str(acc))
+# 7. nested loops: inner iteration state resets per INNER iteration; the
+#    inner loop var never leaks into the outer body's next iteration.
+let pairs = 0
+for i in range(3) {
+    let outer_only = i * 10
+    for j in range(4) {
+        let inner_only = j
+        pairs = pairs + outer_only + inner_only
+    }
+}
+print("c7:" + str(pairs))
+# 8. the loop var is scoped to the body: reading it after the loop reads
+#    the outer binding chain (unbound -> null read note, value null).
+let lv = 0
+for q in range(2) {
+    lv = lv + q
+}
+print("c8:" + str(lv) + ":" + str(q))
+print("== done ==")
