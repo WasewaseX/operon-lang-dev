@@ -1,0 +1,65 @@
+// how-operon-works.mmd — Operon execution pipeline (owner deliverable)
+// Bio metaphor: programs are genomes; functions are GENES; three engines must
+// agree byte-for-byte before any result is trusted (differential law).
+flowchart TB
+    subgraph SRC["SOURCE (.op programs)"]
+        SRC1["app .op files<br/>(apps/, examples/)"]
+        SRC2["stdlib std/*.op<br/>(33 modules, self-hosted genes)"]
+        SRC3["tests/ corpus<br/>(3,500+ programs incl. differential pins)"]
+    end
+
+    subgraph FE["FRONTEND (Rust)"]
+        LEX["lexer<br/>tokens"]
+        PAR["parser<br/>AST (+ E2xxx error taxonomy)"]
+        TC["typeck<br/>annotation + inference"]
+        FOLD["constant folder (VM, --opt 0/1/2)<br/>fold_consts mirrors apply_binop exactly"]
+    end
+
+    subgraph IR["GENE IR"]
+        G1["genes extracted from program body<br/>(fn g() {{...}} / bare-main advisory)"]
+        G2["value system: i64 / f64 / str / list / map<br/>deep_eq value identity + W029 content hashing"]
+    end
+
+    subgraph ENG["THREE DIFFERENTIAL ENGINES (the law itself)"]
+        VM["1 · Rust VM<br/>(default, kernel-accelerated,<br/>--opt 0/1/2 fold pipeline)"]
+        TW["2 · tree-walk interpreter<br/>(--no-vm, reference semantics)"]
+        OR["3 · Python oracle<br/>(bootstrap/oracle.py,<br/>independent implementation)"]
+    end
+
+    subgraph RT["RUNTIME GUARANTEES"]
+        RT1["stress containment (overflow / OOM / fuel)<br/>contained results, never silent lies"]
+        RT2["memory: MapStore memo (P1),<br/>env pools, lazy-fenv target (P4)"]
+        RT3["RNG: deterministic xorshift64*<br/>(std/random, R0.5)"]
+    end
+
+    subgraph TL["TOOLCHAIN"]
+        T1["operon run / build / check / fmt<br/>mod init/add/verify/publish"]
+        T2["packaging: operon.toml + registry lock<br/>(NAME+rev checksums, --locked)"]
+        T3["installer: install.sh --verify<br/>(SHA256SUMS + manifest, fail-closed)"]
+    end
+
+    subgraph GATES["STANDING GATES (CI)"]
+        GA["differential harness<br/>3,489+ programs × 3 lanes<br/>byte + exit-code equality"]
+        GB["perf-gate (12 workloads,<br/>20% threshold + noise policy)"]
+        GC["compat matrix (5 OS/arch legs)<br/>+ redteam 109 / fuzz / R0.6 analytic"]
+    end
+
+    SRC1 --> LEX
+    SRC2 --> LEX
+    SRC3 --> LEX
+    LEX --> PAR --> TC --> G1 --> G2
+    TC -.->|"literal sub-exprs"| FOLD
+    FOLD --> VM
+    G2 --> VM
+    G2 --> TW
+    G2 --> OR
+    VM --> RT
+    TW --> RT
+    OR --> RT
+    VM --> GA
+    TW --> GA
+    OR --> GA
+    GA -->|"0 diverge or the landing is BLOCKED"| GATES
+    VM --> T1
+    T1 --> T2 --> T3
+    GATES --> REL["release tag v2.x.0<br/>(5-platform binaries + SHA256SUMS<br/>+ hermetic installer gate)"]
