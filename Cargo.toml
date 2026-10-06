@@ -1,6 +1,6 @@
 [package]
 name = "operon"
-version = "2.9.0"
+version = "2.9.1"
 edition = "2021"
 license = "MIT"
 description = "Operon — the gene-expression language. Total Grammar toolchain (Rust core, C/C++ load-bearing kernels)."

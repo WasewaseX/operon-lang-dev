@@ -4,7 +4,7 @@ Source of truth: `scripts/gen_doc_stats.py` (run from repo root).
 Validated by `scripts/check_docs_sync.py`. Hand-typed numbers in
 README/SPEC/BENCH are forbidden, link here instead.
 
-- **Version**: 2.9.0  · SPEC Status: v2.9.0
+- **Version**: 2.9.1  · SPEC Status: v2.9.1
 - **Keywords (parser reserved set)**: 60, table in [KEYWORDS.md](KEYWORDS.md)
 - **Std modules**: 33 (args, bigint, binary, bio, collections, csv, deque, env, fmt, fs, graph, hashing, heap, iter, json, logging, math, motifs, path, process, random, result, seq, serialize, set, strings, terminal, testing, time, try_numeric, typed, unicode, url)
 - **Std functions (.op-level `gene` defs)**: 343
