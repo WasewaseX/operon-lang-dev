@@ -1,0 +1,6 @@
+# Rust/FFI build artifacts
+operon-ffi/target/
+app/src/main/jniLibs/
+.gradle/
+build/
+local.properties
