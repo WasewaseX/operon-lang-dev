@@ -1,0 +1,51 @@
+# S3-136T2 pin (2026-10-06): regression gate for issue #136 rows 3-iter-half,
+# 4, and 5 — the tail rows released by E-SWEEP-STD1's landing (#142 / 3cc1116).
+#   row 3 (iter half): iter.take list path is FIRST-N; n <= 0 answers []
+#     (mirrors the collections.take fix landed in S3-136H — both takes are
+#     contract-identical; the bare slice fell into negative-index semantics).
+#   row 4: a sequence yielding null is indistinguishable from exhaustion —
+#     SPEC §7b defines next() as "next value, or null when exhausted", so
+#     the null-yield shape is OUT of the iterator protocol's vocabulary.
+#     Pinned as the documented protocol boundary (a done-flag protocol is
+#     an engine-lane change, not a std fix).
+#   row 5: json_flatten_into flattens DETERMINISTICALLY: sorted-key map
+#     traversal + first-wins leaf writes, so ==-equal maps flatten
+#     identically regardless of insertion order (map == law, same class as
+#     the S3-136H set_from canonicalization). The dotted-key collision
+#     {"a":{"b":1},"a.b":2} and its insertion-order twin both answer the
+#     SAME result — the nested path wins in sorted traversal ("a" < "a.b").
+# Expected output is byte-pinned across all engines (differential lanes).
+use std/iter as it
+use std/json as js
+
+# row 4 fixture: a sequence whose SECOND value is null (out-of-protocol
+# shape, pinned as exhaustion-at-that-point per SPEC §7b)
+sequence null_yielder() {
+    yield null
+    yield 1
+    yield 2
+}
+
+# normal sequence for the take contract rows
+sequence counter3() {
+    yield 10
+    yield 20
+    yield 30
+}
+
+main {
+    # --- row 3 (iter half): take is first-n on the list path ------------
+    print("r3a", it.take([1, 2, 3], -1))
+    print("r3b", it.take([1, 2, 3], 0))
+    print("r3c", it.take([1, 2, 3], 2))
+
+    # --- row 4: sequence path, protocol boundary pinned ------------------
+    print("r4a", it.take(counter3(), 2))
+    print("r4b", it.take(null_yielder(), 3))
+
+    # --- row 5: deterministic flattening, ==-law across insertion orders -
+    print("r5a", js.json_flatten({"a": {"b": 1}, "a.b": 2}))
+    print("r5b", js.json_flatten({"a.b": 2, "a": {"b": 1}}))
+    print("r5c", js.json_flatten({"x": 1, "y": {"z": [10, 20]}}))
+    print("r5d", js.json_flatten({"y": {"z": [10, 20]}, "x": 1}))
+}
