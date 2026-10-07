@@ -1487,7 +1487,26 @@ fn exec_gene_code_inner(
             Instr::EnterScope => {
                 scopes.push(cur.clone());
                 cur = match scope_cache.pop() {
-                    Some(c) => c,
+                    Some(mut c) => {
+                        // P6-wave fix (review 5439336263): the pool is ONE
+                        // LIFO stack shared across ALL scope sites of the
+                        // call, unlike the tree-walk's SITE-LOCAL caches
+                        // (loop_scope_env) whose parentage self-corrects. A
+                        // cached env therefore carries the PARENT of the
+                        // site that stashed it — reusing it verbatim left
+                        // lookups walking a stale ancestor chain: iteration-
+                        // 1 leftovers stayed readable and `let` rebinds saw
+                        // names that a fresh env would not (the 7 divergent
+                        // parity files). Re-anchor on every reuse. Stash
+                        // requires strong_count == 1, so the pop hands us
+                        // sole ownership and Rc::get_mut is infallible here;
+                        // the None arm is unreachable and kept defensive.
+                        match Rc::get_mut(&mut c) {
+                            Some(e) => e.parent = Some(cur.clone()),
+                            None => c = Env::new(Some(cur.clone())),
+                        }
+                        c
+                    }
                     None => Env::new(Some(cur.clone())),
                 };
             }
@@ -2179,7 +2198,19 @@ fn fiber_run_inner(interp: &mut Interp, fiber: &mut Fiber) -> Result<FiberOutcom
             Instr::EnterScope => {
                 scopes.push(cur.clone());
                 let next = match scope_cache.pop() {
-                    Some(c) => c,
+                    Some(mut c) => {
+                        // P6-wave fix (review 5439336263): same re-anchor as
+                        // the sync machine — the per-frame pool is LIFO
+                        // across scope sites, so a reused env must point at
+                        // the CURRENT parent, not the site that stashed it.
+                        // strong_count == 1 at stash makes Rc::get_mut
+                        // infallible on the reuse path.
+                        match Rc::get_mut(&mut c) {
+                            Some(e) => e.parent = Some(cur.clone()),
+                            None => c = Env::new(Some(cur.clone())),
+                        }
+                        c
+                    }
                     None => Env::new(Some(cur.clone())),
                 };
                 *cur = next;
