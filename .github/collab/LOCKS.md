@@ -5,6 +5,59 @@
 
 ---
 
+# OPERON LOCKS — active path ownership (R0.10, APPROVED 2026-10-04)
+
+**What this is:** the mechanical half of multi-agent collision prevention —
+the executable ledger behind the §24.3 claim protocol and the §24.4 CI guard
+(`operon-lang-dev/scripts/collision_guard.py` + `collision-guard.yml` workflow).
+
+**Keeper:** builder-F (roadmap §23, collab/** upkeep). Ledger changes land as
+vault commits; the keeper syncs the CI mirror `.github/collab/LOCKS.md` in
+operon-lang-dev in the same session and the chatroom post records both SHAs.
+
+---
+
+## Task/claim format (the contract)
+
+**1. Before touching code (roadmap §24.3, condensed):**
+
+1. Read `collab/TASKS.md` (is the task READY/unclaimed?).
+2. Read this file — confirm no ACTIVE row owns an overlapping path.
+3. Create the branch, open a **draft PR immediately**.
+4. Put the claim in the PR body (format below) and record the lock here.
+
+**2. PR body contract** (parsed by the CI guard; keys are case-insensitive):
+
+```
+Task-ID: <task id from collab/TASKS.md or roadmap §34 — e.g. W061-L, P1-batch, R0.10>
+Paths: <comma-separated exclusive paths this task touches — files or dir/ prefixes>
+```
+
+- `Task-ID` is REQUIRED for any change under a core path (src/, std/, tests/,
+  examples/, apps/, bootstrap/, scripts/, docs/, packaging/, web/, labs/,
+  .github/, README.md, SPEC.md, and the other top-level docs/Cargo files —
+  the full list is `CORE_PATHS` in the guard script).
+- `Paths` is advisory-but-expected; it lets the guard warn at DRAFT time,
+  before any file changes, when a declared path already belongs to someone else.
+
+**3. Overlap rule:** the first canonical GitHub claim for a path set wins
+(§24.3). The guard rejects a changed file covered by an ACTIVE lock whose task
+differs from the PR's Task-ID. A conflicting worker stops before editing and
+chooses another READY task — or negotiates openly in the chatroom (the owner's
+standing note: cross-agent help is endorsed when claimed openly first).
+
+**4. Lock lifecycle:** ACTIVE → RELEASED. A lock releases when the task's PR
+merges, when the chatroom records a handoff/close, or by owner override.
+Released rows move to the Released table (audit trail, never deleted).
+The ledger is self-checked by the guard: two ACTIVE rows covering one path
+is a loud ledger defect that fails every PR until the keeper fixes it.
+
+**5. Grandfather clause:** PRs opened before the guard's landing date
+(2026-10-05) get WARN instead of FAIL, so the in-flight review queue is
+reported but not churned.
+
+---
+
 ## Active locks
 
 | lock | agent | task | paths | status | claimed | released |
@@ -26,6 +79,8 @@
 | L-021 | builder-B | S3-136T2 | std/iter.op, std/json.op, tests/differential/s3_136t2_pin.op, docs/STDLIB.md, docs/STATS.md, docs/stats.json, docs/api/iter.md, docs/api/json.md | RELEASED | 2026-10-06 (draft PR #149 claim-before-edit; #136 rows 3-iter-half/4/5 released by E-SWEEP-STD1 landing; declared next-pull per d602e69) | 2026-10-06 RELEASED at landing: PR #149 MERGED rebase-merge 42844e9 (API truth 12:26:29Z; refresh-1 onto post-release main ab3a3c4 after the release-round stats collision; CI 14 pass + 1 documented skip on 0bbc330; full corpus 3505/0 + 3497/0 both lanes; cargo 331/0; redteam 109/0; pin 3-lane byte-identical re-verified on post-merge main 42844e9 incl. #152 src/value.rs) | PR #149 / 42844e9 |
 | L-022 | builder-C | R0.7 (claim/evidence schema) | docs/spec/CLAIMS.md, bootstrap/claim_registry.json, scripts/check_claims.py, scripts/test.sh | ACTIVE | 2026-10-06 (chatroom post + TASKS row; R0.6 follow-on per §27 verification/science lane; no overlap with L-007/L-008/L-020/L-021/L-002) | — |
 | L-020 | builder-C | F5 (#49 cargo-fuzz in-process) | fuzz/, .github/workflows/fuzz-inproc.yml, docs/FUZZING.md | ACTIVE | 2026-10-06 (chatroom post; branch reliab/f5-cargo-fuzz-inproc pushed @ 38d219e, draft PR #147; guard green post body-claim patch; L-012 covers scripts/fuzz_parser.py only — no overlap) | #49 |
+| L-023 | Super Z | Z-134-RANGEGUARD | src/interp.rs, tests/differential/range_step_wrap_pin.op | ACTIVE | 2026-10-07 (chatroom digest-14 post; digest-10 ALL-word queue item #134 — S1 builtin range step-wrap, differential pin rides; unclaimed per F session-16 scan + room ruling; the lazy for-loop site is already guarded by the P5 wave, the materialized builtin is the remaining site) | — |
+| L-025 | builder-B | W036-freeze-lint (D-008 follow-up) | scripts/check_docs_sync.py, docs/specs/CORE-BIO-BOUNDARY.md, TODO-100.md | RELEASED | 2026-10-08 (worklog session-35; the W036-named follow-up: automated lint diffing parser KEYWORDS+marks against the frozen inventory; no overlap with L-007/L-008/L-020/L-022/L-023/L-024 — docs/specs/ is not docs/spec/, and test.sh is not touched) | 2026-10-08 RELEASED at landing: W069 MERGED direct to main @ 85a0d38 (push API truth 29e2d2b..85a0d38, WasewaseX identity verified on the head commit; gate receipts in the commit message: positive run green 60kw/7marks, negative tests crossing/vanished/count-drift/mark-drift all fire; CI watch noted in session-35 worklog) |
 
 Notes:
 - **Not locked (claims invited, not yet ACKed in the room):** P2/P3
@@ -47,3 +102,4 @@ Notes:
 | L-003 | builder-A | P5-P6-survey | docs/bench/ | 2026-10-04 (chatroom 15:40 post, measure-only) | 2026-10-05 (survey merged as PR #92 @ 52830cd — fix phases re-claim per survey-then-fix) |
 | L-009 | builder-F | R0.10 | collab/** (vault), .github/collab/**, scripts/collision_guard.py, .github/workflows/collision-guard.yml | 2026-10-05 (this ledger) | 2026-10-05 (CI half merged as PR #93 @ c1e5039 — keeper sync continues under WORKER-BEHAVIOR rule 7) |
 | L-001 | builder-A | P1-batch | src/value.rs, src/vm.rs | 2026-10-04 (chatroom 14:58/16:05 posts) | 2026-10-05 (P1 fix cycle landed on main @ 2bd29b0 — bbf1c67 rework + 5fe1a11 D1 counter + 2bd29b0 slot ownership; owner-merged PR #100 06:29Z; F's independent probe battery green on the fix head pre-merge) |
+| L-024 | Super Z | Z-130-EXACT2 | src/num_exact.rs, src/interp.rs, src/vm.rs, src/lib.rs, tests/differential/int_float_exact2_pin.op, docs/stats.json, docs/STATS.md | ACTIVE | 2026-10-08 (digest-16 follow-up: my L-023 post declared #130 next in my queue after #134 lands; #134 landed via PR #164 — claim exercised; sweep-3's LAST remaining item; no ACTIVE lock overlaps: L-007/L-008 are F's standing checker/release duties, all others RELEASED) | — |
