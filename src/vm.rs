@@ -2879,8 +2879,13 @@ fn fold_consts(consts: &mut Vec<Const>, a: u32, b: u32, op: BinOp) -> Option<u32
                 // so the folded constant must be Float too — Const::Int
                 // kept the truncated quotient and `9 / 2` executed as 4
                 // under --opt while every unfolded lane printed 4.5.
-                // `as f64` on both sides is bit-identical to as_floats.
-                Const::Float(x as f64 / y as f64)
+                // sweep-3 #130 (Z-130-EXACT2): the runtime Int/Int path is
+                // now EXACTLY rounded once (num_exact::div_i64_i64_exact,
+                // Python long_true_divide law), so the fold calls the SAME
+                // helper — fold byte-matches runtime by construction
+                // (the old `x as f64 / y as f64` collapsed |x| > 2^53
+                // numerators before dividing).
+                Const::Float(crate::num_exact::div_i64_i64_exact(x, y))
             }
             Mod => {
                 if y == 0 {
