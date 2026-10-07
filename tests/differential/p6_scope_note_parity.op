@@ -1,0 +1,103 @@
+# P6-wave parity pin: loop scope reuse must never leak prior-iteration
+# bindings through any env chain (2026-10-07, builder-B).
+#
+# The first cut of the P6 scope reuse cached whole Rc<Env> iteration nodes.
+# A cached child kept its parent pointer, so (a) it pinned its parent scope
+# alive — the parent's strong-count stash check then failed and its stale
+# bindings were never cleared — and (b) the next iteration's
+# contains/get/set walked that ghost parent chain and observed the previous
+# iteration's `let` bindings: spurious `rebinding '...'` notes on stderr
+# (byte-visible; caught by the 3-way parity gate on tests/differential/
+# bigint.op + six more corpus files, while stdout stayed correct because
+# every read was shadowed by a fresh define). The fix recycles the MAPS
+# (mem::take, capacity preserved) and always mints a fresh Env with the
+# correct parent, so no cached node and no ghost chain can exist.
+#
+# This file pins the note stream, not just stdout: every shape below runs
+# byte-identical (stdout AND stderr AND rc) across tree-walk, vm, opt1,
+# opt2, and the Python oracle. The mul_like gene reproduces the exact
+# std/bigint shape that exposed the bug (per-iteration `let carry`/`let j`
+# over a nested while with an inner `let cur`).
+
+gene mul_like(n, m) {
+    let acc = []
+    let i = 0
+    while i < n {
+        let carry = 0
+        let j = 0
+        while j < m {
+            let cur = i * 10 + j
+            carry = carry + cur
+            j = j + 1
+        }
+        push(acc, carry)
+        i = i + 1
+    }
+    return acc
+}
+print("mul4x3:", str(mul_like(4, 3)))
+print("mul3x2:", str(mul_like(3, 2)))
+print("mul2x5:", str(mul_like(2, 5)))
+print("mul1x7:", str(mul_like(1, 7)))
+
+# assign-BEFORE-let in a reused loop body: iteration 1 auto-declares (one
+# note), later iterations must neither re-note nor land the assign in any
+# previous iteration's env (the pre-fix ghost chain swallowed it silently).
+gene assign_first(k) {
+    let out = 0
+    let n = 0
+    while n < k {
+        out = out + n
+        let fresh = out * 2
+        out = fresh
+        n = n + 1
+    }
+    return out
+}
+print("assign_first:", str(assign_first(5)))
+print("assign_first0:", str(assign_first(0)))
+
+# same let name at two loop depths: the inner re-definition is a REAL
+# rebinding note (the outer iteration env IS in the inner chain) — pinned
+# identical on every engine, one note per inner iteration, none extra.
+let total = 0
+for x in range(3) {
+    let acc2 = x
+    for y in range(2) {
+        let acc2 = x * 10 + y
+        total = total + acc2
+    }
+    total = total + acc2
+}
+print("shadow_total:", str(total))
+
+# capture inside a loop: the closure keeps ITS iteration's binding values
+# (fresh-Env lifetime) and later iterations must not observe the capture.
+let fs = []
+for i in range(3) {
+    let captured = i * 100
+    gene grab() {
+        return captured
+    }
+    push(fs, grab)
+}
+print("captures:", str(fs[0]()) + "," + str(fs[1]()) + "," + str(fs[2]()))
+
+# break/continue paths: recycled scopes must not survive a break, and a
+# continue must not skip the recycle into a stale next iteration.
+let seen = []
+let k = 0
+while k < 6 {
+    k = k + 1
+    let tag = k * 2
+    if k == 2 {
+        push(seen, "skip" + str(tag))
+        continue
+    }
+    if k == 5 {
+        push(seen, "brk" + str(tag))
+        break
+    }
+    push(seen, str(tag))
+}
+print("looppath:", str(seen))

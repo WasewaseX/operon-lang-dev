@@ -2177,7 +2177,14 @@ impl Interp {
             }
             Stmt::Let(name, e) => {
                 let v = self.eval(env, e)?;
-                if env.get(name).is_some() {
+                // The rebinding note fires ONLY on a same-scope re-definition
+                // (oracle rule, pinned by tests/differential/
+                // p6_scope_note_parity.op): a `let` that shadows a name from
+                // an OUTER scope is a fresh binding in a new scope and stays
+                // silent — the chain-walking get() over-noted there (a
+                // pre-existing tree/oracle divergence the corpus never
+                // exercised until the P6 parity pins).
+                if env.vars.borrow().contains_key(name.as_str()) {
                     self.note(0, 4, format!("rebinding '{}'", name));
                 }
                 env.define(name, v);
@@ -2188,7 +2195,7 @@ impl Interp {
                 // reachable list/map), the name recorded as const. Freezing
                 // draws nothing: the entropy stream is untouched.
                 let v = self.eval(env, e)?;
-                if env.get(name).is_some() {
+                if env.vars.borrow().contains_key(name.as_str()) {
                     self.note(0, 4, format!("rebinding '{}'", name));
                 }
                 self.deep_freeze(&v);
@@ -2212,7 +2219,7 @@ impl Interp {
                         ),
                     ));
                 }
-                if env.get(name).is_some() {
+                if env.vars.borrow().contains_key(name.as_str()) {
                     self.note(0, 4, format!("rebinding '{}'", name));
                 }
                 env.define(name, v);
@@ -2498,7 +2505,7 @@ impl Interp {
                     if *define {
                         match t {
                             Expr::Ident(name) => {
-                                if env.get(name).is_some() {
+                                if env.vars.borrow().contains_key(name.as_str()) {
                                     self.note(0, 4, format!("rebinding '{}'", name));
                                 }
                                 env.define(name, val);
@@ -3387,7 +3394,7 @@ impl Interp {
     fn bind_pattern(&mut self, env: &Rc<Env>, pat: &Pat, v: Value) {
         match pat {
             Pat::Bind(name) => {
-                if env.get(name).is_some() {
+                if env.vars.borrow().contains_key(name.as_str()) {
                     self.note(0, 4, format!("rebinding '{}'", name));
                 }
                 env.define(name, v);
@@ -3411,7 +3418,7 @@ impl Interp {
                             } else {
                                 Vec::new()
                             };
-                            if env.get(rname).is_some() {
+                            if env.vars.borrow().contains_key(rname.as_str()) {
                                 self.note(0, 4, format!("rebinding '{}'", rname));
                             }
                             env.define(rname, Value::List(Rc::new(RefCell::new(tail))));
@@ -3436,7 +3443,7 @@ impl Interp {
                         self.bind_pattern(env, ep, Value::Null);
                     }
                     if let Some(rname) = rest {
-                        if env.get(rname).is_some() {
+                        if env.vars.borrow().contains_key(rname.as_str()) {
                             self.note(0, 4, format!("rebinding '{}'", rname));
                         }
                         env.define(rname, Value::List(Rc::new(RefCell::new(Vec::new()))));
@@ -3462,7 +3469,7 @@ impl Interp {
                             } else {
                                 Vec::new()
                             };
-                            if env.get(rname).is_some() {
+                            if env.vars.borrow().contains_key(rname.as_str()) {
                                 self.note(0, 4, format!("rebinding '{}'", rname));
                             }
                             env.define(rname, Value::List(Rc::new(RefCell::new(tail))));
@@ -3494,7 +3501,7 @@ impl Interp {
                         self.bind_pattern(env, ep, Value::Null);
                     }
                     if let Some(rname) = rest {
-                        if env.get(rname).is_some() {
+                        if env.vars.borrow().contains_key(rname.as_str()) {
                             self.note(0, 4, format!("rebinding '{}'", rname));
                         }
                         env.define(rname, Value::List(Rc::new(RefCell::new(Vec::new()))));
