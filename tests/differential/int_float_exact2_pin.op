@@ -1,0 +1,57 @@
+# int/float exactness pin (2026-10-08): regression gate for issue #130
+# (Z-130-EXACT2, extends #103). Two laws, both Python-parity:
+#   L1 true division: Int / Int is computed EXACTLY and rounded ONCE
+#      (long_true_divide) — the old path narrowed both operands to f64
+#      first, so numerators above 2^53 collapsed before the divide
+#      (9007199254740993 / 3 printed 3002399751580330.5; truth is ...331.0).
+#   L2 ordering: mixed Int<->Float comparison is EXACT
+#      (float_richcompare) — 9007199254740993 > 9007199254740992.0 was
+#      false under the lossy narrowing; truth is true.
+# Expected values below are Python ground truth, printed as boolean
+# assertions AND raw values so the byte-pin carries the truth. The fold
+# site (vm.rs fold_consts) rides the same helper, so --opt 1/2 lanes must
+# stay byte-identical with the unfolded lanes by construction.
+gene main() {
+    # --- the issue's division table (Python ground truth) ---------------
+    print("div3", 9007199254740993 / 3 == 3002399751580331.0, 9007199254740993 / 3)
+    print("div7", 9007199254740993 / 7 == 1286742750677284.75, 9007199254740993 / 7)
+    # exact quotient round-trips: 3 * (a / 3) is exactly a when a % 3 == 0
+    print("div3_rt", 3.0 * (9007199254740993 / 3) == 9007199254740993.0, 3.0 * (9007199254740993 / 3))
+
+    # --- the issue's ordering table -------------------------------------
+    print("ord_gt", 9007199254740993 > 9007199254740992.0, 9007199254740993 == 9007199254740992.0)
+    print("ord_flip", 9007199254740992.0 < 9007199254740993, 9007199254740992.0 >= 9007199254740993)
+
+    # --- mixed Int/Float division stays double-division (Python law) ----
+    print("mix_div", 9007199254740993 / 1.0 == 9007199254740992.0, 1.0 / 3 == 0.3333333333333333)
+
+    # --- ordering edges: signs, subnormals, infinities-as-boundaries ----
+    print("neg_ord", -1 < -0.5, -0.5 < -1)
+    print("cross_sign", 0.5 > -1, -1 < 0.5)
+    print("tiny", 0 < 0.0000000001, 0 > -0.0000000001, 1 > 0.9999999999)
+    print("halfway", 5 > 2.5, 2 < 2.5, -5 < -2.5)
+
+    # --- i64 boundary exactness ------------------------------------------
+    # i64::MIN is exactly representable: -9223372036854775808.0
+    print("min_exact", -9223372036854775807 - 1 == -9223372036854775808.0, -9223372036854775807 - 1 > -9223372036854775809.0)
+    # 2^63 as float sits strictly above every int (i64::MAX < 2^63)
+    print("above_max", 9223372036854775807 < 9223372036854775808.0, 9223372036854775807 < 1e19)
+
+    # --- division edges: powers of two, negatives, zero signs -----------
+    print("pow2", 4611686018427387904 / 2 == 2305843009213693952.0, 1 / 4611686018427387904 == 0.00000000000000000010842021724855044)
+    print("neg_div", -9 / 2 == -4.5, 9 / -2 == -4.5, -9 / -2 == 4.5)
+    let z = 0 / 5
+    print("zero_pos", z == 0.0, z >= 0.0)
+
+    # --- i64::MIN numerator (|a| = 2^63, the u128-path edge) -------------
+    print("min_div", (-9223372036854775807 - 1) / 2 == -4611686018427387904.0, (-9223372036854775807 - 1) / 1 == -9223372036854775808.0)
+
+    # --- fold contract: literal / literal must byte-match runtime --------
+    print("fold9", 9 / 2 == 4.5, 9 / 2)
+    print("foldbig", 9007199254740993 / 3 == 3002399751580331.0, 9007199254740993 / 3)
+
+    # --- non-int/int semantics unchanged (Python converts lossy there) ---
+    print("float_div", 1.0 / 3 == 0.3333333333333333, 10.0 / 4 == 2.5)
+    print("floordiv", 9 // 2 == 4, -9 // 2 == -5, 9007199254740993 // 3 == 3002399751580331)
+    print("mod_law", 9 % 2 == 1, 7 % -3 == -2)
+}

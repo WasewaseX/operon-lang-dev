@@ -4444,6 +4444,20 @@ impl Interp {
                 }))
             }
             Div => {
+                // sweep-3 #130 (Z-130-EXACT2): Int/Int true division is
+                // EXACTLY rounded once (Python long_true_divide law) — the
+                // old path converted both operands to f64 first, so any
+                // numerator above 2^53 collapsed before the divide
+                // (9007199254740993 / 3 printed ...330.5, oracle says ...331.0).
+                // The zero-divisor stress contract below is unchanged; mixed
+                // Int/Float and Float/Float stay double-division (Python
+                // converts there too — oracle-parity).
+                if let (Value::Int(a), Value::Int(b)) = (l, r) {
+                    if *b == 0 {
+                        return Err(Stress::new("unfolded", "division by zero"));
+                    }
+                    return Ok(Value::Float(crate::num_exact::div_i64_i64_exact(*a, *b)));
+                }
                 let (a, b) = self.as_floats(l, r)?;
                 if b == 0.0 {
                     return Err(Stress::new("unfolded", "division by zero"));
@@ -4604,6 +4618,16 @@ impl Interp {
         match (l, r) {
             (Value::Int(a), Value::Int(b)) => Ok(a.cmp(b)),
             (Value::Str(a), Value::Str(b)) => Ok(a.cmp(b)),
+            // sweep-3 #130 (Z-130-EXACT2): mixed Int<->Float ordering is
+            // EXACT (Python float_richcompare law) — the lossy f64
+            // narrowing said 9007199254740993 == 9007199254740992.0. NaN
+            // never reaches here from the ordering operators (the guard
+            // returns false first) and the helper's Equal fallback matches
+            // the old partial_cmp(None) collapse for any other caller.
+            (Value::Int(a), Value::Float(b)) => Ok(crate::num_exact::cmp_i64_f64_exact(*a, *b)),
+            (Value::Float(a), Value::Int(b)) => {
+                Ok(crate::num_exact::cmp_i64_f64_exact(*b, *a).reverse())
+            }
             _ => {
                 let (a, b) = self.as_floats(l, r)?;
                 Ok(a.partial_cmp(&b).unwrap_or(std::cmp::Ordering::Equal))
