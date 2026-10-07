@@ -104,3 +104,84 @@ for q in range(2) {
 }
 print("c8:" + str(lv) + ":" + str(q))
 print("== done ==")
+
+# --- stale-parent re-anchor pins (P6-wave fix, review 5439336263) ----------
+# NOTE: the scope pool is PER-CALL (exec_gene_code local), so these shapes
+# run inside genes — top-level execution never pops the pool.
+gene pins() {
+    # The VM scope pool is ONE LIFO stack shared across ALL scope sites of a
+    # call (if branches, loop bodies), unlike the tree-walk's SITE-LOCAL caches
+    # (loop_scope_env) whose parentage self-corrects. A reused env therefore
+    # MUST re-anchor its parent to the CURRENT env at EnterScope. Pre-fix, the
+    # reused env kept the PARENT of the site that stashed it: in a nested-loop
+    # shape the outer body env of iteration 1 stays alive ONLY through the
+    # inner env's stale parent pointer, and iteration-2 body-level
+    # `let carry`/`let j` defines Env::contains()-walk that stale ancestor,
+    # emitting spurious rebinding notes a fresh chain would not (std/bigint
+    # __mul_mag is the canonical shape; pre-fix divergence receipts:
+    # genomelab, bigint 13->4981 notes, math_overflow_pin, s3_136h_pool_pin,
+    # stdlib_wave1/2, std_heap — those corpus files are the standing pre-fix
+    # discriminators; c9-c12 pin the re-anchor semantics: per-iteration
+    # value freshness, branch-local visibility, cross-site pool churn,
+    # capture-proof gene instances).
+
+    # c9: nested while loops, outer body redefines carry/j every iteration
+    #     (the __mul_mag shape). Values must stay per-iteration fresh AND the
+    #     stderr must stay note-free for the redefines on every lane.
+    let i = 0
+    let log = ""
+    while i < 3 {
+        let carry = i * 100
+        let j = 0
+        while j < 2 {
+            let cur = carry + j
+            log = log + str(cur) + ";"
+            j = j + 1
+        }
+        log = log + str(carry) + "|"
+        i = i + 1
+    }
+    print("c9:" + log)
+    # c10: a branch-local name must stay invisible after its iteration — the
+    #      re-anchor must not turn reuse into a leak (unbound read: note+null).
+    for i in range(2) {
+        if i == 0 {
+            let z = 77
+        }
+        if i == 1 {
+            print("c10:" + str(z))
+        }
+    }
+    # c11: pool churn across three distinct site kinds in one call — the
+    #      while-lane re-anchor must hold; every value site-correct.
+    let out = ""
+    for i in range(2) {
+        if i == 0 { let a = i + 1
+            out = out + str(a) }
+        if i == 1 { let b = i + 1
+            out = out + str(b) }
+        while i == 1 { let c = i + 10
+            out = out + str(c)
+            break }
+    }
+    print("c11:" + out)
+    # c12: a gene defined inside a loop captures ITS OWN iteration's env —
+    #      captured envs fail the stash check and keep fresh-Env lifetime;
+    #      instances read 0,1,2 (never the last iteration through a stale
+    #      chain).
+    let fs = []
+    for i in range(3) {
+        gene g() {
+            return i
+        }
+        fs = fs + [g]
+    }
+    let total = 0
+    for g2 in fs {
+        total = total + g2()
+    }
+    print("c12:" + str(total))
+    return true
+}
+pins()
+print("== done ==")
