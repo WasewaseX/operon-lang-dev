@@ -4,12 +4,12 @@ Source of truth: `scripts/gen_doc_stats.py` (run from repo root).
 Validated by `scripts/check_docs_sync.py`. Hand-typed numbers in
 README/SPEC/BENCH are forbidden, link here instead.
 
-- **Version**: 2.9.1  · SPEC Status: v2.9.1
+- **Version**: 2.9.2  · SPEC Status: v2.9.2
 - **Keywords (parser reserved set)**: 60, table in [KEYWORDS.md](KEYWORDS.md)
 - **Std modules**: 33 (args, bigint, binary, bio, collections, csv, deque, env, fmt, fs, graph, hashing, heap, iter, json, logging, math, motifs, path, process, random, result, seq, serialize, set, strings, terminal, testing, time, try_numeric, typed, unicode, url)
 - **Std functions (.op-level `gene` defs)**: 346
 - **Red-team payload files**: 106
-- **Proof files**: 167 (of 3578 test .op files)
+- **Proof files**: 167 (of 3579 test .op files)
 - **Proof run / harness recount**: skipped (GEN_DOC_STATS_FAST=1), run by scripts/test.sh on every gate
 - **CLI subcommands**: ast, bench, build, check, crispr, dap, disasm, doc, explain, fix, fmt, graph, ir, keywords, lint, profile, repl, rna, test, version, watch
 - **LSP methods**: initialize, shutdown, textDocument/completion, textDocument/definition, textDocument/didChange, textDocument/didClose, textDocument/didOpen, textDocument/documentSymbol, textDocument/formatting, textDocument/hover, textDocument/prepareRename, textDocument/publishDiagnostics, textDocument/references, textDocument/rename, textDocument/semanticTokens, textDocument/signatureHelp
