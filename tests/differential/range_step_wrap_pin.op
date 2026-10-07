@@ -1,0 +1,72 @@
+# range step-wrap pin (2026-10-07): regression gate for issue #134.
+# The materialized builtin range() stepped with plain i64 addition:
+# debug builds panicked (contained -> the issue's "raises") and release
+# builds wrapped to garbage values before dying on the 10M ceiling.
+# The next value overflowing i64 is PROVABLY past the bound in the
+# direction of travel (step > 0: next > i64::MAX >= stop; step < 0:
+# next < i64::MIN <= stop), so the loop must END, not error. Expected
+# values below are ground truth computed externally (Python), printed
+# as boolean assertions AND raw values so the byte-pin carries the
+# truth. The lazy for-range path was already guarded by the P5 wave
+# (i128 count + checked_add break); the for-controls below pin that
+# contract on the same shapes so the two range surfaces cannot drift.
+gene main() {
+    # --- the issue's exact shape: range(2^62, i64::MAX, 2^62) -----------
+    # start 4611686018427387904 yields; next 9223372036854775808 does not
+    # exist in i64 -> loop ends with exactly one element.
+    let r1 = range(4611686018427387904, 9223372036854775807, 4611686018427387904)
+    print("wrap_up_len", len(r1) == 1, len(r1))
+    print("wrap_up_val", r1[0] == 4611686018427387904, r1[0])
+
+    # --- upward overflow mid-list: range(2^61, i64::MAX, 2^61) ----------
+    # yields 2^61, 2^62, 3*2^61; next 4*2^61 = 2^63 overflows -> done
+    # (Python: 3 vals, exactly these)
+    let r2 = range(2305843009213693952, 9223372036854775807, 2305843009213693952)
+    print("wrap_up_mid", r2 == [2305843009213693952, 4611686018427387904, 6917529027641081856], len(r2))
+    print("wrap_up_last", r2[len(r2) - 1] == 6917529027641081856, r2[len(r2) - 1])
+
+    # --- downward overflow from one above the floor ---------------------
+    # range(-1, i64::MIN + 1, i64::MIN): -1 yields; next -1 + i64::MIN
+    # underflows -> done. (Python: [-1].)
+    let r3 = range(0 - 1, 0 - 9223372036854775807, 0 - 9223372036854775807 - 1)
+    print("wrap_dn_len", len(r3) == 1, len(r3))
+    print("wrap_dn_val", r3[0] == 0 - 1, r3[0])
+
+    # --- downward overflow, big-step shape ------------------------------
+    # range(-2^61, i64::MIN + 1, -2^62): yields -2^61, -3*2^61; next
+    # -5*2^61 underflows -> done. (Python: exactly these 2 vals.)
+    let r4 = range(0 - 2305843009213693952, 0 - 9223372036854775807, 0 - 4611686018427387904)
+    print("wrap_dn_big", r4 == [0 - 2305843009213693952, 0 - 6917529027641081856], len(r4))
+
+    # --- i64::MIN as a START value is legal and yielded verbatim --------
+    let r5 = range(0 - 9223372036854775807 - 1, 0 - 9223372036854775807, 1)
+    print("min_start", r5 == [0 - 9223372036854775807 - 1], r5[0] == 0 - 9223372036854775807 - 1)
+
+    # --- exact-fit ceiling control (no overflow involved) ---------------
+    let r6 = range(9223372036854775806, 9223372036854775807, 1)
+    print("ceiling_fit", r6 == [9223372036854775806], len(r6))
+    print("empty_ctrl", len(range(0, 0, 1)) == 0, len(range(9223372036854775807, 9223372036854775807, 1)) == 0, len(range(0, 0 - 1, 1)) == 0)
+
+    # --- lazy for-range controls (P5 wave contract stays pinned) --------
+    let n1 = 0
+    for x in range(4611686018427387904, 9223372036854775807, 4611686018427387904) {
+        n1 += 1
+    }
+    print("for_wrap_up", n1 == 1, n1)
+    let n2 = 0
+    let last = 0
+    for x in range(0 - 1, 0 - 9223372036854775807, 0 - 9223372036854775807 - 1) {
+        n2 += 1
+        last = x
+    }
+    print("for_wrap_dn", n2 == 1, n2, last == 0 - 1, last)
+    let n3 = 0
+    for x in range(2305843009213693952, 9223372036854775807, 2305843009213693952) {
+        n3 += 1
+    }
+    print("for_wrap_mid", n3 == 3, n3)
+
+    # --- anchors ---------------------------------------------------------
+    print("range_step_wrap_pin_end")
+}
+main()
