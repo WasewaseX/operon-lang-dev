@@ -22,7 +22,7 @@ The mandate: *"Rust, then C, then Python, then Operon, then C++, then HTML, then
 - Python as bootstrap (not implementation) is the right reduction from v1's 100%-Python mistake.
 - One point withheld: **Operon below Python is a snapshot, not a destiny.** Mainstream languages converge on self-hosting (Rust in Rust, Go in Go, TypeScript in TypeScript). Operon's share must grow release over release, the stdlib is already pure `.op`.
 
-### Measured composition (main @ 2218dd8, `bash scripts/stack_report.sh`)
+### Measured composition (main @ 60206fa, `bash scripts/stack_report.sh`)
 
 | rank | language | lines | share | role |
 |---|---|---|---|---|
@@ -272,7 +272,7 @@ operon crispr f.op  (--knockout gene | --matrix) [--json]
 operon bench f.op   [--iters n]
 operon disasm f.op                                # bytecode listing of compiled gene bodies
 operon-ls                                         # stdio LSP: diagnostics, hover, definition, symbols, completion, formatting (SPEC §15)
-operon version                                    # Operon 2.9.2-vm (rust-core, cpp-kernel), banner matches SPEC 2.7.0; -vm = the bytecode machine is the run default (W09 A6)
+operon version                                    # Operon 2.9.3-vm (rust-core, cpp-kernel), banner matches SPEC 2.7.0; -vm = the bytecode machine is the run default (W09 A6)
 ```
 
 ## Reliability — the compatibility contract
