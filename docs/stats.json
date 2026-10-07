@@ -126,7 +126,7 @@
   "h1": "# Operon, Language Specification",
   "status": "v2.9.1"
  },
- "std_function_count": 343,
+ "std_function_count": 346,
  "std_module_count": 33,
  "std_modules": [
   {
@@ -258,10 +258,10 @@
    "module": "unicode"
   },
   {
-   "functions": 10,
+   "functions": 13,
    "module": "url"
   }
  ],
- "test_op_files": 3577,
+ "test_op_files": 3578,
  "version": "2.9.1"
 }

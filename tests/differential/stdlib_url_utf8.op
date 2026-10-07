@@ -1,0 +1,46 @@
+# differential: std/url UTF-8 byte law (url-utf8 hardening). Pure Operon
+# module output pinned byte-identically across rust VM, tree-walk and the
+# Python oracle. Timestamp-free lines only.
+use std/url as u
+
+gene main() {
+    # encode: one %XX per UTF-8 byte for scalars >= 128 (was: raw codepoint
+    # hex with garbage digits — the pre-hardening bug this wave fixes)
+    print(u.url_encode("中"))
+    print(u.url_encode("é"))
+    print(u.url_encode("€"))
+    print(u.url_encode("🌍"))
+    print(u.url_encode("a中b/c d"))
+
+    # decode: valid multi-byte sequences reassemble into one character
+    print(u.url_decode("%E4%B8%AD"))
+    print(u.url_decode("%C3%A9"))
+    print(u.url_decode("%E2%82%AC"))
+    print(u.url_decode("%F0%9F%8C%8D"))
+
+    # round-trip law on a non-ASCII, query-shaped payload
+    let payload = "x=中文&y=4é?z=/🌍"
+    print(u.url_decode(u.url_encode(payload)) == payload)
+    print(u.url_query_encode(u.url_parse("https://h/s?q=" + u.url_encode(payload))["query"]))
+
+    # lenient fallback: truncated runs and lone leads fall back byte-wise
+    print(u.url_decode("%E4%B8") == chr(228) + chr(184))
+    print(u.url_decode("%E4") == chr(228))
+    print(u.url_decode("%C3") == chr(195))
+    print(u.url_decode("%E4xyz") == chr(228) + "xyz")
+    print(u.url_decode("a%E4%B8%ADb%zz"))
+
+    # pre-existing lenient contract still holds verbatim
+    print(u.url_decode("%4"), u.url_decode("%"), u.url_decode("a%2"))
+
+    # malformed "?-before-/" parse keeps its self-healing shape (F1 lock:
+    # slash/qmark indexes desync after the query re-slice; char_slice OOB
+    # clamping lands the same sane result — pinned so a clamp change is a
+    # conscious event, not a silent one)
+    let m1 = u.url_parse("host?a=1/b")
+    print(m1["scheme"], m1["host"], m1["port"], m1["path"])
+    print(u.url_query_encode(m1["query"]))
+    let m2 = u.url_parse("h:9?x/y=2")
+    print(m2["scheme"], m2["host"], m2["port"], m2["path"])
+    print(u.url_query_encode(m2["query"]))
+}

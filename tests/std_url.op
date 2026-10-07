@@ -38,5 +38,25 @@ frame proof {
     let back = u.url_query_encode(u.url_parse("https://h/p?b=2&a=1")["query"])
     assert(back == "a=1&b=2")
 
+    # utf-8 byte law: scalars >= 128 encode one %XX per UTF-8 byte
+    assert(u.url_encode("中") == "%E4%B8%AD")
+    assert(u.url_encode("é") == "%C3%A9")
+    assert(u.url_encode("€") == "%E2%82%AC")
+    assert(u.url_encode("🌍") == "%F0%9F%8C%8D")
+    assert(u.url_decode("%E4%B8%AD") == "中")
+    assert(u.url_decode("%C3%A9") == "é")
+    assert(u.url_decode("%F0%9F%8C%8D") == "🌍")
+
+    # round-trip law on a non-ASCII payload
+    let zh = "中文 x/y?z&мир 🌍"
+    assert(u.url_decode(u.url_encode(zh)) == zh)
+
+    # lenient fallback: truncated runs and lone leads fall back byte-wise
+    assert(u.url_decode("%E4%B8") == chr(228) + chr(184))
+    assert(u.url_decode("%E4") == chr(228))
+    assert(u.url_decode("%C3") == chr(195))
+    assert(u.url_decode("%E4xyz") == chr(228) + "xyz")
+    assert(u.url_decode("a%E4%B8%ADb%zz") == "a中b%zz")
+
     promote("url: all asserts green")
 }
