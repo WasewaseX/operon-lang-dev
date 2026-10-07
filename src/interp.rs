@@ -4266,7 +4266,10 @@ impl Interp {
                             "string concat exceeds the 512 MiB ceiling",
                         ));
                     }
-                    mem_charge(cur.len() as u64 + suffix.len() as u64)?;
+                    // perf-xlang-r2: retained-bytes charge — the in-place
+                    // append allocates only the suffix (amortized), the old
+                    // full-length charge billed O(n^2) for O(n) work.
+                    mem_charge(suffix.len() as u64)?;
                     cur.push_str(suffix);
                     return Ok(true);
                 }
