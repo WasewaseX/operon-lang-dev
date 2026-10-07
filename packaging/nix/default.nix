@@ -8,7 +8,7 @@
   fetchurl,
 }:
 let
-  version = "2.9.1";
+  version = "2.9.2";
   archMap = {
     "x86_64-linux" = {
       target = "x86_64-unknown-linux-gnu";

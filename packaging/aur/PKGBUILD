@@ -4,7 +4,7 @@
 #      .sha256 values (the release ships operon-<v>-<target>.tar.gz.sha256),
 #   2. bump pkgrel on re-release, 3. run makepkg -si locally to smoke it.
 pkgname=operon-lang
-pkgver=2.9.1
+pkgver=2.9.2
 pkgrel=1
 pkgdesc="The gene-expression language — Total Grammar toolchain (Rust core, C++ algorithm kernel)"
 arch=('x86_64' 'aarch64')

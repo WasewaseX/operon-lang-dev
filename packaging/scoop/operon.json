@@ -1,21 +1,21 @@
 {
-    "version": "2.9.1",
+    "version": "2.9.2",
     "description": "Operon — the gene-expression language. Total Grammar toolchain (Rust core, C++ algorithm kernel).",
     "homepage": "https://github.com/WasewaseX/operon-lang-dev",
     "license": "MIT",
     "notes": [
         "W61 COMMUNITY DRAFT - not CI-validated; the sha256 below is pinned",
-        "from the v2.9.1 release's companion .sha256 sidecar (asset hash,",
+        "from the v2.9.2 release's companion .sha256 sidecar (asset hash,",
         "verified in release run 37146021197). Re-pin on every bump.",
         "Ships operon, operon-ls, and the self-hosted std/ directory."
     ],
     "architecture": {
         "64bit": {
-            "url": "https://github.com/WasewaseX/operon-lang-dev/releases/download/v2.9.1/operon-2.9.1-x86_64-pc-windows-msvc.zip",
+            "url": "https://github.com/WasewaseX/operon-lang-dev/releases/download/v2.9.2/operon-2.9.2-x86_64-pc-windows-msvc.zip",
             "hash": "6b984b48365409bc943635b51b4da8dec3ed9f0adfd687f21649ce5a1df870df"
         }
     },
-    "extract_dir": "operon-2.9.1",
+    "extract_dir": "operon-2.9.2",
     "bin": [
         "operon.exe",
         "operon-ls.exe"
