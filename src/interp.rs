@@ -7775,6 +7775,37 @@ impl Interp {
                     Err(e) => Err(Stress::new("missing", format!("send_response: {}", e))),
                 }
             }
+            "send_file" => {
+                // fress-port: raw-byte static asset serving. The file's bytes
+                // go socket-bound directly (no Value ever holds them), so
+                // PNG/woff2 assets survive exactly. Read-capability on the
+                // path gates it like read_file; regular files only; 64 MiB.
+                let conn = match args.first() {
+                    Some(Value::Int(i)) => *i as u64,
+                    _ => 0,
+                };
+                let status = args
+                    .get(1)
+                    .map(|v| v.display())
+                    .unwrap_or_else(|| "200".into());
+                let ctype = args
+                    .get(2)
+                    .map(|v| v.display())
+                    .unwrap_or_else(|| "application/octet-stream".into());
+                let path = args.get(3).map(|v| v.display()).unwrap_or_default();
+                let header_safe = |s: &str| !s.chars().any(|c| (c as u32) < 0x20 || c == '\x7f');
+                if !header_safe(&status) || !header_safe(&ctype) {
+                    return Err(Stress::new(
+                        "interference",
+                        "send_file: status/content-type contain control characters (header injection refused)",
+                    ));
+                }
+                self.caps.check(&self.caps.read, "read", &path)?;
+                match crate::interp::send_file(conn, &status, &ctype, &path) {
+                    Ok(()) => Ok(Value::Bool(true)),
+                    Err(e) => Err(Stress::new("missing", format!("send_file: {}", e))),
+                }
+            }
             // -------------------------------------------------- json
             "json_parse" => {
                 let s = args.first().map(|v| v.display()).unwrap_or_default();
@@ -8503,7 +8534,24 @@ pub fn send_response(conn: u64, status: &str, ctype: &str, body: &str) -> Result
         .map_err(|_| "conn lock poisoned")?
         .remove(&conn);
     let mut stream = stream.ok_or("unknown connection id")?;
-    let reason = match status {
+    let head = format!(
+        "HTTP/1.1 {} {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        status,
+        http_reason(status),
+        ctype,
+        body.len()
+    );
+    use std::io::Write;
+    stream
+        .write_all(head.as_bytes())
+        .and_then(|_| stream.write_all(body.as_bytes()))
+        .and_then(|_| stream.flush())
+        .map_err(|e| e.to_string())
+}
+
+/// Reason phrase for the tiny server's known statuses (send_response twin).
+fn http_reason(status: &str) -> &'static str {
+    match status {
         "200" => "OK",
         "201" => "Created",
         "204" => "No Content",
@@ -8518,17 +8566,64 @@ pub fn send_response(conn: u64, status: &str, ctype: &str, body: &str) -> Result
         "500" => "Internal Server Error",
         "503" => "Service Unavailable",
         _ => "OK",
-    };
+    }
+}
+
+/// Serve a file's RAW BYTES as one HTTP response (fress-port: static assets).
+///
+/// Why a native path: operon strings are UTF-8, so a PNG/woff2 round-trip
+/// through read_file -> send_response would be silently corrupted by the
+/// lossy conversion. This writes the file bytes straight to the socket —
+/// no Value ever holds them. The capability check happens at the builtin
+/// layer (read cap on the path) before this helper is reached.
+///
+/// Testable core: takes any Write sink, so unit tests can assert the exact
+/// head shape and byte fidelity without a socket.
+pub fn write_file_response<W: std::io::Write>(
+    out: &mut W,
+    status: &str,
+    ctype: &str,
+    path: &str,
+) -> Result<(), String> {
+    let meta = std::fs::metadata(path).map_err(|e| format!("send_file '{}': {}", path, e))?;
+    if !meta.is_file() {
+        return Err(format!(
+            "send_file '{}': refused — not a regular file",
+            path
+        ));
+    }
+    const MAX_FILE: u64 = 64 * 1024 * 1024; // mirrors http_get's response ceiling
+    if meta.len() > MAX_FILE {
+        return Err(format!(
+            "send_file '{}': {} bytes exceeds the 64 MiB ceiling",
+            path,
+            meta.len()
+        ));
+    }
+    let mut f = std::fs::File::open(path).map_err(|e| format!("send_file '{}': {}", path, e))?;
     let head = format!(
-        "HTTP/1.1 {} {}\r\nContent-Type: {}; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-        status, reason, ctype, body.len()
+        "HTTP/1.1 {} {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        status,
+        http_reason(status),
+        ctype,
+        meta.len()
     );
-    use std::io::Write;
-    stream
-        .write_all(head.as_bytes())
-        .and_then(|_| stream.write_all(body.as_bytes()))
-        .and_then(|_| stream.flush())
-        .map_err(|e| e.to_string())
+    out.write_all(head.as_bytes())
+        .and_then(|_| std::io::copy(&mut f, out))
+        .and_then(|_| out.flush())
+        .map_err(|e| format!("send_file '{}': {}", path, e))
+}
+
+pub fn send_file(conn: u64, status: &str, ctype: &str, path: &str) -> Result<(), String> {
+    let guard = SERVER.lock().map_err(|_| "server lock poisoned")?;
+    let st = guard.as_ref().ok_or("server not running")?;
+    let stream = st
+        .conns
+        .lock()
+        .map_err(|_| "conn lock poisoned")?
+        .remove(&conn);
+    let mut stream = stream.ok_or("unknown connection id")?;
+    write_file_response(&mut stream, status, ctype, path)
 }
 
 fn http_get(host: &str, port: u16, path: &str) -> Result<String, String> {
@@ -9552,6 +9647,7 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "serve",
     "recv_request",
     "send_response",
+    "send_file",
     "json_parse",
     "json_str",
     "env",
