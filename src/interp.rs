@@ -7119,6 +7119,34 @@ impl Interp {
                 Some(Value::Str(s)) => s.chars().next().map(|c| c as i64).unwrap_or(0),
                 _ => 0,
             })),
+            // fress-port: char/byte iteration helpers. Per-char loops built
+            // from s.slice(i, i+1) + ord() cost one builtin dispatch per
+            // character; these collapse the split into ONE native call and
+            // let the loop index a list. Mirror pairs: chars <-> a list of
+            // 1-char strings; utf8_bytes/str_from_bytes <-> Rust's
+            // String::as_bytes / String::from_utf8_lossy.
+            "chars" => Ok(Value::List(Rc::new(RefCell::new(match args.first() {
+                Some(Value::Str(s)) => s.chars().map(|c| Value::Str(c.to_string())).collect(),
+                _ => Vec::new(),
+            })))),
+            "utf8_bytes" => Ok(Value::List(Rc::new(RefCell::new(match args.first() {
+                Some(Value::Str(s)) => s.as_bytes().iter().map(|b| Value::Int(*b as i64)).collect(),
+                _ => Vec::new(),
+            })))),
+            "str_from_bytes" => Ok(Value::Str(match args.first() {
+                Some(Value::List(l)) => {
+                    let bytes: Vec<u8> = l
+                        .borrow()
+                        .iter()
+                        .filter_map(|v| match v {
+                            Value::Int(i) if (0..=255).contains(i) => Some(*i as u8),
+                            _ => None,
+                        })
+                        .collect();
+                    String::from_utf8_lossy(&bytes).to_string()
+                }
+                _ => String::new(),
+            })),
             "now" => Ok(Value::Float(crate::ffi::now_ns() / 1e9)),
             "sleep" => {
                 let ms = match args.first() {
@@ -9627,6 +9655,9 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "randomize",
     "chr",
     "ord",
+    "chars",
+    "utf8_bytes",
+    "str_from_bytes",
     "now",
     "sleep",
     "argv",
