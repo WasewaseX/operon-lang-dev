@@ -1,0 +1,63 @@
+# Int<->Float exactness pin #2 (2026-10-08): regression gate for issue #130
+# (Z-130-EXACT2 — the LAST sweep-3 item). #103 made Int<->Float equality
+# exact; #130 closes the remaining two lossy axes above 2^53:
+#   hole 1 — Int / Int true division rounded BOTH operands through f64
+#     before dividing (double rounding): 9007199254740993 / 3 printed
+#     ...330.5 instead of the correctly-rounded ...331.0. Fixed to Python
+#     long_true_divide law (num_exact::div_i64_i64_exact): single rounding
+#     of the exact rational — exact-quotient fast path, exact-images fast
+#     path (both |v| <= 2^53), binary long division + half-to-even else.
+#     The VM fold calls the SAME helper (Z-129-FOLDSEM's "fold byte-matches
+#     runtime" contract survives the semantics change).
+#   hole 2 — mixed Int<->Float ordering compared via lossy `as f64`:
+#     9007199254740993 > 9007199254740992.0 was false while #103's exact
+#     == was also false — the trichotomy was broken for the same pair.
+#     Fixed to Python float_richcompare law (num_exact::cmp_i64_f64_exact,
+#     trunc decomposition: |frac| < 1 decides ties, i128 compares the
+#     rest). NaN stays all-false on the bool ops; sorts keep NaN->Equal.
+# Mixed Add/Sub/Mul/Mod and float division STAY lossy (Python converts
+# there too — oracle parity is the contract).
+# Expected output is byte-pinned across all engines (differential lanes).
+main {
+    # --- 1. hole 1: Int / Int true division (the issue's table) ---------
+    print("d1", 9007199254740993 / 3)
+    print("d2", 9007199254740993 / 7)
+    print("d3", 9007199254740993 / 9007199254740993)
+    print("d4", 9007199254740992 / 3)
+    print("d5", 9 / 2)
+    print("d6", -7 / 2)
+    print("d7", 7 / -2)
+    print("d8", -7 / -2)
+    print("d9", 1 / 3)
+    # --- 2. hole 1: i64 edges -------------------------------------------
+    print("e1", (-9223372036854775807 - 1) / -1)
+    print("e2", (-9223372036854775807 - 1) / 1)
+    print("e3", (-9223372036854775807 - 1) / 3)
+    print("e4", 9223372036854775807 / 3)
+    print("e5", 9223372036854775807 / (-9223372036854775807 - 1))
+    # --- 3. hole 2: mixed ordering (the issue's filing pair) ------------
+    print("o1", 9007199254740993 > 9007199254740992.0)
+    print("o2", 9007199254740992.0 < 9007199254740993)
+    print("o3", 9007199254740993 >= 9007199254740992.0)
+    print("o4", 9007199254740992.0 <= 9007199254740993)
+    print("o5", 9007199254740993 > 9007199254740994.0)
+    print("o6", 9007199254740994.0 > 9007199254740993)
+    print("o7", 9007199254740993 < 9007199254740994.0)
+    # trichotomy restored: exactly one of ==, <, > holds for the pair
+    print("o8", 9007199254740993 == 9007199254740992.0)
+    # --- 4. hole 2: fractional ties (the |frac| < 1 law) ----------------
+    print("f1", 5 < 5.5)
+    print("f2", 6 > 5.5)
+    print("f3", -5 > -5.5)
+    print("f4", -6 < -5.5)
+    print("f5", 5 < 4.5)
+    print("f6", -5 > -4.5)
+    # --- 5. hole 2: i64 boundary images ---------------------------------
+    print("b1", (-9223372036854775807 - 1) == -9.223372036854776e18)
+    print("b2", (-9223372036854775807 - 1) <= -9.223372036854776e18)
+    print("b3", 9223372036854775807 < 9.223372036854776e18)
+    print("b4", 9223372036854775807 <= 9.223372036854776e18)
+    # --- 6. folded == unfolded under --opt (fold byte-matches runtime) --
+    print("z1", 9007199254740993 / 7 == 1286742750677284.8)
+    print("z2", 9007199254740993 / 3 == 3002399751580331.0)
+}

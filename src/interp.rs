@@ -4444,6 +4444,19 @@ impl Interp {
                 }))
             }
             Div => {
+                // issue #130 (Z-130-EXACT2): Int / Int true division is
+                // the correctly-rounded f64 of the exact rational (Python
+                // long_true_divide) — the old double rounding through
+                // `f64(x) / f64(y)` divided the wrong numerator for any
+                // |int| above 2^53 (9007199254740993 / 3 -> ...330.5).
+                // The zero-divisor stress below is the contract; the
+                // fold refuses to fold it in lockstep.
+                if let (Value::Int(a), Value::Int(b)) = (l, r) {
+                    if *b == 0 {
+                        return Err(Stress::new("unfolded", "division by zero"));
+                    }
+                    return Ok(Value::Float(crate::num_exact::div_i64_i64_exact(*a, *b)));
+                }
                 let (a, b) = self.as_floats(l, r)?;
                 if b == 0.0 {
                     return Err(Stress::new("unfolded", "division by zero"));
@@ -4604,6 +4617,16 @@ impl Interp {
         match (l, r) {
             (Value::Int(a), Value::Int(b)) => Ok(a.cmp(b)),
             (Value::Str(a), Value::Str(b)) => Ok(a.cmp(b)),
+            // issue #130 (Z-130-EXACT2): mixed Int<->Float ordering is
+            // exact (Python float_richcompare) — the lossy `as f64`
+            // collapse made 9007199254740993 > 9007199254740992.0 false
+            // and broke the trichotomy #103 established for equality.
+            // NaN mirrors the old Equal fallback (the bool ops guard
+            // NaN to all-false before reaching here; sorts keep it).
+            (Value::Int(a), Value::Float(b)) => Ok(crate::num_exact::cmp_i64_f64_exact(*a, *b)),
+            (Value::Float(a), Value::Int(b)) => {
+                Ok(crate::num_exact::cmp_i64_f64_exact(*b, *a).reverse())
+            }
             _ => {
                 let (a, b) = self.as_floats(l, r)?;
                 Ok(a.partial_cmp(&b).unwrap_or(std::cmp::Ordering::Equal))
