@@ -192,18 +192,63 @@ Pins: `tests/differential/p6_loop_scope_pins.op` — closure capture
 break/continue, nested loops, loop-var scoping. Byte-identical on VM lane,
 tree-walk lane, and oracle.
 
+### Parity fix (post-wave, same PR): ghost parent chain — and a correction
+
+The first cut of W1 cached whole `Rc<Env>` iteration nodes in ONE LIFO
+pool shared across ALL scope sites of a call/frame. A popped env carried
+the parent of whatever site stashed it, so nested-loop shapes walked a
+stale ancestor chain: the iteration-1 body env stayed reachable (kept
+alive ONLY by the cached env's stale parent pointer — its own stash was
+refused, count=2 traced at ExitScope) and iteration-2 body-level `let`
+defines `Env::contains()`-walked it, emitting spurious
+`[fallback] rebinding` notes a fresh chain would not (7-file class:
+genomelab, bigint 13 → 4,981 stderr notes, math_overflow_pin,
+s3_136h_pool_pin, stdlib_wave1/2, std_heap; std/bigint `__mul_mag` is the
+canonical shape). Stdout stayed correct — every read was shadowed by a
+fresh define — but stderr is gated byte-strict, and CI correctly refused
+the landing. An earlier revision of this file claimed those 7 were
+"pre-existing documented mode-class divergences"; that claim was WRONG.
+
+Fix (coordinator review 5439336263, independent reproduction before
+landing): re-anchor the popped env's parent to the CURRENT parent on
+every pool reuse (`Rc::get_mut` is infallible there — the stash requires
+strong_count == 1), in BOTH machines (sync `exec_gene_code_inner` + the
+fiber per-frame cache). The tree-walk needs no change: its site-local
+caches self-correct. Pins c9-c12 added to `p6_loop_scope_pins.op`
+(per-iteration value freshness, branch-local visibility, cross-site pool
+churn, capture-proof gene instances).
+
+The parity pins also exposed (and this fix removes) a PRE-EXISTING
+tree/oracle divergence the corpus never exercised: the rebinding-note
+condition chain-walked (`env.get`/`cur.contains`), but the oracle notes
+ONLY on same-scope re-definition — cross-scope shadowing is a fresh
+binding and stays silent. Aligned tree-walk (Let/LetConst/LetAnn/
+multi-assign targets/bind_pattern rest sites) and both VM `StoreName`
+arms to the self-scope check.
+
+Pin: `tests/differential/p6_scope_note_parity.op` — the `__mul_mag`
+shape, assign-before-let, two-depth same-name shadow, loop capture,
+break/continue; stdout AND stderr byte-identical across oracle /
+tree-walk / vm / opt1 / opt2.
+
+Union cost of correctness (same-box A/B vs main 215ff0b, min-of-5):
+m_while 116 → 81 ns/op (−30% — the re-anchor PRESERVES the env-struct
+reuse; no give-back), m_forrange −15%, m_varread −14%, m_intadd −15%,
+m_listidx −11%, m_call −6%.
+
 ### Gates (all green on the wave head)
 
 - differential: main lane 3,508 match / 0 diverge; tree-walk lane 3,500 / 0
 - proofs: 143 passed / 0 failed (2,285 asserts) + apps 3/3 (99 asserts)
 - cargo tests: 129 passed / 0 failed (+ all sub-suites green)
 - redteam: 109 contained / 0 breached
-- vm parity: 3,569 identical, 7 divergent, 4 load-sensitive — the 7 are
-  PRE-EXISTING documented mode-class divergences: mode signatures
-  (`--no-vm`/default/`--opt 1`/`--opt 2`) verified byte-identical between
-  the base and wave binaries per file
-- doc-sync: stats pair carried mechanically (`test_op_files` → 3,576 = the
-  actual tests/ walk; repairs a pre-existing −1 drift)
+- vm parity: 3,577 identical, 0 divergent, 4 load-sensitive (documented) —
+  GREEN after the ghost-chain re-anchor fix below; the 7-file failure the
+  first cut produced is root-caused and fixed, not classified around
+- differential: main lane 4,309 match / 0 diverge; tree-walk lane 4,301 / 0
+  (union head, this box; includes the note-rule parity pin)
+- compat matrix: 4,004 identical / 0 divergent (5 engines, union head)
+- doc-sync: stats pair re-pinned on the v2.9.1 tree at landing
 
 ## Top remaining targets (input to the next waves)
 
