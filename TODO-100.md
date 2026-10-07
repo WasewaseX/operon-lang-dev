@@ -4,13 +4,16 @@ v1.1.0 · 2026-09-26 · owner directive: *"make a super detailed hundred level t
 you are dev 3 so build the 66-100 part · other 2 build the others · save EVERYTHING in the
 repo so we survive terrible environment resets"*
 
-> **BOARD vs PROCESS, read this first.** The **canonical per-item board is
-> `collab/ROADMAP-100.md`** (W-track, builder-B, statuses measured against main @ dd76caa,
-> published first, already executing). **This file is the process/governance layer**: iron
-> rules, ownership, sprint waves, Track L cross-link, per-dev suggested orders, and the
-> environment-reset survival protocol. Only **W-IDs** circulate (W01–W100). If this file's
-> per-level notes and ROADMAP-100's statuses ever disagree, ROADMAP-100 wins and the
-> discrepancy is a bug to fix in the same session.
+> **BOARD vs PROCESS, read this first.** The **canonical per-item board is the W-track
+> block in THIS file** (statuses measured against main; truthed per landing — see W067).
+> Correction 2026-10-08 (W068): the earlier note pointed the board at
+> `collab/ROADMAP-100.md`, a path never published to any ref of this repo or the vault
+> (`git log --all --diff-filter=A` is empty for it; vault `collab/` has no such file) —
+> the pointer was dead since v1.1.0 and is retired. **This file is both the board and the
+> process/governance layer**: iron rules, ownership, sprint waves, Track L cross-link,
+> per-dev suggested orders, and the environment-reset survival protocol. Only **W-IDs**
+> circulate (W01–W100). Status disputes are settled against main with evidence, in the
+> same session.
 
 Everything in this file is committed to the repo on purpose: **this document is the
 survival artifact**. If an environment resets, the M100 board plus `collab/` in
