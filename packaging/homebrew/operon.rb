@@ -8,10 +8,10 @@
 class Operon < Formula
   desc "Gene-expression programming language: Total Grammar toolchain, Rust core, C++ kernels"
   homepage "https://github.com/WasewaseX/operon-lang-dev"
-  url "https://github.com/WasewaseX/operon-lang-dev/archive/refs/tags/v2.9.1.tar.gz"
+  url "https://github.com/WasewaseX/operon-lang-dev/archive/refs/tags/v2.9.2.tar.gz"
   # TODO(release): replace the all-zero placeholder with the sha256 printed by
   # scripts/release.sh (the dist/SHA256SUMS line for this version) once the
-  # v2.9.1 tag exists. brew audit --strict fails on the placeholder by design,
+  # v2.9.2 tag exists. brew audit --strict fails on the placeholder by design,
   # so a formula with an unfilled digest cannot ship unnoticed.
   sha256 "0000000000000000000000000000000000000000000000000000000000000000"
   license "MIT"
