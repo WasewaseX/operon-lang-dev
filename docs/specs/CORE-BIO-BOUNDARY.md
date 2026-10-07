@@ -58,7 +58,9 @@ predates the freeze and stays for back-compat (see Exceptions).
 Plus, all under the same freeze:
 
 - **Marks** (declaration-attached): `@acetylate` `@methylate` `@m6a` `@copies`
-  `@riboswitch` `@burst`.
+  `@riboswitch` `@burst`, plus the generic W64 metadata mark `@deprecated`
+  (not biology-flavored; was missing from this inventory until the W036
+  freeze lint caught the drift on 2026-10-08).
 - **Contextual spellings** inside regulation statements (recognized
   positionally, not reserved): `translates` `attenuates` `secrete` `quorum`
   `quench`, and the edge modifiers `sum` `any` `occupy` `hill`, per-cistron
@@ -122,7 +124,7 @@ keyword without a DECISIONS entry gets bounced in review.
 
 ## Grandfathered exceptions
 
-- **The whole existing biology layer above** (25 keywords, 6 marks, the
+- **The whole existing biology layer above** (25 keywords, 7 marks, the
   contextual statement spellings): grandfathered because it predates the
   freeze; removing it would break every v2.2 program that uses the mechanisms
   (contradicting D-002) and would discard the metaphor the language is named

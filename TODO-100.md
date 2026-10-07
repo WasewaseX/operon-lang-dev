@@ -403,7 +403,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
   `@rule` blocks) over full syntax macros; review against the bio-keyword pressure documented
   in W036. Owner sign-off required to implement.
 
-### W036, Hard core/bio boundary [P0] [dev-2 (spec) + dev-1 (grammar freeze)] [M] [done: docs/specs/CORE-BIO-BOUNDARY.md landed (batch1, c73d0554): one-sentence freeze rule per D-008, 35-of-60 core keyword inventory, 25-keyword frozen bio layer, 22 std modules as the legal growth surface, honest enforcement story (generated inventory + stats gate + review rule; automated freeze lint named as follow-up)]
+### W036, Hard core/bio boundary [P0] [dev-2 (spec) + dev-1 (grammar freeze)] [M] [done: docs/specs/CORE-BIO-BOUNDARY.md landed (batch1, c73d0554): one-sentence freeze rule per D-008, 35-of-60 core keyword inventory, 25-keyword frozen bio layer, 22 std modules as the legal growth surface, honest enforcement story (generated inventory + stats gate + review rule; automated freeze lint named as follow-up); follow-up LANDED (W069, 2026-10-08): the freeze lint is live in check_docs_sync.py — two-way diff of parser KEYWORDS+MARKS against the frozen inventory plus doc-internal count enforcement, negative-tested (crossing/vanished/count-drift/mark-drift all fire); @deprecated (the W64 mark) added to the inventory where the lint caught it missing)]
 - Goal: formal split, **core language** (`gene/let/if/for/match/return/stress/modules/
   types/traits/concurrency`) vs **biology layer** (`regulate/splice/methylate/m6a/operon/
   repressilator/ligand/riboswitch/quorum/fate/...`). New biological mechanisms land as

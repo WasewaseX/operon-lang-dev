@@ -193,6 +193,108 @@ def main():
                 fails.append("W55b: keyword audit rows without a proving test: "
                              + ", ".join(empty))
 
+    # W036 (D-008 core/bio freeze): the parser's reserved set must equal the
+    # frozen inventory in docs/specs/CORE-BIO-BOUNDARY.md, two-way. A parser
+    # keyword the inventory lacks is a boundary crossing (the automated lint
+    # the W036 critique named as its follow-up); an inventory keyword the
+    # parser lacks is a grammar regression. The doc's own claimed counts are
+    # enforced against its actual tables, so the inventory cannot drift
+    # silently in either direction. Legitimate growth path: std/*.op first; a
+    # keyword addition needs the DECISIONS entry plus this inventory updated
+    # in the same PR (the lint then goes green with the new truth).
+    bp = os.path.join(ROOT, "docs", "specs", "CORE-BIO-BOUNDARY.md")
+    if not os.path.exists(bp):
+        fails.append("W036: docs/specs/CORE-BIO-BOUNDARY.md missing (the frozen "
+                     "core/bio inventory is the boundary contract)")
+    else:
+        btxt = open(bp, encoding="utf-8").read()
+
+        def _section(title):
+            i = btxt.find(title)
+            if i < 0:
+                return None
+            j = btxt.find("\n## ", i + len(title))
+            return btxt[i:j if j >= 0 else len(btxt)]
+
+        core_sec = _section("## What is core grammar today (frozen)")
+        bio_sec = _section("## What is the frozen biology layer (grandfathered)")
+        if core_sec is None or bio_sec is None:
+            fails.append("W036: CORE-BIO-BOUNDARY.md lost a frozen-inventory "
+                         "heading (the core and bio sections must survive)")
+        else:
+            # Only the keywords column of the family tables is inventoried;
+            # the same cells name contextual words and builtins that are
+            # explicitly NOT reserved (the doc says so inline).
+            not_reserved = {"mut", "pub", "spawn"}
+
+            def _table_keywords(sec):
+                out = set()
+                for line in sec.splitlines():
+                    if not line.startswith("|"):
+                        continue
+                    cells = line.split("|")
+                    if len(cells) < 3:
+                        continue
+                    for tok in re.findall(r"`([a-z0-9]+)`", cells[2]):
+                        if tok not in not_reserved:
+                            out.add(tok)
+                return out
+
+            core_kw = _table_keywords(core_sec)
+            bio_kw = _table_keywords(bio_sec)
+            parser_kw = set(truth["keywords"])
+            crossing = parser_kw - core_kw - bio_kw
+            if crossing:
+                fails.append("W036: keyword(s) crossed the D-008 freeze — in "
+                             "src/parser.rs::KEYWORDS but not in the frozen "
+                             "inventory: " + ", ".join(sorted(crossing))
+                             + " — new mechanisms land as std/*.op libraries "
+                             "or .cell config; a new keyword needs a DECISIONS "
+                             "entry plus the inventory updated in the same PR")
+            vanished = (core_kw | bio_kw) - parser_kw
+            if vanished:
+                fails.append("W036: frozen keyword(s) missing from the parser's "
+                             "reserved set (grammar regression): "
+                             + ", ".join(sorted(vanished)))
+            m = re.search(r"(\d+) of the (\d+) reserved keywords", core_sec)
+            if not m:
+                fails.append("W036: the core section lost its 'N of the M "
+                             "reserved keywords' claim line")
+            else:
+                if int(m.group(1)) != len(core_kw):
+                    fails.append("W036: core inventory claims %s keywords, the "
+                                 "table lists %d" % (m.group(1), len(core_kw)))
+                if int(m.group(2)) != len(core_kw) + len(bio_kw):
+                    fails.append("W036: total claim %s != core+bio %d"
+                                 % (m.group(2), len(core_kw) + len(bio_kw)))
+            m = re.search(r"The remaining (\d+) keywords", bio_sec)
+            if not m:
+                fails.append("W036: the bio section lost its 'The remaining N "
+                             "keywords' claim line")
+            elif int(m.group(1)) != len(bio_kw):
+                fails.append("W036: bio inventory claims %s keywords, the "
+                             "table lists %d" % (m.group(1), len(bio_kw)))
+            # marks: the same two-way law as keywords
+            doc_marks = set(re.findall(r"`@([a-z0-9]+)`", bio_sec))
+            parser_marks = set(truth.get("marks", []))
+            mcross = parser_marks - doc_marks
+            if mcross:
+                fails.append("W036: mark(s) in the parser but not in the frozen "
+                             "inventory: " + ", ".join(sorted(mcross))
+                             + " — update the inventory in the same PR")
+            mvan = doc_marks - parser_marks
+            if mvan:
+                fails.append("W036: frozen mark(s) missing from the parser: "
+                             + ", ".join(sorted(mvan)))
+            m = re.search(r"(\d+) keywords, (\d+) marks", btxt)
+            if m:
+                if int(m.group(1)) != len(bio_kw):
+                    fails.append("W036: grandfathered claim %s keywords != bio "
+                                 "table %d" % (m.group(1), len(bio_kw)))
+                if int(m.group(2)) != len(doc_marks):
+                    fails.append("W036: grandfathered claim %s marks != "
+                                 "inventory %d" % (m.group(2), len(doc_marks)))
+
     # 7. README stdlib inventory completeness (W57)
     readme = open(os.path.join(ROOT, "README.md"), encoding="utf-8").read()
     for m in truth["std_modules"]:
