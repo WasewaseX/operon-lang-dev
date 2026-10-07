@@ -1185,7 +1185,7 @@ fn exec_gene_code_inner(
                 // get() cloned the bound value just to test presence.
                 let name = code.names[*idx as usize].as_str();
                 let v = stack.pop().unwrap_or(Value::Null);
-                if cur.contains(name) {
+                if cur.vars.borrow().contains_key(name) {
                     interp.note(0, 4, format!("rebinding '{}'", name));
                 }
                 // NOTE: StoreName is deliberately NOT slot-routed. A slot
@@ -1918,7 +1918,7 @@ fn fiber_run_inner(interp: &mut Interp, fiber: &mut Fiber) -> Result<FiberOutcom
                 // P6-wave (fiber mirror): borrowed name + contains() check.
                 let name = code.names[*idx as usize].as_str();
                 let v = stack.pop().unwrap_or(Value::Null);
-                if cur.contains(name) {
+                if cur.vars.borrow().contains_key(name) {
                     interp.note(0, 4, format!("rebinding '{}'", name));
                 }
                 cur.define(name, v);

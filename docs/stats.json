@@ -116,10 +116,10 @@
  ],
  "proof_files": 167,
  "proof_totals": {
-  "asserts": 2285,
-  "files": 3443,
-  "proofs": 143,
-  "source": "target/release/operon"
+  "asserts": null,
+  "files": null,
+  "proofs": null,
+  "source": "fast-mode skip"
  },
  "redteam_files": 106,
  "spec": {
@@ -262,6 +262,6 @@
    "module": "url"
   }
  ],
- "test_op_files": 3576,
+ "test_op_files": 3577,
  "version": "2.9.1"
 }
