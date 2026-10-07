@@ -7613,7 +7613,20 @@ impl Interp {
                 let mut i = a;
                 while (step > 0 && i < b) || (step < 0 && i > b) {
                     out.push(Value::Int(i));
-                    i += step;
+                    // #134 (Z-134-RANGEGUARD): the NEXT value start+step may
+                    // overflow i64 even when the current value was
+                    // legitimately yielded. Overflow is provably past the
+                    // bound in the direction of travel — for step > 0 the
+                    // true next value exceeds i64::MAX >= b, for step < 0 it
+                    // underflows i64::MIN <= b — so the loop is DONE, not in
+                    // error. Mirrors the lazy for-range site's checked_add
+                    // break (P5 wave): this builtin used to step with plain
+                    // `i += step` (debug panicked -> the issue's "raises",
+                    // release wrapped to garbage before the 10M ceiling).
+                    i = match i.checked_add(step) {
+                        Some(n) => n,
+                        None => break,
+                    };
                     if out.len() > 10_000_000 {
                         return Err(Stress::new("overflow", "range too large"));
                     }
